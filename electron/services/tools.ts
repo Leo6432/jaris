@@ -1,6 +1,7 @@
 import type { OllamaTool } from './ollama'
 import { openApp } from './appLauncher'
 import { scheduleReminder } from './reminders'
+import { lookAtScreen } from './vision'
 
 export const TOOLS: OllamaTool[] = [
   {
@@ -37,6 +38,25 @@ export const TOOLS: OllamaTool[] = [
         required: ['message', 'delay_minutes']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'look_at_screen',
+      description:
+        "Capture une image de l'écran de l'utilisateur et la décrit, ou répond à une question précise sur " +
+        'ce qui y est affiché (ex: lire un message d\'erreur, décrire une fenêtre ouverte).',
+      parameters: {
+        type: 'object',
+        properties: {
+          question: {
+            type: 'string',
+            description: "Ce qu'il faut chercher ou décrire sur l'écran, en français"
+          }
+        },
+        required: ['question']
+      }
+    }
   }
 ]
 
@@ -49,6 +69,8 @@ export function createToolExecutor(onReminderFire: ReminderFireHandler) {
         return openApp(String(args.app_name ?? ''))
       case 'set_reminder':
         return scheduleReminder(String(args.message ?? ''), Number(args.delay_minutes ?? 0), onReminderFire)
+      case 'look_at_screen':
+        return lookAtScreen(String(args.question ?? ''))
       default:
         return `Outil inconnu : ${name}`
     }

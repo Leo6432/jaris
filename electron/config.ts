@@ -41,7 +41,9 @@ export const config = {
     host: readEnv('OLLAMA_HOST', 'http://127.0.0.1:11434'),
     model: readEnv('OLLAMA_MODEL', 'qwen3.5:9b'),
     /** Fenêtre de contexte : basse volontairement pour tenir en entier dans la VRAM (le max du modèle est overkill pour de la conversation vocale). */
-    numCtx: Number(readEnv('OLLAMA_NUM_CTX', '4096'))
+    numCtx: Number(readEnv('OLLAMA_NUM_CTX', '4096')),
+    /** Modèle de vision (étape 6), séparé du modèle de conversation. */
+    visionModel: readEnv('OLLAMA_VISION_MODEL', 'qwen3-vl:8b')
   }
 } as const
 

@@ -17,7 +17,9 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ✅ Étape 5 — Tool calling : Jaris peut ouvrir des applications et
   programmer des rappels vocaux (persistés, survivent à un redémarrage de
   Jaris avant l'échéance) — voir plus bas
-- ⬜ Étape 6 — Vision d'écran (qwen3-vl)
+- ✅ Étape 6 — Vision d'écran : Jaris peut capturer l'écran et le décrire ou
+  répondre à une question dessus, via un modèle de vision local (`qwen3-vl:8b`
+  par défaut, séparé du modèle de conversation) — voir plus bas
 - ⬜ Étape 7 — Recherche web (SearXNG)
 - ⬜ Étape 8 — Envoi de mails
 
@@ -137,9 +139,26 @@ sans liste à maintenir.
 sauvegardés sur disque : si tu fermes Jaris avant l'échéance, le rappel se
 déclenche dès que tu relances l'app (ou immédiatement s'il est en retard).
 
+> Comme pour les autres outils, un prompt système strict interdit au modèle
+> de "raconter" une action sans avoir réellement appelé l'outil correspondant
+> — sinon les modèles ont tendance à répondre comme si l'action avait eu
+> lieu sans jamais l'exécuter. Le mode réflexion d'Ollama (`think`) aide
+> aussi beaucoup à la fiabilité des appels d'outils.
+
+## Vision d'écran (étape 6)
+
+```
+ollama pull qwen3-vl:8b
+```
+
+Jaris peut capturer l'écran et le décrire, ou répondre à une question dessus
+("qu'est-ce qui est affiché ?", "y a-t-il un message d'erreur ?") — dis
+simplement ce que tu veux savoir, il capture et regarde tout seul. Utilise
+un modèle séparé du modèle de conversation (`OLLAMA_VISION_MODEL` dans
+`.env`, `qwen3-vl:8b` par défaut).
+
 ## Prérequis pour les prochaines étapes (IA 100% locale)
 
-- `ollama pull qwen3-vl:8b` pour la vision d'écran (étape 6)
 - Docker, pour lancer [SearXNG](https://github.com/searxng/searxng) en local
   (recherche web, étape 7)
 
