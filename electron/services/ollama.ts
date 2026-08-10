@@ -22,6 +22,7 @@ export async function askOllama(prompt: string): Promise<string> {
           { role: 'user', content: prompt }
         ],
         stream: false,
+        think: false, // pas besoin du raisonnement caché de qwen3.5 pour une réponse vocale directe
         options: { num_ctx: config.ollama.numCtx }
       })
     })
