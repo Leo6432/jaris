@@ -21,7 +21,8 @@ export async function askOllama(prompt: string): Promise<string> {
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: prompt }
         ],
-        stream: false
+        stream: false,
+        options: { num_ctx: config.ollama.numCtx }
       })
     })
   } catch {

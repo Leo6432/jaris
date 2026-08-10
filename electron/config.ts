@@ -39,7 +39,9 @@ export const config = {
   },
   ollama: {
     host: readEnv('OLLAMA_HOST', 'http://127.0.0.1:11434'),
-    model: readEnv('OLLAMA_MODEL', 'qwen3.5:9b')
+    model: readEnv('OLLAMA_MODEL', 'qwen3.5:9b'),
+    /** Fenêtre de contexte : basse volontairement pour tenir en entier dans la VRAM (le max du modèle est overkill pour de la conversation vocale). */
+    numCtx: Number(readEnv('OLLAMA_NUM_CTX', '4096'))
   }
 } as const
 
