@@ -5,6 +5,11 @@ interface OllamaVisionResponse {
   message?: { content?: string }
 }
 
+const VISION_SYSTEM_PROMPT =
+  "Tu es Jaris, un assistant vocal qui décrit ce qui est affiché à l'écran de l'utilisateur. Réponds en " +
+  'français, de façon concise et naturelle comme à l\'oral, sans émojis, astérisques, listes à puces ni ' +
+  'mise en forme : ta réponse est lue directement à voix haute.'
+
 // Une capture plein écran/HiDPI (ex: 4K) ralentit énormément l'encodage et
 // l'analyse par le modèle de vision pour peu de gain : une résolution plus
 // modeste suffit largement à lire du texte ou décrire une fenêtre.
@@ -37,6 +42,7 @@ export async function lookAtScreen(question: string): Promise<string> {
       body: JSON.stringify({
         model: config.ollama.visionModel,
         messages: [
+          { role: 'system', content: VISION_SYSTEM_PROMPT },
           {
             role: 'user',
             content: question || "Décris ce qui est affiché à l'écran.",

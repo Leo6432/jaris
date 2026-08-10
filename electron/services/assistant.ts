@@ -37,6 +37,15 @@ export async function converse(
       onLog?.(`Outil appelé : ${call.function.name}(${JSON.stringify(call.function.arguments)})`)
       const result = await executeTool(call.function.name, call.function.arguments)
       onLog?.(`Résultat de l'outil : ${result}`)
+
+      // La vision tourne sur un modèle séparé qui partage la même VRAM que le
+      // modèle de conversation : les deux ne tiennent pas en même temps sur
+      // une carte 8 Go, donc repasser par qwen3.5 pour reformuler forcerait un
+      // rechargement complet. Le modèle de vision répond déjà comme Jaris.
+      if (call.function.name === 'look_at_screen') {
+        return result
+      }
+
       messages.push({ role: 'tool', content: result })
     }
   }
