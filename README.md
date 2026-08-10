@@ -83,13 +83,20 @@ transcrire ce que tu dis ensuite, puis le redire à voix haute pour confirmer
 qu'il a compris — c'est la preuve que toute la chaîne audio fonctionne, avant
 de brancher un vrai raisonnement à l'étape 4.
 
-> Tout le pipeline (détection du mot d'activation, capture, transcription,
-> synthèse vocale, lecture audio) a été testé de bout en bout dans un vrai
-> processus Electron construit par ce projet, micro simulé par un flux audio
-> pré-enregistré (pas de matériel audio disponible dans l'environnement de
-> développement). Seule la capture micro réelle via `sounddevice` reste à
-> vérifier sur ta machine — la détection, la transcription et la synthèse
-> elles-mêmes sont déjà validées.
+> Pipeline testé de bout en bout avec un vrai micro sur une machine Windows
+> (RTX 3070) : mot d'activation, capture, transcription et synthèse vocale
+> fonctionnent tous en conditions réelles.
+>
+> Deux pièges rencontrés en conditions réelles, déjà corrigés dans le code :
+> le périphérique micro par défaut du système n'est pas forcément le bon
+> (ex: un micro virtuel type Voice Changer/Voicemod) — utilise
+> `python -m sounddevice` pour lister les micros et choisir le bon index via
+> `WAKEWORD_INPUT_DEVICE` ; et Whisper peut halluciner du texte plausible sur
+> du silence (le pipeline filtre déjà ça via la détection de voix intégrée).
+>
+> Un raccourci clavier **+** (dans la fenêtre Jaris) déclenche aussi l'écoute
+> manuellement, sans dire le mot d'activation — pratique pour tester ou en
+> environnement bruyant.
 
 ## Prérequis pour les prochaines étapes (IA 100% locale)
 
