@@ -4,13 +4,16 @@ import type { JarisEmotion, VoiceReplyPayload } from '../../shared/ipc'
 import { VoiceClient } from './voiceClient'
 import { synthesizeSpeech } from './tts'
 import { appendConversationEntry } from './conversationStore'
-import { askOllama } from './ollama'
+import { converse } from './assistant'
+import { restoreReminders } from './reminders'
 
 const BACK_TO_IDLE_DELAY_MS = 2500
 
 /**
  * Orchestre le cycle complet : mot d'activation -> capture -> transcription ->
- * réflexion (Ollama) -> réponse parlée.
+ * réflexion (Ollama, avec outils : ouvrir une appli, programmer un rappel) ->
+ * réponse parlée. Les rappels qui se déclenchent tout seuls passent par le
+ * même canal de réponse (announceReminder -> speak).
  */
 export class VoicePipeline extends EventEmitter {
   private voice = new VoiceClient()
@@ -32,6 +35,7 @@ export class VoicePipeline extends EventEmitter {
       this.scheduleIdle()
     })
 
+    await restoreReminders((message) => void this.announceReminder(message))
     await this.voice.start()
     this.setEmotion('idle')
   }
@@ -45,6 +49,12 @@ export class VoicePipeline extends EventEmitter {
     this.voice.triggerWake()
   }
 
+  private async announceReminder(message: string): Promise<void> {
+    this.clearIdleTimer()
+    this.setEmotion('thinking')
+    await this.speak(`Rappel : ${message}`)
+  }
+
   private async handleTranscript(rawText: string): Promise<void> {
     const transcript = rawText.trim()
     if (transcript) this.emit('transcript', transcript)
@@ -54,13 +64,17 @@ export class VoicePipeline extends EventEmitter {
       reply = "Je n'ai rien entendu, réessaie."
     } else {
       try {
-        reply = await askOllama(transcript)
+        reply = await converse(transcript, (message) => void this.announceReminder(message))
       } catch (err) {
         this.emit('log', `Erreur Ollama : ${err instanceof Error ? err.message : String(err)}`)
         reply = "Je n'arrive pas à réfléchir pour le moment, vérifie qu'Ollama tourne bien."
       }
     }
 
+    await this.speak(reply, transcript)
+  }
+
+  private async speak(reply: string, transcript = ''): Promise<void> {
     try {
       const audio = await synthesizeSpeech(reply)
       const audioBuffer = audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer

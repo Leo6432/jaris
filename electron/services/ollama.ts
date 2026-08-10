@@ -1,17 +1,30 @@
 import { config } from '../config'
 
-const SYSTEM_PROMPT =
-  "Tu es Jaris, un assistant vocal personnel qui tourne entièrement en local sur l'ordinateur de " +
-  "l'utilisateur. Réponds en français, de façon concise et naturelle, comme dans une conversation orale. " +
-  "Ta réponse est lue à voix haute par une synthèse vocale : n'utilise jamais d'émojis, d'astérisques, " +
-  "de listes à puces ni de mise en forme, uniquement du texte normal."
-
-interface OllamaChatResponse {
-  message?: { content?: string }
+export interface OllamaToolCall {
+  function: { name: string; arguments: Record<string, unknown> }
 }
 
-/** Envoie la phrase transcrite à Ollama et renvoie la réponse du modèle. */
-export async function askOllama(prompt: string): Promise<string> {
+export interface OllamaMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool'
+  content: string
+  tool_calls?: OllamaToolCall[]
+}
+
+export interface OllamaTool {
+  type: 'function'
+  function: {
+    name: string
+    description: string
+    parameters: Record<string, unknown>
+  }
+}
+
+interface OllamaChatResponse {
+  message?: OllamaMessage
+}
+
+/** Un tour d'échange avec Ollama : envoie l'historique (+ outils dispo) et renvoie le message du modèle. */
+export async function chatWithOllama(messages: OllamaMessage[], tools?: OllamaTool[]): Promise<OllamaMessage> {
   let response: Response
   try {
     response = await fetch(`${config.ollama.host}/api/chat`, {
@@ -19,10 +32,8 @@ export async function askOllama(prompt: string): Promise<string> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: config.ollama.model,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: prompt }
-        ],
+        messages,
+        tools,
         stream: false,
         think: false, // pas besoin du raisonnement caché de qwen3.5 pour une réponse vocale directe
         options: { num_ctx: config.ollama.numCtx }
@@ -37,7 +48,6 @@ export async function askOllama(prompt: string): Promise<string> {
   }
 
   const data = (await response.json()) as OllamaChatResponse
-  const content = data.message?.content?.trim()
-  if (!content) throw new Error(`Réponse vide d'Ollama (modèle '${config.ollama.model}' bien installé ?)`)
-  return content
+  if (!data.message) throw new Error(`Réponse vide d'Ollama (modèle '${config.ollama.model}' bien installé ?)`)
+  return data.message
 }

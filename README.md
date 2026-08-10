@@ -13,9 +13,10 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   transcription (faster-whisper), synthèse vocale (Piper). **Testé de bout
   en bout avec un vrai micro** (voir plus bas)
 - ✅ Étape 4 — Connexion Ollama : Jaris comprend vraiment ce que tu dis et
-  répond avec un LLM local (`qwen3.5:9b` par défaut, configurable). Le tool
-  calling (exécuter des actions) arrive avec l'étape 5
-- ⬜ Étape 5 — Ouverture d'applications + rappels
+  répond avec un LLM local (`qwen3.5:9b` par défaut, configurable)
+- ✅ Étape 5 — Tool calling : Jaris peut ouvrir des applications et
+  programmer des rappels vocaux (persistés, survivent à un redémarrage de
+  Jaris avant l'échéance) — voir plus bas
 - ⬜ Étape 6 — Vision d'écran (qwen3-vl)
 - ⬜ Étape 7 — Recherche web (SearXNG)
 - ⬜ Étape 8 — Envoi de mails
@@ -113,6 +114,38 @@ de brancher un vrai raisonnement à l'étape 4.
 Ollama doit être lancé (il tourne en arrière-plan une fois installé) pour que
 Jaris puisse réfléchir. S'il n'est pas joignable, Jaris le dit à voix haute au
 lieu de planter.
+
+> Le modèle a par défaut une fenêtre de contexte énorme (131072 tokens pour
+> qwen3.5), ce qui peut le faire déborder de la VRAM et tourner en partie sur
+> le CPU (très lent). `OLLAMA_NUM_CTX` dans `.env` (4096 par défaut) évite ça
+> — vérifie avec `ollama ps` que la colonne PROCESSOR affiche bien ~100% GPU.
+
+## Ouvrir des applications et programmer des rappels (étape 5)
+
+Jaris peut maintenant exécuter deux actions pendant la conversation :
+ouvrir une application, ou programmer un rappel vocal ("rappelle-moi de
+sortir le linge dans 10 minutes").
+
+**Ouvrir des applications** : copie `apps.example.json` en `apps.json` à la
+racine du projet, et adapte-le à tes applications (`apps.json` est propre à
+ta machine, il n'est pas suivi par Git) :
+
+```json
+{
+  "calculatrice": "calc.exe",
+  "discord": "C:\\Users\\toi\\AppData\\Local\\Discord\\app-1.0.0\\Discord.exe"
+}
+```
+
+La clé est le nom que tu utilises à voix haute, la valeur la commande ou le
+chemin complet vers l'exécutable. Si Jaris ne trouve pas le nom dans
+`apps.json`, il tente quand même de le lancer tel quel (utile pour les
+commandes Windows connues comme `calc`, `notepad`, `explorer`).
+
+**Rappels** : dis simplement "Jaris, rappelle-moi de [...] dans [x] minutes"
+— pas de configuration nécessaire, c'est un outil intégré. Les rappels sont
+sauvegardés sur disque : si tu fermes Jaris avant l'échéance, le rappel se
+déclenche dès que tu relances l'app (ou immédiatement s'il est en retard).
 
 ## Prérequis pour les prochaines étapes (IA 100% locale)
 
