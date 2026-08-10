@@ -49,7 +49,7 @@ export interface VoiceSetupStatus {
 export function checkVoiceSetup(): VoiceSetupStatus {
   const missing: string[] = []
 
-  if (!config.porcupine.accessKey) missing.push('PICOVOICE_ACCESS_KEY (clé gratuite sur console.picovoice.io)')
+  if (!config.porcupine.accessKey) missing.push('PICOVOICE_ACCESS_KEY (clé gratuite sur console.picovoice.ai)')
   if (!existsSync(config.porcupine.keywordPath)) missing.push(`mot-clé Porcupine introuvable : ${config.porcupine.keywordPath}`)
   if (!existsSync(config.piper.binPath)) missing.push(`binaire Piper introuvable : ${config.piper.binPath}`)
   if (!existsSync(config.piper.voicePath)) missing.push(`voix Piper introuvable : ${config.piper.voicePath}`)

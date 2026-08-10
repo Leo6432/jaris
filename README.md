@@ -38,7 +38,7 @@ téléchargements gratuits.
 
 ### 1. Mot d'activation "Jaris" (Porcupine)
 
-1. Crée un compte gratuit sur [console.picovoice.io](https://console.picovoice.io/)
+1. Crée un compte gratuit sur [console.picovoice.ai](https://console.picovoice.ai/)
    (pas de carte bancaire).
 2. Récupère ta clé dans **AccessKey** → colle-la dans `.env` sous
    `PICOVOICE_ACCESS_KEY`.
