@@ -4,13 +4,13 @@ import type { JarisEmotion, VoiceReplyPayload } from '../../shared/ipc'
 import { VoiceClient } from './voiceClient'
 import { synthesizeSpeech } from './tts'
 import { appendConversationEntry } from './conversationStore'
+import { askOllama } from './ollama'
 
 const BACK_TO_IDLE_DELAY_MS = 2500
 
 /**
  * Orchestre le cycle complet : mot d'activation -> capture -> transcription ->
- * réponse parlée. Pas encore de LLM (étape 4) : Jaris confirme ce qu'il a
- * compris, ce qui prouve que toute la chaîne audio fonctionne de bout en bout.
+ * réflexion (Ollama) -> réponse parlée.
  */
 export class VoicePipeline extends EventEmitter {
   private voice = new VoiceClient()
@@ -49,7 +49,17 @@ export class VoicePipeline extends EventEmitter {
     const transcript = rawText.trim()
     if (transcript) this.emit('transcript', transcript)
 
-    const reply = transcript ? `J'ai entendu : ${transcript}` : "Je n'ai rien entendu, réessaie."
+    let reply: string
+    if (!transcript) {
+      reply = "Je n'ai rien entendu, réessaie."
+    } else {
+      try {
+        reply = await askOllama(transcript)
+      } catch (err) {
+        this.emit('log', `Erreur Ollama : ${err instanceof Error ? err.message : String(err)}`)
+        reply = "Je n'arrive pas à réfléchir pour le moment, vérifie qu'Ollama tourne bien."
+      }
+    }
 
     try {
       const audio = await synthesizeSpeech(reply)
