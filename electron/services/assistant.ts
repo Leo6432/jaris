@@ -6,7 +6,10 @@ const SYSTEM_PROMPT =
   "l'utilisateur. Réponds en français, de façon concise et naturelle, comme dans une conversation orale. " +
   "Ta réponse est lue à voix haute par une synthèse vocale : n'utilise jamais d'émojis, d'astérisques, " +
   "de listes à puces ni de mise en forme, uniquement du texte normal. " +
-  "Tu peux ouvrir des applications et programmer des rappels vocaux grâce aux outils disponibles."
+  "Pour ouvrir une application ou programmer un rappel, tu dois IMPÉRATIVEMENT appeler l'outil correspondant " +
+  "(open_app ou set_reminder) via un vrai appel de fonction. Il est interdit de dire que tu as ouvert une " +
+  "application ou programmé un rappel sans avoir réellement appelé l'outil : attends toujours son résultat " +
+  "avant de confirmer quoi que ce soit à l'utilisateur."
 
 const MAX_TOOL_ROUNDS = 4
 
