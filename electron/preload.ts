@@ -1,12 +1,26 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
+import { IPC_CHANNELS, type JarisEmotion, type VoiceReplyPayload, type VoiceSetupStatusPayload } from '../shared/ipc'
 
-// Le bridge sera étendu dans les prochaines étapes (contrôle PC, rappels,
-// capture d'écran, vision, mails...). Pour l'instant il n'expose rien.
-const api = {}
+function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
+  const listener = (_event: Electron.IpcRendererEvent, payload: T): void => callback(payload)
+  ipcRenderer.on(channel, listener)
+  return () => ipcRenderer.removeListener(channel, listener)
+}
+
+const api = {
+  onEmotion: (cb: (emotion: JarisEmotion) => void) => subscribe(IPC_CHANNELS.emotion, cb),
+  onTranscript: (cb: (text: string) => void) => subscribe(IPC_CHANNELS.transcript, cb),
+  onReply: (cb: (payload: VoiceReplyPayload) => void) => subscribe(IPC_CHANNELS.reply, cb),
+  onLog: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.log, cb),
+  onSetupStatus: (cb: (status: VoiceSetupStatusPayload) => void) => subscribe(IPC_CHANNELS.setupStatus, cb),
+  getSetupStatus: (): Promise<VoiceSetupStatusPayload> => ipcRenderer.invoke(IPC_CHANNELS.setupStatus)
+}
+
+export type JarisApi = typeof api
 
 if (process.contextIsolated) {
-  contextBridge.exposeInMainWorld('api', api)
+  contextBridge.exposeInMainWorld('jaris', api)
 } else {
   // @ts-expect-error (define in dts)
-  window.api = api
+  window.jaris = api
 }

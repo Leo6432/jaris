@@ -7,3 +7,10 @@ release/
 .DS_Store
 .env
 .env.local
+
+# Modèles et binaires locaux téléchargés par l'utilisateur (voir README)
+/models/
+/bin/
+python/venv/
+python/__pycache__/
+

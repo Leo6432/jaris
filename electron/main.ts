@@ -1,9 +1,18 @@
-import { app, shell, BrowserWindow } from 'electron'
+import { app, ipcMain, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
+import { checkVoiceSetup } from './config'
+import { VoicePipeline } from './services/voicePipeline'
+import { IPC_CHANNELS, type JarisEmotion, type VoiceReplyPayload, type VoiceSetupStatusPayload } from '../shared/ipc'
 
 const isDev = !app.isPackaged
+let pipeline: VoicePipeline | null = null
 
-function createWindow(): void {
+function currentSetupStatus(): VoiceSetupStatusPayload {
+  const status = checkVoiceSetup()
+  return { ready: status.porcupineReady && status.piperReady, missing: status.missing }
+}
+
+function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
     width: 1000,
     height: 760,
@@ -32,18 +41,45 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  return mainWindow
+}
+
+async function startVoicePipeline(mainWindow: BrowserWindow): Promise<void> {
+  const status = currentSetupStatus()
+  const send = (channel: string, payload?: unknown): void => {
+    if (!mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload)
+  }
+
+  if (!status.ready) {
+    send(IPC_CHANNELS.setupStatus, status)
+    send(IPC_CHANNELS.log, `Configuration incomplète : ${status.missing.join(' | ')}`)
+    return
+  }
+
+  pipeline = new VoicePipeline()
+  pipeline.on('emotion', (emotion: JarisEmotion) => send(IPC_CHANNELS.emotion, emotion))
+  pipeline.on('transcript', (text: string) => send(IPC_CHANNELS.transcript, text))
+  pipeline.on('reply', (payload: VoiceReplyPayload) => send(IPC_CHANNELS.reply, payload))
+  pipeline.on('log', (message: string) => send(IPC_CHANNELS.log, message))
+
+  try {
+    await pipeline.start()
+    send(IPC_CHANNELS.setupStatus, status)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    send(IPC_CHANNELS.log, `Échec du démarrage du pipeline vocal : ${message}`)
+    send(IPC_CHANNELS.setupStatus, { ready: false, missing: [message] })
+  }
 }
 
 app.whenReady().then(() => {
-  createWindow()
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
+  ipcMain.handle(IPC_CHANNELS.setupStatus, () => currentSetupStatus())
+  const mainWindow = createWindow()
+  void startVoicePipeline(mainWindow)
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  pipeline?.stop()
+  app.quit()
 })
