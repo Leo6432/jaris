@@ -62,6 +62,7 @@ def main() -> None:
         emit({"event": "fatal", "message": f"dépendance Python manquante ou inutilisable ({exc}). Lance : pip install -r python/requirements.txt"})
         sys.exit(1)
 
+    emit({"event": "log", "message": "Chargement du modèle de mot d'activation (openWakeWord)…"})
     try:
         wake_model = Model(
             wakeword_models=[args.wakeword_model],
@@ -74,6 +75,7 @@ def main() -> None:
         emit({"event": "fatal", "message": f"échec de chargement du mot-clé openWakeWord : {exc}"})
         sys.exit(1)
 
+    emit({"event": "log", "message": f"Chargement de Whisper '{args.whisper_model}' (téléchargement HuggingFace au premier lancement, peut prendre plusieurs minutes)…"})
     try:
         whisper_model = WhisperModel(args.whisper_model, device=args.whisper_device, compute_type=args.whisper_compute_type)
     except Exception as exc:
@@ -87,6 +89,7 @@ def main() -> None:
             emit({"event": "log", "message": str(status)})
         audio_queue.put(indata[:, 0].copy())
 
+    emit({"event": "log", "message": "Ouverture du microphone…"})
     try:
         stream = sd.InputStream(
             samplerate=SAMPLE_RATE,
