@@ -41,6 +41,10 @@ export class VoicePipeline extends EventEmitter {
     this.voice.stop()
   }
 
+  triggerWake(): void {
+    this.voice.triggerWake()
+  }
+
   private async handleTranscript(rawText: string): Promise<void> {
     const transcript = rawText.trim()
     if (!transcript) {

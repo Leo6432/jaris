@@ -11,6 +11,7 @@ declare global {
       onLog: (cb: (message: string) => void) => () => void
       onSetupStatus: (cb: (status: VoiceSetupStatusPayload) => void) => () => void
       getSetupStatus: () => Promise<VoiceSetupStatusPayload>
+      triggerWake: () => void
     }
   }
 }

@@ -55,10 +55,21 @@ export default function App(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === '+' && !event.repeat) {
+        window.jaris.triggerWake()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   return (
     <div className="app">
       <JarisFace emotion={emotion} />
       <div className="app__status">{STATUS_LABEL[emotion]}</div>
+      <div className="app__hint">Astuce : dis « Hey Jarvis » ou appuie sur + pour activer l'écoute</div>
 
       {(transcript || reply) && (
         <div className="app__conversation">

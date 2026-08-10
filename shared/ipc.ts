@@ -20,5 +20,7 @@ export const IPC_CHANNELS = {
   transcript: 'jaris:transcript',
   reply: 'jaris:reply',
   log: 'jaris:log',
-  setupStatus: 'jaris:setup-status'
+  setupStatus: 'jaris:setup-status',
+  /** renderer -> main : déclenche l'écoute manuellement (sans dire le mot d'activation). */
+  triggerWake: 'jaris:trigger-wake'
 } as const

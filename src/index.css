@@ -41,6 +41,11 @@ body {
   min-height: 1.4em;
 }
 
+.app__hint {
+  font-size: 0.75rem;
+  color: #4d6a87;
+}
+
 .app__conversation {
   max-width: 480px;
   text-align: center;

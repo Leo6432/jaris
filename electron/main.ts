@@ -75,6 +75,7 @@ async function startVoicePipeline(mainWindow: BrowserWindow): Promise<void> {
 
 app.whenReady().then(() => {
   ipcMain.handle(IPC_CHANNELS.setupStatus, () => currentSetupStatus())
+  ipcMain.on(IPC_CHANNELS.triggerWake, () => pipeline?.triggerWake())
   const mainWindow = createWindow()
   void startVoicePipeline(mainWindow)
 })

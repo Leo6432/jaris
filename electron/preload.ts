@@ -13,7 +13,8 @@ const api = {
   onReply: (cb: (payload: VoiceReplyPayload) => void) => subscribe(IPC_CHANNELS.reply, cb),
   onLog: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.log, cb),
   onSetupStatus: (cb: (status: VoiceSetupStatusPayload) => void) => subscribe(IPC_CHANNELS.setupStatus, cb),
-  getSetupStatus: (): Promise<VoiceSetupStatusPayload> => ipcRenderer.invoke(IPC_CHANNELS.setupStatus)
+  getSetupStatus: (): Promise<VoiceSetupStatusPayload> => ipcRenderer.invoke(IPC_CHANNELS.setupStatus),
+  triggerWake: (): void => ipcRenderer.send(IPC_CHANNELS.triggerWake)
 }
 
 export type JarisApi = typeof api

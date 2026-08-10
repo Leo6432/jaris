@@ -2,10 +2,10 @@ import { ChildProcessByStdio, spawn } from 'child_process'
 import { EventEmitter } from 'events'
 import { createInterface } from 'readline'
 import { join } from 'path'
-import type { Readable } from 'stream'
+import type { Readable, Writable } from 'stream'
 import { config } from '../config'
 
-type VoiceServerProcess = ChildProcessByStdio<null, Readable, Readable>
+type VoiceServerProcess = ChildProcessByStdio<Writable, Readable, Readable>
 
 type VoiceServerEvent =
   | { event: 'ready'; wakeword_model: string }
@@ -52,7 +52,7 @@ export class VoiceClient extends EventEmitter {
         args.push('--input-device', config.wakeword.inputDevice)
       }
 
-      const proc = spawn(config.python.bin, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+      const proc = spawn(config.python.bin, args, { stdio: ['pipe', 'pipe', 'pipe'] })
       this.proc = proc
 
       let settled = false
@@ -111,5 +111,10 @@ export class VoiceClient extends EventEmitter {
     this.proc?.kill()
     this.proc = null
     this.ready = null
+  }
+
+  /** Force un déclenchement, comme si le mot d'activation venait d'être détecté. */
+  triggerWake(): void {
+    this.proc?.stdin.write('trigger\n')
   }
 }

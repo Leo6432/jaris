@@ -21,6 +21,7 @@ import argparse
 import json
 import queue
 import sys
+import threading
 
 import numpy as np
 
@@ -89,6 +90,15 @@ def main() -> None:
             emit({"event": "log", "message": str(status)})
         audio_queue.put(indata[:, 0].copy())
 
+    manual_trigger = threading.Event()
+
+    def stdin_listener() -> None:
+        for raw_line in sys.stdin:
+            if raw_line.strip() == "trigger":
+                manual_trigger.set()
+
+    threading.Thread(target=stdin_listener, daemon=True).start()
+
     emit({"event": "log", "message": "Ouverture du microphone…"})
     try:
         stream = sd.InputStream(
@@ -116,8 +126,11 @@ def main() -> None:
         chunk_ms = (len(chunk) / SAMPLE_RATE) * 1000
 
         if mode == "wake":
+            triggered = manual_trigger.is_set()
+            if triggered:
+                manual_trigger.clear()
             prediction = wake_model.predict(chunk)
-            if prediction.get(wake_model_name, 0.0) > args.wakeword_threshold:
+            if triggered or prediction.get(wake_model_name, 0.0) > args.wakeword_threshold:
                 mode = "capture"
                 capture_chunks = []
                 silent_ms = 0.0
