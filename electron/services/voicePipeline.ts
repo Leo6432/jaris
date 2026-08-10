@@ -47,14 +47,11 @@ export class VoicePipeline extends EventEmitter {
 
   private async handleTranscript(rawText: string): Promise<void> {
     const transcript = rawText.trim()
-    if (!transcript) {
-      this.setEmotion('idle')
-      return
-    }
-    this.emit('transcript', transcript)
+    if (transcript) this.emit('transcript', transcript)
+
+    const reply = transcript ? `J'ai entendu : ${transcript}` : "Je n'ai rien entendu, réessaie."
 
     try {
-      const reply = `J'ai entendu : ${transcript}`
       const audio = await synthesizeSpeech(reply)
       const audioBuffer = audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer
 
@@ -62,12 +59,14 @@ export class VoicePipeline extends EventEmitter {
       this.emit('reply', payload)
       this.setEmotion('happy')
 
-      await appendConversationEntry({
-        id: randomUUID(),
-        timestamp: new Date().toISOString(),
-        transcript,
-        reply
-      })
+      if (transcript) {
+        await appendConversationEntry({
+          id: randomUUID(),
+          timestamp: new Date().toISOString(),
+          transcript,
+          reply
+        })
+      }
     } catch (err) {
       this.emit('log', `Erreur de synthèse vocale : ${err instanceof Error ? err.message : String(err)}`)
       this.setEmotion('surprised')

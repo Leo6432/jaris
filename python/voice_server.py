@@ -151,7 +151,7 @@ def main() -> None:
         wake_model.reset()  # évite un second déclenchement fantôme sur la fin de capture/silence
         audio = np.concatenate(capture_chunks).astype(np.float32) / 32768.0
         try:
-            segments, _info = whisper_model.transcribe(audio, language=args.whisper_language, beam_size=5)
+            segments, _info = whisper_model.transcribe(audio, language=args.whisper_language, beam_size=5, vad_filter=True)
             text = "".join(segment.text for segment in segments).strip()
             emit({"event": "transcript", "text": text})
         except Exception as exc:
