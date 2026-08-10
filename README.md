@@ -126,21 +126,11 @@ Jaris peut maintenant exécuter deux actions pendant la conversation :
 ouvrir une application, ou programmer un rappel vocal ("rappelle-moi de
 sortir le linge dans 10 minutes").
 
-**Ouvrir des applications** : copie `apps.example.json` en `apps.json` à la
-racine du projet, et adapte-le à tes applications (`apps.json` est propre à
-ta machine, il n'est pas suivi par Git) :
-
-```json
-{
-  "calculatrice": "calc.exe",
-  "discord": "C:\\Users\\toi\\AppData\\Local\\Discord\\app-1.0.0\\Discord.exe"
-}
-```
-
-La clé est le nom que tu utilises à voix haute, la valeur la commande ou le
-chemin complet vers l'exécutable. Si Jaris ne trouve pas le nom dans
-`apps.json`, il tente quand même de le lancer tel quel (utile pour les
-commandes Windows connues comme `calc`, `notepad`, `explorer`).
+**Ouvrir des applications** : aucune configuration nécessaire. Jaris
+interroge directement le menu Démarrer de Windows (classiques et Store) pour
+trouver l'application dont le nom se rapproche le plus de ce que tu as dit,
+puis la lance — toute application installée sur ta machine est utilisable
+sans liste à maintenir.
 
 **Rappels** : dis simplement "Jaris, rappelle-moi de [...] dans [x] minutes"
 — pas de configuration nécessaire, c'est un outil intégré. Les rappels sont

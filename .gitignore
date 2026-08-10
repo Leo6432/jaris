@@ -7,7 +7,6 @@ release/
 .DS_Store
 .env
 .env.local
-apps.json
 
 # Modèles et binaires locaux téléchargés par l'utilisateur (voir README)
 /models/

@@ -83,36 +83,6 @@ body {
   padding-left: 20px;
 }
 
-.app__controls {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.app__controls button {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(127, 163, 201, 0.35);
-  color: #d9ecff;
-  padding: 8px 16px;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition:
-    background 0.2s,
-    border-color 0.2s;
-}
-
-.app__controls button:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(127, 163, 201, 0.7);
-}
-
-.app__controls button[data-active='true'] {
-  background: rgba(55, 226, 255, 0.18);
-  border-color: #37e2ff;
-}
-
 .jaris-face {
   position: relative;
   display: flex;

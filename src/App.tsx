@@ -2,14 +2,6 @@ import { useEffect, useRef } from 'react'
 import JarisFace from '@/components/JarisFace'
 import { useJarisStore, type JarisEmotion } from '@/store/useJarisStore'
 
-const EMOTION_BUTTONS: { emotion: JarisEmotion; label: string }[] = [
-  { emotion: 'idle', label: 'Veille' },
-  { emotion: 'listening', label: 'Écoute' },
-  { emotion: 'thinking', label: 'Réflexion' },
-  { emotion: 'happy', label: 'Content' },
-  { emotion: 'surprised', label: 'Surpris' }
-]
-
 const STATUS_LABEL: Record<JarisEmotion, string> = {
   idle: 'Jaris dort...',
   listening: "Jaris t'écoute",
@@ -86,21 +78,9 @@ export default function App(): JSX.Element {
               <li key={item}>{item}</li>
             ))}
           </ul>
-          Voir le README pour les étapes d'installation. En attendant, teste les émotions ci-dessous.
+          Voir le README pour les étapes d'installation.
         </div>
       )}
-
-      <div className="app__controls">
-        {EMOTION_BUTTONS.map((btn) => (
-          <button
-            key={btn.emotion}
-            data-active={emotion === btn.emotion}
-            onClick={() => setEmotion(btn.emotion)}
-          >
-            {btn.label}
-          </button>
-        ))}
-      </div>
 
       <audio ref={audioRef} hidden />
     </div>
