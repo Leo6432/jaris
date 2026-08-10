@@ -11,7 +11,11 @@ const SYSTEM_PROMPT =
 const MAX_TOOL_ROUNDS = 4
 
 /** Envoie la phrase transcrite à Ollama, exécute les outils qu'il demande, renvoie la réponse finale à dire. */
-export async function converse(prompt: string, onReminderFire: (message: string) => void): Promise<string> {
+export async function converse(
+  prompt: string,
+  onReminderFire: (message: string) => void,
+  onLog?: (message: string) => void
+): Promise<string> {
   const executeTool = createToolExecutor(onReminderFire)
   const messages: OllamaMessage[] = [
     { role: 'system', content: SYSTEM_PROMPT },
@@ -26,7 +30,9 @@ export async function converse(prompt: string, onReminderFire: (message: string)
 
     messages.push(message)
     for (const call of message.tool_calls) {
+      onLog?.(`Outil appelé : ${call.function.name}(${JSON.stringify(call.function.arguments)})`)
       const result = await executeTool(call.function.name, call.function.arguments)
+      onLog?.(`Résultat de l'outil : ${result}`)
       messages.push({ role: 'tool', content: result })
     }
   }

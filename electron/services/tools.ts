@@ -7,13 +7,16 @@ export const TOOLS: OllamaTool[] = [
     type: 'function',
     function: {
       name: 'open_app',
-      description: "Ouvre une application sur l'ordinateur de l'utilisateur.",
+      description:
+        "Ouvre n'importe quelle application installée sur l'ordinateur de l'utilisateur (pas seulement " +
+        "quelques applications connues : appelle toujours cet outil avec le nom demandé, il cherche lui-même " +
+        "parmi toutes les applications installées sur la machine).",
       parameters: {
         type: 'object',
         properties: {
           app_name: {
             type: 'string',
-            description: "Nom de l'application à ouvrir, ex: 'calculatrice', 'bloc-notes', 'explorateur'"
+            description: "Nom de l'application à ouvrir, tel que demandé par l'utilisateur"
           }
         },
         required: ['app_name']

@@ -64,7 +64,11 @@ export class VoicePipeline extends EventEmitter {
       reply = "Je n'ai rien entendu, réessaie."
     } else {
       try {
-        reply = await converse(transcript, (message) => void this.announceReminder(message))
+        reply = await converse(
+          transcript,
+          (message) => void this.announceReminder(message),
+          (message) => this.emit('log', message)
+        )
       } catch (err) {
         this.emit('log', `Erreur Ollama : ${err instanceof Error ? err.message : String(err)}`)
         reply = "Je n'arrive pas à réfléchir pour le moment, vérifie qu'Ollama tourne bien."
