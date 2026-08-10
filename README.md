@@ -24,6 +24,11 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   instance [SearXNG](https://github.com/searxng/searxng) auto-hébergée
   (Docker), aucune clé API ni compte — voir plus bas
 - ⬜ Étape 8 — Envoi de mails
+- ⬜ Étape 9 — Sélection automatique de modèle selon la complexité de la
+  question : un petit modèle rapide (ex: `phi-4-mini`) pour les questions
+  simples/rapides, `qwen3.5` pour le reste, afin de gagner du temps et de la
+  VRAM sur les échanges courants sans sacrifier la qualité sur les questions
+  qui le méritent
 
 ## Démarrer en développement
 
