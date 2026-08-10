@@ -20,7 +20,9 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ✅ Étape 6 — Vision d'écran : Jaris peut capturer l'écran et le décrire ou
   répondre à une question dessus, via un modèle de vision local (`qwen3-vl:8b`
   par défaut, séparé du modèle de conversation) — voir plus bas
-- ⬜ Étape 7 — Recherche web (SearXNG)
+- ✅ Étape 7 — Recherche web : Jaris peut chercher sur le web via une
+  instance [SearXNG](https://github.com/searxng/searxng) auto-hébergée
+  (Docker), aucune clé API ni compte — voir plus bas
 - ⬜ Étape 8 — Envoi de mails
 
 ## Démarrer en développement
@@ -157,9 +159,22 @@ simplement ce que tu veux savoir, il capture et regarde tout seul. Utilise
 un modèle séparé du modèle de conversation (`OLLAMA_VISION_MODEL` dans
 `.env`, `qwen3-vl:8b` par défaut).
 
-## Prérequis pour les prochaines étapes (IA 100% locale)
+## Recherche web (étape 7)
 
-- Docker, pour lancer [SearXNG](https://github.com/searxng/searxng) en local
-  (recherche web, étape 7)
+Nécessite [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+Lance l'instance [SearXNG](https://github.com/searxng/searxng) locale (aucun
+compte, aucune clé) :
+
+```
+docker compose up -d
+```
+
+Ça démarre un moteur de recherche auto-hébergé sur `http://localhost:8080`.
+La config nécessaire (API JSON activée) est déjà dans `searxng/settings.yml`,
+suivi par Git — rien à configurer à la main. Jaris l'utilise automatiquement
+dès que tu lui poses une question qui demande une info récente ou qu'il ne
+connaît pas ("cherche sur le web...", ou même sans le dire explicitement).
+
+Pour arrêter SearXNG : `docker compose down`.
 
 Aucune clé API payante n'est nécessaire à aucune étape.

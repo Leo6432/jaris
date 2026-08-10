@@ -44,6 +44,9 @@ export const config = {
     numCtx: Number(readEnv('OLLAMA_NUM_CTX', '4096')),
     /** Modèle de vision (étape 6), séparé du modèle de conversation. */
     visionModel: readEnv('OLLAMA_VISION_MODEL', 'qwen3-vl:8b')
+  },
+  searxng: {
+    host: readEnv('SEARXNG_HOST', 'http://127.0.0.1:8080')
   }
 } as const
 

@@ -1,0 +1,13 @@
+# Config minimale : hérite des réglages par défaut de SearXNG et n'active
+# que ce dont Jaris a besoin (l'API JSON, désactivée par défaut).
+use_default_settings: true
+
+server:
+  secret_key: 'jaris-local-searxng-instance'
+  limiter: false
+  image_proxy: false
+
+search:
+  formats:
+    - html
+    - json

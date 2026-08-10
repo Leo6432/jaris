@@ -2,6 +2,7 @@ import type { OllamaTool } from './ollama'
 import { openApp } from './appLauncher'
 import { scheduleReminder } from './reminders'
 import { lookAtScreen } from './vision'
+import { searchWeb } from './webSearch'
 
 export const TOOLS: OllamaTool[] = [
   {
@@ -57,6 +58,22 @@ export const TOOLS: OllamaTool[] = [
         required: ['question']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_web',
+      description:
+        "Recherche sur le web (moteur local) pour des informations récentes, actuelles, ou que tu ne " +
+        'connais pas avec certitude.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Les mots-clés de recherche' }
+        },
+        required: ['query']
+      }
+    }
   }
 ]
 
@@ -71,6 +88,8 @@ export function createToolExecutor(onReminderFire: ReminderFireHandler) {
         return scheduleReminder(String(args.message ?? ''), Number(args.delay_minutes ?? 0), onReminderFire)
       case 'look_at_screen':
         return lookAtScreen(String(args.question ?? ''))
+      case 'search_web':
+        return searchWeb(String(args.query ?? ''))
       default:
         return `Outil inconnu : ${name}`
     }
