@@ -9,10 +9,11 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ✅ Étape 1 — Projet Electron + React + TS (Vite / electron-vite) initialisé
 - ✅ Étape 2 — Visage animé (`JarisFace`) avec 5 états d'émotion : veille,
   écoute, réflexion, content, surpris
-- ✅ Étape 3 — Pipeline vocal local : mot d'activation "Jaris" (Porcupine),
+- ✅ Étape 3 — Pipeline vocal local : mot d'activation (openWakeWord),
   transcription (faster-whisper), synthèse vocale (Piper). Jaris confirme à
   voix haute ce qu'il a compris ; la vraie compréhension (LLM) arrive à
-  l'étape 4
+  l'étape 4. **Testé de bout en bout** dans un vrai processus Electron (voir
+  plus bas)
 - ⬜ Étape 4 — Connexion Ollama (conversation + tool calling)
 - ⬜ Étape 5 — Ouverture d'applications + rappels
 - ⬜ Étape 6 — Vision d'écran (qwen3-vl)
@@ -33,30 +34,25 @@ ce qui manque, et les boutons sous le visage permettent de tester les 5
 
 ## Mettre en place le pipeline vocal (étape 3)
 
-Trois choses à installer, dans l'ordre. Rien de payant — juste des comptes/
-téléchargements gratuits.
+Zéro compte, zéro clé à créer : tout se télécharge directement.
 
-### 1. Mot d'activation "Jaris" (Porcupine)
+> **Mot d'activation : "Hey Jarvis" (en anglais), pas "Jaris".**
+> openWakeWord (le moteur 100% local et gratuit, sans compte) ne fournit pas
+> de mot-clé "Jaris" prêt à l'emploi — le plus proche livré nativement est
+> "Hey Jarvis", qu'on utilise donc par défaut. Un vrai mot-clé "Jaris"
+> demanderait d'entraîner un modèle maison (notebook fourni par
+> openWakeWord, plus de travail) ; ce n'est pas fait pour l'instant.
 
-1. Crée un compte gratuit sur [console.picovoice.ai](https://console.picovoice.ai/)
-   (pas de carte bancaire).
-2. Récupère ta clé dans **AccessKey** → colle-la dans `.env` sous
-   `PICOVOICE_ACCESS_KEY`.
-3. Va dans **Porcupine → Create Wake Word**, tape "Jaris", choisis
-   **Windows** comme plateforme, entraîne (~2 min) puis télécharge le
-   fichier `.ppn`.
-4. `mkdir -p models/wakeword` puis place-le dans
-   `models/wakeword/Jaris_windows.ppn` (chemin par défaut, modifiable via
-   `PORCUPINE_KEYWORD_PATH` dans `.env`).
+### 1. Environnement Python (mot d'activation + reconnaissance vocale)
 
-### 2. Reconnaissance vocale (faster-whisper)
-
-Tourne dans un petit process Python à côté d'Electron.
+Un seul process Python à côté d'Electron gère le micro, la détection du mot
+d'activation et la transcription.
 
 ```bash
 python -m venv python/venv
 python/venv/Scripts/activate   # (Windows) — python/venv/bin/activate sur Mac/Linux
 pip install -r python/requirements.txt
+python python/download_wakeword_models.py   # télécharge les modèles openWakeWord (~5 Mo) dans models/wakeword/
 ```
 
 Renseigne dans `.env` :
@@ -65,8 +61,10 @@ Renseigne dans `.env` :
 - `WHISPER_DEVICE=cuda` sur la RTX 3070 (nécessite les DLL CUDA/cuDNN livrées
   avec `pip install nvidia-cublas-cu12 nvidia-cudnn-cu12` si `ctranslate2` ne
   les trouve pas), sinon `cpu`
+- `WAKEWORD_THRESHOLD` si le mot d'activation se déclenche trop souvent/pas
+  assez (0 à 1, défaut 0.5)
 
-### 3. Synthèse vocale (Piper)
+### 2. Synthèse vocale (Piper)
 
 1. `mkdir -p bin/piper models/tts`
 2. Télécharge le binaire Windows sur les
@@ -75,21 +73,23 @@ Renseigne dans `.env` :
 3. Télécharge une voix française, par exemple `fr_FR-siwis-medium`, depuis le
    [dépôt de voix Piper](https://huggingface.co/rhasspy/piper-voices/tree/main/fr/fr_FR)
    (les deux fichiers `.onnx` et `.onnx.json`) dans `models/tts/`.
-3. Vérifie que `.env` pointe bien vers ces chemins (`PIPER_BIN_PATH`,
+4. Vérifie que `.env` pointe bien vers ces chemins (`PIPER_BIN_PATH`,
    `PIPER_VOICE_PATH`).
 
 ### Vérifier
 
-`npm run dev` : dis "Jaris" près du micro, Jaris doit s'illuminer (écoute),
-transcrire ce que tu dis, puis le redire à voix haute pour confirmer qu'il a
-compris — c'est la preuve que toute la chaîne audio fonctionne, avant de
-brancher un vrai raisonnement à l'étape 4.
+`npm run dev` : dis "Hey Jarvis" près du micro, Jaris doit s'illuminer,
+transcrire ce que tu dis ensuite, puis le redire à voix haute pour confirmer
+qu'il a compris — c'est la preuve que toute la chaîne audio fonctionne, avant
+de brancher un vrai raisonnement à l'étape 4.
 
-> Le service wake word (`electron/services/wakeword.ts`) est écrit contre le
-> SDK officiel Porcupine/PvRecorder et a été relu attentivement, mais n'a pas
-> pu être testé avec un vrai micro dans cet environnement de développement —
-> vérifie-le en premier sur ta machine. Les services STT (`sttClient.ts`) et
-> TTS (`tts.ts`) ont eux été testés bout en bout (synthèse → transcription).
+> Tout le pipeline (détection du mot d'activation, capture, transcription,
+> synthèse vocale, lecture audio) a été testé de bout en bout dans un vrai
+> processus Electron construit par ce projet, micro simulé par un flux audio
+> pré-enregistré (pas de matériel audio disponible dans l'environnement de
+> développement). Seule la capture micro réelle via `sounddevice` reste à
+> vérifier sur ta machine — la détection, la transcription et la synthèse
+> elles-mêmes sont déjà validées.
 
 ## Prérequis pour les prochaines étapes (IA 100% locale)
 

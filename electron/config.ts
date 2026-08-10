@@ -16,13 +16,18 @@ function readEnv(name: string, fallback = ''): string {
 }
 
 export const config = {
-  porcupine: {
-    accessKey: readEnv('PICOVOICE_ACCESS_KEY'),
-    keywordPath: readEnv('PORCUPINE_KEYWORD_PATH', './models/wakeword/Jaris_windows.ppn'),
-    sensitivity: Number(readEnv('PORCUPINE_SENSITIVITY', '0.6'))
+  python: {
+    bin: readEnv('PYTHON_BIN', 'python')
+  },
+  wakeword: {
+    modelPath: readEnv('WAKEWORD_MODEL_PATH', './models/wakeword/hey_jarvis_v0.1.onnx'),
+    melspecModelPath: readEnv('WAKEWORD_MELSPEC_PATH', './models/wakeword/melspectrogram.onnx'),
+    embeddingModelPath: readEnv('WAKEWORD_EMBEDDING_PATH', './models/wakeword/embedding_model.onnx'),
+    threshold: Number(readEnv('WAKEWORD_THRESHOLD', '0.5')),
+    /** Index du périphérique micro (voir `python -m sounddevice`), vide = défaut système. */
+    inputDevice: readEnv('WAKEWORD_INPUT_DEVICE')
   },
   whisper: {
-    pythonBin: readEnv('PYTHON_BIN', 'python'),
     model: readEnv('WHISPER_MODEL', 'small'),
     language: readEnv('WHISPER_LANGUAGE', 'fr'),
     device: readEnv('WHISPER_DEVICE', 'cpu'),
@@ -39,28 +44,26 @@ export const config = {
 } as const
 
 export interface VoiceSetupStatus {
-  porcupineReady: boolean
-  whisperReady: boolean
+  wakewordReady: boolean
   piperReady: boolean
   missing: string[]
 }
 
-/** Vérifie que les clés/fichiers nécessaires au pipeline vocal sont présents. */
+/** Vérifie que les fichiers nécessaires au pipeline vocal sont présents. */
 export function checkVoiceSetup(): VoiceSetupStatus {
   const missing: string[] = []
 
-  if (!config.porcupine.accessKey) missing.push('PICOVOICE_ACCESS_KEY (clé gratuite sur console.picovoice.ai)')
-  if (!existsSync(config.porcupine.keywordPath)) missing.push(`mot-clé Porcupine introuvable : ${config.porcupine.keywordPath}`)
+  if (!existsSync(config.wakeword.modelPath)) missing.push(`modèle openWakeWord introuvable : ${config.wakeword.modelPath} (lance python/download_wakeword_models.py)`)
+  if (!existsSync(config.wakeword.melspecModelPath)) missing.push(`modèle openWakeWord introuvable : ${config.wakeword.melspecModelPath}`)
+  if (!existsSync(config.wakeword.embeddingModelPath)) missing.push(`modèle openWakeWord introuvable : ${config.wakeword.embeddingModelPath}`)
   if (!existsSync(config.piper.binPath)) missing.push(`binaire Piper introuvable : ${config.piper.binPath}`)
   if (!existsSync(config.piper.voicePath)) missing.push(`voix Piper introuvable : ${config.piper.voicePath}`)
 
-  const porcupineReady = !!config.porcupine.accessKey && existsSync(config.porcupine.keywordPath)
+  const wakewordReady =
+    existsSync(config.wakeword.modelPath) &&
+    existsSync(config.wakeword.melspecModelPath) &&
+    existsSync(config.wakeword.embeddingModelPath)
   const piperReady = existsSync(config.piper.binPath) && existsSync(config.piper.voicePath)
 
-  return {
-    porcupineReady,
-    whisperReady: true, // vérifié au démarrage du sidecar Python (ready/error event)
-    piperReady,
-    missing
-  }
+  return { wakewordReady, piperReady, missing }
 }

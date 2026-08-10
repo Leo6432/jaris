@@ -9,7 +9,7 @@ let pipeline: VoicePipeline | null = null
 
 function currentSetupStatus(): VoiceSetupStatusPayload {
   const status = checkVoiceSetup()
-  return { ready: status.porcupineReady && status.piperReady, missing: status.missing }
+  return { ready: status.wakewordReady && status.piperReady, missing: status.missing }
 }
 
 function createWindow(): BrowserWindow {

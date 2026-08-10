@@ -1,9 +1,7 @@
 import { EventEmitter } from 'events'
 import { randomUUID } from 'crypto'
-import { unlink } from 'fs/promises'
 import type { JarisEmotion, VoiceReplyPayload } from '../../shared/ipc'
-import { WakeWordListener } from './wakeword'
-import { SttClient } from './sttClient'
+import { VoiceClient } from './voiceClient'
 import { synthesizeSpeech } from './tts'
 import { appendConversationEntry } from './conversationStore'
 
@@ -15,50 +13,47 @@ const BACK_TO_IDLE_DELAY_MS = 2500
  * compris, ce qui prouve que toute la chaîne audio fonctionne de bout en bout.
  */
 export class VoicePipeline extends EventEmitter {
-  private wakeWord = new WakeWordListener()
-  private stt = new SttClient()
+  private voice = new VoiceClient()
   private idleTimer: ReturnType<typeof setTimeout> | null = null
 
   async start(): Promise<void> {
-    await this.stt.start()
-
-    this.wakeWord.on('wake', () => {
+    this.voice.on('wake', () => {
       this.clearIdleTimer()
       this.setEmotion('listening')
+      this.setEmotion('thinking') // la capture + transcription se font côté sidecar, sans étape intermédiaire visible
     })
-    this.wakeWord.on('utterance', (wavPath: string) => {
-      void this.handleUtterance(wavPath)
+    this.voice.on('transcript', (text: string) => {
+      void this.handleTranscript(text)
     })
-    this.wakeWord.on('error', (err: Error) => {
-      this.emit('log', `Erreur wake word : ${err.message}`)
+    this.voice.on('log', (message: string) => this.emit('log', message))
+    this.voice.on('error', (err: Error) => {
+      this.emit('log', `Erreur pipeline vocal : ${err.message}`)
       this.setEmotion('surprised')
       this.scheduleIdle()
     })
 
-    this.wakeWord.start()
+    await this.voice.start()
     this.setEmotion('idle')
   }
 
   stop(): void {
     this.clearIdleTimer()
-    this.wakeWord.stop()
-    this.stt.stop()
+    this.voice.stop()
   }
 
-  private async handleUtterance(wavPath: string): Promise<void> {
-    this.setEmotion('thinking')
-    try {
-      const transcript = (await this.stt.transcribe(wavPath)).trim()
-      if (!transcript) {
-        this.setEmotion('idle')
-        return
-      }
-      this.emit('transcript', transcript)
+  private async handleTranscript(rawText: string): Promise<void> {
+    const transcript = rawText.trim()
+    if (!transcript) {
+      this.setEmotion('idle')
+      return
+    }
+    this.emit('transcript', transcript)
 
+    try {
       const reply = `J'ai entendu : ${transcript}`
       const audio = await synthesizeSpeech(reply)
-
       const audioBuffer = audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer
+
       const payload: VoiceReplyPayload = { transcript, reply, audio: audioBuffer }
       this.emit('reply', payload)
       this.setEmotion('happy')
@@ -70,10 +65,9 @@ export class VoicePipeline extends EventEmitter {
         reply
       })
     } catch (err) {
-      this.emit('log', `Erreur pipeline vocal : ${err instanceof Error ? err.message : String(err)}`)
+      this.emit('log', `Erreur de synthèse vocale : ${err instanceof Error ? err.message : String(err)}`)
       this.setEmotion('surprised')
     } finally {
-      await unlink(wavPath).catch(() => {})
       this.scheduleIdle()
     }
   }
