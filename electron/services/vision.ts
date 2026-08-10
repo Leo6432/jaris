@@ -35,7 +35,9 @@ export async function lookAtScreen(question: string): Promise<string> {
             images: [image]
           }
         ],
-        stream: false
+        stream: false,
+        think: false,
+        options: { num_ctx: config.ollama.numCtx }
       })
     })
   } catch {
