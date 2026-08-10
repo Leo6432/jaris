@@ -35,7 +35,10 @@ export async function chatWithOllama(messages: OllamaMessage[], tools?: OllamaTo
         messages,
         tools,
         stream: false,
-        think: false, // pas besoin du raisonnement caché de qwen3.5 pour une réponse vocale directe
+        // Le raisonnement caché de qwen3.5 aide nettement à décider d'appeler un outil plutôt que de
+        // "raconter" une action sans l'exécuter ; désactivé un temps pour la vitesse, réactivé car les
+        // appels d'outils (ouvrir une app, programmer un rappel) étaient trop peu fiables sans lui.
+        think: true,
         options: { num_ctx: config.ollama.numCtx }
       })
     })
