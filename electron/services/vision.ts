@@ -5,11 +5,19 @@ interface OllamaVisionResponse {
   message?: { content?: string }
 }
 
+// Une capture plein écran/HiDPI (ex: 4K) ralentit énormément l'encodage et
+// l'analyse par le modèle de vision pour peu de gain : une résolution plus
+// modeste suffit largement à lire du texte ou décrire une fenêtre.
+const MAX_SCREENSHOT_WIDTH = 1280
+
 async function captureScreenshotBase64(): Promise<string> {
-  const { size, scaleFactor } = screen.getPrimaryDisplay()
+  const { size } = screen.getPrimaryDisplay()
+  const width = Math.min(size.width, MAX_SCREENSHOT_WIDTH)
+  const height = Math.round((size.height / size.width) * width)
+
   const sources = await desktopCapturer.getSources({
     types: ['screen'],
-    thumbnailSize: { width: Math.round(size.width * scaleFactor), height: Math.round(size.height * scaleFactor) }
+    thumbnailSize: { width, height }
   })
 
   const source = sources[0]
