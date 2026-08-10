@@ -1,0 +1,100 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: radial-gradient(circle at 50% 30%, #0c1420 0%, #05070c 70%);
+  color: #d9ecff;
+  overflow: hidden;
+}
+
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+}
+
+.app__status {
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7fa3c9;
+  min-height: 1.4em;
+}
+
+.app__controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.app__controls button {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(127, 163, 201, 0.35);
+  color: #d9ecff;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+}
+
+.app__controls button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(127, 163, 201, 0.7);
+}
+
+.app__controls button[data-active='true'] {
+  background: rgba(55, 226, 255, 0.18);
+  border-color: #37e2ff;
+}
+
+.jaris-face {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.jaris-face__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px dashed;
+  border-top-style: solid;
+}
+
+.jaris-face__core {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.jaris-face__eyes {
+  display: flex;
+  gap: 34px;
+}
