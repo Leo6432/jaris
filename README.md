@@ -29,6 +29,10 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   simples/rapides, `qwen3.5` pour le reste, afin de gagner du temps et de la
   VRAM sur les échanges courants sans sacrifier la qualité sur les questions
   qui le méritent
+- ⬜ Étape 10 — Surveillance des ressources du PC : Jaris prévient à voix
+  haute quand la machine est surchargée (GPU, CPU, RAM trop élevés), pour
+  éviter de lancer une tâche lourde ou d'insister sur une réponse lente sans
+  prévenir
 
 ## Démarrer en développement
 
