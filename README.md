@@ -10,11 +10,11 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ✅ Étape 2 — Visage animé (`JarisFace`) avec 5 états d'émotion : veille,
   écoute, réflexion, content, surpris
 - ✅ Étape 3 — Pipeline vocal local : mot d'activation (openWakeWord),
-  transcription (faster-whisper), synthèse vocale (Piper). Jaris confirme à
-  voix haute ce qu'il a compris ; la vraie compréhension (LLM) arrive à
-  l'étape 4. **Testé de bout en bout** dans un vrai processus Electron (voir
-  plus bas)
-- ⬜ Étape 4 — Connexion Ollama (conversation + tool calling)
+  transcription (faster-whisper), synthèse vocale (Piper). **Testé de bout
+  en bout avec un vrai micro** (voir plus bas)
+- ✅ Étape 4 — Connexion Ollama : Jaris comprend vraiment ce que tu dis et
+  répond avec un LLM local (`qwen3.5:9b` par défaut, configurable). Le tool
+  calling (exécuter des actions) arrive avec l'étape 5
 - ⬜ Étape 5 — Ouverture d'applications + rappels
 - ⬜ Étape 6 — Vision d'écran (qwen3-vl)
 - ⬜ Étape 7 — Recherche web (SearXNG)
@@ -98,12 +98,26 @@ de brancher un vrai raisonnement à l'étape 4.
 > manuellement, sans dire le mot d'activation — pratique pour tester ou en
 > environnement bruyant.
 
+## Mettre en place Ollama (étape 4)
+
+1. Installe [Ollama](https://ollama.com/) (installeur Windows classique)
+2. Télécharge le modèle de raisonnement :
+   ```
+   ollama pull qwen3.5:9b
+   ```
+3. Vérifie dans `.env` que `OLLAMA_HOST` (`http://127.0.0.1:11434` par
+   défaut) et `OLLAMA_MODEL` (`qwen3.5:9b` par défaut) sont corrects — le nom
+   du modèle est entièrement configurable, pas besoin de toucher au code pour
+   en changer
+
+Ollama doit être lancé (il tourne en arrière-plan une fois installé) pour que
+Jaris puisse réfléchir. S'il n'est pas joignable, Jaris le dit à voix haute au
+lieu de planter.
+
 ## Prérequis pour les prochaines étapes (IA 100% locale)
 
-- [Ollama](https://ollama.com/) avec `ollama pull qwen3.5:9b` pour le
-  raisonnement, et `ollama pull qwen3-vl:8b` pour la vision d'écran — le nom
-  du modèle est déjà configurable via `OLLAMA_MODEL` dans `.env`
+- `ollama pull qwen3-vl:8b` pour la vision d'écran (étape 6)
 - Docker, pour lancer [SearXNG](https://github.com/searxng/searxng) en local
-  (recherche web)
+  (recherche web, étape 7)
 
 Aucune clé API payante n'est nécessaire à aucune étape.
