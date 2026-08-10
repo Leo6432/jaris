@@ -31,6 +31,24 @@ SILENCE_RMS_THRESHOLD = 300
 SILENCE_DURATION_MS = 900
 MIN_UTTERANCE_MS = 400
 MAX_UTTERANCE_MS = 12_000
+NO_SPEECH_PROB_THRESHOLD = 0.6
+
+# Formules "génériques" bien connues que Whisper hallucine sur du silence/bruit
+# (héritées de son entraînement sur des sous-titres). Le VAD filtre déjà la
+# plupart des cas, ceci est un filet de sécurité supplémentaire.
+HALLUCINATION_PATTERNS = [
+    "sous-titres réalisés par la communauté d'amara.org",
+    "sous-titrage st'",
+    "merci d'avoir regardé cette vidéo",
+    "abonnez-vous à la chaîne",
+    "n'oubliez pas de vous abonner",
+    "merci à tous et à bientôt",
+]
+
+
+def is_hallucination(text: str) -> bool:
+    lowered = text.lower()
+    return any(pattern in lowered for pattern in HALLUCINATION_PATTERNS)
 
 
 def emit(payload: dict) -> None:
@@ -152,7 +170,10 @@ def main() -> None:
         audio = np.concatenate(capture_chunks).astype(np.float32) / 32768.0
         try:
             segments, _info = whisper_model.transcribe(audio, language=args.whisper_language, beam_size=5, vad_filter=True)
-            text = "".join(segment.text for segment in segments).strip()
+            kept_segments = [segment for segment in segments if segment.no_speech_prob < NO_SPEECH_PROB_THRESHOLD]
+            text = "".join(segment.text for segment in kept_segments).strip()
+            if is_hallucination(text):
+                text = ""
             emit({"event": "transcript", "text": text})
         except Exception as exc:
             emit({"event": "error", "message": str(exc)})
