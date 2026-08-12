@@ -2,7 +2,8 @@ import { app, ipcMain, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { checkVoiceSetup } from './config'
 import { VoicePipeline } from './services/voicePipeline'
-import { IPC_CHANNELS, type JarisEmotion, type VoiceReplyPayload, type VoiceSetupStatusPayload } from '../shared/ipc'
+import { getProfile, saveProfile } from './services/profileStore'
+import { IPC_CHANNELS, type JarisEmotion, type Profile, type VoiceReplyPayload, type VoiceSetupStatusPayload } from '../shared/ipc'
 
 const isDev = !app.isPackaged
 let pipeline: VoicePipeline | null = null
@@ -76,6 +77,8 @@ async function startVoicePipeline(mainWindow: BrowserWindow): Promise<void> {
 app.whenReady().then(() => {
   ipcMain.handle(IPC_CHANNELS.setupStatus, () => currentSetupStatus())
   ipcMain.on(IPC_CHANNELS.triggerWake, () => pipeline?.triggerWake())
+  ipcMain.handle(IPC_CHANNELS.getProfile, () => getProfile())
+  ipcMain.handle(IPC_CHANNELS.saveProfile, (_event, profile: Profile) => saveProfile(profile))
   const mainWindow = createWindow()
   void startVoicePipeline(mainWindow)
 })

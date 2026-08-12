@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import JarisFace from '@/components/JarisFace'
 import { useJarisStore, type JarisEmotion } from '@/store/useJarisStore'
 
@@ -22,6 +22,21 @@ export default function App(): JSX.Element {
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
+
+  // undefined = pas encore chargé, null = pas de profil (premier lancement)
+  const [profileName, setProfileName] = useState<string | null | undefined>(undefined)
+  const [nameInput, setNameInput] = useState('')
+
+  useEffect(() => {
+    window.jaris.getProfile().then((profile) => setProfileName(profile?.name ?? null))
+  }, [])
+
+  const handleOnboardingSubmit = (event: React.FormEvent): void => {
+    event.preventDefault()
+    const name = nameInput.trim()
+    if (!name) return
+    void window.jaris.saveProfile({ name }).then(() => setProfileName(name))
+  }
 
   useEffect(() => {
     window.jaris.getSetupStatus().then(setSetupStatus)
@@ -56,6 +71,28 @@ export default function App(): JSX.Element {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
+
+  if (profileName === undefined) {
+    return <div className="app" />
+  }
+
+  if (profileName === null) {
+    return (
+      <div className="app">
+        <form className="app__onboarding" onSubmit={handleOnboardingSubmit}>
+          <h1>Bonjour !</h1>
+          <p>Comment dois-je t'appeler ?</p>
+          <input
+            autoFocus
+            value={nameInput}
+            onChange={(event) => setNameInput(event.target.value)}
+            placeholder="Ton prénom"
+          />
+          <button type="submit">Valider</button>
+        </form>
+      </div>
+    )
+  }
 
   return (
     <div className="app">

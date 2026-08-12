@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC_CHANNELS, type JarisEmotion, type VoiceReplyPayload, type VoiceSetupStatusPayload } from '../shared/ipc'
+import { IPC_CHANNELS, type JarisEmotion, type Profile, type VoiceReplyPayload, type VoiceSetupStatusPayload } from '../shared/ipc'
 
 function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
   const listener = (_event: Electron.IpcRendererEvent, payload: T): void => callback(payload)
@@ -14,7 +14,9 @@ const api = {
   onLog: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.log, cb),
   onSetupStatus: (cb: (status: VoiceSetupStatusPayload) => void) => subscribe(IPC_CHANNELS.setupStatus, cb),
   getSetupStatus: (): Promise<VoiceSetupStatusPayload> => ipcRenderer.invoke(IPC_CHANNELS.setupStatus),
-  triggerWake: (): void => ipcRenderer.send(IPC_CHANNELS.triggerWake)
+  triggerWake: (): void => ipcRenderer.send(IPC_CHANNELS.triggerWake),
+  getProfile: (): Promise<Profile | null> => ipcRenderer.invoke(IPC_CHANNELS.getProfile),
+  saveProfile: (profile: Profile): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.saveProfile, profile)
 }
 
 export type JarisApi = typeof api

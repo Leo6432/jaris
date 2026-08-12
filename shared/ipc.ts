@@ -14,6 +14,10 @@ export interface VoiceSetupStatusPayload {
   missing: string[]
 }
 
+export interface Profile {
+  name: string
+}
+
 /** Canaux IPC main -> renderer pour piloter le visage et afficher la conversation. */
 export const IPC_CHANNELS = {
   emotion: 'jaris:emotion',
@@ -22,5 +26,8 @@ export const IPC_CHANNELS = {
   log: 'jaris:log',
   setupStatus: 'jaris:setup-status',
   /** renderer -> main : déclenche l'écoute manuellement (sans dire le mot d'activation). */
-  triggerWake: 'jaris:trigger-wake'
+  triggerWake: 'jaris:trigger-wake',
+  /** renderer <-> main : profil utilisateur (prénom), demandé une seule fois au premier lancement. */
+  getProfile: 'jaris:get-profile',
+  saveProfile: 'jaris:save-profile'
 } as const

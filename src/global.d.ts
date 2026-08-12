@@ -1,4 +1,4 @@
-import type { JarisEmotion, VoiceReplyPayload, VoiceSetupStatusPayload } from '../shared/ipc'
+import type { JarisEmotion, Profile, VoiceReplyPayload, VoiceSetupStatusPayload } from '../shared/ipc'
 
 export {}
 
@@ -12,6 +12,8 @@ declare global {
       onSetupStatus: (cb: (status: VoiceSetupStatusPayload) => void) => () => void
       getSetupStatus: () => Promise<VoiceSetupStatusPayload>
       triggerWake: () => void
+      getProfile: () => Promise<Profile | null>
+      saveProfile: (profile: Profile) => Promise<void>
     }
   }
 }

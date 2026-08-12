@@ -6,6 +6,7 @@ import { synthesizeSpeech } from './tts'
 import { appendConversationEntry } from './conversationStore'
 import { converse } from './assistant'
 import { restoreReminders } from './reminders'
+import { getProfile } from './profileStore'
 
 const BACK_TO_IDLE_DELAY_MS = 2500
 
@@ -64,8 +65,10 @@ export class VoicePipeline extends EventEmitter {
       reply = "Je n'ai rien entendu, réessaie."
     } else {
       try {
+        const profile = await getProfile()
         reply = await converse(
           transcript,
+          profile?.name ?? null,
           (message) => void this.announceReminder(message),
           (message) => this.emit('log', message)
         )

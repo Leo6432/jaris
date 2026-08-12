@@ -63,6 +63,12 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ⬜ Étape 20 — Jaris connaît la date et l'heure : briefing du matin
   (planning du jour, tâches à faire), et ajoute automatiquement une tâche à
   la to-do list du site dès que l'utilisateur en mentionne une à voix haute
+- ✅ Étape 21 — Personnalisation, prénom de l'utilisateur : au tout premier
+  lancement, Jaris demande comment l'appeler (une seule fois, sauvegardé
+  localement) et s'adresse ensuite à l'utilisateur par son prénom en
+  conversation — voir plus bas
+- ⬜ Étape 22 — Paramètres avancés : page dédiée pour tout personnaliser
+  (connecter son planning/calendrier, son Gmail, choisir la langue, etc.)
 
 ## Démarrer en développement
 
@@ -72,9 +78,12 @@ cp .env.example .env   # puis remplis les valeurs, voir ci-dessous
 npm run dev
 ```
 
-Sans configuration vocale, la fenêtre s'ouvre quand même : un bandeau indique
-ce qui manque, et les boutons sous le visage permettent de tester les 5
-émotions manuellement.
+Au tout premier lancement, Jaris demande comment l'appeler (juste un
+prénom, sauvegardé localement) — il ne le redemandera plus ensuite, et
+s'adressera à toi par ton prénom en conversation.
+
+Sans configuration vocale, la fenêtre s'ouvre quand même après ça : un
+bandeau indique ce qui manque.
 
 ## Mettre en place le pipeline vocal (étape 3)
 
