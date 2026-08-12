@@ -57,6 +57,12 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   compatibilité des licences des briques open source utilisées (Ollama,
   modèles Qwen, openWakeWord, faster-whisper, Piper, SearXNG) avec une
   distribution commerciale
+- ⬜ Étape 19 — Site web avec tableau de bord personnel : chaque utilisateur
+  peut noter son planning et sa to-do list sur le site, et Jaris peut y
+  écrire des informations
+- ⬜ Étape 20 — Jaris connaît la date et l'heure : briefing du matin
+  (planning du jour, tâches à faire), et ajoute automatiquement une tâche à
+  la to-do list du site dès que l'utilisateur en mentionne une à voix haute
 
 ## Démarrer en développement
 
