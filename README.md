@@ -40,6 +40,18 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   messages et passer des appels depuis le téléphone de l'utilisateur, en
   s'appuyant sur un projet open source existant faisant le pont PC/téléphone
   (ex: KDE Connect) plutôt que de tout réécrire
+- ⬜ Étape 13 — Installeur en un clic : empaqueter toute la chaîne (app +
+  Ollama + modèles) dans un seul installeur simple, pour que d'autres
+  utilisateurs puissent installer Jaris sans suivre toutes les étapes
+  manuelles de ce README
+- ⬜ Étape 14 — Amélioration du design de l'interface
+- ⬜ Étape 15 — Animation pendant la capture/analyse d'écran, pour donner un
+  retour visuel pendant que Jaris "regarde" (étape 6)
+- ⬜ Étape 16 — Mode toujours visible : petite fenêtre Jaris affichée en
+  permanence en bas à droite de l'écran (widget flottant), au lieu de
+  n'apparaître que quand la fenêtre principale a le focus
+- ⬜ Étape 17 — Mise à jour automatique de l'application dès qu'une nouvelle
+  version est publiée
 
 ## Démarrer en développement
 
