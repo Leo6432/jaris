@@ -52,6 +52,11 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   n'apparaître que quand la fenêtre principale a le focus
 - ⬜ Étape 17 — Mise à jour automatique de l'application dès qu'une nouvelle
   version est publiée
+- ⬜ Étape 18 — Préparation à la vente (~5€) : licence, protection contre la
+  copie/redistribution du logiciel. Nécessitera au préalable de vérifier la
+  compatibilité des licences des briques open source utilisées (Ollama,
+  modèles Qwen, openWakeWord, faster-whisper, Piper, SearXNG) avec une
+  distribution commerciale
 
 ## Démarrer en développement
 
