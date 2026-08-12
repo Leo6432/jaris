@@ -33,6 +33,13 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   haute quand la machine est surchargée (GPU, CPU, RAM trop élevés), pour
   éviter de lancer une tâche lourde ou d'insister sur une réponse lente sans
   prévenir
+- ⬜ Étape 11 — Contrôle clavier et souris : Jaris peut écrire du texte et
+  cliquer à la place de l'utilisateur, pour automatiser des actions
+  complètes sur l'ordinateur (pas seulement ouvrir une application)
+- ⬜ Étape 12 — Intégration téléphone : voir les notifications, envoyer des
+  messages et passer des appels depuis le téléphone de l'utilisateur, en
+  s'appuyant sur un projet open source existant faisant le pont PC/téléphone
+  (ex: KDE Connect) plutôt que de tout réécrire
 
 ## Démarrer en développement
 
