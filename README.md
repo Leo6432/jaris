@@ -23,51 +23,56 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ✅ Étape 7 — Recherche web : Jaris peut chercher sur le web via une
   instance [SearXNG](https://github.com/searxng/searxng) auto-hébergée
   (Docker), aucune clé API ni compte — voir plus bas
-- ⬜ Étape 8 — Envoi de mails
-- ⬜ Étape 9 — Sélection automatique de modèle selon la complexité de la
+- ⬜ Étape 8 — Mémoire locale façon Obsidian : Jaris enregistre ce qu'il
+  retient (préférences, infos données en conversation, résumés) dans de
+  simples fichiers markdown liés entre eux sur le disque, plutôt que dans une
+  base opaque. Un bouton "Voir le cerveau de Jaris" dans l'interface ouvre ce
+  dossier de mémoire pour le consulter/modifier à la main
+- ⬜ Étape 9 — Envoi de mails
+- ⬜ Étape 10 — Sélection automatique de modèle selon la complexité de la
   question : un petit modèle rapide (ex: `phi-4-mini`) pour les questions
   simples/rapides, `qwen3.5` pour le reste, afin de gagner du temps et de la
   VRAM sur les échanges courants sans sacrifier la qualité sur les questions
   qui le méritent
-- ⬜ Étape 10 — Surveillance des ressources du PC : Jaris prévient à voix
+- ⬜ Étape 11 — Surveillance des ressources du PC : Jaris prévient à voix
   haute quand la machine est surchargée (GPU, CPU, RAM trop élevés), pour
   éviter de lancer une tâche lourde ou d'insister sur une réponse lente sans
   prévenir
-- ⬜ Étape 11 — Contrôle clavier et souris : Jaris peut écrire du texte et
+- ⬜ Étape 12 — Contrôle clavier et souris : Jaris peut écrire du texte et
   cliquer à la place de l'utilisateur, pour automatiser des actions
   complètes sur l'ordinateur (pas seulement ouvrir une application)
-- ⬜ Étape 12 — Intégration téléphone : voir les notifications, envoyer des
+- ⬜ Étape 13 — Intégration téléphone : voir les notifications, envoyer des
   messages et passer des appels depuis le téléphone de l'utilisateur, en
   s'appuyant sur un projet open source existant faisant le pont PC/téléphone
   (ex: KDE Connect) plutôt que de tout réécrire
-- ⬜ Étape 13 — Installeur en un clic : empaqueter toute la chaîne (app +
+- ⬜ Étape 14 — Installeur en un clic : empaqueter toute la chaîne (app +
   Ollama + modèles) dans un seul installeur simple, pour que d'autres
   utilisateurs puissent installer Jaris sans suivre toutes les étapes
   manuelles de ce README
-- ⬜ Étape 14 — Amélioration du design de l'interface
-- ⬜ Étape 15 — Animation pendant la capture/analyse d'écran, pour donner un
+- ⬜ Étape 15 — Amélioration du design de l'interface
+- ⬜ Étape 16 — Animation pendant la capture/analyse d'écran, pour donner un
   retour visuel pendant que Jaris "regarde" (étape 6)
-- ⬜ Étape 16 — Mode toujours visible : petite fenêtre Jaris affichée en
+- ⬜ Étape 17 — Mode toujours visible : petite fenêtre Jaris affichée en
   permanence en bas à droite de l'écran (widget flottant), au lieu de
   n'apparaître que quand la fenêtre principale a le focus
-- ⬜ Étape 17 — Mise à jour automatique de l'application dès qu'une nouvelle
+- ⬜ Étape 18 — Mise à jour automatique de l'application dès qu'une nouvelle
   version est publiée
-- ⬜ Étape 18 — Préparation à la vente (~5€) : licence, protection contre la
+- ⬜ Étape 19 — Préparation à la vente (~5€) : licence, protection contre la
   copie/redistribution du logiciel. Nécessitera au préalable de vérifier la
   compatibilité des licences des briques open source utilisées (Ollama,
   modèles Qwen, openWakeWord, faster-whisper, Piper, SearXNG) avec une
   distribution commerciale
-- ⬜ Étape 19 — Site web avec tableau de bord personnel : chaque utilisateur
+- ⬜ Étape 20 — Site web avec tableau de bord personnel : chaque utilisateur
   peut noter son planning et sa to-do list sur le site, et Jaris peut y
   écrire des informations
-- ⬜ Étape 20 — Jaris connaît la date et l'heure : briefing du matin
+- ⬜ Étape 21 — Jaris connaît la date et l'heure : briefing du matin
   (planning du jour, tâches à faire), et ajoute automatiquement une tâche à
   la to-do list du site dès que l'utilisateur en mentionne une à voix haute
-- ✅ Étape 21 — Personnalisation, prénom de l'utilisateur : au tout premier
+- ✅ Étape 22 — Personnalisation, prénom de l'utilisateur : au tout premier
   lancement, Jaris demande comment l'appeler (une seule fois, sauvegardé
   localement) et s'adresse ensuite à l'utilisateur par son prénom en
   conversation — voir plus bas
-- ⬜ Étape 22 — Paramètres avancés : page dédiée pour tout personnaliser
+- ⬜ Étape 23 — Paramètres avancés : page dédiée pour tout personnaliser
   (connecter son planning/calendrier, son Gmail, choisir la langue, etc.)
 
 ## Démarrer en développement
