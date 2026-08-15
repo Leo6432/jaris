@@ -74,6 +74,24 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   conversation — voir plus bas
 - ⬜ Étape 23 — Paramètres avancés : page dédiée pour tout personnaliser
   (connecter son planning/calendrier, son Gmail, choisir la langue, etc.)
+- ⬜ Étape 24 — Sous-agents : Jaris peut lancer plusieurs sous-agents (agents
+  web, etc.) en parallèle pour des tâches complexes qui demandent plusieurs
+  actions en même temps, au lieu de tout faire en une seule séquence
+- ⬜ Étape 25 — Scan de capacité au premier lancement : Jaris analyse le PC
+  (GPU, VRAM, RAM) pour vérifier qu'il peut faire tourner les modèles par
+  défaut ; si la machine n'est pas assez puissante, il propose automatiquement
+  des modèles plus légers. Dans le bouton options, une liste de modèles
+  classés du plus puissant au plus léger, avec sélection automatique (ou
+  manuelle) de 3 modèles selon le profil de la machine : un modèle qui
+  réfléchit beaucoup pour les tâches complexes, un modèle médium, et un
+  modèle "flash" rapide pour les questions simples
+- ⬜ Étape 26 — Mentions légales / conditions d'utilisation à faire accepter
+  avant la première utilisation, pour dégager la responsabilité en cas
+  d'action problématique de l'IA
+- ⬜ Étape 27 — Publication et monétisation : site pour vendre un abonnement
+  (~10€/mois), avec un mécanisme de protection contre la copie, la
+  duplication et les fuites gratuites sur internet (licence liée à la
+  machine ou au compte, par exemple)
 
 ## Démarrer en développement
 
