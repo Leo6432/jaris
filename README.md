@@ -95,6 +95,10 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   est partagée à d'autres personnes (piste à creuser, pas encore figée)
 - ⬜ Étape 29 — Publication et monétisation : site pour vendre un abonnement
   (~10€/mois)
+- ⬜ Étape 30 — Vidéo de présentation : animation en full motion design
+  générée avec l'IA pour présenter le projet Jaris
+- ⬜ Étape 31 — Levée de fonds : page sur le site pour présenter le projet à
+  des investisseurs et demander des fonds pour agrandir le site
 
 ## Démarrer en développement
 
