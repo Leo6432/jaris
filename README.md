@@ -23,14 +23,13 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ✅ Étape 7 — Recherche web : Jaris peut chercher sur le web via une
   instance [SearXNG](https://github.com/searxng/searxng) auto-hébergée
   (Docker), aucune clé API ni compte — voir plus bas
-- ⬜ Étape 8 — Mémoire locale façon Obsidian : Jaris enregistre ce qu'il
+- ⬜ Étape 8 — Lancer `docker compose up -d` et vérifier que la recherche web
+  (étape 7) fonctionne bien avant de passer à la suite
+- ⬜ Étape 9 — Mémoire locale façon Obsidian : Jaris enregistre ce qu'il
   retient (préférences, infos données en conversation, résumés) dans de
   simples fichiers markdown liés entre eux sur le disque, plutôt que dans une
   base opaque. Un bouton "Voir le cerveau de Jaris" dans l'interface ouvre ce
   dossier de mémoire pour le consulter/modifier à la main
-- ⬜ Étape 9 — Protection contre la redistribution : identifiant unique par
-  utilisateur/licence pour pouvoir tracer une copie de Jaris qui circule ou
-  est partagée à d'autres personnes (piste à creuser, pas encore figée)
 - ⬜ Étape 10 — Envoi de mails
 - ⬜ Étape 11 — Sélection automatique de modèle selon la complexité de la
   question : un petit modèle rapide (ex: `phi-4-mini`) pour les questions
@@ -91,7 +90,10 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ⬜ Étape 27 — Mentions légales / conditions d'utilisation à faire accepter
   avant la première utilisation, pour dégager la responsabilité en cas
   d'action problématique de l'IA
-- ⬜ Étape 28 — Publication et monétisation : site pour vendre un abonnement
+- ⬜ Étape 28 — Protection contre la redistribution : identifiant unique par
+  utilisateur/licence pour pouvoir tracer une copie de Jaris qui circule ou
+  est partagée à d'autres personnes (piste à creuser, pas encore figée)
+- ⬜ Étape 29 — Publication et monétisation : site pour vendre un abonnement
   (~10€/mois)
 
 ## Démarrer en développement
