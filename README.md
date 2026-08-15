@@ -89,9 +89,9 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   avant la première utilisation, pour dégager la responsabilité en cas
   d'action problématique de l'IA
 - ⬜ Étape 27 — Publication et monétisation : site pour vendre un abonnement
-  (~10€/mois), avec un mécanisme de protection contre la copie, la
-  duplication et les fuites gratuites sur internet (licence liée à la
-  machine ou au compte, par exemple)
+  (~10€/mois), avec une protection contre la redistribution à d'autres
+  personnes — par exemple un identifiant unique par utilisateur/licence pour
+  pouvoir tracer une copie qui circule (piste à creuser, pas encore figée)
 
 ## Démarrer en développement
 
