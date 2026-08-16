@@ -135,6 +135,55 @@ body {
   padding: 0 32px;
 }
 
+.memory-brain__note {
+  position: absolute;
+  top: 60px;
+  right: 20px;
+  bottom: 20px;
+  width: min(360px, 80vw);
+  background: rgba(5, 7, 12, 0.92);
+  border: 1px solid rgba(127, 163, 201, 0.3);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.memory-brain__note-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #d9ecff;
+  border-bottom: 1px solid rgba(127, 163, 201, 0.2);
+}
+
+.memory-brain__note-header button {
+  background: transparent;
+  border: none;
+  color: #7fa3c9;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.memory-brain__note-header button:hover {
+  color: #d9ecff;
+}
+
+.memory-brain__note-content {
+  margin: 0;
+  padding: 14px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #9fc3e6;
+}
+
 .app__setup-warning {
   max-width: 480px;
   text-align: center;

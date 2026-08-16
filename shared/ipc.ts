@@ -49,6 +49,8 @@ export const IPC_CHANNELS = {
   openMemoryFolder: 'jaris:open-memory-folder',
   /** renderer <-> main : récupère les notes de la mémoire et leurs liens, pour la vue graphe 3D. */
   getMemoryGraph: 'jaris:get-memory-graph',
+  /** renderer <-> main : récupère le contenu markdown complet d'une note (clic sur un nœud du graphe). */
+  getMemoryNoteContent: 'jaris:get-memory-note-content',
   /** renderer -> main : la lecture audio de la dernière réponse est terminée, on peut repasser en idle. */
   audioEnded: 'jaris:audio-ended'
 } as const

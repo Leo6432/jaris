@@ -17,6 +17,7 @@ declare global {
       saveProfile: (profile: Profile) => Promise<void>
       openMemoryFolder: () => Promise<void>
       getMemoryGraph: () => Promise<MemoryGraph>
+      getMemoryNoteContent: (title: string) => Promise<string>
     }
   }
 }

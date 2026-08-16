@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
-import ForceGraph3D, { type ForceGraph3DInstance } from '3d-force-graph'
+import { useEffect, useRef, useState } from 'react'
+import ForceGraph3D, { type ForceGraph3DInstance, type NodeObject } from '3d-force-graph'
+import SpriteText from 'three-spritetext'
 import type { MemoryGraph } from '../../shared/ipc'
 
 interface MemoryBrainProps {
@@ -7,9 +8,26 @@ interface MemoryBrainProps {
   onClose: () => void
 }
 
+interface SelectedNote {
+  title: string
+  content: string | null
+}
+
+function makeNodeLabel(node: NodeObject): SpriteText {
+  const sprite = new SpriteText(String(node.id))
+  sprite.color = '#d9ecff'
+  sprite.textHeight = 3.5
+  sprite.backgroundColor = 'rgba(5, 7, 12, 0.75)'
+  sprite.padding = 2
+  sprite.borderRadius = 3
+  sprite.position.set(0, 9, 0)
+  return sprite
+}
+
 export default function MemoryBrain({ graph, onClose }: MemoryBrainProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const instanceRef = useRef<ForceGraph3DInstance | null>(null)
+  const [selectedNote, setSelectedNote] = useState<SelectedNote | null>(null)
 
   useEffect(() => {
     const container = containerRef.current
@@ -18,12 +36,19 @@ export default function MemoryBrain({ graph, onClose }: MemoryBrainProps): JSX.E
     const instance = new ForceGraph3D(container)
       .graphData({ nodes: graph.nodes.map((n) => ({ ...n })), links: graph.links.map((l) => ({ ...l })) })
       .backgroundColor('rgba(0,0,0,0)')
-      .nodeLabel('id')
+      .nodeRelSize(4)
       .nodeColor(() => '#37e2ff')
-      .nodeRelSize(5)
+      .nodeOpacity(0.9)
+      .nodeThreeObject(makeNodeLabel)
+      .nodeThreeObjectExtend(true)
       .linkColor(() => 'rgba(127, 163, 201, 0.55)')
-      .linkDirectionalParticles(1)
+      .linkDirectionalParticles(2)
       .linkDirectionalParticleColor(() => '#37e2ff')
+      .onNodeClick((node) => {
+        const title = String(node.id)
+        setSelectedNote({ title, content: null })
+        void window.jaris.getMemoryNoteContent(title).then((content) => setSelectedNote({ title, content }))
+      })
       .width(container.clientWidth)
       .height(container.clientHeight)
     instanceRef.current = instance
@@ -57,6 +82,18 @@ export default function MemoryBrain({ graph, onClose }: MemoryBrainProps): JSX.E
         <div className="memory-brain__empty">Aucune note pour l'instant : parle à Jaris pour qu'il apprenne.</div>
       ) : (
         <div ref={containerRef} className="memory-brain__canvas" />
+      )}
+
+      {selectedNote && (
+        <div className="memory-brain__note">
+          <div className="memory-brain__note-header">
+            <span>{selectedNote.title}</span>
+            <button onClick={() => setSelectedNote(null)}>✕</button>
+          </div>
+          <pre className="memory-brain__note-content">
+            {selectedNote.content === null ? 'Chargement...' : selectedNote.content}
+          </pre>
+        </div>
       )}
     </div>
   )
