@@ -31,5 +31,7 @@ export const IPC_CHANNELS = {
   getProfile: 'jaris:get-profile',
   saveProfile: 'jaris:save-profile',
   /** renderer -> main : ouvre le dossier de mémoire markdown de Jaris dans l'explorateur de fichiers. */
-  openMemoryFolder: 'jaris:open-memory-folder'
+  openMemoryFolder: 'jaris:open-memory-folder',
+  /** renderer -> main : la lecture audio de la dernière réponse est terminée, on peut repasser en idle. */
+  audioEnded: 'jaris:audio-ended'
 } as const

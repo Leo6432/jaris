@@ -12,6 +12,7 @@ declare global {
       onSetupStatus: (cb: (status: VoiceSetupStatusPayload) => void) => () => void
       getSetupStatus: () => Promise<VoiceSetupStatusPayload>
       triggerWake: () => void
+      notifyAudioEnded: () => void
       getProfile: () => Promise<Profile | null>
       saveProfile: (profile: Profile) => Promise<void>
       openMemoryFolder: () => Promise<void>

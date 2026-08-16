@@ -78,6 +78,7 @@ async function startVoicePipeline(mainWindow: BrowserWindow): Promise<void> {
 app.whenReady().then(() => {
   ipcMain.handle(IPC_CHANNELS.setupStatus, () => currentSetupStatus())
   ipcMain.on(IPC_CHANNELS.triggerWake, () => pipeline?.triggerWake())
+  ipcMain.on(IPC_CHANNELS.audioEnded, () => pipeline?.notifyAudioEnded())
   ipcMain.handle(IPC_CHANNELS.getProfile, () => getProfile())
   ipcMain.handle(IPC_CHANNELS.saveProfile, (_event, profile: Profile) => saveProfile(profile))
   ipcMain.handle(IPC_CHANNELS.openMemoryFolder, async () => {

@@ -122,7 +122,12 @@ export default function App(): JSX.Element {
         </div>
       )}
 
-      <audio ref={audioRef} hidden />
+      <audio
+        ref={audioRef}
+        hidden
+        onEnded={() => window.jaris.notifyAudioEnded()}
+        onError={() => window.jaris.notifyAudioEnded()}
+      />
     </div>
   )
 }

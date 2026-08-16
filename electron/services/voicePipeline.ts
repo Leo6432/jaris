@@ -8,7 +8,16 @@ import { converse } from './assistant'
 import { restoreReminders } from './reminders'
 import { getProfile } from './profileStore'
 
-const BACK_TO_IDLE_DELAY_MS = 2500
+/** Retour à idle après une erreur (pas d'audio en cours, donc pas besoin d'attendre une fin de lecture). */
+const ERROR_IDLE_DELAY_MS = 2500
+/** Petit délai pour laisser l'expression "happy" s'afficher un instant une fois la phrase terminée. */
+const IDLE_SETTLE_DELAY_MS = 400
+/**
+ * Filet de sécurité si le renderer ne prévient jamais que la lecture audio est finie (fenêtre fermée,
+ * lecture bloquée...) : évite de rester bloqué indéfiniment sur "happy" plutôt que de dépendre d'un
+ * minuteur fixe déconnecté de la durée réelle de la phrase.
+ */
+const AUDIO_FALLBACK_IDLE_MS = 20000
 
 /**
  * Orchestre le cycle complet : mot d'activation -> capture -> transcription ->
@@ -33,7 +42,7 @@ export class VoicePipeline extends EventEmitter {
     this.voice.on('error', (err: Error) => {
       this.emit('log', `Erreur pipeline vocal : ${err.message}`)
       this.setEmotion('surprised')
-      this.scheduleIdle()
+      this.scheduleIdle(ERROR_IDLE_DELAY_MS)
     })
 
     await restoreReminders((message) => void this.announceReminder(message))
@@ -48,6 +57,11 @@ export class VoicePipeline extends EventEmitter {
 
   triggerWake(): void {
     this.voice.triggerWake()
+  }
+
+  /** Le renderer prévient dès que la lecture audio de la réponse est terminée : c'est le vrai signal pour repasser en idle, pas une estimation. */
+  notifyAudioEnded(): void {
+    this.scheduleIdle(IDLE_SETTLE_DELAY_MS)
   }
 
   private async announceReminder(message: string): Promise<void> {
@@ -98,11 +112,12 @@ export class VoicePipeline extends EventEmitter {
           reply
         })
       }
+
+      this.scheduleIdle(AUDIO_FALLBACK_IDLE_MS)
     } catch (err) {
       this.emit('log', `Erreur de synthèse vocale : ${err instanceof Error ? err.message : String(err)}`)
       this.setEmotion('surprised')
-    } finally {
-      this.scheduleIdle()
+      this.scheduleIdle(ERROR_IDLE_DELAY_MS)
     }
   }
 
@@ -110,9 +125,9 @@ export class VoicePipeline extends EventEmitter {
     this.emit('emotion', emotion)
   }
 
-  private scheduleIdle(): void {
+  private scheduleIdle(delayMs: number): void {
     this.clearIdleTimer()
-    this.idleTimer = setTimeout(() => this.setEmotion('idle'), BACK_TO_IDLE_DELAY_MS)
+    this.idleTimer = setTimeout(() => this.setEmotion('idle'), delayMs)
   }
 
   private clearIdleTimer(): void {
