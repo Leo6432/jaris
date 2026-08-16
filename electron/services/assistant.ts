@@ -6,11 +6,15 @@ function buildSystemPrompt(userName: string | null): string {
     ? `L'utilisateur s'appelle ${userName} : appelle-le par son prénom de temps en temps, sans exagérer. `
     : ''
 
+  const now = new Date()
+  const dateTime = `Nous sommes le ${now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}, il est ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}. `
+
   return (
     "Tu es Jaris, un assistant vocal personnel qui tourne entièrement en local sur l'ordinateur de " +
     "l'utilisateur. Réponds en français, de façon concise et naturelle, comme dans une conversation orale. " +
     "Ta réponse est lue à voix haute par une synthèse vocale : n'utilise jamais d'émojis, d'astérisques, " +
     'de listes à puces ni de mise en forme, uniquement du texte normal. ' +
+    dateTime +
     addressing +
     "Tu as accès à des outils pour agir réellement : ouvrir une application, programmer un rappel vocal, " +
     "regarder l'écran de l'utilisateur, chercher sur le web. Pour toute action concrète, tu dois " +
