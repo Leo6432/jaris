@@ -4,6 +4,7 @@ import { checkVoiceSetup } from './config'
 import { VoicePipeline } from './services/voicePipeline'
 import { ensureMemoryDir, getMemoryDir, getMemoryGraph, recallNote } from './services/memoryStore'
 import { getProfile, saveProfile } from './services/profileStore'
+import { connectGmail, disconnectGmail, getGmailStatus } from './services/googleAuth'
 import {
   IPC_CHANNELS,
   type JarisEmotion,
@@ -106,6 +107,9 @@ app.whenReady().then(() => {
   })
   ipcMain.handle(IPC_CHANNELS.getMemoryGraph, () => buildMemoryGraphWithUser())
   ipcMain.handle(IPC_CHANNELS.getMemoryNoteContent, (_event, title: string) => recallNote(title))
+  ipcMain.handle(IPC_CHANNELS.getGmailStatus, () => getGmailStatus())
+  ipcMain.handle(IPC_CHANNELS.connectGmail, () => connectGmail())
+  ipcMain.handle(IPC_CHANNELS.disconnectGmail, () => disconnectGmail())
   const mainWindow = createWindow()
   void startVoicePipeline(mainWindow)
 })

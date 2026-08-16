@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import JarisFace from '@/components/JarisFace'
 import MemoryBrain from '@/components/MemoryBrain'
+import OptionsMenu from '@/components/OptionsMenu'
 import { useJarisStore, type JarisEmotion } from '@/store/useJarisStore'
 import type { MemoryGraph } from '../shared/ipc'
 
@@ -103,6 +104,7 @@ export default function App(): JSX.Element {
 
   return (
     <div className="app">
+      <OptionsMenu />
       <JarisFace emotion={emotion} />
       <div className="app__status">{STATUS_LABEL[emotion]}</div>
       <div className="app__hint">Astuce : dis « Hey Jarvis » ou appuie sur + pour activer l'écoute</div>

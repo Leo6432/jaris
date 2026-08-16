@@ -1,4 +1,4 @@
-import type { JarisEmotion, MemoryGraph, Profile, VoiceReplyPayload, VoiceSetupStatusPayload } from '../shared/ipc'
+import type { GmailStatus, JarisEmotion, MemoryGraph, Profile, VoiceReplyPayload, VoiceSetupStatusPayload } from '../shared/ipc'
 
 export {}
 
@@ -18,6 +18,9 @@ declare global {
       openMemoryFolder: () => Promise<void>
       getMemoryGraph: () => Promise<MemoryGraph>
       getMemoryNoteContent: (title: string) => Promise<string>
+      getGmailStatus: () => Promise<GmailStatus>
+      connectGmail: () => Promise<GmailStatus>
+      disconnectGmail: () => Promise<void>
     }
   }
 }

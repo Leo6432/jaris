@@ -35,6 +35,12 @@ export interface MemoryGraph {
   links: MemoryGraphLink[]
 }
 
+/** État de la connexion Gmail (étape 11), pour le menu Options. */
+export interface GmailStatus {
+  connected: boolean
+  email: string | null
+}
+
 /** Canaux IPC main -> renderer pour piloter le visage et afficher la conversation. */
 export const IPC_CHANNELS = {
   emotion: 'jaris:emotion',
@@ -54,5 +60,11 @@ export const IPC_CHANNELS = {
   /** renderer <-> main : récupère le contenu markdown complet d'une note (clic sur un nœud du graphe). */
   getMemoryNoteContent: 'jaris:get-memory-note-content',
   /** renderer -> main : la lecture audio de la dernière réponse est terminée, on peut repasser en idle. */
-  audioEnded: 'jaris:audio-ended'
+  audioEnded: 'jaris:audio-ended',
+  /** renderer <-> main : état de la connexion Gmail. */
+  getGmailStatus: 'jaris:get-gmail-status',
+  /** renderer <-> main : lance le flux de connexion Gmail (ouvre le navigateur système). */
+  connectGmail: 'jaris:connect-gmail',
+  /** renderer -> main : déconnecte le compte Gmail. */
+  disconnectGmail: 'jaris:disconnect-gmail'
 } as const

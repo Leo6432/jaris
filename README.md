@@ -290,8 +290,42 @@ modifier à la main.
 
 ## Envoi de mails (étape 11)
 
-Jaris peut envoyer un vrai mail via un compte SMTP classique (Gmail,
-Outlook, ou tout autre fournisseur). Renseigne dans `.env` :
+Jaris peut envoyer un vrai mail, de deux façons possibles (la première a
+priorité si les deux sont configurées) :
+
+### Option recommandée : connecter Gmail depuis l'appli
+
+Bouton **"Options"** en haut à gauche de la fenêtre → **"Connecter Gmail"**.
+Le navigateur système s'ouvre sur l'écran de connexion Google, tu acceptes
+la permission "envoyer des mails en ton nom", et c'est tout — aucun mot de
+passe à taper dans Jaris. Le jeton est stocké chiffré sur ta machine (via
+le trousseau du système, `safeStorage` d'Electron), jamais en clair. Le
+même bouton Options permet de déconnecter le compte et de s'en reconnecter
+à tout moment.
+
+Ça nécessite de créer un identifiant OAuth "Application de bureau" sur
+Google Cloud Console (gratuit, une seule fois) :
+
+1. Va sur [console.cloud.google.com](https://console.cloud.google.com/),
+   crée un projet (ou réutilise un projet existant)
+2. **APIs et services → Bibliothèque** → active l'API **Gmail API**
+3. **APIs et services → Écran de consentement OAuth** → type "Externe",
+   remplis le nom de l'app, ton mail ; en mode "Test", ajoute ton propre
+   compte Gmail comme utilisateur de test (pas besoin de validation Google
+   pour un usage personnel)
+4. **APIs et services → Identifiants → Créer des identifiants → ID client
+   OAuth**, type **"Application de bureau"**
+5. Copie le "ID client" et le "Code secret du client" générés dans `.env` :
+
+```
+GOOGLE_CLIENT_ID=xxxxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=xxxxx
+```
+
+### Option de secours : SMTP classique
+
+Si aucun compte Gmail n'est connecté, Jaris utilise la configuration SMTP
+de secours dans `.env` :
 
 ```
 SMTP_HOST=smtp.gmail.com
@@ -302,7 +336,8 @@ SMTP_PASS=un-mot-de-passe-d-application
 SMTP_FROM=
 ```
 
-Pour Gmail, utilise un [mot de passe d'application](https://myaccount.google.com/apppasswords)
-(pas ton mot de passe normal, qui ne fonctionnera pas). Sans configuration
-SMTP, Jaris te préviendra à voix haute qu'il ne peut pas envoyer le mail au
-lieu d'échouer silencieusement.
+Pour Gmail par ce biais, utilise un [mot de passe d'application](https://myaccount.google.com/apppasswords)
+(pas ton mot de passe normal, qui ne fonctionnera pas).
+
+Si ni l'un ni l'autre n'est configuré, Jaris te préviendra à voix haute
+qu'il ne peut pas envoyer le mail au lieu d'échouer silencieusement.

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC_CHANNELS,
+  type GmailStatus,
   type JarisEmotion,
   type MemoryGraph,
   type Profile,
@@ -27,7 +28,10 @@ const api = {
   saveProfile: (profile: Profile): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.saveProfile, profile),
   openMemoryFolder: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openMemoryFolder),
   getMemoryGraph: (): Promise<MemoryGraph> => ipcRenderer.invoke(IPC_CHANNELS.getMemoryGraph),
-  getMemoryNoteContent: (title: string): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.getMemoryNoteContent, title)
+  getMemoryNoteContent: (title: string): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.getMemoryNoteContent, title),
+  getGmailStatus: (): Promise<GmailStatus> => ipcRenderer.invoke(IPC_CHANNELS.getGmailStatus),
+  connectGmail: (): Promise<GmailStatus> => ipcRenderer.invoke(IPC_CHANNELS.connectGmail),
+  disconnectGmail: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.disconnectGmail)
 }
 
 export type JarisApi = typeof api

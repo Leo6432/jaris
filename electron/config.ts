@@ -57,6 +57,11 @@ export const config = {
     pass: readEnv('SMTP_PASS'),
     /** Adresse affichée comme expéditeur, souvent identique à SMTP_USER. */
     from: readEnv('SMTP_FROM')
+  },
+  google: {
+    /** Identifiants OAuth "Application de bureau" créés sur Google Cloud Console (voir README). */
+    clientId: readEnv('GOOGLE_CLIENT_ID'),
+    clientSecret: readEnv('GOOGLE_CLIENT_SECRET')
   }
 } as const
 
