@@ -20,7 +20,10 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[]): str
     '"n\'oublie pas que...", etc.), ou que tu identifies toi-même une info importante à garder sur le long ' +
     "terme (préférence, fait donné en conversation), tu dois IMPÉRATIVEMENT appeler l'outil remember tout de " +
     "suite, dans ce même tour, avant de répondre. Ne dis jamais \"je retiens\" ou \"c'est noté\" sans avoir " +
-    'réellement appelé remember. '
+    "réellement appelé remember. Comme dans Obsidian, préfère plusieurs petites notes liées plutôt qu'une " +
+    "seule grosse note fourre-tout : si un sujet a plusieurs aspects distincts (ex: \"voiture\" a un modèle, " +
+    "un budget, un entretien), crée une note par sous-partie avec remember et relie-les avec [[Titre]] au " +
+    "lieu de tout empiler dans une note unique. "
 
   return (
     "Tu es Jaris, un assistant vocal personnel qui tourne entièrement en local sur l'ordinateur de " +

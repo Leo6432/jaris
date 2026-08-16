@@ -4,6 +4,15 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { config } from '../config'
 
+/**
+ * En français, le "s" final de "Jaris" est normalement muet ("Jari"). "Jarisse" se prononce
+ * correctement ("Jariss"), sur le modèle de "Suisse" — uniquement pour la synthèse vocale, le texte
+ * affiché à l'écran garde la vraie orthographe.
+ */
+function toSpeechText(text: string): string {
+  return text.replace(/\bJaris\b/gi, 'Jarisse')
+}
+
 /** Synthétise `text` en audio via Piper (binaire natif) et renvoie un WAV. */
 export async function synthesizeSpeech(text: string): Promise<Buffer> {
   const dir = await mkdtemp(join(tmpdir(), 'jaris-tts-'))
@@ -19,7 +28,7 @@ export async function synthesizeSpeech(text: string): Promise<Buffer> {
         if (code === 0) resolve()
         else reject(new Error(`piper a échoué (code ${code}): ${stderr}`))
       })
-      proc.stdin.write(text)
+      proc.stdin.write(toSpeechText(text))
       proc.stdin.end()
     })
 
