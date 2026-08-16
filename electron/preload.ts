@@ -26,6 +26,7 @@ const api = {
   notifyAudioEnded: (): void => ipcRenderer.send(IPC_CHANNELS.audioEnded),
   getProfile: (): Promise<Profile | null> => ipcRenderer.invoke(IPC_CHANNELS.getProfile),
   saveProfile: (profile: Profile): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.saveProfile, profile),
+  markGmailOnboardingDone: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.markGmailOnboardingDone),
   openMemoryFolder: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openMemoryFolder),
   getMemoryGraph: (): Promise<MemoryGraph> => ipcRenderer.invoke(IPC_CHANNELS.getMemoryGraph),
   getMemoryNoteContent: (title: string): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.getMemoryNoteContent, title),

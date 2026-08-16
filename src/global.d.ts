@@ -15,6 +15,7 @@ declare global {
       notifyAudioEnded: () => void
       getProfile: () => Promise<Profile | null>
       saveProfile: (profile: Profile) => Promise<void>
+      markGmailOnboardingDone: () => Promise<void>
       openMemoryFolder: () => Promise<void>
       getMemoryGraph: () => Promise<MemoryGraph>
       getMemoryNoteContent: (title: string) => Promise<string>

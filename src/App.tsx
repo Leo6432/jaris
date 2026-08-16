@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import GmailOnboarding from '@/components/GmailOnboarding'
 import JarisFace from '@/components/JarisFace'
 import MemoryBrain from '@/components/MemoryBrain'
 import OptionsMenu from '@/components/OptionsMenu'
@@ -28,6 +29,7 @@ export default function App(): JSX.Element {
 
   // undefined = pas encore chargé, null = pas de profil (premier lancement)
   const [profileName, setProfileName] = useState<string | null | undefined>(undefined)
+  const [gmailOnboardingDone, setGmailOnboardingDone] = useState<boolean | undefined>(undefined)
   const [nameInput, setNameInput] = useState('')
   const [memoryGraph, setMemoryGraph] = useState<MemoryGraph | null>(null)
 
@@ -36,14 +38,20 @@ export default function App(): JSX.Element {
   }
 
   useEffect(() => {
-    window.jaris.getProfile().then((profile) => setProfileName(profile?.name ?? null))
+    window.jaris.getProfile().then((profile) => {
+      setProfileName(profile?.name ?? null)
+      setGmailOnboardingDone(profile?.gmailOnboardingDone ?? false)
+    })
   }, [])
 
   const handleOnboardingSubmit = (event: React.FormEvent): void => {
     event.preventDefault()
     const name = nameInput.trim()
     if (!name) return
-    void window.jaris.saveProfile({ name }).then(() => setProfileName(name))
+    void window.jaris.saveProfile({ name }).then(() => {
+      setProfileName(name)
+      setGmailOnboardingDone(false)
+    })
   }
 
   useEffect(() => {
@@ -100,6 +108,10 @@ export default function App(): JSX.Element {
         </form>
       </div>
     )
+  }
+
+  if (!gmailOnboardingDone) {
+    return <GmailOnboarding onDone={() => setGmailOnboardingDone(true)} />
   }
 
   return (

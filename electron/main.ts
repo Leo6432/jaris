@@ -3,7 +3,7 @@ import { join } from 'path'
 import { checkVoiceSetup } from './config'
 import { VoicePipeline } from './services/voicePipeline'
 import { ensureMemoryDir, getMemoryDir, getMemoryGraph, recallNote } from './services/memoryStore'
-import { getProfile, saveProfile } from './services/profileStore'
+import { getProfile, markGmailOnboardingDone, saveProfile } from './services/profileStore'
 import { connectGmail, disconnectGmail, getGmailStatus } from './services/googleAuth'
 import {
   IPC_CHANNELS,
@@ -101,6 +101,7 @@ app.whenReady().then(() => {
   ipcMain.on(IPC_CHANNELS.audioEnded, () => pipeline?.notifyAudioEnded())
   ipcMain.handle(IPC_CHANNELS.getProfile, () => getProfile())
   ipcMain.handle(IPC_CHANNELS.saveProfile, (_event, profile: Profile) => saveProfile(profile))
+  ipcMain.handle(IPC_CHANNELS.markGmailOnboardingDone, () => markGmailOnboardingDone())
   ipcMain.handle(IPC_CHANNELS.openMemoryFolder, async () => {
     await ensureMemoryDir()
     await shell.openPath(getMemoryDir())

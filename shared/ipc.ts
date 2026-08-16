@@ -16,6 +16,8 @@ export interface VoiceSetupStatusPayload {
 
 export interface Profile {
   name: string
+  /** true une fois l'écran "connecter Gmail ou ignorer" affiché après le premier lancement. */
+  gmailOnboardingDone?: boolean
 }
 
 export interface MemoryGraphNode {
@@ -53,6 +55,8 @@ export const IPC_CHANNELS = {
   /** renderer <-> main : profil utilisateur (prénom), demandé une seule fois au premier lancement. */
   getProfile: 'jaris:get-profile',
   saveProfile: 'jaris:save-profile',
+  /** renderer -> main : marque l'écran de connexion Gmail comme vu (après connexion ou "Ignorer"). */
+  markGmailOnboardingDone: 'jaris:mark-gmail-onboarding-done',
   /** renderer -> main : ouvre le dossier de mémoire markdown de Jaris dans l'explorateur de fichiers. */
   openMemoryFolder: 'jaris:open-memory-folder',
   /** renderer <-> main : récupère les notes de la mémoire et leurs liens, pour la vue graphe 3D. */

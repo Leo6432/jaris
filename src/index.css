@@ -318,6 +318,17 @@ body {
   cursor: pointer;
 }
 
+.app__onboarding button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.app__onboarding button.app__onboarding-secondary {
+  background: transparent;
+  border: 1px solid rgba(127, 163, 201, 0.35);
+  color: #7fa3c9;
+}
+
 .jaris-face {
   position: relative;
   display: flex;
