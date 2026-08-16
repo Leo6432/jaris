@@ -1,4 +1,4 @@
-import type { JarisEmotion, Profile, VoiceReplyPayload, VoiceSetupStatusPayload } from '../shared/ipc'
+import type { JarisEmotion, MemoryGraph, Profile, VoiceReplyPayload, VoiceSetupStatusPayload } from '../shared/ipc'
 
 export {}
 
@@ -16,6 +16,7 @@ declare global {
       getProfile: () => Promise<Profile | null>
       saveProfile: (profile: Profile) => Promise<void>
       openMemoryFolder: () => Promise<void>
+      getMemoryGraph: () => Promise<MemoryGraph>
     }
   }
 }

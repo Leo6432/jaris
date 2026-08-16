@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import { mkdir, readFile, readdir, writeFile } from 'fs/promises'
 import { join } from 'path'
+import type { MemoryGraph, MemoryGraphLink } from '../../shared/ipc'
 
 const memoryDir = join(app.getPath('userData'), 'memory')
 
@@ -52,4 +53,23 @@ export async function recallNote(title: string): Promise<string> {
   const match = titles.find((t) => t.toLowerCase() === wanted) ?? titles.find((t) => t.toLowerCase().includes(wanted))
   if (!match) return `Aucune note trouvée pour "${title}".`
   return readFile(notePath(match), 'utf-8')
+}
+
+const LINK_PATTERN = /\[\[([^\]]+)\]\]/g
+
+/** Notes existantes et liens [[Titre]] entre elles, pour la vue graphe 3D du "cerveau" de Jaris. */
+export async function getMemoryGraph(): Promise<MemoryGraph> {
+  const titles = await listMemoryTitles()
+  const titleSet = new Set(titles)
+  const links: MemoryGraphLink[] = []
+
+  for (const title of titles) {
+    const content = await readFile(notePath(title), 'utf-8')
+    for (const match of content.matchAll(LINK_PATTERN)) {
+      const target = match[1].trim()
+      if (target !== title && titleSet.has(target)) links.push({ source: title, target })
+    }
+  }
+
+  return { nodes: titles.map((id) => ({ id })), links }
 }

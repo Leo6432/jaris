@@ -30,56 +30,60 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   simples fichiers markdown liés entre eux sur le disque, plutôt que dans une
   base opaque. Un bouton "Voir le cerveau de Jaris" dans l'interface ouvre ce
   dossier de mémoire pour le consulter/modifier à la main — voir plus bas
-- ⬜ Étape 10 — Envoi de mails
-- ⬜ Étape 11 — Sélection automatique de modèle selon la complexité de la
+- ⬜ Étape 10 — Graphe 3D du cerveau de Jaris : le bouton "Voir le cerveau de
+  Jaris" (étape 9) affiche, en plus d'ouvrir le dossier de fichiers, une
+  vraie visualisation en 3D des notes markdown et de leurs liens sous forme
+  de graphe interactif (rotation, zoom), comme la vue graphe d'Obsidian
+- ⬜ Étape 11 — Envoi de mails
+- ⬜ Étape 12 — Sélection automatique de modèle selon la complexité de la
   question : un petit modèle rapide (ex: `phi-4-mini`) pour les questions
   simples/rapides, `qwen3.5` pour le reste, afin de gagner du temps et de la
   VRAM sur les échanges courants sans sacrifier la qualité sur les questions
   qui le méritent
-- ⬜ Étape 12 — Surveillance des ressources du PC : Jaris prévient à voix
+- ⬜ Étape 13 — Surveillance des ressources du PC : Jaris prévient à voix
   haute quand la machine est surchargée (GPU, CPU, RAM trop élevés), pour
   éviter de lancer une tâche lourde ou d'insister sur une réponse lente sans
   prévenir
-- ⬜ Étape 13 — Contrôle clavier et souris : Jaris peut écrire du texte et
+- ⬜ Étape 14 — Contrôle clavier et souris : Jaris peut écrire du texte et
   cliquer à la place de l'utilisateur, pour automatiser des actions
   complètes sur l'ordinateur (pas seulement ouvrir une application)
-- ⬜ Étape 14 — Intégration téléphone : voir les notifications, envoyer des
+- ⬜ Étape 15 — Intégration téléphone : voir les notifications, envoyer des
   messages et passer des appels depuis le téléphone de l'utilisateur, en
   s'appuyant sur un projet open source existant faisant le pont PC/téléphone
   (ex: KDE Connect) plutôt que de tout réécrire
-- ⬜ Étape 15 — Installeur en un clic : empaqueter toute la chaîne (app +
+- ⬜ Étape 16 — Installeur en un clic : empaqueter toute la chaîne (app +
   Ollama + modèles) dans un seul installeur simple, pour que d'autres
   utilisateurs puissent installer Jaris sans suivre toutes les étapes
   manuelles de ce README
-- ⬜ Étape 16 — Amélioration du design de l'interface
-- ⬜ Étape 17 — Animation pendant la capture/analyse d'écran, pour donner un
+- ⬜ Étape 17 — Amélioration du design de l'interface
+- ⬜ Étape 18 — Animation pendant la capture/analyse d'écran, pour donner un
   retour visuel pendant que Jaris "regarde" (étape 6)
-- ⬜ Étape 18 — Mode toujours visible : petite fenêtre Jaris affichée en
+- ⬜ Étape 19 — Mode toujours visible : petite fenêtre Jaris affichée en
   permanence en bas à droite de l'écran (widget flottant), au lieu de
   n'apparaître que quand la fenêtre principale a le focus
-- ⬜ Étape 19 — Mise à jour automatique de l'application dès qu'une nouvelle
+- ⬜ Étape 20 — Mise à jour automatique de l'application dès qu'une nouvelle
   version est publiée
-- ⬜ Étape 20 — Préparation à la vente (~5€) : licence, protection contre la
+- ⬜ Étape 21 — Préparation à la vente (~5€) : licence, protection contre la
   copie/redistribution du logiciel. Nécessitera au préalable de vérifier la
   compatibilité des licences des briques open source utilisées (Ollama,
   modèles Qwen, openWakeWord, faster-whisper, Piper, SearXNG) avec une
   distribution commerciale
-- ⬜ Étape 21 — Site web avec tableau de bord personnel : chaque utilisateur
+- ⬜ Étape 22 — Site web avec tableau de bord personnel : chaque utilisateur
   peut noter son planning et sa to-do list sur le site, et Jaris peut y
   écrire des informations
-- ⬜ Étape 22 — Jaris connaît la date et l'heure : briefing du matin
+- ⬜ Étape 23 — Jaris connaît la date et l'heure : briefing du matin
   (planning du jour, tâches à faire), et ajoute automatiquement une tâche à
   la to-do list du site dès que l'utilisateur en mentionne une à voix haute
-- ✅ Étape 23 — Personnalisation, prénom de l'utilisateur : au tout premier
+- ✅ Étape 24 — Personnalisation, prénom de l'utilisateur : au tout premier
   lancement, Jaris demande comment l'appeler (une seule fois, sauvegardé
   localement) et s'adresse ensuite à l'utilisateur par son prénom en
   conversation — voir plus bas
-- ⬜ Étape 24 — Paramètres avancés : page dédiée pour tout personnaliser
+- ⬜ Étape 25 — Paramètres avancés : page dédiée pour tout personnaliser
   (connecter son planning/calendrier, son Gmail, choisir la langue, etc.)
-- ⬜ Étape 25 — Sous-agents : Jaris peut lancer plusieurs sous-agents (agents
+- ⬜ Étape 26 — Sous-agents : Jaris peut lancer plusieurs sous-agents (agents
   web, etc.) en parallèle pour des tâches complexes qui demandent plusieurs
   actions en même temps, au lieu de tout faire en une seule séquence
-- ⬜ Étape 26 — Scan de capacité au premier lancement : Jaris analyse le PC
+- ⬜ Étape 27 — Scan de capacité au premier lancement : Jaris analyse le PC
   (GPU, VRAM, RAM) pour vérifier qu'il peut faire tourner les modèles par
   défaut ; si la machine n'est pas assez puissante, il propose automatiquement
   des modèles plus légers. Dans le bouton options, une liste de modèles
@@ -87,18 +91,18 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   manuelle) de 3 modèles selon le profil de la machine : un modèle qui
   réfléchit beaucoup pour les tâches complexes, un modèle médium, et un
   modèle "flash" rapide pour les questions simples
-- ⬜ Étape 27 — Mentions légales / conditions d'utilisation à faire accepter
+- ⬜ Étape 28 — Mentions légales / conditions d'utilisation à faire accepter
   avant la première utilisation, pour dégager la responsabilité en cas
   d'action problématique de l'IA
-- ⬜ Étape 28 — Protection contre la redistribution : identifiant unique par
+- ⬜ Étape 29 — Protection contre la redistribution : identifiant unique par
   utilisateur/licence pour pouvoir tracer une copie de Jaris qui circule ou
   est partagée à d'autres personnes (piste à creuser, pas encore figée)
-- ⬜ Étape 29 — Publication et monétisation : site pour vendre un abonnement
+- ⬜ Étape 30 — Publication et monétisation : site pour vendre un abonnement
   (~10€/mois)
-- ⬜ Étape 30 — Vidéo de présentation : animation en full motion design
+- ⬜ Étape 31 — Vidéo de présentation : animation en full motion design
   générée avec l'IA pour présenter le projet Jaris, avec sound effects et
   musique
-- ⬜ Étape 31 — Levée de fonds : page sur le site pour présenter le projet à
+- ⬜ Étape 32 — Levée de fonds : page sur le site pour présenter le projet à
   des investisseurs et demander des fonds pour agrandir le site
 
 ## Démarrer en développement

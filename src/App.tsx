@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import JarisFace from '@/components/JarisFace'
+import MemoryBrain from '@/components/MemoryBrain'
 import { useJarisStore, type JarisEmotion } from '@/store/useJarisStore'
+import type { MemoryGraph } from '../shared/ipc'
 
 const STATUS_LABEL: Record<JarisEmotion, string> = {
   idle: 'Jaris dort...',
@@ -26,6 +28,11 @@ export default function App(): JSX.Element {
   // undefined = pas encore chargé, null = pas de profil (premier lancement)
   const [profileName, setProfileName] = useState<string | null | undefined>(undefined)
   const [nameInput, setNameInput] = useState('')
+  const [memoryGraph, setMemoryGraph] = useState<MemoryGraph | null>(null)
+
+  const openMemoryBrain = (): void => {
+    void window.jaris.getMemoryGraph().then(setMemoryGraph)
+  }
 
   useEffect(() => {
     window.jaris.getProfile().then((profile) => setProfileName(profile?.name ?? null))
@@ -99,7 +106,7 @@ export default function App(): JSX.Element {
       <JarisFace emotion={emotion} />
       <div className="app__status">{STATUS_LABEL[emotion]}</div>
       <div className="app__hint">Astuce : dis « Hey Jarvis » ou appuie sur + pour activer l'écoute</div>
-      <button className="app__memory-button" onClick={() => window.jaris.openMemoryFolder()}>
+      <button className="app__memory-button" onClick={openMemoryBrain}>
         Voir le cerveau de Jaris
       </button>
 
@@ -128,6 +135,8 @@ export default function App(): JSX.Element {
         onEnded={() => window.jaris.notifyAudioEnded()}
         onError={() => window.jaris.notifyAudioEnded()}
       />
+
+      {memoryGraph && <MemoryBrain graph={memoryGraph} onClose={() => setMemoryGraph(null)} />}
     </div>
   )
 }

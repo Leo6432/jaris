@@ -81,6 +81,60 @@ body {
   color: #d9ecff;
 }
 
+.memory-brain {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(circle at 50% 30%, #0c1420 0%, #05070c 70%);
+}
+
+.memory-brain__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  font-size: 0.85rem;
+  color: #9fc3e6;
+  border-bottom: 1px solid rgba(127, 163, 201, 0.2);
+}
+
+.memory-brain__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.memory-brain__actions button {
+  background: transparent;
+  border: 1px solid rgba(127, 163, 201, 0.35);
+  color: #7fa3c9;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.memory-brain__actions button:hover {
+  border-color: #37e2ff;
+  color: #d9ecff;
+}
+
+.memory-brain__canvas {
+  flex: 1;
+}
+
+.memory-brain__empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4d6a87;
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 0 32px;
+}
+
 .app__setup-warning {
   max-width: 480px;
   text-align: center;

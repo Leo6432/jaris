@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC_CHANNELS, type JarisEmotion, type Profile, type VoiceReplyPayload, type VoiceSetupStatusPayload } from '../shared/ipc'
+import {
+  IPC_CHANNELS,
+  type JarisEmotion,
+  type MemoryGraph,
+  type Profile,
+  type VoiceReplyPayload,
+  type VoiceSetupStatusPayload
+} from '../shared/ipc'
 
 function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
   const listener = (_event: Electron.IpcRendererEvent, payload: T): void => callback(payload)
@@ -18,7 +25,8 @@ const api = {
   notifyAudioEnded: (): void => ipcRenderer.send(IPC_CHANNELS.audioEnded),
   getProfile: (): Promise<Profile | null> => ipcRenderer.invoke(IPC_CHANNELS.getProfile),
   saveProfile: (profile: Profile): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.saveProfile, profile),
-  openMemoryFolder: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openMemoryFolder)
+  openMemoryFolder: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openMemoryFolder),
+  getMemoryGraph: (): Promise<MemoryGraph> => ipcRenderer.invoke(IPC_CHANNELS.getMemoryGraph)
 }
 
 export type JarisApi = typeof api
