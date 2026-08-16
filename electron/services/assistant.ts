@@ -1,13 +1,23 @@
 import { chatWithOllama, type OllamaMessage } from './ollama'
+import { listMemoryTitles } from './memoryStore'
 import { TOOLS, createToolExecutor } from './tools'
 
-function buildSystemPrompt(userName: string | null): string {
+function buildSystemPrompt(userName: string | null, memoryTitles: string[]): string {
   const addressing = userName
     ? `L'utilisateur s'appelle ${userName} : appelle-le par son prénom de temps en temps, sans exagérer. `
     : ''
 
   const now = new Date()
   const dateTime = `Nous sommes le ${now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}, il est ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}. `
+
+  const memory = memoryTitles.length
+    ? `Tu as une mémoire locale sous forme de notes markdown liées entre elles (comme Obsidian). Notes déjà ` +
+      `connues : ${memoryTitles.join(', ')}. Utilise recall_memory pour relire le contenu complet d'une note ` +
+      "avant d'en parler avec précision, et remember pour en créer ou compléter une avec une info importante " +
+      'à garder sur le long terme. '
+    : "Tu as une mémoire locale sous forme de notes markdown (comme Obsidian), encore vide. Utilise l'outil " +
+      "remember pour y enregistrer une info importante à retenir sur l'utilisateur (préférence, fait donné en " +
+      'conversation) quand ça vaut la peine. '
 
   return (
     "Tu es Jaris, un assistant vocal personnel qui tourne entièrement en local sur l'ordinateur de " +
@@ -16,6 +26,7 @@ function buildSystemPrompt(userName: string | null): string {
     'de listes à puces ni de mise en forme, uniquement du texte normal. ' +
     dateTime +
     addressing +
+    memory +
     "Tu as accès à des outils pour agir réellement : ouvrir une application, programmer un rappel vocal, " +
     "regarder l'écran de l'utilisateur, chercher sur le web. Pour toute action concrète, tu dois " +
     "IMPÉRATIVEMENT appeler l'outil correspondant via un vrai appel de fonction, immédiatement, sans phrase " +
@@ -23,7 +34,8 @@ function buildSystemPrompt(userName: string | null): string {
     "réellement appelé l'outil qui l'exécute dans ce même tour : soit tu appelles l'outil tout de suite, soit " +
     "tu réponds directement sans outil. Quand tu donnes une information factuelle trouvée sur le web (prix, " +
     "cours, score, statistique...), donne le chiffre précis d'une source fiable, jamais une moyenne ou une " +
-    'fourchette entre plusieurs sites : choisis la donnée la plus claire et la plus récente parmi les résultats.'
+    "fourchette entre plusieurs sites : choisis la donnée la plus claire et la plus récente parmi les résultats, " +
+    'et précise le nom du site source.'
   )
 }
 
@@ -37,8 +49,9 @@ export async function converse(
   onLog?: (message: string) => void
 ): Promise<string> {
   const executeTool = createToolExecutor(onReminderFire)
+  const memoryTitles = await listMemoryTitles()
   const messages: OllamaMessage[] = [
-    { role: 'system', content: buildSystemPrompt(userName) },
+    { role: 'system', content: buildSystemPrompt(userName, memoryTitles) },
     { role: 'user', content: prompt }
   ]
 

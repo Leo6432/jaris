@@ -2,6 +2,7 @@ import { app, ipcMain, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { checkVoiceSetup } from './config'
 import { VoicePipeline } from './services/voicePipeline'
+import { ensureMemoryDir, getMemoryDir } from './services/memoryStore'
 import { getProfile, saveProfile } from './services/profileStore'
 import { IPC_CHANNELS, type JarisEmotion, type Profile, type VoiceReplyPayload, type VoiceSetupStatusPayload } from '../shared/ipc'
 
@@ -79,6 +80,10 @@ app.whenReady().then(() => {
   ipcMain.on(IPC_CHANNELS.triggerWake, () => pipeline?.triggerWake())
   ipcMain.handle(IPC_CHANNELS.getProfile, () => getProfile())
   ipcMain.handle(IPC_CHANNELS.saveProfile, (_event, profile: Profile) => saveProfile(profile))
+  ipcMain.handle(IPC_CHANNELS.openMemoryFolder, async () => {
+    await ensureMemoryDir()
+    await shell.openPath(getMemoryDir())
+  })
   const mainWindow = createWindow()
   void startVoicePipeline(mainWindow)
 })

@@ -66,6 +66,21 @@ body {
   font-weight: 500;
 }
 
+.app__memory-button {
+  background: transparent;
+  border: 1px solid rgba(127, 163, 201, 0.35);
+  color: #7fa3c9;
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.app__memory-button:hover {
+  border-color: #37e2ff;
+  color: #d9ecff;
+}
+
 .app__setup-warning {
   max-width: 480px;
   text-align: center;

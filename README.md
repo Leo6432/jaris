@@ -23,13 +23,13 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ✅ Étape 7 — Recherche web : Jaris peut chercher sur le web via une
   instance [SearXNG](https://github.com/searxng/searxng) auto-hébergée
   (Docker), aucune clé API ni compte — voir plus bas
-- ⬜ Étape 8 — Lancer `docker compose up -d` et vérifier que la recherche web
-  (étape 7) fonctionne bien avant de passer à la suite
-- ⬜ Étape 9 — Mémoire locale façon Obsidian : Jaris enregistre ce qu'il
+- ✅ Étape 8 — `docker compose up -d` lancé, recherche web (étape 7) testée
+  et fonctionnelle
+- ✅ Étape 9 — Mémoire locale façon Obsidian : Jaris enregistre ce qu'il
   retient (préférences, infos données en conversation, résumés) dans de
   simples fichiers markdown liés entre eux sur le disque, plutôt que dans une
   base opaque. Un bouton "Voir le cerveau de Jaris" dans l'interface ouvre ce
-  dossier de mémoire pour le consulter/modifier à la main
+  dossier de mémoire pour le consulter/modifier à la main — voir plus bas
 - ⬜ Étape 10 — Envoi de mails
 - ⬜ Étape 11 — Sélection automatique de modèle selon la complexité de la
   question : un petit modèle rapide (ex: `phi-4-mini`) pour les questions
@@ -257,3 +257,20 @@ connaît pas ("cherche sur le web...", ou même sans le dire explicitement).
 Pour arrêter SearXNG : `docker compose down`.
 
 Aucune clé API payante n'est nécessaire à aucune étape.
+
+## Mémoire locale façon Obsidian (étape 9)
+
+Jaris peut retenir des informations d'une conversation à l'autre (préférences,
+faits donnés par l'utilisateur, résumés à garder) dans de simples fichiers
+markdown, un par note, stockés en clair sur le disque (dossier `memory` des
+données de l'app) — pas de base de données opaque. Les notes peuvent se lier
+entre elles avec la syntaxe `[[Titre de l'autre note]]`, comme dans Obsidian.
+
+Le bouton "Voir le cerveau de Jaris" dans l'interface ouvre ce dossier
+directement dans l'explorateur de fichiers, pour consulter ou modifier les
+notes à la main à tout moment.
+
+Jaris décide lui-même quand mémoriser une information importante (outil
+`remember`) et quand aller relire une note existante avant de répondre avec
+précision (outil `recall_memory`) — la liste des notes déjà connues lui est
+toujours donnée en contexte.

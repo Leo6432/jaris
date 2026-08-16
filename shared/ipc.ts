@@ -29,5 +29,7 @@ export const IPC_CHANNELS = {
   triggerWake: 'jaris:trigger-wake',
   /** renderer <-> main : profil utilisateur (prénom), demandé une seule fois au premier lancement. */
   getProfile: 'jaris:get-profile',
-  saveProfile: 'jaris:save-profile'
+  saveProfile: 'jaris:save-profile',
+  /** renderer -> main : ouvre le dossier de mémoire markdown de Jaris dans l'explorateur de fichiers. */
+  openMemoryFolder: 'jaris:open-memory-folder'
 } as const

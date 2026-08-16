@@ -1,5 +1,6 @@
 import type { OllamaTool } from './ollama'
 import { openApp } from './appLauncher'
+import { rememberNote, recallNote } from './memoryStore'
 import { scheduleReminder } from './reminders'
 import { lookAtScreen } from './vision'
 import { searchWeb } from './webSearch'
@@ -74,6 +75,39 @@ export const TOOLS: OllamaTool[] = [
         required: ['query']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'remember',
+      description:
+        "Enregistre une information importante à retenir sur le long terme dans la mémoire locale de Jaris " +
+        "(préférence de l'utilisateur, fait donné en conversation, résumé à garder). N'utilise cet outil que " +
+        "pour de l'info qui vaut la peine d'être gardée d'une conversation à l'autre, pas pour la conversation " +
+        "courante. Pour lier une note à une autre note existante, écris [[Titre de l'autre note]] dans le contenu.",
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Titre court de la note (ex: "Léo", "Préférences café")' },
+          content: { type: 'string', description: 'Le contenu à retenir, en markdown' }
+        },
+        required: ['title', 'content']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'recall_memory',
+      description: "Relit le contenu complet d'une note existante de la mémoire locale de Jaris.",
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Le titre (ou un mot-clé du titre) de la note à relire' }
+        },
+        required: ['title']
+      }
+    }
   }
 ]
 
@@ -90,6 +124,10 @@ export function createToolExecutor(onReminderFire: ReminderFireHandler) {
         return lookAtScreen(String(args.question ?? ''))
       case 'search_web':
         return searchWeb(String(args.query ?? ''))
+      case 'remember':
+        return rememberNote(String(args.title ?? ''), String(args.content ?? ''))
+      case 'recall_memory':
+        return recallNote(String(args.title ?? ''))
       default:
         return `Outil inconnu : ${name}`
     }

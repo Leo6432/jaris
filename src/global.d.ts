@@ -14,6 +14,7 @@ declare global {
       triggerWake: () => void
       getProfile: () => Promise<Profile | null>
       saveProfile: (profile: Profile) => Promise<void>
+      openMemoryFolder: () => Promise<void>
     }
   }
 }
