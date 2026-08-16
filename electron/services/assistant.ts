@@ -21,7 +21,9 @@ function buildSystemPrompt(userName: string | null): string {
     "IMPÉRATIVEMENT appeler l'outil correspondant via un vrai appel de fonction, immédiatement, sans phrase " +
     "d'annonce avant. Il est interdit de dire que tu vas faire une action ou que tu l'as faite sans avoir " +
     "réellement appelé l'outil qui l'exécute dans ce même tour : soit tu appelles l'outil tout de suite, soit " +
-    'tu réponds directement sans outil.'
+    "tu réponds directement sans outil. Quand tu donnes une information factuelle trouvée sur le web (prix, " +
+    "cours, score, statistique...), donne le chiffre précis d'une source fiable, jamais une moyenne ou une " +
+    'fourchette entre plusieurs sites : choisis la donnée la plus claire et la plus récente parmi les résultats.'
   )
 }
 
