@@ -61,33 +61,42 @@ export async function connectGmail(): Promise<GmailStatus> {
   const state = randomBytes(16).toString('hex')
 
   const { code, redirectUri } = await new Promise<{ code: string; redirectUri: string }>((resolve, reject) => {
+    // Capturé au démarrage du serveur : server.address() renvoie null une fois server.close() appelé,
+    // donc on ne peut pas relire le port après coup dans le handler de la requête.
+    let redirectUri = ''
+
     const server = createServer((req, res) => {
-      if (!req.url) return
-      const url = new URL(req.url, 'http://127.0.0.1')
-      if (url.pathname !== '/callback') {
-        res.writeHead(404)
-        res.end()
-        return
+      try {
+        if (!req.url) return
+        const url = new URL(req.url, 'http://127.0.0.1')
+        if (url.pathname !== '/callback') {
+          res.writeHead(404)
+          res.end()
+          return
+        }
+
+        const authCode = url.searchParams.get('code')
+        const error = url.searchParams.get('error')
+        const returnedState = url.searchParams.get('state')
+        const ok = !error && authCode && returnedState === state
+
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+        res.end(
+          ok
+            ? '<html><body>Compte Google connecté, tu peux fermer cette fenêtre et revenir à Jaris.</body></html>'
+            : '<html><body>Connexion Google annulée ou échouée, tu peux fermer cette fenêtre.</body></html>'
+        )
+        server.close()
+
+        if (!ok || !authCode) {
+          reject(new Error(error || 'Autorisation Google refusée ou invalide.'))
+          return
+        }
+        resolve({ code: authCode, redirectUri })
+      } catch (err) {
+        server.close()
+        reject(err instanceof Error ? err : new Error(String(err)))
       }
-
-      const authCode = url.searchParams.get('code')
-      const error = url.searchParams.get('error')
-      const returnedState = url.searchParams.get('state')
-      const ok = !error && authCode && returnedState === state
-
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-      res.end(
-        ok
-          ? '<html><body>Compte Google connecté, tu peux fermer cette fenêtre et revenir à Jaris.</body></html>'
-          : '<html><body>Connexion Google annulée ou échouée, tu peux fermer cette fenêtre.</body></html>'
-      )
-      server.close()
-
-      if (!ok || !authCode) {
-        reject(new Error(error || 'Autorisation Google refusée ou invalide.'))
-        return
-      }
-      resolve({ code: authCode, redirectUri: `http://127.0.0.1:${(server.address() as { port: number }).port}/callback` })
     })
 
     server.on('error', reject)
@@ -97,7 +106,7 @@ export async function connectGmail(): Promise<GmailStatus> {
         reject(new Error('Impossible de démarrer le serveur local pour la connexion Google.'))
         return
       }
-      const redirectUri = `http://127.0.0.1:${address.port}/callback`
+      redirectUri = `http://127.0.0.1:${address.port}/callback`
       const authUrl = createOAuthClient(redirectUri).generateAuthUrl({
         access_type: 'offline',
         prompt: 'consent',
