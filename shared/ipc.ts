@@ -20,6 +20,8 @@ export interface Profile {
 
 export interface MemoryGraphNode {
   id: string
+  /** true pour le nœud central représentant l'utilisateur (pas une vraie note markdown). */
+  isCenter?: boolean
 }
 
 export interface MemoryGraphLink {

@@ -13,14 +13,19 @@ interface SelectedNote {
   content: string | null
 }
 
+function isCenterNode(node: NodeObject): boolean {
+  return Boolean((node as { isCenter?: boolean }).isCenter)
+}
+
 function makeNodeLabel(node: NodeObject): SpriteText {
+  const isCenter = isCenterNode(node)
   const sprite = new SpriteText(String(node.id))
-  sprite.color = '#d9ecff'
-  sprite.textHeight = 3.5
+  sprite.color = isCenter ? '#ffb648' : '#d9ecff'
+  sprite.textHeight = isCenter ? 5 : 3.5
   sprite.backgroundColor = 'rgba(5, 7, 12, 0.75)'
   sprite.padding = 2
   sprite.borderRadius = 3
-  sprite.position.set(0, 9, 0)
+  sprite.position.set(0, isCenter ? 13 : 9, 0)
   return sprite
 }
 
@@ -37,7 +42,8 @@ export default function MemoryBrain({ graph, onClose }: MemoryBrainProps): JSX.E
       .graphData({ nodes: graph.nodes.map((n) => ({ ...n })), links: graph.links.map((l) => ({ ...l })) })
       .backgroundColor('rgba(0,0,0,0)')
       .nodeRelSize(4)
-      .nodeColor(() => '#37e2ff')
+      .nodeVal((node) => (isCenterNode(node) ? 3 : 1))
+      .nodeColor((node) => (isCenterNode(node) ? '#ffb648' : '#37e2ff'))
       .nodeOpacity(0.9)
       .nodeThreeObject(makeNodeLabel)
       .nodeThreeObjectExtend(true)

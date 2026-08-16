@@ -4,7 +4,14 @@ import { checkVoiceSetup } from './config'
 import { VoicePipeline } from './services/voicePipeline'
 import { ensureMemoryDir, getMemoryDir, getMemoryGraph, recallNote } from './services/memoryStore'
 import { getProfile, saveProfile } from './services/profileStore'
-import { IPC_CHANNELS, type JarisEmotion, type Profile, type VoiceReplyPayload, type VoiceSetupStatusPayload } from '../shared/ipc'
+import {
+  IPC_CHANNELS,
+  type JarisEmotion,
+  type MemoryGraph,
+  type Profile,
+  type VoiceReplyPayload,
+  type VoiceSetupStatusPayload
+} from '../shared/ipc'
 
 const isDev = !app.isPackaged
 let pipeline: VoicePipeline | null = null
@@ -12,6 +19,18 @@ let pipeline: VoicePipeline | null = null
 function currentSetupStatus(): VoiceSetupStatusPayload {
   const status = checkVoiceSetup()
   return { ready: status.wakewordReady && status.piperReady, missing: status.missing }
+}
+
+/** Ajoute un nœud central représentant l'utilisateur, relié à chaque note, pour donner une vraie structure au graphe (sinon les notes flottent sans lien tant que Jaris n'a pas écrit de [[...]] entre elles). */
+async function buildMemoryGraphWithUser(): Promise<MemoryGraph> {
+  const [graph, profile] = await Promise.all([getMemoryGraph(), getProfile()])
+  if (!profile?.name) return graph
+
+  const otherNodes = graph.nodes.filter((node) => node.id !== profile.name)
+  return {
+    nodes: [{ id: profile.name, isCenter: true }, ...otherNodes],
+    links: [...otherNodes.map((node) => ({ source: profile.name, target: node.id })), ...graph.links]
+  }
 }
 
 function createWindow(): BrowserWindow {
@@ -85,7 +104,7 @@ app.whenReady().then(() => {
     await ensureMemoryDir()
     await shell.openPath(getMemoryDir())
   })
-  ipcMain.handle(IPC_CHANNELS.getMemoryGraph, () => getMemoryGraph())
+  ipcMain.handle(IPC_CHANNELS.getMemoryGraph, () => buildMemoryGraphWithUser())
   ipcMain.handle(IPC_CHANNELS.getMemoryNoteContent, (_event, title: string) => recallNote(title))
   const mainWindow = createWindow()
   void startVoicePipeline(mainWindow)
