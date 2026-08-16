@@ -19,6 +19,11 @@ const IDLE_SETTLE_DELAY_MS = 400
  */
 const AUDIO_FALLBACK_IDLE_MS = 20000
 
+/** Whisper transcrit le mot prononcé "arobase" tel quel plutôt qu'en symbole : gênant pour dicter un email. */
+function normalizeSpokenSymbols(text: string): string {
+  return text.replace(/\barr?obases?\b/gi, '@')
+}
+
 /**
  * Orchestre le cycle complet : mot d'activation -> capture -> transcription ->
  * réflexion (Ollama, avec outils : ouvrir une appli, programmer un rappel) ->
@@ -71,7 +76,7 @@ export class VoicePipeline extends EventEmitter {
   }
 
   private async handleTranscript(rawText: string): Promise<void> {
-    const transcript = rawText.trim()
+    const transcript = normalizeSpokenSymbols(rawText.trim())
     if (transcript) this.emit('transcript', transcript)
 
     let reply: string
