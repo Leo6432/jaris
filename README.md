@@ -47,22 +47,24 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ⬜ Étape 14 — Contrôle clavier et souris : Jaris peut écrire du texte et
   cliquer à la place de l'utilisateur, pour automatiser des actions
   complètes sur l'ordinateur (pas seulement ouvrir une application)
-- ⬜ Étape 15 — Intégration téléphone : voir les notifications, envoyer des
-  messages et passer des appels depuis le téléphone de l'utilisateur, en
-  s'appuyant sur un projet open source existant faisant le pont PC/téléphone
-  (ex: KDE Connect) plutôt que de tout réécrire
-- ⬜ Étape 16 — Installeur en un clic : empaqueter toute la chaîne (app +
+- ⬜ Étape 15 — Installeur en un clic : empaqueter toute la chaîne (app +
   Ollama + modèles) dans un seul installeur simple, pour que d'autres
   utilisateurs puissent installer Jaris sans suivre toutes les étapes
   manuelles de ce README
-- ⬜ Étape 17 — Amélioration du design de l'interface
-- ⬜ Étape 18 — Animation pendant la capture/analyse d'écran, pour donner un
+- ⬜ Étape 16 — Amélioration du design de l'interface
+- ⬜ Étape 17 — Animation pendant la capture/analyse d'écran, pour donner un
   retour visuel pendant que Jaris "regarde" (étape 6)
-- ⬜ Étape 19 — Mode toujours visible : petite fenêtre Jaris affichée en
+- ⬜ Étape 18 — Mode toujours visible : petite fenêtre Jaris affichée en
   permanence en bas à droite de l'écran (widget flottant), au lieu de
   n'apparaître que quand la fenêtre principale a le focus
-- ⬜ Étape 20 — Mise à jour automatique de l'application dès qu'une nouvelle
+- ⬜ Étape 19 — Mise à jour automatique de l'application dès qu'une nouvelle
   version est publiée
+- ⬜ Étape 20 — Intégration téléphone : système pour connecter Jaris au
+  téléphone de l'utilisateur (via son numéro ou une connexion directe au
+  téléphone) afin d'envoyer des messages, voir les notifications, et plus
+  largement tout voir/contrôler depuis le téléphone — en s'appuyant sur un
+  projet open source existant faisant le pont PC/téléphone (ex: KDE Connect)
+  plutôt que de tout réécrire
 - ⬜ Étape 21 — Préparation à la vente (~5€) : licence, protection contre la
   copie/redistribution du logiciel. Nécessitera au préalable de vérifier la
   compatibilité des licences des briques open source utilisées (Ollama,
