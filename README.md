@@ -30,10 +30,10 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   simples fichiers markdown liés entre eux sur le disque, plutôt que dans une
   base opaque. Un bouton "Voir le cerveau de Jaris" dans l'interface ouvre ce
   dossier de mémoire pour le consulter/modifier à la main — voir plus bas
-- ⬜ Étape 10 — Graphe 3D du cerveau de Jaris : le bouton "Voir le cerveau de
-  Jaris" (étape 9) affiche, en plus d'ouvrir le dossier de fichiers, une
-  vraie visualisation en 3D des notes markdown et de leurs liens sous forme
-  de graphe interactif (rotation, zoom), comme la vue graphe d'Obsidian
+- ✅ Étape 10 — Graphe 3D du cerveau de Jaris : le bouton "Voir le cerveau de
+  Jaris" (étape 9) affiche une vraie visualisation en 3D des notes markdown
+  et de leurs liens sous forme de graphe interactif (rotation, zoom), comme
+  la vue graphe d'Obsidian — voir plus bas
 - ⬜ Étape 11 — Envoi de mails
 - ⬜ Étape 12 — Sélection automatique de modèle selon la complexité de la
   question : un petit modèle rapide (ex: `phi-4-mini`) pour les questions
@@ -270,11 +270,17 @@ markdown, un par note, stockés en clair sur le disque (dossier `memory` des
 données de l'app) — pas de base de données opaque. Les notes peuvent se lier
 entre elles avec la syntaxe `[[Titre de l'autre note]]`, comme dans Obsidian.
 
-Le bouton "Voir le cerveau de Jaris" dans l'interface ouvre ce dossier
-directement dans l'explorateur de fichiers, pour consulter ou modifier les
-notes à la main à tout moment.
-
 Jaris décide lui-même quand mémoriser une information importante (outil
 `remember`) et quand aller relire une note existante avant de répondre avec
 précision (outil `recall_memory`) — la liste des notes déjà connues lui est
 toujours donnée en contexte.
+
+## Graphe 3D du cerveau de Jaris (étape 10)
+
+Le bouton "Voir le cerveau de Jaris" dans l'interface ouvre une vraie
+visualisation en 3D (via [`3d-force-graph`](https://github.com/vasturiano/3d-force-graph),
+rendu Three.js) des notes markdown de la mémoire (étape 9) et de leurs liens
+`[[...]]`, interactive (rotation, zoom, survol) — comme la vue graphe
+d'Obsidian. Un bouton "Ouvrir le dossier" dans cette vue permet d'accéder
+directement aux fichiers `.md` dans l'explorateur pour les consulter ou les
+modifier à la main.
