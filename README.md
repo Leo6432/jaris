@@ -34,7 +34,8 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   Jaris" (étape 9) affiche une vraie visualisation en 3D des notes markdown
   et de leurs liens sous forme de graphe interactif (rotation, zoom), comme
   la vue graphe d'Obsidian — voir plus bas
-- ⬜ Étape 11 — Envoi de mails
+- ✅ Étape 11 — Envoi de mails : Jaris peut envoyer un vrai mail via un
+  compte SMTP configuré dans `.env` — voir plus bas
 - ⬜ Étape 12 — Sélection automatique de modèle selon la complexité de la
   question : un petit modèle rapide (ex: `phi-4-mini`) pour les questions
   simples/rapides, `qwen3.5` pour le reste, afin de gagner du temps et de la
@@ -286,3 +287,22 @@ rendu Three.js) des notes markdown de la mémoire (étape 9) et de leurs liens
 d'Obsidian. Un bouton "Ouvrir le dossier" dans cette vue permet d'accéder
 directement aux fichiers `.md` dans l'explorateur pour les consulter ou les
 modifier à la main.
+
+## Envoi de mails (étape 11)
+
+Jaris peut envoyer un vrai mail via un compte SMTP classique (Gmail,
+Outlook, ou tout autre fournisseur). Renseigne dans `.env` :
+
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=toncompte@gmail.com
+SMTP_PASS=un-mot-de-passe-d-application
+SMTP_FROM=
+```
+
+Pour Gmail, utilise un [mot de passe d'application](https://myaccount.google.com/apppasswords)
+(pas ton mot de passe normal, qui ne fonctionnera pas). Sans configuration
+SMTP, Jaris te préviendra à voix haute qu'il ne peut pas envoyer le mail au
+lieu d'échouer silencieusement.

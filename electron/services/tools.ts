@@ -1,5 +1,6 @@
 import type { OllamaTool } from './ollama'
 import { openApp } from './appLauncher'
+import { sendEmail } from './email'
 import { rememberNote, recallNote } from './memoryStore'
 import { scheduleReminder } from './reminders'
 import { lookAtScreen } from './vision'
@@ -108,6 +109,22 @@ export const TOOLS: OllamaTool[] = [
         required: ['title']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'send_email',
+      description: "Envoie un vrai mail via le compte configuré par l'utilisateur.",
+      parameters: {
+        type: 'object',
+        properties: {
+          to: { type: 'string', description: 'Adresse mail du destinataire' },
+          subject: { type: 'string', description: 'Objet du mail' },
+          body: { type: 'string', description: 'Contenu du mail, en texte simple' }
+        },
+        required: ['to', 'subject', 'body']
+      }
+    }
   }
 ]
 
@@ -128,6 +145,8 @@ export function createToolExecutor(onReminderFire: ReminderFireHandler) {
         return rememberNote(String(args.title ?? ''), String(args.content ?? ''))
       case 'recall_memory':
         return recallNote(String(args.title ?? ''))
+      case 'send_email':
+        return sendEmail(String(args.to ?? ''), String(args.subject ?? ''), String(args.body ?? ''))
       default:
         return `Outil inconnu : ${name}`
     }

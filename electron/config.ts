@@ -47,6 +47,16 @@ export const config = {
   },
   searxng: {
     host: readEnv('SEARXNG_HOST', 'http://127.0.0.1:8080')
+  },
+  smtp: {
+    host: readEnv('SMTP_HOST'),
+    port: Number(readEnv('SMTP_PORT', '587')),
+    /** true pour le port 465 (SSL direct), false pour 587/25 (STARTTLS). */
+    secure: readEnv('SMTP_SECURE', 'false') === 'true',
+    user: readEnv('SMTP_USER'),
+    pass: readEnv('SMTP_PASS'),
+    /** Adresse affichée comme expéditeur, souvent identique à SMTP_USER. */
+    from: readEnv('SMTP_FROM')
   }
 } as const
 

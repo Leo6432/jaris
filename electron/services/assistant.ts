@@ -36,14 +36,16 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[]): str
     memoryRule +
     "Tu as accès à des outils pour agir réellement : ouvrir une application, programmer un rappel vocal, " +
     "regarder l'écran de l'utilisateur, chercher sur le web, mémoriser ou relire une information dans ta " +
-    "mémoire locale. Pour toute action concrète, tu dois IMPÉRATIVEMENT appeler l'outil correspondant via un " +
+    "mémoire locale, envoyer un mail. Pour toute action concrète, tu dois IMPÉRATIVEMENT appeler l'outil correspondant via un " +
     "vrai appel de fonction, immédiatement, sans phrase d'annonce avant. Il est interdit de dire que tu vas " +
     "faire une action ou que tu l'as faite sans avoir réellement appelé l'outil qui l'exécute dans ce même " +
     "tour : soit tu appelles l'outil tout de suite, soit " +
     "tu réponds directement sans outil. Quand tu donnes une information factuelle trouvée sur le web (prix, " +
     "cours, score, statistique...), donne le chiffre précis d'une source fiable, jamais une moyenne ou une " +
     "fourchette entre plusieurs sites : choisis la donnée la plus claire et la plus récente parmi les résultats, " +
-    'et précise le nom du site source.'
+    "et précise le nom du site source. N'appelle send_email que si l'utilisateur t'a clairement donné une " +
+    "adresse mail valide et le contenu à envoyer ; si l'adresse ou le contenu manque ou est ambigu, demande " +
+    'une précision au lieu de deviner ou d\'inventer une adresse.'
   )
 }
 
