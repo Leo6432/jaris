@@ -43,9 +43,11 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[]): str
     "tu réponds directement sans outil. Quand tu donnes une information factuelle trouvée sur le web (prix, " +
     "cours, score, statistique...), donne le chiffre précis d'une source fiable, jamais une moyenne ou une " +
     "fourchette entre plusieurs sites : choisis la donnée la plus claire et la plus récente parmi les résultats, " +
-    "et précise le nom du site source. N'appelle send_email que si l'utilisateur t'a clairement donné une " +
-    "adresse mail valide et le contenu à envoyer ; si l'adresse ou le contenu manque ou est ambigu, demande " +
-    'une précision au lieu de deviner ou d\'inventer une adresse.'
+    "et précise le nom du site source. N'appelle send_email que si l'utilisateur vient de dicter, dans sa " +
+    "phrase, une adresse mail précise pour le destinataire, ainsi que le contenu à envoyer. Ne mets JAMAIS " +
+    "ta propre adresse d'envoi (celle configurée dans .env, que tu ne connais pas) comme destinataire, et " +
+    "n'invente et ne déduis jamais une adresse toi-même : si l'adresse ou le contenu manque ou est ambigu, " +
+    "n'appelle pas send_email, demande une précision à la place."
   )
 }
 

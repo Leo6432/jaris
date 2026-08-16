@@ -21,6 +21,16 @@ export async function sendEmail(to: string, subject: string, body: string): Prom
     return "Envoi de mail impossible : la configuration SMTP n'est pas renseignée dans le fichier .env (voir le README)."
   }
 
+  if (!to.trim() || !to.includes('@')) {
+    return "Envoi de mail impossible : aucune adresse mail claire n'a été donnée pour le destinataire."
+  }
+
+  const senderAddress = (config.smtp.from || config.smtp.user).trim().toLowerCase()
+  if (to.trim().toLowerCase() === senderAddress) {
+    return "Envoi de mail bloqué : le destinataire donné correspond à l'adresse d'envoi elle-même, ce qui " +
+      "n'est probablement pas voulu. Redemande l'adresse exacte du destinataire à l'utilisateur."
+  }
+
   try {
     await getTransporter().sendMail({
       from: config.smtp.from || config.smtp.user,
