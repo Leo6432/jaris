@@ -102,9 +102,13 @@ export default function App(): JSX.Element {
   }, [])
 
   // La fenêtre du widget est créée transparente côté Electron (voir electron/main.ts), mais ça ne suffit
-  // pas : tant que <body> garde son fond dégradé sombre, on verrait quand même un rectangle opaque.
+  // pas : tant que <html>/<body> gardent leur fond dégradé sombre, on verrait quand même un rectangle
+  // opaque à la place du widget.
   useEffect(() => {
-    if (MODE === 'widget') document.body.classList.add('body--widget')
+    if (MODE === 'widget') {
+      document.documentElement.classList.add('body--widget')
+      document.body.classList.add('body--widget')
+    }
   }, [])
 
   if (profileName === undefined) {

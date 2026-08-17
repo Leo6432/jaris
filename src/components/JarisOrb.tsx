@@ -89,10 +89,16 @@ function randomHarmonics(count: number): RingHarmonic[] {
 
 const RING_SEGMENTS = 140
 
-/** Anneau au contour irrégulier façon hologramme : rayon perturbé par des harmoniques fixes, plus un tremblement proportionnel au niveau audio (vibre quand Jaris parle). */
+/**
+ * Anneau au contour irrégulier façon hologramme : rayon perturbé par des harmoniques fixes, plus un
+ * tremblement proportionnel au niveau audio (vibre quand Jaris parle). `maxRadius` borne le résultat
+ * (jamais au-delà du bord du canvas) : la respiration + les harmoniques + le tremblement peuvent sinon
+ * se cumuler et faire dépasser le rayon de base de 30% et plus, ce qui coupait le contour à l'écran.
+ */
 function drawJaggedRing(
   ctx: CanvasRenderingContext2D,
   baseRadius: number,
+  maxRadius: number,
   harmonics: RingHarmonic[],
   rotation: number,
   color: string,
@@ -108,6 +114,7 @@ function drawJaggedRing(
       r += baseRadius * h.amp * Math.sin(angle * h.freq + h.phase + rotation)
     }
     r += baseRadius * jitter * 0.06 * Math.sin(angle * 19 + time * 0.006)
+    r = Math.min(r, maxRadius)
     const x = Math.cos(angle + rotation) * r
     const y = Math.sin(angle + rotation) * r
     if (i === 0) ctx.moveTo(x, y)
@@ -253,13 +260,28 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick }: J
       ctx.translate(center, center)
       ctx.globalCompositeOperation = 'lighter'
 
+      // Marge sous le bord réel du canvas (center) pour que le flou de la lueur (shadowBlur) ait la place
+      // de s'estomper avant d'être coupé net par les bords du canvas.
+      const maxRingRadius = center * 0.9
+
       ctx.shadowColor = style.color
-      ctx.shadowBlur = 14 + level * 18
+      ctx.shadowBlur = 8 + level * 10
       ctx.lineWidth = 1.6
-      drawJaggedRing(ctx, center * 0.86 * breathe, harmonicsRef.current.outer, angleRef.current, style.color, 0.85, level, time)
       drawJaggedRing(
         ctx,
-        center * 0.78 * breathe,
+        center * 0.68 * breathe,
+        maxRingRadius,
+        harmonicsRef.current.outer,
+        angleRef.current,
+        style.color,
+        0.85,
+        level,
+        time
+      )
+      drawJaggedRing(
+        ctx,
+        center * 0.6 * breathe,
+        maxRingRadius,
         harmonicsRef.current.inner,
         -angleRef.current * 0.55,
         style.color,
@@ -268,12 +290,12 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick }: J
         time
       )
 
-      ctx.shadowBlur = 6
-      drawGlassRing(ctx, center * 0.6, style.color, 0.3)
-      drawGlassRing(ctx, center * 0.46, style.color, 0.2)
+      ctx.shadowBlur = 5
+      drawGlassRing(ctx, center * 0.46, style.color, 0.3)
+      drawGlassRing(ctx, center * 0.35, style.color, 0.2)
 
-      ctx.shadowBlur = 10 + level * 14
-      drawCore(ctx, center * 0.16 * (1 + level * 0.2), coreAngleRef.current, style.color)
+      ctx.shadowBlur = 7 + level * 8
+      drawCore(ctx, center * 0.14 * (1 + level * 0.2), coreAngleRef.current, style.color)
 
       ctx.restore()
       frameId = requestAnimationFrame(draw)

@@ -25,6 +25,7 @@ body {
 }
 
 /* Widget flottant (étape 19) : fenêtre Electron transparente, donc pas de fond du tout ici. */
+html.body--widget,
 body.body--widget {
   background: transparent;
 }

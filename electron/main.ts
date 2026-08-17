@@ -109,6 +109,10 @@ function createWidgetWindow(): BrowserWindow {
     y: workArea.y + workArea.height - WIDGET_SIZE - WIDGET_MARGIN,
     frame: false,
     transparent: true,
+    // Sur Windows, une fenêtre transparente sans backgroundColor explicite affiche parfois un carré
+    // opaque avant le premier vrai rendu (ou si le compositing DWM ne suit pas) : le forcer en
+    // "entièrement transparent" (8 chiffres hexa, alpha = 00) évite ce carré résiduel.
+    backgroundColor: '#00000000',
     hasShadow: false,
     resizable: false,
     skipTaskbar: true,
