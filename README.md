@@ -242,6 +242,18 @@ démarrage automatique échoue (Ollama pas installé, par exemple), Jaris le dit
 > le CPU (très lent). `OLLAMA_NUM_CTX` dans `.env` (4096 par défaut) évite ça
 > — vérifie avec `ollama ps` que la colonne PROCESSOR affiche bien ~100% GPU.
 
+**Mémoire courte de la conversation.** Chaque question envoyée à Ollama
+inclut maintenant les derniers échanges (question/réponse) de la session en
+cours, pas seulement la dernière phrase toute seule — sinon une précision
+ou une correction ("répète juste l'adresse mail") arrivait à Jaris sans
+aucun contexte, sans lien avec la demande en cours (ex: envoyer un mail),
+et il répondait n'importe quoi. La fenêtre est glissante (les 12 derniers
+messages, soit ~6 échanges) : le contexte ancien sort tout seul au fil de
+la conversation, pas de vrai "reset" à gérer. À ne pas confondre avec la
+mémoire longue durée façon Obsidian (étape 9, plus bas) : celle-ci ne
+retient rien après un redémarrage de Jaris, et sert juste à suivre le fil
+d'une conversation qui s'étale sur plusieurs questions.
+
 ## Sélection automatique de modèle (étape 13)
 
 Au tout premier lancement (juste après la connexion Gmail), Jaris scanne la

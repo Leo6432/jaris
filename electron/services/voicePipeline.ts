@@ -5,8 +5,17 @@ import { VoiceClient } from './voiceClient'
 import { synthesizeSpeech } from './tts'
 import { appendConversationEntry } from './conversationStore'
 import { converse } from './assistant'
+import type { OllamaMessage } from './ollama'
 import { restoreReminders } from './reminders'
 import { getProfile } from './profileStore'
+
+/**
+ * Derniers échanges (user/assistant) gardés en mémoire courte pour la session en cours, pour que Jaris
+ * comprenne une correction/précision ("répète juste l'adresse") sans devoir tout redire depuis le début.
+ * Une fenêtre glissante plutôt qu'un vrai reset explicite : le contexte ancien sort tout seul au fil des
+ * échanges, pas besoin de deviner "quand" une conversation est vraiment terminée.
+ */
+const MAX_HISTORY_MESSAGES = 12
 
 /** Retour à idle après une erreur (pas d'audio en cours, donc pas besoin d'attendre une fin de lecture). */
 const ERROR_IDLE_DELAY_MS = 2500
@@ -92,6 +101,7 @@ function normalizeSpokenSymbols(text: string): string {
 export class VoicePipeline extends EventEmitter {
   private voice = new VoiceClient()
   private idleTimer: ReturnType<typeof setTimeout> | null = null
+  private history: OllamaMessage[] = []
 
   async start(): Promise<void> {
     this.voice.on('wake', () => {
@@ -148,8 +158,11 @@ export class VoicePipeline extends EventEmitter {
           transcript,
           profile?.name ?? null,
           (message) => void this.announceReminder(message),
-          (message) => this.emit('log', message)
+          (message) => this.emit('log', message),
+          this.history
         )
+        this.history.push({ role: 'user', content: transcript }, { role: 'assistant', content: reply })
+        this.history.splice(0, Math.max(0, this.history.length - MAX_HISTORY_MESSAGES))
       } catch (err) {
         this.emit('log', `Erreur Ollama : ${err instanceof Error ? err.message : String(err)}`)
         reply = "Je n'arrive pas à réfléchir pour le moment, vérifie qu'Ollama tourne bien."

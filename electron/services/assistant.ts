@@ -95,12 +95,20 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[]): str
 
 const MAX_TOOL_ROUNDS = 4
 
-/** Envoie la phrase transcrite à Ollama, exécute les outils qu'il demande, renvoie la réponse finale à dire. */
+/**
+ * Envoie la phrase transcrite à Ollama, exécute les outils qu'il demande, renvoie la réponse finale à
+ * dire. `history` porte les derniers échanges (user/assistant) de la session, en amont du nouveau
+ * message : sans ça, chaque question repartait de zéro sans aucun souvenir de ce qui venait d'être dit
+ * — un "je n'ai pas compris l'adresse, répète" suivi d'une simple répétition de l'adresse par
+ * l'utilisateur devenait alors une phrase isolée sans contexte, que Jaris ne savait pas rattacher à la
+ * demande d'envoi de mail en cours.
+ */
 export async function converse(
   prompt: string,
   userName: string | null,
   onReminderFire: (message: string) => void,
-  onLog?: (message: string) => void
+  onLog?: (message: string) => void,
+  history: OllamaMessage[] = []
 ): Promise<string> {
   const executeTool = createToolExecutor(onReminderFire)
   const memoryTitles = await listMemoryTitles()
@@ -158,6 +166,7 @@ export async function converse(
 
   const messages: OllamaMessage[] = [
     { role: 'system', content: buildSystemPrompt(userName, memoryTitles) },
+    ...history,
     { role: 'user', content: prompt }
   ]
 
