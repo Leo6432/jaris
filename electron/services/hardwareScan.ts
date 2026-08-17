@@ -1,7 +1,10 @@
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import type { ModelTiers } from '../../shared/ipc'
 
 const execAsync = promisify(exec)
+
+type Tier = keyof ModelTiers
 
 /**
  * VRAM réservée en permanence par le sidecar STT (Cohere Transcribe, chargé une fois au démarrage de
@@ -41,6 +44,12 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3.5:2b', vramGb: 2.7 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
 ]
+
+const TIER_CANDIDATES: Record<Tier, ModelCandidate[]> = {
+  flash: FLASH_CANDIDATES,
+  medium: MEDIUM_CANDIDATES,
+  large: LARGE_CANDIDATES
+}
 
 function pickForBudget(candidates: ModelCandidate[], budgetGb: number): string {
   const fit = candidates.find((c) => c.vramGb <= budgetGb)
@@ -83,4 +92,47 @@ export async function scanCapacity(): Promise<CapacityScanResult> {
       large: pickForBudget(LARGE_CANDIDATES, budgetGb)
     }
   }
+}
+
+/**
+ * Au-delà de cette température (°C), la RTX 3070 (et la plupart des cartes grand public) commence à
+ * throttler : c'est le signal qu'on utilise pour économiser le GPU le temps qu'il refroidisse, pas une
+ * limite de sécurité matérielle en soi.
+ */
+export const GPU_TEMP_LIMIT_C = 83
+
+/** Petite marge en plus du modèle lui-même (contexte, activations...) avant de le considérer "à sa place". */
+const LIVE_SAFETY_MARGIN_GB = 0.5
+
+export interface LiveGpuStatus {
+  freeVramGb: number | null
+  tempC: number | null
+}
+
+/**
+ * Contrairement à `scanCapacity` (VRAM totale, fixe, pour définir une fois pour toutes les 3 paliers),
+ * cette fonction lit l'état réel du GPU à l'instant présent (VRAM libre, température) : elle sert à
+ * vérifier, juste avant chaque question, que le modèle normalement choisi tient encore la route compte
+ * tenu de ce qui tourne en parallèle (jeu, navigateur...) sur la machine, sans jamais changer les paliers
+ * eux-mêmes.
+ */
+export async function getLiveGpuStatus(): Promise<LiveGpuStatus> {
+  try {
+    const { stdout } = await execAsync('nvidia-smi --query-gpu=memory.free,temperature.gpu --format=csv,noheader,nounits')
+    const firstLine = stdout.trim().split('\n')[0] ?? ''
+    const [freeRaw, tempRaw] = firstLine.split(',').map((s) => s.trim())
+    const freeMib = parseInt(freeRaw, 10)
+    const temp = parseInt(tempRaw, 10)
+    return {
+      freeVramGb: Number.isFinite(freeMib) ? Math.round((freeMib / 1024) * 10) / 10 : null,
+      tempC: Number.isFinite(temp) ? temp : null
+    }
+  } catch {
+    return { freeVramGb: null, tempC: null }
+  }
+}
+
+/** Dans les candidats du palier donné, choisit le plus gros qui tient dans la VRAM *libre* à l'instant présent. */
+export function pickSafeModel(tier: Tier, freeVramGb: number): string {
+  return pickForBudget(TIER_CANDIDATES[tier], Math.max(0, freeVramGb - LIVE_SAFETY_MARGIN_GB))
 }

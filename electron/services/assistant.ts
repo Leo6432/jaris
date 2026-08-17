@@ -3,6 +3,7 @@ import { chatWithOllama, type OllamaMessage, type ThinkLevel } from './ollama'
 import { listMemoryTitles } from './memoryStore'
 import { getProfile } from './profileStore'
 import { TOOLS, createToolExecutor } from './tools'
+import { GPU_TEMP_LIMIT_C, getLiveGpuStatus, pickSafeModel } from './hardwareScan'
 
 interface ModelTiers {
   flash: string
@@ -104,9 +105,30 @@ export async function converse(
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
   const models = profile?.models ?? { flash: config.ollama.model, medium: config.ollama.model, large: config.ollama.model }
-  const tier = pickTier(prompt)
-  const model = models[tier]
+  let tier = pickTier(prompt)
+
+  // Les paliers (flash/médium/puissant) sont figés par le scan de capacité (VRAM totale, déterministe).
+  // Ici on vérifie juste, question par question, que l'état réel du GPU à l'instant présent (température,
+  // VRAM effectivement libre) permet encore de lancer le modèle normalement prévu pour ce palier — sans
+  // jamais changer les paliers eux-mêmes, seulement ce qui est effectivement invoqué pour cette question.
+  const live = await getLiveGpuStatus()
+
+  if (live.tempC !== null && live.tempC >= GPU_TEMP_LIMIT_C && tier !== 'flash') {
+    onLog?.(`GPU à ${live.tempC}°C (seuil ${GPU_TEMP_LIMIT_C}°C) : passage au palier rapide le temps qu'elle refroidisse.`)
+    tier = 'flash'
+  }
+
+  let model = models[tier]
   const think = THINK_LEVEL[tier]
+
+  if (live.freeVramGb !== null) {
+    const safeModel = pickSafeModel(tier, live.freeVramGb)
+    if (safeModel !== model) {
+      onLog?.(`VRAM libre actuelle : ${live.freeVramGb} Go (insuffisant pour ${model}) : repli sur ${safeModel}.`)
+      model = safeModel
+    }
+  }
+
   onLog?.(`Modèle choisi : ${model} (réflexion : ${think})`)
 
   const messages: OllamaMessage[] = [

@@ -273,6 +273,24 @@ machine. L'onglet **Modèles** du menu Options (étape 28) affiche les 3
 paliers actuels et permet de relancer l'analyse à la main (utile après un
 changement matériel, pas pour s'adapter à l'usage GPU du moment).
 
+**Vérification en temps réel avant chaque question.** Les 3 paliers restent
+fixes (scan ci-dessus), mais juste avant d'appeler Ollama, Jaris regarde
+aussi l'état réel du GPU à l'instant présent :
+- si la VRAM *libre* ne suffit plus pour le modèle normalement prévu (un
+  jeu ou un autre logiciel en consomme une partie), Jaris se replie
+  automatiquement sur le modèle le plus gros qui tient encore dans ce
+  palier ;
+- si la carte dépasse 83°C, Jaris bascule directement sur le palier rapide
+  le temps qu'elle refroidisse, pour ne pas insister sur une carte qui
+  chauffe déjà.
+
+Ce repli est ponctuel (recalculé à chaque question, jamais enregistré) :
+dès que la VRAM se libère ou que la carte a refroidi, Jaris revient
+naturellement au modèle normalement prévu pour le palier. Ça évite d'avoir
+à réserver une marge fixe "au cas où" en permanence (ce qui gâcherait de la
+capacité inutilement la plupart du temps) : la marge ne s'applique que
+quand elle sert vraiment.
+
 ## Ouvrir des applications et programmer des rappels (étape 5)
 
 Jaris peut maintenant exécuter deux actions pendant la conversation :
