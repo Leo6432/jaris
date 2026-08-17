@@ -24,10 +24,13 @@ const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
 
 type Tab = 'connexions' | 'voix' | 'modeles'
 
-const TIER_LABELS: Array<{ key: keyof ModelTiers; label: string }> = [
-  { key: 'flash', label: 'Rapide' },
-  { key: 'medium', label: 'Médium' },
-  { key: 'large', label: 'Puissant' }
+// Reflète THINK_LEVEL dans electron/services/assistant.ts : chaque palier a un effort de réflexion Ollama
+// fixe (low/medium/high), utile à afficher pour comprendre pourquoi deux paliers pointant sur le même
+// modèle (matériel contraint) ne répondent quand même pas pareil.
+const TIER_LABELS: Array<{ key: keyof ModelTiers; label: string; think: string }> = [
+  { key: 'flash', label: 'Rapide', think: 'basse' },
+  { key: 'medium', label: 'Médium', think: 'moyenne' },
+  { key: 'large', label: 'Puissant', think: 'haute' }
 ]
 
 export default function OptionsMenu(): JSX.Element {
@@ -198,9 +201,9 @@ export default function OptionsMenu(): JSX.Element {
                 <p className="capacity-scan__status">{scanStatus}</p>
               ) : (
                 <ul className="capacity-scan__models">
-                  {TIER_LABELS.map(({ key, label }) => (
+                  {TIER_LABELS.map(({ key, label, think }) => (
                     <li key={key}>
-                      {label} : {profile?.models?.[key] ?? '—'}
+                      {label} : {profile?.models?.[key] ?? '—'} (réflexion {think})
                     </li>
                   ))}
                 </ul>
