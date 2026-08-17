@@ -362,14 +362,20 @@ la grande fenêtre à l'écran.
   virtuels, donc il reste affiché même en changeant d'application ou de
   bureau.
 - **Réagit depuis n'importe où** : le mot d'activation "Hey Jarvis" (déjà
-  basé sur le micro, indépendant de la fenêtre), la touche **+** et la
-  touche **Insert** (les deux enregistrées en `globalShortcut` au démarrage)
-  déclenchent l'écoute quel que soit le programme qui a le focus.
-  > Une fois un raccourci global enregistré avec succès, Electron/Windows
-  > donnent l'exclusivité totale sur cette touche à Jaris — il n'y a rien de
-  > plus à "prioriser" à ce niveau-là. Si l'enregistrement échoue (touche
-  > déjà réservée par une autre appli, mappage qui varie selon l'agencement
-  > clavier comme l'AZERTY...), le terminal l'indique clairement au
+  basé sur le micro, indépendant de la fenêtre), le **+ du pavé numérique**
+  et la touche **Insert** (les deux enregistrées en `globalShortcut` au
+  démarrage) déclenchent l'écoute quel que soit le programme qui a le focus.
+  > Le caractère "+" tout seul (celui à côté du Entrée sur un clavier
+  > AZERTY) n'est pas un accelerator valide pour `globalShortcut` : Electron
+  > lève carrément une exception à l'enregistrement ("conversion failure
+  > from +"), ce qui plantait le démarrage entier de Jaris avant que ce soit
+  > entouré d'un `try/catch`. Le "+" du pavé numérique (`numadd`) est un
+  > code touche distinct et stable, sans cette ambiguïté — visuellement
+  > c'est quand même la touche "+" recherchée à l'origine. Une fois un
+  > raccourci global enregistré avec succès, Electron/Windows donnent
+  > l'exclusivité totale sur cette touche à Jaris — il n'y a rien de plus à
+  > "prioriser" à ce niveau-là ; si l'enregistrement échoue (touche déjà
+  > réservée par une autre appli...), le terminal l'indique clairement au
   > démarrage (`[jaris] Raccourci global ... enregistré avec succès` ou
   > `Impossible de réserver...`). D'où les deux raccourcis enregistrés en
   > parallèle plutôt qu'un seul : si l'un des deux ne fonctionne pas de

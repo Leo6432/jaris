@@ -159,8 +159,8 @@ export default function App(): JSX.Element {
         <JarisOrb emotion={emotion} />
         <div className="app__status">{STATUS_LABEL[emotion]}</div>
         <div className="app__hint">
-          Astuce : dis « Hey Jarvis » ou appuie sur + (ou Insert), depuis n'importe quelle appli, pour
-          activer l'écoute
+          Astuce : dis « Hey Jarvis » ou appuie sur le + du pavé numérique (ou Insert), depuis n'importe
+          quelle appli, pour activer l'écoute
         </div>
         <button className="app__memory-button" onClick={openMemoryBrain}>
           Voir le cerveau de Jaris

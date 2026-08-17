@@ -263,28 +263,37 @@ app.whenReady().then(async () => {
    * impossible de distinguer "le raccourci ne s'enregistre pas" de "il s'enregistre mais rien ne se passe
    * au moment d'appuyer" (ex: pipeline vocal pas encore prêt) juste en testant à l'aveugle. Une fois
    * enregistré avec succès, Electron/Windows donnent l'exclusivité totale sur cette touche à Jaris quelle
-   * que soit l'appli active : il n'y a rien de plus à "prioriser" à ce niveau-là. Si l'enregistrement
-   * échoue, c'est qu'une autre appli (ou une ancienne instance de Jaris encore ouverte) l'a déjà réservée
-   * en premier — dans ce cas le message d'avertissement ci-dessous l'indiquera clairement dans le terminal.
+   * que soit l'appli active : il n'y a rien de plus à "prioriser" à ce niveau-là.
+   *
+   * globalShortcut.register() peut carrément lever une exception (pas juste renvoyer false) pour un
+   * accelerator qu'il n'arrive pas à convertir en code touche natif — c'est le cas du caractère "+" tout
+   * seul sur cette machine ("conversion failure from +"), ce qui plantait le démarrage entier de Jaris
+   * (exception non rattrapée dans app.whenReady().then(...)). D'où le try/catch : un raccourci qui échoue
+   * à s'enregistrer ne doit jamais empêcher Jaris de démarrer.
    */
   function registerWakeShortcut(key: string): void {
-    const registered = globalShortcut.register(key, () => {
-      console.log(`[jaris] Raccourci global ${key} déclenché (pipeline ${pipeline ? 'prêt' : 'PAS prêt'}).`)
-      pipeline?.triggerWake()
-    })
-    if (registered) {
-      console.log(`[jaris] Raccourci global ${key} enregistré avec succès.`)
-    } else {
-      console.warn(
-        `[jaris] Impossible de réserver le raccourci global ${key} (déjà pris par une autre appli, ou par une ancienne instance de Jaris encore ouverte en arrière-plan).`
-      )
+    try {
+      const registered = globalShortcut.register(key, () => {
+        console.log(`[jaris] Raccourci global ${key} déclenché (pipeline ${pipeline ? 'prêt' : 'PAS prêt'}).`)
+        pipeline?.triggerWake()
+      })
+      if (registered) {
+        console.log(`[jaris] Raccourci global ${key} enregistré avec succès.`)
+      } else {
+        console.warn(
+          `[jaris] Impossible de réserver le raccourci global ${key} (déjà pris par une autre appli, ou par une ancienne instance de Jaris encore ouverte en arrière-plan).`
+        )
+      }
+    } catch (err) {
+      console.warn(`[jaris] Raccourci global ${key} invalide sur ce clavier : ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
-  // "Insert" est confirmé fiable. On tente aussi "+" (préféré par l'utilisateur) en plus, pas à la place :
-  // si "+" échoue à s'enregistrer ou ne se déclenche pas de façon fiable sur ce clavier, Insert reste
-  // disponible sans rien à reconfigurer.
-  registerWakeShortcut('+')
+  // Le caractère "+" seul n'est pas un accelerator valide pour globalShortcut sur cette machine (voir
+  // ci-dessus) : "numadd", la touche + du pavé numérique, est un code touche distinct et stable (pas
+  // d'ambiguïté d'agencement clavier) — visuellement c'est quand même la touche "+" cherchée à l'origine.
+  // "Insert" est confirmé fiable et reste enregistré aussi, sans rien à reconfigurer si l'un des deux gêne.
+  registerWakeShortcut('numadd')
   registerWakeShortcut('Insert')
 
   // Toujours lancée dans sa fenêtre normale, comme avant l'étape 19 : la réduire ou la fermer bascule
