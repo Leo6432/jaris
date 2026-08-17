@@ -1,6 +1,35 @@
+import { config } from '../config'
 import { chatWithOllama, type OllamaMessage } from './ollama'
 import { listMemoryTitles } from './memoryStore'
+import { getProfile } from './profileStore'
 import { TOOLS, createToolExecutor } from './tools'
+
+interface ModelTiers {
+  flash: string
+  medium: string
+  large: string
+}
+
+// Un appel d'outil (ouvrir une appli, rappel, recherche web, mémoire, mail...) doit toujours passer par
+// le modèle "medium" : c'est le seul dont la fiabilité d'appel d'outils a été éprouvée en conditions
+// réelles. Le "flash" est réservé aux échanges sans action ni raisonnement poussé, le "large" aux
+// questions qui demandent explicitement une réflexion approfondie.
+const TOOL_SIGNAL_WORDS = [
+  'ouvre', 'ouvrir', 'lance', 'lancer', 'rappelle', 'rappel', 'cherche', 'recherche', 'regarde', "l'écran",
+  'écran', 'retiens', 'retenir', 'mémorise', 'souviens', 'rappelle-toi', 'envoie', 'envoyer', 'mail', 'email', 'mémoire'
+]
+const COMPLEX_SIGNAL_WORDS = ['pourquoi', 'explique', 'explique-moi', 'compare', 'analyse', 'différence', 'avantages', 'inconvénients', 'résume', 'détaille']
+
+/** Choisit le palier de modèle le plus adapté à la question, sans appel LLM supplémentaire (juste des mots-clés). */
+function pickModelTier(prompt: string, models: ModelTiers): string {
+  const lower = prompt.toLowerCase()
+  const wordCount = prompt.trim().split(/\s+/).filter(Boolean).length
+
+  if (TOOL_SIGNAL_WORDS.some((w) => lower.includes(w))) return models.medium
+  if (COMPLEX_SIGNAL_WORDS.some((w) => lower.includes(w)) || wordCount > 25) return models.large
+  if (wordCount <= 8) return models.flash
+  return models.medium
+}
 
 function buildSystemPrompt(userName: string | null, memoryTitles: string[]): string {
   const addressing = userName
@@ -62,13 +91,18 @@ export async function converse(
 ): Promise<string> {
   const executeTool = createToolExecutor(onReminderFire)
   const memoryTitles = await listMemoryTitles()
+  const profile = await getProfile()
+  const models = profile?.models ?? { flash: config.ollama.model, medium: config.ollama.model, large: config.ollama.model }
+  const model = pickModelTier(prompt, models)
+  onLog?.(`Modèle choisi : ${model}`)
+
   const messages: OllamaMessage[] = [
     { role: 'system', content: buildSystemPrompt(userName, memoryTitles) },
     { role: 'user', content: prompt }
   ]
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const message = await chatWithOllama(messages, TOOLS)
+    const message = await chatWithOllama(messages, TOOLS, model)
     if (!message.tool_calls?.length) {
       return message.content.trim()
     }

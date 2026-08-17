@@ -1,4 +1,4 @@
-import type { GmailStatus, JarisEmotion, MemoryGraph, Profile, VoiceReplyPayload, VoiceSetupStatusPayload } from '../shared/ipc'
+import type { CapacityScanResult, GmailStatus, JarisEmotion, MemoryGraph, Profile, VoiceReplyPayload, VoiceSetupStatusPayload } from '../shared/ipc'
 
 export {}
 
@@ -23,6 +23,8 @@ declare global {
       connectGmail: () => Promise<GmailStatus>
       disconnectGmail: () => Promise<void>
       previewVoice: (voice: string) => Promise<ArrayBuffer>
+      scanCapacity: () => Promise<CapacityScanResult>
+      onCapacityScanStatus: (cb: (message: string) => void) => () => void
     }
   }
 }

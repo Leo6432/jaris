@@ -440,6 +440,47 @@ body {
   color: #7fa3c9;
 }
 
+.capacity-scan {
+  max-width: 380px;
+}
+
+.capacity-scan__spinner {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 3px solid rgba(55, 226, 255, 0.15);
+  border-top-color: #37e2ff;
+  animation: capacity-scan-spin 0.9s linear infinite;
+  margin: 8px 0;
+}
+
+@keyframes capacity-scan-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.capacity-scan__status {
+  color: #7fa3c9;
+  font-size: 0.85rem;
+}
+
+.capacity-scan__models {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #d9ecff;
+  font-size: 0.85rem;
+}
+
+.capacity-scan__hint {
+  font-size: 0.75rem;
+  color: #4d6a87;
+}
+
 .jaris-face {
   position: relative;
   display: flex;

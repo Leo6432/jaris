@@ -24,14 +24,14 @@ interface OllamaChatResponse {
 }
 
 /** Un tour d'échange avec Ollama : envoie l'historique (+ outils dispo) et renvoie le message du modèle. */
-export async function chatWithOllama(messages: OllamaMessage[], tools?: OllamaTool[]): Promise<OllamaMessage> {
+export async function chatWithOllama(messages: OllamaMessage[], tools?: OllamaTool[], model: string = config.ollama.model): Promise<OllamaMessage> {
   let response: Response
   try {
     response = await fetch(`${config.ollama.host}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: config.ollama.model,
+        model,
         messages,
         tools,
         stream: false,
@@ -51,6 +51,33 @@ export async function chatWithOllama(messages: OllamaMessage[], tools?: OllamaTo
   }
 
   const data = (await response.json()) as OllamaChatResponse
-  if (!data.message) throw new Error(`Réponse vide d'Ollama (modèle '${config.ollama.model}' bien installé ?)`)
+  if (!data.message) throw new Error(`Réponse vide d'Ollama (modèle '${model}' bien installé ?)`)
   return data.message
+}
+
+interface OllamaTagsResponse {
+  models?: Array<{ name: string }>
+}
+
+async function listInstalledModels(): Promise<string[]> {
+  const response = await fetch(`${config.ollama.host}/api/tags`)
+  if (!response.ok) throw new Error(`Ollama a répondu ${response.status} en listant les modèles installés`)
+  const data = (await response.json()) as OllamaTagsResponse
+  return (data.models ?? []).map((m) => m.name)
+}
+
+/** Télécharge `model` via Ollama s'il n'est pas déjà installé. */
+export async function pullModelIfMissing(model: string, onStatus?: (message: string) => void): Promise<void> {
+  const installed = await listInstalledModels()
+  if (installed.includes(model)) return
+
+  onStatus?.(`Téléchargement du modèle ${model}…`)
+  const response = await fetch(`${config.ollama.host}/api/pull`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: model, stream: false })
+  })
+  if (!response.ok) {
+    throw new Error(`Échec du téléchargement de ${model} (Ollama a répondu ${response.status})`)
+  }
 }

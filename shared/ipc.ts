@@ -14,12 +14,23 @@ export interface VoiceSetupStatusPayload {
   missing: string[]
 }
 
+/** Les 3 paliers de modèles Ollama choisis par le scan de capacité (étape 13), selon la VRAM détectée. */
+export interface ModelTiers {
+  flash: string
+  medium: string
+  large: string
+}
+
 export interface Profile {
   name: string
   /** true une fois l'écran "connecter Gmail ou ignorer" affiché après le premier lancement. */
   gmailOnboardingDone?: boolean
   /** Voix Supertonic HD choisie dans le menu Options (ex: "M3"), vide = valeur par défaut de .env. */
   ttsVoice?: string
+  /** true une fois le scan de capacité (étape 13) effectué après le premier lancement. */
+  capacityScanDone?: boolean
+  /** Modèles rapide/médium/puissant choisis par le scan de capacité, vide = OLLAMA_MODEL de .env pour les trois. */
+  models?: ModelTiers
 }
 
 export interface MemoryGraphNode {
@@ -43,6 +54,13 @@ export interface MemoryGraph {
 export interface GmailStatus {
   connected: boolean
   email: string | null
+}
+
+/** Résultat du scan de capacité (étape 13) : GPU détecté et modèles choisis pour chaque palier. */
+export interface CapacityScanResult {
+  gpuName: string | null
+  vramGb: number | null
+  models: ModelTiers
 }
 
 /** Canaux IPC main -> renderer pour piloter le visage et afficher la conversation. */
@@ -74,5 +92,9 @@ export const IPC_CHANNELS = {
   /** renderer -> main : déconnecte le compte Gmail. */
   disconnectGmail: 'jaris:disconnect-gmail',
   /** renderer <-> main : synthétise une phrase d'exemple avec une voix donnée, pour la comparer avant de la choisir. */
-  previewVoice: 'jaris:preview-voice'
+  previewVoice: 'jaris:preview-voice',
+  /** renderer <-> main : lance le scan de capacité (GPU/VRAM) et le téléchargement des modèles choisis, une fois au premier lancement. */
+  scanCapacity: 'jaris:scan-capacity',
+  /** main -> renderer : messages d'avancement pendant le scan de capacité (détection, téléchargements). */
+  capacityScanStatus: 'jaris:capacity-scan-status'
 } as const

@@ -40,11 +40,12 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   [Supertonic HD](https://huggingface.co/Supertone/supertonic-3) (voix plus
   naturelle, 99M paramètres, licence OpenRAIL-M compatible avec une
   distribution commerciale future) — voir plus bas
-- ⬜ Étape 13 — Sélection automatique de modèle selon la complexité de la
-  question : un petit modèle rapide (ex: `phi-4-mini`) pour les questions
-  simples/rapides, `qwen3.5` pour le reste, afin de gagner du temps et de la
-  VRAM sur les échanges courants sans sacrifier la qualité sur les questions
-  qui le méritent
+- ✅ Étape 13 — Sélection automatique de modèle selon la complexité de la
+  question : au premier lancement, Jaris scanne la VRAM disponible (en
+  réservant de la place pour le STT en permanence chargé) et choisit 3
+  modèles Ollama adaptés à la machine (rapide/médium/puissant, jamais plus
+  gros que ce qu'elle supporte), puis route chaque question vers le palier
+  le plus adapté — voir plus bas
 - ⬜ Étape 14 — Surveillance des ressources du PC : Jaris prévient à voix
   haute quand la machine est surchargée (GPU, CPU, RAM trop élevés), pour
   éviter de lancer une tâche lourde ou d'insister sur une réponse lente sans
@@ -100,14 +101,11 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ⬜ Étape 27 — Sous-agents : Jaris peut lancer plusieurs sous-agents (agents
   web, etc.) en parallèle pour des tâches complexes qui demandent plusieurs
   actions en même temps, au lieu de tout faire en une seule séquence
-- ⬜ Étape 28 — Scan de capacité au premier lancement : Jaris analyse le PC
-  (GPU, VRAM, RAM) pour vérifier qu'il peut faire tourner les modèles par
-  défaut ; si la machine n'est pas assez puissante, il propose automatiquement
-  des modèles plus légers. Dans le bouton options, une liste de modèles
-  classés du plus puissant au plus léger, avec sélection automatique (ou
-  manuelle) de 3 modèles selon le profil de la machine : un modèle qui
-  réfléchit beaucoup pour les tâches complexes, un modèle médium, et un
-  modèle "flash" rapide pour les questions simples
+- ⬜ Étape 28 — Sélection manuelle des modèles depuis le menu Options : le
+  scan de capacité et les 3 paliers rapide/médium/puissant sont déjà en place
+  (étape 13, automatique au premier lancement) ; reste à les afficher dans le
+  menu Options pour pouvoir changer un palier à la main à tout moment, pas
+  seulement au premier lancement
 - ⬜ Étape 29 — Mentions légales / conditions d'utilisation à faire accepter
   avant la première utilisation, pour dégager la responsabilité en cas
   d'action problématique de l'IA
@@ -241,6 +239,27 @@ démarrage automatique échoue (Ollama pas installé, par exemple), Jaris le dit
 > qwen3.5), ce qui peut le faire déborder de la VRAM et tourner en partie sur
 > le CPU (très lent). `OLLAMA_NUM_CTX` dans `.env` (4096 par défaut) évite ça
 > — vérifie avec `ollama ps` que la colonne PROCESSOR affiche bien ~100% GPU.
+
+## Sélection automatique de modèle (étape 13)
+
+Au tout premier lancement (juste après la connexion Gmail), Jaris scanne la
+carte graphique (`nvidia-smi`) et choisit 3 modèles Ollama adaptés à la
+machine, dans la famille `qwen3.5` (de `0.8b` à `35b`) :
+- **rapide** — questions courtes sans action à faire
+- **médium** — le défaut pour la plupart des échanges, et le seul palier
+  utilisé pour tout appel d'outil (ouvrir une appli, rappel, recherche web,
+  mémoire, mail) : c'est le seul dont la fiabilité d'appel d'outils est
+  éprouvée, pas question de la sacrifier pour gagner un peu de vitesse
+- **puissant** — questions qui demandent explicitement une réflexion
+  poussée ("pourquoi", "explique", "compare"...) ou un message long
+
+Le calcul réserve ~4,5 Go de VRAM pour le STT (Cohere Transcribe, chargé en
+permanence pendant toute la session) avant de choisir les modèles : le
+palier "puissant" ne peut donc jamais dépasser ce que la carte supporte
+réellement, même sur une machine avec beaucoup de VRAM totale mais peu de
+marge une fois le STT pris en compte. Les modèles manquants sont
+téléchargés automatiquement pendant l'écran de scan (`ollama pull`), donc
+peut prendre plusieurs minutes selon la connexion.
 
 ## Ouvrir des applications et programmer des rappels (étape 5)
 

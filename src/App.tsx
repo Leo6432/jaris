@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import CapacityScan from '@/components/CapacityScan'
 import GmailOnboarding from '@/components/GmailOnboarding'
 import JarisFace from '@/components/JarisFace'
 import MemoryBrain from '@/components/MemoryBrain'
@@ -30,6 +31,7 @@ export default function App(): JSX.Element {
   // undefined = pas encore chargé, null = pas de profil (premier lancement)
   const [profileName, setProfileName] = useState<string | null | undefined>(undefined)
   const [gmailOnboardingDone, setGmailOnboardingDone] = useState<boolean | undefined>(undefined)
+  const [capacityScanDone, setCapacityScanDone] = useState<boolean | undefined>(undefined)
   const [nameInput, setNameInput] = useState('')
   const [memoryGraph, setMemoryGraph] = useState<MemoryGraph | null>(null)
 
@@ -41,6 +43,7 @@ export default function App(): JSX.Element {
     window.jaris.getProfile().then((profile) => {
       setProfileName(profile?.name ?? null)
       setGmailOnboardingDone(profile?.gmailOnboardingDone ?? false)
+      setCapacityScanDone(profile?.capacityScanDone ?? false)
     })
   }, [])
 
@@ -51,6 +54,7 @@ export default function App(): JSX.Element {
     void window.jaris.saveProfile({ name }).then(() => {
       setProfileName(name)
       setGmailOnboardingDone(false)
+      setCapacityScanDone(false)
     })
   }
 
@@ -112,6 +116,10 @@ export default function App(): JSX.Element {
 
   if (!gmailOnboardingDone) {
     return <GmailOnboarding onDone={() => setGmailOnboardingDone(true)} />
+  }
+
+  if (!capacityScanDone) {
+    return <CapacityScan onDone={() => setCapacityScanDone(true)} />
   }
 
   return (

@@ -2,6 +2,8 @@ import { app, ipcMain, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { checkVoiceSetup } from './config'
 import { ensureOllamaRunning, ensureSearxngRunning } from './services/dependencyServices'
+import { scanCapacity } from './services/hardwareScan'
+import { pullModelIfMissing } from './services/ollama'
 import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
 import { VoicePipeline } from './services/voicePipeline'
@@ -10,6 +12,7 @@ import { getProfile, markGmailOnboardingDone, saveProfile } from './services/pro
 import { connectGmail, disconnectGmail, getGmailStatus } from './services/googleAuth'
 import {
   IPC_CHANNELS,
+  type CapacityScanResult,
   type JarisEmotion,
   type MemoryGraph,
   type Profile,
@@ -122,6 +125,16 @@ app.whenReady().then(() => {
   ipcMain.handle(IPC_CHANNELS.previewVoice, async (_event, voice: string) => {
     const audio = await previewVoice(voice)
     return audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer
+  })
+  ipcMain.handle(IPC_CHANNELS.scanCapacity, async (event): Promise<CapacityScanResult> => {
+    const sendStatus = (message: string): void => event.sender.send(IPC_CHANNELS.capacityScanStatus, message)
+    sendStatus('Détection de la carte graphique…')
+    const result = await scanCapacity()
+    const uniqueModels = [...new Set([result.models.flash, result.models.medium, result.models.large])]
+    for (const model of uniqueModels) {
+      await pullModelIfMissing(model, sendStatus)
+    }
+    return result
   })
   const mainWindow = createWindow()
   void startVoicePipeline(mainWindow)
