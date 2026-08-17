@@ -1,5 +1,5 @@
 import { config } from '../config'
-import { chatWithOllama, type OllamaMessage, type ThinkLevel } from './ollama'
+import { chatWithOllama, listInstalledModels, type OllamaMessage, type ThinkLevel } from './ollama'
 import { listMemoryTitles } from './memoryStore'
 import { getProfile } from './profileStore'
 import { TOOLS, createToolExecutor } from './tools'
@@ -112,7 +112,13 @@ export async function converse(
   // Ici on vérifie juste, question par question, que l'état réel du GPU à l'instant présent (température,
   // VRAM effectivement libre) permet encore de lancer le modèle normalement prévu pour ce palier — sans
   // jamais changer les paliers eux-mêmes, seulement ce qui est effectivement invoqué pour cette question.
-  const [live, overloadWarning] = await Promise.all([getLiveGpuStatus(), checkOverloadWarning()])
+  const [live, overloadWarning, installedModels] = await Promise.all([
+    getLiveGpuStatus(),
+    checkOverloadWarning(),
+    // Si Ollama ne répond pas ici, l'erreur claire viendra plus bas au vrai appel de chatWithOllama :
+    // liste vide -> pas de repli possible -> on garde le modèle normalement configuré pour le palier.
+    listInstalledModels().catch(() => [] as string[])
+  ])
   if (overloadWarning) onLog?.(`Avertissement machine chargée : ${overloadWarning}`)
 
   if (live.tempC !== null && live.tempC >= GPU_TEMP_LIMIT_C && tier !== 'flash') {
@@ -124,7 +130,7 @@ export async function converse(
   const think = THINK_LEVEL[tier]
 
   if (live.freeVramGb !== null) {
-    const safeModel = pickSafeModel(tier, live.freeVramGb)
+    const safeModel = pickSafeModel(tier, live.freeVramGb, installedModels, model)
     if (safeModel !== model) {
       onLog?.(`VRAM libre actuelle : ${live.freeVramGb} Go (insuffisant pour ${model}) : repli sur ${safeModel}.`)
       model = safeModel

@@ -282,7 +282,9 @@ aussi l'état réel du GPU à l'instant présent :
 - si la VRAM *libre* ne suffit plus pour le modèle normalement prévu (un
   jeu ou un autre logiciel en consomme une partie), Jaris se replie
   automatiquement sur le modèle le plus gros qui tient encore dans ce
-  palier ;
+  palier *et qui est déjà installé* (`ollama list`) — jamais un modèle
+  jamais téléchargé, qui ferait échouer la question avec une erreur
+  "model not found" ;
 - si la carte dépasse 83°C, Jaris bascule directement sur le palier rapide
   le temps qu'elle refroidisse, pour ne pas insister sur une carte qui
   chauffe déjà.

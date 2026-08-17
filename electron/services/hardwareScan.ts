@@ -132,7 +132,16 @@ export async function getLiveGpuStatus(): Promise<LiveGpuStatus> {
   }
 }
 
-/** Dans les candidats du palier donné, choisit le plus gros qui tient dans la VRAM *libre* à l'instant présent. */
-export function pickSafeModel(tier: Tier, freeVramGb: number): string {
-  return pickForBudget(TIER_CANDIDATES[tier], Math.max(0, freeVramGb - LIVE_SAFETY_MARGIN_GB))
+/**
+ * Dans les candidats du palier donné, choisit le plus gros qui tient dans la VRAM *libre* à l'instant
+ * présent — mais uniquement parmi les modèles réellement installés (`installedModels`, via `ollama list`) :
+ * seul le modèle normalement configuré pour ce palier a été téléchargé pendant le scan de capacité, les
+ * autres candidats du palier n'ont peut-être jamais été récupérés. Se replier dessus provoquerait un
+ * "model not found" en pleine conversation. Si aucun candidat du palier n'est installé, on garde
+ * `fallbackModel` (celui normalement configuré) tel quel plutôt que de risquer un modèle absent.
+ */
+export function pickSafeModel(tier: Tier, freeVramGb: number, installedModels: string[], fallbackModel: string): string {
+  const installedCandidates = TIER_CANDIDATES[tier].filter((c) => installedModels.includes(c.model))
+  if (installedCandidates.length === 0) return fallbackModel
+  return pickForBudget(installedCandidates, Math.max(0, freeVramGb - LIVE_SAFETY_MARGIN_GB))
 }

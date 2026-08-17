@@ -66,7 +66,7 @@ interface OllamaTagsResponse {
   models?: Array<{ name: string }>
 }
 
-async function listInstalledModels(): Promise<string[]> {
+export async function listInstalledModels(): Promise<string[]> {
   const response = await fetch(`${config.ollama.host}/api/tags`)
   if (!response.ok) throw new Error(`Ollama a répondu ${response.status} en listant les modèles installés`)
   const data = (await response.json()) as OllamaTagsResponse
