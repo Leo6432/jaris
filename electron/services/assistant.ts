@@ -126,21 +126,35 @@ export async function converse(
     tier = 'flash'
   }
 
-  let model = models[tier]
-  const think = THINK_LEVEL[tier]
-
-  if (live.freeVramGb !== null) {
-    const safeModel = pickSafeModel(tier, live.freeVramGb, installedModels, model)
-    if (safeModel !== model) {
-      onLog?.(`VRAM libre actuelle : ${live.freeVramGb} Go (insuffisant pour ${model}) : repli sur ${safeModel}.`)
-      model = safeModel
+  /** Résout modèle + effort de réflexion pour un palier donné, avec le même repli VRAM temps réel que ci-dessus. */
+  const resolveModelForTier = (t: Tier): { model: string; think: ThinkLevel } => {
+    let m = models[t]
+    if (live.freeVramGb !== null) {
+      const safeModel = pickSafeModel(t, live.freeVramGb, installedModels, m)
+      if (safeModel !== m) {
+        onLog?.(`VRAM libre actuelle : ${live.freeVramGb} Go (insuffisant pour ${m}) : repli sur ${safeModel}.`)
+        m = safeModel
+      }
     }
+    return { model: m, think: THINK_LEVEL[t] }
   }
 
+  let { model, think } = resolveModelForTier(tier)
   onLog?.(`Modèle choisi : ${model} (réflexion : ${think})`)
 
   /** Si la machine est surchargée, l'avertissement précède la vraie réponse dans la même phrase parlée. */
   const withOverloadWarning = (text: string): string => (overloadWarning ? `${overloadWarning} ${text}` : text)
+
+  /**
+   * Les petits modèles (palier "rapide") appellent bien les outils, mais échouent parfois à formuler une
+   * vraie réponse une fois le résultat de l'outil reçu (contenu vide) : sans ce filet, ça fait planter la
+   * synthèse vocale ("Text cannot be empty") en pleine conversation.
+   */
+  const finalize = (text: string): string => {
+    const trimmed = text.trim()
+    const safe = trimmed || "Désolé, je n'ai pas trouvé quoi répondre, tu peux reformuler ?"
+    return withOverloadWarning(safe)
+  }
 
   const messages: OllamaMessage[] = [
     { role: 'system', content: buildSystemPrompt(userName, memoryTitles) },
@@ -150,10 +164,19 @@ export async function converse(
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const message = await chatWithOllama(messages, TOOLS, model, think)
     if (!message.tool_calls?.length) {
-      return withOverloadWarning(message.content.trim())
+      return finalize(message.content)
     }
 
     messages.push(message)
+
+    // Un appel d'outil doit toujours se conclure sur le palier "médium" : c'est le seul dont la fiabilité
+    // à reformuler une vraie réponse après un résultat d'outil est éprouvée (voir THINK_LEVEL plus haut).
+    if (tier === 'flash') {
+      tier = 'medium'
+      ;({ model, think } = resolveModelForTier(tier))
+      onLog?.(`Appel d'outil détecté : passage au palier médium pour la suite (${model}).`)
+    }
+
     for (const call of message.tool_calls) {
       onLog?.(`Outil appelé : ${call.function.name}(${JSON.stringify(call.function.arguments)})`)
       const result = await executeTool(call.function.name, call.function.arguments)
@@ -164,7 +187,7 @@ export async function converse(
       // une carte 8 Go, donc repasser par qwen3.5 pour reformuler forcerait un
       // rechargement complet. Le modèle de vision répond déjà comme Jaris.
       if (call.function.name === 'look_at_screen') {
-        return withOverloadWarning(result)
+        return finalize(result)
       }
 
       messages.push({ role: 'tool', content: result })

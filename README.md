@@ -296,6 +296,17 @@ naturellement au modèle normalement prévu pour le palier. Ça évite d'avoir
 capacité inutilement la plupart du temps) : la marge ne s'applique que
 quand elle sert vraiment.
 
+**Filet de sécurité tool calling.** Le choix du palier "rapide vs médium
+vs puissant" se fait sur des mots-clés dans la question (voir plus bas) :
+ça peut rater une question qui a quand même besoin d'un outil (ex: une
+question météo sans le mot "cherche"). Si Jaris se retrouve à appeler un
+outil alors qu'il tournait sur le palier rapide, il repasse automatiquement
+sur le palier médium pour reformuler la réponse une fois le résultat de
+l'outil reçu — c'est cette étape-là (formuler une vraie phrase à partir
+d'un résultat d'outil) que le petit modèle rate parfois en pratique (réponse
+vide, ce qui plantait la synthèse vocale). Et si malgré tout Jaris n'a
+vraiment rien à dire, il le signale à voix haute au lieu de planter.
+
 ## Surveillance des ressources du PC (étape 14)
 
 En plus du repli automatique de modèle (étape 13 ci-dessus), Jaris vérifie
