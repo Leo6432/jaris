@@ -201,6 +201,13 @@ async function startVoicePipeline(): Promise<void> {
   pipeline.on('transcript', (text: string) => broadcast(IPC_CHANNELS.transcript, text))
   pipeline.on('reply', (payload: VoiceReplyPayload) => broadcast(IPC_CHANNELS.reply, payload))
   pipeline.on('log', (message: string) => broadcast(IPC_CHANNELS.log, message))
+  // Arrêt d'urgence déclenché par la sécurité thermique GPU (voicePipeline/resourceMonitor) : un vrai
+  // app.quit() (pas juste cacher la fenêtre, voir `quitting` plus haut), pour protéger la machine.
+  pipeline.on('shutdown', () => {
+    console.log('[jaris] Arrêt automatique : GPU en surchauffe.')
+    quitting = true
+    app.quit()
+  })
 
   try {
     await pipeline.start()

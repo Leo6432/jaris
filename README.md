@@ -332,19 +332,29 @@ vraiment rien à dire, il le signale à voix haute au lieu de planter.
 
 ## Surveillance des ressources du PC (étape 14)
 
-En plus du repli automatique de modèle (étape 13 ci-dessus), Jaris vérifie
-l'état général de la machine juste avant de répondre à chaque question :
-- **CPU** — % d'utilisation moyen de tous les coeurs
-- **RAM** — % de mémoire vive utilisée
-- **GPU** — % d'utilisation de la carte graphique (`nvidia-smi`)
+Jaris vérifie l'état général de la machine juste avant de répondre à chaque
+question, avec deux logiques bien distinctes :
 
-Si l'un de ces trois dépasse son seuil (90% pour le CPU et la RAM, 95% pour
-le GPU), Jaris le dit à voix haute juste avant sa réponse habituelle ("Attention,
-ta machine est assez chargée en ce moment, avec le CPU à 96%, ça risque
-d'être plus lent que d'habitude.") plutôt que de répondre lentement sans
-prévenir. Pour ne pas répéter le même avertissement à chaque question tant
-que la charge ne redescend pas, il y a un délai de 2 minutes entre deux
-avertissements.
+**CPU et RAM — juste une histoire de lenteur.** Si l'un des deux dépasse 90%
+d'utilisation, Jaris le dit à voix haute avant sa réponse habituelle
+("Attention, ta machine est assez chargée en ce moment, avec le CPU à 96%, ça
+risque d'être plus lent que d'habitude."), avec un délai de 2 minutes entre
+deux avertissements pour ne pas se répéter à chaque question tant que la
+charge ne redescend pas.
+
+**Température du GPU — un vrai risque matériel, traité différemment.** Le %
+d'utilisation du GPU n'est *pas* surveillé : tourner à 90-100% est normal et
+sans danger pour une carte graphique (c'est littéralement ce pour quoi elle
+est faite), ce n'est pas un signe de surcharge. Seule la température réelle
+compte, avec trois paliers, **vérifiés à chaque question sans aucun délai
+anti-spam** (contrairement au CPU/RAM ci-dessus : une carte qui reste chaude
+doit continuer à alerter/agir à chaque fois) :
+- **75°C** — Jaris prévient à voix haute, mais répond quand même normalement
+- **85°C** — la requête est annulée avant même d'appeler le LLM (inutile de
+  charger encore plus un GPU déjà chaud), Jaris dit "85 degrés dépassés,
+  arrêt de la requête" à la place de répondre
+- **90°C** — Jaris s'arrête complètement (`app.quit()`) pour protéger la
+  machine, après avoir eu le temps de le dire à voix haute
 
 ## Contrôle clavier et souris (étape 15)
 

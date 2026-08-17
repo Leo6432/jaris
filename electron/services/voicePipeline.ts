@@ -9,6 +9,8 @@ import { extractMemoryFromExchange } from './memoryExtractor'
 import type { OllamaMessage } from './ollama'
 import { restoreReminders } from './reminders'
 import { getProfile } from './profileStore'
+import { getLiveGpuStatus } from './hardwareScan'
+import { checkGpuTempSafety } from './resourceMonitor'
 
 /**
  * Derniers échanges (user/assistant) gardés en mémoire courte, pour que Jaris comprenne une
@@ -32,6 +34,9 @@ const IDLE_SETTLE_DELAY_MS = 400
  * minuteur fixe déconnecté de la durée réelle de la phrase.
  */
 const AUDIO_FALLBACK_IDLE_MS = 20000
+
+/** Laisse le temps à Jaris de dire l'avertissement d'arrêt (this.speak) avant de vraiment fermer l'appli. */
+const SHUTDOWN_DELAY_MS = 4000
 
 /** Distance d'édition entre deux mots, pour repérer les mots proches phonétiquement de "arobase". */
 function levenshteinDistance(a: string, b: string): number {
@@ -162,30 +167,45 @@ export class VoicePipeline extends EventEmitter {
     const transcript = normalizeSpokenSymbols(rawText.trim())
     if (transcript) this.emit('transcript', transcript)
 
-    let reply: string
     if (!transcript) {
-      reply = "Je n'ai rien entendu, réessaie."
-    } else {
-      try {
-        const profile = await getProfile()
-        reply = await converse(
-          transcript,
-          profile?.name ?? null,
-          (message) => void this.announceReminder(message),
-          (message) => this.emit('log', message),
-          this.history
-        )
-        this.history.push({ role: 'user', content: transcript }, { role: 'assistant', content: reply })
-        this.history.splice(0, Math.max(0, this.history.length - MAX_HISTORY_MESSAGES))
+      await this.speak("Je n'ai rien entendu, réessaie.")
+      return
+    }
 
-        // En arrière-plan, sans attendre : la mémoire longue durée s'enrichit toute seule à partir de la
-        // conversation, sans compter sur le fait que l'utilisateur pense à dire "retiens que..." à chaque
-        // fois. Ne retarde jamais la réponse déjà en train d'être dite (this.speak juste après).
-        void extractMemoryFromExchange(transcript, reply, (message) => this.emit('log', message))
-      } catch (err) {
-        this.emit('log', `Erreur Ollama : ${err instanceof Error ? err.message : String(err)}`)
-        reply = "Je n'arrive pas à réfléchir pour le moment, vérifie qu'Ollama tourne bien."
-      }
+    // Sécurité thermique GPU vérifiée avant même d'appeler le LLM (pas dans converse) : si la requête doit
+    // être annulée, inutile de charger encore plus un GPU déjà chaud avec un appel d'inférence.
+    const gpuStatus = checkGpuTempSafety((await getLiveGpuStatus()).tempC)
+    if (gpuStatus.action === 'abort' || gpuStatus.action === 'shutdown') {
+      this.emit('log', `Sécurité thermique GPU : ${gpuStatus.message}`)
+      await this.speak(gpuStatus.message as string, transcript)
+      // Délai pour laisser l'avertissement être dit avant de fermer réellement l'appli (voir main.ts,
+      // qui écoute cet évènement pour faire un vrai app.quit()).
+      if (gpuStatus.action === 'shutdown') setTimeout(() => this.emit('shutdown'), SHUTDOWN_DELAY_MS)
+      return
+    }
+
+    let reply: string
+    try {
+      const profile = await getProfile()
+      reply = await converse(
+        transcript,
+        profile?.name ?? null,
+        (message) => void this.announceReminder(message),
+        (message) => this.emit('log', message),
+        this.history
+      )
+      if (gpuStatus.action === 'warn') reply = `${gpuStatus.message} ${reply}`
+
+      this.history.push({ role: 'user', content: transcript }, { role: 'assistant', content: reply })
+      this.history.splice(0, Math.max(0, this.history.length - MAX_HISTORY_MESSAGES))
+
+      // En arrière-plan, sans attendre : la mémoire longue durée s'enrichit toute seule à partir de la
+      // conversation, sans compter sur le fait que l'utilisateur pense à dire "retiens que..." à chaque
+      // fois. Ne retarde jamais la réponse déjà en train d'être dite (this.speak juste après).
+      void extractMemoryFromExchange(transcript, reply, (message) => this.emit('log', message))
+    } catch (err) {
+      this.emit('log', `Erreur Ollama : ${err instanceof Error ? err.message : String(err)}`)
+      reply = "Je n'arrive pas à réfléchir pour le moment, vérifie qu'Ollama tourne bien."
     }
 
     await this.speak(reply, transcript)
