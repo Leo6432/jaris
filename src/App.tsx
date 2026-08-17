@@ -152,16 +152,26 @@ export default function App(): JSX.Element {
     }
 
     return (
-      <div className="app app--settings">
-        <h1 className="app__settings-title">Réglages de Jaris</h1>
+      <div className="app">
         <OptionsMenu />
-        <button className="app__memory-button" onClick={openMemoryBrain}>
-          Voir le cerveau de Jaris
-        </button>
+        {/* Pas d'audioElRef ici : seul le widget a un <audio> monté, l'orbe de cette fenêtre suit juste
+            l'émotion sans vibrer avec la voix (évite toute double lecture du son des réponses). */}
+        <JarisOrb emotion={emotion} />
+        <div className="app__status">{STATUS_LABEL[emotion]}</div>
         <div className="app__hint">
           Astuce : dis « Hey Jarvis » ou appuie sur Ctrl+Alt+J, depuis n'importe quelle appli, pour activer
           l'écoute
         </div>
+        <button className="app__memory-button" onClick={openMemoryBrain}>
+          Voir le cerveau de Jaris
+        </button>
+
+        {(transcript || reply) && (
+          <div className="app__conversation">
+            {transcript && <p className="app__transcript">« {transcript} »</p>}
+            {reply && <p className="app__reply">{reply}</p>}
+          </div>
+        )}
 
         {setupStatus && !setupStatus.ready && (
           <div className="app__setup-warning">

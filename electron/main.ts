@@ -31,7 +31,10 @@ let quitting = false
 /** Tant que l'onboarding n'est pas fini, fermer la fenêtre de réglages doit quitter l'appli normalement (pas de widget à replier sur un profil pas encore configuré). */
 let onboardingDone = false
 
-const WIDGET_SIZE = 200
+// Plus haut que large : l'orbe reste petit en haut, le reste de la hauteur sert à afficher une réponse
+// longue sans la couper (tout l'espace vide est transparent, donc invisible tant qu'il n'y a rien à dire).
+const WIDGET_WIDTH = 260
+const WIDGET_HEIGHT = 420
 const WIDGET_MARGIN = 24
 
 function currentSetupStatus(): VoiceSetupStatusPayload {
@@ -103,10 +106,10 @@ function createFullWindow(): BrowserWindow {
 function createWidgetWindow(): BrowserWindow {
   const { workArea } = screen.getPrimaryDisplay()
   const win = new BrowserWindow({
-    width: WIDGET_SIZE,
-    height: WIDGET_SIZE,
-    x: workArea.x + workArea.width - WIDGET_SIZE - WIDGET_MARGIN,
-    y: workArea.y + workArea.height - WIDGET_SIZE - WIDGET_MARGIN,
+    width: WIDGET_WIDTH,
+    height: WIDGET_HEIGHT,
+    x: workArea.x + workArea.width - WIDGET_WIDTH - WIDGET_MARGIN,
+    y: workArea.y + workArea.height - WIDGET_HEIGHT - WIDGET_MARGIN,
     frame: false,
     transparent: true,
     // Sur Windows, une fenêtre transparente sans backgroundColor explicite affiche parfois un carré

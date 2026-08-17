@@ -503,10 +503,15 @@ body.body--widget {
   cursor: pointer;
 }
 
-/* Widget flottant (étape 19) : toujours au premier plan, en bas à droite, sans fond. */
+/*
+ * Widget flottant (étape 19) : toujours au premier plan, en bas à droite, sans fond. La fenêtre est plus
+ * haute que large et vide au départ (donc invisible, tout est transparent) : l'orbe reste en haut, une
+ * réponse longue a la place de s'étaler en dessous sans être coupée, avec un défilement en dernier recours.
+ */
 .app--widget {
-  gap: 6px;
-  padding: 12px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 20px 14px;
   -webkit-app-region: drag;
 }
 
@@ -519,23 +524,15 @@ body.body--widget {
 }
 
 .app__conversation--widget {
-  max-width: 180px;
+  max-width: 220px;
+  max-height: 300px;
+  overflow-y: auto;
+  -webkit-app-region: no-drag;
 }
 
 .app__conversation--widget p {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
-}
-
-/* Fenêtre de réglages (étape 19) : onboarding, Options, cerveau de Jaris — pas de visage/audio ici, c'est le widget qui s'en charge. */
-.app--settings {
-  gap: 18px;
-  padding: 24px;
-}
-
-.app__settings-title {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 500;
-  color: #d9ecff;
 }

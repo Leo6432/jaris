@@ -369,11 +369,15 @@ autre appli.
   > claviers non-QWERTY (AZERTY...) — testé en pratique, ça ne se
   > déclenchait jamais. La touche **+** reste utilisable, mais seulement
   > quand une fenêtre de Jaris (widget ou réglages) a le focus.
-- **Cliquer sur le widget** ouvre la fenêtre de réglages classique (Options,
-  cerveau de Jaris, onboarding) ; la fermer (croix) referme juste cette
-  fenêtre et fait réapparaître le widget, Jaris continue de tourner. Une
-  icône dans la barre système (clic droit) permet de rouvrir les réglages
-  ou de vraiment quitter Jaris.
+- **Cliquer sur le widget** ouvre la fenêtre classique de toujours (l'orbe en
+  grand, la conversation, le bouton Options, le cerveau de Jaris) ; la
+  fermer (croix) referme juste cette fenêtre et fait réapparaître le widget,
+  Jaris continue de tourner. Une icône dans la barre système (clic droit)
+  permet de rouvrir cette fenêtre ou de vraiment quitter Jaris.
+- **Messages longs** : le widget est volontairement plus haut que large
+  (260×420) et vide au départ (donc invisible, tout est transparent) —
+  l'orbe reste en haut, une réponse longue s'étale en dessous sans être
+  coupée, avec un défilement en dernier recours si elle dépasse quand même.
 - Les deux fenêtres ne sont jamais affichées en même temps, pour éviter que
   la réponse vocale soit jouée deux fois.
 
