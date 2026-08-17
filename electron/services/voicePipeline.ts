@@ -3,17 +3,21 @@ import { randomUUID } from 'crypto'
 import type { JarisEmotion, VoiceReplyPayload } from '../../shared/ipc'
 import { VoiceClient } from './voiceClient'
 import { synthesizeSpeech } from './tts'
-import { appendConversationEntry } from './conversationStore'
+import { appendConversationEntry, getConversationHistory } from './conversationStore'
 import { converse } from './assistant'
 import type { OllamaMessage } from './ollama'
 import { restoreReminders } from './reminders'
 import { getProfile } from './profileStore'
 
 /**
- * Derniers échanges (user/assistant) gardés en mémoire courte pour la session en cours, pour que Jaris
- * comprenne une correction/précision ("répète juste l'adresse") sans devoir tout redire depuis le début.
- * Une fenêtre glissante plutôt qu'un vrai reset explicite : le contexte ancien sort tout seul au fil des
- * échanges, pas besoin de deviner "quand" une conversation est vraiment terminée.
+ * Derniers échanges (user/assistant) gardés en mémoire courte, pour que Jaris comprenne une
+ * correction/précision ("répète juste l'adresse") sans devoir tout redire depuis le début. Une fenêtre
+ * glissante plutôt qu'un vrai reset explicite : le contexte ancien sort tout seul au fil des échanges,
+ * pas besoin de deviner "quand" une conversation est vraiment terminée.
+ *
+ * Rechargée depuis conversation-history.json (déjà tenu à jour par appendConversationEntry) à chaque
+ * démarrage de Jaris : sans ça, redémarrer l'appli (ou revenir le lendemain) effaçait tout le contexte
+ * d'un coup, alors que pour l'utilisateur c'est juste une pause dans la même conversation.
  */
 const MAX_HISTORY_MESSAGES = 12
 
@@ -118,6 +122,15 @@ export class VoicePipeline extends EventEmitter {
       this.setEmotion('surprised')
       this.scheduleIdle(ERROR_IDLE_DELAY_MS)
     })
+
+    // Recharge les derniers échanges de la fois précédente (même après un redémarrage de Jaris ou un
+    // jour d'écart) : pour l'utilisateur, revenir le lendemain sur le même sujet doit continuer la
+    // conversation, pas repartir de zéro comme si de rien n'était.
+    const pastEntries = await getConversationHistory(MAX_HISTORY_MESSAGES / 2)
+    this.history = pastEntries.flatMap((entry): OllamaMessage[] => [
+      { role: 'user', content: entry.transcript },
+      { role: 'assistant', content: entry.reply }
+    ])
 
     await restoreReminders((message) => void this.announceReminder(message))
     await this.voice.start()

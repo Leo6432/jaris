@@ -243,16 +243,23 @@ démarrage automatique échoue (Ollama pas installé, par exemple), Jaris le dit
 > — vérifie avec `ollama ps` que la colonne PROCESSOR affiche bien ~100% GPU.
 
 **Mémoire courte de la conversation.** Chaque question envoyée à Ollama
-inclut maintenant les derniers échanges (question/réponse) de la session en
-cours, pas seulement la dernière phrase toute seule — sinon une précision
-ou une correction ("répète juste l'adresse mail") arrivait à Jaris sans
-aucun contexte, sans lien avec la demande en cours (ex: envoyer un mail),
-et il répondait n'importe quoi. La fenêtre est glissante (les 12 derniers
-messages, soit ~6 échanges) : le contexte ancien sort tout seul au fil de
-la conversation, pas de vrai "reset" à gérer. À ne pas confondre avec la
-mémoire longue durée façon Obsidian (étape 9, plus bas) : celle-ci ne
-retient rien après un redémarrage de Jaris, et sert juste à suivre le fil
-d'une conversation qui s'étale sur plusieurs questions.
+inclut maintenant les derniers échanges (question/réponse), pas seulement
+la dernière phrase toute seule — sinon une précision ou une correction
+("répète juste l'adresse mail") arrivait à Jaris sans aucun contexte, sans
+lien avec la demande en cours (ex: envoyer un mail), et il répondait
+n'importe quoi. La fenêtre est glissante (les 12 derniers messages, soit
+~6 échanges) : le contexte ancien sort tout seul au fil de la conversation,
+pas de vrai "reset" à gérer.
+
+Elle survit aussi à un redémarrage de Jaris (ou à une pause d'un jour à
+l'autre) : au lancement, les derniers échanges sont rechargés depuis
+`conversation-history.json` (déjà tenu à jour, voir étape 5 plus bas), donc
+revenir le lendemain sur le même sujet continue la conversation au lieu de
+repartir de zéro. Ça reste une fenêtre glissante bornée (~6 derniers
+échanges, pas tout l'historique) : pour qu'un fait précis survive
+vraiment, sur la durée et sans dépendre de cette fenêtre, mieux vaut
+demander à Jaris de le retenir explicitement — c'est le rôle de la mémoire
+longue durée façon Obsidian (étape 9, plus bas).
 
 ## Sélection automatique de modèle (étape 13)
 
