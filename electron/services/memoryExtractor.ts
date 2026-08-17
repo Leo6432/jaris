@@ -30,12 +30,22 @@ export async function extractMemoryFromExchange(
 
     const systemPrompt =
       'Tu es le module de mémoire de Jaris, un assistant vocal. On te donne un échange de conversation qui ' +
-      'vient juste de se dérouler. Ton seul travail : décider si cet échange contient une information ' +
-      "personnelle durable, qui vaut la peine d'être gardée d'une conversation à l'autre (préférence de " +
-      "l'utilisateur, projet en cours, rendez-vous, fait donné sur sa vie...). Si oui, appelle " +
-      "IMPÉRATIVEMENT l'outil remember pour la sauvegarder, avec un titre de note court et clair. Si " +
-      "l'échange ne contient rien de tel (bavardage, question factuelle ponctuelle, simple demande " +
-      "d'action sans info personnelle...), n'appelle aucun outil et ne réponds rien. " +
+      'vient juste de se dérouler. Ton seul travail : décider si cet échange contient un FAIT nouveau, ' +
+      "concret et durable, que Jaris devrait se rappeler d'une conversation à l'autre (une préférence, une " +
+      "adresse, un projet en cours, un rendez-vous, un fait donné sur la vie de l'utilisateur...).\n\n" +
+      "Si oui, appelle IMPÉRATIVEMENT l'outil remember. Règles strictes pour le contenu de la note :\n" +
+      '- Écris UNIQUEMENT le fait lui-même, comme une phrase de connaissance, à la troisième personne ' +
+      '(bon exemple : "Adresse email de Léo : xxx@gmail.com.").\n' +
+      "- N'écris JAMAIS de commentaire sur ce qui manque, ce qu'il faudrait redemander, ou ton propre " +
+      'raisonnement (interdit : "il n\'a pas encore dit...", "il faudrait demander...", "il est ' +
+      'nécessaire de..."). Si une info manque dans l\'échange, ignore-la simplement, n\'en parle pas ' +
+      'dans la note.\n' +
+      '- Le titre de la note désigne le sujet ou la personne concernée (ex: le prénom de ' +
+      "l'utilisateur pour une info personnelle), jamais l'action en cours (pas de titre comme " +
+      '"Réponse mail" ou "Question posée").\n\n' +
+      'Si cet échange ne contient aucun fait nouveau et concret à garder (bavardage, question ' +
+      "factuelle ponctuelle, demande d'action sans info personnelle, ou juste une incertitude sur une " +
+      "info encore manquante), n'appelle aucun outil et ne réponds rien. " +
       (memoryTitles.length
         ? `Notes déjà en mémoire : ${memoryTitles.join(', ')} — n'appelle pas remember pour une info déjà connue.`
         : '')
