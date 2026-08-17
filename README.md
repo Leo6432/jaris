@@ -53,7 +53,11 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   techniques (modèle de transcription, etc.) déjà configurés par défaut à l'intérieur.
   Aucun fichier `.env` à ouvrir ni à modifier à la main, même pour un
   débutant complet — seuls les vrais réglages perso (connecter Gmail, choisir
-  son prénom) resteront dans l'interface, jamais dans un fichier texte
+  son prénom) resteront dans l'interface, jamais dans un fichier texte. Le
+  modèle de transcription (Cohere Transcribe, licence Apache 2.0) sera
+  embarqué directement dans l'installeur au lieu d'être téléchargé depuis
+  Hugging Face au premier lancement : aucun compte Hugging Face à créer côté
+  utilisateur final, ce compte ne sert qu'en développement
 - ⬜ Étape 16 — Amélioration du design de l'interface
 - ⬜ Étape 17 — Animation pendant la capture/analyse d'écran, pour donner un
   retour visuel pendant que Jaris "regarde" (étape 6)
