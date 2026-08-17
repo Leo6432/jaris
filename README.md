@@ -347,11 +347,14 @@ parle fort, et revient à une respiration légère au repos.
 
 ## Widget flottant toujours visible (étape 19)
 
-Une fois l'onboarding terminé, Jaris n'est plus une grande fenêtre qui doit
-avoir le focus pour réagir : il devient un petit widget (`JarisOrb`, sans
-fenêtre ni fond) posé en bas à droite de l'écran, au-dessus de toutes les
-autres fenêtres — visible même en travaillant dans le navigateur ou une
-autre appli.
+Jaris se lance toujours normalement, dans sa fenêtre classique (comme avant
+cette étape) — rien ne change au démarrage. Ce qui change : dès qu'on la
+réduit (bouton "Réduire") ou qu'on la ferme (croix), au lieu de disparaître
+ou de quitter l'appli, elle laisse la place à un petit widget (`JarisOrb`,
+sans fenêtre ni fond) posé en bas à droite de l'écran, au-dessus de toutes
+les autres fenêtres — visible même en travaillant dans le navigateur ou une
+autre appli. Jaris continue de tourner en arrière-plan, il n'y a juste plus
+la grande fenêtre à l'écran.
 - **Sans fond** : la fenêtre Electron du widget est transparente
   (`transparent: true`, sans bordure) ; seul l'anneau lumineux de `JarisOrb`
   est visible, pas de rectangle derrière.
@@ -359,21 +362,19 @@ autre appli.
   virtuels, donc il reste affiché même en changeant d'application ou de
   bureau.
 - **Réagit depuis n'importe où** : le mot d'activation "Hey Jarvis" (déjà
-  basé sur le micro, indépendant de la fenêtre) et le raccourci clavier
-  **Ctrl+Alt+J** (`globalShortcut`, enregistré au démarrage) déclenchent
-  l'écoute quel que soit le programme qui a le focus.
-  > Une touche seule sans modificateur (ex: juste "+") n'est volontairement
-  > pas utilisée en global : ça interceptait *toute* frappe sur "+" sur tout
-  > le PC (impossible de taper un "+" ailleurs tant que Jaris tourne), et
-  > l'alias clavier "Plus" d'Electron ne mappait pas de façon fiable sur les
-  > claviers non-QWERTY (AZERTY...) — testé en pratique, ça ne se
-  > déclenchait jamais. La touche **+** reste utilisable, mais seulement
-  > quand une fenêtre de Jaris (widget ou réglages) a le focus.
-- **Cliquer sur le widget** ouvre la fenêtre classique de toujours (l'orbe en
-  grand, la conversation, le bouton Options, le cerveau de Jaris) ; la
-  fermer (croix) referme juste cette fenêtre et fait réapparaître le widget,
-  Jaris continue de tourner. Une icône dans la barre système (clic droit)
-  permet de rouvrir cette fenêtre ou de vraiment quitter Jaris.
+  basé sur le micro, indépendant de la fenêtre) et la touche **Insert**
+  (`globalShortcut`, enregistrée au démarrage) déclenchent l'écoute quel que
+  soit le programme qui a le focus.
+  > Une touche à caractère (ex: "+") n'est volontairement pas utilisée en
+  > global : ça interceptait toute frappe sur cette touche ailleurs sur le
+  > PC, et son mappage peut varier selon l'agencement clavier (AZERTY...) —
+  > testé en pratique avec "+", ça ne se déclenchait jamais. **Insert** est
+  > une touche seule à appuyer, jamais utilisée par les applis courantes,
+  > donc sans ces deux problèmes.
+- **Cliquer sur le widget** rouvre la fenêtre classique (l'orbe en grand, la
+  conversation, le bouton Options, le cerveau de Jaris). Une icône dans la
+  barre système (clic droit) permet aussi de la rouvrir, ou de vraiment
+  quitter Jaris.
 - **Messages longs** : le widget est volontairement plus haut que large
   (260×420) et vide au départ (donc invisible, tout est transparent) —
   l'orbe reste en haut, une réponse longue s'étale en dessous sans être

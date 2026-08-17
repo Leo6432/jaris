@@ -63,8 +63,9 @@ function loadRenderer(win: BrowserWindow, mode: 'full' | 'widget'): void {
 }
 
 /**
- * Fenêtre "réglages" classique (onboarding, Options, cerveau de Jaris) : normale, avec bordure. Fermer sa
- * croix la cache seulement (voir `quitting`), Jaris continue à tourner en arrière-plan via le widget.
+ * Fenêtre normale de Jaris (onboarding, orbe, conversation, Options, cerveau de Jaris) : c'est celle-là
+ * qui s'ouvre au lancement, comme avant l'étape 19. La réduire ou fermer sa croix ne quitte pas Jaris :
+ * ça la cache et fait apparaître le widget flottant à la place (voir `quitting`/`onboardingDone`).
  */
 function createFullWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -85,6 +86,14 @@ function createFullWindow(): BrowserWindow {
   win.on('close', (event) => {
     if (quitting || !onboardingDone) return
     event.preventDefault()
+    win.hide()
+    showWidgetWindow()
+  })
+  // Pas de preventDefault possible sur 'minimize' (déjà fait quand l'évènement arrive) : on laisse
+  // Windows réduire, puis on cache complètement la fenêtre (plus d'icône dans la barre des tâches) et
+  // on montre le widget à la place.
+  win.on('minimize', () => {
+    if (!onboardingDone) return
     win.hide()
     showWidgetWindow()
   })
@@ -247,20 +256,18 @@ app.whenReady().then(async () => {
 
   // Raccourci global (pas seulement quand la fenêtre de Jaris a le focus) : déclenche l'écoute depuis
   // n'importe quelle appli, comme le mot d'activation "Hey Jarvis" (déjà global car basé sur le micro).
-  // Une touche seule sans modificateur (ex: "+") est peu fiable en global : ça intercepte aussi tout "+"
-  // tapé ailleurs sur le PC, et l'alias clavier "Plus" d'Electron ne mappe pas de façon fiable sur les
-  // claviers non-QWERTY (AZERTY...). Une combinaison avec modificateur est bien plus robuste.
-  if (!globalShortcut.register('Control+Alt+J', () => pipeline?.triggerWake())) {
-    console.warn('[jaris] Impossible de réserver le raccourci global Ctrl+Alt+J (peut-être déjà pris par une autre appli).')
+  // Une touche à caractère (ex: "+") est peu fiable en global : ça intercepte aussi toute frappe sur cette
+  // touche ailleurs sur le PC, et son mappage clavier peut varier selon l'agencement (AZERTY...).
+  // "Insert" est une touche seule, jamais utilisée par les applis courantes, donc sans ce risque.
+  if (!globalShortcut.register('Insert', () => pipeline?.triggerWake())) {
+    console.warn('[jaris] Impossible de réserver le raccourci global Insert (peut-être déjà pris par une autre appli).')
   }
 
+  // Toujours lancée dans sa fenêtre normale, comme avant l'étape 19 : la réduire ou la fermer bascule
+  // ensuite vers le widget (voir createFullWindow), mais le lancement lui-même ne change pas.
   const profile = await getProfile()
-  if (profile?.capacityScanDone) {
-    onboardingDone = true
-    widgetWindow = createWidgetWindow()
-  } else {
-    fullWindow = createFullWindow()
-  }
+  onboardingDone = Boolean(profile?.capacityScanDone)
+  fullWindow = createFullWindow()
 
   void startVoicePipeline()
 })
