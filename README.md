@@ -46,10 +46,10 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   modèles Ollama adaptés à la machine (rapide/médium/puissant, jamais plus
   gros que ce qu'elle supporte), puis route chaque question vers le palier
   le plus adapté — voir plus bas
-- ⬜ Étape 14 — Surveillance des ressources du PC : Jaris prévient à voix
+- ✅ Étape 14 — Surveillance des ressources du PC : Jaris prévient à voix
   haute quand la machine est surchargée (GPU, CPU, RAM trop élevés), pour
   éviter de lancer une tâche lourde ou d'insister sur une réponse lente sans
-  prévenir
+  prévenir — voir plus bas
 - ⬜ Étape 15 — Contrôle clavier et souris : Jaris peut écrire du texte et
   cliquer à la place de l'utilisateur, pour automatiser des actions
   complètes sur l'ordinateur (pas seulement ouvrir une application)
@@ -290,6 +290,22 @@ naturellement au modèle normalement prévu pour le palier. Ça évite d'avoir
 à réserver une marge fixe "au cas où" en permanence (ce qui gâcherait de la
 capacité inutilement la plupart du temps) : la marge ne s'applique que
 quand elle sert vraiment.
+
+## Surveillance des ressources du PC (étape 14)
+
+En plus du repli automatique de modèle (étape 13 ci-dessus), Jaris vérifie
+l'état général de la machine juste avant de répondre à chaque question :
+- **CPU** — % d'utilisation moyen de tous les coeurs
+- **RAM** — % de mémoire vive utilisée
+- **GPU** — % d'utilisation de la carte graphique (`nvidia-smi`)
+
+Si l'un de ces trois dépasse son seuil (90% pour le CPU et la RAM, 95% pour
+le GPU), Jaris le dit à voix haute juste avant sa réponse habituelle ("Attention,
+ta machine est assez chargée en ce moment, avec le CPU à 96%, ça risque
+d'être plus lent que d'habitude.") plutôt que de répondre lentement sans
+prévenir. Pour ne pas répéter le même avertissement à chaque question tant
+que la charge ne redescend pas, il y a un délai de 2 minutes entre deux
+avertissements.
 
 ## Ouvrir des applications et programmer des rappels (étape 5)
 

@@ -4,6 +4,7 @@ import { listMemoryTitles } from './memoryStore'
 import { getProfile } from './profileStore'
 import { TOOLS, createToolExecutor } from './tools'
 import { GPU_TEMP_LIMIT_C, getLiveGpuStatus, pickSafeModel } from './hardwareScan'
+import { checkOverloadWarning } from './resourceMonitor'
 
 interface ModelTiers {
   flash: string
@@ -111,7 +112,8 @@ export async function converse(
   // Ici on vérifie juste, question par question, que l'état réel du GPU à l'instant présent (température,
   // VRAM effectivement libre) permet encore de lancer le modèle normalement prévu pour ce palier — sans
   // jamais changer les paliers eux-mêmes, seulement ce qui est effectivement invoqué pour cette question.
-  const live = await getLiveGpuStatus()
+  const [live, overloadWarning] = await Promise.all([getLiveGpuStatus(), checkOverloadWarning()])
+  if (overloadWarning) onLog?.(`Avertissement machine chargée : ${overloadWarning}`)
 
   if (live.tempC !== null && live.tempC >= GPU_TEMP_LIMIT_C && tier !== 'flash') {
     onLog?.(`GPU à ${live.tempC}°C (seuil ${GPU_TEMP_LIMIT_C}°C) : passage au palier rapide le temps qu'elle refroidisse.`)
@@ -131,6 +133,9 @@ export async function converse(
 
   onLog?.(`Modèle choisi : ${model} (réflexion : ${think})`)
 
+  /** Si la machine est surchargée, l'avertissement précède la vraie réponse dans la même phrase parlée. */
+  const withOverloadWarning = (text: string): string => (overloadWarning ? `${overloadWarning} ${text}` : text)
+
   const messages: OllamaMessage[] = [
     { role: 'system', content: buildSystemPrompt(userName, memoryTitles) },
     { role: 'user', content: prompt }
@@ -139,7 +144,7 @@ export async function converse(
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const message = await chatWithOllama(messages, TOOLS, model, think)
     if (!message.tool_calls?.length) {
-      return message.content.trim()
+      return withOverloadWarning(message.content.trim())
     }
 
     messages.push(message)
@@ -153,7 +158,7 @@ export async function converse(
       // une carte 8 Go, donc repasser par qwen3.5 pour reformuler forcerait un
       // rechargement complet. Le modèle de vision répond déjà comme Jaris.
       if (call.function.name === 'look_at_screen') {
-        return result
+        return withOverloadWarning(result)
       }
 
       messages.push({ role: 'tool', content: result })
