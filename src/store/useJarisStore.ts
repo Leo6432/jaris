@@ -3,8 +3,20 @@ import type { JarisEmotion, VoiceSetupStatusPayload } from '../../shared/ipc'
 
 export type { JarisEmotion }
 
-/** Délai d'inactivité avant que Jaris ne se rendorme (ms), pour les tests manuels. */
-const SLEEP_AFTER_MS = 45_000
+/**
+ * Filet de sécurité pour repasser à "idle" tout seul si jamais aucun vrai évènement ne le fait (bug,
+ * requête réseau qui reste bloquée...) — ce n'est jamais censé être le chemin normal. Deux durées
+ * différentes selon ce qu'on attend :
+ * - "listening" : on attend que l'utilisateur parle, ça peut légitimement ne jamais arriver (silence),
+ *   donc un délai court a du sens pour se rendormir.
+ * - "thinking"/"happy" : Jaris est en train de vraiment travailler (recherche web, plusieurs outils
+ *   enchaînés...), ce qui peut prendre largement plus de 45s sur du matériel local pour une question
+ *   complexe — un délai aussi court le faisait "s'endormir" en pleine réflexion avant même d'avoir
+ *   répondu. Un délai beaucoup plus généreux ici : juste un filet en cas de vrai blocage, pas une limite
+ *   de temps de réponse normale.
+ */
+const LISTENING_SLEEP_AFTER_MS = 45_000
+const PROCESSING_SLEEP_AFTER_MS = 3 * 60_000
 const MAX_LOGS = 20
 
 interface JarisState {
@@ -39,9 +51,10 @@ export const useJarisStore = create<JarisState>((set, get) => ({
     set(emotion === 'idle' ? { emotion, transcript: null, reply: null } : { emotion })
     if (sleepTimer) clearTimeout(sleepTimer)
     if (emotion !== 'idle') {
+      const delay = emotion === 'listening' ? LISTENING_SLEEP_AFTER_MS : PROCESSING_SLEEP_AFTER_MS
       sleepTimer = setTimeout(() => {
         if (get().emotion !== 'idle') set({ emotion: 'idle' })
-      }, SLEEP_AFTER_MS)
+      }, delay)
     }
   },
 
