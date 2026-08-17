@@ -362,15 +362,19 @@ la grande fenêtre à l'écran.
   virtuels, donc il reste affiché même en changeant d'application ou de
   bureau.
 - **Réagit depuis n'importe où** : le mot d'activation "Hey Jarvis" (déjà
-  basé sur le micro, indépendant de la fenêtre) et la touche **Insert**
-  (`globalShortcut`, enregistrée au démarrage) déclenchent l'écoute quel que
-  soit le programme qui a le focus.
-  > Une touche à caractère (ex: "+") n'est volontairement pas utilisée en
-  > global : ça interceptait toute frappe sur cette touche ailleurs sur le
-  > PC, et son mappage peut varier selon l'agencement clavier (AZERTY...) —
-  > testé en pratique avec "+", ça ne se déclenchait jamais. **Insert** est
-  > une touche seule à appuyer, jamais utilisée par les applis courantes,
-  > donc sans ces deux problèmes.
+  basé sur le micro, indépendant de la fenêtre), la touche **+** et la
+  touche **Insert** (les deux enregistrées en `globalShortcut` au démarrage)
+  déclenchent l'écoute quel que soit le programme qui a le focus.
+  > Une fois un raccourci global enregistré avec succès, Electron/Windows
+  > donnent l'exclusivité totale sur cette touche à Jaris — il n'y a rien de
+  > plus à "prioriser" à ce niveau-là. Si l'enregistrement échoue (touche
+  > déjà réservée par une autre appli, mappage qui varie selon l'agencement
+  > clavier comme l'AZERTY...), le terminal l'indique clairement au
+  > démarrage (`[jaris] Raccourci global ... enregistré avec succès` ou
+  > `Impossible de réserver...`). D'où les deux raccourcis enregistrés en
+  > parallèle plutôt qu'un seul : si l'un des deux ne fonctionne pas de
+  > façon fiable sur une machine donnée, l'autre reste disponible sans rien
+  > à reconfigurer.
 - **Cliquer sur le widget** rouvre la fenêtre classique (l'orbe en grand, la
   conversation, le bouton Options, le cerveau de Jaris). Une icône dans la
   barre système (clic droit) permet aussi de la rouvrir, ou de vraiment

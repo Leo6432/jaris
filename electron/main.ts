@@ -256,23 +256,36 @@ app.whenReady().then(async () => {
   )
   tray.on('click', () => showFullWindow())
 
-  // Raccourci global (pas seulement quand la fenêtre de Jaris a le focus) : déclenche l'écoute depuis
-  // n'importe quelle appli, comme le mot d'activation "Hey Jarvis" (déjà global car basé sur le micro).
-  // Diagnostic explicite à chaque étape (succès/échec d'enregistrement, puis déclenchement réel) : sinon
-  // impossible de distinguer "le raccourci ne s'enregistre pas" de "il s'enregistre mais rien ne se passe
-  // au moment d'appuyer" (ex: pipeline vocal pas encore prêt) juste en testant à l'aveugle.
-  const shortcutKey = 'Insert'
-  const registered = globalShortcut.register(shortcutKey, () => {
-    console.log(`[jaris] Raccourci global ${shortcutKey} déclenché (pipeline ${pipeline ? 'prêt' : 'PAS prêt'}).`)
-    pipeline?.triggerWake()
-  })
-  if (registered) {
-    console.log(`[jaris] Raccourci global ${shortcutKey} enregistré avec succès.`)
-  } else {
-    console.warn(
-      `[jaris] Impossible de réserver le raccourci global ${shortcutKey} (déjà pris par une autre appli, ou par une ancienne instance de Jaris encore ouverte en arrière-plan).`
-    )
+  /**
+   * Raccourci global (pas seulement quand la fenêtre de Jaris a le focus) : déclenche l'écoute depuis
+   * n'importe quelle appli, comme le mot d'activation "Hey Jarvis" (déjà global car basé sur le micro).
+   * Diagnostic explicite à chaque étape (succès/échec d'enregistrement, puis déclenchement réel) : sinon
+   * impossible de distinguer "le raccourci ne s'enregistre pas" de "il s'enregistre mais rien ne se passe
+   * au moment d'appuyer" (ex: pipeline vocal pas encore prêt) juste en testant à l'aveugle. Une fois
+   * enregistré avec succès, Electron/Windows donnent l'exclusivité totale sur cette touche à Jaris quelle
+   * que soit l'appli active : il n'y a rien de plus à "prioriser" à ce niveau-là. Si l'enregistrement
+   * échoue, c'est qu'une autre appli (ou une ancienne instance de Jaris encore ouverte) l'a déjà réservée
+   * en premier — dans ce cas le message d'avertissement ci-dessous l'indiquera clairement dans le terminal.
+   */
+  function registerWakeShortcut(key: string): void {
+    const registered = globalShortcut.register(key, () => {
+      console.log(`[jaris] Raccourci global ${key} déclenché (pipeline ${pipeline ? 'prêt' : 'PAS prêt'}).`)
+      pipeline?.triggerWake()
+    })
+    if (registered) {
+      console.log(`[jaris] Raccourci global ${key} enregistré avec succès.`)
+    } else {
+      console.warn(
+        `[jaris] Impossible de réserver le raccourci global ${key} (déjà pris par une autre appli, ou par une ancienne instance de Jaris encore ouverte en arrière-plan).`
+      )
+    }
   }
+
+  // "Insert" est confirmé fiable. On tente aussi "+" (préféré par l'utilisateur) en plus, pas à la place :
+  // si "+" échoue à s'enregistrer ou ne se déclenche pas de façon fiable sur ce clavier, Insert reste
+  // disponible sans rien à reconfigurer.
+  registerWakeShortcut('+')
+  registerWakeShortcut('Insert')
 
   // Toujours lancée dans sa fenêtre normale, comme avant l'étape 19 : la réduire ou la fermer bascule
   // ensuite vers le widget (voir createFullWindow), mais le lancement lui-même ne change pas.
