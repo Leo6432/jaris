@@ -10,7 +10,7 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ✅ Étape 2 — Visage animé (`JarisFace`) avec 5 états d'émotion : veille,
   écoute, réflexion, content, surpris
 - ✅ Étape 3 — Pipeline vocal local : mot d'activation (openWakeWord),
-  transcription (faster-whisper), synthèse vocale (Piper). **Testé de bout
+  transcription (Cohere Transcribe), synthèse vocale (Piper). **Testé de bout
   en bout avec un vrai micro** (voir plus bas)
 - ✅ Étape 4 — Connexion Ollama : Jaris comprend vraiment ce que tu dis et
   répond avec un LLM local (`qwen3.5:9b` par défaut, configurable)
@@ -50,7 +50,7 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   complètes sur l'ordinateur (pas seulement ouvrir une application)
 - ⬜ Étape 15 — Installeur en un clic : empaqueter toute la chaîne (app +
   Ollama + modèles) dans un seul installeur simple, avec tous les réglages
-  techniques (modèle Whisper, etc.) déjà configurés par défaut à l'intérieur.
+  techniques (modèle de transcription, etc.) déjà configurés par défaut à l'intérieur.
   Aucun fichier `.env` à ouvrir ni à modifier à la main, même pour un
   débutant complet — seuls les vrais réglages perso (connecter Gmail, choisir
   son prénom) resteront dans l'interface, jamais dans un fichier texte
@@ -71,7 +71,7 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ⬜ Étape 21 — Préparation à la vente (~5€) : licence, protection contre la
   copie/redistribution du logiciel. Nécessitera au préalable de vérifier la
   compatibilité des licences des briques open source utilisées (Ollama,
-  modèles Qwen, openWakeWord, faster-whisper, Piper, SearXNG) avec une
+  modèles Qwen, openWakeWord, Cohere Transcribe, Piper, SearXNG) avec une
   distribution commerciale
 - ⬜ Étape 22 — Site web avec tableau de bord personnel : chaque utilisateur
   peut noter son planning et sa to-do list sur le site, et Jaris peut y
@@ -127,7 +127,9 @@ bandeau indique ce qui manque.
 
 ## Mettre en place le pipeline vocal (étape 3)
 
-Zéro compte, zéro clé à créer : tout se télécharge directement.
+Tout se télécharge directement, sauf la reconnaissance vocale qui demande un
+compte Hugging Face gratuit (voir plus bas) — c'est la seule exception au
+"zéro compte" du reste de Jaris.
 
 > **Mot d'activation : "Hey Jarvis" (en anglais), pas "Jaris".**
 > openWakeWord (le moteur 100% local et gratuit, sans compte) ne fournit pas
@@ -148,12 +150,16 @@ pip install -r python/requirements.txt
 python python/download_wakeword_models.py   # télécharge les modèles openWakeWord (~5 Mo) dans models/wakeword/
 ```
 
+La reconnaissance vocale ([Cohere Transcribe](https://huggingface.co/CohereLabs/cohere-transcribe-03-2026),
+open source, #1 du classement Open ASR Leaderboard) est un modèle "gated" :
+1. Crée un compte gratuit sur [huggingface.co](https://huggingface.co)
+2. Accepte les conditions sur la page du modèle
+3. Dans le venv Python : `huggingface-cli login` (colle un token créé sur
+   [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens))
+
 Renseigne dans `.env` :
 - `PYTHON_BIN` → chemin vers `python/venv/Scripts/python.exe`
-- `WHISPER_MODEL` → `small` (rapide) ou `medium` (plus précis) pour le français
-- `WHISPER_DEVICE=cuda` sur la RTX 3070 (nécessite les DLL CUDA/cuDNN livrées
-  avec `pip install nvidia-cublas-cu12 nvidia-cudnn-cu12` si `ctranslate2` ne
-  les trouve pas), sinon `cpu`
+- `STT_DEVICE=cuda` sur la RTX 3070, sinon `cpu`
 - `WAKEWORD_THRESHOLD` si le mot d'activation se déclenche trop souvent/pas
   assez (0 à 1, défaut 0.5)
 
@@ -184,8 +190,9 @@ de brancher un vrai raisonnement à l'étape 4.
 > le périphérique micro par défaut du système n'est pas forcément le bon
 > (ex: un micro virtuel type Voice Changer/Voicemod) — utilise
 > `python -m sounddevice` pour lister les micros et choisir le bon index via
-> `WAKEWORD_INPUT_DEVICE` ; et Whisper peut halluciner du texte plausible sur
-> du silence (le pipeline filtre déjà ça via la détection de voix intégrée).
+> `WAKEWORD_INPUT_DEVICE` ; et un modèle de transcription peut halluciner du
+> texte plausible sur du silence (le pipeline filtre déjà ça via la détection
+> de silence avant capture, plus un filtre de secours sur des formules types).
 >
 > Un raccourci clavier **+** (dans la fenêtre Jaris) déclenche aussi l'écoute
 > manuellement, sans dire le mot d'activation — pratique pour tester ou en

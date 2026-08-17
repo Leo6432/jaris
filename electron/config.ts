@@ -27,11 +27,11 @@ export const config = {
     /** Index du périphérique micro (voir `python -m sounddevice`), vide = défaut système. */
     inputDevice: readEnv('WAKEWORD_INPUT_DEVICE')
   },
-  whisper: {
-    model: readEnv('WHISPER_MODEL', 'small'),
-    language: readEnv('WHISPER_LANGUAGE', 'fr'),
-    device: readEnv('WHISPER_DEVICE', 'cpu'),
-    computeType: readEnv('WHISPER_COMPUTE_TYPE', 'int8')
+  stt: {
+    /** Reconnaissance vocale : Cohere Transcribe (2 Md de paramètres, #1 du Open ASR Leaderboard). */
+    model: readEnv('STT_MODEL', 'CohereLabs/cohere-transcribe-03-2026'),
+    language: readEnv('STT_LANGUAGE', 'fr'),
+    device: readEnv('STT_DEVICE', 'cpu')
   },
   piper: {
     binPath: readEnv('PIPER_BIN_PATH', './bin/piper/piper.exe'),

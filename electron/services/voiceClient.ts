@@ -17,7 +17,7 @@ type VoiceServerEvent =
 
 /**
  * Sidecar Python persistant : écoute continue du micro, mot d'activation
- * (openWakeWord) et transcription (faster-whisper) dans un seul process.
+ * (openWakeWord) et transcription (Cohere Transcribe) dans un seul process.
  * Émet 'wake', 'transcript' (text: string), 'log' et 'error'.
  */
 export class VoiceClient extends EventEmitter {
@@ -39,14 +39,12 @@ export class VoiceClient extends EventEmitter {
         config.wakeword.embeddingModelPath,
         '--wakeword-threshold',
         String(config.wakeword.threshold),
-        '--whisper-model',
-        config.whisper.model,
-        '--whisper-device',
-        config.whisper.device,
-        '--whisper-compute-type',
-        config.whisper.computeType,
-        '--whisper-language',
-        config.whisper.language
+        '--stt-model',
+        config.stt.model,
+        '--stt-device',
+        config.stt.device,
+        '--stt-language',
+        config.stt.language
       ]
       if (config.wakeword.inputDevice !== '') {
         args.push('--input-device', config.wakeword.inputDevice)

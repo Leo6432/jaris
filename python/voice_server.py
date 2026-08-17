@@ -2,8 +2,8 @@
 
 Regroupe dans un seul process : écoute continue du micro, détection du mot
 d'activation (openWakeWord), capture de l'énoncé qui suit jusqu'au silence,
-puis transcription (faster-whisper) — directement depuis les échantillons en
-mémoire, sans passer par des fichiers WAV intermédiaires.
+puis transcription (Cohere Transcribe) — directement depuis les échantillons
+en mémoire, sans passer par des fichiers WAV intermédiaires.
 
 Aucune entrée attendue sur stdin : tout démarre dès le lancement. Une ligne
 JSON par événement sur stdout :
@@ -31,11 +31,11 @@ SILENCE_RMS_THRESHOLD = 300
 SILENCE_DURATION_MS = 900
 MIN_UTTERANCE_MS = 400
 MAX_UTTERANCE_MS = 12_000
-NO_SPEECH_PROB_THRESHOLD = 0.6
 
-# Formules "génériques" bien connues que Whisper hallucine sur du silence/bruit
-# (héritées de son entraînement sur des sous-titres). Le VAD filtre déjà la
-# plupart des cas, ceci est un filet de sécurité supplémentaire.
+# Formules "génériques" que les modèles de transcription peuvent halluciner sur
+# du silence/bruit résiduel (héritées de leur entraînement sur des sous-titres).
+# La détection de silence en amont filtre déjà la plupart des cas, ceci est un
+# filet de sécurité supplémentaire.
 HALLUCINATION_PATTERNS = [
     "sous-titres réalisés par la communauté d'amara.org",
     "sous-titrage st'",
@@ -66,17 +66,17 @@ def main() -> None:
     parser.add_argument("--melspec-model", required=True)
     parser.add_argument("--embedding-model", required=True)
     parser.add_argument("--wakeword-threshold", type=float, default=0.5)
-    parser.add_argument("--whisper-model", default="small")
-    parser.add_argument("--whisper-device", default="cpu")
-    parser.add_argument("--whisper-compute-type", default="int8")
-    parser.add_argument("--whisper-language", default="fr")
+    parser.add_argument("--stt-model", default="CohereLabs/cohere-transcribe-03-2026")
+    parser.add_argument("--stt-device", default="cpu")
+    parser.add_argument("--stt-language", default="fr")
     parser.add_argument("--input-device", type=int, default=None)
     args = parser.parse_args()
 
     try:
         import sounddevice as sd  # lève OSError (pas ImportError) si PortAudio est absent
         from openwakeword.model import Model
-        from faster_whisper import WhisperModel
+        import torch
+        from transformers import AutoProcessor, CohereAsrForConditionalGeneration
     except (ImportError, OSError) as exc:
         emit({"event": "fatal", "message": f"dépendance Python manquante ou inutilisable ({exc}). Lance : pip install -r python/requirements.txt"})
         sys.exit(1)
@@ -94,11 +94,22 @@ def main() -> None:
         emit({"event": "fatal", "message": f"échec de chargement du mot-clé openWakeWord : {exc}"})
         sys.exit(1)
 
-    emit({"event": "log", "message": f"Chargement de Whisper '{args.whisper_model}' (téléchargement HuggingFace au premier lancement, peut prendre plusieurs minutes)…"})
+    emit({"event": "log", "message": f"Chargement de la transcription '{args.stt_model}' (téléchargement HuggingFace au premier lancement, ~4 Go, peut prendre plusieurs minutes)…"})
     try:
-        whisper_model = WhisperModel(args.whisper_model, device=args.whisper_device, compute_type=args.whisper_compute_type)
+        stt_dtype = torch.float16 if args.stt_device == "cuda" else torch.float32
+        stt_processor = AutoProcessor.from_pretrained(args.stt_model)
+        stt_model = CohereAsrForConditionalGeneration.from_pretrained(
+            args.stt_model, dtype=stt_dtype, device_map=args.stt_device
+        )
     except Exception as exc:
-        emit({"event": "fatal", "message": f"échec de chargement de faster-whisper '{args.whisper_model}': {exc}"})
+        hint = (
+            " Ce modèle est protégé ('gated') : accepte les conditions sur "
+            f"https://huggingface.co/{args.stt_model} puis lance `huggingface-cli login` "
+            "avec un compte Hugging Face gratuit."
+            if "gated" in str(exc).lower() or "401" in str(exc) or "access" in str(exc).lower()
+            else ""
+        )
+        emit({"event": "fatal", "message": f"échec de chargement de la transcription '{args.stt_model}': {exc}.{hint}"})
         sys.exit(1)
 
     audio_queue: "queue.Queue[np.ndarray]" = queue.Queue()
@@ -169,9 +180,11 @@ def main() -> None:
         wake_model.reset()  # évite un second déclenchement fantôme sur la fin de capture/silence
         audio = np.concatenate(capture_chunks).astype(np.float32) / 32768.0
         try:
-            segments, _info = whisper_model.transcribe(audio, language=args.whisper_language, beam_size=5, vad_filter=True)
-            kept_segments = [segment for segment in segments if segment.no_speech_prob < NO_SPEECH_PROB_THRESHOLD]
-            text = "".join(segment.text for segment in kept_segments).strip()
+            inputs = stt_processor(audio, sampling_rate=SAMPLE_RATE, return_tensors="pt", language=args.stt_language)
+            inputs.to(stt_model.device, dtype=stt_model.dtype)
+            with torch.no_grad():
+                outputs = stt_model.generate(**inputs, max_new_tokens=256)
+            text = stt_processor.decode(outputs, skip_special_tokens=True).strip()
             if is_hallucination(text):
                 text = ""
             emit({"event": "transcript", "text": text})

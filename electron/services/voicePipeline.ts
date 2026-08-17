@@ -56,11 +56,11 @@ const EMAIL_DOMAIN_PATTERN = new RegExp(
 )
 
 /**
- * Les gros modèles Whisper (large-v3) reconnaissent la ponctuation dictée ("point" -> ".") mais
- * confondent souvent "arobase" avec "point" et transforment tout en points ("milano.iris.gmail.com"
- * au lieu de "milano.iris@gmail.com") : impossible à corriger mot par mot puisque Whisper a déjà tout
- * aplati en points. On détecte plutôt le motif "texte.fournisseur-mail.extension" et on remet le @ au
- * bon endroit, juste avant le nom du fournisseur.
+ * Certains modèles de transcription reconnaissent la ponctuation dictée ("point" -> ".") mais
+ * confondent parfois "arobase" avec "point" et transforment tout en points ("milano.iris.gmail.com"
+ * au lieu de "milano.iris@gmail.com") : impossible à corriger mot par mot puisque le "@" a déjà disparu
+ * de la transcription. On détecte plutôt le motif "texte.fournisseur-mail.extension" et on remet le @
+ * au bon endroit, juste avant le nom du fournisseur.
  */
 function fixSpokenEmailAt(text: string): string {
   return text.replace(EMAIL_DOMAIN_PATTERN, (match, localPart: string, provider: string, tld: string) =>
@@ -69,9 +69,9 @@ function fixSpokenEmailAt(text: string): string {
 }
 
 /**
- * Whisper transcrit "arobase" de façon incohérente d'une fois sur l'autre (rubaze, arobaz...) plutôt
- * que le symbole : une correspondance figée ne suffit pas, on compare chaque mot par distance
- * d'édition à "arobase"/"arrobase" pour tolérer les variations de transcription.
+ * La transcription du mot "arobase" varie parfois d'une fois sur l'autre (rubaze, arobaz...) plutôt
+ * que de donner le symbole : une correspondance figée ne suffit pas, on compare chaque mot par
+ * distance d'édition à "arobase"/"arrobase" pour tolérer ces variations.
  */
 function normalizeSpokenSymbols(text: string): string {
   const withEmailFixed = fixSpokenEmailAt(text)
