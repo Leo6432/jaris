@@ -115,12 +115,11 @@ function createFullWindow(): BrowserWindow {
  * réglages pour le reste (Options, cerveau de Jaris).
  */
 function createWidgetWindow(): BrowserWindow {
-  const { workArea } = screen.getPrimaryDisplay()
+  // Position définitive posée juste avant l'affichage par positionWidgetWindow() (recalculée à chaque
+  // fois, pas figée ici) : la valeur de départ n'a pas d'importance tant que la fenêtre reste cachée.
   const win = new BrowserWindow({
     width: WIDGET_WIDTH,
     height: WIDGET_HEIGHT,
-    x: workArea.x + workArea.width - WIDGET_WIDTH - WIDGET_MARGIN,
-    y: workArea.y + workArea.height - WIDGET_HEIGHT - WIDGET_MARGIN,
     frame: false,
     transparent: true,
     // Sur Windows, une fenêtre transparente sans backgroundColor explicite affiche parfois un carré
@@ -139,7 +138,9 @@ function createWidgetWindow(): BrowserWindow {
 
   win.setAlwaysOnTop(true, 'floating')
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-  win.on('ready-to-show', () => win.show())
+  // Pas d'auto-show ici (contrairement à la fenêtre normale) : le widget est créé caché dès le démarrage
+  // (voir plus bas) pour être déjà chargé le jour où on réduit la fenêtre, et ne s'affiche que sur demande
+  // via showWidgetWindow() — sinon il clignoterait à l'écran dès qu'il finit de charger, au lancement.
   win.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
@@ -147,6 +148,17 @@ function createWidgetWindow(): BrowserWindow {
 
   loadRenderer(win, 'widget')
   return win
+}
+
+/** Recalcule la position en bas à droite de l'écran actuel : pas fixé une fois pour toutes à la création, au cas où l'écran/la zone de travail a changé depuis (résolution, second écran...). */
+function positionWidgetWindow(win: BrowserWindow): void {
+  const { workArea } = screen.getPrimaryDisplay()
+  win.setBounds({
+    x: workArea.x + workArea.width - WIDGET_WIDTH - WIDGET_MARGIN,
+    y: workArea.y + workArea.height - WIDGET_HEIGHT - WIDGET_MARGIN,
+    width: WIDGET_WIDTH,
+    height: WIDGET_HEIGHT
+  })
 }
 
 /** Les deux fenêtres ne sont jamais visibles en même temps (sinon double lecture audio des réponses). */
@@ -160,6 +172,7 @@ function showFullWindow(): void {
 function showWidgetWindow(): void {
   if (fullWindow && !fullWindow.isDestroyed() && fullWindow.isVisible()) return
   if (!widgetWindow || widgetWindow.isDestroyed()) widgetWindow = createWidgetWindow()
+  positionWidgetWindow(widgetWindow)
   widgetWindow.show()
 }
 
@@ -292,15 +305,19 @@ app.whenReady().then(async () => {
   // Le caractère "+" seul n'est pas un accelerator valide pour globalShortcut sur cette machine (voir
   // ci-dessus) : "numadd", la touche + du pavé numérique, est un code touche distinct et stable (pas
   // d'ambiguïté d'agencement clavier) — visuellement c'est quand même la touche "+" cherchée à l'origine.
-  // "Insert" est confirmé fiable et reste enregistré aussi, sans rien à reconfigurer si l'un des deux gêne.
   registerWakeShortcut('numadd')
-  registerWakeShortcut('Insert')
 
   // Toujours lancée dans sa fenêtre normale, comme avant l'étape 19 : la réduire ou la fermer bascule
   // ensuite vers le widget (voir createFullWindow), mais le lancement lui-même ne change pas.
   const profile = await getProfile()
   onboardingDone = Boolean(profile?.capacityScanDone)
   fullWindow = createFullWindow()
+
+  // Widget pré-créé et chargé en arrière-plan dès le démarrage (caché) : sans ça, la première fois qu'on
+  // réduit la fenêtre, il fallait créer la fenêtre Electron ET charger toute la page React avant de
+  // pouvoir l'afficher, ce qui se voyait clairement comme un délai. Là, il ne reste plus qu'à le
+  // positionner et l'afficher (quasi instantané).
+  if (onboardingDone) widgetWindow = createWidgetWindow()
 
   void startVoicePipeline()
 })

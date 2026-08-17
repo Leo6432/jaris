@@ -362,9 +362,9 @@ la grande fenêtre à l'écran.
   virtuels, donc il reste affiché même en changeant d'application ou de
   bureau.
 - **Réagit depuis n'importe où** : le mot d'activation "Hey Jarvis" (déjà
-  basé sur le micro, indépendant de la fenêtre), le **+ du pavé numérique**
-  et la touche **Insert** (les deux enregistrées en `globalShortcut` au
-  démarrage) déclenchent l'écoute quel que soit le programme qui a le focus.
+  basé sur le micro, indépendant de la fenêtre) et le **+ du pavé
+  numérique** (`globalShortcut`, enregistré au démarrage) déclenchent
+  l'écoute quel que soit le programme qui a le focus.
   > Le caractère "+" tout seul (celui à côté du Entrée sur un clavier
   > AZERTY) n'est pas un accelerator valide pour `globalShortcut` : Electron
   > lève carrément une exception à l'enregistrement ("conversion failure
@@ -377,18 +377,20 @@ la grande fenêtre à l'écran.
   > "prioriser" à ce niveau-là ; si l'enregistrement échoue (touche déjà
   > réservée par une autre appli...), le terminal l'indique clairement au
   > démarrage (`[jaris] Raccourci global ... enregistré avec succès` ou
-  > `Impossible de réserver...`). D'où les deux raccourcis enregistrés en
-  > parallèle plutôt qu'un seul : si l'un des deux ne fonctionne pas de
-  > façon fiable sur une machine donnée, l'autre reste disponible sans rien
-  > à reconfigurer.
+  > `Impossible de réserver...`).
 - **Cliquer sur le widget** rouvre la fenêtre classique (l'orbe en grand, la
   conversation, le bouton Options, le cerveau de Jaris). Une icône dans la
   barre système (clic droit) permet aussi de la rouvrir, ou de vraiment
   quitter Jaris.
 - **Messages longs** : le widget est volontairement plus haut que large
-  (260×420) et vide au départ (donc invisible, tout est transparent) —
-  l'orbe reste en haut, une réponse longue s'étale en dessous sans être
-  coupée, avec un défilement en dernier recours si elle dépasse quand même.
+  (320×520) et son contenu est ancré en bas (donc collé au vrai coin
+  bas-droit au repos, vide et transparent donc invisible tant qu'il n'y a
+  rien à dire) — une réponse longue pousse vers le haut sans être coupée,
+  avec un défilement en dernier recours si elle dépasse quand même.
+- **Pré-chargé au démarrage** (cette fenêtre existe déjà, cachée, dès le
+  lancement de Jaris) et repositionné juste avant chaque affichage (pas
+  figé une fois pour toutes) : pas de délai ni de mauvais cadrage la
+  première fois qu'on réduit la fenêtre.
 - Les deux fenêtres ne sont jamais affichées en même temps, pour éviter que
   la réponse vocale soit jouée deux fois.
 
