@@ -33,9 +33,10 @@ export const config = {
     language: readEnv('STT_LANGUAGE', 'fr'),
     device: readEnv('STT_DEVICE', 'cpu')
   },
-  piper: {
-    binPath: readEnv('PIPER_BIN_PATH', './bin/piper/piper.exe'),
-    voicePath: readEnv('PIPER_VOICE_PATH', './models/tts/fr_FR-siwis-medium.onnx')
+  tts: {
+    /** Synthèse vocale : Supertonic HD (99M paramètres, modèle téléchargé automatiquement au premier lancement). */
+    voice: readEnv('TTS_VOICE', 'M1'),
+    language: readEnv('TTS_LANGUAGE', 'fr')
   },
   ollama: {
     host: readEnv('OLLAMA_HOST', 'http://127.0.0.1:11434'),
@@ -67,25 +68,25 @@ export const config = {
 
 export interface VoiceSetupStatus {
   wakewordReady: boolean
-  piperReady: boolean
   missing: string[]
 }
 
-/** Vérifie que les fichiers nécessaires au pipeline vocal sont présents. */
+/**
+ * Vérifie que les fichiers nécessaires au pipeline vocal sont présents. La synthèse vocale
+ * (Supertonic HD) n'a rien à vérifier ici : son modèle se télécharge tout seul au premier lancement,
+ * comme la transcription (Cohere Transcribe).
+ */
 export function checkVoiceSetup(): VoiceSetupStatus {
   const missing: string[] = []
 
   if (!existsSync(config.wakeword.modelPath)) missing.push(`modèle openWakeWord introuvable : ${config.wakeword.modelPath} (lance python/download_wakeword_models.py)`)
   if (!existsSync(config.wakeword.melspecModelPath)) missing.push(`modèle openWakeWord introuvable : ${config.wakeword.melspecModelPath}`)
   if (!existsSync(config.wakeword.embeddingModelPath)) missing.push(`modèle openWakeWord introuvable : ${config.wakeword.embeddingModelPath}`)
-  if (!existsSync(config.piper.binPath)) missing.push(`binaire Piper introuvable : ${config.piper.binPath}`)
-  if (!existsSync(config.piper.voicePath)) missing.push(`voix Piper introuvable : ${config.piper.voicePath}`)
 
   const wakewordReady =
     existsSync(config.wakeword.modelPath) &&
     existsSync(config.wakeword.melspecModelPath) &&
     existsSync(config.wakeword.embeddingModelPath)
-  const piperReady = existsSync(config.piper.binPath) && existsSync(config.piper.voicePath)
 
-  return { wakewordReady, piperReady, missing }
+  return { wakewordReady, missing }
 }

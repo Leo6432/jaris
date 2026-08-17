@@ -10,8 +10,8 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ✅ Étape 2 — Visage animé (`JarisFace`) avec 5 états d'émotion : veille,
   écoute, réflexion, content, surpris
 - ✅ Étape 3 — Pipeline vocal local : mot d'activation (openWakeWord),
-  transcription (Cohere Transcribe), synthèse vocale (Piper). **Testé de bout
-  en bout avec un vrai micro** (voir plus bas)
+  transcription (Cohere Transcribe), synthèse vocale (Supertonic HD). **Testé
+  de bout en bout avec un vrai micro** (voir plus bas)
 - ✅ Étape 4 — Connexion Ollama : Jaris comprend vraiment ce que tu dis et
   répond avec un LLM local (`qwen3.5:9b` par défaut, configurable)
 - ✅ Étape 5 — Tool calling : Jaris peut ouvrir des applications et
@@ -36,9 +36,10 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   la vue graphe d'Obsidian — voir plus bas
 - ✅ Étape 11 — Envoi de mails : Jaris peut envoyer un vrai mail via un
   compte SMTP configuré dans `.env` — voir plus bas
-- ⬜ Étape 12 — Meilleure voix : remplacer Piper (voix actuelle, un peu
-  robotique) par un moteur de synthèse vocale plus naturel, toujours 100%
-  local et compatible avec une distribution commerciale future (étapes 21-22)
+- ✅ Étape 12 — Meilleure voix : Piper remplacé par
+  [Supertonic HD](https://huggingface.co/Supertone/supertonic-3) (voix plus
+  naturelle, 99M paramètres, licence OpenRAIL-M compatible avec une
+  distribution commerciale future) — voir plus bas
 - ⬜ Étape 13 — Sélection automatique de modèle selon la complexité de la
   question : un petit modèle rapide (ex: `phi-4-mini`) pour les questions
   simples/rapides, `qwen3.5` pour le reste, afin de gagner du temps et de la
@@ -82,8 +83,8 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ⬜ Étape 22 — Préparation à la vente (~5€) : licence, protection contre la
   copie/redistribution du logiciel. Nécessitera au préalable de vérifier la
   compatibilité des licences des briques open source utilisées (Ollama,
-  modèles Qwen, openWakeWord, Cohere Transcribe, Piper, SearXNG) avec une
-  distribution commerciale
+  modèles Qwen, openWakeWord, Cohere Transcribe, Supertonic HD, SearXNG) avec
+  une distribution commerciale
 - ⬜ Étape 23 — Site web avec tableau de bord personnel : chaque utilisateur
   peut noter son planning et sa to-do list sur le site, et Jaris peut y
   écrire des informations
@@ -185,17 +186,12 @@ Renseigne dans `.env` :
 - `WAKEWORD_THRESHOLD` si le mot d'activation se déclenche trop souvent/pas
   assez (0 à 1, défaut 0.5)
 
-### 2. Synthèse vocale (Piper)
+### 2. Synthèse vocale (Supertonic HD)
 
-1. `mkdir -p bin/piper models/tts`
-2. Télécharge le binaire Windows sur les
-   [releases GitHub de Piper](https://github.com/rhasspy/piper/releases)
-   (`piper_windows_amd64.zip`), dézippe dans `bin/piper/`.
-3. Télécharge une voix française, par exemple `fr_FR-siwis-medium`, depuis le
-   [dépôt de voix Piper](https://huggingface.co/rhasspy/piper-voices/tree/main/fr/fr_FR)
-   (les deux fichiers `.onnx` et `.onnx.json`) dans `models/tts/`.
-4. Vérifie que `.env` pointe bien vers ces chemins (`PIPER_BIN_PATH`,
-   `PIPER_VOICE_PATH`).
+Rien à installer à la main : `supertonic` est dans `python/requirements.txt`
+(déjà installé à l'étape 1), et le modèle (~100 Mo, léger) se télécharge tout
+seul au premier lancement de Jaris, comme Cohere Transcribe. Réglages dans
+`.env` si besoin (`TTS_VOICE`, `TTS_LANGUAGE`).
 
 ### Vérifier
 

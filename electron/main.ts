@@ -2,6 +2,7 @@ import { app, ipcMain, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { checkVoiceSetup } from './config'
 import { ensureOllamaRunning, ensureSearxngRunning } from './services/dependencyServices'
+import { ttsClient } from './services/ttsClient'
 import { VoicePipeline } from './services/voicePipeline'
 import { ensureMemoryDir, getMemoryDir, getMemoryGraph, recallNote } from './services/memoryStore'
 import { getProfile, markGmailOnboardingDone, saveProfile } from './services/profileStore'
@@ -20,7 +21,7 @@ let pipeline: VoicePipeline | null = null
 
 function currentSetupStatus(): VoiceSetupStatusPayload {
   const status = checkVoiceSetup()
-  return { ready: status.wakewordReady && status.piperReady, missing: status.missing }
+  return { ready: status.wakewordReady, missing: status.missing }
 }
 
 /** Ajoute un nœud central représentant l'utilisateur, relié à chaque note, pour donner une vraie structure au graphe (sinon les notes flottent sans lien tant que Jaris n'a pas écrit de [[...]] entre elles). */
@@ -123,5 +124,6 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   pipeline?.stop()
+  ttsClient.stop()
   app.quit()
 })

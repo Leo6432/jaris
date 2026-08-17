@@ -9,3 +9,4 @@ accelerate
 openwakeword>=0.6.0
 sounddevice>=0.5.5
 numpy>=2.0
+supertonic

@@ -1,8 +1,5 @@
-import { spawn } from 'child_process'
-import { mkdtemp, readFile, rm } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { config } from '../config'
+import { readFile, rm } from 'fs/promises'
+import { ttsClient } from './ttsClient'
 
 /**
  * En français, le "s" final de "Jaris" est normalement muet ("Jari"). "Jarisse" se prononce
@@ -13,27 +10,12 @@ function toSpeechText(text: string): string {
   return text.replace(/\bJaris\b/gi, 'Jarisse')
 }
 
-/** Synthétise `text` en audio via Piper (binaire natif) et renvoie un WAV. */
+/** Synthétise `text` en audio via Supertonic HD (sidecar Python persistant) et renvoie un WAV. */
 export async function synthesizeSpeech(text: string): Promise<Buffer> {
-  const dir = await mkdtemp(join(tmpdir(), 'jaris-tts-'))
-  const outFile = join(dir, 'speech.wav')
-
+  const path = await ttsClient.synthesize(toSpeechText(text))
   try {
-    await new Promise<void>((resolve, reject) => {
-      const proc = spawn(config.piper.binPath, ['-m', config.piper.voicePath, '-f', outFile])
-      let stderr = ''
-      proc.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
-      proc.on('error', reject)
-      proc.on('exit', (code) => {
-        if (code === 0) resolve()
-        else reject(new Error(`piper a échoué (code ${code}): ${stderr}`))
-      })
-      proc.stdin.write(toSpeechText(text))
-      proc.stdin.end()
-    })
-
-    return await readFile(outFile)
+    return await readFile(path)
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(path, { force: true })
   }
 }
