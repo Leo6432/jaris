@@ -150,6 +150,17 @@ pip install -r python/requirements.txt
 python python/download_wakeword_models.py   # télécharge les modèles openWakeWord (~5 Mo) dans models/wakeword/
 ```
 
+Si tu as une carte graphique NVIDIA et veux utiliser `STT_DEVICE=cuda` : `pip install
+torch` (ci-dessus) installe par défaut une version **CPU uniquement** de
+PyTorch sur Windows. Réinstalle-le depuis l'index CUDA officiel (regarde la
+ligne `CUDA Version` dans `nvidia-smi` pour choisir `cu121`/`cu124`/`cu126`
+selon ton driver) :
+
+```bash
+pip uninstall -y torch
+pip install torch --index-url https://download.pytorch.org/whl/cu124
+```
+
 La reconnaissance vocale ([Cohere Transcribe](https://huggingface.co/CohereLabs/cohere-transcribe-03-2026),
 open source, #1 du classement Open ASR Leaderboard) est un modèle "gated" :
 1. Crée un compte gratuit sur [huggingface.co](https://huggingface.co)
