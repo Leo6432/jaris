@@ -253,13 +253,16 @@ pas de vrai "reset" à gérer.
 
 Elle survit aussi à un redémarrage de Jaris (ou à une pause d'un jour à
 l'autre) : au lancement, les derniers échanges sont rechargés depuis
-`conversation-history.json` (déjà tenu à jour, voir étape 5 plus bas), donc
-revenir le lendemain sur le même sujet continue la conversation au lieu de
-repartir de zéro. Ça reste une fenêtre glissante bornée (~6 derniers
-échanges, pas tout l'historique) : pour qu'un fait précis survive
-vraiment, sur la durée et sans dépendre de cette fenêtre, mieux vaut
-demander à Jaris de le retenir explicitement — c'est le rôle de la mémoire
-longue durée façon Obsidian (étape 9, plus bas).
+`conversation-history.json` (un journal local de tous les échanges,
+question/réponse/horodatage, dans le dossier de données de l'app — plafonné
+à 300 entrées pour ne jamais grossir indéfiniment ni ralentir au fil du
+temps), donc revenir le lendemain sur le même sujet continue la
+conversation au lieu de repartir de zéro. Ça reste une fenêtre glissante
+bornée pour Ollama (~6 derniers échanges, pas tout l'historique) : pour
+qu'un fait précis survive vraiment sur la durée, sans dépendre de cette
+fenêtre, c'est le rôle de la mémoire longue durée façon Obsidian (étape 9,
+plus bas) — qui elle aussi s'alimente maintenant automatiquement, voir
+plus bas.
 
 ## Sélection automatique de modèle (étape 13)
 
@@ -487,6 +490,20 @@ Jaris décide lui-même quand mémoriser une information importante (outil
 `remember`) et quand aller relire une note existante avant de répondre avec
 précision (outil `recall_memory`) — la liste des notes déjà connues lui est
 toujours donnée en contexte.
+
+**Alimentée automatiquement, pas seulement sur demande explicite.** En
+pratique, compter sur l'utilisateur pour dire "retiens que..." à chaque
+fois qu'il mentionne un fait important ne marche pas — personne n'y pense
+systématiquement, et sur le palier "rapide" (conversation sans mot-clé
+d'action), rien ne garantit que le modèle appelle vraiment `remember` de
+lui-même. Après chaque échange, un second appel Ollama tourne en arrière-plan
+(`memoryExtractor.ts`), toujours sur le palier médium (le seul dont la
+fiabilité d'appel d'outils est éprouvée) et avec un effort de réflexion bas
+(tâche de classification simple) : il relit l'échange qui vient d'avoir
+lieu et décide s'il contient un fait qui mérite d'être gardé, sans attendre
+une demande explicite. Ne retarde jamais la réponse déjà dite à l'utilisateur
+(lancé sans l'attendre) et n'interrompt jamais la conversation en cas
+d'erreur (avalée silencieusement, juste loguée).
 
 ## Graphe 3D du cerveau de Jaris (étape 10)
 

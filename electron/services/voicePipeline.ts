@@ -5,6 +5,7 @@ import { VoiceClient } from './voiceClient'
 import { synthesizeSpeech } from './tts'
 import { appendConversationEntry, getConversationHistory } from './conversationStore'
 import { converse } from './assistant'
+import { extractMemoryFromExchange } from './memoryExtractor'
 import type { OllamaMessage } from './ollama'
 import { restoreReminders } from './reminders'
 import { getProfile } from './profileStore'
@@ -176,6 +177,11 @@ export class VoicePipeline extends EventEmitter {
         )
         this.history.push({ role: 'user', content: transcript }, { role: 'assistant', content: reply })
         this.history.splice(0, Math.max(0, this.history.length - MAX_HISTORY_MESSAGES))
+
+        // En arrière-plan, sans attendre : la mémoire longue durée s'enrichit toute seule à partir de la
+        // conversation, sans compter sur le fait que l'utilisateur pense à dire "retiens que..." à chaque
+        // fois. Ne retarde jamais la réponse déjà en train d'être dite (this.speak juste après).
+        void extractMemoryFromExchange(transcript, reply, (message) => this.emit('log', message))
       } catch (err) {
         this.emit('log', `Erreur Ollama : ${err instanceof Error ? err.message : String(err)}`)
         reply = "Je n'arrive pas à réfléchir pour le moment, vérifie qu'Ollama tourne bien."
