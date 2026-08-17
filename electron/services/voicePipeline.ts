@@ -34,13 +34,48 @@ function levenshteinDistance(a: string, b: string): number {
 
 const AROBASE_VARIANTS = ['arobase', 'arrobase']
 
+const EMAIL_PROVIDERS = [
+  'gmail',
+  'outlook',
+  'hotmail',
+  'yahoo',
+  'icloud',
+  'live',
+  'laposte',
+  'orange',
+  'free',
+  'wanadoo',
+  'sfr',
+  'protonmail',
+  'gmx',
+  'aol'
+]
+const EMAIL_DOMAIN_PATTERN = new RegExp(
+  `\\b([\\w-]+(?:\\.[\\w-]+)*)\\.(${EMAIL_PROVIDERS.join('|')})\\.(com|fr|net|org|be|ch|ca|co)\\b`,
+  'gi'
+)
+
+/**
+ * Les gros modèles Whisper (large-v3) reconnaissent la ponctuation dictée ("point" -> ".") mais
+ * confondent souvent "arobase" avec "point" et transforment tout en points ("milano.iris.gmail.com"
+ * au lieu de "milano.iris@gmail.com") : impossible à corriger mot par mot puisque Whisper a déjà tout
+ * aplati en points. On détecte plutôt le motif "texte.fournisseur-mail.extension" et on remet le @ au
+ * bon endroit, juste avant le nom du fournisseur.
+ */
+function fixSpokenEmailAt(text: string): string {
+  return text.replace(EMAIL_DOMAIN_PATTERN, (match, localPart: string, provider: string, tld: string) =>
+    match.includes('@') ? match : `${localPart}@${provider}.${tld}`
+  )
+}
+
 /**
  * Whisper transcrit "arobase" de façon incohérente d'une fois sur l'autre (rubaze, arobaz...) plutôt
  * que le symbole : une correspondance figée ne suffit pas, on compare chaque mot par distance
  * d'édition à "arobase"/"arrobase" pour tolérer les variations de transcription.
  */
 function normalizeSpokenSymbols(text: string): string {
-  return text.replace(/[^\s.,!?;:]+/g, (word) => {
+  const withEmailFixed = fixSpokenEmailAt(text)
+  return withEmailFixed.replace(/[^\s.,!?;:]+/g, (word) => {
     const cleaned = word.toLowerCase()
     if (cleaned.length < 5 || cleaned.length > 9) return word
     const closeEnough = AROBASE_VARIANTS.some((variant) => levenshteinDistance(cleaned, variant) <= 3)
