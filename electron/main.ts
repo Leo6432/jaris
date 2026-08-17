@@ -70,6 +70,7 @@ function createWindow(): BrowserWindow {
 async function startVoicePipeline(mainWindow: BrowserWindow): Promise<void> {
   const status = currentSetupStatus()
   const send = (channel: string, payload?: unknown): void => {
+    if (channel === IPC_CHANNELS.log) console.log('[jaris]', payload)
     if (!mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload)
   }
 

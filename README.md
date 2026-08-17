@@ -48,16 +48,20 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ⬜ Étape 14 — Contrôle clavier et souris : Jaris peut écrire du texte et
   cliquer à la place de l'utilisateur, pour automatiser des actions
   complètes sur l'ordinateur (pas seulement ouvrir une application)
-- ⬜ Étape 15 — Installeur en un clic : empaqueter toute la chaîne (app +
-  Ollama + modèles) dans un seul installeur simple, avec tous les réglages
-  techniques (modèle de transcription, etc.) déjà configurés par défaut à l'intérieur.
-  Aucun fichier `.env` à ouvrir ni à modifier à la main, même pour un
-  débutant complet — seuls les vrais réglages perso (connecter Gmail, choisir
-  son prénom) resteront dans l'interface, jamais dans un fichier texte. Le
-  modèle de transcription (Cohere Transcribe, licence Apache 2.0) sera
-  embarqué directement dans l'installeur au lieu d'être téléchargé depuis
-  Hugging Face au premier lancement : aucun compte Hugging Face à créer côté
-  utilisateur final, ce compte ne sert qu'en développement
+- ⬜ Étape 15 — Installeur en un clic : **règle absolue — le Jaris installé par
+  le public doit être exactement le même que celui utilisé en développement**
+  (mêmes modèles, mêmes fonctionnalités, même qualité de réponse), jamais une
+  version allégée ou dégradée, et ça doit rester 0€ pour toujours (aucun
+  abonnement, aucune API payante, tout tourne en local sur la machine de
+  l'utilisateur, exactement comme aujourd'hui en dev). Pour y arriver :
+  empaqueter toute la chaîne (app + Ollama + modèles, y compris le modèle de
+  transcription Cohere Transcribe déjà téléchargé et embarqué — licence
+  Apache 2.0, donc redistribution autorisée) dans un seul installeur simple,
+  avec tous les réglages techniques déjà configurés par défaut à l'intérieur.
+  Aucun fichier `.env` à ouvrir ni à modifier à la main, aucun compte
+  Hugging Face à créer, même pour un débutant complet — seuls les vrais
+  réglages perso (connecter Gmail, choisir son prénom) resteront dans
+  l'interface, jamais dans un fichier texte ni sur un site tiers
 - ⬜ Étape 16 — Amélioration du design de l'interface
 - ⬜ Étape 17 — Animation pendant la capture/analyse d'écran, pour donner un
   retour visuel pendant que Jaris "regarde" (étape 6)
