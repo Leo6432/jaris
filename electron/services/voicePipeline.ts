@@ -19,9 +19,33 @@ const IDLE_SETTLE_DELAY_MS = 400
  */
 const AUDIO_FALLBACK_IDLE_MS = 20000
 
-/** Whisper transcrit le mot prononcé "arobase" tel quel plutôt qu'en symbole : gênant pour dicter un email. */
+/** Distance d'édition entre deux mots, pour repérer les mots proches phonétiquement de "arobase". */
+function levenshteinDistance(a: string, b: string): number {
+  const dp: number[][] = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0))
+  for (let i = 0; i <= a.length; i++) dp[i][0] = i
+  for (let j = 0; j <= b.length; j++) dp[0][j] = j
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1])
+    }
+  }
+  return dp[a.length][b.length]
+}
+
+const AROBASE_VARIANTS = ['arobase', 'arrobase']
+
+/**
+ * Whisper transcrit "arobase" de façon incohérente d'une fois sur l'autre (rubaze, arobaz...) plutôt
+ * que le symbole : une correspondance figée ne suffit pas, on compare chaque mot par distance
+ * d'édition à "arobase"/"arrobase" pour tolérer les variations de transcription.
+ */
 function normalizeSpokenSymbols(text: string): string {
-  return text.replace(/\barr?obases?\b/gi, '@')
+  return text.replace(/[^\s.,!?;:]+/g, (word) => {
+    const cleaned = word.toLowerCase()
+    if (cleaned.length < 5 || cleaned.length > 9) return word
+    const closeEnough = AROBASE_VARIANTS.some((variant) => levenshteinDistance(cleaned, variant) <= 3)
+    return closeEnough ? '@' : word
+  })
 }
 
 /**
