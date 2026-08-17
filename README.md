@@ -391,6 +391,10 @@ la grande fenêtre à l'écran.
   lancement de Jaris) et repositionné juste avant chaque affichage (pas
   figé une fois pour toutes) : pas de délai ni de mauvais cadrage la
   première fois qu'on réduit la fenêtre.
+- **La conversation s'efface toute seule** : la transcription et la réponse
+  restent affichées tant que Jaris parle, puis disparaissent une fois qu'il
+  a fini (retour à "idle" une fois la lecture audio terminée) — pas de
+  vieille conversation qui traîne à l'écran indéfiniment.
 - Les deux fenêtres ne sont jamais affichées en même temps, pour éviter que
   la réponse vocale soit jouée deux fois.
 

@@ -33,7 +33,10 @@ export const useJarisStore = create<JarisState>((set, get) => ({
   setupStatus: null,
 
   setEmotion: (emotion) => {
-    set({ emotion })
+    // De retour à idle (fin de la réponse parlée, une fois le settle delay passé côté pipeline) : on
+    // efface la transcription et la réponse affichées, pour ne pas laisser la dernière conversation
+    // traîner indéfiniment à l'écran une fois que Jaris a fini de parler.
+    set(emotion === 'idle' ? { emotion, transcript: null, reply: null } : { emotion })
     if (sleepTimer) clearTimeout(sleepTimer)
     if (emotion !== 'idle') {
       sleepTimer = setTimeout(() => {
