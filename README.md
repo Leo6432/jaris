@@ -49,9 +49,11 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   cliquer à la place de l'utilisateur, pour automatiser des actions
   complètes sur l'ordinateur (pas seulement ouvrir une application)
 - ⬜ Étape 15 — Installeur en un clic : empaqueter toute la chaîne (app +
-  Ollama + modèles) dans un seul installeur simple, pour que d'autres
-  utilisateurs puissent installer Jaris sans suivre toutes les étapes
-  manuelles de ce README
+  Ollama + modèles) dans un seul installeur simple, avec tous les réglages
+  techniques (modèle Whisper, etc.) déjà configurés par défaut à l'intérieur.
+  Aucun fichier `.env` à ouvrir ni à modifier à la main, même pour un
+  débutant complet — seuls les vrais réglages perso (connecter Gmail, choisir
+  son prénom) resteront dans l'interface, jamais dans un fichier texte
 - ⬜ Étape 16 — Amélioration du design de l'interface
 - ⬜ Étape 17 — Animation pendant la capture/analyse d'écran, pour donner un
   retour visuel pendant que Jaris "regarde" (étape 6)
