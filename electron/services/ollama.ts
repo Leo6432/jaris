@@ -23,8 +23,15 @@ interface OllamaChatResponse {
   message?: OllamaMessage
 }
 
+export type ThinkLevel = 'low' | 'medium' | 'high'
+
 /** Un tour d'échange avec Ollama : envoie l'historique (+ outils dispo) et renvoie le message du modèle. */
-export async function chatWithOllama(messages: OllamaMessage[], tools?: OllamaTool[], model: string = config.ollama.model): Promise<OllamaMessage> {
+export async function chatWithOllama(
+  messages: OllamaMessage[],
+  tools?: OllamaTool[],
+  model: string = config.ollama.model,
+  think: ThinkLevel = 'medium'
+): Promise<OllamaMessage> {
   let response: Response
   try {
     response = await fetch(`${config.ollama.host}/api/chat`, {
@@ -36,9 +43,9 @@ export async function chatWithOllama(messages: OllamaMessage[], tools?: OllamaTo
         tools,
         stream: false,
         // Le raisonnement caché de qwen3.5 aide nettement à décider d'appeler un outil plutôt que de
-        // "raconter" une action sans l'exécuter ; désactivé un temps pour la vitesse, réactivé car les
-        // appels d'outils (ouvrir une app, programmer un rappel) étaient trop peu fiables sans lui.
-        think: true,
+        // "raconter" une action sans l'exécuter ; le niveau (low/medium/high) vient du palier de
+        // complexité choisi pour la question (voir assistant.ts), pas d'une valeur fixe.
+        think,
         options: { num_ctx: config.ollama.numCtx }
       })
     })

@@ -261,6 +261,12 @@ marge une fois le STT pris en compte. Les modèles manquants sont
 téléchargés automatiquement pendant l'écran de scan (`ollama pull`), donc
 peut prendre plusieurs minutes selon la connexion.
 
+Sur une machine contrainte, plusieurs paliers peuvent finir sur le même
+modèle (pas assez de VRAM pour un vrai modèle "puissant" séparé) : ils
+restent quand même différenciés via l'effort de réflexion d'Ollama
+(paramètre `think`, sans coût VRAM supplémentaire) — `low` pour le rapide,
+`medium` pour le médium, `high` pour le puissant.
+
 ## Ouvrir des applications et programmer des rappels (étape 5)
 
 Jaris peut maintenant exécuter deux actions pendant la conversation :

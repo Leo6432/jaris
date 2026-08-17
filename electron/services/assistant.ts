@@ -1,5 +1,5 @@
 import { config } from '../config'
-import { chatWithOllama, type OllamaMessage } from './ollama'
+import { chatWithOllama, type OllamaMessage, type ThinkLevel } from './ollama'
 import { listMemoryTitles } from './memoryStore'
 import { getProfile } from './profileStore'
 import { TOOLS, createToolExecutor } from './tools'
@@ -10,8 +10,19 @@ interface ModelTiers {
   large: string
 }
 
+type Tier = keyof ModelTiers
+
+// Sur du matériel contraint, plusieurs paliers peuvent pointer vers le même modèle (pas assez de VRAM
+// pour un vrai modèle "puissant" séparé) : on les différencie quand même via l'effort de réflexion
+// d'Ollama (think: low/medium/high), qui ne coûte pas de VRAM supplémentaire.
+const THINK_LEVEL: Record<Tier, ThinkLevel> = {
+  flash: 'low',
+  medium: 'medium',
+  large: 'high'
+}
+
 // Un appel d'outil (ouvrir une appli, rappel, recherche web, mémoire, mail...) doit toujours passer par
-// le modèle "medium" : c'est le seul dont la fiabilité d'appel d'outils a été éprouvée en conditions
+// le palier "medium" : c'est le seul dont la fiabilité d'appel d'outils a été éprouvée en conditions
 // réelles. Le "flash" est réservé aux échanges sans action ni raisonnement poussé, le "large" aux
 // questions qui demandent explicitement une réflexion approfondie.
 const TOOL_SIGNAL_WORDS = [
@@ -20,15 +31,15 @@ const TOOL_SIGNAL_WORDS = [
 ]
 const COMPLEX_SIGNAL_WORDS = ['pourquoi', 'explique', 'explique-moi', 'compare', 'analyse', 'différence', 'avantages', 'inconvénients', 'résume', 'détaille']
 
-/** Choisit le palier de modèle le plus adapté à la question, sans appel LLM supplémentaire (juste des mots-clés). */
-function pickModelTier(prompt: string, models: ModelTiers): string {
+/** Choisit le palier de complexité le plus adapté à la question, sans appel LLM supplémentaire (juste des mots-clés). */
+function pickTier(prompt: string): Tier {
   const lower = prompt.toLowerCase()
   const wordCount = prompt.trim().split(/\s+/).filter(Boolean).length
 
-  if (TOOL_SIGNAL_WORDS.some((w) => lower.includes(w))) return models.medium
-  if (COMPLEX_SIGNAL_WORDS.some((w) => lower.includes(w)) || wordCount > 25) return models.large
-  if (wordCount <= 8) return models.flash
-  return models.medium
+  if (TOOL_SIGNAL_WORDS.some((w) => lower.includes(w))) return 'medium'
+  if (COMPLEX_SIGNAL_WORDS.some((w) => lower.includes(w)) || wordCount > 25) return 'large'
+  if (wordCount <= 8) return 'flash'
+  return 'medium'
 }
 
 function buildSystemPrompt(userName: string | null, memoryTitles: string[]): string {
@@ -93,8 +104,10 @@ export async function converse(
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
   const models = profile?.models ?? { flash: config.ollama.model, medium: config.ollama.model, large: config.ollama.model }
-  const model = pickModelTier(prompt, models)
-  onLog?.(`Modèle choisi : ${model}`)
+  const tier = pickTier(prompt)
+  const model = models[tier]
+  const think = THINK_LEVEL[tier]
+  onLog?.(`Modèle choisi : ${model} (réflexion : ${think})`)
 
   const messages: OllamaMessage[] = [
     { role: 'system', content: buildSystemPrompt(userName, memoryTitles) },
@@ -102,7 +115,7 @@ export async function converse(
   ]
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const message = await chatWithOllama(messages, TOOLS, model)
+    const message = await chatWithOllama(messages, TOOLS, model, think)
     if (!message.tool_calls?.length) {
       return message.content.trim()
     }
