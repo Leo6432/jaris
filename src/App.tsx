@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import CapacityScan from '@/components/CapacityScan'
 import GmailOnboarding from '@/components/GmailOnboarding'
-import JarisFace from '@/components/JarisFace'
+import JarisOrb from '@/components/JarisOrb'
 import MemoryBrain from '@/components/MemoryBrain'
 import OptionsMenu from '@/components/OptionsMenu'
 import { useJarisStore, type JarisEmotion } from '@/store/useJarisStore'
@@ -125,7 +125,7 @@ export default function App(): JSX.Element {
   return (
     <div className="app">
       <OptionsMenu />
-      <JarisFace emotion={emotion} />
+      <JarisOrb emotion={emotion} audioElRef={audioRef} />
       <div className="app__status">{STATUS_LABEL[emotion]}</div>
       <div className="app__hint">Astuce : dis « Hey Jarvis » ou appuie sur + pour activer l'écoute</div>
       <button className="app__memory-button" onClick={openMemoryBrain}>

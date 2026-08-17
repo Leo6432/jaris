@@ -481,30 +481,13 @@ body {
   color: #4d6a87;
 }
 
-.jaris-face {
+.jaris-orb {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.jaris-face__ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 2px dashed;
-  border-top-style: solid;
-}
-
-.jaris-face__core {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-
-.jaris-face__eyes {
-  display: flex;
-  gap: 34px;
+.jaris-orb canvas {
+  display: block;
 }

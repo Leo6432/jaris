@@ -7,8 +7,9 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 ## État actuel
 
 - ✅ Étape 1 — Projet Electron + React + TS (Vite / electron-vite) initialisé
-- ✅ Étape 2 — Visage animé (`JarisFace`) avec 5 états d'émotion : veille,
-  écoute, réflexion, content, surpris
+- ✅ Étape 2 — Visage animé (`JarisFace`, remplacé à l'étape 17 par
+  `JarisOrb`) avec 5 états d'émotion : veille, écoute, réflexion, content,
+  surpris
 - ✅ Étape 3 — Pipeline vocal local : mot d'activation (openWakeWord),
   transcription (Cohere Transcribe), synthèse vocale (Supertonic HD). **Testé
   de bout en bout avec un vrai micro** (voir plus bas)
@@ -67,7 +68,9 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   Hugging Face à créer, même pour un débutant complet — seuls les vrais
   réglages perso (connecter Gmail, choisir son prénom) resteront dans
   l'interface, jamais dans un fichier texte ni sur un site tiers
-- ⬜ Étape 17 — Amélioration du design de l'interface
+- ✅ Étape 17 — Amélioration du design de l'interface : le visage animé
+  (`JarisFace`) est remplacé par `JarisOrb`, un noyau holographique façon
+  J.A.R.V.I.S. (Iron Man) — voir plus bas
 - ⬜ Étape 18 — Animation pendant la capture/analyse d'écran, pour donner un
   retour visuel pendant que Jaris "regarde" (étape 6)
 - ⬜ Étape 19 — Mode toujours visible : petite fenêtre Jaris affichée en
@@ -306,6 +309,28 @@ d'être plus lent que d'habitude.") plutôt que de répondre lentement sans
 prévenir. Pour ne pas répéter le même avertissement à chaque question tant
 que la charge ne redescend pas, il y a un délai de 2 minutes entre deux
 avertissements.
+
+## Design de l'interface (étape 17)
+
+Le visage animé d'origine (`JarisFace` : yeux + bouche stylisés) est remplacé
+par `JarisOrb`, un noyau holographique dessiné sur un `<canvas>` (Canvas 2D,
+sans dépendance supplémentaire), inspiré de l'interface de J.A.R.V.I.S. dans
+Iron Man :
+- un double anneau au contour irrégulier ("déchiré"), qui tourne lentement
+- deux anneaux fins plus réguliers façon verre, à l'intérieur
+- un petit noyau filaire au centre (maillage type sphère géodésique, généré
+  par répartition de Fibonacci + connexion aux plus proches voisins), qui
+  tourne sur lui-même
+
+La couleur et la vitesse de rotation changent selon l'émotion de Jaris (teal
+en veille, cyan à l'écoute, orange en réflexion, vert content, rouge
+surpris), comme avant avec `JarisFace`.
+
+**Réactif à la voix.** Pendant que Jaris parle, `JarisOrb` écoute le niveau
+sonore réel de l'audio joué (Web Audio API, `AnalyserNode` branché sur
+l'élément `<audio>` de la réponse) et fait vibrer/pulser l'anneau et le
+noyau en fonction — l'anneau tremble plus fort et brille plus quand Jaris
+parle fort, et revient à une respiration légère au repos.
 
 ## Ouvrir des applications et programmer des rappels (étape 5)
 
