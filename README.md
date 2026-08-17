@@ -154,7 +154,7 @@ La reconnaissance vocale ([Cohere Transcribe](https://huggingface.co/CohereLabs/
 open source, #1 du classement Open ASR Leaderboard) est un modèle "gated" :
 1. Crée un compte gratuit sur [huggingface.co](https://huggingface.co)
 2. Accepte les conditions sur la page du modèle
-3. Dans le venv Python : `huggingface-cli login` (colle un token créé sur
+3. Dans le venv Python : `hf auth login` (colle un token créé sur
    [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens))
 
 Renseigne dans `.env` :

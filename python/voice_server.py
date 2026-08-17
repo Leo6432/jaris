@@ -104,7 +104,7 @@ def main() -> None:
     except Exception as exc:
         hint = (
             " Ce modèle est protégé ('gated') : accepte les conditions sur "
-            f"https://huggingface.co/{args.stt_model} puis lance `huggingface-cli login` "
+            f"https://huggingface.co/{args.stt_model} puis lance `hf auth login` "
             "avec un compte Hugging Face gratuit."
             if "gated" in str(exc).lower() or "401" in str(exc) or "access" in str(exc).lower()
             else ""
