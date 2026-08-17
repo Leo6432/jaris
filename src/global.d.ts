@@ -25,6 +25,8 @@ declare global {
       previewVoice: (voice: string) => Promise<ArrayBuffer>
       scanCapacity: () => Promise<CapacityScanResult>
       onCapacityScanStatus: (cb: (message: string) => void) => () => void
+      notifyOnboardingFinished: () => void
+      openSettings: () => void
     }
   }
 }

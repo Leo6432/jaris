@@ -36,7 +36,9 @@ const api = {
   disconnectGmail: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.disconnectGmail),
   previewVoice: (voice: string): Promise<ArrayBuffer> => ipcRenderer.invoke(IPC_CHANNELS.previewVoice, voice),
   scanCapacity: (): Promise<CapacityScanResult> => ipcRenderer.invoke(IPC_CHANNELS.scanCapacity),
-  onCapacityScanStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.capacityScanStatus, cb)
+  onCapacityScanStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.capacityScanStatus, cb),
+  notifyOnboardingFinished: (): void => ipcRenderer.send(IPC_CHANNELS.onboardingFinished),
+  openSettings: (): void => ipcRenderer.send(IPC_CHANNELS.openSettings)
 }
 
 export type JarisApi = typeof api

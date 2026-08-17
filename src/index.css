@@ -24,6 +24,11 @@ body {
   overflow: hidden;
 }
 
+/* Widget flottant (étape 19) : fenêtre Electron transparente, donc pas de fond du tout ici. */
+body.body--widget {
+  background: transparent;
+}
+
 .app {
   position: relative;
   height: 100%;
@@ -486,8 +491,50 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  -webkit-app-region: no-drag;
 }
 
 .jaris-orb canvas {
   display: block;
+}
+
+.jaris-orb--clickable {
+  cursor: pointer;
+}
+
+/* Widget flottant (étape 19) : toujours au premier plan, en bas à droite, sans fond. */
+.app--widget {
+  gap: 6px;
+  padding: 12px;
+  -webkit-app-region: drag;
+}
+
+.app__status--widget {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9fc3e6;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+}
+
+.app__conversation--widget {
+  max-width: 180px;
+}
+
+.app__conversation--widget p {
+  font-size: 0.7rem;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+}
+
+/* Fenêtre de réglages (étape 19) : onboarding, Options, cerveau de Jaris — pas de visage/audio ici, c'est le widget qui s'en charge. */
+.app--settings {
+  gap: 18px;
+  padding: 24px;
+}
+
+.app__settings-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #d9ecff;
 }

@@ -73,9 +73,9 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   J.A.R.V.I.S. (Iron Man) — voir plus bas
 - ⬜ Étape 18 — Animation pendant la capture/analyse d'écran, pour donner un
   retour visuel pendant que Jaris "regarde" (étape 6)
-- ⬜ Étape 19 — Mode toujours visible : petite fenêtre Jaris affichée en
+- ✅ Étape 19 — Mode toujours visible : petite fenêtre Jaris affichée en
   permanence en bas à droite de l'écran (widget flottant), au lieu de
-  n'apparaître que quand la fenêtre principale a le focus
+  n'apparaître que quand la fenêtre principale a le focus — voir plus bas
 - ⬜ Étape 20 — Mise à jour automatique de l'application dès qu'une nouvelle
   version est publiée
 - ⬜ Étape 21 — Intégration téléphone : système pour connecter Jaris au
@@ -344,6 +344,37 @@ sonore réel de l'audio joué (Web Audio API, `AnalyserNode` branché sur
 l'élément `<audio>` de la réponse) et fait vibrer/pulser l'anneau et le
 noyau en fonction — l'anneau tremble plus fort et brille plus quand Jaris
 parle fort, et revient à une respiration légère au repos.
+
+## Widget flottant toujours visible (étape 19)
+
+Une fois l'onboarding terminé, Jaris n'est plus une grande fenêtre qui doit
+avoir le focus pour réagir : il devient un petit widget (`JarisOrb`, sans
+fenêtre ni fond) posé en bas à droite de l'écran, au-dessus de toutes les
+autres fenêtres — visible même en travaillant dans le navigateur ou une
+autre appli.
+- **Sans fond** : la fenêtre Electron du widget est transparente
+  (`transparent: true`, sans bordure) ; seul l'anneau lumineux de `JarisOrb`
+  est visible, pas de rectangle derrière.
+- **Toujours au-dessus** : `alwaysOnTop` + visible sur tous les bureaux
+  virtuels, donc il reste affiché même en changeant d'application ou de
+  bureau.
+- **Réagit depuis n'importe où** : le mot d'activation "Hey Jarvis" (déjà
+  basé sur le micro, indépendant de la fenêtre) et la touche **+** (devenue
+  un raccourci global via `globalShortcut`, plus seulement local à la
+  fenêtre de Jaris) déclenchent l'écoute quel que soit le programme qui a le
+  focus.
+  > ⚠️ Un raccourci global sur une touche seule (sans Ctrl/Alt) intercepte
+  > *toute* frappe sur "+" sur tout le PC pendant que Jaris tourne — plus
+  > moyen de taper "+" ailleurs (navigateur, tableur...) tant que le
+  > raccourci est actif. Si ça gêne à l'usage, il est facile de le changer
+  > pour une combinaison avec modificateur dans `electron/main.ts`.
+- **Cliquer sur le widget** ouvre la fenêtre de réglages classique (Options,
+  cerveau de Jaris, onboarding) ; la fermer (croix) referme juste cette
+  fenêtre et fait réapparaître le widget, Jaris continue de tourner. Une
+  icône dans la barre système (clic droit) permet de rouvrir les réglages
+  ou de vraiment quitter Jaris.
+- Les deux fenêtres ne sont jamais affichées en même temps, pour éviter que
+  la réponse vocale soit jouée deux fois.
 
 ## Ouvrir des applications et programmer des rappels (étape 5)
 

@@ -96,5 +96,9 @@ export const IPC_CHANNELS = {
   /** renderer <-> main : lance le scan de capacité (GPU/VRAM) et le téléchargement des modèles choisis, une fois au premier lancement. */
   scanCapacity: 'jaris:scan-capacity',
   /** main -> renderer : messages d'avancement pendant le scan de capacité (détection, téléchargements). */
-  capacityScanStatus: 'jaris:capacity-scan-status'
+  capacityScanStatus: 'jaris:capacity-scan-status',
+  /** renderer (fenêtre réglages) -> main : l'onboarding vient de se terminer, bascule vers le widget flottant. */
+  onboardingFinished: 'jaris:onboarding-finished',
+  /** renderer (widget) -> main : ouvre la fenêtre de réglages (Options, cerveau de Jaris). */
+  openSettings: 'jaris:open-settings'
 } as const

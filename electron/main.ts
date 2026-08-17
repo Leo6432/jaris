@@ -1,4 +1,4 @@
-import { app, ipcMain, shell, BrowserWindow } from 'electron'
+import { app, ipcMain, shell, BrowserWindow, globalShortcut, screen, Tray, Menu } from 'electron'
 import { join } from 'path'
 import { checkVoiceSetup } from './config'
 import { ensureOllamaRunning, ensureSearxngRunning } from './services/dependencyServices'
@@ -6,6 +6,7 @@ import { scanCapacity } from './services/hardwareScan'
 import { pullModelIfMissing } from './services/ollama'
 import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
+import { createTrayIcon } from './services/trayIcon'
 import { VoicePipeline } from './services/voicePipeline'
 import { ensureMemoryDir, getMemoryDir, getMemoryGraph, recallNote } from './services/memoryStore'
 import { getProfile, markGmailOnboardingDone, saveProfile } from './services/profileStore'
@@ -22,6 +23,16 @@ import {
 
 const isDev = !app.isPackaged
 let pipeline: VoicePipeline | null = null
+let fullWindow: BrowserWindow | null = null
+let widgetWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+/** Passe à true seulement via le menu de la barre système "Quitter" : sinon fermer la fenêtre de réglages la cache juste, Jaris continue à tourner (widget + écoute du mot d'activation). */
+let quitting = false
+/** Tant que l'onboarding n'est pas fini, fermer la fenêtre de réglages doit quitter l'appli normalement (pas de widget à replier sur un profil pas encore configuré). */
+let onboardingDone = false
+
+const WIDGET_SIZE = 200
+const WIDGET_MARGIN = 24
 
 function currentSetupStatus(): VoiceSetupStatusPayload {
   const status = checkVoiceSetup()
@@ -40,8 +51,20 @@ async function buildMemoryGraphWithUser(): Promise<MemoryGraph> {
   }
 }
 
-function createWindow(): BrowserWindow {
-  const mainWindow = new BrowserWindow({
+function loadRenderer(win: BrowserWindow, mode: 'full' | 'widget'): void {
+  if (isDev && process.env['ELECTRON_RENDERER_URL']) {
+    win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?mode=${mode}`)
+  } else {
+    win.loadFile(join(__dirname, '../renderer/index.html'), { query: { mode } })
+  }
+}
+
+/**
+ * Fenêtre "réglages" classique (onboarding, Options, cerveau de Jaris) : normale, avec bordure. Fermer sa
+ * croix la cache seulement (voir `quitting`), Jaris continue à tourner en arrière-plan via le widget.
+ */
+function createFullWindow(): BrowserWindow {
+  const win = new BrowserWindow({
     width: 1000,
     height: 760,
     minWidth: 480,
@@ -55,58 +78,110 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+  win.on('ready-to-show', () => win.show())
+  win.on('close', (event) => {
+    if (quitting || !onboardingDone) return
+    event.preventDefault()
+    win.hide()
+    showWidgetWindow()
   })
-
-  mainWindow.webContents.setWindowOpenHandler((details) => {
+  win.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
 
-  if (isDev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
-  }
-
-  return mainWindow
+  loadRenderer(win, 'full')
+  return win
 }
 
-async function startVoicePipeline(mainWindow: BrowserWindow): Promise<void> {
-  const status = currentSetupStatus()
-  const send = (channel: string, payload?: unknown): void => {
-    if (channel === IPC_CHANNELS.log) console.log('[jaris]', payload)
-    if (!mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload)
-  }
+/**
+ * Widget flottant façon J.A.R.V.I.S. (étape 19) : sans bordure, transparent, toujours au-dessus des autres
+ * fenêtres, en bas à droite de l'écran — visible même quand une autre appli (navigateur, jeu...) a le
+ * focus. C'est la vue "toujours là" une fois l'onboarding terminé ; cliquer dessus ouvre la fenêtre de
+ * réglages pour le reste (Options, cerveau de Jaris).
+ */
+function createWidgetWindow(): BrowserWindow {
+  const { workArea } = screen.getPrimaryDisplay()
+  const win = new BrowserWindow({
+    width: WIDGET_SIZE,
+    height: WIDGET_SIZE,
+    x: workArea.x + workArea.width - WIDGET_SIZE - WIDGET_MARGIN,
+    y: workArea.y + workArea.height - WIDGET_SIZE - WIDGET_MARGIN,
+    frame: false,
+    transparent: true,
+    hasShadow: false,
+    resizable: false,
+    skipTaskbar: true,
+    show: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/preload.mjs'),
+      sandbox: false
+    }
+  })
 
-  const log = (message: string): void => send(IPC_CHANNELS.log, message)
+  win.setAlwaysOnTop(true, 'floating')
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  win.on('ready-to-show', () => win.show())
+  win.webContents.setWindowOpenHandler((details) => {
+    shell.openExternal(details.url)
+    return { action: 'deny' }
+  })
+
+  loadRenderer(win, 'widget')
+  return win
+}
+
+/** Les deux fenêtres ne sont jamais visibles en même temps (sinon double lecture audio des réponses). */
+function showFullWindow(): void {
+  if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide()
+  if (!fullWindow || fullWindow.isDestroyed()) fullWindow = createFullWindow()
+  fullWindow.show()
+  fullWindow.focus()
+}
+
+function showWidgetWindow(): void {
+  if (fullWindow && !fullWindow.isDestroyed() && fullWindow.isVisible()) return
+  if (!widgetWindow || widgetWindow.isDestroyed()) widgetWindow = createWidgetWindow()
+  widgetWindow.show()
+}
+
+/** Envoie un évènement du pipeline vocal à toutes les fenêtres actuellement ouvertes (réglages et/ou widget). */
+function broadcast(channel: string, payload?: unknown): void {
+  if (channel === IPC_CHANNELS.log) console.log('[jaris]', payload)
+  for (const win of [fullWindow, widgetWindow]) {
+    if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
+  }
+}
+
+async function startVoicePipeline(): Promise<void> {
+  const status = currentSetupStatus()
+  const log = (message: string): void => broadcast(IPC_CHANNELS.log, message)
   void ensureOllamaRunning(log)
   void ensureSearxngRunning(log)
 
   if (!status.ready) {
-    send(IPC_CHANNELS.setupStatus, status)
-    send(IPC_CHANNELS.log, `Configuration incomplète : ${status.missing.join(' | ')}`)
+    broadcast(IPC_CHANNELS.setupStatus, status)
+    broadcast(IPC_CHANNELS.log, `Configuration incomplète : ${status.missing.join(' | ')}`)
     return
   }
 
   pipeline = new VoicePipeline()
-  pipeline.on('emotion', (emotion: JarisEmotion) => send(IPC_CHANNELS.emotion, emotion))
-  pipeline.on('transcript', (text: string) => send(IPC_CHANNELS.transcript, text))
-  pipeline.on('reply', (payload: VoiceReplyPayload) => send(IPC_CHANNELS.reply, payload))
-  pipeline.on('log', (message: string) => send(IPC_CHANNELS.log, message))
+  pipeline.on('emotion', (emotion: JarisEmotion) => broadcast(IPC_CHANNELS.emotion, emotion))
+  pipeline.on('transcript', (text: string) => broadcast(IPC_CHANNELS.transcript, text))
+  pipeline.on('reply', (payload: VoiceReplyPayload) => broadcast(IPC_CHANNELS.reply, payload))
+  pipeline.on('log', (message: string) => broadcast(IPC_CHANNELS.log, message))
 
   try {
     await pipeline.start()
-    send(IPC_CHANNELS.setupStatus, status)
+    broadcast(IPC_CHANNELS.setupStatus, status)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    send(IPC_CHANNELS.log, `Échec du démarrage du pipeline vocal : ${message}`)
-    send(IPC_CHANNELS.setupStatus, { ready: false, missing: [message] })
+    broadcast(IPC_CHANNELS.log, `Échec du démarrage du pipeline vocal : ${message}`)
+    broadcast(IPC_CHANNELS.setupStatus, { ready: false, missing: [message] })
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.setupStatus, () => currentSetupStatus())
   ipcMain.on(IPC_CHANNELS.triggerWake, () => pipeline?.triggerWake())
   ipcMain.on(IPC_CHANNELS.audioEnded, () => pipeline?.notifyAudioEnded())
@@ -136,8 +211,52 @@ app.whenReady().then(() => {
     }
     return result
   })
-  const mainWindow = createWindow()
-  void startVoicePipeline(mainWindow)
+  ipcMain.on(IPC_CHANNELS.onboardingFinished, () => {
+    // L'onboarding vient de se terminer dans la fenêtre de réglages : elle bascule en widget flottant.
+    onboardingDone = true
+    fullWindow?.hide()
+    showWidgetWindow()
+  })
+  ipcMain.on(IPC_CHANNELS.openSettings, () => showFullWindow())
+
+  // Gardé en variable de module : sans référence, Electron peut ramasser l'icône par le garbage collector
+  // et la faire disparaître de la barre système.
+  tray = new Tray(createTrayIcon())
+  tray.setToolTip('Jaris')
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Ouvrir Jaris', click: () => showFullWindow() },
+      { type: 'separator' },
+      {
+        label: 'Quitter',
+        click: () => {
+          quitting = true
+          app.quit()
+        }
+      }
+    ])
+  )
+  tray.on('click', () => showFullWindow())
+
+  // Raccourci global (pas seulement quand la fenêtre de Jaris a le focus) : déclenche l'écoute depuis
+  // n'importe quelle appli, comme le mot d'activation "Hey Jarvis" (déjà global car basé sur le micro).
+  if (!globalShortcut.register('Plus', () => pipeline?.triggerWake())) {
+    console.warn('[jaris] Impossible de réserver le raccourci global "+" (peut-être déjà pris par une autre appli).')
+  }
+
+  const profile = await getProfile()
+  if (profile?.capacityScanDone) {
+    onboardingDone = true
+    widgetWindow = createWidgetWindow()
+  } else {
+    fullWindow = createFullWindow()
+  }
+
+  void startVoicePipeline()
+})
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
 })
 
 app.on('window-all-closed', () => {

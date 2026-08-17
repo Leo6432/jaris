@@ -7,6 +7,7 @@ interface JarisOrbProps {
   size?: number
   /** Élément <audio> qui joue la voix de Jaris : sert à faire vibrer l'anneau en rythme avec la parole. */
   audioElRef?: RefObject<HTMLAudioElement>
+  onClick?: () => void
 }
 
 interface EmotionStyle {
@@ -197,7 +198,7 @@ function readAudioLevel(analyser: AnalyserNode, buffer: Uint8Array<ArrayBuffer>)
 }
 
 /** Cœur visuel de Jaris façon J.A.R.V.I.S. : anneau holographique irrégulier + noyau filaire, qui vibre avec la voix. */
-export default function JarisOrb({ emotion, size = 320, audioElRef }: JarisOrbProps): JSX.Element {
+export default function JarisOrb({ emotion, size = 320, audioElRef, onClick }: JarisOrbProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const emotionRef = useRef(emotion)
   const analyserRef = useRef<AnalyserNode | null>(null)
@@ -283,7 +284,11 @@ export default function JarisOrb({ emotion, size = 320, audioElRef }: JarisOrbPr
   }, [size])
 
   return (
-    <div className="jaris-orb" style={{ width: size, height: size }}>
+    <div
+      className={`jaris-orb${onClick ? ' jaris-orb--clickable' : ''}`}
+      style={{ width: size, height: size }}
+      onClick={onClick}
+    >
       <canvas ref={canvasRef} />
     </div>
   )
