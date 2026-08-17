@@ -158,6 +158,10 @@ export default function App(): JSX.Element {
         <button className="app__memory-button" onClick={openMemoryBrain}>
           Voir le cerveau de Jaris
         </button>
+        <div className="app__hint">
+          Astuce : dis « Hey Jarvis » ou appuie sur Ctrl+Alt+J, depuis n'importe quelle appli, pour activer
+          l'écoute
+        </div>
 
         {setupStatus && !setupStatus.ready && (
           <div className="app__setup-warning">

@@ -244,8 +244,11 @@ app.whenReady().then(async () => {
 
   // Raccourci global (pas seulement quand la fenêtre de Jaris a le focus) : déclenche l'écoute depuis
   // n'importe quelle appli, comme le mot d'activation "Hey Jarvis" (déjà global car basé sur le micro).
-  if (!globalShortcut.register('Plus', () => pipeline?.triggerWake())) {
-    console.warn('[jaris] Impossible de réserver le raccourci global "+" (peut-être déjà pris par une autre appli).')
+  // Une touche seule sans modificateur (ex: "+") est peu fiable en global : ça intercepte aussi tout "+"
+  // tapé ailleurs sur le PC, et l'alias clavier "Plus" d'Electron ne mappe pas de façon fiable sur les
+  // claviers non-QWERTY (AZERTY...). Une combinaison avec modificateur est bien plus robuste.
+  if (!globalShortcut.register('Control+Alt+J', () => pipeline?.triggerWake())) {
+    console.warn('[jaris] Impossible de réserver le raccourci global Ctrl+Alt+J (peut-être déjà pris par une autre appli).')
   }
 
   const profile = await getProfile()

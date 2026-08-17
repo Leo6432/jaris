@@ -359,15 +359,16 @@ autre appli.
   virtuels, donc il reste affiché même en changeant d'application ou de
   bureau.
 - **Réagit depuis n'importe où** : le mot d'activation "Hey Jarvis" (déjà
-  basé sur le micro, indépendant de la fenêtre) et la touche **+** (devenue
-  un raccourci global via `globalShortcut`, plus seulement local à la
-  fenêtre de Jaris) déclenchent l'écoute quel que soit le programme qui a le
-  focus.
-  > ⚠️ Un raccourci global sur une touche seule (sans Ctrl/Alt) intercepte
-  > *toute* frappe sur "+" sur tout le PC pendant que Jaris tourne — plus
-  > moyen de taper "+" ailleurs (navigateur, tableur...) tant que le
-  > raccourci est actif. Si ça gêne à l'usage, il est facile de le changer
-  > pour une combinaison avec modificateur dans `electron/main.ts`.
+  basé sur le micro, indépendant de la fenêtre) et le raccourci clavier
+  **Ctrl+Alt+J** (`globalShortcut`, enregistré au démarrage) déclenchent
+  l'écoute quel que soit le programme qui a le focus.
+  > Une touche seule sans modificateur (ex: juste "+") n'est volontairement
+  > pas utilisée en global : ça interceptait *toute* frappe sur "+" sur tout
+  > le PC (impossible de taper un "+" ailleurs tant que Jaris tourne), et
+  > l'alias clavier "Plus" d'Electron ne mappait pas de façon fiable sur les
+  > claviers non-QWERTY (AZERTY...) — testé en pratique, ça ne se
+  > déclenchait jamais. La touche **+** reste utilisable, mais seulement
+  > quand une fenêtre de Jaris (widget ou réglages) a le focus.
 - **Cliquer sur le widget** ouvre la fenêtre de réglages classique (Options,
   cerveau de Jaris, onboarding) ; la fermer (croix) referme juste cette
   fenêtre et fait réapparaître le widget, Jaris continue de tourner. Une
