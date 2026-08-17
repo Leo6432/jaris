@@ -505,11 +505,12 @@ body.body--widget {
 
 /*
  * Widget flottant (étape 19) : toujours au premier plan, en bas à droite, sans fond. La fenêtre est plus
- * haute que large et vide au départ (donc invisible, tout est transparent) : l'orbe reste en haut, une
- * réponse longue a la place de s'étaler en dessous sans être coupée, avec un défilement en dernier recours.
+ * haute que large et vide au départ (donc invisible, tout est transparent) ; le contenu est ancré en bas
+ * (flex-end), donc collé au vrai coin bas-droit de l'écran au repos — une réponse longue pousse le tout
+ * vers le haut au lieu de laisser un vide entre l'orbe et le coin de l'écran.
  */
 .app--widget {
-  justify-content: flex-start;
+  justify-content: flex-end;
   gap: 10px;
   padding: 20px 14px;
   -webkit-app-region: drag;
@@ -524,8 +525,8 @@ body.body--widget {
 }
 
 .app__conversation--widget {
-  max-width: 220px;
-  max-height: 300px;
+  max-width: 270px;
+  max-height: 380px;
   overflow-y: auto;
   -webkit-app-region: no-drag;
 }

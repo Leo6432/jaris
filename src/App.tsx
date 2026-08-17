@@ -193,7 +193,7 @@ export default function App(): JSX.Element {
   // MODE === 'widget' : uniquement créé une fois l'onboarding terminé, donc profileName est déjà connu ici.
   return (
     <div className="app app--widget">
-      <JarisOrb emotion={emotion} audioElRef={audioRef} size={140} onClick={() => window.jaris.openSettings()} />
+      <JarisOrb emotion={emotion} audioElRef={audioRef} size={160} onClick={() => window.jaris.openSettings()} />
       <div className="app__status app__status--widget">{STATUS_LABEL[emotion]}</div>
 
       {(transcript || reply) && (

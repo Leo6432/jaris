@@ -31,10 +31,12 @@ let quitting = false
 /** Tant que l'onboarding n'est pas fini, fermer la fenêtre de réglages doit quitter l'appli normalement (pas de widget à replier sur un profil pas encore configuré). */
 let onboardingDone = false
 
-// Plus haut que large : l'orbe reste petit en haut, le reste de la hauteur sert à afficher une réponse
-// longue sans la couper (tout l'espace vide est transparent, donc invisible tant qu'il n'y a rien à dire).
-const WIDGET_WIDTH = 260
-const WIDGET_HEIGHT = 420
+// Plus haut que large : le contenu (orbe + texte) reste ancré en bas de la fenêtre (voir .app--widget en
+// CSS), donc collé au vrai coin bas-droit de l'écran au repos. Le reste de la hauteur, vide et transparent
+// donc invisible tant qu'il n'y a rien à dire, sert de marge pour qu'une réponse longue pousse vers le
+// haut sans être coupée.
+const WIDGET_WIDTH = 320
+const WIDGET_HEIGHT = 520
 const WIDGET_MARGIN = 24
 
 function currentSetupStatus(): VoiceSetupStatusPayload {
@@ -256,11 +258,20 @@ app.whenReady().then(async () => {
 
   // Raccourci global (pas seulement quand la fenêtre de Jaris a le focus) : déclenche l'écoute depuis
   // n'importe quelle appli, comme le mot d'activation "Hey Jarvis" (déjà global car basé sur le micro).
-  // Une touche à caractère (ex: "+") est peu fiable en global : ça intercepte aussi toute frappe sur cette
-  // touche ailleurs sur le PC, et son mappage clavier peut varier selon l'agencement (AZERTY...).
-  // "Insert" est une touche seule, jamais utilisée par les applis courantes, donc sans ce risque.
-  if (!globalShortcut.register('Insert', () => pipeline?.triggerWake())) {
-    console.warn('[jaris] Impossible de réserver le raccourci global Insert (peut-être déjà pris par une autre appli).')
+  // Diagnostic explicite à chaque étape (succès/échec d'enregistrement, puis déclenchement réel) : sinon
+  // impossible de distinguer "le raccourci ne s'enregistre pas" de "il s'enregistre mais rien ne se passe
+  // au moment d'appuyer" (ex: pipeline vocal pas encore prêt) juste en testant à l'aveugle.
+  const shortcutKey = 'Insert'
+  const registered = globalShortcut.register(shortcutKey, () => {
+    console.log(`[jaris] Raccourci global ${shortcutKey} déclenché (pipeline ${pipeline ? 'prêt' : 'PAS prêt'}).`)
+    pipeline?.triggerWake()
+  })
+  if (registered) {
+    console.log(`[jaris] Raccourci global ${shortcutKey} enregistré avec succès.`)
+  } else {
+    console.warn(
+      `[jaris] Impossible de réserver le raccourci global ${shortcutKey} (déjà pris par une autre appli, ou par une ancienne instance de Jaris encore ouverte en arrière-plan).`
+    )
   }
 
   // Toujours lancée dans sa fenêtre normale, comme avant l'étape 19 : la réduire ou la fermer bascule
