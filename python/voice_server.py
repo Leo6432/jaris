@@ -184,7 +184,7 @@ def main() -> None:
             inputs.to(stt_model.device, dtype=stt_model.dtype)
             with torch.no_grad():
                 outputs = stt_model.generate(**inputs, max_new_tokens=256)
-            text = stt_processor.decode(outputs, skip_special_tokens=True).strip()
+            text = stt_processor.decode(outputs[0], skip_special_tokens=True).strip()
             if is_hallucination(text):
                 text = ""
             emit({"event": "transcript", "text": text})
