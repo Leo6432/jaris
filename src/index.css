@@ -105,6 +105,41 @@ body {
   color: #ff6b6b;
 }
 
+.options-menu__voices {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.options-menu__voice {
+  background: transparent;
+  border: 1px solid rgba(127, 163, 201, 0.25);
+  color: #b8cbe0;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.options-menu__voice:not(:disabled):hover {
+  border-color: #37e2ff;
+  color: #d9ecff;
+}
+
+.options-menu__voice:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.options-menu__voice--selected {
+  background: rgba(55, 226, 255, 0.15);
+  border-color: #37e2ff;
+  color: #d9ecff;
+}
+
 .app__status {
   font-size: 0.95rem;
   letter-spacing: 0.08em;

@@ -190,8 +190,11 @@ Renseigne dans `.env` :
 
 Rien à installer à la main : `supertonic` est dans `python/requirements.txt`
 (déjà installé à l'étape 1), et le modèle (~100 Mo, léger) se télécharge tout
-seul au premier lancement de Jaris, comme Cohere Transcribe. Réglages dans
-`.env` si besoin (`TTS_VOICE`, `TTS_LANGUAGE`).
+seul au premier lancement de Jaris, comme Cohere Transcribe. `TTS_VOICE`
+dans `.env` fixe la voix par défaut (`M3` de base) ; 10 voix sont dispo au
+total (`M1`-`M5`, `F1`-`F5`) et peuvent être écoutées et choisies directement
+depuis le menu **Options** de l'appli (clic sur une voix = phrase d'exemple
+jouée + voix retenue pour les prochaines réponses), sans toucher au `.env`.
 
 ### Vérifier
 

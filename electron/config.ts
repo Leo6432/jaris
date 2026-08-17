@@ -35,7 +35,7 @@ export const config = {
   },
   tts: {
     /** Synthèse vocale : Supertonic HD (99M paramètres, modèle téléchargé automatiquement au premier lancement). */
-    voice: readEnv('TTS_VOICE', 'M1'),
+    voice: readEnv('TTS_VOICE', 'M3'),
     language: readEnv('TTS_LANGUAGE', 'fr')
   },
   ollama: {

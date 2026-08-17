@@ -22,6 +22,7 @@ declare global {
       getGmailStatus: () => Promise<GmailStatus>
       connectGmail: () => Promise<GmailStatus>
       disconnectGmail: () => Promise<void>
+      previewVoice: (voice: string) => Promise<ArrayBuffer>
     }
   }
 }

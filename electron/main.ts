@@ -2,6 +2,7 @@ import { app, ipcMain, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { checkVoiceSetup } from './config'
 import { ensureOllamaRunning, ensureSearxngRunning } from './services/dependencyServices'
+import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
 import { VoicePipeline } from './services/voicePipeline'
 import { ensureMemoryDir, getMemoryDir, getMemoryGraph, recallNote } from './services/memoryStore'
@@ -118,6 +119,10 @@ app.whenReady().then(() => {
   ipcMain.handle(IPC_CHANNELS.getGmailStatus, () => getGmailStatus())
   ipcMain.handle(IPC_CHANNELS.connectGmail, () => connectGmail())
   ipcMain.handle(IPC_CHANNELS.disconnectGmail, () => disconnectGmail())
+  ipcMain.handle(IPC_CHANNELS.previewVoice, async (_event, voice: string) => {
+    const audio = await previewVoice(voice)
+    return audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer
+  })
   const mainWindow = createWindow()
   void startVoicePipeline(mainWindow)
 })

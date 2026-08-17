@@ -1,8 +1,10 @@
 """Sidecar de synthèse vocale persistant pour Jaris (Supertonic HD).
 
 Charge le modèle une seule fois au démarrage, puis synthétise à la demande :
-une ligne de texte sur stdin = une synthèse. Écrit le WAV dans un fichier
-temporaire et répond par une ligne JSON sur stdout :
+une ligne JSON sur stdin = une synthèse, ex: {"text": "...", "voice": "M3"}.
+Les styles de voix sont mis en cache après leur premier usage (changer de
+voix d'une requête à l'autre ne recharge pas le modèle). Écrit le WAV dans
+un fichier temporaire et répond par une ligne JSON sur stdout :
   {"event": "ready"}
   {"event": "speech", "path": "..."}   (fichier WAV à lire puis supprimer)
   {"event": "error", "message": "..."} (une synthèse a échoué)
@@ -17,6 +19,7 @@ import os
 import sys
 import tempfile
 
+
 def emit(payload: dict) -> None:
     sys.stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")
     sys.stdout.flush()
@@ -24,7 +27,7 @@ def emit(payload: dict) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--voice", default="M1")
+    parser.add_argument("--voice", default="M3")
     parser.add_argument("--language", default="fr")
     args = parser.parse_args()
 
@@ -36,7 +39,7 @@ def main() -> None:
 
     try:
         tts = TTS(auto_download=True)
-        voice_style = tts.get_voice_style(voice_name=args.voice)
+        voice_styles = {args.voice: tts.get_voice_style(voice_name=args.voice)}
     except Exception as exc:
         emit({"event": "fatal", "message": f"échec de chargement de Supertonic : {exc}"})
         sys.exit(1)
@@ -44,14 +47,20 @@ def main() -> None:
     emit({"event": "ready"})
 
     for raw_line in sys.stdin:
-        text = raw_line.strip()
-        if not text:
+        line = raw_line.strip()
+        if not line:
             continue
         try:
+            request = json.loads(line)
+            text = request["text"]
+            voice = request.get("voice") or args.voice
+            if voice not in voice_styles:
+                voice_styles[voice] = tts.get_voice_style(voice_name=voice)
+
             wav, _duration = tts.synthesize(
                 text=text,
                 lang=args.language,
-                voice_style=voice_style,
+                voice_style=voice_styles[voice],
                 total_steps=8,
                 speed=1.05,
             )

@@ -94,12 +94,13 @@ class TtsClient extends EventEmitter {
     return this.ready
   }
 
-  /** Synthétise `text`, renvoie le chemin du fichier WAV généré (à supprimer par l'appelant). */
-  async synthesize(text: string): Promise<string> {
+  /** Synthétise `text` avec `voice` (défaut : celle passée au démarrage du sidecar), renvoie le chemin du WAV généré (à supprimer par l'appelant). */
+  async synthesize(text: string, voice?: string): Promise<string> {
     await this.start()
     return new Promise((resolve, reject) => {
       this.queue.push({ resolve, reject })
-      this.proc?.stdin.write(text.replace(/\n/g, ' ') + '\n')
+      const request = { text: text.replace(/\n/g, ' '), voice }
+      this.proc?.stdin.write(JSON.stringify(request) + '\n')
     })
   }
 

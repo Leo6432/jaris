@@ -18,6 +18,8 @@ export interface Profile {
   name: string
   /** true une fois l'écran "connecter Gmail ou ignorer" affiché après le premier lancement. */
   gmailOnboardingDone?: boolean
+  /** Voix Supertonic HD choisie dans le menu Options (ex: "M3"), vide = valeur par défaut de .env. */
+  ttsVoice?: string
 }
 
 export interface MemoryGraphNode {
@@ -70,5 +72,7 @@ export const IPC_CHANNELS = {
   /** renderer <-> main : lance le flux de connexion Gmail (ouvre le navigateur système). */
   connectGmail: 'jaris:connect-gmail',
   /** renderer -> main : déconnecte le compte Gmail. */
-  disconnectGmail: 'jaris:disconnect-gmail'
+  disconnectGmail: 'jaris:disconnect-gmail',
+  /** renderer <-> main : synthétise une phrase d'exemple avec une voix donnée, pour la comparer avant de la choisir. */
+  previewVoice: 'jaris:preview-voice'
 } as const
