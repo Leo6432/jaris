@@ -1,6 +1,7 @@
 import { app, ipcMain, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { checkVoiceSetup } from './config'
+import { ensureOllamaRunning, ensureSearxngRunning } from './services/dependencyServices'
 import { VoicePipeline } from './services/voicePipeline'
 import { ensureMemoryDir, getMemoryDir, getMemoryGraph, recallNote } from './services/memoryStore'
 import { getProfile, markGmailOnboardingDone, saveProfile } from './services/profileStore'
@@ -73,6 +74,10 @@ async function startVoicePipeline(mainWindow: BrowserWindow): Promise<void> {
     if (channel === IPC_CHANNELS.log) console.log('[jaris]', payload)
     if (!mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload)
   }
+
+  const log = (message: string): void => send(IPC_CHANNELS.log, message)
+  void ensureOllamaRunning(log)
+  void ensureSearxngRunning(log)
 
   if (!status.ready) {
     send(IPC_CHANNELS.setupStatus, status)

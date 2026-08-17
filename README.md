@@ -232,9 +232,11 @@ de brancher un vrai raisonnement à l'étape 4.
    du modèle est entièrement configurable, pas besoin de toucher au code pour
    en changer
 
-Ollama doit être lancé (il tourne en arrière-plan une fois installé) pour que
-Jaris puisse réfléchir. S'il n'est pas joignable, Jaris le dit à voix haute au
-lieu de planter.
+Ollama doit être lancé pour que Jaris puisse réfléchir. Jaris essaie de le
+démarrer automatiquement (`ollama serve`) s'il ne répond pas au lancement de
+l'appli — inutile de le lancer à la main dans la plupart des cas. Si le
+démarrage automatique échoue (Ollama pas installé, par exemple), Jaris le dit
+à voix haute au lieu de planter.
 
 > Le modèle a par défaut une fenêtre de contexte énorme (131072 tokens pour
 > qwen3.5), ce qui peut le faire déborder de la VRAM et tourner en partie sur
@@ -278,9 +280,12 @@ un modèle séparé du modèle de conversation (`OLLAMA_VISION_MODEL` dans
 
 ## Recherche web (étape 7)
 
-Nécessite [Docker Desktop](https://www.docker.com/products/docker-desktop/).
-Lance l'instance [SearXNG](https://github.com/searxng/searxng) locale (aucun
-compte, aucune clé) :
+Nécessite [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+installé. Jaris démarre lui-même Docker Desktop (s'il n'est pas déjà lancé)
+puis l'instance [SearXNG](https://github.com/searxng/searxng) locale (aucun
+compte, aucune clé) au lancement de l'appli — pas besoin de lancer
+`docker compose up -d` à la main. Pour le faire manuellement quand même
+(ou si le démarrage auto échoue) :
 
 ```
 docker compose up -d
