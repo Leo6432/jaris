@@ -5,6 +5,7 @@ import { rememberNote, recallNote } from './memoryStore'
 import { scheduleReminder } from './reminders'
 import { lookAtScreen } from './vision'
 import { searchWeb } from './webSearch'
+import { clickMouse, pressKey, typeText } from './inputControl'
 
 export const TOOLS: OllamaTool[] = [
   {
@@ -131,6 +132,68 @@ export const TOOLS: OllamaTool[] = [
         required: ['to', 'subject', 'body']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'type_text',
+      description:
+        "Écrit du texte à l'endroit où se trouve le curseur/focus actuel sur l'ordinateur (un champ de texte, " +
+        "une barre de recherche, une zone de discussion déjà ouverte...), comme si l'utilisateur le tapait " +
+        "lui-même au clavier. N'utilise cet outil que si l'utilisateur demande explicitement d'écrire ou de " +
+        "taper quelque chose, et seulement si le bon champ est déjà ouvert et actif (au besoin, vérifie avec " +
+        'look_at_screen avant).',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'Le texte exact à taper' }
+        },
+        required: ['text']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'press_key',
+      description:
+        'Appuie sur une touche spéciale du clavier (par exemple pour valider un formulaire ou une recherche ' +
+        'juste après avoir tapé du texte avec type_text).',
+      parameters: {
+        type: 'object',
+        properties: {
+          key: {
+            type: 'string',
+            description:
+              'Nom de la touche : entrée, tab, échap, espace, retour arrière, suppr, haut, bas, gauche, ' +
+              'droite, début, fin'
+          }
+        },
+        required: ['key']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'click_mouse',
+      description:
+        "Clique avec la souris. Si l'utilisateur (ou une capture d'écran précédente via look_at_screen) donne " +
+        'une position précise en pixels, clique à cet endroit ; sinon clique à la position actuelle du curseur.',
+      parameters: {
+        type: 'object',
+        properties: {
+          x: { type: 'number', description: "Position horizontale en pixels sur l'écran (optionnel)" },
+          y: { type: 'number', description: "Position verticale en pixels sur l'écran (optionnel)" },
+          button: {
+            type: 'string',
+            description: 'Type de clic',
+            enum: ['left', 'right', 'double']
+          }
+        },
+        required: []
+      }
+    }
   }
 ]
 
@@ -153,6 +216,15 @@ export function createToolExecutor(onReminderFire: ReminderFireHandler) {
         return recallNote(String(args.title ?? ''))
       case 'send_email':
         return sendEmail(String(args.to ?? ''), String(args.subject ?? ''), String(args.body ?? ''))
+      case 'type_text':
+        return typeText(String(args.text ?? ''))
+      case 'press_key':
+        return pressKey(String(args.key ?? ''))
+      case 'click_mouse': {
+        const x = args.x === undefined || args.x === null ? null : Number(args.x)
+        const y = args.y === undefined || args.y === null ? null : Number(args.y)
+        return clickMouse(x, y, String(args.button ?? 'left'))
+      }
       default:
         return `Outil inconnu : ${name}`
     }

@@ -29,7 +29,8 @@ const THINK_LEVEL: Record<Tier, ThinkLevel> = {
 // questions qui demandent explicitement une réflexion approfondie.
 const TOOL_SIGNAL_WORDS = [
   'ouvre', 'ouvrir', 'lance', 'lancer', 'rappelle', 'rappel', 'cherche', 'recherche', 'regarde', "l'écran",
-  'écran', 'retiens', 'retenir', 'mémorise', 'souviens', 'rappelle-toi', 'envoie', 'envoyer', 'mail', 'email', 'mémoire'
+  'écran', 'retiens', 'retenir', 'mémorise', 'souviens', 'rappelle-toi', 'envoie', 'envoyer', 'mail', 'email', 'mémoire',
+  'écris', 'écrire', 'tape', 'taper', 'clique', 'cliquer', 'clic', 'appuie', 'appuyer'
 ]
 const COMPLEX_SIGNAL_WORDS = ['pourquoi', 'explique', 'explique-moi', 'compare', 'analyse', 'différence', 'avantages', 'inconvénients', 'résume', 'détaille']
 
@@ -78,7 +79,8 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[]): str
     memoryRule +
     "Tu as accès à des outils pour agir réellement : ouvrir une application, programmer un rappel vocal, " +
     "regarder l'écran de l'utilisateur, chercher sur le web, mémoriser ou relire une information dans ta " +
-    "mémoire locale, envoyer un mail. Pour toute action concrète, tu dois IMPÉRATIVEMENT appeler l'outil correspondant via un " +
+    "mémoire locale, envoyer un mail, taper du texte au clavier (type_text), appuyer sur une touche " +
+    "(press_key), cliquer avec la souris (click_mouse). Pour toute action concrète, tu dois IMPÉRATIVEMENT appeler l'outil correspondant via un " +
     "vrai appel de fonction, immédiatement, sans phrase d'annonce avant. Il est interdit de dire que tu vas " +
     "faire une action ou que tu l'as faite sans avoir réellement appelé l'outil qui l'exécute dans ce même " +
     "tour : soit tu appelles l'outil tout de suite, soit " +
@@ -89,7 +91,10 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[]): str
     "phrase, une adresse mail précise pour le destinataire, ainsi que le contenu à envoyer. Ne mets JAMAIS " +
     "ta propre adresse d'envoi (celle configurée dans .env, que tu ne connais pas) comme destinataire, et " +
     "n'invente et ne déduis jamais une adresse toi-même : si l'adresse ou le contenu manque ou est ambigu, " +
-    "n'appelle pas send_email, demande une précision à la place."
+    "n'appelle pas send_email, demande une précision à la place. N'utilise type_text, press_key ou " +
+    "click_mouse que si l'utilisateur demande explicitement d'écrire, de taper, de cliquer ou d'appuyer sur " +
+    "une touche : n'improvise jamais une action clavier/souris de ta propre initiative, ce sont des actions " +
+    "réelles et irréversibles sur l'ordinateur de l'utilisateur."
   )
 }
 

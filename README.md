@@ -51,9 +51,10 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   haute quand la machine est surchargée (GPU, CPU, RAM trop élevés), pour
   éviter de lancer une tâche lourde ou d'insister sur une réponse lente sans
   prévenir — voir plus bas
-- ⬜ Étape 15 — Contrôle clavier et souris : Jaris peut écrire du texte et
+- ✅ Étape 15 — Contrôle clavier et souris : Jaris peut écrire du texte et
   cliquer à la place de l'utilisateur, pour automatiser des actions
-  complètes sur l'ordinateur (pas seulement ouvrir une application)
+  complètes sur l'ordinateur (pas seulement ouvrir une application) — voir
+  plus bas
 - ⬜ Étape 16 — Installeur en un clic : **règle absolue — le Jaris installé par
   le public doit être exactement le même que celui utilisé en développement**
   (mêmes modèles, mêmes fonctionnalités, même qualité de réponse), jamais une
@@ -344,6 +345,35 @@ d'être plus lent que d'habitude.") plutôt que de répondre lentement sans
 prévenir. Pour ne pas répéter le même avertissement à chaque question tant
 que la charge ne redescend pas, il y a un délai de 2 minutes entre deux
 avertissements.
+
+## Contrôle clavier et souris (étape 15)
+
+Jaris peut agir directement sur l'ordinateur, pas seulement ouvrir une
+application :
+- **`type_text`** — tape du texte à l'endroit où se trouve déjà le focus
+  (un champ de recherche, une zone de discussion...), comme si l'utilisateur
+  le tapait lui-même
+- **`press_key`** — appuie sur une touche spéciale (entrée, tab, échap,
+  espace, retour arrière, suppr, flèches, début, fin), par exemple pour
+  valider un formulaire juste après avoir tapé du texte
+- **`click_mouse`** — clique (clic gauche, droit ou double-clic) à une
+  position écran précise en pixels, ou à la position actuelle du curseur si
+  aucune coordonnée n'est donnée
+
+Techniquement, ça passe par l'API Windows bas niveau `SendInput` (mode
+`KEYEVENTF_UNICODE` pour le texte, donc n'importe quel caractère accentué
+tape correctement quelle que soit la disposition clavier), appelée via un
+petit bout de C# compilé à la volée par PowerShell — comme pour
+`open_app` (étape 5), plutôt qu'un paquet npm avec du code natif
+(robotjs, nut.js...) qu'il faudrait recompiler pour l'ABI d'Electron, une
+complexité en plus pour l'installeur en un clic (étape 16). Le texte à
+taper passe par une variable d'environnement, jamais interpolé dans le
+script PowerShell lui-même, pour éviter tout risque d'injection.
+
+Jaris n'utilise ces outils que si l'utilisateur le demande explicitement
+("écris...", "tape...", "clique...", "appuie sur...") : il ne clique ou ne
+tape jamais de sa propre initiative, ce sont des actions réelles et
+irréversibles sur la machine.
 
 ## Design de l'interface (étape 17)
 
