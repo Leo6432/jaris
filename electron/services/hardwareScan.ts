@@ -7,6 +7,12 @@ const execAsync = promisify(exec)
  * VRAM réservée en permanence par le sidecar STT (Cohere Transcribe, chargé une fois au démarrage de
  * Jaris et jamais déchargé) + petite marge de sécurité pour le pilote/l'OS. À soustraire du total avant
  * de choisir des modèles Ollama, sinon on risque de dépasser la VRAM réellement disponible.
+ *
+ * Volontairement basé sur la VRAM *totale* de la carte (fixe), pas sur la VRAM libre à l'instant du
+ * scan : cette dernière varie selon ce qui tourne au même moment (jeu, navigateur...), ce qui donnerait
+ * un résultat différent à chaque scan pour la même machine. Le bouton "relancer l'analyse" du menu
+ * Options sert à re-choisir les modèles si la config matérielle change (nouvelle carte...), pas à
+ * s'adapter à l'usage instantané du GPU.
  */
 const STT_RESERVED_GB = 4.5
 
@@ -60,9 +66,9 @@ export interface CapacityScanResult {
 }
 
 /**
- * Détecte la VRAM dispo et choisit 3 modèles (rapide/médium/puissant) qui tiennent dedans, en réservant
- * de la place pour le STT permanent. Sans GPU NVIDIA détecté (ou en cas d'erreur), part du principe le
- * plus prudent : budget nul, donc les plus petits modèles de chaque palier.
+ * Détecte la VRAM totale de la carte et choisit 3 modèles (rapide/médium/puissant) qui tiennent dedans,
+ * en réservant de la place pour le STT permanent. Sans GPU NVIDIA détecté (ou en cas d'erreur), part du
+ * principe le plus prudent : budget nul, donc les plus petits modèles de chaque palier.
  */
 export async function scanCapacity(): Promise<CapacityScanResult> {
   const { name, vramGb } = await detectGpu()

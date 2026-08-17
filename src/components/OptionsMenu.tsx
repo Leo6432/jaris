@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { GmailStatus, Profile } from '../../shared/ipc'
+import type { GmailStatus, ModelTiers, Profile } from '../../shared/ipc'
 
 interface VoiceOption {
   id: string
@@ -22,7 +22,13 @@ const TTS_VOICES: VoiceOption[] = [
 
 const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
 
-type Tab = 'connexions' | 'voix'
+type Tab = 'connexions' | 'voix' | 'modeles'
+
+const TIER_LABELS: Array<{ key: keyof ModelTiers; label: string }> = [
+  { key: 'flash', label: 'Rapide' },
+  { key: 'medium', label: 'Médium' },
+  { key: 'large', label: 'Puissant' }
+]
 
 export default function OptionsMenu(): JSX.Element {
   const [open, setOpen] = useState(false)
@@ -33,6 +39,8 @@ export default function OptionsMenu(): JSX.Element {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [voiceIndex, setVoiceIndex] = useState(DEFAULT_VOICE_INDEX)
   const [previewing, setPreviewing] = useState(false)
+  const [rescanning, setRescanning] = useState(false)
+  const [scanStatus, setScanStatus] = useState('')
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
 
@@ -43,7 +51,26 @@ export default function OptionsMenu(): JSX.Element {
       const savedIndex = TTS_VOICES.findIndex((v) => v.id === p?.ttsVoice)
       if (savedIndex !== -1) setVoiceIndex(savedIndex)
     })
+    return window.jaris.onCapacityScanStatus(setScanStatus)
   }, [])
+
+  const handleRescan = async (): Promise<void> => {
+    setError(null)
+    setRescanning(true)
+    setScanStatus('Détection de la carte graphique…')
+    try {
+      const scan = await window.jaris.scanCapacity()
+      if (profile) {
+        const updated = { ...profile, models: scan.models, capacityScanDone: true }
+        setProfile(updated)
+        await window.jaris.saveProfile(updated)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setRescanning(false)
+    }
+  }
 
   const voice = useMemo(() => TTS_VOICES[voiceIndex], [voiceIndex])
 
@@ -111,6 +138,12 @@ export default function OptionsMenu(): JSX.Element {
             >
               Voix
             </button>
+            <button
+              className={`options-menu__tab${tab === 'modeles' ? ' options-menu__tab--active' : ''}`}
+              onClick={() => setTab('modeles')}
+            >
+              Modèles
+            </button>
           </div>
 
           {tab === 'connexions' && (
@@ -155,6 +188,26 @@ export default function OptionsMenu(): JSX.Element {
                   />
                 ))}
               </div>
+            </div>
+          )}
+
+          {tab === 'modeles' && (
+            <div className="options-menu__section">
+              <div className="options-menu__section-title">Modèles Ollama par palier</div>
+              {rescanning ? (
+                <p className="capacity-scan__status">{scanStatus}</p>
+              ) : (
+                <ul className="capacity-scan__models">
+                  {TIER_LABELS.map(({ key, label }) => (
+                    <li key={key}>
+                      {label} : {profile?.models?.[key] ?? '—'}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button className="options-menu__action" onClick={() => void handleRescan()} disabled={rescanning}>
+                {rescanning ? 'Analyse en cours...' : "Relancer l'analyse"}
+              </button>
             </div>
           )}
 

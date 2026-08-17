@@ -101,11 +101,10 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ⬜ Étape 27 — Sous-agents : Jaris peut lancer plusieurs sous-agents (agents
   web, etc.) en parallèle pour des tâches complexes qui demandent plusieurs
   actions en même temps, au lieu de tout faire en une seule séquence
-- ⬜ Étape 28 — Sélection manuelle des modèles depuis le menu Options : le
-  scan de capacité et les 3 paliers rapide/médium/puissant sont déjà en place
-  (étape 13, automatique au premier lancement) ; reste à les afficher dans le
-  menu Options pour pouvoir changer un palier à la main à tout moment, pas
-  seulement au premier lancement
+- ✅ Étape 28 — Onglet "Modèles" dans le menu Options : affiche les 3 paliers
+  rapide/médium/puissant choisis par le scan de capacité (étape 13), avec un
+  bouton pour relancer l'analyse à tout moment (pas seulement au premier
+  lancement) — voir plus bas
 - ⬜ Étape 29 — Mentions légales / conditions d'utilisation à faire accepter
   avant la première utilisation, pour dégager la responsabilité en cas
   d'action problématique de l'IA
@@ -266,6 +265,13 @@ modèle (pas assez de VRAM pour un vrai modèle "puissant" séparé) : ils
 restent quand même différenciés via l'effort de réflexion d'Ollama
 (paramètre `think`, sans coût VRAM supplémentaire) — `low` pour le rapide,
 `medium` pour le médium, `high` pour le puissant.
+
+Le calcul se base sur la VRAM *totale* de la carte (fixe), pas sur ce qui
+est libre à l'instant du scan : sinon le résultat changerait selon qu'un
+jeu ou un autre logiciel gourmand tourne au même moment, pour la même
+machine. L'onglet **Modèles** du menu Options (étape 28) affiche les 3
+paliers actuels et permet de relancer l'analyse à la main (utile après un
+changement matériel, pas pour s'adapter à l'usage GPU du moment).
 
 ## Ouvrir des applications et programmer des rappels (étape 5)
 
