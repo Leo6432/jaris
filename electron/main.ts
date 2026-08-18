@@ -2,7 +2,7 @@ import { app, ipcMain, shell, BrowserWindow, globalShortcut, screen, Tray, Menu 
 import { join } from 'path'
 import { checkVoiceSetup } from './config'
 import { ensureOllamaRunning, ensureSearxngRunning, stopOllamaIfStartedByJaris } from './services/dependencyServices'
-import { scanCapacity } from './services/hardwareScan'
+import { getModelOverview, scanCapacity } from './services/hardwareScan'
 import { pullModelIfMissing } from './services/ollama'
 import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
@@ -267,6 +267,7 @@ app.whenReady().then(async () => {
     }
     return result
   })
+  ipcMain.handle(IPC_CHANNELS.getModelOverview, () => getModelOverview())
   ipcMain.on(IPC_CHANNELS.onboardingFinished, () => {
     // L'onboarding vient de se terminer dans la fenêtre de réglages : elle bascule en widget flottant.
     onboardingDone = true

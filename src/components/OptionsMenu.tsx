@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ConversationEntry, GmailStatus, ModelTiers, Profile } from '../../shared/ipc'
+import type { ConversationEntry, GmailStatus, ModelOverviewEntry, ModelTiers, Profile } from '../../shared/ipc'
 
 interface VoiceOption {
   id: string
@@ -46,6 +46,7 @@ export default function OptionsMenu(): JSX.Element {
   const [scanStatus, setScanStatus] = useState('')
   const [history, setHistory] = useState<ConversationEntry[] | null>(null)
   const [clearingHistory, setClearingHistory] = useState(false)
+  const [modelOverview, setModelOverview] = useState<ModelOverviewEntry[] | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
 
@@ -67,6 +68,14 @@ export default function OptionsMenu(): JSX.Element {
       void window.jaris.getConversationHistory().then(setHistory)
     }
   }, [tab, history])
+
+  // Idem pour le tableau comparatif des modèles candidats (relit scripts/benchmark-results.md côté main) :
+  // pas la peine à chaque ouverture du menu si l'utilisateur ne va jamais voir cet onglet.
+  useEffect(() => {
+    if (tab === 'modeles' && modelOverview === null) {
+      void window.jaris.getModelOverview().then(setModelOverview)
+    }
+  }, [tab, modelOverview])
 
   const handleClearHistory = async (): Promise<void> => {
     if (!window.confirm("Supprimer définitivement tout l'historique des conversations ?")) return
@@ -101,6 +110,17 @@ export default function OptionsMenu(): JSX.Element {
   }
 
   const voice = useMemo(() => TTS_VOICES[voiceIndex], [voiceIndex])
+
+  // Modèles actuellement retenus par le profil (un par palier + vision), pour encadrer leur ligne dans le
+  // tableau comparatif ci-dessous.
+  const selectedModels = useMemo(() => {
+    const set = new Set<string>()
+    if (profile?.models?.flash) set.add(profile.models.flash)
+    if (profile?.models?.medium) set.add(profile.models.medium)
+    if (profile?.models?.large) set.add(profile.models.large)
+    if (profile?.visionModel) set.add(profile.visionModel)
+    return set
+  }, [profile])
 
   const handleConnect = (): void => {
     setError(null)
@@ -251,6 +271,43 @@ export default function OptionsMenu(): JSX.Element {
             <button className="options-menu__action" onClick={() => void handleRescan()} disabled={rescanning}>
               {rescanning ? 'Analyse en cours...' : "Relancer l'analyse"}
             </button>
+
+            <div className="options-menu__section-title options-menu__model-overview-title">Tous les modèles candidats</div>
+            {modelOverview === null ? (
+              <p className="capacity-scan__status">Chargement...</p>
+            ) : (
+              <div className="options-menu__model-overview-scroll">
+                <table className="options-menu__model-overview">
+                  <thead>
+                    <tr>
+                      <th>Modèle</th>
+                      <th>Palier(s)</th>
+                      <th>VRAM</th>
+                      <th>Vitesse</th>
+                      <th>Tool-calling</th>
+                      <th>Intelligence</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {modelOverview.map((entry) => (
+                      <tr key={entry.model} className={selectedModels.has(entry.model) ? 'options-menu__model-row--selected' : undefined}>
+                        <td>{entry.model}</td>
+                        <td>{entry.tiers.join(', ')}</td>
+                        <td>{entry.vramGb} Go</td>
+                        <td>{entry.speedTokPerSec !== null ? `${entry.speedTokPerSec.toFixed(1)} tok/s` : 'non testé'}</td>
+                        <td>{entry.toolCalling ?? 'non testé'}</td>
+                        <td>{entry.intelligence !== null ? entry.intelligence : 'non publié'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="options-menu__model-overview-hint">
+              Entourés en cyan : les modèles actuellement retenus par ton profil. Vitesse et tool-calling
+              viennent d'un run local de <code>npm run benchmark:models</code> s'il a déjà tourné sur cette
+              machine. Intelligence = score MMLU-Pro publié quand il existe.
+            </p>
           </div>
         )}
 

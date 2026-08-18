@@ -6,6 +6,7 @@ import {
   type GmailStatus,
   type JarisEmotion,
   type MemoryGraph,
+  type ModelOverviewEntry,
   type Profile,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload
@@ -42,7 +43,8 @@ const api = {
   openSettings: (): void => ipcRenderer.send(IPC_CHANNELS.openSettings),
   getConversationHistory: (): Promise<ConversationEntry[]> => ipcRenderer.invoke(IPC_CHANNELS.getConversationHistory),
   clearConversationHistory: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.clearConversationHistory),
-  openConversationHistoryFile: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openConversationHistoryFile)
+  openConversationHistoryFile: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openConversationHistoryFile),
+  getModelOverview: (): Promise<ModelOverviewEntry[]> => ipcRenderer.invoke(IPC_CHANNELS.getModelOverview)
 }
 
 export type JarisApi = typeof api

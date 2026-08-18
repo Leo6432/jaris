@@ -4,6 +4,7 @@ import type {
   GmailStatus,
   JarisEmotion,
   MemoryGraph,
+  ModelOverviewEntry,
   Profile,
   VoiceReplyPayload,
   VoiceSetupStatusPayload
@@ -39,6 +40,7 @@ declare global {
       getConversationHistory: () => Promise<ConversationEntry[]>
       clearConversationHistory: () => Promise<void>
       openConversationHistoryFile: () => Promise<void>
+      getModelOverview: () => Promise<ModelOverviewEntry[]>
     }
   }
 }

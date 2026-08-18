@@ -74,6 +74,22 @@ export interface CapacityScanResult {
   visionModel: string
 }
 
+/**
+ * Un modèle candidat (tous paliers + vision confondus), pour le tableau comparatif de l'onglet Modèles du
+ * menu Options. speedTokPerSec/toolCalling viennent d'un run local de `npm run benchmark:models`
+ * (scripts/benchmark-models.mjs) s'il a déjà tourné sur cette machine, `null` sinon (jamais de chiffre
+ * inventé). intelligence = score MMLU-Pro publié quand il existe, `null` sinon.
+ */
+export interface ModelOverviewEntry {
+  model: string
+  /** Paliers pour lesquels ce modèle est candidat (ex: ["Rapide"], ["Médium", "Puissant"], ["Vision"]). */
+  tiers: string[]
+  vramGb: number
+  speedTokPerSec: number | null
+  toolCalling: string | null
+  intelligence: number | null
+}
+
 /** Canaux IPC main -> renderer pour piloter le visage et afficher la conversation. */
 export const IPC_CHANNELS = {
   emotion: 'jaris:emotion',
@@ -117,5 +133,7 @@ export const IPC_CHANNELS = {
   /** renderer <-> main : efface définitivement l'historique des échanges (fichier + court terme en mémoire). */
   clearConversationHistory: 'jaris:clear-conversation-history',
   /** renderer -> main : révèle le fichier conversation-history.json dans l'explorateur de fichiers. */
-  openConversationHistoryFile: 'jaris:open-conversation-history-file'
+  openConversationHistoryFile: 'jaris:open-conversation-history-file',
+  /** renderer <-> main : liste tous les modèles candidats (tous paliers + vision) avec leurs métriques, pour l'onglet Modèles. */
+  getModelOverview: 'jaris:get-model-overview'
 } as const

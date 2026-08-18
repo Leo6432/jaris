@@ -1,6 +1,8 @@
 import { exec } from 'child_process'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import { promisify } from 'util'
-import type { ModelTiers } from '../../shared/ipc'
+import type { ModelOverviewEntry, ModelTiers } from '../../shared/ipc'
 
 const execAsync = promisify(exec)
 
@@ -188,4 +190,103 @@ export function pickSafeVisionModel(freeVramGb: number, installedModels: string[
   const installedCandidates = VISION_CANDIDATES.filter((c) => installedModels.includes(c.model))
   if (installedCandidates.length === 0) return fallbackModel
   return pickForBudget(installedCandidates, Math.max(0, freeVramGb - LIVE_SAFETY_MARGIN_GB))
+}
+
+/**
+ * Score MMLU-Pro publié (fiche modèle officielle / éditeur), pour donner une idée de l'"intelligence"
+ * générale de chaque candidat dans l'onglet Modèles du menu Options — en complément de la vitesse et de la
+ * fiabilité d'appel d'outils, qui elles viennent du benchmark local (voir parseLocalBenchmark ci-dessous),
+ * pas d'un score publié. Absent = pas de chiffre MMLU-Pro publié trouvé pour ce modèle.
+ */
+const INTELLIGENCE_MMLU_PRO: Record<string, number> = {
+  'qwen3.5:0.8b': 29.7,
+  'qwen3.5:2b': 55.3,
+  'qwen3.5:4b': 79.1,
+  'qwen3.5:9b': 82.5,
+  'qwen3.5:27b': 86.1,
+  'qwen3.5:35b': 85.3,
+  'granite4:3b': 44.5,
+  'gemma4:e4b': 69.4
+}
+
+interface LocalBenchmarkEntry {
+  speedTokPerSec: number | null
+  toolCalling: string | null
+}
+
+/**
+ * Relit scripts/benchmark-results.md (généré par `npm run benchmark:models`, voir ce script) s'il existe,
+ * pour remonter de vraies mesures faites sur LA machine de l'utilisateur plutôt que des chiffres publiés
+ * génériques. Absent (jamais lancé) : renvoie une map vide, sans faire échouer l'aperçu pour autant.
+ */
+function parseLocalBenchmark(): Map<string, LocalBenchmarkEntry> {
+  const results = new Map<string, LocalBenchmarkEntry>()
+  let raw: string
+  try {
+    raw = readFileSync(join(process.cwd(), 'scripts', 'benchmark-results.md'), 'utf-8')
+  } catch {
+    return results
+  }
+
+  for (const line of raw.split('\n')) {
+    if (!line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
+    const cells = line
+      .split('|')
+      .map((c) => c.trim())
+      .filter(Boolean)
+    if (cells.length !== 4) continue
+
+    const [model, , speed, tool] = cells
+    const speedNum = parseFloat(speed)
+    results.set(model, {
+      speedTokPerSec: Number.isFinite(speedNum) ? speedNum : null,
+      toolCalling: tool === '—' ? null : tool
+    })
+  }
+  return results
+}
+
+const TIER_LABELS: Record<Tier, string> = { flash: 'Rapide', medium: 'Médium', large: 'Puissant' }
+
+/**
+ * Vue d'ensemble de tous les modèles candidats (tous paliers + vision confondus), pour l'onglet Modèles du
+ * menu Options : VRAM nécessaire, vitesse et fiabilité d'appel d'outils mesurées localement si
+ * `npm run benchmark:models` a déjà tourné, "intelligence" générale (MMLU-Pro publié) sinon. Un même
+ * modèle candidat à plusieurs paliers (ex: qwen3.5:0.8b, repli de tous les paliers) n'apparaît qu'une
+ * seule fois, avec la liste de tous les paliers concernés.
+ */
+export function getModelOverview(): ModelOverviewEntry[] {
+  const byModel = new Map<string, ModelOverviewEntry>()
+
+  const addCandidate = (model: string, vramGb: number, tierLabel: string): void => {
+    const existing = byModel.get(model)
+    if (existing) {
+      if (!existing.tiers.includes(tierLabel)) existing.tiers.push(tierLabel)
+      return
+    }
+    byModel.set(model, {
+      model,
+      tiers: [tierLabel],
+      vramGb,
+      speedTokPerSec: null,
+      toolCalling: null,
+      intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null
+    })
+  }
+
+  for (const tier of Object.keys(TIER_CANDIDATES) as Tier[]) {
+    for (const c of TIER_CANDIDATES[tier]) addCandidate(c.model, c.vramGb, TIER_LABELS[tier])
+  }
+  for (const c of VISION_CANDIDATES) addCandidate(c.model, c.vramGb, 'Vision')
+
+  const localBenchmark = parseLocalBenchmark()
+  for (const entry of byModel.values()) {
+    const local = localBenchmark.get(entry.model)
+    if (local) {
+      entry.speedTokPerSec = local.speedTokPerSec
+      entry.toolCalling = local.toolCalling
+    }
+  }
+
+  return [...byModel.values()].sort((a, b) => b.vramGb - a.vramGb)
 }
