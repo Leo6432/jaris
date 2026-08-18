@@ -19,8 +19,9 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   programmer des rappels vocaux (persistés, survivent à un redémarrage de
   Jaris avant l'échéance) — voir plus bas
 - ✅ Étape 6 — Vision d'écran : Jaris peut capturer l'écran et le décrire ou
-  répondre à une question dessus, via un modèle de vision local (`qwen3-vl:8b`
-  par défaut, séparé du modèle de conversation) — voir plus bas
+  répondre à une question dessus, via un modèle de vision local (`qwen3-vl`,
+  taille choisie selon la VRAM comme les modèles de conversation — étape 13,
+  séparé du modèle de conversation) — voir plus bas
 - ✅ Étape 7 — Recherche web : Jaris peut chercher sur le web via une
   instance [SearXNG](https://github.com/searxng/searxng) auto-hébergée
   (Docker), aucune clé API ni compte — voir plus bas
@@ -230,7 +231,13 @@ de brancher un vrai raisonnement à l'étape 4.
 
 ## Mettre en place Ollama (étape 4)
 
-1. Installe [Ollama](https://ollama.com/) (installeur Windows classique)
+1. Installe [Ollama](https://ollama.com/) (installeur Windows classique) —
+   **version 0.7.0 ou plus récente** : en dessous, un bug côté Ollama
+   ([ollama/ollama#8668](https://github.com/ollama/ollama/pull/8668), corrigé
+   dans la 0.7.0) fait apparaître de brèves fenêtres de console Windows vides
+   à chaque chargement/changement de modèle. Rien à faire côté Jaris pour
+   ça — c'est entièrement dans le binaire Ollama — mais Jaris le détecte et
+   le dit dans les logs si une version trop ancienne tourne
 2. Télécharge le modèle de raisonnement :
    ```
    ollama pull qwen3.5:9b
@@ -307,15 +314,23 @@ machine. L'onglet **Modèles** du menu Options (étape 28) affiche les 3
 paliers actuels et permet de relancer l'analyse à la main (utile après un
 changement matériel, pas pour s'adapter à l'usage GPU du moment).
 
-**Vérification en temps réel avant chaque question.** Les 3 paliers restent
-fixes (scan ci-dessus), mais juste avant d'appeler Ollama, Jaris regarde
-aussi l'état réel du GPU à l'instant présent :
+**Modèle de vision aussi adapté à la VRAM.** Le même scan choisit un
+quatrième modèle, dédié à `look_at_screen` (étape 6), dans la famille
+`qwen3-vl` (`2b`/`4b`/`8b`) — plutôt qu'un modèle de vision fixe pour tout
+le monde : sur une carte contrainte, un modèle trop gros pour la VRAM
+restante forçait Ollama à décharger/recharger un gros modèle à chaque
+capture d'écran, plusieurs dizaines de secondes d'attente.
+
+**Vérification en temps réel avant chaque question.** Les paliers (et le
+modèle de vision) restent fixes (scan ci-dessus), mais juste avant
+d'appeler Ollama, Jaris regarde aussi l'état réel du GPU à l'instant
+présent :
 - si la VRAM *libre* ne suffit plus pour le modèle normalement prévu (un
   jeu ou un autre logiciel en consomme une partie), Jaris se replie
   automatiquement sur le modèle le plus gros qui tient encore dans ce
-  palier *et qui est déjà installé* (`ollama list`) — jamais un modèle
-  jamais téléchargé, qui ferait échouer la question avec une erreur
-  "model not found" ;
+  palier (ou, pour la vision, dans la famille `qwen3-vl`) *et qui est déjà
+  installé* (`ollama list`) — jamais un modèle jamais téléchargé, qui
+  ferait échouer la question avec une erreur "model not found" ;
 - si la carte dépasse 83°C, Jaris bascule directement sur le palier rapide
   le temps qu'elle refroidisse, pour ne pas insister sur une carte qui
   chauffe déjà.
@@ -509,15 +524,14 @@ déclenche dès que tu relances l'app (ou immédiatement s'il est en retard).
 
 ## Vision d'écran (étape 6)
 
-```
-ollama pull qwen3-vl:8b
-```
-
 Jaris peut capturer l'écran et le décrire, ou répondre à une question dessus
 ("qu'est-ce qui est affiché ?", "y a-t-il un message d'erreur ?") — dis
 simplement ce que tu veux savoir, il capture et regarde tout seul. Utilise
-un modèle séparé du modèle de conversation (`OLLAMA_VISION_MODEL` dans
-`.env`, `qwen3-vl:8b` par défaut).
+un modèle séparé du modèle de conversation, dans la famille `qwen3-vl`
+(`2b`/`4b`/`8b` selon la VRAM détectée, voir "Modèle de vision aussi adapté
+à la VRAM" à l'étape 13 — `OLLAMA_VISION_MODEL` dans `.env`, `qwen3-vl:8b`
+par défaut, sert uniquement de repli si le scan de capacité n'a jamais
+tourné).
 
 ## Recherche web (étape 7)
 

@@ -51,6 +51,16 @@ const TIER_CANDIDATES: Record<Tier, ModelCandidate[]> = {
   large: LARGE_CANDIDATES
 }
 
+// Le modèle de vision (étape 6) était fixe (qwen3-vl:8b, ~8 Go de VRAM) pour tout le monde : sur une carte
+// contrainte, il ne tient pas à côté du modèle de conversation déjà chargé, forçant Ollama à décharger/
+// recharger à chaque appel (des dizaines de secondes). Mêmes tailles/logique que les paliers de conversation
+// ci-dessus, source : ollama.com/library/qwen3-vl.
+const VISION_CANDIDATES: ModelCandidate[] = [
+  { model: 'qwen3-vl:8b', vramGb: 8 },
+  { model: 'qwen3-vl:4b', vramGb: 5 },
+  { model: 'qwen3-vl:2b', vramGb: 3 }
+]
+
 function pickForBudget(candidates: ModelCandidate[], budgetGb: number): string {
   const fit = candidates.find((c) => c.vramGb <= budgetGb)
   return (fit ?? candidates[candidates.length - 1]).model
@@ -74,12 +84,14 @@ export interface CapacityScanResult {
   gpuName: string | null
   vramGb: number | null
   models: { flash: string; medium: string; large: string }
+  visionModel: string
 }
 
 /**
- * Détecte la VRAM totale de la carte et choisit 3 modèles (rapide/médium/puissant) qui tiennent dedans,
- * en réservant de la place pour le STT permanent. Sans GPU NVIDIA détecté (ou en cas d'erreur), part du
- * principe le plus prudent : budget nul, donc les plus petits modèles de chaque palier.
+ * Détecte la VRAM totale de la carte et choisit 3 modèles de conversation (rapide/médium/puissant) plus un
+ * modèle de vision qui tiennent dedans, en réservant de la place pour le STT permanent. Sans GPU NVIDIA
+ * détecté (ou en cas d'erreur), part du principe le plus prudent : budget nul, donc les plus petits modèles
+ * de chaque palier.
  */
 export async function scanCapacity(): Promise<CapacityScanResult> {
   const { name, vramGb } = await detectGpu()
@@ -92,7 +104,8 @@ export async function scanCapacity(): Promise<CapacityScanResult> {
       flash: pickForBudget(FLASH_CANDIDATES, budgetGb),
       medium: pickForBudget(MEDIUM_CANDIDATES, budgetGb),
       large: pickForBudget(LARGE_CANDIDATES, budgetGb)
-    }
+    },
+    visionModel: pickForBudget(VISION_CANDIDATES, budgetGb)
   }
 }
 
@@ -146,6 +159,18 @@ export async function getLiveGpuStatus(): Promise<LiveGpuStatus> {
  */
 export function pickSafeModel(tier: Tier, freeVramGb: number, installedModels: string[], fallbackModel: string): string {
   const installedCandidates = TIER_CANDIDATES[tier].filter((c) => installedModels.includes(c.model))
+  if (installedCandidates.length === 0) return fallbackModel
+  return pickForBudget(installedCandidates, Math.max(0, freeVramGb - LIVE_SAFETY_MARGIN_GB))
+}
+
+/**
+ * Même logique que pickSafeModel ci-dessus, mais pour le modèle de vision (liste de candidats séparée, pas
+ * un palier de ModelTiers) : le modèle choisi une fois pour toutes au scan de capacité peut ne plus tenir
+ * dans la VRAM *libre* à l'instant présent (conversation déjà chargée, jeu ou navigateur en parallèle...),
+ * ce qui forcerait sinon Ollama à décharger/recharger un gros modèle et ferait traîner look_at_screen.
+ */
+export function pickSafeVisionModel(freeVramGb: number, installedModels: string[], fallbackModel: string): string {
+  const installedCandidates = VISION_CANDIDATES.filter((c) => installedModels.includes(c.model))
   if (installedCandidates.length === 0) return fallbackModel
   return pickForBudget(installedCandidates, Math.max(0, freeVramGb - LIVE_SAFETY_MARGIN_GB))
 }

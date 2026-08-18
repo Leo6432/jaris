@@ -89,7 +89,7 @@ export default function OptionsMenu(): JSX.Element {
     try {
       const scan = await window.jaris.scanCapacity()
       if (profile) {
-        const updated = { ...profile, models: scan.models, capacityScanDone: true }
+        const updated = { ...profile, models: scan.models, visionModel: scan.visionModel, capacityScanDone: true }
         setProfile(updated)
         await window.jaris.saveProfile(updated)
       }
@@ -245,6 +245,7 @@ export default function OptionsMenu(): JSX.Element {
                     {label} : {profile?.models?.[key] ?? '—'} (réflexion {think})
                   </li>
                 ))}
+                <li>Vision : {profile?.visionModel ?? '—'}</li>
               </ul>
             )}
             <button className="options-menu__action" onClick={() => void handleRescan()} disabled={rescanning}>

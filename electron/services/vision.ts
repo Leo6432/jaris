@@ -1,6 +1,8 @@
 import { desktopCapturer, screen } from 'electron'
 import { config } from '../config'
 import { hideScanOverlay, showScanOverlay } from './scanOverlay'
+import { getLiveGpuStatus, pickSafeVisionModel } from './hardwareScan'
+import { listInstalledModels } from './ollama'
 
 interface OllamaVisionResponse {
   message?: { content?: string }
@@ -33,13 +35,29 @@ async function captureScreenshotBase64(): Promise<string> {
 
 /**
  * Capture l'écran et demande au modèle de vision de le décrire ou de répondre à une question dessus.
+ * `visionModel` vient du scan de capacité (étape 13, adapté à la VRAM totale de la machine) plutôt que
+ * toujours le même modèle fixe pour tout le monde : un modèle de vision trop gros pour la carte forçait
+ * Ollama à décharger/recharger un gros modèle à chaque appel (des dizaines de secondes d'attente).
+ *
  * L'animation de scan (étape 18) ne s'affiche qu'APRÈS la capture (jamais avant) : sinon l'overlay
  * apparaîtrait lui-même dans l'image envoyée au modèle. Elle couvre donc la partie "analyse" (l'appel au
  * modèle de vision, qui prend plusieurs secondes), pas la capture elle-même (quasi instantanée) — dans le
  * `finally` pour ne jamais rester affichée en cas d'erreur.
  */
-export async function lookAtScreen(question: string): Promise<string> {
+export async function lookAtScreen(question: string, visionModel: string): Promise<string> {
   const image = await captureScreenshotBase64()
+
+  // Le modèle choisi une fois pour toutes au scan de capacité (VRAM totale) peut ne plus tenir dans la VRAM
+  // *libre* à l'instant présent (conversation déjà chargée, jeu ou navigateur en parallèle...) : même repli
+  // temps réel que pour les modèles de conversation (assistant.ts), pour ne jamais forcer Ollama à charger
+  // un modèle trop gros pour ce qui reste de VRAM disponible maintenant.
+  let model = visionModel
+  try {
+    const [live, installedModels] = await Promise.all([getLiveGpuStatus(), listInstalledModels()])
+    if (live.freeVramGb !== null) model = pickSafeVisionModel(live.freeVramGb, installedModels, visionModel)
+  } catch {
+    // Pas grave si le check échoue : on garde le modèle normalement configuré.
+  }
 
   showScanOverlay()
   try {
@@ -49,7 +67,7 @@ export async function lookAtScreen(question: string): Promise<string> {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: config.ollama.visionModel,
+          model,
           messages: [
             { role: 'system', content: VISION_SYSTEM_PROMPT },
             {
@@ -73,7 +91,7 @@ export async function lookAtScreen(question: string): Promise<string> {
 
     const data = (await response.json()) as OllamaVisionResponse
     const content = data.message?.content?.trim()
-    if (!content) throw new Error(`Réponse vide du modèle de vision '${config.ollama.visionModel}' (bien installé ? ollama pull ${config.ollama.visionModel})`)
+    if (!content) throw new Error(`Réponse vide du modèle de vision '${model}' (bien installé ? ollama pull ${model})`)
     return content
   } finally {
     hideScanOverlay()

@@ -19,7 +19,7 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
         setResult(scan)
         const profile = await window.jaris.getProfile()
         if (profile) {
-          await window.jaris.saveProfile({ ...profile, models: scan.models, capacityScanDone: true })
+          await window.jaris.saveProfile({ ...profile, models: scan.models, visionModel: scan.visionModel, capacityScanDone: true })
         }
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
@@ -58,6 +58,7 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
               <li>Rapide : {result.models.flash}</li>
               <li>Médium : {result.models.medium}</li>
               <li>Puissant : {result.models.large}</li>
+              <li>Vision : {result.visionModel}</li>
             </ul>
             <p className="capacity-scan__hint">
               Jaris choisit automatiquement le modèle le plus adapté à chaque question. Modifiable plus tard.

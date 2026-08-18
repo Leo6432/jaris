@@ -31,6 +31,8 @@ export interface Profile {
   capacityScanDone?: boolean
   /** Modèles rapide/médium/puissant choisis par le scan de capacité, vide = OLLAMA_MODEL de .env pour les trois. */
   models?: ModelTiers
+  /** Modèle de vision choisi par le scan de capacité selon la VRAM, vide = OLLAMA_VISION_MODEL de .env. */
+  visionModel?: string
 }
 
 export interface MemoryGraphNode {
@@ -64,11 +66,12 @@ export interface GmailStatus {
   email: string | null
 }
 
-/** Résultat du scan de capacité (étape 13) : GPU détecté et modèles choisis pour chaque palier. */
+/** Résultat du scan de capacité (étape 13) : GPU détecté et modèles choisis pour chaque palier + vision. */
 export interface CapacityScanResult {
   gpuName: string | null
   vramGb: number | null
   models: ModelTiers
+  visionModel: string
 }
 
 /** Canaux IPC main -> renderer pour piloter le visage et afficher la conversation. */

@@ -37,12 +37,53 @@ async function waitUntil(check: () => Promise<boolean>, timeoutMs: number, inter
 }
 
 /**
+ * En dessous de cette version, `ollama serve` peut faire flasher une brève fenêtre de console Windows
+ * vide à chaque chargement/changement de modèle (le process "runner" qu'Ollama lance en interne n'était
+ * pas caché sur Windows) — corrigé upstream dans la 0.7.0 (ollama/ollama#8668). Rien à faire côté Jaris,
+ * qui ne lance que `ollama serve` lui-même (déjà avec windowsHide) : le correctif est entièrement dans le
+ * binaire Ollama, seule une mise à jour peut faire disparaître ces flashs.
+ */
+const MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH = '0.7.0'
+
+function isVersionOlder(version: string, minVersion: string): boolean {
+  const parts = (v: string): number[] => v.split('.').map((p) => parseInt(p, 10) || 0)
+  const a = parts(version)
+  const b = parts(minVersion)
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const diff = (a[i] ?? 0) - (b[i] ?? 0)
+    if (diff !== 0) return diff < 0
+  }
+  return false
+}
+
+async function warnIfOllamaOutdated(log: LogFn): Promise<void> {
+  try {
+    const response = await fetch(`${config.ollama.host}/api/version`)
+    if (!response.ok) return
+    const data = (await response.json()) as { version?: string }
+    if (data.version && isVersionOlder(data.version, MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH)) {
+      log(
+        `Ollama ${data.version} détecté : les versions antérieures à ${MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH} ` +
+          "peuvent faire apparaître de brèves fenêtres de console Windows vides au chargement d'un modèle " +
+          '(bug corrigé côté Ollama, pas côté Jaris) — mets à jour Ollama sur ollama.com/download pour les faire disparaître.'
+      )
+    }
+  } catch {
+    // Purement informatif : un échec ici (Ollama trop vieux pour exposer /api/version, etc.) ne doit
+    // jamais empêcher Jaris de démarrer.
+  }
+}
+
+/**
  * Lance `ollama serve` si l'API ne répond pas déjà (ex: app Ollama pas encore démarrée au boot
  * Windows). Sans effet si Ollama tourne déjà - la commande échoue juste silencieusement (port pris).
  */
 export async function ensureOllamaRunning(log: LogFn): Promise<void> {
   const url = `${config.ollama.host}/api/tags`
-  if (await isUp(url)) return
+  if (await isUp(url)) {
+    void warnIfOllamaOutdated(log)
+    return
+  }
 
   log("Ollama n'est pas lancé, démarrage automatique…")
   const proc = spawn('ollama', ['serve'], { detached: true, stdio: 'ignore', windowsHide: true })
@@ -51,6 +92,7 @@ export async function ensureOllamaRunning(log: LogFn): Promise<void> {
 
   const up = await waitUntil(() => isUp(url), 20000)
   log(up ? 'Ollama démarré.' : "Échec du démarrage automatique d'Ollama : lance-le manuellement (`ollama serve`).")
+  if (up) void warnIfOllamaOutdated(log)
 }
 
 /**

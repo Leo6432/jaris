@@ -261,7 +261,7 @@ app.whenReady().then(async () => {
     const sendStatus = (message: string): void => event.sender.send(IPC_CHANNELS.capacityScanStatus, message)
     sendStatus('Détection de la carte graphique…')
     const result = await scanCapacity()
-    const uniqueModels = [...new Set([result.models.flash, result.models.medium, result.models.large])]
+    const uniqueModels = [...new Set([result.models.flash, result.models.medium, result.models.large, result.visionModel])]
     for (const model of uniqueModels) {
       await pullModelIfMissing(model, sendStatus)
     }
