@@ -152,6 +152,16 @@ export class VoicePipeline extends EventEmitter {
     this.voice.triggerWake()
   }
 
+  /**
+   * Vide le contexte court terme en mémoire (voir MAX_HISTORY_MESSAGES ci-dessus), en plus du fichier
+   * conversation-history.json effacé séparément (voir clearConversationHistory) : sans ça, supprimer
+   * l'historique depuis le menu Options n'empêcherait pas Jaris de continuer à se souvenir des derniers
+   * échanges déjà chargés en mémoire depuis le démarrage en cours.
+   */
+  clearHistory(): void {
+    this.history = []
+  }
+
   /** Le renderer prévient dès que la lecture audio de la réponse est terminée : c'est le vrai signal pour repasser en idle, pas une estimation. */
   notifyAudioEnded(): void {
     this.scheduleIdle(IDLE_SETTLE_DELAY_MS)

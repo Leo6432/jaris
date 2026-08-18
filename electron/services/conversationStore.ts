@@ -1,13 +1,7 @@
 import { app } from 'electron'
 import { mkdir, readFile, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
-
-export interface ConversationEntry {
-  id: string
-  timestamp: string
-  transcript: string
-  reply: string
-}
+import type { ConversationEntry } from '../../shared/ipc'
 
 const historyPath = join(app.getPath('userData'), 'conversation-history.json')
 
@@ -39,4 +33,10 @@ export async function appendConversationEntry(entry: ConversationEntry): Promise
 export async function getConversationHistory(limit = 50): Promise<ConversationEntry[]> {
   const history = await readHistory()
   return history.slice(-limit)
+}
+
+/** Efface définitivement l'historique des échanges (onglet "Historique" du menu Options). */
+export async function clearConversationHistory(): Promise<void> {
+  await mkdir(dirname(historyPath), { recursive: true })
+  await writeFile(historyPath, '[]', 'utf-8')
 }

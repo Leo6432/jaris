@@ -145,6 +145,60 @@ body.body--widget {
   color: #ff6b6b;
 }
 
+.options-menu__panel--wide {
+  min-width: 360px;
+}
+
+.options-menu__history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 4px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.options-menu__history-entry {
+  border: 1px solid rgba(127, 163, 201, 0.2);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.options-menu__history-date {
+  font-size: 0.65rem;
+  color: #4d6a87;
+}
+
+.options-menu__history-transcript {
+  font-size: 0.8rem;
+  color: #7fa3c9;
+}
+
+.options-menu__history-reply {
+  font-size: 0.85rem;
+  color: #d9ecff;
+}
+
+.options-menu__history-empty {
+  font-size: 0.8rem;
+  color: #4d6a87;
+}
+
+.options-menu__action--danger {
+  background: rgba(255, 107, 107, 0.12);
+  border-color: rgba(255, 107, 107, 0.4);
+  color: #ff9b9b;
+}
+
+.options-menu__action--danger:not(:disabled):hover {
+  border-color: #ff6b6b;
+}
+
 .options-menu__voice-picker {
   display: flex;
   flex-direction: column;

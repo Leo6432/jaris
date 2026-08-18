@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { GmailStatus, ModelTiers, Profile } from '../../shared/ipc'
+import type { ConversationEntry, GmailStatus, ModelTiers, Profile } from '../../shared/ipc'
 
 interface VoiceOption {
   id: string
@@ -22,7 +22,7 @@ const TTS_VOICES: VoiceOption[] = [
 
 const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
 
-type Tab = 'connexions' | 'voix' | 'modeles'
+type Tab = 'connexions' | 'voix' | 'modeles' | 'historique'
 
 // Reflète THINK_LEVEL dans electron/services/assistant.ts : chaque palier a un effort de réflexion Ollama
 // fixe (low/medium/high), utile à afficher pour comprendre pourquoi deux paliers pointant sur le même
@@ -44,6 +44,8 @@ export default function OptionsMenu(): JSX.Element {
   const [previewing, setPreviewing] = useState(false)
   const [rescanning, setRescanning] = useState(false)
   const [scanStatus, setScanStatus] = useState('')
+  const [history, setHistory] = useState<ConversationEntry[] | null>(null)
+  const [clearingHistory, setClearingHistory] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
 
@@ -56,6 +58,29 @@ export default function OptionsMenu(): JSX.Element {
     })
     return window.jaris.onCapacityScanStatus(setScanStatus)
   }, [])
+
+  // Chargé seulement à l'ouverture de l'onglet (pas au montage comme les autres réglages ci-dessus) :
+  // l'historique peut contenir jusqu'à 300 échanges, pas la peine de le lire à chaque ouverture du menu
+  // Options si l'utilisateur ne va jamais voir cet onglet.
+  useEffect(() => {
+    if (tab === 'historique' && history === null) {
+      void window.jaris.getConversationHistory().then(setHistory)
+    }
+  }, [tab, history])
+
+  const handleClearHistory = async (): Promise<void> => {
+    if (!window.confirm("Supprimer définitivement tout l'historique des conversations ?")) return
+    setError(null)
+    setClearingHistory(true)
+    try {
+      await window.jaris.clearConversationHistory()
+      setHistory([])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setClearingHistory(false)
+    }
+  }
 
   const handleRescan = async (): Promise<void> => {
     setError(null)
@@ -127,7 +152,7 @@ export default function OptionsMenu(): JSX.Element {
       </button>
 
       {open && (
-        <div className="options-menu__panel">
+        <div className={`options-menu__panel${tab === 'historique' ? ' options-menu__panel--wide' : ''}`}>
           <div className="options-menu__tabs">
             <button
               className={`options-menu__tab${tab === 'connexions' ? ' options-menu__tab--active' : ''}`}
@@ -146,6 +171,12 @@ export default function OptionsMenu(): JSX.Element {
               onClick={() => setTab('modeles')}
             >
               Modèles
+            </button>
+            <button
+              className={`options-menu__tab${tab === 'historique' ? ' options-menu__tab--active' : ''}`}
+              onClick={() => setTab('historique')}
+            >
+              Historique
             </button>
           </div>
 
@@ -211,6 +242,36 @@ export default function OptionsMenu(): JSX.Element {
               <button className="options-menu__action" onClick={() => void handleRescan()} disabled={rescanning}>
                 {rescanning ? 'Analyse en cours...' : "Relancer l'analyse"}
               </button>
+            </div>
+          )}
+
+          {tab === 'historique' && (
+            <div className="options-menu__section">
+              <div className="options-menu__section-title">Historique des conversations</div>
+              {history === null ? (
+                <p className="capacity-scan__status">Chargement...</p>
+              ) : history.length === 0 ? (
+                <p className="options-menu__history-empty">Aucun échange enregistré pour l'instant.</p>
+              ) : (
+                <>
+                  <ul className="options-menu__history-list">
+                    {[...history].reverse().map((entry) => (
+                      <li key={entry.id} className="options-menu__history-entry">
+                        <div className="options-menu__history-date">{new Date(entry.timestamp).toLocaleString('fr-FR')}</div>
+                        <div className="options-menu__history-transcript">« {entry.transcript} »</div>
+                        <div className="options-menu__history-reply">{entry.reply}</div>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    className="options-menu__action options-menu__action--danger"
+                    onClick={() => void handleClearHistory()}
+                    disabled={clearingHistory}
+                  >
+                    {clearingHistory ? 'Suppression...' : "Supprimer l'historique"}
+                  </button>
+                </>
+              )}
             </div>
           )}
 

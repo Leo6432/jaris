@@ -50,6 +50,14 @@ export interface MemoryGraph {
   links: MemoryGraphLink[]
 }
 
+/** Un échange voix (question/réponse) journalisé sur le disque, pour l'onglet "Historique" du menu Options. */
+export interface ConversationEntry {
+  id: string
+  timestamp: string
+  transcript: string
+  reply: string
+}
+
 /** État de la connexion Gmail (étape 11), pour le menu Options. */
 export interface GmailStatus {
   connected: boolean
@@ -100,5 +108,9 @@ export const IPC_CHANNELS = {
   /** renderer (fenêtre réglages) -> main : l'onboarding vient de se terminer, bascule vers le widget flottant. */
   onboardingFinished: 'jaris:onboarding-finished',
   /** renderer (widget) -> main : ouvre la fenêtre de réglages (Options, cerveau de Jaris). */
-  openSettings: 'jaris:open-settings'
+  openSettings: 'jaris:open-settings',
+  /** renderer <-> main : récupère l'historique complet des échanges voix (transcription, réponse, date). */
+  getConversationHistory: 'jaris:get-conversation-history',
+  /** renderer <-> main : efface définitivement l'historique des échanges (fichier + court terme en mémoire). */
+  clearConversationHistory: 'jaris:clear-conversation-history'
 } as const

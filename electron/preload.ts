@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC_CHANNELS,
   type CapacityScanResult,
+  type ConversationEntry,
   type GmailStatus,
   type JarisEmotion,
   type MemoryGraph,
@@ -38,7 +39,9 @@ const api = {
   scanCapacity: (): Promise<CapacityScanResult> => ipcRenderer.invoke(IPC_CHANNELS.scanCapacity),
   onCapacityScanStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.capacityScanStatus, cb),
   notifyOnboardingFinished: (): void => ipcRenderer.send(IPC_CHANNELS.onboardingFinished),
-  openSettings: (): void => ipcRenderer.send(IPC_CHANNELS.openSettings)
+  openSettings: (): void => ipcRenderer.send(IPC_CHANNELS.openSettings),
+  getConversationHistory: (): Promise<ConversationEntry[]> => ipcRenderer.invoke(IPC_CHANNELS.getConversationHistory),
+  clearConversationHistory: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.clearConversationHistory)
 }
 
 export type JarisApi = typeof api

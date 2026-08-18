@@ -1,4 +1,13 @@
-import type { CapacityScanResult, GmailStatus, JarisEmotion, MemoryGraph, Profile, VoiceReplyPayload, VoiceSetupStatusPayload } from '../shared/ipc'
+import type {
+  CapacityScanResult,
+  ConversationEntry,
+  GmailStatus,
+  JarisEmotion,
+  MemoryGraph,
+  Profile,
+  VoiceReplyPayload,
+  VoiceSetupStatusPayload
+} from '../shared/ipc'
 
 export {}
 
@@ -27,6 +36,8 @@ declare global {
       onCapacityScanStatus: (cb: (message: string) => void) => () => void
       notifyOnboardingFinished: () => void
       openSettings: () => void
+      getConversationHistory: () => Promise<ConversationEntry[]>
+      clearConversationHistory: () => Promise<void>
     }
   }
 }

@@ -9,6 +9,7 @@ import { ttsClient } from './services/ttsClient'
 import { createTrayIcon } from './services/trayIcon'
 import { VoicePipeline } from './services/voicePipeline'
 import { ensureMemoryDir, getMemoryDir, getMemoryGraph, recallNote } from './services/memoryStore'
+import { clearConversationHistory, getConversationHistory } from './services/conversationStore'
 import { getProfile, markGmailOnboardingDone, saveProfile } from './services/profileStore'
 import { connectGmail, disconnectGmail, getGmailStatus } from './services/googleAuth'
 import {
@@ -232,6 +233,14 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle(IPC_CHANNELS.getMemoryGraph, () => buildMemoryGraphWithUser())
   ipcMain.handle(IPC_CHANNELS.getMemoryNoteContent, (_event, title: string) => recallNote(title))
+  // Limite large plutôt que sans limite : le fichier lui-même est déjà borné (MAX_HISTORY_ENTRIES dans
+  // conversationStore.ts), une vraie limite ici n'aurait de sens que si l'onglet Historique devait un jour
+  // paginer.
+  ipcMain.handle(IPC_CHANNELS.getConversationHistory, () => getConversationHistory(300))
+  ipcMain.handle(IPC_CHANNELS.clearConversationHistory, async () => {
+    await clearConversationHistory()
+    pipeline?.clearHistory()
+  })
   ipcMain.handle(IPC_CHANNELS.getGmailStatus, () => getGmailStatus())
   ipcMain.handle(IPC_CHANNELS.connectGmail, () => connectGmail())
   ipcMain.handle(IPC_CHANNELS.disconnectGmail, () => disconnectGmail())
