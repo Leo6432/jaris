@@ -16,7 +16,19 @@
 
 const OLLAMA_HOST = process.env.OLLAMA_HOST?.trim() || 'http://127.0.0.1:11434'
 
-const MODELS = ['qwen3.5:2b', 'qwen3.5:4b', 'qwen3.5:9b', 'phi4-mini', 'gemma4:e4b', 'granite4:3b']
+const MODELS = [
+  'qwen3.5:2b',
+  'qwen3.5:4b',
+  'qwen3.5:9b',
+  'phi4-mini',
+  'gemma4:e4b',
+  'granite4:3b',
+  'nemotron-3-nano:4b',
+  'ministral-3:3b',
+  // Pas de tag officiel dans la bibliothèque Ollama pour ce 1.2B (seule la variante 8B-MoE y est) : import
+  // direct depuis le dépôt Hugging Face officiel de LiquidAI, `ollama pull` fonctionne pareil avec ce préfixe.
+  'hf.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF'
+]
 
 // Copié tel quel depuis electron/services/tools.ts : mêmes schémas que Jaris utilise réellement en
 // conversation, pour que le test reflète le vrai comportement de tool calling, pas un cas simplifié.
