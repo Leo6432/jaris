@@ -145,140 +145,147 @@ export default function OptionsMenu(): JSX.Element {
     }
   }
 
-  return (
-    <div className="options-menu">
-      <button className="options-menu__trigger" onClick={() => setOpen((v) => !v)}>
+  if (!open) {
+    return (
+      <button className="options-menu__trigger" onClick={() => setOpen(true)}>
         Options
       </button>
+    )
+  }
 
-      {open && (
-        <div className={`options-menu__panel${tab === 'historique' ? ' options-menu__panel--wide' : ''}`}>
-          <div className="options-menu__tabs">
-            <button
-              className={`options-menu__tab${tab === 'connexions' ? ' options-menu__tab--active' : ''}`}
-              onClick={() => setTab('connexions')}
-            >
-              Connexions
-            </button>
-            <button
-              className={`options-menu__tab${tab === 'voix' ? ' options-menu__tab--active' : ''}`}
-              onClick={() => setTab('voix')}
-            >
-              Voix
-            </button>
-            <button
-              className={`options-menu__tab${tab === 'modeles' ? ' options-menu__tab--active' : ''}`}
-              onClick={() => setTab('modeles')}
-            >
-              Modèles
-            </button>
-            <button
-              className={`options-menu__tab${tab === 'historique' ? ' options-menu__tab--active' : ''}`}
-              onClick={() => setTab('historique')}
-            >
-              Historique
+  return (
+    <div className="options-page">
+      <div className="options-page__header">
+        <div className="options-menu__tabs">
+          <button
+            className={`options-menu__tab${tab === 'connexions' ? ' options-menu__tab--active' : ''}`}
+            onClick={() => setTab('connexions')}
+          >
+            Connexions
+          </button>
+          <button
+            className={`options-menu__tab${tab === 'voix' ? ' options-menu__tab--active' : ''}`}
+            onClick={() => setTab('voix')}
+          >
+            Voix
+          </button>
+          <button
+            className={`options-menu__tab${tab === 'modeles' ? ' options-menu__tab--active' : ''}`}
+            onClick={() => setTab('modeles')}
+          >
+            Modèles
+          </button>
+          <button
+            className={`options-menu__tab${tab === 'historique' ? ' options-menu__tab--active' : ''}`}
+            onClick={() => setTab('historique')}
+          >
+            Historique
+          </button>
+        </div>
+        <button className="options-page__close" onClick={() => setOpen(false)}>
+          Fermer
+        </button>
+      </div>
+
+      <div className="options-page__content">
+        {tab === 'connexions' && (
+          <div className="options-menu__section">
+            <div className="options-menu__section-title">Mail</div>
+            {status?.connected ? (
+              <>
+                <div className="options-menu__account">{status.email}</div>
+                <button className="options-menu__action" onClick={handleDisconnect}>
+                  Déconnecter
+                </button>
+              </>
+            ) : (
+              <button className="options-menu__action" onClick={handleConnect} disabled={connecting}>
+                {connecting ? 'Connexion...' : 'Connecter Gmail'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {tab === 'voix' && (
+          <div className="options-menu__voice-picker">
+            <div className="options-menu__voice-nav">
+              <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex - 1)} disabled={previewing}>
+                ‹
+              </button>
+              <div className="options-menu__voice-orb" style={{ background: voice.gradient }} />
+              <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex + 1)} disabled={previewing}>
+                ›
+              </button>
+            </div>
+            <div className="options-menu__voice-name">{previewing ? 'Lecture...' : voice.id}</div>
+            <div className="options-menu__voice-description">{voice.description}</div>
+            <div className="options-menu__voice-dots">
+              {TTS_VOICES.map((v, i) => (
+                <button
+                  key={v.id}
+                  className={`options-menu__dot${i === voiceIndex ? ' options-menu__dot--active' : ''}`}
+                  onClick={() => void chooseVoice(i)}
+                  disabled={previewing}
+                  aria-label={v.id}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {tab === 'modeles' && (
+          <div className="options-menu__section">
+            <div className="options-menu__section-title">Modèles Ollama par palier</div>
+            {rescanning ? (
+              <p className="capacity-scan__status">{scanStatus}</p>
+            ) : (
+              <ul className="capacity-scan__models">
+                {TIER_LABELS.map(({ key, label, think }) => (
+                  <li key={key}>
+                    {label} : {profile?.models?.[key] ?? '—'} (réflexion {think})
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button className="options-menu__action" onClick={() => void handleRescan()} disabled={rescanning}>
+              {rescanning ? 'Analyse en cours...' : "Relancer l'analyse"}
             </button>
           </div>
+        )}
 
-          {tab === 'connexions' && (
-            <div className="options-menu__section">
-              <div className="options-menu__section-title">Mail</div>
-              {status?.connected ? (
-                <>
-                  <div className="options-menu__account">{status.email}</div>
-                  <button className="options-menu__action" onClick={handleDisconnect}>
-                    Déconnecter
-                  </button>
-                </>
-              ) : (
-                <button className="options-menu__action" onClick={handleConnect} disabled={connecting}>
-                  {connecting ? 'Connexion...' : 'Connecter Gmail'}
-                </button>
-              )}
-            </div>
-          )}
-
-          {tab === 'voix' && (
-            <div className="options-menu__voice-picker">
-              <div className="options-menu__voice-nav">
-                <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex - 1)} disabled={previewing}>
-                  ‹
-                </button>
-                <div className="options-menu__voice-orb" style={{ background: voice.gradient }} />
-                <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex + 1)} disabled={previewing}>
-                  ›
-                </button>
-              </div>
-              <div className="options-menu__voice-name">{previewing ? 'Lecture...' : voice.id}</div>
-              <div className="options-menu__voice-description">{voice.description}</div>
-              <div className="options-menu__voice-dots">
-                {TTS_VOICES.map((v, i) => (
-                  <button
-                    key={v.id}
-                    className={`options-menu__dot${i === voiceIndex ? ' options-menu__dot--active' : ''}`}
-                    onClick={() => void chooseVoice(i)}
-                    disabled={previewing}
-                    aria-label={v.id}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {tab === 'modeles' && (
-            <div className="options-menu__section">
-              <div className="options-menu__section-title">Modèles Ollama par palier</div>
-              {rescanning ? (
-                <p className="capacity-scan__status">{scanStatus}</p>
-              ) : (
-                <ul className="capacity-scan__models">
-                  {TIER_LABELS.map(({ key, label, think }) => (
-                    <li key={key}>
-                      {label} : {profile?.models?.[key] ?? '—'} (réflexion {think})
+        {tab === 'historique' && (
+          <div className="options-menu__section">
+            <div className="options-menu__section-title">Historique des conversations</div>
+            {history === null ? (
+              <p className="capacity-scan__status">Chargement...</p>
+            ) : history.length === 0 ? (
+              <p className="options-menu__history-empty">Aucun échange enregistré pour l'instant.</p>
+            ) : (
+              <>
+                <ul className="options-menu__history-list">
+                  {[...history].reverse().map((entry) => (
+                    <li key={entry.id} className="options-menu__history-entry">
+                      <div className="options-menu__history-date">{new Date(entry.timestamp).toLocaleString('fr-FR')}</div>
+                      <div className="options-menu__history-transcript">« {entry.transcript} »</div>
+                      <div className="options-menu__history-reply">{entry.reply}</div>
                     </li>
                   ))}
                 </ul>
-              )}
-              <button className="options-menu__action" onClick={() => void handleRescan()} disabled={rescanning}>
-                {rescanning ? 'Analyse en cours...' : "Relancer l'analyse"}
-              </button>
-            </div>
-          )}
+                <button
+                  className="options-menu__action options-menu__action--danger"
+                  onClick={() => void handleClearHistory()}
+                  disabled={clearingHistory}
+                >
+                  {clearingHistory ? 'Suppression...' : "Supprimer l'historique"}
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
-          {tab === 'historique' && (
-            <div className="options-menu__section">
-              <div className="options-menu__section-title">Historique des conversations</div>
-              {history === null ? (
-                <p className="capacity-scan__status">Chargement...</p>
-              ) : history.length === 0 ? (
-                <p className="options-menu__history-empty">Aucun échange enregistré pour l'instant.</p>
-              ) : (
-                <>
-                  <ul className="options-menu__history-list">
-                    {[...history].reverse().map((entry) => (
-                      <li key={entry.id} className="options-menu__history-entry">
-                        <div className="options-menu__history-date">{new Date(entry.timestamp).toLocaleString('fr-FR')}</div>
-                        <div className="options-menu__history-transcript">« {entry.transcript} »</div>
-                        <div className="options-menu__history-reply">{entry.reply}</div>
-                      </li>
-                    ))}
-                  </ul>
-                  <button
-                    className="options-menu__action options-menu__action--danger"
-                    onClick={() => void handleClearHistory()}
-                    disabled={clearingHistory}
-                  >
-                    {clearingHistory ? 'Suppression...' : "Supprimer l'historique"}
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-
-          <audio ref={audioRef} hidden />
-          {error && <div className="options-menu__error">{error}</div>}
-        </div>
-      )}
+        <audio ref={audioRef} hidden />
+        {error && <div className="options-menu__error">{error}</div>}
+      </div>
     </div>
   )
 }
