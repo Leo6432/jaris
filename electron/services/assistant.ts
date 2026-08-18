@@ -29,7 +29,7 @@ const THINK_LEVEL: Record<Tier, ThinkLevel> = {
 // questions qui demandent explicitement une réflexion approfondie.
 const TOOL_SIGNAL_WORDS = [
   'ouvre', 'ouvrir', 'lance', 'lancer', 'rappelle', 'rappel', 'cherche', 'recherche', 'regarde', "l'écran",
-  'écran', 'retiens', 'retenir', 'mémorise', 'souviens', 'rappelle-toi', 'envoie', 'envoyer', 'mail', 'email', 'mémoire',
+  'écran', 'vois', 'voit', 'retiens', 'retenir', 'mémorise', 'souviens', 'rappelle-toi', 'envoie', 'envoyer', 'mail', 'email', 'mémoire',
   'écris', 'écrire', 'tape', 'taper', 'clique', 'cliquer', 'clic', 'appuie', 'appuyer'
 ]
 const COMPLEX_SIGNAL_WORDS = ['pourquoi', 'explique', 'explique-moi', 'compare', 'analyse', 'différence', 'avantages', 'inconvénients', 'résume', 'détaille']
@@ -84,7 +84,11 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[]): str
     "vrai appel de fonction, immédiatement, sans phrase d'annonce avant. Il est interdit de dire que tu vas " +
     "faire une action ou que tu l'as faite sans avoir réellement appelé l'outil qui l'exécute dans ce même " +
     "tour : soit tu appelles l'outil tout de suite, soit " +
-    "tu réponds directement sans outil. Quand tu donnes une information factuelle trouvée sur le web (prix, " +
+    "tu réponds directement sans outil. Le contenu de l'écran change en permanence : à chaque fois que " +
+    "l'utilisateur demande ce qui y est affiché (\"qu'est-ce que tu vois\", \"regarde l'écran\"...), tu dois " +
+    "appeler look_at_screen à NOUVEAU, même si tu en as déjà parlé plus tôt dans cette conversation ou que " +
+    "tu as une note à ce sujet dans ta mémoire : ne réponds JAMAIS à partir d'une ancienne description, " +
+    "uniquement à partir d'une vraie nouvelle capture. Quand tu donnes une information factuelle trouvée sur le web (prix, " +
     "cours, score, statistique...), donne le chiffre précis d'une source fiable, jamais une moyenne ou une " +
     "fourchette entre plusieurs sites : choisis la donnée la plus claire et la plus récente parmi les résultats, " +
     "et précise le nom du site source. N'appelle send_email que si l'utilisateur vient de dicter, dans sa " +
