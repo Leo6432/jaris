@@ -25,29 +25,13 @@ interface OllamaChatResponse {
 
 export type ThinkLevel = 'low' | 'medium' | 'high'
 
-/** Un tour d'échange avec Ollama : envoie l'historique (+ outils dispo) et renvoie le message du modèle. */
-export async function chatWithOllama(
-  messages: OllamaMessage[],
-  tools?: OllamaTool[],
-  model: string = config.ollama.model,
-  think: ThinkLevel = 'medium'
-): Promise<OllamaMessage> {
+async function requestChat(body: Record<string, unknown>, model: string): Promise<OllamaMessage> {
   let response: Response
   try {
     response = await fetch(`${config.ollama.host}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        messages,
-        tools,
-        stream: false,
-        // Le raisonnement caché de qwen3.5 aide nettement à décider d'appeler un outil plutôt que de
-        // "raconter" une action sans l'exécuter ; le niveau (low/medium/high) vient du palier de
-        // complexité choisi pour la question (voir assistant.ts), pas d'une valeur fixe.
-        think,
-        options: { num_ctx: config.ollama.numCtx }
-      })
+      body: JSON.stringify(body)
     })
   } catch {
     throw new Error(`Impossible de joindre Ollama sur ${config.ollama.host} (est-il lancé ?)`)
@@ -60,6 +44,37 @@ export async function chatWithOllama(
   const data = (await response.json()) as OllamaChatResponse
   if (!data.message) throw new Error(`Réponse vide d'Ollama (modèle '${model}' bien installé ?)`)
   return data.message
+}
+
+/**
+ * Un tour d'échange avec Ollama : envoie l'historique (+ outils dispo) et renvoie le message du modèle.
+ *
+ * Certains modèles (constaté au benchmark local : granite4, entre autres) n'ont pas de mode réflexion et
+ * rejettent carrément l'appel avec une erreur si `think` est présent, contrairement à qwen3.5/gemma4 qui le
+ * supportent tous les deux. Plutôt que de maintenir à la main une liste des modèles compatibles (fragile,
+ * à mettre à jour à chaque nouveau modèle ajouté aux paliers), on retente une fois sans `think` si le
+ * premier essai échoue : ça couvre aussi bien les modèles qui le supportent que ceux qui ne le supportent
+ * pas, sans avoir à savoir lequel est lequel à l'avance.
+ */
+export async function chatWithOllama(
+  messages: OllamaMessage[],
+  tools?: OllamaTool[],
+  model: string = config.ollama.model,
+  think: ThinkLevel = 'medium'
+): Promise<OllamaMessage> {
+  const baseBody = { model, messages, tools, stream: false, options: { num_ctx: config.ollama.numCtx } }
+  try {
+    // Le raisonnement caché aide nettement à décider d'appeler un outil plutôt que de "raconter" une
+    // action sans l'exécuter ; le niveau (low/medium/high) vient du palier de complexité choisi pour la
+    // question (voir assistant.ts), pas d'une valeur fixe.
+    return await requestChat({ ...baseBody, think }, model)
+  } catch (firstErr) {
+    try {
+      return await requestChat(baseBody, model)
+    } catch {
+      throw firstErr // le premier message d'erreur est généralement le plus informatif
+    }
+  }
 }
 
 interface OllamaTagsResponse {

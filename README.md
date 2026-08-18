@@ -284,14 +284,25 @@ plus bas.
 
 Au tout premier lancement (juste après la connexion Gmail), Jaris scanne la
 carte graphique (`nvidia-smi`) et choisit 3 modèles Ollama adaptés à la
-machine, dans la famille `qwen3.5` (de `0.8b` à `35b`) :
-- **rapide** — questions courtes sans action à faire
+machine :
+- **rapide** — questions courtes sans action à faire — `qwen3:1.7b` par
+  défaut (repli `qwen3.5:0.8b`)
 - **médium** — le défaut pour la plupart des échanges, et le seul palier
   utilisé pour tout appel d'outil (ouvrir une appli, rappel, recherche web,
   mémoire, mail) : c'est le seul dont la fiabilité d'appel d'outils est
-  éprouvée, pas question de la sacrifier pour gagner un peu de vitesse
+  éprouvée, pas question de la sacrifier pour gagner un peu de vitesse —
+  `gemma4:e4b` si la VRAM le permet, sinon replis en cascade jusqu'à
+  `qwen3.5:0.8b` (voir `MEDIUM_CANDIDATES` dans `hardwareScan.ts`)
 - **puissant** — questions qui demandent explicitement une réflexion
-  poussée ("pourquoi", "explique", "compare"...) ou un message long
+  poussée ("pourquoi", "explique", "compare"...) ou un message long —
+  famille `qwen3.5` (de `9b` à `35b`)
+
+Les modèles par défaut ne sont pas choisis uniquement sur la taille/VRAM :
+`scripts/benchmark-models.mjs` (voir plus bas) permet de comparer plusieurs
+modèles candidats sur le vrai matériel (vitesse, fiabilité d'appel d'outils,
+respect de la consigne "pas de mise en forme" cruciale pour un assistant
+vocal) avant de les retenir — `qwen3:1.7b` et `gemma4:e4b` ont remplacé les
+choix initiaux (`qwen3.5:2b`/`9b`) suite à ces tests locaux.
 
 Le calcul réserve ~4,5 Go de VRAM pour le STT (Cohere Transcribe, chargé en
 permanence pendant toute la session) avant de choisir les modèles : le
@@ -300,6 +311,24 @@ réellement, même sur une machine avec beaucoup de VRAM totale mais peu de
 marge une fois le STT pris en compte. Les modèles manquants sont
 téléchargés automatiquement pendant l'écran de scan (`ollama pull`), donc
 peut prendre plusieurs minutes selon la connexion.
+
+### Comparer des modèles candidats sur ta machine
+
+```
+npm run benchmark:models
+```
+
+Compare plusieurs modèles Ollama (déjà téléchargés, `ollama pull <modèle>`
+sinon) sur le matériel réel plutôt que sur des benchmarks publiés — souvent
+absents pour les petits modèles, ou mesurés dans des conditions différentes
+d'un modèle à l'autre. Utilise exactement les mêmes schémas d'outils que
+Jaris (`electron/services/tools.ts`), sans jamais les exécuter pour de vrai
+(aucune appli ne s'ouvre, aucun mail ne part) : le script vérifie juste que
+le bon outil est appelé, avec des arguments plausibles, sur des questions
+réalistes. Mesure aussi la latence, la vitesse (tokens/seconde) et si la
+réponse respecte la consigne "pas de mise en forme" (essentielle puisque
+tout est lu à voix haute). Résultat affiché dans le terminal et sauvegardé
+dans `scripts/benchmark-results.md`.
 
 Sur une machine contrainte, plusieurs paliers peuvent finir sur le même
 modèle (pas assez de VRAM pour un vrai modèle "puissant" séparé) : ils

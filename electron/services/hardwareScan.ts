@@ -25,15 +25,30 @@ interface ModelCandidate {
 }
 
 // Tailles approximatives (poids seuls, quantization par défaut) - source: ollama.com/library/qwen3.5.
-// Triées du plus gros au plus petit : on prend le premier qui tient dans le budget dispo.
+// Triées du plus gros au plus petit : on prend le premier qui tient dans le budget dispo. Important pour
+// pickForBudget (premier candidat qui tient qui gagne) : un candidat plus petit ET plus VRAM-économe qu'un
+// autre plus haut dans la liste rendrait cet autre inatteignable, donc l'ordre doit rester strictement
+// décroissant en VRAM, jamais juste "par préférence".
+//
+// qwen3:1.7b remplace qwen3.5:2b ici (retiré, pas juste ajouté) : au benchmark local
+// (scripts/benchmark-models.mjs) il s'est montré à la fois plus rapide ET plus fiable en tool-calling que
+// qwen3.5:2b tout en demandant moins de VRAM (~2 Go contre 2,7 Go) — qwen3.5:2b devenait donc de toute
+// façon inatteignable dans la liste une fois qwen3:1.7b ajouté avant lui.
 const FLASH_CANDIDATES: ModelCandidate[] = [
-  { model: 'qwen3.5:2b', vramGb: 2.7 },
+  { model: 'qwen3:1.7b', vramGb: 2 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
 ]
+// gemma4:e4b et granite4:3b ajoutés suite au même benchmark local : gemma4:e4b (6/6 en tool-calling, bien
+// plus rapide que qwen3.5:9b) en tête si la VRAM le permet, granite4:3b (6/6 aussi, ~2,1 Go) comme palier
+// intermédiaire léger avant le repli ultime. granite4:3b rejette le paramètre `think` (contrairement à
+// qwen3.5/gemma4:e4b, qui le supportent tous les deux) : voir le filet de sécurité "sans think" dans
+// chatWithOllama (electron/services/ollama.ts).
 const MEDIUM_CANDIDATES: ModelCandidate[] = [
+  { model: 'gemma4:e4b', vramGb: 9.6 },
   { model: 'qwen3.5:9b', vramGb: 6.6 },
   { model: 'qwen3.5:4b', vramGb: 3.4 },
   { model: 'qwen3.5:2b', vramGb: 2.7 },
+  { model: 'granite4:3b', vramGb: 2.1 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
 ]
 const LARGE_CANDIDATES: ModelCandidate[] = [
