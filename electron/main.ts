@@ -1,7 +1,7 @@
 import { app, ipcMain, shell, BrowserWindow, globalShortcut, screen, Tray, Menu } from 'electron'
 import { join } from 'path'
 import { checkVoiceSetup } from './config'
-import { ensureOllamaRunning, ensureSearxngRunning } from './services/dependencyServices'
+import { ensureOllamaRunning, ensureSearxngRunning, stopOllamaIfStartedByJaris } from './services/dependencyServices'
 import { scanCapacity } from './services/hardwareScan'
 import { pullModelIfMissing } from './services/ollama'
 import { previewVoice } from './services/tts'
@@ -345,6 +345,13 @@ app.whenReady().then(async () => {
   if (onboardingDone) widgetWindow = createWidgetWindow()
 
   void startVoicePipeline()
+})
+
+// Se déclenche une seule fois quel que soit le chemin de sortie (Quitter dans la barre système,
+// window-all-closed...), avant que les fenêtres ne se ferment : le bon endroit pour arrêter proprement ce
+// que Jaris a lui-même démarré, plutôt qu'un process qui continue de tourner indéfiniment en arrière-plan.
+app.on('before-quit', () => {
+  stopOllamaIfStartedByJaris()
 })
 
 app.on('will-quit', () => {

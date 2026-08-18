@@ -1,10 +1,18 @@
-import { exec, spawn } from 'child_process'
+import { exec, execSync, spawn, type ChildProcess } from 'child_process'
 import { promisify } from 'util'
 import { config } from '../config'
 
 const execAsync = promisify(exec)
 
 type LogFn = (message: string) => void
+
+/**
+ * Process `ollama serve` lancé par Jaris lui-même (voir ensureOllamaRunning) — `null` si Ollama tournait
+ * déjà avant que Jaris démarre. Sert uniquement à savoir, au moment de quitter, s'il faut l'arrêter (voir
+ * stopOllamaIfStartedByJaris) : jamais s'il tournait déjà avant, l'utilisateur peut s'en servir en dehors
+ * de Jaris.
+ */
+let ollamaProcessStartedByJaris: ChildProcess | null = null
 
 /** Ping HTTP simple : true dès que le service répond (peu importe le code, tant qu'il répond). */
 async function isUp(url: string, timeoutMs = 2000): Promise<boolean> {
@@ -37,10 +45,39 @@ export async function ensureOllamaRunning(log: LogFn): Promise<void> {
   if (await isUp(url)) return
 
   log("Ollama n'est pas lancé, démarrage automatique…")
-  spawn('ollama', ['serve'], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+  const proc = spawn('ollama', ['serve'], { detached: true, stdio: 'ignore', windowsHide: true })
+  proc.unref()
+  ollamaProcessStartedByJaris = proc
 
   const up = await waitUntil(() => isUp(url), 20000)
   log(up ? 'Ollama démarré.' : "Échec du démarrage automatique d'Ollama : lance-le manuellement (`ollama serve`).")
+}
+
+/**
+ * Arrête Ollama uniquement si c'est cette instance de Jaris qui l'a démarré (jamais s'il tournait déjà
+ * avant, voir ollamaProcessStartedByJaris) : appelé quand Jaris quitte vraiment (Quitter dans la barre
+ * système), pour qu'aucun process ne continue de tourner en arrière-plan une fois Jaris fermé. Sans ça,
+ * `ollama serve` reste actif indéfiniment (lancé "detached" pour survivre à Jaris) et peut décharger/
+ * recharger un modèle tout seul après quelques minutes d'inactivité, ce qui fait parfois flasher une
+ * fenêtre de console Windows même Jaris éteint.
+ */
+export function stopOllamaIfStartedByJaris(): void {
+  const pid = ollamaProcessStartedByJaris?.pid
+  ollamaProcessStartedByJaris = null
+  if (pid === undefined) return
+
+  try {
+    // .kill() seul ne suffit pas toujours pour un process "detached" sous Windows, et ne fermerait de
+    // toute façon pas les sous-process qu'Ollama a pu lancer pour un modèle chargé (voir /T) : taskkill
+    // est le seul moyen fiable de tout arrêter proprement ici.
+    if (process.platform === 'win32') {
+      execSync(`taskkill /pid ${pid} /T /F`, { windowsHide: true, stdio: 'ignore' })
+    } else {
+      process.kill(pid)
+    }
+  } catch {
+    // Rien de plus à faire : au pire Ollama continue de tourner, comme avant ce correctif.
+  }
 }
 
 /**
