@@ -140,9 +140,10 @@ export const TOOLS: OllamaTool[] = [
       description:
         "Écrit du texte à l'endroit où se trouve le curseur/focus actuel sur l'ordinateur (un champ de texte, " +
         "une barre de recherche, une zone de discussion déjà ouverte...), comme si l'utilisateur le tapait " +
-        "lui-même au clavier. N'utilise cet outil que si l'utilisateur demande explicitement d'écrire ou de " +
-        "taper quelque chose, et seulement si le bon champ est déjà ouvert et actif (au besoin, vérifie avec " +
-        'look_at_screen avant).',
+        "lui-même au clavier. Appelle cet outil directement dès que l'utilisateur demande explicitement " +
+        "d'écrire ou de taper quelque chose : ne vérifie JAMAIS l'écran avec look_at_screen avant, ça ne " +
+        "fait que ralentir inutilement — fais confiance à l'utilisateur, il sait déjà où il veut que ça " +
+        'tape.',
       parameters: {
         type: 'object',
         properties: {
