@@ -39,6 +39,7 @@ MAX_UTTERANCE_MS = 12_000
 HALLUCINATION_PATTERNS = [
     "sous-titres réalisés par la communauté d'amara.org",
     "sous-titrage st'",
+    "radio-canada",  # "Sous-titrage/Sous-titré (Société) Radio-Canada" et ses variantes
     "merci d'avoir regardé cette vidéo",
     "abonnez-vous à la chaîne",
     "n'oubliez pas de vous abonner",
@@ -149,6 +150,7 @@ def main() -> None:
     capture_chunks: list[np.ndarray] = []
     silent_ms = 0.0
     captured_ms = 0.0
+    loud_ms = 0.0  # temps effectivement au-dessus du seuil de silence (≠ captured_ms, qui inclut le silence de fin qui a déclenché la coupure)
 
     while True:
         chunk = audio_queue.get()
@@ -164,13 +166,17 @@ def main() -> None:
                 capture_chunks = []
                 silent_ms = 0.0
                 captured_ms = 0.0
+                loud_ms = 0.0
                 emit({"event": "wake"})
             continue
 
         # mode == "capture"
         capture_chunks.append(chunk)
         captured_ms += chunk_ms
-        silent_ms = silent_ms + chunk_ms if rms(chunk) < SILENCE_RMS_THRESHOLD else 0.0
+        chunk_is_loud = rms(chunk) >= SILENCE_RMS_THRESHOLD
+        silent_ms = 0.0 if chunk_is_loud else silent_ms + chunk_ms
+        if chunk_is_loud:
+            loud_ms += chunk_ms
 
         utterance_done = (silent_ms > SILENCE_DURATION_MS and captured_ms > MIN_UTTERANCE_MS) or captured_ms > MAX_UTTERANCE_MS
         if not utterance_done:
@@ -178,6 +184,17 @@ def main() -> None:
 
         mode = "wake"
         wake_model.reset()  # évite un second déclenchement fantôme sur la fin de capture/silence
+
+        # Si rien n'a jamais dépassé le seuil de silence (l'utilisateur active Jaris puis ne dit rien),
+        # inutile d'envoyer ce silence au modèle de transcription : il "hallucine" souvent une phrase
+        # plausible (générique de sous-titrage TV, formule de fin de vidéo...) plutôt que de reconnaître
+        # une absence de parole, hérité de son entraînement sur des sous-titres. Voir aussi
+        # HALLUCINATION_PATTERNS ci-dessus, en filet de sécurité pour les cas où il y a bien un peu de son
+        # (bruit ambiant, toux...) mais pas de vraie parole.
+        if loud_ms < MIN_UTTERANCE_MS:
+            emit({"event": "transcript", "text": ""})
+            continue
+
         audio = np.concatenate(capture_chunks).astype(np.float32) / 32768.0
         try:
             inputs = stt_processor(audio, sampling_rate=SAMPLE_RATE, return_tensors="pt", language=args.stt_language)
