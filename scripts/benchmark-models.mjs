@@ -27,7 +27,12 @@ const MODELS = [
   'ministral-3:3b',
   // Pas de tag officiel dans la bibliothèque Ollama pour ce 1.2B (seule la variante 8B-MoE y est) : import
   // direct depuis le dépôt Hugging Face officiel de LiquidAI, `ollama pull` fonctionne pareil avec ce préfixe.
-  'hf.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF'
+  'hf.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF',
+  'qwen3:1.7b',
+  'granite4:1b',
+  // Fait exclusivement pour le tool calling (pas pour la conversation générale) : ses réponses aux 2
+  // questions de raisonnement du test n'ont pas vraiment de sens, mais intéressant sur les 6 tests d'outils.
+  'functiongemma:270m'
 ]
 
 // Copié tel quel depuis electron/services/tools.ts : mêmes schémas que Jaris utilise réellement en
