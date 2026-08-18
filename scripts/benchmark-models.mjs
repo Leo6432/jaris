@@ -14,6 +14,13 @@
  * main) : pas de téléchargement automatique de plusieurs Go sans le demander explicitement.
  */
 
+import { writeFileSync } from 'fs'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const RESULTS_PATH = join(__dirname, 'benchmark-results.md')
+
 const OLLAMA_HOST = process.env.OLLAMA_HOST?.trim() || 'http://127.0.0.1:11434'
 
 const MODELS = [
@@ -262,18 +269,32 @@ async function main() {
 
   const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null)
 
-  console.log('\n\n## Résultats\n')
-  console.log('| Modèle | Latence moyenne | Vitesse moyenne | Tool-calling |')
-  console.log('|---|---|---|---|')
+  const lines = []
+  lines.push(`# Résultats du benchmark Jaris — ${new Date().toLocaleString('fr-FR')}`)
+  lines.push('')
+  lines.push('| Modèle | Latence moyenne | Vitesse moyenne | Tool-calling |')
+  lines.push('|---|---|---|---|')
   for (const r of results) {
     const acc = r.total ? `${r.correct}/${r.total}` : '—'
-    console.log(`| ${r.model} | ${fmt(avg(r.latencies), 0)} ms | ${fmt(avg(r.speeds))} tok/s | ${acc} |`)
+    lines.push(`| ${r.model} | ${fmt(avg(r.latencies), 0)} ms | ${fmt(avg(r.speeds))} tok/s | ${acc} |`)
   }
 
-  console.log('\n## Réponses aux questions de raisonnement (à juger toi-même)\n')
+  lines.push('')
+  lines.push('## Réponses aux questions de raisonnement (à juger toi-même)')
+  lines.push('')
   for (const { prompt, answer, model } of reasoningAnswers) {
-    console.log(`**${model}** — « ${prompt} »\n> ${answer}\n`)
+    lines.push(`**${model}** — « ${prompt} »`)
+    lines.push(`> ${answer}`)
+    lines.push('')
   }
+
+  const report = lines.join('\n')
+  console.log(`\n\n${report}`)
+
+  // Écrit aussi le rapport dans un fichier : plus simple à envoyer/coller ailleurs qu'à faire défiler et
+  // copier depuis le terminal, surtout avec autant de modèles testés d'affilée.
+  writeFileSync(RESULTS_PATH, report, 'utf-8')
+  console.log(`\n(Résultats aussi sauvegardés dans ${RESULTS_PATH})`)
 }
 
 main()

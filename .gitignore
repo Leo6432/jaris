@@ -17,3 +17,6 @@ python/__pycache__/
 # Fichiers générés au runtime par le conteneur SearXNG (settings.yml est suivi)
 /searxng/uwsgi.ini
 
+# Résultat du benchmark de modèles (scripts/benchmark-models.mjs) : personnel à la machine de test
+/scripts/benchmark-results.md
+
