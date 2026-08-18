@@ -115,12 +115,16 @@ export class VoicePipeline extends EventEmitter {
   /**
    * true tant qu'une phrase est en train d'être traitée (réflexion Ollama + réponse parlée) : le sidecar
    * Python écoute le mot d'activation en continu, indépendamment de ce que fait Electron, donc une nouvelle
-   * phrase peut être captée pendant ce temps. Elle ne doit jamais annuler ni court-circuiter la requête en
-   * cours (l'utilisateur doit quand même recevoir sa première réponse) : elle est juste mise en file pour
-   * être traitée juste après, comme un complément à la demande précédente.
+   * phrase peut être captée pendant ce temps. Une phrase captée PENDANT LA RÉFLEXION (ex: "en fait le
+   * ethereum" juste après "quel est le prix du bitcoin") n'a souvent aucun sens toute seule : elle est
+   * fusionnée avec la phrase en cours et la réflexion recommence avec le tout, pour ne donner qu'UNE seule
+   * réponse combinant les deux plutôt que deux réponses séparées. Une phrase captée pendant que la réponse
+   * précédente est déjà en train d'être dite, elle, ne peut plus être fusionnée avec une réponse déjà
+   * donnée : elle démarre son propre nouvel échange juste après (voir la fin de runTranscript).
    */
   private busy = false
-  private pendingTranscripts: string[] = []
+  private pendingAdditions: string[] = []
+  private abortController: AbortController | null = null
 
   async start(): Promise<void> {
     this.voice.on('wake', () => {
@@ -128,18 +132,21 @@ export class VoicePipeline extends EventEmitter {
       this.setEmotion('listening')
     })
     this.voice.on('transcript', (text: string) => {
+      const addition = normalizeSpokenSymbols(text.trim())
+      if (!addition) {
+        if (!this.busy) void this.runTranscript('')
+        return
+      }
       if (this.busy) {
-        const addition = text.trim()
-        if (addition) {
-          this.pendingTranscripts.push(addition)
-          this.emit('log', `Phrase captée pendant une requête en cours, traitée juste après : « ${addition} »`)
-        }
-        // Jaris reste occupé sur la requête précédente : la capture de cette phrase en plus est terminée,
-        // on repasse en "thinking" (pas "idle") pour ne pas laisser croire qu'il a fini.
+        this.pendingAdditions.push(addition)
+        // Annule la réflexion en cours s'il y en a une : elle repart tout de suite avec la phrase
+        // fusionnée, au lieu de finir de répondre à une question probablement dépassée puis de répondre
+        // une seconde fois séparément (voir runTranscript).
+        this.abortController?.abort()
         this.setEmotion('thinking')
         return
       }
-      void this.runTranscript(text)
+      void this.runTranscript(addition)
     })
     this.voice.on('log', (message: string) => this.emit('log', message))
     this.voice.on('error', (err: Error) => {
@@ -193,72 +200,103 @@ export class VoicePipeline extends EventEmitter {
   }
 
   /**
-   * Traite une phrase, puis enchaîne automatiquement sur la suivante en file s'il y en a une (voir
-   * pendingTranscripts) : une phrase captée pendant que Jaris était occupé n'est jamais perdue ni annulée,
-   * elle est traitée juste après, sans que l'utilisateur ait besoin de redire le mot d'activation.
+   * Traite une phrase. Si une nouvelle phrase arrive pendant la réflexion Ollama, elle est fusionnée avec
+   * ce qui précède et la réflexion recommence avec le tout (boucle `while`) : une seule réponse est donnée
+   * à la fin, jamais deux. Une fois la réponse donnée, si une phrase est arrivée entre-temps (pendant la
+   * synthèse/lecture audio, trop tard pour être fusionnée avec une réponse déjà émise), elle démarre son
+   * propre nouvel échange, enchaîné automatiquement sans que l'utilisateur ait besoin de redire le mot
+   * d'activation.
    */
-  private async runTranscript(rawText: string): Promise<void> {
+  private async runTranscript(firstPart: string): Promise<void> {
     this.busy = true
-    try {
-      await this.handleTranscript(rawText)
-    } finally {
-      this.busy = false
-    }
-    const next = this.pendingTranscripts.shift()
-    if (next !== undefined) void this.runTranscript(next)
-  }
+    let parts = firstPart ? [firstPart] : []
 
-  private async handleTranscript(rawText: string): Promise<void> {
-    const transcript = normalizeSpokenSymbols(rawText.trim())
-    if (transcript) this.emit('transcript', transcript)
+    while (true) {
+      const combined = parts.join('. ').trim()
+      if (combined) this.emit('transcript', combined)
 
-    if (!transcript) {
-      await this.speak("Je n'ai rien entendu, réessaie.")
-      return
-    }
+      if (!combined) {
+        await this.speak("Je n'ai rien entendu, réessaie.")
+        break
+      }
 
-    // "listening" (mis par le handler 'wake') reste affiché jusqu'ici, le temps réel de la capture +
-    // transcription côté sidecar : "thinking" n'apparaît qu'à partir du moment où on a vraiment une
-    // phrase à traiter, pas dès le mot d'activation.
-    this.setEmotion('thinking')
+      // "listening" (mis par le handler 'wake') reste affiché jusqu'ici, le temps réel de la capture +
+      // transcription côté sidecar : "thinking" n'apparaît qu'à partir du moment où on a vraiment une
+      // phrase à traiter, pas dès le mot d'activation.
+      this.setEmotion('thinking')
 
-    // Sécurité thermique GPU vérifiée avant même d'appeler le LLM (pas dans converse) : si la requête doit
-    // être annulée, inutile de charger encore plus un GPU déjà chaud avec un appel d'inférence.
-    const gpuStatus = checkGpuTempSafety((await getLiveGpuStatus()).tempC)
-    if (gpuStatus.action === 'abort' || gpuStatus.action === 'shutdown') {
-      this.emit('log', `Sécurité thermique GPU : ${gpuStatus.message}`)
-      await this.speak(gpuStatus.message as string, transcript)
-      // Délai pour laisser l'avertissement être dit avant de fermer réellement l'appli (voir main.ts,
-      // qui écoute cet évènement pour faire un vrai app.quit()).
-      if (gpuStatus.action === 'shutdown') setTimeout(() => this.emit('shutdown'), SHUTDOWN_DELAY_MS)
-      return
-    }
+      // Sécurité thermique GPU vérifiée avant même d'appeler le LLM (pas dans converse) : si la requête
+      // doit être annulée, inutile de charger encore plus un GPU déjà chaud avec un appel d'inférence.
+      const gpuStatus = checkGpuTempSafety((await getLiveGpuStatus()).tempC)
+      if (gpuStatus.action === 'abort' || gpuStatus.action === 'shutdown') {
+        this.emit('log', `Sécurité thermique GPU : ${gpuStatus.message}`)
+        await this.speak(gpuStatus.message as string, combined)
+        // Délai pour laisser l'avertissement être dit avant de fermer réellement l'appli (voir main.ts,
+        // qui écoute cet évènement pour faire un vrai app.quit()).
+        if (gpuStatus.action === 'shutdown') setTimeout(() => this.emit('shutdown'), SHUTDOWN_DELAY_MS)
+        break
+      }
 
-    let reply: string
-    try {
-      const profile = await getProfile()
-      reply = await converse(
-        transcript,
-        profile?.name ?? null,
-        (message) => void this.announceReminder(message),
-        (message) => this.emit('log', message),
-        this.history
-      )
-      if (gpuStatus.action === 'warn') reply = `${gpuStatus.message} ${reply}`
+      const controller = new AbortController()
+      this.abortController = controller
 
-      this.history.push({ role: 'user', content: transcript }, { role: 'assistant', content: reply })
+      let reply = ''
+      let aborted = false
+      try {
+        const profile = await getProfile()
+        reply = await converse(
+          combined,
+          profile?.name ?? null,
+          (message) => void this.announceReminder(message),
+          (message) => this.emit('log', message),
+          this.history,
+          controller.signal
+        )
+        if (gpuStatus.action === 'warn') reply = `${gpuStatus.message} ${reply}`
+      } catch (err) {
+        if (controller.signal.aborted) {
+          // Une phrase supplémentaire est arrivée pendant la réflexion : inutile de dire une erreur pour
+          // une question de toute façon dépassée, on va la fusionner et recommencer juste en dessous.
+          aborted = true
+        } else {
+          this.emit('log', `Erreur Ollama : ${err instanceof Error ? err.message : String(err)}`)
+          reply = "Je n'arrive pas à réfléchir pour le moment, vérifie qu'Ollama tourne bien."
+        }
+      } finally {
+        if (this.abortController === controller) this.abortController = null
+      }
+
+      // Une phrase est arrivée pendant la réflexion (annulation ci-dessus) ou pile au moment où la réponse
+      // était prête (rare mais possible) : dans les deux cas, on la fusionne et on recommence, plutôt que
+      // de répondre à côté ou de répondre deux fois.
+      if (aborted || this.pendingAdditions.length > 0) {
+        parts = [...parts, ...this.pendingAdditions]
+        this.pendingAdditions = []
+        continue
+      }
+
+      this.history.push({ role: 'user', content: combined }, { role: 'assistant', content: reply })
       this.history.splice(0, Math.max(0, this.history.length - MAX_HISTORY_MESSAGES))
 
       // En arrière-plan, sans attendre : la mémoire longue durée s'enrichit toute seule à partir de la
       // conversation, sans compter sur le fait que l'utilisateur pense à dire "retiens que..." à chaque
       // fois. Ne retarde jamais la réponse déjà en train d'être dite (this.speak juste après).
-      void extractMemoryFromExchange(transcript, reply, (message) => this.emit('log', message))
-    } catch (err) {
-      this.emit('log', `Erreur Ollama : ${err instanceof Error ? err.message : String(err)}`)
-      reply = "Je n'arrive pas à réfléchir pour le moment, vérifie qu'Ollama tourne bien."
+      void extractMemoryFromExchange(combined, reply, (message) => this.emit('log', message))
+
+      await this.speak(reply, combined)
+      break
     }
 
-    await this.speak(reply, transcript)
+    this.busy = false
+
+    // Une phrase captée pendant la synthèse/lecture audio de la réponse qui vient d'être donnée : trop
+    // tard pour la fusionner avec une réponse déjà dite, elle démarre son propre nouvel échange à la
+    // suite, automatiquement.
+    if (this.pendingAdditions.length > 0) {
+      const queued = this.pendingAdditions.join('. ')
+      this.pendingAdditions = []
+      void this.runTranscript(queued)
+    }
   }
 
   private async speak(reply: string, transcript = ''): Promise<void> {
