@@ -177,25 +177,46 @@ async function listInstalledModels() {
   return (data.models ?? []).map((m) => m.name)
 }
 
-async function chat(model, prompt) {
+/**
+ * Certains modèles (constaté : granite4, ministral-3, functiongemma) n'ont pas de mode réflexion et
+ * rejettent le paramètre `think` avec une erreur, contrairement aux familles Qwen/Gemma4/Nemotron qui le
+ * supportent toutes. Plutôt que de maintenir une liste de compatibilité à la main (fragile, à mettre à
+ * jour à chaque nouveau modèle testé), on retente une fois sans `think` si le premier essai échoue.
+ */
+async function chatOnce(model, prompt, withThink) {
   const start = performance.now()
+  const body = {
+    model,
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: prompt }
+    ],
+    tools: TOOLS,
+    stream: false
+  }
+  if (withThink) body.think = 'medium'
+
   const res = await fetch(`${OLLAMA_HOST}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: prompt }
-      ],
-      tools: TOOLS,
-      stream: false,
-      think: 'medium'
-    })
+    body: JSON.stringify(body)
   })
   const wallMs = performance.now() - start
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`)
-  const data = await res.json()
+  return { wallMs, data: await res.json() }
+}
+
+async function chat(model, prompt) {
+  let wallMs, data
+  try {
+    ;({ wallMs, data } = await chatOnce(model, prompt, true))
+  } catch (firstErr) {
+    try {
+      ;({ wallMs, data } = await chatOnce(model, prompt, false))
+    } catch {
+      throw firstErr // le premier message d'erreur est généralement le plus informatif (statut HTTP réel)
+    }
+  }
   const evalCount = data.eval_count ?? 0
   const evalDurationS = (data.eval_duration ?? 0) / 1e9
   const tokPerSec = evalDurationS > 0 ? evalCount / evalDurationS : null
@@ -238,6 +259,7 @@ async function main() {
 
   const results = []
   const reasoningAnswers = []
+  const errors = []
 
   for (const model of toRun) {
     console.log(`\n=== ${model} ===`)
@@ -261,6 +283,7 @@ async function main() {
         }
       } catch (err) {
         console.log(`ERREUR (${err.message})`)
+        errors.push({ model, prompt, message: err.message })
       }
     }
 
@@ -285,6 +308,15 @@ async function main() {
   for (const { prompt, answer, model } of reasoningAnswers) {
     lines.push(`**${model}** — « ${prompt} »`)
     lines.push(`> ${answer}`)
+    lines.push('')
+  }
+
+  if (errors.length) {
+    lines.push('## Erreurs')
+    lines.push('')
+    for (const { model, prompt, message } of errors) {
+      lines.push(`- **${model}** sur « ${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''} » : ${message}`)
+    }
     lines.push('')
   }
 
