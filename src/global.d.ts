@@ -20,7 +20,6 @@ declare global {
       onTranscript: (cb: (text: string) => void) => () => void
       onReply: (cb: (payload: VoiceReplyPayload) => void) => () => void
       onLog: (cb: (message: string) => void) => () => void
-      onInterrupt: (cb: () => void) => () => void
       onSetupStatus: (cb: (status: VoiceSetupStatusPayload) => void) => () => void
       getSetupStatus: () => Promise<VoiceSetupStatusPayload>
       triggerWake: () => void

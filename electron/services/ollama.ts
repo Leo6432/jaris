@@ -25,17 +25,15 @@ interface OllamaChatResponse {
 
 export type ThinkLevel = 'low' | 'medium' | 'high'
 
-async function requestChat(body: Record<string, unknown>, model: string, signal?: AbortSignal): Promise<OllamaMessage> {
+async function requestChat(body: Record<string, unknown>, model: string): Promise<OllamaMessage> {
   let response: Response
   try {
     response = await fetch(`${config.ollama.host}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal
+      body: JSON.stringify(body)
     })
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') throw err
+  } catch {
     throw new Error(`Impossible de joindre Ollama sur ${config.ollama.host} (est-il lancé ?)`)
   }
 
@@ -62,22 +60,17 @@ export async function chatWithOllama(
   messages: OllamaMessage[],
   tools?: OllamaTool[],
   model: string = config.ollama.model,
-  think: ThinkLevel = 'medium',
-  signal?: AbortSignal
+  think: ThinkLevel = 'medium'
 ): Promise<OllamaMessage> {
   const baseBody = { model, messages, tools, stream: false, options: { num_ctx: config.ollama.numCtx } }
   try {
     // Le raisonnement caché aide nettement à décider d'appeler un outil plutôt que de "raconter" une
     // action sans l'exécuter ; le niveau (low/medium/high) vient du palier de complexité choisi pour la
     // question (voir assistant.ts), pas d'une valeur fixe.
-    return await requestChat({ ...baseBody, think }, model, signal)
+    return await requestChat({ ...baseBody, think }, model)
   } catch (firstErr) {
-    // Une requête annulée (nouveau mot d'activation pendant la réflexion) ne doit jamais déclencher le
-    // second essai sans `think` : ce serait relancer un appel inutile vers Ollama pour une réponse dont
-    // personne n'a plus besoin.
-    if (firstErr instanceof Error && firstErr.name === 'AbortError') throw firstErr
     try {
-      return await requestChat(baseBody, model, signal)
+      return await requestChat(baseBody, model)
     } catch {
       throw firstErr // le premier message d'erreur est généralement le plus informatif
     }
