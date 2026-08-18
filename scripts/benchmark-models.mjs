@@ -17,7 +17,11 @@
 const OLLAMA_HOST = process.env.OLLAMA_HOST?.trim() || 'http://127.0.0.1:11434'
 
 const MODELS = [
-  'qwen3.5:2b',
+  'qwen3.5:2b', // par défaut en Q8_0 (2,74 Go) : plus précis mais plus lourd que la variante ci-dessous
+  // Contrairement à qwen3.5:4b/9b (déjà en Q4_K_M par défaut, donc un tag "-q4_K_M" y serait redondant),
+  // qwen3.5:2b par défaut est en Q8_0 : ce tag explicite est un fichier réellement différent (1,95 Go,
+  // plus compressé, potentiellement plus rapide), donc ça vaut le coup de le comparer séparément.
+  'qwen3.5:2b-q4_K_M',
   'qwen3.5:4b',
   'qwen3.5:9b',
   'phi4-mini',
