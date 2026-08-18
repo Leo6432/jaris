@@ -37,7 +37,7 @@ export async function ensureOllamaRunning(log: LogFn): Promise<void> {
   if (await isUp(url)) return
 
   log("Ollama n'est pas lancé, démarrage automatique…")
-  spawn('ollama', ['serve'], { detached: true, stdio: 'ignore' }).unref()
+  spawn('ollama', ['serve'], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
 
   const up = await waitUntil(() => isUp(url), 20000)
   log(up ? 'Ollama démarré.' : "Échec du démarrage automatique d'Ollama : lance-le manuellement (`ollama serve`).")
@@ -52,14 +52,14 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
 
   log("SearXNG n'est pas lancé, démarrage de Docker…")
   try {
-    await execAsync('docker info')
+    await execAsync('docker info', { windowsHide: true })
   } catch {
     if (process.platform === 'win32') {
-      spawn('C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe', { detached: true, stdio: 'ignore' }).unref()
+      spawn('C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe', { detached: true, stdio: 'ignore', windowsHide: true }).unref()
     }
     const dockerUp = await waitUntil(async () => {
       try {
-        await execAsync('docker info')
+        await execAsync('docker info', { windowsHide: true })
         return true
       } catch {
         return false
@@ -72,7 +72,7 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
   }
 
   try {
-    await execAsync('docker compose up -d', { cwd: process.cwd() })
+    await execAsync('docker compose up -d', { cwd: process.cwd(), windowsHide: true })
   } catch (err) {
     log(`Échec du démarrage de SearXNG : ${err instanceof Error ? err.message : String(err)}`)
     return

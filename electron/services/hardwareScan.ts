@@ -58,7 +58,9 @@ function pickForBudget(candidates: ModelCandidate[], budgetGb: number): string {
 
 async function detectGpu(): Promise<{ name: string | null; vramGb: number | null }> {
   try {
-    const { stdout } = await execAsync('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits')
+    const { stdout } = await execAsync('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits', {
+      windowsHide: true
+    })
     const firstLine = stdout.trim().split('\n')[0] ?? ''
     const [name, mibRaw] = firstLine.split(',').map((s) => s.trim())
     const mib = parseInt(mibRaw, 10)
@@ -118,7 +120,9 @@ export interface LiveGpuStatus {
  */
 export async function getLiveGpuStatus(): Promise<LiveGpuStatus> {
   try {
-    const { stdout } = await execAsync('nvidia-smi --query-gpu=memory.free,temperature.gpu --format=csv,noheader,nounits')
+    const { stdout } = await execAsync('nvidia-smi --query-gpu=memory.free,temperature.gpu --format=csv,noheader,nounits', {
+      windowsHide: true
+    })
     const firstLine = stdout.trim().split('\n')[0] ?? ''
     const [freeRaw, tempRaw] = firstLine.split(',').map((s) => s.trim())
     const freeMib = parseInt(freeRaw, 10)

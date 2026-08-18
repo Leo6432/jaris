@@ -42,7 +42,7 @@ class TtsClient extends EventEmitter {
           '--language',
           config.tts.language
         ],
-        { stdio: ['pipe', 'pipe', 'pipe'] }
+        { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true }
       )
       this.proc = proc
 

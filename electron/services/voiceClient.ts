@@ -50,7 +50,7 @@ export class VoiceClient extends EventEmitter {
         args.push('--input-device', config.wakeword.inputDevice)
       }
 
-      const proc = spawn(config.python.bin, args, { stdio: ['pipe', 'pipe', 'pipe'] })
+      const proc = spawn(config.python.bin, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
       this.proc = proc
 
       let settled = false

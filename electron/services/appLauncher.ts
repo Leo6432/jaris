@@ -35,7 +35,7 @@ function findBestMatch(apps: StartApp[], query: string): StartApp | undefined {
 
 function launch(command: string, args: string[]): Promise<string | null> {
   return new Promise((resolve) => {
-    const proc = spawn(command, args, { stdio: 'ignore' })
+    const proc = spawn(command, args, { stdio: 'ignore', windowsHide: true })
     proc.on('error', (err) => resolve(err.message))
     proc.on('spawn', () => resolve(null))
   })
