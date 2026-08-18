@@ -88,7 +88,22 @@ export async function listInstalledModels(): Promise<string[]> {
   return (data.models ?? []).map((m) => m.name)
 }
 
-/** Télécharge `model` via Ollama s'il n'est pas déjà installé. */
+interface OllamaPullProgress {
+  status?: string
+  total?: number
+  completed?: number
+  error?: string
+}
+
+/**
+ * Télécharge `model` via Ollama s'il n'est pas déjà installé, avec une vraie progression (%) affichée au
+ * fil de l'eau. `stream: true` (et non `false` comme avant) : un modèle de plusieurs Go pouvant prendre
+ * plusieurs minutes, une requête non-streamée reste bloquée en silence jusqu'à la toute fin du
+ * téléchargement, sans aucun retour visuel entre-temps — donnant l'impression que rien ne se passe alors
+ * que ça télécharge bien en arrière-plan. Ollama renvoie une ligne JSON par mise à jour (format NDJSON),
+ * une par "couche" du modèle (le pourcentage repart donc à 0 à chaque nouvelle couche, comme dans `ollama
+ * pull` en ligne de commande).
+ */
 export async function pullModelIfMissing(model: string, onStatus?: (message: string) => void): Promise<void> {
   const installed = await listInstalledModels()
   if (installed.includes(model)) return
@@ -97,9 +112,46 @@ export async function pullModelIfMissing(model: string, onStatus?: (message: str
   const response = await fetch(`${config.ollama.host}/api/pull`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: model, stream: false })
+    body: JSON.stringify({ name: model, stream: true })
   })
-  if (!response.ok) {
+  if (!response.ok || !response.body) {
     throw new Error(`Échec du téléchargement de ${model} (Ollama a répondu ${response.status})`)
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let lastPercent = -1
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    let newlineIndex: number
+    while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, newlineIndex).trim()
+      buffer = buffer.slice(newlineIndex + 1)
+      if (!line) continue
+
+      let progress: OllamaPullProgress
+      try {
+        progress = JSON.parse(line)
+      } catch {
+        continue
+      }
+
+      if (progress.error) throw new Error(`Échec du téléchargement de ${model} : ${progress.error}`)
+
+      if (progress.total && progress.completed !== undefined) {
+        const percent = Math.floor((progress.completed / progress.total) * 100)
+        if (percent !== lastPercent) {
+          lastPercent = percent
+          onStatus?.(`Téléchargement du modèle ${model}… ${percent}%`)
+        }
+      } else if (progress.status) {
+        onStatus?.(`${model} : ${progress.status}`)
+      }
+    }
   }
 }
