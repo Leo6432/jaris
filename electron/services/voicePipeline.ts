@@ -139,6 +139,7 @@ export class VoicePipeline extends EventEmitter {
       }
       if (this.busy) {
         this.pendingAdditions.push(addition)
+        this.emit('log', `Phrase captée pendant la réflexion, fusion avec la question en cours : « ${addition} »`)
         // Annule la réflexion en cours s'il y en a une : elle repart tout de suite avec la phrase
         // fusionnée, au lieu de finir de répondre à une question probablement dépassée puis de répondre
         // une seconde fois séparément (voir runTranscript).
@@ -272,6 +273,7 @@ export class VoicePipeline extends EventEmitter {
       if (aborted || this.pendingAdditions.length > 0) {
         parts = [...parts, ...this.pendingAdditions]
         this.pendingAdditions = []
+        this.emit('log', `Réflexion relancée avec la question fusionnée : « ${parts.join('. ')} »`)
         continue
       }
 
@@ -295,6 +297,7 @@ export class VoicePipeline extends EventEmitter {
     if (this.pendingAdditions.length > 0) {
       const queued = this.pendingAdditions.join('. ')
       this.pendingAdditions = []
+      this.emit('log', `Phrase captée trop tard pour être fusionnée (réponse déjà donnée), nouvel échange : « ${queued} »`)
       void this.runTranscript(queued)
     }
   }
