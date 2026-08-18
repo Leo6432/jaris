@@ -75,6 +75,18 @@ export interface CapacityScanResult {
 }
 
 /**
+ * Modèles en place juste avant de relancer le scan de capacité, passés à scanCapacity pour qu'il puisse
+ * supprimer ceux devenus obsolètes si un palier change de choix (ex: un modèle plus adapté trouvé pour le
+ * palier rapide) — jamais utilisé au tout premier scan (onboarding), où il n'y a encore rien à comparer.
+ */
+export interface PreviousModelSelection {
+  flash?: string
+  medium?: string
+  large?: string
+  vision?: string
+}
+
+/**
  * Un modèle candidat (tous paliers + vision confondus), pour le tableau comparatif de l'onglet Modèles du
  * menu Options. speedTokPerSec/toolCalling viennent d'un run local de `npm run benchmark:models`
  * (scripts/benchmark-models.mjs) s'il a déjà tourné sur cette machine, `null` sinon (jamais de chiffre

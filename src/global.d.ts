@@ -5,6 +5,7 @@ import type {
   JarisEmotion,
   MemoryGraph,
   ModelOverviewEntry,
+  PreviousModelSelection,
   Profile,
   VoiceReplyPayload,
   VoiceSetupStatusPayload
@@ -33,7 +34,7 @@ declare global {
       connectGmail: () => Promise<GmailStatus>
       disconnectGmail: () => Promise<void>
       previewVoice: (voice: string) => Promise<ArrayBuffer>
-      scanCapacity: () => Promise<CapacityScanResult>
+      scanCapacity: (previous?: PreviousModelSelection) => Promise<CapacityScanResult>
       onCapacityScanStatus: (cb: (message: string) => void) => () => void
       notifyOnboardingFinished: () => void
       openSettings: () => void

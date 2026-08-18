@@ -4,7 +4,7 @@ import { checkVoiceSetup } from './config'
 import { ensureOllamaRunning, ensureSearxngRunning, stopOllamaIfStartedByJaris } from './services/dependencyServices'
 import { getModelOverview, scanCapacity } from './services/hardwareScan'
 import { runModelBenchmark } from './services/benchmarkRunner'
-import { pullModelIfMissing } from './services/ollama'
+import { deleteModel, pullModelIfMissing } from './services/ollama'
 import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
 import { createTrayIcon } from './services/trayIcon'
@@ -21,6 +21,7 @@ import { connectGmail, disconnectGmail, getGmailStatus } from './services/google
 import {
   IPC_CHANNELS,
   type CapacityScanResult,
+  type PreviousModelSelection,
   type JarisEmotion,
   type MemoryGraph,
   type Profile,
@@ -258,16 +259,39 @@ app.whenReady().then(async () => {
     const audio = await previewVoice(voice)
     return audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer
   })
-  ipcMain.handle(IPC_CHANNELS.scanCapacity, async (event): Promise<CapacityScanResult> => {
-    const sendStatus = (message: string): void => event.sender.send(IPC_CHANNELS.capacityScanStatus, message)
-    sendStatus('Détection de la carte graphique…')
-    const result = await scanCapacity()
-    const uniqueModels = [...new Set([result.models.flash, result.models.medium, result.models.large, result.visionModel])]
-    for (const model of uniqueModels) {
-      await pullModelIfMissing(model, sendStatus)
+  ipcMain.handle(
+    IPC_CHANNELS.scanCapacity,
+    async (event, previous?: PreviousModelSelection): Promise<CapacityScanResult> => {
+      const sendStatus = (message: string): void => event.sender.send(IPC_CHANNELS.capacityScanStatus, message)
+      sendStatus('Détection de la carte graphique…')
+      const result = await scanCapacity()
+      const uniqueModels = [...new Set([result.models.flash, result.models.medium, result.models.large, result.visionModel])]
+      for (const model of uniqueModels) {
+        await pullModelIfMissing(model, sendStatus)
+      }
+
+      // `previous` n'est fourni que par "Relancer l'analyse" (jamais au tout premier scan de l'onboarding,
+      // où il n'y a encore rien à comparer) : si un palier a changé de choix, l'ancien modèle devenu
+      // inutile est supprimé, sauf s'il sert encore ailleurs (ex: même modèle repris pour un autre palier).
+      if (previous) {
+        const stillUsed = new Set(uniqueModels)
+        const oldModels = [previous.flash, previous.medium, previous.large, previous.vision].filter(
+          (m): m is string => Boolean(m)
+        )
+        const stale = [...new Set(oldModels)].filter((m) => !stillUsed.has(m))
+        for (const model of stale) {
+          try {
+            await deleteModel(model)
+            sendStatus(`Ancien modèle ${model} supprimé (remplacé par un meilleur choix).`)
+          } catch (err) {
+            sendStatus(`Échec de la suppression de l'ancien modèle ${model} : ${err instanceof Error ? err.message : String(err)}`)
+          }
+        }
+      }
+
+      return result
     }
-    return result
-  })
+  )
   ipcMain.handle(IPC_CHANNELS.getModelOverview, () => getModelOverview())
   ipcMain.handle(IPC_CHANNELS.runModelBenchmark, async (event) => {
     await runModelBenchmark((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))

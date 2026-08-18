@@ -7,6 +7,7 @@ import {
   type JarisEmotion,
   type MemoryGraph,
   type ModelOverviewEntry,
+  type PreviousModelSelection,
   type Profile,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload
@@ -37,7 +38,8 @@ const api = {
   connectGmail: (): Promise<GmailStatus> => ipcRenderer.invoke(IPC_CHANNELS.connectGmail),
   disconnectGmail: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.disconnectGmail),
   previewVoice: (voice: string): Promise<ArrayBuffer> => ipcRenderer.invoke(IPC_CHANNELS.previewVoice, voice),
-  scanCapacity: (): Promise<CapacityScanResult> => ipcRenderer.invoke(IPC_CHANNELS.scanCapacity),
+  scanCapacity: (previous?: PreviousModelSelection): Promise<CapacityScanResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.scanCapacity, previous),
   onCapacityScanStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.capacityScanStatus, cb),
   notifyOnboardingFinished: (): void => ipcRenderer.send(IPC_CHANNELS.onboardingFinished),
   openSettings: (): void => ipcRenderer.send(IPC_CHANNELS.openSettings),

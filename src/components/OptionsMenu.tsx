@@ -132,7 +132,13 @@ export default function OptionsMenu(): JSX.Element {
     setRescanning(true)
     setScanStatus('Détection de la carte graphique…')
     try {
-      const scan = await window.jaris.scanCapacity()
+      // Transmis pour que main.ts puisse supprimer l'ancien modèle d'un palier si le nouveau scan en
+      // choisit un différent (voir le correctif dans scanCapacity côté main) — jamais transmis au tout
+      // premier scan (onboarding), où profile.models n'existe pas encore.
+      const previous = profile?.models
+        ? { flash: profile.models.flash, medium: profile.models.medium, large: profile.models.large, vision: profile.visionModel }
+        : undefined
+      const scan = await window.jaris.scanCapacity(previous)
       if (profile) {
         const updated = { ...profile, models: scan.models, visionModel: scan.visionModel, capacityScanDone: true }
         setProfile(updated)
