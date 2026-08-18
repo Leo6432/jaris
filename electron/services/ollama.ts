@@ -155,3 +155,19 @@ export async function pullModelIfMissing(model: string, onStatus?: (message: str
     }
   }
 }
+
+/**
+ * Désinstalle `model` via l'API HTTP d'Ollama (DELETE /api/delete), plutôt qu'en lançant `ollama rm` en
+ * sous-process : reste cohérent avec le reste de ce fichier (tout en HTTP) et évite tout risque de fenêtre
+ * de console qui flashe sous Windows pour un simple appel de nettoyage.
+ */
+export async function deleteModel(model: string): Promise<void> {
+  const response = await fetch(`${config.ollama.host}/api/delete`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: model })
+  })
+  if (!response.ok) {
+    throw new Error(`Échec de la suppression de ${model} (Ollama a répondu ${response.status})`)
+  }
+}

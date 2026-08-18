@@ -89,6 +89,15 @@ export default function OptionsMenu(): JSX.Element {
   }, [benchmarkLog])
 
   const handleRunBenchmark = async (): Promise<void> => {
+    if (
+      !window.confirm(
+        'Le benchmark va installer tout modèle candidat manquant (potentiellement plusieurs dizaines de ' +
+          "Go), tester chacun d'eux (peut prendre longtemps), puis SUPPRIMER définitivement tous les " +
+          "modèles testés qui ne sont pas retenus par ton profil actuel. Continuer ?"
+      )
+    ) {
+      return
+    }
     setError(null)
     setBenchmarking(true)
     setBenchmarkLog([])
@@ -295,20 +304,9 @@ export default function OptionsMenu(): JSX.Element {
                 <li>Vision : {profile?.visionModel ?? '—'}</li>
               </ul>
             )}
-            <div className="options-menu__model-actions">
-              <button className="options-menu__action" onClick={() => void handleRescan()} disabled={rescanning}>
-                {rescanning ? 'Analyse en cours...' : "Relancer l'analyse"}
-              </button>
-              <button className="options-menu__action" onClick={() => void handleRunBenchmark()} disabled={benchmarking}>
-                {benchmarking ? 'Benchmark en cours...' : 'Lancer le benchmark'}
-              </button>
-            </div>
-
-            {(benchmarking || benchmarkLog.length > 0) && (
-              <pre ref={benchmarkLogRef} className="options-menu__benchmark-log">
-                {benchmarkLog.join('\n')}
-              </pre>
-            )}
+            <button className="options-menu__action" onClick={() => void handleRescan()} disabled={rescanning}>
+              {rescanning ? 'Analyse en cours...' : "Relancer l'analyse"}
+            </button>
 
             <div className="options-menu__section-title options-menu__model-overview-title">Tous les modèles candidats</div>
             {modelOverview === null ? (
@@ -346,6 +344,20 @@ export default function OptionsMenu(): JSX.Element {
               viennent d'un run local de <code>npm run benchmark:models</code> s'il a déjà tourné sur cette
               machine. Intelligence = score MMLU-Pro publié quand il existe.
             </p>
+
+            <button className="options-menu__action" onClick={() => void handleRunBenchmark()} disabled={benchmarking}>
+              {benchmarking ? 'Benchmark en cours...' : 'Lancer le benchmark'}
+            </button>
+            <p className="options-menu__model-overview-hint">
+              Installe tout modèle candidat manquant (peut être plusieurs dizaines de Go au premier lancement),
+              teste chacun d'eux, puis supprime tous ceux qui ne sont pas retenus par le profil actuel.
+            </p>
+
+            {(benchmarking || benchmarkLog.length > 0) && (
+              <pre ref={benchmarkLogRef} className="options-menu__benchmark-log">
+                {benchmarkLog.join('\n')}
+              </pre>
+            )}
           </div>
         )}
 

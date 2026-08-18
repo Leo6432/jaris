@@ -10,8 +10,10 @@
  *   node scripts/benchmark-models.mjs
  *   OLLAMA_HOST=http://127.0.0.1:11434 node scripts/benchmark-models.mjs
  *
- * Les modèles pas encore installés sont simplement ignorés (avec la commande `ollama pull` à lancer à la
- * main) : pas de téléchargement automatique de plusieurs Go sans le demander explicitement.
+ * Installe automatiquement (`ollama pull`) tout modèle de MODELS pas encore présent avant de le tester —
+ * potentiellement plusieurs dizaines de Go au premier lancement si rien n'est encore installé. Lancé
+ * depuis l'onglet Modèles de Jaris (bouton "Lancer le benchmark"), une confirmation est affichée avant de
+ * démarrer, justement à cause de ce téléchargement potentiellement volumineux.
  */
 
 import { writeFileSync } from 'fs'
@@ -178,6 +180,55 @@ async function listInstalledModels() {
 }
 
 /**
+ * Télécharge `model` via Ollama, avec une progression affichée par tranche de 10% (pas à chaque %, sinon
+ * ~100 lignes par modèle) : lisible aussi bien dans un vrai terminal que dans le journal en direct de
+ * l'onglet Modèles de Jaris (qui découpe la sortie ligne par ligne, un `\r` ne s'y afficherait pas pareil).
+ */
+async function pullModel(model) {
+  console.log(`Téléchargement de ${model}…`)
+  const res = await fetch(`${OLLAMA_HOST}/api/pull`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: model, stream: true })
+  })
+  if (!res.ok || !res.body) throw new Error(`${res.status} ${await res.text()}`)
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let lastBucket = -1
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    let newlineIndex
+    while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, newlineIndex).trim()
+      buffer = buffer.slice(newlineIndex + 1)
+      if (!line) continue
+
+      let progress
+      try {
+        progress = JSON.parse(line)
+      } catch {
+        continue
+      }
+      if (progress.error) throw new Error(progress.error)
+
+      if (progress.total && progress.completed !== undefined) {
+        const bucket = Math.floor((progress.completed / progress.total) * 10) * 10
+        if (bucket !== lastBucket) {
+          lastBucket = bucket
+          console.log(`  ${model} : ${bucket}%`)
+        }
+      }
+    }
+  }
+}
+
+/**
  * Certains modèles (constaté : granite4, ministral-3, functiongemma) n'ont pas de mode réflexion et
  * rejettent le paramètre `think` avec une erreur, contrairement aux familles Qwen/Gemma4/Nemotron qui le
  * supportent toutes. Plutôt que de maintenir une liste de compatibilité à la main (fragile, à mettre à
@@ -245,15 +296,23 @@ async function main() {
     process.exit(1)
   }
 
-  const toRun = MODELS.filter((m) => installed.includes(m))
   const missing = MODELS.filter((m) => !installed.includes(m))
   if (missing.length) {
-    console.log('Modèles non installés, ignorés (lance ces commandes si tu veux les inclure) :')
-    for (const m of missing) console.log(`  ollama pull ${m}`)
+    console.log(`${missing.length} modèle(s) manquant(s) à installer avant le test :\n`)
+    for (const model of missing) {
+      try {
+        await pullModel(model)
+      } catch (err) {
+        console.log(`  Échec de l'installation de ${model} : ${err.message} (ignoré pour ce run)`)
+      }
+    }
+    installed = await listInstalledModels()
     console.log('')
   }
+
+  const toRun = MODELS.filter((m) => installed.includes(m))
   if (!toRun.length) {
-    console.log('Aucun des modèles à tester n\'est installé.')
+    console.log('Aucun des modèles à tester n\'a pu être installé.')
     return
   }
 

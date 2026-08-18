@@ -209,7 +209,7 @@ const INTELLIGENCE_MMLU_PRO: Record<string, number> = {
   'gemma4:e4b': 69.4
 }
 
-interface LocalBenchmarkEntry {
+export interface LocalBenchmarkEntry {
   speedTokPerSec: number | null
   toolCalling: string | null
 }
@@ -218,8 +218,10 @@ interface LocalBenchmarkEntry {
  * Relit scripts/benchmark-results.md (généré par `npm run benchmark:models`, voir ce script) s'il existe,
  * pour remonter de vraies mesures faites sur LA machine de l'utilisateur plutôt que des chiffres publiés
  * génériques. Absent (jamais lancé) : renvoie une map vide, sans faire échouer l'aperçu pour autant.
+ * Exportée en plus de son usage dans getModelOverview ci-dessous : sert aussi à benchmarkRunner.ts pour
+ * savoir quels modèles ont été testés lors du dernier run (et donc candidats à un nettoyage après coup).
  */
-function parseLocalBenchmark(): Map<string, LocalBenchmarkEntry> {
+export function parseLocalBenchmark(): Map<string, LocalBenchmarkEntry> {
   const results = new Map<string, LocalBenchmarkEntry>()
   let raw: string
   try {
