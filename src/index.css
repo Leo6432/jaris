@@ -198,6 +198,27 @@ body.body--scan {
   color: #ff6b6b;
 }
 
+.options-menu__model-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.options-menu__benchmark-log {
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  max-height: 180px;
+  overflow-y: auto;
+  background: rgba(5, 7, 12, 0.6);
+  border: 1px solid rgba(127, 163, 201, 0.2);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: #7fa3c9;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .options-menu__model-overview-title {
   margin-top: 14px;
 }

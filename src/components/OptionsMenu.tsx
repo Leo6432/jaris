@@ -47,8 +47,11 @@ export default function OptionsMenu(): JSX.Element {
   const [history, setHistory] = useState<ConversationEntry[] | null>(null)
   const [clearingHistory, setClearingHistory] = useState(false)
   const [modelOverview, setModelOverview] = useState<ModelOverviewEntry[] | null>(null)
+  const [benchmarking, setBenchmarking] = useState(false)
+  const [benchmarkLog, setBenchmarkLog] = useState<string[]>([])
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
+  const benchmarkLogRef = useRef<HTMLPreElement>(null)
 
   useEffect(() => {
     window.jaris.getGmailStatus().then(setStatus)
@@ -76,6 +79,30 @@ export default function OptionsMenu(): JSX.Element {
       void window.jaris.getModelOverview().then(setModelOverview)
     }
   }, [tab, modelOverview])
+
+  useEffect(() => {
+    return window.jaris.onModelBenchmarkLine((line) => setBenchmarkLog((prev) => [...prev, line]))
+  }, [])
+
+  useEffect(() => {
+    benchmarkLogRef.current?.scrollTo({ top: benchmarkLogRef.current.scrollHeight })
+  }, [benchmarkLog])
+
+  const handleRunBenchmark = async (): Promise<void> => {
+    setError(null)
+    setBenchmarking(true)
+    setBenchmarkLog([])
+    try {
+      await window.jaris.runModelBenchmark()
+      // Le tableau comparatif ci-dessous reflète tout de suite les nouveaux résultats, sans avoir à
+      // changer d'onglet et revenir pour forcer un rechargement.
+      setModelOverview(await window.jaris.getModelOverview())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBenchmarking(false)
+    }
+  }
 
   const handleClearHistory = async (): Promise<void> => {
     if (!window.confirm("Supprimer définitivement tout l'historique des conversations ?")) return
@@ -268,9 +295,20 @@ export default function OptionsMenu(): JSX.Element {
                 <li>Vision : {profile?.visionModel ?? '—'}</li>
               </ul>
             )}
-            <button className="options-menu__action" onClick={() => void handleRescan()} disabled={rescanning}>
-              {rescanning ? 'Analyse en cours...' : "Relancer l'analyse"}
-            </button>
+            <div className="options-menu__model-actions">
+              <button className="options-menu__action" onClick={() => void handleRescan()} disabled={rescanning}>
+                {rescanning ? 'Analyse en cours...' : "Relancer l'analyse"}
+              </button>
+              <button className="options-menu__action" onClick={() => void handleRunBenchmark()} disabled={benchmarking}>
+                {benchmarking ? 'Benchmark en cours...' : 'Lancer le benchmark'}
+              </button>
+            </div>
+
+            {(benchmarking || benchmarkLog.length > 0) && (
+              <pre ref={benchmarkLogRef} className="options-menu__benchmark-log">
+                {benchmarkLog.join('\n')}
+              </pre>
+            )}
 
             <div className="options-menu__section-title options-menu__model-overview-title">Tous les modèles candidats</div>
             {modelOverview === null ? (

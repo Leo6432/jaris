@@ -135,5 +135,9 @@ export const IPC_CHANNELS = {
   /** renderer -> main : révèle le fichier conversation-history.json dans l'explorateur de fichiers. */
   openConversationHistoryFile: 'jaris:open-conversation-history-file',
   /** renderer <-> main : liste tous les modèles candidats (tous paliers + vision) avec leurs métriques, pour l'onglet Modèles. */
-  getModelOverview: 'jaris:get-model-overview'
+  getModelOverview: 'jaris:get-model-overview',
+  /** renderer -> main : lance scripts/benchmark-models.mjs (résout une fois le benchmark terminé). */
+  runModelBenchmark: 'jaris:run-model-benchmark',
+  /** main -> renderer : une ligne de sortie du benchmark en cours, au fil de l'eau. */
+  modelBenchmarkLine: 'jaris:model-benchmark-line'
 } as const

@@ -41,6 +41,8 @@ declare global {
       clearConversationHistory: () => Promise<void>
       openConversationHistoryFile: () => Promise<void>
       getModelOverview: () => Promise<ModelOverviewEntry[]>
+      runModelBenchmark: () => Promise<void>
+      onModelBenchmarkLine: (cb: (line: string) => void) => () => void
     }
   }
 }
