@@ -220,6 +220,12 @@ body.body--widget {
   color: #4d6a87;
 }
 
+.options-menu__history-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
 .options-menu__action--danger {
   background: rgba(255, 107, 107, 0.12);
   border-color: rgba(255, 107, 107, 0.4);
@@ -230,36 +236,41 @@ body.body--widget {
   border-color: #ff6b6b;
 }
 
+/* flex: 1 (et non juste un bloc compact en haut de page comme les autres onglets) : l'onglet Voix n'a que
+   peu de contenu, donc sans ça il reste collé en haut avec un grand vide en dessous — ici il occupe toute
+   la hauteur restante de la page et centre l'orbe dedans. */
 .options-menu__voice-picker {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 4px 0 2px;
+  justify-content: center;
+  gap: 24px;
+  padding: 20px 0;
 }
 
 .options-menu__voice-nav {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 18px;
+  gap: 48px;
 }
 
 .options-menu__voice-orb {
-  width: 96px;
-  height: 96px;
+  width: 220px;
+  height: 220px;
   border-radius: 50%;
-  box-shadow: 0 0 24px rgba(55, 226, 255, 0.25);
+  box-shadow: 0 0 80px rgba(55, 226, 255, 0.35);
 }
 
 .options-menu__arrow {
   background: transparent;
   border: none;
   color: #7fa3c9;
-  font-size: 1.6rem;
+  font-size: 2.8rem;
   line-height: 1;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 4px 12px;
 }
 
 .options-menu__arrow:not(:disabled):hover {
@@ -272,26 +283,26 @@ body.body--widget {
 }
 
 .options-menu__voice-name {
-  font-size: 1rem;
+  font-size: 1.8rem;
   font-weight: 600;
   color: #d9ecff;
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
 .options-menu__voice-description {
-  font-size: 0.78rem;
+  font-size: 1.05rem;
   color: #7fa3c9;
 }
 
 .options-menu__voice-dots {
   display: flex;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .options-menu__dot {
-  width: 7px;
-  height: 7px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   border: none;
   background: rgba(127, 163, 201, 0.35);

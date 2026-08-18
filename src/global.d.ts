@@ -38,6 +38,7 @@ declare global {
       openSettings: () => void
       getConversationHistory: () => Promise<ConversationEntry[]>
       clearConversationHistory: () => Promise<void>
+      openConversationHistoryFile: () => Promise<void>
     }
   }
 }

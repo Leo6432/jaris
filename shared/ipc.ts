@@ -112,5 +112,7 @@ export const IPC_CHANNELS = {
   /** renderer <-> main : récupère l'historique complet des échanges voix (transcription, réponse, date). */
   getConversationHistory: 'jaris:get-conversation-history',
   /** renderer <-> main : efface définitivement l'historique des échanges (fichier + court terme en mémoire). */
-  clearConversationHistory: 'jaris:clear-conversation-history'
+  clearConversationHistory: 'jaris:clear-conversation-history',
+  /** renderer -> main : révèle le fichier conversation-history.json dans l'explorateur de fichiers. */
+  openConversationHistoryFile: 'jaris:open-conversation-history-file'
 } as const

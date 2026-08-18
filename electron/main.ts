@@ -9,7 +9,12 @@ import { ttsClient } from './services/ttsClient'
 import { createTrayIcon } from './services/trayIcon'
 import { VoicePipeline } from './services/voicePipeline'
 import { ensureMemoryDir, getMemoryDir, getMemoryGraph, recallNote } from './services/memoryStore'
-import { clearConversationHistory, getConversationHistory } from './services/conversationStore'
+import {
+  clearConversationHistory,
+  ensureConversationHistoryFile,
+  getConversationHistory,
+  getConversationHistoryPath
+} from './services/conversationStore'
 import { getProfile, markGmailOnboardingDone, saveProfile } from './services/profileStore'
 import { connectGmail, disconnectGmail, getGmailStatus } from './services/googleAuth'
 import {
@@ -240,6 +245,10 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.clearConversationHistory, async () => {
     await clearConversationHistory()
     pipeline?.clearHistory()
+  })
+  ipcMain.handle(IPC_CHANNELS.openConversationHistoryFile, async () => {
+    await ensureConversationHistoryFile()
+    shell.showItemInFolder(getConversationHistoryPath())
   })
   ipcMain.handle(IPC_CHANNELS.getGmailStatus, () => getGmailStatus())
   ipcMain.handle(IPC_CHANNELS.connectGmail, () => connectGmail())

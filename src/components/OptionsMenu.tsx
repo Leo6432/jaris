@@ -261,24 +261,31 @@ export default function OptionsMenu(): JSX.Element {
             ) : history.length === 0 ? (
               <p className="options-menu__history-empty">Aucun échange enregistré pour l'instant.</p>
             ) : (
-              <>
-                <ul className="options-menu__history-list">
-                  {[...history].reverse().map((entry) => (
-                    <li key={entry.id} className="options-menu__history-entry">
-                      <div className="options-menu__history-date">{new Date(entry.timestamp).toLocaleString('fr-FR')}</div>
-                      <div className="options-menu__history-transcript">« {entry.transcript} »</div>
-                      <div className="options-menu__history-reply">{entry.reply}</div>
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  className="options-menu__action options-menu__action--danger"
-                  onClick={() => void handleClearHistory()}
-                  disabled={clearingHistory}
-                >
-                  {clearingHistory ? 'Suppression...' : "Supprimer l'historique"}
+              <ul className="options-menu__history-list">
+                {[...history].reverse().map((entry) => (
+                  <li key={entry.id} className="options-menu__history-entry">
+                    <div className="options-menu__history-date">{new Date(entry.timestamp).toLocaleString('fr-FR')}</div>
+                    <div className="options-menu__history-transcript">« {entry.transcript} »</div>
+                    <div className="options-menu__history-reply">{entry.reply}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {history !== null && (
+              <div className="options-menu__history-actions">
+                <button className="options-menu__action" onClick={() => void window.jaris.openConversationHistoryFile()}>
+                  Ouvrir le dossier
                 </button>
-              </>
+                {history.length > 0 && (
+                  <button
+                    className="options-menu__action options-menu__action--danger"
+                    onClick={() => void handleClearHistory()}
+                    disabled={clearingHistory}
+                  >
+                    {clearingHistory ? 'Suppression...' : "Supprimer l'historique"}
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}

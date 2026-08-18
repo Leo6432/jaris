@@ -40,3 +40,18 @@ export async function clearConversationHistory(): Promise<void> {
   await mkdir(dirname(historyPath), { recursive: true })
   await writeFile(historyPath, '[]', 'utf-8')
 }
+
+export function getConversationHistoryPath(): string {
+  return historyPath
+}
+
+/** Crée le fichier (vide) s'il n'existe pas encore, pour pouvoir le révéler dans l'explorateur de fichiers
+ * même avant le tout premier échange enregistré. */
+export async function ensureConversationHistoryFile(): Promise<void> {
+  try {
+    await readFile(historyPath, 'utf-8')
+  } catch {
+    await mkdir(dirname(historyPath), { recursive: true })
+    await writeFile(historyPath, '[]', 'utf-8')
+  }
+}
