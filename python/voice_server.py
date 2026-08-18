@@ -192,6 +192,16 @@ def main() -> None:
         # HALLUCINATION_PATTERNS ci-dessus, en filet de sécurité pour les cas où il y a bien un peu de son
         # (bruit ambiant, toux...) mais pas de vraie parole.
         if loud_ms < MIN_UTTERANCE_MS:
+            emit(
+                {
+                    "event": "log",
+                    "message": (
+                        f"Rien d'assez fort détecté ({loud_ms:.0f} ms au-dessus du seuil RMS "
+                        f"{SILENCE_RMS_THRESHOLD} sur {captured_ms:.0f} ms captés, minimum requis "
+                        f"{MIN_UTTERANCE_MS} ms) : transcription ignorée pour éviter une hallucination."
+                    ),
+                }
+            )
             emit({"event": "transcript", "text": ""})
             continue
 
