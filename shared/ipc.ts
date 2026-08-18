@@ -124,6 +124,8 @@ export const IPC_CHANNELS = {
   getMemoryNoteContent: 'jaris:get-memory-note-content',
   /** renderer -> main : la lecture audio de la dernière réponse est terminée, on peut repasser en idle. */
   audioEnded: 'jaris:audio-ended',
+  /** main -> renderer : un nouveau mot d'activation vient d'annuler ce que Jaris était en train de faire (réflexion ou réponse en cours) : coupe net toute lecture audio en cours. */
+  interrupt: 'jaris:interrupt',
   /** renderer <-> main : état de la connexion Gmail. */
   getGmailStatus: 'jaris:get-gmail-status',
   /** renderer <-> main : lance le flux de connexion Gmail (ouvre le navigateur système). */

@@ -112,12 +112,21 @@ export class VoicePipeline extends EventEmitter {
   private voice = new VoiceClient()
   private idleTimer: ReturnType<typeof setTimeout> | null = null
   private history: OllamaMessage[] = []
+  /**
+   * Incrémenté à chaque nouveau mot d'activation détecté : distingue l'échange "courant" de tout échange
+   * précédent encore en cours de traitement (réflexion Ollama, synthèse vocale), pour pouvoir l'abandonner
+   * proprement plutôt que de le laisser répondre par-dessus la nouvelle demande de l'utilisateur.
+   */
+  private generation = 0
+  private abortController: AbortController | null = null
 
   async start(): Promise<void> {
     this.voice.on('wake', () => {
-      this.clearIdleTimer()
+      // Le sidecar Python écoute le mot d'activation en continu, indépendamment de ce que fait Electron :
+      // un nouveau "wake" peut donc arriver alors que la réponse précédente est encore en train d'être
+      // réfléchie ou dite à voix haute. Il doit toujours primer sur ce qui est en cours.
+      this.interrupt()
       this.setEmotion('listening')
-      this.setEmotion('thinking') // la capture + transcription se font côté sidecar, sans étape intermédiaire visible
     })
     this.voice.on('transcript', (text: string) => {
       void this.handleTranscript(text)
@@ -167,32 +176,57 @@ export class VoicePipeline extends EventEmitter {
     this.scheduleIdle(IDLE_SETTLE_DELAY_MS)
   }
 
+  /**
+   * Un nouveau mot d'activation prime toujours sur ce que Jaris est en train de faire : annule la requête
+   * Ollama en cours s'il y en a une (this.abortController), et prévient le renderer (évènement 'interrupt',
+   * voir main.ts) de couper net une réponse en train d'être lue à voix haute. Toute suite d'un traitement
+   * de l'ancienne génération (voir les vérifications `myGeneration !== this.generation` plus bas) est alors
+   * silencieusement abandonnée au lieu de répondre par-dessus la nouvelle demande.
+   */
+  private interrupt(): void {
+    this.clearIdleTimer()
+    this.generation++
+    this.abortController?.abort()
+    this.abortController = null
+    this.emit('interrupt')
+  }
+
   private async announceReminder(message: string): Promise<void> {
     this.clearIdleTimer()
+    const myGeneration = this.generation
     this.setEmotion('thinking')
-    await this.speak(`Rappel : ${message}`)
+    await this.speak(`Rappel : ${message}`, '', myGeneration)
   }
 
   private async handleTranscript(rawText: string): Promise<void> {
+    const myGeneration = this.generation
     const transcript = normalizeSpokenSymbols(rawText.trim())
     if (transcript) this.emit('transcript', transcript)
 
     if (!transcript) {
-      await this.speak("Je n'ai rien entendu, réessaie.")
+      await this.speak("Je n'ai rien entendu, réessaie.", '', myGeneration)
       return
     }
+
+    // "listening" (mis par le handler 'wake') reste affiché jusqu'ici, le temps réel de la capture +
+    // transcription côté sidecar : "thinking" n'apparaît qu'à partir du moment où on a vraiment une
+    // phrase à traiter, pas dès le mot d'activation.
+    this.setEmotion('thinking')
 
     // Sécurité thermique GPU vérifiée avant même d'appeler le LLM (pas dans converse) : si la requête doit
     // être annulée, inutile de charger encore plus un GPU déjà chaud avec un appel d'inférence.
     const gpuStatus = checkGpuTempSafety((await getLiveGpuStatus()).tempC)
     if (gpuStatus.action === 'abort' || gpuStatus.action === 'shutdown') {
       this.emit('log', `Sécurité thermique GPU : ${gpuStatus.message}`)
-      await this.speak(gpuStatus.message as string, transcript)
+      await this.speak(gpuStatus.message as string, transcript, myGeneration)
       // Délai pour laisser l'avertissement être dit avant de fermer réellement l'appli (voir main.ts,
       // qui écoute cet évènement pour faire un vrai app.quit()).
       if (gpuStatus.action === 'shutdown') setTimeout(() => this.emit('shutdown'), SHUTDOWN_DELAY_MS)
       return
     }
+
+    const controller = new AbortController()
+    this.abortController = controller
 
     let reply: string
     try {
@@ -202,7 +236,8 @@ export class VoicePipeline extends EventEmitter {
         profile?.name ?? null,
         (message) => void this.announceReminder(message),
         (message) => this.emit('log', message),
-        this.history
+        this.history,
+        controller.signal
       )
       if (gpuStatus.action === 'warn') reply = `${gpuStatus.message} ${reply}`
 
@@ -214,16 +249,25 @@ export class VoicePipeline extends EventEmitter {
       // fois. Ne retarde jamais la réponse déjà en train d'être dite (this.speak juste après).
       void extractMemoryFromExchange(transcript, reply, (message) => this.emit('log', message))
     } catch (err) {
+      // Un nouveau mot d'activation a coupé la réflexion en cours : l'utilisateur a déjà commencé à
+      // reformuler sa demande, inutile de dire une erreur pour une question qu'il a lui-même abandonnée.
+      if (controller.signal.aborted) return
       this.emit('log', `Erreur Ollama : ${err instanceof Error ? err.message : String(err)}`)
       reply = "Je n'arrive pas à réfléchir pour le moment, vérifie qu'Ollama tourne bien."
+    } finally {
+      if (this.abortController === controller) this.abortController = null
     }
 
-    await this.speak(reply, transcript)
+    if (myGeneration !== this.generation) return
+    await this.speak(reply, transcript, myGeneration)
   }
 
-  private async speak(reply: string, transcript = ''): Promise<void> {
+  private async speak(reply: string, transcript = '', myGeneration = this.generation): Promise<void> {
     try {
       const audio = await synthesizeSpeech(reply)
+      // Supplanté par un nouveau mot d'activation pendant la synthèse vocale : ne joue jamais une réponse
+      // devenue obsolète par-dessus la nouvelle demande de l'utilisateur.
+      if (myGeneration !== this.generation) return
       const audioBuffer = audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer
 
       const payload: VoiceReplyPayload = { transcript, reply, audio: audioBuffer }
@@ -241,6 +285,7 @@ export class VoicePipeline extends EventEmitter {
 
       this.scheduleIdle(AUDIO_FALLBACK_IDLE_MS)
     } catch (err) {
+      if (myGeneration !== this.generation) return
       this.emit('log', `Erreur de synthèse vocale : ${err instanceof Error ? err.message : String(err)}`)
       this.setEmotion('surprised')
       this.scheduleIdle(ERROR_IDLE_DELAY_MS)

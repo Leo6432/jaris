@@ -24,6 +24,7 @@ const api = {
   onTranscript: (cb: (text: string) => void) => subscribe(IPC_CHANNELS.transcript, cb),
   onReply: (cb: (payload: VoiceReplyPayload) => void) => subscribe(IPC_CHANNELS.reply, cb),
   onLog: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.log, cb),
+  onInterrupt: (cb: () => void) => subscribe(IPC_CHANNELS.interrupt, cb),
   onSetupStatus: (cb: (status: VoiceSetupStatusPayload) => void) => subscribe(IPC_CHANNELS.setupStatus, cb),
   getSetupStatus: (): Promise<VoiceSetupStatusPayload> => ipcRenderer.invoke(IPC_CHANNELS.setupStatus),
   triggerWake: (): void => ipcRenderer.send(IPC_CHANNELS.triggerWake),

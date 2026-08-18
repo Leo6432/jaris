@@ -117,7 +117,8 @@ export async function converse(
   userName: string | null,
   onReminderFire: (message: string) => void,
   onLog?: (message: string) => void,
-  history: OllamaMessage[] = []
+  history: OllamaMessage[] = [],
+  signal?: AbortSignal
 ): Promise<string> {
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
@@ -180,7 +181,7 @@ export async function converse(
   ]
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const message = await chatWithOllama(messages, TOOLS, model, think)
+    const message = await chatWithOllama(messages, TOOLS, model, think, signal)
     if (!message.tool_calls?.length) {
       return finalize(message.content)
     }

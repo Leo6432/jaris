@@ -72,6 +72,15 @@ export default function App(): JSX.Element {
       window.jaris.onEmotion(setEmotion),
       window.jaris.onTranscript(setTranscript),
       window.jaris.onSetupStatus(setSetupStatus),
+      // Un nouveau mot d'activation vient d'annuler la réponse en cours (voir voicePipeline.ts) : coupe
+      // net une lecture audio déjà commencée, sinon l'ancienne réponse continuerait à parler par-dessus
+      // la nouvelle demande de l'utilisateur.
+      window.jaris.onInterrupt(() => {
+        if (audioRef.current) {
+          audioRef.current.pause()
+          audioRef.current.currentTime = 0
+        }
+      }),
       // Seul le widget a un <audio> monté (voir plus bas) : en mode réglages, audioRef.current reste
       // null et cet appel ne fait rien — pas de double lecture de la voix si les deux fenêtres existent.
       window.jaris.onReply(({ reply: replyText, audio }) => {
