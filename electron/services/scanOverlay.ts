@@ -8,6 +8,8 @@ import { join } from 'path'
  * chaque fois que l'utilisateur demande à Jaris de regarder l'écran.
  */
 let overlayWindow: BrowserWindow | null = null
+/** Voir showScanOverlay : force régulièrement cette fenêtre au premier plan pendant qu'elle est affichée. */
+let moveTopInterval: ReturnType<typeof setInterval> | null = null
 
 function loadOverlayRenderer(win: BrowserWindow): void {
   const isDev = !app.isPackaged
@@ -59,10 +61,25 @@ function ensureOverlayWindow(): BrowserWindow {
 
 /** Affiche l'animation de scan plein écran, sans jamais voler le focus de la fenêtre active. */
 export function showScanOverlay(): void {
-  ensureOverlayWindow().showInactive()
+  const win = ensureOverlayWindow()
+  win.showInactive()
+  win.moveTop()
+
+  // Sur Windows, la barre des tâches garde son propre "always on top" géré par le shell : un simple
+  // alwaysOnTop côté Electron (même au niveau "screen-saver", déjà le plus élevé disponible) ne suffit pas
+  // toujours à rester au-dessus d'elle, elle peut reprendre le dessus après coup. Reforcer cette fenêtre au
+  // premier plan à intervalle régulier tant qu'elle est affichée est le contournement habituel.
+  if (moveTopInterval) clearInterval(moveTopInterval)
+  moveTopInterval = setInterval(() => {
+    if (overlayWindow?.isVisible()) overlayWindow.moveTop()
+  }, 250)
 }
 
 /** Cache l'animation une fois l'analyse de vision terminée (succès ou échec). */
 export function hideScanOverlay(): void {
+  if (moveTopInterval) {
+    clearInterval(moveTopInterval)
+    moveTopInterval = null
+  }
   overlayWindow?.hide()
 }
