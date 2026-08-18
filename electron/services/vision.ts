@@ -1,5 +1,6 @@
 import { desktopCapturer, screen } from 'electron'
 import { config } from '../config'
+import { hideScanOverlay, showScanOverlay } from './scanOverlay'
 
 interface OllamaVisionResponse {
   message?: { content?: string }
@@ -30,40 +31,51 @@ async function captureScreenshotBase64(): Promise<string> {
   return source.thumbnail.toPNG().toString('base64')
 }
 
-/** Capture l'écran et demande au modèle de vision de le décrire ou de répondre à une question dessus. */
+/**
+ * Capture l'écran et demande au modèle de vision de le décrire ou de répondre à une question dessus.
+ * L'animation de scan (étape 18) ne s'affiche qu'APRÈS la capture (jamais avant) : sinon l'overlay
+ * apparaîtrait lui-même dans l'image envoyée au modèle. Elle couvre donc la partie "analyse" (l'appel au
+ * modèle de vision, qui prend plusieurs secondes), pas la capture elle-même (quasi instantanée) — dans le
+ * `finally` pour ne jamais rester affichée en cas d'erreur.
+ */
 export async function lookAtScreen(question: string): Promise<string> {
   const image = await captureScreenshotBase64()
 
-  let response: Response
+  showScanOverlay()
   try {
-    response = await fetch(`${config.ollama.host}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: config.ollama.visionModel,
-        messages: [
-          { role: 'system', content: VISION_SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: question || "Décris ce qui est affiché à l'écran.",
-            images: [image]
-          }
-        ],
-        stream: false,
-        think: false,
-        options: { num_ctx: config.ollama.numCtx }
+    let response: Response
+    try {
+      response = await fetch(`${config.ollama.host}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: config.ollama.visionModel,
+          messages: [
+            { role: 'system', content: VISION_SYSTEM_PROMPT },
+            {
+              role: 'user',
+              content: question || "Décris ce qui est affiché à l'écran.",
+              images: [image]
+            }
+          ],
+          stream: false,
+          think: false,
+          options: { num_ctx: config.ollama.numCtx }
+        })
       })
-    })
-  } catch {
-    throw new Error(`Impossible de joindre Ollama sur ${config.ollama.host} (est-il lancé ?)`)
-  }
+    } catch {
+      throw new Error(`Impossible de joindre Ollama sur ${config.ollama.host} (est-il lancé ?)`)
+    }
 
-  if (!response.ok) {
-    throw new Error(`Ollama (vision) a répondu ${response.status} : ${await response.text()}`)
-  }
+    if (!response.ok) {
+      throw new Error(`Ollama (vision) a répondu ${response.status} : ${await response.text()}`)
+    }
 
-  const data = (await response.json()) as OllamaVisionResponse
-  const content = data.message?.content?.trim()
-  if (!content) throw new Error(`Réponse vide du modèle de vision '${config.ollama.visionModel}' (bien installé ? ollama pull ${config.ollama.visionModel})`)
-  return content
+    const data = (await response.json()) as OllamaVisionResponse
+    const content = data.message?.content?.trim()
+    if (!content) throw new Error(`Réponse vide du modèle de vision '${config.ollama.visionModel}' (bien installé ? ollama pull ${config.ollama.visionModel})`)
+    return content
+  } finally {
+    hideScanOverlay()
+  }
 }

@@ -72,8 +72,8 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ✅ Étape 17 — Amélioration du design de l'interface : le visage animé
   (`JarisFace`) est remplacé par `JarisOrb`, un noyau holographique façon
   J.A.R.V.I.S. (Iron Man) — voir plus bas
-- ⬜ Étape 18 — Animation pendant la capture/analyse d'écran, pour donner un
-  retour visuel pendant que Jaris "regarde" (étape 6)
+- ✅ Étape 18 — Animation pendant la capture/analyse d'écran, pour donner un
+  retour visuel pendant que Jaris "regarde" (étape 6) — voir plus bas
 - ✅ Étape 19 — Mode toujours visible : petite fenêtre Jaris affichée en
   permanence en bas à droite de l'écran (widget flottant), au lieu de
   n'apparaître que quand la fenêtre principale a le focus — voir plus bas
@@ -355,6 +355,22 @@ doit continuer à alerter/agir à chaque fois) :
   arrêt de la requête" à la place de répondre
 - **90°C** — Jaris s'arrête complètement (`app.quit()`) pour protéger la
   machine, après avoir eu le temps de le dire à voix haute
+
+## Animation de scan pendant l'analyse d'écran (étape 18)
+
+Quand Jaris regarde l'écran (`look_at_screen`, étape 6), une ligne de balayage
+cyan façon J.A.R.V.I.S. (même couleur que l'orbe en écoute) descend l'écran en
+boucle, avec des repères d'angle statiques dans les quatre coins — retour
+visuel explicite pendant l'analyse, plutôt qu'un silence total le temps que
+le modèle de vision réponde (plusieurs secondes).
+
+Techniquement, une fenêtre Electron dédiée, plein écran, transparente et
+cliquable au travers (`setIgnoreMouseEvents`), affiche cette animation
+(`ScreenScan.tsx`, canvas 2D). Elle ne s'affiche qu'**après** la capture de
+l'écran, jamais avant : sinon l'overlay apparaîtrait lui-même dans l'image
+envoyée au modèle de vision. `setContentProtection(true)` sur cette fenêtre
+garantit en plus qu'elle ne pourrait de toute façon jamais apparaître dans
+une capture d'écran, même si le minutage changeait un jour.
 
 ## Contrôle clavier et souris (étape 15)
 
