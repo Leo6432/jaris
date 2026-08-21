@@ -110,11 +110,28 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   rapide/médium/puissant choisis par le scan de capacité (étape 13), avec un
   bouton pour relancer l'analyse à tout moment (pas seulement au premier
   lancement) — voir plus bas
-- ⬜ Étape 29 — Design sonore : donne à Jaris sa propre identité sonore, avec
+- ⬜ Étape 29 — Colonne latérale permanente (toujours visible dans
+  l'interface) avec 3 modes : **Agent vocal** (l'expérience actuelle),
+  **Chat** (parler à Jaris par écrit, en plus de la voix), et **Code** — un
+  générateur d'applications 100% local façon Lovable/Emergent (gratuit, en
+  local, sans envoyer de code à un serveur tiers) : décrire une appli en
+  langage naturel et obtenir un vrai projet fonctionnel généré sur la
+  machine. Pour la qualité du code généré, reprendre les techniques de ces
+  outils plutôt qu'un simple appel LLM brut :
+  - Scaffolding + prompt système enrichi de consignes strictes de design, de
+    structure de composants, de gestion des erreurs et d'intégration
+    visuelle, au lieu d'envoyer la requête brute au modèle
+  - Boucle multi-agents : un sous-agent repasse sur le code généré pour
+    vérifier sa cohérence, ajouter du style et corriger la syntaxe avant de
+    l'afficher, au lieu de livrer le premier jet brut du LLM
+  - Contexte ciblé : extraire précisément les dépendances et le contexte
+    nécessaires plutôt que de noyer le modèle dans trop d'informations
+    inutiles, pour un code plus précis
+- ⬜ Étape 30 — Design sonore : donne à Jaris sa propre identité sonore, avec
   des sons distincts selon l'action en cours (clic de souris, envoi d'un
   message/mail, réflexion, scan d'écran...), en plus de la voix — comme les
   bips caractéristiques de J.A.R.V.I.S. (Iron Man)
-- ⬜ Étape 30 — Optimisation complète de l'application : passe à fond sur les
+- ⬜ Étape 31 — Optimisation complète de l'application : passe à fond sur les
   performances avant de passer aux étapes de mise sur le marché ci-dessous —
   réduire au maximum la consommation CPU/GPU/RAM au repos et en usage
   (démarrage, appels redondants comme `nvidia-smi` relancé plusieurs fois par
@@ -122,18 +139,18 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   temps de réponse (chargement des modèles, transcription, synthèse vocale),
   réduire la taille de l'appli packagée, et nettoyer le code mort et les
   dépendances inutilisées
-- ⬜ Étape 31 — Mentions légales / conditions d'utilisation à faire accepter
+- ⬜ Étape 32 — Mentions légales / conditions d'utilisation à faire accepter
   avant la première utilisation, pour dégager la responsabilité en cas
   d'action problématique de l'IA
-- ⬜ Étape 32 — Protection contre la redistribution : identifiant unique par
+- ⬜ Étape 33 — Protection contre la redistribution : identifiant unique par
   utilisateur/licence pour pouvoir tracer une copie de Jaris qui circule ou
   est partagée à d'autres personnes (piste à creuser, pas encore figée)
-- ⬜ Étape 33 — Publication et monétisation : site pour vendre un abonnement
+- ⬜ Étape 34 — Publication et monétisation : site pour vendre un abonnement
   (~10€/mois)
-- ⬜ Étape 34 — Vidéo de présentation : animation en full motion design
+- ⬜ Étape 35 — Vidéo de présentation : animation en full motion design
   générée avec l'IA pour présenter le projet Jaris, avec sound effects et
   musique
-- ⬜ Étape 35 — Levée de fonds : page sur le site pour présenter le projet à
+- ⬜ Étape 36 — Levée de fonds : page sur le site pour présenter le projet à
   des investisseurs et demander des fonds pour agrandir le site
 
 ## Démarrer en développement
