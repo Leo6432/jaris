@@ -3,7 +3,7 @@ import { chatWithOllama, listInstalledModels, type OllamaMessage, type ThinkLeve
 import { listMemoryTitles } from './memoryStore'
 import { getProfile } from './profileStore'
 import { TOOLS, createToolExecutor } from './tools'
-import { GPU_TEMP_LIMIT_C, getLiveGpuStatus, pickSafeModel } from './hardwareScan'
+import { GPU_TEMP_LIMIT_C, pickSafeModel, type LiveGpuStatus } from './hardwareScan'
 import { checkOverloadWarning } from './resourceMonitor'
 
 interface ModelTiers {
@@ -102,7 +102,7 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[]): str
   )
 }
 
-const MAX_TOOL_ROUNDS = 4
+const MAX_TOOL_ROUNDS = 10
 
 /**
  * Envoie la phrase transcrite à Ollama, exécute les outils qu'il demande, renvoie la réponse finale à
@@ -118,7 +118,10 @@ export async function converse(
   onReminderFire: (message: string) => void,
   onLog?: (message: string) => void,
   history: OllamaMessage[] = [],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  // Le pipeline vocal a déjà relevé l'état GPU juste avant d'appeler converse() (sécurité thermique) :
+  // le redemander ici relancerait un second `nvidia-smi` pour la même question, en pur gaspillage.
+  live: LiveGpuStatus = { freeVramGb: null, tempC: null }
 ): Promise<string> {
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
@@ -130,8 +133,7 @@ export async function converse(
   // Ici on vérifie juste, question par question, que l'état réel du GPU à l'instant présent (température,
   // VRAM effectivement libre) permet encore de lancer le modèle normalement prévu pour ce palier — sans
   // jamais changer les paliers eux-mêmes, seulement ce qui est effectivement invoqué pour cette question.
-  const [live, overloadWarning, installedModels] = await Promise.all([
-    getLiveGpuStatus(),
+  const [overloadWarning, installedModels] = await Promise.all([
     checkOverloadWarning(),
     // Si Ollama ne répond pas ici, l'erreur claire viendra plus bas au vrai appel de chatWithOllama :
     // liste vide -> pas de repli possible -> on garde le modèle normalement configuré pour le palier.

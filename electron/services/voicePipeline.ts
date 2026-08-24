@@ -228,7 +228,10 @@ export class VoicePipeline extends EventEmitter {
 
       // Sécurité thermique GPU vérifiée avant même d'appeler le LLM (pas dans converse) : si la requête
       // doit être annulée, inutile de charger encore plus un GPU déjà chaud avec un appel d'inférence.
-      const gpuStatus = checkGpuTempSafety((await getLiveGpuStatus()).tempC)
+      // Ce relevé est réutilisé plus bas dans converse() (passé en paramètre) au lieu d'en relancer un
+      // second : un seul `nvidia-smi` par question, pas deux.
+      const live = await getLiveGpuStatus()
+      const gpuStatus = checkGpuTempSafety(live.tempC)
       if (gpuStatus.action === 'abort' || gpuStatus.action === 'shutdown') {
         this.emit('log', `Sécurité thermique GPU : ${gpuStatus.message}`)
         await this.speak(gpuStatus.message as string, combined)
@@ -251,7 +254,8 @@ export class VoicePipeline extends EventEmitter {
           (message) => void this.announceReminder(message),
           (message) => this.emit('log', message),
           this.history,
-          controller.signal
+          controller.signal,
+          live
         )
         if (gpuStatus.action === 'warn') reply = `${gpuStatus.message} ${reply}`
       } catch (err) {
