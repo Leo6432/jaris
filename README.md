@@ -131,7 +131,17 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   des sons distincts selon l'action en cours (clic de souris, envoi d'un
   message/mail, réflexion, scan d'écran...), en plus de la voix — comme les
   bips caractéristiques de J.A.R.V.I.S. (Iron Man)
-- ⬜ Étape 31 — Optimisation complète de l'application : passe à fond sur les
+- ⬜ Étape 31 — Clics plus fiables via UI Automation (Windows) : au lieu de
+  deviner des coordonnées à partir d'une capture d'écran (vision), utiliser
+  l'API d'accessibilité Windows (`UIAutomationClient`/`UIAutomationTypes`,
+  accessible depuis PowerShell comme le reste du contrôle clavier/souris —
+  étape 15) pour repérer les vrais éléments cliquables d'une fenêtre (nom,
+  type, position exacte via `ClickablePointProperty`) et cliquer dessus avec
+  certitude, même si l'interface bouge — reste 100% local et gratuit.
+  Limite : certaines interfaces personnalisées (jeux, rendu custom) n'exposent
+  pas toujours un arbre d'accessibilité complet, garder look_at_screen
+  (étape 6) en repli dans ce cas
+- ⬜ Étape 32 — Optimisation complète de l'application : passe à fond sur les
   performances avant de passer aux étapes de mise sur le marché ci-dessous —
   réduire au maximum la consommation CPU/GPU/RAM au repos et en usage
   (démarrage, appels redondants comme `nvidia-smi` relancé plusieurs fois par
@@ -139,18 +149,18 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   temps de réponse (chargement des modèles, transcription, synthèse vocale),
   réduire la taille de l'appli packagée, et nettoyer le code mort et les
   dépendances inutilisées
-- ⬜ Étape 32 — Mentions légales / conditions d'utilisation à faire accepter
+- ⬜ Étape 33 — Mentions légales / conditions d'utilisation à faire accepter
   avant la première utilisation, pour dégager la responsabilité en cas
   d'action problématique de l'IA
-- ⬜ Étape 33 — Protection contre la redistribution : identifiant unique par
+- ⬜ Étape 34 — Protection contre la redistribution : identifiant unique par
   utilisateur/licence pour pouvoir tracer une copie de Jaris qui circule ou
   est partagée à d'autres personnes (piste à creuser, pas encore figée)
-- ⬜ Étape 34 — Publication et monétisation : site pour vendre un abonnement
+- ⬜ Étape 35 — Publication et monétisation : site pour vendre un abonnement
   (~10€/mois)
-- ⬜ Étape 35 — Vidéo de présentation : animation en full motion design
+- ⬜ Étape 36 — Vidéo de présentation : animation en full motion design
   générée avec l'IA pour présenter le projet Jaris, avec sound effects et
   musique
-- ⬜ Étape 36 — Levée de fonds : page sur le site pour présenter le projet à
+- ⬜ Étape 37 — Levée de fonds : page sur le site pour présenter le projet à
   des investisseurs et demander des fonds pour agrandir le site
 
 ## Démarrer en développement
