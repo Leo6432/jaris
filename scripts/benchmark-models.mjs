@@ -45,7 +45,15 @@ const MODELS = [
   'granite4:1b',
   // Fait exclusivement pour le tool calling (pas pour la conversation générale) : ses réponses aux 2
   // questions de raisonnement du test n'ont pas vraiment de sens, mais intéressant sur les 6 tests d'outils.
-  'functiongemma:270m'
+  'functiongemma:270m',
+  // Pas de tag officiel dans la bibliothèque Ollama : import direct depuis le dépôt Hugging Face officiel
+  // d'OpenBMB (créateur du modèle) plutôt qu'une requantification tierce. Un seul checkpoint sert à la
+  // fois de réponse rapide ("No-Think") et de réflexion approfondie ("Think") selon le chat template —
+  // pensé explicitement pour assistants locaux / agents de code / appel d'outils, comme Jaris.
+  'hf.co/openbmb/MiniCPM5-1B-GGUF',
+  // Pas de tag officiel non plus : import depuis la requantification GGUF de bartowski (quantifieur
+  // reconnu et fiable dans la communauté Ollama/llama.cpp), à partir du dépôt officiel ai9stars/G9v3-3B.
+  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF'
 ]
 
 // Copié tel quel depuis electron/services/tools.ts : mêmes schémas que Jaris utilise réellement en

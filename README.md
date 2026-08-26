@@ -110,7 +110,14 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   rapide/médium/puissant choisis par le scan de capacité (étape 13), avec un
   bouton pour relancer l'analyse à tout moment (pas seulement au premier
   lancement) — voir plus bas
-- ⬜ Étape 29 — Colonne latérale permanente (toujours visible dans
+- ⬜ Étape 29 — Veille et re-benchmark continu des modèles : relancer
+  régulièrement le benchmark local (bouton de l'étape 28) à mesure que de
+  nouveaux modèles locaux efficaces sortent (ex: MiniCPM5-1B et G9v3-3B,
+  ajoutés le 26 août 2026), pour que Jaris continue d'utiliser ce qu'il y a
+  de mieux pour la config de l'utilisateur — c'est le vrai levier de
+  progrès pour Jaris dans le temps, plus fiable qu'attendre que les gens
+  changent de matériel
+- ⬜ Étape 30 — Colonne latérale permanente (toujours visible dans
   l'interface) avec 3 modes : **Agent vocal** (l'expérience actuelle),
   **Chat** (parler à Jaris par écrit, en plus de la voix), et **Code** — un
   générateur d'applications 100% local façon Lovable/Emergent (gratuit, en
@@ -141,11 +148,11 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
     aujourd'hui car l'API d'Ollama n'expose que du texte, pas les
     représentations internes du modèle, et ça rendrait le débogage
     beaucoup plus dur (plus de logs lisibles entre agents)
-- ⬜ Étape 30 — Design sonore : donne à Jaris sa propre identité sonore, avec
+- ⬜ Étape 31 — Design sonore : donne à Jaris sa propre identité sonore, avec
   des sons distincts selon l'action en cours (clic de souris, envoi d'un
   message/mail, réflexion, scan d'écran...), en plus de la voix — comme les
   bips caractéristiques de J.A.R.V.I.S. (Iron Man)
-- ⬜ Étape 31 — Clics plus fiables via UI Automation (Windows) : au lieu de
+- ⬜ Étape 32 — Clics plus fiables via UI Automation (Windows) : au lieu de
   deviner des coordonnées à partir d'une capture d'écran (vision), utiliser
   l'API d'accessibilité Windows (`UIAutomationClient`/`UIAutomationTypes`,
   accessible depuis PowerShell comme le reste du contrôle clavier/souris —
@@ -155,7 +162,7 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   Limite : certaines interfaces personnalisées (jeux, rendu custom) n'exposent
   pas toujours un arbre d'accessibilité complet, garder look_at_screen
   (étape 6) en repli dans ce cas
-- ⬜ Étape 32 — Optimisation complète de l'application : passe à fond sur les
+- ⬜ Étape 33 — Optimisation complète de l'application : passe à fond sur les
   performances avant de passer aux étapes de mise sur le marché ci-dessous —
   réduire au maximum la consommation CPU/GPU/RAM au repos et en usage
   (démarrage, appels redondants comme `nvidia-smi` relancé plusieurs fois par
@@ -163,18 +170,18 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   temps de réponse (chargement des modèles, transcription, synthèse vocale),
   réduire la taille de l'appli packagée, et nettoyer le code mort et les
   dépendances inutilisées
-- ⬜ Étape 33 — Mentions légales / conditions d'utilisation à faire accepter
+- ⬜ Étape 34 — Mentions légales / conditions d'utilisation à faire accepter
   avant la première utilisation, pour dégager la responsabilité en cas
   d'action problématique de l'IA
-- ⬜ Étape 34 — Protection contre la redistribution : identifiant unique par
+- ⬜ Étape 35 — Protection contre la redistribution : identifiant unique par
   utilisateur/licence pour pouvoir tracer une copie de Jaris qui circule ou
   est partagée à d'autres personnes (piste à creuser, pas encore figée)
-- ⬜ Étape 35 — Publication et monétisation : site pour vendre un abonnement
+- ⬜ Étape 36 — Publication et monétisation : site pour vendre un abonnement
   (~10€/mois)
-- ⬜ Étape 36 — Vidéo de présentation : animation en full motion design
+- ⬜ Étape 37 — Vidéo de présentation : animation en full motion design
   générée avec l'IA pour présenter le projet Jaris, avec sound effects et
   musique
-- ⬜ Étape 37 — Levée de fonds : page sur le site pour présenter le projet à
+- ⬜ Étape 38 — Levée de fonds : page sur le site pour présenter le projet à
   des investisseurs et demander des fonds pour agrandir le site
 
 ## Démarrer en développement
