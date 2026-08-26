@@ -16,14 +16,24 @@
  * démarrer, justement à cause de ce téléchargement potentiellement volumineux.
  */
 
+import { exec } from 'child_process'
 import { writeFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import { promisify } from 'util'
 
+const execAsync = promisify(exec)
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const RESULTS_PATH = join(__dirname, 'benchmark-results.md')
 
 const OLLAMA_HOST = process.env.OLLAMA_HOST?.trim() || 'http://127.0.0.1:11434'
+
+/**
+ * Petite marge sous la VRAM totale détectée, pour le contexte (num_ctx, 4096 par défaut) et l'overhead
+ * OS/pilote pendant le test — contrairement à STT_RESERVED_GB côté app (electron/services/hardwareScan.ts),
+ * pas besoin de réserver de la place pour le STT ici : ce script tourne seul, sans le pipeline vocal.
+ */
+const VRAM_SAFETY_MARGIN_GB = 1
 
 const MODELS = [
   'qwen3.5:2b', // par défaut en Q8_0 (2,74 Go) : plus précis mais plus lourd que la variante ci-dessous
@@ -53,7 +63,13 @@ const MODELS = [
   'hf.co/openbmb/MiniCPM5-1B-GGUF',
   // Pas de tag officiel non plus : import depuis la requantification GGUF de bartowski (quantifieur
   // reconnu et fiable dans la communauté Ollama/llama.cpp), à partir du dépôt officiel ai9stars/G9v3-3B.
-  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF'
+  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF',
+  // Ignorés jusqu'ici car trop gros pour la machine de dev (RTX 3070, 8 Go) : maintenant que le script
+  // détecte la VRAM disponible et saute automatiquement ce qui ne rentre pas (voir detectVramGb ci-dessous),
+  // les garder dans la liste permet aux utilisateurs avec plus de VRAM de vraiment les tester chez eux —
+  // mêmes tailles que LARGE_CANDIDATES dans electron/services/hardwareScan.ts.
+  'qwen3.5:35b',
+  'qwen3.5:27b'
 ]
 
 // Copié tel quel depuis electron/services/tools.ts : mêmes schémas que Jaris utilise réellement en
@@ -188,16 +204,47 @@ async function listInstalledModels() {
 }
 
 /**
+ * VRAM totale de la carte NVIDIA détectée (Go), même requête que detectGpu() dans
+ * electron/services/hardwareScan.ts — dupliquée ici volontairement : ce script tourne en `node` simple, pas
+ * via le bundler Electron/TS, donc pas d'import direct possible entre les deux. `null` sans GPU NVIDIA
+ * détecté (ou en cas d'erreur), auquel cas aucun filtre de taille n'est appliqué (voir main()).
+ */
+async function detectVramGb() {
+  try {
+    const { stdout } = await execAsync('nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits', { windowsHide: true })
+    const mib = parseInt(stdout.trim().split('\n')[0], 10)
+    return Number.isFinite(mib) ? mib / 1024 : null
+  } catch {
+    return null
+  }
+}
+
+class ModelTooLargeError extends Error {
+  constructor(model, requiredGb, budgetGb) {
+    super(`nécessite ~${requiredGb.toFixed(1)} Go, au-delà des ${budgetGb.toFixed(1)} Go disponibles sur cette carte`)
+    this.name = 'ModelTooLargeError'
+    this.model = model
+  }
+}
+
+/**
  * Télécharge `model` via Ollama, avec une progression affichée par tranche de 10% (pas à chaque %, sinon
  * ~100 lignes par modèle) : lisible aussi bien dans un vrai terminal que dans le journal en direct de
  * l'onglet Modèles de Jaris (qui découpe la sortie ligne par ligne, un `\r` ne s'y afficherait pas pareil).
+ *
+ * `budgetGb` (null = pas de limite, VRAM non détectée) : dès que le manifeste Ollama révèle la taille réelle
+ * du modèle (`progress.total`, en octets, disponible avant la fin du téléchargement), on l'annule tout de
+ * suite si ça dépasse le budget — pas la peine de télécharger plusieurs Go pour un modèle qui ne rentrera de
+ * toute façon jamais en VRAM sur cette machine.
  */
-async function pullModel(model) {
+async function pullModel(model, budgetGb) {
   console.log(`Téléchargement de ${model}…`)
+  const controller = new AbortController()
   const res = await fetch(`${OLLAMA_HOST}/api/pull`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: model, stream: true })
+    body: JSON.stringify({ name: model, stream: true }),
+    signal: controller.signal
   })
   if (!res.ok || !res.body) throw new Error(`${res.status} ${await res.text()}`)
 
@@ -205,6 +252,7 @@ async function pullModel(model) {
   const decoder = new TextDecoder()
   let buffer = ''
   let lastBucket = -1
+  let sizeChecked = false
 
   while (true) {
     const { done, value } = await reader.read()
@@ -224,6 +272,15 @@ async function pullModel(model) {
         continue
       }
       if (progress.error) throw new Error(progress.error)
+
+      if (!sizeChecked && budgetGb !== null && progress.total) {
+        sizeChecked = true
+        const requiredGb = progress.total / 1024 ** 3
+        if (requiredGb > budgetGb) {
+          controller.abort()
+          throw new ModelTooLargeError(model, requiredGb, budgetGb)
+        }
+      }
 
       if (progress.total && progress.completed !== undefined) {
         const bucket = Math.floor((progress.completed / progress.total) * 10) * 10
@@ -296,6 +353,14 @@ function fmt(n, digits = 1) {
 async function main() {
   console.log(`Ollama : ${OLLAMA_HOST}\n`)
 
+  const vramGb = await detectVramGb()
+  const vramBudgetGb = vramGb !== null ? Math.max(0, vramGb - VRAM_SAFETY_MARGIN_GB) : null
+  console.log(
+    vramGb !== null
+      ? `VRAM détectée : ${vramGb.toFixed(1)} Go (budget de test : ${vramBudgetGb.toFixed(1)} Go, marge de ${VRAM_SAFETY_MARGIN_GB} Go pour le contexte/l'OS) — les modèles trop gros pour cette carte seront sautés automatiquement.\n`
+      : 'VRAM non détectée (pas de GPU NVIDIA ?) : aucun filtre de taille appliqué, tous les modèles de la liste seront tentés.\n'
+  )
+
   let installed
   try {
     installed = await listInstalledModels()
@@ -309,9 +374,13 @@ async function main() {
     console.log(`${missing.length} modèle(s) manquant(s) à installer avant le test :\n`)
     for (const model of missing) {
       try {
-        await pullModel(model)
+        await pullModel(model, vramBudgetGb)
       } catch (err) {
-        console.log(`  Échec de l'installation de ${model} : ${err.message} (ignoré pour ce run)`)
+        if (err instanceof ModelTooLargeError) {
+          console.log(`  ${model} ignoré : ${err.message}`)
+        } else {
+          console.log(`  Échec de l'installation de ${model} : ${err.message} (ignoré pour ce run)`)
+        }
       }
     }
     installed = await listInstalledModels()
