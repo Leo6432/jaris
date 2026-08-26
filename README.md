@@ -56,20 +56,6 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   cliquer à la place de l'utilisateur, pour automatiser des actions
   complètes sur l'ordinateur (pas seulement ouvrir une application) — voir
   plus bas
-- ⬜ Étape 16 — Installeur en un clic : **règle absolue — le Jaris installé par
-  le public doit être exactement le même que celui utilisé en développement**
-  (mêmes modèles, mêmes fonctionnalités, même qualité de réponse), jamais une
-  version allégée ou dégradée, et ça doit rester 0€ pour toujours (aucun
-  abonnement, aucune API payante, tout tourne en local sur la machine de
-  l'utilisateur, exactement comme aujourd'hui en dev). Pour y arriver :
-  empaqueter toute la chaîne (app + Ollama + modèles, y compris le modèle de
-  transcription Cohere Transcribe déjà téléchargé et embarqué — licence
-  Apache 2.0, donc redistribution autorisée) dans un seul installeur simple,
-  avec tous les réglages techniques déjà configurés par défaut à l'intérieur.
-  Aucun fichier `.env` à ouvrir ni à modifier à la main, aucun compte
-  Hugging Face à créer, même pour un débutant complet — seuls les vrais
-  réglages perso (connecter Gmail, choisir son prénom) resteront dans
-  l'interface, jamais dans un fichier texte ni sur un site tiers
 - ✅ Étape 17 — Amélioration du design de l'interface : le visage animé
   (`JarisFace`) est remplacé par `JarisOrb`, un noyau holographique façon
   J.A.R.V.I.S. (Iron Man) — voir plus bas
@@ -78,38 +64,31 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ✅ Étape 19 — Mode toujours visible : petite fenêtre Jaris affichée en
   permanence en bas à droite de l'écran (widget flottant), au lieu de
   n'apparaître que quand la fenêtre principale a le focus — voir plus bas
-- ⬜ Étape 20 — Mise à jour automatique de l'application dès qu'une nouvelle
-  version est publiée
+- ✅ Étape 25 — Personnalisation, prénom de l'utilisateur : au tout premier
+  lancement, Jaris demande comment l'appeler (une seule fois, sauvegardé
+  localement) et s'adresse ensuite à l'utilisateur par son prénom en
+  conversation — voir plus bas
+- ✅ Étape 28 — Onglet "Modèles" dans le menu Options : affiche les 3 paliers
+  rapide/médium/puissant choisis par le scan de capacité (étape 13), avec un
+  bouton pour relancer l'analyse à tout moment (pas seulement au premier
+  lancement) — voir plus bas
 - ⬜ Étape 21 — Intégration téléphone : système pour connecter Jaris au
   téléphone de l'utilisateur (via son numéro ou une connexion directe au
   téléphone) afin d'envoyer des messages, voir les notifications, et plus
   largement tout voir/contrôler depuis le téléphone — en s'appuyant sur un
   projet open source existant faisant le pont PC/téléphone (ex: KDE Connect)
   plutôt que de tout réécrire
-- ⬜ Étape 22 — Préparation à la vente (~5€) : licence, protection contre la
-  copie/redistribution du logiciel. Nécessitera au préalable de vérifier la
-  compatibilité des licences des briques open source utilisées (Ollama,
-  modèles Qwen, openWakeWord, Cohere Transcribe, Supertonic HD, SearXNG) avec
-  une distribution commerciale
 - ⬜ Étape 23 — Site web avec tableau de bord personnel : chaque utilisateur
   peut noter son planning et sa to-do list sur le site, et Jaris peut y
   écrire des informations
 - ⬜ Étape 24 — Jaris connaît la date et l'heure : briefing du matin
   (planning du jour, tâches à faire), et ajoute automatiquement une tâche à
   la to-do list du site dès que l'utilisateur en mentionne une à voix haute
-- ✅ Étape 25 — Personnalisation, prénom de l'utilisateur : au tout premier
-  lancement, Jaris demande comment l'appeler (une seule fois, sauvegardé
-  localement) et s'adresse ensuite à l'utilisateur par son prénom en
-  conversation — voir plus bas
 - ⬜ Étape 26 — Paramètres avancés : page dédiée pour tout personnaliser
   (connecter son planning/calendrier, son Gmail, choisir la langue, etc.)
 - ⬜ Étape 27 — Sous-agents : Jaris peut lancer plusieurs sous-agents (agents
   web, etc.) en parallèle pour des tâches complexes qui demandent plusieurs
   actions en même temps, au lieu de tout faire en une seule séquence
-- ✅ Étape 28 — Onglet "Modèles" dans le menu Options : affiche les 3 paliers
-  rapide/médium/puissant choisis par le scan de capacité (étape 13), avec un
-  bouton pour relancer l'analyse à tout moment (pas seulement au premier
-  lancement) — voir plus bas
 - ⬜ Étape 29 — Veille et re-benchmark continu des modèles : relancer
   régulièrement le benchmark local (bouton de l'étape 28) à mesure que de
   nouveaux modèles locaux efficaces sortent (ex: MiniCPM5-1B et G9v3-3B,
@@ -183,6 +162,28 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   temps de réponse (chargement des modèles, transcription, synthèse vocale),
   réduire la taille de l'appli packagée, et nettoyer le code mort et les
   dépendances inutilisées
+- ⬜ Étape 16 — Installeur en un clic : **règle absolue — le Jaris installé par
+  le public doit être exactement le même que celui utilisé en développement**
+  (mêmes modèles, mêmes fonctionnalités, même qualité de réponse), jamais une
+  version allégée ou dégradée, et ça doit rester 0€ pour toujours (aucun
+  abonnement, aucune API payante, tout tourne en local sur la machine de
+  l'utilisateur, exactement comme aujourd'hui en dev). Pour y arriver :
+  empaqueter toute la chaîne (app + Ollama + modèles, y compris le modèle de
+  transcription Cohere Transcribe déjà téléchargé et embarqué — licence
+  Apache 2.0, donc redistribution autorisée) dans un seul installeur simple,
+  avec tous les réglages techniques déjà configurés par défaut à l'intérieur.
+  Aucun fichier `.env` à ouvrir ni à modifier à la main, aucun compte
+  Hugging Face à créer, même pour un débutant complet — seuls les vrais
+  réglages perso (connecter Gmail, choisir son prénom) resteront dans
+  l'interface, jamais dans un fichier texte ni sur un site tiers
+- ⬜ Étape 20 — Mise à jour automatique de l'application dès qu'une nouvelle
+  version est publiée
+- ⬜ Étape 22 — Vérification des licences avant mise en vente : vérifier la
+  compatibilité des licences des briques open source utilisées (Ollama,
+  modèles Qwen, openWakeWord, Cohere Transcribe, Supertonic HD, SearXNG) avec
+  une distribution commerciale, avant de passer aux étapes de mise sur le
+  marché ci-dessous (mentions légales, protection contre la redistribution,
+  publication et monétisation)
 - ⬜ Étape 36 — Mentions légales / conditions d'utilisation à faire accepter
   avant la première utilisation, pour dégager la responsabilité en cas
   d'action problématique de l'IA
