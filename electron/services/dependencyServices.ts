@@ -1,6 +1,7 @@
 import { exec, execSync, spawn, type ChildProcess } from 'child_process'
 import { promisify } from 'util'
 import { config } from '../config'
+import { openApp } from './appLauncher'
 
 const execAsync = promisify(exec)
 
@@ -137,26 +138,19 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
   try {
     await execAsync('docker info', { windowsHide: true })
   } catch {
-    // true si Docker Desktop.exe est introuvable au chemin attendu (pas juste "pas encore démarré") : dans
-    // ce cas, inutile d'attendre 90s en sondant `docker info` en boucle, le résultat est déjà connu.
+    // true si Docker Desktop est introuvable (pas juste "pas encore démarré") : dans ce cas, inutile
+    // d'attendre 90s en sondant `docker info` en boucle, le résultat est déjà connu.
     let launchFailed = false
     if (process.platform === 'win32') {
-      const dockerProc = spawn('C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe', {
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true
-      })
-      // Même piège que pour `ollama serve` ci-dessus : sans ce listener, un chemin d'install Docker Desktop
-      // différent (ou Docker pas installé du tout) plante tout Jaris avec un ENOENT non rattrapé, au lieu
-      // de juste échouer à lancer Docker (le message "Docker n'a pas pu démarrer" un peu plus bas suffit).
-      dockerProc.on('error', (err) => {
-        launchFailed = true
-        log(`Impossible de lancer Docker Desktop automatiquement (${err.message}).`)
-      })
-      dockerProc.unref()
-      // Laisse le temps à l'évènement 'error' ci-dessus d'arriver avant de décider s'il faut sonder
-      // `docker info` en boucle : un ENOENT est quasi instantané, jamais aussi long que les 90s d'attente.
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      // Réutilise openApp (étape 5, même mécanisme que "ouvre Discord" à la voix) plutôt qu'un chemin
+      // d'installation codé en dur : celui-ci suppose l'emplacement par défaut
+      // (C:\Program Files\Docker\Docker\Docker Desktop.exe) et échoue silencieusement si Docker Desktop
+      // est installé ailleurs (autre disque, install utilisateur...) — vécu par Léo, qui a dû le lancer
+      // à la main alors qu'il était bien installé. openApp cherche dans le menu Démarrer Windows, qui
+      // connaît l'appli quel que soit son chemin réel d'installation.
+      const result = await openApp('Docker Desktop')
+      log(result)
+      launchFailed = !result.endsWith('a été lancé.')
     }
 
     const dockerUp = !launchFailed && (await waitUntil(async () => {
