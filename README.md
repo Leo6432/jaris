@@ -127,6 +127,12 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   - Contexte ciblé : extraire précisément les dépendances et le contexte
     nécessaires plutôt que de noyer le modèle dans trop d'informations
     inutiles, pour un code plus précis
+  - Piste à surveiller (pas encore faisable) : faire communiquer les
+    sous-agents de la boucle multi-agents autrement qu'en repassant par du
+    texte à chaque échange (perte de nuance à chaque conversion) — bloqué
+    aujourd'hui car l'API d'Ollama n'expose que du texte, pas les
+    représentations internes du modèle, et ça rendrait le débogage
+    beaucoup plus dur (plus de logs lisibles entre agents)
 - ⬜ Étape 30 — Design sonore : donne à Jaris sa propre identité sonore, avec
   des sons distincts selon l'action en cours (clic de souris, envoi d'un
   message/mail, réflexion, scan d'écran...), en plus de la voix — comme les
