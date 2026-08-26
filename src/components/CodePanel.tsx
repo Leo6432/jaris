@@ -90,8 +90,7 @@ export default function CodePanel(): JSX.Element {
       {appResult && appResult.issues.length > 0 && (
         <div className="code-panel__issues">
           <strong>
-            L'application a été générée mais {appResult.issues.length === 1 ? 'un problème n\'a pas pu être corrigé' : `${appResult.issues.length} problèmes n'ont pas pu être corrigés`}
-            {' '}(modèle local trop limité pour cette demande) :
+            L'application a été générée mais {appResult.issues.length === 1 ? "un problème n'a pas pu être corrigé" : `${appResult.issues.length} problèmes n'ont pas pu être corrigés`} :
           </strong>
           <ul>
             {appResult.issues.map((issue) => (

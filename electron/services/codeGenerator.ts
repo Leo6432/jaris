@@ -133,11 +133,31 @@ export function validateGeneratedHtml(html: string): string[] {
  * <!DOCTYPE ou au <html, plutôt que de renvoyer une erreur pour une réponse en réalité exploitable.
  */
 function extractHtml(raw: string): string | null {
-  const fenced = /```(?:html)?\s*\n([\s\S]*?)```/i.exec(raw)
-  const candidate = (fenced ? fenced[1] : raw).trim()
-  const start = candidate.search(/<!DOCTYPE html|<html[\s>]/i)
-  if (start === -1) return null
-  return candidate.slice(start).trim()
+  const fences = [...raw.matchAll(/```(?:html)?\s*\n([\s\S]*?)```/gi)].map((match) => match[1].trim())
+
+  // Un petit modèle ignore régulièrement la consigne "un seul bloc" et découpe le fichier sur plusieurs
+  // blocs de code successifs (le <head> dans l'un, le <body> dans le suivant). Ne garder que le premier
+  // bloc donnait alors un document tronqué, sans <body> — la concaténation reconstitue le vrai fichier.
+  // Elle est essayée en DERNIER pour que deux versions complètes proposées en alternative gardent la
+  // première plutôt que de se retrouver collées bout à bout.
+  const candidates = fences.length ? [...fences] : [raw]
+  if (fences.length > 1) candidates.push(fences.join('\n'))
+
+  const documents = candidates
+    .map((candidate) => {
+      const start = candidate.search(/<!DOCTYPE html|<html[\s>]/i)
+      return start === -1 ? null : candidate.slice(start).trim()
+    })
+    .filter((document): document is string => document !== null)
+
+  if (!documents.length) return null
+
+  // Le meilleur candidat est le plus complet : un document qui a vraiment un <body> et une fermeture
+  // </html> vaut mieux qu'un fragment qui commence bien mais s'arrête au milieu.
+  const score = (document: string): number =>
+    (/<body[\s>]/i.test(document) ? 2 : 0) + (/<\/html>/i.test(document) ? 1 : 0)
+
+  return documents.reduce((best, document) => (score(document) > score(best) ? document : best))
 }
 
 /**
