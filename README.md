@@ -127,6 +127,14 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   - Contexte ciblé : extraire précisément les dépendances et le contexte
     nécessaires plutôt que de noyer le modèle dans trop d'informations
     inutiles, pour un code plus précis
+  - Bac à sable Docker (déjà utilisé pour SearXNG, étapes 7/8) : avant
+    d'afficher une appli générée, la faire tourner dans un conteneur isolé
+    pour vraiment la vérifier (ça compile, ça ne plante pas) plutôt que de
+    l'exécuter directement sur la machine — pas besoin d'une vraie VM
+  - Aperçu (preview) en direct de l'appli générée, mis à jour à chaque
+    modification — visible et à jour quel que soit le mode utilisé pour
+    piloter la génération (dicter par la voix, écrire dans le chat, ou
+    éditer le code directement), pas seulement quand l'onglet Code est ouvert
   - Piste à surveiller (pas encore faisable) : faire communiquer les
     sous-agents de la boucle multi-agents autrement qu'en repassant par du
     texte à chaque échange (perte de nuance à chaque conversion) — bloqué
