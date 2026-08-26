@@ -2,7 +2,7 @@ import { app, ipcMain, shell, BrowserWindow, globalShortcut, screen, Tray, Menu 
 import { join } from 'path'
 import { checkVoiceSetup } from './config'
 import { ensureOllamaRunning, ensureSearxngRunning, stopOllamaIfStartedByJaris } from './services/dependencyServices'
-import { getModelOverview, scanCapacity } from './services/hardwareScan'
+import { getAllCandidateModelIds, getModelOverview, scanCapacity } from './services/hardwareScan'
 import { runModelBenchmark } from './services/benchmarkRunner'
 import { deleteModel, pullModelIfMissing } from './services/ollama'
 import { previewVoice } from './services/tts'
@@ -289,10 +289,36 @@ app.whenReady().then(async () => {
         }
       }
 
+      // Snapshot des modèles candidats connus à l'instant du scan (onboarding ou "Relancer l'analyse") :
+      // sert de référence pour repérer, au prochain lancement, les modèles ajoutés depuis (étape 29).
+      const scannedProfile = await getProfile()
+      if (scannedProfile) {
+        await saveProfile({ ...scannedProfile, knownModelCandidates: getAllCandidateModelIds() })
+      }
+
       return result
     }
   )
   ipcMain.handle(IPC_CHANNELS.getModelOverview, () => getModelOverview())
+  // renderer -> main : modèles candidats apparus depuis le dernier scan (étape 29), pour le popup dans App.tsx.
+  // Un profil créé avant cette fonctionnalité (knownModelCandidates jamais défini) est silencieusement
+  // initialisé sur l'état actuel plutôt que de signaler tous les candidats existants comme "nouveaux".
+  ipcMain.handle(IPC_CHANNELS.getNewModels, async (): Promise<string[]> => {
+    const profile = await getProfile()
+    if (!profile?.capacityScanDone) return []
+    const currentIds = getAllCandidateModelIds()
+    if (!profile.knownModelCandidates) {
+      await saveProfile({ ...profile, knownModelCandidates: currentIds })
+      return []
+    }
+    const known = new Set(profile.knownModelCandidates)
+    return currentIds.filter((id) => !known.has(id))
+  })
+  ipcMain.handle(IPC_CHANNELS.acknowledgeNewModels, async (): Promise<void> => {
+    const profile = await getProfile()
+    if (!profile) return
+    await saveProfile({ ...profile, knownModelCandidates: getAllCandidateModelIds() })
+  })
   ipcMain.handle(IPC_CHANNELS.runModelBenchmark, async (event) => {
     await runModelBenchmark((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))
   })

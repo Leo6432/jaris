@@ -83,6 +83,21 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3-vl:2b', vramGb: 3 }
 ]
 
+/**
+ * Tous les identifiants de modèles candidats (tous paliers + vision confondus, sans doublon), pour l'étape
+ * 29 (veille) : comparé au dernier snapshot connu du profil pour détecter les modèles ajoutés à ce fichier
+ * depuis (nouvelle version de Jaris) et prévenir l'utilisateur au lieu d'attendre qu'il relance l'analyse
+ * de lui-même.
+ */
+export function getAllCandidateModelIds(): string[] {
+  const ids = new Set<string>()
+  for (const list of Object.values(TIER_CANDIDATES)) {
+    for (const c of list) ids.add(c.model)
+  }
+  for (const c of VISION_CANDIDATES) ids.add(c.model)
+  return [...ids]
+}
+
 function pickForBudget(candidates: ModelCandidate[], budgetGb: number): string {
   const fit = candidates.find((c) => c.vramGb <= budgetGb)
   return (fit ?? candidates[candidates.length - 1]).model

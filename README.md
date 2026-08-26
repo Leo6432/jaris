@@ -72,6 +72,15 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   rapide/médium/puissant choisis par le scan de capacité (étape 13), avec un
   bouton pour relancer l'analyse à tout moment (pas seulement au premier
   lancement) — voir plus bas
+- ✅ Étape 29 — Veille des nouveaux modèles : à chaque scan de capacité
+  (étape 13/28), Jaris retient un instantané de tous les modèles candidats
+  qu'il connaît (hardwareScan.ts). Si une nouvelle version de Jaris ajoute
+  des modèles à cette liste (ex: MiniCPM5-1B, G9v3-3B et GLM-4.6V-Flash,
+  ajoutés le 26 août 2026) depuis le dernier scan, un popup en prévient
+  l'utilisateur au lancement suivant, avec le nom des nouveautés, plutôt que
+  d'attendre qu'il pense à relancer l'analyse lui-même — pas de re-benchmark
+  automatique en tâche de fond (trop lourd, 20-40+ min), c'est toujours
+  l'utilisateur qui déclenche via le bouton existant
 - ⬜ Étape 21 — Intégration téléphone : système pour connecter Jaris au
   téléphone de l'utilisateur (via son numéro ou une connexion directe au
   téléphone) afin d'envoyer des messages, voir les notifications, et plus
@@ -89,13 +98,6 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ⬜ Étape 27 — Sous-agents : Jaris peut lancer plusieurs sous-agents (agents
   web, etc.) en parallèle pour des tâches complexes qui demandent plusieurs
   actions en même temps, au lieu de tout faire en une seule séquence
-- ⬜ Étape 29 — Veille et re-benchmark continu des modèles : relancer
-  régulièrement le benchmark local (bouton de l'étape 28) à mesure que de
-  nouveaux modèles locaux efficaces sortent (ex: MiniCPM5-1B et G9v3-3B,
-  ajoutés le 26 août 2026), pour que Jaris continue d'utiliser ce qu'il y a
-  de mieux pour la config de l'utilisateur — c'est le vrai levier de
-  progrès pour Jaris dans le temps, plus fiable qu'attendre que les gens
-  changent de matériel
 - ⬜ Étape 30 — Colonne latérale permanente (toujours visible dans
   l'interface) avec 3 modes : **Agent vocal** (l'expérience actuelle),
   **Chat** (parler à Jaris par écrit, en plus de la voix), et **Code** — un

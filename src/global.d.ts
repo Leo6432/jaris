@@ -44,6 +44,8 @@ declare global {
       getModelOverview: () => Promise<ModelOverviewEntry[]>
       runModelBenchmark: () => Promise<void>
       onModelBenchmarkLine: (cb: (line: string) => void) => () => void
+      getNewModels: () => Promise<string[]>
+      acknowledgeNewModels: () => Promise<void>
     }
   }
 }

@@ -563,6 +563,36 @@ body.body--scan {
   color: #9fc3e6;
 }
 
+.app__new-models {
+  max-width: 480px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #9df0ff;
+  background: rgba(55, 226, 255, 0.08);
+  border: 1px solid rgba(55, 226, 255, 0.3);
+  border-radius: 12px;
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.app__new-models button {
+  background: transparent;
+  border: 1px solid rgba(55, 226, 255, 0.35);
+  color: #9df0ff;
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.app__new-models button:hover {
+  border-color: #37e2ff;
+  color: #d9ecff;
+}
+
 .app__setup-warning {
   max-width: 480px;
   text-align: center;

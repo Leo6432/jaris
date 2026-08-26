@@ -33,6 +33,13 @@ export interface Profile {
   models?: ModelTiers
   /** Modèle de vision choisi par le scan de capacité selon la VRAM, vide = OLLAMA_VISION_MODEL de .env. */
   visionModel?: string
+  /**
+   * Tous les modèles candidats (hardwareScan.ts) connus lors du dernier scan de capacité (étape 13/29) :
+   * sert à repérer, au lancement suivant, les modèles ajoutés depuis (nouvelle version de Jaris) pour
+   * prévenir l'utilisateur au lieu d'attendre qu'il pense à relancer l'analyse lui-même. `undefined` pour
+   * un profil créé avant cette fonctionnalité, jamais traité comme "aucun modèle connu".
+   */
+  knownModelCandidates?: string[]
 }
 
 export interface MemoryGraphNode {
@@ -151,5 +158,9 @@ export const IPC_CHANNELS = {
   /** renderer -> main : lance scripts/benchmark-models.mjs (résout une fois le benchmark terminé). */
   runModelBenchmark: 'jaris:run-model-benchmark',
   /** main -> renderer : une ligne de sortie du benchmark en cours, au fil de l'eau. */
-  modelBenchmarkLine: 'jaris:model-benchmark-line'
+  modelBenchmarkLine: 'jaris:model-benchmark-line',
+  /** renderer <-> main : modèles candidats (hardwareScan.ts) apparus depuis le dernier scan de capacité (étape 29), à afficher en popup. */
+  getNewModels: 'jaris:get-new-models',
+  /** renderer -> main : l'utilisateur a vu le popup de nouveaux modèles, ne plus le remontrer avant les prochains. */
+  acknowledgeNewModels: 'jaris:acknowledge-new-models'
 } as const

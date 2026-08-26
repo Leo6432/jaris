@@ -41,6 +41,7 @@ export default function App(): JSX.Element {
   const [capacityScanDone, setCapacityScanDone] = useState<boolean | undefined>(undefined)
   const [nameInput, setNameInput] = useState('')
   const [memoryGraph, setMemoryGraph] = useState<MemoryGraph | null>(null)
+  const [newModels, setNewModels] = useState<string[]>([])
 
   const openMemoryBrain = (): void => {
     void window.jaris.getMemoryGraph().then(setMemoryGraph)
@@ -90,6 +91,18 @@ export default function App(): JSX.Element {
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Popup "nouveaux modèles" (étape 29) : vérifié une seule fois, quand la fenêtre de réglages est prête
+  // (onboarding déjà fait) — jamais dans le widget, qui n'a pas la place ni l'onglet Modèles pour agir dessus.
+  useEffect(() => {
+    if (MODE !== 'full' || !capacityScanDone) return
+    window.jaris.getNewModels().then(setNewModels)
+  }, [capacityScanDone])
+
+  const dismissNewModels = (): void => {
+    void window.jaris.acknowledgeNewModels()
+    setNewModels([])
+  }
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -170,6 +183,17 @@ export default function App(): JSX.Element {
           <div className="app__conversation">
             {transcript && <p className="app__transcript">« {transcript} »</p>}
             {reply && <p className="app__reply">{reply}</p>}
+          </div>
+        )}
+
+        {newModels.length > 0 && (
+          <div className="app__new-models">
+            <p>
+              {newModels.length === 1 ? 'Nouveau modèle disponible : ' : `${newModels.length} nouveaux modèles disponibles : `}
+              <strong>{newModels.join(', ')}</strong>. Ouvre Options → Modèles puis « Relancer l'analyse »
+              pour voir s'ils conviennent mieux à ta config.
+            </p>
+            <button onClick={dismissNewModels}>Fermer</button>
           </div>
         )}
 

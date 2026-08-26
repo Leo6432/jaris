@@ -48,7 +48,9 @@ const api = {
   openConversationHistoryFile: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openConversationHistoryFile),
   getModelOverview: (): Promise<ModelOverviewEntry[]> => ipcRenderer.invoke(IPC_CHANNELS.getModelOverview),
   runModelBenchmark: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.runModelBenchmark),
-  onModelBenchmarkLine: (cb: (line: string) => void) => subscribe(IPC_CHANNELS.modelBenchmarkLine, cb)
+  onModelBenchmarkLine: (cb: (line: string) => void) => subscribe(IPC_CHANNELS.modelBenchmarkLine, cb),
+  getNewModels: (): Promise<string[]> => ipcRenderer.invoke(IPC_CHANNELS.getNewModels),
+  acknowledgeNewModels: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.acknowledgeNewModels)
 }
 
 export type JarisApi = typeof api
