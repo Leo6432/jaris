@@ -137,6 +137,9 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
   try {
     await execAsync('docker info', { windowsHide: true })
   } catch {
+    // true si Docker Desktop.exe est introuvable au chemin attendu (pas juste "pas encore démarré") : dans
+    // ce cas, inutile d'attendre 90s en sondant `docker info` en boucle, le résultat est déjà connu.
+    let launchFailed = false
     if (process.platform === 'win32') {
       const dockerProc = spawn('C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe', {
         detached: true,
@@ -146,19 +149,26 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
       // Même piège que pour `ollama serve` ci-dessus : sans ce listener, un chemin d'install Docker Desktop
       // différent (ou Docker pas installé du tout) plante tout Jaris avec un ENOENT non rattrapé, au lieu
       // de juste échouer à lancer Docker (le message "Docker n'a pas pu démarrer" un peu plus bas suffit).
-      dockerProc.on('error', (err) => log(`Impossible de lancer Docker Desktop automatiquement : ${err.message}`))
+      dockerProc.on('error', (err) => {
+        launchFailed = true
+        log(`Impossible de lancer Docker Desktop automatiquement (${err.message}).`)
+      })
       dockerProc.unref()
+      // Laisse le temps à l'évènement 'error' ci-dessus d'arriver avant de décider s'il faut sonder
+      // `docker info` en boucle : un ENOENT est quasi instantané, jamais aussi long que les 90s d'attente.
+      await new Promise((resolve) => setTimeout(resolve, 500))
     }
-    const dockerUp = await waitUntil(async () => {
+
+    const dockerUp = !launchFailed && (await waitUntil(async () => {
       try {
         await execAsync('docker info', { windowsHide: true })
         return true
       } catch {
         return false
       }
-    }, 90000, 3000)
+    }, 90000, 3000))
     if (!dockerUp) {
-      log('Docker n\'a pas pu démarrer automatiquement : ouvre Docker Desktop manuellement pour activer la recherche web.')
+      log('Docker n\'a pas pu démarrer automatiquement : installe Docker Desktop (ou ouvre-le manuellement s\'il est déjà installé ailleurs) pour activer la recherche web.')
       return
     }
   }
