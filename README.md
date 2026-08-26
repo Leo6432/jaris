@@ -563,6 +563,18 @@ zéro. Ce qui le distingue d'un simple appel LLM brut (`codeGenerator.ts`) :
   dépendances externes oubliées, mettre en forme ce qui ne l'est pas et
   combler les écarts avec la demande. Si cette relecture échoue, le premier
   jet est conservé plutôt que de faire échouer toute la génération.
+- **Vérification mécanique puis réparation ciblée** : cette relecture est
+  faite "au jugé" par le modèle, qui laisse passer des défauts pourtant
+  détectables automatiquement. `validateGeneratedHtml` vérifie donc pour de
+  vrai le fichier produit — balises `<script>` appariées, `<html>`/`<body>`
+  présents, aucune ressource externe, et surtout aucun code JavaScript resté
+  dans le `<body>` (un petit modèle local l'y laisse régulièrement, où il
+  s'affiche comme un pavé de texte au milieu de la page au lieu de
+  s'exécuter). Les problèmes trouvés sont renvoyés au modèle avec la liste
+  exacte de ce qui ne va pas, bien plus efficace qu'une nouvelle demande de
+  relecture générique. La réparation n'est gardée que si elle réduit vraiment
+  le nombre de problèmes, et ceux qui subsistent sont **affichés à
+  l'utilisateur** plutôt que de faire passer une page cassée pour un succès.
 - **Contexte ciblé** : pour une modification, seul le fichier courant et la
   nouvelle demande sont envoyés au modèle, jamais tout l'historique de la
   discussion.

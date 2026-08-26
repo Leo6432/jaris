@@ -131,6 +131,12 @@ export interface GeneratedApp {
   html: string
   /** Dossier du projet généré sur le disque (contient index.html). */
   path: string
+  /**
+   * Problèmes structurels encore détectés après la passe de réparation (voir validateGeneratedHtml) :
+   * vide si le fichier est sain. Affichés tels quels à l'utilisateur plutôt que de faire passer une page
+   * cassée pour un succès — sur un petit modèle local, ça arrive.
+   */
+  issues: string[]
 }
 
 /** Canaux IPC main -> renderer pour piloter le visage et afficher la conversation. */

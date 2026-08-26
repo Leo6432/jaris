@@ -1151,3 +1151,18 @@ body.body--scan {
   color: #7fa3c9;
   word-break: break-all;
 }
+
+.code-panel__issues {
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: #ffb648;
+  background: rgba(255, 182, 72, 0.08);
+  border: 1px solid rgba(255, 182, 72, 0.3);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.code-panel__issues ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
