@@ -53,6 +53,10 @@ const MODELS = [
   'hf.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF',
   'qwen3:1.7b',
   'granite4:1b',
+  // Repli ultime de tous les paliers dans hardwareScan.ts (FLASH/MEDIUM/LARGE_CANDIDATES) : manquait ici
+  // par oubli, alors qu'il tient sur n'importe quelle config et est un vrai candidat pour du matériel
+  // très contraint (pas de GPU, ou VRAM minuscule).
+  'qwen3.5:0.8b',
   // Fait exclusivement pour le tool calling (pas pour la conversation générale) : ses réponses aux 2
   // questions de raisonnement du test n'ont pas vraiment de sens, mais intéressant sur les 6 tests d'outils.
   'functiongemma:270m',
@@ -372,6 +376,7 @@ async function main() {
   const missing = MODELS.filter((m) => !installed.includes(m))
   if (missing.length) {
     console.log(`${missing.length} modèle(s) manquant(s) à installer avant le test :\n`)
+    let pullsDone = 0
     for (const model of missing) {
       try {
         await pullModel(model, vramBudgetGb)
@@ -382,6 +387,10 @@ async function main() {
           console.log(`  Échec de l'installation de ${model} : ${err.message} (ignoré pour ce run)`)
         }
       }
+      pullsDone++
+      // Lu par l'onglet Modèles de Jaris pour afficher une barre de progression (voir OptionsMenu.tsx) :
+      // format volontairement machine-friendly, jamais affiché tel quel dans le journal visible.
+      console.log(`##PULL_PROGRESS## ${pullsDone} ${missing.length}`)
     }
     installed = await listInstalledModels()
     console.log('')
@@ -396,6 +405,8 @@ async function main() {
   const results = []
   const reasoningAnswers = []
   const errors = []
+  let testsDone = 0
+  const testsTotal = toRun.length * TEST_CASES.length
 
   for (const model of toRun) {
     console.log(`\n=== ${model} ===`)
@@ -421,6 +432,8 @@ async function main() {
         console.log(`ERREUR (${err.message})`)
         errors.push({ model, prompt, message: err.message })
       }
+      testsDone++
+      console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
     }
 
     results.push(perModel)

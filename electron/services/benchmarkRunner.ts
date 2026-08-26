@@ -1,9 +1,10 @@
 import { spawn } from 'child_process'
 import { join } from 'path'
 import { config } from '../config'
-import { deleteModel } from './ollama'
-import { parseLocalBenchmark } from './hardwareScan'
-import { getProfile } from './profileStore'
+import { deleteModel, pullModelIfMissing } from './ollama'
+import { getAllCandidateModelIds, parseLocalBenchmark, pickBestModelsFromBenchmark } from './hardwareScan'
+import { getProfile, saveProfile } from './profileStore'
+import type { CapacityScanResult } from '../../shared/ipc'
 
 /**
  * Lance scripts/benchmark-models.mjs comme un vrai process Node, en streamant chaque ligne de sa sortie
@@ -77,10 +78,53 @@ async function cleanupUnselectedModels(onLine: (line: string) => void): Promise<
   }
 }
 
-/** Lance le benchmark complet (installation des modèles manquants, tests, résultats) puis supprime tout
- * ce qui a été testé mais n'est pas retenu par le profil actuel (voir cleanupUnselectedModels). */
-export async function runModelBenchmark(onLine: (line: string) => void): Promise<void> {
+/**
+ * Lance le benchmark complet (installation des modèles manquants, tests), choisit le meilleur modèle de
+ * chaque palier d'après les vrais résultats (pickBestModelsFromBenchmark), l'enregistre dans le profil,
+ * supprime les anciens modèles remplacés, puis fait le ménage de tout ce qui a été testé mais n'est
+ * finalement retenu par aucun palier (cleanupUnselectedModels) — un seul geste ("Tester tous les modèles et
+ * choisir les meilleurs" dans l'onglet Modèles) au lieu d'un scan par taille puis un benchmark séparé qui ne
+ * changeait rien aux modèles réellement utilisés.
+ */
+export async function runModelAnalysis(onLine: (line: string) => void): Promise<CapacityScanResult> {
+  const before = await getProfile()
+
   await spawnBenchmarkScript(onLine)
   onLine('')
+
+  onLine("Sélection du meilleur modèle pour chaque palier, d'après les résultats du benchmark…")
+  const picked = await pickBestModelsFromBenchmark()
+  // Seul le modèle vision n'est jamais installé par le benchmark (pas testé) : les modèles texte/tool-
+  // calling retenus, eux, ont forcément déjà été téléchargés pour être testés.
+  await pullModelIfMissing(picked.visionModel, onLine)
+
+  // Les anciens modèles texte/tool-calling remplacés sont nettoyés juste en dessous par
+  // cleanupUnselectedModels (ils ont forcément été testés par ce run, donc suivis par parseLocalBenchmark).
+  // Vision n'a pas de résultat de benchmark (jamais testé) : géré ici à part, seulement s'il a changé —
+  // sinon un ancien modèle vision resterait installé indéfiniment sans jamais être nettoyé.
+  if (before?.visionModel && before.visionModel !== picked.visionModel) {
+    try {
+      await deleteModel(before.visionModel)
+      onLine(`Ancien modèle vision ${before.visionModel} supprimé (remplacé par un meilleur choix).`)
+    } catch (err) {
+      onLine(`Échec de la suppression de l'ancien modèle vision ${before.visionModel} : ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  const profile = await getProfile()
+  if (profile) {
+    await saveProfile({
+      ...profile,
+      models: picked.models,
+      visionModel: picked.visionModel,
+      capacityScanDone: true,
+      // Resynchronise la veille de l'étape 29 au passage : ce run vient de tester tout ce que Jaris connaît.
+      knownModelCandidates: getAllCandidateModelIds()
+    })
+  }
+
+  onLine('')
   await cleanupUnselectedModels(onLine)
+
+  return picked
 }

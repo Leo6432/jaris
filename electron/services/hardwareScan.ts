@@ -270,6 +270,13 @@ export function parseLocalBenchmark(): Map<string, LocalBenchmarkEntry> {
 
 const TIER_LABELS: Record<Tier, string> = { flash: 'Rapide', medium: 'Médium', large: 'Puissant' }
 
+export interface ModelOverviewResult {
+  /** VRAM totale détectée sur cette machine, pour expliquer dans l'onglet Modèles pourquoi certains
+   * candidats (ex: qwen3.5:35b sur une carte 8 Go) ne sont jamais testés : ils ne rentreraient pas. */
+  vramGb: number | null
+  entries: ModelOverviewEntry[]
+}
+
 /**
  * Vue d'ensemble de tous les modèles candidats (tous paliers + vision confondus), pour l'onglet Modèles du
  * menu Options : VRAM nécessaire, vitesse et fiabilité d'appel d'outils mesurées localement si
@@ -277,7 +284,7 @@ const TIER_LABELS: Record<Tier, string> = { flash: 'Rapide', medium: 'Médium', 
  * modèle candidat à plusieurs paliers (ex: qwen3.5:0.8b, repli de tous les paliers) n'apparaît qu'une
  * seule fois, avec la liste de tous les paliers concernés.
  */
-export function getModelOverview(): ModelOverviewEntry[] {
+export async function getModelOverview(): Promise<ModelOverviewResult> {
   const byModel = new Map<string, ModelOverviewEntry>()
 
   const addCandidate = (model: string, vramGb: number, tierLabel: string): void => {
@@ -310,5 +317,50 @@ export function getModelOverview(): ModelOverviewEntry[] {
     }
   }
 
-  return [...byModel.values()].sort((a, b) => b.vramGb - a.vramGb)
+  const { vramGb } = await detectGpu()
+  return { vramGb, entries: [...byModel.values()].sort((a, b) => b.vramGb - a.vramGb) }
+}
+
+/** "6/6" -> 6, absent/invalide -> -1 (toujours perdant face à un vrai score dans le tri de pickBestModelsFromBenchmark). */
+function parseToolScore(toolCalling: string | null): number {
+  if (!toolCalling) return -1
+  const correct = Number(toolCalling.split('/')[0])
+  return Number.isFinite(correct) ? correct : -1
+}
+
+/**
+ * Comme scanCapacity, mais choisit le meilleur modèle de chaque palier d'après les vraies mesures du
+ * benchmark local (parseLocalBenchmark : vitesse + fiabilité d'appel d'outils sur CETTE machine) plutôt que
+ * de supposer que le plus gros qui rentre est forcément le meilleur — priorité à la fiabilité d'appel
+ * d'outils, la vitesse ne départageant qu'à égalité. Repli sur pickForBudget (comportement de scanCapacity,
+ * par taille) si aucun candidat du palier n'a de résultat de benchmark exploitable (jamais lancé, ou échec
+ * du test pour tous les candidats qui rentrent). Le palier vision n'a pas de résultats de benchmark local
+ * (pas d'infrastructure de test vision, voir scripts/benchmark-models.mjs) : reste choisi par taille.
+ */
+export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult> {
+  const { name, vramGb } = await detectGpu()
+  const budgetGb = vramGb !== null ? Math.max(0, vramGb - STT_RESERVED_GB) : 0
+  const localBenchmark = parseLocalBenchmark()
+
+  const pickBest = (tier: Tier): string => {
+    const benchmarked = TIER_CANDIDATES[tier]
+      .filter((c) => c.vramGb <= budgetGb)
+      .map((c) => ({ model: c.model, result: localBenchmark.get(c.model) }))
+      .filter((c): c is { model: string; result: LocalBenchmarkEntry } => c.result?.speedTokPerSec != null)
+
+    if (!benchmarked.length) return pickForBudget(TIER_CANDIDATES[tier], budgetGb)
+
+    benchmarked.sort((a, b) => {
+      const toolDiff = parseToolScore(b.result.toolCalling) - parseToolScore(a.result.toolCalling)
+      return toolDiff !== 0 ? toolDiff : (b.result.speedTokPerSec ?? 0) - (a.result.speedTokPerSec ?? 0)
+    })
+    return benchmarked[0].model
+  }
+
+  return {
+    gpuName: name,
+    vramGb,
+    models: { flash: pickBest('flash'), medium: pickBest('medium'), large: pickBest('large') },
+    visionModel: pickForBudget(VISION_CANDIDATES, budgetGb)
+  }
 }

@@ -3,7 +3,7 @@ import { join } from 'path'
 import { checkVoiceSetup } from './config'
 import { ensureOllamaRunning, ensureSearxngRunning, stopOllamaIfStartedByJaris } from './services/dependencyServices'
 import { getAllCandidateModelIds, getModelOverview, scanCapacity } from './services/hardwareScan'
-import { runModelBenchmark } from './services/benchmarkRunner'
+import { runModelAnalysis } from './services/benchmarkRunner'
 import { deleteModel, pullModelIfMissing } from './services/ollama'
 import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
@@ -319,8 +319,8 @@ app.whenReady().then(async () => {
     if (!profile) return
     await saveProfile({ ...profile, knownModelCandidates: getAllCandidateModelIds() })
   })
-  ipcMain.handle(IPC_CHANNELS.runModelBenchmark, async (event) => {
-    await runModelBenchmark((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))
+  ipcMain.handle(IPC_CHANNELS.runModelAnalysis, async (event): Promise<CapacityScanResult> => {
+    return runModelAnalysis((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))
   })
   ipcMain.on(IPC_CHANNELS.onboardingFinished, () => {
     // L'onboarding vient de se terminer dans la fenêtre de réglages : elle bascule en widget flottant.

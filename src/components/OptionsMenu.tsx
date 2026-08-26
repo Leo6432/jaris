@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ConversationEntry, GmailStatus, ModelOverviewEntry, ModelTiers, Profile } from '../../shared/ipc'
+import type { ConversationEntry, GmailStatus, ModelOverviewResult, ModelTiers, Profile } from '../../shared/ipc'
 
 interface VoiceOption {
   id: string
@@ -42,13 +42,12 @@ export default function OptionsMenu(): JSX.Element {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [voiceIndex, setVoiceIndex] = useState(DEFAULT_VOICE_INDEX)
   const [previewing, setPreviewing] = useState(false)
-  const [rescanning, setRescanning] = useState(false)
-  const [scanStatus, setScanStatus] = useState('')
   const [history, setHistory] = useState<ConversationEntry[] | null>(null)
   const [clearingHistory, setClearingHistory] = useState(false)
-  const [modelOverview, setModelOverview] = useState<ModelOverviewEntry[] | null>(null)
+  const [modelOverview, setModelOverview] = useState<ModelOverviewResult | null>(null)
   const [benchmarking, setBenchmarking] = useState(false)
   const [benchmarkLog, setBenchmarkLog] = useState<string[]>([])
+  const [benchmarkProgress, setBenchmarkProgress] = useState<{ phase: 'pull' | 'test'; done: number; total: number } | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
   const benchmarkLogRef = useRef<HTMLPreElement>(null)
@@ -60,7 +59,6 @@ export default function OptionsMenu(): JSX.Element {
       const savedIndex = TTS_VOICES.findIndex((v) => v.id === p?.ttsVoice)
       if (savedIndex !== -1) setVoiceIndex(savedIndex)
     })
-    return window.jaris.onCapacityScanStatus(setScanStatus)
   }, [])
 
   // Chargé seulement à l'ouverture de l'onglet (pas au montage comme les autres réglages ci-dessus) :
@@ -80,20 +78,34 @@ export default function OptionsMenu(): JSX.Element {
     }
   }, [tab, modelOverview])
 
+  // Les lignes ##PULL_PROGRESS##/##TEST_PROGRESS## (scripts/benchmark-models.mjs) sont au format machine,
+  // jamais affichées telles quelles : elles alimentent la barre de progression plutôt que le journal.
   useEffect(() => {
-    return window.jaris.onModelBenchmarkLine((line) => setBenchmarkLog((prev) => [...prev, line]))
+    return window.jaris.onModelBenchmarkLine((line) => {
+      const pullMatch = /^##PULL_PROGRESS## (\d+) (\d+)$/.exec(line)
+      if (pullMatch) {
+        setBenchmarkProgress({ phase: 'pull', done: Number(pullMatch[1]), total: Number(pullMatch[2]) })
+        return
+      }
+      const testMatch = /^##TEST_PROGRESS## (\d+) (\d+)$/.exec(line)
+      if (testMatch) {
+        setBenchmarkProgress({ phase: 'test', done: Number(testMatch[1]), total: Number(testMatch[2]) })
+        return
+      }
+      setBenchmarkLog((prev) => [...prev, line])
+    })
   }, [])
 
   useEffect(() => {
     benchmarkLogRef.current?.scrollTo({ top: benchmarkLogRef.current.scrollHeight })
   }, [benchmarkLog])
 
-  const handleRunBenchmark = async (): Promise<void> => {
+  const handleRunAnalysis = async (): Promise<void> => {
     if (
       !window.confirm(
-        'Le benchmark va installer tout modèle candidat manquant (potentiellement plusieurs dizaines de ' +
-          "Go), tester chacun d'eux (peut prendre longtemps), puis SUPPRIMER définitivement tous les " +
-          "modèles testés qui ne sont pas retenus par ton profil actuel. Continuer ?"
+        'Ça va installer tout modèle candidat manquant qui tient dans la VRAM détectée (potentiellement ' +
+          "plusieurs dizaines de Go), tester chacun d'eux (peut prendre longtemps), puis ACTIVER le " +
+          'meilleur modèle de chaque palier et supprimer tout le reste. Continuer ?'
       )
     ) {
       return
@@ -101,15 +113,18 @@ export default function OptionsMenu(): JSX.Element {
     setError(null)
     setBenchmarking(true)
     setBenchmarkLog([])
+    setBenchmarkProgress(null)
     try {
-      await window.jaris.runModelBenchmark()
-      // Le tableau comparatif ci-dessous reflète tout de suite les nouveaux résultats, sans avoir à
+      const result = await window.jaris.runModelAnalysis()
+      // Reflète tout de suite les nouveaux modèles retenus + le tableau comparatif à jour, sans avoir à
       // changer d'onglet et revenir pour forcer un rechargement.
+      setProfile((prev) => (prev ? { ...prev, models: result.models, visionModel: result.visionModel, capacityScanDone: true } : prev))
       setModelOverview(await window.jaris.getModelOverview())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setBenchmarking(false)
+      setBenchmarkProgress(null)
     }
   }
 
@@ -124,30 +139,6 @@ export default function OptionsMenu(): JSX.Element {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setClearingHistory(false)
-    }
-  }
-
-  const handleRescan = async (): Promise<void> => {
-    setError(null)
-    setRescanning(true)
-    setScanStatus('Détection de la carte graphique…')
-    try {
-      // Transmis pour que main.ts puisse supprimer l'ancien modèle d'un palier si le nouveau scan en
-      // choisit un différent (voir le correctif dans scanCapacity côté main) — jamais transmis au tout
-      // premier scan (onboarding), où profile.models n'existe pas encore.
-      const previous = profile?.models
-        ? { flash: profile.models.flash, medium: profile.models.medium, large: profile.models.large, vision: profile.visionModel }
-        : undefined
-      const scan = await window.jaris.scanCapacity(previous)
-      if (profile) {
-        const updated = { ...profile, models: scan.models, visionModel: scan.visionModel, capacityScanDone: true }
-        setProfile(updated)
-        await window.jaris.saveProfile(updated)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setRescanning(false)
     }
   }
 
@@ -298,21 +289,14 @@ export default function OptionsMenu(): JSX.Element {
         {tab === 'modeles' && (
           <div className="options-menu__section">
             <div className="options-menu__section-title">Modèles Ollama par palier</div>
-            {rescanning ? (
-              <p className="capacity-scan__status">{scanStatus}</p>
-            ) : (
-              <ul className="capacity-scan__models">
-                {TIER_LABELS.map(({ key, label, think }) => (
-                  <li key={key}>
-                    {label} : {profile?.models?.[key] ?? '—'} (réflexion {think})
-                  </li>
-                ))}
-                <li>Vision : {profile?.visionModel ?? '—'}</li>
-              </ul>
-            )}
-            <button className="options-menu__action" onClick={() => void handleRescan()} disabled={rescanning}>
-              {rescanning ? 'Analyse en cours...' : "Relancer l'analyse"}
-            </button>
+            <ul className="capacity-scan__models">
+              {TIER_LABELS.map(({ key, label, think }) => (
+                <li key={key}>
+                  {label} : {profile?.models?.[key] ?? '—'} (réflexion {think})
+                </li>
+              ))}
+              <li>Vision : {profile?.visionModel ?? '—'}</li>
+            </ul>
 
             <div className="options-menu__section-title options-menu__model-overview-title">Tous les modèles candidats</div>
             {modelOverview === null ? (
@@ -331,7 +315,7 @@ export default function OptionsMenu(): JSX.Element {
                     </tr>
                   </thead>
                   <tbody>
-                    {modelOverview.map((entry) => (
+                    {modelOverview.entries.map((entry) => (
                       <tr key={entry.model} className={selectedModels.has(entry.model) ? 'options-menu__model-row--selected' : undefined}>
                         <td>{entry.model}</td>
                         <td>{entry.tiers.join(', ')}</td>
@@ -347,17 +331,37 @@ export default function OptionsMenu(): JSX.Element {
             )}
             <p className="options-menu__model-overview-hint">
               Entourés en cyan : les modèles actuellement retenus par ton profil. Vitesse et tool-calling
-              viennent d'un run local de <code>npm run benchmark:models</code> s'il a déjà tourné sur cette
-              machine. Intelligence = score MMLU-Pro publié quand il existe.
+              viennent d'un run local du bouton ci-dessous, s'il a déjà tourné sur cette machine — jamais
+              pour les modèles Vision (pas d'infrastructure de test vision){' '}
+              {modelOverview?.vramGb != null
+                ? `ni pour ceux qui dépassent la VRAM détectée sur cette machine (${modelOverview.vramGb} Go) : ils ne rentreraient pas.`
+                : '.'}{' '}
+              Intelligence = score MMLU-Pro publié quand il existe.
             </p>
 
-            <button className="options-menu__action" onClick={() => void handleRunBenchmark()} disabled={benchmarking}>
-              {benchmarking ? 'Benchmark en cours...' : 'Lancer le benchmark'}
+            <button className="options-menu__action" onClick={() => void handleRunAnalysis()} disabled={benchmarking}>
+              {benchmarking ? 'Analyse en cours...' : 'Tester tous les modèles et choisir les meilleurs'}
             </button>
             <p className="options-menu__model-overview-hint">
-              Installe tout modèle candidat manquant (peut être plusieurs dizaines de Go au premier lancement),
-              teste chacun d'eux, puis supprime tous ceux qui ne sont pas retenus par le profil actuel.
+              Teste chaque modèle candidat qui tient dans la VRAM détectée (télécharge ceux qui manquent,
+              peut être plusieurs dizaines de Go au premier lancement), choisit et active le meilleur de
+              chaque palier d'après les résultats (fiabilité d'appel d'outils, puis vitesse), et supprime
+              tout le reste.
             </p>
+
+            {benchmarkProgress && (
+              <div className="options-menu__progress">
+                <div className="options-menu__progress-label">
+                  {benchmarkProgress.phase === 'pull' ? 'Téléchargement' : 'Test'} : {benchmarkProgress.done}/{benchmarkProgress.total}
+                </div>
+                <div className="options-menu__progress-bar">
+                  <div
+                    className="options-menu__progress-bar-fill"
+                    style={{ width: `${Math.min(100, (benchmarkProgress.done / Math.max(1, benchmarkProgress.total)) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
             {(benchmarking || benchmarkLog.length > 0) && (
               <pre ref={benchmarkLogRef} className="options-menu__benchmark-log">

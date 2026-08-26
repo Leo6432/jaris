@@ -109,6 +109,13 @@ export interface ModelOverviewEntry {
   intelligence: number | null
 }
 
+/** Résultat de getModelOverview : la liste des candidats, plus la VRAM totale détectée sur la machine, pour
+ * que l'onglet Modèles puisse expliquer pourquoi certains candidats (trop gros) ne sont jamais testés. */
+export interface ModelOverviewResult {
+  vramGb: number | null
+  entries: ModelOverviewEntry[]
+}
+
 /** Canaux IPC main -> renderer pour piloter le visage et afficher la conversation. */
 export const IPC_CHANNELS = {
   emotion: 'jaris:emotion',
@@ -155,9 +162,10 @@ export const IPC_CHANNELS = {
   openConversationHistoryFile: 'jaris:open-conversation-history-file',
   /** renderer <-> main : liste tous les modèles candidats (tous paliers + vision) avec leurs métriques, pour l'onglet Modèles. */
   getModelOverview: 'jaris:get-model-overview',
-  /** renderer -> main : lance scripts/benchmark-models.mjs (résout une fois le benchmark terminé). */
-  runModelBenchmark: 'jaris:run-model-benchmark',
-  /** main -> renderer : une ligne de sortie du benchmark en cours, au fil de l'eau. */
+  /** renderer -> main : lance le benchmark complet (scripts/benchmark-models.mjs) puis choisit et active le
+   * meilleur modèle de chaque palier d'après les résultats (résout une fois toute l'analyse terminée). */
+  runModelAnalysis: 'jaris:run-model-analysis',
+  /** main -> renderer : une ligne de sortie du benchmark en cours, au fil de l'eau (progression comprise, voir OptionsMenu.tsx). */
   modelBenchmarkLine: 'jaris:model-benchmark-line',
   /** renderer <-> main : modèles candidats (hardwareScan.ts) apparus depuis le dernier scan de capacité (étape 29), à afficher en popup. */
   getNewModels: 'jaris:get-new-models',
