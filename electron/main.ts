@@ -4,6 +4,8 @@ import { checkVoiceSetup } from './config'
 import { ensureOllamaRunning, ensureSearxngRunning, stopOllamaIfStartedByJaris } from './services/dependencyServices'
 import { getAllCandidateModelIds, getModelOverview, scanCapacity } from './services/hardwareScan'
 import { runModelAnalysis } from './services/benchmarkRunner'
+import { chatSession } from './services/chatSession'
+import { generateApp, getGeneratedAppsDir } from './services/codeGenerator'
 import { deleteModel, pullModelIfMissing } from './services/ollama'
 import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
@@ -21,6 +23,8 @@ import { connectGmail, disconnectGmail, getGmailStatus } from './services/google
 import {
   IPC_CHANNELS,
   type CapacityScanResult,
+  type ChatMessage,
+  type GeneratedApp,
   type PreviousModelSelection,
   type JarisEmotion,
   type MemoryGraph,
@@ -247,6 +251,9 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.clearConversationHistory, async () => {
     await clearConversationHistory()
     pipeline?.clearHistory()
+    // Le mode Chat (étape 30) alimente le même historique et le même contexte court terme : le laisser
+    // intact ici laisserait Jaris se souvenir par écrit de ce qui vient d'être effacé.
+    chatSession.clear()
   })
   ipcMain.handle(IPC_CHANNELS.openConversationHistoryFile, async () => {
     await ensureConversationHistoryFile()
@@ -321,6 +328,33 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle(IPC_CHANNELS.runModelAnalysis, async (event): Promise<CapacityScanResult> => {
     return runModelAnalysis((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))
+  })
+
+  // Mode Chat (étape 30) : même Jaris, mêmes outils, sans synthèse vocale. Un rappel programmé par écrit
+  // est quand même annoncé à voix haute par le pipeline vocal, comme un rappel programmé à la voix.
+  ipcMain.handle(IPC_CHANNELS.sendChatMessage, (_event, prompt: string): Promise<ChatMessage> => {
+    return chatSession.send(
+      prompt,
+      (message) => void pipeline?.announceReminder(message),
+      (message) => broadcast(IPC_CHANNELS.log, message)
+    )
+  })
+  ipcMain.handle(IPC_CHANNELS.getChatHistory, (): ChatMessage[] => chatSession.getVisibleMessages())
+
+  // Mode Code (étape 30) : génération d'une application autonome, avec avancement au fil de l'eau (la
+  // génération + relecture peut prendre plusieurs minutes sur un modèle local).
+  ipcMain.handle(
+    IPC_CHANNELS.generateApp,
+    (event, description: string, currentHtml?: string): Promise<GeneratedApp> => {
+      return generateApp(
+        description,
+        (message) => event.sender.send(IPC_CHANNELS.codeGenStatus, message),
+        currentHtml
+      )
+    }
+  )
+  ipcMain.handle(IPC_CHANNELS.openGeneratedApp, async (_event, path?: string) => {
+    await shell.openPath(path || getGeneratedAppsDir())
   })
   ipcMain.on(IPC_CHANNELS.onboardingFinished, () => {
     // L'onboarding vient de se terminer dans la fenêtre de réglages : elle bascule en widget flottant.

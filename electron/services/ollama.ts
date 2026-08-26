@@ -63,9 +63,13 @@ export async function chatWithOllama(
   tools?: OllamaTool[],
   model: string = config.ollama.model,
   think: ThinkLevel = 'medium',
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  // Surcharge ponctuelle de la fenêtre de contexte : la conversation normale tient largement dans la
+  // valeur par défaut (OLLAMA_NUM_CTX), mais la génération de code (étape 30) produit un fichier complet
+  // puis le relit en entier pour le corriger, ce qui dépasse nettement 4096 tokens.
+  numCtx: number = config.ollama.numCtx
 ): Promise<OllamaMessage> {
-  const baseBody = { model, messages, tools, stream: false, options: { num_ctx: config.ollama.numCtx } }
+  const baseBody = { model, messages, tools, stream: false, options: { num_ctx: numCtx } }
   try {
     // Le raisonnement caché aide nettement à décider d'appeler un outil plutôt que de "raconter" une
     // action sans l'exécuter ; le niveau (low/medium/high) vient du palier de complexité choisi pour la

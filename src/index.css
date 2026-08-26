@@ -58,11 +58,117 @@ body.body--scan {
   gap: 28px;
 }
 
+/* --- Colonne latérale permanente + zone principale (étape 30) --- */
+
+.app-shell {
+  display: flex;
+  height: 100%;
+}
+
+.sidebar {
+  width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 20px 14px;
+  border-right: 1px solid rgba(127, 163, 201, 0.18);
+  background: rgba(5, 7, 12, 0.5);
+}
+
+.sidebar__brand {
+  font-size: 0.85rem;
+  letter-spacing: 0.32em;
+  color: #37e2ff;
+  padding-left: 8px;
+}
+
+.sidebar__modes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar__mode {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  color: #7fa3c9;
+  padding: 9px 12px;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.sidebar__mode:hover {
+  background: rgba(127, 163, 201, 0.07);
+  color: #d9ecff;
+}
+
+.sidebar__mode--active {
+  background: rgba(55, 226, 255, 0.1);
+  border-left-color: #37e2ff;
+  color: #d9ecff;
+}
+
+.sidebar__mode-label {
+  font-size: 0.88rem;
+}
+
+.sidebar__mode-hint {
+  font-size: 0.68rem;
+  color: #4d6a87;
+}
+
+/* Repoussé en bas de la colonne : les réglages ne sont pas au même niveau que les 3 modes. */
+.sidebar__footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.sidebar__link {
+  background: transparent;
+  border: 1px solid rgba(127, 163, 201, 0.35);
+  color: #7fa3c9;
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.sidebar__link:hover {
+  border-color: #37e2ff;
+  color: #d9ecff;
+}
+
+.app-main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* La vue vocale garde son orbe centré, mais dans la zone restante à droite de la colonne. Le `height:
+   100%` hérité de .app déborderait dès qu'un bandeau (nouveaux modèles) occupe le haut de .app-main :
+   c'est `flex: 1` qui doit décider de la hauteur ici. */
+.app--voice {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  overflow-y: auto;
+}
+
 .options-menu__trigger {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 20;
   background: transparent;
   border: 1px solid rgba(127, 163, 201, 0.35);
   color: #7fa3c9;
@@ -469,21 +575,6 @@ body.body--scan {
   font-weight: 500;
 }
 
-.app__memory-button {
-  background: transparent;
-  border: 1px solid rgba(127, 163, 201, 0.35);
-  color: #7fa3c9;
-  padding: 6px 16px;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  cursor: pointer;
-}
-
-.app__memory-button:hover {
-  border-color: #37e2ff;
-  color: #d9ecff;
-}
-
 .memory-brain {
   position: fixed;
   inset: 0;
@@ -588,6 +679,10 @@ body.body--scan {
 }
 
 .app__new-models {
+  /* Affiché en haut de la zone principale quel que soit le mode actif (étape 30), pas seulement sur la
+     vue vocale : une nouveauté de modèle concerne autant le chat et le code. */
+  align-self: center;
+  margin: 16px 16px 0;
   max-width: 480px;
   text-align: center;
   font-size: 0.8rem;
@@ -780,4 +875,268 @@ body.body--scan {
   line-height: 1.4;
   overflow-wrap: anywhere;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+}
+
+/* --- Mode Chat (étape 30) --- */
+
+.chat-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px 28px;
+}
+
+.chat-panel__thread {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 6px;
+}
+
+.chat-panel__empty {
+  margin: auto;
+  max-width: 420px;
+  text-align: center;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: #4d6a87;
+}
+
+.chat-panel__message {
+  max-width: 78%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  /* Les réponses écrites peuvent contenir des listes et des blocs de code (voir le prompt système du
+     canal "chat" dans assistant.ts) : on respecte les retours à la ligne du modèle. */
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat-panel__message--user {
+  align-self: flex-end;
+  background: rgba(55, 226, 255, 0.13);
+  border: 1px solid rgba(55, 226, 255, 0.25);
+  color: #d9ecff;
+}
+
+.chat-panel__message--assistant {
+  align-self: flex-start;
+  background: rgba(127, 163, 201, 0.08);
+  border: 1px solid rgba(127, 163, 201, 0.2);
+  color: #d9ecff;
+}
+
+.chat-panel__message--pending {
+  align-self: flex-start;
+  color: #4d6a87;
+  font-style: italic;
+}
+
+.chat-panel__error {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #ffb648;
+}
+
+.chat-panel__composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.chat-panel__composer textarea {
+  flex: 1;
+  resize: none;
+  background: rgba(5, 7, 12, 0.6);
+  border: 1px solid rgba(127, 163, 201, 0.25);
+  border-radius: 12px;
+  color: #d9ecff;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.chat-panel__composer textarea:focus {
+  outline: none;
+  border-color: #37e2ff;
+}
+
+.chat-panel__composer button {
+  background: rgba(55, 226, 255, 0.15);
+  border: 1px solid rgba(55, 226, 255, 0.35);
+  color: #d9ecff;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.chat-panel__composer button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* --- Mode Code (étape 30) --- */
+
+.code-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px 28px;
+}
+
+.code-panel__composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.code-panel__composer textarea {
+  resize: none;
+  background: rgba(5, 7, 12, 0.6);
+  border: 1px solid rgba(127, 163, 201, 0.25);
+  border-radius: 12px;
+  color: #d9ecff;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.code-panel__composer textarea:focus {
+  outline: none;
+  border-color: #37e2ff;
+}
+
+.code-panel__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.code-panel__actions button {
+  background: transparent;
+  border: 1px solid rgba(127, 163, 201, 0.35);
+  color: #7fa3c9;
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.code-panel__actions button:hover:not(:disabled) {
+  border-color: #37e2ff;
+  color: #d9ecff;
+}
+
+.code-panel__generate {
+  background: rgba(55, 226, 255, 0.15) !important;
+  border-color: rgba(55, 226, 255, 0.35) !important;
+  color: #d9ecff !important;
+}
+
+.code-panel__actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.code-panel__error {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #ffb648;
+}
+
+.code-panel__status {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 110px;
+  overflow-y: auto;
+  background: rgba(5, 7, 12, 0.6);
+  border: 1px solid rgba(127, 163, 201, 0.2);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: #7fa3c9;
+  white-space: pre-wrap;
+}
+
+.code-panel__result {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.code-panel__view-tabs {
+  display: flex;
+  gap: 6px;
+  align-self: flex-start;
+  background: rgba(127, 163, 201, 0.08);
+  border-radius: 999px;
+  padding: 3px;
+}
+
+.code-panel__view-tab {
+  background: transparent;
+  border: none;
+  color: #7fa3c9;
+  padding: 5px 16px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.code-panel__view-tab--active {
+  background: rgba(55, 226, 255, 0.15);
+  color: #d9ecff;
+}
+
+/* Fond blanc explicite : une page générée qui ne définit pas son propre fond serait sinon transparente
+   sur le dégradé sombre de Jaris, donnant un aperçu illisible qui ne reflète pas le vrai rendu. */
+.code-panel__preview {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 1px solid rgba(127, 163, 201, 0.2);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.code-panel__code {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 0;
+  padding: 12px 14px;
+  background: rgba(5, 7, 12, 0.6);
+  border: 1px solid rgba(127, 163, 201, 0.2);
+  border-radius: 10px;
+  font-size: 0.7rem;
+  line-height: 1.55;
+  color: #9fc4e8;
+}
+
+.code-panel__hint {
+  margin: 0;
+  font-size: 0.68rem;
+  color: #4d6a87;
+}
+
+.code-panel__hint code {
+  color: #7fa3c9;
+  word-break: break-all;
 }

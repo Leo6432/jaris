@@ -81,6 +81,10 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   d'attendre qu'il pense à relancer l'analyse lui-même — pas de re-benchmark
   automatique en tâche de fond (trop lourd, 20-40+ min), c'est toujours
   l'utilisateur qui déclenche via le bouton existant
+- ✅ Étape 30 — Colonne latérale permanente avec 3 modes : **Agent vocal**
+  (l'expérience d'origine), **Chat** (le même Jaris par écrit) et **Code**
+  (générateur d'applications 100% local façon Lovable/Emergent) — voir plus
+  bas
 - ⬜ Étape 21 — Intégration téléphone : système pour connecter Jaris au
   téléphone de l'utilisateur (via son numéro ou une connexion directe au
   téléphone) afin d'envoyer des messages, voir les notifications, et plus
@@ -98,37 +102,15 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ⬜ Étape 27 — Sous-agents : Jaris peut lancer plusieurs sous-agents (agents
   web, etc.) en parallèle pour des tâches complexes qui demandent plusieurs
   actions en même temps, au lieu de tout faire en une seule séquence
-- ⬜ Étape 30 — Colonne latérale permanente (toujours visible dans
-  l'interface) avec 3 modes : **Agent vocal** (l'expérience actuelle),
-  **Chat** (parler à Jaris par écrit, en plus de la voix), et **Code** — un
-  générateur d'applications 100% local façon Lovable/Emergent (gratuit, en
-  local, sans envoyer de code à un serveur tiers) : décrire une appli en
-  langage naturel et obtenir un vrai projet fonctionnel généré sur la
-  machine. Pour la qualité du code généré, reprendre les techniques de ces
-  outils plutôt qu'un simple appel LLM brut :
-  - Scaffolding + prompt système enrichi de consignes strictes de design, de
-    structure de composants, de gestion des erreurs et d'intégration
-    visuelle, au lieu d'envoyer la requête brute au modèle
-  - Boucle multi-agents : un sous-agent repasse sur le code généré pour
-    vérifier sa cohérence, ajouter du style et corriger la syntaxe avant de
-    l'afficher, au lieu de livrer le premier jet brut du LLM
-  - Contexte ciblé : extraire précisément les dépendances et le contexte
-    nécessaires plutôt que de noyer le modèle dans trop d'informations
-    inutiles, pour un code plus précis
-  - Bac à sable Docker (déjà utilisé pour SearXNG, étapes 7/8) : avant
-    d'afficher une appli générée, la faire tourner dans un conteneur isolé
-    pour vraiment la vérifier (ça compile, ça ne plante pas) plutôt que de
-    l'exécuter directement sur la machine — pas besoin d'une vraie VM
-  - Aperçu (preview) en direct de l'appli générée, mis à jour à chaque
-    modification — visible et à jour quel que soit le mode utilisé pour
-    piloter la génération (dicter par la voix, écrire dans le chat, ou
-    éditer le code directement), pas seulement quand l'onglet Code est ouvert
-  - Piste à surveiller (pas encore faisable) : faire communiquer les
-    sous-agents de la boucle multi-agents autrement qu'en repassant par du
-    texte à chaque échange (perte de nuance à chaque conversion) — bloqué
-    aujourd'hui car l'API d'Ollama n'expose que du texte, pas les
-    représentations internes du modèle, et ça rendrait le débogage
-    beaucoup plus dur (plus de logs lisibles entre agents)
+- ⬜ Étape 30bis — Projets multi-fichiers et bac à sable Docker pour le mode
+  Code : aujourd'hui le générateur (étape 30) produit une page autonome d'un
+  seul fichier, vérifiable directement dans l'aperçu (iframe isolée, sans
+  accès au reste de la machine) — aucun conteneur n'est nécessaire pour ça.
+  Le bac à sable Docker (déjà utilisé pour SearXNG, étapes 7/8) devient utile
+  le jour où le mode Code générera de vrais projets multi-fichiers avec des
+  dépendances npm : il faudra alors vraiment installer, compiler et lancer le
+  projet dans un conteneur isolé pour vérifier qu'il tourne, avant de
+  l'afficher — plutôt que de l'exécuter directement sur la machine
 - ⬜ Étape 31 — Design sonore : donne à Jaris sa propre identité sonore, avec
   des sons distincts selon l'action en cours (clic de souris, envoi d'un
   message/mail, réflexion, scan d'écran...), en plus de la voix — comme les
@@ -542,6 +524,63 @@ sonore réel de l'audio joué (Web Audio API, `AnalyserNode` branché sur
 l'élément `<audio>` de la réponse) et fait vibrer/pulser l'anneau et le
 noyau en fonction — l'anneau tremble plus fort et brille plus quand Jaris
 parle fort, et revient à une respiration légère au repos.
+
+## Les 3 modes de l'interface (étape 30)
+
+La fenêtre de réglages a une colonne latérale permanente, toujours visible,
+qui donne accès à trois façons d'utiliser Jaris. Le cerveau de Jaris et le
+menu Options sont en bas de cette colonne, disponibles quel que soit le mode.
+
+**Agent vocal** — l'expérience d'origine : l'orbe, le mot d'activation, la
+réponse parlée. Rien n'y change.
+
+**Chat** — exactement le même Jaris, au clavier : mêmes outils (ouvrir une
+application, chercher sur le web, regarder l'écran, mémoriser, envoyer un
+mail), même mémoire markdown, et surtout le **même historique** que la voix.
+Commencer une demande à l'oral et l'enchaîner par écrit (ou l'inverse)
+continue la même conversation. Deux différences seulement avec la voix : pas
+de synthèse vocale, et le prompt système autorise les listes et les blocs de
+code — l'interdiction de toute mise en forme n'existait que parce que le
+texte était lu à voix haute (`ConverseChannel` dans `assistant.ts`). Un rappel
+programmé depuis le chat est quand même annoncé à voix haute, comme un rappel
+programmé à la voix.
+
+**Code** — un générateur d'applications façon Lovable/Emergent, 100% local :
+on décrit une application en français, Jaris produit une page web autonome
+(HTML + CSS + JavaScript dans un seul fichier, aucune dépendance réseau),
+l'affiche en direct dans un aperçu, et l'enregistre sur le disque. Les
+demandes suivantes modifient l'application en cours au lieu d'en repartir de
+zéro. Ce qui le distingue d'un simple appel LLM brut (`codeGenerator.ts`) :
+
+- **Scaffolding** : un prompt système enrichi de consignes strictes
+  (`APP_RULES`) sur le design, la structure du code, la gestion des cas
+  limites et surtout l'interdiction absolue de toute ressource externe (CDN,
+  police distante, appel réseau) — sans ces règles, un modèle local produit
+  typiquement une page grise avec un `<script src>` vers un CDN qui ne
+  chargera jamais.
+- **Boucle multi-agents** : le premier jet n'est jamais affiché tel quel. Un
+  second passage relit tout le fichier pour corriger la syntaxe, retirer les
+  dépendances externes oubliées, mettre en forme ce qui ne l'est pas et
+  combler les écarts avec la demande. Si cette relecture échoue, le premier
+  jet est conservé plutôt que de faire échouer toute la génération.
+- **Contexte ciblé** : pour une modification, seul le fichier courant et la
+  nouvelle demande sont envoyés au modèle, jamais tout l'historique de la
+  discussion.
+- **Modèle le plus capable disponible** : toujours le palier "puissant" du
+  profil (jamais le palier rapide), avec le même repli VRAM temps réel que la
+  conversation, et une fenêtre de contexte élargie à 16k — un fichier complet
+  généré puis relu en entier dépasse largement les 4096 tokens par défaut.
+
+L'aperçu tourne dans une iframe `sandbox="allow-scripts"`, sans
+`allow-same-origin` : le code produit par le modèle s'exécute dans une origine
+opaque, sans accès à Jaris ni aux fichiers de la machine. Conséquence assumée
+et affichée dans l'interface : `localStorage` y est bloqué (d'où le try/catch
+imposé dans les consignes de génération), mais refonctionne dès qu'on ouvre le
+fichier depuis son dossier. C'est aussi pour ça qu'un conteneur Docker n'est
+pas nécessaire ici : une page autonome sans dépendance n'a rien à installer ni
+à compiler, et l'iframe fournit déjà l'isolation. Le bac à sable Docker
+deviendra utile pour de vrais projets multi-fichiers avec des dépendances npm
+(étape 30bis).
 
 ## Widget flottant toujours visible (étape 19)
 

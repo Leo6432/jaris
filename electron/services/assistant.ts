@@ -45,7 +45,15 @@ function pickTier(prompt: string): Tier {
   return 'medium'
 }
 
-function buildSystemPrompt(userName: string | null, memoryTitles: string[]): string {
+/**
+ * Par quel canal Jaris répond : à la voix (réponse lue par la synthèse vocale) ou en écrit (mode Chat de
+ * l'étape 30). Le reste est rigoureusement identique — mêmes outils, même mémoire, même historique — seule
+ * la forme attendue de la réponse change : l'interdiction de toute mise en forme n'a de sens que parce que
+ * le texte est lu à voix haute, l'appliquer au chat donnerait des réponses écrites inutilement pauvres.
+ */
+export type ConverseChannel = 'voice' | 'chat'
+
+function buildSystemPrompt(userName: string | null, memoryTitles: string[], channel: ConverseChannel): string {
   const addressing = userName
     ? `L'utilisateur s'appelle ${userName} : appelle-le par son prénom de temps en temps, sans exagérer. `
     : ''
@@ -68,11 +76,19 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[]): str
     "un budget, un entretien), crée une note par sous-partie avec remember et relie-les avec [[Titre]] au " +
     "lieu de tout empiler dans une note unique. "
 
+  const style =
+    channel === 'voice'
+      ? "Réponds en français, de façon concise et naturelle, comme dans une conversation orale. " +
+        "Ta réponse est lue à voix haute par une synthèse vocale : n'utilise jamais d'émojis, d'astérisques, " +
+        'de listes à puces ni de mise en forme, uniquement du texte normal. '
+      : "Réponds en français, de façon claire et directe. Tu réponds par écrit dans une fenêtre de chat : " +
+        "tu peux utiliser des listes à puces, des blocs de code et des retours à la ligne quand ça rend la " +
+        "réponse plus lisible, mais reste concis et n'en abuse pas pour une réponse courte. Pas d'émojis. "
+
   return (
-    "Tu es Jaris, un assistant vocal personnel qui tourne entièrement en local sur l'ordinateur de " +
-    "l'utilisateur. Réponds en français, de façon concise et naturelle, comme dans une conversation orale. " +
-    "Ta réponse est lue à voix haute par une synthèse vocale : n'utilise jamais d'émojis, d'astérisques, " +
-    'de listes à puces ni de mise en forme, uniquement du texte normal. ' +
+    "Tu es Jaris, un assistant personnel qui tourne entièrement en local sur l'ordinateur de " +
+    "l'utilisateur. " +
+    style +
     dateTime +
     addressing +
     memory +
@@ -121,7 +137,8 @@ export async function converse(
   signal?: AbortSignal,
   // Le pipeline vocal a déjà relevé l'état GPU juste avant d'appeler converse() (sécurité thermique) :
   // le redemander ici relancerait un second `nvidia-smi` pour la même question, en pur gaspillage.
-  live: LiveGpuStatus = { freeVramGb: null, tempC: null }
+  live: LiveGpuStatus = { freeVramGb: null, tempC: null },
+  channel: ConverseChannel = 'voice'
 ): Promise<string> {
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
@@ -177,7 +194,7 @@ export async function converse(
   }
 
   const messages: OllamaMessage[] = [
-    { role: 'system', content: buildSystemPrompt(userName, memoryTitles) },
+    { role: 'system', content: buildSystemPrompt(userName, memoryTitles, channel) },
     ...history,
     { role: 'user', content: prompt }
   ]

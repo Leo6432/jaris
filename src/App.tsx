@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import CapacityScan from '@/components/CapacityScan'
+import ChatPanel from '@/components/ChatPanel'
+import CodePanel from '@/components/CodePanel'
 import GmailOnboarding from '@/components/GmailOnboarding'
 import JarisOrb from '@/components/JarisOrb'
 import MemoryBrain from '@/components/MemoryBrain'
@@ -14,6 +16,15 @@ const STATUS_LABEL: Record<JarisEmotion, string> = {
   happy: 'Tâche accomplie',
   surprised: 'Oups !'
 }
+
+/** Les 3 modes de la colonne latérale permanente (étape 30). */
+type AppMode = 'voice' | 'chat' | 'code'
+
+const MODES: Array<{ id: AppMode; label: string; hint: string }> = [
+  { id: 'voice', label: 'Agent vocal', hint: 'Parler à Jaris' },
+  { id: 'chat', label: 'Chat', hint: 'Écrire à Jaris' },
+  { id: 'code', label: 'Code', hint: 'Générer une application' }
+]
 
 /**
  * Deux fenêtres partagent ce même bundle (étape 19) : le widget flottant, toujours là en bas à droite
@@ -42,6 +53,7 @@ export default function App(): JSX.Element {
   const [nameInput, setNameInput] = useState('')
   const [memoryGraph, setMemoryGraph] = useState<MemoryGraph | null>(null)
   const [newModels, setNewModels] = useState<string[]>([])
+  const [appMode, setAppMode] = useState<AppMode>('voice')
 
   const openMemoryBrain = (): void => {
     void window.jaris.getMemoryGraph().then(setMemoryGraph)
@@ -106,6 +118,14 @@ export default function App(): JSX.Element {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
+      // Ignoré dès que l'utilisateur est en train d'écrire quelque part (message du mode Chat, description
+      // du mode Code, champs du menu Options...) : sans ça, taper un "+" dans un texte déclencherait
+      // l'écoute au lieu d'écrire le caractère.
+      const target = event.target as HTMLElement | null
+      const typing =
+        target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable
+      if (typing) return
+
       if (event.key === '+' && !event.repeat) {
         window.jaris.triggerWake()
       }
@@ -165,49 +185,78 @@ export default function App(): JSX.Element {
     }
 
     return (
-      <div className="app">
-        <OptionsMenu />
-        {/* Pas d'audioElRef ici : seul le widget a un <audio> monté, l'orbe de cette fenêtre suit juste
-            l'émotion sans vibrer avec la voix (évite toute double lecture du son des réponses). */}
-        <JarisOrb emotion={emotion} />
-        <div className="app__status">{STATUS_LABEL[emotion]}</div>
-        <div className="app__hint">
-          Astuce : dis « Hey Jarvis » ou appuie sur le + du pavé numérique, depuis n'importe quelle appli,
-          pour activer l'écoute
-        </div>
-        <button className="app__memory-button" onClick={openMemoryBrain}>
-          Voir le cerveau de Jaris
-        </button>
+      <div className="app-shell">
+        <nav className="sidebar">
+          <div className="sidebar__brand">JARIS</div>
 
-        {(transcript || reply) && (
-          <div className="app__conversation">
-            {transcript && <p className="app__transcript">« {transcript} »</p>}
-            {reply && <p className="app__reply">{reply}</p>}
+          <div className="sidebar__modes">
+            {MODES.map(({ id, label, hint }) => (
+              <button
+                key={id}
+                className={`sidebar__mode${appMode === id ? ' sidebar__mode--active' : ''}`}
+                onClick={() => setAppMode(id)}
+              >
+                <span className="sidebar__mode-label">{label}</span>
+                <span className="sidebar__mode-hint">{hint}</span>
+              </button>
+            ))}
           </div>
-        )}
 
-        {newModels.length > 0 && (
-          <div className="app__new-models">
-            <p>
-              {newModels.length === 1 ? 'Nouveau modèle disponible : ' : `${newModels.length} nouveaux modèles disponibles : `}
-              <strong>{newModels.join(', ')}</strong>. Ouvre Options → Modèles puis « Relancer l'analyse »
-              pour voir s'ils conviennent mieux à ta config.
-            </p>
-            <button onClick={dismissNewModels}>Fermer</button>
+          <div className="sidebar__footer">
+            <button className="sidebar__link" onClick={openMemoryBrain}>
+              Cerveau de Jaris
+            </button>
+            <OptionsMenu />
           </div>
-        )}
+        </nav>
 
-        {setupStatus && !setupStatus.ready && (
-          <div className="app__setup-warning">
-            Pipeline vocal pas encore configuré :
-            <ul>
-              {setupStatus.missing.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-            Voir le README pour les étapes d'installation.
-          </div>
-        )}
+        <main className="app-main">
+          {newModels.length > 0 && (
+            <div className="app__new-models">
+              <p>
+                {newModels.length === 1 ? 'Nouveau modèle disponible : ' : `${newModels.length} nouveaux modèles disponibles : `}
+                <strong>{newModels.join(', ')}</strong>. Ouvre Options → Modèles puis « Tester tous les
+                modèles » pour voir s'ils conviennent mieux à ta config.
+              </p>
+              <button onClick={dismissNewModels}>Fermer</button>
+            </div>
+          )}
+
+          {appMode === 'voice' && (
+            <div className="app app--voice">
+              {/* Pas d'audioElRef ici : seul le widget a un <audio> monté, l'orbe de cette fenêtre suit juste
+                  l'émotion sans vibrer avec la voix (évite toute double lecture du son des réponses). */}
+              <JarisOrb emotion={emotion} />
+              <div className="app__status">{STATUS_LABEL[emotion]}</div>
+              <div className="app__hint">
+                Astuce : dis « Hey Jarvis » ou appuie sur le + du pavé numérique, depuis n'importe quelle
+                appli, pour activer l'écoute
+              </div>
+
+              {(transcript || reply) && (
+                <div className="app__conversation">
+                  {transcript && <p className="app__transcript">« {transcript} »</p>}
+                  {reply && <p className="app__reply">{reply}</p>}
+                </div>
+              )}
+
+              {setupStatus && !setupStatus.ready && (
+                <div className="app__setup-warning">
+                  Pipeline vocal pas encore configuré :
+                  <ul>
+                    {setupStatus.missing.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                  Voir le README pour les étapes d'installation.
+                </div>
+              )}
+            </div>
+          )}
+
+          {appMode === 'chat' && <ChatPanel />}
+          {appMode === 'code' && <CodePanel />}
+        </main>
 
         {memoryGraph && <MemoryBrain graph={memoryGraph} onClose={() => setMemoryGraph(null)} />}
       </div>

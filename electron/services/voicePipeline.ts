@@ -194,7 +194,12 @@ export class VoicePipeline extends EventEmitter {
     this.scheduleIdle(IDLE_SETTLE_DELAY_MS)
   }
 
-  private async announceReminder(message: string): Promise<void> {
+  /**
+   * Public : un rappel programmé depuis le mode Chat (étape 30) doit être annoncé à voix haute exactement
+   * comme un rappel programmé à la voix — c'est le même Jaris, l'utilisateur n'a aucune raison de rater un
+   * rappel juste parce qu'il l'a demandé au clavier (voir le branchement dans main.ts).
+   */
+  async announceReminder(message: string): Promise<void> {
     this.clearIdleTimer()
     this.setEmotion('thinking')
     await this.speak(`Rappel : ${message}`)

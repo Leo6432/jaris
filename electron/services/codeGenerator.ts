@@ -1,0 +1,177 @@
+import { app } from 'electron'
+import { mkdir, writeFile } from 'fs/promises'
+import { join } from 'path'
+import { config } from '../config'
+import { getLiveGpuStatus, pickSafeModel } from './hardwareScan'
+import { chatWithOllama, listInstalledModels, type OllamaMessage } from './ollama'
+import { getProfile } from './profileStore'
+import type { GeneratedApp } from '../../shared/ipc'
+
+/**
+ * Fenêtre de contexte dédiée à la génération de code : le modèle doit produire un fichier HTML complet
+ * (souvent 200+ lignes), puis le relire EN ENTIER pour le corriger à la passe suivante. La valeur par
+ * défaut de la conversation (4096) tronquerait le fichier en pleine relecture.
+ */
+const CODE_NUM_CTX = 16384
+
+/**
+ * Consignes strictes partagées par les deux passes (génération et critique) — c'est le "scaffolding" qui
+ * fait la différence entre un appel LLM brut et un vrai générateur d'applications : sans ces règles, un
+ * modèle local produit typiquement une page grise sans style, avec un `<script src>` vers un CDN qui ne
+ * chargera jamais (Jaris est 100% local et l'aperçu tourne dans une iframe sans accès réseau).
+ */
+const APP_RULES = [
+  "Produis UN SEUL fichier HTML complet et autonome, commençant par <!DOCTYPE html> et finissant par </html>.",
+  "AUCUNE ressource externe : pas de <script src>, pas de <link href> vers un CDN, pas de police Google " +
+    "Fonts, pas d'image distante, pas de fetch vers une API. Tout (CSS, JavaScript, icônes) doit être écrit " +
+    "en dur dans le fichier. Pour les icônes et les illustrations, utilise du SVG inline. Pour les données " +
+    "d'exemple, écris-les en dur dans le JavaScript.",
+  "JavaScript classique uniquement (pas de React, Vue, ni aucun framework, pas de syntaxe de modules " +
+    "import/export) : le fichier doit fonctionner en l'ouvrant directement dans un navigateur.",
+  "Soigne le design : palette cohérente, vraie hiérarchie typographique, espacements réguliers, coins " +
+    "arrondis, états au survol, et une mise en page responsive (grid ou flex) qui tient aussi sur mobile.",
+  "Structure le code en sections claires et commentées, avec des noms de fonctions et de classes CSS " +
+    "explicites, plutôt qu'un seul bloc monolithique.",
+  "Gère les cas limites visibles par l'utilisateur : liste vide, champ non rempli, saisie invalide, action " +
+    "impossible. L'interface ne doit jamais rester silencieuse ou cassée après une action.",
+  "Si l'application a besoin de garder des données entre deux ouvertures, utilise localStorage, en " +
+    "protégeant chaque lecture/écriture par un try/catch."
+]
+
+const GENERATE_SYSTEM_PROMPT =
+  "Tu es un développeur front-end expert. Tu génères des applications web complètes et fonctionnelles à " +
+  "partir d'une description en langage naturel.\n\n" +
+  `Règles impératives :\n${APP_RULES.map((r) => `- ${r}`).join('\n')}\n\n` +
+  "Réponds UNIQUEMENT avec le code du fichier, dans un bloc ```html. Aucune explication avant ou après."
+
+const CRITIQUE_SYSTEM_PROMPT =
+  "Tu es un relecteur de code front-end exigeant. On te donne le code d'une application web générée par un " +
+  "autre développeur, et la demande initiale de l'utilisateur. Ton travail est de livrer une version " +
+  "corrigée et améliorée de ce fichier.\n\n" +
+  "Vérifie et corrige en priorité :\n" +
+  "- les erreurs de syntaxe HTML/CSS/JavaScript, les balises non fermées, les fonctions appelées mais " +
+  "jamais définies, les identifiants référencés dans le JavaScript mais absents du HTML ;\n" +
+  "- toute ressource externe qui aurait été laissée (CDN, police distante, image distante, appel réseau) : " +
+  "supprime-la et remplace-la par un équivalent écrit en dur dans le fichier ;\n" +
+  "- les éléments affichés mais jamais mis en forme, ou visuellement incohérents avec le reste ;\n" +
+  "- les cas limites non gérés (liste vide, champ non rempli, saisie invalide) ;\n" +
+  "- l'écart avec la demande initiale : une fonctionnalité demandée mais absente doit être ajoutée.\n\n" +
+  `Le fichier corrigé doit toujours respecter ces règles :\n${APP_RULES.map((r) => `- ${r}`).join('\n')}\n\n` +
+  "Réponds UNIQUEMENT avec le fichier complet corrigé, dans un bloc ```html. Aucune explication, aucun " +
+  "commentaire de relecture, aucun résumé des changements."
+
+/**
+ * Récupère le code d'un bloc ```html (ou ``` tout court) dans la réponse du modèle. Certains modèles
+ * répondent avec le HTML brut sans bloc de code malgré la consigne : on le détecte alors directement au
+ * <!DOCTYPE ou au <html, plutôt que de renvoyer une erreur pour une réponse en réalité exploitable.
+ */
+function extractHtml(raw: string): string | null {
+  const fenced = /```(?:html)?\s*\n([\s\S]*?)```/i.exec(raw)
+  const candidate = (fenced ? fenced[1] : raw).trim()
+  const start = candidate.search(/<!DOCTYPE html|<html[\s>]/i)
+  if (start === -1) return null
+  return candidate.slice(start).trim()
+}
+
+/**
+ * Le meilleur modèle disponible pour du code : le palier "puissant" du profil, avec le même repli que la
+ * conversation si la VRAM réellement libre à l'instant présent ne suffit plus (jeu ou navigateur ouvert en
+ * parallèle). Générer du code est la tâche la plus exigeante de Jaris — jamais de palier rapide ici.
+ */
+async function resolveCodeModel(onStatus: (message: string) => void): Promise<string> {
+  const profile = await getProfile()
+  const fallback = profile?.models?.large ?? config.ollama.model
+  const live = await getLiveGpuStatus()
+  if (live.freeVramGb === null) return fallback
+
+  const installed = await listInstalledModels().catch(() => [] as string[])
+  const safe = pickSafeModel('large', live.freeVramGb, installed, fallback)
+  if (safe !== fallback) {
+    onStatus(`VRAM libre actuelle : ${live.freeVramGb} Go (insuffisant pour ${fallback}) : repli sur ${safe}.`)
+  }
+  return safe
+}
+
+/** Nom de dossier lisible et sans surprise pour le système de fichiers, dérivé de la demande. */
+function slugify(description: string): string {
+  const slug = description
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+  return slug || 'app'
+}
+
+/** Dossier où toutes les applications générées sont enregistrées (une par sous-dossier horodaté). */
+export function getGeneratedAppsDir(): string {
+  return join(app.getPath('userData'), 'generated-apps')
+}
+
+/**
+ * Génère une application web autonome à partir d'une description, en deux passes façon Lovable/Emergent
+ * plutôt qu'un simple appel LLM brut :
+ *  1. génération, guidée par un prompt système enrichi de consignes strictes (APP_RULES) ;
+ *  2. critique : un second passage relit le code produit pour corriger la syntaxe, retirer les dépendances
+ *     externes oubliées et combler les écarts avec la demande, avant tout affichage.
+ * Si la passe de critique échoue ou renvoie quelque chose d'inexploitable, on garde le premier jet plutôt
+ * que de faire échouer toute la génération.
+ *
+ * `currentHtml` (modification d'une application déjà générée) est le "contexte ciblé" : on envoie
+ * exactement le fichier à modifier et la nouvelle demande, jamais tout l'historique de la discussion.
+ */
+export async function generateApp(
+  description: string,
+  onStatus: (message: string) => void,
+  currentHtml?: string
+): Promise<GeneratedApp> {
+  const model = await resolveCodeModel(onStatus)
+  onStatus(`Modèle utilisé : ${model}`)
+
+  const userPrompt = currentHtml
+    ? `Voici le fichier actuel de l'application :\n\n\`\`\`html\n${currentHtml}\n\`\`\`\n\n` +
+      `Modification demandée : ${description}\n\n` +
+      "Renvoie le fichier complet modifié, pas seulement les parties changées."
+    : `Application à créer : ${description}`
+
+  onStatus(currentHtml ? 'Application en cours de modification…' : "Génération de l'application…")
+  const generateMessages: OllamaMessage[] = [
+    { role: 'system', content: GENERATE_SYSTEM_PROMPT },
+    { role: 'user', content: userPrompt }
+  ]
+  const first = await chatWithOllama(generateMessages, undefined, model, 'high', undefined, CODE_NUM_CTX)
+  const draft = extractHtml(first.content)
+  if (!draft) {
+    throw new Error("Le modèle n'a pas renvoyé de code HTML exploitable. Reformule ta demande, ou relance.")
+  }
+
+  onStatus('Relecture du code par un second agent (cohérence, style, syntaxe)…')
+  let final = draft
+  try {
+    const critiqueMessages: OllamaMessage[] = [
+      { role: 'system', content: CRITIQUE_SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: `Demande initiale de l'utilisateur : ${description}\n\nCode à relire :\n\n\`\`\`html\n${draft}\n\`\`\``
+      }
+    ]
+    const reviewed = await chatWithOllama(critiqueMessages, undefined, model, 'high', undefined, CODE_NUM_CTX)
+    const reviewedHtml = extractHtml(reviewed.content)
+    if (reviewedHtml) {
+      final = reviewedHtml
+      onStatus('Relecture terminée.')
+    } else {
+      onStatus('La relecture n\'a rien renvoyé d\'exploitable : le premier jet est conservé.')
+    }
+  } catch (err) {
+    onStatus(`Relecture impossible (${err instanceof Error ? err.message : String(err)}) : le premier jet est conservé.`)
+  }
+
+  const dir = join(getGeneratedAppsDir(), `${Date.now()}-${slugify(description)}`)
+  await mkdir(dir, { recursive: true })
+  await writeFile(join(dir, 'index.html'), final, 'utf-8')
+  onStatus(`Application enregistrée dans ${dir}`)
+
+  return { html: final, path: dir }
+}

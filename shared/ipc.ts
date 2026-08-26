@@ -116,6 +116,23 @@ export interface ModelOverviewResult {
   entries: ModelOverviewEntry[]
 }
 
+/** Un message du mode Chat (étape 30) — même Jaris et mêmes outils que la voix, mais en écrit. */
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+/**
+ * Résultat d'une génération d'application en mode Code (étape 30) : le code complet d'une page autonome
+ * (HTML + CSS + JS dans un seul fichier, aucune dépendance réseau) et l'endroit où il a été enregistré sur
+ * le disque, pour pouvoir le rouvrir/modifier en dehors de Jaris.
+ */
+export interface GeneratedApp {
+  html: string
+  /** Dossier du projet généré sur le disque (contient index.html). */
+  path: string
+}
+
 /** Canaux IPC main -> renderer pour piloter le visage et afficher la conversation. */
 export const IPC_CHANNELS = {
   emotion: 'jaris:emotion',
@@ -167,6 +184,16 @@ export const IPC_CHANNELS = {
   runModelAnalysis: 'jaris:run-model-analysis',
   /** main -> renderer : une ligne de sortie du benchmark en cours, au fil de l'eau (progression comprise, voir OptionsMenu.tsx). */
   modelBenchmarkLine: 'jaris:model-benchmark-line',
+  /** renderer <-> main : envoie un message écrit à Jaris (mode Chat, étape 30) et renvoie sa réponse. */
+  sendChatMessage: 'jaris:send-chat-message',
+  /** renderer <-> main : récupère les messages déjà échangés en mode Chat depuis le lancement. */
+  getChatHistory: 'jaris:get-chat-history',
+  /** renderer <-> main : génère une application autonome à partir d'une description (mode Code, étape 30). */
+  generateApp: 'jaris:generate-app',
+  /** main -> renderer : messages d'avancement pendant la génération d'application (étapes de la boucle). */
+  codeGenStatus: 'jaris:code-gen-status',
+  /** renderer -> main : ouvre le dossier de l'application générée dans l'explorateur de fichiers. */
+  openGeneratedApp: 'jaris:open-generated-app',
   /** renderer <-> main : modèles candidats (hardwareScan.ts) apparus depuis le dernier scan de capacité (étape 29), à afficher en popup. */
   getNewModels: 'jaris:get-new-models',
   /** renderer -> main : l'utilisateur a vu le popup de nouveaux modèles, ne plus le remontrer avant les prochains. */
