@@ -22,6 +22,14 @@ const CODE_NUM_CTX = 16384
  */
 const APP_RULES = [
   "Produis UN SEUL fichier HTML complet et autonome, commençant par <!DOCTYPE html> et finissant par </html>.",
+  "Fais EXACTEMENT ce qui est demandé, rien de plus : n'invente aucune fonctionnalité, aucun titre, aucun " +
+    "texte d'ambiance ni aucun élément d'interface qui n'a pas été demandé. Une demande simple (un bouton) " +
+    "doit donner une page simple. Soigner le design ne veut pas dire ajouter du contenu en plus. Quand " +
+    "l'utilisateur précise un libellé, une couleur ou un comportement, reprends-le au mot près.",
+  "N'utilise JAMAIS de classe CSS venant d'une bibliothèque externe (Bootstrap, Tailwind, Font Awesome, " +
+    "Material Icons, Bootstrap Icons...) : ces bibliothèques ne sont pas chargées dans le fichier, donc ces " +
+    "classes n'ont aucun effet. En particulier, aucune police d'icônes : une icône s'écrit en SVG inline, " +
+    "directement dans le HTML. Écris toi-même chaque règle CSS que tu utilises, dans la balise <style>.",
   "AUCUNE ressource externe : pas de <script src>, pas de <link href> vers un CDN, pas de police Google " +
     "Fonts, pas d'image distante, pas de fetch vers une API. Tout (CSS, JavaScript, icônes) doit être écrit " +
     "en dur dans le fichier. Pour les icônes et les illustrations, utilise du SVG inline. Pour les données " +
@@ -61,7 +69,10 @@ const CRITIQUE_SYSTEM_PROMPT =
   "supprime-la et remplace-la par un équivalent écrit en dur dans le fichier ;\n" +
   "- les éléments affichés mais jamais mis en forme, ou visuellement incohérents avec le reste ;\n" +
   "- les cas limites non gérés (liste vide, champ non rempli, saisie invalide) ;\n" +
-  "- l'écart avec la demande initiale : une fonctionnalité demandée mais absente doit être ajoutée.\n\n" +
+  "- l'écart avec la demande initiale, DANS LES DEUX SENS : une fonctionnalité demandée mais absente doit " +
+  "être ajoutée, et tout ce qui a été inventé sans avoir été demandé (titre, texte d'ambiance, compteur, " +
+  "fonctionnalité en plus) doit être SUPPRIMÉ. Les libellés que l'utilisateur a précisés doivent " +
+  "apparaître au mot près.\n\n" +
   `Le fichier corrigé doit toujours respecter ces règles :\n${APP_RULES.map((r) => `- ${r}`).join('\n')}\n\n` +
   "Réponds UNIQUEMENT avec le fichier complet corrigé, dans un bloc ```html. Aucune explication, aucun " +
   "commentaire de relecture, aucun résumé des changements."
@@ -90,6 +101,29 @@ export function validateGeneratedHtml(html: string): string[] {
   const closed = (html.match(/<\/script>/gi) ?? []).length
   if (opened !== closed) {
     issues.push(`les balises <script> ne sont pas appariées (${opened} ouvrante(s), ${closed} fermante(s))`)
+  }
+
+  // Classes de bibliothèques jamais chargées ici : sans leur CSS, une classe d'icône n'affiche pas
+  // d'icône mais le nom de sa ligature en texte brut (souvent rogné par la taille du bouton, ce qui donne
+  // une lettre isolée au milieu d'un élément vide) — un défaut invisible pour le modèle qui relit, mais
+  // parfaitement repérable ici.
+  // Volontairement restreint aux marqueurs sans ambiguïté : un préfixe court comme "fa-" ou "bi-" seul
+  // signalerait à tort des classes maison parfaitement légitimes ("fa-brique", "bi-couleur"). Font Awesome
+  // et Bootstrap Icons imposent de toute façon leur classe de famille ("fa"/"fas"/"bi") à côté de l'icône.
+  const GHOST_PREFIXES = /^(?:material-icons|material-symbols|glyphicon|fa-(?:solid|regular|brands|light|thin|duotone))/i
+  const GHOST_EXACT = new Set(['fa', 'fas', 'far', 'fab', 'bi', 'mdi'])
+  const ghostClasses = [
+    ...new Set(
+      (html.match(/class\s*=\s*["']([^"']*)/gi) ?? [])
+        .flatMap((attr) => attr.replace(/^class\s*=\s*["']/i, '').split(/\s+/))
+        .filter((token) => token && (GHOST_PREFIXES.test(token) || GHOST_EXACT.has(token.toLowerCase())))
+    )
+  ]
+  if (ghostClasses.length) {
+    issues.push(
+      `le fichier utilise des classes d'une bibliothèque externe non chargée, sans aucun effet : ` +
+        `${ghostClasses.slice(0, 4).join(', ')} — écris le CSS toi-même, et remplace toute icône par du SVG inline`
+    )
   }
 
   const external = [...new Set(html.match(/(?:src|href)\s*=\s*["']https?:\/\/[^"']+/gi) ?? [])]
