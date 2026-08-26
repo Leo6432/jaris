@@ -87,6 +87,10 @@ export async function ensureOllamaRunning(log: LogFn): Promise<void> {
 
   log("Ollama n'est pas lancé, démarrage automatique…")
   const proc = spawn('ollama', ['serve'], { detached: true, stdio: 'ignore', windowsHide: true })
+  // spawn() signale un échec (ex: "ollama" absent du PATH) de façon asynchrone via l'évènement 'error' du
+  // process, jamais en levant une exception directement : sans ce listener, Node la traite comme une
+  // exception non rattrapée et ça plante tout Jaris (au lieu de juste échouer à démarrer Ollama).
+  proc.on('error', (err) => log(`Échec du démarrage automatique d'Ollama : ${err.message}`))
   proc.unref()
   ollamaProcessStartedByJaris = proc
 
@@ -134,7 +138,16 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
     await execAsync('docker info', { windowsHide: true })
   } catch {
     if (process.platform === 'win32') {
-      spawn('C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe', { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+      const dockerProc = spawn('C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe', {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      })
+      // Même piège que pour `ollama serve` ci-dessus : sans ce listener, un chemin d'install Docker Desktop
+      // différent (ou Docker pas installé du tout) plante tout Jaris avec un ENOENT non rattrapé, au lieu
+      // de juste échouer à lancer Docker (le message "Docker n'a pas pu démarrer" un peu plus bas suffit).
+      dockerProc.on('error', (err) => log(`Impossible de lancer Docker Desktop automatiquement : ${err.message}`))
+      dockerProc.unref()
     }
     const dockerUp = await waitUntil(async () => {
       try {
