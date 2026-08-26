@@ -4,7 +4,6 @@ import {
   type CapacityScanResult,
   type ChatMessage,
   type ConversationEntry,
-  type GeneratedApp,
   type GmailStatus,
   type JarisEmotion,
   type MemoryGraph,
@@ -54,11 +53,7 @@ const api = {
   getNewModels: (): Promise<string[]> => ipcRenderer.invoke(IPC_CHANNELS.getNewModels),
   acknowledgeNewModels: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.acknowledgeNewModels),
   sendChatMessage: (prompt: string): Promise<ChatMessage> => ipcRenderer.invoke(IPC_CHANNELS.sendChatMessage, prompt),
-  getChatHistory: (): Promise<ChatMessage[]> => ipcRenderer.invoke(IPC_CHANNELS.getChatHistory),
-  generateApp: (description: string, currentHtml?: string): Promise<GeneratedApp> =>
-    ipcRenderer.invoke(IPC_CHANNELS.generateApp, description, currentHtml),
-  onCodeGenStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.codeGenStatus, cb),
-  openGeneratedApp: (path?: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openGeneratedApp, path)
+  getChatHistory: (): Promise<ChatMessage[]> => ipcRenderer.invoke(IPC_CHANNELS.getChatHistory)
 }
 
 export type JarisApi = typeof api

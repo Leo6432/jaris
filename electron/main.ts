@@ -5,7 +5,6 @@ import { ensureOllamaRunning, ensureSearxngRunning, stopOllamaIfStartedByJaris }
 import { getAllCandidateModelIds, getModelOverview, scanCapacity } from './services/hardwareScan'
 import { runModelAnalysis } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
-import { generateApp, getGeneratedAppsDir } from './services/codeGenerator'
 import { deleteModel, pullModelIfMissing } from './services/ollama'
 import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
@@ -24,7 +23,6 @@ import {
   IPC_CHANNELS,
   type CapacityScanResult,
   type ChatMessage,
-  type GeneratedApp,
   type PreviousModelSelection,
   type JarisEmotion,
   type MemoryGraph,
@@ -341,21 +339,6 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle(IPC_CHANNELS.getChatHistory, (): ChatMessage[] => chatSession.getVisibleMessages())
 
-  // Mode Code (étape 30) : génération d'une application autonome, avec avancement au fil de l'eau (la
-  // génération + relecture peut prendre plusieurs minutes sur un modèle local).
-  ipcMain.handle(
-    IPC_CHANNELS.generateApp,
-    (event, description: string, currentHtml?: string): Promise<GeneratedApp> => {
-      return generateApp(
-        description,
-        (message) => event.sender.send(IPC_CHANNELS.codeGenStatus, message),
-        currentHtml
-      )
-    }
-  )
-  ipcMain.handle(IPC_CHANNELS.openGeneratedApp, async (_event, path?: string) => {
-    await shell.openPath(path || getGeneratedAppsDir())
-  })
   ipcMain.on(IPC_CHANNELS.onboardingFinished, () => {
     // L'onboarding vient de se terminer dans la fenêtre de réglages : elle bascule en widget flottant.
     onboardingDone = true

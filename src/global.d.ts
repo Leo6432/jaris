@@ -2,7 +2,6 @@ import type {
   CapacityScanResult,
   ChatMessage,
   ConversationEntry,
-  GeneratedApp,
   GmailStatus,
   JarisEmotion,
   MemoryGraph,
@@ -50,9 +49,6 @@ declare global {
       acknowledgeNewModels: () => Promise<void>
       sendChatMessage: (prompt: string) => Promise<ChatMessage>
       getChatHistory: () => Promise<ChatMessage[]>
-      generateApp: (description: string, currentHtml?: string) => Promise<GeneratedApp>
-      onCodeGenStatus: (cb: (message: string) => void) => () => void
-      openGeneratedApp: (path?: string) => Promise<void>
     }
   }
 }
