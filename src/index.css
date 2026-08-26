@@ -879,9 +879,15 @@ body.body--scan {
 
 /* --- Mode Chat (étape 30) --- */
 
+/* Largeur de lecture bornée et centrée : sans ça, sur un écran large, la bulle de l'utilisateur (alignée
+   à droite) et celle de Jaris (alignée à gauche) se retrouvent aux deux extrémités avec un vide énorme
+   entre les deux, et les réponses longues deviennent des lignes de texte interminables. */
 .chat-panel {
   flex: 1;
   min-height: 0;
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -986,9 +992,14 @@ body.body--scan {
 
 /* --- Mode Code (étape 30) --- */
 
+/* Plus large que le chat (l'aperçu de l'application mérite de la place), mais borné quand même : un champ
+   de description étiré sur 2000 px est illisible. */
 .code-panel {
   flex: 1;
   min-height: 0;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
