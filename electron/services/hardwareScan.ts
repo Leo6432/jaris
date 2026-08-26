@@ -74,6 +74,11 @@ const TIER_CANDIDATES: Record<Tier, ModelCandidate[]> = {
 // ci-dessus, source : ollama.com/library/qwen3-vl.
 const VISION_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3-vl:8b', vramGb: 8 },
+  // Pas de tag officiel dans la bibliothèque Ollama : import depuis le dépôt GGUF de ggml-org (mainteneurs
+  // de llama.cpp), à partir du modèle officiel zai-org/GLM-4.6V-Flash. Le tag Q4_K_M est important : les
+  // autres quantifications communautaires (Q2_K, Q3_K) sont purement textuelles, sans le module de vision.
+  // ~6,2 Go mesurés en Q4_K_M, marge de sécurité incluse ci-dessous.
+  { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 6.5 },
   { model: 'qwen3-vl:4b', vramGb: 5 },
   { model: 'qwen3-vl:2b', vramGb: 3 }
 ]
