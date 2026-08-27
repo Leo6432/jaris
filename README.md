@@ -132,6 +132,18 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   cliquer, remplir des formulaires et prendre des captures d'écran dans un
   navigateur réel — utile pour les sites web dynamiques que le simple scan
   d'écran (étape 6) ou le scraping (étape 33) ne suffisent pas à piloter
+- ⬜ Étape 41 — Génération d'images et de vidéos avec
+  [Wan2GP](https://github.com/deepbeepmeep/Wan2GP) : équivalent local et
+  open source d'Higgsfield, taillé pour les GPU grand public ("GPU Poor") —
+  certains modèles (Wan 2.2 TI2V-5B, Wan 2.2 14B en GGUF...) tournent dès 6
+  Go de VRAM. Demander une image ou une courte vidéo à voix haute ou dans le
+  chat (étape 30) télécharge et lance Wan2GP en local, comme Ollama et
+  SearXNG aujourd'hui. Points à vérifier avant de s'y mettre : licence
+  personnalisée de Wan2GP (gratuit à l'usage d'après le dépôt, mais à
+  confirmer pour une redistribution commerciale — même vérification que
+  l'étape 22 pour les autres briques open source utilisées), et cohabitation
+  en VRAM avec le modèle de conversation déjà chargé (probablement décharger
+  temporairement l'un pour l'autre, comme pour la vision — étape 6)
 - ⬜ Étape 35 — Optimisation complète de l'application : passe à fond sur les
   performances avant de passer aux étapes de mise sur le marché ci-dessous —
   réduire au maximum la consommation CPU/GPU/RAM au repos et en usage
