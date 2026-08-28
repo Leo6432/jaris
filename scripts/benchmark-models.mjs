@@ -73,7 +73,12 @@ const MODELS = [
   // les garder dans la liste permet aux utilisateurs avec plus de VRAM de vraiment les tester chez eux —
   // mêmes tailles que LARGE_CANDIDATES dans electron/services/hardwareScan.ts.
   'qwen3.5:35b',
-  'qwen3.5:27b'
+  'qwen3.5:27b',
+  // Palier "Code" (CODE_CANDIDATES dans hardwareScan.ts) : spécialiste complétion/génération de code
+  // (FIM), pas un modèle conversationnel — ses réponses aux 2 questions de raisonnement n'auront
+  // probablement pas de sens, mais les 6 tests d'appel d'outils restent pertinents pour juger s'il peut
+  // suivre les instructions de Jaris, pas seulement écrire du code isolé.
+  'qwen2.5-coder:7b'
 ]
 
 // Copié tel quel depuis electron/services/tools.ts : mêmes schémas que Jaris utilise réellement en

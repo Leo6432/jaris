@@ -83,6 +83,14 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3-vl:2b', vramGb: 3 }
 ]
 
+// Palier "Code" : modèles spécialisés génération/complétion de code, distincts des paliers de conversation
+// ci-dessus (entraînés spécifiquement sur du code, pas juste "bons en code en plus du reste"). Purement
+// informatif pour l'instant (visible dans le tableau comparatif de l'onglet Modèles, testé par le
+// benchmark local) — le mode Code de l'étape 30 a été retiré, la qualité produite par un modèle de cette
+// taille n'était pas au niveau ; cette liste sert à comparer objectivement d'éventuels remplaçants avant
+// de reconsidérer la fonctionnalité. Source taille : ollama.com/library/qwen2.5-coder.
+const CODE_CANDIDATES: ModelCandidate[] = [{ model: 'qwen2.5-coder:7b', vramGb: 4.7 }]
+
 /**
  * Tous les identifiants de modèles candidats (tous paliers + vision confondus, sans doublon), pour l'étape
  * 29 (veille) : comparé au dernier snapshot connu du profil pour détecter les modèles ajoutés à ce fichier
@@ -95,6 +103,7 @@ export function getAllCandidateModelIds(): string[] {
     for (const c of list) ids.add(c.model)
   }
   for (const c of VISION_CANDIDATES) ids.add(c.model)
+  for (const c of CODE_CANDIDATES) ids.add(c.model)
   return [...ids]
 }
 
@@ -307,6 +316,7 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
     for (const c of TIER_CANDIDATES[tier]) addCandidate(c.model, c.vramGb, TIER_LABELS[tier])
   }
   for (const c of VISION_CANDIDATES) addCandidate(c.model, c.vramGb, 'Vision')
+  for (const c of CODE_CANDIDATES) addCandidate(c.model, c.vramGb, 'Code')
 
   const localBenchmark = parseLocalBenchmark()
   for (const entry of byModel.values()) {
