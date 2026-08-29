@@ -51,19 +51,9 @@ export default function OptionsMenu(): JSX.Element {
   // % de téléchargement du modèle EN COURS (pas juste "N modèles sur M") : un seul gros modèle
   // (qwen3.6:35b-a3b, north-mini-code-1.0...) ferait sinon stagner la barre plusieurs minutes d'affilée.
   const [currentPullPercent, setCurrentPullPercent] = useState(0)
-  const phaseStartRef = useRef<{ phase: 'pull' | 'test'; startedAt: number } | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
   const benchmarkLogRef = useRef<HTMLPreElement>(null)
-  // Force un nouveau rendu toutes les 2s pendant l'analyse pour que le temps restant estimé compte
-  // vraiment à rebours, même entre deux lignes de progression (qui peuvent être espacées de plusieurs
-  // minutes sur un gros téléchargement).
-  const [, forceTick] = useState(0)
-  useEffect(() => {
-    if (!benchmarking) return
-    const interval = setInterval(() => forceTick((t) => t + 1), 2000)
-    return () => clearInterval(interval)
-  }, [benchmarking])
 
   useEffect(() => {
     window.jaris.getGmailStatus().then(setStatus)
@@ -115,16 +105,6 @@ export default function OptionsMenu(): JSX.Element {
     })
   }, [])
 
-  // Repart de zéro à chaque changement de phase (pull -> test) : le temps restant estimé est extrapolé à
-  // partir du temps déjà passé DANS la phase en cours, pas depuis le tout début de l'analyse (le temps par
-  // modèle testé n'a rien à voir avec le temps par modèle téléchargé).
-  useEffect(() => {
-    if (!benchmarkProgress) return
-    if (phaseStartRef.current?.phase !== benchmarkProgress.phase) {
-      phaseStartRef.current = { phase: benchmarkProgress.phase, startedAt: Date.now() }
-    }
-  }, [benchmarkProgress?.phase])
-
   useEffect(() => {
     benchmarkLogRef.current?.scrollTo({ top: benchmarkLogRef.current.scrollHeight })
   }, [benchmarkLog])
@@ -144,7 +124,6 @@ export default function OptionsMenu(): JSX.Element {
     setBenchmarkLog([])
     setBenchmarkProgress(null)
     setCurrentPullPercent(0)
-    phaseStartRef.current = null
     try {
       const result = await window.jaris.runModelAnalysis()
       // Reflète tout de suite les nouveaux modèles retenus + le tableau comparatif à jour, sans avoir à
@@ -390,25 +369,17 @@ export default function OptionsMenu(): JSX.Element {
                     ? Math.min(1, (benchmarkProgress.done + currentPullPercent / 100) / Math.max(1, benchmarkProgress.total))
                     : Math.min(1, benchmarkProgress.done / Math.max(1, benchmarkProgress.total))
 
-                // Extrapolation linéaire simple à partir du temps déjà passé dans cette phase : imprécise
-                // par nature (une estimation, pas une mesure), donc affichée seulement une fois qu'il y a un
-                // minimum de signal (2%) pour éviter un "3 heures restantes" absurde tout au début.
-                const startedAt = phaseStartRef.current?.phase === benchmarkProgress.phase ? phaseStartRef.current.startedAt : null
-                let etaLabel: string | null = null
-                if (startedAt && fraction > 0.02) {
-                  const elapsedMs = Date.now() - startedAt
-                  const remainingMin = Math.round(Math.max(0, elapsedMs / fraction - elapsedMs) / 60000)
-                  etaLabel = remainingMin < 1 ? "moins d'une minute" : remainingMin === 1 ? '~1 minute' : `~${remainingMin} minutes`
-                }
-
                 return (
                   <div className="options-menu__progress">
                     <div className="options-menu__progress-label">
+                      {/* Étape 1/2 puis 2/2, pas juste "Téléchargement"/"Test" : sans ce repère, la barre qui
+                          retombe à 0 en passant du téléchargement au test donne l'impression que toute
+                          l'analyse recommence depuis le début, alors que c'est la 2e étape qui démarre. */}
+                      Étape {benchmarkProgress.phase === 'pull' ? '1/2' : '2/2'} —{' '}
                       {benchmarkProgress.phase === 'pull' ? 'Téléchargement' : 'Test'} : {benchmarkProgress.done}/{benchmarkProgress.total}
                       {benchmarkProgress.phase === 'pull' && currentPullPercent > 0 && currentPullPercent < 100 && (
                         <> (modèle en cours : {currentPullPercent}%)</>
                       )}
-                      {etaLabel && <> — temps restant estimé : {etaLabel}</>}
                     </div>
                     <div className="options-menu__progress-bar">
                       <div className="options-menu__progress-bar-fill" style={{ width: `${fraction * 100}%` }} />
