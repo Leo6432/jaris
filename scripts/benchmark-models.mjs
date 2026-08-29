@@ -332,6 +332,10 @@ async function pullModel(model, budgetGb) {
         if (bucket !== lastBucket) {
           lastBucket = bucket
           console.log(`  ${model} : ${bucket}%`)
+          // Progression FINE du modèle en cours de téléchargement (pas juste "N modèles sur M") : sans ça,
+          // un seul gros modèle (qwen3.6:35b-a3b, north-mini-code-1.0...) fait stagner la barre de
+          // progression pendant plusieurs minutes d'affilée, sans aucun retour visuel entre-temps.
+          console.log(`##PULL_MODEL_PROGRESS## ${bucket}`)
         }
       }
     }
@@ -440,6 +444,9 @@ async function main() {
     console.log(`${missing.length} modèle(s) manquant(s) à installer avant le test :\n`)
     let pullsDone = 0
     for (const model of missing) {
+      // Repart de 0 pour ce nouveau modèle : sans ça, la barre de progression (OptionsMenu.tsx) garderait
+      // affiché le dernier pourcentage du modèle précédent pendant tout le début du téléchargement suivant.
+      console.log('##PULL_MODEL_PROGRESS## 0')
       try {
         await pullModel(model, RAM_OFFLOAD_MODELS.has(model) ? ramOffloadBudgetGb : vramBudgetGb)
       } catch (err) {
