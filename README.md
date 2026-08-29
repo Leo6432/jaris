@@ -589,13 +589,22 @@ zéro. Ce qui le distingue d'un simple appel LLM brut (`codeGenerator.ts`) :
   dessous de ce qu'on peut attendre d'un vrai générateur, malgré les
   correctifs ci-dessus (tentative visible dans l'historique Git). `Jaris`
   utilise maintenant deux modèles réellement entraînés pour le code
-  (`resolveCodeModel` dans `codeGenerator.ts`) : `qwen2.5-coder:7b` par
-  défaut (rapide, tient sur 8 Go de VRAM, téléchargé automatiquement au
-  premier lancement du mode Code), et `qwen3.6:35b-a3b` si l'utilisateur l'a
-  installé lui-même (`ollama pull qwen3.6:35b-a3b`) — nettement plus capable
-  en code, mais 35 Md de paramètres au total qui débordent largement de la
-  VRAM et tournent surtout via la RAM système (plus lent, demande une
-  machine avec beaucoup de RAM).
+  (`resolveCodeModel` dans `codeGenerator.ts`, candidats listés dans
+  `CODE_CANDIDATES` de `hardwareScan.ts`) : `qwen2.5-coder:7b` par défaut
+  (rapide, tient sur 8 Go de VRAM, téléchargé automatiquement au premier
+  lancement du mode Code s'il manque), et `qwen3.6:35b-a3b` s'il est déjà
+  installé — nettement plus capable en code, mais 35 Md de paramètres au
+  total qui débordent largement de la VRAM et tournent surtout via la RAM
+  système (plus lent, demande une machine avec beaucoup de RAM). Contrairement
+  au modèle rapide, il n'est jamais téléchargé automatiquement **pendant**
+  une génération (trop volumineux pour une attente en plein milieu d'une
+  tâche) — mais `scripts/benchmark-models.mjs` (bouton "Lancer l'analyse" de
+  l'onglet Modèles) l'installera bien au prochain lancement : ce modèle est
+  volontairement exempté (`RAM_OFFLOAD_MODELS`) du filtre qui saute
+  normalement tout candidat trop gros pour la VRAM détectée, puisqu'il est
+  conçu pour déborder sur la RAM. Le modèle réellement utilisé si le mode
+  Code démarrait maintenant est affiché dans l'onglet Modèles, à côté des
+  autres paliers.
 
 L'aperçu tourne dans une iframe `sandbox="allow-scripts"`, sans
 `allow-same-origin` : le code produit par le modèle s'exécute dans une origine

@@ -114,6 +114,12 @@ export interface ModelOverviewEntry {
 export interface ModelOverviewResult {
   vramGb: number | null
   entries: ModelOverviewEntry[]
+  /**
+   * Modèle de code effectivement utilisé si le mode Code (étape 30) était lancé maintenant (voir
+   * resolveCodeModel dans codeGenerator.ts) : le modèle qualité s'il est déjà installé, sinon le modèle
+   * rapide (toujours défini, jamais null — celui-ci est téléchargé automatiquement au besoin).
+   */
+  codeModel: string
 }
 
 /** Un message du mode Chat (étape 30) — même Jaris et mêmes outils que la voix, mais en écrit. */

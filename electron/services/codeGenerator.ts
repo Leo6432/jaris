@@ -197,8 +197,8 @@ function extractHtml(raw: string): string | null {
  * et un modèle bien plus capable en qualité (LiveCodeBench nettement supérieur) mais qui déborde largement
  * de la VRAM et tourne surtout via la RAM — plus lent, mais accessible sur une machine avec assez de RAM.
  */
-const CODE_MODEL_QUALITY = 'qwen3.6:35b-a3b'
-const CODE_MODEL_FAST = 'qwen2.5-coder:7b'
+export const CODE_MODEL_QUALITY = 'qwen3.6:35b-a3b'
+export const CODE_MODEL_FAST = 'qwen2.5-coder:7b'
 
 /**
  * Choisit le modèle de code à utiliser : le modèle qualité s'il est déjà installé (l'utilisateur a fait la

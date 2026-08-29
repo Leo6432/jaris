@@ -35,6 +35,16 @@ const OLLAMA_HOST = process.env.OLLAMA_HOST?.trim() || 'http://127.0.0.1:11434'
  */
 const VRAM_SAFETY_MARGIN_GB = 1
 
+/**
+ * Modèles volontairement exemptés du filtre de taille par VRAM ci-dessous : contrairement aux autres
+ * candidats (pensés pour tenir entièrement en VRAM, condition d'un usage voix/chat temps réel), ceux-ci
+ * sont conçus pour déborder sur la RAM système (voir CODE_CANDIDATES dans hardwareScan.ts et
+ * codeGenerator.ts) — les bloquer au téléchargement sous prétexte qu'ils ne rentrent pas en VRAM les
+ * empêcherait à tort d'être jamais installés via ce script sur une machine avec beaucoup de RAM mais peu
+ * de VRAM (le cas de Léo : 8 Go de VRAM, 64 Go de RAM).
+ */
+const RAM_OFFLOAD_MODELS = new Set(['qwen3.6:35b-a3b'])
+
 const MODELS = [
   'qwen3.5:2b', // par défaut en Q8_0 (2,74 Go) : plus précis mais plus lourd que la variante ci-dessous
   // Contrairement à qwen3.5:4b/9b (déjà en Q4_K_M par défaut, donc un tag "-q4_K_M" y serait redondant),
@@ -388,7 +398,7 @@ async function main() {
     let pullsDone = 0
     for (const model of missing) {
       try {
-        await pullModel(model, vramBudgetGb)
+        await pullModel(model, RAM_OFFLOAD_MODELS.has(model) ? null : vramBudgetGb)
       } catch (err) {
         if (err instanceof ModelTooLargeError) {
           console.log(`  ${model} ignoré : ${err.message}`)

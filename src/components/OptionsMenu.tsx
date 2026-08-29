@@ -296,6 +296,7 @@ export default function OptionsMenu(): JSX.Element {
                 </li>
               ))}
               <li>Vision : {profile?.visionModel ?? '—'}</li>
+              <li>Code : {modelOverview?.codeModel ?? '—'}</li>
             </ul>
 
             <div className="options-menu__section-title options-menu__model-overview-title">Tous les modèles candidats</div>

@@ -2,6 +2,8 @@ import { exec } from 'child_process'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { promisify } from 'util'
+import { CODE_MODEL_FAST, CODE_MODEL_QUALITY } from './codeGenerator'
+import { listInstalledModels } from './ollama'
 import type { ModelOverviewEntry, ModelTiers } from '../../shared/ipc'
 
 const execAsync = promisify(exec)
@@ -292,6 +294,12 @@ export interface ModelOverviewResult {
    * candidats (ex: qwen3.5:35b sur une carte 8 Go) ne sont jamais testés : ils ne rentreraient pas. */
   vramGb: number | null
   entries: ModelOverviewEntry[]
+  /**
+   * Modèle de code effectivement utilisé si le mode Code (étape 30) était lancé maintenant (voir
+   * resolveCodeModel dans codeGenerator.ts) : le modèle qualité s'il est déjà installé, sinon le modèle
+   * rapide (toujours défini, jamais null — celui-ci est téléchargé automatiquement au besoin).
+   */
+  codeModel: string
 }
 
 /**
@@ -336,7 +344,9 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
   }
 
   const { vramGb } = await detectGpu()
-  return { vramGb, entries: [...byModel.values()].sort((a, b) => b.vramGb - a.vramGb) }
+  const installedModels = await listInstalledModels().catch(() => [] as string[])
+  const codeModel = installedModels.includes(CODE_MODEL_QUALITY) ? CODE_MODEL_QUALITY : CODE_MODEL_FAST
+  return { vramGb, entries: [...byModel.values()].sort((a, b) => b.vramGb - a.vramGb), codeModel }
 }
 
 /** "6/6" -> 6, absent/invalide -> -1 (toujours perdant face à un vrai score dans le tri de pickBestModelsFromBenchmark). */
