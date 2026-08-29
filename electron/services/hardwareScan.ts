@@ -42,17 +42,20 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3:1.7b', vramGb: 2 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
 ]
-// gemma4:e4b et granite4:3b ajoutés suite au même benchmark local : gemma4:e4b (6/6 en tool-calling, bien
-// plus rapide que qwen3.5:9b) en tête si la VRAM le permet, granite4:3b (6/6 aussi, ~2,1 Go) comme palier
-// intermédiaire léger avant le repli ultime. granite4:3b rejette le paramètre `think` (contrairement à
-// qwen3.5/gemma4:e4b, qui le supportent tous les deux) : voir le filet de sécurité "sans think" dans
-// chatWithOllama (electron/services/ollama.ts).
+// gemma4:e4b et granite4:3b (devenu granite4.1:3b, voir plus bas) ajoutés suite au même benchmark local :
+// gemma4:e4b (6/6 en tool-calling, bien plus rapide que qwen3.5:9b) en tête si la VRAM le permet, la famille
+// Granite (6/6 aussi, ~2,1 Go) comme palier intermédiaire léger avant le repli ultime. Cette famille rejette
+// le paramètre `think` (contrairement à qwen3.5/gemma4:e4b, qui le supportent tous les deux) : voir le
+// filet de sécurité "sans think" dans chatWithOllama (electron/services/ollama.ts).
+// granite4:3b -> granite4.1:3b : IBM a sorti Granite 4.1 (post-training amélioré, tool-calling renforcé,
+// même empreinte VRAM) — mise à jour directe, pas de raison de garder l'ancienne version. Vérifié sur
+// ollama.com/library/granite4.1 (tag 3b, 2,1 Go) et le blog IBM Research annonçant la sortie.
 const MEDIUM_CANDIDATES: ModelCandidate[] = [
   { model: 'gemma4:e4b', vramGb: 9.6 },
   { model: 'qwen3.5:9b', vramGb: 6.6 },
   { model: 'qwen3.5:4b', vramGb: 3.4 },
   { model: 'qwen3.5:2b', vramGb: 2.7 },
-  { model: 'granite4:3b', vramGb: 2.1 },
+  { model: 'granite4.1:3b', vramGb: 2.1 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
 ]
 const LARGE_CANDIDATES: ModelCandidate[] = [
@@ -95,8 +98,17 @@ const VISION_CANDIDATES: ModelCandidate[] = [
 //   VRAM "cible" : il apparaîtra donc comme "ne rentre pas" dans le tableau pour les petites cartes, ce qui
 //   est honnête pour un usage 100% VRAM — le mode Code sait l'utiliser quand même s'il est installé (voir
 //   resolveCodeModel dans codeGenerator.ts). Source taille/quantification : ollama.com/library/qwen3.6:35b-a3b.
+// - north-mini-code-1.0 (Cohere) : spécialiste code agentique, MoE (128 experts, ~3 Md actifs) — donc, comme
+//   qwen3.6:35b-a3b, capable de tourner à cheval VRAM/RAM sans devenir inutilisable (contrairement à un
+//   dense de même taille). Annoncerait un meilleur score que Devstral Small 2 24B (dense) sur l'index code
+//   d'Artificial Analysis. AJOUTÉ ICI EN INFORMATIF SEULEMENT (pas encore promu comme second choix qualité
+//   dans resolveCodeModel) : contrairement à qwen3.6:35b-a3b, pas encore de benchmark indépendant
+//   (LiveCodeBench/SWE-bench) trouvé le comparant directement à ce qui est déjà utilisé — à tester via
+//   "Lancer l'analyse" avant d'envisager de le promouvoir. Source : ollama.com/library/north-mini-code-1.0
+//   (tag :q4_K_M, 19 Go), blog Cohere.
 const CODE_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3.6:35b-a3b', vramGb: 22 },
+  { model: 'north-mini-code-1.0', vramGb: 19 },
   { model: 'qwen2.5-coder:7b', vramGb: 4.7 }
 ]
 
@@ -243,7 +255,8 @@ const INTELLIGENCE_MMLU_PRO: Record<string, number> = {
   'qwen3.5:9b': 82.5,
   'qwen3.5:27b': 86.1,
   'qwen3.5:35b': 85.3,
-  'granite4:3b': 44.5,
+  // granite4:3b (44.5) retiré : remplacé par granite4.1:3b (voir MEDIUM_CANDIDATES), pas de score MMLU-Pro
+  // publié trouvé pour cette nouvelle version — l'ancien chiffre ne lui est pas forcément applicable.
   'gemma4:e4b': 69.4,
   'qwen3.6:35b-a3b': 85.2
 }

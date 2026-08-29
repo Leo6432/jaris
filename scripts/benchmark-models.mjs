@@ -52,7 +52,7 @@ const RAM_SAFETY_MARGIN_GB = 8
  * dédié) : sans ce filtre, ce script tenterait de télécharger des dizaines de Go pour un modèle qui ne
  * tournerait de toute façon jamais correctement.
  */
-const RAM_OFFLOAD_MODELS = new Set(['qwen3.6:35b-a3b'])
+const RAM_OFFLOAD_MODELS = new Set(['qwen3.6:35b-a3b', 'north-mini-code-1.0'])
 
 const MODELS = [
   'qwen3.5:2b', // par défaut en Q8_0 (2,74 Go) : plus précis mais plus lourd que la variante ci-dessous
@@ -64,7 +64,9 @@ const MODELS = [
   'qwen3.5:9b',
   'phi4-mini',
   'gemma4:e4b',
-  'granite4:3b',
+  // granite4.1:3b (remplace granite4:3b, retiré de MEDIUM_CANDIDATES dans hardwareScan.ts) : post-training
+  // amélioré par IBM, même empreinte VRAM (~2,1 Go). Source : ollama.com/library/granite4.1, blog IBM Research.
+  'granite4.1:3b',
   'nemotron-3-nano:4b',
   'ministral-3:3b',
   // Pas de tag officiel dans la bibliothèque Ollama pour ce 1.2B (seule la variante 8B-MoE y est) : import
@@ -101,7 +103,12 @@ const MODELS = [
   // Second modèle du palier "Code" : 35 Md de paramètres au total (3 Md actifs, architecture MoE), tourne
   // surtout via la RAM système (plus lent, mais bien plus capable en code) — voir RAM_OFFLOAD_MODELS
   // ci-dessus, jugé sur VRAM + RAM combinées plutôt que sur la VRAM seule.
-  'qwen3.6:35b-a3b'
+  'qwen3.6:35b-a3b',
+  // Troisième candidat du palier "Code" (Cohere) : spécialiste code agentique, MoE (128 experts, ~3 Md
+  // actifs) donc dans RAM_OFFLOAD_MODELS comme qwen3.6:35b-a3b ci-dessus — 19 Go mais rapide malgré tout
+  // grâce au MoE. Pas encore utilisé par défaut dans codeGenerator.ts (voir CODE_CANDIDATES dans
+  // hardwareScan.ts) : ce run permettra de le comparer objectivement à qwen3.6:35b-a3b avant de décider.
+  'north-mini-code-1.0'
 ]
 
 // Copié tel quel depuis electron/services/tools.ts : mêmes schémas que Jaris utilise réellement en
