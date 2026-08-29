@@ -328,16 +328,36 @@ export default function OptionsMenu(): JSX.Element {
                     </tr>
                   </thead>
                   <tbody>
-                    {modelOverview.entries.map((entry) => (
-                      <tr key={entry.model} className={selectedModels.has(entry.model) ? 'options-menu__model-row--selected' : undefined}>
-                        <td>{entry.model}</td>
-                        <td>{entry.tiers.join(', ')}</td>
-                        <td>{entry.vramGb} Go</td>
-                        <td>{entry.speedTokPerSec !== null ? `${entry.speedTokPerSec.toFixed(1)} tok/s` : 'non testé'}</td>
-                        <td>{entry.toolCalling ?? 'non testé'}</td>
-                        <td>{entry.intelligence !== null ? entry.intelligence : 'non publié'}</td>
-                      </tr>
-                    ))}
+                    {(() => {
+                      // Groupé par palier (Rapide/Médium/Puissant/Vision/Code) plutôt que trié uniquement
+                      // par VRAM : entry.tiers[0] est déjà le palier "principal" du modèle, hardwareScan.ts
+                      // renvoie la liste triée dans ce même ordre — une ligne d'en-tête à chaque changement
+                      // de groupe rend ce classement visible plutôt qu'implicite.
+                      const rows: JSX.Element[] = []
+                      let lastGroup: string | null = null
+                      for (const entry of modelOverview.entries) {
+                        const group = entry.tiers[0] ?? '?'
+                        if (group !== lastGroup) {
+                          rows.push(
+                            <tr key={`group-${group}`} className="options-menu__model-group-row">
+                              <td colSpan={6}>{group}</td>
+                            </tr>
+                          )
+                          lastGroup = group
+                        }
+                        rows.push(
+                          <tr key={entry.model} className={selectedModels.has(entry.model) ? 'options-menu__model-row--selected' : undefined}>
+                            <td>{entry.model}</td>
+                            <td>{entry.tiers.join(', ')}</td>
+                            <td>{entry.vramGb} Go</td>
+                            <td>{entry.speedTokPerSec !== null ? `${entry.speedTokPerSec.toFixed(1)} tok/s` : 'non testé'}</td>
+                            <td>{entry.toolCalling ?? 'non testé'}</td>
+                            <td>{entry.intelligence !== null ? entry.intelligence : 'non publié'}</td>
+                          </tr>
+                        )
+                      }
+                      return rows
+                    })()}
                   </tbody>
                 </table>
               </div>

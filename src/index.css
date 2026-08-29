@@ -378,6 +378,17 @@ body.body--scan {
   color: #d9ecff;
 }
 
+.options-menu__model-group-row td {
+  padding-top: 12px;
+  padding-bottom: 4px;
+  border-bottom: none;
+  color: #7fa3c9;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 .options-menu__model-row--selected td {
   border-top: 1px solid rgba(55, 226, 255, 0.5);
   border-bottom: 1px solid rgba(55, 226, 255, 0.5);

@@ -314,6 +314,23 @@ export function parseLocalBenchmark(): Map<string, LocalBenchmarkEntry> {
 
 const TIER_LABELS: Record<Tier, string> = { flash: 'Rapide', medium: 'Médium', large: 'Puissant' }
 
+/**
+ * Ordre d'affichage des paliers dans le tableau comparatif de l'onglet Modèles : un modèle candidat à
+ * plusieurs paliers (ex: qwen3.5:0.8b, repli de Rapide/Médium/Puissant) est classé sous le PREMIER palier
+ * de cette liste qui le concerne, pour que le tableau se lise comme groupé par palier plutôt que trié
+ * uniquement par VRAM (ce qui mélangeait tous les paliers ensemble).
+ */
+const TIER_DISPLAY_ORDER = ['Rapide', 'Médium', 'Puissant', 'Vision', 'Code']
+
+function primaryTierRank(tiers: string[]): number {
+  let best = TIER_DISPLAY_ORDER.length
+  for (const tier of tiers) {
+    const rank = TIER_DISPLAY_ORDER.indexOf(tier)
+    if (rank !== -1 && rank < best) best = rank
+  }
+  return best
+}
+
 export interface ModelOverviewResult {
   /** VRAM totale détectée sur cette machine, pour expliquer dans l'onglet Modèles pourquoi certains
    * candidats (ex: qwen3.5:35b sur une carte 8 Go) ne sont jamais testés : ils ne rentreraient pas. */
@@ -371,7 +388,11 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
   const { vramGb } = await detectGpu()
   const installedModels = await listInstalledModels().catch(() => [] as string[])
   const codeModel = installedModels.includes(CODE_MODEL_QUALITY) ? CODE_MODEL_QUALITY : CODE_MODEL_FAST
-  return { vramGb, entries: [...byModel.values()].sort((a, b) => b.vramGb - a.vramGb), codeModel }
+  const entries = [...byModel.values()].sort((a, b) => {
+    const tierDiff = primaryTierRank(a.tiers) - primaryTierRank(b.tiers)
+    return tierDiff !== 0 ? tierDiff : b.vramGb - a.vramGb
+  })
+  return { vramGb, entries, codeModel }
 }
 
 /** "6/6" -> 6, absent/invalide -> -1 (toujours perdant face à un vrai score dans le tri de pickBestModelsFromBenchmark). */
