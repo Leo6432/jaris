@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import CapacityScan from '@/components/CapacityScan'
 import ChatPanel from '@/components/ChatPanel'
+import CodePanel from '@/components/CodePanel'
 import GmailOnboarding from '@/components/GmailOnboarding'
 import JarisOrb from '@/components/JarisOrb'
 import MemoryBrain from '@/components/MemoryBrain'
@@ -16,12 +17,13 @@ const STATUS_LABEL: Record<JarisEmotion, string> = {
   surprised: 'Oups !'
 }
 
-/** Les modes de la colonne latérale permanente (étape 30). */
-type AppMode = 'voice' | 'chat'
+/** Les 3 modes de la colonne latérale permanente (étape 30). */
+type AppMode = 'voice' | 'chat' | 'code'
 
 const MODES: Array<{ id: AppMode; label: string; hint: string }> = [
   { id: 'voice', label: 'Agent vocal', hint: 'Parler à Jaris' },
-  { id: 'chat', label: 'Chat', hint: 'Écrire à Jaris' }
+  { id: 'chat', label: 'Chat', hint: 'Écrire à Jaris' },
+  { id: 'code', label: 'Code', hint: 'Générer une application' }
 ]
 
 /**
@@ -116,9 +118,9 @@ export default function App(): JSX.Element {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
-      // Ignoré dès que l'utilisateur est en train d'écrire quelque part (message du mode Chat, champs du
-      // menu Options...) : sans ça, taper un "+" dans un texte déclencherait l'écoute au lieu d'écrire le
-      // caractère.
+      // Ignoré dès que l'utilisateur est en train d'écrire quelque part (message du mode Chat, description
+      // du mode Code, champs du menu Options...) : sans ça, taper un "+" dans un texte déclencherait
+      // l'écoute au lieu d'écrire le caractère.
       const target = event.target as HTMLElement | null
       const typing =
         target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable
@@ -253,6 +255,7 @@ export default function App(): JSX.Element {
           )}
 
           {appMode === 'chat' && <ChatPanel />}
+          {appMode === 'code' && <CodePanel />}
         </main>
 
         {memoryGraph && <MemoryBrain graph={memoryGraph} onClose={() => setMemoryGraph(null)} />}

@@ -78,7 +78,11 @@ const MODELS = [
   // (FIM), pas un modèle conversationnel — ses réponses aux 2 questions de raisonnement n'auront
   // probablement pas de sens, mais les 6 tests d'appel d'outils restent pertinents pour juger s'il peut
   // suivre les instructions de Jaris, pas seulement écrire du code isolé.
-  'qwen2.5-coder:7b'
+  'qwen2.5-coder:7b',
+  // Second modèle du palier "Code" : 35 Md de paramètres au total (3 Md actifs, architecture MoE), sera
+  // sauté automatiquement sur les petites cartes (comme qwen3.5:35b/27b ci-dessus) sauf s'il est déjà
+  // installé — auquel cas il tourne surtout via la RAM système, plus lent mais bien plus capable en code.
+  'qwen3.6:35b-a3b'
 ]
 
 // Copié tel quel depuis electron/services/tools.ts : mêmes schémas que Jaris utilise réellement en

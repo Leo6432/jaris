@@ -84,12 +84,19 @@ const VISION_CANDIDATES: ModelCandidate[] = [
 ]
 
 // Palier "Code" : modèles spécialisés génération/complétion de code, distincts des paliers de conversation
-// ci-dessus (entraînés spécifiquement sur du code, pas juste "bons en code en plus du reste"). Purement
-// informatif pour l'instant (visible dans le tableau comparatif de l'onglet Modèles, testé par le
-// benchmark local) — le mode Code de l'étape 30 a été retiré, la qualité produite par un modèle de cette
-// taille n'était pas au niveau ; cette liste sert à comparer objectivement d'éventuels remplaçants avant
-// de reconsidérer la fonctionnalité. Source taille : ollama.com/library/qwen2.5-coder.
-const CODE_CANDIDATES: ModelCandidate[] = [{ model: 'qwen2.5-coder:7b', vramGb: 4.7 }]
+// ci-dessus (entraînés spécifiquement sur du code, pas juste "bons en code en plus du reste"). Utilisé par
+// codeGenerator.ts (mode Code, étape 30) et visible dans le tableau comparatif de l'onglet Modèles :
+// - qwen2.5-coder:7b : modèle rapide, tient sur 8 Go de VRAM. Source taille : ollama.com/library/qwen2.5-coder.
+// - qwen3.6:35b-a3b : nettement plus capable (LiveCodeBench v6 très supérieur), mais 35 Md de paramètres au
+//   total — ne tient pas dans la VRAM d'une carte 8 Go, tourne surtout via la RAM système (plus lent, mais
+//   accessible avec 64 Go de RAM ou plus). vramGb reflète sa taille réelle (quantification Q4_K_M), pas une
+//   VRAM "cible" : il apparaîtra donc comme "ne rentre pas" dans le tableau pour les petites cartes, ce qui
+//   est honnête pour un usage 100% VRAM — le mode Code sait l'utiliser quand même s'il est installé (voir
+//   resolveCodeModel dans codeGenerator.ts). Source taille/quantification : ollama.com/library/qwen3.6:35b-a3b.
+const CODE_CANDIDATES: ModelCandidate[] = [
+  { model: 'qwen3.6:35b-a3b', vramGb: 22 },
+  { model: 'qwen2.5-coder:7b', vramGb: 4.7 }
+]
 
 /**
  * Tous les identifiants de modèles candidats (tous paliers + vision confondus, sans doublon), pour l'étape
@@ -235,7 +242,8 @@ const INTELLIGENCE_MMLU_PRO: Record<string, number> = {
   'qwen3.5:27b': 86.1,
   'qwen3.5:35b': 85.3,
   'granite4:3b': 44.5,
-  'gemma4:e4b': 69.4
+  'gemma4:e4b': 69.4,
+  'qwen3.6:35b-a3b': 85.2
 }
 
 export interface LocalBenchmarkEntry {
