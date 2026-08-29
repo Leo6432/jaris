@@ -154,7 +154,8 @@ export default function OptionsMenu(): JSX.Element {
 
   const voice = useMemo(() => TTS_VOICES[voiceIndex], [voiceIndex])
 
-  // Modèles actuellement retenus par le profil (un par palier + vision), pour encadrer leur ligne dans le
+  // Modèles actuellement retenus (un par palier + vision, depuis le profil ; plus le palier Code, qui n'a
+  // pas de choix stocké dans le profil — voir modelOverview.codeModel), pour encadrer leur ligne dans le
   // tableau comparatif ci-dessous.
   const selectedModels = useMemo(() => {
     const set = new Set<string>()
@@ -162,8 +163,9 @@ export default function OptionsMenu(): JSX.Element {
     if (profile?.models?.medium) set.add(profile.models.medium)
     if (profile?.models?.large) set.add(profile.models.large)
     if (profile?.visionModel) set.add(profile.visionModel)
+    if (modelOverview?.codeModel) set.add(modelOverview.codeModel)
     return set
-  }, [profile])
+  }, [profile, modelOverview])
 
   const handleConnect = (): void => {
     setError(null)

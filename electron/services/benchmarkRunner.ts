@@ -2,7 +2,7 @@ import { spawn } from 'child_process'
 import { join } from 'path'
 import { config } from '../config'
 import { deleteModel, pullModelIfMissing, ModelTooLargeError } from './ollama'
-import { getAllCandidateModelIds, parseLocalBenchmark, pickBestModelsFromBenchmark } from './hardwareScan'
+import { getAllCandidateModelIds, getCodeCandidateModelIds, parseLocalBenchmark, pickBestModelsFromBenchmark } from './hardwareScan'
 import { getProfile, saveProfile } from './profileStore'
 import type { CapacityScanResult } from '../../shared/ipc'
 
@@ -60,6 +60,11 @@ async function cleanupUnselectedModels(onLine: (line: string) => void): Promise<
   if (profile?.models?.medium) keep.add(profile.models.medium)
   if (profile?.models?.large) keep.add(profile.models.large)
   if (profile?.visionModel) keep.add(profile.visionModel)
+  // Le palier Code n'a pas UN choix stocké dans le profil (resolveCodeModel décide dynamiquement selon ce
+  // qui est installé, voir codeGenerator.ts) : sans cette exemption, un modèle Code fraîchement testé
+  // (potentiellement des dizaines de Go) était supprimé juste après le test, alors que rien ne l'avait
+  // "remplacé" — c'est ce que Léo a vu (qwen2.5-coder:7b réinstallé au premier prompt du mode Code).
+  for (const model of getCodeCandidateModelIds()) keep.add(model)
 
   const toRemove = tested.filter((model) => !keep.has(model))
   if (!toRemove.length) {

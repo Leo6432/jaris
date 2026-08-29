@@ -128,6 +128,18 @@ export function getAllCandidateModelIds(): string[] {
   return [...ids]
 }
 
+/**
+ * Modèles du palier Code (voir CODE_CANDIDATES ci-dessus), pour que benchmarkRunner.ts sache lesquels
+ * exempter du nettoyage post-benchmark (cleanupUnselectedModels) : contrairement aux paliers
+ * flash/medium/large/vision, le palier Code n'a pas UN choix stocké dans le profil — resolveCodeModel
+ * (codeGenerator.ts) décide dynamiquement à chaque génération selon ce qui est installé sur le moment. Sans
+ * cette exemption, tout modèle Code fraîchement testé (potentiellement des dizaines de Go) serait supprimé
+ * juste après le test, alors que rien ne l'a "remplacé" au sens des autres paliers.
+ */
+export function getCodeCandidateModelIds(): string[] {
+  return CODE_CANDIDATES.map((c) => c.model)
+}
+
 function pickForBudget(candidates: ModelCandidate[], budgetGb: number): string {
   const fit = candidates.find((c) => c.vramGb <= budgetGb)
   return (fit ?? candidates[candidates.length - 1]).model
