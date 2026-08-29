@@ -316,60 +316,56 @@ export default function OptionsMenu(): JSX.Element {
               <p className="capacity-scan__status">Chargement...</p>
             ) : (
               <div className="options-menu__model-overview-scroll">
-                <table className="options-menu__model-overview">
-                  <thead>
-                    <tr>
-                      <th>Modèle</th>
-                      <th>Palier(s)</th>
-                      <th>VRAM</th>
-                      <th>Vitesse</th>
-                      <th>Tool-calling</th>
-                      <th>Intelligence</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      // Groupé par palier (Rapide/Médium/Puissant/Vision/Code) plutôt que trié uniquement
-                      // par VRAM : entry.tiers[0] est déjà le palier "principal" du modèle, hardwareScan.ts
-                      // renvoie la liste triée dans ce même ordre — une ligne d'en-tête à chaque changement
-                      // de groupe rend ce classement visible plutôt qu'implicite.
-                      const rows: JSX.Element[] = []
-                      let lastGroup: string | null = null
-                      for (const entry of modelOverview.entries) {
-                        const group = entry.tiers[0] ?? '?'
-                        if (group !== lastGroup) {
-                          rows.push(
-                            <tr key={`group-${group}`} className="options-menu__model-group-row">
-                              <td colSpan={6}>{group}</td>
-                            </tr>
-                          )
-                          lastGroup = group
-                        }
-                        rows.push(
-                          <tr key={entry.model} className={selectedModels.has(entry.model) ? 'options-menu__model-row--selected' : undefined}>
-                            <td>{entry.model}</td>
-                            <td>{entry.tiers.join(', ')}</td>
-                            <td>{entry.vramGb} Go</td>
-                            <td>{entry.speedTokPerSec !== null ? `${entry.speedTokPerSec.toFixed(1)} tok/s` : 'non testé'}</td>
-                            <td>{entry.toolCalling ?? 'non testé'}</td>
-                            <td>{entry.intelligence !== null ? entry.intelligence : 'non publié'}</td>
+                {modelOverview.groups.map((group) => {
+                  // Vision n'a aucune infrastructure de test locale (ni vitesse ni tool-calling n'y sont
+                  // jamais mesurés, voir hardwareScan.ts) : lui afficher ces colonnes suggérerait à tort
+                  // qu'il manque un test plutôt qu'il n'y en a simplement pas pour ce palier.
+                  const showTestColumns = group.tier !== 'Vision'
+                  return (
+                    <div key={group.tier} className="options-menu__model-group">
+                      <div className="options-menu__model-group-title">{group.tier}</div>
+                      <table className="options-menu__model-overview">
+                        <thead>
+                          <tr>
+                            <th>Modèle</th>
+                            <th>VRAM</th>
+                            {showTestColumns && (
+                              <>
+                                <th>Vitesse</th>
+                                <th>Tool-calling</th>
+                                <th>Intelligence</th>
+                              </>
+                            )}
                           </tr>
-                        )
-                      }
-                      return rows
-                    })()}
-                  </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                          {group.entries.map((entry) => (
+                            <tr key={entry.model} className={selectedModels.has(entry.model) ? 'options-menu__model-row--selected' : undefined}>
+                              <td>{entry.model}</td>
+                              <td>{entry.vramGb} Go</td>
+                              {showTestColumns && (
+                                <>
+                                  <td>{entry.speedTokPerSec !== null ? `${entry.speedTokPerSec.toFixed(1)} tok/s` : 'non testé'}</td>
+                                  <td>{entry.toolCalling ?? 'non testé'}</td>
+                                  <td>{entry.intelligence !== null ? entry.intelligence : 'non publié'}</td>
+                                </>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                })}
               </div>
             )}
             <p className="options-menu__model-overview-hint">
-              Entourés en cyan : les modèles actuellement retenus par ton profil. Vitesse et tool-calling
-              viennent d'un run local du bouton ci-dessous, s'il a déjà tourné sur cette machine — jamais
-              pour les modèles Vision (pas d'infrastructure de test vision){' '}
-              {modelOverview?.vramGb != null
-                ? `ni pour ceux qui dépassent la VRAM détectée sur cette machine (${modelOverview.vramGb} Go) : ils ne rentreraient pas.`
-                : '.'}{' '}
-              Intelligence = score MMLU-Pro publié quand il existe.
+              Entourés en cyan : les modèles actuellement retenus. Vitesse et tool-calling viennent d'un run
+              local du bouton ci-dessous, s'il a déjà tourné sur cette machine — jamais pour ceux qui
+              dépassent la VRAM détectée sur cette machine{modelOverview?.vramGb != null ? ` (${modelOverview.vramGb} Go)` : ''} :
+              ils ne rentreraient pas. Le palier Vision n'a pas de colonnes de test : aucune infrastructure
+              locale ne mesure sa vitesse ou sa fiabilité pour l'instant. Intelligence = score MMLU-Pro
+              publié quand il existe.
             </p>
 
             <button className="options-menu__action" onClick={() => void handleRunAnalysis()} disabled={benchmarking}>

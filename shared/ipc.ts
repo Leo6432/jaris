@@ -94,26 +94,37 @@ export interface PreviousModelSelection {
 }
 
 /**
- * Un modèle candidat (tous paliers + vision confondus), pour le tableau comparatif de l'onglet Modèles du
- * menu Options. speedTokPerSec/toolCalling viennent d'un run local de `npm run benchmark:models`
+ * Un modèle candidat pour UN palier donné (voir ModelOverviewGroup), pour le tableau comparatif de l'onglet
+ * Modèles du menu Options. speedTokPerSec/toolCalling viennent d'un run local de `npm run benchmark:models`
  * (scripts/benchmark-models.mjs) s'il a déjà tourné sur cette machine, `null` sinon (jamais de chiffre
  * inventé). intelligence = score MMLU-Pro publié quand il existe, `null` sinon.
  */
 export interface ModelOverviewEntry {
   model: string
-  /** Paliers pour lesquels ce modèle est candidat (ex: ["Rapide"], ["Médium", "Puissant"], ["Vision"]). */
-  tiers: string[]
   vramGb: number
   speedTokPerSec: number | null
   toolCalling: string | null
   intelligence: number | null
 }
 
-/** Résultat de getModelOverview : la liste des candidats, plus la VRAM totale détectée sur la machine, pour
- * que l'onglet Modèles puisse expliquer pourquoi certains candidats (trop gros) ne sont jamais testés. */
+/**
+ * Les candidats d'UN palier (Rapide/Médium/Puissant/Vision/Code) — une liste séparée par palier plutôt
+ * qu'une liste unique tous paliers confondus, pour que chaque tableau n'affiche que les colonnes qui ont un
+ * sens pour lui (ex: Vision n'a pas de vitesse/tool-calling mesurés, pas d'infrastructure de test pour ça).
+ * Un même modèle peut apparaître dans plusieurs groupes s'il est candidat à plusieurs paliers (ex: le plus
+ * petit modèle, repli ultime de Rapide/Médium/Puissant).
+ */
+export interface ModelOverviewGroup {
+  tier: string
+  entries: ModelOverviewEntry[]
+}
+
+/** Résultat de getModelOverview : les candidats groupés par palier, plus la VRAM totale détectée sur la
+ * machine, pour que l'onglet Modèles puisse expliquer pourquoi certains candidats (trop gros) ne sont
+ * jamais testés. */
 export interface ModelOverviewResult {
   vramGb: number | null
-  entries: ModelOverviewEntry[]
+  groups: ModelOverviewGroup[]
   /**
    * Modèle de code effectivement utilisé si le mode Code (étape 30) était lancé maintenant (voir
    * resolveCodeModel dans codeGenerator.ts) : le modèle qualité s'il est déjà installé, sinon le modèle

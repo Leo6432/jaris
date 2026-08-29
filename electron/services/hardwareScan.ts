@@ -4,7 +4,7 @@ import { join } from 'path'
 import { promisify } from 'util'
 import { CODE_MODEL_FAST, CODE_MODEL_QUALITY } from './codeGenerator'
 import { listInstalledModels } from './ollama'
-import type { ModelOverviewEntry, ModelTiers } from '../../shared/ipc'
+import type { ModelOverviewEntry, ModelOverviewResult, ModelTiers } from '../../shared/ipc'
 
 const execAsync = promisify(exec)
 
@@ -106,9 +106,17 @@ const VISION_CANDIDATES: ModelCandidate[] = [
 //   (LiveCodeBench/SWE-bench) trouvé le comparant directement à ce qui est déjà utilisé — à tester via
 //   "Lancer l'analyse" avant d'envisager de le promouvoir. Source : ollama.com/library/north-mini-code-1.0
 //   (tag :q4_K_M, 19 Go), blog Cohere.
+// - qwen2.5-coder:32b : plus gros frère de qwen2.5-coder:7b, mais DENSE (contrairement à qwen3.6:35b-a3b et
+//   north-mini-code-1.0 ci-dessus, tous deux MoE) — tous ses 32 Md de paramètres servent à chaque mot, donc
+//   un débordement sur la RAM le ralentira beaucoup plus fort, proportionnellement, qu'un MoE de taille
+//   comparable (même écart que Devstral Small 2 24B, dense, vs North Mini Code, MoE, observé cette session :
+//   ~5 tok/s contre ~34 tok/s pour une taille de fichier proche). Ajouté en informatif pour le comparer
+//   objectivement via "Lancer l'analyse" plutôt que de deviner. Source taille : ollama.com/library/qwen2.5-coder
+//   (tag 32b, 20 Go).
 const CODE_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3.6:35b-a3b', vramGb: 22 },
   { model: 'north-mini-code-1.0', vramGb: 19 },
+  { model: 'qwen2.5-coder:32b', vramGb: 20 },
   { model: 'qwen2.5-coder:7b', vramGb: 4.7 }
 ]
 
@@ -315,84 +323,40 @@ export function parseLocalBenchmark(): Map<string, LocalBenchmarkEntry> {
 const TIER_LABELS: Record<Tier, string> = { flash: 'Rapide', medium: 'Médium', large: 'Puissant' }
 
 /**
- * Ordre d'affichage des paliers dans le tableau comparatif de l'onglet Modèles : un modèle candidat à
- * plusieurs paliers (ex: qwen3.5:0.8b, repli de Rapide/Médium/Puissant) est classé sous le PREMIER palier
- * de cette liste qui le concerne, pour que le tableau se lise comme groupé par palier plutôt que trié
- * uniquement par VRAM (ce qui mélangeait tous les paliers ensemble).
- */
-const TIER_DISPLAY_ORDER = ['Rapide', 'Médium', 'Puissant', 'Vision', 'Code']
-
-function primaryTierRank(tiers: string[]): number {
-  let best = TIER_DISPLAY_ORDER.length
-  for (const tier of tiers) {
-    const rank = TIER_DISPLAY_ORDER.indexOf(tier)
-    if (rank !== -1 && rank < best) best = rank
-  }
-  return best
-}
-
-export interface ModelOverviewResult {
-  /** VRAM totale détectée sur cette machine, pour expliquer dans l'onglet Modèles pourquoi certains
-   * candidats (ex: qwen3.5:35b sur une carte 8 Go) ne sont jamais testés : ils ne rentreraient pas. */
-  vramGb: number | null
-  entries: ModelOverviewEntry[]
-  /**
-   * Modèle de code effectivement utilisé si le mode Code (étape 30) était lancé maintenant (voir
-   * resolveCodeModel dans codeGenerator.ts) : le modèle qualité s'il est déjà installé, sinon le modèle
-   * rapide (toujours défini, jamais null — celui-ci est téléchargé automatiquement au besoin).
-   */
-  codeModel: string
-}
-
-/**
- * Vue d'ensemble de tous les modèles candidats (tous paliers + vision confondus), pour l'onglet Modèles du
- * menu Options : VRAM nécessaire, vitesse et fiabilité d'appel d'outils mesurées localement si
- * `npm run benchmark:models` a déjà tourné, "intelligence" générale (MMLU-Pro publié) sinon. Un même
- * modèle candidat à plusieurs paliers (ex: qwen3.5:0.8b, repli de tous les paliers) n'apparaît qu'une
- * seule fois, avec la liste de tous les paliers concernés.
+ * Vue d'ensemble des modèles candidats pour l'onglet Modèles, GROUPÉE PAR PALIER (Rapide/Médium/Puissant/
+ * Vision/Code) plutôt qu'une liste unique tous paliers confondus : Vision n'a par exemple aucune
+ * infrastructure de test locale (ni vitesse ni tool-calling n'y sont jamais mesurés), afficher ces colonnes
+ * pour elle n'a pas de sens et suggère à tort qu'il manque un test plutôt qu'il n'y en a simplement pas.
+ * Un même modèle candidat à plusieurs paliers (ex: le plus petit, repli ultime de Rapide/Médium/Puissant)
+ * apparaît dans chacun des groupes concernés — chaque liste doit rester une image complète de ce palier.
  */
 export async function getModelOverview(): Promise<ModelOverviewResult> {
-  const byModel = new Map<string, ModelOverviewEntry>()
-
-  const addCandidate = (model: string, vramGb: number, tierLabel: string): void => {
-    const existing = byModel.get(model)
-    if (existing) {
-      if (!existing.tiers.includes(tierLabel)) existing.tiers.push(tierLabel)
-      return
-    }
-    byModel.set(model, {
-      model,
-      tiers: [tierLabel],
-      vramGb,
-      speedTokPerSec: null,
-      toolCalling: null,
-      intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null
-    })
-  }
-
-  for (const tier of Object.keys(TIER_CANDIDATES) as Tier[]) {
-    for (const c of TIER_CANDIDATES[tier]) addCandidate(c.model, c.vramGb, TIER_LABELS[tier])
-  }
-  for (const c of VISION_CANDIDATES) addCandidate(c.model, c.vramGb, 'Vision')
-  for (const c of CODE_CANDIDATES) addCandidate(c.model, c.vramGb, 'Code')
-
   const localBenchmark = parseLocalBenchmark()
-  for (const entry of byModel.values()) {
-    const local = localBenchmark.get(entry.model)
-    if (local) {
-      entry.speedTokPerSec = local.speedTokPerSec
-      entry.toolCalling = local.toolCalling
+
+  const buildEntry = (model: string, vramGb: number): ModelOverviewEntry => {
+    const local = localBenchmark.get(model)
+    return {
+      model,
+      vramGb,
+      speedTokPerSec: local?.speedTokPerSec ?? null,
+      toolCalling: local?.toolCalling ?? null,
+      intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null
     }
   }
+
+  const groups = [
+    ...(Object.keys(TIER_CANDIDATES) as Tier[]).map((tier) => ({
+      tier: TIER_LABELS[tier],
+      entries: TIER_CANDIDATES[tier].map((c) => buildEntry(c.model, c.vramGb))
+    })),
+    { tier: 'Vision', entries: VISION_CANDIDATES.map((c) => buildEntry(c.model, c.vramGb)) },
+    { tier: 'Code', entries: CODE_CANDIDATES.map((c) => buildEntry(c.model, c.vramGb)) }
+  ]
 
   const { vramGb } = await detectGpu()
   const installedModels = await listInstalledModels().catch(() => [] as string[])
   const codeModel = installedModels.includes(CODE_MODEL_QUALITY) ? CODE_MODEL_QUALITY : CODE_MODEL_FAST
-  const entries = [...byModel.values()].sort((a, b) => {
-    const tierDiff = primaryTierRank(a.tiers) - primaryTierRank(b.tiers)
-    return tierDiff !== 0 ? tierDiff : b.vramGb - a.vramGb
-  })
-  return { vramGb, entries, codeModel }
+  return { vramGb, groups, codeModel }
 }
 
 /** "6/6" -> 6, absent/invalide -> -1 (toujours perdant face à un vrai score dans le tri de pickBestModelsFromBenchmark). */

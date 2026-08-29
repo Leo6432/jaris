@@ -52,7 +52,7 @@ const RAM_SAFETY_MARGIN_GB = 8
  * dédié) : sans ce filtre, ce script tenterait de télécharger des dizaines de Go pour un modèle qui ne
  * tournerait de toute façon jamais correctement.
  */
-const RAM_OFFLOAD_MODELS = new Set(['qwen3.6:35b-a3b', 'north-mini-code-1.0'])
+const RAM_OFFLOAD_MODELS = new Set(['qwen3.6:35b-a3b', 'north-mini-code-1.0', 'qwen2.5-coder:32b'])
 
 const MODELS = [
   'qwen3.5:2b', // par défaut en Q8_0 (2,74 Go) : plus précis mais plus lourd que la variante ci-dessous
@@ -108,7 +108,12 @@ const MODELS = [
   // actifs) donc dans RAM_OFFLOAD_MODELS comme qwen3.6:35b-a3b ci-dessus — 19 Go mais rapide malgré tout
   // grâce au MoE. Pas encore utilisé par défaut dans codeGenerator.ts (voir CODE_CANDIDATES dans
   // hardwareScan.ts) : ce run permettra de le comparer objectivement à qwen3.6:35b-a3b avant de décider.
-  'north-mini-code-1.0'
+  'north-mini-code-1.0',
+  // Quatrième candidat du palier "Code" : plus gros frère de qwen2.5-coder:7b, mais DENSE (contrairement à
+  // qwen3.6:35b-a3b et north-mini-code-1.0 ci-dessus, tous deux MoE) — dans RAM_OFFLOAD_MODELS pour ne pas
+  // être ignoré sur cette carte, mais un débordement sur la RAM ralentira un dense bien plus fort qu'un MoE
+  // de taille comparable (comparer sa vitesse mesurée à celle de north-mini-code-1.0 le confirmera ou non).
+  'qwen2.5-coder:32b'
 ]
 
 // Copié tel quel depuis electron/services/tools.ts : mêmes schémas que Jaris utilise réellement en

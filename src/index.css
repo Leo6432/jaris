@@ -352,6 +352,19 @@ body.body--scan {
   overflow-x: auto;
 }
 
+.options-menu__model-group + .options-menu__model-group {
+  margin-top: 18px;
+}
+
+.options-menu__model-group-title {
+  color: #7fa3c9;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
 .options-menu__model-overview {
   width: 100%;
   border-collapse: collapse;
@@ -376,17 +389,6 @@ body.body--scan {
 
 .options-menu__model-overview td {
   color: #d9ecff;
-}
-
-.options-menu__model-group-row td {
-  padding-top: 12px;
-  padding-bottom: 4px;
-  border-bottom: none;
-  color: #7fa3c9;
-  font-size: 0.68rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
 }
 
 .options-menu__model-row--selected td {
