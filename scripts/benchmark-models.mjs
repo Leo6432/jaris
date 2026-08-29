@@ -239,7 +239,8 @@ async function listInstalledModels() {
  * VRAM totale de la carte NVIDIA détectée (Go), même requête que detectGpu() dans
  * electron/services/hardwareScan.ts — dupliquée ici volontairement : ce script tourne en `node` simple, pas
  * via le bundler Electron/TS, donc pas d'import direct possible entre les deux. `null` sans GPU NVIDIA
- * détecté (ou en cas d'erreur), auquel cas aucun filtre de taille n'est appliqué (voir main()).
+ * détecté (ou en cas d'erreur, ou carte AMD/Intel — non détectées par cette commande) : main() retombe
+ * alors sur un budget basé sur la RAM seule, jamais sur "aucune limite".
  */
 async function detectVramGb() {
   try {
