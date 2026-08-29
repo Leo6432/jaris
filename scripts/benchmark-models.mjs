@@ -18,6 +18,7 @@
 
 import { exec } from 'child_process'
 import { writeFileSync } from 'fs'
+import { totalmem } from 'os'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { promisify } from 'util'
@@ -36,12 +37,20 @@ const OLLAMA_HOST = process.env.OLLAMA_HOST?.trim() || 'http://127.0.0.1:11434'
 const VRAM_SAFETY_MARGIN_GB = 1
 
 /**
- * Modèles volontairement exemptés du filtre de taille par VRAM ci-dessous : contrairement aux autres
- * candidats (pensés pour tenir entièrement en VRAM, condition d'un usage voix/chat temps réel), ceux-ci
- * sont conçus pour déborder sur la RAM système (voir CODE_CANDIDATES dans hardwareScan.ts et
- * codeGenerator.ts) — les bloquer au téléchargement sous prétexte qu'ils ne rentrent pas en VRAM les
- * empêcherait à tort d'être jamais installés via ce script sur une machine avec beaucoup de RAM mais peu
- * de VRAM (le cas de Léo : 8 Go de VRAM, 64 Go de RAM).
+ * Marge sous la RAM totale de la machine, réservée à l'OS et aux autres logiciels ouverts — jamais
+ * disponible en entier pour un seul modèle, contrairement à ce qu'un simple `os.totalmem()` suggérerait.
+ */
+const RAM_SAFETY_MARGIN_GB = 8
+
+/**
+ * Modèles dont le filtre de taille ci-dessous vérifie VRAM + RAM combinées, pas la VRAM seule : contrairement
+ * aux autres candidats (pensés pour tenir entièrement en VRAM, condition d'un usage voix/chat temps réel),
+ * ceux-ci sont conçus pour déborder sur la RAM système (voir CODE_CANDIDATES dans hardwareScan.ts et
+ * codeGenerator.ts). Les juger sur la VRAM seule les bloquerait à tort sur une machine avec beaucoup de RAM
+ * mais peu de VRAM (le cas de Léo : 8 Go de VRAM, 64 Go de RAM) — mais ils doivent quand même être bloqués
+ * sur une machine qui n'a NI la VRAM NI la RAM pour les faire tourner (ex: 12 Go de RAM et pas de GPU
+ * dédié) : sans ce filtre, ce script tenterait de télécharger des dizaines de Go pour un modèle qui ne
+ * tournerait de toute façon jamais correctement.
  */
 const RAM_OFFLOAD_MODELS = new Set(['qwen3.6:35b-a3b'])
 
@@ -89,9 +98,9 @@ const MODELS = [
   // probablement pas de sens, mais les 6 tests d'appel d'outils restent pertinents pour juger s'il peut
   // suivre les instructions de Jaris, pas seulement écrire du code isolé.
   'qwen2.5-coder:7b',
-  // Second modèle du palier "Code" : 35 Md de paramètres au total (3 Md actifs, architecture MoE), sera
-  // sauté automatiquement sur les petites cartes (comme qwen3.5:35b/27b ci-dessus) sauf s'il est déjà
-  // installé — auquel cas il tourne surtout via la RAM système, plus lent mais bien plus capable en code.
+  // Second modèle du palier "Code" : 35 Md de paramètres au total (3 Md actifs, architecture MoE), tourne
+  // surtout via la RAM système (plus lent, mais bien plus capable en code) — voir RAM_OFFLOAD_MODELS
+  // ci-dessus, jugé sur VRAM + RAM combinées plutôt que sur la VRAM seule.
   'qwen3.6:35b-a3b'
 ]
 
@@ -242,6 +251,11 @@ async function detectVramGb() {
   }
 }
 
+/** RAM totale de la machine (Go) : contrairement à la VRAM, Node sait la lire directement, sans commande externe. */
+function detectRamGb() {
+  return totalmem() / 1024 ** 3
+}
+
 class ModelTooLargeError extends Error {
   constructor(model, requiredGb, budgetGb) {
     super(`nécessite ~${requiredGb.toFixed(1)} Go, au-delà des ${budgetGb.toFixed(1)} Go disponibles sur cette carte`)
@@ -384,6 +398,16 @@ async function main() {
       : 'VRAM non détectée (pas de GPU NVIDIA ?) : aucun filtre de taille appliqué, tous les modèles de la liste seront tentés.\n'
   )
 
+  // Budget pour RAM_OFFLOAD_MODELS : VRAM + RAM combinées (pas juste la VRAM), puisque ces modèles sont
+  // conçus pour tourner à cheval sur les deux — mais toujours borné, pour ne pas télécharger des dizaines
+  // de Go sur une machine qui n'a de toute façon ni la VRAM ni la RAM pour les faire tourner.
+  const ramGb = detectRamGb()
+  const ramOffloadBudgetGb = Math.max(0, (vramGb ?? 0) + ramGb - RAM_SAFETY_MARGIN_GB)
+  console.log(
+    `RAM détectée : ${ramGb.toFixed(1)} Go — budget combiné VRAM+RAM pour les modèles conçus pour déborder ` +
+      `sur la RAM (RAM_OFFLOAD_MODELS) : ${ramOffloadBudgetGb.toFixed(1)} Go.\n`
+  )
+
   let installed
   try {
     installed = await listInstalledModels()
@@ -398,7 +422,7 @@ async function main() {
     let pullsDone = 0
     for (const model of missing) {
       try {
-        await pullModel(model, RAM_OFFLOAD_MODELS.has(model) ? null : vramBudgetGb)
+        await pullModel(model, RAM_OFFLOAD_MODELS.has(model) ? ramOffloadBudgetGb : vramBudgetGb)
       } catch (err) {
         if (err instanceof ModelTooLargeError) {
           console.log(`  ${model} ignoré : ${err.message}`)

@@ -599,12 +599,15 @@ zéro. Ce qui le distingue d'un simple appel LLM brut (`codeGenerator.ts`) :
   au modèle rapide, il n'est jamais téléchargé automatiquement **pendant**
   une génération (trop volumineux pour une attente en plein milieu d'une
   tâche) — mais `scripts/benchmark-models.mjs` (bouton "Lancer l'analyse" de
-  l'onglet Modèles) l'installera bien au prochain lancement : ce modèle est
-  volontairement exempté (`RAM_OFFLOAD_MODELS`) du filtre qui saute
-  normalement tout candidat trop gros pour la VRAM détectée, puisqu'il est
-  conçu pour déborder sur la RAM. Le modèle réellement utilisé si le mode
-  Code démarrait maintenant est affiché dans l'onglet Modèles, à côté des
-  autres paliers.
+  l'onglet Modèles) l'installera au prochain lancement si la machine peut
+  raisonnablement le faire tourner : ce modèle fait partie de
+  `RAM_OFFLOAD_MODELS`, jugé sur **VRAM + RAM combinées** (moins une marge de
+  8 Go réservée à l'OS) plutôt que sur la VRAM seule comme les autres
+  candidats — sur une machine avec peu de VRAM mais beaucoup de RAM (le cas de
+  Léo), il passe le filtre ; sur une machine qui n'a ni l'une ni l'autre, il
+  reste bloqué comme n'importe quel modèle trop gros. Le modèle réellement
+  utilisé si le mode Code démarrait maintenant est affiché dans l'onglet
+  Modèles, à côté des autres paliers.
 
 L'aperçu tourne dans une iframe `sandbox="allow-scripts"`, sans
 `allow-same-origin` : le code produit par le modèle s'exécute dans une origine
