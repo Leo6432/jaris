@@ -1,7 +1,7 @@
 import { spawn } from 'child_process'
 import { join } from 'path'
 import { config } from '../config'
-import { deleteModel, pullModelIfMissing } from './ollama'
+import { deleteModel, pullModelIfMissing, ModelTooLargeError } from './ollama'
 import { getAllCandidateModelIds, parseLocalBenchmark, pickBestModelsFromBenchmark } from './hardwareScan'
 import { getProfile, saveProfile } from './profileStore'
 import type { CapacityScanResult } from '../../shared/ipc'
@@ -95,8 +95,19 @@ export async function runModelAnalysis(onLine: (line: string) => void): Promise<
   onLine("Sélection du meilleur modèle pour chaque palier, d'après les résultats du benchmark…")
   const picked = await pickBestModelsFromBenchmark()
   // Seul le modèle vision n'est jamais installé par le benchmark (pas testé) : les modèles texte/tool-
-  // calling retenus, eux, ont forcément déjà été téléchargés pour être testés.
-  await pullModelIfMissing(picked.visionModel, onLine)
+  // calling retenus, eux, ont forcément déjà été téléchargés pour être testés (donc déjà passés par ce
+  // même filet de sécurité). Si même le vision le plus léger ne rentre pas, on continue sans lui plutôt que
+  // de faire échouer toute l'analyse pour une fonctionnalité annexe (voir look_at_screen) — texte/outils
+  // restent utilisables.
+  try {
+    await pullModelIfMissing(picked.visionModel, onLine)
+  } catch (err) {
+    if (err instanceof ModelTooLargeError) {
+      onLine(`Modèle vision ${picked.visionModel} ignoré : ${err.message}`)
+    } else {
+      throw err
+    }
+  }
 
   // Les anciens modèles texte/tool-calling remplacés sont nettoyés juste en dessous par
   // cleanupUnselectedModels (ils ont forcément été testés par ce run, donc suivis par parseLocalBenchmark).

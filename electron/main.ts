@@ -6,7 +6,7 @@ import { getAllCandidateModelIds, getModelOverview, scanCapacity } from './servi
 import { runModelAnalysis } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
 import { generateApp, getGeneratedAppsDir } from './services/codeGenerator'
-import { deleteModel, pullModelIfMissing } from './services/ollama'
+import { deleteModel, pullModelIfMissing, ModelTooLargeError } from './services/ollama'
 import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
 import { createTrayIcon } from './services/trayIcon'
@@ -274,7 +274,22 @@ app.whenReady().then(async () => {
       const result = await scanCapacity()
       const uniqueModels = [...new Set([result.models.flash, result.models.medium, result.models.large, result.visionModel])]
       for (const model of uniqueModels) {
-        await pullModelIfMissing(model, sendStatus)
+        try {
+          await pullModelIfMissing(model, sendStatus)
+        } catch (err) {
+          // pickForBudget (scanCapacity) retombe toujours sur le PLUS PETIT candidat de chaque palier
+          // quand rien ne rentre dans la VRAM détectée : si même ce plus petit candidat dépasse le budget
+          // VRAM+RAM ici, c'est qu'aucun modèle de ce palier ne peut tourner du tout sur cette machine.
+          if (err instanceof ModelTooLargeError) {
+            throw new Error(
+              "Cet ordinateur n'a pas assez de mémoire (VRAM + RAM) pour faire fonctionner un modèle IA " +
+                `local, même le plus léger disponible (${err.model}, ${err.requiredGb.toFixed(1)} Go ` +
+                `nécessaires pour ${err.budgetGb.toFixed(1)} Go disponibles). Jaris ne peut malheureusement ` +
+                'pas fonctionner sur cette machine.'
+            )
+          }
+          throw err
+        }
       }
 
       // `previous` n'est fourni que par "Relancer l'analyse" (jamais au tout premier scan de l'onboarding,

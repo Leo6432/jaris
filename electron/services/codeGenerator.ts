@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
-import { chatWithOllama, listInstalledModels, pullModelIfMissing, type OllamaMessage } from './ollama'
+import { chatWithOllama, listInstalledModels, pullModelIfMissing, ModelTooLargeError, type OllamaMessage } from './ollama'
 import type { GeneratedApp } from '../../shared/ipc'
 
 /**
@@ -217,7 +217,21 @@ async function resolveCodeModel(onStatus: (message: string) => void): Promise<st
 
   if (!installed.includes(CODE_MODEL_FAST)) {
     onStatus(`Téléchargement du modèle de code ${CODE_MODEL_FAST} (une seule fois, ~4,7 Go)…`)
-    await pullModelIfMissing(CODE_MODEL_FAST, onStatus)
+    try {
+      await pullModelIfMissing(CODE_MODEL_FAST, onStatus)
+    } catch (err) {
+      // CODE_MODEL_FAST est déjà le plus léger des deux modèles de CODE_CANDIDATES : s'il ne rentre même
+      // pas dans VRAM+RAM combinées, aucun modèle de code ne peut tourner sur cette machine.
+      if (err instanceof ModelTooLargeError) {
+        throw new Error(
+          "Cet ordinateur n'a pas assez de mémoire (VRAM + RAM) pour faire tourner un modèle de code local, " +
+            `même le plus léger (${err.model}, ${err.requiredGb.toFixed(1)} Go nécessaires pour ` +
+            `${err.budgetGb.toFixed(1)} Go disponibles). Le mode Code ne peut malheureusement pas ` +
+            'fonctionner sur cette machine.'
+        )
+      }
+      throw err
+    }
   }
   onStatus(
     `Modèle utilisé : ${CODE_MODEL_FAST}. Pour une meilleure qualité (plus lent) : ` +

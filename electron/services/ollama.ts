@@ -1,4 +1,5 @@
 import { config } from '../config'
+import { getDownloadBudgetGb } from './systemResources'
 
 export interface OllamaToolCall {
   function: { name: string; arguments: Record<string, unknown> }
@@ -107,6 +108,30 @@ interface OllamaPullProgress {
 }
 
 /**
+ * Levée par pullModelIfMissing quand la taille réelle du modèle (révélée par le manifeste Ollama en plein
+ * téléchargement) dépasse VRAM+RAM combinées de la machine : ce modèle ne pourrait de toute façon jamais
+ * tourner ici, quelle que soit la vitesse acceptée. `requiredGb`/`budgetGb` exposés pour que l'appelant
+ * puisse construire son propre message (ex: "aucun modèle ne rentre du tout" si même le plus petit candidat
+ * d'un palier déclenche cette erreur).
+ */
+export class ModelTooLargeError extends Error {
+  readonly model: string
+  readonly requiredGb: number
+  readonly budgetGb: number
+
+  constructor(model: string, requiredGb: number, budgetGb: number) {
+    super(
+      `${model} nécessite environ ${requiredGb.toFixed(1)} Go, au-delà des ${budgetGb.toFixed(1)} Go de ` +
+        "VRAM + RAM disponibles sur cette machine : il ne pourrait de toute façon pas tourner."
+    )
+    this.name = 'ModelTooLargeError'
+    this.model = model
+    this.requiredGb = requiredGb
+    this.budgetGb = budgetGb
+  }
+}
+
+/**
  * Télécharge `model` via Ollama s'il n'est pas déjà installé, avec une vraie progression (%) affichée au
  * fil de l'eau. `stream: true` (et non `false` comme avant) : un modèle de plusieurs Go pouvant prendre
  * plusieurs minutes, une requête non-streamée reste bloquée en silence jusqu'à la toute fin du
@@ -114,16 +139,26 @@ interface OllamaPullProgress {
  * que ça télécharge bien en arrière-plan. Ollama renvoie une ligne JSON par mise à jour (format NDJSON),
  * une par "couche" du modèle (le pourcentage repart donc à 0 à chaque nouvelle couche, comme dans `ollama
  * pull` en ligne de commande).
+ *
+ * Filtre de taille universel (VRAM+RAM combinées, voir getDownloadBudgetGb dans systemResources.ts) : dès
+ * que le manifeste révèle la taille réelle du modèle (`progress.total`, disponible avant la fin du
+ * téléchargement), le téléchargement est annulé s'il ne rentrerait de toute façon jamais sur cette machine
+ * — quel que soit l'appelant (choix automatique d'un palier, mode Code, benchmark...), aucun modèle n'y
+ * échappe : ce filet de sécurité vit ici, au point d'entrée unique de tout téléchargement de Jaris.
  */
 export async function pullModelIfMissing(model: string, onStatus?: (message: string) => void): Promise<void> {
   const installed = await listInstalledModels()
   if (installed.includes(model)) return
 
+  const budgetGb = await getDownloadBudgetGb()
+
   onStatus?.(`Téléchargement du modèle ${model}…`)
+  const controller = new AbortController()
   const response = await fetch(`${config.ollama.host}/api/pull`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: model, stream: true })
+    body: JSON.stringify({ name: model, stream: true }),
+    signal: controller.signal
   })
   if (!response.ok || !response.body) {
     throw new Error(`Échec du téléchargement de ${model} (Ollama a répondu ${response.status})`)
@@ -133,6 +168,7 @@ export async function pullModelIfMissing(model: string, onStatus?: (message: str
   const decoder = new TextDecoder()
   let buffer = ''
   let lastPercent = -1
+  let sizeChecked = false
 
   while (true) {
     const { done, value } = await reader.read()
@@ -153,6 +189,15 @@ export async function pullModelIfMissing(model: string, onStatus?: (message: str
       }
 
       if (progress.error) throw new Error(`Échec du téléchargement de ${model} : ${progress.error}`)
+
+      if (!sizeChecked && progress.total) {
+        sizeChecked = true
+        const requiredGb = progress.total / 1024 ** 3
+        if (requiredGb > budgetGb) {
+          controller.abort()
+          throw new ModelTooLargeError(model, requiredGb, budgetGb)
+        }
+      }
 
       if (progress.total && progress.completed !== undefined) {
         const percent = Math.floor((progress.completed / progress.total) * 100)
