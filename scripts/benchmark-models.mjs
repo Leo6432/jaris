@@ -269,10 +269,10 @@ class ModelTooLargeError extends Error {
  * ~100 lignes par modèle) : lisible aussi bien dans un vrai terminal que dans le journal en direct de
  * l'onglet Modèles de Jaris (qui découpe la sortie ligne par ligne, un `\r` ne s'y afficherait pas pareil).
  *
- * `budgetGb` (null = pas de limite, VRAM non détectée) : dès que le manifeste Ollama révèle la taille réelle
- * du modèle (`progress.total`, en octets, disponible avant la fin du téléchargement), on l'annule tout de
- * suite si ça dépasse le budget — pas la peine de télécharger plusieurs Go pour un modèle qui ne rentrera de
- * toute façon jamais en VRAM sur cette machine.
+ * `budgetGb` est toujours un nombre concret (jamais de valeur "illimité", voir main()) : dès que le
+ * manifeste Ollama révèle la taille réelle du modèle (`progress.total`, en octets, disponible avant la fin
+ * du téléchargement), on annule le téléchargement tout de suite si ça dépasse le budget — pas la peine de
+ * télécharger plusieurs Go pour un modèle qui ne rentrera de toute façon jamais sur cette machine.
  */
 async function pullModel(model, budgetGb) {
   console.log(`Téléchargement de ${model}…`)
@@ -310,7 +310,7 @@ async function pullModel(model, budgetGb) {
       }
       if (progress.error) throw new Error(progress.error)
 
-      if (!sizeChecked && budgetGb !== null && progress.total) {
+      if (!sizeChecked && progress.total) {
         sizeChecked = true
         const requiredGb = progress.total / 1024 ** 3
         if (requiredGb > budgetGb) {
@@ -390,18 +390,29 @@ function fmt(n, digits = 1) {
 async function main() {
   console.log(`Ollama : ${OLLAMA_HOST}\n`)
 
+  // budgetGb n'est JAMAIS null/illimité, quelle que soit la machine : detectVramGb() ne détecte que les
+  // cartes NVIDIA (nvidia-smi) — une machine sans NVIDIA (carte AMD/Intel, GPU intégré, portable sans GPU
+  // dédié) est donc TOUJOURS vramGb === null ici. Sans repli, ça désactivait purement et simplement le
+  // filtre de taille pour tout le monde dans ce cas — un modèle de 24+ Go aurait été téléchargé en entier
+  // sans aucune vérification. Le repli sur la RAM seule couvre ce cas : au pire (vraiment aucun GPU), le
+  // modèle tournera de toute façon sur CPU/RAM, donc c'est la bonne limite à vérifier.
   const vramGb = await detectVramGb()
-  const vramBudgetGb = vramGb !== null ? Math.max(0, vramGb - VRAM_SAFETY_MARGIN_GB) : null
+  const ramGb = detectRamGb()
+  // Marge différente selon le cas : VRAM_SAFETY_MARGIN_GB (1 Go) suffit pour du contexte/overhead pilote
+  // sur une vraie carte GPU, mais le repli "pas de GPU, tout sur RAM/CPU" doit réserver bien plus pour l'OS
+  // et les autres logiciels — RAM_SAFETY_MARGIN_GB (8 Go), la même marge que pour RAM_OFFLOAD_MODELS.
+  const vramBudgetGb =
+    vramGb !== null ? Math.max(0, vramGb - VRAM_SAFETY_MARGIN_GB) : Math.max(0, ramGb - RAM_SAFETY_MARGIN_GB)
   console.log(
     vramGb !== null
       ? `VRAM détectée : ${vramGb.toFixed(1)} Go (budget de test : ${vramBudgetGb.toFixed(1)} Go, marge de ${VRAM_SAFETY_MARGIN_GB} Go pour le contexte/l'OS) — les modèles trop gros pour cette carte seront sautés automatiquement.\n`
-      : 'VRAM non détectée (pas de GPU NVIDIA ?) : aucun filtre de taille appliqué, tous les modèles de la liste seront tentés.\n'
+      : `Pas de carte NVIDIA détectée : repli sur la RAM seule comme budget (${ramGb.toFixed(1)} Go détectés, ` +
+        `budget de test : ${vramBudgetGb.toFixed(1)} Go) — les modèles trop gros seront sautés automatiquement.\n`
   )
 
-  // Budget pour RAM_OFFLOAD_MODELS : VRAM + RAM combinées (pas juste la VRAM), puisque ces modèles sont
-  // conçus pour tourner à cheval sur les deux — mais toujours borné, pour ne pas télécharger des dizaines
-  // de Go sur une machine qui n'a de toute façon ni la VRAM ni la RAM pour les faire tourner.
-  const ramGb = detectRamGb()
+  // Budget pour RAM_OFFLOAD_MODELS : VRAM + RAM combinées (pas juste l'une ou l'autre), puisque ces modèles
+  // sont conçus pour tourner à cheval sur les deux — mais toujours borné, pour ne pas télécharger des
+  // dizaines de Go sur une machine qui n'a de toute façon ni la VRAM ni la RAM pour les faire tourner.
   const ramOffloadBudgetGb = Math.max(0, (vramGb ?? 0) + ramGb - RAM_SAFETY_MARGIN_GB)
   console.log(
     `RAM détectée : ${ramGb.toFixed(1)} Go — budget combiné VRAM+RAM pour les modèles conçus pour déborder ` +
