@@ -15,11 +15,15 @@ export type ModelRunStatus =
   | { kind: 'skipped' }
 
 /**
- * Fenêtre glissante (ms) sur laquelle le rythme récent de progression est mesuré pour l'estimation de temps
- * restant — voir progressSamplesRef. Ni trop courte (bruit d'un seul événement) ni trop longue (traînerait
- * le rythme d'un modèle précédent, plus rapide ou plus lent, sur le modèle actuel).
+ * Poids de chaque NOUVEL événement dans la moyenne mobile exponentielle (EWMA) du débit de progression, pour
+ * l'estimation de temps restant — voir ewmaRateRef. 0.25 : un seul événement anormal (ex: un test sur un
+ * gros modèle RAM-offloadé qui prend 25 minutes pour presque aucun avancement, voir "Puissant") ne pèse que
+ * pour 25% de la nouvelle estimation, pas 100% — contrairement à une fenêtre glissante (essayée avant),
+ * repérée en simulation pour rester bloquée sur UN SEUL événement lent (ETA à 163 min pour une vraie
+ * remontée à 4 min, le bug signalé : "il me disait 14h mais c'est beaucoup moins"), potentiellement pendant
+ * plusieurs minutes après coup — l'EWMA se corrige, elle, en 1-2 événements suivants.
  */
-const PROGRESS_WINDOW_MS = 90000
+const EWMA_ALPHA = 0.25
 
 export interface ModelAnalysisState {
   benchmarking: boolean
@@ -60,13 +64,14 @@ export function useModelAnalysis(modelOverview: ModelOverviewResult | null): Mod
   const [benchmarkLog, setBenchmarkLog] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
 
-  // Échantillons récents (horodatage, poids fait) de ##PROGRESS##, pour estimer le temps restant à partir du
-  // RYTHME RÉCENT plutôt que de la moyenne depuis le tout début du run : une simple moyenne globale (essayée
-  // avant) reste bloquée sur le rythme des tout premiers petits modèles, rapides — dès qu'un gros modèle
-  // dense (donc lent) arrive plus tard, l'estimation grimpe brutalement au lieu de baisser (le bug signalé :
-  // "il me disait 30 minutes... après il me disait 50 minutes"). Une fenêtre glissante de ~90s s'adapte bien
-  // plus vite à un changement de rythme. Ne garde que les échantillons récents (voir PROGRESS_WINDOW_MS).
-  const progressSamplesRef = useRef<{ t: number; w: number }[]>([])
+  // Débit de progression estimé (poids par seconde) par moyenne mobile exponentielle (EWMA) du débit
+  // INSTANTANÉ entre deux événements ##PROGRESS## consécutifs, pas une simple moyenne depuis le tout début
+  // du run (essayée d'abord : reste bloquée sur le rythme des tout premiers modèles, rapides, quand un gros
+  // modèle lent arrive plus tard) ni une fenêtre glissante brute (essayée ensuite : un seul test isolé très
+  // lent sur un gros modèle "Puissant" pouvait rester coincé dans la fenêtre plusieurs minutes, faisant
+  // dire "14h" alors que la vraie remontée était de quelques minutes). Voir EWMA_ALPHA.
+  const ewmaRateRef = useRef<number | null>(null)
+  const lastProgressRef = useRef<{ t: number; w: number } | null>(null)
   // Estimation "figée" au dernier calcul (ms restants + horodatage du calcul) : le timer ci-dessous fait
   // juste défiler ce chiffre en temps réel entre deux calculs, sans en refaire un nouveau à chaque tick.
   const etaFrozenRef = useRef<{ ms: number; capturedAt: number } | null>(null)
@@ -80,8 +85,9 @@ export function useModelAnalysis(modelOverview: ModelOverviewResult | null): Mod
   // telles quelles : elles alimentent la barre de progression et le tableau de suivi plutôt qu'un journal.
   useEffect(() => {
     return window.jaris.onModelBenchmarkLine((line) => {
-      // Téléchargement et test tournent maintenant EN PARALLÈLE (voir PULL_CONCURRENCY côté script) :
-      // jusqu'à 2 modèles peuvent être en cours de téléchargement à la fois, chaque ligne précise donc lequel.
+      // Téléchargement et test tournent maintenant EN PARALLÈLE (voir pullConcurrencyFor côté script) :
+      // jusqu'à 2 à 4 modèles peuvent être en cours de téléchargement à la fois selon la RAM détectée, chaque
+      // ligne précise donc lequel.
       const modelPullMatch = /^##PULL_MODEL_PROGRESS## (\S+) (\d+)$/.exec(line)
       if (modelPullMatch) {
         const [, model, percent] = modelPullMatch
@@ -123,21 +129,22 @@ export function useModelAnalysis(modelOverview: ModelOverviewResult | null): Mod
         const total = Number(progressMatch[2])
         setProgressFraction(total > 0 ? Math.min(1, done / total) : 0)
 
-        // Estimation de temps restant basée sur le RYTHME RÉCENT (fenêtre glissante), pas la moyenne depuis
-        // le tout début — voir le commentaire de progressSamplesRef plus haut.
+        // Débit INSTANTANÉ depuis le dernier événement, mélangé à la moyenne mobile existante (EWMA) plutôt
+        // que de remplacer purement et simplement l'estimation — voir le commentaire d'ewmaRateRef plus haut.
         const now = Date.now()
-        const samples = progressSamplesRef.current
-        samples.push({ t: now, w: done })
-        while (samples.length > 2 && now - samples[0].t > PROGRESS_WINDOW_MS) samples.shift()
-        const oldest = samples[0]
-        const dtS = (now - oldest.t) / 1000
-        // Ignore un intervalle trop court (une seule ligne, ou deux lignes quasi simultanées) : le débit
-        // mesuré serait bruyant, mieux vaut attendre un peu plus de recul qu'afficher un temps délirant.
-        if (samples.length >= 2 && dtS >= 3) {
-          const rate = (done - oldest.w) / dtS
-          if (rate > 0) {
-            etaFrozenRef.current = { ms: (Math.max(0, total - done) / rate) * 1000, capturedAt: now }
+        const previous = lastProgressRef.current
+        lastProgressRef.current = { t: now, w: done }
+        if (previous) {
+          const dtS = (now - previous.t) / 1000
+          // Ignore un intervalle quasi nul (deux lignes émises au même instant) : diviser par ~0 donnerait un
+          // débit instantané délirant qui pèserait à tort dans la moyenne mobile.
+          if (dtS >= 0.5) {
+            const instantRate = (done - previous.w) / dtS
+            ewmaRateRef.current = ewmaRateRef.current === null ? instantRate : EWMA_ALPHA * instantRate + (1 - EWMA_ALPHA) * ewmaRateRef.current
           }
+        }
+        if (ewmaRateRef.current !== null && ewmaRateRef.current > 0) {
+          etaFrozenRef.current = { ms: (Math.max(0, total - done) / ewmaRateRef.current) * 1000, capturedAt: now }
         }
         return
       }
@@ -170,7 +177,8 @@ export function useModelAnalysis(modelOverview: ModelOverviewResult | null): Mod
     setTestCount(null)
     setProgressFraction(0)
     setEtaMs(null)
-    progressSamplesRef.current = []
+    ewmaRateRef.current = null
+    lastProgressRef.current = null
     etaFrozenRef.current = null
     // Tableau de suivi initialisé avec TOUS les candidats connus à "en attente" : sans ça, un modèle
     // n'apparaîtrait dans le tableau qu'au moment où une ligne le mentionne pour la première fois. Pas filtré

@@ -438,10 +438,12 @@ Un modèle peut tenir en RAM une fois chargé tout en étant impossible à
 télécharger faute de place sur le disque — deux contraintes indépendantes,
 vérifiées séparément avant chaque téléchargement (jamais mis en cache : le
 disque diminue au fil d'un même run, contrairement à la VRAM/RAM). L'analyse
-télécharge jusqu'à 2 modèles à la fois en tâche de fond pendant que ceux déjà
-installés passent déjà leurs tests (au lieu de tout télécharger puis tout
-tester) ; sur une machine à l'espace disque limité, elle passe automatiquement
-en téléchargement strictement séquentiel et supprime immédiatement un
+télécharge jusqu'à 2 à 4 modèles à la fois (adapté à la RAM détectée — une
+machine avec plus de RAM encaisse mieux plusieurs téléchargements simultanés)
+en tâche de fond pendant que ceux déjà installés passent déjà leurs tests (au
+lieu de tout télécharger puis tout tester) ; sur une machine à l'espace disque
+limité, elle passe automatiquement en téléchargement strictement séquentiel
+(cette sécurité prime toujours sur la vitesse) et supprime immédiatement un
 candidat dès qu'un meilleur est trouvé pour son palier — plutôt que de garder
 tous les modèles testés installés simultanément jusqu'à la toute fin.
 

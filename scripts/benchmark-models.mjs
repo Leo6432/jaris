@@ -733,11 +733,22 @@ function detectFreeDiskGb() {
  * lieu de "tout télécharger PUIS tout tester" (réseau inactif pendant les tests, GPU inactif pendant les
  * téléchargements), un modèle peut maintenant se télécharger en tâche de fond pendant qu'un AUTRE, déjà prêt,
  * passe ses tests — les deux étapes utilisent des ressources différentes (bande passante vs GPU/CPU) et ne se
- * gênent quasiment pas. Volontairement limité à 2 (pas plus, malgré la suggestion "1 à 3 modèles") : au-delà,
- * plusieurs téléchargements se partagent la même bande passante sans vraiment aller plus vite, pour un risque
- * accru de contention disque pendant que l'analyse tourne déjà.
+ * gênent quasiment pas.
+ *
+ * Adapté à la RAM détectée plutôt qu'une valeur fixe — à la demande explicite de Léo ("il doit voir avec le
+ * PC, et avec des PC assez forts on peut aller jusqu'à 4") après avoir remarqué que le vrai goulot d'un run
+ * "Puissant" est le téléchargement des gros candidats (14-24 Go chacun, débloqués par le budget VRAM+RAM),
+ * pas les tests. Une machine avec beaucoup de RAM encaisse généralement mieux plusieurs téléchargements
+ * simultanés (buffers réseau, écriture disque en tâche de fond) — mais reste borné à 4 : au-delà, plusieurs
+ * téléchargements se partagent la même bande passante sans vraiment aller plus vite, pour un risque accru de
+ * contention disque. Toujours écrasé à 1 si l'espace disque est serré (voir tightDiskMode dans main()) —
+ * cette sécurité prime toujours sur la vitesse, quelle que soit la RAM disponible.
  */
-const PULL_CONCURRENCY = 2
+function pullConcurrencyFor(ramGb) {
+  if (ramGb >= 32) return 4
+  if (ramGb >= 16) return 3
+  return 2
+}
 
 class ModelTooLargeError extends Error {
   constructor(model, requiredGb, budgetGb) {
@@ -766,7 +777,7 @@ class DiskFullError extends Error {
  * du téléchargement), on annule le téléchargement tout de suite si ça dépasse le budget — pas la peine de
  * télécharger plusieurs Go pour un modèle qui ne rentrera de toute façon jamais sur cette machine.
  *
- * `diskCtx` (`{ reservedGb }`, partagé par TOUS les téléchargements en cours, voir PULL_CONCURRENCY) permet
+ * `diskCtx` (`{ reservedGb }`, partagé par TOUS les téléchargements en cours, voir pullConcurrencyFor) permet
  * de vérifier l'espace disque LIBRE en tenant compte des téléchargements concurrents déjà engagés mais pas
  * encore terminés : sans ça, deux téléchargements lancés en même temps liraient chacun le même espace libre
  * et pourraient tous les deux se croire seuls légitimes à l'utiliser en entier.
@@ -843,7 +854,7 @@ async function pullModel(model, budgetGb, diskCtx, onBucket) {
             // Progression FINE du modèle en cours de téléchargement (pas juste "N modèles sur M") : sans ça,
             // un seul gros modèle (qwen3.6:35b-a3b, north-mini-code-1.0...) fait stagner la barre de
             // progression pendant plusieurs minutes d'affilée, sans aucun retour visuel entre-temps. Le nom
-            // du modèle est inclus (pas juste le %) : PULL_CONCURRENCY autorise plusieurs téléchargements en
+            // du modèle est inclus (pas juste le %) : pullConcurrencyFor autorise plusieurs téléchargements en
             // même temps, il faut distinguer lequel progresse.
             console.log(`##PULL_MODEL_PROGRESS## ${model} ${bucket}`)
             onBucket?.(bucket)
@@ -1103,7 +1114,7 @@ async function main() {
 
   // Poids total de TOUT le travail de cette analyse (Go à télécharger + poids de test, même unité que
   // MODEL_WEIGHT_GB), un seul total désormais — pas "phase 1 puis phase 2" : téléchargement et test tournent
-  // maintenant EN MÊME TEMPS (voir PULL_CONCURRENCY), il n'y a plus de frontière nette entre les deux à
+  // maintenant EN MÊME TEMPS (voir pullConcurrencyFor), il n'y a plus de frontière nette entre les deux à
   // afficher séparément. Toujours pondéré par la vraie taille de chaque modèle (pas un simple compte) : un
   // modèle de 24 Go pèse 24x plus dans ce total qu'un modèle de 1 Go, aussi bien à télécharger qu'à tester
   // (plus lent à chaque réponse) — voir le commentaire de MODEL_WEIGHT_GB.
@@ -1128,7 +1139,7 @@ async function main() {
   // disque non détectable) retombe sur le comportement généreux habituel : impossible de juger la marge sans
   // pouvoir la mesurer.
   const tightDiskMode = freeDiskGbAtStart !== null && freeDiskGbAtStart - DISK_SAFETY_MARGIN_GB < totalPullWeight
-  const effectiveConcurrency = tightDiskMode ? 1 : PULL_CONCURRENCY
+  const effectiveConcurrency = tightDiskMode ? 1 : pullConcurrencyFor(ramGb)
   if (tightDiskMode) {
     console.log(
       `Espace disque limité (${(freeDiskGbAtStart - DISK_SAFETY_MARGIN_GB).toFixed(1)} Go de marge pour ${totalPullWeight.toFixed(1)} Go à télécharger) : téléchargement d'un seul modèle à la fois, et suppression immédiate des candidats déjà dépassés par un meilleur (au lieu d'attendre la fin du run).\n`

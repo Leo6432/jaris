@@ -361,10 +361,10 @@ export default function OptionsMenu(): JSX.Element {
             </button>
             <p className="options-menu__model-overview-hint">
               Teste chaque modèle candidat qui tient dans la VRAM, la RAM ET l'espace disque détectés
-              (télécharge ceux qui manquent, jusqu'à 2 à la fois pendant que les modèles déjà installés
-              passent déjà leurs tests, peut être plusieurs dizaines de Go au premier lancement), choisit et
-              active le meilleur de chaque palier d'après les résultats (fiabilité d'appel d'outils, puis
-              vitesse), et supprime tout le reste.
+              (télécharge ceux qui manquent, jusqu'à 2 à 4 à la fois selon la RAM détectée pendant que les
+              modèles déjà installés passent déjà leurs tests, peut être plusieurs dizaines de Go au premier
+              lancement), choisit et active le meilleur de chaque palier d'après les résultats (fiabilité
+              d'appel d'outils, puis vitesse), et supprime tout le reste.
             </p>
 
             <ModelAnalysisProgress state={analysis} modelOverview={modelOverview} />
