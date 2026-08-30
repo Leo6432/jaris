@@ -91,7 +91,16 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   // ~6,2 Go mesurés en Q4_K_M, marge de sécurité incluse ci-dessous.
   { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 6.5 },
   { model: 'qwen3-vl:4b', vramGb: 5 },
-  { model: 'qwen3-vl:2b', vramGb: 3 }
+  { model: 'qwen3-vl:2b', vramGb: 3 },
+  // Candidats "réutilisation" : qwen3.5 et gemma4:e4b (déjà dans MEDIUM_CANDIDATES) sont NATIVEMENT
+  // multimodaux (vérifié sur ollama.com/library/qwen3.5 : badge vision+tools+thinking), donc candidats
+  // légitimes pour la vision aussi — pas juste des modèles de conversation qu'on force à faire autre chose.
+  // Intérêt concret : si l'un d'eux tient tête à un qwen3-vl/GLM dédié sur VISION_TEST_CASES, Jaris
+  // pourrait un jour réutiliser le modèle de conversation déjà chargé pour look_at_screen, sans jamais
+  // charger un second modèle (zéro swap VRAM). Pas encore le cas aujourd'hui : resolveVisionModel continue
+  // de choisir dans cette liste normalement, ce test sert juste à savoir si ça vaudrait le coup.
+  { model: 'qwen3.5:4b', vramGb: 3.4 },
+  { model: 'gemma4:e4b', vramGb: 9.6 }
 ]
 
 // Palier "Code" : modèles spécialisés génération/complétion de code, distincts des paliers de conversation

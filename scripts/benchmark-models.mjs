@@ -116,7 +116,12 @@ const VISION_CANDIDATES = [
   { model: 'qwen3-vl:8b', vramGb: 8 },
   { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 6.5 },
   { model: 'qwen3-vl:4b', vramGb: 5 },
-  { model: 'qwen3-vl:2b', vramGb: 3 }
+  { model: 'qwen3-vl:2b', vramGb: 3 },
+  // qwen3.5/gemma4:e4b sont nativement multimodaux (déjà dans MEDIUM_CANDIDATES) : testés ici pour savoir
+  // si réutiliser le modèle de conversation déjà chargé tient tête à un modèle vision dédié — voir le
+  // commentaire complet dans hardwareScan.ts.
+  { model: 'qwen3.5:4b', vramGb: 3.4 },
+  { model: 'gemma4:e4b', vramGb: 9.6 }
 ]
 
 // Candidats du palier Code (CODE_CANDIDATES dans hardwareScan.ts, dupliqué ici pour la même raison que
