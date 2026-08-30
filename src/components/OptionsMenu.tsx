@@ -317,10 +317,12 @@ export default function OptionsMenu(): JSX.Element {
             ) : (
               <div className="options-menu__model-overview-scroll">
                 {modelOverview.groups.map((group) => {
-                  // Vision n'a aucune infrastructure de test locale (ni vitesse ni tool-calling n'y sont
-                  // jamais mesurés, voir hardwareScan.ts) : lui afficher ces colonnes suggérerait à tort
-                  // qu'il manque un test plutôt qu'il n'y en a simplement pas pour ce palier.
-                  const showTestColumns = group.tier !== 'Vision'
+                  // Vision est testé (image générée + question à réponse vérifiable, voir
+                  // VISION_TEST_CASES dans scripts/benchmark-models.mjs) mais pas sur du tool-calling — la
+                  // 3e colonne change de nom pour refléter ce qui est réellement mesuré. L'intelligence
+                  // (MMLU-Pro) ne s'applique pas à un modèle vision : jamais publiée pour ce palier, donc
+                  // masquée plutôt que "non publié" partout.
+                  const isVision = group.tier === 'Vision'
                   return (
                     <div key={group.tier} className="options-menu__model-group">
                       <div className="options-menu__model-group-title">{group.tier}</div>
@@ -329,13 +331,9 @@ export default function OptionsMenu(): JSX.Element {
                           <tr>
                             <th>Modèle</th>
                             <th>VRAM</th>
-                            {showTestColumns && (
-                              <>
-                                <th>Vitesse</th>
-                                <th>Tool-calling</th>
-                                <th>Intelligence</th>
-                              </>
-                            )}
+                            <th>Vitesse</th>
+                            <th>{isVision ? 'Précision (images)' : 'Tool-calling'}</th>
+                            {!isVision && <th>Intelligence</th>}
                           </tr>
                         </thead>
                         <tbody>
@@ -343,13 +341,9 @@ export default function OptionsMenu(): JSX.Element {
                             <tr key={entry.model} className={selectedModels.has(entry.model) ? 'options-menu__model-row--selected' : undefined}>
                               <td>{entry.model}</td>
                               <td>{entry.vramGb} Go</td>
-                              {showTestColumns && (
-                                <>
-                                  <td>{entry.speedTokPerSec !== null ? `${entry.speedTokPerSec.toFixed(1)} tok/s` : 'non testé'}</td>
-                                  <td>{entry.toolCalling ?? 'non testé'}</td>
-                                  <td>{entry.intelligence !== null ? entry.intelligence : 'non publié'}</td>
-                                </>
-                              )}
+                              <td>{entry.speedTokPerSec !== null ? `${entry.speedTokPerSec.toFixed(1)} tok/s` : 'non testé'}</td>
+                              <td>{entry.toolCalling ?? 'non testé'}</td>
+                              {!isVision && <td>{entry.intelligence !== null ? entry.intelligence : 'non publié'}</td>}
                             </tr>
                           ))}
                         </tbody>
@@ -360,12 +354,12 @@ export default function OptionsMenu(): JSX.Element {
               </div>
             )}
             <p className="options-menu__model-overview-hint">
-              Entourés en cyan : les modèles actuellement retenus. Vitesse et tool-calling viennent d'un run
+              Entourés en cyan : les modèles actuellement retenus. Vitesse et fiabilité viennent d'un run
               local du bouton ci-dessous, s'il a déjà tourné sur cette machine — jamais pour ceux qui
               dépassent la VRAM détectée sur cette machine{modelOverview?.vramGb != null ? ` (${modelOverview.vramGb} Go)` : ''} :
-              ils ne rentreraient pas. Le palier Vision n'a pas de colonnes de test : aucune infrastructure
-              locale ne mesure sa vitesse ou sa fiabilité pour l'instant. Intelligence = score MMLU-Pro
-              publié quand il existe.
+              ils ne rentreraient pas. Pour Vision, "Précision" vient d'un test dédié (image générée +
+              question à réponse vérifiable, pas de l'appel d'outils) — pas de score d'intelligence MMLU-Pro
+              pour ce palier, ça ne s'y applique pas. Intelligence = score MMLU-Pro publié quand il existe.
             </p>
 
             <button className="options-menu__action" onClick={() => void handleRunAnalysis()} disabled={benchmarking}>

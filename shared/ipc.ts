@@ -110,7 +110,8 @@ export interface ModelOverviewEntry {
 /**
  * Les candidats d'UN palier (Rapide/Médium/Puissant/Vision/Code) — une liste séparée par palier plutôt
  * qu'une liste unique tous paliers confondus, pour que chaque tableau n'affiche que les colonnes qui ont un
- * sens pour lui (ex: Vision n'a pas de vitesse/tool-calling mesurés, pas d'infrastructure de test pour ça).
+ * sens pour lui (ex: Vision n'a pas de score d'intelligence MMLU-Pro, ça ne s'y applique pas — mais a bien
+ * sa propre vitesse/fiabilité mesurées, voir VISION_TEST_CASES dans scripts/benchmark-models.mjs).
  * Un même modèle peut apparaître dans plusieurs groupes s'il est candidat à plusieurs paliers (ex: le plus
  * petit modèle, repli ultime de Rapide/Médium/Puissant).
  */

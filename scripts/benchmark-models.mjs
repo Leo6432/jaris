@@ -22,6 +22,7 @@ import { totalmem } from 'os'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { promisify } from 'util'
+import { deflateSync } from 'zlib'
 
 const execAsync = promisify(exec)
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -114,6 +115,17 @@ const MODELS = [
   // être ignoré sur cette carte, mais un débordement sur la RAM ralentira un dense bien plus fort qu'un MoE
   // de taille comparable (comparer sa vitesse mesurée à celle de north-mini-code-1.0 le confirmera ou non).
   'qwen2.5-coder:32b'
+]
+
+// Candidats du palier Vision (VISION_CANDIDATES dans hardwareScan.ts, dupliqué ici pour la même raison que
+// detectVramGb ci-dessous : ce script tourne en `node` simple, pas d'import direct possible depuis le TS
+// bundlé). Testés séparément de MODELS ci-dessus : la question n'est pas "suit-il les instructions de
+// Jaris" (tool-calling) mais "comprend-il vraiment ce qu'il voit" (voir VISION_TEST_CASES plus bas).
+const VISION_CANDIDATES = [
+  { model: 'qwen3-vl:8b', vramGb: 8 },
+  { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 6.5 },
+  { model: 'qwen3-vl:4b', vramGb: 5 },
+  { model: 'qwen3-vl:2b', vramGb: 3 }
 ]
 
 // Copié tel quel depuis electron/services/tools.ts : mêmes schémas que Jaris utilise réellement en
@@ -238,6 +250,107 @@ const TEST_CASES = [
   { prompt: 'Retiens que mon code postal est 75001.', expectedTool: 'remember' },
   { prompt: 'Explique-moi en une phrase pourquoi le ciel est bleu.', expectedTool: null },
   { prompt: 'Comment tu t\'appelles et qu\'est-ce que tu peux faire pour moi ?', expectedTool: null }
+]
+
+/**
+ * Encodeur PNG minimal (RGB 8 bits, sans dépendance externe — juste zlib, déjà dans Node) pour générer les
+ * images de test de VISION_TEST_CASES ci-dessous à la volée, plutôt que de committer des fichiers image
+ * binaires dans le dépôt. Suffisant pour des aplats de couleur simples, pas un encodeur PNG complet.
+ */
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256)
+  for (let n = 0; n < 256; n++) {
+    let c = n
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
+    table[n] = c >>> 0
+  }
+  return table
+})()
+
+function crc32(buf) {
+  let c = 0xffffffff
+  for (const byte of buf) c = CRC_TABLE[(c ^ byte) & 0xff] ^ (c >>> 8)
+  return (c ^ 0xffffffff) >>> 0
+}
+
+function pngChunk(type, data) {
+  const typeBuf = Buffer.from(type, 'ascii')
+  const lenBuf = Buffer.alloc(4)
+  lenBuf.writeUInt32BE(data.length, 0)
+  const crcBuf = Buffer.alloc(4)
+  crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0)
+  return Buffer.concat([lenBuf, typeBuf, data, crcBuf])
+}
+
+/** `fillFn(x, y) -> [r, g, b]` pour chaque pixel — assez pour des aplats/zones de couleur, pas besoin de plus. */
+function makePngBase64(width, height, fillFn) {
+  const stride = width * 3
+  const raw = Buffer.alloc((stride + 1) * height)
+  for (let y = 0; y < height; y++) {
+    raw[y * (stride + 1)] = 0 // type de filtre "aucun" pour cette ligne
+    for (let x = 0; x < width; x++) {
+      const [r, g, b] = fillFn(x, y)
+      const i = y * (stride + 1) + 1 + x * 3
+      raw[i] = r
+      raw[i + 1] = g
+      raw[i + 2] = b
+    }
+  }
+
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(width, 0)
+  ihdr.writeUInt32BE(height, 4)
+  ihdr[8] = 8 // profondeur 8 bits
+  ihdr[9] = 2 // type de couleur : RGB
+  // ihdr[10..12] (compression/filtre/entrelacement) restent à 0, valeurs standard PNG.
+
+  const png = Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0))
+  ])
+  return png.toString('base64')
+}
+
+// Rouge/vert/bleu francs, faciles à nommer sans ambiguïté (pas de teintes intermédiaires prêtant à
+// interprétation) — le but est de vérifier que le modèle voit VRAIMENT l'image, pas de tester sa culture
+// des nuanciers.
+const RED = [214, 40, 40]
+const GREEN = [40, 180, 74]
+const BLUE = [42, 92, 214]
+
+/**
+ * Test du palier Vision (VISION_CANDIDATES ci-dessus) : au lieu du tool-calling testé pour les modèles de
+ * conversation (TEST_CASES), la question qui compte pour la vision est "le modèle voit-il vraiment
+ * l'image ?" — des questions à réponse unique et objectivement vérifiable (couleur, comptage), pas un
+ * jugement de description ouverte qu'il faudrait noter à la main. `check` reçoit la réponse en minuscules.
+ */
+const VISION_TEST_CASES = [
+  {
+    image: () => makePngBase64(96, 96, () => BLUE),
+    prompt: 'Quelle est la couleur dominante de cette image ? Réponds uniquement avec le nom de la couleur, en un seul mot.',
+    check: (answer) => /\bbleu(e)?\b|\bblue\b/.test(answer)
+  },
+  {
+    image: () => makePngBase64(128, 64, (x) => (x < 64 ? RED : GREEN)),
+    prompt: 'Le côté GAUCHE de cette image est-il plutôt rouge ou plutôt vert ? Réponds en un seul mot.',
+    check: (answer) => /\brouge\b|\bred\b/.test(answer) && !/\bvert(e)?\b|\bgreen\b/.test(answer)
+  },
+  {
+    image: () =>
+      makePngBase64(160, 160, (x, y) => {
+        const squares = [
+          [20, 20],
+          [90, 30],
+          [50, 110]
+        ]
+        const inSquare = squares.some(([sx, sy]) => x >= sx && x < sx + 20 && y >= sy && y < sy + 20)
+        return inSquare ? [20, 20, 20] : [245, 245, 245]
+      }),
+    prompt: 'Combien de carrés noirs vois-tu dans cette image ? Réponds uniquement avec le chiffre.',
+    check: (answer) => /\b3\b|\btrois\b/.test(answer)
+  }
 ]
 
 async function listInstalledModels() {
@@ -400,6 +513,35 @@ async function chat(model, prompt) {
   }
 }
 
+/**
+ * Même appel que lookAtScreen (electron/services/vision.ts) : pas d'outils, `think: false` toujours (les
+ * modèles vision ne le supportent pas forcément, et la production ne l'utilise jamais ici) — pour que ce
+ * test mesure le comportement réel de Jaris, pas un usage générique de l'API vision.
+ */
+async function chatVision(model, prompt, imageBase64) {
+  const start = performance.now()
+  const res = await fetch(`${OLLAMA_HOST}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'user', content: prompt, images: [imageBase64] }],
+      stream: false,
+      think: false
+    })
+  })
+  const wallMs = performance.now() - start
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`)
+  const data = await res.json()
+  const evalCount = data.eval_count ?? 0
+  const evalDurationS = (data.eval_duration ?? 0) / 1e9
+  return {
+    wallMs,
+    tokPerSec: evalDurationS > 0 ? evalCount / evalDurationS : null,
+    content: data.message?.content?.trim() ?? ''
+  }
+}
+
 function fmt(n, digits = 1) {
   return n === null || n === undefined || Number.isNaN(n) ? '—' : n.toFixed(digits)
 }
@@ -444,7 +586,10 @@ async function main() {
     process.exit(1)
   }
 
-  const missing = MODELS.filter((m) => !installed.includes(m))
+  // MODELS (conversation/code) et VISION_CANDIDATES installés dans la même passe : la barre de progression
+  // (OptionsMenu.tsx) n'a pas besoin de les distinguer, seulement combien reste à installer au total.
+  const allInstallable = [...MODELS, ...VISION_CANDIDATES.map((c) => c.model)]
+  const missing = allInstallable.filter((m) => !installed.includes(m))
   if (missing.length) {
     console.log(`${missing.length} modèle(s) manquant(s) à installer avant le test :\n`)
     let pullsDone = 0
@@ -471,7 +616,8 @@ async function main() {
   }
 
   const toRun = MODELS.filter((m) => installed.includes(m))
-  if (!toRun.length) {
+  const visionToRun = VISION_CANDIDATES.map((c) => c.model).filter((m) => installed.includes(m))
+  if (!toRun.length && !visionToRun.length) {
     console.log('Aucun des modèles à tester n\'a pu être installé.')
     return
   }
@@ -480,7 +626,7 @@ async function main() {
   const reasoningAnswers = []
   const errors = []
   let testsDone = 0
-  const testsTotal = toRun.length * TEST_CASES.length
+  const testsTotal = toRun.length * TEST_CASES.length + visionToRun.length * VISION_TEST_CASES.length
 
   for (const model of toRun) {
     console.log(`\n=== ${model} ===`)
@@ -513,12 +659,45 @@ async function main() {
     results.push(perModel)
   }
 
+  // Modèles Vision : les images de VISION_TEST_CASES sont générées une seule fois ici (pas à chaque appel
+  // modèle), le PNG encodé ne dépend que du test, pas du modèle qui le reçoit.
+  const visionImages = VISION_TEST_CASES.map((c) => c.image())
+
+  for (const model of visionToRun) {
+    console.log(`\n=== ${model} (vision) ===`)
+    const perModel = { model, latencies: [], speeds: [], correct: 0, total: 0 }
+
+    for (let i = 0; i < VISION_TEST_CASES.length; i++) {
+      const { prompt, check } = VISION_TEST_CASES[i]
+      process.stdout.write(`  "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}" ... `)
+      try {
+        const r = await chatVision(model, prompt, visionImages[i])
+        perModel.latencies.push(r.wallMs)
+        if (r.tokPerSec !== null) perModel.speeds.push(r.tokPerSec)
+        perModel.total++
+        const ok = check(r.content.toLowerCase())
+        if (ok) perModel.correct++
+        console.log(`${ok ? 'OK' : 'RATÉ'} (réponse: "${r.content.slice(0, 60)}") — ${fmt(r.wallMs, 0)}ms, ${fmt(r.tokPerSec)} tok/s`)
+      } catch (err) {
+        console.log(`ERREUR (${err.message})`)
+        errors.push({ model, prompt, message: err.message })
+      }
+      testsDone++
+      console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
+    }
+
+    results.push(perModel)
+  }
+
   const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null)
 
   const lines = []
   lines.push(`# Résultats du benchmark Jaris — ${new Date().toLocaleString('fr-FR')}`)
   lines.push('')
-  lines.push('| Modèle | Latence moyenne | Vitesse moyenne | Tool-calling |')
+  // "Fiabilité" plutôt que "Tool-calling" : ce tableau mélange les modèles de conversation/code (testés sur
+  // l'appel d'outils, TEST_CASES) et les modèles vision (testés sur la compréhension d'image,
+  // VISION_TEST_CASES) — la colonne représente le score "X/Y" dans les deux cas, mais pas la même épreuve.
+  lines.push('| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité (tool-calling ou vision selon le modèle) |')
   lines.push('|---|---|---|---|')
   for (const r of results) {
     const acc = r.total ? `${r.correct}/${r.total}` : '—'

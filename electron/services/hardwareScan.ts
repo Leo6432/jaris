@@ -324,9 +324,9 @@ const TIER_LABELS: Record<Tier, string> = { flash: 'Rapide', medium: 'Médium', 
 
 /**
  * Vue d'ensemble des modèles candidats pour l'onglet Modèles, GROUPÉE PAR PALIER (Rapide/Médium/Puissant/
- * Vision/Code) plutôt qu'une liste unique tous paliers confondus : Vision n'a par exemple aucune
- * infrastructure de test locale (ni vitesse ni tool-calling n'y sont jamais mesurés), afficher ces colonnes
- * pour elle n'a pas de sens et suggère à tort qu'il manque un test plutôt qu'il n'y en a simplement pas.
+ * Vision/Code) plutôt qu'une liste unique tous paliers confondus : chaque palier n'a pas les mêmes colonnes
+ * pertinentes (ex: Vision n'a pas de score d'intelligence MMLU-Pro, ça ne s'y applique pas — mais a bien sa
+ * propre vitesse/fiabilité mesurées localement, voir VISION_TEST_CASES dans scripts/benchmark-models.mjs).
  * Un même modèle candidat à plusieurs paliers (ex: le plus petit, repli ultime de Rapide/Médium/Puissant)
  * apparaît dans chacun des groupes concernés — chaque liste doit rester une image complète de ce palier.
  */
@@ -367,26 +367,26 @@ function parseToolScore(toolCalling: string | null): number {
 }
 
 /**
- * Comme scanCapacity, mais choisit le meilleur modèle de chaque palier d'après les vraies mesures du
- * benchmark local (parseLocalBenchmark : vitesse + fiabilité d'appel d'outils sur CETTE machine) plutôt que
- * de supposer que le plus gros qui rentre est forcément le meilleur — priorité à la fiabilité d'appel
- * d'outils, la vitesse ne départageant qu'à égalité. Repli sur pickForBudget (comportement de scanCapacity,
- * par taille) si aucun candidat du palier n'a de résultat de benchmark exploitable (jamais lancé, ou échec
- * du test pour tous les candidats qui rentrent). Le palier vision n'a pas de résultats de benchmark local
- * (pas d'infrastructure de test vision, voir scripts/benchmark-models.mjs) : reste choisi par taille.
+ * Comme scanCapacity, mais choisit le meilleur modèle de chaque palier (+ vision) d'après les vraies
+ * mesures du benchmark local (parseLocalBenchmark : vitesse + fiabilité — appel d'outils pour les paliers
+ * de conversation/code, compréhension d'image pour vision, voir VISION_TEST_CASES dans
+ * scripts/benchmark-models.mjs) sur CETTE machine, plutôt que de supposer que le plus gros qui rentre est
+ * forcément le meilleur — priorité à la fiabilité, la vitesse ne départageant qu'à égalité. Repli sur
+ * pickForBudget (comportement de scanCapacity, par taille) si aucun candidat n'a de résultat de benchmark
+ * exploitable pour ce palier (jamais lancé, ou échec du test pour tous les candidats qui rentrent).
  */
 export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult> {
   const { name, vramGb } = await detectGpu()
   const budgetGb = vramGb !== null ? Math.max(0, vramGb - STT_RESERVED_GB) : 0
   const localBenchmark = parseLocalBenchmark()
 
-  const pickBest = (tier: Tier): string => {
-    const benchmarked = TIER_CANDIDATES[tier]
+  const pickBestFrom = (candidates: ModelCandidate[]): string => {
+    const benchmarked = candidates
       .filter((c) => c.vramGb <= budgetGb)
       .map((c) => ({ model: c.model, result: localBenchmark.get(c.model) }))
       .filter((c): c is { model: string; result: LocalBenchmarkEntry } => c.result?.speedTokPerSec != null)
 
-    if (!benchmarked.length) return pickForBudget(TIER_CANDIDATES[tier], budgetGb)
+    if (!benchmarked.length) return pickForBudget(candidates, budgetGb)
 
     benchmarked.sort((a, b) => {
       const toolDiff = parseToolScore(b.result.toolCalling) - parseToolScore(a.result.toolCalling)
@@ -398,7 +398,11 @@ export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult>
   return {
     gpuName: name,
     vramGb,
-    models: { flash: pickBest('flash'), medium: pickBest('medium'), large: pickBest('large') },
-    visionModel: pickForBudget(VISION_CANDIDATES, budgetGb)
+    models: {
+      flash: pickBestFrom(TIER_CANDIDATES.flash),
+      medium: pickBestFrom(TIER_CANDIDATES.medium),
+      large: pickBestFrom(TIER_CANDIDATES.large)
+    },
+    visionModel: pickBestFrom(VISION_CANDIDATES)
   }
 }

@@ -399,11 +399,18 @@ paliers actuels et permet de relancer l'analyse à la main (utile après un
 changement matériel, pas pour s'adapter à l'usage GPU du moment).
 
 **Modèle de vision aussi adapté à la VRAM.** Le même scan choisit un
-quatrième modèle, dédié à `look_at_screen` (étape 6), dans la famille
-`qwen3-vl` (`2b`/`4b`/`8b`) — plutôt qu'un modèle de vision fixe pour tout
-le monde : sur une carte contrainte, un modèle trop gros pour la VRAM
-restante forçait Ollama à décharger/recharger un gros modèle à chaque
-capture d'écran, plusieurs dizaines de secondes d'attente.
+quatrième modèle, dédié à `look_at_screen` (étape 6), parmi `qwen3-vl`
+(`2b`/`4b`/`8b`) et `GLM-4.6V-Flash` — plutôt qu'un modèle de vision fixe
+pour tout le monde : sur une carte contrainte, un modèle trop gros pour la
+VRAM restante forçait Ollama à décharger/recharger un gros modèle à chaque
+capture d'écran, plusieurs dizaines de secondes d'attente. `npm run
+benchmark:models` teste aussi ces candidats vision (pas juste les modèles de
+conversation/code) : trois images générées à la volée (aplat de couleur,
+moitié rouge/moitié verte, comptage de carrés) avec une question à réponse
+objectivement vérifiable chacune — pas de description ouverte à juger à la
+main, comme pour l'appel d'outils des autres paliers. "Lancer l'analyse"
+choisit donc désormais le modèle vision le plus fiable *mesuré*, pas
+seulement le plus gros qui rentre.
 
 **Vérification en temps réel avant chaque question.** Les paliers (et le
 modèle de vision) restent fixes (scan ci-dessus), mais juste avant
