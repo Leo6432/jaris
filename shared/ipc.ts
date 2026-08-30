@@ -73,24 +73,15 @@ export interface GmailStatus {
   email: string | null
 }
 
-/** Résultat du scan de capacité (étape 13) : GPU détecté et modèles choisis pour chaque palier + vision. */
+/**
+ * Résultat de l'analyse complète des modèles (étape 13, obligatoire au premier lancement — voir
+ * CapacityScan.tsx) : GPU détecté et meilleur modèle mesuré pour chaque palier + vision.
+ */
 export interface CapacityScanResult {
   gpuName: string | null
   vramGb: number | null
   models: ModelTiers
   visionModel: string
-}
-
-/**
- * Modèles en place juste avant de relancer le scan de capacité, passés à scanCapacity pour qu'il puisse
- * supprimer ceux devenus obsolètes si un palier change de choix (ex: un modèle plus adapté trouvé pour le
- * palier rapide) — jamais utilisé au tout premier scan (onboarding), où il n'y a encore rien à comparer.
- */
-export interface PreviousModelSelection {
-  flash?: string
-  medium?: string
-  large?: string
-  vision?: string
 }
 
 /**
@@ -187,10 +178,6 @@ export const IPC_CHANNELS = {
   disconnectGmail: 'jaris:disconnect-gmail',
   /** renderer <-> main : synthétise une phrase d'exemple avec une voix donnée, pour la comparer avant de la choisir. */
   previewVoice: 'jaris:preview-voice',
-  /** renderer <-> main : lance le scan de capacité (GPU/VRAM) et le téléchargement des modèles choisis, une fois au premier lancement. */
-  scanCapacity: 'jaris:scan-capacity',
-  /** main -> renderer : messages d'avancement pendant le scan de capacité (détection, téléchargements). */
-  capacityScanStatus: 'jaris:capacity-scan-status',
   /** renderer (fenêtre réglages) -> main : l'onboarding vient de se terminer, bascule vers le widget flottant. */
   onboardingFinished: 'jaris:onboarding-finished',
   /** renderer (widget) -> main : ouvre la fenêtre de réglages (Options, cerveau de Jaris). */

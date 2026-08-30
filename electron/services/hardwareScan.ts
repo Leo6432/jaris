@@ -220,28 +220,6 @@ export interface CapacityScanResult {
 }
 
 /**
- * Détecte la VRAM totale de la carte et choisit 3 modèles de conversation (rapide/médium/puissant) plus un
- * modèle de vision qui tiennent dedans, en réservant de la place pour le STT permanent. Sans GPU NVIDIA
- * détecté (ou en cas d'erreur), part du principe le plus prudent : budget nul, donc les plus petits modèles
- * de chaque palier.
- */
-export async function scanCapacity(): Promise<CapacityScanResult> {
-  const { name, vramGb } = await detectGpu()
-  const budgetGb = vramGb !== null ? Math.max(0, vramGb - STT_RESERVED_GB) : 0
-
-  return {
-    gpuName: name,
-    vramGb,
-    models: {
-      flash: pickForBudget(FLASH_CANDIDATES, budgetGb),
-      medium: pickForBudget(MEDIUM_CANDIDATES, budgetGb),
-      large: pickForBudget(LARGE_CANDIDATES, budgetGb)
-    },
-    visionModel: pickForBudget(VISION_CANDIDATES, budgetGb)
-  }
-}
-
-/**
  * Au-delà de cette température (°C), la RTX 3070 (et la plupart des cartes grand public) commence à
  * throttler : c'est le signal qu'on utilise pour économiser le GPU le temps qu'il refroidisse, pas une
  * limite de sécurité matérielle en soi.
@@ -257,8 +235,8 @@ export interface LiveGpuStatus {
 }
 
 /**
- * Contrairement à `scanCapacity` (VRAM totale, fixe, pour définir une fois pour toutes les 3 paliers),
- * cette fonction lit l'état réel du GPU à l'instant présent (VRAM libre, température) : elle sert à
+ * Contrairement à `pickBestModelsFromBenchmark` (VRAM totale, fixe, pour définir une fois pour toutes les 3
+ * paliers), cette fonction lit l'état réel du GPU à l'instant présent (VRAM libre, température) : elle sert à
  * vérifier, juste avant chaque question, que le modèle normalement choisi tient encore la route compte
  * tenu de ce qui tourne en parallèle (jeu, navigateur...) sur la machine, sans jamais changer les paliers
  * eux-mêmes.
@@ -412,13 +390,14 @@ function parseToolScore(toolCalling: string | null): number {
 }
 
 /**
- * Comme scanCapacity, mais choisit le meilleur modèle de chaque palier (+ vision) d'après les vraies
- * mesures du benchmark local (parseLocalBenchmark : vitesse + fiabilité — appel d'outils pour les paliers
- * de conversation/code, compréhension d'image pour vision, voir VISION_TEST_CASES dans
- * scripts/benchmark-models.mjs) sur CETTE machine, plutôt que de supposer que le plus gros qui rentre est
- * forcément le meilleur — priorité à la fiabilité, la vitesse ne départageant qu'à égalité. Repli sur
- * pickForBudget (comportement de scanCapacity, par taille) si aucun candidat n'a de résultat de benchmark
- * exploitable pour ce palier (jamais lancé, ou échec du test pour tous les candidats qui rentrent).
+ * Choisit le meilleur modèle de chaque palier (+ vision) d'après les vraies mesures du benchmark local
+ * (parseLocalBenchmark : vitesse + fiabilité — appel d'outils pour les paliers de conversation/code,
+ * compréhension d'image pour vision, voir VISION_TEST_CASES dans scripts/benchmark-models.mjs) sur CETTE
+ * machine, plutôt que de supposer que le plus gros qui rentre est forcément le meilleur — priorité à la
+ * fiabilité, la vitesse ne départageant qu'à égalité. Seul chemin de sélection des modèles désormais : le
+ * premier lancement (CapacityScan.tsx) passe obligatoirement par un run complet de ce benchmark, pas par un
+ * choix rapide par taille seule. Repli sur pickForBudget (par taille) si aucun candidat n'a de résultat de
+ * benchmark exploitable pour ce palier (jamais lancé, ou échec du test pour tous les candidats qui rentrent).
  */
 export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult> {
   const { name, vramGb } = await detectGpu()

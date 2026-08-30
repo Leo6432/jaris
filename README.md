@@ -341,9 +341,18 @@ plus bas.
 
 ## Sélection automatique de modèle (étape 13)
 
-Au tout premier lancement (juste après la connexion Gmail), Jaris scanne la
-carte graphique (`nvidia-smi`) et choisit 3 modèles Ollama adaptés à la
-machine :
+Au tout premier lancement (juste après la connexion Gmail), Jaris est
+**obligé** de faire tourner l'analyse complète (voir "Comparer des modèles
+candidats sur ta machine" plus bas) : chaque modèle candidat qui tient sur
+la machine (VRAM, RAM et espace disque) est réellement testé, pas seulement
+choisi par taille — pas d'échappatoire pour continuer sans modèle
+fonctionnel, contrairement à un simple scan rapide qui peut se tromper.
+Ça peut prendre du temps (potentiellement plusieurs dizaines de minutes au
+premier lancement, selon la connexion et le matériel), avec une barre de
+progression et un tableau de suivi en direct de chaque candidat.
+
+Une fois l'analyse terminée, Jaris a choisi 3 modèles Ollama adaptés à la
+machine (typiquement, sur la config de développement testée) :
 - **rapide** — questions courtes sans action à faire — `qwen3:1.7b` par
   défaut (repli `qwen3.5:0.8b`)
 - **médium** — le défaut pour la plupart des échanges, et le seul palier

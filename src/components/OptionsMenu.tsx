@@ -1,31 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ConversationEntry, GmailStatus, ModelOverviewResult, ModelTiers, Profile } from '../../shared/ipc'
+import { useModelAnalysis } from '../hooks/useModelAnalysis'
+import ModelAnalysisProgress from './ModelAnalysisProgress'
 
 interface VoiceOption {
   id: string
   description: string
   gradient: string
 }
-
-/**
- * État d'un modèle candidat pendant un run de benchmark (##PULL_MODEL_PROGRESS##/##MODEL_TESTING##/
- * ##MODEL_DONE##/##MODEL_SKIPPED##, voir scripts/benchmark-models.mjs) — affiché dans le tableau de suivi
- * en direct, à la place du journal brut qui ne montrait qu'un flux de texte difficile à suivre en un coup
- * d'œil ("on n'a aucune vue d'ensemble : quels modèles sont faits, en cours, pas encore commencés").
- */
-type ModelRunStatus =
-  | { kind: 'pending' }
-  | { kind: 'downloading'; percent: number }
-  | { kind: 'testing' }
-  | { kind: 'done'; correct: number; total: number }
-  | { kind: 'skipped' }
-
-/**
- * Fenêtre glissante (ms) sur laquelle le rythme récent de progression est mesuré pour l'estimation de temps
- * restant — voir progressSamplesRef. Ni trop courte (bruit d'un seul événement) ni trop longue (traînerait
- * le rythme d'un modèle précédent, plus rapide ou plus lent, sur le modèle actuel).
- */
-const PROGRESS_WINDOW_MS = 90000
 
 const TTS_VOICES: VoiceOption[] = [
   { id: 'M1', description: 'Vive, énergique', gradient: 'linear-gradient(135deg, #37e2ff, #2b6cff)' },
@@ -41,16 +23,6 @@ const TTS_VOICES: VoiceOption[] = [
 ]
 
 const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
-
-/** "3 min", "1 h 20", "moins d'une minute"... à partir d'une estimation en ms. */
-function formatEta(ms: number): string {
-  const totalMinutes = Math.round(ms / 60000)
-  if (totalMinutes < 1) return "moins d'une minute"
-  if (totalMinutes < 60) return `${totalMinutes} min`
-  const hours = Math.floor(totalMinutes / 60)
-  const minutes = totalMinutes % 60
-  return minutes === 0 ? `${hours} h` : `${hours} h ${minutes}`
-}
 
 type Tab = 'connexions' | 'voix' | 'modeles' | 'historique'
 
@@ -79,28 +51,6 @@ function ReliabilityBadge({ value }: { value: string | null }): JSX.Element {
   return <span className={`options-menu__badge options-menu__badge--${level}`}>{value}</span>
 }
 
-/** Badge d'état pour une ligne du tableau de suivi en direct (pendant un run) — voir ModelRunStatus. */
-function RunStatusBadge({ status }: { status: ModelRunStatus | undefined }): JSX.Element {
-  if (!status || status.kind === 'pending') {
-    return <span className="options-menu__badge options-menu__badge--none">En attente</span>
-  }
-  if (status.kind === 'downloading') {
-    return <span className="options-menu__badge options-menu__badge--mid">Téléchargement {status.percent}%</span>
-  }
-  if (status.kind === 'testing') {
-    return <span className="options-menu__badge options-menu__badge--mid">Test en cours</span>
-  }
-  if (status.kind === 'skipped') {
-    return <span className="options-menu__badge options-menu__badge--bad">Ignoré</span>
-  }
-  const level = status.total === 0 ? 'none' : status.correct === status.total ? 'good' : status.correct === 0 ? 'bad' : 'mid'
-  return (
-    <span className={`options-menu__badge options-menu__badge--${level}`}>
-      Terminé ({status.correct}/{status.total})
-    </span>
-  )
-}
-
 export default function OptionsMenu(): JSX.Element {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('connexions')
@@ -113,35 +63,10 @@ export default function OptionsMenu(): JSX.Element {
   const [history, setHistory] = useState<ConversationEntry[] | null>(null)
   const [clearingHistory, setClearingHistory] = useState(false)
   const [modelOverview, setModelOverview] = useState<ModelOverviewResult | null>(null)
-  const [benchmarking, setBenchmarking] = useState(false)
-  const [benchmarkLog, setBenchmarkLog] = useState<string[]>([])
-  // Compteurs "N/M" lisibles par un humain (nombre de MODÈLES téléchargés, nombre de TESTS effectués) — pas
-  // ce qui pilote la barre/l'ETA (voir progressFraction plus bas), juste un texte informatif à côté.
-  const [pullCount, setPullCount] = useState<{ done: number; total: number } | null>(null)
-  const [testCount, setTestCount] = useState<{ done: number; total: number } | null>(null)
-  // Avancement pondéré global (0..1), Go à télécharger + poids de test confondus dans UN SEUL total (voir
-  // ##PROGRESS## côté script) : il n'y a plus de "phase 1 puis phase 2" à afficher séparément, téléchargement
-  // et test avancent en même temps.
-  const [progressFraction, setProgressFraction] = useState(0)
-  // Temps restant estimé (ms), affiché à côté de la barre. `null` = pas encore assez de recul pour estimer
-  // (tout début du run, ou rythme pas encore mesurable) plutôt que d'afficher un chiffre qui n'a pas de sens.
-  const [etaMs, setEtaMs] = useState<number | null>(null)
-  // État de CHAQUE modèle candidat pendant un run, affiché dans le tableau de suivi en direct ci-dessous (à
-  // la place du journal brut) : où en est-il, palier par palier — voir ModelRunStatus plus bas.
-  const [modelRunStatus, setModelRunStatus] = useState<Record<string, ModelRunStatus>>({})
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
-  const benchmarkLogRef = useRef<HTMLPreElement>(null)
-  // Échantillons récents (horodatage, poids fait) de ##PROGRESS##, pour estimer le temps restant à partir du
-  // RYTHME RÉCENT plutôt que de la moyenne depuis le tout début du run : une simple moyenne globale (essayée
-  // avant) reste bloquée sur le rythme des tout premiers petits modèles, rapides — dès qu'un gros modèle
-  // dense (donc lent) arrive plus tard, l'estimation grimpe brutalement au lieu de baisser (le bug signalé :
-  // "il me disait 30 minutes... après il me disait 50 minutes"). Une fenêtre glissante de ~90s s'adapte bien
-  // plus vite à un changement de rythme. Ne garde que les échantillons récents (voir PROGRESS_WINDOW_MS).
-  const progressSamplesRef = useRef<{ t: number; w: number }[]>([])
-  // Estimation "figée" au dernier calcul (ms restants + horodatage du calcul) : le timer ci-dessous fait
-  // juste défiler ce chiffre en temps réel entre deux calculs, sans en refaire un nouveau à chaque tick.
-  const etaFrozenRef = useRef<{ ms: number; capturedAt: number } | null>(null)
+  // Logique de run + progression partagée avec l'écran d'onboarding (CapacityScan.tsx) — voir useModelAnalysis.
+  const analysis = useModelAnalysis(modelOverview)
 
   useEffect(() => {
     window.jaris.getGmailStatus().then(setStatus)
@@ -169,96 +94,6 @@ export default function OptionsMenu(): JSX.Element {
     }
   }, [tab, modelOverview])
 
-  // Les lignes ##PULL_PROGRESS##/##PULL_MODEL_PROGRESS##/##TEST_PROGRESS##/##PROGRESS##/##MODEL_TESTING##/
-  // ##MODEL_DONE##/##MODEL_SKIPPED## (scripts/benchmark-models.mjs) sont au format machine, jamais affichées
-  // telles quelles : elles alimentent la barre de progression et le tableau de suivi plutôt que le journal.
-  useEffect(() => {
-    return window.jaris.onModelBenchmarkLine((line) => {
-      // Téléchargement et test tournent maintenant EN PARALLÈLE (voir PULL_CONCURRENCY côté script) :
-      // jusqu'à 2 modèles peuvent être en cours de téléchargement à la fois, chaque ligne précise donc lequel.
-      const modelPullMatch = /^##PULL_MODEL_PROGRESS## (\S+) (\d+)$/.exec(line)
-      if (modelPullMatch) {
-        const [, model, percent] = modelPullMatch
-        setModelRunStatus((prev) => ({ ...prev, [model]: { kind: 'downloading', percent: Number(percent) } }))
-        return
-      }
-      const pullMatch = /^##PULL_PROGRESS## (\d+) (\d+)$/.exec(line)
-      if (pullMatch) {
-        setPullCount({ done: Number(pullMatch[1]), total: Number(pullMatch[2]) })
-        return
-      }
-      const testMatch = /^##TEST_PROGRESS## (\d+) (\d+)$/.exec(line)
-      if (testMatch) {
-        setTestCount({ done: Number(testMatch[1]), total: Number(testMatch[2]) })
-        return
-      }
-      const testingMatch = /^##MODEL_TESTING## (\S+)$/.exec(line)
-      if (testingMatch) {
-        setModelRunStatus((prev) => ({ ...prev, [testingMatch[1]]: { kind: 'testing' } }))
-        return
-      }
-      const doneMatch = /^##MODEL_DONE## (\S+) (\d+) (\d+)$/.exec(line)
-      if (doneMatch) {
-        const [, model, correct, total] = doneMatch
-        setModelRunStatus((prev) => ({ ...prev, [model]: { kind: 'done', correct: Number(correct), total: Number(total) } }))
-        return
-      }
-      const skippedMatch = /^##MODEL_SKIPPED## (\S+)$/.exec(line)
-      if (skippedMatch) {
-        setModelRunStatus((prev) => ({ ...prev, [skippedMatch[1]]: { kind: 'skipped' } }))
-        return
-      }
-      // ##PROGRESS## : avancement pondéré GLOBAL (Go téléchargés + poids de test confondus dans un seul
-      // total, voir modelWeightGb côté script) — c'est CETTE progression qui pilote la barre et l'ETA, jamais
-      // les compteurs "N/M" ci-dessus (gardés seulement pour le texte "N/M modèles"/"N/M tests").
-      const progressMatch = /^##PROGRESS## ([\d.]+) ([\d.]+)$/.exec(line)
-      if (progressMatch) {
-        const done = Number(progressMatch[1])
-        const total = Number(progressMatch[2])
-        setProgressFraction(total > 0 ? Math.min(1, done / total) : 0)
-
-        // Estimation de temps restant basée sur le RYTHME RÉCENT (fenêtre glissante), pas la moyenne depuis
-        // le tout début — voir le commentaire de progressSamplesRef plus haut.
-        const now = Date.now()
-        const samples = progressSamplesRef.current
-        samples.push({ t: now, w: done })
-        while (samples.length > 2 && now - samples[0].t > PROGRESS_WINDOW_MS) samples.shift()
-        const oldest = samples[0]
-        const dtS = (now - oldest.t) / 1000
-        // Ignore un intervalle trop court (une seule ligne, ou deux lignes quasi simultanées) : le débit
-        // mesuré serait bruyant, mieux vaut attendre un peu plus de recul qu'afficher un temps délirant.
-        if (samples.length >= 2 && dtS >= 3) {
-          const rate = (done - oldest.w) / dtS
-          if (rate > 0) {
-            etaFrozenRef.current = { ms: (Math.max(0, total - done) / rate) * 1000, capturedAt: now }
-          }
-        }
-        return
-      }
-      setBenchmarkLog((prev) => [...prev, line])
-    })
-  }, [])
-
-  // Fait défiler le compte à rebours entre deux événements ##PROGRESS## (qui peuvent être espacés de
-  // plusieurs minutes pour un gros modèle) plutôt que de le figer jusqu'au prochain événement — sans
-  // recalculer l'estimation elle-même à chaque tick, juste la faire défiler depuis la dernière mesure.
-  useEffect(() => {
-    if (!benchmarking) return
-    const id = setInterval(() => {
-      if (etaFrozenRef.current === null) {
-        setEtaMs(null)
-        return
-      }
-      const { ms, capturedAt } = etaFrozenRef.current
-      setEtaMs(Math.max(0, ms - (Date.now() - capturedAt)))
-    }, 1000)
-    return () => clearInterval(id)
-  }, [benchmarking])
-
-  useEffect(() => {
-    benchmarkLogRef.current?.scrollTo({ top: benchmarkLogRef.current.scrollHeight })
-  }, [benchmarkLog])
-
   const handleRunAnalysis = async (): Promise<void> => {
     if (
       !window.confirm(
@@ -270,35 +105,14 @@ export default function OptionsMenu(): JSX.Element {
       return
     }
     setError(null)
-    setBenchmarking(true)
-    setBenchmarkLog([])
-    setPullCount(null)
-    setTestCount(null)
-    setProgressFraction(0)
-    setEtaMs(null)
-    progressSamplesRef.current = []
-    etaFrozenRef.current = null
-    // Tableau de suivi initialisé avec TOUS les candidats connus (modelOverview, déjà chargé puisque ce
-    // bouton vit dans l'onglet Modèles) à "en attente" : sans ça, un modèle n'apparaîtrait dans le tableau
-    // qu'au moment où une ligne le mentionne pour la première fois, aucune vue d'ensemble avant que ça démarre.
-    const initialStatus: Record<string, ModelRunStatus> = {}
-    for (const group of modelOverview?.groups ?? []) {
-      for (const entry of group.entries) initialStatus[entry.model] = { kind: 'pending' }
-    }
-    setModelRunStatus(initialStatus)
     try {
-      const result = await window.jaris.runModelAnalysis()
+      const result = await analysis.run()
       // Reflète tout de suite les nouveaux modèles retenus + le tableau comparatif à jour, sans avoir à
       // changer d'onglet et revenir pour forcer un rechargement.
       setProfile((prev) => (prev ? { ...prev, models: result.models, visionModel: result.visionModel, capacityScanDone: true } : prev))
       setModelOverview(await window.jaris.getModelOverview())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBenchmarking(false)
-      setPullCount(null)
-      setTestCount(null)
-      setEtaMs(null)
     }
   }
 
@@ -540,8 +354,8 @@ export default function OptionsMenu(): JSX.Element {
               Intelligence = score MMLU-Pro publié, quand il existe.
             </p>
 
-            <button className="options-menu__action" onClick={() => void handleRunAnalysis()} disabled={benchmarking}>
-              {benchmarking ? 'Analyse en cours...' : 'Tester tous les modèles et choisir les meilleurs'}
+            <button className="options-menu__action" onClick={() => void handleRunAnalysis()} disabled={analysis.benchmarking}>
+              {analysis.benchmarking ? 'Analyse en cours...' : 'Tester tous les modèles et choisir les meilleurs'}
             </button>
             <p className="options-menu__model-overview-hint">
               Teste chaque modèle candidat qui tient dans la VRAM, la RAM ET l'espace disque détectés
@@ -551,71 +365,7 @@ export default function OptionsMenu(): JSX.Element {
               vitesse), et supprime tout le reste.
             </p>
 
-            {benchmarking && (
-              <div className="options-menu__progress">
-                <div className="options-menu__progress-label">
-                  Analyse en cours — {Math.round(progressFraction * 100)}%
-                  {/* Pondéré par la vraie taille des modèles (voir ##PROGRESS## côté script), pas juste le
-                      nombre de modèles restants — sinon un seul gros modèle en fin de liste faisait
-                      s'effondrer l'estimation d'un coup. `null` tant qu'il n'y a pas assez de recul pour
-                      estimer, plutôt qu'un chiffre inventé. */}
-                  {etaMs !== null && <> — temps restant estimé : {formatEta(etaMs)}</>}
-                </div>
-                <div className="options-menu__progress-bar">
-                  <div className="options-menu__progress-bar-fill" style={{ width: `${progressFraction * 100}%` }} />
-                </div>
-                {/* Téléchargement et test tournent maintenant en parallèle (PULL_CONCURRENCY côté script) :
-                    plus de "Étape 1/2 puis 2/2", les deux compteurs avancent en même temps. */}
-                <div className="options-menu__progress-sub">
-                  {pullCount && (
-                    <span>
-                      Téléchargements : {pullCount.done}/{pullCount.total}
-                    </span>
-                  )}
-                  {testCount && (
-                    <span>
-                      Tests : {testCount.done}/{testCount.total}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Tableau de suivi en direct plutôt que le journal brut du script (retiré) : une vue d'ensemble
-                de chaque candidat (en attente / en téléchargement / en cours de test / terminé / ignoré),
-                pas un flux de texte à faire défiler pour deviner où en est le run. */}
-            {benchmarking && modelOverview && (
-              <div className="options-menu__model-overview-scroll">
-                {modelOverview.groups.map((group) => (
-                  <div key={group.tier} className="options-menu__model-group">
-                    <div className="options-menu__model-group-title">{group.tier}</div>
-                    <table className="options-menu__model-overview">
-                      <tbody>
-                        {group.entries.map((entry) => (
-                          <tr key={entry.model}>
-                            <td className="options-menu__model-name" title={entry.model}>
-                              {entry.model}
-                            </td>
-                            <td>
-                              <RunStatusBadge status={modelRunStatus[entry.model]} />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Journal complet gardé seulement pour le cas d'erreur (le tableau ci-dessus ne montre pas le
-                détail des messages) — jamais affiché en fonctionnement normal, à la demande de Léo ("enlève
-                le panel le script en bas"). */}
-            {!benchmarking && error && benchmarkLog.length > 0 && (
-              <pre ref={benchmarkLogRef} className="options-menu__benchmark-log">
-                {benchmarkLog.join('\n')}
-              </pre>
-            )}
+            <ModelAnalysisProgress state={analysis} modelOverview={modelOverview} />
           </div>
         )}
 

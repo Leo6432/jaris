@@ -1,20 +1,36 @@
 import { useEffect, useState } from 'react'
-import type { CapacityScanResult } from '../../shared/ipc'
+import type { CapacityScanResult, ModelOverviewResult } from '../../shared/ipc'
+import { useModelAnalysis } from '../hooks/useModelAnalysis'
+import ModelAnalysisProgress from './ModelAnalysisProgress'
 
 interface CapacityScanProps {
   onDone: () => void
 }
 
+/**
+ * Premier lancement : Jaris teste TOUS les modèles candidats compatibles avec la machine (comme "Lancer
+ * l'analyse" dans Options → Modèles, voir useModelAnalysis) plutôt qu'un choix rapide basé sur la seule
+ * VRAM totale — décision explicite de Léo : "je veux que la personne soit obligée de faire l'analyse
+ * complète pour démarrer sa première fois avec Jaris", même si ça prend plus longtemps qu'un scan rapide.
+ * Pas d'échappatoire "continuer quand même" sur un échec (contrairement à l'ancien scan rapide) : sans
+ * modèle réellement testé et retenu, Jaris ne peut de toute façon rien faire — seule une nouvelle tentative
+ * a un sens.
+ */
 export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element {
-  const [status, setStatus] = useState('Détection de la carte graphique…')
+  const [modelOverview, setModelOverview] = useState<ModelOverviewResult | null>(null)
+  const [started, setStarted] = useState(false)
   const [result, setResult] = useState<CapacityScanResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const analysis = useModelAnalysis(modelOverview)
 
   useEffect(() => {
-    const unsubscribe = window.jaris.onCapacityScanStatus(setStatus)
+    void window.jaris.getModelOverview().then(setModelOverview)
+  }, [])
 
-    window.jaris
-      .scanCapacity()
+  const start = (): void => {
+    setStarted(true)
+    setResult(null)
+    analysis
+      .run()
       .then(async (scan) => {
         setResult(scan)
         const profile = await window.jaris.getProfile()
@@ -22,10 +38,11 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
           await window.jaris.saveProfile({ ...profile, models: scan.models, visionModel: scan.visionModel, capacityScanDone: true })
         }
       })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-
-    return unsubscribe
-  }, [])
+      .catch(() => {
+        // analysis.error porte déjà le message : rien de plus à faire ici, l'écran d'échec ci-dessous
+        // propose juste de réessayer (voir le commentaire au-dessus du composant).
+      })
+  }
 
   const finish = (): void => onDone()
 
@@ -34,17 +51,32 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
       <div className="app__onboarding capacity-scan">
         <h1>{result ? 'Analyse terminée' : 'Analyse de ton PC...'}</h1>
 
-        {!result && !error && (
+        {!started && (
           <>
-            <div className="capacity-scan__spinner" />
-            <p className="capacity-scan__status">{status}</p>
+            <p>
+              Jaris teste chaque modèle candidat qui tient sur ta machine (VRAM, RAM et espace disque) pour
+              choisir le meilleur de chaque palier, plutôt que de deviner d'après la taille seule. Ça peut
+              prendre du temps (potentiellement plusieurs dizaines de minutes, et plusieurs Go de
+              téléchargement) selon ta connexion et ton matériel.
+            </p>
+            <button onClick={start} disabled={modelOverview === null}>
+              {modelOverview === null ? 'Préparation...' : "Démarrer l'analyse"}
+            </button>
           </>
         )}
 
-        {error && (
+        {started && !result && !analysis.error && (
           <>
-            <p className="capacity-scan__status">Le scan a échoué : {error}</p>
-            <button onClick={finish}>Continuer quand même</button>
+            <div className="capacity-scan__spinner" />
+            <ModelAnalysisProgress state={analysis} modelOverview={modelOverview} />
+          </>
+        )}
+
+        {analysis.error && (
+          <>
+            <p className="capacity-scan__status">L'analyse a échoué : {analysis.error}</p>
+            <ModelAnalysisProgress state={analysis} modelOverview={modelOverview} />
+            <button onClick={start}>Réessayer</button>
           </>
         )}
 
@@ -61,7 +93,8 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
               <li>Vision : {result.visionModel}</li>
             </ul>
             <p className="capacity-scan__hint">
-              Jaris choisit automatiquement le modèle le plus adapté à chaque question. Modifiable plus tard.
+              Jaris choisit automatiquement le modèle le plus adapté à chaque question. Modifiable plus tard
+              depuis Options → Modèles.
             </p>
             <button onClick={finish}>Continuer</button>
           </>

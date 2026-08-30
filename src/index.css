@@ -901,7 +901,12 @@ body.body--scan {
 }
 
 .capacity-scan {
-  max-width: 380px;
+  max-width: 480px;
+  /* Le tableau de suivi en direct (ModelAnalysisProgress) peut dépasser la hauteur de la fenêtre avec
+     plusieurs dizaines de candidats affichés à la fois : ce conteneur défile lui-même plutôt que de laisser
+     le bas du tableau invisible (contrairement au reste de l'onboarding, jamais assez grand pour ça). */
+  max-height: 92vh;
+  overflow-y: auto;
 }
 
 .capacity-scan__spinner {

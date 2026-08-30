@@ -2,11 +2,10 @@ import { app, ipcMain, shell, BrowserWindow, globalShortcut, screen, Tray, Menu 
 import { join } from 'path'
 import { checkVoiceSetup } from './config'
 import { ensureOllamaRunning, ensureSearxngRunning, stopOllamaIfStartedByJaris } from './services/dependencyServices'
-import { getAllCandidateModelIds, getModelOverview, scanCapacity } from './services/hardwareScan'
+import { getAllCandidateModelIds, getModelOverview } from './services/hardwareScan'
 import { runModelAnalysis } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
 import { generateApp, getGeneratedAppsDir } from './services/codeGenerator'
-import { deleteModel, pullModelIfMissing, ModelTooLargeError, DiskFullError } from './services/ollama'
 import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
 import { createTrayIcon } from './services/trayIcon'
@@ -25,7 +24,6 @@ import {
   type CapacityScanResult,
   type ChatMessage,
   type GeneratedApp,
-  type PreviousModelSelection,
   type JarisEmotion,
   type MemoryGraph,
   type Profile,
@@ -266,68 +264,6 @@ app.whenReady().then(async () => {
     const audio = await previewVoice(voice)
     return audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer
   })
-  ipcMain.handle(
-    IPC_CHANNELS.scanCapacity,
-    async (event, previous?: PreviousModelSelection): Promise<CapacityScanResult> => {
-      const sendStatus = (message: string): void => event.sender.send(IPC_CHANNELS.capacityScanStatus, message)
-      sendStatus('Détection de la carte graphique…')
-      const result = await scanCapacity()
-      const uniqueModels = [...new Set([result.models.flash, result.models.medium, result.models.large, result.visionModel])]
-      for (const model of uniqueModels) {
-        try {
-          await pullModelIfMissing(model, sendStatus)
-        } catch (err) {
-          // pickForBudget (scanCapacity) retombe toujours sur le PLUS PETIT candidat de chaque palier
-          // quand rien ne rentre dans la VRAM détectée : si même ce plus petit candidat dépasse le budget
-          // VRAM+RAM ici, c'est qu'aucun modèle de ce palier ne peut tourner du tout sur cette machine.
-          if (err instanceof ModelTooLargeError) {
-            throw new Error(
-              "Cet ordinateur n'a pas assez de mémoire (VRAM + RAM) pour faire fonctionner un modèle IA " +
-                `local, même le plus léger disponible (${err.model}, ${err.requiredGb.toFixed(1)} Go ` +
-                `nécessaires pour ${err.budgetGb.toFixed(1)} Go disponibles). Jaris ne peut malheureusement ` +
-                'pas fonctionner sur cette machine.'
-            )
-          }
-          if (err instanceof DiskFullError) {
-            throw new Error(
-              "Pas assez d'espace disque libre pour télécharger un modèle IA local, même le plus léger " +
-                `disponible (${err.model}, ${err.requiredGb.toFixed(1)} Go nécessaires pour ` +
-                `${err.freeDiskGb.toFixed(1)} Go libres). Libère de l'espace disque puis relance l'analyse.`
-            )
-          }
-          throw err
-        }
-      }
-
-      // `previous` n'est fourni que par "Relancer l'analyse" (jamais au tout premier scan de l'onboarding,
-      // où il n'y a encore rien à comparer) : si un palier a changé de choix, l'ancien modèle devenu
-      // inutile est supprimé, sauf s'il sert encore ailleurs (ex: même modèle repris pour un autre palier).
-      if (previous) {
-        const stillUsed = new Set(uniqueModels)
-        const oldModels = [previous.flash, previous.medium, previous.large, previous.vision].filter(
-          (m): m is string => Boolean(m)
-        )
-        const stale = [...new Set(oldModels)].filter((m) => !stillUsed.has(m))
-        for (const model of stale) {
-          try {
-            await deleteModel(model)
-            sendStatus(`Ancien modèle ${model} supprimé (remplacé par un meilleur choix).`)
-          } catch (err) {
-            sendStatus(`Échec de la suppression de l'ancien modèle ${model} : ${err instanceof Error ? err.message : String(err)}`)
-          }
-        }
-      }
-
-      // Snapshot des modèles candidats connus à l'instant du scan (onboarding ou "Relancer l'analyse") :
-      // sert de référence pour repérer, au prochain lancement, les modèles ajoutés depuis (étape 29).
-      const scannedProfile = await getProfile()
-      if (scannedProfile) {
-        await saveProfile({ ...scannedProfile, knownModelCandidates: getAllCandidateModelIds() })
-      }
-
-      return result
-    }
-  )
   ipcMain.handle(IPC_CHANNELS.getModelOverview, () => getModelOverview())
   // renderer -> main : modèles candidats apparus depuis le dernier scan (étape 29), pour le popup dans App.tsx.
   // Un profil créé avant cette fonctionnalité (knownModelCandidates jamais défini) est silencieusement
