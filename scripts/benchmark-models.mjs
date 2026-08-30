@@ -52,13 +52,33 @@ const RAM_SAFETY_MARGIN_GB = 8
  * sur une machine qui n'a NI la VRAM NI la RAM pour les faire tourner (ex: 12 Go de RAM et pas de GPU
  * dédié) : sans ce filtre, ce script tenterait de télécharger des dizaines de Go pour un modèle qui ne
  * tournerait de toute façon jamais correctement.
+ *
+ * Les 9 derniers (qwen3.5:35b/27b, qwen3.8:27b, qwen3.6:27b, gemma4:26b, gpt-oss:20b, command-r:35b,
+ * mistral-small:24b, glm-4.7-flash:q4_K_M) sont les candidats du palier Puissant (LARGE_CANDIDATES dans
+ * hardwareScan.ts) au-delà de la VRAM disponible sur une machine comme celle de Léo — ajoutés à la demande
+ * explicite de Léo après avoir vu "Puissant" retomber sur un petit modèle faute de place : sur cette machine,
+ * réserver 4,5 Go de VRAM en permanence pour le STT (voir STT_RESERVED_GB dans hardwareScan.ts) ne laissait
+ * jamais assez de place pour un vrai grand modèle. Certains sont MoE (gemma4:26b, gpt-oss:20b probablement
+ * glm-4.7-flash) et restent rapides même en débordant sur la RAM ; les autres sont denses (qwen3.5:35b/27b,
+ * qwen3.8:27b, qwen3.6:27b, command-r:35b, mistral-small:24b) et seront NETTEMENT plus lents une fois
+ * débordés — accepté en connaissance de cause, mieux vaut un vrai grand modèle plus lent qu'un petit modèle
+ * rapide pour les questions qui demandent explicitement une réflexion poussée.
  */
 const RAM_OFFLOAD_MODELS = new Set([
   'qwen3.6:35b-a3b',
   'qwen3-coder:30b',
   'north-mini-code-1.0',
   'qwen2.5-coder:32b',
-  'devstral-small-2:24b'
+  'devstral-small-2:24b',
+  'qwen3.5:35b',
+  'qwen3.5:27b',
+  'qwen3.8:27b',
+  'qwen3.6:27b',
+  'gemma4:26b',
+  'gpt-oss:20b',
+  'command-r:35b',
+  'mistral-small:24b',
+  'glm-4.7-flash:q4_K_M'
 ])
 
 const MODELS = [

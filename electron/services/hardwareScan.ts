@@ -4,6 +4,7 @@ import { join } from 'path'
 import { promisify } from 'util'
 import { CODE_MODEL_FAST, CODE_MODEL_QUALITY } from './codeGenerator'
 import { listInstalledModels } from './ollama'
+import { RESOURCE_SAFETY_MARGIN_GB, detectRamGb } from './systemResources'
 import type { ModelOverviewEntry, ModelOverviewResult, ModelTiers } from '../../shared/ipc'
 
 const execAsync = promisify(exec)
@@ -92,6 +93,29 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3.5:2b', vramGb: 2.7 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
 ]
+
+/**
+ * Les 9 vrais candidats "Puissant" (au-delà de qwen3.5:9b et en dessous, qui servent aussi de replis pour
+ * Rapide/Médium) tolèrent de déborder sur la RAM plutôt que d'être écartés faute de VRAM — à la demande
+ * explicite de Léo, qui préfère un vrai grand modèle plus lent (potentiellement 30s+ par réponse) à un petit
+ * modèle rapide pour le palier censé gérer les questions qui demandent le plus de réflexion. Utilisé par
+ * pickBestModelsFromBenchmark (budget élargi VRAM+RAM pour ces candidats) et pickSafeModel (pas de repli en
+ * direct sur un modèle plus petit : Ollama gère lui-même le débordement RAM, contrairement à une vraie
+ * absence de place qui ferait échouer le chargement). Dupliqué dans scripts/benchmark-models.mjs
+ * (RAM_OFFLOAD_MODELS) pour la même raison que les autres listes de candidats — voir son commentaire pour le
+ * détail MoE/dense de chacun (certains restent rapides même débordés, d'autres beaucoup moins).
+ */
+const LARGE_RAM_OFFLOAD_MODELS = new Set([
+  'qwen3.5:35b',
+  'qwen3.5:27b',
+  'qwen3.8:27b',
+  'qwen3.6:27b',
+  'gemma4:26b',
+  'gpt-oss:20b',
+  'command-r:35b',
+  'mistral-small:24b',
+  'glm-4.7-flash:q4_K_M'
+])
 
 const TIER_CANDIDATES: Record<Tier, ModelCandidate[]> = {
   flash: FLASH_CANDIDATES,
@@ -266,8 +290,15 @@ export async function getLiveGpuStatus(): Promise<LiveGpuStatus> {
  * autres candidats du palier n'ont peut-être jamais été récupérés. Se replier dessus provoquerait un
  * "model not found" en pleine conversation. Si aucun candidat du palier n'est installé, on garde
  * `fallbackModel` (celui normalement configuré) tel quel plutôt que de risquer un modèle absent.
+ *
+ * Exception : si `fallbackModel` est un candidat "Puissant" pensé pour déborder sur la RAM
+ * (LARGE_RAM_OFFLOAD_MODELS), ce repli VRAM-seule n'a pas de sens — il verrait TOUJOURS "pas assez de VRAM
+ * libre" (c'est prévu, il tourne à cheval sur VRAM+RAM) et le remplacerait systématiquement par un petit
+ * modèle à chaque question, annulant le choix fait par pickBestModelsFromBenchmark. Ollama gère lui-même le
+ * débordement RAM à chaque chargement, pas besoin de ce filet de sécurité pour ces candidats-là.
  */
 export function pickSafeModel(tier: Tier, freeVramGb: number, installedModels: string[], fallbackModel: string): string {
+  if (LARGE_RAM_OFFLOAD_MODELS.has(fallbackModel)) return fallbackModel
   const installedCandidates = TIER_CANDIDATES[tier].filter((c) => installedModels.includes(c.model))
   if (installedCandidates.length === 0) return fallbackModel
   return pickForBudget(installedCandidates, Math.max(0, freeVramGb - LIVE_SAFETY_MARGIN_GB))
@@ -402,14 +433,22 @@ function parseToolScore(toolCalling: string | null): number {
 export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult> {
   const { name, vramGb } = await detectGpu()
   const budgetGb = vramGb !== null ? Math.max(0, vramGb - STT_RESERVED_GB) : 0
+  // Budget élargi pour les candidats "Puissant" qui tolèrent de déborder sur la RAM (voir
+  // LARGE_RAM_OFFLOAD_MODELS) : VRAM (déjà amputée de la réservation STT) + RAM (moins la marge pour
+  // l'OS/les autres logiciels) — jamais pour les autres candidats, qui doivent tenir entièrement en VRAM
+  // pour un usage voix/chat temps réel sans à-coups.
+  const ramOffloadBudgetGb = budgetGb + Math.max(0, detectRamGb() - RESOURCE_SAFETY_MARGIN_GB)
+  const budgetForCandidate = (model: string): number => (LARGE_RAM_OFFLOAD_MODELS.has(model) ? ramOffloadBudgetGb : budgetGb)
   const localBenchmark = parseLocalBenchmark()
 
   const pickBestFrom = (candidates: ModelCandidate[]): string => {
     const benchmarked = candidates
-      .filter((c) => c.vramGb <= budgetGb)
+      .filter((c) => c.vramGb <= budgetForCandidate(c.model))
       .map((c) => ({ model: c.model, result: localBenchmark.get(c.model) }))
       .filter((c): c is { model: string; result: LocalBenchmarkEntry } => c.result?.speedTokPerSec != null)
 
+    // Repli VRAM seule (jamais élargi) : sans aucun résultat de benchmark exploitable, pas de raison de
+    // parier sur un débordement RAM jamais mesuré sur cette machine.
     if (!benchmarked.length) return pickForBudget(candidates, budgetGb)
 
     benchmarked.sort((a, b) => {
