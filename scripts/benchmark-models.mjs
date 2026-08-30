@@ -107,11 +107,14 @@ const MODELS = [
   // uniquement — ce run donnera une vraie mesure locale plutôt que de deviner. Source taille :
   // ollama.com/library/qwen3.8 (tag 27b, 18 Go).
   'qwen3.8:27b',
-  // Trois candidats supplémentaires dans la même tranche (14-19 Go), pour les machines avec plus de VRAM
-  // que la config de développement — voir le commentaire complet dans hardwareScan.ts (LARGE_CANDIDATES).
+  // Candidats supplémentaires dans la même tranche (14-19 Go), pour les machines avec plus de VRAM que la
+  // config de développement — voir le commentaire complet dans hardwareScan.ts (LARGE_CANDIDATES).
   'qwen3.6:27b',
   'gemma4:26b',
-  'gpt-oss:20b'
+  'gpt-oss:20b',
+  'command-r:35b',
+  'mistral-small:24b',
+  'glm-4.7-flash:q4_K_M'
   // Les candidats du palier "Code" (qwen2.5-coder:7b/32b, qwen3.6:35b-a3b, qwen3-coder:30b,
   // north-mini-code-1.0, devstral-small-2:24b) NE sont PAS
   // ici : codeGenerator.ts (mode Code) n'appelle JAMAIS chatWithOllama avec des outils (le paramètre `tools`

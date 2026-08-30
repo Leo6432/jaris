@@ -78,6 +78,15 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3.6:27b', vramGb: 18 },
   { model: 'gemma4:26b', vramGb: 19 },
   { model: 'gpt-oss:20b', vramGb: 14 },
+  // Command R (Cohere) : orienté RAG/tool-use long contexte (128K), tools confirmés. Vérifié sur
+  // ollama.com/library/command-r (19 Go).
+  { model: 'command-r:35b', vramGb: 19 },
+  // Mistral Small : le PDF mentionnait "3.1"/"3.2", des versions qui n'existent pas sous ce nom sur Ollama
+  // — le tag réel actuel est mistral-small:24b (vérifié, 14 Go), function calling natif.
+  { model: 'mistral-small:24b', vramGb: 14 },
+  // GLM-4.7-Flash (Zhipu/Z.ai) : plus récent que GLM-4.6V-Flash déjà en Vision (2 mois vs plus ancien),
+  // tools+thinking, texte seul. Vérifié sur ollama.com/library/glm-4.7-flash/tags (tag q4_K_M, 19 Go).
+  { model: 'glm-4.7-flash:q4_K_M', vramGb: 19 },
   { model: 'qwen3.5:9b', vramGb: 6.6 },
   { model: 'qwen3.5:4b', vramGb: 3.4 },
   { model: 'qwen3.5:2b', vramGb: 2.7 },
