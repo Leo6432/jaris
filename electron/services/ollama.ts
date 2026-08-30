@@ -1,5 +1,5 @@
 import { config } from '../config'
-import { getDownloadBudgetGb } from './systemResources'
+import { DISK_SAFETY_MARGIN_GB, detectFreeDiskGb, getDownloadBudgetGb } from './systemResources'
 
 export interface OllamaToolCall {
   function: { name: string; arguments: Record<string, unknown> }
@@ -132,6 +132,28 @@ export class ModelTooLargeError extends Error {
 }
 
 /**
+ * Levée par pullModelIfMissing quand la taille réelle du modèle dépasse l'espace disque LIBRE de la
+ * machine — contrainte distincte de ModelTooLargeError (VRAM+RAM, "peut-il tourner ?") : un modèle peut très
+ * bien tenir en RAM une fois chargé tout en étant impossible à télécharger faute de place sur le disque.
+ */
+export class DiskFullError extends Error {
+  readonly model: string
+  readonly requiredGb: number
+  readonly freeDiskGb: number
+
+  constructor(model: string, requiredGb: number, freeDiskGb: number) {
+    super(
+      `${model} nécessite environ ${requiredGb.toFixed(1)} Go, au-delà des ${freeDiskGb.toFixed(1)} Go ` +
+        "d'espace disque libre sur cette machine."
+    )
+    this.name = 'DiskFullError'
+    this.model = model
+    this.requiredGb = requiredGb
+    this.freeDiskGb = freeDiskGb
+  }
+}
+
+/**
  * Télécharge `model` via Ollama s'il n'est pas déjà installé, avec une vraie progression (%) affichée au
  * fil de l'eau. `stream: true` (et non `false` comme avant) : un modèle de plusieurs Go pouvant prendre
  * plusieurs minutes, une requête non-streamée reste bloquée en silence jusqu'à la toute fin du
@@ -140,17 +162,22 @@ export class ModelTooLargeError extends Error {
  * une par "couche" du modèle (le pourcentage repart donc à 0 à chaque nouvelle couche, comme dans `ollama
  * pull` en ligne de commande).
  *
- * Filtre de taille universel (VRAM+RAM combinées, voir getDownloadBudgetGb dans systemResources.ts) : dès
- * que le manifeste révèle la taille réelle du modèle (`progress.total`, disponible avant la fin du
- * téléchargement), le téléchargement est annulé s'il ne rentrerait de toute façon jamais sur cette machine
- * — quel que soit l'appelant (choix automatique d'un palier, mode Code, benchmark...), aucun modèle n'y
- * échappe : ce filet de sécurité vit ici, au point d'entrée unique de tout téléchargement de Jaris.
+ * Deux filtres de taille universels, vérifiés dès que le manifeste révèle la taille réelle du modèle
+ * (`progress.total`, disponible avant la fin du téléchargement) : VRAM+RAM combinées (peut-il TOURNER, voir
+ * getDownloadBudgetGb) et espace disque libre (peut-il seulement être TÉLÉCHARGÉ, voir detectFreeDiskGb) —
+ * deux contraintes indépendantes, un modèle peut échouer l'une sans échouer l'autre. `detectFreeDiskGb` est
+ * relu à CHAQUE appel (pas mis en cache) : contrairement à la VRAM/RAM, l'espace disque diminue au fil des
+ * téléchargements successifs, donc chaque nouveau modèle doit revérifier l'état actuel, pas une valeur
+ * figée au tout début. Quel que soit l'appelant (choix automatique d'un palier, mode Code, benchmark...),
+ * aucun modèle n'y échappe : ces filets de sécurité vivent ici, au point d'entrée unique de tout
+ * téléchargement de Jaris.
  */
 export async function pullModelIfMissing(model: string, onStatus?: (message: string) => void): Promise<void> {
   const installed = await listInstalledModels()
   if (installed.includes(model)) return
 
   const budgetGb = await getDownloadBudgetGb()
+  const freeDiskGb = detectFreeDiskGb()
 
   onStatus?.(`Téléchargement du modèle ${model}…`)
   const controller = new AbortController()
@@ -196,6 +223,13 @@ export async function pullModelIfMissing(model: string, onStatus?: (message: str
         if (requiredGb > budgetGb) {
           controller.abort()
           throw new ModelTooLargeError(model, requiredGb, budgetGb)
+        }
+        if (freeDiskGb !== null) {
+          const diskBudgetGb = Math.max(0, freeDiskGb - DISK_SAFETY_MARGIN_GB)
+          if (requiredGb > diskBudgetGb) {
+            controller.abort()
+            throw new DiskFullError(model, requiredGb, diskBudgetGb)
+          }
         }
       }
 

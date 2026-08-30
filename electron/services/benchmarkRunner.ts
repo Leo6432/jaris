@@ -1,7 +1,7 @@
 import { spawn } from 'child_process'
 import { join } from 'path'
 import { config } from '../config'
-import { deleteModel, pullModelIfMissing, ModelTooLargeError } from './ollama'
+import { deleteModel, pullModelIfMissing, ModelTooLargeError, DiskFullError } from './ollama'
 import { getAllCandidateModelIds, getCodeCandidateModelIds, parseLocalBenchmark, pickBestModelsFromBenchmark } from './hardwareScan'
 import { getProfile, saveProfile } from './profileStore'
 import type { CapacityScanResult } from '../../shared/ipc'
@@ -107,7 +107,7 @@ export async function runModelAnalysis(onLine: (line: string) => void): Promise<
   try {
     await pullModelIfMissing(picked.visionModel, onLine)
   } catch (err) {
-    if (err instanceof ModelTooLargeError) {
+    if (err instanceof ModelTooLargeError || err instanceof DiskFullError) {
       onLine(`Modèle vision ${picked.visionModel} ignoré : ${err.message}`)
     } else {
       throw err

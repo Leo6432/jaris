@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
-import { chatWithOllama, listInstalledModels, pullModelIfMissing, ModelTooLargeError, type OllamaMessage } from './ollama'
+import { chatWithOllama, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError, type OllamaMessage } from './ollama'
 import type { GeneratedApp } from '../../shared/ipc'
 
 /**
@@ -228,6 +228,13 @@ async function resolveCodeModel(onStatus: (message: string) => void): Promise<st
             `même le plus léger (${err.model}, ${err.requiredGb.toFixed(1)} Go nécessaires pour ` +
             `${err.budgetGb.toFixed(1)} Go disponibles). Le mode Code ne peut malheureusement pas ` +
             'fonctionner sur cette machine.'
+        )
+      }
+      if (err instanceof DiskFullError) {
+        throw new Error(
+          `Pas assez d'espace disque libre pour télécharger le modèle de code (${err.model}, ` +
+            `${err.requiredGb.toFixed(1)} Go nécessaires pour ${err.freeDiskGb.toFixed(1)} Go libres). ` +
+            "Libère de l'espace disque puis réessaie."
         )
       }
       throw err

@@ -17,8 +17,8 @@
  */
 
 import { exec } from 'child_process'
-import { writeFileSync } from 'fs'
-import { totalmem } from 'os'
+import { statfsSync, writeFileSync } from 'fs'
+import { homedir, totalmem } from 'os'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { promisify } from 'util'
@@ -583,10 +583,59 @@ function detectRamGb() {
   return totalmem() / 1024 ** 3
 }
 
+/**
+ * Marge sous l'espace disque libre détecté, réservée aux fichiers temporaires créés pendant un téléchargement
+ * et à l'espace de manœuvre normal du système — même esprit que RAM_SAFETY_MARGIN_GB, mais pour le disque.
+ * Dupliquée depuis electron/services/systemResources.ts pour la même raison que detectVramGb ci-dessus.
+ */
+const DISK_SAFETY_MARGIN_GB = 5
+
+/**
+ * Espace disque libre (Go) sur le disque où Ollama stocke ses modèles — jusqu'ici jamais vérifié : ce script
+ * (comme l'app) ne regardait que si un modèle tenait en VRAM+RAM pour TOURNER, jamais s'il y avait la place
+ * de le TÉLÉCHARGER d'abord. Relue à CHAQUE appel (jamais mise en cache) : contrairement à la VRAM/RAM,
+ * l'espace disque diminue au fil des téléchargements successifs du run — un modèle testé en fin de liste
+ * doit voir l'espace RÉELLEMENT restant à ce moment-là, pas une valeur figée au tout début. `null` si
+ * `fs.statfsSync` échoue (plateforme non supportée, permissions) : l'appelant ignore alors ce filtre plutôt
+ * que de bloquer tout téléchargement sur une valeur inconnue.
+ */
+function detectFreeDiskGb() {
+  const candidates = [process.env.OLLAMA_MODELS?.trim(), join(homedir(), '.ollama', 'models'), homedir()].filter(Boolean)
+  for (const dir of candidates) {
+    try {
+      const stats = statfsSync(dir)
+      return (stats.bavail * stats.bsize) / 1024 ** 3
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
+/**
+ * Nombre de téléchargements menés EN PARALLÈLE avec les tests des modèles déjà installés (voir main()) : au
+ * lieu de "tout télécharger PUIS tout tester" (réseau inactif pendant les tests, GPU inactif pendant les
+ * téléchargements), un modèle peut maintenant se télécharger en tâche de fond pendant qu'un AUTRE, déjà prêt,
+ * passe ses tests — les deux étapes utilisent des ressources différentes (bande passante vs GPU/CPU) et ne se
+ * gênent quasiment pas. Volontairement limité à 2 (pas plus, malgré la suggestion "1 à 3 modèles") : au-delà,
+ * plusieurs téléchargements se partagent la même bande passante sans vraiment aller plus vite, pour un risque
+ * accru de contention disque pendant que l'analyse tourne déjà.
+ */
+const PULL_CONCURRENCY = 2
+
 class ModelTooLargeError extends Error {
   constructor(model, requiredGb, budgetGb) {
     super(`nécessite ~${requiredGb.toFixed(1)} Go, au-delà des ${budgetGb.toFixed(1)} Go disponibles sur cette carte`)
     this.name = 'ModelTooLargeError'
+    this.model = model
+  }
+}
+
+/** Distinct de ModelTooLargeError (VRAM+RAM, "peut-il tourner ?") : contrainte de place pour le télécharger. */
+class DiskFullError extends Error {
+  constructor(model, requiredGb, freeDiskGb) {
+    super(`nécessite ~${requiredGb.toFixed(1)} Go, au-delà des ${freeDiskGb.toFixed(1)} Go d'espace disque libre`)
+    this.name = 'DiskFullError'
     this.model = model
   }
 }
@@ -601,11 +650,16 @@ class ModelTooLargeError extends Error {
  * du téléchargement), on annule le téléchargement tout de suite si ça dépasse le budget — pas la peine de
  * télécharger plusieurs Go pour un modèle qui ne rentrera de toute façon jamais sur cette machine.
  *
+ * `diskCtx` (`{ reservedGb }`, partagé par TOUS les téléchargements en cours, voir PULL_CONCURRENCY) permet
+ * de vérifier l'espace disque LIBRE en tenant compte des téléchargements concurrents déjà engagés mais pas
+ * encore terminés : sans ça, deux téléchargements lancés en même temps liraient chacun le même espace libre
+ * et pourraient tous les deux se croire seuls légitimes à l'utiliser en entier.
+ *
  * `onBucket(bucketPercent)` est appelé à chaque palier de 10% en plus des logs ci-dessous : c'est main()
  * qui s'en sert pour convertir "ce modèle est à 40%" en "X Go sur Y Go au total ont été téléchargés",
  * la vraie unité de la barre de progression pondérée (voir MODEL_WEIGHT_GB).
  */
-async function pullModel(model, budgetGb, onBucket) {
+async function pullModel(model, budgetGb, diskCtx, onBucket) {
   console.log(`Téléchargement de ${model}…`)
   const controller = new AbortController()
   const res = await fetch(`${OLLAMA_HOST}/api/pull`, {
@@ -621,48 +675,71 @@ async function pullModel(model, budgetGb, onBucket) {
   let buffer = ''
   let lastBucket = -1
   let sizeChecked = false
+  let reservedGb = 0
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
 
-    let newlineIndex
-    while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
-      const line = buffer.slice(0, newlineIndex).trim()
-      buffer = buffer.slice(newlineIndex + 1)
-      if (!line) continue
+      let newlineIndex
+      while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, newlineIndex).trim()
+        buffer = buffer.slice(newlineIndex + 1)
+        if (!line) continue
 
-      let progress
-      try {
-        progress = JSON.parse(line)
-      } catch {
-        continue
-      }
-      if (progress.error) throw new Error(progress.error)
-
-      if (!sizeChecked && progress.total) {
-        sizeChecked = true
-        const requiredGb = progress.total / 1024 ** 3
-        if (requiredGb > budgetGb) {
-          controller.abort()
-          throw new ModelTooLargeError(model, requiredGb, budgetGb)
+        let progress
+        try {
+          progress = JSON.parse(line)
+        } catch {
+          continue
         }
-      }
+        if (progress.error) throw new Error(progress.error)
 
-      if (progress.total && progress.completed !== undefined) {
-        const bucket = Math.floor((progress.completed / progress.total) * 10) * 10
-        if (bucket !== lastBucket) {
-          lastBucket = bucket
-          console.log(`  ${model} : ${bucket}%`)
-          // Progression FINE du modèle en cours de téléchargement (pas juste "N modèles sur M") : sans ça,
-          // un seul gros modèle (qwen3.6:35b-a3b, north-mini-code-1.0...) fait stagner la barre de
-          // progression pendant plusieurs minutes d'affilée, sans aucun retour visuel entre-temps.
-          console.log(`##PULL_MODEL_PROGRESS## ${bucket}`)
-          onBucket?.(bucket)
+        if (!sizeChecked && progress.total) {
+          sizeChecked = true
+          const requiredGb = progress.total / 1024 ** 3
+          if (requiredGb > budgetGb) {
+            controller.abort()
+            throw new ModelTooLargeError(model, requiredGb, budgetGb)
+          }
+          // Vérifié À CE MOMENT PRÉCIS (pas au tout début de main()) : l'espace disque diminue au fil des
+          // téléchargements précédents de ce même run, un modèle testé en fin de liste doit voir l'espace
+          // RÉELLEMENT restant, pas une estimation figée avant le premier téléchargement.
+          const freeDiskGb = detectFreeDiskGb()
+          if (freeDiskGb !== null) {
+            const availableGb = Math.max(0, freeDiskGb - DISK_SAFETY_MARGIN_GB - diskCtx.reservedGb)
+            if (requiredGb > availableGb) {
+              controller.abort()
+              throw new DiskFullError(model, requiredGb, availableGb)
+            }
+            reservedGb = requiredGb
+            diskCtx.reservedGb += reservedGb
+          }
+        }
+
+        if (progress.total && progress.completed !== undefined) {
+          const bucket = Math.floor((progress.completed / progress.total) * 10) * 10
+          if (bucket !== lastBucket) {
+            lastBucket = bucket
+            console.log(`  ${model} : ${bucket}%`)
+            // Progression FINE du modèle en cours de téléchargement (pas juste "N modèles sur M") : sans ça,
+            // un seul gros modèle (qwen3.6:35b-a3b, north-mini-code-1.0...) fait stagner la barre de
+            // progression pendant plusieurs minutes d'affilée, sans aucun retour visuel entre-temps. Le nom
+            // du modèle est inclus (pas juste le %) : PULL_CONCURRENCY autorise plusieurs téléchargements en
+            // même temps, il faut distinguer lequel progresse.
+            console.log(`##PULL_MODEL_PROGRESS## ${model} ${bucket}`)
+            onBucket?.(bucket)
+          }
         }
       }
     }
+  } finally {
+    // Libère la réservation quoi qu'il arrive (succès, erreur, taille dépassée) : une fois ce téléchargement
+    // terminé (ou abandonné), l'espace qu'il a réellement pris sera de toute façon reflété par le prochain
+    // detectFreeDiskGb() — inutile de continuer à le compter en plus.
+    diskCtx.reservedGb -= reservedGb
   }
 }
 
@@ -841,27 +918,41 @@ async function main() {
     process.exit(1)
   }
 
+  // Vérifié une première fois ici pour le pré-filtre/l'estimation ci-dessous, puis RE-vérifié en direct par
+  // pullModel() avant chaque téléchargement individuel (voir son commentaire) : contrairement à la VRAM/RAM,
+  // l'espace disque diminue au fil du run, un modèle en fin de liste doit voir l'espace VRAIMENT restant.
+  const freeDiskGbAtStart = detectFreeDiskGb()
+  console.log(
+    freeDiskGbAtStart !== null
+      ? `Espace disque libre (dossier des modèles Ollama) : ${freeDiskGbAtStart.toFixed(1)} Go (marge de ${DISK_SAFETY_MARGIN_GB} Go) — revérifié avant CHAQUE téléchargement, pas seulement au démarrage.\n`
+      : "Espace disque libre : impossible à détecter sur cette plateforme, ce filtre de sécurité est désactivé (seuls VRAM/RAM sont vérifiés).\n"
+  )
+
   // MODELS, VISION_CANDIDATES et CODE_CANDIDATES installés dans la même passe : la barre de progression
   // (OptionsMenu.tsx) n'a pas besoin de les distinguer, seulement combien reste à installer au total.
   const allInstallable = [...MODELS, ...VISION_CANDIDATES.map((c) => c.model), ...CODE_CANDIDATES.map((c) => c.model)]
   const missingAll = allInstallable.filter((m) => !installed.includes(m))
 
-  // Repli budgétaire pour chaque modèle manquant : même règle que pullModel() plus bas (VRAM+RAM combinées
-  // pour RAM_OFFLOAD_MODELS, VRAM/RAM seule sinon).
-  const budgetFor = (model) => (RAM_OFFLOAD_MODELS.has(model) ? ramOffloadBudgetGb : vramBudgetGb)
+  // Repli budgétaire pour chaque modèle manquant : VRAM+RAM combinées (RAM_OFFLOAD_MODELS) ou VRAM/RAM seule
+  // sinon, ET l'espace disque libre — deux contraintes INDÉPENDANTES (un modèle peut tenir en RAM une fois
+  // chargé tout en étant impossible à télécharger faute de place sur le disque, et inversement) : le plus
+  // petit des deux budgets gagne.
+  const budgetFor = (model) => {
+    const memBudget = RAM_OFFLOAD_MODELS.has(model) ? ramOffloadBudgetGb : vramBudgetGb
+    const diskBudget = freeDiskGbAtStart !== null ? Math.max(0, freeDiskGbAtStart - DISK_SAFETY_MARGIN_GB) : Infinity
+    return Math.min(memBudget, diskBudget)
+  }
 
   // Écarte ICI, avant même de commencer, tout modèle dont on sait déjà (via MODEL_WEIGHT_GB, vérifié plus
   // haut) qu'il ne rentre pas dans le budget de CETTE machine — plutôt que de le laisser dans `missing` et
-  // le voir échouer une fois le téléchargement lancé (ModelTooLargeError, voir pullModel). Deux raisons :
-  // 1) évite un aller-retour réseau inutile pour un modèle qu'on sait déjà trop gros ; 2) et surtout, le
-  // total pondéré ci-dessous (`totalPullWeight`) ne doit compter QUE ce que cette machine peut réellement
+  // le voir échouer une fois le téléchargement lancé (ModelTooLargeError/DiskFullError, voir pullModel).
+  // Deux raisons : 1) évite un aller-retour réseau inutile pour un modèle qu'on sait déjà trop gros ; 2) et
+  // surtout, le total pondéré ci-dessous ne doit compter QUE ce que cette machine peut réellement
   // télécharger — sinon une machine "faible" qui ne peut tester que 3-4 modèles se retrouvait avec un total
-  // gonflé par le poids de modèles jamais réellement téléchargés (ex: qwen3.5:35b, 24 Go, ignoré en 1
-  // seconde), ce qui faisait chuter l'estimation de temps restant au moment de son rejet — au lieu de
-  // refléter la vraie charge de travail de CETTE machine, comme demandé : "un pc nul qui peut analyser que
-  // 3-4 modèles vas pas prendre le même temps qu'un pc qui peut tout tester". La vérification RÉELLE
-  // (manifeste Ollama, dans pullModel) reste le seul filet de sécurité : ce pré-filtre n'est qu'une
-  // estimation pour ne pas tenter l'impossible, jamais un remplacement du vrai contrôle.
+  // gonflé par le poids de modèles jamais réellement téléchargés, ce qui faussait l'estimation de temps
+  // restant. La vérification RÉELLE (manifeste Ollama + espace disque relu en direct, dans pullModel) reste
+  // le seul filet de sécurité : ce pré-filtre n'est qu'une estimation pour ne pas tenter l'impossible,
+  // jamais un remplacement du vrai contrôle.
   const missing = missingAll.filter((m) => modelWeightGb(m) <= budgetFor(m))
   const tooLargeUpfront = missingAll.filter((m) => modelWeightGb(m) > budgetFor(m))
   if (tooLargeUpfront.length) {
@@ -872,52 +963,98 @@ async function main() {
     console.log('')
   }
 
-  if (missing.length) {
-    console.log(`${missing.length} modèle(s) manquant(s) à installer avant le test :\n`)
-    // Poids total en Go de tout ce qui reste à télécharger POUR CETTE MACHINE (voir le filtre tooLargeUpfront
-    // ci-dessus) : sert à l'estimation de temps restant (OptionsMenu.tsx) pour que "40% de la barre"
-    // corresponde vraiment à "40% des Go à télécharger", et pas à "40% du NOMBRE de modèles" — sans ça, un
-    // run qui commence par plein de petits modèles (quelques centaines de Mo chacun) puis finit sur
-    // qwen3.6:35b-a3b (22 Go) affichait un temps restant qui s'effondrait subitement en fin de parcours (voir
-    // le commentaire de RAM_OFFLOAD_MODELS pour le contexte : des modèles de tailles très différentes se
-    // côtoient dans MODELS).
-    const totalPullWeight = missing.reduce((sum, m) => sum + modelWeightGb(m), 0) || 1
-    let pullsDone = 0
-    let pullWeightDone = 0
-    for (const model of missing) {
-      const weight = modelWeightGb(model)
-      // Repart de 0 pour ce nouveau modèle : sans ça, la barre de progression (OptionsMenu.tsx) garderait
-      // affiché le dernier pourcentage du modèle précédent pendant tout le début du téléchargement suivant.
-      console.log('##PULL_MODEL_PROGRESS## 0')
-      console.log(`##PULL_WEIGHT## ${pullWeightDone.toFixed(2)} ${totalPullWeight.toFixed(2)}`)
-      try {
-        await pullModel(model, budgetFor(model), (bucket) => {
-          console.log(`##PULL_WEIGHT## ${(pullWeightDone + (weight * bucket) / 100).toFixed(2)} ${totalPullWeight.toFixed(2)}`)
-        })
-      } catch (err) {
-        if (err instanceof ModelTooLargeError) {
-          console.log(`  ${model} ignoré : ${err.message}`)
-        } else {
-          console.log(`  Échec de l'installation de ${model} : ${err.message} (ignoré pour ce run)`)
-        }
-      }
-      pullsDone++
-      pullWeightDone += weight
-      // Lu par l'onglet Modèles de Jaris pour afficher une barre de progression (voir OptionsMenu.tsx) :
-      // format volontairement machine-friendly, jamais affiché tel quel dans le journal visible.
-      console.log(`##PULL_PROGRESS## ${pullsDone} ${missing.length}`)
-      console.log(`##PULL_WEIGHT## ${pullWeightDone.toFixed(2)} ${totalPullWeight.toFixed(2)}`)
-    }
-    installed = await listInstalledModels()
-    console.log('')
-  }
-
-  const toRun = MODELS.filter((m) => installed.includes(m))
-  const visionToRun = VISION_CANDIDATES.map((c) => c.model).filter((m) => installed.includes(m))
-  const codeToRun = CODE_CANDIDATES.map((c) => c.model).filter((m) => installed.includes(m))
+  const toRun = MODELS.filter((m) => installed.includes(m) || missing.includes(m))
+  const visionToRun = VISION_CANDIDATES.map((c) => c.model).filter((m) => installed.includes(m) || missing.includes(m))
+  const codeToRun = CODE_CANDIDATES.map((c) => c.model).filter((m) => installed.includes(m) || missing.includes(m))
   if (!toRun.length && !visionToRun.length && !codeToRun.length) {
     console.log('Aucun des modèles à tester n\'a pu être installé.')
     return
+  }
+
+  // Poids total de TOUT le travail de cette analyse (Go à télécharger + poids de test, même unité que
+  // MODEL_WEIGHT_GB), un seul total désormais — pas "phase 1 puis phase 2" : téléchargement et test tournent
+  // maintenant EN MÊME TEMPS (voir PULL_CONCURRENCY), il n'y a plus de frontière nette entre les deux à
+  // afficher séparément. Toujours pondéré par la vraie taille de chaque modèle (pas un simple compte) : un
+  // modèle de 24 Go pèse 24x plus dans ce total qu'un modèle de 1 Go, aussi bien à télécharger qu'à tester
+  // (plus lent à chaque réponse) — voir le commentaire de MODEL_WEIGHT_GB.
+  const testWeightOf = (model) => modelWeightGb(model)
+  const totalPullWeight = missing.reduce((sum, m) => sum + modelWeightGb(m), 0)
+  const totalTestWeight =
+    toRun.reduce((sum, m) => sum + testWeightOf(m) * TEST_CASES.length, 0) +
+    visionToRun.reduce((sum, m) => sum + testWeightOf(m) * VISION_TEST_CASES.length, 0) +
+    codeToRun.reduce((sum, m) => sum + testWeightOf(m) * CODE_TEST_CASES.length, 0)
+  const totalWeight = totalPullWeight + totalTestWeight || 1
+  let weightDone = 0
+  const emitProgress = () => console.log(`##PROGRESS## ${weightDone.toFixed(2)} ${totalWeight.toFixed(2)}`)
+  emitProgress()
+
+  // File de téléchargement en tâche de fond, PULL_CONCURRENCY modèles à la fois : dès que main() atteint ce
+  // point, les téléchargements manquants démarrent pendant que les boucles de test plus bas commencent déjà
+  // sur les modèles DÉJÀ installés — au lieu d'attendre que tout soit téléchargé avant de tester quoi que ce
+  // soit (l'ancien fonctionnement, qui laissait le réseau inactif pendant les tests et le GPU inactif pendant
+  // les téléchargements).
+  const diskCtx = { reservedGb: 0 }
+  const pullOutcomes = new Map() // model -> Promise<boolean> (true = installé avec succès, prêt à tester)
+  let pullCursor = 0
+  let pullsDone = 0
+
+  async function runOnePull(model) {
+    const weight = modelWeightGb(model)
+    console.log(`##PULL_MODEL_PROGRESS## ${model} 0`)
+    let ok = true
+    try {
+      await pullModel(model, budgetFor(model), diskCtx, (bucket) => {
+        // Crédit PARTIEL en cours de téléchargement (pas juste à la fin) : sans ça, un seul gros modèle en
+        // téléchargement ferait stagner la barre globale plusieurs minutes malgré une vraie progression.
+        console.log(`##PROGRESS## ${(weightDone + (weight * bucket) / 100).toFixed(2)} ${totalWeight.toFixed(2)}`)
+      })
+    } catch (err) {
+      ok = false
+      if (err instanceof ModelTooLargeError || err instanceof DiskFullError) {
+        console.log(`  ${model} ignoré : ${err.message}`)
+      } else {
+        console.log(`  Échec de l'installation de ${model} : ${err.message} (ignoré pour ce run)`)
+      }
+    }
+    weightDone += weight
+    pullsDone++
+    // "N/M modèles téléchargés" reste utile en lecture humaine à côté de la barre pondérée (OptionsMenu.tsx).
+    console.log(`##PULL_PROGRESS## ${pullsDone} ${missing.length}`)
+    emitProgress()
+    return ok
+  }
+
+  async function pullWorker() {
+    while (pullCursor < missing.length) {
+      const model = missing[pullCursor++]
+      // Peut déjà avoir été pris en charge par le filet de secours d'ensureReady ci-dessous (si une boucle
+      // de test a rattrapé la file, ex: plusieurs modèles déjà installés testés très vite d'affilée) : ne
+      // JAMAIS relancer un second téléchargement pour le même modèle.
+      if (pullOutcomes.has(model)) continue
+      const promise = runOnePull(model)
+      pullOutcomes.set(model, promise)
+      await promise
+    }
+  }
+
+  const pullWorkers = missing.length ? Array.from({ length: Math.min(PULL_CONCURRENCY, missing.length) }, () => pullWorker()) : []
+  if (missing.length) {
+    console.log(
+      `${missing.length} modèle(s) manquant(s) à installer (jusqu'à ${PULL_CONCURRENCY} en parallèle, en tâche de fond pendant les tests) :\n`
+    )
+  }
+
+  /** Attend qu'un modèle soit prêt à être testé (déjà installé, ou en cours/à faire dans la file de pull). */
+  async function ensureReady(model) {
+    if (installed.includes(model)) return true
+    if (!pullOutcomes.has(model)) {
+      // Filet de secours : ne devrait arriver que si une boucle de test rattrape la file de téléchargement
+      // (plusieurs modèles déjà installés testés très vite, pendant que les 2 workers sont encore sur les
+      // tout premiers éléments de `missing`) — télécharge directement plutôt que d'attendre une file qui n'a
+      // pas encore atteint ce modèle.
+      pullOutcomes.set(model, runOnePull(model))
+    }
+    return pullOutcomes.get(model)
   }
 
   const results = []
@@ -927,18 +1064,9 @@ async function main() {
   const testsTotal =
     toRun.length * TEST_CASES.length + visionToRun.length * VISION_TEST_CASES.length + codeToRun.length * CODE_TEST_CASES.length
 
-  // Même logique de pondération que le téléchargement (voir totalPullWeight ci-dessus) : un modèle de
-  // 24 Go répond bien plus lentement, à chaque test, qu'un modèle de 1 Go — le compter comme "un test
-  // parmi d'autres" écrasait cette réalité et cassait l'estimation de temps restant pendant la phase de
-  // test, pas seulement pendant le téléchargement.
-  const testWeightOf = (model) => modelWeightGb(model)
-  const totalTestWeight =
-    toRun.reduce((sum, m) => sum + testWeightOf(m) * TEST_CASES.length, 0) +
-      visionToRun.reduce((sum, m) => sum + testWeightOf(m) * VISION_TEST_CASES.length, 0) +
-      codeToRun.reduce((sum, m) => sum + testWeightOf(m) * CODE_TEST_CASES.length, 0) || 1
-  let testWeightDone = 0
-
   for (const model of toRun) {
+    const ready = await ensureReady(model)
+    if (!ready) continue
     console.log(`\n=== ${model} ===`)
     const perModel = { model, latencies: [], speeds: [], correct: 0, total: 0 }
 
@@ -964,8 +1092,8 @@ async function main() {
       }
       testsDone++
       console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
-      testWeightDone += testWeightOf(model)
-      console.log(`##TEST_WEIGHT## ${testWeightDone.toFixed(2)} ${totalTestWeight.toFixed(2)}`)
+      weightDone += testWeightOf(model)
+      emitProgress()
     }
 
     results.push(perModel)
@@ -976,6 +1104,8 @@ async function main() {
   const visionImages = VISION_TEST_CASES.map((c) => c.image())
 
   for (const model of visionToRun) {
+    const readyVision = await ensureReady(model)
+    if (!readyVision) continue
     console.log(`\n=== ${model} (vision) ===`)
     const perModel = { model, latencies: [], speeds: [], correct: 0, total: 0 }
 
@@ -996,8 +1126,8 @@ async function main() {
       }
       testsDone++
       console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
-      testWeightDone += testWeightOf(model)
-      console.log(`##TEST_WEIGHT## ${testWeightDone.toFixed(2)} ${totalTestWeight.toFixed(2)}`)
+      weightDone += testWeightOf(model)
+      emitProgress()
     }
 
     results.push(perModel)
@@ -1006,6 +1136,8 @@ async function main() {
   // Modèles Code : une seule passe de génération par cas (pas de critique/réparation, voir la note sur
   // CODE_TEST_CASES) — "correct" = extraction HTML réussie ET validateGeneratedHtml ne trouve aucun problème.
   for (const model of codeToRun) {
+    const readyCode = await ensureReady(model)
+    if (!readyCode) continue
     console.log(`\n=== ${model} (code) ===`)
     const perModel = { model, latencies: [], speeds: [], correct: 0, total: 0 }
 
@@ -1030,12 +1162,17 @@ async function main() {
       }
       testsDone++
       console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
-      testWeightDone += testWeightOf(model)
-      console.log(`##TEST_WEIGHT## ${testWeightDone.toFixed(2)} ${totalTestWeight.toFixed(2)}`)
+      weightDone += testWeightOf(model)
+      emitProgress()
     }
 
     results.push(perModel)
   }
+
+  // Sécurité : s'assurer qu'aucun téléchargement en tâche de fond ne reste en vol avant d'écrire les
+  // résultats — ne devrait normalement plus rien avoir à faire ici, chaque modèle de `missing` étant déjà
+  // passé par ensureReady dans l'une des trois boucles ci-dessus (même ordre que `missing`, voir plus haut).
+  await Promise.all(pullWorkers)
 
   const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null)
 

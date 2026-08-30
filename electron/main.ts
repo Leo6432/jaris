@@ -6,7 +6,7 @@ import { getAllCandidateModelIds, getModelOverview, scanCapacity } from './servi
 import { runModelAnalysis } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
 import { generateApp, getGeneratedAppsDir } from './services/codeGenerator'
-import { deleteModel, pullModelIfMissing, ModelTooLargeError } from './services/ollama'
+import { deleteModel, pullModelIfMissing, ModelTooLargeError, DiskFullError } from './services/ollama'
 import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
 import { createTrayIcon } from './services/trayIcon'
@@ -286,6 +286,13 @@ app.whenReady().then(async () => {
                 `local, même le plus léger disponible (${err.model}, ${err.requiredGb.toFixed(1)} Go ` +
                 `nécessaires pour ${err.budgetGb.toFixed(1)} Go disponibles). Jaris ne peut malheureusement ` +
                 'pas fonctionner sur cette machine.'
+            )
+          }
+          if (err instanceof DiskFullError) {
+            throw new Error(
+              "Pas assez d'espace disque libre pour télécharger un modèle IA local, même le plus léger " +
+                `disponible (${err.model}, ${err.requiredGb.toFixed(1)} Go nécessaires pour ` +
+                `${err.freeDiskGb.toFixed(1)} Go libres). Libère de l'espace disque puis relance l'analyse.`
             )
           }
           throw err

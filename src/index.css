@@ -328,6 +328,15 @@ body.body--scan {
   transition: width 0.3s ease;
 }
 
+.options-menu__progress-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 6px;
+  font-size: 0.68rem;
+  color: #6f88a8;
+}
+
 .options-menu__benchmark-log {
   margin: 4px 0 0;
   padding: 10px 12px;

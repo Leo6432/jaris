@@ -73,27 +73,34 @@ export default function OptionsMenu(): JSX.Element {
   const [modelOverview, setModelOverview] = useState<ModelOverviewResult | null>(null)
   const [benchmarking, setBenchmarking] = useState(false)
   const [benchmarkLog, setBenchmarkLog] = useState<string[]>([])
-  const [benchmarkProgress, setBenchmarkProgress] = useState<{ phase: 'pull' | 'test'; done: number; total: number } | null>(null)
-  // % de téléchargement du modèle EN COURS (pas juste "N modèles sur M") : un seul gros modèle
-  // (qwen3.6:35b-a3b, north-mini-code-1.0...) ferait sinon stagner la barre plusieurs minutes d'affilée.
-  const [currentPullPercent, setCurrentPullPercent] = useState(0)
+  // Compteurs "N/M" lisibles par un humain (nombre de MODÈLES téléchargés, nombre de TESTS effectués) — pas
+  // ce qui pilote la barre/l'ETA (voir progressFraction plus bas), juste un texte informatif à côté.
+  const [pullCount, setPullCount] = useState<{ done: number; total: number } | null>(null)
+  const [testCount, setTestCount] = useState<{ done: number; total: number } | null>(null)
+  // % de téléchargement de CHAQUE modèle actuellement en cours (modèle -> %) : téléchargement et test
+  // tournent maintenant en parallèle (voir PULL_CONCURRENCY dans benchmark-models.mjs), jusqu'à 2
+  // téléchargements peuvent être en vol en même temps, il faut donc les distinguer par nom plutôt qu'un
+  // simple pourcentage unique comme avant.
+  const [currentPulls, setCurrentPulls] = useState<Record<string, number>>({})
+  // Avancement pondéré global (0..1), Go à télécharger + poids de test confondus dans UN SEUL total (voir
+  // ##PROGRESS## côté script) : il n'y a plus de "phase 1 puis phase 2" à afficher séparément, téléchargement
+  // et test avancent en même temps.
+  const [progressFraction, setProgressFraction] = useState(0)
   // Temps restant estimé (ms), affiché à côté de la barre. `null` = pas encore assez de recul pour estimer
-  // (tout début d'une étape) plutôt que d'afficher un chiffre qui n'a pas de sens.
+  // (tout début du run) plutôt que d'afficher un chiffre qui n'a pas de sens.
   const [etaMs, setEtaMs] = useState<number | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
   const benchmarkLogRef = useRef<HTMLPreElement>(null)
-  // Horodatage de début de l'étape courante (pull ou test) et estimation courante de sa durée totale : basés
-  // sur ##PULL_WEIGHT##/##TEST_WEIGHT## (scripts/benchmark-models.mjs), qui pondèrent la progression par la
-  // vraie taille en Go de chaque modèle plutôt que de compter les modèles un par un — sans ça, un run qui
-  // enchaîne plein de petits modèles avant un dernier de 22 Go extrapolait un temps restant qui s'effondrait
-  // brutalement dès que ce gros modèle démarrait (le bug signalé : "pour le temps estimé c'est une
-  // catastrophe"). estimatedTotalMsRef se fige à chaque nouvel événement de poids reçu, puis un intervalle
-  // (voir plus bas) fait juste défiler le compte à rebours entre deux événements, qui peuvent être espacés
-  // de plusieurs minutes pour un gros modèle.
+  // Horodatage de début du run et estimation courante de sa durée totale : basés sur ##PROGRESS##
+  // (scripts/benchmark-models.mjs), qui pondère la progression par la vraie taille en Go de chaque modèle
+  // plutôt que de compter les modèles un par un — sans ça, un run qui enchaîne plein de petits modèles avant
+  // un dernier de 22 Go extrapolait un temps restant qui s'effondrait brutalement dès que ce gros modèle
+  // démarrait (le bug signalé : "pour le temps estimé c'est une catastrophe"). estimatedTotalMsRef se fige à
+  // chaque nouvel événement de poids reçu, puis un intervalle (voir plus bas) fait juste défiler le compte à
+  // rebours entre deux événements, qui peuvent être espacés de plusieurs minutes pour un gros modèle.
   const phaseStartRef = useRef<number | null>(null)
   const estimatedTotalMsRef = useRef<number | null>(null)
-  const lastWeightPhaseRef = useRef<'pull' | 'test' | null>(null)
 
   useEffect(() => {
     window.jaris.getGmailStatus().then(setStatus)
@@ -121,48 +128,43 @@ export default function OptionsMenu(): JSX.Element {
     }
   }, [tab, modelOverview])
 
-  // Les lignes ##PULL_PROGRESS##/##PULL_MODEL_PROGRESS##/##TEST_PROGRESS## (scripts/benchmark-models.mjs)
-  // sont au format machine, jamais affichées telles quelles : elles alimentent la barre de progression
-  // plutôt que le journal.
+  // Les lignes ##PULL_PROGRESS##/##PULL_MODEL_PROGRESS##/##TEST_PROGRESS##/##PROGRESS##
+  // (scripts/benchmark-models.mjs) sont au format machine, jamais affichées telles quelles : elles
+  // alimentent la barre de progression plutôt que le journal.
   useEffect(() => {
     return window.jaris.onModelBenchmarkLine((line) => {
-      const modelPullMatch = /^##PULL_MODEL_PROGRESS## (\d+)$/.exec(line)
+      // Téléchargement et test tournent maintenant EN PARALLÈLE (voir PULL_CONCURRENCY côté script) :
+      // jusqu'à 2 modèles peuvent être en cours de téléchargement à la fois, chaque ligne précise donc lequel.
+      const modelPullMatch = /^##PULL_MODEL_PROGRESS## (\S+) (\d+)$/.exec(line)
       if (modelPullMatch) {
-        setCurrentPullPercent(Number(modelPullMatch[1]))
+        const [, model, percent] = modelPullMatch
+        setCurrentPulls((prev) => ({ ...prev, [model]: Number(percent) }))
         return
       }
       const pullMatch = /^##PULL_PROGRESS## (\d+) (\d+)$/.exec(line)
       if (pullMatch) {
-        setBenchmarkProgress({ phase: 'pull', done: Number(pullMatch[1]), total: Number(pullMatch[2]) })
+        setPullCount({ done: Number(pullMatch[1]), total: Number(pullMatch[2]) })
         return
       }
       const testMatch = /^##TEST_PROGRESS## (\d+) (\d+)$/.exec(line)
       if (testMatch) {
-        setBenchmarkProgress({ phase: 'test', done: Number(testMatch[1]), total: Number(testMatch[2]) })
+        setTestCount({ done: Number(testMatch[1]), total: Number(testMatch[2]) })
         return
       }
-      // ##PULL_WEIGHT##/##TEST_WEIGHT## : mêmes étapes que ci-dessus, mais en Go déjà téléchargés / en poids
-      // de test déjà écoulé (voir modelWeightGb dans benchmark-models.mjs) plutôt qu'en nombre de modèles —
-      // c'est CETTE progression pondérée qui sert de base à l'estimation de temps restant, jamais le simple
-      // compte "N/M" ci-dessus (qui reste affiché tel quel, juste pour le texte "N/M modèles").
-      const pullWeightMatch = /^##PULL_WEIGHT## ([\d.]+) ([\d.]+)$/.exec(line)
-      const testWeightMatch = pullWeightMatch ? null : /^##TEST_WEIGHT## ([\d.]+) ([\d.]+)$/.exec(line)
-      const weightMatch = pullWeightMatch ?? testWeightMatch
-      if (weightMatch) {
-        const phase = pullWeightMatch ? 'pull' : 'test'
-        const done = Number(weightMatch[1])
-        const total = Number(weightMatch[2])
+      // ##PROGRESS## : avancement pondéré GLOBAL (Go téléchargés + poids de test confondus dans un seul
+      // total, voir modelWeightGb côté script) — c'est CETTE progression qui pilote la barre et l'ETA, jamais
+      // les compteurs "N/M" ci-dessus (gardés seulement pour le texte "N/M modèles"/"N/M tests").
+      const progressMatch = /^##PROGRESS## ([\d.]+) ([\d.]+)$/.exec(line)
+      if (progressMatch) {
+        const done = Number(progressMatch[1])
+        const total = Number(progressMatch[2])
+        const fraction = total > 0 ? Math.min(1, done / total) : 0
+        setProgressFraction(fraction)
         const now = Date.now()
-        if (lastWeightPhaseRef.current !== phase) {
-          lastWeightPhaseRef.current = phase
-          phaseStartRef.current = now
-          estimatedTotalMsRef.current = null
-          setEtaMs(null)
-        }
-        const fraction = total > 0 ? done / total : 0
-        // Ignore le tout début d'une étape (échantillon minuscule, extrapolation bruitée) : mieux vaut
-        // afficher "estimation en cours" une seconde de plus qu'un temps totalement faux.
-        if (fraction > 0.03 && phaseStartRef.current !== null) {
+        if (phaseStartRef.current === null) phaseStartRef.current = now
+        // Ignore le tout début du run (échantillon minuscule, extrapolation bruitée) : mieux vaut afficher
+        // "estimation en cours" une seconde de plus qu'un temps totalement faux.
+        if (fraction > 0.03) {
           estimatedTotalMsRef.current = (now - phaseStartRef.current) / fraction
         }
         return
@@ -171,8 +173,8 @@ export default function OptionsMenu(): JSX.Element {
     })
   }, [])
 
-  // Fait défiler le compte à rebours entre deux événements ##PULL_WEIGHT##/##TEST_WEIGHT## (qui peuvent être
-  // espacés de plusieurs minutes pour un gros modèle) plutôt que de le figer jusqu'au prochain événement.
+  // Fait défiler le compte à rebours entre deux événements ##PROGRESS## (qui peuvent être espacés de
+  // plusieurs minutes pour un gros modèle) plutôt que de le figer jusqu'au prochain événement.
   useEffect(() => {
     if (!benchmarking) return
     const id = setInterval(() => {
@@ -202,12 +204,13 @@ export default function OptionsMenu(): JSX.Element {
     setError(null)
     setBenchmarking(true)
     setBenchmarkLog([])
-    setBenchmarkProgress(null)
-    setCurrentPullPercent(0)
+    setPullCount(null)
+    setTestCount(null)
+    setCurrentPulls({})
+    setProgressFraction(0)
     setEtaMs(null)
     phaseStartRef.current = null
     estimatedTotalMsRef.current = null
-    lastWeightPhaseRef.current = null
     try {
       const result = await window.jaris.runModelAnalysis()
       // Reflète tout de suite les nouveaux modèles retenus + le tableau comparatif à jour, sans avoir à
@@ -218,7 +221,8 @@ export default function OptionsMenu(): JSX.Element {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setBenchmarking(false)
-      setBenchmarkProgress(null)
+      setPullCount(null)
+      setTestCount(null)
       setEtaMs(null)
     }
   }
@@ -465,44 +469,45 @@ export default function OptionsMenu(): JSX.Element {
               {benchmarking ? 'Analyse en cours...' : 'Tester tous les modèles et choisir les meilleurs'}
             </button>
             <p className="options-menu__model-overview-hint">
-              Teste chaque modèle candidat qui tient dans la VRAM détectée (télécharge ceux qui manquent,
-              peut être plusieurs dizaines de Go au premier lancement), choisit et active le meilleur de
-              chaque palier d'après les résultats (fiabilité d'appel d'outils, puis vitesse), et supprime
-              tout le reste.
+              Teste chaque modèle candidat qui tient dans la VRAM, la RAM ET l'espace disque détectés
+              (télécharge ceux qui manquent, jusqu'à 2 à la fois pendant que les modèles déjà installés
+              passent déjà leurs tests, peut être plusieurs dizaines de Go au premier lancement), choisit et
+              active le meilleur de chaque palier d'après les résultats (fiabilité d'appel d'outils, puis
+              vitesse), et supprime tout le reste.
             </p>
 
-            {benchmarkProgress &&
-              (() => {
-                // Pendant le téléchargement, le % du modèle en cours affine le compte "N/M" (sinon un seul
-                // gros modèle ferait stagner la barre plusieurs minutes sans aucun mouvement visible).
-                const fraction =
-                  benchmarkProgress.phase === 'pull'
-                    ? Math.min(1, (benchmarkProgress.done + currentPullPercent / 100) / Math.max(1, benchmarkProgress.total))
-                    : Math.min(1, benchmarkProgress.done / Math.max(1, benchmarkProgress.total))
-
-                return (
-                  <div className="options-menu__progress">
-                    <div className="options-menu__progress-label">
-                      {/* Étape 1/2 puis 2/2, pas juste "Téléchargement"/"Test" : sans ce repère, la barre qui
-                          retombe à 0 en passant du téléchargement au test donne l'impression que toute
-                          l'analyse recommence depuis le début, alors que c'est la 2e étape qui démarre. */}
-                      Étape {benchmarkProgress.phase === 'pull' ? '1/2' : '2/2'} —{' '}
-                      {benchmarkProgress.phase === 'pull' ? 'Téléchargement' : 'Test'} : {benchmarkProgress.done}/{benchmarkProgress.total}
-                      {benchmarkProgress.phase === 'pull' && currentPullPercent > 0 && currentPullPercent < 100 && (
-                        <> (modèle en cours : {currentPullPercent}%)</>
+            {benchmarking && (
+              <div className="options-menu__progress">
+                <div className="options-menu__progress-label">
+                  Analyse en cours — {Math.round(progressFraction * 100)}%
+                  {/* Pondéré par la vraie taille des modèles (voir ##PROGRESS## côté script), pas juste le
+                      nombre de modèles restants — sinon un seul gros modèle en fin de liste faisait
+                      s'effondrer l'estimation d'un coup. `null` tant qu'il n'y a pas assez de recul pour
+                      estimer, plutôt qu'un chiffre inventé. */}
+                  {etaMs !== null && <> — temps restant estimé : {formatEta(etaMs)}</>}
+                </div>
+                <div className="options-menu__progress-bar">
+                  <div className="options-menu__progress-bar-fill" style={{ width: `${progressFraction * 100}%` }} />
+                </div>
+                {/* Téléchargement et test tournent maintenant en parallèle (PULL_CONCURRENCY côté script) :
+                    plus de "Étape 1/2 puis 2/2", les deux compteurs avancent en même temps. */}
+                <div className="options-menu__progress-sub">
+                  {pullCount && (
+                    <span>
+                      Téléchargements : {pullCount.done}/{pullCount.total}
+                      {Object.keys(currentPulls).length > 0 && (
+                        <> (en cours : {Object.entries(currentPulls).map(([m, p]) => `${m} ${p}%`).join(', ')})</>
                       )}
-                      {/* Pondéré par la vraie taille des modèles (voir ##PULL_WEIGHT##/##TEST_WEIGHT## côté
-                          script), pas juste le nombre de modèles restants — sinon un seul gros modèle en fin
-                          de liste faisait s'effondrer l'estimation d'un coup. `null` tant qu'il n'y a pas
-                          assez de recul pour estimer, plutôt qu'un chiffre inventé. */}
-                      {etaMs !== null && <> — temps restant estimé : {formatEta(etaMs)}</>}
-                    </div>
-                    <div className="options-menu__progress-bar">
-                      <div className="options-menu__progress-bar-fill" style={{ width: `${fraction * 100}%` }} />
-                    </div>
-                  </div>
-                )
-              })()}
+                    </span>
+                  )}
+                  {testCount && (
+                    <span>
+                      Tests : {testCount.done}/{testCount.total}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
             {(benchmarking || benchmarkLog.length > 0) && (
               <pre ref={benchmarkLogRef} className="options-menu__benchmark-log">
