@@ -61,6 +61,12 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
 const LARGE_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3.5:35b', vramGb: 24 },
   { model: 'qwen3.5:27b', vramGb: 17 },
+  // Ajouté après vérification directe sur ollama.com/library/qwen3.8 (18 Go, vision+tools+thinking natifs,
+  // contexte 256K) suite à deux analyses externes (PDF fournis par Léo) le signalant comme successeur de
+  // qwen3.5:27b — gain en code/agentic rapporté par des sources tierces uniquement (pas de chiffre MMLU-Pro
+  // officiel trouvé, donc absent d'INTELLIGENCE_MMLU_PRO plus bas) : à confirmer via "Lancer l'analyse"
+  // avant de le préférer à qwen3.5:27b.
+  { model: 'qwen3.8:27b', vramGb: 18 },
   { model: 'qwen3.5:9b', vramGb: 6.6 },
   { model: 'qwen3.5:4b', vramGb: 3.4 },
   { model: 'qwen3.5:2b', vramGb: 2.7 },
@@ -113,8 +119,14 @@ const VISION_CANDIDATES: ModelCandidate[] = [
 //   ~5 tok/s contre ~34 tok/s pour une taille de fichier proche). Ajouté en informatif pour le comparer
 //   objectivement via "Lancer l'analyse" plutôt que de deviner. Source taille : ollama.com/library/qwen2.5-coder
 //   (tag 32b, 20 Go).
+// - qwen3-coder:30b (Alibaba) : ligne dédiée code, DISTINCTE de qwen3.6:35b-a3b (deux modèles réels et
+//   différents, malgré une taille/architecture proche — 30 Md total / 3,3 Md actifs, MoE, 19 Go). Une
+//   analyse externe fournie par Léo affirmait à tort que "qwen3.6:35b-a3b" n'existait pas et n'était qu'une
+//   confusion avec celui-ci — vérifié directement sur ollama.com/library/qwen3.6/tags : les deux tags
+//   existent bel et bien, séparément. Ajouté en informatif, à comparer aux autres via "Lancer l'analyse".
 const CODE_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3.6:35b-a3b', vramGb: 22 },
+  { model: 'qwen3-coder:30b', vramGb: 19 },
   { model: 'north-mini-code-1.0', vramGb: 19 },
   { model: 'qwen2.5-coder:32b', vramGb: 20 },
   { model: 'qwen2.5-coder:7b', vramGb: 4.7 }

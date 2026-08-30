@@ -53,7 +53,7 @@ const RAM_SAFETY_MARGIN_GB = 8
  * dédié) : sans ce filtre, ce script tenterait de télécharger des dizaines de Go pour un modèle qui ne
  * tournerait de toute façon jamais correctement.
  */
-const RAM_OFFLOAD_MODELS = new Set(['qwen3.6:35b-a3b', 'north-mini-code-1.0', 'qwen2.5-coder:32b'])
+const RAM_OFFLOAD_MODELS = new Set(['qwen3.6:35b-a3b', 'qwen3-coder:30b', 'north-mini-code-1.0', 'qwen2.5-coder:32b'])
 
 const MODELS = [
   'qwen3.5:2b', // par défaut en Q8_0 (2,74 Go) : plus précis mais plus lourd que la variante ci-dessous
@@ -95,8 +95,14 @@ const MODELS = [
   // les garder dans la liste permet aux utilisateurs avec plus de VRAM de vraiment les tester chez eux —
   // mêmes tailles que LARGE_CANDIDATES dans electron/services/hardwareScan.ts.
   'qwen3.5:35b',
-  'qwen3.5:27b'
-  // Les candidats du palier "Code" (qwen2.5-coder:7b/32b, qwen3.6:35b-a3b, north-mini-code-1.0) NE sont PAS
+  'qwen3.5:27b',
+  // Successeur potentiel de qwen3.5:27b (LARGE_CANDIDATES dans hardwareScan.ts) : même taille de VRAM
+  // (18 Go), vision+tools+thinking natifs. Gain rapporté en code/agentic par des sources tierces
+  // uniquement — ce run donnera une vraie mesure locale plutôt que de deviner. Source taille :
+  // ollama.com/library/qwen3.8 (tag 27b, 18 Go).
+  'qwen3.8:27b'
+  // Les candidats du palier "Code" (qwen2.5-coder:7b/32b, qwen3.6:35b-a3b, qwen3-coder:30b,
+  // north-mini-code-1.0) NE sont PAS
   // ici : codeGenerator.ts (mode Code) n'appelle JAMAIS chatWithOllama avec des outils (le paramètre `tools`
   // y est toujours `undefined`), donc les tester sur TEST_CASES (appel d'outils) mesurait une capacité que
   // le mode Code n'utilise jamais. Ils ont leur propre test, plus bas (CODE_CANDIDATES/CODE_TEST_CASES).
@@ -118,6 +124,9 @@ const VISION_CANDIDATES = [
 // (codeGenerator.ts n'en utilise jamais, voir CODE_TEST_CASES plus bas) mais sur la génération de code.
 const CODE_CANDIDATES = [
   { model: 'qwen3.6:35b-a3b', vramGb: 22 },
+  // Ligne dédiée code d'Alibaba, DISTINCTE de qwen3.6:35b-a3b malgré une taille/architecture proche (30 Md
+  // total / 3,3 Md actifs, MoE, 19 Go) — vérifié directement sur Ollama, les deux tags existent séparément.
+  { model: 'qwen3-coder:30b', vramGb: 19 },
   { model: 'north-mini-code-1.0', vramGb: 19 },
   { model: 'qwen2.5-coder:32b', vramGb: 20 },
   { model: 'qwen2.5-coder:7b', vramGb: 4.7 }
