@@ -844,15 +844,43 @@ async function main() {
   // MODELS, VISION_CANDIDATES et CODE_CANDIDATES installés dans la même passe : la barre de progression
   // (OptionsMenu.tsx) n'a pas besoin de les distinguer, seulement combien reste à installer au total.
   const allInstallable = [...MODELS, ...VISION_CANDIDATES.map((c) => c.model), ...CODE_CANDIDATES.map((c) => c.model)]
-  const missing = allInstallable.filter((m) => !installed.includes(m))
+  const missingAll = allInstallable.filter((m) => !installed.includes(m))
+
+  // Repli budgétaire pour chaque modèle manquant : même règle que pullModel() plus bas (VRAM+RAM combinées
+  // pour RAM_OFFLOAD_MODELS, VRAM/RAM seule sinon).
+  const budgetFor = (model) => (RAM_OFFLOAD_MODELS.has(model) ? ramOffloadBudgetGb : vramBudgetGb)
+
+  // Écarte ICI, avant même de commencer, tout modèle dont on sait déjà (via MODEL_WEIGHT_GB, vérifié plus
+  // haut) qu'il ne rentre pas dans le budget de CETTE machine — plutôt que de le laisser dans `missing` et
+  // le voir échouer une fois le téléchargement lancé (ModelTooLargeError, voir pullModel). Deux raisons :
+  // 1) évite un aller-retour réseau inutile pour un modèle qu'on sait déjà trop gros ; 2) et surtout, le
+  // total pondéré ci-dessous (`totalPullWeight`) ne doit compter QUE ce que cette machine peut réellement
+  // télécharger — sinon une machine "faible" qui ne peut tester que 3-4 modèles se retrouvait avec un total
+  // gonflé par le poids de modèles jamais réellement téléchargés (ex: qwen3.5:35b, 24 Go, ignoré en 1
+  // seconde), ce qui faisait chuter l'estimation de temps restant au moment de son rejet — au lieu de
+  // refléter la vraie charge de travail de CETTE machine, comme demandé : "un pc nul qui peut analyser que
+  // 3-4 modèles vas pas prendre le même temps qu'un pc qui peut tout tester". La vérification RÉELLE
+  // (manifeste Ollama, dans pullModel) reste le seul filet de sécurité : ce pré-filtre n'est qu'une
+  // estimation pour ne pas tenter l'impossible, jamais un remplacement du vrai contrôle.
+  const missing = missingAll.filter((m) => modelWeightGb(m) <= budgetFor(m))
+  const tooLargeUpfront = missingAll.filter((m) => modelWeightGb(m) > budgetFor(m))
+  if (tooLargeUpfront.length) {
+    console.log(`${tooLargeUpfront.length} modèle(s) ignoré(s) d'emblée (trop gros pour cette machine) :`)
+    for (const m of tooLargeUpfront) {
+      console.log(`  ${m} ignoré : ~${modelWeightGb(m).toFixed(1)} Go estimés, au-delà des ${budgetFor(m).toFixed(1)} Go disponibles`)
+    }
+    console.log('')
+  }
+
   if (missing.length) {
     console.log(`${missing.length} modèle(s) manquant(s) à installer avant le test :\n`)
-    // Poids total en Go de tout ce qui reste à télécharger : sert à l'estimation de temps restant
-    // (OptionsMenu.tsx) pour que "40% de la barre" corresponde vraiment à "40% des Go à télécharger", et
-    // pas à "40% du NOMBRE de modèles" — sans ça, un run qui commence par plein de petits modèles (quelques
-    // centaines de Mo chacun) puis finit sur qwen3.6:35b-a3b (22 Go) affichait un temps restant qui
-    // s'effondrait subitement en fin de parcours (voir le commentaire de RAM_OFFLOAD_MODELS pour le
-    // contexte : des modèles de tailles très différentes se côtoient dans MODELS).
+    // Poids total en Go de tout ce qui reste à télécharger POUR CETTE MACHINE (voir le filtre tooLargeUpfront
+    // ci-dessus) : sert à l'estimation de temps restant (OptionsMenu.tsx) pour que "40% de la barre"
+    // corresponde vraiment à "40% des Go à télécharger", et pas à "40% du NOMBRE de modèles" — sans ça, un
+    // run qui commence par plein de petits modèles (quelques centaines de Mo chacun) puis finit sur
+    // qwen3.6:35b-a3b (22 Go) affichait un temps restant qui s'effondrait subitement en fin de parcours (voir
+    // le commentaire de RAM_OFFLOAD_MODELS pour le contexte : des modèles de tailles très différentes se
+    // côtoient dans MODELS).
     const totalPullWeight = missing.reduce((sum, m) => sum + modelWeightGb(m), 0) || 1
     let pullsDone = 0
     let pullWeightDone = 0
@@ -863,7 +891,7 @@ async function main() {
       console.log('##PULL_MODEL_PROGRESS## 0')
       console.log(`##PULL_WEIGHT## ${pullWeightDone.toFixed(2)} ${totalPullWeight.toFixed(2)}`)
       try {
-        await pullModel(model, RAM_OFFLOAD_MODELS.has(model) ? ramOffloadBudgetGb : vramBudgetGb, (bucket) => {
+        await pullModel(model, budgetFor(model), (bucket) => {
           console.log(`##PULL_WEIGHT## ${(pullWeightDone + (weight * bucket) / 100).toFixed(2)} ${totalPullWeight.toFixed(2)}`)
         })
       } catch (err) {
