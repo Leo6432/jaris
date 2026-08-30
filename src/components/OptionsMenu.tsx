@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AnalysisScope, ConversationEntry, GmailStatus, ModelOverviewResult, ModelTiers, Profile } from '../../shared/ipc'
 import { useModelAnalysis } from '../hooks/useModelAnalysis'
-import ModelAnalysisProgress from './ModelAnalysisProgress'
+import ModelAnalysisProgress, { ANALYSIS_NOTICE } from './ModelAnalysisProgress'
 
 /** Options du popup de choix de périmètre (voir handleRunAnalysis) — tout, ou un seul palier à la fois. */
 const ANALYSIS_SCOPE_OPTIONS: Array<{ scope: AnalysisScope; label: string }> = [
@@ -380,6 +380,7 @@ export default function OptionsMenu(): JSX.Element {
                     paliers inchangés. Dans les deux cas, le(s) meilleur(s) modèle(s) sont activés et le reste
                     est supprimé.
                   </p>
+                  <p className="options-menu__analysis-notice">{ANALYSIS_NOTICE}</p>
                   <div className="options-menu__scope-dialog-options">
                     <button
                       className="options-menu__scope-dialog-all"

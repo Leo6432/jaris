@@ -11,6 +11,15 @@ const SCOPE_TO_TIER_LABEL: Partial<Record<AnalysisScope, string>> = {
   code: 'Code'
 }
 
+/**
+ * Rappel affiché avant ET pendant tout run (onboarding et ré-analyse depuis Options → Modèles, à la demande
+ * explicite de Léo) : le partager comme une seule constante plutôt que de retaper le texte à chaque endroit
+ * qui l'affiche, pour ne jamais le laisser diverger d'un endroit à l'autre.
+ */
+export const ANALYSIS_NOTICE =
+  "Pour une meilleure analyse, merci de tout fermer et de laisser l'analyse travailler pendant ce temps. " +
+  'Le temps affiché est une estimation : il peut être plus court comme plus long. Merci de votre compréhension.'
+
 /** "3 min", "1 h 20", "moins d'une minute"... à partir d'une estimation en ms. */
 function formatEta(ms: number): string {
   const totalMinutes = Math.round(ms / 60000)
@@ -68,6 +77,8 @@ export default function ModelAnalysisProgress({ state, modelOverview }: ModelAna
 
   return (
     <>
+      {benchmarking && <p className="options-menu__analysis-notice">{ANALYSIS_NOTICE}</p>}
+
       {benchmarking && (
         <div className="options-menu__progress">
           <div className="options-menu__progress-label">

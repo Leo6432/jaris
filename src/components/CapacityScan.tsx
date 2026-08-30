@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { CapacityScanResult, ModelOverviewResult } from '../../shared/ipc'
 import { useModelAnalysis } from '../hooks/useModelAnalysis'
-import ModelAnalysisProgress from './ModelAnalysisProgress'
+import ModelAnalysisProgress, { ANALYSIS_NOTICE } from './ModelAnalysisProgress'
 
 interface CapacityScanProps {
   onDone: () => void
@@ -59,6 +59,7 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
               prendre du temps (potentiellement plusieurs dizaines de minutes, et plusieurs Go de
               téléchargement) selon ta connexion et ton matériel.
             </p>
+            <p className="options-menu__analysis-notice">{ANALYSIS_NOTICE}</p>
             <button onClick={start} disabled={modelOverview === null}>
               {modelOverview === null ? 'Préparation...' : "Démarrer l'analyse"}
             </button>

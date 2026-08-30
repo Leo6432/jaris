@@ -304,6 +304,18 @@ body.body--scan {
   color: #ff6b6b;
 }
 
+/* Rappel "ferme tout le reste pendant l'analyse" — même code couleur ambre que .app__setup-warning (avertit
+   sans alarmer), affiché avant ET pendant tout run (onboarding et ré-analyse depuis Options → Modèles). */
+.options-menu__analysis-notice {
+  font-size: 0.76rem;
+  color: #ffb648;
+  background: rgba(255, 182, 72, 0.08);
+  border: 1px solid rgba(255, 182, 72, 0.3);
+  border-radius: 10px;
+  padding: 8px 14px;
+  margin: 8px 0;
+}
+
 /* Popup de choix du périmètre d'analyse ("tout" ou un seul palier) — au-dessus de .options-page (z-index 20). */
 .options-menu__scope-dialog-overlay {
   position: fixed;
