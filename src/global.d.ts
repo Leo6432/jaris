@@ -1,4 +1,5 @@
 import type {
+  AnalysisScope,
   CapacityScanResult,
   ChatMessage,
   ConversationEntry,
@@ -41,7 +42,7 @@ declare global {
       clearConversationHistory: () => Promise<void>
       openConversationHistoryFile: () => Promise<void>
       getModelOverview: () => Promise<ModelOverviewResult>
-      runModelAnalysis: () => Promise<CapacityScanResult>
+      runModelAnalysis: (scope?: AnalysisScope) => Promise<CapacityScanResult>
       onModelBenchmarkLine: (cb: (line: string) => void) => () => void
       getNewModels: () => Promise<string[]>
       acknowledgeNewModels: () => Promise<void>

@@ -4,7 +4,7 @@ import { config } from '../config'
 import { deleteModel, pullModelIfMissing, ModelTooLargeError, DiskFullError } from './ollama'
 import { getAllCandidateModelIds, getCodeCandidateModelIds, parseLocalBenchmark, pickBestModelsFromBenchmark } from './hardwareScan'
 import { getProfile, saveProfile } from './profileStore'
-import type { CapacityScanResult } from '../../shared/ipc'
+import type { AnalysisScope, CapacityScanResult } from '../../shared/ipc'
 
 /**
  * Lance scripts/benchmark-models.mjs comme un vrai process Node, en streamant chaque ligne de sa sortie
@@ -12,13 +12,17 @@ import type { CapacityScanResult } from '../../shared/ipc'
  * 20-40+ minutes avec plusieurs modèles à charger un par un). Réutilise le script tel quel (pas de logique
  * dupliquée) : ce n'est possible que dans un checkout source (le script n'est jamais packagé), mais
  * l'onglet Modèles qui l'appelle est lui-même un outil de dev, pas une fonctionnalité pour un build final.
+ *
+ * `scope` passé en variable d'environnement (JARIS_ANALYSIS_SCOPE) : le script lit lui-même cette variable
+ * pour ne tester que les candidats du palier demandé (voir son commentaire sur SCOPE) — jamais interprété
+ * ici, seulement transmis tel quel.
  */
-function spawnBenchmarkScript(onLine: (line: string) => void): Promise<void> {
+function spawnBenchmarkScript(onLine: (line: string) => void, scope: AnalysisScope): Promise<void> {
   return new Promise((resolve, reject) => {
     const scriptPath = join(process.cwd(), 'scripts', 'benchmark-models.mjs')
     const proc = spawn('node', [scriptPath], {
       windowsHide: true,
-      env: { ...process.env, OLLAMA_HOST: config.ollama.host }
+      env: { ...process.env, OLLAMA_HOST: config.ollama.host, JARIS_ANALYSIS_SCOPE: scope }
     })
 
     let buffer = ''
@@ -84,17 +88,22 @@ async function cleanupUnselectedModels(onLine: (line: string) => void): Promise<
 }
 
 /**
- * Lance le benchmark complet (installation des modèles manquants, tests), choisit le meilleur modèle de
- * chaque palier d'après les vrais résultats (pickBestModelsFromBenchmark), l'enregistre dans le profil,
- * supprime les anciens modèles remplacés, puis fait le ménage de tout ce qui a été testé mais n'est
- * finalement retenu par aucun palier (cleanupUnselectedModels) — un seul geste ("Tester tous les modèles et
- * choisir les meilleurs" dans l'onglet Modèles) au lieu d'un scan par taille puis un benchmark séparé qui ne
+ * Lance le benchmark (installation des modèles manquants, tests), choisit le meilleur modèle de chaque
+ * palier d'après les vrais résultats (pickBestModelsFromBenchmark), l'enregistre dans le profil, supprime
+ * les anciens modèles remplacés, puis fait le ménage de tout ce qui a été testé mais n'est finalement
+ * retenu par aucun palier (cleanupUnselectedModels) — un seul geste ("Tester tous les modèles et choisir
+ * les meilleurs" dans l'onglet Modèles) au lieu d'un scan par taille puis un benchmark séparé qui ne
  * changeait rien aux modèles réellement utilisés.
+ *
+ * `scope` ('all' par défaut) limite le test à un seul palier — bien plus rapide pour re-tester juste "Puissant"
+ * après un changement qui ne concerne que lui, par exemple. Les résultats des autres paliers, déjà connus
+ * (scripts/benchmark-results.md), sont conservés tels quels par le script — jamais effacés par un run ciblé,
+ * donc pickBestModelsFromBenchmark garde les mêmes choix pour les paliers non re-testés.
  */
-export async function runModelAnalysis(onLine: (line: string) => void): Promise<CapacityScanResult> {
+export async function runModelAnalysis(onLine: (line: string) => void, scope: AnalysisScope = 'all'): Promise<CapacityScanResult> {
   const before = await getProfile()
 
-  await spawnBenchmarkScript(onLine)
+  await spawnBenchmarkScript(onLine, scope)
   onLine('')
 
   onLine("Sélection du meilleur modèle pour chaque palier, d'après les résultats du benchmark…")

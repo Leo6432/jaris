@@ -304,6 +304,77 @@ body.body--scan {
   color: #ff6b6b;
 }
 
+/* Popup de choix du périmètre d'analyse ("tout" ou un seul palier) — au-dessus de .options-page (z-index 20). */
+.options-menu__scope-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(2, 6, 12, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.options-menu__scope-dialog {
+  background: #0c1420;
+  border: 1px solid rgba(127, 163, 201, 0.25);
+  border-radius: 14px;
+  padding: 22px 24px;
+  max-width: 380px;
+  width: 100%;
+}
+
+.options-menu__scope-dialog h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: #d9ecff;
+}
+
+.options-menu__scope-dialog p {
+  margin: 0 0 16px;
+  font-size: 0.78rem;
+  color: #9fc3e6;
+}
+
+.options-menu__scope-dialog-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.options-menu__scope-dialog-options button {
+  background: rgba(55, 226, 255, 0.1);
+  border: 1px solid rgba(55, 226, 255, 0.3);
+  color: #d9ecff;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.options-menu__scope-dialog-options button:hover {
+  border-color: #37e2ff;
+  background: rgba(55, 226, 255, 0.18);
+}
+
+.options-menu__scope-dialog-options button.options-menu__scope-dialog-all {
+  grid-column: 1 / -1;
+  background: rgba(55, 226, 255, 0.18);
+}
+
+.options-menu__scope-dialog-cancel {
+  background: transparent;
+  border: 1px solid rgba(127, 163, 201, 0.35);
+  color: #7fa3c9;
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  width: 100%;
+}
+
 .options-menu__progress {
   margin-top: 10px;
 }
@@ -360,9 +431,12 @@ body.body--scan {
 /* Remplace l'ancienne liste à puces "Modèles Ollama par palier" : la même info existait déjà en double,
    surlignée en cyan dans les tableaux plus bas — ces puces ne servent plus qu'au coup d'œil rapide (+ le
    niveau de réflexion, seule info qui n'est nulle part ailleurs, en infobulle). */
+/* Grille à colonnes fixes plutôt qu'un flex-wrap qui laisse le dernier tomber tout seul sur sa ligne dès que
+   le compte ne remplit pas la ligne précédente (5 puces : Rapide/Médium/Puissant/Vision/Code, Code isolé en
+   flex-wrap) — 3 colonnes donne toujours 3+2, jamais un dernier élément esseulé, quelle que soit la largeur. */
 .options-menu__current-picks {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -374,7 +448,7 @@ body.body--scan {
   border: 1px solid rgba(127, 163, 201, 0.18);
   border-radius: 999px;
   padding: 4px 12px;
-  max-width: 100%;
+  min-width: 0;
 }
 
 .options-menu__pick-tier {

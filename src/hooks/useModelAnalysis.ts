@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { CapacityScanResult, ModelOverviewResult } from '../../shared/ipc'
+import type { AnalysisScope, CapacityScanResult, ModelOverviewResult } from '../../shared/ipc'
 
 /**
  * État d'un modèle candidat pendant un run de benchmark (##PULL_MODEL_PROGRESS##/##MODEL_TESTING##/
@@ -23,6 +23,8 @@ const PROGRESS_WINDOW_MS = 90000
 
 export interface ModelAnalysisState {
   benchmarking: boolean
+  /** Périmètre du run EN COURS (ou du dernier lancé) — 'all' tant qu'aucun run n'a encore démarré. */
+  scope: AnalysisScope
   pullCount: { done: number; total: number } | null
   testCount: { done: number; total: number } | null
   progressFraction: number
@@ -30,8 +32,11 @@ export interface ModelAnalysisState {
   modelRunStatus: Record<string, ModelRunStatus>
   benchmarkLog: string[]
   error: string | null
-  /** Lance scripts/benchmark-models.mjs (via l'IPC runModelAnalysis) et suit sa progression en direct. */
-  run: () => Promise<CapacityScanResult>
+  /**
+   * Lance scripts/benchmark-models.mjs (via l'IPC runModelAnalysis) et suit sa progression en direct.
+   * `scope` ('all' par défaut) limite le test à un seul palier, bien plus rapide — voir AnalysisScope.
+   */
+  run: (scope?: AnalysisScope) => Promise<CapacityScanResult>
 }
 
 /**
@@ -46,6 +51,7 @@ export interface ModelAnalysisState {
  */
 export function useModelAnalysis(modelOverview: ModelOverviewResult | null): ModelAnalysisState {
   const [benchmarking, setBenchmarking] = useState(false)
+  const [scope, setScope] = useState<AnalysisScope>('all')
   const [pullCount, setPullCount] = useState<{ done: number; total: number } | null>(null)
   const [testCount, setTestCount] = useState<{ done: number; total: number } | null>(null)
   const [progressFraction, setProgressFraction] = useState(0)
@@ -155,9 +161,10 @@ export function useModelAnalysis(modelOverview: ModelOverviewResult | null): Mod
     return () => clearInterval(id)
   }, [benchmarking])
 
-  const run = async (): Promise<CapacityScanResult> => {
+  const run = async (requestedScope: AnalysisScope = 'all'): Promise<CapacityScanResult> => {
     setError(null)
     setBenchmarking(true)
+    setScope(requestedScope)
     setBenchmarkLog([])
     setPullCount(null)
     setTestCount(null)
@@ -166,14 +173,16 @@ export function useModelAnalysis(modelOverview: ModelOverviewResult | null): Mod
     progressSamplesRef.current = []
     etaFrozenRef.current = null
     // Tableau de suivi initialisé avec TOUS les candidats connus à "en attente" : sans ça, un modèle
-    // n'apparaîtrait dans le tableau qu'au moment où une ligne le mentionne pour la première fois.
+    // n'apparaîtrait dans le tableau qu'au moment où une ligne le mentionne pour la première fois. Pas filtré
+    // par périmètre ici (ModelAnalysisProgress s'en charge à l'affichage, voir SCOPE_TO_TIER_LABEL) : garder
+    // le statut de TOUS les modèles, même hors périmètre, ne coûte rien et évite de le perdre au passage.
     const initialStatus: Record<string, ModelRunStatus> = {}
     for (const group of modelOverviewRef.current?.groups ?? []) {
       for (const entry of group.entries) initialStatus[entry.model] = { kind: 'pending' }
     }
     setModelRunStatus(initialStatus)
     try {
-      return await window.jaris.runModelAnalysis()
+      return await window.jaris.runModelAnalysis(requestedScope)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       throw err
@@ -185,5 +194,5 @@ export function useModelAnalysis(modelOverview: ModelOverviewResult | null): Mod
     }
   }
 
-  return { benchmarking, pullCount, testCount, progressFraction, etaMs, modelRunStatus, benchmarkLog, error, run }
+  return { benchmarking, scope, pullCount, testCount, progressFraction, etaMs, modelRunStatus, benchmarkLog, error, run }
 }

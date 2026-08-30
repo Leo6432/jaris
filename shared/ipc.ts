@@ -74,6 +74,15 @@ export interface GmailStatus {
 }
 
 /**
+ * Périmètre d'un run d'analyse (runModelAnalysis) : 'all' teste tout comme avant, un palier précis ne teste
+ * QUE ses propres candidats (bien plus rapide) — utile pour re-tester un seul palier après un changement qui
+ * ne concerne que lui (ex: débloquer "Puissant" via VRAM+RAM) sans refaire tourner tout le reste. Les
+ * résultats des autres paliers, déjà dans scripts/benchmark-results.md, sont conservés tels quels (voir le
+ * commentaire sur la fusion dans benchmark-models.mjs) — jamais effacés par un run ciblé.
+ */
+export type AnalysisScope = 'all' | 'flash' | 'medium' | 'large' | 'vision' | 'code'
+
+/**
  * Résultat de l'analyse complète des modèles (étape 13, obligatoire au premier lancement — voir
  * CapacityScan.tsx) : GPU détecté et meilleur modèle mesuré pour chaque palier + vision.
  */

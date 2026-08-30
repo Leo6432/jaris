@@ -21,6 +21,7 @@ import { getProfile, markGmailOnboardingDone, saveProfile } from './services/pro
 import { connectGmail, disconnectGmail, getGmailStatus } from './services/googleAuth'
 import {
   IPC_CHANNELS,
+  type AnalysisScope,
   type CapacityScanResult,
   type ChatMessage,
   type GeneratedApp,
@@ -284,8 +285,8 @@ app.whenReady().then(async () => {
     if (!profile) return
     await saveProfile({ ...profile, knownModelCandidates: getAllCandidateModelIds() })
   })
-  ipcMain.handle(IPC_CHANNELS.runModelAnalysis, async (event): Promise<CapacityScanResult> => {
-    return runModelAnalysis((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))
+  ipcMain.handle(IPC_CHANNELS.runModelAnalysis, async (event, scope?: AnalysisScope): Promise<CapacityScanResult> => {
+    return runModelAnalysis((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line), scope)
   })
 
   // Mode Chat (étape 30) : même Jaris, mêmes outils, sans synthèse vocale. Un rappel programmé par écrit

@@ -17,7 +17,7 @@
  */
 
 import { exec } from 'child_process'
-import { statfsSync, writeFileSync } from 'fs'
+import { readFileSync, statfsSync, writeFileSync } from 'fs'
 import { homedir, totalmem } from 'os'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
@@ -29,6 +29,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const RESULTS_PATH = join(__dirname, 'benchmark-results.md')
 
 const OLLAMA_HOST = process.env.OLLAMA_HOST?.trim() || 'http://127.0.0.1:11434'
+
+/**
+ * Périmètre du run (AnalysisScope côté TS, shared/ipc.ts) : 'all' teste tout comme avant (comportement par
+ * défaut si la variable n'est pas transmise, ex: lancé à la main depuis un terminal), un palier précis ne
+ * teste QUE ses propres candidats — bien plus rapide pour re-tester un seul palier après un changement qui
+ * ne le concerne que lui (ex: débloquer "Puissant" via VRAM+RAM). Transmis par benchmarkRunner.ts
+ * (spawnBenchmarkScript) en variable d'environnement, jamais en argument CLI (plus simple à faire passer par
+ * `child_process.spawn` sans avoir à gérer l'échappement des espaces d'un nom de modèle).
+ */
+const SCOPE = (process.env.JARIS_ANALYSIS_SCOPE?.trim() || 'all')
 
 /**
  * Petite marge sous la VRAM totale détectée, pour le contexte (num_ctx, 4096 par défaut) et l'overhead
@@ -255,6 +265,26 @@ const LARGE_TIER_MODELS = new Set([
   'qwen3.5:0.8b'
 ])
 const VISION_TIER_MODELS = new Set(VISION_CANDIDATES.map((c) => c.model))
+
+/**
+ * Sous-ensembles de MODELS/VISION_CANDIDATES/CODE_CANDIDATES réellement testés CE run, d'après SCOPE — pour
+ * un palier de conversation (flash/medium/large), on filtre MODELS par appartenance (voir
+ * FLASH/MEDIUM/LARGE_TIER_MODELS) puisque c'est une liste plate qui couvre les trois à la fois ; pour
+ * vision/code, on garde ou on vide la liste entière (déjà séparée). `scope === 'all'` (comportement par
+ * défaut) garde tout, exactement comme avant l'ajout de SCOPE.
+ */
+const SCOPED_MODELS =
+  SCOPE === 'all'
+    ? MODELS
+    : SCOPE === 'flash'
+      ? MODELS.filter((m) => FLASH_TIER_MODELS.has(m))
+      : SCOPE === 'medium'
+        ? MODELS.filter((m) => MEDIUM_TIER_MODELS.has(m))
+        : SCOPE === 'large'
+          ? MODELS.filter((m) => LARGE_TIER_MODELS.has(m))
+          : []
+const SCOPED_VISION_CANDIDATES = SCOPE === 'all' || SCOPE === 'vision' ? VISION_CANDIDATES : []
+const SCOPED_CODE_CANDIDATES = SCOPE === 'all' || SCOPE === 'code' ? CODE_CANDIDATES : []
 
 /**
  * `true` seulement si `model` appartient à EXACTEMENT un des trois paliers de conversation ET n'est candidat
@@ -1014,9 +1044,21 @@ async function main() {
       : "Espace disque libre : impossible à détecter sur cette plateforme, ce filtre de sécurité est désactivé (seuls VRAM/RAM sont vérifiés).\n"
   )
 
-  // MODELS, VISION_CANDIDATES et CODE_CANDIDATES installés dans la même passe : la barre de progression
-  // (OptionsMenu.tsx) n'a pas besoin de les distinguer, seulement combien reste à installer au total.
-  const allInstallable = [...MODELS, ...VISION_CANDIDATES.map((c) => c.model), ...CODE_CANDIDATES.map((c) => c.model)]
+  console.log(
+    SCOPE === 'all'
+      ? 'Périmètre : tous les paliers.\n'
+      : `Périmètre : palier "${SCOPE}" seulement (##MODEL_SKIPPED## ci-dessus mis à part, les autres paliers ne sont ni téléchargés ni testés ce run-ci — leurs résultats précédents sont conservés tels quels).\n`
+  )
+
+  // SCOPED_MODELS/SCOPED_VISION_CANDIDATES/SCOPED_CODE_CANDIDATES (pas MODELS/VISION_CANDIDATES/
+  // CODE_CANDIDATES directement) : un run ciblé sur un seul palier (SCOPE) ne doit installer/tester QUE ses
+  // propres candidats, jamais les autres — la barre de progression (OptionsMenu.tsx) n'a pas besoin de les
+  // distinguer, seulement combien reste à installer au total pour CE run.
+  const allInstallable = [
+    ...SCOPED_MODELS,
+    ...SCOPED_VISION_CANDIDATES.map((c) => c.model),
+    ...SCOPED_CODE_CANDIDATES.map((c) => c.model)
+  ]
   const missingAll = allInstallable.filter((m) => !installed.includes(m))
 
   // Repli budgétaire pour chaque modèle manquant : VRAM+RAM combinées (RAM_OFFLOAD_MODELS) ou VRAM/RAM seule
@@ -1051,9 +1093,9 @@ async function main() {
     console.log('')
   }
 
-  const toRun = MODELS.filter((m) => installed.includes(m) || missing.includes(m))
-  const visionToRun = VISION_CANDIDATES.map((c) => c.model).filter((m) => installed.includes(m) || missing.includes(m))
-  const codeToRun = CODE_CANDIDATES.map((c) => c.model).filter((m) => installed.includes(m) || missing.includes(m))
+  const toRun = SCOPED_MODELS.filter((m) => installed.includes(m) || missing.includes(m))
+  const visionToRun = SCOPED_VISION_CANDIDATES.map((c) => c.model).filter((m) => installed.includes(m) || missing.includes(m))
+  const codeToRun = SCOPED_CODE_CANDIDATES.map((c) => c.model).filter((m) => installed.includes(m) || missing.includes(m))
   if (!toRun.length && !visionToRun.length && !codeToRun.length) {
     console.log('Aucun des modèles à tester n\'a pu être installé.')
     return
@@ -1345,6 +1387,30 @@ async function main() {
   // passé par ensureReady dans l'une des trois boucles ci-dessus (même ordre que `missing`, voir plus haut).
   await Promise.all(pullWorkers)
 
+  // Modèles testés lors d'un run PRÉCÉDENT (autre palier, ou run "tout" antérieur) mais pas cette fois-ci
+  // (SCOPE limite ce run à un seul palier) : lus ici pour les GARDER tels quels dans le fichier réécrit
+  // ci-dessous, plutôt que de les faire disparaître. Sans ça, un run "juste Code" effacerait les résultats
+  // flash/medium/large/vision précédents, et pickBestModelsFromBenchmark (hardwareScan.ts) retomberait sur
+  // un choix par taille pour ces paliers, faute de toute donnée. Même format de parsing que
+  // parseLocalBenchmark (hardwareScan.ts) : lignes "| modèle | latence | vitesse | fiabilité |", 4 cellules.
+  const existingRows = new Map()
+  try {
+    const previous = readFileSync(RESULTS_PATH, 'utf-8')
+    for (const line of previous.split('\n')) {
+      if (!line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
+      const cells = line
+        .split('|')
+        .map((c) => c.trim())
+        .filter(Boolean)
+      if (cells.length !== 4) continue
+      const [model, latency, speed, reliability] = cells
+      existingRows.set(model, { latency, speed, reliability })
+    }
+  } catch {
+    // Pas de fichier précédent (tout premier run) : rien à conserver, existingRows reste vide.
+  }
+  const testedThisRun = new Set(results.map((r) => r.model))
+
   const lines = []
   lines.push(`# Résultats du benchmark Jaris — ${new Date().toLocaleString('fr-FR')}`)
   lines.push('')
@@ -1357,6 +1423,10 @@ async function main() {
   for (const r of results) {
     const acc = r.total ? `${r.correct}/${r.total}` : '—'
     lines.push(`| ${r.model} | ${fmt(avg(r.latencies), 0)} ms | ${fmt(avg(r.speeds))} tok/s | ${acc} |`)
+  }
+  for (const [model, row] of existingRows) {
+    if (testedThisRun.has(model)) continue
+    lines.push(`| ${model} | ${row.latency} | ${row.speed} | ${row.reliability} |`)
   }
 
   lines.push('')

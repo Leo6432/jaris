@@ -398,6 +398,14 @@ réponse respecte la consigne "pas de mise en forme" (essentielle puisque
 tout est lu à voix haute). Résultat affiché dans le terminal et sauvegardé
 dans `scripts/benchmark-results.md`.
 
+Depuis l'onglet **Modèles** du menu Options, "Tester tous les modèles et
+choisir les meilleurs" ouvre un choix de périmètre : tout analyser, ou un
+seul palier (rapide/médium/puissant/vision/code) — bien plus rapide pour
+re-tester juste ce qui a changé (`OLLAMA_HOST=... JARIS_ANALYSIS_SCOPE=large
+npm run benchmark:models` en ligne de commande). Les résultats des autres
+paliers, déjà connus, sont conservés tels quels dans
+`scripts/benchmark-results.md` — jamais effacés par un run ciblé.
+
 Sur une machine contrainte, plusieurs paliers peuvent finir sur le même
 modèle (pas assez de VRAM pour un vrai modèle "puissant" séparé) : ils
 restent quand même différenciés via l'effort de réflexion d'Ollama

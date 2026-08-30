@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ConversationEntry, GmailStatus, ModelOverviewResult, ModelTiers, Profile } from '../../shared/ipc'
+import type { AnalysisScope, ConversationEntry, GmailStatus, ModelOverviewResult, ModelTiers, Profile } from '../../shared/ipc'
 import { useModelAnalysis } from '../hooks/useModelAnalysis'
 import ModelAnalysisProgress from './ModelAnalysisProgress'
+
+/** Options du popup de choix de périmètre (voir handleRunAnalysis) — tout, ou un seul palier à la fois. */
+const ANALYSIS_SCOPE_OPTIONS: Array<{ scope: AnalysisScope; label: string }> = [
+  { scope: 'flash', label: 'Rapide seulement' },
+  { scope: 'medium', label: 'Médium seulement' },
+  { scope: 'large', label: 'Puissant seulement' },
+  { scope: 'vision', label: 'Vision seulement' },
+  { scope: 'code', label: 'Code seulement' }
+]
 
 interface VoiceOption {
   id: string
@@ -67,6 +76,7 @@ export default function OptionsMenu(): JSX.Element {
   const audioUrlRef = useRef<string | null>(null)
   // Logique de run + progression partagée avec l'écran d'onboarding (CapacityScan.tsx) — voir useModelAnalysis.
   const analysis = useModelAnalysis(modelOverview)
+  const [scopeDialogOpen, setScopeDialogOpen] = useState(false)
 
   useEffect(() => {
     window.jaris.getGmailStatus().then(setStatus)
@@ -94,19 +104,11 @@ export default function OptionsMenu(): JSX.Element {
     }
   }, [tab, modelOverview])
 
-  const handleRunAnalysis = async (): Promise<void> => {
-    if (
-      !window.confirm(
-        'Ça va installer tout modèle candidat manquant qui tient dans la VRAM détectée (potentiellement ' +
-          "plusieurs dizaines de Go), tester chacun d'eux (peut prendre longtemps), puis ACTIVER le " +
-          'meilleur modèle de chaque palier et supprimer tout le reste. Continuer ?'
-      )
-    ) {
-      return
-    }
+  const handleRunAnalysis = async (scope: AnalysisScope): Promise<void> => {
+    setScopeDialogOpen(false)
     setError(null)
     try {
-      const result = await analysis.run()
+      const result = await analysis.run(scope)
       // Reflète tout de suite les nouveaux modèles retenus + le tableau comparatif à jour, sans avoir à
       // changer d'onglet et revenir pour forcer un rechargement.
       setProfile((prev) => (prev ? { ...prev, models: result.models, visionModel: result.visionModel, capacityScanDone: true } : prev))
@@ -354,7 +356,7 @@ export default function OptionsMenu(): JSX.Element {
               Intelligence = score MMLU-Pro publié, quand il existe.
             </p>
 
-            <button className="options-menu__action" onClick={() => void handleRunAnalysis()} disabled={analysis.benchmarking}>
+            <button className="options-menu__action" onClick={() => setScopeDialogOpen(true)} disabled={analysis.benchmarking}>
               {analysis.benchmarking ? 'Analyse en cours...' : 'Tester tous les modèles et choisir les meilleurs'}
             </button>
             <p className="options-menu__model-overview-hint">
@@ -366,6 +368,37 @@ export default function OptionsMenu(): JSX.Element {
             </p>
 
             <ModelAnalysisProgress state={analysis} modelOverview={modelOverview} />
+
+            {scopeDialogOpen && (
+              <div className="options-menu__scope-dialog-overlay" onClick={() => setScopeDialogOpen(false)}>
+                <div className="options-menu__scope-dialog" onClick={(e) => e.stopPropagation()}>
+                  <h3>Quelle analyse lancer ?</h3>
+                  <p>
+                    Tout analyser installe tout modèle candidat manquant qui tient dans la VRAM/RAM/disque
+                    détectés (potentiellement plusieurs dizaines de Go) et teste chacun d'eux — peut prendre
+                    longtemps. Tester un seul palier est bien plus rapide et garde les résultats des autres
+                    paliers inchangés. Dans les deux cas, le(s) meilleur(s) modèle(s) sont activés et le reste
+                    est supprimé.
+                  </p>
+                  <div className="options-menu__scope-dialog-options">
+                    <button
+                      className="options-menu__scope-dialog-all"
+                      onClick={() => void handleRunAnalysis('all')}
+                    >
+                      Tout analyser
+                    </button>
+                    {ANALYSIS_SCOPE_OPTIONS.map(({ scope, label }) => (
+                      <button key={scope} onClick={() => void handleRunAnalysis(scope)}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="options-menu__scope-dialog-cancel" onClick={() => setScopeDialogOpen(false)}>
+                    Annuler
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
