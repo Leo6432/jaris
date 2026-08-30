@@ -53,7 +53,13 @@ const RAM_SAFETY_MARGIN_GB = 8
  * dédié) : sans ce filtre, ce script tenterait de télécharger des dizaines de Go pour un modèle qui ne
  * tournerait de toute façon jamais correctement.
  */
-const RAM_OFFLOAD_MODELS = new Set(['qwen3.6:35b-a3b', 'qwen3-coder:30b', 'north-mini-code-1.0', 'qwen2.5-coder:32b'])
+const RAM_OFFLOAD_MODELS = new Set([
+  'qwen3.6:35b-a3b',
+  'qwen3-coder:30b',
+  'north-mini-code-1.0',
+  'qwen2.5-coder:32b',
+  'devstral-small-2:24b'
+])
 
 const MODELS = [
   'qwen3.5:2b', // par défaut en Q8_0 (2,74 Go) : plus précis mais plus lourd que la variante ci-dessous
@@ -100,9 +106,14 @@ const MODELS = [
   // (18 Go), vision+tools+thinking natifs. Gain rapporté en code/agentic par des sources tierces
   // uniquement — ce run donnera une vraie mesure locale plutôt que de deviner. Source taille :
   // ollama.com/library/qwen3.8 (tag 27b, 18 Go).
-  'qwen3.8:27b'
+  'qwen3.8:27b',
+  // Trois candidats supplémentaires dans la même tranche (14-19 Go), pour les machines avec plus de VRAM
+  // que la config de développement — voir le commentaire complet dans hardwareScan.ts (LARGE_CANDIDATES).
+  'qwen3.6:27b',
+  'gemma4:26b',
+  'gpt-oss:20b'
   // Les candidats du palier "Code" (qwen2.5-coder:7b/32b, qwen3.6:35b-a3b, qwen3-coder:30b,
-  // north-mini-code-1.0) NE sont PAS
+  // north-mini-code-1.0, devstral-small-2:24b) NE sont PAS
   // ici : codeGenerator.ts (mode Code) n'appelle JAMAIS chatWithOllama avec des outils (le paramètre `tools`
   // y est toujours `undefined`), donc les tester sur TEST_CASES (appel d'outils) mesurait une capacité que
   // le mode Code n'utilise jamais. Ils ont leur propre test, plus bas (CODE_CANDIDATES/CODE_TEST_CASES).
@@ -134,6 +145,9 @@ const CODE_CANDIDATES = [
   { model: 'qwen3-coder:30b', vramGb: 19 },
   { model: 'north-mini-code-1.0', vramGb: 19 },
   { model: 'qwen2.5-coder:32b', vramGb: 20 },
+  // Mistral, agent de code autonome. DENSE (comme qwen2.5-coder:32b) : voir la même remarque dans
+  // hardwareScan.ts. Vérifié sur ollama.com/library/devstral-small-2 (15 Go).
+  { model: 'devstral-small-2:24b', vramGb: 15 },
   { model: 'qwen2.5-coder:7b', vramGb: 4.7 }
 ]
 

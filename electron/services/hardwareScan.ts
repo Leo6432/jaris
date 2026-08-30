@@ -67,6 +67,17 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   // officiel trouvé, donc absent d'INTELLIGENCE_MMLU_PRO plus bas) : à confirmer via "Lancer l'analyse"
   // avant de le préférer à qwen3.5:27b.
   { model: 'qwen3.8:27b', vramGb: 18 },
+  // Trois candidats supplémentaires dans la même tranche (17-19 Go), utiles pour les machines avec plus de
+  // VRAM que la config de développement (8 Go) — pas retenus faute de "trop lourd" mais parce qu'un candidat
+  // de plus dans cette tranche ne changeait rien pour Léo ; ajoutés maintenant pour ceux qui ont la VRAM.
+  // - qwen3.6:27b : autre variante de la même famille que qwen3.6:35b-a3b (Code), vérifiée sur
+  //   ollama.com/library/qwen3.6 (18 Go, vision+tools+thinking natifs).
+  // - gemma4:26b : MoE Google (25,2 Md total / 3,8 Md actifs), vérifié sur ollama.com/library/gemma4 (19 Go).
+  // - gpt-oss:20b (OpenAI, poids ouverts) : vérifié sur ollama.com/library/gpt-oss (14 Go, tools+thinking,
+  //   texte seul — pas de vision contrairement aux autres candidats de cette liste).
+  { model: 'qwen3.6:27b', vramGb: 18 },
+  { model: 'gemma4:26b', vramGb: 19 },
+  { model: 'gpt-oss:20b', vramGb: 14 },
   { model: 'qwen3.5:9b', vramGb: 6.6 },
   { model: 'qwen3.5:4b', vramGb: 3.4 },
   { model: 'qwen3.5:2b', vramGb: 2.7 },
@@ -138,6 +149,10 @@ const CODE_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3-coder:30b', vramGb: 19 },
   { model: 'north-mini-code-1.0', vramGb: 19 },
   { model: 'qwen2.5-coder:32b', vramGb: 20 },
+  // Mistral, agent de code autonome (exploration de dépôt, édition multi-fichiers). DENSE comme
+  // qwen2.5-coder:32b ci-dessus (pas de "-a3b"/MoE dans son nom) : même remarque, débordement RAM plus
+  // pénalisant qu'un MoE de taille comparable. Vérifié sur ollama.com/library/devstral-small-2 (15 Go).
+  { model: 'devstral-small-2:24b', vramGb: 15 },
   { model: 'qwen2.5-coder:7b', vramGb: 4.7 }
 ]
 
