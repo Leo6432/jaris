@@ -91,8 +91,12 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   téléphone de l'utilisateur (via son numéro ou une connexion directe au
   téléphone) afin d'envoyer des messages, voir les notifications, et plus
   largement tout voir/contrôler depuis le téléphone — en s'appuyant sur un
-  projet open source existant faisant le pont PC/téléphone (ex: KDE Connect)
-  plutôt que de tout réécrire
+  projet existant faisant le pont PC/téléphone plutôt que de tout réécrire :
+  soit open source (ex: KDE Connect), soit la fonctionnalité native de
+  Windows **Mobile connecté** (Phone Link) déjà présente sur la machine de
+  l'utilisateur — à comparer avant de choisir (couverture fonctionnelle,
+  et surtout si Phone Link expose de quoi être piloté par Jaris plutôt que
+  seulement utilisable à la main)
 - ⬜ Étape 23 — Site web avec tableau de bord personnel : chaque utilisateur
   peut noter son planning et sa to-do list sur le site, et Jaris peut y
   écrire des informations
