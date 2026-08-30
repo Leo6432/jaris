@@ -1025,6 +1025,8 @@ async function main() {
     console.log(`${tooLargeUpfront.length} modèle(s) ignoré(s) d'emblée (trop gros pour cette machine) :`)
     for (const m of tooLargeUpfront) {
       console.log(`  ${m} ignoré : ~${modelWeightGb(m).toFixed(1)} Go estimés, au-delà des ${budgetFor(m).toFixed(1)} Go disponibles`)
+      // Lu par le tableau de suivi en direct (OptionsMenu.tsx) : ce modèle ne sera jamais testé ce run-ci.
+      console.log(`##MODEL_SKIPPED## ${m}`)
     }
     console.log('')
   }
@@ -1187,8 +1189,12 @@ async function main() {
 
   for (const model of toRun) {
     const ready = await ensureReady(model)
-    if (!ready) continue
+    if (!ready) {
+      console.log(`##MODEL_SKIPPED## ${model}`)
+      continue
+    }
     console.log(`\n=== ${model} ===`)
+    console.log(`##MODEL_TESTING## ${model}`)
     const perModel = { model, latencies: [], speeds: [], correct: 0, total: 0 }
 
     for (const { prompt, expectedTool } of TEST_CASES) {
@@ -1218,6 +1224,8 @@ async function main() {
     }
 
     results.push(perModel)
+    // Lu par le tableau de suivi en direct (OptionsMenu.tsx) : ce modèle a fini tous ses tests, avec ce score.
+    console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
 
     // Espace disque serré uniquement : ce modèle vient de finir son test, et n'appartient qu'à UN SEUL
     // palier (ni multi-palier, ni candidat vision) — on sait donc déjà, avec certitude, s'il faut le garder.
@@ -1231,8 +1239,12 @@ async function main() {
 
   for (const model of visionToRun) {
     const readyVision = await ensureReady(model)
-    if (!readyVision) continue
+    if (!readyVision) {
+      console.log(`##MODEL_SKIPPED## ${model}`)
+      continue
+    }
     console.log(`\n=== ${model} (vision) ===`)
+    console.log(`##MODEL_TESTING## ${model}`)
     const perModel = { model, latencies: [], speeds: [], correct: 0, total: 0 }
 
     for (let i = 0; i < VISION_TEST_CASES.length; i++) {
@@ -1257,6 +1269,7 @@ async function main() {
     }
 
     results.push(perModel)
+    console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
 
     // Le palier vision, comme le texte ci-dessus : seulement pour les 4 candidats vision "purs" (jamais
     // qwen3.5:4b/gemma4:e4b, aussi candidats médium — voir PRUNABLE_VISION_MODELS), et seulement si l'espace
@@ -1270,8 +1283,12 @@ async function main() {
   // CODE_TEST_CASES) — "correct" = extraction HTML réussie ET validateGeneratedHtml ne trouve aucun problème.
   for (const model of codeToRun) {
     const readyCode = await ensureReady(model)
-    if (!readyCode) continue
+    if (!readyCode) {
+      console.log(`##MODEL_SKIPPED## ${model}`)
+      continue
+    }
     console.log(`\n=== ${model} (code) ===`)
+    console.log(`##MODEL_TESTING## ${model}`)
     const perModel = { model, latencies: [], speeds: [], correct: 0, total: 0 }
 
     for (const prompt of CODE_TEST_CASES) {
@@ -1300,6 +1317,7 @@ async function main() {
     }
 
     results.push(perModel)
+    console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
   }
 
   // Sécurité : s'assurer qu'aucun téléchargement en tâche de fond ne reste en vol avant d'écrire les
