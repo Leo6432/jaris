@@ -33,6 +33,22 @@ const TIER_LABELS: Array<{ key: keyof ModelTiers; label: string; think: string }
   { key: 'large', label: 'Puissant', think: 'haute' }
 ]
 
+/**
+ * "3/3", "6/6" etc. en petit badge coloré (vert = parfait, ambre = partiel, rouge = raté) plutôt qu'en
+ * texte brut au milieu du tableau — un coup d'œil suffit pour repérer les bons/mauvais élèves, pas besoin
+ * de lire chaque cellule. "—" (jamais testé) reste un texte neutre, pas un badge.
+ */
+function ReliabilityBadge({ value }: { value: string | null }): JSX.Element {
+  if (!value) return <span className="options-menu__badge options-menu__badge--none">—</span>
+  const match = /^(\d+)\/(\d+)$/.exec(value)
+  if (!match) return <span className="options-menu__badge options-menu__badge--none">{value}</span>
+  const [, correctStr, totalStr] = match
+  const correct = Number(correctStr)
+  const total = Number(totalStr)
+  const level = total === 0 ? 'none' : correct === total ? 'good' : correct === 0 ? 'bad' : 'mid'
+  return <span className={`options-menu__badge options-menu__badge--${level}`}>{value}</span>
+}
+
 export default function OptionsMenu(): JSX.Element {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('connexions')
@@ -300,16 +316,23 @@ export default function OptionsMenu(): JSX.Element {
 
         {tab === 'modeles' && (
           <div className="options-menu__section">
-            <div className="options-menu__section-title">Modèles Ollama par palier</div>
-            <ul className="capacity-scan__models">
+            <div className="options-menu__section-title">Modèles actuellement retenus</div>
+            <div className="options-menu__current-picks">
               {TIER_LABELS.map(({ key, label, think }) => (
-                <li key={key}>
-                  {label} : {profile?.models?.[key] ?? '—'} (réflexion {think})
-                </li>
+                <div key={key} className="options-menu__pick" title={`Réflexion : ${think}`}>
+                  <span className="options-menu__pick-tier">{label}</span>
+                  <span className="options-menu__pick-model">{profile?.models?.[key] ?? '—'}</span>
+                </div>
               ))}
-              <li>Vision : {profile?.visionModel ?? '—'}</li>
-              <li>Code : {modelOverview?.codeModel ?? '—'}</li>
-            </ul>
+              <div className="options-menu__pick">
+                <span className="options-menu__pick-tier">Vision</span>
+                <span className="options-menu__pick-model">{profile?.visionModel ?? '—'}</span>
+              </div>
+              <div className="options-menu__pick">
+                <span className="options-menu__pick-tier">Code</span>
+                <span className="options-menu__pick-model">{modelOverview?.codeModel ?? '—'}</span>
+              </div>
+            </div>
 
             <div className="options-menu__section-title options-menu__model-overview-title">Tous les modèles candidats</div>
             {modelOverview === null ? (
@@ -317,12 +340,13 @@ export default function OptionsMenu(): JSX.Element {
             ) : (
               <div className="options-menu__model-overview-scroll">
                 {modelOverview.groups.map((group) => {
-                  // Vision est testé (image générée + question à réponse vérifiable, voir
-                  // VISION_TEST_CASES dans scripts/benchmark-models.mjs) mais pas sur du tool-calling — la
-                  // 3e colonne change de nom pour refléter ce qui est réellement mesuré. L'intelligence
-                  // (MMLU-Pro) ne s'applique pas à un modèle vision : jamais publiée pour ce palier, donc
-                  // masquée plutôt que "non publié" partout.
+                  // Chaque palier a sa propre épreuve (appel d'outils pour la conversation, compréhension
+                  // d'image pour Vision, génération de HTML valide pour Code) — la colonne change de nom en
+                  // conséquence. L'intelligence (MMLU-Pro) ne s'applique qu'aux modèles de conversation :
+                  // masquée plutôt qu'affichée vide partout ailleurs.
                   const isVision = group.tier === 'Vision'
+                  const isCode = group.tier === 'Code'
+                  const reliabilityLabel = isVision ? 'Précision' : isCode ? 'Qualité du code' : 'Tool-calling'
                   return (
                     <div key={group.tier} className="options-menu__model-group">
                       <div className="options-menu__model-group-title">{group.tier}</div>
@@ -330,20 +354,28 @@ export default function OptionsMenu(): JSX.Element {
                         <thead>
                           <tr>
                             <th>Modèle</th>
-                            <th>VRAM</th>
-                            <th>Vitesse</th>
-                            <th>{isVision ? 'Précision (images)' : 'Tool-calling'}</th>
-                            {!isVision && <th>Intelligence</th>}
+                            <th className="options-menu__col-num">VRAM</th>
+                            <th className="options-menu__col-num">Vitesse</th>
+                            <th className="options-menu__col-num">{reliabilityLabel}</th>
+                            {!isVision && <th className="options-menu__col-num">Intelligence</th>}
                           </tr>
                         </thead>
                         <tbody>
                           {group.entries.map((entry) => (
                             <tr key={entry.model} className={selectedModels.has(entry.model) ? 'options-menu__model-row--selected' : undefined}>
-                              <td>{entry.model}</td>
-                              <td>{entry.vramGb} Go</td>
-                              <td>{entry.speedTokPerSec !== null ? `${entry.speedTokPerSec.toFixed(1)} tok/s` : 'non testé'}</td>
-                              <td>{entry.toolCalling ?? 'non testé'}</td>
-                              {!isVision && <td>{entry.intelligence !== null ? entry.intelligence : 'non publié'}</td>}
+                              <td className="options-menu__model-name" title={entry.model}>
+                                {entry.model}
+                              </td>
+                              <td className="options-menu__col-num">{entry.vramGb} Go</td>
+                              <td className="options-menu__col-num">
+                                {entry.speedTokPerSec !== null ? `${entry.speedTokPerSec.toFixed(1)} tok/s` : '—'}
+                              </td>
+                              <td className="options-menu__col-num">
+                                <ReliabilityBadge value={entry.toolCalling} />
+                              </td>
+                              {!isVision && (
+                                <td className="options-menu__col-num">{entry.intelligence !== null ? entry.intelligence : '—'}</td>
+                              )}
                             </tr>
                           ))}
                         </tbody>
@@ -356,10 +388,8 @@ export default function OptionsMenu(): JSX.Element {
             <p className="options-menu__model-overview-hint">
               Entourés en cyan : les modèles actuellement retenus. Vitesse et fiabilité viennent d'un run
               local du bouton ci-dessous, s'il a déjà tourné sur cette machine — jamais pour ceux qui
-              dépassent la VRAM détectée sur cette machine{modelOverview?.vramGb != null ? ` (${modelOverview.vramGb} Go)` : ''} :
-              ils ne rentreraient pas. Pour Vision, "Précision" vient d'un test dédié (image générée +
-              question à réponse vérifiable, pas de l'appel d'outils) — pas de score d'intelligence MMLU-Pro
-              pour ce palier, ça ne s'y applique pas. Intelligence = score MMLU-Pro publié quand il existe.
+              dépassent la VRAM détectée{modelOverview?.vramGb != null ? ` (${modelOverview.vramGb} Go)` : ''}.
+              Intelligence = score MMLU-Pro publié, quand il existe.
             </p>
 
             <button className="options-menu__action" onClick={() => void handleRunAnalysis()} disabled={benchmarking}>
