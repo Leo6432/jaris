@@ -22,6 +22,16 @@ const TTS_VOICES: VoiceOption[] = [
 
 const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
 
+/** "3 min", "1 h 20", "moins d'une minute"... à partir d'une estimation en ms. */
+function formatEta(ms: number): string {
+  const totalMinutes = Math.round(ms / 60000)
+  if (totalMinutes < 1) return "moins d'une minute"
+  if (totalMinutes < 60) return `${totalMinutes} min`
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return minutes === 0 ? `${hours} h` : `${hours} h ${minutes}`
+}
+
 type Tab = 'connexions' | 'voix' | 'modeles' | 'historique'
 
 // Reflète THINK_LEVEL dans electron/services/assistant.ts : chaque palier a un effort de réflexion Ollama
@@ -67,9 +77,23 @@ export default function OptionsMenu(): JSX.Element {
   // % de téléchargement du modèle EN COURS (pas juste "N modèles sur M") : un seul gros modèle
   // (qwen3.6:35b-a3b, north-mini-code-1.0...) ferait sinon stagner la barre plusieurs minutes d'affilée.
   const [currentPullPercent, setCurrentPullPercent] = useState(0)
+  // Temps restant estimé (ms), affiché à côté de la barre. `null` = pas encore assez de recul pour estimer
+  // (tout début d'une étape) plutôt que d'afficher un chiffre qui n'a pas de sens.
+  const [etaMs, setEtaMs] = useState<number | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
   const benchmarkLogRef = useRef<HTMLPreElement>(null)
+  // Horodatage de début de l'étape courante (pull ou test) et estimation courante de sa durée totale : basés
+  // sur ##PULL_WEIGHT##/##TEST_WEIGHT## (scripts/benchmark-models.mjs), qui pondèrent la progression par la
+  // vraie taille en Go de chaque modèle plutôt que de compter les modèles un par un — sans ça, un run qui
+  // enchaîne plein de petits modèles avant un dernier de 22 Go extrapolait un temps restant qui s'effondrait
+  // brutalement dès que ce gros modèle démarrait (le bug signalé : "pour le temps estimé c'est une
+  // catastrophe"). estimatedTotalMsRef se fige à chaque nouvel événement de poids reçu, puis un intervalle
+  // (voir plus bas) fait juste défiler le compte à rebours entre deux événements, qui peuvent être espacés
+  // de plusieurs minutes pour un gros modèle.
+  const phaseStartRef = useRef<number | null>(null)
+  const estimatedTotalMsRef = useRef<number | null>(null)
+  const lastWeightPhaseRef = useRef<'pull' | 'test' | null>(null)
 
   useEffect(() => {
     window.jaris.getGmailStatus().then(setStatus)
@@ -117,9 +141,49 @@ export default function OptionsMenu(): JSX.Element {
         setBenchmarkProgress({ phase: 'test', done: Number(testMatch[1]), total: Number(testMatch[2]) })
         return
       }
+      // ##PULL_WEIGHT##/##TEST_WEIGHT## : mêmes étapes que ci-dessus, mais en Go déjà téléchargés / en poids
+      // de test déjà écoulé (voir modelWeightGb dans benchmark-models.mjs) plutôt qu'en nombre de modèles —
+      // c'est CETTE progression pondérée qui sert de base à l'estimation de temps restant, jamais le simple
+      // compte "N/M" ci-dessus (qui reste affiché tel quel, juste pour le texte "N/M modèles").
+      const pullWeightMatch = /^##PULL_WEIGHT## ([\d.]+) ([\d.]+)$/.exec(line)
+      const testWeightMatch = pullWeightMatch ? null : /^##TEST_WEIGHT## ([\d.]+) ([\d.]+)$/.exec(line)
+      const weightMatch = pullWeightMatch ?? testWeightMatch
+      if (weightMatch) {
+        const phase = pullWeightMatch ? 'pull' : 'test'
+        const done = Number(weightMatch[1])
+        const total = Number(weightMatch[2])
+        const now = Date.now()
+        if (lastWeightPhaseRef.current !== phase) {
+          lastWeightPhaseRef.current = phase
+          phaseStartRef.current = now
+          estimatedTotalMsRef.current = null
+          setEtaMs(null)
+        }
+        const fraction = total > 0 ? done / total : 0
+        // Ignore le tout début d'une étape (échantillon minuscule, extrapolation bruitée) : mieux vaut
+        // afficher "estimation en cours" une seconde de plus qu'un temps totalement faux.
+        if (fraction > 0.03 && phaseStartRef.current !== null) {
+          estimatedTotalMsRef.current = (now - phaseStartRef.current) / fraction
+        }
+        return
+      }
       setBenchmarkLog((prev) => [...prev, line])
     })
   }, [])
+
+  // Fait défiler le compte à rebours entre deux événements ##PULL_WEIGHT##/##TEST_WEIGHT## (qui peuvent être
+  // espacés de plusieurs minutes pour un gros modèle) plutôt que de le figer jusqu'au prochain événement.
+  useEffect(() => {
+    if (!benchmarking) return
+    const id = setInterval(() => {
+      if (estimatedTotalMsRef.current === null || phaseStartRef.current === null) {
+        setEtaMs(null)
+        return
+      }
+      setEtaMs(Math.max(0, estimatedTotalMsRef.current - (Date.now() - phaseStartRef.current)))
+    }, 1000)
+    return () => clearInterval(id)
+  }, [benchmarking])
 
   useEffect(() => {
     benchmarkLogRef.current?.scrollTo({ top: benchmarkLogRef.current.scrollHeight })
@@ -140,6 +204,10 @@ export default function OptionsMenu(): JSX.Element {
     setBenchmarkLog([])
     setBenchmarkProgress(null)
     setCurrentPullPercent(0)
+    setEtaMs(null)
+    phaseStartRef.current = null
+    estimatedTotalMsRef.current = null
+    lastWeightPhaseRef.current = null
     try {
       const result = await window.jaris.runModelAnalysis()
       // Reflète tout de suite les nouveaux modèles retenus + le tableau comparatif à jour, sans avoir à
@@ -151,6 +219,7 @@ export default function OptionsMenu(): JSX.Element {
     } finally {
       setBenchmarking(false)
       setBenchmarkProgress(null)
+      setEtaMs(null)
     }
   }
 
@@ -422,6 +491,11 @@ export default function OptionsMenu(): JSX.Element {
                       {benchmarkProgress.phase === 'pull' && currentPullPercent > 0 && currentPullPercent < 100 && (
                         <> (modèle en cours : {currentPullPercent}%)</>
                       )}
+                      {/* Pondéré par la vraie taille des modèles (voir ##PULL_WEIGHT##/##TEST_WEIGHT## côté
+                          script), pas juste le nombre de modèles restants — sinon un seul gros modèle en fin
+                          de liste faisait s'effondrer l'estimation d'un coup. `null` tant qu'il n'y a pas
+                          assez de recul pour estimer, plutôt qu'un chiffre inventé. */}
+                      {etaMs !== null && <> — temps restant estimé : {formatEta(etaMs)}</>}
                     </div>
                     <div className="options-menu__progress-bar">
                       <div className="options-menu__progress-bar-fill" style={{ width: `${fraction * 100}%` }} />

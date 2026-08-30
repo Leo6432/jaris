@@ -154,6 +154,57 @@ const CODE_CANDIDATES = [
   { model: 'qwen2.5-coder:7b', vramGb: 4.7 }
 ]
 
+/**
+ * Taille réelle de téléchargement (Go) de chaque entrée de MODELS, UNIQUEMENT pour pondérer la barre de
+ * progression et l'estimation de temps restant ci-dessous — jamais pour la vérification de sécurité
+ * VRAM/RAM (celle-ci reste basée sur `progress.total` révélé par le manifeste Ollama en direct, voir
+ * pullModel). Les tailles des paliers Rapide/Médium/Puissant viennent de FLASH/MEDIUM/LARGE_CANDIDATES
+ * (electron/services/hardwareScan.ts) ou des commentaires de MODELS ci-dessus ; celles sans comparateur
+ * dans hardwareScan.ts (phi4-mini, nemotron-3-nano, ministral-3, granite4:1b, functiongemma, les 3 imports
+ * Hugging Face) ont été vérifiées directement sur ollama.com/library/<modèle>/tags ou l'onglet "Files" du
+ * dépôt Hugging Face (taille du fichier Q4_K_M, la quantification par défaut) avant d'écrire ce tableau.
+ */
+const MODEL_SIZE_HINTS = {
+  'qwen3.5:2b': 2.74,
+  'qwen3.5:2b-q4_K_M': 1.95,
+  'qwen3.5:4b': 3.4,
+  'qwen3.5:9b': 6.6,
+  'phi4-mini': 2.5,
+  'gemma4:e4b': 9.6,
+  'granite4.1:3b': 2.1,
+  'nemotron-3-nano:4b': 2.8,
+  'ministral-3:3b': 3.0,
+  'hf.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF': 0.73,
+  'qwen3:1.7b': 2.0,
+  'granite4:1b': 3.3,
+  'qwen3.5:0.8b': 1.0,
+  'functiongemma:270m': 0.3,
+  'hf.co/openbmb/MiniCPM5-1B-GGUF': 0.69,
+  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 1.9,
+  'qwen3.5:35b': 24,
+  'qwen3.5:27b': 17,
+  'qwen3.8:27b': 18,
+  'qwen3.6:27b': 18,
+  'gemma4:26b': 19,
+  'gpt-oss:20b': 14,
+  'command-r:35b': 19,
+  'mistral-small:24b': 14,
+  'glm-4.7-flash:q4_K_M': 19
+}
+
+// Combine MODEL_SIZE_HINTS avec les tailles déjà présentes sur VISION_CANDIDATES/CODE_CANDIDATES (pas la
+// peine de les dupliquer) pour un seul point d'accès à la taille de n'importe quel modèle candidat.
+const MODEL_WEIGHT_GB = new Map([
+  ...Object.entries(MODEL_SIZE_HINTS),
+  ...VISION_CANDIDATES.map((c) => [c.model, c.vramGb]),
+  ...CODE_CANDIDATES.map((c) => [c.model, c.vramGb])
+])
+
+/** Repli raisonnable si un modèle est ajouté un jour sans entrée dans MODEL_WEIGHT_GB. */
+function modelWeightGb(model) {
+  return MODEL_WEIGHT_GB.get(model) ?? 4
+}
+
 // Copié tel quel depuis electron/services/tools.ts : mêmes schémas que Jaris utilise réellement en
 // conversation, pour que le test reflète le vrai comportement de tool calling, pas un cas simplifié.
 const TOOLS = [
@@ -549,8 +600,12 @@ class ModelTooLargeError extends Error {
  * manifeste Ollama révèle la taille réelle du modèle (`progress.total`, en octets, disponible avant la fin
  * du téléchargement), on annule le téléchargement tout de suite si ça dépasse le budget — pas la peine de
  * télécharger plusieurs Go pour un modèle qui ne rentrera de toute façon jamais sur cette machine.
+ *
+ * `onBucket(bucketPercent)` est appelé à chaque palier de 10% en plus des logs ci-dessous : c'est main()
+ * qui s'en sert pour convertir "ce modèle est à 40%" en "X Go sur Y Go au total ont été téléchargés",
+ * la vraie unité de la barre de progression pondérée (voir MODEL_WEIGHT_GB).
  */
-async function pullModel(model, budgetGb) {
+async function pullModel(model, budgetGb, onBucket) {
   console.log(`Téléchargement de ${model}…`)
   const controller = new AbortController()
   const res = await fetch(`${OLLAMA_HOST}/api/pull`, {
@@ -604,6 +659,7 @@ async function pullModel(model, budgetGb) {
           // un seul gros modèle (qwen3.6:35b-a3b, north-mini-code-1.0...) fait stagner la barre de
           // progression pendant plusieurs minutes d'affilée, sans aucun retour visuel entre-temps.
           console.log(`##PULL_MODEL_PROGRESS## ${bucket}`)
+          onBucket?.(bucket)
         }
       }
     }
@@ -791,13 +847,25 @@ async function main() {
   const missing = allInstallable.filter((m) => !installed.includes(m))
   if (missing.length) {
     console.log(`${missing.length} modèle(s) manquant(s) à installer avant le test :\n`)
+    // Poids total en Go de tout ce qui reste à télécharger : sert à l'estimation de temps restant
+    // (OptionsMenu.tsx) pour que "40% de la barre" corresponde vraiment à "40% des Go à télécharger", et
+    // pas à "40% du NOMBRE de modèles" — sans ça, un run qui commence par plein de petits modèles (quelques
+    // centaines de Mo chacun) puis finit sur qwen3.6:35b-a3b (22 Go) affichait un temps restant qui
+    // s'effondrait subitement en fin de parcours (voir le commentaire de RAM_OFFLOAD_MODELS pour le
+    // contexte : des modèles de tailles très différentes se côtoient dans MODELS).
+    const totalPullWeight = missing.reduce((sum, m) => sum + modelWeightGb(m), 0) || 1
     let pullsDone = 0
+    let pullWeightDone = 0
     for (const model of missing) {
+      const weight = modelWeightGb(model)
       // Repart de 0 pour ce nouveau modèle : sans ça, la barre de progression (OptionsMenu.tsx) garderait
       // affiché le dernier pourcentage du modèle précédent pendant tout le début du téléchargement suivant.
       console.log('##PULL_MODEL_PROGRESS## 0')
+      console.log(`##PULL_WEIGHT## ${pullWeightDone.toFixed(2)} ${totalPullWeight.toFixed(2)}`)
       try {
-        await pullModel(model, RAM_OFFLOAD_MODELS.has(model) ? ramOffloadBudgetGb : vramBudgetGb)
+        await pullModel(model, RAM_OFFLOAD_MODELS.has(model) ? ramOffloadBudgetGb : vramBudgetGb, (bucket) => {
+          console.log(`##PULL_WEIGHT## ${(pullWeightDone + (weight * bucket) / 100).toFixed(2)} ${totalPullWeight.toFixed(2)}`)
+        })
       } catch (err) {
         if (err instanceof ModelTooLargeError) {
           console.log(`  ${model} ignoré : ${err.message}`)
@@ -806,9 +874,11 @@ async function main() {
         }
       }
       pullsDone++
+      pullWeightDone += weight
       // Lu par l'onglet Modèles de Jaris pour afficher une barre de progression (voir OptionsMenu.tsx) :
       // format volontairement machine-friendly, jamais affiché tel quel dans le journal visible.
       console.log(`##PULL_PROGRESS## ${pullsDone} ${missing.length}`)
+      console.log(`##PULL_WEIGHT## ${pullWeightDone.toFixed(2)} ${totalPullWeight.toFixed(2)}`)
     }
     installed = await listInstalledModels()
     console.log('')
@@ -828,6 +898,17 @@ async function main() {
   let testsDone = 0
   const testsTotal =
     toRun.length * TEST_CASES.length + visionToRun.length * VISION_TEST_CASES.length + codeToRun.length * CODE_TEST_CASES.length
+
+  // Même logique de pondération que le téléchargement (voir totalPullWeight ci-dessus) : un modèle de
+  // 24 Go répond bien plus lentement, à chaque test, qu'un modèle de 1 Go — le compter comme "un test
+  // parmi d'autres" écrasait cette réalité et cassait l'estimation de temps restant pendant la phase de
+  // test, pas seulement pendant le téléchargement.
+  const testWeightOf = (model) => modelWeightGb(model)
+  const totalTestWeight =
+    toRun.reduce((sum, m) => sum + testWeightOf(m) * TEST_CASES.length, 0) +
+      visionToRun.reduce((sum, m) => sum + testWeightOf(m) * VISION_TEST_CASES.length, 0) +
+      codeToRun.reduce((sum, m) => sum + testWeightOf(m) * CODE_TEST_CASES.length, 0) || 1
+  let testWeightDone = 0
 
   for (const model of toRun) {
     console.log(`\n=== ${model} ===`)
@@ -855,6 +936,8 @@ async function main() {
       }
       testsDone++
       console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
+      testWeightDone += testWeightOf(model)
+      console.log(`##TEST_WEIGHT## ${testWeightDone.toFixed(2)} ${totalTestWeight.toFixed(2)}`)
     }
 
     results.push(perModel)
@@ -885,6 +968,8 @@ async function main() {
       }
       testsDone++
       console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
+      testWeightDone += testWeightOf(model)
+      console.log(`##TEST_WEIGHT## ${testWeightDone.toFixed(2)} ${totalTestWeight.toFixed(2)}`)
     }
 
     results.push(perModel)
@@ -917,6 +1002,8 @@ async function main() {
       }
       testsDone++
       console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
+      testWeightDone += testWeightOf(model)
+      console.log(`##TEST_WEIGHT## ${testWeightDone.toFixed(2)} ${totalTestWeight.toFixed(2)}`)
     }
 
     results.push(perModel)
