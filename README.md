@@ -416,6 +416,18 @@ main, comme pour l'appel d'outils des autres paliers. "Lancer l'analyse"
 choisit donc désormais le modèle vision le plus fiable *mesuré*, pas
 seulement le plus gros qui rentre.
 
+**Espace disque vérifié en plus de la VRAM/RAM, à chaque téléchargement.**
+Un modèle peut tenir en RAM une fois chargé tout en étant impossible à
+télécharger faute de place sur le disque — deux contraintes indépendantes,
+vérifiées séparément avant chaque téléchargement (jamais mis en cache : le
+disque diminue au fil d'un même run, contrairement à la VRAM/RAM). L'analyse
+télécharge jusqu'à 2 modèles à la fois en tâche de fond pendant que ceux déjà
+installés passent déjà leurs tests (au lieu de tout télécharger puis tout
+tester) ; sur une machine à l'espace disque limité, elle passe automatiquement
+en téléchargement strictement séquentiel et supprime immédiatement un
+candidat dès qu'un meilleur est trouvé pour son palier — plutôt que de garder
+tous les modèles testés installés simultanément jusqu'à la toute fin.
+
 **Vérification en temps réel avant chaque question.** Les paliers (et le
 modèle de vision) restent fixes (scan ci-dessus), mais juste avant
 d'appeler Ollama, Jaris regarde aussi l'état réel du GPU à l'instant

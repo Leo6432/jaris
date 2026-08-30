@@ -205,6 +205,72 @@ function modelWeightGb(model) {
   return MODEL_WEIGHT_GB.get(model) ?? 4
 }
 
+/**
+ * Appartenance de chaque modèle de MODELS aux paliers Rapide/Médium/Puissant — dupliqué depuis
+ * FLASH/MEDIUM/LARGE_CANDIDATES (electron/services/hardwareScan.ts) pour la même raison que MODEL_SIZE_HINTS
+ * (ce script tourne en `node` simple, pas d'import TS possible). UNIQUEMENT utilisé ci-dessous pour décider
+ * quels modèles peuvent être supprimés en cours de route sur une machine à l'espace disque limité (voir
+ * tightDiskMode dans main()) — jamais pour la sélection finale du meilleur modèle de chaque palier, qui reste
+ * entièrement décidée par pickBestFrom (hardwareScan.ts) à partir du fichier de résultats.
+ */
+const FLASH_TIER_MODELS = new Set(['qwen3:1.7b', 'qwen3.5:0.8b'])
+const MEDIUM_TIER_MODELS = new Set(['gemma4:e4b', 'qwen3.5:9b', 'qwen3.5:4b', 'qwen3.5:2b', 'granite4.1:3b', 'qwen3.5:0.8b'])
+const LARGE_TIER_MODELS = new Set([
+  'qwen3.5:35b',
+  'qwen3.5:27b',
+  'qwen3.8:27b',
+  'qwen3.6:27b',
+  'gemma4:26b',
+  'gpt-oss:20b',
+  'command-r:35b',
+  'mistral-small:24b',
+  'glm-4.7-flash:q4_K_M',
+  // hardwareScan.ts reprend aussi ces 4 dans LARGE_CANDIDATES comme repli si rien de plus gros ne rentre,
+  // ce qui les rend multi-paliers (voir isSafeToPruneEarly ci-dessous) : présents ici pour que
+  // FLASH/MEDIUM/LARGE_TIER_MODELS reflètent fidèlement hardwareScan.ts, même si en pratique ça les exclut
+  // du nettoyage anticipé.
+  'qwen3.5:9b',
+  'qwen3.5:4b',
+  'qwen3.5:2b',
+  'qwen3.5:0.8b'
+])
+const VISION_TIER_MODELS = new Set(VISION_CANDIDATES.map((c) => c.model))
+
+/**
+ * `true` seulement si `model` appartient à EXACTEMENT un des trois paliers de conversation ET n'est candidat
+ * vision nulle part ailleurs — dans ce cas (et SEULEMENT dans ce cas), on sait avec certitude, dès que son
+ * propre test est fini, s'il peut être supprimé sans risquer de le priver d'un autre palier qui en aurait
+ * encore besoin (ex: qwen3.5:4b sert À LA FOIS de candidat médium ET de candidat vision — le supprimer trop
+ * tôt parce qu'il perd en médium le priverait d'une chance en vision, testée plus tard). Les modèles
+ * multi-paliers (qwen3.5:0.8b/2b/4b/9b, gemma4:e4b) restent simplement gardés jusqu'à la fin du run, comme
+ * avant — cette prudence ne coûte pas cher : ce sont aussi les plus petits modèles, jamais les gros qui
+ * remplissent vraiment le disque.
+ */
+function singleTierOf(model) {
+  if (VISION_TIER_MODELS.has(model)) return null
+  const tiers = ['flash', 'medium', 'large'].filter(
+    (t) => (t === 'flash' ? FLASH_TIER_MODELS : t === 'medium' ? MEDIUM_TIER_MODELS : LARGE_TIER_MODELS).has(model)
+  )
+  return tiers.length === 1 ? tiers[0] : null
+}
+
+/**
+ * Sous-ensemble de VISION_CANDIDATES sans double-emploi avec un autre palier (qwen3.5:4b et gemma4:e4b sont
+ * EXCLUS : déjà candidats médium, voir singleTierOf) — mêmes garanties que ci-dessus, pour le palier vision.
+ */
+const PRUNABLE_VISION_MODELS = new Set(
+  VISION_CANDIDATES.map((c) => c.model).filter((m) => !MEDIUM_TIER_MODELS.has(m) && !FLASH_TIER_MODELS.has(m) && !LARGE_TIER_MODELS.has(m))
+)
+
+async function deleteModelViaApi(model) {
+  const res = await fetch(`${OLLAMA_HOST}/api/delete`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: model })
+  })
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`)
+}
+
 // Copié tel quel depuis electron/services/tools.ts : mêmes schémas que Jaris utilise réellement en
 // conversation, pour que le test reflète le vrai comportement de tool calling, pas un cas simplifié.
 const TOOLS = [
@@ -988,8 +1054,60 @@ async function main() {
   const emitProgress = () => console.log(`##PROGRESS## ${weightDone.toFixed(2)} ${totalWeight.toFixed(2)}`)
   emitProgress()
 
-  // File de téléchargement en tâche de fond, PULL_CONCURRENCY modèles à la fois : dès que main() atteint ce
-  // point, les téléchargements manquants démarrent pendant que les boucles de test plus bas commencent déjà
+  // Espace disque SERRÉ pour ce run : pas assez de marge pour garder TOUT ce qui va être téléchargé installé
+  // en même temps jusqu'à la toute fin (le fonctionnement habituel, le plus simple — voir cleanupUnselectedModels
+  // dans benchmarkRunner.ts, qui fait le ménage une fois le gagnant de chaque palier connu). Dans ce cas,
+  // deux ajustements : téléchargements strictement l'un après l'autre (pas 2 à la fois, pour ne jamais avoir
+  // 2 gros modèles "en trop" sur le disque en même temps) et suppression immédiate d'un modèle DÈS qu'on sait
+  // avec certitude qu'il a perdu (voir singleTierOf/considerPruning plus bas) — plutôt que d'attendre la fin
+  // du run pendant laquelle TOUS les modèles testés jusqu'ici restent installés simultanément. `null` (espace
+  // disque non détectable) retombe sur le comportement généreux habituel : impossible de juger la marge sans
+  // pouvoir la mesurer.
+  const tightDiskMode = freeDiskGbAtStart !== null && freeDiskGbAtStart - DISK_SAFETY_MARGIN_GB < totalPullWeight
+  const effectiveConcurrency = tightDiskMode ? 1 : PULL_CONCURRENCY
+  if (tightDiskMode) {
+    console.log(
+      `Espace disque limité (${(freeDiskGbAtStart - DISK_SAFETY_MARGIN_GB).toFixed(1)} Go de marge pour ${totalPullWeight.toFixed(1)} Go à télécharger) : téléchargement d'un seul modèle à la fois, et suppression immédiate des candidats déjà dépassés par un meilleur (au lieu d'attendre la fin du run).\n`
+    )
+  }
+
+  // Ne JAMAIS supprimer, même en mode disque serré, un modèle que l'utilisateur avait DÉJÀ installé avant ce
+  // run (`installed` n'est plus modifié après cette capture initiale, voir plus haut) — seuls les modèles que
+  // CE run a lui-même téléchargés sont candidats à une suppression anticipée.
+  const initiallyInstalledSet = new Set(installed)
+
+  // Suivi du "champion" actuel de chaque palier (flash/medium/large/vision), UNIQUEMENT pour les modèles
+  // qui n'appartiennent qu'à UN SEUL palier (singleTierOf/PRUNABLE_VISION_MODELS) : dans ce cas précis, dès
+  // que son propre test est fini, on sait avec certitude s'il peut être supprimé sans risquer de priver un
+  // AUTRE palier qui en aurait encore besoin plus tard. Comparaison identique à pickBestFrom
+  // (hardwareScan.ts) : score d'outils/fiabilité d'abord, vitesse en départage.
+  const champion = { flash: null, medium: null, large: null, vision: null }
+  const championResult = { flash: null, medium: null, large: null, vision: null }
+  const isBetter = (a, b) => (a.toolScore !== b.toolScore ? a.toolScore > b.toolScore : (a.tokPerSec ?? 0) > (b.tokPerSec ?? 0))
+
+  async function deleteNowPruned(model) {
+    try {
+      await deleteModelViaApi(model)
+      console.log(`  ${model} : supprimé immédiatement (dépassé par un meilleur candidat, espace disque limité)`)
+    } catch (err) {
+      console.log(`  ${model} : échec de la suppression anticipée (${err.message}), ignoré`)
+    }
+  }
+
+  async function considerPruning(tier, model, result) {
+    if (!tightDiskMode || initiallyInstalledSet.has(model)) return
+    if (champion[tier] === null || isBetter(result, championResult[tier])) {
+      const dethroned = champion[tier]
+      champion[tier] = model
+      championResult[tier] = result
+      if (dethroned) await deleteNowPruned(dethroned)
+    } else {
+      await deleteNowPruned(model)
+    }
+  }
+
+  // File de téléchargement en tâche de fond, effectiveConcurrency modèles à la fois : dès que main() atteint
+  // ce point, les téléchargements manquants démarrent pendant que les boucles de test plus bas commencent déjà
   // sur les modèles DÉJÀ installés — au lieu d'attendre que tout soit téléchargé avant de tester quoi que ce
   // soit (l'ancien fonctionnement, qui laissait le réseau inactif pendant les tests et le GPU inactif pendant
   // les téléchargements).
@@ -1037,10 +1155,10 @@ async function main() {
     }
   }
 
-  const pullWorkers = missing.length ? Array.from({ length: Math.min(PULL_CONCURRENCY, missing.length) }, () => pullWorker()) : []
+  const pullWorkers = missing.length ? Array.from({ length: Math.min(effectiveConcurrency, missing.length) }, () => pullWorker()) : []
   if (missing.length) {
     console.log(
-      `${missing.length} modèle(s) manquant(s) à installer (jusqu'à ${PULL_CONCURRENCY} en parallèle, en tâche de fond pendant les tests) :\n`
+      `${missing.length} modèle(s) manquant(s) à installer (jusqu'à ${effectiveConcurrency} en parallèle, en tâche de fond pendant les tests) :\n`
     )
   }
 
@@ -1063,6 +1181,9 @@ async function main() {
   let testsDone = 0
   const testsTotal =
     toRun.length * TEST_CASES.length + visionToRun.length * VISION_TEST_CASES.length + codeToRun.length * CODE_TEST_CASES.length
+  // Remonté avant les boucles de test (pas défini seulement à l'écriture des résultats comme avant) :
+  // considerPruning en a besoin pendant le run, pas seulement à la toute fin.
+  const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null)
 
   for (const model of toRun) {
     const ready = await ensureReady(model)
@@ -1097,6 +1218,11 @@ async function main() {
     }
 
     results.push(perModel)
+
+    // Espace disque serré uniquement : ce modèle vient de finir son test, et n'appartient qu'à UN SEUL
+    // palier (ni multi-palier, ni candidat vision) — on sait donc déjà, avec certitude, s'il faut le garder.
+    const tier = singleTierOf(model)
+    if (tier) await considerPruning(tier, model, { toolScore: perModel.correct, tokPerSec: avg(perModel.speeds) })
   }
 
   // Modèles Vision : les images de VISION_TEST_CASES sont générées une seule fois ici (pas à chaque appel
@@ -1131,6 +1257,13 @@ async function main() {
     }
 
     results.push(perModel)
+
+    // Le palier vision, comme le texte ci-dessus : seulement pour les 4 candidats vision "purs" (jamais
+    // qwen3.5:4b/gemma4:e4b, aussi candidats médium — voir PRUNABLE_VISION_MODELS), et seulement si l'espace
+    // disque est serré.
+    if (PRUNABLE_VISION_MODELS.has(model)) {
+      await considerPruning('vision', model, { toolScore: perModel.correct, tokPerSec: avg(perModel.speeds) })
+    }
   }
 
   // Modèles Code : une seule passe de génération par cas (pas de critique/réparation, voir la note sur
@@ -1173,8 +1306,6 @@ async function main() {
   // résultats — ne devrait normalement plus rien avoir à faire ici, chaque modèle de `missing` étant déjà
   // passé par ensureReady dans l'une des trois boucles ci-dessus (même ordre que `missing`, voir plus haut).
   await Promise.all(pullWorkers)
-
-  const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null)
 
   const lines = []
   lines.push(`# Résultats du benchmark Jaris — ${new Date().toLocaleString('fr-FR')}`)
