@@ -95,26 +95,11 @@ const MODELS = [
   // les garder dans la liste permet aux utilisateurs avec plus de VRAM de vraiment les tester chez eux —
   // mêmes tailles que LARGE_CANDIDATES dans electron/services/hardwareScan.ts.
   'qwen3.5:35b',
-  'qwen3.5:27b',
-  // Palier "Code" (CODE_CANDIDATES dans hardwareScan.ts) : spécialiste complétion/génération de code
-  // (FIM), pas un modèle conversationnel — ses réponses aux 2 questions de raisonnement n'auront
-  // probablement pas de sens, mais les 6 tests d'appel d'outils restent pertinents pour juger s'il peut
-  // suivre les instructions de Jaris, pas seulement écrire du code isolé.
-  'qwen2.5-coder:7b',
-  // Second modèle du palier "Code" : 35 Md de paramètres au total (3 Md actifs, architecture MoE), tourne
-  // surtout via la RAM système (plus lent, mais bien plus capable en code) — voir RAM_OFFLOAD_MODELS
-  // ci-dessus, jugé sur VRAM + RAM combinées plutôt que sur la VRAM seule.
-  'qwen3.6:35b-a3b',
-  // Troisième candidat du palier "Code" (Cohere) : spécialiste code agentique, MoE (128 experts, ~3 Md
-  // actifs) donc dans RAM_OFFLOAD_MODELS comme qwen3.6:35b-a3b ci-dessus — 19 Go mais rapide malgré tout
-  // grâce au MoE. Pas encore utilisé par défaut dans codeGenerator.ts (voir CODE_CANDIDATES dans
-  // hardwareScan.ts) : ce run permettra de le comparer objectivement à qwen3.6:35b-a3b avant de décider.
-  'north-mini-code-1.0',
-  // Quatrième candidat du palier "Code" : plus gros frère de qwen2.5-coder:7b, mais DENSE (contrairement à
-  // qwen3.6:35b-a3b et north-mini-code-1.0 ci-dessus, tous deux MoE) — dans RAM_OFFLOAD_MODELS pour ne pas
-  // être ignoré sur cette carte, mais un débordement sur la RAM ralentira un dense bien plus fort qu'un MoE
-  // de taille comparable (comparer sa vitesse mesurée à celle de north-mini-code-1.0 le confirmera ou non).
-  'qwen2.5-coder:32b'
+  'qwen3.5:27b'
+  // Les candidats du palier "Code" (qwen2.5-coder:7b/32b, qwen3.6:35b-a3b, north-mini-code-1.0) NE sont PAS
+  // ici : codeGenerator.ts (mode Code) n'appelle JAMAIS chatWithOllama avec des outils (le paramètre `tools`
+  // y est toujours `undefined`), donc les tester sur TEST_CASES (appel d'outils) mesurait une capacité que
+  // le mode Code n'utilise jamais. Ils ont leur propre test, plus bas (CODE_CANDIDATES/CODE_TEST_CASES).
 ]
 
 // Candidats du palier Vision (VISION_CANDIDATES dans hardwareScan.ts, dupliqué ici pour la même raison que
@@ -126,6 +111,16 @@ const VISION_CANDIDATES = [
   { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 6.5 },
   { model: 'qwen3-vl:4b', vramGb: 5 },
   { model: 'qwen3-vl:2b', vramGb: 3 }
+]
+
+// Candidats du palier Code (CODE_CANDIDATES dans hardwareScan.ts, dupliqué ici pour la même raison que
+// VISION_CANDIDATES/detectVramGb ci-dessus). Testés séparément de MODELS : pas sur l'appel d'outils
+// (codeGenerator.ts n'en utilise jamais, voir CODE_TEST_CASES plus bas) mais sur la génération de code.
+const CODE_CANDIDATES = [
+  { model: 'qwen3.6:35b-a3b', vramGb: 22 },
+  { model: 'north-mini-code-1.0', vramGb: 19 },
+  { model: 'qwen2.5-coder:32b', vramGb: 20 },
+  { model: 'qwen2.5-coder:7b', vramGb: 4.7 }
 ]
 
 // Copié tel quel depuis electron/services/tools.ts : mêmes schémas que Jaris utilise réellement en
@@ -353,6 +348,130 @@ const VISION_TEST_CASES = [
   }
 ]
 
+/**
+ * Copié tel quel depuis electron/services/codeGenerator.ts (APP_RULES/GENERATE_SYSTEM_PROMPT/extractHtml/
+ * validateGeneratedHtml) — même raison que VISION_CANDIDATES/detectVramGb ci-dessus, pas d'import TS
+ * possible depuis ce script autonome. Si ces règles changent côté app, penser à reporter le changement ici.
+ * Volontairement UNE seule passe de génération, sans la relecture/réparation de generateApp : le but est de
+ * mesurer la capacité BRUTE du modèle, pas la qualité une fois lissée par tout le pipeline autour.
+ */
+const CODE_APP_RULES = [
+  "Produis UN SEUL fichier HTML complet et autonome, commençant par <!DOCTYPE html> et finissant par </html>.",
+  "Fais EXACTEMENT ce qui est demandé, rien de plus : n'invente aucune fonctionnalité, aucun titre, aucun " +
+    "texte d'ambiance ni aucun élément d'interface qui n'a pas été demandé. Une demande simple (un bouton) " +
+    "doit donner une page simple. Soigner le design ne veut pas dire ajouter du contenu en plus. Quand " +
+    "l'utilisateur précise un libellé, une couleur ou un comportement, reprends-le au mot près.",
+  "N'utilise JAMAIS de classe CSS venant d'une bibliothèque externe (Bootstrap, Tailwind, Font Awesome, " +
+    "Material Icons, Bootstrap Icons...) : ces bibliothèques ne sont pas chargées dans le fichier, donc ces " +
+    "classes n'ont aucun effet. En particulier, aucune police d'icônes : une icône s'écrit en SVG inline, " +
+    "directement dans le HTML. Écris toi-même chaque règle CSS que tu utilises, dans la balise <style>.",
+  "AUCUNE ressource externe : pas de <script src>, pas de <link href> vers un CDN, pas de police Google " +
+    "Fonts, pas d'image distante, pas de fetch vers une API. Tout (CSS, JavaScript, icônes) doit être écrit " +
+    "en dur dans le fichier. Pour les icônes et les illustrations, utilise du SVG inline. Pour les données " +
+    "d'exemple, écris-les en dur dans le JavaScript.",
+  "JavaScript classique uniquement (pas de React, Vue, ni aucun framework, pas de syntaxe de modules " +
+    "import/export) : le fichier doit fonctionner en l'ouvrant directement dans un navigateur.",
+  "TOUT le JavaScript doit être à l'intérieur d'une balise <script> placée juste avant </body>, et tout le " +
+    "CSS à l'intérieur d'une balise <style> dans le <head>. Aucune ligne de code ne doit se retrouver " +
+    "directement dans le <body> : elle s'afficherait alors comme du texte à l'écran au lieu de s'exécuter.",
+  "Écris le code sur plusieurs lignes correctement indentées, jamais tout sur une seule ligne. Dans le " +
+    "JavaScript, utilise uniquement des commentaires /* ... */ et jamais // : si le code se retrouve " +
+    "malgré tout sur une seule ligne, un // commenterait tout le reste de la ligne et casserait la page.",
+  "Soigne le design : palette cohérente, vraie hiérarchie typographique, espacements réguliers, coins " +
+    "arrondis, états au survol, et une mise en page responsive (grid ou flex) qui tient aussi sur mobile.",
+  "Structure le code en sections claires et commentées, avec des noms de fonctions et de classes CSS " +
+    "explicites, plutôt qu'un seul bloc monolithique.",
+  "Gère les cas limites visibles par l'utilisateur : liste vide, champ non rempli, saisie invalide, action " +
+    "impossible. L'interface ne doit jamais rester silencieuse ou cassée après une action.",
+  "Si l'application a besoin de garder des données entre deux ouvertures, utilise localStorage, en " +
+    "protégeant chaque lecture/écriture par un try/catch."
+]
+
+const CODE_GENERATE_SYSTEM_PROMPT =
+  "Tu es un développeur front-end expert. Tu génères des applications web complètes et fonctionnelles à " +
+  "partir d'une description en langage naturel.\n\n" +
+  `Règles impératives :\n${CODE_APP_RULES.map((r) => `- ${r}`).join('\n')}\n\n` +
+  "Réponds UNIQUEMENT avec le code du fichier, dans un bloc ```html. Aucune explication avant ou après."
+
+function extractHtml(raw) {
+  const fences = [...raw.matchAll(/```(?:html)?\s*\n([\s\S]*?)```/gi)].map((match) => match[1].trim())
+  const candidates = fences.length ? [...fences] : [raw]
+  if (fences.length > 1) candidates.push(fences.join('\n'))
+
+  const documents = candidates
+    .map((candidate) => {
+      const start = candidate.search(/<!DOCTYPE html|<html[\s>]/i)
+      return start === -1 ? null : candidate.slice(start).trim()
+    })
+    .filter((document) => document !== null)
+
+  if (!documents.length) return null
+
+  const score = (document) => (/<body[\s>]/i.test(document) ? 2 : 0) + (/<\/html>/i.test(document) ? 1 : 0)
+  return documents.reduce((best, document) => (score(document) > score(best) ? document : best))
+}
+
+function validateGeneratedHtml(html) {
+  const issues = []
+
+  if (!/<html[\s>]/i.test(html)) issues.push('la balise <html> est absente')
+  if (!/<body[\s>]/i.test(html)) issues.push('la balise <body> est absente')
+
+  const opened = (html.match(/<script[\s>]/gi) ?? []).length
+  const closed = (html.match(/<\/script>/gi) ?? []).length
+  if (opened !== closed) {
+    issues.push(`les balises <script> ne sont pas appariées (${opened} ouvrante(s), ${closed} fermante(s))`)
+  }
+
+  const GHOST_PREFIXES = /^(?:material-icons|material-symbols|glyphicon|fa-(?:solid|regular|brands|light|thin|duotone))/i
+  const GHOST_EXACT = new Set(['fa', 'fas', 'far', 'fab', 'bi', 'mdi'])
+  const ghostClasses = [
+    ...new Set(
+      (html.match(/class\s*=\s*["']([^"']*)/gi) ?? [])
+        .flatMap((attr) => attr.replace(/^class\s*=\s*["']/i, '').split(/\s+/))
+        .filter((token) => token && (GHOST_PREFIXES.test(token) || GHOST_EXACT.has(token.toLowerCase())))
+    )
+  ]
+  if (ghostClasses.length) {
+    issues.push(`le fichier utilise des classes d'une bibliothèque externe non chargée : ${ghostClasses.slice(0, 4).join(', ')}`)
+  }
+
+  const external = [...new Set(html.match(/(?:src|href)\s*=\s*["']https?:\/\/[^"']+/gi) ?? [])]
+  if (external.length) {
+    issues.push(`le fichier charge des ressources externes, interdites ici : ${external.slice(0, 3).join(', ')}`)
+  }
+
+  const visibleText = html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+
+  const jsSignals = [
+    /document\.(addEventListener|querySelector|getElementById)/,
+    /\bfunction\s+\w+\s*\(/,
+    /=>\s*\{/,
+    /\b(?:const|let|var)\s+\w+\s*=/,
+    /\.addEventListener\s*\(/
+  ]
+  if (jsSignals.filter((pattern) => pattern.test(visibleText)).length >= 2) {
+    issues.push("du code JavaScript se trouve directement dans le <body> au lieu d'une balise <script>")
+  }
+
+  return issues
+}
+
+/**
+ * Test du palier Code : une seule question par cas, à réponse vérifiable MÉCANIQUEMENT (validateGeneratedHtml,
+ * pas un jugement humain sur le design) — cohérent avec la philosophie de VISION_TEST_CASES ci-dessus.
+ * `correct` = extraction HTML réussie ET zéro problème détecté par validateGeneratedHtml.
+ */
+const CODE_TEST_CASES = [
+  'Un compteur avec un bouton "+1" et un bouton "reset" qui remet le compteur à zéro.',
+  'Une todo list : un champ pour ajouter une tâche, un bouton "ajouter", la liste des tâches ajoutées, et un bouton pour supprimer chaque tâche.',
+  'Un formulaire de contact avec un champ nom, un champ email, un champ message, et un bouton "envoyer" qui affiche un message de confirmation.'
+]
+
 async function listInstalledModels() {
   const res = await fetch(`${OLLAMA_HOST}/api/tags`)
   if (!res.ok) throw new Error(`Ollama a répondu ${res.status} (est-il lancé sur ${OLLAMA_HOST} ?)`)
@@ -542,6 +661,55 @@ async function chatVision(model, prompt, imageBase64) {
   }
 }
 
+/**
+ * Même appel que generateApp (electron/services/codeGenerator.ts) pour SA première passe (génération) :
+ * pas d'outils (`tools` jamais passé, voir la note dans MODELS ci-dessus — c'est tout le point de ce test
+ * séparé), `think: 'high'`, num_ctx élargi à 16384 (un fichier HTML complet dépasse largement 4096 tokens).
+ * Même repli "sans think" que chat()/chatOnce() ci-dessus si le premier essai échoue.
+ */
+async function chatCodeOnce(model, prompt, withThink) {
+  const start = performance.now()
+  const body = {
+    model,
+    messages: [
+      { role: 'system', content: CODE_GENERATE_SYSTEM_PROMPT },
+      { role: 'user', content: `Application à créer : ${prompt}` }
+    ],
+    stream: false,
+    options: { num_ctx: 16384 }
+  }
+  if (withThink) body.think = 'high'
+
+  const res = await fetch(`${OLLAMA_HOST}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+  const wallMs = performance.now() - start
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`)
+  return { wallMs, data: await res.json() }
+}
+
+async function chatCode(model, prompt) {
+  let wallMs, data
+  try {
+    ;({ wallMs, data } = await chatCodeOnce(model, prompt, true))
+  } catch (firstErr) {
+    try {
+      ;({ wallMs, data } = await chatCodeOnce(model, prompt, false))
+    } catch {
+      throw firstErr
+    }
+  }
+  const evalCount = data.eval_count ?? 0
+  const evalDurationS = (data.eval_duration ?? 0) / 1e9
+  return {
+    wallMs,
+    tokPerSec: evalDurationS > 0 ? evalCount / evalDurationS : null,
+    content: data.message?.content?.trim() ?? ''
+  }
+}
+
 function fmt(n, digits = 1) {
   return n === null || n === undefined || Number.isNaN(n) ? '—' : n.toFixed(digits)
 }
@@ -586,9 +754,9 @@ async function main() {
     process.exit(1)
   }
 
-  // MODELS (conversation/code) et VISION_CANDIDATES installés dans la même passe : la barre de progression
+  // MODELS, VISION_CANDIDATES et CODE_CANDIDATES installés dans la même passe : la barre de progression
   // (OptionsMenu.tsx) n'a pas besoin de les distinguer, seulement combien reste à installer au total.
-  const allInstallable = [...MODELS, ...VISION_CANDIDATES.map((c) => c.model)]
+  const allInstallable = [...MODELS, ...VISION_CANDIDATES.map((c) => c.model), ...CODE_CANDIDATES.map((c) => c.model)]
   const missing = allInstallable.filter((m) => !installed.includes(m))
   if (missing.length) {
     console.log(`${missing.length} modèle(s) manquant(s) à installer avant le test :\n`)
@@ -617,7 +785,8 @@ async function main() {
 
   const toRun = MODELS.filter((m) => installed.includes(m))
   const visionToRun = VISION_CANDIDATES.map((c) => c.model).filter((m) => installed.includes(m))
-  if (!toRun.length && !visionToRun.length) {
+  const codeToRun = CODE_CANDIDATES.map((c) => c.model).filter((m) => installed.includes(m))
+  if (!toRun.length && !visionToRun.length && !codeToRun.length) {
     console.log('Aucun des modèles à tester n\'a pu être installé.')
     return
   }
@@ -626,7 +795,8 @@ async function main() {
   const reasoningAnswers = []
   const errors = []
   let testsDone = 0
-  const testsTotal = toRun.length * TEST_CASES.length + visionToRun.length * VISION_TEST_CASES.length
+  const testsTotal =
+    toRun.length * TEST_CASES.length + visionToRun.length * VISION_TEST_CASES.length + codeToRun.length * CODE_TEST_CASES.length
 
   for (const model of toRun) {
     console.log(`\n=== ${model} ===`)
@@ -689,15 +859,48 @@ async function main() {
     results.push(perModel)
   }
 
+  // Modèles Code : une seule passe de génération par cas (pas de critique/réparation, voir la note sur
+  // CODE_TEST_CASES) — "correct" = extraction HTML réussie ET validateGeneratedHtml ne trouve aucun problème.
+  for (const model of codeToRun) {
+    console.log(`\n=== ${model} (code) ===`)
+    const perModel = { model, latencies: [], speeds: [], correct: 0, total: 0 }
+
+    for (const prompt of CODE_TEST_CASES) {
+      process.stdout.write(`  "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}" ... `)
+      try {
+        const r = await chatCode(model, prompt)
+        perModel.latencies.push(r.wallMs)
+        if (r.tokPerSec !== null) perModel.speeds.push(r.tokPerSec)
+        perModel.total++
+
+        const html = extractHtml(r.content)
+        const issues = html ? validateGeneratedHtml(html) : ['pas de code HTML exploitable dans la réponse']
+        const ok = issues.length === 0
+        if (ok) perModel.correct++
+        console.log(
+          `${ok ? 'OK' : 'RATÉ'} (${issues.length} problème(s)${issues.length ? ' : ' + issues[0] : ''}) — ${fmt(r.wallMs, 0)}ms, ${fmt(r.tokPerSec)} tok/s`
+        )
+      } catch (err) {
+        console.log(`ERREUR (${err.message})`)
+        errors.push({ model, prompt, message: err.message })
+      }
+      testsDone++
+      console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
+    }
+
+    results.push(perModel)
+  }
+
   const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null)
 
   const lines = []
   lines.push(`# Résultats du benchmark Jaris — ${new Date().toLocaleString('fr-FR')}`)
   lines.push('')
-  // "Fiabilité" plutôt que "Tool-calling" : ce tableau mélange les modèles de conversation/code (testés sur
-  // l'appel d'outils, TEST_CASES) et les modèles vision (testés sur la compréhension d'image,
-  // VISION_TEST_CASES) — la colonne représente le score "X/Y" dans les deux cas, mais pas la même épreuve.
-  lines.push('| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité (tool-calling ou vision selon le modèle) |')
+  // "Fiabilité" plutôt que "Tool-calling" : ce tableau mélange trois épreuves différentes selon le
+  // palier — appel d'outils (conversation, TEST_CASES), compréhension d'image (vision, VISION_TEST_CASES)
+  // et génération de HTML valide (code, CODE_TEST_CASES). La colonne reste un score "X/Y" dans les trois
+  // cas, mais ce n'est jamais la même épreuve.
+  lines.push('| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité (épreuve selon le palier du modèle) |')
   lines.push('|---|---|---|---|')
   for (const r of results) {
     const acc = r.total ? `${r.correct}/${r.total}` : '—'

@@ -615,6 +615,17 @@ zéro. Ce qui le distingue d'un simple appel LLM brut (`codeGenerator.ts`) :
   reste bloqué comme n'importe quel modèle trop gros. Le modèle réellement
   utilisé si le mode Code démarrait maintenant est affiché dans l'onglet
   Modèles, à côté des autres paliers.
+- **Testé sur la génération de code, pas l'appel d'outils.** `generateApp`
+  n'appelle jamais Ollama avec des outils (`tools` toujours `undefined`,
+  contrairement à la conversation) — les candidats du palier Code étaient
+  pourtant testés avec les mêmes prompts d'appel d'outils que les paliers de
+  conversation dans `scripts/benchmark-models.mjs`, une capacité que le mode
+  Code n'utilise jamais. `CODE_TEST_CASES` les teste maintenant sur leur
+  vraie tâche : une seule passe de génération (pas la relecture/réparation du
+  vrai pipeline, pour mesurer la capacité brute du modèle) puis
+  `validateGeneratedHtml` vérifie mécaniquement le résultat — même logique
+  que les images générées pour Vision plus haut, une réponse objectivement
+  vérifiable plutôt qu'un jugement humain sur le design.
 
 L'aperçu tourne dans une iframe `sandbox="allow-scripts"`, sans
 `allow-same-origin` : le code produit par le modèle s'exécute dans une origine
