@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC_CHANNELS,
   type AnalysisScope,
+  type AudioInputDevice,
   type CapacityScanResult,
   type ChatMessage,
   type ConversationEntry,
@@ -9,6 +10,8 @@ import {
   type GmailStatus,
   type JarisEmotion,
   type MemoryGraph,
+  type MicTestDonePayload,
+  type MicTestLevelPayload,
   type ModelOverviewResult,
   type Profile,
   type VoiceReplyPayload,
@@ -55,7 +58,13 @@ const api = {
   generateApp: (description: string, currentHtml?: string): Promise<GeneratedApp> =>
     ipcRenderer.invoke(IPC_CHANNELS.generateApp, description, currentHtml),
   onCodeGenStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.codeGenStatus, cb),
-  openGeneratedApp: (path?: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openGeneratedApp, path)
+  openGeneratedApp: (path?: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openGeneratedApp, path),
+  listAudioInputDevices: (): Promise<AudioInputDevice[]> => ipcRenderer.invoke(IPC_CHANNELS.listAudioInputDevices),
+  setAudioInputDevice: (deviceIndex: number | null): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.setAudioInputDevice, deviceIndex),
+  testMicrophone: (): void => ipcRenderer.send(IPC_CHANNELS.testMicrophone),
+  onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => subscribe(IPC_CHANNELS.micTestLevel, cb),
+  onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => subscribe(IPC_CHANNELS.micTestDone, cb)
 }
 
 export type JarisApi = typeof api

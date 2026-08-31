@@ -40,6 +40,10 @@ export interface Profile {
    * un profil créé avant cette fonctionnalité, jamais traité comme "aucun modèle connu".
    */
   knownModelCandidates?: string[]
+  /** Index PortAudio (sounddevice) du micro choisi dans Options → Voix, `undefined`/`null` = défaut système. */
+  audioInputDeviceIndex?: number | null
+  /** deviceId MediaDevices (WebRTC) du haut-parleur choisi dans Options → Voix, vide = sortie par défaut du système. */
+  audioOutputDeviceId?: string
 }
 
 export interface MemoryGraphNode {
@@ -71,6 +75,22 @@ export interface ConversationEntry {
 export interface GmailStatus {
   connected: boolean
   email: string | null
+}
+
+/** Un micro détecté par PortAudio (sounddevice --list-devices), pour le sélecteur d'Options → Voix. */
+export interface AudioInputDevice {
+  index: number
+  name: string
+}
+
+/** Un point de mesure du niveau sonore pendant un test micro (voir mic_test_level dans voice_server.py). */
+export interface MicTestLevelPayload {
+  level: number
+}
+
+/** Verdict final d'un test micro (voir mic_test_done dans voice_server.py). */
+export interface MicTestDonePayload {
+  detected: boolean
 }
 
 /**
@@ -217,5 +237,15 @@ export const IPC_CHANNELS = {
   /** renderer <-> main : modèles candidats (hardwareScan.ts) apparus depuis le dernier scan de capacité (étape 29), à afficher en popup. */
   getNewModels: 'jaris:get-new-models',
   /** renderer -> main : l'utilisateur a vu le popup de nouveaux modèles, ne plus le remontrer avant les prochains. */
-  acknowledgeNewModels: 'jaris:acknowledge-new-models'
+  acknowledgeNewModels: 'jaris:acknowledge-new-models',
+  /** renderer <-> main : liste les micros détectés par PortAudio (voir --list-devices dans voice_server.py). */
+  listAudioInputDevices: 'jaris:list-audio-input-devices',
+  /** renderer <-> main : change le micro utilisé par le sidecar vocal (redémarre le pipeline vocal). */
+  setAudioInputDevice: 'jaris:set-audio-input-device',
+  /** renderer -> main : lance un test micro de quelques secondes sur le micro actuellement en écoute. */
+  testMicrophone: 'jaris:test-microphone',
+  /** main -> renderer : mesure de niveau sonore pendant un test micro en cours. */
+  micTestLevel: 'jaris:mic-test-level',
+  /** main -> renderer : verdict final d'un test micro (un signal a été détecté ou non). */
+  micTestDone: 'jaris:mic-test-done'
 } as const

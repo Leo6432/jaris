@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { AnalysisScope, ConversationEntry, GmailStatus, ModelOverviewResult, ModelTiers, Profile } from '../../shared/ipc'
+import type { AnalysisScope, AudioInputDevice, ConversationEntry, GmailStatus, ModelOverviewResult, ModelTiers, Profile } from '../../shared/ipc'
 import { useModelAnalysis } from '../hooks/useModelAnalysis'
 import ModelAnalysisProgress, { ANALYSIS_NOTICE } from './ModelAnalysisProgress'
 
@@ -77,6 +77,12 @@ export default function OptionsMenu(): JSX.Element {
   // Logique de run + progression partagée avec l'écran d'onboarding (CapacityScan.tsx) — voir useModelAnalysis.
   const analysis = useModelAnalysis(modelOverview)
   const [scopeDialogOpen, setScopeDialogOpen] = useState(false)
+  const [inputDevices, setInputDevices] = useState<AudioInputDevice[] | null>(null)
+  const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[] | null>(null)
+  const [savingAudioDevice, setSavingAudioDevice] = useState(false)
+  const [micTesting, setMicTesting] = useState(false)
+  const [micLevel, setMicLevel] = useState(0)
+  const [micTestResult, setMicTestResult] = useState<boolean | null>(null)
 
   useEffect(() => {
     window.jaris.getGmailStatus().then(setStatus)
@@ -103,6 +109,47 @@ export default function OptionsMenu(): JSX.Element {
       void window.jaris.getModelOverview().then(setModelOverview)
     }
   }, [tab, modelOverview])
+
+  // Idem pour les listes de micros/haut-parleurs : coûteux à peupler pour rien si l'utilisateur ne va
+  // jamais ouvrir l'onglet Voix. Les micros viennent de PortAudio (côté Python, voir --list-devices dans
+  // voice_server.py) ; les haut-parleurs viennent de l'API navigateur MediaDevices — deux catalogues de
+  // périphériques totalement séparés, qui ne peuvent pas être recoupés (voir la doc de setAudioInputDevice).
+  useEffect(() => {
+    if (tab !== 'voix' || inputDevices !== null) return
+    void window.jaris.listAudioInputDevices().then(setInputDevices).catch(() => setInputDevices([]))
+    // getUserMedia doit être appelé au moins une fois pour que enumerateDevices() révèle les vrais noms des
+    // haut-parleurs plutôt que des libellés vides (voir le handler de permission media dans main.ts, qui
+    // accorde silencieusement l'accès sans popup système).
+    void navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then((stream) => stream.getTracks().forEach((track) => track.stop()))
+      .catch(() => {
+        // Pas de micro accessible au navigateur ou permission refusée : enumerateDevices() ci-dessous
+        // renverra quand même les haut-parleurs, juste sans libellé détaillé.
+      })
+      .finally(() => {
+        void navigator.mediaDevices
+          .enumerateDevices()
+          .then((devices) => setOutputDevices(devices.filter((d) => d.kind === 'audiooutput')))
+          .catch(() => setOutputDevices([]))
+      })
+  }, [tab, inputDevices])
+
+  // Jauge de niveau + verdict pendant un test micro (voir mic_test_* dans voice_server.py), abonné une
+  // seule fois au montage comme les autres onLog/onReply de l'appli (App.tsx) plutôt qu'à chaque ouverture
+  // de l'onglet Voix.
+  useEffect(() => {
+    const offLevel = window.jaris.onMicTestLevel(({ level }) => setMicLevel(level))
+    const offDone = window.jaris.onMicTestDone(({ detected }) => {
+      setMicTesting(false)
+      setMicTestResult(detected)
+      setMicLevel(0)
+    })
+    return () => {
+      offLevel()
+      offDone()
+    }
+  }, [])
 
   const handleRunAnalysis = async (scope: AnalysisScope): Promise<void> => {
     setScopeDialogOpen(false)
@@ -190,6 +237,50 @@ export default function OptionsMenu(): JSX.Element {
     }
   }
 
+  /**
+   * Change de micro : sauvegardé côté main (profil) qui redémarre tout le pipeline vocal avec le nouvel
+   * index (voir setAudioInputDevice dans main.ts — le sidecar Python n'ouvre son micro qu'une fois au
+   * démarrage, changer de micro sans relancer n'est pas possible). Le rechargement des modèles (mot
+   * d'activation + transcription) prend quelques secondes, d'où le message pendant `savingAudioDevice`.
+   */
+  const chooseInputDevice = async (value: string): Promise<void> => {
+    setError(null)
+    setSavingAudioDevice(true)
+    setMicTestResult(null)
+    try {
+      const deviceIndex = value === '' ? null : Number(value)
+      await window.jaris.setAudioInputDevice(deviceIndex)
+      setProfile((prev) => (prev ? { ...prev, audioInputDeviceIndex: deviceIndex } : prev))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSavingAudioDevice(false)
+    }
+  }
+
+  /**
+   * Change de haut-parleur : contrairement au micro, pas de redémarrage nécessaire — juste enregistré dans
+   * le profil, relu à chaque nouvelle réponse par le widget avant de lire l'audio (voir App.tsx, setSinkId).
+   */
+  const chooseOutputDevice = async (deviceId: string): Promise<void> => {
+    if (!profile) return
+    setError(null)
+    const updated = { ...profile, audioOutputDeviceId: deviceId }
+    setProfile(updated)
+    try {
+      await window.jaris.saveProfile(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const runMicTest = (): void => {
+    setError(null)
+    setMicTestResult(null)
+    setMicTesting(true)
+    window.jaris.testMicrophone()
+  }
+
   if (!open) {
     return (
       <button className="options-menu__trigger" onClick={() => setOpen(true)}>
@@ -274,6 +365,64 @@ export default function OptionsMenu(): JSX.Element {
                   aria-label={v.id}
                 />
               ))}
+            </div>
+
+            <div className="options-menu__section options-menu__audio-devices">
+              <div className="options-menu__section-title">Micro &amp; haut-parleur</div>
+
+              <label className="options-menu__field">
+                <span>Micro utilisé</span>
+                <select
+                  value={profile?.audioInputDeviceIndex ?? ''}
+                  onChange={(e) => void chooseInputDevice(e.target.value)}
+                  disabled={inputDevices === null || savingAudioDevice}
+                >
+                  <option value="">Défaut du système</option>
+                  {inputDevices?.map((device) => (
+                    <option key={device.index} value={device.index}>
+                      {device.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {inputDevices !== null && inputDevices.length === 0 && (
+                <p className="options-menu__model-overview-hint">Aucun micro détecté par PortAudio.</p>
+              )}
+              {savingAudioDevice && (
+                <p className="options-menu__model-overview-hint">
+                  Changement de micro : redémarrage du pipeline vocal (rechargement des modèles)...
+                </p>
+              )}
+
+              <label className="options-menu__field">
+                <span>Haut-parleur utilisé</span>
+                <select
+                  value={profile?.audioOutputDeviceId || ''}
+                  onChange={(e) => void chooseOutputDevice(e.target.value)}
+                  disabled={outputDevices === null}
+                >
+                  <option value="">Défaut du système</option>
+                  {outputDevices?.map((device) => (
+                    <option key={device.deviceId} value={device.deviceId}>
+                      {device.label || device.deviceId}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <button className="options-menu__action" onClick={runMicTest} disabled={micTesting}>
+                {micTesting ? 'Test en cours...' : 'Tester le micro'}
+              </button>
+              {micTesting && (
+                <div className="options-menu__mic-meter">
+                  <div className="options-menu__mic-meter-fill" style={{ width: `${Math.min(100, micLevel * 100)}%` }} />
+                </div>
+              )}
+              {!micTesting && micTestResult !== null && (
+                <p className={micTestResult ? 'options-menu__mic-result--ok' : 'options-menu__mic-result--bad'}>
+                  {micTestResult ? 'Micro détecté : du son a bien été capté.' : "Rien capté : vérifie que le bon micro est sélectionné et qu'il n'est pas coupé."}
+                </p>
+              )}
             </div>
           </div>
         )}

@@ -126,7 +126,8 @@ export class VoicePipeline extends EventEmitter {
   private pendingAdditions: string[] = []
   private abortController: AbortController | null = null
 
-  async start(): Promise<void> {
+  /** @param inputDeviceIndex Voir VoiceClient.start — micro choisi dans Options → Voix, prioritaire sur .env. */
+  async start(inputDeviceIndex?: number | null): Promise<void> {
     this.voice.on('wake', () => {
       this.clearIdleTimer()
       this.setEmotion('listening')
@@ -155,6 +156,9 @@ export class VoicePipeline extends EventEmitter {
       this.setEmotion('surprised')
       this.scheduleIdle(ERROR_IDLE_DELAY_MS)
     })
+    this.voice.on('micTestStarted', () => this.emit('micTestStarted'))
+    this.voice.on('micTestLevel', (level: number) => this.emit('micTestLevel', level))
+    this.voice.on('micTestDone', (detected: boolean) => this.emit('micTestDone', detected))
 
     // Recharge les derniers échanges de la fois précédente (même après un redémarrage de Jaris ou un
     // jour d'écart) : pour l'utilisateur, revenir le lendemain sur le même sujet doit continuer la
@@ -166,7 +170,7 @@ export class VoicePipeline extends EventEmitter {
     ])
 
     await restoreReminders((message) => void this.announceReminder(message))
-    await this.voice.start()
+    await this.voice.start(inputDeviceIndex)
     this.setEmotion('idle')
   }
 
@@ -177,6 +181,11 @@ export class VoicePipeline extends EventEmitter {
 
   triggerWake(): void {
     this.voice.triggerWake()
+  }
+
+  /** Lance un test micro de quelques secondes (voir 'micTestStarted'/'micTestLevel'/'micTestDone'). */
+  testMic(): void {
+    this.voice.testMic()
   }
 
   /**

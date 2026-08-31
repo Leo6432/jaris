@@ -278,11 +278,20 @@ de brancher un vrai raisonnement à l'étape 4.
 >
 > Deux pièges rencontrés en conditions réelles, déjà corrigés dans le code :
 > le périphérique micro par défaut du système n'est pas forcément le bon
-> (ex: un micro virtuel type Voice Changer/Voicemod) — utilise
-> `python -m sounddevice` pour lister les micros et choisir le bon index via
-> `WAKEWORD_INPUT_DEVICE` ; et un modèle de transcription peut halluciner du
-> texte plausible sur du silence (le pipeline filtre déjà ça via la détection
-> de silence avant capture, plus un filtre de secours sur des formules types).
+> (ex: un micro virtuel type Voice Changer/Voicemod) — se règle directement
+> depuis l'onglet **Voix** du menu Options (menu déroulant "Micro utilisé",
+> plus besoin de passer par `WAKEWORD_INPUT_DEVICE`/`python -m sounddevice`
+> à la main) ; et un modèle de transcription peut halluciner du texte
+> plausible sur du silence (le pipeline filtre déjà ça via la détection de
+> silence avant capture, plus un filtre de secours sur des formules types).
+>
+> Le même onglet **Voix** permet aussi de choisir le haut-parleur utilisé
+> pour les réponses de Jaris, et de lancer un **test micro** de 3 secondes
+> (bouton "Tester le micro") : une jauge de niveau sonore en direct puis un
+> verdict ("micro détecté" ou "rien capté"), sans avoir à parler à Jaris pour
+> le savoir. Changer de micro redémarre le pipeline vocal (rechargement des
+> modèles de mot d'activation et de transcription, quelques secondes) ;
+> changer de haut-parleur est instantané, appliqué à la prochaine réponse.
 >
 > Un raccourci clavier **+** (dans la fenêtre Jaris) déclenche aussi l'écoute
 > manuellement, sans dire le mot d'activation — pratique pour tester ou en

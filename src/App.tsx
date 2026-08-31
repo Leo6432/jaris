@@ -94,8 +94,18 @@ export default function App(): JSX.Element {
         const blob = new Blob([audio], { type: 'audio/wav' })
         audioUrlRef.current = URL.createObjectURL(blob)
         if (audioRef.current) {
-          audioRef.current.src = audioUrlRef.current
-          void audioRef.current.play()
+          const el = audioRef.current
+          el.src = audioUrlRef.current
+          // Relit le profil à chaque réponse plutôt qu'une seule fois au montage : le widget et la fenêtre
+          // de réglages sont deux fenêtres/process renderer séparés (voir App.tsx en tête de fichier), donc
+          // un changement de haut-parleur fait depuis Options (fenêtre réglages) n'apparaîtrait jamais ici
+          // sans le relire. Peu fréquent (une seule fois par réponse parlée), le coût est négligeable.
+          void window.jaris.getProfile().then((profile) => {
+            const sinkId = profile?.audioOutputDeviceId
+            const setSinkId = (el as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> }).setSinkId
+            const applySink = sinkId && setSinkId ? setSinkId.call(el, sinkId) : Promise.resolve()
+            void applySink.catch(() => {}).then(() => el.play())
+          })
         }
       })
     ]

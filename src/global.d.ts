@@ -1,5 +1,6 @@
 import type {
   AnalysisScope,
+  AudioInputDevice,
   CapacityScanResult,
   ChatMessage,
   ConversationEntry,
@@ -7,6 +8,8 @@ import type {
   GmailStatus,
   JarisEmotion,
   MemoryGraph,
+  MicTestDonePayload,
+  MicTestLevelPayload,
   ModelOverviewResult,
   Profile,
   VoiceReplyPayload,
@@ -51,6 +54,11 @@ declare global {
       generateApp: (description: string, currentHtml?: string) => Promise<GeneratedApp>
       onCodeGenStatus: (cb: (message: string) => void) => () => void
       openGeneratedApp: (path?: string) => Promise<void>
+      listAudioInputDevices: () => Promise<AudioInputDevice[]>
+      setAudioInputDevice: (deviceIndex: number | null) => Promise<void>
+      testMicrophone: () => void
+      onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => () => void
+      onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => () => void
     }
   }
 }

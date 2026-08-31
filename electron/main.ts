@@ -1,4 +1,4 @@
-import { app, ipcMain, shell, BrowserWindow, globalShortcut, screen, Tray, Menu } from 'electron'
+import { app, ipcMain, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu } from 'electron'
 import { join } from 'path'
 import { checkVoiceSetup } from './config'
 import { ensureOllamaRunning, ensureSearxngRunning, stopOllamaIfStartedByJaris } from './services/dependencyServices'
@@ -10,6 +10,7 @@ import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
 import { createTrayIcon } from './services/trayIcon'
 import { VoicePipeline } from './services/voicePipeline'
+import { listAudioInputDevices } from './services/voiceClient'
 import { ensureMemoryDir, getMemoryDir, getMemoryGraph, recallNote } from './services/memoryStore'
 import {
   clearConversationHistory,
@@ -22,6 +23,7 @@ import { connectGmail, disconnectGmail, getGmailStatus } from './services/google
 import {
   IPC_CHANNELS,
   type AnalysisScope,
+  type AudioInputDevice,
   type CapacityScanResult,
   type ChatMessage,
   type GeneratedApp,
@@ -212,6 +214,8 @@ async function startVoicePipeline(): Promise<void> {
   pipeline.on('transcript', (text: string) => broadcast(IPC_CHANNELS.transcript, text))
   pipeline.on('reply', (payload: VoiceReplyPayload) => broadcast(IPC_CHANNELS.reply, payload))
   pipeline.on('log', (message: string) => broadcast(IPC_CHANNELS.log, message))
+  pipeline.on('micTestLevel', (level: number) => broadcast(IPC_CHANNELS.micTestLevel, { level }))
+  pipeline.on('micTestDone', (detected: boolean) => broadcast(IPC_CHANNELS.micTestDone, { detected }))
   // Arrêt d'urgence déclenché par la sécurité thermique GPU (voicePipeline/resourceMonitor) : un vrai
   // app.quit() (pas juste cacher la fenêtre, voir `quitting` plus haut), pour protéger la machine.
   pipeline.on('shutdown', () => {
@@ -221,7 +225,8 @@ async function startVoicePipeline(): Promise<void> {
   })
 
   try {
-    await pipeline.start()
+    const profile = await getProfile()
+    await pipeline.start(profile?.audioInputDeviceIndex)
     broadcast(IPC_CHANNELS.setupStatus, status)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -231,6 +236,14 @@ async function startVoicePipeline(): Promise<void> {
 }
 
 app.whenReady().then(async () => {
+  // Autorise silencieusement l'accès micro pour les fenêtres de Jaris (enumerateDevices() ne révèle les
+  // vrais noms de périphériques audio qu'après une permission media accordée, voir Options → Voix) : sans
+  // ce handler, Chromium afficherait une popup de permission native, déroutante dans une appli de bureau
+  // qui n'a jamais utilisé getUserMedia() jusqu'ici (le micro est capturé côté Python, pas par le renderer).
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(permission === 'media')
+  })
+
   ipcMain.handle(IPC_CHANNELS.setupStatus, () => currentSetupStatus())
   ipcMain.on(IPC_CHANNELS.triggerWake, () => pipeline?.triggerWake())
   ipcMain.on(IPC_CHANNELS.audioEnded, () => pipeline?.notifyAudioEnded())
@@ -265,6 +278,18 @@ app.whenReady().then(async () => {
     const audio = await previewVoice(voice)
     return audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer
   })
+  ipcMain.handle(IPC_CHANNELS.listAudioInputDevices, (): Promise<AudioInputDevice[]> => listAudioInputDevices())
+  // Change le micro utilisé : sauvegardé dans le profil puis le pipeline vocal est redémarré avec le nouvel
+  // index (le sidecar Python ouvre son micro une seule fois au démarrage, voir voice_server.py — pas moyen
+  // de changer de micro sans relancer tout le pipeline, y compris le rechargement des modèles).
+  ipcMain.handle(IPC_CHANNELS.setAudioInputDevice, async (_event, deviceIndex: number | null): Promise<void> => {
+    const profile = await getProfile()
+    if (!profile) return
+    await saveProfile({ ...profile, audioInputDeviceIndex: deviceIndex })
+    pipeline?.stop()
+    await startVoicePipeline()
+  })
+  ipcMain.on(IPC_CHANNELS.testMicrophone, () => pipeline?.testMic())
   ipcMain.handle(IPC_CHANNELS.getModelOverview, () => getModelOverview())
   // renderer -> main : modèles candidats apparus depuis le dernier scan (étape 29), pour le popup dans App.tsx.
   // Un profil créé avant cette fonctionnalité (knownModelCandidates jamais défini) est silencieusement
