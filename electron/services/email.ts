@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer'
 import { config } from '../config'
-import { getGmailClient, getGmailStatus } from './googleAuth'
+import { disconnectGmail, getGmailClient, getGmailStatus } from './googleAuth'
 
 let transporter: ReturnType<typeof nodemailer.createTransport> | null = null
 
@@ -70,6 +70,23 @@ export async function sendEmail(to: string, subject: string, body: string): Prom
     })
     return `Mail envoyé à ${to} depuis le compte Gmail connecté.`
   } catch (err) {
-    return `Échec de l'envoi du mail via Gmail : ${err instanceof Error ? err.message : String(err)}`
+    const message = err instanceof Error ? err.message : String(err)
+
+    // Le refresh token stocké est mort côté Google (accès révoqué depuis myaccount.google.com, mot de passe
+    // changé, ou expiration au bout de 7 jours propre aux apps OAuth encore en statut "Testing" sur Google
+    // Cloud Console) : il ne redeviendra jamais valide tout seul, retenter ne fait que répéter la même
+    // erreur (observé : 3 tentatives d'affilée vers 3 destinataires différents, toutes en invalid_grant). Le
+    // supprimer tout de suite remet le menu Options en état "non connecté" au lieu de rester bloqué sur un
+    // faux "connecté" qui échoue silencieusement à chaque futur envoi.
+    if (message.toLowerCase().includes('invalid_grant')) {
+      await disconnectGmail()
+      return (
+        "Échec de l'envoi : la connexion au compte Gmail a expiré ou a été révoquée, et a été déconnectée " +
+        "automatiquement. Explique à l'utilisateur qu'il doit reconnecter son compte Gmail depuis Options → " +
+        'Connexions avant de pouvoir renvoyer ce mail.'
+      )
+    }
+
+    return `Échec de l'envoi du mail via Gmail : ${message}`
   }
 }

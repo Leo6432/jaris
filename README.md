@@ -874,6 +874,18 @@ GOOGLE_CLIENT_ID=xxxxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=xxxxx
 ```
 
+> Tant que l'écran de consentement OAuth reste en statut **"Test"** (étape
+> 3 ci-dessus), Google fait expirer le jeton persistant au bout de **7
+> jours**, même sans rien faire de mal — l'envoi échoue alors avec
+> `invalid_grant` (Jaris déconnecte automatiquement le compte dans ce cas,
+> il suffit de recliquer "Connecter Gmail" dans Options). Pour éviter d'avoir
+> à reconnecter tous les 7 jours, passe l'écran de consentement en statut
+> **"En production"** (bouton "Publier l'application" sur la page Écran de
+> consentement OAuth) : aucune vérification Google n'est nécessaire pour un
+> usage personnel, juste un écran "Cette application n'est pas validée" à
+> traverser une fois via "Paramètres avancés → Accéder à [nom de l'app]
+> (dangereux)" lors de la connexion.
+
 ### Option de secours : SMTP classique
 
 Si aucun compte Gmail n'est connecté, Jaris utilise la configuration SMTP
