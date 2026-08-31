@@ -138,6 +138,26 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[], chan
   )
 }
 
+/**
+ * Le prompt système interdit déjà toute mise en forme en voix ("texte normal uniquement"), mais un petit
+ * modèle local ne suit pas toujours cette consigne (observé : **gras**, listes numérotées, `code`) — filet
+ * de sécurité indépendant du prompt, comme le nettoyage des émojis côté synthèse vocale (voir tts.ts).
+ * Jamais appliqué au canal chat, qui a explicitement le droit d'utiliser ce genre de mise en forme.
+ */
+function stripMarkdownForVoice(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    .replace(/\*([^*\n]+?)\*/g, '$1')
+    .replace(/`([^`]+?)`/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^[-*]\s+/gm, '')
+    .replace(/^\d+\.\s+/gm, '')
+    .replace(/\n+/g, ' ')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+}
+
 const MAX_TOOL_ROUNDS = 10
 
 /**
@@ -210,7 +230,8 @@ export async function converse(
   const finalize = (text: string): string => {
     const trimmed = text.trim()
     const safe = trimmed || "Désolé, je n'ai pas trouvé quoi répondre, tu peux reformuler ?"
-    return withOverloadWarning(safe)
+    const cleaned = channel === 'voice' ? stripMarkdownForVoice(safe) : safe
+    return withOverloadWarning(cleaned)
   }
 
   const messages: OllamaMessage[] = [
