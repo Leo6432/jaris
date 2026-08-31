@@ -219,9 +219,32 @@ export async function converse(
     { role: 'user', content: prompt }
   ]
 
+  // Un petit modèle local abandonne parfois en cours de route sur une tâche à plusieurs étapes : il
+  // cherche (search_web) mais n'envoie jamais le mail malgré une consigne explicite ("envoie-leur un
+  // mail"), et répond à la place par un simple résumé texte de ce qu'il a trouvé. Détecté sur l'intention
+  // de LA PHRASE ACTUELLE (pas l'historique, pour ne jamais relancer sur une intention d'un tour précédent
+  // déjà traitée) plutôt que sur TOOL_SIGNAL_WORDS (pensé pour choisir un palier, pas pour ça).
+  const wantsEmailSent = /\b(envoi|envoie|envoyer|mail|email|courriel)/i.test(prompt)
+  let sendEmailCalled = false
+  let nudgedForEmail = false
+
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const message = await chatWithOllama(messages, TOOLS, model, think, signal)
     if (!message.tool_calls?.length) {
+      if (wantsEmailSent && !sendEmailCalled && !nudgedForEmail) {
+        nudgedForEmail = true
+        onLog?.("Mail demandé mais jamais envoyé : relance corrective d'un tour.")
+        messages.push(message)
+        messages.push({
+          role: 'user',
+          content:
+            "Tu n'as pas encore appelé send_email alors qu'un envoi était demandé. Si tu as déjà une " +
+            'adresse réelle (dictée, ou trouvée par search_web plus haut dans cette conversation), appelle ' +
+            "send_email maintenant, un appel par destinataire. Si une adresse manque encore pour un des " +
+            'destinataires, appelle search_web pour la trouver avant de répondre.'
+        })
+        continue
+      }
       return finalize(message.content)
     }
 
@@ -239,6 +262,8 @@ export async function converse(
       onLog?.(`Outil appelé : ${call.function.name}(${JSON.stringify(call.function.arguments)})`)
       const result = await executeTool(call.function.name, call.function.arguments)
       onLog?.(`Résultat de l'outil : ${result}`)
+
+      if (call.function.name === 'send_email') sendEmailCalled = true
 
       // La vision tourne sur un modèle séparé qui partage la même VRAM que le
       // modèle de conversation : les deux ne tiennent pas en même temps sur

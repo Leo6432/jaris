@@ -122,9 +122,10 @@ export const TOOLS: OllamaTool[] = [
           to: {
             type: 'string',
             description:
-              "Adresse mail EXACTE du destinataire, telle que dictée par l'utilisateur dans sa phrase. Ne " +
-              "mets jamais ta propre adresse d'envoi, ni une adresse inventée ou déduite : si l'utilisateur " +
-              "n'a pas donné d'adresse claire, n'appelle pas cet outil."
+              "Adresse mail EXACTE du destinataire : soit dictée par l'utilisateur dans sa phrase, soit " +
+              "trouvée par toi avec search_web plus tôt dans cette conversation (ex: coordonnées d'un " +
+              "commerce). Ne mets jamais ta propre adresse d'envoi, ni une adresse inventée ou déduite : si " +
+              "tu n'as ni adresse dictée ni adresse trouvée par une vraie recherche, n'appelle pas cet outil."
           },
           subject: { type: 'string', description: 'Objet du mail' },
           body: { type: 'string', description: 'Contenu du mail, en texte simple' }
