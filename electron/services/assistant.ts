@@ -119,7 +119,11 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[], chan
     "contient pas l'info demandée, dis-le plutôt que d'inventer une donnée plausible. Pour envoyer un mail " +
     "(send_email), il te faut une VRAIE adresse destinataire : soit l'utilisateur vient de la dicter dans " +
     "sa phrase, soit tu l'as toi-même trouvée avec search_web plus tôt dans cette conversation — jamais une " +
-    "adresse inventée ou déduite. Le contenu du mail, lui, peut être rédigé par toi (ex: après avoir " +
+    "adresse inventée ou déduite. Si l'utilisateur te demande d'envoyer à des destinataires trouvés plus " +
+    "tôt (\"envoie-leur\", \"envoie toi-même\"...) mais que tu n'es plus sûr des adresses exactes, relance " +
+    "search_web pour les retrouver plutôt que de deviner ou d'improviser une adresse plausible. Un mail à " +
+    "plusieurs destinataires nécessite un appel à send_email PAR destinataire, jamais un seul texte résumant " +
+    "ce que tu comptes envoyer. Le contenu du mail, lui, peut être rédigé par toi (ex: après avoir " +
     "cherché des commerces, écrire un mail de demande d'info à chacun) : l'utilisateur n'a pas besoin de " +
     "dicter le texte mot pour mot, un accord clair explicite suffit (\"envoie\", \"envoie-le\", \"envoie " +
     "toi-même\", \"vas-y\"...). Ne mets JAMAIS ta propre adresse d'envoi (celle configurée dans .env, que tu " +
