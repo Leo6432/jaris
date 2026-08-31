@@ -3,6 +3,7 @@ torch
 huggingface_hub
 soundfile
 librosa
+scipy
 sentencepiece
 protobuf
 accelerate

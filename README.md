@@ -283,22 +283,30 @@ de brancher un vrai raisonnement à l'étape 4.
 > (RTX 3070) : mot d'activation, capture, transcription et synthèse vocale
 > fonctionnent tous en conditions réelles.
 >
-> Deux pièges rencontrés en conditions réelles, déjà corrigés dans le code :
-> le périphérique micro par défaut du système n'est pas forcément le bon
-> (ex: un micro virtuel type Voice Changer/Voicemod) — se règle directement
-> depuis l'onglet **Voix** du menu Options (menu déroulant "Micro utilisé",
-> plus besoin de passer par `WAKEWORD_INPUT_DEVICE`/`python -m sounddevice`
-> à la main) ; et un modèle de transcription peut halluciner du texte
-> plausible sur du silence (le pipeline filtre déjà ça via la détection de
-> silence avant capture, plus un filtre de secours sur des formules types).
+> Pièges rencontrés en conditions réelles, déjà corrigés dans le code : le
+> périphérique micro par défaut du système n'est pas forcément le bon (ex: un
+> micro virtuel type Voice Changer/Voicemod) — se règle directement depuis
+> l'onglet **Micro & Haut-parleur** du menu Options (menu déroulant "Micro
+> utilisé", plus besoin de passer par `WAKEWORD_INPUT_DEVICE`/
+> `python -m sounddevice` à la main) ; un modèle de transcription peut
+> halluciner du texte plausible sur du silence (le pipeline filtre déjà ça
+> via la détection de silence avant capture, plus un filtre de secours sur
+> des formules types) ; et certains micros (USB, Bluetooth...) refusent
+> d'être ouverts directement en 16 kHz (`Invalid sample rate`,
+> `PaErrorCode -9997`) — le sidecar retombe automatiquement sur le débit
+> natif du périphérique et ré-échantillonne en 16 kHz à la volée (voir
+> `make_audio_callback` dans `python/voice_server.py`), sans rien à faire
+> côté utilisateur.
 >
-> Le même onglet **Voix** permet aussi de choisir le haut-parleur utilisé
-> pour les réponses de Jaris, et de lancer un **test micro** de 3 secondes
-> (bouton "Tester le micro") : une jauge de niveau sonore en direct puis un
-> verdict ("micro détecté" ou "rien capté"), sans avoir à parler à Jaris pour
-> le savoir. Changer de micro redémarre le pipeline vocal (rechargement des
-> modèles de mot d'activation et de transcription, quelques secondes) ;
-> changer de haut-parleur est instantané, appliqué à la prochaine réponse.
+> Le même onglet **Micro & Haut-parleur** permet aussi de choisir le
+> haut-parleur utilisé pour les réponses de Jaris, et de lancer un **test
+> micro** (bouton "Tester le micro") : une rangée de barres qui réagit en
+> direct pendant qu'on parle, façon Discord. Pas de durée fixe — le bouton
+> devient "Arrêter le test" pour désactiver quand on veut, plutôt qu'un
+> compte à rebours imposé. Changer de micro redémarre le pipeline vocal
+> (rechargement des modèles de mot d'activation et de transcription, quelques
+> secondes) ; changer de haut-parleur est instantané, appliqué à la prochaine
+> réponse.
 >
 > Un raccourci clavier **+** (dans la fenêtre Jaris) déclenche aussi l'écoute
 > manuellement, sans dire le mot d'activation — pratique pour tester ou en

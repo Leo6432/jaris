@@ -34,6 +34,7 @@ import json
 import queue
 import sys
 import threading
+from math import gcd
 
 import numpy as np
 
@@ -135,6 +136,7 @@ def main() -> None:
 
     try:
         import sounddevice as sd  # lève OSError (pas ImportError) si PortAudio est absent
+        import scipy.signal
         from openwakeword.model import Model
         import torch
         from transformers import AutoProcessor, CohereAsrForConditionalGeneration
@@ -175,10 +177,28 @@ def main() -> None:
 
     audio_queue: "queue.Queue[np.ndarray]" = queue.Queue()
 
-    def on_audio(indata: np.ndarray, _frames: int, _time_info, status) -> None:
-        if status:
-            emit({"event": "log", "message": str(status)})
-        audio_queue.put(indata[:, 0].copy())
+    def make_audio_callback(native_rate: int):
+        """Le reste du pipeline (openWakeWord, RMS, transcription) suppose du 16 kHz partout : si le micro
+        ne peut être ouvert qu'à un autre débit (voir la retombée plus bas), ré-échantillonner ici, une
+        seule fois à l'entrée, plutôt que de complexifier tout le reste en aval."""
+        if native_rate == SAMPLE_RATE:
+            def on_audio(indata: np.ndarray, _frames: int, _time_info, status) -> None:
+                if status:
+                    emit({"event": "log", "message": str(status)})
+                audio_queue.put(indata[:, 0].copy())
+
+            return on_audio
+
+        divisor = gcd(SAMPLE_RATE, native_rate)
+        up, down = SAMPLE_RATE // divisor, native_rate // divisor
+
+        def on_audio(indata: np.ndarray, _frames: int, _time_info, status) -> None:
+            if status:
+                emit({"event": "log", "message": str(status)})
+            resampled = scipy.signal.resample_poly(indata[:, 0], up, down)
+            audio_queue.put(np.clip(resampled, -32768, 32767).astype(np.int16))
+
+        return on_audio
 
     manual_trigger = threading.Event()
     mic_test_start_requested = threading.Event()
@@ -206,9 +226,34 @@ def main() -> None:
             dtype="int16",
             blocksize=CHUNK_SAMPLES,
             device=args.input_device,
-            callback=on_audio,
+            callback=make_audio_callback(SAMPLE_RATE),
         )
         stream.start()
+    except sd.PortAudioError as exc:
+        # PaErrorCode -9997 : certains micros (USB, Bluetooth...) n'exposent que leur propre débit natif
+        # (souvent 44100/48000 Hz) et refusent qu'on leur demande directement du 16 kHz. Retombe sur le
+        # débit par défaut du périphérique plutôt que d'abandonner : make_audio_callback ré-échantillonne
+        # en 16 kHz avant de mettre en file, donc le reste du pipeline ne voit jamais la différence.
+        if "Invalid sample rate" not in str(exc):
+            emit({"event": "fatal", "message": f"impossible d'ouvrir le micro : {exc}"})
+            sys.exit(1)
+        try:
+            device_index = args.input_device if args.input_device is not None else sd.default.device[0]
+            native_rate = int(round(sd.query_devices(device_index, "input")["default_samplerate"]))
+            emit({"event": "log", "message": f"Ce micro n'accepte pas 16 kHz directement, ré-échantillonnage depuis {native_rate} Hz…"})
+            blocksize = max(1, round(CHUNK_SAMPLES * native_rate / SAMPLE_RATE))
+            stream = sd.InputStream(
+                samplerate=native_rate,
+                channels=1,
+                dtype="int16",
+                blocksize=blocksize,
+                device=args.input_device,
+                callback=make_audio_callback(native_rate),
+            )
+            stream.start()
+        except Exception as exc2:
+            emit({"event": "fatal", "message": f"impossible d'ouvrir le micro : {exc2}"})
+            sys.exit(1)
     except Exception as exc:
         emit({"event": "fatal", "message": f"impossible d'ouvrir le micro : {exc}"})
         sys.exit(1)

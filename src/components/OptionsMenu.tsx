@@ -306,12 +306,17 @@ export default function OptionsMenu(): JSX.Element {
 
   /**
    * Bascule le test micro plutôt qu'un test à durée fixe : l'utilisateur active quand il veut parler et
-   * désactive lui-même quand il a fini (voir stopTestMic dans voice_server.py). `micTesting` ne repasse à
-   * false qu'au retour de l'évènement mic_test_done (source de vérité unique côté sidecar), pas ici.
+   * désactive lui-même quand il a fini (voir stopTestMic dans voice_server.py). L'arrêt est appliqué tout
+   * de suite côté UI (pas seulement envoyé au sidecar) : si le pipeline vocal n'est pas dans un état sain
+   * (ex: le micro n'a pas pu s'ouvrir), la commande stop est silencieusement ignorée côté main/sidecar et le
+   * bouton resterait bloqué sur "Arrêter le test" pour toujours sans ça — voir mic_test_done qui, lui,
+   * arrivera quand même mettre à jour le verdict s'il finit par arriver.
    */
   const toggleMicTest = (): void => {
     if (micTesting) {
       window.jaris.stopTestMicrophone()
+      setMicTesting(false)
+      setMicLevels(Array(MIC_TEST_BAR_COUNT).fill(0))
       return
     }
     setError(null)
@@ -369,8 +374,14 @@ export default function OptionsMenu(): JSX.Element {
           onClick={() => {
             // Un test micro actif tourne côté sidecar indépendamment de cette fenêtre (voir voice_server.py) :
             // sans ça, fermer Options pendant un test le laisserait actif en arrière-plan, sans bouton pour
-            // l'arrêter puisque ce panneau n'est plus affiché.
-            if (micTesting) window.jaris.stopTestMicrophone()
+            // l'arrêter puisque ce panneau n'est plus affiché. Reset local aussi (pas seulement l'envoi de
+            // la commande) : ce composant ne démonte pas en fermant Options (voir `if (!open)` plus bas), la
+            // prochaine ouverture doit donc retrouver "Tester le micro", pas "Arrêter le test" pour rien.
+            if (micTesting) {
+              window.jaris.stopTestMicrophone()
+              setMicTesting(false)
+              setMicLevels(Array(MIC_TEST_BAR_COUNT).fill(0))
+            }
             setOpen(false)
           }}
         >
