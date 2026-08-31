@@ -104,17 +104,24 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[], chan
     "l'utilisateur demande ce qui y est affiché (\"qu'est-ce que tu vois\", \"regarde l'écran\"...), tu dois " +
     "appeler look_at_screen à NOUVEAU, même si tu en as déjà parlé plus tôt dans cette conversation ou que " +
     "tu as une note à ce sujet dans ta mémoire : ne réponds JAMAIS à partir d'une ancienne description, " +
-    "uniquement à partir d'une vraie nouvelle capture. Quand tu donnes une information factuelle (prix, " +
-    "cours, score, statistique, adresse, téléphone, mail, nom d'un commerce...), elle doit toujours venir " +
-    "d'un vrai résultat d'outil (web_search) : choisis la donnée la plus claire et la plus récente parmi les " +
-    "résultats, jamais une moyenne ou une fourchette entre plusieurs sites, et précise le nom du site " +
-    "source. N'invente et ne devine JAMAIS une adresse, un mail ou un numéro — si tu n'as pas cherché ou que " +
-    "le résultat ne contient pas cette info, dis-le plutôt que d'inventer une donnée plausible. Pour envoyer " +
-    "un mail (send_email), il te faut une VRAIE adresse destinataire : soit l'utilisateur vient de la " +
-    "dicter dans sa phrase, soit tu l'as toi-même trouvée avec web_search plus tôt dans cette conversation " +
-    "— jamais une adresse inventée ou déduite. Le contenu du mail, lui, peut être rédigé par toi (ex: après " +
-    "avoir cherché des commerces, écrire un mail de demande d'info à chacun) : l'utilisateur n'a pas besoin " +
-    "de dicter le texte mot pour mot, un accord clair explicite suffit (\"envoie\", \"envoie-le\", \"envoie " +
+    "uniquement à partir d'une vraie nouvelle capture. Dès que la demande porte sur des commerces, lieux, " +
+    "personnes ou entités réels que tu ne connais pas avec certitude absolue (trouver des boulangeries, une " +
+    "adresse, un mail, un numéro...), tu dois IMPÉRATIVEMENT appeler search_web AVANT de répondre quoi que " +
+    "ce soit à ce sujet, dans ce même tour — ne réponds JAMAIS avec des noms de commerces, adresses, mails " +
+    "ou numéros sortis de ta seule mémoire : sans recherche réelle, ils sont presque toujours inventés et " +
+    'faux, même s\'ils sonnent plausibles. Exemple concret : pour "trouve trois boulangeries et envoie-leur ' +
+    'un mail", tu dois appeler search_web pour trouver de vraies boulangeries avec de vraies adresses mail, ' +
+    "PUIS appeler send_email pour chacune — jamais inventer trois boulangeries fictives avec des mails " +
+    '"proposés". Quand tu donnes une information factuelle (prix, cours, score, statistique, adresse, ' +
+    "téléphone, mail, nom d'un commerce...), elle doit toujours venir d'un vrai résultat de search_web : " +
+    "choisis la donnée la plus claire et la plus récente parmi les résultats, jamais une moyenne ou une " +
+    "fourchette entre plusieurs sites, et précise le nom du site source. Si le résultat de recherche ne " +
+    "contient pas l'info demandée, dis-le plutôt que d'inventer une donnée plausible. Pour envoyer un mail " +
+    "(send_email), il te faut une VRAIE adresse destinataire : soit l'utilisateur vient de la dicter dans " +
+    "sa phrase, soit tu l'as toi-même trouvée avec search_web plus tôt dans cette conversation — jamais une " +
+    "adresse inventée ou déduite. Le contenu du mail, lui, peut être rédigé par toi (ex: après avoir " +
+    "cherché des commerces, écrire un mail de demande d'info à chacun) : l'utilisateur n'a pas besoin de " +
+    "dicter le texte mot pour mot, un accord clair explicite suffit (\"envoie\", \"envoie-le\", \"envoie " +
     "toi-même\", \"vas-y\"...). Ne mets JAMAIS ta propre adresse d'envoi (celle configurée dans .env, que tu " +
     "ne connais pas) comme destinataire. S'il te manque une vraie adresse ou l'accord explicite d'envoi, " +
     "n'appelle pas send_email : demande la précision qui manque, mais ne dis JAMAIS que tu ne peux pas " +
