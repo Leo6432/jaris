@@ -33,6 +33,12 @@ const TTS_VOICES: VoiceOption[] = [
 
 const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
 
+/**
+ * Nombre de barres du visualiseur de test micro (façon Discord : une fenêtre glissante des derniers niveaux
+ * sonores, pas un seul cercle qui pulse) — voir micLevels plus bas.
+ */
+const MIC_TEST_BAR_COUNT = 42
+
 type Tab = 'connexions' | 'voix' | 'audio' | 'modeles' | 'historique'
 
 /**
@@ -101,7 +107,9 @@ export default function OptionsMenu(): JSX.Element {
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[] | null>(null)
   const [savingAudioDevice, setSavingAudioDevice] = useState(false)
   const [micTesting, setMicTesting] = useState(false)
-  const [micLevel, setMicLevel] = useState(0)
+  // Fenêtre glissante des derniers niveaux sonores (une valeur par évènement mic_test_level, ~12/seconde) :
+  // affichée comme une rangée de barres qui défilent façon Discord, pas un seul chiffre.
+  const [micLevels, setMicLevels] = useState<number[]>(() => Array(MIC_TEST_BAR_COUNT).fill(0))
   const [micTestResult, setMicTestResult] = useState<boolean | null>(null)
 
   useEffect(() => {
@@ -156,15 +164,16 @@ export default function OptionsMenu(): JSX.Element {
       })
   }, [tab, inputDevices])
 
-  // Jauge de niveau + verdict pendant un test micro (voir mic_test_* dans voice_server.py), abonné une
-  // seule fois au montage comme les autres onLog/onReply de l'appli (App.tsx) plutôt qu'à chaque ouverture
-  // de l'onglet Voix.
+  // Visualiseur + verdict pendant un test micro (voir mic_test_* dans voice_server.py), abonné une seule
+  // fois au montage comme les autres onLog/onReply de l'appli (App.tsx) plutôt qu'à chaque ouverture de
+  // l'onglet Micro & Haut-parleur.
   useEffect(() => {
-    const offLevel = window.jaris.onMicTestLevel(({ level }) => setMicLevel(level))
+    const offLevel = window.jaris.onMicTestLevel(({ level }) =>
+      setMicLevels((prev) => [...prev.slice(1), level])
+    )
     const offDone = window.jaris.onMicTestDone(({ detected }) => {
       setMicTesting(false)
       setMicTestResult(detected)
-      setMicLevel(0)
     })
     return () => {
       offLevel()
@@ -298,6 +307,7 @@ export default function OptionsMenu(): JSX.Element {
   const runMicTest = (): void => {
     setError(null)
     setMicTestResult(null)
+    setMicLevels(Array(MIC_TEST_BAR_COUNT).fill(0))
     setMicTesting(true)
     window.jaris.testMicrophone()
   }
@@ -440,17 +450,20 @@ export default function OptionsMenu(): JSX.Element {
 
             <div className="options-menu__section-title">Tester le micro</div>
             <div className="options-menu__mic-test">
-              {/* Réagit en direct à la voix, comme l'indicateur de prise de parole de Discord : le rayon et
-                  la lueur suivent micLevel (mis à jour ~12x/seconde par mic_test_level, voir voice_server.py)
-                  avec une transition courte plutôt qu'un saut brut, pour donner une vraie sensation de
-                  mouvement pendant qu'on parle. */}
-              <div
-                className="options-menu__mic-orb"
-                style={{
-                  transform: `scale(${1 + Math.min(1, micLevel) * 0.7})`,
-                  boxShadow: `0 0 ${20 + Math.min(1, micLevel) * 60}px rgba(55, 226, 255, ${0.25 + Math.min(1, micLevel) * 0.55})`
-                }}
-              />
+              {/* Rangée de barres façon Discord plutôt qu'un seul indicateur : chaque barre est un niveau
+                  sonore récent (mic_test_level, ~12/seconde, voir voice_server.py), la plus récente à
+                  droite — les anciennes défilent vers la gauche à mesure que de nouvelles arrivent
+                  (micLevels ci-dessus), pour une vraie sensation de mouvement pendant qu'on parle plutôt
+                  qu'un seul chiffre qui saute. */}
+              <div className="options-menu__mic-bars">
+                {micLevels.map((level, i) => (
+                  <div
+                    key={i}
+                    className="options-menu__mic-bar"
+                    style={{ height: `${10 + Math.min(1, level) * 90}%` }}
+                  />
+                ))}
+              </div>
               <button className="options-menu__action" onClick={runMicTest} disabled={micTesting}>
                 {micTesting ? 'Parle maintenant...' : 'Tester le micro'}
               </button>

@@ -773,20 +773,33 @@ body.body--scan {
 .options-menu__mic-test {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: 14px;
   padding: 12px 0 4px;
 }
 
-/* Rayon + lueur pilotés en JS depuis micLevel (transform/box-shadow, voir OptionsMenu.tsx) : bouge en
-   direct pendant qu'on parle, comme l'indicateur de prise de parole de Discord. La transition ici (et pas
-   sur une valeur plus longue) est ce qui donne la sensation de mouvement plutôt qu'un à-coup. */
-.options-menu__mic-orb {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #37e2ff, #1c3f99);
-  transition: transform 70ms ease-out, box-shadow 70ms ease-out;
+/* Rangée de barres façon Discord (fenêtre glissante des derniers niveaux sonores, voir micLevels dans
+   OptionsMenu.tsx) plutôt qu'un indicateur unique : hauteur fixe, chaque barre centrée verticalement dedans
+   grâce à align-items (donc grandit "des deux côtés" comme une vraie forme d'onde, pas juste depuis le bas). */
+.options-menu__mic-bars {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3px;
+  height: 44px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: rgba(13, 20, 33, 0.5);
+}
+
+.options-menu__mic-bar {
+  flex: 1;
+  min-width: 2px;
+  border-radius: 999px;
+  background: #37e2ff;
+  /* Transition courte : assez rapide pour ne pas paraître en retard sur la voix, assez longue pour lisser
+     le passage d'une valeur à l'autre plutôt qu'un saut brut. */
+  transition: height 80ms ease-out;
 }
 
 .options-menu__mic-result--ok {

@@ -147,6 +147,13 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   l'étape 22 pour les autres briques open source utilisées), et cohabitation
   en VRAM avec le modèle de conversation déjà chargé (probablement décharger
   temporairement l'un pour l'autre, comme pour la vision — étape 6)
+
+  ### Repère qualité : MiniMax H3 (Max / Live)
+  Modèle cloud payant (dispo via Higgsfield) pris comme repère de qualité
+  pour cette étape : mode **Max** pour la meilleure qualité, mode **Live**
+  pour une génération quasi temps réel. Pas une dépendance de Jaris (qui
+  reste 100% local et gratuit) — juste l'objectif visé localement avec
+  Wan2GP, à rapprocher autant que possible.
 - ⬜ Étape 35 — Optimisation complète de l'application : passe à fond sur les
   performances avant de passer aux étapes de mise sur le marché ci-dessous —
   réduire au maximum la consommation CPU/GPU/RAM au repos et en usage
