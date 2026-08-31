@@ -183,9 +183,14 @@ export class VoicePipeline extends EventEmitter {
     this.voice.triggerWake()
   }
 
-  /** Lance un test micro de quelques secondes (voir 'micTestStarted'/'micTestLevel'/'micTestDone'). */
+  /** Démarre le test micro, actif jusqu'à stopTestMic() (voir 'micTestStarted'/'micTestLevel'/'micTestDone'). */
   testMic(): void {
     this.voice.testMic()
+  }
+
+  /** Arrête un test micro démarré par testMic(). */
+  stopTestMic(): void {
+    this.voice.stopTestMic()
   }
 
   /**

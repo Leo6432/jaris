@@ -6,8 +6,10 @@ puis transcription (Cohere Transcribe) — directement depuis les échantillons
 en mémoire, sans passer par des fichiers WAV intermédiaires.
 
 Sur stdin, une ligne par commande :
-  trigger     déclenche une capture comme si le mot d'activation venait d'être détecté
-  test-mic    lance un test micro de quelques secondes (voir mic_test_* ci-dessous)
+  trigger        déclenche une capture comme si le mot d'activation venait d'être détecté
+  test-mic       démarre le test micro (voir mic_test_* ci-dessous) — reste actif jusqu'à stop-mic-test,
+                 pas de durée fixe : l'utilisateur active/désactive lui-même depuis Options → Micro
+  stop-mic-test  arrête le test micro démarré par test-mic
 
 Une ligne JSON par événement sur stdout :
   {"event": "ready", "wakeword_model": "..."}
@@ -42,7 +44,6 @@ SILENCE_DURATION_MS = 900
 MIN_UTTERANCE_MS = 400
 MAX_UTTERANCE_MS = 12_000
 
-MIC_TEST_DURATION_MS = 3000
 # Plus bas que SILENCE_RMS_THRESHOLD : le test micro veut juste détecter un signal (souffle, voix, tape sur
 # le micro), pas exiger une vraie parole comme la capture d'énoncé.
 MIC_TEST_RMS_THRESHOLD = 150
@@ -180,7 +181,8 @@ def main() -> None:
         audio_queue.put(indata[:, 0].copy())
 
     manual_trigger = threading.Event()
-    mic_test_requested = threading.Event()
+    mic_test_start_requested = threading.Event()
+    mic_test_stop_requested = threading.Event()
 
     def stdin_listener() -> None:
         for raw_line in sys.stdin:
@@ -188,7 +190,11 @@ def main() -> None:
             if line == "trigger":
                 manual_trigger.set()
             elif line == "test-mic":
-                mic_test_requested.set()
+                mic_test_stop_requested.clear()
+                mic_test_start_requested.set()
+            elif line == "stop-mic-test":
+                mic_test_start_requested.clear()
+                mic_test_stop_requested.set()
 
     threading.Thread(target=stdin_listener, daemon=True).start()
 
@@ -215,7 +221,7 @@ def main() -> None:
     captured_ms = 0.0
     loud_ms = 0.0  # temps effectivement au-dessus du seuil de silence (≠ captured_ms, qui inclut le silence de fin qui a déclenché la coupure)
 
-    mic_test_remaining_ms = 0.0
+    mic_test_active = False
     mic_test_detected = False
 
     while True:
@@ -223,21 +229,26 @@ def main() -> None:
         chunk_ms = (len(chunk) / SAMPLE_RATE) * 1000
 
         # Lit le même flux que la détection de mot d'activation, sans jamais interagir avec `mode` : le test
-        # micro tourne "à côté" (voir docstring en tête de fichier), pas à la place du wake word.
-        if mic_test_requested.is_set():
-            mic_test_requested.clear()
-            mic_test_remaining_ms = MIC_TEST_DURATION_MS
+        # micro tourne "à côté" (voir docstring en tête de fichier), pas à la place du wake word. Pas de
+        # durée fixe : reste actif jusqu'à stop-mic-test, l'utilisateur active/désactive lui-même depuis
+        # Options → Micro (voir OptionsMenu.tsx) plutôt que d'attendre un minuteur.
+        if mic_test_start_requested.is_set():
+            mic_test_start_requested.clear()
+            mic_test_active = True
             mic_test_detected = False
             emit({"event": "mic_test_started"})
 
-        if mic_test_remaining_ms > 0:
+        if mic_test_stop_requested.is_set():
+            mic_test_stop_requested.clear()
+            if mic_test_active:
+                mic_test_active = False
+                emit({"event": "mic_test_done", "detected": mic_test_detected})
+
+        if mic_test_active:
             level = rms(chunk)
             if level >= MIC_TEST_RMS_THRESHOLD:
                 mic_test_detected = True
             emit({"event": "mic_test_level", "level": min(1.0, level / MIC_TEST_LEVEL_DIVISOR)})
-            mic_test_remaining_ms -= chunk_ms
-            if mic_test_remaining_ms <= 0:
-                emit({"event": "mic_test_done", "detected": mic_test_detected})
 
         if mode == "wake":
             triggered = manual_trigger.is_set()

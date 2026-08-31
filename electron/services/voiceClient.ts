@@ -138,9 +138,14 @@ export class VoiceClient extends EventEmitter {
     this.proc?.stdin.write('trigger\n')
   }
 
-  /** Lance un test micro de quelques secondes sur le micro actuellement ouvert par le sidecar (voir mic_test_* dans voice_server.py). */
+  /** Démarre le test micro sur le micro actuellement ouvert par le sidecar : reste actif jusqu'à stopTestMic() (voir mic_test_* dans voice_server.py). */
   testMic(): void {
     this.proc?.stdin.write('test-mic\n')
+  }
+
+  /** Arrête un test micro démarré par testMic(). */
+  stopTestMic(): void {
+    this.proc?.stdin.write('stop-mic-test\n')
   }
 }
 

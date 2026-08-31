@@ -304,7 +304,16 @@ export default function OptionsMenu(): JSX.Element {
     }
   }
 
-  const runMicTest = (): void => {
+  /**
+   * Bascule le test micro plutôt qu'un test à durée fixe : l'utilisateur active quand il veut parler et
+   * désactive lui-même quand il a fini (voir stopTestMic dans voice_server.py). `micTesting` ne repasse à
+   * false qu'au retour de l'évènement mic_test_done (source de vérité unique côté sidecar), pas ici.
+   */
+  const toggleMicTest = (): void => {
+    if (micTesting) {
+      window.jaris.stopTestMicrophone()
+      return
+    }
     setError(null)
     setMicTestResult(null)
     setMicLevels(Array(MIC_TEST_BAR_COUNT).fill(0))
@@ -355,7 +364,16 @@ export default function OptionsMenu(): JSX.Element {
             Historique
           </button>
         </div>
-        <button className="options-page__close" onClick={() => setOpen(false)}>
+        <button
+          className="options-page__close"
+          onClick={() => {
+            // Un test micro actif tourne côté sidecar indépendamment de cette fenêtre (voir voice_server.py) :
+            // sans ça, fermer Options pendant un test le laisserait actif en arrière-plan, sans bouton pour
+            // l'arrêter puisque ce panneau n'est plus affiché.
+            if (micTesting) window.jaris.stopTestMicrophone()
+            setOpen(false)
+          }}
+        >
           Fermer
         </button>
       </div>
@@ -464,8 +482,11 @@ export default function OptionsMenu(): JSX.Element {
                   />
                 ))}
               </div>
-              <button className="options-menu__action" onClick={runMicTest} disabled={micTesting}>
-                {micTesting ? 'Parle maintenant...' : 'Tester le micro'}
+              <button
+                className={`options-menu__action${micTesting ? ' options-menu__action--danger' : ''}`}
+                onClick={toggleMicTest}
+              >
+                {micTesting ? 'Arrêter le test' : 'Tester le micro'}
               </button>
               {!micTesting && micTestResult !== null && (
                 <p className={micTestResult ? 'options-menu__mic-result--ok' : 'options-menu__mic-result--bad'}>

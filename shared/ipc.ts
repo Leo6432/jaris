@@ -242,8 +242,10 @@ export const IPC_CHANNELS = {
   listAudioInputDevices: 'jaris:list-audio-input-devices',
   /** renderer <-> main : change le micro utilisé par le sidecar vocal (redémarre le pipeline vocal). */
   setAudioInputDevice: 'jaris:set-audio-input-device',
-  /** renderer -> main : lance un test micro de quelques secondes sur le micro actuellement en écoute. */
+  /** renderer -> main : démarre le test micro sur le micro actuellement en écoute (reste actif jusqu'à stopTestMicrophone). */
   testMicrophone: 'jaris:test-microphone',
+  /** renderer -> main : arrête un test micro démarré par testMicrophone. */
+  stopTestMicrophone: 'jaris:stop-test-microphone',
   /** main -> renderer : mesure de niveau sonore pendant un test micro en cours. */
   micTestLevel: 'jaris:mic-test-level',
   /** main -> renderer : verdict final d'un test micro (un signal a été détecté ou non). */

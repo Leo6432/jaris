@@ -57,6 +57,7 @@ declare global {
       listAudioInputDevices: () => Promise<AudioInputDevice[]>
       setAudioInputDevice: (deviceIndex: number | null) => Promise<void>
       testMicrophone: () => void
+      stopTestMicrophone: () => void
       onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => () => void
       onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => () => void
     }
