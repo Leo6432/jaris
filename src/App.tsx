@@ -144,6 +144,18 @@ export default function App(): JSX.Element {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  // Coupe la réponse en cours dès que Jaris se remet à écouter (mot d'activation redit, ou + du pavé
+  // numérique) : le sidecar Python écoute le mot d'activation en continu, indépendamment de ce que fait
+  // Electron (voir voicePipeline.ts), donc "listening" peut très bien arriver pendant que la réponse
+  // précédente est encore en train d'être lue. Sans ça, la nouvelle capture démarrait bien mais l'ancienne
+  // réponse continuait de parler par-dessus. Sans risque de no-op inutile : appeler pause() sur un <audio>
+  // déjà à l'arrêt ne fait rien.
+  useEffect(() => {
+    if (MODE === 'widget' && emotion === 'listening') {
+      audioRef.current?.pause()
+    }
+  }, [emotion])
+
   // La fenêtre du widget est créée transparente côté Electron (voir electron/main.ts), mais ça ne suffit
   // pas : tant que <html>/<body> gardent leur fond dégradé sombre, on verrait quand même un rectangle
   // opaque à la place du widget.
