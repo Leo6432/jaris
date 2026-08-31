@@ -743,9 +743,9 @@ body.body--scan {
   background: #37e2ff;
 }
 
-/* Sélecteurs micro/haut-parleur + test micro, sous le carrousel de voix dans l'onglet Voix. */
+/* Onglet "Micro & Haut-parleur" (nos périphériques à nous, à distinguer de l'onglet Voix qui règle la voix
+   de Jaris — deux réglages différents, deux onglets différents). */
 .options-menu__audio-devices {
-  width: 100%;
   max-width: 420px;
 }
 
@@ -770,18 +770,23 @@ body.body--scan {
   opacity: 0.6;
 }
 
-.options-menu__mic-meter {
-  width: 100%;
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(127, 163, 201, 0.15);
-  overflow: hidden;
+.options-menu__mic-test {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0 4px;
 }
 
-.options-menu__mic-meter-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #37e2ff, #2ed573);
-  transition: width 80ms linear;
+/* Rayon + lueur pilotés en JS depuis micLevel (transform/box-shadow, voir OptionsMenu.tsx) : bouge en
+   direct pendant qu'on parle, comme l'indicateur de prise de parole de Discord. La transition ici (et pas
+   sur une valeur plus longue) est ce qui donne la sensation de mouvement plutôt qu'un à-coup. */
+.options-menu__mic-orb {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #37e2ff, #1c3f99);
+  transition: transform 70ms ease-out, box-shadow 70ms ease-out;
 }
 
 .options-menu__mic-result--ok {

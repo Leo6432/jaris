@@ -100,12 +100,29 @@ def main() -> None:
             print(json.dumps({"error": f"PortAudio indisponible ({exc})"}, ensure_ascii=False))
             sys.exit(1)
         try:
+            # PortAudio expose le même micro physique une fois par API hôte (MME, DirectSound, WASAPI,
+            # WDM-KS sur Windows...), donc sd.query_devices() brut liste souvent 3-4x le même micro. WASAPI
+            # (l'API moderne, la plus fiable) suffit à couvrir tous les vrais périphériques : s'y limiter
+            # élimine ces doublons plutôt que de les afficher tous à l'utilisateur. Filet de sécurité : si
+            # aucune API WASAPI n'est trouvée (Linux/Mac), on retombe sur la liste complète, dédupliquée par
+            # nom au cas où d'autres API se recoupent aussi.
+            hostapis = sd.query_hostapis()
+            wasapi_index = next((i for i, api in enumerate(hostapis) if "wasapi" in api.get("name", "").lower()), None)
+
             devices = sd.query_devices()
-            inputs = [
-                {"index": idx, "name": dev["name"]}
-                for idx, dev in enumerate(devices)
-                if dev.get("max_input_channels", 0) > 0
-            ]
+            seen_names: set[str] = set()
+            inputs = []
+            for idx, dev in enumerate(devices):
+                if dev.get("max_input_channels", 0) <= 0:
+                    continue
+                if wasapi_index is not None and dev.get("hostapi") != wasapi_index:
+                    continue
+                name = dev["name"]
+                key = name.strip().lower()
+                if key in seen_names:
+                    continue
+                seen_names.add(key)
+                inputs.append({"index": idx, "name": name})
             print(json.dumps({"devices": inputs}, ensure_ascii=False))
         except Exception as exc:
             print(json.dumps({"error": str(exc)}, ensure_ascii=False))

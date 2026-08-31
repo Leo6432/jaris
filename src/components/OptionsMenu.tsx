@@ -33,7 +33,27 @@ const TTS_VOICES: VoiceOption[] = [
 
 const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
 
-type Tab = 'connexions' | 'voix' | 'modeles' | 'historique'
+type Tab = 'connexions' | 'voix' | 'audio' | 'modeles' | 'historique'
+
+/**
+ * Chromium ajoute des pseudo-périphériques "default"/"communications" en plus des vrais haut-parleurs
+ * physiques (mêmes libellés ou très proches, deviceId littéralement "default"/"communications") : les
+ * exclure plutôt que de montrer 2-3 entrées pour le même haut-parleur physique. Dédupliqué par libellé au
+ * cas où il en resterait quand même (rare, mais pas de raison de les montrer deux fois).
+ */
+function dedupeAudioOutputs(devices: MediaDeviceInfo[]): MediaDeviceInfo[] {
+  const seenLabels = new Set<string>()
+  const result: MediaDeviceInfo[] = []
+  for (const device of devices) {
+    if (device.kind !== 'audiooutput') continue
+    if (device.deviceId === 'default' || device.deviceId === 'communications') continue
+    const key = device.label.trim().toLowerCase()
+    if (key && seenLabels.has(key)) continue
+    if (key) seenLabels.add(key)
+    result.push(device)
+  }
+  return result
+}
 
 // Reflète THINK_LEVEL dans electron/services/assistant.ts : chaque palier a un effort de réflexion Ollama
 // fixe (low/medium/high), utile à afficher pour comprendre pourquoi deux paliers pointant sur le même
@@ -111,11 +131,12 @@ export default function OptionsMenu(): JSX.Element {
   }, [tab, modelOverview])
 
   // Idem pour les listes de micros/haut-parleurs : coûteux à peupler pour rien si l'utilisateur ne va
-  // jamais ouvrir l'onglet Voix. Les micros viennent de PortAudio (côté Python, voir --list-devices dans
-  // voice_server.py) ; les haut-parleurs viennent de l'API navigateur MediaDevices — deux catalogues de
-  // périphériques totalement séparés, qui ne peuvent pas être recoupés (voir la doc de setAudioInputDevice).
+  // jamais ouvrir l'onglet Micro & Haut-parleur. Les micros viennent de PortAudio (côté Python, voir
+  // --list-devices dans voice_server.py) ; les haut-parleurs viennent de l'API navigateur MediaDevices —
+  // deux catalogues de périphériques totalement séparés, qui ne peuvent pas être recoupés (voir la doc de
+  // setAudioInputDevice).
   useEffect(() => {
-    if (tab !== 'voix' || inputDevices !== null) return
+    if (tab !== 'audio' || inputDevices !== null) return
     void window.jaris.listAudioInputDevices().then(setInputDevices).catch(() => setInputDevices([]))
     // getUserMedia doit être appelé au moins une fois pour que enumerateDevices() révèle les vrais noms des
     // haut-parleurs plutôt que des libellés vides (voir le handler de permission media dans main.ts, qui
@@ -130,7 +151,7 @@ export default function OptionsMenu(): JSX.Element {
       .finally(() => {
         void navigator.mediaDevices
           .enumerateDevices()
-          .then((devices) => setOutputDevices(devices.filter((d) => d.kind === 'audiooutput')))
+          .then((devices) => setOutputDevices(dedupeAudioOutputs(devices)))
           .catch(() => setOutputDevices([]))
       })
   }, [tab, inputDevices])
@@ -306,6 +327,12 @@ export default function OptionsMenu(): JSX.Element {
             Voix
           </button>
           <button
+            className={`options-menu__tab${tab === 'audio' ? ' options-menu__tab--active' : ''}`}
+            onClick={() => setTab('audio')}
+          >
+            Micro &amp; Haut-parleur
+          </button>
+          <button
             className={`options-menu__tab${tab === 'modeles' ? ' options-menu__tab--active' : ''}`}
             onClick={() => setTab('modeles')}
           >
@@ -366,58 +393,67 @@ export default function OptionsMenu(): JSX.Element {
                 />
               ))}
             </div>
+          </div>
+        )}
 
-            <div className="options-menu__section options-menu__audio-devices">
-              <div className="options-menu__section-title">Micro &amp; haut-parleur</div>
+        {tab === 'audio' && (
+          <div className="options-menu__section options-menu__audio-devices">
+            <div className="options-menu__section-title">Micro utilisé</div>
+            <label className="options-menu__field">
+              <select
+                value={profile?.audioInputDeviceIndex ?? ''}
+                onChange={(e) => void chooseInputDevice(e.target.value)}
+                disabled={inputDevices === null || savingAudioDevice}
+              >
+                <option value="">Défaut du système</option>
+                {inputDevices?.map((device) => (
+                  <option key={device.index} value={device.index}>
+                    {device.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {inputDevices !== null && inputDevices.length === 0 && (
+              <p className="options-menu__model-overview-hint">Aucun micro détecté par PortAudio.</p>
+            )}
+            {savingAudioDevice && (
+              <p className="options-menu__model-overview-hint">
+                Changement de micro : redémarrage du pipeline vocal (rechargement des modèles)...
+              </p>
+            )}
 
-              <label className="options-menu__field">
-                <span>Micro utilisé</span>
-                <select
-                  value={profile?.audioInputDeviceIndex ?? ''}
-                  onChange={(e) => void chooseInputDevice(e.target.value)}
-                  disabled={inputDevices === null || savingAudioDevice}
-                >
-                  <option value="">Défaut du système</option>
-                  {inputDevices?.map((device) => (
-                    <option key={device.index} value={device.index}>
-                      {device.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {inputDevices !== null && inputDevices.length === 0 && (
-                <p className="options-menu__model-overview-hint">Aucun micro détecté par PortAudio.</p>
-              )}
-              {savingAudioDevice && (
-                <p className="options-menu__model-overview-hint">
-                  Changement de micro : redémarrage du pipeline vocal (rechargement des modèles)...
-                </p>
-              )}
+            <div className="options-menu__section-title">Haut-parleur utilisé</div>
+            <label className="options-menu__field">
+              <select
+                value={profile?.audioOutputDeviceId || ''}
+                onChange={(e) => void chooseOutputDevice(e.target.value)}
+                disabled={outputDevices === null}
+              >
+                <option value="">Défaut du système</option>
+                {outputDevices?.map((device) => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.label || device.deviceId}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-              <label className="options-menu__field">
-                <span>Haut-parleur utilisé</span>
-                <select
-                  value={profile?.audioOutputDeviceId || ''}
-                  onChange={(e) => void chooseOutputDevice(e.target.value)}
-                  disabled={outputDevices === null}
-                >
-                  <option value="">Défaut du système</option>
-                  {outputDevices?.map((device) => (
-                    <option key={device.deviceId} value={device.deviceId}>
-                      {device.label || device.deviceId}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
+            <div className="options-menu__section-title">Tester le micro</div>
+            <div className="options-menu__mic-test">
+              {/* Réagit en direct à la voix, comme l'indicateur de prise de parole de Discord : le rayon et
+                  la lueur suivent micLevel (mis à jour ~12x/seconde par mic_test_level, voir voice_server.py)
+                  avec une transition courte plutôt qu'un saut brut, pour donner une vraie sensation de
+                  mouvement pendant qu'on parle. */}
+              <div
+                className="options-menu__mic-orb"
+                style={{
+                  transform: `scale(${1 + Math.min(1, micLevel) * 0.7})`,
+                  boxShadow: `0 0 ${20 + Math.min(1, micLevel) * 60}px rgba(55, 226, 255, ${0.25 + Math.min(1, micLevel) * 0.55})`
+                }}
+              />
               <button className="options-menu__action" onClick={runMicTest} disabled={micTesting}>
-                {micTesting ? 'Test en cours...' : 'Tester le micro'}
+                {micTesting ? 'Parle maintenant...' : 'Tester le micro'}
               </button>
-              {micTesting && (
-                <div className="options-menu__mic-meter">
-                  <div className="options-menu__mic-meter-fill" style={{ width: `${Math.min(100, micLevel * 100)}%` }} />
-                </div>
-              )}
               {!micTesting && micTestResult !== null && (
                 <p className={micTestResult ? 'options-menu__mic-result--ok' : 'options-menu__mic-result--bad'}>
                   {micTestResult ? 'Micro détecté : du son a bien été capté.' : "Rien capté : vérifie que le bon micro est sélectionné et qu'il n'est pas coupé."}
