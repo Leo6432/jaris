@@ -27,8 +27,39 @@ import { deflateSync } from 'zlib'
 const execAsync = promisify(exec)
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const RESULTS_PATH = join(__dirname, 'benchmark-results.md')
+const VERIFIED_TOOL_SCORES_PATH = join(__dirname, 'verified-tool-scores.md')
 
 const OLLAMA_HOST = process.env.OLLAMA_HOST?.trim() || 'http://127.0.0.1:11434'
+
+/**
+ * Modèles déjà vérifiés en fiabilité d'appel d'outils (voir verified-tool-scores.md, commité dans le
+ * dépôt — valable pour tout le monde, cette fiabilité ne dépend pas du matériel, contrairement à la
+ * vitesse). Exclus du téléchargement/test de CE script (voir SCOPED_MODELS plus bas) : aucune raison de
+ * retélécharger et retester un modèle dont le résultat ne peut pas changer d'une machine à l'autre — seule
+ * sa vitesse est recalculée par formule pour cette machine (voir estimateSpeedTokPerSec plus bas et
+ * hardwareScan.ts côté app, qui applique la même logique pour le tableau de l'onglet Modèles). Ne
+ * s'applique jamais à Vision/Code : ces paliers testent autre chose (compréhension d'image, qualité du
+ * code), pas l'appel d'outils — cette liste ne concerne que MODELS/SCOPED_MODELS.
+ */
+function readVerifiedToolModels() {
+  try {
+    const raw = readFileSync(VERIFIED_TOOL_SCORES_PATH, 'utf-8')
+    const models = new Set()
+    for (const line of raw.split('\n')) {
+      if (!line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
+      const cells = line
+        .split('|')
+        .map((c) => c.trim())
+        .filter(Boolean)
+      if (cells.length !== 2) continue
+      models.add(cells[0])
+    }
+    return models
+  } catch {
+    return new Set()
+  }
+}
+const VERIFIED_TOOL_MODELS = readVerifiedToolModels()
 
 /**
  * Périmètre du run (AnalysisScope côté TS, shared/ipc.ts) : 'all' teste tout comme avant (comportement par
@@ -271,9 +302,11 @@ const VISION_TIER_MODELS = new Set(VISION_CANDIDATES.map((c) => c.model))
  * un palier de conversation (flash/medium/large), on filtre MODELS par appartenance (voir
  * FLASH/MEDIUM/LARGE_TIER_MODELS) puisque c'est une liste plate qui couvre les trois à la fois ; pour
  * vision/code, on garde ou on vide la liste entière (déjà séparée). `scope === 'all'` (comportement par
- * défaut) garde tout, exactement comme avant l'ajout de SCOPE.
+ * défaut) garde tout, exactement comme avant l'ajout de SCOPE. Exclut aussi tout modèle déjà dans
+ * VERIFIED_TOOL_MODELS (voir sa définition) : jamais téléchargé ni testé par ce script, sa fiabilité vient
+ * de verified-tool-scores.md, sa vitesse d'une formule côté app — pas de ce script.
  */
-const SCOPED_MODELS =
+const SCOPED_MODELS = (
   SCOPE === 'all'
     ? MODELS
     : SCOPE === 'flash'
@@ -283,6 +316,7 @@ const SCOPED_MODELS =
         : SCOPE === 'large'
           ? MODELS.filter((m) => LARGE_TIER_MODELS.has(m))
           : []
+).filter((m) => !VERIFIED_TOOL_MODELS.has(m))
 const SCOPED_VISION_CANDIDATES = SCOPE === 'all' || SCOPE === 'vision' ? VISION_CANDIDATES : []
 const SCOPED_CODE_CANDIDATES = SCOPE === 'all' || SCOPE === 'code' ? CODE_CANDIDATES : []
 
@@ -1060,6 +1094,12 @@ async function main() {
       ? 'Périmètre : tous les paliers.\n'
       : `Périmètre : palier "${SCOPE}" seulement (##MODEL_SKIPPED## ci-dessus mis à part, les autres paliers ne sont ni téléchargés ni testés ce run-ci — leurs résultats précédents sont conservés tels quels).\n`
   )
+
+  if (VERIFIED_TOOL_MODELS.size) {
+    console.log(
+      `${VERIFIED_TOOL_MODELS.size} modèle(s) déjà vérifié(s) en fiabilité d'appel d'outils (verified-tool-scores.md) : ni téléchargés ni testés ce run-ci, leur vitesse est estimée par formule côté app.\n`
+    )
+  }
 
   // SCOPED_MODELS/SCOPED_VISION_CANDIDATES/SCOPED_CODE_CANDIDATES (pas MODELS/VISION_CANDIDATES/
   // CODE_CANDIDATES directement) : un run ciblé sur un seul palier (SCOPE) ne doit installer/tester QUE ses

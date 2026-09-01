@@ -561,8 +561,10 @@ export default function OptionsMenu(): JSX.Element {
                                 {entry.model}
                               </td>
                               <td className="options-menu__col-num">{entry.vramGb} Go</td>
-                              <td className="options-menu__col-num">
-                                {entry.speedTokPerSec !== null ? `${entry.speedTokPerSec.toFixed(1)} tok/s` : '—'}
+                              <td className="options-menu__col-num" title={entry.speedEstimated ? "Calculée par formule (VRAM/bande passante), pas une vraie mesure sur cette machine" : undefined}>
+                                {entry.speedTokPerSec !== null
+                                  ? `${entry.speedTokPerSec.toFixed(1)} tok/s${entry.speedEstimated ? ' (estimé)' : ''}`
+                                  : '—'}
                               </td>
                               <td className="options-menu__col-num">
                                 <ReliabilityBadge value={entry.toolCalling} />

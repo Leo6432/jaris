@@ -338,6 +338,103 @@ const INTELLIGENCE_MMLU_PRO: Record<string, number> = {
 export interface LocalBenchmarkEntry {
   speedTokPerSec: number | null
   toolCalling: string | null
+  speedEstimated?: boolean
+}
+
+/**
+ * Bande passante mémoire (Go/s) des GPU NVIDIA grand public courants — sources : article Wikipedia de
+ * chaque génération ("GeForce RTX 30/40/50 series"), RTX 5080 corrigé à 960 Go/s via Tom's Hardware après
+ * une première lecture erronée de la page RTX 50 (qui avait recopié le chiffre de la ligne RTX 5090).
+ * Triée du nom le plus spécifique au moins spécifique (voir detectGpuBandwidthGbps) : "RTX 4070 Ti Super"
+ * doit être trouvé avant "RTX 4070 Ti", lui-même avant "RTX 4070", sinon la carte la plus précise ne
+ * matcherait jamais. Pas exhaustif (cartes pro/mobile absentes) : `null` plutôt qu'un chiffre inventé pour
+ * toute carte non reconnue, voir estimateSpeedTokPerSec.
+ */
+const GPU_MEMORY_BANDWIDTH_GBPS: Record<string, number> = {
+  'RTX 3060 Ti': 448,
+  'RTX 3060': 360,
+  'RTX 3070 Ti': 608,
+  'RTX 3070': 448,
+  'RTX 3080 Ti': 960,
+  'RTX 3080': 760,
+  'RTX 3090 Ti': 1008,
+  'RTX 3090': 936,
+  'RTX 4060 Ti': 288,
+  'RTX 4060': 272,
+  'RTX 4070 Ti Super': 672,
+  'RTX 4070 Ti': 504,
+  'RTX 4070 Super': 504,
+  'RTX 4070': 504,
+  'RTX 4080 Super': 736,
+  'RTX 4080': 716.8,
+  'RTX 4090': 1008,
+  'RTX 5050': 320,
+  'RTX 5060 Ti': 672,
+  'RTX 5060': 448,
+  'RTX 5070 Ti': 960,
+  'RTX 5070': 896,
+  'RTX 5080': 960,
+  'RTX 5090': 1792
+}
+
+function detectGpuBandwidthGbps(gpuName: string): number | null {
+  const upper = gpuName.toUpperCase()
+  const key = Object.keys(GPU_MEMORY_BANDWIDTH_GBPS)
+    .sort((a, b) => b.length - a.length)
+    .find((k) => upper.includes(k.toUpperCase()))
+  return key ? GPU_MEMORY_BANDWIDTH_GBPS[key] : null
+}
+
+/**
+ * Efficacité empirique (bande passante réellement atteinte ÷ bande passante théorique) : l'inférence LLM en
+ * génération est limitée par la bande passante mémoire (chaque token relit tout le poids du modèle une
+ * fois), jamais 100% de la bande passante théorique en pratique (overhead noyau, cache KV, contrôleur
+ * mémoire...). Même ordre de grandeur que la valeur utilisée en interne par llmfit (0.55) avant qu'on
+ * retire cette dépendance (voir l'historique de ce fichier) — construite indépendamment, pas recopiée.
+ */
+const MEMORY_BANDWIDTH_EFFICIENCY = 0.55
+
+/**
+ * Estimation de vitesse par pur calcul (bande passante ÷ taille du modèle) — JAMAIS une mesure réelle,
+ * jamais de téléchargement ni d'exécution. Réservée aux modèles déjà vérifiés en fiabilité d'appel d'outils
+ * par ailleurs (parseVerifiedToolScores) : leur fiabilité ne dépend pas du matériel (vérifiée une fois pour
+ * tous), mais leur vitesse si — recalculée ici pour la machine de CET utilisateur plutôt que de partager le
+ * chiffre mesuré sur celle de Léo, qui n'aurait aucun sens ailleurs. `null` si la carte n'est pas reconnue
+ * ou sa VRAM inconnue : jamais un chiffre inventé faute de mieux.
+ */
+export function estimateSpeedTokPerSec(modelVramGb: number, gpuName: string | null): number | null {
+  if (!gpuName || modelVramGb <= 0) return null
+  const bandwidthGbps = detectGpuBandwidthGbps(gpuName)
+  if (bandwidthGbps === null) return null
+  return Math.round(((bandwidthGbps * MEMORY_BANDWIDTH_EFFICIENCY) / modelVramGb) * 10) / 10
+}
+
+/**
+ * Relit scripts/verified-tool-scores.md (commité dans le dépôt, voir son en-tête pour le pourquoi) : scores
+ * de fiabilité d'appel d'outils vérifiés une fois par Léo sur sa machine, valables pour tout le monde —
+ * jamais de vitesse dedans (toujours recalculée par estimateSpeedTokPerSec pour la machine de chaque
+ * utilisateur). Même convention de parsing que parseLocalBenchmark, en plus simple (2 colonnes).
+ */
+export function parseVerifiedToolScores(): Map<string, string> {
+  const results = new Map<string, string>()
+  let raw: string
+  try {
+    raw = readFileSync(join(process.cwd(), 'scripts', 'verified-tool-scores.md'), 'utf-8')
+  } catch {
+    return results
+  }
+
+  for (const line of raw.split('\n')) {
+    if (!line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
+    const cells = line
+      .split('|')
+      .map((c) => c.trim())
+      .filter(Boolean)
+    if (cells.length !== 2) continue
+    const [model, tool] = cells
+    results.set(model, tool)
+  }
+  return results
 }
 
 /**
@@ -386,16 +483,29 @@ const TIER_LABELS: Record<Tier, string> = { flash: 'Rapide', medium: 'Médium', 
  */
 export async function getModelOverview(): Promise<ModelOverviewResult> {
   const localBenchmark = parseLocalBenchmark()
+  const verifiedToolScores = parseVerifiedToolScores()
+  const { name: gpuName, vramGb } = await detectGpu()
 
-  const buildEntry = (model: string, vramGb: number): ModelOverviewEntry => {
+  // Priorité à une vraie mesure locale (le vrai benchmark a tourné sur CETTE machine pour ce modèle) —
+  // sinon, pour un modèle déjà vérifié par ailleurs (voir verified-tool-scores.md), fiabilité partagée +
+  // vitesse estimée par formule pour cette machine — sinon rien de connu.
+  const buildEntry = (model: string, modelVramGb: number): ModelOverviewEntry => {
     const local = localBenchmark.get(model)
-    return {
-      model,
-      vramGb,
-      speedTokPerSec: local?.speedTokPerSec ?? null,
-      toolCalling: local?.toolCalling ?? null,
-      intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null
+    if (local) {
+      return { model, vramGb: modelVramGb, speedTokPerSec: local.speedTokPerSec, toolCalling: local.toolCalling, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null }
     }
+    const verifiedTool = verifiedToolScores.get(model)
+    if (verifiedTool) {
+      return {
+        model,
+        vramGb: modelVramGb,
+        speedTokPerSec: estimateSpeedTokPerSec(modelVramGb, gpuName),
+        speedEstimated: true,
+        toolCalling: verifiedTool,
+        intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null
+      }
+    }
+    return { model, vramGb: modelVramGb, speedTokPerSec: null, toolCalling: null, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null }
   }
 
   const groups = [
@@ -407,7 +517,6 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
     { tier: 'Code', entries: CODE_CANDIDATES.map((c) => buildEntry(c.model, c.vramGb)) }
   ]
 
-  const { vramGb } = await detectGpu()
   const installedModels = await listInstalledModels().catch(() => [] as string[])
   const codeModel = installedModels.includes(CODE_MODEL_QUALITY) ? CODE_MODEL_QUALITY : CODE_MODEL_FAST
   return { vramGb, groups, codeModel }
@@ -421,14 +530,14 @@ function parseToolScore(toolCalling: string | null): number {
 }
 
 /**
- * Choisit le meilleur modèle de chaque palier (+ vision) d'après les vraies mesures du benchmark local
- * (parseLocalBenchmark : vitesse + fiabilité — appel d'outils pour les paliers de conversation/code,
- * compréhension d'image pour vision, voir VISION_TEST_CASES dans scripts/benchmark-models.mjs) sur CETTE
- * machine, plutôt que de supposer que le plus gros qui rentre est forcément le meilleur — priorité à la
- * fiabilité, la vitesse ne départageant qu'à égalité. Seul chemin de sélection des modèles désormais : le
- * premier lancement (CapacityScan.tsx) passe obligatoirement par un run complet de ce benchmark, pas par un
- * choix rapide par taille seule. Repli sur pickForBudget (par taille) si aucun candidat n'a de résultat de
- * benchmark exploitable pour ce palier (jamais lancé, ou échec du test pour tous les candidats qui rentrent).
+ * Choisit le meilleur modèle de chaque palier (+ vision) d'après de vraies mesures — soit un run local du
+ * benchmark (parseLocalBenchmark : vitesse + fiabilité mesurées sur CETTE machine), soit, pour un modèle
+ * déjà vérifié par ailleurs (parseVerifiedToolScores), sa fiabilité partagée combinée à une vitesse estimée
+ * par formule pour cette machine (voir estimateSpeedTokPerSec) — jamais en supposant que le plus gros qui
+ * rentre est forcément le meilleur. Priorité à la fiabilité, la vitesse ne départageant qu'à égalité. Une
+ * vraie mesure locale prime toujours sur un score vérifié partagé pour le même modèle (plus précise,
+ * spécifique à cette machine). Repli sur pickForBudget (par taille) si aucun candidat n'a de résultat
+ * exploitable pour ce palier (jamais testé nulle part, ni localement ni vérifié).
  */
 export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult> {
   const { name, vramGb } = await detectGpu()
@@ -440,15 +549,27 @@ export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult>
   const ramOffloadBudgetGb = budgetGb + Math.max(0, detectRamGb() - RESOURCE_SAFETY_MARGIN_GB)
   const budgetForCandidate = (model: string): number => (LARGE_RAM_OFFLOAD_MODELS.has(model) ? ramOffloadBudgetGb : budgetGb)
   const localBenchmark = parseLocalBenchmark()
+  const verifiedToolScores = parseVerifiedToolScores()
+
+  const resultFor = (candidate: ModelCandidate): LocalBenchmarkEntry | undefined => {
+    const local = localBenchmark.get(candidate.model)
+    if (local) return local
+    const verifiedTool = verifiedToolScores.get(candidate.model)
+    if (!verifiedTool) return undefined
+    return { speedTokPerSec: estimateSpeedTokPerSec(candidate.vramGb, name), toolCalling: verifiedTool, speedEstimated: true }
+  }
 
   const pickBestFrom = (candidates: ModelCandidate[]): string => {
     const benchmarked = candidates
       .filter((c) => c.vramGb <= budgetForCandidate(c.model))
-      .map((c) => ({ model: c.model, result: localBenchmark.get(c.model) }))
-      .filter((c): c is { model: string; result: LocalBenchmarkEntry } => c.result?.speedTokPerSec != null)
+      .map((c) => ({ model: c.model, result: resultFor(c) }))
+      // toolCalling (pas speedTokPerSec) est le critère de validité : un modèle vérifié dont la vitesse n'a
+      // pas pu être estimée (carte inconnue, voir estimateSpeedTokPerSec) reste un candidat légitime, juste
+      // départagé par 0 dans le tri ci-dessous plutôt qu'exclu.
+      .filter((c): c is { model: string; result: LocalBenchmarkEntry } => c.result?.toolCalling != null)
 
-    // Repli VRAM seule (jamais élargi) : sans aucun résultat de benchmark exploitable, pas de raison de
-    // parier sur un débordement RAM jamais mesuré sur cette machine.
+    // Repli VRAM seule (jamais élargi) : sans aucun résultat exploitable (ni mesure locale, ni score
+    // vérifié), pas de raison de parier sur un débordement RAM jamais mesuré sur cette machine.
     if (!benchmarked.length) return pickForBudget(candidates, budgetGb)
 
     benchmarked.sort((a, b) => {

@@ -115,14 +115,19 @@ export interface CapacityScanResult {
 
 /**
  * Un modèle candidat pour UN palier donné (voir ModelOverviewGroup), pour le tableau comparatif de l'onglet
- * Modèles du menu Options. speedTokPerSec/toolCalling viennent d'un run local de `npm run benchmark:models`
- * (scripts/benchmark-models.mjs) s'il a déjà tourné sur cette machine, `null` sinon (jamais de chiffre
- * inventé). intelligence = score MMLU-Pro publié quand il existe, `null` sinon.
+ * Modèles du menu Options. speedTokPerSec/toolCalling viennent soit d'un vrai run local de
+ * `npm run benchmark:models` (scripts/benchmark-models.mjs) sur cette machine, soit — pour un modèle déjà
+ * vérifié par ailleurs (scripts/verified-tool-scores.md) — d'un score de fiabilité partagé (valable pour
+ * tout le monde, ne dépend pas du matériel) combiné à une vitesse estimée par formule pour CETTE machine
+ * (voir estimateSpeedTokPerSec dans hardwareScan.ts). `null` si rien de tout ça n'existe pour ce modèle
+ * (jamais de chiffre inventé). `speedEstimated` distingue les deux cas pour ne jamais les confondre à
+ * l'affichage : true = calculé par formule, false/undefined = vraie mesure locale.
  */
 export interface ModelOverviewEntry {
   model: string
   vramGb: number
   speedTokPerSec: number | null
+  speedEstimated?: boolean
   toolCalling: string | null
   intelligence: number | null
 }

@@ -471,6 +471,36 @@ limité, elle passe automatiquement en téléchargement strictement séquentiel
 candidat dès qu'un meilleur est trouvé pour son palier — plutôt que de garder
 tous les modèles testés installés simultanément jusqu'à la toute fin.
 
+**Petits modèles : scores d'appel d'outils vérifiés une fois, sans jamais
+les réinstaller sur la machine de chaque utilisateur.** Certains modèles
+candidats sont assez petits pour être testés par Léo directement, une seule
+fois — la fiabilité d'appel d'outils d'un modèle (répond-il avec le bon
+outil et les bons arguments) est une propriété du modèle lui-même, pas du
+matériel qui le fait tourner : un score mesuré une fois reste valable sur
+n'importe quelle machine. Ces scores vivent dans `scripts/verified-tool-scores.md`
+(commité, contrairement à `benchmark-results.md`) et `npm run
+benchmark:models` saute automatiquement le téléchargement et le test de
+tout modèle qui y figure (pour les paliers rapide/médium/puissant
+uniquement — vision et code testent autre chose et continuent d'être
+vérifiés pour de vrai). Concrètement, aucun de ces modèles n'est jamais
+téléchargé pour l'analyse chez l'utilisateur final.
+
+La **vitesse**, elle, dépend du matériel de chacun et n'est donc jamais
+stockée dans `verified-tool-scores.md` : pour ces modèles-là, elle est
+recalculée par une formule (`estimateSpeedTokPerSec` dans
+`electron/services/hardwareScan.ts`) à partir de la VRAM qu'occupe le
+modèle et de la bande passante mémoire de la carte graphique détectée
+(table `GPU_MEMORY_BANDWIDTH_GBPS`, RTX 30/40/50 séries) — sans jamais
+installer le modèle. Le tableau de l'onglet **Modèles** affiche ces vitesses
+avec la mention "(estimé)" pour les distinguer d'une vraie mesure. Sur une
+carte graphique non reconnue, la formule ne devine pas : la vitesse affichée
+reste `—`.
+
+Les modèles trop gros pour la machine de Léo (donc jamais testés par lui)
+continuent de suivre le chemin d'origine, inchangé : téléchargés et
+mesurés pour de vrai (vitesse *et* appel d'outils) sur la machine de
+l'utilisateur final qui a assez de VRAM pour le faire.
+
 **Vérification en temps réel avant chaque question.** Les paliers (et le
 modèle de vision) restent fixes (scan ci-dessus), mais juste avant
 d'appeler Ollama, Jaris regarde aussi l'état réel du GPU à l'instant
