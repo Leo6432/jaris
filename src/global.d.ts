@@ -12,6 +12,7 @@ import type {
   MicTestLevelPayload,
   ModelOverviewResult,
   Profile,
+  QuickEstimateResult,
   VoiceReplyPayload,
   VoiceSetupStatusPayload
 } from '../shared/ipc'
@@ -60,6 +61,7 @@ declare global {
       stopTestMicrophone: () => void
       onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => () => void
       onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => () => void
+      getQuickEstimate: () => Promise<QuickEstimateResult>
     }
   }
 }

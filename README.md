@@ -471,6 +471,28 @@ limité, elle passe automatiquement en téléchargement strictement séquentiel
 candidat dès qu'un meilleur est trouvé pour son palier — plutôt que de garder
 tous les modèles testés installés simultanément jusqu'à la toute fin.
 
+**Estimation rapide (llmfit), sans attendre le vrai benchmark.** Le vrai
+scan ci-dessus prend du temps (essentiellement le téléchargement des
+modèles candidats, pas les tests eux-mêmes) : l'onglet **Modèles** propose
+en plus un bouton "Estimation rapide (llmfit, instantané)" qui donne un
+premier avis en quelques secondes, sans rien télécharger ni exécuter.
+S'appuie sur [llmfit](https://github.com/AlexsJones/llmfit) (MIT, ~13 000
+modèles référencés depuis HuggingFace), lancé comme sidecar HTTP local —
+binaire officiel précompilé téléchargé automatiquement une seule fois
+(`electron/services/llmfitClient.ts`), jamais forké/modifié pour garder ses
+mises à jour automatiques. Filtré à ce qui est réellement utilisable par
+Jaris : seuls les modèles installables via Ollama (`ollama_name` connu de
+llmfit) et capables d'appel d'outils (`capability_ids` contient
+`tool_use`) sont proposés — jamais le catalogue brut, qui contient
+beaucoup de bruit (dépôts HuggingFace obscurs, 0 téléchargement). llmfit
+calcule sa propre estimation VRAM *et* RAM par modèle (y compris un mode
+"offload partiel GPU→RAM" générique, calculé dynamiquement — contrairement
+à `LARGE_RAM_OFFLOAD_MODELS` côté Jaris, une liste codée en dur). **Reste
+une estimation par formule** (précisée via `confidence` :
+`estimated`/`calibrated`/`measured_community`/`measured_local`), jamais une
+vérification réelle de fiabilité d'appel d'outils comme le vrai benchmark
+— à traiter comme un point de départ, pas une confirmation.
+
 **Vérification en temps réel avant chaque question.** Les paliers (et le
 modèle de vision) restent fixes (scan ci-dessus), mais juste avant
 d'appeler Ollama, Jaris regarde aussi l'état réel du GPU à l'instant

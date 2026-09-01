@@ -15,8 +15,12 @@ type LogFn = (message: string) => void
  */
 let ollamaProcessStartedByJaris: ChildProcess | null = null
 
-/** Ping HTTP simple : true dès que le service répond (peu importe le code, tant qu'il répond). */
-async function isUp(url: string, timeoutMs = 2000): Promise<boolean> {
+/**
+ * Ping HTTP simple : true dès que le service répond (peu importe le code, tant qu'il répond). Exporté :
+ * réutilisé par llmfitClient.ts pour le même genre d'attente ("le sidecar a-t-il fini de démarrer ?"),
+ * plutôt que de dupliquer cette logique pour chaque nouveau process externe géré par Jaris.
+ */
+export async function isUp(url: string, timeoutMs = 2000): Promise<boolean> {
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -28,7 +32,7 @@ async function isUp(url: string, timeoutMs = 2000): Promise<boolean> {
   }
 }
 
-async function waitUntil(check: () => Promise<boolean>, timeoutMs: number, intervalMs = 2000): Promise<boolean> {
+export async function waitUntil(check: () => Promise<boolean>, timeoutMs: number, intervalMs = 2000): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (await check()) return true
