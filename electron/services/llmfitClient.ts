@@ -185,6 +185,46 @@ interface LlmfitApiModelsResponse {
   models: LlmfitApiModelRow[]
 }
 
+/**
+ * Familles Ollama vérifiées à la main (badge "tools" réel sur ollama.com/library/<nom>) plutôt que la
+ * devinette de llmfit par le nom du modèle (capability_ids "tool_use", voir llmfit-core/src/models.rs :
+ * `name.contains("qwen3") || name.contains("gemma-3")...`). Vérification faite le 2026-09-01 : sur ~26
+ * familles candidates, 6 étaient des faux positifs chez llmfit — le nom "ressemble" à une famille connue
+ * pour les outils, mais le vrai badge ollama.com dit non : gemma3, gemma3n (variantes multimodales, pas le
+ * même template que les LLM texte), codellama (complétion de code, pas de template d'appel d'outils),
+ * qwen2.5vl et llama3.2-vision (variantes vision), nous-hermes2-mixtral (fine-tune qui n'a pas repris le
+ * template outils malgré "hermes" dans le nom). À réviser périodiquement si Ollama publie de nouvelles
+ * familles pertinentes (voir aussi getOllamaCapabilities pour une vérification en direct, en complément,
+ * sur les modèles déjà installés).
+ */
+const OLLAMA_VERIFIED_TOOL_FAMILIES = new Set([
+  'qwen2.5',
+  'qwen2.5-coder',
+  'qwen3',
+  'qwen3-coder',
+  'qwen3-coder-next',
+  'qwen3.5',
+  'qwen3.8',
+  'llama3.1',
+  'llama3.2',
+  'llama3.3',
+  'mistral',
+  'mistral-nemo',
+  'mistral-small',
+  'mistral-small3.1',
+  'mistral-large',
+  'mixtral',
+  'command-r',
+  'command-r-plus',
+  'hermes3',
+  'nemotron'
+])
+
+/** Famille = tout avant les ":" (ex: "qwen2.5-coder:7b" -> "qwen2.5-coder"), la granularité à laquelle Ollama partage un même template de conversation entre tailles. */
+function ollamaFamily(ollamaName: string): string {
+  return ollamaName.split(':')[0]
+}
+
 export interface QuickEstimateModel {
   name: string
   ollamaName: string
@@ -215,9 +255,9 @@ const EMPTY_RESULT: Omit<QuickEstimateResult, 'available' | 'reason'> = {
  * Estimation instantanée (sans rien télécharger ni exécuter, voir README) de ce qui tourne bien sur le
  * matériel détecté. Filtre volontairement le catalogue llmfit (~13 000 entrées auto-découvertes sur
  * HuggingFace, en grande partie du bruit — voir hf_models.json dans le dépôt) à ce qui est réellement
- * utilisable par Jaris : installable via Ollama (ollama_name renseigné) ET capable d'appel d'outils
- * (capability_ids contient "tool_use", le seul critère qui compte vraiment pour Jaris) — jamais tout le
- * catalogue brut.
+ * utilisable par Jaris : installable via Ollama (ollama_name renseigné) ET dans OLLAMA_VERIFIED_TOOL_FAMILIES
+ * — jamais le champ capability_ids "tool_use" de llmfit tel quel, deviné par le nom du modèle et confirmé
+ * faux positif sur plusieurs familles (gemma3, codellama...), voir le commentaire de la constante.
  */
 export async function getQuickEstimate(log: LogFn, limit = 20): Promise<QuickEstimateResult> {
   const up = await ensureLlmfitRunning(log)
@@ -239,7 +279,7 @@ export async function getQuickEstimate(log: LogFn, limit = 20): Promise<QuickEst
     const modelsData = (await modelsRes.json()) as LlmfitApiModelsResponse
 
     const models: QuickEstimateModel[] = modelsData.models
-      .filter((m) => m.ollama_name && m.capability_ids?.includes('tool_use'))
+      .filter((m) => m.ollama_name && OLLAMA_VERIFIED_TOOL_FAMILIES.has(ollamaFamily(m.ollama_name)))
       .slice(0, limit)
       .map((m) => ({
         name: m.name,

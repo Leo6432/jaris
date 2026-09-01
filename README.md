@@ -482,9 +482,15 @@ binaire officiel précompilé téléchargé automatiquement une seule fois
 (`electron/services/llmfitClient.ts`), jamais forké/modifié pour garder ses
 mises à jour automatiques. Filtré à ce qui est réellement utilisable par
 Jaris : seuls les modèles installables via Ollama (`ollama_name` connu de
-llmfit) et capables d'appel d'outils (`capability_ids` contient
-`tool_use`) sont proposés — jamais le catalogue brut, qui contient
-beaucoup de bruit (dépôts HuggingFace obscurs, 0 téléchargement). llmfit
+llmfit) et dont la famille figure dans `OLLAMA_VERIFIED_TOOL_FAMILIES`
+(liste vérifiée à la main contre le vrai badge "tools" de
+ollama.com/library, **pas** le champ `capability_ids: tool_use` de llmfit
+lui-même — celui-ci devine par le nom du modèle et se trompe sur plusieurs
+familles connues : `gemma3`, `gemma3n`, `codellama`, `qwen2.5vl`,
+`llama3.2-vision`, `nous-hermes2-mixtral` disent "tool_use" chez llmfit
+mais n'ont aucun badge "tools" réel — vérifié le 2026-09-01) sont proposés
+— jamais le catalogue brut, qui contient beaucoup de bruit (dépôts
+HuggingFace obscurs, 0 téléchargement). llmfit
 calcule sa propre estimation VRAM *et* RAM par modèle (y compris un mode
 "offload partiel GPU→RAM" générique, calculé dynamiquement — contrairement
 à `LARGE_RAM_OFFLOAD_MODELS` côté Jaris, une liste codée en dur). **Reste
