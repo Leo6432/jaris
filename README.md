@@ -97,6 +97,18 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   l'utilisateur — à comparer avant de choisir (couverture fonctionnelle,
   et surtout si Phone Link expose de quoi être piloté par Jaris plutôt que
   seulement utilisable à la main)
+- ⬜ Étape 42 — Canal Telegram : pouvoir parler à Jaris à distance par
+  message Telegram, en plus de la voix et du chat (étape 30) déjà présents.
+  Nouveau canal branché directement sur le moteur `converse()` existant
+  (`electron/services/assistant.ts`) plutôt qu'un bot séparé et
+  déconnecté : mêmes outils (mail, recherche web, rappels, mémoire — voir
+  `tools.ts`), même historique, même mémoire longue durée qu'en local. Bot
+  Telegram en mode "polling" (ex: `node-telegram-bot-api`) : aucun serveur
+  public ni IP fixe nécessaire, reste 100% local et gratuit. Limite propre
+  au 100% local : le PC de l'utilisateur doit être allumé et Jaris lancé
+  pour recevoir un message — rien n'est hébergé ailleurs, un message envoyé
+  pendant que la machine est éteinte reste juste en attente chez Telegram
+  jusqu'au redémarrage
 - ⬜ Étape 23 — Site web avec tableau de bord personnel : chaque utilisateur
   peut noter son planning et sa to-do list sur le site, et Jaris peut y
   écrire des informations
