@@ -72,6 +72,17 @@ const VERIFIED_TOOL_MODELS = readVerifiedToolModels()
 const SCOPE = (process.env.JARIS_ANALYSIS_SCOPE?.trim() || 'all')
 
 /**
+ * Reprise après interruption (PC éteint, process tué en plein run...) : quand cette variable vaut '1', tout
+ * modèle du périmètre déjà présent dans scripts/benchmark-results.md (donc déjà testé, que ce soit par ce
+ * run interrompu grâce à la sauvegarde incrémentale — voir persistResults plus bas — ou par un run antérieur)
+ * est sauté (ni retéléchargé ni retesté), sa ligne existante est juste conservée telle quelle. PAS le
+ * comportement par défaut : sans cette variable, un run reteste tout son périmètre même si des résultats
+ * existent déjà — c'est le fonctionnement voulu pour re-tester volontairement un palier après un changement
+ * (voir le commentaire de SCOPE ci-dessus), la reprise doit donc rester un choix explicite.
+ */
+const RESUME = process.env.JARIS_RESUME === '1'
+
+/**
  * Petite marge sous la VRAM totale détectée, pour le contexte (num_ctx, 4096 par défaut) et l'overhead
  * OS/pilote pendant le test — contrairement à STT_RESERVED_GB côté app (electron/services/hardwareScan.ts),
  * pas besoin de réserver de la place pour le STT ici : ce script tourne seul, sans le pipeline vocal.
@@ -1101,6 +1112,28 @@ async function main() {
     )
   }
 
+  // Résultats déjà écrits (run précédent, ou sauvegarde incrémentale de CE run avant une interruption — voir
+  // persistResults plus bas) : lus ICI, avant de savoir quoi installer/tester, pour pouvoir sauter les
+  // modèles déjà faits quand JARIS_RESUME=1 (voir son commentaire plus haut). Même format de parsing que
+  // parseLocalBenchmark (hardwareScan.ts) : lignes "| modèle | latence | vitesse | fiabilité |", 4 cellules.
+  const existingRows = new Map()
+  try {
+    const previous = readFileSync(RESULTS_PATH, 'utf-8')
+    for (const line of previous.split('\n')) {
+      if (!line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
+      const cells = line
+        .split('|')
+        .map((c) => c.trim())
+        .filter(Boolean)
+      if (cells.length !== 4) continue
+      const [model, latency, speed, reliability] = cells
+      existingRows.set(model, { latency, speed, reliability })
+    }
+  } catch {
+    // Pas de fichier précédent (tout premier run) : rien à conserver, existingRows reste vide.
+  }
+  const alreadyDone = (model) => RESUME && existingRows.has(model)
+
   // SCOPED_MODELS/SCOPED_VISION_CANDIDATES/SCOPED_CODE_CANDIDATES (pas MODELS/VISION_CANDIDATES/
   // CODE_CANDIDATES directement) : un run ciblé sur un seul palier (SCOPE) ne doit installer/tester QUE ses
   // propres candidats, jamais les autres — la barre de progression (OptionsMenu.tsx) n'a pas besoin de les
@@ -1109,7 +1142,19 @@ async function main() {
     ...SCOPED_MODELS,
     ...SCOPED_VISION_CANDIDATES.map((c) => c.model),
     ...SCOPED_CODE_CANDIDATES.map((c) => c.model)
-  ]
+  ].filter((m) => !alreadyDone(m))
+  if (RESUME && existingRows.size) {
+    const resumedCount = [
+      ...SCOPED_MODELS,
+      ...SCOPED_VISION_CANDIDATES.map((c) => c.model),
+      ...SCOPED_CODE_CANDIDATES.map((c) => c.model)
+    ].filter((m) => alreadyDone(m)).length
+    if (resumedCount) {
+      console.log(
+        `Reprise (JARIS_RESUME=1) : ${resumedCount} modèle(s) du périmètre déjà présent(s) dans ${RESULTS_PATH}, ni retéléchargé(s) ni retesté(s).\n`
+      )
+    }
+  }
   const missingAll = allInstallable.filter((m) => !installed.includes(m))
 
   // Repli budgétaire pour chaque modèle manquant : VRAM+RAM combinées (RAM_OFFLOAD_MODELS) ou VRAM/RAM seule
@@ -1144,9 +1189,13 @@ async function main() {
     console.log('')
   }
 
-  const toRun = SCOPED_MODELS.filter((m) => installed.includes(m) || missing.includes(m))
-  const visionToRun = SCOPED_VISION_CANDIDATES.map((c) => c.model).filter((m) => installed.includes(m) || missing.includes(m))
-  const codeToRun = SCOPED_CODE_CANDIDATES.map((c) => c.model).filter((m) => installed.includes(m) || missing.includes(m))
+  const toRun = SCOPED_MODELS.filter((m) => !alreadyDone(m) && (installed.includes(m) || missing.includes(m)))
+  const visionToRun = SCOPED_VISION_CANDIDATES.map((c) => c.model).filter(
+    (m) => !alreadyDone(m) && (installed.includes(m) || missing.includes(m))
+  )
+  const codeToRun = SCOPED_CODE_CANDIDATES.map((c) => c.model).filter(
+    (m) => !alreadyDone(m) && (installed.includes(m) || missing.includes(m))
+  )
   if (!toRun.length && !visionToRun.length && !codeToRun.length) {
     console.log('Aucun des modèles à tester n\'a pu être installé.')
     return
@@ -1300,6 +1349,58 @@ async function main() {
   // considerPruning en a besoin pendant le run, pas seulement à la toute fin.
   const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null)
 
+  /**
+   * Écrit RESULTS_PATH avec l'état ACTUEL de `results` — appelée après CHAQUE modèle terminé (##MODEL_DONE##
+   * plus bas), pas seulement une fois tout le run fini comme avant : un run qui s'interrompt en cours (PC
+   * éteint, process tué) ne perd plus que le modèle en cours de test, jamais les modèles déjà terminés. Ce
+   * fichier réécrit à chaque fois est justement ce que JARIS_RESUME=1 relit ensuite pour sauter ce qui est
+   * déjà fait (voir son commentaire plus haut) — la reprise dépend directement de cette sauvegarde
+   * incrémentale, sans elle il n'y aurait rien de plus récent que le tout dernier run complet à reprendre.
+   */
+  function persistResults() {
+    const testedThisRun = new Set(results.map((r) => r.model))
+    const lines = []
+    lines.push(`# Résultats du benchmark Jaris — ${new Date().toLocaleString('fr-FR')}`)
+    lines.push('')
+    // "Fiabilité" plutôt que "Tool-calling" : ce tableau mélange trois épreuves différentes selon le
+    // palier — appel d'outils (conversation, TEST_CASES), compréhension d'image (vision, VISION_TEST_CASES)
+    // et génération de HTML valide (code, CODE_TEST_CASES). La colonne reste un score "X/Y" dans les trois
+    // cas, mais ce n'est jamais la même épreuve.
+    lines.push('| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité (épreuve selon le palier du modèle) |')
+    lines.push('|---|---|---|---|')
+    for (const r of results) {
+      const acc = r.total ? `${r.correct}/${r.total}` : '—'
+      lines.push(`| ${r.model} | ${fmt(avg(r.latencies), 0)} ms | ${fmt(avg(r.speeds))} tok/s | ${acc} |`)
+    }
+    for (const [model, row] of existingRows) {
+      if (testedThisRun.has(model)) continue
+      lines.push(`| ${model} | ${row.latency} | ${row.speed} | ${row.reliability} |`)
+    }
+
+    lines.push('')
+    lines.push('## Réponses aux questions de raisonnement (à juger toi-même)')
+    lines.push('')
+    for (const { prompt, answer, model } of reasoningAnswers) {
+      lines.push(`**${model}** — « ${prompt} »`)
+      lines.push(`> ${answer}`)
+      lines.push('')
+    }
+
+    if (errors.length) {
+      lines.push('## Erreurs')
+      lines.push('')
+      for (const { model, prompt, message } of errors) {
+        lines.push(`- **${model}** sur « ${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''} » : ${message}`)
+      }
+      lines.push('')
+    }
+
+    // Écrit aussi le rapport dans un fichier : plus simple à envoyer/coller ailleurs qu'à faire défiler et
+    // copier depuis le terminal, surtout avec autant de modèles testés d'affilée.
+    writeFileSync(RESULTS_PATH, lines.join('\n'), 'utf-8')
+    return lines.join('\n')
+  }
+
   for (const model of toRun) {
     const ready = await ensureReady(model)
     if (!ready) {
@@ -1339,6 +1440,7 @@ async function main() {
     results.push(perModel)
     // Lu par le tableau de suivi en direct (OptionsMenu.tsx) : ce modèle a fini tous ses tests, avec ce score.
     console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
+    persistResults()
 
     // Espace disque serré uniquement : ce modèle vient de finir son test, et n'appartient qu'à UN SEUL
     // palier (ni multi-palier, ni candidat vision) — on sait donc déjà, avec certitude, s'il faut le garder.
@@ -1383,6 +1485,7 @@ async function main() {
 
     results.push(perModel)
     console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
+    persistResults()
 
     // Le palier vision, comme le texte ci-dessus : seulement pour les 4 candidats vision "purs" (jamais
     // qwen3.5:4b/gemma4:e4b, aussi candidats médium — voir PRUNABLE_VISION_MODELS), et seulement si l'espace
@@ -1431,6 +1534,7 @@ async function main() {
 
     results.push(perModel)
     console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
+    persistResults()
   }
 
   // Sécurité : s'assurer qu'aucun téléchargement en tâche de fond ne reste en vol avant d'écrire les
@@ -1438,72 +1542,12 @@ async function main() {
   // passé par ensureReady dans l'une des trois boucles ci-dessus (même ordre que `missing`, voir plus haut).
   await Promise.all(pullWorkers)
 
-  // Modèles testés lors d'un run PRÉCÉDENT (autre palier, ou run "tout" antérieur) mais pas cette fois-ci
-  // (SCOPE limite ce run à un seul palier) : lus ici pour les GARDER tels quels dans le fichier réécrit
-  // ci-dessous, plutôt que de les faire disparaître. Sans ça, un run "juste Code" effacerait les résultats
-  // flash/medium/large/vision précédents, et pickBestModelsFromBenchmark (hardwareScan.ts) retomberait sur
-  // un choix par taille pour ces paliers, faute de toute donnée. Même format de parsing que
-  // parseLocalBenchmark (hardwareScan.ts) : lignes "| modèle | latence | vitesse | fiabilité |", 4 cellules.
-  const existingRows = new Map()
-  try {
-    const previous = readFileSync(RESULTS_PATH, 'utf-8')
-    for (const line of previous.split('\n')) {
-      if (!line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
-      const cells = line
-        .split('|')
-        .map((c) => c.trim())
-        .filter(Boolean)
-      if (cells.length !== 4) continue
-      const [model, latency, speed, reliability] = cells
-      existingRows.set(model, { latency, speed, reliability })
-    }
-  } catch {
-    // Pas de fichier précédent (tout premier run) : rien à conserver, existingRows reste vide.
-  }
-  const testedThisRun = new Set(results.map((r) => r.model))
-
-  const lines = []
-  lines.push(`# Résultats du benchmark Jaris — ${new Date().toLocaleString('fr-FR')}`)
-  lines.push('')
-  // "Fiabilité" plutôt que "Tool-calling" : ce tableau mélange trois épreuves différentes selon le
-  // palier — appel d'outils (conversation, TEST_CASES), compréhension d'image (vision, VISION_TEST_CASES)
-  // et génération de HTML valide (code, CODE_TEST_CASES). La colonne reste un score "X/Y" dans les trois
-  // cas, mais ce n'est jamais la même épreuve.
-  lines.push('| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité (épreuve selon le palier du modèle) |')
-  lines.push('|---|---|---|---|')
-  for (const r of results) {
-    const acc = r.total ? `${r.correct}/${r.total}` : '—'
-    lines.push(`| ${r.model} | ${fmt(avg(r.latencies), 0)} ms | ${fmt(avg(r.speeds))} tok/s | ${acc} |`)
-  }
-  for (const [model, row] of existingRows) {
-    if (testedThisRun.has(model)) continue
-    lines.push(`| ${model} | ${row.latency} | ${row.speed} | ${row.reliability} |`)
-  }
-
-  lines.push('')
-  lines.push('## Réponses aux questions de raisonnement (à juger toi-même)')
-  lines.push('')
-  for (const { prompt, answer, model } of reasoningAnswers) {
-    lines.push(`**${model}** — « ${prompt} »`)
-    lines.push(`> ${answer}`)
-    lines.push('')
-  }
-
-  if (errors.length) {
-    lines.push('## Erreurs')
-    lines.push('')
-    for (const { model, prompt, message } of errors) {
-      lines.push(`- **${model}** sur « ${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''} » : ${message}`)
-    }
-    lines.push('')
-  }
-
-  const report = lines.join('\n')
+  // `existingRows` (lu au tout début de main(), voir plus haut) reste la bonne base ici : les modèles testés
+  // par un palier différent de SCOPE, ou déjà repris via JARIS_RESUME, y sont toujours — persistResults() les
+  // garde tels quels (voir testedThisRun dans sa propre définition). Dernier appel du run, mais chaque modèle
+  // a déjà été persisté individuellement au fil des boucles ci-dessus (voir persistResults()).
+  const report = persistResults()
   console.log(`\n\n${report}`)
-
-  // Écrit aussi le rapport dans un fichier : plus simple à envoyer/coller ailleurs qu'à faire défiler et
-  // copier depuis le terminal, surtout avec autant de modèles testés d'affilée.
-  writeFileSync(RESULTS_PATH, report, 'utf-8')
   console.log(`\n(Résultats aussi sauvegardés dans ${RESULTS_PATH})`)
 }
 
