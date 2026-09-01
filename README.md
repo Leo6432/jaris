@@ -442,6 +442,20 @@ npm run benchmark:models` en ligne de commande). Les résultats des autres
 paliers, déjà connus, sont conservés tels quels dans
 `scripts/benchmark-results.md` — jamais effacés par un run ciblé.
 
+**Reprise après interruption.** `scripts/benchmark-results.md` est réécrit
+après chaque modèle terminé, pas seulement à la toute fin du script :
+interrompre l'analyse en cours (PC éteint, process tué) ne perd plus que le
+modèle en train d'être testé, jamais ceux déjà finis. Pour reprendre là où
+elle s'est arrêtée plutôt que tout retester depuis le début, relancer avec
+`JARIS_RESUME=1` (`OLLAMA_HOST=... JARIS_RESUME=1 npm run benchmark:models`,
+ou `$env:JARIS_RESUME="1"` avant la commande sous PowerShell) : tout modèle
+du périmètre déjà présent dans `scripts/benchmark-results.md` est sauté (ni
+retéléchargé ni retesté), sa ligne existante est juste conservée. Pas le
+comportement par défaut — sans cette variable, un run reteste tout son
+périmètre même si des résultats existent déjà, pour ne pas gêner le
+re-test volontaire d'un palier après un changement (`JARIS_ANALYSIS_SCOPE`
+ci-dessus).
+
 Sur une machine contrainte, plusieurs paliers peuvent finir sur le même
 modèle (pas assez de VRAM pour un vrai modèle "puissant" séparé) : ils
 restent quand même différenciés via l'effort de réflexion d'Ollama
