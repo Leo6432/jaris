@@ -49,10 +49,6 @@ export const config = {
   searxng: {
     host: readEnv('SEARXNG_HOST', 'http://127.0.0.1:8080')
   },
-  llmfit: {
-    /** Sidecar llmfit (github.com/AlexsJones/llmfit) : estimation rapide, sans téléchargement de modèle, de ce qui tourne bien sur le matériel détecté (voir llmfitClient.ts). Port arbitraire, choisi loin d'Ollama (11434) et SearXNG (8080). */
-    port: Number(readEnv('LLMFIT_PORT', '8799'))
-  },
   smtp: {
     host: readEnv('SMTP_HOST'),
     port: Number(readEnv('SMTP_PORT', '587')),

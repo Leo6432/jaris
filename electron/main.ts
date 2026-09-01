@@ -11,7 +11,6 @@ import { ttsClient } from './services/ttsClient'
 import { createTrayIcon } from './services/trayIcon'
 import { VoicePipeline } from './services/voicePipeline'
 import { listAudioInputDevices } from './services/voiceClient'
-import { getQuickEstimate, stopLlmfitIfStartedByJaris } from './services/llmfitClient'
 import { ensureMemoryDir, getMemoryDir, getMemoryGraph, recallNote } from './services/memoryStore'
 import {
   clearConversationHistory,
@@ -31,7 +30,6 @@ import {
   type JarisEmotion,
   type MemoryGraph,
   type Profile,
-  type QuickEstimateResult,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload
 } from '../shared/ipc'
@@ -294,11 +292,6 @@ app.whenReady().then(async () => {
   ipcMain.on(IPC_CHANNELS.testMicrophone, () => pipeline?.testMic())
   ipcMain.on(IPC_CHANNELS.stopTestMicrophone, () => pipeline?.stopTestMic())
   ipcMain.handle(IPC_CHANNELS.getModelOverview, () => getModelOverview())
-  // Estimation instantanée (llmfit) : jamais un remplacement du vrai benchmark, juste un premier avis sans
-  // attendre — voir llmfitClient.ts pour le filtrage (Ollama + appel d'outils uniquement).
-  ipcMain.handle(IPC_CHANNELS.getQuickEstimate, (event): Promise<QuickEstimateResult> => {
-    return getQuickEstimate((message) => event.sender.send(IPC_CHANNELS.log, message))
-  })
   // renderer -> main : modèles candidats apparus depuis le dernier scan (étape 29), pour le popup dans App.tsx.
   // Un profil créé avant cette fonctionnalité (knownModelCandidates jamais défini) est silencieusement
   // initialisé sur l'état actuel plutôt que de signaler tous les candidats existants comme "nouveaux".
@@ -434,7 +427,6 @@ app.whenReady().then(async () => {
 // que Jaris a lui-même démarré, plutôt qu'un process qui continue de tourner indéfiniment en arrière-plan.
 app.on('before-quit', () => {
   stopOllamaIfStartedByJaris()
-  stopLlmfitIfStartedByJaris()
 })
 
 app.on('will-quit', () => {

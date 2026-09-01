@@ -14,7 +14,6 @@ import {
   type MicTestLevelPayload,
   type ModelOverviewResult,
   type Profile,
-  type QuickEstimateResult,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload
 } from '../shared/ipc'
@@ -65,7 +64,6 @@ const api = {
     ipcRenderer.invoke(IPC_CHANNELS.setAudioInputDevice, deviceIndex),
   testMicrophone: (): void => ipcRenderer.send(IPC_CHANNELS.testMicrophone),
   stopTestMicrophone: (): void => ipcRenderer.send(IPC_CHANNELS.stopTestMicrophone),
-  getQuickEstimate: (): Promise<QuickEstimateResult> => ipcRenderer.invoke(IPC_CHANNELS.getQuickEstimate),
   onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => subscribe(IPC_CHANNELS.micTestLevel, cb),
   onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => subscribe(IPC_CHANNELS.micTestDone, cb)
 }

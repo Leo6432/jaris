@@ -1,14 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type {
-  AnalysisScope,
-  AudioInputDevice,
-  ConversationEntry,
-  GmailStatus,
-  ModelOverviewResult,
-  ModelTiers,
-  Profile,
-  QuickEstimateResult
-} from '../../shared/ipc'
+import type { AnalysisScope, AudioInputDevice, ConversationEntry, GmailStatus, ModelOverviewResult, ModelTiers, Profile } from '../../shared/ipc'
 import { useModelAnalysis } from '../hooks/useModelAnalysis'
 import ModelAnalysisProgress, { ANALYSIS_NOTICE } from './ModelAnalysisProgress'
 
@@ -112,8 +103,6 @@ export default function OptionsMenu(): JSX.Element {
   // Logique de run + progression partagée avec l'écran d'onboarding (CapacityScan.tsx) — voir useModelAnalysis.
   const analysis = useModelAnalysis(modelOverview)
   const [scopeDialogOpen, setScopeDialogOpen] = useState(false)
-  const [quickEstimate, setQuickEstimate] = useState<QuickEstimateResult | null>(null)
-  const [quickEstimateLoading, setQuickEstimateLoading] = useState(false)
   const [inputDevices, setInputDevices] = useState<AudioInputDevice[] | null>(null)
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[] | null>(null)
   const [savingAudioDevice, setSavingAudioDevice] = useState(false)
@@ -203,24 +192,6 @@ export default function OptionsMenu(): JSX.Element {
       setModelOverview(await window.jaris.getModelOverview())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
-    }
-  }
-
-  /**
-   * Estimation instantanée via llmfit (github.com/AlexsJones/llmfit, sidecar téléchargé au besoin) : une
-   * formule basée sur la VRAM/RAM/bande passante détectées, sans rien télécharger ni exécuter — jamais un
-   * remplacement du vrai benchmark (analysis.run), juste un premier avis en attendant de lancer celui-ci si
-   * on veut une confirmation réelle (fiabilité d'appel d'outils comprise).
-   */
-  const handleQuickEstimate = async (): Promise<void> => {
-    setError(null)
-    setQuickEstimateLoading(true)
-    try {
-      setQuickEstimate(await window.jaris.getQuickEstimate())
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setQuickEstimateLoading(false)
     }
   }
 
@@ -615,55 +586,6 @@ export default function OptionsMenu(): JSX.Element {
               Intelligence = score MMLU-Pro publié, quand il existe.
             </p>
 
-            <div className="options-menu__section-title options-menu__model-overview-title">Estimation rapide</div>
-            <button className="options-menu__action" onClick={() => void handleQuickEstimate()} disabled={quickEstimateLoading}>
-              {quickEstimateLoading ? 'Estimation...' : 'Estimation rapide (llmfit, instantané)'}
-            </button>
-            <p className="options-menu__model-overview-hint">
-              Basé sur une formule (VRAM/RAM/bande passante détectées), sans rien télécharger ni exécuter —
-              donne un premier avis en quelques secondes, mais ne vérifie jamais la fiabilité d'appel
-              d'outils comme le vrai test ci-dessous. À prendre comme point de départ, pas comme confirmation.
-            </p>
-            {quickEstimate && !quickEstimate.available && (
-              <p className="options-menu__model-overview-hint">Indisponible : {quickEstimate.reason}</p>
-            )}
-            {quickEstimate?.available && (
-              <div className="options-menu__model-overview-scroll">
-                <table className="options-menu__model-overview">
-                  <thead>
-                    <tr>
-                      <th>Modèle</th>
-                      <th className="options-menu__col-num">Vitesse estimée</th>
-                      <th className="options-menu__col-num">Confiance</th>
-                      <th className="options-menu__col-num">Compatibilité</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {quickEstimate.models.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="options-menu__model-overview-hint">
-                          Aucun modèle compatible Ollama + appel d'outils trouvé par llmfit pour ce matériel.
-                        </td>
-                      </tr>
-                    )}
-                    {quickEstimate.models.map((m) => (
-                      <tr key={m.ollamaName}>
-                        <td className="options-menu__model-name" title={m.ollamaName}>
-                          {m.name}
-                        </td>
-                        <td className="options-menu__col-num">
-                          {m.estimatedTokPerSec !== null ? `${m.estimatedTokPerSec.toFixed(1)} tok/s` : '—'}
-                        </td>
-                        <td className="options-menu__col-num">{m.confidence}</td>
-                        <td className="options-menu__col-num">{m.fitLabel}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            <div className="options-menu__section-title options-menu__model-overview-title">Analyse complète (vérifiée)</div>
             <button className="options-menu__action" onClick={() => setScopeDialogOpen(true)} disabled={analysis.benchmarking}>
               {analysis.benchmarking ? 'Analyse en cours...' : 'Tester tous les modèles et choisir les meilleurs'}
             </button>

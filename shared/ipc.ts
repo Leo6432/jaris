@@ -83,33 +83,6 @@ export interface AudioInputDevice {
   name: string
 }
 
-/**
- * Un modèle recommandé par llmfit (github.com/AlexsJones/llmfit) pour le matériel détecté : une estimation
- * instantanée (formule, aucun téléchargement ni exécution), à ne jamais confondre avec les mesures réelles
- * de scripts/benchmark-models.mjs — voir estimateConfidenceLabel ("estimated"/"calibrated"/
- * "measured_local"/"measured_community") pour savoir à quel point s'y fier.
- */
-export interface QuickEstimateModel {
-  name: string
-  /** Tag exact pour `ollama pull`, ex: "qwen2.5-coder:7b-instruct". */
-  ollamaName: string
-  estimatedTokPerSec: number | null
-  confidence: string
-  fitLabel: string
-  memoryRequiredGb: number
-}
-
-/** Résultat de getQuickEstimate : matériel détecté par llmfit + modèles recommandés (déjà filtrés sur Ollama + appel d'outils, voir electron/services/llmfitClient.ts). */
-export interface QuickEstimateResult {
-  available: boolean
-  /** Raison de l'indisponibilité (téléchargement/démarrage de llmfit échoué), affichable telle quelle — null si available. */
-  reason: string | null
-  gpuName: string | null
-  vramGb: number | null
-  ramGb: number | null
-  models: QuickEstimateModel[]
-}
-
 /** Un point de mesure du niveau sonore pendant un test micro (voir mic_test_level dans voice_server.py). */
 export interface MicTestLevelPayload {
   level: number
@@ -276,7 +249,5 @@ export const IPC_CHANNELS = {
   /** main -> renderer : mesure de niveau sonore pendant un test micro en cours. */
   micTestLevel: 'jaris:mic-test-level',
   /** main -> renderer : verdict final d'un test micro (un signal a été détecté ou non). */
-  micTestDone: 'jaris:mic-test-done',
-  /** renderer <-> main : estimation instantanée via llmfit (télécharge/lance le sidecar au besoin), sans lancer le vrai benchmark. */
-  getQuickEstimate: 'jaris:get-quick-estimate'
+  micTestDone: 'jaris:mic-test-done'
 } as const

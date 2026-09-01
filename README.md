@@ -471,36 +471,6 @@ limité, elle passe automatiquement en téléchargement strictement séquentiel
 candidat dès qu'un meilleur est trouvé pour son palier — plutôt que de garder
 tous les modèles testés installés simultanément jusqu'à la toute fin.
 
-**Estimation rapide (llmfit), sans attendre le vrai benchmark.** Le vrai
-scan ci-dessus prend du temps (essentiellement le téléchargement des
-modèles candidats, pas les tests eux-mêmes) : l'onglet **Modèles** propose
-en plus un bouton "Estimation rapide (llmfit, instantané)" qui donne un
-premier avis en quelques secondes, sans rien télécharger ni exécuter.
-S'appuie sur [llmfit](https://github.com/AlexsJones/llmfit) (MIT, ~13 000
-modèles référencés depuis HuggingFace), lancé comme sidecar HTTP local —
-binaire officiel précompilé téléchargé automatiquement une seule fois
-(`electron/services/llmfitClient.ts`), jamais forké/modifié pour garder ses
-mises à jour automatiques. Filtré à ce qui est réellement utilisable par
-Jaris : seuls les modèles installables via Ollama (`ollama_name` connu de
-llmfit) et dont la famille figure dans `OLLAMA_VERIFIED_TOOL_FAMILIES`
-(liste vérifiée à la main contre le vrai badge "tools" de
-ollama.com/library, **pas** le champ `capability_ids: tool_use` de llmfit
-lui-même — celui-ci devine par le nom du modèle) sont proposés — jamais le
-catalogue brut, qui contient beaucoup de bruit (dépôts HuggingFace obscurs,
-0 téléchargement). Vérification exhaustive faite le 2026-09-01 sur les 61
-familles Ollama présentes dans tout le catalogue llmfit (8271 modèles
-scannés) : 29 confirmées, 32 rejetées — dont 6 faux positifs chez llmfit
-(`gemma3`, `gemma3n`, `codellama`, `qwen2.5vl`, `llama3.2-vision`,
-`nous-hermes2-mixtral` disent "tool_use" chez llmfit mais n'ont aucun badge
-réel). llmfit
-calcule sa propre estimation VRAM *et* RAM par modèle (y compris un mode
-"offload partiel GPU→RAM" générique, calculé dynamiquement — contrairement
-à `LARGE_RAM_OFFLOAD_MODELS` côté Jaris, une liste codée en dur). **Reste
-une estimation par formule** (précisée via `confidence` :
-`estimated`/`calibrated`/`measured_community`/`measured_local`), jamais une
-vérification réelle de fiabilité d'appel d'outils comme le vrai benchmark
-— à traiter comme un point de départ, pas une confirmation.
-
 **Vérification en temps réel avant chaque question.** Les paliers (et le
 modèle de vision) restent fixes (scan ci-dessus), mais juste avant
 d'appeler Ollama, Jaris regarde aussi l'état réel du GPU à l'instant
