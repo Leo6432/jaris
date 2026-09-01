@@ -188,16 +188,36 @@ interface LlmfitApiModelsResponse {
 /**
  * Familles Ollama vérifiées à la main (badge "tools" réel sur ollama.com/library/<nom>) plutôt que la
  * devinette de llmfit par le nom du modèle (capability_ids "tool_use", voir llmfit-core/src/models.rs :
- * `name.contains("qwen3") || name.contains("gemma-3")...`). Vérification faite le 2026-09-01 : sur ~26
- * familles candidates, 6 étaient des faux positifs chez llmfit — le nom "ressemble" à une famille connue
- * pour les outils, mais le vrai badge ollama.com dit non : gemma3, gemma3n (variantes multimodales, pas le
- * même template que les LLM texte), codellama (complétion de code, pas de template d'appel d'outils),
- * qwen2.5vl et llama3.2-vision (variantes vision), nous-hermes2-mixtral (fine-tune qui n'a pas repris le
- * template outils malgré "hermes" dans le nom). À réviser périodiquement si Ollama publie de nouvelles
- * familles pertinentes (voir aussi getOllamaCapabilities pour une vérification en direct, en complément,
- * sur les modèles déjà installés).
+ * `name.contains("qwen3") || name.contains("gemma-3")...`). Vérification exhaustive faite le 2026-09-01 :
+ * les 61 familles Ollama présentes dans le catalogue llmfit complet (8271 modèles scannés, --memory 999G
+ * --ram 999G pour ignorer tout filtre matériel) ont chacune été vérifiées une par une contre le vrai badge
+ * "tools" de leur page ollama.com/library — 29 confirmées ci-dessous, 32 rejetées (voir le tableau dans la
+ * conversation/commit pour le détail des rejetées, notamment les faux positifs chez llmfit : gemma3,
+ * gemma3n, codellama, qwen2.5vl, llama3.2-vision, nous-hermes2-mixtral disent "tool_use" chez llmfit mais
+ * n'ont aucun badge réel). À réviser si Ollama publie de nouvelles familles pertinentes.
  */
 const OLLAMA_VERIFIED_TOOL_FAMILIES = new Set([
+  'command-a',
+  'command-r',
+  'command-r-plus',
+  'deepseek-r1',
+  'devstral',
+  'hermes3',
+  'lfm2',
+  'lfm2.5',
+  'lfm2.5-thinking',
+  'llama3.1',
+  'llama3.2',
+  'llama3.3',
+  'mistral',
+  'mistral-large',
+  'mistral-nemo',
+  'mistral-small',
+  'mistral-small3.1',
+  'mixtral',
+  'nemotron',
+  'phi4-mini',
+  'qwen2',
   'qwen2.5',
   'qwen2.5-coder',
   'qwen3',
@@ -205,19 +225,7 @@ const OLLAMA_VERIFIED_TOOL_FAMILIES = new Set([
   'qwen3-coder-next',
   'qwen3.5',
   'qwen3.8',
-  'llama3.1',
-  'llama3.2',
-  'llama3.3',
-  'mistral',
-  'mistral-nemo',
-  'mistral-small',
-  'mistral-small3.1',
-  'mistral-large',
-  'mixtral',
-  'command-r',
-  'command-r-plus',
-  'hermes3',
-  'nemotron'
+  'qwq'
 ])
 
 /** Famille = tout avant les ":" (ex: "qwen2.5-coder:7b" -> "qwen2.5-coder"), la granularité à laquelle Ollama partage un même template de conversation entre tailles. */
