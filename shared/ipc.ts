@@ -237,6 +237,7 @@ export const IPC_CHANNELS = {
   /** renderer <-> main : liste tous les modèles candidats (tous paliers + vision) avec leurs métriques, pour l'onglet Modèles. */
   getModelOverview: 'jaris:get-model-overview',
   getOllamaVersionStatus: 'jaris:get-ollama-version-status',
+  updateOllama: 'jaris:update-ollama',
   /** renderer -> main : lance le benchmark complet (scripts/benchmark-models.mjs) puis choisit et active le
    * meilleur modèle de chaque palier d'après les résultats (résout une fois toute l'analyse terminée). */
   runModelAnalysis: 'jaris:run-model-analysis',

@@ -47,6 +47,7 @@ declare global {
       openConversationHistoryFile: () => Promise<void>
       getModelOverview: () => Promise<ModelOverviewResult>
       getOllamaVersionStatus: () => Promise<OllamaVersionStatus | null>
+      updateOllama: () => Promise<{ success: boolean; message: string }>
       runModelAnalysis: (scope?: AnalysisScope) => Promise<CapacityScanResult>
       onModelBenchmarkLine: (cb: (line: string) => void) => () => void
       getNewModels: () => Promise<string[]>

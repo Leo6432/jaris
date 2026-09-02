@@ -316,6 +316,32 @@ body.body--scan {
   margin: 8px 0;
 }
 
+/* Même code couleur ambre que .options-menu__analysis-notice ci-dessus, pour le bandeau "Ollama pas à
+   jour" (onglet Modèles) — bouton "Mettre à jour" (winget) + lien manuel côte à côte. */
+.options-menu__ollama-warning {
+  font-size: 0.76rem;
+  color: #ffb648;
+  background: rgba(255, 182, 72, 0.08);
+  border: 1px solid rgba(255, 182, 72, 0.3);
+  border-radius: 10px;
+  padding: 8px 14px;
+  margin: 0 0 10px;
+}
+
+.options-menu__ollama-update-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.options-menu__ollama-update-note {
+  font-size: 0.72rem;
+  opacity: 0.85;
+  margin: 6px 0 0;
+}
+
 /* Popup de choix du périmètre d'analyse ("tout" ou un seul palier) — au-dessus de .options-page (z-index 20). */
 .options-menu__scope-dialog-overlay {
   position: fixed;

@@ -363,6 +363,19 @@ jour existe, un bandeau s'affiche dans l'onglet **Modèles** du menu Options
 injoignable ou limite de requêtes atteinte n'empêchent jamais Jaris de
 démarrer, le bandeau reste juste absent).
 
+Le bandeau propose aussi un bouton **"Mettre à jour"** qui lance
+`winget upgrade --id Ollama.Ollama` (`updateOllama`,
+`electron/services/dependencyServices.ts`) — `winget` (App Installer,
+préinstallé sur Windows 10 1809+/11) reste la seule vraie ligne de commande
+fiable pour ça : contrairement à l'installeur Windows d'Ollama
+(OllamaSetup.exe), aucun flag silencieux n'est documenté, pas question d'en
+inventer un. Le paquet `Ollama.Ollama` est officiellement maintenu à jour sur
+[winget-pkgs](https://github.com/microsoft/winget-pkgs). Une seule invite
+Windows (élévation UAC) reste inévitable pour installer quoi que ce soit —
+ni winget ni Jaris ne peuvent la contourner. Si `winget` est introuvable
+(machine très ancienne ou dépouillée), le bouton le dit clairement plutôt que
+d'échouer en silence, et renvoie vers le lien manuel juste à côté.
+
 > Le modèle a par défaut une fenêtre de contexte énorme (131072 tokens pour
 > qwen3.5), ce qui peut le faire déborder de la VRAM et tourner en partie sur
 > le CPU (très lent). `OLLAMA_NUM_CTX` dans `.env` (4096 par défaut) évite ça

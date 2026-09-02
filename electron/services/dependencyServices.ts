@@ -142,6 +142,52 @@ async function checkOllamaFreshness(): Promise<void> {
 }
 
 /**
+ * Déclenché par le bouton "Mettre à jour" du bandeau (OptionsMenu.tsx). `winget` (App Installer, préinstallé
+ * sur Windows 10 1809+/11) reste la seule vraie ligne de commande fiable : contrairement à l'installeur
+ * Windows d'Ollama (OllamaSetup.exe, aucun flag silencieux documenté — pas question d'en inventer un), le
+ * paquet `Ollama.Ollama` est officiellement maintenu à jour sur github.com/microsoft/winget-pkgs. Une seule
+ * invite Windows (élévation UAC) reste inévitable pour installer quoi que ce soit sur la machine — ni winget
+ * ni Jaris ne peuvent la contourner, et il ne faut pas essayer.
+ */
+export function updateOllama(): Promise<{ success: boolean; message: string }> {
+  return new Promise((resolve) => {
+    const proc = spawn(
+      'winget',
+      ['upgrade', '--id', 'Ollama.Ollama', '-e', '--silent', '--accept-package-agreements', '--accept-source-agreements'],
+      { windowsHide: true }
+    )
+    let output = ''
+    proc.stdout?.on('data', (chunk: Buffer) => {
+      output += chunk.toString()
+    })
+    proc.stderr?.on('data', (chunk: Buffer) => {
+      output += chunk.toString()
+    })
+    // Comme pour ensureOllamaRunning : spawn() signale un binaire introuvable (winget absent, machine très
+    // ancienne ou dépouillée) de façon asynchrone via 'error', jamais en levant une exception directement.
+    proc.on('error', (err) => {
+      resolve({
+        success: false,
+        message: `winget introuvable (${err.message}) : installe "App Installer" depuis le Microsoft Store, ou mets à jour à la main sur ollama.com/download.`
+      })
+    })
+    proc.on('close', (code) => {
+      if (code === 0) {
+        // Re-vérifie pour de vrai plutôt que de supposer que ça a marché (ex: winget peut sortir en code 0
+        // même sans rien avoir eu à faire) : le bandeau (OptionsMenu.tsx) relit getOllamaVersionStatus juste
+        // après l'appel, ce cache doit donc déjà être à jour à ce moment-là.
+        void checkOllamaFreshness().then(() => resolve({ success: true, message: 'Ollama mis à jour.' }))
+        return
+      }
+      resolve({
+        success: false,
+        message: `winget a échoué (code ${code}) : ${output.trim().slice(-500) || 'aucun détail'} — essaie ollama.com/download.`
+      })
+    })
+  })
+}
+
+/**
  * Lance `ollama serve` si l'API ne répond pas déjà (ex: app Ollama pas encore démarrée au boot
  * Windows). Sans effet si Ollama tourne déjà - la commande échoue juste silencieusement (port pris).
  */

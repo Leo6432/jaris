@@ -108,6 +108,8 @@ export default function OptionsMenu(): JSX.Element {
   const [clearingHistory, setClearingHistory] = useState(false)
   const [modelOverview, setModelOverview] = useState<ModelOverviewResult | null>(null)
   const [ollamaVersionStatus, setOllamaVersionStatus] = useState<OllamaVersionStatus | null>(null)
+  const [updatingOllama, setUpdatingOllama] = useState(false)
+  const [ollamaUpdateMessage, setOllamaUpdateMessage] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
   // Logique de run + progression partagée avec l'écran d'onboarding (CapacityScan.tsx) — voir useModelAnalysis.
@@ -257,6 +259,19 @@ export default function OptionsMenu(): JSX.Element {
   const handleDisconnect = (): void => {
     setError(null)
     void window.jaris.disconnectGmail().then(() => setStatus({ connected: false, email: null }))
+  }
+
+  const handleUpdateOllama = (): void => {
+    setUpdatingOllama(true)
+    setOllamaUpdateMessage(null)
+    window.jaris
+      .updateOllama()
+      .then(({ message }) => {
+        setOllamaUpdateMessage(message)
+        return window.jaris.getOllamaVersionStatus()
+      })
+      .then(setOllamaVersionStatus)
+      .finally(() => setUpdatingOllama(false))
   }
 
   const chooseVoice = async (index: number): Promise<void> => {
@@ -531,14 +546,24 @@ export default function OptionsMenu(): JSX.Element {
         {tab === 'modeles' && (
           <div className="options-menu__section">
             {ollamaVersionStatus?.outdated && (
-              <div className="app__setup-warning">
+              <div className="options-menu__ollama-warning">
                 Ollama {ollamaVersionStatus.current} installé, la dernière version est{' '}
                 {ollamaVersionStatus.latest} — certains modèles récents peuvent refuser de se télécharger tant
-                qu'Ollama n'est pas à jour. Mets à jour sur{' '}
-                <a href="https://ollama.com/download" target="_blank" rel="noreferrer">
-                  ollama.com/download
-                </a>{' '}
-                (pas besoin de désinstaller avant, ça se fait par-dessus).
+                qu'Ollama n'est pas à jour.
+                <div className="options-menu__ollama-update-actions">
+                  <button onClick={handleUpdateOllama} disabled={updatingOllama}>
+                    {updatingOllama ? 'Mise à jour en cours…' : 'Mettre à jour'}
+                  </button>
+                  <a href="https://ollama.com/download" target="_blank" rel="noreferrer">
+                    ou télécharge manuellement sur ollama.com/download
+                  </a>
+                </div>
+                {updatingOllama && (
+                  <p className="options-menu__ollama-update-note">
+                    Une fenêtre Windows peut demander une autorisation (élévation) — accepte-la pour continuer.
+                  </p>
+                )}
+                {!updatingOllama && ollamaUpdateMessage && <p>{ollamaUpdateMessage}</p>}
               </div>
             )}
 

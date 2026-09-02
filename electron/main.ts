@@ -5,7 +5,8 @@ import {
   ensureOllamaRunning,
   ensureSearxngRunning,
   getOllamaVersionStatus,
-  stopOllamaIfStartedByJaris
+  stopOllamaIfStartedByJaris,
+  updateOllama
 } from './services/dependencyServices'
 import { getAllCandidateModelIds, getModelOverview } from './services/hardwareScan'
 import { runModelAnalysis } from './services/benchmarkRunner'
@@ -298,6 +299,7 @@ app.whenReady().then(async () => {
   ipcMain.on(IPC_CHANNELS.stopTestMicrophone, () => pipeline?.stopTestMic())
   ipcMain.handle(IPC_CHANNELS.getModelOverview, () => getModelOverview())
   ipcMain.handle(IPC_CHANNELS.getOllamaVersionStatus, () => getOllamaVersionStatus())
+  ipcMain.handle(IPC_CHANNELS.updateOllama, () => updateOllama())
   // renderer -> main : modèles candidats apparus depuis le dernier scan (étape 29), pour le popup dans App.tsx.
   // Un profil créé avant cette fonctionnalité (knownModelCandidates jamais défini) est silencieusement
   // initialisé sur l'état actuel plutôt que de signaler tous les candidats existants comme "nouveaux".
