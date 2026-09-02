@@ -28,9 +28,9 @@ function formatSpeed(entry: ModelOverviewEntry): string {
  * risquer qu'elles divergent si l'une des deux est modifiée sans l'autre.
  */
 function formatVramRange(tiers: HardwareTierPreviewData[], i: number): string {
-  if (i === 0) return `moins de ${tiers[0].vramGb} Go`
-  if (i === tiers.length - 1) return `plus de ${tiers[i - 1].vramGb} Go`
-  return `${tiers[i - 1].vramGb} à ${tiers[i].vramGb} Go`
+  if (i === 0) return `(moins de ${tiers[0].vramGb} Go)`
+  if (i === tiers.length - 1) return `(plus de ${tiers[i - 1].vramGb} Go)`
+  return `(${tiers[i - 1].vramGb} à ${tiers[i].vramGb} Go)`
 }
 
 /**

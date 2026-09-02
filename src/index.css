@@ -1112,7 +1112,7 @@ body.body--scan {
 
 .capacity-scan__tier-vram-range {
   font-size: 0.78rem;
-  color: #6f8fae;
+  color: #d9ecff;
 }
 
 /* Une ligne par palier (Rapide/Médium/Puissant/Vision), avec vitesse + fiabilité de son modèle — remplace le
