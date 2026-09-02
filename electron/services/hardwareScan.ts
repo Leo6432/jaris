@@ -553,21 +553,24 @@ function parseToolScore(toolCalling: string | null): number {
 }
 
 /**
- * Choisit le meilleur modèle de chaque palier (+ vision) d'après de vraies mesures — soit un run local du
- * benchmark (parseLocalBenchmark : vitesse + fiabilité mesurées sur CETTE machine), soit, pour un modèle
- * déjà vérifié par ailleurs (parseVerifiedToolScores), sa fiabilité partagée combinée à une vitesse estimée
- * par formule pour cette machine (voir estimateSpeedTokPerSec) — jamais en supposant que le plus gros qui
- * rentre est forcément le meilleur. Priorité à la fiabilité, la vitesse ne départageant qu'à égalité. Une
- * vraie mesure locale prime toujours sur un score vérifié partagé pour le même modèle (plus précise,
- * spécifique à cette machine). Repli sur pickForBudget (par taille) si aucun candidat n'a de résultat
- * exploitable pour ce palier (jamais testé nulle part, ni localement ni vérifié).
- */
-/**
  * Cœur PUR (aucun accès disque/réseau ici — localBenchmark/verifiedToolScores déjà lus par l'appelant) du
- * choix de modèles pour un profil matériel donné (vramGb/ramGb/gpuName) : extrait de
- * pickBestModelsFromBenchmark pour être réutilisable avec des valeurs HYPOTHÉTIQUES (voir
+ * choix du meilleur modèle de chaque palier (+ vision) pour un profil matériel donné (vramGb/ramGb/gpuName)
+ * — extrait en fonction séparée pour être réutilisable avec des valeurs HYPOTHÉTIQUES (voir
  * previewHardwareTiers, qui l'appelle 3 fois avec des VRAM représentatives pour illustrer "petite/moyenne/
- * grande configuration") en plus du vrai matériel détecté.
+ * grande configuration") en plus du vrai matériel détecté (pickBestModelsFromBenchmark).
+ *
+ * D'après de vraies mesures — soit un run local du benchmark (parseLocalBenchmark : vitesse + fiabilité
+ * mesurées sur CETTE machine), soit, pour un modèle déjà vérifié par ailleurs (parseVerifiedToolScores), sa
+ * fiabilité partagée combinée à une vitesse estimée par formule (voir estimateSpeedTokPerSec) — jamais en
+ * supposant que le plus gros qui rentre est forcément le meilleur. Priorité à la fiabilité, la VRAM du
+ * candidat ne départageant qu'à égalité (le plus gros gagne, pas le plus rapide — voir pickBestFrom
+ * ci-dessous). Une vraie mesure locale prime toujours sur un score vérifié partagé pour le même modèle (plus
+ * précise, spécifique à cette machine). Repli sur pickForBudget (par taille) si aucun candidat n'a de
+ * résultat exploitable pour ce palier (jamais testé nulle part, ni localement ni vérifié) — renvoie alors une
+ * entrée sans vitesse/fiabilité connues plutôt qu'un chiffre inventé.
+ *
+ * Renvoie l'entrée COMPLÈTE (pas juste le nom du modèle) pour chaque palier : previewHardwareTiers en a
+ * besoin pour afficher vitesse/fiabilité à côté de chaque modèle, pas seulement son nom.
  */
 function computeModelPicks(
   vramGb: number | null,
@@ -575,7 +578,7 @@ function computeModelPicks(
   gpuName: string | null,
   localBenchmark: Map<string, LocalBenchmarkEntry>,
   verifiedToolScores: Record<VerifiedTier, Map<string, string>>
-): { models: ModelTiers; visionModel: string } {
+): { flash: ModelOverviewEntry; medium: ModelOverviewEntry; large: ModelOverviewEntry; vision: ModelOverviewEntry } {
   const budgetGb = vramGb !== null ? Math.max(0, vramGb - STT_RESERVED_GB) : 0
   // Budget élargi pour les candidats "Puissant" qui tolèrent de déborder sur la RAM (voir
   // LARGE_RAM_OFFLOAD_MODELS) : VRAM (déjà amputée de la réservation STT) + RAM (moins la marge pour
@@ -596,7 +599,7 @@ function computeModelPicks(
   // la demande explicite de Léo : une machine qui a la place doit profiter d'un modèle plus capable, pas
   // juste du plus rapide parmi ceux qui réussissent déjà 100% des tests (nos 6/3 questions ne distinguent
   // pas "juste assez bon" de "vraiment plus intelligent" une fois le score max atteint).
-  const pickBestFrom = (candidates: ModelCandidate[], tier: VerifiedTier): string => {
+  const pickBestFrom = (candidates: ModelCandidate[], tier: VerifiedTier): ModelOverviewEntry => {
     const benchmarked = candidates
       .filter((c) => c.vramGb <= budgetForCandidate(c.model))
       .map((c) => ({ model: c.model, vramGb: c.vramGb, result: resultFor(c, tier) }))
@@ -607,29 +610,44 @@ function computeModelPicks(
 
     // Repli VRAM seule (jamais élargi) : sans aucun résultat exploitable (ni mesure locale, ni score
     // vérifié), pas de raison de parier sur un débordement RAM jamais mesuré sur cette machine.
-    if (!benchmarked.length) return pickForBudget(candidates, budgetGb)
+    if (!benchmarked.length) {
+      const model = pickForBudget(candidates, budgetGb)
+      const vramGbOfModel = candidates.find((c) => c.model === model)?.vramGb ?? 0
+      return { model, vramGb: vramGbOfModel, speedTokPerSec: null, toolCalling: null, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null }
+    }
 
     benchmarked.sort((a, b) => {
       const toolDiff = parseToolScore(b.result.toolCalling) - parseToolScore(a.result.toolCalling)
       return toolDiff !== 0 ? toolDiff : b.vramGb - a.vramGb
     })
-    return benchmarked[0].model
+    const winner = benchmarked[0]
+    return {
+      model: winner.model,
+      vramGb: winner.vramGb,
+      speedTokPerSec: winner.result.speedTokPerSec,
+      speedEstimated: winner.result.speedEstimated,
+      toolCalling: winner.result.toolCalling,
+      intelligence: INTELLIGENCE_MMLU_PRO[winner.model] ?? null
+    }
   }
 
   return {
-    models: {
-      flash: pickBestFrom(TIER_CANDIDATES.flash, 'conversation'),
-      medium: pickBestFrom(TIER_CANDIDATES.medium, 'conversation'),
-      large: pickBestFrom(TIER_CANDIDATES.large, 'conversation')
-    },
-    visionModel: pickBestFrom(VISION_CANDIDATES, 'vision')
+    flash: pickBestFrom(TIER_CANDIDATES.flash, 'conversation'),
+    medium: pickBestFrom(TIER_CANDIDATES.medium, 'conversation'),
+    large: pickBestFrom(TIER_CANDIDATES.large, 'conversation'),
+    vision: pickBestFrom(VISION_CANDIDATES, 'vision')
   }
 }
 
 export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult> {
   const { name, vramGb } = await detectGpu()
   const picks = computeModelPicks(vramGb, detectRamGb(), name, parseLocalBenchmark(), parseVerifiedToolScores())
-  return { gpuName: name, vramGb, ...picks }
+  return {
+    gpuName: name,
+    vramGb,
+    models: { flash: picks.flash.model, medium: picks.medium.model, large: picks.large.model },
+    visionModel: picks.vision.model
+  }
 }
 
 /**

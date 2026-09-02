@@ -462,10 +462,6 @@ body.body--scan {
   word-break: break-word;
 }
 
-.options-menu__model-overview-title {
-  margin-top: 14px;
-}
-
 /* Remplace l'ancienne liste à puces "Modèles Ollama par palier" : la même info existait déjà en double,
    surlignée en cyan dans les tableaux plus bas — ces puces ne servent plus qu'au coup d'œil rapide (+ le
    niveau de réflexion, seule info qui n'est nulle part ailleurs, en infobulle). */
@@ -603,22 +599,6 @@ body.body--scan {
 .options-menu__badge--none {
   color: #4d6a87;
   font-weight: 400;
-}
-
-.options-menu__model-row--selected td {
-  border-top: 1px solid rgba(55, 226, 255, 0.5);
-  border-bottom: 1px solid rgba(55, 226, 255, 0.5);
-  background: rgba(55, 226, 255, 0.08);
-}
-
-.options-menu__model-row--selected td:first-child {
-  border-left: 1px solid rgba(55, 226, 255, 0.5);
-  border-radius: 6px 0 0 6px;
-}
-
-.options-menu__model-row--selected td:last-child {
-  border-right: 1px solid rgba(55, 226, 255, 0.5);
-  border-radius: 0 6px 6px 0;
 }
 
 .options-menu__model-overview-hint {
@@ -1170,15 +1150,36 @@ body.body--scan {
   color: #d9ecff;
 }
 
-.capacity-scan__tier-models {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  color: #9fc3e6;
+/* Une ligne par palier (Rapide/Médium/Puissant/Vision), avec vitesse + fiabilité de son modèle — remplace le
+   tableau détaillé de tous les candidats (retiré, ce résumé par palier suffit). */
+.capacity-scan__tier-table {
+  width: 100%;
+  border-collapse: collapse;
   font-size: 0.78rem;
+  color: #9fc3e6;
+}
+
+.capacity-scan__tier-table td {
+  padding: 2px 0;
+  white-space: nowrap;
+}
+
+.capacity-scan__tier-slot {
+  color: #4d6a87;
+  padding-right: 8px !important;
+}
+
+.capacity-scan__tier-model {
+  color: #d9ecff;
+  padding-right: 10px !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 0;
+  width: 100%;
+}
+
+.capacity-scan__tier-speed {
+  padding-right: 10px !important;
 }
 
 .capacity-scan__tier-badge {
