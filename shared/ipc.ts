@@ -130,6 +130,15 @@ export interface ModelOverviewEntry {
   speedEstimated?: boolean
   toolCalling: string | null
   intelligence: number | null
+  /**
+   * true si ce modèle est présent dans scripts/verified-tool-scores.md pour SON palier — indépendamment de
+   * speedEstimated (qui ne dit que "pas de mesure locale, on affiche le score vérifié à la place") : même un
+   * modèle déjà mesuré localement une fois reste, lui aussi, exclu du prochain run de
+   * scripts/benchmark-models.mjs s'il est vérifié. Sert à ModelAnalysisProgress.tsx (OptionsMenu.tsx) pour
+   * distinguer, dans le tableau de suivi en direct, un modèle qui ne sera JAMAIS touché par ce run (jamais
+   * de ##MODEL_TESTING##/##MODEL_DONE## le concernant) d'un modèle simplement pas encore commencé.
+   */
+  verifiedSkip?: boolean
 }
 
 /**

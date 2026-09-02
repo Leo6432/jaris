@@ -30,8 +30,17 @@ function formatEta(ms: number): string {
   return minutes === 0 ? `${hours} h` : `${hours} h ${minutes}`
 }
 
-/** Badge d'état pour une ligne du tableau de suivi en direct (pendant un run) — voir ModelRunStatus. */
-function RunStatusBadge({ status }: { status: ModelRunStatus | undefined }): JSX.Element {
+/**
+ * Badge d'état pour une ligne du tableau de suivi en direct (pendant un run) — voir ModelRunStatus.
+ * `verifiedSkip` (ModelOverviewEntry, voir shared/ipc.ts) : un modèle déjà vérifié n'est JAMAIS mentionné
+ * par une ligne ##...## de scripts/benchmark-models.mjs (il n'est même pas dans sa liste de candidats ce
+ * run-ci) — sans ce cas à part, il resterait affiché "En attente" pour toujours, comme s'il allait être
+ * testé d'un instant à l'autre alors qu'il ne le sera jamais.
+ */
+function RunStatusBadge({ status, verifiedSkip }: { status: ModelRunStatus | undefined; verifiedSkip?: boolean }): JSX.Element {
+  if ((!status || status.kind === 'pending') && verifiedSkip) {
+    return <span className="options-menu__badge options-menu__badge--good">Déjà vérifié</span>
+  }
   if (!status || status.kind === 'pending') {
     return <span className="options-menu__badge options-menu__badge--none">En attente</span>
   }
@@ -122,7 +131,7 @@ export default function ModelAnalysisProgress({ state, modelOverview }: ModelAna
                         {entry.model}
                       </td>
                       <td>
-                        <RunStatusBadge status={modelRunStatus[entry.model]} />
+                        <RunStatusBadge status={modelRunStatus[entry.model]} verifiedSkip={entry.verifiedSkip} />
                       </td>
                     </tr>
                   ))}

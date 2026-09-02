@@ -507,9 +507,14 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
   // vitesse estimée par formule pour cette machine — sinon rien de connu. `tier` sélectionne la BONNE table
   // du fichier (voir VerifiedTier) : `qwen3.5:4b` par ex. a un score différent en Conversation qu'en Vision.
   const buildEntry = (model: string, modelVramGb: number, tier: VerifiedTier): ModelOverviewEntry => {
+    // Indépendant de local/verifiedTool ci-dessous : même un modèle déjà mesuré localement une fois reste
+    // exclu du PROCHAIN run de benchmark-models.mjs s'il est dans verified-tool-scores.md (voir son
+    // commentaire) — l'UI (ModelAnalysisProgress.tsx) en a besoin pour ne pas laisser ce modèle bloqué sur
+    // "En attente" pour toujours pendant un run, faute de ##MODEL_TESTING##/##MODEL_DONE## le concernant.
+    const verifiedSkip = verifiedToolScores[tier].has(model)
     const local = localBenchmark.get(model)
     if (local) {
-      return { model, vramGb: modelVramGb, speedTokPerSec: local.speedTokPerSec, toolCalling: local.toolCalling, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null }
+      return { model, vramGb: modelVramGb, speedTokPerSec: local.speedTokPerSec, toolCalling: local.toolCalling, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip }
     }
     const verifiedTool = verifiedToolScores[tier].get(model)
     if (verifiedTool) {
@@ -519,10 +524,11 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
         speedTokPerSec: estimateSpeedTokPerSec(modelVramGb, gpuName),
         speedEstimated: true,
         toolCalling: verifiedTool,
-        intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null
+        intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
+        verifiedSkip
       }
     }
-    return { model, vramGb: modelVramGb, speedTokPerSec: null, toolCalling: null, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null }
+    return { model, vramGb: modelVramGb, speedTokPerSec: null, toolCalling: null, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip }
   }
 
   const groups = [
