@@ -627,12 +627,24 @@ function computeModelPicks(
       // départagé par 0 dans le tri ci-dessous plutôt qu'exclu.
       .filter((c): c is { model: string; vramGb: number; result: LocalBenchmarkEntry } => c.result?.toolCalling != null)
 
-    // Repli VRAM seule (jamais élargi) : sans aucun résultat exploitable (ni mesure locale, ni score
-    // vérifié), pas de raison de parier sur un débordement RAM jamais mesuré sur cette machine.
+    // Repli VRAM seule (jamais élargi) : aucun candidat ne tient dans le budget de ce palier (ex: le plus
+    // petit modèle vision, 3 Go, ne rentre déjà plus dans les 1,5 Go restants une fois la réservation STT
+    // déduite sur le palier "Petite"). On garde quand même son score/sa vitesse s'il en a un connu (mesure
+    // locale ou verified-tool-scores.md) plutôt que de les effacer : le modèle affiché EST celui-là qu'on le
+    // veuille ou non (repli ultime), donc autant montrer ce qu'on sait vraiment de lui — seul un modèle
+    // jamais testé nulle part garde des cases vides ci-dessous.
     if (!benchmarked.length) {
       const model = pickForBudget(candidates, budgetGb)
-      const vramGbOfModel = candidates.find((c) => c.model === model)?.vramGb ?? 0
-      return { model, vramGb: vramGbOfModel, speedTokPerSec: null, toolCalling: null, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null }
+      const candidate = candidates.find((c) => c.model === model)
+      const result = candidate ? resultFor(candidate, tier) : undefined
+      return {
+        model,
+        vramGb: candidate?.vramGb ?? 0,
+        speedTokPerSec: result?.speedTokPerSec ?? null,
+        speedEstimated: result?.speedEstimated,
+        toolCalling: result?.toolCalling ?? null,
+        intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null
+      }
     }
 
     benchmarked.sort((a, b) => {
