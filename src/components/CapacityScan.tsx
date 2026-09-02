@@ -1,47 +1,46 @@
-import { useEffect, useState } from 'react'
-import type { CapacityScanResult, ModelOverviewResult } from '../../shared/ipc'
-import { useModelAnalysis } from '../hooks/useModelAnalysis'
-import ModelAnalysisProgress, { ANALYSIS_NOTICE } from './ModelAnalysisProgress'
+import { Fragment, useEffect, useState } from 'react'
+import type { CapacityScanResult, HardwareTierPreview } from '../../shared/ipc'
 
 interface CapacityScanProps {
   onDone: () => void
 }
 
 /**
- * Premier lancement : Jaris teste TOUS les modèles candidats compatibles avec la machine (comme "Lancer
- * l'analyse" dans Options → Modèles, voir useModelAnalysis) plutôt qu'un choix rapide basé sur la seule
- * VRAM totale — décision explicite de Léo : "je veux que la personne soit obligée de faire l'analyse
- * complète pour démarrer sa première fois avec Jaris", même si ça prend plus longtemps qu'un scan rapide.
- * Pas d'échappatoire "continuer quand même" sur un échec (contrairement à l'ancien scan rapide) : sans
- * modèle réellement testé et retenu, Jaris ne peut de toute façon rien faire — seule une nouvelle tentative
- * a un sens.
+ * Premier lancement : détecte le matériel et télécharge directement les modèles déjà connus pour lui
+ * (voir runQuickSetup, benchmarkRunner.ts) — remplace l'ancienne analyse comparative obligatoire complète
+ * (qui pouvait prendre des dizaines de minutes) maintenant que scripts/verified-tool-scores.md couvre la
+ * quasi-totalité des configurations courantes : plus besoin de comparer des dizaines de candidats pour
+ * savoir lequel gagne, juste télécharger le gagnant déjà connu. Présente d'abord les 3 paliers de
+ * configuration (previewHardwareTiers) avec une flèche sur celui qui correspond à cette machine, pour que
+ * l'utilisateur comprenne pourquoi Jaris a choisi ce qu'il a choisi avant même de cliquer "Continuer" — à la
+ * demande explicite de Léo. L'ancienne analyse comparative complète reste disponible à la main depuis
+ * Options → Modèles pour qui veut vérifier/affiner au-delà de ce qui est déjà vérifié.
  */
 export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element {
-  const [modelOverview, setModelOverview] = useState<ModelOverviewResult | null>(null)
-  const [started, setStarted] = useState(false)
+  const [tiers, setTiers] = useState<HardwareTierPreview[] | null>(null)
+  const [installing, setInstalling] = useState(false)
+  const [log, setLog] = useState<string[]>([])
   const [result, setResult] = useState<CapacityScanResult | null>(null)
-  const analysis = useModelAnalysis(modelOverview)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    void window.jaris.getModelOverview().then(setModelOverview)
+    void window.jaris.previewHardwareTiers().then(setTiers)
   }, [])
 
+  useEffect(() => {
+    if (!installing) return
+    return window.jaris.onModelBenchmarkLine((line) => setLog((prev) => [...prev, line]))
+  }, [installing])
+
   const start = (): void => {
-    setStarted(true)
-    setResult(null)
-    analysis
-      .run()
-      .then(async (scan) => {
-        setResult(scan)
-        const profile = await window.jaris.getProfile()
-        if (profile) {
-          await window.jaris.saveProfile({ ...profile, models: scan.models, visionModel: scan.visionModel, capacityScanDone: true })
-        }
-      })
-      .catch(() => {
-        // analysis.error porte déjà le message : rien de plus à faire ici, l'écran d'échec ci-dessous
-        // propose juste de réessayer (voir le commentaire au-dessus du composant).
-      })
+    setError(null)
+    setLog([])
+    setInstalling(true)
+    window.jaris
+      .runQuickSetup()
+      .then((scan) => setResult(scan))
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setInstalling(false))
   }
 
   const finish = (): void => onDone()
@@ -49,34 +48,55 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
   return (
     <div className="app">
       <div className="app__onboarding capacity-scan">
-        <h1>{result ? 'Analyse terminée' : 'Analyse de ton PC...'}</h1>
+        <h1>{result ? 'Configuration terminée' : 'Configuration de Jaris'}</h1>
 
-        {!started && (
+        {!result && !installing && !error && (
           <>
             <p>
-              Jaris teste chaque modèle candidat qui tient sur ta machine (VRAM, RAM et espace disque) pour
-              choisir le meilleur de chaque palier, plutôt que de deviner d'après la taille seule. Ça peut
-              prendre du temps (potentiellement plusieurs dizaines de minutes, et plusieurs Go de
-              téléchargement) selon ta connexion et ton matériel.
+              Jaris détecte ta machine et choisit directement les modèles déjà adaptés à sa taille, sans
+              tout comparer un par un — voici les 3 configurations possibles, la tienne est repérée ci-dessous.
             </p>
-            <p className="options-menu__analysis-notice">{ANALYSIS_NOTICE}</p>
-            <button onClick={start} disabled={modelOverview === null}>
-              {modelOverview === null ? 'Préparation...' : "Démarrer l'analyse"}
+            {tiers === null ? (
+              <p className="capacity-scan__status">Détection du matériel...</p>
+            ) : (
+              <div className="capacity-scan__tiers">
+                {tiers.map((tier, i) => (
+                  <Fragment key={tier.label}>
+                    <div className={`capacity-scan__tier${tier.current ? ' capacity-scan__tier--current' : ''}`}>
+                      <div className="capacity-scan__tier-header">
+                        <span className="capacity-scan__tier-index">Palier {i + 1}</span>
+                        <span className="capacity-scan__tier-label">{tier.label}</span>
+                      </div>
+                      <ul className="capacity-scan__tier-models">
+                        <li>Rapide : {tier.models.flash}</li>
+                        <li>Médium : {tier.models.medium}</li>
+                        <li>Puissant : {tier.models.large}</li>
+                        <li>Vision : {tier.visionModel}</li>
+                      </ul>
+                      {tier.current && <div className="capacity-scan__tier-badge">← ta configuration</div>}
+                    </div>
+                    {i < tiers.length - 1 && <div className="capacity-scan__tier-arrow">↓</div>}
+                  </Fragment>
+                ))}
+              </div>
+            )}
+            <button onClick={start} disabled={tiers === null}>
+              Continuer
             </button>
           </>
         )}
 
-        {started && !result && !analysis.error && (
+        {installing && (
           <>
             <div className="capacity-scan__spinner" />
-            <ModelAnalysisProgress state={analysis} modelOverview={modelOverview} />
+            <p className="capacity-scan__status">Téléchargement des modèles choisis...</p>
+            {log.length > 0 && <p className="capacity-scan__status">{log[log.length - 1]}</p>}
           </>
         )}
 
-        {analysis.error && (
+        {error && (
           <>
-            <p className="capacity-scan__status">L'analyse a échoué : {analysis.error}</p>
-            <ModelAnalysisProgress state={analysis} modelOverview={modelOverview} />
+            <p className="capacity-scan__status">La configuration a échoué : {error}</p>
             <button onClick={start}>Réessayer</button>
           </>
         )}

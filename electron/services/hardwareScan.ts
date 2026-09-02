@@ -5,7 +5,7 @@ import { promisify } from 'util'
 import { CODE_MODEL_FAST, CODE_MODEL_QUALITY } from './codeGenerator'
 import { listInstalledModels } from './ollama'
 import { RESOURCE_SAFETY_MARGIN_GB, detectRamGb } from './systemResources'
-import type { ModelOverviewEntry, ModelOverviewResult, ModelTiers } from '../../shared/ipc'
+import type { HardwareTierPreview, ModelOverviewEntry, ModelOverviewResult, ModelTiers } from '../../shared/ipc'
 
 const execAsync = promisify(exec)
 
@@ -562,24 +562,34 @@ function parseToolScore(toolCalling: string | null): number {
  * spécifique à cette machine). Repli sur pickForBudget (par taille) si aucun candidat n'a de résultat
  * exploitable pour ce palier (jamais testé nulle part, ni localement ni vérifié).
  */
-export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult> {
-  const { name, vramGb } = await detectGpu()
+/**
+ * Cœur PUR (aucun accès disque/réseau ici — localBenchmark/verifiedToolScores déjà lus par l'appelant) du
+ * choix de modèles pour un profil matériel donné (vramGb/ramGb/gpuName) : extrait de
+ * pickBestModelsFromBenchmark pour être réutilisable avec des valeurs HYPOTHÉTIQUES (voir
+ * previewHardwareTiers, qui l'appelle 3 fois avec des VRAM représentatives pour illustrer "petite/moyenne/
+ * grande configuration") en plus du vrai matériel détecté.
+ */
+function computeModelPicks(
+  vramGb: number | null,
+  ramGb: number,
+  gpuName: string | null,
+  localBenchmark: Map<string, LocalBenchmarkEntry>,
+  verifiedToolScores: Record<VerifiedTier, Map<string, string>>
+): { models: ModelTiers; visionModel: string } {
   const budgetGb = vramGb !== null ? Math.max(0, vramGb - STT_RESERVED_GB) : 0
   // Budget élargi pour les candidats "Puissant" qui tolèrent de déborder sur la RAM (voir
   // LARGE_RAM_OFFLOAD_MODELS) : VRAM (déjà amputée de la réservation STT) + RAM (moins la marge pour
   // l'OS/les autres logiciels) — jamais pour les autres candidats, qui doivent tenir entièrement en VRAM
   // pour un usage voix/chat temps réel sans à-coups.
-  const ramOffloadBudgetGb = budgetGb + Math.max(0, detectRamGb() - RESOURCE_SAFETY_MARGIN_GB)
+  const ramOffloadBudgetGb = budgetGb + Math.max(0, ramGb - RESOURCE_SAFETY_MARGIN_GB)
   const budgetForCandidate = (model: string): number => (LARGE_RAM_OFFLOAD_MODELS.has(model) ? ramOffloadBudgetGb : budgetGb)
-  const localBenchmark = parseLocalBenchmark()
-  const verifiedToolScores = parseVerifiedToolScores()
 
   const resultFor = (candidate: ModelCandidate, tier: VerifiedTier): LocalBenchmarkEntry | undefined => {
     const local = localBenchmark.get(candidate.model)
     if (local) return local
     const verifiedTool = verifiedToolScores[tier].get(candidate.model)
     if (!verifiedTool) return undefined
-    return { speedTokPerSec: estimateSpeedTokPerSec(candidate.vramGb, name), toolCalling: verifiedTool, speedEstimated: true }
+    return { speedTokPerSec: estimateSpeedTokPerSec(candidate.vramGb, gpuName), toolCalling: verifiedTool, speedEstimated: true }
   }
 
   // Départage à égalité de fiabilité par la VRAM du candidat (le plus GROS gagne), pas par la vitesse — à
@@ -607,8 +617,6 @@ export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult>
   }
 
   return {
-    gpuName: name,
-    vramGb,
     models: {
       flash: pickBestFrom(TIER_CANDIDATES.flash, 'conversation'),
       medium: pickBestFrom(TIER_CANDIDATES.medium, 'conversation'),
@@ -616,4 +624,52 @@ export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult>
     },
     visionModel: pickBestFrom(VISION_CANDIDATES, 'vision')
   }
+}
+
+export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult> {
+  const { name, vramGb } = await detectGpu()
+  const picks = computeModelPicks(vramGb, detectRamGb(), name, parseLocalBenchmark(), parseVerifiedToolScores())
+  return { gpuName: name, vramGb, ...picks }
+}
+
+/**
+ * Bornes utilisées UNIQUEMENT pour illustrer/étiqueter "Petite/Moyenne/Grande configuration" à
+ * l'utilisateur (écran d'accueil, voir CapacityScan.tsx) — le VRAI choix de modèles
+ * (pickBestModelsFromBenchmark, computeModelPicks) reste continu, basé sur la VRAM/RAM exacte détectée, pas
+ * sur ces 3 paliers. Essayé un temps de vraiment regrouper le choix en 3 paliers matériels stricts (demande
+ * initiale de Léo) : abandonné après simulation contre les vraies données — sur une machine avec peu de VRAM
+ * mais beaucoup de RAM, le débordement RAM autorisé pour "Puissant" faisait gagner un modèle énorme même
+ * pour le palier "Rapide", censé rester réactif. Ces 3 bornes ne servent donc plus qu'à choisir QUOI montrer
+ * à l'écran, jamais à choisir un modèle pour de vrai.
+ */
+const HARDWARE_TIER_PREVIEW_VRAM_GB = [4, 8, 16]
+const HARDWARE_TIER_PREVIEW_LABELS = ['Petite configuration', 'Configuration moyenne', 'Grande configuration']
+
+/**
+ * 3 lignes illustratives (VRAM représentative, RAM/carte RÉELLES de cette machine) pour l'écran d'accueil :
+ * montre concrètement ce que Jaris choisirait à 3 échelles de VRAM différentes, avec un repère clair sur
+ * celle qui correspond à CETTE machine — sans jamais lancer le moindre téléchargement (computeModelPicks est
+ * pur, verified-tool-scores.md/benchmark-results.md sont déjà sur le disque).
+ */
+export async function previewHardwareTiers(): Promise<HardwareTierPreview[]> {
+  const { name, vramGb: actualVramGb } = await detectGpu()
+  const ramGb = detectRamGb()
+  const localBenchmark = parseLocalBenchmark()
+  const verifiedToolScores = parseVerifiedToolScores()
+  // Le palier "actuel" est celui dont la VRAM représentative est la plus proche de la VRAM RÉELLE détectée
+  // (jamais un simple ordre croissant à 3 bornes fixes : une machine à 30 Go de VRAM doit quand même pointer
+  // vers "Grande", pas déborder hors tableau).
+  const currentIndex =
+    actualVramGb === null
+      ? 0
+      : HARDWARE_TIER_PREVIEW_VRAM_GB.reduce(
+          (bestIdx, gb, idx) => (Math.abs(gb - actualVramGb) < Math.abs(HARDWARE_TIER_PREVIEW_VRAM_GB[bestIdx] - actualVramGb) ? idx : bestIdx),
+          0
+        )
+  return HARDWARE_TIER_PREVIEW_VRAM_GB.map((vramGb, i) => ({
+    label: HARDWARE_TIER_PREVIEW_LABELS[i],
+    vramGb,
+    current: i === currentIndex,
+    ...computeModelPicks(vramGb, ramGb, name, localBenchmark, verifiedToolScores)
+  }))
 }

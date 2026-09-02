@@ -405,14 +405,27 @@ plus bas.
 
 ## Sélection automatique de modèle (étape 13)
 
-Au tout premier lancement (juste après la connexion Gmail), Jaris est
-**obligé** de faire tourner l'analyse complète (voir "Comparer des modèles
-candidats sur ta machine" plus bas) : chaque modèle candidat qui tient sur
-la machine (VRAM, RAM et espace disque) est réellement testé, pas seulement
-choisi par taille — pas d'échappatoire pour continuer sans modèle
-fonctionnel, contrairement à un simple scan rapide qui peut se tromper.
-Ça peut prendre du temps (potentiellement plusieurs dizaines de minutes au
-premier lancement, selon la connexion et le matériel), avec une barre de
+Au tout premier lancement (juste après la connexion Gmail), Jaris détecte
+la machine (VRAM, RAM) et télécharge directement les modèles déjà connus
+pour cette configuration (`previewHardwareTiers`/`runQuickSetup`,
+`electron/services/hardwareScan.ts`/`benchmarkRunner.ts`) — quelques
+minutes tout au plus (juste les 3-4 modèles vraiment retenus, jamais des
+dizaines de candidats concurrents). L'écran affiche d'abord les 3 profils
+de machine possibles (Petite/Moyenne/Grande configuration) avec les modèles
+que chacun obtiendrait, et repère clairement celui qui correspond à cette
+machine, avant même de lancer le moindre téléchargement.
+
+Ça n'a pas toujours été le cas : jusqu'ici, le premier lancement forçait
+une analyse comparative complète (chaque candidat réellement téléchargé et
+testé, potentiellement plusieurs dizaines de minutes) — remplacée par ce
+chemin rapide maintenant que `scripts/verified-tool-scores.md` (voir plus
+bas) couvre la quasi-totalité des configurations courantes : plus besoin
+de comparer pour savoir qui gagne, juste télécharger le gagnant déjà
+connu. L'ancienne analyse comparative complète (voir "Comparer des modèles
+candidats sur ta machine" plus bas) reste disponible à la main depuis
+Options → Modèles, pour qui veut vérifier/affiner au-delà de ce qui est
+déjà vérifié — chaque modèle candidat qui tient sur la machine est alors
+réellement testé, pas seulement choisi par taille, avec une barre de
 progression et un tableau de suivi en direct de chaque candidat.
 
 Une fois l'analyse terminée, Jaris a choisi 3 modèles Ollama adaptés à la

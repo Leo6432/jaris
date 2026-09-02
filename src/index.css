@@ -1127,6 +1127,75 @@ body.body--scan {
   color: #4d6a87;
 }
 
+/* Les 3 paliers de configuration (previewHardwareTiers) présentés à l'écran d'accueil, reliés par des
+   flèches verticales — celui qui correspond à la machine détectée (.capacity-scan__tier--current) ressort
+   nettement en cyan, les deux autres restent discrets pour ne pas distraire de l'essentiel. */
+.capacity-scan__tiers {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  margin: 4px 0;
+}
+
+.capacity-scan__tier {
+  text-align: left;
+  background: rgba(127, 163, 201, 0.06);
+  border: 1px solid rgba(127, 163, 201, 0.2);
+  border-radius: 14px;
+  padding: 10px 16px;
+}
+
+.capacity-scan__tier--current {
+  background: rgba(55, 226, 255, 0.1);
+  border-color: #37e2ff;
+}
+
+.capacity-scan__tier-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.capacity-scan__tier-index {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #4d6a87;
+}
+
+.capacity-scan__tier-label {
+  font-size: 0.95rem;
+  color: #d9ecff;
+}
+
+.capacity-scan__tier-models {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: #9fc3e6;
+  font-size: 0.78rem;
+}
+
+.capacity-scan__tier-badge {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: #37e2ff;
+  font-weight: 600;
+}
+
+.capacity-scan__tier-arrow {
+  align-self: center;
+  color: #4d6a87;
+  font-size: 1.1rem;
+  line-height: 1;
+  margin: 2px 0;
+}
+
 .jaris-orb {
   position: relative;
   display: flex;

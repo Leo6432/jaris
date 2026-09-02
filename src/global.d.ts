@@ -6,6 +6,7 @@ import type {
   ConversationEntry,
   GeneratedApp,
   GmailStatus,
+  HardwareTierPreview,
   JarisEmotion,
   MemoryGraph,
   MicTestDonePayload,
@@ -49,6 +50,8 @@ declare global {
       getOllamaVersionStatus: () => Promise<OllamaVersionStatus | null>
       updateOllama: () => Promise<{ success: boolean; message: string }>
       runModelAnalysis: (scope?: AnalysisScope) => Promise<CapacityScanResult>
+      previewHardwareTiers: () => Promise<HardwareTierPreview[]>
+      runQuickSetup: () => Promise<CapacityScanResult>
       onModelBenchmarkLine: (cb: (line: string) => void) => () => void
       getNewModels: () => Promise<string[]>
       acknowledgeNewModels: () => Promise<void>

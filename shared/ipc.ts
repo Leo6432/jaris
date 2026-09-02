@@ -114,6 +114,21 @@ export interface CapacityScanResult {
 }
 
 /**
+ * Une ligne de previewHardwareTiers (hardwareScan.ts) : illustre "à quoi ressemble le choix de Jaris" à une
+ * échelle de VRAM représentative (Petite/Moyenne/Grande configuration), affichée sur l'écran d'accueil
+ * (CapacityScan.tsx) pour montrer clairement où se situe la machine de l'utilisateur — jamais utilisée pour
+ * choisir un modèle pour de vrai (ça reste le rôle de pickBestModelsFromBenchmark, sur la VRAM/RAM exactes).
+ * `current` marque la ligne qui correspond à la machine RÉELLE détectée.
+ */
+export interface HardwareTierPreview {
+  label: string
+  vramGb: number
+  current: boolean
+  models: ModelTiers
+  visionModel: string
+}
+
+/**
  * Un modèle candidat pour UN palier donné (voir ModelOverviewGroup), pour le tableau comparatif de l'onglet
  * Modèles du menu Options. speedTokPerSec/toolCalling viennent soit d'un vrai run local de
  * `npm run benchmark:models` (scripts/benchmark-models.mjs) sur cette machine, soit — pour un modèle déjà
@@ -252,6 +267,13 @@ export const IPC_CHANNELS = {
   runModelAnalysis: 'jaris:run-model-analysis',
   /** main -> renderer : une ligne de sortie du benchmark en cours, au fil de l'eau (progression comprise, voir OptionsMenu.tsx). */
   modelBenchmarkLine: 'jaris:model-benchmark-line',
+  /** renderer -> main : aperçu instantané (sans rien télécharger) des modèles choisis à 3 échelles de VRAM
+   * représentatives, pour l'écran d'accueil (voir previewHardwareTiers, hardwareScan.ts). */
+  previewHardwareTiers: 'jaris:preview-hardware-tiers',
+  /** renderer -> main : détecte le matériel et télécharge directement les modèles déjà choisis pour lui
+   * (voir runQuickSetup, benchmarkRunner.ts) — le nouveau chemin par défaut de l'écran d'accueil, sans passer
+   * par le benchmark comparatif complet. Réutilise modelBenchmarkLine pour la progression des téléchargements. */
+  runQuickSetup: 'jaris:run-quick-setup',
   /** renderer <-> main : envoie un message écrit à Jaris (mode Chat, étape 30) et renvoie sa réponse. */
   sendChatMessage: 'jaris:send-chat-message',
   /** renderer <-> main : récupère les messages déjà échangés en mode Chat depuis le lancement. */

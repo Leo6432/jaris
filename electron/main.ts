@@ -8,8 +8,8 @@ import {
   stopOllamaIfStartedByJaris,
   updateOllama
 } from './services/dependencyServices'
-import { getAllCandidateModelIds, getModelOverview } from './services/hardwareScan'
-import { runModelAnalysis } from './services/benchmarkRunner'
+import { getAllCandidateModelIds, getModelOverview, previewHardwareTiers } from './services/hardwareScan'
+import { runModelAnalysis, runQuickSetup } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
 import { generateApp, getGeneratedAppsDir } from './services/codeGenerator'
 import { previewVoice } from './services/tts'
@@ -321,6 +321,10 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle(IPC_CHANNELS.runModelAnalysis, async (event, scope?: AnalysisScope): Promise<CapacityScanResult> => {
     return runModelAnalysis((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line), scope)
+  })
+  ipcMain.handle(IPC_CHANNELS.previewHardwareTiers, () => previewHardwareTiers())
+  ipcMain.handle(IPC_CHANNELS.runQuickSetup, async (event): Promise<CapacityScanResult> => {
+    return runQuickSetup((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))
   })
 
   // Mode Chat (étape 30) : même Jaris, mêmes outils, sans synthèse vocale. Un rappel programmé par écrit

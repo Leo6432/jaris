@@ -7,6 +7,50 @@ import { getProfile, saveProfile } from './profileStore'
 import type { AnalysisScope, CapacityScanResult } from '../../shared/ipc'
 
 /**
+ * Chemin rapide de l'écran d'accueil (CapacityScan.tsx) : contrairement à runModelAnalysis ci-dessous, ne
+ * lance JAMAIS scripts/benchmark-models.mjs (donc jamais des dizaines de modèles téléchargés juste pour
+ * comparer) — pickBestModelsFromBenchmark (hardwareScan.ts) répond déjà instantanément dès qu'un candidat
+ * vérifié (verified-tool-scores.md) couvre le budget de la machine, ce qui est maintenant le cas pour la
+ * quasi-totalité des configurations courantes. Ne télécharge QUE les modèles réellement choisis (jusqu'à 4 :
+ * rapide/médium/puissant, souvent les mêmes sur une machine contrainte, + vision), jamais les candidats
+ * perdants. `runModelAnalysis` (le vrai test comparatif complet) reste disponible à la main depuis Options →
+ * Modèles pour qui veut vérifier/affiner au-delà de ce que verified-tool-scores.md couvre déjà.
+ */
+export async function runQuickSetup(onLine: (line: string) => void): Promise<CapacityScanResult> {
+  onLine('Détection du matériel...')
+  const picked = await pickBestModelsFromBenchmark()
+  onLine(
+    `Carte détectée : ${picked.gpuName ?? 'inconnue'}${picked.vramGb !== null ? ` (${picked.vramGb} Go de VRAM)` : ''}.`
+  )
+
+  const modelsToInstall = new Set([picked.models.flash, picked.models.medium, picked.models.large, picked.visionModel])
+  for (const model of modelsToInstall) {
+    try {
+      await pullModelIfMissing(model, onLine)
+    } catch (err) {
+      if (err instanceof ModelTooLargeError || err instanceof DiskFullError) {
+        onLine(`Modèle ${model} ignoré : ${err.message}`)
+      } else {
+        throw err
+      }
+    }
+  }
+
+  const profile = await getProfile()
+  if (profile) {
+    await saveProfile({
+      ...profile,
+      models: picked.models,
+      visionModel: picked.visionModel,
+      capacityScanDone: true,
+      knownModelCandidates: getAllCandidateModelIds()
+    })
+  }
+
+  return picked
+}
+
+/**
  * Lance scripts/benchmark-models.mjs comme un vrai process Node, en streamant chaque ligne de sa sortie
  * via `onLine` au fur et à mesure — plutôt que d'attendre la fin complète (le benchmark peut prendre
  * 20-40+ minutes avec plusieurs modèles à charger un par un). Réutilise le script tel quel (pas de logique

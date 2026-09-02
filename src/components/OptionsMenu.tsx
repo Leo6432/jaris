@@ -114,7 +114,9 @@ export default function OptionsMenu(): JSX.Element {
   const [ollamaUpdateMessage, setOllamaUpdateMessage] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
-  // Logique de run + progression partagée avec l'écran d'onboarding (CapacityScan.tsx) — voir useModelAnalysis.
+  // Analyse comparative complète (téléchargement + test réel de chaque candidat) — voir useModelAnalysis.
+  // Réservée à ce bouton manuel désormais : l'écran d'accueil (CapacityScan.tsx) utilise le chemin rapide
+  // (previewHardwareTiers/runQuickSetup) qui ne compare plus rien, juste télécharger le gagnant déjà connu.
   const analysis = useModelAnalysis(modelOverview)
   const [scopeDialogOpen, setScopeDialogOpen] = useState(false)
   const [inputDevices, setInputDevices] = useState<AudioInputDevice[] | null>(null)
