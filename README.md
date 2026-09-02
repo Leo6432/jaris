@@ -348,6 +348,21 @@ l'appli — inutile de le lancer à la main dans la plupart des cas. Si le
 démarrage automatique échoue (Ollama pas installé, par exemple), Jaris le dit
 à voix haute au lieu de planter.
 
+**Avertissement si Ollama n'est pas à jour.** En plus du check ciblé sur la
+0.7.0 ci-dessus, Jaris compare au lancement la version locale d'Ollama à la
+vraie dernière version publiée (`getOllamaVersionStatus`,
+`electron/services/dependencyServices.ts`, via l'API GitHub d'Ollama) —
+jamais un plancher fixe à remonter à la main à chaque nouvelle exigence,
+toujours la dernière en date. Utile car certains modèles récents refusent
+carrément de se télécharger sur une version trop ancienne (`pull model
+manifest: 412`, ex: `qwen3.8:27b`) : sans avertissement, Jaris n'aurait dit
+que "modèle ignoré", sans expliquer pourquoi ni quoi faire. Si une mise à
+jour existe, un bandeau s'affiche dans l'onglet **Modèles** du menu Options
+(étape 28) avec un lien direct vers ollama.com/download — jamais bloquant
+(purement informatif, en best-effort : pas de connexion, GitHub
+injoignable ou limite de requêtes atteinte n'empêchent jamais Jaris de
+démarrer, le bandeau reste juste absent).
+
 > Le modèle a par défaut une fenêtre de contexte énorme (131072 tokens pour
 > qwen3.5), ce qui peut le faire déborder de la VRAM et tourner en partie sur
 > le CPU (très lent). `OLLAMA_NUM_CTX` dans `.env` (4096 par défaut) évite ça

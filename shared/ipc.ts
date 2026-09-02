@@ -159,6 +159,18 @@ export interface ModelOverviewResult {
   codeModel: string
 }
 
+/**
+ * Résultat de getOllamaVersionStatus (electron/services/dependencyServices.ts) : compare la version locale
+ * d'Ollama à la dernière publiée sur GitHub, pour avertir l'utilisateur AVANT qu'un modèle échoue à se
+ * télécharger faute d'une version trop ancienne (ex: qwen3.8:27b) — `null` tant que le check réseau n'a pas
+ * abouti (ou a échoué, ex: pas de connexion) : jamais affiché comme "à jour" par défaut, juste absent.
+ */
+export interface OllamaVersionStatus {
+  current: string
+  latest: string
+  outdated: boolean
+}
+
 /** Un message du mode Chat (étape 30) — même Jaris et mêmes outils que la voix, mais en écrit. */
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -224,6 +236,7 @@ export const IPC_CHANNELS = {
   openConversationHistoryFile: 'jaris:open-conversation-history-file',
   /** renderer <-> main : liste tous les modèles candidats (tous paliers + vision) avec leurs métriques, pour l'onglet Modèles. */
   getModelOverview: 'jaris:get-model-overview',
+  getOllamaVersionStatus: 'jaris:get-ollama-version-status',
   /** renderer -> main : lance le benchmark complet (scripts/benchmark-models.mjs) puis choisit et active le
    * meilleur modèle de chaque palier d'après les résultats (résout une fois toute l'analyse terminée). */
   runModelAnalysis: 'jaris:run-model-analysis',

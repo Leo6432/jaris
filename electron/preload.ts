@@ -13,6 +13,7 @@ import {
   type MicTestDonePayload,
   type MicTestLevelPayload,
   type ModelOverviewResult,
+  type OllamaVersionStatus,
   type Profile,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload
@@ -49,6 +50,7 @@ const api = {
   clearConversationHistory: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.clearConversationHistory),
   openConversationHistoryFile: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openConversationHistoryFile),
   getModelOverview: (): Promise<ModelOverviewResult> => ipcRenderer.invoke(IPC_CHANNELS.getModelOverview),
+  getOllamaVersionStatus: (): Promise<OllamaVersionStatus | null> => ipcRenderer.invoke(IPC_CHANNELS.getOllamaVersionStatus),
   runModelAnalysis: (scope?: AnalysisScope): Promise<CapacityScanResult> => ipcRenderer.invoke(IPC_CHANNELS.runModelAnalysis, scope),
   onModelBenchmarkLine: (cb: (line: string) => void) => subscribe(IPC_CHANNELS.modelBenchmarkLine, cb),
   getNewModels: (): Promise<string[]> => ipcRenderer.invoke(IPC_CHANNELS.getNewModels),

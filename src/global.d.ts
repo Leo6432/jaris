@@ -11,6 +11,7 @@ import type {
   MicTestDonePayload,
   MicTestLevelPayload,
   ModelOverviewResult,
+  OllamaVersionStatus,
   Profile,
   VoiceReplyPayload,
   VoiceSetupStatusPayload
@@ -45,6 +46,7 @@ declare global {
       clearConversationHistory: () => Promise<void>
       openConversationHistoryFile: () => Promise<void>
       getModelOverview: () => Promise<ModelOverviewResult>
+      getOllamaVersionStatus: () => Promise<OllamaVersionStatus | null>
       runModelAnalysis: (scope?: AnalysisScope) => Promise<CapacityScanResult>
       onModelBenchmarkLine: (cb: (line: string) => void) => () => void
       getNewModels: () => Promise<string[]>

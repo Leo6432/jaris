@@ -75,6 +75,72 @@ async function warnIfOllamaOutdated(log: LogFn): Promise<void> {
   }
 }
 
+/** Version locale d'Ollama comparée à la dernière publiée sur GitHub — voir checkOllamaFreshness. */
+export interface OllamaVersionStatus {
+  current: string
+  latest: string
+  outdated: boolean
+}
+
+/**
+ * Résultat du dernier check, gardé en mémoire pour que l'onglet Modèles (OptionsMenu.tsx) puisse le lire
+ * à tout moment via getOllamaVersionStatus() sans refaire l'appel réseau à chaque ouverture — un seul check
+ * par lancement de Jaris suffit, la version installée ne change pas pendant que Jaris tourne. `null` tant
+ * que le check n'a pas encore abouti (ou a échoué) : jamais affiché comme "à jour" par défaut, juste absent.
+ */
+let cachedOllamaVersionStatus: OllamaVersionStatus | null = null
+
+export function getOllamaVersionStatus(): OllamaVersionStatus | null {
+  return cachedOllamaVersionStatus
+}
+
+/**
+ * Dernière version publiée d'Ollama sur GitHub (contrairement à MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH, un
+ * plancher fixe qu'il faudrait remonter à la main à chaque fois qu'un modèle exige une version plus
+ * récente qu'installée — voir l'échec `pull model manifest: 412` de scripts/benchmark-models.mjs) : ce
+ * check compare toujours à la VRAIE dernière version, sans jamais avoir besoin d'être mis à jour ici.
+ */
+async function fetchLatestOllamaVersion(): Promise<string | null> {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 5000)
+    const response = await fetch('https://api.github.com/repos/ollama/ollama/releases/latest', {
+      signal: controller.signal,
+      headers: { Accept: 'application/vnd.github+json' }
+    })
+    clearTimeout(timer)
+    if (!response.ok) return null
+    const data = (await response.json()) as { tag_name?: string }
+    // Tags GitHub d'Ollama sont préfixés "v" (ex: "v0.12.3"), jamais /api/version côté serveur local.
+    return data.tag_name?.replace(/^v/, '') ?? null
+  } catch {
+    // Pas de réseau, GitHub inaccessible, rate limit (60 requêtes/heure sans authentification, largement
+    // suffisant pour un check par lancement) : jamais bloquant, l'utilisateur voit juste l'avertissement.
+    return null
+  }
+}
+
+/**
+ * Compare la version locale d'Ollama à la dernière publiée, met le résultat en cache pour l'UI (voir
+ * getOllamaVersionStatus) — contrairement à warnIfOllamaOutdated (un seul plancher fixe pour un bug
+ * cosmétique précis), sert à avertir l'utilisateur de façon générale dès qu'une mise à jour existe, avant
+ * qu'un téléchargement de modèle échoue pour de vrai (ex: qwen3.8:27b, qui demande une version d'Ollama
+ * plus récente que ce que beaucoup d'installations auront par défaut).
+ */
+async function checkOllamaFreshness(): Promise<void> {
+  try {
+    const response = await fetch(`${config.ollama.host}/api/version`)
+    if (!response.ok) return
+    const data = (await response.json()) as { version?: string }
+    if (!data.version) return
+    const latest = await fetchLatestOllamaVersion()
+    if (!latest) return
+    cachedOllamaVersionStatus = { current: data.version, latest, outdated: isVersionOlder(data.version, latest) }
+  } catch {
+    // Best-effort, comme warnIfOllamaOutdated : ne doit jamais empêcher Jaris de démarrer.
+  }
+}
+
 /**
  * Lance `ollama serve` si l'API ne répond pas déjà (ex: app Ollama pas encore démarrée au boot
  * Windows). Sans effet si Ollama tourne déjà - la commande échoue juste silencieusement (port pris).
@@ -83,6 +149,7 @@ export async function ensureOllamaRunning(log: LogFn): Promise<void> {
   const url = `${config.ollama.host}/api/tags`
   if (await isUp(url)) {
     void warnIfOllamaOutdated(log)
+    void checkOllamaFreshness()
     return
   }
 
@@ -97,7 +164,10 @@ export async function ensureOllamaRunning(log: LogFn): Promise<void> {
 
   const up = await waitUntil(() => isUp(url), 20000)
   log(up ? 'Ollama démarré.' : "Échec du démarrage automatique d'Ollama : lance-le manuellement (`ollama serve`).")
-  if (up) void warnIfOllamaOutdated(log)
+  if (up) {
+    void warnIfOllamaOutdated(log)
+    void checkOllamaFreshness()
+  }
 }
 
 /**

@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { AnalysisScope, AudioInputDevice, ConversationEntry, GmailStatus, ModelOverviewResult, ModelTiers, Profile } from '../../shared/ipc'
+import type {
+  AnalysisScope,
+  AudioInputDevice,
+  ConversationEntry,
+  GmailStatus,
+  ModelOverviewResult,
+  ModelTiers,
+  OllamaVersionStatus,
+  Profile
+} from '../../shared/ipc'
 import { useModelAnalysis } from '../hooks/useModelAnalysis'
 import ModelAnalysisProgress, { ANALYSIS_NOTICE } from './ModelAnalysisProgress'
 
@@ -98,6 +107,7 @@ export default function OptionsMenu(): JSX.Element {
   const [history, setHistory] = useState<ConversationEntry[] | null>(null)
   const [clearingHistory, setClearingHistory] = useState(false)
   const [modelOverview, setModelOverview] = useState<ModelOverviewResult | null>(null)
+  const [ollamaVersionStatus, setOllamaVersionStatus] = useState<OllamaVersionStatus | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
   // Logique de run + progression partagée avec l'écran d'onboarding (CapacityScan.tsx) — voir useModelAnalysis.
@@ -137,6 +147,16 @@ export default function OptionsMenu(): JSX.Element {
       void window.jaris.getModelOverview().then(setModelOverview)
     }
   }, [tab, modelOverview])
+
+  // Contrairement à modelOverview ci-dessus (coûteux, relit un fichier), une simple lecture d'une valeur
+  // déjà en cache côté main (voir getOllamaVersionStatus) : pas besoin de garde "déjà chargé", on relit à
+  // chaque ouverture de l'onglet — utile si le check réseau en tâche de fond au lancement de Jaris n'avait
+  // pas encore fini la première fois que l'utilisateur a ouvert cet onglet.
+  useEffect(() => {
+    if (tab === 'modeles') {
+      void window.jaris.getOllamaVersionStatus().then(setOllamaVersionStatus)
+    }
+  }, [tab])
 
   // Idem pour les listes de micros/haut-parleurs : coûteux à peupler pour rien si l'utilisateur ne va
   // jamais ouvrir l'onglet Micro & Haut-parleur. Les micros viennent de PortAudio (côté Python, voir
@@ -510,6 +530,18 @@ export default function OptionsMenu(): JSX.Element {
 
         {tab === 'modeles' && (
           <div className="options-menu__section">
+            {ollamaVersionStatus?.outdated && (
+              <div className="app__setup-warning">
+                Ollama {ollamaVersionStatus.current} installé, la dernière version est{' '}
+                {ollamaVersionStatus.latest} — certains modèles récents peuvent refuser de se télécharger tant
+                qu'Ollama n'est pas à jour. Mets à jour sur{' '}
+                <a href="https://ollama.com/download" target="_blank" rel="noreferrer">
+                  ollama.com/download
+                </a>{' '}
+                (pas besoin de désinstaller avant, ça se fait par-dessus).
+              </div>
+            )}
+
             <div className="options-menu__section-title">Modèles actuellement retenus</div>
             <div className="options-menu__current-picks">
               {TIER_LABELS.map(({ key, label, think }) => (
