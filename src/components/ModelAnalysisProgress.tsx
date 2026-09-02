@@ -33,13 +33,15 @@ function formatEta(ms: number): string {
 
 /**
  * Badge d'état pour une ligne du tableau de suivi en direct (pendant un run) — voir ModelRunStatus.
- * `verifiedSkip` (ModelOverviewEntry, voir shared/ipc.ts) : un modèle déjà vérifié n'est JAMAIS mentionné
- * par une ligne ##...## de scripts/benchmark-models.mjs (il n'est même pas dans sa liste de candidats ce
- * run-ci) — sans ce cas à part, il resterait affiché "En attente" pour toujours, comme s'il allait être
- * testé d'un instant à l'autre alors qu'il ne le sera jamais.
+ * `verifiedSkip` (ModelOverviewEntry, voir shared/ipc.ts) TOUJOURS prioritaire sur `status`, même si ce
+ * dernier n'est pas "pending" : `modelRunStatus` est une map partagée PAR NOM DE MODÈLE, pas par (modèle,
+ * palier) — un modèle candidat à plusieurs paliers à la fois (ex: qwen3.5:4b, à la fois Médium/Puissant ET
+ * Vision) peut être en train de télécharger pour de vrai à cause d'UN palier où il n'est pas vérifié,
+ * pendant qu'un AUTRE palier où il l'est ne le testera jamais — sans cette priorité, sa ligne Vision
+ * afficherait à tort "Téléchargement..." comme si son propre test vision allait avoir lieu.
  */
 function RunStatusBadge({ status, verifiedSkip }: { status: ModelRunStatus | undefined; verifiedSkip?: boolean }): JSX.Element {
-  if ((!status || status.kind === 'pending') && verifiedSkip) {
+  if (verifiedSkip) {
     return <span className="options-menu__badge options-menu__badge--good">Déjà vérifié</span>
   }
   if (!status || status.kind === 'pending') {
