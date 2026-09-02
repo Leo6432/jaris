@@ -1,8 +1,9 @@
 import { spawn } from 'child_process'
 import { join } from 'path'
 import { config } from '../config'
-import { deleteModel, pullModelIfMissing, ModelTooLargeError, DiskFullError } from './ollama'
+import { deleteModel, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError } from './ollama'
 import { getAllCandidateModelIds, getCodeCandidateModelIds, parseLocalBenchmark, pickBestModelsFromBenchmark } from './hardwareScan'
+import { CODE_MODEL_FAST, CODE_MODEL_QUALITY } from './codeGenerator'
 import { getProfile, saveProfile } from './profileStore'
 import type { AnalysisScope, CapacityScanResult } from '../../shared/ipc'
 
@@ -11,10 +12,11 @@ import type { AnalysisScope, CapacityScanResult } from '../../shared/ipc'
  * lance JAMAIS scripts/benchmark-models.mjs (donc jamais des dizaines de modèles téléchargés juste pour
  * comparer) — pickBestModelsFromBenchmark (hardwareScan.ts) répond déjà instantanément dès qu'un candidat
  * vérifié (verified-tool-scores.md) couvre le budget de la machine, ce qui est maintenant le cas pour la
- * quasi-totalité des configurations courantes. Ne télécharge QUE les modèles réellement choisis (jusqu'à 4 :
- * rapide/médium/puissant, souvent les mêmes sur une machine contrainte, + vision), jamais les candidats
- * perdants. `runModelAnalysis` (le vrai test comparatif complet) reste disponible à la main depuis Options →
- * Modèles pour qui veut vérifier/affiner au-delà de ce que verified-tool-scores.md couvre déjà.
+ * quasi-totalité des configurations courantes. Ne télécharge QUE les modèles réellement choisis (jusqu'à 5 :
+ * rapide/médium/puissant, souvent les mêmes sur une machine contrainte, + vision + le modèle Code rapide),
+ * jamais les candidats perdants. `runModelAnalysis` (le vrai test comparatif complet) reste disponible à la
+ * main depuis Options → Modèles pour qui veut vérifier/affiner au-delà de ce que verified-tool-scores.md
+ * couvre déjà.
  */
 export async function runQuickSetup(onLine: (line: string) => void): Promise<CapacityScanResult> {
   onLine('Détection du matériel...')
@@ -24,6 +26,13 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
   )
 
   const modelsToInstall = new Set([picked.models.flash, picked.models.medium, picked.models.large, picked.visionModel])
+  // Mode Code (codeGenerator.ts) : le modèle qualité (35 Md, plusieurs dizaines de Go) reste un choix
+  // conscient (`ollama pull` manuel, jamais forcé ici), mais le modèle rapide (~4,7 Go) doit être prêt
+  // d'avance comme les autres paliers plutôt que de surprendre l'utilisateur en pleine génération de code —
+  // sauf si le modèle qualité est déjà installé, auquel cas resolveCodeModel l'utilisera de toute façon et
+  // le rapide ne sert à rien.
+  const installed = await listInstalledModels().catch(() => [] as string[])
+  if (!installed.includes(CODE_MODEL_QUALITY)) modelsToInstall.add(CODE_MODEL_FAST)
   for (const model of modelsToInstall) {
     try {
       await pullModelIfMissing(model, onLine)

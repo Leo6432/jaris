@@ -409,11 +409,12 @@ Au tout premier lancement (juste après la connexion Gmail), Jaris détecte
 la machine (VRAM, RAM) et télécharge directement les modèles déjà connus
 pour cette configuration (`previewHardwareTiers`/`runQuickSetup`,
 `electron/services/hardwareScan.ts`/`benchmarkRunner.ts`) — quelques
-minutes tout au plus (juste les 3-4 modèles vraiment retenus, jamais des
-dizaines de candidats concurrents). L'écran affiche d'abord les 3 profils
-de machine possibles (Petite/Moyenne/Grande configuration) avec les modèles
-que chacun obtiendrait, et repère clairement celui qui correspond à cette
-machine, avant même de lancer le moindre téléchargement.
+minutes tout au plus (juste les 4-5 modèles vraiment retenus, dont le
+modèle Code rapide, jamais des dizaines de candidats concurrents).
+L'écran affiche d'abord les 3 profils de machine possibles (Configuration
+petite/moyenne/grande, moins de 6 Go / 6 à 12 Go / plus de 12 Go de VRAM)
+avec les modèles que chacun obtiendrait, et repère clairement celui qui
+correspond à cette machine, avant même de lancer le moindre téléchargement.
 
 Ça n'a pas toujours été le cas : jusqu'ici, le premier lancement forçait
 une analyse comparative complète (chaque candidat réellement téléchargé et
