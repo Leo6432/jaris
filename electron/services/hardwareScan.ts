@@ -582,14 +582,18 @@ export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult>
     return { speedTokPerSec: estimateSpeedTokPerSec(candidate.vramGb, name), toolCalling: verifiedTool, speedEstimated: true }
   }
 
+  // Départage à égalité de fiabilité par la VRAM du candidat (le plus GROS gagne), pas par la vitesse — à
+  // la demande explicite de Léo : une machine qui a la place doit profiter d'un modèle plus capable, pas
+  // juste du plus rapide parmi ceux qui réussissent déjà 100% des tests (nos 6/3 questions ne distinguent
+  // pas "juste assez bon" de "vraiment plus intelligent" une fois le score max atteint).
   const pickBestFrom = (candidates: ModelCandidate[], tier: VerifiedTier): string => {
     const benchmarked = candidates
       .filter((c) => c.vramGb <= budgetForCandidate(c.model))
-      .map((c) => ({ model: c.model, result: resultFor(c, tier) }))
+      .map((c) => ({ model: c.model, vramGb: c.vramGb, result: resultFor(c, tier) }))
       // toolCalling (pas speedTokPerSec) est le critère de validité : un modèle vérifié dont la vitesse n'a
       // pas pu être estimée (carte inconnue, voir estimateSpeedTokPerSec) reste un candidat légitime, juste
       // départagé par 0 dans le tri ci-dessous plutôt qu'exclu.
-      .filter((c): c is { model: string; result: LocalBenchmarkEntry } => c.result?.toolCalling != null)
+      .filter((c): c is { model: string; vramGb: number; result: LocalBenchmarkEntry } => c.result?.toolCalling != null)
 
     // Repli VRAM seule (jamais élargi) : sans aucun résultat exploitable (ni mesure locale, ni score
     // vérifié), pas de raison de parier sur un débordement RAM jamais mesuré sur cette machine.
@@ -597,7 +601,7 @@ export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult>
 
     benchmarked.sort((a, b) => {
       const toolDiff = parseToolScore(b.result.toolCalling) - parseToolScore(a.result.toolCalling)
-      return toolDiff !== 0 ? toolDiff : (b.result.speedTokPerSec ?? 0) - (a.result.speedTokPerSec ?? 0)
+      return toolDiff !== 0 ? toolDiff : b.vramGb - a.vramGb
     })
     return benchmarked[0].model
   }
