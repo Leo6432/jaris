@@ -4,12 +4,14 @@ import type {
   AudioInputDevice,
   ConversationEntry,
   GmailStatus,
+  HardwareTierPreview as HardwareTierPreviewData,
   ModelOverviewResult,
   ModelTiers,
   OllamaVersionStatus,
   Profile
 } from '../../shared/ipc'
 import { useModelAnalysis } from '../hooks/useModelAnalysis'
+import HardwareTierPreview from './HardwareTierPreview'
 import ModelAnalysisProgress, { ANALYSIS_NOTICE } from './ModelAnalysisProgress'
 
 /** Options du popup de choix de périmètre (voir handleRunAnalysis) — tout, ou un seul palier à la fois. */
@@ -109,6 +111,7 @@ export default function OptionsMenu(): JSX.Element {
   const [history, setHistory] = useState<ConversationEntry[] | null>(null)
   const [clearingHistory, setClearingHistory] = useState(false)
   const [modelOverview, setModelOverview] = useState<ModelOverviewResult | null>(null)
+  const [hardwareTiers, setHardwareTiers] = useState<HardwareTierPreviewData[] | null>(null)
   const [ollamaVersionStatus, setOllamaVersionStatus] = useState<OllamaVersionStatus | null>(null)
   const [updatingOllama, setUpdatingOllama] = useState(false)
   const [ollamaUpdateMessage, setOllamaUpdateMessage] = useState<string | null>(null)
@@ -153,6 +156,14 @@ export default function OptionsMenu(): JSX.Element {
       void window.jaris.getModelOverview().then(setModelOverview)
     }
   }, [tab, modelOverview])
+
+  // Même garde "déjà chargé" que modelOverview ci-dessus : previewHardwareTiers relit aussi
+  // scripts/verified-tool-scores.md, pas la peine de le refaire à chaque ouverture de l'onglet.
+  useEffect(() => {
+    if (tab === 'modeles' && hardwareTiers === null) {
+      void window.jaris.previewHardwareTiers().then(setHardwareTiers)
+    }
+  }, [tab, hardwareTiers])
 
   // Contrairement à modelOverview ci-dessus (coûteux, relit un fichier), une simple lecture d'une valeur
   // déjà en cache côté main (voir getOllamaVersionStatus) : pas besoin de garde "déjà chargé", on relit à
@@ -569,6 +580,13 @@ export default function OptionsMenu(): JSX.Element {
                 )}
                 {!updatingOllama && ollamaUpdateMessage && <p>{ollamaUpdateMessage}</p>}
               </div>
+            )}
+
+            <div className="options-menu__section-title">Les 3 paliers de configuration</div>
+            {hardwareTiers === null ? (
+              <p className="capacity-scan__status">Chargement...</p>
+            ) : (
+              <HardwareTierPreview tiers={hardwareTiers} />
             )}
 
             <div className="options-menu__section-title">Modèles actuellement retenus</div>

@@ -1,5 +1,6 @@
-import { Fragment, useEffect, useState } from 'react'
-import type { CapacityScanResult, HardwareTierPreview } from '../../shared/ipc'
+import { useEffect, useState } from 'react'
+import type { CapacityScanResult, HardwareTierPreview as HardwareTierPreviewData } from '../../shared/ipc'
+import HardwareTierPreview from './HardwareTierPreview'
 
 interface CapacityScanProps {
   onDone: () => void
@@ -17,7 +18,7 @@ interface CapacityScanProps {
  * Options → Modèles pour qui veut vérifier/affiner au-delà de ce qui est déjà vérifié.
  */
 export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element {
-  const [tiers, setTiers] = useState<HardwareTierPreview[] | null>(null)
+  const [tiers, setTiers] = useState<HardwareTierPreviewData[] | null>(null)
   const [installing, setInstalling] = useState(false)
   const [log, setLog] = useState<string[]>([])
   const [result, setResult] = useState<CapacityScanResult | null>(null)
@@ -56,30 +57,7 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
               Jaris détecte ta machine et choisit directement les modèles déjà adaptés à sa taille, sans
               tout comparer un par un — voici les 3 configurations possibles, la tienne est repérée ci-dessous.
             </p>
-            {tiers === null ? (
-              <p className="capacity-scan__status">Détection du matériel...</p>
-            ) : (
-              <div className="capacity-scan__tiers">
-                {tiers.map((tier, i) => (
-                  <Fragment key={tier.label}>
-                    <div className={`capacity-scan__tier${tier.current ? ' capacity-scan__tier--current' : ''}`}>
-                      <div className="capacity-scan__tier-header">
-                        <span className="capacity-scan__tier-index">Palier {i + 1}</span>
-                        <span className="capacity-scan__tier-label">{tier.label}</span>
-                      </div>
-                      <ul className="capacity-scan__tier-models">
-                        <li>Rapide : {tier.models.flash}</li>
-                        <li>Médium : {tier.models.medium}</li>
-                        <li>Puissant : {tier.models.large}</li>
-                        <li>Vision : {tier.visionModel}</li>
-                      </ul>
-                      {tier.current && <div className="capacity-scan__tier-badge">← ta configuration</div>}
-                    </div>
-                    {i < tiers.length - 1 && <div className="capacity-scan__tier-arrow">↓</div>}
-                  </Fragment>
-                ))}
-              </div>
-            )}
+            {tiers === null ? <p className="capacity-scan__status">Détection du matériel...</p> : <HardwareTierPreview tiers={tiers} />}
             <button onClick={start} disabled={tiers === null}>
               Continuer
             </button>
