@@ -21,3 +21,25 @@ d'écrire ces lignes) — même convention que la colonne "Appel d'outils" de `b
 
 | Modèle | Appel d'outils |
 |---|---|
+| qwen3.5:2b | 5/6 |
+| qwen3.5:2b-q4_K_M | 4/6 |
+| qwen3.5:9b | 6/6 |
+| phi4-mini | 0/6 |
+| granite4.1:3b | 6/6 |
+| nemotron-3-nano:4b | 6/6 |
+| ministral-3:3b | 6/6 |
+| hf.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF | 0/6 |
+| qwen3:1.7b | 6/6 |
+| granite4:1b | 6/6 |
+| qwen3.5:0.8b | 5/6 |
+| functiongemma:270m | 1/6 |
+| hf.co/openbmb/MiniCPM5-1B-GGUF | 2/6 |
+| hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 6/6 |
+| qwen3.5:35b | 6/6 |
+| qwen3.5:27b | 6/6 |
+| qwen3.6:27b | 6/6 |
+| gemma4:26b | 6/6 |
+| gpt-oss:20b | 6/6 |
+| command-r:35b | 3/6 |
+| mistral-small:24b | 6/6 |
+| glm-4.7-flash:q4_K_M | 6/6 |
