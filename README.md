@@ -525,19 +525,21 @@ limité, elle passe automatiquement en téléchargement strictement séquentiel
 candidat dès qu'un meilleur est trouvé pour son palier — plutôt que de garder
 tous les modèles testés installés simultanément jusqu'à la toute fin.
 
-**Petits modèles : scores d'appel d'outils vérifiés une fois, sans jamais
-les réinstaller sur la machine de chaque utilisateur.** Certains modèles
-candidats sont assez petits pour être testés par Léo directement, une seule
-fois — la fiabilité d'appel d'outils d'un modèle (répond-il avec le bon
-outil et les bons arguments) est une propriété du modèle lui-même, pas du
-matériel qui le fait tourner : un score mesuré une fois reste valable sur
-n'importe quelle machine. Ces scores vivent dans `scripts/verified-tool-scores.md`
-(commité, contrairement à `benchmark-results.md`) et `npm run
-benchmark:models` saute automatiquement le téléchargement et le test de
-tout modèle qui y figure (pour les paliers rapide/médium/puissant
-uniquement — vision et code testent autre chose et continuent d'être
-vérifiés pour de vrai). Concrètement, aucun de ces modèles n'est jamais
-téléchargé pour l'analyse chez l'utilisateur final.
+**Petits modèles : scores vérifiés une fois, sans jamais les réinstaller sur
+la machine de chaque utilisateur.** Certains modèles candidats sont assez
+petits pour être testés par Léo directement, une seule fois — la fiabilité
+d'un modèle (répond-il avec le bon outil et les bons arguments en
+conversation, comprend-il vraiment une image en vision, génère-t-il du code
+valide) est une propriété du modèle lui-même, pas du matériel qui le fait
+tourner : un score mesuré une fois reste valable sur n'importe quelle
+machine. Ces scores vivent dans `scripts/verified-tool-scores.md` (commité,
+contrairement à `benchmark-results.md`), dans **trois sections séparées**
+(Conversation/Vision/Code — jamais une seule liste par nom de modèle, voir
+son en-tête pour pourquoi `qwen3.5:4b` a besoin d'une ligne distincte dans
+chacune des deux premières) et `npm run benchmark:models` saute
+automatiquement le téléchargement et le test de tout modèle présent dans
+la bonne section pour son palier. Concrètement, aucun de ces modèles n'est
+jamais téléchargé pour l'analyse chez l'utilisateur final.
 
 La **vitesse**, elle, dépend du matériel de chacun et n'est donc jamais
 stockée dans `verified-tool-scores.md` : pour ces modèles-là, elle est

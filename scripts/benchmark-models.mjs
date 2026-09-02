@@ -32,34 +32,44 @@ const VERIFIED_TOOL_SCORES_PATH = join(__dirname, 'verified-tool-scores.md')
 const OLLAMA_HOST = process.env.OLLAMA_HOST?.trim() || 'http://127.0.0.1:11434'
 
 /**
- * Modèles déjà vérifiés en fiabilité d'appel d'outils (voir verified-tool-scores.md, commité dans le
- * dépôt — valable pour tout le monde, cette fiabilité ne dépend pas du matériel, contrairement à la
- * vitesse). Exclus du téléchargement/test de CE script (voir SCOPED_MODELS plus bas) : aucune raison de
- * retélécharger et retester un modèle dont le résultat ne peut pas changer d'une machine à l'autre — seule
- * sa vitesse est recalculée par formule pour cette machine (voir estimateSpeedTokPerSec plus bas et
- * hardwareScan.ts côté app, qui applique la même logique pour le tableau de l'onglet Modèles). Ne
- * s'applique jamais à Vision/Code : ces paliers testent autre chose (compréhension d'image, qualité du
- * code), pas l'appel d'outils — cette liste ne concerne que MODELS/SCOPED_MODELS.
+ * Modèles déjà vérifiés une fois par Léo (voir verified-tool-scores.md, commité dans le dépôt — valable
+ * pour tout le monde, cette fiabilité ne dépend pas du matériel, contrairement à la vitesse). Exclus du
+ * téléchargement/test de CE script (voir SCOPED_MODELS/SCOPED_VISION_CANDIDATES/SCOPED_CODE_CANDIDATES plus
+ * bas) : aucune raison de retélécharger et retester un modèle dont le résultat ne peut pas changer d'une
+ * machine à l'autre — seule sa vitesse est recalculée par formule pour cette machine (voir
+ * estimateSpeedTokPerSec plus bas et hardwareScan.ts côté app, qui applique la même logique). Trois listes
+ * séparées par palier (sections "## Conversation/Vision/Code" du fichier), PAS une seule liste par nom de
+ * modèle : `qwen3.5:4b` (et `gemma4:e4b`) sont candidats à la fois en Conversation et en Vision — un score
+ * conversation ne doit jamais faire sauter, à tort, son propre test vision (bug déjà rencontré une fois
+ * avec benchmark-results.md avant qu'on ne le corrige ici, voir parseVerifiedToolScores dans hardwareScan.ts
+ * qui applique la même correction côté app).
  */
-function readVerifiedToolModels() {
+function readVerifiedModels() {
+  const result = { conversation: new Set(), vision: new Set(), code: new Set() }
+  let raw
   try {
-    const raw = readFileSync(VERIFIED_TOOL_SCORES_PATH, 'utf-8')
-    const models = new Set()
-    for (const line of raw.split('\n')) {
-      if (!line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
-      const cells = line
-        .split('|')
-        .map((c) => c.trim())
-        .filter(Boolean)
-      if (cells.length !== 2) continue
-      models.add(cells[0])
-    }
-    return models
+    raw = readFileSync(VERIFIED_TOOL_SCORES_PATH, 'utf-8')
   } catch {
-    return new Set()
+    return result
   }
+  let currentTier = null
+  for (const line of raw.split('\n')) {
+    if (line.startsWith('## ')) {
+      const heading = line.slice(3).trim().toLowerCase()
+      currentTier = heading.startsWith('conversation') ? 'conversation' : heading.startsWith('vision') ? 'vision' : heading.startsWith('code') ? 'code' : null
+      continue
+    }
+    if (!currentTier || !line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
+    const cells = line
+      .split('|')
+      .map((c) => c.trim())
+      .filter(Boolean)
+    if (cells.length !== 2) continue
+    result[currentTier].add(cells[0])
+  }
+  return result
 }
-const VERIFIED_TOOL_MODELS = readVerifiedToolModels()
+const VERIFIED_MODELS = readVerifiedModels()
 
 /**
  * Périmètre du run (AnalysisScope côté TS, shared/ipc.ts) : 'all' teste tout comme avant (comportement par
@@ -314,8 +324,10 @@ const VISION_TIER_MODELS = new Set(VISION_CANDIDATES.map((c) => c.model))
  * FLASH/MEDIUM/LARGE_TIER_MODELS) puisque c'est une liste plate qui couvre les trois à la fois ; pour
  * vision/code, on garde ou on vide la liste entière (déjà séparée). `scope === 'all'` (comportement par
  * défaut) garde tout, exactement comme avant l'ajout de SCOPE. Exclut aussi tout modèle déjà dans
- * VERIFIED_TOOL_MODELS (voir sa définition) : jamais téléchargé ni testé par ce script, sa fiabilité vient
- * de verified-tool-scores.md, sa vitesse d'une formule côté app — pas de ce script.
+ * VERIFIED_MODELS (voir sa définition) : jamais téléchargé ni testé par ce script, sa fiabilité vient de
+ * verified-tool-scores.md, sa vitesse d'une formule côté app — pas de ce script. La bonne liste par palier
+ * (`.conversation`/`.vision`/`.code`) évite qu'un modèle candidat aux deux (ex: qwen3.5:4b, Conversation ET
+ * Vision) ne saute son test vision juste parce qu'il a un score conversation, et inversement.
  */
 const SCOPED_MODELS = (
   SCOPE === 'all'
@@ -327,9 +339,13 @@ const SCOPED_MODELS = (
         : SCOPE === 'large'
           ? MODELS.filter((m) => LARGE_TIER_MODELS.has(m))
           : []
-).filter((m) => !VERIFIED_TOOL_MODELS.has(m))
-const SCOPED_VISION_CANDIDATES = SCOPE === 'all' || SCOPE === 'vision' ? VISION_CANDIDATES : []
-const SCOPED_CODE_CANDIDATES = SCOPE === 'all' || SCOPE === 'code' ? CODE_CANDIDATES : []
+).filter((m) => !VERIFIED_MODELS.conversation.has(m))
+const SCOPED_VISION_CANDIDATES = (SCOPE === 'all' || SCOPE === 'vision' ? VISION_CANDIDATES : []).filter(
+  (c) => !VERIFIED_MODELS.vision.has(c.model)
+)
+const SCOPED_CODE_CANDIDATES = (SCOPE === 'all' || SCOPE === 'code' ? CODE_CANDIDATES : []).filter(
+  (c) => !VERIFIED_MODELS.code.has(c.model)
+)
 
 /**
  * `true` seulement si `model` appartient à EXACTEMENT un des trois paliers de conversation ET n'est candidat
@@ -1106,9 +1122,11 @@ async function main() {
       : `Périmètre : palier "${SCOPE}" seulement (##MODEL_SKIPPED## ci-dessus mis à part, les autres paliers ne sont ni téléchargés ni testés ce run-ci — leurs résultats précédents sont conservés tels quels).\n`
   )
 
-  if (VERIFIED_TOOL_MODELS.size) {
+  const verifiedTotal = VERIFIED_MODELS.conversation.size + VERIFIED_MODELS.vision.size + VERIFIED_MODELS.code.size
+  if (verifiedTotal) {
     console.log(
-      `${VERIFIED_TOOL_MODELS.size} modèle(s) déjà vérifié(s) en fiabilité d'appel d'outils (verified-tool-scores.md) : ni téléchargés ni testés ce run-ci, leur vitesse est estimée par formule côté app.\n`
+      `${verifiedTotal} modèle(s) déjà vérifié(s) (verified-tool-scores.md — ${VERIFIED_MODELS.conversation.size} conversation, ` +
+        `${VERIFIED_MODELS.vision.size} vision, ${VERIFIED_MODELS.code.size} code) : ni téléchargés ni testés ce run-ci, leur vitesse est estimée par formule côté app.\n`
     )
   }
 

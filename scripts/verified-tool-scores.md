@@ -1,23 +1,32 @@
-# Scores d'appel d'outils vérifiés
+# Scores vérifiés (sans téléchargement pour personne)
 
 Contrairement à `scripts/benchmark-results.md` (généré localement par chaque installation de Jaris, jamais
 commité — voir `.gitignore`), ce fichier-ci **est commité dans le dépôt** : il contient des scores de
-fiabilité d'appel d'outils vérifiés une fois par Léo sur sa propre machine, valables pour tout le monde.
+fiabilité vérifiés une fois par Léo sur sa propre machine, valables pour tout le monde.
 
-Pourquoi c'est possible : la fiabilité d'appel d'outils d'un modèle (répond-il avec le bon outil et les
-bons arguments) est une propriété du modèle lui-même, pas du matériel qui le fait tourner — un score
-mesuré une fois reste valable sur n'importe quelle machine. La **vitesse**, elle, dépend du matériel de
-chacun : jamais stockée ici, toujours recalculée par formule pour la config de l'utilisateur (voir
-`estimateSpeedTokPerSec` dans `electron/services/hardwareScan.ts`).
+Pourquoi c'est possible : la fiabilité d'un modèle (répond-il avec le bon outil et les bons arguments,
+comprend-il vraiment une image, génère-t-il du code valide) est une propriété du modèle lui-même, pas du
+matériel qui le fait tourner — un score mesuré une fois reste valable sur n'importe quelle machine. La
+**vitesse**, elle, dépend du matériel de chacun : jamais stockée ici, toujours recalculée par formule pour
+la config de l'utilisateur (voir `estimateSpeedTokPerSec` dans `electron/services/hardwareScan.ts`).
 
-`scripts/benchmark-models.mjs` saute le téléchargement et le test de tout modèle présent ici (voir SCOPE
-et `VERIFIED_TOOL_SCORES` dans le script) : aucune installation nécessaire chez l'utilisateur final pour
-ces modèles-là. Seuls les modèles ABSENTS de ce fichier (trop gros pour la machine de Léo, jamais testés
-par lui) continuent d'être téléchargés et testés pour de vrai, sur la machine de qui a assez de VRAM pour
-le faire.
+`scripts/benchmark-models.mjs` saute le téléchargement et le test de tout modèle présent dans la bonne
+section ci-dessous (voir `VERIFIED_MODELS` dans le script) : aucune installation nécessaire chez
+l'utilisateur final pour ces modèles-là. Seuls les modèles ABSENTS (trop gros pour la machine de Léo,
+jamais testés par lui) continuent d'être téléchargés et testés pour de vrai, sur la machine de qui a assez
+de VRAM pour le faire.
 
-Format : un modèle par ligne, score sur `TEST_CASES.length` de `benchmark-models.mjs` (6 au moment
-d'écrire ces lignes) — même convention que la colonne "Appel d'outils" de `benchmark-results.md`.
+**Trois sections séparées, jamais une seule liste par nom de modèle** : certains modèles (ex: `qwen3.5:4b`,
+`gemma4:e4b`) sont candidats à la fois en Conversation et en Vision — leur score n'y est pas le même (l'un
+teste l'appel d'outils, l'autre la compréhension d'image), donc chacun a sa propre ligne dans sa propre
+section. Un modèle absent d'une section mais présent dans une autre reste testé pour de vrai dans celle où
+il manque.
+
+Format : un modèle par ligne dans sa section, score sur le nombre de questions posées pour ce palier par
+`benchmark-models.mjs` (`TEST_CASES`/`VISION_TEST_CASES`/`CODE_TEST_CASES`, 6/3/3 au moment d'écrire ces
+lignes) — même convention que la colonne "Fiabilité" de `benchmark-results.md`.
+
+## Conversation (rapide / médium / puissant) — appel d'outils
 
 | Modèle | Appel d'outils |
 |---|---|
@@ -43,3 +52,13 @@ d'écrire ces lignes) — même convention que la colonne "Appel d'outils" de `b
 | command-r:35b | 3/6 |
 | mistral-small:24b | 6/6 |
 | glm-4.7-flash:q4_K_M | 6/6 |
+
+## Vision — compréhension d'image
+
+| Modèle | Fiabilité |
+|---|---|
+
+## Code — génération de code
+
+| Modèle | Fiabilité |
+|---|---|

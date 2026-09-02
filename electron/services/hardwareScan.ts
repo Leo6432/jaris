@@ -409,14 +409,24 @@ export function estimateSpeedTokPerSec(modelVramGb: number, gpuName: string | nu
   return Math.round(((bandwidthGbps * MEMORY_BANDWIDTH_EFFICIENCY) / modelVramGb) * 10) / 10
 }
 
+/** Les trois paliers couverts par scripts/verified-tool-scores.md, voir parseVerifiedToolScores. */
+export type VerifiedTier = 'conversation' | 'vision' | 'code'
+
 /**
  * Relit scripts/verified-tool-scores.md (commité dans le dépôt, voir son en-tête pour le pourquoi) : scores
- * de fiabilité d'appel d'outils vérifiés une fois par Léo sur sa machine, valables pour tout le monde —
- * jamais de vitesse dedans (toujours recalculée par estimateSpeedTokPerSec pour la machine de chaque
- * utilisateur). Même convention de parsing que parseLocalBenchmark, en plus simple (2 colonnes).
+ * de fiabilité vérifiés une fois par Léo sur sa machine, valables pour tout le monde — jamais de vitesse
+ * dedans (toujours recalculée par estimateSpeedTokPerSec pour la machine de chaque utilisateur). Trois
+ * tableaux séparés par palier (sections "## Conversation/Vision/Code"), PAS une seule map globale par nom de
+ * modèle : `qwen3.5:4b` (et `gemma4:e4b`) sont candidats à la fois en Conversation et en Vision — un score
+ * conversation ne doit jamais être confondu avec, ni écraser, un score vision pour le même nom de modèle
+ * (bug déjà rencontré une fois dans benchmark-results.md avant qu'on ne le corrige ici).
  */
-export function parseVerifiedToolScores(): Map<string, string> {
-  const results = new Map<string, string>()
+export function parseVerifiedToolScores(): Record<VerifiedTier, Map<string, string>> {
+  const results: Record<VerifiedTier, Map<string, string>> = {
+    conversation: new Map(),
+    vision: new Map(),
+    code: new Map()
+  }
   let raw: string
   try {
     raw = readFileSync(join(process.cwd(), 'scripts', 'verified-tool-scores.md'), 'utf-8')
@@ -424,15 +434,21 @@ export function parseVerifiedToolScores(): Map<string, string> {
     return results
   }
 
+  let currentTier: VerifiedTier | null = null
   for (const line of raw.split('\n')) {
-    if (!line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
+    if (line.startsWith('## ')) {
+      const heading = line.slice(3).trim().toLowerCase()
+      currentTier = heading.startsWith('conversation') ? 'conversation' : heading.startsWith('vision') ? 'vision' : heading.startsWith('code') ? 'code' : null
+      continue
+    }
+    if (!currentTier || !line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
     const cells = line
       .split('|')
       .map((c) => c.trim())
       .filter(Boolean)
     if (cells.length !== 2) continue
-    const [model, tool] = cells
-    results.set(model, tool)
+    const [model, score] = cells
+    results[currentTier].set(model, score)
   }
   return results
 }
@@ -488,13 +504,14 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
 
   // Priorité à une vraie mesure locale (le vrai benchmark a tourné sur CETTE machine pour ce modèle) —
   // sinon, pour un modèle déjà vérifié par ailleurs (voir verified-tool-scores.md), fiabilité partagée +
-  // vitesse estimée par formule pour cette machine — sinon rien de connu.
-  const buildEntry = (model: string, modelVramGb: number): ModelOverviewEntry => {
+  // vitesse estimée par formule pour cette machine — sinon rien de connu. `tier` sélectionne la BONNE table
+  // du fichier (voir VerifiedTier) : `qwen3.5:4b` par ex. a un score différent en Conversation qu'en Vision.
+  const buildEntry = (model: string, modelVramGb: number, tier: VerifiedTier): ModelOverviewEntry => {
     const local = localBenchmark.get(model)
     if (local) {
       return { model, vramGb: modelVramGb, speedTokPerSec: local.speedTokPerSec, toolCalling: local.toolCalling, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null }
     }
-    const verifiedTool = verifiedToolScores.get(model)
+    const verifiedTool = verifiedToolScores[tier].get(model)
     if (verifiedTool) {
       return {
         model,
@@ -511,10 +528,10 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
   const groups = [
     ...(Object.keys(TIER_CANDIDATES) as Tier[]).map((tier) => ({
       tier: TIER_LABELS[tier],
-      entries: TIER_CANDIDATES[tier].map((c) => buildEntry(c.model, c.vramGb))
+      entries: TIER_CANDIDATES[tier].map((c) => buildEntry(c.model, c.vramGb, 'conversation'))
     })),
-    { tier: 'Vision', entries: VISION_CANDIDATES.map((c) => buildEntry(c.model, c.vramGb)) },
-    { tier: 'Code', entries: CODE_CANDIDATES.map((c) => buildEntry(c.model, c.vramGb)) }
+    { tier: 'Vision', entries: VISION_CANDIDATES.map((c) => buildEntry(c.model, c.vramGb, 'vision')) },
+    { tier: 'Code', entries: CODE_CANDIDATES.map((c) => buildEntry(c.model, c.vramGb, 'code')) }
   ]
 
   const installedModels = await listInstalledModels().catch(() => [] as string[])
@@ -551,18 +568,18 @@ export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult>
   const localBenchmark = parseLocalBenchmark()
   const verifiedToolScores = parseVerifiedToolScores()
 
-  const resultFor = (candidate: ModelCandidate): LocalBenchmarkEntry | undefined => {
+  const resultFor = (candidate: ModelCandidate, tier: VerifiedTier): LocalBenchmarkEntry | undefined => {
     const local = localBenchmark.get(candidate.model)
     if (local) return local
-    const verifiedTool = verifiedToolScores.get(candidate.model)
+    const verifiedTool = verifiedToolScores[tier].get(candidate.model)
     if (!verifiedTool) return undefined
     return { speedTokPerSec: estimateSpeedTokPerSec(candidate.vramGb, name), toolCalling: verifiedTool, speedEstimated: true }
   }
 
-  const pickBestFrom = (candidates: ModelCandidate[]): string => {
+  const pickBestFrom = (candidates: ModelCandidate[], tier: VerifiedTier): string => {
     const benchmarked = candidates
       .filter((c) => c.vramGb <= budgetForCandidate(c.model))
-      .map((c) => ({ model: c.model, result: resultFor(c) }))
+      .map((c) => ({ model: c.model, result: resultFor(c, tier) }))
       // toolCalling (pas speedTokPerSec) est le critère de validité : un modèle vérifié dont la vitesse n'a
       // pas pu être estimée (carte inconnue, voir estimateSpeedTokPerSec) reste un candidat légitime, juste
       // départagé par 0 dans le tri ci-dessous plutôt qu'exclu.
@@ -583,10 +600,10 @@ export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult>
     gpuName: name,
     vramGb,
     models: {
-      flash: pickBestFrom(TIER_CANDIDATES.flash),
-      medium: pickBestFrom(TIER_CANDIDATES.medium),
-      large: pickBestFrom(TIER_CANDIDATES.large)
+      flash: pickBestFrom(TIER_CANDIDATES.flash, 'conversation'),
+      medium: pickBestFrom(TIER_CANDIDATES.medium, 'conversation'),
+      large: pickBestFrom(TIER_CANDIDATES.large, 'conversation')
     },
-    visionModel: pickBestFrom(VISION_CANDIDATES)
+    visionModel: pickBestFrom(VISION_CANDIDATES, 'vision')
   }
 }
