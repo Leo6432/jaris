@@ -710,16 +710,11 @@ export async function previewHardwareTiers(): Promise<HardwareTierPreview[]> {
   const ramGb = detectRamGb()
   const localBenchmark = parseLocalBenchmark()
   const verifiedToolScores = parseVerifiedToolScores()
-  // Le palier "actuel" est celui dont la VRAM représentative est la plus proche de la VRAM RÉELLE détectée
-  // (jamais un simple ordre croissant à 3 bornes fixes : une machine à 30 Go de VRAM doit quand même pointer
-  // vers "Grande", pas déborder hors tableau).
-  const currentIndex =
-    actualVramGb === null
-      ? 0
-      : HARDWARE_TIER_PREVIEW_VRAM_GB.reduce(
-          (bestIdx, gb, idx) => (Math.abs(gb - actualVramGb) < Math.abs(HARDWARE_TIER_PREVIEW_VRAM_GB[bestIdx] - actualVramGb) ? idx : bestIdx),
-          0
-        )
+  // Le palier "actuel" suit les bornes décidées avec Léo (moins de 6 Go -> Petite, de 6 à 12 Go -> Moyenne,
+  // plus de 12 Go -> Grande) — PAS le point représentatif le plus proche : une carte 8 Go est plus proche de
+  // 6 que de 12 en distance brute, mais reste bien dans la tranche "Moyenne" par ces bornes. Une machine à
+  // 30 Go de VRAM pointe quand même vers "Grande" (dernier index), jamais hors tableau.
+  const currentIndex = actualVramGb === null ? 0 : actualVramGb < 6 ? 0 : actualVramGb <= 12 ? 1 : 2
   return HARDWARE_TIER_PREVIEW_VRAM_GB.map((vramGb, i) => ({
     label: HARDWARE_TIER_PREVIEW_LABELS[i],
     vramGb,
