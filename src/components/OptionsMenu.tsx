@@ -1,26 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
-  AnalysisScope,
   AudioInputDevice,
   ConversationEntry,
   GmailStatus,
   HardwareTierPreview as HardwareTierPreviewData,
-  ModelOverviewResult,
   OllamaVersionStatus,
   Profile
 } from '../../shared/ipc'
-import { useModelAnalysis } from '../hooks/useModelAnalysis'
 import HardwareTierPreview from './HardwareTierPreview'
-import ModelAnalysisProgress, { ANALYSIS_NOTICE } from './ModelAnalysisProgress'
-
-/** Options du popup de choix de périmètre (voir handleRunAnalysis) — tout, ou un seul palier à la fois. */
-const ANALYSIS_SCOPE_OPTIONS: Array<{ scope: AnalysisScope; label: string }> = [
-  { scope: 'flash', label: 'Rapide seulement' },
-  { scope: 'medium', label: 'Médium seulement' },
-  { scope: 'large', label: 'Puissant seulement' },
-  { scope: 'vision', label: 'Vision seulement' },
-  { scope: 'code', label: 'Code seulement' }
-]
 
 interface VoiceOption {
   id: string
@@ -75,8 +62,8 @@ function dedupeAudioOutputs(devices: MediaDeviceInfo[]): MediaDeviceInfo[] {
  * "3/3", "6/6" etc. en petit badge coloré (vert = parfait, ambre = partiel, rouge = raté) plutôt qu'en
  * texte brut au milieu du tableau — un coup d'œil suffit pour repérer les bons/mauvais élèves, pas besoin
  * de lire chaque cellule. "—" (jamais testé) reste un texte neutre, pas un badge. Exporté : réutilisé par
- * ModelAnalysisProgress.tsx pour afficher le score déjà connu de chaque modèle dès le début d'un run, pas
- * seulement dans le tableau statique ci-dessous.
+ * HardwareTierPreview.tsx (paliers de configuration) et ModelAnalysisProgress.tsx (analyse comparative
+ * complète, toujours lançable via `npm run benchmark:models`), pas seulement ici.
  */
 export function ReliabilityBadge({ value }: { value: string | null }): JSX.Element {
   if (!value) return <span className="options-menu__badge options-menu__badge--none">—</span>
@@ -100,18 +87,13 @@ export default function OptionsMenu(): JSX.Element {
   const [previewing, setPreviewing] = useState(false)
   const [history, setHistory] = useState<ConversationEntry[] | null>(null)
   const [clearingHistory, setClearingHistory] = useState(false)
-  const [modelOverview, setModelOverview] = useState<ModelOverviewResult | null>(null)
   const [hardwareTiers, setHardwareTiers] = useState<HardwareTierPreviewData[] | null>(null)
   const [ollamaVersionStatus, setOllamaVersionStatus] = useState<OllamaVersionStatus | null>(null)
   const [updatingOllama, setUpdatingOllama] = useState(false)
   const [ollamaUpdateMessage, setOllamaUpdateMessage] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
-  // Analyse comparative complète (téléchargement + test réel de chaque candidat) — voir useModelAnalysis.
-  // Réservée à ce bouton manuel désormais : l'écran d'accueil (CapacityScan.tsx) utilise le chemin rapide
-  // (previewHardwareTiers/runQuickSetup) qui ne compare plus rien, juste télécharger le gagnant déjà connu.
-  const analysis = useModelAnalysis(modelOverview)
-  const [scopeDialogOpen, setScopeDialogOpen] = useState(false)
+  const [retestingConfig, setRetestingConfig] = useState(false)
   const [inputDevices, setInputDevices] = useState<AudioInputDevice[] | null>(null)
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[] | null>(null)
   const [savingAudioDevice, setSavingAudioDevice] = useState(false)
@@ -139,23 +121,15 @@ export default function OptionsMenu(): JSX.Element {
     }
   }, [tab, history])
 
-  // Idem pour le tableau comparatif des modèles candidats (relit scripts/benchmark-results.md côté main) :
-  // pas la peine à chaque ouverture du menu si l'utilisateur ne va jamais voir cet onglet.
-  useEffect(() => {
-    if (tab === 'modeles' && modelOverview === null) {
-      void window.jaris.getModelOverview().then(setModelOverview)
-    }
-  }, [tab, modelOverview])
-
-  // Même garde "déjà chargé" que modelOverview ci-dessus : previewHardwareTiers relit aussi
-  // scripts/verified-tool-scores.md, pas la peine de le refaire à chaque ouverture de l'onglet.
+  // Pas la peine à chaque ouverture du menu si l'utilisateur ne va jamais voir cet onglet Modèles :
+  // previewHardwareTiers relit scripts/verified-tool-scores.md/benchmark-results.md côté main.
   useEffect(() => {
     if (tab === 'modeles' && hardwareTiers === null) {
       void window.jaris.previewHardwareTiers().then(setHardwareTiers)
     }
   }, [tab, hardwareTiers])
 
-  // Contrairement à modelOverview ci-dessus (coûteux, relit un fichier), une simple lecture d'une valeur
+  // Contrairement à hardwareTiers ci-dessus (coûteux, relit un fichier), une simple lecture d'une valeur
   // déjà en cache côté main (voir getOllamaVersionStatus) : pas besoin de garde "déjà chargé", on relit à
   // chaque ouverture de l'onglet — utile si le check réseau en tâche de fond au lancement de Jaris n'avait
   // pas encore fini la première fois que l'utilisateur a ouvert cet onglet.
@@ -208,17 +182,21 @@ export default function OptionsMenu(): JSX.Element {
     }
   }, [])
 
-  const handleRunAnalysis = async (scope: AnalysisScope): Promise<void> => {
-    setScopeDialogOpen(false)
+  // Redétecte le matériel (VRAM/RAM) et télécharge directement les modèles déjà connus pour cette
+  // configuration (runQuickSetup, même chemin que l'écran d'accueil) — utile après un changement matériel
+  // (nouvelle carte graphique...), sans repasser par l'ancienne analyse comparative complète (des dizaines
+  // de minutes à tout retélécharger/retester alors que verified-tool-scores.md connaît déjà le gagnant).
+  const handleRetestConfiguration = async (): Promise<void> => {
     setError(null)
+    setRetestingConfig(true)
     try {
-      const result = await analysis.run(scope)
-      // Reflète tout de suite les nouveaux modèles retenus + le tableau comparatif à jour, sans avoir à
-      // changer d'onglet et revenir pour forcer un rechargement.
+      const result = await window.jaris.runQuickSetup()
       setProfile((prev) => (prev ? { ...prev, models: result.models, visionModel: result.visionModel, capacityScanDone: true } : prev))
-      setModelOverview(await window.jaris.getModelOverview())
+      setHardwareTiers(await window.jaris.previewHardwareTiers())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setRetestingConfig(false)
     }
   }
 
@@ -566,50 +544,14 @@ export default function OptionsMenu(): JSX.Element {
               <HardwareTierPreview tiers={hardwareTiers} />
             )}
 
-            <button className="options-menu__action" onClick={() => setScopeDialogOpen(true)} disabled={analysis.benchmarking}>
-              {analysis.benchmarking ? 'Analyse en cours...' : 'Tester tous les modèles et choisir les meilleurs'}
+            <button className="options-menu__action" onClick={() => void handleRetestConfiguration()} disabled={retestingConfig}>
+              {retestingConfig ? 'Nouvelle détection en cours...' : 'Retester la configuration'}
             </button>
             <p className="options-menu__model-overview-hint">
-              Teste chaque modèle candidat qui tient dans la VRAM, la RAM ET l'espace disque détectés
-              (télécharge ceux qui manquent, jusqu'à 2 à 4 à la fois selon la RAM détectée pendant que les
-              modèles déjà installés passent déjà leurs tests, peut être plusieurs dizaines de Go au premier
-              lancement), choisit et active le meilleur de chaque palier d'après les résultats (fiabilité
-              d'appel d'outils, puis vitesse), et supprime tout le reste.
+              Redétecte la VRAM/RAM (utile après un changement matériel, par exemple une nouvelle carte
+              graphique) et télécharge directement les modèles déjà connus pour cette nouvelle configuration,
+              sans repasser par une analyse comparative complète.
             </p>
-
-            <ModelAnalysisProgress state={analysis} modelOverview={modelOverview} />
-
-            {scopeDialogOpen && (
-              <div className="options-menu__scope-dialog-overlay" onClick={() => setScopeDialogOpen(false)}>
-                <div className="options-menu__scope-dialog" onClick={(e) => e.stopPropagation()}>
-                  <h3>Quelle analyse lancer ?</h3>
-                  <p>
-                    Tout analyser installe tout modèle candidat manquant qui tient dans la VRAM/RAM/disque
-                    détectés (potentiellement plusieurs dizaines de Go) et teste chacun d'eux — peut prendre
-                    longtemps. Tester un seul palier est bien plus rapide et garde les résultats des autres
-                    paliers inchangés. Dans les deux cas, le(s) meilleur(s) modèle(s) sont activés et le reste
-                    est supprimé.
-                  </p>
-                  <p className="options-menu__analysis-notice">{ANALYSIS_NOTICE}</p>
-                  <div className="options-menu__scope-dialog-options">
-                    <button
-                      className="options-menu__scope-dialog-all"
-                      onClick={() => void handleRunAnalysis('all')}
-                    >
-                      Tout analyser
-                    </button>
-                    {ANALYSIS_SCOPE_OPTIONS.map(({ scope, label }) => (
-                      <button key={scope} onClick={() => void handleRunAnalysis(scope)}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <button className="options-menu__scope-dialog-cancel" onClick={() => setScopeDialogOpen(false)}>
-                    Annuler
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         )}
 

@@ -95,13 +95,14 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
 ]
 
 /**
- * Les 9 vrais candidats "Puissant" (au-delà de qwen3.5:9b et en dessous, qui servent aussi de replis pour
- * Rapide/Médium) tolèrent de déborder sur la RAM plutôt que d'être écartés faute de VRAM — à la demande
- * explicite de Léo, qui préfère un vrai grand modèle plus lent (potentiellement 30s+ par réponse) à un petit
- * modèle rapide pour le palier censé gérer les questions qui demandent le plus de réflexion. Utilisé par
- * pickBestModelsFromBenchmark (budget élargi VRAM+RAM pour ces candidats) et pickSafeModel (pas de repli en
- * direct sur un modèle plus petit : Ollama gère lui-même le débordement RAM, contrairement à une vraie
- * absence de place qui ferait échouer le chargement). Dupliqué dans scripts/benchmark-models.mjs
+ * Les vrais candidats "Puissant" (au-delà de qwen3.5:9b et en dessous, qui servent aussi de replis pour
+ * Rapide/Médium) + les gros candidats "Code" tolèrent de déborder sur la RAM plutôt que d'être écartés
+ * faute de VRAM — à la demande explicite de Léo, qui préfère un vrai grand modèle plus lent (potentiellement
+ * 30s+ par réponse) à un petit modèle rapide pour les paliers censés gérer le plus de réflexion/qualité.
+ * Utilisé par pickBestModelsFromBenchmark/computeModelPicks (budget élargi VRAM+RAM pour ces candidats) et
+ * pickSafeModel (pas de repli en direct sur un modèle plus petit : Ollama gère lui-même le débordement RAM,
+ * contrairement à une vraie absence de place qui ferait échouer le chargement — jamais appelé pour Code,
+ * qui n'a pas de Tier, donc sans risque de confusion là). Dupliqué dans scripts/benchmark-models.mjs
  * (RAM_OFFLOAD_MODELS) pour la même raison que les autres listes de candidats — voir son commentaire pour le
  * détail MoE/dense de chacun (certains restent rapides même débordés, d'autres beaucoup moins).
  */
@@ -114,7 +115,12 @@ const LARGE_RAM_OFFLOAD_MODELS = new Set([
   'gpt-oss:20b',
   'command-r:35b',
   'mistral-small:24b',
-  'glm-4.7-flash:q4_K_M'
+  'glm-4.7-flash:q4_K_M',
+  'qwen3.6:35b-a3b',
+  'qwen3-coder:30b',
+  'north-mini-code-1.0',
+  'qwen2.5-coder:32b',
+  'devstral-small-2:24b'
 ])
 
 const TIER_CANDIDATES: Record<Tier, ModelCandidate[]> = {
@@ -585,7 +591,13 @@ function computeModelPicks(
   gpuName: string | null,
   localBenchmark: Map<string, LocalBenchmarkEntry>,
   verifiedToolScores: Record<VerifiedTier, Map<string, string>>
-): { flash: ModelOverviewEntry; medium: ModelOverviewEntry; large: ModelOverviewEntry; vision: ModelOverviewEntry } {
+): {
+  flash: ModelOverviewEntry
+  medium: ModelOverviewEntry
+  large: ModelOverviewEntry
+  vision: ModelOverviewEntry
+  code: ModelOverviewEntry
+} {
   const budgetGb = vramGb !== null ? Math.max(0, vramGb - STT_RESERVED_GB) : 0
   // Budget élargi pour les candidats "Puissant" qui tolèrent de déborder sur la RAM (voir
   // LARGE_RAM_OFFLOAD_MODELS) : VRAM (déjà amputée de la réservation STT) + RAM (moins la marge pour
@@ -642,7 +654,8 @@ function computeModelPicks(
     flash: pickBestFrom(TIER_CANDIDATES.flash, 'conversation'),
     medium: pickBestFrom(TIER_CANDIDATES.medium, 'conversation'),
     large: pickBestFrom(TIER_CANDIDATES.large, 'conversation'),
-    vision: pickBestFrom(VISION_CANDIDATES, 'vision')
+    vision: pickBestFrom(VISION_CANDIDATES, 'vision'),
+    code: pickBestFrom(CODE_CANDIDATES, 'code')
   }
 }
 

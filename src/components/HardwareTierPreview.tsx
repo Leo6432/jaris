@@ -6,11 +6,12 @@ interface HardwareTierPreviewProps {
   tiers: HardwareTierPreviewData[]
 }
 
-const SLOT_LABELS: { key: 'flash' | 'medium' | 'large' | 'vision'; label: string }[] = [
+const SLOT_LABELS: { key: 'flash' | 'medium' | 'large' | 'vision' | 'code'; label: string }[] = [
   { key: 'flash', label: 'Rapide' },
   { key: 'medium', label: 'Médium' },
   { key: 'large', label: 'Puissant' },
-  { key: 'vision', label: 'Vision' }
+  { key: 'vision', label: 'Vision' },
+  { key: 'code', label: 'Code' }
 ]
 
 /** Même formatage que le tableau détaillé (OptionsMenu.tsx) : "(estimé)" distingue une vitesse calculée par

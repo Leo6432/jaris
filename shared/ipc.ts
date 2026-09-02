@@ -130,6 +130,7 @@ export interface HardwareTierPreview {
   medium: ModelOverviewEntry
   large: ModelOverviewEntry
   vision: ModelOverviewEntry
+  code: ModelOverviewEntry
 }
 
 /**
