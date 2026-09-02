@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { AnalysisScope, ModelOverviewResult } from '../../shared/ipc'
 import type { ModelAnalysisState, ModelRunStatus } from '../hooks/useModelAnalysis'
+import { ReliabilityBadge } from './OptionsMenu'
 
 /** Fait le lien entre AnalysisScope ('flash'|'medium'|...) et le libellé de palier utilisé par ModelOverviewGroup.tier (voir TIER_LABELS dans hardwareScan.ts). */
 const SCOPE_TO_TIER_LABEL: Partial<Record<AnalysisScope, string>> = {
@@ -124,11 +125,25 @@ export default function ModelAnalysisProgress({ state, modelOverview }: ModelAna
             <div key={group.tier} className="options-menu__model-group">
               <div className="options-menu__model-group-title">{group.tier}</div>
               <table className="options-menu__model-overview">
+                <thead>
+                  <tr>
+                    <th>Modèle</th>
+                    {/* Score déjà connu (mesure locale passée ou verified-tool-scores.md) affiché dès
+                        l'arrivée sur l'écran, avant même que ce run ait touché quoi que ce soit à ce modèle
+                        — pas seulement une fois "Terminé" (voir RunStatusBadge, qui lui montre le score
+                        FRAIS de CE run une fois fini, potentiellement différent). */}
+                    <th className="options-menu__col-num">Fiabilité connue</th>
+                    <th>Statut</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {group.entries.map((entry) => (
                     <tr key={entry.model}>
                       <td className="options-menu__model-name" title={entry.model}>
                         {entry.model}
+                      </td>
+                      <td className="options-menu__col-num">
+                        <ReliabilityBadge value={entry.toolCalling} />
                       </td>
                       <td>
                         <RunStatusBadge status={modelRunStatus[entry.model]} verifiedSkip={entry.verifiedSkip} />

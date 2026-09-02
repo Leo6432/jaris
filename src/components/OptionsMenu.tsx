@@ -82,9 +82,11 @@ const TIER_LABELS: Array<{ key: keyof ModelTiers; label: string; think: string }
 /**
  * "3/3", "6/6" etc. en petit badge coloré (vert = parfait, ambre = partiel, rouge = raté) plutôt qu'en
  * texte brut au milieu du tableau — un coup d'œil suffit pour repérer les bons/mauvais élèves, pas besoin
- * de lire chaque cellule. "—" (jamais testé) reste un texte neutre, pas un badge.
+ * de lire chaque cellule. "—" (jamais testé) reste un texte neutre, pas un badge. Exporté : réutilisé par
+ * ModelAnalysisProgress.tsx pour afficher le score déjà connu de chaque modèle dès le début d'un run, pas
+ * seulement dans le tableau statique ci-dessous.
  */
-function ReliabilityBadge({ value }: { value: string | null }): JSX.Element {
+export function ReliabilityBadge({ value }: { value: string | null }): JSX.Element {
   if (!value) return <span className="options-menu__badge options-menu__badge--none">—</span>
   const match = /^(\d+)\/(\d+)$/.exec(value)
   if (!match) return <span className="options-menu__badge options-menu__badge--none">{value}</span>
