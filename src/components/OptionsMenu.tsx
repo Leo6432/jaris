@@ -6,7 +6,6 @@ import type {
   GmailStatus,
   HardwareTierPreview as HardwareTierPreviewData,
   ModelOverviewResult,
-  ModelTiers,
   OllamaVersionStatus,
   Profile
 } from '../../shared/ipc'
@@ -71,15 +70,6 @@ function dedupeAudioOutputs(devices: MediaDeviceInfo[]): MediaDeviceInfo[] {
   }
   return result
 }
-
-// Reflète THINK_LEVEL dans electron/services/assistant.ts : chaque palier a un effort de réflexion Ollama
-// fixe (low/medium/high), utile à afficher pour comprendre pourquoi deux paliers pointant sur le même
-// modèle (matériel contraint) ne répondent quand même pas pareil.
-const TIER_LABELS: Array<{ key: keyof ModelTiers; label: string; think: string }> = [
-  { key: 'flash', label: 'Rapide', think: 'basse' },
-  { key: 'medium', label: 'Médium', think: 'moyenne' },
-  { key: 'large', label: 'Puissant', think: 'haute' }
-]
 
 /**
  * "3/3", "6/6" etc. en petit badge coloré (vert = parfait, ambre = partiel, rouge = raté) plutôt qu'en
@@ -575,24 +565,6 @@ export default function OptionsMenu(): JSX.Element {
             ) : (
               <HardwareTierPreview tiers={hardwareTiers} />
             )}
-
-            <div className="options-menu__section-title">Modèles actuellement retenus</div>
-            <div className="options-menu__current-picks">
-              {TIER_LABELS.map(({ key, label, think }) => (
-                <div key={key} className="options-menu__pick" title={`Réflexion : ${think}`}>
-                  <span className="options-menu__pick-tier">{label}</span>
-                  <span className="options-menu__pick-model">{profile?.models?.[key] ?? '—'}</span>
-                </div>
-              ))}
-              <div className="options-menu__pick">
-                <span className="options-menu__pick-tier">Vision</span>
-                <span className="options-menu__pick-model">{profile?.visionModel ?? '—'}</span>
-              </div>
-              <div className="options-menu__pick">
-                <span className="options-menu__pick-tier">Code</span>
-                <span className="options-menu__pick-model">{modelOverview?.codeModel ?? '—'}</span>
-              </div>
-            </div>
 
             <button className="options-menu__action" onClick={() => setScopeDialogOpen(true)} disabled={analysis.benchmarking}>
               {analysis.benchmarking ? 'Analyse en cours...' : 'Tester tous les modèles et choisir les meilleurs'}

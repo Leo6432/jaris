@@ -208,16 +208,18 @@ const MODELS = [
 // detectVramGb ci-dessous : ce script tourne en `node` simple, pas d'import direct possible depuis le TS
 // bundlé). Testés séparément de MODELS ci-dessus : la question n'est pas "suit-il les instructions de
 // Jaris" (tool-calling) mais "comprend-il vraiment ce qu'il voit" (voir VISION_TEST_CASES plus bas).
+// Même ordre (du plus gros au plus petit) que hardwareScan.ts, pour la même raison (voir son commentaire) —
+// gemma4:e4b (le plus gros) doit rester en tête, pas en queue.
 const VISION_CANDIDATES = [
-  { model: 'qwen3-vl:8b', vramGb: 8 },
-  { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 6.5 },
-  { model: 'qwen3-vl:4b', vramGb: 5 },
-  { model: 'qwen3-vl:2b', vramGb: 3 },
   // qwen3.5/gemma4:e4b sont nativement multimodaux (déjà dans MEDIUM_CANDIDATES) : testés ici pour savoir
   // si réutiliser le modèle de conversation déjà chargé tient tête à un modèle vision dédié — voir le
   // commentaire complet dans hardwareScan.ts.
+  { model: 'gemma4:e4b', vramGb: 9.6 },
+  { model: 'qwen3-vl:8b', vramGb: 8 },
+  { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 6.5 },
+  { model: 'qwen3-vl:4b', vramGb: 5 },
   { model: 'qwen3.5:4b', vramGb: 3.4 },
-  { model: 'gemma4:e4b', vramGb: 9.6 }
+  { model: 'qwen3-vl:2b', vramGb: 3 }
 ]
 
 // Candidats du palier Code (CODE_CANDIDATES dans hardwareScan.ts, dupliqué ici pour la même raison que

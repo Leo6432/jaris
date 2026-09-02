@@ -127,7 +127,20 @@ const TIER_CANDIDATES: Record<Tier, ModelCandidate[]> = {
 // contrainte, il ne tient pas à côté du modèle de conversation déjà chargé, forçant Ollama à décharger/
 // recharger à chaque appel (des dizaines de secondes). Mêmes tailles/logique que les paliers de conversation
 // ci-dessus, source : ollama.com/library/qwen3-vl.
+// Triée du plus gros au plus petit, comme FLASH/MEDIUM/LARGE_CANDIDATES ci-dessus (voir leur commentaire) :
+// pickForBudget (repli quand aucun candidat n'a de résultat exploitable) suppose cet ordre pour retomber sur
+// le plus petit, jamais un gros modèle par accident — gemma4:e4b (le plus gros ici, 9.6 Go) doit donc rester
+// en TÊTE de liste, pas en queue (bug corrigé : il y était placé en dernier, faisant retomber le repli sur le
+// plus gros modèle vision au lieu du plus petit sur une machine très contrainte).
 const VISION_CANDIDATES: ModelCandidate[] = [
+  // Candidat "réutilisation" : gemma4:e4b (déjà dans MEDIUM_CANDIDATES) est NATIVEMENT multimodal (vérifié
+  // sur ollama.com/library/gemma4 : badge vision+tools+thinking), donc candidat légitime pour la vision
+  // aussi — pas juste un modèle de conversation qu'on force à faire autre chose. Intérêt concret : s'il tient
+  // tête à un qwen3-vl/GLM dédié sur VISION_TEST_CASES, Jaris pourrait un jour réutiliser le modèle de
+  // conversation déjà chargé pour look_at_screen, sans jamais charger un second modèle (zéro swap VRAM). Pas
+  // encore le cas aujourd'hui : resolveVisionModel continue de choisir dans cette liste normalement, ce test
+  // sert juste à savoir si ça vaudrait le coup.
+  { model: 'gemma4:e4b', vramGb: 9.6 },
   { model: 'qwen3-vl:8b', vramGb: 8 },
   // Pas de tag officiel dans la bibliothèque Ollama : import depuis le dépôt GGUF de ggml-org (mainteneurs
   // de llama.cpp), à partir du modèle officiel zai-org/GLM-4.6V-Flash. Le tag Q4_K_M est important : les
@@ -135,16 +148,10 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   // ~6,2 Go mesurés en Q4_K_M, marge de sécurité incluse ci-dessous.
   { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 6.5 },
   { model: 'qwen3-vl:4b', vramGb: 5 },
-  { model: 'qwen3-vl:2b', vramGb: 3 },
-  // Candidats "réutilisation" : qwen3.5 et gemma4:e4b (déjà dans MEDIUM_CANDIDATES) sont NATIVEMENT
-  // multimodaux (vérifié sur ollama.com/library/qwen3.5 : badge vision+tools+thinking), donc candidats
-  // légitimes pour la vision aussi — pas juste des modèles de conversation qu'on force à faire autre chose.
-  // Intérêt concret : si l'un d'eux tient tête à un qwen3-vl/GLM dédié sur VISION_TEST_CASES, Jaris
-  // pourrait un jour réutiliser le modèle de conversation déjà chargé pour look_at_screen, sans jamais
-  // charger un second modèle (zéro swap VRAM). Pas encore le cas aujourd'hui : resolveVisionModel continue
-  // de choisir dans cette liste normalement, ce test sert juste à savoir si ça vaudrait le coup.
+  // Même candidat "réutilisation" que gemma4:e4b ci-dessus, mais pour qwen3.5 (déjà dans MEDIUM_CANDIDATES) :
+  // vérifié nativement multimodal sur ollama.com/library/qwen3.5 (badge vision+tools+thinking).
   { model: 'qwen3.5:4b', vramGb: 3.4 },
-  { model: 'gemma4:e4b', vramGb: 9.6 }
+  { model: 'qwen3-vl:2b', vramGb: 3 }
 ]
 
 // Palier "Code" : modèles spécialisés génération/complétion de code, distincts des paliers de conversation
@@ -660,7 +667,11 @@ export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult>
  * pour le palier "Rapide", censé rester réactif. Ces 3 bornes ne servent donc plus qu'à choisir QUOI montrer
  * à l'écran, jamais à choisir un modèle pour de vrai.
  */
-const HARDWARE_TIER_PREVIEW_VRAM_GB = [4, 8, 16]
+// 4 Go était trop bas : une fois les ~4,5 Go de STT_RESERVED_GB déduits, le budget tombait à 0 et TOUT
+// retombait sur le repli "aucun résultat connu" (vitesse/fiabilité vides pour absolument chaque modèle,
+// même ceux qui ont un vrai score vérifié) — pas représentatif d'une vraie petite machine, juste un budget
+// négatif écrasé à zéro. Ces 3 valeurs laissent toutes un vrai budget positif après réservation STT.
+const HARDWARE_TIER_PREVIEW_VRAM_GB = [6, 12, 24]
 const HARDWARE_TIER_PREVIEW_LABELS = ['Petite configuration', 'Configuration moyenne', 'Grande configuration']
 
 /**
