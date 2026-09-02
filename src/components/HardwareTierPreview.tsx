@@ -22,6 +22,18 @@ function formatSpeed(entry: ModelOverviewEntry): string {
 }
 
 /**
+ * "moins de X Go" / "X à Y Go" / "plus de Y Go" à partir des VRAM représentatives des paliers eux-mêmes
+ * (tier.vramGb, ex: 6/12/24), plutôt qu'en recopiant 6/12/24 en dur ici : les mêmes bornes servent déjà à
+ * choisir le palier "actuel" côté previewHardwareTiers (hardwareScan.ts), pas la peine de les dupliquer et
+ * risquer qu'elles divergent si l'une des deux est modifiée sans l'autre.
+ */
+function formatVramRange(tiers: HardwareTierPreviewData[], i: number): string {
+  if (i === 0) return `moins de ${tiers[0].vramGb} Go`
+  if (i === tiers.length - 1) return `plus de ${tiers[i - 1].vramGb} Go`
+  return `${tiers[i - 1].vramGb} à ${tiers[i].vramGb} Go`
+}
+
+/**
  * Les 3 paliers de configuration (Petite/Moyenne/Grande, voir previewHardwareTiers dans hardwareScan.ts)
  * reliés par des flèches, celui qui correspond à la machine détectée mis en évidence — partagé entre
  * l'écran d'accueil (CapacityScan.tsx, avant même le premier téléchargement) et l'onglet Modèles du menu
@@ -38,6 +50,7 @@ export default function HardwareTierPreview({ tiers }: HardwareTierPreviewProps)
             <div className="capacity-scan__tier-header">
               <span className="capacity-scan__tier-index">Palier {i + 1}</span>
               <span className="capacity-scan__tier-label">{tier.label}</span>
+              <span className="capacity-scan__tier-vram-range">{formatVramRange(tiers, i)}</span>
             </div>
             <table className="capacity-scan__tier-table">
               <tbody>

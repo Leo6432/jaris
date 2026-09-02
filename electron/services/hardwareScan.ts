@@ -697,7 +697,9 @@ export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult>
 // même ceux qui ont un vrai score vérifié) — pas représentatif d'une vraie petite machine, juste un budget
 // négatif écrasé à zéro. Ces 3 valeurs laissent toutes un vrai budget positif après réservation STT.
 const HARDWARE_TIER_PREVIEW_VRAM_GB = [6, 12, 24]
-const HARDWARE_TIER_PREVIEW_LABELS = ['Petite configuration', 'Configuration moyenne', 'Grande configuration']
+// Les 3 noms doivent commencer par le même mot ("Configuration ...") pour ne pas mélanger l'ordre des mots
+// d'un palier à l'autre (bug corrigé : c'était "Petite configuration" mais "Configuration moyenne").
+const HARDWARE_TIER_PREVIEW_LABELS = ['Configuration petite', 'Configuration moyenne', 'Configuration grande']
 
 /**
  * 3 lignes illustratives (VRAM représentative, RAM/carte RÉELLES de cette machine) pour l'écran d'accueil :

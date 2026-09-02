@@ -1110,6 +1110,11 @@ body.body--scan {
   color: #d9ecff;
 }
 
+.capacity-scan__tier-vram-range {
+  font-size: 0.78rem;
+  color: #6f8fae;
+}
+
 /* Une ligne par palier (Rapide/Médium/Puissant/Vision), avec vitesse + fiabilité de son modèle — remplace le
    tableau détaillé de tous les candidats (retiré, ce résumé par palier suffit). */
 .capacity-scan__tier-table {
