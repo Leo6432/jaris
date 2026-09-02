@@ -57,8 +57,18 @@ lignes) — même convention que la colonne "Fiabilité" de `benchmark-results.m
 
 | Modèle | Fiabilité |
 |---|---|
+| hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M | 3/3 |
+| qwen3-vl:4b | 3/3 |
+| qwen3-vl:2b | 3/3 |
+| qwen3.5:4b | 3/3 |
 
 ## Code — génération de code
 
 | Modèle | Fiabilité |
 |---|---|
+| qwen3.6:35b-a3b | 3/3 |
+| qwen3-coder:30b | 3/3 |
+| north-mini-code-1.0 | 3/3 |
+| qwen2.5-coder:32b | 2/2 |
+| devstral-small-2:24b | 3/3 |
+| qwen2.5-coder:7b | 3/3 |
