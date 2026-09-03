@@ -674,6 +674,51 @@ Jaris n'utilise ces outils que si l'utilisateur le demande explicitement
 tape jamais de sa propre initiative, ce sont des actions réelles et
 irréversibles sur la machine.
 
+## Contrôle machine et confirmation avant action (étape 31)
+
+Trois nouveaux outils, pour élargir ce que Jaris peut réellement *faire* sur
+la machine, pas seulement répondre :
+- **`get_system_stats`** — donne l'état actuel de l'ordinateur en une phrase
+  (CPU, RAM, VRAM libre, température GPU), en réutilisant directement
+  `getSystemLoad`/`getLiveGpuStatus` (déjà utilisés en interne pour la
+  surveillance des ressources, étape 14) plutôt qu'une nouvelle mesure
+- **`media_control`** — volume (monter/baisser/couper), lecture/pause,
+  piste suivante/précédente, un cran à la fois comme une vraie touche
+  multimédia (même mécanisme `SendInput` que `press_key`, étape 15) : pas de
+  volume en pourcentage exact, aucune API Windows simple pour ça sans
+  dépendance supplémentaire
+- **`shutdown_pc`** — éteint ou redémarre la machine via `shutdown.exe`
+  natif (aucune dépendance)
+
+**Sécurité graduée (N1/N2/N3).** Ajouter des actions qui touchent vraiment à
+la machine (au-delà d'ouvrir une appli ou taper du texte) rend une mauvaise
+transcription vocale dangereuse — comprendre "éteins" au lieu de "éteins
+pas". Chaque outil (`electron/services/toolSecurity.ts`) a maintenant un
+niveau de risque :
+- **N1 (sûr)** — exécuté directement, jamais de confirmation (tous les
+  outils existants : `open_app`, `look_at_screen`, `search_web`,
+  `remember`/`recall_memory`, `set_reminder`, `type_text`/`press_key`/
+  `click_mouse`, plus les deux nouveaux `get_system_stats`/`media_control`)
+- **N2 (sensible)** — `send_email` : Jaris répond "Tu confirmes : envoyer un
+  mail à ... avec pour objet ... ?" au lieu d'envoyer directement, et
+  attend un oui/non à la phrase suivante avant d'agir pour de vrai. Peut
+  être coché "toujours autoriser" dans Options → Sécurité, révocable à
+  tout moment
+- **N3 (critique)** — `shutdown_pc` : confirmation à CHAQUE fois, jamais de
+  "toujours autoriser" possible, même si l'outil apparaissait par erreur
+  dans la liste des autorisations permanentes
+
+Techniquement, une confirmation en attente vit dans une petite variable
+module-level côté main (`electron/services/toolSecurity.ts`, un seul Jaris
+pour un seul utilisateur, jamais deux confirmations en attente à la fois) :
+la phrase suivante, qu'elle arrive du pipeline vocal ou du mode Chat (même
+fonction `converse()` derrière les deux), est d'abord comparée à une petite
+liste de mots oui/non avant d'être traitée comme une nouvelle question.
+Sans réponse claire dans les 2 minutes, la confirmation expire et la phrase
+suivante est traitée normalement, pour ne jamais interpréter par erreur une
+phrase sans rapport comme une réponse à une action que l'utilisateur a en
+réalité oubliée.
+
 ## Design de l'interface (étape 17)
 
 Le visage animé d'origine (`JarisFace` : yeux + bouche stylisés) est remplacé

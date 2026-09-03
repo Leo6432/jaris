@@ -188,6 +188,31 @@ export async function pressKey(key: string): Promise<string> {
   return error ? `Échec de l'appui sur la touche : ${error}` : `Touche "${key}" pressée.`
 }
 
+/**
+ * Actions multimédia nommées -> code de touche virtuelle Windows (VK_*), les mêmes que sur un clavier
+ * physique avec touches multimédia. Réutilise le même mécanisme KeyPress que pressKey ci-dessus, jamais de
+ * volume en pourcentage exact (pas d'API Windows simple pour ça sans dépendance supplémentaire) : chaque
+ * appel est un cran, comme une vraie touche qu'on presse.
+ */
+const MEDIA_KEY_CODES: Record<string, number> = {
+  volume_up: 0xaf,
+  volume_down: 0xae,
+  mute: 0xad,
+  play_pause: 0xb3,
+  next: 0xb0,
+  previous: 0xb1
+}
+
+/** Appuie sur une touche multimédia (volume, lecture/pause, piste suivante/précédente...), whitelist fixe. */
+export async function mediaKey(action: string): Promise<string> {
+  const vk = MEDIA_KEY_CODES[action.trim().toLowerCase()]
+  if (vk === undefined) {
+    return `Action multimédia "${action}" inconnue. Actions disponibles : ${Object.keys(MEDIA_KEY_CODES).join(', ')}.`
+  }
+  const error = await runPowerShell(`[JarisInput]::KeyPress(${vk})`)
+  return error ? `Échec de l'action multimédia : ${error}` : `Action "${action}" effectuée.`
+}
+
 /** Clique à une position écran donnée (pixels), ou à la position actuelle du curseur si non précisée. */
 export async function clickMouse(x: number | null, y: number | null, button: string): Promise<string> {
   const safeButton = (['left', 'right', 'double'] as const).includes(button as 'left' | 'right' | 'double')

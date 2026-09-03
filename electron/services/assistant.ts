@@ -5,6 +5,14 @@ import { getProfile } from './profileStore'
 import { TOOLS, createToolExecutor } from './tools'
 import { GPU_TEMP_LIMIT_C, pickSafeModel, type LiveGpuStatus } from './hardwareScan'
 import { checkOverloadWarning } from './resourceMonitor'
+import {
+  clearPendingConfirmation,
+  describeToolCall,
+  getPendingConfirmation,
+  interpretYesNo,
+  needsConfirmation,
+  setPendingConfirmation
+} from './toolSecurity'
 
 interface ModelTiers {
   flash: string
@@ -94,7 +102,10 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[], chan
     memory +
     memoryRule +
     "Tu as accès à des outils pour agir réellement : ouvrir une application, programmer un rappel vocal, " +
-    "regarder l'écran de l'utilisateur, chercher sur le web, mémoriser ou relire une information dans ta " +
+    "regarder l'écran de l'utilisateur, donner l'état de la machine (get_system_stats : CPU, RAM, VRAM, " +
+    "température), contrôler le volume/la lecture multimédia (media_control), éteindre ou redémarrer " +
+    "l'ordinateur (shutdown_pc, à n'appeler que sur demande explicite et claire), chercher sur le web, " +
+    "mémoriser ou relire une information dans ta " +
     "mémoire locale, envoyer un mail, taper du texte au clavier (type_text), appuyer sur une touche " +
     "(press_key), cliquer avec la souris (click_mouse). Pour toute action concrète, tu dois IMPÉRATIVEMENT appeler l'outil correspondant via un " +
     "vrai appel de fonction, immédiatement, sans phrase d'annonce avant. Il est interdit de dire que tu vas " +
@@ -183,6 +194,28 @@ export async function converse(
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
   const executeTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel)
+
+  // Une confirmation d'action N2/N3 est en attente (voir needsConfirmation plus bas) : cette phrase
+  // répond à "tu confirmes : ... ?" plutôt que d'être une nouvelle question, traitée AVANT tout appel
+  // LLM (aucune inférence n'est nécessaire pour interpréter un oui/non). Une réponse ambiguë annule la
+  // confirmation en attente (plutôt que de rester bloqué dessus indéfiniment) et retombe sur le flux
+  // normal, qui traite alors `prompt` comme une toute nouvelle question.
+  const pendingConfirmation = getPendingConfirmation()
+  if (pendingConfirmation) {
+    const answer = interpretYesNo(prompt)
+    clearPendingConfirmation()
+    if (answer === true) {
+      onLog?.(`Confirmation reçue : exécution de ${pendingConfirmation.name}.`)
+      const result = await executeTool(pendingConfirmation.name, pendingConfirmation.args)
+      return channel === 'voice' ? stripMarkdownForVoice(result) : result
+    }
+    if (answer === false) {
+      onLog?.(`Action annulée par l'utilisateur : ${pendingConfirmation.name}.`)
+      return "D'accord, j'annule."
+    }
+    onLog?.('Réponse ambiguë à la confirmation en attente : action annulée, traitement comme nouvelle question.')
+  }
+
   const models = profile?.models ?? { flash: config.ollama.model, medium: config.ollama.model, large: config.ollama.model }
   let tier = pickTier(prompt)
 
@@ -281,6 +314,18 @@ export async function converse(
 
     for (const call of message.tool_calls) {
       onLog?.(`Outil appelé : ${call.function.name}(${JSON.stringify(call.function.arguments)})`)
+
+      // Outil N2/N3 (voir toolSecurity.ts) : jamais exécuté à ce tour-ci, on pose la question et on
+      // sort immédiatement — les éventuels autres appels d'outils de ce même lot sont abandonnés plutôt
+      // qu'exécutés en aveugle avant d'avoir la confirmation de celui-ci (voir le court-circuit en tête
+      // de fonction, qui traite la réponse au prochain appel de converse()).
+      if (needsConfirmation(call.function.name, profile?.alwaysAllowedTools ?? [])) {
+        const description = describeToolCall(call.function.name, call.function.arguments)
+        setPendingConfirmation(call.function.name, call.function.arguments, description)
+        onLog?.(`Confirmation requise avant d'exécuter ${call.function.name}.`)
+        return finalize(`Tu confirmes : ${description} ?`)
+      }
+
       const result = await executeTool(call.function.name, call.function.arguments)
       onLog?.(`Résultat de l'outil : ${result}`)
 

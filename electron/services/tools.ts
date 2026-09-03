@@ -5,7 +5,8 @@ import { rememberNote, recallNote } from './memoryStore'
 import { scheduleReminder } from './reminders'
 import { lookAtScreen } from './vision'
 import { searchWeb } from './webSearch'
-import { clickMouse, pressKey, typeText } from './inputControl'
+import { clickMouse, mediaKey, pressKey, typeText } from './inputControl'
+import { getSystemStatsText, shutdownPc } from './systemControl'
 
 export const TOOLS: OllamaTool[] = [
   {
@@ -196,6 +197,52 @@ export const TOOLS: OllamaTool[] = [
         required: []
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_system_stats',
+      description: "Donne l'état actuel de l'ordinateur : utilisation CPU, RAM utilisée, VRAM libre et température du GPU si disponible.",
+      parameters: { type: 'object', properties: {}, required: [] }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'media_control',
+      description:
+        "Contrôle la lecture multimédia ou le volume du système, un cran à la fois (comme une touche " +
+        'multimédia physique) : monter/baisser le son, couper/réactiver le son, lecture/pause, piste ' +
+        'suivante/précédente.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            description: 'Action à effectuer',
+            enum: ['volume_up', 'volume_down', 'mute', 'play_pause', 'next', 'previous']
+          }
+        },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'shutdown_pc',
+      description:
+        "Éteint ou redémarre l'ordinateur. Action CRITIQUE et irréversible : n'appelle cet outil que si " +
+        "l'utilisateur a clairement et explicitement demandé d'éteindre ou de redémarrer la machine, jamais " +
+        "de ta propre initiative ni sur un simple soupçon.",
+      parameters: {
+        type: 'object',
+        properties: {
+          restart: { type: 'boolean', description: 'true pour redémarrer, false (ou absent) pour éteindre' }
+        },
+        required: []
+      }
+    }
   }
 ]
 
@@ -227,6 +274,12 @@ export function createToolExecutor(onReminderFire: ReminderFireHandler, visionMo
         const y = args.y === undefined || args.y === null ? null : Number(args.y)
         return clickMouse(x, y, String(args.button ?? 'left'))
       }
+      case 'get_system_stats':
+        return getSystemStatsText()
+      case 'media_control':
+        return mediaKey(String(args.action ?? ''))
+      case 'shutdown_pc':
+        return shutdownPc(Boolean(args.restart))
       default:
         return `Outil inconnu : ${name}`
     }
