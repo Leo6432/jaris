@@ -10,7 +10,7 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ✅ Étape 2 — Visage animé (`JarisFace`, remplacé à l'étape 17 par
   `JarisOrb`) avec 5 états d'émotion : veille, écoute, réflexion, content,
   surpris
-- ✅ Étape 3 — Pipeline vocal local : mot d'activation (openWakeWord),
+- ✅ Étape 3 — Pipeline vocal local : déclenchement par double clap,
   transcription (Cohere Transcribe), synthèse vocale (Supertonic HD). **Testé
   de bout en bout avec un vrai micro** (voir plus bas)
 - ✅ Étape 4 — Connexion Ollama : Jaris comprend vraiment ce que tu dis et
@@ -192,7 +192,7 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   version est publiée
 - ⬜ Étape 22 — Vérification des licences avant mise en vente : vérifier la
   compatibilité des licences des briques open source utilisées (Ollama,
-  modèles Qwen, openWakeWord, Cohere Transcribe, Supertonic HD, SearXNG) avec
+  modèles Qwen, Cohere Transcribe, Supertonic HD, SearXNG) avec
   une distribution commerciale, avant de passer aux étapes de mise sur le
   marché ci-dessous (mentions légales, protection contre la redistribution,
   publication et monétisation)
@@ -231,23 +231,21 @@ Tout se télécharge directement, sauf la reconnaissance vocale qui demande un
 compte Hugging Face gratuit (voir plus bas) — c'est la seule exception au
 "zéro compte" du reste de Jaris.
 
-> **Mot d'activation : "Hey Jarvis" (en anglais), pas "Jaris".**
-> openWakeWord (le moteur 100% local et gratuit, sans compte) ne fournit pas
-> de mot-clé "Jaris" prêt à l'emploi — le plus proche livré nativement est
-> "Hey Jarvis", qu'on utilise donc par défaut. Un vrai mot-clé "Jaris"
-> demanderait d'entraîner un modèle maison (notebook fourni par
-> openWakeWord, plus de travail) ; ce n'est pas fait pour l'instant.
+> **Déclenchement : double clap, pas de mot à dire.**
+> Jaris n'a plus de mot d'activation parlé (openWakeWord, qui obligeait à
+> dire "Hey Jarvis" en anglais faute de mot-clé "Jaris" pré-entraîné, a été
+> retiré). Deux claps francs et rapprochés suffisent — voir plus bas —, en
+> plus du raccourci clavier **+** pour un déclenchement manuel.
 
-### 1. Environnement Python (mot d'activation + reconnaissance vocale)
+### 1. Environnement Python (déclenchement par clap + reconnaissance vocale)
 
-Un seul process Python à côté d'Electron gère le micro, la détection du mot
-d'activation et la transcription.
+Un seul process Python à côté d'Electron gère le micro, la détection du
+double clap et la transcription.
 
 ```bash
 python -m venv python/venv
 python/venv/Scripts/activate   # (Windows) — python/venv/bin/activate sur Mac/Linux
 pip install -r python/requirements.txt
-python python/download_wakeword_models.py   # télécharge les modèles openWakeWord (~5 Mo) dans models/wakeword/
 ```
 
 Si tu as une carte graphique NVIDIA et veux utiliser `STT_DEVICE=cuda` : `pip install
@@ -271,19 +269,16 @@ open source, #1 du classement Open ASR Leaderboard) est un modèle "gated" :
 Renseigne dans `.env` :
 - `PYTHON_BIN` → chemin vers `python/venv/Scripts/python.exe`
 - `STT_DEVICE=cuda` sur la RTX 3070, sinon `cpu`
-- `WAKEWORD_THRESHOLD` si le mot d'activation se déclenche trop souvent/pas
-  assez (0 à 1, défaut 0.5)
 
-**Déclenchement alternatif : deux claps francs rapprochés**, en plus du mot
-d'activation (jamais à la place) — pas de mot à prononcer, pratique quand on
-a les mains prises ou juste envie de taper dans ses mains façon "clap on/clap
-off". Toujours DEUX claps, jamais un seul : un objet qui tombe ou une porte
-qui claque ne doit pas déclencher Jaris par accident. Réglages dans
-`python/voice_server.py` (`CLAP_RMS_THRESHOLD`, `CLAP_MIN_INTERVAL_MS`,
-`CLAP_MAX_INTERVAL_MS`), à ajuster après un vrai test comme
-`SILENCE_RMS_THRESHOLD` — pas encore de réglage exposé dans `.env` ni dans
-Options, à faire si les valeurs par défaut se révèlent trop/pas assez
-sensibles à l'usage.
+**Déclenchement par double clap.** Toujours DEUX claps francs et rapprochés,
+jamais un seul : un objet qui tombe ou une porte qui claque ne doit pas
+déclencher Jaris par accident (même logique qu'un interrupteur "clap on/clap
+off"). Réglages dans `python/voice_server.py` (`CLAP_RMS_THRESHOLD`,
+`CLAP_MIN_INTERVAL_MS`, `CLAP_MAX_INTERVAL_MS`), à ajuster après un vrai test
+comme `SILENCE_RMS_THRESHOLD` — pas encore de réglage exposé dans `.env` ni
+dans Options, à faire si les valeurs par défaut se révèlent trop/pas assez
+sensibles à l'usage. Le raccourci clavier **+** (dans la fenêtre Jaris) reste
+disponible pour déclencher l'écoute manuellement, sans clap.
 
 ### 2. Synthèse vocale (Supertonic HD)
 
@@ -297,20 +292,20 @@ jouée + voix retenue pour les prochaines réponses), sans toucher au `.env`.
 
 ### Vérifier
 
-`npm run dev` : dis "Hey Jarvis" près du micro, Jaris doit s'illuminer,
-transcrire ce que tu dis ensuite, puis le redire à voix haute pour confirmer
-qu'il a compris — c'est la preuve que toute la chaîne audio fonctionne, avant
-de brancher un vrai raisonnement à l'étape 4.
+`npm run dev` : tape deux fois dans les mains près du micro, Jaris doit
+s'illuminer, transcrire ce que tu dis ensuite, puis le redire à voix haute
+pour confirmer qu'il a compris — c'est la preuve que toute la chaîne audio
+fonctionne, avant de brancher un vrai raisonnement à l'étape 4.
 
 > Pipeline testé de bout en bout avec un vrai micro sur une machine Windows
-> (RTX 3070) : mot d'activation, capture, transcription et synthèse vocale
+> (RTX 3070) : déclenchement, capture, transcription et synthèse vocale
 > fonctionnent tous en conditions réelles.
 >
 > Pièges rencontrés en conditions réelles, déjà corrigés dans le code : le
 > périphérique micro par défaut du système n'est pas forcément le bon (ex: un
 > micro virtuel type Voice Changer/Voicemod) — se règle directement depuis
 > l'onglet **Micro & Haut-parleur** du menu Options (menu déroulant "Micro
-> utilisé", plus besoin de passer par `WAKEWORD_INPUT_DEVICE`/
+> utilisé", plus besoin de passer par `MIC_INPUT_DEVICE`/
 > `python -m sounddevice` à la main) ; un modèle de transcription peut
 > halluciner du texte plausible sur du silence (le pipeline filtre déjà ça
 > via la détection de silence avant capture, plus un filtre de secours sur
@@ -327,13 +322,11 @@ de brancher un vrai raisonnement à l'étape 4.
 > direct pendant qu'on parle, façon Discord. Pas de durée fixe — le bouton
 > devient "Arrêter le test" pour désactiver quand on veut, plutôt qu'un
 > compte à rebours imposé. Changer de micro redémarre le pipeline vocal
-> (rechargement des modèles de mot d'activation et de transcription, quelques
-> secondes) ; changer de haut-parleur est instantané, appliqué à la prochaine
-> réponse.
+> (rechargement du modèle de transcription, quelques secondes) ; changer de
+> haut-parleur est instantané, appliqué à la prochaine réponse.
 >
 > Un raccourci clavier **+** (dans la fenêtre Jaris) déclenche aussi l'écoute
-> manuellement, sans dire le mot d'activation — pratique pour tester ou en
-> environnement bruyant.
+> manuellement, sans clap — pratique pour tester ou en environnement bruyant.
 
 ## Mettre en place Ollama (étape 4)
 
@@ -786,8 +779,8 @@ La fenêtre de réglages a une colonne latérale permanente, toujours visible,
 qui donne accès à trois façons d'utiliser Jaris. Le cerveau de Jaris et le
 menu Options sont en bas de cette colonne, disponibles quel que soit le mode.
 
-**Agent vocal** — l'expérience d'origine : l'orbe, le mot d'activation, la
-réponse parlée. Rien n'y change.
+**Agent vocal** — l'expérience d'origine : l'orbe, le déclenchement par
+double clap, la réponse parlée. Rien n'y change.
 
 **Chat** — exactement le même Jaris, au clavier : mêmes outils (ouvrir une
 application, chercher sur le web, regarder l'écran, mémoriser, envoyer un
@@ -893,10 +886,10 @@ la grande fenêtre à l'écran.
 - **Toujours au-dessus** : `alwaysOnTop` + visible sur tous les bureaux
   virtuels, donc il reste affiché même en changeant d'application ou de
   bureau.
-- **Réagit depuis n'importe où** : le mot d'activation "Hey Jarvis" (déjà
-  basé sur le micro, indépendant de la fenêtre) et le **+ du pavé
-  numérique** (`globalShortcut`, enregistré au démarrage) déclenchent
-  l'écoute quel que soit le programme qui a le focus.
+- **Réagit depuis n'importe où** : le double clap (déjà basé sur le micro,
+  indépendant de la fenêtre) et le **+ du pavé numérique** (`globalShortcut`,
+  enregistré au démarrage) déclenchent l'écoute quel que soit le programme
+  qui a le focus.
   > Le caractère "+" tout seul (celui à côté du Entrée sur un clavier
   > AZERTY) n'est pas un accelerator valide pour `globalShortcut` : Electron
   > lève carrément une exception à l'enregistrement ("conversion failure

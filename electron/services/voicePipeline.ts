@@ -103,7 +103,7 @@ function normalizeSpokenSymbols(text: string): string {
 }
 
 /**
- * Orchestre le cycle complet : mot d'activation -> capture -> transcription ->
+ * Orchestre le cycle complet : déclenchement (double clap ou manuel) -> capture -> transcription ->
  * réflexion (Ollama, avec outils : ouvrir une appli, programmer un rappel) ->
  * réponse parlée. Les rappels qui se déclenchent tout seuls passent par le
  * même canal de réponse (announceReminder -> speak).
@@ -114,7 +114,7 @@ export class VoicePipeline extends EventEmitter {
   private history: OllamaMessage[] = []
   /**
    * true tant qu'une phrase est en train d'être traitée (réflexion Ollama + réponse parlée) : le sidecar
-   * Python écoute le mot d'activation en continu, indépendamment de ce que fait Electron, donc une nouvelle
+   * Python écoute le double clap en continu, indépendamment de ce que fait Electron, donc une nouvelle
    * phrase peut être captée pendant ce temps. Une phrase captée PENDANT LA RÉFLEXION (ex: "en fait le
    * ethereum" juste après "quel est le prix du bitcoin") n'a souvent aucun sens toute seule : elle est
    * fusionnée avec la phrase en cours et la réflexion recommence avec le tout, pour ne donner qu'UNE seule
@@ -242,7 +242,7 @@ export class VoicePipeline extends EventEmitter {
 
       // "listening" (mis par le handler 'wake') reste affiché jusqu'ici, le temps réel de la capture +
       // transcription côté sidecar : "thinking" n'apparaît qu'à partir du moment où on a vraiment une
-      // phrase à traiter, pas dès le mot d'activation.
+      // phrase à traiter, pas dès le déclenchement.
       this.setEmotion('thinking')
 
       // Sécurité thermique GPU vérifiée avant même d'appeler le LLM (pas dans converse) : si la requête

@@ -1,6 +1,5 @@
 import { app, ipcMain, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu } from 'electron'
 import { join } from 'path'
-import { checkVoiceSetup } from './config'
 import {
   ensureOllamaRunning,
   ensureSearxngRunning,
@@ -46,7 +45,7 @@ let pipeline: VoicePipeline | null = null
 let fullWindow: BrowserWindow | null = null
 let widgetWindow: BrowserWindow | null = null
 let tray: Tray | null = null
-/** Passe à true seulement via le menu de la barre système "Quitter" : sinon fermer la fenêtre de réglages la cache juste, Jaris continue à tourner (widget + écoute du mot d'activation). */
+/** Passe à true seulement via le menu de la barre système "Quitter" : sinon fermer la fenêtre de réglages la cache juste, Jaris continue à tourner (widget + écoute du double clap). */
 let quitting = false
 /** Tant que l'onboarding n'est pas fini, fermer la fenêtre de réglages doit quitter l'appli normalement (pas de widget à replier sur un profil pas encore configuré). */
 let onboardingDone = false
@@ -59,10 +58,13 @@ const WIDGET_WIDTH = 320
 const WIDGET_HEIGHT = 520
 const WIDGET_MARGIN = 24
 
-function currentSetupStatus(): VoiceSetupStatusPayload {
-  const status = checkVoiceSetup()
-  return { ready: status.wakewordReady, missing: status.missing }
-}
+/**
+ * Dernier statut connu du pipeline vocal, mis à jour uniquement par un vrai succès/échec de démarrage
+ * (voir startVoicePipeline) — plus de pré-vérification de fichiers à faire depuis le retrait du mot
+ * d'activation (openWakeWord) : la transcription/synthèse vocale se téléchargent déjà seules au besoin,
+ * rien à vérifier avant de tenter de démarrer.
+ */
+let lastSetupStatus: VoiceSetupStatusPayload = { ready: true, missing: [] }
 
 /** Ajoute un nœud central représentant l'utilisateur, relié à chaque note, pour donner une vraie structure au graphe (sinon les notes flottent sans lien tant que Jaris n'a pas écrit de [[...]] entre elles). */
 async function buildMemoryGraphWithUser(): Promise<MemoryGraph> {
@@ -205,16 +207,9 @@ function broadcast(channel: string, payload?: unknown): void {
 }
 
 async function startVoicePipeline(): Promise<void> {
-  const status = currentSetupStatus()
   const log = (message: string): void => broadcast(IPC_CHANNELS.log, message)
   void ensureOllamaRunning(log)
   void ensureSearxngRunning(log)
-
-  if (!status.ready) {
-    broadcast(IPC_CHANNELS.setupStatus, status)
-    broadcast(IPC_CHANNELS.log, `Configuration incomplète : ${status.missing.join(' | ')}`)
-    return
-  }
 
   pipeline = new VoicePipeline()
   pipeline.on('emotion', (emotion: JarisEmotion) => broadcast(IPC_CHANNELS.emotion, emotion))
@@ -234,11 +229,13 @@ async function startVoicePipeline(): Promise<void> {
   try {
     const profile = await getProfile()
     await pipeline.start(profile?.audioInputDeviceIndex)
-    broadcast(IPC_CHANNELS.setupStatus, status)
+    lastSetupStatus = { ready: true, missing: [] }
+    broadcast(IPC_CHANNELS.setupStatus, lastSetupStatus)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     broadcast(IPC_CHANNELS.log, `Échec du démarrage du pipeline vocal : ${message}`)
-    broadcast(IPC_CHANNELS.setupStatus, { ready: false, missing: [message] })
+    lastSetupStatus = { ready: false, missing: [message] }
+    broadcast(IPC_CHANNELS.setupStatus, lastSetupStatus)
   }
 }
 
@@ -251,7 +248,7 @@ app.whenReady().then(async () => {
     callback(permission === 'media')
   })
 
-  ipcMain.handle(IPC_CHANNELS.setupStatus, () => currentSetupStatus())
+  ipcMain.handle(IPC_CHANNELS.setupStatus, () => lastSetupStatus)
   ipcMain.on(IPC_CHANNELS.triggerWake, () => pipeline?.triggerWake())
   ipcMain.on(IPC_CHANNELS.audioEnded, () => pipeline?.notifyAudioEnded())
   ipcMain.handle(IPC_CHANNELS.getProfile, () => getProfile())
@@ -385,7 +382,7 @@ app.whenReady().then(async () => {
 
   /**
    * Raccourci global (pas seulement quand la fenêtre de Jaris a le focus) : déclenche l'écoute depuis
-   * n'importe quelle appli, comme le mot d'activation "Hey Jarvis" (déjà global car basé sur le micro).
+   * n'importe quelle appli, comme le double clap (déjà global car basé sur le micro).
    * Diagnostic explicite à chaque étape (succès/échec d'enregistrement, puis déclenchement réel) : sinon
    * impossible de distinguer "le raccourci ne s'enregistre pas" de "il s'enregistre mais rien ne se passe
    * au moment d'appuyer" (ex: pipeline vocal pas encore prêt) juste en testant à l'aveugle. Une fois

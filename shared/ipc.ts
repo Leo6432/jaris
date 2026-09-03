@@ -9,6 +9,9 @@ export interface VoiceReplyPayload {
   audio: ArrayBuffer
 }
 
+/** Résultat du dernier VRAI essai de démarrage du pipeline vocal (voir startVoicePipeline, main.ts) —
+ * `ready: true` par défaut tant qu'aucun échec n'a eu lieu, plus de pré-vérification de fichiers depuis
+ * le retrait du mot d'activation (openWakeWord). */
 export interface VoiceSetupStatusPayload {
   ready: boolean
   missing: string[]
@@ -242,7 +245,7 @@ export const IPC_CHANNELS = {
   reply: 'jaris:reply',
   log: 'jaris:log',
   setupStatus: 'jaris:setup-status',
-  /** renderer -> main : déclenche l'écoute manuellement (sans dire le mot d'activation). */
+  /** renderer -> main : déclenche l'écoute manuellement (sans double clap). */
   triggerWake: 'jaris:trigger-wake',
   /** renderer <-> main : profil utilisateur (prénom), demandé une seule fois au premier lancement. */
   getProfile: 'jaris:get-profile',

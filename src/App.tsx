@@ -144,8 +144,8 @@ export default function App(): JSX.Element {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  // Coupe la réponse en cours dès que Jaris se remet à écouter (mot d'activation redit, ou + du pavé
-  // numérique) : le sidecar Python écoute le mot d'activation en continu, indépendamment de ce que fait
+  // Coupe la réponse en cours dès que Jaris se remet à écouter (double clap, ou + du pavé
+  // numérique) : le sidecar Python écoute en continu, indépendamment de ce que fait
   // Electron (voir voicePipeline.ts), donc "listening" peut très bien arriver pendant que la réponse
   // précédente est encore en train d'être lue. Sans ça, la nouvelle capture démarrait bien mais l'ancienne
   // réponse continuait de parler par-dessus. Sans risque de no-op inutile : appeler pause() sur un <audio>
@@ -237,8 +237,8 @@ export default function App(): JSX.Element {
             <div className="app__new-models">
               <p>
                 {newModels.length === 1 ? 'Nouveau modèle disponible : ' : `${newModels.length} nouveaux modèles disponibles : `}
-                <strong>{newModels.join(', ')}</strong>. Ouvre Options → Modèles puis « Tester tous les
-                modèles » pour voir s'ils conviennent mieux à ta config.
+                <strong>{newModels.join(', ')}</strong>. Ouvre Options → Modèles puis « Retester la
+                configuration » pour voir s'ils conviennent mieux à ta config.
               </p>
               <button onClick={dismissNewModels}>Fermer</button>
             </div>
@@ -251,8 +251,8 @@ export default function App(): JSX.Element {
               <JarisOrb emotion={emotion} />
               <div className="app__status">{STATUS_LABEL[emotion]}</div>
               <div className="app__hint">
-                Astuce : dis « Hey Jarvis » ou appuie sur le + du pavé numérique, depuis n'importe quelle
-                appli, pour activer l'écoute
+                Astuce : tape deux fois dans les mains ou appuie sur le + du pavé numérique, depuis
+                n'importe quelle appli, pour activer l'écoute
               </div>
 
               {(transcript || reply) && (
@@ -264,7 +264,7 @@ export default function App(): JSX.Element {
 
               {setupStatus && !setupStatus.ready && (
                 <div className="app__setup-warning">
-                  Pipeline vocal pas encore configuré :
+                  Échec du démarrage du pipeline vocal :
                   <ul>
                     {setupStatus.missing.map((item) => (
                       <li key={item}>{item}</li>

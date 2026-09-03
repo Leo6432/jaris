@@ -9,7 +9,7 @@ import type { AudioInputDevice } from '../../shared/ipc'
 type VoiceServerProcess = ChildProcessByStdio<Writable, Readable, Readable>
 
 type VoiceServerEvent =
-  | { event: 'ready'; wakeword_model: string }
+  | { event: 'ready' }
   | { event: 'wake' }
   | { event: 'transcript'; text: string }
   | { event: 'log'; message: string }
@@ -22,10 +22,10 @@ type VoiceServerEvent =
 const VOICE_SERVER_SCRIPT = join(__dirname, '../../python/voice_server.py')
 
 /**
- * Sidecar Python persistant : écoute continue du micro, mot d'activation
- * (openWakeWord) et transcription (Cohere Transcribe) dans un seul process.
- * Émet 'wake', 'transcript' (text: string), 'log', 'error', 'micTestLevel'
- * (level: number) et 'micTestDone' (detected: boolean).
+ * Sidecar Python persistant : écoute continue du micro, détection de double
+ * clap (ou déclenchement manuel, voir triggerWake) et transcription (Cohere
+ * Transcribe) dans un seul process. Émet 'wake', 'transcript' (text: string),
+ * 'log', 'error', 'micTestLevel' (level: number) et 'micTestDone' (detected: boolean).
  */
 export class VoiceClient extends EventEmitter {
   private proc: VoiceServerProcess | null = null
@@ -33,7 +33,7 @@ export class VoiceClient extends EventEmitter {
 
   /**
    * @param inputDeviceIndex Index PortAudio choisi dans Options → Voix (voir Profile.audioInputDeviceIndex),
-   * prioritaire sur WAKEWORD_INPUT_DEVICE (.env) s'il est fourni. `undefined`/`null` = retombe sur .env.
+   * prioritaire sur MIC_INPUT_DEVICE (.env) s'il est fourni. `undefined`/`null` = retombe sur .env.
    */
   start(inputDeviceIndex?: number | null): Promise<void> {
     if (this.ready) return this.ready
@@ -42,14 +42,6 @@ export class VoiceClient extends EventEmitter {
       const args = [
         '-u',
         VOICE_SERVER_SCRIPT,
-        '--wakeword-model',
-        config.wakeword.modelPath,
-        '--melspec-model',
-        config.wakeword.melspecModelPath,
-        '--embedding-model',
-        config.wakeword.embeddingModelPath,
-        '--wakeword-threshold',
-        String(config.wakeword.threshold),
         '--stt-model',
         config.stt.model,
         '--stt-device',
@@ -59,8 +51,8 @@ export class VoiceClient extends EventEmitter {
       ]
       if (inputDeviceIndex !== undefined && inputDeviceIndex !== null) {
         args.push('--input-device', String(inputDeviceIndex))
-      } else if (config.wakeword.inputDevice !== '') {
-        args.push('--input-device', config.wakeword.inputDevice)
+      } else if (config.voice.inputDevice !== '') {
+        args.push('--input-device', config.voice.inputDevice)
       }
 
       const proc = spawn(config.python.bin, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
@@ -133,7 +125,7 @@ export class VoiceClient extends EventEmitter {
     this.ready = null
   }
 
-  /** Force un déclenchement, comme si le mot d'activation venait d'être détecté. */
+  /** Force un déclenchement manuel (touche "+"), comme un double clap détecté. */
   triggerWake(): void {
     this.proc?.stdin.write('trigger\n')
   }

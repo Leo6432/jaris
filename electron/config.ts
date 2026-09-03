@@ -19,13 +19,11 @@ export const config = {
   python: {
     bin: readEnv('PYTHON_BIN', 'python')
   },
-  wakeword: {
-    modelPath: readEnv('WAKEWORD_MODEL_PATH', './models/wakeword/hey_jarvis_v0.1.onnx'),
-    melspecModelPath: readEnv('WAKEWORD_MELSPEC_PATH', './models/wakeword/melspectrogram.onnx'),
-    embeddingModelPath: readEnv('WAKEWORD_EMBEDDING_PATH', './models/wakeword/embedding_model.onnx'),
-    threshold: Number(readEnv('WAKEWORD_THRESHOLD', '0.5')),
-    /** Index du périphérique micro (voir `python -m sounddevice`), vide = défaut système. */
-    inputDevice: readEnv('WAKEWORD_INPUT_DEVICE')
+  voice: {
+    /** Index/nom du périphérique micro (voir `python -m sounddevice`) utilisé par le sidecar vocal, vide =
+     * défaut système. Profile.audioInputDeviceIndex (Options → Voix) reste prioritaire s'il est défini,
+     * voir voiceClient.ts. */
+    inputDevice: readEnv('MIC_INPUT_DEVICE')
   },
   stt: {
     /** Reconnaissance vocale : Cohere Transcribe (2 Md de paramètres, #1 du Open ASR Leaderboard). */
@@ -65,28 +63,3 @@ export const config = {
     clientSecret: readEnv('GOOGLE_CLIENT_SECRET')
   }
 } as const
-
-export interface VoiceSetupStatus {
-  wakewordReady: boolean
-  missing: string[]
-}
-
-/**
- * Vérifie que les fichiers nécessaires au pipeline vocal sont présents. La synthèse vocale
- * (Supertonic HD) n'a rien à vérifier ici : son modèle se télécharge tout seul au premier lancement,
- * comme la transcription (Cohere Transcribe).
- */
-export function checkVoiceSetup(): VoiceSetupStatus {
-  const missing: string[] = []
-
-  if (!existsSync(config.wakeword.modelPath)) missing.push(`modèle openWakeWord introuvable : ${config.wakeword.modelPath} (lance python/download_wakeword_models.py)`)
-  if (!existsSync(config.wakeword.melspecModelPath)) missing.push(`modèle openWakeWord introuvable : ${config.wakeword.melspecModelPath}`)
-  if (!existsSync(config.wakeword.embeddingModelPath)) missing.push(`modèle openWakeWord introuvable : ${config.wakeword.embeddingModelPath}`)
-
-  const wakewordReady =
-    existsSync(config.wakeword.modelPath) &&
-    existsSync(config.wakeword.melspecModelPath) &&
-    existsSync(config.wakeword.embeddingModelPath)
-
-  return { wakewordReady, missing }
-}

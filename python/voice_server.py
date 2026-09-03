@@ -1,20 +1,22 @@
 """Sidecar vocal persistant pour Jaris.
 
-Regroupe dans un seul process : écoute continue du micro, détection du mot
-d'activation (openWakeWord) OU d'un double clap franc rapproché (voir
-CLAP_RMS_THRESHOLD plus bas, mêmes seuils empiriques que la détection de
-silence, à ajuster après un vrai test micro), capture de l'énoncé qui suit
-jusqu'au silence, puis transcription (Cohere Transcribe) — directement depuis
-les échantillons en mémoire, sans passer par des fichiers WAV intermédiaires.
+Regroupe dans un seul process : écoute continue du micro, détection d'un
+double clap franc rapproché (voir CLAP_RMS_THRESHOLD plus bas, seuils
+empiriques à ajuster après un vrai test micro, comme SILENCE_RMS_THRESHOLD)
+— seul déclenchement automatique désormais, plus de mot d'activation parlé
+(openWakeWord retiré, déclenchement manuel via `trigger`/touche "+" toujours
+possible) — capture de l'énoncé qui suit jusqu'au silence, puis transcription
+(Cohere Transcribe) — directement depuis les échantillons en mémoire, sans
+passer par des fichiers WAV intermédiaires.
 
 Sur stdin, une ligne par commande :
-  trigger        déclenche une capture comme si le mot d'activation venait d'être détecté
+  trigger        déclenche une capture manuellement (touche "+", voir App.tsx)
   test-mic       démarre le test micro (voir mic_test_* ci-dessous) — reste actif jusqu'à stop-mic-test,
                  pas de durée fixe : l'utilisateur active/désactive lui-même depuis Options → Micro
   stop-mic-test  arrête le test micro démarré par test-mic
 
 Une ligne JSON par événement sur stdout :
-  {"event": "ready", "wakeword_model": "..."}
+  {"event": "ready"}
   {"event": "wake"}
   {"event": "transcript", "text": "..."}
   {"event": "log", "message": "..."}       (non bloquant, ex: overrun micro)
@@ -42,7 +44,7 @@ from math import gcd
 import numpy as np
 
 SAMPLE_RATE = 16000
-CHUNK_SAMPLES = 1280  # 80 ms, taille recommandée par openWakeWord
+CHUNK_SAMPLES = 1280  # 80 ms : granularité suffisante pour la détection de clap (RMS) sans surcharger le CPU
 SILENCE_RMS_THRESHOLD = 300
 SILENCE_DURATION_MS = 900
 MIN_UTTERANCE_MS = 400
@@ -94,10 +96,6 @@ def rms(chunk: np.ndarray) -> float:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--wakeword-model")
-    parser.add_argument("--melspec-model")
-    parser.add_argument("--embedding-model")
-    parser.add_argument("--wakeword-threshold", type=float, default=0.5)
     parser.add_argument("--stt-model", default="CohereLabs/cohere-transcribe-03-2026")
     parser.add_argument("--stt-device", default="cpu")
     parser.add_argument("--stt-language", default="fr")
@@ -143,30 +141,13 @@ def main() -> None:
             sys.exit(1)
         return
 
-    if not args.wakeword_model or not args.melspec_model or not args.embedding_model:
-        parser.error("--wakeword-model, --melspec-model et --embedding-model sont requis (sauf avec --list-devices)")
-
     try:
         import sounddevice as sd  # lève OSError (pas ImportError) si PortAudio est absent
         import scipy.signal
-        from openwakeword.model import Model
         import torch
         from transformers import AutoProcessor, CohereAsrForConditionalGeneration
     except (ImportError, OSError) as exc:
         emit({"event": "fatal", "message": f"dépendance Python manquante ou inutilisable ({exc}). Lance : pip install -r python/requirements.txt"})
-        sys.exit(1)
-
-    emit({"event": "log", "message": "Chargement du modèle de mot d'activation (openWakeWord)…"})
-    try:
-        wake_model = Model(
-            wakeword_models=[args.wakeword_model],
-            melspec_model_path=args.melspec_model,
-            embedding_model_path=args.embedding_model,
-            inference_framework="onnx",
-        )
-        wake_model_name = next(iter(wake_model.models.keys()))
-    except Exception as exc:
-        emit({"event": "fatal", "message": f"échec de chargement du mot-clé openWakeWord : {exc}"})
         sys.exit(1)
 
     emit({"event": "log", "message": f"Chargement de la transcription '{args.stt_model}' (téléchargement HuggingFace au premier lancement, ~4 Go, peut prendre plusieurs minutes)…"})
@@ -190,7 +171,7 @@ def main() -> None:
     audio_queue: "queue.Queue[np.ndarray]" = queue.Queue()
 
     def make_audio_callback(native_rate: int):
-        """Le reste du pipeline (openWakeWord, RMS, transcription) suppose du 16 kHz partout : si le micro
+        """Le reste du pipeline (détection de clap par RMS, transcription) suppose du 16 kHz partout : si le micro
         ne peut être ouvert qu'à un autre débit (voir la retombée plus bas), ré-échantillonner ici, une
         seule fois à l'entrée, plutôt que de complexifier tout le reste en aval."""
         if native_rate == SAMPLE_RATE:
@@ -270,7 +251,7 @@ def main() -> None:
         emit({"event": "fatal", "message": f"impossible d'ouvrir le micro : {exc}"})
         sys.exit(1)
 
-    emit({"event": "ready", "wakeword_model": wake_model_name})
+    emit({"event": "ready"})
 
     mode = "wake"  # "wake" | "capture"
     capture_chunks: list[np.ndarray] = []
@@ -320,8 +301,7 @@ def main() -> None:
                 manual_trigger.clear()
 
             # Double clap : voir CLAP_RMS_THRESHOLD ci-dessus. Un chunk assez fort après un premier candidat
-            # encore "chaud" (dans la fenêtre MIN/MAX_INTERVAL_MS) déclenche directement, sans attendre
-            # openWakeWord.
+            # encore "chaud" (dans la fenêtre MIN/MAX_INTERVAL_MS) déclenche directement.
             now = time.monotonic()
             if rms(chunk) >= CLAP_RMS_THRESHOLD:
                 if first_clap_at is None:
@@ -339,8 +319,7 @@ def main() -> None:
             elif first_clap_at is not None and (now - first_clap_at) * 1000 > CLAP_MAX_INTERVAL_MS:
                 first_clap_at = None  # premier clap trop ancien, sans second clap dans les temps : oublié
 
-            prediction = wake_model.predict(chunk)
-            if triggered or prediction.get(wake_model_name, 0.0) > args.wakeword_threshold:
+            if triggered:
                 mode = "capture"
                 capture_chunks = []
                 silent_ms = 0.0
@@ -363,7 +342,6 @@ def main() -> None:
             continue
 
         mode = "wake"
-        wake_model.reset()  # évite un second déclenchement fantôme sur la fin de capture/silence
 
         # Si rien n'a jamais dépassé le seuil de silence (l'utilisateur active Jaris puis ne dit rien),
         # inutile d'envoyer ce silence au modèle de transcription : il "hallucine" souvent une phrase
