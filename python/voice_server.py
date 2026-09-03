@@ -1,9 +1,11 @@
 """Sidecar vocal persistant pour Jaris.
 
 Regroupe dans un seul process : écoute continue du micro, détection du mot
-d'activation (openWakeWord), capture de l'énoncé qui suit jusqu'au silence,
-puis transcription (Cohere Transcribe) — directement depuis les échantillons
-en mémoire, sans passer par des fichiers WAV intermédiaires.
+d'activation (openWakeWord) OU d'un double clap franc rapproché (voir
+CLAP_RMS_THRESHOLD plus bas, mêmes seuils empiriques que la détection de
+silence, à ajuster après un vrai test micro), capture de l'énoncé qui suit
+jusqu'au silence, puis transcription (Cohere Transcribe) — directement depuis
+les échantillons en mémoire, sans passer par des fichiers WAV intermédiaires.
 
 Sur stdin, une ligne par commande :
   trigger        déclenche une capture comme si le mot d'activation venait d'être détecté
@@ -34,6 +36,7 @@ import json
 import queue
 import sys
 import threading
+import time
 from math import gcd
 
 import numpy as np
@@ -50,6 +53,15 @@ MAX_UTTERANCE_MS = 12_000
 MIC_TEST_RMS_THRESHOLD = 150
 # Normalise le RMS en 0..1 pour la jauge de la UI (empirique : une voix normale dépasse largement ce seuil).
 MIC_TEST_LEVEL_DIVISOR = 3000.0
+
+# Déclenchement alternatif au mot d'activation : DEUX claps francs rapprochés (pas un seul, pour éviter
+# qu'une porte qui claque ou un objet qui tombe déclenche Jaris par accident — même logique que les
+# interrupteurs "clap on/clap off"). Valeurs empiriques, à ajuster après un vrai test micro (comme
+# SILENCE_RMS_THRESHOLD ci-dessus) : CLAP_RMS_THRESHOLD nettement plus haut que SILENCE_RMS_THRESHOLD, un
+# clap est un pic bien plus fort et bien plus bref qu'une voix normale.
+CLAP_RMS_THRESHOLD = SILENCE_RMS_THRESHOLD * 4
+CLAP_MIN_INTERVAL_MS = 150.0
+CLAP_MAX_INTERVAL_MS = 1200.0
 
 # Formules "génériques" que les modèles de transcription peuvent halluciner sur
 # du silence/bruit résiduel (héritées de leur entraînement sur des sous-titres).
@@ -269,6 +281,13 @@ def main() -> None:
     mic_test_active = False
     mic_test_detected = False
 
+    # Horodatage (time.monotonic(), pas un compteur de chunks) du dernier pic assez fort pour être un
+    # premier clap candidat, en attente d'un second clap dans la fenêtre CLAP_MIN/MAX_INTERVAL_MS -
+    # time.monotonic() plutôt qu'un compteur incrémenté par chunk : robuste même si le traitement prend
+    # occasionnellement plus de 80 ms (surcharge CPU), ce qu'un simple compteur de chunks supposerait à tort
+    # régulier.
+    first_clap_at: float | None = None
+
     while True:
         chunk = audio_queue.get()
         chunk_ms = (len(chunk) / SAMPLE_RATE) * 1000
@@ -299,6 +318,27 @@ def main() -> None:
             triggered = manual_trigger.is_set()
             if triggered:
                 manual_trigger.clear()
+
+            # Double clap : voir CLAP_RMS_THRESHOLD ci-dessus. Un chunk assez fort après un premier candidat
+            # encore "chaud" (dans la fenêtre MIN/MAX_INTERVAL_MS) déclenche directement, sans attendre
+            # openWakeWord.
+            now = time.monotonic()
+            if rms(chunk) >= CLAP_RMS_THRESHOLD:
+                if first_clap_at is None:
+                    first_clap_at = now  # premier clap candidat
+                else:
+                    interval_ms = (now - first_clap_at) * 1000
+                    if interval_ms < CLAP_MIN_INTERVAL_MS:
+                        pass  # trop rapproché : probablement la suite du même clap (chunk voisin), ignoré
+                    elif interval_ms <= CLAP_MAX_INTERVAL_MS:
+                        triggered = True
+                        emit({"event": "log", "message": f"Double clap détecté ({interval_ms:.0f} ms d'écart)."})
+                        first_clap_at = None
+                    else:
+                        first_clap_at = now  # précédent trop ancien : ce pic devient le nouveau premier clap
+            elif first_clap_at is not None and (now - first_clap_at) * 1000 > CLAP_MAX_INTERVAL_MS:
+                first_clap_at = None  # premier clap trop ancien, sans second clap dans les temps : oublié
+
             prediction = wake_model.predict(chunk)
             if triggered or prediction.get(wake_model_name, 0.0) > args.wakeword_threshold:
                 mode = "capture"
@@ -306,6 +346,7 @@ def main() -> None:
                 silent_ms = 0.0
                 captured_ms = 0.0
                 loud_ms = 0.0
+                first_clap_at = None
                 emit({"event": "wake"})
             continue
 

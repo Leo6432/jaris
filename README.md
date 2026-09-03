@@ -274,6 +274,17 @@ Renseigne dans `.env` :
 - `WAKEWORD_THRESHOLD` si le mot d'activation se déclenche trop souvent/pas
   assez (0 à 1, défaut 0.5)
 
+**Déclenchement alternatif : deux claps francs rapprochés**, en plus du mot
+d'activation (jamais à la place) — pas de mot à prononcer, pratique quand on
+a les mains prises ou juste envie de taper dans ses mains façon "clap on/clap
+off". Toujours DEUX claps, jamais un seul : un objet qui tombe ou une porte
+qui claque ne doit pas déclencher Jaris par accident. Réglages dans
+`python/voice_server.py` (`CLAP_RMS_THRESHOLD`, `CLAP_MIN_INTERVAL_MS`,
+`CLAP_MAX_INTERVAL_MS`), à ajuster après un vrai test comme
+`SILENCE_RMS_THRESHOLD` — pas encore de réglage exposé dans `.env` ni dans
+Options, à faire si les valeurs par défaut se révèlent trop/pas assez
+sensibles à l'usage.
+
 ### 2. Synthèse vocale (Supertonic HD)
 
 Rien à installer à la main : `supertonic` est dans `python/requirements.txt`
