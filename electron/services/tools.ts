@@ -7,6 +7,7 @@ import { lookAtScreen } from './vision'
 import { searchWeb } from './webSearch'
 import { clickMouse, mediaKey, pressKey, typeText } from './inputControl'
 import { getSystemStatsText, shutdownPc } from './systemControl'
+import { readActiveTab } from './browserControl'
 
 export const TOOLS: OllamaTool[] = [
   {
@@ -230,6 +231,17 @@ export const TOOLS: OllamaTool[] = [
   {
     type: 'function',
     function: {
+      name: 'read_browser_tab',
+      description:
+        "Lit l'onglet actif de la fenêtre Chrome dédiée à Jaris (titre, URL, texte de la page) pour " +
+        "répondre à \"résume cette page\", \"traduis ça\", \"de quoi ça parle\". Nécessite la fenêtre " +
+        'Chrome dédiée à Jaris (auto-lancée au besoin, séparée du Chrome habituel de l\'utilisateur).',
+      parameters: { type: 'object', properties: {}, required: [] }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'shutdown_pc',
       description:
         "Éteint ou redémarre l'ordinateur. Action CRITIQUE et irréversible : n'appelle cet outil que si " +
@@ -276,6 +288,8 @@ export function createToolExecutor(onReminderFire: ReminderFireHandler, visionMo
       }
       case 'get_system_stats':
         return getSystemStatsText()
+      case 'read_browser_tab':
+        return readActiveTab()
       case 'media_control':
         return mediaKey(String(args.action ?? ''))
       case 'shutdown_pc':

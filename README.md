@@ -719,6 +719,34 @@ suivante est traitée normalement, pour ne jamais interpréter par erreur une
 phrase sans rapport comme une réponse à une action que l'utilisateur a en
 réalité oubliée.
 
+## Lecture d'onglet Chrome (étape 32)
+
+**`read_browser_tab`** (N1, lecture seule) lit le titre, l'URL et le texte de
+l'onglet actif via CDP (Chrome DevTools Protocol) pour répondre à "résume
+cette page", "traduis ça", "de quoi ça parle" — le texte brut extrait est
+renvoyé comme un résultat d'outil normal, c'est le modèle de conversation qui
+résume/traduit/répond, pas une réponse déjà toute faite (contrairement à
+`look_at_screen`, qui lui court-circuite la reformulation).
+
+**Contrainte Chrome, pas une limite de Jaris.** Depuis Chrome 136+, Google
+interdit la connexion CDP sur le profil par défaut, pour des raisons de
+sécurité — vérifié sur `jarvis-assistant-vocal` (projet comparable), seule
+solution qui fonctionne encore : une fenêtre Chrome **séparée**, avec son
+propre profil dédié (`%LOCALAPPDATA%\JarisChrome`), lancée avec
+`--remote-debugging-port`. Jaris ne peut donc lire que les onglets ouverts
+dans cette fenêtre dédiée, jamais le Chrome habituel de l'utilisateur.
+`electron/services/browserControl.ts` lance cette fenêtre automatiquement au
+premier besoin (rien à installer ni à lancer à la main) : elle démarre vide
+(nouveau profil), l'utilisateur doit y ouvrir/naviguer vers la page qu'il
+veut faire lire à Jaris.
+
+Techniquement, zéro nouvelle dépendance npm : `fetch` liste les onglets
+ouverts (`GET /json/list`), puis un `WebSocket` natif (Node 22+, déjà bundlé
+par Electron) dialogue directement en JSON-RPC avec le protocole CDP
+(`Runtime.evaluate`) pour trouver l'onglet visible au premier plan
+(`document.visibilityState`/`document.hasFocus()`) et en extraire le texte
+(`document.body.innerText`, tronqué à 4000 caractères).
+
 ## Design de l'interface (étape 17)
 
 Le visage animé d'origine (`JarisFace` : yeux + bouche stylisés) est remplacé

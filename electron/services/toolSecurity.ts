@@ -26,6 +26,7 @@ export const TOOL_RISK: Record<string, RiskLevel> = {
   click_mouse: 'N1',
   get_system_stats: 'N1',
   media_control: 'N1',
+  read_browser_tab: 'N1',
   send_email: 'N2',
   shutdown_pc: 'N3'
 }

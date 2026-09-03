@@ -102,9 +102,10 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[], chan
     memory +
     memoryRule +
     "Tu as accès à des outils pour agir réellement : ouvrir une application, programmer un rappel vocal, " +
-    "regarder l'écran de l'utilisateur, donner l'état de la machine (get_system_stats : CPU, RAM, VRAM, " +
-    "température), contrôler le volume/la lecture multimédia (media_control), éteindre ou redémarrer " +
-    "l'ordinateur (shutdown_pc, à n'appeler que sur demande explicite et claire), chercher sur le web, " +
+    "regarder l'écran de l'utilisateur, lire l'onglet actif de la fenêtre Chrome dédiée à Jaris " +
+    "(read_browser_tab, pour résumer/traduire une page), donner l'état de la machine (get_system_stats : " +
+    "CPU, RAM, VRAM, température), contrôler le volume/la lecture multimédia (media_control), éteindre ou " +
+    "redémarrer l'ordinateur (shutdown_pc, à n'appeler que sur demande explicite et claire), chercher sur le web, " +
     "mémoriser ou relire une information dans ta " +
     "mémoire locale, envoyer un mail, taper du texte au clavier (type_text), appuyer sur une touche " +
     "(press_key), cliquer avec la souris (click_mouse). Pour toute action concrète, tu dois IMPÉRATIVEMENT appeler l'outil correspondant via un " +
