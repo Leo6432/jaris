@@ -179,11 +179,23 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   (mêmes modèles, mêmes fonctionnalités, même qualité de réponse), jamais une
   version allégée ou dégradée, et ça doit rester 0€ pour toujours (aucun
   abonnement, aucune API payante, tout tourne en local sur la machine de
-  l'utilisateur, exactement comme aujourd'hui en dev). Pour y arriver :
-  empaqueter toute la chaîne (app + Ollama + modèles, y compris le modèle de
-  transcription Cohere Transcribe déjà téléchargé et embarqué — licence
-  Apache 2.0, donc redistribution autorisée) dans un seul installeur simple,
-  avec tous les réglages techniques déjà configurés par défaut à l'intérieur.
+  l'utilisateur, exactement comme aujourd'hui en dev). **Un seul fichier
+  `.exe` téléchargé et double-cliqué, comme n'importe quel vrai logiciel
+  Windows** — aucune commande à taper, aucun terminal à ouvrir. En
+  particulier, rien de ce qui est aujourd'hui manuel pour un développeur ne
+  doit rester manuel pour le public :
+  - `npm install`/`npm run build` (l'app Electron elle-même)
+  - `python -m venv` + `pip install -r python/requirements.txt` (Python,
+    torch, transformers... — plusieurs Go à eux seuls) : soit le Python et
+    ses dépendances sont embarqués tout faits dans l'installeur, soit
+    l'installeur les installe lui-même en silence pendant l'installation,
+    jamais une commande que l'utilisateur doit lancer lui-même
+  - `ollama pull <modèle>` et les modèles de conversation/vision/code
+  - le modèle de transcription Cohere Transcribe (déjà téléchargé et
+    embarqué — licence Apache 2.0, donc redistribution autorisée) et le
+    modèle de synthèse vocale Supertonic HD
+
+  Tous les réglages techniques déjà configurés par défaut à l'intérieur.
   Aucun fichier `.env` à ouvrir ni à modifier à la main, aucun compte
   Hugging Face à créer, même pour un débutant complet — seuls les vrais
   réglages perso (connecter Gmail, choisir son prénom) resteront dans
