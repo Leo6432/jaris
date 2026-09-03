@@ -59,9 +59,13 @@ MIC_TEST_LEVEL_DIVISOR = 3000.0
 # Déclenchement alternatif au mot d'activation : DEUX claps francs rapprochés (pas un seul, pour éviter
 # qu'une porte qui claque ou un objet qui tombe déclenche Jaris par accident — même logique que les
 # interrupteurs "clap on/clap off"). Valeurs empiriques, à ajuster après un vrai test micro (comme
-# SILENCE_RMS_THRESHOLD ci-dessus) : CLAP_RMS_THRESHOLD nettement plus haut que SILENCE_RMS_THRESHOLD, un
-# clap est un pic bien plus fort et bien plus bref qu'une voix normale.
-CLAP_RMS_THRESHOLD = SILENCE_RMS_THRESHOLD * 4
+# SILENCE_RMS_THRESHOLD ci-dessus). Un simple seuil de volume ne suffit pas : de la voix parlée normale
+# peut largement dépasser un seuil bas et déclencher par erreur (constaté en usage réel) — ce qui distingue
+# vraiment un clap, c'est d'être un pic BREF qui surgit du calme, pas juste fort. CLAP_PRECEDED_BY_QUIET
+# exige donc que le chunk juste avant le pic soit sous SILENCE_RMS_THRESHOLD (silence ou presque) : un mot
+# fort en cours de phrase est presque toujours précédé d'un autre chunk déjà assez sonore, donc rejeté.
+CLAP_RMS_THRESHOLD = SILENCE_RMS_THRESHOLD * 8
+CLAP_PRECEDED_BY_QUIET_THRESHOLD = SILENCE_RMS_THRESHOLD
 CLAP_MIN_INTERVAL_MS = 150.0
 CLAP_MAX_INTERVAL_MS = 1200.0
 
@@ -268,13 +272,16 @@ def main() -> None:
     # occasionnellement plus de 80 ms (surcharge CPU), ce qu'un simple compteur de chunks supposerait à tort
     # régulier.
     first_clap_at: float | None = None
+    # RMS du chunk précédent (mode "wake" uniquement) : un vrai clap surgit du calme, contrairement à un
+    # mot fort en cours de phrase, presque toujours précédé d'un autre chunk déjà sonore.
+    prev_wake_rms = 0.0
 
     while True:
         chunk = audio_queue.get()
         chunk_ms = (len(chunk) / SAMPLE_RATE) * 1000
 
-        # Lit le même flux que la détection de mot d'activation, sans jamais interagir avec `mode` : le test
-        # micro tourne "à côté" (voir docstring en tête de fichier), pas à la place du wake word. Pas de
+        # Lit le même flux que la détection de déclenchement, sans jamais interagir avec `mode` : le test
+        # micro tourne "à côté" (voir docstring en tête de fichier), pas à la place du clap. Pas de
         # durée fixe : reste actif jusqu'à stop-mic-test, l'utilisateur active/désactive lui-même depuis
         # Options → Micro (voir OptionsMenu.tsx) plutôt que d'attendre un minuteur.
         if mic_test_start_requested.is_set():
@@ -300,10 +307,13 @@ def main() -> None:
             if triggered:
                 manual_trigger.clear()
 
-            # Double clap : voir CLAP_RMS_THRESHOLD ci-dessus. Un chunk assez fort après un premier candidat
-            # encore "chaud" (dans la fenêtre MIN/MAX_INTERVAL_MS) déclenche directement.
+            # Double clap : voir CLAP_RMS_THRESHOLD ci-dessus. Un chunk candidat doit être un vrai pic qui
+            # surgit du calme (chunk précédent sous CLAP_PRECEDED_BY_QUIET_THRESHOLD), pas juste fort : sinon
+            # de la parole normale, soutenue sur plusieurs chunks d'affilée, se ferait passer pour un clap.
             now = time.monotonic()
-            if rms(chunk) >= CLAP_RMS_THRESHOLD:
+            chunk_rms = rms(chunk)
+            is_onset = chunk_rms >= CLAP_RMS_THRESHOLD and prev_wake_rms < CLAP_PRECEDED_BY_QUIET_THRESHOLD
+            if is_onset:
                 if first_clap_at is None:
                     first_clap_at = now  # premier clap candidat
                 else:
@@ -318,6 +328,7 @@ def main() -> None:
                         first_clap_at = now  # précédent trop ancien : ce pic devient le nouveau premier clap
             elif first_clap_at is not None and (now - first_clap_at) * 1000 > CLAP_MAX_INTERVAL_MS:
                 first_clap_at = None  # premier clap trop ancien, sans second clap dans les temps : oublié
+            prev_wake_rms = chunk_rms
 
             if triggered:
                 mode = "capture"
@@ -342,6 +353,7 @@ def main() -> None:
             continue
 
         mode = "wake"
+        prev_wake_rms = 0.0  # audio de la capture qui vient de finir, jamais comparée à un chunk du mode wake
 
         # Si rien n'a jamais dépassé le seuil de silence (l'utilisateur active Jaris puis ne dit rien),
         # inutile d'envoyer ce silence au modèle de transcription : il "hallucine" souvent une phrase

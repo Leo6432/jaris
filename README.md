@@ -273,10 +273,17 @@ Renseigne dans `.env` :
 **Déclenchement par double clap.** Toujours DEUX claps francs et rapprochés,
 jamais un seul : un objet qui tombe ou une porte qui claque ne doit pas
 déclencher Jaris par accident (même logique qu'un interrupteur "clap on/clap
-off"). Réglages dans `python/voice_server.py` (`CLAP_RMS_THRESHOLD`,
-`CLAP_MIN_INTERVAL_MS`, `CLAP_MAX_INTERVAL_MS`), à ajuster après un vrai test
-comme `SILENCE_RMS_THRESHOLD` — pas encore de réglage exposé dans `.env` ni
-dans Options, à faire si les valeurs par défaut se révèlent trop/pas assez
+off"). Un simple seuil de volume ne suffit pas à distinguer un clap d'une
+voix qui parle fort (constaté en usage réel) : ce qui définit vraiment un
+clap, c'est d'être un pic bref qui surgit du calme, pas juste fort — un
+chunk candidat n'est retenu que si le chunk juste avant est sous
+`CLAP_PRECEDED_BY_QUIET_THRESHOLD` (quasi silence), ce qu'une phrase en
+train d'être dite n'est presque jamais entre deux syllabes. Réglages dans
+`python/voice_server.py` (`CLAP_RMS_THRESHOLD`,
+`CLAP_PRECEDED_BY_QUIET_THRESHOLD`, `CLAP_MIN_INTERVAL_MS`,
+`CLAP_MAX_INTERVAL_MS`), à ajuster après un vrai test comme
+`SILENCE_RMS_THRESHOLD` — pas encore de réglage exposé dans `.env` ni dans
+Options, à faire si les valeurs par défaut se révèlent trop/pas assez
 sensibles à l'usage. Le raccourci clavier **+** (dans la fenêtre Jaris) reste
 disponible pour déclencher l'écoute manuellement, sans clap.
 
