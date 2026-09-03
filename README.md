@@ -201,7 +201,13 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   réglages perso (connecter Gmail, choisir son prénom) resteront dans
   l'interface, jamais dans un fichier texte ni sur un site tiers
 - ⬜ Étape 20 — Mise à jour automatique de l'application dès qu'une nouvelle
-  version est publiée
+  version est publiée : **entièrement depuis l'interface de Jaris, jamais
+  de terminal** — ni `git pull`, ni `pip install`, ni `npm run build` à
+  lancer à la main (contrairement à aujourd'hui, où chaque mise à jour du
+  code demande ces commandes). Détection de nouvelle version, téléchargement
+  et application se font en un clic, ou automatiquement, comme le bouton
+  "Mettre à jour" déjà en place pour Ollama (Options → Modèles) — même
+  principe, appliqué à Jaris lui-même
 - ⬜ Étape 22 — Vérification des licences avant mise en vente : vérifier la
   compatibilité des licences des briques open source utilisées (Ollama,
   modèles Qwen, Cohere Transcribe, Supertonic HD, SearXNG) avec
@@ -284,20 +290,39 @@ Renseigne dans `.env` :
 
 **Déclenchement par double clap.** Toujours DEUX claps francs et rapprochés,
 jamais un seul : un objet qui tombe ou une porte qui claque ne doit pas
-déclencher Jaris par accident (même logique qu'un interrupteur "clap on/clap
-off"). Un simple seuil de volume ne suffit pas à distinguer un clap d'une
-voix qui parle fort (constaté en usage réel) : ce qui définit vraiment un
-clap, c'est d'être un pic bref qui surgit du calme, pas juste fort — un
-chunk candidat n'est retenu que si le chunk juste avant est sous
-`CLAP_PRECEDED_BY_QUIET_THRESHOLD` (quasi silence), ce qu'une phrase en
-train d'être dite n'est presque jamais entre deux syllabes. Réglages dans
-`python/voice_server.py` (`CLAP_RMS_THRESHOLD`,
-`CLAP_PRECEDED_BY_QUIET_THRESHOLD`, `CLAP_MIN_INTERVAL_MS`,
-`CLAP_MAX_INTERVAL_MS`), à ajuster après un vrai test comme
-`SILENCE_RMS_THRESHOLD` — pas encore de réglage exposé dans `.env` ni dans
-Options, à faire si les valeurs par défaut se révèlent trop/pas assez
-sensibles à l'usage. Le raccourci clavier **+** (dans la fenêtre Jaris) reste
-disponible pour déclencher l'écoute manuellement, sans clap.
+déclencher Jaris par accident (même logique qu'un interrupteur "clap
+on/clap off").
+
+Un simple seuil de volume FIXE s'est révélé ingérable en usage réel : trop
+bas, de la voix parlée normale le dépassait ; trop haut, de vrais claps ne
+le dépassaient plus (1 détection sur 10 claps constatée) — le même geste de
+clap donne un RMS très différent selon la distance au micro, le gain
+matériel, le bruit ambiant de la pièce. Deux vraies techniques de détection
+de clap/onset percussif remplacent le seuil fixe (sources : [Arduino Clap
+Detector](https://docs.arduino.cc/tutorials/generic/clap-detector/),
+littérature sur le
+[spectral flux](https://en.wikipedia.org/wiki/Spectral_flux) et le
+"high-frequency content" pour la détection d'onsets percussifs) :
+1. **Niveau ambiant adaptatif** (`noise_floor`, moyenne mobile) — un clap
+   doit dépasser le bruit de fond RÉEL de la pièce d'un facteur donné
+   (`CLAP_RATIO_ABOVE_FLOOR`), pas un chiffre absolu deviné à l'avance :
+   s'auto-calibre tout seul à l'environnement de chaque utilisateur.
+2. **Contenu haute fréquence** (FFT, `high_frequency_ratio`) — ce qui
+   distingue vraiment un clap (transitoire, large bande) d'une voyelle
+   parlée forte (concentrée en basses fréquences/formants) : une voix qui
+   parle fort peut dépasser le niveau ambiant mais n'a presque jamais assez
+   d'énergie haute fréquence pour passer ce filtre (`CLAP_HF_RATIO_MIN`).
+
+Réglages dans `python/voice_server.py` (`NOISE_FLOOR_EMA_ALPHA`,
+`CLAP_RATIO_ABOVE_FLOOR`, `CLAP_ABS_RMS_FLOOR`, `CLAP_HF_CUTOFF_HZ`,
+`CLAP_HF_RATIO_MIN`, `CLAP_MIN_INTERVAL_MS`, `CLAP_MAX_INTERVAL_MS`), à
+ajuster si besoin après un vrai test — chaque pic candidat retenu (avant
+même de vérifier si c'est un vrai double clap) est loggué avec son RMS
+exact et le seuil du moment (`{"event": "log", "message": "Pic candidat :
+..."}`, visible dans la fenêtre Jaris), pour ajuster les seuils à partir de
+vraies mesures plutôt qu'à l'aveugle. Le raccourci clavier **+** (dans la
+fenêtre Jaris) reste disponible pour déclencher l'écoute manuellement, sans
+clap.
 
 ### 2. Synthèse vocale (Supertonic HD)
 

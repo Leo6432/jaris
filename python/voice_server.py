@@ -1,13 +1,13 @@
 """Sidecar vocal persistant pour Jaris.
 
 Regroupe dans un seul process : écoute continue du micro, détection d'un
-double clap franc rapproché (voir CLAP_RMS_THRESHOLD plus bas, seuils
-empiriques à ajuster après un vrai test micro, comme SILENCE_RMS_THRESHOLD)
-— seul déclenchement automatique désormais, plus de mot d'activation parlé
-(openWakeWord retiré, déclenchement manuel via `trigger`/touche "+" toujours
-possible) — capture de l'énoncé qui suit jusqu'au silence, puis transcription
-(Cohere Transcribe) — directement depuis les échantillons en mémoire, sans
-passer par des fichiers WAV intermédiaires.
+double clap franc rapproché (niveau ambiant adaptatif + signature spectrale,
+voir NOISE_FLOOR_EMA_ALPHA plus bas) — seul déclenchement automatique
+désormais, plus de mot d'activation parlé (openWakeWord retiré,
+déclenchement manuel via `trigger`/touche "+" toujours possible) — capture
+de l'énoncé qui suit jusqu'au silence, puis transcription (Cohere
+Transcribe) — directement depuis les échantillons en mémoire, sans passer
+par des fichiers WAV intermédiaires.
 
 Sur stdin, une ligne par commande :
   trigger        déclenche une capture manuellement (touche "+", voir App.tsx)
@@ -58,14 +58,26 @@ MIC_TEST_LEVEL_DIVISOR = 3000.0
 
 # Déclenchement alternatif au mot d'activation : DEUX claps francs rapprochés (pas un seul, pour éviter
 # qu'une porte qui claque ou un objet qui tombe déclenche Jaris par accident — même logique que les
-# interrupteurs "clap on/clap off"). Valeurs empiriques, à ajuster après un vrai test micro (comme
-# SILENCE_RMS_THRESHOLD ci-dessus). Un simple seuil de volume ne suffit pas : de la voix parlée normale
-# peut largement dépasser un seuil bas et déclencher par erreur (constaté en usage réel) — ce qui distingue
-# vraiment un clap, c'est d'être un pic BREF qui surgit du calme, pas juste fort. CLAP_PRECEDED_BY_QUIET
-# exige donc que le chunk juste avant le pic soit sous SILENCE_RMS_THRESHOLD (silence ou presque) : un mot
-# fort en cours de phrase est presque toujours précédé d'un autre chunk déjà assez sonore, donc rejeté.
-CLAP_RMS_THRESHOLD = SILENCE_RMS_THRESHOLD * 8
-CLAP_PRECEDED_BY_QUIET_THRESHOLD = SILENCE_RMS_THRESHOLD
+# interrupteurs "clap on/clap off").
+#
+# Un simple seuil de volume FIXE s'est révélé ingérable en usage réel : trop bas, de la voix parlée
+# normale le dépasse (constaté) ; trop haut, de vrais claps ne le dépassent plus (constaté aussi, 1
+# détection sur 10 claps) — le même geste de clap donne un RMS très différent selon la distance au micro,
+# le gain matériel, le bruit ambiant de la pièce : aucun chiffre fixe ne peut marcher pour tout le monde.
+# Deux vraies techniques de détection de clap/onset percussif (voir sources dans le commit) remplacent le
+# seuil fixe :
+# 1. Niveau ambiant ADAPTATIF (noise_floor, moyenne mobile) : un clap doit dépasser le bruit de fond
+#    RÉEL de la pièce d'un facteur donné, pas un chiffre absolu deviné à l'avance — s'auto-calibre tout
+#    seul à l'environnement de chaque utilisateur.
+# 2. Contenu HAUTE FRÉQUENCE (FFT) : ce qui distingue vraiment un clap (transitoire, large bande) d'une
+#    voyelle parlée forte (concentrée en basses fréquences/formants), littérature audio "spectral flux" /
+#    "high-frequency content" pour la détection d'onsets percussifs. Une voix qui parle fort peut dépasser
+#    le niveau ambiant mais n'a presque jamais assez d'énergie haute fréquence pour passer ce filtre.
+NOISE_FLOOR_EMA_ALPHA = 0.05  # vitesse d'adaptation du niveau ambiant (proche de 0 = lent, proche de 1 = rapide)
+CLAP_RATIO_ABOVE_FLOOR = 6.0  # un clap doit dépasser le niveau ambiant d'au moins ce facteur
+CLAP_ABS_RMS_FLOOR = 400.0  # garde-fou : jamais déclenché sous ce RMS absolu, même dans une pièce ultra silencieuse
+CLAP_HF_CUTOFF_HZ = 2000.0  # fréquence au-delà de laquelle l'énergie compte comme "haute fréquence"
+CLAP_HF_RATIO_MIN = 0.15  # part minimale d'énergie haute fréquence pour compter comme un clap, pas une voyelle
 CLAP_MIN_INTERVAL_MS = 150.0
 CLAP_MAX_INTERVAL_MS = 1200.0
 
@@ -96,6 +108,20 @@ def emit(payload: dict) -> None:
 
 def rms(chunk: np.ndarray) -> float:
     return float(np.sqrt(np.mean(chunk.astype(np.float64) ** 2)))
+
+
+def high_frequency_ratio(chunk: np.ndarray) -> float:
+    """Part de l'énergie du spectre au-dessus de CLAP_HF_CUTOFF_HZ : un clap (transitoire, large bande) en
+    a nettement plus qu'une voyelle parlée (concentrée en basses fréquences/formants) — voir la littérature
+    sur la détection d'onsets percussifs (spectral flux / high-frequency content). FFT sur 1280 échantillons
+    (80 ms) : coût négligeable, aucune dépendance en plus (numpy déjà utilisé pour rms ci-dessus)."""
+    spectrum = np.abs(np.fft.rfft(chunk.astype(np.float64)))
+    total_energy = float(np.sum(spectrum**2))
+    if total_energy <= 0:
+        return 0.0
+    freqs = np.fft.rfftfreq(len(chunk), d=1.0 / SAMPLE_RATE)
+    hf_energy = float(np.sum(spectrum[freqs >= CLAP_HF_CUTOFF_HZ] ** 2))
+    return hf_energy / total_energy
 
 
 def main() -> None:
@@ -272,9 +298,14 @@ def main() -> None:
     # occasionnellement plus de 80 ms (surcharge CPU), ce qu'un simple compteur de chunks supposerait à tort
     # régulier.
     first_clap_at: float | None = None
-    # RMS du chunk précédent (mode "wake" uniquement) : un vrai clap surgit du calme, contrairement à un
-    # mot fort en cours de phrase, presque toujours précédé d'un autre chunk déjà sonore.
-    prev_wake_rms = 0.0
+    # Niveau ambiant adaptatif (mode "wake" uniquement, voir NOISE_FLOOR_EMA_ALPHA ci-dessus) : démarre à
+    # SILENCE_RMS_THRESHOLD (valeur de départ raisonnable) et converge vite vers le vrai bruit de fond de
+    # la pièce.
+    noise_floor = float(SILENCE_RMS_THRESHOLD)
+    # true si le chunk précédent était déjà un pic (au-dessus du seuil adaptatif) : un vrai clap est un
+    # front montant isolé, pas un pic qui continue sur plusieurs chunks d'affilée (ça, c'est de la parole
+    # soutenue).
+    was_spike = False
 
     while True:
         chunk = audio_queue.get()
@@ -307,13 +338,21 @@ def main() -> None:
             if triggered:
                 manual_trigger.clear()
 
-            # Double clap : voir CLAP_RMS_THRESHOLD ci-dessus. Un chunk candidat doit être un vrai pic qui
-            # surgit du calme (chunk précédent sous CLAP_PRECEDED_BY_QUIET_THRESHOLD), pas juste fort : sinon
-            # de la parole normale, soutenue sur plusieurs chunks d'affilée, se ferait passer pour un clap.
+            # Double clap : voir le commentaire au-dessus de NOISE_FLOOR_EMA_ALPHA (niveau ambiant adaptatif
+            # + contenu haute fréquence, pas un seuil de volume fixe).
             now = time.monotonic()
             chunk_rms = rms(chunk)
-            is_onset = chunk_rms >= CLAP_RMS_THRESHOLD and prev_wake_rms < CLAP_PRECEDED_BY_QUIET_THRESHOLD
+            is_spike = chunk_rms >= CLAP_ABS_RMS_FLOOR and chunk_rms >= noise_floor * CLAP_RATIO_ABOVE_FLOOR
+            # Front montant isolé (pas déjà un pic au chunk d'avant) + signature spectrale d'un vrai clap :
+            # les deux conditions doivent passer, pas juste le volume.
+            is_onset = is_spike and not was_spike and high_frequency_ratio(chunk) >= CLAP_HF_RATIO_MIN
             if is_onset:
+                emit(
+                    {
+                        "event": "log",
+                        "message": f"Pic candidat : RMS {chunk_rms:.0f} (seuil {noise_floor * CLAP_RATIO_ABOVE_FLOOR:.0f}, ambiant {noise_floor:.0f}).",
+                    }
+                )
                 if first_clap_at is None:
                     first_clap_at = now  # premier clap candidat
                 else:
@@ -328,7 +367,12 @@ def main() -> None:
                         first_clap_at = now  # précédent trop ancien : ce pic devient le nouveau premier clap
             elif first_clap_at is not None and (now - first_clap_at) * 1000 > CLAP_MAX_INTERVAL_MS:
                 first_clap_at = None  # premier clap trop ancien, sans second clap dans les temps : oublié
-            prev_wake_rms = chunk_rms
+
+            # Seuls les chunks "normaux" (pas un pic) alimentent le niveau ambiant : sinon un clap ferait
+            # monter le seuil moyen juste après lui-même, rendant les claps suivants plus durs à détecter.
+            if not is_spike:
+                noise_floor = (1 - NOISE_FLOOR_EMA_ALPHA) * noise_floor + NOISE_FLOOR_EMA_ALPHA * chunk_rms
+            was_spike = is_spike
 
             if triggered:
                 mode = "capture"
@@ -353,7 +397,7 @@ def main() -> None:
             continue
 
         mode = "wake"
-        prev_wake_rms = 0.0  # audio de la capture qui vient de finir, jamais comparée à un chunk du mode wake
+        was_spike = False  # audio de la capture qui vient de finir, jamais comparé à un chunk du mode wake
 
         # Si rien n'a jamais dépassé le seuil de silence (l'utilisateur active Jaris puis ne dit rien),
         # inutile d'envoyer ce silence au modèle de transcription : il "hallucine" souvent une phrase
