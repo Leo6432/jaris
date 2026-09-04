@@ -179,6 +179,27 @@ export function updateOllama(): Promise<{ success: boolean; message: string }> {
         void checkOllamaFreshness().then(() => resolve({ success: true, message: 'Ollama mis à jour.' }))
         return
       }
+      // APPINSTALLER_CLI_ERROR_UPDATE_NOT_APPLICABLE (0x8A15002B, documenté par Microsoft) : winget dit
+      // "aucune mise à jour disponible" alors que checkOllamaFreshness (comparaison à la vraie dernière
+      // version GitHub, seule source fiable) a détecté une version plus récente — pas une contradiction
+      // côté Jaris, juste que winget ne peut rien faire ici, pour deux raisons possibles : le paquet
+      // communautaire winget-pkgs (github.com/microsoft/winget-pkgs, maintenu par des contributeurs
+      // externes, pas Ollama lui-même) met parfois plusieurs jours à suivre une nouvelle sortie GitHub, ou
+      // l'installation actuelle d'Ollama (pas forcément posée par winget à l'origine) ne correspond pas au
+      // "scope"/type d'installeur que winget attend pour appliquer une mise à jour dessus. Le vrai installeur
+      // Windows d'Ollama, lui, met à jour en place sans se soucier de comment il a été installé avant.
+      if (code === 2316632107 || code === -1978335189) {
+        resolve({
+          success: false,
+          message:
+            "winget ne trouve pas de mise à jour applicable, alors qu'une version plus récente existe bien " +
+            "sur GitHub : le catalogue winget (maintenu par des contributeurs externes, pas Ollama) met parfois " +
+            "plusieurs jours à suivre une nouvelle sortie, ou l'installation actuelle n'est pas dans le format " +
+            "que winget sait mettre à jour. Pas un bug de ton côté : télécharge et lance l'installeur directement " +
+            'sur ollama.com/download, il mettra à jour en place.'
+        })
+        return
+      }
       resolve({
         success: false,
         message: `winget a échoué (code ${code}) : ${output.trim().slice(-500) || 'aucun détail'} — essaie ollama.com/download.`
