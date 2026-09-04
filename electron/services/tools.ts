@@ -7,7 +7,7 @@ import { lookAtScreen } from './vision'
 import { searchWeb } from './webSearch'
 import { clickMouse, mediaKey, pressKey, typeText } from './inputControl'
 import { getSystemStatsText, shutdownPc } from './systemControl'
-import { readActiveTab } from './browserControl'
+import { clickBrowserElement, fillBrowserField, openBrowserUrl, readActiveTab, screenshotActiveTab } from './browserControl'
 
 export const TOOLS: OllamaTool[] = [
   {
@@ -242,6 +242,72 @@ export const TOOLS: OllamaTool[] = [
   {
     type: 'function',
     function: {
+      name: 'open_browser_url',
+      description:
+        "Ouvre une adresse (ou fait une recherche si ce n'est pas une adresse) dans un nouvel onglet de la " +
+        "fenêtre Chrome dédiée à Jaris. Pour \"ouvre YouTube\", \"va sur le site X\", \"cherche des tests du " +
+        'Godox TL60".',
+      parameters: {
+        type: 'object',
+        properties: {
+          target: { type: 'string', description: 'URL complète (https://...) ou mots-clés à chercher' }
+        },
+        required: ['target']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'click_browser_element',
+      description:
+        "Clique sur un élément de l'onglet actif de la fenêtre Chrome dédiée à Jaris, décrit en langage " +
+        'naturel (le texte visible du bouton/lien, ex: "Suivant", "Se connecter", "Ajouter au panier").',
+      parameters: {
+        type: 'object',
+        properties: {
+          description: { type: 'string', description: "Texte visible de l'élément à cliquer" }
+        },
+        required: ['description']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'fill_browser_field',
+      description:
+        "Remplit un champ de formulaire de l'onglet actif de la fenêtre Chrome dédiée à Jaris, décrit en " +
+        'langage naturel (son label ou son placeholder, ex: "Email", "Nom", "Rechercher").',
+      parameters: {
+        type: 'object',
+        properties: {
+          field: { type: 'string', description: 'Label ou placeholder du champ à remplir' },
+          text: { type: 'string', description: 'Texte à écrire dans le champ' }
+        },
+        required: ['field', 'text']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'screenshot_browser_tab',
+      description:
+        "Capture l'onglet actif de la fenêtre Chrome dédiée à Jaris et le décrit, pour un contenu qu'un " +
+        "simple texte (read_browser_tab) ne suffit pas à décrire (mise en page, graphique, image).",
+      parameters: {
+        type: 'object',
+        properties: {
+          question: { type: 'string', description: "Ce qu'il faut chercher ou décrire sur la page, en français" }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'shutdown_pc',
       description:
         "Éteint ou redémarre l'ordinateur. Action CRITIQUE et irréversible : n'appelle cet outil que si " +
@@ -290,6 +356,14 @@ export function createToolExecutor(onReminderFire: ReminderFireHandler, visionMo
         return getSystemStatsText()
       case 'read_browser_tab':
         return readActiveTab()
+      case 'open_browser_url':
+        return openBrowserUrl(String(args.target ?? ''))
+      case 'click_browser_element':
+        return clickBrowserElement(String(args.description ?? ''))
+      case 'fill_browser_field':
+        return fillBrowserField(String(args.field ?? ''), String(args.text ?? ''))
+      case 'screenshot_browser_tab':
+        return screenshotActiveTab(String(args.question ?? ''), visionModel)
       case 'media_control':
         return mediaKey(String(args.action ?? ''))
       case 'shutdown_pc':

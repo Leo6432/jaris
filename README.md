@@ -141,12 +141,7 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   rendu JS des sites dynamiques — reste 100% local et gratuit. Limite : la
   version auto-hébergée n'a pas le contournement anti-bot/rotation de proxy
   de la version cloud payante, suffisant pour un usage perso normal
-- ⬜ Étape 34 — Playwright pour piloter un vrai navigateur : en complément de
-  l'UI Automation Windows (étape 32, pour les applications de bureau),
-  utiliser Playwright (open source, gratuit, 100% local) pour naviguer,
-  cliquer, remplir des formulaires et prendre des captures d'écran dans un
-  navigateur réel — utile pour les sites web dynamiques que le simple scan
-  d'écran (étape 6) ou le scraping (étape 33) ne suffisent pas à piloter
+- ✅ Étape 34 — Playwright pour piloter un vrai navigateur (voir plus bas)
 - ⬜ Étape 43 — Agent de contrôle d'ordinateur complet (comparé à GPT-6 Astra
   d'OpenAI, sorti le 3 septembre 2026 avec le "computer use" comme capacité
   phare — mais dans le cloud, payant, contrairement à Jaris) : au-delà de ce
@@ -823,33 +818,53 @@ suivante est traitée normalement, pour ne jamais interpréter par erreur une
 phrase sans rapport comme une réponse à une action que l'utilisateur a en
 réalité oubliée.
 
-## Lecture d'onglet Chrome (étape 32)
+## Contrôle du navigateur avec Playwright (étape 34)
 
-**`read_browser_tab`** (N1, lecture seule) lit le titre, l'URL et le texte de
-l'onglet actif via CDP (Chrome DevTools Protocol) pour répondre à "résume
-cette page", "traduis ça", "de quoi ça parle" — le texte brut extrait est
-renvoyé comme un résultat d'outil normal, c'est le modèle de conversation qui
-résume/traduit/répond, pas une réponse déjà toute faite (contrairement à
-`look_at_screen`, qui lui court-circuite la reformulation).
+Cinq outils (tous N1, voir plus haut) pilotent la fenêtre Chrome dédiée à
+Jaris via [Playwright](https://playwright.dev/) (`playwright-core`, sans
+navigateur embarqué — réutilise le Chrome déjà installé sur la machine) :
+- **`read_browser_tab`** — lit le titre, l'URL et le texte de l'onglet actif
+  pour répondre à "résume cette page", "traduis ça", "de quoi ça parle" — le
+  texte brut extrait est renvoyé comme un résultat d'outil normal, c'est le
+  modèle de conversation qui résume/traduit/répond, pas une réponse déjà
+  toute faite (contrairement à `look_at_screen`, qui lui court-circuite la
+  reformulation)
+- **`open_browser_url`** — ouvre une adresse (ou une recherche Google si ce
+  n'en est pas une) dans un nouvel onglet
+- **`click_browser_element`** — clique un élément décrit en langage naturel
+  (le texte visible d'un bouton/lien, ex: "Suivant", "Se connecter"), jamais
+  un sélecteur CSS/XPath à deviner : essaie dans l'ordre repérage par rôle
+  bouton, rôle lien, puis texte brut (`page.getByRole`/`getByText`)
+- **`fill_browser_field`** — remplit un champ de formulaire décrit en langage
+  naturel (son label ou son placeholder, `page.getByLabel`/`getByPlaceholder`)
+- **`screenshot_browser_tab`** — capture l'onglet actif et le fait décrire
+  par le modèle de vision (même modèle et même logique de repli VRAM que
+  `look_at_screen`, juste une image différente), pour une mise en page ou un
+  contenu visuel qu'un simple texte ne suffit pas à décrire
 
 **Contrainte Chrome, pas une limite de Jaris.** Depuis Chrome 136+, Google
-interdit la connexion CDP sur le profil par défaut, pour des raisons de
+interdit la connexion CDP (Chrome DevTools Protocol, nécessaire pour piloter
+un onglet depuis l'extérieur) sur le profil par défaut, pour des raisons de
 sécurité — vérifié sur `jarvis-assistant-vocal` (projet comparable), seule
 solution qui fonctionne encore : une fenêtre Chrome **séparée**, avec son
 propre profil dédié (`%LOCALAPPDATA%\JarisChrome`), lancée avec
-`--remote-debugging-port`. Jaris ne peut donc lire que les onglets ouverts
+`--remote-debugging-port`. Jaris ne peut donc piloter que les onglets ouverts
 dans cette fenêtre dédiée, jamais le Chrome habituel de l'utilisateur.
 `electron/services/browserControl.ts` lance cette fenêtre automatiquement au
 premier besoin (rien à installer ni à lancer à la main) : elle démarre vide
 (nouveau profil), l'utilisateur doit y ouvrir/naviguer vers la page qu'il
-veut faire lire à Jaris.
+veut faire piloter à Jaris.
 
-Techniquement, zéro nouvelle dépendance npm : `fetch` liste les onglets
-ouverts (`GET /json/list`), puis un `WebSocket` natif (Node 22+, déjà bundlé
-par Electron) dialogue directement en JSON-RPC avec le protocole CDP
-(`Runtime.evaluate`) pour trouver l'onglet visible au premier plan
-(`document.visibilityState`/`document.hasFocus()`) et en extraire le texte
-(`document.body.innerText`, tronqué à 4000 caractères).
+**Sécurité "achat/paiement".** Comme sur `jarvis-assistant-vocal`, le prompt
+système (`assistant.ts`) interdit explicitement de cliquer un bouton
+d'achat/paiement/validation de commande/suppression de compte sans que
+l'utilisateur ait demandé CETTE action précise dans sa phrase, même si elle
+semble être la suite logique de ce qui précède — Jaris décrit plutôt ce qu'il
+voit et demande confirmation avant. `click_browser_element`/
+`fill_browser_field` restent malgré tout N1 (pas de confirmation
+systématique, voir `toolSecurity.ts`) : le même précédent que
+`click_mouse`/`type_text` (étape 15), sans quoi la navigation assistée
+deviendrait impraticable (une confirmation avant chaque clic).
 
 ## Design de l'interface (étape 17)
 

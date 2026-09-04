@@ -12,7 +12,11 @@ export type RiskLevel = 'N1' | 'N2' | 'N3'
  * type_text/press_key/click_mouse restent volontairement N1 malgré le prompt système qui les décrit
  * lui-même comme "réelles et irréversibles" : c'est un comportement existant, déjà accepté, pas dans le
  * périmètre de ce garde-fou (qui cible les actions ajoutées/identifiées comme un vrai trou : envoi de mail
- * sans confirmation, futur contrôle machine plus lourd type extinction).
+ * sans confirmation, futur contrôle machine plus lourd type extinction). click_browser_element/
+ * fill_browser_field suivent le même précédent que click_mouse/type_text (même nature d'action, juste
+ * ciblée par description au lieu de coordonnées écran) : garder une confirmation à chaque clic/champ
+ * rendrait la navigation assistée impraticable, la prudence "achat/paiement" reste au niveau du prompt
+ * système (assistant.ts), pas d'un blocage systématique ici.
  */
 export const TOOL_RISK: Record<string, RiskLevel> = {
   open_app: 'N1',
@@ -27,6 +31,10 @@ export const TOOL_RISK: Record<string, RiskLevel> = {
   get_system_stats: 'N1',
   media_control: 'N1',
   read_browser_tab: 'N1',
+  open_browser_url: 'N1',
+  click_browser_element: 'N1',
+  fill_browser_field: 'N1',
+  screenshot_browser_tab: 'N1',
   send_email: 'N2',
   shutdown_pc: 'N3'
 }

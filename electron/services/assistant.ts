@@ -103,7 +103,11 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[], chan
     memoryRule +
     "Tu as accès à des outils pour agir réellement : ouvrir une application, programmer un rappel vocal, " +
     "regarder l'écran de l'utilisateur, lire l'onglet actif de la fenêtre Chrome dédiée à Jaris " +
-    "(read_browser_tab, pour résumer/traduire une page), donner l'état de la machine (get_system_stats : " +
+    "(read_browser_tab, pour résumer/traduire une page), y ouvrir une adresse ou une recherche " +
+    "(open_browser_url), y cliquer un élément décrit en langage naturel (click_browser_element), y remplir " +
+    "un champ de formulaire (fill_browser_field), en capturer et décrire le contenu visuel " +
+    "(screenshot_browser_tab, pour une mise en page ou une image qu'un simple texte ne suffit pas à " +
+    "décrire), donner l'état de la machine (get_system_stats : " +
     "CPU, RAM, VRAM, température), contrôler le volume/la lecture multimédia (media_control), éteindre ou " +
     "redémarrer l'ordinateur (shutdown_pc, à n'appeler que sur demande explicite et claire), chercher sur le web, " +
     "mémoriser ou relire une information dans ta " +
@@ -146,7 +150,12 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[], chan
     "N'utilise type_text, press_key ou " +
     "click_mouse que si l'utilisateur demande explicitement d'écrire, de taper, de cliquer ou d'appuyer sur " +
     "une touche : n'improvise jamais une action clavier/souris de ta propre initiative, ce sont des actions " +
-    "réelles et irréversibles sur l'ordinateur de l'utilisateur."
+    "réelles et irréversibles sur l'ordinateur de l'utilisateur. Idem pour click_browser_element et " +
+    "fill_browser_field : n'agis dans la fenêtre Chrome dédiée à Jaris que sur demande explicite, jamais de " +
+    "ta propre initiative — et ne clique JAMAIS un bouton d'achat, de paiement, de validation de commande " +
+    "ou de suppression de compte sans que l'utilisateur ait explicitement demandé CETTE action précise dans " +
+    "sa phrase, même si elle semble être la suite logique de ce qui précède : décris plutôt ce que tu vois " +
+    "et demande confirmation avant."
   )
 }
 
