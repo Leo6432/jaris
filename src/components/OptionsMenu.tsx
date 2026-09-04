@@ -579,9 +579,13 @@ export default function OptionsMenu(): JSX.Element {
                     Une fenêtre Windows peut demander une autorisation (élévation) — accepte-la pour continuer.
                   </p>
                 )}
-                {!updatingOllama && ollamaUpdateMessage && <p>{ollamaUpdateMessage}</p>}
               </div>
             )}
+            {/* Hors du bandeau "outdated" ci-dessus, à dessein : une mise à jour réussie fait justement
+                passer ollamaVersionStatus.outdated à false juste après, ce qui ferait disparaître le
+                message de succès avec le reste du bandeau s'il restait imbriqué dedans — jamais vu le
+                message alors que la mise à jour avait réellement marché. */}
+            {!updatingOllama && ollamaUpdateMessage && <p className="options-menu__ollama-update-note">{ollamaUpdateMessage}</p>}
 
             <div className="options-menu__section-title">Les 3 paliers de configuration</div>
             {hardwareTiers === null ? (
