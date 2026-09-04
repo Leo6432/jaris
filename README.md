@@ -147,6 +147,31 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   cliquer, remplir des formulaires et prendre des captures d'écran dans un
   navigateur réel — utile pour les sites web dynamiques que le simple scan
   d'écran (étape 6) ou le scraping (étape 33) ne suffisent pas à piloter
+- ⬜ Étape 43 — Agent de contrôle d'ordinateur complet (comparé à GPT-6 Astra
+  d'OpenAI, sorti le 3 septembre 2026 avec le "computer use" comme capacité
+  phare — mais dans le cloud, payant, contrairement à Jaris) : au-delà de ce
+  que les étapes 32/34 couvrent déjà (clics fiables, navigateur piloté), il
+  manque encore :
+  - **Fichiers** : créer, déplacer, renommer, organiser (rien aujourd'hui)
+  - **Documents bureautiques** : lire/écrire dans Word/Excel/PowerPoint ou
+    équivalents (rien aujourd'hui)
+  - **Vraie boucle de programmation** : ouvrir un projet EXISTANT (pas
+    seulement générer une appli depuis zéro comme le mode Code actuel),
+    éditer un fichier précis, lancer une commande shell, lire le résultat,
+    corriger, retester — un outil d'exécution shell/édition de fichier
+    n'existe pas encore
+  - **Raccourcis clavier avec modificateurs** (Ctrl+C, Alt+Tab...) et
+    **glisser-déposer** : `press_key`/`click_mouse` (étape 15) ne couvrent
+    qu'une touche seule ou un clic simple
+  - **Plafond d'actions** : `MAX_TOOL_ROUNDS = 10` (`assistant.ts`) limite
+    une tâche à 10 appels d'outils par échange — bloquerait une vraie tâche
+    à plusieurs dizaines d'étapes, à lever (ou remplacer par une vraie
+    limite de temps/budget) une fois les outils au-dessus ajoutés
+
+  Chaque nouvel outil de cette liste devra passer par la sécurité graduée
+  N1/N2/N3 déjà en place (voir plus haut) : plus d'outils capables d'agir
+  sur de vrais fichiers/documents/commandes shell veut dire plus de risque,
+  pas seulement plus de capacités
 - ⬜ Étape 41 — Génération d'images et de vidéos avec
   [Wan2GP](https://github.com/deepbeepmeep/Wan2GP) : équivalent local et
   open source d'Higgsfield, taillé pour les GPU grand public ("GPU Poor") —
