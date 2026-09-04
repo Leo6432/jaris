@@ -169,7 +169,16 @@ async function restartOllamaApp(): Promise<boolean> {
     // on relance quand même juste en dessous.
   })
   await new Promise((resolve) => setTimeout(resolve, 1500))
-  spawn(exePath, [], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+  // 'error' DOIT avoir un listener même si on ignore le résultat (detached + unref) : un spawn() qui
+  // échoue de façon asynchrone (chemin invalide, permission refusée...) sur un process sans aucun
+  // listener 'error' fait planter tout le process principal d'Electron (unhandled 'error' event), pas
+  // juste échouer proprement cet appel.
+  spawn(exePath, [], { detached: true, stdio: 'ignore', windowsHide: true })
+    .on('error', () => {
+      // Rien à faire ici : updateOllama() attend ensuite que le serveur réponde (waitUntil) puis
+      // retombe sur winget si ce n'est jamais le cas, ce qui couvre déjà cet échec.
+    })
+    .unref()
   return true
 }
 
@@ -185,6 +194,17 @@ async function restartOllamaApp(): Promise<boolean> {
  *    Jaris ne peuvent la contourner, et il ne faut pas essayer.
  */
 export async function updateOllama(): Promise<{ success: boolean; message: string }> {
+  try {
+    return await updateOllamaInner()
+  } catch (err) {
+    // Filet de sécurité final : une exception qui remonte jusqu'ici sans ce try/catch traverserait
+    // ipcMain.handle telle quelle jusqu'au renderer, où handleUpdateOllama (OptionsMenu.tsx) n'a pas de
+    // .catch() — le bouton redeviendrait "Mettre à jour" sans jamais afficher la moindre explication.
+    return { success: false, message: `Erreur inattendue pendant la mise à jour : ${err instanceof Error ? err.message : String(err)}` }
+  }
+}
+
+async function updateOllamaInner(): Promise<{ success: boolean; message: string }> {
   const restarted = await restartOllamaApp()
   if (restarted) {
     // Attend que le serveur revienne avant de reverifier : quelques secondes le temps qu'Ollama redémarre

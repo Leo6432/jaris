@@ -275,6 +275,12 @@ export default function OptionsMenu(): JSX.Element {
         return window.jaris.getOllamaVersionStatus()
       })
       .then(setOllamaVersionStatus)
+      .catch((err: unknown) => {
+        // updateOllama() (main.ts) attrape déjà tout en interne, donc ne devrait normalement jamais
+        // rejeter — filet de sécurité quand même : sans ce .catch, une exception ici laissait le bouton
+        // revenir à "Mettre à jour" sans JAMAIS afficher le moindre message, succès ou échec.
+        setOllamaUpdateMessage(err instanceof Error ? err.message : String(err))
+      })
       .finally(() => setUpdatingOllama(false))
   }
 
