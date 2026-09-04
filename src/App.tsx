@@ -7,7 +7,7 @@ import JarisOrb from '@/components/JarisOrb'
 import MemoryBrain from '@/components/MemoryBrain'
 import OptionsMenu from '@/components/OptionsMenu'
 import { useJarisStore, type JarisEmotion } from '@/store/useJarisStore'
-import type { MemoryGraph } from '../shared/ipc'
+import type { MemoryGraph, OllamaVersionStatus } from '../shared/ipc'
 
 const STATUS_LABEL: Record<JarisEmotion, string> = {
   idle: 'Jaris dort...',
@@ -54,6 +54,8 @@ export default function App(): JSX.Element {
   const [memoryGraph, setMemoryGraph] = useState<MemoryGraph | null>(null)
   const [newModels, setNewModels] = useState<string[]>([])
   const [appMode, setAppMode] = useState<AppMode>('voice')
+  const [ollamaVersionStatus, setOllamaVersionStatus] = useState<OllamaVersionStatus | null>(null)
+  const [ollamaPopupDismissed, setOllamaPopupDismissed] = useState(false)
 
   const openMemoryBrain = (): void => {
     void window.jaris.getMemoryGraph().then(setMemoryGraph)
@@ -125,6 +127,17 @@ export default function App(): JSX.Element {
     void window.jaris.acknowledgeNewModels()
     setNewModels([])
   }
+
+  // Popup "Ollama pas à jour" : même principe que newModels ci-dessus (jamais dans le widget, visible
+  // depuis n'importe lequel des 3 modes de la fenêtre de réglages, pas seulement en ouvrant Options →
+  // Modèles comme avant) — sinon l'utilisateur pouvait rater l'avertissement pendant des jours s'il
+  // n'ouvrait jamais cet onglet précis. Le bandeau détaillé + le bouton "Mettre à jour" restent dans
+  // OptionsMenu.tsx (étape 28, sa propre copie de ce même statut) : "Fermer" ici ne fait QUE cacher ce
+  // popup pour la session en cours, jamais définitivement — toujours retrouvable dans Options → Modèles.
+  useEffect(() => {
+    if (MODE !== 'full' || !capacityScanDone) return
+    window.jaris.getOllamaVersionStatus().then(setOllamaVersionStatus)
+  }, [capacityScanDone])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -241,6 +254,16 @@ export default function App(): JSX.Element {
                 configuration » pour voir s'ils conviennent mieux à ta config.
               </p>
               <button onClick={dismissNewModels}>Fermer</button>
+            </div>
+          )}
+
+          {ollamaVersionStatus?.outdated && !ollamaPopupDismissed && (
+            <div className="app__new-models">
+              <p>
+                Ollama {ollamaVersionStatus.current} installé, la dernière version est{' '}
+                {ollamaVersionStatus.latest}. Ouvre Options → Modèles pour mettre à jour.
+              </p>
+              <button onClick={() => setOllamaPopupDismissed(true)}>Fermer</button>
             </div>
           )}
 

@@ -436,6 +436,14 @@ jour existe, un bandeau s'affiche dans l'onglet **Modèles** du menu Options
 injoignable ou limite de requêtes atteinte n'empêchent jamais Jaris de
 démarrer, le bandeau reste juste absent).
 
+Un popup miroir (`App.tsx`, même style que celui des nouveaux modèles
+candidats, étape 29) apparaît en plus dans les 3 modes de la fenêtre de
+réglages (Agent vocal/Chat/Code) — pas seulement en ouvrant l'onglet
+Modèles comme avant — pour ne pas rater l'avertissement pendant des jours
+si cet onglet précis n'est jamais ouvert. "Fermer" ne le cache que pour la
+session en cours (jamais définitivement) : le bandeau détaillé + le bouton
+"Mettre à jour" restent toujours consultables dans Options → Modèles.
+
 Le bandeau propose aussi un bouton **"Mettre à jour"** (`updateOllama`,
 `electron/services/dependencyServices.ts`), en trois temps :
 1. **Redémarrer `ollama app.exe`** (l'appli barre système Windows, pas le
