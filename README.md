@@ -437,18 +437,29 @@ injoignable ou limite de requêtes atteinte n'empêchent jamais Jaris de
 démarrer, le bandeau reste juste absent).
 
 Le bandeau propose aussi un bouton **"Mettre à jour"** (`updateOllama`,
-`electron/services/dependencyServices.ts`), en deux temps :
+`electron/services/dependencyServices.ts`), en trois temps :
 1. **Redémarrer `ollama app.exe`** (l'appli barre système Windows, pas le
    CLI) : Ollama télécharge déjà ses mises à jour tout seul en arrière-plan
-   par défaut ("Auto-download updates") et les applique au redémarrage du
-   process, exactement comme "Restart to update" dans le menu de sa propre
-   icône barre système — aucune invite Windows, aucun catalogue externe.
-   Jaris fait juste `taskkill /IM "ollama app.exe" /F` puis relance
-   l'exécutable, revérifie la version une fois le serveur revenu.
-2. **`winget upgrade --id Ollama.Ollama`** en repli, si le redémarrage seul
-   n'a rien changé (ex: téléchargement auto désactivé côté Ollama) —
-   `winget` (App Installer, préinstallé sur Windows 10 1809+/11), paquet
-   `Ollama.Ollama` officiellement maintenu sur
+   par défaut ("Auto-download updates") — aucune invite Windows, aucun
+   catalogue externe. Jaris fait juste `taskkill /IM "ollama app.exe" /F`
+   puis relance l'exécutable, revérifie la version une fois le serveur
+   revenu. **Ne suffit pas toujours** (constaté en usage réel) : le "Restart
+   to update" de la vraie icône barre système d'Ollama relance en fait tout
+   un installeur téléchargé à part, pas juste le même binaire déjà installé
+   — un simple redémarrage peut donc ne rien changer.
+2. **Télécharger et lancer le vrai installeur officiel** en repli
+   (`https://ollama.com/download/OllamaSetup.exe`, la même adresse que le
+   lien manuel juste à côté) si le redémarrage seul n'a rien changé :
+   garanti de fonctionner puisque c'est l'installeur officiel, contrairement
+   à essayer de deviner où Ollama cache le sien. Aucun flag silencieux
+   documenté pour `OllamaSetup.exe` (pas question d'en inventer un) : la
+   fenêtre de l'installeur s'ouvre normalement, il faut cliquer
+   "Suivant"/"Installer" soi-même — Jaris a juste fait le travail de
+   téléchargement à la place de l'utilisateur.
+3. **`winget upgrade --id Ollama.Ollama`** en tout dernier repli, seulement
+   si même le téléchargement de l'installeur a échoué (pas de réseau vers
+   ollama.com, par exemple) — `winget` (App Installer, préinstallé sur
+   Windows 10 1809+/11), paquet `Ollama.Ollama` officiellement maintenu sur
    [winget-pkgs](https://github.com/microsoft/winget-pkgs). Une invite
    Windows (élévation UAC) reste possible ici — ni winget ni Jaris ne
    peuvent la contourner. Piège rencontré en usage réel : winget peut
@@ -458,8 +469,7 @@ Le bandeau propose aussi un bouton **"Mettre à jour"** (`updateOllama`,
    des contributeurs externes (pas Ollama), peut mettre plusieurs jours à
    suivre une nouvelle sortie ; Jaris détecte spécifiquement ce code et
    l'explique clairement plutôt que d'afficher un échec générique. Si aucune
-   des deux méthodes n'aboutit (ou si `winget` est introuvable — machine
-   très ancienne ou dépouillée), le bouton le dit clairement et renvoie vers
+   des trois méthodes n'aboutit, le bouton le dit clairement et renvoie vers
    le téléchargement manuel sur ollama.com/download.
 
 > Le modèle a par défaut une fenêtre de contexte énorme (131072 tokens pour
