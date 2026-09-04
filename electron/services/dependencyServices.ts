@@ -1,4 +1,6 @@
 import { exec, execSync, spawn, type ChildProcess } from 'child_process'
+import { existsSync } from 'fs'
+import { join } from 'path'
 import { promisify } from 'util'
 import { config } from '../config'
 import { openApp } from './appLauncher'
@@ -142,14 +144,61 @@ async function checkOllamaFreshness(): Promise<void> {
 }
 
 /**
- * Déclenché par le bouton "Mettre à jour" du bandeau (OptionsMenu.tsx). `winget` (App Installer, préinstallé
- * sur Windows 10 1809+/11) reste la seule vraie ligne de commande fiable : contrairement à l'installeur
- * Windows d'Ollama (OllamaSetup.exe, aucun flag silencieux documenté — pas question d'en inventer un), le
- * paquet `Ollama.Ollama` est officiellement maintenu à jour sur github.com/microsoft/winget-pkgs. Une seule
- * invite Windows (élévation UAC) reste inévitable pour installer quoi que ce soit sur la machine — ni winget
- * ni Jaris ne peuvent la contourner, et il ne faut pas essayer.
+ * Chemin de "ollama app.exe" (l'appli barre système Windows — auto-démarrée au login, PAS `ollama.exe` le
+ * CLI utilisé partout ailleurs dans ce fichier). Contrairement à winget (voir updateOllama plus bas),
+ * aucune dépendance à un catalogue externe : Ollama télécharge déjà ses mises à jour tout seul en
+ * arrière-plan (réglage "Auto-download updates", activé par défaut) et les applique au redémarrage du
+ * process — exactement ce que fait "Restart to update" dans le menu de SA PROPRE icône barre système.
  */
-export function updateOllama(): Promise<{ success: boolean; message: string }> {
+function ollamaAppExePath(): string {
+  return join(process.env.LOCALAPPDATA ?? '', 'Ollama', 'ollama app.exe')
+}
+
+/**
+ * Tue puis relance "ollama app.exe" pour appliquer une mise à jour déjà téléchargée en arrière-plan par
+ * Ollama lui-même — `null` si l'exécutable n'est pas à l'emplacement attendu (installation différente,
+ * jamais bloquant : updateOllama retombe alors directement sur winget). Le délai entre le kill et la
+ * relance laisse le temps au process de vraiment libérer le port du serveur avant qu'une nouvelle instance
+ * n'essaie de l'ouvrir.
+ */
+async function restartOllamaApp(): Promise<boolean> {
+  const exePath = ollamaAppExePath()
+  if (!existsSync(exePath)) return false
+  await execAsync('taskkill /IM "ollama app.exe" /F').catch(() => {
+    // Rien à faire si le process n'était pas lancé (déjà arrêté, ou l'utilisateur avait quitté Ollama) :
+    // on relance quand même juste en dessous.
+  })
+  await new Promise((resolve) => setTimeout(resolve, 1500))
+  spawn(exePath, [], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+  return true
+}
+
+/**
+ * Déclenché par le bouton "Mettre à jour" du bandeau (OptionsMenu.tsx). Deux méthodes, dans cet ordre :
+ * 1. Redémarrer "ollama app.exe" (restartOllamaApp ci-dessus) : rapide, aucune invite Windows, applique
+ *    directement ce qu'Ollama a déjà téléchargé tout seul — mais ne fait rien de plus si l'utilisateur a
+ *    désactivé le téléchargement automatique dans les réglages d'Ollama, ou si rien n'est encore prêt.
+ * 2. `winget` (App Installer, préinstallé sur Windows 10 1809+/11) en repli, si le redémarrage n'a pas
+ *    suffi : contrairement à l'installeur Windows d'Ollama (OllamaSetup.exe, aucun flag silencieux
+ *    documenté — pas question d'en inventer un), le paquet `Ollama.Ollama` est officiellement maintenu sur
+ *    github.com/microsoft/winget-pkgs. Une invite Windows (élévation UAC) reste possible ici — ni winget ni
+ *    Jaris ne peuvent la contourner, et il ne faut pas essayer.
+ */
+export async function updateOllama(): Promise<{ success: boolean; message: string }> {
+  const restarted = await restartOllamaApp()
+  if (restarted) {
+    // Attend que le serveur revienne avant de reverifier : quelques secondes le temps qu'Ollama redémarre
+    // et réouvre son API.
+    await waitUntil(() => isUp(`${config.ollama.host}/api/tags`), 20000)
+    await checkOllamaFreshness()
+    const status = getOllamaVersionStatus()
+    if (status && !status.outdated) {
+      return { success: true, message: `Ollama redémarré et mis à jour (${status.current}).` }
+    }
+    // Le redémarrage n'a rien changé (rien de prêt en arrière-plan, ou "Auto-download updates" désactivé
+    // côté Ollama) : winget reste une vraie tentative de mise à jour, pas juste un message d'erreur.
+  }
+
   return new Promise((resolve) => {
     const proc = spawn(
       'winget',
@@ -186,17 +235,15 @@ export function updateOllama(): Promise<{ success: boolean; message: string }> {
       // communautaire winget-pkgs (github.com/microsoft/winget-pkgs, maintenu par des contributeurs
       // externes, pas Ollama lui-même) met parfois plusieurs jours à suivre une nouvelle sortie GitHub, ou
       // l'installation actuelle d'Ollama (pas forcément posée par winget à l'origine) ne correspond pas au
-      // "scope"/type d'installeur que winget attend pour appliquer une mise à jour dessus. Le vrai installeur
-      // Windows d'Ollama, lui, met à jour en place sans se soucier de comment il a été installé avant.
+      // "scope"/type d'installeur que winget attend pour appliquer une mise à jour dessus.
       if (code === 2316632107 || code === -1978335189) {
         resolve({
           success: false,
           message:
-            "winget ne trouve pas de mise à jour applicable, alors qu'une version plus récente existe bien " +
-            "sur GitHub : le catalogue winget (maintenu par des contributeurs externes, pas Ollama) met parfois " +
-            "plusieurs jours à suivre une nouvelle sortie, ou l'installation actuelle n'est pas dans le format " +
-            "que winget sait mettre à jour. Pas un bug de ton côté : télécharge et lance l'installeur directement " +
-            'sur ollama.com/download, il mettra à jour en place.'
+            "Ni le redémarrage d'Ollama ni winget n'ont trouvé de mise à jour applicable, alors qu'une " +
+            "version plus récente existe bien sur GitHub : vérifie que \"Auto-download updates\" est activé " +
+            "dans les réglages d'Ollama, ou télécharge et lance l'installeur directement sur " +
+            'ollama.com/download, il mettra à jour en place.'
         })
         return
       }

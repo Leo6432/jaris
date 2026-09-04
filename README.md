@@ -436,18 +436,31 @@ jour existe, un bandeau s'affiche dans l'onglet **Modèles** du menu Options
 injoignable ou limite de requêtes atteinte n'empêchent jamais Jaris de
 démarrer, le bandeau reste juste absent).
 
-Le bandeau propose aussi un bouton **"Mettre à jour"** qui lance
-`winget upgrade --id Ollama.Ollama` (`updateOllama`,
-`electron/services/dependencyServices.ts`) — `winget` (App Installer,
-préinstallé sur Windows 10 1809+/11) reste la seule vraie ligne de commande
-fiable pour ça : contrairement à l'installeur Windows d'Ollama
-(OllamaSetup.exe), aucun flag silencieux n'est documenté, pas question d'en
-inventer un. Le paquet `Ollama.Ollama` est officiellement maintenu à jour sur
-[winget-pkgs](https://github.com/microsoft/winget-pkgs). Une seule invite
-Windows (élévation UAC) reste inévitable pour installer quoi que ce soit —
-ni winget ni Jaris ne peuvent la contourner. Si `winget` est introuvable
-(machine très ancienne ou dépouillée), le bouton le dit clairement plutôt que
-d'échouer en silence, et renvoie vers le lien manuel juste à côté.
+Le bandeau propose aussi un bouton **"Mettre à jour"** (`updateOllama`,
+`electron/services/dependencyServices.ts`), en deux temps :
+1. **Redémarrer `ollama app.exe`** (l'appli barre système Windows, pas le
+   CLI) : Ollama télécharge déjà ses mises à jour tout seul en arrière-plan
+   par défaut ("Auto-download updates") et les applique au redémarrage du
+   process, exactement comme "Restart to update" dans le menu de sa propre
+   icône barre système — aucune invite Windows, aucun catalogue externe.
+   Jaris fait juste `taskkill /IM "ollama app.exe" /F` puis relance
+   l'exécutable, revérifie la version une fois le serveur revenu.
+2. **`winget upgrade --id Ollama.Ollama`** en repli, si le redémarrage seul
+   n'a rien changé (ex: téléchargement auto désactivé côté Ollama) —
+   `winget` (App Installer, préinstallé sur Windows 10 1809+/11), paquet
+   `Ollama.Ollama` officiellement maintenu sur
+   [winget-pkgs](https://github.com/microsoft/winget-pkgs). Une invite
+   Windows (élévation UAC) reste possible ici — ni winget ni Jaris ne
+   peuvent la contourner. Piège rencontré en usage réel : winget peut
+   répondre `APPINSTALLER_CLI_ERROR_UPDATE_NOT_APPLICABLE` (code
+   `2316632107`, "aucune mise à jour applicable") alors qu'une version plus
+   récente existe bien sur GitHub — le catalogue `winget-pkgs`, maintenu par
+   des contributeurs externes (pas Ollama), peut mettre plusieurs jours à
+   suivre une nouvelle sortie ; Jaris détecte spécifiquement ce code et
+   l'explique clairement plutôt que d'afficher un échec générique. Si aucune
+   des deux méthodes n'aboutit (ou si `winget` est introuvable — machine
+   très ancienne ou dépouillée), le bouton le dit clairement et renvoie vers
+   le téléchargement manuel sur ollama.com/download.
 
 > Le modèle a par défaut une fenêtre de contexte énorme (131072 tokens pour
 > qwen3.5), ce qui peut le faire déborder de la VRAM et tourner en partie sur
