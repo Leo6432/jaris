@@ -64,8 +64,15 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
  * Lance scripts/benchmark-models.mjs comme un vrai process Node, en streamant chaque ligne de sa sortie
  * via `onLine` au fur et à mesure — plutôt que d'attendre la fin complète (le benchmark peut prendre
  * 20-40+ minutes avec plusieurs modèles à charger un par un). Réutilise le script tel quel (pas de logique
- * dupliquée) : ce n'est possible que dans un checkout source (le script n'est jamais packagé), mais
- * l'onglet Modèles qui l'appelle est lui-même un outil de dev, pas une fonctionnalité pour un build final.
+ * dupliquée) : le fichier est bundlé via `extraResources` (electron-builder.yml, `scripts/`), à côté de
+ * verified-tool-scores.md — il n'utilise que des modules Node natifs, aucun node_modules à embarquer avec.
+ *
+ * `spawn(process.execPath, ..., ELECTRON_RUN_AS_NODE: '1')` plutôt que `spawn('node', ...)` : l'exécutable
+ * de Jaris (Electron) EST déjà un runtime Node complet, cette variable le fait tourner en pur Node (aucune
+ * fenêtre Chromium) — l'appli installée n'a donc jamais besoin d'un `node` système, qu'étape 16 ne garantit
+ * jamais (seuls Python et Ollama sont auto-installés). Avant ce correctif, ça plantait immédiatement dans
+ * l'appli installée (`spawn('node', ...)` : commande introuvable, ou pire, un `node` système sans rapport
+ * qui échouait tout de suite faute de trouver le fichier — les deux ressemblant à "code 1" une fois remonté).
  *
  * `scope` passé en variable d'environnement (JARIS_ANALYSIS_SCOPE) : le script lit lui-même cette variable
  * pour ne tester que les candidats du palier demandé (voir son commentaire sur SCOPE) — jamais interprété
@@ -74,9 +81,9 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
 function spawnBenchmarkScript(onLine: (line: string) => void, scope: AnalysisScope): Promise<void> {
   return new Promise((resolve, reject) => {
     const scriptPath = join(resourcesRoot(), 'scripts', 'benchmark-models.mjs')
-    const proc = spawn('node', [scriptPath], {
+    const proc = spawn(process.execPath, [scriptPath], {
       windowsHide: true,
-      env: { ...process.env, OLLAMA_HOST: config.ollama.host, JARIS_ANALYSIS_SCOPE: scope }
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', OLLAMA_HOST: config.ollama.host, JARIS_ANALYSIS_SCOPE: scope }
     })
 
     let buffer = ''
