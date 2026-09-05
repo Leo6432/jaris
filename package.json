@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "dist": "node scripts/generate-icon.mjs && electron-vite build && electron-builder --win",
+    "dist": "node scripts/generate-icon.mjs && electron-vite build && electron-builder --win --publish never",
     "preview": "electron-vite preview",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",

@@ -5,6 +5,7 @@ import { join } from 'path'
 import type { Readable, Writable } from 'stream'
 import { config } from '../config'
 import { pythonScriptsDir } from '../paths'
+import { resolvePythonBin } from './pythonRuntime'
 import type { AudioInputDevice } from '../../shared/ipc'
 
 type VoiceServerProcess = ChildProcessByStdio<Writable, Readable, Readable>
@@ -56,7 +57,7 @@ export class VoiceClient extends EventEmitter {
         args.push('--input-device', config.voice.inputDevice)
       }
 
-      const proc = spawn(config.python.bin, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+      const proc = spawn(resolvePythonBin(), args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
       this.proc = proc
 
       let settled = false
@@ -149,7 +150,7 @@ export class VoiceClient extends EventEmitter {
  */
 export function listAudioInputDevices(): Promise<AudioInputDevice[]> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(config.python.bin, ['-u', voiceServerScript(), '--list-devices'], {
+    const proc = spawn(resolvePythonBin(), ['-u', voiceServerScript(), '--list-devices'], {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
     })

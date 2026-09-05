@@ -5,6 +5,7 @@ import { join } from 'path'
 import type { Readable, Writable } from 'stream'
 import { config } from '../config'
 import { pythonScriptsDir } from '../paths'
+import { resolvePythonBin } from './pythonRuntime'
 
 type TtsServerProcess = ChildProcessByStdio<Writable, Readable, Readable>
 
@@ -34,7 +35,7 @@ class TtsClient extends EventEmitter {
 
     this.ready = new Promise((resolveReady, rejectReady) => {
       const proc = spawn(
-        config.python.bin,
+        resolvePythonBin(),
         [
           '-u',
           join(pythonScriptsDir(), 'tts_server.py'),
