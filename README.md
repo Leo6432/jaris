@@ -6,6 +6,139 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 
 ## État actuel
 
+- ⬜ Étape 21 — Intégration téléphone : système pour connecter Jaris au
+  téléphone de l'utilisateur (via son numéro ou une connexion directe au
+  téléphone) afin d'envoyer des messages, voir les notifications, et plus
+  largement tout voir/contrôler depuis le téléphone — en s'appuyant sur un
+  projet existant faisant le pont PC/téléphone plutôt que de tout réécrire :
+  soit open source (ex: KDE Connect), soit la fonctionnalité native de
+  Windows **Mobile connecté** (Phone Link) déjà présente sur la machine de
+  l'utilisateur — à comparer avant de choisir (couverture fonctionnelle,
+  et surtout si Phone Link expose de quoi être piloté par Jaris plutôt que
+  seulement utilisable à la main)
+- ⬜ Étape 42 — Canal Telegram : pouvoir parler à Jaris à distance par
+  message Telegram, en plus de la voix et du chat (étape 30) déjà présents.
+  Nouveau canal branché directement sur le moteur `converse()` existant
+  (`electron/services/assistant.ts`) plutôt qu'un bot séparé et
+  déconnecté : mêmes outils (mail, recherche web, rappels, mémoire — voir
+  `tools.ts`), même historique, même mémoire longue durée qu'en local. Bot
+  Telegram en mode "polling" (ex: `node-telegram-bot-api`) : aucun serveur
+  public ni IP fixe nécessaire, reste 100% local et gratuit. Limite propre
+  au 100% local : le PC de l'utilisateur doit être allumé et Jaris lancé
+  pour recevoir un message — rien n'est hébergé ailleurs, un message envoyé
+  pendant que la machine est éteinte reste juste en attente chez Telegram
+  jusqu'au redémarrage
+- ⬜ Étape 23 — Site web avec tableau de bord personnel : chaque utilisateur
+  peut noter son planning et sa to-do list sur le site, et Jaris peut y
+  écrire des informations
+- ⬜ Étape 24 — Jaris connaît la date et l'heure : briefing du matin
+  (planning du jour, tâches à faire), et ajoute automatiquement une tâche à
+  la to-do list du site dès que l'utilisateur en mentionne une à voix haute
+- ⬜ Étape 26 — Paramètres avancés : page dédiée pour tout personnaliser
+  (connecter son planning/calendrier, son Gmail, choisir la langue, etc.)
+- ⬜ Étape 27 — Sous-agents : Jaris peut lancer plusieurs sous-agents (agents
+  web, etc.) en parallèle pour des tâches complexes qui demandent plusieurs
+  actions en même temps, au lieu de tout faire en une seule séquence
+- ⬜ Étape 31 — Design sonore : donne à Jaris sa propre identité sonore, avec
+  des sons distincts selon l'action en cours (clic de souris, envoi d'un
+  message/mail, réflexion, scan d'écran...), en plus de la voix — comme les
+  bips caractéristiques de J.A.R.V.I.S. (Iron Man)
+- ⬜ Étape 32 — Clics plus fiables via UI Automation (Windows) : au lieu de
+  deviner des coordonnées à partir d'une capture d'écran (vision), utiliser
+  l'API d'accessibilité Windows (`UIAutomationClient`/`UIAutomationTypes`,
+  accessible depuis PowerShell comme le reste du contrôle clavier/souris —
+  étape 15) pour repérer les vrais éléments cliquables d'une fenêtre (nom,
+  type, position exacte via `ClickablePointProperty`) et cliquer dessus avec
+  certitude, même si l'interface bouge — reste 100% local et gratuit.
+  Limite : certaines interfaces personnalisées (jeux, rendu custom) n'exposent
+  pas toujours un arbre d'accessibilité complet, garder look_at_screen
+  (étape 6) en repli dans ce cas
+- ⬜ Étape 33 — Firecrawl pour un scraping web plus fiable : en complément de
+  la recherche web (étape 7, basée sur SearXNG en local), auto-héberger
+  Firecrawl (open source, licence AGPL-3.0, conteneur Docker comme SearXNG —
+  étapes 7/8) pour extraire le contenu des pages en markdown propre, avec
+  rendu JS des sites dynamiques — reste 100% local et gratuit. Limite : la
+  version auto-hébergée n'a pas le contournement anti-bot/rotation de proxy
+  de la version cloud payante, suffisant pour un usage perso normal
+- ⬜ Étape 43 — Agent de contrôle d'ordinateur complet (comparé à GPT-6 Astra
+  d'OpenAI, sorti le 3 septembre 2026 avec le "computer use" comme capacité
+  phare — mais dans le cloud, payant, contrairement à Jaris) : au-delà de ce
+  que les étapes 32/34 couvrent déjà (clics fiables, navigateur piloté), il
+  manque encore :
+  - **Fichiers** : créer, déplacer, renommer, organiser (rien aujourd'hui)
+  - **Documents bureautiques** : lire/écrire dans Word/Excel/PowerPoint ou
+    équivalents (rien aujourd'hui)
+  - **Vraie boucle de programmation** : ouvrir un projet EXISTANT (pas
+    seulement générer une appli depuis zéro comme le mode Code actuel),
+    éditer un fichier précis, lancer une commande shell, lire le résultat,
+    corriger, retester — un outil d'exécution shell/édition de fichier
+    n'existe pas encore
+  - **Raccourcis clavier avec modificateurs** (Ctrl+C, Alt+Tab...) et
+    **glisser-déposer** : `press_key`/`click_mouse` (étape 15) ne couvrent
+    qu'une touche seule ou un clic simple
+  - **Plafond d'actions** : `MAX_TOOL_ROUNDS = 10` (`assistant.ts`) limite
+    une tâche à 10 appels d'outils par échange — bloquerait une vraie tâche
+    à plusieurs dizaines d'étapes, à lever (ou remplacer par une vraie
+    limite de temps/budget) une fois les outils au-dessus ajoutés
+
+  Chaque nouvel outil de cette liste devra passer par la sécurité graduée
+  N1/N2/N3 déjà en place (voir plus haut) : plus d'outils capables d'agir
+  sur de vrais fichiers/documents/commandes shell veut dire plus de risque,
+  pas seulement plus de capacités
+- ⬜ Étape 41 — Génération d'images et de vidéos avec
+  [Wan2GP](https://github.com/deepbeepmeep/Wan2GP) : équivalent local et
+  open source d'Higgsfield, taillé pour les GPU grand public ("GPU Poor") —
+  certains modèles (Wan 2.2 TI2V-5B, Wan 2.2 14B en GGUF...) tournent dès 6
+  Go de VRAM. Demander une image ou une courte vidéo à voix haute ou dans le
+  chat (étape 30) télécharge et lance Wan2GP en local, comme Ollama et
+  SearXNG aujourd'hui. Points à vérifier avant de s'y mettre : licence
+  personnalisée de Wan2GP (gratuit à l'usage d'après le dépôt, mais à
+  confirmer pour une redistribution commerciale — même vérification que
+  l'étape 22 pour les autres briques open source utilisées), et cohabitation
+  en VRAM avec le modèle de conversation déjà chargé (probablement décharger
+  temporairement l'un pour l'autre, comme pour la vision — étape 6)
+
+  ### Repère qualité : MiniMax H3 (Max / Live)
+  Modèle cloud payant (dispo via Higgsfield) pris comme repère de qualité
+  pour cette étape : mode **Max** pour la meilleure qualité, mode **Live**
+  pour une génération quasi temps réel. Pas une dépendance de Jaris (qui
+  reste 100% local et gratuit) — juste l'objectif visé localement avec
+  Wan2GP, à rapprocher autant que possible.
+- ⬜ Étape 35 — Optimisation complète de l'application : passe à fond sur les
+  performances avant de passer aux étapes de mise sur le marché ci-dessous —
+  réduire au maximum la consommation CPU/GPU/RAM au repos et en usage
+  (démarrage, appels redondants comme `nvidia-smi` relancé plusieurs fois par
+  question, animations qui tournent même fenêtre cachée), accélérer les
+  temps de réponse (chargement des modèles, transcription, synthèse vocale),
+  réduire la taille de l'appli packagée, et nettoyer le code mort et les
+  dépendances inutilisées
+- ⬜ Étape 20 — Mise à jour automatique de l'application dès qu'une nouvelle
+  version est publiée : **entièrement depuis l'interface de Jaris, jamais
+  de terminal** — ni `git pull`, ni `pip install`, ni `npm run build` à
+  lancer à la main (contrairement à aujourd'hui, où chaque mise à jour du
+  code demande ces commandes). Détection de nouvelle version, téléchargement
+  et application se font en un clic, ou automatiquement, comme le bouton
+  "Mettre à jour" déjà en place pour Ollama (Options → Modèles) — même
+  principe, appliqué à Jaris lui-même
+- ⬜ Étape 22 — Vérification des licences avant mise en vente : vérifier la
+  compatibilité des licences des briques open source utilisées (Ollama,
+  modèles Qwen, Cohere Transcribe, Supertonic HD, SearXNG) avec
+  une distribution commerciale, avant de passer aux étapes de mise sur le
+  marché ci-dessous (mentions légales, protection contre la redistribution,
+  publication et monétisation)
+- ⬜ Étape 36 — Mentions légales / conditions d'utilisation à faire accepter
+  avant la première utilisation, pour dégager la responsabilité en cas
+  d'action problématique de l'IA
+- ⬜ Étape 37 — Protection contre la redistribution : identifiant unique par
+  utilisateur/licence pour pouvoir tracer une copie de Jaris qui circule ou
+  est partagée à d'autres personnes (piste à creuser, pas encore figée)
+- ⬜ Étape 38 — Publication et monétisation : site pour vendre un abonnement
+  (~10€/mois)
+- ⬜ Étape 39 — Vidéo de présentation : animation en full motion design
+  générée avec l'IA pour présenter le projet Jaris, avec sound effects et
+  musique
+- ⬜ Étape 40 — Levée de fonds : page sur le site pour présenter le projet à
+  des investisseurs et demander des fonds pour agrandir le site
 - ✅ Étape 1 — Projet Electron + React + TS (Vite / electron-vite) initialisé
 - ✅ Étape 2 — Visage animé (`JarisFace`, remplacé à l'étape 17 par
   `JarisOrb`) avec 5 états d'émotion : veille, écoute, réflexion, content,
@@ -87,113 +220,7 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   bas. Une première version de Code avait été retirée (qualité insuffisante
   sur un modèle généraliste de la taille qui tient sur 8 Go de VRAM) puis
   reprise avec deux modèles réellement spécialisés en code (voir plus bas)
-- ⬜ Étape 21 — Intégration téléphone : système pour connecter Jaris au
-  téléphone de l'utilisateur (via son numéro ou une connexion directe au
-  téléphone) afin d'envoyer des messages, voir les notifications, et plus
-  largement tout voir/contrôler depuis le téléphone — en s'appuyant sur un
-  projet existant faisant le pont PC/téléphone plutôt que de tout réécrire :
-  soit open source (ex: KDE Connect), soit la fonctionnalité native de
-  Windows **Mobile connecté** (Phone Link) déjà présente sur la machine de
-  l'utilisateur — à comparer avant de choisir (couverture fonctionnelle,
-  et surtout si Phone Link expose de quoi être piloté par Jaris plutôt que
-  seulement utilisable à la main)
-- ⬜ Étape 42 — Canal Telegram : pouvoir parler à Jaris à distance par
-  message Telegram, en plus de la voix et du chat (étape 30) déjà présents.
-  Nouveau canal branché directement sur le moteur `converse()` existant
-  (`electron/services/assistant.ts`) plutôt qu'un bot séparé et
-  déconnecté : mêmes outils (mail, recherche web, rappels, mémoire — voir
-  `tools.ts`), même historique, même mémoire longue durée qu'en local. Bot
-  Telegram en mode "polling" (ex: `node-telegram-bot-api`) : aucun serveur
-  public ni IP fixe nécessaire, reste 100% local et gratuit. Limite propre
-  au 100% local : le PC de l'utilisateur doit être allumé et Jaris lancé
-  pour recevoir un message — rien n'est hébergé ailleurs, un message envoyé
-  pendant que la machine est éteinte reste juste en attente chez Telegram
-  jusqu'au redémarrage
-- ⬜ Étape 23 — Site web avec tableau de bord personnel : chaque utilisateur
-  peut noter son planning et sa to-do list sur le site, et Jaris peut y
-  écrire des informations
-- ⬜ Étape 24 — Jaris connaît la date et l'heure : briefing du matin
-  (planning du jour, tâches à faire), et ajoute automatiquement une tâche à
-  la to-do list du site dès que l'utilisateur en mentionne une à voix haute
-- ⬜ Étape 26 — Paramètres avancés : page dédiée pour tout personnaliser
-  (connecter son planning/calendrier, son Gmail, choisir la langue, etc.)
-- ⬜ Étape 27 — Sous-agents : Jaris peut lancer plusieurs sous-agents (agents
-  web, etc.) en parallèle pour des tâches complexes qui demandent plusieurs
-  actions en même temps, au lieu de tout faire en une seule séquence
-- ⬜ Étape 31 — Design sonore : donne à Jaris sa propre identité sonore, avec
-  des sons distincts selon l'action en cours (clic de souris, envoi d'un
-  message/mail, réflexion, scan d'écran...), en plus de la voix — comme les
-  bips caractéristiques de J.A.R.V.I.S. (Iron Man)
-- ⬜ Étape 32 — Clics plus fiables via UI Automation (Windows) : au lieu de
-  deviner des coordonnées à partir d'une capture d'écran (vision), utiliser
-  l'API d'accessibilité Windows (`UIAutomationClient`/`UIAutomationTypes`,
-  accessible depuis PowerShell comme le reste du contrôle clavier/souris —
-  étape 15) pour repérer les vrais éléments cliquables d'une fenêtre (nom,
-  type, position exacte via `ClickablePointProperty`) et cliquer dessus avec
-  certitude, même si l'interface bouge — reste 100% local et gratuit.
-  Limite : certaines interfaces personnalisées (jeux, rendu custom) n'exposent
-  pas toujours un arbre d'accessibilité complet, garder look_at_screen
-  (étape 6) en repli dans ce cas
-- ⬜ Étape 33 — Firecrawl pour un scraping web plus fiable : en complément de
-  la recherche web (étape 7, basée sur SearXNG en local), auto-héberger
-  Firecrawl (open source, licence AGPL-3.0, conteneur Docker comme SearXNG —
-  étapes 7/8) pour extraire le contenu des pages en markdown propre, avec
-  rendu JS des sites dynamiques — reste 100% local et gratuit. Limite : la
-  version auto-hébergée n'a pas le contournement anti-bot/rotation de proxy
-  de la version cloud payante, suffisant pour un usage perso normal
 - ✅ Étape 34 — Playwright pour piloter un vrai navigateur (voir plus bas)
-- ⬜ Étape 43 — Agent de contrôle d'ordinateur complet (comparé à GPT-6 Astra
-  d'OpenAI, sorti le 3 septembre 2026 avec le "computer use" comme capacité
-  phare — mais dans le cloud, payant, contrairement à Jaris) : au-delà de ce
-  que les étapes 32/34 couvrent déjà (clics fiables, navigateur piloté), il
-  manque encore :
-  - **Fichiers** : créer, déplacer, renommer, organiser (rien aujourd'hui)
-  - **Documents bureautiques** : lire/écrire dans Word/Excel/PowerPoint ou
-    équivalents (rien aujourd'hui)
-  - **Vraie boucle de programmation** : ouvrir un projet EXISTANT (pas
-    seulement générer une appli depuis zéro comme le mode Code actuel),
-    éditer un fichier précis, lancer une commande shell, lire le résultat,
-    corriger, retester — un outil d'exécution shell/édition de fichier
-    n'existe pas encore
-  - **Raccourcis clavier avec modificateurs** (Ctrl+C, Alt+Tab...) et
-    **glisser-déposer** : `press_key`/`click_mouse` (étape 15) ne couvrent
-    qu'une touche seule ou un clic simple
-  - **Plafond d'actions** : `MAX_TOOL_ROUNDS = 10` (`assistant.ts`) limite
-    une tâche à 10 appels d'outils par échange — bloquerait une vraie tâche
-    à plusieurs dizaines d'étapes, à lever (ou remplacer par une vraie
-    limite de temps/budget) une fois les outils au-dessus ajoutés
-
-  Chaque nouvel outil de cette liste devra passer par la sécurité graduée
-  N1/N2/N3 déjà en place (voir plus haut) : plus d'outils capables d'agir
-  sur de vrais fichiers/documents/commandes shell veut dire plus de risque,
-  pas seulement plus de capacités
-- ⬜ Étape 41 — Génération d'images et de vidéos avec
-  [Wan2GP](https://github.com/deepbeepmeep/Wan2GP) : équivalent local et
-  open source d'Higgsfield, taillé pour les GPU grand public ("GPU Poor") —
-  certains modèles (Wan 2.2 TI2V-5B, Wan 2.2 14B en GGUF...) tournent dès 6
-  Go de VRAM. Demander une image ou une courte vidéo à voix haute ou dans le
-  chat (étape 30) télécharge et lance Wan2GP en local, comme Ollama et
-  SearXNG aujourd'hui. Points à vérifier avant de s'y mettre : licence
-  personnalisée de Wan2GP (gratuit à l'usage d'après le dépôt, mais à
-  confirmer pour une redistribution commerciale — même vérification que
-  l'étape 22 pour les autres briques open source utilisées), et cohabitation
-  en VRAM avec le modèle de conversation déjà chargé (probablement décharger
-  temporairement l'un pour l'autre, comme pour la vision — étape 6)
-
-  ### Repère qualité : MiniMax H3 (Max / Live)
-  Modèle cloud payant (dispo via Higgsfield) pris comme repère de qualité
-  pour cette étape : mode **Max** pour la meilleure qualité, mode **Live**
-  pour une génération quasi temps réel. Pas une dépendance de Jaris (qui
-  reste 100% local et gratuit) — juste l'objectif visé localement avec
-  Wan2GP, à rapprocher autant que possible.
-- ⬜ Étape 35 — Optimisation complète de l'application : passe à fond sur les
-  performances avant de passer aux étapes de mise sur le marché ci-dessous —
-  réduire au maximum la consommation CPU/GPU/RAM au repos et en usage
-  (démarrage, appels redondants comme `nvidia-smi` relancé plusieurs fois par
-  question, animations qui tournent même fenêtre cachée), accélérer les
-  temps de réponse (chargement des modèles, transcription, synthèse vocale),
-  réduire la taille de l'appli packagée, et nettoyer le code mort et les
-  dépendances inutilisées
 - ✅ Étape 16 — Installeur en un clic (voir plus bas) : **règle absolue — le Jaris installé par
   le public doit être exactement le même que celui utilisé en développement**
   (mêmes modèles, mêmes fonctionnalités, même qualité de réponse), jamais une
@@ -220,33 +247,6 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   Hugging Face à créer, même pour un débutant complet — seuls les vrais
   réglages perso (connecter Gmail, choisir son prénom) resteront dans
   l'interface, jamais dans un fichier texte ni sur un site tiers
-- ⬜ Étape 20 — Mise à jour automatique de l'application dès qu'une nouvelle
-  version est publiée : **entièrement depuis l'interface de Jaris, jamais
-  de terminal** — ni `git pull`, ni `pip install`, ni `npm run build` à
-  lancer à la main (contrairement à aujourd'hui, où chaque mise à jour du
-  code demande ces commandes). Détection de nouvelle version, téléchargement
-  et application se font en un clic, ou automatiquement, comme le bouton
-  "Mettre à jour" déjà en place pour Ollama (Options → Modèles) — même
-  principe, appliqué à Jaris lui-même
-- ⬜ Étape 22 — Vérification des licences avant mise en vente : vérifier la
-  compatibilité des licences des briques open source utilisées (Ollama,
-  modèles Qwen, Cohere Transcribe, Supertonic HD, SearXNG) avec
-  une distribution commerciale, avant de passer aux étapes de mise sur le
-  marché ci-dessous (mentions légales, protection contre la redistribution,
-  publication et monétisation)
-- ⬜ Étape 36 — Mentions légales / conditions d'utilisation à faire accepter
-  avant la première utilisation, pour dégager la responsabilité en cas
-  d'action problématique de l'IA
-- ⬜ Étape 37 — Protection contre la redistribution : identifiant unique par
-  utilisateur/licence pour pouvoir tracer une copie de Jaris qui circule ou
-  est partagée à d'autres personnes (piste à creuser, pas encore figée)
-- ⬜ Étape 38 — Publication et monétisation : site pour vendre un abonnement
-  (~10€/mois)
-- ⬜ Étape 39 — Vidéo de présentation : animation en full motion design
-  générée avec l'IA pour présenter le projet Jaris, avec sound effects et
-  musique
-- ⬜ Étape 40 — Levée de fonds : page sur le site pour présenter le projet à
-  des investisseurs et demander des fonds pour agrandir le site
 
 ## Démarrer en développement
 
