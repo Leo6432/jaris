@@ -4,6 +4,7 @@ import { createInterface } from 'readline'
 import { join } from 'path'
 import type { Readable, Writable } from 'stream'
 import { config } from '../config'
+import { pythonScriptsDir } from '../paths'
 import type { AudioInputDevice } from '../../shared/ipc'
 
 type VoiceServerProcess = ChildProcessByStdio<Writable, Readable, Readable>
@@ -19,7 +20,7 @@ type VoiceServerEvent =
   | { event: 'mic_test_level'; level: number }
   | { event: 'mic_test_done'; detected: boolean }
 
-const VOICE_SERVER_SCRIPT = join(__dirname, '../../python/voice_server.py')
+const voiceServerScript = (): string => join(pythonScriptsDir(), 'voice_server.py')
 
 /**
  * Sidecar Python persistant : écoute continue du micro, détection de double
@@ -41,7 +42,7 @@ export class VoiceClient extends EventEmitter {
     this.ready = new Promise((resolveReady, rejectReady) => {
       const args = [
         '-u',
-        VOICE_SERVER_SCRIPT,
+        voiceServerScript(),
         '--stt-model',
         config.stt.model,
         '--stt-device',
@@ -148,7 +149,7 @@ export class VoiceClient extends EventEmitter {
  */
 export function listAudioInputDevices(): Promise<AudioInputDevice[]> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(config.python.bin, ['-u', VOICE_SERVER_SCRIPT, '--list-devices'], {
+    const proc = spawn(config.python.bin, ['-u', voiceServerScript(), '--list-devices'], {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
     })

@@ -3,6 +3,8 @@ out/
 dist/
 dist-electron/
 release/
+# Icône de l'app, régénérée par scripts/generate-icon.mjs à chaque `npm run dist`
+build/
 *.log
 .DS_Store
 .env

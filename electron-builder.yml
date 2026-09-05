@@ -1,0 +1,48 @@
+# Empaquetage de Jaris en un installeur Windows unique (étape 16 du roadmap).
+#
+# Objectif de l'étape : un seul `.exe` téléchargé et double-cliqué, comme n'importe quel vrai logiciel
+# Windows — aucune commande à taper, aucun terminal à ouvrir, aucun fichier de configuration à remplir.
+# Tout ce qui est encore trop gros pour tenir dans l'installeur (Python et ses dépendances, Ollama, les
+# modèles) est installé par l'application elle-même au premier lancement, jamais par l'utilisateur.
+appId: com.jaris.assistant
+productName: Jaris
+copyright: Jaris
+
+directories:
+  output: release
+  buildResources: build
+
+# Le code compilé de l'app (out/) et le manifeste dont Electron a besoin pour trouver son point d'entrée.
+# Le reste du dépôt (sources TypeScript, scripts de dev, README...) n'a rien à faire dans l'installeur.
+files:
+  - out/**
+  - package.json
+
+# Les sidecars Python sont lancés comme de vrais process externes (`python voice_server.py`) : ils doivent
+# rester de VRAIS fichiers sur le disque, à côté de l'application, et surtout pas être empaquetés dans
+# l'archive `app.asar` — un fichier à l'intérieur d'un asar n'existe pas pour un programme extérieur à
+# Electron (voir electron/paths.ts, qui résout ce dossier selon dev/production).
+extraResources:
+  - from: python
+    to: python
+    filter:
+      - '**/*.py'
+      - requirements.txt
+
+win:
+  target: nsis
+  icon: build/icon.ico
+
+nsis:
+  # Un seul clic, sans assistant : pas d'écran "Suivant / Suivant / Terminer", l'installation démarre au
+  # double-clic et l'application se lance à la fin. C'est exactement ce que demande l'étape 16.
+  oneClick: true
+  # Installation pour l'utilisateur courant (%LOCALAPPDATA%\Programs) plutôt que pour toute la machine :
+  # évite l'invite d'élévation Windows (UAC), qui serait une action de plus demandée à l'utilisateur.
+  perMachine: false
+  allowToChangeInstallationDirectory: false
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  runAfterFinish: true
+  shortcutName: Jaris
+  artifactName: Jaris-Setup-${version}.exe

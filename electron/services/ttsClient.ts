@@ -4,6 +4,7 @@ import { createInterface } from 'readline'
 import { join } from 'path'
 import type { Readable, Writable } from 'stream'
 import { config } from '../config'
+import { pythonScriptsDir } from '../paths'
 
 type TtsServerProcess = ChildProcessByStdio<Writable, Readable, Readable>
 
@@ -36,7 +37,7 @@ class TtsClient extends EventEmitter {
         config.python.bin,
         [
           '-u',
-          join(__dirname, '../../python/tts_server.py'),
+          join(pythonScriptsDir(), 'tts_server.py'),
           '--voice',
           config.tts.voice,
           '--language',

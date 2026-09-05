@@ -10,24 +10,19 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "dist": "node scripts/generate-icon.mjs && electron-vite build && electron-builder --win",
     "preview": "electron-vite preview",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "benchmark:models": "node scripts/benchmark-models.mjs"
   },
+  "//dependencies": "Uniquement ce que le process principal charge VRAIMENT à l'exécution : electron-builder embarque tout ce qui est listé ici dans l'application installée. Les librairies du renderer (react, three...) sont en devDependencies parce que Vite les compile dans out/renderer : les garder ici les ferait embarquer une deuxième fois, en pure duplication (~55 Mo).",
   "dependencies": {
-    "3d-force-graph": "^1.80.0",
     "dotenv": "^17.4.2",
-    "framer-motion": "^11.11.17",
     "google-auth-library": "^11.0.2",
     "nodemailer": "^9.0.5",
-    "playwright-core": "^1.62.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "three": "^0.185.1",
-    "three-spritetext": "^1.10.0",
-    "zustand": "^4.5.5"
+    "playwright-core": "^1.62.1"
   },
   "devDependencies": {
     "@types/nodemailer": "^8.0.1",
@@ -35,9 +30,16 @@
     "@types/react-dom": "^18.3.1",
     "@types/three": "^0.185.1",
     "@vitejs/plugin-react": "^4.7.0",
+    "3d-force-graph": "^1.80.0",
     "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.185.1",
+    "three-spritetext": "^1.10.0",
     "typescript": "^5.6.3",
-    "vite": "^7.0.0"
+    "vite": "^7.0.0",
+    "zustand": "^4.5.5"
   }
 }
