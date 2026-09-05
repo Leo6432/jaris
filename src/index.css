@@ -757,22 +757,6 @@ body.body--scan {
   font-size: 0.85rem;
 }
 
-.options-menu__smtp-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-width: 360px;
-  margin: 4px 0 10px;
-}
-
-.options-menu__checkbox {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.8rem;
-  color: #7fa3c9;
-}
-
 .options-menu__mic-test {
   display: flex;
   flex-direction: column;

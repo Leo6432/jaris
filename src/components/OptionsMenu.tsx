@@ -7,23 +7,9 @@ import type {
   HardwareTierPreview as HardwareTierPreviewData,
   ModelsLocationStatus,
   OllamaVersionStatus,
-  Profile,
-  SmtpStatus
+  Profile
 } from '../../shared/ipc'
 import HardwareTierPreview from './HardwareTierPreview'
-
-/**
- * Préréglages serveur/port pour les fournisseurs mail les plus courants : l'utilisateur choisit juste son
- * fournisseur, jamais un port ou un "SSL/STARTTLS" à connaître. "autre" laisse les champs modifiables pour
- * un fournisseur non listé — pas la peine de couvrir tous les fournisseurs existants, un champ manuel
- * suffit pour les cas restants.
- */
-const SMTP_PRESETS: Record<string, { label: string; host: string; port: number; secure: boolean; helpUrl: string }> = {
-  gmail: { label: 'Gmail', host: 'smtp.gmail.com', port: 587, secure: false, helpUrl: 'https://myaccount.google.com/apppasswords' },
-  outlook: { label: 'Outlook / Hotmail', host: 'smtp.office365.com', port: 587, secure: false, helpUrl: 'https://account.live.com/proofs/AppPassword' },
-  yahoo: { label: 'Yahoo Mail', host: 'smtp.mail.yahoo.com', port: 587, secure: false, helpUrl: 'https://login.yahoo.com/myaccount/security/generate-app-password' },
-  autre: { label: 'Autre (configuration manuelle)', host: '', port: 587, secure: false, helpUrl: '' }
-}
 
 interface VoiceOption {
   id: string
@@ -96,16 +82,6 @@ export default function OptionsMenu(): JSX.Element {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('connexions')
   const [status, setStatus] = useState<GmailStatus | null>(null)
-  const [smtpStatus, setSmtpStatus] = useState<SmtpStatus | null>(null)
-  const [smtpFormOpen, setSmtpFormOpen] = useState(false)
-  const [smtpPreset, setSmtpPreset] = useState<keyof typeof SMTP_PRESETS>('gmail')
-  const [smtpUser, setSmtpUser] = useState('')
-  const [smtpPass, setSmtpPass] = useState('')
-  const [smtpHost, setSmtpHost] = useState(SMTP_PRESETS.gmail.host)
-  const [smtpPort, setSmtpPort] = useState(SMTP_PRESETS.gmail.port)
-  const [smtpSecure, setSmtpSecure] = useState(SMTP_PRESETS.gmail.secure)
-  const [connectingSmtp, setConnectingSmtp] = useState(false)
-  const [smtpMessage, setSmtpMessage] = useState<string | null>(null)
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -139,7 +115,6 @@ export default function OptionsMenu(): JSX.Element {
 
   useEffect(() => {
     window.jaris.getGmailStatus().then(setStatus)
-    window.jaris.getSmtpStatus().then(setSmtpStatus)
     window.jaris.getProfile().then((p) => {
       setProfile(p)
       const savedIndex = TTS_VOICES.findIndex((v) => v.id === p?.ttsVoice)
@@ -288,35 +263,6 @@ export default function OptionsMenu(): JSX.Element {
   const handleDisconnect = (): void => {
     setError(null)
     void window.jaris.disconnectGmail().then(() => setStatus({ connected: false, email: null }))
-  }
-
-  const choosePreset = (key: keyof typeof SMTP_PRESETS): void => {
-    setSmtpPreset(key)
-    setSmtpHost(SMTP_PRESETS[key].host)
-    setSmtpPort(SMTP_PRESETS[key].port)
-    setSmtpSecure(SMTP_PRESETS[key].secure)
-  }
-
-  const handleConnectSmtp = (): void => {
-    setSmtpMessage(null)
-    setConnectingSmtp(true)
-    window.jaris
-      .saveSmtpConfig({ host: smtpHost, port: smtpPort, secure: smtpSecure, user: smtpUser, pass: smtpPass })
-      .then(({ success, message }) => {
-        setSmtpMessage(message)
-        if (success) {
-          setSmtpFormOpen(false)
-          setSmtpPass('')
-          return window.jaris.getSmtpStatus().then(setSmtpStatus)
-        }
-      })
-      .catch((err: unknown) => setSmtpMessage(err instanceof Error ? err.message : String(err)))
-      .finally(() => setConnectingSmtp(false))
-  }
-
-  const handleDisconnectSmtp = (): void => {
-    setSmtpMessage(null)
-    void window.jaris.disconnectSmtp().then(() => setSmtpStatus({ connected: false, email: null }))
   }
 
   /**
@@ -550,77 +496,6 @@ export default function OptionsMenu(): JSX.Element {
               <button className="options-menu__action" onClick={handleConnect} disabled={connecting}>
                 {connecting ? 'Connexion...' : 'Connecter Gmail'}
               </button>
-            )}
-
-            {smtpStatus?.connected ? (
-              <>
-                <div className="options-menu__account">{smtpStatus.email} (SMTP)</div>
-                <button className="options-menu__action" onClick={handleDisconnectSmtp}>
-                  Déconnecter
-                </button>
-              </>
-            ) : smtpFormOpen ? (
-              <div className="options-menu__smtp-form">
-                <label className="options-menu__field">
-                  Fournisseur
-                  <select value={smtpPreset} onChange={(e) => choosePreset(e.target.value as keyof typeof SMTP_PRESETS)}>
-                    {Object.entries(SMTP_PRESETS).map(([key, preset]) => (
-                      <option key={key} value={key}>
-                        {preset.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {SMTP_PRESETS[smtpPreset].helpUrl && (
-                  <p className="options-menu__model-overview-hint">
-                    Génère un mot de passe d'application sur{' '}
-                    <a href={SMTP_PRESETS[smtpPreset].helpUrl} target="_blank" rel="noreferrer">
-                      {new URL(SMTP_PRESETS[smtpPreset].helpUrl).hostname}
-                    </a>{' '}
-                    (demande la validation en 2 étapes activée sur le compte) — jamais ton mot de passe habituel.
-                  </p>
-                )}
-                <label className="options-menu__field">
-                  Adresse mail
-                  <input value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} placeholder="toi@exemple.com" />
-                </label>
-                <label className="options-menu__field">
-                  Mot de passe d'application
-                  <input type="password" value={smtpPass} onChange={(e) => setSmtpPass(e.target.value)} />
-                </label>
-                {smtpPreset === 'autre' && (
-                  <>
-                    <label className="options-menu__field">
-                      Serveur SMTP
-                      <input value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="smtp.exemple.com" />
-                    </label>
-                    <label className="options-menu__field">
-                      Port
-                      <input type="number" value={smtpPort} onChange={(e) => setSmtpPort(Number(e.target.value))} />
-                    </label>
-                    <label className="options-menu__checkbox">
-                      <input type="checkbox" checked={smtpSecure} onChange={(e) => setSmtpSecure(e.target.checked)} />
-                      Connexion SSL directe (port 465 en général) plutôt que STARTTLS
-                    </label>
-                  </>
-                )}
-                <div className="options-menu__ollama-update-actions">
-                  <button onClick={handleConnectSmtp} disabled={connectingSmtp || !smtpUser || !smtpPass || !smtpHost}>
-                    {connectingSmtp ? 'Vérification...' : 'Connecter'}
-                  </button>
-                  <button onClick={() => setSmtpFormOpen(false)}>Annuler</button>
-                </div>
-              </div>
-            ) : (
-              <button className="options-menu__action" onClick={() => setSmtpFormOpen(true)}>
-                Connecter un autre compte mail
-              </button>
-            )}
-            {smtpMessage && <p className="options-menu__ollama-update-note">{smtpMessage}</p>}
-            {status?.connected && smtpStatus?.connected && (
-              <p className="options-menu__model-overview-hint">
-                Les deux sont connectés : le compte Gmail est utilisé en priorité.
-              </p>
             )}
 
             <div className="options-menu__section-title">Navigateur</div>

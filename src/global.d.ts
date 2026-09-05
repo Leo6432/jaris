@@ -18,8 +18,6 @@ import type {
   Profile,
   RuntimeSetupProgress,
   RuntimeSetupStatus,
-  SmtpConfig,
-  SmtpStatus,
   VoiceReplyPayload,
   VoiceSetupStatusPayload
 } from '../shared/ipc'
@@ -58,9 +56,6 @@ declare global {
       importChromeProfile: () => Promise<{ success: boolean; message: string }>
       getAppVersionStatus: () => Promise<AppVersionStatus | null>
       updateApp: () => Promise<{ success: boolean; message: string }>
-      getSmtpStatus: () => Promise<SmtpStatus>
-      saveSmtpConfig: (config: SmtpConfig) => Promise<{ success: boolean; message: string }>
-      disconnectSmtp: () => Promise<void>
       getModelsLocationStatus: () => Promise<ModelsLocationStatus>
       chooseModelsLocation: () => Promise<{ success: boolean; message: string }>
       onModelsLocationProgress: (cb: (message: string) => void) => () => void

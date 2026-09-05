@@ -19,8 +19,6 @@ import {
   type OllamaVersionStatus,
   type Profile,
   type RuntimeSetupProgress,
-  type SmtpConfig,
-  type SmtpStatus,
   type RuntimeSetupStatus,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload
@@ -62,9 +60,6 @@ const api = {
   importChromeProfile: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.importChromeProfile),
   getAppVersionStatus: (): Promise<AppVersionStatus | null> => ipcRenderer.invoke(IPC_CHANNELS.getAppVersionStatus),
   updateApp: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.updateApp),
-  getSmtpStatus: (): Promise<SmtpStatus> => ipcRenderer.invoke(IPC_CHANNELS.getSmtpStatus),
-  saveSmtpConfig: (smtpConfig: SmtpConfig): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.saveSmtpConfig, smtpConfig),
-  disconnectSmtp: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.disconnectSmtp),
   getModelsLocationStatus: (): Promise<ModelsLocationStatus> => ipcRenderer.invoke(IPC_CHANNELS.getModelsLocationStatus),
   chooseModelsLocation: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.chooseModelsLocation),
   onModelsLocationProgress: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.modelsLocationProgress, cb),

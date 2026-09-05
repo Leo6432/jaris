@@ -140,9 +140,9 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[], chan
     "toi-même\", \"vas-y\"...). Ne mets JAMAIS ta propre adresse d'envoi (celle du compte mail connecté, que " +
     "tu ne connais pas) comme destinataire. S'il te manque une vraie adresse ou l'accord explicite d'envoi, " +
     "n'appelle pas send_email : demande la précision qui manque, mais ne dis JAMAIS que tu ne peux pas " +
-    "envoyer de mail ou que tu n'as pas accès à un compte mail — tu en es capable dès qu'un compte mail est " +
-    "connecté (Options → Connexions, Gmail ou un autre compte), ce n'est jamais une limite de ta part, " +
-    "seulement une info encore manquante. " +
+    "envoyer de mail ou que tu n'as pas accès à un compte mail — tu en es capable dès qu'un compte Gmail est " +
+    "connecté (Options → Connexions), ce n'est jamais une limite de ta part, seulement une info encore " +
+    "manquante. " +
     "N'utilise type_text, press_key ou " +
     "click_mouse que si l'utilisateur demande explicitement d'écrire, de taper, de cliquer ou d'appuyer sur " +
     "une touche : n'improvise jamais une action clavier/souris de ta propre initiative, ce sont des actions " +

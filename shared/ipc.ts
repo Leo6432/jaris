@@ -101,27 +101,6 @@ export interface GmailStatus {
 }
 
 /**
- * Configuration SMTP saisie par l'utilisateur dans Options → Connexions (voir smtpStore.ts) : marche avec
- * n'importe quel compte mail via un mot de passe d'application, sans jamais créer de projet Google Cloud.
- * `pass` est envoyé une seule fois (à la connexion) et jamais relu ensuite — voir SmtpStatus, qui ne porte
- * que ce qui peut sans risque revenir au renderer.
- */
-export interface SmtpConfig {
-  host: string
-  port: number
-  secure: boolean
-  user: string
-  pass: string
-  from?: string
-}
-
-/** État de la connexion SMTP, pour le menu Options — jamais le mot de passe, voir SmtpConfig. */
-export interface SmtpStatus {
-  connected: boolean
-  email: string | null
-}
-
-/**
  * Emplacement réel actuel des trois briques lourdes de Jaris (modèles Ollama, environnement Python, cache
  * de reconnaissance/synthèse vocale), lu en direct sur le disque (voir modelsLocation.ts) — jamais une
  * simple valeur de profil qui pourrait dériver de la réalité si l'utilisateur ou un autre outil touche à
@@ -379,12 +358,6 @@ export const IPC_CHANNELS = {
   getAppVersionStatus: 'jaris:get-app-version-status',
   /** renderer -> main : télécharge et lance l'installeur de la dernière version, puis ferme Jaris. */
   updateApp: 'jaris:update-app',
-  /** renderer <-> main : état de la connexion SMTP (voir smtpStore.ts), pour Options → Connexions. */
-  getSmtpStatus: 'jaris:get-smtp-status',
-  /** renderer <-> main : enregistre (après vérification réelle de la connexion) une configuration SMTP. */
-  saveSmtpConfig: 'jaris:save-smtp-config',
-  /** renderer -> main : déconnecte le compte SMTP. */
-  disconnectSmtp: 'jaris:disconnect-smtp',
   /** renderer <-> main : emplacement réel actuel des modèles/environnement (voir modelsLocation.ts). */
   getModelsLocationStatus: 'jaris:get-models-location-status',
   /** renderer -> main : ouvre un sélecteur de dossier puis déplace tout dedans (résout une fois terminé). */

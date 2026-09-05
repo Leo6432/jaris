@@ -29,7 +29,6 @@ import {
 } from './services/conversationStore'
 import { getProfile, markGmailOnboardingDone, saveProfile } from './services/profileStore'
 import { connectGmail, disconnectGmail, getGmailStatus } from './services/googleAuth'
-import { clearSmtpConfig, getSmtpStatus, saveSmtpConfig } from './services/smtpStore'
 import { checkAppFreshness, getAppVersionStatus, updateApp } from './services/appUpdater'
 import {
   IPC_CHANNELS,
@@ -41,7 +40,6 @@ import {
   type JarisEmotion,
   type MemoryGraph,
   type Profile,
-  type SmtpConfig,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload
 } from '../shared/ipc'
@@ -311,9 +309,6 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.importChromeProfile, () => importRealChromeProfile())
   ipcMain.handle(IPC_CHANNELS.getAppVersionStatus, () => getAppVersionStatus())
   ipcMain.handle(IPC_CHANNELS.updateApp, () => updateApp())
-  ipcMain.handle(IPC_CHANNELS.getSmtpStatus, () => getSmtpStatus())
-  ipcMain.handle(IPC_CHANNELS.saveSmtpConfig, (_event, smtpConfig: SmtpConfig) => saveSmtpConfig(smtpConfig))
-  ipcMain.handle(IPC_CHANNELS.disconnectSmtp, () => clearSmtpConfig())
   ipcMain.handle(IPC_CHANNELS.getModelsLocationStatus, () => getModelsLocationStatus())
   ipcMain.handle(IPC_CHANNELS.chooseModelsLocation, async () => {
     const dialogOptions = {
