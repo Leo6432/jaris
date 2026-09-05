@@ -70,25 +70,38 @@ function isNewer(a: [number, number, number], b: [number, number, number]): bool
  * Compare la version installée (`app.getVersion()`, lue par Electron dans `package.json` au moment du
  * build — pas modifiable à l'exécution) à la dernière Release GitHub stable. Met le résultat en cache pour
  * que l'UI (App.tsx, OptionsMenu.tsx) le lise à tout moment sans refaire l'appel réseau — un seul check par
- * lancement de Jaris suffit.
+ * lancement de Jaris suffit. Ignore silencieusement toute erreur (pas de réseau, GitHub inaccessible...) :
+ * ce check en tâche de fond au démarrage ne doit jamais empêcher Jaris de démarrer. Pour un vrai diagnostic
+ * (bouton "Rechercher une mise à jour" dans Options), voir checkForUpdate ci-dessous, qui elle remonte
+ * l'erreur au lieu de l'avaler.
  */
 export function checkAppFreshness(): Promise<void> {
-  freshnessCheck = runFreshnessCheck()
+  freshnessCheck = checkForUpdate().then(() => undefined)
   return freshnessCheck
 }
 
-async function runFreshnessCheck(): Promise<void> {
+/**
+ * Vérifie pour de vrai (jamais depuis le cache) et renvoie l'erreur telle quelle en cas d'échec, contrairement
+ * à checkAppFreshness ci-dessus qui l'avale silencieusement : déclenchée par un clic explicite sur "Rechercher
+ * une mise à jour" (OptionsMenu.tsx), l'utilisateur doit voir la vraie raison d'un échec (pare-feu, réseau
+ * d'entreprise, GitHub injoignable...) plutôt qu'un silence qui ressemble à un bug côté Jaris.
+ */
+export async function checkForUpdate(): Promise<{ status: AppVersionStatus | null; error: string | null }> {
   try {
     const response = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
       headers: { Accept: 'application/vnd.github+json' },
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(8000)
     })
     // 404 tant qu'aucune Release stable (tag v*) n'a jamais été publiée : pas une erreur, juste "rien à
-    // comparer" — jamais affiché comme "à jour" par défaut dans ce cas, voir getAppVersionStatus (null).
-    if (!response.ok) return
+    // comparer" — jamais affiché comme "à jour" par défaut dans ce cas.
+    if (!response.ok) {
+      return response.status === 404
+        ? { status: null, error: null }
+        : { status: null, error: `GitHub a répondu HTTP ${response.status}.` }
+    }
     const release = (await response.json()) as { tag_name?: string; assets?: { name: string; browser_download_url: string }[] }
     const latestParts = release.tag_name ? parseSemver(release.tag_name) : null
-    if (!latestParts) return
+    if (!latestParts) return { status: null, error: 'Réponse GitHub inattendue : aucune version reconnue.' }
 
     const currentVersion = app.getVersion()
     const currentParts = parseSemver(currentVersion) ?? [0, 0, 0]
@@ -100,8 +113,9 @@ async function runFreshnessCheck(): Promise<void> {
       latest: latestParts.join('.'),
       outdated: isNewer(latestParts, currentParts)
     }
-  } catch {
-    // Best-effort (pas de réseau, GitHub inaccessible...) : ne doit jamais empêcher Jaris de démarrer.
+    return { status: cachedStatus, error: null }
+  } catch (err) {
+    return { status: null, error: err instanceof Error ? err.message : String(err) }
   }
 }
 

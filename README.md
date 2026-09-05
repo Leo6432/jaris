@@ -913,6 +913,16 @@ stables déjà publiées avec leurs notes (`getReleaseHistory`, `GET
 /releases`) — de quoi voir d'un coup d'œil sa propre version et tout
 l'historique, sans aller chercher sur GitHub.
 
+Un bouton **"Rechercher une mise à jour"** (façon Windows Update) permet en
+plus de forcer une vraie vérification à la demande, sans attendre le
+prochain lancement de Jaris — utile si le check silencieux du démarrage
+n'a rien trouvé (ex: le réseau n'était pas encore prêt) ou pour vérifier
+tout de suite après une publication. Contrairement au check automatique
+(`checkAppFreshness`, qui avale toute erreur pour ne jamais bloquer le
+démarrage), celui-ci (`checkForUpdate`) affiche le résultat exact : version
+trouvée, "déjà à jour", ou l'erreur réseau telle quelle si la vérification a
+échoué.
+
 **Publier une nouvelle version** : entièrement automatique, plus aucune
 commande à taper par personne (ni un utilisateur, ni le développeur). Il
 suffit de bumper le champ `version` de `package.json` et de pousser le commit

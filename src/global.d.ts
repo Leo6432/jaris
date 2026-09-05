@@ -19,6 +19,7 @@ import type {
   ReleaseHistoryEntry,
   RuntimeSetupProgress,
   RuntimeSetupStatus,
+  UpdateCheckResult,
   VoiceReplyPayload,
   VoiceSetupStatusPayload
 } from '../shared/ipc'
@@ -59,6 +60,7 @@ declare global {
       updateApp: () => Promise<{ success: boolean; message: string }>
       getAppVersion: () => Promise<string>
       getReleaseHistory: () => Promise<ReleaseHistoryEntry[]>
+      checkForUpdate: () => Promise<UpdateCheckResult>
       getModelsLocationStatus: () => Promise<ModelsLocationStatus>
       chooseModelsLocation: () => Promise<{ success: boolean; message: string }>
       onModelsLocationProgress: (cb: (message: string) => void) => () => void

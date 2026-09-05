@@ -252,6 +252,12 @@ export interface ReleaseHistoryEntry {
   notes: string
 }
 
+/** Résultat d'une recherche manuelle de mise à jour (bouton "Rechercher une mise à jour", Options → Modèles). */
+export interface UpdateCheckResult {
+  status: AppVersionStatus | null
+  error: string | null
+}
+
 /** Un message du mode Chat (étape 30) — même Jaris et mêmes outils que la voix, mais en écrit. */
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -367,6 +373,9 @@ export const IPC_CHANNELS = {
   updateApp: 'jaris:update-app',
   /** renderer <-> main : version réellement installée (app.getVersion()), jamais bloquée par le réseau. */
   getAppVersion: 'jaris:get-app-version',
+  /** renderer -> main : recherche une mise à jour pour de vrai (jamais depuis le cache), erreur remontée
+   * telle quelle en cas d'échec — bouton "Rechercher une mise à jour" (Options → Modèles). */
+  checkForUpdate: 'jaris:check-for-update',
   /** renderer <-> main : journal des mises à jour (toutes les Releases GitHub stables), pour Options → Modèles. */
   getReleaseHistory: 'jaris:get-release-history',
   /** renderer <-> main : emplacement réel actuel des modèles/environnement (voir modelsLocation.ts). */

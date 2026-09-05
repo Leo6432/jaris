@@ -21,6 +21,7 @@ import {
   type ReleaseHistoryEntry,
   type RuntimeSetupProgress,
   type RuntimeSetupStatus,
+  type UpdateCheckResult,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload
 } from '../shared/ipc'
@@ -63,6 +64,7 @@ const api = {
   updateApp: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.updateApp),
   getAppVersion: (): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.getAppVersion),
   getReleaseHistory: (): Promise<ReleaseHistoryEntry[]> => ipcRenderer.invoke(IPC_CHANNELS.getReleaseHistory),
+  checkForUpdate: (): Promise<UpdateCheckResult> => ipcRenderer.invoke(IPC_CHANNELS.checkForUpdate),
   getModelsLocationStatus: (): Promise<ModelsLocationStatus> => ipcRenderer.invoke(IPC_CHANNELS.getModelsLocationStatus),
   chooseModelsLocation: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.chooseModelsLocation),
   onModelsLocationProgress: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.modelsLocationProgress, cb),

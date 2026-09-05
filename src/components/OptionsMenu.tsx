@@ -120,6 +120,8 @@ export default function OptionsMenu(): JSX.Element {
   const [releaseHistory, setReleaseHistory] = useState<ReleaseHistoryEntry[] | null>(null)
   const [updatingApp, setUpdatingApp] = useState(false)
   const [appUpdateMessage, setAppUpdateMessage] = useState<string | null>(null)
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [updateCheckMessage, setUpdateCheckMessage] = useState<string | null>(null)
   const [modelsLocation, setModelsLocation] = useState<ModelsLocationStatus | null>(null)
   const [movingModelsLocation, setMovingModelsLocation] = useState(false)
   const [modelsLocationMessage, setModelsLocationMessage] = useState<string | null>(null)
@@ -307,6 +309,39 @@ export default function OptionsMenu(): JSX.Element {
       .then(({ message }) => setAppUpdateMessage(message))
       .catch((err: unknown) => setAppUpdateMessage(err instanceof Error ? err.message : String(err)))
       .finally(() => setUpdatingApp(false))
+  }
+
+  /**
+   * Bouton "Rechercher une mise à jour" (façon Windows Update) : contrairement au check silencieux au
+   * démarrage (checkAppFreshness), celui-ci force une vraie requête réseau et affiche le résultat explicite
+   * — trouvé, à jour, ou l'erreur telle quelle (utile pour diagnostiquer un réseau qui bloque l'accès à
+   * GitHub, cas où le bandeau automatique ne peut jamais apparaître). Met aussi à jour appVersionStatus pour
+   * que le bandeau "Mettre à jour" ci-dessus apparaisse tout de suite si une nouvelle version est trouvée,
+   * sans attendre le prochain lancement de Jaris.
+   */
+  const handleCheckForUpdate = (): void => {
+    setCheckingUpdate(true)
+    setUpdateCheckMessage(null)
+    window.jaris
+      .checkForUpdate()
+      .then(({ status, error }) => {
+        if (error) {
+          setUpdateCheckMessage(`Vérification impossible : ${error}`)
+          return
+        }
+        if (status) {
+          setAppVersionStatus(status)
+          setUpdateCheckMessage(
+            status.outdated
+              ? `Nouvelle version disponible : ${status.latest} (tu as ${status.current}).`
+              : `Jaris est à jour (${status.current}).`
+          )
+        } else {
+          setUpdateCheckMessage("Aucune version publiée n'a été trouvée sur GitHub.")
+        }
+      })
+      .catch((err: unknown) => setUpdateCheckMessage(err instanceof Error ? err.message : String(err)))
+      .finally(() => setCheckingUpdate(false))
   }
 
   const handleUpdateOllama = (): void => {
@@ -645,6 +680,10 @@ export default function OptionsMenu(): JSX.Element {
             <p className="options-menu__model-overview-hint">
               Version installée : <strong>{installedVersion ?? appVersionStatus?.current ?? '...'}</strong>
             </p>
+            <button className="options-menu__action" onClick={handleCheckForUpdate} disabled={checkingUpdate}>
+              {checkingUpdate ? 'Recherche en cours…' : 'Rechercher une mise à jour'}
+            </button>
+            {updateCheckMessage && <p className="options-menu__ollama-update-note">{updateCheckMessage}</p>}
             {releaseHistory === null ? (
               <p className="capacity-scan__status">Chargement...</p>
             ) : releaseHistory.length === 0 ? (
