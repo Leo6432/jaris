@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
   AppVersionStatus,
   AudioInputDevice,
-  ConfirmableTool,
   ConversationEntry,
   GmailStatus,
   HardwareTierPreview as HardwareTierPreviewData,
@@ -53,7 +52,7 @@ const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
  */
 const MIC_TEST_BAR_COUNT = 42
 
-type Tab = 'connexions' | 'voix' | 'audio' | 'modeles' | 'securite' | 'historique'
+type Tab = 'connexions' | 'voix' | 'audio' | 'modeles' | 'stockage' | 'historique'
 
 /**
  * Chromium ajoute des pseudo-périphériques "default"/"communications" en plus des vrais haut-parleurs
@@ -115,8 +114,6 @@ export default function OptionsMenu(): JSX.Element {
   const [history, setHistory] = useState<ConversationEntry[] | null>(null)
   const [clearingHistory, setClearingHistory] = useState(false)
   const [hardwareTiers, setHardwareTiers] = useState<HardwareTierPreviewData[] | null>(null)
-  const [confirmableTools, setConfirmableTools] = useState<ConfirmableTool[] | null>(null)
-  const [savingAlwaysAllowed, setSavingAlwaysAllowed] = useState(false)
   const [ollamaVersionStatus, setOllamaVersionStatus] = useState<OllamaVersionStatus | null>(null)
   const [updatingOllama, setUpdatingOllama] = useState(false)
   const [ollamaUpdateMessage, setOllamaUpdateMessage] = useState<string | null>(null)
@@ -167,15 +164,6 @@ export default function OptionsMenu(): JSX.Element {
     }
   }, [tab, hardwareTiers])
 
-  // Liste fixe côté main (TOOL_RISK dans toolSecurity.ts), pas la peine de la relire à chaque ouverture
-  // de l'onglet Sécurité — contrairement à hardwareTiers ci-dessus, rien ne peut changer entre deux
-  // ouvertures du même Jaris déjà lancé.
-  useEffect(() => {
-    if (tab === 'securite' && confirmableTools === null) {
-      void window.jaris.getConfirmableTools().then(setConfirmableTools)
-    }
-  }, [tab, confirmableTools])
-
   // Contrairement à hardwareTiers ci-dessus (coûteux, relit un fichier), une simple lecture d'une valeur
   // déjà en cache côté main (voir getOllamaVersionStatus) : pas besoin de garde "déjà chargé", on relit à
   // chaque ouverture de l'onglet — utile si le check réseau en tâche de fond au lancement de Jaris n'avait
@@ -184,6 +172,8 @@ export default function OptionsMenu(): JSX.Element {
     if (tab === 'modeles') {
       void window.jaris.getOllamaVersionStatus().then(setOllamaVersionStatus)
       void window.jaris.getAppVersionStatus().then(setAppVersionStatus)
+    }
+    if (tab === 'stockage') {
       void window.jaris.getModelsLocationStatus().then(setModelsLocation)
     }
   }, [tab])
@@ -266,28 +256,6 @@ export default function OptionsMenu(): JSX.Element {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setRetestingConfig(false)
-    }
-  }
-
-  /**
-   * Coche/décoche "toujours autoriser" pour un outil N2 (send_email...) : dispense de la confirmation
-   * orale/écrite avant exécution (voir needsConfirmation, toolSecurity.ts). Ne concerne jamais les outils
-   * N3 (jamais proposés ici, voir getConfirmableTools côté main) : toujours confirmés, quoi qu'il arrive.
-   */
-  const handleToggleAlwaysAllowed = async (toolName: string, allowed: boolean): Promise<void> => {
-    if (!profile) return
-    setError(null)
-    setSavingAlwaysAllowed(true)
-    const current = profile.alwaysAllowedTools ?? []
-    const next = allowed ? [...current, toolName] : current.filter((name) => name !== toolName)
-    const updated = { ...profile, alwaysAllowedTools: next }
-    setProfile(updated)
-    try {
-      await window.jaris.saveProfile(updated)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setSavingAlwaysAllowed(false)
     }
   }
 
@@ -535,10 +503,10 @@ export default function OptionsMenu(): JSX.Element {
             Modèles
           </button>
           <button
-            className={`options-menu__tab${tab === 'securite' ? ' options-menu__tab--active' : ''}`}
-            onClick={() => setTab('securite')}
+            className={`options-menu__tab${tab === 'stockage' ? ' options-menu__tab--active' : ''}`}
+            onClick={() => setTab('stockage')}
           >
-            Sécurité
+            Stockage
           </button>
           <button
             className={`options-menu__tab${tab === 'historique' ? ' options-menu__tab--active' : ''}`}
@@ -814,25 +782,6 @@ export default function OptionsMenu(): JSX.Element {
                 message alors que la mise à jour avait réellement marché. */}
             {!updatingOllama && ollamaUpdateMessage && <p className="options-menu__ollama-update-note">{ollamaUpdateMessage}</p>}
 
-            <div className="options-menu__section-title">Emplacement des modèles</div>
-            <p className="options-menu__model-overview-hint">
-              Les modèles Ollama, l'environnement Python (voix) et le cache de reconnaissance/synthèse
-              vocale peuvent peser plusieurs dizaines de Go au total. Choisis un dossier (par exemple sur un
-              autre disque) pour que tout y soit rassemblé et déplacé — Ollama et Python continuent de
-              fonctionner normalement, sans rien savoir du changement.
-            </p>
-            {modelsLocation && (
-              <ul className="options-menu__models-location-list">
-                <li>Modèles Ollama : {modelsLocation.ollamaModelsDir}</li>
-                <li>Environnement Python : {modelsLocation.pythonRuntimeDir}</li>
-                <li>Cache vocal : {modelsLocation.hfCacheDir}</li>
-              </ul>
-            )}
-            <button className="options-menu__action" onClick={handleChooseModelsLocation} disabled={movingModelsLocation}>
-              {movingModelsLocation ? 'Déplacement en cours…' : 'Choisir un dossier…'}
-            </button>
-            {modelsLocationMessage && <p className="options-menu__ollama-update-note">{modelsLocationMessage}</p>}
-
             <div className="options-menu__section-title">Les 3 paliers de configuration</div>
             {hardwareTiers === null ? (
               <p className="capacity-scan__status">Chargement...</p>
@@ -851,39 +800,26 @@ export default function OptionsMenu(): JSX.Element {
           </div>
         )}
 
-        {tab === 'securite' && (
+        {tab === 'stockage' && (
           <div className="options-menu__section">
-            <div className="options-menu__section-title">Confirmation avant action</div>
+            <div className="options-menu__section-title">Emplacement des modèles</div>
             <p className="options-menu__model-overview-hint">
-              Chaque outil de Jaris a un niveau de risque. Sûr (ouvrir une app, chercher sur le web,
-              regarder l'écran...) s'exécute directement. Sensible (envoyer un mail...) demande toujours une
-              confirmation orale ou écrite avant d'agir, sauf pour les outils cochés "toujours autoriser"
-              ci-dessous — révocable à tout moment. Critique (éteindre/redémarrer l'ordinateur) demande une
-              confirmation à chaque fois, sans exception : jamais de "toujours autoriser" possible pour ces
-              actions-là.
+              Les modèles Ollama, l'environnement Python (voix) et le cache de reconnaissance/synthèse
+              vocale peuvent peser plusieurs dizaines de Go au total. Choisis un dossier (par exemple sur un
+              autre disque) pour que tout y soit rassemblé et déplacé — Ollama et Python continuent de
+              fonctionner normalement, sans rien savoir du changement.
             </p>
-            {confirmableTools === null ? (
-              <p className="capacity-scan__status">Chargement...</p>
-            ) : (
-              <ul className="options-menu__security-list">
-                {confirmableTools.map((tool) => {
-                  const allowed = profile?.alwaysAllowedTools?.includes(tool.name) ?? false
-                  return (
-                    <li key={tool.name} className="options-menu__security-item">
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={allowed}
-                          disabled={savingAlwaysAllowed}
-                          onChange={(e) => void handleToggleAlwaysAllowed(tool.name, e.target.checked)}
-                        />
-                        {tool.label} — toujours autoriser sans confirmation
-                      </label>
-                    </li>
-                  )
-                })}
+            {modelsLocation && (
+              <ul className="options-menu__models-location-list">
+                <li>Modèles Ollama : {modelsLocation.ollamaModelsDir}</li>
+                <li>Environnement Python : {modelsLocation.pythonRuntimeDir}</li>
+                <li>Cache vocal : {modelsLocation.hfCacheDir}</li>
               </ul>
             )}
+            <button className="options-menu__action" onClick={handleChooseModelsLocation} disabled={movingModelsLocation}>
+              {movingModelsLocation ? 'Déplacement en cours…' : 'Choisir un dossier…'}
+            </button>
+            {modelsLocationMessage && <p className="options-menu__ollama-update-note">{modelsLocationMessage}</p>}
           </div>
         )}
 

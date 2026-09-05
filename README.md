@@ -81,10 +81,10 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
     à plusieurs dizaines d'étapes, à lever (ou remplacer par une vraie
     limite de temps/budget) une fois les outils au-dessus ajoutés
 
-  Chaque nouvel outil de cette liste devra passer par la sécurité graduée
-  N1/N2/N3 déjà en place (voir plus haut) : plus d'outils capables d'agir
-  sur de vrais fichiers/documents/commandes shell veut dire plus de risque,
-  pas seulement plus de capacités
+  Plus d'outils capables d'agir sur de vrais fichiers/documents/commandes
+  shell veut dire plus de risque, pas seulement plus de capacités — à garder
+  en tête même sans confirmation systématique par outil (retirée, voir
+  étape 31)
 - ⬜ Étape 41 — Génération d'images et de vidéos avec
   [Wan2GP](https://github.com/deepbeepmeep/Wan2GP) : équivalent local et
   open source d'Higgsfield, taillé pour les GPU grand public ("GPU Poor") —
@@ -784,10 +784,10 @@ Jaris n'utilise ces outils que si l'utilisateur le demande explicitement
 tape jamais de sa propre initiative, ce sont des actions réelles et
 irréversibles sur la machine.
 
-## Contrôle machine et confirmation avant action (étape 31)
+## Contrôle machine (étape 31)
 
-Trois nouveaux outils, pour élargir ce que Jaris peut réellement *faire* sur
-la machine, pas seulement répondre :
+Trois outils, pour élargir ce que Jaris peut réellement *faire* sur la
+machine, pas seulement répondre :
 - **`get_system_stats`** — donne l'état actuel de l'ordinateur en une phrase
   (CPU, RAM, VRAM libre, température GPU), en réutilisant directement
   `getSystemLoad`/`getLiveGpuStatus` (déjà utilisés en interne pour la
@@ -800,34 +800,14 @@ la machine, pas seulement répondre :
 - **`shutdown_pc`** — éteint ou redémarre la machine via `shutdown.exe`
   natif (aucune dépendance)
 
-**Sécurité graduée (N1/N2/N3).** Ajouter des actions qui touchent vraiment à
-la machine (au-delà d'ouvrir une appli ou taper du texte) rend une mauvaise
-transcription vocale dangereuse — comprendre "éteins" au lieu de "éteins
-pas". Chaque outil (`electron/services/toolSecurity.ts`) a maintenant un
-niveau de risque :
-- **N1 (sûr)** — exécuté directement, jamais de confirmation (tous les
-  outils existants : `open_app`, `look_at_screen`, `search_web`,
-  `remember`/`recall_memory`, `set_reminder`, `type_text`/`press_key`/
-  `click_mouse`, plus les deux nouveaux `get_system_stats`/`media_control`)
-- **N2 (sensible)** — `send_email` : Jaris répond "Tu confirmes : envoyer un
-  mail à ... avec pour objet ... ?" au lieu d'envoyer directement, et
-  attend un oui/non à la phrase suivante avant d'agir pour de vrai. Peut
-  être coché "toujours autoriser" dans Options → Sécurité, révocable à
-  tout moment
-- **N3 (critique)** — `shutdown_pc` : confirmation à CHAQUE fois, jamais de
-  "toujours autoriser" possible, même si l'outil apparaissait par erreur
-  dans la liste des autorisations permanentes
-
-Techniquement, une confirmation en attente vit dans une petite variable
-module-level côté main (`electron/services/toolSecurity.ts`, un seul Jaris
-pour un seul utilisateur, jamais deux confirmations en attente à la fois) :
-la phrase suivante, qu'elle arrive du pipeline vocal ou du mode Chat (même
-fonction `converse()` derrière les deux), est d'abord comparée à une petite
-liste de mots oui/non avant d'être traitée comme une nouvelle question.
-Sans réponse claire dans les 2 minutes, la confirmation expire et la phrase
-suivante est traitée normalement, pour ne jamais interpréter par erreur une
-phrase sans rapport comme une réponse à une action que l'utilisateur a en
-réalité oubliée.
+Tous les outils, y compris `send_email` et `shutdown_pc`, s'exécutent
+directement dès que le modèle les appelle, sans confirmation orale/écrite
+préalable — une confirmation systématique par outil a existé un temps
+(niveaux N1/N2/N3, onglet Options → Sécurité) mais a été retirée : jugée
+inutile pour un usage personnel. Le prompt système garde quand même une
+consigne de prudence ciblée pour les clics dans le navigateur (achat,
+paiement, suppression de compte — voir l'étape 34 plus bas), qui reste au
+niveau du modèle plutôt qu'un blocage mécanique.
 
 ## Installeur en un clic (étape 16)
 
@@ -1021,11 +1001,10 @@ système (`assistant.ts`) interdit explicitement de cliquer un bouton
 d'achat/paiement/validation de commande/suppression de compte sans que
 l'utilisateur ait demandé CETTE action précise dans sa phrase, même si elle
 semble être la suite logique de ce qui précède — Jaris décrit plutôt ce qu'il
-voit et demande confirmation avant. `click_browser_element`/
-`fill_browser_field` restent malgré tout N1 (pas de confirmation
-systématique, voir `toolSecurity.ts`) : le même précédent que
-`click_mouse`/`type_text` (étape 15), sans quoi la navigation assistée
-deviendrait impraticable (une confirmation avant chaque clic).
+voit et demande confirmation avant. C'est une consigne au niveau du prompt,
+pas un blocage mécanique (aucune confirmation systématique par outil,
+voir étape 31) : sans quoi la navigation assistée deviendrait impraticable
+(une confirmation avant chaque clic).
 
 ## Design de l'interface (étape 17)
 

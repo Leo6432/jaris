@@ -47,12 +47,6 @@ export interface Profile {
   audioInputDeviceIndex?: number | null
   /** deviceId MediaDevices (WebRTC) du haut-parleur choisi dans Options → Voix, vide = sortie par défaut du système. */
   audioOutputDeviceId?: string
-  /**
-   * Noms des outils N2 (voir toolSecurity.ts) dispensés de confirmation orale/écrite avant exécution,
-   * choisis dans Options → Sécurité, révocable à tout moment. Ne concerne jamais les outils N3 (toujours
-   * confirmés, quoi qu'il arrive) ni les N1 (jamais de confirmation de toute façon).
-   */
-  alwaysAllowedTools?: string[]
 }
 
 /**
@@ -73,12 +67,6 @@ export interface RuntimeSetupProgress {
   percent?: number
   /** true si CETTE étape a échoué : l'installation continue quand même avec les autres. */
   failed?: boolean
-}
-
-/** Un outil N2 proposable en "toujours autoriser" dans Options → Sécurité (voir getConfirmableTools, toolSecurity.ts). */
-export interface ConfirmableTool {
-  name: string
-  label: string
 }
 
 export interface MemoryGraphNode {
@@ -383,9 +371,6 @@ export const IPC_CHANNELS = {
   micTestLevel: 'jaris:mic-test-level',
   /** main -> renderer : verdict final d'un test micro (un signal a été détecté ou non). */
   micTestDone: 'jaris:mic-test-done',
-  /** renderer <-> main : liste les outils N2 (voir toolSecurity.ts) proposables en "toujours autoriser"
-   * dans Options → Sécurité, avec leur libellé lisible. */
-  getConfirmableTools: 'jaris:get-confirmable-tools',
   /** renderer -> main : copie le vrai profil Chrome de l'utilisateur (comptes, favoris, mots de passe) dans
    * la fenêtre Chrome dédiée à Jaris, à la place de son profil vide auto-créé (voir importRealChromeProfile,
    * browserControl.ts). */

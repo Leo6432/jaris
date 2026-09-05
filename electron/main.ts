@@ -10,7 +10,6 @@ import {
 } from './services/dependencyServices'
 import { getModelsLocationStatus, moveModelsLocation } from './services/modelsLocation'
 import { getAllCandidateModelIds, getModelOverview, previewHardwareTiers } from './services/hardwareScan'
-import { getConfirmableTools } from './services/toolSecurity'
 import { importRealChromeProfile } from './services/browserControl'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { runModelAnalysis, runQuickSetup } from './services/benchmarkRunner'
@@ -307,7 +306,6 @@ app.whenReady().then(async () => {
   ipcMain.on(IPC_CHANNELS.testMicrophone, () => pipeline?.testMic())
   ipcMain.on(IPC_CHANNELS.stopTestMicrophone, () => pipeline?.stopTestMic())
   ipcMain.handle(IPC_CHANNELS.getModelOverview, () => getModelOverview())
-  ipcMain.handle(IPC_CHANNELS.getConfirmableTools, () => getConfirmableTools())
   ipcMain.handle(IPC_CHANNELS.getOllamaVersionStatus, () => getOllamaVersionStatus())
   ipcMain.handle(IPC_CHANNELS.updateOllama, () => updateOllama())
   ipcMain.handle(IPC_CHANNELS.importChromeProfile, () => importRealChromeProfile())

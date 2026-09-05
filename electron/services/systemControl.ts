@@ -13,10 +13,10 @@ export async function getSystemStatsText(): Promise<string> {
 
 /**
  * Éteint ou redémarre la machine via la commande Windows native `shutdown.exe` (pas de dépendance
- * supplémentaire). Le délai de quelques secondes laisse le temps à la confirmation orale d'être dite en
- * entier avant que l'extinction réelle ne commence — ce n'est PAS une fenêtre d'annulation exposée à
- * l'utilisateur (voir toolSecurity.ts : la confirmation a déjà eu lieu avant d'appeler cette fonction),
- * juste le même principe que SHUTDOWN_DELAY_MS dans voicePipeline.ts pour l'arrêt de Jaris lui-même.
+ * supplémentaire). Le délai de quelques secondes laisse le temps à la réponse orale de Jaris d'être dite en
+ * entier avant que l'extinction réelle ne commence — ce n'est PAS une fenêtre d'annulation, juste le même
+ * principe que SHUTDOWN_DELAY_MS dans voicePipeline.ts pour l'arrêt de Jaris lui-même. Exécuté directement
+ * dès que le modèle appelle cet outil, sans confirmation préalable.
  */
 const SHUTDOWN_COMMAND_DELAY_S = 10
 

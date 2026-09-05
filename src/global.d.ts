@@ -4,7 +4,6 @@ import type {
   AudioInputDevice,
   CapacityScanResult,
   ChatMessage,
-  ConfirmableTool,
   ConversationEntry,
   GeneratedApp,
   GmailStatus,
@@ -54,7 +53,6 @@ declare global {
       clearConversationHistory: () => Promise<void>
       openConversationHistoryFile: () => Promise<void>
       getModelOverview: () => Promise<ModelOverviewResult>
-      getConfirmableTools: () => Promise<ConfirmableTool[]>
       getOllamaVersionStatus: () => Promise<OllamaVersionStatus | null>
       updateOllama: () => Promise<{ success: boolean; message: string }>
       importChromeProfile: () => Promise<{ success: boolean; message: string }>
