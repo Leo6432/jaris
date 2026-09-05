@@ -269,13 +269,19 @@ function realProfileDir(): string {
 }
 
 /**
- * Sous-dossiers volumineux et réécrits en continu par Chrome (cache disque/GPU) : jamais nécessaires pour
- * retrouver comptes connectés, favoris ou mots de passe, et leur copie ferait juste perdre du temps/de la
- * place pour rien.
+ * Sous-dossiers volumineux et jamais nécessaires pour retrouver comptes connectés, favoris ou mots de
+ * passe (ceux-ci vivent dans "Login Data"/"Web Data"/"Bookmarks"/"Network/Cookies"/"Local State", jamais
+ * exclus ici) : caches disque/GPU, données d'appli par site (IndexedDB, Service Worker/CacheStorage — les
+ * plus gros, utilisés par les sites type Gmail/Docs pour du stockage hors-ligne, parfois plusieurs Go),
+ * modèles ML téléchargés par Chrome, rapports de crash/télémétrie. Skippés par nom peu importe leur
+ * profondeur (basename), qu'ils soient à la racine de "User Data" ou dans "Default"/"Profile N".
  */
 const PROFILE_COPY_EXCLUDED_DIRS = new Set([
   'Cache', 'Code Cache', 'GPUCache', 'GrShaderCache', 'ShaderCache', 'component_crx_cache',
-  'GraphiteDawnCache', 'DawnGraphiteCache', 'DawnWebGPUCache'
+  'GraphiteDawnCache', 'DawnGraphiteCache', 'DawnWebGPUCache',
+  'IndexedDB', 'Service Worker', 'blob_storage', 'databases',
+  'Crashpad', 'BrowserMetrics', 'OptimizationGuidePredictionModels', 'optimization_guide_hint_cache_store',
+  'WidevineCdm', 'Safe Browsing'
 ])
 
 /**
