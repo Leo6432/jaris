@@ -72,7 +72,10 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[], chan
   const memory = memoryTitles.length
     ? `Tu as une mémoire locale sous forme de notes markdown liées entre elles (comme Obsidian). Notes déjà ` +
       `connues : ${memoryTitles.join(', ')}. Utilise recall_memory pour relire le contenu complet d'une note ` +
-      "avant d'en parler avec précision. "
+      "avant d'en parler avec précision. Cette liste de titres n'est qu'un index : ne mentionne, n'évoque ou " +
+      "ne pose une question basée sur une de ces notes QUE si la demande actuelle de l'utilisateur s'y " +
+      "rapporte clairement. Si ce n'est pas le cas, ignore-la complètement — ne pars jamais sur un sujet " +
+      "ancien et sans rapport juste parce qu'il figure dans cette liste. "
     : "Tu as une mémoire locale sous forme de notes markdown (comme Obsidian), encore vide. "
   const memoryRule =
     "Dès que l'utilisateur te demande explicitement de retenir/mémoriser quelque chose (\"retiens que...\", " +

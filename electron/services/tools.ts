@@ -357,7 +357,9 @@ export function createToolExecutor(onReminderFire: ReminderFireHandler, visionMo
       case 'read_browser_tab':
         return readActiveTab()
       case 'open_browser_url':
-        return openBrowserUrl(String(args.target ?? ''))
+        // Un petit modèle local nomme parfois ce paramètre "url" au lieu de "target" (observé en usage
+        // réel) : on accepte les deux plutôt que de silencieusement traiter ça comme une adresse vide.
+        return openBrowserUrl(String(args.target ?? args.url ?? ''))
       case 'click_browser_element':
         return clickBrowserElement(String(args.description ?? ''))
       case 'fill_browser_field':
