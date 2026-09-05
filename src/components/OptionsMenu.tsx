@@ -39,7 +39,7 @@ const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
  */
 const MIC_TEST_BAR_COUNT = 42
 
-type Tab = 'connexions' | 'voix' | 'audio' | 'modeles' | 'stockage' | 'historique'
+type Tab = 'connexions' | 'voix' | 'audio' | 'modeles' | 'miseajour' | 'stockage' | 'historique'
 
 /**
  * Chromium ajoute des pseudo-périphériques "default"/"communications" en plus des vrais haut-parleurs
@@ -172,6 +172,8 @@ export default function OptionsMenu(): JSX.Element {
   useEffect(() => {
     if (tab === 'modeles') {
       void window.jaris.getOllamaVersionStatus().then(setOllamaVersionStatus)
+    }
+    if (tab === 'miseajour') {
       void window.jaris.getAppVersionStatus().then(setAppVersionStatus)
       void window.jaris.getAppVersion().then(setInstalledVersion)
       if (releaseHistory === null) {
@@ -512,6 +514,12 @@ export default function OptionsMenu(): JSX.Element {
             Modèles
           </button>
           <button
+            className={`options-menu__tab${tab === 'miseajour' ? ' options-menu__tab--active' : ''}`}
+            onClick={() => setTab('miseajour')}
+          >
+            Mise à jour
+          </button>
+          <button
             className={`options-menu__tab${tab === 'stockage' ? ' options-menu__tab--active' : ''}`}
             onClick={() => setTab('stockage')}
           >
@@ -676,50 +684,6 @@ export default function OptionsMenu(): JSX.Element {
 
         {tab === 'modeles' && (
           <div className="options-menu__section">
-            <div className="options-menu__section-title">Journal des mises à jour</div>
-            <p className="options-menu__model-overview-hint">
-              Version installée : <strong>{installedVersion ?? appVersionStatus?.current ?? '...'}</strong>
-            </p>
-            <button className="options-menu__action" onClick={handleCheckForUpdate} disabled={checkingUpdate}>
-              {checkingUpdate ? 'Recherche en cours…' : 'Rechercher une mise à jour'}
-            </button>
-            {updateCheckMessage && <p className="options-menu__ollama-update-note">{updateCheckMessage}</p>}
-            {releaseHistory === null ? (
-              <p className="capacity-scan__status">Chargement...</p>
-            ) : releaseHistory.length === 0 ? (
-              <p className="options-menu__model-overview-hint">Aucune version publiée pour l'instant.</p>
-            ) : (
-              <ul className="options-menu__changelog-list">
-                {releaseHistory.map((entry) => (
-                  <li key={entry.version} className="options-menu__changelog-entry">
-                    <div className="options-menu__changelog-header">
-                      <strong>{entry.version}</strong>
-                      {entry.publishedAt && <span>{new Date(entry.publishedAt).toLocaleDateString('fr-FR')}</span>}
-                    </div>
-                    <p className="options-menu__changelog-notes">{formatReleaseNotes(entry.notes)}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {appVersionStatus?.outdated && (
-              <div className="options-menu__ollama-warning">
-                Jaris {appVersionStatus.current} installé, la dernière version est{' '}
-                {appVersionStatus.latest}.
-                <div className="options-menu__ollama-update-actions">
-                  <button onClick={handleUpdateApp} disabled={updatingApp}>
-                    {updatingApp ? 'Mise à jour en cours…' : 'Mettre à jour'}
-                  </button>
-                </div>
-                {updatingApp && (
-                  <p className="options-menu__ollama-update-note">
-                    Jaris va se fermer puis relancer automatiquement une fois la mise à jour terminée.
-                  </p>
-                )}
-              </div>
-            )}
-            {!updatingApp && appUpdateMessage && <p className="options-menu__ollama-update-note">{appUpdateMessage}</p>}
-
             {ollamaVersionStatus?.outdated && (
               <div className="options-menu__ollama-warning">
                 Ollama {ollamaVersionStatus.current} installé, la dernière version est{' '}
@@ -761,6 +725,56 @@ export default function OptionsMenu(): JSX.Element {
               graphique) et télécharge directement les modèles déjà connus pour cette nouvelle configuration,
               sans repasser par une analyse comparative complète.
             </p>
+          </div>
+        )}
+
+        {tab === 'miseajour' && (
+          <div className="options-menu__section">
+            <div className="options-menu__section-title">Journal des mises à jour</div>
+            <p className="options-menu__model-overview-hint">
+              Version installée : <strong>{installedVersion ?? appVersionStatus?.current ?? '...'}</strong>
+            </p>
+            <button className="options-menu__action" onClick={handleCheckForUpdate} disabled={checkingUpdate}>
+              {checkingUpdate ? 'Recherche en cours…' : 'Rechercher une mise à jour'}
+            </button>
+            {updateCheckMessage && <p className="options-menu__ollama-update-note">{updateCheckMessage}</p>}
+
+            {appVersionStatus?.outdated && (
+              <div className="options-menu__ollama-warning">
+                Jaris {appVersionStatus.current} installé, la dernière version est{' '}
+                {appVersionStatus.latest}.
+                <div className="options-menu__ollama-update-actions">
+                  <button onClick={handleUpdateApp} disabled={updatingApp}>
+                    {updatingApp ? 'Mise à jour en cours…' : 'Mettre à jour'}
+                  </button>
+                </div>
+                {updatingApp && (
+                  <p className="options-menu__ollama-update-note">
+                    Jaris va se fermer puis relancer automatiquement une fois la mise à jour terminée.
+                  </p>
+                )}
+              </div>
+            )}
+            {!updatingApp && appUpdateMessage && <p className="options-menu__ollama-update-note">{appUpdateMessage}</p>}
+
+            <div className="options-menu__section-title">Historique des versions</div>
+            {releaseHistory === null ? (
+              <p className="capacity-scan__status">Chargement...</p>
+            ) : releaseHistory.length === 0 ? (
+              <p className="options-menu__model-overview-hint">Aucune version publiée pour l'instant.</p>
+            ) : (
+              <ul className="options-menu__changelog-list">
+                {releaseHistory.map((entry) => (
+                  <li key={entry.version} className="options-menu__changelog-entry">
+                    <div className="options-menu__changelog-header">
+                      <strong>{entry.version}</strong>
+                      {entry.publishedAt && <span>{new Date(entry.publishedAt).toLocaleDateString('fr-FR')}</span>}
+                    </div>
+                    <p className="options-menu__changelog-notes">{formatReleaseNotes(entry.notes)}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 

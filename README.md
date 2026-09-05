@@ -900,13 +900,14 @@ Même principe que le bouton "Mettre à jour" déjà en place pour Ollama
    stable** (`GET /repos/Leo6432/jaris/releases/latest`).
 2. Si elle est plus récente, un bandeau apparaît partout dans l'interface
    (même mécanisme que le popup "nouveaux modèles"/"Ollama pas à jour") et
-   dans Options → Modèles, avec un bouton **"Mettre à jour"**.
+   dans Options → **Mise à jour** (onglet dédié, distinct de Modèles), avec
+   un bouton **"Mettre à jour"**.
 3. Un clic télécharge le VRAI installeur (`Jaris-Setup-*.exe`) joint à cette
    Release, le lance, puis ferme Jaris tout seul pour libérer son propre
    exécutable — l'installeur "un clic" (voir étape 16) continue alors
    entièrement silencieux et relance Jaris à la fin.
 
-Options → Modèles affiche aussi en permanence un **journal des mises à
+Options → Mise à jour affiche aussi en permanence un **journal des mises à
 jour** : la version installée (`getAppVersion`, jamais bloquée par le réseau,
 contrairement au bandeau ci-dessus) et la liste de toutes les Releases
 stables déjà publiées avec leurs notes (`getReleaseHistory`, `GET
@@ -946,7 +947,7 @@ Windows habituel, sur le disque système par défaut :
 | Environnement Python (voix) | `%LOCALAPPDATA%\Jaris\python-runtime` | quelques Go (torch en tête) |
 | Cache reconnaissance/synthèse vocale | `%USERPROFILE%\.cache\huggingface` | ~4 Go |
 
-**Options → Modèles → "Choisir un dossier…"** ouvre un sélecteur de dossier
+**Options → Stockage → "Choisir un dossier…"** ouvre un sélecteur de dossier
 puis déplace les trois vers l'endroit choisi (`modelsLocation.ts`) — utile
 pour les libérer d'un petit SSD système vers un disque secondaire plus
 grand.
