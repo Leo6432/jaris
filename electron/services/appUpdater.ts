@@ -9,10 +9,12 @@ import { join } from 'path'
  * build` : même principe que la mise à jour d'Ollama (dependencyServices.ts) — comparer la version locale
  * à la dernière publiée, puis télécharger et lancer l'installeur au lieu de renvoyer vers un site.
  *
- * Repose sur `.github/workflows/build-installer.yml` : un tag `v*` poussé publie une vraie Release GitHub
- * stable (ex: `v0.1.1`) avec `Jaris-Setup-*.exe` en pièce jointe. `GET /releases/latest` ignore
- * naturellement la Release "dernier-build" (marquée `--prerelease` dans le workflow, utilisée pour tester
- * le développement en cours) : elle ne peut jamais être confondue avec une vraie sortie versionnée.
+ * Repose sur `.github/workflows/build-installer.yml` : dès qu'un push (sur n'importe quelle branche)
+ * contient une version de `package.json` sans Release correspondante, le workflow publie lui-même une
+ * vraie Release GitHub stable (ex: `v0.1.1`) avec `Jaris-Setup-*.exe` en pièce jointe — personne ne pousse
+ * de tag à la main. `GET /releases/latest` ignore naturellement la Release "dernier-build" (marquée
+ * `--prerelease` dans le workflow, utilisée pour tester le développement en cours) : elle ne peut jamais
+ * être confondue avec une vraie sortie versionnée.
  */
 export interface AppVersionStatus {
   current: string

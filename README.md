@@ -906,11 +906,14 @@ Même principe que le bouton "Mettre à jour" déjà en place pour Ollama
    exécutable — l'installeur "un clic" (voir étape 16) continue alors
    entièrement silencieux et relance Jaris à la fin.
 
-**Publier une nouvelle version** (développeur uniquement) : bump le champ
-`version` de `package.json`, commit, puis pousse un tag `vX.Y.Z` correspondant
-(`git tag vX.Y.Z && git push origin vX.Y.Z`) — le workflow
-(`build-installer.yml`) construit et publie automatiquement la Release. La
-Release **"dernier-build"**, republiée à chaque push de branche pour tester le
+**Publier une nouvelle version** : entièrement automatique, plus aucune
+commande à taper par personne (ni un utilisateur, ni le développeur). Il
+suffit de bumper le champ `version` de `package.json` et de pousser le commit
+— sur n'importe quelle branche. Le workflow (`build-installer.yml`) construit
+l'installeur puis, si aucune Release ne correspond déjà à cette version,
+publie lui-même la vraie Release GitHub `vX.Y.Z` avec l'installeur en pièce
+jointe (`gh release create`, sans jamais passer par `git tag`). La Release
+**"dernier-build"**, republiée à chaque push de branche pour tester le
 développement en cours, est marquée `--prerelease` : `releases/latest`
 l'ignore toujours, elle ne peut jamais être confondue avec une vraie sortie
 versionnée par le mécanisme de mise à jour.
