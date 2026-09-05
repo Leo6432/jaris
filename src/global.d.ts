@@ -17,6 +17,8 @@ import type {
   Profile,
   RuntimeSetupProgress,
   RuntimeSetupStatus,
+  SmtpConfig,
+  SmtpStatus,
   VoiceReplyPayload,
   VoiceSetupStatusPayload
 } from '../shared/ipc'
@@ -54,6 +56,9 @@ declare global {
       getOllamaVersionStatus: () => Promise<OllamaVersionStatus | null>
       updateOllama: () => Promise<{ success: boolean; message: string }>
       importChromeProfile: () => Promise<{ success: boolean; message: string }>
+      getSmtpStatus: () => Promise<SmtpStatus>
+      saveSmtpConfig: (config: SmtpConfig) => Promise<{ success: boolean; message: string }>
+      disconnectSmtp: () => Promise<void>
       getRuntimeSetupStatus: () => Promise<RuntimeSetupStatus>
       runRuntimeSetup: () => Promise<RuntimeSetupStatus>
       onRuntimeSetupProgress: (cb: (progress: RuntimeSetupProgress) => void) => () => void

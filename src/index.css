@@ -760,6 +760,31 @@ body.body--scan {
   opacity: 0.6;
 }
 
+.options-menu__field input {
+  background: rgba(13, 20, 33, 0.8);
+  border: 1px solid rgba(127, 163, 201, 0.3);
+  color: #d9ecff;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.options-menu__smtp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 360px;
+  margin: 4px 0 10px;
+}
+
+.options-menu__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: #7fa3c9;
+}
+
 .options-menu__mic-test {
   display: flex;
   flex-direction: column;

@@ -28,6 +28,7 @@ import {
 } from './services/conversationStore'
 import { getProfile, markGmailOnboardingDone, saveProfile } from './services/profileStore'
 import { connectGmail, disconnectGmail, getGmailStatus } from './services/googleAuth'
+import { clearSmtpConfig, getSmtpStatus, saveSmtpConfig } from './services/smtpStore'
 import {
   IPC_CHANNELS,
   type AnalysisScope,
@@ -38,6 +39,7 @@ import {
   type JarisEmotion,
   type MemoryGraph,
   type Profile,
+  type SmtpConfig,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload
 } from '../shared/ipc'
@@ -302,6 +304,9 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.getOllamaVersionStatus, () => getOllamaVersionStatus())
   ipcMain.handle(IPC_CHANNELS.updateOllama, () => updateOllama())
   ipcMain.handle(IPC_CHANNELS.importChromeProfile, () => importRealChromeProfile())
+  ipcMain.handle(IPC_CHANNELS.getSmtpStatus, () => getSmtpStatus())
+  ipcMain.handle(IPC_CHANNELS.saveSmtpConfig, (_event, smtpConfig: SmtpConfig) => saveSmtpConfig(smtpConfig))
+  ipcMain.handle(IPC_CHANNELS.disconnectSmtp, () => clearSmtpConfig())
   ipcMain.handle(IPC_CHANNELS.getRuntimeSetupStatus, () => getRuntimeSetupStatus())
   // L'installation du premier lancement (Python, Ollama) dure plusieurs minutes : chaque étape est
   // diffusée au fil de l'eau plutôt qu'attendre la fin, pour que l'utilisateur voie que ça avance.

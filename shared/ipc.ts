@@ -112,6 +112,27 @@ export interface GmailStatus {
   email: string | null
 }
 
+/**
+ * Configuration SMTP saisie par l'utilisateur dans Options → Connexions (voir smtpStore.ts) : marche avec
+ * n'importe quel compte mail via un mot de passe d'application, sans jamais créer de projet Google Cloud.
+ * `pass` est envoyé une seule fois (à la connexion) et jamais relu ensuite — voir SmtpStatus, qui ne porte
+ * que ce qui peut sans risque revenir au renderer.
+ */
+export interface SmtpConfig {
+  host: string
+  port: number
+  secure: boolean
+  user: string
+  pass: string
+  from?: string
+}
+
+/** État de la connexion SMTP, pour le menu Options — jamais le mot de passe, voir SmtpConfig. */
+export interface SmtpStatus {
+  connected: boolean
+  email: string | null
+}
+
 /** Un micro détecté par PortAudio (sounddevice --list-devices), pour le sélecteur d'Options → Voix. */
 export interface AudioInputDevice {
   index: number
@@ -347,6 +368,12 @@ export const IPC_CHANNELS = {
    * la fenêtre Chrome dédiée à Jaris, à la place de son profil vide auto-créé (voir importRealChromeProfile,
    * browserControl.ts). */
   importChromeProfile: 'jaris:import-chrome-profile',
+  /** renderer <-> main : état de la connexion SMTP (voir smtpStore.ts), pour Options → Connexions. */
+  getSmtpStatus: 'jaris:get-smtp-status',
+  /** renderer <-> main : enregistre (après vérification réelle de la connexion) une configuration SMTP. */
+  saveSmtpConfig: 'jaris:save-smtp-config',
+  /** renderer -> main : déconnecte le compte SMTP. */
+  disconnectSmtp: 'jaris:disconnect-smtp',
   /** renderer <-> main : ce qui reste à installer sur la machine (Python, Ollama) au premier lancement. */
   getRuntimeSetupStatus: 'jaris:get-runtime-setup-status',
   /** renderer <-> main : installe ce qui manque (étape 16), résout avec le statut final. */

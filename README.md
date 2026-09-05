@@ -1239,10 +1239,31 @@ modifier à la main.
 
 ## Envoi de mails (étape 11)
 
-Jaris peut envoyer un vrai mail, de deux façons possibles (la première a
-priorité si les deux sont configurées) :
+Jaris peut envoyer un vrai mail, de deux façons possibles (Gmail a priorité
+si les deux sont connectés) :
 
-### Option recommandée : connecter Gmail depuis l'appli
+### Sans Google Cloud Console : connecter un autre compte mail (SMTP)
+
+Bouton **"Options" → Connexions → "Connecter un autre compte mail"**.
+Choisis ton fournisseur (Gmail, Outlook, Yahoo, ou "Autre" pour un serveur
+SMTP personnalisé), donne ton adresse et un **mot de passe d'application**
+(jamais ton mot de passe habituel — un lien vers la page pour en générer un
+s'affiche selon le fournisseur choisi, ex:
+[myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+pour Gmail, qui demande la validation en 2 étapes activée sur le compte).
+Jaris vérifie la connexion pour de vrai avant d'enregistrer (`transporter.verify`
+de nodemailer) : une faute de frappe se voit tout de suite, pas seulement au
+premier envoi réel. Le mot de passe est chiffré sur la machine (`safeStorage`
+d'Electron, `smtpStore.ts`), jamais en clair, jamais envoyé nulle part sauf au
+serveur SMTP lui-même.
+
+**Aucun projet Google Cloud, aucun identifiant OAuth, aucun compte
+développeur** — contrairement à Gmail ci-dessous, cette option ne dépend
+d'aucun identifiant fourni par Jaris : chaque utilisateur configure son
+propre compte. C'est aussi la seule option qui n'expose à aucun risque de
+vérification d'application Google à l'échelle (voir étape 38).
+
+### Option alternative : connecter Gmail depuis l'appli
 
 Bouton **"Options"** en haut à gauche de la fenêtre → **"Connecter Gmail"**.
 Le navigateur système s'ouvre sur l'écran de connexion Google, tu acceptes
@@ -1283,10 +1304,10 @@ GOOGLE_CLIENT_SECRET=xxxxx
 > traverser une fois via "Paramètres avancés → Accéder à [nom de l'app]
 > (dangereux)" lors de la connexion.
 
-### Option de secours : SMTP classique
+### Option de secours pour le développement : SMTP via `.env`
 
-Si aucun compte Gmail n'est connecté, Jaris utilise la configuration SMTP
-de secours dans `.env` :
+En développement uniquement, `.env` peut porter une configuration SMTP de
+secours (utilisée seulement si aucun compte n'est connecté depuis Options) :
 
 ```
 SMTP_HOST=smtp.gmail.com
@@ -1297,8 +1318,5 @@ SMTP_PASS=un-mot-de-passe-d-application
 SMTP_FROM=
 ```
 
-Pour Gmail par ce biais, utilise un [mot de passe d'application](https://myaccount.google.com/apppasswords)
-(pas ton mot de passe normal, qui ne fonctionnera pas).
-
-Si ni l'un ni l'autre n'est configuré, Jaris te préviendra à voix haute
-qu'il ne peut pas envoyer le mail au lieu d'échouer silencieusement.
+Si rien n'est configuré nulle part, Jaris te préviendra à voix haute qu'il
+ne peut pas envoyer le mail au lieu d'échouer silencieusement.

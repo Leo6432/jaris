@@ -18,6 +18,8 @@ import {
   type OllamaVersionStatus,
   type Profile,
   type RuntimeSetupProgress,
+  type SmtpConfig,
+  type SmtpStatus,
   type RuntimeSetupStatus,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload
@@ -58,6 +60,9 @@ const api = {
   getOllamaVersionStatus: (): Promise<OllamaVersionStatus | null> => ipcRenderer.invoke(IPC_CHANNELS.getOllamaVersionStatus),
   updateOllama: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.updateOllama),
   importChromeProfile: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.importChromeProfile),
+  getSmtpStatus: (): Promise<SmtpStatus> => ipcRenderer.invoke(IPC_CHANNELS.getSmtpStatus),
+  saveSmtpConfig: (smtpConfig: SmtpConfig): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.saveSmtpConfig, smtpConfig),
+  disconnectSmtp: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.disconnectSmtp),
   getRuntimeSetupStatus: (): Promise<RuntimeSetupStatus> => ipcRenderer.invoke(IPC_CHANNELS.getRuntimeSetupStatus),
   runRuntimeSetup: (): Promise<RuntimeSetupStatus> => ipcRenderer.invoke(IPC_CHANNELS.runRuntimeSetup),
   onRuntimeSetupProgress: (cb: (progress: RuntimeSetupProgress) => void) => subscribe(IPC_CHANNELS.runtimeSetupProgress, cb),
