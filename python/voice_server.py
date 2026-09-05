@@ -146,7 +146,10 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--stt-model", default=DEFAULT_STT_MODEL)
     parser.add_argument("--stt-revision", default=DEFAULT_STT_REVISION)
-    parser.add_argument("--stt-device", default="cpu")
+    # "auto" plutôt que "cpu" : c'est torch, une fois chargé, qui sait si une carte graphique est
+    # réellement utilisable (voir plus bas). Un défaut "cpu" ferait tourner la transcription sur le
+    # processeur sur une machine équipée d'un GPU — des secondes au lieu d'une fraction de seconde.
+    parser.add_argument("--stt-device", default="auto")
     parser.add_argument("--stt-language", default="fr")
     parser.add_argument("--input-device", type=int, default=None)
     parser.add_argument("--list-devices", action="store_true")
@@ -201,13 +204,21 @@ def main() -> None:
 
     emit({"event": "log", "message": f"Chargement de la transcription '{args.stt_model}' (téléchargement HuggingFace au premier lancement, ~4 Go, peut prendre plusieurs minutes)…"})
     try:
-        stt_dtype = torch.float16 if args.stt_device == "cuda" else torch.float32
+        # Résolu ici et pas plus tôt : seul torch peut dire si CUDA est vraiment disponible (carte
+        # présente ET pilote compatible ET version GPU de torch installée — voir pythonRuntime.ts, qui
+        # installe la version GPU quand une carte NVIDIA est détectée, mais retombe sur la version
+        # processeur si cette installation échoue).
+        stt_device = args.stt_device
+        if stt_device == "auto":
+            stt_device = "cuda" if torch.cuda.is_available() else "cpu"
+            emit({"event": "log", "message": f"Transcription sur {stt_device}."})
+        stt_dtype = torch.float16 if stt_device == "cuda" else torch.float32
         # La révision n'est épinglée que pour le modèle par défaut : un modèle choisi explicitement par
         # l'utilisateur (STT_MODEL du .env) n'a évidemment pas les mêmes identifiants de commit.
         revision = args.stt_revision if args.stt_model == DEFAULT_STT_MODEL else None
         stt_processor = AutoProcessor.from_pretrained(args.stt_model, revision=revision)
         stt_model = CohereAsrForConditionalGeneration.from_pretrained(
-            args.stt_model, revision=revision, dtype=stt_dtype, device_map=args.stt_device
+            args.stt_model, revision=revision, dtype=stt_dtype, device_map=stt_device
         )
     except Exception as exc:
         hint = (

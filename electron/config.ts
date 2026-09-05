@@ -34,7 +34,9 @@ export const config = {
      */
     model: readEnv('STT_MODEL'),
     language: readEnv('STT_LANGUAGE', 'fr'),
-    device: readEnv('STT_DEVICE', 'cpu')
+    /** "auto" = c'est torch qui tranche au chargement (voir voice_server.py), selon ce qui est réellement
+     * utilisable sur la machine. "cuda"/"cpu" pour forcer l'un des deux. */
+    device: readEnv('STT_DEVICE', 'auto')
   },
   tts: {
     /** Synthèse vocale : Supertonic HD (99M paramètres, modèle téléchargé automatiquement au premier lancement). */

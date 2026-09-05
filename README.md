@@ -321,7 +321,9 @@ l'étape 16 interdit explicitement pour le public. Jaris télécharge donc une
 
 Renseigne dans `.env` :
 - `PYTHON_BIN` → chemin vers `python/venv/Scripts/python.exe`
-- `STT_DEVICE=cuda` sur la RTX 3070, sinon `cpu`
+- `STT_DEVICE` peut rester vide : le GPU est détecté automatiquement au
+  chargement (`torch.cuda.is_available()`), avec repli sur le processeur.
+  Ne le renseigne que pour forcer `cuda` ou `cpu`.
 
 **Déclenchement par double clap.** Toujours DEUX claps francs et rapprochés,
 jamais un seul : un objet qui tombe ou une porte qui claque ne doit pas
