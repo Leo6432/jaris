@@ -133,6 +133,7 @@ const RAM_OFFLOAD_MODELS = new Set([
   'qwen2.5-coder:32b',
   'devstral-small-2:24b',
   'qwen3.5:35b',
+  'qwen3.6:35b',
   'qwen3.5:27b',
   'qwen3.8:27b',
   'qwen3.6:27b',
@@ -153,6 +154,11 @@ const MODELS = [
   'qwen3.5:9b',
   'phi4-mini',
   'gemma4:e4b',
+  // gemma4:12b et granite4.1:8b : voir MEDIUM_CANDIDATES dans hardwareScan.ts pour le détail de la
+  // vérification (tags réels confirmés, "ibm/granite4.1:8b" proposé initialement était un namespace
+  // inexistant) et des deux rejets associés (llama3.2:1b, deepseek-r1).
+  'gemma4:12b',
+  'granite4.1:8b',
   // granite4.1:3b (remplace granite4:3b, retiré de MEDIUM_CANDIDATES dans hardwareScan.ts) : post-training
   // amélioré par IBM, même empreinte VRAM (~2,1 Go). Source : ollama.com/library/granite4.1, blog IBM Research.
   'granite4.1:3b',
@@ -183,6 +189,9 @@ const MODELS = [
   // les garder dans la liste permet aux utilisateurs avec plus de VRAM de vraiment les tester chez eux —
   // mêmes tailles que LARGE_CANDIDATES dans electron/services/hardwareScan.ts.
   'qwen3.5:35b',
+  // Variante dense de qwen3.6 (distincte de qwen3.6:35b-a3b, MoE, plus bas dans les candidats Code) — voir
+  // LARGE_CANDIDATES dans hardwareScan.ts pour le détail de la vérification.
+  'qwen3.6:35b',
   'qwen3.5:27b',
   // Successeur potentiel de qwen3.5:27b (LARGE_CANDIDATES dans hardwareScan.ts) : même taille de VRAM
   // (18 Go), vision+tools+thinking natifs. Gain rapporté en code/agentic par des sources tierces
@@ -216,6 +225,7 @@ const VISION_CANDIDATES = [
   // commentaire complet dans hardwareScan.ts.
   { model: 'gemma4:e4b', vramGb: 9.6 },
   { model: 'qwen3-vl:8b', vramGb: 8 },
+  { model: 'gemma4:12b', vramGb: 7.6 },
   { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 6.5 },
   { model: 'qwen3-vl:4b', vramGb: 5 },
   { model: 'qwen3.5:4b', vramGb: 3.4 },
@@ -255,6 +265,8 @@ const MODEL_SIZE_HINTS = {
   'qwen3.5:9b': 6.6,
   'phi4-mini': 2.5,
   'gemma4:e4b': 9.6,
+  'gemma4:12b': 7.6,
+  'granite4.1:8b': 5.3,
   'granite4.1:3b': 2.1,
   'nemotron-3-nano:4b': 2.8,
   'ministral-3:3b': 3.0,
@@ -266,6 +278,7 @@ const MODEL_SIZE_HINTS = {
   'hf.co/openbmb/MiniCPM5-1B-GGUF': 0.69,
   'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 1.9,
   'qwen3.5:35b': 24,
+  'qwen3.6:35b': 24,
   'qwen3.5:27b': 17,
   'qwen3.8:27b': 18,
   'qwen3.6:27b': 18,

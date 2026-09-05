@@ -52,9 +52,23 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
 // granite4:3b -> granite4.1:3b : IBM a sorti Granite 4.1 (post-training amélioré, tool-calling renforcé,
 // même empreinte VRAM) — mise à jour directe, pas de raison de garder l'ancienne version. Vérifié sur
 // ollama.com/library/granite4.1 (tag 3b, 2,1 Go) et le blog IBM Research annonçant la sortie.
+// gemma4:12b et granite4.1:8b ajoutés après vérification directe sur ollama.com/library (proposés par une
+// IA externe via le prompt de recherche du journal des mises à jour, PAS pris à sa parole) :
+// - gemma4:12b (tag réel confirmé, 7,6 Go) : entre gemma4:e4b et qwen3.5:9b en taille, nativement
+//   multimodal comme gemma4:e4b (donc aussi ajouté à VISION_CANDIDATES plus bas).
+// - granite4.1:8b (tag réel confirmé, 5,3 Go, licence Apache 2.0) : PAS "ibm/granite4.1:8b" comme proposé —
+//   ce préfixe n'existe pas dans la bibliothèque officielle Ollama (`granite4.1:8b` tout court), l'utiliser
+//   aurait risqué de tirer une requantification tierce non vérifiée d'un namespace communautaire au lieu du
+//   modèle officiel IBM.
+// Deux autres propositions de la même IA rejetées : llama3.2:1b (présenté à tort comme "récent 2026" —
+// c'est un modèle Meta de septembre 2024, largement dépassé par qwen3:1.7b déjà en place) et
+// deepseek-r1:1.5b/32b (appel d'outils cassé sur Ollama malgré le badge "tools" affiché — bug connu,
+// voir github.com/ollama/ollama/issues/10935 — rédhibitoire puisque Jaris appelle un outil à chaque action).
 const MEDIUM_CANDIDATES: ModelCandidate[] = [
   { model: 'gemma4:e4b', vramGb: 9.6 },
+  { model: 'gemma4:12b', vramGb: 7.6 },
   { model: 'qwen3.5:9b', vramGb: 6.6 },
+  { model: 'granite4.1:8b', vramGb: 5.3 },
   { model: 'qwen3.5:4b', vramGb: 3.4 },
   { model: 'qwen3.5:2b', vramGb: 2.7 },
   { model: 'granite4.1:3b', vramGb: 2.1 },
@@ -62,6 +76,11 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
 ]
 const LARGE_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3.5:35b', vramGb: 24 },
+  // Variante DENSE de la famille qwen3.6 (distincte de qwen3.6:35b-a3b, le MoE déjà en Code) : tag réel
+  // confirmé sur ollama.com/library/qwen3.6/tags (vision+tools+thinking natifs, disponible en 27b et 35b —
+  // qwen3.6:27b est déjà candidat plus bas). Taille exacte du fichier pas confirmée (poids identique à
+  // qwen3.5:35b utilisé en attendant) : à recaler via "Lancer l'analyse" avant de le préférer à qwen3.5:35b.
+  { model: 'qwen3.6:35b', vramGb: 24 },
   { model: 'qwen3.5:27b', vramGb: 17 },
   // Ajouté après vérification directe sur ollama.com/library/qwen3.8 (18 Go, vision+tools+thinking natifs,
   // contexte 256K) suite à deux analyses externes (PDF fournis par Léo) le signalant comme successeur de
@@ -109,6 +128,7 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
  */
 const LARGE_RAM_OFFLOAD_MODELS = new Set([
   'qwen3.5:35b',
+  'qwen3.6:35b',
   'qwen3.5:27b',
   'qwen3.8:27b',
   'qwen3.6:27b',
@@ -149,6 +169,9 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   // sert juste à savoir si ça vaudrait le coup.
   { model: 'gemma4:e4b', vramGb: 9.6 },
   { model: 'qwen3-vl:8b', vramGb: 8 },
+  // Même candidat "réutilisation" que gemma4:e4b ci-dessus, mais pour gemma4:12b (déjà dans
+  // MEDIUM_CANDIDATES, tag réel confirmé sur ollama.com/library/gemma4).
+  { model: 'gemma4:12b', vramGb: 7.6 },
   // Pas de tag officiel dans la bibliothèque Ollama : import depuis le dépôt GGUF de ggml-org (mainteneurs
   // de llama.cpp), à partir du modèle officiel zai-org/GLM-4.6V-Flash. Le tag Q4_K_M est important : les
   // autres quantifications communautaires (Q2_K, Q3_K) sont purement textuelles, sans le module de vision.
