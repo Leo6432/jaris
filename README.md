@@ -893,8 +893,22 @@ n'est pas disponible dans cette version.
 ### Ce qui reste à faire sur cette étape
 
 - **Signature du code** : l'exécutable n'est pas signé, donc Windows
-  SmartScreen affiche un avertissement au premier lancement. Il faut un
-  certificat payant — à prévoir avec la mise en vente (étape 38).
+  SmartScreen affiche un avertissement au premier lancement ("Informations
+  complémentaires" → "Exécuter quand même" pour continuer, sans risque —
+  c'est notre propre `.exe`). Pas de solution gratuite viable pour Jaris :
+  - **SignPath Foundation** (signature gratuite pour l'open source) est
+    disqualifié — exige un dépôt public, une licence open source, et une
+    application téléchargeable gratuitement, ce que le modèle par abonnement
+    de l'étape 38 exclut.
+  - Construire une réputation SmartScreen sans certificat (des centaines
+    d'installations propres sur plusieurs semaines) ne marche pas ici : le
+    hash de l'exécutable change à chaque nouveau build, la réputation
+    repartirait de zéro à chaque commit.
+  - Reste un vrai certificat payant à prévoir avec l'étape 38 : soit
+    classique (~100-300€/an chez une autorité type DigiCert/Sectigo), soit
+    Azure Trusted Signing (~10$/mois, moins cher, mais réservé aux
+    particuliers US/Canada — en France il faudrait une société enregistrée,
+    de toute façon nécessaire pour facturer un abonnement).
 - **Recherche web sans Docker** : `docker-compose.yml` et la configuration
   SearXNG sont bien embarqués, donc la recherche web marche sur une machine
   qui a déjà Docker Desktop. Mais Docker ne s'installe pas en silence : sur
