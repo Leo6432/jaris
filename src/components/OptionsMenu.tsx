@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
+  AnalysisScope,
   AppVersionStatus,
   AudioInputDevice,
   ConversationEntry,
   GmailStatus,
   HardwareTierPreview as HardwareTierPreviewData,
+  ModelOverviewResult,
   ModelsLocationStatus,
   OllamaVersionStatus,
   Profile,
   ReleaseHistoryEntry
 } from '../../shared/ipc'
 import HardwareTierPreview from './HardwareTierPreview'
+import ModelAnalysisProgress from './ModelAnalysisProgress'
+import { useModelAnalysis } from '../hooks/useModelAnalysis'
 
 interface VoiceOption {
   id: string
@@ -40,6 +44,16 @@ const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
 const MIC_TEST_BAR_COUNT = 42
 
 type Tab = 'connexions' | 'voix' | 'audio' | 'modeles' | 'miseajour' | 'stockage' | 'historique'
+
+/** Choix de périmètre pour "Lancer l'analyse comparative complète" — voir handleRunFullAnalysis. */
+const ANALYSIS_SCOPE_OPTIONS: { value: AnalysisScope; label: string }[] = [
+  { value: 'all', label: 'Tout analyser' },
+  { value: 'flash', label: 'Palier Rapide seulement' },
+  { value: 'medium', label: 'Palier Médium seulement' },
+  { value: 'large', label: 'Palier Puissant seulement' },
+  { value: 'vision', label: 'Palier Vision seulement' },
+  { value: 'code', label: 'Palier Code seulement' }
+]
 
 /**
  * Chromium ajoute des pseudo-périphériques "default"/"communications" en plus des vrais haut-parleurs
@@ -112,6 +126,8 @@ export default function OptionsMenu(): JSX.Element {
   const [history, setHistory] = useState<ConversationEntry[] | null>(null)
   const [clearingHistory, setClearingHistory] = useState(false)
   const [hardwareTiers, setHardwareTiers] = useState<HardwareTierPreviewData[] | null>(null)
+  const [modelOverview, setModelOverview] = useState<ModelOverviewResult | null>(null)
+  const [analysisScope, setAnalysisScope] = useState<AnalysisScope>('all')
   const [ollamaVersionStatus, setOllamaVersionStatus] = useState<OllamaVersionStatus | null>(null)
   const [updatingOllama, setUpdatingOllama] = useState(false)
   const [ollamaUpdateMessage, setOllamaUpdateMessage] = useState<string | null>(null)
@@ -138,6 +154,7 @@ export default function OptionsMenu(): JSX.Element {
   // affichée comme une rangée de barres qui défilent façon Discord, pas un seul chiffre.
   const [micLevels, setMicLevels] = useState<number[]>(() => Array(MIC_TEST_BAR_COUNT).fill(0))
   const [micTestResult, setMicTestResult] = useState<boolean | null>(null)
+  const modelAnalysis = useModelAnalysis(modelOverview)
 
   useEffect(() => {
     window.jaris.getGmailStatus().then(setStatus)
@@ -163,7 +180,10 @@ export default function OptionsMenu(): JSX.Element {
     if (tab === 'modeles' && hardwareTiers === null) {
       void window.jaris.previewHardwareTiers().then(setHardwareTiers)
     }
-  }, [tab, hardwareTiers])
+    if (tab === 'modeles' && modelOverview === null) {
+      void window.jaris.getModelOverview().then(setModelOverview)
+    }
+  }, [tab, hardwareTiers, modelOverview])
 
   // Contrairement à hardwareTiers ci-dessus (coûteux, relit un fichier), une simple lecture d'une valeur
   // déjà en cache côté main (voir getOllamaVersionStatus) : pas besoin de garde "déjà chargé", on relit à
@@ -264,6 +284,25 @@ export default function OptionsMenu(): JSX.Element {
     } finally {
       setRetestingConfig(false)
     }
+  }
+
+  /**
+   * Contrairement à "Retester la configuration" ci-dessus (rapide : télécharge directement le gagnant déjà
+   * connu de verified-tool-scores.md), celle-ci relance pour de vrai scripts/benchmark-models.mjs sur TOUS
+   * les candidats connus (dont les tout nouveaux jamais mesurés, ex: gemma4:12b/granite4.1:8b/qwen3.6:35b) —
+   * seule façon de leur donner une vraie chance de gagner un palier au lieu de rester "informatifs" pour
+   * toujours faute de score mesuré. Peut prendre des dizaines de minutes (voir ANALYSIS_NOTICE,
+   * ModelAnalysisProgress.tsx) : jamais lancée automatiquement, seulement à la demande explicite d'un clic.
+   */
+  const handleRunFullAnalysis = (): void => {
+    setError(null)
+    modelAnalysis
+      .run(analysisScope)
+      .then((result) => {
+        setProfile((prev) => (prev ? { ...prev, models: result.models, visionModel: result.visionModel, capacityScanDone: true } : prev))
+        return Promise.all([window.jaris.previewHardwareTiers().then(setHardwareTiers), window.jaris.getModelOverview().then(setModelOverview)])
+      })
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
   }
 
   const handleClearHistory = async (): Promise<void> => {
@@ -725,6 +764,32 @@ export default function OptionsMenu(): JSX.Element {
               graphique) et télécharge directement les modèles déjà connus pour cette nouvelle configuration,
               sans repasser par une analyse comparative complète.
             </p>
+
+            <div className="options-menu__ollama-update-actions">
+              <label className="options-menu__field">
+                <select
+                  value={analysisScope}
+                  onChange={(e) => setAnalysisScope(e.target.value as AnalysisScope)}
+                  disabled={modelAnalysis.benchmarking}
+                >
+                  {ANALYSIS_SCOPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button onClick={handleRunFullAnalysis} disabled={modelAnalysis.benchmarking}>
+                {modelAnalysis.benchmarking ? 'Analyse en cours...' : 'Tester tous les modèles et choisir les meilleurs'}
+              </button>
+            </div>
+            <p className="options-menu__model-overview-hint">
+              Télécharge et teste pour de vrai les modèles candidats du périmètre choisi sur cette machine
+              (dont les plus récents jamais encore mesurés) pour trouver le vrai meilleur choix — peut prendre
+              des dizaines de minutes pour "Tout analyser", bien plus rapide pour un seul palier ; à lancer
+              plutôt en laissant l'ordinateur tranquille.
+            </p>
+            <ModelAnalysisProgress state={modelAnalysis} modelOverview={modelOverview} />
           </div>
         )}
 
