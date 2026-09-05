@@ -296,7 +296,8 @@ export default function OptionsMenu(): JSX.Element {
     if (
       !window.confirm(
         'Copier ton profil Chrome actuel (comptes connectés, favoris, mots de passe enregistrés) dans la ' +
-          'fenêtre dédiée à Jaris, à la place de son profil vide ? Ferme Google Chrome avant de continuer.'
+          'fenêtre dédiée à Jaris, à la place de son profil vide ? Toutes tes fenêtres Chrome vont se ' +
+          'fermer automatiquement : sauvegarde ton travail avant de continuer.'
       )
     ) {
       return

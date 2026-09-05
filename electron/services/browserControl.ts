@@ -285,18 +285,18 @@ const PROFILE_COPY_EXCLUDED_DIRS = new Set([
 ])
 
 /**
- * Tue la fenêtre Chrome DÉDIÉE à Jaris si elle tourne (jamais le Chrome habituel de l'utilisateur, qui
- * partage le même exécutable chrome.exe) : identifiée par son --user-data-dir dans sa ligne de commande,
- * seul moyen fiable de la distinguer d'un Chrome normal sous Windows. Nécessaire avant de réécrire son
- * dossier de profil, sinon certains fichiers restent verrouillés en écriture par ce process.
+ * Ferme TOUTES les fenêtres Chrome (le Chrome habituel de l'utilisateur ET la fenêtre dédiée à Jaris,
+ * même exécutable chrome.exe) avant de copier le profil : la source (vrai profil) ET la destination
+ * (profil dédié) doivent toutes les deux être libres de tout verrou de fichier. Plus simple et plus fiable
+ * que de demander à l'utilisateur de fermer Chrome lui-même avant de cliquer (constaté en usage réel,
+ * Léo : oublié/pas fait correctement, la copie échouait sur des fichiers encore verrouillés) — la
+ * confirmation affichée avant l'appel (OptionsMenu.tsx) prévient de sauvegarder son travail avant.
  */
-async function killDedicatedChrome(): Promise<void> {
+async function closeAllChrome(): Promise<void> {
   cachedBrowser = null
   if (process.platform !== 'win32') return
-  const profileDir = dedicatedProfileDir().replace(/'/g, "''")
-  const script = `Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | Where-Object { $_.CommandLine -like '*${profileDir}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`
   await new Promise<void>((resolve) => {
-    const proc = spawn('powershell.exe', ['-NoProfile', '-Command', script], { windowsHide: true })
+    const proc = spawn('taskkill', ['/IM', 'chrome.exe', '/F'], { windowsHide: true })
     proc.on('error', () => resolve())
     proc.on('close', () => resolve())
   })
@@ -325,7 +325,7 @@ export async function importRealChromeProfile(): Promise<{ success: boolean; mes
     }
   }
 
-  await killDedicatedChrome()
+  await closeAllChrome()
 
   const dest = dedicatedProfileDir()
   try {
@@ -346,9 +346,9 @@ export async function importRealChromeProfile(): Promise<{ success: boolean; mes
       return {
         success: false,
         message:
-          'Ferme complètement Google Chrome (vérifie dans le Gestionnaire des tâches Windows qu\'aucun ' +
-          "processus \"Google Chrome\" ne reste) puis réessaie : certains fichiers du profil sont encore " +
-          'utilisés.'
+          'Chrome a bien été fermé automatiquement, mais certains fichiers du profil restent verrouillés ' +
+          '(un antivirus, ou un processus Chrome relancé tout seul en arrière-plan) : vérifie dans le ' +
+          'Gestionnaire des tâches Windows qu\'aucun processus "Google Chrome" ne reste, puis réessaie.'
       }
     }
     return { success: false, message: `Échec de la copie du profil : ${detail}` }
