@@ -8,7 +8,7 @@ import JarisOrb from '@/components/JarisOrb'
 import MemoryBrain from '@/components/MemoryBrain'
 import OptionsMenu from '@/components/OptionsMenu'
 import { useJarisStore, type JarisEmotion } from '@/store/useJarisStore'
-import type { MemoryGraph, OllamaVersionStatus } from '../shared/ipc'
+import type { AppVersionStatus, MemoryGraph, OllamaVersionStatus } from '../shared/ipc'
 
 const STATUS_LABEL: Record<JarisEmotion, string> = {
   idle: 'Jaris dort...',
@@ -58,6 +58,8 @@ export default function App(): JSX.Element {
   const [appMode, setAppMode] = useState<AppMode>('voice')
   const [ollamaVersionStatus, setOllamaVersionStatus] = useState<OllamaVersionStatus | null>(null)
   const [ollamaPopupDismissed, setOllamaPopupDismissed] = useState(false)
+  const [appVersionStatus, setAppVersionStatus] = useState<AppVersionStatus | null>(null)
+  const [appPopupDismissed, setAppPopupDismissed] = useState(false)
 
   const openMemoryBrain = (): void => {
     void window.jaris.getMemoryGraph().then(setMemoryGraph)
@@ -151,6 +153,14 @@ export default function App(): JSX.Element {
   useEffect(() => {
     if (MODE !== 'full' || !capacityScanDone) return
     window.jaris.getOllamaVersionStatus().then(setOllamaVersionStatus)
+  }, [capacityScanDone])
+
+  // Popup "Jaris pas à jour" (étape 20) : même principe que celui d'Ollama juste au-dessus — visible
+  // depuis n'importe lequel des 3 modes, "Fermer" ne fait que le cacher pour la session en cours, toujours
+  // retrouvable dans Options → Modèles (bandeau détaillé + bouton "Mettre à jour", OptionsMenu.tsx).
+  useEffect(() => {
+    if (MODE !== 'full' || !capacityScanDone) return
+    window.jaris.getAppVersionStatus().then(setAppVersionStatus)
   }, [capacityScanDone])
 
   useEffect(() => {
@@ -285,6 +295,16 @@ export default function App(): JSX.Element {
                 {ollamaVersionStatus.latest}. Ouvre Options → Modèles pour mettre à jour.
               </p>
               <button onClick={() => setOllamaPopupDismissed(true)}>Fermer</button>
+            </div>
+          )}
+
+          {appVersionStatus?.outdated && !appPopupDismissed && (
+            <div className="app__new-models">
+              <p>
+                Jaris {appVersionStatus.current} installé, la dernière version est{' '}
+                {appVersionStatus.latest}. Ouvre Options → Modèles pour mettre à jour.
+              </p>
+              <button onClick={() => setAppPopupDismissed(true)}>Fermer</button>
             </div>
           )}
 

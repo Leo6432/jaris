@@ -112,14 +112,6 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   temps de réponse (chargement des modèles, transcription, synthèse vocale),
   réduire la taille de l'appli packagée, et nettoyer le code mort et les
   dépendances inutilisées
-- ⬜ Étape 20 — Mise à jour automatique de l'application dès qu'une nouvelle
-  version est publiée : **entièrement depuis l'interface de Jaris, jamais
-  de terminal** — ni `git pull`, ni `pip install`, ni `npm run build` à
-  lancer à la main (contrairement à aujourd'hui, où chaque mise à jour du
-  code demande ces commandes). Détection de nouvelle version, téléchargement
-  et application se font en un clic, ou automatiquement, comme le bouton
-  "Mettre à jour" déjà en place pour Ollama (Options → Modèles) — même
-  principe, appliqué à Jaris lui-même
 - ⬜ Étape 22 — Vérification des licences avant mise en vente : vérifier la
   compatibilité des licences des briques open source utilisées (Ollama,
   modèles Qwen, Cohere Transcribe, Supertonic HD, SearXNG) avec
@@ -221,6 +213,7 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   sur un modèle généraliste de la taille qui tient sur 8 Go de VRAM) puis
   reprise avec deux modèles réellement spécialisés en code (voir plus bas)
 - ✅ Étape 34 — Playwright pour piloter un vrai navigateur (voir plus bas)
+- ✅ Étape 20 — Mise à jour automatique de l'application (voir plus bas)
 - ✅ Étape 16 — Installeur en un clic (voir plus bas) : **règle absolue — le Jaris installé par
   le public doit être exactement le même que celui utilisé en développement**
   (mêmes modèles, mêmes fonctionnalités, même qualité de réponse), jamais une
@@ -914,6 +907,32 @@ n'est pas disponible dans cette version.
   qui a déjà Docker Desktop. Mais Docker ne s'installe pas en silence : sur
   une machine qui ne l'a pas, la recherche web reste indisponible. À
   remplacer par une solution sans Docker.
+
+## Mise à jour automatique de l'application (étape 20)
+
+Même principe que le bouton "Mettre à jour" déjà en place pour Ollama
+(Options → Modèles), appliqué à Jaris lui-même (`appUpdater.ts`) — jamais de
+`git pull`/`npm run build` à lancer à la main :
+
+1. Au lancement, Jaris compare sa propre version (`app.getVersion()`, lue
+   dans `package.json` au moment du build) à la dernière **Release GitHub
+   stable** (`GET /repos/Leo6432/jaris/releases/latest`).
+2. Si elle est plus récente, un bandeau apparaît partout dans l'interface
+   (même mécanisme que le popup "nouveaux modèles"/"Ollama pas à jour") et
+   dans Options → Modèles, avec un bouton **"Mettre à jour"**.
+3. Un clic télécharge le VRAI installeur (`Jaris-Setup-*.exe`) joint à cette
+   Release, le lance, puis ferme Jaris tout seul pour libérer son propre
+   exécutable — l'installeur "un clic" (voir étape 16) continue alors
+   entièrement silencieux et relance Jaris à la fin.
+
+**Publier une nouvelle version** (développeur uniquement) : bump le champ
+`version` de `package.json`, commit, puis pousse un tag `vX.Y.Z` correspondant
+(`git tag vX.Y.Z && git push origin vX.Y.Z`) — le workflow
+(`build-installer.yml`) construit et publie automatiquement la Release. La
+Release **"dernier-build"**, republiée à chaque push de branche pour tester le
+développement en cours, est marquée `--prerelease` : `releases/latest`
+l'ignore toujours, elle ne peut jamais être confondue avec une vraie sortie
+versionnée par le mécanisme de mise à jour.
 
 ## Contrôle du navigateur avec Playwright (étape 34)
 

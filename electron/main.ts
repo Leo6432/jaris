@@ -29,6 +29,7 @@ import {
 import { getProfile, markGmailOnboardingDone, saveProfile } from './services/profileStore'
 import { connectGmail, disconnectGmail, getGmailStatus } from './services/googleAuth'
 import { clearSmtpConfig, getSmtpStatus, saveSmtpConfig } from './services/smtpStore'
+import { checkAppFreshness, getAppVersionStatus, updateApp } from './services/appUpdater'
 import {
   IPC_CHANNELS,
   type AnalysisScope,
@@ -252,6 +253,10 @@ app.whenReady().then(async () => {
     callback(permission === 'media')
   })
 
+  // Un seul check par lancement (comme checkOllamaFreshness) : la version installée ne change pas pendant
+  // que Jaris tourne, pas la peine de refaire l'appel réseau à chaque ouverture d'un onglet Options.
+  void checkAppFreshness()
+
   ipcMain.handle(IPC_CHANNELS.setupStatus, () => lastSetupStatus)
   ipcMain.on(IPC_CHANNELS.triggerWake, () => pipeline?.triggerWake())
   ipcMain.on(IPC_CHANNELS.audioEnded, () => pipeline?.notifyAudioEnded())
@@ -304,6 +309,8 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.getOllamaVersionStatus, () => getOllamaVersionStatus())
   ipcMain.handle(IPC_CHANNELS.updateOllama, () => updateOllama())
   ipcMain.handle(IPC_CHANNELS.importChromeProfile, () => importRealChromeProfile())
+  ipcMain.handle(IPC_CHANNELS.getAppVersionStatus, () => getAppVersionStatus())
+  ipcMain.handle(IPC_CHANNELS.updateApp, () => updateApp())
   ipcMain.handle(IPC_CHANNELS.getSmtpStatus, () => getSmtpStatus())
   ipcMain.handle(IPC_CHANNELS.saveSmtpConfig, (_event, smtpConfig: SmtpConfig) => saveSmtpConfig(smtpConfig))
   ipcMain.handle(IPC_CHANNELS.disconnectSmtp, () => clearSmtpConfig())

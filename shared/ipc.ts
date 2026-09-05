@@ -256,6 +256,16 @@ export interface OllamaVersionStatus {
   outdated: boolean
 }
 
+/**
+ * Version de Jaris lui-même comparée à la dernière Release GitHub stable (étape 20, voir appUpdater.ts) —
+ * même principe qu'OllamaVersionStatus ci-dessus, `null` tant que le check réseau n'a pas abouti.
+ */
+export interface AppVersionStatus {
+  current: string
+  latest: string
+  outdated: boolean
+}
+
 /** Un message du mode Chat (étape 30) — même Jaris et mêmes outils que la voix, mais en écrit. */
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -368,6 +378,10 @@ export const IPC_CHANNELS = {
    * la fenêtre Chrome dédiée à Jaris, à la place de son profil vide auto-créé (voir importRealChromeProfile,
    * browserControl.ts). */
   importChromeProfile: 'jaris:import-chrome-profile',
+  /** renderer <-> main : version de Jaris comparée à la dernière Release GitHub stable (étape 20). */
+  getAppVersionStatus: 'jaris:get-app-version-status',
+  /** renderer -> main : télécharge et lance l'installeur de la dernière version, puis ferme Jaris. */
+  updateApp: 'jaris:update-app',
   /** renderer <-> main : état de la connexion SMTP (voir smtpStore.ts), pour Options → Connexions. */
   getSmtpStatus: 'jaris:get-smtp-status',
   /** renderer <-> main : enregistre (après vérification réelle de la connexion) une configuration SMTP. */

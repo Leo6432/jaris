@@ -1,5 +1,6 @@
 import type {
   AnalysisScope,
+  AppVersionStatus,
   AudioInputDevice,
   CapacityScanResult,
   ChatMessage,
@@ -56,6 +57,8 @@ declare global {
       getOllamaVersionStatus: () => Promise<OllamaVersionStatus | null>
       updateOllama: () => Promise<{ success: boolean; message: string }>
       importChromeProfile: () => Promise<{ success: boolean; message: string }>
+      getAppVersionStatus: () => Promise<AppVersionStatus | null>
+      updateApp: () => Promise<{ success: boolean; message: string }>
       getSmtpStatus: () => Promise<SmtpStatus>
       saveSmtpConfig: (config: SmtpConfig) => Promise<{ success: boolean; message: string }>
       disconnectSmtp: () => Promise<void>

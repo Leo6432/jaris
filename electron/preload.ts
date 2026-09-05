@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC_CHANNELS,
   type AnalysisScope,
+  type AppVersionStatus,
   type AudioInputDevice,
   type CapacityScanResult,
   type ChatMessage,
@@ -60,6 +61,8 @@ const api = {
   getOllamaVersionStatus: (): Promise<OllamaVersionStatus | null> => ipcRenderer.invoke(IPC_CHANNELS.getOllamaVersionStatus),
   updateOllama: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.updateOllama),
   importChromeProfile: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.importChromeProfile),
+  getAppVersionStatus: (): Promise<AppVersionStatus | null> => ipcRenderer.invoke(IPC_CHANNELS.getAppVersionStatus),
+  updateApp: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.updateApp),
   getSmtpStatus: (): Promise<SmtpStatus> => ipcRenderer.invoke(IPC_CHANNELS.getSmtpStatus),
   saveSmtpConfig: (smtpConfig: SmtpConfig): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.saveSmtpConfig, smtpConfig),
   disconnectSmtp: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.disconnectSmtp),

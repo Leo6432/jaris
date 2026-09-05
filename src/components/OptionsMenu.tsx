@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
+  AppVersionStatus,
   AudioInputDevice,
   ConfirmableTool,
   ConversationEntry,
@@ -118,6 +119,9 @@ export default function OptionsMenu(): JSX.Element {
   const [ollamaVersionStatus, setOllamaVersionStatus] = useState<OllamaVersionStatus | null>(null)
   const [updatingOllama, setUpdatingOllama] = useState(false)
   const [ollamaUpdateMessage, setOllamaUpdateMessage] = useState<string | null>(null)
+  const [appVersionStatus, setAppVersionStatus] = useState<AppVersionStatus | null>(null)
+  const [updatingApp, setUpdatingApp] = useState(false)
+  const [appUpdateMessage, setAppUpdateMessage] = useState<string | null>(null)
   const [importingChromeProfile, setImportingChromeProfile] = useState(false)
   const [chromeProfileMessage, setChromeProfileMessage] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -175,6 +179,7 @@ export default function OptionsMenu(): JSX.Element {
   useEffect(() => {
     if (tab === 'modeles') {
       void window.jaris.getOllamaVersionStatus().then(setOllamaVersionStatus)
+      void window.jaris.getAppVersionStatus().then(setAppVersionStatus)
     }
   }, [tab])
 
@@ -319,6 +324,22 @@ export default function OptionsMenu(): JSX.Element {
   const handleDisconnectSmtp = (): void => {
     setSmtpMessage(null)
     void window.jaris.disconnectSmtp().then(() => setSmtpStatus({ connected: false, email: null }))
+  }
+
+  /**
+   * Contrairement à handleUpdateOllama ci-dessous, ne relit jamais le statut après coup : une mise à jour
+   * réussie ferme Jaris une seconde plus tard (voir updateApp, appUpdater.ts) pour laisser l'installeur
+   * remplacer l'exécutable — le message de succès reste affiché jusqu'à la fermeture plutôt que d'essayer
+   * un appel IPC qui n'a plus grand sens à ce moment-là.
+   */
+  const handleUpdateApp = (): void => {
+    setUpdatingApp(true)
+    setAppUpdateMessage(null)
+    window.jaris
+      .updateApp()
+      .then(({ message }) => setAppUpdateMessage(message))
+      .catch((err: unknown) => setAppUpdateMessage(err instanceof Error ? err.message : String(err)))
+      .finally(() => setUpdatingApp(false))
   }
 
   const handleUpdateOllama = (): void => {
@@ -724,6 +745,24 @@ export default function OptionsMenu(): JSX.Element {
 
         {tab === 'modeles' && (
           <div className="options-menu__section">
+            {appVersionStatus?.outdated && (
+              <div className="options-menu__ollama-warning">
+                Jaris {appVersionStatus.current} installé, la dernière version est{' '}
+                {appVersionStatus.latest}.
+                <div className="options-menu__ollama-update-actions">
+                  <button onClick={handleUpdateApp} disabled={updatingApp}>
+                    {updatingApp ? 'Mise à jour en cours…' : 'Mettre à jour'}
+                  </button>
+                </div>
+                {updatingApp && (
+                  <p className="options-menu__ollama-update-note">
+                    Jaris va se fermer puis relancer automatiquement une fois la mise à jour terminée.
+                  </p>
+                )}
+              </div>
+            )}
+            {!updatingApp && appUpdateMessage && <p className="options-menu__ollama-update-note">{appUpdateMessage}</p>}
+
             {ollamaVersionStatus?.outdated && (
               <div className="options-menu__ollama-warning">
                 Ollama {ollamaVersionStatus.current} installé, la dernière version est{' '}
