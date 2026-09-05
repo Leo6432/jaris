@@ -10,6 +10,7 @@ import {
 import { getAllCandidateModelIds, getModelOverview, previewHardwareTiers } from './services/hardwareScan'
 import { getConfirmableTools } from './services/toolSecurity'
 import { importRealChromeProfile } from './services/browserControl'
+import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { runModelAnalysis, runQuickSetup } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
 import { generateApp, getGeneratedAppsDir } from './services/codeGenerator'
@@ -301,6 +302,12 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.getOllamaVersionStatus, () => getOllamaVersionStatus())
   ipcMain.handle(IPC_CHANNELS.updateOllama, () => updateOllama())
   ipcMain.handle(IPC_CHANNELS.importChromeProfile, () => importRealChromeProfile())
+  ipcMain.handle(IPC_CHANNELS.getRuntimeSetupStatus, () => getRuntimeSetupStatus())
+  // L'installation du premier lancement (Python, Ollama) dure plusieurs minutes : chaque étape est
+  // diffusée au fil de l'eau plutôt qu'attendre la fin, pour que l'utilisateur voie que ça avance.
+  ipcMain.handle(IPC_CHANNELS.runRuntimeSetup, () =>
+    runFirstRunSetup((progress) => broadcast(IPC_CHANNELS.runtimeSetupProgress, progress))
+  )
   // renderer -> main : modèles candidats apparus depuis le dernier scan (étape 29), pour le popup dans App.tsx.
   // Un profil créé avant cette fonctionnalité (knownModelCandidates jamais défini) est silencieusement
   // initialisé sur l'état actuel plutôt que de signaler tous les candidats existants comme "nouveaux".

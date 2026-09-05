@@ -15,6 +15,8 @@ import type {
   ModelOverviewResult,
   OllamaVersionStatus,
   Profile,
+  RuntimeSetupProgress,
+  RuntimeSetupStatus,
   VoiceReplyPayload,
   VoiceSetupStatusPayload
 } from '../shared/ipc'
@@ -52,6 +54,9 @@ declare global {
       getOllamaVersionStatus: () => Promise<OllamaVersionStatus | null>
       updateOllama: () => Promise<{ success: boolean; message: string }>
       importChromeProfile: () => Promise<{ success: boolean; message: string }>
+      getRuntimeSetupStatus: () => Promise<RuntimeSetupStatus>
+      runRuntimeSetup: () => Promise<RuntimeSetupStatus>
+      onRuntimeSetupProgress: (cb: (progress: RuntimeSetupProgress) => void) => () => void
       runModelAnalysis: (scope?: AnalysisScope) => Promise<CapacityScanResult>
       previewHardwareTiers: () => Promise<HardwareTierPreview[]>
       runQuickSetup: () => Promise<CapacityScanResult>

@@ -55,6 +55,26 @@ export interface Profile {
   alwaysAllowedTools?: string[]
 }
 
+/**
+ * Ce qui est déjà installé sur la machine pour faire tourner Jaris (étape 16) : Python et ses dépendances
+ * d'un côté, Ollama de l'autre. `ready` = les deux, donc rien à installer au lancement.
+ */
+export interface RuntimeSetupStatus {
+  pythonReady: boolean
+  ollamaReady: boolean
+  ready: boolean
+}
+
+/** Avancement de l'installation du premier lancement (voir runFirstRunSetup, firstRunSetup.ts). */
+export interface RuntimeSetupProgress {
+  step: 'ollama' | 'python'
+  message: string
+  /** Pourcentage quand il est connu (téléchargement) : absent pour une étape dont on ne peut pas mesurer l'avancement. */
+  percent?: number
+  /** true si CETTE étape a échoué : l'installation continue quand même avec les autres. */
+  failed?: boolean
+}
+
 /** Un outil N2 proposable en "toujours autoriser" dans Options → Sécurité (voir getConfirmableTools, toolSecurity.ts). */
 export interface ConfirmableTool {
   name: string
@@ -326,5 +346,11 @@ export const IPC_CHANNELS = {
   /** renderer -> main : copie le vrai profil Chrome de l'utilisateur (comptes, favoris, mots de passe) dans
    * la fenêtre Chrome dédiée à Jaris, à la place de son profil vide auto-créé (voir importRealChromeProfile,
    * browserControl.ts). */
-  importChromeProfile: 'jaris:import-chrome-profile'
+  importChromeProfile: 'jaris:import-chrome-profile',
+  /** renderer <-> main : ce qui reste à installer sur la machine (Python, Ollama) au premier lancement. */
+  getRuntimeSetupStatus: 'jaris:get-runtime-setup-status',
+  /** renderer <-> main : installe ce qui manque (étape 16), résout avec le statut final. */
+  runRuntimeSetup: 'jaris:run-runtime-setup',
+  /** main -> renderer : avancement de cette installation, au fil de l'eau. */
+  runtimeSetupProgress: 'jaris:runtime-setup-progress'
 } as const

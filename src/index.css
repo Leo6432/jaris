@@ -1526,3 +1526,92 @@ body.body--scan {
   margin: 6px 0;
   padding-left: 18px;
 }
+
+/* Écran d'installation du premier lancement (RuntimeSetup.tsx, étape 16) : mêmes codes visuels que
+   l'écran de bienvenue ci-dessus, en un peu plus large — les messages d'avancement de pip/Ollama sont
+   nettement plus longs qu'un "Comment dois-je t'appeler ?". */
+.runtime-setup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  max-width: 460px;
+}
+
+.runtime-setup h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.runtime-setup__intro {
+  margin: 0;
+  color: #9fc3e6;
+  line-height: 1.5;
+}
+
+.runtime-setup__status {
+  color: #d9ecff;
+  font-size: 0.9rem;
+  min-height: 1.2em;
+  /* Une ligne de sortie de pip peut être très longue (URL de paquet) : coupée plutôt que d'élargir
+     l'écran au-delà de la fenêtre. */
+  overflow-wrap: anywhere;
+}
+
+.runtime-setup__bar {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(127, 163, 201, 0.2);
+  overflow: hidden;
+}
+
+.runtime-setup__bar-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #37e2ff, #2b6cff);
+  transition: width 0.3s ease;
+}
+
+/* Étape dont l'avancement n'est pas mesurable (installation de paquets) : un va-et-vient qui montre que
+   ça travaille, plutôt qu'une barre figée qui laisserait croire que c'est planté. */
+.runtime-setup__bar-fill--pulse {
+  width: 35%;
+  animation: runtime-setup-sweep 1.6s ease-in-out infinite;
+}
+
+@keyframes runtime-setup-sweep {
+  0% { margin-left: -35%; }
+  100% { margin-left: 100%; }
+}
+
+.runtime-setup__failures {
+  margin: 0;
+  padding-left: 20px;
+  text-align: left;
+  color: #ffb8b8;
+  font-size: 0.85rem;
+}
+
+.runtime-setup__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.runtime-setup__actions button {
+  background: rgba(55, 226, 255, 0.18);
+  border: 1px solid #37e2ff;
+  color: #d9ecff;
+  padding: 8px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.runtime-setup__actions .runtime-setup__skip {
+  background: transparent;
+  border-color: rgba(127, 163, 201, 0.35);
+  color: #9fc3e6;
+}

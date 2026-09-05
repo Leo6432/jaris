@@ -218,6 +218,57 @@ async function downloadAndLaunchOfficialInstaller(): Promise<boolean> {
   }
 }
 
+/** Emplacements d'installation d'Ollama sur Windows : par utilisateur (le défaut) puis pour toute la machine. */
+function ollamaExePaths(): string[] {
+  return [
+    join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Ollama', 'ollama.exe'),
+    join(process.env.ProgramFiles ?? '', 'Ollama', 'ollama.exe')
+  ]
+}
+
+/** true si Ollama est installé sur cette machine (qu'il tourne déjà ou non). */
+export async function isOllamaInstalled(): Promise<boolean> {
+  if (await isUp(`${config.ollama.host}/api/tags`)) return true
+  return ollamaExePaths().some((p) => existsSync(p))
+}
+
+/**
+ * Installe Ollama sans que l'utilisateur ait quoi que ce soit à cliquer (étape 16) : télécharge
+ * l'installeur officiel et le lance en mode silencieux. OllamaSetup.exe est construit avec Inno Setup, dont
+ * `/VERYSILENT` est l'option standard "aucune fenêtre, aucune question" ; `/SUPPRESSMSGBOXES` couvre les
+ * boîtes de dialogue qui bloqueraient quand même l'installation en attendant un clic, et `/NORESTART`
+ * évite qu'il redémarre le PC de l'utilisateur en plein premier lancement de Jaris.
+ *
+ * En cas d'échec, l'appelant peut toujours retomber sur downloadAndLaunchOfficialInstaller (fenêtre
+ * visible, quelques clics) : mieux vaut demander deux clics que ne pas installer Ollama du tout.
+ */
+export async function installOllamaSilently(onProgress: (message: string) => void): Promise<boolean> {
+  onProgress("Téléchargement d'Ollama…")
+  let installerPath: string
+  try {
+    const response = await fetch(OLLAMA_INSTALLER_URL, { signal: AbortSignal.timeout(120000) })
+    if (!response.ok) return false
+    installerPath = join(tmpdir(), 'JarisOllamaSetup.exe')
+    await writeFile(installerPath, Buffer.from(await response.arrayBuffer()))
+  } catch {
+    return false
+  }
+
+  onProgress("Installation d'Ollama en cours…")
+  const installed = await new Promise<boolean>((resolve) => {
+    const proc = spawn(installerPath, ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'], { windowsHide: true })
+    proc.on('error', () => resolve(false))
+    proc.on('close', (code) => resolve(code === 0))
+  })
+  if (!installed) return false
+
+  // L'installeur rend la main avant qu'Ollama ait fini de démarrer son serveur : sans cette attente, la
+  // suite (téléchargement des modèles) partirait sur un service qui ne répond pas encore.
+  onProgress("Démarrage d'Ollama…")
+  await waitUntil(() => isUp(`${config.ollama.host}/api/tags`), 60000)
+  return true
+}
+
 /**
  * Déclenché par le bouton "Mettre à jour" du bandeau (OptionsMenu.tsx). Trois méthodes, dans cet ordre :
  * 1. Redémarrer "ollama app.exe" (restartOllamaApp ci-dessus) : rapide, silencieux, aucune invite Windows —

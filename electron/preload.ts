@@ -17,6 +17,8 @@ import {
   type ModelOverviewResult,
   type OllamaVersionStatus,
   type Profile,
+  type RuntimeSetupProgress,
+  type RuntimeSetupStatus,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload
 } from '../shared/ipc'
@@ -56,6 +58,9 @@ const api = {
   getOllamaVersionStatus: (): Promise<OllamaVersionStatus | null> => ipcRenderer.invoke(IPC_CHANNELS.getOllamaVersionStatus),
   updateOllama: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.updateOllama),
   importChromeProfile: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.importChromeProfile),
+  getRuntimeSetupStatus: (): Promise<RuntimeSetupStatus> => ipcRenderer.invoke(IPC_CHANNELS.getRuntimeSetupStatus),
+  runRuntimeSetup: (): Promise<RuntimeSetupStatus> => ipcRenderer.invoke(IPC_CHANNELS.runRuntimeSetup),
+  onRuntimeSetupProgress: (cb: (progress: RuntimeSetupProgress) => void) => subscribe(IPC_CHANNELS.runtimeSetupProgress, cb),
   runModelAnalysis: (scope?: AnalysisScope): Promise<CapacityScanResult> => ipcRenderer.invoke(IPC_CHANNELS.runModelAnalysis, scope),
   previewHardwareTiers: (): Promise<HardwareTierPreview[]> => ipcRenderer.invoke(IPC_CHANNELS.previewHardwareTiers),
   runQuickSetup: (): Promise<CapacityScanResult> => ipcRenderer.invoke(IPC_CHANNELS.runQuickSetup),

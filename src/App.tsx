@@ -3,6 +3,7 @@ import CapacityScan from '@/components/CapacityScan'
 import ChatPanel from '@/components/ChatPanel'
 import CodePanel from '@/components/CodePanel'
 import GmailOnboarding from '@/components/GmailOnboarding'
+import RuntimeSetup from '@/components/RuntimeSetup'
 import JarisOrb from '@/components/JarisOrb'
 import MemoryBrain from '@/components/MemoryBrain'
 import OptionsMenu from '@/components/OptionsMenu'
@@ -50,6 +51,7 @@ export default function App(): JSX.Element {
   const [profileName, setProfileName] = useState<string | null | undefined>(undefined)
   const [gmailOnboardingDone, setGmailOnboardingDone] = useState<boolean | undefined>(undefined)
   const [capacityScanDone, setCapacityScanDone] = useState<boolean | undefined>(undefined)
+  const [runtimeReady, setRuntimeReady] = useState<boolean | undefined>(undefined)
   const [nameInput, setNameInput] = useState('')
   const [memoryGraph, setMemoryGraph] = useState<MemoryGraph | null>(null)
   const [newModels, setNewModels] = useState<string[]>([])
@@ -67,6 +69,18 @@ export default function App(): JSX.Element {
       setGmailOnboardingDone(profile?.gmailOnboardingDone ?? false)
       setCapacityScanDone(profile?.capacityScanDone ?? false)
     })
+  }, [])
+
+  // Ce que la machine a déjà (Python, Ollama) : relu à chaque démarrage plutôt qu'enregistré dans le
+  // profil, parce que c'est l'état réel du disque qui compte — une désinstallation d'Ollama en dehors de
+  // Jaris, ou une nouvelle dépendance Python ajoutée par une mise à jour, doit être détectée telle quelle.
+  useEffect(() => {
+    if (MODE !== 'full') return
+    window.jaris
+      .getRuntimeSetupStatus()
+      .then((status) => setRuntimeReady(status.ready))
+      // Statut illisible : on ne bloque pas l'utilisateur derrière un écran d'installation à cause de ça.
+      .catch(() => setRuntimeReady(true))
   }, [])
 
   const handleOnboardingSubmit = (event: React.FormEvent): void => {
@@ -200,6 +214,13 @@ export default function App(): JSX.Element {
           </form>
         </div>
       )
+    }
+
+    // Avant tout le reste : sans Python ni Ollama installés, ni la voix ni la conversation ne peuvent
+    // fonctionner. `undefined` = on ne sait pas encore (statut en cours de lecture), surtout pas "à
+    // installer" : ça ferait clignoter cet écran à chaque démarrage sur une machine déjà prête.
+    if (runtimeReady === false) {
+      return <RuntimeSetup onDone={() => setRuntimeReady(true)} />
     }
 
     if (!gmailOnboardingDone) {
