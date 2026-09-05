@@ -1,0 +1,60 @@
+# Construit l'installeur Windows de Jaris (étape 16) sur les serveurs de GitHub, pas sur une machine de
+# développement : c'est ce qui permet de récupérer un Jaris-Setup.exe prêt à installer sans avoir Node,
+# npm ni quoi que ce soit d'installé sur le PC qui va s'en servir.
+name: Installeur Windows
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+    # Un tag de version (ex: v0.1.0) publie en plus une vraie Release GitHub, voir le dernier bloc.
+    tags:
+      - 'v*'
+  # Permet aussi de relancer une construction à la demande depuis l'onglet Actions de GitHub, sans avoir
+  # à pousser un commit juste pour ça.
+  workflow_dispatch:
+
+jobs:
+  build:
+    # Obligatoirement Windows : un installeur NSIS ne se construit pas sur Linux sans émulation.
+    runs-on: windows-latest
+    permissions:
+      # Nécessaire uniquement pour l'étape de publication de Release ci-dessous (création d'un tag/asset).
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # `npm ci` (et pas `npm install`) : installe exactement les versions de package-lock.json, pour que
+      # l'installeur publié soit construit avec les mêmes dépendances que celles testées.
+      - run: npm ci
+
+      # Le même contrôle de types que celui lancé à la main pendant le développement : mieux vaut échouer
+      # ici que publier un installeur qui plante au lancement.
+      - run: npm run typecheck
+
+      - run: npm run dist
+
+      # Récupérable depuis l'onglet Actions de GitHub, sur chaque commit poussé : c'est le moyen le plus
+      # rapide de tester une version en cours de développement sur un vrai PC Windows.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Jaris-Setup
+          path: release/Jaris-Setup-*.exe
+          if-no-files-found: error
+
+      # Sur un tag de version seulement : publie le .exe en Release, qui donne un lien de téléchargement
+      # direct (un artefact, lui, se télécharge en .zip et demande d'être connecté à GitHub). `gh` est
+      # préinstallé sur les runners GitHub, pas besoin d'une action tierce pour ça.
+      - if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          $exe = (Get-Item release/Jaris-Setup-*.exe).FullName
+          gh release create "$env:GITHUB_REF_NAME" "$exe" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
