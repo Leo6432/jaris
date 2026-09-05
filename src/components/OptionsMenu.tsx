@@ -7,7 +7,8 @@ import type {
   HardwareTierPreview as HardwareTierPreviewData,
   ModelsLocationStatus,
   OllamaVersionStatus,
-  Profile
+  Profile,
+  ReleaseHistoryEntry
 } from '../../shared/ipc'
 import HardwareTierPreview from './HardwareTierPreview'
 
@@ -61,6 +62,27 @@ function dedupeAudioOutputs(devices: MediaDeviceInfo[]): MediaDeviceInfo[] {
 }
 
 /**
+ * Les notes d'une Release viennent de `gh release create --generate-notes` (build-installer.yml) : du
+ * Markdown brut (titres `##`, puces `*`, liens `[texte](url)`) pensé pour la page GitHub, pas pour
+ * s'afficher tel quel dans Jaris. Un nettoyage minimal plutôt qu'un vrai rendu Markdown (pas besoin d'une
+ * librairie entière pour un journal de changements interne) : dépouille les symboles, garde le texte lisible.
+ */
+function formatReleaseNotes(notes: string): string {
+  return notes
+    .split('\n')
+    .filter((line) => !line.includes('**Full Changelog**'))
+    .map((line) =>
+      line
+        .replace(/^#+\s*/, '')
+        .replace(/^\*\s+/, '- ')
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    )
+    .join('\n')
+    .trim()
+}
+
+/**
  * "3/3", "6/6" etc. en petit badge coloré (vert = parfait, ambre = partiel, rouge = raté) plutôt qu'en
  * texte brut au milieu du tableau — un coup d'œil suffit pour repérer les bons/mauvais élèves, pas besoin
  * de lire chaque cellule. "—" (jamais testé) reste un texte neutre, pas un badge. Exporté : réutilisé par
@@ -94,6 +116,8 @@ export default function OptionsMenu(): JSX.Element {
   const [updatingOllama, setUpdatingOllama] = useState(false)
   const [ollamaUpdateMessage, setOllamaUpdateMessage] = useState<string | null>(null)
   const [appVersionStatus, setAppVersionStatus] = useState<AppVersionStatus | null>(null)
+  const [installedVersion, setInstalledVersion] = useState<string | null>(null)
+  const [releaseHistory, setReleaseHistory] = useState<ReleaseHistoryEntry[] | null>(null)
   const [updatingApp, setUpdatingApp] = useState(false)
   const [appUpdateMessage, setAppUpdateMessage] = useState<string | null>(null)
   const [modelsLocation, setModelsLocation] = useState<ModelsLocationStatus | null>(null)
@@ -147,11 +171,15 @@ export default function OptionsMenu(): JSX.Element {
     if (tab === 'modeles') {
       void window.jaris.getOllamaVersionStatus().then(setOllamaVersionStatus)
       void window.jaris.getAppVersionStatus().then(setAppVersionStatus)
+      void window.jaris.getAppVersion().then(setInstalledVersion)
+      if (releaseHistory === null) {
+        void window.jaris.getReleaseHistory().then(setReleaseHistory)
+      }
     }
     if (tab === 'stockage') {
       void window.jaris.getModelsLocationStatus().then(setModelsLocation)
     }
-  }, [tab])
+  }, [tab, releaseHistory])
 
   // Avancement du déplacement (Ollama/Python arrêtés, copie en cours, redémarrage...) : abonné une seule
   // fois comme les autres onLog/onModelBenchmarkLine, pas seulement pendant que l'onglet Modèles est ouvert
@@ -613,6 +641,28 @@ export default function OptionsMenu(): JSX.Element {
 
         {tab === 'modeles' && (
           <div className="options-menu__section">
+            <div className="options-menu__section-title">Journal des mises à jour</div>
+            <p className="options-menu__model-overview-hint">
+              Version installée : <strong>{installedVersion ?? appVersionStatus?.current ?? '...'}</strong>
+            </p>
+            {releaseHistory === null ? (
+              <p className="capacity-scan__status">Chargement...</p>
+            ) : releaseHistory.length === 0 ? (
+              <p className="options-menu__model-overview-hint">Aucune version publiée pour l'instant.</p>
+            ) : (
+              <ul className="options-menu__changelog-list">
+                {releaseHistory.map((entry) => (
+                  <li key={entry.version} className="options-menu__changelog-entry">
+                    <div className="options-menu__changelog-header">
+                      <strong>{entry.version}</strong>
+                      {entry.publishedAt && <span>{new Date(entry.publishedAt).toLocaleDateString('fr-FR')}</span>}
+                    </div>
+                    <p className="options-menu__changelog-notes">{formatReleaseNotes(entry.notes)}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+
             {appVersionStatus?.outdated && (
               <div className="options-menu__ollama-warning">
                 Jaris {appVersionStatus.current} installé, la dernière version est{' '}

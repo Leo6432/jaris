@@ -583,6 +583,43 @@ body.body--scan {
   overflow-wrap: anywhere;
 }
 
+.options-menu__changelog-list {
+  list-style: none;
+  margin: 4px 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.options-menu__changelog-entry {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.options-menu__changelog-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: #e4edf7;
+}
+
+.options-menu__changelog-header span {
+  color: #7fa3c9;
+  font-size: 0.75rem;
+}
+
+.options-menu__changelog-notes {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  color: #9fc3e6;
+  white-space: pre-wrap;
+}
+
 .options-menu__history-list {
   list-style: none;
   margin: 0;

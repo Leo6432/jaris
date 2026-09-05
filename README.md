@@ -906,6 +906,13 @@ Même principe que le bouton "Mettre à jour" déjà en place pour Ollama
    exécutable — l'installeur "un clic" (voir étape 16) continue alors
    entièrement silencieux et relance Jaris à la fin.
 
+Options → Modèles affiche aussi en permanence un **journal des mises à
+jour** : la version installée (`getAppVersion`, jamais bloquée par le réseau,
+contrairement au bandeau ci-dessus) et la liste de toutes les Releases
+stables déjà publiées avec leurs notes (`getReleaseHistory`, `GET
+/releases`) — de quoi voir d'un coup d'œil sa propre version et tout
+l'historique, sans aller chercher sur GitHub.
+
 **Publier une nouvelle version** : entièrement automatique, plus aucune
 commande à taper par personne (ni un utilisateur, ni le développeur). Il
 suffit de bumper le champ `version` de `package.json` et de pousser le commit

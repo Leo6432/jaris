@@ -245,6 +245,13 @@ export interface AppVersionStatus {
   outdated: boolean
 }
 
+/** Une entrée du journal des mises à jour (Options → Modèles), une par Release GitHub stable publiée. */
+export interface ReleaseHistoryEntry {
+  version: string
+  publishedAt: string
+  notes: string
+}
+
 /** Un message du mode Chat (étape 30) — même Jaris et mêmes outils que la voix, mais en écrit. */
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -358,6 +365,10 @@ export const IPC_CHANNELS = {
   getAppVersionStatus: 'jaris:get-app-version-status',
   /** renderer -> main : télécharge et lance l'installeur de la dernière version, puis ferme Jaris. */
   updateApp: 'jaris:update-app',
+  /** renderer <-> main : version réellement installée (app.getVersion()), jamais bloquée par le réseau. */
+  getAppVersion: 'jaris:get-app-version',
+  /** renderer <-> main : journal des mises à jour (toutes les Releases GitHub stables), pour Options → Modèles. */
+  getReleaseHistory: 'jaris:get-release-history',
   /** renderer <-> main : emplacement réel actuel des modèles/environnement (voir modelsLocation.ts). */
   getModelsLocationStatus: 'jaris:get-models-location-status',
   /** renderer -> main : ouvre un sélecteur de dossier puis déplace tout dedans (résout une fois terminé). */

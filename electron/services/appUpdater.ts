@@ -22,6 +22,13 @@ export interface AppVersionStatus {
   outdated: boolean
 }
 
+/** Une entrée du journal des mises à jour (Options → Modèles), une par Release GitHub stable publiée. */
+export interface ReleaseHistoryEntry {
+  version: string
+  publishedAt: string
+  notes: string
+}
+
 const REPO = 'Leo6432/jaris'
 
 let cachedStatus: AppVersionStatus | null = null
@@ -38,6 +45,12 @@ let freshnessCheck: Promise<void> | null = null
 export async function getAppVersionStatus(): Promise<AppVersionStatus | null> {
   if (freshnessCheck) await freshnessCheck
   return cachedStatus
+}
+
+/** Version réellement installée, lue localement (`app.getVersion()`) — jamais bloquée par le réseau,
+ * contrairement à getAppVersionStatus() qui compare à la dernière Release GitHub. */
+export function getInstalledVersion(): string {
+  return app.getVersion()
 }
 
 function parseSemver(version: string): [number, number, number] | null {
@@ -89,6 +102,33 @@ async function runFreshnessCheck(): Promise<void> {
     }
   } catch {
     // Best-effort (pas de réseau, GitHub inaccessible...) : ne doit jamais empêcher Jaris de démarrer.
+  }
+}
+
+/**
+ * Journal des mises à jour (Options → Modèles) : la liste des vraies Releases GitHub stables, la plus
+ * récente en premier (ordre déjà renvoyé par l'API). `GET /releases` (pluriel, jusqu'à 30 par défaut, bien
+ * assez pour un historique) inclut la Release "dernier-build" au même titre que les autres — filtrée ici
+ * via son champ `prerelease`, exactement comme `releases/latest` l'ignore déjà naturellement ailleurs.
+ */
+export async function getReleaseHistory(): Promise<ReleaseHistoryEntry[]> {
+  try {
+    const response = await fetch(`https://api.github.com/repos/${REPO}/releases`, {
+      headers: { Accept: 'application/vnd.github+json' },
+      signal: AbortSignal.timeout(5000)
+    })
+    if (!response.ok) return []
+    const releases = (await response.json()) as { tag_name?: string; prerelease?: boolean; published_at?: string; body?: string }[]
+
+    return releases
+      .filter((r) => !r.prerelease && r.tag_name && parseSemver(r.tag_name))
+      .map((r) => ({
+        version: r.tag_name as string,
+        publishedAt: r.published_at ?? '',
+        notes: r.body?.trim() || 'Pas de notes détaillées pour cette version.'
+      }))
+  } catch {
+    return []
   }
 }
 

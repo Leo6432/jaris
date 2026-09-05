@@ -16,6 +16,7 @@ import type {
   ModelsLocationStatus,
   OllamaVersionStatus,
   Profile,
+  ReleaseHistoryEntry,
   RuntimeSetupProgress,
   RuntimeSetupStatus,
   VoiceReplyPayload,
@@ -56,6 +57,8 @@ declare global {
       importChromeProfile: () => Promise<{ success: boolean; message: string }>
       getAppVersionStatus: () => Promise<AppVersionStatus | null>
       updateApp: () => Promise<{ success: boolean; message: string }>
+      getAppVersion: () => Promise<string>
+      getReleaseHistory: () => Promise<ReleaseHistoryEntry[]>
       getModelsLocationStatus: () => Promise<ModelsLocationStatus>
       chooseModelsLocation: () => Promise<{ success: boolean; message: string }>
       onModelsLocationProgress: (cb: (message: string) => void) => () => void

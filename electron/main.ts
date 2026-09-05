@@ -29,7 +29,7 @@ import {
 } from './services/conversationStore'
 import { getProfile, markGmailOnboardingDone, saveProfile } from './services/profileStore'
 import { connectGmail, disconnectGmail, getGmailStatus } from './services/googleAuth'
-import { checkAppFreshness, getAppVersionStatus, updateApp } from './services/appUpdater'
+import { checkAppFreshness, getAppVersionStatus, getInstalledVersion, getReleaseHistory, updateApp } from './services/appUpdater'
 import {
   IPC_CHANNELS,
   type AnalysisScope,
@@ -309,6 +309,8 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.importChromeProfile, () => importRealChromeProfile())
   ipcMain.handle(IPC_CHANNELS.getAppVersionStatus, () => getAppVersionStatus())
   ipcMain.handle(IPC_CHANNELS.updateApp, () => updateApp())
+  ipcMain.handle(IPC_CHANNELS.getAppVersion, () => getInstalledVersion())
+  ipcMain.handle(IPC_CHANNELS.getReleaseHistory, () => getReleaseHistory())
   ipcMain.handle(IPC_CHANNELS.getModelsLocationStatus, () => getModelsLocationStatus())
   ipcMain.handle(IPC_CHANNELS.chooseModelsLocation, async () => {
     const dialogOptions = {
