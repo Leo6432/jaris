@@ -57,12 +57,23 @@ jobs:
           path: release/Jaris-Setup-*.exe
           if-no-files-found: error
 
-      # Sur un tag de version seulement : publie le .exe en Release, qui donne un lien de téléchargement
-      # direct (un artefact, lui, se télécharge en .zip et demande d'être connecté à GitHub). `gh` est
-      # préinstallé sur les runners GitHub, pas besoin d'une action tierce pour ça.
+      # Sur un tag de version : publie le .exe en Release nommée d'après le tag (ex: v0.1.0), une vraie
+      # sortie versionnée avec ses notes.
       - if: startsWith(github.ref, 'refs/tags/v')
         run: |
           $exe = (Get-Item release/Jaris-Setup-*.exe).FullName
           gh release create "$env:GITHUB_REF_NAME" "$exe" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # Sur chaque push de branche (pas les tags, déjà couverts ci-dessus) : republie systématiquement une
+      # Release "dernier-build", écrasée à chaque fois (--clobber). Contrairement à un artefact (.zip, lien
+      # qui change à chaque run), ça donne un lien de téléchargement STABLE et direct vers le .exe, sans
+      # jamais avoir à créer un tag à la main pour tester une version en cours de développement.
+      - if: github.ref_type == 'branch'
+        run: |
+          $exe = (Get-Item release/Jaris-Setup-*.exe).FullName
+          gh release delete dernier-build --yes 2>$null
+          gh release create dernier-build "$exe" --title "Dernier build (${env:GITHUB_REF_NAME})" --notes "Construit automatiquement depuis le commit ${env:GITHUB_SHA} — pas une version stable, remplacé à chaque push." --prerelease
         env:
           GH_TOKEN: ${{ github.token }}
