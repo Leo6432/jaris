@@ -124,9 +124,28 @@ def high_frequency_ratio(chunk: np.ndarray) -> float:
     return hf_energy / total_energy
 
 
+# Copie non protégée du modèle de transcription officiel (CohereLabs/cohere-transcribe-03-2026), dont
+# l'accès demande un compte Hugging Face et l'acceptation de conditions en ligne. Ce compte est exactement
+# ce que l'étape 16 du roadmap interdit ("aucun compte Hugging Face à créer, même pour un débutant
+# complet") : sans ça, la reconnaissance vocale ne démarre tout simplement pas sur une machine fraîchement
+# installée.
+#
+# Ce ne sont pas d'autres poids, ni une version allégée : le fichier model.safetensors de cette copie a
+# exactement la même empreinte SHA256 que l'officiel (987bd3e141c7bfdb5a78f5db11397ee7737308357e6cc0a3f36a4979b158137a,
+# 4 131 862 976 octets), vérifié via l'API Hugging Face. La licence Apache 2.0 du modèle autorise
+# explicitement cette redistribution.
+DEFAULT_STT_MODEL = "evewashere/cohere-transcribe-03-2026-ungated"
+
+# Version exacte (identifiant de commit) plutôt que la dernière en date : un dépôt tiers pourrait sinon
+# remplacer les poids par n'importe quoi d'un jour à l'autre, et Jaris le téléchargerait sans broncher.
+# Un identifiant de commit, lui, est immuable — c'est ce qui rend l'usage d'une copie tierce sûr.
+DEFAULT_STT_REVISION = "29b9036c65620e1a148127c6147543b52358da6a"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--stt-model", default="CohereLabs/cohere-transcribe-03-2026")
+    parser.add_argument("--stt-model", default=DEFAULT_STT_MODEL)
+    parser.add_argument("--stt-revision", default=DEFAULT_STT_REVISION)
     parser.add_argument("--stt-device", default="cpu")
     parser.add_argument("--stt-language", default="fr")
     parser.add_argument("--input-device", type=int, default=None)
@@ -183,15 +202,18 @@ def main() -> None:
     emit({"event": "log", "message": f"Chargement de la transcription '{args.stt_model}' (téléchargement HuggingFace au premier lancement, ~4 Go, peut prendre plusieurs minutes)…"})
     try:
         stt_dtype = torch.float16 if args.stt_device == "cuda" else torch.float32
-        stt_processor = AutoProcessor.from_pretrained(args.stt_model)
+        # La révision n'est épinglée que pour le modèle par défaut : un modèle choisi explicitement par
+        # l'utilisateur (STT_MODEL du .env) n'a évidemment pas les mêmes identifiants de commit.
+        revision = args.stt_revision if args.stt_model == DEFAULT_STT_MODEL else None
+        stt_processor = AutoProcessor.from_pretrained(args.stt_model, revision=revision)
         stt_model = CohereAsrForConditionalGeneration.from_pretrained(
-            args.stt_model, dtype=stt_dtype, device_map=args.stt_device
+            args.stt_model, revision=revision, dtype=stt_dtype, device_map=args.stt_device
         )
     except Exception as exc:
         hint = (
-            " Ce modèle est protégé ('gated') : accepte les conditions sur "
-            f"https://huggingface.co/{args.stt_model} puis lance `hf auth login` "
-            "avec un compte Hugging Face gratuit."
+            f" Le modèle '{args.stt_model}' est protégé ('gated') : accepte les conditions sur "
+            f"https://huggingface.co/{args.stt_model} puis lance `hf auth login`, ou laisse STT_MODEL "
+            f"vide dans le .env pour utiliser le modèle par défaut, qui lui ne demande aucun compte."
             if "gated" in str(exc).lower() or "401" in str(exc) or "access" in str(exc).lower()
             else ""
         )

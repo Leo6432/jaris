@@ -41,16 +41,12 @@ export class VoiceClient extends EventEmitter {
     if (this.ready) return this.ready
 
     this.ready = new Promise((resolveReady, rejectReady) => {
-      const args = [
-        '-u',
-        voiceServerScript(),
-        '--stt-model',
-        config.stt.model,
-        '--stt-device',
-        config.stt.device,
-        '--stt-language',
-        config.stt.language
-      ]
+      const args = ['-u', voiceServerScript(), '--stt-device', config.stt.device, '--stt-language', config.stt.language]
+      // Transmis seulement si l'utilisateur a explicitement choisi un autre modèle : sinon voice_server.py
+      // applique le sien, avec la version exacte épinglée qui l'accompagne (voir DEFAULT_STT_MODEL).
+      if (config.stt.model !== '') {
+        args.push('--stt-model', config.stt.model)
+      }
       if (inputDeviceIndex !== undefined && inputDeviceIndex !== null) {
         args.push('--input-device', String(inputDeviceIndex))
       } else if (config.voice.inputDevice !== '') {

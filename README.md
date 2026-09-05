@@ -194,7 +194,7 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   temps de réponse (chargement des modèles, transcription, synthèse vocale),
   réduire la taille de l'appli packagée, et nettoyer le code mort et les
   dépendances inutilisées
-- ⬜ Étape 16 — Installeur en un clic : **règle absolue — le Jaris installé par
+- ✅ Étape 16 — Installeur en un clic (voir plus bas) : **règle absolue — le Jaris installé par
   le public doit être exactement le même que celui utilisé en développement**
   (mêmes modèles, mêmes fonctionnalités, même qualité de réponse), jamais une
   version allégée ou dégradée, et ça doit rester 0€ pour toujours (aucun
@@ -265,9 +265,12 @@ bandeau indique ce qui manque.
 
 ## Mettre en place le pipeline vocal (étape 3)
 
-Tout se télécharge directement, sauf la reconnaissance vocale qui demande un
-compte Hugging Face gratuit (voir plus bas) — c'est la seule exception au
-"zéro compte" du reste de Jaris.
+Tout se télécharge directement : aucun compte à créer nulle part, y compris
+pour la reconnaissance vocale (voir plus bas).
+
+> Cette section décrit l'installation **manuelle, pour le développement**.
+> L'application installée, elle, fait tout ça toute seule au premier
+> lancement — voir "Installeur en un clic (étape 16)" plus bas.
 
 > **Déclenchement : double clap, pas de mot à dire.**
 > Jaris n'a plus de mot d'activation parlé (openWakeWord, qui obligeait à
@@ -297,12 +300,24 @@ pip uninstall -y torch
 pip install torch --index-url https://download.pytorch.org/whl/cu124
 ```
 
-La reconnaissance vocale ([Cohere Transcribe](https://huggingface.co/CohereLabs/cohere-transcribe-03-2026),
-open source, #1 du classement Open ASR Leaderboard) est un modèle "gated" :
-1. Crée un compte gratuit sur [huggingface.co](https://huggingface.co)
-2. Accepte les conditions sur la page du modèle
-3. Dans le venv Python : `hf auth login` (colle un token créé sur
-   [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens))
+La reconnaissance vocale utilise [Cohere Transcribe](https://huggingface.co/CohereLabs/cohere-transcribe-03-2026)
+(open source, #1 du classement Open ASR Leaderboard). Le dépôt officiel est
+"gated" (compte Hugging Face + acceptation de conditions en ligne), ce que
+l'étape 16 interdit explicitement pour le public. Jaris télécharge donc une
+**copie non protégée** du même modèle, à la version exacte épinglée
+(`DEFAULT_STT_MODEL`/`DEFAULT_STT_REVISION` dans `python/voice_server.py`) :
+
+- ce ne sont pas d'autres poids ni une version allégée — le fichier
+  `model.safetensors` a exactement la même empreinte SHA256 que l'officiel
+  (`987bd3e1…`, 4 131 862 976 octets), vérifié via l'API Hugging Face ;
+- la licence Apache 2.0 du modèle autorise explicitement cette
+  redistribution ;
+- la version est épinglée par identifiant de commit, immuable : le dépôt
+  tiers ne peut pas remplacer les poids sous nos pieds.
+
+> À faire avant la mise en vente (étapes 22/38) : héberger cette copie
+> nous-mêmes plutôt que dépendre d'un dépôt tiers qui pourrait être supprimé.
+> La licence le permet ; seule la disponibilité est en jeu, pas le contenu.
 
 Renseigne dans `.env` :
 - `PYTHON_BIN` → chemin vers `python/venv/Scripts/python.exe`
@@ -817,6 +832,59 @@ Sans réponse claire dans les 2 minutes, la confirmation expire et la phrase
 suivante est traitée normalement, pour ne jamais interpréter par erreur une
 phrase sans rapport comme une réponse à une action que l'utilisateur a en
 réalité oubliée.
+
+## Installeur en un clic (étape 16)
+
+`npm run dist` produit **`Jaris-Setup-<version>.exe`** (electron-builder,
+NSIS) : un seul fichier à double-cliquer, sans assistant "Suivant/Suivant",
+sans invite d'élévation Windows (installation par utilisateur dans
+`%LOCALAPPDATA%\Programs`), et Jaris se lance à la fin. L'icône est générée
+par code (`scripts/generate-icon.mjs`), comme celle de la barre système :
+aucun binaire opaque dans le dépôt.
+
+**Personne n'a besoin d'un environnement de développement pour l'obtenir.**
+Le workflow `.github/workflows/build-installer.yml` construit l'installeur
+sur un runner Windows de GitHub à chaque commit poussé (récupérable dans
+l'onglet Actions) et le publie en Release sur un tag `v*` — donc sans Node,
+sans npm et sans dépôt cloné sur le PC qui va s'en servir.
+
+### Ce qui s'installe tout seul au premier lancement
+
+L'installeur ne contient que l'application (~100 Mo). Le reste est trop lourd
+pour un `.exe` et dépend de la machine, donc Jaris l'installe lui-même au
+premier démarrage, avec une barre de progression (`RuntimeSetup.tsx`,
+`firstRunSetup.ts`) — jamais une commande à taper :
+
+| Brique | Comment | Où |
+| --- | --- | --- |
+| Ollama | installeur officiel lancé en mode silencieux (`/VERYSILENT`) | `dependencyServices.ts` |
+| Python | version autonome (python-build-standalone), décompressée dans `%LOCALAPPDATA%\Jaris` | `pythonRuntime.ts` |
+| PyTorch, transformers… | `pip install` dans ce Python-là | `pythonRuntime.ts` |
+| Modèles de conversation | écran de configuration existant, selon la VRAM détectée | `benchmarkRunner.ts` |
+| Transcription et voix | téléchargés au premier usage par les sidecars Python | `voice_server.py`, `tts_server.py` |
+
+**PyTorch est installé à part, et avant le reste.** Sur Windows, le paquet
+`torch` publié sur PyPI — celui qu'installerait un simple `pip install -r
+requirements.txt` — est une version **sans support GPU**. L'installer tel
+quel ferait tourner la transcription sur le processeur (des secondes au lieu
+d'une fraction de seconde) sur une machine qui a pourtant une carte
+graphique : exactement la "version dégradée" que cette étape interdit. Jaris
+détecte donc la carte NVIDIA et installe la version GPU depuis l'index
+officiel PyTorch, avec repli automatique sur la version processeur si ça
+échoue.
+
+L'empreinte de `requirements.txt` est enregistrée après installation : une
+future version de Jaris qui ajoute une dépendance déclenchera l'installation
+manquante toute seule, sans que l'utilisateur ait à s'en occuper (base de
+l'étape 20).
+
+### Ce qui reste à faire sur cette étape
+
+- **Signature du code** : l'exécutable n'est pas signé, donc Windows
+  SmartScreen affiche un avertissement au premier lancement. Il faut un
+  certificat payant — à prévoir avec la mise en vente (étape 38).
+- **Recherche web** : SearXNG demande encore Docker Desktop, qui ne
+  s'installe pas en silence. À remplacer par une solution sans Docker.
 
 ## Contrôle du navigateur avec Playwright (étape 34)
 
