@@ -26,8 +26,17 @@ const REPO = 'Leo6432/jaris'
 
 let cachedStatus: AppVersionStatus | null = null
 let cachedDownloadUrl: string | null = null
+let freshnessCheck: Promise<void> | null = null
 
-export function getAppVersionStatus(): AppVersionStatus | null {
+/**
+ * Attend la vérification en cours si `checkAppFreshness` n'a pas encore fini (appelée en `void` au
+ * démarrage, sans attendre) avant de renvoyer le cache : sans ça, l'appel IPC déclenché par le montage de
+ * l'interface (App.tsx, quasi instantané) gagnait quasi systématiquement la course contre l'appel réseau
+ * vers GitHub (bien plus lent), et `cachedStatus` valait encore `null` à ce moment-là — la popup de mise à
+ * jour ne pouvait alors jamais s'afficher, peu importe la version réellement publiée.
+ */
+export async function getAppVersionStatus(): Promise<AppVersionStatus | null> {
+  if (freshnessCheck) await freshnessCheck
   return cachedStatus
 }
 
@@ -50,7 +59,12 @@ function isNewer(a: [number, number, number], b: [number, number, number]): bool
  * que l'UI (App.tsx, OptionsMenu.tsx) le lise à tout moment sans refaire l'appel réseau — un seul check par
  * lancement de Jaris suffit.
  */
-export async function checkAppFreshness(): Promise<void> {
+export function checkAppFreshness(): Promise<void> {
+  freshnessCheck = runFreshnessCheck()
+  return freshnessCheck
+}
+
+async function runFreshnessCheck(): Promise<void> {
   try {
     const response = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
       headers: { Accept: 'application/vnd.github+json' },
