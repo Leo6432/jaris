@@ -14,6 +14,7 @@ import type {
   MicTestDonePayload,
   MicTestLevelPayload,
   ModelOverviewResult,
+  ModelsLocationStatus,
   OllamaVersionStatus,
   Profile,
   RuntimeSetupProgress,
@@ -62,6 +63,9 @@ declare global {
       getSmtpStatus: () => Promise<SmtpStatus>
       saveSmtpConfig: (config: SmtpConfig) => Promise<{ success: boolean; message: string }>
       disconnectSmtp: () => Promise<void>
+      getModelsLocationStatus: () => Promise<ModelsLocationStatus>
+      chooseModelsLocation: () => Promise<{ success: boolean; message: string }>
+      onModelsLocationProgress: (cb: (message: string) => void) => () => void
       getRuntimeSetupStatus: () => Promise<RuntimeSetupStatus>
       runRuntimeSetup: () => Promise<RuntimeSetupStatus>
       onRuntimeSetupProgress: (cb: (progress: RuntimeSetupProgress) => void) => () => void

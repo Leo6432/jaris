@@ -1,12 +1,14 @@
-import { app, ipcMain, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu } from 'electron'
+import { app, dialog, ipcMain, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu } from 'electron'
 import { join } from 'path'
 import {
   ensureOllamaRunning,
   ensureSearxngRunning,
   getOllamaVersionStatus,
+  stopOllamaCompletely,
   stopOllamaIfStartedByJaris,
   updateOllama
 } from './services/dependencyServices'
+import { getModelsLocationStatus, moveModelsLocation } from './services/modelsLocation'
 import { getAllCandidateModelIds, getModelOverview, previewHardwareTiers } from './services/hardwareScan'
 import { getConfirmableTools } from './services/toolSecurity'
 import { importRealChromeProfile } from './services/browserControl'
@@ -314,6 +316,32 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.getSmtpStatus, () => getSmtpStatus())
   ipcMain.handle(IPC_CHANNELS.saveSmtpConfig, (_event, smtpConfig: SmtpConfig) => saveSmtpConfig(smtpConfig))
   ipcMain.handle(IPC_CHANNELS.disconnectSmtp, () => clearSmtpConfig())
+  ipcMain.handle(IPC_CHANNELS.getModelsLocationStatus, () => getModelsLocationStatus())
+  ipcMain.handle(IPC_CHANNELS.chooseModelsLocation, async () => {
+    const dialogOptions = {
+      properties: ['openDirectory' as const, 'createDirectory' as const],
+      title: 'Choisir où stocker les modèles et fichiers lourds de Jaris'
+    }
+    const result = fullWindow ? await dialog.showOpenDialog(fullWindow, dialogOptions) : await dialog.showOpenDialog(dialogOptions)
+    if (result.canceled || !result.filePaths[0]) return { success: false, message: '' }
+    const newDir = result.filePaths[0]
+
+    const log = (message: string): void => broadcast(IPC_CHANNELS.modelsLocationProgress, message)
+    // Ollama et les sidecars Python doivent tous les deux libérer leurs fichiers avant de déplacer quoi
+    // que ce soit, sinon la copie échoue ou laisse des données à moitié écrites.
+    log('Arrêt temporaire des services…')
+    pipeline?.stop()
+    ttsClient.stop()
+    await stopOllamaCompletely()
+
+    const outcome = await moveModelsLocation(newDir, log)
+
+    log('Redémarrage des services…')
+    void ensureOllamaRunning(log)
+    await startVoicePipeline()
+
+    return outcome
+  })
   ipcMain.handle(IPC_CHANNELS.getRuntimeSetupStatus, () => getRuntimeSetupStatus())
   // L'installation du premier lancement (Python, Ollama) dure plusieurs minutes : chaque étape est
   // diffusée au fil de l'eau plutôt qu'attendre la fin, pour que l'utilisateur voie que ça avance.

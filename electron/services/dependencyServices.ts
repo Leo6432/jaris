@@ -433,6 +433,19 @@ export function stopOllamaIfStartedByJaris(): void {
 }
 
 /**
+ * Arrête TOUT process Ollama en cours (le serveur `ollama.exe`, ET l'appli barre système `ollama app.exe`
+ * qui le relancerait sinon tout seul) — nécessaire avant de déplacer le dossier des modèles
+ * (Options → Modèles, voir modelsLocation.ts) : tant qu'un fichier de ce dossier est ouvert par Ollama, le
+ * déplacer échouerait ou laisserait des données corrompues. `ensureOllamaRunning` (appelé juste après par
+ * l'appelant) le relance proprement une fois le déplacement terminé.
+ */
+export async function stopOllamaCompletely(): Promise<void> {
+  ollamaProcessStartedByJaris = null
+  await execAsync('taskkill /IM ollama.exe /F').catch(() => {})
+  await execAsync('taskkill /IM "ollama app.exe" /F').catch(() => {})
+}
+
+/**
  * Démarre Docker Desktop (si besoin) puis `docker compose up -d` pour SearXNG (recherche web).
  * Non bloquant pour le reste de Jaris : la recherche web est juste indisponible en attendant.
  */

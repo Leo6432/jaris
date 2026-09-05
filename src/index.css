@@ -571,6 +571,18 @@ body.body--scan {
   color: #7fa3c9;
 }
 
+.options-menu__models-location-list {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: #9fc3e6;
+  overflow-wrap: anywhere;
+}
+
 .options-menu__security-list {
   list-style: none;
   margin: 0;

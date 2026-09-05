@@ -240,6 +240,7 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   Hugging Face à créer, même pour un débutant complet — seuls les vrais
   réglages perso (connecter Gmail, choisir son prénom) resteront dans
   l'interface, jamais dans un fichier texte ni sur un site tiers
+- ✅ Étape 44 — Choisir l'emplacement disque des modèles (voir plus bas)
 
 ## Démarrer en développement
 
@@ -933,6 +934,42 @@ Release **"dernier-build"**, republiée à chaque push de branche pour tester le
 développement en cours, est marquée `--prerelease` : `releases/latest`
 l'ignore toujours, elle ne peut jamais être confondue avec une vraie sortie
 versionnée par le mécanisme de mise à jour.
+
+## Choisir l'emplacement disque des modèles (étape 44)
+
+Les trois briques les plus lourdes de Jaris ont chacune leur emplacement
+Windows habituel, sur le disque système par défaut :
+
+| Brique | Emplacement habituel | Poids typique |
+| --- | --- | --- |
+| Modèles Ollama | `%USERPROFILE%\.ollama\models` | plusieurs Go par palier |
+| Environnement Python (voix) | `%LOCALAPPDATA%\Jaris\python-runtime` | quelques Go (torch en tête) |
+| Cache reconnaissance/synthèse vocale | `%USERPROFILE%\.cache\huggingface` | ~4 Go |
+
+**Options → Modèles → "Choisir un dossier…"** ouvre un sélecteur de dossier
+puis déplace les trois vers l'endroit choisi (`modelsLocation.ts`) — utile
+pour les libérer d'un petit SSD système vers un disque secondaire plus
+grand.
+
+**Comment, techniquement.** Plutôt que d'apprendre à chaque outil un nouvel
+emplacement (variable d'environnement différente pour chacun, configuration
+séparée, risque de casser un usage en dehors de Jaris), chaque emplacement
+habituel est transformé en **jonction NTFS** (`mklink /J`) pointant vers le
+dossier choisi : totalement transparent pour Ollama, `transformers` et
+`huggingface_hub`, qui continuent de lire/écrire au même chemin qu'avant
+sans rien savoir du changement — les données, elles, vivent physiquement sur
+le disque choisi. Une jonction, contrairement à un lien symbolique Windows,
+ne demande jamais de droits administrateur et fonctionne aussi bien entre
+deux disques différents que sur le même disque.
+
+Ollama et les sidecars Python sont arrêtés avant le déplacement (fichiers
+verrouillés sinon) puis relancés une fois terminé. Les données existantes
+sont copiées AVANT que l'ancien emplacement ne soit touché : un échec en
+cours de route (disque de destination plein, par exemple) laisse tout
+exactement comme avant l'essai, jamais dans un état à moitié déplacé. Un
+nouveau changement d'emplacement migre depuis l'ancien dossier choisi (pas
+depuis l'emplacement Windows d'origine) et nettoie l'ancien disque au passage
+— jamais de copies orphelines qui s'accumulent.
 
 ## Contrôle du navigateur avec Playwright (étape 34)
 

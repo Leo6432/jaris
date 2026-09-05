@@ -133,6 +133,18 @@ export interface SmtpStatus {
   email: string | null
 }
 
+/**
+ * Emplacement réel actuel des trois briques lourdes de Jaris (modèles Ollama, environnement Python, cache
+ * de reconnaissance/synthèse vocale), lu en direct sur le disque (voir modelsLocation.ts) — jamais une
+ * simple valeur de profil qui pourrait dériver de la réalité si l'utilisateur ou un autre outil touche à
+ * ces dossiers en dehors de Jaris.
+ */
+export interface ModelsLocationStatus {
+  ollamaModelsDir: string
+  pythonRuntimeDir: string
+  hfCacheDir: string
+}
+
 /** Un micro détecté par PortAudio (sounddevice --list-devices), pour le sélecteur d'Options → Voix. */
 export interface AudioInputDevice {
   index: number
@@ -388,6 +400,12 @@ export const IPC_CHANNELS = {
   saveSmtpConfig: 'jaris:save-smtp-config',
   /** renderer -> main : déconnecte le compte SMTP. */
   disconnectSmtp: 'jaris:disconnect-smtp',
+  /** renderer <-> main : emplacement réel actuel des modèles/environnement (voir modelsLocation.ts). */
+  getModelsLocationStatus: 'jaris:get-models-location-status',
+  /** renderer -> main : ouvre un sélecteur de dossier puis déplace tout dedans (résout une fois terminé). */
+  chooseModelsLocation: 'jaris:choose-models-location',
+  /** main -> renderer : avancement de ce déplacement, au fil de l'eau. */
+  modelsLocationProgress: 'jaris:models-location-progress',
   /** renderer <-> main : ce qui reste à installer sur la machine (Python, Ollama) au premier lancement. */
   getRuntimeSetupStatus: 'jaris:get-runtime-setup-status',
   /** renderer <-> main : installe ce qui manque (étape 16), résout avec le statut final. */

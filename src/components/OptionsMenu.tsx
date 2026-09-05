@@ -6,6 +6,7 @@ import type {
   ConversationEntry,
   GmailStatus,
   HardwareTierPreview as HardwareTierPreviewData,
+  ModelsLocationStatus,
   OllamaVersionStatus,
   Profile,
   SmtpStatus
@@ -122,6 +123,9 @@ export default function OptionsMenu(): JSX.Element {
   const [appVersionStatus, setAppVersionStatus] = useState<AppVersionStatus | null>(null)
   const [updatingApp, setUpdatingApp] = useState(false)
   const [appUpdateMessage, setAppUpdateMessage] = useState<string | null>(null)
+  const [modelsLocation, setModelsLocation] = useState<ModelsLocationStatus | null>(null)
+  const [movingModelsLocation, setMovingModelsLocation] = useState(false)
+  const [modelsLocationMessage, setModelsLocationMessage] = useState<string | null>(null)
   const [importingChromeProfile, setImportingChromeProfile] = useState(false)
   const [chromeProfileMessage, setChromeProfileMessage] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -180,8 +184,29 @@ export default function OptionsMenu(): JSX.Element {
     if (tab === 'modeles') {
       void window.jaris.getOllamaVersionStatus().then(setOllamaVersionStatus)
       void window.jaris.getAppVersionStatus().then(setAppVersionStatus)
+      void window.jaris.getModelsLocationStatus().then(setModelsLocation)
     }
   }, [tab])
+
+  // Avancement du déplacement (Ollama/Python arrêtés, copie en cours, redémarrage...) : abonné une seule
+  // fois comme les autres onLog/onModelBenchmarkLine, pas seulement pendant que l'onglet Modèles est ouvert
+  // — l'opération continue même si l'utilisateur change d'onglet entre-temps.
+  useEffect(() => {
+    return window.jaris.onModelsLocationProgress(setModelsLocationMessage)
+  }, [])
+
+  const handleChooseModelsLocation = (): void => {
+    setModelsLocationMessage(null)
+    setMovingModelsLocation(true)
+    window.jaris
+      .chooseModelsLocation()
+      .then(({ success, message }) => {
+        if (message) setModelsLocationMessage(message)
+        if (success) return window.jaris.getModelsLocationStatus().then(setModelsLocation)
+      })
+      .catch((err: unknown) => setModelsLocationMessage(err instanceof Error ? err.message : String(err)))
+      .finally(() => setMovingModelsLocation(false))
+  }
 
   // Idem pour les listes de micros/haut-parleurs : coûteux à peupler pour rien si l'utilisateur ne va
   // jamais ouvrir l'onglet Micro & Haut-parleur. Les micros viennent de PortAudio (côté Python, voir
@@ -788,6 +813,25 @@ export default function OptionsMenu(): JSX.Element {
                 message de succès avec le reste du bandeau s'il restait imbriqué dedans — jamais vu le
                 message alors que la mise à jour avait réellement marché. */}
             {!updatingOllama && ollamaUpdateMessage && <p className="options-menu__ollama-update-note">{ollamaUpdateMessage}</p>}
+
+            <div className="options-menu__section-title">Emplacement des modèles</div>
+            <p className="options-menu__model-overview-hint">
+              Les modèles Ollama, l'environnement Python (voix) et le cache de reconnaissance/synthèse
+              vocale peuvent peser plusieurs dizaines de Go au total. Choisis un dossier (par exemple sur un
+              autre disque) pour que tout y soit rassemblé et déplacé — Ollama et Python continuent de
+              fonctionner normalement, sans rien savoir du changement.
+            </p>
+            {modelsLocation && (
+              <ul className="options-menu__models-location-list">
+                <li>Modèles Ollama : {modelsLocation.ollamaModelsDir}</li>
+                <li>Environnement Python : {modelsLocation.pythonRuntimeDir}</li>
+                <li>Cache vocal : {modelsLocation.hfCacheDir}</li>
+              </ul>
+            )}
+            <button className="options-menu__action" onClick={handleChooseModelsLocation} disabled={movingModelsLocation}>
+              {movingModelsLocation ? 'Déplacement en cours…' : 'Choisir un dossier…'}
+            </button>
+            {modelsLocationMessage && <p className="options-menu__ollama-update-note">{modelsLocationMessage}</p>}
 
             <div className="options-menu__section-title">Les 3 paliers de configuration</div>
             {hardwareTiers === null ? (
