@@ -880,13 +880,26 @@ future version de Jaris qui ajoute une dépendance déclenchera l'installation
 manquante toute seule, sans que l'utilisateur ait à s'en occuper (base de
 l'étape 20).
 
+### Une action à faire une seule fois (par le développeur, jamais l'utilisateur)
+
+Pour que le bouton "Connecter Gmail" fonctionne dans l'application installée,
+ajoute `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` dans **Settings → Secrets
+and variables → Actions** du dépôt GitHub. Ils sont figés dans la
+construction (`define` dans `electron.vite.config.ts`), jamais écrits dans le
+dépôt, et l'application installée n'a donc aucun `.env` à remplir. Sans eux,
+le build réussit quand même et Jaris explique simplement que l'envoi de mails
+n'est pas disponible dans cette version.
+
 ### Ce qui reste à faire sur cette étape
 
 - **Signature du code** : l'exécutable n'est pas signé, donc Windows
   SmartScreen affiche un avertissement au premier lancement. Il faut un
   certificat payant — à prévoir avec la mise en vente (étape 38).
-- **Recherche web** : SearXNG demande encore Docker Desktop, qui ne
-  s'installe pas en silence. À remplacer par une solution sans Docker.
+- **Recherche web sans Docker** : `docker-compose.yml` et la configuration
+  SearXNG sont bien embarqués, donc la recherche web marche sur une machine
+  qui a déjà Docker Desktop. Mais Docker ne s'installe pas en silence : sur
+  une machine qui ne l'a pas, la recherche web reste indisponible. À
+  remplacer par une solution sans Docker.
 
 ## Contrôle du navigateur avec Playwright (étape 34)
 

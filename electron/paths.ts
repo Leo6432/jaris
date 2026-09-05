@@ -11,3 +11,17 @@ import { join } from 'path'
 export function pythonScriptsDir(): string {
   return app.isPackaged ? join(process.resourcesPath, 'python') : join(__dirname, '../../python')
 }
+
+/**
+ * Racine des fichiers du dépôt lus au moment de l'exécution (scores de modèles vérifiés, configuration
+ * SearXNG...). En développement c'est le dossier du projet ; dans l'application installée, c'est le
+ * dossier des ressources, où electron-builder les recopie.
+ *
+ * À NE PAS confondre avec `process.cwd()`, utilisé jusqu'ici : le dossier courant d'une application
+ * lancée depuis un raccourci Windows n'a aucun rapport avec l'endroit où elle est installée (souvent
+ * C:\Windows\System32), donc tout fichier cherché relativement à lui était introuvable une fois Jaris
+ * installé — silencieusement, puisque ces lectures retombent sur une valeur par défaut en cas d'échec.
+ */
+export function resourcesRoot(): string {
+  return app.isPackaged ? process.resourcesPath : join(__dirname, '../..')
+}

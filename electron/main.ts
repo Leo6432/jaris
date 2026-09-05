@@ -305,9 +305,18 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.getRuntimeSetupStatus, () => getRuntimeSetupStatus())
   // L'installation du premier lancement (Python, Ollama) dure plusieurs minutes : chaque étape est
   // diffusée au fil de l'eau plutôt qu'attendre la fin, pour que l'utilisateur voie que ça avance.
-  ipcMain.handle(IPC_CHANNELS.runRuntimeSetup, () =>
-    runFirstRunSetup((progress) => broadcast(IPC_CHANNELS.runtimeSetupProgress, progress))
-  )
+  ipcMain.handle(IPC_CHANNELS.runRuntimeSetup, async () => {
+    const status = await runFirstRunSetup((progress) => broadcast(IPC_CHANNELS.runtimeSetupProgress, progress))
+    // Le pipeline vocal a déjà tenté de démarrer au lancement de Jaris (voir plus bas), forcément en
+    // échec sur une machine où Python n'était pas encore installé. Sans ce redémarrage, la voix resterait
+    // morte jusqu'à ce que l'utilisateur pense à quitter et relancer Jaris — alors qu'il vient
+    // précisément de regarder Python s'installer.
+    if (status.pythonReady) {
+      pipeline?.stop()
+      await startVoicePipeline()
+    }
+    return status
+  })
   // renderer -> main : modèles candidats apparus depuis le dernier scan (étape 29), pour le popup dans App.tsx.
   // Un profil créé avant cette fonctionnalité (knownModelCandidates jamais défini) est silencieusement
   // initialisé sur l'état actuel plutôt que de signaler tous les candidats existants comme "nouveaux".

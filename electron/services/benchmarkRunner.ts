@@ -6,6 +6,7 @@ import { getAllCandidateModelIds, getCodeCandidateModelIds, parseLocalBenchmark,
 import { CODE_MODEL_FAST, CODE_MODEL_QUALITY } from './codeGenerator'
 import { getProfile, saveProfile } from './profileStore'
 import type { AnalysisScope, CapacityScanResult } from '../../shared/ipc'
+import { resourcesRoot } from '../paths'
 
 /**
  * Chemin rapide de l'écran d'accueil (CapacityScan.tsx) : contrairement à runModelAnalysis ci-dessous, ne
@@ -72,7 +73,7 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
  */
 function spawnBenchmarkScript(onLine: (line: string) => void, scope: AnalysisScope): Promise<void> {
   return new Promise((resolve, reject) => {
-    const scriptPath = join(process.cwd(), 'scripts', 'benchmark-models.mjs')
+    const scriptPath = join(resourcesRoot(), 'scripts', 'benchmark-models.mjs')
     const proc = spawn('node', [scriptPath], {
       windowsHide: true,
       env: { ...process.env, OLLAMA_HOST: config.ollama.host, JARIS_ANALYSIS_SCOPE: scope }

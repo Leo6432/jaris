@@ -1,5 +1,6 @@
 import { exec } from 'child_process'
 import { readFileSync } from 'fs'
+import { resourcesRoot } from '../paths'
 import { join } from 'path'
 import { promisify } from 'util'
 import { CODE_MODEL_FAST, CODE_MODEL_QUALITY } from './codeGenerator'
@@ -442,7 +443,7 @@ export function parseVerifiedToolScores(): Record<VerifiedTier, Map<string, stri
   }
   let raw: string
   try {
-    raw = readFileSync(join(process.cwd(), 'scripts', 'verified-tool-scores.md'), 'utf-8')
+    raw = readFileSync(join(resourcesRoot(), 'scripts', 'verified-tool-scores.md'), 'utf-8')
   } catch {
     return results
   }
@@ -477,7 +478,7 @@ export function parseLocalBenchmark(): Map<string, LocalBenchmarkEntry> {
   const results = new Map<string, LocalBenchmarkEntry>()
   let raw: string
   try {
-    raw = readFileSync(join(process.cwd(), 'scripts', 'benchmark-results.md'), 'utf-8')
+    raw = readFileSync(join(resourcesRoot(), 'scripts', 'benchmark-results.md'), 'utf-8')
   } catch {
     return results
   }

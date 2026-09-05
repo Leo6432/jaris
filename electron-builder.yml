@@ -28,6 +28,21 @@ extraResources:
     filter:
       - '**/*.py'
       - requirements.txt
+  # Scores de fiabilité des modèles, lus à l'exécution pour choisir quel modèle installer sur cette
+  # machine (voir parseVerifiedToolScores, hardwareScan.ts). Sans ce fichier, plus aucun candidat n'a de
+  # score connu : le choix retombe sur "le plus gros modèle qui tient en VRAM", sans considération de sa
+  # fiabilité en appels d'outils — exactement la version dégradée que l'étape 16 interdit.
+  - from: scripts
+    to: scripts
+    filter:
+      - verified-tool-scores.md
+  # Recherche web : la configuration du conteneur SearXNG. Docker Desktop ne s'installe pas en silence,
+  # donc la recherche web reste indisponible sur une machine qui ne l'a pas (voir README) — mais sur une
+  # machine qui l'a déjà, il ne manquait que ces fichiers pour que ça marche.
+  - from: docker-compose.yml
+    to: docker-compose.yml
+  - from: searxng
+    to: searxng
 
 win:
   target: nsis

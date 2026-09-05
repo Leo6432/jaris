@@ -39,7 +39,15 @@ jobs:
       # ici que publier un installeur qui plante au lancement.
       - run: npm run typecheck
 
+      # Les identifiants Google sont figés dans la construction (voir `define` dans
+      # electron.vite.config.ts) : sans eux, l'application installée ne peut pas connecter de compte Gmail,
+      # puisqu'elle n'a aucun .env où les lire. À renseigner une seule fois dans Settings → Secrets and
+      # variables → Actions du dépôt ; s'ils sont absents, le build réussit quand même et Jaris explique
+      # simplement que l'envoi de mails n'est pas disponible dans cette version.
       - run: npm run dist
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
 
       # Récupérable depuis l'onglet Actions de GitHub, sur chaque commit poussé : c'est le moyen le plus
       # rapide de tester une version en cours de développement sur un vrai PC Windows.

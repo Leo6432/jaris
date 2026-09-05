@@ -53,8 +53,14 @@ export async function disconnectGmail(): Promise<void> {
  */
 export async function connectGmail(): Promise<GmailStatus> {
   if (!config.google.clientId || !config.google.clientSecret) {
+    // Deux situations très différentes derrière la même absence d'identifiants, d'où deux messages : en
+    // développement il manque un .env à remplir, alors que dans l'application installée l'utilisateur n'a
+    // aucun fichier à éditer (l'étape 16 l'interdit) — lui parler d'un .env l'enverrait chercher quelque
+    // chose qui n'existe pas chez lui.
     throw new Error(
-      'Configuration Google manquante : renseigne GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET dans .env (voir le README).'
+      app.isPackaged
+        ? "L'envoi de mails n'est pas disponible dans cette version de Jaris : elle a été construite sans identifiants Google."
+        : 'Configuration Google manquante : renseigne GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET dans .env (voir le README).'
     )
   }
 

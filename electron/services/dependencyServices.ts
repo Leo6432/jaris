@@ -6,6 +6,7 @@ import { join } from 'path'
 import { promisify } from 'util'
 import { config } from '../config'
 import { openApp } from './appLauncher'
+import { resourcesRoot } from '../paths'
 
 const execAsync = promisify(exec)
 
@@ -472,7 +473,7 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
   }
 
   try {
-    await execAsync('docker compose up -d', { cwd: process.cwd(), windowsHide: true })
+    await execAsync('docker compose up -d', { cwd: resourcesRoot(), windowsHide: true })
   } catch (err) {
     log(`Échec du démarrage de SearXNG : ${err instanceof Error ? err.message : String(err)}`)
     return
