@@ -94,6 +94,8 @@ export default function OptionsMenu(): JSX.Element {
   const [ollamaVersionStatus, setOllamaVersionStatus] = useState<OllamaVersionStatus | null>(null)
   const [updatingOllama, setUpdatingOllama] = useState(false)
   const [ollamaUpdateMessage, setOllamaUpdateMessage] = useState<string | null>(null)
+  const [importingChromeProfile, setImportingChromeProfile] = useState(false)
+  const [chromeProfileMessage, setChromeProfileMessage] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
   const [retestingConfig, setRetestingConfig] = useState(false)
@@ -284,6 +286,30 @@ export default function OptionsMenu(): JSX.Element {
       .finally(() => setUpdatingOllama(false))
   }
 
+  /**
+   * Remplace le profil (vide au premier lancement) de la fenêtre Chrome dédiée à Jaris par une copie du
+   * vrai profil Chrome de l'utilisateur (comptes connectés, favoris, mots de passe) — voir
+   * importRealChromeProfile, browserControl.ts. Confirmation explicite avant d'agir : ça copie des données
+   * sensibles (mots de passe enregistrés) et ferme la fenêtre Chrome dédiée si elle tournait déjà.
+   */
+  const handleImportChromeProfile = (): void => {
+    if (
+      !window.confirm(
+        'Copier ton profil Chrome actuel (comptes connectés, favoris, mots de passe enregistrés) dans la ' +
+          'fenêtre dédiée à Jaris, à la place de son profil vide ? Ferme Google Chrome avant de continuer.'
+      )
+    ) {
+      return
+    }
+    setImportingChromeProfile(true)
+    setChromeProfileMessage(null)
+    window.jaris
+      .importChromeProfile()
+      .then(({ message }) => setChromeProfileMessage(message))
+      .catch((err: unknown) => setChromeProfileMessage(err instanceof Error ? err.message : String(err)))
+      .finally(() => setImportingChromeProfile(false))
+  }
+
   const chooseVoice = async (index: number): Promise<void> => {
     const nextIndex = (index + TTS_VOICES.length) % TTS_VOICES.length
     setVoiceIndex(nextIndex)
@@ -456,6 +482,17 @@ export default function OptionsMenu(): JSX.Element {
                 {connecting ? 'Connexion...' : 'Connecter Gmail'}
               </button>
             )}
+
+            <div className="options-menu__section-title">Navigateur</div>
+            <p className="options-menu__model-overview-hint">
+              Jaris pilote une fenêtre Chrome séparée (Chrome 136+ interdit ça sur ton Chrome habituel, par
+              sécurité). Elle démarre avec un profil vide : connecte-la à ton vrai profil pour qu'elle
+              retrouve tes comptes, favoris et mots de passe déjà enregistrés.
+            </p>
+            <button className="options-menu__action" onClick={handleImportChromeProfile} disabled={importingChromeProfile}>
+              {importingChromeProfile ? 'Copie en cours...' : 'Connecter mon profil Chrome existant'}
+            </button>
+            {chromeProfileMessage && <p className="options-menu__ollama-update-note">{chromeProfileMessage}</p>}
           </div>
         )}
 

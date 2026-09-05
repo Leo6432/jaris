@@ -55,6 +55,7 @@ const api = {
   getConfirmableTools: (): Promise<ConfirmableTool[]> => ipcRenderer.invoke(IPC_CHANNELS.getConfirmableTools),
   getOllamaVersionStatus: (): Promise<OllamaVersionStatus | null> => ipcRenderer.invoke(IPC_CHANNELS.getOllamaVersionStatus),
   updateOllama: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.updateOllama),
+  importChromeProfile: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.importChromeProfile),
   runModelAnalysis: (scope?: AnalysisScope): Promise<CapacityScanResult> => ipcRenderer.invoke(IPC_CHANNELS.runModelAnalysis, scope),
   previewHardwareTiers: (): Promise<HardwareTierPreview[]> => ipcRenderer.invoke(IPC_CHANNELS.previewHardwareTiers),
   runQuickSetup: (): Promise<CapacityScanResult> => ipcRenderer.invoke(IPC_CHANNELS.runQuickSetup),

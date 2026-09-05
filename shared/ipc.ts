@@ -322,5 +322,9 @@ export const IPC_CHANNELS = {
   micTestDone: 'jaris:mic-test-done',
   /** renderer <-> main : liste les outils N2 (voir toolSecurity.ts) proposables en "toujours autoriser"
    * dans Options → Sécurité, avec leur libellé lisible. */
-  getConfirmableTools: 'jaris:get-confirmable-tools'
+  getConfirmableTools: 'jaris:get-confirmable-tools',
+  /** renderer -> main : copie le vrai profil Chrome de l'utilisateur (comptes, favoris, mots de passe) dans
+   * la fenêtre Chrome dédiée à Jaris, à la place de son profil vide auto-créé (voir importRealChromeProfile,
+   * browserControl.ts). */
+  importChromeProfile: 'jaris:import-chrome-profile'
 } as const

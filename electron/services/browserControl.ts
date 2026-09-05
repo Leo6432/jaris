@@ -1,7 +1,8 @@
 import { spawn } from 'child_process'
 import { connect } from 'net'
 import { existsSync } from 'fs'
-import { join } from 'path'
+import { cp, rm } from 'fs/promises'
+import { basename, join } from 'path'
 import { chromium, type Browser, type Locator, type Page } from 'playwright-core'
 import { describeBrowserScreenshot } from './vision'
 
@@ -259,5 +260,91 @@ export async function screenshotActiveTab(question: string, visionModel: string)
     return await describeBrowserScreenshot(buffer.toString('base64'), question, visionModel)
   } catch (err) {
     return `Impossible de capturer cet onglet : ${err instanceof Error ? err.message : String(err)}`
+  }
+}
+
+/** Dossier "User Data" du VRAI Chrome de l'utilisateur (celui de tous les jours), jamais celui piloté par CDP. */
+function realProfileDir(): string {
+  return join(process.env.LOCALAPPDATA ?? '', 'Google', 'Chrome', 'User Data')
+}
+
+/**
+ * Sous-dossiers volumineux et réécrits en continu par Chrome (cache disque/GPU) : jamais nécessaires pour
+ * retrouver comptes connectés, favoris ou mots de passe, et leur copie ferait juste perdre du temps/de la
+ * place pour rien.
+ */
+const PROFILE_COPY_EXCLUDED_DIRS = new Set([
+  'Cache', 'Code Cache', 'GPUCache', 'GrShaderCache', 'ShaderCache', 'component_crx_cache',
+  'GraphiteDawnCache', 'DawnGraphiteCache', 'DawnWebGPUCache'
+])
+
+/**
+ * Tue la fenêtre Chrome DÉDIÉE à Jaris si elle tourne (jamais le Chrome habituel de l'utilisateur, qui
+ * partage le même exécutable chrome.exe) : identifiée par son --user-data-dir dans sa ligne de commande,
+ * seul moyen fiable de la distinguer d'un Chrome normal sous Windows. Nécessaire avant de réécrire son
+ * dossier de profil, sinon certains fichiers restent verrouillés en écriture par ce process.
+ */
+async function killDedicatedChrome(): Promise<void> {
+  cachedBrowser = null
+  if (process.platform !== 'win32') return
+  const profileDir = dedicatedProfileDir().replace(/'/g, "''")
+  const script = `Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | Where-Object { $_.CommandLine -like '*${profileDir}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`
+  await new Promise<void>((resolve) => {
+    const proc = spawn('powershell.exe', ['-NoProfile', '-Command', script], { windowsHide: true })
+    proc.on('error', () => resolve())
+    proc.on('close', () => resolve())
+  })
+  await new Promise((resolve) => setTimeout(resolve, 1000))
+}
+
+/**
+ * Remplace le profil (vide au premier lancement) de la fenêtre Chrome dédiée à Jaris par une copie du vrai
+ * profil Chrome de l'utilisateur — comptes connectés, favoris, mots de passe inclus. Possible seulement
+ * parce que la restriction CDP de Chrome 136+ (voir le commentaire en tête de fichier) porte sur le dossier
+ * de profil PAR DÉFAUT exactement, pas sur un dossier personnalisé qui se trouve contenir une copie des
+ * mêmes données : une fois copié ici, ce dossier redevient un profil "personnalisé" ordinaire aux yeux de
+ * Chrome, piloté par CDP comme n'importe quel profil vide. C'est un instantané figé (pas une synchronisation
+ * continue) : les futurs changements du Chrome habituel de l'utilisateur ne s'y répercutent pas tout seuls,
+ * sauf en activant la synchronisation Google dans les deux profils.
+ */
+export async function importRealChromeProfile(): Promise<{ success: boolean; message: string }> {
+  if (process.platform !== 'win32') {
+    return { success: false, message: "Cette fonctionnalité n'est disponible que sur Windows pour l'instant." }
+  }
+  const source = realProfileDir()
+  if (!existsSync(source)) {
+    return {
+      success: false,
+      message: 'Profil Chrome introuvable à son emplacement habituel — vérifie que Google Chrome est bien installé.'
+    }
+  }
+
+  await killDedicatedChrome()
+
+  const dest = dedicatedProfileDir()
+  try {
+    await rm(dest, { recursive: true, force: true })
+    await cp(source, dest, {
+      recursive: true,
+      filter: (src) => !PROFILE_COPY_EXCLUDED_DIRS.has(basename(src))
+    })
+    return {
+      success: true,
+      message:
+        'Ton profil Chrome (comptes connectés, favoris, mots de passe) a été copié dans la fenêtre dédiée ' +
+        "à Jaris — demande-lui d'ouvrir une page pour la voir se relancer avec."
+    }
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    if (detail.includes('EBUSY') || detail.toLowerCase().includes('lock')) {
+      return {
+        success: false,
+        message:
+          'Ferme complètement Google Chrome (vérifie dans le Gestionnaire des tâches Windows qu\'aucun ' +
+          "processus \"Google Chrome\" ne reste) puis réessaie : certains fichiers du profil sont encore " +
+          'utilisés.'
+      }
+    }
+    return { success: false, message: `Échec de la copie du profil : ${detail}` }
   }
 }

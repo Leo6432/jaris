@@ -51,6 +51,7 @@ declare global {
       getConfirmableTools: () => Promise<ConfirmableTool[]>
       getOllamaVersionStatus: () => Promise<OllamaVersionStatus | null>
       updateOllama: () => Promise<{ success: boolean; message: string }>
+      importChromeProfile: () => Promise<{ success: boolean; message: string }>
       runModelAnalysis: (scope?: AnalysisScope) => Promise<CapacityScanResult>
       previewHardwareTiers: () => Promise<HardwareTierPreview[]>
       runQuickSetup: () => Promise<CapacityScanResult>

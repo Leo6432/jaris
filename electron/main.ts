@@ -9,6 +9,7 @@ import {
 } from './services/dependencyServices'
 import { getAllCandidateModelIds, getModelOverview, previewHardwareTiers } from './services/hardwareScan'
 import { getConfirmableTools } from './services/toolSecurity'
+import { importRealChromeProfile } from './services/browserControl'
 import { runModelAnalysis, runQuickSetup } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
 import { generateApp, getGeneratedAppsDir } from './services/codeGenerator'
@@ -299,6 +300,7 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.getConfirmableTools, () => getConfirmableTools())
   ipcMain.handle(IPC_CHANNELS.getOllamaVersionStatus, () => getOllamaVersionStatus())
   ipcMain.handle(IPC_CHANNELS.updateOllama, () => updateOllama())
+  ipcMain.handle(IPC_CHANNELS.importChromeProfile, () => importRealChromeProfile())
   // renderer -> main : modèles candidats apparus depuis le dernier scan (étape 29), pour le popup dans App.tsx.
   // Un profil créé avant cette fonctionnalité (knownModelCandidates jamais défini) est silencieusement
   // initialisé sur l'état actuel plutôt que de signaler tous les candidats existants comme "nouveaux".

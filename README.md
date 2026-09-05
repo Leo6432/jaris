@@ -853,7 +853,15 @@ dans cette fenêtre dédiée, jamais le Chrome habituel de l'utilisateur.
 `electron/services/browserControl.ts` lance cette fenêtre automatiquement au
 premier besoin (rien à installer ni à lancer à la main) : elle démarre vide
 (nouveau profil), l'utilisateur doit y ouvrir/naviguer vers la page qu'il
-veut faire piloter à Jaris.
+veut faire piloter à Jaris. Bouton **"Connecter mon profil Chrome
+existant"** dans Options → Connexions (`importRealChromeProfile`,
+`browserControl.ts`) pour éviter ce profil vide : copie le vrai profil
+Chrome de l'utilisateur (comptes connectés, favoris, mots de passe) dans le
+dossier de la fenêtre dédiée — possible car la restriction de Chrome 136+
+porte sur le dossier de profil *par défaut* exactement, pas sur un dossier
+personnalisé qui contiendrait les mêmes données. Instantané figé (pas
+synchronisé en continu avec le Chrome habituel), sauf à activer la
+synchronisation Google dans les deux profils.
 
 **Sécurité "achat/paiement".** Comme sur `jarvis-assistant-vocal`, le prompt
 système (`assistant.ts`) interdit explicitement de cliquer un bouton
