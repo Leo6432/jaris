@@ -1,10 +1,57 @@
+/* ==========================================================================
+   Jaris — thème "HUD" (interface technique façon cockpit / réacteur ARC)
+   --------------------------------------------------------------------------
+   Un seul jeu de tokens ici, utilisé partout ailleurs dans ce fichier : changer
+   l'accent ou le fond se fait à un seul endroit, jamais en repassant sur des
+   centaines de couleurs écrites en dur (ce qui était le cas avant).
+
+   Deux polices seulement, embarquées dans le bundle (voir src/main.tsx, jamais
+   Google Fonts : Jaris doit marcher hors ligne) :
+   - Rajdhani, condensée et anguleuse, pour tout ce qui est étiquette/titre/bouton
+     — c'est elle qui donne le ton "instrument de bord".
+   - Barlow, plus neutre et lisible, pour le texte courant et les réponses de
+     Jaris, qui peuvent être longues : une police d'affichage sur des paragraphes
+     entiers fatiguerait à la lecture.
+   Le monospace reste celui de Windows (Consolas/Cascadia, toujours présent) :
+   utilisé uniquement pour des identifiants techniques et des chiffres alignés.
+   ========================================================================== */
 :root {
   color-scheme: dark;
-  font-family:
-    'Segoe UI',
-    system-ui,
-    -apple-system,
-    sans-serif;
+
+  /* Fonds : presque noir, très légèrement bleuté (un noir pur écrase les lueurs). */
+  --hud-bg: #01040a;
+  --hud-panel: #061019;
+  --hud-panel-raised: rgba(12, 28, 44, 0.55);
+
+  /* Texte, du plus lisible au plus discret. */
+  --hud-text: #e6f7ff;
+  --hud-text-soft: #a9cfe8;
+  --hud-text-dim: #7fb0d4;
+  --hud-text-faint: #4f7391;
+
+  /* Accent principal : le cyan du réacteur. --bright sert aux survols/lueurs. */
+  --hud-accent: #3ddcff;
+  --hud-accent-bright: #9ff2ff;
+  --hud-accent-deep: #1f6fff;
+  --hud-accent-rgb: 61, 220, 255;
+
+  /* Couleurs de sens (jamais décoratives) : or = attention, vert = OK, rouge = échec. */
+  --hud-gold: #ffb020;
+  --hud-ok: #31ffb0;
+  --hud-danger: #ff4d68;
+  --hud-danger-soft: #ffb8c2;
+
+  /* Traits : le HUD est fait de hairlines, pas de gros contours. */
+  --hud-line: rgba(var(--hud-accent-rgb), 0.22);
+  --hud-line-strong: rgba(var(--hud-accent-rgb), 0.5);
+  --hud-glow: 0 0 12px rgba(var(--hud-accent-rgb), 0.35);
+
+  --hud-font-display: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+  --hud-font-body: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+  --hud-font-mono: 'Cascadia Mono', Consolas, ui-monospace, monospace;
+
+  font-family: var(--hud-font-body);
+  font-synthesis-weight: none;
 }
 
 * {
@@ -18,13 +65,69 @@ body,
   margin: 0;
 }
 
+/*
+ * Le fond n'est pas un simple dégradé : trois couches superposées (grille
+ * technique, halo du réacteur, vignette) qui donnent la profondeur d'un écran
+ * de cockpit. Tout est en CSS pur — aucune image à charger, donc rien qui
+ * puisse manquer hors ligne, et zéro coût de rendu continu (pas d'animation
+ * sur ces couches-là, seule la ligne de balayage plus bas bouge).
+ */
 body {
-  background: radial-gradient(circle at 50% 30%, #0c1420 0%, #05070c 70%);
-  color: #d9ecff;
+  background:
+    linear-gradient(rgba(var(--hud-accent-rgb), 0.045) 1px, transparent 1px) 0 0 / 100% 44px,
+    linear-gradient(90deg, rgba(var(--hud-accent-rgb), 0.045) 1px, transparent 1px) 0 0 / 44px 100%,
+    radial-gradient(circle at 50% 26%, rgba(var(--hud-accent-rgb), 0.13) 0%, transparent 58%),
+    radial-gradient(circle at 50% 30%, var(--hud-panel) 0%, var(--hud-bg) 72%);
+  color: var(--hud-text);
   overflow: hidden;
 }
 
-/* Widget flottant (étape 19) : fenêtre Electron transparente, donc pas de fond du tout ici. */
+/*
+ * Ligne de balayage : une seule barre lumineuse qui descend lentement, comme un
+ * radar qui rafraîchit l'écran. Volontairement très lente (9 s) et très peu
+ * contrastée — l'effet doit se remarquer du coin de l'œil, jamais distraire
+ * pendant qu'on lit une réponse. `pointer-events: none` : purement décoratif,
+ * ne doit jamais intercepter un clic.
+ */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(var(--hud-accent-rgb), 0.055) 48%,
+    rgba(var(--hud-accent-rgb), 0.09) 50%,
+    rgba(var(--hud-accent-rgb), 0.055) 52%,
+    transparent 100%
+  );
+  background-size: 100% 240px;
+  background-repeat: no-repeat;
+  animation: hud-sweep 9s linear infinite;
+}
+
+@keyframes hud-sweep {
+  from {
+    background-position: 0 -240px;
+  }
+  to {
+    background-position: 0 100vh;
+  }
+}
+
+/* Respecte le réglage système "réduire les animations" : la ligne de balayage et
+   les pulsations disparaissent, le reste de l'interface est identique. */
+@media (prefers-reduced-motion: reduce) {
+  body::after {
+    animation: none;
+    opacity: 0.4;
+  }
+}
+
+/* Widget flottant (étape 19) : fenêtre Electron transparente, donc pas de fond du tout ici — grille et
+   ligne de balayage comprises, sinon elles s'afficheraient par-dessus le bureau autour de l'orbe. */
 html.body--widget,
 body.body--widget {
   background: transparent;
@@ -34,6 +137,11 @@ body.body--widget {
 html.body--scan,
 body.body--scan {
   background: transparent;
+}
+
+body.body--widget::after,
+body.body--scan::after {
+  display: none;
 }
 
 .screen-scan {
@@ -72,14 +180,14 @@ body.body--scan {
   flex-direction: column;
   gap: 24px;
   padding: 20px 14px;
-  border-right: 1px solid rgba(127, 163, 201, 0.18);
-  background: rgba(5, 7, 12, 0.5);
+  border-right: 1px solid rgba(122, 176, 214, 0.18);
+  background: rgba(1, 4, 10, 0.5);
 }
 
 .sidebar__brand {
   font-size: 0.85rem;
   letter-spacing: 0.32em;
-  color: #37e2ff;
+  color: var(--hud-accent);
   padding-left: 8px;
 }
 
@@ -97,7 +205,7 @@ body.body--scan {
   background: transparent;
   border: none;
   border-left: 2px solid transparent;
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
   padding: 9px 12px;
   border-radius: 0 8px 8px 0;
   cursor: pointer;
@@ -105,14 +213,14 @@ body.body--scan {
 }
 
 .sidebar__mode:hover {
-  background: rgba(127, 163, 201, 0.07);
-  color: #d9ecff;
+  background: rgba(122, 176, 214, 0.07);
+  color: var(--hud-text);
 }
 
 .sidebar__mode--active {
-  background: rgba(55, 226, 255, 0.1);
-  border-left-color: #37e2ff;
-  color: #d9ecff;
+  background: rgba(61, 220, 255, 0.1);
+  border-left-color: var(--hud-accent);
+  color: var(--hud-text);
 }
 
 .sidebar__mode-label {
@@ -121,7 +229,7 @@ body.body--scan {
 
 .sidebar__mode-hint {
   font-size: 0.68rem;
-  color: #4d6a87;
+  color: var(--hud-text-faint);
 }
 
 /* Repoussé en bas de la colonne : les réglages ne sont pas au même niveau que les 3 modes. */
@@ -135,8 +243,8 @@ body.body--scan {
 
 .sidebar__link {
   background: transparent;
-  border: 1px solid rgba(127, 163, 201, 0.35);
-  color: #7fa3c9;
+  border: 1px solid rgba(122, 176, 214, 0.35);
+  color: var(--hud-text-dim);
   padding: 6px 16px;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -145,8 +253,8 @@ body.body--scan {
 }
 
 .sidebar__link:hover {
-  border-color: #37e2ff;
-  color: #d9ecff;
+  border-color: var(--hud-accent);
+  color: var(--hud-text);
 }
 
 .app-main {
@@ -170,8 +278,8 @@ body.body--scan {
 
 .options-menu__trigger {
   background: transparent;
-  border: 1px solid rgba(127, 163, 201, 0.35);
-  color: #7fa3c9;
+  border: 1px solid rgba(122, 176, 214, 0.35);
+  color: var(--hud-text-dim);
   padding: 6px 16px;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -179,8 +287,8 @@ body.body--scan {
 }
 
 .options-menu__trigger:hover {
-  border-color: #37e2ff;
-  color: #d9ecff;
+  border-color: var(--hud-accent);
+  color: var(--hud-text);
 }
 
 /* Page pleine (pas un petit menu déroulant) : même structure que .memory-brain, pour de la place à
@@ -191,7 +299,7 @@ body.body--scan {
   z-index: 20;
   display: flex;
   flex-direction: column;
-  background: radial-gradient(circle at 50% 30%, #0c1420 0%, #05070c 70%);
+  background: radial-gradient(circle at 50% 30%, var(--hud-panel) 0%, var(--hud-bg) 70%);
 }
 
 .options-page__header {
@@ -200,13 +308,13 @@ body.body--scan {
   justify-content: space-between;
   gap: 16px;
   padding: 14px 20px;
-  border-bottom: 1px solid rgba(127, 163, 201, 0.2);
+  border-bottom: 1px solid rgba(122, 176, 214, 0.2);
 }
 
 .options-page__close {
   background: transparent;
-  border: 1px solid rgba(127, 163, 201, 0.35);
-  color: #7fa3c9;
+  border: 1px solid rgba(122, 176, 214, 0.35);
+  color: var(--hud-text-dim);
   padding: 6px 14px;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -214,8 +322,8 @@ body.body--scan {
 }
 
 .options-page__close:hover {
-  border-color: #37e2ff;
-  color: #d9ecff;
+  border-color: var(--hud-accent);
+  color: var(--hud-text);
 }
 
 .options-page__content {
@@ -236,7 +344,7 @@ body.body--scan {
 .options-menu__tabs {
   display: flex;
   gap: 6px;
-  background: rgba(127, 163, 201, 0.08);
+  background: rgba(122, 176, 214, 0.08);
   border-radius: 999px;
   padding: 3px;
 }
@@ -245,7 +353,7 @@ body.body--scan {
   flex: 1;
   background: transparent;
   border: none;
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
   padding: 6px 14px;
   border-radius: 999px;
   font-size: 0.8rem;
@@ -253,12 +361,12 @@ body.body--scan {
 }
 
 .options-menu__tab:hover {
-  color: #d9ecff;
+  color: var(--hud-text);
 }
 
 .options-menu__tab--active {
-  background: rgba(55, 226, 255, 0.15);
-  color: #d9ecff;
+  background: rgba(61, 220, 255, 0.15);
+  color: var(--hud-text);
 }
 
 .options-menu__section {
@@ -271,19 +379,19 @@ body.body--scan {
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #4d6a87;
+  color: var(--hud-text-faint);
 }
 
 .options-menu__account {
   font-size: 0.85rem;
-  color: #d9ecff;
+  color: var(--hud-text);
   word-break: break-all;
 }
 
 .options-menu__action {
-  background: rgba(55, 226, 255, 0.12);
-  border: 1px solid rgba(55, 226, 255, 0.4);
-  color: #d9ecff;
+  background: rgba(61, 220, 255, 0.12);
+  border: 1px solid rgba(61, 220, 255, 0.4);
+  color: var(--hud-text);
   padding: 6px 14px;
   border-radius: 999px;
   font-size: 0.8rem;
@@ -296,21 +404,21 @@ body.body--scan {
 }
 
 .options-menu__action:not(:disabled):hover {
-  border-color: #37e2ff;
+  border-color: var(--hud-accent);
 }
 
 .options-menu__error {
   font-size: 0.75rem;
-  color: #ff6b6b;
+  color: var(--hud-danger);
 }
 
 /* Rappel "ferme tout le reste pendant l'analyse" — même code couleur ambre que .app__setup-warning (avertit
    sans alarmer), affiché avant ET pendant tout run (onboarding et ré-analyse depuis Options → Modèles). */
 .options-menu__analysis-notice {
   font-size: 0.76rem;
-  color: #ffb648;
-  background: rgba(255, 182, 72, 0.08);
-  border: 1px solid rgba(255, 182, 72, 0.3);
+  color: var(--hud-gold);
+  background: rgba(255, 176, 32, 0.08);
+  border: 1px solid rgba(255, 176, 32, 0.3);
   border-radius: 10px;
   padding: 8px 14px;
   margin: 8px 0;
@@ -320,9 +428,9 @@ body.body--scan {
    jour" (onglet Modèles) — bouton "Mettre à jour" (winget) + lien manuel côte à côte. */
 .options-menu__ollama-warning {
   font-size: 0.76rem;
-  color: #ffb648;
-  background: rgba(255, 182, 72, 0.08);
-  border: 1px solid rgba(255, 182, 72, 0.3);
+  color: var(--hud-gold);
+  background: rgba(255, 176, 32, 0.08);
+  border: 1px solid rgba(255, 176, 32, 0.3);
   border-radius: 10px;
   padding: 8px 14px;
   margin: 0 0 10px;
@@ -347,7 +455,7 @@ body.body--scan {
   position: fixed;
   inset: 0;
   z-index: 30;
-  background: rgba(2, 6, 12, 0.7);
+  background: rgba(1, 3, 8, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -355,8 +463,8 @@ body.body--scan {
 }
 
 .options-menu__scope-dialog {
-  background: #0c1420;
-  border: 1px solid rgba(127, 163, 201, 0.25);
+  background: var(--hud-panel);
+  border: 1px solid rgba(122, 176, 214, 0.25);
   border-radius: 14px;
   padding: 22px 24px;
   max-width: 380px;
@@ -366,13 +474,13 @@ body.body--scan {
 .options-menu__scope-dialog h3 {
   margin: 0 0 8px;
   font-size: 1rem;
-  color: #d9ecff;
+  color: var(--hud-text);
 }
 
 .options-menu__scope-dialog p {
   margin: 0 0 16px;
   font-size: 0.78rem;
-  color: #9fc3e6;
+  color: var(--hud-text-soft);
 }
 
 .options-menu__scope-dialog-options {
@@ -383,9 +491,9 @@ body.body--scan {
 }
 
 .options-menu__scope-dialog-options button {
-  background: rgba(55, 226, 255, 0.1);
-  border: 1px solid rgba(55, 226, 255, 0.3);
-  color: #d9ecff;
+  background: rgba(61, 220, 255, 0.1);
+  border: 1px solid rgba(61, 220, 255, 0.3);
+  color: var(--hud-text);
   padding: 9px 10px;
   border-radius: 8px;
   font-size: 0.78rem;
@@ -393,19 +501,19 @@ body.body--scan {
 }
 
 .options-menu__scope-dialog-options button:hover {
-  border-color: #37e2ff;
-  background: rgba(55, 226, 255, 0.18);
+  border-color: var(--hud-accent);
+  background: rgba(61, 220, 255, 0.18);
 }
 
 .options-menu__scope-dialog-options button.options-menu__scope-dialog-all {
   grid-column: 1 / -1;
-  background: rgba(55, 226, 255, 0.18);
+  background: rgba(61, 220, 255, 0.18);
 }
 
 .options-menu__scope-dialog-cancel {
   background: transparent;
-  border: 1px solid rgba(127, 163, 201, 0.35);
-  color: #7fa3c9;
+  border: 1px solid rgba(122, 176, 214, 0.35);
+  color: var(--hud-text-dim);
   padding: 7px 16px;
   border-radius: 999px;
   font-size: 0.78rem;
@@ -419,20 +527,20 @@ body.body--scan {
 
 .options-menu__progress-label {
   font-size: 0.72rem;
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
   margin-bottom: 4px;
 }
 
 .options-menu__progress-bar {
   height: 6px;
   border-radius: 999px;
-  background: rgba(127, 163, 201, 0.15);
+  background: rgba(122, 176, 214, 0.15);
   overflow: hidden;
 }
 
 .options-menu__progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #2b6cff, #37e2ff);
+  background: linear-gradient(90deg, var(--hud-accent-deep), var(--hud-accent));
   border-radius: 999px;
   transition: width 0.3s ease;
 }
@@ -443,7 +551,7 @@ body.body--scan {
   gap: 4px 14px;
   margin-top: 6px;
   font-size: 0.68rem;
-  color: #6f88a8;
+  color: var(--hud-text-faint);
 }
 
 .options-menu__benchmark-log {
@@ -451,13 +559,13 @@ body.body--scan {
   padding: 10px 12px;
   max-height: 180px;
   overflow-y: auto;
-  background: rgba(5, 7, 12, 0.6);
-  border: 1px solid rgba(127, 163, 201, 0.2);
+  background: rgba(1, 4, 10, 0.6);
+  border: 1px solid rgba(122, 176, 214, 0.2);
   border-radius: 8px;
   font-family: inherit;
   font-size: 0.68rem;
   line-height: 1.5;
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -469,8 +577,8 @@ body.body--scan {
 /* Chaque palier dans sa propre carte : plus facile à distinguer d'un seul coup d'œil que 5 tableaux qui
    s'enchaînent sans séparation visuelle. */
 .options-menu__model-group {
-  background: rgba(127, 163, 201, 0.04);
-  border: 1px solid rgba(127, 163, 201, 0.12);
+  background: rgba(122, 176, 214, 0.04);
+  border: 1px solid rgba(122, 176, 214, 0.12);
   border-radius: 10px;
   padding: 10px 12px;
 }
@@ -480,7 +588,7 @@ body.body--scan {
 }
 
 .options-menu__model-group-title {
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
   font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -498,11 +606,11 @@ body.body--scan {
 .options-menu__model-overview td {
   padding: 6px 10px;
   text-align: left;
-  border-bottom: 1px solid rgba(127, 163, 201, 0.12);
+  border-bottom: 1px solid rgba(122, 176, 214, 0.12);
 }
 
 .options-menu__model-overview th {
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
   font-weight: 500;
   font-size: 0.66rem;
   text-transform: uppercase;
@@ -510,7 +618,7 @@ body.body--scan {
 }
 
 .options-menu__model-overview td {
-  color: #d9ecff;
+  color: var(--hud-text);
 }
 
 .options-menu__model-overview tr:last-child td {
@@ -542,33 +650,33 @@ body.body--scan {
 }
 
 .options-menu__badge--good {
-  background: rgba(46, 213, 115, 0.15);
-  color: #2ed573;
+  background: rgba(49, 255, 176, 0.15);
+  color: var(--hud-ok);
 }
 
 .options-menu__badge--mid {
-  background: rgba(255, 165, 2, 0.15);
-  color: #ffa502;
+  background: rgba(255, 176, 32, 0.15);
+  color: var(--hud-gold);
 }
 
 .options-menu__badge--bad {
-  background: rgba(255, 71, 87, 0.15);
-  color: #ff6b6b;
+  background: rgba(255, 77, 104, 0.15);
+  color: var(--hud-danger);
 }
 
 .options-menu__badge--none {
-  color: #4d6a87;
+  color: var(--hud-text-faint);
   font-weight: 400;
 }
 
 .options-menu__model-overview-hint {
   margin-top: 8px;
   font-size: 0.7rem;
-  color: #4d6a87;
+  color: var(--hud-text-faint);
 }
 
 .options-menu__model-overview-hint code {
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
 }
 
 .options-menu__models-location-list {
@@ -579,7 +687,7 @@ body.body--scan {
   flex-direction: column;
   gap: 4px;
   font-size: 0.8rem;
-  color: #9fc3e6;
+  color: var(--hud-text-soft);
   overflow-wrap: anywhere;
 }
 
@@ -605,18 +713,18 @@ body.body--scan {
   justify-content: space-between;
   gap: 10px;
   font-size: 0.85rem;
-  color: #e4edf7;
+  color: var(--hud-text);
 }
 
 .options-menu__changelog-header span {
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
   font-size: 0.75rem;
 }
 
 .options-menu__changelog-notes {
   margin: 6px 0 0;
   font-size: 0.78rem;
-  color: #9fc3e6;
+  color: var(--hud-text-soft);
   white-space: pre-wrap;
 }
 
@@ -630,7 +738,7 @@ body.body--scan {
 }
 
 .options-menu__history-entry {
-  border: 1px solid rgba(127, 163, 201, 0.2);
+  border: 1px solid rgba(122, 176, 214, 0.2);
   border-radius: 10px;
   padding: 10px 14px;
   display: flex;
@@ -640,24 +748,24 @@ body.body--scan {
 
 .options-menu__history-date {
   font-size: 0.65rem;
-  color: #4d6a87;
+  color: var(--hud-text-faint);
 }
 
 .options-menu__history-transcript {
   font-size: 0.8rem;
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
   overflow-wrap: anywhere;
 }
 
 .options-menu__history-reply {
   font-size: 0.85rem;
-  color: #d9ecff;
+  color: var(--hud-text);
   overflow-wrap: anywhere;
 }
 
 .options-menu__history-empty {
   font-size: 0.8rem;
-  color: #4d6a87;
+  color: var(--hud-text-faint);
 }
 
 .options-menu__history-actions {
@@ -667,13 +775,13 @@ body.body--scan {
 }
 
 .options-menu__action--danger {
-  background: rgba(255, 107, 107, 0.12);
-  border-color: rgba(255, 107, 107, 0.4);
-  color: #ff9b9b;
+  background: rgba(255, 77, 104, 0.12);
+  border-color: rgba(255, 77, 104, 0.4);
+  color: var(--hud-danger);
 }
 
 .options-menu__action--danger:not(:disabled):hover {
-  border-color: #ff6b6b;
+  border-color: var(--hud-danger);
 }
 
 /* flex: 1 (et non juste un bloc compact en haut de page comme les autres onglets) : l'onglet Voix n'a que
@@ -700,13 +808,13 @@ body.body--scan {
   width: 220px;
   height: 220px;
   border-radius: 50%;
-  box-shadow: 0 0 80px rgba(55, 226, 255, 0.35);
+  box-shadow: 0 0 80px rgba(61, 220, 255, 0.35);
 }
 
 .options-menu__arrow {
   background: transparent;
   border: none;
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
   font-size: 2.8rem;
   line-height: 1;
   cursor: pointer;
@@ -714,7 +822,7 @@ body.body--scan {
 }
 
 .options-menu__arrow:not(:disabled):hover {
-  color: #d9ecff;
+  color: var(--hud-text);
 }
 
 .options-menu__arrow:disabled {
@@ -725,13 +833,13 @@ body.body--scan {
 .options-menu__voice-name {
   font-size: 1.8rem;
   font-weight: 600;
-  color: #d9ecff;
+  color: var(--hud-text);
   margin-top: 8px;
 }
 
 .options-menu__voice-description {
   font-size: 1.05rem;
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
 }
 
 .options-menu__voice-dots {
@@ -745,7 +853,7 @@ body.body--scan {
   height: 10px;
   border-radius: 50%;
   border: none;
-  background: rgba(127, 163, 201, 0.35);
+  background: rgba(122, 176, 214, 0.35);
   cursor: pointer;
   padding: 0;
 }
@@ -755,7 +863,7 @@ body.body--scan {
 }
 
 .options-menu__dot--active {
-  background: #37e2ff;
+  background: var(--hud-accent);
 }
 
 /* Onglet "Micro & Haut-parleur" (nos périphériques à nous, à distinguer de l'onglet Voix qui règle la voix
@@ -769,13 +877,13 @@ body.body--scan {
   flex-direction: column;
   gap: 4px;
   font-size: 0.8rem;
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
 }
 
 .options-menu__field select {
-  background: rgba(13, 20, 33, 0.8);
-  border: 1px solid rgba(127, 163, 201, 0.3);
-  color: #d9ecff;
+  background: rgba(6, 16, 25, 0.8);
+  border: 1px solid rgba(122, 176, 214, 0.3);
+  color: var(--hud-text);
   padding: 6px 10px;
   border-radius: 8px;
   font-size: 0.85rem;
@@ -786,9 +894,9 @@ body.body--scan {
 }
 
 .options-menu__field input {
-  background: rgba(13, 20, 33, 0.8);
-  border: 1px solid rgba(127, 163, 201, 0.3);
-  color: #d9ecff;
+  background: rgba(6, 16, 25, 0.8);
+  border: 1px solid rgba(122, 176, 214, 0.3);
+  color: var(--hud-text);
   padding: 6px 10px;
   border-radius: 8px;
   font-size: 0.85rem;
@@ -813,14 +921,14 @@ body.body--scan {
   height: 44px;
   padding: 0 4px;
   border-radius: 8px;
-  background: rgba(13, 20, 33, 0.5);
+  background: rgba(6, 16, 25, 0.5);
 }
 
 .options-menu__mic-bar {
   flex: 1;
   min-width: 2px;
   border-radius: 999px;
-  background: #37e2ff;
+  background: var(--hud-accent);
   /* Transition courte : assez rapide pour ne pas paraître en retard sur la voix, assez longue pour lisser
      le passage d'une valeur à l'autre plutôt qu'un saut brut. */
   transition: height 80ms ease-out;
@@ -828,25 +936,25 @@ body.body--scan {
 
 .options-menu__mic-result--ok {
   font-size: 0.8rem;
-  color: #2ed573;
+  color: var(--hud-ok);
 }
 
 .options-menu__mic-result--bad {
   font-size: 0.8rem;
-  color: #ff6b6b;
+  color: var(--hud-danger);
 }
 
 .app__status {
   font-size: 0.95rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
   min-height: 1.4em;
 }
 
 .app__hint {
   font-size: 0.75rem;
-  color: #4d6a87;
+  color: var(--hud-text-faint);
 }
 
 .app__conversation {
@@ -859,13 +967,13 @@ body.body--scan {
 
 .app__transcript {
   margin: 0;
-  color: #9fc3e6;
+  color: var(--hud-text-soft);
   font-style: italic;
 }
 
 .app__reply {
   margin: 0;
-  color: #d9ecff;
+  color: var(--hud-text);
   font-weight: 500;
 }
 
@@ -875,7 +983,7 @@ body.body--scan {
   z-index: 10;
   display: flex;
   flex-direction: column;
-  background: radial-gradient(circle at 50% 30%, #0c1420 0%, #05070c 70%);
+  background: radial-gradient(circle at 50% 30%, var(--hud-panel) 0%, var(--hud-bg) 70%);
 }
 
 .memory-brain__header {
@@ -884,8 +992,8 @@ body.body--scan {
   justify-content: space-between;
   padding: 14px 20px;
   font-size: 0.85rem;
-  color: #9fc3e6;
-  border-bottom: 1px solid rgba(127, 163, 201, 0.2);
+  color: var(--hud-text-soft);
+  border-bottom: 1px solid rgba(122, 176, 214, 0.2);
 }
 
 .memory-brain__actions {
@@ -895,8 +1003,8 @@ body.body--scan {
 
 .memory-brain__actions button {
   background: transparent;
-  border: 1px solid rgba(127, 163, 201, 0.35);
-  color: #7fa3c9;
+  border: 1px solid rgba(122, 176, 214, 0.35);
+  color: var(--hud-text-dim);
   padding: 6px 14px;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -904,8 +1012,8 @@ body.body--scan {
 }
 
 .memory-brain__actions button:hover {
-  border-color: #37e2ff;
-  color: #d9ecff;
+  border-color: var(--hud-accent);
+  color: var(--hud-text);
 }
 
 .memory-brain__canvas {
@@ -917,7 +1025,7 @@ body.body--scan {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #4d6a87;
+  color: var(--hud-text-faint);
   font-size: 0.85rem;
   text-align: center;
   padding: 0 32px;
@@ -929,8 +1037,8 @@ body.body--scan {
   right: 20px;
   bottom: 20px;
   width: min(360px, 80vw);
-  background: rgba(5, 7, 12, 0.92);
-  border: 1px solid rgba(127, 163, 201, 0.3);
+  background: rgba(1, 4, 10, 0.92);
+  border: 1px solid rgba(122, 176, 214, 0.3);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -944,20 +1052,20 @@ body.body--scan {
   padding: 10px 14px;
   font-size: 0.85rem;
   font-weight: 500;
-  color: #d9ecff;
-  border-bottom: 1px solid rgba(127, 163, 201, 0.2);
+  color: var(--hud-text);
+  border-bottom: 1px solid rgba(122, 176, 214, 0.2);
 }
 
 .memory-brain__note-header button {
   background: transparent;
   border: none;
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
   cursor: pointer;
   font-size: 0.9rem;
 }
 
 .memory-brain__note-header button:hover {
-  color: #d9ecff;
+  color: var(--hud-text);
 }
 
 .memory-brain__note-content {
@@ -969,7 +1077,7 @@ body.body--scan {
   font-family: inherit;
   font-size: 0.8rem;
   line-height: 1.5;
-  color: #9fc3e6;
+  color: var(--hud-text-soft);
 }
 
 .app__new-models {
@@ -980,9 +1088,9 @@ body.body--scan {
   max-width: 480px;
   text-align: center;
   font-size: 0.8rem;
-  color: #9df0ff;
-  background: rgba(55, 226, 255, 0.08);
-  border: 1px solid rgba(55, 226, 255, 0.3);
+  color: var(--hud-accent-bright);
+  background: rgba(61, 220, 255, 0.08);
+  border: 1px solid rgba(61, 220, 255, 0.3);
   border-radius: 12px;
   padding: 10px 16px;
   display: flex;
@@ -993,8 +1101,8 @@ body.body--scan {
 
 .app__new-models button {
   background: transparent;
-  border: 1px solid rgba(55, 226, 255, 0.35);
-  color: #9df0ff;
+  border: 1px solid rgba(61, 220, 255, 0.35);
+  color: var(--hud-accent-bright);
   padding: 4px 14px;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -1002,17 +1110,17 @@ body.body--scan {
 }
 
 .app__new-models button:hover {
-  border-color: #37e2ff;
-  color: #d9ecff;
+  border-color: var(--hud-accent);
+  color: var(--hud-text);
 }
 
 .app__setup-warning {
   max-width: 480px;
   text-align: center;
   font-size: 0.8rem;
-  color: #ffb648;
-  background: rgba(255, 182, 72, 0.08);
-  border: 1px solid rgba(255, 182, 72, 0.3);
+  color: var(--hud-gold);
+  background: rgba(255, 176, 32, 0.08);
+  border: 1px solid rgba(255, 176, 32, 0.3);
   border-radius: 12px;
   padding: 10px 16px;
 }
@@ -1039,14 +1147,14 @@ body.body--scan {
 
 .app__onboarding p {
   margin: 0 0 8px;
-  color: #9fc3e6;
+  color: var(--hud-text-soft);
 }
 
 .app__onboarding input {
   width: 100%;
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(127, 163, 201, 0.35);
-  color: #d9ecff;
+  border: 1px solid rgba(122, 176, 214, 0.35);
+  color: var(--hud-text);
   padding: 10px 14px;
   border-radius: 999px;
   font-size: 0.95rem;
@@ -1055,13 +1163,13 @@ body.body--scan {
 
 .app__onboarding input:focus {
   outline: none;
-  border-color: #37e2ff;
+  border-color: var(--hud-accent);
 }
 
 .app__onboarding button {
-  background: rgba(55, 226, 255, 0.18);
-  border: 1px solid #37e2ff;
-  color: #d9ecff;
+  background: rgba(61, 220, 255, 0.18);
+  border: 1px solid var(--hud-accent);
+  color: var(--hud-text);
   padding: 8px 20px;
   border-radius: 999px;
   font-size: 0.9rem;
@@ -1075,8 +1183,8 @@ body.body--scan {
 
 .app__onboarding button.app__onboarding-secondary {
   background: transparent;
-  border: 1px solid rgba(127, 163, 201, 0.35);
-  color: #7fa3c9;
+  border: 1px solid rgba(122, 176, 214, 0.35);
+  color: var(--hud-text-dim);
 }
 
 .capacity-scan {
@@ -1092,8 +1200,8 @@ body.body--scan {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  border: 3px solid rgba(55, 226, 255, 0.15);
-  border-top-color: #37e2ff;
+  border: 3px solid rgba(61, 220, 255, 0.15);
+  border-top-color: var(--hud-accent);
   animation: capacity-scan-spin 0.9s linear infinite;
   margin: 8px 0;
 }
@@ -1105,7 +1213,7 @@ body.body--scan {
 }
 
 .capacity-scan__status {
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
   font-size: 0.85rem;
 }
 
@@ -1116,13 +1224,13 @@ body.body--scan {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  color: #d9ecff;
+  color: var(--hud-text);
   font-size: 0.85rem;
 }
 
 .capacity-scan__hint {
   font-size: 0.75rem;
-  color: #4d6a87;
+  color: var(--hud-text-faint);
 }
 
 /* Les 3 paliers de configuration (previewHardwareTiers) présentés à l'écran d'accueil, reliés par des
@@ -1138,15 +1246,15 @@ body.body--scan {
 
 .capacity-scan__tier {
   text-align: left;
-  background: rgba(127, 163, 201, 0.06);
-  border: 1px solid rgba(127, 163, 201, 0.2);
+  background: rgba(122, 176, 214, 0.06);
+  border: 1px solid rgba(122, 176, 214, 0.2);
   border-radius: 14px;
   padding: 10px 16px;
 }
 
 .capacity-scan__tier--current {
-  background: rgba(55, 226, 255, 0.1);
-  border-color: #37e2ff;
+  background: rgba(61, 220, 255, 0.1);
+  border-color: var(--hud-accent);
 }
 
 .capacity-scan__tier-header {
@@ -1160,17 +1268,17 @@ body.body--scan {
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #4d6a87;
+  color: var(--hud-text-faint);
 }
 
 .capacity-scan__tier-label {
   font-size: 0.95rem;
-  color: #d9ecff;
+  color: var(--hud-text);
 }
 
 .capacity-scan__tier-vram-range {
   font-size: 0.78rem;
-  color: #d9ecff;
+  color: var(--hud-text);
 }
 
 /* Une ligne par palier (Rapide/Médium/Puissant/Vision), avec vitesse + fiabilité de son modèle — remplace le
@@ -1179,7 +1287,7 @@ body.body--scan {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.78rem;
-  color: #9fc3e6;
+  color: var(--hud-text-soft);
 }
 
 .capacity-scan__tier-table td {
@@ -1188,12 +1296,12 @@ body.body--scan {
 }
 
 .capacity-scan__tier-slot {
-  color: #4d6a87;
+  color: var(--hud-text-faint);
   padding-right: 8px !important;
 }
 
 .capacity-scan__tier-model {
-  color: #d9ecff;
+  color: var(--hud-text);
   padding-right: 10px !important;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1208,13 +1316,13 @@ body.body--scan {
 .capacity-scan__tier-badge {
   margin-top: 6px;
   font-size: 0.78rem;
-  color: #37e2ff;
+  color: var(--hud-accent);
   font-weight: 600;
 }
 
 .capacity-scan__tier-arrow {
   align-self: center;
-  color: #4d6a87;
+  color: var(--hud-text-faint);
   font-size: 1.1rem;
   line-height: 1;
   margin: 2px 0;
@@ -1253,7 +1361,7 @@ body.body--scan {
   font-size: 0.7rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #9fc3e6;
+  color: var(--hud-text-soft);
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
 }
 
@@ -1303,7 +1411,7 @@ body.body--scan {
   text-align: center;
   font-size: 0.8rem;
   line-height: 1.6;
-  color: #4d6a87;
+  color: var(--hud-text-faint);
 }
 
 .chat-panel__message {
@@ -1320,28 +1428,28 @@ body.body--scan {
 
 .chat-panel__message--user {
   align-self: flex-end;
-  background: rgba(55, 226, 255, 0.13);
-  border: 1px solid rgba(55, 226, 255, 0.25);
-  color: #d9ecff;
+  background: rgba(61, 220, 255, 0.13);
+  border: 1px solid rgba(61, 220, 255, 0.25);
+  color: var(--hud-text);
 }
 
 .chat-panel__message--assistant {
   align-self: flex-start;
-  background: rgba(127, 163, 201, 0.08);
-  border: 1px solid rgba(127, 163, 201, 0.2);
-  color: #d9ecff;
+  background: rgba(122, 176, 214, 0.08);
+  border: 1px solid rgba(122, 176, 214, 0.2);
+  color: var(--hud-text);
 }
 
 .chat-panel__message--pending {
   align-self: flex-start;
-  color: #4d6a87;
+  color: var(--hud-text-faint);
   font-style: italic;
 }
 
 .chat-panel__error {
   margin: 0;
   font-size: 0.75rem;
-  color: #ffb648;
+  color: var(--hud-gold);
 }
 
 .chat-panel__composer {
@@ -1353,10 +1461,10 @@ body.body--scan {
 .chat-panel__composer textarea {
   flex: 1;
   resize: none;
-  background: rgba(5, 7, 12, 0.6);
-  border: 1px solid rgba(127, 163, 201, 0.25);
+  background: rgba(1, 4, 10, 0.6);
+  border: 1px solid rgba(122, 176, 214, 0.25);
   border-radius: 12px;
-  color: #d9ecff;
+  color: var(--hud-text);
   padding: 10px 12px;
   font-family: inherit;
   font-size: 0.85rem;
@@ -1365,13 +1473,13 @@ body.body--scan {
 
 .chat-panel__composer textarea:focus {
   outline: none;
-  border-color: #37e2ff;
+  border-color: var(--hud-accent);
 }
 
 .chat-panel__composer button {
-  background: rgba(55, 226, 255, 0.15);
-  border: 1px solid rgba(55, 226, 255, 0.35);
-  color: #d9ecff;
+  background: rgba(61, 220, 255, 0.15);
+  border: 1px solid rgba(61, 220, 255, 0.35);
+  color: var(--hud-text);
   padding: 10px 20px;
   border-radius: 12px;
   font-size: 0.8rem;
@@ -1408,10 +1516,10 @@ body.body--scan {
 
 .code-panel__composer textarea {
   resize: none;
-  background: rgba(5, 7, 12, 0.6);
-  border: 1px solid rgba(127, 163, 201, 0.25);
+  background: rgba(1, 4, 10, 0.6);
+  border: 1px solid rgba(122, 176, 214, 0.25);
   border-radius: 12px;
-  color: #d9ecff;
+  color: var(--hud-text);
   padding: 10px 12px;
   font-family: inherit;
   font-size: 0.85rem;
@@ -1420,7 +1528,7 @@ body.body--scan {
 
 .code-panel__composer textarea:focus {
   outline: none;
-  border-color: #37e2ff;
+  border-color: var(--hud-accent);
 }
 
 .code-panel__actions {
@@ -1431,8 +1539,8 @@ body.body--scan {
 
 .code-panel__actions button {
   background: transparent;
-  border: 1px solid rgba(127, 163, 201, 0.35);
-  color: #7fa3c9;
+  border: 1px solid rgba(122, 176, 214, 0.35);
+  color: var(--hud-text-dim);
   padding: 7px 16px;
   border-radius: 999px;
   font-size: 0.78rem;
@@ -1441,14 +1549,14 @@ body.body--scan {
 }
 
 .code-panel__actions button:hover:not(:disabled) {
-  border-color: #37e2ff;
-  color: #d9ecff;
+  border-color: var(--hud-accent);
+  color: var(--hud-text);
 }
 
 .code-panel__generate {
-  background: rgba(55, 226, 255, 0.15) !important;
-  border-color: rgba(55, 226, 255, 0.35) !important;
-  color: #d9ecff !important;
+  background: rgba(61, 220, 255, 0.15) !important;
+  border-color: rgba(61, 220, 255, 0.35) !important;
+  color: var(--hud-text) !important;
 }
 
 .code-panel__actions button:disabled {
@@ -1459,7 +1567,7 @@ body.body--scan {
 .code-panel__error {
   margin: 0;
   font-size: 0.75rem;
-  color: #ffb648;
+  color: var(--hud-gold);
 }
 
 .code-panel__status {
@@ -1467,13 +1575,13 @@ body.body--scan {
   padding: 10px 12px;
   max-height: 110px;
   overflow-y: auto;
-  background: rgba(5, 7, 12, 0.6);
-  border: 1px solid rgba(127, 163, 201, 0.2);
+  background: rgba(1, 4, 10, 0.6);
+  border: 1px solid rgba(122, 176, 214, 0.2);
   border-radius: 8px;
   font-family: inherit;
   font-size: 0.68rem;
   line-height: 1.5;
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
   white-space: pre-wrap;
 }
 
@@ -1489,7 +1597,7 @@ body.body--scan {
   display: flex;
   gap: 6px;
   align-self: flex-start;
-  background: rgba(127, 163, 201, 0.08);
+  background: rgba(122, 176, 214, 0.08);
   border-radius: 999px;
   padding: 3px;
 }
@@ -1497,7 +1605,7 @@ body.body--scan {
 .code-panel__view-tab {
   background: transparent;
   border: none;
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
   padding: 5px 16px;
   border-radius: 999px;
   font-size: 0.76rem;
@@ -1506,8 +1614,8 @@ body.body--scan {
 }
 
 .code-panel__view-tab--active {
-  background: rgba(55, 226, 255, 0.15);
-  color: #d9ecff;
+  background: rgba(61, 220, 255, 0.15);
+  color: var(--hud-text);
 }
 
 /* Fond blanc explicite : une page générée qui ne définit pas son propre fond serait sinon transparente
@@ -1516,7 +1624,7 @@ body.body--scan {
   flex: 1;
   min-height: 0;
   width: 100%;
-  border: 1px solid rgba(127, 163, 201, 0.2);
+  border: 1px solid rgba(122, 176, 214, 0.2);
   border-radius: 10px;
   background: #ffffff;
 }
@@ -1527,31 +1635,31 @@ body.body--scan {
   overflow: auto;
   margin: 0;
   padding: 12px 14px;
-  background: rgba(5, 7, 12, 0.6);
-  border: 1px solid rgba(127, 163, 201, 0.2);
+  background: rgba(1, 4, 10, 0.6);
+  border: 1px solid rgba(122, 176, 214, 0.2);
   border-radius: 10px;
   font-size: 0.7rem;
   line-height: 1.55;
-  color: #9fc4e8;
+  color: var(--hud-text-soft);
 }
 
 .code-panel__hint {
   margin: 0;
   font-size: 0.68rem;
-  color: #4d6a87;
+  color: var(--hud-text-faint);
 }
 
 .code-panel__hint code {
-  color: #7fa3c9;
+  color: var(--hud-text-dim);
   word-break: break-all;
 }
 
 .code-panel__issues {
   font-size: 0.72rem;
   line-height: 1.55;
-  color: #ffb648;
-  background: rgba(255, 182, 72, 0.08);
-  border: 1px solid rgba(255, 182, 72, 0.3);
+  color: var(--hud-gold);
+  background: rgba(255, 176, 32, 0.08);
+  border: 1px solid rgba(255, 176, 32, 0.3);
   border-radius: 10px;
   padding: 10px 14px;
 }
@@ -1580,12 +1688,12 @@ body.body--scan {
 
 .runtime-setup__intro {
   margin: 0;
-  color: #9fc3e6;
+  color: var(--hud-text-soft);
   line-height: 1.5;
 }
 
 .runtime-setup__status {
-  color: #d9ecff;
+  color: var(--hud-text);
   font-size: 0.9rem;
   min-height: 1.2em;
   /* Une ligne de sortie de pip peut être très longue (URL de paquet) : coupée plutôt que d'élargir
@@ -1597,7 +1705,7 @@ body.body--scan {
   width: 100%;
   height: 6px;
   border-radius: 999px;
-  background: rgba(127, 163, 201, 0.2);
+  background: rgba(122, 176, 214, 0.2);
   overflow: hidden;
 }
 
@@ -1605,7 +1713,7 @@ body.body--scan {
   height: 100%;
   width: 0;
   border-radius: 999px;
-  background: linear-gradient(90deg, #37e2ff, #2b6cff);
+  background: linear-gradient(90deg, var(--hud-accent), var(--hud-accent-deep));
   transition: width 0.3s ease;
 }
 
@@ -1625,7 +1733,7 @@ body.body--scan {
   margin: 0;
   padding-left: 20px;
   text-align: left;
-  color: #ffb8b8;
+  color: var(--hud-danger-soft);
   font-size: 0.85rem;
 }
 
@@ -1635,9 +1743,9 @@ body.body--scan {
 }
 
 .runtime-setup__actions button {
-  background: rgba(55, 226, 255, 0.18);
-  border: 1px solid #37e2ff;
-  color: #d9ecff;
+  background: rgba(61, 220, 255, 0.18);
+  border: 1px solid var(--hud-accent);
+  color: var(--hud-text);
   padding: 8px 18px;
   border-radius: 999px;
   cursor: pointer;
@@ -1646,6 +1754,672 @@ body.body--scan {
 
 .runtime-setup__actions .runtime-setup__skip {
   background: transparent;
-  border-color: rgba(127, 163, 201, 0.35);
-  color: #9fc3e6;
+  border-color: rgba(122, 176, 214, 0.35);
+  color: var(--hud-text-soft);
+}
+
+/* ==========================================================================
+   COUCHE HUD
+   --------------------------------------------------------------------------
+   Volontairement en fin de fichier : ces règles réhabillent les mêmes classes
+   que celles définies plus haut (mise en page inchangée, seul l'aspect change),
+   et étant les dernières à spécificité égale, ce sont elles qui gagnent. Garder
+   la mise en page d'origine intacte plus haut évite de recalculer des dizaines
+   de flex/grid déjà éprouvés juste pour changer un look.
+
+   Trois motifs reviennent partout, et un seul suffit à faire lire "instrument"
+   plutôt que "site web" :
+   1. les coins coupés en diagonale (clip-path) à la place des coins arrondis,
+   2. les équerres lumineuses dans les angles des panneaux,
+   3. les étiquettes en capitales très espacées, dans la police d'affichage.
+   ========================================================================== */
+
+/* --- Typographie ---------------------------------------------------------- */
+
+h1,
+h2,
+h3,
+.sidebar__brand,
+.sidebar__mode-label,
+.options-menu__section-title,
+.options-menu__model-group-title,
+.options-menu__tab,
+.capacity-scan__tier-label,
+.capacity-scan__tier-index,
+.code-panel__view-tab,
+.app__status {
+  font-family: var(--hud-font-display);
+}
+
+h1 {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+/* Toutes les étiquettes de section : capitales espacées + un trait qui part vers
+   la droite, comme les intitulés de zone sur un tableau de bord. */
+.options-menu__section-title,
+.options-menu__model-group-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  color: var(--hud-accent);
+  text-transform: uppercase;
+}
+
+.options-menu__section-title::after,
+.options-menu__model-group-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--hud-line-strong), transparent);
+}
+
+/* --- Boutons -------------------------------------------------------------- */
+
+/*
+ * Un seul aspect pour tous les boutons d'action, quelle que soit la classe
+ * d'origine (elles étaient toutes légèrement différentes) : coins coupés en bas
+ * à droite / haut à gauche, fond très sombre, liseré cyan qui s'allume au
+ * survol. Le `clip-path` fait tout le travail — pas d'image, pas de bordure
+ * biseautée bricolée.
+ */
+.options-menu__action,
+.options-menu__trigger,
+.options-page__close,
+.sidebar__link,
+.options-menu__scope-dialog-cancel,
+.options-menu__ollama-update-actions button,
+.app__new-models button,
+.memory-brain__actions button,
+.code-panel__generate,
+.chat-panel__composer button,
+.code-panel__composer button,
+.capacity-scan button,
+.runtime-setup__actions button,
+.app__onboarding button {
+  position: relative;
+  font-family: var(--hud-font-display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--hud-accent);
+  background: linear-gradient(180deg, rgba(var(--hud-accent-rgb), 0.14), rgba(var(--hud-accent-rgb), 0.05));
+  border: 1px solid var(--hud-line-strong);
+  border-radius: 0;
+  padding: 9px 20px;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+}
+
+.options-menu__action:not(:disabled):hover,
+.options-menu__trigger:hover,
+.options-page__close:hover,
+.sidebar__link:hover,
+.options-menu__scope-dialog-cancel:hover,
+.options-menu__ollama-update-actions button:not(:disabled):hover,
+.app__new-models button:hover,
+.memory-brain__actions button:hover,
+.code-panel__generate:not(:disabled):hover,
+.chat-panel__composer button:not(:disabled):hover,
+.code-panel__composer button:not(:disabled):hover,
+.capacity-scan button:not(:disabled):hover,
+.runtime-setup__actions button:not(:disabled):hover,
+.app__onboarding button:hover {
+  color: var(--hud-accent-bright);
+  border-color: var(--hud-accent);
+  background: linear-gradient(180deg, rgba(var(--hud-accent-rgb), 0.26), rgba(var(--hud-accent-rgb), 0.1));
+  box-shadow: var(--hud-glow);
+}
+
+/* Le clavier doit voir où il est au moins aussi bien que la souris : le contour
+   natif disparaîtrait sous le clip-path, remplacé par une lueur nette. */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--hud-accent-bright) !important;
+  box-shadow:
+    0 0 0 1px var(--hud-accent-bright),
+    0 0 16px rgba(var(--hud-accent-rgb), 0.5);
+}
+
+.options-menu__action--danger,
+.options-menu__action--danger:not(:disabled):hover {
+  color: var(--hud-danger);
+  border-color: rgba(255, 77, 104, 0.55);
+  background: linear-gradient(180deg, rgba(255, 77, 104, 0.16), rgba(255, 77, 104, 0.05));
+  box-shadow: none;
+}
+
+/* --- Panneaux et équerres ------------------------------------------------- */
+
+/*
+ * Les équerres d'angle : deux pseudo-éléments qui ne dessinent que deux côtés de
+ * bordure chacun, en haut à gauche et en bas à droite. C'est le détail le plus
+ * "cockpit" de tout le thème, et il ne coûte rien — aucun élément supplémentaire
+ * dans le DOM, donc applicable à des composants qu'on ne touche pas côté React.
+ */
+.options-menu__model-group,
+.options-menu__changelog-entry,
+.capacity-scan__tier,
+.options-menu__scope-dialog,
+.app__new-models,
+.app__conversation:not(.app__conversation--widget),
+.chat-panel__message,
+.code-panel__result,
+.memory-brain__note {
+  position: relative;
+  border-radius: 0 !important;
+  background: var(--hud-panel-raised);
+  border: 1px solid var(--hud-line);
+  backdrop-filter: blur(6px);
+}
+
+.options-menu__model-group::before,
+.options-menu__changelog-entry::before,
+.capacity-scan__tier::before,
+.options-menu__scope-dialog::before,
+.app__new-models::before,
+.chat-panel__message::before,
+.code-panel__result::before,
+.memory-brain__note::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 14px;
+  height: 14px;
+  border-top: 2px solid var(--hud-accent);
+  border-left: 2px solid var(--hud-accent);
+  pointer-events: none;
+}
+
+.options-menu__model-group::after,
+.options-menu__changelog-entry::after,
+.capacity-scan__tier::after,
+.options-menu__scope-dialog::after,
+.app__new-models::after,
+.chat-panel__message::after,
+.code-panel__result::after,
+.memory-brain__note::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 14px;
+  height: 14px;
+  border-right: 2px solid var(--hud-accent);
+  border-bottom: 2px solid var(--hud-accent);
+  pointer-events: none;
+}
+
+/* Le palier correspondant à la machine : équerres dorées au lieu de cyan, plus une
+   lueur — c'est l'information la plus importante de cet écran, elle doit sauter
+   aux yeux sans avoir à lire les libellés. */
+.capacity-scan__tier--current {
+  border-color: rgba(255, 176, 32, 0.5);
+  box-shadow: 0 0 24px rgba(255, 176, 32, 0.12);
+}
+
+.capacity-scan__tier--current::before,
+.capacity-scan__tier--current::after {
+  border-color: var(--hud-gold);
+}
+
+/* --- Colonne latérale ----------------------------------------------------- */
+
+.sidebar {
+  background: linear-gradient(180deg, rgba(6, 16, 25, 0.92), rgba(1, 4, 10, 0.92));
+  border-right: 1px solid var(--hud-line);
+  backdrop-filter: blur(8px);
+}
+
+/* Le nom de l'appli traité comme la plaque d'un appareil : lettres très espacées,
+   lueur cyan, et un trait plein dessous qui court sur toute la largeur. */
+.sidebar__brand {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.42em;
+  color: var(--hud-accent);
+  text-shadow: 0 0 18px rgba(var(--hud-accent-rgb), 0.55);
+  padding: 4px 0 14px 8px;
+  border-bottom: 1px solid var(--hud-line);
+}
+
+.sidebar__mode {
+  position: relative;
+  border-left: none;
+  border-radius: 0;
+  padding: 11px 14px;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+/* Le trait vertical d'état est dessiné en ::before plutôt qu'en border-left : il
+   peut ainsi s'allonger/s'illuminer à l'activation sans décaler le texte d'un
+   pixel, ce qui se voyait à chaque changement de mode. */
+.sidebar__mode::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 12px;
+  background: var(--hud-text-faint);
+  transition:
+    height 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.sidebar__mode:hover::before {
+  height: 60%;
+  background: var(--hud-text-dim);
+}
+
+.sidebar__mode--active {
+  background: linear-gradient(90deg, rgba(var(--hud-accent-rgb), 0.16), transparent);
+  color: var(--hud-text);
+}
+
+.sidebar__mode--active::before {
+  height: 100%;
+  background: var(--hud-accent);
+  box-shadow: 0 0 12px rgba(var(--hud-accent-rgb), 0.8);
+}
+
+.sidebar__mode-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.sidebar__mode-hint {
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+}
+
+/* --- Écran vocal : l'orbe et son statut ----------------------------------- */
+
+/*
+ * Deux anneaux concentriques autour de l'orbe, dessinés en CSS (l'orbe lui-même
+ * reste un canvas, voir JarisOrb.tsx) : un cercle fin fixe et un arc en rotation
+ * lente. C'est ce qui transforme "une sphère au milieu d'une page" en "cible
+ * d'un viseur". `inset` négatif : les anneaux débordent volontairement de la
+ * boîte de l'orbe.
+ */
+.app--voice .jaris-orb {
+  position: relative;
+}
+
+.app--voice .jaris-orb::before,
+.app--voice .jaris-orb::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.app--voice .jaris-orb::before {
+  inset: -26px;
+  border: 1px solid rgba(var(--hud-accent-rgb), 0.18);
+}
+
+.app--voice .jaris-orb::after {
+  inset: -44px;
+  border: 1px dashed rgba(var(--hud-accent-rgb), 0.28);
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+  animation: hud-ring-spin 14s linear infinite;
+}
+
+@keyframes hud-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app--voice .jaris-orb::after {
+    animation: none;
+  }
+}
+
+/* Le statut ("Jaris t'écoute"...) devient l'indicateur principal de l'écran :
+   capitales espacées, précédé d'un point qui bat au rythme de l'état. */
+.app__status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--hud-accent);
+  text-shadow: 0 0 16px rgba(var(--hud-accent-rgb), 0.4);
+}
+
+.app__status::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--hud-accent);
+  box-shadow: 0 0 10px var(--hud-accent);
+  animation: hud-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes hud-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app__status::before {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+.app__hint {
+  font-family: var(--hud-font-display);
+  letter-spacing: 0.08em;
+  color: var(--hud-text-faint);
+  max-width: 46ch;
+  text-align: center;
+}
+
+/* Transcription et réponse : la question de l'utilisateur en cyan discret, la
+   réponse de Jaris en blanc lisible — la hiérarchie doit se lire sans étiquette. */
+.app__transcript {
+  font-family: var(--hud-font-display);
+  letter-spacing: 0.06em;
+  color: var(--hud-accent);
+}
+
+.app__reply {
+  font-family: var(--hud-font-body);
+  color: var(--hud-text);
+}
+
+/* --- Onglets (Options, mode Code) ----------------------------------------- */
+
+.options-menu__tabs,
+.code-panel__view-tabs {
+  border-radius: 0;
+  background: rgba(1, 4, 10, 0.6);
+  border: 1px solid var(--hud-line);
+  padding: 0;
+  gap: 0;
+}
+
+.options-menu__tab,
+.code-panel__view-tab {
+  border-radius: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 9px 14px;
+  border-bottom: 2px solid transparent;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.options-menu__tab--active,
+.code-panel__view-tab--active {
+  background: rgba(var(--hud-accent-rgb), 0.12);
+  border-bottom-color: var(--hud-accent);
+  color: var(--hud-accent-bright);
+}
+
+/* --- En-têtes de page ----------------------------------------------------- */
+
+.options-page,
+.memory-brain {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(var(--hud-accent-rgb), 0.1) 0%, transparent 55%),
+    linear-gradient(180deg, var(--hud-panel) 0%, var(--hud-bg) 70%);
+}
+
+.options-page__header,
+.memory-brain__header {
+  border-bottom: 1px solid var(--hud-line);
+  background: rgba(1, 4, 10, 0.5);
+}
+
+.options-page__header h2,
+.memory-brain__header h2,
+.options-page__header > span:first-child {
+  font-family: var(--hud-font-display);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--hud-accent);
+}
+
+/* --- Champs de saisie ----------------------------------------------------- */
+
+input,
+textarea,
+select {
+  font-family: var(--hud-font-body);
+  border-radius: 0 !important;
+  background: rgba(1, 4, 10, 0.75) !important;
+  border: 1px solid var(--hud-line) !important;
+  color: var(--hud-text) !important;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--hud-text-faint);
+}
+
+/* --- Barres de progression ------------------------------------------------ */
+
+.options-menu__progress-bar,
+.runtime-setup__bar {
+  border-radius: 0;
+  border: 1px solid var(--hud-line);
+  background: rgba(1, 4, 10, 0.8);
+}
+
+.options-menu__progress-bar-fill,
+.runtime-setup__bar-fill {
+  border-radius: 0;
+  background: linear-gradient(90deg, var(--hud-accent-deep), var(--hud-accent));
+  box-shadow: 0 0 14px rgba(var(--hud-accent-rgb), 0.6);
+}
+
+/* --- Badges et pastilles -------------------------------------------------- */
+
+.options-menu__badge {
+  border-radius: 0;
+  font-family: var(--hud-font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  background: transparent;
+}
+
+.options-menu__badge--good {
+  color: var(--hud-ok);
+}
+
+.options-menu__badge--mid {
+  color: var(--hud-gold);
+}
+
+.options-menu__badge--bad {
+  color: var(--hud-danger);
+}
+
+.options-menu__badge--none {
+  color: var(--hud-text-faint);
+  border-color: var(--hud-text-faint);
+}
+
+/* --- Données techniques en monospace -------------------------------------- */
+
+.options-menu__model-name,
+.capacity-scan__tier-model,
+.options-menu__models-location-list,
+.options-menu__col-num,
+.capacity-scan__tier-speed,
+.options-menu__changelog-header,
+.options-menu__benchmark-log,
+code {
+  font-family: var(--hud-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Bandeaux d'alerte ---------------------------------------------------- */
+
+.app__new-models,
+.options-menu__ollama-warning,
+.options-menu__analysis-notice,
+.app__setup-warning {
+  border-radius: 0;
+  border-left: 3px solid var(--hud-gold);
+}
+
+.app__setup-warning,
+.options-menu__error,
+.chat-panel__error,
+.code-panel__error {
+  font-family: var(--hud-font-display);
+  letter-spacing: 0.06em;
+}
+
+/* --- Tableaux ------------------------------------------------------------- */
+
+.options-menu__model-overview th,
+.capacity-scan__tier-slot {
+  font-family: var(--hud-font-display);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--hud-accent);
+}
+
+/* --- Barres de défilement ------------------------------------------------- */
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(1, 4, 10, 0.6);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(var(--hud-accent-rgb), 0.28);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--hud-accent-rgb), 0.5);
+  background-clip: content-box;
+}
+
+/* --- Corrections repérées à la relecture visuelle -------------------------- */
+
+/* Les intitulés longs ("Micro & Haut-parleur", "Mise à jour") passaient sur deux
+   lignes et faisaient grandir toute la barre d'onglets, qui devenait deux fois
+   plus haute que les autres. */
+.options-menu__tab {
+  white-space: nowrap;
+  padding: 9px 12px;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+}
+
+/* Les liens gardaient le bleu/violet souligné par défaut du navigateur, seule
+   chose de l'interface à ne pas suivre le thème. */
+a {
+  color: var(--hud-accent);
+  text-decoration: none;
+  border-bottom: 1px solid var(--hud-line-strong);
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+a:hover {
+  color: var(--hud-accent-bright);
+  border-bottom-color: var(--hud-accent-bright);
+}
+
+/* Le repère "← ta configuration" reprend l'or du palier courant plutôt que le
+   cyan général : c'est la même information que les équerres dorées autour de la
+   carte, elle doit se lire d'un seul coup d'œil. */
+.capacity-scan__tier-badge {
+  font-family: var(--hud-font-display);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--hud-gold);
+}
+
+/* Bandeaux d'alerte : texte à gauche et bouton dans le flux, au lieu de tout
+   centrer — un paragraphe centré sur plusieurs lignes se lit mal, et le bouton
+   perdu au milieu ne ressemblait pas à une action. */
+.app__new-models {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  text-align: left;
+  padding: 12px 18px;
+}
+
+.app__new-models p {
+  margin: 0;
+  flex: 1;
+}
+
+.app__new-models button {
+  flex-shrink: 0;
+}
+
+/* L'astuce sous l'orbe repasse en police de texte : en Rajdhani, très espacée et
+   en petit corps, elle demandait un effort de lecture pour une phrase qu'on lit
+   justement une seule fois, au début. */
+.app__hint {
+  font-family: var(--hud-font-body);
+  letter-spacing: 0.01em;
+  line-height: 1.6;
+}
+
+/* Transcription centrée mais lisible : la mise en avant vient de la couleur, pas
+   d'un espacement de lettres qui rendrait une phrase entière difficile à suivre. */
+.app__transcript {
+  letter-spacing: 0.02em;
 }

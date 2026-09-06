@@ -1051,6 +1051,38 @@ l'élément `<audio>` de la réponse) et fait vibrer/pulser l'anneau et le
 noyau en fonction — l'anneau tremble plus fort et brille plus quand Jaris
 parle fort, et revient à une respiration légère au repos.
 
+### Toute l'interface passe au thème HUD (pas seulement l'orbe)
+
+L'étape 17 d'origine ne concernait que l'orbe : le reste de l'interface
+(Options, mode Chat, mode Code, écran d'onboarding...) est resté un habillage
+assez générique pendant longtemps — "ça ne fait pas dingue" de l'aveu de
+Léo. Toute l'appli reprend maintenant le même langage visuel que l'orbe,
+plutôt qu'un orbe futuriste posé sur des panneaux ordinaires :
+
+- **Fond en couches** (`body` dans `index.css`) : grille technique très
+  discrète, halo radial derrière l'orbe, et une ligne de balayage (scanline)
+  qui descend lentement l'écran en boucle — jamais assez marquée pour
+  distraire pendant la lecture d'une réponse.
+- **Coins coupés en diagonale** (`clip-path`) à la place des coins arrondis
+  sur les boutons, et **équerres lumineuses** dans les angles des panneaux
+  (cartes de résultats, bandeaux d'alerte, messages du chat) — deux
+  pseudo-éléments CSS par panneau, sans rien ajouter au DOM React.
+- **Deux polices embarquées** (`@fontsource/rajdhani` et `@fontsource/barlow`,
+  chargées en sous-ensemble latin seulement dans `main.tsx` — jamais Google
+  Fonts, Jaris doit rester utilisable hors connexion) : Rajdhani, condensée et
+  anguleuse, pour tous les titres/étiquettes/boutons ; Barlow pour le texte
+  courant et les réponses de Jaris, plus confortable à lire sur un paragraphe
+  entier.
+- **Une seule palette de tokens** (`--hud-*` en haut de `index.css`) réutilisée
+  partout — cyan pour l'accent général, or uniquement pour une vraie alerte
+  ou le palier de configuration qui correspond à la machine, vert/rouge pour
+  les scores de fiabilité. Avant, chaque composant avait ses propres couleurs
+  écrites en dur (`#37e2ff`, `#7fa3c9`...) répétées des dizaines de fois.
+
+Volontairement laissé identique : toute la mise en page (flex/grid) de chaque
+écran, qui fonctionnait déjà bien — seul l'habillage visuel change, jamais la
+structure.
+
 ## Les 3 modes de l'interface (étape 30)
 
 La fenêtre de réglages a une colonne latérale permanente, toujours visible,

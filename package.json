@@ -1,6 +1,6 @@
 {
   "name": "jaris",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "Jaris - assistant IA personnel vocal, 100% local et gratuit",
   "main": "./out/main/main.js",
   "author": "",
@@ -25,6 +25,8 @@
     "playwright-core": "^1.62.1"
   },
   "devDependencies": {
+    "@fontsource/barlow": "^5.3.0",
+    "@fontsource/rajdhani": "^5.3.0",
     "@types/nodemailer": "^8.0.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
