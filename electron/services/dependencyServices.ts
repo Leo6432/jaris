@@ -45,11 +45,14 @@ async function waitUntil(check: () => Promise<boolean>, timeoutMs: number, inter
 /**
  * En dessous de cette version, `ollama serve` peut faire flasher une brève fenêtre de console Windows
  * vide à chaque chargement/changement de modèle (le process "runner" qu'Ollama lance en interne n'était
- * pas caché sur Windows) — corrigé upstream dans la 0.7.0 (ollama/ollama#8668). Rien à faire côté Jaris,
- * qui ne lance que `ollama serve` lui-même (déjà avec windowsHide) : le correctif est entièrement dans le
- * binaire Ollama, seule une mise à jour peut faire disparaître ces flashs.
+ * pas caché sur Windows) — corrigé upstream dans la 0.7.0 (ollama/ollama#8668). Jaris ne lance lui-même que
+ * `ollama serve` (déjà avec windowsHide), donc rien à changer côté spawn ici : le vrai correctif vit dans le
+ * binaire Ollama — voir warnIfOllamaOutdated ci-dessous, qui tente un redémarrage silencieux dans ce cas.
  */
 const MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH = '0.7.0'
+
+/** Un seul essai de redémarrage silencieux par lancement de Jaris — voir warnIfOllamaOutdated. */
+let attemptedSilentOllamaRestart = false
 
 function isVersionOlder(version: string, minVersion: string): boolean {
   const parts = (v: string): number[] => v.split('.').map((p) => parseInt(p, 10) || 0)
@@ -68,11 +71,40 @@ async function warnIfOllamaOutdated(log: LogFn): Promise<void> {
     if (!response.ok) return
     const data = (await response.json()) as { version?: string }
     if (data.version && isVersionOlder(data.version, MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH)) {
+      if (attemptedSilentOllamaRestart) return
+      attemptedSilentOllamaRestart = true
       log(
         `Ollama ${data.version} détecté : les versions antérieures à ${MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH} ` +
           "peuvent faire apparaître de brèves fenêtres de console Windows vides au chargement d'un modèle " +
-          '(bug corrigé côté Ollama, pas côté Jaris) — mets à jour Ollama sur ollama.com/download pour les faire disparaître.'
+          '(bug corrigé côté Ollama, pas côté Jaris) — tentative de mise à jour silencieuse…'
       )
+      // Uniquement le redémarrage silencieux (applique une mise à jour déjà téléchargée en arrière-plan par
+      // Ollama, sans la moindre fenêtre) : jamais le vrai installeur ici (downloadAndLaunchOfficialInstaller,
+      // utilisé par le bouton "Mettre à jour" d'Options), qui lui ouvre une fenêtre — remplacer le problème
+      // (des fenêtres apparaissent) par un autre irait à l'encontre du but recherché.
+      const restarted = await restartOllamaApp()
+      if (restarted) {
+        await waitUntil(() => isUp(`${config.ollama.host}/api/tags`), 20000)
+        void checkOllamaFreshness()
+        try {
+          // Comparé directement au seuil du bug (pas à `outdated`, qui compare à la toute dernière version
+          // GitHub) : le redémarrage peut très bien suffire à passer 0.7.0 sans pour autant retomber sur la
+          // toute dernière version publiée — le bug de fenêtres est alors déjà réglé, `outdated` dirait
+          // pourtant encore "oui".
+          const recheck = await fetch(`${config.ollama.host}/api/version`)
+          const recheckData = recheck.ok ? ((await recheck.json()) as { version?: string }) : null
+          const stillOld = !recheckData?.version || isVersionOlder(recheckData.version, MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH)
+          log(
+            stillOld
+              ? "Redémarrage silencieux tenté, mais Ollama reste sur l'ancienne version — mets-le à jour manuellement dans Options → Micro & Modèles pour faire disparaître ces fenêtres."
+              : `Ollama mis à jour silencieusement (${recheckData?.version}).`
+          )
+        } catch {
+          log('Mets à jour Ollama manuellement dans Options → Micro & Modèles pour faire disparaître ces fenêtres.')
+        }
+      } else {
+        log('Mets à jour Ollama manuellement dans Options → Micro & Modèles pour faire disparaître ces fenêtres.')
+      }
     }
   } catch {
     // Purement informatif : un échec ici (Ollama trop vieux pour exposer /api/version, etc.) ne doit
