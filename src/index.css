@@ -797,6 +797,15 @@ body.body--scan::after {
   align-items: center;
   justify-content: center;
   gap: 24px;
+  /* inset: 0 le fait passer PAR-DESSUS l'en-tête et la navigation (couverts par sa boîte, même invisible) :
+     sans ça, tout ce qui n'est pas un bouton à l'intérieur (le vide entre l'orbe et les bords) intercepte le
+     clic à leur place — impossible de cliquer Fermer ou un autre onglet depuis Voix. auto sur ses boutons
+     rétablit le clic là où quelque chose est réellement affiché. */
+  pointer-events: none;
+}
+
+.options-menu__voice-picker button {
+  pointer-events: auto;
 }
 
 .options-menu__voice-nav {
