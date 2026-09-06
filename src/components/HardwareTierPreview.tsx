@@ -1,5 +1,6 @@
 import { Fragment } from 'react'
 import type { HardwareTierPreview as HardwareTierPreviewData, ModelOverviewEntry } from '../../shared/ipc'
+import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge } from './OptionsMenu'
 
 interface HardwareTierPreviewProps {
@@ -60,7 +61,7 @@ export default function HardwareTierPreview({ tiers }: HardwareTierPreviewProps)
                     <tr key={key}>
                       <td className="capacity-scan__tier-slot">{label}</td>
                       <td className="capacity-scan__tier-model" title={entry.model}>
-                        {entry.model}
+                        {formatModelName(entry.model)}
                       </td>
                       <td className="capacity-scan__tier-speed">{formatSpeed(entry)}</td>
                       <td>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { CapacityScanResult, HardwareTierPreview as HardwareTierPreviewData } from '../../shared/ipc'
+import { formatModelName } from '../lib/formatModelName'
 import HardwareTierPreview from './HardwareTierPreview'
 
 interface CapacityScanProps {
@@ -86,10 +87,10 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
               {result.vramGb !== null ? ` (${result.vramGb} Go de VRAM)` : ''}
             </p>
             <ul className="capacity-scan__models">
-              <li>Rapide : {result.models.flash}</li>
-              <li>Médium : {result.models.medium}</li>
-              <li>Puissant : {result.models.large}</li>
-              <li>Vision : {result.visionModel}</li>
+              <li>Rapide : {formatModelName(result.models.flash)}</li>
+              <li>Médium : {formatModelName(result.models.medium)}</li>
+              <li>Puissant : {formatModelName(result.models.large)}</li>
+              <li>Vision : {formatModelName(result.visionModel)}</li>
             </ul>
             <p className="capacity-scan__hint">
               Jaris choisit automatiquement le modèle le plus adapté à chaque question. Modifiable plus tard

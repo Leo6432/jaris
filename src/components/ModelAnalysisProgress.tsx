@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { AnalysisScope, ModelOverviewResult } from '../../shared/ipc'
 import type { ModelAnalysisState, ModelRunStatus } from '../hooks/useModelAnalysis'
+import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge } from './OptionsMenu'
 
 /** Fait le lien entre AnalysisScope ('flash'|'medium'|...) et le libellé de palier utilisé par ModelOverviewGroup.tier (voir TIER_LABELS dans hardwareScan.ts). */
@@ -142,7 +143,7 @@ export default function ModelAnalysisProgress({ state, modelOverview }: ModelAna
                   {group.entries.map((entry) => (
                     <tr key={entry.model}>
                       <td className="options-menu__model-name" title={entry.model}>
-                        {entry.model}
+                        {formatModelName(entry.model)}
                       </td>
                       <td className="options-menu__col-num">
                         <ReliabilityBadge value={entry.toolCalling} />
