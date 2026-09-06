@@ -64,13 +64,21 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
 // c'est un modèle Meta de septembre 2024, largement dépassé par qwen3:1.7b déjà en place) et
 // deepseek-r1:1.5b/32b (appel d'outils cassé sur Ollama malgré le badge "tools" affiché — bug connu,
 // voir github.com/ollama/ollama/issues/10935 — rédhibitoire puisque Jaris appelle un outil à chaque action).
+// granite4.2:8b/3b (IBM, sorti le 25/08/2026, Apache 2.0, tags réels confirmés sur ollama.com/library —
+// 5,3 Go et 2,2 Go, quasi identiques en taille à granite4.1) : ajoutés à CÔTÉ de granite4.1, PAS à leur
+// place, contrairement au remplacement direct granite4:3b -> granite4.1:3b fait plus haut dans l'historique
+// de ce fichier — cette fois granite4.1:8b/3b ont un vrai score d'appel d'outils mesuré (6/6, voir
+// verified-tool-scores.md, mesuré sur la machine de Léo début septembre 2026), alors que 4.2 n'a encore
+// aucune mesure : les remplacer perdrait une preuve réelle au profit d'un chiffre encore jamais vérifié.
 const MEDIUM_CANDIDATES: ModelCandidate[] = [
   { model: 'gemma4:e4b', vramGb: 9.6 },
   { model: 'gemma4:12b', vramGb: 7.6 },
   { model: 'qwen3.5:9b', vramGb: 6.6 },
+  { model: 'granite4.2:8b', vramGb: 5.3 },
   { model: 'granite4.1:8b', vramGb: 5.3 },
   { model: 'qwen3.5:4b', vramGb: 3.4 },
   { model: 'qwen3.5:2b', vramGb: 2.7 },
+  { model: 'granite4.2:3b', vramGb: 2.2 },
   { model: 'granite4.1:3b', vramGb: 2.1 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
 ]
@@ -97,6 +105,10 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   // - gpt-oss:20b (OpenAI, poids ouverts) : vérifié sur ollama.com/library/gpt-oss (14 Go, tools+thinking,
   //   texte seul — pas de vision contrairement aux autres candidats de cette liste).
   { model: 'qwen3.6:27b', vramGb: 18 },
+  // granite4.2:30b (IBM, sorti le 25/08/2026, Apache 2.0) : tag réel confirmé sur ollama.com/library/
+  // granite4.2/tags (18 Go, tools natifs, 128K contexte) — voir MEDIUM_CANDIDATES plus haut pour le
+  // raisonnement complet sur pourquoi granite4.1 reste en parallèle plutôt que d'être remplacé.
+  { model: 'granite4.2:30b', vramGb: 18 },
   { model: 'gemma4:26b', vramGb: 19 },
   { model: 'gpt-oss:20b', vramGb: 14 },
   // Command R (Cohere) : orienté RAG/tool-use long contexte (128K), tools confirmés. Vérifié sur
@@ -132,6 +144,7 @@ const LARGE_RAM_OFFLOAD_MODELS = new Set([
   'qwen3.5:27b',
   'qwen3.8:27b',
   'qwen3.6:27b',
+  'granite4.2:30b',
   'gemma4:26b',
   'gpt-oss:20b',
   'command-r:35b',

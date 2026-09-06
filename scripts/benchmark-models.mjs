@@ -137,6 +137,7 @@ const RAM_OFFLOAD_MODELS = new Set([
   'qwen3.5:27b',
   'qwen3.8:27b',
   'qwen3.6:27b',
+  'granite4.2:30b',
   'gemma4:26b',
   'gpt-oss:20b',
   'command-r:35b',
@@ -159,6 +160,10 @@ const MODELS = [
   // inexistant) et des deux rejets associés (llama3.2:1b, deepseek-r1).
   'gemma4:12b',
   'granite4.1:8b',
+  // granite4.2:8b/3b : voir MEDIUM_CANDIDATES dans hardwareScan.ts pour le détail — ajoutés à côté de
+  // granite4.1 (pas à sa place), celui-ci ayant un vrai score mesuré à préserver.
+  'granite4.2:8b',
+  'granite4.2:3b',
   // granite4.1:3b (remplace granite4:3b, retiré de MEDIUM_CANDIDATES dans hardwareScan.ts) : post-training
   // amélioré par IBM, même empreinte VRAM (~2,1 Go). Source : ollama.com/library/granite4.1, blog IBM Research.
   'granite4.1:3b',
@@ -201,6 +206,7 @@ const MODELS = [
   // Candidats supplémentaires dans la même tranche (14-19 Go), pour les machines avec plus de VRAM que la
   // config de développement — voir le commentaire complet dans hardwareScan.ts (LARGE_CANDIDATES).
   'qwen3.6:27b',
+  'granite4.2:30b',
   'gemma4:26b',
   'gpt-oss:20b',
   'command-r:35b',
@@ -266,7 +272,9 @@ const MODEL_SIZE_HINTS = {
   'phi4-mini': 2.5,
   'gemma4:e4b': 9.6,
   'gemma4:12b': 7.6,
+  'granite4.2:8b': 5.3,
   'granite4.1:8b': 5.3,
+  'granite4.2:3b': 2.2,
   'granite4.1:3b': 2.1,
   'nemotron-3-nano:4b': 2.8,
   'ministral-3:3b': 3.0,
@@ -282,6 +290,7 @@ const MODEL_SIZE_HINTS = {
   'qwen3.5:27b': 17,
   'qwen3.8:27b': 18,
   'qwen3.6:27b': 18,
+  'granite4.2:30b': 18,
   'gemma4:26b': 19,
   'gpt-oss:20b': 14,
   'command-r:35b': 19,
@@ -311,12 +320,25 @@ function modelWeightGb(model) {
  * entièrement décidée par pickBestFrom (hardwareScan.ts) à partir du fichier de résultats.
  */
 const FLASH_TIER_MODELS = new Set(['qwen3:1.7b', 'qwen3.5:0.8b'])
-const MEDIUM_TIER_MODELS = new Set(['gemma4:e4b', 'qwen3.5:9b', 'qwen3.5:4b', 'qwen3.5:2b', 'granite4.1:3b', 'qwen3.5:0.8b'])
+const MEDIUM_TIER_MODELS = new Set([
+  'gemma4:e4b',
+  'gemma4:12b',
+  'qwen3.5:9b',
+  'granite4.2:8b',
+  'granite4.1:8b',
+  'qwen3.5:4b',
+  'qwen3.5:2b',
+  'granite4.2:3b',
+  'granite4.1:3b',
+  'qwen3.5:0.8b'
+])
 const LARGE_TIER_MODELS = new Set([
   'qwen3.5:35b',
+  'qwen3.6:35b',
   'qwen3.5:27b',
   'qwen3.8:27b',
   'qwen3.6:27b',
+  'granite4.2:30b',
   'gemma4:26b',
   'gpt-oss:20b',
   'command-r:35b',
