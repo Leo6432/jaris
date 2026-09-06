@@ -45,9 +45,13 @@ const MIC_TEST_BAR_COUNT = 42
 
 type Tab = 'connexions' | 'voix' | 'audio' | 'modeles' | 'miseajour' | 'stockage' | 'historique'
 
-/** Choix de périmètre pour "Lancer l'analyse comparative complète" — voir handleRunFullAnalysis. */
+/**
+ * Choix de périmètre pour "Tester tous les modèles et choisir les meilleurs" — voir handleRunFullAnalysis.
+ * Pas de choix "tout analyser" : à la demande explicite de Léo, qui préfère ne jamais pouvoir lancer un test
+ * de plusieurs dizaines de minutes par erreur — un seul palier à la fois, plus rapide, cohérent avec l'esprit
+ * "pas tout tester d'un coup" des 3 paliers de configuration.
+ */
 const ANALYSIS_SCOPE_OPTIONS: { value: AnalysisScope; label: string }[] = [
-  { value: 'all', label: 'Tout analyser' },
   { value: 'flash', label: 'Palier Rapide seulement' },
   { value: 'medium', label: 'Palier Médium seulement' },
   { value: 'large', label: 'Palier Puissant seulement' },
@@ -127,7 +131,7 @@ export default function OptionsMenu(): JSX.Element {
   const [clearingHistory, setClearingHistory] = useState(false)
   const [hardwareTiers, setHardwareTiers] = useState<HardwareTierPreviewData[] | null>(null)
   const [modelOverview, setModelOverview] = useState<ModelOverviewResult | null>(null)
-  const [analysisScope, setAnalysisScope] = useState<AnalysisScope>('all')
+  const [analysisScope, setAnalysisScope] = useState<AnalysisScope>('flash')
   const [ollamaVersionStatus, setOllamaVersionStatus] = useState<OllamaVersionStatus | null>(null)
   const [updatingOllama, setUpdatingOllama] = useState(false)
   const [ollamaUpdateMessage, setOllamaUpdateMessage] = useState<string | null>(null)
@@ -784,10 +788,9 @@ export default function OptionsMenu(): JSX.Element {
               </button>
             </div>
             <p className="options-menu__model-overview-hint">
-              Télécharge et teste pour de vrai les modèles candidats du périmètre choisi sur cette machine
-              (dont les plus récents jamais encore mesurés) pour trouver le vrai meilleur choix — peut prendre
-              des dizaines de minutes pour "Tout analyser", bien plus rapide pour un seul palier ; à lancer
-              plutôt en laissant l'ordinateur tranquille.
+              Télécharge et teste pour de vrai les modèles candidats du palier choisi sur cette machine (dont
+              les plus récents jamais encore mesurés) pour trouver le vrai meilleur choix — peut prendre
+              plusieurs minutes selon le palier, à lancer plutôt en laissant l'ordinateur tranquille.
             </p>
             <ModelAnalysisProgress state={modelAnalysis} modelOverview={modelOverview} />
           </div>
