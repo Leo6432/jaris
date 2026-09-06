@@ -795,6 +795,11 @@ body.body--scan::after {
   justify-content: center;
   gap: 24px;
   padding: 20px 0;
+  /* Centré dans .options-page__content, cet onglet se centrerait en réalité dans la seule zone de travail
+     (à droite de la navigation, voir .options-page__body) : comme il n'affiche qu'un petit bloc isolé, ça
+     se voit tout de suite comme "décalé vers la droite" par rapport à la fenêtre entière. Décalé vers la
+     gauche de la moitié de la largeur de la navigation, il retombe au centre réel de la fenêtre. */
+  margin-left: calc(var(--options-nav-width, 0px) / -2);
 }
 
 .options-menu__voice-nav {
@@ -2483,10 +2488,13 @@ a:hover {
 }
 
 .options-page__body {
+  /* Fixe plutôt que minmax(200px, 250px) : .options-menu__voice-picker s'en sert pour se recentrer sur la
+     fenêtre entière (voir plus bas) — une largeur qui varie avec la fenêtre rendrait ce calcul faux. */
+  --options-nav-width: 220px;
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(200px, 250px) minmax(0, 1fr);
+  grid-template-columns: var(--options-nav-width) minmax(0, 1fr);
 }
 
 .options-page__navigation {
@@ -2579,5 +2587,11 @@ a:hover {
 
   .options-page__content {
     padding: 24px 20px 36px;
+  }
+
+  /* La navigation passe au-dessus du contenu (grid-template-rows ci-dessus) au lieu d'être une colonne à
+     gauche : il n'y a plus rien à compenser pour recentrer l'onglet Voix sur la fenêtre. */
+  .options-menu__voice-picker {
+    margin-left: 0;
   }
 }
