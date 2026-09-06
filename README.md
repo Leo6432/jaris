@@ -533,11 +533,13 @@ chemin rapide maintenant que `scripts/verified-tool-scores.md` (voir plus
 bas) couvre la quasi-totalité des configurations courantes : plus besoin
 de comparer pour savoir qui gagne, juste télécharger le gagnant déjà
 connu. L'ancienne analyse comparative complète (voir "Comparer des modèles
-candidats sur ta machine" plus bas) reste disponible à la main depuis
-Options → Modèles, pour qui veut vérifier/affiner au-delà de ce qui est
-déjà vérifié — chaque modèle candidat qui tient sur la machine est alors
-réellement testé, pas seulement choisi par taille, avec une barre de
-progression et un tableau de suivi en direct de chaque candidat.
+candidats sur ta machine" plus bas) reste disponible en ligne de commande
+(`npm run benchmark:models`), jamais depuis l'onglet Options → Modèles à
+dessein (demande explicite de Léo : jamais de test de plusieurs dizaines
+de minutes déclenchable par erreur depuis l'appli) — chaque modèle candidat
+qui tient sur la machine est alors réellement testé, pas seulement choisi
+par taille, avec une barre de progression et un tableau de suivi en direct
+de chaque candidat dans le terminal.
 
 Une fois l'analyse terminée, Jaris a choisi 3 modèles Ollama adaptés à la
 machine (typiquement, sur la config de développement testée) :
@@ -586,14 +588,12 @@ réponse respecte la consigne "pas de mise en forme" (essentielle puisque
 tout est lu à voix haute). Résultat affiché dans le terminal et sauvegardé
 dans `scripts/benchmark-results.md`.
 
-Depuis l'onglet **Modèles** du menu Options, "Tester tous les modèles et
-choisir les meilleurs" ouvre un choix de palier (rapide/médium/puissant/
-vision/code, un seul à la fois) — pas d'option "tout analyser" à dessein
-(demande explicite de Léo, jamais de test de plusieurs dizaines de minutes
-possible par erreur ; toujours possible en ligne de commande pour qui en a
-besoin : `OLLAMA_HOST=... JARIS_ANALYSIS_SCOPE=large npm run
-benchmark:models`). Les résultats des autres paliers, déjà connus, sont
-conservés tels quels dans
+Uniquement en ligne de commande (jamais depuis l'onglet Options → Modèles,
+à la demande explicite de Léo, qui préfère ne jamais pouvoir déclencher par
+erreur un test de plusieurs dizaines de minutes) : `JARIS_ANALYSIS_SCOPE`
+limite à un seul palier (rapide/médium/puissant/vision/code), par exemple
+`OLLAMA_HOST=... JARIS_ANALYSIS_SCOPE=large npm run benchmark:models`. Les
+résultats des autres paliers, déjà connus, sont conservés tels quels dans
 `scripts/benchmark-results.md` — jamais effacés par un run ciblé.
 
 **Reprise après interruption.** `scripts/benchmark-results.md` est réécrit
