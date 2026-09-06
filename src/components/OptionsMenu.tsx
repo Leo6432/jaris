@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type {
   AppVersionStatus,
   AudioInputDevice,
@@ -485,55 +486,18 @@ export default function OptionsMenu(): JSX.Element {
     )
   }
 
-  return (
-    <div className="options-page">
-      <div className="options-page__header">
-        <div className="options-menu__tabs">
-          <button
-            className={`options-menu__tab${tab === 'connexions' ? ' options-menu__tab--active' : ''}`}
-            onClick={() => setTab('connexions')}
-          >
-            Connexions
-          </button>
-          <button
-            className={`options-menu__tab${tab === 'voix' ? ' options-menu__tab--active' : ''}`}
-            onClick={() => setTab('voix')}
-          >
-            Voix
-          </button>
-          <button
-            className={`options-menu__tab${tab === 'audio' ? ' options-menu__tab--active' : ''}`}
-            onClick={() => setTab('audio')}
-          >
-            Micro &amp; Modèles
-          </button>
-          <button
-            className={`options-menu__tab${tab === 'miseajour' ? ' options-menu__tab--active' : ''}`}
-            onClick={() => setTab('miseajour')}
-          >
-            Mise à jour
-          </button>
-          <button
-            className={`options-menu__tab${tab === 'stockage' ? ' options-menu__tab--active' : ''}`}
-            onClick={() => setTab('stockage')}
-          >
-            Stockage
-          </button>
-          <button
-            className={`options-menu__tab${tab === 'historique' ? ' options-menu__tab--active' : ''}`}
-            onClick={() => setTab('historique')}
-          >
-            Historique
-          </button>
+  return createPortal(
+    <div className="options-page" role="dialog" aria-modal="true" aria-label="Options de Jaris">
+      <header className="options-page__header">
+        <div>
+          <span className="options-page__eyebrow">Jaris</span>
+          <h2>Options</h2>
         </div>
         <button
           className="options-page__close"
           onClick={() => {
-            // Un test micro actif tourne côté sidecar indépendamment de cette fenêtre (voir voice_server.py) :
-            // sans ça, fermer Options pendant un test le laisserait actif en arrière-plan, sans bouton pour
-            // l'arrêter puisque ce panneau n'est plus affiché. Reset local aussi (pas seulement l'envoi de
-            // la commande) : ce composant ne démonte pas en fermant Options (voir `if (!open)` plus bas), la
-            // prochaine ouverture doit donc retrouver "Tester le micro", pas "Arrêter le test" pour rien.
+            // Un test micro actif tourne côté sidecar indépendamment de cette fenêtre : l'arrêter ici
+            // évite qu'il continue en arrière-plan après la fermeture de la page des réglages.
             if (micTesting) {
               window.jaris.stopTestMicrophone()
               setMicTesting(false)
@@ -544,9 +508,35 @@ export default function OptionsMenu(): JSX.Element {
         >
           Fermer
         </button>
-      </div>
+      </header>
 
-      <div className="options-page__content">
+      <div className="options-page__body">
+        <aside className="options-page__navigation" aria-label="Sections des options">
+          <span className="options-page__navigation-label">Réglages</span>
+          <nav className="options-menu__tabs">
+            <button className={`options-menu__tab${tab === 'connexions' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('connexions')}>
+              Connexions
+            </button>
+            <button className={`options-menu__tab${tab === 'voix' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('voix')}>
+              Voix
+            </button>
+            <button className={`options-menu__tab${tab === 'audio' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('audio')}>
+              Micro &amp; Modèles
+            </button>
+            <button className={`options-menu__tab${tab === 'miseajour' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('miseajour')}>
+              Mise à jour
+            </button>
+            <button className={`options-menu__tab${tab === 'stockage' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('stockage')}>
+              Stockage
+            </button>
+            <button className={`options-menu__tab${tab === 'historique' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('historique')}>
+              Historique
+            </button>
+          </nav>
+        </aside>
+
+        <main className="options-page__workspace">
+          <div className="options-page__content">
         {tab === 'connexions' && (
           <div className="options-menu__section">
             <div className="options-menu__section-title">Mail</div>
@@ -832,7 +822,10 @@ export default function OptionsMenu(): JSX.Element {
 
         <audio ref={audioRef} hidden />
         {error && <div className="options-menu__error">{error}</div>}
+          </div>
+        </main>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
