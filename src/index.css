@@ -338,7 +338,7 @@ body.body--scan::after {
 
 .options-page__content > * {
   width: 100%;
-  max-width: 640px;
+  max-width: 960px;
 }
 
 .options-menu__tabs {
@@ -866,18 +866,17 @@ body.body--scan::after {
   background: var(--hud-accent);
 }
 
-/* Onglet "Micro & Haut-parleur" (nos périphériques à nous, à distinguer de l'onglet Voix qui règle la voix
-   de Jaris — deux réglages différents, deux onglets différents). */
-.options-menu__audio-devices {
-  max-width: 420px;
-}
-
+/* Sélecteur micro/haut-parleur (nos périphériques à nous, à distinguer de l'onglet Voix qui règle la voix
+   de Jaris) : c'est le menu déroulant qu'on borne en largeur, pas tout le bloc autour — le limiter plus haut
+   (ex. sur .options-menu__audio-devices) épinglait toute la section à gauche avec un grand vide à droite,
+   au lieu de laisser le reste de la page (boutons, paliers matériels...) utiliser toute la largeur. */
 .options-menu__field {
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 0.8rem;
   color: var(--hud-text-dim);
+  max-width: 420px;
 }
 
 .options-menu__field select {

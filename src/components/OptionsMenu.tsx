@@ -605,7 +605,7 @@ export default function OptionsMenu(): JSX.Element {
 
         {tab === 'audio' && (
           <div className="options-menu__section">
-            <div className="options-menu__section options-menu__audio-devices">
+            <div className="options-menu__section">
               <div className="options-menu__section-title">Micro utilisé</div>
               <label className="options-menu__field">
                 <select
