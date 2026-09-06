@@ -52,6 +52,18 @@ lignes) — même convention que la colonne "Fiabilité" de `benchmark-results.m
 | command-r:35b | 3/6 |
 | mistral-small:24b | 6/6 |
 | glm-4.7-flash:q4_K_M | 6/6 |
+| qwen3.5:4b | 6/6 |
+| qwen3.6:35b | 6/6 |
+| qwen3.8:27b | 6/6 |
+| granite4.1:8b | 6/6 |
+
+**Note sur `granite4.1:8b`** (mesuré le 06/09/2026, avec `qwen3.5:4b`/`qwen3.6:35b`/`qwen3.8:27b`
+ci-dessus) : 6/6 à l'appel d'outils, mais sa réponse à la question de raisonnement libre ("qu'est-ce que tu
+peux faire pour moi ?") utilise des tirets de liste ("- Ouvrir n'importe quelle application...") alors que
+la consigne "jamais de mise en forme" (réponse lue à voix haute) est explicite dans le prompt système —
+seul des 4 modèles testés ce jour-là à s'en écarter, les trois autres répondant en phrases suivies. Le test
+d'appel d'outils ne couvre pas cette consigne (questions différentes), donc le 6/6 reste correct, mais à
+garder en tête avant de le laisser gagner automatiquement un palier.
 
 ## Vision — compréhension d'image
 
