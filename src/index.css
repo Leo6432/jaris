@@ -784,22 +784,19 @@ body.body--scan::after {
   border-color: var(--hud-danger);
 }
 
-/* flex: 1 (et non juste un bloc compact en haut de page comme les autres onglets) : l'onglet Voix n'a que
-   peu de contenu, donc sans ça il reste collé en haut avec un grand vide en dessous — ici il occupe toute
-   la hauteur restante de la page et centre l'orbe dedans. */
+/* Ce bloc n'a que peu de contenu (orbe, nom, description) : centré dans .options-page__content comme les
+   autres onglets, il ne se centrerait en réalité que sur la zone de travail (à droite de la colonne de
+   navigation, voir .options-page__body) et paraîtrait décalé vers la droite par rapport à la fenêtre.
+   position: absolute + inset: 0 le sort de cette zone pour le centrer sur .options-page en entier — le seul
+   ancêtre positionné (position: fixed) au-dessus, donc la fenêtre réelle, colonne de navigation comprise. */
 .options-menu__voice-picker {
-  flex: 1;
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 24px;
-  padding: 20px 0;
-  /* Centré dans .options-page__content, cet onglet se centrerait en réalité dans la seule zone de travail
-     (à droite de la navigation, voir .options-page__body) : comme il n'affiche qu'un petit bloc isolé, ça
-     se voit tout de suite comme "décalé vers la droite" par rapport à la fenêtre entière. Décalé vers la
-     gauche de la moitié de la largeur de la navigation, il retombe au centre réel de la fenêtre. */
-  margin-left: calc(var(--options-nav-width, 0px) / -2);
 }
 
 .options-menu__voice-nav {
@@ -853,14 +850,20 @@ body.body--scan::after {
   margin-top: 10px;
 }
 
+/* Petites barres verticales façon indicateur de niveau, pas des ronds pleins colorés : ce sont les seuls
+   points ronds de toute l'interface, ils détonnaient au milieu des coins coupés et bordures nettes du reste
+   du thème. */
 .options-menu__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+  width: 4px;
+  height: 14px;
+  border-radius: 0;
   border: none;
-  background: rgba(122, 176, 214, 0.35);
+  background: var(--hud-text-faint);
   cursor: pointer;
   padding: 0;
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .options-menu__dot:disabled {
@@ -869,6 +872,7 @@ body.body--scan::after {
 
 .options-menu__dot--active {
   background: var(--hud-accent);
+  box-shadow: 0 0 8px rgba(var(--hud-accent-rgb), 0.7);
 }
 
 /* Sélecteur micro/haut-parleur (nos périphériques à nous, à distinguer de l'onglet Voix qui règle la voix
@@ -2488,13 +2492,10 @@ a:hover {
 }
 
 .options-page__body {
-  /* Fixe plutôt que minmax(200px, 250px) : .options-menu__voice-picker s'en sert pour se recentrer sur la
-     fenêtre entière (voir plus bas) — une largeur qui varie avec la fenêtre rendrait ce calcul faux. */
-  --options-nav-width: 220px;
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: var(--options-nav-width) minmax(0, 1fr);
+  grid-template-columns: minmax(200px, 250px) minmax(0, 1fr);
 }
 
 .options-page__navigation {
@@ -2548,6 +2549,14 @@ a:hover {
   max-width: 1240px;
 }
 
+/* .options-menu__voice-picker s'étend volontairement sur .options-page en entier (position: absolute,
+   inset: 0, voir plus haut) pour se centrer sur la fenêtre réelle plutôt que sur cette seule zone de
+   contenu. Cette limite de largeur, pensée pour du texte/tableaux, le figeait sinon à 1240px collé à
+   gauche (aucun centrage automatique pour un élément en position absolute) au lieu de le centrer. */
+.options-page__content > .options-menu__voice-picker {
+  max-width: none;
+}
+
 @media (max-width: 700px) {
   .options-page__header {
     min-height: 64px;
@@ -2587,11 +2596,5 @@ a:hover {
 
   .options-page__content {
     padding: 24px 20px 36px;
-  }
-
-  /* La navigation passe au-dessus du contenu (grid-template-rows ci-dessus) au lieu d'être une colonne à
-     gauche : il n'y a plus rien à compenser pour recentrer l'onglet Voix sur la fenêtre. */
-  .options-menu__voice-picker {
-    margin-left: 0;
   }
 }
