@@ -56,6 +56,9 @@ lignes) — même convention que la colonne "Fiabilité" de `benchmark-results.m
 | qwen3.6:35b | 6/6 |
 | qwen3.8:27b | 6/6 |
 | granite4.1:8b | 6/6 |
+| granite4.2:8b | 6/6 |
+| granite4.2:3b | 5/6 |
+| granite4.2:30b | 6/6 |
 
 **Note sur `granite4.1:8b`** (mesuré le 06/09/2026, avec `qwen3.5:4b`/`qwen3.6:35b`/`qwen3.8:27b`
 ci-dessus) : 6/6 à l'appel d'outils, mais sa réponse à la question de raisonnement libre ("qu'est-ce que tu
@@ -64,6 +67,15 @@ la consigne "jamais de mise en forme" (réponse lue à voix haute) est explicite
 seul des 4 modèles testés ce jour-là à s'en écarter, les trois autres répondant en phrases suivies. Le test
 d'appel d'outils ne couvre pas cette consigne (questions différentes), donc le 6/6 reste correct, mais à
 garder en tête avant de le laisser gagner automatiquement un palier.
+
+**Note sur la famille `granite4.2`** (mesurée le 06/09/2026) : même défaut de mise en forme que
+`granite4.1:8b` ci-dessus, mais cette fois sur le **3b** (tirets de liste), pas le 8b — semble être un trait
+récurrent de Granite sur les questions de raisonnement libre, pas propre à une seule taille. Le **8b**, lui,
+répond en phrases suivies mais MENTIONNE sa propre consigne de style dans sa réponse ("Tout en français, de
+façon naturelle et concise, sans formes ou émojis") — une fuite du prompt système dans le texte destiné à
+l'utilisateur, à surveiller aussi. Seul le **30b** répond proprement sur les deux points. Le 3b a en plus
+raté une question d'appel d'outils (5/6, contre 6/6 pour granite4.1:3b) : pas un remplacement direct de
+granite4.1:3b, malgré la version plus récente.
 
 ## Vision — compréhension d'image
 
