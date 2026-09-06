@@ -2361,6 +2361,21 @@ code {
   letter-spacing: 0.08em;
 }
 
+/* Avec le texte non coupé ci-dessus, les 7 onglets ("Micro & Haut-parleur" et
+   "Mise à jour" compris) ne pouvaient plus rétrécir : la rangée débordait du
+   panneau au lieu de tenir sur une ligne, et le bouton fermer ou un onglet
+   poussé hors du cadre devenait injoignable au clic. `flex-wrap` la laisse
+   passer sur une deuxième ligne au lieu de déborder ; `flex: 0 1 auto` évite
+   que les onglets restants s'étirent pour combler la ligne une fois repliés. */
+.options-menu__tabs {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.options-menu__tab {
+  flex: 0 1 auto;
+}
+
 /* Les liens gardaient le bleu/violet souligné par défaut du navigateur, seule
    chose de l'interface à ne pas suivre le thème. */
 a {
