@@ -2448,3 +2448,136 @@ a:hover {
 .app__transcript {
   letter-spacing: 0.02em;
 }
+
+/* Page Options indépendante : le portail la rend sœur de l'application plutôt qu'enfant de la barre
+   latérale. Les réglages gardent ainsi tout l'écran disponible, avec une navigation dédiée à gauche et
+   une zone de travail large à droite. */
+.options-page {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+}
+
+.options-page__header {
+  flex: 0 0 auto;
+  min-height: 76px;
+  padding: 13px 28px;
+}
+
+.options-page__header h2 {
+  margin: 1px 0 0;
+  font-size: 1.45rem;
+}
+
+.options-page__eyebrow,
+.options-page__navigation-label {
+  display: block;
+  font-family: var(--hud-font-display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--hud-text-faint);
+}
+
+.options-page__body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(200px, 250px) minmax(0, 1fr);
+}
+
+.options-page__navigation {
+  min-height: 0;
+  padding: 28px 16px;
+  border-right: 1px solid var(--hud-line);
+  background: rgba(1, 4, 10, 0.5);
+}
+
+.options-page__navigation-label {
+  margin: 0 12px 12px;
+}
+
+.options-page .options-menu__tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border: 0;
+  background: transparent;
+}
+
+.options-page .options-menu__tab {
+  flex: 0 0 auto;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid transparent;
+  border-left: 2px solid transparent;
+  text-align: left;
+}
+
+.options-page .options-menu__tab--active {
+  border-color: var(--hud-line);
+  border-left-color: var(--hud-accent);
+  border-bottom-color: var(--hud-line);
+}
+
+.options-page__workspace {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.options-page__content {
+  height: 100%;
+  overflow-y: auto;
+  align-items: stretch;
+  padding: 32px clamp(28px, 5vw, 80px) 48px;
+}
+
+.options-page__content > * {
+  max-width: 1240px;
+}
+
+@media (max-width: 700px) {
+  .options-page__header {
+    min-height: 64px;
+    padding: 10px 16px;
+  }
+
+  .options-page__body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .options-page__navigation {
+    padding: 8px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--hud-line);
+  }
+
+  .options-page__navigation-label {
+    display: none;
+  }
+
+  .options-page .options-menu__tabs {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .options-page .options-menu__tab {
+    width: auto;
+    white-space: nowrap;
+    border-left-color: transparent;
+  }
+
+  .options-page .options-menu__tab--active {
+    border-left-color: transparent;
+    border-bottom-color: var(--hud-accent);
+  }
+
+  .options-page__content {
+    padding: 24px 20px 36px;
+  }
+}
