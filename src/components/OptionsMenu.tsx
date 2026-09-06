@@ -39,7 +39,7 @@ const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
  */
 const MIC_TEST_BAR_COUNT = 42
 
-type Tab = 'connexions' | 'voix' | 'audio' | 'modeles' | 'miseajour' | 'stockage' | 'historique'
+type Tab = 'connexions' | 'voix' | 'audio' | 'miseajour' | 'stockage' | 'historique'
 
 /**
  * Chromium ajoute des pseudo-périphériques "default"/"communications" en plus des vrais haut-parleurs
@@ -160,7 +160,7 @@ export default function OptionsMenu(): JSX.Element {
   // Pas la peine à chaque ouverture du menu si l'utilisateur ne va jamais voir cet onglet Modèles :
   // previewHardwareTiers relit scripts/verified-tool-scores.md/benchmark-results.md côté main.
   useEffect(() => {
-    if (tab === 'modeles' && hardwareTiers === null) {
+    if (tab === 'audio' && hardwareTiers === null) {
       void window.jaris.previewHardwareTiers().then(setHardwareTiers)
     }
   }, [tab, hardwareTiers])
@@ -170,7 +170,7 @@ export default function OptionsMenu(): JSX.Element {
   // chaque ouverture de l'onglet — utile si le check réseau en tâche de fond au lancement de Jaris n'avait
   // pas encore fini la première fois que l'utilisateur a ouvert cet onglet.
   useEffect(() => {
-    if (tab === 'modeles') {
+    if (tab === 'audio') {
       void window.jaris.getOllamaVersionStatus().then(setOllamaVersionStatus)
     }
     if (tab === 'miseajour') {
@@ -505,13 +505,7 @@ export default function OptionsMenu(): JSX.Element {
             className={`options-menu__tab${tab === 'audio' ? ' options-menu__tab--active' : ''}`}
             onClick={() => setTab('audio')}
           >
-            Micro &amp; Haut-parleur
-          </button>
-          <button
-            className={`options-menu__tab${tab === 'modeles' ? ' options-menu__tab--active' : ''}`}
-            onClick={() => setTab('modeles')}
-          >
-            Modèles
+            Micro &amp; Modèles
           </button>
           <button
             className={`options-menu__tab${tab === 'miseajour' ? ' options-menu__tab--active' : ''}`}
@@ -610,80 +604,78 @@ export default function OptionsMenu(): JSX.Element {
         )}
 
         {tab === 'audio' && (
-          <div className="options-menu__section options-menu__audio-devices">
-            <div className="options-menu__section-title">Micro utilisé</div>
-            <label className="options-menu__field">
-              <select
-                value={profile?.audioInputDeviceIndex ?? ''}
-                onChange={(e) => void chooseInputDevice(e.target.value)}
-                disabled={inputDevices === null || savingAudioDevice}
-              >
-                <option value="">Défaut du système</option>
-                {inputDevices?.map((device) => (
-                  <option key={device.index} value={device.index}>
-                    {device.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {inputDevices !== null && inputDevices.length === 0 && (
-              <p className="options-menu__model-overview-hint">Aucun micro détecté par PortAudio.</p>
-            )}
-            {savingAudioDevice && (
-              <p className="options-menu__model-overview-hint">
-                Changement de micro : redémarrage du pipeline vocal (rechargement des modèles)...
-              </p>
-            )}
-
-            <div className="options-menu__section-title">Haut-parleur utilisé</div>
-            <label className="options-menu__field">
-              <select
-                value={profile?.audioOutputDeviceId || ''}
-                onChange={(e) => void chooseOutputDevice(e.target.value)}
-                disabled={outputDevices === null}
-              >
-                <option value="">Défaut du système</option>
-                {outputDevices?.map((device) => (
-                  <option key={device.deviceId} value={device.deviceId}>
-                    {device.label || device.deviceId}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className="options-menu__section-title">Tester le micro</div>
-            <div className="options-menu__mic-test">
-              {/* Rangée de barres façon Discord plutôt qu'un seul indicateur : chaque barre est un niveau
-                  sonore récent (mic_test_level, ~12/seconde, voir voice_server.py), la plus récente à
-                  droite — les anciennes défilent vers la gauche à mesure que de nouvelles arrivent
-                  (micLevels ci-dessus), pour une vraie sensation de mouvement pendant qu'on parle plutôt
-                  qu'un seul chiffre qui saute. */}
-              <div className="options-menu__mic-bars">
-                {micLevels.map((level, i) => (
-                  <div
-                    key={i}
-                    className="options-menu__mic-bar"
-                    style={{ height: `${10 + Math.min(1, level) * 90}%` }}
-                  />
-                ))}
-              </div>
-              <button
-                className={`options-menu__action${micTesting ? ' options-menu__action--danger' : ''}`}
-                onClick={toggleMicTest}
-              >
-                {micTesting ? 'Arrêter le test' : 'Tester le micro'}
-              </button>
-              {!micTesting && micTestResult !== null && (
-                <p className={micTestResult ? 'options-menu__mic-result--ok' : 'options-menu__mic-result--bad'}>
-                  {micTestResult ? 'Micro détecté : du son a bien été capté.' : "Rien capté : vérifie que le bon micro est sélectionné et qu'il n'est pas coupé."}
+          <div className="options-menu__section">
+            <div className="options-menu__section options-menu__audio-devices">
+              <div className="options-menu__section-title">Micro utilisé</div>
+              <label className="options-menu__field">
+                <select
+                  value={profile?.audioInputDeviceIndex ?? ''}
+                  onChange={(e) => void chooseInputDevice(e.target.value)}
+                  disabled={inputDevices === null || savingAudioDevice}
+                >
+                  <option value="">Défaut du système</option>
+                  {inputDevices?.map((device) => (
+                    <option key={device.index} value={device.index}>
+                      {device.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {inputDevices !== null && inputDevices.length === 0 && (
+                <p className="options-menu__model-overview-hint">Aucun micro détecté par PortAudio.</p>
+              )}
+              {savingAudioDevice && (
+                <p className="options-menu__model-overview-hint">
+                  Changement de micro : redémarrage du pipeline vocal (rechargement des modèles)...
                 </p>
               )}
-            </div>
-          </div>
-        )}
 
-        {tab === 'modeles' && (
-          <div className="options-menu__section">
+              <div className="options-menu__section-title">Haut-parleur utilisé</div>
+              <label className="options-menu__field">
+                <select
+                  value={profile?.audioOutputDeviceId || ''}
+                  onChange={(e) => void chooseOutputDevice(e.target.value)}
+                  disabled={outputDevices === null}
+                >
+                  <option value="">Défaut du système</option>
+                  {outputDevices?.map((device) => (
+                    <option key={device.deviceId} value={device.deviceId}>
+                      {device.label || device.deviceId}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="options-menu__section-title">Tester le micro</div>
+              <div className="options-menu__mic-test">
+                {/* Rangée de barres façon Discord plutôt qu'un seul indicateur : chaque barre est un niveau
+                    sonore récent (mic_test_level, ~12/seconde, voir voice_server.py), la plus récente à
+                    droite — les anciennes défilent vers la gauche à mesure que de nouvelles arrivent
+                    (micLevels ci-dessus), pour une vraie sensation de mouvement pendant qu'on parle plutôt
+                    qu'un seul chiffre qui saute. */}
+                <div className="options-menu__mic-bars">
+                  {micLevels.map((level, i) => (
+                    <div
+                      key={i}
+                      className="options-menu__mic-bar"
+                      style={{ height: `${10 + Math.min(1, level) * 90}%` }}
+                    />
+                  ))}
+                </div>
+                <button
+                  className={`options-menu__action${micTesting ? ' options-menu__action--danger' : ''}`}
+                  onClick={toggleMicTest}
+                >
+                  {micTesting ? 'Arrêter le test' : 'Tester le micro'}
+                </button>
+                {!micTesting && micTestResult !== null && (
+                  <p className={micTestResult ? 'options-menu__mic-result--ok' : 'options-menu__mic-result--bad'}>
+                    {micTestResult ? 'Micro détecté : du son a bien été capté.' : "Rien capté : vérifie que le bon micro est sélectionné et qu'il n'est pas coupé."}
+                  </p>
+                )}
+              </div>
+            </div>
+
             {ollamaVersionStatus?.outdated && (
               <div className="options-menu__ollama-warning">
                 Ollama {ollamaVersionStatus.current} installé, la dernière version est{' '}

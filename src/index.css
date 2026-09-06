@@ -2198,11 +2198,22 @@ textarea:focus-visible {
 
 /* --- En-têtes de page ----------------------------------------------------- */
 
-.options-page,
 .memory-brain {
   background:
     radial-gradient(circle at 50% 0%, rgba(var(--hud-accent-rgb), 0.1) 0%, transparent 55%),
     linear-gradient(180deg, var(--hud-panel) 0%, var(--hud-bg) 70%);
+}
+
+/* Le fond d'Options reprend exactement celui de la page d'accueil (voir `body` en haut du fichier) : cette
+   page recouvre tout l'écran par-dessus body (position: fixed, z-index: 20), donc son propre dégradé plus
+   plat remplaçait complètement la grille/halo du fond principal — Options avait l'air d'un écran différent
+   plutôt que d'un simple panneau ouvert par-dessus l'accueil. */
+.options-page {
+  background:
+    linear-gradient(rgba(var(--hud-accent-rgb), 0.045) 1px, transparent 1px) 0 0 / 100% 44px,
+    linear-gradient(90deg, rgba(var(--hud-accent-rgb), 0.045) 1px, transparent 1px) 0 0 / 44px 100%,
+    radial-gradient(circle at 50% 26%, rgba(var(--hud-accent-rgb), 0.13) 0%, transparent 58%),
+    radial-gradient(circle at 50% 30%, var(--hud-panel) 0%, var(--hud-bg) 72%);
 }
 
 .options-page__header,
