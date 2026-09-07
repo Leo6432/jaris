@@ -3,6 +3,11 @@
 Assistant IA vocal 100% local (Electron + React + TypeScript, LLM via Ollama). Développé pour Léo, seul
 utilisateur/testeur — pas d'autres développeurs, pas d'utilisateurs externes à ménager.
 
+Ce fichier est mis à jour à chaque session avec les nouveaux pièges rencontrés — jamais un instantané figé.
+Une version équivalente mais générique (pas spécifique à Claude Code) existe dans `AGENTS.md` pour les autres
+IA/outils utilisés sur ce dépôt (ex: Codex/ChatGPT, qui ne lit pas `CLAUDE.md`) : garder les deux synchronisés
+quand un nouveau piège ou une nouvelle étape de la checklist est ajouté ici.
+
 ## À vérifier après CHAQUE changement, avant de le considérer terminé
 
 Dans cet ordre, sans en sauter :
@@ -53,6 +58,20 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
 - Éviter les correctifs spéculatifs en rafale sur un même symptôme flou : si la cause exacte n'est pas
   claire, poser une question ciblée à Léo (il n'est pas très technique — préférer des questions à choix
   simples plutôt que demander d'interpréter des logs) plutôt que de deviner et de multiplier les versions.
+- **Une tâche longue (`computer_use_task`, jusqu'à 20 allers-retours capture d'écran + clic, chaque étape
+  pouvant prendre jusqu'à 45s) doit donner un signe de vie régulier**, sinon elle paraît plantée alors qu'elle
+  travaille juste lentement (constaté en usage réel : Léo a cru Jaris bloqué après 3 minutes sans rien voir
+  bouger). Toute action qui peut prendre plus de quelques secondes doit annoncer sa progression au fil de
+  l'eau (voir `onLog`/`window.jaris.onLog`), pas seulement un indicateur statique du type "Jaris réfléchit…".
+- **Vérifier si un mécanisme IPC existe déjà avant d'en ajouter un nouveau** : `window.jaris.onLog` était déjà
+  exposé côté preload depuis longtemps mais jamais consommé par aucun composant React — le brancher a suffi,
+  pas besoin de créer un nouveau channel.
+- Le canal "chat" (texte, sans synthèse vocale) et le canal "voix" (Agent Vocal) partagent exactement les
+  mêmes outils (même fonction `converse()`, même tableau `TOOLS`) — seul le `channel` passé à
+  `buildSystemPrompt` change le style de réponse autorisé (listes/gras/code OK en chat, jamais en voix car lu
+  à voix haute par la synthèse). La progression en direct ajoutée dans `ChatPanel.tsx` est donc chat-only par
+  design (pas de transcript équivalent en voix, et narrer chaque étape à voix haute serait pénible) : le mode
+  voix garde seulement l'overlay de scan plein écran comme signe visuel pendant une tâche longue.
 
 ## Commandes utiles
 
