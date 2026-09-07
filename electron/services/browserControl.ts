@@ -298,6 +298,31 @@ async function findActiveProfileFolder(userDataDir: string): Promise<string> {
   return 'Default'
 }
 
+/**
+ * Liste tous les profils Chrome de la machine (nom affiché + nom de dossier), pour laisser Léo choisir
+ * explicitement lequel importer plutôt que de subir la détection automatique de findActiveProfileFolder —
+ * utile quand ce n'est pas forcément le profil le plus récemment actif qu'on veut copier (plusieurs comptes
+ * sur la même machine). "info_cache" (JSON, dans "Local State") liste chaque profil connu par Chrome avec
+ * son nom affiché ("name") ; on retombe sur le nom de dossier si "name" manque.
+ */
+export async function listChromeProfiles(): Promise<{ folder: string; name: string }[]> {
+  const userDataDir = realProfileDir()
+  try {
+    const localState = JSON.parse(await readFile(join(userDataDir, 'Local State'), 'utf-8')) as {
+      profile?: { info_cache?: Record<string, { name?: string }> }
+    }
+    const infoCache = localState.profile?.info_cache ?? {}
+    return Object.entries(infoCache)
+      .filter(([folder]) => existsSync(join(userDataDir, folder)))
+      .map(([folder, info]) => ({ folder, name: info.name || folder }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  } catch {
+    // "Local State" absent/illisible : aucun profil à proposer, le bouton "Connecter mon profil" retombe
+    // alors sur la détection automatique (voir importRealChromeProfile) plutôt que d'échouer ici.
+    return []
+  }
+}
+
 const PROFILE_COPY_EXCLUDED_DIRS = new Set([
   'Cache', 'Code Cache', 'GPUCache', 'GrShaderCache', 'ShaderCache', 'component_crx_cache',
   'GraphiteDawnCache', 'DawnGraphiteCache', 'DawnWebGPUCache',
@@ -335,7 +360,7 @@ async function closeAllChrome(): Promise<void> {
  * continue) : les futurs changements du Chrome habituel de l'utilisateur ne s'y répercutent pas tout seuls,
  * sauf en activant la synchronisation Google dans les deux profils.
  */
-export async function importRealChromeProfile(): Promise<{ success: boolean; message: string }> {
+export async function importRealChromeProfile(profileFolder?: string): Promise<{ success: boolean; message: string }> {
   if (process.platform !== 'win32') {
     return { success: false, message: "Cette fonctionnalité n'est disponible que sur Windows pour l'instant." }
   }
@@ -351,7 +376,11 @@ export async function importRealChromeProfile(): Promise<{ success: boolean; mes
 
   const dest = dedicatedProfileDir()
   try {
-    const activeProfile = await findActiveProfileFolder(source)
+    // `profileFolder` vient du sélecteur de profil dans Options (voir listChromeProfiles) : un choix
+    // explicite de Léo prime toujours sur la détection automatique, qui ne devine que le profil le plus
+    // récemment actif — pas forcément celui qu'on veut copier sur une machine à plusieurs comptes.
+    const activeProfile =
+      profileFolder && existsSync(join(source, profileFolder)) ? profileFolder : await findActiveProfileFolder(source)
     await rm(dest, { recursive: true, force: true })
     // Renommé en "Default" côté destination : la fenêtre dédiée est lancée sans --profile-directory (voir
     // launchDebugChrome), donc Chrome y cherche toujours son profil sous ce nom précis, quel que soit le

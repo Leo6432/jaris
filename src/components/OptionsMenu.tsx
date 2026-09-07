@@ -128,6 +128,10 @@ export default function OptionsMenu(): JSX.Element {
   const [modelsLocationMessage, setModelsLocationMessage] = useState<string | null>(null)
   const [importingChromeProfile, setImportingChromeProfile] = useState(false)
   const [chromeProfileMessage, setChromeProfileMessage] = useState<string | null>(null)
+  const [chromeProfiles, setChromeProfiles] = useState<{ folder: string; name: string }[]>([])
+  // Vide = détection automatique (le profil le plus récemment actif, voir importRealChromeProfile côté
+  // main) : Léo ne choisit explicitement que s'il a plusieurs comptes et que ce n'est pas le bon.
+  const [selectedChromeProfile, setSelectedChromeProfile] = useState('')
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
   const [retestingConfig, setRetestingConfig] = useState(false)
@@ -147,6 +151,7 @@ export default function OptionsMenu(): JSX.Element {
       const savedIndex = TTS_VOICES.findIndex((v) => v.id === p?.ttsVoice)
       if (savedIndex !== -1) setVoiceIndex(savedIndex)
     })
+    window.jaris.listChromeProfiles().then(setChromeProfiles)
   }, [])
 
   // Chargé seulement à l'ouverture de l'onglet (pas au montage comme les autres réglages ci-dessus) :
@@ -385,7 +390,7 @@ export default function OptionsMenu(): JSX.Element {
     setImportingChromeProfile(true)
     setChromeProfileMessage(null)
     window.jaris
-      .importChromeProfile()
+      .importChromeProfile(selectedChromeProfile || undefined)
       .then(({ message }) => setChromeProfileMessage(message))
       .catch((err: unknown) => setChromeProfileMessage(err instanceof Error ? err.message : String(err)))
       .finally(() => setImportingChromeProfile(false))
@@ -559,6 +564,21 @@ export default function OptionsMenu(): JSX.Element {
               sécurité). Elle démarre avec un profil vide : connecte-la à ton vrai profil pour qu'elle
               retrouve tes comptes, favoris et mots de passe déjà enregistrés.
             </p>
+            {/* Seulement si plusieurs profils existent : avec un seul, la détection automatique côté main
+                (le profil le plus récemment actif) est de toute façon sans ambiguïté. */}
+            {chromeProfiles.length > 1 && (
+              <label className="options-menu__field">
+                Quel profil ?
+                <select value={selectedChromeProfile} onChange={(e) => setSelectedChromeProfile(e.target.value)}>
+                  <option value="">Détection automatique (profil le plus récent)</option>
+                  {chromeProfiles.map((p) => (
+                    <option key={p.folder} value={p.folder}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <button className="options-menu__action" onClick={handleImportChromeProfile} disabled={importingChromeProfile}>
               {importingChromeProfile ? 'Copie en cours...' : 'Connecter mon profil Chrome existant'}
             </button>

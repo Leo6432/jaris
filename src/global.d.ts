@@ -55,7 +55,8 @@ declare global {
       getModelOverview: () => Promise<ModelOverviewResult>
       getOllamaVersionStatus: () => Promise<OllamaVersionStatus | null>
       updateOllama: () => Promise<{ success: boolean; message: string }>
-      importChromeProfile: () => Promise<{ success: boolean; message: string }>
+      listChromeProfiles: () => Promise<{ folder: string; name: string }[]>
+      importChromeProfile: (profileFolder?: string) => Promise<{ success: boolean; message: string }>
       getAppVersionStatus: () => Promise<AppVersionStatus | null>
       updateApp: () => Promise<{ success: boolean; message: string }>
       getAppVersion: () => Promise<string>

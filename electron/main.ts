@@ -10,7 +10,7 @@ import {
 } from './services/dependencyServices'
 import { getModelsLocationStatus, moveModelsLocation } from './services/modelsLocation'
 import { getAllCandidateModelIds, getModelOverview, previewHardwareTiers } from './services/hardwareScan'
-import { importRealChromeProfile } from './services/browserControl'
+import { importRealChromeProfile, listChromeProfiles } from './services/browserControl'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { runModelAnalysis, runQuickSetup } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
@@ -319,7 +319,8 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.getModelOverview, () => getModelOverview())
   ipcMain.handle(IPC_CHANNELS.getOllamaVersionStatus, () => getOllamaVersionStatus())
   ipcMain.handle(IPC_CHANNELS.updateOllama, () => updateOllama())
-  ipcMain.handle(IPC_CHANNELS.importChromeProfile, () => importRealChromeProfile())
+  ipcMain.handle(IPC_CHANNELS.listChromeProfiles, () => listChromeProfiles())
+  ipcMain.handle(IPC_CHANNELS.importChromeProfile, (_event, profileFolder?: string) => importRealChromeProfile(profileFolder))
   ipcMain.handle(IPC_CHANNELS.getAppVersionStatus, () => getAppVersionStatus())
   ipcMain.handle(IPC_CHANNELS.updateApp, () => updateApp())
   ipcMain.handle(IPC_CHANNELS.getAppVersion, () => getInstalledVersion())

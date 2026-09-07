@@ -363,9 +363,13 @@ export const IPC_CHANNELS = {
   micTestLevel: 'jaris:mic-test-level',
   /** main -> renderer : verdict final d'un test micro (un signal a été détecté ou non). */
   micTestDone: 'jaris:mic-test-done',
+  /** renderer <-> main : liste des profils Chrome connus sur la machine (nom affiché + dossier), pour le
+   * sélecteur dans Options → Connexions (voir listChromeProfiles, browserControl.ts). */
+  listChromeProfiles: 'jaris:list-chrome-profiles',
   /** renderer -> main : copie le vrai profil Chrome de l'utilisateur (comptes, favoris, mots de passe) dans
    * la fenêtre Chrome dédiée à Jaris, à la place de son profil vide auto-créé (voir importRealChromeProfile,
-   * browserControl.ts). */
+   * browserControl.ts). Dossier de profil optionnel (voir listChromeProfiles) : sans lui, détection
+   * automatique du profil le plus récemment actif. */
   importChromeProfile: 'jaris:import-chrome-profile',
   /** renderer <-> main : version de Jaris comparée à la dernière Release GitHub stable (étape 20). */
   getAppVersionStatus: 'jaris:get-app-version-status',
