@@ -77,6 +77,12 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   répond "done" sans jamais avoir tapé/lancé la recherche) : le prompt système de la boucle
   (`SYSTEM_PROMPT`, computerUse.ts) doit explicitement interdire de conclure "done" tant que chaque verbe de
   l'objectif n'est pas vérifié un par un — un exemple concret dans le prompt aide plus qu'une règle abstraite.
+- **Le modèle de conversation répond parfois par une PROMESSE d'action ("je vais faire X", "un instant",
+  "attends") SANS appeler le moindre outil dans ce tour** : comme `message.tool_calls` est vide, la boucle
+  d'assistant.ts prenait ce texte pour la réponse finale et s'arrêtait là — rien ne se passait jamais malgré
+  l'annonce. Détecter ça sur le LANGAGE DE PROMESSE dans la réponse elle-même (pas sur l'intention de la
+  phrase de l'utilisateur, trop spécifique à deviner à l'avance) est plus robuste et généralise mieux que le
+  filet `wantsEmailSent`, propre au seul cas du mail.
 
 ## Commandes utiles
 

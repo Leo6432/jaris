@@ -75,6 +75,12 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   (`SYSTEM_PROMPT`, `electron/services/computerUse.ts`) doit explicitement interdire de conclure "done" tant
   que chaque verbe de l'objectif n'est pas vérifié un par un — un exemple concret dans le prompt aide plus
   qu'une règle abstraite.
+- **Le modèle de conversation répond parfois par une PROMESSE d'action ("je vais faire X", "un instant",
+  "attends") SANS appeler le moindre outil dans ce tour** : comme la liste des appels d'outils est vide, la
+  boucle (`electron/services/assistant.ts`) prenait ce texte pour la réponse finale et s'arrêtait là — rien
+  ne se passait jamais malgré l'annonce. Détecter ça sur le LANGAGE DE PROMESSE dans la réponse elle-même
+  (pas sur l'intention de la phrase de l'utilisateur, trop spécifique à deviner à l'avance) généralise mieux
+  qu'un filet propre à un seul cas d'usage (ex: le mail).
 
 ## Commandes utiles
 
