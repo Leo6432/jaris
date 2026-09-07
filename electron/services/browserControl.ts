@@ -1,7 +1,7 @@
 import { spawn } from 'child_process'
 import { connect } from 'net'
 import { existsSync } from 'fs'
-import { cp, rm } from 'fs/promises'
+import { cp, copyFile, readFile, rm } from 'fs/promises'
 import { basename, join } from 'path'
 import { chromium, type Browser, type Locator, type Page } from 'playwright-core'
 import { describeBrowserScreenshot } from './vision'
@@ -276,6 +276,28 @@ function realProfileDir(): string {
  * modèles ML téléchargés par Chrome, rapports de crash/télémétrie. Skippés par nom peu importe leur
  * profondeur (basename), qu'ils soient à la racine de "User Data" ou dans "Default"/"Profile N".
  */
+/**
+ * "User Data" contient TOUS les profils Chrome de la machine, pas seulement celui de l'utilisateur qui a
+ * cliqué "Connecter mon profil" (chez Léo en usage réel : plus de 20 profils, dont ceux d'autres membres de
+ * la famille) — "Local State" (JSON) retient le nom de dossier du profil actif au dernier lancement de
+ * Chrome (`profile.last_used`, ex. "Default" ou "Profile 3") pour ne copier QUE celui-là. Sans ça,
+ * importRealChromeProfile copiait chaque profil de la machine l'un après l'autre (minutes au lieu de
+ * secondes) et exposait à Jaris les mots de passe/cookies de tout le monde, pas juste les siens.
+ */
+async function findActiveProfileFolder(userDataDir: string): Promise<string> {
+  try {
+    const localState = JSON.parse(await readFile(join(userDataDir, 'Local State'), 'utf-8')) as {
+      profile?: { last_used?: string }
+    }
+    const lastUsed = localState.profile?.last_used
+    if (lastUsed && existsSync(join(userDataDir, lastUsed))) return lastUsed
+  } catch {
+    // "Local State" absent/illisible/corrompu : on retombe sur "Default" ci-dessous plutôt que d'échouer —
+    // presque toujours le bon profil de toute façon sur une machine à un seul utilisateur Chrome.
+  }
+  return 'Default'
+}
+
 const PROFILE_COPY_EXCLUDED_DIRS = new Set([
   'Cache', 'Code Cache', 'GPUCache', 'GrShaderCache', 'ShaderCache', 'component_crx_cache',
   'GraphiteDawnCache', 'DawnGraphiteCache', 'DawnWebGPUCache',
@@ -329,11 +351,21 @@ export async function importRealChromeProfile(): Promise<{ success: boolean; mes
 
   const dest = dedicatedProfileDir()
   try {
+    const activeProfile = await findActiveProfileFolder(source)
     await rm(dest, { recursive: true, force: true })
-    await cp(source, dest, {
+    // Renommé en "Default" côté destination : la fenêtre dédiée est lancée sans --profile-directory (voir
+    // launchDebugChrome), donc Chrome y cherche toujours son profil sous ce nom précis, quel que soit le
+    // nom réel du profil actif copié ("Profile 3", etc.) côté source.
+    await cp(join(source, activeProfile), join(dest, 'Default'), {
       recursive: true,
       filter: (src) => !PROFILE_COPY_EXCLUDED_DIRS.has(basename(src))
     })
+    // "Local State" vit à la racine de "User Data", pas dans le dossier d'un profil — nécessaire pour que
+    // Chrome retrouve la clé de déchiffrement des mots de passe enregistrés dans "Login Data".
+    const localStateSrc = join(source, 'Local State')
+    if (existsSync(localStateSrc)) {
+      await copyFile(localStateSrc, join(dest, 'Local State'))
+    }
     return {
       success: true,
       message:
