@@ -72,6 +72,11 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   à voix haute par la synthèse). La progression en direct ajoutée dans `ChatPanel.tsx` est donc chat-only par
   design (pas de transcript équivalent en voix, et narrer chaque étape à voix haute serait pénible) : le mode
   voix garde seulement l'overlay de scan plein écran comme signe visuel pendant une tâche longue.
+- **`computer_use_task` (petit modèle de vision local) s'arrête facilement après la PREMIÈRE sous-tâche
+  visible d'un objectif à plusieurs actions** ("ouvre YouTube et cherche un tuto guitare" → ouvre YouTube,
+  répond "done" sans jamais avoir tapé/lancé la recherche) : le prompt système de la boucle
+  (`SYSTEM_PROMPT`, computerUse.ts) doit explicitement interdire de conclure "done" tant que chaque verbe de
+  l'objectif n'est pas vérifié un par un — un exemple concret dans le prompt aide plus qu'une règle abstraite.
 
 ## Commandes utiles
 

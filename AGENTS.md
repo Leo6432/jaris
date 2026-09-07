@@ -69,6 +69,12 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   mêmes outils (même fonction `converse()` dans `assistant.ts`, même tableau `TOOLS`) — seul le `channel`
   passé à `buildSystemPrompt` change le style de réponse autorisé (listes/gras/code OK en chat, jamais en
   voix car lu à voix haute par la synthèse).
+- **`computer_use_task` (petit modèle de vision local) s'arrête facilement après la PREMIÈRE sous-tâche
+  visible d'un objectif à plusieurs actions** ("ouvre YouTube et cherche un tuto guitare" → ouvre YouTube,
+  répond "done" sans jamais avoir tapé/lancé la recherche) : le prompt système de la boucle
+  (`SYSTEM_PROMPT`, `electron/services/computerUse.ts`) doit explicitement interdire de conclure "done" tant
+  que chaque verbe de l'objectif n'est pas vérifié un par un — un exemple concret dans le prompt aide plus
+  qu'une règle abstraite.
 
 ## Commandes utiles
 
