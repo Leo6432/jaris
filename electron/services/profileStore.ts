@@ -19,10 +19,3 @@ export async function saveProfile(profile: Profile): Promise<void> {
   await mkdir(dirname(profilePath), { recursive: true })
   await writeFile(profilePath, JSON.stringify(profile, null, 2), 'utf-8')
 }
-
-/** Marque l'écran "connecter Gmail ou ignorer" comme déjà vu, pour ne plus le remontrer au lancement suivant. */
-export async function markGmailOnboardingDone(): Promise<void> {
-  const profile = await getProfile()
-  if (!profile) return
-  await saveProfile({ ...profile, gmailOnboardingDone: true })
-}

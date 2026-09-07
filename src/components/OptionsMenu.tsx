@@ -4,7 +4,6 @@ import type {
   AppVersionStatus,
   AudioInputDevice,
   ConversationEntry,
-  GmailStatus,
   HardwareTierPreview as HardwareTierPreviewData,
   ModelsLocationStatus,
   OllamaVersionStatus,
@@ -40,7 +39,7 @@ const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
  */
 const MIC_TEST_BAR_COUNT = 42
 
-type Tab = 'connexions' | 'voix' | 'audio' | 'miseajour' | 'stockage' | 'historique'
+type Tab = 'voix' | 'audio' | 'miseajour' | 'stockage' | 'historique'
 
 /**
  * Chromium ajoute des pseudo-périphériques "default"/"communications" en plus des vrais haut-parleurs
@@ -103,9 +102,7 @@ export function ReliabilityBadge({ value }: { value: string | null }): JSX.Eleme
 
 export default function OptionsMenu(): JSX.Element {
   const [open, setOpen] = useState(false)
-  const [tab, setTab] = useState<Tab>('connexions')
-  const [status, setStatus] = useState<GmailStatus | null>(null)
-  const [connecting, setConnecting] = useState(false)
+  const [tab, setTab] = useState<Tab>('voix')
   const [error, setError] = useState<string | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [voiceIndex, setVoiceIndex] = useState(DEFAULT_VOICE_INDEX)
@@ -126,12 +123,6 @@ export default function OptionsMenu(): JSX.Element {
   const [modelsLocation, setModelsLocation] = useState<ModelsLocationStatus | null>(null)
   const [movingModelsLocation, setMovingModelsLocation] = useState(false)
   const [modelsLocationMessage, setModelsLocationMessage] = useState<string | null>(null)
-  const [importingChromeProfile, setImportingChromeProfile] = useState(false)
-  const [chromeProfileMessage, setChromeProfileMessage] = useState<string | null>(null)
-  const [chromeProfiles, setChromeProfiles] = useState<{ folder: string; name: string }[]>([])
-  // Vide = détection automatique (le profil le plus récemment actif, voir importRealChromeProfile côté
-  // main) : Léo ne choisit explicitement que s'il a plusieurs comptes et que ce n'est pas le bon.
-  const [selectedChromeProfile, setSelectedChromeProfile] = useState('')
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
   const [retestingConfig, setRetestingConfig] = useState(false)
@@ -145,13 +136,11 @@ export default function OptionsMenu(): JSX.Element {
   const [micTestResult, setMicTestResult] = useState<boolean | null>(null)
 
   useEffect(() => {
-    window.jaris.getGmailStatus().then(setStatus)
     window.jaris.getProfile().then((p) => {
       setProfile(p)
       const savedIndex = TTS_VOICES.findIndex((v) => v.id === p?.ttsVoice)
       if (savedIndex !== -1) setVoiceIndex(savedIndex)
     })
-    window.jaris.listChromeProfiles().then(setChromeProfiles)
   }, [])
 
   // Chargé seulement à l'ouverture de l'onglet (pas au montage comme les autres réglages ci-dessus) :
@@ -288,21 +277,6 @@ export default function OptionsMenu(): JSX.Element {
 
   const voice = useMemo(() => TTS_VOICES[voiceIndex], [voiceIndex])
 
-  const handleConnect = (): void => {
-    setError(null)
-    setConnecting(true)
-    window.jaris
-      .connectGmail()
-      .then(setStatus)
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-      .finally(() => setConnecting(false))
-  }
-
-  const handleDisconnect = (): void => {
-    setError(null)
-    void window.jaris.disconnectGmail().then(() => setStatus({ connected: false, email: null }))
-  }
-
   /**
    * Contrairement à handleUpdateOllama ci-dessous, ne relit jamais le statut après coup : une mise à jour
    * réussie ferme Jaris une seconde plus tard (voir updateApp, appUpdater.ts) pour laisser l'installeur
@@ -369,31 +343,6 @@ export default function OptionsMenu(): JSX.Element {
         setOllamaUpdateMessage(err instanceof Error ? err.message : String(err))
       })
       .finally(() => setUpdatingOllama(false))
-  }
-
-  /**
-   * Remplace le profil (vide au premier lancement) de la fenêtre Chrome dédiée à Jaris par une copie du
-   * vrai profil Chrome de l'utilisateur (comptes connectés, favoris, mots de passe) — voir
-   * importRealChromeProfile, browserControl.ts. Confirmation explicite avant d'agir : ça copie des données
-   * sensibles (mots de passe enregistrés) et ferme la fenêtre Chrome dédiée si elle tournait déjà.
-   */
-  const handleImportChromeProfile = (): void => {
-    if (
-      !window.confirm(
-        'Copier ton profil Chrome actuel (comptes connectés, favoris, mots de passe enregistrés) dans la ' +
-          'fenêtre dédiée à Jaris, à la place de son profil vide ? Toutes tes fenêtres Chrome vont se ' +
-          'fermer automatiquement : sauvegarde ton travail avant de continuer.'
-      )
-    ) {
-      return
-    }
-    setImportingChromeProfile(true)
-    setChromeProfileMessage(null)
-    window.jaris
-      .importChromeProfile(selectedChromeProfile || undefined)
-      .then(({ message }) => setChromeProfileMessage(message))
-      .catch((err: unknown) => setChromeProfileMessage(err instanceof Error ? err.message : String(err)))
-      .finally(() => setImportingChromeProfile(false))
   }
 
   const chooseVoice = async (index: number): Promise<void> => {
@@ -519,9 +468,6 @@ export default function OptionsMenu(): JSX.Element {
         <aside className="options-page__navigation" aria-label="Sections des options">
           <span className="options-page__navigation-label">Réglages</span>
           <nav className="options-menu__tabs">
-            <button className={`options-menu__tab${tab === 'connexions' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('connexions')}>
-              Connexions
-            </button>
             <button className={`options-menu__tab${tab === 'voix' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('voix')}>
               Voix
             </button>
@@ -542,50 +488,6 @@ export default function OptionsMenu(): JSX.Element {
 
         <main className="options-page__workspace">
           <div className="options-page__content">
-        {tab === 'connexions' && (
-          <div className="options-menu__section">
-            <div className="options-menu__section-title">Mail</div>
-            {status?.connected ? (
-              <>
-                <div className="options-menu__account">{status.email}</div>
-                <button className="options-menu__action" onClick={handleDisconnect}>
-                  Déconnecter
-                </button>
-              </>
-            ) : (
-              <button className="options-menu__action" onClick={handleConnect} disabled={connecting}>
-                {connecting ? 'Connexion...' : 'Connecter Gmail'}
-              </button>
-            )}
-
-            <div className="options-menu__section-title">Navigateur</div>
-            <p className="options-menu__model-overview-hint">
-              Jaris pilote une fenêtre Chrome séparée (Chrome 136+ interdit ça sur ton Chrome habituel, par
-              sécurité). Elle démarre avec un profil vide : connecte-la à ton vrai profil pour qu'elle
-              retrouve tes comptes, favoris et mots de passe déjà enregistrés.
-            </p>
-            {/* Seulement si plusieurs profils existent : avec un seul, la détection automatique côté main
-                (le profil le plus récemment actif) est de toute façon sans ambiguïté. */}
-            {chromeProfiles.length > 1 && (
-              <label className="options-menu__field">
-                Quel profil ?
-                <select value={selectedChromeProfile} onChange={(e) => setSelectedChromeProfile(e.target.value)}>
-                  <option value="">Détection automatique (profil le plus récent)</option>
-                  {chromeProfiles.map((p) => (
-                    <option key={p.folder} value={p.folder}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <button className="options-menu__action" onClick={handleImportChromeProfile} disabled={importingChromeProfile}>
-              {importingChromeProfile ? 'Copie en cours...' : 'Connecter mon profil Chrome existant'}
-            </button>
-            {chromeProfileMessage && <p className="options-menu__ollama-update-note">{chromeProfileMessage}</p>}
-          </div>
-        )}
-
         {tab === 'voix' && (
           <div className="options-menu__voice-picker">
             <div className="options-menu__voice-nav">

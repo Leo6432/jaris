@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import CapacityScan from '@/components/CapacityScan'
 import ChatPanel from '@/components/ChatPanel'
 import CodePanel from '@/components/CodePanel'
-import GmailOnboarding from '@/components/GmailOnboarding'
 import RuntimeSetup from '@/components/RuntimeSetup'
 import JarisOrb from '@/components/JarisOrb'
 import MemoryBrain from '@/components/MemoryBrain'
@@ -49,7 +48,6 @@ export default function App(): JSX.Element {
 
   // undefined = pas encore chargé, null = pas de profil (premier lancement)
   const [profileName, setProfileName] = useState<string | null | undefined>(undefined)
-  const [gmailOnboardingDone, setGmailOnboardingDone] = useState<boolean | undefined>(undefined)
   const [capacityScanDone, setCapacityScanDone] = useState<boolean | undefined>(undefined)
   const [runtimeReady, setRuntimeReady] = useState<boolean | undefined>(undefined)
   const [nameInput, setNameInput] = useState('')
@@ -68,7 +66,6 @@ export default function App(): JSX.Element {
   useEffect(() => {
     window.jaris.getProfile().then((profile) => {
       setProfileName(profile?.name ?? null)
-      setGmailOnboardingDone(profile?.gmailOnboardingDone ?? false)
       setCapacityScanDone(profile?.capacityScanDone ?? false)
     })
   }, [])
@@ -91,7 +88,6 @@ export default function App(): JSX.Element {
     if (!name) return
     void window.jaris.saveProfile({ name }).then(() => {
       setProfileName(name)
-      setGmailOnboardingDone(false)
       setCapacityScanDone(false)
     })
   }
@@ -231,10 +227,6 @@ export default function App(): JSX.Element {
     // installer" : ça ferait clignoter cet écran à chaque démarrage sur une machine déjà prête.
     if (runtimeReady === false) {
       return <RuntimeSetup onDone={() => setRuntimeReady(true)} />
-    }
-
-    if (!gmailOnboardingDone) {
-      return <GmailOnboarding onDone={() => setGmailOnboardingDone(true)} />
     }
 
     if (!capacityScanDone) {

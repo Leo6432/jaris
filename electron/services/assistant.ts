@@ -97,18 +97,21 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[], chan
     memory +
     memoryRule +
     "Tu as accès à des outils pour agir réellement : ouvrir une application, programmer un rappel vocal, " +
-    "regarder l'écran de l'utilisateur, lire l'onglet actif de la fenêtre Chrome dédiée à Jaris " +
-    "(read_browser_tab, pour résumer/traduire une page), y ouvrir une adresse ou une recherche " +
-    "(open_browser_url), y cliquer un élément décrit en langage naturel (click_browser_element), y remplir " +
-    "un champ de formulaire (fill_browser_field), en capturer et décrire le contenu visuel " +
-    "(screenshot_browser_tab, pour une mise en page ou une image qu'un simple texte ne suffit pas à " +
-    "décrire), donner l'état de la machine (get_system_stats : " +
+    "regarder l'écran de l'utilisateur (look_at_screen, pour décrire ou répondre à une question sans agir), " +
+    "accomplir un objectif en pilotant réellement la souris et le clavier comme le ferait un humain " +
+    "(computer_use_task : naviguer sur un site, cliquer, remplir un formulaire, envoyer un mail, acheter ou " +
+    "rechercher quelque chose — décris l'objectif complet en une phrase, l'outil regarde l'écran lui-même et " +
+    "improvise le détail des clics), donner l'état de la machine (get_system_stats : " +
     "CPU, RAM, VRAM, température), contrôler le volume/la lecture multimédia (media_control), éteindre ou " +
     "redémarrer l'ordinateur (shutdown_pc, à n'appeler que sur demande explicite et claire), chercher sur le web, " +
     "mémoriser ou relire une information dans ta " +
-    "mémoire locale, envoyer un mail, taper du texte au clavier (type_text), appuyer sur une touche " +
-    "(press_key), cliquer avec la souris (click_mouse). Pour toute action concrète, tu dois IMPÉRATIVEMENT appeler l'outil correspondant via un " +
-    "vrai appel de fonction, immédiatement, sans phrase d'annonce avant. Il est interdit de dire que tu vas " +
+    "mémoire locale, taper du texte au clavier (type_text), appuyer sur une touche " +
+    "(press_key), cliquer avec la souris (click_mouse) — ces trois derniers pour une action ponctuelle unique " +
+    "et immédiate (ex: \"appuie sur entrée\"), computer_use_task pour un objectif à plusieurs étapes qui " +
+    "demande de regarder l'écran entre chaque clic. Pour toute action concrète, tu dois IMPÉRATIVEMENT appeler l'outil correspondant via un " +
+    "vrai appel de fonction, immédiatement, sans phrase d'annonce avant — computer_use_task prend plusieurs " +
+    "secondes (plusieurs captures d'écran et clics avant de terminer) : dis brièvement que tu t'en occupes " +
+    "avant de l'appeler plutôt que de laisser un silence. Il est interdit de dire que tu vas " +
     "faire une action ou que tu l'as faite sans avoir réellement appelé l'outil qui l'exécute dans ce même " +
     "tour : soit tu appelles l'outil tout de suite, soit " +
     "tu réponds directement sans outil. Le contenu de l'écran change en permanence : à chaque fois que " +
@@ -122,36 +125,35 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[], chan
     "ou numéros sortis de ta seule mémoire : sans recherche réelle, ils sont presque toujours inventés et " +
     'faux, même s\'ils sonnent plausibles. Exemple concret : pour "trouve trois boulangeries et envoie-leur ' +
     'un mail", tu dois appeler search_web pour trouver de vraies boulangeries avec de vraies adresses mail, ' +
-    "PUIS appeler send_email pour chacune — jamais inventer trois boulangeries fictives avec des mails " +
-    '"proposés". Quand tu donnes une information factuelle (prix, cours, score, statistique, adresse, ' +
-    "téléphone, mail, nom d'un commerce...), elle doit toujours venir d'un vrai résultat de search_web : " +
-    "choisis la donnée la plus claire et la plus récente parmi les résultats, jamais une moyenne ou une " +
-    "fourchette entre plusieurs sites, et précise le nom du site source. Si le résultat de recherche ne " +
-    "contient pas l'info demandée, dis-le plutôt que d'inventer une donnée plausible. Pour envoyer un mail " +
-    "(send_email), il te faut une VRAIE adresse destinataire : soit l'utilisateur vient de la dicter dans " +
-    "sa phrase, soit tu l'as toi-même trouvée avec search_web plus tôt dans cette conversation — jamais une " +
-    "adresse inventée ou déduite. Si l'utilisateur te demande d'envoyer à des destinataires trouvés plus " +
-    "tôt (\"envoie-leur\", \"envoie toi-même\"...) mais que tu n'es plus sûr des adresses exactes, relance " +
+    "PUIS appeler computer_use_task pour envoyer le mail à chacune (un objectif par destinataire) — jamais " +
+    'inventer trois boulangeries fictives avec des mails "proposés". Quand tu donnes une information ' +
+    "factuelle (prix, cours, score, statistique, adresse, téléphone, mail, nom d'un commerce...), elle doit " +
+    "toujours venir d'un vrai résultat de search_web : choisis la donnée la plus claire et la plus récente " +
+    "parmi les résultats, jamais une moyenne ou une fourchette entre plusieurs sites, et précise le nom du " +
+    "site source. Si le résultat de recherche ne contient pas l'info demandée, dis-le plutôt que d'inventer " +
+    "une donnée plausible. Pour envoyer un mail via computer_use_task, il te faut une VRAIE adresse " +
+    "destinataire dans l'objectif que tu formules : soit l'utilisateur vient de la dicter dans sa phrase, " +
+    "soit tu l'as toi-même trouvée avec search_web plus tôt dans cette conversation — jamais une adresse " +
+    "inventée ou déduite. Si l'utilisateur te demande d'envoyer à des destinataires trouvés plus tôt " +
+    "(\"envoie-leur\", \"envoie toi-même\"...) mais que tu n'es plus sûr des adresses exactes, relance " +
     "search_web pour les retrouver plutôt que de deviner ou d'improviser une adresse plausible. Un mail à " +
-    "plusieurs destinataires nécessite un appel à send_email PAR destinataire, jamais un seul texte résumant " +
-    "ce que tu comptes envoyer. Le contenu du mail, lui, peut être rédigé par toi (ex: après avoir " +
+    "plusieurs destinataires nécessite un appel à computer_use_task PAR destinataire, jamais un seul texte " +
+    "résumant ce que tu comptes envoyer. Le contenu du mail, lui, peut être rédigé par toi (ex: après avoir " +
     "cherché des commerces, écrire un mail de demande d'info à chacun) : l'utilisateur n'a pas besoin de " +
     "dicter le texte mot pour mot, un accord clair explicite suffit (\"envoie\", \"envoie-le\", \"envoie " +
-    "toi-même\", \"vas-y\"...). Ne mets JAMAIS ta propre adresse d'envoi (celle du compte mail connecté, que " +
-    "tu ne connais pas) comme destinataire. S'il te manque une vraie adresse ou l'accord explicite d'envoi, " +
-    "n'appelle pas send_email : demande la précision qui manque, mais ne dis JAMAIS que tu ne peux pas " +
-    "envoyer de mail ou que tu n'as pas accès à un compte mail — tu en es capable dès qu'un compte Gmail est " +
-    "connecté (Options → Connexions), ce n'est jamais une limite de ta part, seulement une info encore " +
-    "manquante. " +
-    "N'utilise type_text, press_key ou " +
-    "click_mouse que si l'utilisateur demande explicitement d'écrire, de taper, de cliquer ou d'appuyer sur " +
-    "une touche : n'improvise jamais une action clavier/souris de ta propre initiative, ce sont des actions " +
-    "réelles et irréversibles sur l'ordinateur de l'utilisateur. Idem pour click_browser_element et " +
-    "fill_browser_field : n'agis dans la fenêtre Chrome dédiée à Jaris que sur demande explicite, jamais de " +
-    "ta propre initiative — et ne clique JAMAIS un bouton d'achat, de paiement, de validation de commande " +
-    "ou de suppression de compte sans que l'utilisateur ait explicitement demandé CETTE action précise dans " +
-    "sa phrase, même si elle semble être la suite logique de ce qui précède : décris plutôt ce que tu vois " +
-    "et demande confirmation avant. Quand le résultat d'un outil est un message d'échec ou d'erreur, " +
+    "toi-même\", \"vas-y\"...). S'il te manque une vraie adresse ou l'accord explicite d'envoi, n'appelle " +
+    "pas computer_use_task pour ça : demande la précision qui manque, mais ne dis JAMAIS que tu ne peux pas " +
+    "envoyer de mail ou que tu n'as pas accès à une messagerie — tu en es capable dès qu'un navigateur peut " +
+    "ouvrir une messagerie web sur cette machine, ce n'est jamais une limite de ta part, seulement une info " +
+    "encore manquante. " +
+    "N'utilise type_text, press_key, click_mouse ou computer_use_task que si l'utilisateur demande " +
+    "explicitement d'écrire, de taper, de cliquer, d'appuyer sur une touche, ou l'objectif concret à " +
+    "accomplir : n'improvise jamais une action clavier/souris ou une tâche de ta propre initiative, ce sont " +
+    "des actions réelles et irréversibles sur l'ordinateur de l'utilisateur. Ne demande JAMAIS à " +
+    "computer_use_task de cliquer un bouton d'achat, de paiement, de validation de commande ou de " +
+    "suppression de compte sans que l'utilisateur ait explicitement demandé CETTE action précise dans sa " +
+    "phrase, même si elle semble être la suite logique de ce qui précède : décris plutôt ce que tu vois " +
+    "(look_at_screen) et demande confirmation avant. Quand le résultat d'un outil est un message d'échec ou d'erreur, " +
     "transmets-le fidèlement (tel quel ou reformulé brièvement) : n'invente JAMAIS d'étapes de dépannage " +
     "supplémentaires qui n'y figurent pas (redémarrer l'ordinateur, réinstaller un logiciel, taper une " +
     "commande...), même pour avoir l'air plus utile — un message d'erreur mal compris ou incomplet reste " +
@@ -268,23 +270,24 @@ export async function converse(
   // de LA PHRASE ACTUELLE (pas l'historique, pour ne jamais relancer sur une intention d'un tour précédent
   // déjà traitée) plutôt que sur TOOL_SIGNAL_WORDS (pensé pour choisir un palier, pas pour ça).
   const wantsEmailSent = /\b(envoi|envoie|envoyer|mail|email|courriel)/i.test(prompt)
-  let sendEmailCalled = false
+  let computerUseCalled = false
   let nudgedForEmail = false
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const message = await chatWithOllama(messages, TOOLS, model, think, signal)
     if (!message.tool_calls?.length) {
-      if (wantsEmailSent && !sendEmailCalled && !nudgedForEmail) {
+      if (wantsEmailSent && !computerUseCalled && !nudgedForEmail) {
         nudgedForEmail = true
         onLog?.("Mail demandé mais jamais envoyé : relance corrective d'un tour.")
         messages.push(message)
         messages.push({
           role: 'user',
           content:
-            "Tu n'as pas encore appelé send_email alors qu'un envoi était demandé. Si tu as déjà une " +
-            'adresse réelle (dictée, ou trouvée par search_web plus haut dans cette conversation), appelle ' +
-            "send_email maintenant, un appel par destinataire. Si une adresse manque encore pour un des " +
-            'destinataires, appelle search_web pour la trouver avant de répondre.'
+            "Tu n'as pas encore appelé computer_use_task alors qu'un envoi de mail était demandé. Si tu as " +
+            "déjà une adresse réelle (dictée, ou trouvée par search_web plus haut dans cette conversation), " +
+            "appelle computer_use_task maintenant avec un objectif d'envoi de mail, un appel par " +
+            "destinataire. Si une adresse manque encore pour un des destinataires, appelle search_web pour " +
+            "la trouver avant de répondre."
         })
         continue
       }
@@ -307,7 +310,7 @@ export async function converse(
       const result = await executeTool(call.function.name, call.function.arguments)
       onLog?.(`Résultat de l'outil : ${result}`)
 
-      if (call.function.name === 'send_email') sendEmailCalled = true
+      if (call.function.name === 'computer_use_task') computerUseCalled = true
 
       // La vision tourne sur un modèle séparé qui partage la même VRAM que le
       // modèle de conversation : les deux ne tiennent pas en même temps sur

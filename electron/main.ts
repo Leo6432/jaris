@@ -10,7 +10,6 @@ import {
 } from './services/dependencyServices'
 import { getModelsLocationStatus, moveModelsLocation } from './services/modelsLocation'
 import { getAllCandidateModelIds, getModelOverview, previewHardwareTiers } from './services/hardwareScan'
-import { importRealChromeProfile, listChromeProfiles } from './services/browserControl'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { runModelAnalysis, runQuickSetup } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
@@ -27,8 +26,7 @@ import {
   getConversationHistory,
   getConversationHistoryPath
 } from './services/conversationStore'
-import { getProfile, markGmailOnboardingDone, saveProfile } from './services/profileStore'
-import { connectGmail, disconnectGmail, getGmailStatus } from './services/googleAuth'
+import { getProfile, saveProfile } from './services/profileStore'
 import { checkAppFreshness, checkForUpdate, getAppVersionStatus, getInstalledVersion, getReleaseHistory, updateApp } from './services/appUpdater'
 import {
   IPC_CHANNELS,
@@ -274,7 +272,6 @@ app.whenReady().then(async () => {
   ipcMain.on(IPC_CHANNELS.audioEnded, () => pipeline?.notifyAudioEnded())
   ipcMain.handle(IPC_CHANNELS.getProfile, () => getProfile())
   ipcMain.handle(IPC_CHANNELS.saveProfile, (_event, profile: Profile) => saveProfile(profile))
-  ipcMain.handle(IPC_CHANNELS.markGmailOnboardingDone, () => markGmailOnboardingDone())
   ipcMain.handle(IPC_CHANNELS.openMemoryFolder, async () => {
     await ensureMemoryDir()
     await shell.openPath(getMemoryDir())
@@ -296,9 +293,6 @@ app.whenReady().then(async () => {
     await ensureConversationHistoryFile()
     shell.showItemInFolder(getConversationHistoryPath())
   })
-  ipcMain.handle(IPC_CHANNELS.getGmailStatus, () => getGmailStatus())
-  ipcMain.handle(IPC_CHANNELS.connectGmail, () => connectGmail())
-  ipcMain.handle(IPC_CHANNELS.disconnectGmail, () => disconnectGmail())
   ipcMain.handle(IPC_CHANNELS.previewVoice, async (_event, voice: string) => {
     const audio = await previewVoice(voice)
     return audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer
@@ -319,8 +313,6 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.getModelOverview, () => getModelOverview())
   ipcMain.handle(IPC_CHANNELS.getOllamaVersionStatus, () => getOllamaVersionStatus())
   ipcMain.handle(IPC_CHANNELS.updateOllama, () => updateOllama())
-  ipcMain.handle(IPC_CHANNELS.listChromeProfiles, () => listChromeProfiles())
-  ipcMain.handle(IPC_CHANNELS.importChromeProfile, (_event, profileFolder?: string) => importRealChromeProfile(profileFolder))
   ipcMain.handle(IPC_CHANNELS.getAppVersionStatus, () => getAppVersionStatus())
   // `quitting = true` seulement juste avant que updateApp() n'appelle réellement app.quit() (jamais avant, y
   // compris en cas d'échec du téléchargement) : sinon fermer la fenêtre principale plus tard dans la session

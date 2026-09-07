@@ -212,7 +212,7 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   bas. Une première version de Code avait été retirée (qualité insuffisante
   sur un modèle généraliste de la taille qui tient sur 8 Go de VRAM) puis
   reprise avec deux modèles réellement spécialisés en code (voir plus bas)
-- ✅ Étape 34 — Playwright pour piloter un vrai navigateur (voir plus bas)
+- ✅ Étape 34 — Agent "computer use" pour piloter réellement l'ordinateur à la souris et au clavier (voir plus bas)
 - ✅ Étape 20 — Mise à jour automatique de l'application (voir plus bas)
 - ✅ Étape 16 — Installeur en un clic (voir plus bas) : **règle absolue — le Jaris installé par
   le public doit être exactement le même que celui utilisé en développement**
@@ -802,7 +802,7 @@ machine, pas seulement répondre :
 - **`shutdown_pc`** — éteint ou redémarre la machine via `shutdown.exe`
   natif (aucune dépendance)
 
-Tous les outils, y compris `send_email` et `shutdown_pc`, s'exécutent
+Tous les outils, y compris `computer_use_task` et `shutdown_pc`, s'exécutent
 directement dès que le modèle les appelle, sans confirmation orale/écrite
 préalable — une confirmation systématique par outil a existé un temps
 (niveaux N1/N2/N3, onglet Options → Sécurité) mais a été retirée : jugée
@@ -855,16 +855,6 @@ L'empreinte de `requirements.txt` est enregistrée après installation : une
 future version de Jaris qui ajoute une dépendance déclenchera l'installation
 manquante toute seule, sans que l'utilisateur ait à s'en occuper (base de
 l'étape 20).
-
-### Une action à faire une seule fois (par le développeur, jamais l'utilisateur)
-
-Pour que le bouton "Connecter Gmail" fonctionne dans l'application installée,
-ajoute `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` dans **Settings → Secrets
-and variables → Actions** du dépôt GitHub. Ils sont figés dans la
-construction (`define` dans `electron.vite.config.ts`), jamais écrits dans le
-dépôt, et l'application installée n'a donc aucun `.env` à remplir. Sans eux,
-le build réussit quand même et Jaris explique simplement que l'envoi de mails
-n'est pas disponible dans cette version.
 
 ### Ce qui reste à faire sur cette étape
 
@@ -974,60 +964,43 @@ nouveau changement d'emplacement migre depuis l'ancien dossier choisi (pas
 depuis l'emplacement Windows d'origine) et nettoie l'ancien disque au passage
 — jamais de copies orphelines qui s'accumulent.
 
-## Contrôle du navigateur avec Playwright (étape 34)
+## Agent "computer use" (étape 34)
 
-Cinq outils (tous N1, voir plus haut) pilotent la fenêtre Chrome dédiée à
-Jaris via [Playwright](https://playwright.dev/) (`playwright-core`, sans
-navigateur embarqué — réutilise le Chrome déjà installé sur la machine) :
-- **`read_browser_tab`** — lit le titre, l'URL et le texte de l'onglet actif
-  pour répondre à "résume cette page", "traduis ça", "de quoi ça parle" — le
-  texte brut extrait est renvoyé comme un résultat d'outil normal, c'est le
-  modèle de conversation qui résume/traduit/répond, pas une réponse déjà
-  toute faite (contrairement à `look_at_screen`, qui lui court-circuite la
-  reformulation)
-- **`open_browser_url`** — ouvre une adresse (ou une recherche Google si ce
-  n'en est pas une) dans un nouvel onglet
-- **`click_browser_element`** — clique un élément décrit en langage naturel
-  (le texte visible d'un bouton/lien, ex: "Suivant", "Se connecter"), jamais
-  un sélecteur CSS/XPath à deviner : essaie dans l'ordre repérage par rôle
-  bouton, rôle lien, puis texte brut (`page.getByRole`/`getByText`)
-- **`fill_browser_field`** — remplit un champ de formulaire décrit en langage
-  naturel (son label ou son placeholder, `page.getByLabel`/`getByPlaceholder`)
-- **`screenshot_browser_tab`** — capture l'onglet actif et le fait décrire
-  par le modèle de vision (même modèle et même logique de repli VRAM que
-  `look_at_screen`, juste une image différente), pour une mise en page ou un
-  contenu visuel qu'un simple texte ne suffit pas à décrire
+Jaris n'a plus de fenêtre Chrome séparée ni de profil à connecter : un seul
+outil, **`computer_use_task(goal)`**, accomplit un objectif en pilotant
+réellement la souris et le clavier de l'ordinateur, exactement comme le
+ferait un humain — ouvrir un site et y naviguer, cliquer un bouton, remplir
+un formulaire, envoyer un mail, acheter ou chercher quelque chose
+(`electron/services/computerUse.ts`). Remplace l'ancienne approche par
+[Playwright](https://playwright.dev/)/CDP (fenêtre Chrome dédiée pilotée par
+sélecteurs de rôle/texte) et l'envoi de mail par API Gmail — choix assumé
+par Léo (2026-09-07) : plus lent et moins fiable (dépend de la capacité du
+modèle de vision local à repérer un bouton en pixels, jamais garantie sur un
+petit modèle) qu'un appel d'API direct, mais fonctionne sur n'importe quel
+site ou application sans configuration préalable, et n'a plus besoin d'une
+fenêtre Chrome séparée du navigateur habituel de l'utilisateur.
 
-**Contrainte Chrome, pas une limite de Jaris.** Depuis Chrome 136+, Google
-interdit la connexion CDP (Chrome DevTools Protocol, nécessaire pour piloter
-un onglet depuis l'extérieur) sur le profil par défaut, pour des raisons de
-sécurité — vérifié sur `jarvis-assistant-vocal` (projet comparable), seule
-solution qui fonctionne encore : une fenêtre Chrome **séparée**, avec son
-propre profil dédié (`%LOCALAPPDATA%\JarisChrome`), lancée avec
-`--remote-debugging-port`. Jaris ne peut donc piloter que les onglets ouverts
-dans cette fenêtre dédiée, jamais le Chrome habituel de l'utilisateur.
-`electron/services/browserControl.ts` lance cette fenêtre automatiquement au
-premier besoin (rien à installer ni à lancer à la main) : elle démarre vide
-(nouveau profil), l'utilisateur doit y ouvrir/naviguer vers la page qu'il
-veut faire piloter à Jaris. Bouton **"Connecter mon profil Chrome
-existant"** dans Options → Connexions (`importRealChromeProfile`,
-`browserControl.ts`) pour éviter ce profil vide : copie le vrai profil
-Chrome de l'utilisateur (comptes connectés, favoris, mots de passe) dans le
-dossier de la fenêtre dédiée — possible car la restriction de Chrome 136+
-porte sur le dossier de profil *par défaut* exactement, pas sur un dossier
-personnalisé qui contiendrait les mêmes données. Instantané figé (pas
-synchronisé en continu avec le Chrome habituel), sauf à activer la
-synchronisation Google dans les deux profils.
+**La boucle.** `computerUseTask` capture l'écran réel (même mécanisme que
+`look_at_screen`, voir étape 6), l'envoie avec l'objectif et l'historique des
+actions déjà faites au modèle de vision, qui répond par un JSON décrivant la
+PROCHAINE action (`click`/`double_click`/`right_click` avec des coordonnées
+pixel, `type` du texte, `key` une touche, `wait`, ou `done`/`fail` pour
+arrêter) — jamais de texte libre autour, pour rester analysable sans modèle
+de langage séparé. L'action est exécutée via les mêmes primitives que
+`click_mouse`/`type_text`/`press_key` (`inputControl.ts`), une nouvelle
+capture est prise, et ainsi de suite jusqu'à `done`/`fail` ou 20 actions
+(`MAX_STEPS`, filet anti-boucle-infinie si le modèle ne conclut jamais).
 
 **Sécurité "achat/paiement".** Comme sur `jarvis-assistant-vocal`, le prompt
-système (`assistant.ts`) interdit explicitement de cliquer un bouton
-d'achat/paiement/validation de commande/suppression de compte sans que
-l'utilisateur ait demandé CETTE action précise dans sa phrase, même si elle
-semble être la suite logique de ce qui précède — Jaris décrit plutôt ce qu'il
-voit et demande confirmation avant. C'est une consigne au niveau du prompt,
-pas un blocage mécanique (aucune confirmation systématique par outil,
-voir étape 31) : sans quoi la navigation assistée deviendrait impraticable
-(une confirmation avant chaque clic).
+système (`assistant.ts`) interdit explicitement de demander à
+`computer_use_task` de cliquer un bouton d'achat/paiement/validation de
+commande/suppression de compte sans que l'utilisateur ait demandé CETTE
+action précise dans sa phrase, même si elle semble être la suite logique de
+ce qui précède — Jaris décrit plutôt ce qu'il voit (`look_at_screen`) et
+demande confirmation avant. C'est une consigne au niveau du prompt, pas un
+blocage mécanique (aucune confirmation systématique par outil, voir étape
+31) : sans quoi la navigation assistée deviendrait impraticable (une
+confirmation avant chaque clic).
 
 ## Design de l'interface (étape 17)
 
@@ -1329,52 +1302,11 @@ modifier à la main.
 
 ## Envoi de mails (étape 11)
 
-Jaris peut envoyer un vrai mail via un compte Gmail connecté depuis l'appli.
-
-Bouton **"Options"** en haut à gauche de la fenêtre → **"Connecter Gmail"**.
-Le navigateur système s'ouvre sur l'écran de connexion Google, tu acceptes
-la permission "envoyer des mails en ton nom", et c'est tout — aucun mot de
-passe à taper dans Jaris. Le jeton est stocké chiffré sur ta machine (via
-le trousseau du système, `safeStorage` d'Electron), jamais en clair. Le
-même bouton Options permet de déconnecter le compte et de s'en reconnecter
-à tout moment.
-
-Ça nécessite de créer un identifiant OAuth "Application de bureau" sur
-Google Cloud Console (gratuit, une seule fois) :
-
-1. Va sur [console.cloud.google.com](https://console.cloud.google.com/),
-   crée un projet (ou réutilise un projet existant)
-2. **APIs et services → Bibliothèque** → active l'API **Gmail API**
-3. **APIs et services → Écran de consentement OAuth** → type "Externe",
-   remplis le nom de l'app, ton mail ; en mode "Test", ajoute ton propre
-   compte Gmail comme utilisateur de test (pas besoin de validation Google
-   pour un usage personnel)
-4. **APIs et services → Identifiants → Créer des identifiants → ID client
-   OAuth**, type **"Application de bureau"**
-5. Copie le "ID client" et le "Code secret du client" générés dans `.env` :
-
-```
-GOOGLE_CLIENT_ID=xxxxx.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=xxxxx
-```
-
-> Tant que l'écran de consentement OAuth reste en statut **"Test"** (étape
-> 3 ci-dessus), Google fait expirer le jeton persistant au bout de **7
-> jours**, même sans rien faire de mal — l'envoi échoue alors avec
-> `invalid_grant` (Jaris déconnecte automatiquement le compte dans ce cas,
-> il suffit de recliquer "Connecter Gmail" dans Options). Pour éviter d'avoir
-> à reconnecter tous les 7 jours, passe l'écran de consentement en statut
-> **"En production"** (bouton "Publier l'application" sur la page Écran de
-> consentement OAuth) : aucune vérification Google n'est nécessaire pour un
-> usage personnel, juste un écran "Cette application n'est pas validée" à
-> traverser une fois via "Paramètres avancés → Accéder à [nom de l'app]
-> (dangereux)" lors de la connexion.
-
-Pour l'application installée (étape 16, pas de `.env`), ces deux identifiants
-sont figés à la construction depuis les secrets GitHub Actions du dépôt (voir
-"Une action à faire une seule fois" plus bas) — c'est ce qui permet à
-n'importe quel installeur téléchargé de connecter Gmail sans que l'utilisateur
-n'ait à créer quoi que ce soit lui-même.
-
-Si aucun compte Gmail n'est connecté, Jaris te préviendra à voix haute qu'il
-ne peut pas envoyer le mail au lieu d'échouer silencieusement.
+Jaris envoie un vrai mail en pilotant réellement une messagerie web (Gmail...)
+à la souris et au clavier, via `computer_use_task` (voir "Agent computer use",
+étape 34, plus bas) — plus de compte à connecter ni d'identifiant à créer sur
+Google Cloud Console : ça marche dès qu'un navigateur peut ouvrir une
+messagerie sur la machine, exactement comme un humain qui écrirait le mail
+lui-même. Ancienne approche (compte Gmail connecté via OAuth, API Gmail)
+abandonnée au profit de cette solution unique pour toute action sur
+ordinateur, choix assumé par Léo (2026-09-07).

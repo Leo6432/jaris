@@ -53,15 +53,5 @@ export const config = {
   },
   searxng: {
     host: readEnv('SEARXNG_HOST', 'http://127.0.0.1:8080')
-  },
-  google: {
-    /**
-     * Identifiants OAuth "Application de bureau" créés sur Google Cloud Console (voir README). Le .env
-     * reste prioritaire (pratique en développement) ; à défaut, ceux figés à la construction depuis les
-     * secrets GitHub (voir `define` dans electron.vite.config.ts) — sans quoi l'application installée,
-     * qui n'a aucun .env, ne pourrait jamais connecter de compte Gmail.
-     */
-    clientId: readEnv('GOOGLE_CLIENT_ID', __GOOGLE_CLIENT_ID__),
-    clientSecret: readEnv('GOOGLE_CLIENT_SECRET', __GOOGLE_CLIENT_SECRET__)
   }
 } as const

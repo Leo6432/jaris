@@ -18,7 +18,9 @@ const VISION_SYSTEM_PROMPT =
 // modeste suffit largement à lire du texte ou décrire une fenêtre.
 const MAX_SCREENSHOT_WIDTH = 1280
 
-async function captureScreenshotBase64(): Promise<string> {
+/** Capture plein écran en base64 (PNG) — réutilisée par computerUse.ts (étape 34) pour chaque itération de
+    sa boucle de contrôle. */
+export async function captureScreenshotBase64(): Promise<string> {
   const { size } = screen.getPrimaryDisplay()
   const width = Math.min(size.width, MAX_SCREENSHOT_WIDTH)
   const height = Math.round((size.height / size.width) * width)
@@ -95,13 +97,4 @@ export async function lookAtScreen(question: string, visionModel: string): Promi
   } finally {
     hideScanOverlay()
   }
-}
-
-/**
- * Même analyse que lookAtScreen, mais pour une capture déjà en main (un onglet de la fenêtre Chrome dédiée
- * à Jaris, voir screenshotActiveTab dans browserControl.ts) — jamais de vraie capture d'écran ici, donc pas
- * besoin de l'overlay de scan (étape 18), qui n'a de sens que pour une vraie capture plein écran.
- */
-export async function describeBrowserScreenshot(imageBase64: string, question: string, visionModel: string): Promise<string> {
-  return describeImage(imageBase64, question || 'Décris ce qui est affiché sur cette page.', visionModel)
 }

@@ -1,6 +1,6 @@
 {
   "name": "jaris",
-  "version": "0.1.29",
+  "version": "0.2.0",
   "description": "Jaris - assistant IA personnel vocal, 100% local et gratuit",
   "main": "./out/main/main.js",
   "author": "",
@@ -19,15 +19,11 @@
   },
   "//dependencies": "Uniquement ce que le process principal charge VRAIMENT à l'exécution : electron-builder embarque tout ce qui est listé ici dans l'application installée. Les librairies du renderer (react, three...) sont en devDependencies parce que Vite les compile dans out/renderer : les garder ici les ferait embarquer une deuxième fois, en pure duplication (~55 Mo).",
   "dependencies": {
-    "dotenv": "^17.4.2",
-    "google-auth-library": "^11.0.2",
-    "nodemailer": "^9.0.5",
-    "playwright-core": "^1.62.1"
+    "dotenv": "^17.4.2"
   },
   "devDependencies": {
     "@fontsource/barlow": "^5.3.0",
     "@fontsource/rajdhani": "^5.3.0",
-    "@types/nodemailer": "^8.0.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/three": "^0.185.1",

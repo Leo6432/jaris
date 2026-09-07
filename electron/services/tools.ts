@@ -1,13 +1,12 @@
 import type { OllamaTool } from './ollama'
 import { openApp } from './appLauncher'
-import { sendEmail } from './email'
+import { computerUseTask } from './computerUse'
 import { rememberNote, recallNote } from './memoryStore'
 import { scheduleReminder } from './reminders'
 import { lookAtScreen } from './vision'
 import { searchWeb } from './webSearch'
 import { clickMouse, mediaKey, pressKey, typeText } from './inputControl'
 import { getSystemStatsText, shutdownPc } from './systemControl'
-import { clickBrowserElement, fillBrowserField, openBrowserUrl, readActiveTab, screenshotActiveTab } from './browserControl'
 
 export const TOOLS: OllamaTool[] = [
   {
@@ -116,29 +115,6 @@ export const TOOLS: OllamaTool[] = [
   {
     type: 'function',
     function: {
-      name: 'send_email',
-      description: "Envoie un vrai mail via le compte configuré par l'utilisateur.",
-      parameters: {
-        type: 'object',
-        properties: {
-          to: {
-            type: 'string',
-            description:
-              "Adresse mail EXACTE du destinataire : soit dictée par l'utilisateur dans sa phrase, soit " +
-              "trouvée par toi avec search_web plus tôt dans cette conversation (ex: coordonnées d'un " +
-              "commerce). Ne mets jamais ta propre adresse d'envoi, ni une adresse inventée ou déduite : si " +
-              "tu n'as ni adresse dictée ni adresse trouvée par une vraie recherche, n'appelle pas cet outil."
-          },
-          subject: { type: 'string', description: 'Objet du mail' },
-          body: { type: 'string', description: 'Contenu du mail, en texte simple' }
-        },
-        required: ['to', 'subject', 'body']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
       name: 'type_text',
       description:
         "Écrit du texte à l'endroit où se trouve le curseur/focus actuel sur l'ordinateur (un champ de texte, " +
@@ -231,77 +207,27 @@ export const TOOLS: OllamaTool[] = [
   {
     type: 'function',
     function: {
-      name: 'read_browser_tab',
+      name: 'computer_use_task',
       description:
-        "Lit l'onglet actif de la fenêtre Chrome dédiée à Jaris (titre, URL, texte de la page) pour " +
-        "répondre à \"résume cette page\", \"traduis ça\", \"de quoi ça parle\". Nécessite la fenêtre " +
-        'Chrome dédiée à Jaris (auto-lancée au besoin, séparée du Chrome habituel de l\'utilisateur).',
-      parameters: { type: 'object', properties: {}, required: [] }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'open_browser_url',
-      description:
-        "Ouvre une adresse (ou fait une recherche si ce n'est pas une adresse) dans un nouvel onglet de la " +
-        "fenêtre Chrome dédiée à Jaris. Pour \"ouvre YouTube\", \"va sur le site X\", \"cherche des tests du " +
-        'Godox TL60".',
+        "Accomplit un objectif en pilotant réellement l'ordinateur à la souris et au clavier, comme le " +
+        "ferait un humain : ouvrir un site et y naviguer, cliquer des boutons/liens, remplir un formulaire, " +
+        "envoyer un mail (ouvre le vrai Gmail/client mail déjà connecté sur la machine), acheter/rechercher " +
+        "quelque chose sur un site. Décris l'objectif complet en une phrase claire (pas une suite d'étapes " +
+        "détaillées : l'agent regarde l'écran et improvise le détail lui-même). Plus lent qu'une réponse " +
+        "directe (plusieurs captures d'écran et clics avant de terminer) : préviens l'utilisateur que ça va " +
+        "prendre un instant plutôt que de rester silencieux pendant l'exécution.",
       parameters: {
         type: 'object',
         properties: {
-          target: { type: 'string', description: 'URL complète (https://...) ou mots-clés à chercher' }
+          goal: {
+            type: 'string',
+            description:
+              'Objectif complet et autonome, ex: "Envoie un mail à jean@exemple.com avec pour objet ' +
+              '\'Réunion\' et pour contenu \'Je confirme demain 14h\'", "Va sur youtube.com et cherche des ' +
+              'tutos de guitare", "Ajoute le premier résultat au panier sur ce site".'
+          }
         },
-        required: ['target']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'click_browser_element',
-      description:
-        "Clique sur un élément de l'onglet actif de la fenêtre Chrome dédiée à Jaris, décrit en langage " +
-        'naturel (le texte visible du bouton/lien, ex: "Suivant", "Se connecter", "Ajouter au panier").',
-      parameters: {
-        type: 'object',
-        properties: {
-          description: { type: 'string', description: "Texte visible de l'élément à cliquer" }
-        },
-        required: ['description']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'fill_browser_field',
-      description:
-        "Remplit un champ de formulaire de l'onglet actif de la fenêtre Chrome dédiée à Jaris, décrit en " +
-        'langage naturel (son label ou son placeholder, ex: "Email", "Nom", "Rechercher").',
-      parameters: {
-        type: 'object',
-        properties: {
-          field: { type: 'string', description: 'Label ou placeholder du champ à remplir' },
-          text: { type: 'string', description: 'Texte à écrire dans le champ' }
-        },
-        required: ['field', 'text']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'screenshot_browser_tab',
-      description:
-        "Capture l'onglet actif de la fenêtre Chrome dédiée à Jaris et le décrit, pour un contenu qu'un " +
-        "simple texte (read_browser_tab) ne suffit pas à décrire (mise en page, graphique, image).",
-      parameters: {
-        type: 'object',
-        properties: {
-          question: { type: 'string', description: "Ce qu'il faut chercher ou décrire sur la page, en français" }
-        },
-        required: []
+        required: ['goal']
       }
     }
   },
@@ -341,8 +267,8 @@ export function createToolExecutor(onReminderFire: ReminderFireHandler, visionMo
         return rememberNote(String(args.title ?? ''), String(args.content ?? ''))
       case 'recall_memory':
         return recallNote(String(args.title ?? ''))
-      case 'send_email':
-        return sendEmail(String(args.to ?? ''), String(args.subject ?? ''), String(args.body ?? ''))
+      case 'computer_use_task':
+        return computerUseTask(String(args.goal ?? ''), visionModel)
       case 'type_text':
         return typeText(String(args.text ?? ''))
       case 'press_key':
@@ -354,18 +280,6 @@ export function createToolExecutor(onReminderFire: ReminderFireHandler, visionMo
       }
       case 'get_system_stats':
         return getSystemStatsText()
-      case 'read_browser_tab':
-        return readActiveTab()
-      case 'open_browser_url':
-        // Un petit modèle local nomme parfois ce paramètre "url" au lieu de "target" (observé en usage
-        // réel) : on accepte les deux plutôt que de silencieusement traiter ça comme une adresse vide.
-        return openBrowserUrl(String(args.target ?? args.url ?? ''))
-      case 'click_browser_element':
-        return clickBrowserElement(String(args.description ?? ''))
-      case 'fill_browser_field':
-        return fillBrowserField(String(args.field ?? ''), String(args.text ?? ''))
-      case 'screenshot_browser_tab':
-        return screenshotActiveTab(String(args.question ?? ''), visionModel)
       case 'media_control':
         return mediaKey(String(args.action ?? ''))
       case 'shutdown_pc':

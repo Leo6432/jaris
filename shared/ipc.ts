@@ -26,8 +26,6 @@ export interface ModelTiers {
 
 export interface Profile {
   name: string
-  /** true une fois l'écran "connecter Gmail ou ignorer" affiché après le premier lancement. */
-  gmailOnboardingDone?: boolean
   /** Voix Supertonic HD choisie dans le menu Options (ex: "M3"), vide = valeur par défaut de .env. */
   ttsVoice?: string
   /** true une fois le scan de capacité (étape 13) effectué après le premier lancement. */
@@ -92,12 +90,6 @@ export interface ConversationEntry {
   timestamp: string
   transcript: string
   reply: string
-}
-
-/** État de la connexion Gmail (étape 11), pour le menu Options. */
-export interface GmailStatus {
-  connected: boolean
-  email: string | null
 }
 
 /**
@@ -293,8 +285,6 @@ export const IPC_CHANNELS = {
   /** renderer <-> main : profil utilisateur (prénom), demandé une seule fois au premier lancement. */
   getProfile: 'jaris:get-profile',
   saveProfile: 'jaris:save-profile',
-  /** renderer -> main : marque l'écran de connexion Gmail comme vu (après connexion ou "Ignorer"). */
-  markGmailOnboardingDone: 'jaris:mark-gmail-onboarding-done',
   /** renderer -> main : ouvre le dossier de mémoire markdown de Jaris dans l'explorateur de fichiers. */
   openMemoryFolder: 'jaris:open-memory-folder',
   /** renderer <-> main : récupère les notes de la mémoire et leurs liens, pour la vue graphe 3D. */
@@ -303,12 +293,6 @@ export const IPC_CHANNELS = {
   getMemoryNoteContent: 'jaris:get-memory-note-content',
   /** renderer -> main : la lecture audio de la dernière réponse est terminée, on peut repasser en idle. */
   audioEnded: 'jaris:audio-ended',
-  /** renderer <-> main : état de la connexion Gmail. */
-  getGmailStatus: 'jaris:get-gmail-status',
-  /** renderer <-> main : lance le flux de connexion Gmail (ouvre le navigateur système). */
-  connectGmail: 'jaris:connect-gmail',
-  /** renderer -> main : déconnecte le compte Gmail. */
-  disconnectGmail: 'jaris:disconnect-gmail',
   /** renderer <-> main : synthétise une phrase d'exemple avec une voix donnée, pour la comparer avant de la choisir. */
   previewVoice: 'jaris:preview-voice',
   /** renderer (fenêtre réglages) -> main : l'onboarding vient de se terminer, bascule vers le widget flottant. */
@@ -363,14 +347,6 @@ export const IPC_CHANNELS = {
   micTestLevel: 'jaris:mic-test-level',
   /** main -> renderer : verdict final d'un test micro (un signal a été détecté ou non). */
   micTestDone: 'jaris:mic-test-done',
-  /** renderer <-> main : liste des profils Chrome connus sur la machine (nom affiché + dossier), pour le
-   * sélecteur dans Options → Connexions (voir listChromeProfiles, browserControl.ts). */
-  listChromeProfiles: 'jaris:list-chrome-profiles',
-  /** renderer -> main : copie le vrai profil Chrome de l'utilisateur (comptes, favoris, mots de passe) dans
-   * la fenêtre Chrome dédiée à Jaris, à la place de son profil vide auto-créé (voir importRealChromeProfile,
-   * browserControl.ts). Dossier de profil optionnel (voir listChromeProfiles) : sans lui, détection
-   * automatique du profil le plus récemment actif. */
-  importChromeProfile: 'jaris:import-chrome-profile',
   /** renderer <-> main : version de Jaris comparée à la dernière Release GitHub stable (étape 20). */
   getAppVersionStatus: 'jaris:get-app-version-status',
   /** renderer -> main : télécharge et lance l'installeur de la dernière version, puis ferme Jaris. */
