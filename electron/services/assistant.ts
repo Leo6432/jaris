@@ -205,7 +205,7 @@ export async function converse(
 ): Promise<string> {
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
-  const executeTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel)
+  const executeTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel, onLog)
 
   const models = profile?.models ?? { flash: config.ollama.model, medium: config.ollama.model, large: config.ollama.model }
   let tier = pickTier(prompt)

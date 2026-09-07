@@ -114,11 +114,22 @@ async function nextStep(goal: string, history: string[], imageBase64: string, vi
  * formulaire...) en pilotant réellement la souris et le clavier, capture d'écran par capture d'écran.
  * `MAX_STEPS` évite une boucle infinie si le modèle de vision reste bloqué sans jamais renvoyer "done"/"fail".
  */
-export async function computerUseTask(goal: string, visionModel: string): Promise<string> {
+export async function computerUseTask(
+  goal: string,
+  visionModel: string,
+  onProgress?: (message: string) => void
+): Promise<string> {
   if (!goal.trim()) return "Dis-moi ce qu'il faut faire à l'écran."
 
   const history: string[] = []
   for (let i = 0; i < MAX_STEPS; i++) {
+    // Chaque itération (capture + appel au modèle de vision) peut prendre jusqu'à 45s (STEP_TIMEOUT_MS) sur
+    // une machine chargée ou sans GPU — sans un signe de vie régulier, ça ressemble à un plantage silencieux
+    // plutôt qu'à une réflexion lente (constaté en usage réel : Léo pensait Jaris bloqué après plusieurs
+    // minutes sans aucune action visible). Le fil de discussion (ChatPanel.tsx, via window.jaris.onLog)
+    // affiche cette ligne en direct pendant que ça tourne.
+    onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : je regarde l'écran…`)
+
     let image: string
     try {
       image = await captureScreenshotBase64()
@@ -144,19 +155,23 @@ export async function computerUseTask(goal: string, visionModel: string): Promis
         const button = step.action === 'double_click' ? 'double' : step.action === 'right_click' ? 'right' : 'left'
         await clickMouse(step.x ?? null, step.y ?? null, button)
         history.push(`${i + 1}. Clic ${button} à (${step.x}, ${step.y})`)
+        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : clic ${button} à (${step.x}, ${step.y}).`)
         break
       }
       case 'type':
         await typeText(step.text ?? '')
         history.push(`${i + 1}. Texte tapé : "${step.text ?? ''}"`)
+        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : texte tapé.`)
         break
       case 'key':
         await pressKey(step.key ?? '')
         history.push(`${i + 1}. Touche "${step.key ?? ''}" pressée`)
+        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : touche "${step.key ?? ''}" pressée.`)
         break
       case 'wait':
         await new Promise((resolve) => setTimeout(resolve, 1200))
         history.push(`${i + 1}. Attente (chargement)`)
+        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : attente du chargement de la page…`)
         break
     }
   }

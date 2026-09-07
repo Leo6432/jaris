@@ -251,8 +251,9 @@ export const TOOLS: OllamaTool[] = [
 ]
 
 type ReminderFireHandler = (message: string) => void
+type LogHandler = (message: string) => void
 
-export function createToolExecutor(onReminderFire: ReminderFireHandler, visionModel: string) {
+export function createToolExecutor(onReminderFire: ReminderFireHandler, visionModel: string, onLog?: LogHandler) {
   return async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
     switch (name) {
       case 'open_app':
@@ -268,7 +269,7 @@ export function createToolExecutor(onReminderFire: ReminderFireHandler, visionMo
       case 'recall_memory':
         return recallNote(String(args.title ?? ''))
       case 'computer_use_task':
-        return computerUseTask(String(args.goal ?? ''), visionModel)
+        return computerUseTask(String(args.goal ?? ''), visionModel, onLog)
       case 'type_text':
         return typeText(String(args.text ?? ''))
       case 'press_key':

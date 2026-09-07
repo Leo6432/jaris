@@ -29,10 +29,20 @@ export default function ChatPanel(): JSX.Element {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [progress, setProgress] = useState<string | null>(null)
   const threadRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     void window.jaris.getChatHistory().then(setMessages)
+  }, [])
+
+  // computer_use_task (étape 34) peut prendre plusieurs minutes (jusqu'à 20 allers-retours capture d'écran
+  // + clic) sans jamais donner signe de vie autrement — constaté en usage réel : Léo pensait Jaris bloqué
+  // après plusieurs minutes à voir juste "Jaris réfléchit…" sans rien de plus. onLog (déjà diffusé côté main
+  // pour chaque étape, voir computerUse.ts/assistant.ts) remplace ce texte statique par la dernière étape en
+  // cours tant qu'une réponse est en vol.
+  useEffect(() => {
+    return window.jaris.onLog(setProgress)
   }, [])
 
   // Toujours coller au dernier message : pendant que Jaris réfléchit, l'indicateur en bas doit rester
@@ -48,6 +58,7 @@ export default function ChatPanel(): JSX.Element {
     setError(null)
     setInput('')
     setSending(true)
+    setProgress(null)
     // Affiché tout de suite, sans attendre la réponse : côté main le message est de toute façon ajouté au
     // fil dès réception, donc les deux restent cohérents.
     setMessages((prev) => [...prev, { role: 'user', content: prompt }])
@@ -59,6 +70,7 @@ export default function ChatPanel(): JSX.Element {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setSending(false)
+      setProgress(null)
     }
   }
 
@@ -86,7 +98,9 @@ export default function ChatPanel(): JSX.Element {
           </div>
         ))}
 
-        {sending && <div className="chat-panel__message chat-panel__message--pending">Jaris réfléchit…</div>}
+        {sending && (
+          <div className="chat-panel__message chat-panel__message--pending">{progress ?? 'Jaris réfléchit…'}</div>
+        )}
       </div>
 
       {error && <p className="chat-panel__error">{error}</p>}
