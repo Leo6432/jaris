@@ -56,11 +56,27 @@ function isPortOpen(port: number): Promise<boolean> {
 function launchDebugChrome(): boolean {
   const exe = findChromeExe()
   if (!exe) return false
-  const proc = spawn(exe, [`--remote-debugging-port=${CDP_PORT}`, `--user-data-dir=${dedicatedProfileDir()}`], {
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: false
-  })
+  const proc = spawn(
+    exe,
+    [
+      `--remote-debugging-port=${CDP_PORT}`,
+      `--user-data-dir=${dedicatedProfileDir()}`,
+      // Sans ça, les versions récentes de Chrome peuvent lancer leur propre sélecteur "Qui utilise Chrome ?"
+      // au démarrage même avec --user-data-dir (une nouveauté de l'UI Chrome, pas un problème d'isolation du
+      // profil dédié en lui-même) — --profile-directory force Chrome à ouvrir directement le profil "Default"
+      // de CE dossier, sans passer par un choix quelconque.
+      '--profile-directory=Default',
+      // Écran de bienvenue/import de données au tout premier lancement d'un profil neuf : jamais pertinent
+      // pour une fenêtre pilotée par automatisation, seulement une étape de plus qui bloque la navigation.
+      '--no-first-run',
+      '--no-default-browser-check'
+    ],
+    {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false
+    }
+  )
   proc.on('error', () => {
     // Rien à faire : connectOrLaunch ci-dessous retente la connexion pendant ~8s puis abandonne
     // proprement (MSG_UNAVAILABLE) si Chrome n'a jamais fini par répondre.

@@ -322,7 +322,10 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.listChromeProfiles, () => listChromeProfiles())
   ipcMain.handle(IPC_CHANNELS.importChromeProfile, (_event, profileFolder?: string) => importRealChromeProfile(profileFolder))
   ipcMain.handle(IPC_CHANNELS.getAppVersionStatus, () => getAppVersionStatus())
-  ipcMain.handle(IPC_CHANNELS.updateApp, () => updateApp())
+  // `quitting = true` seulement juste avant que updateApp() n'appelle réellement app.quit() (jamais avant, y
+  // compris en cas d'échec du téléchargement) : sinon fermer la fenêtre principale plus tard dans la session
+  // quitterait Jaris pour de bon au lieu de se replier en widget comme d'habitude.
+  ipcMain.handle(IPC_CHANNELS.updateApp, () => updateApp(() => { quitting = true }))
   ipcMain.handle(IPC_CHANNELS.getAppVersion, () => getInstalledVersion())
   ipcMain.handle(IPC_CHANNELS.getReleaseHistory, () => getReleaseHistory())
   ipcMain.handle(IPC_CHANNELS.checkForUpdate, () => checkForUpdate())

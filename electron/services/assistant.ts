@@ -151,7 +151,11 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[], chan
     "ta propre initiative — et ne clique JAMAIS un bouton d'achat, de paiement, de validation de commande " +
     "ou de suppression de compte sans que l'utilisateur ait explicitement demandé CETTE action précise dans " +
     "sa phrase, même si elle semble être la suite logique de ce qui précède : décris plutôt ce que tu vois " +
-    "et demande confirmation avant."
+    "et demande confirmation avant. Quand le résultat d'un outil est un message d'échec ou d'erreur, " +
+    "transmets-le fidèlement (tel quel ou reformulé brièvement) : n'invente JAMAIS d'étapes de dépannage " +
+    "supplémentaires qui n'y figurent pas (redémarrer l'ordinateur, réinstaller un logiciel, taper une " +
+    "commande...), même pour avoir l'air plus utile — un message d'erreur mal compris ou incomplet reste " +
+    "préférable à des instructions inventées et fausses."
   )
 }
 

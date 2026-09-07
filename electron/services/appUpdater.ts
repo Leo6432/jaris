@@ -148,12 +148,18 @@ export async function getReleaseHistory(): Promise<ReleaseHistoryEntry[]> {
 
 /**
  * Déclenché par le bouton "Mettre à jour" (OptionsMenu.tsx, comme celui d'Ollama). Télécharge le VRAI
- * installeur de la Release GitHub (jamais un fichier généré à la volée) et le lance : l'installeur NSIS
- * "un clic" (voir electron-builder.yml) détecte tout seul que Jaris tourne déjà et le ferme si besoin, mais
- * Jaris se ferme ici de lui-même juste après avoir lancé l'installeur pour éviter même cette invite —
- * l'installation continue alors entièrement silencieuse et relance Jaris à la fin (`runAfterFinish`).
+ * installeur de la Release GitHub (jamais un fichier généré à la volée) et le lance seulement une fois Jaris
+ * réellement en train de quitter (voir plus bas), pour ne jamais déclencher l'invite "Jaris tourne déjà,
+ * fermer et continuer ?" de l'installeur NSIS "un clic" (electron-builder.yml).
+ *
+ * `onBeforeQuit` : la fenêtre principale (main.ts) intercepte sa propre fermeture pour se cacher en widget
+ * au lieu de vraiment quitter, sauf si le drapeau module `quitting` est déjà à `true` (voir le menu barre
+ * système "Quitter"). Sans prévenir main.ts juste avant d'appeler `app.quit()` ci-dessous, cette
+ * interception s'applique aussi ici : Jaris ne quittait donc jamais réellement pendant une mise à jour (il
+ * se repliait juste en widget), ce qui explique que l'installeur voie systématiquement Jaris.exe encore actif
+ * à son contrôle de démarrage — jamais un problème de timing, Jaris ne fermait tout simplement pas du tout.
  */
-export async function updateApp(): Promise<{ success: boolean; message: string }> {
+export async function updateApp(onBeforeQuit?: () => void): Promise<{ success: boolean; message: string }> {
   if (!cachedStatus?.outdated) {
     return { success: false, message: 'Aucune mise à jour disponible.' }
   }
@@ -170,20 +176,23 @@ export async function updateApp(): Promise<{ success: boolean; message: string }
     const installerPath = join(tmpdir(), 'JarisSetup.exe')
     await writeFile(installerPath, Buffer.from(await response.arrayBuffer()))
 
-    // windowsHide: false — si Jaris ne se ferme pas assez vite pour éviter l'invite "Jaris tourne déjà,
-    // fermer et continuer ?" du point de vue de l'installeur, l'utilisateur doit pouvoir la voir et cliquer
-    // "OK" plutôt qu'un installeur bloqué invisible en arrière-plan.
-    spawn(installerPath, [], { detached: true, stdio: 'ignore', windowsHide: false })
-      .on('error', () => {
-        // Rien à faire de plus ici : le message de succès a déjà été renvoyé au moment de l'appel, et
-        // Jaris est sur le point de se fermer de toute façon (voir plus bas) — un échec asynchrone du
-        // spawn lui-même n'a plus d'utilisateur à qui le rapporter à ce stade.
-      })
-      .unref()
-
-    // Laisse une seconde à l'installeur pour démarrer avant que Jaris ne se ferme et libère son propre
-    // exécutable — sans quoi les deux processus pourraient se disputer le même fichier au même instant.
-    setTimeout(() => app.quit(), 1000)
+    // Lancé seulement une fois Jaris réellement en train de quitter ('will-quit', après la fermeture de ses
+    // fenêtres), jamais avant : l'installeur NSIS vérifie si Jaris.exe tourne encore quasi immédiatement
+    // après son propre démarrage. Avec l'ancien ordre (spawn immédiat, puis Jaris ne se fermait qu'une
+    // seconde plus tard), ce contrôle voyait systématiquement Jaris encore actif et affichait son invite
+    // "Jaris tourne déjà, fermer et continuer ?" à chaque mise à jour — jamais un cas limite, constaté à
+    // chaque fois en usage réel (Léo). windowsHide: false — cette invite doit rester visible si jamais elle
+    // apparaît encore malgré ce nouvel ordre (Jaris trop lent à quitter sur une machine chargée, par exemple).
+    app.once('will-quit', () => {
+      spawn(installerPath, [], { detached: true, stdio: 'ignore', windowsHide: false })
+        .on('error', () => {
+          // Rien à faire de plus ici : Jaris est de toute façon en train de quitter, plus personne à qui
+          // rapporter un échec asynchrone du spawn lui-même à ce stade.
+        })
+        .unref()
+    })
+    onBeforeQuit?.()
+    app.quit()
 
     return { success: true, message: `Mise à jour vers ${cachedStatus.latest} : Jaris va se fermer et relancer automatiquement.` }
   } catch (err) {
