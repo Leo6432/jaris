@@ -37,8 +37,14 @@ const SYSTEM_PROMPT =
   'sur le bon champ si besoin), ' +
   '{"action":"key","key":"<entrée|tab|échap|espace|retour arrière|suppr|haut|bas|gauche|droite|début|fin>"}, ' +
   '{"action":"wait"} (la page est en train de charger, rien à cliquer pour l\'instant), ' +
-  '{"action":"done","result":"<résumé bref de ce qui a été accompli>"} dès que l\'objectif est visiblement ' +
-  'atteint sur la dernière capture, ' +
+  '{"action":"done","result":"<résumé bref de ce qui a été accompli>"} UNIQUEMENT quand CHAQUE partie de ' +
+  "l'objectif est visiblement accomplie sur la dernière capture — jamais dès qu'une PREMIÈRE partie est " +
+  'faite. Exemple concret : pour "ouvre YouTube et cherche un tuto guitare", ouvrir YouTube ne suffit pas : ' +
+  "il faut aussi avoir cliqué sur la barre de recherche, tapé la requête, ET lancé la recherche (touche " +
+  "entrée ou clic sur la loupe) avant de répondre \"done\" — répondre \"done\" après la seule ouverture " +
+  'alors que le reste de l\'objectif n\'est pas fait est une erreur grave, ça laisse la tâche à moitié ' +
+  "terminée sans que l'utilisateur ne le sache. Avant de répondre \"done\", relis l'objectif complet et " +
+  "vérifie mentalement chaque verbe d'action qu'il contient un par un. " +
   '{"action":"fail","result":"<pourquoi c\'est bloqué>"} si un élément reste introuvable après plusieurs ' +
   "essais ou qu'une page d'erreur/de connexion bloque la suite — jamais boucler indéfiniment sur le même " +
   'échec. x/y sont des pixels, origine en haut à gauche de l\'image fournie. Une seule action par réponse.'
