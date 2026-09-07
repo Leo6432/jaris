@@ -1,7 +1,7 @@
 import { spawn } from 'child_process'
 import { connect } from 'net'
 import { existsSync } from 'fs'
-import { cp, copyFile, readFile, rm } from 'fs/promises'
+import { cp, copyFile, readFile, rm, writeFile } from 'fs/promises'
 import { basename, join } from 'path'
 import { chromium, type Browser, type Locator, type Page } from 'playwright-core'
 import { describeBrowserScreenshot } from './vision'
@@ -354,7 +354,11 @@ const PROFILE_COPY_EXCLUDED_DIRS = new Set([
   'GraphiteDawnCache', 'DawnGraphiteCache', 'DawnWebGPUCache',
   'IndexedDB', 'Service Worker', 'blob_storage', 'databases',
   'Crashpad', 'BrowserMetrics', 'OptimizationGuidePredictionModels', 'optimization_guide_hint_cache_store',
-  'WidevineCdm', 'Safe Browsing'
+  'WidevineCdm', 'Safe Browsing',
+  // Onglets ouverts au moment de la copie : Chrome les rouvre tous au premier lancement de la fenêtre
+  // dédiée (restauration de session normale, appliquée à une copie) — jamais voulu ici, seuls comptes/
+  // favoris/mots de passe doivent suivre, pas un instantané des dizaines d'onglets ouverts sur le vrai Chrome.
+  'Sessions', 'Session Storage', 'Current Session', 'Current Tabs', 'Last Session', 'Last Tabs'
 ])
 
 /**
@@ -408,18 +412,37 @@ export async function importRealChromeProfile(profileFolder?: string): Promise<{
     const activeProfile =
       profileFolder && existsSync(join(source, profileFolder)) ? profileFolder : await findActiveProfileFolder(source)
     await rm(dest, { recursive: true, force: true })
-    // Renommé en "Default" côté destination : la fenêtre dédiée est lancée sans --profile-directory (voir
-    // launchDebugChrome), donc Chrome y cherche toujours son profil sous ce nom précis, quel que soit le
-    // nom réel du profil actif copié ("Profile 3", etc.) côté source.
+    // Renommé en "Default" côté destination : la fenêtre dédiée est lancée avec --profile-directory=Default
+    // (voir launchDebugChrome), donc Chrome y cherche toujours son profil sous ce nom précis, quel que soit
+    // le nom réel du profil actif copié ("Profile 3", etc.) côté source.
     await cp(join(source, activeProfile), join(dest, 'Default'), {
       recursive: true,
       filter: (src) => !PROFILE_COPY_EXCLUDED_DIRS.has(basename(src))
     })
     // "Local State" vit à la racine de "User Data", pas dans le dossier d'un profil — nécessaire pour que
-    // Chrome retrouve la clé de déchiffrement des mots de passe enregistrés dans "Login Data".
+    // Chrome retrouve la clé de déchiffrement des mots de passe enregistrés dans "Login Data". Remappé plutôt
+    // que copié tel quel : son "info_cache" décrit chaque profil PAR SON VRAI NOM DE DOSSIER ("Profile 7",
+    // par ex.) — copié sans y toucher, Chrome ne retrouve plus l'entrée du dossier une fois renommé en
+    // "Default" ci-dessus, et affiche un profil anonyme "Personne 1" au lieu du vrai nom (comptes/mots de
+    // passe restent malgré tout fonctionnels, uniquement l'affichage du nom est faux).
     const localStateSrc = join(source, 'Local State')
     if (existsSync(localStateSrc)) {
-      await copyFile(localStateSrc, join(dest, 'Local State'))
+      try {
+        const localState = JSON.parse(await readFile(localStateSrc, 'utf-8')) as {
+          profile?: { info_cache?: Record<string, unknown>; last_used?: string; last_active_profiles?: string[] }
+        }
+        const info = localState.profile?.info_cache?.[activeProfile]
+        if (localState.profile && info) {
+          localState.profile.info_cache = { Default: info }
+          localState.profile.last_used = 'Default'
+          localState.profile.last_active_profiles = ['Default']
+        }
+        await writeFile(join(dest, 'Local State'), JSON.stringify(localState))
+      } catch {
+        // Repli sur une copie brute : Chrome affichera peut-être "Personne 1" au lieu du vrai nom, mais
+        // comptes/favoris/mots de passe restent utilisables normalement.
+        await copyFile(localStateSrc, join(dest, 'Local State'))
+      }
     }
     return {
       success: true,
