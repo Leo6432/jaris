@@ -87,10 +87,14 @@ class ChatSession {
       )
       if (gpuStatus.action === 'warn') reply = `${gpuStatus.message}\n\n${reply}`
     } catch (err) {
-      onLog(`Erreur Ollama (chat) : ${err instanceof Error ? err.message : String(err)}`)
+      const detail = err instanceof Error ? err.message : String(err)
+      onLog(`Erreur Ollama (chat) : ${detail}`)
+      // Le détail (déjà clair et actionnable, voir ollama.ts : "Impossible de joindre Ollama...",
+      // "Ollama a répondu 500 : ...") est ajouté au lieu d'être perdu derrière un message générique — même
+      // logique que pour un outil qui échoue (voir assistant.ts) : ne jamais cacher la vraie cause.
       return this.pushVisible({
         role: 'assistant',
-        content: "Je n'arrive pas à réfléchir pour le moment, vérifie qu'Ollama tourne bien."
+        content: `Je n'arrive pas à réfléchir pour le moment : ${detail}`
       })
     }
 

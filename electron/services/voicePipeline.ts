@@ -283,8 +283,11 @@ export class VoicePipeline extends EventEmitter {
           // une question de toute façon dépassée, on va la fusionner et recommencer juste en dessous.
           aborted = true
         } else {
-          this.emit('log', `Erreur Ollama : ${err instanceof Error ? err.message : String(err)}`)
-          reply = "Je n'arrive pas à réfléchir pour le moment, vérifie qu'Ollama tourne bien."
+          const detail = err instanceof Error ? err.message : String(err)
+          this.emit('log', `Erreur Ollama : ${detail}`)
+          // Même logique que côté Chat (chatSession.ts) : le détail est déjà clair et actionnable, mieux
+          // vaut le dire à voix haute que cacher la vraie cause derrière un message toujours identique.
+          reply = `Je n'arrive pas à réfléchir pour le moment : ${detail}`
         }
       } finally {
         if (this.abortController === controller) this.abortController = null
