@@ -44,6 +44,19 @@ import {
   type VoiceSetupStatusPayload
 } from '../shared/ipc'
 
+/**
+ * Sans ce verrou, cliquer plusieurs fois sur le raccourci (ou double-cliquer par erreur) lance autant de
+ * Jaris en parallèle : plusieurs micros ouverts en même temps, plusieurs `ollama serve` qui se disputent le
+ * même port, plusieurs sidecars Python... Demandé tout en haut, avant tout autre `app.on`/`app.whenReady`,
+ * comme recommandé par Electron : la toute première instance obtient le verrou et continue normalement ;
+ * toute tentative suivante le rate immédiatement, ne fait plus rien d'autre que quitter, et déclenche
+ * l'évènement 'second-instance' CHEZ LA PREMIÈRE INSTANCE (voir plus bas showFullWindow) plutôt que
+ * d'ouvrir sa propre fenêtre.
+ */
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+}
+
 const isDev = !app.isPackaged
 let pipeline: VoicePipeline | null = null
 let fullWindow: BrowserWindow | null = null
@@ -492,6 +505,14 @@ app.whenReady().then(async () => {
 // que Jaris a lui-même démarré, plutôt qu'un process qui continue de tourner indéfiniment en arrière-plan.
 app.on('before-quit', () => {
   stopOllamaIfStartedByJaris()
+})
+
+// Déclenché sur la toute première instance (celle qui a le verrou, voir requestSingleInstanceLock tout en
+// haut du fichier) quand une deuxième tentative de lancement vient de se faire recaler : au lieu de laisser
+// l'utilisateur croire que rien ne s'est passé, on ramène la fenêtre existante au premier plan — exactement
+// ce que ferait un simple clic sur l'icône de la barre système.
+app.on('second-instance', () => {
+  showFullWindow()
 })
 
 app.on('will-quit', () => {
