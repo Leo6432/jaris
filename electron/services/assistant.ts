@@ -307,7 +307,19 @@ export async function converse(
     for (const call of message.tool_calls) {
       onLog?.(`Outil appelé : ${call.function.name}(${JSON.stringify(call.function.arguments)})`)
 
-      const result = await executeTool(call.function.name, call.function.arguments)
+      // Un outil qui lève une exception (SearXNG/Ollama/Docker injoignable, erreur réseau...) ne doit
+      // jamais faire échouer tout le tour de conversation : sans ce try/catch, l'exception remontait telle
+      // quelle jusqu'à converse(), et l'appelant (voicePipeline.ts/chatSession.ts) la remplaçait par le
+      // message générique "vérifie qu'Ollama tourne bien" — trompeur quand la vraie cause est ailleurs (ex:
+      // SearXNG pas lancé pour search_web). Le message d'erreur, lui, est déjà clair et actionnable (voir
+      // webSearch.ts) : mieux vaut le transmettre au modèle comme un résultat d'outil normal, pour qu'il le
+      // relaie fidèlement (voir la consigne "ne jamais inventer de dépannage" plus bas) plutôt que le perdre.
+      let result: string
+      try {
+        result = await executeTool(call.function.name, call.function.arguments)
+      } catch (err) {
+        result = `Échec de l'outil : ${err instanceof Error ? err.message : String(err)}`
+      }
       onLog?.(`Résultat de l'outil : ${result}`)
 
       if (call.function.name === 'computer_use_task') computerUseCalled = true
