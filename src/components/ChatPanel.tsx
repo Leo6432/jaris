@@ -1,5 +1,24 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import type { ChatMessage } from '../../shared/ipc'
+
+/**
+ * Le canal "chat" du prompt système (assistant.ts) autorise le modèle à utiliser du markdown léger (listes,
+ * blocs de code) et il lui arrive d'utiliser **gras** même si ce n'est pas explicitement demandé — jusqu'ici
+ * affiché tel quel avec les astérisques littéraux. Seul le gras est interprété ici (le reste : listes,
+ * retours à la ligne, restent du texte brut géré par `white-space: pre-wrap` en CSS) : pas la peine d'une
+ * vraie dépendance markdown pour un seul cas d'usage.
+ */
+function renderFormattedText(content: string): JSX.Element {
+  const parts = content.split(/(\*\*[^*]+\*\*)/g)
+  return (
+    <>
+      {parts.map((part, index) => {
+        const match = /^\*\*([^*]+)\*\*$/.exec(part)
+        return match ? <strong key={index}>{match[1]}</strong> : <Fragment key={index}>{part}</Fragment>
+      })}
+    </>
+  )
+}
 
 /**
  * Mode Chat (étape 30) : la même conversation que la voix, au clavier. Le fil vit côté main
@@ -63,7 +82,7 @@ export default function ChatPanel(): JSX.Element {
 
         {messages.map((message, index) => (
           <div key={index} className={`chat-panel__message chat-panel__message--${message.role}`}>
-            {message.content}
+            {renderFormattedText(message.content)}
           </div>
         ))}
 

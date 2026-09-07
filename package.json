@@ -1,6 +1,6 @@
 {
   "name": "jaris",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Jaris - assistant IA personnel vocal, 100% local et gratuit",
   "main": "./out/main/main.js",
   "author": "",
