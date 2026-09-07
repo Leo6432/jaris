@@ -26,7 +26,18 @@ export async function searchWeb(query: string): Promise<string> {
   }
 
   if (!response.ok) {
-    throw new Error(`SearXNG a répondu ${response.status} : ${await response.text()}`)
+    // 403 sur ?format=json précisément (jamais sur la recherche HTML normale) : SearXNG refuse ce format
+    // par défaut pour décourager le scraping à grande échelle des instances PUBLIQUES — searxng/settings.yml
+    // de ce dépôt l'active déjà (search.formats: [html, json], server.limiter: false), mais SearXNG ne relit
+    // ce fichier qu'au démarrage du conteneur : un conteneur déjà lancé avant/sans cette config (ou qui n'a
+    // simplement jamais redémarré depuis) continue de refuser le JSON tant qu'il n'est pas relancé.
+    const hint =
+      response.status === 403
+        ? " (le format JSON est-il bien activé côté SearXNG ? vérifie searxng/settings.yml (formats: json, " +
+          "limiter: false) puis redémarre le conteneur avec \"docker compose restart\" pour qu'il reprenne " +
+          'en compte ce fichier)'
+        : ''
+    throw new Error(`SearXNG a répondu ${response.status}${hint} : ${await response.text()}`)
   }
 
   const data = (await response.json()) as SearxngResponse
