@@ -272,6 +272,18 @@ export async function converse(
   const wantsEmailSent = /\b(envoi|envoie|envoyer|mail|email|courriel)/i.test(prompt)
   let computerUseCalled = false
   let nudgedForEmail = false
+  let toolCalledThisTurn = false
+  let nudgedForPromise = false
+
+  // Constaté en usage réel (Léo, "ouvre YouTube et cherche des tutos de guitare") : le modèle répond parfois
+  // "YouTube est ouvert, je vais faire la recherche, attends une minute" SANS avoir appelé le moindre outil
+  // dans ce tour — la promesse d'agir remplace l'action elle-même, et la conversation se termine là (plus
+  // rien ne se passe, Jaris repasse en veille). Contrairement à wantsEmailSent ci-dessus (spécifique au
+  // mail), ce filet est générique : il ne regarde pas l'intention de la phrase de l'utilisateur mais le
+  // langage de PROMESSE FUTURE dans la réponse elle-même ("je vais faire X", "un instant", "attends") sans
+  // aucun appel d'outil qui l'accompagne — le signe le plus fiable qu'une action annoncée n'a pas eu lieu.
+  const PROMISE_WITHOUT_ACTION =
+    /\b(je vais (?:le |la |les )?faire|je m'en occupe|je m'y mets|un instant\b|attends(?:[- ]moi)?\b|patiente\b|je le fais (?:tout de suite|maintenant)|laisse[- ]moi (?:faire|une seconde|un instant))/i
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const message = await chatWithOllama(messages, TOOLS, model, think, signal)
@@ -291,9 +303,25 @@ export async function converse(
         })
         continue
       }
+      if (!toolCalledThisTurn && !nudgedForPromise && PROMISE_WITHOUT_ACTION.test(message.content)) {
+        nudgedForPromise = true
+        onLog?.("Action annoncée sans appel d'outil : relance corrective d'un tour.")
+        messages.push(message)
+        messages.push({
+          role: 'user',
+          content:
+            "Tu viens d'annoncer une action (\"je vais faire...\", \"un instant\"...) sans appeler le moindre " +
+            "outil dans ce tour : une promesse ne remplace jamais l'action réelle. Si une action est encore " +
+            "à faire, appelle MAINTENANT l'outil correspondant (computer_use_task, open_app, etc.). Si en y " +
+            "réfléchissant aucune action n'est vraiment nécessaire, corrige ta réponse pour ne pas donner une " +
+            "fausse impression qu'un traitement est en cours."
+        })
+        continue
+      }
       return finalize(message.content)
     }
 
+    toolCalledThisTurn = true
     messages.push(message)
 
     // Un appel d'outil doit toujours se conclure sur le palier "médium" : c'est le seul dont la fiabilité
