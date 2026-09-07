@@ -21,7 +21,17 @@ import { describeBrowserScreenshot } from './vision'
  * Playwright gère déjà l'attente d'éléments, les sélecteurs par rôle/texte/label, et les captures d'écran
  * de façon robuste plutôt que de tout réinventer à la main.
  */
-const CDP_PORT = 9222
+/**
+ * 9222 est le port le plus utilisé au monde pour le debug distant Chrome (documentation officielle Chrome
+ * DevTools Protocol, exemples Puppeteer/Selenium, config Chrome de l'extension "Debugger for Chrome" de
+ * VS Code...) : sur une machine où tourne déjà AUTRE CHOSE dessus (constaté en usage réel, Léo — une machine
+ * avec de nombreux profils Chrome de test), connectOrLaunch s'y connecte tout de suite avec succès et
+ * `launchDebugChrome` (donc --user-data-dir, --profile-directory=Default...) n'est jamais même appelé —
+ * Jaris pilote alors ce Chrome-là, pas sa fenêtre dédiée, avec les vrais profils/comptes de la machine. Un
+ * port nettement moins commun réduit ce risque de collision sans l'éliminer complètement dans l'absolu, mais
+ * c'est la cause la plus probable ici.
+ */
+const CDP_PORT = 58222
 const CDP_HOST = '127.0.0.1'
 
 function dedicatedProfileDir(): string {
