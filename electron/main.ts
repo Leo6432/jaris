@@ -51,7 +51,8 @@ import {
  * l'évènement 'second-instance' CHEZ LA PREMIÈRE INSTANCE (voir plus bas showFullWindow) plutôt que
  * d'ouvrir sa propre fenêtre.
  */
-if (!app.requestSingleInstanceLock()) {
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
   app.quit()
 }
 
@@ -255,6 +256,14 @@ async function startVoicePipeline(): Promise<void> {
 }
 
 app.whenReady().then(async () => {
+  // `app.quit()` (voir tout en haut du fichier) n'interrompt pas forcément la suite du script de façon
+  // synchrone : `ready` peut malgré tout finir par se déclencher pour l'instance perdante avant que la
+  // sortie demandée ne soit vraiment effective (constaté en usage réel : plusieurs fenêtres Jaris qui
+  // s'ouvrent puis se referment aussitôt en rafale au lancement). Sans ce garde-fou, une instance qui a
+  // déjà perdu la course au verrou continuerait quand même à créer sa fenêtre, démarrer Ollama, etc. avant
+  // de se fermer — exactement le flash visible à corriger ici.
+  if (!gotSingleInstanceLock) return
+
   // Autorise silencieusement l'accès micro pour les fenêtres de Jaris (enumerateDevices() ne révèle les
   // vrais noms de périphériques audio qu'après une permission media accordée, voir Options → Voix) : sans
   // ce handler, Chromium afficherait une popup de permission native, déroutante dans une appli de bureau
