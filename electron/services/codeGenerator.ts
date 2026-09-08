@@ -215,51 +215,29 @@ function describeDownloadFailure(err: unknown): Error | null {
 }
 
 /**
- * Choisit le modèle de code à utiliser :
- * 1. Le choix explicite de Options → Modèles (étape 46, `profile.codeModel`), parmi tous les candidats du
- *    tableau de comparaison (CODE_CANDIDATES, hardwareScan.ts).
- * 2. À défaut ('auto'/non défini) : le meilleur candidat qui tient réellement dans la VRAM+RAM de cette
- *    machine (pickBestCodeModel, hardwareScan.ts) — EXACTEMENT la même logique que pour les paliers
- *    flash/médium/puissant/vision, à la demande explicite de Léo ("pourquoi on choisit pas le meilleur
- *    modèle qu'on peut sur les paliers et télécharger comme vision"). Avant l'étape 46, "auto" voulait dire
- *    un repli fixe sur seulement 2 modèles (qualité si déjà installée, sinon toujours le plus léger),
- *    ignorant complètement la taille réelle de la machine — un choix arbitraire et déconnecté du reste du
- *    catalogue, jamais justifié autrement qu'historiquement (voir l'ancien commit d'introduction du mode
- *    Code). Téléchargé automatiquement au besoin, comme n'importe quel autre palier.
+ * Choisit le modèle de code à utiliser : le meilleur candidat qui tient réellement dans la VRAM+RAM de cette
+ * machine, EXACTEMENT comme les paliers flash/médium/puissant/vision — pas de choix manuel dans Options, à
+ * la demande explicite de Léo ("pourquoi mettre un menu déroulant, et pas directement mettre les meilleurs
+ * modèles par palier comme vision"). `profile.codeModel` est le pick déjà calculé et enregistré par
+ * runQuickSetup/runModelAnalysis (benchmarkRunner.ts) — lu directement ici sans le recalculer, exactement
+ * comme `profile.visionModel` (voir assistant.ts). `pickBestCodeModel()` ne sert plus que de repli pour un
+ * profil créé avant l'étape 46 (jamais passé par un scan qui l'aurait renseigné).
  */
-async function resolveCodeModel(onStatus: (message: string) => void, preferredModel?: string): Promise<string> {
+async function resolveCodeModel(onStatus: (message: string) => void, savedCodeModel?: string): Promise<string> {
   const installed = await listInstalledModels().catch(() => [] as string[])
+  const model = savedCodeModel ?? (await pickBestCodeModel())
 
-  if (preferredModel && preferredModel !== 'auto') {
-    if (installed.includes(preferredModel)) {
-      onStatus(`Modèle choisi dans Options → Modèles : ${preferredModel}.`)
-      return preferredModel
-    }
-    onStatus(`Téléchargement du modèle de code choisi dans Options (${preferredModel})…`)
-    try {
-      await pullModelIfMissing(preferredModel, onStatus)
-      return preferredModel
-    } catch (err) {
-      const readable = describeDownloadFailure(err)
-      if (!readable) throw err
-      onStatus(`${readable.message} Repli sur le choix automatique.`)
-      // Continue plus bas sur la logique automatique plutôt que de faire échouer toute la génération pour
-      // un choix devenu irréalisable (ex: changement de machine depuis le dernier réglage).
-    }
+  if (installed.includes(model)) {
+    onStatus(`Modèle de code choisi automatiquement pour cette machine : ${model}.`)
+    return model
   }
 
-  const best = await pickBestCodeModel()
-  if (installed.includes(best)) {
-    onStatus(`Modèle choisi automatiquement pour cette machine : ${best}.`)
-    return best
-  }
-
-  onStatus(`Téléchargement du modèle de code choisi automatiquement pour cette machine (${best})…`)
+  onStatus(`Téléchargement du modèle de code choisi automatiquement pour cette machine (${model})…`)
   try {
-    await pullModelIfMissing(best, onStatus)
-    return best
+    await pullModelIfMissing(model, onStatus)
+    return model
   } catch (err) {
-    // `best` vient déjà du candidat le plus léger qui existe (CODE_CANDIDATES) si rien d'autre ne tient :
+    // `model` vient déjà du candidat le plus léger qui existe (CODE_CANDIDATES) si rien d'autre ne tient :
     // s'il échoue quand même, aucun modèle de code ne peut tourner sur cette machine.
     const readable = describeDownloadFailure(err)
     throw readable

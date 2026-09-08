@@ -9,7 +9,7 @@ import {
   updateOllama
 } from './services/dependencyServices'
 import { getModelsLocationStatus, moveModelsLocation } from './services/modelsLocation'
-import { getAllCandidateModelIds, getCodeCandidateModelIds, getModelOverview, previewHardwareTiers } from './services/hardwareScan'
+import { getAllCandidateModelIds, getModelOverview, previewHardwareTiers } from './services/hardwareScan'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { runModelAnalysis, runQuickSetup } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
@@ -320,7 +320,6 @@ app.whenReady().then(async () => {
   ipcMain.on(IPC_CHANNELS.testMicrophone, () => pipeline?.testMic())
   ipcMain.on(IPC_CHANNELS.stopTestMicrophone, () => pipeline?.stopTestMic())
   ipcMain.handle(IPC_CHANNELS.getModelOverview, () => getModelOverview())
-  ipcMain.handle(IPC_CHANNELS.getCodeCandidateModelIds, () => getCodeCandidateModelIds())
   ipcMain.handle(IPC_CHANNELS.getOllamaVersionStatus, () => getOllamaVersionStatus())
   ipcMain.handle(IPC_CHANNELS.updateOllama, () => updateOllama())
   ipcMain.handle(IPC_CHANNELS.getAppVersionStatus, () => getAppVersionStatus())

@@ -117,6 +117,11 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   comportement plus cohérent avec le reste du système était possible depuis longtemps sans jamais avoir été
   branché — vérifier si une valeur déjà calculée est réellement utilisée avant de supposer qu'un
   comportement différent est intentionnel.
+- **Une automatisation qui reproduit un mécanisme existant doit aussi reproduire son INTERFACE, pas
+  seulement sa logique interne** : la sélection automatique du modèle Code (ci-dessus) gardait d'abord un
+  menu déroulant manuel dans Options par prudence, alors qu'aucun autre palier (flash/médium/puissant/vision)
+  n'en a — repéré par l'utilisateur, corrigé en lisant directement la valeur déjà calculée et enregistrée
+  dans le profil (comme `visionModel`), sans recalcul en direct ni choix manuel.
 
 ## Commandes utiles
 

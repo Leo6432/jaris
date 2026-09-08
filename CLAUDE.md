@@ -127,6 +127,15 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   reste de Jaris, à la demande explicite de Léo. Le calcul existait déjà (`computeModelPicks` calculait un
   pick "code" depuis le début) mais son résultat était juste jeté sans être utilisé — vérifier si une valeur
   déjà calculée est réellement exploitée en aval avant de supposer qu'un comportement différent est voulu.
+- **Une automatisation "propre" mais laissée à côté d'un menu déroulant manuel n'est qu'à moitié faite** : la
+  première version de la sélection automatique du modèle Code (ci-dessus) gardait un réglage manuel dans
+  Options par prudence, alors qu'aucun autre palier (flash/médium/puissant/vision) n'en a — Léo l'a repéré
+  immédiatement ("pourquoi mettre un menu déroulant, et pas directement mettre les meilleurs modèles... comme
+  vision"). Corrigé en retirant le menu déroulant et en lisant directement `profile.codeModel` (calculé et
+  enregistré par `runQuickSetup`/l'analyse comparative), exactement comme `profile.visionModel` est déjà lu
+  dans `assistant.ts` — jamais recalculé "en direct" à chaque génération. Une fois qu'un calcul reproduit
+  fidèlement le comportement d'un mécanisme existant, aligner aussi l'INTERFACE sur ce mécanisme, pas
+  seulement la logique interne.
 
 ## Commandes utiles
 

@@ -46,9 +46,10 @@ export interface Profile {
   /** deviceId MediaDevices (WebRTC) du haut-parleur choisi dans Options → Voix, vide = sortie par défaut du système. */
   audioOutputDeviceId?: string
   /**
-   * Modèle du mode Code (étape 46) choisi dans Options → Modèles, parmi les candidats du tableau de
-   * comparaison (getCodeCandidateModelIds, hardwareScan.ts). `undefined`/`'auto'` = comportement historique
-   * de resolveCodeModel (codeGenerator.ts) : modèle qualité si déjà installé, sinon modèle rapide.
+   * Meilleur modèle du mode Code pour cette machine (pickBestCodeModel, hardwareScan.ts), calculé et
+   * enregistré par runQuickSetup/runModelAnalysis (benchmarkRunner.ts) exactement comme `visionModel`
+   * ci-dessus — pas de choix manuel dans Options, resolveCodeModel (codeGenerator.ts) lit cette valeur
+   * directement. `undefined` seulement pour un profil créé avant l'étape 46.
    */
   codeModel?: string
 }
@@ -326,9 +327,6 @@ export const IPC_CHANNELS = {
   openConversationHistoryFile: 'jaris:open-conversation-history-file',
   /** renderer <-> main : liste tous les modèles candidats (tous paliers + vision) avec leurs métriques, pour l'onglet Modèles. */
   getModelOverview: 'jaris:get-model-overview',
-  /** renderer <-> main : identifiants des modèles candidats du palier Code (étape 46, hardwareScan.ts), pour
-   * le réglage "Modèle du mode Code" dans Options → Micro & Modèles. */
-  getCodeCandidateModelIds: 'jaris:get-code-candidate-model-ids',
   getOllamaVersionStatus: 'jaris:get-ollama-version-status',
   updateOllama: 'jaris:update-ollama',
   /** renderer -> main : lance le benchmark complet (scripts/benchmark-models.mjs) puis choisit et active le

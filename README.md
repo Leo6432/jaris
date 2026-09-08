@@ -276,9 +276,9 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   journal, test de démarrage de l'appli packagée ajouté à la CI
 - ✅ Étape 46 — Modèle de code choisi et téléchargé automatiquement selon
   la VRAM+RAM de la machine (Options → Modèles), exactement comme les
-  autres paliers/vision — plus les deux choix fixes historiques,
-  catalogue élargi avec qwen2.5-coder:14b, réglage manuel toujours
-  possible pour qui veut imposer un modèle précis
+  autres paliers/vision — plus les deux choix fixes historiques ni le
+  menu déroulant manuel qui les accompagnait, catalogue élargi avec
+  qwen2.5-coder:14b
 - ✅ Étape 48 — Réponses du Chat affichées au fil de leur génération
   (streaming), nouvel outil read_web_page pour lire le contenu complet
   d'une page trouvée par search_web quand l'extrait ne suffit pas
@@ -1150,31 +1150,25 @@ zéro. Ce qui le distingue d'un simple appel LLM brut (`codeGenerator.ts`) :
 - **Contexte ciblé** : pour une modification, seul le fichier courant et la
   nouvelle demande sont envoyés au modèle, jamais tout l'historique de la
   discussion.
-- **Deux modèles dédiés, pas un palier de conversation** : une première
+- **Des modèles dédiés, pas un palier de conversation** : une première
   version s'appuyait sur le palier "puissant" du profil (un modèle
   généraliste, pas spécialisé code) — la qualité produite restait trop en
   dessous de ce qu'on peut attendre d'un vrai générateur, malgré les
-  correctifs ci-dessus (tentative visible dans l'historique Git). `Jaris`
-  utilise maintenant deux modèles réellement entraînés pour le code
-  (`resolveCodeModel` dans `codeGenerator.ts`, candidats listés dans
-  `CODE_CANDIDATES` de `hardwareScan.ts`) : `qwen2.5-coder:7b` par défaut
-  (rapide, tient sur 8 Go de VRAM, téléchargé automatiquement au premier
-  lancement du mode Code s'il manque), et `qwen3.6:35b-a3b` s'il est déjà
-  installé — nettement plus capable en code, mais 35 Md de paramètres au
-  total qui débordent largement de la VRAM et tournent surtout via la RAM
-  système (plus lent, demande une machine avec beaucoup de RAM). Contrairement
-  au modèle rapide, il n'est jamais téléchargé automatiquement **pendant**
-  une génération (trop volumineux pour une attente en plein milieu d'une
-  tâche) — mais `scripts/benchmark-models.mjs` (bouton "Lancer l'analyse" de
-  l'onglet Modèles) l'installera au prochain lancement si la machine peut
-  raisonnablement le faire tourner : ce modèle fait partie de
-  `RAM_OFFLOAD_MODELS`, jugé sur **VRAM + RAM combinées** (moins une marge de
-  8 Go réservée à l'OS) plutôt que sur la VRAM seule comme les autres
-  candidats — sur une machine avec peu de VRAM mais beaucoup de RAM (le cas de
-  Léo), il passe le filtre ; sur une machine qui n'a ni l'une ni l'autre, il
-  reste bloqué comme n'importe quel modèle trop gros. Le modèle réellement
-  utilisé si le mode Code démarrait maintenant est affiché dans l'onglet
-  Modèles, à côté des autres paliers.
+  correctifs ci-dessus (tentative visible dans l'historique Git). `Jaris` a
+  ensuite utilisé un temps deux modèles fixes (rapide par défaut, qualité
+  seulement si déjà installé) avant que Léo ne fasse remarquer que ce choix
+  ignorait complètement la taille de la machine, contrairement aux paliers
+  flash/médium/puissant/vision. Depuis l'étape 46, le mode Code choisit et
+  télécharge automatiquement le meilleur modèle de `CODE_CANDIDATES`
+  (`hardwareScan.ts`) qui tient réellement dans la VRAM+RAM détectée —
+  exactement le même calcul que les autres paliers (`pickBestCodeModel`),
+  calculé une fois par `runQuickSetup`/l'analyse comparative et enregistré
+  dans le profil (`profile.codeModel`), sans aucun choix manuel dans Options.
+  Certains gros candidats (ex: `qwen3.6:35b-a3b`) font partie de
+  `LARGE_RAM_OFFLOAD_MODELS`, jugés sur **VRAM + RAM combinées** plutôt que
+  la VRAM seule — sur une machine avec peu de VRAM mais beaucoup de RAM (le
+  cas de Léo), ils passent le filtre. Le modèle réellement retenu est affiché
+  dans l'onglet Modèles, à côté des autres paliers.
 - **Testé sur la génération de code, pas l'appel d'outils.** `generateApp`
   n'appelle jamais Ollama avec des outils (`tools` toujours `undefined`,
   contrairement à la conversation) — les candidats du palier Code étaient
