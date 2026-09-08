@@ -96,14 +96,14 @@ async function warnIfOllamaOutdated(log: LogFn): Promise<void> {
           const stillOld = !recheckData?.version || isVersionOlder(recheckData.version, MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH)
           log(
             stillOld
-              ? "Redémarrage silencieux tenté, mais Ollama reste sur l'ancienne version — mets-le à jour manuellement dans Options → Micro & Modèles pour faire disparaître ces fenêtres."
+              ? "Redémarrage silencieux tenté, mais Ollama reste sur l'ancienne version — mets-le à jour manuellement dans Options → Modèles pour faire disparaître ces fenêtres."
               : `Ollama mis à jour silencieusement (${recheckData?.version}).`
           )
         } catch {
-          log('Mets à jour Ollama manuellement dans Options → Micro & Modèles pour faire disparaître ces fenêtres.')
+          log('Mets à jour Ollama manuellement dans Options → Modèles pour faire disparaître ces fenêtres.')
         }
       } else {
-        log('Mets à jour Ollama manuellement dans Options → Micro & Modèles pour faire disparaître ces fenêtres.')
+        log('Mets à jour Ollama manuellement dans Options → Modèles pour faire disparaître ces fenêtres.')
       }
     }
   } catch {
