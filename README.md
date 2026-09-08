@@ -6,6 +6,61 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 
 ## État actuel
 
+- ⬜ Étape 45 — Installations plus prévisibles : figer les versions des
+  dépendances Python (actuellement peu ou pas figées) et l'image Docker de
+  SearXNG (actuellement `latest`) pour que deux installations de la même
+  version de Jaris récupèrent exactement les mêmes composants. Le
+  "démarrage rapide" (`runQuickSetup`) doit aussi vérifier que les modèles
+  sélectionnés sont vraiment disponibles avant de marquer la configuration
+  comme terminée (au lieu d'ignorer silencieusement un téléchargement
+  échoué faute de place/mémoire). Ajouter un test dans la CI qui lance
+  vraiment l'appli packagée une fois construite, pour attraper un
+  plantage au démarrage avant publication plutôt qu'en usage réel
+- ⬜ Étape 46 — Choix du modèle de code configurable : le mode Code
+  (`codeGenerator.ts`) choisit aujourd'hui entre deux modèles fixes
+  (qwen3.6:35b-a3b si déjà installé, sinon qwen2.5-coder:7b), sans lien
+  avec les autres modèles comparés dans le tableau d'Options → Modèles.
+  Ajouter un vrai réglage (menu déroulant dans Options, choix automatique
+  ou manuel) réellement respecté par le générateur, et élargir le
+  catalogue de candidats (qwen2.5-coder:14b comme palier intermédiaire,
+  qwen3-coder:30b rendu sélectionnable comme palier puissant)
+- ⬜ Étape 47 — Mémoire unifiée entre Voix et Chat : les deux modes
+  enregistrent dans le même fichier (`conversation-history.json`) mais
+  gardent chacun leur historique en mémoire chargé séparément au premier
+  usage — passer de l'un à l'autre en pleine conversation ne garantit donc
+  pas de retrouver immédiatement le tout dernier échange. Fusionner en une
+  session commune, et gérer les corrections explicites ("mon adresse a
+  changé" doit remplacer l'adresse active dans la mémoire longue durée,
+  pas juste s'ajouter à côté)
+- ⬜ Étape 48 — Réponses affichées au fil de l'eau + recherche web plus
+  poussée : les réponses d'Ollama arrivent aujourd'hui d'un bloc
+  (`stream: false` partout) — les afficher progressivement dans le Chat
+  (étape 30) au fur et à mesure de leur génération, avant d'envisager une
+  synthèse vocale par phrases côté voix (plus délicat, à ne pas faire dans
+  la même passe). Côté recherche web (étape 7), `search_web` ne renvoie
+  que 5 extraits de résultats SearXNG sans jamais ouvrir les pages : lire
+  le contenu complet d'une page trouvée quand l'extrait ne suffit pas
+  (adresse, détail précis absent du résumé)
+- ⬜ Étape 49 — Benchmarks qui valident un vrai résultat, pas juste la
+  structure : le benchmark conversation (`scripts/benchmark-models.mjs`)
+  vérifie surtout le nom de l'outil appelé sans valider ses arguments, et
+  le benchmark Code contrôle la structure HTML sans jamais cliquer dans
+  l'appli générée — un modèle peut donc obtenir un bon score avec un
+  rappel au mauvais délai ou des boutons qui ne répondent pas. Construire
+  une petite batterie de scénarios d'usage réel (recherche puis action,
+  correction d'une demande, ajout/suppression de tâches, sauvegarde après
+  rechargement), mesurer réussite/erreurs/durée, et transmettre les
+  erreurs d'exécution du mode Code au modèle pour qu'il se corrige.
+  Corriger au passage le rangement des résultats de benchmark
+  (`hardwareScan.ts`) : indexés seulement par nom de modèle, un résultat
+  Vision peut aujourd'hui écraser un résultat Conversation du même modèle
+
+  Étapes 45 à 49 identifiées via une relecture de code par Codex/ChatGPT
+  (2026-09-07), vérifiées une par une sur le vrai code avant d'être
+  ajoutées ici — voir aussi les 3 bugs réels trouvés par cette même
+  relecture, déjà corrigés (facteur d'échelle des clics de
+  `computer_use_task`, négation ignorée dans la détection d'intention de
+  mail, annulation qui n'atteignait pas la boucle de clics).
 - ⬜ Étape 21 — Intégration téléphone : système pour connecter Jaris au
   téléphone de l'utilisateur (via son numéro ou une connexion directe au
   téléphone) afin d'envoyer des messages, voir les notifications, et plus
