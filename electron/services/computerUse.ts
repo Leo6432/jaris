@@ -6,6 +6,18 @@ import { clickMouse, pressKey, typeText } from './inputControl'
 import { captureScreenshotBase64 } from './vision'
 
 /**
+ * Convertit une coordonnée renvoyée par le modèle de vision (repérée sur l'image réduite à
+ * MAX_SCREENSHOT_WIDTH, voir vision.ts) en coordonnée réelle à l'écran, en appliquant le facteur `scale` de
+ * la capture correspondante — sans cette conversion, un clic pourtant bien repéré par le modèle sur l'image
+ * atterrissait ailleurs sur le vrai écran dès que celui-ci dépasse MAX_SCREENSHOT_WIDTH de large (repéré par
+ * une relecture externe du code, jamais testé en usage réel avant, la plupart des essais de Léo n'étant
+ * jamais allés jusqu'à un vrai clic).
+ */
+function toScreenCoord(value: number | undefined, scale: number): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.round(value * scale) : null
+}
+
+/**
  * Agent "computer use" (étape 34, remplace l'ancien pilotage Chrome dédié par CDP/Playwright et l'envoi de
  * mail par API Gmail) : Jaris n'a plus de fenêtre séparée ni de compte à connecter — il regarde une vraie
  * capture d'écran, décide de la prochaine action de souris/clavier comme le ferait une personne, l'exécute,
@@ -77,16 +89,27 @@ function extractStep(raw: string): ComputerUseStep | null {
   }
 }
 
-async function nextStep(goal: string, history: string[], imageBase64: string, visionModel: string): Promise<ComputerUseStep> {
+async function nextStep(
+  goal: string,
+  history: string[],
+  imageBase64: string,
+  visionModel: string,
+  signal?: AbortSignal
+): Promise<ComputerUseStep> {
   const model = await resolveVisionModel(visionModel)
   const historyText = history.length ? `Actions déjà faites :\n${history.join('\n')}` : 'Aucune action encore faite.'
 
+  // Combine le timeout par étape avec le signal d'annulation externe (voir computerUseTask) : sans ça, une
+  // annulation demandée pendant que cette requête est en vol (nouvelle phrase à la voix qui coupe la
+  // réflexion en cours, voir voicePipeline.ts) n'atteignait jamais la boucle de clics — seul l'appel Ollama
+  // de la conversation "normale" pouvait être annulé jusqu'ici, jamais computer_use_task une fois lancé.
+  const timeoutSignal = AbortSignal.timeout(STEP_TIMEOUT_MS)
   let response: Response
   try {
     response = await fetch(`${config.ollama.host}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(STEP_TIMEOUT_MS),
+      signal: signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal,
       body: JSON.stringify({
         model,
         messages: [
@@ -123,12 +146,19 @@ async function nextStep(goal: string, history: string[], imageBase64: string, vi
 export async function computerUseTask(
   goal: string,
   visionModel: string,
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  signal?: AbortSignal
 ): Promise<string> {
   if (!goal.trim()) return "Dis-moi ce qu'il faut faire à l'écran."
 
   const history: string[] = []
   for (let i = 0; i < MAX_STEPS; i++) {
+    // Vérifié à chaque itération (nouvelle phrase à la voix qui annule la réflexion en cours, voir
+    // voicePipeline.ts) : sans ça, une fois lancée, cette boucle de clics ne pouvait plus jamais être
+    // interrompue avant MAX_STEPS ou la fin naturelle de l'objectif, contrairement au reste de la
+    // conversation.
+    if (signal?.aborted) return "Tâche interrompue avant d'être terminée."
+
     // Chaque itération (capture + appel au modèle de vision) peut prendre jusqu'à 45s (STEP_TIMEOUT_MS) sur
     // une machine chargée ou sans GPU — sans un signe de vie régulier, ça ressemble à un plantage silencieux
     // plutôt qu'à une réflexion lente (constaté en usage réel : Léo pensait Jaris bloqué après plusieurs
@@ -137,8 +167,9 @@ export async function computerUseTask(
     onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : je regarde l'écran…`)
 
     let image: string
+    let scale: number
     try {
-      image = await captureScreenshotBase64()
+      ;({ imageBase64: image, scale } = await captureScreenshotBase64())
     } catch (err) {
       return `Impossible de capturer l'écran : ${err instanceof Error ? err.message : String(err)}`
     }
@@ -146,7 +177,7 @@ export async function computerUseTask(
     showScanOverlay()
     let step: ComputerUseStep
     try {
-      step = await nextStep(goal, history, image, visionModel)
+      step = await nextStep(goal, history, image, visionModel, signal)
     } finally {
       hideScanOverlay()
     }
@@ -159,9 +190,11 @@ export async function computerUseTask(
       case 'double_click':
       case 'right_click': {
         const button = step.action === 'double_click' ? 'double' : step.action === 'right_click' ? 'right' : 'left'
-        await clickMouse(step.x ?? null, step.y ?? null, button)
-        history.push(`${i + 1}. Clic ${button} à (${step.x}, ${step.y})`)
-        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : clic ${button} à (${step.x}, ${step.y}).`)
+        const x = toScreenCoord(step.x, scale)
+        const y = toScreenCoord(step.y, scale)
+        await clickMouse(x, y, button)
+        history.push(`${i + 1}. Clic ${button} à (${x}, ${y})`)
+        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : clic ${button} à (${x}, ${y}).`)
         break
       }
       case 'type':

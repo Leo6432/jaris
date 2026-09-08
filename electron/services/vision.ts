@@ -18,9 +18,21 @@ const VISION_SYSTEM_PROMPT =
 // modeste suffit largement à lire du texte ou décrire une fenêtre.
 const MAX_SCREENSHOT_WIDTH = 1280
 
+export interface ScreenCapture {
+  imageBase64: string
+  /**
+   * Facteur pour convertir une coordonnée pixel de `imageBase64` (réduite à MAX_SCREENSHOT_WIDTH, voir
+   * plus haut) en coordonnée réelle à l'écran : `realX = capturedX * scale` — computerUse.ts (étape 34) doit
+   * impérativement appliquer ce facteur avant de cliquer, sinon un clic repéré correctement par le modèle de
+   * vision sur l'image atterrit ailleurs sur le vrai écran dès que celui-ci dépasse MAX_SCREENSHOT_WIDTH de
+   * large (quasiment tous les écrans modernes). `1` quand l'écran est déjà plus étroit que ce seuil.
+   */
+  scale: number
+}
+
 /** Capture plein écran en base64 (PNG) — réutilisée par computerUse.ts (étape 34) pour chaque itération de
     sa boucle de contrôle. */
-export async function captureScreenshotBase64(): Promise<string> {
+export async function captureScreenshotBase64(): Promise<ScreenCapture> {
   const { size } = screen.getPrimaryDisplay()
   const width = Math.min(size.width, MAX_SCREENSHOT_WIDTH)
   const height = Math.round((size.height / size.width) * width)
@@ -32,7 +44,7 @@ export async function captureScreenshotBase64(): Promise<string> {
 
   const source = sources[0]
   if (!source) throw new Error("Impossible de capturer l'écran (aucune source disponible).")
-  return source.thumbnail.toPNG().toString('base64')
+  return { imageBase64: source.thumbnail.toPNG().toString('base64'), scale: size.width / width }
 }
 
 /**
@@ -90,10 +102,10 @@ async function describeImage(imageBase64: string, question: string, visionModel:
  * `finally` pour ne jamais rester affichée en cas d'erreur.
  */
 export async function lookAtScreen(question: string, visionModel: string): Promise<string> {
-  const image = await captureScreenshotBase64()
+  const { imageBase64 } = await captureScreenshotBase64()
   showScanOverlay()
   try {
-    return await describeImage(image, question || "Décris ce qui est affiché à l'écran.", visionModel)
+    return await describeImage(imageBase64, question || "Décris ce qui est affiché à l'écran.", visionModel)
   } finally {
     hideScanOverlay()
   }

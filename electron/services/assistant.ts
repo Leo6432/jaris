@@ -34,6 +34,24 @@ const TOOL_SIGNAL_WORDS = [
 ]
 const COMPLEX_SIGNAL_WORDS = ['pourquoi', 'explique', 'explique-moi', 'compare', 'analyse', 'différence', 'avantages', 'inconvénients', 'résume', 'détaille']
 
+const MAIL_KEYWORDS = /\b(envoi|envoie|envoyer|mail|email|courriel)\b/i
+const NEGATION_WORDS = /\b(ne|n['e]|pas|jamais|surtout pas|évite|éviter|aucun|sans)\b/i
+
+/**
+ * true si la phrase mentionne un envoi de mail SANS négation à proximité immédiate ("envoie un mail" oui,
+ * "n'envoie pas de mail"/"jamais de mail" non) — sert uniquement à décider s'il faut relancer le modèle vers
+ * computer_use_task (voir wantsEmailSent plus bas), jamais une vraie analyse grammaticale : une simple
+ * fenêtre de texte autour du mot déclencheur suffit, la négation française se plaçant aussi bien avant
+ * ("n'envoie") qu'après ("envoie... pas") le verbe.
+ */
+function hasUnnegatedMailIntent(prompt: string): boolean {
+  const match = MAIL_KEYWORDS.exec(prompt)
+  if (!match) return false
+  const windowStart = Math.max(0, match.index - 20)
+  const windowEnd = Math.min(prompt.length, match.index + match[0].length + 20)
+  return !NEGATION_WORDS.test(prompt.slice(windowStart, windowEnd))
+}
+
 /** Choisit le palier de complexité le plus adapté à la question, sans appel LLM supplémentaire (juste des mots-clés). */
 function pickTier(prompt: string): Tier {
   const lower = prompt.toLowerCase()
@@ -205,7 +223,7 @@ export async function converse(
 ): Promise<string> {
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
-  const executeTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel, onLog)
+  const executeTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel, onLog, signal)
 
   const models = profile?.models ?? { flash: config.ollama.model, medium: config.ollama.model, large: config.ollama.model }
   let tier = pickTier(prompt)
@@ -269,7 +287,7 @@ export async function converse(
   // mail"), et répond à la place par un simple résumé texte de ce qu'il a trouvé. Détecté sur l'intention
   // de LA PHRASE ACTUELLE (pas l'historique, pour ne jamais relancer sur une intention d'un tour précédent
   // déjà traitée) plutôt que sur TOOL_SIGNAL_WORDS (pensé pour choisir un palier, pas pour ça).
-  const wantsEmailSent = /\b(envoi|envoie|envoyer|mail|email|courriel)/i.test(prompt)
+  const wantsEmailSent = hasUnnegatedMailIntent(prompt)
   let computerUseCalled = false
   let nudgedForEmail = false
   let toolCalledThisTurn = false
