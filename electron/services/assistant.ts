@@ -365,12 +365,26 @@ export async function converse(
       // webSearch.ts) : mieux vaut le transmettre au modèle comme un résultat d'outil normal, pour qu'il le
       // relaie fidèlement (voir la consigne "ne jamais inventer de dépannage" plus bas) plutôt que le perdre.
       let result: string
+      let toolFailed = false
       try {
         result = await executeTool(call.function.name, call.function.arguments)
       } catch (err) {
         result = `Échec de l'outil : ${err instanceof Error ? err.message : String(err)}`
+        toolFailed = true
       }
       onLog?.(`Résultat de l'outil : ${result}`)
+
+      // Constaté en usage réel (Léo, recherche web en échec 403) : malgré la consigne système "ne jamais
+      // inventer de dépannage" (voir buildSystemPrompt), un petit modèle local ignore régulièrement cette
+      // règle et remplace le vrai message d'erreur par un dépannage générique halluciné (étapes nginx/
+      // .htaccess/journaux qui n'ont RIEN à voir avec Jaris) — pire qu'inutile, puisque FAUX et présenté avec
+      // assurance. Un message d'erreur est déjà écrit pour être actionnable tel quel (voir webSearch.ts/
+      // ollama.ts) : le renvoyer directement, sans repasser par le modèle, élimine le risque au lieu
+      // d'espérer qu'une consigne suffise à empêcher l'invention — même logique que le court-circuit
+      // look_at_screen ci-dessous, qui évite déjà un aller-retour LLM inutile.
+      if (toolFailed) {
+        return finalize(result)
+      }
 
       if (call.function.name === 'computer_use_task') computerUseCalled = true
 

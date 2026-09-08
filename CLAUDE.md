@@ -148,15 +148,32 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   résolution du montage Docker (`volumes:`) fait à la création du conteneur — si ce montage a un jour pointé
   vers autre chose que le vrai `searxng/settings.yml` (dossier auto-créé vide par Docker si le chemin
   n'existait pas encore à la toute première création du conteneur, par exemple), aucun `restart` ne le
-  corrige jamais, seule une VRAIE recréation du conteneur le peut. **Corrigé pour de bon (v0.3.7)** en testant
-  directement la vraie capacité dont Jaris a besoin (une requête `?format=json` réelle, voir
-  `searxngJsonSearchWorks` dans dependencyServices.ts) plutôt que de deviner la cause via des comparaisons de
-  fichiers : peu importe POURQUOI le conteneur refuse le JSON, ce test le détecte, et `docker compose up -d
-  --force-recreate` (jamais un simple `restart`) répare toutes les causes possibles d'un coup, pas seulement
-  celle initialement supposée. **Leçon générale : préférer toujours tester le comportement RÉEL observable
+  corrige jamais, seule une VRAIE recréation du conteneur le peut. **v0.3.7** a testé directement la vraie
+  capacité dont Jaris a besoin (une requête `?format=json` réelle, voir `searxngJsonSearchWorks` dans
+  dependencyServices.ts) plutôt que de deviner la cause via des comparaisons de fichiers, et recrée le
+  conteneur (`docker compose up -d --force-recreate`, jamais un simple `restart`) si ce test échoue.
+  **Léo a confirmé être sur cette version et avoir TOUJOURS le même 403 après ce correctif aussi** — la vraie
+  cause reste donc non identifiée avec certitude à ce stade (2 hypothèses fausses déjà écartées : process pas
+  redémarré, montage jamais recréé). Ne pas tenter un 3e correctif spéculatif sans données réelles : le
+  correctif suivant (voir plus bas, court-circuit de la réponse du modèle sur un échec d'outil) sert
+  justement à obtenir enfin le VRAI message d'erreur de SearXNG, verbatim, pour diagnostiquer avec des faits
+  plutôt qu'une hypothèse de plus. **Leçon générale : préférer toujours tester le comportement RÉEL observable
   (est-ce que ça marche ?) plutôt que d'inférer un état interne (un fichier a-t-il changé ?) quand la cause
   exacte d'un bug n'est pas confirmée avec certitude** — un correctif basé sur une hypothèse non vérifiée peut
-  sembler correct en relecture de code tout en ne réglant rien en usage réel.
+  sembler correct en relecture de code tout en ne réglant rien en usage réel, et l'a effectivement démontré
+  deux fois de suite ici.
+- **Une consigne système ("ne jamais inventer de dépannage", buildSystemPrompt) ne suffit pas à empêcher un
+  petit modèle local de le faire quand même** : face à un vrai message d'erreur SearXNG (403), le modèle de
+  conversation a remplacé le message réel par un dépannage générique halluciné et FAUX (étapes nginx/
+  .htaccess/journaux qui n'existent pas dans l'installation de Jaris) — constaté en usage réel malgré la
+  consigne explicite déjà en place. Corrigé en COURT-CIRCUITANT le modèle plutôt qu'en renforçant encore la
+  consigne (déjà démontrée insuffisante) : dès qu'un appel d'outil échoue (`Échec de l'outil :`, assistant.ts),
+  la réponse finale est le message d'erreur lui-même, jamais reformulé par un nouvel appel au modèle — même
+  logique que le court-circuit déjà existant pour `look_at_screen`. Les messages d'erreur (webSearch.ts etc.)
+  doivent donc être rédigés directement pour un lecteur humain non technique, plus jamais en supposant qu'un
+  modèle les reformulera avant affichage. **Leçon générale : quand une consigne "ne fais pas X" échoue en
+  usage réel face à un petit modèle, la bonne réponse est souvent de rendre X impossible dans le code plutôt
+  que de reformuler la consigne une fois de plus.**
 - **Une automatisation "propre" mais laissée à côté d'un menu déroulant manuel n'est qu'à moitié faite** : la
   première version de la sélection automatique du modèle Code (ci-dessus) gardait un réglage manuel dans
   Options par prudence, alors qu'aucun autre palier (flash/médium/puissant/vision) n'en a — Léo l'a repéré

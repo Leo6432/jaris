@@ -6,6 +6,16 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 
 ## État actuel
 
+- ⬜ Étape 51 — SearXNG (recherche web) renvoie encore un 403 sur le
+  format JSON chez Léo malgré 2 correctifs tentés (v0.3.6 : redémarrage
+  du conteneur si settings.yml a changé depuis un marqueur ; v0.3.7 :
+  test direct de la vraie requête JSON + recréation complète du
+  conteneur si elle échoue) — les deux confirmés inefficaces en usage
+  réel, la vraie cause n'est donc pas encore identifiée avec certitude.
+  L'étape 52 (voir plus bas) permet au moins d'obtenir maintenant le
+  VRAI message d'erreur de SearXNG tel quel (plus de dépannage inventé
+  par le modèle par-dessus) pour diagnostiquer sur des faits la
+  prochaine fois que Léo retombe dessus
 - ⬜ Étape 47 — Mémoire unifiée entre Voix et Chat : les deux modes
   enregistrent dans le même fichier (`conversation-history.json`) mais
   gardent chacun leur historique en mémoire chargé séparément au premier
@@ -288,15 +298,15 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   maintenant la ligne "ta configuration" avec la VRAM réelle détectée
   plutôt qu'un des 3 points fixes (6/12/24 Go) — deux machines de la même
   tranche pouvaient sinon afficher des modèles différents de ceux
-  vraiment enregistrés dans leur profil. SearXNG (recherche web) se
-  répare aussi tout seul quand il refuse le format JSON malgré une
-  configuration correcte sur le disque : un premier essai (v0.3.6,
-  comparer un hash de settings.yml pour décider d'un simple redémarrage)
-  n'a pas suffi — Léo avait toujours la même erreur ensuite. Corrigé en
-  testant directement la vraie recherche JSON (peu importe la cause du
-  refus) et en recréant vraiment le conteneur (`--force-recreate`, pas un
-  simple redémarrage) quand ce test échoue, sans jamais demander à Léo de
-  taper une commande
+  vraiment enregistrés dans leur profil
+- ✅ Étape 52 — Le modèle de conversation remplaçait parfois un vrai
+  message d'erreur d'outil par un dépannage générique inventé et FAUX
+  (constaté sur l'échec SearXNG ci-dessous : des étapes nginx/.htaccess
+  qui n'existent pas dans Jaris), malgré une consigne système explicite
+  le lui interdisant déjà. Corrigé en court-circuitant le modèle plutôt
+  qu'en renforçant encore la consigne : un échec d'outil devient
+  directement la réponse finale, jamais reformulé — même logique que le
+  court-circuit déjà existant pour look_at_screen
 
 ## Démarrer en développement
 

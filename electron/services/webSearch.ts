@@ -26,18 +26,33 @@ export async function searchWeb(query: string): Promise<string> {
   }
 
   if (!response.ok) {
-    // 403 sur ?format=json précisément (jamais sur la recherche HTML normale) : SearXNG refuse ce format
-    // par défaut pour décourager le scraping à grande échelle des instances PUBLIQUES — searxng/settings.yml
-    // de ce dépôt l'active déjà (search.formats: [html, json], server.limiter: false). ensureSearxngRunning
-    // (dependencyServices.ts) teste et répare déjà ça tout seul à chaque démarrage de Jaris (recrée le
-    // conteneur si le format JSON est refusé) : ce message ne devrait donc apparaître qu'entre deux
-    // démarrages de Jaris (config modifiée à la main pendant que Jaris tourne déjà), jamais durablement.
-    const hint =
+    // Ce message atteint maintenant Léo TEL QUEL (assistant.ts renvoie directement le résultat d'un outil en
+    // échec, sans repasser par le modèle de conversation qui a démontré en usage réel inventer un dépannage
+    // générique faux à sa place — voir CLAUDE.md) : le rédiger pour un humain non technique, jamais supposer
+    // qu'il sera reformulé.
+    //
+    // 403 sur ?format=json précisément (jamais sur la recherche HTML normale) : SearXNG refuse ce format par
+    // défaut pour décourager le scraping à grande échelle des instances PUBLIQUES — searxng/settings.yml de
+    // ce dépôt l'active déjà (search.formats: [html, json], server.limiter: false), et ensureSearxngRunning
+    // (dependencyServices.ts) teste/répare déjà ça à chaque démarrage de Jaris. Un 403 qui persiste malgré ça
+    // (vécu par Léo, 2 correctifs déjà tentés v0.3.6/v0.3.7) reste possible pour une cause pas encore
+    // identifiée avec certitude : ne plus promettre "c'est réparé tout seul", juste donner le fait brut.
+    const bodySnippet =
       response.status === 403
-        ? ' (vérifie searxng/settings.yml (formats: json, limiter: false) puis relance Jaris — la ' +
-          'configuration est revérifiée et le conteneur recréé automatiquement si besoin à chaque démarrage)'
-        : ''
-    throw new Error(`SearXNG a répondu ${response.status}${hint} : ${await response.text()}`)
+        ? (await response.text())
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 300)
+        : await response.text()
+    throw new Error(
+      response.status === 403
+        ? `La recherche web est bloquée par SearXNG (erreur 403, format JSON refusé). Contenu renvoyé par ` +
+          `SearXNG : "${bodySnippet}". Ce n'est pas censé arriver : Jaris essaie de corriger ça tout seul à ` +
+          `chaque démarrage. Si ça persiste après avoir complètement fermé puis relancé Jaris, transmets ce ` +
+          `message exact (avec le contenu entre guillemets) pour qu'on trouve la vraie cause.`
+        : `SearXNG a répondu ${response.status} : ${bodySnippet}`
+    )
   }
 
   const data = (await response.json()) as SearxngResponse

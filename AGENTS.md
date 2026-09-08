@@ -138,11 +138,25 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   **Corrigé pour de bon** en testant directement la vraie capacité dont l'app a besoin (une requête réelle
   reproduisant l'usage réel) plutôt que de deviner la cause via des comparaisons de fichiers : peu importe
   POURQUOI le service refuse, ce test le détecte, et une VRAIE recréation du conteneur (jamais un simple
-  redémarrage) répare toutes les causes possibles d'un coup. **Leçon générale : préférer toujours tester le
-  comportement RÉEL observable (est-ce que ça marche ?) plutôt que d'inférer un état interne (un fichier
-  a-t-il changé ?) quand la cause exacte d'un bug n'est pas confirmée avec certitude** — un correctif basé
-  sur une hypothèse non vérifiée peut sembler correct en relecture de code tout en ne réglant rien en usage
-  réel.
+  redémarrage) répare toutes les causes possibles d'un coup.
+  **Ce deuxième correctif s'est AUSSI révélé insuffisant en usage réel** (l'utilisateur a confirmé être sur
+  cette version et avoir toujours le même échec) : la vraie cause reste non identifiée avec certitude après 2
+  hypothèses fausses écartées. Ne pas tenter un 3e correctif spéculatif sans données réelles — voir le point
+  suivant, qui sert justement à obtenir enfin le VRAI message d'erreur pour diagnostiquer avec des faits.
+  **Leçon générale : préférer toujours tester le comportement RÉEL observable (est-ce que ça marche ?) plutôt
+  que d'inférer un état interne (un fichier a-t-il changé ?) quand la cause exacte d'un bug n'est pas
+  confirmée avec certitude** — un correctif basé sur une hypothèse non vérifiée peut sembler correct en
+  relecture de code tout en ne réglant rien en usage réel, et peut le démontrer plusieurs fois de suite.
+- **Une consigne système ("ne jamais inventer de dépannage") ne suffit pas à empêcher un petit modèle local
+  de le faire quand même** : face à un vrai message d'erreur technique, un modèle de conversation a remplacé
+  le message réel par un dépannage générique halluciné et FAUX (des étapes qui n'existent pas dans
+  l'installation réelle) — malgré une consigne explicite déjà en place le lui interdisant. Corrigé en
+  COURT-CIRCUITANT le modèle plutôt qu'en renforçant encore la consigne (déjà démontrée insuffisante) : dès
+  qu'un appel d'outil échoue, la réponse finale devient le message d'erreur lui-même, jamais reformulé par un
+  nouvel appel au modèle. Les messages d'erreur doivent donc être rédigés directement pour un lecteur humain,
+  plus jamais en supposant qu'un modèle les reformulera avant affichage. **Leçon générale : quand une
+  consigne "ne fais pas X" échoue en usage réel face à un petit modèle, la bonne réponse est souvent de
+  rendre X impossible dans le code plutôt que de reformuler la consigne une fois de plus.**
 - **Une automatisation qui reproduit un mécanisme existant doit aussi reproduire son INTERFACE, pas
   seulement sa logique interne** : la sélection automatique du modèle Code (ci-dessus) gardait d'abord un
   menu déroulant manuel dans Options par prudence, alors qu'aucun autre palier (flash/médium/puissant/vision)
