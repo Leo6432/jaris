@@ -7,12 +7,16 @@ interface HardwareTierPreviewProps {
   tiers: HardwareTierPreviewData[]
 }
 
-const SLOT_LABELS: { key: 'flash' | 'medium' | 'large' | 'vision' | 'code'; label: string }[] = [
+// 'code' volontairement absent (étape 46) : contrairement aux 4 lignes ci-dessous, le modèle de code réel
+// (resolveCodeModel, codeGenerator.ts) ne suit PAS cette logique de budget par palier — juste "qualité si
+// déjà installée, sinon rapide" par défaut, ou le choix explicite d'Options → Micro & Modèles. L'afficher
+// ici (calculé par une logique de budget totalement différente, jamais utilisée pour de vrai) donnait
+// l'impression trompeuse que Jaris choisirait ce modèle-là pour ce palier, ce qui n'est jamais le cas.
+const SLOT_LABELS: { key: 'flash' | 'medium' | 'large' | 'vision'; label: string }[] = [
   { key: 'flash', label: 'Rapide' },
   { key: 'medium', label: 'Médium' },
   { key: 'large', label: 'Puissant' },
-  { key: 'vision', label: 'Vision' },
-  { key: 'code', label: 'Code' }
+  { key: 'vision', label: 'Vision' }
 ]
 
 /** Même formatage que le tableau détaillé (OptionsMenu.tsx) : "(estimé)" distingue une vitesse calculée par
