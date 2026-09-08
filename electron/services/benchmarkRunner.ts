@@ -1,9 +1,8 @@
 import { spawn } from 'child_process'
 import { join } from 'path'
 import { config } from '../config'
-import { deleteModel, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError } from './ollama'
+import { deleteModel, pullModelIfMissing, ModelTooLargeError, DiskFullError } from './ollama'
 import { getAllCandidateModelIds, getCodeCandidateModelIds, parseLocalBenchmark, pickBestModelsFromBenchmark } from './hardwareScan'
-import { CODE_MODEL_FAST, CODE_MODEL_QUALITY } from './codeGenerator'
 import { getProfile, saveProfile } from './profileStore'
 import type { AnalysisScope, CapacityScanResult } from '../../shared/ipc'
 import { resourcesRoot } from '../paths'
@@ -26,14 +25,11 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
     `Carte détectée : ${picked.gpuName ?? 'inconnue'}${picked.vramGb !== null ? ` (${picked.vramGb} Go de VRAM)` : ''}.`
   )
 
-  const modelsToInstall = new Set([picked.models.flash, picked.models.medium, picked.models.large, picked.visionModel])
-  // Mode Code (codeGenerator.ts) : le modèle qualité (35 Md, plusieurs dizaines de Go) reste un choix
-  // conscient (`ollama pull` manuel, jamais forcé ici), mais le modèle rapide (~4,7 Go) doit être prêt
-  // d'avance comme les autres paliers plutôt que de surprendre l'utilisateur en pleine génération de code —
-  // sauf si le modèle qualité est déjà installé, auquel cas resolveCodeModel l'utilisera de toute façon et
-  // le rapide ne sert à rien.
-  const installed = await listInstalledModels().catch(() => [] as string[])
-  if (!installed.includes(CODE_MODEL_QUALITY)) modelsToInstall.add(CODE_MODEL_FAST)
+  // Mode Code (étape 46) : le meilleur candidat qui tient dans la VRAM+RAM de cette machine (picked.codeModel,
+  // même logique que flash/médium/puissant/vision) est maintenant installé d'avance ici aussi, plutôt que de
+  // surprendre l'utilisateur en pleine génération de code — comportement historique (2 modèles fixes, jamais
+  // liés à la taille de la machine) abandonné à la demande explicite de Léo.
+  const modelsToInstall = new Set([picked.models.flash, picked.models.medium, picked.models.large, picked.visionModel, picked.codeModel])
   // Un modèle ignoré (trop gros pour VRAM+RAM, ou pas assez de disque) ne doit jamais rendre la
   // configuration silencieusement "réussie" : sans ce suivi, capacityScanDone passait quand même à `true`
   // ci-dessous alors qu'un palier entier (ex: le modèle "puissant") n'était en réalité jamais installé —
@@ -59,6 +55,7 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
       ...profile,
       models: picked.models,
       visionModel: picked.visionModel,
+      codeModel: picked.codeModel,
       capacityScanDone: true,
       knownModelCandidates: getAllCandidateModelIds()
     })
@@ -212,6 +209,7 @@ export async function runModelAnalysis(onLine: (line: string) => void, scope: An
       ...profile,
       models: picked.models,
       visionModel: picked.visionModel,
+      codeModel: picked.codeModel,
       capacityScanDone: true,
       // Resynchronise la veille de l'étape 29 au passage : ce run vient de tester tout ce que Jaris connaît.
       knownModelCandidates: getAllCandidateModelIds()

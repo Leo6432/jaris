@@ -108,6 +108,16 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   callback optionnel qui, quand fourni, bascule l'appel en streaming — absent, le comportement reste
   identique à avant pour les autres canaux.
 
+- **Vérifier qu'un type partagé n'est pas dupliqué localement dans un autre fichier avant de l'étendre** :
+  un fichier avait sa PROPRE copie locale d'un type censé être partagé, jamais synchronisée avec le vrai —
+  ajouter un champ au type partagé n'avait aucun effet tant que cette copie locale existait. Chercher toutes
+  les déclarations du même nom de type dans le dépôt avant d'en étendre un.
+- **Un calcul déjà fait mais jamais réellement exploité en aval** (ici : un "meilleur modèle de code selon
+  la machine" calculé depuis le début mais toujours jeté avant d'être utilisé) est un signe qu'un
+  comportement plus cohérent avec le reste du système était possible depuis longtemps sans jamais avoir été
+  branché — vérifier si une valeur déjà calculée est réellement utilisée avant de supposer qu'un
+  comportement différent est intentionnel.
+
 ## Commandes utiles
 
 ```

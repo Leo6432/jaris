@@ -145,6 +145,13 @@ export interface CapacityScanResult {
   models: ModelTiers
   visionModel: string
   /**
+   * Meilleur modèle de code (CODE_CANDIDATES, hardwareScan.ts) qui tient réellement dans la VRAM+RAM de
+   * cette machine — même logique que flash/medium/large/vision ci-dessus, exactement à la demande de Léo
+   * ("pourquoi on choisit pas le meilleur modèle qu'on peut sur les paliers et télécharger comme vision") :
+   * avant l'étape 46, le mode Code ignorait totalement la taille de la machine (2 choix fixes seulement).
+   */
+  codeModel: string
+  /**
    * Modèles qu'il aurait fallu télécharger pour cette configuration mais qui ont été ignorés (trop gros pour
    * la VRAM+RAM combinées, ou pas assez d'espace disque) — voir runQuickSetup, benchmarkRunner.ts. Absent ou
    * vide si tout s'est téléchargé sans accroc : sans ce champ, la configuration se marquait "terminée" avec
@@ -221,9 +228,8 @@ export interface ModelOverviewResult {
   vramGb: number | null
   groups: ModelOverviewGroup[]
   /**
-   * Modèle de code effectivement utilisé si le mode Code (étape 30) était lancé maintenant (voir
-   * resolveCodeModel dans codeGenerator.ts) : le modèle qualité s'il est déjà installé, sinon le modèle
-   * rapide (toujours défini, jamais null — celui-ci est téléchargé automatiquement au besoin).
+   * Modèle de code choisi automatiquement pour cette machine (étape 46, voir pickBestCodeModel dans
+   * hardwareScan.ts) si aucun choix explicite n'est enregistré dans le profil — toujours défini, jamais null.
    */
   codeModel: string
 }

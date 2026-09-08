@@ -3,10 +3,8 @@ import { readFileSync } from 'fs'
 import { resourcesRoot } from '../paths'
 import { join } from 'path'
 import { promisify } from 'util'
-import { CODE_MODEL_FAST, CODE_MODEL_QUALITY } from './codeGenerator'
-import { listInstalledModels } from './ollama'
 import { RESOURCE_SAFETY_MARGIN_GB, detectRamGb } from './systemResources'
-import type { HardwareTierPreview, ModelOverviewEntry, ModelOverviewResult, ModelTiers } from '../../shared/ipc'
+import type { CapacityScanResult, HardwareTierPreview, ModelOverviewEntry, ModelOverviewResult, ModelTiers } from '../../shared/ipc'
 
 const execAsync = promisify(exec)
 
@@ -287,13 +285,6 @@ async function detectGpu(): Promise<{ name: string | null; vramGb: number | null
   } catch {
     return { name: null, vramGb: null }
   }
-}
-
-export interface CapacityScanResult {
-  gpuName: string | null
-  vramGb: number | null
-  models: { flash: string; medium: string; large: string }
-  visionModel: string
 }
 
 /**
@@ -593,8 +584,7 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
     { tier: 'Code', entries: CODE_CANDIDATES.map((c) => buildEntry(c.model, c.vramGb, 'code')) }
   ]
 
-  const installedModels = await listInstalledModels().catch(() => [] as string[])
-  const codeModel = installedModels.includes(CODE_MODEL_QUALITY) ? CODE_MODEL_QUALITY : CODE_MODEL_FAST
+  const codeModel = computeModelPicks(vramGb, detectRamGb(), gpuName, localBenchmark, verifiedToolScores).code.model
   return { vramGb, groups, codeModel }
 }
 
@@ -718,8 +708,22 @@ export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult>
     gpuName: name,
     vramGb,
     models: { flash: picks.flash.model, medium: picks.medium.model, large: picks.large.model },
-    visionModel: picks.vision.model
+    visionModel: picks.vision.model,
+    codeModel: picks.code.model
   }
+}
+
+/**
+ * Meilleur modèle de code pour la VRAM+RAM RÉELLE de cette machine (étape 46) — utilisé par
+ * resolveCodeModel (codeGenerator.ts) quand aucun choix explicite n'est enregistré ('auto'/profil
+ * antérieur à ce réglage), à la place de l'ancien repli fixe (qualité si déjà installée, sinon rapide) qui
+ * ignorait complètement la taille de la machine. Même calcul que pickBestModelsFromBenchmark ci-dessus,
+ * extrait à part : resolveCodeModel n'a besoin QUE du pick Code, pas des 4 autres paliers.
+ */
+export async function pickBestCodeModel(): Promise<string> {
+  const { name, vramGb } = await detectGpu()
+  const picks = computeModelPicks(vramGb, detectRamGb(), name, parseLocalBenchmark(), parseVerifiedToolScores())
+  return picks.code.model
 }
 
 /**

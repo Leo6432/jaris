@@ -116,6 +116,18 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   tourne (content vide, tout est dans tool_calls) : le callback ne reçoit donc du texte visible que sur le
   tour qui répond vraiment, sans logique spéciale à écrire pour distinguer les deux cas.
 
+- **Vérifier qu'un type partagé (`shared/ipc.ts`) n'est pas dupliqué localement dans un autre fichier avant
+  de l'étendre** : `hardwareScan.ts` avait sa PROPRE copie locale de `CapacityScanResult` (jamais importée du
+  fichier partagé), désynchronisée du vrai type depuis longtemps — ajouter un champ dans `shared/ipc.ts`
+  n'avait aucun effet sur les fonctions de ce fichier tant que cette copie locale existait. `grep -rn
+  "interface NomDuType"` dans tout le dépôt avant d'ajouter un champ à un type partagé.
+- **Le mode Code n'a pas de raison de choisir son modèle différemment des autres paliers** (flash/médium/
+  puissant/vision) : le choisir "automatiquement selon ce qui tient sur la machine" plutôt qu'un repli fixe
+  sur seulement 2 modèles (qualité si déjà installée, sinon toujours le plus léger) est plus cohérent avec le
+  reste de Jaris, à la demande explicite de Léo. Le calcul existait déjà (`computeModelPicks` calculait un
+  pick "code" depuis le début) mais son résultat était juste jeté sans être utilisé — vérifier si une valeur
+  déjà calculée est réellement exploitée en aval avant de supposer qu'un comportement différent est voulu.
+
 ## Commandes utiles
 
 ```

@@ -274,8 +274,11 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   image Docker SearXNG figées, modèle ignoré (VRAM/RAM/disque
   insuffisants) signalé clairement au lieu de disparaître dans le
   journal, test de démarrage de l'appli packagée ajouté à la CI
-- ✅ Étape 46 — Choix du modèle de code configurable (Options → Micro &
-  Modèles), catalogue élargi avec qwen2.5-coder:14b
+- ✅ Étape 46 — Modèle de code choisi et téléchargé automatiquement selon
+  la VRAM+RAM de la machine (Options → Modèles), exactement comme les
+  autres paliers/vision — plus les deux choix fixes historiques,
+  catalogue élargi avec qwen2.5-coder:14b, réglage manuel toujours
+  possible pour qui veut imposer un modèle précis
 - ✅ Étape 48 — Réponses du Chat affichées au fil de leur génération
   (streaming), nouvel outil read_web_page pour lire le contenu complet
   d'une page trouvée par search_web quand l'extrait ne suffit pas

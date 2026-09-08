@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { chatWithOllama, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError, type OllamaMessage } from './ollama'
+import { pickBestCodeModel } from './hardwareScan'
 import { getProfile } from './profileStore'
 import type { GeneratedApp } from '../../shared/ipc'
 
@@ -193,26 +194,38 @@ function extractHtml(raw: string): string | null {
 }
 
 /**
- * Les deux modèles dédiés au mode Code (distincts des paliers de conversation, voir CODE_CANDIDATES dans
- * hardwareScan.ts) : un modèle rapide, spécialisé code mais raisonnable en taille (tient sur 8 Go de VRAM),
- * et un modèle bien plus capable en qualité (LiveCodeBench nettement supérieur) mais qui déborde largement
- * de la VRAM et tourne surtout via la RAM — plus lent, mais accessible sur une machine avec assez de RAM.
+ * Convertit une erreur de téléchargement (modèle trop gros pour VRAM+RAM, ou pas assez d'espace disque) en
+ * message lisible pour l'utilisateur — partagé par les deux tentatives de resolveCodeModel ci-dessous (choix
+ * explicite ET choix automatique), pour ne jamais dupliquer ce texte deux fois.
  */
-export const CODE_MODEL_QUALITY = 'qwen3.6:35b-a3b'
-export const CODE_MODEL_FAST = 'qwen2.5-coder:7b'
+function describeDownloadFailure(err: unknown): Error | null {
+  if (err instanceof ModelTooLargeError) {
+    return new Error(
+      `Cet ordinateur n'a pas assez de mémoire (VRAM + RAM) pour faire tourner ${err.model} ` +
+        `(${err.requiredGb.toFixed(1)} Go nécessaires pour ${err.budgetGb.toFixed(1)} Go disponibles).`
+    )
+  }
+  if (err instanceof DiskFullError) {
+    return new Error(
+      `Pas assez d'espace disque libre pour télécharger ${err.model} (${err.requiredGb.toFixed(1)} Go ` +
+        `nécessaires pour ${err.freeDiskGb.toFixed(1)} Go libres). Libère de l'espace disque puis réessaie.`
+    )
+  }
+  return null
+}
 
 /**
  * Choisit le modèle de code à utiliser :
  * 1. Le choix explicite de Options → Modèles (étape 46, `profile.codeModel`), parmi tous les candidats du
- *    tableau de comparaison (CODE_CANDIDATES, hardwareScan.ts) — pas seulement les deux ci-dessus. Avant
- *    cette étape, ce choix n'existait tout simplement pas : le mode Code ignorait le reste du catalogue,
- *    même déjà comparé dans Options → Modèles.
- * 2. À défaut ('auto'/non défini, comportement historique) : le modèle qualité s'il est déjà installé
- *    (l'utilisateur a fait la démarche consciente de le récupérer, potentiellement plusieurs dizaines de
- *    Go), sinon le modèle rapide, téléchargé automatiquement au besoin (il reste raisonnable, ~4,7 Go). On
- *    ne retombe plus sur le palier "puissant" de la conversation comme avant : un modèle généraliste s'est
- *    révélé insuffisant pour du code (voir l'historique Git), alors qu'un modèle réellement spécialisé fait
- *    une vraie différence.
+ *    tableau de comparaison (CODE_CANDIDATES, hardwareScan.ts).
+ * 2. À défaut ('auto'/non défini) : le meilleur candidat qui tient réellement dans la VRAM+RAM de cette
+ *    machine (pickBestCodeModel, hardwareScan.ts) — EXACTEMENT la même logique que pour les paliers
+ *    flash/médium/puissant/vision, à la demande explicite de Léo ("pourquoi on choisit pas le meilleur
+ *    modèle qu'on peut sur les paliers et télécharger comme vision"). Avant l'étape 46, "auto" voulait dire
+ *    un repli fixe sur seulement 2 modèles (qualité si déjà installée, sinon toujours le plus léger),
+ *    ignorant complètement la taille réelle de la machine — un choix arbitraire et déconnecté du reste du
+ *    catalogue, jamais justifié autrement qu'historiquement (voir l'ancien commit d'introduction du mode
+ *    Code). Téléchargé automatiquement au besoin, comme n'importe quel autre palier.
  */
 async function resolveCodeModel(onStatus: (message: string) => void, preferredModel?: string): Promise<string> {
   const installed = await listInstalledModels().catch(() => [] as string[])
@@ -227,51 +240,32 @@ async function resolveCodeModel(onStatus: (message: string) => void, preferredMo
       await pullModelIfMissing(preferredModel, onStatus)
       return preferredModel
     } catch (err) {
-      if (err instanceof ModelTooLargeError || err instanceof DiskFullError) {
-        onStatus(`${preferredModel} ignoré (${err.message}) : repli sur le choix automatique.`)
-        // Continue plus bas sur la logique automatique plutôt que de faire échouer toute la génération pour
-        // un choix devenu irréalisable (ex: changement de machine depuis le dernier réglage).
-      } else {
-        throw err
-      }
+      const readable = describeDownloadFailure(err)
+      if (!readable) throw err
+      onStatus(`${readable.message} Repli sur le choix automatique.`)
+      // Continue plus bas sur la logique automatique plutôt que de faire échouer toute la génération pour
+      // un choix devenu irréalisable (ex: changement de machine depuis le dernier réglage).
     }
   }
 
-  if (installed.includes(CODE_MODEL_QUALITY)) {
-    onStatus(`Modèle qualité détecté : ${CODE_MODEL_QUALITY}.`)
-    return CODE_MODEL_QUALITY
+  const best = await pickBestCodeModel()
+  if (installed.includes(best)) {
+    onStatus(`Modèle choisi automatiquement pour cette machine : ${best}.`)
+    return best
   }
 
-  if (!installed.includes(CODE_MODEL_FAST)) {
-    onStatus(`Téléchargement du modèle de code ${CODE_MODEL_FAST} (une seule fois, ~4,7 Go)…`)
-    try {
-      await pullModelIfMissing(CODE_MODEL_FAST, onStatus)
-    } catch (err) {
-      // CODE_MODEL_FAST est déjà le plus léger des deux modèles de CODE_CANDIDATES : s'il ne rentre même
-      // pas dans VRAM+RAM combinées, aucun modèle de code ne peut tourner sur cette machine.
-      if (err instanceof ModelTooLargeError) {
-        throw new Error(
-          "Cet ordinateur n'a pas assez de mémoire (VRAM + RAM) pour faire tourner un modèle de code local, " +
-            `même le plus léger (${err.model}, ${err.requiredGb.toFixed(1)} Go nécessaires pour ` +
-            `${err.budgetGb.toFixed(1)} Go disponibles). Le mode Code ne peut malheureusement pas ` +
-            'fonctionner sur cette machine.'
-        )
-      }
-      if (err instanceof DiskFullError) {
-        throw new Error(
-          `Pas assez d'espace disque libre pour télécharger le modèle de code (${err.model}, ` +
-            `${err.requiredGb.toFixed(1)} Go nécessaires pour ${err.freeDiskGb.toFixed(1)} Go libres). ` +
-            "Libère de l'espace disque puis réessaie."
-        )
-      }
-      throw err
-    }
+  onStatus(`Téléchargement du modèle de code choisi automatiquement pour cette machine (${best})…`)
+  try {
+    await pullModelIfMissing(best, onStatus)
+    return best
+  } catch (err) {
+    // `best` vient déjà du candidat le plus léger qui existe (CODE_CANDIDATES) si rien d'autre ne tient :
+    // s'il échoue quand même, aucun modèle de code ne peut tourner sur cette machine.
+    const readable = describeDownloadFailure(err)
+    throw readable
+      ? new Error(`${readable.message} Le mode Code ne peut malheureusement pas fonctionner sur cette machine.`)
+      : err
   }
-  onStatus(
-    `Modèle utilisé : ${CODE_MODEL_FAST}. Pour une meilleure qualité (plus lent) : ` +
-      `ollama pull ${CODE_MODEL_QUALITY}.`
-  )
-  return CODE_MODEL_FAST
 }
 
 /** Nom de dossier lisible et sans surprise pour le système de fichiers, dérivé de la demande. */

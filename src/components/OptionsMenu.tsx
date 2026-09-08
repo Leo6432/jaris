@@ -440,7 +440,7 @@ export default function OptionsMenu(): JSX.Element {
     if (!profile) return
     setError(null)
     setSavingCodeModel(true)
-    const updated = { ...profile, codeModel: value === 'auto' ? undefined : value }
+    const updated = { ...profile, codeModel: value }
     setProfile(updated)
     try {
       await window.jaris.saveProfile(updated)
@@ -683,7 +683,7 @@ export default function OptionsMenu(): JSX.Element {
                 onChange={(event) => void chooseCodeModel(event.target.value)}
                 disabled={savingCodeModel || codeModels === null}
               >
-                <option value="auto">Auto (qualité si déjà installé, sinon rapide)</option>
+                <option value="auto">Auto (le meilleur modèle qui tient sur cette machine)</option>
                 {codeModels?.map((model) => (
                   <option key={model} value={model}>
                     {formatModelName(model)}
@@ -692,8 +692,9 @@ export default function OptionsMenu(): JSX.Element {
               </select>
             </label>
             <p className="options-menu__model-overview-hint">
-              "Auto" reprend le comportement historique. Choisir un modèle précis le télécharge au besoin (peut
-              prendre plusieurs dizaines de Go) à la prochaine génération dans le mode Code.
+              "Auto" choisit et télécharge automatiquement le meilleur modèle selon ta configuration (comme les
+              autres paliers ci-dessus). Choisir un modèle précis le télécharge au besoin (peut prendre
+              plusieurs dizaines de Go) à la prochaine génération dans le mode Code.
             </p>
           </div>
         )}
