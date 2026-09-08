@@ -40,7 +40,7 @@ const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
  */
 const MIC_TEST_BAR_COUNT = 42
 
-type Tab = 'voix' | 'audio' | 'miseajour' | 'stockage' | 'historique'
+type Tab = 'voix' | 'micro' | 'modeles' | 'miseajour' | 'stockage' | 'historique'
 
 /**
  * Chromium ajoute des pseudo-périphériques "default"/"communications" en plus des vrais haut-parleurs
@@ -158,7 +158,7 @@ export default function OptionsMenu(): JSX.Element {
   // Pas la peine à chaque ouverture du menu si l'utilisateur ne va jamais voir cet onglet Modèles :
   // previewHardwareTiers relit scripts/verified-tool-scores.md/benchmark-results.md côté main.
   useEffect(() => {
-    if (tab === 'audio' && hardwareTiers === null) {
+    if (tab === 'modeles' && hardwareTiers === null) {
       void window.jaris.previewHardwareTiers().then(setHardwareTiers)
     }
   }, [tab, hardwareTiers])
@@ -167,7 +167,7 @@ export default function OptionsMenu(): JSX.Element {
   // mode Code" — même garde "déjà chargé" que hardwareTiers ci-dessus, cette liste ne change jamais en
   // cours de session.
   useEffect(() => {
-    if (tab === 'audio' && codeModels === null) {
+    if (tab === 'modeles' && codeModels === null) {
       void window.jaris.getCodeCandidateModelIds().then(setCodeModels)
     }
   }, [tab, codeModels])
@@ -177,7 +177,7 @@ export default function OptionsMenu(): JSX.Element {
   // chaque ouverture de l'onglet — utile si le check réseau en tâche de fond au lancement de Jaris n'avait
   // pas encore fini la première fois que l'utilisateur a ouvert cet onglet.
   useEffect(() => {
-    if (tab === 'audio') {
+    if (tab === 'modeles') {
       void window.jaris.getOllamaVersionStatus().then(setOllamaVersionStatus)
     }
     if (tab === 'miseajour') {
@@ -218,7 +218,7 @@ export default function OptionsMenu(): JSX.Element {
   // deux catalogues de périphériques totalement séparés, qui ne peuvent pas être recoupés (voir la doc de
   // setAudioInputDevice).
   useEffect(() => {
-    if (tab !== 'audio' || inputDevices !== null) return
+    if (tab !== 'micro' || inputDevices !== null) return
     void window.jaris.listAudioInputDevices().then(setInputDevices).catch(() => setInputDevices([]))
     // getUserMedia doit être appelé au moins une fois pour que enumerateDevices() révèle les vrais noms des
     // haut-parleurs plutôt que des libellés vides (voir le handler de permission media dans main.ts, qui
@@ -512,8 +512,11 @@ export default function OptionsMenu(): JSX.Element {
             <button className={`options-menu__tab${tab === 'voix' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('voix')}>
               Voix
             </button>
-            <button className={`options-menu__tab${tab === 'audio' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('audio')}>
-              Micro &amp; Modèles
+            <button className={`options-menu__tab${tab === 'micro' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('micro')}>
+              Micro
+            </button>
+            <button className={`options-menu__tab${tab === 'modeles' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('modeles')}>
+              Modèles
             </button>
             <button className={`options-menu__tab${tab === 'miseajour' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('miseajour')}>
               Mise à jour
@@ -556,9 +559,8 @@ export default function OptionsMenu(): JSX.Element {
           </div>
         )}
 
-        {tab === 'audio' && (
+        {tab === 'micro' && (
           <div className="options-menu__section">
-            <div className="options-menu__section">
               <div className="options-menu__section-title">Micro utilisé</div>
               <label className="options-menu__field">
                 <select
@@ -627,8 +629,11 @@ export default function OptionsMenu(): JSX.Element {
                   </p>
                 )}
               </div>
-            </div>
+          </div>
+        )}
 
+        {tab === 'modeles' && (
+          <div className="options-menu__section">
             {ollamaVersionStatus?.outdated && (
               <div className="options-menu__ollama-warning">
                 Ollama {ollamaVersionStatus.current} installé, la dernière version est{' '}
