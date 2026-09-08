@@ -95,6 +95,18 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   jusqu'à `MAX_STEPS` ou sa fin naturelle, sans pouvoir être interrompue. Le signal doit être transmis
   explicitement à l'outil concerné, pas seulement à l'appel de conversation — et combiné (`AbortSignal.any`)
   avec le timeout déjà en place par étape.
+- **Figer des versions de dépendances Python une par une, en prenant la "dernière" de chaque paquet
+  indépendamment, peut choisir des versions incompatibles entre elles** (constaté : la dernière version
+  indépendante de librosa et de scipy ne fonctionnaient pas ensemble). Toujours résoudre l'ENSEMBLE via
+  `pip install --dry-run --report -` (ou équivalent) et figer le résultat de cette résolution. Un paquet avec
+  un chemin d'installation particulier (`torch`, installé à part via un index CUDA dédié) ne doit PAS être
+  figé dans `requirements.txt` : une version figée ici pourrait forcer une réinstallation d'une autre version
+  par-dessus celle déjà installée pour de bonnes raisons.
+- **Pour figer une image Docker `:latest` sur un tag précis**, interroger l'API du registre (digest de
+  `:latest`, puis quel tag nommé partage ce digest) plutôt que deviner un numéro de version.
+- **Ajouter du streaming à un appel LLM partagé par plusieurs canaux sans risquer de régression** : passer un
+  callback optionnel qui, quand fourni, bascule l'appel en streaming — absent, le comportement reste
+  identique à avant pour les autres canaux.
 
 ## Commandes utiles
 

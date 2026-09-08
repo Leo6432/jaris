@@ -98,6 +98,23 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   jusqu'à `MAX_STEPS` ou sa fin naturelle, sans pouvoir être interrompue par une nouvelle phrase à la voix.
   Le signal doit être transmis explicitement à `createToolExecutor`/l'outil concerné, pas seulement à l'appel
   de conversation — et combiné (`AbortSignal.any`) avec le timeout déjà en place par étape.
+- **Figer des versions de dépendances Python (`requirements.txt`) une par une, en prenant la "dernière" de
+  chaque paquet indépendamment, peut choisir des versions incompatibles entre elles** (constaté : la dernière
+  version indépendante de librosa et de scipy ne fonctionnaient pas ensemble). Toujours résoudre l'ENSEMBLE
+  via `pip install --dry-run --report -` (ou équivalent) et figer le résultat de cette résolution, jamais des
+  choix indépendants. Un paquet avec un chemin d'installation particulier (`torch`, installé à part via un
+  index CUDA dédié dans `pythonRuntime.ts`) ne doit PAS être figé dans `requirements.txt` : une version figée
+  ici pourrait forcer pip à réinstaller une autre version par-dessus celle déjà installée pour de bonnes
+  raisons.
+- **Pour figer une image Docker `:latest` sur un tag précis**, interroger l'API du registre (ex: Docker Hub
+  `/v2/repositories/<image>/tags/latest` pour le digest, puis chercher quel tag nommé partage ce digest)
+  plutôt que deviner un numéro de version.
+- **Ajouter du streaming à un appel LLM partagé par plusieurs canaux (chat ET voix ici) sans risquer de
+  régression** : passer un callback optionnel (`onToken`) qui, quand fourni, bascule l'appel en `stream:
+  true` — absent (cas de la voix, qui attend le texte complet avant de le lire), le comportement reste
+  rigoureusement identique à avant. Un tour d'appel d'outil ne "raconte" en général rien pendant qu'il
+  tourne (content vide, tout est dans tool_calls) : le callback ne reçoit donc du texte visible que sur le
+  tour qui répond vraiment, sans logique spéciale à écrire pour distinguer les deux cas.
 
 ## Commandes utiles
 
