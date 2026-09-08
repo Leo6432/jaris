@@ -121,8 +121,9 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[], chan
     "rechercher quelque chose — décris l'objectif complet en une phrase, l'outil regarde l'écran lui-même et " +
     "improvise le détail des clics), donner l'état de la machine (get_system_stats : " +
     "CPU, RAM, VRAM, température), contrôler le volume/la lecture multimédia (media_control), éteindre ou " +
-    "redémarrer l'ordinateur (shutdown_pc, à n'appeler que sur demande explicite et claire), chercher sur le web, " +
-    "mémoriser ou relire une information dans ta " +
+    "redémarrer l'ordinateur (shutdown_pc, à n'appeler que sur demande explicite et claire), chercher sur le web " +
+    "(search_web), lire le contenu complet d'une page précise déjà trouvée par search_web quand son extrait ne " +
+    "suffit pas (read_web_page), mémoriser ou relire une information dans ta " +
     "mémoire locale, taper du texte au clavier (type_text), appuyer sur une touche " +
     "(press_key), cliquer avec la souris (click_mouse) — ces trois derniers pour une action ponctuelle unique " +
     "et immédiate (ex: \"appuie sur entrée\"), computer_use_task pour un objectif à plusieurs étapes qui " +
@@ -219,7 +220,10 @@ export async function converse(
   // Le pipeline vocal a déjà relevé l'état GPU juste avant d'appeler converse() (sécurité thermique) :
   // le redemander ici relancerait un second `nvidia-smi` pour la même question, en pur gaspillage.
   live: LiveGpuStatus = { freeVramGb: null, tempC: null },
-  channel: ConverseChannel = 'voice'
+  channel: ConverseChannel = 'voice',
+  // Étape 48, chat uniquement (jamais fourni à la voix) : reçoit chaque fragment de texte au fil de sa
+  // génération, pour un affichage progressif dans ChatPanel.tsx au lieu d'attendre la réponse complète.
+  onToken?: (delta: string) => void
 ): Promise<string> {
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
@@ -304,7 +308,7 @@ export async function converse(
     /\b(je vais (?:le |la |les )?faire|je m'en occupe|je m'y mets|un instant\b|attends(?:[- ]moi)?\b|patiente\b|je le fais (?:tout de suite|maintenant)|laisse[- ]moi (?:faire|une seconde|un instant))/i
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const message = await chatWithOllama(messages, TOOLS, model, think, signal)
+    const message = await chatWithOllama(messages, TOOLS, model, think, signal, config.ollama.numCtx, onToken)
     if (!message.tool_calls?.length) {
       if (wantsEmailSent && !computerUseCalled && !nudgedForEmail) {
         nudgedForEmail = true

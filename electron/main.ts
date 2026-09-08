@@ -9,7 +9,7 @@ import {
   updateOllama
 } from './services/dependencyServices'
 import { getModelsLocationStatus, moveModelsLocation } from './services/modelsLocation'
-import { getAllCandidateModelIds, getModelOverview, previewHardwareTiers } from './services/hardwareScan'
+import { getAllCandidateModelIds, getCodeCandidateModelIds, getModelOverview, previewHardwareTiers } from './services/hardwareScan'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { runModelAnalysis, runQuickSetup } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
@@ -320,6 +320,7 @@ app.whenReady().then(async () => {
   ipcMain.on(IPC_CHANNELS.testMicrophone, () => pipeline?.testMic())
   ipcMain.on(IPC_CHANNELS.stopTestMicrophone, () => pipeline?.stopTestMic())
   ipcMain.handle(IPC_CHANNELS.getModelOverview, () => getModelOverview())
+  ipcMain.handle(IPC_CHANNELS.getCodeCandidateModelIds, () => getCodeCandidateModelIds())
   ipcMain.handle(IPC_CHANNELS.getOllamaVersionStatus, () => getOllamaVersionStatus())
   ipcMain.handle(IPC_CHANNELS.updateOllama, () => updateOllama())
   ipcMain.handle(IPC_CHANNELS.getAppVersionStatus, () => getAppVersionStatus())
@@ -400,11 +401,12 @@ app.whenReady().then(async () => {
 
   // Mode Chat (étape 30) : même Jaris, mêmes outils, sans synthèse vocale. Un rappel programmé par écrit
   // est quand même annoncé à voix haute par le pipeline vocal, comme un rappel programmé à la voix.
-  ipcMain.handle(IPC_CHANNELS.sendChatMessage, (_event, prompt: string): Promise<ChatMessage> => {
+  ipcMain.handle(IPC_CHANNELS.sendChatMessage, (event, prompt: string): Promise<ChatMessage> => {
     return chatSession.send(
       prompt,
       (message) => void pipeline?.announceReminder(message),
-      (message) => broadcast(IPC_CHANNELS.log, message)
+      (message) => broadcast(IPC_CHANNELS.log, message),
+      (delta) => event.sender.send(IPC_CHANNELS.chatStreamToken, delta)
     )
   })
   ipcMain.handle(IPC_CHANNELS.getChatHistory, (): ChatMessage[] => chatSession.getVisibleMessages())

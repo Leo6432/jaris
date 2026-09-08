@@ -96,6 +96,21 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
               Jaris choisit automatiquement le modèle le plus adapté à chaque question. Modifiable plus tard
               depuis Options → Modèles.
             </p>
+            {result.skippedModels && result.skippedModels.length > 0 && (
+              <div className="capacity-scan__warning">
+                <p>
+                  Attention : {result.skippedModels.length > 1 ? 'certains modèles ci-dessus ne sont' : 'un des modèles ci-dessus n\'est'} en
+                  réalité pas installé, Jaris utilisera un repli moins bon en attendant :
+                </p>
+                <ul>
+                  {result.skippedModels.map(({ model, reason }) => (
+                    <li key={model}>
+                      {formatModelName(model)} : {reason}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <button onClick={finish}>Continuer</button>
           </>
         )}

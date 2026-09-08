@@ -58,7 +58,8 @@ class ChatSession {
   async send(
     prompt: string,
     onReminderFire: (message: string) => void,
-    onLog: (message: string) => void
+    onLog: (message: string) => void,
+    onToken?: (delta: string) => void
   ): Promise<ChatMessage> {
     await this.ensureLoaded()
     this.pushVisible({ role: 'user', content: prompt })
@@ -83,7 +84,8 @@ class ChatSession {
         this.history,
         undefined,
         live,
-        'chat'
+        'chat',
+        onToken
       )
       if (gpuStatus.action === 'warn') reply = `${gpuStatus.message}\n\n${reply}`
     } catch (err) {

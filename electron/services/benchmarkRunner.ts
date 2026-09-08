@@ -34,12 +34,19 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
   // le rapide ne sert à rien.
   const installed = await listInstalledModels().catch(() => [] as string[])
   if (!installed.includes(CODE_MODEL_QUALITY)) modelsToInstall.add(CODE_MODEL_FAST)
+  // Un modèle ignoré (trop gros pour VRAM+RAM, ou pas assez de disque) ne doit jamais rendre la
+  // configuration silencieusement "réussie" : sans ce suivi, capacityScanDone passait quand même à `true`
+  // ci-dessous alors qu'un palier entier (ex: le modèle "puissant") n'était en réalité jamais installé —
+  // CapacityScan.tsx affichait "Configuration terminée" avec un modèle listé qui n'existe pourtant pas sur
+  // le disque, jusqu'à ce que Jaris échoue à l'utiliser bien plus tard, loin du vrai moment de la cause.
+  const skippedModels: { model: string; reason: string }[] = []
   for (const model of modelsToInstall) {
     try {
       await pullModelIfMissing(model, onLine)
     } catch (err) {
       if (err instanceof ModelTooLargeError || err instanceof DiskFullError) {
         onLine(`Modèle ${model} ignoré : ${err.message}`)
+        skippedModels.push({ model, reason: err.message })
       } else {
         throw err
       }
@@ -57,7 +64,7 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
     })
   }
 
-  return picked
+  return { ...picked, skippedModels: skippedModels.length ? skippedModels : undefined }
 }
 
 /**
@@ -174,11 +181,13 @@ export async function runModelAnalysis(onLine: (line: string) => void, scope: An
   // même filet de sécurité). Si même le vision le plus léger ne rentre pas, on continue sans lui plutôt que
   // de faire échouer toute l'analyse pour une fonctionnalité annexe (voir look_at_screen) — texte/outils
   // restent utilisables.
+  const skippedModels: { model: string; reason: string }[] = []
   try {
     await pullModelIfMissing(picked.visionModel, onLine)
   } catch (err) {
     if (err instanceof ModelTooLargeError || err instanceof DiskFullError) {
       onLine(`Modèle vision ${picked.visionModel} ignoré : ${err.message}`)
+      skippedModels.push({ model: picked.visionModel, reason: err.message })
     } else {
       throw err
     }
@@ -212,5 +221,5 @@ export async function runModelAnalysis(onLine: (line: string) => void, scope: An
   onLine('')
   await cleanupUnselectedModels(onLine)
 
-  return picked
+  return { ...picked, skippedModels: skippedModels.length ? skippedModels : undefined }
 }

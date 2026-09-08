@@ -26,13 +26,26 @@ interface OllamaChatResponse {
 
 export type ThinkLevel = 'low' | 'medium' | 'high'
 
-async function requestChat(body: Record<string, unknown>, model: string, signal?: AbortSignal): Promise<OllamaMessage> {
+/**
+ * `onToken` (étape 48) bascule cet appel en streaming NDJSON (`stream: true`) plutôt que la réponse d'un
+ * bloc habituelle : chaque fragment de `message.content` est relayé au fil de l'eau, en plus d'accumuler la
+ * réponse complète comme avant (tool_calls compris, présents dans un des derniers fragments plutôt que
+ * construits token par token). Sans `onToken` (comportement historique, voix comprise), tout reste identique
+ * — un seul appel non-streamé, la réponse complète d'un bloc.
+ */
+async function requestChat(
+  body: Record<string, unknown>,
+  model: string,
+  signal?: AbortSignal,
+  onToken?: (delta: string) => void
+): Promise<OllamaMessage> {
+  const streaming = Boolean(onToken)
   let response: Response
   try {
     response = await fetch(`${config.ollama.host}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, stream: streaming }),
       signal
     })
   } catch (err) {
@@ -44,9 +57,48 @@ async function requestChat(body: Record<string, unknown>, model: string, signal?
     throw new Error(`Ollama a répondu ${response.status} : ${await response.text()}`)
   }
 
-  const data = (await response.json()) as OllamaChatResponse
-  if (!data.message) throw new Error(`Réponse vide d'Ollama (modèle '${model}' bien installé ?)`)
-  return data.message
+  if (!streaming) {
+    const data = (await response.json()) as OllamaChatResponse
+    if (!data.message) throw new Error(`Réponse vide d'Ollama (modèle '${model}' bien installé ?)`)
+    return data.message
+  }
+
+  if (!response.body) throw new Error(`Réponse en streaming sans corps d'Ollama (modèle '${model}').`)
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let content = ''
+  let toolCalls: OllamaToolCall[] | undefined
+  let role: OllamaMessage['role'] = 'assistant'
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    let newlineIndex: number
+    while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, newlineIndex).trim()
+      buffer = buffer.slice(newlineIndex + 1)
+      if (!line) continue
+
+      let chunk: OllamaChatResponse
+      try {
+        chunk = JSON.parse(line)
+      } catch {
+        continue
+      }
+      if (chunk.message?.content) {
+        content += chunk.message.content
+        onToken?.(chunk.message.content)
+      }
+      if (chunk.message?.tool_calls?.length) toolCalls = chunk.message.tool_calls
+      if (chunk.message?.role) role = chunk.message.role
+    }
+  }
+
+  if (!content && !toolCalls) throw new Error(`Réponse vide d'Ollama (modèle '${model}' bien installé ?)`)
+  return { role, content, tool_calls: toolCalls }
 }
 
 /**
@@ -68,21 +120,26 @@ export async function chatWithOllama(
   // Surcharge ponctuelle de la fenêtre de contexte : la conversation normale tient largement dans la
   // valeur par défaut (OLLAMA_NUM_CTX), mais la génération de code (étape 30) produit un fichier complet
   // puis le relit en entier pour le corriger, ce qui dépasse nettement 4096 tokens.
-  numCtx: number = config.ollama.numCtx
+  numCtx: number = config.ollama.numCtx,
+  // Étape 48 : présent uniquement côté Chat (jamais à la voix, qui attend le texte complet avant de le lire
+  // à voix haute) — voir requestChat ci-dessus. Un tour qui appelle un outil ne "raconte" en général rien
+  // (content vide, tout est dans tool_calls) : ce callback ne reçoit donc quelque chose de visible que sur
+  // le tour qui répond vraiment, sans traitement spécial à faire ici pour distinguer les deux cas.
+  onToken?: (delta: string) => void
 ): Promise<OllamaMessage> {
-  const baseBody = { model, messages, tools, stream: false, options: { num_ctx: numCtx } }
+  const baseBody = { model, messages, tools, options: { num_ctx: numCtx } }
   try {
     // Le raisonnement caché aide nettement à décider d'appeler un outil plutôt que de "raconter" une
     // action sans l'exécuter ; le niveau (low/medium/high) vient du palier de complexité choisi pour la
     // question (voir assistant.ts), pas d'une valeur fixe.
-    return await requestChat({ ...baseBody, think }, model, signal)
+    return await requestChat({ ...baseBody, think }, model, signal, onToken)
   } catch (firstErr) {
     // Une requête annulée (l'utilisateur a ajouté une précision pendant la réflexion, voir voicePipeline.ts)
     // ne doit jamais déclencher le second essai sans `think` : ce serait un appel Ollama inutile pour une
     // réponse qui va de toute façon être remplacée par la relance avec la phrase fusionnée.
     if (firstErr instanceof Error && firstErr.name === 'AbortError') throw firstErr
     try {
-      return await requestChat(baseBody, model, signal)
+      return await requestChat(baseBody, model, signal, onToken)
     } catch {
       throw firstErr // le premier message d'erreur est généralement le plus informatif
     }

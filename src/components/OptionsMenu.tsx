@@ -11,6 +11,7 @@ import type {
   ReleaseHistoryEntry
 } from '../../shared/ipc'
 import HardwareTierPreview from './HardwareTierPreview'
+import { formatModelName } from '../lib/formatModelName'
 
 interface VoiceOption {
   id: string
@@ -134,6 +135,8 @@ export default function OptionsMenu(): JSX.Element {
   // affichée comme une rangée de barres qui défilent façon Discord, pas un seul chiffre.
   const [micLevels, setMicLevels] = useState<number[]>(() => Array(MIC_TEST_BAR_COUNT).fill(0))
   const [micTestResult, setMicTestResult] = useState<boolean | null>(null)
+  const [codeModels, setCodeModels] = useState<string[] | null>(null)
+  const [savingCodeModel, setSavingCodeModel] = useState(false)
 
   useEffect(() => {
     window.jaris.getProfile().then((p) => {
@@ -159,6 +162,15 @@ export default function OptionsMenu(): JSX.Element {
       void window.jaris.previewHardwareTiers().then(setHardwareTiers)
     }
   }, [tab, hardwareTiers])
+
+  // Étape 46 : catalogue des modèles candidats du mode Code (hardwareScan.ts), pour le réglage "Modèle du
+  // mode Code" — même garde "déjà chargé" que hardwareTiers ci-dessus, cette liste ne change jamais en
+  // cours de session.
+  useEffect(() => {
+    if (tab === 'audio' && codeModels === null) {
+      void window.jaris.getCodeCandidateModelIds().then(setCodeModels)
+    }
+  }, [tab, codeModels])
 
   // Contrairement à hardwareTiers ci-dessus (coûteux, relit un fichier), une simple lecture d'une valeur
   // déjà en cache côté main (voir getOllamaVersionStatus) : pas besoin de garde "déjà chargé", on relit à
@@ -254,6 +266,15 @@ export default function OptionsMenu(): JSX.Element {
       const result = await window.jaris.runQuickSetup()
       setProfile((prev) => (prev ? { ...prev, models: result.models, visionModel: result.visionModel, capacityScanDone: true } : prev))
       setHardwareTiers(await window.jaris.previewHardwareTiers())
+      // Un modèle ignoré (trop gros pour VRAM+RAM, ou pas assez de disque) ne doit jamais passer inaperçu :
+      // sans ça, le profil listait un modèle qui n'est en réalité pas installé, jusqu'à ce que Jaris échoue
+      // à l'utiliser bien plus tard, loin du vrai moment de la cause (voir aussi CapacityScan.tsx).
+      if (result.skippedModels?.length) {
+        setError(
+          `Configuration mise à jour, mais ${result.skippedModels.length > 1 ? 'ces modèles ont' : 'ce modèle a'} ` +
+            `été ignoré : ${result.skippedModels.map((s) => `${s.model} (${s.reason})`).join(' ; ')}`
+        )
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -407,6 +428,26 @@ export default function OptionsMenu(): JSX.Element {
       await window.jaris.saveProfile(updated)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  /**
+   * Choisit le modèle du mode Code (étape 46) : contrairement au micro/haut-parleur, ce choix peut
+   * nécessiter un téléchargement (jusqu'à plusieurs dizaines de Go) — géré au moment de la génération
+   * suivante par resolveCodeModel (codeGenerator.ts), pas ici. 'auto' revient au comportement historique.
+   */
+  const chooseCodeModel = async (value: string): Promise<void> => {
+    if (!profile) return
+    setError(null)
+    setSavingCodeModel(true)
+    const updated = { ...profile, codeModel: value === 'auto' ? undefined : value }
+    setProfile(updated)
+    try {
+      await window.jaris.saveProfile(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSavingCodeModel(false)
     }
   }
 
@@ -628,6 +669,26 @@ export default function OptionsMenu(): JSX.Element {
               Redétecte la VRAM/RAM (utile après un changement matériel, par exemple une nouvelle carte
               graphique) et télécharge directement les modèles déjà connus pour cette nouvelle configuration,
               sans repasser par une analyse comparative complète.
+            </p>
+
+            <div className="options-menu__section-title">Modèle du mode Code</div>
+            <label className="options-menu__field">
+              <select
+                value={profile?.codeModel ?? 'auto'}
+                onChange={(event) => void chooseCodeModel(event.target.value)}
+                disabled={savingCodeModel || codeModels === null}
+              >
+                <option value="auto">Auto (qualité si déjà installé, sinon rapide)</option>
+                {codeModels?.map((model) => (
+                  <option key={model} value={model}>
+                    {formatModelName(model)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="options-menu__model-overview-hint">
+              "Auto" reprend le comportement historique. Choisir un modèle précis le télécharge au besoin (peut
+              prendre plusieurs dizaines de Go) à la prochaine génération dans le mode Code.
             </p>
           </div>
         )}

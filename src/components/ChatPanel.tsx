@@ -30,6 +30,7 @@ export default function ChatPanel(): JSX.Element {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState<string | null>(null)
+  const [streamingReply, setStreamingReply] = useState('')
   const threadRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -45,11 +46,19 @@ export default function ChatPanel(): JSX.Element {
     return window.jaris.onLog(setProgress)
   }, [])
 
+  // Étape 48 : la réponse s'affiche au fil de sa génération plutôt que d'un bloc à la fin — un tour qui
+  // appelle un outil ne "raconte" en général rien pendant qu'il tourne (voir le commentaire d'onToken,
+  // ollama.ts), donc ces fragments n'arrivent en pratique que pendant le tour qui répond vraiment, juste
+  // après les étapes d'outil éventuelles montrées par `progress` ci-dessus.
+  useEffect(() => {
+    return window.jaris.onChatStreamToken((delta) => setStreamingReply((prev) => prev + delta))
+  }, [])
+
   // Toujours coller au dernier message : pendant que Jaris réfléchit, l'indicateur en bas doit rester
   // visible sans avoir à faire défiler à la main.
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messages, sending])
+  }, [messages, sending, streamingReply])
 
   const send = async (): Promise<void> => {
     const prompt = input.trim()
@@ -59,6 +68,7 @@ export default function ChatPanel(): JSX.Element {
     setInput('')
     setSending(true)
     setProgress(null)
+    setStreamingReply('')
     // Affiché tout de suite, sans attendre la réponse : côté main le message est de toute façon ajouté au
     // fil dès réception, donc les deux restent cohérents.
     setMessages((prev) => [...prev, { role: 'user', content: prompt }])
@@ -71,6 +81,7 @@ export default function ChatPanel(): JSX.Element {
     } finally {
       setSending(false)
       setProgress(null)
+      setStreamingReply('')
     }
   }
 
@@ -99,7 +110,9 @@ export default function ChatPanel(): JSX.Element {
         ))}
 
         {sending && (
-          <div className="chat-panel__message chat-panel__message--pending">{progress ?? 'Jaris réfléchit…'}</div>
+          <div className={`chat-panel__message chat-panel__message--${streamingReply ? 'assistant' : 'pending'}`}>
+            {streamingReply ? renderFormattedText(streamingReply) : (progress ?? 'Jaris réfléchit…')}
+          </div>
         )}
       </div>
 

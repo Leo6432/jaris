@@ -1,6 +1,10 @@
 services:
   searxng:
-    image: searxng/searxng:latest
+    # Version figée (étape 45) plutôt que "latest" : sans ça, deux installations de Jaris à quelques
+    # semaines d'écart récupèrent des versions différentes de SearXNG, jamais testées ensemble côté Jaris —
+    # à remonter à la main quand une future version apporte quelque chose dont Jaris a besoin.
+    image: searxng/searxng:2026.9.8-3fdc6d753
+    pull_policy: missing
     ports:
       - '8080:8080'
     volumes:

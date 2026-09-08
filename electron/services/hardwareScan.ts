@@ -236,6 +236,9 @@ const CODE_CANDIDATES: ModelCandidate[] = [
   // qwen2.5-coder:32b ci-dessus (pas de "-a3b"/MoE dans son nom) : même remarque, débordement RAM plus
   // pénalisant qu'un MoE de taille comparable. Vérifié sur ollama.com/library/devstral-small-2 (15 Go).
   { model: 'devstral-small-2:24b', vramGb: 15 },
+  // Palier intermédiaire entre 32b et 7b ci-dessous, absent jusqu'ici (relecture Codex, étape 46) : taille
+  // vérifiée sur ollama.com/library/qwen2.5-coder:14b (9 Go).
+  { model: 'qwen2.5-coder:14b', vramGb: 9 },
   { model: 'qwen2.5-coder:7b', vramGb: 4.7 }
 ]
 

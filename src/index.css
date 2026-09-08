@@ -1250,6 +1250,24 @@ body.body--scan::after {
   color: var(--hud-text-faint);
 }
 
+/* Même code couleur ambre que .options-menu__ollama-warning : un modèle ignoré pendant la configuration
+   rapide (trop gros pour VRAM+RAM ou pas assez de disque, voir runQuickSetup) doit rester visible sur
+   l'écran final, pas seulement défiler dans le journal d'installation puis disparaître. */
+.capacity-scan__warning {
+  font-size: 0.76rem;
+  color: var(--hud-gold);
+  background: rgba(255, 176, 32, 0.08);
+  border: 1px solid rgba(255, 176, 32, 0.3);
+  border-radius: 10px;
+  padding: 8px 14px;
+  text-align: left;
+}
+
+.capacity-scan__warning ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
 /* Les 3 paliers de configuration (previewHardwareTiers) présentés à l'écran d'accueil, reliés par des
    flèches verticales — celui qui correspond à la machine détectée (.capacity-scan__tier--current) ressort
    nettement en cyan, les deux autres restent discrets pour ne pas distraire de l'essentiel. */

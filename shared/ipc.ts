@@ -45,6 +45,12 @@ export interface Profile {
   audioInputDeviceIndex?: number | null
   /** deviceId MediaDevices (WebRTC) du haut-parleur choisi dans Options → Voix, vide = sortie par défaut du système. */
   audioOutputDeviceId?: string
+  /**
+   * Modèle du mode Code (étape 46) choisi dans Options → Modèles, parmi les candidats du tableau de
+   * comparaison (getCodeCandidateModelIds, hardwareScan.ts). `undefined`/`'auto'` = comportement historique
+   * de resolveCodeModel (codeGenerator.ts) : modèle qualité si déjà installé, sinon modèle rapide.
+   */
+  codeModel?: string
 }
 
 /**
@@ -138,6 +144,13 @@ export interface CapacityScanResult {
   vramGb: number | null
   models: ModelTiers
   visionModel: string
+  /**
+   * Modèles qu'il aurait fallu télécharger pour cette configuration mais qui ont été ignorés (trop gros pour
+   * la VRAM+RAM combinées, ou pas assez d'espace disque) — voir runQuickSetup, benchmarkRunner.ts. Absent ou
+   * vide si tout s'est téléchargé sans accroc : sans ce champ, la configuration se marquait "terminée" avec
+   * succès même quand un palier entier manquait, sans jamais le dire clairement à l'utilisateur (étape 45).
+   */
+  skippedModels?: { model: string; reason: string }[]
 }
 
 /**
@@ -307,6 +320,9 @@ export const IPC_CHANNELS = {
   openConversationHistoryFile: 'jaris:open-conversation-history-file',
   /** renderer <-> main : liste tous les modèles candidats (tous paliers + vision) avec leurs métriques, pour l'onglet Modèles. */
   getModelOverview: 'jaris:get-model-overview',
+  /** renderer <-> main : identifiants des modèles candidats du palier Code (étape 46, hardwareScan.ts), pour
+   * le réglage "Modèle du mode Code" dans Options → Micro & Modèles. */
+  getCodeCandidateModelIds: 'jaris:get-code-candidate-model-ids',
   getOllamaVersionStatus: 'jaris:get-ollama-version-status',
   updateOllama: 'jaris:update-ollama',
   /** renderer -> main : lance le benchmark complet (scripts/benchmark-models.mjs) puis choisit et active le
@@ -323,6 +339,9 @@ export const IPC_CHANNELS = {
   runQuickSetup: 'jaris:run-quick-setup',
   /** renderer <-> main : envoie un message écrit à Jaris (mode Chat, étape 30) et renvoie sa réponse. */
   sendChatMessage: 'jaris:send-chat-message',
+  /** main -> renderer : un fragment de la réponse en cours de génération (étape 48), affiché au fil de
+   * l'eau dans ChatPanel.tsx plutôt que d'attendre la réponse complète de sendChatMessage. */
+  chatStreamToken: 'jaris:chat-stream-token',
   /** renderer <-> main : récupère les messages déjà échangés en mode Chat depuis le lancement. */
   getChatHistory: 'jaris:get-chat-history',
   /** renderer <-> main : génère une application autonome à partir d'une description (mode Code, étape 30). */

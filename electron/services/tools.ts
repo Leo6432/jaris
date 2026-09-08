@@ -5,6 +5,7 @@ import { rememberNote, recallNote } from './memoryStore'
 import { scheduleReminder } from './reminders'
 import { lookAtScreen } from './vision'
 import { searchWeb } from './webSearch'
+import { readWebPage } from './webPage'
 import { clickMouse, mediaKey, pressKey, typeText } from './inputControl'
 import { getSystemStatsText, shutdownPc } from './systemControl'
 
@@ -76,6 +77,24 @@ export const TOOLS: OllamaTool[] = [
           query: { type: 'string', description: 'Les mots-clés de recherche' }
         },
         required: ['query']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read_web_page',
+      description:
+        "Lit le contenu texte d'une page web précise (étape 48) — à utiliser quand les extraits de " +
+        "search_web ne suffisent pas (détail précis manquant : adresse exacte, horaire, prix...). " +
+        "Prends l'URL parmi celles déjà renvoyées par un précédent appel à search_web dans cette même " +
+        "conversation, jamais une URL inventée.",
+      parameters: {
+        type: 'object',
+        properties: {
+          url: { type: 'string', description: "URL complète de la page à lire, trouvée via search_web" }
+        },
+        required: ['url']
       }
     }
   },
@@ -269,6 +288,8 @@ export function createToolExecutor(
         return lookAtScreen(String(args.question ?? ''), visionModel)
       case 'search_web':
         return searchWeb(String(args.query ?? ''))
+      case 'read_web_page':
+        return readWebPage(String(args.url ?? ''))
       case 'remember':
         return rememberNote(String(args.title ?? ''), String(args.content ?? ''))
       case 'recall_memory':

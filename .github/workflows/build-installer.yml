@@ -41,6 +41,26 @@ jobs:
 
       - run: npm run dist
 
+      # Étape 45 : lance vraiment l'appli packagée (pas l'unpacked, avant l'installeur NSIS) pour attraper un
+      # plantage au démarrage AVANT de publier une Release — sans ce test, une régression qui empêche Jaris
+      # de s'ouvrir (dépendance native manquante, exception non rattrapée dans app.whenReady()...) n'était
+      # découverte qu'en usage réel, bien après la publication. Aucun service externe requis pour ce test
+      # (Ollama/Docker/SearXNG) : le démarrage de Jaris est déjà conçu pour continuer même s'ils manquent
+      # (voir dependencyServices.ts) et afficher sa fenêtre d'onboarding dans tous les cas.
+      - name: Vérifie que l'appli packagée démarre sans planter
+        shell: pwsh
+        run: |
+          $exe = "release\win-unpacked\Jaris.exe"
+          if (-not (Test-Path $exe)) { throw "Exécutable introuvable : $exe" }
+          $proc = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 15
+          $stillRunning = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
+          if (-not $stillRunning) {
+            throw "Jaris s'est fermé tout seul dans les 15 secondes suivant son lancement (code de sortie $($proc.ExitCode)) : plantage au démarrage."
+          }
+          Write-Host "Jaris tourne toujours après 15s, aucun plantage détecté."
+          Stop-Process -Id $proc.Id -Force
+
       # Récupérable depuis l'onglet Actions de GitHub, sur chaque commit poussé : c'est le moyen le plus
       # rapide de tester une version en cours de développement sur un vrai PC Windows.
       - uses: actions/upload-artifact@v4

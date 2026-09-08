@@ -32,6 +32,7 @@ declare global {
       onTranscript: (cb: (text: string) => void) => () => void
       onReply: (cb: (payload: VoiceReplyPayload) => void) => () => void
       onLog: (cb: (message: string) => void) => () => void
+      onChatStreamToken: (cb: (delta: string) => void) => () => void
       onSetupStatus: (cb: (status: VoiceSetupStatusPayload) => void) => () => void
       getSetupStatus: () => Promise<VoiceSetupStatusPayload>
       triggerWake: () => void
@@ -48,6 +49,7 @@ declare global {
       clearConversationHistory: () => Promise<void>
       openConversationHistoryFile: () => Promise<void>
       getModelOverview: () => Promise<ModelOverviewResult>
+      getCodeCandidateModelIds: () => Promise<string[]>
       getOllamaVersionStatus: () => Promise<OllamaVersionStatus | null>
       updateOllama: () => Promise<{ success: boolean; message: string }>
       getAppVersionStatus: () => Promise<AppVersionStatus | null>

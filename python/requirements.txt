@@ -1,12 +1,21 @@
-transformers>=5.4.0
+# Versions figées (étape 45) : résolues ensemble via `pip install --dry-run` (pas juste la dernière version
+# de chaque paquet prise indépendamment — certaines dernières versions indépendantes, ex: librosa 1.0.0 ou
+# scipy 1.18.1, se sont révélées incompatibles entre elles une fois résolues toutes ensemble). Sans ça, deux
+# installations de la même version de Jaris, à quelques semaines d'écart, pouvaient récupérer des versions
+# différentes de chaque dépendance — jamais testées ensemble, un risque inutile pour un simple sidecar voix.
+transformers==5.16.1
+huggingface_hub==1.30.0
+soundfile==0.14.0
+librosa==0.11.0
+scipy==1.17.1
+sentencepiece==0.2.2
+protobuf==7.36.1
+accelerate==1.14.0
+sounddevice==0.5.6
+numpy==2.4.6
+supertonic==1.3.1
+# torch délibérément SANS version figée ici : installé à part et en amont pour les machines NVIDIA
+# (pythonRuntime.ts, index CUDA dédié) avant que cette liste ne soit appliquée — une version figée ici
+# risquerait de forcer pip à réinstaller une version différente (donc potentiellement sans support GPU)
+# par-dessus celle déjà installée. Voir le commentaire d'installDependencies() dans pythonRuntime.ts.
 torch
-huggingface_hub
-soundfile
-librosa
-scipy
-sentencepiece
-protobuf
-accelerate
-sounddevice>=0.5.5
-numpy>=2.0
-supertonic

@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { chatWithOllama, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError, type OllamaMessage } from './ollama'
+import { getProfile } from './profileStore'
 import type { GeneratedApp } from '../../shared/ipc'
 
 /**
@@ -201,14 +202,40 @@ export const CODE_MODEL_QUALITY = 'qwen3.6:35b-a3b'
 export const CODE_MODEL_FAST = 'qwen2.5-coder:7b'
 
 /**
- * Choisit le modèle de code à utiliser : le modèle qualité s'il est déjà installé (l'utilisateur a fait la
- * démarche consciente de le récupérer, potentiellement plusieurs dizaines de Go), sinon le modèle rapide,
- * téléchargé automatiquement au besoin (il reste raisonnable, ~4,7 Go). On ne retombe plus sur le palier
- * "puissant" de la conversation comme avant : un modèle généraliste s'est révélé insuffisant pour du code
- * (voir l'historique Git), alors qu'un modèle réellement spécialisé fait une vraie différence.
+ * Choisit le modèle de code à utiliser :
+ * 1. Le choix explicite de Options → Modèles (étape 46, `profile.codeModel`), parmi tous les candidats du
+ *    tableau de comparaison (CODE_CANDIDATES, hardwareScan.ts) — pas seulement les deux ci-dessus. Avant
+ *    cette étape, ce choix n'existait tout simplement pas : le mode Code ignorait le reste du catalogue,
+ *    même déjà comparé dans Options → Modèles.
+ * 2. À défaut ('auto'/non défini, comportement historique) : le modèle qualité s'il est déjà installé
+ *    (l'utilisateur a fait la démarche consciente de le récupérer, potentiellement plusieurs dizaines de
+ *    Go), sinon le modèle rapide, téléchargé automatiquement au besoin (il reste raisonnable, ~4,7 Go). On
+ *    ne retombe plus sur le palier "puissant" de la conversation comme avant : un modèle généraliste s'est
+ *    révélé insuffisant pour du code (voir l'historique Git), alors qu'un modèle réellement spécialisé fait
+ *    une vraie différence.
  */
-async function resolveCodeModel(onStatus: (message: string) => void): Promise<string> {
+async function resolveCodeModel(onStatus: (message: string) => void, preferredModel?: string): Promise<string> {
   const installed = await listInstalledModels().catch(() => [] as string[])
+
+  if (preferredModel && preferredModel !== 'auto') {
+    if (installed.includes(preferredModel)) {
+      onStatus(`Modèle choisi dans Options → Modèles : ${preferredModel}.`)
+      return preferredModel
+    }
+    onStatus(`Téléchargement du modèle de code choisi dans Options (${preferredModel})…`)
+    try {
+      await pullModelIfMissing(preferredModel, onStatus)
+      return preferredModel
+    } catch (err) {
+      if (err instanceof ModelTooLargeError || err instanceof DiskFullError) {
+        onStatus(`${preferredModel} ignoré (${err.message}) : repli sur le choix automatique.`)
+        // Continue plus bas sur la logique automatique plutôt que de faire échouer toute la génération pour
+        // un choix devenu irréalisable (ex: changement de machine depuis le dernier réglage).
+      } else {
+        throw err
+      }
+    }
+  }
 
   if (installed.includes(CODE_MODEL_QUALITY)) {
     onStatus(`Modèle qualité détecté : ${CODE_MODEL_QUALITY}.`)
@@ -281,7 +308,8 @@ export async function generateApp(
   onStatus: (message: string) => void,
   currentHtml?: string
 ): Promise<GeneratedApp> {
-  const model = await resolveCodeModel(onStatus)
+  const profile = await getProfile()
+  const model = await resolveCodeModel(onStatus, profile?.codeModel)
 
   const userPrompt = currentHtml
     ? `Voici le fichier actuel de l'application :\n\n\`\`\`html\n${currentHtml}\n\`\`\`\n\n` +
