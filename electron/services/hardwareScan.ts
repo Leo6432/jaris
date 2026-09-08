@@ -715,14 +715,15 @@ export async function pickBestCodeModel(): Promise<string> {
 }
 
 /**
- * Bornes utilisées UNIQUEMENT pour illustrer/étiqueter "Petite/Moyenne/Grande configuration" à
- * l'utilisateur (écran d'accueil, voir CapacityScan.tsx) — le VRAI choix de modèles
- * (pickBestModelsFromBenchmark, computeModelPicks) reste continu, basé sur la VRAM/RAM exacte détectée, pas
- * sur ces 3 paliers. Essayé un temps de vraiment regrouper le choix en 3 paliers matériels stricts (demande
- * initiale de Léo) : abandonné après simulation contre les vraies données — sur une machine avec peu de VRAM
- * mais beaucoup de RAM, le débordement RAM autorisé pour "Puissant" faisait gagner un modèle énorme même
- * pour le palier "Rapide", censé rester réactif. Ces 3 bornes ne servent donc plus qu'à choisir QUOI montrer
- * à l'écran, jamais à choisir un modèle pour de vrai.
+ * Bornes utilisées UNIQUEMENT pour étiqueter "Petite/Moyenne/Grande configuration" et illustrer les 2
+ * paliers qui ne sont PAS celui de l'utilisateur (écran d'accueil, voir CapacityScan.tsx) — le VRAI choix de
+ * modèles (pickBestModelsFromBenchmark, computeModelPicks) reste continu, basé sur la VRAM/RAM exacte
+ * détectée, pas sur ces 3 paliers fixes. Essayé un temps de vraiment regrouper le choix en 3 paliers
+ * matériels stricts (demande initiale de Léo) : abandonné après simulation contre les vraies données — sur
+ * une machine avec peu de VRAM mais beaucoup de RAM, le débordement RAM autorisé pour "Puissant" faisait
+ * gagner un modèle énorme même pour le palier "Rapide", censé rester réactif. La ligne "ta configuration"
+ * (previewHardwareTiers plus bas) calcule quand même avec la VRAM réelle, pas un de ces 3 points fixes : elle
+ * doit rester fidèle à ce qui est vraiment enregistré dans le profil, jamais une approximation.
  */
 // 4 Go était trop bas : une fois les ~4,5 Go de STT_RESERVED_GB déduits, le budget tombait à 0 et TOUT
 // retombait sur le repli "aucun résultat connu" (vitesse/fiabilité vides pour absolument chaque modèle,
@@ -734,10 +735,12 @@ const HARDWARE_TIER_PREVIEW_VRAM_GB = [6, 12, 24]
 const HARDWARE_TIER_PREVIEW_LABELS = ['Configuration petite', 'Configuration moyenne', 'Configuration grande']
 
 /**
- * 3 lignes illustratives (VRAM représentative, RAM/carte RÉELLES de cette machine) pour l'écran d'accueil :
- * montre concrètement ce que Jaris choisirait à 3 échelles de VRAM différentes, avec un repère clair sur
- * celle qui correspond à CETTE machine — sans jamais lancer le moindre téléchargement (computeModelPicks est
- * pur, verified-tool-scores.md/benchmark-results.md sont déjà sur le disque).
+ * 3 lignes pour l'écran d'accueil : les 2 qui ne correspondent pas à cette machine sont illustratives (VRAM
+ * représentative fixe, 6/12/24 Go), la ligne marquée "ta configuration" (current) utilise la VRAM RÉELLE
+ * détectée — donc toujours les mêmes modèles que ceux réellement choisis/enregistrés par
+ * pickBestModelsFromBenchmark, jamais une approximation arrondie au palier le plus proche. Sans jamais
+ * lancer le moindre téléchargement (computeModelPicks est pur, verified-tool-scores.md/benchmark-results.md
+ * sont déjà sur le disque).
  */
 export async function previewHardwareTiers(): Promise<HardwareTierPreview[]> {
   const { name, vramGb: actualVramGb } = await detectGpu()
@@ -753,6 +756,13 @@ export async function previewHardwareTiers(): Promise<HardwareTierPreview[]> {
     label: HARDWARE_TIER_PREVIEW_LABELS[i],
     vramGb,
     current: i === currentIndex,
-    ...computeModelPicks(vramGb, ramGb, name, localBenchmark, verifiedToolScores)
+    // Pour la ligne "ta configuration", calculer avec la VRAM RÉELLE de cette machine plutôt qu'avec le
+    // point représentatif fixe (6/12/24) : deux machines dans la même tranche "Moyenne" (ex: 7 Go et 11 Go)
+    // n'obtiennent pas forcément les mêmes modèles, donc afficher toujours le point fixe sous "ta
+    // configuration" pouvait montrer des modèles différents de ceux réellement choisis et enregistrés dans
+    // le profil (pickBestModelsFromBenchmark, plus bas dans ce fichier) — repéré par Léo. Les 2 autres
+    // lignes restent purement illustratives (point fixe), pas la peine de recalculer pour des machines qui
+    // ne sont pas la sienne.
+    ...computeModelPicks(i === currentIndex && actualVramGb !== null ? actualVramGb : vramGb, ramGb, name, localBenchmark, verifiedToolScores)
   }))
 }

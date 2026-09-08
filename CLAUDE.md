@@ -127,6 +127,22 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   reste de Jaris, à la demande explicite de Léo. Le calcul existait déjà (`computeModelPicks` calculait un
   pick "code" depuis le début) mais son résultat était juste jeté sans être utilisé — vérifier si une valeur
   déjà calculée est réellement exploitée en aval avant de supposer qu'un comportement différent est voulu.
+- **Un tableau "illustratif" qui met en évidence la ligne "ta configuration" doit vraiment refléter cette
+  configuration, pas le point représentatif fixe le plus proche** : `previewHardwareTiers` (hardwareScan.ts)
+  calculait les 3 paliers avec 3 VRAM fixes (6/12/24 Go), y compris la ligne marquée comme correspondant à la
+  machine de l'utilisateur — deux machines dans la même tranche (7 Go et 11 Go, toutes deux "Moyenne")
+  pouvaient donc voir des modèles différents de ceux réellement choisis pour elles. Repéré par Léo. Corrigé
+  en calculant la ligne "current" avec la VRAM RÉELLE détectée plutôt qu'avec le point fixe du palier — les 2
+  autres lignes restent de la pure illustration, seule celle qui prétend représenter "ta configuration" doit
+  être exacte.
+- **Un service démarré une fois par Jaris et qui reste "up" indéfiniment (SearXNG, `docker compose up -d`)
+  n'est jamais reconfiguré tout seul si le fichier monté en volume change** (`searxng/settings.yml`) : le
+  check `isUp` faisait sortir `ensureSearxngRunning` immédiatement sans jamais comparer la config sur le
+  disque à celle réellement appliquée par le conteneur déjà lancé — un 403 causé par une config devenue
+  périmée (mise à jour de Jaris, ou modif manuelle) restait donc bloqué jusqu'à un redémarrage MANUEL du
+  conteneur, que Léo n'est pas censé savoir faire lui-même. Corrigé en comparant un hash de settings.yml à un
+  marqueur stocké dans userData (mis à jour à chaque (re)démarrage réussi) : différent -> `docker compose
+  restart` automatique, sans jamais demander à Léo de taper une commande.
 - **Une automatisation "propre" mais laissée à côté d'un menu déroulant manuel n'est qu'à moitié faite** : la
   première version de la sélection automatique du modèle Code (ci-dessus) gardait un réglage manuel dans
   Options par prudence, alors qu'aucun autre palier (flash/médium/puissant/vision) n'en a — Léo l'a repéré

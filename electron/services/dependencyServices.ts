@@ -1,6 +1,8 @@
 import { exec, execSync, spawn, type ChildProcess } from 'child_process'
+import { createHash } from 'crypto'
+import { app } from 'electron'
 import { existsSync } from 'fs'
-import { writeFile } from 'fs/promises'
+import { readFile, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { promisify } from 'util'
@@ -477,12 +479,65 @@ export async function stopOllamaCompletely(): Promise<void> {
   await execAsync('taskkill /IM "ollama app.exe" /F').catch(() => {})
 }
 
+/** Fichier marqueur (userData) gardant le hash du settings.yml appliqué au dernier (re)démarrage du conteneur. */
+function searxngSettingsHashMarkerPath(): string {
+  return join(app.getPath('userData'), 'searxng-settings-hash.txt')
+}
+
+async function currentSettingsHash(): Promise<string | null> {
+  try {
+    const settingsPath = join(resourcesRoot(), 'searxng', 'settings.yml')
+    return createHash('sha256').update(await readFile(settingsPath)).digest('hex')
+  } catch {
+    return null
+  }
+}
+
+/** Marque le hash actuel de settings.yml comme "appliqué" — appelé après tout (re)démarrage réussi du conteneur. */
+async function markSettingsHashApplied(): Promise<void> {
+  const hash = await currentSettingsHash()
+  if (hash) await writeFile(searxngSettingsHashMarkerPath(), hash, 'utf-8').catch(() => {})
+}
+
 /**
- * Démarre Docker Desktop (si besoin) puis `docker compose up -d` pour SearXNG (recherche web).
- * Non bloquant pour le reste de Jaris : la recherche web est juste indisponible en attendant.
+ * SearXNG ne relit `searxng/settings.yml` qu'au démarrage de son propre process (voir le piège documenté
+ * dans CLAUDE.md/AGENTS.md) : `docker compose up -d` seul ne le relance jamais si le conteneur tourne déjà,
+ * donc un changement de ce fichier (mise à jour de Jaris, ou modification manuelle) reste invisible pour de
+ * bon jusqu'à un redémarrage explicite du conteneur — vécu par Léo (recherche web bloquée en 403 malgré une
+ * config pourtant correcte sur le disque). Détecté ici en comparant le hash actuel du fichier à celui
+ * appliqué au dernier démarrage connu (marqueur dans userData, jamais dans le dossier SearXNG lui-même,
+ * recopié à chaque mise à jour de l'appli) : différent (ou absent, ex: mise à jour depuis une version de
+ * Jaris antérieure à ce correctif) -> redémarrage automatique, sans jamais demander à Léo de taper une
+ * commande Docker lui-même.
+ */
+async function settingsHashChangedSinceLastStart(): Promise<boolean> {
+  const currentHash = await currentSettingsHash()
+  if (!currentHash) return false // settings.yml illisible : ne bloque jamais SearXNG pour ça.
+  const markerPath = searxngSettingsHashMarkerPath()
+  const lastHash = existsSync(markerPath) ? (await readFile(markerPath, 'utf-8').catch(() => '')).trim() : null
+  return currentHash !== lastHash
+}
+
+/**
+ * Démarre Docker Desktop (si besoin) puis `docker compose up -d` pour SearXNG (recherche web) — ou, si le
+ * conteneur tourne déjà mais que `settings.yml` a changé depuis son dernier démarrage, `docker compose
+ * restart` pour que le changement soit enfin pris en compte (voir settingsHashChangedSinceLastStart
+ * ci-dessus). Non bloquant pour le reste de Jaris : la recherche web est juste indisponible en attendant.
  */
 export async function ensureSearxngRunning(log: LogFn): Promise<void> {
-  if (await isUp(config.searxng.host)) return
+  if (await isUp(config.searxng.host)) {
+    if (await settingsHashChangedSinceLastStart()) {
+      log('Configuration SearXNG modifiée depuis le dernier démarrage : redémarrage du conteneur…')
+      try {
+        await execAsync('docker compose restart', { cwd: resourcesRoot(), windowsHide: true })
+        await markSettingsHashApplied()
+        log('SearXNG redémarré avec la configuration à jour.')
+      } catch (err) {
+        log(`Échec du redémarrage de SearXNG : ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+    return
+  }
 
   log("SearXNG n'est pas lancé, démarrage de Docker…")
   try {
@@ -519,6 +574,7 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
 
   try {
     await execAsync('docker compose up -d', { cwd: resourcesRoot(), windowsHide: true })
+    await markSettingsHashApplied()
   } catch (err) {
     log(`Échec du démarrage de SearXNG : ${err instanceof Error ? err.message : String(err)}`)
     return

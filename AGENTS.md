@@ -117,6 +117,19 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   comportement plus cohérent avec le reste du système était possible depuis longtemps sans jamais avoir été
   branché — vérifier si une valeur déjà calculée est réellement utilisée avant de supposer qu'un
   comportement différent est intentionnel.
+- **Un tableau "illustratif" avec une ligne mise en avant comme "ta configuration" doit vraiment refléter
+  cette configuration, pas le point représentatif fixe le plus proche** : un calcul de paliers par 3 points
+  fixes de VRAM (6/12/24 Go) donnait la même ligne "current" à deux machines pourtant différentes (7 Go et 11
+  Go), avec potentiellement des modèles différents de ceux réellement choisis pour chacune. Corrigé en
+  calculant cette ligne précise avec la VRAM réelle détectée, pas le point fixe du palier — seules les lignes
+  purement illustratives (pas "la sienne") peuvent rester approximatives.
+- **Un service démarré une fois et laissé "up" indéfiniment (ex: SearXNG via `docker compose up -d`) ne se
+  reconfigure jamais tout seul si un fichier monté en volume change** : un simple check "le service
+  répond-il" faisait sortir la fonction de démarrage immédiatement sans jamais comparer la config sur le
+  disque à celle réellement appliquée par le conteneur déjà lancé, bloquant un utilisateur non technique
+  derrière une commande de redémarrage qu'il ne sait pas taper lui-même. Corrigé en comparant un hash du
+  fichier de config à un marqueur mis à jour à chaque (re)démarrage réussi : différent -> redémarrage
+  automatique du conteneur, sans jamais demander à l'utilisateur de toucher un terminal.
 - **Une automatisation qui reproduit un mécanisme existant doit aussi reproduire son INTERFACE, pas
   seulement sa logique interne** : la sélection automatique du modèle Code (ci-dessus) gardait d'abord un
   menu déroulant manuel dans Options par prudence, alors qu'aucun autre palier (flash/médium/puissant/vision)

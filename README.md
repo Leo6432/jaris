@@ -282,6 +282,18 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ✅ Étape 48 — Réponses du Chat affichées au fil de leur génération
   (streaming), nouvel outil read_web_page pour lire le contenu complet
   d'une page trouvée par search_web quand l'extrait ne suffit pas
+- ✅ Étape 50 — Deux corrections signalées par Léo après l'étape 46 :
+  le tableau des 3 paliers affiche à nouveau la ligne Code (retirée en
+  v0.3.1 quand elle ne reflétait pas encore un vrai calcul), et calcule
+  maintenant la ligne "ta configuration" avec la VRAM réelle détectée
+  plutôt qu'un des 3 points fixes (6/12/24 Go) — deux machines de la même
+  tranche pouvaient sinon afficher des modèles différents de ceux
+  vraiment enregistrés dans leur profil. SearXNG (recherche web) se
+  redémarre aussi tout seul quand `settings.yml` a changé depuis son
+  dernier démarrage (hash comparé à un marqueur dans userData) : avant,
+  `docker compose up -d` ne relançait jamais un conteneur déjà en route,
+  laissant une config pourtant corrigée sur le disque bloquée derrière un
+  redémarrage manuel que Léo n'a pas à savoir faire
 
 ## Démarrer en développement
 
