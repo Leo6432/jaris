@@ -28,14 +28,14 @@ export async function searchWeb(query: string): Promise<string> {
   if (!response.ok) {
     // 403 sur ?format=json précisément (jamais sur la recherche HTML normale) : SearXNG refuse ce format
     // par défaut pour décourager le scraping à grande échelle des instances PUBLIQUES — searxng/settings.yml
-    // de ce dépôt l'active déjà (search.formats: [html, json], server.limiter: false), mais SearXNG ne relit
-    // ce fichier qu'au démarrage du conteneur : un conteneur déjà lancé avant/sans cette config (ou qui n'a
-    // simplement jamais redémarré depuis) continue de refuser le JSON tant qu'il n'est pas relancé.
+    // de ce dépôt l'active déjà (search.formats: [html, json], server.limiter: false). ensureSearxngRunning
+    // (dependencyServices.ts) teste et répare déjà ça tout seul à chaque démarrage de Jaris (recrée le
+    // conteneur si le format JSON est refusé) : ce message ne devrait donc apparaître qu'entre deux
+    // démarrages de Jaris (config modifiée à la main pendant que Jaris tourne déjà), jamais durablement.
     const hint =
       response.status === 403
-        ? " (le format JSON est-il bien activé côté SearXNG ? vérifie searxng/settings.yml (formats: json, " +
-          "limiter: false) puis redémarre le conteneur avec \"docker compose restart\" pour qu'il reprenne " +
-          'en compte ce fichier)'
+        ? ' (vérifie searxng/settings.yml (formats: json, limiter: false) puis relance Jaris — la ' +
+          'configuration est revérifiée et le conteneur recréé automatiquement si besoin à chaque démarrage)'
         : ''
     throw new Error(`SearXNG a répondu ${response.status}${hint} : ${await response.text()}`)
   }

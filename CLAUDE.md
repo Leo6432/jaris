@@ -137,12 +137,26 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   être exacte.
 - **Un service démarré une fois par Jaris et qui reste "up" indéfiniment (SearXNG, `docker compose up -d`)
   n'est jamais reconfiguré tout seul si le fichier monté en volume change** (`searxng/settings.yml`) : le
-  check `isUp` faisait sortir `ensureSearxngRunning` immédiatement sans jamais comparer la config sur le
-  disque à celle réellement appliquée par le conteneur déjà lancé — un 403 causé par une config devenue
-  périmée (mise à jour de Jaris, ou modif manuelle) restait donc bloqué jusqu'à un redémarrage MANUEL du
-  conteneur, que Léo n'est pas censé savoir faire lui-même. Corrigé en comparant un hash de settings.yml à un
-  marqueur stocké dans userData (mis à jour à chaque (re)démarrage réussi) : différent -> `docker compose
-  restart` automatique, sans jamais demander à Léo de taper une commande.
+  check `isUp` faisait sortir `ensureSearxngRunning` immédiatement sans jamais vérifier que le conteneur déjà
+  lancé fonctionne vraiment comme prévu — un 403 sur le format JSON restait donc bloqué jusqu'à un
+  redémarrage MANUEL du conteneur, que Léo n'est pas censé savoir faire lui-même.
+  **Premier correctif (v0.3.6) insuffisant, à ne pas refaire** : comparer un hash de settings.yml à un
+  marqueur stocké dans userData supposait que la SEULE cause possible était "le process de SearXNG n'a jamais
+  relu le fichier depuis qu'il a changé" — un `docker compose restart` suffisait alors. Vécu en usage réel :
+  Léo avait toujours le même 403 après cette version. Cause probable plus large (jamais confirmée avec
+  certitude faute d'accès à sa machine) : un `restart` relance le PROCESS mais ne retouche jamais à la
+  résolution du montage Docker (`volumes:`) fait à la création du conteneur — si ce montage a un jour pointé
+  vers autre chose que le vrai `searxng/settings.yml` (dossier auto-créé vide par Docker si le chemin
+  n'existait pas encore à la toute première création du conteneur, par exemple), aucun `restart` ne le
+  corrige jamais, seule une VRAIE recréation du conteneur le peut. **Corrigé pour de bon (v0.3.7)** en testant
+  directement la vraie capacité dont Jaris a besoin (une requête `?format=json` réelle, voir
+  `searxngJsonSearchWorks` dans dependencyServices.ts) plutôt que de deviner la cause via des comparaisons de
+  fichiers : peu importe POURQUOI le conteneur refuse le JSON, ce test le détecte, et `docker compose up -d
+  --force-recreate` (jamais un simple `restart`) répare toutes les causes possibles d'un coup, pas seulement
+  celle initialement supposée. **Leçon générale : préférer toujours tester le comportement RÉEL observable
+  (est-ce que ça marche ?) plutôt que d'inférer un état interne (un fichier a-t-il changé ?) quand la cause
+  exacte d'un bug n'est pas confirmée avec certitude** — un correctif basé sur une hypothèse non vérifiée peut
+  sembler correct en relecture de code tout en ne réglant rien en usage réel.
 - **Une automatisation "propre" mais laissée à côté d'un menu déroulant manuel n'est qu'à moitié faite** : la
   première version de la sélection automatique du modèle Code (ci-dessus) gardait un réglage manuel dans
   Options par prudence, alors qu'aucun autre palier (flash/médium/puissant/vision) n'en a — Léo l'a repéré

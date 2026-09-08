@@ -125,11 +125,24 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   purement illustratives (pas "la sienne") peuvent rester approximatives.
 - **Un service démarré une fois et laissé "up" indéfiniment (ex: SearXNG via `docker compose up -d`) ne se
   reconfigure jamais tout seul si un fichier monté en volume change** : un simple check "le service
-  répond-il" faisait sortir la fonction de démarrage immédiatement sans jamais comparer la config sur le
-  disque à celle réellement appliquée par le conteneur déjà lancé, bloquant un utilisateur non technique
-  derrière une commande de redémarrage qu'il ne sait pas taper lui-même. Corrigé en comparant un hash du
-  fichier de config à un marqueur mis à jour à chaque (re)démarrage réussi : différent -> redémarrage
-  automatique du conteneur, sans jamais demander à l'utilisateur de toucher un terminal.
+  répond-il" faisait sortir la fonction de démarrage immédiatement sans jamais vérifier que le conteneur déjà
+  lancé fonctionne vraiment comme prévu, bloquant un utilisateur non technique derrière une commande de
+  redémarrage qu'il ne sait pas taper lui-même.
+  **Premier correctif insuffisant, à ne pas refaire** : comparer un hash du fichier de config à un marqueur
+  supposait que la SEULE cause possible était "le process n'a jamais relu le fichier depuis qu'il a changé" —
+  un simple redémarrage du process suffisait alors. Vécu en usage réel : le même échec persistait après cette
+  version. Un redémarrage relance le PROCESS mais ne retouche jamais à la résolution du montage (volume)
+  fait à la création du conteneur — si ce montage a un jour pointé vers autre chose que le vrai fichier
+  (dossier auto-créé vide par le moteur de conteneurs si le chemin n'existait pas encore à la toute première
+  création), aucun redémarrage simple ne le corrige, seule une VRAIE recréation du conteneur le peut.
+  **Corrigé pour de bon** en testant directement la vraie capacité dont l'app a besoin (une requête réelle
+  reproduisant l'usage réel) plutôt que de deviner la cause via des comparaisons de fichiers : peu importe
+  POURQUOI le service refuse, ce test le détecte, et une VRAIE recréation du conteneur (jamais un simple
+  redémarrage) répare toutes les causes possibles d'un coup. **Leçon générale : préférer toujours tester le
+  comportement RÉEL observable (est-ce que ça marche ?) plutôt que d'inférer un état interne (un fichier
+  a-t-il changé ?) quand la cause exacte d'un bug n'est pas confirmée avec certitude** — un correctif basé
+  sur une hypothèse non vérifiée peut sembler correct en relecture de code tout en ne réglant rien en usage
+  réel.
 - **Une automatisation qui reproduit un mécanisme existant doit aussi reproduire son INTERFACE, pas
   seulement sa logique interne** : la sélection automatique du modèle Code (ci-dessus) gardait d'abord un
   menu déroulant manuel dans Options par prudence, alors qu'aucun autre palier (flash/médium/puissant/vision)
