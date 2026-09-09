@@ -14,6 +14,7 @@ import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetu
 import { runModelAnalysis, runQuickSetup } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
 import { generateApp, getGeneratedAppsDir } from './services/codeGenerator'
+import { createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
 import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
 import { createTrayIcon } from './services/trayIcon'
@@ -52,6 +53,7 @@ import {
  * l'évènement 'second-instance' CHEZ LA PREMIÈRE INSTANCE (voir plus bas showFullWindow) plutôt que
  * d'ouvrir sa propre fenêtre.
  */
+registerPreviewScheme()
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 if (!gotSingleInstanceLock) {
   app.quit()
@@ -271,6 +273,7 @@ app.whenReady().then(async () => {
   // déjà perdu la course au verrou continuerait quand même à créer sa fenêtre, démarrer Ollama, etc. avant
   // de se fermer — exactement le flash visible à corriger ici.
   if (!gotSingleInstanceLock) return
+  registerPreviewHandler()
 
   // Autorise silencieusement l'accès micro pour les fenêtres de Jaris (enumerateDevices() ne révèle les
   // vrais noms de périphériques audio qu'après une permission media accordée, voir Options → Voix) : sans
@@ -426,12 +429,13 @@ app.whenReady().then(async () => {
   // génération + relecture peut prendre plusieurs minutes sur un modèle local).
   ipcMain.handle(
     IPC_CHANNELS.generateApp,
-    (event, description: string, currentHtml?: string): Promise<GeneratedApp> => {
-      return generateApp(
+    async (event, description: string, currentHtml?: string): Promise<GeneratedApp> => {
+      const generated = await generateApp(
         description,
         (message) => event.sender.send(IPC_CHANNELS.codeGenStatus, message),
         currentHtml
       )
+      return { ...generated, previewUrl: createGeneratedAppPreview(generated.html) }
     }
   )
   ipcMain.handle(IPC_CHANNELS.openGeneratedApp, async (_event, path?: string) => {

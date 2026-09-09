@@ -385,6 +385,13 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   langage fautif détecté (même mécanisme que `nudgedForEmail`/`nudgedForPromise` dans assistant.ts) avant
   d'abandonner avec le message détaillé. Régression : `node --test scripts/test-codegen-generate.mjs`.
 
+- **Une iframe `srcDoc` hérite de la CSP du document Jaris** : `script-src 'self'` bloquait le JavaScript
+  inline d'un jeu pourtant fonctionnel dans le navigateur. Reproduit avec un vrai clic sur Jouer : bouton
+  atteint mais script bloqué par CSP. Servir l'aperçu via une origine dédiée `jaris-preview:` avec sa propre
+  CSP et `sandbox allow-scripts`, sans `allow-same-origin`, plutôt qu'assouplir les scripts de la fenêtre
+  principale. Le protocole ne sert que du HTML enregistré en mémoire, jamais un chemin de fichier fourni
+  par l'URL. Vérifier clic Jouer, clavier, clic extérieur, accès parent/réseau refusés et CSP parent conservée.
+
 ## Commandes utiles
 
 ```

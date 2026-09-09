@@ -123,7 +123,7 @@ export default function CodePanel(): JSX.Element {
             // sans accès à Jaris ni aux fichiers locaux. Conséquence assumée : localStorage y est bloqué
             // (d'où le try/catch imposé dans les consignes de génération), mais il refonctionne dès que le
             // fichier est ouvert normalement dans un navigateur depuis le dossier du projet.
-            <iframe className="code-panel__preview" title="Aperçu de l'application" sandbox="allow-scripts" srcDoc={appResult.html} />
+            <iframe className="code-panel__preview" title="Aperçu de l'application" sandbox="allow-scripts" src={appResult.previewUrl} />
           ) : (
             <pre className="code-panel__code">{appResult.html}</pre>
           )}

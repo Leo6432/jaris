@@ -296,6 +296,8 @@ export interface ChatMessage {
  */
 export interface GeneratedApp {
   html: string
+  /** URL isolée ajoutée par le main lors de l'envoi au renderer. */
+  previewUrl?: string
   /** Dossier du projet généré sur le disque (contient index.html). */
   path: string
   /**
