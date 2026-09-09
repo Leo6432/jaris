@@ -6,16 +6,6 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 
 ## État actuel
 
-- ⬜ Étape 51 — SearXNG (recherche web) renvoie encore un 403 sur le
-  format JSON chez Léo malgré 2 correctifs tentés (v0.3.6 : redémarrage
-  du conteneur si settings.yml a changé depuis un marqueur ; v0.3.7 :
-  test direct de la vraie requête JSON + recréation complète du
-  conteneur si elle échoue) — les deux confirmés inefficaces en usage
-  réel, la vraie cause n'est donc pas encore identifiée avec certitude.
-  L'étape 52 (voir plus bas) permet au moins d'obtenir maintenant le
-  VRAI message d'erreur de SearXNG tel quel (plus de dépannage inventé
-  par le modèle par-dessus) pour diagnostiquer sur des faits la
-  prochaine fois que Léo retombe dessus
 - ⬜ Étape 47 — Mémoire unifiée entre Voix et Chat : les deux modes
   enregistrent dans le même fichier (`conversation-history.json`) mais
   gardent chacun leur historique en mémoire chargé séparément au premier
@@ -301,12 +291,24 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   vraiment enregistrés dans leur profil
 - ✅ Étape 52 — Le modèle de conversation remplaçait parfois un vrai
   message d'erreur d'outil par un dépannage générique inventé et FAUX
-  (constaté sur l'échec SearXNG ci-dessous : des étapes nginx/.htaccess
-  qui n'existent pas dans Jaris), malgré une consigne système explicite
-  le lui interdisant déjà. Corrigé en court-circuitant le modèle plutôt
-  qu'en renforçant encore la consigne : un échec d'outil devient
-  directement la réponse finale, jamais reformulé — même logique que le
-  court-circuit déjà existant pour look_at_screen
+  (constaté sur un échec SearXNG persistant, voir étape 53 : des étapes
+  nginx/.htaccess qui n'existent pas dans Jaris), malgré une consigne
+  système explicite le lui interdisant déjà. Corrigé en court-circuitant
+  le modèle plutôt qu'en renforçant encore la consigne : un échec d'outil
+  devient directement la réponse finale, jamais reformulé — même logique
+  que le court-circuit déjà existant pour look_at_screen
+- ✅ Étape 53 — Deux corrections supplémentaires signalées par Léo :
+  (1) SearXNG répondait 403 en boucle malgré 2 correctifs (v0.3.6/v0.3.7)
+  qui ciblaient tous les deux le conteneur SearXNG lui-même — le VRAI
+  message d'erreur obtenu grâce à l'étape 52 a révélé que le corps de la
+  réponse était en fait la page 403 par défaut d'Apache, jamais produite
+  par SearXNG : un AUTRE logiciel déjà installé occupait le port 8080
+  (port très commun) et se faisait passer pour SearXNG "déjà démarré" —
+  les correctifs précédents ne pouvaient donc jamais avoir d'effet, le
+  vrai conteneur SearXNG n'ayant peut-être même jamais réussi à démarrer
+  sur cette machine. Corrigé en déplaçant SearXNG sur le port 8091 ;
+  (2) le mode vocal réagissait à la voix même en étant sur l'onglet Chat
+  ou Code — suspendu tant qu'un de ces deux onglets est actif
 
 ## Démarrer en développement
 
@@ -1313,7 +1315,9 @@ compte, aucune clé) au lancement de l'appli — pas besoin de lancer
 docker compose up -d
 ```
 
-Ça démarre un moteur de recherche auto-hébergé sur `http://localhost:8080`.
+Ça démarre un moteur de recherche auto-hébergé sur `http://localhost:8091`
+(port volontairement inhabituel plutôt que le 8080 par défaut de SearXNG,
+trop souvent déjà pris par un autre logiciel — voir docker-compose.yml).
 La config nécessaire (API JSON activée) est déjà dans `searxng/settings.yml`,
 suivi par Git — rien à configurer à la main. Jaris l'utilise automatiquement
 dès que tu lui poses une question qui demande une info récente ou qu'il ne

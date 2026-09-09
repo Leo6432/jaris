@@ -63,6 +63,24 @@ export default function App(): JSX.Element {
     void window.jaris.getMemoryGraph().then(setMemoryGraph)
   }
 
+  // Suspend la réaction à la voix tant que l'onglet Chat ou Code est actif (à la demande explicite de
+  // Léo) : Jaris n'a aucune raison de réagir au mot d'activation pendant que l'utilisateur écrit dans un
+  // autre mode. Uniquement depuis la fenêtre de réglages (`?mode=full`, seule à avoir ces onglets) : le
+  // widget (`?mode=widget`) n'a pas de sélecteur de mode et ne doit jamais envoyer ce signal.
+  useEffect(() => {
+    if (MODE !== 'full') return
+    window.jaris.setActiveMode(appMode)
+    // Repositionne l'état réel côté main quand cette fenêtre redevient visible (ex: rouverte depuis le
+    // widget après avoir été repliée) : main.ts force déjà la reprise de l'écoute au repli (voir 'close'/
+    // 'minimize' dans main.ts), donc sans ce resync l'onglet resté sur Chat/Code depuis la dernière fois
+    // laisserait Jaris écouter alors que l'écran affiche encore Chat/Code, jusqu'au prochain clic d'onglet.
+    const resync = (): void => {
+      if (document.visibilityState === 'visible') window.jaris.setActiveMode(appMode)
+    }
+    document.addEventListener('visibilitychange', resync)
+    return () => document.removeEventListener('visibilitychange', resync)
+  }, [appMode])
+
   useEffect(() => {
     window.jaris.getProfile().then((profile) => {
       setProfileName(profile?.name ?? null)

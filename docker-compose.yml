@@ -5,10 +5,18 @@ services:
     # à remonter à la main quand une future version apporte quelque chose dont Jaris a besoin.
     image: searxng/searxng:2026.9.8-3fdc6d753
     pull_policy: missing
+    # Port hôte 8091 plutôt que le 8080 par défaut de SearXNG (le port DANS le conteneur, à droite, reste
+    # 8080 — inchangé) : 8080 est un des ports les plus utilisés par d'autres logiciels (clients torrent,
+    # serveurs Java type Tomcat/Jenkins, interfaces d'admin de routeur/box...). Diagnostiqué chez Léo : le
+    # "403 Forbidden" qu'il recevait n'était pas du tout produit par SearXNG (dont les pages d'erreur sont
+    # dans son propre style) mais par la page 403 par défaut d'un tout autre serveur web déjà installé sur sa
+    # machine et déjà propriétaire du port 8080 — `isUp()` (dependencyServices.ts) le prenait donc pour
+    # SearXNG "déjà démarré" et ne lançait jamais le vrai conteneur, ce qu'aucun des correctifs précédents
+    # (v0.3.6/v0.3.7, qui supposaient tous une vraie instance SearXNG mal configurée) ne pouvait détecter.
     ports:
-      - '8080:8080'
+      - '8091:8080'
     volumes:
       - ./searxng:/etc/searxng:rw
     environment:
-      - SEARXNG_BASE_URL=http://localhost:8080/
+      - SEARXNG_BASE_URL=http://localhost:8091/
     restart: unless-stopped

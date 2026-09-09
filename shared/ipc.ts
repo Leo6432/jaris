@@ -392,5 +392,12 @@ export const IPC_CHANNELS = {
   /** renderer <-> main : installe ce qui manque (étape 16), résout avec le statut final. */
   runRuntimeSetup: 'jaris:run-runtime-setup',
   /** main -> renderer : avancement de cette installation, au fil de l'eau. */
-  runtimeSetupProgress: 'jaris:runtime-setup-progress'
+  runtimeSetupProgress: 'jaris:runtime-setup-progress',
+  /**
+   * renderer -> main : la fenêtre de réglages (`?mode=full`) prévient à chaque changement d'onglet
+   * (Agent vocal/Chat/Code, App.tsx) — utilisé pour suspendre l'écoute vocale (VoicePipeline) tant que
+   * l'utilisateur est sur Chat ou Code, à sa demande explicite : Jaris ne doit pas réagir à sa voix (mot
+   * d'activation, transcription) quand il est en train d'écrire dans un autre mode.
+   */
+  setActiveMode: 'jaris:set-active-mode'
 } as const

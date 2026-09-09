@@ -162,6 +162,22 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   exacte d'un bug n'est pas confirmée avec certitude** — un correctif basé sur une hypothèse non vérifiée peut
   sembler correct en relecture de code tout en ne réglant rien en usage réel, et l'a effectivement démontré
   deux fois de suite ici.
+  **VRAIE cause enfin identifiée (v0.3.9)**, grâce au message d'erreur verbatim obtenu par le correctif
+  suivant : le corps de la réponse 403 ("You don't have the permission to access the requested resource. It
+  is either read-protected or not readable by the server.") est le texte EXACT de la page d'erreur 403 par
+  défaut d'Apache — jamais produit par SearXNG (dont les pages d'erreur ont son propre style). Autrement dit,
+  ce n'était jamais SearXNG qui répondait sur le port 8080 : un AUTRE logiciel déjà installé sur la machine de
+  Léo (8080 est un port très commun — clients torrent, serveurs Java, interfaces d'admin de routeur...)
+  occupait déjà ce port, et `isUp()` (un simple "est-ce que quelque chose répond ?") le prenait pour SearXNG
+  "déjà démarré" — ce qui explique aussi pourquoi les 2 correctifs précédents (v0.3.6/v0.3.7, qui essayaient
+  tous les deux de réparer/recréer LE CONTENEUR SearXNG) n'ont jamais pu avoir d'effet : le vrai conteneur
+  SearXNG n'a peut-être même jamais réussi à démarrer sur cette machine (port déjà pris). Corrigé en changeant
+  le port hôte de SearXNG (8080 -> 8091, `docker-compose.yml`), un port beaucoup moins souvent déjà utilisé.
+  **Leçon générale : le corps/texte exact d'une erreur HTTP peut identifier QUEL logiciel répond vraiment**
+  (une page d'erreur Apache/nginx/IIS a une signature reconnaissable, différente de celle de l'appli qu'on
+  pense interroger) — comparer ce texte avant de supposer que le service qu'on croit interroger est bien
+  celui qui répond. Et plus largement : ne jamais coder un check "est-ce que ce port répond" comme preuve
+  qu'un service PRÉCIS tourne dessus, seulement qu'UN service (n'importe lequel) y répond.
 - **Une consigne système ("ne jamais inventer de dépannage", buildSystemPrompt) ne suffit pas à empêcher un
   petit modèle local de le faire quand même** : face à un vrai message d'erreur SearXNG (403), le modèle de
   conversation a remplacé le message réel par un dépannage générique halluciné et FAUX (étapes nginx/
@@ -183,6 +199,19 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   dans `assistant.ts` — jamais recalculé "en direct" à chaque génération. Une fois qu'un calcul reproduit
   fidèlement le comportement d'un mécanisme existant, aligner aussi l'INTERFACE sur ce mécanisme, pas
   seulement la logique interne.
+- **Le mode vocal (mot d'activation) écoutait en continu quel que soit l'onglet actif** (Agent vocal/Chat/
+  Code, App.tsx) : passer en Chat ou Code pour écrire n'empêchait pas Jaris de réagir à la voix par-dessus, à
+  la demande explicite de Léo ("faut pas que jarvis s'active ou puisse être utilisé" pendant Chat/Code).
+  Corrigé par un drapeau `suspended` dans `VoicePipeline` (electron/services/voicePipeline.ts) qui fait
+  ignorer les évènements 'wake'/'transcript' déjà reçus, plutôt que d'arrêter/relancer tout le sidecar Python
+  à chaque changement d'onglet (lent, inutile) — piloté par un nouveau canal IPC `setActiveMode` envoyé par
+  App.tsx à chaque changement de `appMode`. Piège identifié en l'écrivant : la fenêtre de réglages n'est
+  JAMAIS détruite en se repliant en widget (juste `win.hide()`), donc son état React (`appMode`) reste figé
+  sur Chat/Code même après le repli — sans un `setListeningSuspended(false)` forcé côté main.ts sur les
+  évènements 'close'/'minimize' de cette fenêtre (avant même de savoir ce que pense le renderer), l'écoute
+  vocale serait restée bloquée indéfiniment dès qu'on repliait la fenêtre depuis Chat/Code, pour un
+  utilisateur qui ne voit plus que le widget (symbole du mode vocal) et n'a aucune raison de deviner pourquoi
+  Jaris ne réagit plus à sa voix.
 
 ## Commandes utiles
 

@@ -128,6 +128,11 @@ function createFullWindow(): BrowserWindow {
     event.preventDefault()
     win.hide()
     showWidgetWindow()
+    // Le React de cette fenêtre reste en mémoire (juste cachée, jamais rechargée) : s'il était resté sur
+    // l'onglet Chat/Code au moment de se replier en widget, l'écoute vocale resterait suspendue pour de bon
+    // (voir setListeningSuspended, voicePipeline.ts) alors que l'utilisateur ne voit plus que le widget,
+    // symbole du mode vocal — la reprendre explicitement ici plutôt que de dépendre du renderer cette fois.
+    pipeline?.setListeningSuspended(false)
   })
   // Pas de preventDefault possible sur 'minimize' (déjà fait quand l'évènement arrive) : on laisse
   // Windows réduire, puis on cache complètement la fenêtre (plus d'icône dans la barre des tâches) et
@@ -136,6 +141,7 @@ function createFullWindow(): BrowserWindow {
     if (!onboardingDone) return
     win.hide()
     showWidgetWindow()
+    pipeline?.setListeningSuspended(false)
   })
   win.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -319,6 +325,9 @@ app.whenReady().then(async () => {
   })
   ipcMain.on(IPC_CHANNELS.testMicrophone, () => pipeline?.testMic())
   ipcMain.on(IPC_CHANNELS.stopTestMicrophone, () => pipeline?.stopTestMic())
+  ipcMain.on(IPC_CHANNELS.setActiveMode, (_event, mode: 'voice' | 'chat' | 'code') =>
+    pipeline?.setListeningSuspended(mode !== 'voice')
+  )
   ipcMain.handle(IPC_CHANNELS.getModelOverview, () => getModelOverview())
   ipcMain.handle(IPC_CHANNELS.getOllamaVersionStatus, () => getOllamaVersionStatus())
   ipcMain.handle(IPC_CHANNELS.updateOllama, () => updateOllama())

@@ -147,6 +147,19 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   que d'inférer un état interne (un fichier a-t-il changé ?) quand la cause exacte d'un bug n'est pas
   confirmée avec certitude** — un correctif basé sur une hypothèse non vérifiée peut sembler correct en
   relecture de code tout en ne réglant rien en usage réel, et peut le démontrer plusieurs fois de suite.
+  **VRAIE cause enfin identifiée**, grâce au message d'erreur verbatim obtenu par le correctif suivant : le
+  corps de la réponse 403 était le texte EXACT de la page d'erreur 403 par défaut d'Apache — jamais produit
+  par l'appli qu'on croyait interroger (dont les pages d'erreur ont son propre style). Un AUTRE logiciel déjà
+  installé sur la machine occupait déjà ce port (un port commun — clients torrent, serveurs Java, interfaces
+  d'admin de routeur...), et un simple check "est-ce que quelque chose répond sur ce port" le prenait pour le
+  bon service "déjà démarré" — ce qui explique pourquoi réparer/recréer LE CONTENEUR n'avait jamais pu avoir
+  d'effet : il n'avait peut-être même jamais réussi à démarrer (port déjà pris). Corrigé en changeant le port
+  hôte du service pour un port beaucoup moins souvent déjà utilisé. **Leçon générale : le corps/texte exact
+  d'une erreur HTTP peut identifier QUEL logiciel répond vraiment** (une page d'erreur Apache/nginx/IIS a une
+  signature reconnaissable, différente de celle de l'appli qu'on pense interroger) — comparer ce texte avant
+  de supposer que le service qu'on croit interroger est bien celui qui répond. Et plus largement : ne jamais
+  coder un check "est-ce que ce port répond" comme preuve qu'un service PRÉCIS tourne dessus, seulement qu'UN
+  service (n'importe lequel) y répond.
 - **Une consigne système ("ne jamais inventer de dépannage") ne suffit pas à empêcher un petit modèle local
   de le faire quand même** : face à un vrai message d'erreur technique, un modèle de conversation a remplacé
   le message réel par un dépannage générique halluciné et FAUX (des étapes qui n'existent pas dans
@@ -162,6 +175,14 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   menu déroulant manuel dans Options par prudence, alors qu'aucun autre palier (flash/médium/puissant/vision)
   n'en a — repéré par l'utilisateur, corrigé en lisant directement la valeur déjà calculée et enregistrée
   dans le profil (comme `visionModel`), sans recalcul en direct ni choix manuel.
+- **Un mode vocal (mot d'activation) qui écoute en continu doit pouvoir être suspendu selon le mode d'usage
+  actif** (ex: un onglet Chat/Code à côté d'un mode Vocal) : sans ça, parler pendant qu'on écrit ailleurs
+  déclenche quand même une réaction vocale. Suspendre par un simple drapeau qui fait ignorer les évènements
+  déjà reçus est plus léger que d'arrêter/relancer tout le pipeline audio à chaque changement de mode. Piège
+  identifié en l'écrivant : si la fenêtre qui pilote ce drapeau peut se cacher SANS être détruite (son état
+  React survit), la resuspendre en dernier au repli laisserait l'écoute bloquée indéfiniment pour un
+  utilisateur qui ne voit plus que l'interface représentant le mode vocal — forcer la reprise explicitement
+  au moment où cette fenêtre se cache/réduit, pas seulement dépendre de ce que pense encore son état interne.
 
 ## Commandes utiles
 

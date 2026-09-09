@@ -125,14 +125,24 @@ export class VoicePipeline extends EventEmitter {
   private busy = false
   private pendingAdditions: string[] = []
   private abortController: AbortController | null = null
+  /**
+   * true tant que la fenêtre de réglages est sur l'onglet Chat ou Code (voir setListeningSuspended, appelé
+   * depuis main.ts sur IPC_CHANNELS.setActiveMode) : le sidecar Python continue d'écouter en continu (le
+   * mot d'activation ne s'arrête pas côté audio), mais Jaris ignore tout ce qu'il capte tant que ce drapeau
+   * est actif, à la demande explicite de Léo — pas de raison que Jaris réagisse à la voix pendant qu'il est
+   * en train d'écrire dans un autre mode.
+   */
+  private suspended = false
 
   /** @param inputDeviceIndex Voir VoiceClient.start — micro choisi dans Options → Voix, prioritaire sur .env. */
   async start(inputDeviceIndex?: number | null): Promise<void> {
     this.voice.on('wake', () => {
+      if (this.suspended) return
       this.clearIdleTimer()
       this.setEmotion('listening')
     })
     this.voice.on('transcript', (text: string) => {
+      if (this.suspended) return
       const addition = normalizeSpokenSymbols(text.trim())
       if (!addition) {
         if (!this.busy) void this.runTranscript('')
@@ -181,6 +191,15 @@ export class VoicePipeline extends EventEmitter {
 
   triggerWake(): void {
     this.voice.triggerWake()
+  }
+
+  /**
+   * Suspend/reprend la réaction à la voix (voir le drapeau `suspended` ci-dessus) sans jamais arrêter le
+   * sidecar Python lui-même : redémarrer tout le pipeline audio à chaque changement d'onglet serait lent et
+   * inutile, alors qu'ignorer les évènements 'wake'/'transcript' déjà reçus est instantané.
+   */
+  setListeningSuspended(suspended: boolean): void {
+    this.suspended = suspended
   }
 
   /** Démarre le test micro, actif jusqu'à stopTestMic() (voir 'micTestStarted'/'micTestLevel'/'micTestDone'). */
