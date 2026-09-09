@@ -303,6 +303,15 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   conversation live ET l'extraction silencieuse utilisent chacune leur propre appel au modèle), le paramètre
   existerait dans l'outil sans jamais être utilisé.
 
+- **Une boucle de pilotage peut scanner sans agir si une action JSON inconnue est acceptée** :
+  `extractStep()` ne vérifiait que la présence du champ `action`, puis le `switch` ignorait les valeurs
+  inconnues. Reproduit par test : 20 captures, zéro clic. Valider les actions et leurs arguments avant
+  exécution ; vérifier aussi le résultat des helpers clavier/souris, qui renvoient leurs erreurs en texte.
+  Un échec de `computer_use_task` doit lever une erreur pour activer le court-circuit de `assistant.ts`,
+  sinon le modèle peut le reformuler ou relancer la même tâche. Les attentes répétées doivent être bornées.
+  Ce garde-fou fournit un diagnostic, il ne prouve pas à lui seul pourquoi une tâche réelle YouTube échoue.
+  Les logs intermédiaires du Chat ne sont pas lus à voix haute pendant une tâche vocale.
+
 ## Commandes utiles
 
 ```

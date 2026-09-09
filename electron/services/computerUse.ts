@@ -29,6 +29,7 @@ function toScreenCoord(value: number | undefined, scale: number): number | null 
 
 const MAX_STEPS = 20
 const STEP_TIMEOUT_MS = 45000
+const MAX_CONSECUTIVE_WAITS = 3
 
 interface ComputerUseStep {
   action: 'click' | 'double_click' | 'right_click' | 'type' | 'key' | 'wait' | 'done' | 'fail'
@@ -82,7 +83,13 @@ function extractStep(raw: string): ComputerUseStep | null {
   if (!match) return null
   try {
     const parsed = JSON.parse(match[0]) as Partial<ComputerUseStep>
-    if (!parsed.action) return null
+    if (!['click', 'double_click', 'right_click', 'type', 'key', 'wait', 'done', 'fail'].includes(parsed.action ?? '')) return null
+    if (['click', 'double_click', 'right_click'].includes(parsed.action ?? '') &&
+      !(typeof parsed.x === 'number' && Number.isFinite(parsed.x) && parsed.x >= 0 &&
+        typeof parsed.y === 'number' && Number.isFinite(parsed.y) && parsed.y >= 0)) return null
+    if (parsed.action === 'type' && !(typeof parsed.text === 'string' && parsed.text.trim())) return null
+    if (parsed.action === 'key' && !(typeof parsed.key === 'string' && parsed.key.trim())) return null
+    if (parsed.result !== undefined && typeof parsed.result !== 'string') return null
     return parsed as ComputerUseStep
   } catch {
     return null
@@ -126,7 +133,7 @@ async function nextStep(
   }
 
   if (!response.ok) {
-    return { action: 'fail', result: `Le modèle de vision a répondu ${response.status}.` }
+    return { action: 'fail', result: `Le modèle de vision ${model} a répondu ${response.status} : ${(await response.text()).slice(0, 300)}` }
   }
 
   const data = (await response.json()) as OllamaChatResponse
@@ -134,7 +141,7 @@ async function nextStep(
   if (!content) return { action: 'fail', result: 'Réponse vide du modèle de vision.' }
 
   const step = extractStep(content)
-  if (!step) return { action: 'fail', result: "Réponse du modèle de vision incompréhensible (pas de JSON d'action valide)." }
+  if (!step) return { action: 'fail', result: `Le modèle de vision ${model} a proposé une action inexécutable : ${content.slice(0, 300)}` }
   return step
 }
 
@@ -152,6 +159,7 @@ export async function computerUseTask(
   if (!goal.trim()) return "Dis-moi ce qu'il faut faire à l'écran."
 
   const history: string[] = []
+  let consecutiveWaits = 0
   for (let i = 0; i < MAX_STEPS; i++) {
     // Vérifié à chaque itération (nouvelle phrase à la voix qui annule la réflexion en cours, voir
     // voicePipeline.ts) : sans ça, une fois lancée, cette boucle de clics ne pouvait plus jamais être
@@ -171,7 +179,7 @@ export async function computerUseTask(
     try {
       ;({ imageBase64: image, scale } = await captureScreenshotBase64())
     } catch (err) {
-      return `Impossible de capturer l'écran : ${err instanceof Error ? err.message : String(err)}`
+      throw new Error(`Impossible de capturer l'écran : ${err instanceof Error ? err.message : String(err)}`)
     }
 
     showScanOverlay()
@@ -182,8 +190,16 @@ export async function computerUseTask(
       hideScanOverlay()
     }
 
+    // Une annulation pendant l'inférence ne doit jamais être suivie d'un clic tardif.
+    if (signal?.aborted) return "Tâche interrompue avant d'être terminée."
     if (step.action === 'done') return step.result || 'Fait.'
-    if (step.action === 'fail') return `Je n'ai pas réussi : ${step.result || 'raison inconnue'}.`
+    // Lever l'erreur active le court-circuit d'assistant.ts : le modèle de conversation ne doit pas
+    // masquer ce diagnostic ni relancer dix fois une tâche qui vient d'échouer.
+    if (step.action === 'fail') throw new Error(step.result || 'Le pilotage de l’écran a échoué sans préciser pourquoi.')
+    consecutiveWaits = step.action === 'wait' ? consecutiveWaits + 1 : 0
+    if (consecutiveWaits >= MAX_CONSECUTIVE_WAITS) {
+      throw new Error("Le modèle de vision demande seulement d'attendre depuis trois captures consécutives. Je m'arrête sans avoir terminé l'objectif.")
+    }
 
     switch (step.action) {
       case 'click':
@@ -192,21 +208,26 @@ export async function computerUseTask(
         const button = step.action === 'double_click' ? 'double' : step.action === 'right_click' ? 'right' : 'left'
         const x = toScreenCoord(step.x, scale)
         const y = toScreenCoord(step.y, scale)
-        await clickMouse(x, y, button)
+        const result = await clickMouse(x, y, button)
+        if (!result.startsWith(`Clic ${button} effectué`)) throw new Error(result)
         history.push(`${i + 1}. Clic ${button} à (${x}, ${y})`)
         onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : clic ${button} à (${x}, ${y}).`)
         break
       }
-      case 'type':
-        await typeText(step.text ?? '')
+      case 'type': {
+        const result = await typeText(step.text ?? '')
+        if (result !== 'Texte tapé.') throw new Error(result)
         history.push(`${i + 1}. Texte tapé : "${step.text ?? ''}"`)
         onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : texte tapé.`)
         break
-      case 'key':
-        await pressKey(step.key ?? '')
+      }
+      case 'key': {
+        const result = await pressKey(step.key ?? '')
+        if (result !== `Touche "${step.key}" pressée.`) throw new Error(result)
         history.push(`${i + 1}. Touche "${step.key ?? ''}" pressée`)
         onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : touche "${step.key ?? ''}" pressée.`)
         break
+      }
       case 'wait':
         await new Promise((resolve) => setTimeout(resolve, 1200))
         history.push(`${i + 1}. Attente (chargement)`)
@@ -215,5 +236,5 @@ export async function computerUseTask(
     }
   }
 
-  return `Je me suis arrêté après ${MAX_STEPS} actions sans terminer l'objectif : ${goal}.`
+  throw new Error(`Je me suis arrêté après ${MAX_STEPS} étapes sans terminer l'objectif : ${goal}.`)
 }
