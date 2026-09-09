@@ -325,6 +325,15 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   incontournable, qui sert justement l'accord explicite voulu ici. Un
   redémarrage Windows n'est jamais forcé à la place de l'utilisateur —
   juste suggéré s'il semble nécessaire après coup
+- ✅ Étape 56 — Le détecteur "promesse sans action" (empêche Jaris de
+  dire "je vais faire X" sans jamais appeler l'outil) ne couvrait que
+  le verbe "faire" — constaté en usage réel (Léo, une
+  question sur le président américain), le modèle a promis "je vais
+  RECHERCHER..." sans jamais appeler search_web, une formulation qui ne
+  matchait pas l'ancien motif. Généralisé pour détecter "je vais " +
+  n'importe quel verbe (motif grammatical, pas un mot précis), vérifié
+  pour ne pas déclencher à tort sur des tournures bénignes ("je vais
+  bien")
 
 ## Démarrer en développement
 

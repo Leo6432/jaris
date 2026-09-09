@@ -304,8 +304,17 @@ export async function converse(
   // mail), ce filet est générique : il ne regarde pas l'intention de la phrase de l'utilisateur mais le
   // langage de PROMESSE FUTURE dans la réponse elle-même ("je vais faire X", "un instant", "attends") sans
   // aucun appel d'outil qui l'accompagne — le signe le plus fiable qu'une action annoncée n'a pas eu lieu.
+  //
+  // "je vais (le/la/les )?faire" ne suffisait pas : constaté en usage réel (Léo, une question sur le
+  // président américain), le modèle a promis "je vais RECHERCHER pour vous..." sans jamais appeler
+  // search_web, et cette formulation ne matchait pas le motif d'origine limité au seul verbe "faire" —
+  // remplacé par un motif générique "je vais " + un verbe (mot se terminant par -er/-ir/-re, les 3
+  // terminaisons d'infinitif du français), avec un pronom optionnel entre les deux (le/la/les/lui/y/en) pour
+  // couvrir "je vais LE faire" comme "je vais chercher"/"je vais envoyer"/"je vais vérifier"/etc. sans
+  // connaître le verbe à l'avance. Testé pour ne pas accrocher "je vais bien" (bien/très ne se terminent pas
+  // en -er/-ir/-re) avant d'être adopté.
   const PROMISE_WITHOUT_ACTION =
-    /\b(je vais (?:le |la |les )?faire|je m'en occupe|je m'y mets|un instant\b|attends(?:[- ]moi)?\b|patiente\b|je le fais (?:tout de suite|maintenant)|laisse[- ]moi (?:faire|une seconde|un instant))/i
+    /\b(je vais (?:(?:le|la|les|lui|y|en) )?[a-zà-ÿœ]+(?:er|ir|re)\b|je m'en occupe|je m'y mets|un instant\b|attends(?:[- ]moi)?\b|patiente\b|je le fais (?:tout de suite|maintenant)|laisse[- ]moi (?:faire|une seconde|un instant))/i
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const message = await chatWithOllama(messages, TOOLS, model, think, signal, config.ollama.numCtx, onToken)

@@ -211,6 +211,15 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   vrai (requête HEAD) avant de choisir un délai de téléchargement adapté, plutôt que de réutiliser le même
   délai qu'une autre dépendance bien plus légère : un délai trop court aurait coupé un téléchargement en
   pleine réussite sur une connexion modeste, faisant croire à un échec à tort.
+- **Un détecteur "promesse sans action" basé sur un motif de mot-clé précis (ex: "je vais faire") généralise
+  mal** : constaté en usage réel, le modèle a promis une action avec un AUTRE verbe ("je vais rechercher...")
+  sans jamais appeler le bon outil, et cette phrase ne matchait pas le motif d'origine limité à un seul verbe.
+  Vérifié avec un vrai test du motif sur le texte exact avant de corriger (jamais supposé la cause). Corrigé
+  en détectant le PATRON GRAMMATICAL (verbe au futur proche : "je vais " + un mot se terminant par les
+  terminaisons d'infinitif de la langue) plutôt qu'un verbe précis — couvre tous les verbes sans avoir à les
+  connaître à l'avance, testé pour ne pas accrocher les usages bénins ("je vais bien") avant d'être adopté.
+  **Leçon générale : dès que c'est possible, détecter le PATRON GRAMMATICAL plutôt qu'un mot-clé précis** —
+  un mot-clé précis oblige à rajouter chaque nouveau cas un par un à mesure qu'on le découvre en usage réel.
 
 ## Commandes utiles
 

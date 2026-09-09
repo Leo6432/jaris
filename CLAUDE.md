@@ -243,6 +243,18 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   vérifiée pour de vrai (requête HEAD, ~600 Mo) avant de choisir un délai de téléchargement (10 minutes, pas
   les 2 minutes utilisées pour Ollama dont l'installeur est bien plus léger) : un délai trop court aurait
   coupé un téléchargement en pleine réussite sur une connexion modeste, faisant croire à un échec à tort.
+- **Le détecteur `PROMISE_WITHOUT_ACTION` (assistant.ts, v0.2.8) était trop étroit** : limité au seul motif
+  "je vais (le/la/les )?faire", il ratait toute promesse formulée avec un autre verbe — constaté en usage
+  réel (Léo, question sur le président américain) : le modèle a promis "je vais RECHERCHER pour vous..."
+  sans jamais appeler `search_web`, et cette phrase ne matchait pas le motif d'origine. Vérifié avec un vrai
+  test du regex sur le texte exact avant de corriger (`current regex matches: false`) plutôt que de supposer
+  la cause. Corrigé en généralisant à "je vais " + un pronom optionnel (le/la/les/lui/y/en) + un verbe (mot
+  se terminant par -er/-ir/-re, les 3 terminaisons d'infinitif du français) — couvre "je vais chercher/
+  envoyer/vérifier/regarder/etc." sans connaître le verbe à l'avance, tout en restant sans faux positif sur
+  "je vais bien" (bien/très ne se terminent pas en -er/-ir/-re, vérifié par test avant d'adopter le motif).
+  **Leçon générale : un détecteur basé sur un mot-clé précis (ici "faire") généralise mal** — dès que c'est
+  possible, détecter le PATRON GRAMMATICAL (ici : verbe au futur proche) plutôt qu'un mot précis évite de
+  devoir rajouter chaque nouveau verbe rencontré un par un à mesure qu'on les découvre en usage réel.
 
 ## Commandes utiles
 
