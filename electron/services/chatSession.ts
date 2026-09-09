@@ -1,20 +1,17 @@
 import { randomUUID } from 'crypto'
 import { converse } from './assistant'
-import { appendConversationEntry, getConversationHistory } from './conversationStore'
+import { appendConversationEntry } from './conversationStore'
+import { clearSessionHistory, getSessionHistory, pushSessionExchange } from './conversationSession'
 import { extractMemoryFromExchange } from './memoryExtractor'
 import { getLiveGpuStatus } from './hardwareScan'
 import { getProfile } from './profileStore'
 import { checkGpuTempSafety } from './resourceMonitor'
-import type { OllamaMessage } from './ollama'
 import type { ChatMessage } from '../../shared/ipc'
-
-/** Même fenêtre glissante que le pipeline vocal : le contexte ancien sort tout seul au fil des échanges. */
-const MAX_HISTORY_MESSAGES = 12
 
 /**
  * Nombre de messages gardés pour l'AFFICHAGE du fil de discussion, bien plus large que la fenêtre envoyée
- * au modèle ci-dessus : pouvoir remonter dans ce qui a été dit ne coûte rien, alors qu'envoyer tout
- * l'historique au modèle à chaque message coûterait du contexte (et donc de la VRAM) pour rien.
+ * au modèle (conversationSession.ts) : pouvoir remonter dans ce qui a été dit ne coûte rien, alors qu'envoyer
+ * tout l'historique au modèle à chaque message coûterait du contexte (et donc de la VRAM) pour rien.
  */
 const MAX_VISIBLE_MESSAGES = 200
 
@@ -24,24 +21,14 @@ const MAX_VISIBLE_MESSAGES = 200
  * plutôt que dans le renderer pour que passer d'un mode à l'autre dans la colonne latérale ne perde pas la
  * discussion en cours.
  *
- * L'historique court terme est amorcé avec les derniers échanges de conversation-history.json, alimenté
- * aussi bien par la voix que par le chat : demander quelque chose à l'oral puis enchaîner par écrit (ou
- * l'inverse) continue la même conversation au lieu de repartir de zéro.
+ * Étape 47 : le contexte court terme envoyé au modèle (conversationSession.ts) est PARTAGÉ avec le pipeline
+ * vocal — relu à chaque envoi plutôt que gardé dans une copie locale à ce fichier, contrairement à avant où
+ * chat et voix chargeaient chacun leur propre copie indépendante au premier usage (donc désynchronisées dès
+ * qu'on passait de l'un à l'autre en pleine conversation). Demander quelque chose à l'oral puis enchaîner
+ * par écrit (ou l'inverse) continue donc vraiment la même conversation, immédiatement.
  */
 class ChatSession {
-  private history: OllamaMessage[] = []
   private visible: ChatMessage[] = []
-  private loaded = false
-
-  private async ensureLoaded(): Promise<void> {
-    if (this.loaded) return
-    this.loaded = true
-    const pastEntries = await getConversationHistory(MAX_HISTORY_MESSAGES / 2)
-    this.history = pastEntries.flatMap((entry): OllamaMessage[] => [
-      { role: 'user', content: entry.transcript },
-      { role: 'assistant', content: entry.reply }
-    ])
-  }
 
   /** Messages à afficher dans le fil (vide au premier lancement : on n'y remet pas l'historique vocal). */
   getVisibleMessages(): ChatMessage[] {
@@ -50,9 +37,8 @@ class ChatSession {
 
   /** Vidé en même temps que l'historique global, depuis le menu Options (voir clearConversationHistory). */
   clear(): void {
-    this.history = []
+    clearSessionHistory()
     this.visible = []
-    this.loaded = false
   }
 
   async send(
@@ -61,7 +47,6 @@ class ChatSession {
     onLog: (message: string) => void,
     onToken?: (delta: string) => void
   ): Promise<ChatMessage> {
-    await this.ensureLoaded()
     this.pushVisible({ role: 'user', content: prompt })
 
     // Même sécurité thermique qu'à la voix : inutile de lancer une inférence sur un GPU déjà trop chaud.
@@ -76,12 +61,15 @@ class ChatSession {
     let reply: string
     try {
       const profile = await getProfile()
+      // Étape 47 : session partagée avec le pipeline vocal (conversationSession.ts), relue à chaque envoi —
+      // un échange dit à voix haute juste avant est donc déjà visible ici.
+      const history = await getSessionHistory()
       reply = await converse(
         prompt,
         profile?.name ?? null,
         onReminderFire,
         onLog,
-        this.history,
+        history,
         undefined,
         live,
         'chat',
@@ -100,8 +88,7 @@ class ChatSession {
       })
     }
 
-    this.history.push({ role: 'user', content: prompt }, { role: 'assistant', content: reply })
-    this.history.splice(0, Math.max(0, this.history.length - MAX_HISTORY_MESSAGES))
+    pushSessionExchange(prompt, reply)
 
     // Exactement comme à la voix : la mémoire longue durée s'enrichit toute seule, et l'échange rejoint
     // l'historique commun (onglet Historique du menu Options, et amorçage du contexte au prochain lancement).

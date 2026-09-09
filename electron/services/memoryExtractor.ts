@@ -32,7 +32,8 @@ export async function extractMemoryFromExchange(
       'Tu es le module de mémoire de Jaris, un assistant vocal. On te donne un échange de conversation qui ' +
       'vient juste de se dérouler. Ton seul travail : décider si cet échange contient un FAIT nouveau, ' +
       "concret et durable, que Jaris devrait se rappeler d'une conversation à l'autre (une préférence, une " +
-      "adresse, un projet en cours, un rendez-vous, un fait donné sur la vie de l'utilisateur...).\n\n" +
+      "adresse, un projet en cours, un rendez-vous, un fait donné sur la vie de l'utilisateur...), OU une " +
+      "CORRECTION d'un fait déjà noté (l'utilisateur dit qu'une info connue a changé ou était fausse).\n\n" +
       "Si oui, appelle IMPÉRATIVEMENT l'outil remember. Règles strictes pour le contenu de la note :\n" +
       '- Écris UNIQUEMENT le fait lui-même, comme une phrase de connaissance, à la troisième personne ' +
       '(bon exemple : "Adresse email de Léo : xxx@gmail.com.").\n' +
@@ -42,12 +43,18 @@ export async function extractMemoryFromExchange(
       'dans la note.\n' +
       '- Le titre de la note désigne le sujet ou la personne concernée (ex: le prénom de ' +
       "l'utilisateur pour une info personnelle), jamais l'action en cours (pas de titre comme " +
-      '"Réponse mail" ou "Question posée").\n\n' +
-      'Si cet échange ne contient aucun fait nouveau et concret à garder (bavardage, question ' +
-      "factuelle ponctuelle, demande d'action sans info personnelle, ou juste une incertitude sur une " +
-      "info encore manquante), n'appelle aucun outil et ne réponds rien. " +
+      '"Réponse mail" ou "Question posée").\n' +
+      "- Si l'échange CORRIGE une info déjà connue (ex: \"en fait mon adresse c'est...\", \"ce n'est plus " +
+      '..., c\'est maintenant..."), mets `replace: true` pour que la nouvelle valeur remplace l\'ancienne au ' +
+      "lieu de s'ajouter à côté. Laisse `replace` absent/false pour un fait vraiment nouveau qui s'ajoute à " +
+      'ce qui est déjà noté.\n\n' +
+      'Si cet échange ne contient aucun fait nouveau et concret à garder, aucune correction, et rien de ' +
+      "différent de ce qui est déjà noté (bavardage, question factuelle ponctuelle, demande d'action sans " +
+      'info personnelle, ou juste une incertitude sur une info encore manquante), n\'appelle aucun outil et ' +
+      'ne réponds rien. ' +
       (memoryTitles.length
-        ? `Notes déjà en mémoire : ${memoryTitles.join(', ')} — n'appelle pas remember pour une info déjà connue.`
+        ? `Notes déjà en mémoire : ${memoryTitles.join(', ')} — n'appelle pas remember pour répéter une info ` +
+          'déjà connue et inchangée, mais appelle-le bien (avec replace: true) si cette info vient de changer.'
         : '')
 
     const messages: OllamaMessage[] = [
@@ -62,7 +69,7 @@ export async function extractMemoryFromExchange(
       const title = String(call.function.arguments.title ?? '').trim()
       const content = String(call.function.arguments.content ?? '').trim()
       if (!title || !content) continue
-      await rememberNote(title, content)
+      await rememberNote(title, content, Boolean(call.function.arguments.replace))
       onLog?.(`Mémoire enrichie automatiquement : "${title}"`)
     }
   } catch (err) {

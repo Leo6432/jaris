@@ -28,17 +28,29 @@ export async function listMemoryTitles(): Promise<string[]> {
   return files.filter((file) => file.endsWith('.md')).map((file) => file.replace(/\.md$/, ''))
 }
 
-/** Crée ou complète une note markdown. Les liens vers d'autres notes s'écrivent en [[Titre]]. */
-export async function rememberNote(title: string, content: string): Promise<string> {
+/**
+ * Crée ou complète une note markdown. Les liens vers d'autres notes s'écrivent en [[Titre]].
+ *
+ * Étape 47 (partie 2) : `replace` sert une CORRECTION explicite ("mon adresse a changé", "en fait c'est...")
+ * — sans ça, rememberNote ajoutait TOUJOURS un nouvel horodatage à la suite de l'existant, donc une note
+ * "corrigée" contenait quand même encore l'ancienne valeur juste au-dessus de la nouvelle : recallNote (et
+ * donc le modèle, qui relit la note entière) ne pouvait jamais savoir laquelle des deux était encore valable.
+ * `replace: true` réécrit le fichier avec UNIQUEMENT le fait actuel, sans trace de l'ancien. Par défaut
+ * (`replace` absent/false), le comportement d'origine est inchangé : une info vraiment nouvelle s'ajoute à la
+ * suite de la précédente, jamais à sa place.
+ */
+export async function rememberNote(title: string, content: string, replace = false): Promise<string> {
   await ensureMemoryDir()
   const path = notePath(title)
   const timestamp = new Date().toLocaleString('fr-FR')
 
   let existing = ''
-  try {
-    existing = await readFile(path, 'utf-8')
-  } catch {
-    // Nouvelle note.
+  if (!replace) {
+    try {
+      existing = await readFile(path, 'utf-8')
+    } catch {
+      // Nouvelle note.
+    }
   }
 
   const entry = `\n\n_${timestamp}_\n${content}`

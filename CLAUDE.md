@@ -282,6 +282,26 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   embarqué, l'historique et les appels réellement exécutés avant d'accuser de nouveau le service externe.
   Exclure les échanges en échec du contexte envoyé au modèle dans `converse()`, sans effacer l'historique
   visible ni masquer les vrais échecs du tour actuel. Régression : `node --test scripts/test-assistant-history.mjs`.
+- **Deux copies indépendantes du même historique court terme (voix et chat) se désynchronisent** : avant
+  l'étape 47, `voicePipeline.ts` et `chatSession.ts` avaient chacun leur propre `history` chargée séparément
+  au premier usage de chaque canal — les deux écrivaient bien dans le même `conversation-history.json`, mais
+  passer de l'un à l'autre en pleine conversation ne voyait pas forcément le tout dernier échange dit sur
+  l'autre canal. Corrigé en extrayant la logique commune dans un nouveau module partagé
+  (`conversationSession.ts`, un seul état au niveau du module, pas une classe par canal) que les deux fichiers
+  relisent à chaque tour (`getSessionHistory()`) au lieu de garder leur propre copie. **Leçon générale : avant
+  de dupliquer un état "juste pour ce fichier", vérifier si un autre fichier du dépôt a déjà exactement la
+  même donnée en copie séparée** — la dupliquer plus loin aggrave la désynchronisation au lieu de la
+  corriger.
+- **Une mémoire markdown qui n'ajoute JAMAIS ne peut pas représenter une correction** : `rememberNote`
+  ajoutait toujours un nouvel horodatage à la suite du contenu existant, donc corriger une info ("mon adresse
+  a changé") laissait l'ancienne et la nouvelle valeur côte à côte dans la même note, sans façon fiable de
+  savoir laquelle est encore valable en la relisant. Corrigé (étape 47) par un paramètre `replace` optionnel
+  (défaut `false`, comportement identique à avant) qui, à `true`, réécrit la note avec UNIQUEMENT le nouveau
+  contenu. Le modèle décide lui-même quand le mettre à `true` (nouvelle instruction dans le prompt système de
+  `assistant.ts` pour une correction dite en pleine conversation, et dans celui de `memoryExtractor.ts` pour
+  l'extraction automatique en arrière-plan) — sans cette instruction explicite dans LES DEUX prompts (la
+  conversation live ET l'extraction silencieuse utilisent chacune leur propre appel au modèle), le paramètre
+  existerait dans l'outil sans jamais être utilisé.
 
 ## Commandes utiles
 

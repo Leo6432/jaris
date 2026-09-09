@@ -111,7 +111,15 @@ export const TOOLS: OllamaTool[] = [
         type: 'object',
         properties: {
           title: { type: 'string', description: 'Titre court de la note (ex: "Léo", "Préférences café")' },
-          content: { type: 'string', description: 'Le contenu à retenir, en markdown' }
+          content: { type: 'string', description: 'Le contenu à retenir, en markdown' },
+          replace: {
+            type: 'boolean',
+            description:
+              "true UNIQUEMENT si l'utilisateur corrige une info déjà connue (\"mon adresse a changé\", " +
+              '"en fait ce n\'est plus...") : remplace tout le contenu existant de cette note par le nouveau, ' +
+              "sans garder l'ancienne valeur. Absent/false (par défaut) pour une info vraiment nouvelle, qui " +
+              "s'ajoute simplement à la suite de ce qui est déjà noté."
+          }
         },
         required: ['title', 'content']
       }
@@ -291,7 +299,7 @@ export function createToolExecutor(
       case 'read_web_page':
         return readWebPage(String(args.url ?? ''))
       case 'remember':
-        return rememberNote(String(args.title ?? ''), String(args.content ?? ''))
+        return rememberNote(String(args.title ?? ''), String(args.content ?? ''), Boolean(args.replace))
       case 'recall_memory':
         return recallNote(String(args.title ?? ''))
       case 'computer_use_task':

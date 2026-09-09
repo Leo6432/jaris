@@ -95,7 +95,9 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[], chan
     "réellement appelé remember. Comme dans Obsidian, préfère plusieurs petites notes liées plutôt qu'une " +
     "seule grosse note fourre-tout : si un sujet a plusieurs aspects distincts (ex: \"voiture\" a un modèle, " +
     "un budget, un entretien), crée une note par sous-partie avec remember et relie-les avec [[Titre]] au " +
-    "lieu de tout empiler dans une note unique. "
+    "lieu de tout empiler dans une note unique. Si l'utilisateur CORRIGE une info déjà connue (\"mon adresse " +
+    "a changé\", \"en fait ce n'est plus ... c'est maintenant ...\"), appelle remember avec `replace: true` " +
+    "pour remplacer l'ancienne valeur au lieu de l'ajouter à côté. "
 
   const style =
     channel === 'voice'

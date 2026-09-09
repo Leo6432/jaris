@@ -6,14 +6,6 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 
 ## État actuel
 
-- ⬜ Étape 47 — Mémoire unifiée entre Voix et Chat : les deux modes
-  enregistrent dans le même fichier (`conversation-history.json`) mais
-  gardent chacun leur historique en mémoire chargé séparément au premier
-  usage — passer de l'un à l'autre en pleine conversation ne garantit donc
-  pas de retrouver immédiatement le tout dernier échange. Fusionner en une
-  session commune, et gérer les corrections explicites ("mon adresse a
-  changé" doit remplacer l'adresse active dans la mémoire longue durée,
-  pas juste s'ajouter à côté)
 - ⬜ Étape 49 — Benchmarks qui valident un vrai résultat, pas juste la
   structure : le benchmark conversation (`scripts/benchmark-models.mjs`)
   vérifie surtout le nom de l'outil appelé sans valider ses arguments, et
@@ -351,6 +343,22 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   piste. Plus de 4e hypothèse non vérifiée : Jaris lit maintenant la
   config telle que le conteneur la voit RÉELLEMENT et l'inclut dans le
   message d'erreur, pour comparer un fait au fichier réel sur le disque
+- ✅ Étape 59 — La vraie cause du 403 SearXNG (étapes 55 à 58) : un ANCIEN
+  échec d'outil rejoué depuis l'historique de conversation, sans nouvel
+  appel réel à SearXNG (déjà redevenu fonctionnel entre-temps). Aucune des
+  hypothèses précédentes n'était donc la cause. Corrigé (par Codex) en
+  excluant du contexte envoyé au modèle les échanges où l'outil avait
+  échoué, sans effacer l'historique visible ni masquer un vrai échec du
+  tour en cours. Régression : `node --test scripts/test-assistant-history.mjs`
+- ✅ Étape 47 — Mémoire unifiée entre Voix et Chat : les deux modes
+  chargeaient chacun leur propre copie de l'historique court terme envoyé
+  au modèle, désynchronisées dès qu'on passait de l'un à l'autre en pleine
+  conversation. Fusionné dans un module partagé
+  (`conversationSession.ts`), relu à chaque tour par les deux canaux.
+  Gère aussi les corrections explicites : l'outil `remember` accepte un
+  paramètre `replace` (mis à `true` par le modèle quand l'utilisateur
+  corrige une info déjà connue, ex: "mon adresse a changé") qui remplace
+  le contenu de la note au lieu de s'ajouter à côté
 
 ## Démarrer en développement
 

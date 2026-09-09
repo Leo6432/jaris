@@ -3,26 +3,14 @@ import { randomUUID } from 'crypto'
 import type { JarisEmotion, VoiceReplyPayload } from '../../shared/ipc'
 import { VoiceClient } from './voiceClient'
 import { synthesizeSpeech } from './tts'
-import { appendConversationEntry, getConversationHistory } from './conversationStore'
+import { appendConversationEntry } from './conversationStore'
 import { converse } from './assistant'
+import { clearSessionHistory, getSessionHistory, pushSessionExchange } from './conversationSession'
 import { extractMemoryFromExchange } from './memoryExtractor'
-import type { OllamaMessage } from './ollama'
 import { restoreReminders } from './reminders'
 import { getProfile } from './profileStore'
 import { getLiveGpuStatus } from './hardwareScan'
 import { checkGpuTempSafety } from './resourceMonitor'
-
-/**
- * Derniers échanges (user/assistant) gardés en mémoire courte, pour que Jaris comprenne une
- * correction/précision ("répète juste l'adresse") sans devoir tout redire depuis le début. Une fenêtre
- * glissante plutôt qu'un vrai reset explicite : le contexte ancien sort tout seul au fil des échanges,
- * pas besoin de deviner "quand" une conversation est vraiment terminée.
- *
- * Rechargée depuis conversation-history.json (déjà tenu à jour par appendConversationEntry) à chaque
- * démarrage de Jaris : sans ça, redémarrer l'appli (ou revenir le lendemain) effaçait tout le contexte
- * d'un coup, alors que pour l'utilisateur c'est juste une pause dans la même conversation.
- */
-const MAX_HISTORY_MESSAGES = 12
 
 /** Retour à idle après une erreur (pas d'audio en cours, donc pas besoin d'attendre une fin de lecture). */
 const ERROR_IDLE_DELAY_MS = 2500
@@ -111,7 +99,6 @@ function normalizeSpokenSymbols(text: string): string {
 export class VoicePipeline extends EventEmitter {
   private voice = new VoiceClient()
   private idleTimer: ReturnType<typeof setTimeout> | null = null
-  private history: OllamaMessage[] = []
   /**
    * true tant qu'une phrase est en train d'être traitée (réflexion Ollama + réponse parlée) : le sidecar
    * Python écoute le double clap en continu, indépendamment de ce que fait Electron, donc une nouvelle
@@ -170,15 +157,6 @@ export class VoicePipeline extends EventEmitter {
     this.voice.on('micTestLevel', (level: number) => this.emit('micTestLevel', level))
     this.voice.on('micTestDone', (detected: boolean) => this.emit('micTestDone', detected))
 
-    // Recharge les derniers échanges de la fois précédente (même après un redémarrage de Jaris ou un
-    // jour d'écart) : pour l'utilisateur, revenir le lendemain sur le même sujet doit continuer la
-    // conversation, pas repartir de zéro comme si de rien n'était.
-    const pastEntries = await getConversationHistory(MAX_HISTORY_MESSAGES / 2)
-    this.history = pastEntries.flatMap((entry): OllamaMessage[] => [
-      { role: 'user', content: entry.transcript },
-      { role: 'assistant', content: entry.reply }
-    ])
-
     await restoreReminders((message) => void this.announceReminder(message))
     await this.voice.start(inputDeviceIndex)
     this.setEmotion('idle')
@@ -213,13 +191,14 @@ export class VoicePipeline extends EventEmitter {
   }
 
   /**
-   * Vide le contexte court terme en mémoire (voir MAX_HISTORY_MESSAGES ci-dessus), en plus du fichier
-   * conversation-history.json effacé séparément (voir clearConversationHistory) : sans ça, supprimer
-   * l'historique depuis le menu Options n'empêcherait pas Jaris de continuer à se souvenir des derniers
-   * échanges déjà chargés en mémoire depuis le démarrage en cours.
+   * Vide le contexte court terme en mémoire (étape 47 : partagé avec le mode Chat, voir
+   * conversationSession.ts), en plus du fichier conversation-history.json effacé séparément (voir
+   * clearConversationHistory) : sans ça, supprimer l'historique depuis le menu Options n'empêcherait pas
+   * Jaris de continuer à se souvenir des derniers échanges déjà chargés en mémoire depuis le démarrage en
+   * cours.
    */
   clearHistory(): void {
-    this.history = []
+    clearSessionHistory()
   }
 
   /** Le renderer prévient dès que la lecture audio de la réponse est terminée : c'est le vrai signal pour repasser en idle, pas une estimation. */
@@ -286,12 +265,16 @@ export class VoicePipeline extends EventEmitter {
       let aborted = false
       try {
         const profile = await getProfile()
+        // Étape 47 : session partagée avec le mode Chat (conversationSession.ts), relue à chaque tour plutôt
+        // que gardée dans une copie locale — un échange écrit dans l'autre canal juste avant est donc déjà
+        // visible ici, sans avoir à redémarrer Jaris ni changer d'onglet dans un ordre précis.
+        const history = await getSessionHistory()
         reply = await converse(
           combined,
           profile?.name ?? null,
           (message) => void this.announceReminder(message),
           (message) => this.emit('log', message),
-          this.history,
+          history,
           controller.signal,
           live
         )
@@ -322,8 +305,7 @@ export class VoicePipeline extends EventEmitter {
         continue
       }
 
-      this.history.push({ role: 'user', content: combined }, { role: 'assistant', content: reply })
-      this.history.splice(0, Math.max(0, this.history.length - MAX_HISTORY_MESSAGES))
+      pushSessionExchange(combined, reply)
 
       // En arrière-plan, sans attendre : la mémoire longue durée s'enrichit toute seule à partir de la
       // conversation, sans compter sur le fait que l'utilisateur pense à dire "retiens que..." à chaque
