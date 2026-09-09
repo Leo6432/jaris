@@ -225,6 +225,24 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   doit être revu chaque fois que ce qu'on empile dedans (prompt système, outils...) grossit significativement
   — mesurer pour de vrai (compter les caractères/tokens réels) plutôt que de supposer qu'une valeur choisie
   il y a plusieurs versions est toujours valable.**
+- **Docker Desktop n'est PAS auto-installé comme Ollama** (choix volontaire, jusqu'à ce que Léo demande le
+  contraire) : `ensureSearxngRunning` (dependencyServices.ts) ne fait que LANCER Docker Desktop s'il est déjà
+  installé — vécu par Léo sur une machine sans Docker du tout ("je croyais qu'en installant Jaris ça installe
+  Ollama ET Docker Desktop automatiquement"), une confusion légitime vu qu'Ollama, lui, s'installe déjà tout
+  seul. Corrigé en ajoutant `installDockerDesktop` (dependencyServices.ts), déclenché quand `openApp('Docker
+  Desktop')` répond "aucune application nommée..." (pas juste "pas encore lancé"). **Différence assumée avec
+  installOllamaSilently** : PAS silencieux comme Ollama, à la demande explicite de Léo — activer la
+  virtualisation nécessaire à Docker Desktop demande une élévation Windows (UAC) qu'aucun indicateur ne peut
+  contourner, donc l'utilisateur voit de toute façon une fenêtre Windows lui demander une autorisation ; cette
+  fenêtre sert l'accord explicite demandé, pas la peine d'en ajouter une autre côté Jaris. Jamais de
+  redémarrage forcé à la place de l'utilisateur (action difficile à annuler) : si Docker ne répond toujours
+  pas après l'installation, le message suggère juste qu'un redémarrage Windows est PROBABLEMENT nécessaire
+  (vérifié sur docs.docker.com AVANT d'écrire cette fonction : Docker Desktop ne documente PAS ses codes de
+  sortie, contrairement à la convention Windows Installer standard — donc jamais affirmer "il faut redémarrer"
+  comme un fait déduit d'un code de sortie précis, seulement une piste probable). Taille de l'installeur
+  vérifiée pour de vrai (requête HEAD, ~600 Mo) avant de choisir un délai de téléchargement (10 minutes, pas
+  les 2 minutes utilisées pour Ollama dont l'installeur est bien plus léger) : un délai trop court aurait
+  coupé un téléchargement en pleine réussite sur une connexion modeste, faisant croire à un échec à tort.
 
 ## Commandes utiles
 

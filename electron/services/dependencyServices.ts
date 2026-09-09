@@ -218,6 +218,8 @@ async function restartOllamaApp(): Promise<boolean> {
 }
 
 const OLLAMA_INSTALLER_URL = 'https://ollama.com/download/OllamaSetup.exe'
+/** Lien stable officiel documenté par Docker (docs.docker.com/desktop/setup/install/windows-install) — toujours la dernière version stable pour Windows/amd64. */
+const DOCKER_DESKTOP_INSTALLER_URL = 'https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe'
 
 /**
  * Télécharge le VRAI installeur officiel Ollama (source fiable : ollama.com, jamais un fichier qu'Ollama
@@ -504,6 +506,48 @@ async function searxngJsonSearchWorks(): Promise<boolean> {
 }
 
 /**
+ * Installe Docker Desktop, à la demande explicite de Léo ("je préfère qu'il essaie de l'installer tout
+ * seul, avec mon accord affiché au moment de l'installation") : contrairement à Ollama (installOllamaSilently
+ * ci-dessus), on n'essaie PAS de rendre ça 100% invisible. Activer la virtualisation (WSL2/Plateforme de
+ * machine virtuelle) nécessaire à Docker Desktop demande une élévation Windows (UAC) que ni Jaris ni
+ * l'installeur ne peuvent contourner — l'utilisateur VERRA forcément une fenêtre Windows lui demander une
+ * autorisation, quels que soient les indicateurs passés ici. Cette fenêtre sert justement l'accord explicite
+ * demandé, pas la peine d'en rajouter une autre.
+ *
+ * `install --quiet --accept-license` sont les indicateurs officiels documentés par Docker (pas de fenêtre
+ * d'installation à cliquer, contrairement à Ollama où aucun indicateur silencieux n'existe) : "quiet" évite
+ * l'assistant d'installation, pas l'invite UAC elle-même. Docker ne documente PAS ses codes de sortie
+ * (vérifié sur docs.docker.com avant d'écrire cette fonction) : contrairement à installOllamaSilently, on ne
+ * peut donc pas distinguer avec certitude "installé avec succès" de "redémarrage nécessaire" par le seul
+ * code de sortie — l'appelant (ensureSearxngRunning) le découvre plutôt en essayant de relancer Docker
+ * Desktop juste après et en observant s'il répond vraiment, jamais en devinant depuis un code non documenté.
+ */
+async function installDockerDesktop(onProgress: (message: string) => void): Promise<boolean> {
+  onProgress('Téléchargement de Docker Desktop (environ 600 Mo, ça peut prendre plusieurs minutes)…')
+  let installerPath: string
+  try {
+    // 10 minutes, pas 2 comme pour Ollama (installOllamaSilently) : l'installeur Docker Desktop pèse
+    // environ 600 Mo (vérifié via une requête HEAD sur l'URL officielle), largement plus gros que celui
+    // d'Ollama — un délai trop court couperait le téléchargement en pleine réussite sur une connexion
+    // modeste, faisant croire à un échec alors que c'était juste lent.
+    const response = await fetch(DOCKER_DESKTOP_INSTALLER_URL, { signal: AbortSignal.timeout(600000) })
+    if (!response.ok) return false
+    installerPath = join(tmpdir(), 'JarisDockerDesktopInstaller.exe')
+    await writeFile(installerPath, Buffer.from(await response.arrayBuffer()))
+  } catch {
+    return false
+  }
+
+  onProgress("Installation de Docker Desktop en cours (une fenêtre Windows peut demander une autorisation — accepte-la pour continuer)…")
+  const exitCode = await new Promise<number | null>((resolve) => {
+    const proc = spawn(installerPath, ['install', '--quiet', '--accept-license'], { windowsHide: true })
+    proc.on('error', () => resolve(null))
+    proc.on('close', (code) => resolve(code))
+  })
+  return exitCode === 0
+}
+
+/**
  * Démarre Docker Desktop (si besoin) puis `docker compose up -d` pour SearXNG (recherche web) — ou, si le
  * conteneur tourne déjà mais refuse le format JSON (searxngJsonSearchWorks ci-dessus), `docker compose up -d
  * --force-recreate` pour repartir d'un conteneur neuf qui relit tout (settings.yml ET la résolution du
@@ -533,6 +577,10 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
     // true si Docker Desktop est introuvable (pas juste "pas encore démarré") : dans ce cas, inutile
     // d'attendre 90s en sondant `docker info` en boucle, le résultat est déjà connu.
     let launchFailed = false
+    // Distingue le message final si Jaris vient tout juste d'installer Docker Desktop lui-même (voir plus
+    // bas) : dans ce cas précis seulement, une absence de réponse a de bonnes chances d'être un redémarrage
+    // Windows requis, pas la peine de le suggérer dans tous les autres cas.
+    let justInstalled = false
     if (process.platform === 'win32') {
       // Réutilise openApp (étape 5, même mécanisme que "ouvre Discord" à la voix) plutôt qu'un chemin
       // d'installation codé en dur : celui-ci suppose l'emplacement par défaut
@@ -543,6 +591,26 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
       const result = await openApp('Docker Desktop')
       log(result)
       launchFailed = !result.endsWith('a été lancé.')
+
+      // "aucune application nommée..." = Docker Desktop n'est PAS installé (pas juste pas lancé) : à la
+      // demande explicite de Léo, on essaie de l'installer nous-mêmes plutôt que de se contenter de lui
+      // dire d'aller le faire — voir installDockerDesktop ci-dessus pour pourquoi ce n'est PAS silencieux
+      // comme pour Ollama (élévation Windows incontournable).
+      if (launchFailed && result.includes('aucune application nommée')) {
+        justInstalled = await installDockerDesktop(log)
+        if (justInstalled) {
+          log('Docker Desktop installé, démarrage…')
+          const relaunch = await openApp('Docker Desktop')
+          log(relaunch)
+          launchFailed = !relaunch.endsWith('a été lancé.')
+        } else {
+          log(
+            "Docker Desktop n'a pas pu s'installer tout seul (téléchargement impossible, ou autorisation " +
+              'Windows refusée) : installe-le manuellement sur docker.com/products/docker-desktop pour ' +
+              'activer la recherche web.'
+          )
+        }
+      }
     }
 
     const dockerUp = !launchFailed && (await waitUntil(async () => {
@@ -554,7 +622,17 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
       }
     }, 90000, 3000))
     if (!dockerUp) {
-      log('Docker n\'a pas pu démarrer automatiquement : installe Docker Desktop (ou ouvre-le manuellement s\'il est déjà installé ailleurs) pour activer la recherche web.')
+      // Après une installation qui vient de réussir, Docker Desktop qui ne répond toujours pas après 90s a
+      // de bonnes chances d'attendre un redémarrage Windows (activation de la virtualisation) — jamais
+      // confirmé avec certitude (Docker ne documente pas ses codes de sortie), donc formulé comme une piste
+      // probable, pas un fait, plutôt que d'inventer une cause précise.
+      log(
+        justInstalled
+          ? "Docker Desktop vient d'être installé mais ne répond pas encore : un redémarrage de Windows " +
+              "est probablement nécessaire pour finir d'activer la virtualisation — redémarre ton PC, la " +
+              'recherche web sera disponible juste après.'
+          : 'Docker n\'a pas pu démarrer automatiquement : installe Docker Desktop (ou ouvre-le manuellement s\'il est déjà installé ailleurs) pour activer la recherche web.'
+      )
       return
     }
   }

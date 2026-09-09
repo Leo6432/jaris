@@ -317,6 +317,14 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   (4096) avant même le premier message. OLLAMA_NUM_CTX passe à 8192
   (config.ts/.env.example), jamais revu depuis sa valeur d'origine
   malgré la croissance du système prompt/des outils au fil des versions
+- ✅ Étape 55 — Docker Desktop (nécessaire à la recherche web) s'installe
+  maintenant lui-même si besoin, à la demande explicite de Léo qui
+  pensait à tort qu'il l'était déjà (seul Ollama s'installait tout seul
+  jusqu'ici, pas Docker Desktop). Pas silencieux comme Ollama : activer
+  la virtualisation nécessaire demande une autorisation Windows
+  incontournable, qui sert justement l'accord explicite voulu ici. Un
+  redémarrage Windows n'est jamais forcé à la place de l'utilisateur —
+  juste suggéré s'il semble nécessaire après coup
 
 ## Démarrer en développement
 
@@ -1317,12 +1325,18 @@ tourné).
 
 ## Recherche web (étape 7)
 
-Nécessite [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-installé. Jaris démarre lui-même Docker Desktop (s'il n'est pas déjà lancé)
-puis l'instance [SearXNG](https://github.com/searxng/searxng) locale (aucun
-compte, aucune clé) au lancement de l'appli — pas besoin de lancer
-`docker compose up -d` à la main. Pour le faire manuellement quand même
-(ou si le démarrage auto échoue) :
+Nécessite [Docker Desktop](https://www.docker.com/products/docker-desktop/),
+mais rien à installer à la main : Jaris télécharge et installe Docker Desktop
+tout seul s'il ne le trouve pas (étape 55), le démarre (s'il n'est pas déjà
+lancé) puis démarre l'instance [SearXNG](https://github.com/searxng/searxng)
+locale (aucun compte, aucune clé) au lancement de l'appli — pas besoin de
+lancer `docker compose up -d` à la main. Contrairement à Ollama, cette
+installation n'est pas 100% silencieuse : Windows demande une autorisation
+(élévation) pour activer la virtualisation nécessaire, incontournable même
+pour Jaris — accepte-la pour continuer. Si Docker Desktop ne répond toujours
+pas juste après avoir été installé, un redémarrage de Windows est souvent
+nécessaire. Pour lancer SearXNG manuellement quand même (ou si le démarrage
+auto échoue) :
 
 ```
 docker compose up -d

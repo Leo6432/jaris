@@ -194,6 +194,23 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   basé sur "ce qu'on utilise aujourd'hui" doit être revu chaque fois que ce qu'on empile dedans (prompt
   système, outils...) grossit significativement — mesurer pour de vrai (compter les caractères/tokens réels)
   plutôt que de supposer qu'une valeur choisie il y a plusieurs versions est toujours valable.**
+- **Une dépendance externe lourde (Docker Desktop) n'était PAS auto-installée comme les autres** (choix
+  volontaire au départ) : le code ne faisait que la LANCER si déjà installée — confusion légitime pour
+  l'utilisateur si une autre dépendance similaire (Ollama), elle, s'installe déjà toute seule. Corrigé en
+  ajoutant un vrai téléchargement + installation automatique, déclenché seulement quand on détecte que la
+  dépendance n'est PAS installée (pas juste "pas encore lancée"). **Différence assumée avec l'installation
+  silencieuse existante** : PAS silencieux cette fois, à la demande explicite de l'utilisateur — activer la
+  virtualisation nécessaire à Docker Desktop demande une élévation Windows (UAC) qu'aucun indicateur ne peut
+  contourner, donc l'utilisateur voit de toute façon une fenêtre système lui demander une autorisation ; cette
+  fenêtre sert l'accord explicite demandé, pas la peine d'en ajouter une autre. Jamais de redémarrage forcé à
+  la place de l'utilisateur (action difficile à annuler) : si le service ne répond toujours pas après
+  l'installation, le message suggère juste qu'un redémarrage est PROBABLEMENT nécessaire (vérifié sur la
+  documentation officielle AVANT d'écrire cette fonction : cette dépendance ne documente pas ses codes de
+  sortie, contrairement à la convention standard — donc jamais affirmer "il faut redémarrer" comme un fait
+  déduit d'un code de sortie précis, seulement une piste probable). Taille de l'installeur vérifiée pour de
+  vrai (requête HEAD) avant de choisir un délai de téléchargement adapté, plutôt que de réutiliser le même
+  délai qu'une autre dépendance bien plus légère : un délai trop court aurait coupé un téléchargement en
+  pleine réussite sur une connexion modeste, faisant croire à un échec à tort.
 
 ## Commandes utiles
 
