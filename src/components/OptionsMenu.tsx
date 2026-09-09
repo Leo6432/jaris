@@ -420,6 +420,19 @@ export default function OptionsMenu(): JSX.Element {
     }
   }
 
+  /** Design sonore (étape 31) : absent/true par défaut (voir App.tsx), false pour tout couper. */
+  const toggleSoundEffects = async (enabled: boolean): Promise<void> => {
+    if (!profile) return
+    setError(null)
+    const updated = { ...profile, soundEffectsEnabled: enabled }
+    setProfile(updated)
+    try {
+      await window.jaris.saveProfile(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
   /**
    * Bascule le test micro plutôt qu'un test à durée fixe : l'utilisateur active quand il veut parler et
    * désactive lui-même quand il a fini (voir stopTestMic dans voice_server.py). L'arrêt est appliqué tout
@@ -525,6 +538,16 @@ export default function OptionsMenu(): JSX.Element {
                 />
               ))}
             </div>
+
+            <div className="options-menu__section-title">Design sonore</div>
+            <label className="options-menu__checkbox">
+              <input
+                type="checkbox"
+                checked={profile?.soundEffectsEnabled !== false}
+                onChange={(e) => void toggleSoundEffects(e.target.checked)}
+              />
+              Bips d'interface (écoute, réflexion, clic, scan...)
+            </label>
           </div>
         )}
 

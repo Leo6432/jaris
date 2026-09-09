@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events'
 import { randomUUID } from 'crypto'
-import type { JarisEmotion, VoiceReplyPayload } from '../../shared/ipc'
+import type { JarisEmotion, SoundCue, VoiceReplyPayload } from '../../shared/ipc'
 import { VoiceClient } from './voiceClient'
 import { synthesizeSpeech } from './tts'
 import { appendConversationEntry } from './conversationStore'
@@ -276,7 +276,10 @@ export class VoicePipeline extends EventEmitter {
           (message) => this.emit('log', message),
           history,
           controller.signal,
-          live
+          live,
+          'voice',
+          undefined,
+          (cue) => this.emit('soundCue', cue)
         )
         if (gpuStatus.action === 'warn') reply = `${gpuStatus.message} ${reply}`
       } catch (err) {
@@ -355,8 +358,16 @@ export class VoicePipeline extends EventEmitter {
     }
   }
 
+  /**
+   * Étape 31 : les cues "ambiants" (écoute/réflexion/succès/échec) suivent directement les transitions
+   * d'émotion déjà en place ici depuis longtemps — pas de nouveaux points d'appel, juste ce mapping. Les
+   * cues d'outil (clic/scan) sont différents : ils viennent de converse() (onSoundCue, voir runTranscript
+   * plus bas), pas d'ici, puisque cette méthode ne sait rien des outils appelés.
+   */
   private setEmotion(emotion: JarisEmotion): void {
     this.emit('emotion', emotion)
+    const cue: Partial<Record<JarisEmotion, SoundCue>> = { listening: 'listening', thinking: 'thinking', happy: 'success', surprised: 'error' }
+    if (cue[emotion]) this.emit('soundCue', cue[emotion])
   }
 
   private scheduleIdle(delayMs: number): void {

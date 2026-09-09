@@ -302,6 +302,26 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   l'extraction automatique en arrière-plan) — sans cette instruction explicite dans LES DEUX prompts (la
   conversation live ET l'extraction silencieuse utilisent chacune leur propre appel au modèle), le paramètre
   existerait dans l'outil sans jamais être utilisé.
+- **Un évènement broadcast aux deux fenêtres (widget + réglages, jamais détruites, juste cachées) se joue
+  deux fois si le renderer ne filtre pas lui-même** : le design sonore (étape 31, `IPC_CHANNELS.soundCue`)
+  utilise le même `broadcast()` que `emotion`/`log`, qui envoie à `[fullWindow, widgetWindow]` sans savoir
+  laquelle est réellement affichée. Sans un garde côté renderer, les DEUX fenêtres auraient joué le bip en
+  même temps dès que les deux existent (widget caché derrière la fenêtre de réglages, par ex.) — corrigé en
+  ne jouant le son QUE si `document.visibilityState === 'visible'` dans le renderer qui reçoit l'évènement
+  (App.tsx), pas en changeant `broadcast()` lui-même (déjà utilisé tel quel par d'autres évènements qui, eux,
+  ont besoin d'atteindre une fenêtre cachée — voir le repli sur `audioRef.current` pour `onReply` un peu plus
+  haut dans ce même fichier : deux évènements différents peuvent légitimement vouloir deux stratégies de
+  filtrage différentes, pas de solution unique à copier partout sans réfléchir à CE cas précis).
+- **Un conteneur CSS en `pointer-events: none` (pour laisser cliquer au travers d'un grand bloc `position:
+  absolute; inset: 0` par ailleurs vide) désactive aussi les clics sur tout nouvel élément interactif ajouté
+  dedans, silencieusement** : `.options-menu__voice-picker` (OptionsMenu.tsx, onglet Voix) n'autorisait le
+  clic QUE sur ses `button` (`pointer-events: auto` ciblé), un choix qui datait d'avant l'ajout d'une case à
+  cocher (étape 31, "Bips d'interface") — un `<label><input type="checkbox">` n'est pas un `button`, donc
+  sans étendre cette règle explicitement à `.options-menu__checkbox`, la case aurait été visible mais
+  totalement incliquable. Repéré en écrivant le CSS, pas en testant dans un vrai navigateur (aucun accès
+  Windows cette session) : toujours vérifier les règles `pointer-events`/`inset` déjà en place sur un
+  conteneur avant d'y ajouter un nouvel élément interactif, jamais supposer qu'un enfant hérite du
+  comportement de clic normal.
 
 - **Une boucle de pilotage peut scanner sans agir si une action JSON inconnue est acceptée** :
   `extractStep()` ne vérifiait que la présence du champ `action`, puis le `switch` ignorait les valeurs

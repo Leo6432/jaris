@@ -20,6 +20,7 @@ import {
   type ReleaseHistoryEntry,
   type RuntimeSetupProgress,
   type RuntimeSetupStatus,
+  type SoundCue,
   type UpdateCheckResult,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload
@@ -85,7 +86,8 @@ const api = {
   stopTestMicrophone: (): void => ipcRenderer.send(IPC_CHANNELS.stopTestMicrophone),
   setActiveMode: (mode: 'voice' | 'chat' | 'code'): void => ipcRenderer.send(IPC_CHANNELS.setActiveMode, mode),
   onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => subscribe(IPC_CHANNELS.micTestLevel, cb),
-  onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => subscribe(IPC_CHANNELS.micTestDone, cb)
+  onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => subscribe(IPC_CHANNELS.micTestDone, cb),
+  onSoundCue: (cb: (cue: SoundCue) => void) => subscribe(IPC_CHANNELS.soundCue, cb)
 }
 
 export type JarisApi = typeof api

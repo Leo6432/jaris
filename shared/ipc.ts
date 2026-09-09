@@ -2,6 +2,15 @@
 
 export type JarisEmotion = 'idle' | 'listening' | 'thinking' | 'happy' | 'surprised'
 
+/**
+ * Identifiants des sons courts du design sonore de Jaris (étape 31) — synthétisés à la volée côté renderer
+ * (voir src/lib/soundDesign.ts, Web Audio API), jamais de vrais fichiers audio embarqués : reste léger et ne
+ * dépend d'aucun asset à maintenir. 'listening'/'thinking'/'success'/'error' suivent les mêmes transitions
+ * que JarisEmotion (voix) ; 'click'/'scan' accompagnent un appel d'outil précis (click_mouse/look_at_screen/
+ * computer_use_task), en Voix comme en Chat puisque les deux partagent converse() (tools.ts).
+ */
+export type SoundCue = 'listening' | 'thinking' | 'success' | 'error' | 'click' | 'scan'
+
 export interface VoiceReplyPayload {
   transcript: string
   reply: string
@@ -52,6 +61,8 @@ export interface Profile {
    * directement. `undefined` seulement pour un profil créé avant l'étape 46.
    */
   codeModel?: string
+  /** Design sonore (étape 31) : absent/true par défaut, false pour couper les bips d'interface (Options → Voix). */
+  soundEffectsEnabled?: boolean
 }
 
 /**
@@ -399,5 +410,7 @@ export const IPC_CHANNELS = {
    * l'utilisateur est sur Chat ou Code, à sa demande explicite : Jaris ne doit pas réagir à sa voix (mot
    * d'activation, transcription) quand il est en train d'écrire dans un autre mode.
    */
-  setActiveMode: 'jaris:set-active-mode'
+  setActiveMode: 'jaris:set-active-mode',
+  /** main -> renderer : un son court à jouer (design sonore, étape 31) — voir SoundCue plus haut. */
+  soundCue: 'jaris:sound-cue'
 } as const

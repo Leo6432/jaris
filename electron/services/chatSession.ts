@@ -6,7 +6,7 @@ import { extractMemoryFromExchange } from './memoryExtractor'
 import { getLiveGpuStatus } from './hardwareScan'
 import { getProfile } from './profileStore'
 import { checkGpuTempSafety } from './resourceMonitor'
-import type { ChatMessage } from '../../shared/ipc'
+import type { ChatMessage, SoundCue } from '../../shared/ipc'
 
 /**
  * Nombre de messages gardés pour l'AFFICHAGE du fil de discussion, bien plus large que la fenêtre envoyée
@@ -45,9 +45,15 @@ class ChatSession {
     prompt: string,
     onReminderFire: (message: string) => void,
     onLog: (message: string) => void,
+    // Étape 31 : contrairement à la Voix (qui tire ses cues ambiants de ses propres transitions
+    // d'émotion, voir voicePipeline.ts), le Chat n'a pas d'état "émotion" — il émet lui-même ses cues
+    // ambiants (réflexion/succès/échec) autour de converse(), et lui transmet le même callback pour ses
+    // cues d'outil (clic/scan, voir TOOL_SOUND_CUES dans assistant.ts) : un seul callback pour les deux.
+    onSoundCue?: (cue: SoundCue) => void,
     onToken?: (delta: string) => void
   ): Promise<ChatMessage> {
     this.pushVisible({ role: 'user', content: prompt })
+    onSoundCue?.('thinking')
 
     // Même sécurité thermique qu'à la voix : inutile de lancer une inférence sur un GPU déjà trop chaud.
     // Le relevé est réutilisé par converse() plus bas au lieu d'en relancer un second.
@@ -55,6 +61,7 @@ class ChatSession {
     const gpuStatus = checkGpuTempSafety(live.tempC)
     if (gpuStatus.action === 'abort' || gpuStatus.action === 'shutdown') {
       onLog(`Sécurité thermique GPU : ${gpuStatus.message}`)
+      onSoundCue?.('error')
       return this.pushVisible({ role: 'assistant', content: gpuStatus.message as string })
     }
 
@@ -73,12 +80,14 @@ class ChatSession {
         undefined,
         live,
         'chat',
-        onToken
+        onToken,
+        onSoundCue
       )
       if (gpuStatus.action === 'warn') reply = `${gpuStatus.message}\n\n${reply}`
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
       onLog(`Erreur Ollama (chat) : ${detail}`)
+      onSoundCue?.('error')
       // Le détail (déjà clair et actionnable, voir ollama.ts : "Impossible de joindre Ollama...",
       // "Ollama a répondu 500 : ...") est ajouté au lieu d'être perdu derrière un message générique — même
       // logique que pour un outil qui échoue (voir assistant.ts) : ne jamais cacher la vraie cause.
@@ -88,6 +97,7 @@ class ChatSession {
       })
     }
 
+    onSoundCue?.('success')
     pushSessionExchange(prompt, reply)
 
     // Exactement comme à la voix : la mémoire longue durée s'enrichit toute seule, et l'échange rejoint

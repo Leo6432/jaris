@@ -60,10 +60,6 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ⬜ Étape 27 — Sous-agents : Jaris peut lancer plusieurs sous-agents (agents
   web, etc.) en parallèle pour des tâches complexes qui demandent plusieurs
   actions en même temps, au lieu de tout faire en une seule séquence
-- ⬜ Étape 31 — Design sonore : donne à Jaris sa propre identité sonore, avec
-  des sons distincts selon l'action en cours (clic de souris, envoi d'un
-  message/mail, réflexion, scan d'écran...), en plus de la voix — comme les
-  bips caractéristiques de J.A.R.V.I.S. (Iron Man)
 - ⬜ Étape 32 — Clics plus fiables via UI Automation (Windows) : au lieu de
   deviner des coordonnées à partir d'une capture d'écran (vision), utiliser
   l'API d'accessibilité Windows (`UIAutomationClient`/`UIAutomationTypes`,
@@ -359,6 +355,11 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   paramètre `replace` (mis à `true` par le modèle quand l'utilisateur
   corrige une info déjà connue, ex: "mon adresse a changé") qui remplace
   le contenu de la note au lieu de s'ajouter à côté
+- ✅ Étape 31 — Design sonore : Jaris a sa propre identité sonore, des bips
+  courts façon J.A.R.V.I.S. synthétisés à la volée (Web Audio API, aucun
+  fichier audio à embarquer) pour l'écoute, la réflexion, un succès, une
+  erreur, un clic de souris et un scan d'écran — en Voix comme en Chat, qui
+  partagent le même mécanisme. Désactivable en un clic dans Options → Voix
 
 ## Démarrer en développement
 

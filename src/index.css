@@ -804,7 +804,8 @@ body.body--scan::after {
   pointer-events: none;
 }
 
-.options-menu__voice-picker button {
+.options-menu__voice-picker button,
+.options-menu__voice-picker .options-menu__checkbox {
   pointer-events: auto;
 }
 
@@ -857,6 +858,20 @@ body.body--scan::after {
   display: flex;
   gap: 10px;
   margin-top: 10px;
+}
+
+.options-menu__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--hud-text-dim);
+  cursor: pointer;
+}
+
+.options-menu__checkbox input {
+  accent-color: var(--hud-accent);
+  cursor: pointer;
 }
 
 /* Petites barres verticales façon indicateur de niveau, pas des ronds pleins colorés : ce sont les seuls

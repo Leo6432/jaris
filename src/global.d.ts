@@ -18,6 +18,7 @@ import type {
   ReleaseHistoryEntry,
   RuntimeSetupProgress,
   RuntimeSetupStatus,
+  SoundCue,
   UpdateCheckResult,
   VoiceReplyPayload,
   VoiceSetupStatusPayload
@@ -80,6 +81,7 @@ declare global {
       setActiveMode: (mode: 'voice' | 'chat' | 'code') => void
       onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => () => void
       onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => () => void
+      onSoundCue: (cb: (cue: SoundCue) => void) => () => void
     }
   }
 }

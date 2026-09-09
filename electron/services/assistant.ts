@@ -5,6 +5,20 @@ import { getProfile } from './profileStore'
 import { TOOLS, createToolExecutor } from './tools'
 import { GPU_TEMP_LIMIT_C, pickSafeModel, type LiveGpuStatus } from './hardwareScan'
 import { checkOverloadWarning } from './resourceMonitor'
+import type { SoundCue } from '../../shared/ipc'
+
+/**
+ * Design sonore (étape 31) : seuls les outils qui correspondent à une action PHYSIQUE/perceptible ont un
+ * son dédié — clic de souris (click_mouse) et capture d'écran (look_at_screen, computer_use_task, qui
+ * commence toujours par regarder l'écran). Les autres outils (remember, set_reminder...) n'ont pas de son
+ * propre : ce ne sont pas les exemples cités dans la demande d'origine, et un bip à chaque appel d'outil
+ * sans distinction serait plus fatiguant qu'utile.
+ */
+const TOOL_SOUND_CUES: Partial<Record<string, SoundCue>> = {
+  click_mouse: 'click',
+  look_at_screen: 'scan',
+  computer_use_task: 'scan'
+}
 
 interface ModelTiers {
   flash: string
@@ -225,7 +239,13 @@ export async function converse(
   channel: ConverseChannel = 'voice',
   // Étape 48, chat uniquement (jamais fourni à la voix) : reçoit chaque fragment de texte au fil de sa
   // génération, pour un affichage progressif dans ChatPanel.tsx au lieu d'attendre la réponse complète.
-  onToken?: (delta: string) => void
+  onToken?: (delta: string) => void,
+  // Étape 31 : un son court par appel d'outil PHYSIQUE (voir TOOL_SOUND_CUES plus haut), commun à la Voix
+  // et au Chat puisque les deux passent par ce même converse(). Les cues "ambiants" (écoute/réflexion/
+  // succès/échec) ne viennent PAS d'ici : la voix les tire déjà de ses propres transitions d'émotion
+  // (voicePipeline.ts), et le chat les émet lui-même autour de cet appel (chatSession.ts) — cette fonction
+  // ne connaît que les outils, jamais l'état ambiant du canal appelant.
+  onSoundCue?: (cue: SoundCue) => void
 ): Promise<string> {
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
@@ -375,6 +395,8 @@ export async function converse(
 
     for (const call of message.tool_calls) {
       onLog?.(`Outil appelé : ${call.function.name}(${JSON.stringify(call.function.arguments)})`)
+      const soundCue = TOOL_SOUND_CUES[call.function.name]
+      if (soundCue) onSoundCue?.(soundCue)
 
       // Un outil qui lève une exception (SearXNG/Ollama/Docker injoignable, erreur réseau...) ne doit
       // jamais faire échouer tout le tour de conversation : sans ce try/catch, l'exception remontait telle
