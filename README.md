@@ -361,6 +361,15 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   erreur, un clic de souris, un scan d'écran et l'envoi d'un message en Chat
   — en Voix comme en Chat, qui partagent le même mécanisme. Désactivable en
   un clic dans Options → Voix
+- ✅ Étape 60 — "Les boutons marchent jamais" en mode Code (Léo) : les
+  applications générées qui utilisent `body { height: 100vh; overflow:
+  hidden; }` (un motif courant pour une page "plein écran") plaçaient leur
+  bouton principal hors de la zone visible du petit aperçu de Jaris, plus
+  étroit qu'une vraie fenêtre de navigateur — invisible et incliquable, sans
+  moyen de faire défiler pour l'atteindre. Confirmé par un vrai test (pas
+  une supposition) avant de corriger. Le générateur interdit maintenant ce
+  motif et le détecte automatiquement pour le réparer si le modèle l'utilise
+  quand même
 
 ## Démarrer en développement
 

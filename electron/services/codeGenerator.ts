@@ -48,7 +48,13 @@ const APP_RULES = [
   "Gère les cas limites visibles par l'utilisateur : liste vide, champ non rempli, saisie invalide, action " +
     "impossible. L'interface ne doit jamais rester silencieuse ou cassée après une action.",
   "Si l'application a besoin de garder des données entre deux ouvertures, utilise localStorage, en " +
-    "protégeant chaque lecture/écriture par un try/catch."
+    "protégeant chaque lecture/écriture par un try/catch.",
+  "N'utilise JAMAIS `overflow: hidden` combiné à une hauteur fixe (`height: 100vh`, `height: 100%`) sur " +
+    "<html> ou <body> : l'aperçu dans lequel cette page s'affiche est PLUS PETIT qu'une fenêtre de " +
+    "navigateur classique, donc tout contenu qui dépasse cette hauteur (souvent un bouton en bas de page) " +
+    "devient invisible ET impossible à cliquer, sans aucun moyen de faire défiler pour l'atteindre. Laisse " +
+    "toujours la page défiler normalement (`overflow-y: auto`, ou pas de règle d'overflow du tout) si son " +
+    "contenu peut dépasser la hauteur disponible."
 ]
 
 const GENERATE_SYSTEM_PROMPT =
@@ -154,6 +160,34 @@ export function validateGeneratedHtml(html: string): string[] {
     issues.push(
       "du code JavaScript se trouve directement dans le <body> et s'affiche comme du texte à l'écran au " +
         "lieu de s'exécuter : déplace TOUT ce code à l'intérieur d'une balise <script> avant </body>"
+    )
+  }
+
+  // Reproduit en usage réel (Léo, un jeu Snake généré) : `body { height: 100vh; overflow: hidden; }` est un
+  // motif très courant pour une page "plein écran sans défilement", mais l'aperçu de Jaris (iframe) est
+  // PLUS PETIT qu'une vraie fenêtre de navigateur — tout ce qui dépasse cette hauteur (ici, le bouton
+  // "Jouer"/"Rejouer") devient invisible ET incliquable, sans aucun moyen de faire défiler pour l'atteindre.
+  // Vérifié UNIQUEMENT à l'intérieur des balises <style> (jamais sur le HTML brut autour) : sans ça, la
+  // toute première règle CSS du fichier capture aussi tout ce qui la précède dans la recherche du sélecteur
+  // (`[^{}]+` remonte jusqu'au début du document faute d'accolade avant), et "<!DOCTYPE html><html>..."
+  // contient lui-même le mot "html" — un faux positif certain sur CHAQUE fichier généré, détecté en testant
+  // ce correctif avant de le considérer terminé plutôt qu'après. Vérifié sur toute règle dont le sélecteur
+  // mentionne html/body (pas seulement une règle "body {" isolée : un fichier généré écrit parfois
+  // "html, body { ... }" en un seul bloc).
+  const styleContent = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map((match) => match[1]).join(' ')
+  const htmlOrBodyDeclarations = [...styleContent.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+    .filter(([, selector]) => /\b(?:html|body)\b/i.test(selector))
+    .map(([, , declarations]) => declarations)
+    .join(' ')
+  const hasFixedViewportHeight = /height\s*:\s*100(?:vh|%)/i.test(htmlOrBodyDeclarations)
+  const hasHiddenOverflow = /overflow(?:-y)?\s*:\s*hidden/i.test(htmlOrBodyDeclarations)
+  if (hasFixedViewportHeight && hasHiddenOverflow) {
+    issues.push(
+      '<html>/<body> combine une hauteur fixe (100vh/100%) et overflow: hidden — si le contenu réel ' +
+        "dépasse la hauteur du petit aperçu de Jaris, tout ce qui dépasse (souvent un bouton) devient " +
+        'invisible et incliquable, sans moyen de faire défiler pour l\'atteindre : remplace par ' +
+        '`overflow-y: auto` (ou retire la hauteur fixe) pour que la page reste utilisable avec moins de ' +
+        'place verticale'
     )
   }
 

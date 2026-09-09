@@ -342,6 +342,34 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   Ce garde-fou fournit un diagnostic, il ne prouve pas à lui seul pourquoi une tâche réelle YouTube échoue.
   Les logs intermédiaires du Chat ne sont pas lus à voix haute pendant une tâche vocale.
 
+- **"Les boutons marchent jamais" en mode Code (Léo) : le vrai bug n'était NI dans le HTML/JS généré, NI
+  dans le mécanisme d'aperçu (iframe `sandbox="allow-scripts"`, testé sain à part)** — c'était une
+  interaction entre les deux. Un motif CSS très courant pour une page "plein écran" générée par le modèle
+  (`body { height: 100vh; overflow: hidden; }`, vu tel quel dans un Snake généré) suppose une fenêtre de
+  navigateur classique ; l'aperçu de Jaris (`.code-panel__preview`, CodePanel.tsx) est un iframe BEAUCOUP
+  plus petit (contraint par le compositeur/la barre de statut/l'indice au-dessus et en dessous). Tout
+  contenu qui dépasse cette hauteur réduite (ici le bouton "Jouer"/"Rejouer", en bas de page) devient
+  invisible ET incliquable, sans le moindre moyen de faire défiler pour l'atteindre (`overflow: hidden`
+  empêche justement ça) — d'où "rien du tout ne se passe" au clic, confirmé par Léo (AskUserQuestion : il
+  cliquait bien DANS l'aperçu de Jaris). **Diagnostic vérifié pour de vrai avant tout correctif** : un test
+  Playwright avec le VRAI CSS compilé (`out/renderer/assets/index-*.css`) et un clic bas niveau aux
+  coordonnées ÉCRAN réelles du bouton (position de l'iframe + position du bouton DANS l'iframe, pas
+  `frame.click()` qui cible l'élément directement sans passer par le vrai rendu) a confirmé que le bouton
+  tombe hors de la zone visible de l'iframe — jamais deviné, contrairement à la saga SearXNG plus haut.
+  Corrigé à la source (`APP_RULES`, codeGenerator.ts) : nouvelle consigne interdisant `overflow: hidden` +
+  hauteur fixe (100vh/100%) sur `<html>`/`<body>`, ET un contrôle mécanique dans `validateGeneratedHtml`
+  (même mécanisme déjà là pour les classes fantômes/ressources externes/JS hors `<script>`) qui détecte ce
+  motif et déclenche la passe de réparation. **Piège dans le correctif lui-même, attrapé par le test AVANT
+  de le considérer terminé** : la première version du contrôle cherchait `selector { déclarations }` sur le
+  HTML ENTIER, mais pour la toute PREMIÈRE règle CSS du fichier, la capture du "sélecteur" (`[^{}]+`, qui
+  remonte jusqu'à la dernière accolade rencontrée) avalait tout le HTML précédent — `<!DOCTYPE
+  html><html><head><style>` contient lui-même le mot "html", donc CHAQUE fichier généré aurait déclenché un
+  faux positif dès sa première règle CSS. Corrigé en isolant d'abord le contenu des balises `<style>` avant
+  d'y chercher des règles html/body. Régression : `node --test scripts/test-codegen-validate.mjs`. **Leçon
+  générale : un correctif "évident" doit quand même être testé avec des cas limites simples (ici : le tout
+  premier cas réel, la page générée elle-même) avant d'être considéré fiable** — la relecture seule n'aurait
+  pas forcément repéré ce faux positif.
+
 ## Commandes utiles
 
 ```
