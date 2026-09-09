@@ -331,7 +331,18 @@ export async function generateApp(
   const first = await chatWithOllama(generateMessages, undefined, model, 'high', undefined, CODE_NUM_CTX)
   const draft = extractHtml(first.content)
   if (!draft) {
-    throw new Error("Le modèle n'a pas renvoyé de code HTML exploitable. Reformule ta demande, ou relance.")
+    // Un message générique ("reformule, ou relance") ne dit rien de la VRAIE cause si ça se reproduit à
+    // chaque fois (refus du modèle, réponse vide, sortie qui tourne en rond sans jamais écrire de HTML...) :
+    // même logique que pour un outil qui échoue (voir assistant.ts/webSearch.ts) — montrer ce que le modèle a
+    // RÉELLEMENT répondu plutôt que de laisser deviner, pour diagnostiquer avec des faits la prochaine fois.
+    const raw = first.content.trim()
+    const preview = raw.slice(0, 300)
+    throw new Error(
+      "Le modèle n'a pas renvoyé de code HTML exploitable. Reformule ta demande, ou relance." +
+        (preview
+          ? ` Ce qu'il a répondu à la place : "${preview}${raw.length > 300 ? '…' : ''}"`
+          : ' Sa réponse était vide.')
+    )
   }
 
   onStatus('Relecture du code par un second agent (cohérence, style, syntaxe)…')

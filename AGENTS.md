@@ -330,6 +330,17 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   scripts/test-codegen-validate.mjs`. **Leçon générale : un correctif "évident" doit quand même être testé
   avec des cas limites simples (ici : le tout premier cas réel, la page générée elle-même) avant d'être
   considéré fiable** — la relecture seule n'aurait pas forcément repéré ce faux positif.
+- **"Le modèle n'a pas renvoyé de code HTML exploitable" (mode Code) : message générique qui ne dit RIEN de
+  ce que le modèle a répondu à la place** — Léo a rencontré ce message à chaque tentative pour une nouvelle
+  application (pas une modification), sans qu'on sache si le modèle a refusé, renvoyé du texte vide, ou une
+  réponse qui tourne en rond sans jamais écrire de HTML. Impossible à diagnostiquer sans le contenu réel de
+  cette session (pas d'Ollama/GPU dans cet environnement pour reproduire le comportement d'un modèle local).
+  Corrigé en incluant un extrait (300 caractères) de la VRAIE réponse du modèle dans le message d'erreur
+  affiché (codeGenerator.ts, `generateApp`) — même logique que pour un outil qui échoue (assistant.ts/
+  webSearch.ts) : ne jamais laisser un message générique remplacer les faits, surtout quand la cause
+  n'est pas encore connue. Cause exacte du blocage encore NON identifiée à ce stade : la prochaine occurrence
+  affichera enfin ce que le modèle a réellement répondu, pour diagnostiquer avec des faits plutôt qu'une
+  hypothèse de plus — ne pas répéter l'erreur de la saga SearXNG (deviner avant d'avoir la vraie donnée).
 
 ## Commandes utiles
 
