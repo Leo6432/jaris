@@ -255,6 +255,22 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   **Leçon générale : un détecteur basé sur un mot-clé précis (ici "faire") généralise mal** — dès que c'est
   possible, détecter le PATRON GRAMMATICAL (ici : verbe au futur proche) plutôt qu'un mot précis évite de
   devoir rajouter chaque nouveau verbe rencontré un par un à mesure qu'on les découvre en usage réel.
+- **Installer Docker Desktop tout seul (v0.4.0) ne suffisait pas : WSL, son prérequis sur Windows, manque
+  silencieusement sur une machine qui ne l'a jamais eu** — vécu en usage réel par Léo dans la FOULÉE du
+  correctif précédent : Docker Desktop installé avec succès par Jaris, mais bloqué au démarrage derrière sa
+  propre erreur "WSL not installed", lui demandant de lancer `wsl --install` à la main. Bug de PLACEMENT du
+  check, pas de logique : le premier ajout ne vérifiait WSL qu'à L'INTÉRIEUR de la branche "Docker Desktop pas
+  installé du tout" — jamais atteinte une fois Docker Desktop déjà présent (le cas de Léo dès le lancement
+  suivant), donc jamais réellement exécuté pour lui. Corrigé en déplaçant le check WSL tout en haut, AVANT
+  même de toucher à Docker Desktop, que celui-ci soit déjà installé ou non : WSL est un prérequis pour que
+  Docker Desktop FONCTIONNE sur Windows, pas seulement pour l'installer. Installé de la même manière que
+  Docker Desktop (élévation Windows via PowerShell `Start-Process -Verb RunAs`, jamais de redémarrage forcé —
+  vérifié sur learn.microsoft.com/windows/wsl/install qu'un redémarrage est TOUJOURS requis après un premier
+  `wsl --install`, contrairement aux codes de sortie non documentés de Docker Desktop). **Leçon générale :
+  quand une vérification/installation automatique est ajoutée dans UNE branche précise d'un flux à plusieurs
+  chemins, vérifier qu'elle reste atteignable une fois que l'état qui a déclenché cette branche a changé** —
+  un correctif qui marche pour le premier lancement peut devenir invisible dès le lancement suivant si son
+  placement suppose à tort que les deux lancements prennent le même chemin.
 
 ## Commandes utiles
 

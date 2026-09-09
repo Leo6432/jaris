@@ -334,6 +334,15 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   n'importe quel verbe (motif grammatical, pas un mot précis), vérifié
   pour ne pas déclencher à tort sur des tournures bénignes ("je vais
   bien")
+- ✅ Étape 57 — L'auto-installation de Docker Desktop (étape 55) ne
+  suffisait pas : constaté en usage réel juste après, Docker Desktop
+  installé avec succès mais bloqué au démarrage par sa propre erreur
+  "WSL not installed" (son prérequis sur Windows, jamais vérifié).
+  Corrigé en installant WSL en premier (même mécanisme de consentement
+  Windows visible que pour Docker Desktop), déplacé pour être vérifié à
+  chaque lancement de Jaris et pas seulement au tout premier — l'ancien
+  emplacement du check ne pouvait jamais s'exécuter une fois Docker
+  Desktop déjà installé
 
 ## Démarrer en développement
 

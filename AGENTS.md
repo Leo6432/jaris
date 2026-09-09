@@ -220,6 +220,19 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   connaître à l'avance, testé pour ne pas accrocher les usages bénins ("je vais bien") avant d'être adopté.
   **Leçon générale : dès que c'est possible, détecter le PATRON GRAMMATICAL plutôt qu'un mot-clé précis** —
   un mot-clé précis oblige à rajouter chaque nouveau cas un par un à mesure qu'on le découvre en usage réel.
+- **Installer une dépendance lourde tout seul ne suffit pas si SON PROPRE prérequis manque aussi en
+  silence** — vécu en usage réel dans la foulée du correctif précédent (auto-installation de Docker
+  Desktop) : installée avec succès, mais bloquée au démarrage derrière son propre message d'erreur
+  réclamant un prérequis système (WSL) jamais vérifié. Bug de PLACEMENT du check, pas de logique : le
+  premier ajout ne vérifiait ce prérequis qu'à L'INTÉRIEUR de la branche "pas installée du tout" — jamais
+  atteinte une fois la dépendance déjà présente (le cas dès le lancement suivant), donc jamais réellement
+  exécuté. Corrigé en déplaçant ce check tout en haut, AVANT même de toucher à la dépendance elle-même, que
+  celle-ci soit déjà installée ou non : ce prérequis conditionne le FONCTIONNEMENT, pas seulement
+  l'installation. **Leçon générale : quand une vérification/installation automatique est ajoutée dans UNE
+  branche précise d'un flux à plusieurs chemins, vérifier qu'elle reste atteignable une fois que l'état qui a
+  déclenché cette branche a changé** — un correctif qui marche pour le premier lancement peut devenir
+  invisible dès le lancement suivant si son placement suppose à tort que les deux lancements prennent le
+  même chemin.
 
 ## Commandes utiles
 

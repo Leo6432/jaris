@@ -506,6 +506,54 @@ async function searxngJsonSearchWorks(): Promise<boolean> {
 }
 
 /**
+ * true si le sous-système Windows pour Linux (WSL) est déjà installé — condition préalable au
+ * fonctionnement de Docker Desktop sur Windows (backend par défaut), vécu en usage réel par Léo : Docker
+ * Desktop installé avec succès (installDockerDesktop ci-dessous) mais refusant quand même de démarrer,
+ * affichant sa propre erreur "WSL not installed" en lui demandant de lancer `wsl --install` à la main. Sur
+ * une machine où WSL n'a jamais été installé, `wsl --status` échoue (ou déclenche l'invite Windows "WSL
+ * n'est pas installé") ; sur une machine où WSL est déjà là (même sans distribution Linux installée), elle
+ * réussit.
+ */
+async function isWslInstalled(): Promise<boolean> {
+  try {
+    await execAsync('wsl --status', { windowsHide: true })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Installe WSL, prérequis silencieusement manquant de Docker Desktop sur une machine qui ne l'avait jamais
+ * utilisé (vécu en usage réel par Léo). `wsl --install` DOIT être lancé depuis un terminal Administrateur
+ * (vérifié sur learn.microsoft.com/windows/wsl/install avant d'écrire cette fonction) : Jaris lui-même ne
+ * tourne pas élevé, donc on déclenche l'élévation via PowerShell `Start-Process -Verb RunAs`, qui affiche la
+ * même fenêtre Windows (UAC) que pour l'installation de Docker Desktop — sert le même accord explicite,
+ * jamais contournable de toute façon. Un redémarrage est TOUJOURS nécessaire après un premier `wsl --install`
+ * réussi (documenté explicitement par Microsoft, contrairement aux codes de sortie non documentés de Docker
+ * Desktop) : jamais redémarrer le PC à la place de Léo, seulement le lui dire clairement à l'appelant.
+ */
+async function installWsl(onProgress: (message: string) => void): Promise<boolean> {
+  onProgress(
+    'Installation de WSL, nécessaire à Docker Desktop (une fenêtre Windows peut demander une autorisation — accepte-la pour continuer)…'
+  )
+  const exitCode = await new Promise<number | null>((resolve) => {
+    const proc = spawn(
+      'powershell',
+      ['-NoProfile', '-Command', "Start-Process wsl.exe -ArgumentList '--install' -Verb RunAs -Wait"],
+      { windowsHide: true }
+    )
+    proc.on('error', () => resolve(null))
+    proc.on('close', (code) => resolve(code))
+  })
+  // Code 0 = l'élévation a réussi et `wsl --install` a tourné jusqu'au bout (le redémarrage reste
+  // nécessaire, voir isWslInstalled ci-dessus) ; tout autre code (ou process introuvable) couvre aussi bien
+  // l'autorisation Windows refusée par l'utilisateur qu'un échec réel — on ne peut pas distinguer les deux
+  // avec certitude depuis ce seul code, donc jamais affirmer "installé" dans ce cas.
+  return exitCode === 0
+}
+
+/**
  * Installe Docker Desktop, à la demande explicite de Léo ("je préfère qu'il essaie de l'installer tout
  * seul, avec mon accord affiché au moment de l'installation") : contrairement à Ollama (installOllamaSilently
  * ci-dessus), on n'essaie PAS de rendre ça 100% invisible. Activer la virtualisation (WSL2/Plateforme de
@@ -582,6 +630,29 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
     // Windows requis, pas la peine de le suggérer dans tous les autres cas.
     let justInstalled = false
     if (process.platform === 'win32') {
+      // WSL d'abord, AVANT même de toucher à Docker Desktop : c'est un prérequis pour que Docker Desktop
+      // fonctionne sur Windows (backend par défaut), que Docker Desktop soit déjà installé ou non — vécu en
+      // usage réel par Léo : Docker Desktop installé avec succès par Jaris (v0.4.0) mais bloqué derrière sa
+      // propre erreur "WSL not installed" au démarrage, jamais détecté ici puisque ce check n'existait
+      // qu'à l'intérieur de la branche "Docker Desktop pas installé du tout", jamais atteinte une fois
+      // Docker Desktop déjà présent. Un `wsl --install` qui vient de vraiment installer WSL exige un
+      // redémarrage AVANT que Docker Desktop puisse jamais démarrer : pas la peine d'aller plus loin dans ce
+      // cas précis, la suite reprendra automatiquement au prochain lancement de Jaris une fois WSL en place.
+      if (!(await isWslInstalled())) {
+        const wslLaunched = await installWsl(log)
+        if (!(await isWslInstalled())) {
+          log(
+            wslLaunched
+              ? "WSL a été installé, mais Windows doit redémarrer pour l'activer avant que Docker Desktop " +
+                  'puisse fonctionner : redémarre ton PC, puis relance Jaris pour continuer.'
+              : "WSL n'a pas pu s'installer (autorisation Windows refusée, ou échec du téléchargement) : " +
+                  'lance "wsl --install" toi-même dans un PowerShell en administrateur, redémarre, puis ' +
+                  'relance Jaris pour activer la recherche web.'
+          )
+          return
+        }
+      }
+
       // Réutilise openApp (étape 5, même mécanisme que "ouvre Discord" à la voix) plutôt qu'un chemin
       // d'installation codé en dur : celui-ci suppose l'emplacement par défaut
       // (C:\Program Files\Docker\Docker\Docker Desktop.exe) et échoue silencieusement si Docker Desktop
