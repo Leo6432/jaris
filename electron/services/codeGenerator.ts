@@ -21,6 +21,11 @@ const CODE_NUM_CTX = 16384
  */
 const APP_RULES = [
   "Produis UN SEUL fichier HTML complet et autonome, commençant par <!DOCTYPE html> et finissant par </html>.",
+  "Le fichier tourne dans un NAVIGATEUR WEB (HTML/CSS/JavaScript uniquement), jamais dans un autre langage : " +
+    "même pour un jeu ou un programme dont l'implémentation la plus connue dans les tutoriels est ailleurs " +
+    "(ex: un Snake, un Tetris ou un Pong en Python/tkinter/pygame), écris-le TOUJOURS en HTML/CSS/JavaScript " +
+    "(un <canvas> pour un jeu en 2D), jamais dans ce langage d'origine, même s'il te semble plus naturel " +
+    "pour ce cas précis.",
   "Fais EXACTEMENT ce qui est demandé, rien de plus : n'invente aucune fonctionnalité, aucun titre, aucun " +
     "texte d'ambiance ni aucun élément d'interface qui n'a pas été demandé. Une demande simple (un bouton) " +
     "doit donner une page simple. Soigner le design ne veut pas dire ajouter du contenu en plus. Quand " +
@@ -329,20 +334,49 @@ export async function generateApp(
     { role: 'user', content: userPrompt }
   ]
   const first = await chatWithOllama(generateMessages, undefined, model, 'high', undefined, CODE_NUM_CTX)
-  const draft = extractHtml(first.content)
+  let draft = extractHtml(first.content)
   if (!draft) {
-    // Un message générique ("reformule, ou relance") ne dit rien de la VRAIE cause si ça se reproduit à
-    // chaque fois (refus du modèle, réponse vide, sortie qui tourne en rond sans jamais écrire de HTML...) :
-    // même logique que pour un outil qui échoue (voir assistant.ts/webSearch.ts) — montrer ce que le modèle a
-    // RÉELLEMENT répondu plutôt que de laisser deviner, pour diagnostiquer avec des faits la prochaine fois.
-    const raw = first.content.trim()
-    const preview = raw.slice(0, 300)
-    throw new Error(
-      "Le modèle n'a pas renvoyé de code HTML exploitable. Reformule ta demande, ou relance." +
-        (preview
-          ? ` Ce qu'il a répondu à la place : "${preview}${raw.length > 300 ? '…' : ''}"`
-          : ' Sa réponse était vide.')
+    // Cause réelle identifiée en usage réel (Léo, "un jeu Snake") : le modèle a ignoré la consigne HTML et
+    // répondu en Python/tkinter — l'implémentation la plus connue de Snake dans les tutoriels, malgré la
+    // consigne explicite. Une seule relance avec une consigne corrective ciblée (même logique que
+    // nudgedForEmail/nudgedForPromise dans assistant.ts) plutôt qu'échouer directement : un petit modèle
+    // qui a fait cette erreur une fois se corrige généralement en la voyant nommée explicitement.
+    const wrongLanguage = first.content.match(/```(\w+)/)?.[1]?.toLowerCase()
+    onStatus(
+      wrongLanguage && wrongLanguage !== 'html'
+        ? `Le modèle a répondu en ${wrongLanguage} au lieu de HTML : nouvelle tentative avec une consigne plus explicite…`
+        : "Réponse du modèle inexploitable : nouvelle tentative…"
     )
+    const retryMessages: OllamaMessage[] = [
+      ...generateMessages,
+      first,
+      {
+        role: 'user',
+        content:
+          "Ta réponse n'est PAS un fichier HTML" +
+          (wrongLanguage && wrongLanguage !== 'html' ? ` (tu as répondu en ${wrongLanguage})` : '') +
+          ". Cette application doit tourner dans un NAVIGATEUR WEB : réponds UNIQUEMENT avec un fichier " +
+          "HTML complet (HTML + CSS + JavaScript, tout dans le même fichier), dans un bloc ```html, en " +
+          "respectant exactement les mêmes règles que précédemment — jamais dans un autre langage, même " +
+          "si ce langage te semblait plus naturel pour cette demande précise."
+      }
+    ]
+    const retry = await chatWithOllama(retryMessages, undefined, model, 'high', undefined, CODE_NUM_CTX)
+    draft = extractHtml(retry.content)
+    if (!draft) {
+      // Un message générique ("reformule, ou relance") ne dit rien de la VRAIE cause si ça se reproduit :
+      // même logique que pour un outil qui échoue (voir assistant.ts/webSearch.ts) — montrer ce que le
+      // modèle a RÉELLEMENT répondu plutôt que de laisser deviner, pour diagnostiquer avec des faits.
+      const raw = retry.content.trim()
+      const preview = raw.slice(0, 300)
+      throw new Error(
+        "Le modèle n'a pas renvoyé de code HTML exploitable, même après une nouvelle tentative. Reformule " +
+          'ta demande différemment, ou relance.' +
+          (preview
+            ? ` Ce qu'il a répondu à la place : "${preview}${raw.length > 300 ? '…' : ''}"`
+            : ' Sa réponse était vide.')
+      )
+    }
   }
 
   onStatus('Relecture du code par un second agent (cohérence, style, syntaxe)…')

@@ -370,6 +370,14 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   une supposition) avant de corriger. Le générateur interdit maintenant ce
   motif et le détecte automatiquement pour le réparer si le modèle l'utilise
   quand même
+- ✅ Étape 61 — Mode Code, "le modèle n'a pas renvoyé de code HTML
+  exploitable" à chaque tentative pour "un jeu Snake" (Léo) : le modèle
+  répondait en Python/tkinter au lieu de HTML, Snake étant un exemple trop
+  classique des tutoriels Python — trouvé grâce à un message d'erreur qui
+  montre maintenant la vraie réponse du modèle au lieu de rester générique.
+  Le générateur relance désormais automatiquement une fois avec une
+  consigne corrective avant d'abandonner, et la consigne de départ cite
+  explicitement ce piège (Snake/Tetris/Pong) pour l'éviter dès le début
 
 ## Démarrer en développement
 

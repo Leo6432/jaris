@@ -330,17 +330,21 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   scripts/test-codegen-validate.mjs`. **Leçon générale : un correctif "évident" doit quand même être testé
   avec des cas limites simples (ici : le tout premier cas réel, la page générée elle-même) avant d'être
   considéré fiable** — la relecture seule n'aurait pas forcément repéré ce faux positif.
-- **"Le modèle n'a pas renvoyé de code HTML exploitable" (mode Code) : message générique qui ne dit RIEN de
-  ce que le modèle a répondu à la place** — Léo a rencontré ce message à chaque tentative pour une nouvelle
-  application (pas une modification), sans qu'on sache si le modèle a refusé, renvoyé du texte vide, ou une
-  réponse qui tourne en rond sans jamais écrire de HTML. Impossible à diagnostiquer sans le contenu réel de
-  cette session (pas d'Ollama/GPU dans cet environnement pour reproduire le comportement d'un modèle local).
-  Corrigé en incluant un extrait (300 caractères) de la VRAIE réponse du modèle dans le message d'erreur
-  affiché (codeGenerator.ts, `generateApp`) — même logique que pour un outil qui échoue (assistant.ts/
-  webSearch.ts) : ne jamais laisser un message générique remplacer les faits, surtout quand la cause
-  n'est pas encore connue. Cause exacte du blocage encore NON identifiée à ce stade : la prochaine occurrence
-  affichera enfin ce que le modèle a réellement répondu, pour diagnostiquer avec des faits plutôt qu'une
-  hypothèse de plus — ne pas répéter l'erreur de la saga SearXNG (deviner avant d'avoir la vraie donnée).
+- **"Le modèle n'a pas renvoyé de code HTML exploitable" (mode Code) : message générique qui ne disait RIEN
+  de ce que le modèle a répondu à la place** — Léo a rencontré ce message à chaque tentative pour "un jeu
+  Snake" (nouvelle application, pas une modification). Un premier correctif a d'abord ajouté un extrait
+  (300 caractères) de la vraie réponse dans le message d'erreur (même logique que pour un outil qui échoue,
+  assistant.ts/webSearch.ts : ne jamais laisser un message générique remplacer les faits) plutôt que de
+  deviner la cause sans données — leçon directement tirée de la saga SearXNG plus haut. **Cause réelle
+  révélée par ce diagnostic dès la première relance de Léo** : le modèle avait répondu en PYTHON/tkinter
+  (`import tkinter as tk`, `class SnakeGame`...), malgré la consigne système explicite de ne produire QUE du
+  HTML — Snake est un exemple tellement classique des tutoriels Python que le modèle a suivi ce réflexe
+  d'entraînement au lieu de la consigne. Corrigé en deux temps : (1) `APP_RULES` nomme maintenant EXPLICITEMENT
+  ce cas (Snake/Tetris/Pong en Python/tkinter/pygame) comme exemple concret à éviter — un exemple nommé
+  généralise mieux qu'une règle abstraite ("HTML uniquement"), même leçon que le prompt `computer_use_task`
+  plus haut ; (2) `generateApp` relance UNE fois automatiquement avec une consigne corrective qui cite le
+  langage fautif détecté (même mécanisme que `nudgedForEmail`/`nudgedForPromise` dans assistant.ts) avant
+  d'abandonner avec le message détaillé. Régression : `node --test scripts/test-codegen-generate.mjs`.
 
 ## Commandes utiles
 
