@@ -183,6 +183,17 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   React survit), la resuspendre en dernier au repli laisserait l'écoute bloquée indéfiniment pour un
   utilisateur qui ne voit plus que l'interface représentant le mode vocal — forcer la reprise explicitement
   au moment où cette fenêtre se cache/réduit, pas seulement dépendre de ce que pense encore son état interne.
+- **Un budget de fenêtre de contexte LLM choisi une fois n'est jamais revu quand le système prompt/la liste
+  d'outils grossissent** : figé depuis le début (choix volontaire pour tenir en VRAM), jamais réévalué malgré
+  l'ajout progressif de nombreux outils et consignes système au fil des versions — mesuré pour de vrai cette
+  session : le système prompt + la liste d'outils consomment déjà à eux seuls plusieurs milliers de tokens,
+  AVANT même le premier message de l'utilisateur. Sur le plus petit modèle disponible, ça ne laissait
+  quasiment plus de budget pour une vraie réponse — une réponse vide constatée en usage réel. Corrigé en
+  doublant la valeur par défaut : le coût mémoire supplémentaire (cache K/V) est négligeable comparé au poids
+  du modèle, surtout pour les petits modèles justement les plus concernés. **Leçon générale : un budget fixe
+  basé sur "ce qu'on utilise aujourd'hui" doit être revu chaque fois que ce qu'on empile dedans (prompt
+  système, outils...) grossit significativement — mesurer pour de vrai (compter les caractères/tokens réels)
+  plutôt que de supposer qu'une valeur choisie il y a plusieurs versions est toujours valable.**
 
 ## Commandes utiles
 

@@ -309,6 +309,14 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   sur cette machine. Corrigé en déplaçant SearXNG sur le port 8091 ;
   (2) le mode vocal réagissait à la voix même en étant sur l'onglet Chat
   ou Code — suspendu tant qu'un de ces deux onglets est actif
+- ✅ Étape 54 — "Réponse vide d'Ollama" constaté en usage réel sur le plus
+  petit modèle du palier Rapide (qwen3.5:0.8b, choisi sur les machines à
+  faible VRAM) : mesuré pour de vrai, le système prompt de Jaris + la
+  liste de ses outils consomment à eux seuls environ 4200-4500 tokens,
+  déjà presque tout le budget de la fenêtre de contexte par défaut
+  (4096) avant même le premier message. OLLAMA_NUM_CTX passe à 8192
+  (config.ts/.env.example), jamais revu depuis sa valeur d'origine
+  malgré la croissance du système prompt/des outils au fil des versions
 
 ## Démarrer en développement
 
@@ -556,8 +564,13 @@ Le bandeau propose aussi un bouton **"Mettre à jour"** (`updateOllama`,
 
 > Le modèle a par défaut une fenêtre de contexte énorme (131072 tokens pour
 > qwen3.5), ce qui peut le faire déborder de la VRAM et tourner en partie sur
-> le CPU (très lent). `OLLAMA_NUM_CTX` dans `.env` (4096 par défaut) évite ça
+> le CPU (très lent). `OLLAMA_NUM_CTX` dans `.env` (8192 par défaut) évite ça
 > — vérifie avec `ollama ps` que la colonne PROCESSOR affiche bien ~100% GPU.
+> 4096 (valeur d'origine) s'est révélé trop bas une fois mesuré pour de vrai :
+> le système prompt de Jaris + la liste de ses outils consomment déjà environ
+> 4200-4500 tokens à eux seuls, ce qui pouvait faire déborder le budget de
+> réponse avant même le premier message sur le plus petit modèle du palier
+> Rapide (constaté en usage réel — "Réponse vide d'Ollama").
 
 **Mémoire courte de la conversation.** Chaque question envoyée à Ollama
 inclut maintenant les derniers échanges (question/réponse), pas seulement

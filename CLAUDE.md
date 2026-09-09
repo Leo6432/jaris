@@ -212,6 +212,19 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   vocale serait restée bloquée indéfiniment dès qu'on repliait la fenêtre depuis Chat/Code, pour un
   utilisateur qui ne voit plus que le widget (symbole du mode vocal) et n'a aucune raison de deviner pourquoi
   Jaris ne réagit plus à sa voix.
+- **Un budget de fenêtre de contexte (`OLLAMA_NUM_CTX`) choisi une fois n'est jamais revu quand le système
+  prompt/la liste d'outils grossissent** : figé à 4096 depuis le début (choix volontaire pour tenir en VRAM),
+  jamais réévalué malgré l'ajout progressif de nombreux outils et consignes système au fil des versions —
+  mesuré pour de vrai cette session : le système prompt (`buildSystemPrompt`) + `TOOLS` (tools.ts) consomment
+  déjà à eux seuls environ 4200-4500 tokens, AVANT même le premier message de l'utilisateur. Sur le plus
+  petit modèle du palier Rapide (qwen3.5:0.8b, choisi sur les machines à faible VRAM), ça ne laissait
+  quasiment plus de budget pour une vraie réponse — "Réponse vide d'Ollama" constaté en usage réel par Léo.
+  Corrigé en doublant la valeur par défaut (4096 -> 8192, `config.ts`/`.env.example`) : le coût VRAM
+  supplémentaire (cache K/V) est négligeable comparé au poids du modèle, surtout pour les petits modèles
+  justement les plus concernés. **Leçon générale : un budget fixe basé sur "ce qu'on utilise aujourd'hui"
+  doit être revu chaque fois que ce qu'on empile dedans (prompt système, outils...) grossit significativement
+  — mesurer pour de vrai (compter les caractères/tokens réels) plutôt que de supposer qu'une valeur choisie
+  il y a plusieurs versions est toujours valable.**
 
 ## Commandes utiles
 

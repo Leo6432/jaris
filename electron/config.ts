@@ -46,8 +46,20 @@ export const config = {
   ollama: {
     host: readEnv('OLLAMA_HOST', 'http://127.0.0.1:11434'),
     model: readEnv('OLLAMA_MODEL', 'qwen3.5:9b'),
-    /** Fenêtre de contexte : basse volontairement pour tenir en entier dans la VRAM (le max du modèle est overkill pour de la conversation vocale). */
-    numCtx: Number(readEnv('OLLAMA_NUM_CTX', '4096')),
+    /**
+     * Fenêtre de contexte : volontairement bien plus basse que le max du modèle (overkill pour de la
+     * conversation vocale) pour tenir en entier dans la VRAM, mais 4096 (valeur d'origine) s'est révélé
+     * trop bas une fois mesuré pour de vrai : le système prompt (buildSystemPrompt, assistant.ts) + la
+     * liste des outils (TOOLS, tools.ts) consomment à eux seuls environ 4200-4500 tokens AVANT même le
+     * premier message de l'utilisateur — sur le plus petit modèle du palier Rapide (qwen3.5:0.8b, utilisé
+     * sur les machines à faible VRAM), ça ne laissait quasiment plus de place pour une vraie réponse,
+     * produisant un contenu vide ("Réponse vide d'Ollama") constaté en usage réel par Léo sur une machine
+     * modeste. Le système prompt/la liste d'outils ont grossi au fil des versions sans jamais revoir ce
+     * chiffre : 8192 laisse une vraie marge, pour un coût VRAM supplémentaire négligeable (le cache K/V
+     * d'un contexte plus long pèse peu comparé au poids du modèle lui-même, surtout pour les petits
+     * modèles justement les plus concernés par ce bug).
+     */
+    numCtx: Number(readEnv('OLLAMA_NUM_CTX', '8192')),
     /** Modèle de vision (étape 6), séparé du modèle de conversation. */
     visionModel: readEnv('OLLAMA_VISION_MODEL', 'qwen3-vl:8b')
   },
