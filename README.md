@@ -300,13 +300,11 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ✅ Étape 53 — Deux corrections supplémentaires signalées par Léo :
   (1) SearXNG répondait 403 en boucle malgré 2 correctifs (v0.3.6/v0.3.7)
   qui ciblaient tous les deux le conteneur SearXNG lui-même — le VRAI
-  message d'erreur obtenu grâce à l'étape 52 a révélé que le corps de la
-  réponse était en fait la page 403 par défaut d'Apache, jamais produite
-  par SearXNG : un AUTRE logiciel déjà installé occupait le port 8080
-  (port très commun) et se faisait passer pour SearXNG "déjà démarré" —
-  les correctifs précédents ne pouvaient donc jamais avoir d'effet, le
-  vrai conteneur SearXNG n'ayant peut-être même jamais réussi à démarrer
-  sur cette machine. Corrigé en déplaçant SearXNG sur le port 8091 ;
+  message d'erreur obtenu grâce à l'étape 52 a d'abord semblé montrer que
+  le corps de la réponse était la page 403 par défaut d'Apache, jamais
+  produite par SearXNG (un AUTRE logiciel occuperait le port 8080).
+  Corrigé sur cette base en déplaçant SearXNG sur le port 8091 — **ce
+  diagnostic s'est révélé FAUX, voir étape 58** ;
   (2) le mode vocal réagissait à la voix même en étant sur l'onglet Chat
   ou Code — suspendu tant qu'un de ces deux onglets est actif
 - ✅ Étape 54 — "Réponse vide d'Ollama" constaté en usage réel sur le plus
@@ -343,6 +341,16 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   chaque lancement de Jaris et pas seulement au tout premier — l'ancien
   emplacement du check ne pouvait jamais s'exécuter une fois Docker
   Desktop déjà installé
+- ✅ Étape 58 — Le 403 SearXNG est réapparu à l'identique après l'étape
+  53 (port 8091 y compris) : le diagnostic "page d'erreur Apache par
+  défaut" était FAUX, basé sur une recherche web généraliste plutôt que
+  sur le vrai code source. Vérifié pour de vrai cette fois (code source
+  de Werkzeug, la bibliothèque utilisée par SearXNG) : ce texte est le
+  message d'erreur PAR DÉFAUT de SearXNG lui-même — c'était bien lui qui
+  répondait depuis le début, le changement de port était une fausse
+  piste. Plus de 4e hypothèse non vérifiée : Jaris lit maintenant la
+  config telle que le conteneur la voit RÉELLEMENT et l'inclut dans le
+  message d'erreur, pour comparer un fait au fichier réel sur le disque
 
 ## Démarrer en développement
 

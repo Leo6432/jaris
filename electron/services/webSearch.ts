@@ -1,4 +1,5 @@
 import { config } from '../config'
+import { readSearxngContainerSettings } from './dependencyServices'
 
 interface SearxngResult {
   title: string
@@ -33,10 +34,14 @@ export async function searchWeb(query: string): Promise<string> {
     //
     // 403 sur ?format=json précisément (jamais sur la recherche HTML normale) : SearXNG refuse ce format par
     // défaut pour décourager le scraping à grande échelle des instances PUBLIQUES — searxng/settings.yml de
-    // ce dépôt l'active déjà (search.formats: [html, json], server.limiter: false), et ensureSearxngRunning
-    // (dependencyServices.ts) teste/répare déjà ça à chaque démarrage de Jaris. Un 403 qui persiste malgré ça
-    // (vécu par Léo, 2 correctifs déjà tentés v0.3.6/v0.3.7) reste possible pour une cause pas encore
-    // identifiée avec certitude : ne plus promettre "c'est réparé tout seul", juste donner le fait brut.
+    // ce dépôt l'active déjà (search.formats: [html, json], server.limiter: false). Ce texte exact ("You
+    // don't have the permission...") EST la page d'erreur par défaut de Flask/Werkzeug (le framework de
+    // SearXNG lui-même), vérifié dans son code source — PAS une page Apache d'un autre logiciel comme on l'a
+    // cru un temps (v0.3.9, diagnostic erroné basé sur une identification non vérifiée du texte). Le conteneur
+    // SearXNG répond donc bien lui-même, mais sa config chargée en mémoire ne contient toujours pas "json"
+    // dans search.formats malgré 3 correctifs déjà tentés (v0.3.6/v0.3.7/v0.3.9) et le fichier correct sur le
+    // disque : plus de promesse de "réparation automatique" tant que la vraie cause n'est pas confirmée —
+    // readSearxngContainerSettings() (dependencyServices.ts) donne enfin un vrai fait à comparer.
     const bodySnippet =
       response.status === 403
         ? (await response.text())
@@ -45,14 +50,16 @@ export async function searchWeb(query: string): Promise<string> {
             .trim()
             .slice(0, 300)
         : await response.text()
-    throw new Error(
-      response.status === 403
-        ? `La recherche web est bloquée par SearXNG (erreur 403, format JSON refusé). Contenu renvoyé par ` +
-          `SearXNG : "${bodySnippet}". Ce n'est pas censé arriver : Jaris essaie de corriger ça tout seul à ` +
-          `chaque démarrage. Si ça persiste après avoir complètement fermé puis relancé Jaris, transmets ce ` +
-          `message exact (avec le contenu entre guillemets) pour qu'on trouve la vraie cause.`
-        : `SearXNG a répondu ${response.status} : ${bodySnippet}`
-    )
+    if (response.status === 403) {
+      const containerSettings = await readSearxngContainerSettings()
+      throw new Error(
+        `La recherche web est bloquée par SearXNG (erreur 403, format JSON refusé). Contenu renvoyé par ` +
+          `SearXNG : "${bodySnippet}". Fichier de configuration tel que le conteneur le voit RÉELLEMENT en ce ` +
+          `moment : ${containerSettings ? `"${containerSettings.slice(0, 500)}"` : 'impossible à lire (Docker indisponible ?)'}. ` +
+          `Transmets ce message exact en entier (les deux parties entre guillemets) pour qu'on trouve enfin la vraie cause.`
+      )
+    }
+    throw new Error(`SearXNG a répondu ${response.status} : ${bodySnippet}`)
   }
 
   const data = (await response.json()) as SearxngResponse

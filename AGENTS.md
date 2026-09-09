@@ -147,19 +147,22 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   que d'inférer un état interne (un fichier a-t-il changé ?) quand la cause exacte d'un bug n'est pas
   confirmée avec certitude** — un correctif basé sur une hypothèse non vérifiée peut sembler correct en
   relecture de code tout en ne réglant rien en usage réel, et peut le démontrer plusieurs fois de suite.
-  **VRAIE cause enfin identifiée**, grâce au message d'erreur verbatim obtenu par le correctif suivant : le
-  corps de la réponse 403 était le texte EXACT de la page d'erreur 403 par défaut d'Apache — jamais produit
-  par l'appli qu'on croyait interroger (dont les pages d'erreur ont son propre style). Un AUTRE logiciel déjà
-  installé sur la machine occupait déjà ce port (un port commun — clients torrent, serveurs Java, interfaces
-  d'admin de routeur...), et un simple check "est-ce que quelque chose répond sur ce port" le prenait pour le
-  bon service "déjà démarré" — ce qui explique pourquoi réparer/recréer LE CONTENEUR n'avait jamais pu avoir
-  d'effet : il n'avait peut-être même jamais réussi à démarrer (port déjà pris). Corrigé en changeant le port
-  hôte du service pour un port beaucoup moins souvent déjà utilisé. **Leçon générale : le corps/texte exact
-  d'une erreur HTTP peut identifier QUEL logiciel répond vraiment** (une page d'erreur Apache/nginx/IIS a une
-  signature reconnaissable, différente de celle de l'appli qu'on pense interroger) — comparer ce texte avant
-  de supposer que le service qu'on croit interroger est bien celui qui répond. Et plus largement : ne jamais
-  coder un check "est-ce que ce port répond" comme preuve qu'un service PRÉCIS tourne dessus, seulement qu'UN
-  service (n'importe lequel) y répond.
+  **"Cause identifiée" à ce moment-là : en réalité FAUSSE, corrigée après un nouvel échec en usage réel.**
+  Conclu à tort que le corps de la réponse 403 était la page d'erreur Apache par défaut (donc qu'un AUTRE
+  logiciel occupait le port), sur la base d'une recherche web généraliste sur "403 forbidden" — jamais du
+  code source réel du composant suspecté. Changé le port sur cette base. Le même 403 est réapparu sur le
+  nouveau port. En vérifiant pour de vrai le CODE SOURCE de Werkzeug (la bibliothèque WSGI sous-jacente de
+  l'appli suspectée) : ce texte est son propre message d'erreur par défaut pour un 403 — c'était bien l'appli
+  elle-même qui répondait depuis le début, exactement comme le tout premier diagnostic le suggérait. Le
+  changement de port était une fausse piste sans rapport avec le vrai problème. Corrigé en ajoutant un VRAI
+  diagnostic plutôt qu'une hypothèse de plus : lire la config TELLE QUE LE SERVICE LA VOIT RÉELLEMENT (via la
+  commande d'exécution du conteneur) et l'inclure directement dans le message d'erreur, pour comparer un FAIT
+  au fichier réel sur le disque plutôt que de deviner encore. **Leçon générale, renforcée par cet échec** :
+  une recherche web généraliste sur un message d'erreur NE VÉRIFIE RIEN de spécifique — pour identifier la
+  source EXACTE d'un texte précis, il faut consulter le CODE SOURCE réel du composant suspecté, jamais des
+  articles génériques qui parlent du sujet en surface. Une conclusion présentée avec assurance peut être
+  fausse même après une recherche qui SEMBLE la confirmer — la revérifier avec la source primaire avant de la
+  communiquer comme un fait à l'utilisateur.
 - **Une consigne système ("ne jamais inventer de dépannage") ne suffit pas à empêcher un petit modèle local
   de le faire quand même** : face à un vrai message d'erreur technique, un modèle de conversation a remplacé
   le message réel par un dépannage générique halluciné et FAUX (des étapes qui n'existent pas dans

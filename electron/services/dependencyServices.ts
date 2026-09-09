@@ -506,6 +506,28 @@ async function searxngJsonSearchWorks(): Promise<boolean> {
 }
 
 /**
+ * Diagnostic seulement (jamais utilisé pour réparer quoi que ce soit tout seul) : lit le VRAI fichier
+ * settings.yml tel que le conteneur SearXNG le voit RÉELLEMENT à cet instant, à comparer avec le fichier sur
+ * le disque de Jaris (searxng/settings.yml). Ajouté après que 3 hypothèses successives se soient révélées
+ * fausses ou non concluantes en usage réel (v0.3.6 : process pas relancé ; v0.3.7 : montage jamais recréé ;
+ * v0.3.9 : port déjà pris par un autre logiciel — cette dernière basée sur une identification erronée du
+ * corps de la réponse 403, voir le commentaire dans webSearch.ts) : plutôt qu'une 4e hypothèse non vérifiée,
+ * cette fonction rapporte un FAIT — ce que le conteneur voit vraiment — pour la première fois. Ne lève
+ * jamais d'exception : un diagnostic qui échoue ne doit jamais faire échouer la vraie recherche par-dessus.
+ */
+export async function readSearxngContainerSettings(): Promise<string | null> {
+  try {
+    const { stdout } = await execAsync('docker compose exec -T searxng cat /etc/searxng/settings.yml', {
+      cwd: resourcesRoot(),
+      windowsHide: true
+    })
+    return stdout.trim() || null
+  } catch {
+    return null
+  }
+}
+
+/**
  * true si le sous-système Windows pour Linux (WSL) est déjà installé — condition préalable au
  * fonctionnement de Docker Desktop sur Windows (backend par défaut), vécu en usage réel par Léo : Docker
  * Desktop installé avec succès (installDockerDesktop ci-dessous) mais refusant quand même de démarrer,

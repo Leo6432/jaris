@@ -162,22 +162,26 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   exacte d'un bug n'est pas confirmée avec certitude** — un correctif basé sur une hypothèse non vérifiée peut
   sembler correct en relecture de code tout en ne réglant rien en usage réel, et l'a effectivement démontré
   deux fois de suite ici.
-  **VRAIE cause enfin identifiée (v0.3.9)**, grâce au message d'erreur verbatim obtenu par le correctif
-  suivant : le corps de la réponse 403 ("You don't have the permission to access the requested resource. It
-  is either read-protected or not readable by the server.") est le texte EXACT de la page d'erreur 403 par
-  défaut d'Apache — jamais produit par SearXNG (dont les pages d'erreur ont son propre style). Autrement dit,
-  ce n'était jamais SearXNG qui répondait sur le port 8080 : un AUTRE logiciel déjà installé sur la machine de
-  Léo (8080 est un port très commun — clients torrent, serveurs Java, interfaces d'admin de routeur...)
-  occupait déjà ce port, et `isUp()` (un simple "est-ce que quelque chose répond ?") le prenait pour SearXNG
-  "déjà démarré" — ce qui explique aussi pourquoi les 2 correctifs précédents (v0.3.6/v0.3.7, qui essayaient
-  tous les deux de réparer/recréer LE CONTENEUR SearXNG) n'ont jamais pu avoir d'effet : le vrai conteneur
-  SearXNG n'a peut-être même jamais réussi à démarrer sur cette machine (port déjà pris). Corrigé en changeant
-  le port hôte de SearXNG (8080 -> 8091, `docker-compose.yml`), un port beaucoup moins souvent déjà utilisé.
-  **Leçon générale : le corps/texte exact d'une erreur HTTP peut identifier QUEL logiciel répond vraiment**
-  (une page d'erreur Apache/nginx/IIS a une signature reconnaissable, différente de celle de l'appli qu'on
-  pense interroger) — comparer ce texte avant de supposer que le service qu'on croit interroger est bien
-  celui qui répond. Et plus largement : ne jamais coder un check "est-ce que ce port répond" comme preuve
-  qu'un service PRÉCIS tourne dessus, seulement qu'UN service (n'importe lequel) y répond.
+  **"Cause identifiée" en v0.3.9 : en réalité FAUSSE, corrigée après un 4e échec en usage réel (v0.4.3+).**
+  J'avais conclu (v0.3.9) que le corps de la réponse 403 ("You don't have the permission to access the
+  requested resource. It is either read-protected or not readable by the server.") était la page d'erreur
+  Apache par défaut, donc qu'un AUTRE logiciel occupait le port 8080 — et changé le port vers 8091 sur cette
+  base. Léo a eu EXACTEMENT le même 403 après ce correctif (et après le passage à 8091). En vérifiant pour de
+  vrai le CODE SOURCE de Werkzeug (la bibliothèque WSGI utilisée par Flask, donc par SearXNG lui-même) plutôt
+  que de m'en tenir à une recherche web générique sur "403 forbidden" : ce texte est l'attribut `description`
+  EXACT de la classe `Forbidden` de Werkzeug — c'est SearXNG LUI-MÊME qui répond, exactement comme le
+  suggérait le tout premier diagnostic (v0.3.6/v0.3.7, jamais confirmé ni infirmé avec certitude à l'époque).
+  Le changement de port était donc une fausse piste sans rapport avec le vrai problème (rester au demeurant
+  inoffensif, gardé). Corrigé en ajoutant un VRAI diagnostic plutôt qu'une 5e hypothèse : `readSearxngContainerSettings`
+  (dependencyServices.ts) lit le settings.yml TEL QUE LE CONTENEUR LE VOIT via `docker compose exec`, inclus
+  directement dans le message d'erreur (webSearch.ts) pour enfin comparer un FAIT (ce que le conteneur voit)
+  au fichier réel sur le disque, plutôt que de deviner encore. **Leçon générale, renforcée par cet échec** :
+  une recherche web généraliste ("qu'est-ce qu'une erreur 403 ?") NE VÉRIFIE RIEN de spécifique — pour
+  identifier la source EXACTE d'un texte d'erreur précis, il faut aller consulter le CODE SOURCE réel du
+  composant suspecté (ici Werkzeug), jamais des articles génériques qui parlent du sujet en surface. Une
+  conclusion présentée avec assurance ("c'est Apache, pas SearXNG") peut être fausse même après une recherche
+  qui SEMBLE confirmer la thèse — la revérifier avec la source primaire avant de la communiquer comme un fait
+  à l'utilisateur, surtout après avoir déjà été repris une fois sur l'exactitude des affirmations.
 - **Une consigne système ("ne jamais inventer de dépannage", buildSystemPrompt) ne suffit pas à empêcher un
   petit modèle local de le faire quand même** : face à un vrai message d'erreur SearXNG (403), le modèle de
   conversation a remplacé le message réel par un dépannage générique halluciné et FAUX (étapes nginx/
