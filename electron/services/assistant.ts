@@ -282,7 +282,15 @@ export async function converse(
 
   const messages: OllamaMessage[] = [
     { role: 'system', content: buildSystemPrompt(userName, memoryTitles, channel) },
-    ...history,
+    // Les erreurs d'outils sont conservées dans l'historique visible, mais pas réinjectées au modèle :
+    // qwen3.5:4b a reproduit un ancien 403 SANS appeler search_web, alors que le service répondait 200.
+    // Retirer aussi la question associée évite une suite de demandes anciennes laissées sans réponse.
+    // Ce filtre s'applique au chargement comme en session, dans les deux canaux, sans effacer le disque.
+    ...history.filter((message, index) => {
+      const isToolFailure = (entry?: OllamaMessage): boolean =>
+        entry?.role === 'assistant' && entry.content.trimStart().startsWith("Échec de l'outil :")
+      return !isToolFailure(message) && !(message.role === 'user' && isToolFailure(history[index + 1]))
+    }),
     { role: 'user', content: prompt }
   ]
 

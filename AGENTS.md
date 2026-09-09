@@ -237,6 +237,13 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   invisible dès le lancement suivant si son placement suppose à tort que les deux lancements prennent le
   même chemin.
 
+- **Un ancien échec d'outil dans l'historique peut être recopié SANS nouvel appel d'outil** : reproduit avec
+  qwen3.5:4b, qui annonçait encore un 403 alors que la recherche JSON réelle répondait 200. Le message
+  provenait d'une ancienne version et n'existait même plus dans le programme installé. Comparer le code
+  embarqué, l'historique et les appels réellement exécutés avant d'accuser de nouveau le service externe.
+  Exclure les échanges en échec du contexte envoyé au modèle dans `converse()`, sans effacer l'historique
+  visible ni masquer les vrais échecs du tour actuel. Régression : `node --test scripts/test-assistant-history.mjs`.
+
 ## Commandes utiles
 
 ```
