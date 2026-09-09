@@ -358,8 +358,9 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ✅ Étape 31 — Design sonore : Jaris a sa propre identité sonore, des bips
   courts façon J.A.R.V.I.S. synthétisés à la volée (Web Audio API, aucun
   fichier audio à embarquer) pour l'écoute, la réflexion, un succès, une
-  erreur, un clic de souris et un scan d'écran — en Voix comme en Chat, qui
-  partagent le même mécanisme. Désactivable en un clic dans Options → Voix
+  erreur, un clic de souris, un scan d'écran et l'envoi d'un message en Chat
+  — en Voix comme en Chat, qui partagent le même mécanisme. Désactivable en
+  un clic dans Options → Voix
 
 ## Démarrer en développement
 

@@ -69,11 +69,33 @@ const SEQUENCES: Record<SoundCue, Tone[]> = {
   // Un "tick" très court et sec, comme un vrai clic mécanique.
   click: [{ freq: 1400, start: 0, duration: 0.02, type: 'square', gain: MASTER_GAIN * 0.5 }],
   // Un balayage de fréquence montant, façon scanner de science-fiction.
-  scan: [{ freq: 300, start: 0, duration: 0.18, type: 'sine', sweepTo: 1100 }]
+  scan: [{ freq: 300, start: 0, duration: 0.18, type: 'sine', sweepTo: 1100 }],
+  // Deux notes courtes et nettes, façon "whoosh" d'un message qui part (iMessage/Slack) : plus vif que
+  // "success", pour ne pas confondre "envoyé" avec "réponse reçue".
+  send: [
+    { freq: 700, start: 0, duration: 0.05 },
+    { freq: 1050, start: 0.05, duration: 0.06 }
+  ]
 }
 
 export function playSoundCue(cue: SoundCue): void {
   const context = getContext()
   if (!context) return
   for (const tone of SEQUENCES[cue]) playTone(context, tone)
+}
+
+/**
+ * Comme playSoundCue, mais relit le profil pour respecter la case "Bips d'interface" désactivable dans
+ * Options → Voix (soundEffectsEnabled) — utilisé par tout renderer qui joue un cue directement (App.tsx pour
+ * les cues broadcastés par main.ts, ChatPanel.tsx pour le son "send" joué localement au clic sur Envoyer/
+ * Entrée, sans passer par l'IPC main -> renderer).
+ */
+export async function playSoundCueIfEnabled(cue: SoundCue): Promise<void> {
+  try {
+    const profile = await window.jaris.getProfile()
+    if (profile?.soundEffectsEnabled === false) return
+  } catch {
+    // Profil illisible : un simple bip d'interface ne vaut pas la peine de bloquer dessus, on le joue quand même.
+  }
+  playSoundCue(cue)
 }

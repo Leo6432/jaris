@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
+import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import type { ChatMessage } from '../../shared/ipc'
 
 /**
@@ -69,6 +70,9 @@ export default function ChatPanel(): JSX.Element {
     setSending(true)
     setProgress(null)
     setStreamingReply('')
+    // Étape 31 : joué directement ici (pas via IPC main -> renderer comme les autres cues, voir App.tsx)
+    // puisque l'action vient de CETTE fenêtre — inutile d'attendre un aller-retour pour un son immédiat.
+    void playSoundCueIfEnabled('send')
     // Affiché tout de suite, sans attendre la réponse : côté main le message est de toute façon ajouté au
     // fil dès réception, donc les deux restent cohérents.
     setMessages((prev) => [...prev, { role: 'user', content: prompt }])

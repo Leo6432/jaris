@@ -7,9 +7,11 @@ export type JarisEmotion = 'idle' | 'listening' | 'thinking' | 'happy' | 'surpri
  * (voir src/lib/soundDesign.ts, Web Audio API), jamais de vrais fichiers audio embarqués : reste léger et ne
  * dépend d'aucun asset à maintenir. 'listening'/'thinking'/'success'/'error' suivent les mêmes transitions
  * que JarisEmotion (voix) ; 'click'/'scan' accompagnent un appel d'outil précis (click_mouse/look_at_screen/
- * computer_use_task), en Voix comme en Chat puisque les deux partagent converse() (tools.ts).
+ * computer_use_task), en Voix comme en Chat puisque les deux partagent converse() (tools.ts). 'send' est
+ * Chat uniquement (ChatPanel.tsx) : joué directement au clic sur Envoyer/Entrée, sans passer par l'IPC
+ * main -> renderer comme les autres (l'action vient de CETTE fenêtre, pas besoin d'un aller-retour).
  */
-export type SoundCue = 'listening' | 'thinking' | 'success' | 'error' | 'click' | 'scan'
+export type SoundCue = 'listening' | 'thinking' | 'success' | 'error' | 'click' | 'scan' | 'send'
 
 export interface VoiceReplyPayload {
   transcript: string

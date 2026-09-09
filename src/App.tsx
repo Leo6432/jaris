@@ -6,7 +6,7 @@ import RuntimeSetup from '@/components/RuntimeSetup'
 import JarisOrb from '@/components/JarisOrb'
 import MemoryBrain from '@/components/MemoryBrain'
 import OptionsMenu from '@/components/OptionsMenu'
-import { playSoundCue } from '@/lib/soundDesign'
+import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import { useJarisStore, type JarisEmotion } from '@/store/useJarisStore'
 import type { AppVersionStatus, MemoryGraph, OllamaVersionStatus } from '../shared/ipc'
 
@@ -144,15 +144,11 @@ export default function App(): JSX.Element {
       // Étape 31 : widget et fenêtre de réglages reçoivent tous les deux ce signal (broadcast, main.ts),
       // même quand l'un des deux est caché (juste win.hide(), jamais détruit — voir les commentaires plus
       // haut sur MODE/showFullWindow) : sans ce garde par visibilité, les deux joueraient le son en même
-      // temps dès que les deux fenêtres existent, pour un bip entendu deux fois. Le profil est relu à
-      // chaque cue plutôt que mis en cache une fois : même raison que pour le haut-parleur juste au-dessus,
-      // un changement fait dans Options doit s'appliquer sans avoir à relancer Jaris.
+      // temps dès que les deux fenêtres existent, pour un bip entendu deux fois. playSoundCueIfEnabled
+      // relit le profil à chaque cue (Options → Voix) plutôt que de le mettre en cache une fois.
       window.jaris.onSoundCue((cue) => {
         if (document.visibilityState !== 'visible') return
-        void window.jaris.getProfile().then((profile) => {
-          if (profile?.soundEffectsEnabled === false) return
-          playSoundCue(cue)
-        })
+        void playSoundCueIfEnabled(cue)
       })
     ]
 

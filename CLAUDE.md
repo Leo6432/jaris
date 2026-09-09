@@ -322,6 +322,16 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   Windows cette session) : toujours vérifier les règles `pointer-events`/`inset` déjà en place sur un
   conteneur avant d'y ajouter un nouvel élément interactif, jamais supposer qu'un enfant hérite du
   comportement de clic normal.
+- **Un cue sonore déclenché par une action LOCALE au renderer n'a pas besoin de repasser par le
+  main process** : les cues d'écoute/réflexion/succès/échec/clic/scan (étape 31) viennent tous d'un
+  évènement backend (émotion vocale, appel d'outil) diffusé par `broadcast()` puis rejoué côté renderer
+  (`onSoundCue`, App.tsx). Le son "envoi de message" en Chat, lui, réagit au clic sur Envoyer/Entrée DANS
+  cette même fenêtre : le copier sur le même circuit IPC (main -> renderer) aurait juste ajouté un
+  aller-retour inutile pour un son censé être instantané. Ajouté à la place `playSoundCueIfEnabled`
+  (soundDesign.ts, factorise la vérification du réglage `soundEffectsEnabled`) appelé directement depuis
+  `ChatPanel.tsx`. **Leçon générale : ne pas copier le circuit d'un mécanisme existant par réflexe** —
+  vérifier d'abord si l'évènement à jouer est déjà disponible localement avant de le faire transiter par
+  le main process comme les cas précédents.
 
 - **Une boucle de pilotage peut scanner sans agir si une action JSON inconnue est acceptée** :
   `extractStep()` ne vérifiait que la présence du champ `action`, puis le `switch` ignorait les valeurs
