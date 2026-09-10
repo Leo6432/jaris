@@ -422,6 +422,19 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   modèle candidat déjà benchmarké) : 10 paliers exactement avec les données
   actuelles, comme deviné par Léo — deux machines dans le même palier
   reçoivent maintenant garanti le même modèle, palier par palier
+- ✅ Étape 66 — Léo a demandé de revoir tous les modèles candidats (les 5
+  listes : Rapide/Médium/Puissant/Vision/Code) pour vérifier qu'aucun
+  meilleur choix n'a été manqué. Revue complète sur les sources officielles
+  (ollama.com) plutôt qu'un simple coup d'œil : aucune famille majeure
+  manquante trouvée (pas de Qwen4 stable publié — juste un aperçu
+  d'architecture MLX-only inutilisable ici —, pas de Gemma 5 ni de Granite
+  4.3), et deux suggestions d'agrégateurs externes vérifiées puis rejetées
+  (un "Qwen3 8B" déjà dépassé par qwen3.5:9b, un "Hermes 4 14B" qui n'existe
+  QUE dans des espaces de noms communautaires non officiels sur Ollama,
+  jamais publié par Nous Research lui-même). Un vrai correctif trouvé au
+  passage : qwen3.6:35b (palier Puissant) avait un poids provisoire
+  (24 Go, recopié de qwen3.5:35b faute de mieux) — recalé au vrai poids
+  confirmé (23 Go, ollama.com/library/qwen3.6/tags)
 
 ## Démarrer en développement
 

@@ -84,9 +84,10 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3.5:35b', vramGb: 24 },
   // Variante DENSE de la famille qwen3.6 (distincte de qwen3.6:35b-a3b, le MoE déjà en Code) : tag réel
   // confirmé sur ollama.com/library/qwen3.6/tags (vision+tools+thinking natifs, disponible en 27b et 35b —
-  // qwen3.6:27b est déjà candidat plus bas). Taille exacte du fichier pas confirmée (poids identique à
-  // qwen3.5:35b utilisé en attendant) : à recaler via "Lancer l'analyse" avant de le préférer à qwen3.5:35b.
-  { model: 'qwen3.6:35b', vramGb: 24 },
+  // qwen3.6:27b est déjà candidat plus bas). Taille EXACTE désormais confirmée (23 Go, ollama.com/library/
+  // qwen3.6/tags) — remplace le poids "en attendant" de qwen3.5:35b utilisé jusqu'ici faute de chiffre réel
+  // (revue complète des candidats, demande de Léo "revoire tous les model pour des meilleurs").
+  { model: 'qwen3.6:35b', vramGb: 23 },
   { model: 'qwen3.5:27b', vramGb: 17 },
   // Ajouté après vérification directe sur ollama.com/library/qwen3.8 (18 Go, vision+tools+thinking natifs,
   // contexte 256K) suite à deux analyses externes (PDF fournis par Léo) le signalant comme successeur de
@@ -252,6 +253,19 @@ const CODE_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen2.5-coder:7b', vramGb: 4.7 }
 ]
 
+// Revue complète des 5 listes ci-dessus (demande de Léo, "revoire tous les model pour des meilleurs") :
+// aucune famille majeure manquante trouvée par rapport à ce qui est déjà candidat quelque part dans ce
+// fichier. Vérifié en particulier : pas de Qwen4 stable publié à ce jour (Qwen3.8-Flash-Next n'est qu'un
+// aperçu d'architecture, 125 Md de paramètres, MLX UNIQUEMENT — inutilisable sur les GPU NVIDIA visés ici) ;
+// pas de Gemma 5 ni de Granite 4.3 publiés (Gemma4/Granite4.1 déjà candidats restent les dernières versions
+// réelles) ; qwen3.6:35b recalé au vrai poids (23 Go, voir son commentaire dans LARGE_CANDIDATES) au lieu du
+// placeholder précédent. Deux suggestions d'agrégateurs externes examinées et REJETÉES : "Qwen3 8B" (~4,8
+// Go, sans le ".5") ignoré comme déjà dépassé par qwen3.5:9b (même éditeur, génération plus récente, déjà
+// candidat Médium) ; "Hermes 4 14B" introuvable comme modèle OFFICIEL sur ollama.com — recherche sur
+// ollama.com/search?q=hermes ne remonte que Hermes 3 (Nous Research, officiel) et divers "Hermes 4.x" dans
+// des espaces de noms COMMUNAUTAIRES non vérifiés (ericli1018, steelpuddles, MonomythDevelopment...), jamais
+// le fabricant d'origine — même risque déjà écarté ailleurs dans ce fichier (voir granite4.1:8b) d'importer
+// une requantification tierce non vérifiée à la place du modèle officiel.
 /**
  * Tous les identifiants de modèles candidats (tous paliers + vision confondus, sans doublon), pour l'étape
  * 29 (veille) : comparé au dernier snapshot connu du profil pour détecter les modèles ajoutés à ce fichier
