@@ -28,9 +28,10 @@ function formatSpeed(entry: ModelOverviewEntry): string {
 
 /**
  * "moins de X Go" / "X à Y Go" / "plus de Y Go" à partir des VRAM représentatives des paliers eux-mêmes
- * (tier.vramGb, ex: 6/12/24), plutôt qu'en recopiant 6/12/24 en dur ici : les mêmes bornes servent déjà à
- * choisir le palier "actuel" côté previewHardwareTiers (hardwareScan.ts), pas la peine de les dupliquer et
- * risquer qu'elles divergent si l'une des deux est modifiée sans l'autre.
+ * (tier.vramGb, une frontière réelle par palier — voir previewVramSteps, hardwareScan.ts), plutôt qu'en
+ * recopiant des valeurs fixes en dur ici : les mêmes bornes servent déjà à choisir le palier "actuel" côté
+ * previewHardwareTiers, pas la peine de les dupliquer et risquer qu'elles divergent si l'une des deux est
+ * modifiée sans l'autre. Générique quel que soit le nombre de paliers (jamais figé à 3).
  */
 function formatVramRange(tiers: HardwareTierPreviewData[], i: number): string {
   if (i === 0) return `(moins de ${tiers[0].vramGb} Go)`
@@ -39,12 +40,13 @@ function formatVramRange(tiers: HardwareTierPreviewData[], i: number): string {
 }
 
 /**
- * Les 3 paliers de configuration (Petite/Moyenne/Grande, voir previewHardwareTiers dans hardwareScan.ts)
- * reliés par des flèches, celui qui correspond à la machine détectée mis en évidence — partagé entre
- * l'écran d'accueil (CapacityScan.tsx, avant même le premier téléchargement) et l'onglet Modèles du menu
- * Options (OptionsMenu.tsx, consultable à tout moment après), plutôt que dupliquer le même JSX deux fois.
- * Affiche vitesse et fiabilité de chaque modèle (pas juste son nom) : remplace le tableau détaillé de tous
- * les candidats, retiré à la demande de Léo une fois ce résumé jugé suffisant.
+ * Les paliers de configuration (une dizaine en pratique, un par frontière RÉELLE de VRAM — voir
+ * previewVramSteps dans hardwareScan.ts, à la demande de Léo pour que deux machines dans le même palier
+ * obtiennent garanti le même modèle) reliés par des flèches, celui qui correspond à la machine détectée mis
+ * en évidence — partagé entre l'écran d'accueil (CapacityScan.tsx, avant même le premier téléchargement) et
+ * l'onglet Modèles du menu Options (OptionsMenu.tsx, consultable à tout moment après), plutôt que dupliquer
+ * le même JSX deux fois. Affiche vitesse et fiabilité de chaque modèle (pas juste son nom) : remplace le
+ * tableau détaillé de tous les candidats, retiré à la demande de Léo une fois ce résumé jugé suffisant.
  */
 export default function HardwareTierPreview({ tiers }: HardwareTierPreviewProps): JSX.Element {
   return (

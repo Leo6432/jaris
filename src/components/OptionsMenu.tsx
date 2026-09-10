@@ -652,7 +652,7 @@ export default function OptionsMenu(): JSX.Element {
                 message alors que la mise à jour avait réellement marché. */}
             {!updatingOllama && ollamaUpdateMessage && <p className="options-menu__ollama-update-note">{ollamaUpdateMessage}</p>}
 
-            <div className="options-menu__section-title">Les 3 paliers de configuration</div>
+            <div className="options-menu__section-title">Les paliers de configuration</div>
             {hardwareTiers === null ? (
               <p className="capacity-scan__status">Chargement...</p>
             ) : (

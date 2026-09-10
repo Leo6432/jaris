@@ -588,6 +588,29 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
   return { vramGb, groups, codeModel }
 }
 
+/**
+ * Résultat connu pour UN candidat donné : une vraie mesure locale (benchmark-results.md) si elle existe,
+ * sinon la fiabilité partagée (verified-tool-scores.md, valable pour tout le monde) combinée à une vitesse
+ * estimée par formule pour CETTE machine — `undefined` si rien de connu du tout (jamais de chiffre inventé).
+ * Extrait de computeModelPicks (pickBestFrom l'utilise pour départager les candidats) pour être réutilisé
+ * tel quel par previewVramSteps ci-dessous : les deux doivent s'accorder EXACTEMENT sur "ce candidat a un
+ * score connu ou non", sinon les frontières de VRAM affichées à l'écran d'accueil ne correspondraient plus
+ * aux vraies frontières où pickBestFrom peut changer de gagnant.
+ */
+function resolveBenchmarkResult(
+  candidate: ModelCandidate,
+  tier: VerifiedTier,
+  gpuName: string | null,
+  localBenchmark: Map<string, LocalBenchmarkEntry>,
+  verifiedToolScores: Record<VerifiedTier, Map<string, string>>
+): LocalBenchmarkEntry | undefined {
+  const local = localBenchmark.get(candidate.model)
+  if (local) return local
+  const verifiedTool = verifiedToolScores[tier].get(candidate.model)
+  if (!verifiedTool) return undefined
+  return { speedTokPerSec: estimateSpeedTokPerSec(candidate.vramGb, gpuName), toolCalling: verifiedTool, speedEstimated: true }
+}
+
 /** "6/6" -> 6, absent/invalide -> -1 (toujours perdant face à un vrai score dans le tri de pickBestModelsFromBenchmark). */
 function parseToolScore(toolCalling: string | null): number {
   if (!toolCalling) return -1
@@ -636,13 +659,8 @@ function computeModelPicks(
   const ramOffloadBudgetGb = budgetGb + Math.max(0, ramGb - RESOURCE_SAFETY_MARGIN_GB)
   const budgetForCandidate = (model: string): number => (LARGE_RAM_OFFLOAD_MODELS.has(model) ? ramOffloadBudgetGb : budgetGb)
 
-  const resultFor = (candidate: ModelCandidate, tier: VerifiedTier): LocalBenchmarkEntry | undefined => {
-    const local = localBenchmark.get(candidate.model)
-    if (local) return local
-    const verifiedTool = verifiedToolScores[tier].get(candidate.model)
-    if (!verifiedTool) return undefined
-    return { speedTokPerSec: estimateSpeedTokPerSec(candidate.vramGb, gpuName), toolCalling: verifiedTool, speedEstimated: true }
-  }
+  const resultFor = (candidate: ModelCandidate, tier: VerifiedTier): LocalBenchmarkEntry | undefined =>
+    resolveBenchmarkResult(candidate, tier, gpuName, localBenchmark, verifiedToolScores)
 
   // Départage à égalité de fiabilité (6/6) : d'abord par MMLU-Pro (INTELLIGENCE_MMLU_PRO) quand les DEUX
   // candidats à égalité ont un chiffre connu, sinon par la VRAM du candidat (le plus GROS gagne) — à la
@@ -735,30 +753,66 @@ export async function pickBestCodeModel(): Promise<string> {
 }
 
 /**
- * Bornes utilisées UNIQUEMENT pour étiqueter "Petite/Moyenne/Grande configuration" et illustrer les 2
- * paliers qui ne sont PAS celui de l'utilisateur (écran d'accueil, voir CapacityScan.tsx) — le VRAI choix de
- * modèles (pickBestModelsFromBenchmark, computeModelPicks) reste continu, basé sur la VRAM/RAM exacte
- * détectée, pas sur ces 3 paliers fixes. Essayé un temps de vraiment regrouper le choix en 3 paliers
- * matériels stricts (demande initiale de Léo) : abandonné après simulation contre les vraies données — sur
- * une machine avec peu de VRAM mais beaucoup de RAM, le débordement RAM autorisé pour "Puissant" faisait
- * gagner un modèle énorme même pour le palier "Rapide", censé rester réactif. La ligne "ta configuration"
- * (previewHardwareTiers plus bas) calcule quand même avec la VRAM réelle, pas un de ces 3 points fixes : elle
- * doit rester fidèle à ce qui est vraiment enregistré dans le profil, jamais une approximation.
+ * Chaque VRAM DISTINCTE parmi les candidats Rapide/Médium/Puissant qui ont un score connu (resolveBenchmarkResult)
+ * est déjà, par construction, une frontière EXACTE où pickBestFrom peut changer de gagnant (voir son filtre
+ * `c.vramGb <= budget` dans computeModelPicks) : deux machines dont le budget tombe entre deux de ces
+ * frontières obtiennent TOUJOURS le même modèle, quel que soit l'écart de VRAM entre elles. Les anciens 3
+ * points fixes (6/12/24 Go, "Petite/Moyenne/Grande configuration") masquaient ça : deux machines dans la
+ * même tranche "Moyenne" (7 et 11 Go) pouvaient déjà recevoir des modèles différents en réalité (une
+ * frontière réelle, ex: qwen3.5:9b — qui pèse 6,6 Go, donc atteignable dès 11,1 Go de VRAM TOTALE une fois
+ * STT_RESERVED_GB déduit — tombe ENTRE les deux) sans que l'étiquette ne le montre — Léo a
+ * demandé qu'à VRAM égale, tout le monde ait garanti le même modèle, palier par palier ("tu vas regarder sur
+ * internet les benchmark si plusieurs model sont 6/6" puis "je veux que tout le monde ait le même model dans
+ * palier 1 et 2 et 3, met minimum 30go... " → clarifié en "ajoute 10 palier, mais les 10 palier doivent etre
+ * exact pour tout le monde"). Utiliser les VRAIES frontières comme lignes de l'écran d'accueil (au lieu de 3
+ * points arbitraires) le garantit directement, puisque chaque ligne EST déjà une frontière réelle.
+ *
+ * PAS un retour à la tentative abandonnée plus haut dans l'historique de ce fichier ("regrouper le choix en
+ * 3 paliers matériels stricts") : cette tentative calculait UN SEUL budget combiné pour les 3 rôles à la
+ * fois, ce qui laissait le débordement RAM autorisé pour "Puissant" gonfler à tort le palier "Rapide" (qui
+ * n'en bénéficie jamais). Ici, chaque ligne appelle toujours computeModelPicks séparément pour Rapide/
+ * Médium/Puissant/Vision/Code (comme avant), donc le budget VRAM+RAM propre à "Puissant" ne contamine jamais
+ * les 2 autres rôles — seul le NOMBRE et le CHOIX des points représentatifs change, pas le calcul lui-même.
  */
-// 4 Go était trop bas : une fois les ~4,5 Go de STT_RESERVED_GB déduits, le budget tombait à 0 et TOUT
-// retombait sur le repli "aucun résultat connu" (vitesse/fiabilité vides pour absolument chaque modèle,
-// même ceux qui ont un vrai score vérifié) — pas représentatif d'une vraie petite machine, juste un budget
-// négatif écrasé à zéro. Ces 3 valeurs laissent toutes un vrai budget positif après réservation STT.
-const HARDWARE_TIER_PREVIEW_VRAM_GB = [6, 12, 24]
-// Les 3 noms doivent commencer par le même mot ("Configuration ...") pour ne pas mélanger l'ordre des mots
-// d'un palier à l'autre (bug corrigé : c'était "Petite configuration" mais "Configuration moyenne").
-const HARDWARE_TIER_PREVIEW_LABELS = ['Configuration petite', 'Configuration moyenne', 'Configuration grande']
+function previewVramSteps(
+  gpuName: string | null,
+  ramGb: number,
+  localBenchmark: Map<string, LocalBenchmarkEntry>,
+  verifiedToolScores: Record<VerifiedTier, Map<string, string>>
+): number[] {
+  const hasScore = (c: ModelCandidate): boolean =>
+    resolveBenchmarkResult(c, 'conversation', gpuName, localBenchmark, verifiedToolScores)?.toolCalling != null
+
+  // `candidate.vramGb` est le poids DU MODÈLE (comparé à budgetForCandidate dans computeModelPicks), pas la
+  // VRAM TOTALE de la machine (le paramètre attendu par computeModelPicks, qui lui retire STT_RESERVED_GB
+  // avant de comparer) : reconvertir en "VRAM totale minimale requise" pour que la ligne de l'écran d'accueil
+  // corresponde vraiment à la machine qui atteint tout juste ce candidat. Les candidats "Puissant"
+  // (LARGE_RAM_OFFLOAD_MODELS) peuvent en plus déborder sur la RAM (ramOffloadBudgetGb dans
+  // computeModelPicks) : leur seuil de VRAM totale est donc réduit d'autant, jamais sous 0.
+  const totalVramNeededFor = (c: ModelCandidate): number => {
+    const ramOffloadAllowance = LARGE_RAM_OFFLOAD_MODELS.has(c.model) ? Math.max(0, ramGb - RESOURCE_SAFETY_MARGIN_GB) : 0
+    return Math.max(0, c.vramGb - ramOffloadAllowance + STT_RESERVED_GB)
+  }
+
+  const sizes = [...FLASH_CANDIDATES, ...MEDIUM_CANDIDATES, ...LARGE_CANDIDATES].filter(hasScore).map(totalVramNeededFor)
+  return [...new Set(sizes)].sort((a, b) => a - b)
+}
+
+/** Mot descriptif par tiers de la liste (léger/intermédiaire/robuste) — le numéro exact ("Palier N") et la
+ * VRAM précise sont déjà affichés séparément par HardwareTierPreview.tsx, ce mot ne sert qu'à donner une
+ * impression générale en un coup d'œil sans avoir à lire chaque chiffre. */
+function previewLabelFor(index: number, total: number): string {
+  const ratio = total <= 1 ? 0 : index / (total - 1)
+  if (ratio < 1 / 3) return 'Configuration légère'
+  if (ratio < 2 / 3) return 'Configuration intermédiaire'
+  return 'Configuration robuste'
+}
 
 /**
- * 3 lignes pour l'écran d'accueil : les 2 qui ne correspondent pas à cette machine sont illustratives (VRAM
- * représentative fixe, 6/12/24 Go), la ligne marquée "ta configuration" (current) utilise la VRAM RÉELLE
- * détectée — donc toujours les mêmes modèles que ceux réellement choisis/enregistrés par
- * pickBestModelsFromBenchmark, jamais une approximation arrondie au palier le plus proche. Sans jamais
+ * Autant de lignes que de frontières de VRAM réellement atteignables (previewVramSteps, une dizaine en
+ * pratique) pour l'écran d'accueil et l'onglet Modèles — la ligne "ta configuration" (current) coïncide
+ * donc TOUJOURS exactement avec l'une des lignes fixes (jamais une approximation arrondie au palier le plus
+ * proche), puisque chaque ligne fixe EST déjà la frontière réelle où le résultat peut changer. Sans jamais
  * lancer le moindre téléchargement (computeModelPicks est pur, verified-tool-scores.md/benchmark-results.md
  * sont déjà sur le disque).
  */
@@ -767,22 +821,24 @@ export async function previewHardwareTiers(): Promise<HardwareTierPreview[]> {
   const ramGb = detectRamGb()
   const localBenchmark = parseLocalBenchmark()
   const verifiedToolScores = parseVerifiedToolScores()
-  // Le palier "actuel" suit les bornes décidées avec Léo (moins de 6 Go -> Petite, de 6 à 12 Go -> Moyenne,
-  // plus de 12 Go -> Grande) — PAS le point représentatif le plus proche : une carte 8 Go est plus proche de
-  // 6 que de 12 en distance brute, mais reste bien dans la tranche "Moyenne" par ces bornes. Une machine à
-  // 30 Go de VRAM pointe quand même vers "Grande" (dernier index), jamais hors tableau.
-  const currentIndex = actualVramGb === null ? 0 : actualVramGb < 6 ? 0 : actualVramGb <= 12 ? 1 : 2
-  return HARDWARE_TIER_PREVIEW_VRAM_GB.map((vramGb, i) => ({
-    label: HARDWARE_TIER_PREVIEW_LABELS[i],
+
+  const steps = previewVramSteps(name, ramGb, localBenchmark, verifiedToolScores)
+
+  // Le palier atteint = le plus haut dont la VRAM tient dans le budget réel de cette machine — jamais hors
+  // tableau (repli sur le premier palier si même le plus petit ne rentre pas encore).
+  let currentIndex = 0
+  for (let i = 0; i < steps.length; i++) {
+    if (actualVramGb !== null && steps[i] <= actualVramGb) currentIndex = i
+  }
+
+  return steps.map((vramGb, i) => ({
+    label: previewLabelFor(i, steps.length),
     vramGb,
     current: i === currentIndex,
-    // Pour la ligne "ta configuration", calculer avec la VRAM RÉELLE de cette machine plutôt qu'avec le
-    // point représentatif fixe (6/12/24) : deux machines dans la même tranche "Moyenne" (ex: 7 Go et 11 Go)
-    // n'obtiennent pas forcément les mêmes modèles, donc afficher toujours le point fixe sous "ta
-    // configuration" pouvait montrer des modèles différents de ceux réellement choisis et enregistrés dans
-    // le profil (pickBestModelsFromBenchmark, plus bas dans ce fichier) — repéré par Léo. Les 2 autres
-    // lignes restent purement illustratives (point fixe), pas la peine de recalculer pour des machines qui
-    // ne sont pas la sienne.
+    // Ligne "ta configuration" calculée avec la VRAM RÉELLE de cette machine, les autres avec leur propre
+    // point représentatif — mathématiquement identique dans les deux cas puisque `vramGb` ci-dessus EST déjà
+    // la frontière exacte où le résultat change (voir previewVramSteps), mais garder le calcul sur la VRAM
+    // réelle pour "ta configuration" reste la source la plus directe de vérité, sans intermédiaire.
     ...computeModelPicks(i === currentIndex && actualVramGb !== null ? actualVramGb : vramGb, ramGb, name, localBenchmark, verifiedToolScores)
   }))
 }

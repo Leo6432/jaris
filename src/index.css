@@ -1283,9 +1283,9 @@ body.body--scan::after {
   padding-left: 18px;
 }
 
-/* Les 3 paliers de configuration (previewHardwareTiers) présentés à l'écran d'accueil, reliés par des
+/* Les paliers de configuration (previewHardwareTiers) présentés à l'écran d'accueil, reliés par des
    flèches verticales — celui qui correspond à la machine détectée (.capacity-scan__tier--current) ressort
-   nettement en cyan, les deux autres restent discrets pour ne pas distraire de l'essentiel. */
+   nettement en cyan, les autres restent discrets pour ne pas distraire de l'essentiel. */
 .capacity-scan__tiers {
   display: flex;
   flex-direction: column;

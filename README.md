@@ -412,6 +412,16 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   ne devient PAS le nouveau choix du palier Puissant sur cette seule mesure
   (connaissance générale) — aucun chiffre comparatif fiable trouvé côté
   code/agentic, l'axe où les PDF fournis par Léo rapportaient un gain
+- ✅ Étape 65 — Léo a fait remarquer que les 3 points fixes de l'écran
+  d'accueil (6/12/24 Go, "Petite/Moyenne/Grande configuration") pouvaient
+  regrouper sous une même étiquette deux machines qui reçoivent en réalité
+  des modèles différents — il a demandé qu'à VRAM égale, tout le monde ait
+  garanti le même modèle, avec autant de paliers que nécessaire ("ajoute 10
+  palier, mais les 10 palier doivent etre exact pour tout le monde"). Les 3
+  points fixes sont remplacés par les VRAIES frontières de VRAM (une par
+  modèle candidat déjà benchmarké) : 10 paliers exactement avec les données
+  actuelles, comme deviné par Léo — deux machines dans le même palier
+  reçoivent maintenant garanti le même modèle, palier par palier
 
 ## Démarrer en développement
 

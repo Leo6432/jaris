@@ -12,7 +12,7 @@ interface CapacityScanProps {
  * (voir runQuickSetup, benchmarkRunner.ts) — remplace l'ancienne analyse comparative obligatoire complète
  * (qui pouvait prendre des dizaines de minutes) maintenant que scripts/verified-tool-scores.md couvre la
  * quasi-totalité des configurations courantes : plus besoin de comparer des dizaines de candidats pour
- * savoir lequel gagne, juste télécharger le gagnant déjà connu. Présente d'abord les 3 paliers de
+ * savoir lequel gagne, juste télécharger le gagnant déjà connu. Présente d'abord les paliers de
  * configuration (previewHardwareTiers) avec une flèche sur celui qui correspond à cette machine, pour que
  * l'utilisateur comprenne pourquoi Jaris a choisi ce qu'il a choisi avant même de cliquer "Continuer" — à la
  * demande explicite de Léo. L'ancienne analyse comparative complète reste disponible à la main depuis

@@ -433,6 +433,38 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   qu'avant, mais ne change pas le résultat pour ce cas précis tant qu'une meilleure donnée n'est pas trouvée.
   Régression (mock fs/child_process/systemResources, pas de vraie machine) :
   `node --test scripts/test-hardwarescan-tiebreak.mjs`.
+- **`previewHardwareTiers` (3 points fixes 6/12/24 Go, "Petite/Moyenne/Grande") masquait de vraies différences
+  entre machines de la même tranche** : Léo a fait remarquer que deux machines dans la même tranche "Moyenne"
+  peuvent recevoir des modèles différents (une frontière réelle de pickBestFrom peut tomber ENTRE elles),
+  malgré l'étiquette identique — demande initiale mal comprise d'abord comme "mets un minimum de 30 Go" (aurait
+  cassé le palier Médium, donc TOUS les appels d'outils, sur sa propre machine ~8 Go de VRAM — confirmé avant
+  d'implémenter quoi que ce soit), puis clarifiée en "ajoute 10 palier, mais les 10 palier doivent etre exact
+  pour tout le monde". Remplacé les 3 points fixes par les VRAIES frontières de VRAM (une par candidat
+  benchmarké de FLASH/MEDIUM/LARGE_CANDIDATES, convertie du poids du modèle vers la VRAM TOTALE minimale
+  requise via `+STT_RESERVED_GB` et, pour les candidats "Puissant" qui tolèrent la RAM, `-ramOffloadAllowance`)
+  — `previewVramSteps`, hardwareScan.ts. Résultat : 10 paliers exactement sur les données actuelles, comme
+  deviné par Léo. **PAS un retour à la tentative "3 paliers matériels stricts" déjà essayée et abandonnée**
+  (voir l'entrée plus haut sur previewHardwareTiers) : cette tentative calculait un SEUL budget combiné pour
+  les 3 rôles à la fois, ce qui laissait le débordement RAM de "Puissant" gonfler à tort le palier "Rapide" —
+  ici, Rapide/Médium/Puissant restent calculés séparément avec leur propre formule de budget, seul le nombre
+  et le choix des points représentatifs change. Vérifié avant de livrer que ça ne casse rien sur la machine de
+  Léo (RTX 3070, ~8 Go VRAM, budget simulé avec 32 Go de RAM) : Médium atterrit sur `qwen3.5:4b` (palier 7,9
+  Go), toujours un modèle qui appelle des outils — pas d'"indisponible" comme redouté un temps avec une autre
+  approche écartée en cours de route (repli sur le palier du dessous, refusé par Léo pour rester "exact").
+  **Piège dans mon propre calcul, attrapé par mon propre test avant de livrer** : `candidate.vramGb` est le
+  poids DU MODÈLE, pas la VRAM totale de la machine — utiliser cette valeur brute comme seuil de palier aurait
+  affiché des seuils totalement faux (ex: un palier "3,4 Go" pour un modèle qui a en réalité besoin de 7,9 Go
+  de VRAM totale une fois la réservation STT ajoutée). **Piège dans le TEST lui-même, attrapé en débogant un
+  résultat inattendu** : le mock `child_process.exec` (déjà utilisé par test-hardwarescan-tiebreak.mjs,
+  corrigé au passage) n'avait pas la marque `[util.promisify.custom]` que le VRAI `child_process.exec` de Node
+  pose sur lui-même — sans elle, `promisify(exec)` résout vers un TABLEAU positionnel `[stdout, stderr]` au
+  lieu de l'objet `{stdout, stderr}` attendu par `detectGpu()`, qui retombe alors silencieusement (son propre
+  try/catch) sur VRAM/GPU `null` en ignorant complètement la valeur simulée — le test passait quand même par
+  coïncidence (repli RAM offload) sans jamais exercer la détection VRAM qu'il prétendait simuler. **Leçon
+  générale : quand un mock remplace une fonction Node normalement promisifiée nativement (exec, readFile...),
+  reproduire aussi sa marque `[util.promisify.custom]` — sinon `promisify()` change silencieusement de forme
+  de résultat sans la moindre erreur visible.** Régression :
+  `node --test scripts/test-hardwarescan-preview-steps.mjs`.
 
 ## Commandes utiles
 

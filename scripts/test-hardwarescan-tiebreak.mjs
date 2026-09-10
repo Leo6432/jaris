@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import vm from 'node:vm'
+import { promisify } from 'node:util'
 import ts from 'typescript'
 
 /**
@@ -21,13 +22,20 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/har
 }).outputText
 
 function setup({ verifiedToolScoresMd = '', vramMib = 30 * 1024, ramGb = 32 } = {}) {
+  // hardwareScan.ts appelle exec() via util.promisify (execAsync = promisify(exec)), qui résout normalement
+  // vers {stdout, stderr} grâce à la marque [util.promisify.custom] posée par le VRAI child_process.exec de
+  // Node — un mock sans cette marque fait résoudre promisify vers un tableau [stdout, stderr] à la place,
+  // donc `const { stdout } = await execAsync(...)` recevrait `undefined` et detectGpu() retomberait
+  // silencieusement sur {name: null, vramGb: null} (rattrapé par son propre try/catch) sans jamais lire la
+  // VRAM simulée ci-dessous. Reposer la même marque ici reproduit fidèlement ce que Node fait pour de vrai.
+  const exec = (_cmd, opts, cb) => {
+    const callback = typeof opts === 'function' ? opts : cb
+    callback(null, `Fake GPU, ${vramMib}\n`, '')
+  }
+  exec[promisify.custom] = () => Promise.resolve({ stdout: `Fake GPU, ${vramMib}\n`, stderr: '' })
+
   const modules = {
-    child_process: {
-      exec: (_cmd, opts, cb) => {
-        const callback = typeof opts === 'function' ? opts : cb
-        callback(null, `Fake GPU, ${vramMib}\n`, '')
-      }
-    },
+    child_process: { exec },
     fs: {
       readFileSync: (path) => {
         if (String(path).includes('verified-tool-scores.md')) return verifiedToolScoresMd

@@ -176,12 +176,14 @@ export interface CapacityScanResult {
 
 /**
  * Une ligne de previewHardwareTiers (hardwareScan.ts) : illustre "à quoi ressemble le choix de Jaris" à une
- * échelle de VRAM représentative (Petite/Moyenne/Grande configuration), affichée sur l'écran d'accueil
- * (CapacityScan.tsx) et l'onglet Modèles (OptionsMenu.tsx) pour montrer clairement où se situe la machine de
- * l'utilisateur — jamais utilisée pour choisir un modèle pour de vrai (ça reste le rôle de
- * pickBestModelsFromBenchmark, sur la VRAM/RAM exactes). `current` marque la ligne qui correspond à la
- * machine RÉELLE détectée. Chaque palier (flash/medium/large/vision) porte l'entrée COMPLÈTE (vitesse,
- * fiabilité...), pas juste le nom du modèle — voir ModelOverviewEntry ci-dessous.
+ * VRAM représentative, affichée sur l'écran d'accueil (CapacityScan.tsx) et l'onglet Modèles (OptionsMenu.tsx)
+ * pour montrer clairement où se situe la machine de l'utilisateur — jamais utilisée pour choisir un modèle
+ * pour de vrai (ça reste le rôle de pickBestModelsFromBenchmark, sur la VRAM/RAM exactes). `vramGb` est une
+ * FRONTIÈRE RÉELLE (voir previewVramSteps) où le modèle choisi peut changer, pas un point arbitraire (6/12/24
+ * Go) : deux machines dont la VRAM tombe entre deux lignes obtiennent garanti le même modèle. `current`
+ * marque la ligne qui correspond à la machine RÉELLE détectée. Chaque palier (flash/medium/large/vision)
+ * porte l'entrée COMPLÈTE (vitesse, fiabilité...), pas juste le nom du modèle — voir ModelOverviewEntry
+ * ci-dessous.
  */
 export interface HardwareTierPreview {
   label: string
