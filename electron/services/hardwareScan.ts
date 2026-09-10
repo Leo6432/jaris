@@ -91,8 +91,14 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   // Ajouté après vérification directe sur ollama.com/library/qwen3.8 (18 Go, vision+tools+thinking natifs,
   // contexte 256K) suite à deux analyses externes (PDF fournis par Léo) le signalant comme successeur de
   // qwen3.5:27b — gain en code/agentic rapporté par des sources tierces uniquement (pas de chiffre MMLU-Pro
-  // officiel trouvé, donc absent d'INTELLIGENCE_MMLU_PRO plus bas) : à confirmer via "Lancer l'analyse"
-  // avant de le préférer à qwen3.5:27b.
+  // OFFICIEL trouvé à l'époque). Depuis (question de Léo, "pourquoi on regarde pas les vrais benchmarks pour
+  // départager les 6/6 ?") : un score MMLU-Pro de 84.3 a été trouvé via BenchLM.ai — un agrégateur tiers, PAS
+  // la fiche officielle Alibaba, donc à prendre avec la même réserve que les autres chiffres "sources
+  // tierces" de ce fichier. Ajouté à INTELLIGENCE_MMLU_PRO plus bas malgré cette réserve, DÉLIBÉRÉMENT plus
+  // bas que qwen3.5:27b (86.1) et qwen3.5:35b (85.3) déjà en place : ce chiffre ne confirme donc PAS le
+  // "gain" rapporté par les PDF de Léo sur l'axe connaissance générale — seulement sur code/agentic (jamais
+  // confirmé par un vrai chiffre comparatif ici, voir pickBestFrom dans computeModelPicks : le départage
+  // entre candidats à 6/6 utilise maintenant MMLU-Pro quand les deux le connaissent, VRAM sinon).
   { model: 'qwen3.8:27b', vramGb: 18 },
   // Trois candidats supplémentaires dans la même tranche (17-19 Go), utiles pour les machines avec plus de
   // VRAM que la config de développement (8 Go) — pas retenus faute de "trop lourd" mais parce qu'un candidat
@@ -364,7 +370,13 @@ const INTELLIGENCE_MMLU_PRO: Record<string, number> = {
   // granite4:3b (44.5) retiré : remplacé par granite4.1:3b (voir MEDIUM_CANDIDATES), pas de score MMLU-Pro
   // publié trouvé pour cette nouvelle version — l'ancien chiffre ne lui est pas forcément applicable.
   'gemma4:e4b': 69.4,
-  'qwen3.6:35b-a3b': 85.2
+  'qwen3.6:35b-a3b': 85.2,
+  // Source : BenchLM.ai (agrégateur tiers, PAS la fiche officielle Alibaba — voir le commentaire sur
+  // qwen3.8:27b dans LARGE_CANDIDATES plus haut pour le contexte complet). Volontairement inférieur à
+  // qwen3.5:27b/qwen3.5:35b ci-dessus : ce chiffre ne confirme PAS un gain de connaissance générale, jamais
+  // à prendre pour argent comptant sans vérification sur une fiche officielle si l'écart avec un autre
+  // chiffre ici devient un jour déterminant pour un choix de modèle.
+  'qwen3.8:27b': 84.3
 }
 
 export interface LocalBenchmarkEntry {
@@ -632,10 +644,14 @@ function computeModelPicks(
     return { speedTokPerSec: estimateSpeedTokPerSec(candidate.vramGb, gpuName), toolCalling: verifiedTool, speedEstimated: true }
   }
 
-  // Départage à égalité de fiabilité par la VRAM du candidat (le plus GROS gagne), pas par la vitesse — à
-  // la demande explicite de Léo : une machine qui a la place doit profiter d'un modèle plus capable, pas
-  // juste du plus rapide parmi ceux qui réussissent déjà 100% des tests (nos 6/3 questions ne distinguent
-  // pas "juste assez bon" de "vraiment plus intelligent" une fois le score max atteint).
+  // Départage à égalité de fiabilité (6/6) : d'abord par MMLU-Pro (INTELLIGENCE_MMLU_PRO) quand les DEUX
+  // candidats à égalité ont un chiffre connu, sinon par la VRAM du candidat (le plus GROS gagne) — à la
+  // demande explicite de Léo, qui a fait remarquer qu'un score "parfait" ne veut pas dire "le meilleur" (nos
+  // 6/6 questions ne distinguent pas "juste assez bon" de "vraiment plus intelligent" une fois le score max
+  // atteint) et qu'il fallait aller chercher un VRAI signal externe (benchmark) avant de se rabattre sur la
+  // taille. La VRAM reste le repli : MMLU-Pro n'est renseigné que pour une poignée de modèles (voir la table),
+  // donc la plupart des départages continuent de se faire par taille faute de chiffre comparable pour les deux
+  // candidats à la fois.
   const pickBestFrom = (candidates: ModelCandidate[], tier: VerifiedTier): ModelOverviewEntry => {
     const benchmarked = candidates
       .filter((c) => c.vramGb <= budgetForCandidate(c.model))
@@ -667,7 +683,11 @@ function computeModelPicks(
 
     benchmarked.sort((a, b) => {
       const toolDiff = parseToolScore(b.result.toolCalling) - parseToolScore(a.result.toolCalling)
-      return toolDiff !== 0 ? toolDiff : b.vramGb - a.vramGb
+      if (toolDiff !== 0) return toolDiff
+      const aIntel = INTELLIGENCE_MMLU_PRO[a.model]
+      const bIntel = INTELLIGENCE_MMLU_PRO[b.model]
+      if (aIntel !== undefined && bIntel !== undefined && aIntel !== bIntel) return bIntel - aIntel
+      return b.vramGb - a.vramGb
     })
     const winner = benchmarked[0]
     return {

@@ -396,6 +396,22 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   nommés comme sur Claude/ChatGPT). Le mode Code perdait carrément l'accès
   aux applications déjà générées (pourtant bien enregistrées sur le disque)
   — ajout d'un écran "Récents" qui les liste et permet d'en rouvrir une
+- ✅ Étape 64 — Léo a remarqué qu'à score "parfait" (6/6, notre test maison
+  d'appel d'outils) le départage entre plusieurs candidats du même palier se
+  faisait uniquement par taille (le plus gros gagne), et a demandé d'aller
+  chercher de vrais benchmarks externes avant de départager ainsi. 6/6 est un
+  PLAFOND (test à 6 questions) que plusieurs modèles peuvent atteindre sans
+  être aussi capables l'un que l'autre — pas un classement fin. Le départage
+  utilise maintenant le score MMLU-Pro publié (`INTELLIGENCE_MMLU_PRO`,
+  hardwareScan.ts) quand les DEUX candidats à égalité en ont un connu, la
+  VRAM ne restant un repli que si l'un des deux (ou les deux) n'a aucun
+  chiffre MMLU-Pro trouvé. Recherché à cette occasion (question de Léo sur
+  qwen3.8:27b, 18 Go) : un score MMLU-Pro de 84.3 (source tierce, BenchLM.ai,
+  pas la fiche officielle Alibaba) — plus bas que qwen3.5:27b (86.1, 17 Go)
+  et qwen3.5:35b (85.3, 24 Go) déjà utilisés. Résultat concret : qwen3.8:27b
+  ne devient PAS le nouveau choix du palier Puissant sur cette seule mesure
+  (connaissance générale) — aucun chiffre comparatif fiable trouvé côté
+  code/agentic, l'axe où les PDF fournis par Léo rapportaient un gain
 
 ## Démarrer en développement
 
