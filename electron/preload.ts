@@ -8,6 +8,7 @@ import {
   type ChatMessage,
   type ConversationEntry,
   type GeneratedApp,
+  type GeneratedAppSummary,
   type HardwareTierPreview,
   type JarisEmotion,
   type MemoryGraph,
@@ -79,6 +80,8 @@ const api = {
     ipcRenderer.invoke(IPC_CHANNELS.generateApp, description, currentHtml),
   onCodeGenStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.codeGenStatus, cb),
   openGeneratedApp: (path?: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openGeneratedApp, path),
+  getGeneratedApps: (): Promise<GeneratedAppSummary[]> => ipcRenderer.invoke(IPC_CHANNELS.getGeneratedApps),
+  loadGeneratedApp: (path: string): Promise<GeneratedApp> => ipcRenderer.invoke(IPC_CHANNELS.loadGeneratedApp, path),
   listAudioInputDevices: (): Promise<AudioInputDevice[]> => ipcRenderer.invoke(IPC_CHANNELS.listAudioInputDevices),
   setAudioInputDevice: (deviceIndex: number | null): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.setAudioInputDevice, deviceIndex),

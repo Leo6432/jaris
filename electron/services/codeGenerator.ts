@@ -1,10 +1,10 @@
 import { app } from 'electron'
-import { mkdir, writeFile } from 'fs/promises'
+import { mkdir, readdir, readFile, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { chatWithOllama, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError, type OllamaMessage } from './ollama'
 import { pickBestCodeModel } from './hardwareScan'
 import { getProfile } from './profileStore'
-import type { GeneratedApp } from '../../shared/ipc'
+import type { GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
 
 /**
  * Fenêtre de contexte dédiée à la génération de code : le modèle doit produire un fichier HTML complet
@@ -300,6 +300,38 @@ function slugify(description: string): string {
 /** Dossier où toutes les applications générées sont enregistrées (une par sous-dossier horodaté). */
 export function getGeneratedAppsDir(): string {
   return join(app.getPath('userData'), 'generated-apps')
+}
+
+/**
+ * Applications déjà générées, les plus récentes en premier — repéré par Léo en usage réel ("si on relance
+ * jarvis, on a plus rien dans le code") : chaque génération est bien enregistrée sur le disque
+ * (`<horodatage>-<slug>/index.html`), mais rien n'exposait cette liste avant, donc `CodePanel.tsx` repartait
+ * toujours d'un écran vide après un redémarrage même si le fichier existait toujours. Le libellé est dérivé
+ * du nom de dossier (déjà lisible, voir `slugify` plus haut) : pas besoin de stocker la description à part.
+ */
+export async function listGeneratedApps(limit = 20): Promise<GeneratedAppSummary[]> {
+  let entries: string[]
+  try {
+    entries = await readdir(getGeneratedAppsDir())
+  } catch {
+    return []
+  }
+
+  return entries
+    .map((name): GeneratedAppSummary | null => {
+      const match = name.match(/^(\d+)-(.+)$/)
+      if (!match) return null
+      return { path: join(getGeneratedAppsDir(), name), label: match[2].replace(/-/g, ' '), timestamp: Number(match[1]) }
+    })
+    .filter((summary): summary is GeneratedAppSummary => summary !== null)
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, limit)
+}
+
+/** Recharge une application déjà générée depuis son dossier, pour la remontrer dans l'aperçu (voir ci-dessus). */
+export async function loadGeneratedApp(path: string): Promise<GeneratedApp> {
+  const html = await readFile(join(path, 'index.html'), 'utf-8')
+  return { html, path, issues: [] }
 }
 
 /**

@@ -6,6 +6,7 @@ import type {
   ChatMessage,
   ConversationEntry,
   GeneratedApp,
+  GeneratedAppSummary,
   HardwareTierPreview,
   JarisEmotion,
   MemoryGraph,
@@ -74,6 +75,8 @@ declare global {
       generateApp: (description: string, currentHtml?: string) => Promise<GeneratedApp>
       onCodeGenStatus: (cb: (message: string) => void) => () => void
       openGeneratedApp: (path?: string) => Promise<void>
+      getGeneratedApps: () => Promise<GeneratedAppSummary[]>
+      loadGeneratedApp: (path: string) => Promise<GeneratedApp>
       listAudioInputDevices: () => Promise<AudioInputDevice[]>
       setAudioInputDevice: (deviceIndex: number | null) => Promise<void>
       testMicrophone: () => void

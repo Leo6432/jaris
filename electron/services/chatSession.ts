@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import { converse } from './assistant'
-import { appendConversationEntry } from './conversationStore'
+import { appendConversationEntry, getConversationHistory } from './conversationStore'
 import { clearSessionHistory, getSessionHistory, pushSessionExchange } from './conversationSession'
 import { extractMemoryFromExchange } from './memoryExtractor'
 import { getLiveGpuStatus } from './hardwareScan'
@@ -29,9 +29,30 @@ const MAX_VISIBLE_MESSAGES = 200
  */
 class ChatSession {
   private visible: ChatMessage[] = []
+  private loaded = false
 
-  /** Messages à afficher dans le fil (vide au premier lancement : on n'y remet pas l'historique vocal). */
-  getVisibleMessages(): ChatMessage[] {
+  /**
+   * Amorcé depuis conversation-history.json (voix ET chat, voir étape 47) au premier appel seulement :
+   * repéré par Léo en usage réel ("si on relance jarvis, on a plus rien dans le chat") — avant ça, `visible`
+   * repartait vide à chaque lancement même si le modèle, lui, se souvenait déjà des derniers échanges
+   * (`conversationSession.ts` chargeait bien son propre historique court terme). Jaris n'a qu'UNE seule
+   * conversation continue (voix + chat unifiées), pas plusieurs fils nommés façon Claude/ChatGPT : rouvrir
+   * l'onglet Chat après un redémarrage montre donc la suite de CETTE conversation, y compris ce qui a été
+   * dit à voix haute entre-temps.
+   */
+  private async ensureLoaded(): Promise<void> {
+    if (this.loaded) return
+    this.loaded = true
+    const pastEntries = await getConversationHistory(MAX_VISIBLE_MESSAGES / 2)
+    this.visible = pastEntries.flatMap((entry): ChatMessage[] => [
+      { role: 'user', content: entry.transcript },
+      { role: 'assistant', content: entry.reply }
+    ])
+  }
+
+  /** Messages à afficher dans le fil, amorcés depuis le disque au premier appel (voir ensureLoaded). */
+  async getVisibleMessages(): Promise<ChatMessage[]> {
+    await this.ensureLoaded()
     return this.visible
   }
 
@@ -39,6 +60,7 @@ class ChatSession {
   clear(): void {
     clearSessionHistory()
     this.visible = []
+    this.loaded = true
   }
 
   async send(
@@ -52,6 +74,9 @@ class ChatSession {
     onSoundCue?: (cue: SoundCue) => void,
     onToken?: (delta: string) => void
   ): Promise<ChatMessage> {
+    // Sans ça, un message envoyé avant que le premier getVisibleMessages() (appelé au montage de
+    // ChatPanel.tsx) ait fini de charger l'historique pourrait écraser la restauration en cours.
+    await this.ensureLoaded()
     this.pushVisible({ role: 'user', content: prompt })
     onSoundCue?.('thinking')
 

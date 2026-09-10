@@ -13,7 +13,7 @@ import { getAllCandidateModelIds, getModelOverview, previewHardwareTiers } from 
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { runModelAnalysis, runQuickSetup } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
-import { generateApp, getGeneratedAppsDir } from './services/codeGenerator'
+import { generateApp, getGeneratedAppsDir, listGeneratedApps, loadGeneratedApp } from './services/codeGenerator'
 import { createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
 import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
@@ -36,6 +36,7 @@ import {
   type CapacityScanResult,
   type ChatMessage,
   type GeneratedApp,
+  type GeneratedAppSummary,
   type JarisEmotion,
   type MemoryGraph,
   type Profile,
@@ -423,7 +424,7 @@ app.whenReady().then(async () => {
       (delta) => event.sender.send(IPC_CHANNELS.chatStreamToken, delta)
     )
   })
-  ipcMain.handle(IPC_CHANNELS.getChatHistory, (): ChatMessage[] => chatSession.getVisibleMessages())
+  ipcMain.handle(IPC_CHANNELS.getChatHistory, (): Promise<ChatMessage[]> => chatSession.getVisibleMessages())
 
   // Mode Code (étape 30) : génération d'une application autonome, avec avancement au fil de l'eau (la
   // génération + relecture peut prendre plusieurs minutes sur un modèle local).
@@ -440,6 +441,11 @@ app.whenReady().then(async () => {
   )
   ipcMain.handle(IPC_CHANNELS.openGeneratedApp, async (_event, path?: string) => {
     await shell.openPath(path || getGeneratedAppsDir())
+  })
+  ipcMain.handle(IPC_CHANNELS.getGeneratedApps, (): Promise<GeneratedAppSummary[]> => listGeneratedApps())
+  ipcMain.handle(IPC_CHANNELS.loadGeneratedApp, async (_event, path: string): Promise<GeneratedApp> => {
+    const loaded = await loadGeneratedApp(path)
+    return { ...loaded, previewUrl: createGeneratedAppPreview(loaded.html) }
   })
 
   ipcMain.on(IPC_CHANNELS.onboardingFinished, () => {

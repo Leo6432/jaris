@@ -352,6 +352,30 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   CSP et `sandbox allow-scripts`, sans `allow-same-origin`, plutôt qu'assouplir les scripts de la fenêtre
   principale. Le protocole ne sert que du HTML enregistré en mémoire, jamais un chemin de fichier fourni
   par l'URL. Vérifier clic Jouer, clavier, clic extérieur, accès parent/réseau refusés et CSP parent conservée.
+- **"Si on relance jarvis, on a plus rien dans le code et chat" (Léo)** : deux causes DISTINCTES, dans deux
+  fichiers séparés, pour le même symptôme apparent.
+  - Chat : `ChatSession.visible` (chatSession.ts) démarrait TOUJOURS vide au lancement, par choix explicite
+    ("vide au premier lancement : on n'y remet pas l'historique vocal", commentaire d'origine) — alors que
+    `conversationSession.ts` (le contexte envoyé au MODÈLE) chargeait déjà son propre historique depuis
+    `conversation-history.json` au démarrage. Résultat : le modèle "se souvenait" des derniers échanges,
+    mais l'écran du Chat les affichait comme s'ils n'avaient jamais existé. Corrigé en amorçant `visible`
+    depuis ce même fichier partagé (voix + chat, étape 47) au premier appel de `getVisibleMessages()`/`send()`
+    — même pattern `ensureLoaded()` que `conversationSession.ts`. Jaris n'a PAS plusieurs fils de discussion
+    nommés façon Claude/ChatGPT (une seule conversation continue, à dessein depuis l'étape 47) : rouvrir
+    Chat après un redémarrage montre la SUITE de cette conversation, y compris ce qui a été dit à voix haute
+    entre-temps — pas une liste de conversations séparées à choisir.
+  - Code : chaque génération est bien enregistrée sur le disque
+    (`generated-apps/<horodatage>-<slug>/index.html`), mais rien n'exposait cette liste au renderer —
+    `CodePanel.tsx` repartait d'un écran vide à chaque lancement même si les fichiers existaient toujours.
+    Corrigé en ajoutant `listGeneratedApps()`/`loadGeneratedApp()` (codeGenerator.ts, lisent le dossier et un
+    fichier `index.html` donné) + deux canaux IPC, et un écran "Récents" dans CodePanel.tsx (visible tant
+    qu'aucune application n'est chargée) qui recharge une ancienne génération avec une NOUVELLE URL d'aperçu
+    isolée (`createGeneratedAppPreview`, voir l'entrée CSP juste au-dessus) plutôt que de réutiliser
+    l'ancienne, qui ne survit pas à un redémarrage (Map en mémoire). **Leçon générale : un symptôme identique
+    rapporté sur deux fonctionnalités différentes ("le chat ET le code") n'a pas forcément une seule cause
+    commune** — vérifier chaque mécanisme séparément (ici : un flux "affichage" jamais amorcé vs. un flux
+    "liste" jamais exposé) au lieu de chercher un correctif unique qui expliquerait les deux à la fois.
+    Régression : `node --test scripts/test-chat-session-restore.mjs scripts/test-codegen-recents.mjs`.
 
 ## Commandes utiles
 

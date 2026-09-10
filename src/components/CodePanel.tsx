@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GeneratedApp } from '../../shared/ipc'
+import type { GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
 
 type View = 'preview' | 'code'
 
@@ -15,7 +15,16 @@ export default function CodePanel(): JSX.Element {
   const [appResult, setAppResult] = useState<GeneratedApp | null>(null)
   const [view, setView] = useState<View>('preview')
   const [error, setError] = useState<string | null>(null)
+  const [recentApps, setRecentApps] = useState<GeneratedAppSummary[]>([])
   const statusRef = useRef<HTMLPreElement>(null)
+
+  // Repéré par Léo en usage réel ("si on relance jarvis, on a plus rien dans le code") : chaque génération
+  // est bien enregistrée sur le disque (generated-apps/<horodatage>-<slug>/), mais rien ne remontrait cette
+  // liste après un redémarrage — l'écran de départ repartait toujours à zéro même si le fichier existait
+  // toujours. Chargée une fois au montage ; regénérée après chaque génération réussie (voir refreshRecentApps).
+  useEffect(() => {
+    void window.jaris.getGeneratedApps().then(setRecentApps)
+  }, [])
 
   useEffect(() => {
     return window.jaris.onCodeGenStatus((message) => setStatusLines((prev) => [...prev, message]))
@@ -38,10 +47,22 @@ export default function CodePanel(): JSX.Element {
       setAppResult(result)
       setDescription('')
       setView('preview')
+      void window.jaris.getGeneratedApps().then(setRecentApps)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setGenerating(false)
+    }
+  }
+
+  const openRecent = async (path: string): Promise<void> => {
+    setError(null)
+    try {
+      const result = await window.jaris.loadGeneratedApp(path)
+      setAppResult(result)
+      setView('preview')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -80,6 +101,22 @@ export default function CodePanel(): JSX.Element {
       </div>
 
       {error && <p className="code-panel__error">{error}</p>}
+
+      {!appResult && !generating && recentApps.length > 0 && (
+        <div className="code-panel__recents">
+          <div className="code-panel__section-title">Récents</div>
+          <ul>
+            {recentApps.map((recent) => (
+              <li key={recent.path}>
+                <button onClick={() => void openRecent(recent.path)}>
+                  <span className="code-panel__recent-label">{recent.label}</span>
+                  <span className="code-panel__recent-date">{new Date(recent.timestamp).toLocaleString('fr-FR')}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {(generating || statusLines.length > 0) && (
         <pre ref={statusRef} className="code-panel__status">

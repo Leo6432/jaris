@@ -308,6 +308,19 @@ export interface GeneratedApp {
   issues: string[]
 }
 
+/**
+ * Une application déjà générée, listée dans "Récents" (mode Code) — repéré par Léo en usage réel : chaque
+ * génération est enregistrée sur le disque, mais rien n'en gardait la liste avant, donc relancer Jaris
+ * perdait l'accès à tout ce qui avait déjà été généré. `label` vient du nom de dossier (déjà lisible),
+ * jamais recalculé depuis le HTML pour rester rapide même avec beaucoup d'applications.
+ */
+export interface GeneratedAppSummary {
+  path: string
+  label: string
+  /** Date de génération (Date.now() au moment de l'enregistrement, voir codeGenerator.ts). */
+  timestamp: number
+}
+
 /** Canaux IPC main -> renderer pour piloter le visage et afficher la conversation. */
 export const IPC_CHANNELS = {
   emotion: 'jaris:emotion',
@@ -361,7 +374,8 @@ export const IPC_CHANNELS = {
   /** main -> renderer : un fragment de la réponse en cours de génération (étape 48), affiché au fil de
    * l'eau dans ChatPanel.tsx plutôt que d'attendre la réponse complète de sendChatMessage. */
   chatStreamToken: 'jaris:chat-stream-token',
-  /** renderer <-> main : récupère les messages déjà échangés en mode Chat depuis le lancement. */
+  /** renderer <-> main : récupère les messages du mode Chat, amorcés depuis conversation-history.json au
+   * premier appel après un lancement (voir ChatSession.ensureLoaded) — plus seulement ceux de la session en cours. */
   getChatHistory: 'jaris:get-chat-history',
   /** renderer <-> main : génère une application autonome à partir d'une description (mode Code, étape 30). */
   generateApp: 'jaris:generate-app',
@@ -369,6 +383,12 @@ export const IPC_CHANNELS = {
   codeGenStatus: 'jaris:code-gen-status',
   /** renderer -> main : ouvre le dossier de l'application générée dans l'explorateur de fichiers. */
   openGeneratedApp: 'jaris:open-generated-app',
+  /** renderer <-> main : liste les applications déjà générées (les plus récentes d'abord), pour l'écran
+   * "Récents" du mode Code — survit à un redémarrage de Jaris puisque lu directement sur le disque. */
+  getGeneratedApps: 'jaris:get-generated-apps',
+  /** renderer <-> main : recharge une application déjà générée (depuis "Récents") pour la remontrer dans
+   * l'aperçu, avec une nouvelle URL d'aperçu isolée (voir generatedAppPreview.ts). */
+  loadGeneratedApp: 'jaris:load-generated-app',
   /** renderer <-> main : modèles candidats (hardwareScan.ts) apparus depuis le dernier scan de capacité (étape 29), à afficher en popup. */
   getNewModels: 'jaris:get-new-models',
   /** renderer -> main : l'utilisateur a vu le popup de nouveaux modèles, ne plus le remontrer avant les prochains. */

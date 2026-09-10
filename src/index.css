@@ -1620,6 +1620,63 @@ body.body--scan::after {
   color: var(--hud-gold);
 }
 
+.code-panel__recents {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.code-panel__recents .code-panel__section-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--hud-text-faint);
+}
+
+.code-panel__recents ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.code-panel__recents button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(1, 4, 10, 0.4);
+  border: 1px solid rgba(122, 176, 214, 0.2);
+  border-radius: 10px;
+  color: var(--hud-text-dim);
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.code-panel__recents button:hover {
+  border-color: var(--hud-accent);
+  color: var(--hud-text);
+}
+
+.code-panel__recent-label {
+  text-transform: capitalize;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code-panel__recent-date {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: var(--hud-text-faint);
+}
+
 .code-panel__status {
   margin: 0;
   padding: 10px 12px;

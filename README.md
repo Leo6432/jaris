@@ -378,6 +378,24 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   Le générateur relance désormais automatiquement une fois avec une
   consigne corrective avant d'abandonner, et la consigne de départ cite
   explicitement ce piège (Snake/Tetris/Pong) pour l'éviter dès le début
+- ✅ Étape 62 — Le jeu Snake généré en mode Code avait TOUJOURS un bouton
+  incliquable après deux correctifs réels (étapes 60 et 61 : overflow
+  masqué, puis réponse en Python) — la vraie 3e cause (Codex) : l'aperçu
+  héritait de la politique de sécurité (CSP) de la fenêtre principale de
+  Jaris, qui bloque les scripts, donc le JavaScript du jeu généré ne
+  s'exécutait jamais dans l'aperçu même si le fichier était parfaitement
+  valide. Corrigé en servant l'aperçu depuis sa propre origine dédiée, avec
+  sa propre CSP et un isolement complet (jamais d'accès à Jaris, au réseau
+  ou au stockage) — vérifié par un vrai clic automatisé qui démarre
+  effectivement la partie
+- ✅ Étape 63 — "Si on relance jarvis, on a plus rien dans le code et
+  chat" (Léo) : le Chat repartait toujours d'un écran vide au démarrage
+  (choix d'origine), même si le modèle, lui, se souvenait déjà des derniers
+  échanges — corrigé en réaffichant la conversation depuis le même fichier
+  partagé voix/chat (une seule conversation continue, pas plusieurs fils
+  nommés comme sur Claude/ChatGPT). Le mode Code perdait carrément l'accès
+  aux applications déjà générées (pourtant bien enregistrées sur le disque)
+  — ajout d'un écran "Récents" qui les liste et permet d'en rouvrir une
 
 ## Démarrer en développement
 
