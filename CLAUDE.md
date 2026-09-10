@@ -465,6 +465,13 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   reproduire aussi sa marque `[util.promisify.custom]` — sinon `promisify()` change silencieusement de forme
   de résultat sans la moindre erreur visible.** Régression :
   `node --test scripts/test-hardwarescan-preview-steps.mjs`.
+- **`gemma4:26b` (palier Puissant, LARGE_CANDIDATES) manquait de VISION_CANDIDATES** alors que ses petits
+  frères de la même famille (`gemma4:e4b`, `gemma4:12b`) y sont déjà en "réutilisation" — signalé par Léo
+  ("c'est un des meilleurs en vision"), vérifié directement sur ollama.com/library/gemma4 (tag `gemma4:26b` :
+  badge "Text, Image" confirmé, pas juste une affirmation à prendre pour argent comptant) avant de l'ajouter.
+  Toujours vérifier le tag EXACT sur la page officielle plutôt que de faire confiance à un nom approximatif
+  ("gemma-4-26b-a4b") — le nom réel dans Ollama est `gemma4:26b` (le "a4b"/"4B actifs" correspond au nombre de
+  paramètres actifs du MoE, déjà documenté dans le commentaire LARGE_CANDIDATES, pas un tag Ollama à part).
 
 ## Commandes utiles
 

@@ -177,6 +177,12 @@ const TIER_CANDIDATES: Record<Tier, ModelCandidate[]> = {
 // en TÊTE de liste, pas en queue (bug corrigé : il y était placé en dernier, faisant retomber le repli sur le
 // plus gros modèle vision au lieu du plus petit sur une machine très contrainte).
 const VISION_CANDIDATES: ModelCandidate[] = [
+  // Même candidat "réutilisation" que gemma4:e4b/gemma4:12b plus bas, mais pour gemma4:26b (déjà dans
+  // LARGE_CANDIDATES, palier Puissant) — signalé par Léo, vérifié directement sur ollama.com/library/gemma4 :
+  // le tag `gemma4:26b` porte bien le badge "Text, Image" (vision native), pas seulement les tags plus
+  // petits de la famille. En tête de liste (19 Go, le plus gros candidat vision) : l'ordre doit rester
+  // strictement décroissant en VRAM (voir le commentaire de pickForBudget plus haut dans ce fichier).
+  { model: 'gemma4:26b', vramGb: 19 },
   // Candidat "réutilisation" : gemma4:e4b (déjà dans MEDIUM_CANDIDATES) est NATIVEMENT multimodal (vérifié
   // sur ollama.com/library/gemma4 : badge vision+tools+thinking), donc candidat légitime pour la vision
   // aussi — pas juste un modèle de conversation qu'on force à faire autre chose. Intérêt concret : s'il tient
