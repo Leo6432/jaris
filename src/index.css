@@ -1395,16 +1395,24 @@ body.body--scan::after {
 }
 
 /*
- * Widget flottant (étape 19) : toujours au premier plan, en bas à droite, sans fond. La fenêtre est plus
- * haute que large et vide au départ (donc invisible, tout est transparent) ; le contenu est ancré en bas
- * (flex-end), donc collé au vrai coin bas-droit de l'écran au repos — une réponse longue pousse le tout
- * vers le haut au lieu de laisser un vide entre l'orbe et le coin de l'écran.
+ * Widget flottant (étape 19, repositionné en haut au centre façon "notch" à l'étape 68) : toujours au
+ * premier plan, sans fond. La fenêtre est plus haute que large et vide au départ (donc invisible, tout est
+ * transparent) ; le contenu est ancré en HAUT (flex-start), donc collé au vrai bord haut de l'écran — une
+ * réponse longue pousse le tout vers le bas au lieu de laisser un vide entre l'orbe et le bord de l'écran.
  */
 .app--widget {
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 10px;
-  padding: 20px 14px;
+  padding: 16px 14px;
   -webkit-app-region: drag;
+}
+
+/* État "repos" (étape 68) : juste le petit orbe réduit, sans statut ni conversation — main.ts replie la
+   VRAIE fenêtre Electron à WIDGET_COLLAPSED_WIDTH/HEIGHT en même temps, donc ce padding doit rester assez
+   petit pour ne jamais dépasser cette hauteur (36px : 24px d'orbe + 6px de marge de chaque côté). */
+.app--widget-collapsed {
+  gap: 0;
+  padding: 6px 10px;
 }
 
 .app__status--widget {

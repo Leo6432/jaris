@@ -166,20 +166,6 @@ garder cette liste concentrée sur ce qui reste à faire — rien n'est perdu, j
   pour que "regarde ça" fonctionne sans description. Pas encore conçu en
   détail (comment le déclencher à la voix, faut-il un mot-clé dédié comme
   "ça"/"ce truc", etc.) — à discuter avec Léo avant de coder quoi que ce soit.
-- ⬜ Étape 68 (pas encore commencée) — Widget "notch" en haut de l'écran :
-  Léo a repéré chez VoiceOS un indicateur qui vit en haut au milieu de
-  l'écran, collé au bord (façon "notch"/Dynamic Island), toujours
-  disponible sans jamais avoir besoin d'être ouvert/fermé, et qui se réduit/
-  disparaît quand il n'est pas utilisé. Le widget actuel de Jaris
-  (`createWidgetWindow`/`positionWidgetWindow`, main.ts) est ancré en BAS À
-  DROITE de l'écran, taille fixe, sans réduction/disparition automatique
-  selon l'activité — une position et un comportement différents de ce que
-  Léo a repéré. Idée à creuser : un widget repositionné en haut au centre,
-  qui adopte une forme réduite/discrète au repos et se déploie pendant une
-  écoute/réponse, façon "notch" — pas encore conçu en détail (taille exacte
-  au repos, ce qui déclenche l'agrandissement, faut-il vraiment le déplacer
-  ou juste ajouter ce comportement à la position actuelle) — à discuter avec
-  Léo avant de coder quoi que ce soit.
 
 ## Démarrer en développement
 

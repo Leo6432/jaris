@@ -292,3 +292,21 @@ faire — rien n'est perdu, juste rangé à part. Voir README.md pour la liste d
   passage : qwen3.6:35b (palier Puissant) avait un poids provisoire
   (24 Go, recopié de qwen3.5:35b faute de mieux) — recalé au vrai poids
   confirmé (23 Go, ollama.com/library/qwen3.6/tags)
+- ✅ Étape 68 — Widget "notch" en haut de l'écran : Léo a repéré chez
+  VoiceOS un indicateur qui vit en haut au milieu de l'écran, collé au bord
+  (façon "notch"/Dynamic Island), toujours disponible sans besoin d'être
+  ouvert/fermé, et qui se réduit/disparaît au repos — le widget de Jaris
+  était ancré en bas à droite, taille fixe, sans réduction automatique.
+  Repositionné en haut au centre, collé au bord haut (`positionWidgetWindow`,
+  main.ts) ; replié (juste le petit orbe, 24px) tant que Jaris est au repos
+  ('idle'), déplié (orbe 160px + statut + transcript/réponse, comme avant)
+  dès que l'émotion change — la vraie fenêtre Electron change de taille en
+  direct à chaque évènement `emotion` du pipeline vocal, pas seulement le
+  CSS à l'intérieur. Pas d'animation native du redimensionnement de fenêtre
+  sur Windows (contrairement à macOS) : accepté comme limite connue plutôt
+  que d'ajouter une dépendance d'animation pour ce premier jet. Layout
+  vérifié avec le vrai CSS compilé via Playwright (mesure des rectangles
+  réels, pas une supposition) : l'orbe replié (24px) tient bien dans la
+  fenêtre repliée (84x36) sans débordement, l'orbe déplié (160px) + le texte
+  tiennent dans la fenêtre dépliée (320x460) — jamais testé en usage réel
+  (pas d'accès Windows dans cet environnement)

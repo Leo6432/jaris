@@ -28,11 +28,16 @@ const MODES: Array<{ id: AppMode; label: string; hint: string }> = [
 ]
 
 /**
- * Deux fenêtres partagent ce même bundle (étape 19) : le widget flottant, toujours là en bas à droite
- * (`?mode=widget`), et la fenêtre de réglages classique pour l'onboarding/Options/cerveau de Jaris
- * (`?mode=full`, ou pas de paramètre du tout en développement).
+ * Deux fenêtres partagent ce même bundle : le widget flottant, toujours là en haut au centre de l'écran
+ * (`?mode=widget`, façon "notch" depuis l'étape 68 — bas à droite avant), et la fenêtre de réglages classique
+ * pour l'onboarding/Options/cerveau de Jaris (`?mode=full`, ou pas de paramètre du tout en développement).
  */
 const MODE = new URLSearchParams(window.location.search).get('mode') === 'widget' ? 'widget' : 'full'
+
+/** Taille de l'orbe replié au repos (étape 68) — le côté Electron (main.ts, WIDGET_COLLAPSED_WIDTH/HEIGHT)
+ * doit rester assez grand pour le contenir sans le couper. */
+const WIDGET_ORB_COLLAPSED_SIZE = 24
+const WIDGET_ORB_EXPANDED_SIZE = 160
 
 export default function App(): JSX.Element {
   const emotion = useJarisStore((state) => state.emotion)
@@ -370,16 +375,28 @@ export default function App(): JSX.Element {
   }
 
   // MODE === 'widget' : uniquement créé une fois l'onboarding terminé, donc profileName est déjà connu ici.
+  // Étape 68 : replié (juste le petit orbe, sans statut ni conversation) tant que Jaris est au repos — main.ts
+  // agrandit/replie la VRAIE fenêtre Electron en même temps (positionWidgetWindow), ce CSS ne fait qu'habiller
+  // le contenu à l'intérieur de la taille déjà fixée côté main.
+  const widgetCollapsed = emotion === 'idle'
   return (
-    <div className="app app--widget">
-      <JarisOrb emotion={emotion} audioElRef={audioRef} size={160} onClick={() => window.jaris.openSettings()} />
-      <div className="app__status app__status--widget">{STATUS_LABEL[emotion]}</div>
-
-      {(transcript || reply) && (
-        <div className="app__conversation app__conversation--widget">
-          {transcript && <p className="app__transcript">« {transcript} »</p>}
-          {reply && <p className="app__reply">{reply}</p>}
-        </div>
+    <div className={`app app--widget${widgetCollapsed ? ' app--widget-collapsed' : ''}`}>
+      <JarisOrb
+        emotion={emotion}
+        audioElRef={audioRef}
+        size={widgetCollapsed ? WIDGET_ORB_COLLAPSED_SIZE : WIDGET_ORB_EXPANDED_SIZE}
+        onClick={() => window.jaris.openSettings()}
+      />
+      {!widgetCollapsed && (
+        <>
+          <div className="app__status app__status--widget">{STATUS_LABEL[emotion]}</div>
+          {(transcript || reply) && (
+            <div className="app__conversation app__conversation--widget">
+              {transcript && <p className="app__transcript">« {transcript} »</p>}
+              {reply && <p className="app__reply">{reply}</p>}
+            </div>
+          )}
+        </>
       )}
 
       <audio

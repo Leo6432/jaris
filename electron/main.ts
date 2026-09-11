@@ -70,13 +70,17 @@ let quitting = false
 /** Tant que l'onboarding n'est pas fini, fermer la fenêtre de réglages doit quitter l'appli normalement (pas de widget à replier sur un profil pas encore configuré). */
 let onboardingDone = false
 
-// Plus haut que large : le contenu (orbe + texte) reste ancré en bas de la fenêtre (voir .app--widget en
-// CSS), donc collé au vrai coin bas-droit de l'écran au repos. Le reste de la hauteur, vide et transparent
-// donc invisible tant qu'il n'y a rien à dire, sert de marge pour qu'une réponse longue pousse vers le
-// haut sans être coupée.
+// Plus haut que large : le contenu (orbe + texte) reste ancré en haut de la fenêtre (voir .app--widget en
+// CSS), donc collé au vrai bord haut de l'écran (étape 68, façon "notch"). Le reste de la hauteur, vide et
+// transparent donc invisible tant qu'il n'y a rien à dire, sert de marge pour qu'une réponse longue pousse
+// vers le bas sans être coupée.
 const WIDGET_WIDTH = 320
-const WIDGET_HEIGHT = 520
-const WIDGET_MARGIN = 24
+const WIDGET_HEIGHT = 460
+// Taille "repos" (étape 68) : juste assez pour le petit orbe réduit (voir JARIS_ORB_COLLAPSED_SIZE côté
+// renderer, App.tsx) sans texte autour — ni statut ni transcript/réponse, qui ne réapparaissent qu'une fois
+// agrandi. Choisie petite ET large plutôt que carrée pour rester discrète, façon barre/notch plutôt que rond.
+const WIDGET_COLLAPSED_WIDTH = 84
+const WIDGET_COLLAPSED_HEIGHT = 36
 
 /**
  * Dernier statut connu du pipeline vocal, mis à jour uniquement par un vrai succès/échec de démarrage
@@ -198,14 +202,26 @@ function createWidgetWindow(): BrowserWindow {
   return win
 }
 
-/** Recalcule la position en bas à droite de l'écran actuel : pas fixé une fois pour toutes à la création, au cas où l'écran/la zone de travail a changé depuis (résolution, second écran...). */
-function positionWidgetWindow(win: BrowserWindow): void {
+/**
+ * Recalcule la position en haut au centre de l'écran actuel (étape 68) : pas fixée une fois pour toutes à la
+ * création, au cas où l'écran/la zone de travail a changé depuis (résolution, second écran...). Collé au
+ * bord haut (y = workArea.y, sans marge) façon "notch" — seule la largeur/hauteur change entre `expanded`
+ * (orbe + statut + conversation, comme avant à l'étape 19) et l'état "repos" (juste le petit orbe réduit,
+ * voir WIDGET_COLLAPSED_WIDTH/HEIGHT) : `showWidgetWindow` démarre toujours replié, `pipeline.on('emotion',
+ * ...)` plus bas rappelle cette fonction à chaque changement d'émotion pour agrandir/replier en direct.
+ * Un simple `setBounds` (pas d'animation native) : Electron n'anime pas les changements de bounds sur
+ * Windows, contrairement à macOS — le CSS interne (.app--widget-collapsed, index.css) compense en faisant
+ * un fondu/zoom sur le CONTENU pendant que la fenêtre change de taille instantanément.
+ */
+function positionWidgetWindow(win: BrowserWindow, expanded: boolean): void {
   const { workArea } = screen.getPrimaryDisplay()
+  const width = expanded ? WIDGET_WIDTH : WIDGET_COLLAPSED_WIDTH
+  const height = expanded ? WIDGET_HEIGHT : WIDGET_COLLAPSED_HEIGHT
   win.setBounds({
-    x: workArea.x + workArea.width - WIDGET_WIDTH - WIDGET_MARGIN,
-    y: workArea.y + workArea.height - WIDGET_HEIGHT - WIDGET_MARGIN,
-    width: WIDGET_WIDTH,
-    height: WIDGET_HEIGHT
+    x: workArea.x + Math.round((workArea.width - width) / 2),
+    y: workArea.y,
+    width,
+    height
   })
 }
 
@@ -217,10 +233,12 @@ function showFullWindow(): void {
   fullWindow.focus()
 }
 
+/** Toujours replié à l'affichage (voir positionWidgetWindow) : Jaris vient de se replier depuis un moment
+ * calme (fin d'onboarding, fenêtre de réglages repliée/minimisée) — jamais en pleine écoute/réponse. */
 function showWidgetWindow(): void {
   if (fullWindow && !fullWindow.isDestroyed() && fullWindow.isVisible()) return
   if (!widgetWindow || widgetWindow.isDestroyed()) widgetWindow = createWidgetWindow()
-  positionWidgetWindow(widgetWindow)
+  positionWidgetWindow(widgetWindow, false)
   widgetWindow.show()
 }
 
@@ -238,7 +256,15 @@ async function startVoicePipeline(): Promise<void> {
   void ensureSearxngRunning(log)
 
   pipeline = new VoicePipeline()
-  pipeline.on('emotion', (emotion: JarisEmotion) => broadcast(IPC_CHANNELS.emotion, emotion))
+  pipeline.on('emotion', (emotion: JarisEmotion) => {
+    broadcast(IPC_CHANNELS.emotion, emotion)
+    // Étape 68 : le widget se déplie pendant l'écoute/réflexion/réponse et se replie dès le retour au repos
+    // ('idle') — seulement s'il est vraiment affiché (jamais en plein onboarding/fenêtre de réglages ouverte,
+    // où widgetWindow existe déjà en mémoire mais reste caché).
+    if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
+      positionWidgetWindow(widgetWindow, emotion !== 'idle')
+    }
+  })
   pipeline.on('transcript', (text: string) => broadcast(IPC_CHANNELS.transcript, text))
   pipeline.on('reply', (payload: VoiceReplyPayload) => broadcast(IPC_CHANNELS.reply, payload))
   pipeline.on('log', (message: string) => broadcast(IPC_CHANNELS.log, message))
