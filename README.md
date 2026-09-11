@@ -435,6 +435,21 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   passage : qwen3.6:35b (palier Puissant) avait un poids provisoire
   (24 Go, recopié de qwen3.5:35b faute de mieux) — recalé au vrai poids
   confirmé (23 Go, ollama.com/library/qwen3.6/tags)
+- 🔲 Étape 67 (pas encore commencée) — "Pointer et demander" : Léo a repéré
+  chez un concurrent (VoiceOS, voiceos.com) une fonctionnalité où
+  l'utilisateur place juste le curseur de la souris sur un élément à l'écran
+  (un bouton, un email, une ligne de code, un graphique...) puis demande à
+  voix haute quelque chose à propos de "ça"/"ce truc" — l'appli comprend de
+  quoi il parle grâce à la position du curseur, sans que l'utilisateur ait à
+  décrire l'élément verbalement. Jaris a déjà `look_at_screen` (vision.ts),
+  mais qui capture l'écran ENTIER sans jamais tenir compte de la position du
+  curseur — la question doit toujours décrire elle-même ce qui est visé.
+  Idée à creuser : capturer la position du curseur (`screen.getCursorScreenPoint()`,
+  déjà disponible via Electron) en même temps que la capture d'écran, et la
+  transmettre au modèle de vision (ou recadrer l'image autour du curseur)
+  pour que "regarde ça" fonctionne sans description. Pas encore conçu en
+  détail (comment le déclencher à la voix, faut-il un mot-clé dédié comme
+  "ça"/"ce truc", etc.) — à discuter avec Léo avant de coder quoi que ce soit.
 
 ## Démarrer en développement
 
