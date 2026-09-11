@@ -79,11 +79,13 @@ const WIDGET_HEIGHT = 460
 // Taille "repos" (étape 68) : juste assez pour le petit orbe réduit (voir WIDGET_ORB_COLLAPSED_SIZE côté
 // renderer, App.tsx) sans texte autour — ni statut ni transcript/réponse, qui ne réapparaissent qu'une fois
 // agrandi. Choisie petite ET large plutôt que carrée pour rester discrète, façon barre/notch plutôt que rond.
-// Légèrement plus grande que la pilule visible elle-même (.app--widget-collapsed, index.css, qui a sa propre
-// marge de 2px) : une pilule arrondie collée pile au bord réel de la fenêtre laisse un liseré rectangulaire
-// résiduel sur Windows (antialiasing DWM d'une fenêtre transparente) — vu en usage réel par Léo.
+// Légèrement plus grande que la pilule visible elle-même (.widget-pill, index.css, ajustée à son propre
+// contenu) : une pilule arrondie collée pile au bord réel de la fenêtre laisse un liseré rectangulaire
+// résiduel sur Windows (antialiasing DWM d'une fenêtre transparente) — vu en usage réel par Léo. Hauteur
+// remontée à 48 (orbe agrandi à 32px, voir WIDGET_ORB_COLLAPSED_SIZE côté renderer, App.tsx — "agrandit un
+// peu", Léo en usage réel) : garde le même genre de marge autour de la pilule qu'avant l'agrandissement.
 const WIDGET_COLLAPSED_WIDTH = 84
-const WIDGET_COLLAPSED_HEIGHT = 40
+const WIDGET_COLLAPSED_HEIGHT = 48
 
 /**
  * Dernier statut connu du pipeline vocal, mis à jour uniquement par un vrai succès/échec de démarrage

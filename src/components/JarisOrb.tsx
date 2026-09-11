@@ -276,10 +276,18 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick }: J
         // Un seul anneau déchiqueté (pas deux + le noyau maillé, voir le grand rendu ci-dessous) : garde la
         // vraie signature visuelle de Jaris (bord irrégulier via les harmoniques, pas un cercle lisse) à une
         // taille où le détail complet deviendrait juste du bruit.
+        //
+        // Respiration/rotation AMPLIFIÉES rien que pour ce rendu minimal (jamais touché à EMOTION_STYLES
+        // lui-même, partagé avec le grand orbe) : Léo en usage réel, "le cercle au milieu ne bouge pas" — le
+        // réglage 'idle' d'origine (pulse 0.02, spinSpeed 0.05) est réglé pour un anneau de 160-320px, où même
+        // un mouvement relatif discret reste visible ; sur un anneau de 32px ce même mouvement devient
+        // quasi imperceptible en valeur absolue. Multiplié ici seulement, pas dans la table partagée.
+        const minimalBreathe = 1 + Math.sin(time * 0.0015) * style.pulse * 4 + level * 0.08
+        const minimalRotation = angleRef.current * 2.5
         ctx.shadowColor = style.color
         ctx.shadowBlur = 5 + level * 6
         ctx.lineWidth = 1.4
-        drawJaggedRing(ctx, center * 0.62 * breathe, center * 0.92, harmonicsRef.current.outer, angleRef.current, style.color, 0.9, level, time)
+        drawJaggedRing(ctx, center * 0.62 * minimalBreathe, center * 0.92, harmonicsRef.current.outer, minimalRotation, style.color, 0.9, level, time)
       } else {
         // Marge sous le bord réel du canvas (center) pour que le flou de la lueur (shadowBlur) ait la place
         // de s'estomper avant d'être coupé net par les bords du canvas.

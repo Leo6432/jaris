@@ -513,6 +513,20 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   déjà 100% de l'espace.** Piège trouvé en testant l'hypothèse la plus simple (mesurer le rectangle réel via
   Playwright) plutôt qu'en supposant que le CSS écrit "devrait marcher" — toujours pas testé en usage réel sur
   une vraie machine Windows (pas d'accès Windows dans cet environnement).
+- **3e retour de Léo sur la pilule repliée (étape 71) : agrandir, animer le "cercle" (trop statique), animer
+  la transition repos/actif.** Le réglage d'animation 'idle' partagé (`EMOTION_STYLES`, pulse/spinSpeed) est
+  calibré pour un anneau de 160-320px — un mouvement relatif discret y reste visible, mais devient quasi
+  imperceptible en valeur ABSOLUE une fois réduit à 32px ; amplifié (×4 respiration, ×2,5 rotation)
+  UNIQUEMENT dans la branche de rendu minimal de JarisOrb.tsx, jamais dans la table partagée (le grand orbe
+  n'a jamais été critiqué). **Technique retenue pour "une petite animation à la transition" sans avoir à
+  animer le redimensionnement de la fenêtre Electron elle-même (impossible nativement sur Windows, déjà
+  documenté) : donner une `key` différente à un composant React selon l'état (ici `'collapsed'`/`'expanded'`)
+  force un vrai démontage/remontage plutôt qu'un simple changement de prop sur la même instance — un
+  `animation` CSS (contrairement à `transition`) se rejoue automatiquement à CHAQUE montage, donnant une
+  transition visible gratuitement à chaque bascule.** Généralisable à toute transition d'état où l'élément
+  qui change n'a normalement pas de raison de se démonter (ici JarisOrb reste le même composant logique,
+  seule sa taille change) : forcer le remontage via `key` est plus simple qu'orchestrer une transition CSS
+  manuelle sur des propriétés qui ne s'y prêtent pas nativement (ici la résolution du canvas).
 
 ## Commandes utiles
 

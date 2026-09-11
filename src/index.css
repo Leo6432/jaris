@@ -1378,12 +1378,34 @@ body.body--scan::after {
   margin: 2px 0;
 }
 
+/*
+ * "pop-in" au montage : App.tsx donne une `key` différente à JarisOrb selon replié/déplié dans le widget,
+ * pour forcer React à démonter/remonter (pas juste changer la prop `size` sur la même instance) — un
+ * `animation` CSS (contrairement à `transition`) se rejoue automatiquement à CHAQUE montage, donnant une
+ * vraie transition visible à chaque bascule repos/actif (Léo, usage réel : "fait une petite animation pour
+ * passer de inactif à actif") sans avoir à animer le redimensionnement de la fenêtre Electron elle-même
+ * (instantané sur Windows, voir positionWidgetWindow dans main.ts — limite déjà documentée, pas contournée
+ * ici). Se joue aussi une fois au tout premier chargement de la fenêtre de réglages (le grand orbe), sans
+ * conséquence puisqu'il ne se redémonte jamais ensuite.
+ */
+@keyframes jaris-orb-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .jaris-orb {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   -webkit-app-region: no-drag;
+  animation: jaris-orb-pop-in 0.22s ease-out;
 }
 
 .jaris-orb canvas {
@@ -1392,6 +1414,12 @@ body.body--scan::after {
 
 .jaris-orb--clickable {
   cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jaris-orb {
+    animation: none;
+  }
 }
 
 /*

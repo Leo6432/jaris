@@ -34,9 +34,10 @@ const MODES: Array<{ id: AppMode; label: string; hint: string }> = [
  */
 const MODE = new URLSearchParams(window.location.search).get('mode') === 'widget' ? 'widget' : 'full'
 
-/** Taille de l'orbe replié au repos (étape 68) — le côté Electron (main.ts, WIDGET_COLLAPSED_WIDTH/HEIGHT)
- * doit rester assez grand pour le contenir sans le couper. */
-const WIDGET_ORB_COLLAPSED_SIZE = 24
+/** Taille de l'orbe replié au repos (étape 68, agrandie à la demande de Léo en usage réel : "agrandit un
+ * peu") — le côté Electron (main.ts, WIDGET_COLLAPSED_WIDTH/HEIGHT) doit rester assez grand pour le contenir
+ * sans le couper. */
+const WIDGET_ORB_COLLAPSED_SIZE = 32
 const WIDGET_ORB_EXPANDED_SIZE = 160
 
 export default function App(): JSX.Element {
@@ -380,7 +381,13 @@ export default function App(): JSX.Element {
   // le contenu à l'intérieur de la taille déjà fixée côté main.
   const widgetCollapsed = emotion === 'idle'
   const orb = (
+    // `key` différente entre replié/déplié : force React à démonter/remonter JarisOrb à la transition
+    // plutôt que de juste changer sa prop `size` sur la même instance — sert UNIQUEMENT à rejouer l'animation
+    // CSS "pop-in" de .jaris-orb (index.css) à chaque bascule (Léo, usage réel : "fait une petite animation
+    // pour passer de inactif à actif"), le redimensionnement de la VRAIE fenêtre Electron restant instantané
+    // côté main.ts (aucune animation native sur Windows, voir positionWidgetWindow) quoi qu'il arrive ici.
     <JarisOrb
+      key={widgetCollapsed ? 'collapsed' : 'expanded'}
       emotion={emotion}
       audioElRef={audioRef}
       size={widgetCollapsed ? WIDGET_ORB_COLLAPSED_SIZE : WIDGET_ORB_EXPANDED_SIZE}

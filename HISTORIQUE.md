@@ -343,3 +343,23 @@ faire — rien n'est perdu, juste rangé à part. Voir README.md pour la liste d
   de deux + le noyau maillé). Revérifié avec le vrai CSS compilé via
   Playwright (capsule bien décollée des 4 bords, aucun débordement) —
   toujours pas testé en usage réel sur une vraie machine Windows
+- ✅ Étape 71 — Suite de l'étape 70 en usage réel : Léo a demandé (1)
+  d'agrandir un peu la pilule repliée, (2) que "le cercle au milieu"
+  bouge vraiment (perçu comme statique), (3) une petite animation pour la
+  transition repos/actif. (1) : orbe replié 24 → 32px (`WIDGET_ORB_
+  COLLAPSED_SIZE`, App.tsx), fenêtre repliée 40 → 48px de haut (main.ts)
+  pour garder la même marge autour. (2) : l'animation d'origine (idle :
+  pulse 0.02, spinSpeed 0.05, réglée pour un anneau de 160-320px) devient
+  quasi imperceptible en valeur absolue sur 32px — amplifiée ×4/×2,5
+  (respiration/rotation) UNIQUEMENT dans le rendu minimal de JarisOrb.tsx,
+  jamais dans EMOTION_STYLES lui-même (partagé avec le grand orbe, jamais
+  critiqué par Léo). (3) : App.tsx donne une `key` différente à JarisOrb
+  selon replié/déplié, forçant React à démonter/remonter l'instance plutôt
+  que de juste changer sa prop `size` — un nouveau `@keyframes jaris-orb-
+  pop-in` (index.css, respecte `prefers-reduced-motion`) se rejoue donc à
+  chaque bascule. Le redimensionnement de la VRAIE fenêtre Electron reste
+  instantané sur Windows (limite déjà documentée, pas contournée) : c'est
+  le contenu React/CSS à l'intérieur qui anime, pas la fenêtre elle-même.
+  Revérifié avec le vrai CSS compilé via Playwright (capsule toujours bien
+  décollée des bords, aucun débordement avec les nouvelles tailles) —
+  toujours pas testé en usage réel sur une vraie machine Windows
