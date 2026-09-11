@@ -72,6 +72,33 @@ const CORE_POINTS = fibonacciSphere(46)
 const CORE_EDGES = buildMeshEdges(CORE_POINTS, 3)
 const CORE_TILT = 0.5
 
+/**
+ * Sous ce seuil (widget "notch" replié, étape 68 : 24px), le rendu détaillé ci-dessous (anneaux déchiqués +
+ * noyau filaire, pensé pour 160-320px) devient un petit amas confus plutôt qu'un vrai logo — signalé par Léo
+ * en usage réel ("on a un logo de jaris mais en tout petit, règle ça"). En dessous de ce seuil, `draw()` bascule
+ * sur un rendu volontairement plus simple (un point lumineux + un seul halo, voir drawMinimalGlow) plutôt que
+ * de continuer à miniaturiser le même dessin complexe.
+ */
+const MINIMAL_SIZE_THRESHOLD = 48
+
+/** Rendu simplifié pour le widget replié : un point lumineux qui respire + un seul anneau fin autour, dans
+ * la couleur de l'émotion — reste identifiable comme "Jaris" (même couleur/pulsation que le grand orbe) sans
+ * essayer de faire tenir tout le détail (anneaux déchiquetés, noyau maillé) dans quelques dizaines de pixels. */
+function drawMinimalGlow(ctx: CanvasRenderingContext2D, center: number, color: string, breathe: number, level: number): void {
+  ctx.shadowColor = color
+  ctx.shadowBlur = 6 + level * 8
+  ctx.beginPath()
+  ctx.arc(0, 0, center * 0.32 * breathe, 0, Math.PI * 2)
+  ctx.fillStyle = color
+  ctx.globalAlpha = 0.9
+  ctx.fill()
+  ctx.globalAlpha = 1
+
+  ctx.shadowBlur = 3
+  ctx.lineWidth = 1.2
+  drawGlassRing(ctx, center * 0.72, color, 0.35)
+}
+
 interface RingHarmonic {
   freq: number
   amp: number
@@ -260,42 +287,46 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick }: J
       ctx.translate(center, center)
       ctx.globalCompositeOperation = 'lighter'
 
-      // Marge sous le bord réel du canvas (center) pour que le flou de la lueur (shadowBlur) ait la place
-      // de s'estomper avant d'être coupé net par les bords du canvas.
-      const maxRingRadius = center * 0.9
+      if (size < MINIMAL_SIZE_THRESHOLD) {
+        drawMinimalGlow(ctx, center, style.color, breathe, level)
+      } else {
+        // Marge sous le bord réel du canvas (center) pour que le flou de la lueur (shadowBlur) ait la place
+        // de s'estomper avant d'être coupé net par les bords du canvas.
+        const maxRingRadius = center * 0.9
 
-      ctx.shadowColor = style.color
-      ctx.shadowBlur = 8 + level * 10
-      ctx.lineWidth = 1.6
-      drawJaggedRing(
-        ctx,
-        center * 0.68 * breathe,
-        maxRingRadius,
-        harmonicsRef.current.outer,
-        angleRef.current,
-        style.color,
-        0.85,
-        level,
-        time
-      )
-      drawJaggedRing(
-        ctx,
-        center * 0.6 * breathe,
-        maxRingRadius,
-        harmonicsRef.current.inner,
-        -angleRef.current * 0.55,
-        style.color,
-        0.45,
-        level,
-        time
-      )
+        ctx.shadowColor = style.color
+        ctx.shadowBlur = 8 + level * 10
+        ctx.lineWidth = 1.6
+        drawJaggedRing(
+          ctx,
+          center * 0.68 * breathe,
+          maxRingRadius,
+          harmonicsRef.current.outer,
+          angleRef.current,
+          style.color,
+          0.85,
+          level,
+          time
+        )
+        drawJaggedRing(
+          ctx,
+          center * 0.6 * breathe,
+          maxRingRadius,
+          harmonicsRef.current.inner,
+          -angleRef.current * 0.55,
+          style.color,
+          0.45,
+          level,
+          time
+        )
 
-      ctx.shadowBlur = 5
-      drawGlassRing(ctx, center * 0.46, style.color, 0.3)
-      drawGlassRing(ctx, center * 0.35, style.color, 0.2)
+        ctx.shadowBlur = 5
+        drawGlassRing(ctx, center * 0.46, style.color, 0.3)
+        drawGlassRing(ctx, center * 0.35, style.color, 0.2)
 
-      ctx.shadowBlur = 7 + level * 8
-      drawCore(ctx, center * 0.14 * (1 + level * 0.2), coreAngleRef.current, style.color)
+        ctx.shadowBlur = 7 + level * 8
+        drawCore(ctx, center * 0.14 * (1 + level * 0.2), coreAngleRef.current, style.color)
+      }
 
       ctx.restore()
       frameId = requestAnimationFrame(draw)

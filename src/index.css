@@ -1407,12 +1407,25 @@ body.body--scan::after {
   -webkit-app-region: drag;
 }
 
-/* État "repos" (étape 68) : juste le petit orbe réduit, sans statut ni conversation — main.ts replie la
-   VRAIE fenêtre Electron à WIDGET_COLLAPSED_WIDTH/HEIGHT en même temps, donc ce padding doit rester assez
-   petit pour ne jamais dépasser cette hauteur (36px : 24px d'orbe + 6px de marge de chaque côté). */
+/*
+ * État "repos" (étape 68) : juste le petit orbe réduit, sans statut ni conversation — main.ts replie la
+ * VRAIE fenêtre Electron à WIDGET_COLLAPSED_WIDTH/HEIGHT en même temps, donc ce padding doit rester assez
+ * petit pour ne jamais dépasser cette hauteur (36px : 24px d'orbe + 6px de marge de chaque côté).
+ *
+ * Un simple orbe miniaturisé flottant sur le bureau, sans rien autour, rendait "bizarre" en usage réel (Léo :
+ * "on a un logo de jaris mais en tout petit") — le rendu détaillé de l'orbe (JarisOrb.tsx) est pensé pour
+ * 160-320px, pas pour quelques dizaines de pixels (déjà simplifié côté canvas, voir MINIMAL_SIZE_THRESHOLD),
+ * mais un point lumineux SEUL reste trop nu pour lire "Jaris est là" au premier coup d'œil. Un vrai petit
+ * boîtier façon pilule (mêmes tokens HUD que le reste de l'appli, pas de couleur inventée) l'entoure pour
+ * donner une vraie présence stylée, comme un notch/Dynamic Island réel plutôt qu'un logo qui flotte seul.
+ */
 .app--widget-collapsed {
   gap: 0;
-  padding: 6px 10px;
+  padding: 4px 10px;
+  background: var(--hud-panel-raised);
+  border: 1px solid var(--hud-line);
+  border-radius: 999px;
+  box-shadow: var(--hud-glow);
 }
 
 .app__status--widget {

@@ -505,6 +505,26 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   CSS compilé, mesure de rectangles réels — ni orbe ni texte ne débordent des deux tailles de fenêtre), PAS
   encore en usage réel** (pas d'accès Windows dans cet environnement) : la sensation exacte du redimensionnement
   "sec" sur une vraie machine Windows reste à confirmer par Léo.
+- **Le rendu détaillé de JarisOrb (anneaux déchiquetés + noyau filaire) ne miniaturise pas bien** : conçu
+  pour 160-320px, il devient un petit amas confus une fois réduit à 24px pour le widget "notch" replié
+  (étape 68) — constaté en USAGE RÉEL par Léo ("on a un logo de jaris mais en tout petit, règle ça"), pas
+  repéré par la vérification Playwright de l'étape précédente (qui ne testait que le DÉBORDEMENT/la position,
+  jamais la qualité perçue du dessin — une vérification de layout ne remplace pas un avis sur le rendu
+  visuel lui-même). Corrigé par un second mode de rendu dans JarisOrb.tsx (`MINIMAL_SIZE_THRESHOLD = 48`) :
+  sous ce seuil, un simple point lumineux + un seul anneau fin (`drawMinimalGlow`) remplace tout le détail —
+  toujours la couleur/pulsation de l'émotion, donc reconnaissable comme "Jaris", sans essayer de faire tenir
+  la géométrie complexe dans quelques dizaines de pixels. Complété par un vrai boîtier CSS (`.app--widget-
+  collapsed`, index.css : fond `--hud-panel-raised`, bordure `--hud-line`, `--hud-glow`, coins arrondis en
+  pilule) autour du point — un logo seul flottant sur le bureau restait trop nu, un point lumineux à
+  l'intérieur d'une vraie pilule glassy (mêmes tokens HUD que le reste de l'app, aucune couleur inventée)
+  se lit tout de suite comme un vrai indicateur "notch" plutôt qu'un logo égaré. **Piège de calcul évité en
+  ajustant le padding avant de considérer ça fini, pas après** : `box-sizing: border-box` (reset global) fait
+  compter la bordure de 1px ET le padding DANS la hauteur totale de la pilule (36px, WIDGET_COLLAPSED_HEIGHT) —
+  un padding vertical de 6px calculé sans compter cette bordure aurait laissé seulement 22px de haut pour un
+  orbe de 24px (débordement de 2px) ; réduit à 4px pour repasser sous la vérification Playwright (mesure de
+  rectangles réels sur le nouveau CSS compilé) avant de livrer. **Leçon générale : une vérification de layout
+  (rien ne déborde) ne dit rien de la qualité perçue d'un rendu — les deux sont des questions différentes,
+  toutes deux à vérifier séparément avant de considérer un changement visuel terminé.**
 
 ## Commandes utiles
 

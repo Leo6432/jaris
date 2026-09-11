@@ -310,3 +310,16 @@ faire — rien n'est perdu, juste rangé à part. Voir README.md pour la liste d
   fenêtre repliée (84x36) sans débordement, l'orbe déplié (160px) + le texte
   tiennent dans la fenêtre dépliée (320x460) — jamais testé en usage réel
   (pas d'accès Windows dans cet environnement)
+- ✅ Étape 69 — Suite de l'étape 68 en usage réel : Léo a trouvé le widget
+  replié "bizarre" ("on a un logo de jaris mais en tout petit") — le rendu
+  détaillé de l'orbe (anneaux déchiquetés + noyau filaire, pensé pour
+  160-320px) devenait un petit amas confus une fois réduit à 24px. Corrigé
+  par un second mode de rendu dans JarisOrb.tsx sous 48px (un simple point
+  lumineux + un anneau fin, toujours dans la couleur/pulsation de
+  l'émotion) plutôt que de continuer à miniaturiser le dessin complexe, et
+  par un vrai boîtier CSS façon pilule autour (fond/bordure/lueur — mêmes
+  tokens HUD que le reste de l'app) : un point lumineux seul flottant sur
+  le bureau restait trop nu, la pilule le fait lire comme un vrai
+  indicateur "notch" plutôt qu'un logo égaré. Revérifié avec le vrai CSS
+  compilé via Playwright après coup (aucun débordement, capture d'écran à
+  l'appui) — toujours pas testé en usage réel sur une vraie machine Windows
