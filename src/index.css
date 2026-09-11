@@ -1378,16 +1378,7 @@ body.body--scan::after {
   margin: 2px 0;
 }
 
-/*
- * "pop-in" au montage : App.tsx donne une `key` différente à JarisOrb selon replié/déplié dans le widget,
- * pour forcer React à démonter/remonter (pas juste changer la prop `size` sur la même instance) — un
- * `animation` CSS (contrairement à `transition`) se rejoue automatiquement à CHAQUE montage, donnant une
- * vraie transition visible à chaque bascule repos/actif (Léo, usage réel : "fait une petite animation pour
- * passer de inactif à actif") sans avoir à animer le redimensionnement de la fenêtre Electron elle-même
- * (instantané sur Windows, voir positionWidgetWindow dans main.ts — limite déjà documentée, pas contournée
- * ici). Se joue aussi une fois au tout premier chargement de la fenêtre de réglages (le grand orbe), sans
- * conséquence puisqu'il ne se redémonte jamais ensuite.
- */
+/* Apparition initiale de l’orbe des réglages ; le widget utilise ses transitions persistantes. */
 @keyframes jaris-orb-pop-in {
   from {
     opacity: 0;
@@ -2763,4 +2754,60 @@ a:hover {
   .options-page__content {
     padding: 24px 20px 36px;
   }
+}
+
+/* Transition du widget : positions indépendantes de la hauteur de la fenêtre native.
+ * Le main attend la fin du repli avant de réduire sa zone de capture des clics. */
+.app--widget {
+  position: relative;
+  padding: 0;
+}
+.app--widget .jaris-orb { animation: none; }
+.widget-rest, .widget-active {
+  position: absolute;
+  left: 50%;
+  transition: transform 320ms cubic-bezier(.22, 1, .36, 1), opacity 240ms ease;
+}
+.widget-rest {
+  top: 4px;
+  transform: translate(-50%, 72px) scale(5);
+  opacity: 0;
+  pointer-events: none;
+}
+.widget-active {
+  top: 16px;
+  transform: translate(-50%, 0) scale(1);
+  opacity: 1;
+}
+.widget-details {
+  position: absolute;
+  top: 186px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 200ms ease, transform 320ms ease, visibility 320ms;
+}
+.app--widget-collapsed .widget-rest {
+  transform: translate(-50%, 0) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+.app--widget-collapsed .widget-active {
+  transform: translate(-50%, -72px) scale(.2);
+  opacity: 0;
+  pointer-events: none;
+}
+.app--widget-collapsed .widget-details {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .widget-rest, .widget-active, .widget-details { transition: none; }
 }

@@ -375,42 +375,30 @@ export default function App(): JSX.Element {
     )
   }
 
-  // MODE === 'widget' : uniquement créé une fois l'onboarding terminé, donc profileName est déjà connu ici.
-  // Étape 68 : replié (juste le petit orbe, sans statut ni conversation) tant que Jaris est au repos — main.ts
-  // agrandit/replie la VRAIE fenêtre Electron en même temps (positionWidgetWindow), ce CSS ne fait qu'habiller
-  // le contenu à l'intérieur de la taille déjà fixée côté main.
+  // Les deux rendus restent montés : le fondu/zoom reste continu, même si l'émotion
+  // change de nouveau avant la fin de la transition.
   const widgetCollapsed = emotion === 'idle'
-  const orb = (
-    // `key` différente entre replié/déplié : force React à démonter/remonter JarisOrb à la transition
-    // plutôt que de juste changer sa prop `size` sur la même instance — sert UNIQUEMENT à rejouer l'animation
-    // CSS "pop-in" de .jaris-orb (index.css) à chaque bascule (Léo, usage réel : "fait une petite animation
-    // pour passer de inactif à actif"), le redimensionnement de la VRAIE fenêtre Electron restant instantané
-    // côté main.ts (aucune animation native sur Windows, voir positionWidgetWindow) quoi qu'il arrive ici.
-    <JarisOrb
-      key={widgetCollapsed ? 'collapsed' : 'expanded'}
-      emotion={emotion}
-      audioElRef={audioRef}
-      size={widgetCollapsed ? WIDGET_ORB_COLLAPSED_SIZE : WIDGET_ORB_EXPANDED_SIZE}
-      onClick={() => window.jaris.openSettings()}
-    />
-  )
   return (
     <div className={`app app--widget${widgetCollapsed ? ' app--widget-collapsed' : ''}`}>
-      {/* Pilule ajustée à son propre contenu (pas à toute la fenêtre, voir .widget-pill en CSS) : reste
-          naturellement décollée des bords de la fenêtre repliée sans jamais toucher à margin/height, qui
-          collabait avec le parent #root sur cette fenêtre (margin collapsing CSS, repéré avant de livrer). */}
-      {widgetCollapsed ? <div className="widget-pill">{orb}</div> : orb}
-      {!widgetCollapsed && (
-        <>
-          <div className="app__status app__status--widget">{STATUS_LABEL[emotion]}</div>
-          {(transcript || reply) && (
-            <div className="app__conversation app__conversation--widget">
-              {transcript && <p className="app__transcript">« {transcript} »</p>}
-              {reply && <p className="app__reply">{reply}</p>}
-            </div>
-          )}
-        </>
-      )}
+      <div className="widget-rest" aria-hidden={!widgetCollapsed}>
+        <div className="widget-pill">
+          <JarisOrb emotion={emotion} size={WIDGET_ORB_COLLAPSED_SIZE}
+            onClick={() => window.jaris.openSettings()} />
+        </div>
+      </div>
+      <div className="widget-active" aria-hidden={widgetCollapsed}>
+        <JarisOrb emotion={emotion} audioElRef={audioRef} size={WIDGET_ORB_EXPANDED_SIZE}
+          onClick={() => window.jaris.openSettings()} />
+      </div>
+      <div className="widget-details" aria-hidden={widgetCollapsed}>
+        <div className="app__status app__status--widget">{STATUS_LABEL[emotion]}</div>
+        {(transcript || reply) && (
+          <div className="app__conversation app__conversation--widget">
+            {transcript && <p className="app__transcript">« {transcript} »</p>}
+            {reply && <p className="app__reply">{reply}</p>}
+          </div>
+        )}
+      </div>
 
       <audio
         ref={audioRef}

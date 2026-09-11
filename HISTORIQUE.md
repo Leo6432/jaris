@@ -363,3 +363,8 @@ faire — rien n'est perdu, juste rangé à part. Voir README.md pour la liste d
   Revérifié avec le vrai CSS compilé via Playwright (capsule toujours bien
   décollée des bords, aucun débordement avec les nouvelles tailles) —
   toujours pas testé en usage réel sur une vraie machine Windows
+
+- Correctif v0.4.22 — Transition continue du widget (fondu/zoom 320 ms, rendus persistants), repli
+  natif différé et annulable. Clics, rectangles et inversion rapide vérifiés sur le renderer compilé.
+  Masquage des consoles de trois commandes taskkill internes et du processus WSL élevé.
+  La disparition de toutes les fenêtres tierces au démarrage reste à confirmer en usage réel.

@@ -199,7 +199,7 @@ function ollamaAppExePath(): string {
 async function restartOllamaApp(): Promise<boolean> {
   const exePath = ollamaAppExePath()
   if (!existsSync(exePath)) return false
-  await execAsync('taskkill /IM "ollama app.exe" /F').catch(() => {
+  await execAsync('taskkill /IM "ollama app.exe" /F', { windowsHide: true }).catch(() => {
     // Rien à faire si le process n'était pas lancé (déjà arrêté, ou l'utilisateur avait quitté Ollama) :
     // on relance quand même juste en dessous.
   })
@@ -475,8 +475,8 @@ export function stopOllamaIfStartedByJaris(): void {
  */
 export async function stopOllamaCompletely(): Promise<void> {
   ollamaProcessStartedByJaris = null
-  await execAsync('taskkill /IM ollama.exe /F').catch(() => {})
-  await execAsync('taskkill /IM "ollama app.exe" /F').catch(() => {})
+  await execAsync('taskkill /IM ollama.exe /F', { windowsHide: true }).catch(() => {})
+  await execAsync('taskkill /IM "ollama app.exe" /F', { windowsHide: true }).catch(() => {})
 }
 
 /**
@@ -562,7 +562,7 @@ async function installWsl(onProgress: (message: string) => void): Promise<boolea
   const exitCode = await new Promise<number | null>((resolve) => {
     const proc = spawn(
       'powershell',
-      ['-NoProfile', '-Command', "Start-Process wsl.exe -ArgumentList '--install' -Verb RunAs -Wait"],
+      ['-NoProfile', '-Command', "Start-Process wsl.exe -ArgumentList '--install' -Verb RunAs -WindowStyle Hidden -Wait"],
       { windowsHide: true }
     )
     proc.on('error', () => resolve(null))

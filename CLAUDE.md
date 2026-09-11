@@ -567,6 +567,17 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   seule sa taille change) : forcer le remontage via `key` est plus simple qu'orchestrer une transition CSS
   manuelle sur des propriétés qui ne s'y prêtent pas nativement (ici la résolution du canvas).
 
+
+- **Une animation au remontage ne relie pas deux états du widget** : changer la clé React détruit le
+  canvas précédent et le repli natif immédiat coupe le contenu. Garder les deux rendus montés, animer
+  transform/opacity avec un ancrage indépendant de la taille native, agrandir avant l’évènement renderer
+  et différer le repli natif après le fondu. Annuler ce repli si une nouvelle activation survient.
+  Vérifier les étapes intermédiaires, les clics et les inversions rapides, pas seulement les états finaux.
+- **Masquer un processus parent ne suffit pas pour ses commandes secondaires** : les trois taskkill
+  internes d’Ollama utilisaient exec sans windowsHide. Chaque lancement interne doit masquer sa console ;
+  Start-Process exige aussi son propre WindowStyle Hidden. Les interfaces d’installation et l’UAC restent
+  gérées par Windows. Un audit des options confirme le correctif, pas l’absence de toute fenêtre tierce.
+
 ## Commandes utiles
 
 ```

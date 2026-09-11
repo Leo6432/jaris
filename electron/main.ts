@@ -216,9 +216,21 @@ function createWidgetWindow(): BrowserWindow {
  * ...)` plus bas rappelle cette fonction à chaque changement d'émotion pour agrandir/replier en direct.
  * Un simple `setBounds` (pas d'animation native) : Electron n'anime pas les changements de bounds sur
  * Windows, contrairement à macOS — le CSS interne (.app--widget-collapsed, index.css) compense en faisant
- * un fondu/zoom sur le CONTENU pendant que la fenêtre change de taille instantanément.
+ * un fondu/zoom sur le CONTENU. Le repli natif est différé jusqu’à la fin de cette transition.
  */
-function positionWidgetWindow(win: BrowserWindow, expanded: boolean): void {
+let widgetCollapseTimer: ReturnType<typeof setTimeout> | undefined
+
+function positionWidgetWindow(win: BrowserWindow, expanded: boolean, animate = false): void {
+  clearTimeout(widgetCollapseTimer)
+  widgetCollapseTimer = undefined
+  if (!expanded && animate) {
+    // Laisser le renderer terminer son fondu/zoom avant de couper la fenêtre.
+    widgetCollapseTimer = setTimeout(() => {
+      widgetCollapseTimer = undefined
+      if (!win.isDestroyed() && win.isVisible()) positionWidgetWindow(win, false)
+    }, 340)
+    return
+  }
   const { workArea } = screen.getPrimaryDisplay()
   const width = expanded ? WIDGET_WIDTH : WIDGET_COLLAPSED_WIDTH
   const height = expanded ? WIDGET_HEIGHT : WIDGET_COLLAPSED_HEIGHT
@@ -262,13 +274,13 @@ async function startVoicePipeline(): Promise<void> {
 
   pipeline = new VoicePipeline()
   pipeline.on('emotion', (emotion: JarisEmotion) => {
-    broadcast(IPC_CHANNELS.emotion, emotion)
     // Étape 68 : le widget se déplie pendant l'écoute/réflexion/réponse et se replie dès le retour au repos
     // ('idle') — seulement s'il est vraiment affiché (jamais en plein onboarding/fenêtre de réglages ouverte,
     // où widgetWindow existe déjà en mémoire mais reste caché).
     if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
-      positionWidgetWindow(widgetWindow, emotion !== 'idle')
+      positionWidgetWindow(widgetWindow, emotion !== 'idle', true)
     }
+    broadcast(IPC_CHANNELS.emotion, emotion)
   })
   pipeline.on('transcript', (text: string) => broadcast(IPC_CHANNELS.transcript, text))
   pipeline.on('reply', (payload: VoiceReplyPayload) => broadcast(IPC_CHANNELS.reply, payload))
