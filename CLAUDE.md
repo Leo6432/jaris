@@ -525,6 +525,33 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   rectangles réels sur le nouveau CSS compilé) avant de livrer. **Leçon générale : une vérification de layout
   (rien ne déborde) ne dit rien de la qualité perçue d'un rendu — les deux sont des questions différentes,
   toutes deux à vérifier séparément avant de considérer un changement visuel terminé.**
+- **Suite en usage réel de la pilule repliée (étape 68/69) : deux retours de Léo, un vrai bug Windows et une
+  préférence de forme.** (1) "il y a un fond rectangulaire" derrière les bords arrondis — limite CONNUE des
+  fenêtres Electron transparentes sur Windows (le DWM anti-alias mal un bord arrondi qui touche EXACTEMENT le
+  bord de la fenêtre). (2) "fait pas la forme ronde, fait la forme de jarvis" — la vraie signature de Jaris
+  est un anneau au bord IRRÉGULIER (harmoniques, `drawJaggedRing`), pas un cercle lisse (`drawGlassRing`)
+  utilisé dans mon premier essai de version simplifiée : réutiliser le dessin EXISTANT (un seul anneau
+  déchiqueté au lieu de deux + le noyau maillé) plutôt qu'inventer une nouvelle forme "ronde" générique a
+  réglé ça en gardant l'identité visuelle reconnaissable. **Piège CSS classique attrapé AVANT de livrer en
+  corrigeant (1)** : une première tentative a mis `margin: 2px` directement sur le conteneur qui remplit toute
+  la fenêtre (`.app--widget-collapsed`, `height: 100%` hérité de `.app`) pour décoller la pilule du bord —
+  deux problèmes empilés, chacun repéré par une vraie mesure Playwright plutôt que supposé correct après
+  relecture : `height: 100%` ne réagit PAS à `margin` comme `width: auto` le ferait (la pilule restait collée
+  aux 4 bords malgré la marge déclarée, mesuré à (0,0,84,40) au lieu de l'inset attendu) ; en corrigeant avec
+  `height: calc(100% - 4px)`, un DEUXIÈME piège est apparu — la fusion de marges CSS (margin collapsing) : le
+  margin-top d'un premier enfant sans padding/bordure sur ses ancêtres (`#root`, `body`) "remonte" par fusion
+  jusqu'à `body` lui-même, décalant TOUTE LA PAGE de 2px vers le bas au lieu de juste décoller la pilule
+  (`BODY`/`#root` mesurés en dépassement de 2px en bas). Résolu en abandonnant `margin`/`height` sur le
+  conteneur plein-écran : un élément à taille AUTO (`.widget-pill`, ajusté à son propre contenu — orbe +
+  padding + bordure) centré par le flex du PARENT reste naturellement décollé des bords, sans jamais toucher
+  à `margin`/`height` sur un élément qui remplit toute la fenêtre. **Leçon générale : `margin` sur un élément
+  qui remplit son parent via `height: 100%` (ou toute dimension en %) ne crée PAS l'inset attendu, et un
+  premier enfant en flux normal sans padding/bordure sur ses parents peut faire "remonter" sa marge jusqu'à
+  un ancêtre bien plus haut (fusion de marges) — pour décoller un élément des bords d'un conteneur, préférer
+  un élément à taille AUTO centré par le flex du parent plutôt que des marges/calc sur un élément qui remplit
+  déjà 100% de l'espace.** Piège trouvé en testant l'hypothèse la plus simple (mesurer le rectangle réel via
+  Playwright) plutôt qu'en supposant que le CSS écrit "devrait marcher" — toujours pas testé en usage réel sur
+  une vraie machine Windows (pas d'accès Windows dans cet environnement).
 
 ## Commandes utiles
 

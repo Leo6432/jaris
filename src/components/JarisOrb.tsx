@@ -73,31 +73,16 @@ const CORE_EDGES = buildMeshEdges(CORE_POINTS, 3)
 const CORE_TILT = 0.5
 
 /**
- * Sous ce seuil (widget "notch" replié, étape 68 : 24px), le rendu détaillé ci-dessous (anneaux déchiqués +
- * noyau filaire, pensé pour 160-320px) devient un petit amas confus plutôt qu'un vrai logo — signalé par Léo
- * en usage réel ("on a un logo de jaris mais en tout petit, règle ça"). En dessous de ce seuil, `draw()` bascule
- * sur un rendu volontairement plus simple (un point lumineux + un seul halo, voir drawMinimalGlow) plutôt que
- * de continuer à miniaturiser le même dessin complexe.
+ * Sous ce seuil (widget "notch" replié, étape 68 : 24px), le rendu détaillé ci-dessous (2 anneaux déchiquetés
+ * + noyau filaire, pensé pour 160-320px) devient un petit amas confus plutôt qu'un vrai logo — signalé par
+ * Léo en usage réel ("on a un logo de jaris mais en tout petit, règle ça"). Un premier remplacement par un
+ * simple point plein rejeté aussi par Léo ("fait pas la forme ronde, fait la forme de jarvis comme sur
+ * l'accueil") : la vraie signature visuelle de Jaris n'est pas "un cercle", c'est un anneau au bord IRRÉGULIER
+ * (voir drawJaggedRing plus haut — la déchiqueté vient des harmoniques, pas un cercle lisse comme
+ * drawGlassRing). En dessous de ce seuil, `draw()` réutilise donc drawJaggedRing tel quel, juste UN SEUL
+ * anneau (pas deux + le noyau maillé) pour rester lisible à cette taille.
  */
 const MINIMAL_SIZE_THRESHOLD = 48
-
-/** Rendu simplifié pour le widget replié : un point lumineux qui respire + un seul anneau fin autour, dans
- * la couleur de l'émotion — reste identifiable comme "Jaris" (même couleur/pulsation que le grand orbe) sans
- * essayer de faire tenir tout le détail (anneaux déchiquetés, noyau maillé) dans quelques dizaines de pixels. */
-function drawMinimalGlow(ctx: CanvasRenderingContext2D, center: number, color: string, breathe: number, level: number): void {
-  ctx.shadowColor = color
-  ctx.shadowBlur = 6 + level * 8
-  ctx.beginPath()
-  ctx.arc(0, 0, center * 0.32 * breathe, 0, Math.PI * 2)
-  ctx.fillStyle = color
-  ctx.globalAlpha = 0.9
-  ctx.fill()
-  ctx.globalAlpha = 1
-
-  ctx.shadowBlur = 3
-  ctx.lineWidth = 1.2
-  drawGlassRing(ctx, center * 0.72, color, 0.35)
-}
 
 interface RingHarmonic {
   freq: number
@@ -288,7 +273,13 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick }: J
       ctx.globalCompositeOperation = 'lighter'
 
       if (size < MINIMAL_SIZE_THRESHOLD) {
-        drawMinimalGlow(ctx, center, style.color, breathe, level)
+        // Un seul anneau déchiqueté (pas deux + le noyau maillé, voir le grand rendu ci-dessous) : garde la
+        // vraie signature visuelle de Jaris (bord irrégulier via les harmoniques, pas un cercle lisse) à une
+        // taille où le détail complet deviendrait juste du bruit.
+        ctx.shadowColor = style.color
+        ctx.shadowBlur = 5 + level * 6
+        ctx.lineWidth = 1.4
+        drawJaggedRing(ctx, center * 0.62 * breathe, center * 0.92, harmonicsRef.current.outer, angleRef.current, style.color, 0.9, level, time)
       } else {
         // Marge sous le bord réel du canvas (center) pour que le flou de la lueur (shadowBlur) ait la place
         // de s'estomper avant d'être coupé net par les bords du canvas.

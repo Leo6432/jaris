@@ -379,14 +379,20 @@ export default function App(): JSX.Element {
   // agrandit/replie la VRAIE fenêtre Electron en même temps (positionWidgetWindow), ce CSS ne fait qu'habiller
   // le contenu à l'intérieur de la taille déjà fixée côté main.
   const widgetCollapsed = emotion === 'idle'
+  const orb = (
+    <JarisOrb
+      emotion={emotion}
+      audioElRef={audioRef}
+      size={widgetCollapsed ? WIDGET_ORB_COLLAPSED_SIZE : WIDGET_ORB_EXPANDED_SIZE}
+      onClick={() => window.jaris.openSettings()}
+    />
+  )
   return (
     <div className={`app app--widget${widgetCollapsed ? ' app--widget-collapsed' : ''}`}>
-      <JarisOrb
-        emotion={emotion}
-        audioElRef={audioRef}
-        size={widgetCollapsed ? WIDGET_ORB_COLLAPSED_SIZE : WIDGET_ORB_EXPANDED_SIZE}
-        onClick={() => window.jaris.openSettings()}
-      />
+      {/* Pilule ajustée à son propre contenu (pas à toute la fenêtre, voir .widget-pill en CSS) : reste
+          naturellement décollée des bords de la fenêtre repliée sans jamais toucher à margin/height, qui
+          collabait avec le parent #root sur cette fenêtre (margin collapsing CSS, repéré avant de livrer). */}
+      {widgetCollapsed ? <div className="widget-pill">{orb}</div> : orb}
       {!widgetCollapsed && (
         <>
           <div className="app__status app__status--widget">{STATUS_LABEL[emotion]}</div>

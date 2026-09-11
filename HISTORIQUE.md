@@ -323,3 +323,23 @@ faire — rien n'est perdu, juste rangé à part. Voir README.md pour la liste d
   indicateur "notch" plutôt qu'un logo égaré. Revérifié avec le vrai CSS
   compilé via Playwright après coup (aucun débordement, capture d'écran à
   l'appui) — toujours pas testé en usage réel sur une vraie machine Windows
+- ✅ Étape 70 — Suite de l'étape 69 en usage réel : Léo a signalé deux
+  choses sur la pilule repliée — (1) "il y a un fond rectangulaire" derrière
+  les bords arrondis, (2) "fait pas la forme ronde, fait la forme de jarvis
+  comme sur l'accueil" (pas de point plein générique). (1) est une limite
+  connue des fenêtres Electron transparentes sur Windows : le DWM anti-alias
+  mal un bord arrondi qui touche EXACTEMENT le bord de la fenêtre, laissant
+  un liseré rectangulaire résiduel. Corrigé en ajustant la pilule à son
+  PROPRE contenu (`.widget-pill`, App.tsx/index.css) plutôt qu'en l'étirant
+  à toute la fenêtre avec `margin`/`height: calc()` — une première tentative
+  avec `margin` a d'abord provoqué un vrai piège CSS (fusion de marges :
+  le margin-top de l'enfant remontait jusqu'à `body`, décalant toute la page
+  au lieu de juste décoller la pilule), repéré et corrigé AVANT de livrer en
+  passant par un élément à taille auto centré par le flex du parent, qui
+  reste naturellement décollé des bords sans cet effet de bord. Pour (2) :
+  la vraie signature de Jaris est un anneau au bord IRRÉGULIER (harmoniques,
+  pas un cercle lisse) — remplacé le point plein par un seul anneau
+  déchiqueté (réutilise drawJaggedRing déjà existant, juste un seul au lieu
+  de deux + le noyau maillé). Revérifié avec le vrai CSS compilé via
+  Playwright (capsule bien décollée des 4 bords, aucun débordement) —
+  toujours pas testé en usage réel sur une vraie machine Windows

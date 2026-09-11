@@ -76,11 +76,14 @@ let onboardingDone = false
 // vers le bas sans être coupée.
 const WIDGET_WIDTH = 320
 const WIDGET_HEIGHT = 460
-// Taille "repos" (étape 68) : juste assez pour le petit orbe réduit (voir JARIS_ORB_COLLAPSED_SIZE côté
+// Taille "repos" (étape 68) : juste assez pour le petit orbe réduit (voir WIDGET_ORB_COLLAPSED_SIZE côté
 // renderer, App.tsx) sans texte autour — ni statut ni transcript/réponse, qui ne réapparaissent qu'une fois
 // agrandi. Choisie petite ET large plutôt que carrée pour rester discrète, façon barre/notch plutôt que rond.
+// Légèrement plus grande que la pilule visible elle-même (.app--widget-collapsed, index.css, qui a sa propre
+// marge de 2px) : une pilule arrondie collée pile au bord réel de la fenêtre laisse un liseré rectangulaire
+// résiduel sur Windows (antialiasing DWM d'une fenêtre transparente) — vu en usage réel par Léo.
 const WIDGET_COLLAPSED_WIDTH = 84
-const WIDGET_COLLAPSED_HEIGHT = 36
+const WIDGET_COLLAPSED_HEIGHT = 40
 
 /**
  * Dernier statut connu du pipeline vocal, mis à jour uniquement par un vrai succès/échec de démarrage
