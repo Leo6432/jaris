@@ -42,13 +42,9 @@ async function waitUntil(check: () => Promise<boolean>, timeoutMs: number, inter
   return false
 }
 
-/**
- * En dessous de cette version, `ollama serve` peut faire flasher une brève fenêtre de console Windows
- * vide à chaque chargement/changement de modèle (le process "runner" qu'Ollama lance en interne n'était
- * pas caché sur Windows) — corrigé upstream dans la 0.7.0 (ollama/ollama#8668). Jaris ne lance lui-même que
- * `ollama serve` (déjà avec windowsHide), donc rien à changer côté spawn ici : le vrai correctif vit dans le
- * binaire Ollama — voir warnIfOllamaOutdated ci-dessous, qui tente un redémarrage silencieux dans ce cas.
- */
+/** Correctif historique des consoles des runners. Ce seuil ne garantit pas l’absence
+ * de régression : les helpers 0.34.0 ont nécessité le lancement avec console cachée
+ * héritée dans ensureOllamaRunning, confirmé par une trace sur la machine réelle. */
 const MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH = '0.7.0'
 
 /** Un seul essai de redémarrage silencieux par lancement de Jaris — voir warnIfOllamaOutdated. */
@@ -423,7 +419,16 @@ export async function ensureOllamaRunning(log: LogFn): Promise<void> {
   }
 
   log("Ollama n'est pas lancé, démarrage automatique…")
-  const proc = spawn('ollama', ['serve'], { detached: true, stdio: 'ignore', windowsHide: true })
+  // Une console absente sur le parent oblige les helpers GPU d’Ollama à en créer
+  // une nouvelle. Sous Windows, fournir une console cachée qu’ils peuvent hériter.
+  // Garder PowerShell vivant permet aussi à taskkill /T de fermer tout l’arbre.
+  // Ne pas le détacher : testé sous Windows, PowerShell détaché sortait sans lancer
+  // le serveur. Le serveur créé par Start-Process possède sa propre console cachée.
+  const proc = process.platform === 'win32'
+    ? spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+      "$ErrorActionPreference = 'Stop'; $server = Start-Process -FilePath 'ollama.exe' -ArgumentList 'serve' -WindowStyle Hidden -PassThru; $server.WaitForExit(); exit $server.ExitCode"
+    ], { stdio: 'ignore', windowsHide: true })
+    : spawn('ollama', ['serve'], { detached: true, stdio: 'ignore', windowsHide: true })
   // spawn() signale un échec (ex: "ollama" absent du PATH) de façon asynchrone via l'évènement 'error' du
   // process, jamais en levant une exception directement : sans ce listener, Node la traite comme une
   // exception non rattrapée et ça plante tout Jaris (au lieu de juste échouer à démarrer Ollama).

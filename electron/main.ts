@@ -232,7 +232,10 @@ function positionWidgetWindow(win: BrowserWindow, expanded: boolean, animate = f
     return
   }
   const { workArea } = screen.getPrimaryDisplay()
-  const width = expanded ? WIDGET_WIDTH : WIDGET_COLLAPSED_WIDTH
+  // Garder le même x et la même largeur évite que Windows déplace l’ancienne
+  // image avant que Chromium ait recalculé son centrage (saut de 118 px).
+  const shaped = process.platform === 'win32' || process.platform === 'linux'
+  const width = shaped || expanded ? WIDGET_WIDTH : WIDGET_COLLAPSED_WIDTH
   const height = expanded ? WIDGET_HEIGHT : WIDGET_COLLAPSED_HEIGHT
   win.setBounds({
     x: workArea.x + Math.round((workArea.width - width) / 2),
@@ -240,6 +243,13 @@ function positionWidgetWindow(win: BrowserWindow, expanded: boolean, animate = f
     width,
     height
   })
+  if (shaped) {
+    // La région native laisse réellement passer les clics hors de la pilule.
+    win.setShape(expanded ? [] : [{
+      x: Math.round((WIDGET_WIDTH - WIDGET_COLLAPSED_WIDTH) / 2),
+      y: 0, width: WIDGET_COLLAPSED_WIDTH, height: WIDGET_COLLAPSED_HEIGHT
+    }])
+  }
 }
 
 /** Les deux fenêtres ne sont jamais visibles en même temps (sinon double lecture audio des réponses). */

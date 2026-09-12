@@ -578,6 +578,23 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   Start-Process exige aussi son propre WindowStyle Hidden. Les interfaces d’installation et l’UAC restent
   gérées par Windows. Un audit des options confirme le correctif, pas l’absence de toute fenêtre tierce.
 
+
+- **Le saut horizontal du widget persistait malgré un fondu CSS** : redimensionner ET déplacer la
+  fenêtre native laisse brièvement l’ancien rendu à sa nouvelle origine avant le recalcul Chromium.
+  Sur Windows/Linux, garder x et la largeur constants et limiter la région native avec setShape au repos.
+  La région exclue laisse passer les clics ; vérifié via GetWindowRgn/PtInRegion sous Windows, pas seulement
+  par les rectangles DOM. Le fondu et le repli vertical différé restent inchangés.
+- **Les consoles restantes venaient des enfants d’Ollama, pas des commandes taskkill** : trace réelle
+  du redémarrage en 0.4.22 : llama-server et gpu-discover créaient chacun un conhost. windowsHide sur
+  un parent sans console ne fournit pas de console cachée à hériter. Lancer ollama serve via Start-Process
+  -WindowStyle Hidden puis attendre le processus maintient une console cachée commune et l’arbre d’arrêt.
+  Ne pas détacher le lanceur PowerShell : le test exact avec detached:true sortait sans lancer le serveur ;
+  sans ce drapeau, démarrage et arrêt de l’arbre sont vérifiés avec les mêmes options que la production.
+  Test réel avec Ollama 0.34.0 sur un port isolé : helpers observés, API disponible, aucune fenêtre visible
+  relevée pendant 35 s. Ne pas déduire l’absence de régression d’une version minimale ancienne d’Ollama.
+  Win32_ProcessStartTrace était refusé sur cette machine malgré la lecture CIM autorisée : ne pas avaler
+  silencieusement cette erreur ; la trace utile a été obtenue par des instantanés CIM rapprochés.
+
 ## Commandes utiles
 
 ```

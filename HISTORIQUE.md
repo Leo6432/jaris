@@ -368,3 +368,8 @@ faire — rien n'est perdu, juste rangé à part. Voir README.md pour la liste d
   natif différé et annulable. Clics, rectangles et inversion rapide vérifiés sur le renderer compilé.
   Masquage des consoles de trois commandes taskkill internes et du processus WSL élevé.
   La disparition de toutes les fenêtres tierces au démarrage reste à confirmer en usage réel.
+
+- Correctif v0.4.23 — Après retours sur 0.4.22 : axe horizontal fixe du widget, région native de
+  84x48 au repos dans une fenêtre de largeur constante ; plus de déplacement horizontal à l’activation.
+  Identification par trace réelle des consoles des helpers d’Ollama. Console cachée héritée via
+  Start-Process, avec arrêt de tout l’arbre conservé. Tests natifs Windows, renderer et serveur isolé.
