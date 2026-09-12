@@ -457,3 +457,16 @@ faire — rien n'est perdu, juste rangé à part. Voir README.md pour la liste d
   redéclenche exactement quand le nœud DOM apparaît/disparaît, peu importe
   la raison. Revérifié après correction : 266px à 1000x760, 378px à
   1920x1080, bien croissant et borné.
+- ✅ Étape 78 (v0.4.30) — Léo a précisé que la taille responsive de l'étape
+  77 n'était pas ce qu'il voulait : "je veut la meme taille que dans
+  l'aceuille la meme" — pas une taille calculée selon l'écran, littéralement
+  la même valeur fixe que l'orbe de l'écran d'accueil (App.tsx, mode
+  'voice', `<JarisOrb emotion={emotion} />` sans prop `size`, donc le
+  défaut `320` de JarisOrb.tsx). Retiré tout le ResizeObserver/callback ref
+  de l'étape 77 : le sélecteur de voix omet maintenant lui aussi la prop
+  `size`, héritant du même défaut que l'accueil plutôt que de dupliquer
+  `320` en dur à côté — une divergence future entre les deux écrans devient
+  impossible par construction. Revérifié pour de vrai avec un test
+  Playwright : orbe à 320x320 identique à 480x600 (plus petite fenêtre
+  possible de Jaris), 1000x760 et 1920x1080, sans jamais déborder de la
+  fenêtre.

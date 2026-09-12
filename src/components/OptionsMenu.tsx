@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type {
   AppVersionStatus,
@@ -112,8 +112,6 @@ export default function OptionsMenu(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [voiceIndex, setVoiceIndex] = useState(DEFAULT_VOICE_INDEX)
-  const voiceOrbObserverRef = useRef<ResizeObserver | null>(null)
-  const [voiceOrbSize, setVoiceOrbSize] = useState(220)
   const [previewing, setPreviewing] = useState(false)
   const [history, setHistory] = useState<ConversationEntry[] | null>(null)
   const [clearingHistory, setClearingHistory] = useState(false)
@@ -149,35 +147,6 @@ export default function OptionsMenu(): JSX.Element {
       const savedIndex = TTS_VOICES.findIndex((v) => v.id === p?.ttsVoice)
       if (savedIndex !== -1) setVoiceIndex(savedIndex)
     })
-  }, [])
-
-  // L'orbe de l'onglet Voix restait à une taille FIXE (220px) quelle que soit la taille réelle de la
-  // fenêtre — sur un grand écran, ça paraît minuscule et perdu au milieu d'un immense vide (repéré par
-  // Léo en usage réel, capture d'écran à l'appui : "ne se met pas bien par rapport a l'écrant... trop
-  // petit"). `.options-menu__voice-picker` s'étend déjà sur TOUTE la fenêtre (position: absolute, inset: 0
-  // — voir index.css) : le mesurer via ResizeObserver donne directement les dimensions réelles disponibles,
-  // sans dépendre de la taille de l'écran de Léo ni d'une valeur fixe supposée "raisonnable". Bornes
-  // (180-420px) pour rester lisible sur une petite fenêtre et ne pas devenir absurdement énorme sur un
-  // écran ultra-large.
-  //
-  // Callback ref plutôt qu'un `useRef` + `useEffect([tab])` : ce dernier ne se redéclenche QUE quand `tab`
-  // change, jamais quand `open` passe de false à true — sur le tout premier rendu (`open` encore false),
-  // cet effet s'exécute avec `tab` déjà à 'voix' (valeur par défaut) mais le noeud n'existe pas encore
-  // (page fermée), il ressort donc aussitôt SANS jamais observer quoi que ce soit, et ne se relance plus
-  // jamais après l'ouverture réelle du panneau — piège attrapé par un test Playwright avant de livrer (le
-  // canvas restait bloqué à 220px quelle que soit la taille de fenêtre testée). Un callback ref se redéclenche
-  // exactement quand LE NOEUD LUI-MÊME apparaît/disparaît, peu importe la raison (tab, open, ou autre à
-  // l'avenir).
-  const voicePickerCallbackRef = useCallback((el: HTMLDivElement | null) => {
-    voiceOrbObserverRef.current?.disconnect()
-    voiceOrbObserverRef.current = null
-    if (!el) return
-    const observer = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect
-      setVoiceOrbSize(Math.max(180, Math.min(420, Math.min(width, height) * 0.35)))
-    })
-    observer.observe(el)
-    voiceOrbObserverRef.current = observer
   }, [])
 
   // Chargé seulement à l'ouverture de l'onglet (pas au montage comme les autres réglages ci-dessus) :
@@ -551,12 +520,16 @@ export default function OptionsMenu(): JSX.Element {
         <main className="options-page__workspace">
           <div className="options-page__content">
         {tab === 'voix' && (
-          <div className="options-menu__voice-picker" ref={voicePickerCallbackRef}>
+          <div className="options-menu__voice-picker">
             <div className="options-menu__voice-nav">
               <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex - 1)} disabled={previewing}>
                 ‹
               </button>
-              <JarisOrb emotion="idle" color={voice.color} size={voiceOrbSize} />
+              {/* Pas de `size` ici : hérite du même défaut (320) que <JarisOrb emotion={emotion} /> sur
+                  l'écran d'accueil (App.tsx, mode 'voice') — Léo voulait explicitement "la même taille que
+                  dans l'accueil", pas une taille recalculée séparément (une valeur fixe dupliquée ou un
+                  calcul responsive, tous deux essayés puis écartés, auraient pu diverger de l'accueil). */}
+              <JarisOrb emotion="idle" color={voice.color} />
               <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex + 1)} disabled={previewing}>
                 ›
               </button>

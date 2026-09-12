@@ -634,6 +634,19 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   (mesure, ResizeObserver, focus...), une callback ref est plus fiable qu'un `useRef` + `useEffect` avec un
   tableau de dépendances qu'il faut deviner correctement — surtout quand le nœud est conditionnellement
   rendu par PLUSIEURS états différents (ici `open` ET `tab`), pas un seul.**
+- **Étape 77 (taille responsive de l'orbe des voix) elle-même revenue en arrière juste après (étape 78)** :
+  Léo a précisé "je veut la meme taille que dans l'aceuille la meme" — pas une taille CALCULÉE selon l'écran
+  (même bien bornée 180-420px), littéralement LA MÊME valeur fixe que `<JarisOrb emotion={emotion} />` sur
+  l'écran d'accueil (App.tsx, mode 'voice', sans prop `size` → défaut `320` de JarisOrb.tsx). Tout le
+  ResizeObserver/callback ref de l'étape 77 retiré (déjà plus de complexité que nécessaire une fois le vrai
+  besoin connu) : le sélecteur de voix omet maintenant lui aussi la prop `size`, héritant du MÊME défaut
+  que l'accueil plutôt que de dupliquer la valeur `320` en dur À CÔTÉ (une divergence future entre les deux
+  écrans resterait alors impossible par construction, pas seulement par convention). **Leçon générale :
+  "adapter à l'écran de l'utilisateur" et "la même taille qu'ailleurs dans l'app" sont deux demandes qui se
+  RESSEMBLENT en français courant mais impliquent des implémentations opposées (calcul dynamique vs valeur
+  fixe partagée) — la première tentative (étape 77) a supposé la première lecture sans la confirmer, alors
+  que Léo décrivait déjà la seconde ("le même cercle que dans l'accueil") dès sa toute première demande sur
+  ce sujet (étape 76) ; une relecture plus attentive de sa phrase d'origine aurait évité ce détour.**
 
 ## Commandes utiles
 
