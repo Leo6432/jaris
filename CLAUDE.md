@@ -606,6 +606,23 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   relevée pendant 35 s. Ne pas déduire l’absence de régression d’une version minimale ancienne d’Ollama.
   Win32_ProcessStartTrace était refusé sur cette machine malgré la lecture CIM autorisée : ne pas avaler
   silencieusement cette erreur ; la trace utile a été obtenue par des instantanés CIM rapprochés.
+- **"Jaris est ouvert mais pas en haut" (Léo, étape 73) : le repli en widget ne réagissait qu'à un clic
+  explicite sur minimize, jamais à une simple perte de focus** — Léo a précisé (2 questions ciblées
+  nécessaires pour lever l'ambiguïté initiale, message garanti flou : "je clique n'importe ou pour l'enlever")
+  qu'il ne parlait NI du bouton réduire NI du widget lui-même, mais du cas où il reste sur la fenêtre normale
+  de Jaris puis clique sur une AUTRE application (ex: le navigateur) SANS jamais toucher au bouton réduire :
+  rien n'indiquait alors plus nulle part que Jaris tournait encore. Contradiction avec l'intention documentée
+  depuis l'étape 19 elle-même ("widget flottant... visible même quand une autre appli a le focus") : le code
+  n'a en réalité JAMAIS câblé cette partie, seul `win.on('minimize', ...)` déclenchait le repli. Corrigé en
+  ajoutant `win.on('blur', ...)` (createFullWindow, main.ts) qui traite une perte de focus EXACTEMENT comme
+  minimize (même repli en widget) — sauf pendant un vrai dialogue natif Windows attaché à la fenêtre (ex:
+  `chooseModelsLocation`, `dialog.showOpenDialog`), qui prend lui aussi le focus OS sans que Léo ait quitté
+  Jaris : un nouveau drapeau `dialogOpen` (mis à `true`/`false` autour de l'appel à `showOpenDialog`) empêche
+  le handler `blur` de cacher la fenêtre (et son dialogue enfant, orphelin si le parent disparaît) dans ce
+  cas précis. **Piège identifié avant de coder, pas après** : un dialogue MODAL attaché à une fenêtre parente
+  (`dialog.showOpenDialog(fullWindow, ...)`) prend le focus OS au même titre qu'une autre application pour
+  Electron — sans ce garde, choisir l'emplacement des modèles (étape 44) aurait fait disparaître la fenêtre
+  de réglages en plein milieu de la sélection du dossier.
 
 ## Commandes utiles
 

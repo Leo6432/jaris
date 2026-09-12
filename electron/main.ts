@@ -71,6 +71,11 @@ let tray: Tray | null = null
 let quitting = false
 /** Tant que l'onboarding n'est pas fini, fermer la fenêtre de réglages doit quitter l'appli normalement (pas de widget à replier sur un profil pas encore configuré). */
 let onboardingDone = false
+/** Vrai pendant qu'un vrai dialogue natif Windows est ouvert sur fullWindow (ex: chooseModelsLocation) : le
+ * dialogue prend le focus OS, ce qui déclenche 'blur' sur fullWindow comme un changement d'appli normal —
+ * sans ce garde, le handler 'blur' plus bas cacherait fullWindow (et son dialogue enfant orphelin avec) alors
+ * que Léo n'a fait que cliquer dans une fenêtre de sélection de dossier qui fait partie de Jaris. */
+let dialogOpen = false
 
 // Plus haut que large : le contenu (orbe + texte) reste ancré en haut de la fenêtre (voir .app--widget en
 // CSS), donc collé au vrai bord haut de l'écran (étape 68, façon "notch"). Le reste de la hauteur, vide et
@@ -157,6 +162,18 @@ function createFullWindow(): BrowserWindow {
     showWidgetWindow()
     pipeline?.setListeningSuspended(false)
   })
+  // Léo a signalé qu'en changeant simplement d'application (ex: passer sur le navigateur) SANS cliquer sur
+  // réduire, rien n'indiquait plus que Jaris tournait ("jaris est ouvert mais pas en haut") — contrairement à
+  // l'intention d'origine de l'étape 19 ("visible même quand une autre appli a le focus"), jusqu'ici seul
+  // 'minimize' déclenchait le repli en widget, jamais une simple perte de focus. 'blur' traite maintenant ce
+  // cas exactement comme minimize (même repli) — sauf pendant un vrai dialogue natif de Jaris (`dialogOpen`,
+  // ex: chooseModelsLocation), qui prend aussi le focus OS sans que Léo ait quitté Jaris pour autant.
+  win.on('blur', () => {
+    if (!onboardingDone || dialogOpen) return
+    win.hide()
+    showWidgetWindow()
+    pipeline?.setListeningSuspended(false)
+  })
   win.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
@@ -168,9 +185,10 @@ function createFullWindow(): BrowserWindow {
 
 /**
  * Widget flottant façon J.A.R.V.I.S. (étape 19) : sans bordure, transparent, toujours au-dessus des autres
- * fenêtres, en bas à droite de l'écran — visible même quand une autre appli (navigateur, jeu...) a le
- * focus. C'est la vue "toujours là" une fois l'onboarding terminé ; cliquer dessus ouvre la fenêtre de
- * réglages pour le reste (Options, cerveau de Jaris).
+ * fenêtres, en haut au centre de l'écran (étape 68) — visible même quand une autre appli (navigateur, jeu...)
+ * a le focus, y compris en changeant simplement d'appli SANS minimiser (voir `win.on('blur', ...)` dans
+ * createFullWindow). C'est la vue "toujours là" une fois l'onboarding terminé ; cliquer dessus ouvre la
+ * fenêtre de réglages pour le reste (Options, cerveau de Jaris).
  */
 function createWidgetWindow(): BrowserWindow {
   // Position définitive posée juste avant l'affichage par positionWidgetWindow() (recalculée à chaque
@@ -405,7 +423,9 @@ app.whenReady().then(async () => {
       properties: ['openDirectory' as const, 'createDirectory' as const],
       title: 'Choisir où stocker les modèles et fichiers lourds de Jaris'
     }
+    dialogOpen = true
     const result = fullWindow ? await dialog.showOpenDialog(fullWindow, dialogOptions) : await dialog.showOpenDialog(dialogOptions)
+    dialogOpen = false
     if (result.canceled || !result.filePaths[0]) return { success: false, message: '' }
     const newDir = result.filePaths[0]
 

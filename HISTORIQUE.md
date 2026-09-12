@@ -388,3 +388,22 @@ faire — rien n'est perdu, juste rangé à part. Voir README.md pour la liste d
   d'urgence GPU), minimize reste inchangé (replie en widget). Vérifié par
   `npm run typecheck`/`npm run build` — toujours pas testé en usage réel sur
   une vraie machine Windows (pas d'accès Windows dans cet environnement).
+- ✅ Étape 73 (v0.4.25) — Léo a signalé (message flou d'abord, clarifié en 2
+  questions ciblées) que changer simplement d'application (ex: passer sur
+  le navigateur) SANS jamais cliquer sur réduire laissait Jaris tourner sans
+  plus rien de visible ("jaris est ouvert mais pas en haut") — contrairement
+  à l'intention documentée depuis l'étape 19 elle-même ("widget flottant...
+  visible même quand une autre appli a le focus"), jamais réellement câblée :
+  seul un clic explicite sur minimize déclenchait le repli en widget, jamais
+  une simple perte de focus. Corrigé en ajoutant `win.on('blur', ...)`
+  (createFullWindow, main.ts) qui traite maintenant une perte de focus
+  exactement comme minimize (même repli en widget) — sauf pendant un vrai
+  dialogue natif Windows attaché à la fenêtre (`chooseModelsLocation`,
+  étape 44), qui prend lui aussi le focus OS sans que Léo ait quitté Jaris :
+  un nouveau drapeau `dialogOpen` empêche le repli dans ce cas précis (sinon
+  choisir l'emplacement des modèles aurait fait disparaître la fenêtre de
+  réglages, et son dialogue enfant orphelin avec, en plein milieu de la
+  sélection du dossier). Vérifié par `npm run typecheck`/`npm run build` et
+  la suite de régression existante (`test-widget-transition.mjs`, 6/6) —
+  toujours pas testé en usage réel sur une vraie machine Windows (pas
+  d'accès Windows dans cet environnement).
