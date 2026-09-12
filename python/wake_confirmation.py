@@ -3,9 +3,18 @@ from collections import deque
 import re
 import numpy as np
 
-# Graphies observées avec Cohere sur les voix de test françaises. Aucun rapprochement
-# flou : Paris, Jarvis et les sous-chaînes dans d'autres mots ne sont pas acceptés.
-WAKE_NAME = re.compile(r'\b(?:jaris|jarice|jarisse)\b', re.IGNORECASE)
+# Un test réel (25 échantillons TTS "Jaris" synthétiques transcrits par Cohere Transcribe, voir
+# scripts/test-wake-confirmation.py) a révélé qu'une liste de graphies exactes ratait 33-40% des vraies
+# activations : Cohere transcrit "Jaris" de façon très variable ("Jaris", "Jarisse", "Jarissa", "Jariste",
+# "Jarisses", "Jarice"...). Le point commun à TOUTES ces graphies observées n'est pas "jaris" (qui rate
+# "Jarice", déjà vu par Codex dans le premier essai) mais le préfixe "jari" seul, suivi de n'importe quelle
+# terminaison — motif GÉNÉRALISANT plutôt qu'une énumération figée qu'il aurait fallu réenrichir à chaque
+# nouvelle graphie découverte, même leçon que PROMISE_WITHOUT_ACTION dans assistant.ts (détecter le PATRON
+# plutôt qu'un mot précis). Reste volontairement strict sur le PRÉFIXE lui-même : "jarvis" (préfixe "jarv")
+# et "j'arrive"/"j'arrise" (préfixe "arriv"/"arris", pas "jari") ne matchent jamais — la confusion réelle et
+# fréquente avec "j'arrive" (un vrai mot français très courant) n'est PAS ajoutée à la liste acceptée,
+# risque trop élevé de fausse activation sur une phrase innocente ("j'arrive dans 5 minutes").
+WAKE_NAME = re.compile(r'\bjari\w*\b', re.IGNORECASE)
 
 
 def contains_wake_name(text: str) -> bool:

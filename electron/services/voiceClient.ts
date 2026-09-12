@@ -36,8 +36,11 @@ export class VoiceClient extends EventEmitter {
   /**
    * @param inputDeviceIndex Index PortAudio choisi dans Options → Voix (voir Profile.audioInputDeviceIndex),
    * prioritaire sur MIC_INPUT_DEVICE (.env) s'il est fourni. `undefined`/`null` = retombe sur .env.
+   * @param wakewordEnabled Options → Activation (étape 81, Profile.activationWakeWordEnabled) : `false`
+   * passe `--wakeword-disabled` à voice_server.py, qui saute alors le chargement du détecteur ONNX du mot
+   * "Jaris" (rien à charger/ré-échantillonner en trop pour un utilisateur qui préfère la touche "+"/l'orbe).
    */
-  start(inputDeviceIndex?: number | null): Promise<void> {
+  start(inputDeviceIndex?: number | null, wakewordEnabled = true): Promise<void> {
     if (this.ready) return this.ready
 
     this.ready = new Promise((resolveReady, rejectReady) => {
@@ -51,6 +54,9 @@ export class VoiceClient extends EventEmitter {
         args.push('--input-device', String(inputDeviceIndex))
       } else if (config.voice.inputDevice !== '') {
         args.push('--input-device', config.voice.inputDevice)
+      }
+      if (!wakewordEnabled) {
+        args.push('--wakeword-disabled')
       }
 
       const proc = spawn(resolvePythonBin(), args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })

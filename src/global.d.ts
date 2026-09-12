@@ -79,6 +79,7 @@ declare global {
       loadGeneratedApp: (path: string) => Promise<GeneratedApp>
       listAudioInputDevices: () => Promise<AudioInputDevice[]>
       setAudioInputDevice: (deviceIndex: number | null) => Promise<void>
+      setWakewordEnabled: (enabled: boolean) => Promise<void>
       testMicrophone: () => void
       stopTestMicrophone: () => void
       setActiveMode: (mode: 'voice' | 'chat' | 'code') => void

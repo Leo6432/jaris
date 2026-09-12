@@ -204,7 +204,13 @@ export default function App(): JSX.Element {
       if (typing) return
 
       if (event.key === '+' && !event.repeat) {
-        window.jaris.triggerWake()
+        // Relit le profil à chaque pression plutôt que de garder un état React à synchroniser (voir
+        // playSoundCueIfEnabled, soundDesign.ts, même pattern) : Options → Activation (étape 81) permet de
+        // décocher cette touche si Léo préfère les deux autres façons d'activer Jaris.
+        void window.jaris.getProfile().then((profile) => {
+          if (profile?.activationKeyEnabled === false) return
+          window.jaris.triggerWake()
+        })
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -337,12 +343,22 @@ export default function App(): JSX.Element {
           {appMode === 'voice' && (
             <div className="app app--voice">
               {/* Pas d'audioElRef ici : seul le widget a un <audio> monté, l'orbe de cette fenêtre suit juste
-                  l'émotion sans vibrer avec la voix (évite toute double lecture du son des réponses). */}
-              <JarisOrb emotion={emotion} />
+                  l'émotion sans vibrer avec la voix (évite toute double lecture du son des réponses).
+                  onClick : une des 3 façons d'activer Jaris (Options → Activation, étape 81), avec la même
+                  relecture du profil à la volée que le "+" ci-dessus plutôt qu'un état React à synchroniser. */}
+              <JarisOrb
+                emotion={emotion}
+                onClick={() => {
+                  void window.jaris.getProfile().then((profile) => {
+                    if (profile?.activationOrbClickEnabled === false) return
+                    window.jaris.triggerWake()
+                  })
+                }}
+              />
               <div className="app__status">{STATUS_LABEL[emotion]}</div>
               <div className="app__hint">
-                Astuce : tape deux fois dans les mains ou appuie sur le + du pavé numérique, depuis
-                n'importe quelle appli, pour activer l'écoute
+                Astuce : dis "Jaris", clique sur le cercle, ou appuie sur le + du pavé numérique depuis
+                n'importe quelle appli, pour activer l'écoute (personnalisable dans Options → Activation)
               </div>
 
               {(transcript || reply) && (

@@ -121,8 +121,13 @@ export class VoicePipeline extends EventEmitter {
    */
   private suspended = false
 
-  /** @param inputDeviceIndex Voir VoiceClient.start — micro choisi dans Options → Voix, prioritaire sur .env. */
-  async start(inputDeviceIndex?: number | null): Promise<void> {
+  /**
+   * @param inputDeviceIndex Voir VoiceClient.start — micro choisi dans Options → Voix, prioritaire sur .env.
+   * @param wakewordEnabled Options → Activation (étape 81) : `false` désactive le détecteur ONNX du mot
+   * "Jaris" côté sidecar Python (voir VoiceClient.start) — la touche "+" et le clic sur l'orbe restent
+   * disponibles quoi qu'il arrive, ce drapeau ne concerne QUE l'écoute passive du micro.
+   */
+  async start(inputDeviceIndex?: number | null, wakewordEnabled = true): Promise<void> {
     this.voice.on('wake', () => {
       if (this.suspended) return
       this.clearIdleTimer()
@@ -158,7 +163,7 @@ export class VoicePipeline extends EventEmitter {
     this.voice.on('micTestDone', (detected: boolean) => this.emit('micTestDone', detected))
 
     await restoreReminders((message) => void this.announceReminder(message))
-    await this.voice.start(inputDeviceIndex)
+    await this.voice.start(inputDeviceIndex, wakewordEnabled)
     this.setEmotion('idle')
   }
 

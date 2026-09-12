@@ -85,6 +85,7 @@ const api = {
   listAudioInputDevices: (): Promise<AudioInputDevice[]> => ipcRenderer.invoke(IPC_CHANNELS.listAudioInputDevices),
   setAudioInputDevice: (deviceIndex: number | null): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.setAudioInputDevice, deviceIndex),
+  setWakewordEnabled: (enabled: boolean): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.setWakewordEnabled, enabled),
   testMicrophone: (): void => ipcRenderer.send(IPC_CHANNELS.testMicrophone),
   stopTestMicrophone: (): void => ipcRenderer.send(IPC_CHANNELS.stopTestMicrophone),
   setActiveMode: (mode: 'voice' | 'chat' | 'code'): void => ipcRenderer.send(IPC_CHANNELS.setActiveMode, mode),

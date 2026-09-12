@@ -547,3 +547,20 @@ L’audio est conservé pendant cette confirmation et le préfixe d’appel reti
 La touche + reste directe. Tests du tampon borné, délai, rejet des autres mots, conservation de
 la demande et annulation de la confirmation par la voie manuelle. Vérification audio synthétique
 supplémentaire ; la voix et le microphone réels de Léo restent à valider après installation.
+
+- ✅ Étape 81 (v0.5.3) — Léo, juste après v0.5.2 : "il s'active meme pas quand je dit jaris il
+  s'active jamais". Diagnostiqué pour de vrai (vraie transcription Cohere Transcribe sur 25
+  échantillons "Jaris" frais, simulation complète de la boucle wake) : aucun bug de timing, mais la
+  liste de graphies exactes de v0.5.2 (`jaris|jarice|jarisse`) ratait 33-40% des transcriptions
+  réelles ("Jarissa", "Jariste", "Jarisses"...). Corrigé en généralisant le motif au préfixe commun
+  `\bjari\w*\b` plutôt qu'énumérer chaque graphie — reste strict sur "jarvis" et la confusion
+  fréquente avec "j'arrive" (mot français courant), jamais acceptés. Un log manquant côté rejet de
+  confirmation a été ajouté (voir voice_server.py) pour diagnostiquer les prochains cas sans deviner.
+  Léo a aussi demandé, dans le même message : "aujoute dans une option un truc activation et pouvoir
+  cocher activer jaris avec la touche plus et en disant jaris ou juste en cliquant sur jaris le
+  cecle" — nouvel onglet Options → Activation avec 3 cases indépendantes (touche "+", mot
+  d'activation, clic sur l'orbe), les 2 premières relues à la volée côté renderer, la troisième
+  redémarrant le pipeline vocal (comme le changement de micro). Bug préexistant trouvé au passage :
+  l'astuce de l'écran d'accueil mentionnait encore le double clap, jamais repéré par le grep sur le
+  mot "clap" (paraphrase, pas le mot lui-même) — corrigé pour mentionner les 3 vraies méthodes.
+  Vérifié par un vrai clic Playwright sur le composant réel, pas juste une relecture du JSX.

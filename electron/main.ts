@@ -327,7 +327,7 @@ async function startVoicePipeline(): Promise<void> {
 
   try {
     const profile = await getProfile()
-    await pipeline.start(profile?.audioInputDeviceIndex)
+    await pipeline.start(profile?.audioInputDeviceIndex, profile?.activationWakeWordEnabled !== false)
     lastSetupStatus = { ready: true, missing: [] }
     broadcast(IPC_CHANNELS.setupStatus, lastSetupStatus)
   } catch (err) {
@@ -398,6 +398,17 @@ app.whenReady().then(async () => {
     const profile = await getProfile()
     if (!profile) return
     await saveProfile({ ...profile, audioInputDeviceIndex: deviceIndex })
+    pipeline?.stop()
+    await startVoicePipeline()
+  })
+  // Options → Activation (étape 81) : redémarre le pipeline vocal comme setAudioInputDevice ci-dessus, pour
+  // la même raison (le sidecar Python décide de charger ou non le détecteur ONNX une seule fois, à son
+  // démarrage). Les deux autres bascules d'Activation (touche "+", clic sur l'orbe) sont de simples champs
+  // du profil enregistrés via saveProfile, relus à la volée côté renderer (App.tsx) sans passer par ici.
+  ipcMain.handle(IPC_CHANNELS.setWakewordEnabled, async (_event, enabled: boolean): Promise<void> => {
+    const profile = await getProfile()
+    if (!profile) return
+    await saveProfile({ ...profile, activationWakeWordEnabled: enabled })
     pipeline?.stop()
     await startVoicePipeline()
   })

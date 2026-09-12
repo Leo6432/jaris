@@ -65,6 +65,16 @@ export interface Profile {
   codeModel?: string
   /** Design sonore (étape 31) : absent/true par défaut, false pour couper les bips d'interface (Options → Voix). */
   soundEffectsEnabled?: boolean
+  /**
+   * Options → Activation (étape 81) : les 3 façons de déclencher l'écoute sont toutes activables/
+   * désactivables indépendamment, absent/true par défaut pour chacune. `activationWakeWordEnabled` est
+   * le seul des trois qui redémarre le pipeline vocal quand il change (voir setWakewordEnabled,
+   * main.ts) : c'est au démarrage du sidecar Python que le détecteur ONNX est chargé ou non, pas
+   * quelque chose qui se bascule à chaud comme les deux autres.
+   */
+  activationKeyEnabled?: boolean
+  activationWakeWordEnabled?: boolean
+  activationOrbClickEnabled?: boolean
 }
 
 /**
@@ -413,6 +423,10 @@ export const IPC_CHANNELS = {
   updateApp: 'jaris:update-app',
   /** renderer <-> main : version réellement installée (app.getVersion()), jamais bloquée par le réseau. */
   getAppVersion: 'jaris:get-app-version',
+  /** renderer <-> main : active/désactive le mot d'activation "Jaris" (redémarre le pipeline vocal, voir
+   * Profile.activationWakeWordEnabled) — les deux autres bascules de l'onglet Activation (touche "+", clic
+   * sur l'orbe) sont de simples champs du profil, relus à la volée sans redémarrage nécessaire. */
+  setWakewordEnabled: 'jaris:set-wakeword-enabled',
   /** renderer -> main : recherche une mise à jour pour de vrai (jamais depuis le cache), erreur remontée
    * telle quelle en cas d'échec — bouton "Rechercher une mise à jour" (Options → Modèles). */
   checkForUpdate: 'jaris:check-for-update',

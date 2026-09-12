@@ -191,12 +191,12 @@ pour la reconnaissance vocale (voir plus bas).
 > L'application installée, elle, fait tout ça toute seule au premier
 > lancement — voir "Installeur en un clic (étape 16)" plus bas.
 
-> **Déclenchement : dire "Jaris", pas de clap.**
+> **Déclenchement : dire "Jaris", cliquer sur le cercle, ou la touche "+".**
 > openWakeWord avait été retiré une première fois car aucun mot-clé "Jaris"
 > pré-entraîné n'existait (obligeait à dire "Hey Jarvis" en anglais) — un
 > modèle dédié, entraîné spécifiquement pour "Jaris" (voir plus bas), le
-> remplace maintenant. Le raccourci clavier **+** reste disponible pour un
-> déclenchement manuel, sans rien dire.
+> remplace maintenant. Les 3 méthodes sont indépendamment activables/
+> désactivables dans Options → Activation.
 
 ### 1. Environnement Python (mot d'activation + reconnaissance vocale)
 
@@ -265,24 +265,32 @@ pipeline melspectrogramme + embedding + classifieur — vérifié BIT À BIT
 identique à `openwakeword.utils.AudioFeatures` officiel avant d'y faire
 confiance.
 
-**Précision mesurée pour de vrai**, pas estimée : sur des phrases jamais
-vues à l'entraînement, "Jaris" est détecté de façon fiable (dès qu'il y a
-un peu de contexte autour, ou après ~1s d'écoute continue pour un "Jaris"
-tout seul), et les confusions évidentes ("Paris", "chariot", phrases
-générales) sont correctement ignorées. **Deux confusions phonétiques
-réelles et difficiles restent connues** : "Jarvis" (l'ancien nom) et une
-phrase contenant "il a ri" peuvent occasionnellement déclencher Jaris par
-erreur, même après un corpus d'entraînement volontairement élargi sur ces
-deux cas précis — la proximité acoustique avec "Jaris" est simplement très
-forte. Le raccourci clavier **+** (dans la fenêtre Jaris) reste disponible
-pour déclencher l'écoute manuellement, sans rien dire, si besoin.
+**Le score ONNX seul ne suffit pas** : mesuré en usage réel, il confond
+parfois la parole ordinaire avec "Jaris" ("Paris", la météo, des nombres...).
+Une seconde étape (`python/wake_confirmation.py`) transcrit localement les
+~3 secondes autour d'un candidat (Cohere Transcribe, déjà chargé pour la
+reconnaissance vocale) et n'active Jaris que si le nom y apparaît vraiment
+— jamais sur le seul score ONNX. Reconnaît les graphies que Cohere produit
+réellement pour "Jaris" ("Jarisse", "Jariste"...) via un motif généralisant
+(préfixe "jari" + n'importe quelle terminaison) plutôt qu'une liste figée,
+tout en restant strict sur "Jarvis" (l'ancien nom) qui ne matche jamais.
 
-Seuil de décision et anti-rebond réglables dans `python/voice_server.py`
-(`WAKEWORD_THRESHOLD`, `WAKEWORD_DEBOUNCE_CHUNKS`) — chaque score qui
-approche le seuil sans le dépasser est loggué (`{"event": "log", "message":
-"Score mot d'activation : ..."}`, visible dans la fenêtre Jaris), pour
-ajuster à partir de vraies mesures plutôt qu'à l'aveugle si Léo rencontre
-d'autres faux positifs/négatifs en usage réel.
+**Précision mesurée pour de vrai**, pas estimée : sur 25 échantillons TTS
+"Jaris" jamais entendus à l'entraînement, environ 3/4 sont confirmés ; le
+reste est presque toujours transcrit "j'arrive" (un vrai mot français très
+courant, phonétiquement très proche) — accepter aussi "j'arrive" aurait
+fait activer Jaris sur une phrase innocente ("j'arrive dans 5 minutes"),
+jugé pire qu'un rappel imparfait. **Cette confusion avec "j'arrive" reste
+une limite connue, pas résolue** : "Jaris" est simplement proche d'un mot
+français courant, aucun correctif de logiciel ne peut fermer complètement
+cet écart.
+
+D'où **Options → Activation** : la touche **+** du pavé numérique, dire
+"Jaris" à voix haute, et un simple clic sur le cercle de Jaris sont 3
+façons indépendantes de déclencher l'écoute, chacune activable/
+désactivable séparément — si le mot d'activation rate ou se déclenche trop
+souvent chez toi, désactive-le et garde les deux autres, aussi fiables que
+l'ancien double clap.
 
 ### 2. Synthèse vocale (Supertonic HD)
 

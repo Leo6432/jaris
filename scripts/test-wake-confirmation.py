@@ -6,9 +6,14 @@ from wake_confirmation import WakeConfirmation, contains_wake_name, remove_wake_
 
 class ConfirmationTests(unittest.TestCase):
     def test_name_boundaries(self):
-        for text in ('Jaris', 'Jarice, ouvre YouTube.', 'Bonjour Jarisse !'):
+        # Graphies réellement observées avec Cohere Transcribe sur 25 échantillons TTS "Jaris" (voir
+        # wake_confirmation.py) : une liste figée en ratait 33-40%, d'où le motif généralisant
+        # \bjari\w*\b (préfixe "jari", pas "jaris" -- "Jarice" ne le contient pas) -- accepte donc aussi
+        # "jarisien" ci-dessous (aucun vrai mot français ne commence par "jari-", le risque de faux positif
+        # sur un mot RÉEL non lié est donc nul en pratique).
+        for text in ('Jaris', 'Jarice, ouvre YouTube.', 'Bonjour Jarisse !', 'Jarissa.', 'Jariste.', 'Jarisses.', 'jarisien'):
             self.assertTrue(contains_wake_name(text))
-        for text in ('Paris', 'Jarvis', 'Le rendez-vous est demain.', 'jarisien', '', 'Voici la météo.'):
+        for text in ('Paris', 'Jarvis', 'Le rendez-vous est demain.', "J'arrive.", "J'arrise.", '', 'Voici la météo.'):
             self.assertFalse(contains_wake_name(text))
 
     def test_retains_audio_until_word_complete(self):

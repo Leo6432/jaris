@@ -34,6 +34,9 @@ Avec --list-devices : ignore tous les autres arguments, n'ouvre aucun micro et n
 imprime juste {"devices": [{"index": 0, "name": "..."}, ...]} (ou {"error": "..."}) et quitte. Utilisé par
 Electron pour peupler la liste des micros dans le menu Options, sans lancer tout le sidecar pour ça.
 
+Avec --wakeword-disabled (Options → Activation, étape 81) : le détecteur ONNX du mot "Jaris" n'est ni
+chargé ni exécuté, seul `trigger` (touche "+"/clic sur l'orbe) déclenche une capture.
+
 Lancé par electron/services/voiceClient.ts, jamais directement.
 """
 
@@ -126,6 +129,10 @@ def main() -> None:
     parser.add_argument("--stt-language", default="fr")
     parser.add_argument("--input-device", type=int, default=None)
     parser.add_argument("--list-devices", action="store_true")
+    # Options → Activation (étape 81) : quand Léo préfère la touche "+"/le clic sur l'orbe, aucune raison de
+    # charger les 3 modèles ONNX du détecteur (voir wakeword.py) ni de les faire tourner en continu sur
+    # chaque chunk de micro pour rien.
+    parser.add_argument("--wakeword-disabled", action="store_true")
     args = parser.parse_args()
 
     if args.list_devices:
@@ -294,13 +301,15 @@ def main() -> None:
         emit({"event": "fatal", "message": f"impossible d'ouvrir le micro : {exc}"})
         sys.exit(1)
 
-    try:
-        detector = JarisWakeWordDetector(threshold=WAKEWORD_THRESHOLD, debounce_chunks=WAKEWORD_DEBOUNCE_CHUNKS, minimum_rms=SILENCE_RMS_THRESHOLD)
-    except Exception as exc:
-        stream.stop()
-        stream.close()
-        emit({"event": "fatal", "message": f"impossible de charger le détecteur du mot Jaris : {exc}"})
-        sys.exit(1)
+    detector = None
+    if not args.wakeword_disabled:
+        try:
+            detector = JarisWakeWordDetector(threshold=WAKEWORD_THRESHOLD, debounce_chunks=WAKEWORD_DEBOUNCE_CHUNKS, minimum_rms=SILENCE_RMS_THRESHOLD)
+        except Exception as exc:
+            stream.stop()
+            stream.close()
+            emit({"event": "fatal", "message": f"impossible de charger le détecteur du mot Jaris : {exc}"})
+            sys.exit(1)
 
     emit({"event": "ready"})
 
@@ -346,10 +355,14 @@ def main() -> None:
             if triggered:
                 manual_trigger.clear()
 
-            score = detector.process_chunk(chunk)
-            candidate = detector.should_trigger(score) if not triggered else False
-            pending_audio = confirmation.push(chunk, candidate)
+            # detector est None avec --wakeword-disabled (Options → Activation, Léo préfère la touche "+"/le
+            # clic sur l'orbe) : rien à faire tourner sur ce chunk, seul le déclenchement manuel compte.
+            pending_audio = None
             confirmed_audio = None
+            if detector is not None:
+                score = detector.process_chunk(chunk)
+                candidate = detector.should_trigger(score) if not triggered else False
+                pending_audio = confirmation.push(chunk, candidate)
             if triggered:
                 confirmation.clear()
                 voice_activated = False
@@ -369,6 +382,11 @@ def main() -> None:
                         confirmed_audio = pending_audio
                         confirmation.clear()
                         emit({"event": "log", "message": "Mot Jaris confirmé par la transcription locale."})
+                    else:
+                        # Visibilité indispensable pour ajuster WAKE_NAME (wake_confirmation.py) à partir de
+                        # vraies transcriptions rejetées, plutôt qu'à l'aveugle — même logique que le "Pic
+                        # candidat" du double clap ou le "Score mot d'activation" plus haut.
+                        emit({"event": "log", "message": f"Candidat rejeté (transcription : {candidate_text!r})."})
                 except Exception as exc:
                     # Une vérification échouée ne donne jamais une activation par défaut.
                     emit({"event": "log", "message": f"Vérification du mot Jaris impossible : {exc}"})

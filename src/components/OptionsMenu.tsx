@@ -45,7 +45,7 @@ const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
  */
 const MIC_TEST_BAR_COUNT = 42
 
-type Tab = 'voix' | 'micro' | 'modeles' | 'miseajour' | 'stockage' | 'historique'
+type Tab = 'voix' | 'micro' | 'activation' | 'modeles' | 'miseajour' | 'stockage' | 'historique'
 
 /**
  * Chromium ajoute des pseudo-périphériques "default"/"communications" en plus des vrais haut-parleurs
@@ -135,6 +135,7 @@ export default function OptionsMenu(): JSX.Element {
   const [inputDevices, setInputDevices] = useState<AudioInputDevice[] | null>(null)
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[] | null>(null)
   const [savingAudioDevice, setSavingAudioDevice] = useState(false)
+  const [savingWakewordSetting, setSavingWakewordSetting] = useState(false)
   const [micTesting, setMicTesting] = useState(false)
   // Fenêtre glissante des derniers niveaux sonores (une valeur par évènement mic_test_level, ~12/seconde) :
   // affichée comme une rangée de barres qui défilent façon Discord, pas un seul chiffre.
@@ -439,6 +440,55 @@ export default function OptionsMenu(): JSX.Element {
   }
 
   /**
+   * Options → Activation (étape 81) : touche "+" et clic sur l'orbe sont de simples champs du profil,
+   * relus à la volée par App.tsx (comme soundEffectsEnabled ci-dessus) — aucun redémarrage du pipeline
+   * vocal nécessaire, contrairement à toggleWakeword juste en dessous.
+   */
+  const toggleActivationKey = async (enabled: boolean): Promise<void> => {
+    if (!profile) return
+    setError(null)
+    const updated = { ...profile, activationKeyEnabled: enabled }
+    setProfile(updated)
+    try {
+      await window.jaris.saveProfile(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const toggleActivationOrbClick = async (enabled: boolean): Promise<void> => {
+    if (!profile) return
+    setError(null)
+    const updated = { ...profile, activationOrbClickEnabled: enabled }
+    setProfile(updated)
+    try {
+      await window.jaris.saveProfile(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  /**
+   * Contrairement aux deux bascules ci-dessus, le mot d'activation redémarre le pipeline vocal (voir
+   * setWakewordEnabled dans main.ts — le sidecar Python décide de charger le détecteur ONNX une seule fois,
+   * à son démarrage, pas quelque chose qui se bascule à chaud) : même pattern que chooseInputDevice
+   * (savingWakewordSetting affiche un message pendant les quelques secondes de rechargement des modèles).
+   */
+  const toggleActivationWakeword = async (enabled: boolean): Promise<void> => {
+    if (!profile) return
+    setError(null)
+    setSavingWakewordSetting(true)
+    try {
+      await window.jaris.setWakewordEnabled(enabled)
+      setProfile((prev) => (prev ? { ...prev, activationWakeWordEnabled: enabled } : prev))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSavingWakewordSetting(false)
+    }
+  }
+
+  /**
    * Bascule le test micro plutôt qu'un test à durée fixe : l'utilisateur active quand il veut parler et
    * désactive lui-même quand il a fini (voir stopTestMic dans voice_server.py). L'arrêt est appliqué tout
    * de suite côté UI (pas seulement envoyé au sidecar) : si le pipeline vocal n'est pas dans un état sain
@@ -501,6 +551,9 @@ export default function OptionsMenu(): JSX.Element {
             </button>
             <button className={`options-menu__tab${tab === 'micro' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('micro')}>
               Micro
+            </button>
+            <button className={`options-menu__tab${tab === 'activation' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('activation')}>
+              Activation
             </button>
             <button className={`options-menu__tab${tab === 'modeles' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('modeles')}>
               Modèles
@@ -630,6 +683,51 @@ export default function OptionsMenu(): JSX.Element {
                   </p>
                 )}
               </div>
+          </div>
+        )}
+
+        {tab === 'activation' && (
+          <div className="options-menu__section">
+            <div className="options-menu__section-title">Comment déclencher l'écoute</div>
+            <p className="options-menu__model-overview-hint">
+              Les trois façons d'activer Jaris sont indépendantes : décoche celles dont tu ne veux pas.
+            </p>
+            <label className="options-menu__checkbox">
+              <input
+                type="checkbox"
+                checked={profile?.activationKeyEnabled !== false}
+                onChange={(e) => void toggleActivationKey(e.target.checked)}
+              />
+              Touche "+" du pavé numérique
+            </label>
+            <label className="options-menu__checkbox">
+              <input
+                type="checkbox"
+                checked={profile?.activationOrbClickEnabled !== false}
+                onChange={(e) => void toggleActivationOrbClick(e.target.checked)}
+              />
+              Clic sur le cercle de Jaris
+            </label>
+            <label className="options-menu__checkbox">
+              <input
+                type="checkbox"
+                checked={profile?.activationWakeWordEnabled !== false}
+                disabled={savingWakewordSetting}
+                onChange={(e) => void toggleActivationWakeword(e.target.checked)}
+              />
+              Dire "Jaris" à voix haute
+            </label>
+            {savingWakewordSetting && (
+              <p className="options-menu__model-overview-hint">
+                Redémarrage du pipeline vocal (rechargement des modèles)...
+              </p>
+            )}
+            <p className="options-menu__model-overview-hint">
+              Le mot d'activation "Jaris" n'est pas toujours parfait : "Jarvis" (l'ancien nom) et certaines
+              phrases contenant "il a ri" peuvent parfois le déclencher par erreur, et il lui arrive de ne
+              pas reconnaître "Jaris" dit seul, sans rien après. Si ça arrive trop souvent, la touche "+" et
+              le clic sur le cercle restent des façons fiables de l'activer.
+            </p>
           </div>
         )}
 

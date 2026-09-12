@@ -766,6 +766,43 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   Tester des phrases négatives, pas seulement silence et mot positif. La vérification ajoute un
   délai et un coût de transcription ; ne pas présenter cette solution comme un classifieur réentraîné.
 
+- **La confirmation par transcription de v0.5.2 (ci-dessus) résolvait les faux positifs mais en créait un
+  autre : Léo a rapporté "il s'active meme pas quand je dit jaris il s'active jamais" juste après.** Diagnostic
+  vérifié pour de vrai, pas deviné : téléchargé le vrai modèle Cohere Transcribe dans un venv jetable et
+  transcrit 25 échantillons TTS "Jaris" frais (jamais vus à l'entraînement) — AUCUN bug de timing (le
+  candidat ONNX arrive bien dans la fenêtre des 3s gardées par `WakeConfirmation`, confirmé par une
+  simulation chunk par chunk de toute la boucle), mais `WAKE_NAME` (`\b(?:jaris|jarice|jarisse)\b`, la liste
+  de graphies exactes de v0.5.2) ratait 33-40% des vraies transcriptions : Cohere rend "Jaris" de façon très
+  variable ("Jarissa", "Jariste", "Jarisses"...), toutes avec le préfixe COMMUN "jari" (pas "jaris" : "Jarice"
+  n'a pas de "s"). **Corrigé en généralisant le motif à `\bjari\w*\b`** (préfixe + n'importe quelle
+  terminaison) plutôt que d'allonger la liste à chaque nouvelle graphie découverte — même leçon que
+  `PROMISE_WITHOUT_ACTION` (assistant.ts) : détecter le PATRON plutôt qu'un mot précis. Reste strict sur le
+  préfixe lui-même : "jarvis" (préfixe "jarv") et surtout "j'arrive"/"j'arrise" (préfixe "arriv"/"arris", une
+  confusion RÉELLE et fréquente avec un mot français très courant, ~24% des transcriptions même après ce
+  correctif) ne matchent jamais — ajouter "j'arrive" à la liste acceptée aurait fait activer Jaris sur une
+  phrase innocente ("j'arrive dans 5 minutes"), un risque jugé pire qu'un rappel imparfait. **Limite
+  acceptée, pas résolue** : "Jaris" reste phonétiquement proche d'un vrai mot français très courant, aucun
+  correctif de regex ne peut fermer cet écart — d'où l'ajout, à la même étape, d'un onglet Options →
+  Activation pour que Léo garde la touche "+"/le clic sur l'orbe comme filets fiables. Un `else` manquant
+  dans voice_server.py (aucun log quand la confirmation REJETTE un candidat, seulement quand elle réussit)
+  a aussi été ajouté : sans lui, impossible de savoir pourquoi une activation ratait sans relire le code.
+  Régression : `python scripts/test-wake-confirmation.py`.
+- **"ajoute dans une option un truc activation... activer jaris avec la touche plus et en disant jaris ou
+  juste en cliquant sur jaris le cecle" (Léo, étape 81)** : nouvel onglet Options → Activation, 3 cases
+  indépendantes (absent/true par défaut chacune, même convention que `soundEffectsEnabled`) —
+  `activationKeyEnabled`/`activationOrbClickEnabled` sont de simples champs du profil relus À LA VOLÉE côté
+  renderer (App.tsx, `window.jaris.getProfile()` à chaque pression de "+"/clic sur l'orbe, même pattern que
+  `playSoundCueIfEnabled` dans soundDesign.ts) — aucun redémarrage nécessaire, contrairement à
+  `activationWakeWordEnabled` qui redémarre tout le pipeline vocal (`setWakewordEnabled`, main.ts, même
+  raison que `setAudioInputDevice` : le sidecar Python décide de charger le détecteur ONNX une seule fois, à
+  son démarrage, `--wakeword-disabled`). **Bug PRÉ-EXISTANT trouvé en cherchant où ajouter le clic sur
+  l'orbe** : l'astuce affichée sur l'écran d'accueil ("Astuce : tape deux fois dans les mains...") référençait
+  encore le double clap RETIRÉ à l'étape 80 — jamais repéré par le grep sur le mot "clap" lui-même (cette
+  phrase ne le contient pas), preuve qu'un grep-sweep après un retrait doit aussi chercher des paraphrases
+  évidentes du comportement retiré, pas seulement son nom technique. Vérifié avec un vrai clic Playwright
+  (bundle du vrai `OptionsMenu.tsx`, clic bas niveau sur la 3e case, les 2 autres inchangées) que les 3 cases
+  existent et se basculent indépendamment, pas juste une relecture du JSX.
+
 ## Commandes utiles
 
 ```
