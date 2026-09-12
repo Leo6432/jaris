@@ -37,6 +37,8 @@ export interface ModelTiers {
 
 export interface Profile {
   name: string
+  /** Voix Supertonic HD choisie dans le menu Options (ex: "M3"), vide = valeur par défaut de .env. */
+  ttsVoice?: string
   /** true une fois le scan de capacité (étape 13) effectué après le premier lancement. */
   capacityScanDone?: boolean
   /** Modèles rapide/médium/puissant choisis par le scan de capacité, vide = OLLAMA_MODEL de .env pour les trois. */

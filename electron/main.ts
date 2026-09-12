@@ -386,8 +386,8 @@ app.whenReady().then(async () => {
     await ensureConversationHistoryFile()
     shell.showItemInFolder(getConversationHistoryPath())
   })
-  ipcMain.handle(IPC_CHANNELS.previewVoice, async () => {
-    const audio = await previewVoice()
+  ipcMain.handle(IPC_CHANNELS.previewVoice, async (_event, voice: string) => {
+    const audio = await previewVoice(voice)
     return audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer
   })
   ipcMain.handle(IPC_CHANNELS.listAudioInputDevices, (): Promise<AudioInputDevice[]> => listAudioInputDevices())
