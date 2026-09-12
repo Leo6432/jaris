@@ -191,16 +191,17 @@ pour la reconnaissance vocale (voir plus bas).
 > L'application installée, elle, fait tout ça toute seule au premier
 > lancement — voir "Installeur en un clic (étape 16)" plus bas.
 
-> **Déclenchement : double clap, pas de mot à dire.**
-> Jaris n'a plus de mot d'activation parlé (openWakeWord, qui obligeait à
-> dire "Hey Jarvis" en anglais faute de mot-clé "Jaris" pré-entraîné, a été
-> retiré). Deux claps francs et rapprochés suffisent — voir plus bas —, en
-> plus du raccourci clavier **+** pour un déclenchement manuel.
+> **Déclenchement : dire "Jaris", pas de clap.**
+> openWakeWord avait été retiré une première fois car aucun mot-clé "Jaris"
+> pré-entraîné n'existait (obligeait à dire "Hey Jarvis" en anglais) — un
+> modèle dédié, entraîné spécifiquement pour "Jaris" (voir plus bas), le
+> remplace maintenant. Le raccourci clavier **+** reste disponible pour un
+> déclenchement manuel, sans rien dire.
 
-### 1. Environnement Python (déclenchement par clap + reconnaissance vocale)
+### 1. Environnement Python (mot d'activation + reconnaissance vocale)
 
 Un seul process Python à côté d'Electron gère le micro, la détection du
-double clap et la transcription.
+mot d'activation et la transcription.
 
 ```bash
 python -m venv python/venv
