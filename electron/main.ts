@@ -65,7 +65,9 @@ let pipeline: VoicePipeline | null = null
 let fullWindow: BrowserWindow | null = null
 let widgetWindow: BrowserWindow | null = null
 let tray: Tray | null = null
-/** Passe à true seulement via le menu de la barre système "Quitter" : sinon fermer la fenêtre de réglages la cache juste, Jaris continue à tourner (widget + écoute du double clap). */
+/** Passe à true via le menu de la barre système "Quitter" OU en fermant la croix de la fenêtre de réglages
+ * (les deux quittent vraiment Jaris désormais) — seul minimize (juste en dessous) continue de replier en
+ * widget sans jamais toucher à ce drapeau. */
 let quitting = false
 /** Tant que l'onboarding n'est pas fini, fermer la fenêtre de réglages doit quitter l'appli normalement (pas de widget à replier sur un profil pas encore configuré). */
 let onboardingDone = false
@@ -117,8 +119,10 @@ function loadRenderer(win: BrowserWindow, mode: 'full' | 'widget'): void {
 
 /**
  * Fenêtre normale de Jaris (onboarding, orbe, conversation, Options, cerveau de Jaris) : c'est celle-là
- * qui s'ouvre au lancement, comme avant l'étape 19. La réduire ou fermer sa croix ne quitte pas Jaris :
- * ça la cache et fait apparaître le widget flottant à la place (voir `quitting`/`onboardingDone`).
+ * qui s'ouvre au lancement, comme avant l'étape 19. La réduire cache la fenêtre et fait apparaître le widget
+ * flottant à la place (voir `onboardingDone`) ; fermer sa croix, elle, quitte VRAIMENT Jaris (voir
+ * `quitting`) — Léo s'attend à ce que fermer l'appli la ferme pour de bon, pas qu'elle continue de tourner
+ * en widget sans qu'il s'en rende compte.
  */
 function createFullWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -136,16 +140,13 @@ function createFullWindow(): BrowserWindow {
   })
 
   win.on('ready-to-show', () => win.show())
-  win.on('close', (event) => {
-    if (quitting || !onboardingDone) return
-    event.preventDefault()
-    win.hide()
-    showWidgetWindow()
-    // Le React de cette fenêtre reste en mémoire (juste cachée, jamais rechargée) : s'il était resté sur
-    // l'onglet Chat/Code au moment de se replier en widget, l'écoute vocale resterait suspendue pour de bon
-    // (voir setListeningSuspended, voicePipeline.ts) alors que l'utilisateur ne voit plus que le widget,
-    // symbole du mode vocal — la reprendre explicitement ici plutôt que de dépendre du renderer cette fois.
-    pipeline?.setListeningSuspended(false)
+  // Fermer la croix quitte vraiment Jaris (widget compris, via app.quit() qui referme aussi les autres
+  // fenêtres) — avant cette version, fermer la croix se repliait silencieusement en widget comme minimize,
+  // ce qui laissait Jaris tourner en arrière-plan sans que Léo s'en rende compte en cliquant la croix.
+  win.on('close', () => {
+    if (quitting) return
+    quitting = true
+    app.quit()
   })
   // Pas de preventDefault possible sur 'minimize' (déjà fait quand l'évènement arrive) : on laisse
   // Windows réduire, puis on cache complètement la fenêtre (plus d'icône dans la barre des tâches) et

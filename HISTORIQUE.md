@@ -373,3 +373,18 @@ faire — rien n'est perdu, juste rangé à part. Voir README.md pour la liste d
   84x48 au repos dans une fenêtre de largeur constante ; plus de déplacement horizontal à l’activation.
   Identification par trace réelle des consoles des helpers d’Ollama. Console cachée héritée via
   Start-Process, avec arrêt de tout l’arbre conservé. Tests natifs Windows, renderer et serveur isolé.
+
+- ✅ Étape 72 (v0.4.24) — Léo a demandé que fermer la croix de la fenêtre principale
+  quitte VRAIMENT Jaris, au lieu de se replier silencieusement en widget
+  comme le fait minimize (confirmé vouloir garder ce comportement de repli
+  pour minimize). Depuis l'étape 19, les deux boutons faisaient exactement
+  la même chose (`event.preventDefault()` + `win.hide()` +
+  `showWidgetWindow()`) : Jaris continuait de tourner en arrière-plan (widget
+  + écoute du double clap) qu'on clique sur réduire ou sur la croix, sans
+  aucun moyen de vraiment l'arrêter autrement que par le menu de la barre
+  système. Corrigé en séparant les deux chemins dans `createFullWindow`
+  (main.ts) : la croix met `quitting = true` puis appelle `app.quit()` (même
+  idiome déjà utilisé pour "Quitter" dans le menu tray et pour l'arrêt
+  d'urgence GPU), minimize reste inchangé (replie en widget). Vérifié par
+  `npm run typecheck`/`npm run build` — toujours pas testé en usage réel sur
+  une vraie machine Windows (pas d'accès Windows dans cet environnement).

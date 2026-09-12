@@ -1081,12 +1081,13 @@ fichier depuis son dossier.
 
 Jaris se lance toujours normalement, dans sa fenêtre classique (comme avant
 cette étape) — rien ne change au démarrage. Ce qui change : dès qu'on la
-réduit (bouton "Réduire") ou qu'on la ferme (croix), au lieu de disparaître
-ou de quitter l'appli, elle laisse la place à un petit widget (`JarisOrb`,
-sans fenêtre ni fond) posé en bas à droite de l'écran, au-dessus de toutes
-les autres fenêtres — visible même en travaillant dans le navigateur ou une
-autre appli. Jaris continue de tourner en arrière-plan, il n'y a juste plus
-la grande fenêtre à l'écran.
+réduit (bouton "Réduire"), au lieu de disparaître dans la barre des tâches,
+elle laisse la place à un petit widget (`JarisOrb`, sans fenêtre ni fond)
+posé en haut au centre de l'écran (étape 68), au-dessus de toutes les autres
+fenêtres — visible même en travaillant dans le navigateur ou une autre appli.
+Jaris continue de tourner en arrière-plan, il n'y a juste plus la grande
+fenêtre à l'écran. **Fermer la croix, elle, quitte vraiment Jaris** (étape
+72) : contrairement à réduire, ce n'est plus un repli silencieux en widget.
 - **Sans fond** : la fenêtre Electron du widget est transparente
   (`transparent: true`, sans bordure) ; seul l'anneau lumineux de `JarisOrb`
   est visible, pas de rectangle derrière.

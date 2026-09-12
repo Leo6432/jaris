@@ -527,6 +527,18 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   qui change n'a normalement pas de raison de se démonter (ici JarisOrb reste le même composant logique,
   seule sa taille change) : forcer le remontage via `key` est plus simple qu'orchestrer une transition CSS
   manuelle sur des propriétés qui ne s'y prêtent pas nativement (ici la résolution du canvas).
+- **Fermer la croix de la fenêtre principale se repliait en widget EXACTEMENT comme minimize** (étape 19,
+  jamais remis en cause jusqu'à ce que Léo le demande à l'étape 72) : `win.on('close', ...)` faisait
+  `event.preventDefault()` + `win.hide()` + `showWidgetWindow()`, la même chose que `win.on('minimize', ...)`
+  juste en dessous — Jaris continuait donc de tourner en arrière-plan (widget + écoute du double clap) quel
+  que soit le bouton cliqué, sans que rien ne distingue "je veux juste réduire" de "je veux fermer l'appli".
+  Corrigé en séparant les deux : la croix met `quitting = true` puis appelle `app.quit()` (même idiome déjà
+  utilisé pour "Quitter" dans le menu de la barre système et pour l'arrêt d'urgence GPU), minimize reste
+  inchangé. **Piège pour la prochaine fois qu'un TROISIÈME état de fenêtre est ajouté (ex: un futur "réduire
+  dans la barre système sans widget") : `quitting` n'est qu'un booléen global partagé par plusieurs
+  déclencheurs (croix, tray "Quitter", arrêt GPU) — avant d'ajouter un nouveau chemin qui doit vraiment quitter
+  l'app, vérifier s'il doit lui aussi passer par ce même drapeau (sinon un `close` ultérieur sur une fenêtre
+  encore ouverte pourrait se re-intercepter et re-replier en widget au lieu de laisser le quit se terminer).**
 
 
 - **Une animation au remontage ne relie pas deux états du widget** : changer la clé React détruit le
