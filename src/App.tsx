@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import CapacityScan from '@/components/CapacityScan'
 import ChatPanel from '@/components/ChatPanel'
 import CodePanel from '@/components/CodePanel'
@@ -52,6 +52,33 @@ export default function App(): JSX.Element {
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
+
+  // Taille de l'orbe de l'écran Agent vocal (défaut 320px, comme avant) : Léo a signalé que réduire la
+  // fenêtre pendant/après une demande transforme le cercle en une simple ligne orange ondulée — l'orbe
+  // restait à 320px fixe et se faisait ROGNER par `.app-main` (overflow: hidden) dès que la fenêtre devenait
+  // plus petite que lui, ne laissant visible qu'une fine bande horizontale au milieu de l'anneau irrégulier.
+  // `.app__orb-stage` (index.css) prend, via flex, exactement l'espace RESTANT dans `.app--voice` une fois
+  // le statut et l'astuce posés (measuré, pas deviné) ; un ResizeObserver dessus retaille l'orbe pour qu'il
+  // ne dépasse jamais cet espace réel, jusqu'à MINIMAL_SIZE_THRESHOLD (JarisOrb.tsx) où le rendu simplifié
+  // du widget replié prend le relais plutôt que de continuer à rogner un anneau détaillé.
+  const [orbSize, setOrbSize] = useState(320)
+  const orbResizeObserverRef = useRef<ResizeObserver | null>(null)
+  const orbStageRef = useCallback((el: HTMLDivElement | null) => {
+    orbResizeObserverRef.current?.disconnect()
+    orbResizeObserverRef.current = null
+    if (!el) return
+    const ORB_MAX = 320
+    const ORB_MIN = 24
+    const MARGIN = 24
+    const update = (): void => {
+      const available = Math.min(el.clientWidth, el.clientHeight) - MARGIN
+      setOrbSize(Math.max(ORB_MIN, Math.min(ORB_MAX, available)))
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    orbResizeObserverRef.current = observer
+  }, [])
 
   // undefined = pas encore chargé, null = pas de profil (premier lancement)
   const [profileName, setProfileName] = useState<string | null | undefined>(undefined)
@@ -345,16 +372,22 @@ export default function App(): JSX.Element {
               {/* Pas d'audioElRef ici : seul le widget a un <audio> monté, l'orbe de cette fenêtre suit juste
                   l'émotion sans vibrer avec la voix (évite toute double lecture du son des réponses).
                   onClick : une des 3 façons d'activer Jaris (Options → Activation, étape 81), avec la même
-                  relecture du profil à la volée que le "+" ci-dessus plutôt qu'un état React à synchroniser. */}
-              <JarisOrb
-                emotion={emotion}
-                onClick={() => {
-                  void window.jaris.getProfile().then((profile) => {
-                    if (profile?.activationOrbClickEnabled === false) return
-                    window.jaris.triggerWake()
-                  })
-                }}
-              />
+                  relecture du profil à la volée que le "+" ci-dessus plutôt qu'un état React à synchroniser.
+                  app__orb-stage : voir orbStageRef ci-dessus, prend l'espace RÉELLEMENT restant pour éviter
+                  que l'orbe ne se fasse rogner par la fenêtre (au lieu de rétrécir proprement) quand elle est
+                  réduite. */}
+              <div className="app__orb-stage" ref={orbStageRef}>
+                <JarisOrb
+                  emotion={emotion}
+                  size={orbSize}
+                  onClick={() => {
+                    void window.jaris.getProfile().then((profile) => {
+                      if (profile?.activationOrbClickEnabled === false) return
+                      window.jaris.triggerWake()
+                    })
+                  }}
+                />
+              </div>
               <div className="app__status">{STATUS_LABEL[emotion]}</div>
               <div className="app__hint">
                 Astuce : dis "Jaris", clique sur le cercle, ou appuie sur le + du pavé numérique depuis

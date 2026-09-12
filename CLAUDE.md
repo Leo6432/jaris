@@ -818,6 +818,27 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   raccourci local au renderer ET un raccourci global au process principal), une case "désactiver X" doit
   gater CHAQUE mécanisme séparément — en gater un seul laisse croire que le réglage ne marche pas du tout,
   alors qu'il marche partiellement.**
+- **"si je demande a jaris dans l'application, et je diminue la page ça fait ça" (Léo, capture d'écran :
+  une simple ligne orange ondulée flottant en haut d'un écran presque noir)** : l'orbe de l'écran Agent vocal
+  (App.tsx) avait une taille FIXE (320px, `<JarisOrb emotion={emotion} />` sans prop `size`), centrée par
+  flexbox dans `.app.app--voice` — réduire la fenêtre ne rétrécit PAS cet orbe (les navigateurs ne
+  redimensionnent pas un enfant de taille fixe en px juste parce que le parent devient trop petit), il se
+  fait ROGNER par `.app-main` (`overflow: hidden`) dès que la fenêtre passe sous 320px de haut, ne laissant
+  visible qu'une fine bande horizontale au milieu de l'anneau irrégulier — exactement la "ligne ondulée" de
+  la capture. **Diagnostic vérifié pour de vrai avant tout correctif** : un test Playwright a bundlé le VRAI
+  composant `JarisOrb.tsx` dans la vraie structure DOM de App.tsx (`.app-shell > .app-main > .app.app--voice`),
+  avec le vrai CSS compilé, réduit la fenêtre à 900x90, et confirmé par screenshot que le rendu obtenu est
+  identique à la capture de Léo (bande orange ondulée) — pas deviné. Corrigé en ajoutant `.app__orb-stage`
+  (index.css), un conteneur flex (`flex: 1 1 auto; align-self: stretch; min-height: 0`) qui prend exactement
+  l'espace RÉELLEMENT restant dans `.app--voice` une fois le statut et l'astuce posés (mesuré par la mise en
+  page CSS elle-même, pas une marge devinée), observé par un `ResizeObserver` (App.tsx, `orbStageRef`, en
+  callback ref — même technique que l'orbe du sélecteur de voix à l'étape 77, pour la même raison : se
+  redéclenche à la présence réelle du nœud DOM) qui clampe la prop `size` de `JarisOrb` entre 24 et 320px
+  selon l'espace dispo. Revérifié avec le même test Playwright : la fenêtre normale garde l'orbe à 320px
+  (aucune régression), une fenêtre très réduite le fait rétrécir proprement (jusqu'au rendu minimal simplifié
+  de JarisOrb en dessous de 48px) plutôt que de le laisser se faire rogner en forme cassée. Un clic réel
+  Playwright sur le canvas confirme que `onClick` (une des 3 méthodes d'activation, étape 81) fonctionne
+  toujours après l'ajout du conteneur `.app__orb-stage`.
 
 ## Commandes utiles
 

@@ -276,6 +276,21 @@ body.body--scan::after {
   overflow-y: auto;
 }
 
+/* Voir orbStageRef (App.tsx) : occupe tout l'espace RESTANT dans .app--voice une fois le statut et l'astuce
+   posés (flex: 1, align-self: stretch pour la largeur réelle, pas juste celle de l'orbe), pour qu'un
+   ResizeObserver puisse mesurer ce qui reste vraiment plutôt que deviner une marge fixe. Sans lui, l'orbe
+   (taille fixe 320px) se faisait rogner par .app-main (overflow: hidden) dès que la fenêtre devenait plus
+   petite que lui, ne laissant visible qu'une fine bande horizontale de l'anneau irrégulier. */
+.app__orb-stage {
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .options-menu__trigger {
   background: transparent;
   border: 1px solid rgba(122, 176, 214, 0.35);

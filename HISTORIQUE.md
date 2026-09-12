@@ -573,3 +573,14 @@ supplémentaire ; la voix et le microphone réels de Léo restent à valider apr
   appli, l'usage normal pour Léo). Seul le premier vérifiait `activationKeyEnabled` ; le second
   appelait encore `pipeline?.triggerWake()` sans le moindre contrôle. Corrigé en ajoutant la même
   relecture du profil dans le callback du raccourci global avant de déclencher l'écoute.
+
+- ✅ Étape 83 (v0.5.5) — Léo, capture d'écran : une ligne orange ondulée flottant en haut d'un écran
+  noir, "si je demande a jaris dans l'application, et je diminue la page ça fait ça". Vérifié par un
+  test Playwright avec le vrai composant JarisOrb dans la vraie structure DOM (pas deviné) : l'orbe de
+  l'écran Agent vocal restait à taille fixe (320px) et se faisait rogner par `.app-main` (overflow:
+  hidden) dès que la fenêtre passait sous 320px de haut, ne laissant visible qu'une fine bande de
+  l'anneau irrégulier — reproduit à l'identique de la capture de Léo. Corrigé en ajoutant un conteneur
+  flex `.app__orb-stage` qui prend l'espace réellement restant (mesuré par la mise en page, pas deviné),
+  observé par un ResizeObserver qui clampe la taille de l'orbe entre 24 et 320px. Revérifié : taille
+  normale inchangée à 320px, rétrécissement propre sur petite fenêtre, clic sur l'orbe toujours
+  fonctionnel après l'ajout du conteneur.
