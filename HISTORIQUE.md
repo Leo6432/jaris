@@ -407,3 +407,28 @@ faire — rien n'est perdu, juste rangé à part. Voir README.md pour la liste d
   la suite de régression existante (`test-widget-transition.mjs`, 6/6) —
   toujours pas testé en usage réel sur une vraie machine Windows (pas
   d'accès Windows dans cet environnement).
+- ✅ Étape 74 (v0.4.26) — Léo a demandé une recherche sur d'éventuels
+  meilleurs modèles/outils vocaux (prompt donné à ChatGPT, résultat comparé
+  aux propres recherches faites ici), puis a validé le remplacement de
+  Supertonic HD par Kokoro pour la synthèse vocale (STT/Cohere Transcribe
+  confirmé rester le meilleur choix, inchangé). Kokoro sonne plus naturel
+  dans les comparatifs indépendants et sa licence (Apache 2.0) est plus
+  permissive, mais n'a qu'UNE SEULE voix par langue en dehors de l'anglais
+  (`ff_siwis` en français, contre 10 voix chez Supertonic) — Léo en a été
+  informé ET a écouté un vrai échantillon audio français généré et envoyé
+  avant de valider le changement, pas juste sur la foi de chiffres de
+  comparatifs souvent centrés sur l'anglais. Remplacé dans
+  `python/tts_server.py` (le français passe par le repli espeak-ng de
+  Kokoro, fourni sans installation système séparée via `espeakng-loader`),
+  dépendances Python re-résolues ENSEMBLE (`pip install --dry-run
+  --report`) avant de figer `kokoro==0.9.4`/`espeakng-loader==0.2.4`. Le
+  menu Options → Voix n'a plus de choix à faire (une seule voix) : le
+  picker à 10 voix est retiré au profit d'un simple nom + bouton "Écouter
+  un exemple" (`ttsVoice`/`TTS_VOICE` retirés du profil/`.env`, désormais
+  sans utilité). Vérifié pour de vrai : le script `tts_server.py` exécuté
+  avec une vraie requête JSON produit un vrai WAV exploitable, et un test
+  Playwright sur le vrai CSS compilé confirme que le nouveau bouton reste
+  cliquable et que "Fermer" reçoit toujours ses clics à travers le
+  conteneur `pointer-events: none` de l'onglet Voix — toujours pas testé en
+  usage réel sur une vraie machine Windows (pas d'accès Windows dans cet
+  environnement), en particulier le chargement d'espeak-ng via l'installeur.

@@ -39,8 +39,9 @@ export const config = {
     device: readEnv('STT_DEVICE', 'auto')
   },
   tts: {
-    /** Synthèse vocale : Supertonic HD (99M paramètres, modèle téléchargé automatiquement au premier lancement). */
-    voice: readEnv('TTS_VOICE', 'M3'),
+    /** Synthèse vocale : Kokoro-82M (modèle téléchargé automatiquement au premier lancement). Pas de
+     * réglage de voix (TTS_VOICE, retiré) : Kokoro n'a qu'une seule voix par langue en dehors de
+     * l'anglais (voir tts_server.py), contrairement à Supertonic HD qui en proposait 10. */
     language: readEnv('TTS_LANGUAGE', 'fr')
   },
   ollama: {

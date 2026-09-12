@@ -21,7 +21,7 @@ interface PendingRequest {
 }
 
 /**
- * Sidecar Python persistant pour la synthèse vocale (Supertonic HD) : le modèle est chargé une seule
+ * Sidecar Python persistant pour la synthèse vocale (Kokoro-82M) : le modèle est chargé une seule
  * fois au premier appel puis réutilisé pour chaque phrase, au lieu de relancer un process à chaque
  * réponse (contrairement à l'ancien Piper, appelé comme binaire natif à chaque fois).
  */
@@ -36,14 +36,7 @@ class TtsClient extends EventEmitter {
     this.ready = new Promise((resolveReady, rejectReady) => {
       const proc = spawn(
         resolvePythonBin(),
-        [
-          '-u',
-          join(pythonScriptsDir(), 'tts_server.py'),
-          '--voice',
-          config.tts.voice,
-          '--language',
-          config.tts.language
-        ],
+        ['-u', join(pythonScriptsDir(), 'tts_server.py'), '--language', config.tts.language],
         { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true }
       )
       this.proc = proc
@@ -96,12 +89,12 @@ class TtsClient extends EventEmitter {
     return this.ready
   }
 
-  /** Synthétise `text` avec `voice` (défaut : celle passée au démarrage du sidecar), renvoie le chemin du WAV généré (à supprimer par l'appelant). */
-  async synthesize(text: string, voice?: string): Promise<string> {
+  /** Synthétise `text`, renvoie le chemin du WAV généré (à supprimer par l'appelant). */
+  async synthesize(text: string): Promise<string> {
     await this.start()
     return new Promise((resolve, reject) => {
       this.queue.push({ resolve, reject })
-      const request = { text: text.replace(/\n/g, ' '), voice }
+      const request = { text: text.replace(/\n/g, ' ') }
       this.proc?.stdin.write(JSON.stringify(request) + '\n')
     })
   }

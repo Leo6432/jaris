@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type {
   AppVersionStatus,
@@ -12,27 +12,6 @@ import type {
 } from '../../shared/ipc'
 import HardwareTierPreview from './HardwareTierPreview'
 import { formatModelName } from '../lib/formatModelName'
-
-interface VoiceOption {
-  id: string
-  description: string
-  gradient: string
-}
-
-const TTS_VOICES: VoiceOption[] = [
-  { id: 'M1', description: 'Vive, énergique', gradient: 'linear-gradient(135deg, #37e2ff, #2b6cff)' },
-  { id: 'M2', description: 'Grave, sérieuse', gradient: 'linear-gradient(135deg, #2b6cff, #1c3f99)' },
-  { id: 'M3', description: 'Autoritaire, confiante', gradient: 'linear-gradient(135deg, #6c5ce7, #341f97)' },
-  { id: 'M4', description: 'Douce, jeune', gradient: 'linear-gradient(135deg, #55e6c1, #10ac84)' },
-  { id: 'M5', description: 'Chaleureuse, narrative', gradient: 'linear-gradient(135deg, #feca57, #ff9f43)' },
-  { id: 'F1', description: 'Calme, posée', gradient: 'linear-gradient(135deg, #ff9ff3, #f368e0)' },
-  { id: 'F2', description: 'Vive, enjouée', gradient: 'linear-gradient(135deg, #ff6b81, #ee5253)' },
-  { id: 'F3', description: 'Professionnelle', gradient: 'linear-gradient(135deg, #48dbfb, #0abde3)' },
-  { id: 'F4', description: 'Nette, confiante', gradient: 'linear-gradient(135deg, #c8d6e5, #8395a7)' },
-  { id: 'F5', description: 'Douce, bienveillante', gradient: 'linear-gradient(135deg, #ffdfba, #ffb8b8)' }
-]
-
-const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
 
 /**
  * Nombre de barres du visualiseur de test micro (façon Discord : une fenêtre glissante des derniers niveaux
@@ -106,7 +85,6 @@ export default function OptionsMenu(): JSX.Element {
   const [tab, setTab] = useState<Tab>('voix')
   const [error, setError] = useState<string | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [voiceIndex, setVoiceIndex] = useState(DEFAULT_VOICE_INDEX)
   const [previewing, setPreviewing] = useState(false)
   const [history, setHistory] = useState<ConversationEntry[] | null>(null)
   const [clearingHistory, setClearingHistory] = useState(false)
@@ -137,11 +115,7 @@ export default function OptionsMenu(): JSX.Element {
   const [micTestResult, setMicTestResult] = useState<boolean | null>(null)
 
   useEffect(() => {
-    window.jaris.getProfile().then((p) => {
-      setProfile(p)
-      const savedIndex = TTS_VOICES.findIndex((v) => v.id === p?.ttsVoice)
-      if (savedIndex !== -1) setVoiceIndex(savedIndex)
-    })
+    window.jaris.getProfile().then(setProfile)
   }, [])
 
   // Chargé seulement à l'ouverture de l'onglet (pas au montage comme les autres réglages ci-dessus) :
@@ -285,8 +259,6 @@ export default function OptionsMenu(): JSX.Element {
     }
   }
 
-  const voice = useMemo(() => TTS_VOICES[voiceIndex], [voiceIndex])
-
   /**
    * Contrairement à handleUpdateOllama ci-dessous, ne relit jamais le statut après coup : une mise à jour
    * réussie ferme Jaris une seconde plus tard (voir updateApp, appUpdater.ts) pour laisser l'installeur
@@ -355,26 +327,18 @@ export default function OptionsMenu(): JSX.Element {
       .finally(() => setUpdatingOllama(false))
   }
 
-  const chooseVoice = async (index: number): Promise<void> => {
-    const nextIndex = (index + TTS_VOICES.length) % TTS_VOICES.length
-    setVoiceIndex(nextIndex)
+  /** Une seule voix côté Kokoro (ff_siwis, voir tts_server.py) : rien à choisir, juste à écouter. */
+  const previewCurrentVoice = async (): Promise<void> => {
     setError(null)
     setPreviewing(true)
     try {
-      const nextVoice = TTS_VOICES[nextIndex]
-      const audio = await window.jaris.previewVoice(nextVoice.id)
+      const audio = await window.jaris.previewVoice()
       if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current)
       const blob = new Blob([audio], { type: 'audio/wav' })
       audioUrlRef.current = URL.createObjectURL(blob)
       if (audioRef.current) {
         audioRef.current.src = audioUrlRef.current
         await audioRef.current.play()
-      }
-
-      if (profile) {
-        const updated = { ...profile, ttsVoice: nextVoice.id }
-        setProfile(updated)
-        await window.jaris.saveProfile(updated)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -515,28 +479,13 @@ export default function OptionsMenu(): JSX.Element {
         <main className="options-page__workspace">
           <div className="options-page__content">
         {tab === 'voix' && (
-          <div className="options-menu__voice-picker">
-            <div className="options-menu__voice-nav">
-              <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex - 1)} disabled={previewing}>
-                ‹
+          <div className="options-menu__voice-section">
+            <div className="options-menu__voice-current">
+              <div className="options-menu__voice-name">Kokoro</div>
+              <div className="options-menu__voice-description">Voix française unique (ff_siwis)</div>
+              <button className="options-menu__preview-button" onClick={() => void previewCurrentVoice()} disabled={previewing}>
+                {previewing ? 'Lecture...' : 'Écouter un exemple'}
               </button>
-              <div className="options-menu__voice-orb" style={{ background: voice.gradient }} />
-              <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex + 1)} disabled={previewing}>
-                ›
-              </button>
-            </div>
-            <div className="options-menu__voice-name">{previewing ? 'Lecture...' : voice.id}</div>
-            <div className="options-menu__voice-description">{voice.description}</div>
-            <div className="options-menu__voice-dots">
-              {TTS_VOICES.map((v, i) => (
-                <button
-                  key={v.id}
-                  className={`options-menu__dot${i === voiceIndex ? ' options-menu__dot--active' : ''}`}
-                  onClick={() => void chooseVoice(i)}
-                  disabled={previewing}
-                  aria-label={v.id}
-                />
-              ))}
             </div>
 
             <div className="options-menu__section-title">Design sonore</div>

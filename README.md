@@ -131,7 +131,7 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   dépendances inutilisées
 - ⬜ Étape 22 — Vérification des licences avant mise en vente : vérifier la
   compatibilité des licences des briques open source utilisées (Ollama,
-  modèles Qwen, Cohere Transcribe, Supertonic HD, SearXNG) avec
+  modèles Qwen, Cohere Transcribe, Kokoro, SearXNG) avec
   une distribution commerciale, avant de passer aux étapes de mise sur le
   marché ci-dessous (mentions légales, protection contre la redistribution,
   publication et monétisation)
@@ -280,15 +280,16 @@ vraies mesures plutôt qu'à l'aveugle. Le raccourci clavier **+** (dans la
 fenêtre Jaris) reste disponible pour déclencher l'écoute manuellement, sans
 clap.
 
-### 2. Synthèse vocale (Supertonic HD)
+### 2. Synthèse vocale (Kokoro)
 
-Rien à installer à la main : `supertonic` est dans `python/requirements.txt`
-(déjà installé à l'étape 1), et le modèle (~100 Mo, léger) se télécharge tout
-seul au premier lancement de Jaris, comme Cohere Transcribe. `TTS_VOICE`
-dans `.env` fixe la voix par défaut (`M3` de base) ; 10 voix sont dispo au
-total (`M1`-`M5`, `F1`-`F5`) et peuvent être écoutées et choisies directement
-depuis le menu **Options** de l'appli (clic sur une voix = phrase d'exemple
-jouée + voix retenue pour les prochaines réponses), sans toucher au `.env`.
+Rien à installer à la main : `kokoro` (+ `espeakng-loader`, qui embarque le
+binaire espeak-ng directement dans le paquet pip, sans installation système
+séparée) sont dans `python/requirements.txt` (déjà installé à l'étape 1), et
+le modèle (~80 Mo, très léger, tourne sur CPU) se télécharge tout seul au
+premier lancement de Jaris, comme Cohere Transcribe. Une seule voix française
+(`ff_siwis`) : pas de réglage de voix dans `.env` (contrairement à l'ancien
+Supertonic HD qui en proposait 10) — écoutable depuis le menu **Options** de
+l'appli (onglet Voix, bouton "Écouter un exemple").
 
 ### Vérifier
 

@@ -44,7 +44,7 @@ declare global {
       openMemoryFolder: () => Promise<void>
       getMemoryGraph: () => Promise<MemoryGraph>
       getMemoryNoteContent: (title: string) => Promise<string>
-      previewVoice: (voice: string) => Promise<ArrayBuffer>
+      previewVoice: () => Promise<ArrayBuffer>
       notifyOnboardingFinished: () => void
       openSettings: () => void
       getConversationHistory: () => Promise<ConversationEntry[]>

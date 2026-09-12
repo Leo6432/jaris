@@ -623,6 +623,35 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   (`dialog.showOpenDialog(fullWindow, ...)`) prend le focus OS au même titre qu'une autre application pour
   Electron — sans ce garde, choisir l'emplacement des modèles (étape 44) aurait fait disparaître la fenêtre
   de réglages en plein milieu de la sélection du dossier.
+- **Remplacement de Supertonic HD par Kokoro (étape 74), à la demande de Léo ("change avec koro") après
+  recherche externe (prompt donné à ChatGPT) et écoute d'un vrai échantillon audio français généré et
+  envoyé avant de coder** : Kokoro sonne plus naturel dans les comparatifs indépendants et sa licence
+  (Apache 2.0) est plus permissive, mais il n'a qu'UNE SEULE voix par langue en dehors de l'anglais (`ff_
+  siwis` en français, contre 10 voix M1-M5/F1-F5 chez Supertonic) — ses propres créateurs qualifient le
+  français de "peu représenté" (moins de 11h d'entraînement, note B-). Léo a été informé de ce compromis
+  ET a entendu un vrai échantillon (généré dans un venv jetable, envoyé via SendUserFile) avant de valider
+  le changement — jamais juste sur la base des chiffres de comparatifs (souvent centrés sur l'anglais).
+  **Le français passe par le repli espeak-ng de Kokoro** (pas de G2P dédié comme l'anglais/japonais/
+  mandarin) : `espeakng-loader` fournit le binaire espeak-ng directement DANS le paquet pip (aucune
+  installation système séparée à demander à Léo, cohérent avec la règle de l'étape 16 "rien à installer à
+  la main") — `EspeakWrapper.set_library()`/`set_data_path()` (module `phonemizer`) doivent être configurés
+  AVANT le premier `from kokoro import KPipeline`, sinon Kokoro cherche un espeak-ng système qui n'existe
+  pas sur une machine Windows vierge. `device="cpu"` explicite (Kokoro tourne très bien sans GPU) : le
+  budget VRAM de Jaris (`STT_RESERVED_GB`, hardwareScan.ts) ne réserve de la place QUE pour le sidecar STT
+  — laisser Kokoro choisir seul son device aurait pu lui faire prendre le GPU par défaut et dépasser
+  silencieusement ce budget déjà calculé pour les modèles Ollama. Le menu Options → Voix n'a donc plus de
+  quoi que ce soit à choisir : le picker à 10 voix (flèches/orbe/points, `TTS_VOICES`) est retiré au profit
+  d'un simple nom + bouton "Écouter un exemple" — même `ttsVoice`/`TTS_VOICE` retirés du profil/`.env`
+  (rien à y stocker). **Dépendances Python résolues ENSEMBLE via `pip install --dry-run --report`** (même
+  discipline que d'habitude dans ce fichier) avant de figer `kokoro==0.9.4`/`espeakng-loader==0.2.4` dans
+  requirements.txt : `kokoro` tire `misaki[en]` (donc spaCy et toute sa chaîne) INCONDITIONNELLEMENT, même
+  si Jaris n'utilise jamais l'anglais — poids supplémentaire accepté (aucun conflit de version avec les
+  paquets déjà figés pour Cohere Transcribe), pas une raison de bricoler l'installation. Vérifié pour de
+  vrai (pas juste en relecture) : le vrai script `tts_server.py` exécuté avec une vraie requête JSON sur
+  stdin produit un vrai WAV exploitable, ET un test Playwright sur le vrai CSS compilé confirme que le
+  nouveau bouton reste cliquable et que "Fermer" reçoit toujours ses clics à travers le conteneur
+  `pointer-events: none` (même piège déjà documenté à l'étape 31) — jamais testé en usage réel (pas d'accès
+  Windows dans cet environnement), en particulier le chargement d'espeak-ng via un vrai installeur Windows.
 
 ## Commandes utiles
 
