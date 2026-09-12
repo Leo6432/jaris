@@ -470,3 +470,19 @@ faire — rien n'est perdu, juste rangé à part. Voir README.md pour la liste d
   Playwright : orbe à 320x320 identique à 480x600 (plus petite fenêtre
   possible de Jaris), 1000x760 et 1920x1080, sans jamais déborder de la
   fenêtre.
+- ✅ Étape 79 (v0.4.31) — Léo avait remarqué que Supertonic 3 a "plusieurs
+  niveaux" (question : "étape combien ?") : vérifié que `total_steps` va de
+  5 (rapide, moins net) à 12 (recommandé max, plus propre) chez Supertonic,
+  8 étant déjà la valeur par défaut de la bibliothèque. Avant tout
+  changement, deux choses vérifiées pour de vrai plutôt que supposées : (1)
+  3 vrais échantillons audio générés (niveaux 1/5/12, même phrase, dans un
+  venv jetable avec le `supertonic==1.3.1` réellement figé dans
+  requirements.txt) envoyés à Léo pour qu'il écoute et compare lui-même ;
+  (2) le coût réel chronométré avant de répondre à sa question "ça va
+  prendre beaucoup plus de puissance ?" : ~1,45s à 8 contre ~1,98s à 12 sur
+  la machine de test (+35-40%, aucune VRAM/GPU supplémentaire nécessaire —
+  un coût CPU par réponse, pas un besoin matériel nouveau). Léo a choisi le
+  niveau 12 en connaissance de cause ("met a le etape 12") : `total_steps`
+  changé de 8 à 12 dans `python/tts_server.py`. Revérifié pour de vrai :
+  appel réel de `tts_server.py` via stdin/stdout (exit code 0, synthèse
+  produite), suite de régression complète (48/48 tests) toujours au vert.

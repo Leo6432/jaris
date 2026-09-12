@@ -647,6 +647,21 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   fixe partagée) — la première tentative (étape 77) a supposé la première lecture sans la confirmer, alors
   que Léo décrivait déjà la seconde ("le même cercle que dans l'accueil") dès sa toute première demande sur
   ce sujet (étape 76) ; une relecture plus attentive de sa phrase d'origine aurait évité ce détour.**
+- **Qualité Supertonic (`total_steps`, python/tts_server.py) : 8 -> 12, décidé sur des FAITS mesurés, pas des
+  suppositions.** Léo avait remarqué que Supertonic a "plusieurs niveaux" (question sur "étape combien") ;
+  vérifié que `total_steps` va de 5 (rapide, moins net) à 12 (recommandé max, plus propre) chez Supertonic,
+  8 étant déjà la valeur par défaut de la bibliothèque — donc DÉJÀ un choix raisonnable avant tout
+  changement, pas une valeur négligée. Avant de choisir, deux choses vérifiées pour de vrai plutôt que
+  supposées : (1) 3 vrais échantillons audio générés (niveaux 1/5/12, MÊME phrase, dans un venv jetable avec
+  le `supertonic==1.3.1` réellement figé dans requirements.txt) envoyés à Léo pour qu'il écoute et compare
+  lui-même — jamais une recommandation basée sur des chiffres de comparatifs seuls (même leçon que Kokoro,
+  étapes 74-75) ; (2) le coût réel en temps CHRONOMÉTRÉ (pas estimé) avant de répondre à sa question "ça va
+  prendre beaucoup plus de puissance ?" : ~1,45s à 8 contre ~1,98s à 12 sur la machine de test (+35-40%,
+  aucune VRAM/GPU supplémentaire nécessaire — c'est un coût CPU par réponse, pas un besoin matériel nouveau).
+  Léo a choisi 12 en connaissance de cause. **Leçon générale : quand une question porte sur un coût concret
+  ("combien de temps/puissance en plus ?"), le chronométrer réellement (même sur une machine différente de
+  celle de l'utilisateur, en le précisant) donne une réponse bien plus utile qu'une estimation qualitative
+  ("un peu plus lent").**
 
 ## Commandes utiles
 

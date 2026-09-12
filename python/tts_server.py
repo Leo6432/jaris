@@ -61,7 +61,12 @@ def main() -> None:
                 text=text,
                 lang=args.language,
                 voice_style=voice_styles[voice],
-                total_steps=8,
+                # 8 -> 12 (borne haute recommandée par Supertonic) : Léo a comparé les 3 échantillons
+                # (niveaux 1/5/12 générés et envoyés en usage réel) et préféré 12, malgré le coût mesuré
+                # pour de vrai (~35-40% de temps de synthèse en plus, ~0,5s de plus par réponse sur une
+                # machine de test) — pas de VRAM/GPU supplémentaire nécessaire, seulement un peu plus de
+                # calcul CPU à chaque réponse.
+                total_steps=12,
                 speed=1.05,
             )
             fd, path = tempfile.mkstemp(suffix=".wav", prefix="jaris-tts-")
