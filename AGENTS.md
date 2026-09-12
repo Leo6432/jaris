@@ -662,6 +662,49 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   ("combien de temps/puissance en plus ?"), le chronométrer réellement (même sur une machine différente de
   celle de l'utilisateur, en le précisant) donne une réponse bien plus utile qu'une estimation qualitative
   ("un peu plus lent").**
+- **"on vas pas faire en tappant dans les mains c'est galere... dire juste jaris" (Léo, étape 80)** :
+  remplace le double clap par un vrai mot d'activation "Jaris", en évitant le piège de la toute première
+  tentative (openWakeWord retiré une première fois car aucun mot-clé "Jaris" n'existe tout fait, obligeant
+  à dire "Hey Jarvis" en anglais). Entraîné un modèle openWakeWord DÉDIÉ à "Jaris" plutôt que de réutiliser
+  un mot existant : corpus synthétique généré avec les 10 voix Supertonic DÉJÀ utilisées par Jaris (français
+  réel, pas le générateur Piper anglais fourni par défaut par openWakeWord) — positifs ("Jaris" dans
+  plusieurs phrasings/voix/vitesses) et négatifs DURS (mots phonétiquement proches : "Paris", "chariot", "a
+  ri", "Jarvis"...) plutôt qu'un jeu de données générique. Le jeu de négatifs "arrière-plan" officiel
+  d'openWakeWord (ACAV100M, ~17 Go de features pré-calculées) a été délibérément écarté (disproportionné
+  pour ce cas, en plus d'un risque réel pour le budget disque de la session) au profit des augmentations
+  synthétiques déjà intégrées à la bibliothèque (bruit coloré, gain, pitch, filtre EQ) — validé objectivement
+  à la fin via le jeu de validation OFFICIEL d'openWakeWord (faux positifs/heure sur ~11h de vrai audio
+  varié, téléchargé à part car minuscule, 185 Mo) plutôt qu'une estimation.
+  **Piège d'empaquetage identifié AVANT de coder l'intégration** : le paquet PyPI `openwakeword` lui-même ne
+  s'installe PAS sur Windows/Python récent — sa dépendance dure `tflite-runtime` n'a aucune roue disponible
+  au-delà de Python 3.9 ni pour Windows (vérifié sur PyPI, pas supposé). `python/wakeword.py` réimplémente
+  donc EN MINIATURE (numpy + onnxruntime seulement, déjà une dépendance transitive de Supertonic) le
+  pipeline melspectrogramme + embedding + classifieur d'AudioFeatures/Model (Apache-2.0, réimplémentation
+  autorisée par la licence — même logique que la copie non protégée de Cohere Transcribe) — jamais deviné
+  correct : un test dédié (bundle le vrai fichier audio, traité chunk par chunk comme le fera vraiment
+  voice_server.py) a confirmé une correspondance BIT-À-BIT avec `openwakeword.utils.AudioFeatures` officiel
+  avant de faire confiance à cette réimplémentation.
+  **Vrai bug découvert EN CONSTRUISANT ce corpus, sans lien direct avec le mot d'activation lui-même, mais
+  qui affecte potentiellement tout micro dont le débit natif n'est pas 16 kHz (donc du code déjà en
+  production) : `scipy.signal.resample_poly` sur un tableau **int16** renvoie du SILENCE TOTAL, sans la
+  moindre erreur ni avertissement, quel que soit le ratio ou le contenu (vérifié avec un ton pur ET du bruit
+  aléatoire, aux deux ratios 44100→16000 ET 48000→16000 — toujours 0, alors que la MÊME opération sur le
+  MÊME signal converti en float64 d'abord donne le résultat attendu).** Découvert parce que le corpus généré
+  pour l'entraînement (ré-échantillonné 44,1 kHz -> 16 kHz avec ce même appel, copié depuis
+  `make_audio_callback` de `voice_server.py`) donnait un modèle bloqué à un rappel de 0% (toujours "pas
+  Jaris") quel que soit l'hyperparamètre ajusté — en creusant (comparaison directe du melspectrogramme
+  brut ONNX avant/après transform, puis du signal audio lui-même) le fichier resamplé s'est révélé
+  totalement silencieux (RMS = 0), pas juste "mal entraîné". `make_audio_callback` (voice_server.py) a
+  exactement le même appel, dans la retombée utilisée quand un micro n'accepte pas 16 kHz directement (USB/
+  Bluetooth, cas déjà documenté plus haut) : CORRIGÉ en castant en `float64` avant `resample_poly`, jamais
+  vérifié en usage réel avant (aucun micro de ce type rencontré). **Leçon générale, très concrète : une
+  fonction scipy/numpy qui accepte un tableau entier SANS lever d'erreur ne veut pas dire qu'elle le traite
+  correctement — certaines routines de filtrage supposent silencieusement une entrée en virgule flottante et
+  renvoient un résultat FAUX (ici : zéro partout) sur un entier, sans le moindre signal d'alerte. Toujours
+  caster explicitement en float avant un traitement DSP (filtrage, ré-échantillonnage, FFT...), même quand
+  la doc ne l'exige pas explicitement en entrée.** Régression : reproduit avec un script minimal (ton pur +
+  bruit aléatoire, scipy 1.14.1), pas encore de test automatisé dans `scripts/` (aucune convention Python
+  dans la suite de tests existante, uniquement `node --test scripts/test-*.mjs`).
 
 ## Commandes utiles
 

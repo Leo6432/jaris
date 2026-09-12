@@ -225,7 +225,14 @@ def main() -> None:
         def on_audio(indata: np.ndarray, _frames: int, _time_info, status) -> None:
             if status:
                 emit({"event": "log", "message": str(status)})
-            resampled = scipy.signal.resample_poly(indata[:, 0], up, down)
+            # scipy.signal.resample_poly sur un tableau int16 renvoie SILENCIEUSEMENT du silence total
+            # (aucune erreur, aucun avertissement) : sa filtration polyphase interne suppose une entrée en
+            # virgule flottante, un tableau entier y donne un résultat nul quel que soit le ratio ou le
+            # contenu (vérifié : ton pur ET bruit aléatoire donnent 0 en int16, un résultat correct en
+            # float64) — jamais détecté avant faute d'accès à un micro qui déclenche vraiment cette
+            # retombée (débit natif ≠ 16 kHz) en usage réel. Convertir en float AVANT le ré-échantillonnage
+            # corrige ça : c'est déjà le format attendu par les modèles ONNX de melspectrogramme en aval.
+            resampled = scipy.signal.resample_poly(indata[:, 0].astype(np.float64), up, down)
             audio_queue.put(np.clip(resampled, -32768, 32767).astype(np.int16))
 
         return on_audio
