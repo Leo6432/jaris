@@ -564,3 +564,12 @@ supplémentaire ; la voix et le microphone réels de Léo restent à valider apr
   l'astuce de l'écran d'accueil mentionnait encore le double clap, jamais repéré par le grep sur le
   mot "clap" (paraphrase, pas le mot lui-même) — corrigé pour mentionner les 3 vraies méthodes.
   Vérifié par un vrai clic Playwright sur le composant réel, pas juste une relecture du JSX.
+
+- ✅ Étape 82 (v0.5.4) — Léo, juste après l'étape 81 : "je desactive le plus je fait plus sa sactive"
+  (décocher la case "touche +" ne changeait rien). `grep -n "globalShortcut\|register("` dans
+  main.ts a révélé que le correctif précédent n'avait gaté qu'UN des deux mécanismes qui déclenchent
+  l'écoute avec cette touche : `handleKeyDown` (App.tsx, renderer, seulement si Jaris a le focus) ET
+  `globalShortcut.register('numadd', ...)` (main.ts, raccourci Windows global depuis n'importe quelle
+  appli, l'usage normal pour Léo). Seul le premier vérifiait `activationKeyEnabled` ; le second
+  appelait encore `pipeline?.triggerWake()` sans le moindre contrôle. Corrigé en ajoutant la même
+  relecture du profil dans le callback du raccourci global avant de déclencher l'écoute.

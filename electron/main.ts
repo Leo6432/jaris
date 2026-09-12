@@ -579,7 +579,15 @@ app.whenReady().then(async () => {
     try {
       const registered = globalShortcut.register(key, () => {
         console.log(`[jaris] Raccourci global ${key} déclenché (pipeline ${pipeline ? 'prêt' : 'PAS prêt'}).`)
-        pipeline?.triggerWake()
+        // Options → Activation (étape 81) : ce raccourci est un enregistrement GLOBAL côté main process,
+        // totalement indépendant du handleKeyDown du renderer (App.tsx, qui ne voit jamais cette touche
+        // quand Jaris n'a pas le focus) — sans ce même contrôle ici, décocher "touche +" dans Options
+        // n'avait aucun effet dès que la fenêtre de Jaris n'était pas la fenêtre active (signalé par Léo :
+        // "je desactive le plus je fait plus sa sactive").
+        void getProfile().then((profile) => {
+          if (profile?.activationKeyEnabled === false) return
+          pipeline?.triggerWake()
+        })
       })
       if (registered) {
         console.log(`[jaris] Raccourci global ${key} enregistré avec succès.`)

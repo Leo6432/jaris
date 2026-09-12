@@ -802,6 +802,22 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   évidentes du comportement retiré, pas seulement son nom technique. Vérifié avec un vrai clic Playwright
   (bundle du vrai `OptionsMenu.tsx`, clic bas niveau sur la 3e case, les 2 autres inchangées) que les 3 cases
   existent et se basculent indépendamment, pas juste une relecture du JSX.
+- **La case "touche +" (Options → Activation, étape 81) n'avait aucun effet** : Léo l'a signalé juste après
+  l'avoir décochée ("je desactive le plus je fait plus sa sactive"). Le correctif de l'étape 81 n'avait gardé
+  qu'un seul des DEUX mécanismes qui déclenchent l'écoute sur cette touche : `handleKeyDown` dans App.tsx
+  (renderer, ne voit la touche QUE si la fenêtre de Jaris a le focus) ET `globalShortcut.register('numadd',
+  ...)` dans main.ts (process principal, un raccourci Windows global qui fonctionne depuis N'IMPORTE QUELLE
+  appli, à dessein depuis l'étape 19 — voir le commentaire juste au-dessus de `registerWakeShortcut`). Seul le
+  premier avait été gaté par `activationKeyEnabled` ; le second appelait encore `pipeline?.triggerWake()`
+  sans la moindre vérification, donc la case ne changeait rien pour Léo, qui presse `+` depuis d'autres
+  applis (l'usage normal du raccourci GLOBAL, pas depuis la fenêtre de Jaris elle-même). Trouvé par un simple
+  `grep -n "globalShortcut\|register("` dans main.ts avant de conclure quoi que ce soit. Corrigé en ajoutant
+  la même relecture `getProfile()` (déjà utilisée telle quelle ailleurs dans ce fichier, ex: `setAudioInputDevice`)
+  dans le callback de `globalShortcut.register`, avant l'appel à `triggerWake()`. **Leçon générale : quand une
+  même action (ici "déclencher l'écoute avec +") est atteignable par PLUSIEURS mécanismes indépendants (un
+  raccourci local au renderer ET un raccourci global au process principal), une case "désactiver X" doit
+  gater CHAQUE mécanisme séparément — en gater un seul laisse croire que le réglage ne marche pas du tout,
+  alors qu'il marche partiellement.**
 
 ## Commandes utiles
 
