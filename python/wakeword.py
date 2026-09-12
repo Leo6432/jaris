@@ -29,7 +29,6 @@ CHUNK_SAMPLES = 1280  # doit rester identique à voice_server.py : le pipeline s
 MELSPEC_HISTORY_SAMPLES = CHUNK_SAMPLES + 160 * 3  # fenêtre glissante donnée au modèle de melspectrogramme
 MELSPEC_WINDOW_FRAMES = 76  # nombre de frames de melspectrogramme consommées par le modèle d'embedding
 MELSPEC_BUFFER_MAX_FRAMES = 970  # ~10 s d'historique de melspectrogramme (10 * 97 frames/s), comme l'original
-FEATURE_BUFFER_MAX_FRAMES = 32  # l'original garde ~120 (10 s) ; le classifieur n'en lit que les 16 derniers
 
 
 class JarisWakeWordDetector:
@@ -51,6 +50,11 @@ class JarisWakeWordDetector:
             os.path.join(MODELS_DIR, "jaris.onnx"), sess_options=sess_options, providers=providers
         )
         self._classifier_input_name = self._classifier_session.get_inputs()[0].name
+        # Nombre de frames d'embedding attendues par le classifieur (dépend de la durée des clips
+        # d'entraînement, voir scripts/train_jaris_wakeword.py) : lu dans le modèle plutôt que codé en dur,
+        # pour ne jamais désynchroniser wakeword.py d'un futur ré-entraînement avec une durée différente.
+        self._n_feature_frames = self._classifier_session.get_inputs()[0].shape[1]
+        self._feature_buffer_max_frames = self._n_feature_frames * 2
 
         self.threshold = threshold
         # Ignore les nouveaux déclenchements pendant ce nombre de chunks après un premier déclenchement :
@@ -88,11 +92,11 @@ class JarisWakeWordDetector:
 
         embedding = self._embed(self._melspec_buffer[-MELSPEC_WINDOW_FRAMES:])
         self._feature_buffer = np.vstack((self._feature_buffer, embedding[None, :]))
-        if self._feature_buffer.shape[0] > FEATURE_BUFFER_MAX_FRAMES:
-            self._feature_buffer = self._feature_buffer[-FEATURE_BUFFER_MAX_FRAMES:]
+        if self._feature_buffer.shape[0] > self._feature_buffer_max_frames:
+            self._feature_buffer = self._feature_buffer[-self._feature_buffer_max_frames:]
 
-        features = self._feature_buffer[-16:][None, :, :].astype(np.float32)
-        if features.shape[1] < 16:
+        features = self._feature_buffer[-self._n_feature_frames:][None, :, :].astype(np.float32)
+        if features.shape[1] < self._n_feature_frames:
             return 0.0
 
         score = float(self._classifier_session.run(None, {self._classifier_input_name: features})[0].squeeze())
