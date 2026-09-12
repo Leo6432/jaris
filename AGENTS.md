@@ -719,6 +719,15 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   le seuil déjà utilisé pour la capture vocale ; conserver une fenêtre pour ne pas perdre un
   score qui monte juste après la fin du mot. Tester silence, bruit faible et mot prononcé.
 
+- **Bloquer le silence ne valide pas un détecteur de mot-clé** : après v0.5.1, Léo constatait
+  une activation dès qu’il parlait. Reproduit avec météo, nombres et Paris. Un contrôle RMS vérifie
+  seulement qu’il y a du son, jamais que le nom est prononcé. Le score ONNX reste un candidat ;
+  confirmer le nom par la transcription locale déjà chargée avant tout événement wake. Conserver
+  les 3 secondes récentes et 640 ms après le candidat pour finir le mot sans perdre la demande.
+  Échec ou absence du nom : aucune activation. La touche + contourne cette confirmation.
+  Tester des phrases négatives, pas seulement silence et mot positif. La vérification ajoute un
+  délai et un coût de transcription ; ne pas présenter cette solution comme un classifieur réentraîné.
+
 ## Commandes utiles
 
 ```

@@ -2,7 +2,7 @@
 
 Regroupe dans un seul process : écoute continue du micro, détection du mot
 d'activation "Jaris" (modèle openWakeWord dédié, entraîné spécifiquement
-pour ce mot — voir wakeword.py et scripts/train_jaris_wakeword.py ;
+pour ce mot, puis confirmation par transcription locale — voir wakeword.py et wake_confirmation.py ;
 déclenchement manuel via `trigger`/touche "+" toujours possible) — capture
 de l'énoncé qui suit jusqu'au silence, puis transcription (Cohere
 Transcribe) — directement depuis les échantillons en mémoire, sans passer
@@ -47,6 +47,7 @@ from math import gcd
 import numpy as np
 
 from wakeword import JarisWakeWordDetector
+from wake_confirmation import WakeConfirmation, contains_wake_name, remove_wake_prefix
 
 SAMPLE_RATE = 16000
 CHUNK_SAMPLES = 1280  # 80 ms : le pas fixe attendu par JarisWakeWordDetector (voir wakeword.py)
@@ -61,17 +62,9 @@ MIC_TEST_RMS_THRESHOLD = 150
 # Normalise le RMS en 0..1 pour la jauge de la UI (empirique : une voix normale dépasse largement ce seuil).
 MIC_TEST_LEVEL_DIVISOR = 3000.0
 
-# Seuil de détection du mot d'activation "Jaris" (score du modèle, 0-1) et anti-rebond (en nombre de chunks
-# de 80 ms) — voir wakeword.py et scripts/train_jaris_wakeword.py pour comment ce modèle a été entraîné et
-# évalué. 0.995 (pas 0.5, le seuil "par défaut" d'un classifieur binaire) choisi après un vrai test sur des
-# phrases JAMAIS vues à l'entraînement : à 0.5, "Paris", "chariot" ou une phrase quelconque contenant "a ri"
-# déclenchaient parfois Jaris par erreur. À 0.995, tout ce qui a été testé fonctionne SAUF deux confusions
-# phonétiques réellement difficiles ("Jarvis", l'ancien nom, et une phrase contenant "a ri" comme "il a ri
-# très fort") qui restent élevées (score > 0.99) même après un corpus négatif volontairement élargi sur ces
-# cas précis — un rappel de 97,2% sur nos propres échantillons de test à ce seuil, contre 87-88% à un seuil
-# encore plus strict qui n'aurait pas réglé ces deux confusions de toute façon (leur score dépasse déjà
-# 0.99). Ces deux mots restent un vrai risque de faux déclenchement connu, pas un compromis choisi à
-# l'aveugle : voir CLAUDE.md pour le détail des mesures.
+# Le score ONNX ne constitue qu'un candidat : tests réels de v0.5.1, des phrases
+# météo et « Paris » dépassent aussi ce seuil. WakeConfirmation exige ensuite
+# une transcription locale contenant le nom avant tout événement wake.
 WAKEWORD_THRESHOLD = 0.995
 WAKEWORD_DEBOUNCE_CHUNKS = 15  # ~1,2s : couvre la durée d'un "Jaris" dit une fois, sans bloquer trop longtemps après
 
@@ -311,6 +304,8 @@ def main() -> None:
 
     emit({"event": "ready"})
 
+    confirmation = WakeConfirmation()
+    voice_activated = False
     mode = "wake"  # "wake" | "capture"
     capture_chunks: list[np.ndarray] = []
     silent_ms = 0.0
@@ -351,24 +346,40 @@ def main() -> None:
             if triggered:
                 manual_trigger.clear()
 
-            # Toujours nourri, même si `triggered` est déjà vrai (touche "+") : sinon les tampons internes
-            # du détecteur (voir wakeword.py) accumuleraient un trou dès qu'un déclenchement manuel survient.
             score = detector.process_chunk(chunk)
-            # Diagnostic (même esprit que le "Pic candidat" du double clap) : un score qui approche le seuil
-            # sans le dépasser aide à ajuster WAKEWORD_THRESHOLD à partir de vraies mesures plutôt qu'à
-            # l'aveugle, sans noyer les logs sur du bruit de fond ordinaire (score proche de 0 en permanence).
-            if score >= WAKEWORD_THRESHOLD * 0.6:
-                emit({"event": "log", "message": f"Score mot d'activation : {score:.2f} (seuil {WAKEWORD_THRESHOLD:.2f})."})
-            if not triggered and detector.should_trigger(score):
-                triggered = True
-                emit({"event": "log", "message": f"Mot d'activation détecté (score {score:.2f})."})
+            candidate = detector.should_trigger(score) if not triggered else False
+            pending_audio = confirmation.push(chunk, candidate)
+            confirmed_audio = None
+            if triggered:
+                confirmation.clear()
+                voice_activated = False
+            elif pending_audio is not None:
+                # Le classifieur confond la parole courante avec le nom. Son score
+                # ne suffit donc jamais à activer l'interface ou envoyer une demande.
+                audio = np.concatenate(pending_audio).astype(np.float32) / 32768.0
+                try:
+                    inputs = stt_processor(audio, sampling_rate=SAMPLE_RATE, return_tensors="pt", language=args.stt_language)
+                    inputs.to(stt_model.device, dtype=stt_model.dtype)
+                    with torch.no_grad():
+                        outputs = stt_model.generate(**inputs, max_new_tokens=64)
+                    candidate_text = stt_processor.decode(outputs[0], skip_special_tokens=True).strip()
+                    if contains_wake_name(candidate_text):
+                        triggered = True
+                        voice_activated = True
+                        confirmed_audio = pending_audio
+                        confirmation.clear()
+                        emit({"event": "log", "message": "Mot Jaris confirmé par la transcription locale."})
+                except Exception as exc:
+                    # Une vérification échouée ne donne jamais une activation par défaut.
+                    emit({"event": "log", "message": f"Vérification du mot Jaris impossible : {exc}"})
 
             if triggered:
                 mode = "capture"
-                capture_chunks = []
+                # Conserver le son pendant la confirmation, y compris « Jaris, ouvre… ».
+                capture_chunks = confirmed_audio or []
                 silent_ms = 0.0
-                captured_ms = 0.0
-                loud_ms = 0.0
+                captured_ms = len(capture_chunks) * chunk_ms
+                loud_ms = sum(chunk_ms for part in capture_chunks if rms(part) >= SILENCE_RMS_THRESHOLD)
                 emit({"event": "wake"})
             continue
 
@@ -413,6 +424,8 @@ def main() -> None:
             with torch.no_grad():
                 outputs = stt_model.generate(**inputs, max_new_tokens=256)
             text = stt_processor.decode(outputs[0], skip_special_tokens=True).strip()
+            if voice_activated:
+                text = remove_wake_prefix(text)
             if is_hallucination(text):
                 text = ""
             emit({"event": "transcript", "text": text})

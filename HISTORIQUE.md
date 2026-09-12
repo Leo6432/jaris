@@ -534,3 +534,16 @@ récent empêche cette activation sans parole, en réutilisant le seuil de captu
 
 Validation audio synthétique M3/F3 : « Jaris » est détecté, mais « Paris » déclenche aussi.
 Cette confusion du classifieur reste une limite connue ; le correctif ne prétend pas réentraîner le modèle.
+
+
+## v0.5.2 — Confirmer le nom avant l’activation vocale
+
+Le contrôle de volume de v0.5.1 supprimait le silence mais ne distinguait pas la parole ordinaire
+ du mot Jaris. Reproduit sur météo, nombres et Paris. Le score ONNX lance maintenant une courte
+vérification par Cohere local ; seul le nom Jaris (ou les graphies phonétiques Jarice/Jarisse
+observées dans les tests) autorise wake. Aucune activation sur erreur de vérification.
+
+L’audio est conservé pendant cette confirmation et le préfixe d’appel retiré de la demande finale.
+La touche + reste directe. Tests du tampon borné, délai, rejet des autres mots, conservation de
+la demande et annulation de la confirmation par la voie manuelle. Vérification audio synthétique
+supplémentaire ; la voix et le microphone réels de Léo restent à valider après installation.

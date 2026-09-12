@@ -48,6 +48,7 @@ jobs:
       - name: Vérifie le détecteur vocal réellement empaqueté
         run: |
           python -m pip install numpy==2.4.6 onnxruntime==1.30.0
+          python scripts/test-wake-confirmation.py
           python scripts/check-packaged-wakeword.py release/win-unpacked/resources/python
 
       # Étape 45 : lance vraiment l'appli packagée (pas l'unpacked, avant l'installeur NSIS) pour attraper un

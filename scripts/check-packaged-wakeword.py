@@ -11,6 +11,9 @@ for name in ('melspectrogram.onnx', 'embedding_model.onnx', 'jaris.onnx'):
         raise RuntimeError(f'Modèle vocal absent ou vide : {model}')
 sys.path.insert(0, str(resources))
 from wakeword import JarisWakeWordDetector
+from wake_confirmation import WakeConfirmation, contains_wake_name
+assert not contains_wake_name("Voici la météo à Paris.")
+assert contains_wake_name("Jaris, bonjour.")
 
 detector = JarisWakeWordDetector()
 for _ in range(50):
