@@ -816,13 +816,6 @@ body.body--scan::after {
   gap: 48px;
 }
 
-.options-menu__voice-orb {
-  width: 220px;
-  height: 220px;
-  border-radius: 50%;
-  box-shadow: 0 0 80px rgba(61, 220, 255, 0.35);
-}
-
 .options-menu__arrow {
   background: transparent;
   border: none;

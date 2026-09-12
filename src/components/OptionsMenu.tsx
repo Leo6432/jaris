@@ -11,25 +11,30 @@ import type {
   ReleaseHistoryEntry
 } from '../../shared/ipc'
 import HardwareTierPreview from './HardwareTierPreview'
+import JarisOrb from './JarisOrb'
 import { formatModelName } from '../lib/formatModelName'
 
 interface VoiceOption {
   id: string
   description: string
-  gradient: string
+  /** Couleur de l'anneau JarisOrb pour distinguer cette voix (voir color? dans JarisOrb.tsx) — même forme
+   * (anneau déchiqueté) que sur l'accueil pour toutes les voix, JAMAIS un cercle lisse générique : seule la
+   * couleur change, à la demande explicite de Léo ("fait pas un cercle rond... fait le même cercle que dans
+   * l'accueil... change juste la couleur pour différencier les voix"). */
+  color: string
 }
 
 const TTS_VOICES: VoiceOption[] = [
-  { id: 'M1', description: 'Vive, énergique', gradient: 'linear-gradient(135deg, #37e2ff, #2b6cff)' },
-  { id: 'M2', description: 'Grave, sérieuse', gradient: 'linear-gradient(135deg, #2b6cff, #1c3f99)' },
-  { id: 'M3', description: 'Autoritaire, confiante', gradient: 'linear-gradient(135deg, #6c5ce7, #341f97)' },
-  { id: 'M4', description: 'Douce, jeune', gradient: 'linear-gradient(135deg, #55e6c1, #10ac84)' },
-  { id: 'M5', description: 'Chaleureuse, narrative', gradient: 'linear-gradient(135deg, #feca57, #ff9f43)' },
-  { id: 'F1', description: 'Calme, posée', gradient: 'linear-gradient(135deg, #ff9ff3, #f368e0)' },
-  { id: 'F2', description: 'Vive, enjouée', gradient: 'linear-gradient(135deg, #ff6b81, #ee5253)' },
-  { id: 'F3', description: 'Professionnelle', gradient: 'linear-gradient(135deg, #48dbfb, #0abde3)' },
-  { id: 'F4', description: 'Nette, confiante', gradient: 'linear-gradient(135deg, #c8d6e5, #8395a7)' },
-  { id: 'F5', description: 'Douce, bienveillante', gradient: 'linear-gradient(135deg, #ffdfba, #ffb8b8)' }
+  { id: 'M1', description: 'Vive, énergique', color: '#37e2ff' },
+  { id: 'M2', description: 'Grave, sérieuse', color: '#2b6cff' },
+  { id: 'M3', description: 'Autoritaire, confiante', color: '#6c5ce7' },
+  { id: 'M4', description: 'Douce, jeune', color: '#55e6c1' },
+  { id: 'M5', description: 'Chaleureuse, narrative', color: '#feca57' },
+  { id: 'F1', description: 'Calme, posée', color: '#ff9ff3' },
+  { id: 'F2', description: 'Vive, enjouée', color: '#ff6b81' },
+  { id: 'F3', description: 'Professionnelle', color: '#48dbfb' },
+  { id: 'F4', description: 'Nette, confiante', color: '#c8d6e5' },
+  { id: 'F5', description: 'Douce, bienveillante', color: '#ffb8b8' }
 ]
 
 const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
@@ -520,7 +525,7 @@ export default function OptionsMenu(): JSX.Element {
               <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex - 1)} disabled={previewing}>
                 ‹
               </button>
-              <div className="options-menu__voice-orb" style={{ background: voice.gradient }} />
+              <JarisOrb emotion="idle" color={voice.color} size={220} />
               <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex + 1)} disabled={previewing}>
                 ›
               </button>

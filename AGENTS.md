@@ -596,6 +596,23 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   était donc le bon signal d'alerte à donner à Léo AVANT de coder — mais le verdict final ne pouvait venir
   que de lui, après une vraie écoute, jamais d'une décision prise ici à sa place sur la base des seuls
   chiffres.
+- **Le sélecteur de voix (Options → Voix) affichait un simple cercle plein (gradient CSS, `border-radius:
+  50%`) pour représenter chaque voix — Léo l'a jugé incohérent avec l'identité visuelle de Jaris** ("fait
+  pas un cercle rond... fait le même cercle que dans l'accueil... change juste la couleur pour différencier
+  les voix"), la même préférence déjà exprimée pour la pilule du widget replié (étapes 69-70 : "la vraie
+  signature de Jaris est un anneau au bord IRRÉGULIER, pas un cercle lisse"). Corrigé en ajoutant un prop
+  optionnel `color?: string` à `JarisOrb` (src/components/JarisOrb.tsx) qui REMPLACE UNIQUEMENT la couleur
+  tirée de `EMOTION_STYLES[emotion]` (jamais modifiée elle-même — vitesse de rotation/pulsation restent
+  celles de `emotion`, ici toujours `'idle'`) : `const color = colorRef.current ?? style.color` puis chaque
+  usage de `style.color` dans `draw()` remplacé par cette variable locale. Le sélecteur affiche donc
+  maintenant un vrai `<JarisOrb emotion="idle" color={voice.color} size={220} />` par voix (10 couleurs
+  hexadécimales, `TTS_VOICES`, à la place des 10 dégradés CSS retirés) — même forme reconnaissable pour
+  toutes, seule la couleur change. **Vérifié pour de vrai, pas juste en relecture** : un test Playwright a
+  bundlé le VRAI composant `JarisOrb.tsx` (via esbuild, react-dom/client) et lu les pixels du canvas rendu
+  pour deux couleurs différentes — confirme que (1) le rayon de l'anneau varie selon l'angle (variance
+  mesurée > 0, jamais un cercle parfait), et (2) la couleur moyenne du canvas correspond exactement à la
+  couleur passée en prop (rouge pur vs vert pur, aucune contamination par `EMOTION_STYLES.idle.color` par
+  défaut).
 
 ## Commandes utiles
 

@@ -425,3 +425,19 @@ faire — rien n'est perdu, juste rangé à part. Voir README.md pour la liste d
   qualité perçue (ici une voix, là un dessin) ne se remplace pas par des
   chiffres de comparatifs, même corroborés par plusieurs sources — seule une
   vraie écoute en usage réel tranche.
+- ✅ Étape 76 (v0.4.28) — Léo a jugé le sélecteur de voix (Options → Voix)
+  incohérent avec l'identité visuelle de Jaris : un simple cercle plein
+  (gradient CSS) représentait chaque voix, alors que "la vraie signature de
+  Jaris" est l'anneau au bord irrégulier de JarisOrb (même préférence déjà
+  exprimée pour la pilule du widget replié aux étapes 69-70). Corrigé en
+  ajoutant un prop optionnel `color?: string` à JarisOrb qui remplace
+  UNIQUEMENT la couleur tirée de `EMOTION_STYLES[emotion]` (jamais modifiée
+  elle-même) — le sélecteur affiche maintenant un vrai `<JarisOrb
+  emotion="idle" color={voice.color} size={220} />` par voix (10 couleurs
+  hexadécimales à la place des 10 dégradés CSS retirés), même forme pour
+  toutes les voix, seule la couleur change. Vérifié pour de vrai (pas juste
+  en relecture) : un test Playwright a bundlé le vrai composant JarisOrb.tsx
+  (esbuild + react-dom/client) et lu les pixels du canvas rendu pour deux
+  couleurs différentes — confirme le rayon variable de l'anneau (jamais un
+  cercle parfait) et la couleur exacte appliquée (rouge pur vs vert pur,
+  sans contamination par la couleur par défaut de l'émotion).

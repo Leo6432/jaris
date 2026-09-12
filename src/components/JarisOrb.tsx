@@ -8,6 +8,12 @@ interface JarisOrbProps {
   /** Élément <audio> qui joue la voix de Jaris : sert à faire vibrer l'anneau en rythme avec la parole. */
   audioElRef?: RefObject<HTMLAudioElement>
   onClick?: () => void
+  /** Remplace UNIQUEMENT la couleur de `EMOTION_STYLES[emotion]` (jamais modifiée elle-même) — vitesse de
+   * rotation/pulsation restent celles de `emotion`. Sert au sélecteur de voix (Options → Voix) : même forme
+   * reconnaissable (anneau déchiqueté) que sur l'accueil, une couleur différente par voix pour les distinguer
+   * (demande explicite de Léo : "fait pas un cercle rond... fait le même cercle que dans l'accueil... change
+   * juste la couleur"). */
+  color?: string
 }
 
 interface EmotionStyle {
@@ -217,9 +223,10 @@ function readAudioLevel(analyser: AnalyserNode, buffer: Uint8Array<ArrayBuffer>)
 }
 
 /** Cœur visuel de Jaris façon J.A.R.V.I.S. : anneau holographique irrégulier + noyau filaire, qui vibre avec la voix. */
-export default function JarisOrb({ emotion, size = 320, audioElRef, onClick }: JarisOrbProps): JSX.Element {
+export default function JarisOrb({ emotion, size = 320, audioElRef, onClick, color }: JarisOrbProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const emotionRef = useRef(emotion)
+  const colorRef = useRef(color)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const audioBufferRef = useRef<Uint8Array<ArrayBuffer> | null>(null)
   const angleRef = useRef(0)
@@ -229,6 +236,10 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick }: J
   useEffect(() => {
     emotionRef.current = emotion
   }, [emotion])
+
+  useEffect(() => {
+    colorRef.current = color
+  }, [color])
 
   useEffect(() => {
     const audioEl = audioElRef?.current
@@ -259,6 +270,7 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick }: J
       lastTime = time
 
       const style = EMOTION_STYLES[emotionRef.current]
+      const color = colorRef.current ?? style.color
       const level =
         analyserRef.current && audioBufferRef.current ? readAudioLevel(analyserRef.current, audioBufferRef.current) : 0
 
@@ -284,16 +296,16 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick }: J
         // quasi imperceptible en valeur absolue. Multiplié ici seulement, pas dans la table partagée.
         const minimalBreathe = 1 + Math.sin(time * 0.0015) * style.pulse * 4 + level * 0.08
         const minimalRotation = angleRef.current * 2.5
-        ctx.shadowColor = style.color
+        ctx.shadowColor = color
         ctx.shadowBlur = 5 + level * 6
         ctx.lineWidth = 1.4
-        drawJaggedRing(ctx, center * 0.62 * minimalBreathe, center * 0.92, harmonicsRef.current.outer, minimalRotation, style.color, 0.9, level, time)
+        drawJaggedRing(ctx, center * 0.62 * minimalBreathe, center * 0.92, harmonicsRef.current.outer, minimalRotation, color, 0.9, level, time)
       } else {
         // Marge sous le bord réel du canvas (center) pour que le flou de la lueur (shadowBlur) ait la place
         // de s'estomper avant d'être coupé net par les bords du canvas.
         const maxRingRadius = center * 0.9
 
-        ctx.shadowColor = style.color
+        ctx.shadowColor = color
         ctx.shadowBlur = 8 + level * 10
         ctx.lineWidth = 1.6
         drawJaggedRing(
@@ -302,7 +314,7 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick }: J
           maxRingRadius,
           harmonicsRef.current.outer,
           angleRef.current,
-          style.color,
+          color,
           0.85,
           level,
           time
@@ -313,18 +325,18 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick }: J
           maxRingRadius,
           harmonicsRef.current.inner,
           -angleRef.current * 0.55,
-          style.color,
+          color,
           0.45,
           level,
           time
         )
 
         ctx.shadowBlur = 5
-        drawGlassRing(ctx, center * 0.46, style.color, 0.3)
-        drawGlassRing(ctx, center * 0.35, style.color, 0.2)
+        drawGlassRing(ctx, center * 0.46, color, 0.3)
+        drawGlassRing(ctx, center * 0.35, color, 0.2)
 
         ctx.shadowBlur = 7 + level * 8
-        drawCore(ctx, center * 0.14 * (1 + level * 0.2), coreAngleRef.current, style.color)
+        drawCore(ctx, center * 0.14 * (1 + level * 0.2), coreAngleRef.current, color)
       }
 
       ctx.restore()
