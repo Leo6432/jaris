@@ -652,6 +652,27 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   jamais un cercle parfait), et (2) la couleur moyenne du canvas correspond exactement à la couleur passée
   en prop (rouge pur vs vert pur, aucune contamination par `EMOTION_STYLES.idle.color` par défaut).
 
+- **L'orbe de l'onglet Voix (étape 76) restait à une taille FIXE (220px) quelle que soit la taille réelle
+  de la fenêtre** — sur un grand écran, il paraît minuscule et perdu au milieu d'un immense vide, capture
+  d'écran de Léo à l'appui en usage réel : "ne se met pas bien par rapport a l'écrant... trop petit".
+  Corrigé en mesurant `.options-menu__voice-picker` (déjà en `position: absolute; inset: 0`, donc déjà
+  aux dimensions réelles disponibles) via `ResizeObserver`, borné entre 180 et 420px. **Piège dans mon
+  PROPRE premier correctif, attrapé par un test Playwright avant de livrer, pas en usage réel** : un
+  `useRef` + `useEffect(..., [tab])` classique ne se redéclenche QUE quand `tab` change — au tout premier
+  rendu (`open` encore `false`, la page Options n'existe pas dans le DOM), cet effet tourne quand même avec
+  `tab` déjà à `'voix'` (valeur par défaut), trouve `ref.current === null` et ressort aussitôt SANS jamais
+  observer quoi que ce soit ; comme `tab` ne change plus jamais après l'ouverture réelle du panneau,
+  l'effet ne se relance JAMAIS — l'orbe restait bloqué à 220px quelle que soit la fenêtre testée, confirmé
+  par un test qui a mesuré le canvas rendu à 1000x760 ET 1920x1080 (chiffres identiques, plus grand nulle
+  part). **Corrigé en remplaçant `useRef`+`useEffect` par une CALLBACK REF** (`(el) => { ... }` passée
+  directement à `ref=`) : elle se redéclenche exactement quand LE NOEUD LUI-MÊME apparaît/disparaît dans le
+  DOM, peu importe la raison (`open`, `tab`, ou une autre condition future) — plus besoin de deviner le bon
+  tableau de dépendances. Revérifié après correction : 266px à 1000x760, 378px à 1920x1080, bien croissant
+  et borné. **Leçon générale : pour une logique de setup/nettoyage liée à la PRÉSENCE d'un nœud DOM précis
+  (mesure, ResizeObserver, focus...), une callback ref est plus fiable qu'un `useRef` + `useEffect` avec un
+  tableau de dépendances qu'il faut deviner correctement — surtout quand le nœud est conditionnellement
+  rendu par PLUSIEURS états différents (ici `open` ET `tab`), pas un seul.**
+
 ## Commandes utiles
 
 ```

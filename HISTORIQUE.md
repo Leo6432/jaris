@@ -441,3 +441,19 @@ faire — rien n'est perdu, juste rangé à part. Voir README.md pour la liste d
   couleurs différentes — confirme le rayon variable de l'anneau (jamais un
   cercle parfait) et la couleur exacte appliquée (rouge pur vs vert pur,
   sans contamination par la couleur par défaut de l'émotion).
+- ✅ Étape 77 (v0.4.29) — Suite de l'étape 76 en usage réel, capture d'écran
+  à l'appui : Léo a signalé que l'orbe de l'onglet Voix "ne se met pas bien
+  par rapport a l'écrant... trop petit" sur son écran — la taille fixe de
+  220px choisie à l'étape 76 paraît minuscule et perdue au milieu d'un
+  immense vide sur un grand écran. Corrigé en mesurant la taille réelle de
+  `.options-menu__voice-picker` (déjà en `position: absolute; inset: 0`, il
+  occupe déjà toute la fenêtre) via `ResizeObserver`, borné entre 180 et
+  420px selon la taille réelle disponible. **Piège dans mon propre premier
+  correctif, attrapé par un test Playwright AVANT de livrer** : un
+  `useRef` + `useEffect(..., [tab])` classique ne se redéclenche jamais
+  quand la page Options s'ouvre réellement (seulement quand `tab` change) —
+  l'orbe restait bloqué à 220px quelle que soit la fenêtre testée (1000x760
+  ET 1920x1080 mesurés identiques). Remplacé par une CALLBACK REF, qui se
+  redéclenche exactement quand le nœud DOM apparaît/disparaît, peu importe
+  la raison. Revérifié après correction : 266px à 1000x760, 378px à
+  1920x1080, bien croissant et borné.
