@@ -623,6 +623,18 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   (`dialog.showOpenDialog(fullWindow, ...)`) prend le focus OS au même titre qu'une autre application pour
   Electron — sans ce garde, choisir l'emplacement des modèles (étape 44) aurait fait disparaître la fenêtre
   de réglages en plein milieu de la sélection du dossier.
+- **Kokoro (étape 74) revenu en arrière (étape 75) après écoute en usage réel** : malgré des comparatifs
+  indépendants favorables et une licence plus permissive, Léo a demandé de revenir à Supertonic HD
+  ("remet supersonic en faite") après l'avoir vraiment écouté sur sa machine — retour en arrière via
+  `git revert` (commit propre, sans conflit) plutôt qu'une réécriture manuelle, puisque le commit Kokoro
+  était isolé et le plus récent de la branche. **Leçon générale, qui rejoint celle déjà tirée pour le
+  visuel du widget (étapes 69-71) : un jugement de QUALITÉ PERÇUE (ici le son d'une voix, là le rendu d'un
+  orbe) ne se laisse jamais deviner par des chiffres de comparatifs, même corroborés par deux sources
+  indépendantes — seule une vraie écoute/un vrai visionnage en usage réel tranche.** Le compromis objectif
+  (1 voix au lieu de 10, français "peu représenté" selon les créateurs de Kokoro, documenté à l'étape 74)
+  était donc le bon signal d'alerte à donner à Léo AVANT de coder — mais le verdict final ne pouvait venir
+  que de lui, après une vraie écoute, jamais d'une décision prise ici à sa place sur la base des seuls
+  chiffres.
 
 ## Commandes utiles
 

@@ -407,3 +407,21 @@ faire — rien n'est perdu, juste rangé à part. Voir README.md pour la liste d
   la suite de régression existante (`test-widget-transition.mjs`, 6/6) —
   toujours pas testé en usage réel sur une vraie machine Windows (pas
   d'accès Windows dans cet environnement).
+- ✅ Étape 74 (v0.4.26, revenue en arrière à l'étape 75) — Remplacement de
+  Supertonic HD par Kokoro pour la synthèse vocale, après recherche externe
+  (prompt donné à ChatGPT) et écoute d'un échantillon audio français généré
+  avant de coder. Kokoro sonnait plus naturel dans les comparatifs
+  indépendants et sa licence (Apache 2.0) était plus permissive, mais
+  n'avait qu'UNE SEULE voix française (`ff_siwis`, contre 10 chez
+  Supertonic) — compromis annoncé à Léo avant qu'il valide.
+- ✅ Étape 75 (v0.4.27) — Après avoir écouté Kokoro en usage réel, Léo a
+  demandé de revenir à Supertonic HD ("remet supersonic en faite") : le
+  compromis (une seule voix) ne valait pas le gain de naturel pour lui en
+  pratique. Revenu en arrière avec `git revert` du commit de l'étape 74
+  (commit isolé, le plus récent de la branche, aucun conflit) plutôt qu'une
+  réécriture manuelle — restaure exactement le picker à 10 voix, `ttsVoice`/
+  `TTS_VOICE`, et `python/tts_server.py`/`requirements.txt` d'avant. Même
+  leçon que pour le rendu visuel du widget (étapes 69-71) : un jugement de
+  qualité perçue (ici une voix, là un dessin) ne se remplace pas par des
+  chiffres de comparatifs, même corroborés par plusieurs sources — seule une
+  vraie écoute en usage réel tranche.
