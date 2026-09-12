@@ -34,7 +34,7 @@ MELSPEC_BUFFER_MAX_FRAMES = 970  # ~10 s d'historique de melspectrogramme (10 * 
 class JarisWakeWordDetector:
     """Détecteur à état, un chunk de 1280 échantillons à la fois (voir process_chunk)."""
 
-    def __init__(self, threshold: float = 0.5, debounce_chunks: int = 25):
+    def __init__(self, threshold: float = 0.995, debounce_chunks: int = 15):
         sess_options = ort.SessionOptions()
         sess_options.inter_op_num_threads = 1
         sess_options.intra_op_num_threads = 1

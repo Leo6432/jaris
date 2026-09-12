@@ -24,9 +24,9 @@ type VoiceServerEvent =
 const voiceServerScript = (): string => join(pythonScriptsDir(), 'voice_server.py')
 
 /**
- * Sidecar Python persistant : écoute continue du micro, détection de double
- * clap (ou déclenchement manuel, voir triggerWake) et transcription (Cohere
- * Transcribe) dans un seul process. Émet 'wake', 'transcript' (text: string),
+ * Sidecar Python persistant : écoute continue du micro, détection du mot
+ * d'activation "Jaris" (ou déclenchement manuel, voir triggerWake) et transcription
+ * (Cohere Transcribe) dans un seul process. Émet 'wake', 'transcript' (text: string),
  * 'log', 'error', 'micTestLevel' (level: number) et 'micTestDone' (detected: boolean).
  */
 export class VoiceClient extends EventEmitter {
@@ -123,7 +123,7 @@ export class VoiceClient extends EventEmitter {
     this.ready = null
   }
 
-  /** Force un déclenchement manuel (touche "+"), comme un double clap détecté. */
+  /** Force un déclenchement manuel (touche "+"), comme si le mot d'activation "Jaris" avait été détecté. */
   triggerWake(): void {
     this.proc?.stdin.write('trigger\n')
   }

@@ -330,7 +330,7 @@ export const IPC_CHANNELS = {
   reply: 'jaris:reply',
   log: 'jaris:log',
   setupStatus: 'jaris:setup-status',
-  /** renderer -> main : déclenche l'écoute manuellement (sans double clap). */
+  /** renderer -> main : déclenche l'écoute manuellement (sans dire le mot d'activation). */
   triggerWake: 'jaris:trigger-wake',
   /** renderer <-> main : profil utilisateur (prénom), demandé une seule fois au premier lancement. */
   getProfile: 'jaris:get-profile',

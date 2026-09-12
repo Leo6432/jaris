@@ -245,41 +245,44 @@ Renseigne dans `.env` :
   chargement (`torch.cuda.is_available()`), avec repli sur le processeur.
   Ne le renseigne que pour forcer `cuda` ou `cpu`.
 
-**Déclenchement par double clap.** Toujours DEUX claps francs et rapprochés,
-jamais un seul : un objet qui tombe ou une porte qui claque ne doit pas
-déclencher Jaris par accident (même logique qu'un interrupteur "clap
-on/clap off").
+**Déclenchement par mot d'activation "Jaris".** Aucun mot-clé "Jaris"
+n'existe tout fait dans openWakeWord (le seul mot d'activation qu'il propose
+proche du nom de l'appli est l'anglais "Hey Jarvis") : un modèle dédié a
+donc été entraîné spécifiquement pour "Jaris" (`python/wakeword.py` +
+`python/models/jaris.onnx`), avec les 10 voix Supertonic déjà utilisées par
+Jaris pour générer le corpus d'entraînement (positifs "Jaris" dans
+plusieurs phrasings, négatifs ciblés sur les vrais risques de confusion
+français : "Paris", "chariot", "il a ri", "Jarvis"...) — pas le générateur
+TTS anglais (Piper) fourni par défaut par openWakeWord, ni le jeu de
+données "arrière-plan" officiel (ACAV100M, ~17 Go, disproportionné pour ce
+cas).
 
-Un simple seuil de volume FIXE s'est révélé ingérable en usage réel : trop
-bas, de la voix parlée normale le dépassait ; trop haut, de vrais claps ne
-le dépassaient plus (1 détection sur 10 claps constatée) — le même geste de
-clap donne un RMS très différent selon la distance au micro, le gain
-matériel, le bruit ambiant de la pièce. Deux vraies techniques de détection
-de clap/onset percussif remplacent le seuil fixe (sources : [Arduino Clap
-Detector](https://docs.arduino.cc/tutorials/generic/clap-detector/),
-littérature sur le
-[spectral flux](https://en.wikipedia.org/wiki/Spectral_flux) et le
-"high-frequency content" pour la détection d'onsets percussifs) :
-1. **Niveau ambiant adaptatif** (`noise_floor`, moyenne mobile) — un clap
-   doit dépasser le bruit de fond RÉEL de la pièce d'un facteur donné
-   (`CLAP_RATIO_ABOVE_FLOOR`), pas un chiffre absolu deviné à l'avance :
-   s'auto-calibre tout seul à l'environnement de chaque utilisateur.
-2. **Contenu haute fréquence** (FFT, `high_frequency_ratio`) — ce qui
-   distingue vraiment un clap (transitoire, large bande) d'une voyelle
-   parlée forte (concentrée en basses fréquences/formants) : une voix qui
-   parle fort peut dépasser le niveau ambiant mais n'a presque jamais assez
-   d'énergie haute fréquence pour passer ce filtre (`CLAP_HF_RATIO_MIN`).
+Le paquet PyPI `openwakeword` lui-même ne s'installe **pas** sur Windows/
+Python récent (sa dépendance `tflite-runtime` n'a aucune roue disponible
+pour cette plateforme) : `python/wakeword.py` réimplémente donc en miniature
+(numpy + onnxruntime seulement, déjà une dépendance de Supertonic) le
+pipeline melspectrogramme + embedding + classifieur — vérifié BIT À BIT
+identique à `openwakeword.utils.AudioFeatures` officiel avant d'y faire
+confiance.
 
-Réglages dans `python/voice_server.py` (`NOISE_FLOOR_EMA_ALPHA`,
-`CLAP_RATIO_ABOVE_FLOOR`, `CLAP_ABS_RMS_FLOOR`, `CLAP_HF_CUTOFF_HZ`,
-`CLAP_HF_RATIO_MIN`, `CLAP_MIN_INTERVAL_MS`, `CLAP_MAX_INTERVAL_MS`), à
-ajuster si besoin après un vrai test — chaque pic candidat retenu (avant
-même de vérifier si c'est un vrai double clap) est loggué avec son RMS
-exact et le seuil du moment (`{"event": "log", "message": "Pic candidat :
-..."}`, visible dans la fenêtre Jaris), pour ajuster les seuils à partir de
-vraies mesures plutôt qu'à l'aveugle. Le raccourci clavier **+** (dans la
-fenêtre Jaris) reste disponible pour déclencher l'écoute manuellement, sans
-clap.
+**Précision mesurée pour de vrai**, pas estimée : sur des phrases jamais
+vues à l'entraînement, "Jaris" est détecté de façon fiable (dès qu'il y a
+un peu de contexte autour, ou après ~1s d'écoute continue pour un "Jaris"
+tout seul), et les confusions évidentes ("Paris", "chariot", phrases
+générales) sont correctement ignorées. **Deux confusions phonétiques
+réelles et difficiles restent connues** : "Jarvis" (l'ancien nom) et une
+phrase contenant "il a ri" peuvent occasionnellement déclencher Jaris par
+erreur, même après un corpus d'entraînement volontairement élargi sur ces
+deux cas précis — la proximité acoustique avec "Jaris" est simplement très
+forte. Le raccourci clavier **+** (dans la fenêtre Jaris) reste disponible
+pour déclencher l'écoute manuellement, sans rien dire, si besoin.
+
+Seuil de décision et anti-rebond réglables dans `python/voice_server.py`
+(`WAKEWORD_THRESHOLD`, `WAKEWORD_DEBOUNCE_CHUNKS`) — chaque score qui
+approche le seuil sans le dépasser est loggué (`{"event": "log", "message":
+"Score mot d'activation : ..."}`, visible dans la fenêtre Jaris), pour
+ajuster à partir de vraies mesures plutôt qu'à l'aveugle si Léo rencontre
+d'autres faux positifs/négatifs en usage réel.
 
 ### 2. Synthèse vocale (Supertonic HD)
 
@@ -293,14 +296,18 @@ jouée + voix retenue pour les prochaines réponses), sans toucher au `.env`.
 
 ### Vérifier
 
-`npm run dev` : tape deux fois dans les mains près du micro, Jaris doit
-s'illuminer, transcrire ce que tu dis ensuite, puis le redire à voix haute
-pour confirmer qu'il a compris — c'est la preuve que toute la chaîne audio
-fonctionne, avant de brancher un vrai raisonnement à l'étape 4.
+`npm run dev` : dis "Jaris" près du micro, il doit s'illuminer, transcrire
+ce que tu dis ensuite, puis le redire à voix haute pour confirmer qu'il a
+compris — c'est la preuve que toute la chaîne audio fonctionne, avant de
+brancher un vrai raisonnement à l'étape 4.
 
 > Pipeline testé de bout en bout avec un vrai micro sur une machine Windows
-> (RTX 3070) : déclenchement, capture, transcription et synthèse vocale
-> fonctionnent tous en conditions réelles.
+> (RTX 3070) : déclenchement (double clap, à l'époque), capture,
+> transcription et synthèse vocale fonctionnent tous en conditions réelles.
+> Le nouveau mot d'activation "Jaris" est vérifié par un vrai test de bout
+> en bout (audio synthétique, jamais entendu par Léo) mais pas encore
+> confirmé avec sa vraie voix/son vrai micro — comme pour tout changement
+> vocal, seul un usage réel le confirme complètement.
 >
 > Pièges rencontrés en conditions réelles, déjà corrigés dans le code : le
 > périphérique micro par défaut du système n'est pas forcément le bon (ex: un
@@ -327,7 +334,7 @@ fonctionne, avant de brancher un vrai raisonnement à l'étape 4.
 > haut-parleur est instantané, appliqué à la prochaine réponse.
 >
 > Un raccourci clavier **+** (dans la fenêtre Jaris) déclenche aussi l'écoute
-> manuellement, sans clap — pratique pour tester ou en environnement bruyant.
+> manuellement, sans rien dire — pratique pour tester ou en environnement bruyant.
 
 ## Mettre en place Ollama (étape 4)
 
@@ -993,8 +1000,8 @@ La fenêtre de réglages a une colonne latérale permanente, toujours visible,
 qui donne accès à trois façons d'utiliser Jaris. Le cerveau de Jaris et le
 menu Options sont en bas de cette colonne, disponibles quel que soit le mode.
 
-**Agent vocal** — l'expérience d'origine : l'orbe, le déclenchement par
-double clap, la réponse parlée. Rien n'y change.
+**Agent vocal** — l'expérience d'origine : l'orbe, le déclenchement en
+disant "Jaris", la réponse parlée. Rien n'y change.
 
 **Chat** — exactement le même Jaris, au clavier : mêmes outils (ouvrir une
 application, chercher sur le web, regarder l'écran, mémoriser, envoyer un
@@ -1095,8 +1102,8 @@ fenêtre à l'écran. **Fermer la croix, elle, quitte vraiment Jaris** (étape
 - **Toujours au-dessus** : `alwaysOnTop` + visible sur tous les bureaux
   virtuels, donc il reste affiché même en changeant d'application ou de
   bureau.
-- **Réagit depuis n'importe où** : le double clap (déjà basé sur le micro,
-  indépendant de la fenêtre) et le **+ du pavé numérique** (`globalShortcut`,
+- **Réagit depuis n'importe où** : le mot d'activation "Jaris" (déjà basé sur
+  le micro, indépendant de la fenêtre) et le **+ du pavé numérique** (`globalShortcut`,
   enregistré au démarrage) déclenchent l'écoute quel que soit le programme
   qui a le focus.
   > Le caractère "+" tout seul (celui à côté du Entrée sur un clavier

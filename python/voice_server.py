@@ -63,10 +63,16 @@ MIC_TEST_LEVEL_DIVISOR = 3000.0
 
 # Seuil de détection du mot d'activation "Jaris" (score du modèle, 0-1) et anti-rebond (en nombre de chunks
 # de 80 ms) — voir wakeword.py et scripts/train_jaris_wakeword.py pour comment ce modèle a été entraîné et
-# évalué. 0.5 est le seuil de décision standard d'un classifieur binaire (sigmoïde) ; ajusté ici après
-# évaluation sur le jeu de test (voix synthétiques) ET sur le jeu de validation officiel d'openWakeWord
-# (faux positifs par heure, mesuré sur ~11h de vrai audio varié) plutôt que deviné.
-WAKEWORD_THRESHOLD = 0.5
+# évalué. 0.995 (pas 0.5, le seuil "par défaut" d'un classifieur binaire) choisi après un vrai test sur des
+# phrases JAMAIS vues à l'entraînement : à 0.5, "Paris", "chariot" ou une phrase quelconque contenant "a ri"
+# déclenchaient parfois Jaris par erreur. À 0.995, tout ce qui a été testé fonctionne SAUF deux confusions
+# phonétiques réellement difficiles ("Jarvis", l'ancien nom, et une phrase contenant "a ri" comme "il a ri
+# très fort") qui restent élevées (score > 0.99) même après un corpus négatif volontairement élargi sur ces
+# cas précis — un rappel de 97,2% sur nos propres échantillons de test à ce seuil, contre 87-88% à un seuil
+# encore plus strict qui n'aurait pas réglé ces deux confusions de toute façon (leur score dépasse déjà
+# 0.99). Ces deux mots restent un vrai risque de faux déclenchement connu, pas un compromis choisi à
+# l'aveugle : voir CLAUDE.md pour le détail des mesures.
+WAKEWORD_THRESHOLD = 0.995
 WAKEWORD_DEBOUNCE_CHUNKS = 15  # ~1,2s : couvre la durée d'un "Jaris" dit une fois, sans bloquer trop longtemps après
 
 # Formules "génériques" que les modèles de transcription peuvent halluciner sur
@@ -208,9 +214,9 @@ def main() -> None:
     audio_queue: "queue.Queue[np.ndarray]" = queue.Queue()
 
     def make_audio_callback(native_rate: int):
-        """Le reste du pipeline (détection de clap par RMS, transcription) suppose du 16 kHz partout : si le micro
-        ne peut être ouvert qu'à un autre débit (voir la retombée plus bas), ré-échantillonner ici, une
-        seule fois à l'entrée, plutôt que de complexifier tout le reste en aval."""
+        """Le reste du pipeline (détection du mot d'activation, transcription) suppose du 16 kHz partout : si
+        le micro ne peut être ouvert qu'à un autre débit (voir la retombée plus bas), ré-échantillonner ici,
+        une seule fois à l'entrée, plutôt que de complexifier tout le reste en aval."""
         if native_rate == SAMPLE_RATE:
             def on_audio(indata: np.ndarray, _frames: int, _time_info, status) -> None:
                 if status:
@@ -313,8 +319,8 @@ def main() -> None:
         chunk_ms = (len(chunk) / SAMPLE_RATE) * 1000
 
         # Lit le même flux que la détection de déclenchement, sans jamais interagir avec `mode` : le test
-        # micro tourne "à côté" (voir docstring en tête de fichier), pas à la place du clap. Pas de
-        # durée fixe : reste actif jusqu'à stop-mic-test, l'utilisateur active/désactive lui-même depuis
+        # micro tourne "à côté" (voir docstring en tête de fichier), pas à la place du mot d'activation.
+        # Pas de durée fixe : reste actif jusqu'à stop-mic-test, l'utilisateur active/désactive lui-même depuis
         # Options → Micro (voir OptionsMenu.tsx) plutôt que d'attendre un minuteur.
         if mic_test_start_requested.is_set():
             mic_test_start_requested.clear()

@@ -486,3 +486,36 @@ faire — rien n'est perdu, juste rangé à part. Voir README.md pour la liste d
   changé de 8 à 12 dans `python/tts_server.py`. Revérifié pour de vrai :
   appel réel de `tts_server.py` via stdin/stdout (exit code 0, synthèse
   produite), suite de régression complète (48/48 tests) toujours au vert.
+- ✅ Étape 80 (v0.5.0) — Léo : "on vas pas faire en tappant dans les mains
+  c'est galere on vas dire juste jaris... fait un bon système qui comprend
+  bien car la derniere fois c'etais pas top" (référence à l'ancien mot
+  d'activation openWakeWord, retiré parce qu'aucun mot-clé "Jaris" n'existe
+  tout fait, obligeant à dire "Hey Jarvis" en anglais). Entraîné un modèle
+  openWakeWord DÉDIÉ à "Jaris" : corpus synthétique généré avec les 10 voix
+  Supertonic déjà utilisées par Jaris (français réel, pas le générateur
+  Piper anglais fourni par défaut), positifs "Jaris" + négatifs DURS ciblés
+  sur les vrais risques de confusion ("Paris", "chariot", "il a ri",
+  "Jarvis") plutôt qu'un jeu de données générique. `python/wakeword.py`
+  réimplémente en miniature (numpy + onnxruntime, pas le paquet openwakeword
+  lui-même — sa dépendance tflite-runtime n'a aucune roue Windows) le
+  pipeline melspectrogramme + embedding + classifieur, vérifié BIT À BIT
+  identique à l'implémentation officielle avant d'y faire confiance.
+  **Bug réel découvert en construisant le corpus, sans lien direct avec le
+  mot d'activation mais qui affecte du code déjà en production** :
+  `scipy.signal.resample_poly` sur un tableau int16 renvoie du SILENCE
+  TOTAL, sans la moindre erreur — corrigé dans `make_audio_callback`
+  (voice_server.py, retombée utilisée par les micros dont le débit natif
+  n'est pas 16 kHz, ex: USB/Bluetooth). **Validé objectivement, pas
+  supposé** : jeu de validation OFFICIEL d'openWakeWord (faux positifs/
+  heure sur ~11h de vrai audio varié) ET un test de bout en bout sur des
+  phrases jamais vues à l'entraînement. **Résultat honnête, pas parfait** :
+  "Jaris" est détecté de façon fiable (dès qu'il y a un peu de contexte, ou
+  après ~1s pour "Jaris" tout seul en écoute continue), "Paris"/"chariot"/
+  phrases générales sont bien ignorés — mais deux confusions phonétiques
+  réelles restent ("Jarvis", l'ancien nom, et "il a ri"), même après un
+  corpus négatif volontairement élargi sur ces deux cas précis (43 phrases
+  x 10 voix). Seuil de décision (`WAKEWORD_THRESHOLD` = 0,995, pas le 0,5
+  "par défaut") choisi après ce test réel, pas deviné. Le raccourci clavier
+  **+** reste disponible en repli. Pas encore testé avec la vraie voix/le
+  vrai micro de Léo — comme pour tout changement vocal, seul l'usage réel
+  le confirmera complètement.

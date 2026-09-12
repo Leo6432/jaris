@@ -211,7 +211,7 @@ export default function App(): JSX.Element {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  // Coupe la réponse en cours dès que Jaris se remet à écouter (double clap, ou + du pavé
+  // Coupe la réponse en cours dès que Jaris se remet à écouter (mot d'activation "Jaris", ou + du pavé
   // numérique) : le sidecar Python écoute en continu, indépendamment de ce que fait
   // Electron (voir voicePipeline.ts), donc "listening" peut très bien arriver pendant que la réponse
   // précédente est encore en train d'être lue. Sans ça, la nouvelle capture démarrait bien mais l'ancienne

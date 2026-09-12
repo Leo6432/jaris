@@ -91,7 +91,7 @@ function normalizeSpokenSymbols(text: string): string {
 }
 
 /**
- * Orchestre le cycle complet : déclenchement (double clap ou manuel) -> capture -> transcription ->
+ * Orchestre le cycle complet : déclenchement (mot d'activation "Jaris" ou manuel) -> capture -> transcription ->
  * réflexion (Ollama, avec outils : ouvrir une appli, programmer un rappel) ->
  * réponse parlée. Les rappels qui se déclenchent tout seuls passent par le
  * même canal de réponse (announceReminder -> speak).
@@ -101,7 +101,7 @@ export class VoicePipeline extends EventEmitter {
   private idleTimer: ReturnType<typeof setTimeout> | null = null
   /**
    * true tant qu'une phrase est en train d'être traitée (réflexion Ollama + réponse parlée) : le sidecar
-   * Python écoute le double clap en continu, indépendamment de ce que fait Electron, donc une nouvelle
+   * Python écoute le mot d'activation en continu, indépendamment de ce que fait Electron, donc une nouvelle
    * phrase peut être captée pendant ce temps. Une phrase captée PENDANT LA RÉFLEXION (ex: "en fait le
    * ethereum" juste après "quel est le prix du bitcoin") n'a souvent aucun sens toute seule : elle est
    * fusionnée avec la phrase en cours et la réflexion recommence avec le tout, pour ne donner qu'UNE seule

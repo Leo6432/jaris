@@ -551,7 +551,7 @@ app.whenReady().then(async () => {
 
   /**
    * Raccourci global (pas seulement quand la fenêtre de Jaris a le focus) : déclenche l'écoute depuis
-   * n'importe quelle appli, comme le double clap (déjà global car basé sur le micro).
+   * n'importe quelle appli, comme le mot d'activation (déjà global car basé sur le micro).
    * Diagnostic explicite à chaque étape (succès/échec d'enregistrement, puis déclenchement réel) : sinon
    * impossible de distinguer "le raccourci ne s'enregistre pas" de "il s'enregistre mais rien ne se passe
    * au moment d'appuyer" (ex: pipeline vocal pas encore prêt) juste en testant à l'aveugle. Une fois
