@@ -519,3 +519,18 @@ faire — rien n'est perdu, juste rangé à part. Voir README.md pour la liste d
   **+** reste disponible en repli. Pas encore testé avec la vraie voix/le
   vrai micro de Léo — comme pour tout changement vocal, seul l'usage réel
   le confirmera complètement.
+
+
+## v0.5.1 — Mot d’activation absent de l’installateur
+
+Diagnostic sur le PC de Léo : les trois modèles ONNX existaient dans le dépôt mais étaient exclus
+par le filtre electron-builder. Leur absence faisait quitter le sidecar juste après un faux signal
+« prêt ». Les modèles sont maintenant inclus ; le signal prêt attend le chargement du détecteur,
+et la CI charge les modèles depuis les ressources empaquetées et traite du silence synthétique.
+La reconnaissance de la voix réelle de Léo reste à confirmer après installation.
+
+Le test a aussi reproduit un score de 0,999 sur silence numérique : un contrôle du niveau sonore
+récent empêche cette activation sans parole, en réutilisant le seuil de capture vocale.
+
+Validation audio synthétique M3/F3 : « Jaris » est détecté, mais « Paris » déclenche aussi.
+Cette confusion du classifieur reste une limite connue ; le correctif ne prétend pas réentraîner le modèle.

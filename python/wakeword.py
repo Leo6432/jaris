@@ -34,7 +34,7 @@ MELSPEC_BUFFER_MAX_FRAMES = 970  # ~10 s d'historique de melspectrogramme (10 * 
 class JarisWakeWordDetector:
     """Détecteur à état, un chunk de 1280 échantillons à la fois (voir process_chunk)."""
 
-    def __init__(self, threshold: float = 0.995, debounce_chunks: int = 15):
+    def __init__(self, threshold: float = 0.995, debounce_chunks: int = 15, minimum_rms: float = 300):
         sess_options = ort.SessionOptions()
         sess_options.inter_op_num_threads = 1
         sess_options.intra_op_num_threads = 1
@@ -56,6 +56,10 @@ class JarisWakeWordDetector:
         self._n_feature_frames = self._classifier_session.get_inputs()[0].shape[1]
         self._feature_buffer_max_frames = self._n_feature_frames * 2
 
+        # Le classifieur peut donner un score élevé au silence. Exiger un signal audible
+        # récent, au même seuil que la capture de parole, sans couper la fin du mot.
+        self.minimum_rms = minimum_rms
+        self._recent_rms = deque(maxlen=self._n_feature_frames)
         self.threshold = threshold
         # Ignore les nouveaux déclenchements pendant ce nombre de chunks après un premier déclenchement :
         # une seule prononciation de "Jaris" peut faire dépasser le seuil sur plusieurs chunks consécutifs
@@ -79,6 +83,7 @@ class JarisWakeWordDetector:
 
     def process_chunk(self, chunk: np.ndarray) -> float:
         """Traite un chunk de 1280 échantillons int16, renvoie le score de détection (0-1) de ce chunk."""
+        self._recent_rms.append(float(np.sqrt(np.mean(chunk.astype(np.float64) ** 2))))
         self._raw_buffer.extend(chunk.tolist())
 
         recent = np.array(list(self._raw_buffer)[-MELSPEC_HISTORY_SAMPLES:], dtype=np.int16)
@@ -106,7 +111,8 @@ class JarisWakeWordDetector:
 
     def should_trigger(self, score: float) -> bool:
         """À appeler avec le score renvoyé par process_chunk(). Applique le seuil + le anti-rebond."""
-        if score >= self.threshold and self._chunks_since_trigger >= self.debounce_chunks:
+        audible = bool(self._recent_rms) and max(self._recent_rms) >= self.minimum_rms
+        if audible and score >= self.threshold and self._chunks_since_trigger >= self.debounce_chunks:
             self._chunks_since_trigger = 0
             return True
         return False

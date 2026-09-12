@@ -27,6 +27,7 @@ extraResources:
     to: python
     filter:
       - '**/*.py'
+      - 'models/*.onnx'
       - requirements.txt
   # Scores de fiabilité des modèles, lus à l'exécution pour choisir quel modèle installer sur cette
   # machine (voir parseVerifiedToolScores, hardwareScan.ts). Sans ce fichier, plus aucun candidat n'a de

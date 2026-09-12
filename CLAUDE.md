@@ -744,6 +744,19 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   bruit aléatoire, scipy 1.14.1), pas encore de test automatisé dans `scripts/` (aucune convention Python
   dans la suite de tests existante, uniquement `node --test scripts/test-*.mjs`).
 
+
+- **Un modèle présent dans Git peut manquer dans l’application installée** : en v0.5.0, le filtre
+  `extraResources` ne copiait que les fichiers Python et requirements.txt, excluant les trois modèles
+  ONNX du mot « Jaris ». Reproduit sur l’installation réelle : `NoSuchFile` dès le chargement du
+  melspectrogramme. Inclure `models/*.onnx` et charger le vrai détecteur depuis les ressources
+  empaquetées en CI. Le sidecar ne doit annoncer `ready` qu’après ce chargement ; un échec doit
+  émettre `fatal` avec sa cause réelle, sinon l’interface croit l’écoute prête alors que Python quitte.
+
+- **Un score de mot-clé élevé ne prouve pas qu’une voix est présente** : le modèle Jaris 0.5.0
+  donne environ 0,999 sur du silence numérique. Exiger un niveau sonore récent suffisant, avec
+  le seuil déjà utilisé pour la capture vocale ; conserver une fenêtre pour ne pas perdre un
+  score qui monte juste après la fin du mot. Tester silence, bruit faible et mot prononcé.
+
 ## Commandes utiles
 
 ```

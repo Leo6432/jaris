@@ -301,6 +301,14 @@ def main() -> None:
         emit({"event": "fatal", "message": f"impossible d'ouvrir le micro : {exc}"})
         sys.exit(1)
 
+    try:
+        detector = JarisWakeWordDetector(threshold=WAKEWORD_THRESHOLD, debounce_chunks=WAKEWORD_DEBOUNCE_CHUNKS, minimum_rms=SILENCE_RMS_THRESHOLD)
+    except Exception as exc:
+        stream.stop()
+        stream.close()
+        emit({"event": "fatal", "message": f"impossible de charger le détecteur du mot Jaris : {exc}"})
+        sys.exit(1)
+
     emit({"event": "ready"})
 
     mode = "wake"  # "wake" | "capture"
@@ -311,8 +319,6 @@ def main() -> None:
 
     mic_test_active = False
     mic_test_detected = False
-
-    detector = JarisWakeWordDetector(threshold=WAKEWORD_THRESHOLD, debounce_chunks=WAKEWORD_DEBOUNCE_CHUNKS)
 
     while True:
         chunk = audio_queue.get()
