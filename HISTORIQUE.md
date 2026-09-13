@@ -604,3 +604,13 @@ supplémentaire ; la voix et le microphone réels de Léo restent à valider apr
   avec le vrai DOM du widget (20% de l'orbe visible avant, 100% après, capture identique à celle de Léo).
   Corrigé en mémorisant l'émotion courante côté main (`lastEmotion`) et en ouvrant le widget à la taille
   correspondante, pour que fenêtre native et contenu ne se contredisent plus.
+
+- ✅ Étape 86 (v0.5.8) — Léo, dernier reste visible après l'étape 85 : "on voit d'abord jaris essayer
+  d'aller dans le widget quand il est inactif et apres etre actif mais en 0.5s". La fenêtre s'ouvrait
+  bien à la bonne taille, mais son contenu rejouait quand même l'animation repos -> actif à l'affichage :
+  une fenêtre cachée ne peint pas, donc le dernier état peint restait "replié" et la transition CSS
+  (320ms) repartait de là au moment de montrer le widget. Corrigé par une classe `app--widget-instant`
+  qui coupe ces transitions tant que la fenêtre est cachée et ne les réactive qu'après une vraie frame
+  peinte dans le bon état — les changements d'émotion suivants, widget déjà à l'écran, gardent leur
+  animation normale. Vérifié par mesure Playwright (sans la classe : opacity 0,05 / scale 0,38 deux
+  frames après ; avec : déjà l'état final).

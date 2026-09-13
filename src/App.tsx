@@ -266,6 +266,39 @@ export default function App(): JSX.Element {
     }
   }, [])
 
+  // Léo, en usage réel, juste après le correctif de la taille native du widget : "on voit d'abord jaris
+  // essayer d'aller dans le widget quand il est inactif et apres etre actif mais en 0.5s". Le widget est
+  // CACHÉ (win.hide()) la plupart du temps, et Chromium ne peint pas une fenêtre cachée : quand l'émotion
+  // passe à 'listening' pendant ce temps, le DOM change bien, mais l'ancien état (replié) reste le dernier
+  // état réellement PEINT. À l'affichage, le navigateur reprend donc la transition CSS de .widget-rest/
+  // .widget-active (320ms, index.css) depuis cet ancien état — d'où la pilule "repos" visible une demi-
+  // seconde avant de se déplier, alors que Jaris écoutait déjà avant même le repli.
+  // Corrigé en coupant les transitions tant que la fenêtre est cachée (aucune transition en attente ne peut
+  // alors se créer) et en ne les réactivant qu'après une vraie frame peinte dans le bon état.
+  const [widgetInstant, setWidgetInstant] = useState(() => document.visibilityState !== 'visible')
+  useEffect(() => {
+    if (MODE !== 'widget') return
+    let firstFrame = 0
+    let secondFrame = 0
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState !== 'visible') {
+        setWidgetInstant(true)
+        return
+      }
+      // Deux frames : la première peint l'état courant sans transition, la seconde rend la main aux
+      // animations pour les changements d'émotion suivants, widget déjà à l'écran.
+      firstFrame = requestAnimationFrame(() => {
+        secondFrame = requestAnimationFrame(() => setWidgetInstant(false))
+      })
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      cancelAnimationFrame(firstFrame)
+      cancelAnimationFrame(secondFrame)
+    }
+  }, [])
+
   if (profileName === undefined) {
     return <div className="app" />
   }
@@ -428,7 +461,11 @@ export default function App(): JSX.Element {
   // change de nouveau avant la fin de la transition.
   const widgetCollapsed = emotion === 'idle'
   return (
-    <div className={`app app--widget${widgetCollapsed ? ' app--widget-collapsed' : ''}`}>
+    <div
+      className={`app app--widget${widgetCollapsed ? ' app--widget-collapsed' : ''}${
+        widgetInstant ? ' app--widget-instant' : ''
+      }`}
+    >
       <div className="widget-rest" aria-hidden={!widgetCollapsed}>
         <div className="widget-pill">
           <JarisOrb emotion={emotion} size={WIDGET_ORB_COLLAPSED_SIZE}

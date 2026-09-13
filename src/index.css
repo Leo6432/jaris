@@ -2828,6 +2828,16 @@ a:hover {
   transform: translateY(-8px);
   pointer-events: none;
 }
+/* Voir widgetInstant (App.tsx) : posé tant que la fenêtre du widget est cachée, retiré seulement une fois
+   une vraie frame peinte dans le bon état. Sans ça, l'émotion qui change pendant que le widget est caché
+   laissait la transition se jouer À L'AFFICHAGE, depuis le dernier état peint (replié) — le widget
+   apparaissait au repos puis se dépliait en 320ms alors que Jaris écoutait déjà. */
+.app--widget-instant .widget-rest,
+.app--widget-instant .widget-active,
+.app--widget-instant .widget-details {
+  transition: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .widget-rest, .widget-active, .widget-details { transition: none; }
 }

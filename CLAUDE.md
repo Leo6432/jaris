@@ -889,6 +889,30 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   une fois côté renderer pour le contenu) finissent toujours par se contredire** — les faire dériver de la
   même source (l'émotion) est la seule façon de garantir qu'ils ne divergent pas.
 
+- **Suite du correctif précédent (widget à la bonne taille), dernier reste visible signalé par Léo : "on voit
+  d'abord jaris essayer d'aller dans le widget quand il est inactif et apres etre actif mais en 0.5s"** — la
+  fenêtre s'ouvrait bien à la bonne taille, mais son CONTENU se dépliait quand même sous les yeux de Léo,
+  alors que Jaris écoutait déjà avant le repli. Cause : le widget est CACHÉ (`win.hide()`) la quasi-totalité
+  du temps, et Chromium ne peint pas une fenêtre cachée — quand l'émotion passe à 'listening' pendant ce
+  temps, React met bien le DOM à jour, mais le dernier état réellement PEINT reste l'état replié. À
+  l'affichage, le navigateur reprend donc la transition CSS de `.widget-rest`/`.widget-active` (320ms
+  transform + 240ms opacity, index.css) DEPUIS cet état périmé : la pilule "repos" reste visible une
+  demi-seconde avant de se déplier. Corrigé par une classe `app--widget-instant` (App.tsx + index.css) qui
+  coupe ces transitions tant que `document.visibilityState !== 'visible'` — aucune transition en attente ne
+  peut alors se créer pendant que la fenêtre est cachée — et qui n'est retirée qu'après DEUX
+  `requestAnimationFrame` (donc une vraie frame peinte dans le bon état), pour que les changements d'émotion
+  SUIVANTS, widget déjà à l'écran, gardent leur animation normale. **Vérifié pour de vrai** : test Playwright
+  sur le vrai CSS compilé, mesure de `getComputedStyle` 2 frames après le passage replié -> actif — sans la
+  classe, `.widget-active` est encore à `opacity 0.053` / `scale 0.379` (la transition se joue bien, c'est
+  exactement ce que voyait Léo) ; avec la classe, déjà `opacity 1` / `scale 1`, sans aucune animation. **Ce
+  qui reste NON vérifiable ici** : que Chromium se comporte bien ainsi dans une vraie fenêtre Electron cachée
+  (pas d'accès Windows dans cet environnement) — le mécanisme du correctif est prouvé, son déclencheur exact
+  reste confirmé seulement par le symptôme décrit par Léo. **Leçon générale : une fenêtre cachée continue de
+  recevoir les évènements et de mettre son DOM à jour, mais PAS de peindre — tout changement d'état arrivé
+  pendant qu'elle était cachée peut donc se rejouer en animation au moment de l'afficher, depuis un état
+  périmé.** Couper les transitions tant que `visibilityState` n'est pas `visible` (et ne les rendre qu'après
+  une frame peinte) est la parade générique, valable pour n'importe quelle fenêtre qu'on cache/réaffiche.
+
 ## Commandes utiles
 
 ```
