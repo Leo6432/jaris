@@ -24,8 +24,25 @@ async function listInstalledApps(): Promise<StartApp[]> {
   return apps
 }
 
-function findBestMatch(apps: StartApp[], query: string): StartApp | undefined {
+/**
+ * Exportée pour être testable directement (scripts/test-app-launcher.mjs) sans avoir à mocker
+ * `listInstalledApps` (qui lance PowerShell) juste pour exercer la logique d'appariement.
+ *
+ * Constaté en usage réel (Léo, "Ouvre le bloc-notes et écris bonjour") : Jaris a ouvert "X" (le réseau
+ * social) au lieu du bloc-notes. Cause : un appel d'outil `open_app` SANS `app_name` (ou avec une chaîne
+ * vide, ex: argument oublié par le petit modèle local) donnait `q === ''` — `"n'importe quoi".includes('')`
+ * vaut TOUJOURS `true` en JS, donc TOUTE application installée matchait la condition, et le tri par nom le
+ * plus court (pensé pour départager des matches légitimes similaires) élisait alors le nom le plus court de
+ * TOUTE la machine, peu important son rapport avec la demande — "X" (1 caractère) gagne face à "Bloc-notes"
+ * sans le moindre lien sémantique. Reproduit avec un vrai test AVANT de corriger (query vide -> {Name: 'X'}
+ * sur une liste d'apps de test), pas deviné. Corrigé en refusant toute correspondance pour une requête vide
+ * — un nom d'application vide ne "matche" plus rien, il déclenche le message "aucune application nommée"
+ * déjà existant dans `openApp` (ou le message dédié ci-dessous, si le nom manque carrément).
+ */
+export function findBestMatch(apps: StartApp[], query: string): StartApp | undefined {
   const q = query.toLowerCase().trim()
+  if (!q) return undefined
+
   const exact = apps.find((a) => a.Name.toLowerCase() === q)
   if (exact) return exact
 
@@ -43,6 +60,13 @@ function launch(command: string, args: string[]): Promise<string | null> {
 
 /** Ouvre une application installée sur la machine, identifiée par son nom parlé (ex: "discord", "calculatrice"). */
 export async function openApp(name: string): Promise<string> {
+  // Message dédié (plutôt que de laisser tomber dans le "aucune application nommée" générique, qui
+  // afficherait un nom vide entre guillemets) : voir findBestMatch ci-dessus, un nom vide/absent ouvrait
+  // jusqu'ici l'application dont le nom est le plus court sur TOUTE la machine, sans rapport avec la demande.
+  if (!name.trim()) {
+    return "Aucun nom d'application n'a été précisé : impossible de savoir laquelle ouvrir."
+  }
+
   let apps: StartApp[]
   try {
     apps = await listInstalledApps()

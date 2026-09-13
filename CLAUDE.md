@@ -1019,6 +1019,37 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   que de forcer une liste de participes à énumérer — ici, le nom de l'outil qui fuite dans le texte est
   disponible et fiable indépendamment du temps employé par le modèle pour décrire l'action.**
 
+- **Suite immédiate du correctif ci-dessus, 3e variante du même symptôme : cette fois Jaris a réellement
+  ouvert une application — mais la MAUVAISE.** Léo, après avoir redemandé : « c'est bon bloc note est ouvert
+  avec bonjour, et il m'a ouvert X » (le réseau social X, ex-Twitter) — et confirmé, questions à choix simples
+  à l'appui, qu'aucun texte n'a été tapé nulle part. Contrairement aux deux bugs précédents (aucune action du
+  tout, puis une action narrée en plus au passé composé), cette fois un VRAI appel d'outil `open_app` a bien
+  eu lieu et a bien ouvert quelque chose — juste pas ce qui était demandé, et la réponse finale du modèle a
+  ensuite prétendu à tort que "bloc-notes" avec "bonjour" était fait.
+  Cause racine trouvée et reproduite par un vrai test AVANT de corriger : `findBestMatch` (appLauncher.ts)
+  compare la requête (`q`) à chaque nom d'application via `a.Name.includes(q) || q.includes(a.Name)`. Si `q`
+  est une chaîne VIDE (`app_name` omis ou vide dans l'appel d'outil — plausible sur un petit modèle local qui
+  oublie parfois un argument requis), `"n'importe quoi".includes('')` vaut TOUJOURS `true` en JavaScript :
+  TOUTE application installée matchait donc la condition, et le tri qui départage par le nom le PLUS COURT
+  (pensé pour départager des matches légitimes similaires, pas pour ce cas) élisait alors le nom le plus
+  court de TOUTE la machine, sans le moindre rapport avec la demande — "X" (1 caractère) gagne mécaniquement
+  face à "Bloc-notes" dès que la requête est vide. Confirmé par un test direct (`findBestMatch(apps, '')` ->
+  `{Name: 'X'}` sur une liste imitant le cas réel) avant d'écrire le correctif. Corrigé en refusant toute
+  correspondance pour une requête vide (`if (!q) return undefined`, avant même la comparaison exacte) —
+  `openApp` retombe alors sur son message "aucune application nommée" déjà existant, remplacé ici par un
+  message dédié plus clair quand le nom est carrément vide/absent plutôt que manquant simplement. Régression :
+  `node --test scripts/test-app-launcher.mjs` (nouveau fichier, `findBestMatch` exportée pour être testée sans
+  mocker `listInstalledApps`/PowerShell). **Limite distincte repérée en écrivant le test, PAS corrigée ici**
+  (hors du périmètre exact du bug rapporté, pour éviter un correctif spéculatif en plus) : un nom d'application
+  très court comme "X" reste sujet à un faux positif par SOUS-CHAÎNE dès que sa lettre apparaît n'importe où
+  dans une requête NON vide (ex: une requête contenant la lettre "x" ailleurs) — un risque préexistant, pas
+  introduit par ce correctif, à garder en tête si un futur signalement évoque encore une app à nom très court
+  ouverte à tort. **Leçon générale : `"chaîne".includes('')` vaut toujours `true` en JavaScript — toute
+  fonction de correspondance par sous-chaîne construite sur `.includes()` doit explicitement écarter une
+  requête vide en amont, sinon une entrée absente/vide dégénère silencieusement en "tout matche", et un tri
+  de départage conçu pour un cas différent (départager des matches déjà légitimes) peut alors élire un résultat
+  n'ayant plus aucun rapport avec la demande d'origine.**
+
 ## Commandes utiles
 
 ```

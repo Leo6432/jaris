@@ -659,3 +659,16 @@ supplémentaire ; la voix et le microphone réels de Léo restent à valider apr
   (tools.ts) plutôt qu'une liste séparée à tenir à jour, combiné à PROMISE_WITHOUT_ACTION dans la même
   relance corrective (variable renommée nudgedForNoAction pour refléter les deux cas couverts).
   Régression : `npm test` (nouveau `scripts/test-false-completion.mjs`, 13 cas).
+
+- ✅ Étape 89 (v0.6.3) — Léo, 3e variante du même symptôme : cette fois Jaris a réellement ouvert une
+  application, mais la mauvaise ("c'est bon bloc note est ouvert avec bonjour, et il m'a ouvert X" — le
+  réseau social X, confirmé par 2 questions à choix simples : rien n'a été tapé nulle part). Cause racine
+  trouvée et reproduite par un vrai test avant de corriger : findBestMatch (appLauncher.ts) matche par
+  sous-chaîne (.includes()) — une requête app_name VIDE (argument oublié par le petit modèle local) fait
+  matcher TOUTE application installée ("n'importe quoi".includes('') vaut toujours true en JS), et le tri
+  par nom le plus court élit alors le nom le plus court de toute la machine, "X" dans le cas de Léo, sans
+  aucun rapport avec la demande. Corrigé en refusant toute correspondance pour une requête vide, avec un
+  message dédié plus clair dans openApp quand le nom est carrément vide/absent. Limite distincte repérée
+  mais pas corrigée (hors périmètre) : un nom d'app très court reste sujet à un faux positif par
+  sous-chaîne si sa lettre apparaît ailleurs dans une requête non vide. Régression : `npm test` (nouveau
+  `scripts/test-app-launcher.mjs`, 8 cas).
