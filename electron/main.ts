@@ -102,6 +102,14 @@ const WIDGET_COLLAPSED_HEIGHT = 48
  */
 let lastSetupStatus: VoiceSetupStatusPayload = { ready: true, missing: [] }
 
+/**
+ * Dernière émotion connue du pipeline vocal, tenue à jour par `pipeline.on('emotion', ...)`. Sert
+ * UNIQUEMENT à `showWidgetWindow` : le renderer choisit déplié/replié d'après l'émotion
+ * (`widgetCollapsed = emotion === 'idle'`, App.tsx), donc la fenêtre native doit se baser sur la MÊME
+ * information, sinon les deux se contredisent (voir showWidgetWindow).
+ */
+let lastEmotion: JarisEmotion = 'idle'
+
 /** Ajoute un nœud central représentant l'utilisateur, relié à chaque note, pour donner une vraie structure au graphe (sinon les notes flottent sans lien tant que Jaris n'a pas écrit de [[...]] entre elles). */
 async function buildMemoryGraphWithUser(): Promise<MemoryGraph> {
   const [graph, profile] = await Promise.all([getMemoryGraph(), getProfile()])
@@ -231,8 +239,9 @@ function createWidgetWindow(): BrowserWindow {
  * création, au cas où l'écran/la zone de travail a changé depuis (résolution, second écran...). Collé au
  * bord haut (y = workArea.y, sans marge) façon "notch" — seule la largeur/hauteur change entre `expanded`
  * (orbe + statut + conversation, comme avant à l'étape 19) et l'état "repos" (juste le petit orbe réduit,
- * voir WIDGET_COLLAPSED_WIDTH/HEIGHT) : `showWidgetWindow` démarre toujours replié, `pipeline.on('emotion',
- * ...)` plus bas rappelle cette fonction à chaque changement d'émotion pour agrandir/replier en direct.
+ * voir WIDGET_COLLAPSED_WIDTH/HEIGHT) : `showWidgetWindow` démarre à la taille correspondant à l'émotion en
+ * cours (`lastEmotion`, jamais forcée à "replié" — voir le commentaire de cette fonction), et
+ * `pipeline.on('emotion', ...)` plus bas rappelle celle-ci à chaque changement pour agrandir/replier en direct.
  * Un simple `setBounds` (pas d'animation native) : Electron n'anime pas les changements de bounds sur
  * Windows, contrairement à macOS — le CSS interne (.app--widget-collapsed, index.css) compense en faisant
  * un fondu/zoom sur le CONTENU. Le repli natif est différé jusqu’à la fin de cette transition.
@@ -279,12 +288,22 @@ function showFullWindow(): void {
   fullWindow.focus()
 }
 
-/** Toujours replié à l'affichage (voir positionWidgetWindow) : Jaris vient de se replier depuis un moment
- * calme (fin d'onboarding, fenêtre de réglages repliée/minimisée) — jamais en pleine écoute/réponse. */
+/**
+ * Taille native alignée sur l'ÉMOTION en cours, pas forcée à "replié".
+ *
+ * Cette fonction supposait jusqu'ici que Jaris se replie toujours depuis un moment calme (fin
+ * d'onboarding, fenêtre de réglages réduite) et "jamais en pleine écoute/réponse" — hypothèse FAUSSE,
+ * signalée par Léo en usage réel : il parle à Jaris puis réduit la fenêtre pendant qu'il écoute encore.
+ * Le renderer, lui, se base uniquement sur l'émotion (`widgetCollapsed = emotion === 'idle'`, App.tsx) et
+ * dessinait donc le widget DÉPLIÉ (orbe de 160px + statut + conversation) dans une fenêtre native forcée à
+ * la taille REPLIÉE (48px de haut, en plus restreinte par `setShape` à 84x48) : l'orbe se faisait rogner en
+ * une fine bande horizontale flottant par-dessus les autres applis ("ça fait sa avec google chatgpt claude
+ * partout").
+ */
 function showWidgetWindow(): void {
   if (fullWindow && !fullWindow.isDestroyed() && fullWindow.isVisible()) return
   if (!widgetWindow || widgetWindow.isDestroyed()) widgetWindow = createWidgetWindow()
-  positionWidgetWindow(widgetWindow, false)
+  positionWidgetWindow(widgetWindow, lastEmotion !== 'idle')
   widgetWindow.show()
 }
 
@@ -303,6 +322,9 @@ async function startVoicePipeline(): Promise<void> {
 
   pipeline = new VoicePipeline()
   pipeline.on('emotion', (emotion: JarisEmotion) => {
+    // Retenu même quand le widget est caché : si Léo réduit la fenêtre de réglages pendant que Jaris écoute,
+    // showWidgetWindow doit pouvoir l'afficher directement à la bonne taille (voir lastEmotion).
+    lastEmotion = emotion
     // Étape 68 : le widget se déplie pendant l'écoute/réflexion/réponse et se replie dès le retour au repos
     // ('idle') — seulement s'il est vraiment affiché (jamais en plein onboarding/fenêtre de réglages ouverte,
     // où widgetWindow existe déjà en mémoire mais reste caché).

@@ -862,6 +862,33 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   recalcul — si le changement de taille n'est jamais animé.** Toujours vérifier le comportement PENDANT la
   transition (valeurs intermédiaires), pas seulement l'état de départ et d'arrivée.
 
+- **La MÊME "ligne ondulée" rapportée 3 fois de suite, et mes 2 premiers correctifs visaient le mauvais
+  écran (étapes 83-84, v0.5.5/v0.5.6) : le vrai coupable était le WIDGET, pas la fenêtre principale.** Léo a
+  fini par donner la précision qui change tout : "c'est quand jaris écoute et je diminue jaris, et ça fait sa
+  avec google chatgpt claude partout" — "diminuer" = RÉDUIRE la fenêtre (pas redimensionner), "partout" = la
+  forme flotte par-dessus les autres applis, donc c'est la fenêtre widget always-on-top, et la couleur CYAN
+  de sa capture correspond à `listening` (#37e2ff) dans EMOTION_STYLES, pas à `thinking` (orange) comme je
+  l'avais supposé à l'étape 84. Cause réelle : `showWidgetWindow` (main.ts) forçait TOUJOURS la fenêtre
+  native à la taille repliée (`positionWidgetWindow(widgetWindow, false)`, 48px de haut + `setShape` à
+  84x48), sur une hypothèse écrite noir sur blanc dans son propre commentaire — "Jaris vient de se replier
+  depuis un moment calme... jamais en pleine écoute/réponse" — alors que le RENDERER, lui, choisit
+  déplié/replié uniquement d'après l'émotion (`widgetCollapsed = emotion === 'idle'`, App.tsx) et dessinait
+  donc un orbe de 160px (WIDGET_ORB_EXPANDED_SIZE) dans une fenêtre de 48px. Réduire Jaris pendant qu'il
+  écoute mettait donc les deux en contradiction directe. **Vérifié pour de vrai, pas déduit** : un test
+  Playwright avec le vrai DOM du widget et le vrai CSS compilé mesure 20% seulement de l'orbe visible à
+  320x48 (capture obtenue identique à celle de Léo : une fine ligne cyan courbée) contre 100% à 320x460.
+  Corrigé en mémorisant l'émotion courante côté main (`lastEmotion`, mis à jour dans `pipeline.on('emotion',
+  ...)` même quand le widget est caché) et en s'en servant dans `showWidgetWindow`, pour que la fenêtre
+  native parte à la MÊME taille que ce que le renderer va dessiner. **Leçon générale, la plus chère de cette
+  série : quand un même symptôme est rapporté 2 fois de suite malgré un correctif, arrêter d'affiner le
+  correctif et REMETTRE EN CAUSE le composant qu'on croit en cause** — ici trois indices présents dès la
+  première capture (la position en haut de l'écran, la couleur de l'émotion, le fait que ça flotte par-dessus
+  une autre appli) désignaient le widget, jamais la fenêtre principale ; je les ai lus comme du "chrome" de
+  la capture d'écran au lieu de les traiter comme des données. **Corollaire : deux composants qui décident
+  séparément d'un même état (ici "déplié ou replié ?", décidé une fois côté main pour la fenêtre native et
+  une fois côté renderer pour le contenu) finissent toujours par se contredire** — les faire dériver de la
+  même source (l'émotion) est la seule façon de garantir qu'ils ne divergent pas.
+
 ## Commandes utiles
 
 ```

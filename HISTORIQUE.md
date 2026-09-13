@@ -593,3 +593,14 @@ supplémentaire ; la voix et le microphone réels de Léo restent à valider apr
   largeur/hauteur de l'orbe ET de son canvas (les deux, sinon l'un saute pendant que l'autre rétrécit en
   douceur). Revérifié par échantillonnage pendant la transition : la taille affichée interpole bien entre
   les deux valeurs au lieu de sauter instantanément.
+
+- ✅ Étape 85 (v0.5.7) — Léo, 3e signalement du même symptôme : "toujours pas, mais c'est quand
+  jaris écoute et je diminue jaris, et ça fait sa avec google chatgpt claude partout". La précision
+  ("réduire", "par-dessus les autres applis", couleur cyan = émotion `listening`) désignait le WIDGET,
+  pas la fenêtre principale visée par mes deux correctifs précédents. Vrai bug : `showWidgetWindow`
+  (main.ts) forçait toujours la fenêtre native à la taille repliée (48px de haut), alors que le renderer
+  déplie le widget dès que l'émotion n'est pas `idle` et y dessine un orbe de 160px — réduire Jaris
+  pendant qu'il écoute rognait donc l'orbe à une fine bande flottante. Vérifié par un test Playwright
+  avec le vrai DOM du widget (20% de l'orbe visible avant, 100% après, capture identique à celle de Léo).
+  Corrigé en mémorisant l'émotion courante côté main (`lastEmotion`) et en ouvrant le widget à la taille
+  correspondante, pour que fenêtre native et contenu ne se contredisent plus.
