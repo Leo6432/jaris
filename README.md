@@ -60,16 +60,6 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
 - ⬜ Étape 27 — Sous-agents : Jaris peut lancer plusieurs sous-agents (agents
   web, etc.) en parallèle pour des tâches complexes qui demandent plusieurs
   actions en même temps, au lieu de tout faire en une seule séquence
-- ⬜ Étape 32 — Clics plus fiables via UI Automation (Windows) : au lieu de
-  deviner des coordonnées à partir d'une capture d'écran (vision), utiliser
-  l'API d'accessibilité Windows (`UIAutomationClient`/`UIAutomationTypes`,
-  accessible depuis PowerShell comme le reste du contrôle clavier/souris —
-  étape 15) pour repérer les vrais éléments cliquables d'une fenêtre (nom,
-  type, position exacte via `ClickablePointProperty`) et cliquer dessus avec
-  certitude, même si l'interface bouge — reste 100% local et gratuit.
-  Limite : certaines interfaces personnalisées (jeux, rendu custom) n'exposent
-  pas toujours un arbre d'accessibilité complet, garder look_at_screen
-  (étape 6) en repli dans ce cas
 - ⬜ Étape 33 — Firecrawl pour un scraping web plus fiable : en complément de
   la recherche web (étape 7, basée sur SearXNG en local), auto-héberger
   Firecrawl (open source, licence AGPL-3.0, conteneur Docker comme SearXNG —

@@ -1,6 +1,6 @@
 {
   "name": "jaris",
-  "version": "0.5.8",
+  "version": "0.6.0",
   "description": "Jaris - assistant IA personnel vocal, 100% local et gratuit",
   "main": "./out/main/main.js",
   "author": "",
@@ -15,6 +15,8 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "//test": "Glob entre guillemets : c'est Node qui le développe, pas le shell — la commande reste donc identique sous PowerShell (CI Windows) et sous un shell Unix.",
+    "test": "node --test \"scripts/test-*.mjs\"",
     "benchmark:models": "node scripts/benchmark-models.mjs"
   },
   "//dependencies": "Uniquement ce que le process principal charge VRAIMENT à l'exécution : electron-builder embarque tout ce qui est listé ici dans l'application installée. Les librairies du renderer (react, three...) sont en devDependencies parce que Vite les compile dans out/renderer : les garder ici les ferait embarquer une deuxième fois, en pure duplication (~55 Mo).",

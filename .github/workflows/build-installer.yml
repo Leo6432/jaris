@@ -39,6 +39,11 @@ jobs:
       # ici que publier un installeur qui plante au lancement.
       - run: npm run typecheck
 
+      # Les tests de régression écrits au fil des correctifs (scripts/test-*.mjs) n'étaient jusqu'ici lancés
+      # qu'à la main : rien n'empêchait de publier un installeur qui les casse. Ils sont rapides (quelques
+      # secondes, aucun service externe requis) et servent justement à ne pas refaire les bugs déjà corrigés.
+      - run: npm test
+
       - run: npm run dist
 
       - uses: actions/setup-python@v5

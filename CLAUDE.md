@@ -913,10 +913,49 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   périmé.** Couper les transitions tant que `visibilityState` n'est pas `visible` (et ne les rendre qu'après
   une frame peinte) est la parade générique, valable pour n'importe quelle fenêtre qu'on cache/réaffiche.
 
+- **Étape 32 (clics via UI Automation) : conçue pour que la partie NON testable ici soit la plus petite
+  possible.** Aucun Windows ni PowerShell dans cet environnement — le script UIA ne peut donc être ni exécuté
+  ni même vérifié syntaxiquement (contrairement au CSS/React, vérifiables avec Playwright). Deux décisions
+  en découlent, et elles valent pour tout futur ajout PowerShell : (1) le script ne fait QUE LIRE (il renvoie
+  les éléments cliquables et leurs positions) — c'est `clickMouse` (inputControl.ts, déjà éprouvé) qui clique,
+  et la recherche par nom (`findElementByName`) est du TypeScript pur, donc entièrement testable sans
+  Windows ; (2) conséquence directe et gratuite : AUCUNE donnée venant du modèle n'entre dans le script
+  PowerShell, donc plus de nom d'élément à échapper, plus de risque d'injection — là où inputControl.ts doit
+  encore passer le texte à taper par variable d'environnement. **Leçon générale : quand une partie du code
+  n'est pas vérifiable dans l'environnement de dev, déplacer la logique qui manipule des données non fiables
+  du côté VÉRIFIABLE, plutôt que d'écrire un test qui fait semblant de couvrir l'autre côté.** Toute
+  défaillance du script (fenêtre sans arbre d'accessibilité, erreur, délai de 5s dépassé) renvoie une liste
+  VIDE et non une exception : le pilotage retombe alors exactement sur le comportement d'avant (clic en
+  pixels), le repli explicitement demandé par l'étape 32.
+- **Un élément visé introuvable ne doit PAS faire échouer toute la tâche de pilotage**, contrairement à
+  toutes les autres actions de la boucle (computerUse.ts) qui lèvent une erreur pour activer le court-circuit
+  d'assistant.ts. Une liste d'accessibilité peut être incomplète ou avoir changé depuis la capture : l'échec
+  est noté dans l'historique envoyé au modèle ("Élément X introuvable — reste le clic en pixels") pour qu'il
+  VOIE le problème et reprenne en pixels au tour suivant. Abandonner la tâche entière pour un nom mal repris
+  aurait rendu la nouveauté plus fragile que ce qu'elle remplace. Borné par MAX_STEPS comme le reste.
+- **`ConvertTo-Json` de Windows PowerShell 5.1 n'a pas `-AsArray`** : une liste d'UN SEUL élément ressort en
+  objet JSON, pas en tableau d'un élément. Sans garde côté TypeScript (`parseElements`), une fenêtre avec un
+  seul bouton cliquable aurait renvoyé une liste vide — le cas le plus simple, donc celui qu'on teste le
+  moins spontanément. Testé explicitement (`scripts/test-ui-automation.mjs`).
+- **`vm.runInNewContext` (utilisé par tous les tests du dépôt) crée des prototypes Array/Object DIFFÉRENTS de
+  ceux du test** : `assert.deepEqual` y échoue alors avec "Values have same structure but are not
+  reference-equal" sur des objets pourtant identiques. Les tests existants ne comparaient que des primitives
+  (`assert.equal(x.type, ...)`) et n'avaient donc jamais rencontré le piège. Pour comparer des objets
+  entiers, charger le module dans le realm courant (`vm.runInThisContext` + wrapper
+  `(function (exports, require, module) { ... })`) plutôt que dans un contexte séparé.
+- **Les tests de régression du dépôt (`scripts/test-*.mjs`) n'étaient JAMAIS lancés par la CI** — découvert
+  en ajoutant ceux de l'étape 32 : le workflow ne faisait que `typecheck` + `dist` + les tests Python du mot
+  d'activation. Chaque correctif documentait pourtant sa ligne "Régression : node --test ...", sans que rien
+  n'empêche de publier un installeur qui les casse. Ajouté `npm test` (script `package.json`, glob ENTRE
+  GUILLEMETS pour que ce soit Node et non le shell qui le développe — la CI tourne sous PowerShell) et une
+  étape dédiée dans le workflow, juste après `typecheck`. **Leçon générale : écrire un test ne suffit pas, il
+  faut vérifier qu'il est réellement exécuté par la CI — un test jamais lancé ne protège de rien.**
+
 ## Commandes utiles
 
 ```
 npm run typecheck   # tsc, node + web, sans build complet
+npm test            # tests de régression (scripts/test-*.mjs), aussi lancés par la CI
 npm run build       # electron-vite build (rapide, sans générer l'installeur)
 npm run dist        # build complet + installeur .exe (long, normalement laissé à la CI)
 ```

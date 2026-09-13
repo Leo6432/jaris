@@ -614,3 +614,19 @@ supplémentaire ; la voix et le microphone réels de Léo restent à valider apr
   peinte dans le bon état — les changements d'émotion suivants, widget déjà à l'écran, gardent leur
   animation normale. Vérifié par mesure Playwright (sans la classe : opacity 0,05 / scale 0,38 deux
   frames après ; avec : déjà l'état final).
+
+- ✅ Étape 32 (v0.6.0) — Clics plus fiables via UI Automation (Windows) : le pilotage d'écran
+  (`computer_use_task`) demandait au modèle de vision de DEVINER des coordonnées en pixels sur une
+  capture. Il reçoit maintenant, à chaque étape, la liste des VRAIS éléments cliquables de la fenêtre
+  active (nom, type, position exacte) lue via l'API d'accessibilité de Windows — nouveau service
+  `electron/services/uiAutomation.ts`, en PowerShell comme le contrôle clavier/souris de l'étape 15,
+  donc sans rien de natif à recompiler pour l'installeur. Nouvelle action `click_element` : le modèle
+  vise un NOM plutôt que des pixels, et Jaris clique à la position donnée par le système.
+  Repli conservé exactement comme prévu par l'étape : si l'arbre d'accessibilité est vide ou
+  inexploitable (jeu, interface dessinée sur mesure), ou si le nom visé est introuvable, la tâche ne
+  s'arrête PAS — le clic en pixels d'origine reprend la main. Aucun texte venant du modèle n'entre dans
+  le script PowerShell (la recherche par nom est du TypeScript pur), donc aucun risque d'injection.
+  Régression : `npm test` (nouveau `scripts/test-ui-automation.mjs` + 5 cas ajoutés à
+  `scripts/test-computer-use.mjs`). La suite de tests, jusqu'ici jamais lancée en CI, l'est maintenant
+  à chaque build. Le script PowerShell lui-même n'est pas vérifiable hors Windows : à confirmer en
+  usage réel.

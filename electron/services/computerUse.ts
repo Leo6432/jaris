@@ -3,6 +3,7 @@ import { getLiveGpuStatus, pickSafeVisionModel } from './hardwareScan'
 import { listInstalledModels } from './ollama'
 import { hideScanOverlay, showScanOverlay } from './scanOverlay'
 import { clickMouse, pressKey, typeText } from './inputControl'
+import { describeElements, findElementByName, listClickableElements, type ClickableElement } from './uiAutomation'
 import { captureScreenshotBase64 } from './vision'
 
 /**
@@ -32,9 +33,11 @@ const STEP_TIMEOUT_MS = 45000
 const MAX_CONSECUTIVE_WAITS = 3
 
 interface ComputerUseStep {
-  action: 'click' | 'double_click' | 'right_click' | 'type' | 'key' | 'wait' | 'done' | 'fail'
+  action: 'click_element' | 'click' | 'double_click' | 'right_click' | 'type' | 'key' | 'wait' | 'done' | 'fail'
   x?: number
   y?: number
+  /** Nom de l'élément visé pour `click_element` (voir uiAutomation.ts, étape 32). */
+  name?: string
   text?: string
   key?: string
   result?: string
@@ -45,7 +48,11 @@ const SYSTEM_PROMPT =
   "un humain, à partir de captures d'écran successives. On te donne un objectif et l'historique des actions " +
   'déjà faites. Réponds UNIQUEMENT par un objet JSON décrivant la PROCHAINE action à faire, sans aucun texte ' +
   'autour, sans balises de code : ' +
-  '{"action":"click","x":<pixel>,"y":<pixel>} ou "double_click"/"right_click" pareil, ' +
+  '{"action":"click_element","name":"<nom EXACT d\'un élément de la liste fournie>"} — À PRÉFÉRER dès que ' +
+  "la cible figure dans la liste des éléments cliquables détectés par Windows : leur position est donnée par " +
+  "le système, donc exacte, alors qu'un clic en pixels n'est qu'une estimation faite sur l'image. " +
+  '{"action":"click","x":<pixel>,"y":<pixel>} ou "double_click"/"right_click" pareil — à utiliser seulement ' +
+  "quand la cible n'est PAS dans cette liste (jeu, interface dessinée sur mesure, liste vide). " +
   '{"action":"type","text":"<texte à taper au clavier>"} (tape à l\'endroit du dernier clic, clique d\'abord ' +
   'sur le bon champ si besoin), ' +
   '{"action":"key","key":"<entrée|tab|échap|espace|retour arrière|suppr|haut|bas|gauche|droite|début|fin>"}, ' +
@@ -83,7 +90,8 @@ function extractStep(raw: string): ComputerUseStep | null {
   if (!match) return null
   try {
     const parsed = JSON.parse(match[0]) as Partial<ComputerUseStep>
-    if (!['click', 'double_click', 'right_click', 'type', 'key', 'wait', 'done', 'fail'].includes(parsed.action ?? '')) return null
+    if (!['click_element', 'click', 'double_click', 'right_click', 'type', 'key', 'wait', 'done', 'fail'].includes(parsed.action ?? '')) return null
+    if (parsed.action === 'click_element' && !(typeof parsed.name === 'string' && parsed.name.trim())) return null
     if (['click', 'double_click', 'right_click'].includes(parsed.action ?? '') &&
       !(typeof parsed.x === 'number' && Number.isFinite(parsed.x) && parsed.x >= 0 &&
         typeof parsed.y === 'number' && Number.isFinite(parsed.y) && parsed.y >= 0)) return null
@@ -100,11 +108,18 @@ async function nextStep(
   goal: string,
   history: string[],
   imageBase64: string,
+  elements: ClickableElement[],
   visionModel: string,
   signal?: AbortSignal
 ): Promise<ComputerUseStep> {
   const model = await resolveVisionModel(visionModel)
   const historyText = history.length ? `Actions déjà faites :\n${history.join('\n')}` : 'Aucune action encore faite.'
+  // Liste vide = fenêtre sans arbre d'accessibilité exploitable (jeu, rendu sur mesure) : on le DIT au modèle
+  // plutôt que de ne rien mettre, sinon il peut croire que la liste a juste été oubliée et attendre au lieu
+  // de repasser au clic en pixels.
+  const elementsText = elements.length
+    ? `Éléments cliquables détectés par Windows (positions exactes, à préférer) :\n${describeElements(elements)}`
+    : "Windows n'expose aucun élément cliquable pour cette fenêtre : utilise les clics en pixels."
 
   // Combine le timeout par étape avec le signal d'annulation externe (voir computerUseTask) : sans ça, une
   // annulation demandée pendant que cette requête est en vol (nouvelle phrase à la voix qui coupe la
@@ -121,7 +136,7 @@ async function nextStep(
         model,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: `Objectif : ${goal}\n\n${historyText}\n\nCapture d'écran actuelle jointe. Quelle est la prochaine action ?`, images: [imageBase64] }
+          { role: 'user', content: `Objectif : ${goal}\n\n${historyText}\n\n${elementsText}\n\nCapture d'écran actuelle jointe. Quelle est la prochaine action ?`, images: [imageBase64] }
         ],
         stream: false,
         think: false,
@@ -182,10 +197,16 @@ export async function computerUseTask(
       throw new Error(`Impossible de capturer l'écran : ${err instanceof Error ? err.message : String(err)}`)
     }
 
+    // Étape 32 : ce que Windows lui-même sait des éléments cliquables de la fenêtre active, pour que le
+    // modèle vise un NOM (position exacte) plutôt que des pixels devinés sur l'image. Ne lève jamais et
+    // renvoie une liste vide si l'arbre d'accessibilité n'est pas exploitable — le pilotage en pixels
+    // d'origine reste alors le repli, exactement comme avant.
+    const elements = await listClickableElements()
+
     showScanOverlay()
     let step: ComputerUseStep
     try {
-      step = await nextStep(goal, history, image, visionModel, signal)
+      step = await nextStep(goal, history, image, elements, visionModel, signal)
     } finally {
       hideScanOverlay()
     }
@@ -202,6 +223,24 @@ export async function computerUseTask(
     }
 
     switch (step.action) {
+      case 'click_element': {
+        const wanted = step.name ?? ''
+        const target = findElementByName(elements, wanted)
+        if (!target) {
+          // PAS une erreur fatale, contrairement aux autres actions : c'est le cas de repli prévu par
+          // l'étape 32 (élément absent de l'arbre d'accessibilité, ou interface qui a bougé depuis la
+          // capture). On le note dans l'historique pour que le modèle le VOIE et repasse au clic en pixels
+          // au tour suivant, plutôt que d'abandonner toute la tâche pour un nom mal repris.
+          history.push(`${i + 1}. Élément "${wanted}" introuvable dans la liste Windows — reste le clic en pixels`)
+          onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : élément "${wanted}" introuvable, je repasse en clic direct.`)
+          break
+        }
+        const result = await clickMouse(target.x, target.y, 'left')
+        if (!result.startsWith('Clic left effectué')) throw new Error(result)
+        history.push(`${i + 1}. Clic sur "${target.name}" (${target.type}, position donnée par Windows)`)
+        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : clic sur "${target.name}".`)
+        break
+      }
       case 'click':
       case 'double_click':
       case 'right_click': {
