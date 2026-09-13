@@ -1,0 +1,71 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import test from 'node:test'
+import vm from 'node:vm'
+import ts from 'typescript'
+
+/**
+ * PROMISE_WITHOUT_ACTION (assistant.ts) détecte une promesse d'action du modèle ("je vais faire X") sans
+ * appel d'outil qui l'accompagne. Exportée au niveau module précisément pour être testée ici sans avoir à
+ * mocker tout converse() (Ollama, les outils, le profil...).
+ */
+const source = ts.transpileModule(readFileSync(new URL('../electron/services/assistant.ts', import.meta.url), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+}).outputText
+
+const modules = {
+  '../config': { config: { ollama: {} } },
+  './ollama': {},
+  './memoryStore': {},
+  './profileStore': {},
+  './tools': {},
+  './hardwareScan': {},
+  './resourceMonitor': {}
+}
+const exports = {}
+vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports } })
+const { PROMISE_WITHOUT_ACTION } = exports
+
+test('reproduit le vrai cas rapporté par Léo (étape 32) : un adverbe entre "je vais" et le verbe', () => {
+  const text =
+    "Je m'excuse pour la confusion. Comme demandé, je vais simplement taper \"Bonjour\" dans le premier " +
+    'champ texte ouvert (par exemple Notepad ou le bloc-notes actuellement en usage). Je vais maintenant ' +
+    'utiliser type_text pour écrire cela.'
+  assert.ok(PROMISE_WITHOUT_ACTION.test(text))
+})
+
+for (const text of [
+  'je vais le faire',
+  'je vais chercher',
+  'je vais envoyer le mail',
+  'je vais vérifier ça',
+  'je vais regarder',
+  'je vais maintenant utiliser type_text',
+  'je vais simplement taper le texte',
+  'je vais tout de suite envoyer le mail',
+  'un instant, je regarde',
+  'attends une minute',
+  'attends-moi',
+  'patiente un peu',
+  "je m'en occupe",
+  "je m'y mets",
+  'je le fais tout de suite',
+  'laisse-moi faire'
+]) {
+  test(`détecté comme promesse : ${JSON.stringify(text)}`, () => {
+    assert.ok(PROMISE_WITHOUT_ACTION.test(text))
+  })
+}
+
+for (const text of [
+  'je vais bien',
+  'je vais très bien merci',
+  "je vais bien. je dois partir chercher quelque chose",
+  "Il est 14h32.",
+  "Voici ce que j'ai trouvé.",
+  ''
+]) {
+  test(`jamais un faux positif : ${JSON.stringify(text)}`, () => {
+    assert.ok(!PROMISE_WITHOUT_ACTION.test(text))
+  })
+}

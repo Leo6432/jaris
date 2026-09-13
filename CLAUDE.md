@@ -951,6 +951,50 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   étape dédiée dans le workflow, juste après `typecheck`. **Leçon générale : écrire un test ne suffit pas, il
   faut vérifier qu'il est réellement exécuté par la CI — un test jamais lancé ne protège de rien.**
 
+- **Suite immédiate de l'étape 32 : "pourquoi le texte est tout en bas" (Léo, capture d'écran)** — le premier
+  correctif au rognage de l'orbe (v0.5.5, `.app__orb-stage`) réglait bien le rognage mais avait un effet de
+  bord non repéré jusqu'ici : `flex: 1 1 auto` sur ce conteneur lui faisait TOUJOURS occuper tout l'espace
+  disponible dans `.app--voice`, ce qui poussait le statut/l'astuce tout en bas de l'écran sur une fenêtre
+  normale/grande — l'orbe et le texte, centrés ENSEMBLE comme un seul groupe avant ce premier correctif,
+  s'étaient retrouvés séparés aux deux bouts de l'écran. Corrigé en abandonnant le flex-grow : l'orbe redevient
+  un enfant DIRECT de `.app` (qui garde son `justify-content: center` d'origine, jamais touché), et un nouveau
+  conteneur `.app__voice-footer` regroupe statut/astuce/conversation/avertissement pour que le `ResizeObserver`
+  (`voiceLayoutRef`, App.tsx) mesure une seule hauteur ("tout ce qui n'est pas l'orbe") à soustraire de la
+  hauteur totale du conteneur, sans jamais faire grandir artificiellement quoi que ce soit. Un seul
+  `ResizeObserver` observe À LA FOIS le conteneur ET le footer (measure() relit toujours les deux tailles
+  fraîches via `getBoundingClientRect`/`clientHeight`, jamais `entry.contentRect`, donc peu importe lequel
+  déclenche le rappel) — remplace les DEUX observations séparées qu'aurait demandées une implémentation plus
+  naïve. **Vérifié pour de vrai avec Playwright, pas juste en relisant le CSS** : sur une fenêtre 1300x1080,
+  le groupe orbe+footer est bien centré (écart haut/bas < 22px sur 1080px de hauteur) au lieu du texte plaqué
+  en bas ; sur une fenêtre réduite (900x220), l'orbe rétrécit toujours sans déborder ; après idle -> thinking
+  -> happy, l'orbe reste à 320px et le groupe reste cohérent ; un clic réel sur le canvas déclenche toujours
+  `onClick`. **Leçon générale : un correctif qui résout un symptôme (rognage) en donnant TOUT l'espace
+  disponible à un élément peut lui-même créer un nouveau symptôme (répartition aux deux bouts de l'écran) —
+  toujours revérifier le résultat sur le cas "normal, rien de spécial" après un correctif pensé pour un cas
+  extrême (fenêtre réduite), pas seulement le cas extrême lui-même.**
+- **Léo a aussi rapporté, dans le même message, un vrai échec d'action : "Ouvre le bloc-notes et écris
+  bonjour" a donné "Je vais maintenant utiliser type_text pour écrire cela." puis Jaris s'est rendormi SANS
+  jamais taper quoi que ce soit.** `PROMISE_WITHOUT_ACTION` (assistant.ts) existe justement pour ce cas
+  précis, mais ratait cette phrase : le motif ne matchait "je vais " que suivi IMMÉDIATEMENT d'un pronom de
+  la liste fixe (le/la/les/lui/y/en) ou d'un verbe en -er/-ir/-re — "maintenant" n'étant ni l'un ni l'autre,
+  toute la promesse passait au travers. **Vérifié avec un vrai test du regex sur le texte exact avant de
+  corriger** (`current regex matches: false`), même discipline que les deux généralisations précédentes de ce
+  même détecteur. Corrigé en généralisant encore une fois le motif : au lieu d'une liste fixe de pronoms, un
+  mot connecteur QUELCONQUE (jusqu'à 3 : "maintenant", "simplement", "tout de suite"...) est maintenant
+  accepté entre "je vais" et le verbe — les pronoms explicites étaient déjà un cas particulier de "un mot
+  quelconque avant le verbe", inutile de les lister à part une fois ce cas général géré. Chaque mot connecteur
+  est vérifié pour ne PAS contenir de ponctuation de fin de phrase (`.`/`!`/`?`), sinon le motif pourrait
+  sauter par-dessus une vraie fin de phrase et matcher le verbe d'une phrase suivante sans rapport — testé
+  explicitement ("je vais bien. je dois partir chercher..." doit rester SANS match, "partir" appartenant à
+  "je dois", pas à "je vais"). `PROMISE_WITHOUT_ACTION` sortie de `converse()` vers le niveau module et
+  exportée, pour être testable directement (`scripts/test-promise-detection.mjs`) sans avoir à mocker tout
+  l'appel Ollama/les outils autour — même raisonnement que le service `uiAutomation.ts` de l'étape 32 (rendre
+  vérifiable ce qui peut l'être). **Troisième fois que ce même détecteur doit être généralisé pour le même
+  type de lacune (un mot-clé/motif précis rate une formulation légèrement différente) : chaque fois, la
+  bonne réponse a été de détecter un PATRON plus large plutôt que d'ajouter le cas précis à une liste — ici,
+  le patron "je vais [jusqu'à 3 mots connecteurs] [verbe]" plutôt que d'ajouter "maintenant" à une liste de
+  pronoms qui aurait fallu réenrichir à chaque nouvel adverbe découvert en usage réel.**
+
 ## Commandes utiles
 
 ```

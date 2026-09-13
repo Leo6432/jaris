@@ -219,6 +219,45 @@ function stripMarkdownForVoice(text: string): string {
 const MAX_TOOL_ROUNDS = 10
 
 /**
+ * Détecte une PROMESSE FUTURE dans une réponse du modèle ("je vais faire X", "un instant", "attends") sans
+ * appel d'outil qui l'accompagne — le signe le plus fiable qu'une action annoncée n'a pas eu lieu. Constaté
+ * en usage réel (Léo, "ouvre YouTube et cherche des tutos de guitare") : le modèle répond parfois "YouTube
+ * est ouvert, je vais faire la recherche, attends une minute" SANS avoir appelé le moindre outil dans ce
+ * tour — la promesse d'agir remplace l'action elle-même, et la conversation se termine là (plus rien ne se
+ * passe, Jaris repasse en veille). Contrairement à `hasUnnegatedMailIntent` (spécifique au mail), ce filet
+ * est générique : il ne regarde pas l'intention de la phrase de l'utilisateur mais le langage employé par LE
+ * MODÈLE dans sa réponse.
+ *
+ * Exportée (au lieu de rester une const locale dans `converse()`) pour être testable directement —
+ * scripts/test-promise-detection.mjs — sans avoir à mocker tout l'appel Ollama/les outils autour.
+ *
+ * "je vais (le/la/les )?faire" ne suffisait pas : constaté en usage réel (Léo, une question sur le président
+ * américain), le modèle a promis "je vais RECHERCHER pour vous..." sans jamais appeler search_web, et cette
+ * formulation ne matchait pas le motif d'origine limité au seul verbe "faire" — remplacé par un motif
+ * générique "je vais " + un verbe (mot se terminant par -er/-ir/-re, les 3 terminaisons d'infinitif du
+ * français), avec un pronom optionnel entre les deux (le/la/les/lui/y/en) pour couvrir "je vais LE faire"
+ * comme "je vais chercher"/"je vais envoyer"/"je vais vérifier"/etc. sans connaître le verbe à l'avance.
+ * Testé pour ne pas accrocher "je vais bien" (bien/très ne se terminent pas en -er/-ir/-re) avant d'être
+ * adopté.
+ *
+ * Cette liste FIXE de pronoms ratait encore un vrai cas signalé par Léo (étape 32, mode Code) : "Je vais
+ * MAINTENANT utiliser type_text pour écrire cela." n'a déclenché aucune relance (le modèle s'est ensuite
+ * rendormi sans avoir jamais tapé quoi que ce soit), car "maintenant" n'est ni un pronom de la liste ni un
+ * verbe en -er/-ir/-re — le motif ne matchait qu'IMMÉDIATEMENT après "je vais ". Vérifié avec un vrai test du
+ * regex sur le texte exact avant de corriger (`current regex matches: false`), même discipline que la
+ * première généralisation ci-dessus. Généralisé à un mot connecteur QUELCONQUE (jusqu'à 3 : "maintenant",
+ * "simplement", "tout de suite"...) entre "je vais" et le verbe, plutôt que d'énumérer un adverbe de plus à
+ * chaque nouveau cas découvert — même leçon, un cran plus loin : les pronoms explicites (le/la/les/lui/y/en)
+ * étaient déjà un cas particulier de "un mot quelconque avant le verbe", inutile de les lister à part une
+ * fois ce cas général géré. Chaque mot connecteur est vérifié pour ne PAS contenir de ponctuation de fin de
+ * phrase (`.`/`!`/`?`) : sans ce garde, le motif pourrait sauter par-dessus une vraie fin de phrase et
+ * matcher un verbe d'une phrase suivante sans rapport (ex: "je vais bien. je dois partir chercher..." — testé
+ * explicitement pour rester sans match, "partir" appartenant à "je dois", pas à "je vais").
+ */
+export const PROMISE_WITHOUT_ACTION =
+  /\b(je vais\b(?:\s+(?!\S*[.!?])\S+){0,3}?\s+(?!\S*[.!?])[a-zà-ÿœ]+(?:er|ir|re)\b|je m'en occupe|je m'y mets|un instant\b|attends(?:[- ]moi)?\b|patiente\b|je le fais (?:tout de suite|maintenant)|laisse[- ]moi (?:faire|une seconde|un instant))/i
+
+/**
  * Envoie la phrase transcrite à Ollama, exécute les outils qu'il demande, renvoie la réponse finale à
  * dire. `history` porte les derniers échanges (user/assistant) de la session, en amont du nouveau
  * message : sans ça, chaque question repartait de zéro sans aucun souvenir de ce qui venait d'être dit
@@ -326,25 +365,6 @@ export async function converse(
   let nudgedForEmail = false
   let toolCalledThisTurn = false
   let nudgedForPromise = false
-
-  // Constaté en usage réel (Léo, "ouvre YouTube et cherche des tutos de guitare") : le modèle répond parfois
-  // "YouTube est ouvert, je vais faire la recherche, attends une minute" SANS avoir appelé le moindre outil
-  // dans ce tour — la promesse d'agir remplace l'action elle-même, et la conversation se termine là (plus
-  // rien ne se passe, Jaris repasse en veille). Contrairement à wantsEmailSent ci-dessus (spécifique au
-  // mail), ce filet est générique : il ne regarde pas l'intention de la phrase de l'utilisateur mais le
-  // langage de PROMESSE FUTURE dans la réponse elle-même ("je vais faire X", "un instant", "attends") sans
-  // aucun appel d'outil qui l'accompagne — le signe le plus fiable qu'une action annoncée n'a pas eu lieu.
-  //
-  // "je vais (le/la/les )?faire" ne suffisait pas : constaté en usage réel (Léo, une question sur le
-  // président américain), le modèle a promis "je vais RECHERCHER pour vous..." sans jamais appeler
-  // search_web, et cette formulation ne matchait pas le motif d'origine limité au seul verbe "faire" —
-  // remplacé par un motif générique "je vais " + un verbe (mot se terminant par -er/-ir/-re, les 3
-  // terminaisons d'infinitif du français), avec un pronom optionnel entre les deux (le/la/les/lui/y/en) pour
-  // couvrir "je vais LE faire" comme "je vais chercher"/"je vais envoyer"/"je vais vérifier"/etc. sans
-  // connaître le verbe à l'avance. Testé pour ne pas accrocher "je vais bien" (bien/très ne se terminent pas
-  // en -er/-ir/-re) avant d'être adopté.
-  const PROMISE_WITHOUT_ACTION =
-    /\b(je vais (?:(?:le|la|les|lui|y|en) )?[a-zà-ÿœ]+(?:er|ir|re)\b|je m'en occupe|je m'y mets|un instant\b|attends(?:[- ]moi)?\b|patiente\b|je le fais (?:tout de suite|maintenant)|laisse[- ]moi (?:faire|une seconde|un instant))/i
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const message = await chatWithOllama(messages, TOOLS, model, think, signal, config.ollama.numCtx, onToken)

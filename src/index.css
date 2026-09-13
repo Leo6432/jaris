@@ -276,19 +276,22 @@ body.body--scan::after {
   overflow-y: auto;
 }
 
-/* Voir orbStageRef (App.tsx) : occupe tout l'espace RESTANT dans .app--voice une fois le statut et l'astuce
-   posés (flex: 1, align-self: stretch pour la largeur réelle, pas juste celle de l'orbe), pour qu'un
-   ResizeObserver puisse mesurer ce qui reste vraiment plutôt que deviner une marge fixe. Sans lui, l'orbe
-   (taille fixe 320px) se faisait rogner par .app-main (overflow: hidden) dès que la fenêtre devenait plus
-   petite que lui, ne laissant visible qu'une fine bande horizontale de l'anneau irrégulier. */
-.app__orb-stage {
-  flex: 1 1 auto;
-  align-self: stretch;
-  min-height: 0;
-  min-width: 0;
+/* Regroupe statut/astuce/conversation/avertissement pour que voiceLayoutRef (App.tsx) mesure UNE seule
+   hauteur ("tout ce qui n'est pas l'orbe") plutôt que de sommer plusieurs éléments séparés. Son propre `gap`
+   reproduit celui de `.app` (28px) : ces éléments ne sont plus des enfants DIRECTS de `.app`, ce conteneur
+   doit donc fournir lui-même l'espacement qu'ils recevaient auparavant du `gap` de `.app`.
+   Remplace `.app__orb-stage` (v0.5.5) : ce premier correctif au rognage de l'orbe utilisait `flex: 1` pour
+   qu'un ResizeObserver puisse mesurer l'espace réellement restant — mais ça faisait aussi TOUJOURS grandir
+   ce conteneur pour occuper l'espace en trop, poussant statut/astuce tout en bas de l'écran sur une fenêtre
+   normale/grande (signalé par Léo : "pourquoi le texte est tout en bas") au lieu de rester group avec l'orbe
+   au centre comme avant ce correctif. La mesure se fait maintenant directement en JS (hauteur de CE bloc
+   soustraite à la hauteur du conteneur), sans jamais toucher au `justify-content: center` de `.app` — l'orbe
+   et ce bloc redeviennent un seul groupe centré, qui rétrécit ENSEMBLE plutôt que de s'écarter. */
+.app__voice-footer {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: 28px;
 }
 
 .options-menu__trigger {
@@ -1405,11 +1408,11 @@ body.body--scan::after {
   justify-content: center;
   -webkit-app-region: no-drag;
   animation: jaris-orb-pop-in 0.22s ease-out;
-  /* orbStageRef (App.tsx) recalcule la taille de l'orbe dès qu'un sibling change (ex: le transcript qui
-     apparaît au début de "réfléchit" prend de la place sur .app__orb-stage) : sans transition, ce
-     changement de taille est un saut sec et instantané — vu par Léo comme "un petit bug" pile au moment où
-     Jaris commence à réfléchir. Anime width/height (pas juste l'opacité du pop-in ci-dessus) pour que ce
-     nouveau redimensionnement soit un rétrécissement fluide plutôt qu'un jump brutal. */
+  /* voiceLayoutRef (App.tsx) recalcule la taille de l'orbe dès que .app__voice-footer change de hauteur (ex:
+     le transcript qui apparaît au début de "réfléchit") : sans transition, ce changement de taille est un
+     saut sec et instantané — vu par Léo comme "un petit bug" pile au moment où Jaris commence à réfléchir.
+     Anime width/height (pas juste l'opacité du pop-in ci-dessus) pour que ce nouveau redimensionnement soit
+     un rétrécissement fluide plutôt qu'un jump brutal. */
   transition: width 0.2s ease, height 0.2s ease;
 }
 

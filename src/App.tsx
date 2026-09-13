@@ -57,13 +57,24 @@ export default function App(): JSX.Element {
   // fenêtre pendant/après une demande transforme le cercle en une simple ligne orange ondulée — l'orbe
   // restait à 320px fixe et se faisait ROGNER par `.app-main` (overflow: hidden) dès que la fenêtre devenait
   // plus petite que lui, ne laissant visible qu'une fine bande horizontale au milieu de l'anneau irrégulier.
-  // `.app__orb-stage` (index.css) prend, via flex, exactement l'espace RESTANT dans `.app--voice` une fois
-  // le statut et l'astuce posés (measuré, pas deviné) ; un ResizeObserver dessus retaille l'orbe pour qu'il
-  // ne dépasse jamais cet espace réel, jusqu'à MINIMAL_SIZE_THRESHOLD (JarisOrb.tsx) où le rendu simplifié
-  // du widget replié prend le relais plutôt que de continuer à rogner un anneau détaillé.
+  // **Premier correctif (v0.5.5) insuffisant, remplacé ici** : `.app__orb-stage` prenait, via `flex: 1`,
+  // TOUT l'espace restant dans `.app--voice` — ce qui poussait le statut/l'astuce tout en bas de l'écran sur
+  // une fenêtre normale/grande (signalé par Léo : "pourquoi le texte est tout en bas"), alors qu'avant ce
+  // premier correctif l'orbe et le texte formaient un seul groupe CENTRÉ ensemble. Corrigé en mesurant
+  // directement la hauteur du bloc statut/astuce/conversation (`.app__voice-footer` ci-dessous, via
+  // `getBoundingClientRect` sur le nœud trouvé dans le conteneur observé) plutôt que de lui laisser du
+  // flex-grow décider : la taille de l'orbe est déduite de "hauteur totale du conteneur moins hauteur du
+  // footer", sans jamais toucher à `justify-content: center` sur `.app` — l'orbe et le footer redeviennent un
+  // groupe centré comme à l'origine, qui rétrécit ENSEMBLE si besoin plutôt que de se répartir aux deux bouts
+  // de l'écran. Un seul `ResizeObserver` observe À LA FOIS le conteneur (redimensionnement de la fenêtre) ET
+  // le footer (apparition du transcript/de la réponse, qui change sa hauteur sans changer celle de la
+  // fenêtre) — measure() relit toujours les deux tailles fraîches via le DOM plutôt que de se fier à
+  // `entry.contentRect`, donc peu importe lequel des deux déclenche le rappel. Rétrécit jusqu'à
+  // MINIMAL_SIZE_THRESHOLD (JarisOrb.tsx), où le rendu simplifié du widget replié prend le relais plutôt que
+  // de continuer à rogner un anneau détaillé.
   const [orbSize, setOrbSize] = useState(320)
   const orbResizeObserverRef = useRef<ResizeObserver | null>(null)
-  const orbStageRef = useCallback((el: HTMLDivElement | null) => {
+  const voiceLayoutRef = useCallback((el: HTMLDivElement | null) => {
     orbResizeObserverRef.current?.disconnect()
     orbResizeObserverRef.current = null
     if (!el) return
@@ -71,12 +82,16 @@ export default function App(): JSX.Element {
     const ORB_MIN = 24
     const MARGIN = 24
     const update = (): void => {
-      const available = Math.min(el.clientWidth, el.clientHeight) - MARGIN
+      const footer = el.querySelector<HTMLElement>('.app__voice-footer')
+      const footerHeight = footer?.getBoundingClientRect().height ?? 0
+      const available = Math.min(el.clientWidth, el.clientHeight - footerHeight) - MARGIN
       setOrbSize(Math.max(ORB_MIN, Math.min(ORB_MAX, available)))
     }
     update()
     const observer = new ResizeObserver(update)
     observer.observe(el)
+    const footer = el.querySelector<HTMLElement>('.app__voice-footer')
+    if (footer) observer.observe(footer)
     orbResizeObserverRef.current = observer
   }, [])
 
@@ -401,50 +416,53 @@ export default function App(): JSX.Element {
           )}
 
           {appMode === 'voice' && (
-            <div className="app app--voice">
+            <div className="app app--voice" ref={voiceLayoutRef}>
               {/* Pas d'audioElRef ici : seul le widget a un <audio> monté, l'orbe de cette fenêtre suit juste
                   l'émotion sans vibrer avec la voix (évite toute double lecture du son des réponses).
                   onClick : une des 3 façons d'activer Jaris (Options → Activation, étape 81), avec la même
                   relecture du profil à la volée que le "+" ci-dessus plutôt qu'un état React à synchroniser.
-                  app__orb-stage : voir orbStageRef ci-dessus, prend l'espace RÉELLEMENT restant pour éviter
-                  que l'orbe ne se fasse rogner par la fenêtre (au lieu de rétrécir proprement) quand elle est
-                  réduite. */}
-              <div className="app__orb-stage" ref={orbStageRef}>
-                <JarisOrb
-                  emotion={emotion}
-                  size={orbSize}
-                  onClick={() => {
-                    void window.jaris.getProfile().then((profile) => {
-                      if (profile?.activationOrbClickEnabled === false) return
-                      window.jaris.triggerWake()
-                    })
-                  }}
-                />
-              </div>
-              <div className="app__status">{STATUS_LABEL[emotion]}</div>
-              <div className="app__hint">
-                Astuce : dis "Jaris", clique sur le cercle, ou appuie sur le + du pavé numérique depuis
-                n'importe quelle appli, pour activer l'écoute (personnalisable dans Options → Activation)
-              </div>
-
-              {(transcript || reply) && (
-                <div className="app__conversation">
-                  {transcript && <p className="app__transcript">« {transcript} »</p>}
-                  {reply && <p className="app__reply">{reply}</p>}
+                  Orbe en enfant DIRECT de .app (pas dans un conteneur à part) : voir voiceLayoutRef ci-dessus
+                  — orbe et .app__voice-footer forment un seul groupe, centré par le justify-content:center
+                  déjà présent sur .app, qui rétrécit ensemble plutôt que de se répartir aux deux bouts de
+                  l'écran. */}
+              <JarisOrb
+                emotion={emotion}
+                size={orbSize}
+                onClick={() => {
+                  void window.jaris.getProfile().then((profile) => {
+                    if (profile?.activationOrbClickEnabled === false) return
+                    window.jaris.triggerWake()
+                  })
+                }}
+              />
+              {/* Regroupe tout ce qui n'est pas l'orbe : voiceLayoutRef mesure la hauteur de CE bloc (pas
+                  chacun de ses enfants séparément) pour déduire l'espace réellement laissé à l'orbe. */}
+              <div className="app__voice-footer">
+                <div className="app__status">{STATUS_LABEL[emotion]}</div>
+                <div className="app__hint">
+                  Astuce : dis "Jaris", clique sur le cercle, ou appuie sur le + du pavé numérique depuis
+                  n'importe quelle appli, pour activer l'écoute (personnalisable dans Options → Activation)
                 </div>
-              )}
 
-              {setupStatus && !setupStatus.ready && (
-                <div className="app__setup-warning">
-                  Échec du démarrage du pipeline vocal :
-                  <ul>
-                    {setupStatus.missing.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                  Voir le README pour les étapes d'installation.
-                </div>
-              )}
+                {(transcript || reply) && (
+                  <div className="app__conversation">
+                    {transcript && <p className="app__transcript">« {transcript} »</p>}
+                    {reply && <p className="app__reply">{reply}</p>}
+                  </div>
+                )}
+
+                {setupStatus && !setupStatus.ready && (
+                  <div className="app__setup-warning">
+                    Échec du démarrage du pipeline vocal :
+                    <ul>
+                      {setupStatus.missing.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                    Voir le README pour les étapes d'installation.
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

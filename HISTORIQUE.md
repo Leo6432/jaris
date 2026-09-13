@@ -630,3 +630,17 @@ supplémentaire ; la voix et le microphone réels de Léo restent à valider apr
   `scripts/test-computer-use.mjs`). La suite de tests, jusqu'ici jamais lancée en CI, l'est maintenant
   à chaque build. Le script PowerShell lui-même n'est pas vérifiable hors Windows : à confirmer en
   usage réel.
+
+- ✅ Étape 87 (v0.6.1) — Léo, deux bugs dans le même message. (1) Capture d'écran : "pourquoi le texte
+  est tout en bas". Le correctif de l'étape 83 (`.app__orb-stage`, flex:1) réglait le rognage de l'orbe
+  mais lui faisait toujours occuper tout l'espace disponible, séparant l'orbe et le texte aux deux bouts
+  de l'écran au lieu de les garder centrés ensemble. Corrigé en mesurant la hauteur du bloc texte
+  (regroupé dans `.app__voice-footer`) pour la soustraire de la hauteur totale, sans jamais toucher au
+  centrage d'origine de `.app` — orbe et texte reforment un seul groupe centré, qui rétrécit ensemble sur
+  petite fenêtre. Vérifié par Playwright sur 3 tailles de fenêtre et un vrai clic. (2) "Ouvre le
+  bloc-notes et écris bonjour" a donné une promesse en texte ("Je vais maintenant utiliser type_text...")
+  puis Jaris s'est rendormi sans agir — le détecteur de promesse sans action ratait cette phrase à cause
+  de l'adverbe "maintenant" entre "je vais" et le verbe. Vérifié avec un vrai test du regex sur le texte
+  exact avant de corriger. Généralisé (3e fois) : un mot connecteur quelconque est maintenant accepté
+  entre "je vais" et le verbe, plutôt que d'énumérer chaque adverbe rencontré. Régression : `npm test`
+  (nouveau `scripts/test-promise-detection.mjs`, 23 cas).
