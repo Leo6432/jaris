@@ -1405,10 +1405,20 @@ body.body--scan::after {
   justify-content: center;
   -webkit-app-region: no-drag;
   animation: jaris-orb-pop-in 0.22s ease-out;
+  /* orbStageRef (App.tsx) recalcule la taille de l'orbe dès qu'un sibling change (ex: le transcript qui
+     apparaît au début de "réfléchit" prend de la place sur .app__orb-stage) : sans transition, ce
+     changement de taille est un saut sec et instantané — vu par Léo comme "un petit bug" pile au moment où
+     Jaris commence à réfléchir. Anime width/height (pas juste l'opacité du pop-in ci-dessus) pour que ce
+     nouveau redimensionnement soit un rétrécissement fluide plutôt qu'un jump brutal. */
+  transition: width 0.2s ease, height 0.2s ease;
 }
 
 .jaris-orb canvas {
   display: block;
+  /* Même raison que .jaris-orb ci-dessus : le canvas est redimensionné par JS (JarisOrb.tsx, style.width/
+     height) exactement en même temps que son conteneur — animer les deux ensemble évite que le canvas
+     "saute" pendant que sa boîte englobante rétrécit en douceur (ou l'inverse). */
+  transition: width 0.2s ease, height 0.2s ease;
 }
 
 .jaris-orb--clickable {
@@ -1416,8 +1426,10 @@ body.body--scan::after {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .jaris-orb {
+  .jaris-orb,
+  .jaris-orb canvas {
     animation: none;
+    transition: none;
   }
 }
 

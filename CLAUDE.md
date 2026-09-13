@@ -839,6 +839,28 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   de JarisOrb en dessous de 48px) plutôt que de le laisser se faire rogner en forme cassée. Un clic réel
   Playwright sur le canvas confirme que `onClick` (une des 3 méthodes d'activation, étape 81) fonctionne
   toujours après l'ajout du conteneur `.app__orb-stage`.
+- **Suite immédiate du correctif ci-dessus : "quand il réfléchit ça fait ça un petit bug mais après quand il
+  repond il est normal" (Léo)** — le clampage de taille de l'orbe (`.app__orb-stage`/`ResizeObserver`)
+  fonctionnait, mais SANS transition CSS : dès que `.app__conversation` apparaît (le transcript, connu dès le
+  début de "réfléchit", avant même la réponse), il prend de la place sur `.app--voice` et l'orbe change de
+  taille — un JS qui réassigne `canvas.width`/`style.width` instantanément, sans la moindre animation.
+  **Reproduit pour de vrai avant tout correctif** : un test Playwright a rejoué exactement idle -> thinking
+  (transcript) -> happy (reply) dans une fenêtre réduite, et confirmé que la taille de l'orbe saute d'un coup
+  sec (40px -> 24px) SANS aucune valeur intermédiaire, exactement au moment où le transcript apparaît — pas
+  de bug aléatoire, un vrai saut instantané, perçu comme "un petit bug" pile pendant que Jaris réfléchit.
+  Corrigé en ajoutant `transition: width 0.2s ease, height 0.2s ease` à `.jaris-orb` ET `.jaris-orb canvas`
+  (index.css) — les DEUX éléments, pas un seul, car chacun a sa propre taille en pixels fixée indépendamment
+  par JS (le div par le prop `size` de React, le canvas par `JarisOrb.tsx`) : n'animer que l'un des deux
+  aurait laissé l'autre sauter pendant que le premier rétrécit en douceur, créant un décalage visible entre
+  la boîte et son contenu. Revérifié avec le même test : `canvas.width` (résolution) passe toujours
+  instantanément à la valeur finale (comportement JS normal, inchangé), mais la taille AFFICHÉE
+  (`getBoundingClientRect`) interpole bien 40 -> ~24 sur environ 200ms au lieu d'un saut sec — confirmé par
+  échantillonnage à 165ms d'intervalle pendant la transition, pas juste par screenshot avant/après. Repris
+  aussi dans le bloc `prefers-reduced-motion: reduce` déjà présent pour `.jaris-orb`, comme l'animation de
+  pop-in au montage. **Leçon générale : un `ResizeObserver` qui clampe une taille pour éviter un rognage
+  (défaut du correctif précédent) peut lui-même introduire un défaut différent — un saut visuel sec à chaque
+  recalcul — si le changement de taille n'est jamais animé.** Toujours vérifier le comportement PENDANT la
+  transition (valeurs intermédiaires), pas seulement l'état de départ et d'arrivée.
 
 ## Commandes utiles
 

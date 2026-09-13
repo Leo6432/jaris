@@ -584,3 +584,12 @@ supplémentaire ; la voix et le microphone réels de Léo restent à valider apr
   observé par un ResizeObserver qui clampe la taille de l'orbe entre 24 et 320px. Revérifié : taille
   normale inchangée à 320px, rétrécissement propre sur petite fenêtre, clic sur l'orbe toujours
   fonctionnel après l'ajout du conteneur.
+
+- ✅ Étape 84 (v0.5.6) — Léo, juste après l'étape 83 : "quand il réfléchit ça fait ça un petit bug mais
+  après quand il repond il est normal". Reproduit pour de vrai avec Playwright (idle -> thinking avec
+  transcript -> happy avec réponse, fenêtre réduite) : la taille de l'orbe change bien sans erreur, mais
+  d'un coup sec (40px -> 24px en un seul saut, sans transition) dès que le transcript apparaît — perçu
+  comme un glitch pile pendant que Jaris réfléchit. Corrigé en ajoutant une transition CSS (0,2s) sur la
+  largeur/hauteur de l'orbe ET de son canvas (les deux, sinon l'un saute pendant que l'autre rétrécit en
+  douceur). Revérifié par échantillonnage pendant la transition : la taille affichée interpole bien entre
+  les deux valeurs au lieu de sauter instantanément.
