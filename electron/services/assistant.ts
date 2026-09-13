@@ -258,6 +258,39 @@ export const PROMISE_WITHOUT_ACTION =
   /\b(je vais\b(?:\s+(?!\S*[.!?])\S+){0,3}?\s+(?!\S*[.!?])[a-zà-ÿœ]+(?:er|ir|re)\b|je m'en occupe|je m'y mets|un instant\b|attends(?:[- ]moi)?\b|patiente\b|je le fais (?:tout de suite|maintenant)|laisse[- ]moi (?:faire|une seconde|un instant))/i
 
 /**
+ * Liste des noms techniques des outils (open_app, type_text, computer_use_task...), dérivée de TOOLS plutôt
+ * que recopiée à part : un outil ajouté à tools.ts est couvert automatiquement par `findLeakedToolName`
+ * ci-dessous, sans jamais risquer de désynchronisation entre les deux listes.
+ */
+const TOOL_NAMES = TOOLS.map((tool) => tool.function.name)
+
+/**
+ * Détecte qu'une réponse SANS appel d'outil ce tour-ci mentionne malgré tout le nom TECHNIQUE d'un outil —
+ * signe quasi infaillible que le modèle NARRE une action plutôt que de l'avoir réellement effectuée. Constaté
+ * en usage réel (Léo, "Ouvre le bloc-notes et écris bonjour") : « J'ai ouvert le bloc-notes... et j'ai tapé
+ * Bonjour avec type_text. mais il a rien ouvert » — la réponse affirme l'action au PASSÉ COMPOSÉ ("j'ai
+ * ouvert", "j'ai tapé"), pas au futur ("je vais faire") comme `PROMISE_WITHOUT_ACTION` ci-dessus le détecte
+ * déjà : ce cas lui échappait entièrement, sans le moindre "je vais" dans le texte.
+ *
+ * Une généralisation grammaticale comme celle de `PROMISE_WITHOUT_ACTION` (motif uniforme -er/-ir/-re pour
+ * TOUS les infinitifs français) ne s'étend pas ici : les participes passés français n'ont AUCUNE terminaison
+ * commune (réguliers en -é/-i/-u, mais "ouvert"/"fait"/"dit"/"écrit"/"pris"/"mis"... pour les irréguliers) —
+ * détecter "un verbe au passé composé" demanderait une vraie liste de participes, tout aussi incomplète
+ * qu'une liste de verbes au futur l'était avant sa propre généralisation plus haut. Signal retenu à la place,
+ * plus robuste et indépendant du temps grammatical employé : le nom de l'outil LUI-MÊME ("type_text" dans
+ * l'exemple ci-dessus) apparaît littéralement dans le texte — un utilisateur ne prononce jamais ces
+ * identifiants techniques, donc leur présence dans une réponse SANS appel d'outil ne peut venir que du
+ * modèle, qui a confondu DÉCRIRE l'outil (même en disant l'avoir déjà utilisé) et l'appeler réellement.
+ *
+ * `toolNames` en second paramètre (au lieu de toujours lire `TOOL_NAMES`) : permet à
+ * scripts/test-false-completion.mjs de tester avec une petite liste, sans avoir à mocker tout `tools.ts`
+ * (qui importe lui-même appLauncher/computerUse/vision/webSearch/inputControl...) juste pour lire des noms.
+ */
+export function findLeakedToolName(text: string, toolNames: readonly string[] = TOOL_NAMES): string | undefined {
+  return toolNames.find((name) => new RegExp(`\\b${name}\\b`, 'i').test(text))
+}
+
+/**
  * Envoie la phrase transcrite à Ollama, exécute les outils qu'il demande, renvoie la réponse finale à
  * dire. `history` porte les derniers échanges (user/assistant) de la session, en amont du nouveau
  * message : sans ça, chaque question repartait de zéro sans aucun souvenir de ce qui venait d'être dit
@@ -364,7 +397,7 @@ export async function converse(
   let computerUseCalled = false
   let nudgedForEmail = false
   let toolCalledThisTurn = false
-  let nudgedForPromise = false
+  let nudgedForNoAction = false
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const message = await chatWithOllama(messages, TOOLS, model, think, signal, config.ollama.numCtx, onToken)
@@ -384,18 +417,26 @@ export async function converse(
         })
         continue
       }
-      if (!toolCalledThisTurn && !nudgedForPromise && PROMISE_WITHOUT_ACTION.test(message.content)) {
-        nudgedForPromise = true
-        onLog?.("Action annoncée sans appel d'outil : relance corrective d'un tour.")
+      const leakedTool = !toolCalledThisTurn && !nudgedForNoAction ? findLeakedToolName(message.content) : undefined
+      if (!toolCalledThisTurn && !nudgedForNoAction && (PROMISE_WITHOUT_ACTION.test(message.content) || leakedTool)) {
+        nudgedForNoAction = true
+        onLog?.(
+          leakedTool
+            ? `Outil "${leakedTool}" mentionné sans appel réel : relance corrective d'un tour.`
+            : "Action annoncée sans appel d'outil : relance corrective d'un tour."
+        )
         messages.push(message)
         messages.push({
           role: 'user',
           content:
-            "Tu viens d'annoncer une action (\"je vais faire...\", \"un instant\"...) sans appeler le moindre " +
-            "outil dans ce tour : une promesse ne remplace jamais l'action réelle. Si une action est encore " +
-            "à faire, appelle MAINTENANT l'outil correspondant (computer_use_task, open_app, etc.). Si en y " +
-            "réfléchissant aucune action n'est vraiment nécessaire, corrige ta réponse pour ne pas donner une " +
-            "fausse impression qu'un traitement est en cours."
+            "Tu viens de décrire une action (\"je vais faire...\", \"un instant...\", ou même \"j'ai déjà " +
+            "fait...\") sans appeler le moindre outil dans ce tour : ni une promesse ni une affirmation " +
+            "d'action déjà faite ne remplacent jamais l'appel réel à l'outil, qui n'a pas eu lieu. Si une " +
+            "action est encore à faire, appelle MAINTENANT l'outil correspondant (computer_use_task, " +
+            "open_app, type_text, etc.) — ne dis jamais qu'une action est faite avant que l'outil ait " +
+            "réellement été appelé et ait réussi. Si en y réfléchissant aucune action n'est vraiment " +
+            "nécessaire, corrige ta réponse pour ne pas donner une fausse impression qu'un traitement a eu " +
+            "lieu."
         })
         continue
       }

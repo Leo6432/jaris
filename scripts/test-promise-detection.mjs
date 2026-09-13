@@ -18,7 +18,10 @@ const modules = {
   './ollama': {},
   './memoryStore': {},
   './profileStore': {},
-  './tools': {},
+  // TOOLS doit être un vrai tableau (pas {}) : assistant.ts calcule `TOOL_NAMES = TOOLS.map(...)` au niveau
+  // module (findLeakedToolName, voir test-false-completion.mjs) — un mock vide ferait planter le chargement
+  // du module ici aussi, avant même d'atteindre PROMISE_WITHOUT_ACTION.
+  './tools': { TOOLS: [{ function: { name: 'open_app' } }], createToolExecutor: () => {} },
   './hardwareScan': {},
   './resourceMonitor': {}
 }

@@ -957,6 +957,30 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   le patron "je vais [jusqu'à 3 mots connecteurs] [verbe]" plutôt que d'ajouter "maintenant" à une liste de
   pronoms qui aurait fallu réenrichir à chaque nouvel adverbe découvert en usage réel.**
 
+- **Suite immédiate du correctif ci-dessus : Léo a retrouvé le MÊME type de bug sous une forme différente,
+  cette fois au PASSÉ COMPOSÉ plutôt qu'au futur** — « Ouvre un bloc-notes et écris Bonjour... J'ai ouvert le
+  bloc-notes (ou le premier champ texte disponible) et j'ai tapé Bonjour avec type_text. mais il a rien
+  ouvert ». `PROMISE_WITHOUT_ACTION` ne pouvait pas attraper ce cas : son motif ne cherche que "je vais
+  [verbe]" (futur), alors que cette réponse affirme l'action comme DÉJÀ FAITE ("j'ai ouvert", "j'ai tapé"),
+  sans le moindre "je vais". Une généralisation grammaticale à la même façon (un motif uniforme pour TOUS les
+  participes passés) ne fonctionne pas ici, contrairement au futur : les infinitifs français se terminent
+  TOUS en -er/-ir/-re (motif exploité 3 fois déjà pour ce même détecteur), mais les participes passés n'ont
+  AUCUNE terminaison commune (réguliers en -é/-i/-u, irréguliers comme "ouvert"/"fait"/"dit"/"écrit"/"pris"/
+  "mis"...) — une liste de participes serait tout aussi incomplète qu'une liste de verbes au futur l'était
+  avant sa généralisation. Signal retenu à la place, indépendant du temps grammatical employé : la réponse
+  nommait littéralement l'outil interne ("avec type_text") — un utilisateur ne prononce jamais un identifiant
+  technique comme celui-ci, donc sa présence dans une réponse SANS appel d'outil ne peut venir que du modèle
+  qui a confondu DÉCRIRE l'outil (même en prétendant l'avoir déjà utilisé) et l'appeler réellement. Ajouté
+  `findLeakedToolName` (assistant.ts), dérivé de `TOOLS` (`tools.ts`) plutôt que d'une liste recopiée à part
+  — un outil ajouté plus tard reste couvert automatiquement, sans jamais resynchroniser quoi que ce soit à la
+  main — combiné à `PROMISE_WITHOUT_ACTION` dans la même relance corrective (`nudgedForNoAction`, ex-
+  `nudgedForPromise`, renommé pour refléter les deux cas qu'il couvre désormais). Régression :
+  `node --test scripts/test-false-completion.mjs`. **Leçon générale : quand une généralisation grammaticale
+  qui a bien marché pour UN temps verbal (futur, terminaisons uniformes) ne s'étend pas à un autre temps
+  (passé composé, terminaisons irrégulières), chercher un signal DIFFÉRENT de la grammaire elle-même plutôt
+  que de forcer une liste de participes à énumérer — ici, le nom de l'outil qui fuite dans le texte est
+  disponible et fiable indépendamment du temps employé par le modèle pour décrire l'action.**
+
 ## Commandes utiles
 
 ```

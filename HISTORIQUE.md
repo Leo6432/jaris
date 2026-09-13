@@ -644,3 +644,18 @@ supplémentaire ; la voix et le microphone réels de Léo restent à valider apr
   exact avant de corriger. Généralisé (3e fois) : un mot connecteur quelconque est maintenant accepté
   entre "je vais" et le verbe, plutôt que d'énumérer chaque adverbe rencontré. Régression : `npm test`
   (nouveau `scripts/test-promise-detection.mjs`, 23 cas).
+
+- ✅ Étape 88 (v0.6.2) — Léo, suite immédiate de l'étape 87 : « Ouvre un bloc-notes et écris Bonjour...
+  J'ai ouvert le bloc-notes (ou le premier champ texte disponible) et j'ai tapé Bonjour avec type_text.
+  mais il a rien ouvert ». Même famille de bug (une réponse texte remplace l'action réelle) mais au
+  PASSÉ COMPOSÉ ("j'ai ouvert", "j'ai tapé") plutôt qu'au futur ("je vais faire") : le détecteur de
+  promesse (PROMISE_WITHOUT_ACTION) ne pouvait pas l'attraper, son motif ne cherchant que "je vais
+  [verbe]". Une généralisation grammaticale comme celle du futur (terminaisons -er/-ir/-re, uniformes
+  pour tous les infinitifs) ne s'étend pas au passé composé (participes irréguliers sans terminaison
+  commune : ouvert/fait/dit/écrit/pris/mis...). Signal retenu à la place : la réponse nommait
+  littéralement l'outil interne ("avec type_text") — un utilisateur ne prononce jamais cet identifiant
+  technique, donc sa présence dans une réponse sans appel d'outil ne peut venir que du modèle qui décrit
+  l'outil sans l'avoir réellement appelé. Ajouté `findLeakedToolName` (assistant.ts), dérivé de TOOLS
+  (tools.ts) plutôt qu'une liste séparée à tenir à jour, combiné à PROMISE_WITHOUT_ACTION dans la même
+  relance corrective (variable renommée nudgedForNoAction pour refléter les deux cas couverts).
+  Régression : `npm test` (nouveau `scripts/test-false-completion.mjs`, 13 cas).
