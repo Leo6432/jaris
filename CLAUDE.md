@@ -1050,6 +1050,49 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   de départage conçu pour un cas différent (départager des matches déjà légitimes) peut alors élire un résultat
   n'ayant plus aucun rapport avec la demande d'origine.**
 
+- **4e variante, et enfin la cause la plus banale : « même quand je dit ouvre l'application youtube ou bloc
+  note il dit c'est lancé mais il lance pas » (Léo).** Une demande pourtant sans ambiguïté, sans texte à
+  taper, sans plusieurs étapes — donc plus aucun rapport avec les détecteurs de fausse action des 3 correctifs
+  précédents. Deux causes bien distinctes, chacune mesurée avant d'écrire la moindre ligne de correctif :
+  1. **`findBestMatch` comparait des orthographes, pas des noms.** La requête vient d'une transcription
+     vocale (donc sans trait d'union ni accent) alors que `Get-StartApps` renvoie le libellé Windows exact.
+     Mesuré sur une liste imitant un Windows français : "bloc note", "bloc notes", "blocnotes" et
+     "parametres" ne matchaient RIEN — seule la graphie exacte "bloc-notes" fonctionnait. Corrigé par une
+     normalisation (minuscules, accents retirés, ponctuation en espaces) plus une petite table d'alias de
+     LANGUE (`LOCALIZED_ALIASES`) pour les applications intégrées dont le libellé dépend de la langue de
+     Windows : "notepad" ne matche "Bloc-notes" par aucune normalisation possible, c'est une question de
+     langue, pas d'orthographe — et l'alias joue dans les deux sens, donc le correctif tient que Windows soit
+     en français ou en anglais (information qu'on n'a jamais eue sur sa machine).
+  2. **Le modèle annonçait "c'est lancé" par dessus l'échec.** `openApp` renvoie son échec comme une simple
+     chaîne (jamais une exception), donc le court-circuit d'`assistant.ts` — qui ne se déclenche que sur une
+     exception — ne s'appliquait pas : le message partait au modèle comme un résultat d'outil ordinaire, et
+     le petit modèle local répondait quand même un succès par dessus. Exactement le travers déjà corrigé pour
+     le dépannage halluciné par dessus une erreur SearXNG. Corrigé par un court-circuit dédié (même forme que
+     celui de `look_at_screen`) : dès qu'`open_app` ne renvoie pas son message de succès, ce message devient
+     la réponse finale, sans repasser par le modèle. Bénéfice secondaire important : sur une demande en
+     plusieurs étapes ("ouvre le bloc-notes ET écris bonjour"), ça empêche aussi d'enchaîner sur `type_text`
+     alors qu'aucune application n'a été ouverte — le texte serait parti dans la fenêtre au hasard qui a le
+     focus. Le littéral `'a été lancé.'`, jusqu'ici recopié dans dependencyServices.ts, est devenu
+     `APP_LAUNCHED_SUFFIX`/`didAppLaunch` : une seule définition de "l'application a VRAIMENT démarré",
+     partagée par les deux appelants.
+  **Piège majeur du correctif 1, attrapé en le testant avant de livrer, PAS en relecture** : la normalisation
+  rend le matching plus permissif, donc elle a AGGRAVÉ la faiblesse laissée de côté au correctif précédent
+  (un nom d'application d'une seule lettre matchant par sous-chaîne). Mesuré : "ouvre explorateur", "excel"
+  et "le fichier texte" élisaient TOUS "X" — l'app que Léo a réellement installée, et déjà ouverte à tort une
+  fois. Livrer la normalisation seule aurait donc rendu son bug d'origine PLUS fréquent, pas moins. Corrigé
+  en comparant des MOTS entiers (`containsWords`, avec tolérance de préfixe sur le dernier mot pour le
+  pluriel, et une longueur minimale de 3 pour tout fragment) et en remplaçant le "le nom le plus court gagne"
+  par un vrai classement en deux temps : d'abord les applications dont le nom couvre TOUTE la demande (la
+  plus courte gagne, celle qui ajoute le moins), sinon celles dont le nom est contenu DANS la demande (la
+  plus longue gagne, celle qui en explique le plus — sans quoi "bloc notes" élirait une app "Notes" plutôt
+  que "Bloc-notes"). Régression : `node --test scripts/test-app-launcher.mjs` (27 cas).
+  **Leçon générale : rendre un appariement plus tolérant est rarement neutre — chaque assouplissement élargit
+  aussi ce qui matche PAR ERREUR, et il faut re-tester les faux positifs connus (surtout ceux déjà notés comme
+  "limite acceptée" à une étape précédente) AVANT de livrer l'assouplissement, pas après le prochain
+  signalement.** Corollaire, valable au-delà de ce fichier : un tri de départage (ici "le nom le plus court")
+  n'est valide que pour les candidats qu'il était censé départager — dès que la façon de sélectionner les
+  candidats change, revérifier que le critère de départage a toujours un sens.
+
 ## Commandes utiles
 
 ```

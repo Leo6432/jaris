@@ -672,3 +672,18 @@ supplémentaire ; la voix et le microphone réels de Léo restent à valider apr
   mais pas corrigée (hors périmètre) : un nom d'app très court reste sujet à un faux positif par
   sous-chaîne si sa lettre apparaît ailleurs dans une requête non vide. Régression : `npm test` (nouveau
   `scripts/test-app-launcher.mjs`, 8 cas).
+
+- ✅ Étape 90 (v0.6.4) — Léo : « même quand je dit ouvre l'application youtube ou bloc note il dit c'est
+  lancé mais il lance pas ». Demande pourtant simple, donc sans rapport avec les détecteurs de fausse
+  action des étapes 87-89. Deux causes distinctes, mesurées avant de corriger. (1) findBestMatch
+  (appLauncher.ts) comparait des orthographes brutes : la transcription vocale ("bloc note", "parametres")
+  ne matchait jamais le libellé Windows exact ("Bloc-notes", "Paramètres") — corrigé par une normalisation
+  (accents, traits d'union, pluriel) et une petite table d'alias de langue pour les applications intégrées
+  ("notepad" ↔ "bloc-notes"), qui joue dans les deux sens. (2) Un échec d'open_app repartait au modèle
+  comme un résultat ordinaire, et le petit modèle local annonçait "c'est lancé" par dessus — corrigé par un
+  court-circuit dédié (même forme que look_at_screen) : le message d'échec devient la réponse finale, sans
+  repasser par le modèle. Empêche aussi d'enchaîner un type_text alors qu'aucune fenêtre n'a été ouverte.
+  Piège attrapé en testant avant de livrer : la normalisation rendait PLUS fréquent le faux positif laissé
+  de côté à l'étape 89 ("ouvre explorateur", "excel" élisaient l'app "X" de Léo) — corrigé en comparant des
+  mots entiers avec longueur minimale, et en remplaçant le "nom le plus court gagne" par un classement en
+  deux temps. Régression : `npm test` (scripts/test-app-launcher.mjs, 27 cas).

@@ -23,13 +23,14 @@ const modules = {
 }
 const exports = {}
 vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports }, process }, {})
-const { findBestMatch, openApp } = exports
+const { findBestMatch, openApp, didAppLaunch } = exports
 
 const REAL_WORLD_APPS = [
   { Name: 'Bloc-notes', AppID: 'notepad' },
   { Name: 'X', AppID: 'twitter' },
   { Name: 'Google Chrome', AppID: 'chrome' },
   { Name: 'Calculatrice', AppID: 'calc' },
+  { Name: 'Paramètres', AppID: 'settings' },
   { Name: 'Discord', AppID: 'discord' }
 ]
 
@@ -63,3 +64,65 @@ for (const blank of ['', '   ']) {
     assert.equal(result, "Aucun nom d'application n'a été précisé : impossible de savoir laquelle ouvrir.")
   })
 }
+
+/**
+ * Deuxième signalement de Léo, le même jour : « même quand je dit ouvre l'application youtube ou bloc note
+ * il dit c'est lancé mais il lance pas ». Ces graphies-là (celles d'une transcription vocale : sans trait
+ * d'union, sans accent, au singulier) ne matchaient RIEN avant la normalisation — mesuré avant de corriger,
+ * seule "bloc-notes" exactement orthographiée fonctionnait.
+ */
+for (const spoken of ['bloc note', 'bloc notes', 'blocnotes', 'bloc-notes', 'le bloc-notes', 'Bloc-Notes', 'notepad']) {
+  test(`la graphie parlée trouve bien le Bloc-notes : ${JSON.stringify(spoken)}`, () => {
+    assert.equal(findBestMatch(REAL_WORLD_APPS, spoken)?.Name, 'Bloc-notes')
+  })
+}
+
+for (const spoken of ['parametres', 'Paramètres', 'settings']) {
+  test(`accents et langue ne bloquent plus l'appariement : ${JSON.stringify(spoken)}`, () => {
+    assert.equal(findBestMatch(REAL_WORLD_APPS, spoken)?.Name, 'Paramètres')
+  })
+}
+
+/**
+ * Le vrai piège de la normalisation, attrapé en la testant AVANT de livrer : "X" (1 caractère, réellement
+ * installé chez Léo, et déjà ouvert à tort une fois) matchait par sous-chaîne dès que la lettre apparaissait
+ * n'importe où dans la demande — "ouvre explorateur", "excel" et "le fichier texte" élisaient tous "X" parce
+ * que le tri prenait ensuite le nom le plus court. La comparaison se fait donc sur des MOTS entiers, avec une
+ * longueur minimale pour les fragments.
+ */
+for (const query of ['ouvre explorateur', 'excel', 'le fichier texte', 'luxe']) {
+  test(`un nom d'app d'une lettre ne se glisse plus dans un mot sans rapport : ${JSON.stringify(query)}`, () => {
+    assert.equal(findBestMatch(REAL_WORLD_APPS, query), undefined)
+  })
+}
+
+test('"X" reste ouvrable en le demandant par son nom exact', () => {
+  assert.equal(findBestMatch(REAL_WORLD_APPS, 'x')?.Name, 'X')
+  assert.equal(findBestMatch(REAL_WORLD_APPS, 'X')?.Name, 'X')
+})
+
+test('le nom le plus explicatif gagne quand deux applications se ressemblent', () => {
+  const apps = [...REAL_WORLD_APPS, { Name: 'Notes', AppID: 'notes' }]
+  // "bloc notes" ne doit pas élire "Notes" (plus court) alors que "Bloc-notes" couvre toute la demande.
+  assert.equal(findBestMatch(apps, 'bloc notes')?.Name, 'Bloc-notes')
+  assert.equal(findBestMatch(apps, 'notes rapides')?.Name, 'Notes')
+})
+
+test('une partie du nom suffit toujours à trouver une application', () => {
+  assert.equal(findBestMatch(REAL_WORLD_APPS, 'chrome')?.Name, 'Google Chrome')
+  assert.equal(findBestMatch(REAL_WORLD_APPS, 'google chrome')?.Name, 'Google Chrome')
+})
+
+test('une application vraiment absente reste absente (pas de faux positif de secours)', () => {
+  // YouTube n'est pas installé dans cette liste : findBestMatch ne doit rien inventer, c'est ce qui déclenche
+  // le message d'échec relayé tel quel à Léo (court-circuit open_app dans assistant.ts).
+  assert.equal(findBestMatch(REAL_WORLD_APPS, 'youtube'), undefined)
+})
+
+test("didAppLaunch ne reconnaît que le vrai message de succès d'openApp", () => {
+  assert.equal(didAppLaunch('Bloc-notes a été lancé.'), true)
+  assert.equal(didAppLaunch('Je n\'ai trouvé aucune application nommée "youtube" installée sur cette machine.'), false)
+  assert.equal(didAppLaunch("Aucun nom d'application n'a été précisé : impossible de savoir laquelle ouvrir."), false)
+  assert.equal(didAppLaunch('Échec de l\'ouverture de "Discord" : spawn ENOENT'), false)
+  assert.equal(didAppLaunch('Impossible de lister les applications installées : boom'), false)
+})

@@ -3,6 +3,7 @@ import { chatWithOllama, listInstalledModels, type OllamaMessage, type ThinkLeve
 import { listMemoryTitles } from './memoryStore'
 import { getProfile } from './profileStore'
 import { TOOLS, createToolExecutor } from './tools'
+import { didAppLaunch } from './appLauncher'
 import { GPU_TEMP_LIMIT_C, pickSafeModel, type LiveGpuStatus } from './hardwareScan'
 import { checkOverloadWarning } from './resourceMonitor'
 import type { SoundCue } from '../../shared/ipc'
@@ -489,6 +490,19 @@ export async function converse(
       }
 
       if (call.function.name === 'computer_use_task') computerUseCalled = true
+
+      // Constaté en usage réel (Léo : « même quand je dit ouvre l'application youtube ou bloc note il dit
+      // c'est lancé mais il lance pas ») : quand open_app échoue (aucune application de ce nom installée,
+      // ou lancement refusé), son message part au modèle comme un résultat d'outil ordinaire — et le petit
+      // modèle local répond quand même "c'est lancé", exactement le même travers que le dépannage halluciné
+      // par dessus une erreur SearXNG. Contrairement à une recherche web sans résultat (où le modèle a
+      // quelque chose d'utile à dire), un échec d'ouverture n'a qu'une seule réponse honnête possible : le
+      // message lui-même. Court-circuit identique à look_at_screen ci-dessous, et il protège aussi la suite
+      // d'une tâche en plusieurs étapes ("ouvre le bloc-notes ET écris bonjour") : sans application ouverte,
+      // enchaîner sur type_text taperait le texte dans la fenêtre au hasard qui a le focus.
+      if (call.function.name === 'open_app' && !didAppLaunch(result)) {
+        return finalize(result)
+      }
 
       // La vision tourne sur un modèle séparé qui partage la même VRAM que le
       // modèle de conversation : les deux ne tiennent pas en même temps sur

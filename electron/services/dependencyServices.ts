@@ -5,7 +5,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { promisify } from 'util'
 import { config } from '../config'
-import { openApp } from './appLauncher'
+import { didAppLaunch, openApp } from './appLauncher'
 import { resourcesRoot } from '../paths'
 
 const execAsync = promisify(exec)
@@ -688,7 +688,7 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
       // connaît l'appli quel que soit son chemin réel d'installation.
       const result = await openApp('Docker Desktop')
       log(result)
-      launchFailed = !result.endsWith('a été lancé.')
+      launchFailed = !didAppLaunch(result)
 
       // "aucune application nommée..." = Docker Desktop n'est PAS installé (pas juste pas lancé) : à la
       // demande explicite de Léo, on essaie de l'installer nous-mêmes plutôt que de se contenter de lui
@@ -700,7 +700,7 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
           log('Docker Desktop installé, démarrage…')
           const relaunch = await openApp('Docker Desktop')
           log(relaunch)
-          launchFailed = !relaunch.endsWith('a été lancé.')
+          launchFailed = !didAppLaunch(relaunch)
         } else {
           log(
             "Docker Desktop n'a pas pu s'installer tout seul (téléchargement impossible, ou autorisation " +
