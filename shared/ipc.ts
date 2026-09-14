@@ -282,14 +282,14 @@ export interface AppVersionStatus {
   outdated: boolean
 }
 
-/** Une entrée du journal des mises à jour (Options → Modèles), une par Release GitHub stable publiée. */
+/** Une entrée du journal des mises à jour (Options → Mise à jour), une par Release GitHub stable publiée. */
 export interface ReleaseHistoryEntry {
   version: string
   publishedAt: string
   notes: string
 }
 
-/** Résultat d'une recherche manuelle de mise à jour (bouton "Rechercher une mise à jour", Options → Modèles). */
+/** Résultat d'une recherche manuelle de mise à jour (bouton "Rechercher une mise à jour", Options → Mise à jour). */
 export interface UpdateCheckResult {
   status: AppVersionStatus | null
   error: string | null
@@ -535,9 +535,9 @@ export const IPC_CHANNELS = {
    * sur l'orbe) sont de simples champs du profil, relus à la volée sans redémarrage nécessaire. */
   setWakewordEnabled: 'jaris:set-wakeword-enabled',
   /** renderer -> main : recherche une mise à jour pour de vrai (jamais depuis le cache), erreur remontée
-   * telle quelle en cas d'échec — bouton "Rechercher une mise à jour" (Options → Modèles). */
+   * telle quelle en cas d'échec — bouton "Rechercher une mise à jour" (Options → Mise à jour). */
   checkForUpdate: 'jaris:check-for-update',
-  /** renderer <-> main : journal des mises à jour (toutes les Releases GitHub stables), pour Options → Modèles. */
+  /** renderer <-> main : journal des mises à jour (toutes les Releases GitHub stables), pour Options → Mise à jour. */
   getReleaseHistory: 'jaris:get-release-history',
   /** renderer <-> main : emplacement réel actuel des modèles/environnement (voir modelsLocation.ts). */
   getModelsLocationStatus: 'jaris:get-models-location-status',

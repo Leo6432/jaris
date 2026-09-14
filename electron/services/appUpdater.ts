@@ -23,7 +23,7 @@ export interface AppVersionStatus {
   outdated: boolean
 }
 
-/** Une entrée du journal des mises à jour (Options → Modèles), une par Release GitHub stable publiée. */
+/** Une entrée du journal des mises à jour (Options → Mise à jour), une par Release GitHub stable publiée. */
 export interface ReleaseHistoryEntry {
   version: string
   publishedAt: string
@@ -73,7 +73,7 @@ function isNewer(a: [number, number, number], b: [number, number, number]): bool
  * que l'UI (App.tsx, OptionsMenu.tsx) le lise à tout moment sans refaire l'appel réseau — un seul check par
  * lancement de Jaris suffit. Ignore silencieusement toute erreur (pas de réseau, GitHub inaccessible...) :
  * ce check en tâche de fond au démarrage ne doit jamais empêcher Jaris de démarrer. Pour un vrai diagnostic
- * (bouton "Rechercher une mise à jour" dans Options), voir checkForUpdate ci-dessous, qui elle remonte
+ * (bouton "Rechercher une mise à jour" dans Options → Mise à jour), voir checkForUpdate ci-dessous, qui elle remonte
  * l'erreur au lieu de l'avaler.
  */
 export function checkAppFreshness(): Promise<void> {
@@ -121,7 +121,7 @@ export async function checkForUpdate(): Promise<{ status: AppVersionStatus | nul
 }
 
 /**
- * Journal des mises à jour (Options → Modèles) : la liste des vraies Releases GitHub stables, la plus
+ * Journal des mises à jour (Options → Mise à jour) : la liste des vraies Releases GitHub stables, la plus
  * récente en premier (ordre déjà renvoyé par l'API). `GET /releases` (pluriel, jusqu'à 30 par défaut, bien
  * assez pour un historique) inclut la Release "dernier-build" au même titre que les autres — filtrée ici
  * via son champ `prerelease`, exactement comme `releases/latest` l'ignore déjà naturellement ailleurs.
