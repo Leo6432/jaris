@@ -1251,6 +1251,43 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   et une hiérarchie visible ; ici il était resté tel quel depuis l'étape 30 alors que tout le reste du mode
   Code avait été repris plusieurs fois.
 
+- **Supprimer une application générée (étape 95, demande de Léo : "pouvoir supprimer des application dans
+  code")** — la liste "Tes applications" s'allongeait sans aucun moyen de faire le ménage autrement qu'en
+  ouvrant l'explorateur de fichiers. Trois décisions structurantes :
+  1. **Le chemin vient du RENDERER, il est donc revérifié côté main avant tout effacement**
+     (`deleteGeneratedApp`, codeGenerator.ts) : un `rm -r` est l'opération la plus irréversible de tout le
+     programme. Seul un ENFANT DIRECT du dossier des applications générées est accepté — ni le dossier
+     lui-même (qui effacerait TOUT d'un coup), ni un sous-dossier plus profond, ni quoi que ce soit en
+     dehors, ni une remontée par `..`. Le garde repose sur `resolve`/`relative`/`isAbsolute`/`sep`, jamais
+     sur une comparaison de chaînes (`startsWith` sur le dossier parent laisserait passer `..`).
+  2. **Confirmation DANS la ligne, jamais un dialogue natif.** Un `dialog.showMessageBox` aurait fait perdre
+     le focus à la fenêtre — donc replié Jaris en widget en plein milieu, exactement le bug de l'étape 93.
+     La ligne se transforme en "Supprimer « X » définitivement ? [Supprimer] [Annuler]" : aucun dialogue, et
+     c'est vérifiable dans un vrai navigateur, contrairement à une fenêtre native.
+  3. **La corbeille est un bouton FRÈRE du bouton d'ouverture, pas imbriqué dedans** (du HTML invalide, et
+     un clic sur la corbeille aurait aussi ouvert l'application). Le filet de séparation entre les lignes est
+     donc passé du bouton au `<li>` : avec deux boutons par ligne, il aurait sinon dessiné deux bouts de
+     séparateur côte à côte.
+  **Vrai défaut trouvé au passage dans MON propre travail de l'étape 94, en mesurant au lieu de croire** :
+  les boutons "Nouvelle application"/"Ouvrir le dossier" étaient censés être "plus petits" que le reste —
+  mesurés pour de vrai (`getComputedStyle` sur le CSS compilé), ils étaient restés à la taille pleine
+  (13,12px / 9px 20px). La règle de réduction était écrite dans la section "mode Code" du fichier, donc
+  AVANT la famille de boutons partagée : à spécificité ÉGALE, c'est la dernière règle du fichier qui gagne,
+  et la famille écrasait donc silencieusement la réduction. Même piège pour le bouton rouge de confirmation :
+  `.code-panel__recent-confirm button` (une classe + un type, spécificité 0-1-1) l'emportait sur la variante
+  `.code-panel__recent-confirm-yes` (0-1-0), qui restait donc cyan au lieu de rouge. Corrigé en déplaçant la
+  règle de taille APRÈS la famille, et en donnant une vraie classe à chaque bouton plutôt qu'un sélecteur
+  `.conteneur button`. **Leçon générale, valable pour tout ce fichier CSS : quand on ajoute une variante à
+  une famille de composants partagée, vérifier (1) que la règle est écrite APRÈS la famille — à spécificité
+  égale, l'ordre décide — et (2) qu'elle n'a pas une spécificité PLUS FAIBLE que la règle de base ; un
+  sélecteur de base en `.conteneur element` bat toujours une variante en `.classe-modificatrice`. Et le
+  vérifier en MESURANT le style calculé, pas en relisant : une règle sans effet ne produit aucune erreur,
+  elle est juste ignorée.**
+  Régression : `node --test scripts/test-codegen-delete.mjs` (8 cas de garde ; vérifiés en retirant
+  temporairement le garde — 7 des 8 échouent alors, donc le test mord bien) et `scripts/test-code-panel-ui.mjs`
+  (vrai navigateur : la corbeille seule ne supprime rien, Annuler laisse la ligne intacte, Supprimer retire
+  vraiment la ligne, et un clic sur la corbeille n'ouvre jamais l'application).
+
 ## Commandes utiles
 
 ```

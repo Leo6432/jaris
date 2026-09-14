@@ -45,16 +45,26 @@ const APP = {
   previewUrl: 'about:blank'
 }
 
+window.__apps = [
+  { path: 'C:/apps/liste', label: 'liste de courses', timestamp: Date.now() - 3600_000 },
+  { path: 'C:/apps/snake', label: 'jeu snake', timestamp: Date.now() - 90_000_000 }
+]
+window.__deleted = []
+
 window.jaris = {
   onCodeGenStatus: () => () => {},
-  getGeneratedApps: () => Promise.resolve([
-    { path: 'C:/apps/liste', label: 'liste de courses', timestamp: Date.now() - 3600_000 },
-    { path: 'C:/apps/snake', label: 'jeu snake', timestamp: Date.now() - 90_000_000 }
-  ]),
+  getGeneratedApps: () => Promise.resolve(window.__apps),
   loadGeneratedApp: () => Promise.resolve(APP),
   generateApp: () => Promise.resolve(APP),
   openGeneratedApp: () => Promise.resolve(),
-  pickImageFile: () => Promise.resolve(null)
+  pickImageFile: () => Promise.resolve(null),
+  // Le vrai main process efface le dossier puis la liste est rechargée : simulé à l'identique ici, pour
+  // que le test vérifie aussi que la liste affichée se met à jour après la suppression.
+  deleteGeneratedApp: (path) => {
+    window.__deleted.push(path)
+    window.__apps = window.__apps.filter((app) => app.path !== path)
+    return Promise.resolve()
+  }
 }
 
 createRoot(document.getElementById('root')).render(<Panel />)
@@ -132,9 +142,43 @@ test('la liste des applications déjà créées est un panneau titré, avec des 
   })
 })
 
+test('supprimer demande confirmation, puis retire vraiment la ligne', options, async () => {
+  await withPage(async (page) => {
+    assert.equal(await page.locator('.code-panel__recents li').count(), 2)
+
+    // Un simple clic sur la corbeille ne supprime RIEN : effacer un dossier est définitif.
+    await page.click('.code-panel__recents li:first-child .code-panel__recent-delete')
+    await page.waitForSelector('.code-panel__recent-confirm')
+    assert.match(await page.textContent('.code-panel__recent-confirm span'), /liste de courses/)
+    assert.deepEqual(await page.evaluate(() => window.__deleted), [])
+
+    // Annuler laisse la ligne intacte.
+    await page.click('.code-panel__recent-confirm-no')
+    assert.equal(await page.locator('.code-panel__recent-confirm').count(), 0)
+    assert.equal(await page.locator('.code-panel__recents li').count(), 2)
+    assert.deepEqual(await page.evaluate(() => window.__deleted), [])
+
+    // Confirmer supprime, et la liste affichée se met à jour.
+    await page.click('.code-panel__recents li:first-child .code-panel__recent-delete')
+    await page.click('.code-panel__recent-confirm-yes')
+    await page.waitForFunction(() => document.querySelectorAll('.code-panel__recents li').length === 1)
+    assert.deepEqual(await page.evaluate(() => window.__deleted), ['C:/apps/liste'])
+    assert.match(await page.textContent('.code-panel__recents li'), /jeu snake/)
+  })
+})
+
+test("la corbeille d'une ligne n'ouvre jamais l'application par erreur", options, async () => {
+  await withPage(async (page) => {
+    // Les deux boutons sont dans la MÊME ligne : un clic sur la corbeille ne doit pas déclencher l'ouverture
+    // (ce qui arriverait si la corbeille était imbriquée dans le bouton d'ouverture).
+    await page.click('.code-panel__recents li:first-child .code-panel__recent-delete')
+    assert.equal(await page.locator('.code-panel__preview').count(), 0)
+  })
+})
+
 test('cliquer une application de la liste la rouvre', options, async () => {
   await withPage(async (page) => {
-    await page.click('.code-panel__recents button')
+    await page.click('.code-panel__recent-open')
     await page.waitForSelector('.code-panel__preview')
     // La liste laisse la place à l'application : les deux ne cohabitent pas.
     assert.equal(await page.locator('.code-panel__recents').count(), 0)
@@ -144,7 +188,7 @@ test('cliquer une application de la liste la rouvre', options, async () => {
 for (const width of [1280, 760]) {
   test(`onglets et actions tiennent sur UNE seule barre, dans le panneau (${width}px)`, options, async () => {
     await withPage(async (page) => {
-      await page.click('.code-panel__recents button')
+      await page.click('.code-panel__recent-open')
       await page.waitForSelector('.code-panel__preview')
 
       const layout = await page.evaluate(() => {

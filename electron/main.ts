@@ -14,7 +14,7 @@ import { getAllCandidateModelIds, getModelOverview, previewHardwareTiers } from 
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { runModelAnalysis, runQuickSetup } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
-import { generateApp, getGeneratedAppsDir, listGeneratedApps, loadGeneratedApp } from './services/codeGenerator'
+import { deleteGeneratedApp, generateApp, getGeneratedAppsDir, listGeneratedApps, loadGeneratedApp } from './services/codeGenerator'
 import { createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
 import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
@@ -607,6 +607,7 @@ app.whenReady().then(async () => {
     await shell.openPath(path || getGeneratedAppsDir())
   })
   ipcMain.handle(IPC_CHANNELS.getGeneratedApps, (): Promise<GeneratedAppSummary[]> => listGeneratedApps())
+  ipcMain.handle(IPC_CHANNELS.deleteGeneratedApp, (_event, path: string) => deleteGeneratedApp(path))
   ipcMain.handle(IPC_CHANNELS.loadGeneratedApp, async (_event, path: string): Promise<GeneratedApp> => {
     const loaded = await loadGeneratedApp(path)
     return { ...loaded, previewUrl: createGeneratedAppPreview(loaded.html) }

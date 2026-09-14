@@ -1841,15 +1841,27 @@ body.body--scan::after {
 }
 
 /* Lignes SANS cadre individuel, séparées par un simple filet : le panneau porte déjà une bordure, en
-   remettre une par ligne empilait deux boîtes pour une seule information. */
-.code-panel__recents button {
-  width: 100%;
+   remettre une par ligne empilait deux boîtes pour une seule information. Le filet est porté par le <li>
+   (et non par le bouton) depuis l'ajout de la corbeille : la ligne contient désormais DEUX boutons, qui
+   auraient sinon dessiné deux bouts de séparateur côte à côte. */
+.code-panel__recents li {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid rgba(var(--hud-accent-rgb), 0.08);
+}
+
+.code-panel__recents li:last-child {
+  border-bottom: none;
+}
+
+.code-panel__recent-open {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 14px;
   background: transparent;
   border: none;
-  border-bottom: 1px solid rgba(var(--hud-accent-rgb), 0.08);
   border-radius: 0;
   color: var(--hud-text-soft);
   padding: 11px 10px;
@@ -1862,17 +1874,53 @@ body.body--scan::after {
     color 0.15s ease;
 }
 
-.code-panel__recents li:last-child button {
-  border-bottom: none;
-}
-
-.code-panel__recents button:hover {
+.code-panel__recent-open:hover {
   background: rgba(var(--hud-accent-rgb), 0.08);
   color: var(--hud-text);
 }
 
-.code-panel__recents button:hover svg {
+.code-panel__recent-open:hover svg {
   color: var(--hud-accent-bright);
+}
+
+/* Discrète tant qu'on ne la survole pas : c'est l'action rare et irréversible de la ligne, elle ne doit
+   pas attirer l'œil autant que "ouvrir". */
+.code-panel__recent-delete {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--hud-text-faint);
+  padding: 11px 12px;
+  cursor: pointer;
+  opacity: 0.55;
+  transition:
+    color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.code-panel__recent-delete:hover {
+  color: var(--hud-danger);
+  opacity: 1;
+}
+
+.code-panel__recent-confirm {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  color: var(--hud-text);
+  background: rgba(255, 77, 104, 0.07);
+}
+
+.code-panel__recent-confirm span {
+  flex: 1;
+  min-width: 180px;
 }
 
 .code-panel__recent-label {
@@ -1937,15 +1985,6 @@ body.body--scan::after {
 .code-panel__result-actions {
   display: flex;
   gap: 8px;
-}
-
-/* Même famille de boutons que tout le reste de l'app (coins coupés, Rajdhani), juste plus discrets : ce
-   sont des actions secondaires à côté de l'aperçu, qui reste le sujet de l'écran. */
-.code-panel__result-actions button {
-  font-size: 0.7rem;
-  letter-spacing: 0.1em;
-  padding: 6px 12px;
-  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
 }
 
 .code-panel__view-tabs {
@@ -2191,6 +2230,8 @@ h1 {
 .memory-brain__actions button,
 .composer__send,
 .code-panel__result-actions button,
+.code-panel__recent-confirm-yes,
+.code-panel__recent-confirm-no,
 .capacity-scan button,
 .runtime-setup__actions button,
 .app__onboarding button {
@@ -2224,6 +2265,8 @@ h1 {
 .memory-brain__actions button:hover,
 .composer__send:not(:disabled):hover,
 .code-panel__result-actions button:not(:disabled):hover,
+.code-panel__recent-confirm-yes:not(:disabled):hover,
+.code-panel__recent-confirm-no:not(:disabled):hover,
 .capacity-scan button:not(:disabled):hover,
 .runtime-setup__actions button:not(:disabled):hover,
 .app__onboarding button:hover {
@@ -2246,8 +2289,26 @@ textarea:not(.composer__input):focus-visible {
     0 0 16px rgba(var(--hud-accent-rgb), 0.5);
 }
 
+/*
+ * Boutons de la MÊME famille (coins coupés, Rajdhani) mais en plus petit : actions secondaires posées à
+ * côté du sujet de l'écran (l'aperçu de l'application, la ligne à supprimer), qui ne doivent pas lui faire
+ * concurrence. Placé APRÈS la famille : ces règles ont exactement la même spécificité qu'elle, donc à cet
+ * endroit seulement elles gagnent — écrites plus haut (dans la section du mode Code), elles étaient
+ * silencieusement écrasées et n'avaient aucun effet.
+ */
+.code-panel__result-actions button,
+.code-panel__recent-confirm-yes,
+.code-panel__recent-confirm-no {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  padding: 6px 12px;
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+}
+
 .options-menu__action--danger,
-.options-menu__action--danger:not(:disabled):hover {
+.code-panel__recent-confirm-yes,
+.options-menu__action--danger:not(:disabled):hover,
+.code-panel__recent-confirm-yes:not(:disabled):hover {
   color: var(--hud-danger);
   border-color: rgba(255, 77, 104, 0.55);
   background: linear-gradient(180deg, rgba(255, 77, 104, 0.16), rgba(255, 77, 104, 0.05));

@@ -749,3 +749,14 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   l'ouvre. Régression : `npm test` (179 tests), dont un test de mise en page dans un vrai navigateur vérifié
   en remettant temporairement l'ancien empilement, et le calcul de date testé jusqu'au passage de minuit.
   Non vérifiable ici : le rendu sur sa vraie machine Windows, à confirmer par Léo.
+
+- ✅ Étape 95 (v0.7.4) — Léo : "pouvoir supprimer des application dans code". Chaque ligne de "Tes
+  applications" a maintenant une corbeille discrète, et la confirmation se fait DANS la ligne ("Supprimer
+  « X » définitivement ?") plutôt que par un dialogue natif, qui aurait replié Jaris en widget en prenant le
+  focus (piège de l'étape 93). Le chemin envoyé par le renderer est revérifié côté main avant tout
+  effacement : seul un dossier enfant direct du dossier des applications générées est accepté, jamais le
+  dossier lui-même ni quoi que ce soit en dehors. Défaut trouvé au passage dans le travail de l'étape 94, en
+  mesurant le style calculé plutôt qu'en relisant le CSS : la réduction de taille des deux boutons
+  d'action n'était jamais appliquée (écrite avant la famille de boutons partagée, donc écrasée par elle) —
+  corrigé. Régression : `npm test` (189 tests), dont un test du garde de suppression vérifié en le retirant
+  temporairement, et le parcours complet corbeille/annuler/supprimer dans un vrai navigateur.

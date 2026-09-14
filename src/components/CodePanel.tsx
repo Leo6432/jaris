@@ -15,6 +15,16 @@ function OpenIcon(): JSX.Element {
   )
 }
 
+/** Corbeille (étape 95) : même parti pris que l'icône de pièce jointe du composeur — un SVG inline qui
+ *  hérite de `currentColor`, aucune dépendance, aucun emoji. */
+function DeleteIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+      <path d="M4 7h16M10 4h4M9 7v12M15 7v12M6 7l1 13h10l1-13" />
+    </svg>
+  )
+}
+
 /**
  * Mode Code (étape 30) : décrire une application en français et la voir tourner, générée à 100% en local.
  * Une fois une première version obtenue, les demandes suivantes sont traitées comme des modifications du
@@ -29,6 +39,8 @@ export default function CodePanel(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [recentApps, setRecentApps] = useState<GeneratedAppSummary[]>([])
   const [attachment, setAttachment] = useState<ImageAttachment | null>(null)
+  /** Chemin de l'application dont la ligne demande confirmation avant suppression (une seule à la fois). */
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const statusRef = useRef<HTMLPreElement>(null)
 
   // Repéré par Léo en usage réel ("si on relance jarvis, on a plus rien dans le code") : chaque génération
@@ -80,6 +92,25 @@ export default function CodePanel(): JSX.Element {
       const result = await window.jaris.loadGeneratedApp(path)
       setAppResult(result)
       setView('preview')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  /**
+   * Supprime définitivement le dossier de l'application (étape 95). Le chemin est revérifié côté main
+   * (deleteGeneratedApp, codeGenerator.ts) : un effacement récursif ne se fait jamais sur la seule parole
+   * du renderer.
+   */
+  const remove = async (path: string): Promise<void> => {
+    setError(null)
+    setPendingDelete(null)
+    try {
+      await window.jaris.deleteGeneratedApp(path)
+      setRecentApps(await window.jaris.getGeneratedApps())
+      // L'application supprimée était justement celle affichée : l'aperçu pointerait sur un dossier qui
+      // n'existe plus, donc retour à l'écran de départ.
+      if (appResult?.path === path) startOver()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
@@ -143,11 +174,40 @@ export default function CodePanel(): JSX.Element {
               <ul>
                 {recentApps.map((recent) => (
                   <li key={recent.path}>
-                    <button onClick={() => void openRecent(recent.path)} title={recent.path}>
-                      <span className="code-panel__recent-label">{recent.label}</span>
-                      <span className="code-panel__recent-date">{formatRecentDate(recent.timestamp)}</span>
-                      <OpenIcon />
-                    </button>
+                    {/* Confirmation DANS la ligne, pas un dialogue natif : supprimer efface un dossier pour
+                        de bon, donc ça se confirme — mais un dialogue natif ferait perdre le focus à la
+                        fenêtre, et Jaris se replierait en widget en plein milieu (piège de l'étape 93). */}
+                    {pendingDelete === recent.path ? (
+                      <div className="code-panel__recent-confirm">
+                        <span>Supprimer « {recent.label} » définitivement ?</span>
+                        <button className="code-panel__recent-confirm-yes" onClick={() => void remove(recent.path)}>
+                          Supprimer
+                        </button>
+                        <button className="code-panel__recent-confirm-no" onClick={() => setPendingDelete(null)}>
+                          Annuler
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          className="code-panel__recent-open"
+                          onClick={() => void openRecent(recent.path)}
+                          title={recent.path}
+                        >
+                          <span className="code-panel__recent-label">{recent.label}</span>
+                          <span className="code-panel__recent-date">{formatRecentDate(recent.timestamp)}</span>
+                          <OpenIcon />
+                        </button>
+                        <button
+                          className="code-panel__recent-delete"
+                          onClick={() => setPendingDelete(recent.path)}
+                          title={`Supprimer ${recent.label}`}
+                          aria-label={`Supprimer ${recent.label}`}
+                        >
+                          <DeleteIcon />
+                        </button>
+                      </>
+                    )}
                   </li>
                 ))}
               </ul>

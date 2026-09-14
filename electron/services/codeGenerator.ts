@@ -1,6 +1,6 @@
 import { app } from 'electron'
-import { mkdir, readdir, readFile, writeFile } from 'fs/promises'
-import { join } from 'path'
+import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises'
+import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { config } from '../config'
 import { chatWithOllama, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError, type OllamaMessage } from './ollama'
 import { pickBestCodeModel } from './hardwareScan'
@@ -334,6 +334,29 @@ export async function listGeneratedApps(limit = 20): Promise<GeneratedAppSummary
 export async function loadGeneratedApp(path: string): Promise<GeneratedApp> {
   const html = await readFile(join(path, 'index.html'), 'utf-8')
   return { html, path, issues: [] }
+}
+
+/**
+ * Supprime définitivement une application générée (son dossier entier), à la demande de Léo — la liste
+ * s'allongeait sans aucun moyen de faire le ménage autrement qu'en ouvrant l'explorateur de fichiers.
+ *
+ * Le chemin vient du RENDERER : il est donc vérifié ici, jamais supprimé tel quel. Un effacement récursif
+ * est l'opération la plus irréversible de tout le programme — un chemin inattendu (bogue d'appel, chemin
+ * bricolé, `..` dans la chaîne) effacerait de vrais dossiers de Léo sans aucun moyen de revenir en arrière.
+ * Seul un ENFANT DIRECT du dossier des applications générées est accepté : ni le dossier lui-même (qui
+ * effacerait tout d'un coup), ni un sous-dossier plus profond, ni quoi que ce soit en dehors.
+ */
+export async function deleteGeneratedApp(path: string): Promise<void> {
+  const root = resolve(getGeneratedAppsDir())
+  const target = resolve(path)
+  const inside = relative(root, target)
+  // Chaîne vide = le dossier racine lui-même ; ".." = en dehors ; un séparateur = plus profond qu'un enfant
+  // direct. isAbsolute couvre le cas Windows d'un autre disque (D:\... depuis C:\...), où `relative`
+  // renvoie un chemin absolu plutôt qu'une suite de "..".
+  if (!inside || inside.startsWith('..') || isAbsolute(inside) || inside.includes(sep)) {
+    throw new Error("Ce dossier n'est pas une application générée par Jaris : suppression refusée.")
+  }
+  await rm(target, { recursive: true, force: true })
 }
 
 /**

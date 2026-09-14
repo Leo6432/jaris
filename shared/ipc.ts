@@ -451,6 +451,9 @@ export const IPC_CHANNELS = {
   /** renderer <-> main : recharge une application déjà générée (depuis "Récents") pour la remontrer dans
    * l'aperçu, avec une nouvelle URL d'aperçu isolée (voir generatedAppPreview.ts). */
   loadGeneratedApp: 'jaris:load-generated-app',
+  /** renderer -> main : supprime définitivement une application générée (son dossier). Le chemin est
+   * revérifié côté main avant tout effacement, voir deleteGeneratedApp (codeGenerator.ts). */
+  deleteGeneratedApp: 'jaris:delete-generated-app',
   /** renderer <-> main : modèles candidats (hardwareScan.ts) apparus depuis le dernier scan de capacité (étape 29), à afficher en popup. */
   getNewModels: 'jaris:get-new-models',
   /** renderer -> main : l'utilisateur a vu le popup de nouveaux modèles, ne plus le remontrer avant les prochains. */
