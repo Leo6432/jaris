@@ -1,11 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
-import {
-  ACCEPTED_IMAGE_TYPES,
-  fileToImageAttachment,
-  findImageInDataTransfer,
-  type ImageAttachment
-} from '@/lib/imageAttachment'
+import Composer from '@/components/Composer'
+import type { ImageAttachment } from '@/lib/imageAttachment'
 import type { ChatMessage } from '../../shared/ipc'
 
 /**
@@ -40,7 +36,6 @@ export default function ChatPanel(): JSX.Element {
   const [streamingReply, setStreamingReply] = useState('')
   const [attachment, setAttachment] = useState<ImageAttachment | null>(null)
   const threadRef = useRef<HTMLDivElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     void window.jaris.getChatHistory().then(setMessages)
@@ -68,20 +63,6 @@ export default function ChatPanel(): JSX.Element {
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, sending, streamingReply])
-
-  /**
-   * Étape 91 : une image seule (sans texte) est un envoi parfaitement légitime — "regarde ça" — donc le
-   * bouton ne s'active pas uniquement sur du texte, contrairement à avant. Le backend remplace alors la
-   * question vide par "Décris cette image." (voir chatSession.ts).
-   */
-  const attachImage = async (file: File | Blob, name = ''): Promise<void> => {
-    try {
-      setError(null)
-      setAttachment(await fileToImageAttachment(file, name))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    }
-  }
 
   const send = async (): Promise<void> => {
     const prompt = input.trim()
@@ -113,31 +94,6 @@ export default function ChatPanel(): JSX.Element {
     }
   }
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
-    // Entrée envoie, Maj+Entrée passe à la ligne : convention attendue dans une fenêtre de chat.
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault()
-      void send()
-    }
-  }
-
-  // Coller (Ctrl+V) une capture d'écran est le geste le plus courant pour "envoyer une image" : sans ça, il
-  // faudrait d'abord l'enregistrer dans un fichier juste pour pouvoir la choisir. Le glisser-déposer passe
-  // par le même chemin, pour la même raison.
-  const handlePaste = (event: React.ClipboardEvent): void => {
-    const file = findImageInDataTransfer(event.clipboardData.items)
-    if (!file) return
-    event.preventDefault()
-    void attachImage(file)
-  }
-
-  const handleDrop = (event: React.DragEvent): void => {
-    const file = findImageInDataTransfer(event.dataTransfer.items)
-    if (!file) return
-    event.preventDefault()
-    void attachImage(file, file.name)
-  }
-
   return (
     <div className="chat-panel">
       <div className="chat-panel__thread" ref={threadRef}>
@@ -166,46 +122,20 @@ export default function ChatPanel(): JSX.Element {
 
       {error && <p className="chat-panel__error">{error}</p>}
 
-      {attachment && (
-        <div className="chat-panel__attachment">
-          <img src={attachment.dataUrl} alt="Aperçu de l'image à envoyer" />
-          <span className="chat-panel__attachment-name">{attachment.name || 'Image collée'}</span>
-          <button className="chat-panel__attachment-remove" onClick={() => setAttachment(null)} disabled={sending}>
-            Retirer
-          </button>
-        </div>
-      )}
-
-      <div className="chat-panel__composer" onDrop={handleDrop} onDragOver={(event) => event.preventDefault()}>
-        <textarea
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          placeholder="Écris ton message… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne, Ctrl+V pour coller une image)"
-          rows={2}
-        />
-        {/* Un input file caché plutôt qu'un dialogue natif via IPC : le renderer a déjà tout ce qu'il faut
-            pour lire et réduire l'image (canvas), et un aller-retour vers le main process n'apporterait rien. */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ACCEPTED_IMAGE_TYPES.join(',')}
-          hidden
-          onChange={(event) => {
-            const file = event.target.files?.[0]
-            if (file) void attachImage(file, file.name)
-            // Remis à zéro pour que rechoisir LE MÊME fichier juste après déclenche bien un nouvel onChange.
-            event.target.value = ''
-          }}
-        />
-        <button className="chat-panel__attach" onClick={() => fileInputRef.current?.click()} disabled={sending}>
-          Image
-        </button>
-        <button onClick={() => void send()} disabled={sending || (!input.trim() && !attachment)}>
-          {sending ? '…' : 'Envoyer'}
-        </button>
-      </div>
+      <Composer
+        value={input}
+        onChange={setInput}
+        onSubmit={() => void send()}
+        placeholder="Écris ton message…"
+        submitLabel="Envoyer"
+        busyLabel="Envoi…"
+        busy={sending}
+        attachment={attachment}
+        onAttachmentChange={setAttachment}
+        onError={setError}
+        submitOnEnter
+        hint="Entrée pour envoyer · Maj+Entrée : nouvelle ligne · Ctrl+V : coller une image"
+      />
     </div>
   )
 }

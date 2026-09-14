@@ -1143,6 +1143,42 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   vraies images (photo, capture, maquette) — c'est un jugement de qualité perçue, et la leçon Kokoro/orbe
   vaut aussi ici : seuls de vrais essais sur sa machine tranchent.
 
+- **Passe de design sur le composeur du Chat et du mode Code (étape 92, demande de Léo : "Travaille sur le
+  ux visiuel met pas des bouton image, améliorer tout le design").** Deux vrais défauts, constatés sur une
+  CAPTURE RÉELLE du rendu compilé (bundle esbuild des vrais composants + vrai CSS, pas une relecture du
+  code) avant de toucher quoi que ce soit :
+  1. **Le bouton "Image" en toutes lettres avait le même poids visuel que l'action principale** — et en mode
+     Code il paraissait carrément PLUS important qu'elle : l'action secondaire était rendue dans le style
+     plein du HUD, tandis que "Générer l'application", désactivée tant qu'aucun texte n'était saisi,
+     s'affichait en gris. Remplacé par une icône SVG inline (aucune dépendance, aucun emoji) qui hérite de
+     `currentColor`, avec `title`/`aria-label` puisqu'elle n'a plus de libellé.
+  2. **Le champ et ses boutons ne formaient pas un objet** : les boutons flottaient sous la ligne de base du
+     textarea, chacun avec son propre cadre. Remplacé par UNE carte (`.composer`) qui contient le champ, la
+     pièce jointe et la barre d'actions — le focus allume la carte entière (`:focus-within`) au lieu de
+     déplacer un contour d'un élément à l'autre.
+  **Vraie cause de duplication supprimée au passage** : le composeur existait en DEUX exemplaires (ChatPanel
+  et CodePanel), avec la même logique de collage/glisser-déposer/champ fichier recopiée. C'est exactement
+  pour ça que les deux écrans avaient déjà divergé visuellement dès le premier ajout. Extrait dans un seul
+  `src/components/Composer.tsx` : les deux panneaux se ressemblent désormais PAR CONSTRUCTION, pas par
+  discipline — même leçon que `conversationSession.ts` (étape 47) pour l'historique dupliqué.
+  **Piège CSS trouvé par la capture, pas en relecture** : le champ gardait un second cadre À L'INTÉRIEUR de
+  la carte. Cause : une règle globale `input, textarea, select` (src/index.css) impose `border`/`background`
+  avec `!important` — une classe ne peut donc pas la neutraliser. Corrigé en EXCLUANT explicitement le champ
+  du composeur de cette règle (`textarea:not(.composer__input)`) plutôt qu'en ajoutant un `!important`
+  concurrent : une seule source de vérité reste, et l'exception est lisible là où la règle est écrite.
+  **Cohérence plutôt qu'invention** : le bouton d'envoi ne redéfinit PAS son apparence (j'avais d'abord écrit
+  un bouton arrondi à lui). Il rejoint la famille de boutons déjà partagée par toute l'app (coins coupés en
+  `clip-path`, Rajdhani en majuscules) — Léo a déjà repris ce projet deux fois sur des formes "génériques"
+  inventées à côté de l'identité visuelle existante (le cercle lisse du widget, celui du sélecteur de voix) :
+  quand une famille de composants existe déjà, s'y raccrocher AVANT d'en créer une nouvelle.
+  Vérifié par mesure réelle (pas à l'œil) après coup : le bouton d'envoi reste à 11px à l'intérieur de la
+  carte et l'icône fait 34x34 (vraie cible de clic), en 1280px comme en 760px de large, sans défilement
+  horizontal, sur les DEUX panneaux. Les 3 tests navigateur de l'étape 91 ont été repointés sur les nouveaux
+  noms de classes et passent : ils vérifient donc aussi ce composeur.
+  **Périmètre assumé** : seuls le Chat et le mode Code ont été retouchés. L'écran Agent vocal, les Options et
+  l'onboarding n'ont PAS été repris cette fois — "améliorer tout le design" en un seul commit aurait été
+  invérifiable ; à reprendre écran par écran, avec une capture avant/après à chaque fois.
+
 ## Commandes utiles
 
 ```

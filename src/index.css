@@ -1583,51 +1583,169 @@ body.body--scan::after {
   color: var(--hud-gold);
 }
 
-.chat-panel__composer {
+/* ==========================================================================
+   Composeur partagé — Chat et mode Code (étape 92)
+   --------------------------------------------------------------------------
+   Un SEUL bloc de styles pour les deux écrans, comme il n'y a plus qu'un seul
+   composant (Composer.tsx). Avant, chaque panneau avait son propre composeur :
+   le champ et les boutons flottaient côte à côte sans alignement commun, et le
+   bouton "Image" (en toutes lettres) avait le même poids visuel que l'action
+   principale — au point de paraître PLUS important qu'elle en mode Code.
+
+   Principe : le composeur est UNE carte. Le champ, la pièce jointe et la barre
+   d'actions vivent dedans, donc tout est aligné par construction, et la carte
+   entière réagit au focus comme un seul objet.
+   ========================================================================== */
+.composer {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-items: flex-end;
+  padding: 10px 10px 8px;
+  border: 1px solid var(--hud-line);
+  border-radius: 16px;
+  background: var(--hud-panel-raised);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.chat-panel__composer textarea {
-  flex: 1;
+/* La carte entière s'allume quand le champ a le focus : le contour ne saute plus d'un élément à l'autre. */
+.composer:focus-within {
+  border-color: var(--hud-line-strong);
+  box-shadow: var(--hud-glow);
+}
+
+.composer--busy {
+  opacity: 0.75;
+}
+
+.composer__input {
   resize: none;
-  background: rgba(1, 4, 10, 0.6);
-  border: 1px solid rgba(122, 176, 214, 0.25);
-  border-radius: 12px;
+  border: none;
+  background: transparent;
   color: var(--hud-text);
-  padding: 10px 12px;
+  padding: 6px 6px 0;
   font-family: inherit;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  font-size: 0.88rem;
+  line-height: 1.55;
 }
 
-.chat-panel__composer textarea:focus {
+.composer__input:focus {
   outline: none;
-  border-color: var(--hud-accent);
 }
 
-.chat-panel__composer button {
-  background: rgba(61, 220, 255, 0.15);
-  border: 1px solid rgba(61, 220, 255, 0.35);
-  color: var(--hud-text);
-  padding: 10px 20px;
-  border-radius: 12px;
-  font-size: 0.8rem;
-  font-family: inherit;
+.composer__input::placeholder {
+  color: var(--hud-text-faint);
+}
+
+.composer__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Le rappel des raccourcis pousse le bouton d'envoi à droite et disparaît en premier si la place manque :
+   c'est l'information la moins importante de la barre. */
+.composer__hint {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.68rem;
+  color: var(--hud-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Bouton d'action SECONDAIRE : une icône, sans fond ni libellé, pour ne jamais concurrencer "Envoyer". */
+.composer__attach {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--hud-text-dim);
   cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
-.chat-panel__composer button:disabled {
-  opacity: 0.4;
+.composer__attach:not(:disabled):hover {
+  color: var(--hud-accent-bright);
+  border-color: var(--hud-line);
+  background: rgba(var(--hud-accent-rgb), 0.08);
+}
+
+.composer__attach:disabled {
+  opacity: 0.35;
   cursor: default;
 }
 
-/* --- Image jointe, Chat et Code (étape 91) --- */
+/* Action PRINCIPALE : elle rejoint la famille de boutons HUD du reste de l'app (coins coupés, Rajdhani
+   en majuscules) plutôt que d'inventer un style à elle — voir la règle groupée plus bas. Ici, seul ce qui
+   la distingue dans le composeur : c'est la seule action remplie de la barre, donc la seule que l'œil
+   trouve en premier, face à l'icône de pièce jointe volontairement discrète. */
+.composer__send {
+  flex: none;
+}
 
-/* Vignette de l'image dans le fil de discussion. `display: block` + margin plutôt qu'un flex sur le message :
-   le texte du message est du contenu inline (voir renderFormattedText), le passer en flex casserait son
-   `white-space: pre-wrap`. */
+.composer__send:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* Pièce jointe : une puce DANS la carte, pas une barre pleine largeur au-dessus — elle appartient
+   visuellement au message en cours d'écriture. */
+.composer__attachment {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--hud-line);
+  border-radius: 12px;
+  background: rgba(1, 4, 10, 0.5);
+}
+
+.composer__attachment img {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--hud-line);
+}
+
+.composer__attachment-name {
+  min-width: 0;
+  max-width: 240px;
+  font-size: 0.75rem;
+  color: var(--hud-text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer__attachment-remove {
+  border: none;
+  background: transparent;
+  color: var(--hud-text-faint);
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.composer__attachment-remove:not(:disabled):hover {
+  color: var(--hud-danger-soft);
+  background: rgba(255, 77, 104, 0.12);
+}
+
+/* Vignette d'une image déjà envoyée, dans le fil. `display: block` + margin plutôt qu'un flex sur le
+   message : le texte du message est du contenu inline (voir renderFormattedText), le passer en flex
+   casserait son `white-space: pre-wrap`. */
 .chat-panel__message-image {
   display: block;
   max-width: 100%;
@@ -1636,39 +1754,6 @@ body.body--scan::after {
   border-radius: 10px;
   border: 1px solid var(--hud-line);
   margin-bottom: 8px;
-}
-
-/* Barre d'aperçu au-dessus du composeur, tant que l'image n'est pas envoyée. */
-.chat-panel__attachment,
-.code-panel__attachment {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--hud-line);
-  border-radius: 12px;
-  background: rgba(1, 4, 10, 0.6);
-}
-
-.chat-panel__attachment img,
-.code-panel__attachment img {
-  width: 48px;
-  height: 48px;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid var(--hud-line);
-}
-
-.chat-panel__attachment-name,
-.code-panel__attachment-name {
-  flex: 1;
-  min-width: 0;
-  font-size: 0.78rem;
-  opacity: 0.75;
-  /* Un nom de fichier long ne doit pas pousser le bouton "Retirer" hors de la barre. */
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* --- Mode Code (étape 30) --- */
@@ -1685,62 +1770,6 @@ body.body--scan::after {
   flex-direction: column;
   gap: 12px;
   padding: 24px 28px;
-}
-
-.code-panel__composer {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.code-panel__composer textarea {
-  resize: none;
-  background: rgba(1, 4, 10, 0.6);
-  border: 1px solid rgba(122, 176, 214, 0.25);
-  border-radius: 12px;
-  color: var(--hud-text);
-  padding: 10px 12px;
-  font-family: inherit;
-  font-size: 0.85rem;
-  line-height: 1.5;
-}
-
-.code-panel__composer textarea:focus {
-  outline: none;
-  border-color: var(--hud-accent);
-}
-
-.code-panel__actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.code-panel__actions button {
-  background: transparent;
-  border: 1px solid rgba(122, 176, 214, 0.35);
-  color: var(--hud-text-dim);
-  padding: 7px 16px;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.code-panel__actions button:hover:not(:disabled) {
-  border-color: var(--hud-accent);
-  color: var(--hud-text);
-}
-
-.code-panel__generate {
-  background: rgba(61, 220, 255, 0.15) !important;
-  border-color: rgba(61, 220, 255, 0.35) !important;
-  color: var(--hud-text) !important;
-}
-
-.code-panel__actions button:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 
 .code-panel__error {
@@ -2071,9 +2100,8 @@ h1 {
 .options-menu__ollama-update-actions button,
 .app__new-models button,
 .memory-brain__actions button,
-.code-panel__generate,
-.chat-panel__composer button,
-.code-panel__composer button,
+.composer__send,
+.code-panel__result-actions button,
 .capacity-scan button,
 .runtime-setup__actions button,
 .app__onboarding button {
@@ -2105,9 +2133,8 @@ h1 {
 .options-menu__ollama-update-actions button:not(:disabled):hover,
 .app__new-models button:hover,
 .memory-brain__actions button:hover,
-.code-panel__generate:not(:disabled):hover,
-.chat-panel__composer button:not(:disabled):hover,
-.code-panel__composer button:not(:disabled):hover,
+.composer__send:not(:disabled):hover,
+.code-panel__result-actions button:not(:disabled):hover,
 .capacity-scan button:not(:disabled):hover,
 .runtime-setup__actions button:not(:disabled):hover,
 .app__onboarding button:hover {
@@ -2122,7 +2149,7 @@ h1 {
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
-textarea:focus-visible {
+textarea:not(.composer__input):focus-visible {
   outline: none;
   border-color: var(--hud-accent-bright) !important;
   box-shadow:
@@ -2469,8 +2496,11 @@ textarea:focus-visible {
 
 /* --- Champs de saisie ----------------------------------------------------- */
 
+/* `.composer__input` est exclu : dans le composeur (étape 92), c'est la CARTE qui porte le cadre et la
+   lueur de focus, pas le champ lui-même — sans cette exception, ce `!important` redessinerait un second
+   contour à l'intérieur de la carte (constaté sur la capture avant/après). */
 input,
-textarea,
+textarea:not(.composer__input),
 select {
   font-family: var(--hud-font-body);
   border-radius: 0 !important;

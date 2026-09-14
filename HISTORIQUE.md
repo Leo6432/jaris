@@ -707,3 +707,18 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   effectivement transmise, aperçu, envoi possible sans texte, fichier non-image refusé proprement.
   Régression : `npm test` (163 tests, dont 2 nouveaux fichiers). Reste à confirmer par Léo en usage réel :
   la qualité des réponses du modèle de vision sur ses vraies images.
+
+- ✅ Étape 92 (v0.7.1) — Léo : "Travaille sur le ux visiuel met pas des bouton image, améliorer tout le
+  design". Capture réelle du rendu compilé avant de toucher au code : le bouton "Image" en toutes lettres
+  avait le même poids que l'action principale (et paraissait même plus important qu'elle en mode Code), et
+  le champ et ses boutons ne formaient pas un objet cohérent. Remplacé par une icône discrète et par UNE
+  carte qui contient le champ, la pièce jointe et les actions, avec la lueur de focus portée par la carte
+  entière. Le composeur, jusqu'ici écrit deux fois (Chat et Code) avec la même logique de collage/
+  glisser-déposer recopiée, est extrait dans un seul composant partagé : les deux écrans se ressemblent
+  maintenant par construction. Le bouton d'envoi rejoint la famille de boutons déjà existante (coins
+  coupés, Rajdhani) au lieu d'un style inventé à côté. Piège trouvé par la capture : une règle globale
+  `input, textarea, select` en `!important` redessinait un second cadre dans la carte — le champ du
+  composeur en est explicitement exclu plutôt que d'ajouter un `!important` concurrent. Vérifié par mesure
+  réelle sur les deux panneaux à 1280px et 760px (rien ne déborde, icône 34x34, pas de défilement
+  horizontal) ; les 3 tests navigateur de l'étape 91 repointés sur les nouvelles classes passent toujours.
+  Périmètre assumé : Chat et Code uniquement — Agent vocal, Options et onboarding restent à reprendre.

@@ -111,7 +111,7 @@ function buildPage(component) {
  * processus gardent la boucle d'évènements de Node vivante, et `node --test` ne se termine JAMAIS — le test
  * paraît alors "bloqué" au lieu d'afficher son échec (vécu en écrivant ce fichier).
  */
-async function withPage(run, component = 'ChatPanel', readySelector = '.chat-panel__composer') {
+async function withPage(run, component = 'ChatPanel', readySelector = '.composer') {
   const html = buildPage(component)
   const browser = await chromium.launch()
   try {
@@ -143,20 +143,20 @@ const options = { skip: chromium ? false : 'Playwright indisponible dans cet env
 test('une image jointe est réduite, prévisualisée, puis envoyée en base64 avec le message', options, async () => {
   await withPage(async (page) => {
     const dataUrl = await page.evaluate(MAKE_WIDE_PNG)
-    await page.setInputFiles('.chat-panel__composer input[type=file]', {
+    await page.setInputFiles('.composer input[type=file]', {
       name: 'maquette.png',
       mimeType: 'image/png',
       buffer: Buffer.from(dataUrl.split(',')[1], 'base64')
     })
 
-    await page.waitForSelector('.chat-panel__attachment img')
-    assert.equal(await page.textContent('.chat-panel__attachment-name'), 'maquette.png')
+    await page.waitForSelector('.composer__attachment img')
+    assert.equal(await page.textContent('.composer__attachment-name'), 'maquette.png')
 
     // Envoyer doit être actif MÊME sans texte : une image seule ("regarde ça") est un envoi légitime.
-    const sendButton = page.locator('.chat-panel__composer button', { hasText: 'Envoyer' })
+    const sendButton = page.locator('.composer__send')
     assert.equal(await sendButton.isDisabled(), false)
 
-    await page.fill('.chat-panel__composer textarea', "C'est quoi sur cette image ?")
+    await page.fill('.composer__input', "C'est quoi sur cette image ?")
     await sendButton.click()
     await page.waitForFunction(() => window.__sent.length === 1)
 
@@ -180,7 +180,7 @@ test('une image jointe est réduite, prévisualisée, puis envoyée en base64 av
 
     // Le fil affiche la vignette, et l'aperçu du composeur a bien été vidé après l'envoi.
     await page.waitForSelector('.chat-panel__message-image')
-    assert.equal(await page.locator('.chat-panel__attachment').count(), 0)
+    assert.equal(await page.locator('.composer__attachment').count(), 0)
 
     // La vignette ne doit pas déborder du fil de discussion.
     const overflow = await page.evaluate(() => {
@@ -194,7 +194,7 @@ test('une image jointe est réduite, prévisualisée, puis envoyée en base64 av
 
 test("un fichier qui n'est pas une image est refusé avec un message clair", options, async () => {
   await withPage(async (page) => {
-    await page.setInputFiles('.chat-panel__composer input[type=file]', {
+    await page.setInputFiles('.composer input[type=file]', {
       name: 'notes.txt',
       mimeType: 'text/plain',
       buffer: Buffer.from('bonjour')
@@ -202,7 +202,7 @@ test("un fichier qui n'est pas une image est refusé avec un message clair", opt
 
     await page.waitForSelector('.chat-panel__error')
     assert.match(await page.textContent('.chat-panel__error'), /non pris en charge/)
-    assert.equal(await page.locator('.chat-panel__attachment').count(), 0)
+    assert.equal(await page.locator('.composer__attachment').count(), 0)
   })
 })
 
@@ -219,17 +219,17 @@ test('en mode Code, une maquette jointe part bien avec la demande de génératio
   await withPage(
     async (page) => {
       const dataUrl = await page.evaluate(MAKE_WIDE_PNG)
-      await page.setInputFiles('.code-panel__composer input[type=file]', {
+      await page.setInputFiles('.composer input[type=file]', {
         name: 'maquette.png',
         mimeType: 'image/png',
         buffer: Buffer.from(dataUrl.split(',')[1], 'base64')
       })
 
-      await page.waitForSelector('.code-panel__attachment img')
-      assert.equal(await page.textContent('.code-panel__attachment-name'), 'maquette.png')
+      await page.waitForSelector('.composer__attachment img')
+      assert.equal(await page.textContent('.composer__attachment-name'), 'maquette.png')
 
       // Une maquette seule doit suffire à lancer la génération, sans description écrite.
-      const generateButton = page.locator('.code-panel__generate')
+      const generateButton = page.locator('.composer__send')
       assert.equal(await generateButton.isDisabled(), false)
 
       await generateButton.click()
@@ -242,9 +242,9 @@ test('en mode Code, une maquette jointe part bien avec la demande de génératio
       assert.match(sent.prompt, /image jointe/i)
 
       // L'aperçu est vidé après la génération, pour ne pas rejoindre par erreur la demande suivante.
-      assert.equal(await page.locator('.code-panel__attachment').count(), 0)
+      assert.equal(await page.locator('.composer__attachment').count(), 0)
     },
     'CodePanel',
-    '.code-panel__composer'
+    '.composer'
   )
 })
