@@ -690,3 +690,6 @@ supplémentaire ; la voix et le microphone réels de Léo restent à valider apr
 
 ## v0.6.5 — Ouvertures explicites exécutées sans décision du modèle
 Les demandes simples d’ouverture passent directement par open_app en voix et en chat. Les échecs sont transmis tels quels ; un lancement Explorer est décrit comme une demande transmise à Windows, pas comme la preuve d’une fenêtre ouverte. Tests avec Steam/Blocnotes et exclusions des demandes complexes/négatives. Le lanceur réel a été essayé : fenêtre Bloc-notes détectée, Steam sans fenêtre principale détectée à ce stade.
+
+## v0.6.6 — Créer réellement le document Bloc-notes demandé
+Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un nouveau fichier texte et ouvrent ce fichier. Confirmation seulement après détection de sa fenêtre ; échec lisible sinon. Aucun texte n’est frappé dans une fenêtre existante au hasard.

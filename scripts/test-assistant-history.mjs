@@ -16,13 +16,19 @@ const history = [
   { role: 'assistant', content: oldError }
 ]
 
-function setup(chat, execute) {
+const noteExports = {}
+vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../electron/services/notepad.ts', import.meta.url), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+}).outputText, { exports: noteExports, require: name => name === 'util' ? {promisify: () => {}} : {} })
+
+function setup(chat, execute, writeNote = async () => assert.fail('pas de document attendu')) {
   const config = { ollama: { model: 'test', visionModel: 'vision', numCtx: 8192 } }
   const modules = {
     '../config': { config },
     './ollama': { chatWithOllama: chat, listInstalledModels: async () => ['test'] },
     './memoryStore': { listMemoryTitles: async () => [] },
     './profileStore': { getProfile: async () => null },
+    './notepad': { requestedNotepadText: noteExports.requestedNotepadText, openNotepadText: writeNote },
     './appLauncher': { didAppLaunch: result => result.endsWith('a été lancé.') },
     './hardwareScan': { GPU_TEMP_LIMIT_C: 85 },
     './resourceMonitor': { checkOverloadWarning: async () => null },
@@ -95,3 +101,24 @@ for (const prompt of ['N’ouvre pas Steam', 'Comment ouvre-t-on Steam ?', 'Ouvr
     assert.equal(await converse(prompt,null,()=>{}),'Analyse normale')
   })
 }
+
+for (const channel of ['voice', 'chat']) {
+  test(`${channel}: ouvrir Bloc-notes et écrire exécute réellement le service`, async () => {
+    let calls = 0
+    const converse = setup(async () => assert.fail('pas de modèle'), async () => assert.fail('pas de frappe non ciblée'), async text => {
+      calls++; assert.equal(text, 'Bonjour.'); return 'Document vérifié'
+    })
+    assert.equal(await converse("Ouvre l'application Bloc-Notes et écrit Bonjour.", null, () => {}, undefined, [], undefined, undefined, channel), 'Document vérifié')
+    assert.equal(calls, 1)
+  })
+}
+test('une fenêtre non confirmée ne produit jamais de succès', async () => {
+  const converse = setup(async () => assert.fail('pas de modèle'), async () => {}, async () => { throw new Error('fenêtre absente') })
+  assert.match(await converse('Ouvre le bloc notes et écris Bonjour', null, () => {}), /fenêtre absente/)
+})
+for (const prompt of ['N’ouvre pas le Bloc-notes et écris Bonjour', 'Comment ouvrir le Bloc-notes et écrire Bonjour ?', 'Ouvre Steam et écris Bonjour']) {
+  test(`exclut le routage de document : ${prompt}`, () => assert.equal(noteExports.requestedNotepadText(prompt), undefined))
+}
+test('le texte dicté reste littéral, y compris caractères PowerShell', () => {
+  assert.equal(noteExports.requestedNotepadText('Ouvre le Bloc-notes et écris « Bonjour $HOME ; Stop-Process ».'), 'Bonjour $HOME ; Stop-Process')
+})

@@ -1,3 +1,4 @@
+import { requestedNotepadText, openNotepadText } from './notepad'
 import { config } from '../config'
 import { chatWithOllama, listInstalledModels, type OllamaMessage, type ThinkLevel } from './ollama'
 import { listMemoryTitles } from './memoryStore'
@@ -332,6 +333,16 @@ export async function converse(
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
   const executeTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel, onLog, signal)
+
+  const noteText = requestedNotepadText(prompt)
+  if (noteText !== undefined) {
+    onLog?.('Préparation du document et ouverture du Bloc-notes…')
+    try {
+      return await openNotepadText(noteText, signal)
+    } catch (err) {
+      return `Impossible de confirmer l’ouverture du document : ${err instanceof Error ? err.message : String(err)}`
+    }
+  }
 
   const requestedApp = directAppRequest(prompt)
   if (requestedApp) {

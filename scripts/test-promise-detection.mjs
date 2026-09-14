@@ -14,7 +14,8 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/ass
 }).outputText
 
 const modules = {
-  '../config': { config: { ollama: {} } },
+  './notepad': { requestedNotepadText: () => undefined },
+    '../config': { config: { ollama: {} } },
   './ollama': {},
   './memoryStore': {},
   './profileStore': {},
