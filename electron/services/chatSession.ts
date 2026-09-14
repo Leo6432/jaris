@@ -34,13 +34,14 @@ class ChatSession {
   private loaded = false
 
   /**
-   * Amorcé depuis conversation-history.json (voix ET chat, voir étape 47) au premier appel seulement :
-   * repéré par Léo en usage réel ("si on relance jarvis, on a plus rien dans le chat") — avant ça, `visible`
+   * Amorcé depuis la conversation ACTIVE (voix ET chat, voir étape 47) au premier appel seulement : repéré
+   * par Léo en usage réel ("si on relance jarvis, on a plus rien dans le chat") — avant ça, `visible`
    * repartait vide à chaque lancement même si le modèle, lui, se souvenait déjà des derniers échanges
-   * (`conversationSession.ts` chargeait bien son propre historique court terme). Jaris n'a qu'UNE seule
-   * conversation continue (voix + chat unifiées), pas plusieurs fils nommés façon Claude/ChatGPT : rouvrir
-   * l'onglet Chat après un redémarrage montre donc la suite de CETTE conversation, y compris ce qui a été
-   * dit à voix haute entre-temps.
+   * (`conversationSession.ts` chargeait bien son propre historique court terme).
+   *
+   * Étape 96 : il y a désormais PLUSIEURS conversations (demande de Léo), et `getConversationHistory` rend
+   * celle qui est active — c'est aussi celle dans laquelle le canal vocal écrit, pour que passer de la voix
+   * à l'écrit continue toujours la même discussion. Changer de fil appelle `reset()` juste en dessous.
    */
   private async ensureLoaded(): Promise<void> {
     if (this.loaded) return
@@ -63,6 +64,19 @@ class ChatSession {
     clearSessionHistory()
     this.visible = []
     this.loaded = true
+  }
+
+  /**
+   * Étape 96 : appelé après un changement de conversation (ou la création d'une nouvelle). Remet à zéro le
+   * fil AFFICHÉ et le contexte court terme envoyé au modèle — sans ça, le nouveau fil s'ouvrirait avec les
+   * messages de l'ancien à l'écran, et Jaris répondrait en tenant compte d'une discussion dont Léo vient
+   * justement de sortir. Le rechargement se fait au prochain getVisibleMessages()/send() (ensureLoaded),
+   * qui relit la conversation devenue active.
+   */
+  reset(): void {
+    clearSessionHistory()
+    this.visible = []
+    this.loaded = false
   }
 
   /**

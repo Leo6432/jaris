@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Composer from '@/components/Composer'
 import { formatRecentDate } from '@/lib/formatRecentDate'
+import { DeleteIcon } from '@/components/icons'
 import type { ImageAttachment } from '@/lib/imageAttachment'
 import type { GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
 
@@ -11,16 +12,6 @@ function OpenIcon(): JSX.Element {
   return (
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <path d="M9 6l6 6-6 6" />
-    </svg>
-  )
-}
-
-/** Corbeille (étape 95) : même parti pris que l'icône de pièce jointe du composeur — un SVG inline qui
- *  hérite de `currentColor`, aucune dépendance, aucun emoji. */
-function DeleteIcon(): JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
-      <path d="M4 7h16M10 4h4M9 7v12M15 7v12M6 7l1 13h10l1-13" />
     </svg>
   )
 }

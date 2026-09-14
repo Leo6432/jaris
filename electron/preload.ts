@@ -7,6 +7,7 @@ import {
   type CapacityScanResult,
   type ChatMessage,
   type ConversationEntry,
+  type ConversationList,
   type GeneratedApp,
   type GeneratedAppSummary,
   type HardwareTierPreview,
@@ -80,6 +81,12 @@ const api = {
   sendChatMessage: (prompt: string, imageBase64?: string): Promise<ChatMessage> =>
     ipcRenderer.invoke(IPC_CHANNELS.sendChatMessage, prompt, imageBase64),
   getChatHistory: (): Promise<ChatMessage[]> => ipcRenderer.invoke(IPC_CHANNELS.getChatHistory),
+  // Conversations du Chat (étape 96) : les trois canaux qui modifient la liste la renvoient à jour, pour
+  // éviter un second aller-retour juste pour la relire.
+  listConversations: (): Promise<ConversationList> => ipcRenderer.invoke(IPC_CHANNELS.listConversations),
+  createConversation: (): Promise<ConversationList> => ipcRenderer.invoke(IPC_CHANNELS.createConversation),
+  selectConversation: (id: string): Promise<ConversationList> => ipcRenderer.invoke(IPC_CHANNELS.selectConversation, id),
+  deleteConversation: (id: string): Promise<ConversationList> => ipcRenderer.invoke(IPC_CHANNELS.deleteConversation, id),
   // Sélecteur d'image ouvert par le MAIN process (étape 93) et pas par un <input type="file"> : seul le main
   // peut encadrer le dialogue natif du garde `dialogOpen`, sans lequel Jaris se replie en widget dès que ce
   // dialogue prend le focus. Renvoie null si l'utilisateur annule.

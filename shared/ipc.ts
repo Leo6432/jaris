@@ -310,6 +310,32 @@ export interface ChatMessage {
 }
 
 /**
+ * Une conversation du Chat (étape 96). Jaris n'avait qu'un seul fil continu depuis l'étape 47 ; Léo a
+ * demandé de pouvoir en tenir plusieurs. Le titre est dérivé du premier message (voir titleFromMessage,
+ * conversationStore.ts) : rien à saisir à la main.
+ *
+ * Le canal VOCAL écrit toujours dans la conversation ACTIVE : changer de fil dans le Chat change donc aussi
+ * celui que la voix continue, ce qui préserve la continuité voix <-> écrit acquise à l'étape 47.
+ */
+export interface ConversationSummary {
+  id: string
+  title: string
+  /** ISO. */
+  createdAt: string
+  /** ISO, mis à jour à chaque échange — sert à trier la liste, la plus récente en premier. */
+  updatedAt: string
+  /** Nombre d'échanges enregistrés : 0 = conversation encore vide. */
+  messageCount: number
+}
+
+/** Liste des conversations et laquelle est active — renvoyé par tous les canaux qui la modifient, pour que
+ *  le renderer n'ait jamais à recharger la liste dans un second appel. */
+export interface ConversationList {
+  activeId: string
+  conversations: ConversationSummary[]
+}
+
+/**
  * Formats d'image acceptés par la pièce jointe (Chat et mode Code), en UNE SEULE table partagée : le
  * renderer en tire les types MIME qu'il accepte au collage/glisser-déposer (`ACCEPTED_IMAGE_TYPES`,
  * src/lib/imageAttachment.ts) et le main process en tire à la fois les extensions du sélecteur natif et le
@@ -439,6 +465,15 @@ export const IPC_CHANNELS = {
   /** renderer <-> main : récupère les messages du mode Chat, amorcés depuis conversation-history.json au
    * premier appel après un lancement (voir ChatSession.ensureLoaded) — plus seulement ceux de la session en cours. */
   getChatHistory: 'jaris:get-chat-history',
+  /** renderer <-> main : liste les conversations du Chat (étape 96) et laquelle est active. */
+  listConversations: 'jaris:list-conversations',
+  /** renderer <-> main : crée une conversation vide et la rend active (réutilise l'active si elle est déjà
+   * vide, pour ne pas empiler des fils identiques à chaque clic). Renvoie la liste à jour. */
+  createConversation: 'jaris:create-conversation',
+  /** renderer <-> main : change la conversation active — Chat ET voix, qui écrivent dans la même. */
+  selectConversation: 'jaris:select-conversation',
+  /** renderer <-> main : supprime définitivement une conversation et ses messages. Renvoie la liste à jour. */
+  deleteConversation: 'jaris:delete-conversation',
   /** renderer <-> main : génère une application autonome à partir d'une description (mode Code, étape 30). */
   generateApp: 'jaris:generate-app',
   /** main -> renderer : messages d'avancement pendant la génération d'application (étapes de la boucle). */

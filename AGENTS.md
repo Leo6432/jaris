@@ -363,7 +363,9 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
     — même pattern `ensureLoaded()` que `conversationSession.ts`. Jaris n'a PAS plusieurs fils de discussion
     nommés façon Claude/ChatGPT (une seule conversation continue, à dessein depuis l'étape 47) : rouvrir
     Chat après un redémarrage montre la SUITE de cette conversation, y compris ce qui a été dit à voix haute
-    entre-temps — pas une liste de conversations séparées à choisir.
+    entre-temps — pas une liste de conversations séparées à choisir. **PLUS VRAI DEPUIS L'ÉTAPE 96** (voir
+    plus bas) : Léo a demandé plusieurs conversations ; la continuité voix <-> écrit décrite ici vaut
+    désormais pour la conversation ACTIVE.
   - Code : chaque génération est bien enregistrée sur le disque
     (`generated-apps/<horodatage>-<slug>/index.html`), mais rien n'exposait cette liste au renderer —
     `CodePanel.tsx` repartait d'un écran vide à chaque lancement même si les fichiers existaient toujours.
@@ -1249,6 +1251,60 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   temporairement le garde — 7 des 8 échouent alors, donc le test mord bien) et `scripts/test-code-panel-ui.mjs`
   (vrai navigateur : la corbeille seule ne supprime rien, Annuler laisse la ligne intacte, Supprimer retire
   vraiment la ligne, et un clic sur la corbeille n'ouvre jamais l'application).
+
+- **Plusieurs conversations dans le Chat (étape 96, demande de Léo : "avoir plusieurs conversation sur
+  chat")** — l'inverse exact du choix documenté depuis l'étape 47 ("Jaris n'a PAS plusieurs fils de
+  discussion nommés façon Claude/ChatGPT, une seule conversation continue, à dessein"). Quand une demande
+  explicite contredit un choix de conception noté ici, c'est la demande qui gagne : cette entrée remplace
+  l'ancienne affirmation, elle ne la contredit pas par accident.
+  **Ce qui est PRÉSERVÉ de l'étape 47, et qui décide de toute l'architecture** : le canal VOCAL écrit dans
+  la conversation ACTIVE, jamais dans un fil à part. Parler puis enchaîner par écrit continue donc toujours
+  la même discussion ; changer de fil dans le Chat change aussi celui que la voix continue. L'alternative
+  (un fil dédié à la voix) aurait cassé la propriété la plus utile du mode vocal pour un gain nul.
+  **Stockage** : un dossier `conversations/` (un fichier JSON par fil + un `index.json` qui retient les
+  titres et lequel est actif) à la place de l'unique `conversation-history.json`. Le plafond de 300 échanges
+  devient PAR conversation : global, discuter dans un nouveau fil aurait fini par ronger les messages d'un
+  ancien fil auquel on n'a jamais retouché.
+  **Migration, le point le plus sensible** : au premier lancement après la mise à jour, l'ancien
+  `conversation-history.json` devient la première conversation (titre repris de son premier message, dates
+  reprises des échanges eux-mêmes). L'ancien fichier n'est JAMAIS supprimé par la migration — il reste comme
+  filet, même si plus rien ne le lit. Léo s'était explicitement inquiété de ça ("j'ai peur que plus on
+  avance plus tu vas perdre des données") : c'est vérifié par un test sur un faux disque, pas par relecture.
+  Seul "Supprimer l'historique" (Options) l'efface aussi — sinon la migration ressortirait tout juste après
+  que Léo a demandé de tout effacer.
+  **Titres dérivés du premier message** (`titleFromMessage`, fonction pure testée à part), figés ensuite :
+  rien à saisir, et la liste ne danse pas sous les yeux à chaque échange. Deux clics sur "Nouvelle
+  conversation" ne créent qu'un seul fil vide (l'actif est réutilisé s'il est déjà vide), et supprimer le
+  dernier fil en laisse toujours un : le Chat ne doit jamais se retrouver sans conversation courante.
+  **Onglet Historique (Options)** : il montre désormais TOUTES les conversations mélangées, remises dans
+  l'ordre du temps — c'est le journal de tout ce qui a été dit, voix comprise, pas la vue du fil en cours
+  (celui-là s'affiche dans le Chat). "Ouvrir le dossier" ouvre le dossier des conversations.
+  **Côté interface** : une seule ligne au-dessus du fil (nom de la conversation + "Nouvelle conversation"),
+  la liste ne s'ouvrant qu'à la demande — le Chat reste une page de discussion, pas un gestionnaire de fils.
+  La liste réutilise exactement le vocabulaire de "Tes applications" du mode Code (panneau HUD, lignes sans
+  cadre individuel séparées par un filet, corbeille discrète, confirmation dans la ligne) : deux listes qui
+  font la même chose doivent se ressembler. La corbeille, identique dans les deux, a été extraite dans
+  `src/components/icons.tsx` dès son DEUXIÈME usage plutôt que recopiée.
+  **Piège attrapé par les tests, pas en relecture** : `ChatPanel` appelle `listConversations()` au montage ;
+  le faux pont preload de `test-image-attachment-ui.mjs` ne fournissait pas ce canal, donc l'appel plantait
+  dans l'effet React, le composant ne se montait jamais, et les 3 tests d'image restaient "bloqués" 30
+  secondes sur leur premier `waitForSelector` sans jamais dire pourquoi. **Leçon générale : quand un
+  composant gagne un nouvel appel IPC au montage, tous les faux ponts preload des tests navigateur EXISTANTS
+  doivent le fournir — un canal manquant ne donne pas une erreur lisible, il fait juste expirer le test.**
+  Régression : `node --test scripts/test-conversations.mjs` (10 cas sur un faux disque : migration sans
+  perte, isolation réelle des fils, titres, suppression, journal global, effacement complet) et
+  `scripts/test-chat-conversations-ui.mjs` (vrai navigateur : changer de fil RECHARGE vraiment le fil
+  affiché — sans ça le nouveau fil s'ouvrirait avec les messages de l'ancien —, "Nouvelle conversation"
+  ouvre un fil vide, et supprimer demande confirmation).
+  **Non vérifiable ici** : la migration sur la VRAIE machine de Léo, avec son vrai `conversation-history.json`.
+
+- **`git add -A` sur un arbre de travail qui contient déjà le début du chantier SUIVANT** : un commit
+  présenté (et rédigé) comme "correction d'un test uniquement" a en réalité emporté la réécriture en cours
+  de `conversationStore.ts`, qui référençait un type pas encore ajouté à `shared/ipc.ts` — la CI a échoué au
+  typecheck sur un commit censé ne toucher qu'un fichier de test. **Leçon générale : `git add -A` ne dit pas
+  ce qu'il ajoute ; dès qu'un chantier est commencé à côté, vérifier `git status` AVANT de committer et
+  stager explicitement les fichiers du correctif en cours** — sinon le message de commit décrit autre chose
+  que son contenu, et la vérification (typecheck/CI) porte sur un état que personne n'a voulu.
 
 ## Commandes utiles
 

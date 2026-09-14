@@ -43,6 +43,9 @@ window.__nextPickedFile = null
 window.__pickCalls = 0
 window.jaris = {
   getChatHistory: () => Promise.resolve([]),
+  // Ajouté à l'étape 96 : ChatPanel liste ses conversations au montage. Sans ce faux canal, le composant
+  // plante dans son effet et la page ne rend jamais rien — le test paraît alors juste "bloqué".
+  listConversations: () => Promise.resolve({ activeId: 'c1', conversations: [{ id: 'c1', title: 'Conversation', createdAt: '', updatedAt: '', messageCount: 0 }] }),
   onLog: () => () => {},
   onChatStreamToken: () => () => {},
   onCodeGenStatus: () => () => {},

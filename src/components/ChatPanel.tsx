@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import Composer from '@/components/Composer'
+import { formatRecentDate } from '@/lib/formatRecentDate'
+import { DeleteIcon } from '@/components/icons'
 import type { ImageAttachment } from '@/lib/imageAttachment'
-import type { ChatMessage } from '../../shared/ipc'
+import type { ChatMessage, ConversationList } from '../../shared/ipc'
 
 /**
  * Le canal "chat" du prompt système (assistant.ts) autorise le modèle à utiliser du markdown léger (listes,
@@ -35,11 +37,37 @@ export default function ChatPanel(): JSX.Element {
   const [progress, setProgress] = useState<string | null>(null)
   const [streamingReply, setStreamingReply] = useState('')
   const [attachment, setAttachment] = useState<ImageAttachment | null>(null)
+  // Conversations (étape 96) : la liste complète, laquelle est ouverte, et si le sélecteur est déplié.
+  const [conversations, setConversations] = useState<ConversationList | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const threadRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     void window.jaris.getChatHistory().then(setMessages)
+    void window.jaris.listConversations().then(setConversations)
   }, [])
+
+  /**
+   * Toute action sur les conversations (créer, changer, supprimer) renvoie la liste à jour ET remet le fil
+   * à zéro côté main : le fil affiché est donc relu derrière, jamais deviné ici. Sans cette relecture, le
+   * nouveau fil s'ouvrirait avec les messages de l'ancien encore à l'écran.
+   */
+  const applyConversationChange = async (result: Promise<ConversationList>): Promise<void> => {
+    setError(null)
+    setPendingDelete(null)
+    setPickerOpen(false)
+    try {
+      setConversations(await result)
+      setMessages(await window.jaris.getChatHistory())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const activeTitle =
+    conversations?.conversations.find((conversation) => conversation.id === conversations.activeId)?.title ??
+    'Conversation'
 
   // computer_use_task (étape 34) peut prendre plusieurs minutes (jusqu'à 20 allers-retours capture d'écran
   // + clic) sans jamais donner signe de vie autrement — constaté en usage réel : Léo pensait Jaris bloqué
@@ -85,6 +113,9 @@ export default function ChatPanel(): JSX.Element {
     try {
       const reply = await window.jaris.sendChatMessage(prompt, image?.base64)
       setMessages((prev) => [...prev, reply])
+      // Le titre d'une conversation est dérivé de son PREMIER message (conversationStore.ts) : sans cette
+      // relecture, la barre afficherait encore "Nouvelle conversation" après le tout premier échange.
+      setConversations(await window.jaris.listConversations())
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -96,6 +127,72 @@ export default function ChatPanel(): JSX.Element {
 
   return (
     <div className="chat-panel">
+      {/* Barre des conversations (étape 96) : le fil courant est nommé d'après son premier message, et le
+          sélecteur ne s'ouvre qu'à la demande — le Chat reste une page de discussion, pas une liste. */}
+      <div className="chat-panel__bar">
+        <button
+          className={`chat-panel__picker-toggle${pickerOpen ? ' chat-panel__picker-toggle--open' : ''}`}
+          onClick={() => setPickerOpen((open) => !open)}
+          aria-expanded={pickerOpen}
+        >
+          <span className="chat-panel__picker-title">{activeTitle}</span>
+          <span className="chat-panel__picker-caret" aria-hidden="true">
+            ▾
+          </span>
+        </button>
+        <button
+          className="chat-panel__new"
+          onClick={() => void applyConversationChange(window.jaris.createConversation())}
+        >
+          Nouvelle conversation
+        </button>
+      </div>
+
+      {pickerOpen && conversations && (
+        <div className="chat-panel__picker">
+          <ul>
+            {conversations.conversations.map((conversation) => (
+              <li key={conversation.id}>
+                {pendingDelete === conversation.id ? (
+                  <div className="chat-panel__picker-confirm">
+                    <span>Supprimer « {conversation.title} » définitivement ?</span>
+                    <button
+                      className="chat-panel__picker-confirm-yes"
+                      onClick={() => void applyConversationChange(window.jaris.deleteConversation(conversation.id))}
+                    >
+                      Supprimer
+                    </button>
+                    <button className="chat-panel__picker-confirm-no" onClick={() => setPendingDelete(null)}>
+                      Annuler
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      className={`chat-panel__picker-item${
+                        conversation.id === conversations.activeId ? ' chat-panel__picker-item--active' : ''
+                      }`}
+                      onClick={() => void applyConversationChange(window.jaris.selectConversation(conversation.id))}
+                    >
+                      <span className="chat-panel__picker-item-title">{conversation.title}</span>
+                      <span className="chat-panel__picker-item-date">{formatRecentDate(Date.parse(conversation.updatedAt))}</span>
+                    </button>
+                    <button
+                      className="chat-panel__picker-delete"
+                      onClick={() => setPendingDelete(conversation.id)}
+                      title={`Supprimer ${conversation.title}`}
+                      aria-label={`Supprimer ${conversation.title}`}
+                    >
+                      <DeleteIcon />
+                    </button>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="chat-panel__thread" ref={threadRef}>
         {messages.length === 0 && !sending && (
           <p className="chat-panel__empty">

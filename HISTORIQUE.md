@@ -760,3 +760,18 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   d'action n'était jamais appliquée (écrite avant la famille de boutons partagée, donc écrasée par elle) —
   corrigé. Régression : `npm test` (189 tests), dont un test du garde de suppression vérifié en le retirant
   temporairement, et le parcours complet corbeille/annuler/supprimer dans un vrai navigateur.
+
+- ✅ Étape 96 (v0.8.0) — Léo : "avoir plusieurs conversation sur chat" (avec la suppression des applications
+  du mode Code, étape 95, dont la version 0.7.4 n'avait jamais été publiée : sa CI a échoué deux fois, d'abord
+  sur une assertion de test fausse sous Windows, puis sur un commit qui avait emporté par erreur le début de
+  ce chantier-ci — les deux fonctionnalités sortent donc ensemble). Le Chat a maintenant une barre au-dessus
+  du fil avec le nom de la conversation en cours et un bouton "Nouvelle conversation" ; la liste s'ouvre à la
+  demande, chaque fil pouvant être rouvert ou supprimé (avec confirmation). Les titres sont dérivés du premier
+  message, rien à saisir. Le canal vocal écrit toujours dans la conversation ACTIVE : parler puis enchaîner
+  par écrit continue la même discussion, comme depuis l'étape 47. Les échanges vivent désormais dans un
+  dossier `conversations/` (un fichier par fil) et l'ancien `conversation-history.json` est repris comme
+  première conversation au premier lancement, sans jamais être supprimé — vérifié par un test sur un faux
+  disque plutôt que par relecture. L'onglet Historique des Options montre toutes les conversations mélangées,
+  remises dans l'ordre du temps. Régression : `npm test` (203 tests), dont la migration et le rechargement
+  réel du fil au changement de conversation dans un vrai navigateur. Non vérifiable ici : la migration sur la
+  vraie machine de Léo, avec son propre historique.

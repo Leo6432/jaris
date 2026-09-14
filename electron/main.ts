@@ -24,9 +24,13 @@ import { listAudioInputDevices } from './services/voiceClient'
 import { ensureMemoryDir, getMemoryDir, getMemoryGraph, recallNote } from './services/memoryStore'
 import {
   clearConversationHistory,
+  createConversation,
+  deleteConversation,
   ensureConversationHistoryFile,
-  getConversationHistory,
-  getConversationHistoryPath
+  getAllConversationEntries,
+  getConversationHistoryPath,
+  listConversations,
+  setActiveConversation
 } from './services/conversationStore'
 import { getProfile, saveProfile } from './services/profileStore'
 import { checkAppFreshness, checkForUpdate, getAppVersionStatus, getInstalledVersion, getReleaseHistory, updateApp } from './services/appUpdater'
@@ -37,6 +41,7 @@ import {
   type AudioInputDevice,
   type CapacityScanResult,
   type ChatMessage,
+  type ConversationList,
   type GeneratedApp,
   type GeneratedAppSummary,
   type JarisEmotion,
@@ -399,7 +404,31 @@ app.whenReady().then(async () => {
   // Limite large plutôt que sans limite : le fichier lui-même est déjà borné (MAX_HISTORY_ENTRIES dans
   // conversationStore.ts), une vraie limite ici n'aurait de sens que si l'onglet Historique devait un jour
   // paginer.
-  ipcMain.handle(IPC_CHANNELS.getConversationHistory, () => getConversationHistory(300))
+  // Onglet Historique : TOUTES les conversations mélangées (étape 96) — c'est le journal de tout ce qui a
+  // été dit, voix comprise, pas la vue du fil en cours (celui-là s'affiche dans le Chat).
+  ipcMain.handle(IPC_CHANNELS.getConversationHistory, () => getAllConversationEntries(300))
+
+  // Conversations du Chat (étape 96). Chaque changement de fil remet à zéro le fil affiché ET le contexte
+  // court terme envoyé au modèle, côté chat comme côté voix : les deux écrivent dans la conversation
+  // ACTIVE, donc les deux doivent oublier celle qu'on vient de quitter.
+  const switchConversation = async (): Promise<ConversationList> => {
+    chatSession.reset()
+    pipeline?.clearHistory()
+    return listConversations()
+  }
+  ipcMain.handle(IPC_CHANNELS.listConversations, () => listConversations())
+  ipcMain.handle(IPC_CHANNELS.createConversation, async () => {
+    await createConversation()
+    return switchConversation()
+  })
+  ipcMain.handle(IPC_CHANNELS.selectConversation, async (_event, id: string) => {
+    await setActiveConversation(id)
+    return switchConversation()
+  })
+  ipcMain.handle(IPC_CHANNELS.deleteConversation, async (_event, id: string) => {
+    await deleteConversation(id)
+    return switchConversation()
+  })
   ipcMain.handle(IPC_CHANNELS.clearConversationHistory, async () => {
     await clearConversationHistory()
     pipeline?.clearHistory()

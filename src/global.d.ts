@@ -5,6 +5,7 @@ import type {
   CapacityScanResult,
   ChatMessage,
   ConversationEntry,
+  ConversationList,
   GeneratedApp,
   GeneratedAppSummary,
   HardwareTierPreview,
@@ -75,6 +76,10 @@ declare global {
       // préfixe "data:...;base64,". Lue par le modèle de vision, jamais par celui de conversation/de code.
       sendChatMessage: (prompt: string, imageBase64?: string) => Promise<ChatMessage>
       getChatHistory: () => Promise<ChatMessage[]>
+      listConversations: () => Promise<ConversationList>
+      createConversation: () => Promise<ConversationList>
+      selectConversation: (id: string) => Promise<ConversationList>
+      deleteConversation: (id: string) => Promise<ConversationList>
       // Étape 93 : sélecteur d'image ouvert par le main process (jamais un <input type="file">, qui repliait
       // Jaris en widget en prenant le focus). null si l'utilisateur annule.
       pickImageFile: () => Promise<PickedImageFile | null>
