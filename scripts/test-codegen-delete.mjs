@@ -56,7 +56,11 @@ test("supprime le dossier d'une application générée, récursivement", async (
   const { deleteGeneratedApp, removed } = setup()
   await deleteGeneratedApp(`${APPS_DIR}/1000-jeu-snake`)
   assert.equal(removed.length, 1)
-  assert.equal(removed[0].target, `${APPS_DIR}/1000-jeu-snake`)
+  // Comparé au chemin RÉSOLU par le vrai module path, jamais à la chaîne POSIX écrite plus haut : sous
+  // Windows (le runner de la CI), "/fake/..." n'est pas un chemin absolu — resolve() le rend absolu sur le
+  // disque courant ("C:\fake\...") et retourne des antislashs. Ce test échouait donc en CI, uniquement à
+  // cause de son assertion : le garde testé juste en dessous, lui, était correct sur les deux systèmes.
+  assert.equal(removed[0].target, nodePath.resolve(`${APPS_DIR}/1000-jeu-snake`))
   assert.equal(removed[0].options.recursive, true)
 })
 
