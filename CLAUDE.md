@@ -1105,3 +1105,5 @@ npm run dist        # build complet + installeur .exe (long, normalement laissé
 `docker-compose.yml` + `searxng/settings.yml` : recherche web locale (SearXNG). Nécessite Docker Desktop
 lancé ; `searxng/settings.yml` n'est relu par SearXNG qu'au démarrage du conteneur — un changement de config
 nécessite `docker compose restart`, pas seulement `docker compose up -d`.
+
+- **Une réponse passée sans nom technique d’outil échappe aux détecteurs de promesse** : les phrases réelles « L’application Steam a été ouverte » et « L’application Blocnotes a été ouverte » pouvaient être rendues sans outil. Pour les commandes simples et explicites « ouvre [l’application] X », appeler directement open_app dans le canal partagé, sans demander au modèle de décider. Exclure les commandes composées et négatives. Le signal spawn d’explorer.exe prouve seulement l’envoi de la demande à Windows, pas une fenêtre visible : la réponse directe doit refléter cette limite. Régression : test-assistant-history.mjs, voix et chat.

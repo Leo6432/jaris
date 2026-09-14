@@ -23,6 +23,7 @@ function setup(chat, execute) {
     './ollama': { chatWithOllama: chat, listInstalledModels: async () => ['test'] },
     './memoryStore': { listMemoryTitles: async () => [] },
     './profileStore': { getProfile: async () => null },
+    './appLauncher': { didAppLaunch: result => result.endsWith('a été lancé.') },
     './hardwareScan': { GPU_TEMP_LIMIT_C: 85 },
     './resourceMonitor': { checkOverloadWarning: async () => null },
     './tools': { TOOLS: [], createToolExecutor: () => execute }
@@ -68,3 +69,29 @@ test('une nouvelle demande sans recherche ne force aucun outil', async () => {
   }, async () => { assert.fail('aucun outil demandé') })
   assert.equal(await converse('Ne cherche pas sur internet', null, () => {}, undefined, history), "D'accord")
 })
+
+for (const channel of ['voice', 'chat']) {
+  for (const app of ['Steam', 'Blocnotes']) {
+    test(`${channel}: ouverture explicite de ${app} sans fausse confirmation du modèle`, async () => {
+      let calls = 0
+      const converse = setup(async () => { assert.fail('aucun appel modèle nécessaire') }, async (name, args) => {
+        calls++
+        assert.equal(name, 'open_app')
+        assert.equal(args.app_name, app)
+        return `${app} a été lancé.`
+      })
+      assert.equal(await converse(`Ouvre l'application ${app}.`, null, () => {}, undefined, [], undefined, undefined, channel), `Demande d'ouverture transmise à Windows pour ${app}.`)
+      assert.equal(calls, 1)
+    })
+  }
+}
+test('ouverture introuvable : conserver le véritable échec', async () => {
+  const converse = setup(async () => assert.fail('pas de modèle'), async () => 'Application introuvable')
+  assert.equal(await converse('Ouvre Inconnue', null, () => {}), 'Application introuvable')
+})
+for (const prompt of ['N’ouvre pas Steam', 'Comment ouvre-t-on Steam ?', 'Ouvre Steam et écris bonjour', 'Ouvre Steam puis ferme-le', 'Ouvre Steam sans lancer de jeu']) {
+  test(`pas de routage direct pour ${prompt}`, async () => {
+    const converse = setup(async () => ({role:'assistant',content:'Analyse normale'}), async () => assert.fail('pas de lancement direct'))
+    assert.equal(await converse(prompt,null,()=>{}),'Analyse normale')
+  })
+}

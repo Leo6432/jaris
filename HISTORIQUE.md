@@ -687,3 +687,6 @@ supplémentaire ; la voix et le microphone réels de Léo restent à valider apr
   de côté à l'étape 89 ("ouvre explorateur", "excel" élisaient l'app "X" de Léo) — corrigé en comparant des
   mots entiers avec longueur minimale, et en remplaçant le "nom le plus court gagne" par un classement en
   deux temps. Régression : `npm test` (scripts/test-app-launcher.mjs, 27 cas).
+
+## v0.6.5 — Ouvertures explicites exécutées sans décision du modèle
+Les demandes simples d’ouverture passent directement par open_app en voix et en chat. Les échecs sont transmis tels quels ; un lancement Explorer est décrit comme une demande transmise à Windows, pas comme la preuve d’une fenêtre ouverte. Tests avec Steam/Blocnotes et exclusions des demandes complexes/négatives. Le lanceur réel a été essayé : fenêtre Bloc-notes détectée, Steam sans fenêtre principale détectée à ce stade.

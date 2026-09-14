@@ -21,6 +21,15 @@ const TOOL_SOUND_CUES: Partial<Record<string, SoundCue>> = {
   computer_use_task: 'scan'
 }
 
+/** Commande simple explicite : exécuter l'outil sans dépendre d'une décision du modèle. */
+export function directAppRequest(prompt: string): string | undefined {
+  const match = prompt.trim().match(/^ouvre\s+(?:l[’']application\s+)?([\p{L}\p{N}][\p{L}\p{N} .’'_-]{0,79}?)[.!]?$/iu)
+  const name = match?.[1].trim()
+  // Les demandes composées, négations et explications restent dans la conversation normale.
+  if (!name || /\b(?:et|puis|ensuite|mais|sans|pas|jamais|si|pour|avec)\b/i.test(name)) return undefined
+  return name
+}
+
 interface ModelTiers {
   flash: string
   medium: string
@@ -323,6 +332,21 @@ export async function converse(
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
   const executeTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel, onLog, signal)
+
+  const requestedApp = directAppRequest(prompt)
+  if (requestedApp) {
+    if (signal?.aborted) return "Ouverture annulée."
+    onLog?.(`Ouverture demandée : ${requestedApp}.`)
+    try {
+      const result = await executeTool('open_app', { app_name: requestedApp })
+      // Explorer accuse réception avant que l'application ait nécessairement une fenêtre visible.
+      return didAppLaunch(result)
+        ? `Demande d'ouverture transmise à Windows pour ${requestedApp}.`
+        : result
+    } catch (err) {
+      return `Échec de l'outil : ${err instanceof Error ? err.message : String(err)}`
+    }
+  }
 
   const models = profile?.models ?? { flash: config.ollama.model, medium: config.ollama.model, large: config.ollama.model }
   let tier = pickTier(prompt)
