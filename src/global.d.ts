@@ -70,9 +70,11 @@ declare global {
       onModelBenchmarkLine: (cb: (line: string) => void) => () => void
       getNewModels: () => Promise<string[]>
       acknowledgeNewModels: () => Promise<void>
-      sendChatMessage: (prompt: string) => Promise<ChatMessage>
+      // imageBase64 (étape 91) : image déjà réduite et encodée par src/lib/imageAttachment.ts, sans le
+      // préfixe "data:...;base64,". Lue par le modèle de vision, jamais par celui de conversation/de code.
+      sendChatMessage: (prompt: string, imageBase64?: string) => Promise<ChatMessage>
       getChatHistory: () => Promise<ChatMessage[]>
-      generateApp: (description: string, currentHtml?: string) => Promise<GeneratedApp>
+      generateApp: (description: string, currentHtml?: string, imageBase64?: string) => Promise<GeneratedApp>
       onCodeGenStatus: (cb: (message: string) => void) => () => void
       openGeneratedApp: (path?: string) => Promise<void>
       getGeneratedApps: () => Promise<GeneratedAppSummary[]>

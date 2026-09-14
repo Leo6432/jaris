@@ -522,13 +522,14 @@ app.whenReady().then(async () => {
 
   // Mode Chat (étape 30) : même Jaris, mêmes outils, sans synthèse vocale. Un rappel programmé par écrit
   // est quand même annoncé à voix haute par le pipeline vocal, comme un rappel programmé à la voix.
-  ipcMain.handle(IPC_CHANNELS.sendChatMessage, (event, prompt: string): Promise<ChatMessage> => {
+  ipcMain.handle(IPC_CHANNELS.sendChatMessage, (event, prompt: string, imageBase64?: string): Promise<ChatMessage> => {
     return chatSession.send(
       prompt,
       (message) => void pipeline?.announceReminder(message),
       (message) => broadcast(IPC_CHANNELS.log, message),
       (cue: SoundCue) => broadcast(IPC_CHANNELS.soundCue, cue),
-      (delta) => event.sender.send(IPC_CHANNELS.chatStreamToken, delta)
+      (delta) => event.sender.send(IPC_CHANNELS.chatStreamToken, delta),
+      imageBase64
     )
   })
   ipcMain.handle(IPC_CHANNELS.getChatHistory, (): Promise<ChatMessage[]> => chatSession.getVisibleMessages())
@@ -537,11 +538,12 @@ app.whenReady().then(async () => {
   // génération + relecture peut prendre plusieurs minutes sur un modèle local).
   ipcMain.handle(
     IPC_CHANNELS.generateApp,
-    async (event, description: string, currentHtml?: string): Promise<GeneratedApp> => {
+    async (event, description: string, currentHtml?: string, imageBase64?: string): Promise<GeneratedApp> => {
       const generated = await generateApp(
         description,
         (message) => event.sender.send(IPC_CHANNELS.codeGenStatus, message),
-        currentHtml
+        currentHtml,
+        imageBase64
       )
       return { ...generated, previewUrl: createGeneratedAppPreview(generated.html) }
     }

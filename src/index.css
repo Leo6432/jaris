@@ -1623,6 +1623,54 @@ body.body--scan::after {
   cursor: default;
 }
 
+/* --- Image jointe, Chat et Code (étape 91) --- */
+
+/* Vignette de l'image dans le fil de discussion. `display: block` + margin plutôt qu'un flex sur le message :
+   le texte du message est du contenu inline (voir renderFormattedText), le passer en flex casserait son
+   `white-space: pre-wrap`. */
+.chat-panel__message-image {
+  display: block;
+  max-width: 100%;
+  max-height: 260px;
+  width: auto;
+  border-radius: 10px;
+  border: 1px solid var(--hud-line);
+  margin-bottom: 8px;
+}
+
+/* Barre d'aperçu au-dessus du composeur, tant que l'image n'est pas envoyée. */
+.chat-panel__attachment,
+.code-panel__attachment {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--hud-line);
+  border-radius: 12px;
+  background: rgba(1, 4, 10, 0.6);
+}
+
+.chat-panel__attachment img,
+.code-panel__attachment img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--hud-line);
+}
+
+.chat-panel__attachment-name,
+.code-panel__attachment-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.78rem;
+  opacity: 0.75;
+  /* Un nom de fichier long ne doit pas pousser le bouton "Retirer" hors de la barre. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* --- Mode Code (étape 30) --- */
 
 /* Plus large que le chat (l'aperçu de l'application mérite de la place), mais borné quand même : un champ

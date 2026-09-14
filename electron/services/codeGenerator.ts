@@ -1,9 +1,11 @@
 import { app } from 'electron'
 import { mkdir, readdir, readFile, writeFile } from 'fs/promises'
 import { join } from 'path'
+import { config } from '../config'
 import { chatWithOllama, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError, type OllamaMessage } from './ollama'
 import { pickBestCodeModel } from './hardwareScan'
 import { getProfile } from './profileStore'
+import { IMAGE_FOR_CODE_SYSTEM_PROMPT, describeImage } from './vision'
 import type { GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
 
 /**
@@ -349,16 +351,47 @@ export async function loadGeneratedApp(path: string): Promise<GeneratedApp> {
 export async function generateApp(
   description: string,
   onStatus: (message: string) => void,
-  currentHtml?: string
+  currentHtml?: string,
+  imageBase64?: string
 ): Promise<GeneratedApp> {
   const profile = await getProfile()
+
+  /**
+   * Image jointe (étape 91) : le modèle de code ne sait pas lire une image, et un modèle de vision ne tient
+   * pas en VRAM en même temps que lui sur une carte 8 Go (voir assistant.ts). L'image est donc d'abord
+   * traduite en texte par le modèle de vision, AVANT que le modèle de code soit chargé — deux étapes
+   * strictement séquentielles, jamais deux modèles en mémoire à la fois. Le modèle de code ne reçoit ensuite
+   * que du texte, comme pour n'importe quelle demande écrite.
+   */
+  let imageDescription: string | undefined
+  if (imageBase64) {
+    onStatus("Lecture de l'image jointe…")
+    imageDescription = await describeImage(
+      imageBase64,
+      "Décris cette interface pour qu'elle puisse être reconstruite fidèlement.",
+      profile?.visionModel ?? config.ollama.visionModel,
+      IMAGE_FOR_CODE_SYSTEM_PROMPT
+    )
+    onStatus('Image lue, passage à la génération.')
+  }
+
   const model = await resolveCodeModel(onStatus, profile?.codeModel)
 
+  const withImage = (base: string): string =>
+    imageDescription
+      ? `${base}\n\nL'utilisateur a joint une image (maquette ou capture à reproduire). En voici la ` +
+        `description fidèle, faite par un modèle de vision :\n\n${imageDescription}\n\n` +
+        'Reproduis cette interface le plus fidèlement possible : même disposition, mêmes textes, mêmes ' +
+        'couleurs.'
+      : base
+
   const userPrompt = currentHtml
-    ? `Voici le fichier actuel de l'application :\n\n\`\`\`html\n${currentHtml}\n\`\`\`\n\n` +
-      `Modification demandée : ${description}\n\n` +
-      "Renvoie le fichier complet modifié, pas seulement les parties changées."
-    : `Application à créer : ${description}`
+    ? withImage(
+        `Voici le fichier actuel de l'application :\n\n\`\`\`html\n${currentHtml}\n\`\`\`\n\n` +
+          `Modification demandée : ${description}\n\n` +
+          "Renvoie le fichier complet modifié, pas seulement les parties changées."
+      )
+    : withImage(`Application à créer : ${description}`)
 
   onStatus(currentHtml ? 'Application en cours de modification…' : "Génération de l'application…")
   const generateMessages: OllamaMessage[] = [

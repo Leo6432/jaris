@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import {
+  ACCEPTED_IMAGE_TYPES,
+  fileToImageAttachment,
+  findImageInDataTransfer,
+  type ImageAttachment
+} from '@/lib/imageAttachment'
 import type { GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
 
 type View = 'preview' | 'code'
@@ -16,7 +22,9 @@ export default function CodePanel(): JSX.Element {
   const [view, setView] = useState<View>('preview')
   const [error, setError] = useState<string | null>(null)
   const [recentApps, setRecentApps] = useState<GeneratedAppSummary[]>([])
+  const [attachment, setAttachment] = useState<ImageAttachment | null>(null)
   const statusRef = useRef<HTMLPreElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Repéré par Léo en usage réel ("si on relance jarvis, on a plus rien dans le code") : chaque génération
   // est bien enregistrée sur le disque (generated-apps/<horodatage>-<slug>/), mais rien ne remontrait cette
@@ -34,18 +42,38 @@ export default function CodePanel(): JSX.Element {
     statusRef.current?.scrollTo({ top: statusRef.current.scrollHeight })
   }, [statusLines])
 
+  /**
+   * Étape 91 : une maquette ou une capture d'écran vaut mieux qu'un long paragraphe pour décrire une
+   * interface. L'image est lue par le modèle de VISION puis transmise au modèle de code sous forme de texte
+   * (voir generateApp) : les deux ne tiennent pas ensemble en VRAM.
+   */
+  const attachImage = async (file: File | Blob, name = ''): Promise<void> => {
+    try {
+      setError(null)
+      setAttachment(await fileToImageAttachment(file, name))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
   const generate = async (): Promise<void> => {
     const prompt = description.trim()
-    if (!prompt || generating) return
+    // Une image seule suffit ("reproduis cette maquette") : le texte n'est plus obligatoire s'il y a une image.
+    if ((!prompt && !attachment) || generating) return
 
     setError(null)
     setGenerating(true)
     setStatusLines([])
     try {
       // appResult présent = demande de modification : le fichier actuel part avec la demande.
-      const result = await window.jaris.generateApp(prompt, appResult?.html)
+      const result = await window.jaris.generateApp(
+        prompt || 'Reproduis fidèlement l\'interface de l\'image jointe.',
+        appResult?.html,
+        attachment?.base64
+      )
       setAppResult(result)
       setDescription('')
+      setAttachment(null)
       setView('preview')
       void window.jaris.getGeneratedApps().then(setRecentApps)
     } catch (err) {
@@ -71,24 +99,69 @@ export default function CodePanel(): JSX.Element {
     setStatusLines([])
     setError(null)
     setDescription('')
+    setAttachment(null)
+  }
+
+  const handlePaste = (event: React.ClipboardEvent): void => {
+    const file = findImageInDataTransfer(event.clipboardData.items)
+    if (!file) return
+    event.preventDefault()
+    void attachImage(file)
+  }
+
+  const handleDrop = (event: React.DragEvent): void => {
+    const file = findImageInDataTransfer(event.dataTransfer.items)
+    if (!file) return
+    event.preventDefault()
+    void attachImage(file, file.name)
   }
 
   return (
     <div className="code-panel">
-      <div className="code-panel__composer">
+      <div className="code-panel__composer" onDrop={handleDrop} onDragOver={(event) => event.preventDefault()}>
         <textarea
           value={description}
           onChange={(event) => setDescription(event.target.value)}
+          onPaste={handlePaste}
           placeholder={
             appResult
               ? 'Que veux-tu changer ? (ex: ajoute un mode sombre, trie les tâches par date…)'
-              : "Décris l'application à créer… (ex: une todo list avec des catégories et une barre de progression)"
+              : "Décris l'application à créer, ou joins une maquette à reproduire… (Ctrl+V pour coller une image)"
           }
           rows={3}
           disabled={generating}
         />
+
+        {attachment && (
+          <div className="code-panel__attachment">
+            <img src={attachment.dataUrl} alt="Aperçu de la maquette jointe" />
+            <span className="code-panel__attachment-name">{attachment.name || 'Image collée'}</span>
+            <button onClick={() => setAttachment(null)} disabled={generating}>
+              Retirer
+            </button>
+          </div>
+        )}
+
         <div className="code-panel__actions">
-          <button className="code-panel__generate" onClick={() => void generate()} disabled={generating || !description.trim()}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ACCEPTED_IMAGE_TYPES.join(',')}
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (file) void attachImage(file, file.name)
+              event.target.value = ''
+            }}
+          />
+          <button onClick={() => fileInputRef.current?.click()} disabled={generating}>
+            Image
+          </button>
+          <button
+            className="code-panel__generate"
+            onClick={() => void generate()}
+            disabled={generating || (!description.trim() && !attachment)}
+          >
             {generating ? 'Génération…' : appResult ? 'Modifier' : "Générer l'application"}
           </button>
           {appResult && !generating && (

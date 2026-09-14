@@ -693,3 +693,17 @@ Les demandes simples d’ouverture passent directement par open_app en voix et e
 
 ## v0.6.6 — Créer réellement le document Bloc-notes demandé
 Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un nouveau fichier texte et ouvrent ce fichier. Confirmation seulement après détection de sa fenêtre ; échec lisible sinon. Aucun texte n’est frappé dans une fenêtre existante au hasard.
+
+- ✅ Étape 91 (v0.7.0) — Léo : "ajoute la possibilité d'envoyer une image dans le chat et dans le code".
+  Bouton Image, collage (Ctrl+V) et glisser-déposer dans les deux modes. Contrainte structurante : ni le
+  modèle de conversation ni celui de code ne savent lire une image, et le modèle de vision ne tient pas en
+  VRAM en même temps qu'eux — d'où deux chemins strictement séquentiels. En Chat, l'image part au modèle de
+  vision et sa réponse est renvoyée telle quelle (même court-circuit que look_at_screen). En Code, l'image
+  est d'abord traduite en texte par le modèle de vision, puis ce texte seul entre dans le prompt du modèle
+  de code, qui ne reçoit donc jamais d'image. L'image est réduite à 1280px et ré-encodée en JPEG avant de
+  traverser l'IPC (même limite que les captures d'écran), et la vignette n'est jamais écrite dans
+  conversation-history.json (seuls la question et la réponse y entrent). Vérifié dans un vrai navigateur sur
+  les VRAIS composants ChatPanel et CodePanel : réduction réelle 2000px -> 1280px mesurée sur l'image
+  effectivement transmise, aperçu, envoi possible sans texte, fichier non-image refusé proprement.
+  Régression : `npm test` (163 tests, dont 2 nouveaux fichiers). Reste à confirmer par Léo en usage réel :
+  la qualité des réponses du modèle de vision sur ses vraies images.

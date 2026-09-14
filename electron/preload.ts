@@ -74,10 +74,13 @@ const api = {
   onModelBenchmarkLine: (cb: (line: string) => void) => subscribe(IPC_CHANNELS.modelBenchmarkLine, cb),
   getNewModels: (): Promise<string[]> => ipcRenderer.invoke(IPC_CHANNELS.getNewModels),
   acknowledgeNewModels: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.acknowledgeNewModels),
-  sendChatMessage: (prompt: string): Promise<ChatMessage> => ipcRenderer.invoke(IPC_CHANNELS.sendChatMessage, prompt),
+  // imageBase64 (étape 91) : image jointe, déjà réduite côté renderer (voir src/lib/imageAttachment.ts) et
+  // sans le préfixe "data:image/...;base64,". Traitée par le modèle de VISION, pas par celui de conversation.
+  sendChatMessage: (prompt: string, imageBase64?: string): Promise<ChatMessage> =>
+    ipcRenderer.invoke(IPC_CHANNELS.sendChatMessage, prompt, imageBase64),
   getChatHistory: (): Promise<ChatMessage[]> => ipcRenderer.invoke(IPC_CHANNELS.getChatHistory),
-  generateApp: (description: string, currentHtml?: string): Promise<GeneratedApp> =>
-    ipcRenderer.invoke(IPC_CHANNELS.generateApp, description, currentHtml),
+  generateApp: (description: string, currentHtml?: string, imageBase64?: string): Promise<GeneratedApp> =>
+    ipcRenderer.invoke(IPC_CHANNELS.generateApp, description, currentHtml, imageBase64),
   onCodeGenStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.codeGenStatus, cb),
   openGeneratedApp: (path?: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openGeneratedApp, path),
   getGeneratedApps: (): Promise<GeneratedAppSummary[]> => ipcRenderer.invoke(IPC_CHANNELS.getGeneratedApps),

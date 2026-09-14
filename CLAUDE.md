@@ -1093,6 +1093,56 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   n'est valide que pour les candidats qu'il était censé départager — dès que la façon de sélectionner les
   candidats change, revérifier que le critère de départage a toujours un sens.
 
+- **Image jointe dans le Chat et en mode Code (étape 91, demande de Léo : "ajoute la possibilité d'envoyer
+  une image dans le chat et dans le code").** Contrainte structurante identifiée AVANT de coder, pas après :
+  ni le modèle de conversation ni le modèle de code ne savent lire une image, et le modèle de vision ne tient
+  pas en VRAM en même temps qu'eux sur une carte 8 Go — contrainte déjà documentée pour `look_at_screen`.
+  D'où deux chemins, tous les deux STRICTEMENT séquentiels (jamais deux modèles chargés à la fois) :
+  - **Chat** : l'image + la question partent au modèle de VISION (`describeImage`), et sa réponse est
+    renvoyée telle quelle, sans repasser par le modèle de conversation — exactement le court-circuit qui
+    existe déjà pour `look_at_screen`, pour la même raison (reformuler forcerait un rechargement complet de
+    modèle pour un gain nul).
+  - **Code** : l'image est d'abord traduite en TEXTE par le modèle de vision (`IMAGE_FOR_CODE_SYSTEM_PROMPT`,
+    qui demande une description exploitable pour reconstruire, pas un commentaire libre), PUIS ce texte seul
+    entre dans le prompt du modèle de code. Le modèle de code ne reçoit donc jamais d'image.
+  `describeImage` (vision.ts) était privée : exportée avec un `systemPrompt` OPTIONNEL dont le défaut est le
+  prompt d'origine — `look_at_screen` garde donc un comportement rigoureusement identique à avant, seuls les
+  nouveaux appelants passent un autre prompt.
+  **L'image n'est jamais envoyée telle quelle** : `src/lib/imageAttachment.ts` la réduit à 1280px de large
+  (même limite que les captures d'écran de vision.ts, et pour la même raison) et la ré-encode en JPEG avant
+  de la faire traverser l'IPC puis la requête Ollama. Le calcul de la taille cible est une fonction PURE
+  isolée exprès (`computeScaledSize`) pour être testable sans navigateur — même principe que
+  `findElementByName` (uiAutomation.ts) : mettre du côté vérifiable ce qui peut l'être.
+  **La vignette n'est PAS persistée** : `ChatMessage.image` sert uniquement à l'affichage de la session en
+  cours. Écrire du base64 dans `conversation-history.json` le ferait grossir de plusieurs mégaoctets par
+  image, pour une vignette que personne ne relit — seuls la question et la réponse (du texte) y entrent, ce
+  qui suffit à garder le contexte d'une question de suivi.
+  **Duplication de type attrapée par le typecheck** : la signature de `window.jaris` est recopiée À LA MAIN
+  dans `src/global.d.ts`, séparément de `electron/preload.ts` — modifier le preload seul ne suffit donc
+  jamais côté renderer. Le piège générique "un type partagé dupliqué ailleurs" est déjà documenté plus haut
+  pour `shared/ipc.ts`/`hardwareScan.ts` : `global.d.ts` est le troisième endroit concerné.
+  **Trois pièges rencontrés en écrivant le test navigateur** (chacun coûte sinon un diagnostic à l'aveugle) :
+  (1) sans `--jsx=automatic`, esbuild compile le JSX en `React.createElement` alors que le projet est en
+  runtime JSX automatique (React 18) — la page plante sur "React is not defined", le composant ne se monte
+  jamais, et le test semble juste "bloqué" sur son premier `waitForSelector` sans jamais dire pourquoi ;
+  (2) sans `--alias:@=src`, esbuild ne résout pas les imports `@/...` du projet ; (3) sans try/finally autour
+  du navigateur, une assertion qui échoue laisse Chromium ouvert, ses processus gardent la boucle
+  d'évènements de Node vivante, et `node --test` ne se termine JAMAIS — l'échec n'est jamais affiché.
+  **Playwright n'est pas une dépendance du projet** (présent en dev, absent du runner Windows de la CI) :
+  `scripts/test-image-attachment-ui.mjs` le charge donc en import DYNAMIQUE dans un try/catch et marque ses
+  tests `skip` avec une raison explicite quand il manque — sans ça, `npm test` (qui prend TOUS les
+  `scripts/test-*.mjs`, CI comprise) échouerait en CI sur un simple import. Marqué "ignoré" et pas
+  silencieusement vert, pour rester cohérent avec la leçon déjà tirée ici : un test qu'on croit passé alors
+  qu'il n'a rien exécuté ne protège de rien.
+  Régression : `node --test scripts/test-image-attachment.mjs` (calcul pur), `scripts/test-image-attachment-ui.mjs`
+  (vrais composants ChatPanel ET CodePanel dans un navigateur : réduction réelle 2000px -> 1280px vérifiée sur
+  l'image RÉELLEMENT transmise, aperçu, envoi possible sans texte, fichier non-image refusé), plus le routage
+  backend dans `scripts/test-chat-session-restore.mjs` (une image ne doit JAMAIS appeler `converse()`) et
+  `scripts/test-codegen-generate.mjs` (le modèle de code reçoit la description, jamais l'image).
+  **Non vérifié ici, à confirmer par Léo en usage réel** : la QUALITÉ des réponses du modèle de vision sur de
+  vraies images (photo, capture, maquette) — c'est un jugement de qualité perçue, et la leçon Kokoro/orbe
+  vaut aussi ici : seuls de vrais essais sur sa machine tranchent.
+
 ## Commandes utiles
 
 ```

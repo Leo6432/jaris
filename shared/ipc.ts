@@ -299,6 +299,14 @@ export interface UpdateCheckResult {
 export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
+  /**
+   * Aperçu (data URL) d'une image jointe par l'utilisateur, étape 91 — UNIQUEMENT pour l'affichage dans le
+   * fil pendant la session en cours. Jamais renvoyé par le main process ni écrit dans
+   * conversation-history.json : y stocker du base64 ferait grossir ce fichier de plusieurs mégaoctets par
+   * image, pour une vignette que personne ne relit. Rouvrir Jaris remontre donc la question et la réponse,
+   * sans la vignette.
+   */
+  image?: string
 }
 
 /**

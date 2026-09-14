@@ -1,5 +1,11 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
+import {
+  ACCEPTED_IMAGE_TYPES,
+  fileToImageAttachment,
+  findImageInDataTransfer,
+  type ImageAttachment
+} from '@/lib/imageAttachment'
 import type { ChatMessage } from '../../shared/ipc'
 
 /**
@@ -32,7 +38,9 @@ export default function ChatPanel(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState<string | null>(null)
   const [streamingReply, setStreamingReply] = useState('')
+  const [attachment, setAttachment] = useState<ImageAttachment | null>(null)
   const threadRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     void window.jaris.getChatHistory().then(setMessages)
@@ -61,12 +69,28 @@ export default function ChatPanel(): JSX.Element {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, sending, streamingReply])
 
+  /**
+   * Étape 91 : une image seule (sans texte) est un envoi parfaitement légitime — "regarde ça" — donc le
+   * bouton ne s'active pas uniquement sur du texte, contrairement à avant. Le backend remplace alors la
+   * question vide par "Décris cette image." (voir chatSession.ts).
+   */
+  const attachImage = async (file: File | Blob, name = ''): Promise<void> => {
+    try {
+      setError(null)
+      setAttachment(await fileToImageAttachment(file, name))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
   const send = async (): Promise<void> => {
     const prompt = input.trim()
-    if (!prompt || sending) return
+    const image = attachment
+    if ((!prompt && !image) || sending) return
 
     setError(null)
     setInput('')
+    setAttachment(null)
     setSending(true)
     setProgress(null)
     setStreamingReply('')
@@ -75,10 +99,10 @@ export default function ChatPanel(): JSX.Element {
     void playSoundCueIfEnabled('send')
     // Affiché tout de suite, sans attendre la réponse : côté main le message est de toute façon ajouté au
     // fil dès réception, donc les deux restent cohérents.
-    setMessages((prev) => [...prev, { role: 'user', content: prompt }])
+    setMessages((prev) => [...prev, { role: 'user', content: prompt, image: image?.dataUrl }])
 
     try {
-      const reply = await window.jaris.sendChatMessage(prompt)
+      const reply = await window.jaris.sendChatMessage(prompt, image?.base64)
       setMessages((prev) => [...prev, reply])
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -97,6 +121,23 @@ export default function ChatPanel(): JSX.Element {
     }
   }
 
+  // Coller (Ctrl+V) une capture d'écran est le geste le plus courant pour "envoyer une image" : sans ça, il
+  // faudrait d'abord l'enregistrer dans un fichier juste pour pouvoir la choisir. Le glisser-déposer passe
+  // par le même chemin, pour la même raison.
+  const handlePaste = (event: React.ClipboardEvent): void => {
+    const file = findImageInDataTransfer(event.clipboardData.items)
+    if (!file) return
+    event.preventDefault()
+    void attachImage(file)
+  }
+
+  const handleDrop = (event: React.DragEvent): void => {
+    const file = findImageInDataTransfer(event.dataTransfer.items)
+    if (!file) return
+    event.preventDefault()
+    void attachImage(file, file.name)
+  }
+
   return (
     <div className="chat-panel">
       <div className="chat-panel__thread" ref={threadRef}>
@@ -109,6 +150,9 @@ export default function ChatPanel(): JSX.Element {
 
         {messages.map((message, index) => (
           <div key={index} className={`chat-panel__message chat-panel__message--${message.role}`}>
+            {message.image && (
+              <img className="chat-panel__message-image" src={message.image} alt="Image envoyée à Jaris" />
+            )}
             {renderFormattedText(message.content)}
           </div>
         ))}
@@ -122,15 +166,43 @@ export default function ChatPanel(): JSX.Element {
 
       {error && <p className="chat-panel__error">{error}</p>}
 
-      <div className="chat-panel__composer">
+      {attachment && (
+        <div className="chat-panel__attachment">
+          <img src={attachment.dataUrl} alt="Aperçu de l'image à envoyer" />
+          <span className="chat-panel__attachment-name">{attachment.name || 'Image collée'}</span>
+          <button className="chat-panel__attachment-remove" onClick={() => setAttachment(null)} disabled={sending}>
+            Retirer
+          </button>
+        </div>
+      )}
+
+      <div className="chat-panel__composer" onDrop={handleDrop} onDragOver={(event) => event.preventDefault()}>
         <textarea
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Écris ton message… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)"
+          onPaste={handlePaste}
+          placeholder="Écris ton message… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne, Ctrl+V pour coller une image)"
           rows={2}
         />
-        <button onClick={() => void send()} disabled={sending || !input.trim()}>
+        {/* Un input file caché plutôt qu'un dialogue natif via IPC : le renderer a déjà tout ce qu'il faut
+            pour lire et réduire l'image (canvas), et un aller-retour vers le main process n'apporterait rien. */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ACCEPTED_IMAGE_TYPES.join(',')}
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            if (file) void attachImage(file, file.name)
+            // Remis à zéro pour que rechoisir LE MÊME fichier juste après déclenche bien un nouvel onChange.
+            event.target.value = ''
+          }}
+        />
+        <button className="chat-panel__attach" onClick={() => fileInputRef.current?.click()} disabled={sending}>
+          Image
+        </button>
+        <button onClick={() => void send()} disabled={sending || (!input.trim() && !attachment)}>
           {sending ? '…' : 'Envoyer'}
         </button>
       </div>

@@ -13,6 +13,30 @@ const VISION_SYSTEM_PROMPT =
   'français, de façon concise et naturelle comme à l\'oral, sans émojis, astérisques, listes à puces ni ' +
   'mise en forme : ta réponse est lue directement à voix haute.'
 
+/**
+ * Image jointe dans le Chat (étape 91). Contrairement au prompt ci-dessus, la réponse est LUE À L'ÉCRAN et
+ * pas à voix haute : la mise en forme légère y est autorisée, exactement comme le canal 'chat' de
+ * buildSystemPrompt (assistant.ts) l'autorise déjà pour les réponses écrites.
+ */
+export const IMAGE_CHAT_SYSTEM_PROMPT =
+  "Tu es Jaris. L'utilisateur t'envoie une image et te pose une question dessus. Réponds en français, " +
+  "précisément et sans inventer : si un détail est illisible ou absent de l'image, dis-le franchement " +
+  "plutôt que de le deviner. Tu peux utiliser une mise en forme légère (listes, **gras**) si ça aide à la " +
+  'lecture.'
+
+/**
+ * Image jointe en mode Code (étape 91) : le modèle de code n'est PAS un modèle de vision, et les deux ne
+ * tiennent de toute façon pas ensemble en VRAM sur une carte 8 Go (voir assistant.ts). L'image est donc
+ * traduite en TEXTE par le modèle de vision, puis ce texte seul part au modèle de code — d'où un prompt qui
+ * demande une description exploitable pour reconstruire l'interface, pas un commentaire libre.
+ */
+export const IMAGE_FOR_CODE_SYSTEM_PROMPT =
+  "Tu décris une image (maquette, capture d'écran ou croquis d'interface) pour qu'un autre modèle puisse la " +
+  "reconstruire en HTML/CSS sans jamais la voir. Réponds en français. Décris dans l'ordre : la structure " +
+  "générale et la disposition des blocs, chaque texte visible recopié mot pour mot, les couleurs dominantes, " +
+  'les boutons/champs/images et leur position relative. Ne propose aucun code, ne donne aucun conseil : ' +
+  "uniquement ce qui est réellement visible. Si une zone est illisible, dis-le au lieu de l'inventer."
+
 // Une capture plein écran/HiDPI (ex: 4K) ralentit énormément l'encodage et
 // l'analyse par le modèle de vision pour peu de gain : une résolution plus
 // modeste suffit largement à lire du texte ou décrire une fenêtre.
@@ -54,7 +78,14 @@ export async function captureScreenshotBase64(): Promise<ScreenCapture> {
  * toutes au scan de capacité (VRAM totale) peut ne plus tenir dans la VRAM *libre* à l'instant présent
  * (conversation déjà chargée, jeu en parallèle...).
  */
-async function describeImage(imageBase64: string, question: string, visionModel: string): Promise<string> {
+export async function describeImage(
+  imageBase64: string,
+  question: string,
+  visionModel: string,
+  // Défaut = le prompt "lu à voix haute" d'origine : look_at_screen garde donc EXACTEMENT le comportement
+  // qu'il avait avant l'étape 91, seuls les nouveaux appelants (chat/code) passent un prompt différent.
+  systemPrompt: string = VISION_SYSTEM_PROMPT
+): Promise<string> {
   let model = visionModel
   try {
     const [live, installedModels] = await Promise.all([getLiveGpuStatus(), listInstalledModels()])
@@ -71,7 +102,7 @@ async function describeImage(imageBase64: string, question: string, visionModel:
       body: JSON.stringify({
         model,
         messages: [
-          { role: 'system', content: VISION_SYSTEM_PROMPT },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: question, images: [imageBase64] }
         ],
         stream: false,

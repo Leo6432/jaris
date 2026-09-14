@@ -27,6 +27,7 @@ const PYTHON_RESPONSE =
 function setup(responses) {
   const calls = []
   const statusLines = []
+  const visionCalls = []
   const modules = {
     electron: { app: { getPath: () => '/tmp' } },
     'fs/promises': { mkdir: async () => {}, writeFile: async () => {} },
@@ -44,14 +45,26 @@ function setup(responses) {
       DiskFullError: class extends Error {}
     },
     './hardwareScan': { pickBestCodeModel: async () => 'test-model' },
-    './profileStore': { getProfile: async () => ({ codeModel: 'test-model' }) }
+    './profileStore': { getProfile: async () => ({ codeModel: 'test-model', visionModel: 'vision-test' }) },
+    // Étape 91 : une maquette jointe est d'abord traduite en TEXTE par le modèle de vision (le modèle de
+    // code ne sait pas lire une image, et les deux ne tiennent pas ensemble en VRAM).
+    '../config': { config: { ollama: { visionModel: 'vision-par-defaut' } } },
+    './vision': {
+      IMAGE_FOR_CODE_SYSTEM_PROMPT: 'prompt-image-code',
+      describeImage: async (imageBase64, question, model, systemPrompt) => {
+        visionCalls.push({ imageBase64, question, model, systemPrompt })
+        return 'Un bouton rouge centré sur fond noir.'
+      }
+    }
   }
   const exports = {}
   vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports }, console })
   return {
-    generateApp: (description) => exports.generateApp(description, (line) => statusLines.push(line)),
+    generateApp: (description, currentHtml, imageBase64) =>
+      exports.generateApp(description, (line) => statusLines.push(line), currentHtml, imageBase64),
     calls,
-    statusLines
+    statusLines,
+    visionCalls
   }
 }
 
@@ -89,4 +102,34 @@ test('une réponse HTML valide dès le premier coup ne déclenche AUCUNE relance
   assert.match(result.html, /<!DOCTYPE html>/)
   assert.equal(app.calls.length, 2)
   assert.ok(!app.statusLines.some((line) => /nouvelle tentative/i.test(line)))
+})
+
+/**
+ * Étape 91 — maquette jointe en mode Code. Le modèle de code ne reçoit JAMAIS l'image : elle est d'abord
+ * traduite en texte par le modèle de vision, et c'est ce texte qui entre dans le prompt. Les deux modèles
+ * ne sont ainsi jamais chargés en même temps (contrainte VRAM déjà documentée pour look_at_screen).
+ */
+test("une image jointe est lue par le modèle de vision, puis décrite au modèle de code", async () => {
+  const app = setup([VALID_HTML])
+  await app.generateApp('reproduis ça', undefined, 'BASE64MAQUETTE')
+
+  assert.equal(app.visionCalls.length, 1)
+  assert.equal(app.visionCalls[0].imageBase64, 'BASE64MAQUETTE')
+  assert.equal(app.visionCalls[0].systemPrompt, 'prompt-image-code')
+  assert.equal(app.visionCalls[0].model, 'vision-test')
+
+  // La description de l'image doit se retrouver dans ce qui part au modèle de code, et l'image elle-même
+  // ne doit jamais y apparaître.
+  const userPrompt = app.calls[0].find((message) => message.role === 'user').content
+  assert.match(userPrompt, /Un bouton rouge centré sur fond noir\./)
+  assert.match(userPrompt, /reproduis ça/)
+  assert.equal(userPrompt.includes('BASE64MAQUETTE'), false)
+})
+
+test("sans image, le prompt du modèle de code est inchangé", async () => {
+  const app = setup([VALID_HTML])
+  await app.generateApp('une todo list')
+  assert.equal(app.visionCalls.length, 0)
+  const userPrompt = app.calls[0].find((message) => message.role === 'user').content
+  assert.equal(userPrompt, 'Application à créer : une todo list')
 })

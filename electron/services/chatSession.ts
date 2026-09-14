@@ -1,5 +1,7 @@
 import { randomUUID } from 'crypto'
+import { config } from '../config'
 import { converse } from './assistant'
+import { IMAGE_CHAT_SYSTEM_PROMPT, describeImage } from './vision'
 import { appendConversationEntry, getConversationHistory } from './conversationStore'
 import { clearSessionHistory, getSessionHistory, pushSessionExchange } from './conversationSession'
 import { extractMemoryFromExchange } from './memoryExtractor'
@@ -63,6 +65,28 @@ class ChatSession {
     this.loaded = true
   }
 
+  /**
+   * Image jointe (étape 91) : traitée par le modèle de VISION, pas par le modèle de conversation — ce
+   * dernier ne sait pas lire une image, et les deux ne tiennent pas ensemble en VRAM sur une carte 8 Go
+   * (contrainte déjà documentée dans assistant.ts pour look_at_screen). La réponse du modèle de vision est
+   * donc renvoyée telle quelle, exactement comme le court-circuit look_at_screen : la reformuler avec le
+   * modèle de conversation forcerait un rechargement complet de modèle pour un gain nul.
+   *
+   * L'échange rejoint quand même l'historique partagé sous forme de TEXTE (la question et la réponse, jamais
+   * l'image) : une question de suivi ("et la couleur du bouton ?") garde donc le contexte, sans jamais faire
+   * grossir conversation-history.json avec des mégaoctets d'image en base64.
+   */
+  private async answerAboutImage(prompt: string, imageBase64: string, onLog: (message: string) => void): Promise<string> {
+    const profile = await getProfile()
+    onLog("Lecture de l'image…")
+    return describeImage(
+      imageBase64,
+      prompt || "Décris cette image.",
+      profile?.visionModel ?? config.ollama.visionModel,
+      IMAGE_CHAT_SYSTEM_PROMPT
+    )
+  }
+
   async send(
     prompt: string,
     onReminderFire: (message: string) => void,
@@ -72,7 +96,8 @@ class ChatSession {
     // ambiants (réflexion/succès/échec) autour de converse(), et lui transmet le même callback pour ses
     // cues d'outil (clic/scan, voir TOOL_SOUND_CUES dans assistant.ts) : un seul callback pour les deux.
     onSoundCue?: (cue: SoundCue) => void,
-    onToken?: (delta: string) => void
+    onToken?: (delta: string) => void,
+    imageBase64?: string
   ): Promise<ChatMessage> {
     // Sans ça, un message envoyé avant que le premier getVisibleMessages() (appelé au montage de
     // ChatPanel.tsx) ait fini de charger l'historique pourrait écraser la restauration en cours.
@@ -96,18 +121,20 @@ class ChatSession {
       // Étape 47 : session partagée avec le pipeline vocal (conversationSession.ts), relue à chaque envoi —
       // un échange dit à voix haute juste avant est donc déjà visible ici.
       const history = await getSessionHistory()
-      reply = await converse(
-        prompt,
-        profile?.name ?? null,
-        onReminderFire,
-        onLog,
-        history,
-        undefined,
-        live,
-        'chat',
-        onToken,
-        onSoundCue
-      )
+      reply = imageBase64
+        ? await this.answerAboutImage(prompt, imageBase64, onLog)
+        : await converse(
+            prompt,
+            profile?.name ?? null,
+            onReminderFire,
+            onLog,
+            history,
+            undefined,
+            live,
+            'chat',
+            onToken,
+            onSoundCue
+          )
       if (gpuStatus.action === 'warn') reply = `${gpuStatus.message}\n\n${reply}`
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err)
