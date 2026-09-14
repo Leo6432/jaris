@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { globSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 
 /**
@@ -18,7 +20,10 @@ import ts from 'typescript'
  * nouveau chemin, qui est le piège déjà rencontré deux fois dans ce projet (le check WSL placé dans une
  * branche jamais atteinte, la touche "+" gatée d'un seul côté sur deux).
  */
-const projectRoot = new URL('..', import.meta.url)
+// fileURLToPath, jamais `.pathname` : sous Windows (le runner de la CI), `new URL(...).pathname` vaut
+// "/C:/a/jaris/..." — un chemin que ni globSync ni readFileSync ne retrouvent, et le test passerait alors
+// sans avoir lu le moindre fichier. Un test qui ne vérifie rien ne protège de rien (leçon déjà notée).
+const projectRoot = fileURLToPath(new URL('..', import.meta.url))
 
 /**
  * Les commentaires de ce dépôt CITENT abondamment le code qu'ils expliquent (`dialog.showOpenDialog`,
@@ -27,7 +32,7 @@ const projectRoot = new URL('..', import.meta.url)
  * l'intérieur d'une chaîne (une URL, par exemple), ce qu'une simple expression régulière raterait.
  */
 function sourceWithoutComments(relativePath, jsx = ts.JsxEmit.None) {
-  return ts.transpileModule(readFileSync(new URL(relativePath, projectRoot), 'utf8'), {
+  return ts.transpileModule(readFileSync(join(projectRoot, relativePath), 'utf8'), {
     compilerOptions: { removeComments: true, jsx, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext }
   }).outputText
 }
@@ -74,8 +79,12 @@ test('le repli en widget sur perte de focus consulte bien ce drapeau', () => {
 test("aucun sélecteur de fichier ne repasse côté renderer, où le drapeau ne peut rien", () => {
   // C'est la cause exacte du bug signalé par Léo : un <input type="file"> ouvre son dialogue depuis
   // Chromium, que le main process ne voit jamais passer.
-  for (const file of globSync(new URL('src/**/*.tsx', projectRoot).pathname)) {
-    const source = sourceWithoutComments(file.replace(projectRoot.pathname, ''), ts.JsxEmit.Preserve)
+  // Motif en barres obliques + `cwd` : c'est la forme portable de globSync, là où un chemin absolu concaténé
+  // ne retrouverait rien sous Windows.
+  const components = globSync('src/**/*.tsx', { cwd: projectRoot })
+  assert.ok(components.length > 5, `seulement ${components.length} composant(s) relu(s) : le balayage a raté`)
+  for (const file of components) {
+    const source = sourceWithoutComments(file, ts.JsxEmit.Preserve)
     assert.doesNotMatch(source, /type="file"/, `${file} ouvre un sélecteur de fichier côté renderer`)
   }
 })
