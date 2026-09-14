@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
 /**
- * Mise en page du mode Code (étape 94), sur le VRAI composant et le vrai CSS compilé.
+ * Mise en page du mode Code (étapes 94-97), sur le VRAI composant et le vrai CSS compilé.
  *
  * Léo : "le design de code c'est mal fait, on comprend pas trop les truc recent en bas apres il ya des
  * bouton". Deux défauts mesurés sur une capture réelle avant correction : la liste des applications déjà
@@ -54,7 +54,7 @@ window.__deleted = []
 window.jaris = {
   onCodeGenStatus: () => () => {},
   getGeneratedApps: () => Promise.resolve(window.__apps),
-  loadGeneratedApp: () => Promise.resolve(APP),
+  loadGeneratedApp: (path) => Promise.resolve({ ...APP, path }),
   generateApp: () => Promise.resolve(APP),
   openGeneratedApp: () => Promise.resolve(),
   pickImageFile: () => Promise.resolve(null),
@@ -118,7 +118,7 @@ async function withPage(run, width = 1280) {
     const page = await browser.newPage()
     await page.setViewportSize({ width, height: 860 })
     await page.setContent(html)
-    await page.waitForSelector('.composer')
+    await page.waitForSelector('.workspace__rail')
     await run(page)
   } finally {
     await browser.close()
@@ -127,14 +127,12 @@ async function withPage(run, width = 1280) {
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
 
-test('la liste des applications déjà créées est un panneau titré, avec des dates lisibles', options, async () => {
+test('les applications déjà créées sont listées en colonne, avec des dates lisibles', options, async () => {
   await withPage(async (page) => {
-    await page.waitForSelector('.code-panel__recents')
-    assert.match(await page.textContent('.code-panel__recents .code-panel__section-title'), /applications/i)
-    // Sans cette phrase, rien ne disait qu'une ligne s'ouvre au clic.
-    assert.match(await page.textContent('.code-panel__recents-tip'), /rouvrir/i)
+    assert.equal(await page.locator('.workspace__list li').count(), 2)
+    assert.match(await page.textContent('.workspace__new'), /Nouvelle application/i)
 
-    const dates = await page.locator('.code-panel__recent-date').allTextContents()
+    const dates = await page.locator('.workspace__item-meta').allTextContents()
     assert.equal(dates.length, 2)
     // Plus d'horodatage à la seconde ("14/09/2026 15:11:52") : c'était plus long que le nom lui-même.
     for (const date of dates) assert.doesNotMatch(date, /\d{2}:\d{2}:\d{2}/)
@@ -142,28 +140,50 @@ test('la liste des applications déjà créées est un panneau titré, avec des 
   })
 })
 
+test('le Chat et le mode Code ont la MÊME présentation', options, async () => {
+  // Demande explicite de Léo ("les conversation et code fait comme claude ou chatgpt la meme présentation").
+  // Les deux écrans partagent le même composant : ce test vérifie que le mode Code en a bien tous les
+  // éléments, dans le même ordre — colonne à gauche, contenu au centre, champ de saisie EN BAS.
+  await withPage(async (page) => {
+    await page.click('.workspace__item')
+    await page.waitForSelector('.code-panel__preview')
+
+    const layout = await page.evaluate(() => {
+      const box = (selector) => document.querySelector(selector).getBoundingClientRect()
+      return {
+        railLeftOfContent: box('.workspace__rail').right <= box('.workspace__main').left + 1,
+        composerBelowPreview: box('.composer').top > box('.code-panel__preview').top,
+        composerLast: document.querySelector('.code-panel').lastElementChild.classList.contains('composer')
+      }
+    })
+    assert.equal(layout.railLeftOfContent, true)
+    assert.equal(layout.composerBelowPreview, true, "le champ de saisie n'est pas en bas")
+    assert.equal(layout.composerLast, true)
+  })
+})
+
 test('supprimer demande confirmation, puis retire vraiment la ligne', options, async () => {
   await withPage(async (page) => {
-    assert.equal(await page.locator('.code-panel__recents li').count(), 2)
+    assert.equal(await page.locator('.workspace__list li').count(), 2)
 
     // Un simple clic sur la corbeille ne supprime RIEN : effacer un dossier est définitif.
-    await page.click('.code-panel__recents li:first-child .code-panel__recent-delete')
-    await page.waitForSelector('.code-panel__recent-confirm')
-    assert.match(await page.textContent('.code-panel__recent-confirm span'), /liste de courses/)
+    await page.click('.workspace__list li:first-child .workspace__delete')
+    await page.waitForSelector('.workspace__confirm')
+    assert.match(await page.textContent('.workspace__confirm span'), /liste de courses/)
     assert.deepEqual(await page.evaluate(() => window.__deleted), [])
 
     // Annuler laisse la ligne intacte.
-    await page.click('.code-panel__recent-confirm-no')
-    assert.equal(await page.locator('.code-panel__recent-confirm').count(), 0)
-    assert.equal(await page.locator('.code-panel__recents li').count(), 2)
+    await page.click('.workspace__confirm-no')
+    assert.equal(await page.locator('.workspace__confirm').count(), 0)
+    assert.equal(await page.locator('.workspace__list li').count(), 2)
     assert.deepEqual(await page.evaluate(() => window.__deleted), [])
 
     // Confirmer supprime, et la liste affichée se met à jour.
-    await page.click('.code-panel__recents li:first-child .code-panel__recent-delete')
-    await page.click('.code-panel__recent-confirm-yes')
-    await page.waitForFunction(() => document.querySelectorAll('.code-panel__recents li').length === 1)
+    await page.click('.workspace__list li:first-child .workspace__delete')
+    await page.click('.workspace__confirm-yes')
+    await page.waitForFunction(() => document.querySelectorAll('.workspace__list li').length === 1)
     assert.deepEqual(await page.evaluate(() => window.__deleted), ['C:/apps/liste'])
-    assert.match(await page.textContent('.code-panel__recents li'), /jeu snake/)
+    assert.match(await page.textContent('.workspace__list li'), /jeu snake/)
   })
 })
 
@@ -171,24 +191,25 @@ test("la corbeille d'une ligne n'ouvre jamais l'application par erreur", options
   await withPage(async (page) => {
     // Les deux boutons sont dans la MÊME ligne : un clic sur la corbeille ne doit pas déclencher l'ouverture
     // (ce qui arriverait si la corbeille était imbriquée dans le bouton d'ouverture).
-    await page.click('.code-panel__recents li:first-child .code-panel__recent-delete')
+    await page.click('.workspace__list li:first-child .workspace__delete')
     assert.equal(await page.locator('.code-panel__preview').count(), 0)
   })
 })
 
 test('cliquer une application de la liste la rouvre', options, async () => {
   await withPage(async (page) => {
-    await page.click('.code-panel__recent-open')
+    await page.click('.workspace__item')
     await page.waitForSelector('.code-panel__preview')
-    // La liste laisse la place à l'application : les deux ne cohabitent pas.
-    assert.equal(await page.locator('.code-panel__recents').count(), 0)
+    // La liste reste visible à gauche pendant qu'on regarde l'application (contrairement à l'étape 94, où
+    // elle disparaissait dès qu'une application était chargée), et la ligne ouverte est signalée.
+    assert.equal(await page.locator('.workspace__item--active').count(), 1)
   })
 })
 
 for (const width of [1280, 760]) {
   test(`onglets et actions tiennent sur UNE seule barre, dans le panneau (${width}px)`, options, async () => {
     await withPage(async (page) => {
-      await page.click('.code-panel__recent-open')
+      await page.click('.workspace__item')
       await page.waitForSelector('.code-panel__preview')
 
       const layout = await page.evaluate(() => {

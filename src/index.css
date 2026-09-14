@@ -1527,170 +1527,6 @@ body.body--scan::after {
   padding: 24px 28px;
 }
 
-/* --- Conversations du Chat (étape 96) --- */
-
-/* Une seule ligne au-dessus du fil : le nom de la conversation en cours (qui ouvre la liste) et le bouton
-   pour en démarrer une autre. La liste elle-même ne s'affiche qu'à la demande — le Chat doit rester une
-   page de discussion, pas un gestionnaire de fils. */
-.chat-panel__bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.chat-panel__picker-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  padding: 4px 0;
-  color: var(--hud-text);
-  font-family: var(--hud-font-display);
-  font-size: 0.9rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  transition: color 0.15s ease;
-}
-
-.chat-panel__picker-toggle:hover,
-.chat-panel__picker-toggle--open {
-  color: var(--hud-accent-bright);
-}
-
-.chat-panel__picker-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chat-panel__picker-caret {
-  flex-shrink: 0;
-  font-size: 0.7rem;
-  color: var(--hud-text-faint);
-  transition: transform 0.15s ease;
-}
-
-.chat-panel__picker-toggle--open .chat-panel__picker-caret {
-  transform: rotate(180deg);
-}
-
-/* Liste des conversations : même vocabulaire que "Tes applications" du mode Code (panneau HUD, lignes sans
-   cadre individuel séparées par un filet, corbeille discrète) — deux listes qui font la même chose doivent
-   se ressembler. */
-.chat-panel__picker {
-  /* Ne se laisse pas écraser par le fil (flex: 1) juste en dessous : sans ça, la liste se réduirait à
-     quelques pixels sur une fenêtre un peu courte. */
-  flex: 0 0 auto;
-  max-height: 260px;
-  overflow-y: auto;
-  padding: 6px 10px;
-}
-
-.chat-panel__picker ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.chat-panel__picker li {
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid rgba(var(--hud-accent-rgb), 0.08);
-}
-
-.chat-panel__picker li:last-child {
-  border-bottom: none;
-}
-
-.chat-panel__picker-item {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  color: var(--hud-text-soft);
-  padding: 10px 8px;
-  font-family: inherit;
-  font-size: 0.84rem;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-}
-
-.chat-panel__picker-item:hover {
-  background: rgba(var(--hud-accent-rgb), 0.08);
-  color: var(--hud-text);
-}
-
-/* Un liseré à gauche en plus de la couleur : sur une liste de titres tous en clair, la seule nuance de
-   couleur ne saute pas aux yeux — surtout quand le fil actif est simplement le premier de la liste. */
-.chat-panel__picker-item--active {
-  color: var(--hud-accent-bright);
-  box-shadow: inset 2px 0 0 var(--hud-accent);
-}
-
-.chat-panel__picker-item-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chat-panel__picker-item-date {
-  flex-shrink: 0;
-  font-size: 0.7rem;
-  color: var(--hud-text-faint);
-}
-
-.chat-panel__picker-delete {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  color: var(--hud-text-faint);
-  padding: 10px 10px;
-  cursor: pointer;
-  opacity: 0.55;
-  transition:
-    color 0.15s ease,
-    opacity 0.15s ease;
-}
-
-.chat-panel__picker-delete:hover {
-  color: var(--hud-danger);
-  opacity: 1;
-}
-
-.chat-panel__picker-confirm {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 8px;
-  font-size: 0.78rem;
-  color: var(--hud-text);
-  background: rgba(255, 77, 104, 0.07);
-}
-
-.chat-panel__picker-confirm span {
-  flex: 1;
-  min-width: 170px;
-}
-
 .chat-panel__thread {
   flex: 1;
   overflow-y: auto;
@@ -1920,6 +1756,199 @@ body.body--scan::after {
   margin-bottom: 8px;
 }
 
+/* --- Espace de travail partagé : Chat et mode Code (étape 97) ------------- */
+
+/* Colonne de gauche façon Claude/ChatGPT, demandée par Léo ("les conversation et code fait comme claude ou
+   chatgpt la meme présentation"). UN seul jeu de styles pour les deux écrans : ils affichent exactement la
+   même chose (un bouton "nouveau", une liste, le contenu courant à droite). */
+.workspace {
+  flex: 1;
+  /* min-width: 0 obligatoire, pas seulement min-height : sans lui, un élément flex refuse de se réduire en
+     dessous de la largeur minimale de son contenu — la colonne (240px) plus le contenu débordaient donc la
+     fenêtre au lieu de la partager (mesuré : 784px de large dans une fenêtre de 760px). */
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.workspace__rail {
+  width: 240px;
+  flex-shrink: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 12px;
+  border-right: 1px solid var(--hud-line);
+  background: rgba(1, 4, 10, 0.35);
+}
+
+.workspace__new {
+  width: 100%;
+  text-align: center;
+}
+
+.workspace__empty {
+  margin: 4px 6px;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--hud-text-faint);
+}
+
+.workspace__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Lignes séparées par un simple filet, sans cadre individuel : la colonne a déjà sa bordure, en remettre
+   une par ligne empilerait deux boîtes pour une seule information (même parti pris qu'à l'étape 94). Le
+   filet est porté par le <li> et non par le bouton, parce qu'une ligne contient DEUX boutons (ouvrir et
+   supprimer) qui dessineraient sinon deux bouts de séparateur côte à côte. */
+.workspace__list li {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid rgba(var(--hud-accent-rgb), 0.07);
+}
+
+.workspace__list li:last-child {
+  border-bottom: none;
+}
+
+.workspace__item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--hud-text-soft);
+  padding: 9px 8px;
+  font-family: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.workspace__item:hover {
+  background: rgba(var(--hud-accent-rgb), 0.08);
+  color: var(--hud-text);
+}
+
+/* Un liseré à gauche en plus de la couleur : sur une liste de titres tous en clair, la seule nuance de
+   couleur ne saute pas aux yeux. */
+.workspace__item--active {
+  color: var(--hud-accent-bright);
+  box-shadow: inset 2px 0 0 var(--hud-accent);
+}
+
+.workspace__item-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Seule la première lettre passe en majuscule : `text-transform: capitalize` écrirait "Liste De Courses". */
+.workspace__item-title::first-letter {
+  text-transform: uppercase;
+}
+
+.workspace__item-meta {
+  font-size: 0.68rem;
+  color: var(--hud-text-faint);
+}
+
+/* Discrète tant qu'on ne la survole pas : c'est l'action rare et irréversible de la ligne. */
+.workspace__delete {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--hud-text-faint);
+  padding: 9px 8px;
+  cursor: pointer;
+  opacity: 0.55;
+  transition:
+    color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.workspace__delete:hover {
+  color: var(--hud-danger);
+  opacity: 1;
+}
+
+.workspace__confirm {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--hud-text);
+  background: rgba(255, 77, 104, 0.07);
+}
+
+.workspace__confirm span {
+  flex-basis: 100%;
+}
+
+.workspace__main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* Gouttière réservée au bouton de repli, qui flotte en haut à gauche : sans elle, il passerait par-dessus
+     le premier message de la discussion. */
+  padding-left: 34px;
+}
+
+.workspace__rail-toggle {
+  position: absolute;
+  top: 10px;
+  left: 6px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--hud-text-faint);
+  padding: 4px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition:
+    color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.workspace__rail-toggle:hover {
+  color: var(--hud-accent-bright);
+  opacity: 1;
+}
+
+/* Sur une fenêtre étroite, la colonne des modes (200px) plus celle-ci laisseraient trop peu de place à la
+   discussion : elle rétrécit d'abord, et le bouton de repli reste là pour la faire disparaître tout à fait. */
+@media (max-width: 900px) {
+  .workspace__rail {
+    width: 190px;
+  }
+}
+
 /* --- Mode Code (étape 30) --- */
 
 /* Plus large que le chat (l'aperçu de l'application mérite de la place), mais borné quand même : un champ
@@ -1942,174 +1971,12 @@ body.body--scan::after {
   color: var(--hud-gold);
 }
 
-/* Écran de départ : occupe toute la hauteur restante sous le champ, pour que la liste des applications
-   déjà créées remplisse l'écran au lieu de flotter au-dessus d'un grand vide (étape 94). */
-.code-panel__start {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
 .code-panel__intro {
   margin: 0;
   max-width: 78ch;
   font-size: 0.82rem;
   line-height: 1.6;
   color: var(--hud-text-dim);
-}
-
-/* Vrai panneau (fond, bordure et équerres d'angle ajoutés par la famille HUD partagée, voir plus bas) :
-   sans lui, la liste n'était qu'une suite de lignes posées sur le fond, sans début ni fin lisibles. */
-.code-panel__recents {
-  /* Le panneau s'ajuste à son contenu, sans jamais dépasser la place disponible (la liste défile alors) :
-     étiré à toute la hauteur, il aurait été vide aux trois quarts avec deux ou trois applications. */
-  flex: 0 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 14px 16px 6px;
-}
-
-.code-panel__recents-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--hud-line);
-}
-
-.code-panel__recents .code-panel__section-title {
-  font-family: var(--hud-font-display);
-  font-size: 0.78rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--hud-text);
-}
-
-.code-panel__recents-tip {
-  font-size: 0.7rem;
-  color: var(--hud-text-faint);
-}
-
-.code-panel__recents ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Lignes SANS cadre individuel, séparées par un simple filet : le panneau porte déjà une bordure, en
-   remettre une par ligne empilait deux boîtes pour une seule information. Le filet est porté par le <li>
-   (et non par le bouton) depuis l'ajout de la corbeille : la ligne contient désormais DEUX boutons, qui
-   auraient sinon dessiné deux bouts de séparateur côte à côte. */
-.code-panel__recents li {
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid rgba(var(--hud-accent-rgb), 0.08);
-}
-
-.code-panel__recents li:last-child {
-  border-bottom: none;
-}
-
-.code-panel__recent-open {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  color: var(--hud-text-soft);
-  padding: 11px 10px;
-  font-family: inherit;
-  font-size: 0.86rem;
-  cursor: pointer;
-  text-align: left;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-}
-
-.code-panel__recent-open:hover {
-  background: rgba(var(--hud-accent-rgb), 0.08);
-  color: var(--hud-text);
-}
-
-.code-panel__recent-open:hover svg {
-  color: var(--hud-accent-bright);
-}
-
-/* Discrète tant qu'on ne la survole pas : c'est l'action rare et irréversible de la ligne, elle ne doit
-   pas attirer l'œil autant que "ouvrir". */
-.code-panel__recent-delete {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  color: var(--hud-text-faint);
-  padding: 11px 12px;
-  cursor: pointer;
-  opacity: 0.55;
-  transition:
-    color 0.15s ease,
-    opacity 0.15s ease;
-}
-
-.code-panel__recent-delete:hover {
-  color: var(--hud-danger);
-  opacity: 1;
-}
-
-.code-panel__recent-confirm {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 8px 10px;
-  font-size: 0.8rem;
-  color: var(--hud-text);
-  background: rgba(255, 77, 104, 0.07);
-}
-
-.code-panel__recent-confirm span {
-  flex: 1;
-  min-width: 180px;
-}
-
-.code-panel__recent-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Seule la première lettre passe en majuscule : `text-transform: capitalize` écrivait "Liste De Courses". */
-.code-panel__recent-label::first-letter {
-  text-transform: uppercase;
-}
-
-.code-panel__recent-date {
-  flex-shrink: 0;
-  font-size: 0.72rem;
-  color: var(--hud-text-faint);
-}
-
-.code-panel__recents svg {
-  flex-shrink: 0;
-  color: var(--hud-text-faint);
-  transition: color 0.15s ease;
 }
 
 .code-panel__status {
@@ -2394,8 +2261,9 @@ h1 {
 .memory-brain__actions button,
 .composer__send,
 .code-panel__result-actions button,
-.code-panel__recent-confirm-yes,
-.code-panel__recent-confirm-no,
+.workspace__new,
+.workspace__confirm-yes,
+.workspace__confirm-no,
 .capacity-scan button,
 .runtime-setup__actions button,
 .app__onboarding button {
@@ -2429,11 +2297,9 @@ h1 {
 .memory-brain__actions button:hover,
 .composer__send:not(:disabled):hover,
 .code-panel__result-actions button:not(:disabled):hover,
-.code-panel__recent-confirm-yes:not(:disabled):hover,
-.code-panel__recent-confirm-no:not(:disabled):hover,
-.chat-panel__new:not(:disabled):hover,
-.chat-panel__picker-confirm-yes:not(:disabled):hover,
-.chat-panel__picker-confirm-no:not(:disabled):hover,
+.workspace__new:not(:disabled):hover,
+.workspace__confirm-yes:not(:disabled):hover,
+.workspace__confirm-no:not(:disabled):hover,
 .capacity-scan button:not(:disabled):hover,
 .runtime-setup__actions button:not(:disabled):hover,
 .app__onboarding button:hover {
@@ -2464,23 +2330,27 @@ textarea:not(.composer__input):focus-visible {
  * silencieusement écrasées et n'avaient aucun effet.
  */
 .code-panel__result-actions button,
-.code-panel__recent-confirm-yes,
-.code-panel__recent-confirm-no,
-.chat-panel__new,
-.chat-panel__picker-confirm-yes,
-.chat-panel__picker-confirm-no {
+.workspace__new,
+.workspace__confirm-yes,
+.workspace__confirm-no {
   font-size: 0.7rem;
   letter-spacing: 0.1em;
   padding: 6px 12px;
   clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
 }
 
+/* "NOUVELLE CONVERSATION" (21 caractères en majuscules) passait sur deux lignes dans la colonne de 240px :
+   l'interlettrage de la famille, pensé pour des boutons courts, coûte ici une ligne entière. Mesuré à
+   40px de haut avant, 27px après — la même hauteur que "Nouvelle application". Placé APRÈS la famille,
+   sinon la règle serait écrasée à spécificité égale (piège de l'étape 95). */
+.workspace__new {
+  letter-spacing: 0.05em;
+}
+
 .options-menu__action--danger,
-.code-panel__recent-confirm-yes,
-.chat-panel__picker-confirm-yes,
+.workspace__confirm-yes,
 .options-menu__action--danger:not(:disabled):hover,
-.code-panel__recent-confirm-yes:not(:disabled):hover,
-.chat-panel__picker-confirm-yes:not(:disabled):hover {
+.workspace__confirm-yes:not(:disabled):hover {
   color: var(--hud-danger);
   border-color: rgba(255, 77, 104, 0.55);
   background: linear-gradient(180deg, rgba(255, 77, 104, 0.16), rgba(255, 77, 104, 0.05));
@@ -2503,8 +2373,6 @@ textarea:not(.composer__input):focus-visible {
 .app__conversation:not(.app__conversation--widget),
 .chat-panel__message,
 .code-panel__result,
-.code-panel__recents,
-.chat-panel__picker,
 .memory-brain__note {
   position: relative;
   border-radius: 0 !important;
@@ -2520,8 +2388,6 @@ textarea:not(.composer__input):focus-visible {
 .app__new-models::before,
 .chat-panel__message::before,
 .code-panel__result::before,
-.code-panel__recents::before,
-.chat-panel__picker::before,
 .memory-brain__note::before {
   content: '';
   position: absolute;
@@ -2541,8 +2407,6 @@ textarea:not(.composer__input):focus-visible {
 .app__new-models::after,
 .chat-panel__message::after,
 .code-panel__result::after,
-.code-panel__recents::after,
-.chat-panel__picker::after,
 .memory-brain__note::after {
   content: '';
   position: absolute;

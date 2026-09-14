@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
 /**
- * Sélecteur de conversations du Chat (étape 96), sur le VRAI composant et le vrai CSS compilé.
+ * Liste des conversations du Chat, dans la colonne de gauche partagée avec le mode Code (Workspace, étape
+ * 97) — sur le VRAI composant et le vrai CSS compilé.
  *
  * Ce que ce test protège vraiment : qu'un changement de fil RECHARGE le fil affiché. Côté main, chaque
  * bascule remet à zéro le fil et le contexte du modèle ; si le renderer oubliait de relire, le nouveau fil
@@ -126,7 +127,7 @@ async function withPage(run) {
     const page = await browser.newPage()
     await page.setViewportSize({ width: 1100, height: 800 })
     await page.setContent(html)
-    await page.waitForSelector('.chat-panel__bar')
+    await page.waitForSelector('.workspace__rail')
     await run(page)
   } finally {
     await browser.close()
@@ -135,16 +136,21 @@ async function withPage(run) {
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
 
-test('la barre nomme la conversation en cours, la liste ne s\'ouvre qu\'à la demande', options, async () => {
+test('les conversations sont listées en colonne, la conversation ouverte est signalée', options, async () => {
   await withPage(async (page) => {
-    assert.equal(await page.textContent('.chat-panel__picker-title'), 'parle moi des chats')
-    assert.equal(await page.locator('.chat-panel__picker').count(), 0)
+    // Toujours visible, sans rien déplier : c'est ce que Léo demandait ("comme claude ou chatgpt").
+    assert.equal(await page.locator('.workspace__list li').count(), 2)
+    assert.equal(await page.locator('.workspace__item--active').count(), 1)
+    assert.equal(await page.textContent('.workspace__item--active .workspace__item-title'), 'parle moi des chats')
 
-    await page.click('.chat-panel__picker-toggle')
-    await page.waitForSelector('.chat-panel__picker')
-    assert.equal(await page.locator('.chat-panel__picker li').count(), 2)
-    // La conversation ouverte est signalée dans la liste.
-    assert.equal(await page.locator('.chat-panel__picker-item--active').count(), 1)
+    // Le bouton de création est bien rendu dans le style de l'application, pas en gris (défaut signalé par
+    // Léo en v0.8.0 : la classe manquait dans la famille de boutons partagée, le bouton restait blanc).
+    const style = await page.evaluate(() => {
+      const s = getComputedStyle(document.querySelector('.workspace__new'))
+      return { color: s.color, hasBackground: s.backgroundImage !== 'none' }
+    })
+    assert.equal(style.hasBackground, true, 'le bouton "Nouvelle conversation" est resté sans fond')
+    assert.notEqual(style.color, 'rgb(255, 255, 255)', 'le bouton est resté au style par défaut du navigateur')
   })
 })
 
@@ -153,15 +159,12 @@ test('changer de conversation recharge VRAIMENT le fil affiché', options, async
     await page.waitForSelector('.chat-panel__message')
     assert.match(await page.textContent('.chat-panel__thread'), /chats dorment/)
 
-    await page.click('.chat-panel__picker-toggle')
-    await page.click('.chat-panel__picker li:nth-child(2) .chat-panel__picker-item')
+    await page.click('.workspace__list li:nth-child(2) .workspace__item')
 
     await page.waitForFunction(() => document.querySelector('.chat-panel__thread').textContent.includes('crêpes'))
     const thread = await page.textContent('.chat-panel__thread')
     assert.doesNotMatch(thread, /chats dorment/, "les messages de l'ancien fil sont restés à l'écran")
-    assert.equal(await page.textContent('.chat-panel__picker-title'), 'recette de crêpes')
-    // La liste se referme après le choix : on revient à la discussion.
-    assert.equal(await page.locator('.chat-panel__picker').count(), 0)
+    assert.equal(await page.textContent('.workspace__item--active .workspace__item-title'), 'recette de crêpes')
     assert.deepEqual(await page.evaluate(() => window.__calls), [['select', 'b']])
   })
 })
@@ -169,28 +172,27 @@ test('changer de conversation recharge VRAIMENT le fil affiché', options, async
 test('"Nouvelle conversation" ouvre un fil vide', options, async () => {
   await withPage(async (page) => {
     await page.waitForSelector('.chat-panel__message')
-    await page.click('.chat-panel__new')
+    await page.click('.workspace__new')
 
     await page.waitForFunction(() => document.querySelectorAll('.chat-panel__message').length === 0)
-    assert.equal(await page.textContent('.chat-panel__picker-title'), 'Nouvelle conversation')
+    assert.equal(await page.textContent('.workspace__item--active .workspace__item-title'), 'Nouvelle conversation')
     assert.deepEqual(await page.evaluate(() => window.__calls), [['create']])
   })
 })
 
 test('supprimer une conversation demande confirmation', options, async () => {
   await withPage(async (page) => {
-    await page.click('.chat-panel__picker-toggle')
-    await page.click('.chat-panel__picker li:nth-child(2) .chat-panel__picker-delete')
-    await page.waitForSelector('.chat-panel__picker-confirm')
+    await page.click('.workspace__list li:nth-child(2) .workspace__delete')
+    await page.waitForSelector('.workspace__confirm')
     // Rien n'est supprimé tant que la confirmation n'est pas validée.
     assert.deepEqual(await page.evaluate(() => window.__calls), [])
 
-    await page.click('.chat-panel__picker-confirm-no')
-    assert.equal(await page.locator('.chat-panel__picker-confirm').count(), 0)
+    await page.click('.workspace__confirm-no')
+    assert.equal(await page.locator('.workspace__confirm').count(), 0)
     assert.deepEqual(await page.evaluate(() => window.__calls), [])
 
-    await page.click('.chat-panel__picker li:nth-child(2) .chat-panel__picker-delete')
-    await page.click('.chat-panel__picker-confirm-yes')
+    await page.click('.workspace__list li:nth-child(2) .workspace__delete')
+    await page.click('.workspace__confirm-yes')
     await page.waitForFunction(() => window.__calls.length === 1)
     assert.deepEqual(await page.evaluate(() => window.__calls), [['delete', 'b']])
   })

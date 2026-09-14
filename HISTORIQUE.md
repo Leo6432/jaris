@@ -775,3 +775,15 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   remises dans l'ordre du temps. Régression : `npm test` (203 tests), dont la migration et le rechargement
   réel du fil au changement de conversation dans un vrai navigateur. Non vérifiable ici : la migration sur la
   vraie machine de Léo, avec son propre historique.
+
+- ✅ Étape 97 (v0.8.1) — Léo : "pourquoi nouvelle conversation est en gris" et "les conversation et code fait
+  comme claude ou chatgpt la meme présentation". Le bouton gris était un vrai défaut livré en v0.8.0 : sa
+  classe manquait dans la règle de base de la famille de boutons (elle n'était que dans le survol et la
+  taille), donc il restait au style par défaut du navigateur — corrigé et désormais vérifié par une mesure du
+  style calculé, pas par un grep. Le Chat et le mode Code partagent maintenant UN SEUL composant de mise en
+  page : colonne de gauche permanente (bouton "Nouveau…" puis la liste), contenu au centre, champ de saisie
+  en bas — le menu déroulant du Chat et le panneau "Tes applications" du mode Code disparaissent au profit de
+  cette présentation commune, repliable sur une fenêtre étroite. Piège corrigé au passage, trouvé en mesurant
+  une fenêtre de 760px : il manquait `min-width: 0` sur le conteneur flex, la mise en page débordait de 24px.
+  Régression : `npm test` (204 tests), dont un test dédié qui vérifie que les deux écrans ont bien la même
+  présentation. Non vérifiable ici : le rendu sur sa vraie machine Windows.

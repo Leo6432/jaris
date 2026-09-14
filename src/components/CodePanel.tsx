@@ -1,20 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import Composer from '@/components/Composer'
+import Workspace from '@/components/Workspace'
 import { formatRecentDate } from '@/lib/formatRecentDate'
-import { DeleteIcon } from '@/components/icons'
 import type { ImageAttachment } from '@/lib/imageAttachment'
 import type { GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
 
 type View = 'preview' | 'code'
-
-/** Chevron de fin de ligne : dit qu'une ligne de la liste s'ouvre, là où un simple cadre ne disait rien. */
-function OpenIcon(): JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M9 6l6 6-6 6" />
-    </svg>
-  )
-}
 
 /**
  * Mode Code (étape 30) : décrire une application en français et la voir tourner, générée à 100% en local.
@@ -30,8 +21,6 @@ export default function CodePanel(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [recentApps, setRecentApps] = useState<GeneratedAppSummary[]>([])
   const [attachment, setAttachment] = useState<ImageAttachment | null>(null)
-  /** Chemin de l'application dont la ligne demande confirmation avant suppression (une seule à la fois). */
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const statusRef = useRef<HTMLPreElement>(null)
 
   // Repéré par Léo en usage réel ("si on relance jarvis, on a plus rien dans le code") : chaque génération
@@ -95,7 +84,6 @@ export default function CodePanel(): JSX.Element {
    */
   const remove = async (path: string): Promise<void> => {
     setError(null)
-    setPendingDelete(null)
     try {
       await window.jaris.deleteGeneratedApp(path)
       setRecentApps(await window.jaris.getGeneratedApps())
@@ -116,163 +104,119 @@ export default function CodePanel(): JSX.Element {
   }
 
   return (
-    <div className="code-panel">
-      <Composer
-        value={description}
-        onChange={setDescription}
-        onSubmit={() => void generate()}
-        placeholder={
-          appResult
-            ? 'Que veux-tu changer ? (ex: ajoute un mode sombre, trie les tâches par date…)'
-            : "Décris l'application à créer, ou joins une maquette à reproduire…"
-        }
-        submitLabel={appResult ? 'Modifier' : "Générer l'application"}
-        busyLabel="Génération…"
-        busy={generating}
-        attachment={attachment}
-        onAttachmentChange={setAttachment}
-        onError={setError}
-        rows={3}
-        hint="Ctrl+V pour coller une capture, ou glisse une image ici"
-      />
-
-      {error && <p className="code-panel__error">{error}</p>}
-
-      {(generating || statusLines.length > 0) && (
-        <pre ref={statusRef} className="code-panel__status">
-          {statusLines.join('\n')}
-        </pre>
-      )}
-
-      {/* Écran de départ (étape 94) : avant, la liste des applications déjà créées était posée telle quelle
-          sous le champ, sous une micro-étiquette "Récents", au-dessus d'un grand vide — "on comprend pas
-          trop les truc recent en bas" (Léo). Elle devient un vrai panneau titré qui occupe la place
-          disponible, avec une phrase qui dit ce que fait ce mode : sans app chargée, c'est le seul contenu
-          de l'écran, il ne peut pas rester muet. */}
-      {!appResult && !generating && (
-        <div className="code-panel__start">
+    <Workspace
+      newLabel="Nouvelle application"
+      onNew={startOver}
+      items={recentApps.map((recent) => ({
+        id: recent.path,
+        title: recent.label,
+        meta: formatRecentDate(recent.timestamp)
+      }))}
+      activeId={appResult?.path ?? null}
+      onSelect={(path) => void openRecent(path)}
+      onDelete={(path) => void remove(path)}
+      emptyLabel="Aucune application pour l'instant."
+    >
+      <div className="code-panel">
+        {/* Écran de départ : la liste des applications déjà créées vit maintenant dans la colonne de gauche
+            (étape 97), il ne reste donc ici que la phrase qui dit à quoi sert ce mode — sans elle, l'écran
+            serait entièrement vide avant la première génération. */}
+        {!appResult && !generating && (
           <p className="code-panel__intro">
             Décris une application en français : Jaris l'écrit entièrement sur ta machine, puis la lance
             juste ici. Tu peux aussi joindre une capture ou une maquette à reproduire.
           </p>
+        )}
 
-          {recentApps.length > 0 && (
-            <div className="code-panel__recents">
-              <div className="code-panel__recents-header">
-                <span className="code-panel__section-title">Tes applications</span>
-                <span className="code-panel__recents-tip">Clique pour rouvrir</span>
-              </div>
-              <ul>
-                {recentApps.map((recent) => (
-                  <li key={recent.path}>
-                    {/* Confirmation DANS la ligne, pas un dialogue natif : supprimer efface un dossier pour
-                        de bon, donc ça se confirme — mais un dialogue natif ferait perdre le focus à la
-                        fenêtre, et Jaris se replierait en widget en plein milieu (piège de l'étape 93). */}
-                    {pendingDelete === recent.path ? (
-                      <div className="code-panel__recent-confirm">
-                        <span>Supprimer « {recent.label} » définitivement ?</span>
-                        <button className="code-panel__recent-confirm-yes" onClick={() => void remove(recent.path)}>
-                          Supprimer
-                        </button>
-                        <button className="code-panel__recent-confirm-no" onClick={() => setPendingDelete(null)}>
-                          Annuler
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <button
-                          className="code-panel__recent-open"
-                          onClick={() => void openRecent(recent.path)}
-                          title={recent.path}
-                        >
-                          <span className="code-panel__recent-label">{recent.label}</span>
-                          <span className="code-panel__recent-date">{formatRecentDate(recent.timestamp)}</span>
-                          <OpenIcon />
-                        </button>
-                        <button
-                          className="code-panel__recent-delete"
-                          onClick={() => setPendingDelete(recent.path)}
-                          title={`Supprimer ${recent.label}`}
-                          aria-label={`Supprimer ${recent.label}`}
-                        >
-                          <DeleteIcon />
-                        </button>
-                      </>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
+        {appResult && appResult.issues.length > 0 && (
+          <div className="code-panel__issues">
+            <strong>
+              L'application a été générée mais {appResult.issues.length === 1 ? "un problème n'a pas pu être corrigé" : `${appResult.issues.length} problèmes n'ont pas pu être corrigés`} :
+            </strong>
+            <ul>
+              {appResult.issues.map((issue) => (
+                <li key={issue}>{issue}</li>
+              ))}
+            </ul>
+            Relance la génération, ou reformule ta demande en plus simple.
+          </div>
+        )}
 
-      {appResult && appResult.issues.length > 0 && (
-        <div className="code-panel__issues">
-          <strong>
-            L'application a été générée mais {appResult.issues.length === 1 ? "un problème n'a pas pu être corrigé" : `${appResult.issues.length} problèmes n'ont pas pu être corrigés`} :
-          </strong>
-          <ul>
-            {appResult.issues.map((issue) => (
-              <li key={issue}>{issue}</li>
-            ))}
-          </ul>
-          Relance la génération, ou reformule ta demande en plus simple.
-        </div>
-      )}
-
-      {appResult && (
-        <div className="code-panel__result">
-          {/* Une SEULE barre (étape 94) : les onglets Aperçu/Code et les deux actions secondaires étaient
-              deux rangées séparées, empilées avec le composeur au-dessus de l'aperçu — quatre bandes avant
-              d'atteindre l'application elle-même, "après il y a des boutons" (Léo). Les actions rejoignent
-              la ligne des onglets, à droite et en plus petit : elles restent de la même famille de boutons
-              que le reste de l'app, sans concurrencer l'aperçu. */}
-          <div className="code-panel__result-bar">
-            <div className="code-panel__view-tabs">
-              <button
-                className={`code-panel__view-tab${view === 'preview' ? ' code-panel__view-tab--active' : ''}`}
-                onClick={() => setView('preview')}
-              >
-                Aperçu
-              </button>
-              <button
-                className={`code-panel__view-tab${view === 'code' ? ' code-panel__view-tab--active' : ''}`}
-                onClick={() => setView('code')}
-              >
-                Code
-              </button>
-            </div>
-
-            {!generating && (
-              <div className="code-panel__result-actions">
-                <button onClick={startOver}>Nouvelle application</button>
-                <button onClick={() => void window.jaris.openGeneratedApp(appResult.path)} title={appResult.path}>
-                  Ouvrir le dossier
+        {appResult && (
+          <div className="code-panel__result">
+            {/* Une SEULE barre (étape 94) : les onglets Aperçu/Code et les actions secondaires étaient deux
+                rangées séparées, empilées au-dessus de l'aperçu — "après il y a des boutons" (Léo). */}
+            <div className="code-panel__result-bar">
+              <div className="code-panel__view-tabs">
+                <button
+                  className={`code-panel__view-tab${view === 'preview' ? ' code-panel__view-tab--active' : ''}`}
+                  onClick={() => setView('preview')}
+                >
+                  Aperçu
+                </button>
+                <button
+                  className={`code-panel__view-tab${view === 'code' ? ' code-panel__view-tab--active' : ''}`}
+                  onClick={() => setView('code')}
+                >
+                  Code
                 </button>
               </div>
+
+              {!generating && (
+                <div className="code-panel__result-actions">
+                  <button onClick={() => void window.jaris.openGeneratedApp(appResult.path)} title={appResult.path}>
+                    Ouvrir le dossier
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {view === 'preview' ? (
+              // sandbox sans allow-same-origin : le code généré par le modèle tourne dans une origine opaque,
+              // sans accès à Jaris ni aux fichiers locaux. Conséquence assumée : localStorage y est bloqué
+              // (d'où le try/catch imposé dans les consignes de génération), mais il refonctionne dès que le
+              // fichier est ouvert normalement dans un navigateur depuis le dossier du projet.
+              <iframe className="code-panel__preview" title="Aperçu de l'application" sandbox="allow-scripts" src={appResult.previewUrl} />
+            ) : (
+              <pre className="code-panel__code">{appResult.html}</pre>
             )}
+
+            <p className="code-panel__hint">
+              Aperçu isolé : la sauvegarde de données (localStorage) n'y marche pas, mais fonctionne en
+              ouvrant le fichier depuis le dossier.
+            </p>
           </div>
+        )}
 
-          {view === 'preview' ? (
-            // sandbox sans allow-same-origin : le code généré par le modèle tourne dans une origine opaque,
-            // sans accès à Jaris ni aux fichiers locaux. Conséquence assumée : localStorage y est bloqué
-            // (d'où le try/catch imposé dans les consignes de génération), mais il refonctionne dès que le
-            // fichier est ouvert normalement dans un navigateur depuis le dossier du projet.
-            <iframe className="code-panel__preview" title="Aperçu de l'application" sandbox="allow-scripts" src={appResult.previewUrl} />
-          ) : (
-            <pre className="code-panel__code">{appResult.html}</pre>
-          )}
+        {(generating || statusLines.length > 0) && (
+          <pre ref={statusRef} className="code-panel__status">
+            {statusLines.join('\n')}
+          </pre>
+        )}
 
-          {/* Le chemin complet du dossier vivait ici en toutes lettres, sur deux lignes serrées en bas de
-              l'écran — il est maintenant dans l'infobulle du bouton "Ouvrir le dossier", qui fait mieux le
-              travail. Ne reste que ce qui est vraiment utile à savoir en regardant l'aperçu. */}
-          <p className="code-panel__hint">
-            Aperçu isolé : la sauvegarde de données (localStorage) n'y marche pas, mais fonctionne en
-            ouvrant le fichier depuis le dossier.
-          </p>
-        </div>
-      )}
-    </div>
+        {error && <p className="code-panel__error">{error}</p>}
+
+        {/* Composeur EN BAS, comme dans le Chat (étape 97) : les deux écrans ont maintenant exactement la
+            même présentation — liste à gauche, contenu au centre, champ de saisie en bas. */}
+        <Composer
+          value={description}
+          onChange={setDescription}
+          onSubmit={() => void generate()}
+          placeholder={
+            appResult
+              ? 'Que veux-tu changer ? (ex: ajoute un mode sombre, trie les tâches par date…)'
+              : "Décris l'application à créer, ou joins une maquette à reproduire…"
+          }
+          submitLabel={appResult ? 'Modifier' : "Générer l'application"}
+          busyLabel="Génération…"
+          busy={generating}
+          attachment={attachment}
+          onAttachmentChange={setAttachment}
+          onError={setError}
+          rows={3}
+          hint="Ctrl+V pour coller une capture, ou glisse une image ici"
+        />
+      </div>
+    </Workspace>
   )
 }

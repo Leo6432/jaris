@@ -1306,6 +1306,39 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   stager explicitement les fichiers du correctif en cours** — sinon le message de commit décrit autre chose
   que son contenu, et la vérification (typecheck/CI) porte sur un état que personne n'a voulu.
 
+- **"pourquoi nouvelle conversation est en gris" + "les conversation et code fait comme claude ou chatgpt la
+  meme présentation" (Léo, étape 97)** — deux retours dans le même message, l'un est un défaut que j'avais
+  livré, l'autre une refonte de mise en page.
+  1. **Le bouton gris était un vrai bug, et de MA part.** `.chat-panel__new` avait bien été ajouté à la liste
+     de survol et à la règle de taille compacte de la famille de boutons partagée, mais PAS à la règle de
+     BASE : le bouton n'avait donc ni fond, ni couleur, ni coins coupés — il restait au style par défaut du
+     navigateur (texte blanc, bordure blanche). J'avais "vérifié" mon remplacement avec un `grep -c` qui
+     comptait 6 occurrences : le compte était juste, l'emplacement non. **Leçon générale : compter les
+     occurrences d'un nom après une modification ne prouve rien sur l'endroit où elles ont atterri** — pour
+     une règle CSS, la seule vérification qui vaut est de MESURER le style calculé (`getComputedStyle`) sur
+     le CSS compilé, ce qui aurait montré `color: rgb(255,255,255)` et `background-image: none` tout de
+     suite. C'est maintenant une assertion de test à part entière.
+  2. **Présentation façon Claude/ChatGPT, pour le Chat ET le mode Code.** Le sélecteur déroulant de l'étape
+     96 (la liste ne s'ouvrait qu'à la demande) et le panneau "Tes applications" de l'étape 94 (posé sous le
+     champ, visible seulement tant qu'aucune application n'était chargée) sont remplacés par UNE colonne de
+     gauche permanente : bouton "Nouveau…" en haut, liste en dessous, contenu à droite, champ de saisie EN
+     BAS dans les deux écrans (le composeur du mode Code était en haut jusqu'ici). **Un seul composant
+     partagé** (`src/components/Workspace.tsx`) plutôt que deux mises en page qui se ressemblent : Léo
+     demandait explicitement "la MÊME présentation", et deux copies auraient redivergé exactement comme
+     l'avaient fait les deux composeurs avant l'étape 92. La confirmation de suppression, l'état "élément
+     actif" et le repli de la colonne vivent dans ce composant, plus dans chaque panneau.
+  **Piège CSS trouvé par une mesure, pas en relecture** : à 760px de large, la mise en page débordait de 24px
+  (mesuré : `.workspace` faisait 784px dans une fenêtre de 760px). Cause : `min-height: 0` avait été posé sur
+  le conteneur flex mais pas `min-width: 0` — un élément flex refuse par défaut de se réduire en dessous de
+  la largeur minimale de son contenu, donc la colonne (240px) + le contenu poussaient la fenêtre au lieu de
+  la partager. **Leçon générale : sur un conteneur flex HORIZONTAL qui doit pouvoir rétrécir, `min-width: 0`
+  est aussi nécessaire que `min-height: 0` l'est en vertical — et ça ne se voit qu'en mesurant une fenêtre
+  étroite, jamais sur la fenêtre de développement.**
+  Régression : `scripts/test-chat-conversations-ui.mjs` et `scripts/test-code-panel-ui.mjs` (vrai navigateur),
+  dont un test dédié "le Chat et le mode Code ont la MÊME présentation" (colonne à gauche du contenu, champ
+  de saisie en bas, dernier élément du panneau) et un test qui vérifie que le bouton de création a bien un
+  fond et une couleur, pas le style par défaut du navigateur.
+
 ## Commandes utiles
 
 ```
