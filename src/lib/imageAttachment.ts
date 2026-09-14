@@ -1,3 +1,5 @@
+import { IMAGE_TYPES_BY_EXTENSION, type PickedImageFile } from '../../shared/ipc'
+
 /**
  * Pièce jointe image du Chat et du mode Code (étape 91).
  *
@@ -10,8 +12,12 @@
  */
 export const MAX_IMAGE_WIDTH = 1280
 
-/** Formats acceptés par le sélecteur de fichier ET par le collage/glisser-déposer. */
-export const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/bmp']
+/**
+ * Formats acceptés au collage et au glisser-déposer. Dérivés de la table PARTAGÉE avec le main process
+ * (shared/ipc.ts) plutôt que réécrits ici : le sélecteur natif filtre par extension, ce chemin-ci teste un
+ * type MIME — deux vocabulaires pour une seule et même liste de formats, qui doivent rester d'accord.
+ */
+export const ACCEPTED_IMAGE_TYPES = [...new Set(Object.values(IMAGE_TYPES_BY_EXTENSION))]
 
 export interface ImageAttachment {
   /** Pour l'aperçu dans l'interface (`<img src>`), jamais envoyé au modèle tel quel. */
@@ -75,8 +81,22 @@ export async function fileToImageAttachment(file: File | Blob, name = ''): Promi
   if (!isSupportedImageType(file.type)) {
     throw new Error(`Format d'image non pris en charge : ${file.type || 'inconnu'}.`)
   }
+  return renderToAttachment(await readAsDataUrl(file), name)
+}
 
-  const originalDataUrl = await readAsDataUrl(file)
+/**
+ * Même chose pour un fichier choisi via le sélecteur NATIF (main process, voir `pickImageFile`) : les
+ * octets arrivent déjà lus, il ne reste que la réduction — délibérément la MÊME (renderToAttachment) que le
+ * collage et le glisser-déposer, pour qu'il n'existe qu'une seule implémentation du redimensionnement.
+ */
+export async function pickedFileToImageAttachment(picked: PickedImageFile): Promise<ImageAttachment> {
+  if (!isSupportedImageType(picked.type)) {
+    throw new Error(`Format d'image non pris en charge : ${picked.type || 'inconnu'}.`)
+  }
+  return renderToAttachment(`data:${picked.type};base64,${picked.base64}`, picked.name)
+}
+
+async function renderToAttachment(originalDataUrl: string, name: string): Promise<ImageAttachment> {
   const image = await loadImage(originalDataUrl)
   const size = computeScaledSize(image.naturalWidth, image.naturalHeight)
 

@@ -722,3 +722,17 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   réelle sur les deux panneaux à 1280px et 760px (rien ne déborde, icône 34x34, pas de défilement
   horizontal) ; les 3 tests navigateur de l'étape 91 repointés sur les nouvelles classes passent toujours.
   Périmètre assumé : Chat et Code uniquement — Agent vocal, Options et onboarding restent à reprendre.
+
+- ✅ Étape 93 (v0.7.2) — Léo : "quand je clique sur image ça met jaris en widget et m'ouvre bien mes
+  fichier". Le bouton de pièce jointe ouvrait un `<input type="file">` côté renderer : son dialogue natif
+  prend le focus, et Jaris se repliait en widget en plein milieu du choix du fichier (le repli sur perte de
+  focus date de l'étape 73). Le garde prévu exactement pour ça (`dialogOpen`) ne couvrait que les dialogues
+  ouverts par le main process — le sélecteur d'image y passe donc désormais lui aussi, plutôt que de
+  réinventer un second garde côté renderer, qui serait resté bloqué au moindre dialogue annulé. Le fichier
+  n'est que lu côté main : la réduction à 1280px reste côté renderer, par la même fonction que le collage et
+  le glisser-déposer. Les formats acceptés deviennent une seule table partagée (extension -> type MIME), le
+  sélecteur natif filtrant par extension là où le collage teste un type MIME. Les deux relâchements du
+  drapeau passent au passage dans un `finally` : une exception du dialogue le laissait bloqué, et la fenêtre
+  ne se serait plus jamais repliée. Régression : `npm test` (169 tests), dont un nouveau test structurel du
+  garde — ses 4 assertions ont été vérifiées une par une en réintroduisant temporairement chaque oubli. Non
+  vérifiable ici (ni Windows ni Electron) : que le repli ne se produise effectivement plus sur sa machine.

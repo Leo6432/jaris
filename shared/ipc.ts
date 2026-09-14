@@ -310,6 +310,40 @@ export interface ChatMessage {
 }
 
 /**
+ * Formats d'image acceptés par la pièce jointe (Chat et mode Code), en UNE SEULE table partagée : le
+ * renderer en tire les types MIME qu'il accepte au collage/glisser-déposer (`ACCEPTED_IMAGE_TYPES`,
+ * src/lib/imageAttachment.ts) et le main process en tire à la fois les extensions du sélecteur natif et le
+ * type MIME à renvoyer pour le fichier choisi (voir `pickImageFile`, main.ts).
+ *
+ * Deux listes séparées (une en MIME côté renderer, une en extensions côté main) finiraient forcément par
+ * diverger — un format collable mais invisible dans le sélecteur de fichiers, ou l'inverse : c'est
+ * exactement le genre de duplication qui a déjà mordu ce projet (voir CLAUDE.md, la copie locale de
+ * CapacityScanResult dans hardwareScan.ts).
+ */
+export const IMAGE_TYPES_BY_EXTENSION: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  bmp: 'image/bmp'
+}
+
+/**
+ * Fichier image choisi via le sélecteur NATIF ouvert par le main process (voir `pickImageFile`) : les
+ * octets bruts, tels que lus sur le disque, à réduire ensuite côté renderer par le MÊME chemin que le
+ * collage et le glisser-déposer (fileToImageAttachment/pickedFileToImageAttachment).
+ */
+export interface PickedImageFile {
+  /** Nom du fichier, affiché sous l'aperçu. */
+  name: string
+  /** Type MIME déduit de l'extension, vide si elle n'est pas dans IMAGE_TYPES_BY_EXTENSION. */
+  type: string
+  /** Octets du fichier encodés en base64, sans préfixe `data:`. */
+  base64: string
+}
+
+/**
  * Résultat d'une génération d'application en mode Code (étape 30) : le code complet d'une page autonome
  * (HTML + CSS + JS dans un seul fichier, aucune dépendance réseau) et l'endroit où il a été enregistré sur
  * le disque, pour pouvoir le rouvrir/modifier en dehors de Jaris.
@@ -394,6 +428,14 @@ export const IPC_CHANNELS = {
   /** main -> renderer : un fragment de la réponse en cours de génération (étape 48), affiché au fil de
    * l'eau dans ChatPanel.tsx plutôt que d'attendre la réponse complète de sendChatMessage. */
   chatStreamToken: 'jaris:chat-stream-token',
+  /**
+   * renderer <-> main : ouvre le sélecteur de fichier image du Chat/mode Code et renvoie le fichier choisi
+   * (null si annulé). Passe par le main process — et non par un `<input type="file">` côté renderer — parce
+   * que c'est le SEUL endroit où le garde `dialogOpen` peut encadrer l'ouverture du dialogue natif : sans
+   * lui, le 'blur' provoqué par ce dialogue repliait Jaris en widget en plein milieu du choix de l'image
+   * (signalé en usage réel par Léo).
+   */
+  pickImageFile: 'jaris:pick-image-file',
   /** renderer <-> main : récupère les messages du mode Chat, amorcés depuis conversation-history.json au
    * premier appel après un lancement (voir ChatSession.ensureLoaded) — plus seulement ceux de la session en cours. */
   getChatHistory: 'jaris:get-chat-history',

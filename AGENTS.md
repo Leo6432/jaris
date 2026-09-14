@@ -1141,6 +1141,38 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   l'onboarding n'ont PAS été repris cette fois — "améliorer tout le design" en un seul commit aurait été
   invérifiable ; à reprendre écran par écran, avec une capture avant/après à chaque fois.
 
+- **"quand je clique sur image ça met jaris en widget et m'ouvre bien mes fichier" (Léo, étape 93)** : le
+  bouton "joindre une image" (étapes 91-92) ouvrait un `<input type="file">` caché côté RENDERER. Le dialogue
+  natif que Chromium ouvre alors prend le focus OS, donc `fullWindow` reçoit 'blur' — et `win.on('blur', ...)`
+  (étape 73) replie Jaris en widget exactement comme un changement d'application. Le garde qui existe déjà
+  pour ce cas précis (`dialogOpen`, ajouté à l'étape 73 pour `chooseModelsLocation`) ne pouvait rien y faire :
+  il n'est posé qu'autour des appels `dialog.showOpenDialog` du MAIN process, et un dialogue ouvert par le
+  renderer n'est jamais vu par le main. Corrigé en déplaçant le sélecteur d'image vers le main
+  (`IPC_CHANNELS.pickImageFile`, main.ts), pour que le mécanisme déjà éprouvé s'applique tel quel plutôt que
+  d'en inventer un second. **Alternative écartée volontairement** : laisser l'`<input type="file">` et faire
+  prévenir le renderer par IPC avant/après l'ouverture — le drapeau resterait bloqué à `true` pour toute la
+  session au moindre chemin qui ne renvoie pas son "c'est fermé" (dialogue annulé, fenêtre rechargée), et
+  Jaris ne se replierait alors plus JAMAIS en widget. Encadrer un `await` dans le process qui contrôle le
+  dialogue rend cet état impossible. Le fichier n'est que LU côté main : la réduction à 1280px reste côté
+  renderer, par la MÊME fonction que le collage et le glisser-déposer (`renderToAttachment`, extraite pour
+  ça) — une seule implémentation du redimensionnement, pas deux. Les formats acceptés, jusqu'ici une liste de
+  types MIME côté renderer, deviennent une table extension -> MIME PARTAGÉE (`IMAGE_TYPES_BY_EXTENSION`,
+  shared/ipc.ts) : le sélecteur natif filtre par extension, le collage teste un type MIME, et deux listes
+  séparées auraient fini par diverger. Correctif secondaire au passage, sur le même drapeau : les deux
+  `dialogOpen = false` sont maintenant dans un `finally` — une exception du dialogue laissait sinon le
+  drapeau bloqué à `true`, avec exactement la conséquence décrite plus haut. Régression :
+  `node --test scripts/test-native-dialog-guard.mjs` (test STRUCTUREL : vérifie que tout `showOpenDialog` du
+  main est encadré, que le drapeau est toujours relâché dans un `finally`, que 'blur' le consulte, et
+  qu'aucun `<input type="file">` ne revient côté renderer — pas le comportement réel de Windows,
+  invérifiable ici) plus `scripts/test-image-attachment-ui.mjs` (vrai clic sur le bouton dans un navigateur :
+  image choisie, dialogue annulé, format refusé). Les 4 assertions ont été vérifiées une par une en
+  réintroduisant temporairement chaque oubli, pour ne pas garder un test qui passerait quoi qu'il arrive.
+  **Leçon générale : un garde ajouté pour un cas précis ne protège QUE les chemins qui passent par le code
+  qu'il encadre — avant d'ajouter une nouvelle façon de déclencher le même genre d'action (ici : ouvrir un
+  dialogue natif), vérifier si un garde existe déjà pour ce comportement, et faire passer le nouveau chemin
+  PAR lui plutôt que de le recréer à côté.** Même famille que la touche "+" gatée d'un seul côté sur deux
+  (étape 82) et que le check WSL placé dans une branche jamais atteinte.
+
 ## Commandes utiles
 
 ```

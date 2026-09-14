@@ -29,12 +29,18 @@ const entryPath = join(projectRoot, 'tmp-image-attachment-entry.tsx')
 
 /**
  * Faux pont preload commun aux deux panneaux : enregistre ce qui part VRAIMENT vers le main process.
+ *
+ * `pickImageFile` (étape 93) remplace l'ancien `<input type="file">` : le sélecteur est désormais ouvert par
+ * le main process, donc le test le simule comme n'importe quel autre canal IPC — `__nextPickedFile` est ce
+ * que le main renverrait (null = dialogue annulé), et `__pickCalls` compte les ouvertures réelles.
  */
 const ENTRY_FOR = (component) => `
 import { createRoot } from 'react-dom/client'
 import Panel from './src/components/${component}'
 
 window.__sent = []
+window.__nextPickedFile = null
+window.__pickCalls = 0
 window.jaris = {
   getChatHistory: () => Promise.resolve([]),
   onLog: () => () => {},
@@ -42,6 +48,10 @@ window.jaris = {
   onCodeGenStatus: () => () => {},
   getGeneratedApps: () => Promise.resolve([]),
   getProfile: () => Promise.resolve({ soundEffectsEnabled: false }),
+  pickImageFile: () => {
+    window.__pickCalls += 1
+    return Promise.resolve(window.__nextPickedFile)
+  },
   sendChatMessage: (prompt, imageBase64) => {
     window.__sent.push({ prompt, imageBase64 })
     return Promise.resolve({ role: 'assistant', content: 'Réponse de test.' })
@@ -140,14 +150,22 @@ const MAKE_WIDE_PNG = `(() => {
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
 
+/**
+ * Simule ce que renvoie le sélecteur natif (main process) puis clique VRAIMENT sur le bouton de pièce
+ * jointe — pas d'appel direct à la fonction interne : c'est le câblage bouton -> IPC -> réduction qui doit
+ * être vérifié, puisque c'est précisément lui qui a changé à l'étape 93.
+ */
+async function pickFile(page, picked) {
+  await page.evaluate((file) => {
+    window.__nextPickedFile = file
+  }, picked)
+  await page.click('.composer__attach')
+}
+
 test('une image jointe est réduite, prévisualisée, puis envoyée en base64 avec le message', options, async () => {
   await withPage(async (page) => {
     const dataUrl = await page.evaluate(MAKE_WIDE_PNG)
-    await page.setInputFiles('.composer input[type=file]', {
-      name: 'maquette.png',
-      mimeType: 'image/png',
-      buffer: Buffer.from(dataUrl.split(',')[1], 'base64')
-    })
+    await pickFile(page, { name: 'maquette.png', type: 'image/png', base64: dataUrl.split(',')[1] })
 
     await page.waitForSelector('.composer__attachment img')
     assert.equal(await page.textContent('.composer__attachment-name'), 'maquette.png')
@@ -194,15 +212,27 @@ test('une image jointe est réduite, prévisualisée, puis envoyée en base64 av
 
 test("un fichier qui n'est pas une image est refusé avec un message clair", options, async () => {
   await withPage(async (page) => {
-    await page.setInputFiles('.composer input[type=file]', {
-      name: 'notes.txt',
-      mimeType: 'text/plain',
-      buffer: Buffer.from('bonjour')
-    })
+    // Le filtre du dialogue natif n'empêche pas de taper *.* et de choisir n'importe quoi : le main renvoie
+    // alors un type vide, et le refus doit être le même que pour un collage non supporté.
+    await pickFile(page, { name: 'notes.txt', type: '', base64: btoa('bonjour') })
 
     await page.waitForSelector('.chat-panel__error')
     assert.match(await page.textContent('.chat-panel__error'), /non pris en charge/)
     assert.equal(await page.locator('.composer__attachment').count(), 0)
+  })
+})
+
+test('annuler le sélecteur ne signale aucune erreur et garde la pièce jointe en cours', options, async () => {
+  await withPage(async (page) => {
+    const dataUrl = await page.evaluate(MAKE_WIDE_PNG)
+    await pickFile(page, { name: 'maquette.png', type: 'image/png', base64: dataUrl.split(',')[1] })
+    await page.waitForSelector('.composer__attachment img')
+
+    // null = dialogue fermé sans rien choisir : ni erreur affichée, ni image perdue.
+    await pickFile(page, null)
+    await page.waitForFunction(() => window.__pickCalls === 2)
+    assert.equal(await page.locator('.chat-panel__error').count(), 0)
+    assert.equal(await page.textContent('.composer__attachment-name'), 'maquette.png')
   })
 })
 
@@ -219,11 +249,7 @@ test('en mode Code, une maquette jointe part bien avec la demande de génératio
   await withPage(
     async (page) => {
       const dataUrl = await page.evaluate(MAKE_WIDE_PNG)
-      await page.setInputFiles('.composer input[type=file]', {
-        name: 'maquette.png',
-        mimeType: 'image/png',
-        buffer: Buffer.from(dataUrl.split(',')[1], 'base64')
-      })
+      await pickFile(page, { name: 'maquette.png', type: 'image/png', base64: dataUrl.split(',')[1] })
 
       await page.waitForSelector('.composer__attachment img')
       assert.equal(await page.textContent('.composer__attachment-name'), 'maquette.png')

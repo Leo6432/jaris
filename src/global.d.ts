@@ -15,6 +15,7 @@ import type {
   ModelOverviewResult,
   ModelsLocationStatus,
   OllamaVersionStatus,
+  PickedImageFile,
   Profile,
   ReleaseHistoryEntry,
   RuntimeSetupProgress,
@@ -74,6 +75,9 @@ declare global {
       // préfixe "data:...;base64,". Lue par le modèle de vision, jamais par celui de conversation/de code.
       sendChatMessage: (prompt: string, imageBase64?: string) => Promise<ChatMessage>
       getChatHistory: () => Promise<ChatMessage[]>
+      // Étape 93 : sélecteur d'image ouvert par le main process (jamais un <input type="file">, qui repliait
+      // Jaris en widget en prenant le focus). null si l'utilisateur annule.
+      pickImageFile: () => Promise<PickedImageFile | null>
       generateApp: (description: string, currentHtml?: string, imageBase64?: string) => Promise<GeneratedApp>
       onCodeGenStatus: (cb: (message: string) => void) => () => void
       openGeneratedApp: (path?: string) => Promise<void>

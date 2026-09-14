@@ -1,5 +1,6 @@
 import { app, dialog, ipcMain, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu } from 'electron'
-import { join } from 'path'
+import { basename, extname, join } from 'path'
+import { readFile } from 'fs/promises'
 import {
   ensureOllamaRunning,
   ensureSearxngRunning,
@@ -31,6 +32,7 @@ import { getProfile, saveProfile } from './services/profileStore'
 import { checkAppFreshness, checkForUpdate, getAppVersionStatus, getInstalledVersion, getReleaseHistory, updateApp } from './services/appUpdater'
 import {
   IPC_CHANNELS,
+  IMAGE_TYPES_BY_EXTENSION,
   type AnalysisScope,
   type AudioInputDevice,
   type CapacityScanResult,
@@ -39,6 +41,7 @@ import {
   type GeneratedAppSummary,
   type JarisEmotion,
   type MemoryGraph,
+  type PickedImageFile,
   type Profile,
   type SoundCue,
   type VoiceReplyPayload,
@@ -456,9 +459,15 @@ app.whenReady().then(async () => {
       properties: ['openDirectory' as const, 'createDirectory' as const],
       title: 'Choisir où stocker les modèles et fichiers lourds de Jaris'
     }
+    // try/finally : un échec du dialogue laissait sinon `dialogOpen` bloqué à true pour toute la session,
+    // et la fenêtre de réglages ne se serait plus JAMAIS repliée en widget en changeant d'application.
     dialogOpen = true
-    const result = fullWindow ? await dialog.showOpenDialog(fullWindow, dialogOptions) : await dialog.showOpenDialog(dialogOptions)
-    dialogOpen = false
+    let result
+    try {
+      result = fullWindow ? await dialog.showOpenDialog(fullWindow, dialogOptions) : await dialog.showOpenDialog(dialogOptions)
+    } finally {
+      dialogOpen = false
+    }
     if (result.canceled || !result.filePaths[0]) return { success: false, message: '' }
     const newDir = result.filePaths[0]
 
@@ -533,6 +542,52 @@ app.whenReady().then(async () => {
     )
   })
   ipcMain.handle(IPC_CHANNELS.getChatHistory, (): Promise<ChatMessage[]> => chatSession.getVisibleMessages())
+
+  /**
+   * Sélecteur d'image du Chat et du mode Code (étape 93).
+   *
+   * Le bouton "joindre une image" ouvrait jusqu'ici un `<input type="file">` caché côté renderer. Le
+   * dialogue natif que Chromium ouvre alors prend le focus OS, donc `fullWindow` reçoit 'blur' — et le
+   * handler 'blur' (createFullWindow) repliait Jaris en widget en plein milieu du choix du fichier :
+   * "quand je clique sur image ça met jaris en widget et m'ouvre bien mes fichier" (Léo, usage réel).
+   * Le garde qui existe déjà pour ce cas exact (`dialogOpen`, posé autour de chooseModelsLocation) ne
+   * pouvait pas s'appliquer : un dialogue ouvert par le renderer n'est jamais vu par le main process.
+   *
+   * D'où ce passage par `dialog.showOpenDialog` ici : le drapeau est posé et retiré autour du seul appel
+   * qui ouvre vraiment le dialogue, dans le process qui le contrôle — aucun état "replié plus jamais"
+   * possible, contrairement à un renderer qui préviendrait de l'ouverture puis de la fermeture (un
+   * dialogue annulé sans évènement, une fenêtre rechargée, et le drapeau resterait bloqué à true).
+   *
+   * Le fichier n'est ici QUE lu : la réduction reste côté renderer (src/lib/imageAttachment.ts), par le
+   * même chemin que le collage et le glisser-déposer.
+   */
+  ipcMain.handle(IPC_CHANNELS.pickImageFile, async (): Promise<PickedImageFile | null> => {
+    const dialogOptions = {
+      properties: ['openFile' as const],
+      title: 'Choisir une image à envoyer à Jaris',
+      filters: [{ name: 'Images', extensions: Object.keys(IMAGE_TYPES_BY_EXTENSION) }]
+    }
+    dialogOpen = true
+    let chosen: string | undefined
+    try {
+      const result = fullWindow
+        ? await dialog.showOpenDialog(fullWindow, dialogOptions)
+        : await dialog.showOpenDialog(dialogOptions)
+      chosen = result.canceled ? undefined : result.filePaths[0]
+    } finally {
+      dialogOpen = false
+    }
+    if (!chosen) return null
+
+    const extension = extname(chosen).slice(1).toLowerCase()
+    return {
+      name: basename(chosen),
+      // Vide si l'extension est inconnue (le filtre du dialogue n'empêche pas de taper *.* puis de choisir
+      // n'importe quoi) : le renderer refuse alors avec le même message que pour un collage non supporté.
+      type: IMAGE_TYPES_BY_EXTENSION[extension] ?? '',
+      base64: (await readFile(chosen)).toString('base64')
+    }
+  })
 
   // Mode Code (étape 30) : génération d'une application autonome, avec avancement au fil de l'eau (la
   // génération + relecture peut prendre plusieurs minutes sur un modèle local).

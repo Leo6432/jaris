@@ -1,8 +1,7 @@
-import { useRef } from 'react'
 import {
-  ACCEPTED_IMAGE_TYPES,
   fileToImageAttachment,
   findImageInDataTransfer,
+  pickedFileToImageAttachment,
   type ImageAttachment
 } from '@/lib/imageAttachment'
 
@@ -63,11 +62,29 @@ export default function Composer({
   rows = 2,
   hint
 }: ComposerProps): JSX.Element {
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
   const attach = async (file: File | Blob, name = ''): Promise<void> => {
     try {
       onAttachmentChange(await fileToImageAttachment(file, name))
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  /**
+   * Le sélecteur de fichier est ouvert par le MAIN process (étape 93), plus par un `<input type="file">`
+   * caché : le dialogue natif que Chromium ouvrait pour cet input prenait le focus OS, ce qui repliait Jaris
+   * en widget en plein milieu du choix de l'image ("quand je clique sur image ça met jaris en widget et
+   * m'ouvre bien mes fichier", Léo en usage réel). Seul le main process peut encadrer ce dialogue du garde
+   * qui existe déjà pour ce cas exact (`dialogOpen`, voir main.ts).
+   *
+   * Les octets reviennent bruts : la réduction reste ici, par exactement le même chemin que le collage et le
+   * glisser-déposer ci-dessus.
+   */
+  const pick = async (): Promise<void> => {
+    try {
+      const picked = await window.jaris.pickImageFile()
+      // null = dialogue annulé : ne touche pas à la pièce jointe déjà choisie, et surtout aucune erreur.
+      if (picked) onAttachmentChange(await pickedFileToImageAttachment(picked))
     } catch (err) {
       onError(err instanceof Error ? err.message : String(err))
     }
@@ -136,24 +153,10 @@ export default function Composer({
       />
 
       <div className="composer__actions">
-        {/* Un input file caché plutôt qu'un dialogue natif via IPC : le renderer a déjà tout ce qu'il faut
-            pour lire et réduire l'image (canvas), un aller-retour vers le main process n'apporterait rien. */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ACCEPTED_IMAGE_TYPES.join(',')}
-          hidden
-          onChange={(event) => {
-            const file = event.target.files?.[0]
-            if (file) void attach(file, file.name)
-            // Remis à zéro pour que rechoisir LE MÊME fichier déclenche bien un nouvel onChange.
-            event.target.value = ''
-          }}
-        />
         <button
           type="button"
           className="composer__attach"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => void pick()}
           disabled={busy}
           title="Joindre une image (ou Ctrl+V pour coller)"
           aria-label="Joindre une image"

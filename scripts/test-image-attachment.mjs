@@ -11,17 +11,26 @@ import ts from 'typescript'
  * exprès pour être testée directement ici — même principe que findElementByName (uiAutomation.ts) : mettre
  * du côté vérifiable ce qui peut l'être.
  */
-const source = ts.transpileModule(readFileSync(new URL('../src/lib/imageAttachment.ts', import.meta.url), 'utf8'), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
-}).outputText
-
 // Chargé dans le realm COURANT (pas via runInNewContext) : sinon les objets renvoyés ont des prototypes
 // différents de ceux du test et `assert.deepEqual` échoue sur "same structure but not reference-equal" —
 // piège déjà rencontré et documenté dans CLAUDE.md.
-const exports = {}
-const load = vm.runInThisContext(`(function (exports, module, require) { ${source} })`)
-load(exports, { exports }, () => ({}))
-const { computeScaledSize, isSupportedImageType, MAX_IMAGE_WIDTH } = exports
+function loadModule(relativePath, resolveRequire = () => ({})) {
+  const source = ts.transpileModule(readFileSync(new URL(relativePath, import.meta.url), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+  }).outputText
+  const exports = {}
+  vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(exports, { exports }, resolveRequire)
+  return exports
+}
+
+// La liste des formats acceptés vit maintenant dans shared/ipc.ts (une seule table pour le renderer ET le
+// sélecteur natif du main process, étape 93) : le VRAI module partagé est chargé plutôt que remplacé par un
+// stub, pour que ce test porte bien sur les formats réellement acceptés par l'application.
+const shared = loadModule('../shared/ipc.ts')
+const { computeScaledSize, isSupportedImageType, ACCEPTED_IMAGE_TYPES, MAX_IMAGE_WIDTH } = loadModule(
+  '../src/lib/imageAttachment.ts',
+  (id) => (id.endsWith('shared/ipc') ? shared : {})
+)
 
 test('une image plus large que la limite est réduite en gardant ses proportions', () => {
   const scaled = computeScaledSize(3840, 2160)
@@ -68,5 +77,18 @@ test('seuls les vrais formats image sont acceptés', () => {
   // Un PDF ou un fichier texte collé/déposé ne doit pas être envoyé au modèle de vision comme une image.
   for (const type of ['application/pdf', 'text/plain', '', 'image/svg+xml']) {
     assert.equal(isSupportedImageType(type), false, type)
+  }
+})
+
+test('les formats du sélecteur natif et ceux du collage décrivent la MÊME liste', () => {
+  // Étape 93 : le sélecteur natif (main process) filtre par EXTENSION, le collage/glisser-déposer teste un
+  // type MIME. Deux listes écrites séparément finiraient par diverger — un format choisissable dans le
+  // sélecteur mais refusé une fois lu, ou l'inverse. Les deux dérivent donc de la même table partagée.
+  const fromExtensions = [...new Set(Object.values(shared.IMAGE_TYPES_BY_EXTENSION))]
+  assert.deepEqual([...ACCEPTED_IMAGE_TYPES].sort(), fromExtensions.sort())
+  // Chaque extension doit être écrite sans point ni majuscule : main.ts la compare à extname(...).slice(1)
+  // passé en minuscules, et la donne telle quelle aux filtres d'Electron.
+  for (const extension of Object.keys(shared.IMAGE_TYPES_BY_EXTENSION)) {
+    assert.equal(extension, extension.toLowerCase().replace(/^\./, ''), extension)
   }
 })

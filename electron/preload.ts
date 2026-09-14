@@ -17,6 +17,7 @@ import {
   type ModelOverviewResult,
   type ModelsLocationStatus,
   type OllamaVersionStatus,
+  type PickedImageFile,
   type Profile,
   type ReleaseHistoryEntry,
   type RuntimeSetupProgress,
@@ -79,6 +80,10 @@ const api = {
   sendChatMessage: (prompt: string, imageBase64?: string): Promise<ChatMessage> =>
     ipcRenderer.invoke(IPC_CHANNELS.sendChatMessage, prompt, imageBase64),
   getChatHistory: (): Promise<ChatMessage[]> => ipcRenderer.invoke(IPC_CHANNELS.getChatHistory),
+  // Sélecteur d'image ouvert par le MAIN process (étape 93) et pas par un <input type="file"> : seul le main
+  // peut encadrer le dialogue natif du garde `dialogOpen`, sans lequel Jaris se replie en widget dès que ce
+  // dialogue prend le focus. Renvoie null si l'utilisateur annule.
+  pickImageFile: (): Promise<PickedImageFile | null> => ipcRenderer.invoke(IPC_CHANNELS.pickImageFile),
   generateApp: (description: string, currentHtml?: string, imageBase64?: string): Promise<GeneratedApp> =>
     ipcRenderer.invoke(IPC_CHANNELS.generateApp, description, currentHtml, imageBase64),
   onCodeGenStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.codeGenStatus, cb),
