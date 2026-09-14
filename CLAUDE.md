@@ -1211,6 +1211,46 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   PAR lui plutôt que de le recréer à côté.** Même famille que la touche "+" gatée d'un seul côté sur deux
   (étape 82) et que le check WSL placé dans une branche jamais atteinte.
 
+- **"le design de code c'est mal fait, on comprend pas trop les truc recent en bas apres il ya des bouton"
+  (Léo, étape 94)** — deux défauts bien distincts, tous les deux constatés sur une CAPTURE RÉELLE du rendu
+  compilé (vrai composant bundlé + vrai CSS) avant de toucher au code, jamais devinés en relisant le JSX :
+  1. **Écran de départ** : la liste des applications déjà générées était une suite de lignes posées sur le
+     fond, sous une micro-étiquette "RÉCENTS" (0,7rem, `--hud-text-faint`), au-dessus d'un vide occupant les
+     deux tiers de l'écran — rien ne disait ce qu'étaient ces lignes ni qu'un clic les rouvrait. Chaque ligne
+     affichait `toLocaleString('fr-FR')` brut, soit "14/09/2026 15:11:52" : une date à la SECONDE, plus
+     longue que le nom de l'application à côté. Et `text-transform: capitalize` écrivait "Liste De Courses".
+     Corrigé en faisant de cette liste un vrai panneau titré ("Tes applications" + "Clique pour rouvrir"),
+     rattaché à la famille HUD DÉJÀ partagée (fond `--hud-panel-raised`, bordure, équerres d'angle — les
+     mêmes sélecteurs que `.chat-panel__message`/`.code-panel__result`, aucun style inventé à côté), avec
+     des lignes sans cadre individuel (le panneau porte déjà une bordure : en remettre une par ligne
+     empilait deux boîtes pour une seule information), un chevron de fin de ligne, et une date lisible
+     (`formatRecentDate`, src/lib/formatRecentDate.ts : "Aujourd'hui, 15:11" / "Hier, 22:40" / "2 septembre").
+     Une phrase d'introduction explique enfin ce que fait ce mode, comme `.chat-panel__empty` le fait déjà
+     côté Chat — sans application chargée, c'est le seul contenu de l'écran, il ne pouvait pas rester muet.
+  2. **Écran avec une application chargée** : QUATRE bandes s'empilaient avant d'atteindre l'application
+     elle-même (composeur, deux gros boutons pleine largeur, onglets Aperçu/Code, puis enfin l'aperçu) —
+     c'est le "après il y a des boutons" de Léo. Les deux actions secondaires rejoignent la ligne des
+     onglets, à droite et en plus petit, À L'INTÉRIEUR du panneau de l'application : deux bandes au lieu de
+     quatre. Elles gardent la famille de boutons de toute l'app (coins coupés, Rajdhani) — même leçon que le
+     bouton d'envoi à l'étape 92 : se raccrocher à une famille existante plutôt qu'en inventer une.
+     Le chemin complet du dossier, jusqu'ici écrit en toutes lettres sur deux lignes serrées en bas d'écran,
+     passe en infobulle du bouton "Ouvrir le dossier", qui fait mieux le travail.
+  **`formatRecentDate` est une fonction PURE** (l'instant courant est un paramètre, jamais un `new Date()`
+  caché dedans) pour être testable sans navigateur — même principe que `computeScaledSize`. **Piège attrapé
+  en l'écrivant** : calculer "aujourd'hui/hier" par `(maintenant - date) / 86400000` est FAUX — hier 23h50 vu
+  depuis aujourd'hui 00h10 donne 0 jour, donc "Aujourd'hui" pour quelque chose fait la veille. Le calcul se
+  fait sur des jours de CALENDRIER (minuit à minuit), et ce cas précis est un test à part entière.
+  Régression : `node --test scripts/test-format-recent-date.mjs` (6 cas, dont le passage de minuit et un
+  horodatage invalide) et `scripts/test-code-panel-ui.mjs` (vrai navigateur : la liste est un panneau titré
+  aux dates sans secondes, un clic rouvre bien l'application, et onglets + actions restent sur UNE seule
+  barre dans le panneau, à 1280px comme à 760px, sans débordement horizontal). Les assertions de mise en
+  page ont été vérifiées en REMETTANT temporairement l'ancien empilement (barre en colonne, puis actions
+  ressorties du panneau) : le test échoue bien dans les deux cas, il ne passerait pas quoi qu'il arrive.
+  **Leçon générale : un écran "vide" n'est pas un détail cosmétique** — c'est le seul moment où l'utilisateur
+  n'a aucun contexte pour deviner à quoi sert l'écran, donc celui qui mérite le plus une phrase d'explication
+  et une hiérarchie visible ; ici il était resté tel quel depuis l'étape 30 alors que tout le reste du mode
+  Code avait été repris plusieurs fois.
+
 ## Commandes utiles
 
 ```

@@ -1778,16 +1778,56 @@ body.body--scan::after {
   color: var(--hud-gold);
 }
 
-.code-panel__recents {
+/* Écran de départ : occupe toute la hauteur restante sous le champ, pour que la liste des applications
+   déjà créées remplisse l'écran au lieu de flotter au-dessus d'un grand vide (étape 94). */
+.code-panel__start {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 14px;
+}
+
+.code-panel__intro {
+  margin: 0;
+  max-width: 78ch;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--hud-text-dim);
+}
+
+/* Vrai panneau (fond, bordure et équerres d'angle ajoutés par la famille HUD partagée, voir plus bas) :
+   sans lui, la liste n'était qu'une suite de lignes posées sur le fond, sans début ni fin lisibles. */
+.code-panel__recents {
+  /* Le panneau s'ajuste à son contenu, sans jamais dépasser la place disponible (la liste défile alors) :
+     étiré à toute la hauteur, il aurait été vide aux trois quarts avec deux ou trois applications. */
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px 6px;
+}
+
+.code-panel__recents-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--hud-line);
 }
 
 .code-panel__recents .code-panel__section-title {
-  font-size: 0.7rem;
+  font-family: var(--hud-font-display);
+  font-size: 0.78rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.12em;
+  color: var(--hud-text);
+}
+
+.code-panel__recents-tip {
+  font-size: 0.7rem;
   color: var(--hud-text-faint);
 }
 
@@ -1795,44 +1835,69 @@ body.body--scan::after {
   list-style: none;
   margin: 0;
   padding: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 
+/* Lignes SANS cadre individuel, séparées par un simple filet : le panneau porte déjà une bordure, en
+   remettre une par ligne empilait deux boîtes pour une seule information. */
 .code-panel__recents button {
   width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  background: rgba(1, 4, 10, 0.4);
-  border: 1px solid rgba(122, 176, 214, 0.2);
-  border-radius: 10px;
-  color: var(--hud-text-dim);
-  padding: 8px 14px;
+  gap: 14px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(var(--hud-accent-rgb), 0.08);
+  border-radius: 0;
+  color: var(--hud-text-soft);
+  padding: 11px 10px;
   font-family: inherit;
-  font-size: 0.8rem;
+  font-size: 0.86rem;
   cursor: pointer;
   text-align: left;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.code-panel__recents li:last-child button {
+  border-bottom: none;
 }
 
 .code-panel__recents button:hover {
-  border-color: var(--hud-accent);
+  background: rgba(var(--hud-accent-rgb), 0.08);
   color: var(--hud-text);
 }
 
+.code-panel__recents button:hover svg {
+  color: var(--hud-accent-bright);
+}
+
 .code-panel__recent-label {
-  text-transform: capitalize;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Seule la première lettre passe en majuscule : `text-transform: capitalize` écrivait "Liste De Courses". */
+.code-panel__recent-label::first-letter {
+  text-transform: uppercase;
+}
+
 .code-panel__recent-date {
   flex-shrink: 0;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   color: var(--hud-text-faint);
+}
+
+.code-panel__recents svg {
+  flex-shrink: 0;
+  color: var(--hud-text-faint);
+  transition: color 0.15s ease;
 }
 
 .code-panel__status {
@@ -1855,13 +1920,37 @@ body.body--scan::after {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+/* Onglets à gauche, actions secondaires à droite, sur UNE ligne (étape 94) : les deux étaient des rangées
+   séparées, qui s'empilaient sous le composeur avant même de voir l'application. */
+.code-panel__result-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.code-panel__result-actions {
+  display: flex;
   gap: 8px;
+}
+
+/* Même famille de boutons que tout le reste de l'app (coins coupés, Rajdhani), juste plus discrets : ce
+   sont des actions secondaires à côté de l'aperçu, qui reste le sujet de l'écran. */
+.code-panel__result-actions button {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  padding: 6px 12px;
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
 }
 
 .code-panel__view-tabs {
   display: flex;
   gap: 6px;
-  align-self: flex-start;
   background: rgba(122, 176, 214, 0.08);
   border-radius: 999px;
   padding: 3px;
@@ -2181,6 +2270,7 @@ textarea:not(.composer__input):focus-visible {
 .app__conversation:not(.app__conversation--widget),
 .chat-panel__message,
 .code-panel__result,
+.code-panel__recents,
 .memory-brain__note {
   position: relative;
   border-radius: 0 !important;
@@ -2196,6 +2286,7 @@ textarea:not(.composer__input):focus-visible {
 .app__new-models::before,
 .chat-panel__message::before,
 .code-panel__result::before,
+.code-panel__recents::before,
 .memory-brain__note::before {
   content: '';
   position: absolute;
@@ -2215,6 +2306,7 @@ textarea:not(.composer__input):focus-visible {
 .app__new-models::after,
 .chat-panel__message::after,
 .code-panel__result::after,
+.code-panel__recents::after,
 .memory-brain__note::after {
   content: '';
   position: absolute;

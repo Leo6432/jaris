@@ -241,9 +241,9 @@ test.after(() => {
 })
 
 /**
- * Mode Code : même mécanique, mais le composeur a son propre balisage (bouton "Image" dans
- * .code-panel__actions, aperçu dans le composeur lui-même). Vérifié séparément : le CSS est partagé, pas le
- * JSX — une régression dans l'un n'apparaîtrait pas dans l'autre.
+ * Mode Code : le composeur est le MÊME composant qu'en Chat depuis l'étape 92, mais il est piloté par un
+ * autre panneau (état, libellés, envoi vers generateApp au lieu de sendChatMessage). Vérifié séparément :
+ * une régression du câblage dans l'un n'apparaîtrait pas dans l'autre.
  */
 test('en mode Code, une maquette jointe part bien avec la demande de génération', options, async () => {
   await withPage(

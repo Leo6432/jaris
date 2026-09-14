@@ -1,9 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import Composer from '@/components/Composer'
+import { formatRecentDate } from '@/lib/formatRecentDate'
 import type { ImageAttachment } from '@/lib/imageAttachment'
 import type { GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
 
 type View = 'preview' | 'code'
+
+/** Chevron de fin de ligne : dit qu'une ligne de la liste s'ouvre, là où un simple cadre ne disait rien. */
+function OpenIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  )
+}
 
 /**
  * Mode Code (étape 30) : décrire une application en français et la voir tourner, générée à 100% en local.
@@ -104,35 +114,46 @@ export default function CodePanel(): JSX.Element {
         hint="Ctrl+V pour coller une capture, ou glisse une image ici"
       />
 
-      {appResult && !generating && (
-        <div className="code-panel__result-actions">
-          <button onClick={startOver}>Nouvelle application</button>
-          <button onClick={() => void window.jaris.openGeneratedApp(appResult.path)}>Ouvrir le dossier</button>
-        </div>
-      )}
-
       {error && <p className="code-panel__error">{error}</p>}
-
-      {!appResult && !generating && recentApps.length > 0 && (
-        <div className="code-panel__recents">
-          <div className="code-panel__section-title">Récents</div>
-          <ul>
-            {recentApps.map((recent) => (
-              <li key={recent.path}>
-                <button onClick={() => void openRecent(recent.path)}>
-                  <span className="code-panel__recent-label">{recent.label}</span>
-                  <span className="code-panel__recent-date">{new Date(recent.timestamp).toLocaleString('fr-FR')}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       {(generating || statusLines.length > 0) && (
         <pre ref={statusRef} className="code-panel__status">
           {statusLines.join('\n')}
         </pre>
+      )}
+
+      {/* Écran de départ (étape 94) : avant, la liste des applications déjà créées était posée telle quelle
+          sous le champ, sous une micro-étiquette "Récents", au-dessus d'un grand vide — "on comprend pas
+          trop les truc recent en bas" (Léo). Elle devient un vrai panneau titré qui occupe la place
+          disponible, avec une phrase qui dit ce que fait ce mode : sans app chargée, c'est le seul contenu
+          de l'écran, il ne peut pas rester muet. */}
+      {!appResult && !generating && (
+        <div className="code-panel__start">
+          <p className="code-panel__intro">
+            Décris une application en français : Jaris l'écrit entièrement sur ta machine, puis la lance
+            juste ici. Tu peux aussi joindre une capture ou une maquette à reproduire.
+          </p>
+
+          {recentApps.length > 0 && (
+            <div className="code-panel__recents">
+              <div className="code-panel__recents-header">
+                <span className="code-panel__section-title">Tes applications</span>
+                <span className="code-panel__recents-tip">Clique pour rouvrir</span>
+              </div>
+              <ul>
+                {recentApps.map((recent) => (
+                  <li key={recent.path}>
+                    <button onClick={() => void openRecent(recent.path)} title={recent.path}>
+                      <span className="code-panel__recent-label">{recent.label}</span>
+                      <span className="code-panel__recent-date">{formatRecentDate(recent.timestamp)}</span>
+                      <OpenIcon />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       )}
 
       {appResult && appResult.issues.length > 0 && (
@@ -151,19 +172,35 @@ export default function CodePanel(): JSX.Element {
 
       {appResult && (
         <div className="code-panel__result">
-          <div className="code-panel__view-tabs">
-            <button
-              className={`code-panel__view-tab${view === 'preview' ? ' code-panel__view-tab--active' : ''}`}
-              onClick={() => setView('preview')}
-            >
-              Aperçu
-            </button>
-            <button
-              className={`code-panel__view-tab${view === 'code' ? ' code-panel__view-tab--active' : ''}`}
-              onClick={() => setView('code')}
-            >
-              Code
-            </button>
+          {/* Une SEULE barre (étape 94) : les onglets Aperçu/Code et les deux actions secondaires étaient
+              deux rangées séparées, empilées avec le composeur au-dessus de l'aperçu — quatre bandes avant
+              d'atteindre l'application elle-même, "après il y a des boutons" (Léo). Les actions rejoignent
+              la ligne des onglets, à droite et en plus petit : elles restent de la même famille de boutons
+              que le reste de l'app, sans concurrencer l'aperçu. */}
+          <div className="code-panel__result-bar">
+            <div className="code-panel__view-tabs">
+              <button
+                className={`code-panel__view-tab${view === 'preview' ? ' code-panel__view-tab--active' : ''}`}
+                onClick={() => setView('preview')}
+              >
+                Aperçu
+              </button>
+              <button
+                className={`code-panel__view-tab${view === 'code' ? ' code-panel__view-tab--active' : ''}`}
+                onClick={() => setView('code')}
+              >
+                Code
+              </button>
+            </div>
+
+            {!generating && (
+              <div className="code-panel__result-actions">
+                <button onClick={startOver}>Nouvelle application</button>
+                <button onClick={() => void window.jaris.openGeneratedApp(appResult.path)} title={appResult.path}>
+                  Ouvrir le dossier
+                </button>
+              </div>
+            )}
           </div>
 
           {view === 'preview' ? (
@@ -176,10 +213,12 @@ export default function CodePanel(): JSX.Element {
             <pre className="code-panel__code">{appResult.html}</pre>
           )}
 
+          {/* Le chemin complet du dossier vivait ici en toutes lettres, sur deux lignes serrées en bas de
+              l'écran — il est maintenant dans l'infobulle du bouton "Ouvrir le dossier", qui fait mieux le
+              travail. Ne reste que ce qui est vraiment utile à savoir en regardant l'aperçu. */}
           <p className="code-panel__hint">
-            Enregistré dans <code>{appResult.path}</code>. L'aperçu tourne isolé, sans accès au reste de la
-            machine : la sauvegarde de données (localStorage) n'y fonctionne pas, mais marche en ouvrant le
-            fichier depuis le dossier.
+            Aperçu isolé : la sauvegarde de données (localStorage) n'y marche pas, mais fonctionne en
+            ouvrant le fichier depuis le dossier.
           </p>
         </div>
       )}

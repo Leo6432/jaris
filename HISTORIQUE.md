@@ -736,3 +736,16 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   ne se serait plus jamais repliée. Régression : `npm test` (169 tests), dont un nouveau test structurel du
   garde — ses 4 assertions ont été vérifiées une par une en réintroduisant temporairement chaque oubli. Non
   vérifiable ici (ni Windows ni Electron) : que le repli ne se produise effectivement plus sur sa machine.
+
+- ✅ Étape 94 (v0.7.3) — Léo : "le design de code c'est mal fait, on comprend pas trop les truc recent en
+  bas apres il ya des bouton". Capture réelle du rendu compilé avant de toucher au code, deux défauts
+  séparés. Écran de départ : la liste des applications déjà créées n'était qu'une suite de lignes sous une
+  micro-étiquette, au-dessus d'un grand vide, avec des dates à la seconde plus longues que les noms — elle
+  devient un panneau titré ("Tes applications", "Clique pour rouvrir") dans le même style que le reste de
+  l'app, avec des dates en clair ("Aujourd'hui, 15:11", "Hier, 22:40", "2 septembre") et une phrase qui
+  explique enfin ce que fait ce mode. Écran avec une application : quatre bandes s'empilaient avant
+  d'arriver à l'aperçu — les deux actions rejoignent la ligne des onglets, dans le panneau de
+  l'application, soit deux bandes au lieu de quatre ; le chemin du dossier passe en infobulle du bouton qui
+  l'ouvre. Régression : `npm test` (179 tests), dont un test de mise en page dans un vrai navigateur vérifié
+  en remettant temporairement l'ancien empilement, et le calcul de date testé jusqu'au passage de minuit.
+  Non vérifiable ici : le rendu sur sa vraie machine Windows, à confirmer par Léo.
