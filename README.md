@@ -835,6 +835,17 @@ Même principe que le bouton "Mettre à jour" déjà en place pour Ollama
    exécutable — l'installeur "un clic" (voir étape 16) continue alors
    entièrement silencieux et relance Jaris à la fin.
 
+Pendant le téléchargement (~98 Mo, soit plusieurs minutes sur une connexion
+modeste), une **barre de progression** affiche le pourcentage et les octets
+reçus (étape 98) : le bouton restait sinon figé sur "Mise à jour en cours…"
+sans que rien ne distingue un téléchargement qui avance d'un blocage. Ce
+téléchargement est partagé avec ceux d'Ollama et de Docker Desktop
+(`electron/services/download.ts`) : il n'a aucun plafond de durée totale —
+seule une connexion muette pendant une minute abandonne, donc une connexion
+lente finit toujours par aboutir — et il vérifie que le fichier reçu est
+COMPLET avant que Jaris ne se ferme pour le lancer, un installeur tronqué se
+lançant sinon sans rien faire de visible.
+
 Options → Mise à jour affiche aussi en permanence un **journal des mises à
 jour** : la version installée (`getAppVersion`, jamais bloquée par le réseau,
 contrairement au bandeau ci-dessus) et la liste de toutes les Releases

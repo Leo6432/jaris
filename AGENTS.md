@@ -1355,3 +1355,53 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
 - **Une réponse passée sans nom technique d’outil échappe aux détecteurs de promesse** : les phrases réelles « L’application Steam a été ouverte » et « L’application Blocnotes a été ouverte » pouvaient être rendues sans outil. Pour les commandes simples et explicites « ouvre [l’application] X », appeler directement open_app dans le canal partagé, sans demander au modèle de décider. Exclure les commandes composées et négatives. Le signal spawn d’explorer.exe prouve seulement l’envoi de la demande à Windows, pas une fenêtre visible : la réponse directe doit refléter cette limite. Régression : test-assistant-history.mjs, voix et chat.
 
 - **Ouvrir puis écrire ne doit pas se réduire à deux annonces du modèle, ni à une frappe dans le focus courant** : pour une demande explicite de document Bloc-notes, créer un fichier texte indépendant et l’ouvrir, puis confirmer sa fenêtre identifiable. Ne jamais interpoler le texte dicté dans PowerShell ; transmettre uniquement un chemin encodé. La commande composée doit être testée dans la vraie boucle voix/chat avec un service exécuté et avec un service en échec.
+
+- **"quand on demande une mise à jour on ne sait pas quand c'est terminé et des fois c'est bloqué et ça fait
+  rien" (Léo, étape 98)** — un seul retour, trois défauts distincts, tous les trois MESURÉS avant d'écrire la
+  moindre ligne (une vraie requête HTTP sur chaque installeur, jamais une estimation) :
+  1. **Un plafond de DURÉE TOTALE choisi sans jamais mesurer la taille du fichier.** `AbortSignal.timeout(N)`
+     passé à `fetch` coupe aussi la lecture du corps : c'est donc un budget pour le téléchargement ENTIER,
+     pas un délai de connexion. Confronté aux tailles réelles : Jaris-Setup 98 Mo en 120 s (exige 7 Mbit/s
+     SOUTENUS du début à la fin), OllamaSetup 1,5 Go en 30 s pour le bouton "Mettre à jour" (400 Mbit/s :
+     cette méthode ne pouvait littéralement JAMAIS aboutir, "Mettre à jour" retombait toujours en silence sur
+     winget), et le même 1,5 Go en 120 s pour l'installation d'Ollama au tout premier lancement (100 Mbit/s).
+     Un téléchargement qui avançait parfaitement mais lentement était donc coupé en pleine réussite.
+     **Remplacé par un délai d'INACTIVITÉ** (`downloadToFile`, electron/services/download.ts) : plus aucun
+     plafond de durée totale, seule l'absence de tout nouvel octet pendant une minute abandonne. Ce critère
+     ne dépend ni de la taille du fichier ni du débit, donc il n'aura plus jamais à être recalculé quand un
+     installeur grossira — contrairement au délai de 10 minutes de Docker Desktop, pourtant calculé à partir
+     d'une vraie mesure HEAD à l'étape 60, mais qui exigeait quand même 8 Mbit/s pendant 10 minutes d'affilée.
+     **Leçon générale : un délai d'attente sur une opération dont la durée dépend de la taille des données et
+     du débit de l'utilisateur doit porter sur l'INACTIVITÉ (rien ne bouge), jamais sur la durée totale —
+     sinon le chiffre est forcément faux pour quelqu'un, et il redevient faux à chaque fois que le fichier
+     grossit.**
+  2. **Aucun signe de vie pendant plusieurs minutes.** Le fichier entier était chargé en mémoire
+     (`await response.arrayBuffer()`, 1,5 Go de RAM au passage) puis écrit d'un bloc : rien ne distinguait
+     "ça avance" de "c'est planté", exactement ce que décrit Léo. Écrit au fil de l'eau maintenant, avec
+     l'avancement renvoyé à l'interface (nouveau canal `updateProgress`, barre de progression réelle dans
+     Options → Mise à jour ; octets reçus affichés pendant l'installation d'Ollama). Même famille de défaut
+     que `computer_use_task` à l'étape 34 : **toute action qui peut durer plus de quelques secondes doit
+     dire où elle en est, un indicateur figé se lit comme un blocage.** La barre réutilise la famille CSS
+     déjà partagée (`.options-menu__progress*`) plutôt que d'en inventer une, et c'est vérifié par une
+     MESURE du style calculé (leçon du bouton resté gris, étape 97).
+  3. **Un installeur TRONQUÉ était lancé comme si de rien n'était.** Une connexion coupée en route laissait
+     un `.exe` incomplet, que Jaris lançait juste avant de se fermer : l'installeur ne fait alors rien de
+     visible, et il n'y a plus personne pour l'expliquer — le "ça fait rien" de Léo dans sa forme la plus
+     trompeuse. La taille reçue est maintenant comparée à celle annoncée (`Content-Length`) AVANT de quitter,
+     et le fichier partiel est effacé au lieu d'être laissé en place. **Leçon générale : avant une action
+     irréversible qui dépend d'un fichier téléchargé (ici : fermer l'application pour le lancer), vérifier
+     que le fichier est complet — un téléchargement interrompu ne lève aucune erreur, il produit juste un
+     fichier plus court.**
+  Les messages d'échec (délai, disque plein, fichier verrouillé par un antivirus, pas de réseau) sont
+  désormais écrits en français et actionnables, et remontés TELS QUELS jusqu'à l'écran plutôt que réhabillés
+  en "Échec de la mise à jour : The operation was aborted due to timeout" — même principe que le
+  court-circuit d'assistant.ts : personne ne reformule plus un message d'erreur avant de l'afficher, donc il
+  doit déjà être lisible par Léo.
+  **Défaut de navigation trouvé au passage** : la popup d'accueil disait "Ouvre Options → Modèles pour mettre
+  à jour" alors que la mise à jour de Jaris a son propre onglet "Mise à jour" depuis qu'elle a été séparée de
+  celle d'Ollama — envoyer quelqu'un sur un onglet où le bouton n'est pas est une autre façon de "ne rien
+  faire". Quand une section d'Options est scindée, relire les phrases qui y renvoient depuis ailleurs.
+  Régression : `node --test scripts/test-download.mjs scripts/test-app-updater.mjs scripts/test-update-progress-ui.mjs`
+  (avancement réellement émis, abandon sur inactivité et non sur durée totale, installeur incomplet qui ne
+  ferme JAMAIS Jaris et ne se lance pas, messages en français, barre qui suit le pourcentage dans un vrai
+  navigateur). Chaque assertion a été vérifiée en réintroduisant temporairement le défaut correspondant.

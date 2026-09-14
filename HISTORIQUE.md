@@ -787,3 +787,21 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   une fenêtre de 760px : il manquait `min-width: 0` sur le conteneur flex, la mise en page débordait de 24px.
   Régression : `npm test` (204 tests), dont un test dédié qui vérifie que les deux écrans ont bien la même
   présentation. Non vérifiable ici : le rendu sur sa vraie machine Windows.
+
+- ✅ Étape 98 (v0.8.2) — Léo : "quand on demande une mise à jour on ne sait pas quand c'est terminé et des
+  fois c'est bloqué et ça fait rien". Les trois téléchargements d'installeur de Jaris (Jaris lui-même,
+  Ollama, Docker Desktop) avaient le même double défaut, mesuré pour de vrai avant tout correctif : aucun
+  signe de vie pendant plusieurs minutes, et un plafond de DURÉE TOTALE choisi sans jamais regarder la taille
+  du fichier — 98 Mo en 120 s pour Jaris (7 Mbit/s soutenus exigés), et surtout 1,5 Go en 30 s pour la mise à
+  jour d'Ollama (400 Mbit/s : elle ne pouvait donc jamais aboutir, elle retombait toujours en silence sur
+  winget) comme 1,5 Go en 120 s pour son installation au tout premier lancement. Les trois passent désormais
+  par un téléchargement commun qui écrit au fil de l'eau, affiche l'avancement (barre de progression réelle
+  dans Options → Mise à jour, octets reçus pendant l'installation d'Ollama), n'a plus aucun plafond de durée
+  totale — seule une connexion muette pendant une minute abandonne — et vérifie que le fichier reçu est
+  COMPLET avant de fermer Jaris : un installeur tronqué se lançait jusqu'ici sans rien faire de visible,
+  Jaris étant déjà fermé pour l'expliquer. Les échecs sont maintenant dits en français et actionnables, plus
+  en "The operation was aborted due to timeout". Corrigé au passage : la popup d'accueil renvoyait vers
+  "Options → Modèles" alors que la mise à jour de Jaris a son propre onglet. Régression : `npm test`
+  (216 tests), dont l'avancement réellement émis, l'abandon sur inactivité et l'installeur incomplet qui ne
+  ferme pas Jaris — chaque assertion vérifiée en réintroduisant temporairement le défaut. Non vérifiable
+  ici : le déroulé complet d'une vraie mise à jour sur la machine de Léo.

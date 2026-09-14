@@ -1,12 +1,13 @@
 import { exec, execSync, spawn, type ChildProcess } from 'child_process'
 import { existsSync } from 'fs'
-import { writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { promisify } from 'util'
 import { config } from '../config'
 import { didAppLaunch, openApp } from './appLauncher'
+import { downloadToFile } from './download'
 import { resourcesRoot } from '../paths'
+import { formatBytes } from '../../shared/formatBytes'
 
 const execAsync = promisify(exec)
 
@@ -229,16 +230,17 @@ const DOCKER_DESKTOP_INSTALLER_URL = 'https://desktop.docker.com/win/main/amd64/
  */
 async function downloadAndLaunchOfficialInstaller(): Promise<boolean> {
   try {
-    const response = await fetch(OLLAMA_INSTALLER_URL, { signal: AbortSignal.timeout(30000) })
-    if (!response.ok) return false
-    const buffer = Buffer.from(await response.arrayBuffer())
+    // OllamaSetup.exe pèse 1,5 Go (mesuré pour de vrai). L'ancien plafond de 30 secondes sur le
+    // téléchargement ENTIER exigeait 400 Mbit/s soutenus : cette méthode ne pouvait donc JAMAIS aboutir,
+    // et "Mettre à jour" retombait systématiquement sur winget sans que rien ne l'explique. downloadToFile
+    // n'a plus de délai total du tout — seule une connexion vraiment muette pendant une minute abandonne.
     const installerPath = join(tmpdir(), 'JarisOllamaSetup.exe')
-    await writeFile(installerPath, buffer)
+    await downloadToFile(OLLAMA_INSTALLER_URL, installerPath)
     // windowsHide: false ici, volontairement, contrairement au reste du fichier : l'utilisateur DOIT voir
     // et pouvoir interagir avec cette fenêtre pour terminer l'installation.
     spawn(installerPath, [], { detached: true, stdio: 'ignore', windowsHide: false })
       .on('error', () => {
-        // Rien à faire : updateOllama() traite déjà `false` (renvoyé plus bas si writeFile/fetch échoue)
+        // Rien à faire : updateOllama() traite déjà `false` (renvoyé plus bas si le téléchargement échoue)
         // comme un échec de cette méthode et retombe sur winget — un échec asynchrone du spawn lui-même,
         // lui, n'a plus d'impact sur le message déjà renvoyé, juste un filet anti-crash comme ailleurs.
       })
@@ -273,15 +275,25 @@ export async function isOllamaInstalled(): Promise<boolean> {
  * En cas d'échec, l'appelant peut toujours retomber sur downloadAndLaunchOfficialInstaller (fenêtre
  * visible, quelques clics) : mieux vaut demander deux clics que ne pas installer Ollama du tout.
  */
-export async function installOllamaSilently(onProgress: (message: string) => void): Promise<boolean> {
-  onProgress("Téléchargement d'Ollama…")
-  let installerPath: string
+export async function installOllamaSilently(onProgress: (message: string, percent?: number) => void): Promise<boolean> {
+  onProgress("Téléchargement d'Ollama…", 0)
+  const installerPath = join(tmpdir(), 'JarisOllamaSetup.exe')
   try {
-    const response = await fetch(OLLAMA_INSTALLER_URL, { signal: AbortSignal.timeout(120000) })
-    if (!response.ok) return false
-    installerPath = join(tmpdir(), 'JarisOllamaSetup.exe')
-    await writeFile(installerPath, Buffer.from(await response.arrayBuffer()))
-  } catch {
+    // 1,5 Go (mesuré) : l'ancien plafond de 120 secondes sur le téléchargement ENTIER exigeait 100 Mbit/s
+    // soutenus, donc le tout premier lancement de Jaris échouait à installer Ollama sur la quasi-totalité
+    // des connexions — sans rien afficher d'autre qu'un "Téléchargement d'Ollama…" figé pendant deux
+    // minutes. Avancement réel affiché ici aussi : c'est de loin le plus long téléchargement de Jaris.
+    await downloadToFile(OLLAMA_INSTALLER_URL, installerPath, {
+      onProgress: ({ receivedBytes, totalBytes, percent }) =>
+        onProgress(
+          totalBytes === null
+            ? `Téléchargement d'Ollama : ${formatBytes(receivedBytes)}…`
+            : `Téléchargement d'Ollama : ${formatBytes(receivedBytes)} sur ${formatBytes(totalBytes)}…`,
+          percent ?? undefined
+        )
+    })
+  } catch (err) {
+    onProgress(err instanceof Error ? err.message : "Le téléchargement d'Ollama a échoué.")
     return false
   }
 
@@ -599,17 +611,24 @@ async function installWsl(onProgress: (message: string) => void): Promise<boolea
  */
 async function installDockerDesktop(onProgress: (message: string) => void): Promise<boolean> {
   onProgress('Téléchargement de Docker Desktop (environ 600 Mo, ça peut prendre plusieurs minutes)…')
-  let installerPath: string
+  const installerPath = join(tmpdir(), 'JarisDockerDesktopInstaller.exe')
   try {
-    // 10 minutes, pas 2 comme pour Ollama (installOllamaSilently) : l'installeur Docker Desktop pèse
-    // environ 600 Mo (vérifié via une requête HEAD sur l'URL officielle), largement plus gros que celui
-    // d'Ollama — un délai trop court couperait le téléchargement en pleine réussite sur une connexion
-    // modeste, faisant croire à un échec alors que c'était juste lent.
-    const response = await fetch(DOCKER_DESKTOP_INSTALLER_URL, { signal: AbortSignal.timeout(600000) })
-    if (!response.ok) return false
-    installerPath = join(tmpdir(), 'JarisDockerDesktopInstaller.exe')
-    await writeFile(installerPath, Buffer.from(await response.arrayBuffer()))
-  } catch {
+    // Le plafond était ici de 10 minutes pour le téléchargement entier, choisi à partir de la taille
+    // réelle du fichier (~600 Mo) — déjà mieux que les 2 minutes d'Ollama, mais ça exigeait quand même
+    // 8 Mbit/s soutenus pendant 10 minutes d'affilée. Comme les deux autres installeurs, ce téléchargement
+    // passe maintenant par downloadToFile : plus de délai TOTAL du tout (une connexion lente finit par
+    // aboutir), seule une absence complète de données pendant une minute abandonne, et l'avancement
+    // s'affiche au lieu d'un message figé.
+    await downloadToFile(DOCKER_DESKTOP_INSTALLER_URL, installerPath, {
+      onProgress: ({ receivedBytes, totalBytes }) =>
+        onProgress(
+          totalBytes === null
+            ? `Téléchargement de Docker Desktop : ${formatBytes(receivedBytes)}…`
+            : `Téléchargement de Docker Desktop : ${formatBytes(receivedBytes)} sur ${formatBytes(totalBytes)}…`
+        )
+    })
+  } catch (err) {
+    onProgress(err instanceof Error ? err.message : 'Le téléchargement de Docker Desktop a échoué.')
     return false
   }
 

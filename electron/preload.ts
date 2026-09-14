@@ -25,6 +25,7 @@ import {
   type RuntimeSetupStatus,
   type SoundCue,
   type UpdateCheckResult,
+  type UpdateProgress,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload
 } from '../shared/ipc'
@@ -61,6 +62,7 @@ const api = {
   updateOllama: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.updateOllama),
   getAppVersionStatus: (): Promise<AppVersionStatus | null> => ipcRenderer.invoke(IPC_CHANNELS.getAppVersionStatus),
   updateApp: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.updateApp),
+  onUpdateProgress: (cb: (progress: UpdateProgress) => void) => subscribe(IPC_CHANNELS.updateProgress, cb),
   getAppVersion: (): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.getAppVersion),
   getReleaseHistory: (): Promise<ReleaseHistoryEntry[]> => ipcRenderer.invoke(IPC_CHANNELS.getReleaseHistory),
   checkForUpdate: (): Promise<UpdateCheckResult> => ipcRenderer.invoke(IPC_CHANNELS.checkForUpdate),

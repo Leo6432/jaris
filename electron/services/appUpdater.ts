@@ -1,8 +1,9 @@
 import { app } from 'electron'
 import { spawn } from 'child_process'
-import { writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { DownloadError, downloadToFile } from './download'
+import type { UpdateProgress } from '../../shared/ipc'
 
 /**
  * Met à jour Jaris lui-même depuis l'interface (étape 20 du roadmap), sans jamais `git pull`/`npm run
@@ -159,7 +160,10 @@ export async function getReleaseHistory(): Promise<ReleaseHistoryEntry[]> {
  * se repliait juste en widget), ce qui explique que l'installeur voie systématiquement Jaris.exe encore actif
  * à son contrôle de démarrage — jamais un problème de timing, Jaris ne fermait tout simplement pas du tout.
  */
-export async function updateApp(onBeforeQuit?: () => void): Promise<{ success: boolean; message: string }> {
+export async function updateApp(
+  onBeforeQuit?: () => void,
+  onProgress?: (progress: UpdateProgress) => void
+): Promise<{ success: boolean; message: string }> {
   if (!cachedStatus?.outdated) {
     return { success: false, message: 'Aucune mise à jour disponible.' }
   }
@@ -170,11 +174,20 @@ export async function updateApp(onBeforeQuit?: () => void): Promise<{ success: b
     }
   }
 
+  // Nommé d'après la version téléchargée : un reste d'une tentative précédente (fichier encore verrouillé
+  // par un antivirus, installation abandonnée) ne peut plus faire échouer l'écriture de celle-ci.
+  const installerPath = join(tmpdir(), `Jaris-Setup-${cachedStatus.latest}.exe`)
+
   try {
-    const response = await fetch(cachedDownloadUrl, { signal: AbortSignal.timeout(120000) })
-    if (!response.ok) return { success: false, message: `Téléchargement impossible (HTTP ${response.status}).` }
-    const installerPath = join(tmpdir(), 'JarisSetup.exe')
-    await writeFile(installerPath, Buffer.from(await response.arrayBuffer()))
+    // Téléchargé au fil de l'eau, avec l'avancement renvoyé à l'interface (étape 98) : l'installeur pèse
+    // ~98 Mo, soit plusieurs minutes sur une connexion modeste — sans ce retour, le bouton restait figé sur
+    // "Mise à jour en cours…" sans que rien ne distingue un téléchargement qui avance d'un blocage.
+    // downloadToFile vérifie aussi que le fichier reçu est COMPLET avant qu'on ferme Jaris pour le lancer :
+    // un .exe tronqué se lance sans rien faire de visible, et Jaris serait déjà fermé pour le dire.
+    await downloadToFile(cachedDownloadUrl, installerPath, {
+      onProgress: (progress) => onProgress?.({ phase: 'download', ...progress })
+    })
+    onProgress?.({ phase: 'install', receivedBytes: 0, totalBytes: null, percent: 100 })
 
     // Lancé seulement une fois Jaris réellement en train de quitter ('will-quit', après la fermeture de ses
     // fenêtres), jamais avant : l'installeur NSIS vérifie si Jaris.exe tourne encore quasi immédiatement
@@ -196,6 +209,10 @@ export async function updateApp(onBeforeQuit?: () => void): Promise<{ success: b
 
     return { success: true, message: `Mise à jour vers ${cachedStatus.latest} : Jaris va se fermer et relancer automatiquement.` }
   } catch (err) {
+    // Un message de DownloadError est DÉJÀ rédigé pour Léo (voir download.ts) : le réhabiller en "Échec de
+    // la mise à jour : The operation was aborted due to timeout" lui enlevait justement ce qui était
+    // actionnable dedans. Tout le reste garde le préfixe, qui situe au moins l'erreur.
+    if (err instanceof DownloadError) return { success: false, message: err.message }
     return { success: false, message: `Échec de la mise à jour : ${err instanceof Error ? err.message : String(err)}` }
   }
 }

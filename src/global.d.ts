@@ -23,6 +23,7 @@ import type {
   RuntimeSetupStatus,
   SoundCue,
   UpdateCheckResult,
+  UpdateProgress,
   VoiceReplyPayload,
   VoiceSetupStatusPayload
 } from '../shared/ipc'
@@ -57,6 +58,9 @@ declare global {
       updateOllama: () => Promise<{ success: boolean; message: string }>
       getAppVersionStatus: () => Promise<AppVersionStatus | null>
       updateApp: () => Promise<{ success: boolean; message: string }>
+      // Étape 98 : avancement du téléchargement de l'installeur, sans lequel le bouton "Mettre à jour"
+      // restait figé plusieurs minutes sans rien dire ("on ne sait pas quand c'est terminé", Léo).
+      onUpdateProgress: (cb: (progress: UpdateProgress) => void) => () => void
       getAppVersion: () => Promise<string>
       getReleaseHistory: () => Promise<ReleaseHistoryEntry[]>
       checkForUpdate: () => Promise<UpdateCheckResult>

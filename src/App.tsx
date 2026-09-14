@@ -408,8 +408,11 @@ export default function App(): JSX.Element {
           {appVersionStatus?.outdated && !appPopupDismissed && (
             <div className="app__new-models">
               <p>
+                {/* Onglet "Mise à jour", pas "Modèles" : celui de Jaris a son propre onglet depuis qu'il a
+                    été séparé de celui d'Ollama, mais cette phrase était restée sur l'ancien — envoyer
+                    quelqu'un sur un onglet où le bouton n'est pas est une autre façon de "ne rien faire". */}
                 Jaris {appVersionStatus.current} installé, la dernière version est{' '}
-                {appVersionStatus.latest}. Ouvre Options → Modèles pour mettre à jour.
+                {appVersionStatus.latest}. Ouvre Options → Mise à jour pour l'installer.
               </p>
               <button onClick={() => setAppPopupDismissed(true)}>Fermer</button>
             </div>

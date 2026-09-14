@@ -478,7 +478,16 @@ app.whenReady().then(async () => {
   // `quitting = true` seulement juste avant que updateApp() n'appelle réellement app.quit() (jamais avant, y
   // compris en cas d'échec du téléchargement) : sinon fermer la fenêtre principale plus tard dans la session
   // quitterait Jaris pour de bon au lieu de se replier en widget comme d'habitude.
-  ipcMain.handle(IPC_CHANNELS.updateApp, () => updateApp(() => { quitting = true }))
+  ipcMain.handle(IPC_CHANNELS.updateApp, () =>
+    updateApp(
+      () => {
+        quitting = true
+      },
+      // Avancement du téléchargement (étape 98) : l'installeur pèse ~98 Mo, soit plusieurs minutes sur une
+      // connexion modeste — sans ce retour, la fenêtre restait figée sur "Mise à jour en cours…".
+      (progress) => broadcast(IPC_CHANNELS.updateProgress, progress)
+    )
+  )
   ipcMain.handle(IPC_CHANNELS.getAppVersion, () => getInstalledVersion())
   ipcMain.handle(IPC_CHANNELS.getReleaseHistory, () => getReleaseHistory())
   ipcMain.handle(IPC_CHANNELS.checkForUpdate, () => checkForUpdate())

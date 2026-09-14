@@ -8,8 +8,10 @@ import type {
   ModelsLocationStatus,
   OllamaVersionStatus,
   Profile,
-  ReleaseHistoryEntry
+  ReleaseHistoryEntry,
+  UpdateProgress
 } from '../../shared/ipc'
+import AppUpdateProgress from './AppUpdateProgress'
 import HardwareTierPreview from './HardwareTierPreview'
 import JarisOrb from './JarisOrb'
 import { formatModelName } from '../lib/formatModelName'
@@ -124,6 +126,8 @@ export default function OptionsMenu(): JSX.Element {
   const [releaseHistory, setReleaseHistory] = useState<ReleaseHistoryEntry[] | null>(null)
   const [updatingApp, setUpdatingApp] = useState(false)
   const [appUpdateMessage, setAppUpdateMessage] = useState<string | null>(null)
+  /** Avancement du téléchargement en cours (étape 98) — `null` tant qu'aucun octet n'est encore arrivé. */
+  const [updateProgress, setUpdateProgress] = useState<UpdateProgress | null>(null)
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [updateCheckMessage, setUpdateCheckMessage] = useState<string | null>(null)
   const [modelsLocation, setModelsLocation] = useState<ModelsLocationStatus | null>(null)
@@ -192,6 +196,13 @@ export default function OptionsMenu(): JSX.Element {
   // — l'opération continue même si l'utilisateur change d'onglet entre-temps.
   useEffect(() => {
     return window.jaris.onModelsLocationProgress(setModelsLocationMessage)
+  }, [])
+
+  // Même raisonnement pour le téléchargement de la mise à jour (étape 98) : abonné une seule fois au
+  // montage, pas seulement pendant que l'onglet "Mise à jour" est affiché — le téléchargement continue si
+  // l'utilisateur change d'onglet entre-temps, et l'avancement doit être à jour quand il revient.
+  useEffect(() => {
+    return window.jaris.onUpdateProgress(setUpdateProgress)
   }, [])
 
   const handleChooseModelsLocation = (): void => {
@@ -302,6 +313,9 @@ export default function OptionsMenu(): JSX.Element {
   const handleUpdateApp = (): void => {
     setUpdatingApp(true)
     setAppUpdateMessage(null)
+    // Remis à zéro à chaque tentative : sinon un nouvel essai après un échec repartirait visuellement du
+    // pourcentage atteint la fois précédente, alors que le téléchargement, lui, recommence du début.
+    setUpdateProgress(null)
     window.jaris
       .updateApp()
       .then(({ message }) => setAppUpdateMessage(message))
@@ -804,11 +818,10 @@ export default function OptionsMenu(): JSX.Element {
                     {updatingApp ? 'Mise à jour en cours…' : 'Mettre à jour'}
                   </button>
                 </div>
-                {updatingApp && (
-                  <p className="options-menu__ollama-update-note">
-                    Jaris va se fermer puis relancer automatiquement une fois la mise à jour terminée.
-                  </p>
-                )}
+                {/* Étape 98 : une VRAIE barre qui avance, à la place d'une phrase figée. L'installeur pèse
+                    ~98 Mo, soit plusieurs minutes sur une connexion modeste — "on ne sait pas quand c'est
+                    terminé et des fois c'est bloqué et ça fait rien" (Léo) décrivait exactement ce vide. */}
+                {updatingApp && <AppUpdateProgress progress={updateProgress} />}
               </div>
             )}
             {!updatingApp && appUpdateMessage && <p className="options-menu__ollama-update-note">{appUpdateMessage}</p>}

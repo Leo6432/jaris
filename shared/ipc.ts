@@ -295,6 +295,23 @@ export interface UpdateCheckResult {
   error: string | null
 }
 
+/**
+ * Avancement de la mise à jour de Jaris (étape 98), affiché pendant que le bouton "Mettre à jour" travaille.
+ *
+ * Léo : "quand on demande une mise à jour on ne sait pas quand c'est terminé". L'installeur pèse ~98 Mo
+ * (mesuré) et se téléchargeait sans le moindre signe de vie : plusieurs minutes de bouton figé, impossible
+ * de distinguer "ça avance" de "c'est planté".
+ */
+export interface UpdateProgress {
+  /** 'download' pendant le téléchargement, 'install' une fois lancé (Jaris se ferme dans la foulée). */
+  phase: 'download' | 'install'
+  receivedBytes: number
+  /** Taille annoncée par GitHub, `null` s'il ne l'annonce pas (aucune barre possible dans ce cas). */
+  totalBytes: number | null
+  /** 0-100, `null` quand la taille totale est inconnue. */
+  percent: number | null
+}
+
 /** Un message du mode Chat (étape 30) — même Jaris et mêmes outils que la voix, mais en écrit. */
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -509,6 +526,8 @@ export const IPC_CHANNELS = {
   getAppVersionStatus: 'jaris:get-app-version-status',
   /** renderer -> main : télécharge et lance l'installeur de la dernière version, puis ferme Jaris. */
   updateApp: 'jaris:update-app',
+  /** main -> renderer : avancement de ce téléchargement, au fil de l'eau (étape 98). */
+  updateProgress: 'jaris:update-progress',
   /** renderer <-> main : version réellement installée (app.getVersion()), jamais bloquée par le réseau. */
   getAppVersion: 'jaris:get-app-version',
   /** renderer <-> main : active/désactive le mot d'activation "Jaris" (redémarre le pipeline vocal, voir

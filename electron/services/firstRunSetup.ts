@@ -37,7 +37,7 @@ export async function runFirstRunSetup(onProgress: (progress: RuntimeSetupProgre
 
   if (!status.ollamaReady) {
     onProgress({ step: 'ollama', message: "Installation d'Ollama (le moteur de conversation)…" })
-    const installed = await installOllamaSilently((message) => onProgress({ step: 'ollama', message }))
+    const installed = await installOllamaSilently((message, percent) => onProgress({ step: 'ollama', message, percent }))
     if (!installed) {
       onProgress({
         step: 'ollama',
