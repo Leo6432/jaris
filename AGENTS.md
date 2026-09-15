@@ -1543,3 +1543,42 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   Régression : `scripts/test-code-panel-ui.mjs` — "changer d'application efface le bandeau de la génération
   précédente" et "« Nouvelle application » repart d'un écran propre". Vérifié en remettant temporairement
   l'ancien code : le premier test échoue bien.
+
+- **"dans le dépôt il n'y a aucune donnée sensible car le dépôt est public ?" (Léo, étape 103) — audit du
+  dépôt, puis deux corrections.** Vérifié sur des FAITS plutôt qu'en répondant "tout va bien" : aucune clé
+  d'API, aucun jeton, aucune clé privée, ni dans les fichiers actuels ni dans TOUT l'historique des commits
+  (un fichier supprimé reste lisible pour toujours dans un dépôt public — chercher aussi dans
+  `git log --all -p`, jamais seulement dans l'arbre de travail) ; `.env` bien ignoré et `.env.example` ne
+  contenant que des cases à remplir ; la CI n'utilise que le `github.token` que GitHub fournit tout seul.
+  Deux vraies trouvailles, corrigées :
+  1. **Le port de SearXNG était publié sur TOUTES les interfaces réseau.** `ports: - '8091:8080'`
+     (docker-compose.yml) : sans adresse devant, Docker publie sur 0.0.0.0, donc n'importe qui sur le même
+     Wi-Fi pouvait atteindre `http://<ip-de-la-machine>:8091` et faire ses recherches à travers la connexion
+     de Léo — d'autant que la clé de signature de l'instance (`secret_key`, searxng/settings.yml) est
+     publique puisque le dépôt l'est. Corrigé en `'127.0.0.1:8091:8080'`. **Leçon générale : dans un
+     docker-compose.yml, `HÔTE:CONTENEUR` sans adresse publie le service sur tout le réseau local, pas
+     seulement sur la machine — un service destiné à la machine elle-même doit toujours s'écrire
+     `127.0.0.1:HÔTE:CONTENEUR`.** La clé de signature, elle, n'a PAS été changée : une fois le service
+     limité à la machine, elle n'est plus atteignable de l'extérieur, et la remplacer supposerait de générer
+     puis d'écrire un settings.yml au premier lancement — précisément le terrain qui a produit la série de
+     pannes v0.3.6 à v0.4.3, pour un gain nul ici.
+  2. **Corriger le fichier ne suffisait PAS à protéger la machine déjà installée**, et c'est le vrai piège.
+     Un conteneur garde la publication décidée à sa CRÉATION : le fichier corrigé n'y change rien tant qu'il
+     n'est pas recréé. Or `ensureSearxngRunning` ressort immédiatement quand SearXNG répond déjà, et le
+     conteneur est relancé tout seul à chaque démarrage de Docker (`restart: unless-stopped`) — le correctif
+     ne serait donc JAMAIS arrivé jusqu'à la machine de Léo. Ajouté un contrôle qui lit la publication
+     RÉELLE (`docker compose port searxng 8080`, qui répond "0.0.0.0:8091" ou "127.0.0.1:8091") et recrée le
+     conteneur si elle dépasse la machine — le même `--force-recreate` que pour le refus du format JSON, les
+     deux raisons étant évaluées ensemble pour ne recréer qu'une seule fois. Un diagnostic indisponible (la
+     commande échoue) répond "limité à la machine" : "je ne sais pas" ne doit jamais valoir "c'est ouvert",
+     sinon Jaris recréerait pour rien un conteneur qui fonctionne. **Leçon générale, même famille que le
+     check WSL placé dans une branche jamais atteinte et que la touche "+" gatée d'un seul côté sur deux :
+     changer un fichier de configuration ne corrige que les installations FUTURES — pour une machine déjà
+     installée, il faut un contrôle qui constate l'état réel au démarrage et le répare.**
+  Corrigé aussi, sans rapport technique : une adresse e-mail qui ressemblait à une vraie adresse servait
+  d'exemple dans un commentaire (voicePipeline.ts), remplacée par une adresse inventée. **Dans un dépôt
+  public, un exemple repris d'un essai réel peut exposer la donnée de quelqu'un d'autre.**
+  Régression : `node --test scripts/test-searxng-binding.mjs` (conteneur ouvert recréé, publication IPv6
+  ouverte comptée elle aussi, conteneur déjà limité JAMAIS recréé à chaque lancement, refus du JSON toujours
+  traité, diagnostic indisponible sans effet, et docker-compose.yml qui ne publie que sur 127.0.0.1). Chaque
+  assertion a été vérifiée en réintroduisant temporairement le défaut correspondant.

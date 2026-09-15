@@ -64,8 +64,8 @@ const EMAIL_DOMAIN_PATTERN = new RegExp(
 
 /**
  * Certains modèles de transcription reconnaissent la ponctuation dictée ("point" -> ".") mais
- * confondent parfois "arobase" avec "point" et transforment tout en points ("milano.iris.gmail.com"
- * au lieu de "milano.iris@gmail.com") : impossible à corriger mot par mot puisque le "@" a déjà disparu
+ * confondent parfois "arobase" avec "point" et transforment tout en points ("jean.dupont.gmail.com"
+ * au lieu de "jean.dupont@gmail.com") : impossible à corriger mot par mot puisque le "@" a déjà disparu
  * de la transcription. On détecte plutôt le motif "texte.fournisseur-mail.extension" et on remet le @
  * au bon endroit, juste avant le nom du fournisseur.
  */

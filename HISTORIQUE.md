@@ -846,3 +846,15 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   fonction appelée par les TROIS chemins qui changent l'application affichée — générer, ouvrir une
   application existante, "Nouvelle application". Régression : `npm test` (235 tests), dont un test qui échoue
   si l'un de ces chemins oublie d'effacer.
+
+- ✅ Étape 103 (v0.8.6) — Léo : "dans le dépôt il n'y a aucune donnée sensible car le dépôt est public ?"
+  puis "règle pour pas pouvoir prendre la machine dans le même wifi". Audit complet du dépôt public : aucune
+  clé, aucun jeton, aucun mot de passe, ni dans les fichiers ni dans l'historique des commits. Deux vraies
+  trouvailles corrigées : le moteur de recherche SearXNG publiait son port sur tout le réseau local (Docker
+  publie sur toutes les interfaces quand aucune adresse n'est précisée), donc n'importe qui sur le même
+  Wi-Fi pouvait faire ses recherches à travers la connexion de Léo — il n'est désormais joignable que depuis
+  son ordinateur ; et une adresse e-mail d'apparence réelle servant d'exemple dans un commentaire a été
+  remplacée par une adresse inventée. Corriger le fichier ne suffisait pas : un conteneur déjà lancé garde
+  son ancienne configuration, donc Jaris vérifie maintenant au démarrage que le port est bien limité à la
+  machine et recrée le conteneur sinon. Régression : `npm test` (242 tests), dont un fichier dédié vérifié
+  en réintroduisant chaque défaut.

@@ -523,6 +523,47 @@ async function searxngJsonSearchWorks(): Promise<boolean> {
 }
 
 /**
+ * Lit la publication RÉELLE du port de SearXNG, telle que Docker l'applique en ce moment
+ * (`docker compose port` répond par exemple "0.0.0.0:8091" ou "127.0.0.1:8091"), plutôt que de relire la
+ * ligne `ports:` de docker-compose.yml : un conteneur garde la publication décidée à sa CRÉATION, changer
+ * le fichier ensuite ne la modifie jamais tout seul. Même principe que searxngJsonSearchWorks ci-dessus —
+ * constater un fait observable, jamais déduire l'état d'un conteneur depuis un fichier sur le disque.
+ * Renvoie null si la commande échoue (Docker indisponible, service inconnu...) : c'est "je ne sais pas",
+ * pas "c'est ouvert".
+ */
+async function readSearxngPortBinding(): Promise<string | null> {
+  try {
+    const { stdout } = await execAsync('docker compose port searxng 8080', {
+      cwd: resourcesRoot(),
+      windowsHide: true
+    })
+    return stdout.trim() || null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * true si la publication lue ci-dessus reste limitée à cet ordinateur. Séparée de la commande Docker (et
+ * exportée) pour être testable sans Docker — scripts/test-searxng-binding.mjs.
+ *
+ * Docker peut publier le port sur plusieurs interfaces à la fois (une ligne chacune, IPv4 et IPv6) : il
+ * suffit d'UNE ligne ouverte pour que la machine soit joignable depuis le Wi-Fi, d'où le `every`.
+ * Une valeur nulle/vide signifie "diagnostic indisponible" et répond true : on ne recrée jamais un
+ * conteneur qui fonctionne sur la foi d'une commande qui n'a pas pu répondre (même prudence que le catch
+ * de searxngJsonSearchWorks).
+ */
+export function isLocalOnlyBinding(binding: string | null): boolean {
+  if (!binding) return true
+  const lines = binding
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  if (lines.length === 0) return true
+  return lines.every((line) => line.startsWith('127.0.0.1:') || line.startsWith('[::1]:'))
+}
+
+/**
  * Diagnostic seulement (jamais utilisé pour réparer quoi que ce soit tout seul) : lit le VRAI fichier
  * settings.yml tel que le conteneur SearXNG le voit RÉELLEMENT à cet instant, à comparer avec le fichier sur
  * le disque de Jaris (searxng/settings.yml). Ajouté après que 3 hypothèses successives se soient révélées
@@ -651,12 +692,31 @@ async function installDockerDesktop(onProgress: (message: string) => void): Prom
  */
 export async function ensureSearxngRunning(log: LogFn): Promise<void> {
   if (await isUp(config.searxng.host)) {
-    if (!(await searxngJsonSearchWorks())) {
-      log('SearXNG répond mais refuse le format JSON : recréation du conteneur avec la configuration actuelle…')
+    // Deux raisons de recréer un conteneur DÉJÀ lancé, constatées chacune sur un fait observable : il
+    // refuse le format JSON, ou il publie son port sur tout le réseau local. Les deux sont vérifiées avant
+    // d'agir pour ne recréer qu'une seule fois si elles sont vraies en même temps.
+    const networkExposed = !isLocalOnlyBinding(await readSearxngPortBinding())
+    const jsonBroken = !(await searxngJsonSearchWorks())
+    if (networkExposed || jsonBroken) {
+      log(
+        networkExposed
+          ? 'SearXNG était accessible depuis tout le réseau local : recréation du conteneur pour le limiter à cet ordinateur…'
+          : 'SearXNG répond mais refuse le format JSON : recréation du conteneur avec la configuration actuelle…'
+      )
       try {
         await execAsync('docker compose up -d --force-recreate', { cwd: resourcesRoot(), windowsHide: true })
-        const fixed = await waitUntil(() => searxngJsonSearchWorks(), 30000)
-        log(fixed ? 'SearXNG recréé, le format JSON fonctionne.' : 'SearXNG recréé, mais refuse toujours le format JSON — vérifie searxng/settings.yml.')
+        if (jsonBroken) {
+          const fixed = await waitUntil(() => searxngJsonSearchWorks(), 30000)
+          log(fixed ? 'SearXNG recréé, le format JSON fonctionne.' : 'SearXNG recréé, mais refuse toujours le format JSON — vérifie searxng/settings.yml.')
+        }
+        if (networkExposed) {
+          const stillExposed = !isLocalOnlyBinding(await readSearxngPortBinding())
+          log(
+            stillExposed
+              ? "SearXNG recréé, mais son port reste publié sur le réseau — vérifie la ligne ports: de docker-compose.yml."
+              : "SearXNG recréé : il n'est plus joignable que depuis cet ordinateur."
+          )
+        }
       } catch (err) {
         log(`Échec de la recréation de SearXNG : ${err instanceof Error ? err.message : String(err)}`)
       }

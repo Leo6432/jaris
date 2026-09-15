@@ -1204,6 +1204,9 @@ docker compose up -d
 Ça démarre un moteur de recherche auto-hébergé sur `http://localhost:8091`
 (port volontairement inhabituel plutôt que le 8080 par défaut de SearXNG,
 trop souvent déjà pris par un autre logiciel — voir docker-compose.yml).
+Il n'est joignable que depuis cet ordinateur : le port est publié sur
+`127.0.0.1` uniquement, jamais sur le réseau local — sinon n'importe qui
+sur le même Wi-Fi pourrait faire ses recherches à travers ta connexion.
 La config nécessaire (API JSON activée) est déjà dans `searxng/settings.yml`,
 suivi par Git — rien à configurer à la main. Jaris l'utilise automatiquement
 dès que tu lui poses une question qui demande une info récente ou qu'il ne

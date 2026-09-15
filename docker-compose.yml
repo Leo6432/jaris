@@ -13,8 +13,15 @@ services:
     # machine et déjà propriétaire du port 8080 — `isUp()` (dependencyServices.ts) le prenait donc pour
     # SearXNG "déjà démarré" et ne lançait jamais le vrai conteneur, ce qu'aucun des correctifs précédents
     # (v0.3.6/v0.3.7, qui supposaient tous une vraie instance SearXNG mal configurée) ne pouvait détecter.
+    # `127.0.0.1:` devant le port hôte (étape 103) : sans ce préfixe, Docker publie le port sur TOUTES les
+    # interfaces réseau de la machine (0.0.0.0), pas seulement sur l'ordinateur lui-même — n'importe qui
+    # connecté au même Wi-Fi pouvait donc atteindre http://<ip-de-la-machine>:8091 et lancer ses recherches
+    # à travers l'instance de Léo. SearXNG n'a aucun compte ni mot de passe (rien à "pirater"), mais c'est
+    # sa connexion Internet qui servait de relais, et sa clé de signature est publique (dépôt public).
+    # Jaris n'interroge SearXNG que depuis la machine locale (SEARXNG_HOST=http://127.0.0.1:8091) : limiter
+    # la publication à cette même interface ne change donc rien pour lui.
     ports:
-      - '8091:8080'
+      - '127.0.0.1:8091:8080'
     volumes:
       - ./searxng:/etc/searxng:rw
     environment:
