@@ -921,3 +921,14 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   leurs descriptions techniques — un test garantit qu'aucun outil ajouté à l'avenir n'est oublié dans cette
   liste, et qu'aucune entrée ne cite un outil qui n'existe plus. Régression : `npm test` (271 tests), avec
   chaque assertion vérifiée en réintroduisant son défaut.
+
+- ✅ Étape 109 (v0.11.2) — Léo : "je clique sur mis a jour et ça fait 100 pourcent et apres ça fait rien",
+  cette fois bien la mise à jour de Jaris lui-même (le mot "pourcent" levait l'ambiguïté qui avait piégé
+  l'étape 99). Le téléchargement de l'installeur (étape 98) allait bien jusqu'au bout, mais Jaris ne fermait
+  jamais ensuite : fermer une fenêtre lui fait perdre le focus AVANT de se fermer pour de bon, et le handler
+  `'blur'` qui replie Jaris en widget (étape 73) ne savait pas faire la différence entre "une autre appli
+  prend le focus" et "la fenêtre est en train de se fermer pour de bon" — il réaffichait donc le widget en
+  plein milieu de la fermeture, et Electron ne quitte jamais tant qu'une fenêtre reste ouverte. Corrigé en
+  ajoutant le même genre de garde que celui déjà en place pour les dialogues natifs (`dialogOpen`), cette
+  fois sur le drapeau `quitting`. Régression : `npm test` (272 tests), avec un nouveau test structurel
+  vérifié en retirant temporairement le correctif pour confirmer qu'il mord bien.

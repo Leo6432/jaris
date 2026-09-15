@@ -193,8 +193,18 @@ function createFullWindow(): BrowserWindow {
   // 'minimize' déclenchait le repli en widget, jamais une simple perte de focus. 'blur' traite maintenant ce
   // cas exactement comme minimize (même repli) — sauf pendant un vrai dialogue natif de Jaris (`dialogOpen`,
   // ex: chooseModelsLocation), qui prend aussi le focus OS sans que Léo ait quitté Jaris pour autant.
+  //
+  // `quitting` fait partie du même garde, trouvé en creusant "je clique sur mis à jour et ça fait 100% puis
+  // plus rien" : fermer une fenêtre lui fait perdre le focus AVANT de se fermer pour de bon, donc 'blur' se
+  // déclenche aussi pendant la séquence de app.quit() (mise à jour de Jaris, croix, "Quitter" du menu). Sans
+  // ce garde, ce 'blur' recréait le widget en PLEIN milieu de la fermeture — un widgetWindow tout juste
+  // recréé (s'il venait d'être fermé par ce même app.quit()) redevient une fenêtre bien vivante, et
+  // Electron ne quitte jamais tant qu'il reste une fenêtre ouverte : la mise à jour ne se lançait donc
+  // jamais, sans la moindre erreur visible. `quitting` passe à `true` par tous les chemins de fermeture
+  // volontaire AVANT le moindre appel à `app.quit()` (voir sa déclaration plus haut) : le consulter ici
+  // suffit, pas besoin d'un drapeau dédié de plus.
   win.on('blur', () => {
-    if (!onboardingDone || dialogOpen) return
+    if (!onboardingDone || dialogOpen || quitting) return
     win.hide()
     showWidgetWindow()
     pipeline?.setListeningSuspended(false)

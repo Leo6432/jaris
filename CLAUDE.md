@@ -1823,3 +1823,36 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   dans un vrai navigateur : tous les groupes et toutes les capacités du fichier source sont RÉELLEMENT
   affichés — pas juste comptés dans le code — et les titres de groupe sont habillés par le CSS partagé, pas
   laissés en texte brut). Chaque assertion vérifiée en réintroduisant temporairement son défaut.
+
+- **"je clique sur mis a jour et ça fait 100 pourcent et apres ça fait rien" (Léo, étape 109) — la mise à
+  jour de Jaris lui-même (Options → Mise à jour), pas le mode Code cette fois : le mot "pourcent" ne laissait
+  aucune ambiguïté, contrairement à l'étape 99.** Le téléchargement de l'installeur (étape 98) fonctionnait
+  bien jusqu'au bout — barre à 100 %, message "Jaris se ferme, puis se rouvre tout seul" affiché — mais Jaris
+  ne fermait jamais ni ne relançait rien après ça. `downloadToFile`/`updateApp` (déjà couverts par
+  `test-app-updater.mjs`) ont été revérifiés en entier et sont corrects : le fichier est complet avant que
+  `app.quit()` ne soit appelé, `will-quit` lance bien l'installeur.
+  **Cause trouvée en relisant TOUTE la séquence de fermeture, pas seulement appUpdater.ts** : fermer une
+  fenêtre lui fait perdre le focus AVANT de se fermer pour de bon — `app.quit()` (mise à jour, croix de la
+  fenêtre, "Quitter" du menu, arrêt GPU) déclenche donc un vrai évènement `'blur'` sur la fenêtre principale
+  EN PLEIN MILIEU de sa propre fermeture. Le handler `win.on('blur', ...)` (étape 73 : replier Jaris en
+  widget dès qu'une autre appli prend le focus) ne consultait que `dialogOpen`, jamais `quitting` — il
+  réaffichait donc le widget (ou le RECRÉAIT si `app.quit()` avait déjà eu le temps de le détruire) juste
+  avant que la fenêtre principale ne finisse de disparaître. Electron ne quitte jamais tant qu'il reste une
+  fenêtre ouverte : `will-quit` ne se déclenchait donc jamais, l'installeur ne démarrait jamais, et rien
+  n'indiquait pourquoi — exactement le "ça fait rien" de Léo, après un téléchargement pourtant complet.
+  Corrigé en ajoutant `quitting` à la condition de sortie du handler `'blur'`, exactement comme `dialogOpen`
+  déjà là pour une raison différente (un dialogue natif qui prend le focus OS, pas une fermeture en cours).
+  **Familier, la même faute que la touche "+" gatée d'un seul côté sur deux (étape 82) et le check WSL placé
+  dans une branche jamais atteinte : un garde ajouté pour un cas précis (ici `dialogOpen` pour les
+  dialogues) ne protège que CE cas — un évènement qui peut se déclencher pour une AUTRE raison (ici : la
+  fenêtre en train de se fermer pour de bon) doit être couvert par son PROPRE garde, pas supposé couvert par
+  hasard par le premier qui existe déjà sur le même handler.**
+  **Leçon générale, plus large : fermer une fenêtre déclenche 'blur' avant 'close' — tout handler `'blur'`
+  ajouté sur une fenêtre qui peut aussi se fermer volontairement (croix, `app.quit()`, menu Quitter...) doit
+  explicitement ignorer ce cas, sinon il s'exécute en PLEIN MILIEU de la fermeture et peut la bloquer
+  indéfiniment en recréant une fenêtre juste avant que la dernière ne disparaisse — sans la moindre erreur
+  visible, puisque rien n'a "planté", Jaris restait juste plantée là.**
+  Test STRUCTUREL (pas de vraie fenêtre Electron ici, invérifiable faute de Windows dans cet environnement),
+  même famille que `test-native-dialog-guard.mjs` qui vérifie déjà que ce même handler consulte `dialogOpen` :
+  `node --test scripts/test-quit-blur-guard.mjs`. Vérifié en retirant temporairement `quitting` de la
+  condition : le test échoue bien.
