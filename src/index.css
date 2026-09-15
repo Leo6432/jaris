@@ -2029,6 +2029,15 @@ body.body--scan::after {
   box-shadow: 0 0 12px rgba(var(--hud-ok-rgb), 0.25);
 }
 
+/* Un arrêt demandé n'est ni un succès ni une panne : même bandeau, au même endroit, mais en neutre.
+   Écrit APRÈS la règle de succès ci-dessus — à spécificité égale, c'est l'ordre qui décide. */
+.code-panel__done--stopped {
+  color: var(--hud-text-dim);
+  border-color: var(--hud-line);
+  background: rgba(122, 176, 214, 0.06);
+  box-shadow: none;
+}
+
 .code-panel__status {
   margin: 0;
   padding: 10px 12px;

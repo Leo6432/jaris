@@ -515,7 +515,6 @@ export async function generateApp(
       profile?.visionModel ?? config.ollama.visionModel,
       IMAGE_FOR_CODE_SYSTEM_PROMPT
     )
-    onStatus('Image lue, passage à la génération.')
   }
 
   const model = await resolveCodeModel(onStatus, profile?.codeModel)
@@ -536,7 +535,8 @@ export async function generateApp(
       )
     : withImage(`Application à créer : ${description}`)
 
-  onStatus(currentHtml ? 'Application en cours de modification…' : "Génération de l'application…")
+  // Plus de ligne de journal ici : le bandeau d'avancement annonce déjà cette étape, et la répéter dans un
+  // second cadre juste en dessous donnait deux rectangles qui racontent la même chose (étape 101, Léo).
   const generateMessages: OllamaMessage[] = [
     { role: 'system', content: GENERATE_SYSTEM_PROMPT },
     { role: 'user', content: userPrompt }
@@ -591,7 +591,6 @@ export async function generateApp(
     }
   }
 
-  onStatus('Relecture du code par un second agent (cohérence, style, syntaxe)…')
   let final = draft
   try {
     const critiqueMessages: OllamaMessage[] = [
@@ -605,7 +604,6 @@ export async function generateApp(
     const reviewedHtml = extractHtml(reviewed.content)
     if (reviewedHtml) {
       final = reviewedHtml
-      onStatus('Relecture terminée.')
     } else {
       onStatus('La relecture n\'a rien renvoyé d\'exploitable : le premier jet est conservé.')
     }
@@ -623,8 +621,7 @@ export async function generateApp(
   // exacte de ce qui ne va pas — beaucoup plus efficace qu'une nouvelle demande de relecture générique.
   let issues = validateGeneratedHtml(final)
   if (issues.length) {
-    onStatus(`Vérification : ${issues.length} problème(s) détecté(s), tentative de réparation…`)
-    for (const issue of issues) onStatus(`  - ${issue}`)
+    const detected = issues.length
     try {
       const repairMessages: OllamaMessage[] = [
         { role: 'system', content: REPAIR_SYSTEM_PROMPT },
@@ -647,19 +644,23 @@ export async function generateApp(
           issues = remaining
         }
       }
-      onStatus(issues.length ? `Réparation partielle : ${issues.length} problème(s) restant(s).` : 'Réparation réussie.')
+      // Une seule ligne, et en français courant : le détail technique ("les balises <script> ne sont pas
+      // appariées (1 ouvrante(s), 0 fermante(s))") ne veut rien dire pour Léo, surtout une fois le problème
+      // corrigé. Ce qui reste vraiment cassé est de toute façon affiché à part (GeneratedApp.issues).
+      onStatus(
+        issues.length
+          ? `${detected} problème(s) trouvé(s) dans le code, ${detected - issues.length} corrigé(s) automatiquement.`
+          : `${detected} problème(s) trouvé(s) dans le code, corrigé(s) automatiquement.`
+      )
     } catch (err) {
       if (err instanceof GenerationStoppedError) throw err
       onStatus(`Réparation impossible (${err instanceof Error ? err.message : String(err)}).`)
     }
-  } else {
-    onStatus('Vérification : aucun problème structurel détecté.')
   }
 
   const dir = join(getGeneratedAppsDir(), `${Date.now()}-${slugify(description)}`)
   await mkdir(dir, { recursive: true })
   await writeFile(join(dir, 'index.html'), final, 'utf-8')
-  onStatus(`Application enregistrée dans ${dir}`)
 
   return { html: final, path: dir, issues }
 }

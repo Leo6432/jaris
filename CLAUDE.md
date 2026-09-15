@@ -1529,3 +1529,31 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
      rendre à très grande taille côte à côte avec l'ancien** — à 15px, un défaut de géométrie ne se lit pas
      comme "mal dessiné" mais comme "un peu sale", et on ne sait pas dire pourquoi. La comparaison agrandie
      rend la cause évidente en une seconde.
+
+- **"c'est bizarre il y a étape 2 etc.. plus un autre rectangle avec [tout le journal]" (Léo, étape 101).**
+  Le bandeau d'avancement de l'étape 99 a été ajouté À CÔTÉ du journal existant sans toucher à ce dernier —
+  qui annonçait pourtant déjà les mêmes étapes, mot pour mot ("Génération de l'application…", "Relecture du
+  code par un second agent…"). Résultat livré : deux cadres empilés racontant la même chose, dont un
+  rempli de détails illisibles pour Léo ("les balises <script> ne sont pas appariées (1 ouvrante(s), 0
+  fermante(s))") et du chemin Windows complet du dossier. Pire : la condition d'affichage du journal était
+  `generating || statusLines.length > 0`, donc un cadre VIDE restait à l'écran pendant toute une génération
+  qui n'avait rien à journaliser.
+  **Leçon générale, la vraie cause : ajouter un nouvel affichage pour une information ne suffit pas, il faut
+  RETIRER celui qu'il remplace.** Un ajout se vérifie facilement (il apparaît, il est joli, le test passe) ;
+  la redondance qu'il crée, elle, ne se voit qu'en regardant l'écran ENTIER — ce que fait l'utilisateur, et
+  pas un test qui ne vérifie que le nouvel élément. Le réflexe à garder : après avoir ajouté un indicateur,
+  chercher qui disait déjà la même chose et le supprimer, puis regarder une capture complète.
+  Corrigé en trois temps : (1) toutes les lignes de journal qui doublonnaient une étape du bandeau sont
+  supprimées, (2) le détail technique de la vérification devient une seule phrase en français courant ("2
+  problème(s) trouvé(s) dans le code, corrigé(s) automatiquement") — ce qui reste vraiment cassé est de
+  toute façon déjà affiché à part (`GeneratedApp.issues`), et le chemin complet du dossier est déjà
+  l'infobulle du bouton "Ouvrir le dossier" depuis l'étape 94 —, (3) le journal ne s'affiche PLUS QUE s'il
+  a quelque chose à dire que le bandeau ne dit pas (modèle à télécharger au premier usage, réparation,
+  relance après une réponse inexploitable). Dans le cas nominal, il n'y a donc plus qu'un seul cadre.
+  **L'arrêt rejoint la même règle que la fin (étape 100)** : "Génération arrêtée après 12 s" s'affiche
+  désormais dans le bandeau lui-même, en neutre (ni vert de succès, ni rouge d'erreur), à la place exacte de
+  l'avancement qu'il interrompt — il partait avant dans le journal, c'est-à-dire dans l'autre cadre.
+  Régression : `scripts/test-code-panel-ui.mjs`, test "pendant une génération, UN SEUL cadre s'affiche"
+  (vérifie qu'aucun second cadre n'existe pendant la génération, qu'il revient quand il a une vraie
+  information, et que le journal ne répète plus les étapes). Vérifié en remettant temporairement l'ancienne
+  condition d'affichage : le test échoue bien.

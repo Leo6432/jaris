@@ -827,3 +827,13 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   surtout pour une modification, dont l'aperçu ressemble souvent au précédent. La corbeille a été redessinée :
   sa poignée flottait au-dessus du couvercle sans y être rattachée, ses deux stries traversaient le couvercle
   et le fond, et aucun angle n'était arrondi ; elle est aussi un peu plus grande et moins délavée au repos.
+
+- ✅ Étape 101 (v0.8.4) — Léo : "c'est bizarre il y a étape 2 etc.. plus un autre rectangle avec [le journal
+  complet]". Le bandeau d'avancement de l'étape 99 avait été ajouté à côté du journal existant sans retirer
+  ce que celui-ci disait déjà : deux cadres empilés annonçaient les mêmes étapes, le second rempli de détails
+  incompréhensibles (balises non appariées, chemin Windows complet) — et il s'affichait même vide pendant les
+  générations sans rien à signaler. Le journal ne montre désormais QUE ce que le bandeau ne dit pas (modèle à
+  télécharger au premier usage, problèmes réparés, relance) ; la vérification tient en une phrase en français
+  courant ; et "Génération arrêtée après 12 s" s'affiche dans le bandeau, en neutre, au lieu de partir dans
+  l'autre cadre. Dans le cas normal, il n'y a plus qu'un seul cadre à l'écran. Régression : `npm test`
+  (233 tests), dont un test dédié qui échoue si un second cadre revient.

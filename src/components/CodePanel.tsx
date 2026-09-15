@@ -50,8 +50,9 @@ export default function CodePanel(): JSX.Element {
   /** Temps écoulé depuis le clic, réaffiché chaque seconde : "ça tourne depuis 2 min" est la première
    *  chose que Léo cherchait des yeux ("on ne sait pas quand c'est terminé"). */
   const [elapsedMs, setElapsedMs] = useState(0)
-  /** Durée de la DERNIÈRE génération terminée, pour annoncer clairement la fin. */
-  const [lastDurationMs, setLastDurationMs] = useState<number | null>(null)
+  /** Issue de la DERNIÈRE génération, affichée à la place du bandeau d'avancement une fois celui-ci fini :
+   *  terminée normalement, ou arrêtée à la demande. `null` tant qu'il n'y a rien à annoncer. */
+  const [lastOutcome, setLastOutcome] = useState<{ kind: 'done' | 'stopped'; durationMs: number } | null>(null)
   const statusRef = useRef<HTMLPreElement>(null)
   /** Mis à true par le bouton "Arrêter" : l'échec qui suit est alors un arrêt voulu, pas une panne. */
   const stoppedRef = useRef(false)
@@ -95,7 +96,7 @@ export default function CodePanel(): JSX.Element {
     setGenerating(true)
     setStatusLines([])
     setProgress(null)
-    setLastDurationMs(null)
+    setLastOutcome(null)
     stoppedRef.current = false
     const startedAt = Date.now()
     try {
@@ -109,15 +110,16 @@ export default function CodePanel(): JSX.Element {
       setDescription('')
       setAttachment(null)
       setView('preview')
-      // Fin annoncée de deux façons : la durée reste affichée sous le champ, et un bip si les sons sont
+      // Fin annoncée de deux façons : le bandeau reste affiché avec la durée, et un bip si les sons sont
       // activés — une génération peut durer plusieurs minutes, pendant lesquelles Léo fait autre chose.
-      setLastDurationMs(Date.now() - startedAt)
+      setLastOutcome({ kind: 'done', durationMs: Date.now() - startedAt })
       void playSoundCueIfEnabled('success')
       void window.jaris.getGeneratedApps().then(setRecentApps)
     } catch (err) {
-      // Un arrêt demandé n'est pas une panne : il s'affiche comme une ligne de journal, pas en rouge.
+      // Un arrêt demandé n'est pas une panne : il s'affiche dans le bandeau, au même endroit que
+      // l'avancement qu'il interrompt, jamais en rouge.
       if (stoppedRef.current) {
-        setStatusLines((prev) => [...prev, `Génération arrêtée après ${formatDuration(Date.now() - startedAt)}.`])
+        setLastOutcome({ kind: 'stopped', durationMs: Date.now() - startedAt })
       } else {
         setError(err instanceof Error ? err.message : String(err))
         void playSoundCueIfEnabled('error')
@@ -277,16 +279,24 @@ export default function CodePanel(): JSX.Element {
             regardait le bandeau, c'est donc là que doit s'afficher "c'est fini", pas dans une petite ligne
             grise ailleurs. Une modification d'application donne souvent un aperçu presque identique à
             l'œil — sans cette phrase, rien ne dit que le travail est terminé. */}
-        {!generating && lastDurationMs !== null && (
-          <p className="code-panel__done">
-            <CheckIcon />
+        {!generating && lastOutcome !== null && (
+          <p className={`code-panel__done${lastOutcome.kind === 'stopped' ? ' code-panel__done--stopped' : ''}`}>
+            {lastOutcome.kind === 'done' && <CheckIcon />}
             {/* Pas de "ci-dessus"/"ci-dessous" : l'aperçu est au-dessus de ce bandeau, mais une phrase qui
                 désigne une position devient fausse au premier changement de mise en page. */}
-            <span>Terminé en {formatDuration(lastDurationMs)} — ton application est à jour.</span>
+            <span>
+              {lastOutcome.kind === 'done'
+                ? `Terminé en ${formatDuration(lastOutcome.durationMs)} — ton application est à jour.`
+                : `Génération arrêtée après ${formatDuration(lastOutcome.durationMs)}.`}
+            </span>
           </p>
         )}
 
-        {(generating || statusLines.length > 0) && (
+        {/* Journal réservé à ce que le bandeau ne dit PAS (modèle à télécharger, problèmes réparés, relance
+            après une réponse inexploitable). Il répétait les étapes une par une, ce qui donnait deux cadres
+            côte à côte disant la même chose — et il s'affichait même vide pendant toute la génération
+            (étape 101, Léo : "il y a étape 2 etc. plus un autre rectangle"). */}
+        {statusLines.length > 0 && (
           <pre ref={statusRef} className="code-panel__status">
             {statusLines.join('\n')}
           </pre>

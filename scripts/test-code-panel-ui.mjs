@@ -52,7 +52,11 @@ window.__apps = [
 window.__deleted = []
 
 window.jaris = {
-  onCodeGenStatus: () => () => {},
+  // Rappel gardé pour que le test puisse simuler une vraie ligne de journal (voir le test du cadre unique).
+  onCodeGenStatus: (cb) => {
+    window.__status = cb
+    return () => {}
+  },
   // Étape 99 : CodePanel s'abonne à l'avancement au montage. Un canal manquant ne donne aucune erreur
   // lisible — l'effet React plante, le composant ne se monte jamais, et le test expire au bout de 30 s
   // sans dire pourquoi (piège déjà vécu à l'étape 96). Le rappel est gardé pour que le test puisse
@@ -320,11 +324,19 @@ test('le bouton "Arrêter" arrête vraiment, et ne laisse pas une erreur rouge',
     await page.click('.code-panel__live-stop')
     assert.equal(await page.evaluate(() => window.__cancelled), true)
 
-    // L'arrêt est une décision de l'utilisateur, pas une panne : il se lit dans le journal, pas en rouge.
-    await page.waitForSelector('.code-panel__status')
-    assert.match(await page.textContent('.code-panel__status'), /Génération arrêtée/)
+    // L'arrêt est une décision de l'utilisateur, pas une panne : il s'annonce dans le bandeau, à la place
+    // même de l'avancement qu'il interrompt, jamais en rouge.
+    await page.waitForSelector('.code-panel__done')
+    assert.match(await page.textContent('.code-panel__done'), /Génération arrêtée après \d+ s/)
     assert.equal(await page.locator('.code-panel__error').count(), 0)
     assert.equal(await page.locator('.code-panel__live').count(), 0)
+    // Neutre, et surtout pas la couleur de succès : ce n'est pas une application livrée.
+    const stopped = await page.evaluate(() => {
+      const css = getComputedStyle(document.querySelector('.code-panel__done'))
+      return { color: css.color, shadow: css.boxShadow }
+    })
+    assert.doesNotMatch(stopped.color, /49, 255, 176/)
+    assert.equal(stopped.shadow, 'none')
   })
 })
 
@@ -335,6 +347,22 @@ test('une génération terminée annonce sa durée', options, async () => {
     await page.waitForSelector('.code-panel__done')
     assert.match(await page.textContent('.code-panel__done'), /Terminé en \d+ s/)
     assert.equal(await page.locator('.code-panel__live').count(), 0)
+  })
+})
+
+test("pendant une génération, UN SEUL cadre s'affiche", options, async () => {
+  // Léo : "c'est bizarre il y a étape 2 etc. plus un autre rectangle". Le journal répétait les étapes du
+  // bandeau et s'affichait même vide, ce qui donnait deux cadres côte à côte pour la même information.
+  await withPage(async (page) => {
+    await startGeneration(page)
+    assert.equal(await page.locator('.code-panel__live').count(), 1)
+    assert.equal(await page.locator('.code-panel__status').count(), 0, 'un second cadre (vide) est affiché')
+
+    // Le journal ne revient QUE pour ce que le bandeau ne dit pas — ici, des problèmes réparés.
+    await page.evaluate(() => window.__status('2 problème(s) trouvé(s) dans le code, corrigé(s) automatiquement.'))
+    assert.equal(await page.locator('.code-panel__status').count(), 1)
+    const log = await page.textContent('.code-panel__status')
+    assert.doesNotMatch(log, /Génération de l'application|Relecture du code/, 'le journal répète encore les étapes')
   })
 })
 
