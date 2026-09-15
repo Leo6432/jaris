@@ -8,6 +8,8 @@ import { searchWeb } from './webSearch'
 import { readWebPage } from './webPage'
 import { clickMouse, mediaKey, pressKey, typeText } from './inputControl'
 import { getSystemStatsText, shutdownPc } from './systemControl'
+import { ringPhone, sendTextToPhone } from './phoneBridge'
+import { getProfile } from './profileStore'
 
 export const TOOLS: OllamaTool[] = [
   {
@@ -261,6 +263,35 @@ export const TOOLS: OllamaTool[] = [
   {
     type: 'function',
     function: {
+      name: 'ring_phone',
+      description:
+        "Fait sonner le téléphone de l'utilisateur pour l'aider à le retrouver, même s'il est en mode " +
+        'silencieux. À utiliser quand il dit qu\'il a perdu/ne trouve plus son téléphone.',
+      parameters: { type: 'object', properties: {}, required: [] }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'send_to_phone',
+      description:
+        "Dépose un texte ou un lien sur le téléphone de l'utilisateur LUI-MÊME, pour qu'il le retrouve sur " +
+        "son écran (ex: un lien trouvé sur le web, une adresse, un code). ATTENTION : ce n'est PAS un SMS et " +
+        "ça n'écrit à personne d'autre — Apple interdit à toute application d'envoyer des SMS depuis un " +
+        "iPhone, donc si l'utilisateur demande d'envoyer un message à quelqu'un, dis-lui franchement que " +
+        "Jaris ne peut pas le faire plutôt que d'utiliser cet outil à la place.",
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'Le texte ou le lien à déposer sur le téléphone' }
+        },
+        required: ['text']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'shutdown_pc',
       description:
         "Éteint ou redémarre l'ordinateur. Action CRITIQUE et irréversible : n'appelle cet outil que si " +
@@ -317,6 +348,17 @@ export function createToolExecutor(
         return getSystemStatsText()
       case 'media_control':
         return mediaKey(String(args.action ?? ''))
+      case 'ring_phone': {
+        // Le téléphone choisi et le chemin du programme sont relus dans le profil À CHAQUE appel (même
+        // pattern que les bascules d'activation, main.ts) : changer l'un dans Options prend effet tout de
+        // suite, sans relancer Jaris.
+        const profile = await getProfile()
+        return ringPhone(profile?.phoneDeviceId, profile?.phoneCliPath)
+      }
+      case 'send_to_phone': {
+        const profile = await getProfile()
+        return sendTextToPhone(String(args.text ?? ''), profile?.phoneDeviceId, profile?.phoneCliPath)
+      }
       case 'shutdown_pc':
         return shutdownPc(Boolean(args.restart))
       default:

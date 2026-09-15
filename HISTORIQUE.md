@@ -858,3 +858,17 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   son ancienne configuration, donc Jaris vérifie maintenant au démarrage que le port est bien limité à la
   machine et recrée le conteneur sinon. Régression : `npm test` (242 tests), dont un fichier dédié vérifié
   en réintroduisant chaque défaut.
+
+- ✅ Étape 104 / étape 21 du plan (v0.9.0) — Léo : "on va faire étape 21" (intégration téléphone). Comparaison
+  faite avant de coder, comme le demandait l'étape : KDE Connect fournit un vrai programme en ligne de
+  commande (vérifié dans son dépôt officiel, compilé aussi sur Windows), là où le "Mobile connecté" de
+  Windows n'a aucune API — il aurait fallu cliquer à l'aveugle dans sa fenêtre. Léo a un iPhone : vérifié à
+  la source que l'application iOS de KDE Connect n'a ni SMS ni notifications (Apple l'interdit à toutes les
+  applications), donc annoncé AVANT de coder plutôt que de livrer une version qui n'enverrait rien. Il a
+  choisi ce qui marche vraiment sur iPhone. Jaris peut maintenant faire sonner le téléphone ("fais sonner
+  mon téléphone") et y déposer un texte ou un lien ("envoie-moi ça sur mon téléphone"), avec un nouvel
+  onglet Options → Téléphone (téléphone joignable ou non, bouton de test, et un repli pour désigner KDE
+  Connect soi-même si Jaris ne le trouve pas). Le texte dicté passe toujours en argument séparé, jamais dans
+  une ligne de commande : un test vérifie qu'une phrase piégée ressort intacte. Régression : `npm test`
+  (259 tests), dont 17 nouveaux vérifiés en réintroduisant chaque défaut. Reste à faire : déclencher des
+  actions de Jaris DEPUIS le téléphone (voir "Étape 21 (suite)" dans le README).

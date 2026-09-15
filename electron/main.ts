@@ -33,6 +33,7 @@ import {
   setActiveConversation
 } from './services/conversationStore'
 import { getProfile, saveProfile } from './services/profileStore'
+import { getPhoneStatus, ringPhone, sendTextToPhone } from './services/phoneBridge'
 import { checkAppFreshness, checkForUpdate, getAppVersionStatus, getInstalledVersion, getReleaseHistory, updateApp } from './services/appUpdater'
 import {
   IPC_CHANNELS,
@@ -46,6 +47,7 @@ import {
   type GeneratedAppSummary,
   type JarisEmotion,
   type MemoryGraph,
+  type PhoneStatus,
   type PickedImageFile,
   type Profile,
   type SoundCue,
@@ -628,6 +630,45 @@ app.whenReady().then(async () => {
       // n'importe quoi) : le renderer refuse alors avec le même message que pour un collage non supporté.
       type: IMAGE_TYPES_BY_EXTENSION[extension] ?? '',
       base64: (await readFile(chosen)).toString('base64')
+    }
+  })
+
+  // Pont téléphone (étape 21, KDE Connect). Le chemin du programme et le téléphone choisi sont relus dans le
+  // profil À CHAQUE appel, comme les bascules d'activation : Léo peut désigner l'un ou l'autre dans Options
+  // sans avoir à relancer Jaris.
+  ipcMain.handle(IPC_CHANNELS.getPhoneStatus, async (): Promise<PhoneStatus> => {
+    const profile = await getProfile()
+    return getPhoneStatus(profile?.phoneCliPath)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.ringPhone, async (): Promise<string> => {
+    const profile = await getProfile()
+    return ringPhone(profile?.phoneDeviceId, profile?.phoneCliPath)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.sendToPhone, async (_event, text: string): Promise<string> => {
+    const profile = await getProfile()
+    return sendTextToPhone(text, profile?.phoneDeviceId, profile?.phoneCliPath)
+  })
+
+  // Même garde `dialogOpen` que pickImageFile : un dialogue natif prend le focus, et sans ce garde le
+  // handler 'blur' replierait la fenêtre de réglages en widget pendant que Léo choisit le fichier.
+  ipcMain.handle(IPC_CHANNELS.pickKdeConnectCli, async (): Promise<string | null> => {
+    const dialogOptions = {
+      properties: ['openFile' as const],
+      title: 'Trouver kdeconnect-cli.exe (dossier d\'installation de KDE Connect)',
+      filters: [{ name: 'Programme', extensions: ['exe'] }]
+    }
+    dialogOpen = true
+    try {
+      const result = fullWindow
+        ? await dialog.showOpenDialog(fullWindow, dialogOptions)
+        : await dialog.showOpenDialog(dialogOptions)
+      // Renvoie seulement le chemin : c'est OptionsMenu qui l'enregistre dans le profil, comme pour tous les
+      // autres réglages — le main n'écrit jamais un profil partiel par-dessus celui du renderer.
+      return result.canceled ? null : (result.filePaths[0] ?? null)
+    } finally {
+      dialogOpen = false
     }
   })
 

@@ -7,6 +7,7 @@ import type {
   HardwareTierPreview as HardwareTierPreviewData,
   ModelsLocationStatus,
   OllamaVersionStatus,
+  PhoneStatus,
   Profile,
   ReleaseHistoryEntry,
   UpdateProgress
@@ -47,7 +48,7 @@ const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
  */
 const MIC_TEST_BAR_COUNT = 42
 
-type Tab = 'voix' | 'micro' | 'activation' | 'modeles' | 'miseajour' | 'stockage' | 'historique'
+type Tab = 'voix' | 'micro' | 'activation' | 'telephone' | 'modeles' | 'miseajour' | 'stockage' | 'historique'
 
 /**
  * Chromium ajoute des pseudo-périphériques "default"/"communications" en plus des vrais haut-parleurs
@@ -145,6 +146,11 @@ export default function OptionsMenu(): JSX.Element {
   // affichée comme une rangée de barres qui défilent façon Discord, pas un seul chiffre.
   const [micLevels, setMicLevels] = useState<number[]>(() => Array(MIC_TEST_BAR_COUNT).fill(0))
   const [micTestResult, setMicTestResult] = useState<boolean | null>(null)
+  /** Pont téléphone (étape 21) — `null` tant que l'onglet Téléphone n'a jamais été ouvert. */
+  const [phoneStatus, setPhoneStatus] = useState<PhoneStatus | null>(null)
+  const [phoneBusy, setPhoneBusy] = useState(false)
+  /** Résultat de la dernière action téléphone, déjà rédigé en français par phoneBridge.ts : affiché tel quel. */
+  const [phoneMessage, setPhoneMessage] = useState<string | null>(null)
 
   useEffect(() => {
     window.jaris.getProfile().then((p) => {
@@ -165,6 +171,18 @@ export default function OptionsMenu(): JSX.Element {
 
   // Pas la peine à chaque ouverture du menu si l'utilisateur ne va jamais voir cet onglet Modèles :
   // previewHardwareTiers relit scripts/verified-tool-scores.md/benchmark-results.md côté main.
+  // Relu à CHAQUE ouverture de l'onglet (et pas une seule fois comme hardwareTiers) : contrairement à un
+  // réglage enregistré, l'état du pont change tout seul dans le dos de Jaris — le téléphone sort du Wi-Fi,
+  // l'application est fermée sur l'iPhone... Un état figé au premier affichage serait faux la fois suivante.
+  useEffect(() => {
+    if (tab !== 'telephone') return
+    setPhoneBusy(true)
+    void window.jaris
+      .getPhoneStatus()
+      .then(setPhoneStatus)
+      .finally(() => setPhoneBusy(false))
+  }, [tab])
+
   useEffect(() => {
     if (tab === 'modeles' && hardwareTiers === null) {
       void window.jaris.previewHardwareTiers().then(setHardwareTiers)
@@ -458,6 +476,51 @@ export default function OptionsMenu(): JSX.Element {
    * relus à la volée par App.tsx (comme soundEffectsEnabled ci-dessus) — aucun redémarrage du pipeline
    * vocal nécessaire, contrairement à toggleWakeword juste en dessous.
    */
+  /** Recharge l'état du pont : après chaque action, l'affichage doit décrire la situation RÉELLE du moment. */
+  const refreshPhoneStatus = async (): Promise<void> => {
+    setPhoneStatus(await window.jaris.getPhoneStatus())
+  }
+
+  const runPhoneAction = async (action: () => Promise<string>): Promise<void> => {
+    setPhoneBusy(true)
+    setPhoneMessage(null)
+    try {
+      setPhoneMessage(await action())
+      await refreshPhoneStatus()
+    } catch (err) {
+      setPhoneMessage(err instanceof Error ? err.message : String(err))
+    } finally {
+      setPhoneBusy(false)
+    }
+  }
+
+  /** Enregistre le téléphone à utiliser quand plusieurs sont joignables (sinon Jaris prend le seul qu'il voit). */
+  const choosePhoneDevice = async (deviceId: string): Promise<void> => {
+    if (!profile) return
+    setError(null)
+    const updated = { ...profile, phoneDeviceId: deviceId }
+    setProfile(updated)
+    try {
+      await window.jaris.saveProfile(updated)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  /** Repli quand la recherche automatique de kdeconnect-cli.exe échoue : Léo le désigne lui-même. */
+  const chooseKdeConnectCli = async (): Promise<void> => {
+    const chosen = await window.jaris.pickKdeConnectCli()
+    if (!chosen || !profile) return
+    const updated = { ...profile, phoneCliPath: chosen }
+    setProfile(updated)
+    try {
+      await window.jaris.saveProfile(updated)
+      await refreshPhoneStatus()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
   const toggleActivationKey = async (enabled: boolean): Promise<void> => {
     if (!profile) return
     setError(null)
@@ -568,6 +631,9 @@ export default function OptionsMenu(): JSX.Element {
             </button>
             <button className={`options-menu__tab${tab === 'activation' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('activation')}>
               Activation
+            </button>
+            <button className={`options-menu__tab${tab === 'telephone' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('telephone')}>
+              Téléphone
             </button>
             <button className={`options-menu__tab${tab === 'modeles' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('modeles')}>
               Modèles
@@ -742,6 +808,77 @@ export default function OptionsMenu(): JSX.Element {
               pas reconnaître "Jaris" dit seul, sans rien après. Si ça arrive trop souvent, la touche "+" et
               le clic sur le cercle restent des façons fiables de l'activer.
             </p>
+          </div>
+        )}
+
+        {tab === 'telephone' && (
+          <div className="options-menu__section">
+            <div className="options-menu__section-title">Ton téléphone</div>
+            <p className="options-menu__model-overview-hint">
+              Jaris parle à ton téléphone par KDE Connect, sur ton Wi-Fi — rien ne passe par internet. Installe
+              l'application sur l'ordinateur (kdeconnect.kde.org) et sur le téléphone (App Store), puis appaire
+              les deux une seule fois.
+            </p>
+            <p className="options-menu__model-overview-hint">
+              Sur iPhone, Apple interdit aux applications de lire les notifications des autres applications et
+              d'envoyer des SMS : Jaris ne peut donc pas le faire, quel que soit le logiciel. Ce qui marche
+              vraiment : faire sonner ton téléphone, et lui déposer un texte ou un lien. L'application KDE
+              Connect doit rester affichée à l'écran du téléphone pendant ce temps, toujours à cause d'Apple.
+            </p>
+
+            {phoneStatus === null ? (
+              <p className="options-menu__model-overview-hint">Vérification…</p>
+            ) : (
+              <>
+                {phoneStatus.devices.length > 0 && (
+                  <>
+                    <div className="options-menu__section-title">
+                      {phoneStatus.devices.length === 1 ? 'Téléphone joignable' : 'Téléphones joignables'}
+                    </div>
+                    {phoneStatus.devices.map((device) => (
+                      <label className="options-menu__checkbox" key={device.id}>
+                        <input
+                          type="radio"
+                          name="phone-device"
+                          checked={
+                            profile?.phoneDeviceId === device.id ||
+                            (phoneStatus.devices.length === 1 && !profile?.phoneDeviceId)
+                          }
+                          onChange={() => void choosePhoneDevice(device.id)}
+                        />
+                        {device.name}
+                      </label>
+                    ))}
+                  </>
+                )}
+
+                {phoneStatus.message && <p className="options-menu__model-overview-hint">{phoneStatus.message}</p>}
+
+                <div className="options-menu__actions">
+                  <button
+                    className="options-menu__action"
+                    disabled={phoneBusy || phoneStatus.devices.length === 0}
+                    onClick={() => void runPhoneAction(() => window.jaris.ringPhone())}
+                  >
+                    Faire sonner le téléphone
+                  </button>
+                  <button
+                    className="options-menu__action"
+                    disabled={phoneBusy}
+                    onClick={() => void runPhoneAction(() => refreshPhoneStatus().then(() => 'Vérification terminée.'))}
+                  >
+                    Revérifier
+                  </button>
+                  {!phoneStatus.installed && (
+                    <button className="options-menu__action" disabled={phoneBusy} onClick={() => void chooseKdeConnectCli()}>
+                      Trouver KDE Connect moi-même
+                    </button>
+                  )}
+                </div>
+
+                {phoneMessage && <p className="options-menu__model-overview-hint">{phoneMessage}</p>}
+              </>
+            )}
           </div>
         )}
 

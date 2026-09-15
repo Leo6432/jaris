@@ -455,7 +455,11 @@ body.body--scan::after {
   margin: 0 0 10px;
 }
 
-.options-menu__ollama-update-actions {
+/* Rangée de boutons d'un onglet Options. `.options-menu__actions` (onglet Téléphone, étape 21) rejoint la
+   règle existante au lieu d'en créer une identique à côté : deux rangées de boutons doivent se ressembler
+   par construction, pas par discipline. */
+.options-menu__ollama-update-actions,
+.options-menu__actions {
   display: flex;
   align-items: center;
   gap: 10px;

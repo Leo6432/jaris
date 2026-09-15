@@ -1582,3 +1582,59 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   ouverte comptée elle aussi, conteneur déjà limité JAMAIS recréé à chaque lancement, refus du JSON toujours
   traité, diagnostic indisponible sans effet, et docker-compose.yml qui ne publie que sur 127.0.0.1). Chaque
   assertion a été vérifiée en réintroduisant temporairement le défaut correspondant.
+
+- **Intégration téléphone (étape 21, demande de Léo : "on va faire étape 21").** L'étape demandait
+  explicitement de COMPARER deux ponts PC/téléphone avant d'en choisir un — comparaison faite sur les
+  sources primaires, jamais sur des articles :
+  - **KDE Connect** expose un vrai programme en ligne de commande. Vérifié dans son dépôt officiel :
+    `add_subdirectory(cli)` est hors de tout `if (NOT WIN32)` (CMakeLists.txt), donc `kdeconnect-cli` est
+    compilé aussi sur Windows, et `cli/kdeconnect-cli.cpp` liste les options réellement disponibles
+    (`--ring`, `--share-text`, `--share`, `--list-available --id-name-only`, `--send-sms --destination`,
+    `--list-notifications`...). Même forme d'intégration que tout le reste de Jaris : on lance une commande,
+    on lit sa sortie.
+  - **Mobile connecté (Phone Link)** fait plus de choses avec un iPhone (messages, notifications, appels par
+    Bluetooth — documenté par Microsoft) mais n'expose AUCUNE API : la seule réponse officielle sur
+    learn.microsoft.com à « existe-t-il une API Phone Link ? » renvoie vers des services SMS payants. Le
+    piloter demanderait de cliquer dans sa fenêtre à l'aveugle, ce qui casse à la première mise à jour de
+    Windows — et se prétend automatique tout en étant intestable ici.
+  **Léo a un iPhone, et c'est ce qui décide du périmètre réel.** Sa première demande était « envoyer un SMS
+  à la voix » : impossible, et il fallait le dire avant de coder plutôt que de livrer un truc qui n'enverrait
+  rien. Vérifié à la source, pas supposé : l'application iOS de KDE Connect contient exactement 8 greffons
+  (liste des dossiers de `Plugins and Plugin Views` dans kdeconnect-ios : Battery, Clipboard, FindMyPhone,
+  Ping, Presenter, RemoteInput, RunCommand, Share) — ni SMS, ni notifications — et leur README l'explique :
+  « Notification syncing doesn't work because iOS applications can't access notifications of other apps ».
+  C'est une interdiction d'Apple, donc aucun logiciel local ne peut la contourner. Léo, informé, a choisi de
+  faire « ce qui marche vraiment sur iPhone » plutôt qu'un pilotage de fenêtre bricolé.
+  **Leçon générale : quand une demande se heurte à une interdiction d'une plateforme tierce, la vérifier sur
+  la source primaire (le code/les greffons réellement livrés, pas une page marketing) et l'annoncer AVANT de
+  coder** — livrer une version dégradée en silence, ou un pilotage d'interface fragile présenté comme
+  automatique, aurait coûté une version pour rien et une confiance en moins.
+  **Sécurité, le point structurant du code** : le texte envoyé au téléphone vient du modèle, donc d'une
+  phrase dictée. Toutes les commandes passent par `execFile` avec un TABLEAU d'arguments, jamais par une
+  chaîne de shell — même règle que `type_text` (inputControl.ts). Un test lance vraiment
+  `coucou" & shutdown -s -t 0 & echo "` et vérifie qu'il ressort INTACT comme argument unique, plus un
+  contrôle structurel qui échoue si un futur ajout repasse par `exec`/`shell: true`.
+  **Piège évité par anticipation, tiré des étapes 87-90** : le message de succès dit « Texte déposé sur ton
+  téléphone, dans KDE Connect (ce n'est pas un SMS envoyé à quelqu'un) ». Un simple « Envoyé sur le
+  téléphone. » aurait laissé croire qu'un message était parti à quelqu'un — exactement la famille de fausses
+  confirmations déjà corrigée trois fois. La description de l'outil dit aussi au modèle de REFUSER
+  franchement une demande de SMS au lieu d'utiliser cet outil à la place.
+  **Deux pièges déjà documentés, rencontrés à nouveau en écrivant les tests** : (1) `vm.runInNewContext` et
+  ses prototypes séparés font échouer `assert.deepEqual` sur des objets identiques — chargé dans le realm
+  courant (`runInThisContext` + enveloppe) puisque ce test compare de vrais tableaux d'arguments ; (2) un
+  mock d'`execFile` sans la marque `[util.promisify.custom]` fait résoudre `promisify` vers un tableau
+  positionnel, et le test passerait à côté de ce qu'il prétend vérifier.
+  **Piège trouvé dans MON propre test, en vérifiant qu'il mordait** : la première version de l'assertion
+  « les boutons sont bien habillés par le CSS » visait `.options-menu__action` — en retirant cette classe
+  d'un bouton pour vérifier, le test passait toujours : son sélecteur trouvait simplement le bouton SUIVANT,
+  resté stylé. Corrigé en sélectionnant tous les boutons par leur BALISE puis en les vérifiant un par un.
+  **Leçon générale : un test qui cherche ses éléments par la classe qu'il est censé vérifier ne peut pas voir
+  cette classe manquer** — sélectionner par ce qui ne change pas (la balise, le rôle), puis mesurer.
+  Régression : `node --test scripts/test-phone-bridge.mjs scripts/test-phone-tab-ui.mjs` (commandes
+  construites, texte piégé resté inerte, aucun shell, téléphone choisi respecté, message quand rien n'est
+  joignable ; et dans un vrai navigateur : onglet monté, boutons réellement habillés par le CSS compilé,
+  bouton désactivé quand aucun téléphone n'est joignable). Chaque assertion a été vérifiée en réintroduisant
+  temporairement le défaut correspondant.
+  **Non vérifiable ici, à confirmer par Léo** : que KDE Connect s'installe bien, que Jaris trouve
+  `kdeconnect-cli.exe` là où l'installeur le dépose (d'où le bouton « Trouver KDE Connect moi-même », qui
+  marche quel que soit le dossier), et que l'appairage tienne sur son Wi-Fi.

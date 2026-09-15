@@ -75,6 +75,35 @@ export interface Profile {
   activationKeyEnabled?: boolean
   activationWakeWordEnabled?: boolean
   activationOrbClickEnabled?: boolean
+  /**
+   * Options → Téléphone (étape 21) : identifiant KDE Connect du téléphone à utiliser. Absent tant que Léo
+   * n'a rien choisi — inutile de le forcer, un seul téléphone joignable est pris automatiquement
+   * (resolveDevice, phoneBridge.ts) ; ce champ ne sert que s'il y en a plusieurs.
+   */
+  phoneDeviceId?: string
+  /**
+   * Chemin de `kdeconnect-cli.exe` désigné à la main, quand la recherche automatique ne l'a pas trouvé :
+   * l'emplacement dépend de la façon dont KDE Connect a été installé, et aucun Windows n'était disponible
+   * pour vérifier laquelle tombe juste — ce repli marche quel que soit le dossier.
+   */
+  phoneCliPath?: string
+}
+
+/** Un téléphone appairé et joignable, vu par KDE Connect (étape 21). */
+export interface PhoneDevice {
+  id: string
+  name: string
+}
+
+/**
+ * État du pont téléphone pour Options → Téléphone. `message` est déjà rédigé pour être lu tel quel par Léo
+ * (installation manquante, téléphone injoignable, Wi-Fi différent) : rien ne le reformule avant l'affichage.
+ */
+export interface PhoneStatus {
+  installed: boolean
+  reachable: boolean
+  devices: PhoneDevice[]
+  message: string
 }
 
 /**
@@ -593,5 +622,18 @@ export const IPC_CHANNELS = {
    */
   setActiveMode: 'jaris:set-active-mode',
   /** main -> renderer : un son court à jouer (design sonore, étape 31) — voir SoundCue plus haut. */
-  soundCue: 'jaris:sound-cue'
+  soundCue: 'jaris:sound-cue',
+  /** renderer <-> main : état du pont téléphone (KDE Connect installé ? téléphones joignables ?) — étape 21. */
+  getPhoneStatus: 'jaris:get-phone-status',
+  /** renderer -> main : fait sonner le téléphone, pour vérifier que le pont marche vraiment (bouton de test). */
+  ringPhone: 'jaris:ring-phone',
+  /** renderer -> main : envoie un texte/lien sur le téléphone. */
+  sendToPhone: 'jaris:send-to-phone',
+  /**
+   * renderer <-> main : sélecteur de fichier pour désigner `kdeconnect-cli.exe` à la main quand la recherche
+   * automatique échoue. Passe par le main process comme `pickImageFile`, et pour la même raison : c'est le
+   * seul endroit où le garde `dialogOpen` peut encadrer le dialogue natif, sans quoi Jaris se replierait en
+   * widget en plein milieu du choix (bug vécu à l'étape 93).
+   */
+  pickKdeConnectCli: 'jaris:pick-kdeconnect-cli'
 } as const
