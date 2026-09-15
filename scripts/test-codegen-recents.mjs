@@ -4,6 +4,11 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 
+// `vm.runInNewContext` crée un realm SANS les globaux de Node : depuis l'étape 99, generateApp arme un
+// battement de cœur (setInterval) pendant chaque appel au modèle, qui échouait ici sur un simple
+// "setInterval is not defined" — un piège qui ne vient pas du code testé mais du bac à sable du test.
+const TIMERS = { setInterval, clearInterval }
+
 /**
  * Reproduit en usage réel (Léo, "si on relance jarvis, on a plus rien dans le code") : chaque application
  * générée était bien enregistrée sur le disque (generated-apps/<horodatage>-<slug>/index.html), mais rien
@@ -41,7 +46,7 @@ function setup({ dirEntries = [], readdirError = null, files = {} } = {}) {
     './profileStore': { getProfile: async () => null }
   }
   const exports = {}
-  vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports } })
+  vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports }, ...TIMERS })
   return exports
 }
 

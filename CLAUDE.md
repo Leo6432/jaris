@@ -1443,3 +1443,89 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   (avancement réellement émis, abandon sur inactivité et non sur durée totale, installeur incomplet qui ne
   ferme JAMAIS Jaris et ne se lance pas, messages en français, barre qui suit le pourcentage dans un vrai
   navigateur). Chaque assertion a été vérifiée en réintroduisant temporairement le défaut correspondant.
+
+- **"quand on demande une mise à jour on ne sait pas quand c'est terminé et des fois c'est bloqué et ça fait
+  rien" (Léo, étape 99) — il parlait du MODE CODE, pas de la mise à jour de Jaris.** Le mot "mise à jour"
+  désignait ici une DEMANDE DE MODIFICATION d'une application déjà générée ("Que veux-tu changer ?"), pas la
+  mise à jour de l'application Jaris elle-même, sur laquelle l'étape 98 venait d'être livrée. Précision
+  donnée par Léo juste après ("mince je voulais dire pour code pas pour mis a jour"). **Leçon générale :
+  quand un mot du vocabulaire de l'utilisateur correspond exactement à une fonctionnalité existante, ce
+  n'est pas une preuve qu'il parle de celle-là** — "mise à jour" veut dire "mettre à jour quelque chose"
+  bien avant de désigner l'écran qui porte ce nom. Le correctif de l'étape 98 restait un vrai bug mesuré
+  (et a été livré), mais il ne répondait pas à la demande ; une question ciblée aurait coûté une minute.
+  Le défaut réel, lui, est le même symptôme sur un autre écran : une génération enchaîne 2 à 4 appels au
+  modèle local (écriture, relecture, parfois une relance et une réparation), chacun pouvant durer plusieurs
+  minutes, et RIEN n'était envoyé à l'écran entre le début et la fin d'un appel — le journal n'affichait sa
+  ligne suivante qu'une fois l'appel terminé. Trois manques, corrigés ensemble :
+  1. **Aucune preuve de mouvement.** `chatWithOllama` savait déjà streamer (`onToken`, étape 48, utilisé par
+     le Chat) mais le mode Code ne s'en servait pas : il attendait la réponse complète. Il streame
+     maintenant, et le nombre de caractères déjà écrits est renvoyé à l'écran — c'est LA différence entre
+     "ça travaille" et "c'est bloqué", qu'aucun libellé fixe ne peut donner. Le raisonnement caché
+     (`message.thinking`, documenté par l'API Ollama) est relayé par un second callback `onThinking` :
+     pendant une longue réflexion, aucun caractère de code n'arrive, et sans ce signal l'écran serait
+     indiscernable d'un blocage. Il n'est JAMAIS accumulé dans la réponse rendue, uniquement compté comme
+     signe de vie.
+  2. **Rien ne disait combien de temps ça pouvait encore durer.** L'étape en cours est numérotée ("étape 2
+     sur 2"), et le total monte quand une passe supplémentaire devient nécessaire (relance, réparation)
+     plutôt que d'être compté d'avance pour un cas qui n'arrive pas la plupart du temps — jamais une
+     "étape 3 sur 2". Un `idleMs` (temps depuis le dernier fragment reçu, renvoyé par un battement de cœur
+     d'une seconde) permet de DIRE "rien reçu du modèle depuis 45 s" au lieu de laisser deviner. Un
+     chronomètre côté écran ne peut pas jouer ce rôle : il continuerait de tourner même si Ollama était mort.
+  3. **Aucun moyen d'arrêter.** Une génération partie ne pouvait plus être interrompue autrement qu'en
+     fermant Jaris — c'est le "ça fait rien" dans sa forme la plus frustrante. Un bouton "Arrêter" annule
+     désormais le vrai `AbortSignal` passé à chaque appel. **Piège attrapé par le test, pas en relecture :**
+     les passes de relecture et de réparation sont volontairement TOLÉRANTES (un échec conserve le premier
+     jet) — sans un relais explicite de l'arrêt dans ces deux `catch`, un clic sur "Arrêter" pendant la
+     relecture était avalé comme un échec ordinaire et la génération continuait jusqu'au bout. **Leçon
+     générale : un `catch` qui "absorbe les échecs pour continuer quand même" doit toujours laisser passer
+     l'annulation demandée par l'utilisateur — sinon le bouton d'arrêt marche à certains moments seulement,
+     ce qui est pire qu'une absence de bouton.**
+  **Deux pièges de realm dans les tests, dont un qui cachait un VRAI défaut de production.** Les tests de ce
+  module chargent le code avec `vm.runInNewContext`, qui crée un realm sans les globaux de Node : le
+  battement de cœur (`setInterval`) échouait donc sur "setInterval is not defined", un échec qui ne vient pas
+  du code testé mais du bac à sable (corrigé en passant les minuteurs au contexte). Surtout, `err instanceof
+  Error` répond FALSE pour une erreur créée dans un autre realm — le test d'arrêt a ainsi révélé que la
+  détection écrite en premier (`err instanceof Error && err.name === 'AbortError'`) ne tenait pas ; et elle
+  est tout aussi fragile en production, où `fetch` rejette avec une `DOMException` sur un signal annulé.
+  Remplacée par un contrôle du seul NOM de l'erreur. **Leçon générale : ne jamais faire dépendre la
+  détection d'une annulation d'un `instanceof` — la classe change selon le realm et selon ce qui a levé
+  l'erreur, le nom `AbortError`, lui, est stable.**
+  **Piège de l'étape 96 revécu alors qu'il était déjà écrit ici** : `CodePanel` s'abonne désormais à un
+  nouveau canal au montage, et les faux ponts preload des tests navigateur EXISTANTS ne le fournissaient pas
+  — le composant ne se montait plus du tout et la suite partait en expiration de 30 s par test, sans le
+  moindre message. Le réflexe à garder : après avoir ajouté un `window.jaris.xxx` consommé au montage,
+  `grep` les faux ponts des tests avant de lancer la suite.
+  Régression : `node --test scripts/test-codegen-progress.mjs scripts/test-format-codegen-progress.mjs
+  scripts/test-code-panel-ui.mjs` (avancement réellement émis PENDANT l'appel, numérotation des étapes,
+  arrêt effectif y compris pendant la relecture, et dans un vrai navigateur : bandeau affiché, silence
+  prolongé annoncé, bouton "Arrêter" réellement habillé par le CSS et suivi d'un journal — pas d'une erreur
+  rouge). Chaque assertion a été vérifiée en réintroduisant temporairement le défaut correspondant.
+
+- **"on sait pas trop quand c'est terminé quand on fait un prompt dans code" + "les icones poubelle sont un
+  peu mal faite" (Léo, étape 100).** Deux retours d'affilée sur le mode Code, livrés avec l'étape 99 dans la
+  même version.
+  1. **La fin d'une génération était annoncée ailleurs que là où l'utilisateur regardait.** L'étape 99 avait
+     ajouté un bandeau d'avancement bien visible (étape en cours, caractères écrits, chronomètre) — mais la
+     FIN, elle, n'était qu'une petite ligne grise de 0,72rem posée sous ce bandeau disparu. Or c'est
+     exactement au même endroit que l'œil attend la nouvelle : le bandeau qui bougeait devient donc
+     maintenant un bandeau vert "Terminé en 1 min 12 — ton application est à jour", même boîte, même place,
+     seule la couleur change (`--hud-ok`, le jeton de succès qui existait déjà — jamais une couleur
+     inventée à côté). **Leçon générale : quand une opération longue affiche un indicateur de progression,
+     son message de fin doit remplacer CET indicateur au même endroit, pas s'afficher ailleurs** — sinon
+     l'utilisateur continue de fixer une zone devenue vide et ne voit pas que c'est fini. Ça compte d'autant
+     plus pour une MODIFICATION : l'aperçu obtenu ressemble souvent au précédent, donc le résultat visuel ne
+     suffit pas à dire que le travail est terminé.
+     Détail corrigé en relisant la capture : la première rédaction disait "l'aperçu ci-dessous est à jour"
+     alors que l'aperçu est AU-DESSUS du bandeau. **Une phrase d'interface qui désigne une position devient
+     fausse au premier changement de mise en page — préférer une formulation qui n'en dépend pas.**
+  2. **La corbeille était mal dessinée, et ça ne se voyait qu'en l'agrandissant.** Trois vrais défauts de
+     tracé dans `icons.tsx` : la poignée était un trait flottant AU-DESSUS du couvercle, sans montants pour
+     l'y rattacher ; les deux stries intérieures partaient exactement SUR la ligne du couvercle et
+     descendaient jusqu'au fond, donc elles traversaient l'un et l'autre au lieu de rester dans le bac ; et
+     aucun `strokeLinecap`/`strokeLinejoin`, d'où des angles coupés net à chaque jonction. Redessinée
+     (poignée rattachée, stries rentrées en haut comme en bas, extrémités arrondies), passée de 15 à 16px, et
+     son opacité de repos relevée de 0,55 à 0,75 : sur une couleur déjà `--hud-text-faint`, elle était
+     délavée au point qu'on ne distinguait plus sa forme. **Leçon générale : pour juger un tracé SVG, le
+     rendre à très grande taille côte à côte avec l'ancien** — à 15px, un défaut de géométrie ne se lit pas
+     comme "mal dessiné" mais comme "un peu sale", et on ne sait pas dire pourquoi. La comparaison agrandie
+     rend la cause évidente en une seconde.

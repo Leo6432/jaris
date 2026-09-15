@@ -1,11 +1,35 @@
 import { useEffect, useRef, useState } from 'react'
 import Composer from '@/components/Composer'
 import Workspace from '@/components/Workspace'
+import { formatCodeGenProgress, formatDuration } from '@/lib/formatCodeGenProgress'
 import { formatRecentDate } from '@/lib/formatRecentDate'
+import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import type { ImageAttachment } from '@/lib/imageAttachment'
-import type { GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
+import type { CodeGenProgress, GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
 
 type View = 'preview' | 'code'
+
+/**
+ * Coche du bandeau de fin (étape 100). Définie ici et pas dans icons.tsx : la règle du projet est d'extraire
+ * une icône au DEUXIÈME usage, pas avant — elle n'est utilisée qu'à cet endroit.
+ */
+function CheckIcon(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 12.5l5.2 5.2L20 7" />
+    </svg>
+  )
+}
 
 /**
  * Mode Code (étape 30) : décrire une application en français et la voir tourner, générée à 100% en local.
@@ -21,7 +45,16 @@ export default function CodePanel(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [recentApps, setRecentApps] = useState<GeneratedAppSummary[]>([])
   const [attachment, setAttachment] = useState<ImageAttachment | null>(null)
+  /** Avancement en direct de l'étape en cours (étape 99) — `null` avant le premier appel au modèle. */
+  const [progress, setProgress] = useState<CodeGenProgress | null>(null)
+  /** Temps écoulé depuis le clic, réaffiché chaque seconde : "ça tourne depuis 2 min" est la première
+   *  chose que Léo cherchait des yeux ("on ne sait pas quand c'est terminé"). */
+  const [elapsedMs, setElapsedMs] = useState(0)
+  /** Durée de la DERNIÈRE génération terminée, pour annoncer clairement la fin. */
+  const [lastDurationMs, setLastDurationMs] = useState<number | null>(null)
   const statusRef = useRef<HTMLPreElement>(null)
+  /** Mis à true par le bouton "Arrêter" : l'échec qui suit est alors un arrêt voulu, pas une panne. */
+  const stoppedRef = useRef(false)
 
   // Repéré par Léo en usage réel ("si on relance jarvis, on a plus rien dans le code") : chaque génération
   // est bien enregistrée sur le disque (generated-apps/<horodatage>-<slug>/), mais rien ne remontrait cette
@@ -36,6 +69,20 @@ export default function CodePanel(): JSX.Element {
   }, [])
 
   useEffect(() => {
+    return window.jaris.onCodeGenProgress(setProgress)
+  }, [])
+
+  // Chronomètre de la génération en cours. Une seconde suffit : ce n'est pas une mesure, c'est un signe que
+  // Jaris est toujours vivant — et il s'arrête net dès que la génération est finie.
+  useEffect(() => {
+    if (!generating) return
+    const startedAt = Date.now()
+    setElapsedMs(0)
+    const timer = setInterval(() => setElapsedMs(Date.now() - startedAt), 1000)
+    return () => clearInterval(timer)
+  }, [generating])
+
+  useEffect(() => {
     statusRef.current?.scrollTo({ top: statusRef.current.scrollHeight })
   }, [statusLines])
 
@@ -47,6 +94,10 @@ export default function CodePanel(): JSX.Element {
     setError(null)
     setGenerating(true)
     setStatusLines([])
+    setProgress(null)
+    setLastDurationMs(null)
+    stoppedRef.current = false
+    const startedAt = Date.now()
     try {
       // appResult présent = demande de modification : le fichier actuel part avec la demande.
       const result = await window.jaris.generateApp(
@@ -58,12 +109,30 @@ export default function CodePanel(): JSX.Element {
       setDescription('')
       setAttachment(null)
       setView('preview')
+      // Fin annoncée de deux façons : la durée reste affichée sous le champ, et un bip si les sons sont
+      // activés — une génération peut durer plusieurs minutes, pendant lesquelles Léo fait autre chose.
+      setLastDurationMs(Date.now() - startedAt)
+      void playSoundCueIfEnabled('success')
       void window.jaris.getGeneratedApps().then(setRecentApps)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      // Un arrêt demandé n'est pas une panne : il s'affiche comme une ligne de journal, pas en rouge.
+      if (stoppedRef.current) {
+        setStatusLines((prev) => [...prev, `Génération arrêtée après ${formatDuration(Date.now() - startedAt)}.`])
+      } else {
+        setError(err instanceof Error ? err.message : String(err))
+        void playSoundCueIfEnabled('error')
+      }
     } finally {
       setGenerating(false)
+      setProgress(null)
     }
+  }
+
+  /** Arrête la génération en cours (étape 99) : sans ce bouton, une génération partie ne pouvait plus être
+   *  interrompue autrement qu'en fermant Jaris. */
+  const stop = (): void => {
+    stoppedRef.current = true
+    window.jaris.cancelCodeGen()
   }
 
   const openRecent = async (path: string): Promise<void> => {
@@ -186,6 +255,35 @@ export default function CodePanel(): JSX.Element {
               ouvrant le fichier depuis le dossier.
             </p>
           </div>
+        )}
+
+        {/* Étape 99 : le bandeau qui manquait. Une génération enchaîne 2 à 4 appels au modèle local, chacun
+            pouvant durer plusieurs minutes — "on ne sait pas quand c'est terminé et des fois c'est bloqué et
+            ça fait rien" (Léo). On montre donc où on en est (étape X sur Y), la preuve que ça avance (les
+            caractères écrits, qui montent), depuis combien de temps, et une sortie de secours. */}
+        {generating && (
+          <div className="code-panel__live">
+            <div className="code-panel__live-text">
+              <span className="code-panel__live-title">{formatCodeGenProgress(progress, elapsedMs).title}</span>
+              <span className="code-panel__live-detail">{formatCodeGenProgress(progress, elapsedMs).detail}</span>
+            </div>
+            <button className="code-panel__live-stop" onClick={stop}>
+              Arrêter
+            </button>
+          </div>
+        )}
+
+        {/* Fin de génération annoncée À L'ENDROIT MÊME où l'avancement était suivi (étape 100) : Léo
+            regardait le bandeau, c'est donc là que doit s'afficher "c'est fini", pas dans une petite ligne
+            grise ailleurs. Une modification d'application donne souvent un aperçu presque identique à
+            l'œil — sans cette phrase, rien ne dit que le travail est terminé. */}
+        {!generating && lastDurationMs !== null && (
+          <p className="code-panel__done">
+            <CheckIcon />
+            {/* Pas de "ci-dessus"/"ci-dessous" : l'aperçu est au-dessus de ce bandeau, mais une phrase qui
+                désigne une position devient fausse au premier changement de mise en page. */}
+            <span>Terminé en {formatDuration(lastDurationMs)} — ton application est à jour.</span>
+          </p>
         )}
 
         {(generating || statusLines.length > 0) && (

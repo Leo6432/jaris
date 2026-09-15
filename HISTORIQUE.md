@@ -805,3 +805,25 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   (216 tests), dont l'avancement réellement émis, l'abandon sur inactivité et l'installeur incomplet qui ne
   ferme pas Jaris — chaque assertion vérifiée en réintroduisant temporairement le défaut. Non vérifiable
   ici : le déroulé complet d'une vraie mise à jour sur la machine de Léo.
+
+- ✅ Étape 99 (v0.8.3) — Léo : "quand on demande une mise à jour on ne sait pas quand c'est terminé et des
+  fois c'est bloqué et ça fait rien", en parlant du MODE CODE (une demande de modification d'application),
+  pas de la mise à jour de Jaris corrigée à l'étape 98. Une génération enchaîne 2 à 4 appels au modèle local
+  (écriture, relecture, parfois une relance et une réparation), chacun pouvant durer plusieurs minutes, et
+  rien n'apparaissait à l'écran entre le début et la fin d'un appel. Désormais : un bandeau d'avancement qui
+  dit l'étape en cours ("étape 1 sur 2 · Écriture de l'application"), le nombre de caractères déjà écrits par
+  le modèle — qui monte, donc prouve que ça avance —, le temps écoulé, et "rien reçu du modèle depuis 45 s"
+  quand ça se tait vraiment (ce qu'un simple chronomètre ne peut pas dire : il tournerait même si Ollama
+  était mort). Le mode Code utilise enfin le streaming que le Chat utilisait déjà, plus le raisonnement caché
+  du modèle comme signe de vie pendant qu'il réfléchit sans écrire. Un bouton "Arrêter" interrompt pour de
+  vrai une génération partie, y compris pendant la relecture — jusqu'ici il fallait fermer Jaris.
+  Régression : `npm test` (232 tests), dont l'avancement réellement émis pendant l'appel, la numérotation des
+  étapes, et l'arrêt effectif. Non vérifiable ici : la durée réelle d'une génération sur la machine de Léo.
+
+- ✅ Étape 100 (v0.8.3, même version) — Léo : "on sait pas trop quand c'est terminé quand on fait un prompt
+  dans code" et "les icones poubelle sont un peu mal faite". La fin d'une génération s'affiche maintenant
+  EXACTEMENT là où l'avancement était suivi : le bandeau devient vert "Terminé en 1 min 12 — ton application
+  est à jour" (plus un bip si les sons sont activés), au lieu d'une petite ligne grise ailleurs — ça compte
+  surtout pour une modification, dont l'aperçu ressemble souvent au précédent. La corbeille a été redessinée :
+  sa poignée flottait au-dessus du couvercle sans y être rattachée, ses deux stries traversaient le couvercle
+  et le fond, et aucun angle n'était arrondi ; elle est aussi un peu plus grande et moins délavée au repos.

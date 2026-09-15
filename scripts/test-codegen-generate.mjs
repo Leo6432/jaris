@@ -23,6 +23,11 @@ const VALID_HTML =
 const PYTHON_RESPONSE =
   '```python\nimport tkinter as tk\n\nclass SnakeGame:\n    def __init__(self, fenetre):\n        pass\n```'
 
+// `vm.runInNewContext` crée un realm SANS les globaux de Node : depuis l'étape 99, generateApp arme un
+// battement de cœur (setInterval) pendant chaque appel au modèle, qui échouait ici sur un simple
+// "setInterval is not defined" — un piège qui ne vient pas du code testé mais du bac à sable du test.
+const TIMERS = { setInterval, clearInterval }
+
 /** Fabrique un module généré avec une file de réponses successives pour chatWithOllama (dans l'ordre d'appel). */
 function setup(responses) {
   const calls = []
@@ -58,7 +63,7 @@ function setup(responses) {
     }
   }
   const exports = {}
-  vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports }, console })
+  vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports }, console, ...TIMERS })
   return {
     generateApp: (description, currentHtml, imageBase64) =>
       exports.generateApp(description, (line) => statusLines.push(line), currentHtml, imageBase64),

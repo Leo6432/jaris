@@ -8,6 +8,7 @@ import {
   type ChatMessage,
   type ConversationEntry,
   type ConversationList,
+  type CodeGenProgress,
   type GeneratedApp,
   type GeneratedAppSummary,
   type HardwareTierPreview,
@@ -96,6 +97,9 @@ const api = {
   generateApp: (description: string, currentHtml?: string, imageBase64?: string): Promise<GeneratedApp> =>
     ipcRenderer.invoke(IPC_CHANNELS.generateApp, description, currentHtml, imageBase64),
   onCodeGenStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.codeGenStatus, cb),
+  // Étape 99 : avancement en direct de l'étape en cours, et arrêt d'une génération partie.
+  onCodeGenProgress: (cb: (progress: CodeGenProgress) => void) => subscribe(IPC_CHANNELS.codeGenProgress, cb),
+  cancelCodeGen: (): void => ipcRenderer.send(IPC_CHANNELS.cancelCodeGen),
   openGeneratedApp: (path?: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openGeneratedApp, path),
   getGeneratedApps: (): Promise<GeneratedAppSummary[]> => ipcRenderer.invoke(IPC_CHANNELS.getGeneratedApps),
   loadGeneratedApp: (path: string): Promise<GeneratedApp> => ipcRenderer.invoke(IPC_CHANNELS.loadGeneratedApp, path),

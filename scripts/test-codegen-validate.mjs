@@ -4,6 +4,11 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 
+// `vm.runInNewContext` crée un realm SANS les globaux de Node : depuis l'étape 99, generateApp arme un
+// battement de cœur (setInterval) pendant chaque appel au modèle, qui échouait ici sur un simple
+// "setInterval is not defined" — un piège qui ne vient pas du code testé mais du bac à sable du test.
+const TIMERS = { setInterval, clearInterval }
+
 /**
  * validateGeneratedHtml() est une fonction pure (aucun appel réseau/disque à l'exécution) mais son module
  * importe electron/ollama/hardwareScan/profileStore au chargement — mockés ici en no-op puisque cette
@@ -29,7 +34,7 @@ const modules = {
   './profileStore': { getProfile: async () => null }
 }
 const exports = {}
-vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports } })
+vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports }, ...TIMERS })
 
 const { validateGeneratedHtml } = exports
 

@@ -9,6 +9,13 @@ export interface OllamaMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string
   tool_calls?: OllamaToolCall[]
+  /**
+   * Raisonnement caché des modèles qui en produisent un (`think`), documenté par l'API Ollama comme
+   * "the model's thinking process". Jamais affiché ni renvoyé à l'utilisateur — mais, en streaming, c'est
+   * le SEUL signe de vie pendant les longues secondes où le modèle réfléchit avant d'écrire quoi que ce
+   * soit (voir onThinking plus bas, étape 99).
+   */
+  thinking?: string
 }
 
 export interface OllamaTool {
@@ -37,9 +44,10 @@ async function requestChat(
   body: Record<string, unknown>,
   model: string,
   signal?: AbortSignal,
-  onToken?: (delta: string) => void
+  onToken?: (delta: string) => void,
+  onThinking?: (delta: string) => void
 ): Promise<OllamaMessage> {
-  const streaming = Boolean(onToken)
+  const streaming = Boolean(onToken || onThinking)
   let response: Response
   try {
     response = await fetch(`${config.ollama.host}/api/chat`, {
@@ -92,6 +100,9 @@ async function requestChat(
         content += chunk.message.content
         onToken?.(chunk.message.content)
       }
+      // Jamais accumulé dans la réponse rendue : sert uniquement de signe de vie pendant la réflexion
+      // (mode Code, étape 99), où plusieurs minutes peuvent s'écouler avant le premier caractère de code.
+      if (chunk.message?.thinking) onThinking?.(chunk.message.thinking)
       if (chunk.message?.tool_calls?.length) toolCalls = chunk.message.tool_calls
       if (chunk.message?.role) role = chunk.message.role
     }
@@ -125,21 +136,28 @@ export async function chatWithOllama(
   // à voix haute) — voir requestChat ci-dessus. Un tour qui appelle un outil ne "raconte" en général rien
   // (content vide, tout est dans tool_calls) : ce callback ne reçoit donc quelque chose de visible que sur
   // le tour qui répond vraiment, sans traitement spécial à faire ici pour distinguer les deux cas.
-  onToken?: (delta: string) => void
+  onToken?: (delta: string) => void,
+  /**
+   * Fragments du raisonnement caché (étape 99), uniquement consommés comme signe de vie par le mode Code —
+   * jamais affichés. Fournir ce callback suffit à passer l'appel en streaming, même sans `onToken`.
+   */
+  onThinking?: (delta: string) => void
 ): Promise<OllamaMessage> {
   const baseBody = { model, messages, tools, options: { num_ctx: numCtx } }
   try {
     // Le raisonnement caché aide nettement à décider d'appeler un outil plutôt que de "raconter" une
     // action sans l'exécuter ; le niveau (low/medium/high) vient du palier de complexité choisi pour la
     // question (voir assistant.ts), pas d'une valeur fixe.
-    return await requestChat({ ...baseBody, think }, model, signal, onToken)
+    return await requestChat({ ...baseBody, think }, model, signal, onToken, onThinking)
   } catch (firstErr) {
     // Une requête annulée (l'utilisateur a ajouté une précision pendant la réflexion, voir voicePipeline.ts)
     // ne doit jamais déclencher le second essai sans `think` : ce serait un appel Ollama inutile pour une
     // réponse qui va de toute façon être remplacée par la relance avec la phrase fusionnée.
     if (firstErr instanceof Error && firstErr.name === 'AbortError') throw firstErr
     try {
-      return await requestChat(baseBody, model, signal, onToken)
+      // Sans `think`, aucun fragment de raisonnement n'arrivera : onThinking est quand même
+      // transmis, il ne sera simplement jamais appelé.
+      return await requestChat(baseBody, model, signal, onToken, onThinking)
     } catch {
       throw firstErr // le premier message d'erreur est généralement le plus informatif
     }

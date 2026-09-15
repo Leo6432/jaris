@@ -53,9 +53,27 @@ window.__deleted = []
 
 window.jaris = {
   onCodeGenStatus: () => () => {},
+  // Étape 99 : CodePanel s'abonne à l'avancement au montage. Un canal manquant ne donne aucune erreur
+  // lisible — l'effet React plante, le composant ne se monte jamais, et le test expire au bout de 30 s
+  // sans dire pourquoi (piège déjà vécu à l'étape 96). Le rappel est gardé pour que le test puisse
+  // simuler de vrais messages d'avancement, comme le ferait le main process.
+  onCodeGenProgress: (cb) => {
+    window.__emitProgress = cb
+    return () => {}
+  },
   getGeneratedApps: () => Promise.resolve(window.__apps),
   loadGeneratedApp: (path) => Promise.resolve({ ...APP, path }),
-  generateApp: () => Promise.resolve(APP),
+  // Génération pilotée par le test (étape 99) : elle reste EN COURS tant que le test ne la termine pas,
+  // seule façon d'observer le bandeau d'avancement, qui n'existe que pendant ce temps-là.
+  generateApp: () =>
+    new Promise((resolve, reject) => {
+      window.__finishGen = () => resolve(APP)
+      window.__failGen = (err) => reject(err)
+    }),
+  cancelCodeGen: () => {
+    window.__cancelled = true
+    window.__failGen?.(new Error('aborted'))
+  },
   openGeneratedApp: () => Promise.resolve(),
   pickImageFile: () => Promise.resolve(null),
   // Le vrai main process efface le dossier puis la liste est rechargée : simulé à l'identique ici, pour
@@ -241,6 +259,84 @@ for (const width of [1280, 760]) {
     }, width)
   })
 }
+
+/** Lance une génération et attend que le bandeau d'avancement apparaisse. */
+async function startGeneration(page) {
+  await page.fill('.composer__input', 'une liste de courses')
+  await page.click('.composer__send')
+  await page.waitForSelector('.code-panel__live')
+}
+
+test("pendant une génération, l'écran dit où on en est au lieu de rester figé", options, async () => {
+  // Le retour de Léo, mot pour mot : "on ne sait pas quand c'est terminé et des fois c'est bloqué et ça
+  // fait rien". Avant l'étape 99, ce bandeau n'existait pas : seul un bouton grisé "Génération…" restait
+  // affiché, parfois plusieurs minutes, sans rien d'autre.
+  await withPage(async (page) => {
+    await startGeneration(page)
+    assert.match(await page.textContent('.code-panel__live-title'), /Préparation/)
+
+    await page.evaluate(() =>
+      window.__emitProgress({
+        label: "Écriture de l'application",
+        stepIndex: 1,
+        stepCount: 2,
+        charsWritten: 4210,
+        thinking: false,
+        idleMs: 0
+      })
+    )
+    assert.equal(await page.textContent('.code-panel__live-title'), "Étape 1 sur 2 · Écriture de l'application")
+    assert.match((await page.textContent('.code-panel__live-detail')).replace(/\s/g, ' '), /4 210 caractères écrits/)
+
+    // Un silence prolongé est DIT, au lieu de laisser un écran immobile sans explication.
+    await page.evaluate(() =>
+      window.__emitProgress({
+        label: "Écriture de l'application",
+        stepIndex: 1,
+        stepCount: 2,
+        charsWritten: 4210,
+        thinking: false,
+        idleMs: 45_000
+      })
+    )
+    assert.match(await page.textContent('.code-panel__live-detail'), /rien reçu du modèle depuis 45 s/)
+  })
+})
+
+test('le bouton "Arrêter" arrête vraiment, et ne laisse pas une erreur rouge', options, async () => {
+  await withPage(async (page) => {
+    await startGeneration(page)
+
+    // Le nom de classe présent dans le JSX ne prouve pas que le CSS s'y applique (piège du bouton resté
+    // gris, étape 97) : on mesure le style RÉELLEMENT calculé.
+    const style = await page.evaluate(() => {
+      const css = getComputedStyle(document.querySelector('.code-panel__live-stop'))
+      return { image: css.backgroundImage, clip: css.clipPath, transform: css.textTransform }
+    })
+    assert.match(style.image, /linear-gradient/, 'le bouton Arrêter est resté au style par défaut du navigateur')
+    assert.match(style.clip, /polygon/)
+    assert.equal(style.transform, 'uppercase')
+
+    await page.click('.code-panel__live-stop')
+    assert.equal(await page.evaluate(() => window.__cancelled), true)
+
+    // L'arrêt est une décision de l'utilisateur, pas une panne : il se lit dans le journal, pas en rouge.
+    await page.waitForSelector('.code-panel__status')
+    assert.match(await page.textContent('.code-panel__status'), /Génération arrêtée/)
+    assert.equal(await page.locator('.code-panel__error').count(), 0)
+    assert.equal(await page.locator('.code-panel__live').count(), 0)
+  })
+})
+
+test('une génération terminée annonce sa durée', options, async () => {
+  await withPage(async (page) => {
+    await startGeneration(page)
+    await page.evaluate(() => window.__finishGen())
+    await page.waitForSelector('.code-panel__done')
+    assert.match(await page.textContent('.code-panel__done'), /Terminé en \d+ s/)
+    assert.equal(await page.locator('.code-panel__live').count(), 0)
+  })
+})
 
 test.after(() => {
   if (outDir) rmSync(outDir, { recursive: true, force: true })

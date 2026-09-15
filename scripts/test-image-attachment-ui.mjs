@@ -49,6 +49,11 @@ window.jaris = {
   onLog: () => () => {},
   onChatStreamToken: () => () => {},
   onCodeGenStatus: () => () => {},
+  // Étape 99 : CodePanel s'abonne à l'avancement au montage. Un canal manquant ne donne aucune erreur
+  // lisible — l'effet React plante, le composant ne se monte jamais, et le test expire au bout de 30 s
+  // sans dire pourquoi (piège déjà vécu à l'étape 96).
+  onCodeGenProgress: () => () => {},
+  cancelCodeGen: () => {},
   getGeneratedApps: () => Promise.resolve([]),
   getProfile: () => Promise.resolve({ soundEffectsEnabled: false }),
   pickImageFile: () => {

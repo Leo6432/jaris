@@ -79,6 +79,10 @@ let tray: Tray | null = null
 let quitting = false
 /** Tant que l'onboarding n'est pas fini, fermer la fenêtre de réglages doit quitter l'appli normalement (pas de widget à replier sur un profil pas encore configuré). */
 let onboardingDone = false
+/** Génération d'application en cours (mode Code), pour que le bouton "Arrêter" puisse l'interrompre
+ * (étape 99) — `null` quand rien ne tourne. Avant, une génération partie ne pouvait plus être arrêtée
+ * autrement qu'en fermant Jaris. */
+let codeGenAbort: AbortController | null = null
 /** Vrai pendant qu'un vrai dialogue natif Windows est ouvert sur fullWindow (ex: chooseModelsLocation) : le
  * dialogue prend le focus OS, ce qui déclenche 'blur' sur fullWindow comme un changement d'appli normal —
  * sans ce garde, le handler 'blur' plus bas cacherait fullWindow (et son dialogue enfant orphelin avec) alors
@@ -632,15 +636,30 @@ app.whenReady().then(async () => {
   ipcMain.handle(
     IPC_CHANNELS.generateApp,
     async (event, description: string, currentHtml?: string, imageBase64?: string): Promise<GeneratedApp> => {
-      const generated = await generateApp(
-        description,
-        (message) => event.sender.send(IPC_CHANNELS.codeGenStatus, message),
-        currentHtml,
-        imageBase64
-      )
-      return { ...generated, previewUrl: createGeneratedAppPreview(generated.html) }
+      // Une seule génération à la fois (le bouton est désactivé pendant) : ce contrôleur est donc celui de
+      // la génération en cours, et c'est lui que le bouton "Arrêter" déclenche (étape 99). Remis à null à
+      // la fin pour qu'un clic tardif n'annule pas la génération SUIVANTE.
+      codeGenAbort?.abort()
+      const controller = new AbortController()
+      codeGenAbort = controller
+      try {
+        const generated = await generateApp(
+          description,
+          (message) => event.sender.send(IPC_CHANNELS.codeGenStatus, message),
+          currentHtml,
+          imageBase64,
+          {
+            onProgress: (progress) => event.sender.send(IPC_CHANNELS.codeGenProgress, progress),
+            signal: controller.signal
+          }
+        )
+        return { ...generated, previewUrl: createGeneratedAppPreview(generated.html) }
+      } finally {
+        if (codeGenAbort === controller) codeGenAbort = null
+      }
     }
   )
+  ipcMain.on(IPC_CHANNELS.cancelCodeGen, () => codeGenAbort?.abort())
   ipcMain.handle(IPC_CHANNELS.openGeneratedApp, async (_event, path?: string) => {
     await shell.openPath(path || getGeneratedAppsDir())
   })

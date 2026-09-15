@@ -38,6 +38,7 @@
   /* Couleurs de sens (jamais décoratives) : or = attention, vert = OK, rouge = échec. */
   --hud-gold: #ffb020;
   --hud-ok: #31ffb0;
+  --hud-ok-rgb: 49, 255, 176;
   --hud-danger: #ff4d68;
   --hud-danger-soft: #ffb8c2;
 
@@ -1878,7 +1879,10 @@ body.body--scan::after {
   color: var(--hud-text-faint);
   padding: 9px 8px;
   cursor: pointer;
-  opacity: 0.55;
+  /* 0,55 sur une couleur déjà "faint" rendait la corbeille délavée au point qu'on ne distinguait plus sa
+     forme (étape 100). Elle reste volontairement discrète — une suppression ne doit pas crier — mais
+     lisible. */
+  opacity: 0.75;
   transition:
     color 0.15s ease,
     opacity 0.15s ease;
@@ -1977,6 +1981,52 @@ body.body--scan::after {
   font-size: 0.82rem;
   line-height: 1.6;
   color: var(--hud-text-dim);
+}
+
+/*
+ * Bandeau d'avancement d'une génération (étape 99) : où on en est, depuis combien de temps, et de quoi
+ * arrêter. Posé juste au-dessus du journal, qui garde lui l'historique des étapes franchies.
+ */
+.code-panel__live,
+.code-panel__done {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(var(--hud-accent-rgb), 0.08);
+  border: 1px solid var(--hud-line-strong);
+  box-shadow: var(--hud-glow);
+}
+
+.code-panel__live-text {
+  flex: 1;
+  /* Sans ça, un long libellé d'étape refuse de se réduire et pousse le bouton hors de l'écran sur une
+     fenêtre étroite — exactement le débordement mesuré à l'étape 97. */
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.code-panel__live-title {
+  font-size: 0.78rem;
+  color: var(--hud-accent-bright);
+}
+
+.code-panel__live-detail {
+  font-size: 0.7rem;
+  color: var(--hud-text-dim);
+}
+
+/* Écrit APRÈS la règle partagée ci-dessus, jamais avant : à spécificité égale c'est l'ordre qui décide,
+   et la couleur de succès serait sinon silencieusement écrasée par le cyan (piège des étapes 95 et 97). */
+.code-panel__done {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--hud-ok);
+  border-color: rgba(var(--hud-ok-rgb), 0.45);
+  background: rgba(var(--hud-ok-rgb), 0.08);
+  box-shadow: 0 0 12px rgba(var(--hud-ok-rgb), 0.25);
 }
 
 .code-panel__status {
@@ -2261,6 +2311,7 @@ h1 {
 .memory-brain__actions button,
 .composer__send,
 .code-panel__result-actions button,
+.code-panel__live-stop,
 .workspace__new,
 .workspace__confirm-yes,
 .workspace__confirm-no,
@@ -2297,6 +2348,7 @@ h1 {
 .memory-brain__actions button:hover,
 .composer__send:not(:disabled):hover,
 .code-panel__result-actions button:not(:disabled):hover,
+.code-panel__live-stop:not(:disabled):hover,
 .workspace__new:not(:disabled):hover,
 .workspace__confirm-yes:not(:disabled):hover,
 .workspace__confirm-no:not(:disabled):hover,
@@ -2330,6 +2382,7 @@ textarea:not(.composer__input):focus-visible {
  * silencieusement écrasées et n'avaient aucun effet.
  */
 .code-panel__result-actions button,
+.code-panel__live-stop,
 .workspace__new,
 .workspace__confirm-yes,
 .workspace__confirm-no {

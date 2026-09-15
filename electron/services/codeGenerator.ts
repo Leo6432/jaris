@@ -6,7 +6,7 @@ import { chatWithOllama, listInstalledModels, pullModelIfMissing, ModelTooLargeE
 import { pickBestCodeModel } from './hardwareScan'
 import { getProfile } from './profileStore'
 import { IMAGE_FOR_CODE_SYSTEM_PROMPT, describeImage } from './vision'
-import type { GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
+import type { CodeGenProgress, GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
 
 /**
  * Fenêtre de contexte dédiée à la génération de code : le modèle doit produire un fichier HTML complet
@@ -14,6 +14,39 @@ import type { GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
  * défaut de la conversation (4096) tronquerait le fichier en pleine relecture.
  */
 const CODE_NUM_CTX = 16384
+
+/** Rythme du battement de cœur d'avancement pendant une étape (voir runModelStep, étape 99). */
+const PROGRESS_HEARTBEAT_MS = 1000
+/** Fréquence maximale des messages d'avancement déclenchés par les fragments reçus du modèle. */
+const PROGRESS_THROTTLE_MS = 200
+
+/**
+ * Un abandon volontaire (bouton "Arrêter"), reconnu SANS `instanceof Error` : `fetch` rejette avec une
+ * `DOMException` sur un signal annulé, et un test qui charge ce module dans un realm séparé (`vm`) crée ses
+ * erreurs avec un AUTRE constructeur Error — `instanceof` y répond false pour une erreur pourtant bien
+ * réelle. Le seul critère fiable est donc le NOM, jamais la classe.
+ */
+function isAbortError(error: unknown): boolean {
+  return (error as { name?: string } | null)?.name === 'AbortError'
+}
+
+/**
+ * Options d'une génération (étape 99). En objet plutôt qu'en paramètres positionnels supplémentaires :
+ * `generateApp` en avait déjà quatre.
+ */
+export interface GenerateAppOptions {
+  /** Avancement EN DIRECT de l'étape en cours — remplace le précédent, ne s'empile pas. */
+  onProgress?: (progress: CodeGenProgress) => void
+  /** Arrêt demandé par l'utilisateur (bouton "Arrêter"). */
+  signal?: AbortSignal
+}
+
+/** Levée quand l'utilisateur arrête lui-même la génération : ce n'est pas une panne, juste un arrêt. */
+export class GenerationStoppedError extends Error {
+  constructor() {
+    super("Génération arrêtée.")
+  }
+}
 
 /**
  * Consignes strictes partagées par les deux passes (génération et critique) — c'est le "scaffolding" qui
@@ -375,9 +408,92 @@ export async function generateApp(
   description: string,
   onStatus: (message: string) => void,
   currentHtml?: string,
-  imageBase64?: string
+  imageBase64?: string,
+  options: GenerateAppOptions = {}
 ): Promise<GeneratedApp> {
+  const { onProgress, signal } = options
   const profile = await getProfile()
+
+  /**
+   * Étapes annoncées d'avance (étape 99) : sans ce "sur 2", impossible de savoir s'il reste 10 secondes ou
+   * 3 minutes. Ne comptent ici que les étapes qui font VRAIMENT travailler le modèle (écriture, puis
+   * relecture, plus la lecture de l'image quand il y en a une) — la vérification structurelle, elle, est
+   * instantanée. Une relance ou une réparation ajoutent leur étape au moment où elles deviennent
+   * nécessaires, plutôt que d'être comptées d'avance alors qu'elles n'arrivent pas la plupart du temps.
+   */
+  let stepCount = imageBase64 ? 3 : 2
+  let stepIndex = 0
+
+  /**
+   * Un appel au modèle, avec un vrai signe de vie pendant qu'il travaille.
+   *
+   * Le cœur du problème signalé par Léo : chacun de ces appels peut durer plusieurs minutes, et rien
+   * n'arrivait entre le "Génération de l'application…" du début et la ligne suivante. Deux signaux ici :
+   * `charsWritten`, qui monte tant que le modèle écrit (la preuve que ça avance), et un battement de cœur
+   * toutes les secondes qui porte `idleMs` — le temps écoulé depuis le dernier fragment reçu, seul moyen de
+   * distinguer "ça travaille" de "c'est bloqué".
+   */
+  const runModelStep = async (label: string, messages: OllamaMessage[]): Promise<OllamaMessage> => {
+    stepIndex += 1
+    const currentStep = stepIndex
+    let charsWritten = 0
+    let thinking = true
+    let lastActivity = Date.now()
+
+    let lastEmit = 0
+    const emit = (throttled = false): void => {
+      const now = Date.now()
+      // Un modèle écrit par petits fragments très rapprochés : sans ce filtre, l'IPC recevrait des milliers
+      // de messages pour un seul fichier généré.
+      if (throttled && now - lastEmit < PROGRESS_THROTTLE_MS) return
+      lastEmit = now
+      onProgress?.({
+        label,
+        stepIndex: currentStep,
+        stepCount,
+        charsWritten,
+        thinking,
+        idleMs: now - lastActivity
+      })
+    }
+    emit()
+    // Deux sources d'avancement, complémentaires : les fragments reçus (ça avance, avec le compteur qui
+    // monte) et ce battement de cœur (même quand plus rien n'arrive, `idleMs` continue de grandir — c'est
+    // ce qui permet de dire "bloqué" au lieu de laisser un écran figé sans explication).
+    const heartbeat = setInterval(() => emit(), PROGRESS_HEARTBEAT_MS)
+    try {
+      const message = await chatWithOllama(
+        messages,
+        undefined,
+        model,
+        'high',
+        signal,
+        CODE_NUM_CTX,
+        (delta) => {
+          thinking = false
+          charsWritten += delta.length
+          lastActivity = Date.now()
+          emit(true)
+        },
+        // Raisonnement caché : aucun caractère de code, mais ça prouve que le modèle est bien en train de
+        // travailler — sans ça, une longue réflexion est indiscernable d'un blocage.
+        () => {
+          lastActivity = Date.now()
+          emit(true)
+        }
+      )
+      // État final de l'étape, sans étranglement : les tout derniers fragments arrivent souvent dans les
+      // 200 ms qui précèdent la fin, donc sans cet envoi le compteur resterait figé sur une valeur d'avant.
+      emit()
+      return message
+    } catch (err) {
+      // Un arrêt ne veut pas dire "panne" : c'est l'utilisateur qui a cliqué sur "Arrêter".
+      if (isAbortError(err)) throw new GenerationStoppedError()
+      throw err
+    } finally {
+      clearInterval(heartbeat)
+    }
+  }
 
   /**
    * Image jointe (étape 91) : le modèle de code ne sait pas lire une image, et un modèle de vision ne tient
@@ -388,6 +504,10 @@ export async function generateApp(
    */
   let imageDescription: string | undefined
   if (imageBase64) {
+    // Compte comme l'étape 1 sur 4 pour que la numérotation des suivantes reste juste. Pas d'avancement en
+    // direct ici : describeImage ne streame pas, donc il n'y a rien de vrai à afficher — le journal dit
+    // simplement ce qui se passe, comme avant.
+    stepIndex = 1
     onStatus("Lecture de l'image jointe…")
     imageDescription = await describeImage(
       imageBase64,
@@ -421,7 +541,7 @@ export async function generateApp(
     { role: 'system', content: GENERATE_SYSTEM_PROMPT },
     { role: 'user', content: userPrompt }
   ]
-  const first = await chatWithOllama(generateMessages, undefined, model, 'high', undefined, CODE_NUM_CTX)
+  const first = await runModelStep(currentHtml ? "Modification de l'application" : "Écriture de l'application", generateMessages)
   let draft = extractHtml(first.content)
   if (!draft) {
     // Cause réelle identifiée en usage réel (Léo, "un jeu Snake") : le modèle a ignoré la consigne HTML et
@@ -449,7 +569,11 @@ export async function generateApp(
           "si ce langage te semblait plus naturel pour cette demande précise."
       }
     ]
-    const retry = await chatWithOllama(retryMessages, undefined, model, 'high', undefined, CODE_NUM_CTX)
+    // La relance compte comme une étape à part : elle repart de zéro et dure aussi longtemps que la
+    // première — l'annoncer évite de laisser croire que l'étape en cours patine. Le total prévu monte
+    // d'autant : mieux vaut un total qui s'ajuste qu'une "étape 4 sur 3".
+    stepCount += 1
+    const retry = await runModelStep('Nouvelle tentative', retryMessages)
     draft = extractHtml(retry.content)
     if (!draft) {
       // Un message générique ("reformule, ou relance") ne dit rien de la VRAIE cause si ça se reproduit :
@@ -477,7 +601,7 @@ export async function generateApp(
         content: `Demande initiale de l'utilisateur : ${description}\n\nCode à relire :\n\n\`\`\`html\n${draft}\n\`\`\``
       }
     ]
-    const reviewed = await chatWithOllama(critiqueMessages, undefined, model, 'high', undefined, CODE_NUM_CTX)
+    const reviewed = await runModelStep('Relecture du code', critiqueMessages)
     const reviewedHtml = extractHtml(reviewed.content)
     if (reviewedHtml) {
       final = reviewedHtml
@@ -486,6 +610,10 @@ export async function generateApp(
       onStatus('La relecture n\'a rien renvoyé d\'exploitable : le premier jet est conservé.')
     }
   } catch (err) {
+    // Un arrêt demandé par l'utilisateur n'est PAS un échec de relecture à absorber : sans ce relais, le
+    // clic sur "Arrêter" pendant la relecture aurait été avalé ici et la génération aurait continué
+    // jusqu'au bout comme si de rien n'était.
+    if (err instanceof GenerationStoppedError) throw err
     onStatus(`Relecture impossible (${err instanceof Error ? err.message : String(err)}) : le premier jet est conservé.`)
   }
 
@@ -507,7 +635,8 @@ export async function generateApp(
             `Fichier à réparer :\n\n\`\`\`html\n${final}\n\`\`\``
         }
       ]
-      const repaired = await chatWithOllama(repairMessages, undefined, model, 'high', undefined, CODE_NUM_CTX)
+      stepCount += 1
+      const repaired = await runModelStep('Réparation des problèmes détectés', repairMessages)
       const repairedHtml = extractHtml(repaired.content)
       // La réparation n'est gardée que si elle améliore vraiment les choses : un modèle peut très bien
       // renvoyer une version differemment cassée, auquel cas on garde la précédente.
@@ -520,6 +649,7 @@ export async function generateApp(
       }
       onStatus(issues.length ? `Réparation partielle : ${issues.length} problème(s) restant(s).` : 'Réparation réussie.')
     } catch (err) {
+      if (err instanceof GenerationStoppedError) throw err
       onStatus(`Réparation impossible (${err instanceof Error ? err.message : String(err)}).`)
     }
   } else {

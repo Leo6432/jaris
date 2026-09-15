@@ -406,6 +406,36 @@ export interface GeneratedApp {
 }
 
 /**
+ * Avancement EN DIRECT de l'étape en cours d'une génération (mode Code, étape 99).
+ *
+ * Léo : "quand on demande une mise à jour [d'une application, en mode Code] on ne sait pas quand c'est
+ * terminé et des fois c'est bloqué et ça fait rien". Une génération enchaîne 2 à 4 appels au modèle local,
+ * chacun pouvant durer plusieurs minutes sans rien afficher : rien ne distinguait un modèle qui travaille
+ * d'un modèle bloqué. `charsWritten` est la preuve du mouvement — il monte tant que le modèle écrit.
+ *
+ * Contrairement à `codeGenStatus` (une ligne AJOUTÉE au journal à chaque étape franchie), ce message
+ * REMPLACE le précédent : c'est l'état courant, pas un historique.
+ */
+export interface CodeGenProgress {
+  /** Ce que Jaris fait en ce moment ("Écriture de l'application", "Relecture du code"…). */
+  label: string
+  /** Étape courante sur le nombre total prévu — "étape 2 sur 3". */
+  stepIndex: number
+  stepCount: number
+  /** Caractères déjà écrits par le modèle pour CETTE étape. */
+  charsWritten: number
+  /** true tant que le modèle réfléchit sans avoir encore écrit le moindre caractère de code. */
+  thinking: boolean
+  /**
+   * Temps écoulé depuis le dernier signe de vie du modèle. Envoyé toutes les secondes pendant une étape
+   * (battement de cœur) : c'est ce qui permet de dire "ça n'avance plus depuis 40 s" au lieu de laisser
+   * l'utilisateur deviner — un chronomètre côté écran, lui, continuerait de tourner même si Ollama était
+   * mort.
+   */
+  idleMs: number
+}
+
+/**
  * Une application déjà générée, listée dans "Récents" (mode Code) — repéré par Léo en usage réel : chaque
  * génération est enregistrée sur le disque, mais rien n'en gardait la liste avant, donc relancer Jaris
  * perdait l'accès à tout ce qui avait déjà été généré. `label` vient du nom de dossier (déjà lisible),
@@ -495,6 +525,10 @@ export const IPC_CHANNELS = {
   generateApp: 'jaris:generate-app',
   /** main -> renderer : messages d'avancement pendant la génération d'application (étapes de la boucle). */
   codeGenStatus: 'jaris:code-gen-status',
+  /** main -> renderer : avancement EN DIRECT de l'étape en cours (étape 99) — voir CodeGenProgress. */
+  codeGenProgress: 'jaris:code-gen-progress',
+  /** renderer -> main : arrête la génération en cours (bouton "Arrêter", étape 99). */
+  cancelCodeGen: 'jaris:cancel-code-gen',
   /** renderer -> main : ouvre le dossier de l'application générée dans l'explorateur de fichiers. */
   openGeneratedApp: 'jaris:open-generated-app',
   /** renderer <-> main : liste les applications déjà générées (les plus récentes d'abord), pour l'écran

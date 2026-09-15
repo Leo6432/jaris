@@ -6,6 +6,7 @@ import type {
   ChatMessage,
   ConversationEntry,
   ConversationList,
+  CodeGenProgress,
   GeneratedApp,
   GeneratedAppSummary,
   HardwareTierPreview,
@@ -89,6 +90,10 @@ declare global {
       pickImageFile: () => Promise<PickedImageFile | null>
       generateApp: (description: string, currentHtml?: string, imageBase64?: string) => Promise<GeneratedApp>
       onCodeGenStatus: (cb: (message: string) => void) => () => void
+      // Étape 99 : avancement en direct pendant une génération (l'étape en cours, les caractères déjà
+      // écrits, le temps depuis le dernier signe de vie) et arrêt d'une génération déjà partie.
+      onCodeGenProgress: (cb: (progress: CodeGenProgress) => void) => () => void
+      cancelCodeGen: () => void
       openGeneratedApp: (path?: string) => Promise<void>
       getGeneratedApps: () => Promise<GeneratedAppSummary[]>
       loadGeneratedApp: (path: string) => Promise<GeneratedApp>
