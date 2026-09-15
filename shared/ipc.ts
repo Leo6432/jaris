@@ -75,41 +75,27 @@ export interface Profile {
   activationKeyEnabled?: boolean
   activationWakeWordEnabled?: boolean
   activationOrbClickEnabled?: boolean
-  /**
-   * Options → Téléphone (étape 21) : identifiant KDE Connect du téléphone à utiliser. Absent tant que Léo
-   * n'a rien choisi — inutile de le forcer, un seul téléphone joignable est pris automatiquement
-   * (resolveDevice, phoneBridge.ts) ; ce champ ne sert que s'il y en a plusieurs.
-   */
-  phoneDeviceId?: string
-  /**
-   * Chemin de `kdeconnect-cli.exe` désigné à la main, quand la recherche automatique ne l'a pas trouvé :
-   * l'emplacement dépend de la façon dont KDE Connect a été installé, et aucun Windows n'était disponible
-   * pour vérifier laquelle tombe juste — ce repli marche quel que soit le dossier.
-   */
-  phoneCliPath?: string
 }
 
-/** Un téléphone appairé et joignable, vu par KDE Connect (étape 21). */
-export interface PhoneDevice {
-  id: string
-  name: string
+/** Une notification lue dans le centre de notifications de Windows (étape 21bis). */
+export interface PhoneNotification {
+  /** Application qui l'a émise ("Mobile connecté" pour celles venues du téléphone), vide si introuvable. */
+  app: string
+  /** Lignes de texte de la notification (titre puis contenu), déjà nettoyées des lignes vides. */
+  lines: string[]
 }
 
 /**
- * État du pont téléphone pour Options → Téléphone. `message` est déjà rédigé pour être lu tel quel par Léo
- * (installation manquante, téléphone injoignable, Wi-Fi différent) : rien ne le reformule avant l'affichage.
+ * Résultat d'une lecture des notifications. `message` est déjà rédigé pour être lu tel quel par Léo — y
+ * compris quand ça n'a PAS marché : "denied" (Windows refuse l'accès) et "allowed avec 0 notification" ne
+ * doivent surtout pas se ressembler à l'écran, sinon un refus se lit comme "tu n'as rien reçu".
  */
-export interface PhoneStatus {
-  installed: boolean
-  reachable: boolean
-  devices: PhoneDevice[]
+export interface PhoneNotificationsResult {
+  status: 'allowed' | 'denied' | 'unsupported' | 'error'
+  notifications: PhoneNotification[]
   message: string
 }
 
-/**
- * Ce qui est déjà installé sur la machine pour faire tourner Jaris (étape 16) : Python et ses dépendances
- * d'un côté, Ollama de l'autre. `ready` = les deux, donc rien à installer au lancement.
- */
 export interface RuntimeSetupStatus {
   pythonReady: boolean
   ollamaReady: boolean
@@ -623,17 +609,12 @@ export const IPC_CHANNELS = {
   setActiveMode: 'jaris:set-active-mode',
   /** main -> renderer : un son court à jouer (design sonore, étape 31) — voir SoundCue plus haut. */
   soundCue: 'jaris:sound-cue',
-  /** renderer <-> main : état du pont téléphone (KDE Connect installé ? téléphones joignables ?) — étape 21. */
-  getPhoneStatus: 'jaris:get-phone-status',
-  /** renderer -> main : fait sonner le téléphone, pour vérifier que le pont marche vraiment (bouton de test). */
-  ringPhone: 'jaris:ring-phone',
-  /** renderer -> main : envoie un texte/lien sur le téléphone. */
-  sendToPhone: 'jaris:send-to-phone',
   /**
-   * renderer <-> main : sélecteur de fichier pour désigner `kdeconnect-cli.exe` à la main quand la recherche
-   * automatique échoue. Passe par le main process comme `pickImageFile`, et pour la même raison : c'est le
-   * seul endroit où le garde `dialogOpen` peut encadrer le dialogue natif, sans quoi Jaris se replierait en
-   * widget en plein milieu du choix (bug vécu à l'étape 93).
+   * renderer <-> main : lit les notifications en cours dans le centre de notifications de Windows — donc
+   * celles du téléphone quand "Mobile connecté" les y dépose (étape 21bis). Passe par l'API documentée
+   * `UserNotificationListener` et jamais par la fenêtre de Mobile connecté, qui n'a aucune API.
    */
-  pickKdeConnectCli: 'jaris:pick-kdeconnect-cli'
+  getPhoneNotifications: 'jaris:get-phone-notifications',
+  /** renderer -> main : ouvre "Mobile connecté" (pour l'appairer au téléphone la première fois). */
+  openPhoneLink: 'jaris:open-phone-link'
 } as const

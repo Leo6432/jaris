@@ -751,7 +751,11 @@ body.body--scan::after {
   white-space: pre-wrap;
 }
 
-.options-menu__history-list {
+/* Liste des notifications lues (étape 21bis) : elle rejoint la liste de l'historique plutôt que d'inventer
+   une deuxième mise en forme de liste dans le même menu — deux listes qui font la même chose doivent se
+   ressembler par construction. */
+.options-menu__history-list,
+.options-menu__notifications {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -760,7 +764,8 @@ body.body--scan::after {
   gap: 10px;
 }
 
-.options-menu__history-entry {
+.options-menu__history-entry,
+.options-menu__notifications li {
   border: 1px solid rgba(122, 176, 214, 0.2);
   border-radius: 10px;
   padding: 10px 14px;

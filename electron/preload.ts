@@ -18,7 +18,7 @@ import {
   type MicTestLevelPayload,
   type ModelOverviewResult,
   type ModelsLocationStatus,
-  type PhoneStatus,
+  type PhoneNotificationsResult,
   type OllamaVersionStatus,
   type PickedImageFile,
   type Profile,
@@ -95,12 +95,10 @@ const api = {
   // peut encadrer le dialogue natif du garde `dialogOpen`, sans lequel Jaris se replie en widget dès que ce
   // dialogue prend le focus. Renvoie null si l'utilisateur annule.
   pickImageFile: (): Promise<PickedImageFile | null> => ipcRenderer.invoke(IPC_CHANNELS.pickImageFile),
-  // Pont téléphone (étape 21, KDE Connect). Chaque action renvoie une PHRASE en français, déjà lisible telle
-  // quelle : succès comme échec s'affichent sans être reformulés, même principe que les messages d'outils.
-  getPhoneStatus: (): Promise<PhoneStatus> => ipcRenderer.invoke(IPC_CHANNELS.getPhoneStatus),
-  ringPhone: (): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.ringPhone),
-  sendToPhone: (text: string): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.sendToPhone, text),
-  pickKdeConnectCli: (): Promise<string | null> => ipcRenderer.invoke(IPC_CHANNELS.pickKdeConnectCli),
+  // Téléphone (étape 21bis) : lecture des notifications par l'API de Windows, et ouverture de Mobile
+  // connecté pour l'appairage. Les deux renvoient un résultat déjà rédigé en français, affiché tel quel.
+  getPhoneNotifications: (): Promise<PhoneNotificationsResult> => ipcRenderer.invoke(IPC_CHANNELS.getPhoneNotifications),
+  openPhoneLink: (): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.openPhoneLink),
   generateApp: (description: string, currentHtml?: string, imageBase64?: string): Promise<GeneratedApp> =>
     ipcRenderer.invoke(IPC_CHANNELS.generateApp, description, currentHtml, imageBase64),
   onCodeGenStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.codeGenStatus, cb),

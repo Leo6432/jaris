@@ -17,7 +17,7 @@ import type {
   ModelOverviewResult,
   ModelsLocationStatus,
   OllamaVersionStatus,
-  PhoneStatus,
+  PhoneNotificationsResult,
   PickedImageFile,
   Profile,
   ReleaseHistoryEntry,
@@ -89,12 +89,10 @@ declare global {
       // Étape 93 : sélecteur d'image ouvert par le main process (jamais un <input type="file">, qui repliait
       // Jaris en widget en prenant le focus). null si l'utilisateur annule.
       pickImageFile: () => Promise<PickedImageFile | null>
-      // Étape 21 : pont vers le téléphone (KDE Connect). Les trois actions renvoient une phrase en français
-      // prête à afficher ; pickKdeConnectCli renvoie le chemin choisi, ou null si l'utilisateur annule.
-      getPhoneStatus: () => Promise<PhoneStatus>
-      ringPhone: () => Promise<string>
-      sendToPhone: (text: string) => Promise<string>
-      pickKdeConnectCli: () => Promise<string | null>
+      // Étape 21bis : notifications lues via l'API de Windows (donc celles du téléphone quand Mobile
+      // connecté les y dépose), et ouverture de Mobile connecté pour l'appairage.
+      getPhoneNotifications: () => Promise<PhoneNotificationsResult>
+      openPhoneLink: () => Promise<string>
       generateApp: (description: string, currentHtml?: string, imageBase64?: string) => Promise<GeneratedApp>
       onCodeGenStatus: (cb: (message: string) => void) => () => void
       // Étape 99 : avancement en direct pendant une génération (l'étape en cours, les caractères déjà

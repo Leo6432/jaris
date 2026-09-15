@@ -872,3 +872,17 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   une ligne de commande : un test vérifie qu'une phrase piégée ressort intacte. Régression : `npm test`
   (259 tests), dont 17 nouveaux vérifiés en réintroduisant chaque défaut. Reste à faire : déclencher des
   actions de Jaris DEPUIS le téléphone (voir "Étape 21 (suite)" dans le README).
+
+- ✅ Étape 105 (v0.10.0) — Léo : "enlève tout kde connect on va faire soit mobile connecté soit rien". KDE
+  Connect retiré entièrement (service, outils, onglet, tests) et remplacé par Mobile connecté. En cherchant
+  comment m'y prendre, j'ai trouvé ce que j'avais raté la veille : pour LIRE les notifications du téléphone,
+  il n'y a pas besoin de parler à Mobile connecté ni de cliquer dans sa fenêtre — il dépose ces notifications
+  dans le centre de notifications de Windows, et Windows a une API officielle pour les lire. Jaris lit donc
+  la source du système, pas l'écran d'une application : rien qui dépende de la langue de Windows ou de la
+  position des boutons. Dis "qu'est-ce que j'ai reçu ?" et il répond ; l'onglet Options → Téléphone permet
+  de lire à la main et d'ouvrir Mobile connecté pour l'appairage. Deux conditions annoncées d'avance :
+  Windows demande une autorisation au premier essai, et les notifications de l'iPhone n'arrivent que si
+  Mobile connecté est relié en Bluetooth avec le partage des notifications activé côté téléphone. Envoyer un
+  SMS reste impossible (interdit par Apple à toute application sur ordinateur) et Jaris le dit franchement.
+  Régression : `npm test`, dont un test qui vérifie qu'un refus de Windows ne se lit jamais comme "tu n'as
+  rien reçu", et un autre qui garantit qu'aucune trace de KDE Connect ne revient dans le code.

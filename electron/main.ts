@@ -33,7 +33,8 @@ import {
   setActiveConversation
 } from './services/conversationStore'
 import { getProfile, saveProfile } from './services/profileStore'
-import { getPhoneStatus, ringPhone, sendTextToPhone } from './services/phoneBridge'
+import { openApp } from './services/appLauncher'
+import { readPhoneNotifications } from './services/phoneLink'
 import { checkAppFreshness, checkForUpdate, getAppVersionStatus, getInstalledVersion, getReleaseHistory, updateApp } from './services/appUpdater'
 import {
   IPC_CHANNELS,
@@ -47,7 +48,7 @@ import {
   type GeneratedAppSummary,
   type JarisEmotion,
   type MemoryGraph,
-  type PhoneStatus,
+  type PhoneNotificationsResult,
   type PickedImageFile,
   type Profile,
   type SoundCue,
@@ -633,44 +634,13 @@ app.whenReady().then(async () => {
     }
   })
 
-  // Pont téléphone (étape 21, KDE Connect). Le chemin du programme et le téléphone choisi sont relus dans le
-  // profil À CHAQUE appel, comme les bascules d'activation : Léo peut désigner l'un ou l'autre dans Options
-  // sans avoir à relancer Jaris.
-  ipcMain.handle(IPC_CHANNELS.getPhoneStatus, async (): Promise<PhoneStatus> => {
-    const profile = await getProfile()
-    return getPhoneStatus(profile?.phoneCliPath)
-  })
+  // Téléphone (étape 21bis) : les notifications sont lues dans le centre de notifications de WINDOWS via
+  // son API documentée, jamais en regardant la fenêtre de Mobile connecté — celle-ci n'expose aucune API.
+  ipcMain.handle(IPC_CHANNELS.getPhoneNotifications, (): Promise<PhoneNotificationsResult> => readPhoneNotifications())
 
-  ipcMain.handle(IPC_CHANNELS.ringPhone, async (): Promise<string> => {
-    const profile = await getProfile()
-    return ringPhone(profile?.phoneDeviceId, profile?.phoneCliPath)
-  })
-
-  ipcMain.handle(IPC_CHANNELS.sendToPhone, async (_event, text: string): Promise<string> => {
-    const profile = await getProfile()
-    return sendTextToPhone(text, profile?.phoneDeviceId, profile?.phoneCliPath)
-  })
-
-  // Même garde `dialogOpen` que pickImageFile : un dialogue natif prend le focus, et sans ce garde le
-  // handler 'blur' replierait la fenêtre de réglages en widget pendant que Léo choisit le fichier.
-  ipcMain.handle(IPC_CHANNELS.pickKdeConnectCli, async (): Promise<string | null> => {
-    const dialogOptions = {
-      properties: ['openFile' as const],
-      title: 'Trouver kdeconnect-cli.exe (dossier d\'installation de KDE Connect)',
-      filters: [{ name: 'Programme', extensions: ['exe'] }]
-    }
-    dialogOpen = true
-    try {
-      const result = fullWindow
-        ? await dialog.showOpenDialog(fullWindow, dialogOptions)
-        : await dialog.showOpenDialog(dialogOptions)
-      // Renvoie seulement le chemin : c'est OptionsMenu qui l'enregistre dans le profil, comme pour tous les
-      // autres réglages — le main n'écrit jamais un profil partiel par-dessus celui du renderer.
-      return result.canceled ? null : (result.filePaths[0] ?? null)
-    } finally {
-      dialogOpen = false
-    }
-  })
+  // Ouvre Mobile connecté par le MÊME chemin que "ouvre Discord" à la voix (menu Démarrer), plutôt qu'un
+  // chemin d'installation codé en dur qui casserait sur une installation ailleurs — leçon de l'étape 60.
+  ipcMain.handle(IPC_CHANNELS.openPhoneLink, (): Promise<string> => openApp('Mobile connecté'))
 
   // Mode Code (étape 30) : génération d'une application autonome, avec avancement au fil de l'eau (la
   // génération + relecture peut prendre plusieurs minutes sur un modèle local).

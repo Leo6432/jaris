@@ -1638,3 +1638,51 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   **Non vérifiable ici, à confirmer par Léo** : que KDE Connect s'installe bien, que Jaris trouve
   `kdeconnect-cli.exe` là où l'installeur le dépose (d'où le bouton « Trouver KDE Connect moi-même », qui
   marche quel que soit le dossier), et que l'appairage tienne sur son Wi-Fi.
+
+- **KDE Connect RETIRÉ et remplacé par Mobile connecté, à la demande de Léo (étape 21bis) : « enlève tout
+  kde connect on va faire soit mobile connecté soit rien ».** Cette entrée REMPLACE la précédente (étape 21)
+  sur le choix du pont téléphone — même convention que l'étape 96 face à l'étape 47 : quand une demande
+  explicite contredit un choix noté ici, c'est la demande qui gagne, et l'entrée est mise à jour plutôt que
+  laissée à se contredire toute seule. Ce qui reste vrai de l'entrée précédente : les FAITS vérifiés sur
+  l'application iOS de KDE Connect (8 greffons, ni SMS ni notifications) et sur l'absence d'API de Mobile
+  connecté. Ce qui change : la conclusion qu'on en tire.
+  **Ce que j'avais raté en concluant trop vite « Mobile connecté = pilotage de fenêtre à l'aveugle ».** J'ai
+  comparé les deux ponts sur la même question — « lequel expose une API ? » — et j'ai arrêté là. Mais pour
+  LIRE les notifications, il n'y a pas besoin de parler à Mobile connecté : il les dépose dans le CENTRE DE
+  NOTIFICATIONS de Windows, et Windows a une API documentée pour ça (`UserNotificationListener`,
+  Windows.UI.Notifications.Management, depuis Windows 10 1607). La bonne question n'était donc pas « cette
+  application a-t-elle une API ? » mais « où atterrit vraiment la donnée que je veux ? ». **Leçon générale :
+  quand un logiciel tiers n'expose aucune API, chercher où il DÉPOSE ses données dans le système avant de
+  conclure qu'il faut piloter son interface** — le système d'exploitation, lui, a souvent une porte
+  officielle, stable et documentée, là où une fenêtre change à chaque mise à jour.
+  **Deux conditions hors de notre contrôle, annoncées comme telles plutôt que découvertes par Léo** : (1)
+  Windows exige une autorisation explicite (`RequestAccessAsync` — « UserNotificationListener requires
+  explicit user permission to be granted before it may be used », learn.microsoft.com) ; (2) les
+  notifications de l'iPhone n'arrivent dans le centre de notifications que si Mobile connecté est appairé en
+  Bluetooth et « Partager les notifications du système » activé côté iPhone. **Non vérifiable ici** : que
+  l'autorisation soit accordée à une application NON EMPAQUETÉE comme Jaris (la documentation ne le dit pas,
+  et je ne l'invente pas) — d'où un résultat qui distingue explicitement `denied` de `unsupported` et
+  d'`error`, pour que le premier essai de Léo tranche avec un fait.
+  **Le piège de conception le plus important de ce module, traité avant qu'il arrive** : « aucune
+  notification » et « Windows refuse l'accès » produisent tous les deux une liste VIDE. Si les deux messages
+  se ressemblaient, un refus se lirait comme « tu n'as rien reçu » — une affirmation fausse, exactement la
+  famille des fausses confirmations des étapes 87-90. Les deux messages sont donc explicitement différents,
+  et un test échoue si le message de refus se met à ressembler à celui d'une boîte vide.
+  **Piège de PowerShell 5.1 déjà documenté à l'étape 32, et qui frappait à nouveau ici** : `ConvertTo-Json`
+  n'a pas `-AsArray`, donc UNE seule notification ressort en objet et non en tableau d'un élément — le cas
+  le plus banal aurait été perdu. Garde côté TypeScript, testé, et vérifié en retirant le garde.
+  **Répartition testable/non testable, comme à l'étape 32** : le script PowerShell ne prend AUCUN paramètre
+  (aucune donnée du modèle n'y entre jamais, donc rien à échapper) et ne fait que lire ; toute la logique qui
+  manipule sa sortie est du TypeScript testé ici. Un test structurel échoue si une interpolation apparaît un
+  jour dans le script.
+  **Choix d'interface** : la lecture ne part PAS toute seule à l'ouverture de l'onglet, contrairement aux
+  autres réglages — la première lecture déclenche une fenêtre d'autorisation Windows, et une fenêtre système
+  qui surgit parce qu'on a simplement ouvert un onglet serait incompréhensible. C'est le clic sur le bouton
+  qui la provoque, après une phrase qui explique pourquoi.
+  Régression : `node --test scripts/test-phone-link.mjs scripts/test-phone-tab-ui.mjs` (notification unique
+  non perdue, refus jamais confondu avec une boîte vide, sortie illisible devenue message lisible, script
+  sans interpolation, et dans un vrai navigateur : rien n'est lu sans clic, les notifications s'affichent
+  après le clic, un refus n'affiche jamais de liste vide). Un test vérifie aussi en permanence qu'aucune
+  trace de KDE Connect ne revient dans le CODE (les commentaires qui expliquent son retrait, eux, restent) —
+  le grep-sweep après un retrait devient ainsi permanent au lieu d'être fait une fois à la main.
+  Chaque assertion a été vérifiée en réintroduisant temporairement le défaut correspondant.

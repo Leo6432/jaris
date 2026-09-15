@@ -27,15 +27,12 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   `computer_use_task`, négation ignorée dans la détection d'intention de
   mail, annulation qui n'atteignait pas la boucle de clics). 45/46/48
   faites depuis (voir plus bas), 47/49 encore à faire.
-- ⬜ Étape 21 (suite) — Piloter Jaris DEPUIS le téléphone : KDE Connect
-  permet à l'application du téléphone de déclencher des commandes sur le PC
-  (fonction "Run command", présente aussi sur iPhone). Les commandes
-  disponibles sont stockées par KDE Connect dans un fichier de configuration
-  (`%LOCALAPPDATA%\kdeconnect\<id-du-téléphone>\kdeconnect_runcommand\config`,
-  clé `commands` en JSON — vérifié dans le source du greffon) : il reste à les
-  y inscrire depuis Jaris pour qu'un appui sur le téléphone lance une action de
-  Jaris, sans que Léo ait à configurer quoi que ce soit à la main. La partie
-  PC → téléphone (faire sonner, déposer un texte/lien) est faite, voir plus bas.
+- ⬜ Étape 21 (suite) — Envoyer un message depuis Jaris. Apple interdit à
+  toute application d'envoyer un SMS depuis un ordinateur, et Mobile connecté
+  n'expose aucune API : le seul chemin serait de piloter sa fenêtre à coups de
+  clics, fragile et invérifiable hors d'une vraie machine Windows. À trancher
+  avec Léo après son premier essai de la lecture des notifications — ou par un
+  autre canal (Telegram, étape 42), qui lui marche sans rien contourner.
 - ⬜ Étape 42 — Canal Telegram : pouvoir parler à Jaris à distance par
   message Telegram, en plus de la voix et du chat (étape 30) déjà présents.
   Nouveau canal branché directement sur le moteur `converse()` existant
@@ -1149,38 +1146,35 @@ fenêtre à l'écran. **Fermer la croix, elle, quitte vraiment Jaris** (étape
 
 ## Téléphone (étape 21)
 
-Jaris parle au téléphone par **KDE Connect**, sur le Wi-Fi local : rien ne
-passe par internet, aucun compte, aucun serveur — même principe que le reste
-de Jaris. Installe KDE Connect sur l'ordinateur (kdeconnect.kde.org) et sur le
-téléphone, appaire les deux une fois, puis choisis le téléphone dans
-Options → Téléphone.
+Jaris peut lire **les notifications de ton téléphone**, en passant par « Mobile
+connecté » (Phone Link) — l'application de Windows qui relie un téléphone au PC.
 
-Ce que Jaris sait faire, à la voix comme en chat :
+Comment ça marche, et pourquoi c'est fait comme ça : Mobile connecté n'expose
+aucune API, donc Jaris ne lui parle pas. Il n'en a pas besoin — Mobile connecté
+dépose les notifications du téléphone dans le **centre de notifications de
+Windows**, et Windows, lui, a une API officielle pour les lire
+(`UserNotificationListener`). Jaris lit donc la source, pas l'écran d'une
+application : rien à cliquer, rien qui dépende de la langue de Windows ou de la
+position des boutons dans une fenêtre.
 
-- **"fais sonner mon téléphone"** — même s'il est en silencieux.
-- **"envoie-moi ça sur mon téléphone"** — dépose un texte ou un lien sur
-  l'écran du téléphone (un lien trouvé sur le web, une adresse, un code).
+Dis simplement « qu'est-ce que j'ai reçu ? », ou passe par Options → Téléphone
+pour lire et vérifier la configuration.
 
-**Pourquoi KDE Connect et pas le "Mobile connecté" de Windows** : les deux ont
-été comparés avant d'écrire une ligne. Mobile connecté fait plus de choses avec
-un iPhone (messages et notifications par Bluetooth) mais n'expose aucune API
-documentée — Jaris ne pourrait s'en servir qu'en cliquant à l'aveugle dans sa
-fenêtre, ce qui casse à la première mise à jour de Windows. KDE Connect fournit
-un vrai programme en ligne de commande (`kdeconnect-cli`), compilé aussi sur
-Windows : c'est la même forme d'intégration que tout le reste de Jaris.
+**À faire une fois** : installer/ouvrir Mobile connecté, le relier au téléphone
+en Bluetooth, et activer « Partager les notifications du système » côté
+téléphone. Au premier essai, Windows demandera si Jaris a le droit de lire les
+notifications — c'est obligatoire et documenté par Microsoft.
 
-**Ce qui est impossible sur iPhone, et pourquoi** : Apple interdit à toute
-application de lire les notifications des autres applications et d'envoyer des
-SMS. L'application iOS de KDE Connect contient d'ailleurs exactement 8
-fonctions (batterie, presse-papier, faire sonner, ping, présentation, clavier/
-souris à distance, lancer une commande, partage) — ni SMS, ni notifications, et
-leur propre documentation le dit explicitement. Aucun logiciel local ne peut
-contourner ça : Jaris ne promet donc pas de le faire. Sur Android, les mêmes
-commandes couvriraient aussi les SMS et les notifications.
+**Ce que Jaris ne peut pas faire, et pourquoi** : envoyer un SMS. Apple
+l'interdit à toute application sur un ordinateur ; ce n'est pas une limite de
+Jaris et aucun logiciel local ne la contourne. Jaris le dit franchement plutôt
+que de faire semblant.
 
-**Limite à connaître** : toujours à cause d'iOS, l'application KDE Connect doit
-rester affichée à l'écran du téléphone pendant l'échange — Apple ne laisse pas
-ce genre d'application travailler en arrière-plan.
+**Choix assumé, après un aller-retour** : une première version passait par KDE
+Connect (faire sonner le téléphone, lui déposer un texte). Elle a été retirée à
+la demande de Léo — sur un iPhone, KDE Connect ne peut ni lire les notifications
+ni envoyer de SMS (Apple, encore), ce qui laissait une fonctionnalité trop
+maigre pour deux applications à installer.
 
 ## Ouvrir des applications et programmer des rappels (étape 5)
 

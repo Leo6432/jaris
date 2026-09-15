@@ -15,8 +15,8 @@ import test from 'node:test'
  * classe) ; (2) la rangée de boutons, rattachée à une règle CSS existante par sélecteur groupé, s'applique
  * vraiment — une règle qui ne matche rien ne lève aucune erreur, elle est juste ignorée.
  *
- * Ce que ce test NE prouve pas : que KDE Connect fonctionne sur la machine de Léo (ni Windows, ni iPhone,
- * ni KDE Connect ici) — le pont lui-même est testé à part, sur les commandes construites.
+ * Ce que ce test NE prouve pas : que Windows accorde l'autorisation, ni que Mobile connecté relaie bien les
+ * notifications de l'iPhone (aucun Windows ici) — la lecture elle-même est testée à part, sur la sortie.
  */
 let chromium = null
 try {
@@ -39,17 +39,15 @@ const ENTRY = `
 import { createRoot } from 'react-dom/client'
 import OptionsMenu from './src/components/OptionsMenu'
 
-const state = { phone: null, ringCalls: 0 }
-window.__setPhone = (status) => { state.phone = status }
-window.__ringCalls = () => state.ringCalls
+const state = { result: null, openCalls: 0 }
+window.__setResult = (result) => { state.result = result }
+window.__openCalls = () => state.openCalls
 
 const overrides = {
   getProfile: async () => ({ name: 'Léo' }),
   saveProfile: async () => {},
-  getPhoneStatus: async () => state.phone,
-  ringPhone: async () => { state.ringCalls += 1; return 'Le téléphone sonne.' },
-  sendToPhone: async () => 'Texte déposé sur ton téléphone.',
-  pickKdeConnectCli: async () => null
+  getPhoneNotifications: async () => state.result,
+  openPhoneLink: async () => { state.openCalls += 1; return "L'application Mobile connecté a été lancée." }
 }
 
 window.jaris = new Proxy({}, {
@@ -98,14 +96,20 @@ function buildPage() {
   return pageHtml
 }
 
-const REACHABLE = {
-  installed: true,
-  reachable: true,
-  devices: [{ id: 'abc123', name: 'iPhone de Léo' }],
-  message: ''
+const AVEC_NOTIFICATIONS = {
+  status: 'allowed',
+  notifications: [{ app: 'Mobile connecté', lines: ['Maman', 'Tu rentres quand ?'] }],
+  message: '1 notification(s) en cours.'
 }
 
-async function withPhoneTab(status, run) {
+const REFUS = {
+  status: 'denied',
+  notifications: [],
+  message:
+    "Windows n'autorise pas Jaris à lire tes notifications. Va dans Paramètres Windows → Confidentialité et sécurité → Notifications, et autorise l'accès aux notifications, puis réessaie."
+}
+
+async function withPhoneTab(result, run) {
   const html = buildPage()
   const browser = await chromium.launch()
   try {
@@ -113,7 +117,7 @@ async function withPhoneTab(status, run) {
     await page.setViewportSize({ width: 1100, height: 800 })
     await page.setContent(html)
     await page.waitForSelector('.options-menu__trigger')
-    await page.evaluate((s) => window.__setPhone(s), status)
+    await page.evaluate((r) => window.__setResult(r), result)
     await page.click('.options-menu__trigger')
     // Vrai clic sur l'onglet, pas un setState forcé : c'est le chemin qu'emprunte Léo.
     await page.click('.options-menu__tab:has-text("Téléphone")')
@@ -126,17 +130,17 @@ async function withPhoneTab(status, run) {
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
 
-test("l'onglet dit ce qu'Apple interdit, plutôt que de laisser espérer des SMS", options, async () => {
-  await withPhoneTab(REACHABLE, async (page) => {
+test("l'onglet prévient de l'autorisation Windows et ne laisse pas espérer des SMS", options, async () => {
+  await withPhoneTab(AVEC_NOTIFICATIONS, async (page) => {
     const texte = await page.textContent('.options-menu__section')
+    assert.match(texte, /autorisation|te demandera/i)
     assert.match(texte, /SMS/)
-    assert.match(texte, /notifications/)
-    assert.match(texte, /iPhone de Léo/)
+    assert.match(texte, /Mobile connecté/)
   })
 })
 
 test('les boutons sont habillés par le CSS de Jaris, pas laissés au style par défaut', options, async () => {
-  await withPhoneTab(REACHABLE, async (page) => {
+  await withPhoneTab(AVEC_NOTIFICATIONS, async (page) => {
     const mesure = await page.evaluate(() => {
       // TOUS les boutons de la rangée, sélectionnés par leur BALISE et non par la classe attendue : un
       // bouton qui aurait perdu la classe doit être examiné lui aussi, pas ignoré par le sélecteur. Première
@@ -160,48 +164,43 @@ test('les boutons sont habillés par le CSS de Jaris, pas laissés au style par 
       assert.equal(bouton.transform, 'uppercase', `« ${bouton.texte} » n'est pas en majuscules`)
       assert.match(bouton.police, /Rajdhani/i, `« ${bouton.texte} » n'a pas la police du HUD`)
     }
-    // La rangée a rejoint une règle existante par sélecteur groupé : vérifier qu'elle s'applique vraiment.
     assert.equal(mesure.rangee, 'flex')
   })
 })
 
-test('faire sonner appelle vraiment le pont, et affiche sa réponse', options, async () => {
-  await withPhoneTab(REACHABLE, async (page) => {
-    await page.click('.options-menu__actions .options-menu__action:has-text("Faire sonner")')
-    await page.waitForFunction(() => document.body.textContent.includes('Le téléphone sonne.'))
-    assert.equal(await page.evaluate(() => window.__ringCalls()), 1)
+test('rien ne se lit tant que Léo ne clique pas (la demande Windows ne surgit pas toute seule)', options, async () => {
+  // Ouvrir un onglet ne doit pas déclencher une fenêtre système : la première lecture demande une
+  // autorisation à Windows, et elle doit être provoquée par un clic dont Léo comprend la raison.
+  await withPhoneTab(AVEC_NOTIFICATIONS, async (page) => {
+    const texte = await page.textContent('.options-menu__section')
+    assert.doesNotMatch(texte, /Tu rentres quand/, 'les notifications ont été lues sans clic')
   })
 })
 
-test("sans téléphone joignable, le bouton est désactivé au lieu d'échouer une fois cliqué", options, async () => {
-  const injoignable = {
-    installed: true,
-    reachable: true,
-    devices: [],
-    message: 'Aucun téléphone joignable pour l\'instant.'
-  }
-  await withPhoneTab(injoignable, async (page) => {
-    const bouton = await page.$('.options-menu__actions .options-menu__action:has-text("Faire sonner")')
-    assert.equal(await bouton.isDisabled(), true)
-    assert.match(await page.textContent('.options-menu__section'), /Aucun téléphone joignable/)
+test('après le clic, les notifications lues sont affichées', options, async () => {
+  await withPhoneTab(AVEC_NOTIFICATIONS, async (page) => {
+    await page.click('.options-menu__action:has-text("Lire mes notifications")')
+    await page.waitForSelector('.options-menu__notifications li')
+    const texte = await page.textContent('.options-menu__notifications')
+    assert.match(texte, /Mobile connecté/)
+    assert.match(texte, /Tu rentres quand/)
   })
 })
 
-test("quand KDE Connect est introuvable, le bouton pour le désigner soi-même apparaît", options, async () => {
-  const absent = {
-    installed: false,
-    reachable: false,
-    devices: [],
-    message: "KDE Connect n'est pas installé (ou Jaris ne l'a pas trouvé)."
-  }
-  await withPhoneTab(absent, async (page) => {
-    const boutons = await page.$$eval('.options-menu__actions .options-menu__action', (els) =>
-      els.map((el) => el.textContent.trim())
-    )
-    assert.ok(
-      boutons.some((texte) => /Trouver KDE Connect/i.test(texte)),
-      `bouton de repli absent : ${JSON.stringify(boutons)}`
-    )
+test("un refus de Windows s'affiche comme un refus, pas comme une absence de message", options, async () => {
+  await withPhoneTab(REFUS, async (page) => {
+    await page.click('.options-menu__action:has-text("Lire mes notifications")')
+    await page.waitForFunction(() => document.body.textContent.includes('Paramètres Windows'))
+    const liste = await page.$('.options-menu__notifications')
+    assert.equal(liste, null, 'une liste vide est affichée alors que Windows a refusé')
+  })
+})
+
+test('le bouton d’ouverture appelle vraiment Mobile connecté', options, async () => {
+  await withPhoneTab(AVEC_NOTIFICATIONS, async (page) => {
+    await page.click('.options-menu__action:has-text("Ouvrir Mobile connecté")')
+    await page.waitForFunction(() => document.body.textContent.includes('a été lancée'))
+    assert.equal(await page.evaluate(() => window.__openCalls()), 1)
   })
 })
 

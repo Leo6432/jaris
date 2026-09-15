@@ -7,7 +7,7 @@ import type {
   HardwareTierPreview as HardwareTierPreviewData,
   ModelsLocationStatus,
   OllamaVersionStatus,
-  PhoneStatus,
+  PhoneNotificationsResult,
   Profile,
   ReleaseHistoryEntry,
   UpdateProgress
@@ -146,10 +146,10 @@ export default function OptionsMenu(): JSX.Element {
   // affichée comme une rangée de barres qui défilent façon Discord, pas un seul chiffre.
   const [micLevels, setMicLevels] = useState<number[]>(() => Array(MIC_TEST_BAR_COUNT).fill(0))
   const [micTestResult, setMicTestResult] = useState<boolean | null>(null)
-  /** Pont téléphone (étape 21) — `null` tant que l'onglet Téléphone n'a jamais été ouvert. */
-  const [phoneStatus, setPhoneStatus] = useState<PhoneStatus | null>(null)
+  /** Dernière lecture des notifications (étape 21bis) — `null` tant qu'on n'a jamais lu. */
+  const [phoneResult, setPhoneResult] = useState<PhoneNotificationsResult | null>(null)
   const [phoneBusy, setPhoneBusy] = useState(false)
-  /** Résultat de la dernière action téléphone, déjà rédigé en français par phoneBridge.ts : affiché tel quel. */
+  /** Réponse de l'ouverture de Mobile connecté, déjà rédigée par openApp : affichée telle quelle. */
   const [phoneMessage, setPhoneMessage] = useState<string | null>(null)
 
   useEffect(() => {
@@ -171,17 +171,10 @@ export default function OptionsMenu(): JSX.Element {
 
   // Pas la peine à chaque ouverture du menu si l'utilisateur ne va jamais voir cet onglet Modèles :
   // previewHardwareTiers relit scripts/verified-tool-scores.md/benchmark-results.md côté main.
-  // Relu à CHAQUE ouverture de l'onglet (et pas une seule fois comme hardwareTiers) : contrairement à un
-  // réglage enregistré, l'état du pont change tout seul dans le dos de Jaris — le téléphone sort du Wi-Fi,
-  // l'application est fermée sur l'iPhone... Un état figé au premier affichage serait faux la fois suivante.
-  useEffect(() => {
-    if (tab !== 'telephone') return
-    setPhoneBusy(true)
-    void window.jaris
-      .getPhoneStatus()
-      .then(setPhoneStatus)
-      .finally(() => setPhoneBusy(false))
-  }, [tab])
+  // PAS de lecture automatique à l'ouverture de l'onglet, contrairement aux autres réglages : la toute
+  // première lecture déclenche une demande d'autorisation Windows (documenté par Microsoft pour
+  // UserNotificationListener). Une fenêtre système qui surgit parce qu'on a simplement ouvert un onglet
+  // serait incompréhensible — c'est le clic sur le bouton qui la provoque, en sachant pourquoi.
 
   useEffect(() => {
     if (tab === 'modeles' && hardwareTiers === null) {
@@ -476,48 +469,26 @@ export default function OptionsMenu(): JSX.Element {
    * relus à la volée par App.tsx (comme soundEffectsEnabled ci-dessus) — aucun redémarrage du pipeline
    * vocal nécessaire, contrairement à toggleWakeword juste en dessous.
    */
-  /** Recharge l'état du pont : après chaque action, l'affichage doit décrire la situation RÉELLE du moment. */
-  const refreshPhoneStatus = async (): Promise<void> => {
-    setPhoneStatus(await window.jaris.getPhoneStatus())
-  }
-
-  const runPhoneAction = async (action: () => Promise<string>): Promise<void> => {
+  const readPhoneNotifications = async (): Promise<void> => {
     setPhoneBusy(true)
     setPhoneMessage(null)
     try {
-      setPhoneMessage(await action())
-      await refreshPhoneStatus()
+      setPhoneResult(await window.jaris.getPhoneNotifications())
     } catch (err) {
-      setPhoneMessage(err instanceof Error ? err.message : String(err))
+      setPhoneResult({ status: 'error', notifications: [], message: err instanceof Error ? err.message : String(err) })
     } finally {
       setPhoneBusy(false)
     }
   }
 
-  /** Enregistre le téléphone à utiliser quand plusieurs sont joignables (sinon Jaris prend le seul qu'il voit). */
-  const choosePhoneDevice = async (deviceId: string): Promise<void> => {
-    if (!profile) return
-    setError(null)
-    const updated = { ...profile, phoneDeviceId: deviceId }
-    setProfile(updated)
+  const openPhoneLink = async (): Promise<void> => {
+    setPhoneBusy(true)
     try {
-      await window.jaris.saveProfile(updated)
+      setPhoneMessage(await window.jaris.openPhoneLink())
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    }
-  }
-
-  /** Repli quand la recherche automatique de kdeconnect-cli.exe échoue : Léo le désigne lui-même. */
-  const chooseKdeConnectCli = async (): Promise<void> => {
-    const chosen = await window.jaris.pickKdeConnectCli()
-    if (!chosen || !profile) return
-    const updated = { ...profile, phoneCliPath: chosen }
-    setProfile(updated)
-    try {
-      await window.jaris.saveProfile(updated)
-      await refreshPhoneStatus()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setPhoneMessage(err instanceof Error ? err.message : String(err))
+    } finally {
+      setPhoneBusy(false)
     }
   }
 
@@ -815,68 +786,42 @@ export default function OptionsMenu(): JSX.Element {
           <div className="options-menu__section">
             <div className="options-menu__section-title">Ton téléphone</div>
             <p className="options-menu__model-overview-hint">
-              Jaris parle à ton téléphone par KDE Connect, sur ton Wi-Fi — rien ne passe par internet. Installe
-              l'application sur l'ordinateur (kdeconnect.kde.org) et sur le téléphone (App Store), puis appaire
-              les deux une seule fois.
+              Jaris lit les notifications affichées par Windows. Celles de ton iPhone en font partie dès que
+              « Mobile connecté » est relié à ton téléphone en Bluetooth, avec « Partager les notifications du
+              système » activé côté iPhone. Jaris ne regarde jamais dans la fenêtre de Mobile connecté : il
+              demande à Windows, qui est la vraie source.
             </p>
             <p className="options-menu__model-overview-hint">
-              Sur iPhone, Apple interdit aux applications de lire les notifications des autres applications et
-              d'envoyer des SMS : Jaris ne peut donc pas le faire, quel que soit le logiciel. Ce qui marche
-              vraiment : faire sonner ton téléphone, et lui déposer un texte ou un lien. L'application KDE
-              Connect doit rester affichée à l'écran du téléphone pendant ce temps, toujours à cause d'Apple.
+              Au premier essai, Windows te demandera si Jaris a le droit de lire tes notifications — c'est
+              normal, et c'est le seul moyen d'y accéder. Apple, lui, interdit d'envoyer des SMS depuis un
+              ordinateur : ça, Jaris ne pourra pas le faire.
             </p>
 
-            {phoneStatus === null ? (
-              <p className="options-menu__model-overview-hint">Vérification…</p>
-            ) : (
+            <div className="options-menu__actions">
+              <button className="options-menu__action" disabled={phoneBusy} onClick={() => void readPhoneNotifications()}>
+                {phoneBusy ? 'Lecture…' : 'Lire mes notifications'}
+              </button>
+              <button className="options-menu__action" disabled={phoneBusy} onClick={() => void openPhoneLink()}>
+                Ouvrir Mobile connecté
+              </button>
+            </div>
+
+            {phoneMessage && <p className="options-menu__model-overview-hint">{phoneMessage}</p>}
+
+            {phoneResult && (
               <>
-                {phoneStatus.devices.length > 0 && (
-                  <>
-                    <div className="options-menu__section-title">
-                      {phoneStatus.devices.length === 1 ? 'Téléphone joignable' : 'Téléphones joignables'}
-                    </div>
-                    {phoneStatus.devices.map((device) => (
-                      <label className="options-menu__checkbox" key={device.id}>
-                        <input
-                          type="radio"
-                          name="phone-device"
-                          checked={
-                            profile?.phoneDeviceId === device.id ||
-                            (phoneStatus.devices.length === 1 && !profile?.phoneDeviceId)
-                          }
-                          onChange={() => void choosePhoneDevice(device.id)}
-                        />
-                        {device.name}
-                      </label>
+                <p className="options-menu__model-overview-hint">{phoneResult.message}</p>
+                {phoneResult.notifications.length > 0 && (
+                  <ul className="options-menu__notifications">
+                    {phoneResult.notifications.map((notification, index) => (
+                      <li key={index}>
+                        {notification.app && <strong>{notification.app}</strong>}
+                        {notification.app && ' — '}
+                        {notification.lines.join(' · ')}
+                      </li>
                     ))}
-                  </>
+                  </ul>
                 )}
-
-                {phoneStatus.message && <p className="options-menu__model-overview-hint">{phoneStatus.message}</p>}
-
-                <div className="options-menu__actions">
-                  <button
-                    className="options-menu__action"
-                    disabled={phoneBusy || phoneStatus.devices.length === 0}
-                    onClick={() => void runPhoneAction(() => window.jaris.ringPhone())}
-                  >
-                    Faire sonner le téléphone
-                  </button>
-                  <button
-                    className="options-menu__action"
-                    disabled={phoneBusy}
-                    onClick={() => void runPhoneAction(() => refreshPhoneStatus().then(() => 'Vérification terminée.'))}
-                  >
-                    Revérifier
-                  </button>
-                  {!phoneStatus.installed && (
-                    <button className="options-menu__action" disabled={phoneBusy} onClick={() => void chooseKdeConnectCli()}>
-                      Trouver KDE Connect moi-même
-                    </button>
-                  )}
-                </div>
-
-                {phoneMessage && <p className="options-menu__model-overview-hint">{phoneMessage}</p>}
               </>
             )}
           </div>

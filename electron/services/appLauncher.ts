@@ -67,7 +67,10 @@ const LOCALIZED_ALIASES: string[][] = [
   ['courrier', 'mail'],
   ['calendrier', 'calendar'],
   ['horloge', 'clock'],
-  ['appareil photo', 'camera']
+  ['appareil photo', 'camera'],
+  // Étape 21bis : « Mobile connecté » en français, « Phone Link » en anglais — aucune normalisation ne
+  // rapproche les deux, c'est une question de langue. Jaris l'ouvre pour l'appairage au téléphone.
+  ['mobile connecte', 'phone link']
 ]
 
 /** Toutes les graphies équivalentes d'un nom déjà normalisé (lui-même inclus). */
