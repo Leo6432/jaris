@@ -35,6 +35,7 @@ import {
 import { getProfile, saveProfile } from './services/profileStore'
 import { openApp } from './services/appLauncher'
 import { readPhoneNotifications } from './services/phoneLink'
+import { inspectPhoneLinkCache } from './services/phoneLinkCache'
 import { checkAppFreshness, checkForUpdate, getAppVersionStatus, getInstalledVersion, getReleaseHistory, updateApp } from './services/appUpdater'
 import {
   IPC_CHANNELS,
@@ -48,6 +49,7 @@ import {
   type GeneratedAppSummary,
   type JarisEmotion,
   type MemoryGraph,
+  type PhoneCacheReport,
   type PhoneNotificationsResult,
   type PickedImageFile,
   type Profile,
@@ -641,6 +643,10 @@ app.whenReady().then(async () => {
   // Ouvre Mobile connecté par le MÊME chemin que "ouvre Discord" à la voix (menu Démarrer), plutôt qu'un
   // chemin d'installation codé en dur qui casserait sur une installation ailleurs — leçon de l'étape 60.
   ipcMain.handle(IPC_CHANNELS.openPhoneLink, (): Promise<string> => openApp('Mobile connecté'))
+
+  // Constat en LECTURE SEULE de ce que Mobile connecté range sur le disque : aucun contenu de message n'est
+  // lu, seulement la structure — de quoi décider avec des faits s'il y a une vraie fonctionnalité à bâtir.
+  ipcMain.handle(IPC_CHANNELS.inspectPhoneCache, (): Promise<PhoneCacheReport> => inspectPhoneLinkCache())
 
   // Mode Code (étape 30) : génération d'une application autonome, avec avancement au fil de l'eau (la
   // génération + relecture peut prendre plusieurs minutes sur un modèle local).

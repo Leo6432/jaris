@@ -18,6 +18,7 @@ import {
   type MicTestLevelPayload,
   type ModelOverviewResult,
   type ModelsLocationStatus,
+  type PhoneCacheReport,
   type PhoneNotificationsResult,
   type OllamaVersionStatus,
   type PickedImageFile,
@@ -99,6 +100,7 @@ const api = {
   // connecté pour l'appairage. Les deux renvoient un résultat déjà rédigé en français, affiché tel quel.
   getPhoneNotifications: (): Promise<PhoneNotificationsResult> => ipcRenderer.invoke(IPC_CHANNELS.getPhoneNotifications),
   openPhoneLink: (): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.openPhoneLink),
+  inspectPhoneCache: (): Promise<PhoneCacheReport> => ipcRenderer.invoke(IPC_CHANNELS.inspectPhoneCache),
   generateApp: (description: string, currentHtml?: string, imageBase64?: string): Promise<GeneratedApp> =>
     ipcRenderer.invoke(IPC_CHANNELS.generateApp, description, currentHtml, imageBase64),
   onCodeGenStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.codeGenStatus, cb),

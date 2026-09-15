@@ -17,6 +17,7 @@ import type {
   ModelOverviewResult,
   ModelsLocationStatus,
   OllamaVersionStatus,
+  PhoneCacheReport,
   PhoneNotificationsResult,
   PickedImageFile,
   Profile,
@@ -93,6 +94,8 @@ declare global {
       // connecté les y dépose), et ouverture de Mobile connecté pour l'appairage.
       getPhoneNotifications: () => Promise<PhoneNotificationsResult>
       openPhoneLink: () => Promise<string>
+      // Étape 21ter : constat en lecture seule du cache de Mobile connecté (structure, jamais le contenu).
+      inspectPhoneCache: () => Promise<PhoneCacheReport>
       generateApp: (description: string, currentHtml?: string, imageBase64?: string) => Promise<GeneratedApp>
       onCodeGenStatus: (cb: (message: string) => void) => () => void
       // Étape 99 : avancement en direct pendant une génération (l'étape en cours, les caractères déjà

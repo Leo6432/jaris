@@ -7,6 +7,7 @@ import type {
   HardwareTierPreview as HardwareTierPreviewData,
   ModelsLocationStatus,
   OllamaVersionStatus,
+  PhoneCacheReport,
   PhoneNotificationsResult,
   Profile,
   ReleaseHistoryEntry,
@@ -151,6 +152,8 @@ export default function OptionsMenu(): JSX.Element {
   const [phoneBusy, setPhoneBusy] = useState(false)
   /** Réponse de l'ouverture de Mobile connecté, déjà rédigée par openApp : affichée telle quelle. */
   const [phoneMessage, setPhoneMessage] = useState<string | null>(null)
+  /** Constat du cache de Mobile connecté (étape 21ter) — structure seulement, jamais un contenu de message. */
+  const [phoneCache, setPhoneCache] = useState<PhoneCacheReport | null>(null)
 
   useEffect(() => {
     window.jaris.getProfile().then((p) => {
@@ -481,6 +484,17 @@ export default function OptionsMenu(): JSX.Element {
     }
   }
 
+  const inspectPhoneCache = async (): Promise<void> => {
+    setPhoneBusy(true)
+    try {
+      setPhoneCache(await window.jaris.inspectPhoneCache())
+    } catch (err) {
+      setPhoneCache({ packages: [], databases: [], message: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setPhoneBusy(false)
+    }
+  }
+
   const openPhoneLink = async (): Promise<void> => {
     setPhoneBusy(true)
     try {
@@ -804,9 +818,34 @@ export default function OptionsMenu(): JSX.Element {
               <button className="options-menu__action" disabled={phoneBusy} onClick={() => void openPhoneLink()}>
                 Ouvrir Mobile connecté
               </button>
+              <button className="options-menu__action" disabled={phoneBusy} onClick={() => void inspectPhoneCache()}>
+                Chercher mes messages sur le PC
+              </button>
             </div>
 
             {phoneMessage && <p className="options-menu__model-overview-hint">{phoneMessage}</p>}
+
+            {phoneCache && (
+              <>
+                <p className="options-menu__model-overview-hint">{phoneCache.message}</p>
+                {phoneCache.databases.length > 0 && (
+                  <ul className="options-menu__notifications">
+                    {phoneCache.databases.map((database) => (
+                      <li key={database.path}>
+                        <strong>{database.path.split('\\').pop()}</strong>
+                        {' — '}
+                        {database.error
+                          ? database.error
+                          : database.tables
+                              .filter((table) => table.rows !== 0)
+                              .map((table) => `${table.name} (${table.rows === -1 ? 'illisible' : `${table.rows} lignes`})`)
+                              .join(', ') || 'aucune table remplie'}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
 
             {phoneResult && (
               <>

@@ -1686,3 +1686,39 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   trace de KDE Connect ne revient dans le CODE (les commentaires qui expliquent son retrait, eux, restent) —
   le grep-sweep après un retrait devient ainsi permanent au lieu d'être fait une fois à la main.
   Chaque assertion a été vérifiée en réintroduisant temporairement le défaut correspondant.
+
+- **« mais tu peux pas te connecter à mobile connecté, il n'y a pas un outil pour ça » (Léo, étape 21ter) —
+  et la troisième fois que la même question mal posée m'a fait rater une piste.** Les notifications du
+  téléphone restaient dans la fenêtre de Mobile connecté sans passer par le centre de notifications de
+  Windows (constaté par Léo : son message arrive dans Mobile connecté, mais Windows + N ne le montre pas),
+  donc la lecture livrée à l'étape 21bis ne voyait que les notifications du PC. Plutôt que de répéter « il
+  n'y a pas d'API », j'ai reposé la question qui paye : **où atterrit la donnée ?** Réponse : Mobile connecté
+  garde ses données dans un cache local en bases SQLite — documenté par des travaux publiés d'informatique
+  légale sur l'application Your Phone/Phone Link (`%LOCALAPPDATA%\Packages\Microsoft.YourPhone_*\LocalCache`),
+  jamais par Microsoft. **Leçon générale, désormais vérifiée trois fois sur ce seul sujet : « cette
+  application n'expose pas d'API » ne veut pas dire « inaccessible » — chercher successivement (1) ce que le
+  système d'exploitation publie lui-même, (2) ce que l'application écrit sur le disque, et seulement en
+  dernier recours son interface graphique.**
+  **Ce qui est livré est un CONSTAT, pas une fonctionnalité** (`phoneLinkCache.ts`) : Jaris regarde quelles
+  bases existent, quelles tables elles contiennent et combien de lignes — et rien d'autre. Aucun contenu de
+  message n'est lu, ce qui est vérifié par un test. Deux raisons : le schéma n'est documenté nulle part et
+  change avec les versions, donc écrire un lecteur maintenant serait deviner (la saga SearXNG a coûté quatre
+  hypothèses successives pour cette raison exacte) ; et le rapport peut être envoyé tel quel par Léo sans
+  exposer ses conversations.
+  **VRAI DÉFAUT DE SÉCURITÉ ATTRAPÉ PAR UN TEST, à ne jamais refaire** : `node:sqlite` attend l'option
+  `readOnly` (O MAJUSCULE). Écrite `readonly` en minuscules — l'orthographe naturelle, et celle du mot-clé
+  TypeScript — elle est **acceptée sans la moindre erreur ET IGNORÉE** : la base s'ouvre en ÉCRITURE. Le code
+  livré aurait donc ouvert les bases de messages de Léo, appartenant à une autre application en cours
+  d'exécution, avec le droit de les modifier. Repéré uniquement parce que le test ne se contente pas de lire
+  l'option mais TENTE une écriture et exige qu'elle échoue ; mesuré ensuite sur les deux orthographes pour
+  confirmer. **Leçon générale : un objet d'options ne valide pas ses clés — une option mal orthographiée est
+  silencieusement ignorée, et le comportement par défaut (ici : écriture autorisée) s'applique. Pour toute
+  option qui INTERDIT quelque chose, ne jamais se fier au nom écrit : tester que l'action interdite échoue
+  vraiment.** Même famille que `resample_poly` sur un tableau d'entiers (silence total, aucune erreur) et que
+  les règles CSS sans effet : ce qui ne lève pas d'erreur n'est pas pour autant appliqué.
+  Le parcours du cache est borné (profondeur, nombre d'entrées, tables par base) parce qu'un cache
+  d'application contient des milliers de fichiers, et un dossier illisible n'interrompt pas le reste — sans
+  ça, le premier dossier verrouillé ferait dire « rien trouvé » alors que tout est là.
+  Régression : `node --test scripts/test-phone-cache.mjs` — parcours sur un VRAI faux disque et lecture d'une
+  VRAIE base SQLite créée par le test (pas un mock), plus l'assertion d'écriture refusée qui a trouvé le
+  défaut ci-dessus, et une assertion qui échoue si un contenu de message se retrouve dans le rapport.

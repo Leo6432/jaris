@@ -886,3 +886,17 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   SMS reste impossible (interdit par Apple à toute application sur ordinateur) et Jaris le dit franchement.
   Régression : `npm test`, dont un test qui vérifie qu'un refus de Windows ne se lit jamais comme "tu n'as
   rien reçu", et un autre qui garantit qu'aucune trace de KDE Connect ne revient dans le code.
+
+- ✅ Étape 106 (v0.10.1) — Léo : "mais tu peux pas te connecter à mobile connecté, il n'y a pas un outil pour
+  ça ?" — après avoir constaté que les notifications de son iPhone restent dans la fenêtre de Mobile connecté
+  sans passer par le centre de notifications de Windows (donc invisibles pour la lecture livrée en v0.10.0).
+  Plutôt que de répéter qu'il n'y a pas d'API, j'ai cherché où Mobile connecté RANGE ses données : dans un
+  cache local, en bases SQLite (documenté par des travaux d'informatique légale sur cette application, pas
+  par Microsoft). Nouveau bouton "Chercher mes messages sur le PC" (Options → Téléphone) qui REGARDE ce
+  qu'il y a vraiment : quelles bases, quelles tables, combien de lignes — et rien d'autre. Aucun contenu de
+  message n'est lu, pour que Léo puisse m'envoyer le résultat sans exposer ses conversations, et parce que
+  le format de ces bases n'est documenté nulle part : écrire un lecteur de messages tout de suite serait
+  deviner. Vrai défaut de sécurité attrapé au passage par un test : l'option d'ouverture en lecture seule
+  s'écrit `readOnly` et pas `readonly` — mal orthographiée, elle est ignorée en silence et la base s'ouvre
+  en écriture. Le test tente une vraie écriture et exige qu'elle échoue. Régression : `npm test` (266 tests),
+  dont un parcours sur un vrai faux disque et la lecture d'une vraie base SQLite créée par le test.
