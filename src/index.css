@@ -401,6 +401,16 @@ body.body--scan::after {
   color: var(--hud-text-faint);
 }
 
+/* Onglet "Ce que Jaris sait faire" (étape 108) : un groupe par catégorie, chacun avec son propre titre —
+   sans cet espacement, les groupes se suivraient collés les uns aux autres comme un seul bloc. */
+.options-menu__capability-group {
+  margin-top: 18px;
+}
+
+.options-menu__capability-group:first-child {
+  margin-top: 4px;
+}
+
 .options-menu__account {
   font-size: 0.85rem;
   color: var(--hud-text);

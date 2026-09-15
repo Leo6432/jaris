@@ -13,6 +13,7 @@ import type {
   ReleaseHistoryEntry,
   UpdateProgress
 } from '../../shared/ipc'
+import { CAPABILITIES } from '../../shared/capabilities'
 import AppUpdateProgress from './AppUpdateProgress'
 import HardwareTierPreview from './HardwareTierPreview'
 import JarisOrb from './JarisOrb'
@@ -49,7 +50,7 @@ const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
  */
 const MIC_TEST_BAR_COUNT = 42
 
-type Tab = 'voix' | 'micro' | 'activation' | 'telephone' | 'modeles' | 'miseajour' | 'stockage' | 'historique'
+type Tab = 'capacites' | 'voix' | 'micro' | 'activation' | 'telephone' | 'modeles' | 'miseajour' | 'stockage' | 'historique'
 
 /**
  * Chromium ajoute des pseudo-périphériques "default"/"communications" en plus des vrais haut-parleurs
@@ -609,6 +610,9 @@ export default function OptionsMenu(): JSX.Element {
         <aside className="options-page__navigation" aria-label="Sections des options">
           <span className="options-page__navigation-label">Réglages</span>
           <nav className="options-menu__tabs">
+            <button className={`options-menu__tab${tab === 'capacites' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('capacites')}>
+              Ce que Jaris sait faire
+            </button>
             <button className={`options-menu__tab${tab === 'voix' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('voix')}>
               Voix
             </button>
@@ -638,6 +642,30 @@ export default function OptionsMenu(): JSX.Element {
 
         <main className="options-page__workspace">
           <div className="options-page__content">
+        {tab === 'capacites' && (
+          <div className="options-menu__section">
+            <div className="options-menu__section-title">Ce que Jaris sait faire</div>
+            <p className="options-menu__model-overview-hint">
+              La liste complète, à la voix comme en Chat — tu n'as rien à activer, dis simplement ce que tu
+              veux.
+            </p>
+            {CAPABILITIES.map((group) => (
+              <div key={group.title} className="options-menu__capability-group">
+                <div className="options-menu__section-title">{group.title}</div>
+                <ul className="options-menu__notifications">
+                  {group.items.map((item) => (
+                    <li key={item.title}>
+                      <strong>{item.title}</strong>
+                      {' — '}
+                      {item.description}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+
         {tab === 'voix' && (
           <div className="options-menu__voice-picker">
             <div className="options-menu__voice-nav">

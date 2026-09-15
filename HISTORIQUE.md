@@ -912,3 +912,12 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   converties puis vérifiées (trois formats possibles). Régression : `npm test` (263 tests), avec de vraies
   bases SQLite créées par les tests ; deux pièges trouvés dans mes propres tests en vérifiant qu'ils
   mordaient, et corrigés.
+
+- ✅ Étape 108 (v0.11.1) — Léo : "tkt chatgpt est en train de gérer mais dans les option tu peut mettre tout
+  se que jaris peut faire" (pendant que ChatGPT gère le bug de colonnes non trouvées sur les appels). Nouvel
+  onglet Options → "Ce que Jaris sait faire" qui liste, en langage courant et groupé par usage (ordinateur,
+  web, mémoire, rappels, téléphone, mode Code, chat), tout ce que Jaris peut faire à la voix comme en Chat.
+  Écrit comme une redite volontairement réécrite des outils internes plutôt qu'une copie automatique de
+  leurs descriptions techniques — un test garantit qu'aucun outil ajouté à l'avenir n'est oublié dans cette
+  liste, et qu'aucune entrée ne cite un outil qui n'existe plus. Régression : `npm test` (271 tests), avec
+  chaque assertion vérifiée en réintroduisant son défaut.

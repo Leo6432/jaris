@@ -1797,3 +1797,29 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   et dans un vrai navigateur : rien n'est lu sans clic, les appels s'affichent avec une date lisible, et
   « aucun appel » s'explique au lieu d'afficher une liste vide). Chaque assertion a été vérifiée en
   réintroduisant temporairement son défaut — c'est comme ça que les deux pièges ci-dessus sont sortis.
+
+- **"tkt chatgpt est en train de gérer mais dans les option tu peut mettre tout se que jaris peut faire"
+  (Léo, étape 108)** — un nouvel onglet Options → "Ce que Jaris sait faire", qui liste en langage courant
+  tout ce que Jaris peut faire à la voix comme en Chat.
+  **Décision structurante : une redite VOLONTAIREMENT réécrite de `TOOLS` (tools.ts), pas une copie
+  automatique de ses descriptions.** `TOOLS` est écrit pour Ollama (impératif technique, parfois des détails
+  d'implémentation — ex: "clique à cet endroit ; sinon clique à la position actuelle du curseur") et vit côté
+  main process (`child_process`/`fs`), donc injouable tel quel dans le renderer. `shared/capabilities.ts`
+  regroupe par USAGE plutôt que par ordre d'ajout, en phrases écrites pour Léo, pas pour un modèle.
+  **Comment ça ne se désynchronise pas de `TOOLS`, le vrai risque d'une redite manuelle** : chaque capacité
+  qui correspond à un outil précis porte son `toolNames` (le(s) nom(s) exacts de tools.ts). Un test relit
+  `tools.ts` par expression régulière et vérifie qu'AUCUN outil n'existe sans être couvert dans
+  `capabilities.ts` — et réciproquement, qu'aucune entrée ne cite un outil renommé/retiré (ce qui vient de se
+  produire deux fois cette session même : `read_phone_notifications` retiré à l'étape 21quater). Même
+  discipline que `findLeakedToolName`, déjà dérivé de `TOOLS` pour la même raison. **Leçon générale : quand
+  une information doit exister sous deux formes différentes pour deux publics différents (ici : un modèle et
+  un humain), la duplication elle-même n'est pas le problème — c'est l'ABSENCE de vérification croisée qui
+  laisse les deux dériver en silence.**
+  Un test vérifie aussi qu'aucun identifiant technique en snake_case (ex: "click_mouse") ne fuite dans une
+  description affichée à Léo — vérifié en réintroduisant volontairement une description du genre "Appelle
+  open_app pour lancer une application" : le test l'a bien attrapée.
+  Régression : `node --test scripts/test-capabilities.mjs scripts/test-capabilities-tab-ui.mjs` (outil ajouté
+  sans entrée détecté, référence à un outil disparu détectée, doublon détecté, jargon technique détecté ; et
+  dans un vrai navigateur : tous les groupes et toutes les capacités du fichier source sont RÉELLEMENT
+  affichés — pas juste comptés dans le code — et les titres de groupe sont habillés par le CSS partagé, pas
+  laissés en texte brut). Chaque assertion vérifiée en réintroduisant temporairement son défaut.
