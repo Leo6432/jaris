@@ -900,3 +900,15 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   s'écrit `readOnly` et pas `readonly` — mal orthographiée, elle est ignorée en silence et la base s'ouvre
   en écriture. Le test tente une vraie écriture et exige qu'elle échoue. Régression : `npm test` (266 tests),
   dont un parcours sur un vrai faux disque et la lecture d'une vraie base SQLite créée par le test.
+
+- ✅ Étape 107 (v0.11.0) — Léo : "enlève lire mes notification car ça met pc", avec le résultat du constat
+  lancé sur sa machine : `calling.db` (100 appels), `contacts.db` (24 contacts, 29 numéros), et aucune base
+  de messages. La lecture des notifications est donc retirée (elle ne voyait que celles du PC), et remplacée
+  par ce que les données permettent vraiment : "qui m'a appelé ?" et "c'est quoi le numéro de maman ?".
+  Jaris lit le cache de Mobile connecté en lecture seule, sans rien envoyer sur internet. Les messages
+  restent hors de portée — Mobile connecté ne les garde pas sur le disque, et Apple interdit d'en envoyer
+  depuis un ordinateur : Jaris le dit au lieu de le laisser croire. Comme les noms de colonnes de ces bases
+  ne sont documentés nulle part, ils sont reconnus à l'exécution plutôt que devinés, et les dates sont
+  converties puis vérifiées (trois formats possibles). Régression : `npm test` (263 tests), avec de vraies
+  bases SQLite créées par les tests ; deux pièges trouvés dans mes propres tests en vérifiant qu'ils
+  mordaient, et corrigés.

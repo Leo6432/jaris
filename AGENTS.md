@@ -1722,3 +1722,40 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   Régression : `node --test scripts/test-phone-cache.mjs` — parcours sur un VRAI faux disque et lecture d'une
   VRAIE base SQLite créée par le test (pas un mock), plus l'assertion d'écriture refusée qui a trouvé le
   défaut ci-dessus, et une assertion qui échoue si un contenu de message se retrouve dans le rapport.
+
+- **« enlève lire mes notification car ça met pc » + le résultat du constat (Léo, étape 21quater).** Le
+  constat livré à l'étape 21ter a tourné sur sa machine et a renvoyé des FAITS, pas des suppositions :
+  `calling.db` → `call_history` (100 lignes) ; `contacts.db` → `contact` (24), `phonenumber` (29), plus les
+  tables d'index `contact_index`/`fts_*` ; et **aucune base de messages**. Pour un iPhone, Mobile connecté
+  affiche les messages dans sa fenêtre sans les garder sur le disque. Périmètre donc décidé par la donnée
+  réelle, pas par une envie : les appels et les contacts se lisent, les messages non — et Jaris le dit au
+  lieu de le laisser croire. La lecture des notifications (étape 21bis) est retirée : elle ne voyait que
+  celles du PC, ce qui n'a aucun intérêt et laissait espérer autre chose.
+  **Le schéma était connu à moitié, et c'est ce qui décide de l'implémentation** : le constat donne les noms
+  des TABLES, jamais ceux des COLONNES, et rien ne les documente. Deviner `date`/`number`/`name` aurait
+  marché par chance sur une version et cassé à la suivante. Les colonnes sont donc RECONNUES à l'exécution
+  (`PRAGMA table_info` + motifs), et deux schémas différents sont exercés exprès par les tests.
+  **Trois formats d'horodatage possibles** (secondes Unix, millisecondes Unix, ticks .NET) sans savoir
+  lequel : on convertit puis on VÉRIFIE que la date tombe entre 2000 et 2100. Sans ce contrôle, un mauvais
+  format donnerait "17 janvier 1970" ou une date en l'an 4521 sans que rien ne le signale. **Leçon générale :
+  quand plusieurs formats sont plausibles pour une même valeur, essayer puis valider le RÉSULTAT vaut mieux
+  que choisir un format en espérant — une conversion fausse ne lève aucune erreur, elle produit juste une
+  valeur absurde.**
+  **DEUX PIÈGES TROUVÉS DANS MES PROPRES TESTS, tous deux parce que j'ai vérifié qu'ils mordaient** :
+  1. Le test remplaçait `findPhoneDatabases` sur les exports du module pour simuler la machine de Léo —
+     **sans le moindre effet** : un appel INTERNE à une fonction du même module ne passe jamais par les
+     exports. Le test lisait donc la vraie machine (aucune base, ici) et ne vérifiait rien. Corrigé en
+     rendant la dépendance réellement injectable (paramètre), comme le `fs` de phoneLinkCache. **Leçon
+     générale : on ne remplace pas une fonction d'un module par ses exports — pour qu'un test contrôle
+     vraiment une dépendance, elle doit être PASSÉE, pas monkey-patchée.** Même famille que le `grep -c` de
+     l'étape 97, qui comptait juste sans rien prouver.
+  2. L'assertion « la recherche de contacts ne doit pas attraper les tables d'index » passait aussi bien
+     AVEC qu'SANS l'ancrage `/^contact$/` : dans ma base de test, la vraie table `contact` était créée en
+     premier, donc trouvée en premier de toute façon. L'ordre réel chez Léo est inconnu. Corrigé en créant
+     les tables d'index AVANT dans le test. **Leçon générale : un test dont le résultat dépend d'un ordre
+     que le code ne garantit pas ne teste pas le code, il teste sa propre mise en scène.**
+  Régression : `node --test scripts/test-phone-data.mjs scripts/test-phone-tab-ui.mjs` (vraies bases SQLite
+  créées par le test, deux schémas de colonnes différents, trois formats de date, contacts avec accents,
+  et dans un vrai navigateur : rien n'est lu sans clic, les appels s'affichent avec une date lisible, et
+  « aucun appel » s'explique au lieu d'afficher une liste vide). Chaque assertion a été vérifiée en
+  réintroduisant temporairement son défaut — c'est comme ça que les deux pièges ci-dessus sont sortis.

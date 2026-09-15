@@ -19,7 +19,7 @@ import {
   type ModelOverviewResult,
   type ModelsLocationStatus,
   type PhoneCacheReport,
-  type PhoneNotificationsResult,
+  type PhoneCall,
   type OllamaVersionStatus,
   type PickedImageFile,
   type Profile,
@@ -98,7 +98,7 @@ const api = {
   pickImageFile: (): Promise<PickedImageFile | null> => ipcRenderer.invoke(IPC_CHANNELS.pickImageFile),
   // Téléphone (étape 21bis) : lecture des notifications par l'API de Windows, et ouverture de Mobile
   // connecté pour l'appairage. Les deux renvoient un résultat déjà rédigé en français, affiché tel quel.
-  getPhoneNotifications: (): Promise<PhoneNotificationsResult> => ipcRenderer.invoke(IPC_CHANNELS.getPhoneNotifications),
+  getPhoneCalls: (): Promise<PhoneCall[]> => ipcRenderer.invoke(IPC_CHANNELS.getPhoneCalls),
   openPhoneLink: (): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.openPhoneLink),
   inspectPhoneCache: (): Promise<PhoneCacheReport> => ipcRenderer.invoke(IPC_CHANNELS.inspectPhoneCache),
   generateApp: (description: string, currentHtml?: string, imageBase64?: string): Promise<GeneratedApp> =>

@@ -34,7 +34,7 @@ import {
 } from './services/conversationStore'
 import { getProfile, saveProfile } from './services/profileStore'
 import { openApp } from './services/appLauncher'
-import { readPhoneNotifications } from './services/phoneLink'
+import { readRecentCalls } from './services/phoneData'
 import { inspectPhoneLinkCache } from './services/phoneLinkCache'
 import { checkAppFreshness, checkForUpdate, getAppVersionStatus, getInstalledVersion, getReleaseHistory, updateApp } from './services/appUpdater'
 import {
@@ -50,7 +50,7 @@ import {
   type JarisEmotion,
   type MemoryGraph,
   type PhoneCacheReport,
-  type PhoneNotificationsResult,
+  type PhoneCall,
   type PickedImageFile,
   type Profile,
   type SoundCue,
@@ -636,9 +636,8 @@ app.whenReady().then(async () => {
     }
   })
 
-  // Téléphone (étape 21bis) : les notifications sont lues dans le centre de notifications de WINDOWS via
-  // son API documentée, jamais en regardant la fenêtre de Mobile connecté — celle-ci n'expose aucune API.
-  ipcMain.handle(IPC_CHANNELS.getPhoneNotifications, (): Promise<PhoneNotificationsResult> => readPhoneNotifications())
+  // Téléphone (étape 21quater) : appels lus dans le cache de Mobile connecté, en lecture seule.
+  ipcMain.handle(IPC_CHANNELS.getPhoneCalls, (): Promise<PhoneCall[]> => readRecentCalls())
 
   // Ouvre Mobile connecté par le MÊME chemin que "ouvre Discord" à la voix (menu Démarrer), plutôt qu'un
   // chemin d'installation codé en dur qui casserait sur une installation ailleurs — leçon de l'étape 60.

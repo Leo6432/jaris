@@ -8,7 +8,7 @@ import { searchWeb } from './webSearch'
 import { readWebPage } from './webPage'
 import { clickMouse, mediaKey, pressKey, typeText } from './inputControl'
 import { getSystemStatsText, shutdownPc } from './systemControl'
-import { formatNotificationsForSpeech, readPhoneNotifications } from './phoneLink'
+import { formatCalls, formatContacts, readRecentCalls, searchContacts } from './phoneData'
 
 export const TOOLS: OllamaTool[] = [
   {
@@ -262,13 +262,28 @@ export const TOOLS: OllamaTool[] = [
   {
     type: 'function',
     function: {
-      name: 'read_phone_notifications',
+      name: 'read_call_history',
       description:
-        "Lit les notifications en cours sur l'ordinateur — y compris celles du téléphone quand " +
-        "« Mobile connecté » (Phone Link) est relié au téléphone, puisqu'il les dépose dans le centre de " +
-        "notifications de Windows. À utiliser quand l'utilisateur demande ce qu'il a reçu, s'il a des " +
-        "messages ou des notifications. Lecture seule : ça n'envoie rien et ne répond à personne.",
+        "Donne les derniers appels reçus et passés sur le téléphone de l'utilisateur (qui, quand, durée). " +
+        "À utiliser pour « qui m'a appelé ? », « j'ai raté un appel ? ». Ne donne PAS les messages : ils ne " +
+        "sont pas enregistrés sur l'ordinateur, et aucune application ne peut les lire ni en envoyer depuis " +
+        "un iPhone — dis-le franchement si l'utilisateur le demande.",
       parameters: { type: 'object', properties: {}, required: [] }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'find_contact',
+      description:
+        "Retrouve le numéro de téléphone d'un contact de l'utilisateur par son nom (ex: « c'est quoi le " +
+        'numéro de maman ? »). Cherche uniquement dans les contacts déjà recopiés sur cet ordinateur par ' +
+        'Mobile connecté, rien n\'est envoyé sur internet.',
+      parameters: {
+        type: 'object',
+        properties: { name: { type: 'string', description: 'Nom (ou début du nom) du contact cherché' } },
+        required: ['name']
+      }
     }
   },
   {
@@ -330,11 +345,13 @@ export function createToolExecutor(
         return getSystemStatsText()
       case 'media_control':
         return mediaKey(String(args.action ?? ''))
-      case 'read_phone_notifications': {
-        // Le message d'échec (autorisation Windows refusée, Mobile connecté pas relié) est déjà rédigé pour
-        // Léo par phoneLink.ts et remonte TEL QUEL : aucune reformulation par le modèle, même principe que
-        // les autres outils depuis l'épisode du dépannage halluciné par-dessus une erreur SearXNG.
-        return formatNotificationsForSpeech(await readPhoneNotifications())
+      case 'read_call_history':
+        // Les messages d'échec sont déjà rédigés pour Léo par phoneData.ts et remontent TELS QUELS : aucune
+        // reformulation par le modèle, même principe que les autres outils.
+        return formatCalls(await readRecentCalls())
+      case 'find_contact': {
+        const name = String(args.name ?? '')
+        return formatContacts(await searchContacts(name), name)
       }
       case 'shutdown_pc':
         return shutdownPc(Boolean(args.restart))

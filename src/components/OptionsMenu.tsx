@@ -8,7 +8,7 @@ import type {
   ModelsLocationStatus,
   OllamaVersionStatus,
   PhoneCacheReport,
-  PhoneNotificationsResult,
+  PhoneCall,
   Profile,
   ReleaseHistoryEntry,
   UpdateProgress
@@ -147,8 +147,8 @@ export default function OptionsMenu(): JSX.Element {
   // affichée comme une rangée de barres qui défilent façon Discord, pas un seul chiffre.
   const [micLevels, setMicLevels] = useState<number[]>(() => Array(MIC_TEST_BAR_COUNT).fill(0))
   const [micTestResult, setMicTestResult] = useState<boolean | null>(null)
-  /** Dernière lecture des notifications (étape 21bis) — `null` tant qu'on n'a jamais lu. */
-  const [phoneResult, setPhoneResult] = useState<PhoneNotificationsResult | null>(null)
+  /** Derniers appels lus dans le cache de Mobile connecté (étape 21quater) — `null` tant qu'on n'a pas lu. */
+  const [phoneCalls, setPhoneCalls] = useState<PhoneCall[] | null>(null)
   const [phoneBusy, setPhoneBusy] = useState(false)
   /** Réponse de l'ouverture de Mobile connecté, déjà rédigée par openApp : affichée telle quelle. */
   const [phoneMessage, setPhoneMessage] = useState<string | null>(null)
@@ -472,13 +472,14 @@ export default function OptionsMenu(): JSX.Element {
    * relus à la volée par App.tsx (comme soundEffectsEnabled ci-dessus) — aucun redémarrage du pipeline
    * vocal nécessaire, contrairement à toggleWakeword juste en dessous.
    */
-  const readPhoneNotifications = async (): Promise<void> => {
+  const readPhoneCalls = async (): Promise<void> => {
     setPhoneBusy(true)
     setPhoneMessage(null)
     try {
-      setPhoneResult(await window.jaris.getPhoneNotifications())
+      setPhoneCalls(await window.jaris.getPhoneCalls())
     } catch (err) {
-      setPhoneResult({ status: 'error', notifications: [], message: err instanceof Error ? err.message : String(err) })
+      setPhoneCalls([])
+      setPhoneMessage(err instanceof Error ? err.message : String(err))
     } finally {
       setPhoneBusy(false)
     }
@@ -800,30 +801,49 @@ export default function OptionsMenu(): JSX.Element {
           <div className="options-menu__section">
             <div className="options-menu__section-title">Ton téléphone</div>
             <p className="options-menu__model-overview-hint">
-              Jaris lit les notifications affichées par Windows. Celles de ton iPhone en font partie dès que
-              « Mobile connecté » est relié à ton téléphone en Bluetooth, avec « Partager les notifications du
-              système » activé côté iPhone. Jaris ne regarde jamais dans la fenêtre de Mobile connecté : il
-              demande à Windows, qui est la vraie source.
+              Quand « Mobile connecté » (Phone Link) est relié à ton téléphone, il recopie sur cet ordinateur
+              ton historique d'appels et tes contacts. Jaris les lit directement là, sans rien envoyer sur
+              internet : tu peux lui demander « qui m'a appelé ? » ou « c'est quoi le numéro de maman ? ».
             </p>
             <p className="options-menu__model-overview-hint">
-              Au premier essai, Windows te demandera si Jaris a le droit de lire tes notifications — c'est
-              normal, et c'est le seul moyen d'y accéder. Apple, lui, interdit d'envoyer des SMS depuis un
-              ordinateur : ça, Jaris ne pourra pas le faire.
+              Les messages, eux, ne sont pas recopiés : Mobile connecté les affiche dans sa fenêtre sans les
+              garder sur le disque. Jaris ne peut donc ni les lire ni en envoyer — et pour l'envoi, c'est de
+              toute façon interdit par Apple à toute application sur ordinateur.
             </p>
 
             <div className="options-menu__actions">
-              <button className="options-menu__action" disabled={phoneBusy} onClick={() => void readPhoneNotifications()}>
-                {phoneBusy ? 'Lecture…' : 'Lire mes notifications'}
+              <button className="options-menu__action" disabled={phoneBusy} onClick={() => void readPhoneCalls()}>
+                {phoneBusy ? 'Lecture…' : 'Voir mes derniers appels'}
               </button>
               <button className="options-menu__action" disabled={phoneBusy} onClick={() => void openPhoneLink()}>
                 Ouvrir Mobile connecté
               </button>
               <button className="options-menu__action" disabled={phoneBusy} onClick={() => void inspectPhoneCache()}>
-                Chercher mes messages sur le PC
+                Ce que Mobile connecté garde sur le PC
               </button>
             </div>
 
             {phoneMessage && <p className="options-menu__model-overview-hint">{phoneMessage}</p>}
+
+            {phoneCalls !== null && (
+              phoneCalls.length === 0 ? (
+                <p className="options-menu__model-overview-hint">
+                  Aucun appel trouvé sur cet ordinateur. Vérifie que Mobile connecté est bien relié à ton
+                  téléphone — c'est lui qui recopie cet historique, Jaris ne fait que le lire.
+                </p>
+              ) : (
+                <ul className="options-menu__notifications">
+                  {phoneCalls.map((call, index) => (
+                    <li key={index}>
+                      <strong>{call.name || call.number || 'Numéro inconnu'}</strong>
+                      {' — '}
+                      {call.date ? new Date(call.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : 'date inconnue'}
+                      {call.durationSeconds > 0 && `, ${Math.round(call.durationSeconds / 60)} min`}
+                    </li>
+                  ))}
+                </ul>
+              )
+            )}
 
             {phoneCache && (
               <>
@@ -840,23 +860,6 @@ export default function OptionsMenu(): JSX.Element {
                               .filter((table) => table.rows !== 0)
                               .map((table) => `${table.name} (${table.rows === -1 ? 'illisible' : `${table.rows} lignes`})`)
                               .join(', ') || 'aucune table remplie'}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </>
-            )}
-
-            {phoneResult && (
-              <>
-                <p className="options-menu__model-overview-hint">{phoneResult.message}</p>
-                {phoneResult.notifications.length > 0 && (
-                  <ul className="options-menu__notifications">
-                    {phoneResult.notifications.map((notification, index) => (
-                      <li key={index}>
-                        {notification.app && <strong>{notification.app}</strong>}
-                        {notification.app && ' — '}
-                        {notification.lines.join(' · ')}
                       </li>
                     ))}
                   </ul>

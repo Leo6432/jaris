@@ -1146,35 +1146,28 @@ fenêtre à l'écran. **Fermer la croix, elle, quitte vraiment Jaris** (étape
 
 ## Téléphone (étape 21)
 
-Jaris peut lire **les notifications de ton téléphone**, en passant par « Mobile
-connecté » (Phone Link) — l'application de Windows qui relie un téléphone au PC.
+Quand « Mobile connecté » (Phone Link) est relié au téléphone, il recopie sur le
+PC l'historique d'appels et les contacts. Jaris les lit directement là, en
+lecture seule, sans rien envoyer sur internet :
 
-Comment ça marche, et pourquoi c'est fait comme ça : Mobile connecté n'expose
-aucune API, donc Jaris ne lui parle pas. Il n'en a pas besoin — Mobile connecté
-dépose les notifications du téléphone dans le **centre de notifications de
-Windows**, et Windows, lui, a une API officielle pour les lire
-(`UserNotificationListener`). Jaris lit donc la source, pas l'écran d'une
-application : rien à cliquer, rien qui dépende de la langue de Windows ou de la
-position des boutons dans une fenêtre.
+- **« qui m'a appelé ? »** — les derniers appels, avec qui, quand et la durée.
+- **« c'est quoi le numéro de maman ? »** — recherche dans les contacts.
 
-Dis simplement « qu'est-ce que j'ai reçu ? », ou passe par Options → Téléphone
-pour lire et vérifier la configuration.
+Options → Téléphone permet de faire la même chose à la main, d'ouvrir Mobile
+connecté pour l'appairage, et de voir ce qu'il garde sur le PC.
 
-**À faire une fois** : installer/ouvrir Mobile connecté, le relier au téléphone
-en Bluetooth, et activer « Partager les notifications du système » côté
-téléphone. Au premier essai, Windows demandera si Jaris a le droit de lire les
-notifications — c'est obligatoire et documenté par Microsoft.
+**Ce qui n'est pas possible, et pourquoi** : les messages. Mobile connecté les
+affiche dans sa fenêtre mais ne les écrit pas sur le disque — constaté sur la
+machine de Léo, qui n'a que `calling.db` et `contacts.db`. Et en envoyer est
+interdit par Apple à toute application sur ordinateur. Jaris le dit franchement
+plutôt que de faire semblant.
 
-**Ce que Jaris ne peut pas faire, et pourquoi** : envoyer un SMS. Apple
-l'interdit à toute application sur un ordinateur ; ce n'est pas une limite de
-Jaris et aucun logiciel local ne la contourne. Jaris le dit franchement plutôt
-que de faire semblant.
-
-**Choix assumé, après un aller-retour** : une première version passait par KDE
-Connect (faire sonner le téléphone, lui déposer un texte). Elle a été retirée à
-la demande de Léo — sur un iPhone, KDE Connect ne peut ni lire les notifications
-ni envoyer de SMS (Apple, encore), ce qui laissait une fonctionnalité trop
-maigre pour deux applications à installer.
+**Comment on en est arrivé là** (trois tentatives, gardées parce que la leçon
+sert) : KDE Connect d'abord, retiré car sur iPhone il ne peut ni lire les
+notifications ni envoyer de SMS ; puis la lecture des notifications de Windows,
+retirée car Mobile connecté n'y publie pas celles du téléphone ; puis la lecture
+de son cache local, qui est ce qui marche. La bonne question n'était jamais
+« cette application a-t-elle une API ? » mais « où atterrit vraiment la donnée ? ».
 
 ## Ouvrir des applications et programmer des rappels (étape 5)
 

@@ -39,14 +39,15 @@ const ENTRY = `
 import { createRoot } from 'react-dom/client'
 import OptionsMenu from './src/components/OptionsMenu'
 
-const state = { result: null, openCalls: 0 }
-window.__setResult = (result) => { state.result = result }
+const state = { calls: [], openCalls: 0 }
+window.__setCalls = (calls) => { state.calls = calls }
 window.__openCalls = () => state.openCalls
 
 const overrides = {
   getProfile: async () => ({ name: 'Léo' }),
   saveProfile: async () => {},
-  getPhoneNotifications: async () => state.result,
+  getPhoneCalls: async () => state.calls,
+  inspectPhoneCache: async () => ({ packages: [], databases: [], message: 'rien' }),
   openPhoneLink: async () => { state.openCalls += 1; return "L'application Mobile connecté a été lancée." }
 }
 
@@ -96,20 +97,11 @@ function buildPage() {
   return pageHtml
 }
 
-const AVEC_NOTIFICATIONS = {
-  status: 'allowed',
-  notifications: [{ app: 'Mobile connecté', lines: ['Maman', 'Tu rentres quand ?'] }],
-  message: '1 notification(s) en cours.'
-}
+const APPELS = [
+  { name: 'Maman', number: '+33600000001', date: new Date().toISOString(), durationSeconds: 120 }
+]
 
-const REFUS = {
-  status: 'denied',
-  notifications: [],
-  message:
-    "Windows n'autorise pas Jaris à lire tes notifications. Va dans Paramètres Windows → Confidentialité et sécurité → Notifications, et autorise l'accès aux notifications, puis réessaie."
-}
-
-async function withPhoneTab(result, run) {
+async function withPhoneTab(calls, run) {
   const html = buildPage()
   const browser = await chromium.launch()
   try {
@@ -117,7 +109,7 @@ async function withPhoneTab(result, run) {
     await page.setViewportSize({ width: 1100, height: 800 })
     await page.setContent(html)
     await page.waitForSelector('.options-menu__trigger')
-    await page.evaluate((r) => window.__setResult(r), result)
+    await page.evaluate((c) => window.__setCalls(c), calls)
     await page.click('.options-menu__trigger')
     // Vrai clic sur l'onglet, pas un setState forcé : c'est le chemin qu'emprunte Léo.
     await page.click('.options-menu__tab:has-text("Téléphone")')
@@ -130,22 +122,23 @@ async function withPhoneTab(result, run) {
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
 
-test("l'onglet prévient de l'autorisation Windows et ne laisse pas espérer des SMS", options, async () => {
-  await withPhoneTab(AVEC_NOTIFICATIONS, async (page) => {
+test("l'onglet dit ce qui marche et ce qui est impossible, sans laisser espérer les messages", options, async () => {
+  await withPhoneTab(APPELS, async (page) => {
     const texte = await page.textContent('.options-menu__section')
-    assert.match(texte, /autorisation|te demandera/i)
-    assert.match(texte, /SMS/)
-    assert.match(texte, /Mobile connecté/)
+    assert.match(texte, /appels/i)
+    assert.match(texte, /contacts/i)
+    // Le point qui compte : ne pas laisser croire aux messages, puisque Mobile connecté ne les garde pas.
+    assert.match(texte, /messages/i)
+    assert.match(texte, /ni les lire ni en envoyer/i)
   })
 })
 
 test('les boutons sont habillés par le CSS de Jaris, pas laissés au style par défaut', options, async () => {
-  await withPhoneTab(AVEC_NOTIFICATIONS, async (page) => {
+  await withPhoneTab(APPELS, async (page) => {
     const mesure = await page.evaluate(() => {
       // TOUS les boutons de la rangée, sélectionnés par leur BALISE et non par la classe attendue : un
-      // bouton qui aurait perdu la classe doit être examiné lui aussi, pas ignoré par le sélecteur. Première
-      // version de ce test : il visait `.options-menu__action` et passait donc encore quand un bouton perdait
-      // sa classe — il trouvait simplement le bouton suivant, resté stylé (le piège même de l'étape 97).
+      // bouton qui aurait perdu la classe doit être examiné lui aussi, pas ignoré par le sélecteur (piège
+      // de l'étape 97, retrouvé dans ce test même à l'étape 21).
       const boutons = [...document.querySelectorAll('.options-menu__actions button')].map((bouton) => {
         const calcule = getComputedStyle(bouton)
         return {
@@ -157,9 +150,8 @@ test('les boutons sont habillés par le CSS de Jaris, pas laissés au style par 
       })
       return { boutons, rangee: getComputedStyle(document.querySelector('.options-menu__actions')).display }
     })
-    assert.ok(mesure.boutons.length >= 2, `rangée quasi vide : ${JSON.stringify(mesure.boutons)}`)
+    assert.ok(mesure.boutons.length >= 3, `rangée incomplète : ${JSON.stringify(mesure.boutons)}`)
     for (const bouton of mesure.boutons) {
-      // Exactement ce qui manquait au bouton resté gris de l'étape 97 : un fond, une casse, une police.
       assert.match(bouton.background, /gradient/, `« ${bouton.texte} » n'a aucun fond : CSS partagé non appliqué`)
       assert.equal(bouton.transform, 'uppercase', `« ${bouton.texte} » n'est pas en majuscules`)
       assert.match(bouton.police, /Rajdhani/i, `« ${bouton.texte} » n'a pas la police du HUD`)
@@ -168,36 +160,36 @@ test('les boutons sont habillés par le CSS de Jaris, pas laissés au style par 
   })
 })
 
-test('rien ne se lit tant que Léo ne clique pas (la demande Windows ne surgit pas toute seule)', options, async () => {
-  // Ouvrir un onglet ne doit pas déclencher une fenêtre système : la première lecture demande une
-  // autorisation à Windows, et elle doit être provoquée par un clic dont Léo comprend la raison.
-  await withPhoneTab(AVEC_NOTIFICATIONS, async (page) => {
+test('rien ne se lit tant que Léo ne clique pas', options, async () => {
+  await withPhoneTab(APPELS, async (page) => {
     const texte = await page.textContent('.options-menu__section')
-    assert.doesNotMatch(texte, /Tu rentres quand/, 'les notifications ont été lues sans clic')
+    assert.doesNotMatch(texte, /Maman/, 'les appels ont été lus sans clic')
   })
 })
 
-test('après le clic, les notifications lues sont affichées', options, async () => {
-  await withPhoneTab(AVEC_NOTIFICATIONS, async (page) => {
-    await page.click('.options-menu__action:has-text("Lire mes notifications")')
+test('après le clic, les appels sont affichés avec leur date lisible', options, async () => {
+  await withPhoneTab(APPELS, async (page) => {
+    await page.click('.options-menu__action:has-text("Voir mes derniers appels")')
     await page.waitForSelector('.options-menu__notifications li')
     const texte = await page.textContent('.options-menu__notifications')
-    assert.match(texte, /Mobile connecté/)
-    assert.match(texte, /Tu rentres quand/)
+    assert.match(texte, /Maman/)
+    assert.match(texte, /2 min/)
+    // Une date ISO brute à l'écran serait illisible : elle doit être mise en forme.
+    assert.doesNotMatch(texte, /\dT\d\d:/)
   })
 })
 
-test("un refus de Windows s'affiche comme un refus, pas comme une absence de message", options, async () => {
-  await withPhoneTab(REFUS, async (page) => {
-    await page.click('.options-menu__action:has-text("Lire mes notifications")')
-    await page.waitForFunction(() => document.body.textContent.includes('Paramètres Windows'))
+test("aucun appel trouvé : on explique, au lieu d'afficher une liste vide", options, async () => {
+  await withPhoneTab([], async (page) => {
+    await page.click('.options-menu__action:has-text("Voir mes derniers appels")')
+    await page.waitForFunction(() => document.body.textContent.includes('Aucun appel trouvé'))
     const liste = await page.$('.options-menu__notifications')
-    assert.equal(liste, null, 'une liste vide est affichée alors que Windows a refusé')
+    assert.equal(liste, null, 'une liste vide est affichée alors qu’il n’y a aucun appel')
   })
 })
 
 test('le bouton d’ouverture appelle vraiment Mobile connecté', options, async () => {
-  await withPhoneTab(AVEC_NOTIFICATIONS, async (page) => {
+  await withPhoneTab(APPELS, async (page) => {
     await page.click('.options-menu__action:has-text("Ouvrir Mobile connecté")')
     await page.waitForFunction(() => document.body.textContent.includes('a été lancée'))
     assert.equal(await page.evaluate(() => window.__openCalls()), 1)

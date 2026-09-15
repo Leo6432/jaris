@@ -77,23 +77,19 @@ export interface Profile {
   activationOrbClickEnabled?: boolean
 }
 
-/** Une notification lue dans le centre de notifications de Windows (étape 21bis). */
-export interface PhoneNotification {
-  /** Application qui l'a émise ("Mobile connecté" pour celles venues du téléphone), vide si introuvable. */
-  app: string
-  /** Lignes de texte de la notification (titre puis contenu), déjà nettoyées des lignes vides. */
-  lines: string[]
+/** Un appel de l'historique du téléphone, recopié sur le PC par Mobile connecté (étape 21quater). */
+export interface PhoneCall {
+  name: string
+  number: string
+  /** Date ISO, vide si l'horodatage de la base n'a pas pu être interprété (voir toDate, phoneData.ts). */
+  date: string
+  durationSeconds: number
 }
 
-/**
- * Résultat d'une lecture des notifications. `message` est déjà rédigé pour être lu tel quel par Léo — y
- * compris quand ça n'a PAS marché : "denied" (Windows refuse l'accès) et "allowed avec 0 notification" ne
- * doivent surtout pas se ressembler à l'écran, sinon un refus se lit comme "tu n'as rien reçu".
- */
-export interface PhoneNotificationsResult {
-  status: 'allowed' | 'denied' | 'unsupported' | 'error'
-  notifications: PhoneNotification[]
-  message: string
+/** Un contact du téléphone, recopié sur le PC par Mobile connecté. */
+export interface PhoneContact {
+  name: string
+  numbers: string[]
 }
 
 /** Une base SQLite trouvée dans le cache de Mobile connecté (étape 21ter) — structure seulement. */
@@ -631,11 +627,11 @@ export const IPC_CHANNELS = {
   /** main -> renderer : un son court à jouer (design sonore, étape 31) — voir SoundCue plus haut. */
   soundCue: 'jaris:sound-cue',
   /**
-   * renderer <-> main : lit les notifications en cours dans le centre de notifications de Windows — donc
-   * celles du téléphone quand "Mobile connecté" les y dépose (étape 21bis). Passe par l'API documentée
-   * `UserNotificationListener` et jamais par la fenêtre de Mobile connecté, qui n'a aucune API.
+   * renderer <-> main : derniers appels du téléphone, lus dans le cache de Mobile connecté (étape
+   * 21quater). Les MESSAGES n'y sont pas : le constat sur la machine de Léo n'a trouvé que `calling.db` et
+   * `contacts.db`, jamais de base de messages — pour un iPhone, Mobile connecté les affiche sans les garder.
    */
-  getPhoneNotifications: 'jaris:get-phone-notifications',
+  getPhoneCalls: 'jaris:get-phone-calls',
   /** renderer -> main : ouvre "Mobile connecté" (pour l'appairer au téléphone la première fois). */
   openPhoneLink: 'jaris:open-phone-link',
   /**
