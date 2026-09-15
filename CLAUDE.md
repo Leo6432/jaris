@@ -1557,3 +1557,27 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   (vérifie qu'aucun second cadre n'existe pendant la génération, qu'il revient quand il a une vraie
   information, et que le journal ne répète plus les étapes). Vérifié en remettant temporairement l'ancienne
   condition d'affichage : le test échoue bien.
+
+- **"quand on est dans code on change de conversation ça change pas Terminé en 7 min 56 — ton application est
+  à jour, soit ça a duré la même durée soit c'est un bug" (Léo, étape 102).** C'était bien un bug : le
+  bandeau de fin (et le journal) décrivent UNE génération précise, mais ils n'étaient remis à zéro qu'au
+  DÉBUT d'une nouvelle génération. Ouvrir une autre application depuis la colonne de gauche laissait donc
+  "Terminé en 7 min 56 — ton application est à jour" affiché au-dessus d'une application qui n'avait rien à
+  voir — une affirmation fausse sur ce qui est à l'écran, et impossible à distinguer d'une vraie coïncidence
+  de durée (c'est exactement le doute qu'a eu Léo).
+  **Leçon générale : un état qui décrit UN élément doit être effacé par TOUS les chemins qui changent
+  l'élément affiché, pas seulement par celui qui l'a créé.** Ici trois chemins changent l'application
+  affichée (générer, ouvrir une application de la liste, "Nouvelle application") et un seul des trois
+  effaçait le bandeau. Le correctif ne se contente pas d'ajouter les lignes manquantes dans les deux autres :
+  les trois remises à zéro sont regroupées dans une seule fonction (`clearGenerationFeedback`) appelée par
+  les trois chemins — recopier trois `setXxx(null)` à la main dans chaque chemin est précisément ce qui
+  vient d'être oublié une fois, et le serait encore au prochain chemin ajouté.
+  **Famille de défauts à surveiller pour de bon** : c'est le TROISIÈME retour d'affilée (étapes 100, 101,
+  102) sur le même bandeau, et les trois viennent de la même racine — un affichage ajouté sans repasser sur
+  tout ce qui l'entoure : d'abord la fin annoncée ailleurs que l'avancement (100), puis l'ancien journal
+  laissé en double à côté (101), puis l'effacement oublié sur deux chemins sur trois (102). **Après avoir
+  ajouté un élément d'interface, faire le tour de son cycle de vie complet : qui l'affiche, qui le met à
+  jour, et surtout qui doit le faire DISPARAÎTRE.**
+  Régression : `scripts/test-code-panel-ui.mjs` — "changer d'application efface le bandeau de la génération
+  précédente" et "« Nouvelle application » repart d'un écran propre". Vérifié en remettant temporairement
+  l'ancien code : le premier test échoue bien.

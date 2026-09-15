@@ -87,16 +87,30 @@ export default function CodePanel(): JSX.Element {
     statusRef.current?.scrollTo({ top: statusRef.current.scrollHeight })
   }, [statusLines])
 
+  /**
+   * Le bandeau de fin, le journal et l'erreur décrivent UNE génération précise, celle de l'application
+   * affichée. Dès qu'on affiche autre chose, ils ne parlent plus de ce qui est à l'écran — Léo a vu
+   * "Terminé en 7 min 56 — ton application est à jour" rester au-dessus d'une AUTRE application, qu'il
+   * venait simplement d'ouvrir dans la colonne de gauche (étape 102).
+   *
+   * Regroupé dans une seule fonction appelée par TOUS les chemins qui changent l'application affichée :
+   * trois `setXxx(null)` recopiés à la main dans chaque chemin, c'est exactement ce qui vient d'être
+   * oublié une fois.
+   */
+  const clearGenerationFeedback = (): void => {
+    setStatusLines([])
+    setLastOutcome(null)
+    setError(null)
+  }
+
   const generate = async (): Promise<void> => {
     const prompt = description.trim()
     // Une image seule suffit ("reproduis cette maquette") : le texte n'est plus obligatoire s'il y a une image.
     if ((!prompt && !attachment) || generating) return
 
-    setError(null)
+    clearGenerationFeedback()
     setGenerating(true)
-    setStatusLines([])
     setProgress(null)
-    setLastOutcome(null)
     stoppedRef.current = false
     const startedAt = Date.now()
     try {
@@ -138,7 +152,7 @@ export default function CodePanel(): JSX.Element {
   }
 
   const openRecent = async (path: string): Promise<void> => {
-    setError(null)
+    clearGenerationFeedback()
     try {
       const result = await window.jaris.loadGeneratedApp(path)
       setAppResult(result)
@@ -168,8 +182,7 @@ export default function CodePanel(): JSX.Element {
 
   const startOver = (): void => {
     setAppResult(null)
-    setStatusLines([])
-    setError(null)
+    clearGenerationFeedback()
     setDescription('')
     setAttachment(null)
   }

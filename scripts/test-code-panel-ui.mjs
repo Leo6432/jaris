@@ -366,6 +366,36 @@ test("pendant une génération, UN SEUL cadre s'affiche", options, async () => {
   })
 })
 
+test("changer d'application efface le bandeau de la génération précédente", options, async () => {
+  // Léo : "quand on est dans code on change de conversation ça change pas Terminé en 7 min 56 — ton
+  // application est à jour". Le bandeau décrit UNE génération : affiché au-dessus d'une autre application,
+  // il affirme quelque chose de faux sur celle qu'on regarde.
+  await withPage(async (page) => {
+    await startGeneration(page)
+    await page.evaluate(() => {
+      window.__status('2 problème(s) trouvé(s) dans le code, corrigé(s) automatiquement.')
+      window.__finishGen()
+    })
+    await page.waitForSelector('.code-panel__done')
+
+    // Ouvrir une AUTRE application depuis la colonne de gauche.
+    await page.click('.workspace__list li:nth-child(2) .workspace__item')
+    await page.waitForFunction(() => document.querySelectorAll('.code-panel__done').length === 0)
+    assert.equal(await page.locator('.code-panel__status').count(), 0, 'le journal de la génération précédente est resté')
+  })
+})
+
+test('"Nouvelle application" repart d\'un écran propre', options, async () => {
+  await withPage(async (page) => {
+    await startGeneration(page)
+    await page.evaluate(() => window.__finishGen())
+    await page.waitForSelector('.code-panel__done')
+
+    await page.click('.workspace__new')
+    await page.waitForFunction(() => document.querySelectorAll('.code-panel__done').length === 0)
+  })
+})
+
 test.after(() => {
   if (outDir) rmSync(outDir, { recursive: true, force: true })
 })

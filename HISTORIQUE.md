@@ -837,3 +837,12 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   courant ; et "Génération arrêtée après 12 s" s'affiche dans le bandeau, en neutre, au lieu de partir dans
   l'autre cadre. Dans le cas normal, il n'y a plus qu'un seul cadre à l'écran. Régression : `npm test`
   (233 tests), dont un test dédié qui échoue si un second cadre revient.
+
+- ✅ Étape 102 (v0.8.5) — Léo : "c'est normal que quand on est dans code on change de conversation ça change
+  pas Terminé en 7 min 56 — ton application est à jour ? soit ça a duré la même durée soit c'est un bug".
+  C'était un bug : le bandeau de fin n'était effacé qu'au démarrage d'une nouvelle génération, donc ouvrir
+  une autre application dans la colonne de gauche le laissait affiché au-dessus d'une application qui n'avait
+  rien à voir. Les trois remises à zéro (bandeau, journal, erreur) sont maintenant regroupées dans une seule
+  fonction appelée par les TROIS chemins qui changent l'application affichée — générer, ouvrir une
+  application existante, "Nouvelle application". Régression : `npm test` (235 tests), dont un test qui échoue
+  si l'un de ces chemins oublie d'effacer.
