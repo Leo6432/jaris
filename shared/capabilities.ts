@@ -1,11 +1,19 @@
 /**
- * Liste de ce que Jaris sait faire, affichée dans Options → Capacités (étape 108, demande de Léo :
- * "dans les option tu peut mettre tout se que jaris peut faire").
+ * Liste de ce que Jaris sait faire, affichée dans Options → Découvrir (étape 108, demande de Léo :
+ * "dans les option tu peut mettre tout se que jaris peut faire" ; refondue à l'étape 111, "fait une
+ * meilleur présentation car on comprend pas trop").
  *
  * ÉCRIT POUR LÉO, PAS POUR LE MODÈLE. `TOOLS` (electron/services/tools.ts) décrit chaque outil pour Ollama
  * (impératif technique, parfois avec des détails d'implémentation) et vit côté main process — un module qui
  * importe `child_process`/`fs` ne peut de toute façon pas être empaqueté dans le renderer. Ce fichier est
  * une redite volontairement DIFFÉRENTE, en langage courant, groupée par usage plutôt que par ordre d'ajout.
+ *
+ * CE QUI A CHANGÉ À L'ÉTAPE 111, et pourquoi : chaque entrée avait UNE seule longue description qui mélangeait
+ * trois choses — ce que c'est, comment on s'en sert, et des détails techniques (SearXNG, VRAM, "second
+ * agent"). Rendue telle quelle, ça donnait un pavé de texte par ligne, et la phrase à DIRE — la seule chose
+ * dont Léo a vraiment besoin — était noyée au milieu. Désormais : `description` dit à quoi ça sert en une
+ * phrase courte, et `example` porte la phrase exacte à prononcer, affichée à part. Les détails techniques
+ * sont simplement supprimés : ils n'aidaient personne ici, et ils vivent déjà dans le code.
  *
  * COMMENT ÇA NE DÉSYNCHRONISE PAS DE `TOOLS` : chaque capacité qui correspond à un outil précis porte son
  * `toolNames` (le(s) nom(s) exacts de `tools.ts`). `scripts/test-capabilities.mjs` relit `tools.ts` et
@@ -18,7 +26,12 @@
  */
 export interface Capability {
   title: string
+  /** À quoi ça sert, en une phrase courte — jamais le détail de l'implémentation. */
   description: string
+  /** La phrase exacte à dire pour déclencher ça, affichée à part (sans guillemets : le rendu les ajoute). */
+  example?: string
+  /** Vrai pour une entrée qui explique ce que Jaris NE peut PAS faire : affichée en note, pas en carte. */
+  limitation?: boolean
   /** Noms exacts dans `TOOLS` (tools.ts) si cette capacité correspond à un ou plusieurs outils précis.
    *  Sert uniquement à la vérification de synchronisation, jamais affiché à Léo. */
   toolNames?: string[]
@@ -26,136 +39,172 @@ export interface Capability {
 
 export interface CapabilityGroup {
   title: string
+  /** Une ligne qui situe le groupe, affichée sous son titre. */
+  summary: string
+  /** Étiquette devant les exemples du groupe. "Dis" par défaut — le mode Code, lui, se pilote au clavier
+   *  dans son propre champ, jamais à la voix : y afficher "Dis" serait une consigne fausse. */
+  exampleLabel?: string
   items: Capability[]
 }
 
 export const CAPABILITIES: CapabilityGroup[] = [
   {
     title: 'Sur ton ordinateur',
+    summary: 'Jaris fait à ta place ce que tu ferais à la souris et au clavier.',
     items: [
       {
         title: 'Ouvrir une application',
-        description: '« ouvre le bloc-notes », « lance Spotify »… — cherche parmi tout ce qui est installé, aucune liste à tenir à jour.',
+        description: 'Cherche parmi tout ce qui est installé : rien à configurer, rien à tenir à jour.',
+        example: 'ouvre le bloc-notes',
         toolNames: ['open_app']
       },
       {
-        title: 'Écrire, appuyer sur une touche, cliquer',
-        description: 'Dicte un texte pour qu\'il soit tapé là où tu as le curseur, valide avec une touche, ou clique à ta place.',
-        toolNames: ['type_text', 'press_key', 'click_mouse']
+        title: 'Écrire du texte à ta place',
+        description: 'Dicte, Jaris tape là où ton curseur clignote.',
+        // Jamais de guillemets DANS un exemple : le rendu l'encadre déjà des siens (OptionsMenu.tsx), et
+        // deux niveaux imbriqués donnaient « écris « bonjour... » » — vu sur une capture, pas en relecture.
+        example: 'écris merci beaucoup, à demain',
+        toolNames: ['type_text']
       },
       {
-        title: 'Régler le son et la lecture',
-        description: 'Monter/baisser le volume, couper le son, lecture/pause, piste suivante — comme les touches multimédia du clavier.',
+        title: 'Appuyer sur une touche, cliquer',
+        description: 'Valider, fermer, cliquer quelque part — sans lâcher ce que tu fais.',
+        example: 'appuie sur Entrée',
+        toolNames: ['press_key', 'click_mouse']
+      },
+      {
+        title: 'Régler le son',
+        description: 'Volume, coupure du son, lecture, pause, piste suivante.',
+        example: 'baisse le son',
         toolNames: ['media_control']
       },
       {
-        title: "Voir l'état de la machine",
-        description: 'Utilisation du processeur, mémoire utilisée, VRAM libre, température de la carte graphique.',
-        toolNames: ['get_system_stats']
-      },
-      {
-        title: "Regarder l'écran",
-        description: 'Décrit ce qui est affiché, ou répond à une question précise dessus (« il y a un message d\'erreur ? »).',
+        title: 'Regarder ton écran',
+        description: 'Te décrit ce qui est affiché, ou répond à une question précise dessus.',
+        example: "qu'est-ce qu'il y a à l'écran ?",
         toolNames: ['look_at_screen']
       },
       {
-        title: 'Accomplir une tâche complète en pilotant la souris et le clavier',
-        description: 'Naviguer sur un site, remplir un formulaire, envoyer un mail déjà connecté sur la machine — plus lent qu\'une réponse directe, Jaris te prévient avant de s\'y mettre.',
+        title: 'Faire une tâche complète tout seul',
+        description: 'Plusieurs actions à la suite, en pilotant la souris et le clavier. Plus lent : Jaris te prévient avant de s\'y mettre.',
+        example: 'ouvre YouTube et cherche un tuto guitare',
         toolNames: ['computer_use_task']
       },
       {
+        title: "Te dire l'état de la machine",
+        description: 'Processeur, mémoire, carte graphique, température.',
+        example: 'ça chauffe, mon PC ?',
+        toolNames: ['get_system_stats']
+      },
+      {
         title: 'Éteindre ou redémarrer le PC',
-        description: "Seulement si tu le demandes clairement — jamais de sa propre initiative ni sur un simple soupçon.",
+        description: 'Seulement si tu le demandes clairement — jamais de sa propre initiative.',
+        example: "éteins l'ordinateur",
         toolNames: ['shutdown_pc']
       }
     ]
   },
   {
-    title: 'Sur le web',
+    title: 'Chercher une information',
+    summary: 'Pour ce que Jaris ne sait pas, ou ce qui a changé depuis.',
     items: [
       {
         title: 'Chercher sur le web',
-        description: "Pour une info récente ou qu'il ne connaît pas avec certitude — moteur de recherche local (SearXNG), sans passer par un service payant.",
+        description: "Pour une info récente ou dont il n'est pas sûr. La recherche tourne sur ta machine, pas chez un service payant.",
+        example: 'quel temps il fait demain ?',
         toolNames: ['search_web']
       },
       {
-        title: 'Lire une page web précise',
-        description: "Quand un simple extrait de recherche ne suffit pas (adresse exacte, horaire, prix...).",
+        title: 'Lire une page précise',
+        description: "Quand un extrait de recherche ne suffit pas : horaire exact, adresse, prix.",
+        example: 'lis-moi cette page et résume-la',
         toolNames: ['read_web_page']
       }
     ]
   },
   {
-    title: 'Mémoire',
+    title: 'Se souvenir de toi',
+    summary: "Ce que tu lui dis une fois, il le garde — sur ton disque, jamais en ligne.",
     items: [
       {
-        title: 'Retenir une information',
-        description: 'Une préférence, un fait donné en conversation — gardé d\'une session à l\'autre, consultable dans le cerveau de Jaris (graphe 3D).',
+        title: 'Retenir quelque chose',
+        description: 'Une habitude, une préférence, un fait — retrouvé même après un redémarrage.',
+        example: 'retiens que je bois du thé, pas du café',
         toolNames: ['remember']
       },
       {
-        title: 'Se souvenir',
-        description: "Relit une note déjà enregistrée quand tu y fais référence plus tard.",
+        title: 'Te le ressortir plus tard',
+        description: 'Il relit ce qu\'il a noté dès que tu y fais référence.',
+        example: 'je bois quoi le matin, déjà ?',
         toolNames: ['recall_memory']
-      }
-    ]
-  },
-  {
-    title: 'Rappels',
-    items: [
+      },
       {
-        title: 'Programmer un rappel',
-        description: '« rappelle-moi de sortir le linge dans 10 minutes » — dit à voix haute à l\'heure prévue, même si Jaris vient d\'être relancé entre-temps.',
+        title: 'Te rappeler quelque chose à l\'heure dite',
+        description: 'Dit à voix haute au bon moment, même si Jaris a été relancé entre-temps.',
+        example: 'rappelle-moi de sortir le linge dans 10 minutes',
         toolNames: ['set_reminder']
       }
     ]
   },
   {
-    title: 'Téléphone (via Mobile connecté)',
+    title: 'Ton téléphone',
+    summary: 'Ce que Mobile connecté a déjà recopié sur le PC. Rien ne part sur internet.',
     items: [
       {
-        title: 'Historique des appels',
-        description: '« qui m\'a appelé ? » — lit ce que Mobile connecté a déjà recopié sur cet ordinateur, sans rien envoyer sur internet.',
+        title: 'Qui t\'a appelé',
+        description: 'Les derniers appels, avec le nom quand il est connu.',
+        example: "qui m'a appelé aujourd'hui ?",
         toolNames: ['read_call_history']
       },
       {
-        title: 'Retrouver un contact',
-        description: '« c\'est quoi le numéro de maman ? » — recherche dans les contacts recopiés sur le PC.',
+        title: 'Le numéro d\'un contact',
+        description: 'Cherche dans les contacts recopiés sur le PC.',
+        example: "c'est quoi le numéro de maman ?",
         toolNames: ['find_contact']
       },
       {
-        title: 'Ce qui reste impossible : les messages',
-        description: "Mobile connecté ne les garde pas sur le disque (constaté), et Apple interdit d'en envoyer depuis un ordinateur — Jaris le dit plutôt que de faire semblant."
+        title: 'Les messages, eux, sont hors de portée',
+        description: "Mobile connecté ne les garde pas sur le disque, et Apple interdit d'en envoyer depuis un ordinateur. Jaris te le dit plutôt que de faire semblant.",
+        limitation: true
       }
     ]
   },
   {
-    title: 'Mode Code',
+    title: 'Créer une application (mode Code)',
+    summary: "Décris ce que tu veux, Jaris l'écrit et te le montre tout de suite.",
+    exampleLabel: 'Écris',
     items: [
       {
-        title: 'Générer une application complète',
-        description: "Décris ce que tu veux (éventuellement avec une image de référence) : Jaris écrit une page HTML autonome, se relit lui-même, et corrige les problèmes qu'il trouve.",
+        title: 'Partir d\'une idée',
+        description: "Jaris écrit la page, se relit lui-même, et corrige ce qu'il trouve. Tu peux joindre une image comme modèle.",
+        example: 'un minuteur de cuisine avec un gros bouton'
       },
       {
-        title: 'Modifier une application déjà générée',
-        description: 'Redemande un changement sur une application ouverte : elle est mise à jour sur place, avec le même suivi en direct.'
+        title: 'Changer ce qui existe déjà',
+        description: 'Redemande un changement sur une application ouverte : elle est mise à jour sur place.',
+        example: 'mets le fond en noir et le texte en plus gros'
       },
       {
-        title: 'Retrouver et supprimer tes applications',
-        description: "Toutes tes créations restent listées après un redémarrage de Jaris, avec un moyen de les effacer si tu n'en veux plus."
+        title: 'Retrouver tes créations',
+        description: "Elles restent toutes dans la colonne de gauche après un redémarrage, et tu peux en supprimer.",
       }
     ]
   },
   {
-    title: 'Chat et conversations',
+    title: 'Discuter par écrit',
+    summary: "Le Chat, pour quand tu ne veux pas parler à voix haute.",
     items: [
       {
         title: 'Plusieurs conversations séparées',
-        description: 'Comme sur Claude ou ChatGPT : change de fil de discussion sans mélanger les sujets, chacun garde son propre historique.'
+        description: 'Comme sur ChatGPT : un fil par sujet, chacun avec son propre historique.'
       },
       {
-        title: 'Envoyer une image',
-        description: "Joins une image au Chat ou au mode Code pour que Jaris la décrive ou s'en serve comme référence."
+        title: 'Lui montrer une image',
+        description: 'Joins une photo ou une capture : Jaris la décrit, ou s\'en sert comme modèle en mode Code.'
+      },
+      {
+        title: 'Continuer à la voix',
+        description: 'Ce que tu dis à voix haute continue la conversation ouverte dans le Chat, et inversement.'
       }
     ]
   }

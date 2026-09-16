@@ -1853,3 +1853,45 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   assertions dédiées (le handler `'blur'` consulte le nouveau drapeau, le canal IPC met bien à jour ce
   drapeau, le composant Options appelle bien ce canal). Les trois ont été vérifiées en réintroduisant chacun
   des trois défauts correspondants : chaque test échoue bien seul, sans faire échouer les deux autres.
+
+- **"met ce que jaris sait faire pas dans reglage mais crée une autre sous categorie" + "fait une meilleur
+  présentation car on comprend pas trop c'est du texte mémoire : retenir c'est pas beau et on comprend pas
+  totalement" (Léo, étape 111)** — deux retours sur l'onglet livré à l'étape 108, constatés sur une CAPTURE
+  RÉELLE du rendu compilé avant de toucher au code (discipline déjà appliquée aux étapes 92/94) :
+  1. **Rangement.** "Ce que Jaris sait faire" était le premier onglet sous l'intitulé "Réglages" — or on n'y
+     règle rien, on y découvre. La colonne de gauche a donc maintenant DEUX catégories ("Découvrir" puis
+     "Réglages"), chacune avec son propre intitulé et sa propre liste.
+  2. **Présentation.** Chaque capacité était une ligne de texte continue (`<strong>titre</strong> — longue
+     description`), et la description mélangeait trois choses : ce que c'est, comment s'en servir, et des
+     détails techniques (SearXNG, VRAM, "second agent"). La phrase à DIRE — la seule chose dont Léo a
+     vraiment besoin — était noyée au milieu. Refondu en CARTES rangées en grille : titre, une phrase de
+     description, puis la phrase exacte à prononcer, détachée par un filet et introduite par une étiquette
+     ("Dis"). `Capability` gagne `example`, `CapabilityGroup` gagne `summary`.
+  **Défaut que la capture a révélé et que la relecture n'aurait pas montré** : le `{' — '}` du JSX tombait en
+  DÉBUT de ligne dès que le titre occupait toute la largeur, donnant un tiret orphelin en tête de la
+  deuxième ligne de chaque entrée. C'est une partie du "c'est pas beau" de Léo, qu'il n'a pas eu à nommer.
+  **Deux défauts trouvés dans MON PROPRE travail, sur la capture du nouveau rendu, pas en relecture** :
+  (1) un exemple contenait déjà ses guillemets alors que le rendu en ajoute → « écris « bonjour… » » à
+  l'écran ; (2) les phrases à dire ne s'alignaient pas entre deux cartes voisines (chacune suivait sa
+  description, de longueur différente) — corrigé par `margin: auto 0 0`, qui les colle au bas de la carte.
+  **Étiquette "Dis" volontairement remplacée par "Écris" pour le mode Code** (`exampleLabel` au niveau du
+  groupe) : ce mode se pilote au clavier dans son propre champ, jamais à la voix — afficher "Dis" y aurait
+  été une consigne fausse, exactement la famille des affirmations inexactes déjà corrigée plusieurs fois ici.
+  **Les limitations ne sont PAS des cartes** ("les messages sont hors de portée") : rendues en note à liseré,
+  jamais dans la grille — une limitation rendue comme les autres se compterait visuellement comme une
+  capacité de plus.
+  **Vrai piège CSS attrapé par une MESURE en fenêtre étroite, pas à l'œil** : la règle générale
+  `.options-menu__tabs { flex-wrap: wrap }` (plus haut dans index.css) s'appliquait aussi aux deux nouvelles
+  listes d'onglets — sous 700px, la seconde s'enroulait sur trois lignes et poussait la première à côté du
+  pavé obtenu, cassant complètement l'ordre de lecture (hauteur mesurée : 137px au lieu de 55px). Une seule
+  liste, avant, masquait le problème parce que son `overflow-x: auto` la faisait défiler. Corrigé par
+  `flex-wrap: nowrap` + le défilement porté par la barre elle-même. **Leçon générale : passer de UN à DEUX
+  éléments du même type dans un conteneur peut réveiller une règle générale qui n'avait jamais eu d'effet
+  visible jusque-là — remesurer les points de rupture après un tel passage, pas seulement la fenêtre de
+  développement.**
+  Régression : `node --test scripts/test-capabilities.mjs scripts/test-capabilities-tab-ui.mjs` (14 tests) —
+  une capacité liée à un outil doit donner sa phrase à dire, aucun exemple ne porte ses propres guillemets
+  (source ET rendu), une limitation ne prétend jamais correspondre à un outil, la catégorie de "Ce que Jaris
+  sait faire" n'est pas "Réglages", et les cartes sont réellement habillées par le CSS compilé (style
+  calculé mesuré, leçon du bouton resté gris de l'étape 97). Chacun des 5 nouveaux tests a été vérifié en
+  réintroduisant son défaut : chaque test échoue seul, sans entraîner les autres.

@@ -620,11 +620,17 @@ export default function OptionsMenu(): JSX.Element {
 
       <div className="options-page__body">
         <aside className="options-page__navigation" aria-label="Sections des options">
-          <span className="options-page__navigation-label">Réglages</span>
+          {/* Deux catégories distinctes, à la demande de Léo (étape 111) : "Ce que Jaris sait faire" n'est
+              pas un réglage — on n'y change rien, on y découvre. Le laisser en tête de "Réglages" le faisait
+              passer pour un panneau de configuration de plus. */}
+          <span className="options-page__navigation-label">Découvrir</span>
           <nav className="options-menu__tabs">
             <button className={`options-menu__tab${tab === 'capacites' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('capacites')}>
               Ce que Jaris sait faire
             </button>
+          </nav>
+          <span className="options-page__navigation-label options-page__navigation-label--next">Réglages</span>
+          <nav className="options-menu__tabs">
             <button className={`options-menu__tab${tab === 'voix' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('voix')}>
               Voix
             </button>
@@ -656,24 +662,41 @@ export default function OptionsMenu(): JSX.Element {
           <div className="options-page__content">
         {tab === 'capacites' && (
           <div className="options-menu__section">
-            <div className="options-menu__section-title">Ce que Jaris sait faire</div>
-            <p className="options-menu__model-overview-hint">
-              La liste complète, à la voix comme en Chat — tu n'as rien à activer, dis simplement ce que tu
-              veux.
+            <p className="options-menu__capability-intro">
+              Tu n'as rien à activer : dis-le, ou écris-le dans le Chat. Les phrases en exemple marchent
+              telles quelles.
             </p>
             {CAPABILITIES.map((group) => (
-              <div key={group.title} className="options-menu__capability-group">
-                <div className="options-menu__section-title">{group.title}</div>
-                <ul className="options-menu__notifications">
-                  {group.items.map((item) => (
-                    <li key={item.title}>
-                      <strong>{item.title}</strong>
-                      {' — '}
-                      {item.description}
-                    </li>
+              <section key={group.title} className="options-menu__capability-group">
+                <h3 className="options-menu__capability-group-title">{group.title}</h3>
+                <p className="options-menu__capability-group-summary">{group.summary}</p>
+                {/* Les limitations ("les messages sont hors de portée") ne sont PAS des cartes : ce sont des
+                    notes. Les rendre comme les autres laisserait croire à une capacité de plus, exactement la
+                    famille des fausses confirmations déjà corrigée plusieurs fois dans ce projet. */}
+                <div className="options-menu__capability-cards">
+                  {group.items
+                    .filter((item) => !item.limitation)
+                    .map((item) => (
+                      <article key={item.title} className="options-menu__capability">
+                        <h4 className="options-menu__capability-title">{item.title}</h4>
+                        <p className="options-menu__capability-description">{item.description}</p>
+                        {item.example && (
+                          <p className="options-menu__capability-example">
+                            <span className="options-menu__capability-example-label">{group.exampleLabel ?? 'Dis'}</span>
+                            <span className="options-menu__capability-example-text">« {item.example} »</span>
+                          </p>
+                        )}
+                      </article>
+                    ))}
+                </div>
+                {group.items
+                  .filter((item) => item.limitation)
+                  .map((item) => (
+                    <p key={item.title} className="options-menu__capability-limitation">
+                      <strong>{item.title}.</strong> {item.description}
+                    </p>
                   ))}
-                </ul>
-              </div>
+              </section>
             ))}
           </div>
         )}

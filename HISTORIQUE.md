@@ -941,3 +941,14 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   appelle à chaque ouverture/fermeture — même principe que les gardes déjà en place sur ce handler pour un
   dialogue natif et pour une fermeture volontaire. Régression : `npm test` (275 tests), avec 3 nouvelles
   assertions structurelles, chacune vérifiée en réintroduisant son défaut.
+
+- ✅ Étape 111 (v0.11.4) — Léo : "met ce que jaris sait faire pas dans reglage mais crée une autre sous
+  categorie dans les options" et "fait une meilleur présentation car on comprend pas trop". L'onglet a
+  quitté "Réglages" pour une nouvelle catégorie "Découvrir" (on n'y règle rien, on y découvre), et son
+  contenu est refondu : chaque capacité devient une carte avec son titre, une phrase courte, et surtout LA
+  PHRASE À DIRE, détachée et introduite par "Dis" (ou "Écris" en mode Code, qui se pilote au clavier). Les
+  détails techniques qui n'aidaient personne sont retirés, et ce que Jaris ne peut pas faire est rendu en
+  note, jamais en carte. Trois défauts trouvés sur des captures du rendu réel plutôt qu'en relecture : un
+  tiret orphelin en tête de ligne, des guillemets doublés autour d'un exemple, et des phrases à dire mal
+  alignées entre cartes voisines. Régression : `npm test` (281 tests), chaque nouveau test vérifié en
+  réintroduisant son défaut.

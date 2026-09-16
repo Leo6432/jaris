@@ -106,42 +106,133 @@ test('tous les groupes et toutes les capacités du fichier partagé sont réelle
   const source = readFileSync(join(projectRoot, 'shared/capabilities.ts'), 'utf8')
   const groupCount = [...source.matchAll(/\n {2}\{\n {4}title:/g)].length
   const itemCount = [...source.matchAll(/\n {6}\{\n {8}title:/g)].length
+  const limitationCount = [...source.matchAll(/\n {8}limitation: true/g)].length
   assert.ok(groupCount >= 5, `motif de comptage des groupes en panne : ${groupCount} trouvé(s)`)
   assert.ok(itemCount >= 15, `motif de comptage des capacités en panne : ${itemCount} trouvé(s)`)
+  assert.ok(limitationCount >= 1, `motif de comptage des limitations en panne : ${limitationCount} trouvé(s)`)
 
   await withCapabilitiesTab(async (page) => {
     const rendered = await page.evaluate(() => ({
       groups: document.querySelectorAll('.options-menu__capability-group').length,
-      items: document.querySelectorAll('.options-menu__capability-group li').length
+      cards: document.querySelectorAll('.options-menu__capability').length,
+      limitations: document.querySelectorAll('.options-menu__capability-limitation').length
     }))
     assert.equal(rendered.groups, groupCount, `${rendered.groups} groupe(s) affiché(s), ${groupCount} attendu(s) dans capabilities.ts`)
-    assert.equal(rendered.items, itemCount, `${rendered.items} capacité(s) affichée(s), ${itemCount} attendue(s) dans capabilities.ts`)
+    assert.equal(
+      rendered.cards + rendered.limitations,
+      itemCount,
+      `${rendered.cards} carte(s) + ${rendered.limitations} note(s) affichées, ${itemCount} entrée(s) attendues dans capabilities.ts`
+    )
+    assert.equal(rendered.limitations, limitationCount, 'une limitation est rendue comme une capacité, ou disparaît')
   })
 })
 
-test('le contenu réel (pas un texte générique) est visible : outils précis nommés en clair', options, async () => {
+test("chaque carte montre la phrase à dire, détachée de sa description", options, async () => {
+  // Le vrai retour de Léo (étape 111) : "on comprend pas trop". Une phrase d'exemple noyée dans le
+  // paragraphe ne se repère pas — il faut qu'elle soit un élément à part, avec son étiquette.
+  await withCapabilitiesTab(async (page) => {
+    const exemple = await page.evaluate(() => {
+      const carte = [...document.querySelectorAll('.options-menu__capability')].find((c) =>
+        c.textContent.includes('Ouvrir une application')
+      )
+      const ligne = carte?.querySelector('.options-menu__capability-example')
+      if (!ligne) return null
+      const style = getComputedStyle(ligne)
+      return {
+        texte: ligne.textContent.trim(),
+        separe: style.borderTopWidth,
+        descriptionDistincte: carte.querySelector('.options-menu__capability-description') !== null
+      }
+    })
+    assert.ok(exemple, "la carte « Ouvrir une application » n'affiche aucune phrase d'exemple")
+    assert.match(exemple.texte, /Dis/, "l'exemple n'est pas introduit par son étiquette")
+    assert.match(exemple.texte, /«\s*ouvre le bloc-notes\s*»/, 'la phrase exacte à dire est absente')
+    assert.notEqual(exemple.separe, '0px', "la phrase d'exemple n'est pas détachée de la description")
+    assert.ok(exemple.descriptionDistincte, 'la description et la phrase à dire sont dans le même bloc')
+  })
+})
+
+test('les guillemets ne sont jamais doublés autour d\'un exemple', options, async () => {
+  // Défaut réel trouvé sur une capture : un exemple qui portait déjà ses guillemets donnait « écris
+  // « bonjour... » ». La source est gardée propre par test-capabilities.mjs ; ici on vérifie le RENDU.
+  await withCapabilitiesTab(async (page) => {
+    const doublons = await page.evaluate(() =>
+      [...document.querySelectorAll('.options-menu__capability-example-text')]
+        .map((el) => el.textContent.trim())
+        .filter((t) => (t.match(/«/g) ?? []).length > 1 || (t.match(/»/g) ?? []).length > 1)
+    )
+    assert.deepEqual(doublons, [], `guillemets imbriqués à l'écran : ${doublons.join(' | ')}`)
+  })
+})
+
+test('le contenu réel (pas un texte générique) est visible : chaque famille est représentée', options, async () => {
   await withCapabilitiesTab(async (page) => {
     const texte = await page.textContent('.options-page__content')
     assert.match(texte, /Ouvrir une application/)
-    assert.match(texte, /qui m'a appelé/i)
-    assert.match(texte, /Générer une application complète/)
+    assert.match(texte, /appel/i)
+    assert.match(texte, /mode Code/i)
     // Le point sur lequel Léo a explicitement buté dans le passé : les messages restent impossibles.
     assert.match(texte, /messages/i)
   })
 })
 
-test('les titres de groupe sont habillés comme les autres titres de section, pas laissés en texte brut', options, async () => {
+test('les cartes sont vraiment habillées par le CSS, pas laissées au style par défaut', options, async () => {
+  // Leçon du bouton resté gris (étape 97) : une règle CSS sans effet ne produit aucune erreur, elle est
+  // juste ignorée — la seule vérification qui vaut est de MESURER le style calculé. Les éléments sont
+  // sélectionnés par leur balise/rôle puis vérifiés un par un, jamais par la classe qu'on teste (leçon de
+  // l'étape 21 : un sélecteur par classe ne peut pas voir cette classe manquer).
   await withCapabilitiesTab(async (page) => {
-    const styles = await page.evaluate(() =>
-      [...document.querySelectorAll('.options-menu__capability-group .options-menu__section-title')].map((el) => {
-        const s = getComputedStyle(el)
-        return { texte: el.textContent.trim(), transform: s.textTransform, taille: s.fontSize }
-      })
+    const mesures = await page.evaluate(() => {
+      const groupe = document.querySelector('.options-menu__capability-group')
+      const titre = groupe.querySelector('h3')
+      const carte = document.querySelector('.options-menu__capability')
+      const styleCarte = getComputedStyle(carte)
+      return {
+        titreTaille: parseFloat(getComputedStyle(titre).fontSize),
+        titreCouleur: getComputedStyle(titre).color,
+        carteFond: styleCarte.backgroundColor,
+        carteBordure: styleCarte.borderTopWidth,
+        carteRayon: styleCarte.borderTopLeftRadius,
+        colonnes: getComputedStyle(document.querySelector('.options-menu__capability-cards')).gridTemplateColumns
+      }
+    })
+    assert.ok(mesures.titreTaille >= 15, `titre de groupe trop petit (${mesures.titreTaille}px) pour un intertitre`)
+    assert.notEqual(mesures.titreCouleur, 'rgb(255, 255, 255)', 'le titre de groupe est resté au blanc par défaut du navigateur')
+    assert.notEqual(mesures.carteFond, 'rgba(0, 0, 0, 0)', 'la carte n’a aucun fond : la règle CSS ne s’applique pas')
+    assert.notEqual(mesures.carteBordure, '0px', 'la carte n’a aucune bordure')
+    assert.notEqual(mesures.carteRayon, '0px', 'la carte n’a pas de coins arrondis')
+    // Une grille à plusieurs colonnes à 1100px de large : une colonne unique redonnerait le mur de texte.
+    assert.ok(mesures.colonnes.split(' ').length >= 2, `les cartes ne se rangent pas en grille : ${mesures.colonnes}`)
+  })
+})
+
+test('"Ce que Jaris sait faire" est dans sa propre catégorie, pas dans les réglages', options, async () => {
+  // Demande explicite de Léo (étape 111) : "met ce que jaris sait faire pas dans reglage mais crée une
+  // autre sous categorie dans les options".
+  await withCapabilitiesTab(async (page) => {
+    const nav = await page.evaluate(() => {
+      const aside = document.querySelector('.options-page__navigation')
+      const labels = [...aside.querySelectorAll('.options-page__navigation-label')].map((el) => el.textContent.trim())
+      // Pour chaque liste d'onglets, l'intitulé de catégorie qui la précède immédiatement.
+      const listes = [...aside.querySelectorAll('nav')].map((liste) => ({
+        categorie: liste.previousElementSibling?.textContent.trim() ?? null,
+        onglets: [...liste.querySelectorAll('button')].map((b) => b.textContent.trim())
+      }))
+      return { labels, listes }
+    })
+    assert.ok(nav.labels.length >= 2, `une seule catégorie dans la colonne : ${JSON.stringify(nav.labels)}`)
+
+    const capacites = nav.listes.find((l) => l.onglets.some((o) => /sait faire/i.test(o)))
+    assert.ok(capacites, '"Ce que Jaris sait faire" est introuvable dans la navigation')
+    assert.doesNotMatch(
+      capacites.categorie,
+      /réglages/i,
+      '"Ce que Jaris sait faire" est encore rangé sous "Réglages"'
     )
-    assert.ok(styles.length >= 5, `trop peu de titres de groupe stylés : ${JSON.stringify(styles)}`)
-    for (const style of styles) {
-      assert.equal(style.transform, 'uppercase', `« ${style.texte} » n'est pas en majuscules comme les autres titres de section`)
-    }
+    // Et les vrais réglages, eux, restent bien ensemble sous leur propre intitulé.
+    const reglages = nav.listes.find((l) => l.onglets.includes('Voix'))
+    assert.match(reglages.categorie, /réglages/i, 'les réglages ont perdu leur intitulé de catégorie')
+    assert.ok(reglages.onglets.length >= 7, `des réglages ont disparu de la colonne : ${JSON.stringify(reglages.onglets)}`)
   })
 })
 

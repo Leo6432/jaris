@@ -56,6 +56,7 @@ test('un même outil n’est jamais listé deux fois (un vrai doublon, pas juste
 test('chaque capacité a un vrai titre et une vraie description, en français courant', () => {
   for (const group of CAPABILITIES) {
     assert.ok(group.title.trim().length > 0, 'un groupe sans titre')
+    assert.ok(group.summary.trim().length > 10, `groupe sans résumé lisible : ${group.title}`)
     assert.ok(group.items.length > 0, `groupe vide : ${group.title}`)
     for (const item of group.items) {
       assert.ok(item.title.trim().length > 0, `capacité sans titre dans ${group.title}`)
@@ -64,6 +65,43 @@ test('chaque capacité a un vrai titre et une vraie description, en français co
       // exactement le genre de détail écrit pour Ollama, pas pour lui — même souci que les messages
       // d'erreur qui ne doivent jamais montrer du jargon interne.
       assert.doesNotMatch(item.description, /[a-z]+_[a-z]+/, `« ${item.title} » contient un identifiant technique (snake_case) dans sa description`)
+    }
+  }
+})
+
+test("chaque capacité utilisable à la demande donne la phrase exacte à dire", () => {
+  // C'est le cœur du retour de Léo (étape 111) : "on comprend pas trop". Une capacité qui correspond à un
+  // outil se déclenche en le DEMANDANT — sans exemple, il faut deviner la formulation. Les entrées sans
+  // outil (mode Code, Chat) décrivent un écran où l'on va, pas une phrase à prononcer : elles en sont
+  // dispensées, comme les limitations.
+  for (const group of CAPABILITIES) {
+    for (const item of group.items) {
+      if (!item.toolNames || item.limitation) continue
+      assert.ok(item.example, `« ${item.title} » correspond à un outil mais n'a aucune phrase d'exemple`)
+      assert.ok(item.example.trim().length > 5, `phrase d'exemple trop courte pour « ${item.title} »`)
+    }
+  }
+})
+
+test("aucune phrase d'exemple ne porte ses propres guillemets", () => {
+  // Le rendu (OptionsMenu.tsx) encadre déjà chaque exemple de « » : un exemple qui en contient lui-même
+  // donnait « écris « bonjour... » » à l'écran. Repéré sur une capture du rendu réel, jamais en relecture.
+  for (const group of CAPABILITIES) {
+    for (const item of group.items) {
+      if (!item.example) continue
+      assert.doesNotMatch(item.example, /[«»"]/, `guillemets en trop dans l'exemple de « ${item.title} »`)
+    }
+  }
+})
+
+test('une limitation ne se fait jamais passer pour une capacité', () => {
+  // "Les messages sont hors de portée" ne doit ni porter d'outil ni proposer une phrase à dire : ce serait
+  // exactement la famille des fausses confirmations déjà corrigée plusieurs fois dans ce projet.
+  for (const group of CAPABILITIES) {
+    for (const item of group.items) {
+      if (!item.limitation) continue
+      assert.equal(item.toolNames, undefined, `la limitation « ${item.title} » prétend correspondre à un outil`)
+      assert.equal(item.example, undefined, `la limitation « ${item.title} » propose une phrase à dire`)
     }
   }
 })

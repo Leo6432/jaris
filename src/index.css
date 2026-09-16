@@ -401,14 +401,117 @@ body.body--scan::after {
   color: var(--hud-text-faint);
 }
 
-/* Onglet "Ce que Jaris sait faire" (étape 108) : un groupe par catégorie, chacun avec son propre titre —
-   sans cet espacement, les groupes se suivraient collés les uns aux autres comme un seul bloc. */
-.options-menu__capability-group {
-  margin-top: 18px;
+/* Onglet "Ce que Jaris sait faire" (étape 108, entièrement repris à l'étape 111 : "fait une meilleur
+   présentation car on comprend pas trop").
+   Chaque capacité est une CARTE (titre / à quoi ça sert / la phrase à dire) au lieu d'une ligne de texte
+   continue, et les cartes se rangent en grille : à la largeur habituelle de la fenêtre d'options, une
+   description courte occupait moins de la moitié de la ligne, donc une colonne unique gaspillait la place
+   tout en donnant un mur de texte. */
+.options-menu__capability-intro {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  color: var(--hud-text-dim);
 }
 
-.options-menu__capability-group:first-child {
-  margin-top: 4px;
+.options-menu__capability-group {
+  margin-top: 26px;
+}
+
+.options-menu__capability-group:first-of-type {
+  margin-top: 10px;
+}
+
+.options-menu__capability-group-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--hud-text);
+}
+
+.options-menu__capability-group-summary {
+  margin: 2px 0 12px;
+  font-size: 0.82rem;
+  color: var(--hud-text-faint);
+}
+
+.options-menu__capability-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 10px;
+}
+
+.options-menu__capability {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 13px 15px;
+  border: 1px solid var(--hud-line);
+  border-radius: 10px;
+  background: var(--hud-panel-raised);
+}
+
+.options-menu__capability-title {
+  margin: 0;
+  font-family: var(--hud-font-display);
+  font-size: 0.98rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--hud-text);
+}
+
+.options-menu__capability-description {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--hud-text-dim);
+}
+
+/* La phrase à dire est la seule chose vraiment actionnable de la carte : elle est détachée du paragraphe
+   par un filet et par l'étiquette "Dis", sinon elle se lit comme la suite de la description (le défaut
+   exact signalé par Léo). */
+/* `margin-top: auto` colle la phrase au BAS de la carte : les cartes d'une même rangée ont déjà la même
+   hauteur (grille), mais sans ça la phrase suivait sa description, donc deux cartes voisines affichaient
+   leur "Dis" à deux hauteurs différentes selon la longueur du texte au-dessus. */
+.options-menu__capability-example {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: auto 0 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(var(--hud-accent-rgb), 0.12);
+}
+
+.options-menu__capability-example-label {
+  flex: 0 0 auto;
+  font-family: var(--hud-font-display);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--hud-text-faint);
+}
+
+.options-menu__capability-example-text {
+  font-size: 0.84rem;
+  line-height: 1.4;
+  color: var(--hud-accent);
+}
+
+/* Une limitation n'est pas une capacité : pas de carte, pas de bordure pleine — un liseré à gauche, comme
+   une note en marge, pour qu'on ne la compte jamais parmi ce que Jaris sait faire. */
+.options-menu__capability-limitation {
+  margin: 10px 0 0;
+  padding: 9px 13px;
+  border-left: 2px solid var(--hud-line-strong);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--hud-text-faint);
+}
+
+.options-menu__capability-limitation strong {
+  color: var(--hud-text-dim);
+  font-weight: 600;
 }
 
 .options-menu__account {
@@ -3040,6 +3143,13 @@ a:hover {
   margin: 0 12px 12px;
 }
 
+/* La colonne de gauche est découpée en catégories depuis l'étape 111 ("crée une autre sous categorie dans
+   les options") : chaque catégorie suivante a besoin d'air au-dessus, sinon son titre colle au dernier
+   onglet de la précédente et les deux listes se lisent comme une seule. */
+.options-page__navigation-label--next {
+  margin-top: 22px;
+}
+
 .options-page .options-menu__tabs {
   display: flex;
   flex-direction: column;
@@ -3099,7 +3209,14 @@ a:hover {
     grid-template-rows: auto minmax(0, 1fr);
   }
 
+  /* Les catégories (étape 111) disparaissent en fenêtre étroite : la colonne devient une seule barre
+     horizontale, et les deux listes d'onglets s'y suivent. Le défilement est porté par la barre elle-même,
+     pas par chaque liste — sinon chaque catégorie aurait sa propre glissière, à quelques pixels l'une de
+     l'autre. */
   .options-page__navigation {
+    display: flex;
+    align-items: center;
+    overflow-x: auto;
     padding: 8px 12px;
     border-right: 0;
     border-bottom: 1px solid var(--hud-line);
@@ -3109,9 +3226,22 @@ a:hover {
     display: none;
   }
 
+  /* `flex-wrap: nowrap` contre la règle générale `.options-menu__tabs { flex-wrap: wrap }` (plus haut dans
+     ce fichier) : avec DEUX listes côte à côte depuis l'étape 111, la seconde s'enroulait sur trois lignes
+     et poussait la première à côté du pavé obtenu — les onglets ne se lisaient plus dans l'ordre. La barre
+     doit défiler d'un bloc, pas s'empiler. */
   .options-page .options-menu__tabs {
+    flex: 0 0 auto;
     flex-direction: row;
-    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  /* Sans ce filet, les deux catégories (dont les intitulés sont masqués ici) se lisent comme une seule
+     longue liste d'onglets de réglages. */
+  .options-page .options-menu__tabs + .options-page__navigation-label + .options-menu__tabs {
+    margin-left: 10px;
+    padding-left: 10px;
+    border-left: 1px solid var(--hud-line);
   }
 
   .options-page .options-menu__tab {
