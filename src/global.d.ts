@@ -112,6 +112,7 @@ declare global {
       testMicrophone: () => void
       stopTestMicrophone: () => void
       setActiveMode: (mode: 'voice' | 'chat' | 'code') => void
+      setOptionsOpen: (open: boolean) => void
       onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => () => void
       onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => () => void
       onSoundCue: (cb: (cue: SoundCue) => void) => () => void

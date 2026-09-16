@@ -1856,3 +1856,37 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   même famille que `test-native-dialog-guard.mjs` qui vérifie déjà que ce même handler consulte `dialogOpen` :
   `node --test scripts/test-quit-blur-guard.mjs`. Vérifié en retirant temporairement `quitting` de la
   condition : le test échoue bien.
+
+- **"quand on est dans les option, jaris ne doit pas partir en widget quand on part" (Léo, étape 110) — suite
+  immédiate de l'étape 109, même handler `'blur'`, une TROISIÈME raison de perdre le focus qui n'a rien à
+  voir avec "une autre appli prend la main" (le seul cas prévu à l'origine, étape 73).** La page Options
+  (`OptionsMenu.tsx`) vit dans `fullWindow`, pas une fenêtre à part (c'est un simple overlay React affiché
+  via `createPortal`) — rien côté main ne savait donc la distinguer du reste de l'app : cliquer sur une autre
+  application en pleine configuration (par exemple pour vérifier un réglage ailleurs) déclenchait le même
+  `'blur'` qu'un vrai changement d'appli, et repliait Jaris en widget en plein milieu — perdant l'accès direct
+  à la page Options (repliée avec le reste de la fenêtre derrière le petit widget), alors qu'elle a déjà son
+  propre bouton "Fermer" pour signaler qu'on a vraiment terminé.
+  Corrigé par le même principe que `dialogOpen`/`quitting` déjà en place sur ce handler : un nouveau drapeau
+  `optionsOpen` (main.ts), mis à jour par un nouveau canal IPC `setOptionsOpen` (renderer -> main) que
+  `OptionsMenu.tsx` appelle dans un `useEffect(() => { window.jaris.setOptionsOpen(open) ; return () =>
+  window.jaris.setOptionsOpen(false) }, [open])` — la fonction de nettoyage garantit que le drapeau retombe à
+  `false` si jamais `open` change sans repasser par un chemin qui l'aurait fait explicitement (le composant
+  n'est en pratique jamais démonté, mais un `true` oublié bloquerait le repli en widget pour TOUTE la session,
+  un risque bien pire qu'un appel redondant). Une seule source de vérité (`open`, déjà l'état React existant)
+  plutôt que d'appeler `setOptionsOpen` séparément dans les deux handlers d'ouverture/fermeture, qu'il aurait
+  fallu garder synchronisés à la main.
+  **Décision volontairement PAS symétrique avec `minimize`** : contrairement à `'blur'`, le handler
+  `win.on('minimize', ...)` ne consulte ni `dialogOpen` ni `optionsOpen` — un clic explicite sur "réduire" est
+  un geste délibéré de l'utilisateur, à respecter tel quel même en pleine configuration, alors que `'blur'` est
+  un effet de bord incident (cliquer ailleurs) qui ne devrait pas produire la même conséquence radicale.
+  **Troisième garde ajouté sur ce même handler en l'espace de deux étapes (dialogOpen à l'étape 73, quitting à
+  l'étape 109, optionsOpen ici) : la leçon de l'étape 109 se confirme** — un handler `'blur'` sur une fenêtre
+  qui héberge plusieurs contenus/états (dialogue natif, page Options, fermeture en cours...) doit explicitement
+  écarter CHAQUE cas où perdre le focus ne doit PAS être traité comme "une autre appli a pris la main", sous
+  peine de devoir en découvrir un nouveau à chaque nouveau signalement.
+  Test STRUCTUREL (pas de vraie fenêtre Electron ici, invérifiable faute de Windows dans cet environnement),
+  ajouté au même fichier que le garde `quitting` (même famille de handler, même style de vérification) :
+  `node --test scripts/test-quit-blur-guard.mjs`, avec 3 assertions dédiées (le handler `'blur'` consulte
+  `optionsOpen`, le canal IPC met bien à jour ce drapeau, `OptionsMenu.tsx` appelle bien
+  `window.jaris.setOptionsOpen`). Les trois ont été vérifiées en réintroduisant chacun des trois défauts
+  correspondants : chaque test échoue bien seul, sans faire échouer les deux autres.

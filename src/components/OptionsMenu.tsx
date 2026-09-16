@@ -164,6 +164,18 @@ export default function OptionsMenu(): JSX.Element {
     })
   }, [])
 
+  // Prévient main.ts (`optionsOpen`) à chaque ouverture/fermeture — Léo : "quand on est dans les option,
+  // jaris ne doit pas partir en widget quand on part". Cette page vit dans fullWindow (pas une fenêtre à
+  // part), donc rien côté main ne savait jusqu'ici la distinguer du reste de l'app pour le handler 'blur'
+  // (repli en widget sur perte de focus). Effet de nettoyage (composant jamais démonté en pratique, mais un
+  // `true` oublié à `false` bloquerait le repli en widget pour toute la session) plutôt qu'un simple appel
+  // dans les deux handlers `onClick` d'ouverture/fermeture, pour ne dépendre que d'UNE seule source de
+  // vérité (`open`) au lieu de deux endroits à synchroniser à la main.
+  useEffect(() => {
+    window.jaris.setOptionsOpen(open)
+    return () => window.jaris.setOptionsOpen(false)
+  }, [open])
+
   // Chargé seulement à l'ouverture de l'onglet (pas au montage comme les autres réglages ci-dessus) :
   // l'historique peut contenir jusqu'à 300 échanges, pas la peine de le lire à chaque ouverture du menu
   // Options si l'utilisateur ne va jamais voir cet onglet.

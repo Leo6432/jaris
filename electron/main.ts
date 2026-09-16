@@ -93,6 +93,12 @@ let codeGenAbort: AbortController | null = null
  * sans ce garde, le handler 'blur' plus bas cacherait fullWindow (et son dialogue enfant orphelin avec) alors
  * que Léo n'a fait que cliquer dans une fenêtre de sélection de dossier qui fait partie de Jaris. */
 let dialogOpen = false
+/** Vrai tant que la page Options (OptionsMenu.tsx) est ouverte dans fullWindow — elle vit dans la fenêtre
+ * normale, pas une fenêtre à part, donc rien ne la distinguait jusqu'ici du reste de l'app pour 'blur'.
+ * Léo : "quand on est dans les option, jaris ne doit pas partir en widget quand on part" — repli en widget
+ * jugé perturbant en pleine configuration (Options a son propre bouton "Fermer", pas besoin du repli en
+ * plus). Mis à jour par IPC_CHANNELS.setOptionsOpen, envoyé par OptionsMenu.tsx à chaque ouverture/fermeture. */
+let optionsOpen = false
 
 // Plus haut que large : le contenu (orbe + texte) reste ancré en haut de la fenêtre (voir .app--widget en
 // CSS), donc collé au vrai bord haut de l'écran (étape 68, façon "notch"). Le reste de la hauteur, vide et
@@ -203,8 +209,14 @@ function createFullWindow(): BrowserWindow {
   // jamais, sans la moindre erreur visible. `quitting` passe à `true` par tous les chemins de fermeture
   // volontaire AVANT le moindre appel à `app.quit()` (voir sa déclaration plus haut) : le consulter ici
   // suffit, pas besoin d'un drapeau dédié de plus.
+  //
+  // `optionsOpen` : Léo, juste après - "quand on est dans les option, jaris ne doit pas partir en widget
+  // quand on part". La page Options (OptionsMenu.tsx) vit dans fullWindow, pas une fenêtre à part : sans ce
+  // garde, cliquer sur une autre appli en pleine configuration (ex: vérifier un réglage ailleurs) repliait
+  // Jaris en widget, perdant l'accès direct à la page Options (repliée avec le reste de la fenêtre derrière
+  // le petit widget) — Options a déjà son propre bouton "Fermer" pour signaler qu'on a vraiment fini.
   win.on('blur', () => {
-    if (!onboardingDone || dialogOpen || quitting) return
+    if (!onboardingDone || dialogOpen || quitting || optionsOpen) return
     win.hide()
     showWidgetWindow()
     pipeline?.setListeningSuspended(false)
@@ -490,6 +502,9 @@ app.whenReady().then(async () => {
   ipcMain.on(IPC_CHANNELS.setActiveMode, (_event, mode: 'voice' | 'chat' | 'code') =>
     pipeline?.setListeningSuspended(mode !== 'voice')
   )
+  ipcMain.on(IPC_CHANNELS.setOptionsOpen, (_event, open: boolean) => {
+    optionsOpen = open
+  })
   ipcMain.handle(IPC_CHANNELS.getModelOverview, () => getModelOverview())
   ipcMain.handle(IPC_CHANNELS.getOllamaVersionStatus, () => getOllamaVersionStatus())
   ipcMain.handle(IPC_CHANNELS.updateOllama, () => updateOllama())

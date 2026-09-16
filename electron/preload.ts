@@ -118,6 +118,7 @@ const api = {
   testMicrophone: (): void => ipcRenderer.send(IPC_CHANNELS.testMicrophone),
   stopTestMicrophone: (): void => ipcRenderer.send(IPC_CHANNELS.stopTestMicrophone),
   setActiveMode: (mode: 'voice' | 'chat' | 'code'): void => ipcRenderer.send(IPC_CHANNELS.setActiveMode, mode),
+  setOptionsOpen: (open: boolean): void => ipcRenderer.send(IPC_CHANNELS.setOptionsOpen, open),
   onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => subscribe(IPC_CHANNELS.micTestLevel, cb),
   onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => subscribe(IPC_CHANNELS.micTestDone, cb),
   onSoundCue: (cb: (cue: SoundCue) => void) => subscribe(IPC_CHANNELS.soundCue, cb)

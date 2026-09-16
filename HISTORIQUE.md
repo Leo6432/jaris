@@ -932,3 +932,12 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   ajoutant le même genre de garde que celui déjà en place pour les dialogues natifs (`dialogOpen`), cette
   fois sur le drapeau `quitting`. Régression : `npm test` (272 tests), avec un nouveau test structurel
   vérifié en retirant temporairement le correctif pour confirmer qu'il mord bien.
+
+- ✅ Étape 110 (v0.11.3) — Léo : "quand on est dans les option, jaris ne doit pas partir en widget quand on
+  part", suite immédiate de l'étape 109 sur le même handler `'blur'`. La page Options vit dans la fenêtre
+  normale (un simple overlay), donc rien ne la distinguait du reste de l'app : cliquer sur une autre
+  application en pleine configuration repliait Jaris en widget, perdant l'accès direct à la page Options.
+  Corrigé par un nouveau drapeau `optionsOpen`, mis à jour par un nouveau canal IPC que la page Options
+  appelle à chaque ouverture/fermeture — même principe que les gardes déjà en place sur ce handler pour un
+  dialogue natif et pour une fermeture volontaire. Régression : `npm test` (275 tests), avec 3 nouvelles
+  assertions structurelles, chacune vérifiée en réintroduisant son défaut.

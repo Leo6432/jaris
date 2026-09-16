@@ -624,6 +624,14 @@ export const IPC_CHANNELS = {
    * d'activation, transcription) quand il est en train d'écrire dans un autre mode.
    */
   setActiveMode: 'jaris:set-active-mode',
+  /**
+   * renderer -> main : OptionsMenu.tsx prévient à chaque ouverture/fermeture de la page Options (elle vit
+   * dans la fenêtre normale, pas une fenêtre à part — voir `optionsOpen`, main.ts). Léo : "quand on est
+   * dans les option, jaris ne doit pas partir en widget quand on part" — le handler `'blur'` de la fenêtre
+   * principale (repli en widget sur perte de focus, étape 73) doit ignorer ce cas comme il ignore déjà un
+   * dialogue natif (`dialogOpen`) ou une fermeture volontaire (`quitting`).
+   */
+  setOptionsOpen: 'jaris:set-options-open',
   /** main -> renderer : un son court à jouer (design sonore, étape 31) — voir SoundCue plus haut. */
   soundCue: 'jaris:sound-cue',
   /**
