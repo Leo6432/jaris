@@ -75,6 +75,23 @@ export interface Profile {
   activationKeyEnabled?: boolean
   activationWakeWordEnabled?: boolean
   activationOrbClickEnabled?: boolean
+  /**
+   * Longueur de contexte choisie manuellement dans Options -> Modèles (curseur "comme sur Ollama", étape
+   * suivante) — toujours l'un de CONTEXT_LENGTH_STEPS (hardwareScan.ts), jamais une valeur arbitraire tapée
+   * à la main. `undefined` = jamais touché, Jaris garde OLLAMA_NUM_CTX (.env, 8192 par défaut) exactement
+   * comme avant l'ajout de ce réglage.
+   */
+  contextLength?: number
+}
+
+/** Résultat de getContextLengthOptions (hardwareScan.ts) : voir son commentaire pour le calcul du plafond. */
+export interface ContextLengthOptions {
+  /** Palier actuellement retenu (profil ou repli .env), toujours l'un de CONTEXT_LENGTH_STEPS. */
+  current: number
+  /** Palier maximum sûr pour la VRAM libre actuelle et le modèle du palier Puissant. */
+  max: number
+  /** Uniquement les paliers de CONTEXT_LENGTH_STEPS qui ne dépassent pas `max`, pour peupler le curseur. */
+  availableSteps: number[]
 }
 
 /** Un appel de l'historique du téléphone, recopié sur le PC par Mobile connecté (étape 21quater). */
@@ -653,5 +670,13 @@ export const IPC_CHANNELS = {
    * quelles tables, combien de lignes. Aucun contenu de message n'est lu : c'est un CONSTAT destiné à
    * décider la suite avec des faits, pas une fonctionnalité de lecture de messages.
    */
-  inspectPhoneCache: 'jaris:inspect-phone-cache'
+  inspectPhoneCache: 'jaris:inspect-phone-cache',
+  /**
+   * renderer <-> main : calcule le curseur de longueur de contexte (Options -> Modèles) pour la VRAM
+   * ACTUELLEMENT libre et le modèle du palier Puissant — jamais mis en cache, recalculé à chaque ouverture
+   * de l'onglet (voir computeContextLengthOptions, hardwareScan.ts).
+   */
+  getContextLengthOptions: 'jaris:get-context-length-options',
+  /** renderer -> main : enregistre la longueur de contexte choisie dans le profil (Profile.contextLength). */
+  setContextLength: 'jaris:set-context-length'
 } as const

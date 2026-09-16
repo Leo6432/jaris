@@ -165,7 +165,7 @@ export async function chatWithOllama(
 }
 
 interface OllamaTagsResponse {
-  models?: Array<{ name: string }>
+  models?: Array<{ name: string; size?: number }>
 }
 
 export async function listInstalledModels(): Promise<string[]> {
@@ -173,6 +173,40 @@ export async function listInstalledModels(): Promise<string[]> {
   if (!response.ok) throw new Error(`Ollama a répondu ${response.status} en listant les modèles installés`)
   const data = (await response.json()) as OllamaTagsResponse
   return (data.models ?? []).map((m) => m.name)
+}
+
+/**
+ * Taille réelle sur disque (octets) d'un modèle déjà installé, telle que rapportée par `/api/tags` (champ
+ * `size`) — sert d'approximation de son poids en VRAM (curseur de longueur de contexte, hardwareScan.ts).
+ * Préférée à la table `vramGb` maintenue à la main dans hardwareScan.ts (ModelCandidate) : cette dernière
+ * s'est déjà révélée fausse une fois (qwen3.6:35b recopié d'un autre modèle faute de mieux) et ne couvre de
+ * toute façon que les modèles CANDIDATS de Jaris, jamais un modèle installé manuellement en dehors de ces
+ * listes. `null` si le modèle n'est pas installé (jamais une taille inventée).
+ */
+export async function getInstalledModelSizeBytes(model: string): Promise<number | null> {
+  const response = await fetch(`${config.ollama.host}/api/tags`)
+  if (!response.ok) throw new Error(`Ollama a répondu ${response.status} en listant les modèles installés`)
+  const data = (await response.json()) as OllamaTagsResponse
+  const entry = (data.models ?? []).find((m) => m.name === model)
+  return typeof entry?.size === 'number' ? entry.size : null
+}
+
+/**
+ * Métadonnées d'architecture d'un modèle (`POST /api/show`), pour calculer le poids réel du cache K/V par
+ * token de contexte (curseur de longueur de contexte, hardwareScan.ts). Les clés de `model_info` sont
+ * préfixées par l'architecture du modèle ("llama.block_count", "qwen3.attention.head_count_kv",
+ * "gemma3.embedding_length"...) — jamais un nom fixe, donc lues par SUFFIXE dans parseModelArchInfo
+ * (hardwareScan.ts) plutôt que par une liste d'architectures connues à maintenir à la main.
+ */
+export async function getModelInfo(model: string): Promise<Record<string, unknown> | null> {
+  const response = await fetch(`${config.ollama.host}/api/show`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model })
+  })
+  if (!response.ok) return null
+  const data = (await response.json()) as { model_info?: Record<string, unknown> }
+  return data.model_info ?? null
 }
 
 interface OllamaPullProgress {

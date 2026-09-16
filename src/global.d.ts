@@ -4,6 +4,7 @@ import type {
   AudioInputDevice,
   CapacityScanResult,
   ChatMessage,
+  ContextLengthOptions,
   ConversationEntry,
   ConversationList,
   CodeGenProgress,
@@ -57,6 +58,8 @@ declare global {
       clearConversationHistory: () => Promise<void>
       openConversationHistoryFile: () => Promise<void>
       getModelOverview: () => Promise<ModelOverviewResult>
+      getContextLengthOptions: () => Promise<ContextLengthOptions>
+      setContextLength: (contextLength: number | undefined) => Promise<void>
       getOllamaVersionStatus: () => Promise<OllamaVersionStatus | null>
       updateOllama: () => Promise<{ success: boolean; message: string }>
       getAppVersionStatus: () => Promise<AppVersionStatus | null>

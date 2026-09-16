@@ -976,3 +976,12 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   revérification directe. `glm-4.7-flash:q4_K_M` gardé après vérification d'un vrai bug Ollama documenté
   (l'appel d'outils peut casser en cours de conversation), sur décision explicite de Léo. Régression :
   `npm test` (297 tests).
+- ✅ Étape 114 (v0.13.0) — Léo a montré le curseur "Context length" de l'app Ollama et demandé la même chose,
+  personnalisée pour ne jamais dépasser la VRAM. Nouveau curseur dans Options → Modèles : son maximum est
+  calculé pour la VRAM libre réelle et le modèle du palier Puissant (formule du cache K/V vérifiée sur la doc
+  officielle d'Ollama, poids du modèle lu directement sur son fichier installé plutôt que sur une table
+  maintenue à la main). Sans donnée fiable (Ollama injoignable, modèle absent), le curseur ne propose jamais
+  plus que le réglage déjà en usage. Un vrai bug CSS (le curseur héritait du cadre des champs de texte) et
+  une erreur d'affichage ("33k" au lieu de "32k") ont été attrapés par les tests avant publication. Régression :
+  `node --test scripts/test-context-length.mjs scripts/test-format-context-length.mjs scripts/test-context-length-ui.mjs`
+  (312 tests au total). Non vérifié en usage réel : la précision exacte sur la carte graphique de Léo.

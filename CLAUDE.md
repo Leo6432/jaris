@@ -2025,3 +2025,65 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   d'une revue ultérieure.
   Régression : `npm test` (297 tests, aucun comportement testable ne change — uniquement un nom de modèle
   candidat et une ligne de score retirée).
+
+- **Curseur de longueur de contexte (étape 114), demande de Léo devant une capture de l'app Ollama :
+  "jaris voit les model et regarde la vram et propose une barre comme sur ollama mais qui est personnaliser
+  a chacun pour que le dernier ne dépasse pas la vram".** Contrairement au curseur d'Ollama (4k à 256k fixe
+  pour tout le monde), le MAXIMUM ici est calculé pour la VRAM libre réelle et le modèle du palier PUISSANT
+  (le plus gros modèle de conversation configuré) — c'est celui qui laisse le moins de VRAM pour le cache K/V,
+  donc si un contexte tient pour lui, il tient forcément aussi pour Rapide/Médium (modèles plus petits, plus
+  de marge) : pas besoin de calculer les 3 paliers séparément pour un seul curseur global.
+  **Deux appels Ollama vérifiés sur la doc officielle avant d'écrire la moindre ligne de calcul** (jamais
+  deviné, même discipline que le reste de ce fichier) :
+  - `POST /api/show` (`getModelInfo`, ollama.ts) renvoie `model_info` avec des clés PRÉFIXÉES par
+    l'architecture du modèle ("llama.block_count", "qwen3.attention.head_count_kv"...) — lues par SUFFIXE
+    dans `parseModelArchInfo` plutôt que par une liste d'architectures connues à maintenir à la main à
+    chaque nouvelle famille de modèle (même raisonnement que le retry sans `think` dans ollama.ts).
+  - `GET /api/tags` renvoie aussi un champ `size` (octets réels sur disque) par modèle installé — utilisé
+    comme poids VRAM (`getInstalledModelSizeBytes`) À LA PLACE de la table `vramGb` maintenue à la main dans
+    hardwareScan.ts (ModelCandidate) : cette dernière s'est déjà révélée fausse une fois (qwen3.6:35b
+    recopié d'un autre modèle faute de mieux) et ne couvre de toute façon que les candidats DE JARIS, jamais
+    un modèle installé manuellement en dehors de ces listes.
+  **Formule du cache K/V** (`kvCacheBytesPerToken`, hardwareScan.ts) : 2 (clé+valeur) x nombre de couches x
+  têtes K/V (PAS les têtes d'attention — l'attention groupée/GQA partage les mêmes clés-valeurs entre
+  plusieurs têtes de requête) x dimension d'une tête x 2 octets (cache par défaut d'Ollama en f16, jamais
+  changé ici). Vérifiée sur une config "8B-like" réaliste (32 couches/32 têtes/8 têtes K/V/4096 de
+  dimension, proche de Llama-3-8B) AVANT d'écrire le test : 8192 tokens de contexte = exactement 1 Gio de
+  cache K/V pour cette config — un ordre de grandeur déjà connu par ailleurs, pas juste un calcul qui
+  "semblait juste" en le relisant.
+  **Sécurité, le principe qui gouverne tout le reste** : si la moindre donnée réelle manque (Ollama
+  injoignable, modèle pas installé, architecture non reconnue), le repli est TOUJOURS le palier déjà en
+  usage aujourd'hui — jamais un maximum optimiste inventé faute de mieux. Proposer plus de marge sans preuve
+  aurait été exactement le genre d'hypothèse non vérifiée que ce dépôt a appris à ses dépens à ne jamais
+  présenter comme un fait (voir la saga SearXNG plus haut).
+  **Vrai bug CSS attrapé par le test AVANT de livrer, pas en relecture — même famille que le bouton
+  "Nouvelle conversation" resté gris (étape 97) et le double cadre du composeur (étape 92)** : la règle
+  générale `input, textarea:not(.composer__input), select { border-radius: 0 !important; background: ...
+  !important; border: ... !important }` (src/index.css) s'applique à TOUT `<input>`, y compris un
+  `type="range"` — le curseur aurait hérité d'un cadre de champ de texte classique par-dessus son style
+  dédié (fond de piste, coins arrondis), un `!important` ne pouvant être neutralisé que par un autre
+  `!important`. Corrigé en excluant `.options-menu__context-slider` de cette règle générale, exactement
+  comme `.composer__input` l'est déjà pour une raison différente. Repéré par une VRAIE mesure de style
+  calculé dans un navigateur (`border-radius` mesuré à `0px` au lieu de `999px`), jamais en relisant le CSS.
+  **Piège dans mon PROPRE premier jet de `formatContextLength`, attrapé par le test avant de livrer** :
+  diviser par 1000 pour afficher "32k" aurait donné "33k" pour 32768 — le "k" d'une longueur de contexte
+  désigne toujours 1024 (convention universelle : "128k" veut dire 131072, jamais 128000), jamais 1000.
+  **Portée volontairement limitée à la conversation** (assistant.ts) : `look_at_screen`/`computer_use_task`
+  (vision.ts/computerUse.ts) gardent leur `config.ollama.numCtx` fixe, jamais le réglage de ce curseur — ils
+  utilisent un modèle de VISION séparé, dont le budget VRAM n'a rien à voir avec celui calculé ici pour le
+  palier Puissant ; appliquer ce réglage là-bas aurait validé un contexte contre le mauvais modèle.
+  **Piège déjà documenté dans ce fichier, retombé dessus une nouvelle fois** : les deux tests EXISTANTS de
+  hardwareScan.ts (`test-hardwarescan-preview-steps.mjs`, `test-hardwarescan-tiebreak.mjs`) chargent ce
+  fichier avec un faux pont qui ne connaissait pas le nouvel import `./ollama` — les 6 tests ont commencé à
+  échouer (module introuvable) tant que ce pont n'a pas été mis à jour. Réflexe à garder : après avoir ajouté
+  un `import` à un module déjà chargé par plusieurs tests, `grep` tous les faux ponts existants avant de
+  lancer la suite.
+  Régression : `node --test scripts/test-context-length.mjs scripts/test-format-context-length.mjs
+  scripts/test-context-length-ui.mjs` (formule K/V vérifiée à la main, repli de sécurité jamais optimiste,
+  jamais au-dessus du maximum natif du modèle ; et dans un vrai navigateur : seuls les paliers sûrs pour LA
+  machine simulée s'affichent — jamais les 7 par défaut —, déplacer le curseur enregistre la bonne VALEUR en
+  tokens et pas un index brut, et le curseur est réellement habillé par le CSS de Jaris). Chaque assertion
+  critique a été vérifiée en réintroduisant temporairement son défaut.
+  **Non vérifiable ici, à confirmer par Léo en usage réel** : que le calcul retombe juste sur SA vraie carte
+  graphique et SES vrais modèles installés (pas d'accès Windows/GPU réel dans cet environnement) — le
+  mécanisme est prouvé par la formule et les tests, sa précision exacte sur sa machine ne l'est pas encore.

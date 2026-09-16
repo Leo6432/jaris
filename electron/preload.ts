@@ -6,6 +6,7 @@ import {
   type AudioInputDevice,
   type CapacityScanResult,
   type ChatMessage,
+  type ContextLengthOptions,
   type ConversationEntry,
   type ConversationList,
   type CodeGenProgress,
@@ -61,6 +62,9 @@ const api = {
   clearConversationHistory: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.clearConversationHistory),
   openConversationHistoryFile: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openConversationHistoryFile),
   getModelOverview: (): Promise<ModelOverviewResult> => ipcRenderer.invoke(IPC_CHANNELS.getModelOverview),
+  getContextLengthOptions: (): Promise<ContextLengthOptions> => ipcRenderer.invoke(IPC_CHANNELS.getContextLengthOptions),
+  setContextLength: (contextLength: number | undefined): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.setContextLength, contextLength),
   getOllamaVersionStatus: (): Promise<OllamaVersionStatus | null> => ipcRenderer.invoke(IPC_CHANNELS.getOllamaVersionStatus),
   updateOllama: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.updateOllama),
   getAppVersionStatus: (): Promise<AppVersionStatus | null> => ipcRenderer.invoke(IPC_CHANNELS.getAppVersionStatus),

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import type {
   AppVersionStatus,
   AudioInputDevice,
+  ContextLengthOptions,
   ConversationEntry,
   HardwareTierPreview as HardwareTierPreviewData,
   ModelsLocationStatus,
@@ -18,6 +19,7 @@ import AppUpdateProgress from './AppUpdateProgress'
 import HardwareTierPreview from './HardwareTierPreview'
 import JarisOrb from './JarisOrb'
 import { formatModelName } from '../lib/formatModelName'
+import { formatContextLength } from '../lib/formatContextLength'
 
 interface VoiceOption {
   id: string
@@ -121,6 +123,13 @@ export default function OptionsMenu(): JSX.Element {
   const [history, setHistory] = useState<ConversationEntry[] | null>(null)
   const [clearingHistory, setClearingHistory] = useState(false)
   const [hardwareTiers, setHardwareTiers] = useState<HardwareTierPreviewData[] | null>(null)
+  /**
+   * Curseur de longueur de contexte (Léo : "jaris voit les model et regarde la vram et propose une barre
+   * comme sur ollama... personnalisé à chacun pour que le dernier ne dépasse pas la vram") — `null` tant
+   * que non chargé, recalculé à chaque ouverture de l'onglet (voir l'effet plus bas).
+   */
+  const [contextLengthOptions, setContextLengthOptions] = useState<ContextLengthOptions | null>(null)
+  const [savingContextLength, setSavingContextLength] = useState(false)
   const [ollamaVersionStatus, setOllamaVersionStatus] = useState<OllamaVersionStatus | null>(null)
   const [updatingOllama, setUpdatingOllama] = useState(false)
   const [ollamaUpdateMessage, setOllamaUpdateMessage] = useState<string | null>(null)
@@ -206,6 +215,9 @@ export default function OptionsMenu(): JSX.Element {
   useEffect(() => {
     if (tab === 'modeles') {
       void window.jaris.getOllamaVersionStatus().then(setOllamaVersionStatus)
+      // Recalculé à CHAQUE ouverture de l'onglet, jamais mis en cache : la VRAM libre change d'un
+      // lancement à l'autre selon ce qui tourne en parallèle sur la machine (jeu, navigateur...).
+      void window.jaris.getContextLengthOptions().then(setContextLengthOptions)
     }
     if (tab === 'miseajour') {
       void window.jaris.getAppVersionStatus().then(setAppVersionStatus)
@@ -238,6 +250,17 @@ export default function OptionsMenu(): JSX.Element {
       else setUpdateProgress(progress)
     })
   }, [])
+
+  const handleContextLengthChange = (value: number): void => {
+    // Optimiste : le curseur bouge tout de suite, l'enregistrement se fait en tâche de fond. `current`
+    // est le seul champ qui change ; `max`/`availableSteps` restent ceux déjà calculés pour cette machine.
+    setContextLengthOptions((prev) => (prev ? { ...prev, current: value } : prev))
+    setSavingContextLength(true)
+    window.jaris
+      .setContextLength(value)
+      .catch(() => {})
+      .finally(() => setSavingContextLength(false))
+  }
 
   const handleChooseModelsLocation = (): void => {
     setModelsLocationMessage(null)
@@ -998,6 +1021,37 @@ export default function OptionsMenu(): JSX.Element {
                 Modèle du mode Code : <strong>{formatModelName(profile.codeModel)}</strong> — choisi et
                 téléchargé automatiquement selon ta configuration, comme les paliers ci-dessus.
               </p>
+            )}
+
+            {contextLengthOptions && (
+              <div className="options-menu__context-length">
+                <div className="options-menu__section-title">Longueur de mémoire</div>
+                <p className="options-menu__model-overview-hint">
+                  Combien de la conversation Jaris garde en tête pour répondre — comme le curseur "Context
+                  length" d'Ollama, sauf que le maximum est déjà limité à ce que ta carte graphique peut
+                  encaisser sans déborder.
+                </p>
+                <input
+                  type="range"
+                  className="options-menu__context-slider"
+                  min={0}
+                  max={Math.max(0, contextLengthOptions.availableSteps.length - 1)}
+                  value={Math.max(0, contextLengthOptions.availableSteps.indexOf(contextLengthOptions.current))}
+                  onChange={(event) => {
+                    const step = contextLengthOptions.availableSteps[Number(event.target.value)]
+                    if (step !== undefined) handleContextLengthChange(step)
+                  }}
+                />
+                <div className="options-menu__context-slider-ticks">
+                  {contextLengthOptions.availableSteps.map((step) => (
+                    <span key={step}>{formatContextLength(step)}</span>
+                  ))}
+                </div>
+                <p className="options-menu__model-overview-hint">
+                  Actuellement : <strong>{formatContextLength(contextLengthOptions.current)}</strong>
+                  {savingContextLength ? ' (enregistrement…)' : ''}
+                </p>
+              </div>
             )}
           </div>
         )}

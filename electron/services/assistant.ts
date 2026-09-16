@@ -379,6 +379,9 @@ export async function converse(
   }
 
   const models = profile?.models ?? { flash: config.ollama.model, medium: config.ollama.model, large: config.ollama.model }
+  // Curseur de longueur de contexte (Options -> Modèles) : `undefined` tant que Léo n'y a jamais touché,
+  // Jaris garde alors exactement le comportement d'avant ce réglage (OLLAMA_NUM_CTX, config.ts).
+  const numCtx = profile?.contextLength ?? config.ollama.numCtx
   let tier = pickTier(prompt)
 
   // Les paliers (flash/médium/puissant) sont figés par le scan de capacité (VRAM totale, déterministe).
@@ -455,7 +458,7 @@ export async function converse(
   let nudgedForNoAction = false
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const message = await chatWithOllama(messages, TOOLS, model, think, signal, config.ollama.numCtx, onToken)
+    const message = await chatWithOllama(messages, TOOLS, model, think, signal, numCtx, onToken)
     if (!message.tool_calls?.length) {
       if (wantsEmailSent && !computerUseCalled && !nudgedForEmail) {
         nudgedForEmail = true

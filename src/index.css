@@ -815,6 +815,57 @@ body.body--scan::after {
   color: var(--hud-text-dim);
 }
 
+.options-menu__context-length {
+  margin-top: 18px;
+}
+
+/* Curseur "comme sur Ollama" (Léo), même famille visuelle que .options-menu__progress-bar juste au-dessus
+   dans ce fichier plutôt qu'un style de curseur générique inventé à côté. */
+.options-menu__context-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  margin: 10px 0 6px;
+  border-radius: 999px;
+  background: rgba(122, 176, 214, 0.15);
+  cursor: pointer;
+}
+
+.options-menu__context-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--hud-accent);
+  box-shadow: var(--hud-glow);
+  cursor: pointer;
+}
+
+.options-menu__context-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: var(--hud-accent);
+  box-shadow: var(--hud-glow);
+  cursor: pointer;
+}
+
+.options-menu__context-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(122, 176, 214, 0.15);
+}
+
+.options-menu__context-slider-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  color: var(--hud-text-faint);
+}
+
 .options-menu__models-location-list {
   list-style: none;
   margin: 0 0 4px;
@@ -2874,8 +2925,14 @@ textarea:not(.composer__input):focus-visible {
 
 /* `.composer__input` est exclu : dans le composeur (étape 92), c'est la CARTE qui porte le cadre et la
    lueur de focus, pas le champ lui-même — sans cette exception, ce `!important` redessinerait un second
-   contour à l'intérieur de la carte (constaté sur la capture avant/après). */
-input,
+   contour à l'intérieur de la carte (constaté sur la capture avant/après).
+   `.options-menu__context-slider` (curseur de longueur de contexte) est exclu pour la même raison : c'est
+   un `<input type="range">`, pas un champ de texte — sans cette exception, le `!important` de cette règle
+   écrase le style DÉDIÉ du curseur (fond de piste, coins arrondis) et dessine par-dessus un cadre de champ
+   de texte classique, attrapé par une vraie mesure de style calculé avant de livrer (même piège que le
+   bouton "Nouvelle conversation" resté gris, étape 97 : compter les occurrences ne suffit jamais, seule une
+   mesure du style RÉELLEMENT appliqué le prouve). */
+input:not(.options-menu__context-slider),
 textarea:not(.composer__input),
 select {
   font-family: var(--hud-font-body);

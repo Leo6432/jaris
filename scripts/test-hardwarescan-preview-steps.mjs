@@ -43,7 +43,11 @@ function setup({ verifiedToolScoresMd = '', vramMib, ramGb = 32 } = {}) {
       }
     },
     '../paths': { resourcesRoot: () => '/fake/resources' },
-    './systemResources': { RESOURCE_SAFETY_MARGIN_GB: 4, detectRamGb: () => ramGb }
+    './systemResources': { RESOURCE_SAFETY_MARGIN_GB: 4, detectRamGb: () => ramGb },
+    // Curseur de longueur de contexte : hardwareScan.ts importe désormais ces deux fonctions d'ollama.ts,
+    // jamais appelées par les tests de ce fichier (aucune assertion ici ne porte dessus) — sans ce stub,
+    // le require shim ne trouve pas './ollama' et fait échouer tout le module à charger.
+    './ollama': { getModelInfo: async () => null, getInstalledModelSizeBytes: async () => null }
   }
   const exports = {}
   vm.runInNewContext(source, {

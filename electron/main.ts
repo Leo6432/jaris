@@ -10,7 +10,8 @@ import {
   updateOllama
 } from './services/dependencyServices'
 import { getModelsLocationStatus, moveModelsLocation } from './services/modelsLocation'
-import { getAllCandidateModelIds, getModelOverview, previewHardwareTiers } from './services/hardwareScan'
+import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, previewHardwareTiers } from './services/hardwareScan'
+import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { runModelAnalysis, runQuickSetup } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
@@ -506,6 +507,21 @@ app.whenReady().then(async () => {
     optionsOpen = open
   })
   ipcMain.handle(IPC_CHANNELS.getModelOverview, () => getModelOverview())
+  // Étape suivante (Léo : "jaris voit les model et regarde la vram et propose une barre... personnalisé à
+  // chacun pour que le dernier ne dépasse pas la vram") : le modèle de référence est celui du palier
+  // PUISSANT (le plus gros modèle de conversation configuré, voir computeContextLengthOptions pour le
+  // pourquoi), jamais un modèle choisi par le renderer — recalculé à chaque ouverture de l'onglet.
+  ipcMain.handle(IPC_CHANNELS.getContextLengthOptions, async () => {
+    const profile = await getProfile()
+    const model = profile?.models?.large ?? config.ollama.model
+    const currentContext = profile?.contextLength ?? config.ollama.numCtx
+    return computeContextLengthOptions(model, currentContext)
+  })
+  ipcMain.handle(IPC_CHANNELS.setContextLength, async (_event, contextLength: number | undefined) => {
+    const profile = await getProfile()
+    if (!profile) return
+    await saveProfile({ ...profile, contextLength })
+  })
   ipcMain.handle(IPC_CHANNELS.getOllamaVersionStatus, () => getOllamaVersionStatus())
   // Même canal d'avancement que la mise à jour de Jaris, distingué par `target` (étape 112) : l'installeur
   // d'Ollama pèse 1,5 Go, soit plusieurs minutes pendant lesquelles le bouton restait muet ("ça bloque

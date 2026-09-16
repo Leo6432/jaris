@@ -4,7 +4,8 @@ import { resourcesRoot } from '../paths'
 import { join } from 'path'
 import { promisify } from 'util'
 import { RESOURCE_SAFETY_MARGIN_GB, detectRamGb } from './systemResources'
-import type { CapacityScanResult, HardwareTierPreview, ModelOverviewEntry, ModelOverviewResult, ModelTiers } from '../../shared/ipc'
+import { getInstalledModelSizeBytes, getModelInfo } from './ollama'
+import type { CapacityScanResult, ContextLengthOptions, HardwareTierPreview, ModelOverviewEntry, ModelOverviewResult, ModelTiers } from '../../shared/ipc'
 
 const execAsync = promisify(exec)
 
@@ -383,6 +384,131 @@ export function pickSafeVisionModel(freeVramGb: number, installedModels: string[
   const installedCandidates = VISION_CANDIDATES.filter((c) => installedModels.includes(c.model))
   if (installedCandidates.length === 0) return fallbackModel
   return pickForBudget(installedCandidates, Math.max(0, freeVramGb - LIVE_SAFETY_MARGIN_GB))
+}
+
+// Curseur de longueur de contexte (Options -> Modèles, demande de Léo : "jaris voit les model et regarde
+// la vram et propose une barre comme sur ollama mais qui est personnaliser a chacun pour que le dernier ne
+// dépasse pas la vram") — même idée que le curseur "Context length" de l'app Ollama (capture envoyée par
+// Léo), sauf que le MAXIMUM du curseur est calculé pour cette machine plutôt que de monter jusqu'à 256k
+// pour tout le monde. Le palier "Puissant" (le plus gros modèle de conversation, donc celui qui laisse le
+// MOINS de VRAM libre pour le cache K/V) sert de référence : si un contexte donné tient pour lui, il tient
+// forcément aussi pour Rapide/Médium (modèles plus petits, donc plus de marge), ce qui évite de calculer
+// les 3 paliers séparément pour un seul curseur global.
+
+/** Mêmes paliers que le curseur "Context length" d'Ollama (capture de Léo), jamais une valeur arbitraire. */
+export const CONTEXT_LENGTH_STEPS = [4096, 8192, 16384, 32768, 65536, 131072, 262144]
+
+/**
+ * Format générique du champ `model_info` renvoyé par `POST /api/show` (getModelInfo, ollama.ts) : les clés
+ * sont préfixées par l'ARCHITECTURE du modèle ("llama.block_count", "qwen3.attention.head_count_kv",
+ * "gemma3.embedding_length"...), jamais un nom fixe — lues par SUFFIXE plutôt que par une liste
+ * d'architectures connues à maintenir à la main à chaque nouvelle famille de modèle (même raisonnement que
+ * le retry sans `think` dans ollama.ts, déjà motivé par la même fragilité).
+ */
+export interface ModelArchInfo {
+  blockCount: number
+  headCount: number
+  headCountKv: number
+  embeddingLength: number
+  /** Taille de contexte maximale supportée par LE MODÈLE LUI-MÊME — jamais dépassée, même si la VRAM le permettrait. */
+  maxContextLength: number
+}
+
+export function parseModelArchInfo(modelInfo: Record<string, unknown> | null): ModelArchInfo | null {
+  if (!modelInfo) return null
+  const find = (suffix: string): number | null => {
+    for (const [key, value] of Object.entries(modelInfo)) {
+      if (key.endsWith(suffix) && typeof value === 'number' && Number.isFinite(value)) return value
+    }
+    return null
+  }
+  const blockCount = find('.block_count')
+  const headCount = find('.attention.head_count')
+  const headCountKv = find('.attention.head_count_kv')
+  const embeddingLength = find('.embedding_length')
+  const maxContextLength = find('.context_length')
+  if (blockCount == null || headCount == null || headCountKv == null || embeddingLength == null || maxContextLength == null) {
+    return null
+  }
+  return { blockCount, headCount, headCountKv, embeddingLength, maxContextLength }
+}
+
+/**
+ * Octets de VRAM consommés par le cache K/V pour UN token de contexte en plus. Formule standard des
+ * transformeurs : 2 (clé + valeur) x nombre de couches x têtes K/V (PAS les têtes d'attention — l'attention
+ * groupée/GQA partage les mêmes clés-valeurs entre plusieurs têtes de requête, d'où head_count_kv <
+ * head_count sur la plupart des modèles récents) x dimension d'une tête (embedding_length / head_count,
+ * jamais fournie telle quelle par Ollama) x 2 octets par valeur (cache par défaut d'Ollama en f16 — Jaris ne
+ * configure jamais OLLAMA_KV_CACHE_TYPE, donc jamais q8_0/q4_0 en pratique ici).
+ */
+export function kvCacheBytesPerToken(arch: ModelArchInfo): number {
+  const BYTES_PER_KV_VALUE_F16 = 2
+  const headDim = arch.embeddingLength / arch.headCount
+  return 2 * arch.blockCount * arch.headCountKv * headDim * BYTES_PER_KV_VALUE_F16
+}
+
+/**
+ * Contexte maximum (en tokens, PAS encore arrondi à un palier de CONTEXT_LENGTH_STEPS) qui tient dans la
+ * VRAM LIBRE actuelle une fois le poids du modèle déduit, sans jamais dépasser ce que le modèle supporte
+ * nativement. `freeVramGb` doit être une mesure RÉELLE et récente (getLiveGpuStatus), pas un budget
+ * théorique — même marge de sécurité que le reste de ce fichier pour ce genre de calcul (LIVE_SAFETY_MARGIN_GB).
+ */
+export function computeMaxSafeContext(arch: ModelArchInfo, modelWeightVramGb: number, freeVramGb: number): number {
+  const availableForKvGb = freeVramGb - LIVE_SAFETY_MARGIN_GB - modelWeightVramGb
+  if (availableForKvGb <= 0) return 0
+  const GB = 1024 ** 3
+  const maxTokensFromVram = Math.floor((availableForKvGb * GB) / kvCacheBytesPerToken(arch))
+  return Math.min(arch.maxContextLength, maxTokensFromVram)
+}
+
+/**
+ * Le plus grand palier de CONTEXT_LENGTH_STEPS qui tient dans `maxSafeTokens` — jamais en dessous du plus
+ * petit palier (4096, déjà le plancher historique de Jaris, voir OLLAMA_NUM_CTX dans config.ts) même si le
+ * calcul VRAM tombe encore plus bas : mieux vaut proposer ce plancher que de renvoyer 0.
+ */
+export function roundDownToContextStep(maxSafeTokens: number): number {
+  let result = CONTEXT_LENGTH_STEPS[0]
+  for (const step of CONTEXT_LENGTH_STEPS) {
+    if (step <= maxSafeTokens) result = step
+  }
+  return result
+}
+
+/**
+ * Calcule le curseur pour l'onglet Modèles : `model` doit être le modèle du palier PUISSANT (le plus gros
+ * modèle de conversation configuré, donc celui qui laisse le moins de VRAM libre pour le cache K/V — voir le
+ * commentaire en tête de section). Recalculé à CHAQUE ouverture de l'onglet (jamais mis en cache) : la VRAM
+ * libre change d'un lancement à l'autre selon ce qui tourne en parallèle sur la machine.
+ *
+ * Si la moindre donnée réelle manque (Ollama injoignable, modèle pas installé, architecture non reconnue),
+ * le repli est TOUJOURS le palier déjà en usage aujourd'hui — jamais un maximum optimiste inventé faute de
+ * mieux : proposer plus de marge sans preuve serait exactement le genre d'hypothèse non vérifiée que ce
+ * dépôt a appris à ses dépens à ne jamais présenter comme un fait (voir la saga SearXNG, CLAUDE.md).
+ */
+export async function computeContextLengthOptions(model: string, currentContext: number): Promise<ContextLengthOptions> {
+  const fallbackMax = roundDownToContextStep(currentContext)
+  const fallback: ContextLengthOptions = {
+    current: fallbackMax,
+    max: fallbackMax,
+    availableSteps: CONTEXT_LENGTH_STEPS.filter((s) => s <= fallbackMax)
+  }
+
+  const [{ freeVramGb }, modelInfo, weightBytes] = await Promise.all([
+    getLiveGpuStatus(),
+    getModelInfo(model).catch(() => null),
+    getInstalledModelSizeBytes(model).catch(() => null)
+  ])
+  const arch = parseModelArchInfo(modelInfo)
+  if (freeVramGb === null || !arch || weightBytes === null) return fallback
+
+  const modelWeightVramGb = weightBytes / 1024 ** 3
+  const maxSafe = roundDownToContextStep(computeMaxSafeContext(arch, modelWeightVramGb, freeVramGb))
+  const max = Math.max(maxSafe, CONTEXT_LENGTH_STEPS[0])
+  return {
+    current: Math.min(fallbackMax, max),
+    max,
+    availableSteps: CONTEXT_LENGTH_STEPS.filter((s) => s <= max)
+  }
 }
 
 /**
