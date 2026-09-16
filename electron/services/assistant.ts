@@ -309,6 +309,19 @@ export function findLeakedToolName(text: string, toolNames: readonly string[] = 
  * l'utilisateur devenait alors une phrase isolée sans contexte, que Jaris ne savait pas rattacher à la
  * demande d'envoi de mail en cours.
  */
+/** Les demandes simples passent directement par le pilote, sans promesse vide d'un petit modèle. */
+export function directPhoneRequest(prompt: string): { name: string; args: Record<string, unknown> } | undefined {
+  const value = prompt.trim().replace(/^jaris[, ]+/i, '')
+  if (/^(?:lis|regarde|montre|affiche)(?:-moi)? (?:mes|les) notifications(?: (?:du|de mon) (?:téléphone|telephone|mobile))?[.!?]?$/i.test(value)) {
+    return { name: 'read_phone_notifications', args: {} }
+  }
+  const call = value.match(/^(?:appelle|appeler|téléphone à) (.+?)[.!?]?$/i)
+  if (call && !/\b(?:et|puis|pas|jamais|sans)\b/i.test(call[1])) return { name: 'call_phone', args: { recipient: call[1] } }
+  const message = value.match(/^envoie(?:r)? (?:un )?(?:sms|message) [àa] (.+?)(?:\s*:\s*| pour (?:lui )?dire\s+| disant\s+)([\s\S]+)$/i)
+  if (message) return { name: 'send_phone_message', args: { recipient: message[1].trim(), text: message[2].trim().replace(/^[«“"]([\s\S]*)[»”"]$/, '$1').trim() } }
+  return undefined
+}
+
 export async function converse(
   prompt: string,
   userName: string | null,
@@ -332,7 +345,13 @@ export async function converse(
 ): Promise<string> {
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
-  const executeTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel, onLog, signal)
+  const executeTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel, onLog, signal, prompt)
+
+  const phoneRequest = directPhoneRequest(prompt)
+  if (phoneRequest) {
+    try { return await executeTool(phoneRequest.name, phoneRequest.args) }
+    catch (err) { return `Échec de l’outil téléphone : ${err instanceof Error ? err.message : String(err)}` }
+  }
 
   const noteText = requestedNotepadText(prompt)
   if (noteText !== undefined) {
@@ -543,7 +562,7 @@ export async function converse(
       // modèle de conversation : les deux ne tiennent pas en même temps sur
       // une carte 8 Go, donc repasser par qwen3.5 pour reformuler forcerait un
       // rechargement complet. Le modèle de vision répond déjà comme Jaris.
-      if (call.function.name === 'look_at_screen') {
+      if (['look_at_screen', 'read_phone_notifications', 'call_phone', 'send_phone_message'].includes(call.function.name)) {
         return finalize(result)
       }
 

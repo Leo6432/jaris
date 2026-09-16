@@ -9,7 +9,7 @@ import { collectDatabaseFiles, isPhonePackage } from './phoneLinkCache'
  * CE FICHIER EST ÉCRIT SUR DES FAITS, PAS SUR UNE HYPOTHÈSE. Le constat livré à l'étape 21ter a tourné sur
  * la machine de Léo et a renvoyé exactement ceci : `calling.db` avec une table `call_history` (100 lignes),
  * `contacts.db` avec `contact` (24) et `phonenumber` (29) — et AUCUNE table de messages. D'où le périmètre :
- * les appels et les contacts se lisent, les messages ne se lisent pas, et Jaris ne prétend pas le contraire.
+ * ce module lit les appels et contacts du cache ; phoneLink.ts pilote la fenêtre pour les autres actions.
  * Pour un iPhone, Mobile connecté affiche les messages dans sa fenêtre sans les garder sur le disque.
  *
  * CE QUI RESTE INCONNU, ET COMMENT C'EST TRAITÉ. Le constat donne les noms des TABLES, pas ceux des
@@ -185,7 +185,7 @@ export async function searchContacts(
 
     const numbersByContact = new Map<string, string[]>()
     if (numberTable) {
-      const numberColumn = pickColumn(numberTable.columns, [/number/i, /value/i])
+      const numberColumn = pickColumn(numberTable.columns.filter(column => !/(?:^id$|_id$|Id$)/i.test(column)), [/^phone_number$/i, /^display_phone_number$/i, /number/i, /value/i])
       const linkColumn = pickColumn(numberTable.columns, [/contact.*id/i, /^id$/i])
       if (numberColumn && linkColumn) {
         for (const row of numberTable.rows) {

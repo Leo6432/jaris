@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { buildSync } from 'esbuild'
 import { globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,7 +20,7 @@ import test from 'node:test'
  */
 let chromium = null
 try {
-  ;({ chromium } = await import('/opt/node22/lib/node_modules/playwright/index.mjs'))
+  ;({ chromium } = await import(process.env.PLAYWRIGHT_MODULE || '/opt/node22/lib/node_modules/playwright/index.mjs'))
 } catch {
   chromium = null
 }
@@ -74,20 +74,7 @@ function buildPage() {
 
   writeFileSync(entryPath, ENTRY)
   try {
-    execFileSync(
-      'npx',
-      [
-        'esbuild',
-        entryPath,
-        '--bundle',
-        '--format=iife',
-        '--loader:.tsx=tsx',
-        '--jsx=automatic',
-        `--alias:@=${join(projectRoot, 'src')}`,
-        `--outfile=${bundlePath}`
-      ],
-      { cwd: projectRoot, stdio: 'pipe' }
-    )
+    buildSync({entryPoints:[entryPath], bundle:true, format:'iife', jsx:'automatic', alias:{'@':join(projectRoot,'src')}, outfile:bundlePath})
   } finally {
     rmSync(entryPath, { force: true })
   }
@@ -103,7 +90,7 @@ const APPELS = [
 
 async function withPhoneTab(calls, run) {
   const html = buildPage()
-  const browser = await chromium.launch()
+  const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
   try {
     const page = await browser.newPage()
     await page.setViewportSize({ width: 1100, height: 800 })
@@ -122,14 +109,16 @@ async function withPhoneTab(calls, run) {
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
 
-test("l'onglet dit ce qui marche et ce qui est impossible, sans laisser espérer les messages", options, async () => {
+test("l'onglet explique les commandes téléphone et les limites de confirmation", options, async () => {
   await withPhoneTab(APPELS, async (page) => {
     const texte = await page.textContent('.options-menu__section')
     assert.match(texte, /appels/i)
     assert.match(texte, /contacts/i)
-    // Le point qui compte : ne pas laisser croire aux messages, puisque Mobile connecté ne les garde pas.
-    assert.match(texte, /messages/i)
-    assert.match(texte, /ni les lire ni en envoyer/i)
+    // Décrit les commandes réellement disponibles et ne promet pas la réception.
+    assert.match(texte, /message/i)
+    assert.match(texte, /Lis mes notifications/i)
+    assert.match(texte, /Appelle maman/i)
+    assert.match(texte, /ne relance jamais/i)
   })
 })
 

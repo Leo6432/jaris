@@ -869,9 +869,10 @@ export default function OptionsMenu(): JSX.Element {
               internet : tu peux lui demander « qui m'a appelé ? » ou « c'est quoi le numéro de maman ? ».
             </p>
             <p className="options-menu__model-overview-hint">
-              Les messages, eux, ne sont pas recopiés : Mobile connecté les affiche dans sa fenêtre sans les
-              garder sur le disque. Jaris ne peut donc ni les lire ni en envoyer — et pour l'envoi, c'est de
-              toute façon interdit par Apple à toute application sur ordinateur.
+              Tu peux aussi demander « Lis mes notifications », « Appelle maman » ou « Envoie un message
+              à maman : Bonjour ». Jaris utilise la fenêtre de Mobile connecté et vérifie le destinataire
+              avant l’action. Le téléphone doit rester connecté en Bluetooth. Une commande d’envoi ne prouve
+              pas encore sa réception ; Jaris ne relance jamais automatiquement un envoi.
             </p>
 
             <div className="options-menu__actions">

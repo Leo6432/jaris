@@ -152,3 +152,14 @@ test('la mise en phrase des appels est lisible à voix haute', () => {
 test.after(() => {
   if (workDir) rmSync(workDir, { recursive: true, force: true })
 })
+
+// Schéma relevé sur le PC : phone_number_id précède le vrai phone_number.
+test('le numéro interne phone_number_id ne remplace jamais le téléphone du contact', async () => {
+  const file=join(scratch(),'real-schema.db')
+  const db=new DatabaseSync(file)
+  db.exec('CREATE TABLE contact (contact_id INTEGER, display_name TEXT); CREATE TABLE phonenumber (phone_number_id INTEGER, contact_id INTEGER, phone_number TEXT, display_phone_number TEXT)')
+  db.prepare('INSERT INTO contact VALUES (?,?)').run(7,'Test')
+  db.prepare('INSERT INTO phonenumber VALUES (?,?,?,?)').run(99999999,7,'+33600000001','06 00 00 00 01')
+  db.close()
+  assert.deepEqual((await searchContacts('Test',{open:openReadOnly,files:[file]}))[0].numbers,['+33600000001'])
+})

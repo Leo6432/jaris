@@ -952,3 +952,11 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   tiret orphelin en tête de ligne, des guillemets doublés autour d'un exemple, et des phrases à dire mal
   alignées entre cartes voisines. Régression : `npm test` (281 tests), chaque nouveau test vérifié en
   réintroduisant son défaut.
+
+- Intégration téléphone v0.12.0 : lecture du panneau des notifications de Mobile connecté, composition
+  d’appels et envoi du texte exact via les commandes Windows identifiées sur la machine. Destinataire
+  contrôlé, brouillons préservés, aucun nouvel essai automatique après transmission. Les demandes simples
+  passent directement par les outils dans les canaux voix et chat. Correction du champ phone_number_id
+  confondu avec phone_number ; un contact à plusieurs numéros demande une précision. Documentation et
+  cartes « Ce que Jaris sait faire » corrigées. Validation : tests automatisés, clics du vrai composant
+  Options, lecture réelle et préparation sans envoi sur Windows. Appel abouti et livraison SMS non testés.

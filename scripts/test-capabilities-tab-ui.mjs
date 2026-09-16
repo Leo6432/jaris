@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { buildSync } from 'esbuild'
 import { globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -16,7 +16,7 @@ import test from 'node:test'
  */
 let chromium = null
 try {
-  ;({ chromium } = await import('/opt/node22/lib/node_modules/playwright/index.mjs'))
+  ;({ chromium } = await import(process.env.PLAYWRIGHT_MODULE || '/opt/node22/lib/node_modules/playwright/index.mjs'))
 } catch {
   chromium = null
 }
@@ -56,20 +56,7 @@ function buildPage() {
 
   writeFileSync(entryPath, ENTRY)
   try {
-    execFileSync(
-      'npx',
-      [
-        'esbuild',
-        entryPath,
-        '--bundle',
-        '--format=iife',
-        '--loader:.tsx=tsx',
-        '--jsx=automatic',
-        `--alias:@=${join(projectRoot, 'src')}`,
-        `--outfile=${bundlePath}`
-      ],
-      { cwd: projectRoot, stdio: 'pipe' }
-    )
+    buildSync({entryPoints:[entryPath], bundle:true, format:'iife', jsx:'automatic', alias:{'@':join(projectRoot,'src')}, outfile:bundlePath})
   } finally {
     rmSync(entryPath, { force: true })
   }
@@ -81,7 +68,7 @@ function buildPage() {
 
 async function withCapabilitiesTab(run) {
   const html = buildPage()
-  const browser = await chromium.launch()
+  const browser = await chromium.launch({channel: process.env.PLAYWRIGHT_CHANNEL || undefined})
   try {
     const page = await browser.newPage()
     await page.setViewportSize({ width: 1100, height: 900 })
@@ -103,7 +90,7 @@ test('tous les groupes et toutes les capacités du fichier partagé sont réelle
   // Compte les groupes (`title:` en tête d'objet du tableau CAPABILITIES) et les capacités (`title:` en tête
   // d'objet des sous-tableaux `items`) directement dans le SOURCE — pas d'import de .ts depuis ce script
   // .mjs, la transpilation vit dans les autres tests (test-capabilities.mjs s'en charge pour la logique).
-  const source = readFileSync(join(projectRoot, 'shared/capabilities.ts'), 'utf8')
+  const source = readFileSync(join(projectRoot, 'shared/capabilities.ts'), 'utf8').replace(/\r\n/g, '\n')
   const groupCount = [...source.matchAll(/\n {2}\{\n {4}title:/g)].length
   const itemCount = [...source.matchAll(/\n {6}\{\n {8}title:/g)].length
   const limitationCount = [...source.matchAll(/\n {8}limitation: true/g)].length

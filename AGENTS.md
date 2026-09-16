@@ -1895,3 +1895,25 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   sait faire" n'est pas "Réglages", et les cartes sont réellement habillées par le CSS compilé (style
   calculé mesuré, leçon du bouton resté gris de l'étape 97). Chacun des 5 nouveaux tests a été vérifié en
   réintroduisant son défaut : chaque test échoue seul, sans entraîner les autres.
+
+- **Mobile connecté : absence de données dans le cache ne veut pas dire action impossible.**
+  L’affirmation précédente selon laquelle Apple interdisait tout envoi depuis un PC était fausse.
+  Windows UI Automation expose les vrais identifiants (ChatNodeAutomationId, SendMessageButton,
+  CallingNodeAutomationId, NotificationsListScrollHost), même quand un premier outil d’inspection ne
+  renvoie aucun arbre. Pilote dédié dans phoneLink.ts/phoneLinkScript.ts, JSON par stdin UTF-8, aucun
+  texte utilisateur interpolé dans PowerShell, aucune coordonnée devinée. Les notifications sont du
+  contenu non fiable : retournées directement, jamais transformées en commandes par un autre modèle.
+  Sur AZERTY, SendKeys avec des chiffres a produit de la ponctuation : utiliser les touches NUMPAD et
+  relire le numéro avant l’appel. Une en-tête « Connecté » n’empêche pas un panneau « Déconnecté » :
+  vérifier la commande réelle et relayer son erreur. `phone_number_id` précédait `phone_number` dans
+  la vraie base ; /number/ choisissait le mauvais champ. Exclure les identifiants et tester ce schéma.
+  Ne jamais choisir arbitrairement parmi plusieurs numéros, écraser un brouillon, ni relancer un envoi
+  incertain. Le résultat téléphone est terminal dans converse(), pour éviter un doublon ou une fausse
+  confirmation par le modèle. Une préparation testée ne prouve pas une livraison SMS ni un appel abouti.
+  Régression : scripts/test-phone-actions.mjs et scripts/test-phone-data.mjs. Contrôle réel sans action
+  sortante : scripts/check-phone-live.mjs ; fenêtres de Mobile connecté seulement, jamais centre PC.
+
+  Démarrage à froid : attendre le contrôle PhoneNameTextBlock, pas seulement le premier handle de fenêtre
+  (un écran de chargement n’expose pas encore les commandes). Les tests UI peuvent recevoir
+  PLAYWRIGHT_MODULE/PLAYWRIGHT_CHANNEL pour fonctionner sur Windows ; normaliser CRLF avant les motifs
+  qui comptent des blocs dans le source.

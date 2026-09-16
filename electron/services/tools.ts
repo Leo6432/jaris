@@ -1,3 +1,4 @@
+import { phoneLinkAction } from './phoneLink'
 import type { OllamaTool } from './ollama'
 import { openApp } from './appLauncher'
 import { computerUseTask } from './computerUse'
@@ -11,6 +12,31 @@ import { getSystemStatsText, shutdownPc } from './systemControl'
 import { formatCalls, formatContacts, readRecentCalls, searchContacts } from './phoneData'
 
 export const TOOLS: OllamaTool[] = [
+  {
+    type: 'function', function: {
+      name: 'read_phone_notifications',
+      description: 'Lit les notifications affichées dans Mobile connecté, donc celles du téléphone. Aucun clic sur les notifications, aucun effacement.',
+      parameters: { type: 'object', properties: {}, required: [] }
+    }
+  },
+  {
+    type: 'function', function: {
+      name: 'call_phone',
+      description: 'Appelle un contact ou un numéro via Mobile connecté, uniquement sur demande explicite. Le destinataire doit être repris exactement de la demande. Ne jamais relancer automatiquement un appel.',
+      parameters: { type: 'object', properties: { recipient: { type: 'string', description: 'Nom exact ou numéro donné par la personne' } }, required: ['recipient'] }
+    }
+  },
+  {
+    type: 'function', function: {
+      name: 'send_phone_message',
+      description: 'Envoie un SMS/message texte via Mobile connecté, y compris avec un iPhone connecté. Exige une demande explicite, le destinataire et le texte exact. Ne jamais inventer de numéro ni relancer un envoi.',
+      parameters: { type: 'object', properties: {
+        recipient: { type: 'string', description: 'Contact ou numéro exact demandé' },
+        text: { type: 'string', description: 'Texte exact demandé, sans reformulation' }
+      }, required: ['recipient', 'text'] }
+    }
+  },
+
   {
     type: 'function',
     function: {
@@ -265,9 +291,8 @@ export const TOOLS: OllamaTool[] = [
       name: 'read_call_history',
       description:
         "Donne les derniers appels reçus et passés sur le téléphone de l'utilisateur (qui, quand, durée). " +
-        "À utiliser pour « qui m'a appelé ? », « j'ai raté un appel ? ». Ne donne PAS les messages : ils ne " +
-        "sont pas enregistrés sur l'ordinateur, et aucune application ne peut les lire ni en envoyer depuis " +
-        "un iPhone — dis-le franchement si l'utilisateur le demande.",
+        "À utiliser pour « qui m'a appelé ? », « j'ai raté un appel ? ». Lit uniquement l'historique. " +
+        "Pour appeler, envoyer un message ou lire les notifications, utilise les outils téléphone dédiés.",
       parameters: { type: 'object', properties: {}, required: [] }
     }
   },
@@ -312,10 +337,17 @@ export function createToolExecutor(
   onReminderFire: ReminderFireHandler,
   visionModel: string,
   onLog?: LogHandler,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  userPrompt = ''
 ) {
   return async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
     switch (name) {
+      case 'read_phone_notifications':
+        return phoneLinkAction('notifications', '', '', userPrompt, onLog, signal)
+      case 'call_phone':
+        return phoneLinkAction('call', String(args.recipient ?? ''), '', userPrompt, onLog, signal)
+      case 'send_phone_message':
+        return phoneLinkAction('send', String(args.recipient ?? ''), String(args.text ?? ''), userPrompt, onLog, signal)
       case 'open_app':
         return openApp(String(args.app_name ?? ''))
       case 'set_reminder':

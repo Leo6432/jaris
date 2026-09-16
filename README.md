@@ -1156,11 +1156,22 @@ lecture seule, sans rien envoyer sur internet :
 Options → Téléphone permet de faire la même chose à la main, d'ouvrir Mobile
 connecté pour l'appairage, et de voir ce qu'il garde sur le PC.
 
-**Ce qui n'est pas possible, et pourquoi** : les messages. Mobile connecté les
-affiche dans sa fenêtre mais ne les écrit pas sur le disque — constaté sur la
-machine de Léo, qui n'a que `calling.db` et `contacts.db`. Et en envoyer est
-interdit par Apple à toute application sur ordinateur. Jaris le dit franchement
-plutôt que de faire semblant.
+**Notifications, appels et messages (v0.12.0)** : le cache ne suffit pas, mais la fenêtre de
+Mobile connecté expose ses commandes à Windows. Jaris peut maintenant utiliser :
+
+- « Lis mes notifications » : lit le panneau du téléphone, sans effacer les notifications.
+- « Appelle maman » : résout un contact unique et vérifie le numéro composé avant l’appel.
+- « Envoie un message à maman : Bonjour » : conserve le texte exact et vérifie le destinataire.
+
+Si un contact a plusieurs numéros, redire la demande avec le numéro choisi. Le téléphone doit
+rester connecté en Bluetooth ; Mobile connecté peut passer au premier plan. Un brouillon existant
+n’est pas écrasé. Une commande transmise ne prouve pas la réception du SMS ou la connexion de l’appel.
+Aucune relance automatique après une transmission incertaine. Cette intégration ne dépend pas du
+modèle de vision. L’ancienne affirmation d’une interdiction générale par Apple était erronée :
+[Microsoft documente l’envoi de messages avec Mobile connecté](https://support.microsoft.com/en-us/windows/apps/phonelink/send-and-receive-text-messages-from-your-pc).
+
+Validation locale : lecture de notifications et préparation d’appel/message sur Windows, sans envoi
+ni appel réel. `node scripts/check-phone-live.mjs` reproduit ces essais avec un numéro factice.
 
 **Comment on en est arrivé là** (trois tentatives, gardées parce que la leçon
 sert) : KDE Connect d'abord, retiré car sur iPhone il ne peut ni lire les
