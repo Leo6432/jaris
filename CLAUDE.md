@@ -1994,3 +1994,34 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   téléchargement échoué, aucun téléchargement muet dans tout le dépôt, et dans un vrai navigateur : le libellé
   nomme Ollama et sa taille, et aucune promesse de fermeture de Jaris). Chaque assertion a été vérifiée en
   réintroduisant son défaut.
+
+- **"je voit des fois gemma 4 des fois pas fait tes analyse de ton cote" (Léo, étape 113) — après un prompt
+  de recherche donné à une IA externe (réponses jugées incohérentes d'une fois sur l'autre), Léo a demandé
+  une vraie analyse indépendante plutôt qu'un relais d'une IA tierce.** Revue complète des 5 listes de
+  candidats (hardwareScan.ts) faite directement ici (recherches vérifiées, pas prises au mot d'un agrégateur).
+  Confirmé : aucune nouvelle génération majeure depuis la dernière revue — pas de Qwen4 stable (Qwen3.8-
+  Flash-Next reste un aperçu d'architecture MLX uniquement, déjà écarté), pas de Gemma 5 (Gemma4 du 2 avril
+  2026 reste la dernière), pas de Granite 4.3 (Granite4.2 du 25 août 2026 reste la dernière) — les 5 listes
+  restent à jour sur les familles principales.
+  Deux trouvailles concrètes, vérifiées sur ollama.com/library avant tout changement :
+  1. **`mistral-small:24b` (palier Puissant) n'était PAS ce que son propre commentaire affirmait.** Une revue
+     précédente avait conclu que "3.1"/"3.2" n'existaient pas sous ce nom sur Ollama — FAUX, revérifié :
+     `mistral-small3.2:24b` est un tag officiel distinct (15 Go), qui améliore explicitement l'appel
+     d'outils par rapport à l'ancienne Mistral Small 3/2501 utilisée jusqu'ici (32K de contexte, texte seul)
+     et ajoute la vision + 128K de contexte. Remplacé partout (hardwareScan.ts, benchmark-models.mjs,
+     verified-tool-scores.md) — l'ancien score 6/6 mesuré pour l'ancien tag a été RETIRÉ plutôt que recopié
+     sur le nouveau, jamais mesuré : `benchmark-models.mjs` le testera pour de vrai au prochain "Lancer
+     l'analyse" sur la machine de Léo.
+  2. **`glm-4.7-flash:q4_K_M` (palier Puissant) a un vrai 6/6 mesuré sur la machine de Léo, mais plusieurs
+     bugs OFFICIELS non résolus** (github.com/ollama/ollama, issues #13840/#13820/#14273/#16497, de janvier
+     à juin 2026) montrent l'appel d'outils qui casse en cours de conversation avec ce modèle précis sur
+     Ollama — même famille de risque que DeepSeek-R1, déjà exclu pour la même raison plus haut dans ce
+     fichier. Cause non tranchée avec certitude (vrai test local positif contre bugs externes documentés) :
+     posé à Léo via une question à choix simple plutôt que décidé seul. Gardé tel quel sur sa décision — le
+     vrai test de Jaris est passé 6/6, aucun signalement réel ici.
+  **Leçon générale : une conclusion notée dans un commentaire ("X n'existe pas sous ce nom") peut devenir
+  fausse avec le temps** (un tag ajouté depuis à la bibliothèque Ollama, même si la conclusion était correcte
+  au moment où elle a été écrite) — la revérifier directement plutôt que de la recopier comme acquise lors
+  d'une revue ultérieure.
+  Régression : `npm test` (297 tests, aucun comportement testable ne change — uniquement un nom de modèle
+  candidat et une ligne de score retirée).

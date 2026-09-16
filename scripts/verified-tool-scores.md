@@ -50,7 +50,6 @@ lignes) — même convention que la colonne "Fiabilité" de `benchmark-results.m
 | gemma4:26b | 6/6 |
 | gpt-oss:20b | 6/6 |
 | command-r:35b | 3/6 |
-| mistral-small:24b | 6/6 |
 | glm-4.7-flash:q4_K_M | 6/6 |
 | qwen3.5:4b | 6/6 |
 | qwen3.6:35b | 6/6 |

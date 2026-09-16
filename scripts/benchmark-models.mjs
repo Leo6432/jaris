@@ -116,13 +116,13 @@ const RAM_SAFETY_MARGIN_GB = 8
  * tournerait de toute façon jamais correctement.
  *
  * Les 9 derniers (qwen3.5:35b/27b, qwen3.8:27b, qwen3.6:27b, gemma4:26b, gpt-oss:20b, command-r:35b,
- * mistral-small:24b, glm-4.7-flash:q4_K_M) sont les candidats du palier Puissant (LARGE_CANDIDATES dans
+ * mistral-small3.2:24b, glm-4.7-flash:q4_K_M) sont les candidats du palier Puissant (LARGE_CANDIDATES dans
  * hardwareScan.ts) au-delà de la VRAM disponible sur une machine comme celle de Léo — ajoutés à la demande
  * explicite de Léo après avoir vu "Puissant" retomber sur un petit modèle faute de place : sur cette machine,
  * réserver 4,5 Go de VRAM en permanence pour le STT (voir STT_RESERVED_GB dans hardwareScan.ts) ne laissait
  * jamais assez de place pour un vrai grand modèle. Certains sont MoE (gemma4:26b, gpt-oss:20b probablement
  * glm-4.7-flash) et restent rapides même en débordant sur la RAM ; les autres sont denses (qwen3.5:35b/27b,
- * qwen3.8:27b, qwen3.6:27b, command-r:35b, mistral-small:24b) et seront NETTEMENT plus lents une fois
+ * qwen3.8:27b, qwen3.6:27b, command-r:35b, mistral-small3.2:24b) et seront NETTEMENT plus lents une fois
  * débordés — accepté en connaissance de cause, mieux vaut un vrai grand modèle plus lent qu'un petit modèle
  * rapide pour les questions qui demandent explicitement une réflexion poussée.
  */
@@ -141,7 +141,7 @@ const RAM_OFFLOAD_MODELS = new Set([
   'gemma4:26b',
   'gpt-oss:20b',
   'command-r:35b',
-  'mistral-small:24b',
+  'mistral-small3.2:24b',
   'glm-4.7-flash:q4_K_M'
 ])
 
@@ -210,7 +210,7 @@ const MODELS = [
   'gemma4:26b',
   'gpt-oss:20b',
   'command-r:35b',
-  'mistral-small:24b',
+  'mistral-small3.2:24b',
   'glm-4.7-flash:q4_K_M'
   // Les candidats du palier "Code" (qwen2.5-coder:7b/32b, qwen3.6:35b-a3b, qwen3-coder:30b,
   // north-mini-code-1.0, devstral-small-2:24b) NE sont PAS
@@ -294,7 +294,7 @@ const MODEL_SIZE_HINTS = {
   'gemma4:26b': 19,
   'gpt-oss:20b': 14,
   'command-r:35b': 19,
-  'mistral-small:24b': 14,
+  'mistral-small3.2:24b': 15,
   'glm-4.7-flash:q4_K_M': 19
 }
 
@@ -342,7 +342,7 @@ const LARGE_TIER_MODELS = new Set([
   'gemma4:26b',
   'gpt-oss:20b',
   'command-r:35b',
-  'mistral-small:24b',
+  'mistral-small3.2:24b',
   'glm-4.7-flash:q4_K_M',
   // hardwareScan.ts reprend aussi ces 4 dans LARGE_CANDIDATES comme repli si rien de plus gros ne rentre,
   // ce qui les rend multi-paliers (voir isSafeToPruneEarly ci-dessous) : présents ici pour que

@@ -119,11 +119,22 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   // Command R (Cohere) : orienté RAG/tool-use long contexte (128K), tools confirmés. Vérifié sur
   // ollama.com/library/command-r (19 Go).
   { model: 'command-r:35b', vramGb: 19 },
-  // Mistral Small : le PDF mentionnait "3.1"/"3.2", des versions qui n'existent pas sous ce nom sur Ollama
-  // — le tag réel actuel est mistral-small:24b (vérifié, 14 Go), function calling natif.
-  { model: 'mistral-small:24b', vramGb: 14 },
+  // Mistral Small : la conclusion précédente ("3.1"/"3.2" n'existent pas sous ce nom sur Ollama") était
+  // FAUSSE — vérifiée à nouveau sur ollama.com/library/mistral-small3.2 (revue des 5 listes de candidats,
+  // demande de Léo "regarde lm studio... fait tes analyse de ton coté") : mistral-small3.2:24b est un tag
+  // officiel distinct, 15 Go, qui améliore explicitement l'appel d'outils par rapport à la version utilisée
+  // jusqu'ici (`mistral-small:24b`, en réalité l'ancienne Mistral Small 3/2501, jamais versionnée 3.1/3.2,
+  // 32K de contexte seulement, texte uniquement) et ajoute la vision + un contexte de 128K. Remplacé : aucune
+  // raison de garder l'ancienne version une fois la bonne trouvée.
+  { model: 'mistral-small3.2:24b', vramGb: 15 },
   // GLM-4.7-Flash (Zhipu/Z.ai) : plus récent que GLM-4.6V-Flash déjà en Vision (2 mois vs plus ancien),
   // tools+thinking, texte seul. Vérifié sur ollama.com/library/glm-4.7-flash/tags (tag q4_K_M, 19 Go).
+  // Réexaminé (même revue que Mistral Small ci-dessus) : plusieurs bugs OFFICIELS (github.com/ollama/ollama,
+  // issues #13840/#13820/#14273/#16497, de janvier à juin 2026, jamais dits résolus) montrent que l'appel
+  // d'outils peut casser en cours de conversation avec CE modèle précis sur Ollama — même famille de risque
+  // que DeepSeek-R1 (déjà exclu plus haut pour la même raison). Léo, informé, a choisi de le garder : le vrai
+  // test de Jaris est passé 6/6 sur sa machine (verified-tool-scores.md), aucun signalement réel ici — à
+  // retirer si un vrai échec d'appel d'outils avec ce modèle est un jour rapporté en usage réel.
   { model: 'glm-4.7-flash:q4_K_M', vramGb: 19 },
   { model: 'qwen3.5:9b', vramGb: 6.6 },
   { model: 'qwen3.5:4b', vramGb: 3.4 },
@@ -153,7 +164,7 @@ const LARGE_RAM_OFFLOAD_MODELS = new Set([
   'gemma4:26b',
   'gpt-oss:20b',
   'command-r:35b',
-  'mistral-small:24b',
+  'mistral-small3.2:24b',
   'glm-4.7-flash:q4_K_M',
   'qwen3.6:35b-a3b',
   'qwen3-coder:30b',

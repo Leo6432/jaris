@@ -968,3 +968,11 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   pendant une mise à jour d'Ollama, Jaris ne se ferme pas et l'installeur attend un clic — la barre partagée
   annonçait le contraire. Régression : `npm test` (285 tests), dont un garde qui échoue si un futur
   téléchargement repart sans avancement.
+- ✅ Étape 113 (v0.12.2) — Léo a demandé une vraie analyse indépendante des modèles candidats plutôt qu'un
+  relais d'IA externe (réponses jugées incohérentes d'une fois sur l'autre). Revue des 5 listes : aucune
+  nouvelle génération majeure (pas de Qwen4/Gemma5/Granite4.3 publiés). `mistral-small:24b` remplacé par
+  `mistral-small3.2:24b` (tag officiel distinct, meilleur appel d'outils, vision, contexte 128K) — la
+  conclusion précédente du fichier ("ces versions n'existent pas sur Ollama") était fausse, corrigée après
+  revérification directe. `glm-4.7-flash:q4_K_M` gardé après vérification d'un vrai bug Ollama documenté
+  (l'appel d'outils peut casser en cours de conversation), sur décision explicite de Léo. Régression :
+  `npm test` (297 tests).
