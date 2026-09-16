@@ -8,6 +8,7 @@ import { didAppLaunch, openApp } from './appLauncher'
 import { downloadToFile } from './download'
 import { resourcesRoot } from '../paths'
 import { formatBytes } from '../../shared/formatBytes'
+import type { UpdateProgress } from '../../shared/ipc'
 
 const execAsync = promisify(exec)
 
@@ -215,6 +216,12 @@ async function restartOllamaApp(): Promise<boolean> {
 }
 
 const OLLAMA_INSTALLER_URL = 'https://ollama.com/download/OllamaSetup.exe'
+
+/**
+ * Avancement remonté pendant la mise à jour d'Ollama (étape 112) — `target` est ajouté par main.ts, qui seul
+ * sait sur quel canal l'envoyer : ce module n'a pas à connaître la forme exacte du message IPC.
+ */
+export type OllamaUpdateProgress = (progress: Omit<UpdateProgress, 'target'>) => void
 /** Lien stable officiel documenté par Docker (docs.docker.com/desktop/setup/install/windows-install) — toujours la dernière version stable pour Windows/amd64. */
 const DOCKER_DESKTOP_INSTALLER_URL = 'https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe'
 
@@ -228,14 +235,22 @@ const DOCKER_DESKTOP_INSTALLER_URL = 'https://desktop.docker.com/win/main/amd64/
  * l'utilisateur clique "Suivant"/"Installer" lui-même — plus rapide que d'aller le chercher soi-même dans
  * un navigateur, mais pas 100% automatique jusqu'au bout comme restartOllamaApp quand elle marche.
  */
-async function downloadAndLaunchOfficialInstaller(): Promise<boolean> {
+async function downloadAndLaunchOfficialInstaller(onProgress?: OllamaUpdateProgress): Promise<boolean> {
   try {
     // OllamaSetup.exe pèse 1,5 Go (mesuré pour de vrai). L'ancien plafond de 30 secondes sur le
     // téléchargement ENTIER exigeait 400 Mbit/s soutenus : cette méthode ne pouvait donc JAMAIS aboutir,
     // et "Mettre à jour" retombait systématiquement sur winget sans que rien ne l'explique. downloadToFile
     // n'a plus de délai total du tout — seule une connexion vraiment muette pendant une minute abandonne.
+    //
+    // `onProgress` (étape 112) : 1,5 Go, c'est de loin le plus gros téléchargement de Jaris — plusieurs
+    // minutes sur une connexion ordinaire. Sans lui, le bouton restait figé sur "Mise à jour en cours…"
+    // tout ce temps ("ça bloque depuis 5m", Léo), impossible à distinguer d'un plantage. C'était le SEUL
+    // des quatre appels à downloadToFile du dépôt à ne rien remonter, alors que c'est le plus long.
     const installerPath = join(tmpdir(), 'JarisOllamaSetup.exe')
-    await downloadToFile(OLLAMA_INSTALLER_URL, installerPath)
+    await downloadToFile(OLLAMA_INSTALLER_URL, installerPath, {
+      onProgress: (progress) => onProgress?.({ phase: 'download', ...progress })
+    })
+    onProgress?.({ phase: 'install', receivedBytes: 0, totalBytes: null, percent: 100 })
     // windowsHide: false ici, volontairement, contrairement au reste du fichier : l'utilisateur DOIT voir
     // et pouvoir interagir avec cette fenêtre pour terminer l'installation.
     spawn(installerPath, [], { detached: true, stdio: 'ignore', windowsHide: false })
@@ -325,9 +340,9 @@ export async function installOllamaSilently(onProgress: (message: string, percen
  *    (élévation UAC) reste possible ici — ni winget ni Jaris ne peuvent la contourner, et il ne faut pas
  *    essayer.
  */
-export async function updateOllama(): Promise<{ success: boolean; message: string }> {
+export async function updateOllama(onProgress?: OllamaUpdateProgress): Promise<{ success: boolean; message: string }> {
   try {
-    return await updateOllamaInner()
+    return await updateOllamaInner(onProgress)
   } catch (err) {
     // Filet de sécurité final : une exception qui remonte jusqu'ici sans ce try/catch traverserait
     // ipcMain.handle telle quelle jusqu'au renderer, où handleUpdateOllama (OptionsMenu.tsx) n'a pas de
@@ -336,7 +351,7 @@ export async function updateOllama(): Promise<{ success: boolean; message: strin
   }
 }
 
-async function updateOllamaInner(): Promise<{ success: boolean; message: string }> {
+async function updateOllamaInner(onProgress?: OllamaUpdateProgress): Promise<{ success: boolean; message: string }> {
   const restarted = await restartOllamaApp()
   if (restarted) {
     // Attend que le serveur revienne avant de reverifier : quelques secondes le temps qu'Ollama redémarre
@@ -353,7 +368,7 @@ async function updateOllamaInner(): Promise<{ success: boolean; message: string 
     // garantie de fonctionner, pas juste un message d'erreur.
   }
 
-  if (await downloadAndLaunchOfficialInstaller()) {
+  if (await downloadAndLaunchOfficialInstaller(onProgress)) {
     return {
       success: true,
       message:

@@ -1954,3 +1954,43 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   (un écran de chargement n’expose pas encore les commandes). Les tests UI peuvent recevoir
   PLAYWRIGHT_MODULE/PLAYWRIGHT_CHANNEL pour fonctionner sur Windows ; normaliser CRLF avant les motifs
   qui comptent des blocs dans le source.
+- **"je clique sur mis a jour de ollama [...] ça bloque depuis 5m et je fait clique droit sur ollama et je
+  voit aucune mis a jour" (Léo, étape 112).** Rien n'était bloqué : Jaris téléchargeait l'installeur officiel
+  d'Ollama — 1,5 Go (mesuré) — et le bouton restait figé sur "Mise à jour en cours…" pendant tout ce temps.
+  **Cause trouvée en comparant les appelants plutôt qu'en devinant** : `grep` des quatre appels à
+  `downloadToFile` du dépôt (mise à jour de Jaris, installation silencieuse d'Ollama au premier lancement,
+  Docker Desktop, et celui-ci) — le chemin du bouton "Mettre à jour" d'Ollama était le SEUL à ne passer aucun
+  `onProgress`, alors que c'est de loin le plus lourd : 15 fois l'installeur de Jaris, pour lequel l'étape 98
+  avait justement ajouté une barre parce que 98 Mo en silence étaient déjà insupportables. La leçon de
+  l'étape 98 ("toute action qui peut durer plus de quelques secondes doit dire où elle en est") avait donc
+  été appliquée à un seul des deux boutons de mise à jour, à côté l'un de l'autre dans le même écran.
+  **Leçon générale : quand un correctif règle un défaut sur UN appelant d'une fonction partagée, lister tous
+  les autres appelants avant de refermer — le même défaut y dort souvent, et c'est justement le plus gros qui
+  avait été oublié ici.** C'est vérifié en permanence maintenant : un test échoue si un `downloadToFile` du
+  dépôt repart sans `onProgress`.
+  **Le canal d'avancement est PARTAGÉ, pas dupliqué** (`updateProgress` + `AppUpdateProgress`, déjà écrits
+  pour Jaris) : un champ `target: 'jaris' | 'ollama'` distingue les deux, et chaque écran ne garde que ce qui
+  le concerne — sans ce tri, télécharger Ollama aurait fait avancer la barre de l'onglet "Mise à jour" de
+  Jaris, qui ne télécharge pourtant rien.
+  **Deux affirmations fausses attrapées sur une CAPTURE du rendu réel, pas en relecture** : (1) la barre
+  partagée affiche une consigne en bas, écrite en dur pour Jaris — "Ne ferme pas Jaris : il se ferme et se
+  rouvre tout seul à la fin" s'affichait donc pendant une mise à jour d'OLLAMA, qui ne ferme jamais Jaris ;
+  (2) le message de fin promettait la même reprise automatique, alors que l'installeur d'Ollama n'a AUCUN
+  mode silencieux documenté : il ouvre sa fenêtre et attend un clic. Les deux textes dépendent maintenant de
+  la cible. **Piège dans mon PROPRE premier correctif** : j'avais lu la cible dans `progress`, qui vaut `null`
+  tant qu'aucun octet n'est arrivé — la consigne de Jaris se serait donc affichée pendant les premières
+  secondes, exactement quand on la lit. La cible est passée en prop par l'écran, qui sait toujours ce qu'il
+  met à jour.
+  **Piège rencontré en écrivant le test, à garder en tête pour tout mock de `spawn`** : `updateOllama` retombe
+  sur winget en dernier recours et attend une promesse que seuls ses évènements `'error'`/`'close'` résolvent
+  — un faux process qui n'émet jamais rien laisse cette promesse pendante pour toujours, et `node --test`
+  s'arrête sur "Promise resolution is still pending" sans dire quel appel l'a causé.
+  **Ce qui n'est PAS corrigé ici, faute de pouvoir le vérifier** : pourquoi le clic droit sur l'icône d'Ollama
+  ne propose aucune mise à jour chez Léo. C'est cohérent avec ce que fait Jaris (il ne trouve rien de prêt en
+  arrière-plan, donc il télécharge le vrai installeur), mais ça dépend du réglage "Auto-download updates"
+  d'Ollama lui-même, invérifiable d'ici.
+  Régression : `node --test scripts/test-ollama-update-progress.mjs scripts/test-update-progress-ui.mjs`
+  (avancement réellement transmis de bout en bout avec des modules simulés, aucun "installation lancée" sur un
+  téléchargement échoué, aucun téléchargement muet dans tout le dépôt, et dans un vrai navigateur : le libellé
+  nomme Ollama et sa taille, et aucune promesse de fermeture de Jaris). Chaque assertion a été vérifiée en
+  réintroduisant son défaut.

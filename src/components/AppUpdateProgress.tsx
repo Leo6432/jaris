@@ -14,7 +14,16 @@ import type { UpdateProgress } from '../../shared/ipc'
  * vérifiable dans un vrai navigateur avec le vrai CSS compilé : c'est la seule façon de prouver que la
  * barre avance vraiment, une règle CSS sans effet ne produisant aucune erreur.
  */
-export default function AppUpdateProgress({ progress }: { progress: UpdateProgress | null }): JSX.Element {
+export default function AppUpdateProgress({
+  progress,
+  target = 'jaris'
+}: {
+  progress: UpdateProgress | null
+  /** Ce qui se met à jour. Passé par l'écran plutôt que lu dans `progress` : celui-ci vaut `null` pendant
+   *  les premières secondes (aucun octet reçu), et la consigne du bas serait alors celle de Jaris — donc
+   *  fausse — juste au moment où l'utilisateur la lit pour la première fois. */
+  target?: UpdateProgress['target']
+}): JSX.Element {
   const percent = progress?.percent ?? null
 
   return (
@@ -27,8 +36,16 @@ export default function AppUpdateProgress({ progress }: { progress: UpdateProgre
           <div className="options-menu__progress-bar-fill" style={{ width: `${percent}%` }} />
         </div>
       )}
+      {/* Deux consignes différentes, jamais interchangeables (étape 112) : Jaris se ferme et se rouvre tout
+          seul, alors qu'une mise à jour d'OLLAMA ne ferme jamais Jaris. Laisser la phrase de Jaris s'afficher
+          pendant la mise à jour d'Ollama annonçait une fermeture qui n'arrive pas — repéré sur une capture du
+          rendu réel, pas en relecture. */}
       <div className="options-menu__progress-sub">
-        <span>Ne ferme pas Jaris : il se ferme et se rouvre tout seul à la fin.</span>
+        <span>
+          {target === 'ollama'
+            ? "Laisse Jaris ouvert : c'est lui qui télécharge, et Ollama est un gros fichier (plusieurs minutes)."
+            : 'Ne ferme pas Jaris : il se ferme et se rouvre tout seul à la fin.'}
+        </span>
       </div>
     </div>
   )

@@ -162,7 +162,9 @@ export async function getReleaseHistory(): Promise<ReleaseHistoryEntry[]> {
  */
 export async function updateApp(
   onBeforeQuit?: () => void,
-  onProgress?: (progress: UpdateProgress) => void
+  // `target` est ajouté par main.ts, seul à savoir sur quel canal ça part (même convention que
+  // dependencyServices pour Ollama depuis l'étape 112) : ce module ne décrit que son propre avancement.
+  onProgress?: (progress: Omit<UpdateProgress, 'target'>) => void
 ): Promise<{ success: boolean; message: string }> {
   if (!cachedStatus?.outdated) {
     return { success: false, message: 'Aucune mise à jour disponible.' }

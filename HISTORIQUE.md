@@ -960,3 +960,11 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   confondu avec phone_number ; un contact à plusieurs numéros demande une précision. Documentation et
   cartes « Ce que Jaris sait faire » corrigées. Validation : tests automatisés, clics du vrai composant
   Options, lecture réelle et préparation sans envoi sur Windows. Appel abouti et livraison SMS non testés.
+- ✅ Étape 112 (v0.12.1) — Léo : "je clique sur mis a jour de ollama... ça bloque depuis 5m". Rien n'était
+  bloqué : Jaris téléchargeait l'installeur d'Ollama (1,5 Go) sans aucun signe de vie, le bouton restant figé
+  sur "Mise à jour en cours…" pendant plusieurs minutes. C'était le seul des quatre téléchargements de Jaris
+  à ne rien afficher, alors que c'est de loin le plus long. Il montre désormais la même barre de progression
+  que la mise à jour de Jaris (pourcentage, taille reçue sur 1,5 Go), avec deux textes corrigés au passage :
+  pendant une mise à jour d'Ollama, Jaris ne se ferme pas et l'installeur attend un clic — la barre partagée
+  annonçait le contraire. Régression : `npm test` (285 tests), dont un garde qui échoue si un futur
+  téléchargement repart sans avancement.

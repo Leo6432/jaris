@@ -507,7 +507,12 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle(IPC_CHANNELS.getModelOverview, () => getModelOverview())
   ipcMain.handle(IPC_CHANNELS.getOllamaVersionStatus, () => getOllamaVersionStatus())
-  ipcMain.handle(IPC_CHANNELS.updateOllama, () => updateOllama())
+  // Même canal d'avancement que la mise à jour de Jaris, distingué par `target` (étape 112) : l'installeur
+  // d'Ollama pèse 1,5 Go, soit plusieurs minutes pendant lesquelles le bouton restait muet ("ça bloque
+  // depuis 5m", Léo).
+  ipcMain.handle(IPC_CHANNELS.updateOllama, () =>
+    updateOllama((progress) => broadcast(IPC_CHANNELS.updateProgress, { target: 'ollama', ...progress }))
+  )
   ipcMain.handle(IPC_CHANNELS.getAppVersionStatus, () => getAppVersionStatus())
   // `quitting = true` seulement juste avant que updateApp() n'appelle réellement app.quit() (jamais avant, y
   // compris en cas d'échec du téléchargement) : sinon fermer la fenêtre principale plus tard dans la session
@@ -519,7 +524,7 @@ app.whenReady().then(async () => {
       },
       // Avancement du téléchargement (étape 98) : l'installeur pèse ~98 Mo, soit plusieurs minutes sur une
       // connexion modeste — sans ce retour, la fenêtre restait figée sur "Mise à jour en cours…".
-      (progress) => broadcast(IPC_CHANNELS.updateProgress, progress)
+      (progress) => broadcast(IPC_CHANNELS.updateProgress, { target: 'jaris', ...progress })
     )
   )
   ipcMain.handle(IPC_CHANNELS.getAppVersion, () => getInstalledVersion())

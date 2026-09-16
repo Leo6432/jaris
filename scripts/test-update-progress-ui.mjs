@@ -33,7 +33,7 @@ import { createRoot } from 'react-dom/client'
 import AppUpdateProgress from './src/components/AppUpdateProgress'
 
 const root = createRoot(document.getElementById('root'))
-window.__render = (progress) => root.render(<AppUpdateProgress progress={progress} />)
+window.__render = (progress, target) => root.render(<AppUpdateProgress progress={progress} target={target} />)
 window.__render(null)
 `
 
@@ -143,7 +143,7 @@ test("la barre est bien habillée par le CSS de Jaris, pas laissée au style par
 test('chaque étape est annoncée en clair, et rien ne prétend avancer avant le premier octet', options, async () => {
   await withPage(async (page) => {
     // Avant le premier octet : surtout pas "0 %", qui se lit comme un blocage.
-    assert.match(await page.textContent('.options-menu__progress-label'), /Connexion à GitHub/)
+    assert.match(await page.textContent('.options-menu__progress-label'), /Connexion au serveur/)
     assert.equal(await page.locator('.options-menu__progress-bar').count(), 0)
 
     await page.evaluate(() =>
@@ -160,4 +160,35 @@ test('chaque étape est annoncée en clair, et rien ne prétend avancer avant le
 
 test.after(() => {
   if (outDir) rmSync(outDir, { recursive: true, force: true })
+})
+
+
+test("une mise à jour d'Ollama ne promet jamais que Jaris va se fermer", options, async () => {
+  // Défaut réel trouvé sur une capture du rendu (étape 112) : la barre était partagée avec la mise à jour de
+  // Jaris, donc elle affichait "Ne ferme pas Jaris : il se ferme et se rouvre tout seul à la fin" pendant une
+  // mise à jour d'OLLAMA — une fermeture qui n'arrive jamais. Même famille que les fausses confirmations
+  // déjà corrigées plusieurs fois dans ce projet.
+  await withPage(async (page) => {
+    // Dès le premier instant, AVANT le moindre octet : c'est justement là que la consigne est lue.
+    await page.evaluate(() => window.__render(null, 'ollama'))
+    const avant = await page.textContent('.options-menu__progress-sub')
+    assert.doesNotMatch(avant, /se ferme/, `consigne de Jaris affichée pour Ollama : ${avant.trim()}`)
+
+    await page.evaluate(() =>
+      window.__render({ target: 'ollama', phase: 'download', receivedBytes: 805_306_368, totalBytes: 1_610_612_736, percent: 50 }, 'ollama')
+    )
+    const label = await page.textContent('.options-menu__progress-label')
+    assert.match(label, /Ollama/, "le libellé ne dit pas que c'est Ollama qui se télécharge")
+    assert.match(label, /1,5 Go/, "la taille réelle (1,5 Go) n'est pas annoncée")
+    assert.doesNotMatch(await page.textContent('.options-menu__progress-sub'), /se ferme/)
+
+    // Fin : l'installeur d'Ollama n'a aucun mode silencieux, il attend un clic — ne jamais annoncer
+    // une fin automatique.
+    await page.evaluate(() =>
+      window.__render({ target: 'ollama', phase: 'install', receivedBytes: 0, totalBytes: null, percent: 100 }, 'ollama')
+    )
+    const fin = await page.textContent('.options-menu__progress-label')
+    assert.match(fin, /fenêtre/, `la fin ne dit pas qu'une fenêtre attend un clic : ${fin.trim()}`)
+    assert.doesNotMatch(fin, /se rouvre tout seul/, 'la fin promet une reprise automatique qui ne vient pas')
+  })
 })

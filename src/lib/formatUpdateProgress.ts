@@ -12,12 +12,19 @@ import type { UpdateProgress } from '../../shared/ipc'
  * croire à un blocage alors que la connexion au serveur est simplement en train de s'établir.
  */
 export function formatUpdateProgress(progress: UpdateProgress | null): string {
-  if (!progress) return 'Connexion à GitHub…'
+  if (!progress) return 'Connexion au serveur de téléchargement…'
   if (progress.phase === 'install') {
-    return 'Téléchargement terminé. Jaris se ferme, puis se rouvre tout seul une fois la mise à jour installée.'
+    // Deux fins très différentes, à ne jamais confondre : Jaris se ferme et se rouvre tout seul, alors que
+    // l'installeur d'Ollama n'a AUCUN mode silencieux documenté — il ouvre sa propre fenêtre et attend un
+    // clic. Afficher "ça se termine tout seul" dans ce cas serait une promesse fausse, et Léo attendrait
+    // devant un écran qui ne bougera jamais (même famille que les fausses confirmations déjà corrigées).
+    return progress.target === 'ollama'
+      ? "Téléchargement terminé. Termine l'installation dans la fenêtre d'Ollama qui vient de s'ouvrir."
+      : 'Téléchargement terminé. Jaris se ferme, puis se rouvre tout seul une fois la mise à jour installée.'
   }
+  const quoi = progress.target === 'ollama' ? "Téléchargement d'Ollama" : 'Téléchargement'
   if (progress.totalBytes === null) {
-    return `Téléchargement : ${formatBytes(progress.receivedBytes)} reçus…`
+    return `${quoi} : ${formatBytes(progress.receivedBytes)} reçus…`
   }
-  return `Téléchargement : ${progress.percent} % — ${formatBytes(progress.receivedBytes)} sur ${formatBytes(progress.totalBytes)}`
+  return `${quoi} : ${progress.percent} % — ${formatBytes(progress.receivedBytes)} sur ${formatBytes(progress.totalBytes)}`
 }

@@ -131,6 +131,7 @@ export default function OptionsMenu(): JSX.Element {
   const [appUpdateMessage, setAppUpdateMessage] = useState<string | null>(null)
   /** Avancement du téléchargement en cours (étape 98) — `null` tant qu'aucun octet n'est encore arrivé. */
   const [updateProgress, setUpdateProgress] = useState<UpdateProgress | null>(null)
+  const [ollamaUpdateProgress, setOllamaUpdateProgress] = useState<UpdateProgress | null>(null)
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [updateCheckMessage, setUpdateCheckMessage] = useState<string | null>(null)
   const [modelsLocation, setModelsLocation] = useState<ModelsLocationStatus | null>(null)
@@ -228,8 +229,14 @@ export default function OptionsMenu(): JSX.Element {
   // Même raisonnement pour le téléchargement de la mise à jour (étape 98) : abonné une seule fois au
   // montage, pas seulement pendant que l'onglet "Mise à jour" est affiché — le téléchargement continue si
   // l'utilisateur change d'onglet entre-temps, et l'avancement doit être à jour quand il revient.
+  // Les deux boutons ("Mettre à jour" de Jaris et celui d'Ollama) partagent ce canal depuis l'étape 112 :
+  // chacun ne garde QUE les avancements qui le concernent. Sans ce tri, télécharger l'installeur d'Ollama
+  // ferait avancer la barre de l'onglet "Mise à jour" de Jaris, qui ne télécharge pourtant rien du tout.
   useEffect(() => {
-    return window.jaris.onUpdateProgress(setUpdateProgress)
+    return window.jaris.onUpdateProgress((progress) => {
+      if (progress.target === 'ollama') setOllamaUpdateProgress(progress)
+      else setUpdateProgress(progress)
+    })
   }, [])
 
   const handleChooseModelsLocation = (): void => {
@@ -386,6 +393,9 @@ export default function OptionsMenu(): JSX.Element {
   const handleUpdateOllama = (): void => {
     setUpdatingOllama(true)
     setOllamaUpdateMessage(null)
+    // Remis à zéro à chaque tentative, comme pour Jaris : sinon un nouvel essai repartirait visuellement du
+    // pourcentage atteint la fois précédente, alors que le téléchargement, lui, recommence du début.
+    setOllamaUpdateProgress(null)
     window.jaris
       .updateOllama()
       .then(({ message }) => {
@@ -949,9 +959,15 @@ export default function OptionsMenu(): JSX.Element {
                   </a>
                 </div>
                 {updatingOllama && (
-                  <p className="options-menu__ollama-update-note">
-                    Une fenêtre Windows peut demander une autorisation (élévation) — accepte-la pour continuer.
-                  </p>
+                  <>
+                    {/* L'installeur d'Ollama pèse 1,5 Go : plusieurs minutes pendant lesquelles il ne se
+                        passait rien à l'écran ("ça bloque depuis 5m", Léo). Même barre que la mise à jour de
+                        Jaris (étape 98) plutôt qu'un second indicateur inventé à côté. */}
+                    <AppUpdateProgress progress={ollamaUpdateProgress} target="ollama" />
+                    <p className="options-menu__ollama-update-note">
+                      Une fenêtre Windows peut demander une autorisation (élévation) — accepte-la pour continuer.
+                    </p>
+                  </>
                 )}
               </div>
             )}

@@ -335,10 +335,16 @@ export interface UpdateCheckResult {
  * de distinguer "ça avance" de "c'est planté".
  */
 export interface UpdateProgress {
-  /** 'download' pendant le téléchargement, 'install' une fois lancé (Jaris se ferme dans la foulée). */
+  /**
+   * Ce qui se met à jour (étape 112). Le canal est le MÊME pour les deux boutons, donc chaque écran ne doit
+   * afficher que les avancements qui le concernent : sans ce champ, mettre Ollama à jour ferait aussi bouger
+   * la barre de l'onglet "Mise à jour" de Jaris, qui ne télécharge pourtant rien.
+   */
+  target: 'jaris' | 'ollama'
+  /** 'download' pendant le téléchargement, 'install' une fois l'installeur lancé. */
   phase: 'download' | 'install'
   receivedBytes: number
-  /** Taille annoncée par GitHub, `null` s'il ne l'annonce pas (aucune barre possible dans ce cas). */
+  /** Taille annoncée par le serveur, `null` s'il ne l'annonce pas (aucune barre possible dans ce cas). */
   totalBytes: number | null
   /** 0-100, `null` quand la taille totale est inconnue. */
   percent: number | null
