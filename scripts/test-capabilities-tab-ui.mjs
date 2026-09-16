@@ -216,10 +216,14 @@ test('"Ce que Jaris sait faire" est dans sa propre catégorie, pas dans les rég
       /réglages/i,
       '"Ce que Jaris sait faire" est encore rangé sous "Réglages"'
     )
-    // Et les vrais réglages, eux, restent bien ensemble sous leur propre intitulé.
+    // Et les vrais réglages, eux, restent bien ensemble sous leur propre intitulé. Depuis la refonte de
+    // l'étape 115 (Léo : "des categorie... peuvent etre ensemble"), Micro/Activation ont rejoint Voix et
+    // Mise à jour/Stockage/Historique ont rejoint Général — la liste attendue est donc plus courte
+    // qu'avant, mais toujours strictement celle-ci, jamais un simple comptage qui masquerait un onglet
+    // disparu par erreur.
     const reglages = nav.listes.find((l) => l.onglets.includes('Voix'))
     assert.match(reglages.categorie, /réglages/i, 'les réglages ont perdu leur intitulé de catégorie')
-    assert.ok(reglages.onglets.length >= 7, `des réglages ont disparu de la colonne : ${JSON.stringify(reglages.onglets)}`)
+    assert.deepEqual(reglages.onglets, ['Voix', 'Téléphone', 'Modèles', 'Général'], `réglages inattendus : ${JSON.stringify(reglages.onglets)}`)
   })
 })
 

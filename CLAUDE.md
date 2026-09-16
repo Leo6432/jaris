@@ -2087,3 +2087,49 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   **Non vérifiable ici, à confirmer par Léo en usage réel** : que le calcul retombe juste sur SA vraie carte
   graphique et SES vrais modèles installés (pas d'accès Windows/GPU réel dans cet environnement) — le
   mécanisme est prouvé par la formule et les tests, sa précision exacte sur sa machine ne l'est pas encore.
+
+- **Refonte des Options (étape 115), demande de Léo : "il ya des categorie dans les options qui peuvent etre
+  ensemble, refait totalement option bien comme claude gpt".** 9 onglets réduits à 5 : Micro et Activation
+  (2 réglages, chacun quelques lignes) n'avaient aucune raison d'être des onglets à part entière — regroupés
+  dans Voix, qui parle déjà de l'expérience vocale dans son ensemble. Mise à jour/Stockage/Historique, trois
+  réglages "à propos de l'application" plutôt que trois sujets distincts, regroupés dans un nouvel onglet
+  Général — même principe que l'onglet "Général" de ChatGPT/Claude (thème, langue, effacer les
+  discussions... tout sur une seule page). Modèles et Téléphone restent inchangés : déjà des catégories
+  cohérentes à elles seules, rien à fusionner.
+  **Piège structurel identifié AVANT de fusionner le JSX, pas après** : `.options-menu__voice-picker`
+  (l'écran orbe/nom/description de la voix) était en `position: absolute; inset: 0; pointer-events: none`
+  depuis l'étape 76 — un choix voulu à l'époque parce que ce bloc était le SEUL contenu de l'onglet Voix
+  (trop peu pour se centrer normalement dans `.options-page__content`, donc sorti du flux pour se centrer
+  sur la fenêtre entière). Une fois Micro/Activation ajoutés en dessous dans le même onglet, cette
+  justification ne tenait plus : un enfant `position: absolute` ignore tout ce qui le suit dans le flux, donc
+  les nouvelles sections seraient restées invisibles, cachées DERRIÈRE l'orbe. Corrigé en repassant ce bloc en
+  flux normal (plus de `position: absolute`/`pointer-events: none`, ni des deux règles satellites qui
+  existaient uniquement pour compenser ce choix) — l'orbe redevient un bloc ordinaire en tête d'une vraie
+  page de réglages qui défile, exactement le rendu ChatGPT/Claude demandé.
+  **VRAI BUG DE PRODUCTION trouvé en écrivant le test, pas juste un artefact d'environnement de test** :
+  fusionner Micro dans Voix (l'onglet par défaut, `useState<Tab>('voix')`) a fait planter TOUTE la page
+  Options, dans tous les tests navigateur existants de ce fichier (capacités, téléphone, longueur de
+  contexte) — pas seulement les nouveaux. Diagnostiqué avec un script Playwright dédié qui capture
+  `page.on('pageerror')` plutôt que de deviner à partir du seul timeout Playwright ("waiting for
+  `.options-menu__trigger`" ne dit RIEN de la vraie cause) : `Cannot read properties of undefined (reading
+  'getUserMedia')`. L'effet qui peuple la liste des micros/haut-parleurs appelait
+  `navigator.mediaDevices.getUserMedia(...)` SANS vérifier que `navigator.mediaDevices` existe — cette API
+  n'est exposée que dans un contexte sécurisé (https/localhost), absent dans le bundle de test
+  (`page.setContent()` sert du contenu sur `about:blank`), mais rien ne garantit non plus qu'elle soit
+  toujours présente sur une vraie machine (paramètres de confidentialité stricts, config Electron
+  particulière...) — un accès direct sans garde plante alors TOUTE la page Options, pas seulement le
+  sélecteur de haut-parleur. Avant la fusion, ce risque dormait dans l'onglet Micro, jamais ouvert par défaut
+  ni visité par aucun test existant ; en devenant partie de l'onglet par défaut, il s'est immédiatement
+  déclenché partout. Corrigé en vérifiant `navigator.mediaDevices` avant tout accès, avec un repli silencieux
+  sur la liste vide (le haut-parleur reste alors au choix par défaut du système) au lieu de faire planter le
+  composant entier. **Leçon générale : fusionner un onglet secondaire, jamais visité par défaut, DANS l'onglet
+  par défaut peut faire remonter à la surface un bug latent qui dormait dans ce recoin depuis longtemps —
+  toujours revérifier chaque effet du contenu fusionné une fois qu'il devient atteignable par défaut, pas
+  seulement copier-coller le JSX.**
+  Régression : `node --test scripts/test-options-reorganization-ui.mjs` (les anciens onglets ont vraiment
+  disparu de la barre, Voix et Général affichent VRAIMENT tout leur contenu fusionné sur une seule page —
+  pas juste les titres —, et l'orbe de la voix reste visible et cliquable maintenant qu'il partage la page),
+  plus la mise à jour d'une assertion devenue fausse dans `scripts/test-capabilities-tab-ui.mjs` (comptait
+  "au moins 7 réglages", devenu "exactement ces 4 réglages" — un simple comptage aurait laissé passer un
+  onglet disparu par erreur, même famille de piège que le `grep -c` de l'étape 97). Vérifié aussi par deux
+  captures d'écran réelles du rendu compilé (Voix et Général) avant de considérer la refonte terminée.

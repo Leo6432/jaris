@@ -976,29 +976,17 @@ body.body--scan::after {
   border-color: var(--hud-danger);
 }
 
-/* Ce bloc n'a que peu de contenu (orbe, nom, description) : centré dans .options-page__content comme les
-   autres onglets, il ne se centrerait en réalité que sur la zone de travail (à droite de la colonne de
-   navigation, voir .options-page__body) et paraîtrait décalé vers la droite par rapport à la fenêtre.
-   position: absolute + inset: 0 le sort de cette zone pour le centrer sur .options-page en entier — le seul
-   ancêtre positionné (position: fixed) au-dessus, donc la fenêtre réelle, colonne de navigation comprise. */
+/* Jusqu'à l'étape 115, ce bloc était le SEUL contenu de l'onglet Voix (orbe, nom, description) — trop peu
+   pour se centrer normalement dans .options-page__content, d'où un `position: absolute; inset: 0` qui le
+   sortait du flux pour le centrer sur la fenêtre entière. Depuis que Micro/Haut-parleur/Activation ont
+   rejoint cet onglet (Léo : "des categorie... peuvent etre ensemble"), ce n'est plus vrai : le showcase de
+   la voix redevient un bloc normal, en tête d'une vraie page de réglages qui défile comme les autres. */
 .options-menu__voice-picker {
-  position: absolute;
-  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 24px;
-  /* inset: 0 le fait passer PAR-DESSUS l'en-tête et la navigation (couverts par sa boîte, même invisible) :
-     sans ça, tout ce qui n'est pas un bouton à l'intérieur (le vide entre l'orbe et les bords) intercepte le
-     clic à leur place — impossible de cliquer Fermer ou un autre onglet depuis Voix. auto sur ses boutons
-     rétablit le clic là où quelque chose est réellement affiché. */
-  pointer-events: none;
-}
-
-.options-menu__voice-picker button,
-.options-menu__voice-picker .options-menu__checkbox {
-  pointer-events: auto;
+  padding-bottom: 8px;
 }
 
 .options-menu__voice-nav {
@@ -3245,14 +3233,6 @@ a:hover {
 
 .options-page__content > * {
   max-width: 1240px;
-}
-
-/* .options-menu__voice-picker s'étend volontairement sur .options-page en entier (position: absolute,
-   inset: 0, voir plus haut) pour se centrer sur la fenêtre réelle plutôt que sur cette seule zone de
-   contenu. Cette limite de largeur, pensée pour du texte/tableaux, le figeait sinon à 1240px collé à
-   gauche (aucun centrage automatique pour un élément en position absolute) au lieu de le centrer. */
-.options-page__content > .options-menu__voice-picker {
-  max-width: none;
 }
 
 @media (max-width: 700px) {

@@ -985,3 +985,12 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   une erreur d'affichage ("33k" au lieu de "32k") ont été attrapés par les tests avant publication. Régression :
   `node --test scripts/test-context-length.mjs scripts/test-format-context-length.mjs scripts/test-context-length-ui.mjs`
   (312 tests au total). Non vérifié en usage réel : la précision exacte sur la carte graphique de Léo.
+- ✅ Étape 115 (v0.13.1) — Léo a demandé de refaire les Options "comme claude gpt" en regroupant les
+  catégories qui pouvaient l'être. 9 onglets réduits à 5 : Micro et Activation rejoignent Voix ; Mise à
+  jour, Stockage et Historique rejoignent un nouvel onglet Général — chacun devient une vraie page de
+  réglages avec plusieurs sections, comme chez ChatGPT/Claude. Modèles et Téléphone restent inchangés. Un
+  vrai bug de production a été trouvé en écrivant les tests : fusionner Micro dans l'onglet ouvert par
+  défaut faisait planter toute la page Options dès qu'elle s'ouvrait, `navigator.mediaDevices` pouvant être
+  absent sans que le code ne le vérifie avant de s'en servir — corrigé avec un repli silencieux. Régression :
+  `node --test scripts/test-options-reorganization-ui.mjs` (316 tests au total), vérifié aussi par deux
+  captures d'écran réelles du nouveau rendu.

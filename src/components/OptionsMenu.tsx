@@ -52,7 +52,13 @@ const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
  */
 const MIC_TEST_BAR_COUNT = 42
 
-type Tab = 'capacites' | 'voix' | 'micro' | 'activation' | 'telephone' | 'modeles' | 'miseajour' | 'stockage' | 'historique'
+// Refonte étape 115 (Léo : "il ya des categorie dans les options qui peuvent etre ensemble, refait
+// totalement option bien comme claude gpt") : Micro et Activation (2 réglages, chacun quelques lignes)
+// n'avaient aucune raison d'être des onglets à part entière — regroupés dans "Voix", qui parle déjà de
+// l'expérience vocale dans son ensemble. Même chose pour Mise à jour/Stockage/Historique, trois réglages
+// "à propos de l'application" plutôt que trois sujets distincts — regroupés dans "Général", à la manière du
+// même onglet chez ChatGPT/Claude (thème, langue, effacer les discussions...). 9 onglets -> 5.
+type Tab = 'capacites' | 'voix' | 'telephone' | 'modeles' | 'general'
 
 /**
  * Chromium ajoute des pseudo-périphériques "default"/"communications" en plus des vrais haut-parleurs
@@ -190,7 +196,7 @@ export default function OptionsMenu(): JSX.Element {
   // l'historique peut contenir jusqu'à 300 échanges, pas la peine de le lire à chaque ouverture du menu
   // Options si l'utilisateur ne va jamais voir cet onglet.
   useEffect(() => {
-    if (tab === 'historique' && history === null) {
+    if (tab === 'general' && history === null) {
       void window.jaris.getConversationHistory().then(setHistory)
     }
   }, [tab, history])
@@ -219,14 +225,12 @@ export default function OptionsMenu(): JSX.Element {
       // lancement à l'autre selon ce qui tourne en parallèle sur la machine (jeu, navigateur...).
       void window.jaris.getContextLengthOptions().then(setContextLengthOptions)
     }
-    if (tab === 'miseajour') {
+    if (tab === 'general') {
       void window.jaris.getAppVersionStatus().then(setAppVersionStatus)
       void window.jaris.getAppVersion().then(setInstalledVersion)
       if (releaseHistory === null) {
         void window.jaris.getReleaseHistory().then(setReleaseHistory)
       }
-    }
-    if (tab === 'stockage') {
       void window.jaris.getModelsLocationStatus().then(setModelsLocation)
     }
   }, [tab, releaseHistory])
@@ -276,13 +280,22 @@ export default function OptionsMenu(): JSX.Element {
   }
 
   // Idem pour les listes de micros/haut-parleurs : coûteux à peupler pour rien si l'utilisateur ne va
-  // jamais ouvrir l'onglet Micro & Haut-parleur. Les micros viennent de PortAudio (côté Python, voir
+  // jamais ouvrir l'onglet Voix (Micro/Haut-parleur en fait partie depuis l'étape 115). Les micros
+  // viennent de PortAudio (côté Python, voir
   // --list-devices dans voice_server.py) ; les haut-parleurs viennent de l'API navigateur MediaDevices —
   // deux catalogues de périphériques totalement séparés, qui ne peuvent pas être recoupés (voir la doc de
   // setAudioInputDevice).
   useEffect(() => {
-    if (tab !== 'micro' || inputDevices !== null) return
+    if (tab !== 'voix' || inputDevices !== null) return
     void window.jaris.listAudioInputDevices().then(setInputDevices).catch(() => setInputDevices([]))
+    // `navigator.mediaDevices` n'existe que dans un contexte sécurisé (https/localhost) — absent en pratique
+    // seulement hors production (bundle de test chargé sur about:blank, voir scripts/test-options-*-ui.mjs),
+    // mais un accès direct sans garde plante toute la page Options (exception non rattrapée dans un effet React,
+    // sans limite de dégâts) plutôt que de simplement laisser le haut-parleur au choix par défaut du système.
+    if (!navigator.mediaDevices) {
+      setOutputDevices([])
+      return
+    }
     // getUserMedia doit être appelé au moins une fois pour que enumerateDevices() révèle les vrais noms des
     // haut-parleurs plutôt que des libellés vides (voir le handler de permission media dans main.ts, qui
     // accorde silencieusement l'accès sans popup système).
@@ -667,26 +680,14 @@ export default function OptionsMenu(): JSX.Element {
             <button className={`options-menu__tab${tab === 'voix' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('voix')}>
               Voix
             </button>
-            <button className={`options-menu__tab${tab === 'micro' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('micro')}>
-              Micro
-            </button>
-            <button className={`options-menu__tab${tab === 'activation' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('activation')}>
-              Activation
-            </button>
             <button className={`options-menu__tab${tab === 'telephone' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('telephone')}>
               Téléphone
             </button>
             <button className={`options-menu__tab${tab === 'modeles' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('modeles')}>
               Modèles
             </button>
-            <button className={`options-menu__tab${tab === 'miseajour' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('miseajour')}>
-              Mise à jour
-            </button>
-            <button className={`options-menu__tab${tab === 'stockage' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('stockage')}>
-              Stockage
-            </button>
-            <button className={`options-menu__tab${tab === 'historique' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('historique')}>
-              Historique
+            <button className={`options-menu__tab${tab === 'general' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('general')}>
+              Général
             </button>
           </nav>
         </aside>
@@ -735,34 +736,39 @@ export default function OptionsMenu(): JSX.Element {
         )}
 
         {tab === 'voix' && (
-          <div className="options-menu__voice-picker">
-            <div className="options-menu__voice-nav">
-              <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex - 1)} disabled={previewing}>
-                ‹
-              </button>
-              {/* Pas de `size` ici : hérite du même défaut (320) que <JarisOrb emotion={emotion} /> sur
-                  l'écran d'accueil (App.tsx, mode 'voice') — Léo voulait explicitement "la même taille que
-                  dans l'accueil", pas une taille recalculée séparément (une valeur fixe dupliquée ou un
-                  calcul responsive, tous deux essayés puis écartés, auraient pu diverger de l'accueil). */}
-              <JarisOrb emotion="idle" color={voice.color} />
-              <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex + 1)} disabled={previewing}>
-                ›
-              </button>
-            </div>
-            <div className="options-menu__voice-name">{previewing ? 'Lecture...' : voice.id}</div>
-            <div className="options-menu__voice-description">{voice.description}</div>
-            <div className="options-menu__voice-dots">
-              {TTS_VOICES.map((v, i) => (
-                <button
-                  key={v.id}
-                  className={`options-menu__dot${i === voiceIndex ? ' options-menu__dot--active' : ''}`}
-                  onClick={() => void chooseVoice(i)}
-                  disabled={previewing}
-                  aria-label={v.id}
-                />
-              ))}
+          <div className="options-menu__section options-menu__section--voix">
+            <div className="options-menu__voice-picker">
+              <div className="options-menu__voice-nav">
+                <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex - 1)} disabled={previewing}>
+                  ‹
+                </button>
+                {/* Pas de `size` ici : hérite du même défaut (320) que <JarisOrb emotion={emotion} /> sur
+                    l'écran d'accueil (App.tsx, mode 'voice') — Léo voulait explicitement "la même taille que
+                    dans l'accueil", pas une taille recalculée séparément (une valeur fixe dupliquée ou un
+                    calcul responsive, tous deux essayés puis écartés, auraient pu diverger de l'accueil). */}
+                <JarisOrb emotion="idle" color={voice.color} />
+                <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex + 1)} disabled={previewing}>
+                  ›
+                </button>
+              </div>
+              <div className="options-menu__voice-name">{previewing ? 'Lecture...' : voice.id}</div>
+              <div className="options-menu__voice-description">{voice.description}</div>
+              <div className="options-menu__voice-dots">
+                {TTS_VOICES.map((v, i) => (
+                  <button
+                    key={v.id}
+                    className={`options-menu__dot${i === voiceIndex ? ' options-menu__dot--active' : ''}`}
+                    onClick={() => void chooseVoice(i)}
+                    disabled={previewing}
+                    aria-label={v.id}
+                  />
+                ))}
+              </div>
             </div>
 
+            {/* Micro/Haut-parleur/Activation rejoignent Voix depuis l'étape 115 (Léo : "des categorie...
+                peuvent etre ensemble") : trois réglages qui parlent tous de l'expérience vocale, pas trois
+                sujets distincts — même page, à la façon d'un onglet de réglages Claude/ChatGPT. */}
             <div className="options-menu__section-title">Design sonore</div>
             <label className="options-menu__checkbox">
               <input
@@ -772,84 +778,76 @@ export default function OptionsMenu(): JSX.Element {
               />
               Bips d'interface (écoute, réflexion, clic, scan...)
             </label>
-          </div>
-        )}
 
-        {tab === 'micro' && (
-          <div className="options-menu__section">
-              <div className="options-menu__section-title">Micro utilisé</div>
-              <label className="options-menu__field">
-                <select
-                  value={profile?.audioInputDeviceIndex ?? ''}
-                  onChange={(e) => void chooseInputDevice(e.target.value)}
-                  disabled={inputDevices === null || savingAudioDevice}
-                >
-                  <option value="">Défaut du système</option>
-                  {inputDevices?.map((device) => (
-                    <option key={device.index} value={device.index}>
-                      {device.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {inputDevices !== null && inputDevices.length === 0 && (
-                <p className="options-menu__model-overview-hint">Aucun micro détecté par PortAudio.</p>
-              )}
-              {savingAudioDevice && (
-                <p className="options-menu__model-overview-hint">
-                  Changement de micro : redémarrage du pipeline vocal (rechargement des modèles)...
+            <div className="options-menu__section-title">Micro utilisé</div>
+            <label className="options-menu__field">
+              <select
+                value={profile?.audioInputDeviceIndex ?? ''}
+                onChange={(e) => void chooseInputDevice(e.target.value)}
+                disabled={inputDevices === null || savingAudioDevice}
+              >
+                <option value="">Défaut du système</option>
+                {inputDevices?.map((device) => (
+                  <option key={device.index} value={device.index}>
+                    {device.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {inputDevices !== null && inputDevices.length === 0 && (
+              <p className="options-menu__model-overview-hint">Aucun micro détecté par PortAudio.</p>
+            )}
+            {savingAudioDevice && (
+              <p className="options-menu__model-overview-hint">
+                Changement de micro : redémarrage du pipeline vocal (rechargement des modèles)...
+              </p>
+            )}
+
+            <div className="options-menu__section-title">Haut-parleur utilisé</div>
+            <label className="options-menu__field">
+              <select
+                value={profile?.audioOutputDeviceId || ''}
+                onChange={(e) => void chooseOutputDevice(e.target.value)}
+                disabled={outputDevices === null}
+              >
+                <option value="">Défaut du système</option>
+                {outputDevices?.map((device) => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.label || device.deviceId}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="options-menu__section-title">Tester le micro</div>
+            <div className="options-menu__mic-test">
+              {/* Rangée de barres façon Discord plutôt qu'un seul indicateur : chaque barre est un niveau
+                  sonore récent (mic_test_level, ~12/seconde, voir voice_server.py), la plus récente à
+                  droite — les anciennes défilent vers la gauche à mesure que de nouvelles arrivent
+                  (micLevels ci-dessus), pour une vraie sensation de mouvement pendant qu'on parle plutôt
+                  qu'un seul chiffre qui saute. */}
+              <div className="options-menu__mic-bars">
+                {micLevels.map((level, i) => (
+                  <div
+                    key={i}
+                    className="options-menu__mic-bar"
+                    style={{ height: `${10 + Math.min(1, level) * 90}%` }}
+                  />
+                ))}
+              </div>
+              <button
+                className={`options-menu__action${micTesting ? ' options-menu__action--danger' : ''}`}
+                onClick={toggleMicTest}
+              >
+                {micTesting ? 'Arrêter le test' : 'Tester le micro'}
+              </button>
+              {!micTesting && micTestResult !== null && (
+                <p className={micTestResult ? 'options-menu__mic-result--ok' : 'options-menu__mic-result--bad'}>
+                  {micTestResult ? 'Micro détecté : du son a bien été capté.' : "Rien capté : vérifie que le bon micro est sélectionné et qu'il n'est pas coupé."}
                 </p>
               )}
+            </div>
 
-              <div className="options-menu__section-title">Haut-parleur utilisé</div>
-              <label className="options-menu__field">
-                <select
-                  value={profile?.audioOutputDeviceId || ''}
-                  onChange={(e) => void chooseOutputDevice(e.target.value)}
-                  disabled={outputDevices === null}
-                >
-                  <option value="">Défaut du système</option>
-                  {outputDevices?.map((device) => (
-                    <option key={device.deviceId} value={device.deviceId}>
-                      {device.label || device.deviceId}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="options-menu__section-title">Tester le micro</div>
-              <div className="options-menu__mic-test">
-                {/* Rangée de barres façon Discord plutôt qu'un seul indicateur : chaque barre est un niveau
-                    sonore récent (mic_test_level, ~12/seconde, voir voice_server.py), la plus récente à
-                    droite — les anciennes défilent vers la gauche à mesure que de nouvelles arrivent
-                    (micLevels ci-dessus), pour une vraie sensation de mouvement pendant qu'on parle plutôt
-                    qu'un seul chiffre qui saute. */}
-                <div className="options-menu__mic-bars">
-                  {micLevels.map((level, i) => (
-                    <div
-                      key={i}
-                      className="options-menu__mic-bar"
-                      style={{ height: `${10 + Math.min(1, level) * 90}%` }}
-                    />
-                  ))}
-                </div>
-                <button
-                  className={`options-menu__action${micTesting ? ' options-menu__action--danger' : ''}`}
-                  onClick={toggleMicTest}
-                >
-                  {micTesting ? 'Arrêter le test' : 'Tester le micro'}
-                </button>
-                {!micTesting && micTestResult !== null && (
-                  <p className={micTestResult ? 'options-menu__mic-result--ok' : 'options-menu__mic-result--bad'}>
-                    {micTestResult ? 'Micro détecté : du son a bien été capté.' : "Rien capté : vérifie que le bon micro est sélectionné et qu'il n'est pas coupé."}
-                  </p>
-                )}
-              </div>
-          </div>
-        )}
-
-        {tab === 'activation' && (
-          <div className="options-menu__section">
             <div className="options-menu__section-title">Comment déclencher l'écoute</div>
             <p className="options-menu__model-overview-hint">
               Les trois façons d'activer Jaris sont indépendantes : décoche celles dont tu ne veux pas.
@@ -1056,8 +1054,11 @@ export default function OptionsMenu(): JSX.Element {
           </div>
         )}
 
-        {tab === 'miseajour' && (
+        {tab === 'general' && (
           <div className="options-menu__section">
+            {/* Mise à jour/Stockage/Historique fusionnés dans "Général" depuis l'étape 115 (Léo : "des
+                categorie... peuvent etre ensemble") : trois réglages "à propos de l'application" plutôt que
+                trois sujets distincts, à la manière du même onglet chez ChatGPT/Claude. */}
             <div className="options-menu__section-title">Journal des mises à jour</div>
             <p className="options-menu__model-overview-hint">
               Version installée : <strong>{installedVersion ?? appVersionStatus?.current ?? '...'}</strong>
@@ -1102,11 +1103,7 @@ export default function OptionsMenu(): JSX.Element {
                 ))}
               </ul>
             )}
-          </div>
-        )}
 
-        {tab === 'stockage' && (
-          <div className="options-menu__section">
             <div className="options-menu__section-title">Emplacement des modèles</div>
             <p className="options-menu__model-overview-hint">
               Les modèles Ollama, l'environnement Python (voix) et le cache de reconnaissance/synthèse
@@ -1125,11 +1122,7 @@ export default function OptionsMenu(): JSX.Element {
               {movingModelsLocation ? 'Déplacement en cours…' : 'Choisir un dossier…'}
             </button>
             {modelsLocationMessage && <p className="options-menu__ollama-update-note">{modelsLocationMessage}</p>}
-          </div>
-        )}
 
-        {tab === 'historique' && (
-          <div className="options-menu__section">
             <div className="options-menu__section-title">Historique des conversations</div>
             {history === null ? (
               <p className="capacity-scan__status">Chargement...</p>
