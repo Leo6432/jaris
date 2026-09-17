@@ -1016,3 +1016,13 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   des paliers intermédiaires (multiples de 1024) pour toujours proposer au moins 4 choix, sans jamais
   dépasser le maximum sûr déjà calculé. Régression : `npm test` (286 tests), chaque correctif vérifié en le
   retirant temporairement pour confirmer que son test échoue bien seul.
+- ✅ Étape 118 (v0.14.2) — Léo : "1. enleve historique version 2. j'ai tester le palier 4 avec un amis il est
+  bizare", avec une capture montrant un message technique et un échange incohérent avec un ami (Tom). Trois
+  correctifs : (1) "Historique des versions" retiré complètement d'Options → Général, sans remplacement ;
+  (2) le plancher du curseur de longueur de contexte (4096, ajouté à l'étape 117) est retiré — le système
+  prompt + les outils consomment déjà ~4200-4500 tokens, donc 4096 ne pouvait même pas les contenir,
+  l'hypothèse la mieux étayée pour expliquer les réponses incohérentes de Tom ; le nouveau plancher est 8192,
+  déjà retenu ailleurs dans Jaris pour la même raison ; (3) un message de diagnostic interne réservé au
+  réglage du mot d'activation ("Candidat rejeté...") s'affichait par erreur dans le Chat — il partait par le
+  même canal que les messages destinés à l'utilisateur ; désormais routé séparément (stderr), jamais montré à
+  l'écran. Régression : `npm test` (286 tests).

@@ -2255,3 +2255,67 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   graduations sur le cas RÉEL le plus serré (max=8192). Chaque nouvelle assertion vérifiée en réintroduisant
   temporairement le défaut correspondant (CSS ET calcul séparément) : les deux échouent bien chacun de son
   côté, sans faire échouer l'autre.
+
+- **Étape 118, trois retours de Léo dans le même message : "1. enleve historique version 2. j'ai tester le
+  palier 4 avec un amis il est bizare"** (avec, à l'appui, une capture montrant "Candidat rejeté
+  [transcription] : 'Il est bizarre.'" et un échange incohérent : "Salut Jarvis je m'appelle Tom j'adore les
+  fléchettes" a reçu une réponse qui salue Tom comme s'il était déjà venu, ignore les fléchettes, et enchaîne
+  sur une question hors sujet à propos d'une "page de contact").
+  1. **"Historique des versions" retiré complètement d'Options → Général**, sur simple demande, sans
+     remplacement : `getReleaseHistory()` (appUpdater.ts, qui interrogeait `GET /repos/.../releases`),
+     l'interface `ReleaseHistoryEntry`, le canal IPC, le bridge preload, le type `global.d.ts`, le bloc JSX et
+     son CSS dédié (`.options-menu__changelog-*`) retirés ensemble — grep-sweep confirmant qu'aucune référence
+     ne traînait plus nulle part (CLAUDE.md, étape 3) avant de considérer le retrait terminé. Général garde la
+     version installée en permanence (`getAppVersion`, jamais bloquée par le réseau), seul le bandeau "Mettre à
+     jour" dépendait déjà du réseau.
+  2. **Le "palier 4" bizarre : diagnostiqué en reliant un fait déjà documenté DANS CE MÊME FICHIER, pas
+     deviné.** Le curseur de longueur de contexte (étape 117, livré juste avant) garantit maintenant au moins
+     4 choix — mais sur une machine dont la VRAM laisse peu de marge, ce 4e choix pouvait tomber à 4096 ou une
+     valeur interpolée proche. Or ce fichier documente déjà, pour une tout autre raison (le doublement de
+     `OLLAMA_NUM_CTX` de 4096 à 8192, `config.ts`), que le système prompt + `TOOLS` (tools.ts) consomment À
+     EUX SEULS environ 4200-4500 tokens avant même le premier message — 4096 ne peut donc même pas contenir le
+     prompt système, laissant zéro place pour la conversation elle-même. C'est l'explication la plus probable
+     du comportement halluciné de Tom (accueil incohérent, sujet perdu, question hors contexte) : PAS confirmé
+     par une mesure sur sa machine (aucun accès à celle-ci), présenté comme hypothèse la mieux étayée plutôt
+     que comme un fait, par honnêteté sur "vérifié" vs "déduit". Corrigé en retirant 4096 de
+     `CONTEXT_LENGTH_STEPS` (hardwareScan.ts) : le plancher du curseur devient 8192, déjà le plancher retenu
+     ailleurs pour la même raison — `roundDownToContextStep`/`computeAvailableSteps` n'ont pas eu à changer
+     eux-mêmes (ils dérivent déjà leur plancher de `CONTEXT_LENGTH_STEPS[0]`), seuls leurs commentaires et les
+     tests dépendants ont dû être recalculés à la main (nouvelles valeurs interpolées : 11264/13312 pour
+     max=16384, 24576 pour max=32768). **Leçon générale : un fait déjà noté dans ce fichier pour une raison X
+     peut expliquer un bug signalé plus tard pour une raison Y sans le moindre rapport apparent** — avant de
+     supposer une nouvelle cause, relire si ce fichier ne documente pas déjà la contrainte exacte qui explique
+     le symptôme.
+  3. **La capture "Candidat rejeté [transcription]" : un vrai bug distinct, trouvé en investiguant plutôt
+     qu'en la traitant comme un simple détail de la capture.** `voice_server.py` loggait déjà, pour CHAQUE
+     candidat au mot d'activation rejeté par la confirmation locale, un message technique
+     (`"Candidat rejeté (transcription : ...)."`) — ajouté à l'étape "confirmation par transcription"
+     UNIQUEMENT pour ajuster `WAKE_NAME` (wake_confirmation.py) depuis de vraies transcriptions rejetées,
+     jamais pensé pour l'utilisateur. Le problème : ce message partait par `emit({"event": "log", ...})`,
+     EXACTEMENT le même canal stdout que les messages légitimes ("Chargement de la transcription…", "Mot Jaris
+     confirmé…") — relayé sans filtre par voiceClient.ts -> voicePipeline.ts -> `broadcast(IPC_CHANNELS.log)`
+     -> `window.jaris.onLog` -> `ChatPanel.tsx`, qui l'affiche comme texte de progression ("Jaris réfléchit…").
+     Le détecteur de mot d'activation tourne EN PERMANENCE tant que le sidecar vocal écoute, y compris pendant
+     que Chat est ouvert (seule la RÉACTION au mot est suspendue par `VoicePipeline.suspended`, étape 72 — pas
+     le simple fait de logger un candidat rejeté) : n'importe quelle parole ambiante phonétiquement proche de
+     "Jaris" pouvait donc faire apparaître ce texte de diagnostic interne en plein milieu du Chat, sans le
+     moindre rapport avec ce qui s'y passait. Corrigé en séparant les deux canaux à la source plutôt qu'en
+     filtrant côté renderer : nouvelle fonction `debug()` (voice_server.py, à côté d'`emit()`) qui écrit sur
+     stderr — déjà capturé par voiceClient.ts en simple `console.error('[voice_server]', ...)`, jamais
+     rediffusé au renderer — pour les deux messages purement diagnostiques ("Candidat rejeté…" et "Mot Jaris
+     confirmé par la transcription locale.", ce dernier n'ajoutant rien pour Léo puisque l'évènement `wake`
+     qui suit change déjà visuellement l'orbe). **Leçon générale, même famille que le bouton "Nouvelle
+     conversation" resté gris ou le double cadre du composeur : un canal de diffusion PARTAGÉ (ici `emit(...,
+     "event": "log")`, utilisé à la fois pour du vrai statut ET pour du diagnostic de développement) finit par
+     mélanger les deux aux yeux de l'utilisateur — dès qu'un message n'a de sens que pour AJUSTER LE CODE,
+     jamais pour lui, il ne doit jamais emprunter le canal qui remonte jusqu'à l'interface, même si ce canal
+     existe déjà et semble pratique à réutiliser.**
+  Régression : `npm test` (286 tests, aucune régression — les mocks `getContextLengthOptions` des tests UI
+  existants mis à jour avec les nouvelles valeurs de `computeAvailableSteps`). Le changement Python n'a pas de
+  test dédié dans ce dépôt (`scripts/test-wake-confirmation.py` ne teste que `wake_confirmation.py`, jamais
+  `voice_server.py` — module numpy d'ailleurs absent de cet environnement, non vérifiable ici) : vérifié par
+  relecture attentive du flux complet (stdout JSON vs stderr texte brut) et par l'absence de toute référence
+  aux deux chaînes de log dans le reste du dépôt (aucun test/consommateur n'en dépendait). **Non vérifiable
+  ici, à confirmer par Léo en usage réel** : que le "palier 4" redevienne cohérent une fois son plancher réel
+  remonté à 8192 sur sa machine et celle de Tom, et que la capture "Candidat rejeté" ne réapparaisse plus dans
+  le Chat.

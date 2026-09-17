@@ -9,7 +9,6 @@ import type {
   ModelsLocationStatus,
   OllamaVersionStatus,
   Profile,
-  ReleaseHistoryEntry,
   UpdateProgress
 } from '../../shared/ipc'
 import { CAPABILITIES } from '../../shared/capabilities'
@@ -76,27 +75,6 @@ function dedupeAudioOutputs(devices: MediaDeviceInfo[]): MediaDeviceInfo[] {
     result.push(device)
   }
   return result
-}
-
-/**
- * Les notes d'une Release viennent de `gh release create --generate-notes` (build-installer.yml) : du
- * Markdown brut (titres `##`, puces `*`, liens `[texte](url)`) pensé pour la page GitHub, pas pour
- * s'afficher tel quel dans Jaris. Un nettoyage minimal plutôt qu'un vrai rendu Markdown (pas besoin d'une
- * librairie entière pour un journal de changements interne) : dépouille les symboles, garde le texte lisible.
- */
-function formatReleaseNotes(notes: string): string {
-  return notes
-    .split('\n')
-    .filter((line) => !line.includes('**Full Changelog**'))
-    .map((line) =>
-      line
-        .replace(/^#+\s*/, '')
-        .replace(/^\*\s+/, '- ')
-        .replace(/\*\*(.+?)\*\*/g, '$1')
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    )
-    .join('\n')
-    .trim()
 }
 
 /**
@@ -193,7 +171,6 @@ export default function OptionsMenu(): JSX.Element {
   const [ollamaUpdateMessage, setOllamaUpdateMessage] = useState<string | null>(null)
   const [appVersionStatus, setAppVersionStatus] = useState<AppVersionStatus | null>(null)
   const [installedVersion, setInstalledVersion] = useState<string | null>(null)
-  const [releaseHistory, setReleaseHistory] = useState<ReleaseHistoryEntry[] | null>(null)
   const [updatingApp, setUpdatingApp] = useState(false)
   const [appUpdateMessage, setAppUpdateMessage] = useState<string | null>(null)
   /** Avancement du téléchargement en cours (étape 98) — `null` tant qu'aucun octet n'est encore arrivé. */
@@ -273,12 +250,9 @@ export default function OptionsMenu(): JSX.Element {
     if (tab === 'general') {
       void window.jaris.getAppVersionStatus().then(setAppVersionStatus)
       void window.jaris.getAppVersion().then(setInstalledVersion)
-      if (releaseHistory === null) {
-        void window.jaris.getReleaseHistory().then(setReleaseHistory)
-      }
       void window.jaris.getModelsLocationStatus().then(setModelsLocation)
     }
-  }, [tab, releaseHistory])
+  }, [tab])
 
   // Avancement du déplacement (Ollama/Python arrêtés, copie en cours, redémarrage...) : abonné une seule
   // fois comme les autres onLog/onModelBenchmarkLine, pas seulement pendant que l'onglet Modèles est ouvert
@@ -1047,26 +1021,6 @@ export default function OptionsMenu(): JSX.Element {
                 </div>
               )}
               {!updatingApp && appUpdateMessage && <p className="options-menu__ollama-update-note">{appUpdateMessage}</p>}
-            </SettingGroup>
-
-            <SettingGroup title="Historique des versions">
-              {releaseHistory === null ? (
-                <p className="capacity-scan__status">Chargement...</p>
-              ) : releaseHistory.length === 0 ? (
-                <p className="options-menu__model-overview-hint">Aucune version publiée pour l'instant.</p>
-              ) : (
-                <ul className="options-menu__changelog-list">
-                  {releaseHistory.map((entry) => (
-                    <li key={entry.version} className="options-menu__changelog-entry">
-                      <div className="options-menu__changelog-header">
-                        <strong>{entry.version}</strong>
-                        {entry.publishedAt && <span>{new Date(entry.publishedAt).toLocaleDateString('fr-FR')}</span>}
-                      </div>
-                      <p className="options-menu__changelog-notes">{formatReleaseNotes(entry.notes)}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </SettingGroup>
 
             <SettingGroup title="Emplacement des modèles">

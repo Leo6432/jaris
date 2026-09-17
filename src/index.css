@@ -983,43 +983,6 @@ body.body--scan::after {
   overflow-wrap: anywhere;
 }
 
-.options-menu__changelog-list {
-  list-style: none;
-  margin: 4px 0 14px;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 220px;
-  overflow-y: auto;
-}
-
-.options-menu__changelog-entry {
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.options-menu__changelog-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 0.85rem;
-  color: var(--hud-text);
-}
-
-.options-menu__changelog-header span {
-  color: var(--hud-text-dim);
-  font-size: 0.75rem;
-}
-
-.options-menu__changelog-notes {
-  margin: 6px 0 0;
-  font-size: 0.78rem;
-  color: var(--hud-text-soft);
-  white-space: pre-wrap;
-}
-
 .options-menu__history-list {
   list-style: none;
   margin: 0;
@@ -2626,7 +2589,6 @@ textarea:not(.composer__input):focus-visible {
  * dans le DOM, donc applicable à des composants qu'on ne touche pas côté React.
  */
 .options-menu__model-group,
-.options-menu__changelog-entry,
 .capacity-scan__tier,
 .options-menu__scope-dialog,
 .app__new-models,
@@ -2642,7 +2604,6 @@ textarea:not(.composer__input):focus-visible {
 }
 
 .options-menu__model-group::before,
-.options-menu__changelog-entry::before,
 .capacity-scan__tier::before,
 .options-menu__scope-dialog::before,
 .app__new-models::before,
@@ -2661,7 +2622,6 @@ textarea:not(.composer__input):focus-visible {
 }
 
 .options-menu__model-group::after,
-.options-menu__changelog-entry::after,
 .capacity-scan__tier::after,
 .options-menu__scope-dialog::after,
 .app__new-models::after,
@@ -3027,7 +2987,6 @@ textarea::placeholder {
 .options-menu__models-location-list,
 .options-menu__col-num,
 .capacity-scan__tier-speed,
-.options-menu__changelog-header,
 .options-menu__benchmark-log,
 code {
   font-family: var(--hud-font-mono);

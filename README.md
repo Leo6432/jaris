@@ -836,12 +836,9 @@ lente finit toujours par aboutir — et il vérifie que le fichier reçu est
 COMPLET avant que Jaris ne se ferme pour le lancer, un installeur tronqué se
 lançant sinon sans rien faire de visible.
 
-Options → Mise à jour affiche aussi en permanence un **journal des mises à
-jour** : la version installée (`getAppVersion`, jamais bloquée par le réseau,
-contrairement au bandeau ci-dessus) et la liste de toutes les Releases
-stables déjà publiées avec leurs notes (`getReleaseHistory`, `GET
-/releases`) — de quoi voir d'un coup d'œil sa propre version et tout
-l'historique, sans aller chercher sur GitHub.
+Options → Général affiche aussi en permanence la version installée
+(`getAppVersion`, jamais bloquée par le réseau, contrairement au bandeau
+ci-dessus).
 
 Un bouton **"Rechercher une mise à jour"** (façon Windows Update) permet en
 plus de forcer une vraie vérification à la demande, sans attendre le

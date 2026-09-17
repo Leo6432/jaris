@@ -23,13 +23,6 @@ export interface AppVersionStatus {
   outdated: boolean
 }
 
-/** Une entrée du journal des mises à jour (Options → Mise à jour), une par Release GitHub stable publiée. */
-export interface ReleaseHistoryEntry {
-  version: string
-  publishedAt: string
-  notes: string
-}
-
 const REPO = 'Leo6432/jaris'
 
 let cachedStatus: AppVersionStatus | null = null
@@ -117,33 +110,6 @@ export async function checkForUpdate(): Promise<{ status: AppVersionStatus | nul
     return { status: cachedStatus, error: null }
   } catch (err) {
     return { status: null, error: err instanceof Error ? err.message : String(err) }
-  }
-}
-
-/**
- * Journal des mises à jour (Options → Mise à jour) : la liste des vraies Releases GitHub stables, la plus
- * récente en premier (ordre déjà renvoyé par l'API). `GET /releases` (pluriel, jusqu'à 30 par défaut, bien
- * assez pour un historique) inclut la Release "dernier-build" au même titre que les autres — filtrée ici
- * via son champ `prerelease`, exactement comme `releases/latest` l'ignore déjà naturellement ailleurs.
- */
-export async function getReleaseHistory(): Promise<ReleaseHistoryEntry[]> {
-  try {
-    const response = await fetch(`https://api.github.com/repos/${REPO}/releases`, {
-      headers: { Accept: 'application/vnd.github+json' },
-      signal: AbortSignal.timeout(5000)
-    })
-    if (!response.ok) return []
-    const releases = (await response.json()) as { tag_name?: string; prerelease?: boolean; published_at?: string; body?: string }[]
-
-    return releases
-      .filter((r) => !r.prerelease && r.tag_name && parseSemver(r.tag_name))
-      .map((r) => ({
-        version: r.tag_name as string,
-        publishedAt: r.published_at ?? '',
-        notes: r.body?.trim() || 'Pas de notes détaillées pour cette version.'
-      }))
-  } catch {
-    return []
   }
 }
 

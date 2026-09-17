@@ -96,6 +96,17 @@ def emit(payload: dict) -> None:
     sys.stdout.flush()
 
 
+def debug(message: str) -> None:
+    """Diagnostic pour AJUSTER le code (ex: WAKE_NAME depuis de vraies transcriptions rejetées), jamais pour
+    l'utilisateur : contrairement à emit(..., "event": "log"), qui est diffusé jusqu'à l'interface (voir
+    voiceClient.ts/voicePipeline.ts/ChatPanel.tsx), ceci n'écrit que sur stderr — capturé par voiceClient.ts
+    en simple `console.error('[voice_server]', ...)`, jamais rediffusé au renderer. Séparation ajoutée après
+    que Léo a vu "Candidat rejeté (transcription : 'Il est bizarre.')" s'afficher dans le Chat : ce texte
+    n'a de sens que pour régler wake_confirmation.py, jamais pour lui.
+    """
+    print(message, file=sys.stderr, flush=True)
+
+
 def rms(chunk: np.ndarray) -> float:
     return float(np.sqrt(np.mean(chunk.astype(np.float64) ** 2)))
 
@@ -381,12 +392,16 @@ def main() -> None:
                         voice_activated = True
                         confirmed_audio = pending_audio
                         confirmation.clear()
-                        emit({"event": "log", "message": "Mot Jaris confirmé par la transcription locale."})
+                        # Diagnostic seulement (debug(), pas emit(..., "event": "log")) : le vrai signal visible
+                        # côté utilisateur est l'évènement "wake" qui suit (change l'émotion de l'orbe) — cette
+                        # phrase technique ("confirmé par la transcription locale") n'ajoute rien pour Léo.
+                        debug("Mot Jaris confirmé par la transcription locale.")
                     else:
                         # Visibilité indispensable pour ajuster WAKE_NAME (wake_confirmation.py) à partir de
                         # vraies transcriptions rejetées, plutôt qu'à l'aveugle — même logique que le "Pic
-                        # candidat" du double clap ou le "Score mot d'activation" plus haut.
-                        emit({"event": "log", "message": f"Candidat rejeté (transcription : {candidate_text!r})."})
+                        # candidat" du double clap ou le "Score mot d'activation" plus haut. debug(), pas emit()
+                        # : ce texte ne concerne QUE le réglage de WAKE_NAME, jamais l'utilisateur (voir debug()).
+                        debug(f"Candidat rejeté (transcription : {candidate_text!r}).")
                 except Exception as exc:
                     # Une vérification échouée ne donne jamais une activation par défaut.
                     emit({"event": "log", "message": f"Vérification du mot Jaris impossible : {exc}"})

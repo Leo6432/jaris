@@ -24,10 +24,11 @@ try {
 const projectRoot = fileURLToPath(new URL('..', import.meta.url))
 const entryPath = join(projectRoot, 'tmp-context-length-tab-entry.tsx')
 
-// availableSteps volontairement PLUS COURT que CONTEXT_LENGTH_STEPS au complet (4 paliers sur 7) : simule
-// une machine dont la VRAM ne permet pas de monter jusqu'à 256k, exactement le cas que ce réglage doit
-// couvrir — un curseur qui afficherait quand même les 7 paliers laisserait croire que 256k est sûr partout.
-const CONTEXT_OPTIONS = { current: 8192, max: 32768, availableSteps: [4096, 8192, 16384, 32768] }
+// availableSteps volontairement PLUS COURT que CONTEXT_LENGTH_STEPS au complet (4 paliers sur 6, plancher
+// relevé à 8192 depuis l'étape 118) : simule une machine dont la VRAM ne permet pas de monter jusqu'à 256k,
+// exactement le cas que ce réglage doit couvrir — un curseur qui afficherait quand même les 6 paliers
+// laisserait croire que 256k est sûr partout.
+const CONTEXT_OPTIONS = { current: 8192, max: 32768, availableSteps: [8192, 16384, 24576, 32768] }
 
 const ENTRY = `
 import { createRoot } from 'react-dom/client'
@@ -95,15 +96,15 @@ const options = { skip: chromium ? false : 'Playwright indisponible dans cet env
 test('le curseur ne propose QUE les paliers sûrs pour cette machine, jamais les 7 par défaut', options, async () => {
   await withModelesTab(async (page) => {
     const ticks = await page.$$eval('.options-menu__context-slider-ticks span', (els) => els.map((el) => el.textContent))
-    assert.deepEqual(ticks, ['4k', '8k', '16k', '32k'], `paliers affichés : ${ticks.join(', ')}`)
+    assert.deepEqual(ticks, ['8k', '16k', '24k', '32k'], `paliers affichés : ${ticks.join(', ')}`)
     const max = await page.getAttribute('.options-menu__context-slider', 'max')
-    assert.equal(max, '3', 'le curseur doit avoir 4 positions (index 0 à 3), pas 7')
+    assert.equal(max, '3', 'le curseur doit avoir 4 positions (index 0 à 3), pas 6')
   })
 })
 
 test('déplacer le curseur enregistre la bonne valeur en tokens, pas un index brut', options, async () => {
   await withModelesTab(async (page) => {
-    // Position 2 de availableSteps = 16384, PAS "2" tel quel : un bug qui enregistrerait l'index au lieu de
+    // Position 2 de availableSteps = 24576, PAS "2" tel quel : un bug qui enregistrerait l'index au lieu de
     // la vraie valeur passerait inaperçu tant qu'on ne vérifie pas le nombre réellement transmis à setContextLength.
     await page.evaluate(() => {
       const el = document.querySelector('.options-menu__context-slider')
@@ -113,11 +114,11 @@ test('déplacer le curseur enregistre la bonne valeur en tokens, pas un index br
     })
     await page.waitForFunction(() => window.__setContextLengthCalls.length > 0)
     const calls = await page.evaluate(() => window.__setContextLengthCalls)
-    assert.deepEqual(calls, [16384], `attendu [16384], reçu ${JSON.stringify(calls)}`)
+    assert.deepEqual(calls, [24576], `attendu [24576], reçu ${JSON.stringify(calls)}`)
     // Le libellé "Actuellement" doit suivre tout de suite (mise à jour optimiste), pas attendre la
     // confirmation du main process.
     const currentLabel = await page.textContent('.options-menu__context-row .options-menu__row-description strong')
-    assert.equal(currentLabel, '16k')
+    assert.equal(currentLabel, '24k')
   })
 })
 
@@ -146,16 +147,16 @@ test('"Longueur de mémoire" est bien placé AU-DESSUS de "Les paliers de config
 
 test('les graduations ne se chevauchent JAMAIS, même quand la VRAM ne laisse que peu de paliers ronds (bug "4k8k" collé)', options, async () => {
   // Reproduit exactement le cas signalé par Léo (capture à l'appui) : sur une machine dont le maximum sûr
-  // est 8192, l'échelle d'Ollama seule ne donnait que 2 valeurs (4096, 8192) — computeAvailableSteps (voir
-  // scripts/test-context-length.mjs) en fabrique maintenant 4, mais ça ne suffit pas à lui seul : la vraie
-  // cause visuelle (`.options-menu__row-control` resté en flex-LIGNE pour une ligne "stacked", écrasant le
-  // conteneur des graduations à sa largeur minimale) doit aussi être corrigée côté CSS, sinon ces 4 valeurs
-  // se marcheraient quand même dessus.
+  // est 16384, l'échelle d'Ollama seule ne donnait que 2 valeurs (8192, 16384, plancher relevé à l'étape 118)
+  // — computeAvailableSteps (voir scripts/test-context-length.mjs) en fabrique maintenant 4, mais ça ne
+  // suffit pas à lui seul : la vraie cause visuelle (`.options-menu__row-control` resté en flex-LIGNE pour
+  // une ligne "stacked", écrasant le conteneur des graduations à sa largeur minimale) doit aussi être
+  // corrigée côté CSS, sinon ces 4 valeurs se marcheraient quand même dessus.
   const html = (() => {
     const outDir = mkdtempSync(join(tmpdir(), 'jaris-context-length-tight-'))
     const bundlePath = join(outDir, 'bundle.js')
     const entry = join(projectRoot, 'tmp-context-length-tight-entry.tsx')
-    const TIGHT_OPTIONS = { current: 8192, max: 8192, availableSteps: [4096, 5120, 7168, 8192] }
+    const TIGHT_OPTIONS = { current: 8192, max: 16384, availableSteps: [8192, 11264, 13312, 16384] }
     writeFileSync(
       entry,
       `
@@ -198,7 +199,7 @@ createRoot(document.getElementById('root')).render(<OptionsMenu />)
     await page.waitForSelector('.options-menu__context-slider-ticks span')
 
     const texts = await page.$$eval('.options-menu__context-slider-ticks span', (els) => els.map((el) => el.textContent))
-    assert.deepEqual(texts, ['4k', '5k', '7k', '8k'], `4 graduations attendues, reçu : ${texts.join(', ')}`)
+    assert.deepEqual(texts, ['8k', '11k', '13k', '16k'], `4 graduations attendues, reçu : ${texts.join(', ')}`)
 
     const boxes = await page.$$eval('.options-menu__context-slider-ticks span', (els) => els.map((el) => el.getBoundingClientRect().x + el.getBoundingClientRect().width))
     const lefts = await page.$$eval('.options-menu__context-slider-ticks span', (els) => els.map((el) => el.getBoundingClientRect().x))

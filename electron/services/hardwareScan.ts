@@ -395,8 +395,17 @@ export function pickSafeVisionModel(freeVramGb: number, installedModels: string[
 // forcément aussi pour Rapide/Médium (modèles plus petits, donc plus de marge), ce qui évite de calculer
 // les 3 paliers séparément pour un seul curseur global.
 
-/** Mêmes paliers que le curseur "Context length" d'Ollama (capture de Léo), jamais une valeur arbitraire. */
-export const CONTEXT_LENGTH_STEPS = [4096, 8192, 16384, 32768, 65536, 131072, 262144]
+/**
+ * Mêmes paliers que le curseur "Context length" d'Ollama (capture de Léo), moins son plancher de 4096 —
+ * étape 118, après le retour de Léo sur un test de "palier 4" (le curseur donnant alors 4096 ou une valeur
+ * interpolée proche) qui a produit des réponses incohérentes/hallucinées avec un ami. Mesuré ailleurs dans ce
+ * fichier (config.ts, OLLAMA_NUM_CTX) : le système prompt + la liste d'outils (TOOLS, tools.ts) consomment à
+ * eux seuls environ 4200-4500 tokens AVANT même le premier message — 4096 ne peut donc même pas contenir le
+ * prompt système, laissant zéro place pour la conversation elle-même, ce qui explique le comportement erratique
+ * observé. 8192 est déjà le plancher par défaut retenu ailleurs pour cette même raison : il devient aussi le
+ * plancher de ce curseur, pour ne plus jamais pouvoir en sélectionner un plus bas.
+ */
+export const CONTEXT_LENGTH_STEPS = [8192, 16384, 32768, 65536, 131072, 262144]
 
 /**
  * Format générique du champ `model_info` renvoyé par `POST /api/show` (getModelInfo, ollama.ts) : les clés
@@ -463,8 +472,9 @@ export function computeMaxSafeContext(arch: ModelArchInfo, modelWeightVramGb: nu
 
 /**
  * Le plus grand palier de CONTEXT_LENGTH_STEPS qui tient dans `maxSafeTokens` — jamais en dessous du plus
- * petit palier (4096, déjà le plancher historique de Jaris, voir OLLAMA_NUM_CTX dans config.ts) même si le
- * calcul VRAM tombe encore plus bas : mieux vaut proposer ce plancher que de renvoyer 0.
+ * petit palier (8192 depuis l'étape 118, le plancher déjà retenu pour OLLAMA_NUM_CTX dans config.ts, seul
+ * budget qui laisse de la place à la fois pour le système prompt + les outils et pour une vraie conversation)
+ * même si le calcul VRAM tombe encore plus bas : mieux vaut proposer ce plancher que de renvoyer 0.
  */
 export function roundDownToContextStep(maxSafeTokens: number): number {
   let result = CONTEXT_LENGTH_STEPS[0]
@@ -488,9 +498,10 @@ const MIN_CONTEXT_CHOICES = 4
  * D'abord les paliers "ronds" de CONTEXT_LENGTH_STEPS qui tiennent (les mêmes que le curseur d'Ollama) ;
  * s'il en manque pour atteindre MIN_CONTEXT_CHOICES, complétés par des paliers intermédiaires — multiples
  * de 1024, donc toujours un "Xk" propre avec formatContextLength — régulièrement espacés entre le plancher
- * (4096) et `max`. Aucun de ces paliers intermédiaires ne dépasse jamais `max` : ils ne rendent rien de
- * MOINS sûr que ce que `max` autorisait déjà, ils remplissent seulement l'intervalle. Si `max` vaut déjà le
- * plancher lui-même (aucune marge du tout), il n'y a rien à ajouter : un seul palier existe, point final.
+ * (8192 depuis l'étape 118, jamais en dessous) et `max`. Aucun de ces paliers intermédiaires ne dépasse
+ * jamais `max` : ils ne rendent rien de MOINS sûr que ce que `max` autorisait déjà, ils remplissent
+ * seulement l'intervalle. Si `max` vaut déjà le plancher lui-même (aucune marge du tout), il n'y a rien à
+ * ajouter : un seul palier existe, point final.
  */
 export function computeAvailableSteps(max: number): number[] {
   const fromLadder = CONTEXT_LENGTH_STEPS.filter((s) => s <= max)

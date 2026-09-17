@@ -40,11 +40,10 @@ const overrides = {
   getProfile: async () => ({ name: 'Léo' }),
   saveProfile: async () => {},
   listAudioInputDevices: async () => [],
-  getContextLengthOptions: async () => ({ current: 8192, max: 32768, availableSteps: [4096, 8192, 16384, 32768] }),
+  getContextLengthOptions: async () => ({ current: 8192, max: 32768, availableSteps: [8192, 16384, 24576, 32768] }),
   getOllamaVersionStatus: async () => null,
   getAppVersionStatus: async () => ({ current: '0.13.0', latest: '0.13.0', outdated: false }),
   getAppVersion: async () => '0.13.0',
-  getReleaseHistory: async () => [],
   getModelsLocationStatus: async () => ({
     ollamaModelsDir: 'C\\\\models',
     pythonRuntimeDir: 'C\\\\python',
@@ -132,7 +131,7 @@ test('Général regroupe VRAIMENT mise à jour, stockage et historique sur UNE s
     await page.click('.options-menu__tab:has-text("Général")')
     await page.waitForSelector('.options-menu__section-title')
     const titles = await page.$$eval('.options-page__content .options-menu__section-title', (els) => els.map((el) => el.textContent))
-    assert.deepEqual(titles, ['Mise à jour', 'Historique des versions', 'Emplacement des modèles', 'Historique des conversations'])
+    assert.deepEqual(titles, ['Mise à jour', 'Emplacement des modèles', 'Historique des conversations'])
     assert.ok(await page.$('.options-menu__models-location-list, .options-menu__model-overview-hint'), 'la section stockage doit être présente')
   })
 })

@@ -34,7 +34,7 @@ import {
   setActiveConversation
 } from './services/conversationStore'
 import { getProfile, saveProfile } from './services/profileStore'
-import { checkAppFreshness, checkForUpdate, getAppVersionStatus, getInstalledVersion, getReleaseHistory, updateApp } from './services/appUpdater'
+import { checkAppFreshness, checkForUpdate, getAppVersionStatus, getInstalledVersion, updateApp } from './services/appUpdater'
 import {
   IPC_CHANNELS,
   IMAGE_TYPES_BY_EXTENSION,
@@ -539,7 +539,6 @@ app.whenReady().then(async () => {
     )
   )
   ipcMain.handle(IPC_CHANNELS.getAppVersion, () => getInstalledVersion())
-  ipcMain.handle(IPC_CHANNELS.getReleaseHistory, () => getReleaseHistory())
   ipcMain.handle(IPC_CHANNELS.checkForUpdate, () => checkForUpdate())
   ipcMain.handle(IPC_CHANNELS.getModelsLocationStatus, () => getModelsLocationStatus())
   ipcMain.handle(IPC_CHANNELS.chooseModelsLocation, async () => {

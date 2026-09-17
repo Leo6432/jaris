@@ -112,10 +112,13 @@ test('computeMaxSafeContext renvoie 0 si le modèle seul dépasse déjà la VRAM
   assert.equal(computeMaxSafeContext(arch, 20, 8), 0)
 })
 
-test('roundDownToContextStep ne descend jamais sous le plancher historique de 4096', () => {
+test('roundDownToContextStep ne descend jamais sous le plancher de 8192 (étape 118)', () => {
   const { roundDownToContextStep, CONTEXT_LENGTH_STEPS } = loadHardwareScan({ freeVramMib: 8000 })
-  assert.equal(roundDownToContextStep(0), 4096)
-  assert.equal(roundDownToContextStep(4095), 4096)
+  // 4096 a été retiré du plancher à l'étape 118 : le système prompt + les outils (TOOLS, tools.ts) consomment
+  // déjà à eux seuls ~4200-4500 tokens, donc 4096 ne pouvait même pas les contenir — un ami de Léo a eu des
+  // réponses incohérentes/hallucinées en testant "palier 4" (4096 ou une valeur interpolée proche).
+  assert.equal(roundDownToContextStep(0), 8192)
+  assert.equal(roundDownToContextStep(4095), 8192)
   assert.equal(roundDownToContextStep(10_000), 8192)
   assert.equal(roundDownToContextStep(300_000), CONTEXT_LENGTH_STEPS.at(-1))
 })
@@ -125,18 +128,17 @@ test('computeContextLengthOptions propose un maximum plus grand quand la VRAM/le
   const result = await computeContextLengthOptions('qwen3.5:9b', 8192)
   assert.equal(result.max, 16384, `attendu 16384, reçu ${JSON.stringify(result)}`)
   assert.equal(result.current, 8192, 'la valeur déjà en usage ne doit pas bouger toute seule')
-  // 4 paliers minimum désormais (étape 117) : 4096/8192/16384 de l'échelle d'Ollama ne donnent que 3 valeurs
-  // sous 16384, complétées par le palier intermédiaire 12288 (multiple de 1024, jamais au-dessus de max).
-  assert.deepEqual(result.availableSteps, [4096, 8192, 12288, 16384])
+  // 4 paliers minimum (étape 117) : 8192/16384 de l'échelle d'Ollama (plancher relevé à l'étape 118) ne
+  // donnent que 2 valeurs sous 16384, complétées par 2 paliers intermédiaires (multiples de 1024).
+  assert.deepEqual(result.availableSteps, [8192, 11264, 13312, 16384])
 })
 
 test('computeContextLengthOptions ne propose JAMAIS plus que le palier déjà en usage sans donnée fiable', async () => {
   // Ollama injoignable (getModelInfo renvoie null) : aucune preuve que monter le curseur soit sûr.
   const { computeContextLengthOptions } = loadHardwareScan({ freeVramMib: 8000, modelInfo: null, sizeBytes: null })
   const result = await computeContextLengthOptions('qwen3.5:9b', 8192)
-  // Toujours au moins 4 choix, tous <= 8192 (la valeur déjà en usage, donc déjà prouvée sûre en pratique) :
-  // compléter l'intervalle ne propose rien de PLUS que ce qui tournait déjà, juste plus de choix en dessous.
-  assert.deepEqual(result, { current: 8192, max: 8192, availableSteps: [4096, 5120, 7168, 8192] })
+  // max == plancher (8192) : aucune marge du tout, rien à intercaler, un seul choix possible.
+  assert.deepEqual(result, { current: 8192, max: 8192, availableSteps: [8192] })
 })
 
 test('computeContextLengthOptions redescend le palier actuel si la VRAM libre ne le permet plus', async () => {
@@ -146,20 +148,20 @@ test('computeContextLengthOptions redescend le palier actuel si la VRAM libre ne
   const result = await computeContextLengthOptions('qwen3.5:9b', 32768)
   assert.equal(result.max, 16384)
   assert.equal(result.current, 16384, `current ne doit jamais dépasser max, reçu ${JSON.stringify(result)}`)
-  assert.deepEqual(result.availableSteps, [4096, 8192, 12288, 16384])
+  assert.deepEqual(result.availableSteps, [8192, 11264, 13312, 16384])
 })
 
 test('computeAvailableSteps garantit au moins 4 paliers dès que la VRAM laisse un peu de marge', () => {
   const { computeAvailableSteps } = loadHardwareScan({ freeVramMib: 8000 })
-  // max == plancher (4096) : aucune marge du tout, rien à intercaler, un seul choix possible.
-  assert.deepEqual(computeAvailableSteps(4096), [4096])
-  // max == 8192 : l'échelle d'Ollama ne donne que 2 valeurs (4096, 8192) — Léo, capture à l'appui : "il ya
+  // max == plancher (8192 depuis l'étape 118) : aucune marge du tout, rien à intercaler, un seul choix possible.
+  assert.deepEqual(computeAvailableSteps(8192), [8192])
+  // max == 16384 : l'échelle d'Ollama ne donne que 2 valeurs (8192, 16384) — Léo, capture à l'appui : "il ya
   // écrit 4k8k coller... il en faut 4". Complété par deux paliers intermédiaires, multiples de 1024.
-  assert.deepEqual(computeAvailableSteps(8192), [4096, 5120, 7168, 8192])
-  // max == 16384 : l'échelle d'Ollama donne 3 valeurs (4096, 8192, 16384), complétées par une seule (12288).
-  assert.deepEqual(computeAvailableSteps(16384), [4096, 8192, 12288, 16384])
-  // max == 32768 : l'échelle d'Ollama donne déjà 4 valeurs — rien à ajouter, on ne complète jamais pour rien.
-  assert.deepEqual(computeAvailableSteps(32768), [4096, 8192, 16384, 32768])
+  assert.deepEqual(computeAvailableSteps(16384), [8192, 11264, 13312, 16384])
+  // max == 32768 : l'échelle d'Ollama donne 3 valeurs (8192, 16384, 32768), complétées par une seule (24576).
+  assert.deepEqual(computeAvailableSteps(32768), [8192, 16384, 24576, 32768])
+  // max == 65536 : l'échelle d'Ollama donne déjà 4 valeurs — rien à ajouter, on ne complète jamais pour rien.
+  assert.deepEqual(computeAvailableSteps(65536), [8192, 16384, 32768, 65536])
   // Un max plus grand encore garde l'échelle d'Ollama telle quelle (déjà bien plus que 4 valeurs).
-  assert.deepEqual(computeAvailableSteps(262144), [4096, 8192, 16384, 32768, 65536, 131072, 262144])
+  assert.deepEqual(computeAvailableSteps(262144), [8192, 16384, 32768, 65536, 131072, 262144])
 })

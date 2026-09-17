@@ -20,7 +20,6 @@ import type {
   OllamaVersionStatus,
   PickedImageFile,
   Profile,
-  ReleaseHistoryEntry,
   RuntimeSetupProgress,
   RuntimeSetupStatus,
   SoundCue,
@@ -66,7 +65,6 @@ declare global {
       // restait figé plusieurs minutes sans rien dire ("on ne sait pas quand c'est terminé", Léo).
       onUpdateProgress: (cb: (progress: UpdateProgress) => void) => () => void
       getAppVersion: () => Promise<string>
-      getReleaseHistory: () => Promise<ReleaseHistoryEntry[]>
       checkForUpdate: () => Promise<UpdateCheckResult>
       getModelsLocationStatus: () => Promise<ModelsLocationStatus>
       chooseModelsLocation: () => Promise<{ success: boolean; message: string }>
