@@ -2203,3 +2203,55 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   réglages ne contient plus que Voix/Modèles/Général) et `scripts/test-capabilities.mjs` (seuil d'outils
   abaissé en connaissance de cause). Chaque assertion modifiée a été vérifiée en la faisant échouer d'abord
   (ancien texte, ancienne classe) avant de confirmer qu'elle passe sur le nouveau rendu.
+
+- **"met juste le context au dessus des palier et c'est bizzare il ya écrit 4k8k coller, et essaye de
+  proposer plusieurs choix pas 2 il en faut 4" (Léo, étape 117) — trois retours sur le curseur de longueur
+  de contexte livré à l'étape 114, dans le nouveau gabarit `SettingRow`/`SettingGroup` de l'étape 116.**
+  1. **Ordre.** "Longueur de mémoire" déplacé AU-DESSUS de "Les paliers de configuration" (OptionsMenu.tsx,
+     onglet Modèles) — un simple réordonnancement du JSX, aucune logique changée.
+  2. **"4k8k" collé : un vrai bug de mise en page, pas un problème de contenu.** Cause trouvée en relisant le
+     CSS de la ligne "stacked" ajoutée à l'étape 116 : `.options-menu__row--stacked` met bien
+     `flex-direction: column` sur la ligne ELLE-MÊME (texte au-dessus, contrôle en dessous), mais
+     `.options-menu__row-control` — le conteneur DANS lequel vivent le curseur ET ses graduations, tous les
+     deux enfants directs de ce conteneur — restait en flex-LIGNE (son mode par défaut, jamais changé pour ce
+     cas). Le curseur (`.options-menu__context-slider`, déjà en `width: 100%`) réclamait donc toute la place
+     à côté de ses propres graduations au lieu d'être suivi par elles en dessous ; le conteneur des
+     graduations, écrasé à sa largeur minimale par ce partage de ligne, perdait l'espace que
+     `justify-content: space-between` était censé lui donner — les libellés "4k"/"8k" se retrouvaient collés
+     l'un à l'autre faute de place pour les écarter. Corrigé en ajoutant `flex-direction: column;
+     align-items: stretch` à `.options-menu__row--stacked .options-menu__row-control` : le curseur et ses
+     graduations reprennent chacun toute la largeur, l'un sous l'autre. **Leçon générale, qui rejoint celle
+     déjà tirée pour `.options-menu__voice-picker` (étape 115) : `flex-direction: column` posé sur un
+     conteneur ne s'hérite PAS par ses enfants flex — si un enfant direct est LUI-MÊME un conteneur flex
+     (ici `.options-menu__row-control`, généralement en ligne pour aligner un intitulé et son contrôle), il
+     faut le repasser en colonne EXPLICITEMENT pour lui aussi, sinon deux éléments qu'on croit empilés
+     restent côte à côte, écrasés dans l'espace qui leur reste.** Vérifié par une VRAIE mesure de rectangles
+     (`getBoundingClientRect`) sur les 4 graduations, pas par une simple relecture du CSS — le test échoue
+     bien si le correctif est retiré (confirmé en le retirant temporairement).
+  3. **"il en faut 4" : la vraie cause profonde, en amont du rendu.** Sur une machine dont la VRAM libre ne
+     laisse de marge que pour les tout premiers doublements de l'échelle d'Ollama (4k, 8k, parfois 16k),
+     `CONTEXT_LENGTH_STEPS.filter(s => s <= max)` (hardwareScan.ts) ne renvoyait parfois que 2 ou 3 valeurs
+     — d'où le collage visuel ET un curseur qui ne servait presque à rien (2 crans). Ajouté
+     `computeAvailableSteps(max)` : garde d'abord les paliers "ronds" de l'échelle d'Ollama qui tiennent,
+     puis, s'il en manque pour atteindre 4, complète par des paliers INTERMÉDIAIRES (multiples de 1024, donc
+     toujours un "Xk" propre avec `formatContextLength`) régulièrement espacés entre le plancher (4096) et
+     `max` — jamais un seul ajouté au-dessus de `max` : compléter l'intervalle ne rend rien de MOINS sûr que
+     ce que `max` autorisait déjà, contrairement à inventer un maximum plus optimiste (interdit depuis
+     l'étape 114, toujours vrai ici). Exemple mesuré : max=8192 donnait avant `[4096, 8192]`, donne
+     maintenant `[4096, 5120, 7168, 8192]`. Seul cas où 4 restent impossibles : `max` égal au plancher
+     lui-même (4096, aucune marge du tout) — un seul choix existe alors réellement, rien à fabriquer.
+  **Piège que ce correctif aurait pu créer, évité en écrivant le test AVANT de considérer le correctif
+  fini** : corriger UNIQUEMENT le CSS (2) sans toucher au calcul (3) aurait laissé un curseur bien espacé
+  mais toujours limité à 2 crans sur la machine de Léo — les deux bugs se ressemblaient dans son message
+  mais avaient des causes complètement séparées (l'un dans le RENDU, l'autre dans le CALCUL en amont), et
+  corriger le premier n'aurait rien réglé du second. Un test dédié à `computeAvailableSteps` (4 cas : au
+  plancher, à 8192, à 16384, à 32768 et au-delà) vérifie le calcul indépendamment du rendu, et un test
+  navigateur avec le résultat RÉEL de ce calcul (`[4096, 5120, 7168, 8192]`) vérifie que le CSS ne recasse
+  pas ce que le calcul vient de réparer — les deux bouts de la chaîne, jamais un seul.
+  Régression : `node --test scripts/test-context-length.mjs scripts/test-context-length-ui.mjs` (286 tests
+  au total) — `computeAvailableSteps` testée directement (plancher, 8192, 16384, 32768, 262144), les 3 tests
+  existants de `computeContextLengthOptions` mis à jour pour le nouveau nombre de paliers, un test d'ordre
+  ("Longueur de mémoire" avant "Les paliers de configuration") et un test de non-chevauchement des
+  graduations sur le cas RÉEL le plus serré (max=8192). Chaque nouvelle assertion vérifiée en réintroduisant
+  temporairement le défaut correspondant (CSS ET calcul séparément) : les deux échouent bien chacun de son
+  côté, sans faire échouer l'autre.

@@ -1007,3 +1007,12 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   seuil minimal d'outils dans tools.ts (16 → 12, cohérent avec les 5 outils téléphone retirés) et 4 tests
   navigateur réécrits pour la nouvelle structure. Vérifié aussi par de vraies captures d'écran du rendu
   compilé sur les 3 onglets.
+- ✅ Étape 117 (v0.14.1) — Léo, sur le curseur de longueur de contexte : "met juste le context au dessus des
+  palier", "il ya écrit 4k8k coller", "il en faut 4" (pas 2). Trois correctifs : (1) "Longueur de mémoire"
+  déplacé au-dessus de "Les paliers de configuration" ; (2) le collage visuel venait d'un vrai bug CSS — le
+  conteneur des graduations restait en flex-ligne à côté du curseur au lieu d'être empilé en dessous,
+  l'écrasant à sa largeur minimale ; (3) sur une machine dont la VRAM ne laisse de marge que pour 2-3 des
+  grands doublements d'Ollama (4k, 8k), un nouveau calcul (`computeAvailableSteps`) complète maintenant avec
+  des paliers intermédiaires (multiples de 1024) pour toujours proposer au moins 4 choix, sans jamais
+  dépasser le maximum sûr déjà calculé. Régression : `npm test` (286 tests), chaque correctif vérifié en le
+  retirant temporairement pour confirmer que son test échoue bien seul.

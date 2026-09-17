@@ -132,3 +132,86 @@ test('le curseur est réellement habillé par le CSS de Jaris, pas laissé au st
     assert.equal(styles.cursor, 'pointer')
   })
 })
+
+test('"Longueur de mémoire" est bien placé AU-DESSUS de "Les paliers de configuration"', options, async () => {
+  // Léo, étape 117 : "met juste le context au dessus des palier".
+  await withModelesTab(async (page) => {
+    const titles = await page.$$eval('.options-page__content .options-menu__section-title', (els) => els.map((el) => el.textContent))
+    const iContexte = titles.indexOf('Longueur de mémoire')
+    const iPaliers = titles.indexOf('Les paliers de configuration')
+    assert.ok(iContexte !== -1 && iPaliers !== -1, `sections introuvables : ${titles.join(', ')}`)
+    assert.ok(iContexte < iPaliers, `"Longueur de mémoire" (position ${iContexte}) doit précéder "Les paliers de configuration" (position ${iPaliers})`)
+  })
+})
+
+test('les graduations ne se chevauchent JAMAIS, même quand la VRAM ne laisse que peu de paliers ronds (bug "4k8k" collé)', options, async () => {
+  // Reproduit exactement le cas signalé par Léo (capture à l'appui) : sur une machine dont le maximum sûr
+  // est 8192, l'échelle d'Ollama seule ne donnait que 2 valeurs (4096, 8192) — computeAvailableSteps (voir
+  // scripts/test-context-length.mjs) en fabrique maintenant 4, mais ça ne suffit pas à lui seul : la vraie
+  // cause visuelle (`.options-menu__row-control` resté en flex-LIGNE pour une ligne "stacked", écrasant le
+  // conteneur des graduations à sa largeur minimale) doit aussi être corrigée côté CSS, sinon ces 4 valeurs
+  // se marcheraient quand même dessus.
+  const html = (() => {
+    const outDir = mkdtempSync(join(tmpdir(), 'jaris-context-length-tight-'))
+    const bundlePath = join(outDir, 'bundle.js')
+    const entry = join(projectRoot, 'tmp-context-length-tight-entry.tsx')
+    const TIGHT_OPTIONS = { current: 8192, max: 8192, availableSteps: [4096, 5120, 7168, 8192] }
+    writeFileSync(
+      entry,
+      `
+import { createRoot } from 'react-dom/client'
+import OptionsMenu from './src/components/OptionsMenu'
+const overrides = {
+  getProfile: async () => ({ name: 'Léo' }),
+  saveProfile: async () => {},
+  getContextLengthOptions: async () => (${JSON.stringify(TIGHT_OPTIONS)}),
+  setContextLength: async () => {}
+}
+window.jaris = new Proxy({}, {
+  get: (_target, name) => {
+    if (typeof name !== 'string') return undefined
+    if (name in overrides) return overrides[name]
+    if (name.startsWith('on')) return () => () => {}
+    return async () => null
+  }
+})
+createRoot(document.getElementById('root')).render(<OptionsMenu />)
+`
+    )
+    try {
+      buildSync({ entryPoints: [entry], bundle: true, format: 'iife', jsx: 'automatic', alias: { '@': join(projectRoot, 'src') }, outfile: bundlePath })
+    } finally {
+      rmSync(entry, { force: true })
+    }
+    const css = readFileSync(globSync(join(projectRoot, 'out/renderer/assets/index-*.css'))[0], 'utf8')
+    return `<!doctype html><html><head><style>html,body{margin:0;background:#05070c;}${css}</style></head><body><div id="root"></div><script>${readFileSync(bundlePath, 'utf8')}</script></body></html>`
+  })()
+
+  const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
+  try {
+    const page = await browser.newPage()
+    await page.setViewportSize({ width: 1100, height: 900 })
+    await page.setContent(html)
+    await page.waitForSelector('.options-menu__trigger')
+    await page.click('.options-menu__trigger')
+    await page.click('.options-menu__tab:has-text("Modèles")')
+    await page.waitForSelector('.options-menu__context-slider-ticks span')
+
+    const texts = await page.$$eval('.options-menu__context-slider-ticks span', (els) => els.map((el) => el.textContent))
+    assert.deepEqual(texts, ['4k', '5k', '7k', '8k'], `4 graduations attendues, reçu : ${texts.join(', ')}`)
+
+    const boxes = await page.$$eval('.options-menu__context-slider-ticks span', (els) => els.map((el) => el.getBoundingClientRect().x + el.getBoundingClientRect().width))
+    const lefts = await page.$$eval('.options-menu__context-slider-ticks span', (els) => els.map((el) => el.getBoundingClientRect().x))
+    for (let i = 1; i < lefts.length; i++) {
+      assert.ok(lefts[i] > boxes[i - 1], `"${texts[i - 1]}" et "${texts[i]}" se chevauchent ou se touchent (fin du précédent : ${boxes[i - 1]}, début du suivant : ${lefts[i]})`)
+    }
+
+    // Le conteneur des graduations doit occuper toute la largeur de la ligne, pas seulement la largeur
+    // minimale de son contenu (la cause exacte du collage : `.options-menu__row-control` resté en ligne).
+    const ticksWidth = await page.$eval('.options-menu__context-slider-ticks', (el) => el.getBoundingClientRect().width)
+    const rowWidth = await page.$eval('.options-menu__context-row', (el) => el.getBoundingClientRect().width)
+    assert.ok(ticksWidth > rowWidth * 0.9, `les graduations (${ticksWidth}px) ne prennent pas toute la largeur de la ligne (${rowWidth}px)`)
+  } finally {
+    await browser.close()
+  }
+})

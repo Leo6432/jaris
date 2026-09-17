@@ -474,6 +474,40 @@ export function roundDownToContextStep(maxSafeTokens: number): number {
   return result
 }
 
+/** Nombre minimum de paliers à toujours proposer sur le curseur, voir computeAvailableSteps ci-dessous. */
+const MIN_CONTEXT_CHOICES = 4
+
+/**
+ * Les paliers du curseur pour un `max` donné (étape 117, Léo, capture à l'appui : "il ya écrit 4k8k
+ * coller... essaye de proposer plusieurs choix pas 2 il en faut 4"). Sur une machine dont la VRAM ne laisse
+ * de la place que pour les deux ou trois premiers doublements d'Ollama (4k, 8k[, 16k]), filtrer
+ * CONTEXT_LENGTH_STEPS ne laissait parfois que 2 valeurs — les deux graduations se retrouvaient alors
+ * collées l'une à l'autre sur le curseur (voir aussi le correctif CSS de `.options-menu__row-control`,
+ * index.css, qui réglait la moitié visuelle du même symptôme).
+ *
+ * D'abord les paliers "ronds" de CONTEXT_LENGTH_STEPS qui tiennent (les mêmes que le curseur d'Ollama) ;
+ * s'il en manque pour atteindre MIN_CONTEXT_CHOICES, complétés par des paliers intermédiaires — multiples
+ * de 1024, donc toujours un "Xk" propre avec formatContextLength — régulièrement espacés entre le plancher
+ * (4096) et `max`. Aucun de ces paliers intermédiaires ne dépasse jamais `max` : ils ne rendent rien de
+ * MOINS sûr que ce que `max` autorisait déjà, ils remplissent seulement l'intervalle. Si `max` vaut déjà le
+ * plancher lui-même (aucune marge du tout), il n'y a rien à ajouter : un seul palier existe, point final.
+ */
+export function computeAvailableSteps(max: number): number[] {
+  const fromLadder = CONTEXT_LENGTH_STEPS.filter((s) => s <= max)
+  const floor = CONTEXT_LENGTH_STEPS[0]
+  if (fromLadder.length >= MIN_CONTEXT_CHOICES || max <= floor) return fromLadder
+
+  const GRANULARITY = 1024
+  const steps = new Set(fromLadder)
+  steps.add(floor)
+  steps.add(max)
+  for (let i = 1; i < MIN_CONTEXT_CHOICES - 1; i++) {
+    const raw = floor + ((max - floor) * i) / (MIN_CONTEXT_CHOICES - 1)
+    steps.add(Math.round(raw / GRANULARITY) * GRANULARITY)
+  }
+  return [...steps].sort((a, b) => a - b)
+}
+
 /**
  * Calcule le curseur pour l'onglet Modèles : `model` doit être le modèle du palier PUISSANT (le plus gros
  * modèle de conversation configuré, donc celui qui laisse le moins de VRAM libre pour le cache K/V — voir le
@@ -490,7 +524,7 @@ export async function computeContextLengthOptions(model: string, currentContext:
   const fallback: ContextLengthOptions = {
     current: fallbackMax,
     max: fallbackMax,
-    availableSteps: CONTEXT_LENGTH_STEPS.filter((s) => s <= fallbackMax)
+    availableSteps: computeAvailableSteps(fallbackMax)
   }
 
   const [{ freeVramGb }, modelInfo, weightBytes] = await Promise.all([
@@ -507,7 +541,7 @@ export async function computeContextLengthOptions(model: string, currentContext:
   return {
     current: Math.min(fallbackMax, max),
     max,
-    availableSteps: CONTEXT_LENGTH_STEPS.filter((s) => s <= max)
+    availableSteps: computeAvailableSteps(max)
   }
 }
 

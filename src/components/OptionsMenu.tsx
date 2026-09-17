@@ -942,32 +942,10 @@ export default function OptionsMenu(): JSX.Element {
                 message alors que la mise à jour avait réellement marché. */}
             {!updatingOllama && ollamaUpdateMessage && <p className="options-menu__ollama-update-note">{ollamaUpdateMessage}</p>}
 
-            <SettingGroup title="Les paliers de configuration">
-              {hardwareTiers === null ? (
-                <p className="capacity-scan__status">Chargement...</p>
-              ) : (
-                <HardwareTierPreview tiers={hardwareTiers} />
-              )}
-              <SettingRow
-                label="Retester la configuration"
-                description="Redétecte la VRAM/RAM (utile après un changement matériel, par exemple une
-                  nouvelle carte graphique) et télécharge directement les modèles déjà connus pour cette
-                  nouvelle configuration, sans repasser par une analyse comparative complète."
-              >
-                <button className="options-menu__action" onClick={() => void handleRetestConfiguration()} disabled={retestingConfig}>
-                  {retestingConfig ? 'Nouvelle détection en cours...' : 'Retester la configuration'}
-                </button>
-              </SettingRow>
-              {profile?.codeModel && (
-                <SettingRow
-                  label="Modèle du mode Code"
-                  description="Choisi et téléchargé automatiquement selon ta configuration, comme les paliers ci-dessus."
-                >
-                  <strong>{formatModelName(profile.codeModel)}</strong>
-                </SettingRow>
-              )}
-            </SettingGroup>
-
+            {/* Longueur de mémoire AU-DESSUS des paliers de configuration (Léo, étape 117 : "met juste le
+                context au dessus des palier") : les deux parlent de "quel modèle/combien de mémoire pour ce
+                modèle", mais le réglage qu'on vient justement de toucher (le curseur) ne doit pas se
+                retrouver sous un gros tableau qu'il faut d'abord dépasser pour le retrouver. */}
             {contextLengthOptions && (
               <SettingGroup title="Longueur de mémoire">
                 <SettingRow
@@ -1002,6 +980,32 @@ export default function OptionsMenu(): JSX.Element {
                 </SettingRow>
               </SettingGroup>
             )}
+
+            <SettingGroup title="Les paliers de configuration">
+              {hardwareTiers === null ? (
+                <p className="capacity-scan__status">Chargement...</p>
+              ) : (
+                <HardwareTierPreview tiers={hardwareTiers} />
+              )}
+              <SettingRow
+                label="Retester la configuration"
+                description="Redétecte la VRAM/RAM (utile après un changement matériel, par exemple une
+                  nouvelle carte graphique) et télécharge directement les modèles déjà connus pour cette
+                  nouvelle configuration, sans repasser par une analyse comparative complète."
+              >
+                <button className="options-menu__action" onClick={() => void handleRetestConfiguration()} disabled={retestingConfig}>
+                  {retestingConfig ? 'Nouvelle détection en cours...' : 'Retester la configuration'}
+                </button>
+              </SettingRow>
+              {profile?.codeModel && (
+                <SettingRow
+                  label="Modèle du mode Code"
+                  description="Choisi et téléchargé automatiquement selon ta configuration, comme les paliers ci-dessus."
+                >
+                  <strong>{formatModelName(profile.codeModel)}</strong>
+                </SettingRow>
+              )}
+            </SettingGroup>
           </div>
         )}
 

@@ -448,8 +448,16 @@ body.body--scan::after {
   gap: 8px;
 }
 
+/* `flex-direction: column` ICI aussi (pas seulement sur `.options-menu__row--stacked` ci-dessus) : sans
+   elle, `.options-menu__row-control` restait un flex en LIGNE (son mode par défaut) — le curseur (déjà en
+   `width: 100%`) et ses graduations en dessous se retrouvaient côte à côte au lieu de l'un sous l'autre, et
+   le conteneur des graduations, écrasé à sa largeur minimale par le curseur qui réclamait toute la place,
+   perdait l'espacement de `justify-content: space-between` : "4k" et "8k" se retrouvaient collés l'un à
+   l'autre au lieu d'être espacés (Léo, étape 117 : "il ya écrit 4k8k coller"). */
 .options-menu__row--stacked .options-menu__row-control {
   width: 100%;
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .options-menu__row-text {
