@@ -96,7 +96,6 @@ test('tous les groupes et toutes les capacités du fichier partagé sont réelle
   const limitationCount = [...source.matchAll(/\n {8}limitation: true/g)].length
   assert.ok(groupCount >= 5, `motif de comptage des groupes en panne : ${groupCount} trouvé(s)`)
   assert.ok(itemCount >= 15, `motif de comptage des capacités en panne : ${itemCount} trouvé(s)`)
-  assert.ok(limitationCount >= 1, `motif de comptage des limitations en panne : ${limitationCount} trouvé(s)`)
 
   await withCapabilitiesTab(async (page) => {
     const rendered = await page.evaluate(() => ({
@@ -156,10 +155,9 @@ test('le contenu réel (pas un texte générique) est visible : chaque famille e
   await withCapabilitiesTab(async (page) => {
     const texte = await page.textContent('.options-page__content')
     assert.match(texte, /Ouvrir une application/)
-    assert.match(texte, /appel/i)
+    assert.match(texte, /rappel/i)
     assert.match(texte, /mode Code/i)
-    // Le point sur lequel Léo a explicitement buté dans le passé : les messages restent impossibles.
-    assert.match(texte, /messages/i)
+    assert.match(texte, /conversation/i)
   })
 })
 
@@ -223,7 +221,7 @@ test('"Ce que Jaris sait faire" est dans sa propre catégorie, pas dans les rég
     // disparu par erreur.
     const reglages = nav.listes.find((l) => l.onglets.includes('Voix'))
     assert.match(reglages.categorie, /réglages/i, 'les réglages ont perdu leur intitulé de catégorie')
-    assert.deepEqual(reglages.onglets, ['Voix', 'Téléphone', 'Modèles', 'Général'], `réglages inattendus : ${JSON.stringify(reglages.onglets)}`)
+    assert.deepEqual(reglages.onglets, ['Voix', 'Modèles', 'Général'], `réglages inattendus : ${JSON.stringify(reglages.onglets)}`)
   })
 })
 

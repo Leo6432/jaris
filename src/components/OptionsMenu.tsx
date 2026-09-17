@@ -8,8 +8,6 @@ import type {
   HardwareTierPreview as HardwareTierPreviewData,
   ModelsLocationStatus,
   OllamaVersionStatus,
-  PhoneCacheReport,
-  PhoneCall,
   Profile,
   ReleaseHistoryEntry,
   UpdateProgress
@@ -58,7 +56,7 @@ const MIC_TEST_BAR_COUNT = 42
 // l'expérience vocale dans son ensemble. Même chose pour Mise à jour/Stockage/Historique, trois réglages
 // "à propos de l'application" plutôt que trois sujets distincts — regroupés dans "Général", à la manière du
 // même onglet chez ChatGPT/Claude (thème, langue, effacer les discussions...). 9 onglets -> 5.
-type Tab = 'capacites' | 'voix' | 'telephone' | 'modeles' | 'general'
+type Tab = 'capacites' | 'voix' | 'modeles' | 'general'
 
 /**
  * Chromium ajoute des pseudo-périphériques "default"/"communications" en plus des vrais haut-parleurs
@@ -119,6 +117,60 @@ export function ReliabilityBadge({ value }: { value: string | null }): JSX.Eleme
   return <span className={`options-menu__badge options-menu__badge--${level}`}>{value}</span>
 }
 
+/**
+ * Une ligne de réglage uniforme (étape 116, Léo : "tu voit sur claude chatgpt tout se ressemble mais dans
+ * les option rien ne se ressemble micro comment se déclencher") : intitulé + description à gauche, le
+ * contrôle (case à cocher, menu déroulant, bouton, valeur en lecture seule...) aligné à droite. Avant cette
+ * refonte, chaque type de réglage avait sa propre mise en forme ad hoc (`.options-menu__field` pour un menu
+ * déroulant, `.options-menu__checkbox` en ligne isolée pour une case à cocher, un bouton nu pour une action)
+ * — Léo comparait "Micro utilisé" (un menu) et "Comment se déclencher" (des cases) et n'y voyait aucun point
+ * commun. `stacked` réserve le cas où le contrôle a besoin de toute la largeur (le curseur de longueur de
+ * contexte, un visualiseur de micro) plutôt que de rester coincé à droite d'une ligne étroite.
+ */
+function SettingRow({
+  label,
+  description,
+  stacked = false,
+  className,
+  children
+}: {
+  label: string
+  description?: React.ReactNode
+  stacked?: boolean
+  className?: string
+  children: React.ReactNode
+}): JSX.Element {
+  return (
+    <div className={`options-menu__row${stacked ? ' options-menu__row--stacked' : ''}${className ? ` ${className}` : ''}`}>
+      <div className="options-menu__row-text">
+        <span className="options-menu__row-label">{label}</span>
+        {description && <p className="options-menu__row-description">{description}</p>}
+      </div>
+      <div className="options-menu__row-control">{children}</div>
+    </div>
+  )
+}
+
+/** Regroupe plusieurs `SettingRow` dans une même carte (fond + bordure), avec un titre au-dessus — le
+ *  "groupe de réglages" façon Claude/ChatGPT, plutôt que des lignes qui flottent seules dans la page. */
+function SettingGroup({
+  title,
+  description,
+  children
+}: {
+  title: string
+  description?: string
+  children: React.ReactNode
+}): JSX.Element {
+  return (
+    <div className="options-menu__group">
+      <div className="options-menu__section-title">{title}</div>
+      {description && <p className="options-menu__group-description">{description}</p>}
+      <div className="options-menu__group-rows">{children}</div>
+    </div>
+  )
+}
+
 export default function OptionsMenu(): JSX.Element {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('voix')
@@ -164,13 +216,6 @@ export default function OptionsMenu(): JSX.Element {
   // affichée comme une rangée de barres qui défilent façon Discord, pas un seul chiffre.
   const [micLevels, setMicLevels] = useState<number[]>(() => Array(MIC_TEST_BAR_COUNT).fill(0))
   const [micTestResult, setMicTestResult] = useState<boolean | null>(null)
-  /** Derniers appels lus dans le cache de Mobile connecté (étape 21quater) — `null` tant qu'on n'a pas lu. */
-  const [phoneCalls, setPhoneCalls] = useState<PhoneCall[] | null>(null)
-  const [phoneBusy, setPhoneBusy] = useState(false)
-  /** Réponse de l'ouverture de Mobile connecté, déjà rédigée par openApp : affichée telle quelle. */
-  const [phoneMessage, setPhoneMessage] = useState<string | null>(null)
-  /** Constat du cache de Mobile connecté (étape 21ter) — structure seulement, jamais un contenu de message. */
-  const [phoneCache, setPhoneCache] = useState<PhoneCacheReport | null>(null)
 
   useEffect(() => {
     window.jaris.getProfile().then((p) => {
@@ -531,41 +576,6 @@ export default function OptionsMenu(): JSX.Element {
    * relus à la volée par App.tsx (comme soundEffectsEnabled ci-dessus) — aucun redémarrage du pipeline
    * vocal nécessaire, contrairement à toggleWakeword juste en dessous.
    */
-  const readPhoneCalls = async (): Promise<void> => {
-    setPhoneBusy(true)
-    setPhoneMessage(null)
-    try {
-      setPhoneCalls(await window.jaris.getPhoneCalls())
-    } catch (err) {
-      setPhoneCalls([])
-      setPhoneMessage(err instanceof Error ? err.message : String(err))
-    } finally {
-      setPhoneBusy(false)
-    }
-  }
-
-  const inspectPhoneCache = async (): Promise<void> => {
-    setPhoneBusy(true)
-    try {
-      setPhoneCache(await window.jaris.inspectPhoneCache())
-    } catch (err) {
-      setPhoneCache({ packages: [], databases: [], message: err instanceof Error ? err.message : String(err) })
-    } finally {
-      setPhoneBusy(false)
-    }
-  }
-
-  const openPhoneLink = async (): Promise<void> => {
-    setPhoneBusy(true)
-    try {
-      setPhoneMessage(await window.jaris.openPhoneLink())
-    } catch (err) {
-      setPhoneMessage(err instanceof Error ? err.message : String(err))
-    } finally {
-      setPhoneBusy(false)
-    }
-  }
-
   const toggleActivationKey = async (enabled: boolean): Promise<void> => {
     if (!profile) return
     setError(null)
@@ -680,9 +690,6 @@ export default function OptionsMenu(): JSX.Element {
             <button className={`options-menu__tab${tab === 'voix' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('voix')}>
               Voix
             </button>
-            <button className={`options-menu__tab${tab === 'telephone' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('telephone')}>
-              Téléphone
-            </button>
             <button className={`options-menu__tab${tab === 'modeles' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('modeles')}>
               Modèles
             </button>
@@ -768,199 +775,136 @@ export default function OptionsMenu(): JSX.Element {
 
             {/* Micro/Haut-parleur/Activation rejoignent Voix depuis l'étape 115 (Léo : "des categorie...
                 peuvent etre ensemble") : trois réglages qui parlent tous de l'expérience vocale, pas trois
-                sujets distincts — même page, à la façon d'un onglet de réglages Claude/ChatGPT. */}
-            <div className="options-menu__section-title">Design sonore</div>
-            <label className="options-menu__checkbox">
-              <input
-                type="checkbox"
-                checked={profile?.soundEffectsEnabled !== false}
-                onChange={(e) => void toggleSoundEffects(e.target.checked)}
-              />
-              Bips d'interface (écoute, réflexion, clic, scan...)
-            </label>
+                sujets distincts — même page, à la façon d'un onglet de réglages Claude/ChatGPT. Chaque
+                réglage passe maintenant par `SettingRow` (étape 116, Léo : "dans les option rien ne se
+                ressemble micro comment se déclencher") : intitulé + description à gauche, contrôle à
+                droite, quel que soit le type de contrôle (case, menu, bouton) — plus de mise en forme ad hoc
+                différente d'un réglage à l'autre. */}
+            <SettingGroup title="Son">
+              <SettingRow label="Bips d'interface" description="Un son court à l'écoute, la réflexion, un clic, un scan...">
+                <input
+                  type="checkbox"
+                  className="options-menu__toggle"
+                  checked={profile?.soundEffectsEnabled !== false}
+                  onChange={(e) => void toggleSoundEffects(e.target.checked)}
+                />
+              </SettingRow>
+            </SettingGroup>
 
-            <div className="options-menu__section-title">Micro utilisé</div>
-            <label className="options-menu__field">
-              <select
-                value={profile?.audioInputDeviceIndex ?? ''}
-                onChange={(e) => void chooseInputDevice(e.target.value)}
-                disabled={inputDevices === null || savingAudioDevice}
+            <SettingGroup title="Micro et haut-parleur">
+              <SettingRow
+                label="Micro utilisé"
+                description={
+                  inputDevices !== null && inputDevices.length === 0
+                    ? 'Aucun micro détecté par PortAudio.'
+                    : savingAudioDevice
+                      ? 'Changement de micro : redémarrage du pipeline vocal (rechargement des modèles)…'
+                      : undefined
+                }
               >
-                <option value="">Défaut du système</option>
-                {inputDevices?.map((device) => (
-                  <option key={device.index} value={device.index}>
-                    {device.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {inputDevices !== null && inputDevices.length === 0 && (
-              <p className="options-menu__model-overview-hint">Aucun micro détecté par PortAudio.</p>
-            )}
-            {savingAudioDevice && (
-              <p className="options-menu__model-overview-hint">
-                Changement de micro : redémarrage du pipeline vocal (rechargement des modèles)...
-              </p>
-            )}
+                <select
+                  className="options-menu__select"
+                  value={profile?.audioInputDeviceIndex ?? ''}
+                  onChange={(e) => void chooseInputDevice(e.target.value)}
+                  disabled={inputDevices === null || savingAudioDevice}
+                >
+                  <option value="">Défaut du système</option>
+                  {inputDevices?.map((device) => (
+                    <option key={device.index} value={device.index}>
+                      {device.name}
+                    </option>
+                  ))}
+                </select>
+              </SettingRow>
 
-            <div className="options-menu__section-title">Haut-parleur utilisé</div>
-            <label className="options-menu__field">
-              <select
-                value={profile?.audioOutputDeviceId || ''}
-                onChange={(e) => void chooseOutputDevice(e.target.value)}
-                disabled={outputDevices === null}
-              >
-                <option value="">Défaut du système</option>
-                {outputDevices?.map((device) => (
-                  <option key={device.deviceId} value={device.deviceId}>
-                    {device.label || device.deviceId}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <SettingRow label="Haut-parleur utilisé">
+                <select
+                  className="options-menu__select"
+                  value={profile?.audioOutputDeviceId || ''}
+                  onChange={(e) => void chooseOutputDevice(e.target.value)}
+                  disabled={outputDevices === null}
+                >
+                  <option value="">Défaut du système</option>
+                  {outputDevices?.map((device) => (
+                    <option key={device.deviceId} value={device.deviceId}>
+                      {device.label || device.deviceId}
+                    </option>
+                  ))}
+                </select>
+              </SettingRow>
 
-            <div className="options-menu__section-title">Tester le micro</div>
-            <div className="options-menu__mic-test">
-              {/* Rangée de barres façon Discord plutôt qu'un seul indicateur : chaque barre est un niveau
-                  sonore récent (mic_test_level, ~12/seconde, voir voice_server.py), la plus récente à
-                  droite — les anciennes défilent vers la gauche à mesure que de nouvelles arrivent
-                  (micLevels ci-dessus), pour une vraie sensation de mouvement pendant qu'on parle plutôt
-                  qu'un seul chiffre qui saute. */}
-              <div className="options-menu__mic-bars">
-                {micLevels.map((level, i) => (
-                  <div
-                    key={i}
-                    className="options-menu__mic-bar"
-                    style={{ height: `${10 + Math.min(1, level) * 90}%` }}
-                  />
-                ))}
-              </div>
-              <button
-                className={`options-menu__action${micTesting ? ' options-menu__action--danger' : ''}`}
-                onClick={toggleMicTest}
-              >
-                {micTesting ? 'Arrêter le test' : 'Tester le micro'}
-              </button>
-              {!micTesting && micTestResult !== null && (
-                <p className={micTestResult ? 'options-menu__mic-result--ok' : 'options-menu__mic-result--bad'}>
-                  {micTestResult ? 'Micro détecté : du son a bien été capté.' : "Rien capté : vérifie que le bon micro est sélectionné et qu'il n'est pas coupé."}
-                </p>
+              <SettingRow label="Tester le micro" description="Vérifie que Jaris capte bien ta voix.">
+                <button
+                  className={`options-menu__action${micTesting ? ' options-menu__action--danger' : ''}`}
+                  onClick={toggleMicTest}
+                >
+                  {micTesting ? 'Arrêter le test' : 'Tester le micro'}
+                </button>
+              </SettingRow>
+              {(micTesting || micTestResult !== null) && (
+                <div className="options-menu__mic-test-detail">
+                  {/* Rangée de barres façon Discord plutôt qu'un seul indicateur : chaque barre est un
+                      niveau sonore récent (mic_test_level, ~12/seconde, voir voice_server.py), la plus
+                      récente à droite — les anciennes défilent vers la gauche à mesure que de nouvelles
+                      arrivent (micLevels ci-dessus), pour une vraie sensation de mouvement pendant qu'on
+                      parle plutôt qu'un seul chiffre qui saute. */}
+                  <div className="options-menu__mic-bars">
+                    {micLevels.map((level, i) => (
+                      <div
+                        key={i}
+                        className="options-menu__mic-bar"
+                        style={{ height: `${10 + Math.min(1, level) * 90}%` }}
+                      />
+                    ))}
+                  </div>
+                  {!micTesting && micTestResult !== null && (
+                    <p className={micTestResult ? 'options-menu__mic-result--ok' : 'options-menu__mic-result--bad'}>
+                      {micTestResult ? 'Micro détecté : du son a bien été capté.' : "Rien capté : vérifie que le bon micro est sélectionné et qu'il n'est pas coupé."}
+                    </p>
+                  )}
+                </div>
               )}
-            </div>
+            </SettingGroup>
 
-            <div className="options-menu__section-title">Comment déclencher l'écoute</div>
-            <p className="options-menu__model-overview-hint">
-              Les trois façons d'activer Jaris sont indépendantes : décoche celles dont tu ne veux pas.
-            </p>
-            <label className="options-menu__checkbox">
-              <input
-                type="checkbox"
-                checked={profile?.activationKeyEnabled !== false}
-                onChange={(e) => void toggleActivationKey(e.target.checked)}
-              />
-              Touche "+" du pavé numérique
-            </label>
-            <label className="options-menu__checkbox">
-              <input
-                type="checkbox"
-                checked={profile?.activationOrbClickEnabled !== false}
-                onChange={(e) => void toggleActivationOrbClick(e.target.checked)}
-              />
-              Clic sur le cercle de Jaris
-            </label>
-            <label className="options-menu__checkbox">
-              <input
-                type="checkbox"
-                checked={profile?.activationWakeWordEnabled !== false}
-                disabled={savingWakewordSetting}
-                onChange={(e) => void toggleActivationWakeword(e.target.checked)}
-              />
-              Dire "Jaris" à voix haute
-            </label>
-            {savingWakewordSetting && (
-              <p className="options-menu__model-overview-hint">
-                Redémarrage du pipeline vocal (rechargement des modèles)...
-              </p>
-            )}
+            <SettingGroup
+              title="Comment déclencher l'écoute"
+              description="Les trois façons d'activer Jaris sont indépendantes : décoche celles dont tu ne veux pas."
+            >
+              <SettingRow label='Touche "+" du pavé numérique'>
+                <input
+                  type="checkbox"
+                  className="options-menu__toggle"
+                  checked={profile?.activationKeyEnabled !== false}
+                  onChange={(e) => void toggleActivationKey(e.target.checked)}
+                />
+              </SettingRow>
+              <SettingRow label="Clic sur le cercle de Jaris">
+                <input
+                  type="checkbox"
+                  className="options-menu__toggle"
+                  checked={profile?.activationOrbClickEnabled !== false}
+                  onChange={(e) => void toggleActivationOrbClick(e.target.checked)}
+                />
+              </SettingRow>
+              <SettingRow
+                label='Dire "Jaris" à voix haute'
+                description={savingWakewordSetting ? 'Redémarrage du pipeline vocal (rechargement des modèles)…' : undefined}
+              >
+                <input
+                  type="checkbox"
+                  className="options-menu__toggle"
+                  checked={profile?.activationWakeWordEnabled !== false}
+                  disabled={savingWakewordSetting}
+                  onChange={(e) => void toggleActivationWakeword(e.target.checked)}
+                />
+              </SettingRow>
+            </SettingGroup>
             <p className="options-menu__model-overview-hint">
               Le mot d'activation "Jaris" n'est pas toujours parfait : "Jarvis" (l'ancien nom) et certaines
               phrases contenant "il a ri" peuvent parfois le déclencher par erreur, et il lui arrive de ne
               pas reconnaître "Jaris" dit seul, sans rien après. Si ça arrive trop souvent, la touche "+" et
               le clic sur le cercle restent des façons fiables de l'activer.
             </p>
-          </div>
-        )}
-
-        {tab === 'telephone' && (
-          <div className="options-menu__section">
-            <div className="options-menu__section-title">Ton téléphone</div>
-            <p className="options-menu__model-overview-hint">
-              Quand « Mobile connecté » (Phone Link) est relié à ton téléphone, il recopie sur cet ordinateur
-              ton historique d'appels et tes contacts. Jaris les lit directement là, sans rien envoyer sur
-              internet : tu peux lui demander « qui m'a appelé ? » ou « c'est quoi le numéro de maman ? ».
-            </p>
-            <p className="options-menu__model-overview-hint">
-              Tu peux aussi demander « Lis mes notifications », « Appelle maman » ou « Envoie un message
-              à maman : Bonjour ». Jaris utilise la fenêtre de Mobile connecté et vérifie le destinataire
-              avant l’action. Le téléphone doit rester connecté en Bluetooth. Une commande d’envoi ne prouve
-              pas encore sa réception ; Jaris ne relance jamais automatiquement un envoi.
-            </p>
-
-            <div className="options-menu__actions">
-              <button className="options-menu__action" disabled={phoneBusy} onClick={() => void readPhoneCalls()}>
-                {phoneBusy ? 'Lecture…' : 'Voir mes derniers appels'}
-              </button>
-              <button className="options-menu__action" disabled={phoneBusy} onClick={() => void openPhoneLink()}>
-                Ouvrir Mobile connecté
-              </button>
-              <button className="options-menu__action" disabled={phoneBusy} onClick={() => void inspectPhoneCache()}>
-                Ce que Mobile connecté garde sur le PC
-              </button>
-            </div>
-
-            {phoneMessage && <p className="options-menu__model-overview-hint">{phoneMessage}</p>}
-
-            {phoneCalls !== null && (
-              phoneCalls.length === 0 ? (
-                <p className="options-menu__model-overview-hint">
-                  Aucun appel trouvé sur cet ordinateur. Vérifie que Mobile connecté est bien relié à ton
-                  téléphone — c'est lui qui recopie cet historique, Jaris ne fait que le lire.
-                </p>
-              ) : (
-                <ul className="options-menu__notifications">
-                  {phoneCalls.map((call, index) => (
-                    <li key={index}>
-                      <strong>{call.name || call.number || 'Numéro inconnu'}</strong>
-                      {' — '}
-                      {call.date ? new Date(call.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : 'date inconnue'}
-                      {call.durationSeconds > 0 && `, ${Math.round(call.durationSeconds / 60)} min`}
-                    </li>
-                  ))}
-                </ul>
-              )
-            )}
-
-            {phoneCache && (
-              <>
-                <p className="options-menu__model-overview-hint">{phoneCache.message}</p>
-                {phoneCache.databases.length > 0 && (
-                  <ul className="options-menu__notifications">
-                    {phoneCache.databases.map((database) => (
-                      <li key={database.path}>
-                        <strong>{database.path.split('\\').pop()}</strong>
-                        {' — '}
-                        {database.error
-                          ? database.error
-                          : database.tables
-                              .filter((table) => table.rows !== 0)
-                              .map((table) => `${table.name} (${table.rows === -1 ? 'illisible' : `${table.rows} lignes`})`)
-                              .join(', ') || 'aucune table remplie'}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </>
-            )}
           </div>
         )}
 
@@ -998,58 +942,65 @@ export default function OptionsMenu(): JSX.Element {
                 message alors que la mise à jour avait réellement marché. */}
             {!updatingOllama && ollamaUpdateMessage && <p className="options-menu__ollama-update-note">{ollamaUpdateMessage}</p>}
 
-            <div className="options-menu__section-title">Les paliers de configuration</div>
-            {hardwareTiers === null ? (
-              <p className="capacity-scan__status">Chargement...</p>
-            ) : (
-              <HardwareTierPreview tiers={hardwareTiers} />
-            )}
-
-            <button className="options-menu__action" onClick={() => void handleRetestConfiguration()} disabled={retestingConfig}>
-              {retestingConfig ? 'Nouvelle détection en cours...' : 'Retester la configuration'}
-            </button>
-            <p className="options-menu__model-overview-hint">
-              Redétecte la VRAM/RAM (utile après un changement matériel, par exemple une nouvelle carte
-              graphique) et télécharge directement les modèles déjà connus pour cette nouvelle configuration,
-              sans repasser par une analyse comparative complète.
-            </p>
-
-            {profile?.codeModel && (
-              <p className="options-menu__model-overview-hint">
-                Modèle du mode Code : <strong>{formatModelName(profile.codeModel)}</strong> — choisi et
-                téléchargé automatiquement selon ta configuration, comme les paliers ci-dessus.
-              </p>
-            )}
+            <SettingGroup title="Les paliers de configuration">
+              {hardwareTiers === null ? (
+                <p className="capacity-scan__status">Chargement...</p>
+              ) : (
+                <HardwareTierPreview tiers={hardwareTiers} />
+              )}
+              <SettingRow
+                label="Retester la configuration"
+                description="Redétecte la VRAM/RAM (utile après un changement matériel, par exemple une
+                  nouvelle carte graphique) et télécharge directement les modèles déjà connus pour cette
+                  nouvelle configuration, sans repasser par une analyse comparative complète."
+              >
+                <button className="options-menu__action" onClick={() => void handleRetestConfiguration()} disabled={retestingConfig}>
+                  {retestingConfig ? 'Nouvelle détection en cours...' : 'Retester la configuration'}
+                </button>
+              </SettingRow>
+              {profile?.codeModel && (
+                <SettingRow
+                  label="Modèle du mode Code"
+                  description="Choisi et téléchargé automatiquement selon ta configuration, comme les paliers ci-dessus."
+                >
+                  <strong>{formatModelName(profile.codeModel)}</strong>
+                </SettingRow>
+              )}
+            </SettingGroup>
 
             {contextLengthOptions && (
-              <div className="options-menu__context-length">
-                <div className="options-menu__section-title">Longueur de mémoire</div>
-                <p className="options-menu__model-overview-hint">
-                  Combien de la conversation Jaris garde en tête pour répondre — comme le curseur "Context
-                  length" d'Ollama, sauf que le maximum est déjà limité à ce que ta carte graphique peut
-                  encaisser sans déborder.
-                </p>
-                <input
-                  type="range"
-                  className="options-menu__context-slider"
-                  min={0}
-                  max={Math.max(0, contextLengthOptions.availableSteps.length - 1)}
-                  value={Math.max(0, contextLengthOptions.availableSteps.indexOf(contextLengthOptions.current))}
-                  onChange={(event) => {
-                    const step = contextLengthOptions.availableSteps[Number(event.target.value)]
-                    if (step !== undefined) handleContextLengthChange(step)
-                  }}
-                />
-                <div className="options-menu__context-slider-ticks">
-                  {contextLengthOptions.availableSteps.map((step) => (
-                    <span key={step}>{formatContextLength(step)}</span>
-                  ))}
-                </div>
-                <p className="options-menu__model-overview-hint">
-                  Actuellement : <strong>{formatContextLength(contextLengthOptions.current)}</strong>
-                  {savingContextLength ? ' (enregistrement…)' : ''}
-                </p>
-              </div>
+              <SettingGroup title="Longueur de mémoire">
+                <SettingRow
+                  stacked
+                  className="options-menu__context-row"
+                  label="Combien Jaris garde en tête"
+                  description={
+                    <>
+                      Comme le curseur "Context length" d'Ollama, sauf que le maximum est déjà limité à ce
+                      que ta carte graphique peut encaisser sans déborder. Actuellement :{' '}
+                      <strong>{formatContextLength(contextLengthOptions.current)}</strong>
+                      {savingContextLength ? ' (enregistrement…)' : ''}
+                    </>
+                  }
+                >
+                  <input
+                    type="range"
+                    className="options-menu__context-slider"
+                    min={0}
+                    max={Math.max(0, contextLengthOptions.availableSteps.length - 1)}
+                    value={Math.max(0, contextLengthOptions.availableSteps.indexOf(contextLengthOptions.current))}
+                    onChange={(event) => {
+                      const step = contextLengthOptions.availableSteps[Number(event.target.value)]
+                      if (step !== undefined) handleContextLengthChange(step)
+                    }}
+                  />
+                  <div className="options-menu__context-slider-ticks">
+                    {contextLengthOptions.availableSteps.map((step) => (
+                      <span key={step}>{formatContextLength(step)}</span>
+                    ))}
+                  </div>
+                </SettingRow>
+              </SettingGroup>
             )}
           </div>
         )}
@@ -1058,103 +1009,116 @@ export default function OptionsMenu(): JSX.Element {
           <div className="options-menu__section">
             {/* Mise à jour/Stockage/Historique fusionnés dans "Général" depuis l'étape 115 (Léo : "des
                 categorie... peuvent etre ensemble") : trois réglages "à propos de l'application" plutôt que
-                trois sujets distincts, à la manière du même onglet chez ChatGPT/Claude. */}
-            <div className="options-menu__section-title">Journal des mises à jour</div>
-            <p className="options-menu__model-overview-hint">
-              Version installée : <strong>{installedVersion ?? appVersionStatus?.current ?? '...'}</strong>
-            </p>
-            <button className="options-menu__action" onClick={handleCheckForUpdate} disabled={checkingUpdate}>
-              {checkingUpdate ? 'Recherche en cours…' : 'Rechercher une mise à jour'}
-            </button>
-            {updateCheckMessage && <p className="options-menu__ollama-update-note">{updateCheckMessage}</p>}
-
-            {appVersionStatus?.outdated && (
-              <div className="options-menu__ollama-warning">
-                Jaris {appVersionStatus.current} installé, la dernière version est{' '}
-                {appVersionStatus.latest}.
-                <div className="options-menu__ollama-update-actions">
-                  <button onClick={handleUpdateApp} disabled={updatingApp}>
-                    {updatingApp ? 'Mise à jour en cours…' : 'Mettre à jour'}
-                  </button>
-                </div>
-                {/* Étape 98 : une VRAIE barre qui avance, à la place d'une phrase figée. L'installeur pèse
-                    ~98 Mo, soit plusieurs minutes sur une connexion modeste — "on ne sait pas quand c'est
-                    terminé et des fois c'est bloqué et ça fait rien" (Léo) décrivait exactement ce vide. */}
-                {updatingApp && <AppUpdateProgress progress={updateProgress} />}
-              </div>
-            )}
-            {!updatingApp && appUpdateMessage && <p className="options-menu__ollama-update-note">{appUpdateMessage}</p>}
-
-            <div className="options-menu__section-title">Historique des versions</div>
-            {releaseHistory === null ? (
-              <p className="capacity-scan__status">Chargement...</p>
-            ) : releaseHistory.length === 0 ? (
-              <p className="options-menu__model-overview-hint">Aucune version publiée pour l'instant.</p>
-            ) : (
-              <ul className="options-menu__changelog-list">
-                {releaseHistory.map((entry) => (
-                  <li key={entry.version} className="options-menu__changelog-entry">
-                    <div className="options-menu__changelog-header">
-                      <strong>{entry.version}</strong>
-                      {entry.publishedAt && <span>{new Date(entry.publishedAt).toLocaleDateString('fr-FR')}</span>}
-                    </div>
-                    <p className="options-menu__changelog-notes">{formatReleaseNotes(entry.notes)}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <div className="options-menu__section-title">Emplacement des modèles</div>
-            <p className="options-menu__model-overview-hint">
-              Les modèles Ollama, l'environnement Python (voix) et le cache de reconnaissance/synthèse
-              vocale peuvent peser plusieurs dizaines de Go au total. Choisis un dossier (par exemple sur un
-              autre disque) pour que tout y soit rassemblé et déplacé — Ollama et Python continuent de
-              fonctionner normalement, sans rien savoir du changement.
-            </p>
-            {modelsLocation && (
-              <ul className="options-menu__models-location-list">
-                <li>Modèles Ollama : {modelsLocation.ollamaModelsDir}</li>
-                <li>Environnement Python : {modelsLocation.pythonRuntimeDir}</li>
-                <li>Cache vocal : {modelsLocation.hfCacheDir}</li>
-              </ul>
-            )}
-            <button className="options-menu__action" onClick={handleChooseModelsLocation} disabled={movingModelsLocation}>
-              {movingModelsLocation ? 'Déplacement en cours…' : 'Choisir un dossier…'}
-            </button>
-            {modelsLocationMessage && <p className="options-menu__ollama-update-note">{modelsLocationMessage}</p>}
-
-            <div className="options-menu__section-title">Historique des conversations</div>
-            {history === null ? (
-              <p className="capacity-scan__status">Chargement...</p>
-            ) : history.length === 0 ? (
-              <p className="options-menu__history-empty">Aucun échange enregistré pour l'instant.</p>
-            ) : (
-              <ul className="options-menu__history-list">
-                {[...history].reverse().map((entry) => (
-                  <li key={entry.id} className="options-menu__history-entry">
-                    <div className="options-menu__history-date">{new Date(entry.timestamp).toLocaleString('fr-FR')}</div>
-                    <div className="options-menu__history-transcript">« {entry.transcript} »</div>
-                    <div className="options-menu__history-reply">{entry.reply}</div>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {history !== null && (
-              <div className="options-menu__history-actions">
-                <button className="options-menu__action" onClick={() => void window.jaris.openConversationHistoryFile()}>
-                  Ouvrir le dossier
+                trois sujets distincts, à la manière du même onglet chez ChatGPT/Claude. Chaque réglage passe
+                maintenant par `SettingRow`/`SettingGroup` (étape 116) pour la même raison que l'onglet Voix
+                ci-dessus : un bouton, une case et une valeur en lecture seule doivent se présenter pareil. */}
+            <SettingGroup title="Mise à jour">
+              <SettingRow
+                label="Rechercher une mise à jour"
+                description={
+                  <>
+                    Version installée : <strong>{installedVersion ?? appVersionStatus?.current ?? '...'}</strong>
+                    {updateCheckMessage ? <> — {updateCheckMessage}</> : null}
+                  </>
+                }
+              >
+                <button className="options-menu__action" onClick={handleCheckForUpdate} disabled={checkingUpdate}>
+                  {checkingUpdate ? 'Recherche en cours…' : 'Rechercher une mise à jour'}
                 </button>
-                {history.length > 0 && (
-                  <button
-                    className="options-menu__action options-menu__action--danger"
-                    onClick={() => void handleClearHistory()}
-                    disabled={clearingHistory}
-                  >
-                    {clearingHistory ? 'Suppression...' : "Supprimer l'historique"}
+              </SettingRow>
+
+              {appVersionStatus?.outdated && (
+                <div className="options-menu__ollama-warning">
+                  Jaris {appVersionStatus.current} installé, la dernière version est{' '}
+                  {appVersionStatus.latest}.
+                  <div className="options-menu__ollama-update-actions">
+                    <button onClick={handleUpdateApp} disabled={updatingApp}>
+                      {updatingApp ? 'Mise à jour en cours…' : 'Mettre à jour'}
+                    </button>
+                  </div>
+                  {/* Étape 98 : une VRAIE barre qui avance, à la place d'une phrase figée. L'installeur pèse
+                      ~98 Mo, soit plusieurs minutes sur une connexion modeste — "on ne sait pas quand c'est
+                      terminé et des fois c'est bloqué et ça fait rien" (Léo) décrivait exactement ce vide. */}
+                  {updatingApp && <AppUpdateProgress progress={updateProgress} />}
+                </div>
+              )}
+              {!updatingApp && appUpdateMessage && <p className="options-menu__ollama-update-note">{appUpdateMessage}</p>}
+            </SettingGroup>
+
+            <SettingGroup title="Historique des versions">
+              {releaseHistory === null ? (
+                <p className="capacity-scan__status">Chargement...</p>
+              ) : releaseHistory.length === 0 ? (
+                <p className="options-menu__model-overview-hint">Aucune version publiée pour l'instant.</p>
+              ) : (
+                <ul className="options-menu__changelog-list">
+                  {releaseHistory.map((entry) => (
+                    <li key={entry.version} className="options-menu__changelog-entry">
+                      <div className="options-menu__changelog-header">
+                        <strong>{entry.version}</strong>
+                        {entry.publishedAt && <span>{new Date(entry.publishedAt).toLocaleDateString('fr-FR')}</span>}
+                      </div>
+                      <p className="options-menu__changelog-notes">{formatReleaseNotes(entry.notes)}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </SettingGroup>
+
+            <SettingGroup title="Emplacement des modèles">
+              <SettingRow
+                label="Dossier des modèles"
+                description="Les modèles Ollama, l'environnement Python (voix) et le cache de reconnaissance/synthèse
+                  vocale peuvent peser plusieurs dizaines de Go au total — regroupe-les ailleurs (un autre disque,
+                  par exemple) sans que rien d'autre n'ait à changer."
+              >
+                <button className="options-menu__action" onClick={handleChooseModelsLocation} disabled={movingModelsLocation}>
+                  {movingModelsLocation ? 'Déplacement en cours…' : 'Choisir un dossier…'}
+                </button>
+              </SettingRow>
+              {modelsLocation && (
+                <ul className="options-menu__models-location-list">
+                  <li>Modèles Ollama : {modelsLocation.ollamaModelsDir}</li>
+                  <li>Environnement Python : {modelsLocation.pythonRuntimeDir}</li>
+                  <li>Cache vocal : {modelsLocation.hfCacheDir}</li>
+                </ul>
+              )}
+              {modelsLocationMessage && <p className="options-menu__ollama-update-note">{modelsLocationMessage}</p>}
+            </SettingGroup>
+
+            <SettingGroup title="Historique des conversations">
+              {history === null ? (
+                <p className="capacity-scan__status">Chargement...</p>
+              ) : history.length === 0 ? (
+                <p className="options-menu__history-empty">Aucun échange enregistré pour l'instant.</p>
+              ) : (
+                <ul className="options-menu__history-list">
+                  {[...history].reverse().map((entry) => (
+                    <li key={entry.id} className="options-menu__history-entry">
+                      <div className="options-menu__history-date">{new Date(entry.timestamp).toLocaleString('fr-FR')}</div>
+                      <div className="options-menu__history-transcript">« {entry.transcript} »</div>
+                      <div className="options-menu__history-reply">{entry.reply}</div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {history !== null && (
+                <SettingRow label="Dossier de l'historique" description="Ouvre le fichier où tout est enregistré, ou efface-le complètement.">
+                  <button className="options-menu__action" onClick={() => void window.jaris.openConversationHistoryFile()}>
+                    Ouvrir le dossier
                   </button>
-                )}
-              </div>
-            )}
+                  {history.length > 0 && (
+                    <button
+                      className="options-menu__action options-menu__action--danger"
+                      onClick={() => void handleClearHistory()}
+                      disabled={clearingHistory}
+                    >
+                      {clearingHistory ? 'Suppression...' : "Supprimer l'historique"}
+                    </button>
+                  )}
+                </SettingRow>
+              )}
+            </SettingGroup>
           </div>
         )}
 

@@ -147,47 +147,6 @@ export const CAPABILITIES: CapabilityGroup[] = [
     ]
   },
   {
-    title: 'Ton téléphone',
-    summary: 'Notifications, appels et messages depuis Mobile connecté, avec ton téléphone relié au PC.',
-    items: [
-      {
-        title: 'Qui t\'a appelé',
-        description: 'Les derniers appels, avec le nom quand il est connu.',
-        example: "qui m'a appelé aujourd'hui ?",
-        toolNames: ['read_call_history']
-      },
-      {
-        title: 'Le numéro d\'un contact',
-        description: 'Cherche dans les contacts recopiés sur le PC.',
-        example: "c'est quoi le numéro de maman ?",
-        toolNames: ['find_contact']
-      },
-      {
-        title: 'Lire tes notifications',
-        description: 'Lit les notifications affichées dans Mobile connecté, sans les effacer.',
-        example: 'lis mes notifications',
-        toolNames: ['read_phone_notifications']
-      },
-      {
-        title: 'Passer un appel',
-        description: 'Compose un numéro vérifié dans Mobile connecté. Si un contact a plusieurs numéros, précise lequel.',
-        example: 'appelle maman',
-        toolNames: ['call_phone']
-      },
-      {
-        title: 'Envoyer un message',
-        description: 'Reprend ton texte exact et vérifie le destinataire avant de demander l’envoi.',
-        example: 'envoie un message à maman : Bonjour',
-        toolNames: ['send_phone_message']
-      },
-      {
-        title: 'Le téléphone doit rester connecté',
-        description: 'Mobile connecté peut ouvrir sa fenêtre. Une commande transmise ne confirme ni la réception du message ni la réponse à l’appel.',
-        limitation: true
-      }
-    ]
-  },
-  {
     title: 'Créer une application (mode Code)',
     summary: "Décris ce que tu veux, Jaris l'écrit et te le montre tout de suite.",
     exampleLabel: 'Écris',

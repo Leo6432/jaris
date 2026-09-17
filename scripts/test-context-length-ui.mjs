@@ -116,7 +116,7 @@ test('déplacer le curseur enregistre la bonne valeur en tokens, pas un index br
     assert.deepEqual(calls, [16384], `attendu [16384], reçu ${JSON.stringify(calls)}`)
     // Le libellé "Actuellement" doit suivre tout de suite (mise à jour optimiste), pas attendre la
     // confirmation du main process.
-    const currentLabel = await page.textContent('.options-menu__context-length strong')
+    const currentLabel = await page.textContent('.options-menu__context-row .options-menu__row-description strong')
     assert.equal(currentLabel, '16k')
   })
 })

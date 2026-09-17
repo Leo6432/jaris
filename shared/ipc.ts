@@ -94,42 +94,6 @@ export interface ContextLengthOptions {
   availableSteps: number[]
 }
 
-/** Un appel de l'historique du téléphone, recopié sur le PC par Mobile connecté (étape 21quater). */
-export interface PhoneCall {
-  name: string
-  number: string
-  /** Date ISO, vide si l'horodatage de la base n'a pas pu être interprété (voir toDate, phoneData.ts). */
-  date: string
-  durationSeconds: number
-}
-
-/** Un contact du téléphone, recopié sur le PC par Mobile connecté. */
-export interface PhoneContact {
-  name: string
-  numbers: string[]
-}
-
-/** Une base SQLite trouvée dans le cache de Mobile connecté (étape 21ter) — structure seulement. */
-export interface PhoneCacheDatabase {
-  path: string
-  sizeBytes: number
-  /** `rows: -1` = table illisible (verrouillée par l'application en cours d'exécution, par exemple). */
-  tables: { name: string; rows: number }[]
-  error?: string
-}
-
-/**
- * Ce que Jaris trouve du cache de Mobile connecté sur le disque. Volontairement SANS aucun contenu de
- * message : on cherche d'abord à savoir si les données sont là et sous quelle forme, avant de décider s'il
- * y a une vraie fonctionnalité à construire dessus. Léo peut donc l'envoyer tel quel sans exposer ses
- * conversations.
- */
-export interface PhoneCacheReport {
-  packages: string[]
-  databases: PhoneCacheDatabase[]
-  message: string
-}
-
 export interface RuntimeSetupStatus {
   pythonReady: boolean
   ollamaReady: boolean
@@ -657,20 +621,6 @@ export const IPC_CHANNELS = {
   setOptionsOpen: 'jaris:set-options-open',
   /** main -> renderer : un son court à jouer (design sonore, étape 31) — voir SoundCue plus haut. */
   soundCue: 'jaris:sound-cue',
-  /**
-   * renderer <-> main : derniers appels du téléphone, lus dans le cache de Mobile connecté (étape
-   * 21quater). Les MESSAGES n'y sont pas : le constat sur la machine de Léo n'a trouvé que `calling.db` et
-   * `contacts.db`, jamais de base de messages — pour un iPhone, Mobile connecté les affiche sans les garder.
-   */
-  getPhoneCalls: 'jaris:get-phone-calls',
-  /** renderer -> main : ouvre "Mobile connecté" (pour l'appairer au téléphone la première fois). */
-  openPhoneLink: 'jaris:open-phone-link',
-  /**
-   * renderer <-> main : regarde ce que Mobile connecté range sur le disque (étape 21ter) — quelles bases,
-   * quelles tables, combien de lignes. Aucun contenu de message n'est lu : c'est un CONSTAT destiné à
-   * décider la suite avec des faits, pas une fonctionnalité de lecture de messages.
-   */
-  inspectPhoneCache: 'jaris:inspect-phone-cache',
   /**
    * renderer <-> main : calcule le curseur de longueur de contexte (Options -> Modèles) pour la VRAM
    * ACTUELLEMENT libre et le modèle du palier Puissant — jamais mis en cache, recalculé à chaque ouverture

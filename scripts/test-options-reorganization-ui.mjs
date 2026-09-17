@@ -8,11 +8,12 @@ import test from 'node:test'
 
 /**
  * Refonte des Options (étape 115), demande de Léo : "il ya des categorie dans les options qui peuvent etre
- * ensemble, refait totalement option bien comme claude gpt". 9 onglets réduits à 5 : Micro et Activation
+ * ensemble, refait totalement option bien comme claude gpt". 9 onglets réduits : Micro et Activation
  * rejoignent Voix, Mise à jour/Stockage/Historique rejoignent un nouvel onglet Général — chacun devient une
  * VRAIE page de réglages avec plusieurs sections, à la manière de l'onglet "Général" de ChatGPT/Claude
  * (thème, langue, effacer les discussions... tout sur une seule page), plutôt qu'une multitude de tout
- * petits onglets à un seul réglage.
+ * petits onglets à un seul réglage. L'onglet Téléphone (Mobile connecté) a depuis été retiré complètement à
+ * l'étape 116 (Léo : "enleve totalement mobile connect"), sans rapport avec cette refonte visuelle.
  *
  * Ce test vérifie le VRAI composant compilé, pas une relecture du JSX : que les anciens onglets ont
  * vraiment disparu de la barre de navigation, que leur contenu est bien réapparu à l'intérieur du bon
@@ -102,10 +103,10 @@ async function withOptions(run) {
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
 
-test('9 onglets réduits à 5 : les anciens onglets Micro/Activation/Mise à jour/Stockage/Historique ont disparu', options, async () => {
+test('onglets réduits : les anciens onglets Micro/Activation/Mise à jour/Stockage/Historique/Téléphone ont disparu', options, async () => {
   await withOptions(async (page) => {
     const labels = await page.$$eval('.options-menu__tab', (els) => els.map((el) => el.textContent?.trim()))
-    assert.deepEqual(labels, ['Ce que Jaris sait faire', 'Voix', 'Téléphone', 'Modèles', 'Général'], `onglets affichés : ${labels.join(', ')}`)
+    assert.deepEqual(labels, ['Ce que Jaris sait faire', 'Voix', 'Modèles', 'Général'], `onglets affichés : ${labels.join(', ')}`)
   })
 })
 
@@ -114,11 +115,14 @@ test('Voix regroupe VRAIMENT le sélecteur de voix, le micro et l’activation s
     await page.click('.options-menu__tab:has-text("Voix")')
     await page.waitForSelector('.options-menu__voice-picker')
     // Toutes les sections doivent être présentes SIMULTANÉMENT dans le DOM (une seule page qui défile),
-    // pas seulement atteignables une par une derrière un second niveau de navigation.
+    // pas seulement atteignables une par une derrière un second niveau de navigation. Depuis la refonte de
+    // l'étape 116 (lignes de réglage uniformes), ce sont des GROUPES (`SettingGroup`) plutôt qu'un titre par
+    // réglage individuel — "Son" contient le bip d'interface, "Micro et haut-parleur" contient le micro, le
+    // haut-parleur ET le test, "Comment déclencher l'écoute" contient les 3 cases d'activation.
     const titles = await page.$$eval('.options-menu__section--voix .options-menu__section-title', (els) => els.map((el) => el.textContent))
-    assert.deepEqual(titles, ['Design sonore', 'Micro utilisé', 'Haut-parleur utilisé', 'Tester le micro', "Comment déclencher l'écoute"])
+    assert.deepEqual(titles, ['Son', 'Micro et haut-parleur', "Comment déclencher l'écoute"])
     // Un réglage de chaque ancien onglet, pour prouver qu'il ne s'agit pas que des titres.
-    assert.ok(await page.$('.options-menu__mic-test'), 'le test micro doit être présent')
+    assert.ok((await page.textContent('.options-menu__section--voix')).includes('Tester le micro'), 'le test micro doit être présent')
     assert.ok((await page.textContent('.options-menu__section--voix')).includes('Dire "Jaris" à voix haute'), 'la case Activation doit être présente')
   })
 })
@@ -128,7 +132,7 @@ test('Général regroupe VRAIMENT mise à jour, stockage et historique sur UNE s
     await page.click('.options-menu__tab:has-text("Général")')
     await page.waitForSelector('.options-menu__section-title')
     const titles = await page.$$eval('.options-page__content .options-menu__section-title', (els) => els.map((el) => el.textContent))
-    assert.deepEqual(titles, ['Journal des mises à jour', 'Historique des versions', 'Emplacement des modèles', 'Historique des conversations'])
+    assert.deepEqual(titles, ['Mise à jour', 'Historique des versions', 'Emplacement des modèles', 'Historique des conversations'])
     assert.ok(await page.$('.options-menu__models-location-list, .options-menu__model-overview-hint'), 'la section stockage doit être présente')
   })
 })

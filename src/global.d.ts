@@ -18,8 +18,6 @@ import type {
   ModelOverviewResult,
   ModelsLocationStatus,
   OllamaVersionStatus,
-  PhoneCacheReport,
-  PhoneCall,
   PickedImageFile,
   Profile,
   ReleaseHistoryEntry,
@@ -93,12 +91,6 @@ declare global {
       // Étape 93 : sélecteur d'image ouvert par le main process (jamais un <input type="file">, qui repliait
       // Jaris en widget en prenant le focus). null si l'utilisateur annule.
       pickImageFile: () => Promise<PickedImageFile | null>
-      // Étape 21quater : derniers appels lus dans le cache de Mobile connecté (les messages n'y sont pas),
-      // et ouverture de Mobile connecté pour l'appairage.
-      getPhoneCalls: () => Promise<PhoneCall[]>
-      openPhoneLink: () => Promise<string>
-      // Étape 21ter : constat en lecture seule du cache de Mobile connecté (structure, jamais le contenu).
-      inspectPhoneCache: () => Promise<PhoneCacheReport>
       generateApp: (description: string, currentHtml?: string, imageBase64?: string) => Promise<GeneratedApp>
       onCodeGenStatus: (cb: (message: string) => void) => () => void
       // Étape 99 : avancement en direct pendant une génération (l'étape en cours, les caractères déjà

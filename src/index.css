@@ -401,6 +401,111 @@ body.body--scan::after {
   color: var(--hud-text-faint);
 }
 
+/* Refonte des réglages (étape 116), Léo : "tu voit sur claude chatgpt tout se ressemble mais dans les
+   option rien ne se ressemble micro comment se déclencher" — avant, un menu déroulant (`.options-menu__field`),
+   une case isolée (`.options-menu__checkbox`) et un bouton nu avaient chacun leur propre mise en forme.
+   `.options-menu__group` regroupe plusieurs réglages dans une même carte (même famille visuelle que
+   `.options-menu__capability`, fond `--hud-panel-raised` + bordure `--hud-line`, juste sans le grillage en
+   colonnes) ; `.options-menu__row` est LA ligne de réglage commune, quel que soit le contrôle qu'elle
+   porte : intitulé + description à gauche, contrôle aligné à droite. */
+.options-menu__group {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--hud-line);
+  background: var(--hud-panel-raised);
+  padding: 2px 18px 14px;
+}
+
+.options-menu__group-description {
+  margin: 0 0 4px;
+  font-size: 0.76rem;
+  color: var(--hud-text-faint);
+}
+
+.options-menu__group-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.options-menu__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(122, 176, 214, 0.12);
+}
+
+.options-menu__group-rows > .options-menu__row:last-child {
+  border-bottom: none;
+}
+
+/* Un contrôle qui a besoin de toute la largeur (le curseur de longueur de contexte, un menu très long)
+   passe sous le texte plutôt qu'à côté — jamais une seconde mise en forme différente pour ce cas. */
+.options-menu__row--stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.options-menu__row--stacked .options-menu__row-control {
+  width: 100%;
+}
+
+.options-menu__row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.options-menu__row-label {
+  font-size: 0.85rem;
+  color: var(--hud-text);
+}
+
+.options-menu__row-description {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--hud-text-faint);
+}
+
+.options-menu__row-control {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Case à cocher d'une ligne de réglage : plus grande qu'une case de formulaire par défaut, pour rester une
+   vraie cible de clic une fois qu'elle n'a plus le texte du réglage collé juste à côté d'elle (ce texte vit
+   maintenant dans `.options-menu__row-label`, à gauche de la ligne). */
+.options-menu__toggle {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--hud-accent);
+  cursor: pointer;
+}
+
+.options-menu__select {
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  max-width: 260px;
+}
+
+.options-menu__select:disabled {
+  opacity: 0.6;
+}
+
+/* Détail dépliable sous la ligne "Tester le micro" (barres + verdict) : n'apparaît que pendant un test ou
+   juste après, pour ne pas laisser un bloc vide entre deux réglages le reste du temps. */
+.options-menu__mic-test-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 0 14px;
+}
+
 /* Onglet "Ce que Jaris sait faire" (étape 108, entièrement repris à l'étape 111 : "fait une meilleur
    présentation car on comprend pas trop").
    Chaque capacité est une CARTE (titre / à quoi ça sert / la phrase à dire) au lieu d'une ligne de texte
@@ -568,11 +673,7 @@ body.body--scan::after {
   margin: 0 0 10px;
 }
 
-/* Rangée de boutons d'un onglet Options. `.options-menu__actions` (onglet Téléphone, étape 21) rejoint la
-   règle existante au lieu d'en créer une identique à côté : deux rangées de boutons doivent se ressembler
-   par construction, pas par discipline. */
-.options-menu__ollama-update-actions,
-.options-menu__actions {
+.options-menu__ollama-update-actions {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -815,10 +916,6 @@ body.body--scan::after {
   color: var(--hud-text-dim);
 }
 
-.options-menu__context-length {
-  margin-top: 18px;
-}
-
 /* Curseur "comme sur Ollama" (Léo), même famille visuelle que .options-menu__progress-bar juste au-dessus
    dans ce fichier plutôt qu'un style de curseur générique inventé à côté. */
 .options-menu__context-slider {
@@ -915,11 +1012,7 @@ body.body--scan::after {
   white-space: pre-wrap;
 }
 
-/* Liste des notifications lues (étape 21bis) : elle rejoint la liste de l'historique plutôt que d'inventer
-   une deuxième mise en forme de liste dans le même menu — deux listes qui font la même chose doivent se
-   ressembler par construction. */
-.options-menu__history-list,
-.options-menu__notifications {
+.options-menu__history-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -928,8 +1021,7 @@ body.body--scan::after {
   gap: 10px;
 }
 
-.options-menu__history-entry,
-.options-menu__notifications li {
+.options-menu__history-entry {
   border: 1px solid rgba(122, 176, 214, 0.2);
   border-radius: 10px;
   padding: 10px 14px;
@@ -958,12 +1050,6 @@ body.body--scan::after {
 .options-menu__history-empty {
   font-size: 0.8rem;
   color: var(--hud-text-faint);
-}
-
-.options-menu__history-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 4px;
 }
 
 .options-menu__action--danger {
@@ -1033,20 +1119,6 @@ body.body--scan::after {
   margin-top: 10px;
 }
 
-.options-menu__checkbox {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.8rem;
-  color: var(--hud-text-dim);
-  cursor: pointer;
-}
-
-.options-menu__checkbox input {
-  accent-color: var(--hud-accent);
-  cursor: pointer;
-}
-
 /* Petites barres verticales façon indicateur de niveau, pas des ronds pleins colorés : ce sont les seuls
    points ronds de toute l'interface, ils détonnaient au milieu des coins coupés et bordures nettes du reste
    du thème. */
@@ -1070,49 +1142,6 @@ body.body--scan::after {
 .options-menu__dot--active {
   background: var(--hud-accent);
   box-shadow: 0 0 8px rgba(var(--hud-accent-rgb), 0.7);
-}
-
-/* Sélecteur micro/haut-parleur (nos périphériques à nous, à distinguer de l'onglet Voix qui règle la voix
-   de Jaris) : c'est le menu déroulant qu'on borne en largeur, pas tout le bloc autour — le limiter plus haut
-   (ex. sur .options-menu__audio-devices) épinglait toute la section à gauche avec un grand vide à droite,
-   au lieu de laisser le reste de la page (boutons, paliers matériels...) utiliser toute la largeur. */
-.options-menu__field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.8rem;
-  color: var(--hud-text-dim);
-  max-width: 420px;
-}
-
-.options-menu__field select {
-  background: rgba(6, 16, 25, 0.8);
-  border: 1px solid rgba(122, 176, 214, 0.3);
-  color: var(--hud-text);
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-size: 0.85rem;
-}
-
-.options-menu__field select:disabled {
-  opacity: 0.6;
-}
-
-.options-menu__field input {
-  background: rgba(6, 16, 25, 0.8);
-  border: 1px solid rgba(122, 176, 214, 0.3);
-  color: var(--hud-text);
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-size: 0.85rem;
-}
-
-.options-menu__mic-test {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 14px;
-  padding: 12px 0 4px;
 }
 
 /* Rangée de barres façon Discord (fenêtre glissante des derniers niveaux sonores, voir micLevels dans

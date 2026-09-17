@@ -1,4 +1,3 @@
-import { phoneLinkAction } from './phoneLink'
 import type { OllamaTool } from './ollama'
 import { openApp } from './appLauncher'
 import { computerUseTask } from './computerUse'
@@ -9,34 +8,8 @@ import { searchWeb } from './webSearch'
 import { readWebPage } from './webPage'
 import { clickMouse, mediaKey, pressKey, typeText } from './inputControl'
 import { getSystemStatsText, shutdownPc } from './systemControl'
-import { formatCalls, formatContacts, readRecentCalls, searchContacts } from './phoneData'
 
 export const TOOLS: OllamaTool[] = [
-  {
-    type: 'function', function: {
-      name: 'read_phone_notifications',
-      description: 'Lit les notifications affichées dans Mobile connecté, donc celles du téléphone. Aucun clic sur les notifications, aucun effacement.',
-      parameters: { type: 'object', properties: {}, required: [] }
-    }
-  },
-  {
-    type: 'function', function: {
-      name: 'call_phone',
-      description: 'Appelle un contact ou un numéro via Mobile connecté, uniquement sur demande explicite. Le destinataire doit être repris exactement de la demande. Ne jamais relancer automatiquement un appel.',
-      parameters: { type: 'object', properties: { recipient: { type: 'string', description: 'Nom exact ou numéro donné par la personne' } }, required: ['recipient'] }
-    }
-  },
-  {
-    type: 'function', function: {
-      name: 'send_phone_message',
-      description: 'Envoie un SMS/message texte via Mobile connecté, y compris avec un iPhone connecté. Exige une demande explicite, le destinataire et le texte exact. Ne jamais inventer de numéro ni relancer un envoi.',
-      parameters: { type: 'object', properties: {
-        recipient: { type: 'string', description: 'Contact ou numéro exact demandé' },
-        text: { type: 'string', description: 'Texte exact demandé, sans reformulation' }
-      }, required: ['recipient', 'text'] }
-    }
-  },
-
   {
     type: 'function',
     function: {
@@ -288,32 +261,6 @@ export const TOOLS: OllamaTool[] = [
   {
     type: 'function',
     function: {
-      name: 'read_call_history',
-      description:
-        "Donne les derniers appels reçus et passés sur le téléphone de l'utilisateur (qui, quand, durée). " +
-        "À utiliser pour « qui m'a appelé ? », « j'ai raté un appel ? ». Lit uniquement l'historique. " +
-        "Pour appeler, envoyer un message ou lire les notifications, utilise les outils téléphone dédiés.",
-      parameters: { type: 'object', properties: {}, required: [] }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'find_contact',
-      description:
-        "Retrouve le numéro de téléphone d'un contact de l'utilisateur par son nom (ex: « c'est quoi le " +
-        'numéro de maman ? »). Cherche uniquement dans les contacts déjà recopiés sur cet ordinateur par ' +
-        'Mobile connecté, rien n\'est envoyé sur internet.',
-      parameters: {
-        type: 'object',
-        properties: { name: { type: 'string', description: 'Nom (ou début du nom) du contact cherché' } },
-        required: ['name']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
       name: 'shutdown_pc',
       description:
         "Éteint ou redémarre l'ordinateur. Action CRITIQUE et irréversible : n'appelle cet outil que si " +
@@ -337,17 +284,10 @@ export function createToolExecutor(
   onReminderFire: ReminderFireHandler,
   visionModel: string,
   onLog?: LogHandler,
-  signal?: AbortSignal,
-  userPrompt = ''
+  signal?: AbortSignal
 ) {
   return async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
     switch (name) {
-      case 'read_phone_notifications':
-        return phoneLinkAction('notifications', '', '', userPrompt, onLog, signal)
-      case 'call_phone':
-        return phoneLinkAction('call', String(args.recipient ?? ''), '', userPrompt, onLog, signal)
-      case 'send_phone_message':
-        return phoneLinkAction('send', String(args.recipient ?? ''), String(args.text ?? ''), userPrompt, onLog, signal)
       case 'open_app':
         return openApp(String(args.app_name ?? ''))
       case 'set_reminder':
@@ -377,14 +317,6 @@ export function createToolExecutor(
         return getSystemStatsText()
       case 'media_control':
         return mediaKey(String(args.action ?? ''))
-      case 'read_call_history':
-        // Les messages d'échec sont déjà rédigés pour Léo par phoneData.ts et remontent TELS QUELS : aucune
-        // reformulation par le modèle, même principe que les autres outils.
-        return formatCalls(await readRecentCalls())
-      case 'find_contact': {
-        const name = String(args.name ?? '')
-        return formatContacts(await searchContacts(name), name)
-      }
       case 'shutdown_pc':
         return shutdownPc(Boolean(args.restart))
       default:

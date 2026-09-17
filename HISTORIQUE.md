@@ -994,3 +994,16 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   absent sans que le code ne le vérifie avant de s'en servir — corrigé avec un repli silencieux. Régression :
   `node --test scripts/test-options-reorganization-ui.mjs` (316 tests au total), vérifié aussi par deux
   captures d'écran réelles du nouveau rendu.
+- ✅ Étape 116 (v0.14.0) — Léo, en un seul message : "enleve totalement mobile connect" et "refait car...
+  dans les option rien ne se ressemble micro comment se déclencher". Deux chantiers distincts. (1) Mobile
+  connecté est retiré EN ENTIER (pas juste désactivé) : les 4 fichiers qui le pilotaient, ses 5 outils
+  (notifications, appel, message, historique d'appels, contacts) et son onglet Options → Téléphone
+  disparaissent complètement — même principe que le retrait de KDE Connect (étape 21bis) : le code part,
+  l'historique de ce fichier reste. (2) Les 3 onglets de réglages restants (Voix, Modèles, Général) sont
+  refaits avec un gabarit uniforme : chaque réglage individuel est maintenant une ligne identique quel que
+  soit son contrôle (case, menu déroulant, bouton ou valeur en lecture seule), regroupées par cartes titrées
+  — avant, un menu et un groupe de cases avaient chacun leur propre mise en forme, exactement ce que Léo
+  comparait défavorablement à Claude/ChatGPT. Régression : `npm test` (283 tests), dont la mise à jour du
+  seuil minimal d'outils dans tools.ts (16 → 12, cohérent avec les 5 outils téléphone retirés) et 4 tests
+  navigateur réécrits pour la nouvelle structure. Vérifié aussi par de vraies captures d'écran du rendu
+  compilé sur les 3 onglets.

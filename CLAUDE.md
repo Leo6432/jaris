@@ -2133,3 +2133,73 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   "au moins 7 réglages", devenu "exactement ces 4 réglages" — un simple comptage aurait laissé passer un
   onglet disparu par erreur, même famille de piège que le `grep -c` de l'étape 97). Vérifié aussi par deux
   captures d'écran réelles du rendu compilé (Voix et Général) avant de considérer la refonte terminée.
+
+- **"enleve totalement mobile connect, et refait car je trouve que tu a mis plein de truc partout, ça fait
+  trop charger sur des categorie, et tu voit sur claude chatgpt tout se ressemble mais dans les option rien
+  ne se ressemble micro comment se déclencher" (Léo, étape 116) — deux demandes distinctes dans le même
+  message.**
+  1. **Retrait COMPLET de Mobile connecté**, pas une dépriorisation : `phoneLink.ts` (pilotage UI Automation),
+     `phoneLinkScript.ts` (le script PowerShell qu'il lance), `phoneData.ts` (lecture calling.db/contacts.db)
+     et `phoneLinkCache.ts` (constat du cache) supprimés en entier. Les 5 outils qu'ils servaient
+     (`read_phone_notifications`, `call_phone`, `send_phone_message`, `read_call_history`, `find_contact`)
+     retirés de `TOOLS` (tools.ts, 19 → 14 outils), `directPhoneRequest` et son court-circuit dans
+     `converse()` retirés d'assistant.ts, le groupe "Ton téléphone" retiré de `CAPABILITIES`
+     (shared/capabilities.ts), les 3 canaux IPC et l'onglet Options → Téléphone retirés en entier
+     (`shared/ipc.ts`, `main.ts`, `preload.ts`, `global.d.ts`, `OptionsMenu.tsx`). **Même précédent que le
+     retrait de KDE Connect (étape 21bis) : le CODE part, l'HISTORIQUE de ce fichier reste** — les entrées
+     21/21bis/21ter/21quater/112 ci-dessus ne sont pas effacées : la leçon qu'elles portent (chercher où une
+     appli DÉPOSE sa donnée avant de conclure qu'il faut piloter sa fenêtre ; les pièges `readOnly` de
+     node:sqlite, `ConvertTo-Json` sans `-AsArray`, le focus perdu par un dialogue...) reste valable pour un
+     futur pont similaire, même si le code qu'elles décrivaient a disparu.
+     **Grep-sweep complet avant de considérer le retrait terminé** (CLAUDE.md, étape 3) : l'alias
+     `['mobile connecte', 'phone link']` dans `appLauncher.ts` (LOCALIZED_ALIASES) est volontairement GARDÉ —
+     ce n'est pas un reste mort, `open_app` est un outil générique (ouvrir n'importe quelle application par
+     son nom) sans le moindre rapport avec les outils téléphone retirés : un utilisateur peut toujours dire
+     "ouvre mobile connecté" pour une tout autre raison (mettre son téléphone en miroir, par exemple). Les
+     mentions de "téléphone"/"microphone" dans `imageAttachment.ts`, `voice_server.py` et
+     `generatedAppPreview.ts` sont des faux positifs du grep large sur "phone" (une photo de téléphone en
+     pièce jointe, un micro), sans aucun rapport avec la fonctionnalité retirée. Le paramètre `userPrompt`
+     de `createToolExecutor` (tools.ts), qui n'existait QUE pour les outils téléphone, est aussi retiré —
+     laisser un paramètre mort après le retrait de son seul consommateur aurait été le même genre d'oubli que
+     les alias/canaux jamais nettoyés déjà documentés plus haut dans ce fichier.
+  2. **Refonte visuelle des 3 onglets de réglages restants (Voix, Modèles, Général)**, pour la cohérence que
+     Léo décrit chez Claude/ChatGPT : avant, un menu déroulant ("Micro utilisé", `.options-menu__field`), un
+     groupe de cases isolées ("Comment déclencher l'écoute", `.options-menu__checkbox`) et un bouton nu
+     avaient chacun leur propre mise en forme ad hoc, sans rien qui les fasse se ressembler. Deux nouveaux
+     composants génériques dans OptionsMenu.tsx : `SettingRow` (intitulé + description à gauche, contrôle
+     aligné à droite — peu importe que ce contrôle soit une case à cocher, un menu, un bouton ou une simple
+     valeur en lecture seule comme le modèle du mode Code) et `SettingGroup` (regroupe plusieurs `SettingRow`
+     apparentées dans une même carte titrée, même famille visuelle que `.options-menu__capability` : fond
+     `--hud-panel-raised` + bordure `--hud-line`, jamais une couleur/un style inventé à côté). Les TROIS
+     onglets de réglages restants utilisent désormais ce même gabarit — plus aucune ligne ne se présente
+     différemment d'une autre selon son type de contrôle.
+     **`stacked` (prop de `SettingRow`) réserve le seul cas où un contrôle a vraiment besoin de toute la
+     largeur** (le curseur de longueur de contexte de l'étape 114, qui a aussi besoin de ses graduations en
+     dessous) — plutôt que d'inventer une troisième forme de ligne à côté des deux évidentes.
+     **Contenu riche volontairement PAS forcé dans une ligne** : le tableau des paliers de configuration
+     (`HardwareTierPreview`), la liste de l'historique des versions/conversations et le visualiseur de micro
+     (barres + verdict) restent du contenu de groupe ordinaire — une `SettingRow` suppose un intitulé et UN
+     contrôle, pas une liste ou un tableau entiers ; les y forcer aurait juste déplacé le problème plutôt que
+     de le résoudre.
+     **CSS mort retiré au passage, pas laissé traîner** : `.options-menu__field`, `.options-menu__checkbox`,
+     `.options-menu__mic-test` (remplacé par `.options-menu__mic-test-detail`, qui n'affiche les barres que
+     PENDANT/APRÈS un test plutôt qu'en permanence), `.options-menu__actions`, `.options-menu__history-actions`
+     et `.options-menu__context-length` n'avaient plus le moindre consommateur en JSX une fois la refonte
+     terminée — vérifié par un grep de chaque classe avant de les supprimer, même discipline que pour un
+     fichier supprimé.
+     Vérifié par capture d'écran réelle du rendu compilé (bundle esbuild + vrai CSS, même discipline que les
+     refontes précédentes de ce fichier) sur les 3 onglets avant de considérer la refonte terminée — jamais
+     seulement une relecture du JSX.
+  **Piège attrapé par le test, pas en relecture** : `scripts/test-capabilities.mjs` avait un seuil de
+  sanity-check figé (`toolNamesInSource.length >= 16`) pour vérifier que son propre motif regex n'avait rien
+  raté — le retrait volontaire des 5 outils téléphone (19 → 14) l'a fait échouer à tort. **Leçon générale :
+  un seuil de sanity-check sur un COMPTE doit être révisé chaque fois que ce compte change délibérément,
+  sinon un retrait de fonctionnalité pourtant correct se fait bloquer par un garde-fou périmé qui teste une
+  vieille hypothèse plutôt que le comportement actuel.**
+  Régression : `npm test` (283 tests) — `scripts/test-options-reorganization-ui.mjs` (les groupes/lignes
+  remplacent bien les anciens titres de section, plus aucune trace de l'onglet Téléphone),
+  `scripts/test-context-length-ui.mjs` (le curseur et sa valeur "Actuellement" restent lisibles dans leur
+  nouvelle ligne), `scripts/test-capabilities-tab-ui.mjs` (plus de limitation "téléphone", la liste de
+  réglages ne contient plus que Voix/Modèles/Général) et `scripts/test-capabilities.mjs` (seuil d'outils
+  abaissé en connaissance de cause). Chaque assertion modifiée a été vérifiée en la faisant échouer d'abord
+  (ancien texte, ancienne classe) avant de confirmer qu'elle passe sur le nouveau rendu.

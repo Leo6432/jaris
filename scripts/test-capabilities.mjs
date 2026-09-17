@@ -30,8 +30,9 @@ const { CAPABILITIES } = exports
 const declaredToolNames = CAPABILITIES.flatMap((group) => group.items.flatMap((item) => item.toolNames ?? []))
 
 test('tous les outils réels de tools.ts sont trouvés dans le fichier source', () => {
-  // Si ce test échoue, le motif regex ci-dessus a raté quelque chose — pas une preuve que tools.ts est vide.
-  assert.ok(toolNamesInSource.length >= 16, `seulement ${toolNamesInSource.length} outil(s) trouvé(s) dans tools.ts : le motif a-t-il changé ?`)
+  // Seuil abaissé à l'étape 116 (retrait complet de Mobile connecté : 5 outils téléphone en moins). Si ce
+  // test échoue, le motif regex ci-dessus a raté quelque chose — pas une preuve que tools.ts est vide.
+  assert.ok(toolNamesInSource.length >= 12, `seulement ${toolNamesInSource.length} outil(s) trouvé(s) dans tools.ts : le motif a-t-il changé ?`)
 })
 
 test('aucun outil de tools.ts ne manque dans "Ce que Jaris sait faire"', () => {

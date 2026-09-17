@@ -19,8 +19,6 @@ import {
   type MicTestLevelPayload,
   type ModelOverviewResult,
   type ModelsLocationStatus,
-  type PhoneCacheReport,
-  type PhoneCall,
   type OllamaVersionStatus,
   type PickedImageFile,
   type Profile,
@@ -100,11 +98,6 @@ const api = {
   // peut encadrer le dialogue natif du garde `dialogOpen`, sans lequel Jaris se replie en widget dès que ce
   // dialogue prend le focus. Renvoie null si l'utilisateur annule.
   pickImageFile: (): Promise<PickedImageFile | null> => ipcRenderer.invoke(IPC_CHANNELS.pickImageFile),
-  // Téléphone (étape 21bis) : lecture des notifications par l'API de Windows, et ouverture de Mobile
-  // connecté pour l'appairage. Les deux renvoient un résultat déjà rédigé en français, affiché tel quel.
-  getPhoneCalls: (): Promise<PhoneCall[]> => ipcRenderer.invoke(IPC_CHANNELS.getPhoneCalls),
-  openPhoneLink: (): Promise<string> => ipcRenderer.invoke(IPC_CHANNELS.openPhoneLink),
-  inspectPhoneCache: (): Promise<PhoneCacheReport> => ipcRenderer.invoke(IPC_CHANNELS.inspectPhoneCache),
   generateApp: (description: string, currentHtml?: string, imageBase64?: string): Promise<GeneratedApp> =>
     ipcRenderer.invoke(IPC_CHANNELS.generateApp, description, currentHtml, imageBase64),
   onCodeGenStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.codeGenStatus, cb),

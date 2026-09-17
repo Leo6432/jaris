@@ -27,12 +27,6 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   `computer_use_task`, négation ignorée dans la détection d'intention de
   mail, annulation qui n'atteignait pas la boucle de clics). 45/46/48
   faites depuis (voir plus bas), 47/49 encore à faire.
-- ⬜ Étape 21 (suite) — Envoyer un message depuis Jaris. Apple interdit à
-  toute application d'envoyer un SMS depuis un ordinateur, et Mobile connecté
-  n'expose aucune API : le seul chemin serait de piloter sa fenêtre à coups de
-  clics, fragile et invérifiable hors d'une vraie machine Windows. À trancher
-  avec Léo après son premier essai de la lecture des notifications — ou par un
-  autre canal (Telegram, étape 42), qui lui marche sans rien contourner.
 - ⬜ Étape 42 — Canal Telegram : pouvoir parler à Jaris à distance par
   message Telegram, en plus de la voix et du chat (étape 30) déjà présents.
   Nouveau canal branché directement sur le moteur `converse()` existant
@@ -1143,42 +1137,6 @@ fenêtre à l'écran. **Fermer la croix, elle, quitte vraiment Jaris** (étape
   vieille conversation qui traîne à l'écran indéfiniment.
 - Les deux fenêtres ne sont jamais affichées en même temps, pour éviter que
   la réponse vocale soit jouée deux fois.
-
-## Téléphone (étape 21)
-
-Quand « Mobile connecté » (Phone Link) est relié au téléphone, il recopie sur le
-PC l'historique d'appels et les contacts. Jaris les lit directement là, en
-lecture seule, sans rien envoyer sur internet :
-
-- **« qui m'a appelé ? »** — les derniers appels, avec qui, quand et la durée.
-- **« c'est quoi le numéro de maman ? »** — recherche dans les contacts.
-
-Options → Téléphone permet de faire la même chose à la main, d'ouvrir Mobile
-connecté pour l'appairage, et de voir ce qu'il garde sur le PC.
-
-**Notifications, appels et messages (v0.12.0)** : le cache ne suffit pas, mais la fenêtre de
-Mobile connecté expose ses commandes à Windows. Jaris peut maintenant utiliser :
-
-- « Lis mes notifications » : lit le panneau du téléphone, sans effacer les notifications.
-- « Appelle maman » : résout un contact unique et vérifie le numéro composé avant l’appel.
-- « Envoie un message à maman : Bonjour » : conserve le texte exact et vérifie le destinataire.
-
-Si un contact a plusieurs numéros, redire la demande avec le numéro choisi. Le téléphone doit
-rester connecté en Bluetooth ; Mobile connecté peut passer au premier plan. Un brouillon existant
-n’est pas écrasé. Une commande transmise ne prouve pas la réception du SMS ou la connexion de l’appel.
-Aucune relance automatique après une transmission incertaine. Cette intégration ne dépend pas du
-modèle de vision. L’ancienne affirmation d’une interdiction générale par Apple était erronée :
-[Microsoft documente l’envoi de messages avec Mobile connecté](https://support.microsoft.com/en-us/windows/apps/phonelink/send-and-receive-text-messages-from-your-pc).
-
-Validation locale : lecture de notifications et préparation d’appel/message sur Windows, sans envoi
-ni appel réel. `node scripts/check-phone-live.mjs` reproduit ces essais avec un numéro factice.
-
-**Comment on en est arrivé là** (trois tentatives, gardées parce que la leçon
-sert) : KDE Connect d'abord, retiré car sur iPhone il ne peut ni lire les
-notifications ni envoyer de SMS ; puis la lecture des notifications de Windows,
-retirée car Mobile connecté n'y publie pas celles du téléphone ; puis la lecture
-de son cache local, qui est ce qui marche. La bonne question n'était jamais
-« cette application a-t-elle une API ? » mais « où atterrit vraiment la donnée ? ».
 
 ## Ouvrir des applications et programmer des rappels (étape 5)
 
