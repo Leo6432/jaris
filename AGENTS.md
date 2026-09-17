@@ -2335,3 +2335,48 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   (pas d'accès à sa machine), et quel modèle exact ce changement fait basculer côté Léo lui-même (pas d'accès
   non plus à sa VRAM/RAM réelles depuis cet environnement) — à confirmer par un futur "Lancer l'analyse" chez
   l'un comme chez l'autre.
+
+- **Étape 120, Léo : "regarde qu'on clique sur déplacer, dans les options ça déplace bien tout les fichiers
+  plus ollama et quand il y a une mise à jour c'est dans le dossier choisit"** — une demande de VÉRIFICATION
+  du "Déplacer" (Options → Modèles, étape 44, `modelsLocation.ts`), qui n'avait JAMAIS eu le moindre test de
+  régression avant cette session (grep confirmé avant d'écrire quoi que ce soit).
+  **Ce qui était déjà correct, confirmé par un vrai test plutôt que par une simple relecture** : les modèles
+  Ollama SONT bien l'une des 3 briques déplacées (`ollamaModelsLink()`, `.ollama\models`), pas seulement
+  Python/HuggingFace comme on pourrait le craindre en lisant vite le nom de la fonctionnalité. Et le flux de
+  mise à jour d'Ollama (`updateOllama`/`dependencyServices.ts`) ne touche JAMAIS au dossier des modèles
+  lui-même — seulement à l'application Ollama (redémarrage, installeur officiel, winget) — donc un modèle
+  téléchargé après une mise à jour continue de passer par la jonction NTFS déjà posée, sans rien à refaire :
+  vérifié par un test STRUCTUREL qui échoue si un futur changement de ce flux referençait un jour le chemin
+  des modèles ou tentait d'y supprimer quoi que ce soit.
+  **VRAI BUG trouvé en écrivant le test, jamais en relisant le code** : `redirectFolder`
+  (modelsLocation.ts) ne créait jamais le dossier PARENT du lien (`link`) avant d'appeler `createJunction`
+  (`mklink /J`) — exactement comme un symlink Unix classique, `mklink` ne crée JAMAIS les dossiers parents
+  manquants tout seul. Sur une machine où Ollama/Python/`huggingface_hub` n'ont encore JAMAIS tourné une
+  seule fois (ex: `%USERPROFILE%\.cache` n'existe pas tant qu'aucun modèle de transcription/synthèse n'a
+  été téléchargé), le déplacement échouait purement et simplement pour cette brique-là avec un simple
+  "dossier introuvable" — empêchant de préparer un déplacement AVANT le tout premier usage, un cas
+  pourtant tout à fait raisonnable (déplacer dès l'installation, avant de laisser Jaris télécharger quoi
+  que ce soit sur le disque système par défaut). Corrigé en ajoutant `await mkdir(dirname(link), {recursive:
+  true})` juste avant `createJunction` — idempotent et sans effet si le parent existe déjà, donc aucun
+  risque pour le cas normal (déjà utilisé au moins une fois) qui fonctionnait déjà. Vérifié en retirant
+  temporairement cette ligne : le test échoue bien avec exactement le même message d'erreur qu'attendu
+  ("ENOENT... dossier introuvable"), confirmant qu'il mord vraiment.
+  **Comment le test contourne l'absence de Windows dans cet environnement** : `createJunction` lance
+  `cmd.exe`/`mklink /J`, injoignable ici — le `child_process.spawn` est mocké pour poser un VRAI lien
+  symbolique Linux à la place (`fs.symlinkSync`), qui se comporte IDENTIQUEMENT du point de vue du reste du
+  module (`lstat().isSymbolicLink()` + `readlink()`, utilisés par `currentRealDir`) — seule la commande
+  Windows elle-même est feinte, tout le reste (cp/mkdir/rm/lstat/readlink) est du VRAI fs sur un VRAI
+  dossier temporaire. `process` est shadowé (paramètre de la fonction wrapper du chargeur de module, pas le
+  global Node) pour forcer `process.platform` à `'win32'` (sinon `moveModelsLocation` ressort
+  immédiatement, "Windows pour l'instant") sans jamais toucher au vrai `process` du test lui-même — même
+  principe que les autres modules chargés en `vm.runInThisContext` dans ce dépôt, étendu ici au-delà de
+  `require`/`exports`/`module` pour couvrir aussi `process`.
+  Régression : `node --test scripts/test-models-location.mjs` (4 tests : les 3 briques dont Ollama sont bien
+  déplacées avec leur contenu réel, un échec isolé sur une seule brique n'empêche pas les deux autres de
+  réussir, un déplacement AVANT tout premier téléchargement pose quand même la jonction, et le flux de mise
+  à jour d'Ollama ne référence jamais le dossier des modèles). **Non vérifiable ici, à confirmer par Léo en
+  usage réel** : le comportement d'une VRAIE jonction NTFS Windows (par opposition au symlink Linux simulé
+  ici) à travers un VRAI cycle complet déplacement -> mise à jour -> nouveau téléchargement, en particulier
+  si l'installeur OFFICIEL d'Ollama (code que Jaris ne contrôle pas) fait un jour quelque chose d'inhabituel
+  avec `.ollama\models` lors d'une réinstallation — invérifiable depuis ce dépôt, seul un usage réel avec
+  Léo (ou Tom) peut le confirmer.

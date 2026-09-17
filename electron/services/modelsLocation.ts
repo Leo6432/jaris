@@ -1,7 +1,7 @@
 import { existsSync } from 'fs'
 import { cp, lstat, mkdir, readlink, rm } from 'fs/promises'
 import { spawn } from 'child_process'
-import { join } from 'path'
+import { dirname, join } from 'path'
 
 /**
  * Où vivent les téléchargements lourds de Jaris (Options → Modèles → "Choisir un dossier"), et comment les
@@ -103,6 +103,12 @@ async function redirectFolder(link: string, target: string, onProgress: (message
     if (real !== link) await rm(real, { recursive: true, force: true })
   }
   await rm(link, { recursive: true, force: true })
+  // `mklink /J` (createJunction) ne crée jamais le dossier PARENT de `link` lui-même — exactement comme un
+  // symlink Unix classique. Sur une machine où rien n'a encore jamais tourné (Ollama/Python/huggingface_hub
+  // jamais lancés une seule fois), ce parent peut ne pas exister du tout (ex: %USERPROFILE%\.cache si
+  // huggingface_hub n'a jamais téléchargé quoi que ce soit) : sans cette ligne, la jonction échouerait avec
+  // un simple "dossier introuvable", empêchant de préparer un déplacement AVANT le tout premier usage.
+  await mkdir(dirname(link), { recursive: true })
   await createJunction(link, target)
 }
 

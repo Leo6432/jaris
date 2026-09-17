@@ -1033,3 +1033,9 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   débordement partiel), et Ollama le garde chargé plusieurs minutes après chaque question — ne laissant plus
   assez de RAM pour le reste de l'ordinateur. La marge de sécurité réservée avant d'autoriser un aussi gros
   modèle est doublée (8 → 16 Go), pour tout le monde. Régression : `npm test` (286 tests).
+- ✅ Étape 120 (v0.14.4) — Léo a demandé de vérifier que "Déplacer" (Options → Modèles) déplace bien tout,
+  Ollama compris, et que les mises à jour respectent ensuite le dossier choisi. Les deux étaient déjà
+  corrects (vérifié par un nouveau test, cette fonctionnalité n'en avait jamais eu). Un vrai bug trouvé en
+  écrivant ce test : déplacer AVANT le tout premier lancement d'Ollama/Python/de la voix (donc avant que
+  leurs dossiers habituels n'existent) échouait, car le dossier parent n'était jamais créé avant de poser le
+  raccourci vers le nouvel emplacement. Corrigé. Régression : `npm test` (290 tests).
