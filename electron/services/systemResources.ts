@@ -11,8 +11,25 @@ const execAsync = promisify(exec)
  * entier pour un seul modèle, contrairement à ce qu'un simple total brut suggérerait. Même valeur que
  * RAM_SAFETY_MARGIN_GB dans scripts/benchmark-models.mjs (dupliqué là-bas volontairement : ce script tourne
  * en `node` simple, pas via le bundler Electron/TS, donc pas d'import direct possible entre les deux).
+ *
+ * 8 -> 16 (étape 119) : un ami de Léo (Tom, 32 Go de RAM, carte graphique dédiée à faible VRAM) a vu
+ * `ollama serve` tourner à pleine charge PROCESSEUR pendant plusieurs minutes après une seule question,
+ * saturant sa RAM au point que tout l'ordinateur semblait figé ("Jaris était ouvert mais ne travaillait
+ * même pas"). Cause : `ramOffloadBudgetGb` (computeModelPicks, hardwareScan.ts) autorisait un modèle du
+ * palier Puissant jusqu'à VRAM + (RAM totale - 8 Go) — sur sa machine, ~24 Go de marge de débordement RAM
+ * pour un modèle dont la quasi-totalité doit alors tourner sur la RAM normale plutôt que la carte graphique
+ * (bien plus lent que le "30 s de plus" attendu pour un débordement partiel), ne laissant plus que 8 Go
+ * pour Windows et le reste pendant que ce modèle reste chargé (Ollama le garde "au chaud" plusieurs minutes
+ * après chaque question, pas juste le temps de la réponse). 8 Go de marge suffit sur une machine avec une
+ * bonne carte graphique (peu de débordement RAM nécessaire), mais pas quand la quasi-TOTALITÉ d'un gros
+ * modèle doit vivre en RAM. Doublé à 16 Go : réduit d'autant le plus gros modèle autorisé à déborder sur la
+ * RAM, sur TOUTES les machines (y compris potentiellement le palier Puissant de Léo lui-même, prévenu
+ * explicitement avant ce changement) — un compromis plus prudent plutôt qu'une vérification de RAM
+ * réellement libre au moment du calcul (option écartée : le scan de capacité tourne une seule fois, souvent
+ * juste après l'installation quand la machine est justement TRÈS libre, donc une mesure "en direct" à ce
+ * moment-là n'aurait rien changé pour Tom — voir CLAUDE.md, étape 119, pour le raisonnement complet).
  */
-export const RESOURCE_SAFETY_MARGIN_GB = 8
+export const RESOURCE_SAFETY_MARGIN_GB = 16
 
 /**
  * VRAM totale de la carte NVIDIA détectée (Go), ou `null` sans carte NVIDIA détectée (pas de GPU dédié,

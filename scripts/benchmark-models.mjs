@@ -102,8 +102,11 @@ const VRAM_SAFETY_MARGIN_GB = 1
 /**
  * Marge sous la RAM totale de la machine, réservée à l'OS et aux autres logiciels ouverts — jamais
  * disponible en entier pour un seul modèle, contrairement à ce qu'un simple `os.totalmem()` suggérerait.
+ * 8 -> 16 (étape 119) : voir RESOURCE_SAFETY_MARGIN_GB (electron/services/systemResources.ts), même valeur
+ * dupliquée ici volontairement, même raisonnement (un ami de Léo à faible VRAM dédiée s'est retrouvé avec
+ * un modèle Puissant tournant presque entièrement sur sa RAM, saturant sa machine entière).
  */
-const RAM_SAFETY_MARGIN_GB = 8
+const RAM_SAFETY_MARGIN_GB = 16
 
 /**
  * Modèles dont le filtre de taille ci-dessous vérifie VRAM + RAM combinées, pas la VRAM seule : contrairement
@@ -1116,7 +1119,8 @@ async function main() {
   const ramGb = detectRamGb()
   // Marge différente selon le cas : VRAM_SAFETY_MARGIN_GB (1 Go) suffit pour du contexte/overhead pilote
   // sur une vraie carte GPU, mais le repli "pas de GPU, tout sur RAM/CPU" doit réserver bien plus pour l'OS
-  // et les autres logiciels — RAM_SAFETY_MARGIN_GB (8 Go), la même marge que pour RAM_OFFLOAD_MODELS.
+  // et les autres logiciels — RAM_SAFETY_MARGIN_GB (16 Go depuis l'étape 119), la même marge que pour
+  // RAM_OFFLOAD_MODELS.
   const vramBudgetGb =
     vramGb !== null ? Math.max(0, vramGb - VRAM_SAFETY_MARGIN_GB) : Math.max(0, ramGb - RAM_SAFETY_MARGIN_GB)
   console.log(

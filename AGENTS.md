@@ -2282,3 +2282,56 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   ici, à confirmer par Léo en usage réel** : que le "palier 4" redevienne cohérent une fois son plancher réel
   remonté à 8192 sur sa machine et celle de Tom, et que la capture "Candidat rejeté" ne réapparaisse plus dans
   le Chat.
+
+- **Étape 119, suite immédiate de l'étape 118 : "et aussi jaris faisait rien, et mon ami regarde
+  gestionnaire des tâches, ça mettait ollama serv et c'était 2000mo [corrigé ensuite en] 20 Go et ça
+  saturait sa ram"** — puis, questions ciblées à l'appui (Tom : 32 Go de RAM, carte graphique DÉDIÉE) et
+  "mais pourquoi ollama serv tournait à fond quand jaris était inactif aucune tâche" et "après le test
+  Salut Jarvis" : diagnostic construit pas à pas à partir de faits, sans deviner, exactement comme la saga
+  SearXNG plus haut recommande de le faire.
+  **Ce qui a d'abord semblé contradictoire, et pourquoi ça ne l'était pas** : 32 Go de RAM + une carte
+  graphique dédiée n'est PAS une machine faible — mon premier réflexe ("machine trop faible, pas de GPU")
+  était donc faux. Le VRAI mécanisme, confirmé par la lecture du code plutôt que supposé : le palier
+  "Puissant" (LARGE_RAM_OFFLOAD_MODELS, hardwareScan.ts) a le droit, À LA DEMANDE EXPLICITE DE LÉO documentée
+  plus haut dans ce fichier ("un vrai grand modèle plus lent... plutôt qu'un petit modèle rapide"), de
+  choisir un modèle dont le poids dépasse largement la VRAM disponible, en comptant sur un débordement sur
+  la RAM normale (`ramOffloadBudgetGb = budgetGb + max(0, ramGb - RESOURCE_SAFETY_MARGIN_GB)`, marge de 8 Go
+  à l'époque). Sur la carte de Tom (dédiée mais probablement peu de VRAM), un modèle d'environ 20 Go a donc
+  été choisi pour le palier Puissant — la quasi-TOTALITÉ tournant sur sa RAM plutôt que sa carte graphique,
+  bien plus lent que le "30 s de plus" attendu pour un débordement PARTIEL. Ollama garde ensuite ce modèle
+  chargé ("au chaud") plusieurs minutes après chaque question pour répondre plus vite à la suivante — donc
+  ces ~20 Go restent occupés (et le processeur peut rester très sollicité si une génération est encore en
+  cours, un tour de la boucle d'outils de `converse()` pouvant reprendre plusieurs fois de suite sur un
+  modèle aussi lent) bien après que Tom ait cru que "rien ne se passait", laissant Windows + le reste avec
+  seulement ~12 Go sur les 32 — assez pour saturer la machine entière si quoi que ce soit d'autre tournait.
+  **Piège dans mon PREMIER correctif proposé, corrigé avant de coder quoi que ce soit** : j'ai d'abord
+  recommandé de vérifier la RAM VRAIMENT LIBRE au moment du calcul (même philosophie que `getLiveGpuStatus`
+  pour la VRAM, déjà utilisée pour le curseur de longueur de contexte) — mais en y réfléchissant plus loin
+  AVANT de l'implémenter : le choix du modèle Puissant est FIGÉ une seule fois par le scan de capacité
+  (`computeModelPicks`, appelé par `runQuickSetup`), typiquement juste après l'installation, quand la
+  machine est justement TRÈS libre. Une mesure "en direct" à CE moment précis n'aurait donc rien changé pour
+  Tom (RAM libre ≈ RAM totale à cet instant) : le vrai problème n'est pas "la RAM était déjà occupée au
+  moment du choix", c'est "le calcul autorise un modèle dont la quasi-totalité doit vivre en RAM, point final,
+  peu importe quand on mesure". **Leçon générale : une technique qui a bien marché pour un problème (VRAM en
+  direct plutôt que VRAM totale, étape 114) ne se transpose pas automatiquement à un problème qui semble
+  similaire en surface — vérifier que le mécanisme du bug est vraiment le même avant de recopier la même
+  solution.** Corrigé à la place en relevant `RESOURCE_SAFETY_MARGIN_GB`/`RAM_SAFETY_MARGIN_GB` (dupliquée
+  volontairement dans scripts/benchmark-models.mjs, même raison que d'habitude) de 8 à 16 Go : réduit d'autant
+  le plus gros modèle autorisé à déborder sur la RAM, sur TOUTES les machines. **Changement PARTAGÉ, annoncé à
+  Léo AVANT de l'appliquer plutôt qu'en silence** : cette marge conditionne aussi SON PROPRE modèle Puissant
+  (qwen3.5:35b/27b déjà en usage, documenté plus haut) — informé que ce changement pourrait aussi faire
+  reculer son propre choix vers un modèle plus petit, il a confirmé vouloir l'augmentation quand même plutôt
+  que de risquer le même blocage chez d'autres personnes à VRAM modeste.
+  **Ce qui reste un compromis assumé, pas une solution complète** : une marge FIXE plus grande réduit le
+  risque sans l'éliminer — une machine avec encore moins de RAM libre au moment de l'usage réel (beaucoup
+  d'autres logiciels ouverts alors qu'aucun ne l'était au moment du scan) pourrait en théorie retomber dans
+  le même problème à une échelle réduite. Une vérification de RAM réellement libre AU MOMENT DE CHAQUE
+  RÉPONSE (pas seulement au moment du scan) résoudrait ça plus complètement, mais demanderait de pouvoir
+  changer de modèle Puissant EN COURS DE ROUTE — un changement d'architecture plus large, pas engagé ici sans
+  un nouveau signalement qui le justifierait.
+  Régression : `npm test` (286 tests, sans changement de comportement testable — chaque test qui exerce ce
+  calcul injecte déjà sa propre marge simulée, indépendante de la constante réelle, donc aucun ne dépendait
+  de sa valeur par défaut). **Non vérifiable ici** : que ce changement empêche vraiment le blocage chez Tom
+  (pas d'accès à sa machine), et quel modèle exact ce changement fait basculer côté Léo lui-même (pas d'accès
+  non plus à sa VRAM/RAM réelles depuis cet environnement) — à confirmer par un futur "Lancer l'analyse" chez
+  l'un comme chez l'autre.

@@ -1026,3 +1026,10 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   réglage du mot d'activation ("Candidat rejeté...") s'affichait par erreur dans le Chat — il partait par le
   même canal que les messages destinés à l'utilisateur ; désormais routé séparément (stderr), jamais montré à
   l'écran. Régression : `npm test` (286 tests).
+- ✅ Étape 119 (v0.14.3) — suite immédiate : "jaris faisait rien" chez Tom, avec `ollama serve` tournant à
+  plein régime et ~20 Go de RAM occupés alors qu'aucune question n'était en cours. Cause : sur une machine à
+  RAM confortable mais carte graphique peu puissante, le palier "Puissant" pouvait choisir un modèle dont la
+  quasi-totalité tourne sur la RAM normale plutôt que la carte graphique (bien plus lent qu'un simple
+  débordement partiel), et Ollama le garde chargé plusieurs minutes après chaque question — ne laissant plus
+  assez de RAM pour le reste de l'ordinateur. La marge de sécurité réservée avant d'autoriser un aussi gros
+  modèle est doublée (8 → 16 Go), pour tout le monde. Régression : `npm test` (286 tests).
