@@ -126,13 +126,29 @@ test('Voix regroupe VRAIMENT le sélecteur de voix, le micro et l’activation s
   })
 })
 
-test('Général regroupe VRAIMENT mise à jour, stockage et historique sur UNE seule page', options, async () => {
+test('Général regroupe VRAIMENT mise à jour et historique sur UNE seule page', options, async () => {
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Général")')
     await page.waitForSelector('.options-menu__section-title')
     const titles = await page.$$eval('.options-page__content .options-menu__section-title', (els) => els.map((el) => el.textContent))
-    assert.deepEqual(titles, ['Mise à jour', 'Emplacement des modèles', 'Historique des conversations'])
-    assert.ok(await page.$('.options-menu__models-location-list, .options-menu__model-overview-hint'), 'la section stockage doit être présente')
+    // "Emplacement des modèles" a rejoint Modèles à l'étape 119 (maquette "Options Jaris.dc.html") : ce
+    // n'est plus un réglage de l'application elle-même, donc plus une section de Général — voir le test
+    // "Modèles regroupe..." ci-dessous, qui vérifie qu'elle est bien réapparue là-bas plutôt que d'avoir
+    // simplement disparu.
+    assert.deepEqual(titles, ['Mise à jour', 'Historique des conversations'])
+    assert.ok((await page.textContent('.options-page__content')).includes('Rechercher une mise à jour'), 'la section mise à jour doit être présente')
+  })
+})
+
+test('Modèles regroupe VRAIMENT mémoire, matériel et fichiers/moteur local (dont l’emplacement des modèles) sur UNE seule page', options, async () => {
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Modèles")')
+    await page.waitForSelector('.options-menu__section-title')
+    const titles = await page.$$eval('.options-page__content .options-menu__section-title', (els) => els.map((el) => el.textContent))
+    assert.deepEqual(titles, ['Longueur de mémoire', 'Les paliers de configuration', 'Fichiers et moteur local'])
+    const content = await page.textContent('.options-page__content')
+    assert.ok(content.includes('Dossier des modèles'), 'le déplacement du dossier des modèles doit être présent')
+    assert.ok(await page.$('.options-menu__models-location-list'), 'la liste des emplacements doit être présente')
   })
 })
 

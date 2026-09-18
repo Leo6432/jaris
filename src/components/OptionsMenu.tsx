@@ -129,6 +129,41 @@ function SettingRow({
   )
 }
 
+/**
+ * Interrupteur à coins coupés (refonte visuelle Options, étape 119 — maquette `Options Jaris.dc.html`),
+ * remplace la case à cocher native utilisée jusqu'ici dans `SettingRow` : une case de formulaire par défaut
+ * est la seule commande de tout l'écran qui ne suivait pas la famille de boutons HUD (coins coupés en
+ * `clip-path`, pas de coins arrondis). Un `<button role="switch">` plutôt qu'un vrai `<input type="checkbox">`
+ * stylé : impossible d'obtenir un rail + curseur en `clip-path` sur une case native (son apparence est
+ * remplacée en bloc par `accent-color`/`appearance`, pas composée de deux calques indépendants) — `aria-checked`
+ * garde la même sémantique d'accessibilité qu'une case à cocher pour qui utilise un lecteur d'écran.
+ */
+function Toggle({
+  checked,
+  onChange,
+  disabled = false,
+  label
+}: {
+  checked: boolean
+  onChange: (next: boolean) => void
+  disabled?: boolean
+  label: string
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      className={`options-menu__switch${checked ? ' options-menu__switch--on' : ''}`}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+    >
+      <span className="options-menu__switch-knob" />
+    </button>
+  )
+}
+
 /** Regroupe plusieurs `SettingRow` dans une même carte (fond + bordure), avec un titre au-dessus — le
  *  "groupe de réglages" façon Claude/ChatGPT, plutôt que des lignes qui flottent seules dans la page. */
 function SettingGroup({
@@ -246,11 +281,15 @@ export default function OptionsMenu(): JSX.Element {
       // Recalculé à CHAQUE ouverture de l'onglet, jamais mis en cache : la VRAM libre change d'un
       // lancement à l'autre selon ce qui tourne en parallèle sur la machine (jeu, navigateur...).
       void window.jaris.getContextLengthOptions().then(setContextLengthOptions)
+      // Emplacement des modèles déplacé ici depuis Général (refonte étape 119, maquette
+      // "Options Jaris.dc.html") : Ollama et le dossier des modèles parlent tous les deux de "ce que ta
+      // machine fait tourner localement", pas de l'application Jaris elle-même — Général garde uniquement
+      // ce qui concerne l'application (sa version, son historique).
+      void window.jaris.getModelsLocationStatus().then(setModelsLocation)
     }
     if (tab === 'general') {
       void window.jaris.getAppVersionStatus().then(setAppVersionStatus)
       void window.jaris.getAppVersion().then(setInstalledVersion)
-      void window.jaris.getModelsLocationStatus().then(setModelsLocation)
     }
   }, [tab])
 
@@ -756,11 +795,10 @@ export default function OptionsMenu(): JSX.Element {
                 différente d'un réglage à l'autre. */}
             <SettingGroup title="Son">
               <SettingRow label="Bips d'interface" description="Un son court à l'écoute, la réflexion, un clic, un scan...">
-                <input
-                  type="checkbox"
-                  className="options-menu__toggle"
+                <Toggle
+                  label="Bips d'interface"
                   checked={profile?.soundEffectsEnabled !== false}
-                  onChange={(e) => void toggleSoundEffects(e.target.checked)}
+                  onChange={(next) => void toggleSoundEffects(next)}
                 />
               </SettingRow>
             </SettingGroup>
@@ -844,32 +882,29 @@ export default function OptionsMenu(): JSX.Element {
               title="Comment déclencher l'écoute"
               description="Les trois façons d'activer Jaris sont indépendantes : décoche celles dont tu ne veux pas."
             >
-              <SettingRow label='Touche "+" du pavé numérique'>
-                <input
-                  type="checkbox"
-                  className="options-menu__toggle"
+              <SettingRow label='Touche "+" du pavé numérique' description="La façon la plus fiable, même en jeu.">
+                <Toggle
+                  label='Touche "+" du pavé numérique'
                   checked={profile?.activationKeyEnabled !== false}
-                  onChange={(e) => void toggleActivationKey(e.target.checked)}
+                  onChange={(next) => void toggleActivationKey(next)}
                 />
               </SettingRow>
-              <SettingRow label="Clic sur le cercle de Jaris">
-                <input
-                  type="checkbox"
-                  className="options-menu__toggle"
+              <SettingRow label="Clic sur le cercle de Jaris" description="Sur la page Agent vocal comme sur le widget.">
+                <Toggle
+                  label="Clic sur le cercle de Jaris"
                   checked={profile?.activationOrbClickEnabled !== false}
-                  onChange={(e) => void toggleActivationOrbClick(e.target.checked)}
+                  onChange={(next) => void toggleActivationOrbClick(next)}
                 />
               </SettingRow>
               <SettingRow
                 label='Dire "Jaris" à voix haute'
                 description={savingWakewordSetting ? 'Redémarrage du pipeline vocal (rechargement des modèles)…' : undefined}
               >
-                <input
-                  type="checkbox"
-                  className="options-menu__toggle"
+                <Toggle
+                  label='Dire "Jaris" à voix haute'
                   checked={profile?.activationWakeWordEnabled !== false}
                   disabled={savingWakewordSetting}
-                  onChange={(e) => void toggleActivationWakeword(e.target.checked)}
+                  onChange={(next) => void toggleActivationWakeword(next)}
                 />
               </SettingRow>
             </SettingGroup>
@@ -884,38 +919,6 @@ export default function OptionsMenu(): JSX.Element {
 
         {tab === 'modeles' && (
           <div className="options-menu__section">
-            {ollamaVersionStatus?.outdated && (
-              <div className="options-menu__ollama-warning">
-                Ollama {ollamaVersionStatus.current} installé, la dernière version est{' '}
-                {ollamaVersionStatus.latest} — certains modèles récents peuvent refuser de se télécharger tant
-                qu'Ollama n'est pas à jour.
-                <div className="options-menu__ollama-update-actions">
-                  <button onClick={handleUpdateOllama} disabled={updatingOllama}>
-                    {updatingOllama ? 'Mise à jour en cours…' : 'Mettre à jour'}
-                  </button>
-                  <a href="https://ollama.com/download" target="_blank" rel="noreferrer">
-                    ou télécharge manuellement sur ollama.com/download
-                  </a>
-                </div>
-                {updatingOllama && (
-                  <>
-                    {/* L'installeur d'Ollama pèse 1,5 Go : plusieurs minutes pendant lesquelles il ne se
-                        passait rien à l'écran ("ça bloque depuis 5m", Léo). Même barre que la mise à jour de
-                        Jaris (étape 98) plutôt qu'un second indicateur inventé à côté. */}
-                    <AppUpdateProgress progress={ollamaUpdateProgress} target="ollama" />
-                    <p className="options-menu__ollama-update-note">
-                      Une fenêtre Windows peut demander une autorisation (élévation) — accepte-la pour continuer.
-                    </p>
-                  </>
-                )}
-              </div>
-            )}
-            {/* Hors du bandeau "outdated" ci-dessus, à dessein : une mise à jour réussie fait justement
-                passer ollamaVersionStatus.outdated à false juste après, ce qui ferait disparaître le
-                message de succès avec le reste du bandeau s'il restait imbriqué dedans — jamais vu le
-                message alors que la mise à jour avait réellement marché. */}
-            {!updatingOllama && ollamaUpdateMessage && <p className="options-menu__ollama-update-note">{ollamaUpdateMessage}</p>}
-
             {/* Longueur de mémoire AU-DESSUS des paliers de configuration (Léo, étape 117 : "met juste le
                 context au dessus des palier") : les deux parlent de "quel modèle/combien de mémoire pour ce
                 modèle", mais le réglage qu'on vient justement de toucher (le curseur) ne doit pas se
@@ -980,16 +983,86 @@ export default function OptionsMenu(): JSX.Element {
                 </SettingRow>
               )}
             </SettingGroup>
+
+            {/* "Fichiers et moteur local" (refonte étape 119, maquette "Options Jaris.dc.html") : Ollama et
+                le dossier de stockage des modèles rejoignent Modèles, déplacés depuis Général — les deux
+                parlent de ce qui fait tourner les modèles sur cette machine, pas de l'application Jaris
+                elle-même (mission-design, section 1 : "Modèles (... mise à jour d'Ollama, emplacement des
+                modèles)"). La ligne Ollama reste visible même à jour désormais (avant : rien du tout ne
+                s'affichait tant qu'aucune mise à jour n'était disponible) — seule la donnée déjà lue par
+                getOllamaVersionStatus() change de forme d'affichage, aucun nouvel appel IPC. */}
+            <SettingGroup title="Fichiers et moteur local">
+              <SettingRow
+                label="Ollama"
+                description={
+                  ollamaVersionStatus
+                    ? ollamaVersionStatus.outdated
+                      ? `Version ${ollamaVersionStatus.current} installée · ${ollamaVersionStatus.latest} disponible. Certains modèles récents peuvent refuser de se télécharger tant qu'il n'est pas à jour.`
+                      : `Version ${ollamaVersionStatus.current} installée · à jour.`
+                    : 'Vérification de la version…'
+                }
+              >
+                {ollamaVersionStatus?.outdated && (
+                  <button className="options-menu__action" onClick={handleUpdateOllama} disabled={updatingOllama}>
+                    {updatingOllama ? 'Mise à jour en cours…' : 'Mettre à jour'}
+                  </button>
+                )}
+              </SettingRow>
+              {ollamaVersionStatus?.outdated && (
+                <div className="options-menu__ollama-warning">
+                  <a href="https://ollama.com/download" target="_blank" rel="noreferrer">
+                    Ou télécharge manuellement sur ollama.com/download
+                  </a>
+                  {updatingOllama && (
+                    <>
+                      {/* L'installeur d'Ollama pèse 1,5 Go : plusieurs minutes pendant lesquelles il ne se
+                          passait rien à l'écran ("ça bloque depuis 5m", Léo). Même barre que la mise à jour
+                          de Jaris (étape 98) plutôt qu'un second indicateur inventé à côté. */}
+                      <AppUpdateProgress progress={ollamaUpdateProgress} target="ollama" />
+                      <p className="options-menu__ollama-update-note">
+                        Une fenêtre Windows peut demander une autorisation (élévation) — accepte-la pour continuer.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+              {/* Hors du bandeau "outdated" ci-dessus, à dessein : une mise à jour réussie fait justement
+                  passer ollamaVersionStatus.outdated à false juste après, ce qui ferait disparaître le
+                  message de succès avec le reste du bandeau s'il restait imbriqué dedans — jamais vu le
+                  message alors que la mise à jour avait réellement marché. */}
+              {!updatingOllama && ollamaUpdateMessage && <p className="options-menu__ollama-update-note">{ollamaUpdateMessage}</p>}
+
+              <SettingRow
+                label="Dossier des modèles"
+                description="Les modèles Ollama, l'environnement Python (voix) et le cache de reconnaissance/synthèse
+                  vocale peuvent peser plusieurs dizaines de Go au total — regroupe-les ailleurs (un autre disque,
+                  par exemple) sans que rien d'autre n'ait à changer."
+              >
+                <button className="options-menu__action" onClick={handleChooseModelsLocation} disabled={movingModelsLocation}>
+                  {movingModelsLocation ? 'Déplacement en cours…' : 'Choisir un dossier…'}
+                </button>
+              </SettingRow>
+              {modelsLocation && (
+                <ul className="options-menu__models-location-list">
+                  <li>Modèles Ollama : {modelsLocation.ollamaModelsDir}</li>
+                  <li>Environnement Python : {modelsLocation.pythonRuntimeDir}</li>
+                  <li>Cache vocal : {modelsLocation.hfCacheDir}</li>
+                </ul>
+              )}
+              {modelsLocationMessage && <p className="options-menu__ollama-update-note">{modelsLocationMessage}</p>}
+            </SettingGroup>
           </div>
         )}
 
         {tab === 'general' && (
           <div className="options-menu__section">
-            {/* Mise à jour/Stockage/Historique fusionnés dans "Général" depuis l'étape 115 (Léo : "des
-                categorie... peuvent etre ensemble") : trois réglages "à propos de l'application" plutôt que
-                trois sujets distincts, à la manière du même onglet chez ChatGPT/Claude. Chaque réglage passe
-                maintenant par `SettingRow`/`SettingGroup` (étape 116) pour la même raison que l'onglet Voix
-                ci-dessus : un bouton, une case et une valeur en lecture seule doivent se présenter pareil. */}
+            {/* Mise à jour/Historique regroupés dans "Général" depuis l'étape 115 (Léo : "des categorie...
+                peuvent etre ensemble") : deux réglages "à propos de l'application" plutôt que deux sujets
+                distincts, à la manière du même onglet chez ChatGPT/Claude. Chaque réglage passe par
+                `SettingRow`/`SettingGroup` (étape 116) pour la même raison que l'onglet Voix ci-dessus : un
+                bouton et une liste doivent se présenter pareil. "Emplacement des modèles" a rejoint Modèles à
+                l'étape 119 (maquette "Options Jaris.dc.html") : ce n'est pas l'application elle-même qui est
+                stockée là, mais les modèles/moteurs locaux qu'elle fait tourner. */}
             <SettingGroup title="Mise à jour">
               <SettingRow
                 label="Rechercher une mise à jour"
@@ -1021,27 +1094,6 @@ export default function OptionsMenu(): JSX.Element {
                 </div>
               )}
               {!updatingApp && appUpdateMessage && <p className="options-menu__ollama-update-note">{appUpdateMessage}</p>}
-            </SettingGroup>
-
-            <SettingGroup title="Emplacement des modèles">
-              <SettingRow
-                label="Dossier des modèles"
-                description="Les modèles Ollama, l'environnement Python (voix) et le cache de reconnaissance/synthèse
-                  vocale peuvent peser plusieurs dizaines de Go au total — regroupe-les ailleurs (un autre disque,
-                  par exemple) sans que rien d'autre n'ait à changer."
-              >
-                <button className="options-menu__action" onClick={handleChooseModelsLocation} disabled={movingModelsLocation}>
-                  {movingModelsLocation ? 'Déplacement en cours…' : 'Choisir un dossier…'}
-                </button>
-              </SettingRow>
-              {modelsLocation && (
-                <ul className="options-menu__models-location-list">
-                  <li>Modèles Ollama : {modelsLocation.ollamaModelsDir}</li>
-                  <li>Environnement Python : {modelsLocation.pythonRuntimeDir}</li>
-                  <li>Cache vocal : {modelsLocation.hfCacheDir}</li>
-                </ul>
-              )}
-              {modelsLocationMessage && <p className="options-menu__ollama-update-note">{modelsLocationMessage}</p>}
             </SettingGroup>
 
             <SettingGroup title="Historique des conversations">

@@ -2446,3 +2446,57 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   (la CI l'installe APRÈS `npm test`), jamais silencieusement vert. **Non vérifiable ici, à confirmer par Léo
   en usage réel** : que "Déplacer" relance bien Jaris sur sa vraie machine Windows et qu'il retrouve toutes
   ses conversations au nouvel emplacement.
+
+- **Étape 119 : refonte visuelle de la page Options à partir d'une vraie maquette (`prompt-design-jaris.md` +
+  `Options Jaris.dc.html`, handoff Claude Design), PAS une nouvelle plainte de Léo cette fois — la refonte
+  précédente (étapes 115-118) avait déjà posé `SettingRow`/`SettingGroup`, les deux catégories de navigation
+  et les regroupements Voix/Modèles/Général. Décision de périmètre prise AVANT de coder : garder ces
+  fondations (elles répondent déjà, dans le code, à la même demande "tout se ressemble" que documente la
+  maquette) plutôt que de tout réécrire à partir de zéro — seuls les écarts RÉELS entre le rendu compilé et
+  la maquette ont été corrigés, pas une réécriture "au cas où elle diffère ailleurs".**
+  1. **Interrupteur à coins coupés, remplace la case à cocher native** (les 4 réglages "Bips d'interface",
+     "+", "clic sur l'orbe", "mot d'activation") : nouveau composant `Toggle` (OptionsMenu.tsx) rendu en
+     `<button role="switch" aria-checked>`, jamais un `<input type="checkbox">` stylé — impossible d'obtenir
+     un rail + curseur en deux calques `clip-path` indépendants sur l'apparence d'une case native
+     (`accent-color`/`appearance` ne composent pas, ils remplacent l'apparence en bloc). Nouvelles classes
+     `.options-menu__switch`/`.options-menu__switch--on`/`.options-menu__switch-knob` (index.css),
+     `.options-menu__toggle` (case 18x18, seule commande de tout l'écran encore en coins arrondis) retirée —
+     plus aucun consommateur en JSX, vérifié par grep avant suppression.
+  2. **Équerres d'angle ajoutées à `.options-menu__group`** (les cartes "Son", "Micro et haut-parleur",
+     "Comment déclencher l'écoute"...) : seule famille de panneaux de la page encore "plate" (juste bordure +
+     fond, sans les deux coins lumineux) au milieu d'un thème où c'est justement CE détail qui fait lire
+     "instrument" plutôt que "site web" (voir le commentaire de tête de la section "COUCHE HUD" du fichier).
+     Ajoutée à la même liste de sélecteurs que `.options-menu__model-group`/`.capacity-scan__tier`/etc.,
+     jamais un second bloc de règles dupliqué à côté.
+  3. **"Emplacement des modèles" déplacé de Général vers Modèles, fusionné avec Ollama dans un nouveau
+     panneau "Fichiers et moteur local"** — la maquette (et la mission-design, section 1 : "Modèles (...
+     mise à jour d'Ollama, emplacement des modèles)") les regroupe tous les deux sous Modèles, pas sous
+     Général : ce ne sont pas des réglages de l'application Jaris elle-même, mais des fichiers/moteurs locaux
+     qu'elle fait tourner. La lecture de `getModelsLocationStatus()` (déjà existante, aucun nouveau canal
+     IPC) se déclenche donc maintenant à l'ouverture de l'onglet Modèles, plus à celle de Général. **Effet de
+     bord volontaire, documenté plutôt que caché** : la ligne "Ollama" est désormais visible même quand
+     Ollama est à jour (avant : rien ne s'affichait tant qu'aucune mise à jour n'était trouvée) — seule la
+     MISE EN FORME de `ollamaVersionStatus` (déjà lu par un appel IPC existant) change, pas la logique.
+  4. **Pas touché, à dessein** : `HardwareTierPreview.tsx` (déjà réutilisé tel quel, comme demandé par la
+     mission-design — "reuse it, don't reinvent the table" — même s'il affiche TOUS les paliers avec le
+     courant en évidence plutôt que le seul palier courant de la maquette, à la demande explicite antérieure
+     de Léo documentée plus haut dans ce fichier), `JarisOrb` (déjà réutilisé avec sa prop `color`, jamais un
+     rond CSS), la colonne de contrôle des lignes (`.options-menu__row-control`) reste en largeur automatique
+     plutôt que la colonne fixe de 240px de la maquette — écart cosmétique mineur laissé de côté pour ne pas
+     rouvrir le calcul de largeur de TOUTES les lignes (menus déroulants, boutons doubles de l'historique...)
+     dans ce même commit.
+  **Bug pré-existant repéré en écran étroit (760px), PAS corrigé ici** : le libellé "Retester la
+  configuration" (onglet Modèles) s'enroule mot par mot sur une douzaine de lignes à 760px, poussé par le
+  bouton voisin qui ne rétrécit pas — confirmé pré-existant (même symptôme capturé sur le code d'AVANT ce
+  commit, avant de toucher quoi que ce soit) et sans rapport avec les changements de cette étape : laissé
+  volontairement pour une prochaine étape plutôt que d'élargir le périmètre de celle-ci.
+  Régression : `npm test` (303 tests) — `scripts/test-options-reorganization-ui.mjs` mis à jour pour la
+  nouvelle liste de titres (Général : `['Mise à jour', 'Historique des conversations']`, sans "Emplacement
+  des modèles" ; nouveau test dédié vérifiant que Modèles affiche bien `['Longueur de mémoire', 'Les paliers
+  de configuration', 'Fichiers et moteur local']` et que le dossier des modèles y est bien présent), vérifié
+  mordant en réintroduisant temporairement l'ancien groupe dans Général (le test échoue bien avec le titre en
+  trop) avant de confirmer qu'il passe sur le nouveau rendu. Vérifié par capture d'écran réelle du rendu
+  compilé (bundle esbuild + vrai CSS) sur les onglets Voix et Modèles, à 1280px et 760px : aucun défilement
+  horizontal aux deux largeurs (`scrollWidth` mesuré égal à la largeur de la fenêtre), l'interrupteur porte
+  bien le `clip-path` réel (mesuré par `getComputedStyle`, pas relu dans le CSS), et `.options-menu__group`
+  porte bien ses équerres (`::before`/`::after` avec `content: '""'` mesurés).

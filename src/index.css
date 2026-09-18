@@ -485,14 +485,51 @@ body.body--scan::after {
   gap: 10px;
 }
 
-/* Case à cocher d'une ligne de réglage : plus grande qu'une case de formulaire par défaut, pour rester une
-   vraie cible de clic une fois qu'elle n'a plus le texte du réglage collé juste à côté d'elle (ce texte vit
-   maintenant dans `.options-menu__row-label`, à gauche de la ligne). */
-.options-menu__toggle {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--hud-accent);
+/* Interrupteur d'une ligne de réglage (refonte étape 119, remplace la case à cocher native
+   `.options-menu__toggle`) : rail + curseur en coins coupés, même famille que les boutons HUD plutôt qu'un
+   style de case de formulaire par défaut (voir le composant `Toggle`, OptionsMenu.tsx). Dimensions et
+   décalage du curseur repris de la maquette "Options Jaris.dc.html" (rail 44x22, curseur 16x14). */
+.options-menu__switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--hud-line-strong);
+  background: rgba(1, 4, 10, 0.6);
   cursor: pointer;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.options-menu__switch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.options-menu__switch--on {
+  background: rgba(var(--hud-accent-rgb), 0.16);
+  border-color: var(--hud-accent);
+}
+
+.options-menu__switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 14px;
+  background: var(--hud-text-faint);
+  transition:
+    left 0.14s ease,
+    background 0.14s ease;
+}
+
+.options-menu__switch--on .options-menu__switch-knob {
+  left: 25px;
+  background: var(--hud-accent);
+  box-shadow: 0 0 8px rgba(var(--hud-accent-rgb), 0.7);
 }
 
 .options-menu__select {
@@ -2588,6 +2625,7 @@ textarea:not(.composer__input):focus-visible {
  * "cockpit" de tout le thème, et il ne coûte rien — aucun élément supplémentaire
  * dans le DOM, donc applicable à des composants qu'on ne touche pas côté React.
  */
+.options-menu__group,
 .options-menu__model-group,
 .capacity-scan__tier,
 .options-menu__scope-dialog,
@@ -2603,6 +2641,13 @@ textarea:not(.composer__input):focus-visible {
   backdrop-filter: blur(6px);
 }
 
+/* `.options-menu__group` (les cartes de réglages, ex "Son", "Micro et haut-parleur"...) a rejoint les
+   équerres à l'étape 119 : la maquette "Options Jaris.dc.html" en met sur CHAQUE panneau de la page Options,
+   pas seulement sur les cartes matérielles/messages/résultats déjà équipées — sans elles, ces cartes étaient
+   la seule famille de panneaux "plats" (juste bordure + fond) au milieu d'un thème où l'équerre d'angle est
+   justement le motif qui fait lire "instrument" plutôt que "site web" (voir le commentaire de tête de
+   section, plus haut dans ce fichier). */
+.options-menu__group::before,
 .options-menu__model-group::before,
 .capacity-scan__tier::before,
 .options-menu__scope-dialog::before,
@@ -2621,6 +2666,7 @@ textarea:not(.composer__input):focus-visible {
   pointer-events: none;
 }
 
+.options-menu__group::after,
 .options-menu__model-group::after,
 .capacity-scan__tier::after,
 .options-menu__scope-dialog::after,
