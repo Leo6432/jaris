@@ -125,7 +125,32 @@ test('Voix regroupe VRAIMENT le sélecteur de voix, le micro et l’activation s
     assert.deepEqual(titles, ['La voix de Jaris', 'Son et périphériques', "Déclencher l'écoute"])
     // Un réglage de chaque ancien onglet, pour prouver qu'il ne s'agit pas que des titres.
     assert.ok((await page.textContent('.options-menu__section--voix')).includes('Tester le micro'), 'le test micro doit être présent')
-    assert.ok((await page.textContent('.options-menu__section--voix')).includes('Dire "Jaris" à voix haute'), 'la case Activation doit être présente')
+    assert.ok((await page.textContent('.options-menu__section--voix')).includes('Dire « Jaris » à voix haute'), 'la case Activation doit être présente')
+  })
+})
+
+test('chaque page de réglages a son titre + sous-titre de la maquette (repéré seulement à la capture complète)', options, async () => {
+  // Léo, après 4 correctifs successifs sur des cartes déjà comparées : "non tu a pas compris ma demande" —
+  // ce titre/sous-titre était absent des DEUX branches parallèles depuis le premier commit de cette série,
+  // parce qu'aucune comparaison précédente n'avait pris une capture de la page COMPLÈTE (toujours recadrée
+  // sur les cartes elles-mêmes). Un test dédié plutôt qu'une simple relecture de la classe CSS : vérifie le
+  // texte RÉEL affiché pour les 3 onglets de réglages, pas juste que `TAB_META` existe dans le code.
+  await withOptions(async (page) => {
+    for (const [tabName, title, subtitle] of [
+      ['Voix', 'Voix', "La voix de Jaris, les périphériques qu'il utilise, et les façons de le réveiller."],
+      ['Modèles', 'Modèles', 'Ce que ta machine fait tourner, et combien Jaris garde en tête pendant une conversation.'],
+      ['Général', 'Général', "L'application elle-même : version, fichiers, historique."]
+    ]) {
+      await page.click(`.options-menu__tab:has-text("${tabName}")`)
+      await page.waitForSelector('.options-page__tab-header h3')
+      const heading = await page.textContent('.options-page__tab-header h3')
+      const sub = await page.textContent('.options-page__tab-header p')
+      assert.equal(heading, title, `titre de la page ${tabName}`)
+      assert.equal(sub, subtitle, `sous-titre de la page ${tabName}`)
+    }
+    // "Ce que Jaris sait faire" garde sa propre intro DANS sa section (étape 111), jamais ce gabarit.
+    await page.click('.options-menu__tab:has-text("Ce que Jaris sait faire")')
+    assert.equal(await page.$('.options-page__tab-header'), null, "capacités ne doit pas avoir ce titre de page")
   })
 })
 

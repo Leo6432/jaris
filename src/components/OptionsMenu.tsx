@@ -58,6 +58,20 @@ const MIC_TEST_BAR_COUNT = 42
 type Tab = 'capacites' | 'voix' | 'modeles' | 'general'
 
 /**
+ * Titre + sous-titre en tête de chaque page de réglages (design importé, "Options Jaris.dc.html") —
+ * absents du code jusqu'ici : les 3 comparaisons précédentes (v0.14.6 à v0.14.9) s'étaient concentrées sur
+ * le contenu DES cartes, jamais sur ce qui vit AU-DESSUS d'elles, repéré seulement quand Léo a renvoyé une
+ * capture de la page COMPLÈTE plutôt que juste le panneau recadré ("non tu a pas compris ma demande...").
+ * "Ce que Jaris sait faire" (capacites) garde sa propre phrase d'intro DANS sa section (étape 111), pas ce
+ * gabarit — seuls les 3 onglets de réglages en ont besoin.
+ */
+const TAB_META: Partial<Record<Tab, { title: string; subtitle: string }>> = {
+  voix: { title: 'Voix', subtitle: "La voix de Jaris, les périphériques qu'il utilise, et les façons de le réveiller." },
+  modeles: { title: 'Modèles', subtitle: 'Ce que ta machine fait tourner, et combien Jaris garde en tête pendant une conversation.' },
+  general: { title: 'Général', subtitle: "L'application elle-même : version, fichiers, historique." }
+}
+
+/**
  * Chromium ajoute des pseudo-périphériques "default"/"communications" en plus des vrais haut-parleurs
  * physiques (mêmes libellés ou très proches, deviceId littéralement "default"/"communications") : les
  * exclure plutôt que de montrer 2-3 entrées pour le même haut-parleur physique. Dédupliqué par libellé au
@@ -714,6 +728,12 @@ export default function OptionsMenu(): JSX.Element {
 
         <main className="options-page__workspace">
           <div className="options-page__content">
+        {TAB_META[tab] && (
+          <div className="options-page__tab-header">
+            <h3>{TAB_META[tab]!.title}</h3>
+            <p>{TAB_META[tab]!.subtitle}</p>
+          </div>
+        )}
         {tab === 'capacites' && (
           <div className="options-menu__section">
             <p className="options-menu__capability-intro">
@@ -846,7 +866,7 @@ export default function OptionsMenu(): JSX.Element {
                 </select>
               </SettingRow>
 
-              <SettingRow label="Bips d'interface" description="Un son court à l'écoute, la réflexion, un clic, un scan...">
+              <SettingRow label="Bips d'interface" description="Un son court à l'écoute, la réflexion, un clic.">
                 <Toggle
                   label="Bips d'interface"
                   checked={profile?.soundEffectsEnabled !== false}
@@ -858,7 +878,7 @@ export default function OptionsMenu(): JSX.Element {
                   className={`options-menu__action${micTesting ? ' options-menu__action--danger' : ''}`}
                   onClick={toggleMicTest}
                 >
-                  {micTesting ? 'Arrêter le test' : 'Tester le micro'}
+                  {micTesting ? 'Arrêter' : 'Tester'}
                 </button>
               </SettingRow>
               {(micTesting || micTestResult !== null) && (
@@ -890,9 +910,9 @@ export default function OptionsMenu(): JSX.Element {
               title="Déclencher l'écoute"
               description="Les trois façons sont indépendantes : garde celles que tu utilises."
             >
-              <SettingRow label='Touche "+" du pavé numérique' description="La façon la plus fiable, même en jeu.">
+              <SettingRow label="Touche « + » du pavé numérique" description="La façon la plus fiable, même en jeu.">
                 <Toggle
-                  label='Touche "+" du pavé numérique'
+                  label="Touche « + » du pavé numérique"
                   checked={profile?.activationKeyEnabled !== false}
                   onChange={(next) => void toggleActivationKey(next)}
                 />
@@ -905,23 +925,21 @@ export default function OptionsMenu(): JSX.Element {
                 />
               </SettingRow>
               <SettingRow
-                label='Dire "Jaris" à voix haute'
-                description={savingWakewordSetting ? 'Redémarrage du pipeline vocal (rechargement des modèles)…' : undefined}
+                label="Dire « Jaris » à voix haute"
+                description={
+                  savingWakewordSetting
+                    ? 'Redémarrage du pipeline vocal (rechargement des modèles)…'
+                    : 'Pas toujours parfait : « Jarvis » peut aussi le réveiller.'
+                }
               >
                 <Toggle
-                  label='Dire "Jaris" à voix haute'
+                  label="Dire « Jaris » à voix haute"
                   checked={profile?.activationWakeWordEnabled !== false}
                   disabled={savingWakewordSetting}
                   onChange={(next) => void toggleActivationWakeword(next)}
                 />
               </SettingRow>
             </SettingGroup>
-            <p className="options-menu__model-overview-hint">
-              Le mot d'activation "Jaris" n'est pas toujours parfait : "Jarvis" (l'ancien nom) et certaines
-              phrases contenant "il a ri" peuvent parfois le déclencher par erreur, et il lui arrive de ne
-              pas reconnaître "Jaris" dit seul, sans rien après. Si ça arrive trop souvent, la touche "+" et
-              le clic sur le cercle restent des façons fiables de l'activer.
-            </p>
           </div>
         )}
 

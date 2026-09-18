@@ -2594,3 +2594,44 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   Régression : `npm test` (303 tests, inchangé). Vérifié par capture d'écran réelle du rendu compilé,
   comparée ligne par ligne à la capture originale du mockup — les deux phrases d'aide sont maintenant
   identiques, texte et position.
+
+- **v0.14.9 encore "pas compris" (v0.14.10) : la vraie cause de tous les allers-retours précédents — je
+  comparais des CAPTURES RECADRÉES sur les cartes, jamais la page COMPLÈTE.** Léo, après v0.14.9 : "non tu a
+  pas compris ma demande, voici se qu'on a et se que je veut en plus normalement je t'ai envoyer le prompt de
+  claude design" — avec DEUX captures cette fois, l'une de la page COMPLÈTE (en-tête inclus), l'autre du
+  panneau recadré comme les fois précédentes. Comparaison faite pour de vrai contre l'image complète, pas
+  seulement les cartes :
+  1. **Un titre + sous-titre de PAGE manquait entièrement, invisible dans toutes mes captures précédentes**
+     (toujours recadrées sur `.options-menu__voice-picker` en premier plan). Chacun des 3 onglets de réglages
+     a dans le mockup un `<h3>` + une phrase d'intro AU-DESSUS de la première carte : "Voix" / "La voix de
+     Jaris, les périphériques qu'il utilise, et les façons de le réveiller." (idem Modèles/Général, textes
+     exacts en commentaire de `TAB_META`, OptionsMenu.tsx). Ajouté un objet `TAB_META` + un bloc rendu juste
+     après `.options-page__content`, PAS pour "Ce que Jaris sait faire" (capacites) qui garde sa propre intro
+     déjà dans sa section depuis l'étape 111.
+  2. **Trois écarts de texte fins, jamais remarqués avant une comparaison mot à mot** : "Bips d'interface" se
+     terminait par ", un scan..." (absent du mockup, qui s'arrête à "un clic.") ; le bouton "Tester le micro"
+     était en toutes lettres au lieu du court "Tester"/"Arrêter" du mockup (le libellé de LIGNE reste "Tester
+     le micro", seul le texte du BOUTON change) ; les guillemets français « » du mockup ("Touche « + » du
+     pavé numérique", "Dire « Jaris » à voix haute") étaient restés en guillemets droits `"..."` dans le code.
+  3. **Le long paragraphe sous "Déclencher l'écoute"** (avertissement complet sur "Jarvis"/"il a ri") n'existe
+     PAS dans le mockup, qui porte à la place une description COURTE directement sous la ligne "Dire « Jaris »
+     à voix haute" : "Pas toujours parfait : « Jarvis » peut aussi le réveiller." Remplacé le paragraphe par
+     cette description de ligne — `.options-menu__model-overview-hint` retirée du CSS, plus aucun consommateur.
+  **Pourquoi ces 4 écarts avaient survécu à 3 sessions de correctifs successives (v0.14.6 à v0.14.9, deux
+  branches)** : chaque comparaison précédente prenait une capture qui commençait DIRECTEMENT sur la première
+  carte (`.options-menu__voice-picker`), jamais la page entière — un titre de page au-dessus des cartes ne
+  pouvait tout simplement pas apparaître dans le cadrage utilisé pour vérifier. Et les 3 écarts de texte fins
+  demandaient une comparaison caractère par caractère, jamais faite jusqu'ici (les comparaisons visaient des
+  écarts STRUCTURELS — cartes manquantes, ordre, titres de section — pas le contenu exact de chaque phrase).
+  **Leçon générale, qui prolonge celle de v0.14.9 : "toujours pareil" après plusieurs correctifs ciblés
+  successifs signifie souvent que la MÉTHODE de comparaison elle-même est incomplète, pas seulement qu'un
+  écart de plus reste à corriger.** Ici, le cadrage des captures (jamais la page complète) et la profondeur
+  de la comparaison (structure seulement, jamais le texte mot à mot) limitaient systématiquement ce qui
+  POUVAIT être trouvé, quel que soit le soin apporté à chaque correctif individuel — corrigé en prenant
+  systématiquement une capture PLEINE PAGE (en-tête compris) et en comparant le texte de CHAQUE ligne, pas
+  seulement les titres de carte et l'ordre.
+  Régression : `node --test scripts/test-options-reorganization-ui.mjs` (304 tests au total) — nouveau test
+  dédié qui vérifie le texte RÉEL affiché du titre + sous-titre pour les 3 onglets de réglages ET l'absence
+  de ce gabarit sur "Ce que Jaris sait faire", vérifié mordant en désactivant temporairement `TAB_META` (le
+  test échoue bien, confirmé avant de le committer). Vérifié en plus par capture d'écran réelle des 3 onglets
+  (en-tête inclus cette fois) comparée directement aux deux captures envoyées par Léo.

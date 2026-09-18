@@ -360,6 +360,21 @@ body.body--scan::after {
   max-width: 960px;
 }
 
+/* Titre + sous-titre en tête de chaque page de réglages (design importé) — voir TAB_META, OptionsMenu.tsx.
+   Pas de carte/bordure ici, contrairement aux panneaux en dessous : c'est une INTRODUCTION à la page, pas
+   un groupe de réglages de plus. */
+.options-page__tab-header h3 {
+  margin: 0;
+  font-size: 1.3rem;
+  color: var(--hud-text);
+}
+
+.options-page__tab-header p {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: var(--hud-text-faint);
+}
+
 .options-menu__tabs {
   display: flex;
   gap: 6px;
@@ -949,16 +964,6 @@ body.body--scan::after {
 .options-menu__badge--none {
   color: var(--hud-text-faint);
   font-weight: 400;
-}
-
-.options-menu__model-overview-hint {
-  margin-top: 8px;
-  font-size: 0.7rem;
-  color: var(--hud-text-faint);
-}
-
-.options-menu__model-overview-hint code {
-  color: var(--hud-text-dim);
 }
 
 /* Curseur "comme sur Ollama" (Léo), même famille visuelle que .options-menu__progress-bar juste au-dessus
