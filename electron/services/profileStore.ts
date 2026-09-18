@@ -1,9 +1,9 @@
-import { app } from 'electron'
 import { mkdir, readFile, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
 import type { Profile } from '../../shared/ipc'
+import { getDataRoot } from './dataLocation'
 
-const profilePath = join(app.getPath('userData'), 'profile.json')
+const profilePath = join(getDataRoot(), 'profile.json')
 
 /** null tant que l'utilisateur n'a pas encore renseigné son prénom (premier lancement). */
 export async function getProfile(): Promise<Profile | null> {

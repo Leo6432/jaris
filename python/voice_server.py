@@ -49,6 +49,17 @@ from math import gcd
 
 import numpy as np
 
+# Python 3.12 (la série embarquée par Jaris, voir PYTHON_SERIES dans pythonRuntime.ts) choisit l'encodage de
+# stdout d'après la PAGE DE CODES Windows quand la sortie est un tube, PAS UTF-8 : sur un Windows français
+# ordinaire, "ça" partait donc en cp1252 (un seul octet 0xE7) alors que Node lit toujours de l'UTF-8 —
+# chaque caractère accentué arrivait à l'écran en "�". Constaté chez un ami de Léo (Tom), transcription
+# affichée telle quelle : "◆a marche pas... Salut Charisse, ◆a va ?" pour "Ça marche pas... ça va ?".
+# Invisible sur la machine de Léo (page de codes déjà en UTF-8 chez lui), d'où un bug qui n'apparaît que
+# chez quelqu'un d'autre. Forcé ici plutôt que laissé au réglage Windows de chacun : le sidecar écrit
+# TOUJOURS de l'UTF-8, quelle que soit la machine. stderr aussi (les diagnostics de debug() sont en français).
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
+
 from wakeword import JarisWakeWordDetector
 from wake_confirmation import WakeConfirmation, contains_wake_name, remove_wake_prefix
 

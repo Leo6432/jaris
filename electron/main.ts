@@ -10,6 +10,7 @@ import {
   updateOllama
 } from './services/dependencyServices'
 import { getModelsLocationStatus, moveModelsLocation } from './services/modelsLocation'
+import { moveDataLocation } from './services/dataLocation'
 import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, previewHardwareTiers } from './services/hardwareScan'
 import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
@@ -567,12 +568,32 @@ app.whenReady().then(async () => {
     await stopOllamaCompletely()
 
     const outcome = await moveModelsLocation(newDir, log)
+    // Étape 121, Léo : "sa doit déplacer tout" — les conversations/profil/mémoire/applications générées
+    // partent aussi, pas seulement les trois briques lourdes ci-dessus (voir dataLocation.ts pour le
+    // pourquoi d'un mécanisme différent : pas de jonction sur userData, qui héberge aussi les fichiers
+    // internes de Chromium ouverts en permanence).
+    const dataOutcome = await moveDataLocation(newDir, log)
 
-    log('Redémarrage des services…')
-    void ensureOllamaRunning(log)
-    await startVoicePipeline()
+    if (dataOutcome.success) {
+      // Les stores calculent leur chemin UNE fois au chargement du module : copier les fichiers ne suffit
+      // pas, il faut relancer Jaris pour qu'il relise tout depuis le nouvel emplacement. Inutile de
+      // redémarrer les services ici — l'instance suivante les relance elle-même à son démarrage normal.
+      log('Redémarrage de Jaris pour utiliser le nouvel emplacement…')
+      quitting = true
+      app.relaunch()
+      // Laisse la réponse IPC repartir vers l'interface avant de couper : sinon la promesse côté renderer
+      // ne se résout jamais et le bouton reste figé sur "Déplacement en cours…" jusqu'à la relance.
+      setTimeout(() => app.quit(), 500)
+    } else {
+      log('Redémarrage des services…')
+      void ensureOllamaRunning(log)
+      await startVoicePipeline()
+    }
 
-    return outcome
+    return {
+      success: outcome.success && dataOutcome.success,
+      message: [outcome.message, dataOutcome.message].filter(Boolean).join(' ')
+    }
   })
   ipcMain.handle(IPC_CHANNELS.getRuntimeSetupStatus, () => getRuntimeSetupStatus())
   // L'installation du premier lancement (Python, Ollama) dure plusieurs minutes : chaque étape est

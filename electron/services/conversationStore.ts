@@ -1,8 +1,8 @@
-import { app } from 'electron'
 import { randomUUID } from 'crypto'
 import { mkdir, readFile, readdir, rm, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
 import type { ConversationEntry, ConversationSummary } from '../../shared/ipc'
+import { getDataRoot } from './dataLocation'
 
 /**
  * Jaris n'avait qu'UNE seule conversation continue, à dessein depuis l'étape 47 (voix et chat unifiés).
@@ -14,10 +14,10 @@ import type { ConversationEntry, ConversationSummary } from '../../shared/ipc'
  * propriété acquise à l'étape 47 (demander quelque chose à l'oral puis enchaîner par écrit continue la même
  * discussion). Changer de conversation dans le Chat change donc aussi celle que la voix continue.
  */
-const legacyHistoryPath = join(app.getPath('userData'), 'conversation-history.json')
+const legacyHistoryPath = join(getDataRoot(), 'conversation-history.json')
 
 function conversationsDir(): string {
-  return join(app.getPath('userData'), 'conversations')
+  return join(getDataRoot(), 'conversations')
 }
 
 function indexPath(): string {

@@ -30,6 +30,7 @@ function setup() {
   const removed = []
   const modules = {
     electron: { app: { getPath: () => '/fake/userData' } },
+    './dataLocation': { getDataRoot: () => '/fake/userData' },
     'fs/promises': {
       readdir: async () => [],
       readFile: async () => '',

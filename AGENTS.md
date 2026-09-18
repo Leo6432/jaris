@@ -2380,3 +2380,69 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   si l'installeur OFFICIEL d'Ollama (code que Jaris ne contrôle pas) fait un jour quelque chose d'inhabituel
   avec `.ollama\models` lors d'une réinstallation — invérifiable depuis ce dépôt, seul un usage réel avec
   Léo (ou Tom) peut le confirmer.
+
+- **Étape 121, deux retours de Léo dans la foulée : "sa doit déplacer tout" (le bouton "Déplacer") et une
+  capture d'un ami (Tom) montrant des accents cassés : "◆a marche pas. Ah si, c'est bon. Salut Charisse,
+  ◆a va ?"** — soit "Ça marche pas... ça va ?", chaque "ç" arrivé à l'écran en caractère de remplacement.
+  1. **"Déplacer" ne bougeait que les téléchargements lourds.** Léo l'a constaté ("le fichier jaris avec
+     conversation cache ne change pas quand on clique sur déplacer"), et quand je lui ai demandé POURQUOI
+     déplacer quelques Ko de JSON alors que la fonctionnalité vise des dizaines de Go, la réponse a été sans
+     ambiguïté : "sa doit déplacer tout". Demande de COMPLÉTUDE, pas de place disque — et quand une demande
+     explicite contredit le périmètre noté ici, c'est la demande qui gagne (même convention qu'à l'étape 96).
+     **Mécanisme DIFFÉRENT des trois briques existantes, à dessein — le point le plus important de cette
+     étape.** modelsLocation.ts pose une JONCTION NTFS sur le dossier habituel, transparente pour tout le
+     monde (Ollama et Python ne savent rien de Jaris). Impossible de faire pareil ici : `app.getPath('userData')`
+     héberge AUSSI les fichiers internes de Chromium (Cache, GPUCache, Local Storage, Network Persistent
+     State...), ouverts en permanence par le process Electron EN TRAIN DE TOURNER — les copier/supprimer/
+     rediriger pendant que Jaris tourne exposerait à une copie prise en plein milieu d'une écriture, ou à une
+     suppression refusée par Windows, sur les seules données IRREMPLAÇABLES du programme (un modèle, ça se
+     retéléécharge ; une conversation, non). Nouveau module `dataLocation.ts` : on ne touche JAMAIS au dossier
+     userData lui-même, on copie uniquement ce que JARIS écrit lui-même (conversations, profil, mémoire,
+     applications générées, rappels — de simples JSON/markdown ouverts-écrits-fermés à chaque fois, vérifié :
+     aucun `createWriteStream`/`openSync` dans ces stores), et on laisse un petit MARQUEUR dans userData qui
+     dit où ils vivent désormais. userData reste l'ancrage FIXE décidé par Windows : c'est là que Jaris
+     cherche toujours ce marqueur au démarrage.
+     **Les originaux ne sont JAMAIS supprimés**, contrairement aux trois autres briques — même politique que
+     l'ancien `conversation-history.json` conservé à l'étape 96, pour la raison que Léo avait lui-même
+     exprimée ("j'ai peur que plus on avance plus tu vas perdre des données"). Au pire il reste une copie
+     périmée de quelques Mo à l'ancien emplacement, que plus rien ne lit une fois le marqueur écrit.
+     **Jaris se relance tout seul après un déplacement réussi** (`app.relaunch()`, main.ts, avec `quitting =
+     true` AVANT — sans quoi la fenêtre intercepte sa propre fermeture et se replie en widget, piège déjà
+     documenté à l'étape 109) : les stores calculent leur chemin UNE fois au chargement du module, donc
+     copier les fichiers ne suffit pas à leur faire lire le nouvel emplacement. Les services (Ollama, voix)
+     ne sont PAS redémarrés dans ce cas — l'instance suivante les relance elle-même à son démarrage normal,
+     les redémarrer pour les tuer une seconde plus tard n'aurait servi à rien.
+     **Piège déjà écrit dans ce fichier, revécu quand même** : ajouter l'import de `dataLocation` aux 5 stores
+     a fait échouer 29 tests d'un coup ("Cannot read properties of undefined (reading 'getDataRoot')") — les
+     faux ponts des tests EXISTANTS (`test-codegen-*.mjs`, `test-conversations.mjs`) ne fournissaient pas ce
+     nouveau module. Le réflexe à garder, pour de bon : après avoir ajouté un `import` à un module déjà chargé
+     par des tests, `grep` TOUS les faux ponts avant de lancer la suite.
+  2. **Les accents cassés : cause REPRODUITE, jamais supposée.** Python 3.12 (la série embarquée par Jaris,
+     `PYTHON_SERIES` dans pythonRuntime.ts) choisit l'encodage de `sys.stdout` d'après la PAGE DE CODES
+     Windows quand la sortie est un tube, PAS UTF-8. Sur un Windows français ordinaire (cp1252),
+     `json.dumps(..., ensure_ascii=False)` écrit donc "ça" en UN octet 0xE7, alors que Node lit toujours de
+     l'UTF-8 : le caractère devient "�". Vérifié pour de vrai avant d'écrire la moindre ligne de correctif —
+     un script Python minimal lancé avec `PYTHONIOENCODING=cp1252`, lu par le même `readline` que
+     voiceClient.ts, a rendu EXACTEMENT la capture de Tom : `�a marche pas. Salut Charisse, �a va ?`.
+     Corrigé par `sys.stdout.reconfigure(encoding="utf-8")` (+ stderr, qui porte les diagnostics français de
+     `debug()`) en tête des DEUX sidecars — voice_server.py ET tts_server.py, tous deux concernés (leçon de
+     l'étape 112 : lister tous les appelants du même motif, pas seulement celui qui a été signalé).
+     **Pourquoi Léo ne l'avait jamais vu** : sa page de codes est déjà en UTF-8 (option Windows "Bêta :
+     utiliser UTF-8"), donc chez lui ça marchait par chance. C'est un bug qui n'apparaît QUE sur la machine de
+     quelqu'un d'autre — d'où l'intérêt d'un vrai test plutôt que d'un essai local. **Leçon générale : ne
+     jamais laisser l'encodage d'un flux au réglage de la machine ; un sidecar doit imposer son UTF-8, sinon
+     il marche chez le développeur et casse chez l'utilisateur.**
+     **Deuxième défaut du même symptôme, côté Node, corrigé au passage** : la lecture de la liste des micros
+     accumulait `chunk.toString()` morceau par morceau — un caractère accentué (2 octets en UTF-8) tombant à
+     cheval sur deux morceaux se serait cassé en deux "�" MÊME avec un flux parfaitement valide. Les noms de
+     micros Windows en sont pleins ("Microphone (Réseau)"). Corrigé par `setEncoding('utf8')`, qui garde
+     l'octet incomplet pour le morceau suivant. Le flux principal, lui, passait déjà par `readline` (qui gère
+     ça correctement) — d'où un seul endroit à corriger, trouvé en relisant les DEUX lectures de stdout.
+  Régression : `node --test scripts/test-data-location.mjs scripts/test-sidecar-encoding.mjs` (302 tests au
+  total). Le test d'encodage est COMPORTEMENTAL, pas seulement structurel : il relance vraiment Python avec
+  `PYTHONIOENCODING=cp1252` et vérifie que "Ça marche pas. Salut Charisse, ça va ?" traverse le tube intact —
+  vérifié en retirant le `reconfigure` du script généré, le test échoue alors avec `actual: '�a marche pas.
+  Salut Charisse, �a va ?'`, mot pour mot la capture de Tom. Ignoré avec une raison explicite si Python manque
+  (la CI l'installe APRÈS `npm test`), jamais silencieusement vert. **Non vérifiable ici, à confirmer par Léo
+  en usage réel** : que "Déplacer" relance bien Jaris sur sa vraie machine Windows et qu'il retrouve toutes
+  ses conversations au nouvel emplacement.

@@ -158,8 +158,14 @@ export function listAudioInputDevices(): Promise<AudioInputDevice[]> {
     })
 
     let stdout = ''
-    proc.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString()
+    // setEncoding plutôt que `chunk.toString()` : un caractère accentué (2 octets en UTF-8) peut tomber À
+    // CHEVAL sur deux morceaux du flux, et décoder chaque morceau séparément casse alors ce caractère en deux
+    // "�" — exactement le symptôme corrigé côté Python juste à côté, mais pour une raison différente. Node
+    // garde ici l'octet incomplet pour le morceau suivant (StringDecoder interne). Les noms de micros
+    // Windows sont justement pleins d'accents ("Microphone (Réseau)"), et c'est cette liste qu'on lit.
+    proc.stdout.setEncoding('utf8')
+    proc.stdout.on('data', (chunk: string) => {
+      stdout += chunk
     })
     proc.stderr.on('data', (chunk: Buffer) => {
       console.error('[voice_server --list-devices]', chunk.toString())

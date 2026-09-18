@@ -1,7 +1,7 @@
-import { app } from 'electron'
 import { mkdir, readFile, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
 import { randomUUID } from 'crypto'
+import { getDataRoot } from './dataLocation'
 
 export interface Reminder {
   id: string
@@ -11,7 +11,7 @@ export interface Reminder {
 
 type ReminderFireHandler = (message: string) => void
 
-const storePath = join(app.getPath('userData'), 'reminders.json')
+const storePath = join(getDataRoot(), 'reminders.json')
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 
 async function readReminders(): Promise<Reminder[]> {

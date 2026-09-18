@@ -31,6 +31,7 @@ function setup({ files = {} } = {}) {
   let uuid = 0
   const modules = {
     electron: { app: { getPath: () => USER_DATA } },
+    './dataLocation': { getDataRoot: () => USER_DATA },
     crypto: { randomUUID: () => `id-${++uuid}` },
     'fs/promises': {
       readFile: async (path) => {

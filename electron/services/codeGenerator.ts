@@ -1,4 +1,3 @@
-import { app } from 'electron'
 import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { config } from '../config'
@@ -7,6 +6,7 @@ import { pickBestCodeModel } from './hardwareScan'
 import { getProfile } from './profileStore'
 import { IMAGE_FOR_CODE_SYSTEM_PROMPT, describeImage } from './vision'
 import type { CodeGenProgress, GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
+import { getDataRoot } from './dataLocation'
 
 /**
  * Fenêtre de contexte dédiée à la génération de code : le modèle doit produire un fichier HTML complet
@@ -334,7 +334,7 @@ function slugify(description: string): string {
 
 /** Dossier où toutes les applications générées sont enregistrées (une par sous-dossier horodaté). */
 export function getGeneratedAppsDir(): string {
-  return join(app.getPath('userData'), 'generated-apps')
+  return join(getDataRoot(), 'generated-apps')
 }
 
 /**

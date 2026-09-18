@@ -35,6 +35,7 @@ function setup(responses) {
   const visionCalls = []
   const modules = {
     electron: { app: { getPath: () => '/tmp' } },
+    './dataLocation': { getDataRoot: () => '/tmp' },
     'fs/promises': { mkdir: async () => {}, writeFile: async () => {} },
     path: { join: (...parts) => parts.join('/') },
     './ollama': {

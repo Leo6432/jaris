@@ -22,6 +22,7 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/cod
 function setup({ dirEntries = [], readdirError = null, files = {} } = {}) {
   const modules = {
     electron: { app: { getPath: () => '/fake/userData' } },
+    './dataLocation': { getDataRoot: () => '/fake/userData' },
     'fs/promises': {
       readdir: async () => {
         if (readdirError) throw readdirError

@@ -21,6 +21,7 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/cod
 
 const modules = {
   electron: { app: { getPath: () => '/tmp' } },
+  './dataLocation': { getDataRoot: () => '/tmp' },
   'fs/promises': { mkdir: async () => {}, writeFile: async () => {} },
   path: { join: (...parts) => parts.join('/') },
   './ollama': {

@@ -19,6 +19,13 @@ import os
 import sys
 import tempfile
 
+# Même piège que voice_server.py (voir son commentaire détaillé) : sur Python 3.12, stdout vers un tube prend
+# la page de codes Windows et non UTF-8, donc tout accent ressortait en "�" côté Node. Les messages d'erreur
+# de ce sidecar sont en français, et le texte à synthétiser lui-même revient parfois dans un message : le
+# forcer en UTF-8 ici aussi, jamais laissé au réglage Windows de la machine.
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
+
 
 def emit(payload: dict) -> None:
     sys.stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")

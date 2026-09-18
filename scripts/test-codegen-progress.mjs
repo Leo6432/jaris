@@ -44,6 +44,7 @@ function setup(responses, { onBeforeCall } = {}) {
 
   const modules = {
     electron: { app: { getPath: () => '/tmp' } },
+    './dataLocation': { getDataRoot: () => '/tmp' },
     'fs/promises': {
       mkdir: async () => {},
       writeFile: async (path, content) => written.push({ path, content })

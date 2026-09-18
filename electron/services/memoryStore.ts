@@ -1,9 +1,9 @@
-import { app } from 'electron'
 import { mkdir, readFile, readdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 import type { MemoryGraph, MemoryGraphLink } from '../../shared/ipc'
+import { getDataRoot } from './dataLocation'
 
-const memoryDir = join(app.getPath('userData'), 'memory')
+const memoryDir = join(getDataRoot(), 'memory')
 
 function sanitizeTitle(title: string): string {
   return title.trim().replace(/[\\/:*?"<>|]/g, '').slice(0, 80) || 'note'

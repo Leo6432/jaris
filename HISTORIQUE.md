@@ -1039,3 +1039,12 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   écrivant ce test : déplacer AVANT le tout premier lancement d'Ollama/Python/de la voix (donc avant que
   leurs dossiers habituels n'existent) échouait, car le dossier parent n'était jamais créé avant de poser le
   raccourci vers le nouvel emplacement. Corrigé. Régression : `npm test` (290 tests).
+- ✅ Étape 121 (v0.14.5) — deux retours de Léo. (1) "sa doit déplacer tout" : le bouton "Déplacer" (Options →
+  Modèles) ne bougeait que les gros téléchargements IA ; il emporte désormais aussi les conversations, le
+  profil, la mémoire, les applications générées et les rappels, et Jaris se relance tout seul pour les relire
+  au nouvel emplacement. Les originaux ne sont jamais supprimés (filet de sécurité), et les fichiers internes
+  de Windows/Chromium ne sont jamais touchés. (2) Accents cassés chez un ami (capture : "◆a va ?" au lieu de
+  "ça va ?") : les sidecars Python écrivaient dans la page de codes de Windows au lieu d'UTF-8, donc chaque
+  accent arrivait à l'écran en caractère de remplacement — invisible chez Léo (sa machine est déjà en UTF-8),
+  cassé chez quelqu'un d'autre. Cause reproduite à l'identique avant correctif. Régression : `npm test`
+  (302 tests).
