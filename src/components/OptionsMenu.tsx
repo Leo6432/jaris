@@ -777,38 +777,45 @@ export default function OptionsMenu(): JSX.Element {
 
         {tab === 'voix' && (
           <div className="options-menu__section options-menu__section--voix">
-            {/* Le sélecteur de voix était le seul bloc de tout l'écran Options sans bordure/équerres ni
-                titre de section (étape 119, maquette "Options Jaris.dc.html", panneau "La voix de Jaris") :
-                même défaut que "Son" ci-dessous, un élément qui ne ressemble pas aux autres. `SettingGroup`
-                accepte n'importe quel enfant (pas seulement des `SettingRow`), donc l'envelopper suffit sans
-                toucher à sa mise en page interne (centrée, différente d'une liste de lignes). */}
+            {/* Refonte étape 120 : la maquette "Options Jaris.dc.html" montre en réalité une carte COMPACTE,
+                orbe + flèches à GAUCHE et bloc de texte à DROITE (nom+descripteur sur une ligne, points,
+                phrase d'aide) — pas la grande carte centrée verticalement héritée de l'écran d'accueil que
+                les étapes 76-78 avaient fixée ici (dont la contrainte "même taille que l'accueil" est donc
+                explicitement abandonnée pour CETTE carte précise : Léo l'a redemandé sans ambiguïté après
+                plusieurs captures, "tu a toujours pas compris que c'etais ça que faut changer, je veut que
+                ça ressemble a ça", capture de la carte compacte à l'appui). L'écran d'accueil (App.tsx,
+                mode 'voice') garde lui son orbe à 320px, seule CETTE carte du menu Options change. */}
             <SettingGroup title="La voix de Jaris">
             <div className="options-menu__voice-picker">
               <div className="options-menu__voice-nav">
                 <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex - 1)} disabled={previewing}>
                   ‹
                 </button>
-                {/* Pas de `size` ici : hérite du même défaut (320) que <JarisOrb emotion={emotion} /> sur
-                    l'écran d'accueil (App.tsx, mode 'voice') — Léo voulait explicitement "la même taille que
-                    dans l'accueil", pas une taille recalculée séparément (une valeur fixe dupliquée ou un
-                    calcul responsive, tous deux essayés puis écartés, auraient pu diverger de l'accueil). */}
-                <JarisOrb emotion="idle" color={voice.color} />
+                <JarisOrb emotion="idle" color={voice.color} size={100} />
                 <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex + 1)} disabled={previewing}>
                   ›
                 </button>
               </div>
-              <div className="options-menu__voice-name">{previewing ? 'Lecture...' : voice.id}</div>
-              <div className="options-menu__voice-description">{voice.description}</div>
-              <div className="options-menu__voice-dots">
-                {TTS_VOICES.map((v, i) => (
-                  <button
-                    key={v.id}
-                    className={`options-menu__dot${i === voiceIndex ? ' options-menu__dot--active' : ''}`}
-                    onClick={() => void chooseVoice(i)}
-                    disabled={previewing}
-                    aria-label={v.id}
-                  />
-                ))}
+              <div className="options-menu__voice-info">
+                <div className="options-menu__voice-heading">
+                  <span className="options-menu__voice-name">{previewing ? 'Lecture...' : voice.id}</span>
+                  <span className="options-menu__voice-description">{voice.description}</span>
+                </div>
+                <div className="options-menu__voice-dots">
+                  {TTS_VOICES.map((v, i) => (
+                    <button
+                      key={v.id}
+                      className={`options-menu__dot${i === voiceIndex ? ' options-menu__dot--active' : ''}`}
+                      onClick={() => void chooseVoice(i)}
+                      disabled={previewing}
+                      aria-label={v.id}
+                    />
+                  ))}
+                </div>
+                <p className="options-menu__voice-hint">
+                  Chaque voix est écoutée dès qu'elle est choisie. Le cercle prend sa couleur pour que tu la
+                  reconnaisses d'un coup d'œil.
+                </p>
               </div>
             </div>
             </SettingGroup>

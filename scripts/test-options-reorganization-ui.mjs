@@ -182,7 +182,7 @@ test('Modèles regroupe VRAIMENT mémoire, matériel et fichiers/moteur local (d
   })
 })
 
-test("l'orbe de la voix reste centré et cliquable une fois partagé avec les autres sections", options, async () => {
+test("l'orbe de la voix reste visible et cliquable une fois partagé avec les autres sections", options, async () => {
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Voix")')
     await page.waitForSelector('.jaris-orb canvas')
@@ -196,5 +196,26 @@ test("l'orbe de la voix reste centré et cliquable une fois partagé avec les au
     // conteneur `pointer-events: none` mal dimensionné) — ce test échouerait avec une erreur explicite de
     // Playwright si un tel conteneur existait encore au-dessus de l'orbe.
     await page.locator('.jaris-orb canvas').first().click()
+  })
+})
+
+test('"La voix de Jaris" est une carte COMPACTE (orbe à gauche, texte à droite), pas la grande carte centrée verticalement', options, async () => {
+  // Léo, capture recadrée sur cette seule carte à l'appui, après plusieurs allers-retours sur des écarts de
+  // texte : "tu a toujours pas compris que c'etais ça que faut changer, je veut que ça ressemble a ça" —
+  // aucune comparaison précédente n'avait remis en cause la DISPOSITION elle-même (héritée des étapes
+  // 76-78, "même taille que l'accueil"), qui n'a jamais été celle de la maquette pour cette carte précise.
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Voix")')
+    await page.waitForSelector('.jaris-orb canvas')
+    const orbBox = await page.locator('.jaris-orb canvas').first().boundingBox()
+    const nameBox = await page.locator('.options-menu__voice-name').boundingBox()
+    const cardBox = await page.locator('.options-menu__section--voix .options-menu__group').first().boundingBox()
+    // Horizontal, pas vertical : le nom doit être À CÔTÉ de l'orbe (chevauchement vertical réel), pas
+    // dessous. Une disposition verticale centrée mettrait nameBox bien plus bas que le bas de l'orbe.
+    assert.ok(nameBox.y < orbBox.y + orbBox.height, `"M3" doit être à côté de l'orbe, pas dessous : orbe ${JSON.stringify(orbBox)}, nom ${JSON.stringify(nameBox)}`)
+    assert.ok(nameBox.x > orbBox.x + orbBox.width, `"M3" doit être à DROITE de l'orbe : orbe ${JSON.stringify(orbBox)}, nom ${JSON.stringify(nameBox)}`)
+    // Compacte : la grande carte centrée verticalement (avant ce correctif) dépassait 600px de haut à elle
+    // seule ; la carte compacte de la maquette tient sur une seule bande, largement sous 250px.
+    assert.ok(cardBox.height < 250, `la carte doit être compacte, pas la grande carte verticale d'avant : ${cardBox.height}px`)
   })
 })

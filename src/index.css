@@ -1075,34 +1075,34 @@ body.body--scan::after {
   border-color: var(--hud-danger);
 }
 
-/* Jusqu'à l'étape 115, ce bloc était le SEUL contenu de l'onglet Voix (orbe, nom, description) — trop peu
-   pour se centrer normalement dans .options-page__content, d'où un `position: absolute; inset: 0` qui le
-   sortait du flux pour le centrer sur la fenêtre entière. Depuis que Micro/Haut-parleur/Activation ont
-   rejoint cet onglet (Léo : "des categorie... peuvent etre ensemble"), ce n'est plus vrai : le showcase de
-   la voix redevient un bloc normal, en tête d'une vraie page de réglages qui défile comme les autres. */
+/* Refonte étape 120 (maquette "Options Jaris.dc.html") : carte COMPACTE, orbe + flèches à gauche, bloc de
+   texte à droite — pas la grande carte centrée verticalement des étapes 76-78 (dont la contrainte "même
+   taille que l'accueil" ne s'applique donc plus à CETTE carte précise, voir le commentaire au-dessus du
+   JSX). Repéré seulement quand Léo a envoyé une capture recadrée SUR CETTE CARTE, jamais vu dans les
+   captures pleine page précédentes qui la montraient trop petite pour distinguer sa vraie disposition. */
 .options-menu__voice-picker {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 24px;
-  padding-bottom: 8px;
+  gap: 28px;
 }
 
 .options-menu__voice-nav {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 48px;
+  gap: 10px;
+  flex: 0 0 auto;
 }
 
 .options-menu__arrow {
   background: transparent;
   border: none;
   color: var(--hud-text-dim);
-  font-size: 2.8rem;
+  font-size: 1.6rem;
   line-height: 1;
   cursor: pointer;
-  padding: 4px 12px;
+  padding: 4px 6px;
 }
 
 .options-menu__arrow:not(:disabled):hover {
@@ -1114,22 +1114,40 @@ body.body--scan::after {
   cursor: default;
 }
 
+.options-menu__voice-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.options-menu__voice-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
 .options-menu__voice-name {
-  font-size: 1.8rem;
+  font-size: 1.5rem;
   font-weight: 600;
   color: var(--hud-text);
-  margin-top: 8px;
 }
 
 .options-menu__voice-description {
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   color: var(--hud-text-dim);
 }
 
 .options-menu__voice-dots {
   display: flex;
   gap: 10px;
-  margin-top: 10px;
+}
+
+.options-menu__voice-hint {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--hud-text-faint);
+  max-width: 480px;
 }
 
 /* Petites barres verticales façon indicateur de niveau, pas des ronds pleins colorés : ce sont les seuls

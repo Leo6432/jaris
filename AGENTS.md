@@ -2635,3 +2635,40 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   de ce gabarit sur "Ce que Jaris sait faire", vérifié mordant en désactivant temporairement `TAB_META` (le
   test échoue bien, confirmé avant de le committer). Vérifié en plus par capture d'écran réelle des 3 onglets
   (en-tête inclus cette fois) comparée directement aux deux captures envoyées par Léo.
+
+- **v0.14.10 encore "pas compris" (v0.14.11) : cette fois le problème n'était PAS le texte, c'était toute la
+  DISPOSITION de la carte "La voix de Jaris" — jamais remise en cause depuis les étapes 76-78.** Léo, capture
+  RECADRÉE sur cette seule carte, sans ambiguïté possible cette fois : "tu a toujours pas compris que c'etais
+  ça que faut changer, je veut que ça ressemble a ça". La capture montrait une carte COMPACTE en une seule
+  bande horizontale — orbe (petit, ~100px) + flèches à GAUCHE, "M3 Autoritaire, confiante" sur une seule
+  ligne à DROITE, points en dessous, une phrase d'aide en dessous — alors que le code affichait depuis
+  l'étape 78 une grande carte centrée VERTICALEMENT (orbe à 320px, nom centré dessous, description centrée
+  encore dessous), occupant plus de 600px de haut à elle seule.
+  **Pourquoi cet écart avait survécu à 4 sessions de correctifs (v0.14.6 à v0.14.10)** : toutes les
+  comparisons précédentes (y compris la capture pleine page de v0.14.10) montraient cette carte suffisamment
+  PETITE à l'écran pour que sa disposition verticale centrée ne saute pas aux yeux — il a fallu une capture
+  RECADRÉE SUR ELLE SEULE, en gros plan, pour que la différence de forme devienne évidente. Aucune des
+  comparaisons "ligne par ligne" de v0.14.10 n'aurait pu la détecter : le TEXTE de chaque élément (nom,
+  description, points) était déjà correct, seul leur AGENCEMENT relatif était faux.
+  **Contredit explicitement une décision écrite à l'étape 78** ("je veut la meme taille que dans l'aceuille
+  la meme" — Léo avait alors demandé la MÊME taille que l'orbe de l'écran d'accueil, 320px, pour CETTE carte
+  précise) : cette exigence est abandonnée ici pour cette carte, remplacée par la disposition compacte de la
+  maquette — même convention que l'étape 96 face à l'étape 47, la demande la plus récente et la plus précise
+  (une capture recadrée, sans ambiguïté) l'emporte sur une décision plus ancienne. L'écran d'accueil (App.tsx,
+  mode 'voice'), qui n'a jamais été mis en cause dans aucun de ces échanges, garde lui son orbe à 320px —
+  seule CETTE carte du menu Options change.
+  Restructuré en deux blocs flex côte à côte : `.options-menu__voice-nav` (flèches + orbe, `size={100}`,
+  inchangé côté logique) à gauche, un nouveau `.options-menu__voice-info` (nom+descripteur sur une ligne,
+  points, phrase d'aide) à droite — la phrase d'aide elle-même ("Chaque voix est écoutée dès qu'elle est
+  choisie. Le cercle prend sa couleur pour que tu la reconnaisses d'un coup d'œil.") était elle aussi
+  entièrement absente du code jusqu'ici, encore un texte de la maquette jamais transcrit.
+  **Leçon générale, qui complète celle de v0.14.10 sur le cadrage des captures** : une capture pleine page
+  suffit pour repérer des éléments STRUCTURELS manquants (un titre de page entier, par exemple), mais peut
+  masquer un écart de DISPOSITION au sein d'un même élément si celui-ci reste petit à l'échelle de la page —
+  il faut alors une capture RECADRÉE, en gros plan, sur l'élément précis en cause. Les deux cadrages (pleine
+  page ET recadré) sont complémentaires, aucun des deux ne suffit seul à tout détecter.
+  Régression : `node --test scripts/test-options-reorganization-ui.mjs` (305 tests) — nouveau test dédié qui
+  mesure les rectangles réels de l'orbe et du nom ("M3" doit être à côté de l'orbe, pas dessous, et la carte
+  doit rester sous 250px de haut), vérifié mordant en forçant temporairement `flex-direction: column` sur
+  `.options-menu__voice-picker` (le test échoue bien, confirmé avant de le committer). Vérifié en plus par
+  capture d'écran réelle RECADRÉE sur cette seule carte, comparée directement à celle envoyée par Léo.
