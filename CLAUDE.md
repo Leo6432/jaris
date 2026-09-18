@@ -2606,3 +2606,28 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   le texte exact de cette description, donc rien à mettre à jour). Vérifié par capture d'écran réelle du
   rendu compilé (bundle esbuild + vrai CSS) de l'onglet Voix, comparée directement à la capture du mockup
   envoyée par Léo — ordre et texte identiques.
+
+- **v0.14.8 toujours "pareil" pour Léo malgré l'ordre et le texte corrigés (v0.14.9) : le VRAI écart
+  restant n'était pas dans ce que j'avais déjà comparé.** Après la correction précédente, Léo a renvoyé une
+  capture de sa propre app avec juste "c'est toujours pareil" — la capture montrait en réalité déjà le bon
+  ordre ET le bon texte de "Déclencher l'écoute", donc rien de ce que le commit précédent visait n'était
+  encore en cause. Comparée ligne par ligne à la capture ORIGINALE du mockup (celle qui montrait toute la
+  page, pas seulement le panneau recadré envoyé après) : "Micro utilisé" et "Haut-parleur utilisé" ont
+  chacun une phrase d'aide PERMANENTE dans le mockup ("Changer de micro relance l'écoute : quelques
+  secondes." / "Là où Jaris parle.") — le code n'affichait RIEN sous ces deux lignes en usage normal
+  (`description={... : undefined}` pour le micro, aucune prop `description` du tout pour le haut-parleur).
+  Deux lignes plus courtes que le mockup, silencieusement, depuis le tout premier commit de cette série —
+  jamais repéré parce que les comparaisons précédentes s'étaient concentrées sur les titres/l'ordre/le texte
+  DÉJÀ signalés, pas sur une relecture complète ligne par ligne de tout le panneau contre le mockup.
+  Corrigé en donnant à "Micro utilisé" cette phrase comme repli par défaut (au lieu de `undefined`, les deux
+  cas dynamiques — aucun micro détecté, changement en cours — restent prioritaires) et en ajoutant la
+  description manquante à "Haut-parleur utilisé".
+  **Leçon générale, qui rejoint celle déjà tirée sur la vérification écran par écran plus haut** : corriger
+  les écarts qu'un signalement précédent a explicitement nommés ne garantit pas d'avoir tout trouvé — un
+  utilisateur qui dit "c'est toujours pareil" après un vrai correctif ciblé signale souvent un AUTRE écart
+  resté invisible parce que jamais explicitement pointé, pas que le correctif précédent a échoué. Toujours
+  reprendre la comparaison mockup-contre-rendu-réel depuis le début (chaque ligne, chaque description), pas
+  seulement re-vérifier ce qui a déjà été corrigé.
+  Régression : `npm test` (303 tests, inchangé). Vérifié par capture d'écran réelle du rendu compilé,
+  comparée ligne par ligne à la capture originale du mockup — les deux phrases d'aide sont maintenant
+  identiques, texte et position.

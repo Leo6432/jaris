@@ -812,7 +812,7 @@ export default function OptionsMenu(): JSX.Element {
                     ? 'Aucun micro détecté par PortAudio.'
                     : savingAudioDevice
                       ? 'Changement de micro : redémarrage du pipeline vocal (rechargement des modèles)…'
-                      : undefined
+                      : 'Changer de micro relance l\'écoute : quelques secondes.'
                 }
               >
                 <select
@@ -830,7 +830,7 @@ export default function OptionsMenu(): JSX.Element {
                 </select>
               </SettingRow>
 
-              <SettingRow label="Haut-parleur utilisé">
+              <SettingRow label="Haut-parleur utilisé" description="Là où Jaris parle.">
                 <select
                   className="options-menu__select"
                   value={profile?.audioOutputDeviceId || ''}
