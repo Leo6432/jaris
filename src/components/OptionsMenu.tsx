@@ -805,13 +805,6 @@ export default function OptionsMenu(): JSX.Element {
                 exactement la "carte à une seule ligne" que la maquette dit d'éliminer — les deux parlent de
                 la même chose (ce que Jaris fait entendre/écoute), pas de deux sujets distincts. */}
             <SettingGroup title="Son et périphériques">
-              <SettingRow label="Bips d'interface" description="Un son court à l'écoute, la réflexion, un clic, un scan...">
-                <Toggle
-                  label="Bips d'interface"
-                  checked={profile?.soundEffectsEnabled !== false}
-                  onChange={(next) => void toggleSoundEffects(next)}
-                />
-              </SettingRow>
               <SettingRow
                 label="Micro utilisé"
                 description={
@@ -853,6 +846,13 @@ export default function OptionsMenu(): JSX.Element {
                 </select>
               </SettingRow>
 
+              <SettingRow label="Bips d'interface" description="Un son court à l'écoute, la réflexion, un clic, un scan...">
+                <Toggle
+                  label="Bips d'interface"
+                  checked={profile?.soundEffectsEnabled !== false}
+                  onChange={(next) => void toggleSoundEffects(next)}
+                />
+              </SettingRow>
               <SettingRow label="Tester le micro" description="Vérifie que Jaris capte bien ta voix.">
                 <button
                   className={`options-menu__action${micTesting ? ' options-menu__action--danger' : ''}`}
@@ -888,7 +888,7 @@ export default function OptionsMenu(): JSX.Element {
 
             <SettingGroup
               title="Déclencher l'écoute"
-              description="Les trois façons d'activer Jaris sont indépendantes : décoche celles dont tu ne veux pas."
+              description="Les trois façons sont indépendantes : garde celles que tu utilises."
             >
               <SettingRow label='Touche "+" du pavé numérique' description="La façon la plus fiable, même en jeu.">
                 <Toggle

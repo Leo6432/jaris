@@ -2571,3 +2571,38 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   `scripts/test-context-length-ui.mjs` mis à jour pour les nouveaux titres, vérifié mordant. Vérifié par
   capture d'écran réelle du rendu compilé (bundle esbuild + vrai CSS) sur les 3 onglets Voix/Modèles/Général
   à 1280px, et par mesure `scrollWidth`/`clientWidth` à 760px (aucun défilement horizontal).
+
+- **Deux sessions Claude ont travaillé EN PARALLÈLE sur ce même correctif (design importé, Voix/Modèles/
+  Général) sans le savoir, chacune sur sa propre branche — v0.14.6/v0.14.7 sur CETTE branche
+  (session_01QcAbDpze6PJcbfsRPEtacY) et v0.14.6 sur `claude/admiring-ride-ow6t1v`
+  (session_01F7US6NdL4t2QGBZ4iSs5LC) — toutes deux parties du même commit v0.14.5.** Léo a envoyé une
+  capture du mockup ET une capture de son app réelle (v0.14.7, donc CETTE branche) côte à côte : "c'est pas
+  pareil les 2 et j'ai la version 14.7" — deux vrais écarts restaient malgré les commits v0.14.6/v0.14.7
+  déjà livrés ici :
+  1. **Ordre des lignes dans "Son et périphériques"** : le code avait "Bips d'interface" EN PREMIER (hérité
+     de l'ancien groupe "Son" séparé, jamais réordonné en fusionnant), le mockup montre Micro/Haut-parleur/
+     Bips/Tester. Réordonné pour correspondre exactement.
+  2. **Texte de "Déclencher l'écoute"** : le TITRE avait bien été aligné sur le mockup, mais pas la
+     DESCRIPTION du groupe — restée à "Les trois façons d'activer Jaris sont indépendantes : décoche celles
+     dont tu ne veux pas." (formulation négative) au lieu de "Les trois façons sont indépendantes : garde
+     celles que tu utilises." (formulation positive du mockup) — un titre qui correspond ne garantit pas que
+     tout le texte du bloc correspond aussi.
+  **Sur `claude/admiring-ride-ow6t1v` (l'autre session), une refonte BEAUCOUP plus large avait été faite en
+  parallèle** (vue compacte "ton palier" au lieu des ~10 empilés, GPU/VRAM/RAM réellement détectés affichés,
+  "Emplacement des données" avec un nouveau canal IPC, historique remplacé par un simple compteur) — mais
+  son tag de release (v0.14.6) est entré en COLLISION avec celui déjà publié par CETTE branche
+  (`gh release view $tag` réussit -> "rien à faire", voir le workflow) : ce travail n'a donc JAMAIS été
+  publié nulle part, et Léo n'a jamais pu le voir. Reconcilié en portant ICI uniquement les deux corrections
+  ponctuelles ci-dessus (celles que Léo montrait concrètement), pas la refonte plus large de l'autre
+  session — hors périmètre de ce signalement précis, et cette branche-ci avait explicitement choisi de GARDER
+  la vraie liste d'historique plutôt que le simple compteur du mockup ("comportement existant précieux",
+  v0.14.7) : un choix déjà fait sciemment, pas un oubli à corriger.
+  **Leçon générale, pour la prochaine fois que deux sessions travaillent le même dépôt sans le savoir** : le
+  workflow de release (`build-installer.yml`) skip silencieusement une release dont le tag existe déjà — un
+  push réussi et un build vert NE PROUVENT PAS que le travail a été publié quelque part d'accessible à
+  l'utilisateur. Avant de conclure qu'un correctif est "livré", vérifier que la Release GitHub correspond
+  VRAIMENT au commit qu'on vient de pousser (`target_commitish`), pas seulement que le tag existe.
+  Régression : `npm test` (303 tests, inchangé — aucun test n'asserte l'ordre des lignes dans un groupe ni
+  le texte exact de cette description, donc rien à mettre à jour). Vérifié par capture d'écran réelle du
+  rendu compilé (bundle esbuild + vrai CSS) de l'onglet Voix, comparée directement à la capture du mockup
+  envoyée par Léo — ordre et texte identiques.
