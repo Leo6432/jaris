@@ -53,7 +53,6 @@ declare global {
       openSettings: () => void
       getConversationHistory: () => Promise<ConversationEntry[]>
       clearConversationHistory: () => Promise<void>
-      openConversationHistoryFile: () => Promise<void>
       getModelOverview: () => Promise<ModelOverviewResult>
       getContextLengthOptions: () => Promise<ContextLengthOptions>
       setContextLength: (contextLength: number | undefined) => Promise<void>
@@ -69,6 +68,8 @@ declare global {
       getModelsLocationStatus: () => Promise<ModelsLocationStatus>
       chooseModelsLocation: () => Promise<{ success: boolean; message: string }>
       onModelsLocationProgress: (cb: (message: string) => void) => () => void
+      getDataLocationPath: () => Promise<string>
+      openDataFolder: () => Promise<void>
       getRuntimeSetupStatus: () => Promise<RuntimeSetupStatus>
       runRuntimeSetup: () => Promise<RuntimeSetupStatus>
       onRuntimeSetupProgress: (cb: (progress: RuntimeSetupProgress) => void) => () => void

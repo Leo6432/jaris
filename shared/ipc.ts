@@ -212,6 +212,16 @@ export interface HardwareTierPreview {
   label: string
   vramGb: number
   current: boolean
+  /** GPU réellement détecté sur cette machine (nvidia-smi), identique sur toutes les lignes — seule `vramGb`
+   * varie d'un palier à l'autre. `null` si aucun GPU NVIDIA détecté. Affiché uniquement pour la ligne
+   * "ta configuration" (voir HardwareTierPreview.tsx), pas pour les paliers purement illustratifs. */
+  gpuName: string | null
+  /** VRAM totale RÉELLEMENT détectée (nvidia-smi), par opposition à `vramGb` ci-dessus qui est la frontière
+   * du palier — les deux ne coïncident que par coïncidence. `null` si aucun GPU NVIDIA détecté. */
+  detectedVramGb: number | null
+  /** RAM totale réellement détectée sur cette machine (detectRamGb, systemResources.ts), même raison que
+   * gpuName ci-dessus : identique sur toutes les lignes. */
+  ramGb: number
   flash: ModelOverviewEntry
   medium: ModelOverviewEntry
   large: ModelOverviewEntry
@@ -490,8 +500,6 @@ export const IPC_CHANNELS = {
   getConversationHistory: 'jaris:get-conversation-history',
   /** renderer <-> main : efface définitivement l'historique des échanges (fichier + court terme en mémoire). */
   clearConversationHistory: 'jaris:clear-conversation-history',
-  /** renderer -> main : révèle le fichier conversation-history.json dans l'explorateur de fichiers. */
-  openConversationHistoryFile: 'jaris:open-conversation-history-file',
   /** renderer <-> main : liste tous les modèles candidats (tous paliers + vision) avec leurs métriques, pour l'onglet Modèles. */
   getModelOverview: 'jaris:get-model-overview',
   getOllamaVersionStatus: 'jaris:get-ollama-version-status',
@@ -589,6 +597,13 @@ export const IPC_CHANNELS = {
   chooseModelsLocation: 'jaris:choose-models-location',
   /** main -> renderer : avancement de ce déplacement, au fil de l'eau. */
   modelsLocationProgress: 'jaris:models-location-progress',
+  /** renderer <-> main : dossier RÉEL actuel des données propres à Jaris (conversations/profil/mémoire...),
+   * voir getDataRoot (dataLocation.ts) — même dossier que "Emplacement des données" (Options -> Général),
+   * déplacé par le MÊME bouton "Déplacer" que les modèles (chooseModelsLocation ci-dessus), jamais un
+   * second sélecteur de dossier séparé. */
+  getDataLocationPath: 'jaris:get-data-location-path',
+  /** renderer -> main : révèle ce dossier dans l'explorateur de fichiers (shell.openPath). */
+  openDataFolder: 'jaris:open-data-folder',
   /** renderer <-> main : ce qui reste à installer sur la machine (Python, Ollama) au premier lancement. */
   getRuntimeSetupStatus: 'jaris:get-runtime-setup-status',
   /** renderer <-> main : installe ce qui manque (étape 16), résout avec le statut final. */

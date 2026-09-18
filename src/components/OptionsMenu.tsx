@@ -105,7 +105,7 @@ export function ReliabilityBadge({ value }: { value: string | null }): JSX.Eleme
  * commun. `stacked` réserve le cas où le contrôle a besoin de toute la largeur (le curseur de longueur de
  * contexte, un visualiseur de micro) plutôt que de rester coincé à droite d'une ligne étroite.
  */
-function SettingRow({
+export function SettingRow({
   label,
   description,
   stacked = false,
@@ -179,6 +179,10 @@ export default function OptionsMenu(): JSX.Element {
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [updateCheckMessage, setUpdateCheckMessage] = useState<string | null>(null)
   const [modelsLocation, setModelsLocation] = useState<ModelsLocationStatus | null>(null)
+  /** Dossier RÉEL des données propres à Jaris (Options -> Général, "Emplacement des données") : le MÊME
+   * dossier que `getDataRoot()` déplace via le bouton "Déplacer" (Modèles -> Fichiers et moteur local),
+   * juste affiché ici pour qu'on puisse l'ouvrir directement sans le déplacer. */
+  const [dataLocationPath, setDataLocationPath] = useState<string | null>(null)
   const [movingModelsLocation, setMovingModelsLocation] = useState(false)
   const [modelsLocationMessage, setModelsLocationMessage] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -246,11 +250,14 @@ export default function OptionsMenu(): JSX.Element {
       // Recalculé à CHAQUE ouverture de l'onglet, jamais mis en cache : la VRAM libre change d'un
       // lancement à l'autre selon ce qui tourne en parallèle sur la machine (jeu, navigateur...).
       void window.jaris.getContextLengthOptions().then(setContextLengthOptions)
+      // "Emplacement des modèles" a rejoint cet onglet (design importé, "Fichiers et moteur local") :
+      // c'était dans Général jusqu'ici, voir handleChooseModelsLocation plus bas.
+      void window.jaris.getModelsLocationStatus().then(setModelsLocation)
     }
     if (tab === 'general') {
       void window.jaris.getAppVersionStatus().then(setAppVersionStatus)
       void window.jaris.getAppVersion().then(setInstalledVersion)
-      void window.jaris.getModelsLocationStatus().then(setModelsLocation)
+      void window.jaris.getDataLocationPath().then(setDataLocationPath)
     }
   }, [tab])
 
@@ -718,34 +725,42 @@ export default function OptionsMenu(): JSX.Element {
 
         {tab === 'voix' && (
           <div className="options-menu__section options-menu__section--voix">
-            <div className="options-menu__voice-picker">
-              <div className="options-menu__voice-nav">
-                <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex - 1)} disabled={previewing}>
-                  ‹
-                </button>
-                {/* Pas de `size` ici : hérite du même défaut (320) que <JarisOrb emotion={emotion} /> sur
-                    l'écran d'accueil (App.tsx, mode 'voice') — Léo voulait explicitement "la même taille que
-                    dans l'accueil", pas une taille recalculée séparément (une valeur fixe dupliquée ou un
-                    calcul responsive, tous deux essayés puis écartés, auraient pu diverger de l'accueil). */}
-                <JarisOrb emotion="idle" color={voice.color} />
-                <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex + 1)} disabled={previewing}>
-                  ›
-                </button>
+            {/* Voici LA carte cyan cliquable de l'écran d'accueil, présentée cette fois comme un vrai
+                groupe de réglages titré ("La voix de Jaris", même famille visuelle que les autres cartes de
+                cette page) plutôt qu'un bloc flottant seul en tête de l'onglet — conforme au design importé
+                (Claude Design, "Options Jaris.dc.html") que Léo a demandé de suivre. `SettingGroup` accepte
+                n'importe quel enfant dans `.options-menu__group-rows`, pas seulement des `SettingRow` : le
+                sélecteur de voix garde sa propre mise en page interne (orbe centré, flèches, points). */}
+            <SettingGroup title="La voix de Jaris">
+              <div className="options-menu__voice-picker">
+                <div className="options-menu__voice-nav">
+                  <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex - 1)} disabled={previewing}>
+                    ‹
+                  </button>
+                  {/* Pas de `size` ici : hérite du même défaut (320) que <JarisOrb emotion={emotion} /> sur
+                      l'écran d'accueil (App.tsx, mode 'voice') — Léo voulait explicitement "la même taille que
+                      dans l'accueil", pas une taille recalculée séparément (une valeur fixe dupliquée ou un
+                      calcul responsive, tous deux essayés puis écartés, auraient pu diverger de l'accueil). */}
+                  <JarisOrb emotion="idle" color={voice.color} />
+                  <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex + 1)} disabled={previewing}>
+                    ›
+                  </button>
+                </div>
+                <div className="options-menu__voice-name">{previewing ? 'Lecture...' : voice.id}</div>
+                <div className="options-menu__voice-description">{voice.description}</div>
+                <div className="options-menu__voice-dots">
+                  {TTS_VOICES.map((v, i) => (
+                    <button
+                      key={v.id}
+                      className={`options-menu__dot${i === voiceIndex ? ' options-menu__dot--active' : ''}`}
+                      onClick={() => void chooseVoice(i)}
+                      disabled={previewing}
+                      aria-label={v.id}
+                    />
+                  ))}
+                </div>
               </div>
-              <div className="options-menu__voice-name">{previewing ? 'Lecture...' : voice.id}</div>
-              <div className="options-menu__voice-description">{voice.description}</div>
-              <div className="options-menu__voice-dots">
-                {TTS_VOICES.map((v, i) => (
-                  <button
-                    key={v.id}
-                    className={`options-menu__dot${i === voiceIndex ? ' options-menu__dot--active' : ''}`}
-                    onClick={() => void chooseVoice(i)}
-                    disabled={previewing}
-                    aria-label={v.id}
-                  />
-                ))}
-              </div>
-            </div>
+            </SettingGroup>
 
             {/* Micro/Haut-parleur/Activation rejoignent Voix depuis l'étape 115 (Léo : "des categorie...
                 peuvent etre ensemble") : trois réglages qui parlent tous de l'expérience vocale, pas trois
@@ -753,8 +768,10 @@ export default function OptionsMenu(): JSX.Element {
                 réglage passe maintenant par `SettingRow` (étape 116, Léo : "dans les option rien ne se
                 ressemble micro comment se déclencher") : intitulé + description à gauche, contrôle à
                 droite, quel que soit le type de contrôle (case, menu, bouton) — plus de mise en forme ad hoc
-                différente d'un réglage à l'autre. */}
-            <SettingGroup title="Son">
+                différente d'un réglage à l'autre. Le bip d'interface et le micro/haut-parleur sont
+                maintenant UNE seule carte ("Son et périphériques", design importé) : les deux parlent du
+                même sujet (ce que Jaris entend/fait entendre), pas deux sujets séparés. */}
+            <SettingGroup title="Son et périphériques">
               <SettingRow label="Bips d'interface" description="Un son court à l'écoute, la réflexion, un clic, un scan...">
                 <input
                   type="checkbox"
@@ -763,9 +780,6 @@ export default function OptionsMenu(): JSX.Element {
                   onChange={(e) => void toggleSoundEffects(e.target.checked)}
                 />
               </SettingRow>
-            </SettingGroup>
-
-            <SettingGroup title="Micro et haut-parleur">
               <SettingRow
                 label="Micro utilisé"
                 description={
@@ -841,8 +855,8 @@ export default function OptionsMenu(): JSX.Element {
             </SettingGroup>
 
             <SettingGroup
-              title="Comment déclencher l'écoute"
-              description="Les trois façons d'activer Jaris sont indépendantes : décoche celles dont tu ne veux pas."
+              title="Déclencher l'écoute"
+              description="Les trois façons sont indépendantes : garde celles que tu utilises."
             >
               <SettingRow label='Touche "+" du pavé numérique'>
                 <input
@@ -884,82 +898,57 @@ export default function OptionsMenu(): JSX.Element {
 
         {tab === 'modeles' && (
           <div className="options-menu__section">
-            {ollamaVersionStatus?.outdated && (
-              <div className="options-menu__ollama-warning">
-                Ollama {ollamaVersionStatus.current} installé, la dernière version est{' '}
-                {ollamaVersionStatus.latest} — certains modèles récents peuvent refuser de se télécharger tant
-                qu'Ollama n'est pas à jour.
-                <div className="options-menu__ollama-update-actions">
-                  <button onClick={handleUpdateOllama} disabled={updatingOllama}>
-                    {updatingOllama ? 'Mise à jour en cours…' : 'Mettre à jour'}
-                  </button>
-                  <a href="https://ollama.com/download" target="_blank" rel="noreferrer">
-                    ou télécharge manuellement sur ollama.com/download
-                  </a>
-                </div>
-                {updatingOllama && (
+            {/* Mémoire de conversation EN TÊTE (Léo, étape 117 : "met juste le context au dessus des
+                palier") : c'est le réglage qu'on vient justement de toucher, il ne doit pas se retrouver
+                sous un gros tableau qu'il faut d'abord dépasser pour le retrouver. "Actuellement : Xk
+                tokens" est maintenant une ligne à part SOUS le curseur (design importé), pas mêlée à la
+                phrase d'explication au-dessus de lui. */}
+            <SettingGroup title="Mémoire de conversation">
+              <SettingRow
+                stacked
+                className="options-menu__context-row"
+                label="Combien Jaris garde en tête"
+                description="Le maximum est déjà limité à ce que ta carte graphique encaisse sans déborder."
+              >
+                {contextLengthOptions ? (
                   <>
-                    {/* L'installeur d'Ollama pèse 1,5 Go : plusieurs minutes pendant lesquelles il ne se
-                        passait rien à l'écran ("ça bloque depuis 5m", Léo). Même barre que la mise à jour de
-                        Jaris (étape 98) plutôt qu'un second indicateur inventé à côté. */}
-                    <AppUpdateProgress progress={ollamaUpdateProgress} target="ollama" />
-                    <p className="options-menu__ollama-update-note">
-                      Une fenêtre Windows peut demander une autorisation (élévation) — accepte-la pour continuer.
-                    </p>
-                  </>
-                )}
-              </div>
-            )}
-            {/* Hors du bandeau "outdated" ci-dessus, à dessein : une mise à jour réussie fait justement
-                passer ollamaVersionStatus.outdated à false juste après, ce qui ferait disparaître le
-                message de succès avec le reste du bandeau s'il restait imbriqué dedans — jamais vu le
-                message alors que la mise à jour avait réellement marché. */}
-            {!updatingOllama && ollamaUpdateMessage && <p className="options-menu__ollama-update-note">{ollamaUpdateMessage}</p>}
-
-            {/* Longueur de mémoire AU-DESSUS des paliers de configuration (Léo, étape 117 : "met juste le
-                context au dessus des palier") : les deux parlent de "quel modèle/combien de mémoire pour ce
-                modèle", mais le réglage qu'on vient justement de toucher (le curseur) ne doit pas se
-                retrouver sous un gros tableau qu'il faut d'abord dépasser pour le retrouver. */}
-            {contextLengthOptions && (
-              <SettingGroup title="Longueur de mémoire">
-                <SettingRow
-                  stacked
-                  className="options-menu__context-row"
-                  label="Combien Jaris garde en tête"
-                  description={
-                    <>
-                      Comme le curseur "Context length" d'Ollama, sauf que le maximum est déjà limité à ce
-                      que ta carte graphique peut encaisser sans déborder. Actuellement :{' '}
+                    <input
+                      type="range"
+                      className="options-menu__context-slider"
+                      min={0}
+                      max={Math.max(0, contextLengthOptions.availableSteps.length - 1)}
+                      value={Math.max(0, contextLengthOptions.availableSteps.indexOf(contextLengthOptions.current))}
+                      onChange={(event) => {
+                        const step = contextLengthOptions.availableSteps[Number(event.target.value)]
+                        if (step !== undefined) handleContextLengthChange(step)
+                      }}
+                    />
+                    <div className="options-menu__context-slider-ticks">
+                      {contextLengthOptions.availableSteps.map((step) => (
+                        <span key={step}>{formatContextLength(step)}</span>
+                      ))}
+                    </div>
+                    <p className="options-menu__context-current">
+                      <span className="options-menu__context-current-label">Actuellement</span>{' '}
                       <strong>{formatContextLength(contextLengthOptions.current)}</strong>
                       {savingContextLength ? ' (enregistrement…)' : ''}
-                    </>
-                  }
-                >
-                  <input
-                    type="range"
-                    className="options-menu__context-slider"
-                    min={0}
-                    max={Math.max(0, contextLengthOptions.availableSteps.length - 1)}
-                    value={Math.max(0, contextLengthOptions.availableSteps.indexOf(contextLengthOptions.current))}
-                    onChange={(event) => {
-                      const step = contextLengthOptions.availableSteps[Number(event.target.value)]
-                      if (step !== undefined) handleContextLengthChange(step)
-                    }}
-                  />
-                  <div className="options-menu__context-slider-ticks">
-                    {contextLengthOptions.availableSteps.map((step) => (
-                      <span key={step}>{formatContextLength(step)}</span>
-                    ))}
-                  </div>
-                </SettingRow>
-              </SettingGroup>
-            )}
+                    </p>
+                  </>
+                ) : (
+                  <p className="capacity-scan__status">Chargement...</p>
+                )}
+              </SettingRow>
+            </SettingGroup>
 
-            <SettingGroup title="Les paliers de configuration">
+            {/* Vue COMPACTE (palier de la machine détectée seulement) : voir HardwareTierPreview.tsx,
+                `compact`. Un bouton ("Ta configuration") déplie la comparaison complète des ~10 paliers,
+                gardée intacte pour qui veut comparer, sans l'imposer par défaut à qui veut juste savoir "ce
+                que ma machine fait tourner". */}
+            <SettingGroup title="Ce que ta machine fait tourner">
               {hardwareTiers === null ? (
                 <p className="capacity-scan__status">Chargement...</p>
               ) : (
-                <HardwareTierPreview tiers={hardwareTiers} />
+                <HardwareTierPreview tiers={hardwareTiers} compact />
               )}
               <SettingRow
                 label="Retester la configuration"
@@ -980,28 +969,97 @@ export default function OptionsMenu(): JSX.Element {
                 </SettingRow>
               )}
             </SettingGroup>
+
+            {/* Ollama et l'emplacement des modèles rejoignent l'onglet Modèles (design importé, "Fichiers et
+                moteur local") : "Emplacement des modèles" vivait jusqu'ici dans Général, alors que c'est un
+                réglage sur les MODÈLES, pas sur l'application elle-même — même famille que le reste de cet
+                onglet. Le bandeau Ollama devient une ligne permanente (visible même à jour) plutôt qu'un
+                encart qui n'apparaissait que quand une mise à jour était disponible. */}
+            <SettingGroup title="Fichiers et moteur local">
+              <SettingRow
+                label="Ollama"
+                description={
+                  ollamaVersionStatus
+                    ? ollamaVersionStatus.outdated
+                      ? `Version ${ollamaVersionStatus.current} installée · ${ollamaVersionStatus.latest} disponible. Certains modèles récents refusent de se télécharger tant qu'il n'est pas à jour.`
+                      : `Version ${ollamaVersionStatus.current} installée, à jour.`
+                    : 'Vérification de la version installée…'
+                }
+              >
+                {ollamaVersionStatus?.outdated && (
+                  <button className="options-menu__action" onClick={handleUpdateOllama} disabled={updatingOllama}>
+                    {updatingOllama ? 'Mise à jour en cours…' : 'Mettre à jour'}
+                  </button>
+                )}
+              </SettingRow>
+              {ollamaVersionStatus?.outdated && !updatingOllama && (
+                <p className="options-menu__ollama-update-note">
+                  Ou télécharge manuellement sur{' '}
+                  <a href="https://ollama.com/download" target="_blank" rel="noreferrer">
+                    ollama.com/download
+                  </a>
+                  .
+                </p>
+              )}
+              {updatingOllama && (
+                <>
+                  {/* L'installeur d'Ollama pèse 1,5 Go : plusieurs minutes pendant lesquelles il ne se
+                      passait rien à l'écran ("ça bloque depuis 5m", Léo). Même barre que la mise à jour de
+                      Jaris (étape 98) plutôt qu'un second indicateur inventé à côté. */}
+                  <AppUpdateProgress progress={ollamaUpdateProgress} target="ollama" />
+                  <p className="options-menu__ollama-update-note">
+                    Une fenêtre Windows peut demander une autorisation (élévation) — accepte-la pour continuer.
+                  </p>
+                </>
+              )}
+              {/* Hors du `outdated` ci-dessus, à dessein : une mise à jour réussie fait justement passer
+                  `outdated` à false juste après, ce qui ferait disparaître le message de succès en même
+                  temps que le reste — jamais vu le message alors que la mise à jour avait réellement marché. */}
+              {!updatingOllama && ollamaUpdateMessage && <p className="options-menu__ollama-update-note">{ollamaUpdateMessage}</p>}
+
+              <SettingRow
+                label="Emplacement des modèles"
+                description={
+                  modelsLocation
+                    ? modelsLocation.ollamaModelsDir
+                    : "Les modèles Ollama, l'environnement Python (voix) et le cache vocal peuvent peser plusieurs dizaines de Go au total."
+                }
+              >
+                <button className="options-menu__action" onClick={handleChooseModelsLocation} disabled={movingModelsLocation}>
+                  {movingModelsLocation ? 'Déplacement en cours…' : 'Déplacer'}
+                </button>
+              </SettingRow>
+              {modelsLocation && (
+                <ul className="options-menu__models-location-list">
+                  <li>Environnement Python : {modelsLocation.pythonRuntimeDir}</li>
+                  <li>Cache vocal : {modelsLocation.hfCacheDir}</li>
+                </ul>
+              )}
+              {modelsLocationMessage && <p className="options-menu__ollama-update-note">{modelsLocationMessage}</p>}
+            </SettingGroup>
           </div>
         )}
 
         {tab === 'general' && (
           <div className="options-menu__section">
-            {/* Mise à jour/Stockage/Historique fusionnés dans "Général" depuis l'étape 115 (Léo : "des
-                categorie... peuvent etre ensemble") : trois réglages "à propos de l'application" plutôt que
-                trois sujets distincts, à la manière du même onglet chez ChatGPT/Claude. Chaque réglage passe
-                maintenant par `SettingRow`/`SettingGroup` (étape 116) pour la même raison que l'onglet Voix
-                ci-dessus : un bouton, une case et une valeur en lecture seule doivent se présenter pareil. */}
-            <SettingGroup title="Mise à jour">
+            {/* Refonte (design importé, "Jaris sur cet ordinateur" + "Mémoire et historique") : "Emplacement
+                des modèles" a rejoint l'onglet Modèles (c'est un réglage sur les modèles, pas sur
+                l'application) ; le journal complet des échanges a laissé place à un simple compte —
+                relire une vieille conversation se fait dans le Chat lui-même (étape 96, plusieurs
+                conversations), pas dans les réglages. */}
+            <SettingGroup title="Jaris sur cet ordinateur">
               <SettingRow
-                label="Rechercher une mise à jour"
+                label="Version installée"
                 description={
                   <>
-                    Version installée : <strong>{installedVersion ?? appVersionStatus?.current ?? '...'}</strong>
+                    <strong>{installedVersion ?? appVersionStatus?.current ?? '...'}</strong>
+                    {appVersionStatus?.outdated ? <> — version {appVersionStatus.latest} disponible sur GitHub.</> : null}
                     {updateCheckMessage ? <> — {updateCheckMessage}</> : null}
                   </>
                 }
               >
                 <button className="options-menu__action" onClick={handleCheckForUpdate} disabled={checkingUpdate}>
-                  {checkingUpdate ? 'Recherche en cours…' : 'Rechercher une mise à jour'}
+                  {checkingUpdate ? 'Recherche en cours…' : 'Rechercher'}
                 </button>
               </SettingRow>
 
@@ -1021,61 +1079,30 @@ export default function OptionsMenu(): JSX.Element {
                 </div>
               )}
               {!updatingApp && appUpdateMessage && <p className="options-menu__ollama-update-note">{appUpdateMessage}</p>}
-            </SettingGroup>
 
-            <SettingGroup title="Emplacement des modèles">
               <SettingRow
-                label="Dossier des modèles"
-                description="Les modèles Ollama, l'environnement Python (voix) et le cache de reconnaissance/synthèse
-                  vocale peuvent peser plusieurs dizaines de Go au total — regroupe-les ailleurs (un autre disque,
-                  par exemple) sans que rien d'autre n'ait à changer."
+                label="Emplacement des données"
+                description={dataLocationPath ?? 'Conversations, profil, mémoire, applications générées.'}
               >
-                <button className="options-menu__action" onClick={handleChooseModelsLocation} disabled={movingModelsLocation}>
-                  {movingModelsLocation ? 'Déplacement en cours…' : 'Choisir un dossier…'}
+                <button className="options-menu__action" onClick={() => void window.jaris.openDataFolder()}>
+                  Ouvrir le dossier
                 </button>
               </SettingRow>
-              {modelsLocation && (
-                <ul className="options-menu__models-location-list">
-                  <li>Modèles Ollama : {modelsLocation.ollamaModelsDir}</li>
-                  <li>Environnement Python : {modelsLocation.pythonRuntimeDir}</li>
-                  <li>Cache vocal : {modelsLocation.hfCacheDir}</li>
-                </ul>
-              )}
-              {modelsLocationMessage && <p className="options-menu__ollama-update-note">{modelsLocationMessage}</p>}
             </SettingGroup>
 
-            <SettingGroup title="Historique des conversations">
-              {history === null ? (
-                <p className="capacity-scan__status">Chargement...</p>
-              ) : history.length === 0 ? (
-                <p className="options-menu__history-empty">Aucun échange enregistré pour l'instant.</p>
-              ) : (
-                <ul className="options-menu__history-list">
-                  {[...history].reverse().map((entry) => (
-                    <li key={entry.id} className="options-menu__history-entry">
-                      <div className="options-menu__history-date">{new Date(entry.timestamp).toLocaleString('fr-FR')}</div>
-                      <div className="options-menu__history-transcript">« {entry.transcript} »</div>
-                      <div className="options-menu__history-reply">{entry.reply}</div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {history !== null && (
-                <SettingRow label="Dossier de l'historique" description="Ouvre le fichier où tout est enregistré, ou efface-le complètement.">
-                  <button className="options-menu__action" onClick={() => void window.jaris.openConversationHistoryFile()}>
-                    Ouvrir le dossier
-                  </button>
-                  {history.length > 0 && (
-                    <button
-                      className="options-menu__action options-menu__action--danger"
-                      onClick={() => void handleClearHistory()}
-                      disabled={clearingHistory}
-                    >
-                      {clearingHistory ? 'Suppression...' : "Supprimer l'historique"}
-                    </button>
-                  )}
-                </SettingRow>
-              )}
+            <SettingGroup title="Mémoire et historique">
+              <SettingRow label="Conversations gardées" description="Les 300 derniers échanges, sur ton disque uniquement.">
+                {history === null ? '…' : <strong>{history.length} échange{history.length > 1 ? 's' : ''}</strong>}
+              </SettingRow>
+              <SettingRow label="Effacer l'historique" description="Définitif. Ce que Jaris a retenu de toi n'est pas touché.">
+                <button
+                  className="options-menu__action options-menu__action--danger"
+                  onClick={() => void handleClearHistory()}
+                  disabled={clearingHistory || history === null || history.length === 0}
+                >
+                  {clearingHistory ? 'Suppression...' : 'Effacer'}
+                </button>
+              </SettingRow>
             </SettingGroup>
           </div>
         )}

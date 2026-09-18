@@ -2446,3 +2446,58 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   (la CI l'installe APRÈS `npm test`), jamais silencieusement vert. **Non vérifiable ici, à confirmer par Léo
   en usage réel** : que "Déplacer" relance bien Jaris sur sa vraie machine Windows et qu'il retrouve toutes
   ses conversations au nouvel emplacement.
+
+- **Un design importé (Claude Design MCP) déclaré "implémenté" par une session précédente ne l'était que
+  partiellement — Léo : "j'ai demander a claude de refaire le design comme claude design sur option voici les
+  screen de claude design mais regarde le dépot il a pas tout refait correctement", 3 captures du mockup
+  cible à l'appui.** Vérifié en comparant le VRAI rendu compilé (Playwright, mêmes données simulées que les
+  captures : RTX 4070/12 Go/32 Go de RAM, palier 7/10, version Ollama en retard...) à chacune des 3 captures,
+  onglet par onglet — jamais en relisant seulement le JSX, qui aurait pu sembler correct sans l'être. Trois
+  vrais écarts trouvés, tous corrigés :
+  1. **Voix** : le sélecteur de voix (orbe) n'était pas dans une carte titrée ("La voix de Jaris" dans le
+     mockup, un simple bloc flottant dans le code) ; "Son" et "Micro et haut-parleur" étaient deux cartes
+     séparées alors que le mockup n'en montre qu'une ("Son et périphériques").
+  2. **Modèles** : titres différents ("Longueur de mémoire"/"Les paliers de configuration" au lieu de
+     "Mémoire de conversation"/"Ce que ta machine fait tourner") ; surtout, la comparaison affichait encore
+     les ~10 paliers empilés reliés par des flèches (`HardwareTierPreview`, conçu à l'origine pour l'accueil)
+     alors que le mockup ne montre QUE le palier de la machine détectée, en résumé compact avec un bouton
+     "Ta configuration". Et "Emplacement des modèles" vivait dans Général, alors que le mockup le range dans
+     Modèles, à côté d'Ollama, sous "Fichiers et moteur local" — jamais un simple encart conditionnel comme
+     avant, mais une ligne permanente.
+  3. **Général** : aucune ligne "Emplacement des données" (le dossier `userData`, jamais exposé au renderer
+     jusqu'ici) ; l'historique s'affichait en entier (transcript de chaque échange) là où le mockup ne montre
+     qu'un compte ("128 échanges") + un bouton Effacer — relire une vieille conversation se fait dans le Chat
+     lui-même (plusieurs conversations depuis une étape précédente), pas dans les réglages.
+  **Décision structurante pour le palier compact (2)** : plutôt que de supprimer la comparaison complète des
+  paliers (utile pour qui veut voir où sa machine se situe par rapport aux autres), un bouton
+  ("Ta configuration") la déplie sous le résumé compact — rien n'est perdu, seul ce qui s'affiche PAR DÉFAUT
+  change, exactement ce que montre le mockup. Le composant reste partagé avec l'écran d'accueil (avant même
+  le premier téléchargement, où la vue complète garde tout son sens pour expliquer le principe), via un
+  simple prop `compact`.
+  **GPU/VRAM/RAM réellement détectés, jamais inventés** : le mockup affiche "RTX 4070 · 12 Go de mémoire
+  vidéo · 32 Go de RAM" sous le numéro de palier — ces trois valeurs n'étaient PAS renvoyées par
+  `previewHardwareTiers` (seule la VRAM représentative du palier l'était, pas le matériel réel), alors
+  qu'elles étaient déjà calculées à l'intérieur de cette même fonction (`detectGpu()`/`detectRamGb()`), juste
+  jetées avant de sortir. Ajoutées au type retourné plutôt que via un second appel IPC séparé.
+  **"Emplacement des données" a demandé un VRAI nouveau canal IPC** (`getDataLocationPath`/`openDataFolder`,
+  `shell.openPath(getDataRoot())`) — `getDataRoot()` (dataLocation.ts) existait déjà côté main (calcule où
+  vivent conversations/profil/mémoire, déplacés par le même bouton "Déplacer" que les modèles) mais n'était
+  jamais exposé au renderer avant cette session : rien à CALCULER de nouveau, juste à exposer ce qui existait
+  déjà.
+  **`openConversationHistoryFile` (bouton "Ouvrir le dossier" de l'ancien historique) retiré en entier** une
+  fois son seul appelant disparu — canal IPC, handler main.ts, `getConversationHistoryPath`/
+  `ensureConversationHistoryFile` (conversationStore.ts, plus aucun autre appelant), preload, types : un
+  `grep` de chaque symbole avant suppression a confirmé qu'aucune trace ne restait (voir la checklist en tête
+  de ce fichier). Superseded par "Emplacement des données", plus général (tout le dossier, pas seulement ce
+  fichier).
+  **Leçon générale, la vraie cause de tout ce correctif : une comparaison capture-contre-capture (le VRAI
+  rendu compilé, pas une relecture de code) révèle des écarts qu'une relecture de JSX "qui a l'air correct"
+  ne révèle pas** — surtout quand le rendu dépend de données dynamiques (paliers, chemins de dossiers,
+  compteurs) qu'une simple lecture du composant ne simule pas mentalement. Un design importé "annoncé
+  terminé" par une session précédente doit être revérifié écran par écran de cette façon, pas supposé
+  correct parce que le fichier source semble raisonnable.
+  Régression : `node --test scripts/test-options-reorganization-ui.mjs scripts/test-context-length-ui.mjs`
+  (titres de cartes réellement affichés, "Fichiers et moteur local" contient bien Ollama ET l'emplacement des
+  modèles avec son vrai chemin, "Emplacement des données" présent dans Général). Vérifié en plus par capture
+  d'écran réelle des 3 onglets (mêmes données que les captures cibles) avant de considérer la refonte
+  terminée, pas seulement par les tests.

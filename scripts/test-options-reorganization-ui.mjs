@@ -49,6 +49,7 @@ const overrides = {
     pythonRuntimeDir: 'C\\\\python',
     hfCacheDir: 'C\\\\cache'
   }),
+  getDataLocationPath: async () => 'C\\\\data',
   getConversationHistory: async () => [],
   previewHardwareTiers: async () => []
 }
@@ -114,25 +115,40 @@ test('Voix regroupe VRAIMENT le sélecteur de voix, le micro et l’activation s
     await page.click('.options-menu__tab:has-text("Voix")')
     await page.waitForSelector('.options-menu__voice-picker')
     // Toutes les sections doivent être présentes SIMULTANÉMENT dans le DOM (une seule page qui défile),
-    // pas seulement atteignables une par une derrière un second niveau de navigation. Depuis la refonte de
-    // l'étape 116 (lignes de réglage uniformes), ce sont des GROUPES (`SettingGroup`) plutôt qu'un titre par
-    // réglage individuel — "Son" contient le bip d'interface, "Micro et haut-parleur" contient le micro, le
-    // haut-parleur ET le test, "Comment déclencher l'écoute" contient les 3 cases d'activation.
+    // pas seulement atteignables une par une derrière un second niveau de navigation. Depuis la refonte
+    // "design importé" (Claude Design, "Options Jaris.dc.html"), ce sont des GROUPES (`SettingGroup`) plutôt
+    // qu'un titre par réglage individuel — "La voix de Jaris" contient le sélecteur d'orbe, "Son et
+    // périphériques" contient le bip d'interface, le micro, le haut-parleur ET le test, "Déclencher
+    // l'écoute" contient les 3 cases d'activation.
     const titles = await page.$$eval('.options-menu__section--voix .options-menu__section-title', (els) => els.map((el) => el.textContent))
-    assert.deepEqual(titles, ['Son', 'Micro et haut-parleur', "Comment déclencher l'écoute"])
+    assert.deepEqual(titles, ['La voix de Jaris', 'Son et périphériques', "Déclencher l'écoute"])
     // Un réglage de chaque ancien onglet, pour prouver qu'il ne s'agit pas que des titres.
     assert.ok((await page.textContent('.options-menu__section--voix')).includes('Tester le micro'), 'le test micro doit être présent')
     assert.ok((await page.textContent('.options-menu__section--voix')).includes('Dire "Jaris" à voix haute'), 'la case Activation doit être présente')
   })
 })
 
-test('Général regroupe VRAIMENT mise à jour, stockage et historique sur UNE seule page', options, async () => {
+test('Général regroupe VRAIMENT mise à jour et historique sur UNE seule page (design importé)', options, async () => {
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Général")')
     await page.waitForSelector('.options-menu__section-title')
     const titles = await page.$$eval('.options-page__content .options-menu__section-title', (els) => els.map((el) => el.textContent))
-    assert.deepEqual(titles, ['Mise à jour', 'Emplacement des modèles', 'Historique des conversations'])
-    assert.ok(await page.$('.options-menu__models-location-list, .options-menu__model-overview-hint'), 'la section stockage doit être présente')
+    // "Emplacement des modèles" a rejoint l'onglet Modèles (design importé, "Fichiers et moteur local") :
+    // Général ne garde que ce qui concerne l'application elle-même.
+    assert.deepEqual(titles, ['Jaris sur cet ordinateur', 'Mémoire et historique'])
+    assert.ok((await page.textContent('.options-page__content')).includes('Emplacement des données'), "l'emplacement des données doit être présent")
+  })
+})
+
+test('Modèles regroupe VRAIMENT Ollama et Emplacement des modèles (design importé, "Fichiers et moteur local")', options, async () => {
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Modèles")')
+    await page.waitForSelector('.options-menu__section-title')
+    const titles = await page.$$eval('.options-page__content .options-menu__section-title', (els) => els.map((el) => el.textContent))
+    assert.deepEqual(titles, ['Mémoire de conversation', 'Ce que ta machine fait tourner', 'Fichiers et moteur local'])
+    const content = await page.textContent('.options-page__content')
+    assert.ok(content.includes('Emplacement des modèles'), "l'emplacement des modèles doit être présent")
+    assert.ok(content.includes('C\\models'), 'le vrai chemin des modèles doit être affiché')
   })
 })
 

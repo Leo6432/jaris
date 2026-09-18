@@ -116,8 +116,9 @@ test('déplacer le curseur enregistre la bonne valeur en tokens, pas un index br
     const calls = await page.evaluate(() => window.__setContextLengthCalls)
     assert.deepEqual(calls, [24576], `attendu [24576], reçu ${JSON.stringify(calls)}`)
     // Le libellé "Actuellement" doit suivre tout de suite (mise à jour optimiste), pas attendre la
-    // confirmation du main process.
-    const currentLabel = await page.textContent('.options-menu__context-row .options-menu__row-description strong')
+    // confirmation du main process. Depuis le design importé, cette valeur vit sur sa PROPRE ligne sous le
+    // curseur (`.options-menu__context-current`), plus mêlée à la phrase d'explication au-dessus de lui.
+    const currentLabel = await page.textContent('.options-menu__context-row .options-menu__context-current strong')
     assert.equal(currentLabel, '24k')
   })
 })
@@ -134,14 +135,15 @@ test('le curseur est réellement habillé par le CSS de Jaris, pas laissé au st
   })
 })
 
-test('"Longueur de mémoire" est bien placé AU-DESSUS de "Les paliers de configuration"', options, async () => {
-  // Léo, étape 117 : "met juste le context au dessus des palier".
+test('"Mémoire de conversation" est bien placé AU-DESSUS de "Ce que ta machine fait tourner"', options, async () => {
+  // Léo, étape 117 : "met juste le context au dessus des palier" — titres renommés par le design importé
+  // (Claude Design, "Options Jaris.dc.html"), même exigence de placement.
   await withModelesTab(async (page) => {
     const titles = await page.$$eval('.options-page__content .options-menu__section-title', (els) => els.map((el) => el.textContent))
-    const iContexte = titles.indexOf('Longueur de mémoire')
-    const iPaliers = titles.indexOf('Les paliers de configuration')
+    const iContexte = titles.indexOf('Mémoire de conversation')
+    const iPaliers = titles.indexOf('Ce que ta machine fait tourner')
     assert.ok(iContexte !== -1 && iPaliers !== -1, `sections introuvables : ${titles.join(', ')}`)
-    assert.ok(iContexte < iPaliers, `"Longueur de mémoire" (position ${iContexte}) doit précéder "Les paliers de configuration" (position ${iPaliers})`)
+    assert.ok(iContexte < iPaliers, `"Mémoire de conversation" (position ${iContexte}) doit précéder "Ce que ta machine fait tourner" (position ${iPaliers})`)
   })
 })
 

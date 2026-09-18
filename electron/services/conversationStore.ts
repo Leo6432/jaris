@@ -235,12 +235,3 @@ export async function clearConversationHistory(): Promise<void> {
   await writeIndex({ activeId: fresh.id, conversations: [fresh] })
 }
 
-/** Dossier des conversations, révélé par le bouton "Ouvrir le dossier" (Options → Historique). */
-export function getConversationHistoryPath(): string {
-  return conversationsDir()
-}
-
-/** Crée le dossier s'il n'existe pas encore, pour pouvoir le révéler même avant le premier échange. */
-export async function ensureConversationHistoryFile(): Promise<void> {
-  await readIndex()
-}

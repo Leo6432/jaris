@@ -1037,6 +1037,9 @@ export async function previewHardwareTiers(): Promise<HardwareTierPreview[]> {
     label: previewLabelFor(i, steps.length),
     vramGb,
     current: i === currentIndex,
+    gpuName: name,
+    detectedVramGb: actualVramGb,
+    ramGb,
     // Ligne "ta configuration" calculée avec la VRAM RÉELLE de cette machine, les autres avec leur propre
     // point représentatif — mathématiquement identique dans les deux cas puisque `vramGb` ci-dessus EST déjà
     // la frontière exacte où le résultat change (voir previewVramSteps), mais garder le calcul sur la VRAM

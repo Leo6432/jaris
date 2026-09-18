@@ -10,7 +10,7 @@ import {
   updateOllama
 } from './services/dependencyServices'
 import { getModelsLocationStatus, moveModelsLocation } from './services/modelsLocation'
-import { moveDataLocation } from './services/dataLocation'
+import { getDataRoot, moveDataLocation } from './services/dataLocation'
 import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, previewHardwareTiers } from './services/hardwareScan'
 import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
@@ -28,9 +28,7 @@ import {
   clearConversationHistory,
   createConversation,
   deleteConversation,
-  ensureConversationHistoryFile,
   getAllConversationEntries,
-  getConversationHistoryPath,
   listConversations,
   setActiveConversation
 } from './services/conversationStore'
@@ -464,10 +462,6 @@ app.whenReady().then(async () => {
     // intact ici laisserait Jaris se souvenir par écrit de ce qui vient d'être effacé.
     chatSession.clear()
   })
-  ipcMain.handle(IPC_CHANNELS.openConversationHistoryFile, async () => {
-    await ensureConversationHistoryFile()
-    shell.showItemInFolder(getConversationHistoryPath())
-  })
   ipcMain.handle(IPC_CHANNELS.previewVoice, async (_event, voice: string) => {
     const audio = await previewVoice(voice)
     return audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer
@@ -542,6 +536,8 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.getAppVersion, () => getInstalledVersion())
   ipcMain.handle(IPC_CHANNELS.checkForUpdate, () => checkForUpdate())
   ipcMain.handle(IPC_CHANNELS.getModelsLocationStatus, () => getModelsLocationStatus())
+  ipcMain.handle(IPC_CHANNELS.getDataLocationPath, () => getDataRoot())
+  ipcMain.handle(IPC_CHANNELS.openDataFolder, () => shell.openPath(getDataRoot()))
   ipcMain.handle(IPC_CHANNELS.chooseModelsLocation, async () => {
     const dialogOptions = {
       properties: ['openDirectory' as const, 'createDirectory' as const],
