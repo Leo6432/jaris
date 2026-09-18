@@ -116,10 +116,13 @@ test('Voix regroupe VRAIMENT le sélecteur de voix, le micro et l’activation s
     // Toutes les sections doivent être présentes SIMULTANÉMENT dans le DOM (une seule page qui défile),
     // pas seulement atteignables une par une derrière un second niveau de navigation. Depuis la refonte de
     // l'étape 116 (lignes de réglage uniformes), ce sont des GROUPES (`SettingGroup`) plutôt qu'un titre par
-    // réglage individuel — "Son" contient le bip d'interface, "Micro et haut-parleur" contient le micro, le
-    // haut-parleur ET le test, "Comment déclencher l'écoute" contient les 3 cases d'activation.
+    // réglage individuel. Depuis l'étape 119 (maquette "Options Jaris.dc.html") : le sélecteur de voix est
+    // lui aussi un groupe titré ("La voix de Jaris", il était auparavant le seul bloc sans bordure/titre de
+    // tout l'écran) ; "Son" et "Micro et haut-parleur" ont fusionné en "Son et périphériques" ("Son" ne
+    // portait qu'UNE ligne, la carte à une seule ligne que la maquette dit d'éliminer) ; "Comment déclencher
+    // l'écoute" est redevenu "Déclencher l'écoute" (copie exacte de la maquette).
     const titles = await page.$$eval('.options-menu__section--voix .options-menu__section-title', (els) => els.map((el) => el.textContent))
-    assert.deepEqual(titles, ['Son', 'Micro et haut-parleur', "Comment déclencher l'écoute"])
+    assert.deepEqual(titles, ['La voix de Jaris', 'Son et périphériques', "Déclencher l'écoute"])
     // Un réglage de chaque ancien onglet, pour prouver qu'il ne s'agit pas que des titres.
     assert.ok((await page.textContent('.options-menu__section--voix')).includes('Tester le micro'), 'le test micro doit être présent')
     assert.ok((await page.textContent('.options-menu__section--voix')).includes('Dire "Jaris" à voix haute'), 'la case Activation doit être présente')
@@ -145,7 +148,9 @@ test('Modèles regroupe VRAIMENT mémoire, matériel et fichiers/moteur local (d
     await page.click('.options-menu__tab:has-text("Modèles")')
     await page.waitForSelector('.options-menu__section-title')
     const titles = await page.$$eval('.options-page__content .options-menu__section-title', (els) => els.map((el) => el.textContent))
-    assert.deepEqual(titles, ['Longueur de mémoire', 'Les paliers de configuration', 'Fichiers et moteur local'])
+    // Titres alignés sur la copie exacte de la maquette (étape 119) : "Mémoire de conversation" et "Ce que
+    // ta machine fait tourner" au lieu de "Longueur de mémoire"/"Les paliers de configuration".
+    assert.deepEqual(titles, ['Mémoire de conversation', 'Ce que ta machine fait tourner', 'Fichiers et moteur local'])
     const content = await page.textContent('.options-page__content')
     assert.ok(content.includes('Dossier des modèles'), 'le déplacement du dossier des modèles doit être présent')
     assert.ok(await page.$('.options-menu__models-location-list'), 'la liste des emplacements doit être présente')

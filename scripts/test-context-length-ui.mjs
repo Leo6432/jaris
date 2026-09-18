@@ -134,14 +134,15 @@ test('le curseur est réellement habillé par le CSS de Jaris, pas laissé au st
   })
 })
 
-test('"Longueur de mémoire" est bien placé AU-DESSUS de "Les paliers de configuration"', options, async () => {
-  // Léo, étape 117 : "met juste le context au dessus des palier".
+test('"Mémoire de conversation" est bien placé AU-DESSUS de "Ce que ta machine fait tourner"', options, async () => {
+  // Léo, étape 117 : "met juste le context au dessus des palier". Titres renommés à l'étape 119 (maquette
+  // "Options Jaris.dc.html", copie exacte : "Mémoire de conversation" / "Ce que ta machine fait tourner").
   await withModelesTab(async (page) => {
     const titles = await page.$$eval('.options-page__content .options-menu__section-title', (els) => els.map((el) => el.textContent))
-    const iContexte = titles.indexOf('Longueur de mémoire')
-    const iPaliers = titles.indexOf('Les paliers de configuration')
+    const iContexte = titles.indexOf('Mémoire de conversation')
+    const iPaliers = titles.indexOf('Ce que ta machine fait tourner')
     assert.ok(iContexte !== -1 && iPaliers !== -1, `sections introuvables : ${titles.join(', ')}`)
-    assert.ok(iContexte < iPaliers, `"Longueur de mémoire" (position ${iContexte}) doit précéder "Les paliers de configuration" (position ${iPaliers})`)
+    assert.ok(iContexte < iPaliers, `"Mémoire de conversation" (position ${iContexte}) doit précéder "Ce que ta machine fait tourner" (position ${iPaliers})`)
   })
 })
 

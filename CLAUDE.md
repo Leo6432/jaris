@@ -2537,3 +2537,37 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   horizontal aux deux largeurs (`scrollWidth` mesuré égal à la largeur de la fenêtre), l'interrupteur porte
   bien le `clip-path` réel (mesuré par `getComputedStyle`, pas relu dans le CSS), et `.options-menu__group`
   porte bien ses équerres (`::before`/`::after` avec `content: '""'` mesurés).
+
+- **Étape 120 : le rapport de l'étape 119 surestimait la fidélité réelle à la maquette — repéré par Léo, PAS
+  par une relecture interne.** Léo a comparé le rendu réel à la maquette (`Options Jaris.dc.html`) après le
+  commit de l'étape 119 et a demandé confirmation ("mais tu a pas fait totalement comme claude design ?"). En
+  reconstruisant le composant réel (esbuild + vrai CSS compilé) plutôt qu'en relisant le résumé du commit
+  précédent : deux écarts RÉELS avaient été manqués, malgré l'étape 119 qui affirmait n'avoir laissé que des
+  écarts "cosmétiques mineurs".
+  1. **"Son" était encore un groupe à UNE SEULE ligne** (juste le bip d'interface), séparé de "Micro et
+     haut-parleur" — exactement la "carte à une seule ligne" que la maquette dit d'éliminer, et que l'étape
+     119 prétendait déjà résolue par les étapes 115-118. Fusionnés en un seul groupe "Son et périphériques"
+     (copie exacte de la maquette), qui contient maintenant : bip d'interface, micro, haut-parleur, test du
+     micro.
+  2. **Le sélecteur de voix était le SEUL bloc de tout l'écran sans bordure/équerres ni titre de section** —
+     un flottant au milieu de panneaux titrés partout ailleurs, alors que la maquette le présente comme un
+     panneau "La voix de Jaris" comme les autres. `SettingGroup` accepte n'importe quel enfant (pas seulement
+     des `SettingRow`), donc l'envelopper a suffi sans toucher à sa mise en page interne (centrée).
+  3. **Titres de section pas alignés sur la copie exacte de la maquette**, alors que Léo l'avait fournie mot
+     pour mot : "Comment déclencher l'écoute" → "Déclencher l'écoute", "Longueur de mémoire" → "Mémoire de
+     conversation", "Les paliers de configuration" → "Ce que ta machine fait tourner".
+  **Toujours pas touché, à dessein (mêmes raisons qu'à l'étape 119)** : la colonne de contrôle en largeur
+  auto plutôt que 240px fixe, le bug de retour à la ligne de "Retester la configuration" à 760px, et
+  "Historique des conversations" qui affiche la VRAIE liste des échanges (comportement existant, précieux)
+  plutôt que le simple compteur "128 échanges" de la maquette (qui ne pouvait représenter que des données
+  factices, faute d'accès aux vraies).
+  **Leçon générale, à ne pas oublier** : après avoir livré une refonte visuelle face à une maquette de
+  référence, RE-VÉRIFIER par un rendu réel (pas relire le diff ni faire confiance au résumé déjà écrit) que
+  chaque panneau de la maquette a un équivalent structurel dans le rendu compilé — un résumé de commit qui
+  affirme "tous les écarts réels corrigés" peut lui-même en avoir raté, surtout pour un élément qui n'a
+  jamais eu besoin de changer de CLASSE CSS (comme le sélecteur de voix, jamais cassé, juste jamais habillé
+  comme le reste) et qui passe donc facilement inaperçu d'un simple diff de code.
+  Régression : `npm test` (303 tests) — `scripts/test-options-reorganization-ui.mjs` et
+  `scripts/test-context-length-ui.mjs` mis à jour pour les nouveaux titres, vérifié mordant. Vérifié par
+  capture d'écran réelle du rendu compilé (bundle esbuild + vrai CSS) sur les 3 onglets Voix/Modèles/Général
+  à 1280px, et par mesure `scrollWidth`/`clientWidth` à 760px (aucun défilement horizontal).

@@ -757,6 +757,12 @@ export default function OptionsMenu(): JSX.Element {
 
         {tab === 'voix' && (
           <div className="options-menu__section options-menu__section--voix">
+            {/* Le sélecteur de voix était le seul bloc de tout l'écran Options sans bordure/équerres ni
+                titre de section (étape 119, maquette "Options Jaris.dc.html", panneau "La voix de Jaris") :
+                même défaut que "Son" ci-dessous, un élément qui ne ressemble pas aux autres. `SettingGroup`
+                accepte n'importe quel enfant (pas seulement des `SettingRow`), donc l'envelopper suffit sans
+                toucher à sa mise en page interne (centrée, différente d'une liste de lignes). */}
+            <SettingGroup title="La voix de Jaris">
             <div className="options-menu__voice-picker">
               <div className="options-menu__voice-nav">
                 <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex - 1)} disabled={previewing}>
@@ -785,6 +791,7 @@ export default function OptionsMenu(): JSX.Element {
                 ))}
               </div>
             </div>
+            </SettingGroup>
 
             {/* Micro/Haut-parleur/Activation rejoignent Voix depuis l'étape 115 (Léo : "des categorie...
                 peuvent etre ensemble") : trois réglages qui parlent tous de l'expérience vocale, pas trois
@@ -792,8 +799,12 @@ export default function OptionsMenu(): JSX.Element {
                 réglage passe maintenant par `SettingRow` (étape 116, Léo : "dans les option rien ne se
                 ressemble micro comment se déclencher") : intitulé + description à gauche, contrôle à
                 droite, quel que soit le type de contrôle (case, menu, bouton) — plus de mise en forme ad hoc
-                différente d'un réglage à l'autre. */}
-            <SettingGroup title="Son">
+                différente d'un réglage à l'autre.
+                "Son" et "Micro et haut-parleur" fusionnés en un seul groupe "Son et périphériques" à l'étape
+                119 (maquette "Options Jaris.dc.html") : "Son" ne contenait qu'UNE ligne (le bip d'interface),
+                exactement la "carte à une seule ligne" que la maquette dit d'éliminer — les deux parlent de
+                la même chose (ce que Jaris fait entendre/écoute), pas de deux sujets distincts. */}
+            <SettingGroup title="Son et périphériques">
               <SettingRow label="Bips d'interface" description="Un son court à l'écoute, la réflexion, un clic, un scan...">
                 <Toggle
                   label="Bips d'interface"
@@ -801,9 +812,6 @@ export default function OptionsMenu(): JSX.Element {
                   onChange={(next) => void toggleSoundEffects(next)}
                 />
               </SettingRow>
-            </SettingGroup>
-
-            <SettingGroup title="Micro et haut-parleur">
               <SettingRow
                 label="Micro utilisé"
                 description={
@@ -879,7 +887,7 @@ export default function OptionsMenu(): JSX.Element {
             </SettingGroup>
 
             <SettingGroup
-              title="Comment déclencher l'écoute"
+              title="Déclencher l'écoute"
               description="Les trois façons d'activer Jaris sont indépendantes : décoche celles dont tu ne veux pas."
             >
               <SettingRow label='Touche "+" du pavé numérique' description="La façon la plus fiable, même en jeu.">
@@ -924,7 +932,7 @@ export default function OptionsMenu(): JSX.Element {
                 modèle", mais le réglage qu'on vient justement de toucher (le curseur) ne doit pas se
                 retrouver sous un gros tableau qu'il faut d'abord dépasser pour le retrouver. */}
             {contextLengthOptions && (
-              <SettingGroup title="Longueur de mémoire">
+              <SettingGroup title="Mémoire de conversation">
                 <SettingRow
                   stacked
                   className="options-menu__context-row"
@@ -958,7 +966,7 @@ export default function OptionsMenu(): JSX.Element {
               </SettingGroup>
             )}
 
-            <SettingGroup title="Les paliers de configuration">
+            <SettingGroup title="Ce que ta machine fait tourner">
               {hardwareTiers === null ? (
                 <p className="capacity-scan__status">Chargement...</p>
               ) : (
