@@ -3053,9 +3053,9 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
 
 ## Idées à explorer (pas encore commencées)
 
-Backlog de pistes discutées avec Léo après une recherche sur les avancées 2026 pertinentes pour un assistant
-vocal local — aucune des trois n'est codée, à reprendre seulement si Léo donne le feu vert à l'une d'elles.
-Classées par ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
+Backlog de pistes discutées avec Léo après des recherches sur les avancées 2026 pertinentes pour Jaris —
+aucune des cinq n'est codée, à reprendre seulement si Léo donne le feu vert à l'une d'elles. Classées par
+ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
 
 1. **Voix full-duplex (interruption en temps réel).** Pouvoir parler PAR-DESSUS Jaris pour l'interrompre en
    pleine réponse (façon GPT-Live d'OpenAI, lancé en juillet 2026, "barge-in") au lieu du cycle actuel
@@ -3072,3 +3072,16 @@ Classées par ordre d'ampleur du chantier (la plus lourde en premier), pas par p
    plus de 200 serveurs communautaires déjà publiés (GitHub, Docker, Slack...) sans coder chaque outil à la
    main. Changement d'architecture des outils, mais éviterait de tout réinventer à chaque nouvelle idée
    d'intégration future.
+4. **Mode Code : exécution sandboxée type WebContainer.** Techno derrière StackBlitz/Bolt/Claude Artifacts en
+   2026 (Node.js + npm compilés en WebAssembly, tourne DANS le navigateur, démarrage <1s, zéro serveur).
+   Permettrait de sortir du principe actuel "un seul fichier HTML autonome" (`codeGenerator.ts`) pour générer
+   de vraies applications multi-fichiers avec de vraies dépendances npm, tout en restant 100% local. L'iframe
+   isolée déjà en place pour l'aperçu (`jaris-preview:`, CSP dédiée, voir `generatedAppPreview.ts`) est un bon
+   point de départ, mais ça veut dire refaire tout le pipeline génération + aperçu. Chantier lourd.
+5. **Mode Code : boucle de réparation qui EXÉCUTE vraiment le code généré, pas seulement une relecture
+   textuelle.** `validateGeneratedHtml` (codeGenerator.ts) analyse aujourd'hui le HTML comme du TEXTE (motifs
+   cherchés à l'aveugle : balises non appariées, JS hors `<script>`...), jamais en le faisant tourner pour de
+   vrai. Faire tourner le code généré dans un vrai navigateur headless (même technique que les tests
+   Playwright déjà utilisés dans ce dépôt) pour capturer les VRAIES erreurs JS/console avant de les redonner
+   au modèle à corriger serait plus fiable qu'un motif de texte. Changement ciblé sur `codeGenerator.ts`, pas
+   une refonte — prolonge la passe de relecture/réparation déjà en place plutôt que de la remplacer.
