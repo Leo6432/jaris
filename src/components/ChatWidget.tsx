@@ -137,11 +137,6 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
     } finally {
       setSending(false)
       setProgress(null)
-      // Une fois la réponse complète, le widget doit rendre la main à l'écran derrière lui. La protection
-      // du brouillon est relâchée explicitement avant le repli : sinon la fenêtre peut rester ouverte parce
-      // que le champ a été vidé dès l'envoi mais que `expanded` vaut encore vrai.
-      window.jaris.setChatWidgetKeepOpen(false)
-      window.jaris.collapseChatWidget()
     }
   }
 
@@ -167,7 +162,14 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
    */
   useEffect(() => {
     if (inactive || sending || error || !reply || hovering || input.length > 0) return
-    const timer = setTimeout(dismiss, computeReplyDismissDelayMs(reply))
+    const timer = setTimeout(() => {
+      dismiss()
+      // Le repli doit arriver APRÈS le délai de lecture, jamais dès la fin de génération. Relâcher d'abord
+      // la protection est indispensable : `expanded` est encore vrai dans ce rendu et le main refuserait
+      // sinon de remettre la fenêtre en mode inactif.
+      window.jaris.setChatWidgetKeepOpen(false)
+      window.jaris.collapseChatWidget()
+    }, computeReplyDismissDelayMs(reply))
     return () => clearTimeout(timer)
   }, [inactive, sending, error, reply, hovering, input])
 

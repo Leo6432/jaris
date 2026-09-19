@@ -161,7 +161,7 @@ test('un seul caractère protège le brouillon quand la souris quitte la barre',
   })
 })
 
-test('envoyer masque la barre puis replie le widget après la réponse', options, async () => {
+test('envoyer masque la barre mais laisse le temps de lire la réponse', options, async () => {
   await withWidget(async (page) => {
     await page.setViewportSize({ width: 460, height: 400 })
     await page.fill('.chat-widget__input', 'salut')
@@ -170,9 +170,10 @@ test('envoyer masque la barre puis replie le widget après la réponse', options
     assert.equal(await page.evaluate(() => window.__keepOpen), true, 'la question en cours n’est pas protégée')
     assert.equal((await page.$('.chat-widget__bar')) === null, true, 'la barre doit disparaître pendant la réponse')
     await page.waitForFunction(() => document.querySelector('.chat-widget__reply')?.textContent?.includes('18 degrés'))
-    await page.waitForFunction(() => window.__collapsed === 1)
-    assert.equal(await page.evaluate(() => window.__keepOpen), false, 'la protection doit être libérée après la réponse')
-})
+    await page.waitForTimeout(1000)
+    assert.equal(await page.evaluate(() => window.__collapsed), 0, 'la réponse a disparu environ 1 seconde après sa génération')
+    assert.ok(await page.$('.chat-widget__answer'), 'la réponse doit rester lisible pendant son délai calculé')
+  })
 })
 
 test('après un repli souris, le prochain + rouvre une simple barre sans ancienne réponse', options, async () => {
@@ -396,10 +397,8 @@ test('la réponse disparaît toute seule après le délai calculé, sans survol'
     // diagnostic minimal (`assert.equal(handle, null)` sur un VRAI ElementHandle ne rend jamais la main, ni
     // ne lève d'erreur, même après 20s). Toujours comparer un BOOLÉEN (`=== null`), jamais le handle lui-même.
     assert.equal((await page.$('.chat-widget__answer')) === null, true, 'la réponse aurait dû disparaître toute seule')
-    // La barre de saisie, elle, reste affichée : `dismiss()` ne fait que replier la RÉPONSE (expanded=false),
-    // pas revenir à la pilule minuscule — ça, c'est le rôle du prop `inactive`, piloté par main.ts quand la
-    // souris quitte VRAIMENT le widget, pas par ce délai de lecture.
-    assert.equal((await page.$('.chat-widget__input')) === null, false, 'la barre de saisie doit rester prête pour la question suivante')
+    assert.equal(await page.evaluate(() => window.__collapsed), 1, 'le widget doit revenir en inactif après lecture')
+    assert.equal(await page.evaluate(() => window.__keepOpen), false, 'la protection doit être libérée avant le repli')
   })
 })
 
