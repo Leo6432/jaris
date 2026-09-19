@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { renderFormattedText } from '@/lib/formatReply'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 
-// Délai de disparition automatique de la réponse, calé sur une vitesse de lecture moyenne (~200 mots/min,
-// soit 300ms/mot) — voir computeReplyDismissDelayMs et l'effet plus bas. Bornes pour rester raisonnable aux
+// Délai de disparition automatique de la réponse, volontairement confortable pour la lecture
+// (600ms/mot) — voir computeReplyDismissDelayMs et l'effet plus bas. Bornes pour rester raisonnable aux
 // deux extrêmes : une réponse d'un seul mot garde quand même quelques secondes à l'écran, une réponse très
 // longue ne bloque pas le widget ouvert indéfiniment (elle reste de toute façon consultable dans le Chat,
 // "Ouvrir le Chat").
-const REPLY_DISMISS_MS_PER_WORD = 300
+const REPLY_DISMISS_MS_PER_WORD = 600
 const MIN_REPLY_DISMISS_MS = 4000
 const MAX_REPLY_DISMISS_MS = 25000
 
