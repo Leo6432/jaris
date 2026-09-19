@@ -37,10 +37,17 @@ window.__heights = []
 window.__openedSettings = 0
 window.__collapsed = 0
 window.__keepOpen = false
+window.__sendDelay = 60
+window.__logListeners = []
+window.__emitLog = (message) => window.__logListeners.forEach((listener) => listener(message))
 const overrides = {
   sendChatMessage: async () => {
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    await new Promise((resolve) => setTimeout(resolve, window.__sendDelay))
     return { role: 'assistant', content: "Il fait 18 degrés à Paris, ciel **couvert**." }
+  },
+  onLog: (listener) => {
+    window.__logListeners.push(listener)
+    return () => { window.__logListeners = window.__logListeners.filter((entry) => entry !== listener) }
   },
   setChatWidgetHeight: (height) => window.__heights.push(height),
   setChatWidgetKeepOpen: (keepOpen) => { window.__keepOpen = keepOpen },
@@ -173,6 +180,27 @@ test('envoyer masque la barre mais laisse le temps de lire la réponse', options
     await page.waitForTimeout(1000)
     assert.equal(await page.evaluate(() => window.__collapsed), 0, 'la réponse a disparu environ 1 seconde après sa génération')
     assert.ok(await page.$('.chat-widget__answer'), 'la réponse doit rester lisible pendant son délai calculé')
+  })
+})
+
+test('une recherche affiche un état simple, jamais les journaux techniques des outils', options, async () => {
+  await withWidget(async (page) => {
+    await page.setViewportSize({ width: 460, height: 400 })
+    await page.evaluate(() => { window.__sendDelay = 500 })
+    await page.fill('.chat-widget__input', 'qui est Dario Amodei ?')
+    await page.click('.chat-widget__send')
+    await page.evaluate(() => window.__emitLog('Outil appelé : search_web({"query":"Dario Amodei"})'))
+    await page.waitForFunction(() => document.querySelector('.chat-widget__reply')?.textContent?.includes('Recherche sur internet'))
+    let visible = await page.textContent('.chat-widget__reply')
+    assert.doesNotMatch(visible, /Outil appelé|search_web/, 'le nom technique de l’outil est affiché')
+
+    await page.evaluate(() => window.__emitLog("Résultat de l'outil : Dario Amodei est le CEO d’Anthropic."))
+    await page.waitForTimeout(50)
+    visible = await page.textContent('.chat-widget__reply')
+    assert.match(visible, /Recherche sur internet/, 'le résultat brut a remplacé l’état simple')
+    assert.doesNotMatch(visible, /Résultat de l'outil|CEO d’Anthropic/, 'le résultat technique brut est affiché')
+
+    await page.waitForFunction(() => document.querySelector('.chat-widget__reply')?.textContent?.includes('18 degrés'))
   })
 })
 

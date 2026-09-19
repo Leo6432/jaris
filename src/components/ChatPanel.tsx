@@ -4,6 +4,7 @@ import Composer from '@/components/Composer'
 import Workspace from '@/components/Workspace'
 import { formatRecentDate } from '@/lib/formatRecentDate'
 import { renderFormattedText } from '@/lib/formatReply'
+import { formatChatProgress } from '@/lib/formatChatProgress'
 import type { ImageAttachment } from '@/lib/imageAttachment'
 import type { ChatMessage, ConversationList } from '../../shared/ipc'
 
@@ -69,7 +70,10 @@ export default function ChatPanel(): JSX.Element {
   // pour chaque étape, voir computerUse.ts/assistant.ts) remplace ce texte statique par la dernière étape en
   // cours tant qu'une réponse est en vol.
   useEffect(() => {
-    return window.jaris.onLog(setProgress)
+    return window.jaris.onLog((message) => {
+      const visible = formatChatProgress(message)
+      if (visible) setProgress(visible)
+    })
   }, [])
 
   // Étape 48 : la réponse s'affiche au fil de sa génération plutôt que d'un bloc à la fin — un tour qui

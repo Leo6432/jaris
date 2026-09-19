@@ -1394,6 +1394,13 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   (`&#x20;`) et retirer les émojis spontanés, sauf si l'utilisateur parle lui-même d'un émoji. Régression :
   `scripts/test-assistant-history.mjs`.
 
+- **Les journaux `onLog` du moteur ne sont pas du texte destiné à l'utilisateur.** Le Chat et son widget
+  affichaient littéralement `Outil appelé : search_web(...)`, puis `Résultat de l'outil : ...`, avant la
+  réponse finale. Garder les journaux complets pour le diagnostic, mais les renderer via un filtre partagé :
+  convertir une recherche en « Recherche sur internet… », ignorer son résultat brut, et laisser la vraie
+  réponse finale prendre sa place. Ne pas supprimer tout suivi : `computer_use_task` peut durer plusieurs
+  minutes et doit toujours donner un signe de vie humain. Régression : `scripts/test-chat-widget-ui.mjs`.
+
 ## Commandes utiles
 
 ```

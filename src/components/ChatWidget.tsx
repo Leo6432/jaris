@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { renderFormattedText } from '@/lib/formatReply'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
+import { formatChatProgress } from '@/lib/formatChatProgress'
 
 // Délai de disparition automatique de la réponse, volontairement confortable pour la lecture
 // (300ms par mot) — voir computeReplyDismissDelayMs et l'effet plus bas. Une réponse courte reste au
@@ -109,10 +110,14 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
     return window.jaris.onChatStreamToken((delta) => setReply((prev) => prev + delta))
   }, [])
 
-  // Même raison que dans ChatPanel : un appel d'outil (recherche web, pilotage de l'écran...) peut prendre
-  // des minutes sans le moindre fragment de réponse — sans ces étapes, la barre semblerait bloquée.
+  // Même raison que dans ChatPanel : un appel d'outil peut prendre longtemps sans fragment de réponse. Les
+  // journaux techniques sont transformés en état humain ; « Outil appelé » et le résultat brut ne doivent
+  // jamais apparaître dans le widget.
   useEffect(() => {
-    return window.jaris.onLog(setProgress)
+    return window.jaris.onLog((message) => {
+      const visible = formatChatProgress(message)
+      if (visible) setProgress(visible)
+    })
   }, [])
 
   const send = async (): Promise<void> => {
