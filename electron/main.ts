@@ -111,17 +111,17 @@ const WIDGET_HEIGHT = 460
 // Légèrement plus grande que la pilule visible elle-même (.widget-pill, index.css, ajustée à son propre
 // contenu) : une pilule arrondie collée pile au bord réel de la fenêtre laisse un liseré rectangulaire
 // résiduel sur Windows (antialiasing DWM d'une fenêtre transparente) — vu en usage réel par Léo. Hauteur
-// remontée à 48 (orbe agrandi à 32px, voir WIDGET_ORB_COLLAPSED_SIZE côté renderer, App.tsx — "agrandit un
-// peu", Léo en usage réel) : garde le même genre de marge autour de la pilule qu'avant l'agrandissement.
-const WIDGET_COLLAPSED_WIDTH = 84
-const WIDGET_COLLAPSED_HEIGHT = 48
+// remontée à 68 : l'orbe et sa pilule occupent 40px, puis 14px transparents de chaque côté laissent le halo
+// de 12px se fondre entièrement au lieu d'être tranché par le bord de la fenêtre native.
+const WIDGET_COLLAPSED_WIDTH = 104
+const WIDGET_COLLAPSED_HEIGHT = 68
 
 // Widget TEXTE (mode Chat) : même emplacement et même forme de pilule que le widget vocal, mais une barre
 // où écrire à la place du cercle qui écoute. Forcément bien plus large que la pilule du cercle (84px) : une
 // barre de saisie de 84px ne laisserait la place à aucun mot. Déplié (une question est partie), la fenêtre
 // s'agrandit vers le bas pour la réponse, comme le widget vocal le fait pour la sienne.
 const WIDGET_CHAT_WIDTH = 460
-const WIDGET_CHAT_COLLAPSED_HEIGHT = 56
+const WIDGET_CHAT_COLLAPSED_HEIGHT = 68
 // Borne haute de la hauteur MESURÉE renvoyée par le widget (voir chatWidgetHeight) : au-delà, la réponse
 // défile dans le widget plutôt que de manger la moitié de l'écran.
 const WIDGET_CHAT_MAX_HEIGHT = 440
@@ -442,6 +442,18 @@ function triggerVisibleWake(): void {
   pipeline.triggerWake()
 }
 
+/** Dès que la souris quitte la barre Chat, elle rend sa place au petit indicateur inactif permanent. */
+function collapseChatWidget(): void {
+  if (
+    currentWidgetMode() !== 'chat' || displayedWidgetMode !== 'chat' ||
+    !widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible()
+  ) return
+  displayedWidgetMode = 'chat-idle'
+  chatWidgetHeight = null
+  widgetWindow.webContents.send(IPC_CHANNELS.widgetMode, displayedWidgetMode)
+  positionWidgetWindow(widgetWindow, false, true)
+}
+
 /** Envoie un évènement du pipeline vocal à toutes les fenêtres actuellement ouvertes (réglages et/ou widget). */
 function broadcast(channel: string, payload?: unknown): void {
   if (channel === IPC_CHANNELS.log) console.log('[jaris]', payload)
@@ -624,6 +636,7 @@ app.whenReady().then(async () => {
     // cliquer en fermant le widget.
     positionWidgetWindow(widgetWindow, true)
   })
+  ipcMain.on(IPC_CHANNELS.collapseChatWidget, () => collapseChatWidget())
   ipcMain.on(IPC_CHANNELS.setOptionsOpen, (_event, open: boolean) => {
     optionsOpen = open
   })

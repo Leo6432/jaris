@@ -1064,3 +1064,9 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   indicateur inactif remplace la barre au repos ; + le transforme en vraie barre de saisie déjà focalisée.
   Le mode Code reste sans widget. Vérifié avec les tests structurels et un vrai clic navigateur sur le passage
   indicateur → barre.
+
+- ✅ Étape 125 (v0.15.3) — Deux finitions des widgets signalées en usage réel. (1) Le petit dégradé lumineux
+  était coupé sur les formes Vocal et Chat parce que leur fenêtre native finissait à 4 px du contenu alors
+  que le halo s'étend sur 12 px : les fenêtres réservent maintenant 14 px transparents autour, sans grossir
+  les formes visibles. (2) La barre Chat ouverte par + revient automatiquement à son petit indicateur inactif
+  dès que la souris quitte toute sa zone. Vérifié avec de vrais mouvements de souris et des mesures du rendu.

@@ -1115,8 +1115,11 @@ toujours l'application complète. **Fermer sa croix quitte vraiment Jaris**.
   > démarrage (`[jaris] Raccourci global ... enregistré avec succès` ou
   > `Impossible de réserver...`).
 - **Depuis Chat**, quitter la fenêtre affiche le petit indicateur inactif. La
-  touche + le remplace par la barre de saisie. Depuis Code, aucun widget n'est
-  affiché.
+  touche + le remplace par la barre de saisie ; sortir la souris de toute la
+  zone Chat le replie automatiquement. Depuis Code, aucun widget n'est affiché.
+- **Halo entièrement fondu** : les formes Vocal et Chat gardent 14 px de zone
+  transparente autour de leur lueur de 12 px, afin que Windows ne la coupe plus
+  au bord de la fenêtre native.
 - **Cliquer sur le widget vocal actif** rouvre la fenêtre classique (l'orbe en
   grand, la conversation, le bouton Options, le cerveau de Jaris). Une icône
   dans la barre système (clic droit) permet aussi de la rouvrir, ou de vraiment

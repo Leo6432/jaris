@@ -3537,11 +3537,11 @@ a:hover {
 .app--widget-chat {
   justify-content: flex-start;
   align-items: center;
-  padding: 4px 6px;
+  padding: 14px;
 }
 .app--widget-chat-idle {
   justify-content: flex-start;
-  padding: 4px;
+  padding: 14px;
 }
 .app--widget-chat-idle .chat-widget {
   align-items: center;
@@ -3553,7 +3553,7 @@ a:hover {
   transition: transform 320ms cubic-bezier(.22, 1, .36, 1), opacity 240ms ease;
 }
 .widget-rest {
-  top: 4px;
+  top: 14px;
   transform: translate(-50%, 72px) scale(5);
   opacity: 0;
   pointer-events: none;

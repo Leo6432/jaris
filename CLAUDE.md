@@ -2850,3 +2850,8 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   `symlinkSync()` sans type fonctionne dans le runner Linux, mais demande un privilège spécial sur Windows et
   faisait échouer `npm test` avec `EPERM` sans défaut du code testé. Utiliser le type `junction` sur Windows,
   qui reproduit justement `mklink /J` et ne demande pas ce privilège, puis garder le symlink classique ailleurs.
+- **Une ombre CSS dans une fenêtre Electron transparente est coupée par les limites NATIVES.** Une pilule
+  avec `box-shadow: 0 0 12px` placée à 4px du bord ne peut jamais montrer un fondu complet, même si son CSS
+  est correct : réserver au moins 14px transparents dans les bounds et dans `setShape`. Pour le Chat ouvert
+  par +, `onMouseLeave` doit prévenir le main par IPC afin que contenu, bounds et région cliquable reviennent
+  ensemble à `chat-idle` ; changer seulement le JSX laisserait une grande fenêtre invisible au-dessus du bureau.

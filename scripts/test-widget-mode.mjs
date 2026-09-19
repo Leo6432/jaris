@@ -147,6 +147,19 @@ test('le rendu Chat possède un état inactif et + le remplace par la barre', ()
   assert.match(mainSource, /displayedWidgetMode === ['"]chat['"][\s\S]{0,80}?widgetWindow\.focus\(\)/)
 })
 
+test('quitter la barre avec la souris replie réellement la fenêtre en Chat inactif', () => {
+  assert.match(widgetSource, /onMouseLeave[\s\S]{0,100}?collapseChatWidget\(\)/)
+  assert.match(mainSource, /function collapseChatWidget\(\)[\s\S]{0,500}?displayedWidgetMode = ['"]chat-idle['"][\s\S]{0,250}?positionWidgetWindow\(widgetWindow, false, true\)/)
+  assert.match(mainSource, /ipcMain\.on\(IPC_CHANNELS\.collapseChatWidget/)
+})
+
+test('la fenêtre native réserve une vraie marge au halo de tous les widgets', () => {
+  assert.match(mainSource, /WIDGET_COLLAPSED_WIDTH = 104/)
+  assert.match(mainSource, /WIDGET_COLLAPSED_HEIGHT = 68/)
+  assert.match(mainSource, /WIDGET_CHAT_COLLAPSED_HEIGHT = 68/)
+  assert.match(appSource, /app--widget-chat-idle/)
+})
+
 test('le renderer du widget demande sa forme au montage ET écoute les changements', () => {
   assert.match(
     appSource,

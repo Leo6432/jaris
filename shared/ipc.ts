@@ -641,9 +641,11 @@ export const IPC_CHANNELS = {
    * capte les clics sur toute sa surface une fois dépliée, donc une hauteur fixe calculée pour la réponse la
    * plus longue laisserait, pour une réponse courte, des centaines de pixels invisibles qui avalent les clics
    * en haut de l'écran. Le widget vocal s'en accommode (il se replie tout seul quelques secondes plus tard) ;
-   * celui-ci reste ouvert tant qu'on ne l'a pas fermé.
+   * celui-ci reste ouvert tant que la souris reste dessus, puis revient à son indicateur inactif.
    */
   setChatWidgetHeight: 'jaris:set-chat-widget-height',
+  /** widget Chat -> main : la souris a quitté toute la barre/réponse, revenir au petit état inactif. */
+  collapseChatWidget: 'jaris:collapse-chat-widget',
   /**
    * renderer -> main : OptionsMenu.tsx prévient à chaque ouverture/fermeture de la page Options (elle vit
    * dans la fenêtre normale, pas une fenêtre à part — voir `optionsOpen`, main.ts). Léo : "quand on est

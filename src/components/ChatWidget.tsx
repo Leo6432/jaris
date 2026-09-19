@@ -71,6 +71,16 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
   }, [inactive])
 
   useEffect(() => {
+    if (!inactive) return
+    // Le prochain + doit rouvrir une simple barre, pas ressusciter l'ancienne réponse dépliée. Le texte en
+    // cours de saisie est conservé comme brouillon ; seuls les éléments de réponse sont remis au repos.
+    setQuestion(null)
+    setReply('')
+    setError(null)
+    setProgress(null)
+  }, [inactive])
+
+  useEffect(() => {
     return window.jaris.onChatStreamToken((delta) => setReply((prev) => prev + delta))
   }, [])
 
@@ -126,7 +136,11 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
   }
 
   return (
-    <div className={`chat-widget${expanded ? ' chat-widget--expanded' : ''}`} ref={rootRef}>
+    <div
+      className={`chat-widget${expanded ? ' chat-widget--expanded' : ''}`}
+      ref={rootRef}
+      onMouseLeave={() => window.jaris.collapseChatWidget()}
+    >
       <form
         className="chat-widget__bar"
         onSubmit={(event) => {

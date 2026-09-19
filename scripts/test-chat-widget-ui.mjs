@@ -34,12 +34,14 @@ import ChatWidget from './src/components/ChatWidget'
 
 window.__heights = []
 window.__openedSettings = 0
+window.__collapsed = 0
 const overrides = {
   sendChatMessage: async () => {
     await new Promise((resolve) => setTimeout(resolve, 60))
     return { role: 'assistant', content: "Il fait 18 degrés à Paris, ciel **couvert**." }
   },
   setChatWidgetHeight: (height) => window.__heights.push(height),
+  collapseChatWidget: () => { window.__collapsed += 1 },
   openSettings: () => { window.__openedSettings += 1 },
   getProfile: async () => ({ name: 'Léo', soundEffectsEnabled: false })
 }
@@ -63,6 +65,13 @@ window.__renderChatWidget = (inactive) => root.render(
   </div>
 )
 window.__renderChatWidget(false)
+window.__renderVoiceRest = () => root.render(
+  <div className="app app--widget app--widget-collapsed">
+    <div className="widget-rest">
+      <div className="widget-pill"><span style={{ display: 'block', width: 32, height: 32 }} /></div>
+    </div>
+  </div>
+)
 `
 
 let pageHtml = null
@@ -89,9 +98,9 @@ async function withWidget(run) {
   const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
   try {
     const page = await browser.newPage()
-    // Les dimensions réelles de la fenêtre au repos (WIDGET_CHAT_WIDTH x WIDGET_CHAT_COLLAPSED_HEIGHT,
+    // Les dimensions réelles de la fenêtre active (WIDGET_CHAT_WIDTH x WIDGET_CHAT_COLLAPSED_HEIGHT,
     // main.ts) : tester à une taille inventée ne dirait rien de ce que Léo verra.
-    await page.setViewportSize({ width: 460, height: 56 })
+    await page.setViewportSize({ width: 460, height: 68 })
     await page.setContent(html)
     await page.waitForSelector('.chat-widget__input')
     await run(page)
@@ -125,6 +134,52 @@ test('le Chat inactif reste un petit widget puis + peut afficher une barre déj�
     await page.evaluate(() => window.__renderChatWidget(false))
     await page.waitForSelector('.chat-widget__input')
     assert.equal(await page.$eval('.chat-widget__input', (el) => document.activeElement === el), true)
+  })
+})
+
+test('sortir réellement la souris de la barre demande son retour à l’état inactif', options, async () => {
+  await withWidget(async (page) => {
+    await page.hover('.chat-widget__bar')
+    await page.mouse.move(459, 67)
+    await page.waitForFunction(() => window.__collapsed === 1)
+    assert.equal(await page.evaluate(() => window.__collapsed), 1)
+  })
+})
+
+test('après un repli souris, le prochain + rouvre une simple barre sans ancienne réponse', options, async () => {
+  await withWidget(async (page) => {
+    await page.fill('.chat-widget__input', 'bonjour')
+    await page.click('.chat-widget__send')
+    await page.waitForSelector('.chat-widget__answer')
+    await page.evaluate(() => window.__renderChatWidget(true))
+    await page.waitForSelector('.chat-widget__idle')
+    await page.evaluate(() => window.__renderChatWidget(false))
+    await page.waitForSelector('.chat-widget__input')
+    assert.equal(await page.$('.chat-widget__answer'), null)
+  })
+})
+
+test('le halo possède assez de marge transparente pour ne pas être coupé', options, async () => {
+  await withWidget(async (page) => {
+    const geometry = await page.$eval('.chat-widget__bar', (el) => {
+      const rect = el.getBoundingClientRect()
+      return { top: rect.top, left: rect.left, right: innerWidth - rect.right, bottom: innerHeight - rect.bottom }
+    })
+    // --hud-glow utilise 12px de flou : 14px laisse deux pixels d'antialiasing en plus à chaque bord.
+    assert.deepEqual(geometry, { top: 14, left: 14, right: 14, bottom: 14 })
+  })
+})
+
+test('le halo du widget vocal inactif possède lui aussi sa marge complète', options, async () => {
+  await withWidget(async (page) => {
+    await page.setViewportSize({ width: 320, height: 68 })
+    await page.evaluate(() => window.__renderVoiceRest())
+    await page.waitForSelector('.widget-pill')
+    const geometry = await page.$eval('.widget-pill', (el) => {
+      const rect = el.getBoundingClientRect()
+      return { top: rect.top, bottom: innerHeight - rect.bottom }
+    })
+    assert.deepEqual(geometry, { top: 14, bottom: 14 })
   })
 })
 
