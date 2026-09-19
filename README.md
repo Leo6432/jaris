@@ -1116,7 +1116,9 @@ toujours l'application complète. **Fermer sa croix quitte vraiment Jaris**.
   > `Impossible de réserver...`).
 - **Depuis Chat**, quitter la fenêtre affiche le petit indicateur inactif. La
   touche + le remplace par la barre de saisie ; sortir la souris de toute la
-  zone Chat le replie automatiquement. Depuis Code, aucun widget n'est affiché.
+  zone Chat le replie automatiquement. Un suivi natif temporaire complète
+  l'évènement de la page afin que les passages rapides hors d'une fenêtre
+  transparente soient eux aussi détectés. Depuis Code, aucun widget n'est affiché.
 - **Halo entièrement fondu** : les formes Vocal et Chat gardent 14 px de zone
   transparente autour de leur lueur de 12 px, afin que Windows ne la coupe plus
   au bord de la fenêtre native.

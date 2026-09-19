@@ -122,6 +122,10 @@ const WIDGET_COLLAPSED_HEIGHT = 68
 // s'agrandit vers le bas pour la réponse, comme le widget vocal le fait pour la sienne.
 const WIDGET_CHAT_WIDTH = 460
 const WIDGET_CHAT_COLLAPSED_HEIGHT = 68
+// Même valeur que le padding de `.app--widget-chat` : c'est la limite VISUELLE de la barre. La fenêtre
+// native est volontairement plus grande pour laisser respirer son halo, mais entrer dans cette marge
+// transparente ne doit pas compter comme rester sur le Chat.
+const WIDGET_CHAT_HALO_MARGIN = 14
 // Borne haute de la hauteur MESURÉE renvoyée par le widget (voir chatWidgetHeight) : au-delà, la réponse
 // défile dans le widget plutôt que de manger la moitié de l'écran.
 const WIDGET_CHAT_MAX_HEIGHT = 440
@@ -164,6 +168,53 @@ let displayedWidgetMode: WidgetMode = 'voice'
  * taillée pour la réponse la plus longue.
  */
 let chatWidgetHeight: number | null = null
+
+/**
+ * Filet natif pour la sortie de souris du Chat. Chromium peut perdre `mouseleave` quand le pointeur franchit
+ * rapidement la limite d'une BrowserWindow transparente. Le minuteur ne tourne que pendant que la barre est
+ * ouverte et ne peut la replier qu'après avoir vu la souris entrer dans sa surface visible : appuyer sur +
+ * au clavier avec le pointeur ailleurs ne referme donc jamais la barre immédiatement.
+ */
+let chatPointerWatchTimer: ReturnType<typeof setInterval> | undefined
+let chatPointerWasInside = false
+
+function stopChatPointerWatch(): void {
+  clearInterval(chatPointerWatchTimer)
+  chatPointerWatchTimer = undefined
+  chatPointerWasInside = false
+}
+
+function isPointInsideChatSurface(
+  point: { x: number; y: number },
+  bounds: { x: number; y: number; width: number; height: number }
+): boolean {
+  return point.x >= bounds.x + WIDGET_CHAT_HALO_MARGIN &&
+    point.x < bounds.x + bounds.width - WIDGET_CHAT_HALO_MARGIN &&
+    point.y >= bounds.y + WIDGET_CHAT_HALO_MARGIN &&
+    point.y < bounds.y + bounds.height - WIDGET_CHAT_HALO_MARGIN
+}
+
+function startChatPointerWatch(): void {
+  stopChatPointerWatch()
+  const poll = (): void => {
+    if (
+      currentWidgetMode() !== 'chat' || displayedWidgetMode !== 'chat' ||
+      !widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible()
+    ) {
+      stopChatPointerWatch()
+      return
+    }
+    const inside = isPointInsideChatSurface(screen.getCursorScreenPoint(), widgetWindow.getBounds())
+    if (inside) {
+      chatPointerWasInside = true
+    } else if (chatPointerWasInside) {
+      collapseChatWidget()
+    }
+  }
+  // Le premier relevé évite d'attendre 50 ms quand le pointeur est déjà sur la barre au moment du +.
+  chatPointerWatchTimer = setInterval(poll, 50)
+  poll()
+}
 
 /**
  * La forme du widget vient du mode actif, et d'une SEULE source : la taille native de la fenêtre (ici) et
@@ -384,6 +435,7 @@ function positionWidgetWindow(win: BrowserWindow, expanded: boolean, animate = f
 
 /** Les deux fenêtres ne sont jamais visibles en même temps (sinon double lecture audio des réponses). */
 function showFullWindow(): void {
+  stopChatPointerWatch()
   if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide()
   if (!fullWindow || fullWindow.isDestroyed()) fullWindow = createFullWindow()
   fullWindow.show()
@@ -409,6 +461,7 @@ function showWidgetWindow(forceExpanded = false): void {
   // laisserait à l'écran la forme du mode précédent, qui ne correspond plus à rien. Jaris reste joignable
   // par son icône dans la barre système ("Ouvrir Jaris").
   if (activeMode === 'code') {
+    stopChatPointerWatch()
     if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide()
     return
   }
@@ -425,7 +478,12 @@ function showWidgetWindow(forceExpanded = false): void {
   // Le raccourci + part souvent pendant qu'une autre application a le focus. Afficher la barre Chat sans
   // lui donner le focus obligerait à recliquer dedans avant d'écrire, alors que + vient précisément de
   // demander cette saisie. Le widget vocal, lui, ne vole jamais le focus pendant une activation à la voix.
-  if (displayedWidgetMode === 'chat') widgetWindow.focus()
+  if (displayedWidgetMode === 'chat') {
+    widgetWindow.focus()
+    startChatPointerWatch()
+  } else {
+    stopChatPointerWatch()
+  }
 }
 
 /** La touche + ouvre la forme du mode actif : barre écrite en Chat, écoute visible en Agent vocal. */
@@ -448,6 +506,7 @@ function collapseChatWidget(): void {
     currentWidgetMode() !== 'chat' || displayedWidgetMode !== 'chat' ||
     !widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible()
   ) return
+  stopChatPointerWatch()
   displayedWidgetMode = 'chat-idle'
   chatWidgetHeight = null
   widgetWindow.webContents.send(IPC_CHANNELS.widgetMode, displayedWidgetMode)

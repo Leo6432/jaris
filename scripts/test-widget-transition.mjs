@@ -54,6 +54,21 @@ test('la hauteur demandée par le widget texte est bornée',()=>{
  const g=fixture('chat',null);g.position(g.win,true);assert.equal(g.changes[0].height,68)
 })
 
+test('la limite native du Chat exclut le halo transparent',()=>{
+ const start=main.indexOf('function isPointInsideChatSurface(')
+ const end=main.indexOf('\nfunction startChatPointerWatch',start)
+ const source=main.slice(start,end)+'\nexports.inside = isPointInsideChatSurface'
+ const context={exports:{},WIDGET_CHAT_HALO_MARGIN:14}
+ vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,context)
+ const bounds={x:100,y:20,width:460,height:68}
+ assert.equal(context.exports.inside({x:114,y:34},bounds),true,'le premier pixel visible doit armer le suivi')
+ assert.equal(context.exports.inside({x:113,y:34},bounds),false,'le halo gauche ne fait pas partie de la barre')
+ assert.equal(context.exports.inside({x:545,y:73},bounds),true,'le dernier pixel visible doit rester dedans')
+ assert.equal(context.exports.inside({x:546,y:73},bounds),false,'le halo droit doit déclencher la sortie')
+ assert.equal(context.exports.inside({x:330,y:33},bounds),false,'le halo supérieur doit déclencher la sortie')
+ assert.equal(context.exports.inside({x:330,y:74},bounds),false,'le halo inférieur doit déclencher la sortie')
+})
+
 test('après l’onboarding, la grande fenêtre reste cachée mais le widget inactif apparaît',()=>{
  const source=ts.transpileModule(main,{compilerOptions:{removeComments:true,target:ts.ScriptTarget.ES2022}}).outputText
  assert.match(source,/fullWindow\s*=\s*createFullWindow\(!onboardingDone\)/)

@@ -1070,3 +1070,11 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   que le halo s'étend sur 12 px : les fenêtres réservent maintenant 14 px transparents autour, sans grossir
   les formes visibles. (2) La barre Chat ouverte par + revient automatiquement à son petit indicateur inactif
   dès que la souris quitte toute sa zone. Vérifié avec de vrais mouvements de souris et des mesures du rendu.
+
+- ✅ Étape 126 (v0.15.4) — Le repli du Chat à la sortie de souris restait parfois bloqué en usage réel : il
+  dépendait uniquement de `mouseleave`, évènement que Chromium peut perdre quand le pointeur franchit vite
+  le bord d'une fenêtre Electron transparente. Une surveillance native temporaire lit maintenant la position
+  réelle du pointeur toutes les 50 ms pendant que la barre est ouverte. Elle s'arme seulement après une vraie
+  entrée sur la surface visible, puis replie le Chat dès la sortie, y compris dans le halo transparent. Ainsi,
+  une ouverture au clavier avec la souris ailleurs reste ouverte. Le suivi s'arrête dès le repli, le retour à
+  la grande fenêtre, le mode Code ou la disparition du widget.

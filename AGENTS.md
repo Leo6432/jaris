@@ -2818,3 +2818,10 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   est correct : réserver au moins 14px transparents dans les bounds et dans `setShape`. Pour le Chat ouvert
   par +, `onMouseLeave` doit prévenir le main par IPC afin que contenu, bounds et région cliquable reviennent
   ensemble à `chat-idle` ; changer seulement le JSX laisserait une grande fenêtre invisible au-dessus du bureau.
+- **`mouseleave` peut être perdu au bord d'une `BrowserWindow` transparente.** Constaté en usage réel : le
+  Chat se repliait la plupart du temps, mais restait parfois ouvert quand le pointeur quittait vite la fenêtre.
+  Garder l'évènement renderer pour le chemin immédiat et le compléter par un relevé natif temporaire de
+  `screen.getCursorScreenPoint()`. Armer ce filet seulement après une vraie entrée dans la surface visible :
+  sinon une barre ouverte au clavier alors que la souris se trouve ailleurs se refermerait instantanément.
+  Comparer à la surface dessinée, sans compter la marge transparente réservée au halo, et arrêter le minuteur
+  dès le repli ou le masquage afin qu'il ne tourne jamais pendant l'état inactif.
