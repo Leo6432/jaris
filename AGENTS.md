@@ -2838,3 +2838,45 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   par-dessus le contour arrondi de la pilule. Ajouter une exception après la règle globale, avec `box-shadow:
   none` et bordure transparente, puis mesurer le style calculé sur un vrai focus : compter les déclarations
   CSS ne prouve pas quel sélecteur gagne réellement.
+
+- **Étape 124, Léo : "Qui a créé ChatGPT ?" a reçu comme réponse un texte confus décrivant une décision de
+  ne pas appeler d'outil, au lieu de la vraie réponse.** Diagnostiqué en lisant le code, pas deviné, et
+  vérifié avec le vrai regex avant de corriger. Deux bugs empilés dans la boucle de `converse()`
+  (assistant.ts) :
+  1. **Faux positif de `PROMISE_WITHOUT_ACTION`.** Le modèle avait très probablement déjà donné la bonne
+     réponse, juste précédée d'un préambule poli ("Je vais vous répondre : ChatGPT a été créé par OpenAI.").
+     Le regex ne regardait jamais ce qui suit "je vais [verbe]" dans la MÊME phrase — testé avant de
+     corriger : `PROMISE_WITHOUT_ACTION.test("Je vais vous répondre : ChatGPT a été créé par OpenAI.")` →
+     `true`, alors que la réponse était déjà complète et correcte.
+  2. **La relance corrective aggrave au lieu de réparer.** Ce faux positif déclenche une relance ("tu as
+     décrit une action sans l'exécuter, corrige ta réponse") — sur une réponse pourtant déjà bonne, le petit
+     modèle local ne sait pas quoi "corriger" et a fini par PARAPHRASER la consigne de correction elle-même
+     comme si c'était sa réponse. Comme cette relance n'a droit qu'à un seul essai (`nudgedForNoAction`),
+     aucune vérification ne rattrape ce texte confus : il part tel quel à l'écran.
+  **Le vrai problème est le n°1**, et il ne peut pas se corriger avec un simple ajustement du motif
+  grammatical (contrairement aux 3 généralisations précédentes de ce même détecteur, toutes purement
+  grammaticales) : "je vais envoyer le mail" (une vraie promesse sèche) et "je vais vous répondre : ChatGPT
+  a été créé par OpenAI" (un préambule suivi d'une vraie réponse) ont EXACTEMENT la même forme grammaticale
+  — seule la SUBSTANCE de ce qui suit le verbe les distingue (rien ou presque pour une promesse sèche,
+  plusieurs mots de contenu pour une vraie réponse). `PROMISE_WITHOUT_ACTION` devient donc une FONCTION
+  plutôt qu'un simple regex exporté : elle itère sur tous les matches possibles du motif (regex global) et
+  ne considère que c'est une promesse sèche si, pour CHAQUE match, ce qui suit compte moins de 5 mots de
+  contenu — sinon (au moins un match suivi d'une vraie réponse substantielle), ce n'est plus une promesse
+  sans suite. Seul appelant du module (`converse()`) mis à jour (`PROMISE_WITHOUT_ACTION(message.content)`
+  au lieu de `.test(...)`).
+  **Deuxième filet, prompt-level** : la consigne de relance corrective précise maintenant explicitement, pour
+  le cas où aucune action n'est nécessaire, de répondre "directement et uniquement à la question d'origine
+  ... sans mentionner cette consigne, les outils, ni le fait que tu corriges quoi que ce soit" — pour réduire
+  le risque qu'un modèle confus paraphrase encore la consigne au lieu de simplement répondre, même si un
+  futur cas échappe au correctif n°1. **Non vérifié en usage réel** (pas d'accès à Ollama ni au petit modèle
+  local dans cet environnement) : seul le comportement du détecteur est prouvé par test, l'efficacité de ce
+  second filet reste à confirmer par Léo.
+  **Limite assumée, pas résolue** : une réponse très COURTE après un préambule ("Je vais répondre : Paris.")
+  reste indiscernable d'une promesse sèche par ce seul critère de longueur (3 mots de contenu < 5) — seul le
+  cas réellement rapporté (une réponse avec plusieurs mots de contenu, le cas réaliste pour "qui a créé X ?")
+  est couvert, faute de pouvoir observer la vraie sortie du petit modèle local pour affiner plus précisément.
+  Régression : `node --test scripts/test-promise-detection.mjs` (27 tests, dont 3 nouveaux cas de préambule
+  suivi d'une vraie réponse — jamais une promesse — et 1 cas qui reste bien une promesse sèche même précédé
+  d'un tour de phrase poli). Chaque nouvelle assertion vérifiée mordante : revenue temporairement à l'ancien
+  comportement (`.test()` sur le regex simple), les 3 nouveaux cas de faux positif échouent bien, les 24
+  autres (déjà établis) continuent de passer.

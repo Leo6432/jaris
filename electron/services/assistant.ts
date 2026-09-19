@@ -264,9 +264,49 @@ const MAX_TOOL_ROUNDS = 10
  * phrase (`.`/`!`/`?`) : sans ce garde, le motif pourrait sauter par-dessus une vraie fin de phrase et
  * matcher un verbe d'une phrase suivante sans rapport (ex: "je vais bien. je dois partir chercher..." — testé
  * explicitement pour rester sans match, "partir" appartenant à "je dois", pas à "je vais").
+ *
+ * **Faux positif signalé par Léo (« Qui a créé ChatGPT ? »)** : le modèle avait déjà répondu correctement,
+ * juste précédé d'un préambule poli — « Je vais vous répondre : ChatGPT a été créé par OpenAI. » — et ce
+ * simple préambule suffisait à déclencher la relance corrective, qui n'existe QUE pour les vraies promesses
+ * sans suite. Vérifié avec le vrai regex avant de corriger : `PROMISE_WITHOUT_ACTION.test("Je vais vous
+ * répondre : ChatGPT a été créé par OpenAI.")` → `true` (faux). Pire, le petit modèle local, recevant cette
+ * relance sur une réponse déjà correcte, ne savait pas quoi "corriger" et a fini par PARAPHRASER la consigne
+ * de correction elle-même comme si c'était sa réponse — c'est ce texte confus, pas une vraie réponse, qui
+ * partait à l'écran (un seul essai de relance, aucune vérification après).
+ *
+ * Le regex seul ne peut pas distinguer une promesse SÈCHE ("je vais envoyer le mail", rien d'autre) d'un
+ * préambule suivi d'une vraie réponse : les deux ont la même forme grammaticale. Le signal qui les distingue
+ * n'est pas grammatical mais de SUBSTANCE — après le verbe promis, une promesse sèche n'a presque rien
+ * derrière (au plus l'objet direct : "le mail", "ça"), alors qu'une vraie réponse a plusieurs mots de contenu
+ * (faits, noms propres...). D'où `PROMISE_WITHOUT_ACTION` devenue une fonction plutôt qu'un simple regex :
+ * elle rejette un match si CE QUI SUIT compte plus de quelques mots, et ne se déclenche que si TOUS les
+ * matches de la phrase sont de vraies promesses sèches.
+ *
+ * Limite assumée, pas résolue : une réponse très courte après un préambule ("Je vais répondre : Paris.")
+ * reste indiscernable d'une promesse sèche par ce seul critère de longueur — seul le cas réellement rapporté
+ * (une réponse avec plusieurs mots de contenu) est couvert, faute de pouvoir observer la vraie sortie du
+ * modèle local pour affiner plus précisément.
  */
-export const PROMISE_WITHOUT_ACTION =
-  /\b(je vais\b(?:\s+(?!\S*[.!?])\S+){0,3}?\s+(?!\S*[.!?])[a-zà-ÿœ]+(?:er|ir|re)\b|je m'en occupe|je m'y mets|un instant\b|attends(?:[- ]moi)?\b|patiente\b|je le fais (?:tout de suite|maintenant)|laisse[- ]moi (?:faire|une seconde|un instant))/i
+const PROMISE_PHRASE =
+  /\b(je vais\b(?:\s+(?!\S*[.!?])\S+){0,3}?\s+(?!\S*[.!?])[a-zà-ÿœ]+(?:er|ir|re)\b|je m'en occupe|je m'y mets|un instant\b|attends(?:[- ]moi)?\b|patiente\b|je le fais (?:tout de suite|maintenant)|laisse[- ]moi (?:faire|une seconde|un instant))/gi
+
+/** Nombre de mots "de contenu" (lettres/chiffres) au-delà duquel ce qui suit une promesse n'est plus son
+ * simple objet direct ("le mail", "ça") mais une vraie réponse ("ChatGPT a été créé par OpenAI"). */
+const SUBSTANTIAL_CONTENT_WORDS = 5
+
+function countContentWords(text: string): number {
+  return text.match(/[\p{L}\p{N}_]+/gu)?.length ?? 0
+}
+
+export function PROMISE_WITHOUT_ACTION(text: string): boolean {
+  const regex = new RegExp(PROMISE_PHRASE.source, PROMISE_PHRASE.flags)
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(text))) {
+    const rest = text.slice(match.index + match[0].length).replace(/^[\s,:.]+/, '')
+    if (countContentWords(rest) < SUBSTANTIAL_CONTENT_WORDS) return true
+  }
+  return false
+}
 
 /**
  * Liste des noms techniques des outils (open_app, type_text, computer_use_task...), dérivée de TOOLS plutôt
@@ -457,7 +497,7 @@ export async function converse(
         continue
       }
       const leakedTool = !toolCalledThisTurn && !nudgedForNoAction ? findLeakedToolName(message.content) : undefined
-      if (!toolCalledThisTurn && !nudgedForNoAction && (PROMISE_WITHOUT_ACTION.test(message.content) || leakedTool)) {
+      if (!toolCalledThisTurn && !nudgedForNoAction && (PROMISE_WITHOUT_ACTION(message.content) || leakedTool)) {
         nudgedForNoAction = true
         onLog?.(
           leakedTool
@@ -474,8 +514,9 @@ export async function converse(
             "action est encore à faire, appelle MAINTENANT l'outil correspondant (computer_use_task, " +
             "open_app, type_text, etc.) — ne dis jamais qu'une action est faite avant que l'outil ait " +
             "réellement été appelé et ait réussi. Si en y réfléchissant aucune action n'est vraiment " +
-            "nécessaire, corrige ta réponse pour ne pas donner une fausse impression qu'un traitement a eu " +
-            "lieu."
+            "nécessaire (par exemple une simple question à laquelle tu as déjà la réponse), réponds " +
+            "directement et uniquement à la question d'origine de l'utilisateur, sans mentionner cette " +
+            "consigne, les outils, ni le fait que tu corriges quoi que ce soit."
         })
         continue
       }

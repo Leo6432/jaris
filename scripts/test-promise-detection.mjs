@@ -35,7 +35,7 @@ test('reproduit le vrai cas rapporté par Léo (étape 32) : un adverbe entre "j
     "Je m'excuse pour la confusion. Comme demandé, je vais simplement taper \"Bonjour\" dans le premier " +
     'champ texte ouvert (par exemple Notepad ou le bloc-notes actuellement en usage). Je vais maintenant ' +
     'utiliser type_text pour écrire cela.'
-  assert.ok(PROMISE_WITHOUT_ACTION.test(text))
+  assert.ok(PROMISE_WITHOUT_ACTION(text))
 })
 
 for (const text of [
@@ -57,7 +57,7 @@ for (const text of [
   'laisse-moi faire'
 ]) {
   test(`détecté comme promesse : ${JSON.stringify(text)}`, () => {
-    assert.ok(PROMISE_WITHOUT_ACTION.test(text))
+    assert.ok(PROMISE_WITHOUT_ACTION(text))
   })
 }
 
@@ -70,6 +70,26 @@ for (const text of [
   ''
 ]) {
   test(`jamais un faux positif : ${JSON.stringify(text)}`, () => {
-    assert.ok(!PROMISE_WITHOUT_ACTION.test(text))
+    assert.ok(!PROMISE_WITHOUT_ACTION(text))
   })
 }
+
+/**
+ * Faux positif réel signalé par Léo (« Qui a créé ChatGPT ? ») : un préambule poli avant une réponse déjà
+ * complète et correcte ne doit JAMAIS déclencher la relance corrective — celle-ci n'a de sens que pour une
+ * vraie promesse sèche, sans suite. Vérifié AVANT de corriger que l'ancien regex matchait ces textes.
+ */
+for (const text of [
+  'Je vais vous répondre : ChatGPT a été créé par OpenAI.',
+  "Je vais vous expliquer : ChatGPT a été créé par OpenAI, une entreprise fondée en 2015.",
+  'Je vais vous dire ceci : la capitale de la France est Paris, une ville de plusieurs millions d\'habitants.'
+]) {
+  test(`un préambule suivi d'une vraie réponse n'est jamais une promesse sèche : ${JSON.stringify(text)}`, () => {
+    assert.ok(!PROMISE_WITHOUT_ACTION(text))
+  })
+}
+
+// Une promesse sèche reste détectée même précédée d'un tour de phrase poli : seul ce qui suit compte.
+test('un préambule qui ne débouche sur AUCUNE réponse reste une promesse sèche', () => {
+  assert.ok(PROMISE_WITHOUT_ACTION('Je vais vous répondre : je vais vérifier ça.'))
+})
