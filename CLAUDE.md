@@ -2770,3 +2770,73 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   considérer le déplacement terminé — pas seulement le passage des tests.
   Régression : `npm test` (306/306, `Fichiers et moteur local` déplacé de Modèles vers Général dans les deux
   tests concernés).
+
+- **Étape 123, Léo : "tu vois quand on va sur chat code agent vocal et on part de jaris il se met en inactif
+  en widget et peut être appelé, je veux que quand on se met dans chat, et on part on peut faire plus comme
+  pour le vocal et ça met une barre de texte en haut au centre comme le widget vocal, et on peut lui
+  demander une question sans aller directement sur l'application. As-tu bien compris ? avant de commencer".**
+  Question posée AVANT de coder (il le demandait explicitement) : 3 choix simples, qui ont chacun changé le
+  périmètre. Réponses : (1) "comme pour le vocal en inactif, sauf qu'à la place d'avoir un cercle, et qui
+  écoute, une barre de texte pour le chat" — donc la barre REMPLACE le cercle, et Jaris n'écoute plus ;
+  (2) "comme pour le widget vocal mais à la place une barre" — la réponse s'affiche DANS le widget, sans
+  rouvrir l'application ; (3) mode Code : "ça doit rien faire aucun widget". Sans ces 3 réponses j'aurais
+  implémenté un cercle + une barre côte à côte, avec l'écoute toujours active et la même forme en Code.
+  **Le repli dépend maintenant du mode actif, et d'une seule source.** `activeMode` (main.ts) est retenu par
+  le handler `setActiveMode` qui existait déjà pour suspendre l'écoute ; `currentWidgetMode()` en dérive la
+  forme, et la taille NATIVE de la fenêtre comme le contenu DESSINÉ en découlent tous les deux. C'est la
+  leçon de l'orbe rogné en fine bande (étape 85) appliquée d'emblée : deux composants qui décident séparément
+  du même état finissent toujours par se contredire. Retenu côté main plutôt que redemandé au renderer au
+  moment du repli : la fenêtre est déjà en train de perdre le focus à cet instant, un aller-retour IPC
+  arriverait trop tard pour choisir la taille AVANT d'afficher.
+  **L'écoute ne reprend plus au repli que depuis le mode voix** (`applyListeningForActiveMode`). Ça
+  CONTREDIT volontairement le `setListeningSuspended(false)` forcé de l'étape 72, et pour une raison qui
+  n'existe que maintenant : ce forçage était là parce que le widget était TOUJOURS le widget vocal, donc un
+  utilisateur qui ne voyait plus que le cercle n'avait aucune raison de deviner pourquoi Jaris ne répondait
+  plus à sa voix. Désormais la forme du widget dit elle-même dans quel état on est (barre = écrit, cercle =
+  voix), donc l'ambiguïté qui justifiait le forçage a disparu. **Leçon générale : un garde posé pour lever
+  une ambiguïté peut devenir inutile — voire nuisible — quand l'interface lève cette ambiguïté toute seule ;
+  le retirer demande de vérifier que la raison d'origine ne tient plus, pas seulement que le code compile.**
+  **Deux pièges CSS de ce fichier retombés dessus, tous les deux attrapés par une MESURE, pas en relisant.**
+  (1) `.app--widget-chat { padding: 4px 6px }` écrit avec le reste du widget texte était silencieusement
+  écrasé par `.app--widget { padding: 0 }`, déclaré plus bas — à spécificité égale, la dernière règle du
+  fichier gagne (piège de l'étape 95, déjà documenté). Repéré parce que la mesure renvoyait `padding: 0px`
+  alors qu'il était bien déclaré. (2) La règle générale `input, ... { border/background !important }` aurait
+  redessiné un cadre carré à l'intérieur de la pilule arrondie : `.chat-widget__input` est donc exclu comme
+  `.composer__input` et `.options-menu__context-slider` l'étaient déjà, dans la règle elle-même plutôt qu'avec
+  un `!important` concurrent. Un 3e piège de la même famille évité en le sachant à l'avance :
+  `.app--widget` met TOUTE la fenêtre en `-webkit-app-region: drag` (pour attraper le widget), ce qui rend
+  un champ de saisie posé dedans impossible à remplir — d'où `no-drag` explicite sur la barre, vérifié par un
+  vrai clic Playwright puis par la mesure du style calculé.
+  **Hauteur de la fenêtre MESURÉE sur le contenu réel, pas fixe.** Première version : une hauteur dépliée
+  fixe (400px), comme le widget vocal. Défaut vu sur la capture : une réponse courte laissait ~230px de
+  fenêtre transparente qui, elle, avale quand même les clics en haut de l'écran — supportable pour le widget
+  vocal (il se replie tout seul après quelques secondes), pas pour celui-ci qui reste ouvert tant qu'on ne
+  l'a pas fermé. Le renderer renvoie donc sa hauteur (`setChatWidgetHeight`), bornée côté main.
+  **Fausse piste dans ce correctif, écartée par la mesure** : `document.documentElement.scrollHeight`
+  semblait le plus simple pour "la hauteur totale du contenu" — il renvoie en réalité le MAXIMUM entre le
+  contenu et la fenêtre, donc la hauteur actuelle de la fenêtre dès que le contenu est plus court (mesuré :
+  400 renvoyé pour 169 de contenu réel, soit exactement la valeur qu'on cherchait à corriger). Remplacé par
+  le `bottom` du nœud + le padding du bas. **Leçon générale : `scrollHeight` n'est jamais la hauteur du
+  contenu seul — il ne descend jamais en dessous de la taille de l'élément/fenêtre.**
+  **Désynchronisation anticipée plutôt que découverte** : une question posée depuis le widget part par le
+  MÊME `sendChatMessage` que le mode Chat, donc dans la même conversation — mais la fenêtre de réglages
+  n'est jamais détruite (juste cachée), donc son fil serait resté figé sur ce qu'il affichait avant le repli
+  et l'échange fait depuis le widget n'y serait jamais apparu. `ChatPanel` relit donc son fil sur
+  `visibilitychange`. Même famille que les deux historiques court terme voix/chat désynchronisés (étape 47).
+  `renderFormattedText` sorti de ChatPanel.tsx vers `src/lib/formatReply.tsx` plutôt que recopié : les deux
+  écrans rendent la même donnée.
+  Régression : `node --test scripts/test-widget-mode.mjs scripts/test-chat-widget-ui.mjs
+  scripts/test-widget-transition.mjs` (325 tests au total). Structurel côté main (aucun widget en mode Code,
+  écoute reprise seulement en voix, émotion vocale qui ne touche jamais au widget texte, forme dérivée d'une
+  seule source) ; dans un VRAI navigateur côté widget (barre présente et jamais le cercle, frappe possible
+  malgré la zone de déplacement, pas de double cadre, réponse affichée avec son gras, hauteur mesurée
+  inférieure à la fenêtre, rien de coupé à la hauteur demandée, boutons réellement habillés par le CSS
+  compilé) ; et dimensions natives de la barre dans le faux pont de `test-widget-transition.mjs` — qui
+  plantait d'ailleurs sur `currentWidgetMode is not defined` tant que ses globaux injectés n'ont pas été mis
+  à jour, **le même réflexe que pour les faux ponts preload : après avoir ajouté une dépendance à un module
+  déjà chargé par des tests, mettre à jour leurs bouchons avant de lancer la suite.** Chaque assertion
+  vérifiée mordante en réintroduisant son défaut (y compris une injection de défaut qui n'avait rien changé
+  du tout au premier essai — un défaut qu'on croit injecté sans l'avoir vérifié ne prouve rien).
+  **Non vérifiable ici, à confirmer par Léo en usage réel** : qu'une fenêtre Electron `alwaysOnTop` +
+  `skipTaskbar` prenne bien le focus clavier au clic sur Windows (il n'y a ni Windows ni vraie fenêtre
+  Electron dans cet environnement) — tout le reste est prouvé par les mesures ci-dessus, pas ça.

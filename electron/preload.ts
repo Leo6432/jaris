@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC_CHANNELS,
   type AnalysisScope,
+  type AppMode,
   type AppVersionStatus,
   type AudioInputDevice,
   type CapacityScanResult,
@@ -28,7 +29,8 @@ import {
   type UpdateCheckResult,
   type UpdateProgress,
   type VoiceReplyPayload,
-  type VoiceSetupStatusPayload
+  type VoiceSetupStatusPayload,
+  type WidgetMode
 } from '../shared/ipc'
 
 function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
@@ -112,8 +114,12 @@ const api = {
   setWakewordEnabled: (enabled: boolean): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.setWakewordEnabled, enabled),
   testMicrophone: (): void => ipcRenderer.send(IPC_CHANNELS.testMicrophone),
   stopTestMicrophone: (): void => ipcRenderer.send(IPC_CHANNELS.stopTestMicrophone),
-  setActiveMode: (mode: 'voice' | 'chat' | 'code'): void => ipcRenderer.send(IPC_CHANNELS.setActiveMode, mode),
+  setActiveMode: (mode: AppMode): void => ipcRenderer.send(IPC_CHANNELS.setActiveMode, mode),
   setOptionsOpen: (open: boolean): void => ipcRenderer.send(IPC_CHANNELS.setOptionsOpen, open),
+  getWidgetMode: (): Promise<WidgetMode> => ipcRenderer.invoke(IPC_CHANNELS.getWidgetMode),
+  onWidgetMode: (cb: (mode: WidgetMode) => void) => subscribe(IPC_CHANNELS.widgetMode, cb),
+  setChatWidgetHeight: (height: number | null): void =>
+    ipcRenderer.send(IPC_CHANNELS.setChatWidgetHeight, height),
   onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => subscribe(IPC_CHANNELS.micTestLevel, cb),
   onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => subscribe(IPC_CHANNELS.micTestDone, cb),
   onSoundCue: (cb: (cue: SoundCue) => void) => subscribe(IPC_CHANNELS.soundCue, cb)

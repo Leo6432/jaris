@@ -1720,6 +1720,135 @@ body.body--scan::after {
   box-shadow: var(--hud-glow);
 }
 
+/* --- Widget TEXTE (quitter Jaris depuis le mode Chat) ---
+ *
+ * Même emplacement et même vocabulaire visuel que la pilule du widget vocal (fond `--hud-panel-raised`,
+ * bordure `--hud-line`, `--hud-glow`, coins en pilule) : seule la barre de saisie remplace le cercle, à la
+ * demande de Léo. Aucune couleur ni forme inventée à côté — la leçon déjà tirée deux fois ici (le cercle
+ * lisse du widget replié, celui du sélecteur de voix) : se raccrocher à la famille existante.
+ */
+.chat-widget {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
+
+.chat-widget__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 14px;
+  background: var(--hud-panel-raised);
+  border: 1px solid var(--hud-line);
+  border-radius: 999px;
+  box-shadow: var(--hud-glow);
+  /* `.app--widget` met TOUTE la fenêtre en zone de déplacement (`-webkit-app-region: drag`) pour qu'on
+     puisse attraper le widget : sans cette exception, un champ de saisie posé dedans serait impossible à
+     cliquer ET impossible à remplir — Chromium donne le geste à la fenêtre avant le champ. Piège de la
+     même famille que le conteneur en `pointer-events: none` qui rendait une case à cocher incliquable. */
+  -webkit-app-region: no-drag;
+}
+
+/* La règle générale `input, textarea, select` (plus haut dans ce fichier) impose bordure/fond/coins droits
+   en `!important` : un champ posé dans la pilule héritait donc d'un second cadre carré à l'intérieur du
+   bord arrondi. Même exception que `.composer__input` et `.options-menu__context-slider`, déclarée là où
+   la règle générale est écrite plutôt qu'avec un `!important` concurrent. */
+.chat-widget__input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 0;
+  font-size: 0.85rem;
+  color: var(--hud-text);
+  background: transparent;
+  border: none;
+  outline: none;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+}
+
+.chat-widget__input::placeholder {
+  color: var(--hud-text-faint);
+}
+
+/* Même bouton icône que la pièce jointe du composeur (`.composer__attach`) : une action secondaire dans un
+   champ, pas un bouton d'action pleine largeur — reprendre le style existant plutôt que d'en inventer un
+   troisième, comme pour le bouton d'envoi du Chat. */
+.chat-widget__send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--hud-text-dim);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  -webkit-app-region: no-drag;
+}
+
+.chat-widget__send:not(:disabled):hover {
+  color: var(--hud-accent-bright);
+  border-color: var(--hud-line);
+  background: rgba(var(--hud-accent-rgb), 0.08);
+}
+
+.chat-widget__send:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.chat-widget__answer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--hud-panel-raised);
+  border: 1px solid var(--hud-line);
+  border-radius: 14px;
+  box-shadow: var(--hud-glow);
+  max-height: 300px;
+  overflow-y: auto;
+  -webkit-app-region: no-drag;
+}
+
+.chat-widget__question {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--hud-text-faint);
+  overflow-wrap: anywhere;
+}
+
+.chat-widget__reply {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--hud-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-widget__error {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--hud-danger);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Les boutons eux-mêmes empruntent la famille partagée (coins coupés, Rajdhani) et sa variante compacte,
+   déclarées plus bas dans ce fichier — à spécificité égale, seule une règle écrite APRÈS la famille gagne,
+   donc rien de leur apparence ne peut être posé ici (piège vécu à l'étape 95). */
+.chat-widget__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .app__status--widget {
   font-size: 0.7rem;
   letter-spacing: 0.06em;
@@ -2555,6 +2684,7 @@ h1 {
 .workspace__new,
 .workspace__confirm-yes,
 .workspace__confirm-no,
+.chat-widget__action,
 .capacity-scan button,
 .runtime-setup__actions button,
 .app__onboarding button {
@@ -2592,6 +2722,7 @@ h1 {
 .workspace__new:not(:disabled):hover,
 .workspace__confirm-yes:not(:disabled):hover,
 .workspace__confirm-no:not(:disabled):hover,
+.chat-widget__action:not(:disabled):hover,
 .capacity-scan button:not(:disabled):hover,
 .runtime-setup__actions button:not(:disabled):hover,
 .app__onboarding button:hover {
@@ -2625,7 +2756,8 @@ textarea:not(.composer__input):focus-visible {
 .code-panel__live-stop,
 .workspace__new,
 .workspace__confirm-yes,
-.workspace__confirm-no {
+.workspace__confirm-no,
+.chat-widget__action {
   font-size: 0.7rem;
   letter-spacing: 0.1em;
   padding: 6px 12px;
@@ -2995,8 +3127,11 @@ textarea:not(.composer__input):focus-visible {
    écrase le style DÉDIÉ du curseur (fond de piste, coins arrondis) et dessine par-dessus un cadre de champ
    de texte classique, attrapé par une vraie mesure de style calculé avant de livrer (même piège que le
    bouton "Nouvelle conversation" resté gris, étape 97 : compter les occurrences ne suffit jamais, seule une
-   mesure du style RÉELLEMENT appliqué le prouve). */
-input:not(.options-menu__context-slider),
+   mesure du style RÉELLEMENT appliqué le prouve).
+   `.chat-widget__input` (barre du widget texte) est exclu pour la même raison que `.composer__input` : la
+   PILULE qui l'entoure porte déjà le cadre et les coins arrondis, un second contour carré à l'intérieur
+   casserait la forme. */
+input:not(.options-menu__context-slider):not(.chat-widget__input),
 textarea:not(.composer__input),
 select {
   font-family: var(--hud-font-body);
@@ -3377,6 +3512,16 @@ a:hover {
 .app--widget {
   position: relative;
   padding: 0;
+}
+/* Écrit APRÈS `.app--widget { padding: 0 }` : à spécificité égale, seule la dernière règle du fichier gagne
+   — posée plus haut (avec le reste du widget texte), elle était silencieusement ignorée, ce qu'une mesure du
+   style calculé a montré tout de suite (padding lu à 0px alors qu'il était bien déclaré). Ces quelques
+   pixels ne sont pas cosmétiques : une pilule arrondie collée pile au bord d'une fenêtre transparente laisse
+   un liseré rectangulaire résiduel sur Windows, déjà signalé par Léo sur le widget vocal. */
+.app--widget-chat {
+  justify-content: flex-start;
+  align-items: center;
+  padding: 4px 6px;
 }
 .app--widget .jaris-orb { animation: none; }
 .widget-rest, .widget-active {

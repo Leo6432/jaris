@@ -2,6 +2,21 @@
 
 export type JarisEmotion = 'idle' | 'listening' | 'thinking' | 'happy' | 'surprised'
 
+/** Les trois modes de la fenêtre de réglages (App.tsx), aussi retenus côté main pour choisir la forme du
+ * widget au repli (voir WidgetMode juste en dessous et `setActiveMode`). */
+export type AppMode = 'voice' | 'chat' | 'code'
+
+/**
+ * Ce que devient Jaris quand on quitte sa fenêtre, dérivé du dernier mode actif :
+ * - 'voice' : le widget cercle qui écoute, tel qu'il a toujours été ;
+ * - 'chat' : une barre de texte au même endroit, pour poser une question écrite sans rouvrir l'application
+ *   (Léo : "à la place d'avoir un cercle, et qui écoute, ... une barre de texte pour le chat") — Jaris ne
+ *   réagit alors PAS à la voix, exactement comme le cercle qu'elle remplace ne réagit pas au clavier ;
+ * - depuis le mode Code, aucun widget n'est affiché du tout ("ça doit rien faire aucun widget") : il n'y a
+ *   donc pas de valeur 'code' ici, c'est l'absence de fenêtre qui l'exprime (voir showWidgetWindow, main.ts).
+ */
+export type WidgetMode = 'voice' | 'chat'
+
 /**
  * Identifiants des sons courts du design sonore de Jaris (étape 31) — synthétisés à la volée côté renderer
  * (voir src/lib/soundDesign.ts, Web Audio API), jamais de vrais fichiers audio embarqués : reste léger et ne
@@ -602,6 +617,34 @@ export const IPC_CHANNELS = {
    * d'activation, transcription) quand il est en train d'écrire dans un autre mode.
    */
   setActiveMode: 'jaris:set-active-mode',
+  /**
+   * main -> widget : quelle forme le widget flottant doit prendre, dérivée du dernier mode actif de la
+   * fenêtre de réglages (voir `setActiveMode` juste au-dessus). Léo : "quand on se met dans chat, et on part
+   * ... ça met une barre de texte en haut au centre comme le widget vocal, et on peut lui demander une
+   * question sans aller directement sur l'application".
+   *
+   * La taille NATIVE de la fenêtre (main.ts) et le contenu DESSINÉ (App.tsx) doivent venir de la même source,
+   * sinon les deux se contredisent — piège déjà vécu avec la taille du widget vocal, où le renderer dessinait
+   * un orbe déplié dans une fenêtre native forcée à la taille repliée.
+   */
+  widgetMode: 'jaris:widget-mode',
+  /** widget -> main : le widget vient d'être créé et demande sa forme (le `widgetMode` envoyé à l'affichage
+   * peut arriver avant que ce renderer soit prêt à l'écouter — sans cette lecture au montage, un widget tout
+   * juste créé resterait sur sa forme par défaut jusqu'au repli suivant). */
+  getWidgetMode: 'jaris:get-widget-mode',
+  /**
+   * widget -> main : la hauteur dont le widget texte a besoin, en pixels (ou `null` pour revenir à sa simple
+   * barre). L'équivalent, pour le widget texte, de ce que `pipeline.on('emotion')` fait tout seul pour le
+   * widget vocal — rien ne passe par le main quand l'utilisateur tape dans la barre, il ne peut donc pas le
+   * deviner.
+   *
+   * Une hauteur MESURÉE plutôt qu'une taille dépliée fixe : la fenêtre reste au-dessus de tout le reste et
+   * capte les clics sur toute sa surface une fois dépliée, donc une hauteur fixe calculée pour la réponse la
+   * plus longue laisserait, pour une réponse courte, des centaines de pixels invisibles qui avalent les clics
+   * en haut de l'écran. Le widget vocal s'en accommode (il se replie tout seul quelques secondes plus tard) ;
+   * celui-ci reste ouvert tant qu'on ne l'a pas fermé.
+   */
+  setChatWidgetHeight: 'jaris:set-chat-widget-height',
   /**
    * renderer -> main : OptionsMenu.tsx prévient à chaque ouverture/fermeture de la page Options (elle vit
    * dans la fenêtre normale, pas une fenêtre à part — voir `optionsOpen`, main.ts). Léo : "quand on est

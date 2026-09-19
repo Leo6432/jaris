@@ -1,29 +1,11 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import Composer from '@/components/Composer'
 import Workspace from '@/components/Workspace'
 import { formatRecentDate } from '@/lib/formatRecentDate'
+import { renderFormattedText } from '@/lib/formatReply'
 import type { ImageAttachment } from '@/lib/imageAttachment'
 import type { ChatMessage, ConversationList } from '../../shared/ipc'
-
-/**
- * Le canal "chat" du prompt système (assistant.ts) autorise le modèle à utiliser du markdown léger (listes,
- * blocs de code) et il lui arrive d'utiliser **gras** même si ce n'est pas explicitement demandé — jusqu'ici
- * affiché tel quel avec les astérisques littéraux. Seul le gras est interprété ici (le reste : listes,
- * retours à la ligne, restent du texte brut géré par `white-space: pre-wrap` en CSS) : pas la peine d'une
- * vraie dépendance markdown pour un seul cas d'usage.
- */
-function renderFormattedText(content: string): JSX.Element {
-  const parts = content.split(/(\*\*[^*]+\*\*)/g)
-  return (
-    <>
-      {parts.map((part, index) => {
-        const match = /^\*\*([^*]+)\*\*$/.exec(part)
-        return match ? <strong key={index}>{match[1]}</strong> : <Fragment key={index}>{part}</Fragment>
-      })}
-    </>
-  )
-}
 
 /**
  * Mode Chat (étape 30) : la même conversation que la voix, au clavier. Le fil vit côté main
@@ -47,6 +29,23 @@ export default function ChatPanel(): JSX.Element {
   useEffect(() => {
     void window.jaris.getChatHistory().then(setMessages)
     void window.jaris.listConversations().then(setConversations)
+  }, [])
+
+  /**
+   * Une question posée depuis le widget texte (ChatWidget.tsx, au repli du mode Chat) part dans la MÊME
+   * conversation, mais dans une autre fenêtre : cette fenêtre-ci n'est jamais détruite (juste cachée), donc
+   * sans relecture son fil resterait figé sur ce qu'il affichait avant le repli, et l'échange fait depuis le
+   * widget n'apparaîtrait jamais. Même famille de piège que les deux historiques court terme voix/chat
+   * désynchronisés : deux vues de la même donnée doivent la relire, pas la deviner.
+   */
+  useEffect(() => {
+    const refresh = (): void => {
+      if (document.visibilityState !== 'visible') return
+      void window.jaris.getChatHistory().then(setMessages)
+      void window.jaris.listConversations().then(setConversations)
+    }
+    document.addEventListener('visibilitychange', refresh)
+    return () => document.removeEventListener('visibilitychange', refresh)
   }, [])
 
   /**

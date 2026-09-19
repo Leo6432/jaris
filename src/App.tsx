@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import CapacityScan from '@/components/CapacityScan'
 import ChatPanel from '@/components/ChatPanel'
+import ChatWidget from '@/components/ChatWidget'
 import CodePanel from '@/components/CodePanel'
 import RuntimeSetup from '@/components/RuntimeSetup'
 import JarisOrb from '@/components/JarisOrb'
@@ -8,7 +9,7 @@ import MemoryBrain from '@/components/MemoryBrain'
 import OptionsMenu from '@/components/OptionsMenu'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import { useJarisStore, type JarisEmotion } from '@/store/useJarisStore'
-import type { AppVersionStatus, MemoryGraph, OllamaVersionStatus } from '../shared/ipc'
+import type { AppVersionStatus, MemoryGraph, OllamaVersionStatus, WidgetMode } from '../shared/ipc'
 
 const STATUS_LABEL: Record<JarisEmotion, string> = {
   idle: 'Jaris dort...',
@@ -290,6 +291,19 @@ export default function App(): JSX.Element {
   // seconde avant de se déplier, alors que Jaris écoutait déjà avant même le repli.
   // Corrigé en coupant les transitions tant que la fenêtre est cachée (aucune transition en attente ne peut
   // alors se créer) et en ne les réactivant qu'après une vraie frame peinte dans le bon état.
+  // Ce que le widget doit être quand on quitte Jaris : le cercle qui écoute (depuis l'Agent vocal) ou une
+  // barre de texte (depuis le Chat) — voir WidgetMode, shared/ipc.ts. Le main décide, le renderer se
+  // contente de suivre : les deux doivent dessiner et dimensionner la MÊME forme.
+  // Lu au montage ET écouté ensuite : le `widgetMode` envoyé juste avant l'affichage peut arriver alors que
+  // ce renderer vient tout juste d'être créé et n'écoute pas encore, et la forme change d'un repli à
+  // l'autre sur une fenêtre qui, elle, n'est jamais détruite.
+  const [widgetMode, setWidgetMode] = useState<WidgetMode>('voice')
+  useEffect(() => {
+    if (MODE !== 'widget') return
+    void window.jaris.getWidgetMode().then(setWidgetMode)
+    return window.jaris.onWidgetMode(setWidgetMode)
+  }, [])
+
   const [widgetInstant, setWidgetInstant] = useState(() => document.visibilityState !== 'visible')
   useEffect(() => {
     if (MODE !== 'widget') return
@@ -474,6 +488,18 @@ export default function App(): JSX.Element {
         </main>
 
         {memoryGraph && <MemoryBrain graph={memoryGraph} onClose={() => setMemoryGraph(null)} />}
+      </div>
+    )
+  }
+
+  // Quitter Jaris depuis le Chat donne une barre de texte à la place du cercle qui écoute (voir
+  // ChatWidget.tsx). Rendu à part plutôt qu'en variante du widget vocal : les deux n'ont ni le même contenu,
+  // ni la même mécanique (l'un suit l'émotion du pipeline vocal, l'autre ce que l'utilisateur tape), et les
+  // mélanger dans un seul arbre aurait fait cohabiter deux logiques de dépliage sur les mêmes éléments.
+  if (widgetMode === 'chat') {
+    return (
+      <div className={`app app--widget app--widget-chat${widgetInstant ? ' app--widget-instant' : ''}`}>
+        <ChatWidget />
       </div>
     )
   }

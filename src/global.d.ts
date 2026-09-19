@@ -1,5 +1,6 @@
 import type {
   AnalysisScope,
+  AppMode,
   AppVersionStatus,
   AudioInputDevice,
   CapacityScanResult,
@@ -26,7 +27,8 @@ import type {
   UpdateCheckResult,
   UpdateProgress,
   VoiceReplyPayload,
-  VoiceSetupStatusPayload
+  VoiceSetupStatusPayload,
+  WidgetMode
 } from '../shared/ipc'
 
 export {}
@@ -104,8 +106,11 @@ declare global {
       setWakewordEnabled: (enabled: boolean) => Promise<void>
       testMicrophone: () => void
       stopTestMicrophone: () => void
-      setActiveMode: (mode: 'voice' | 'chat' | 'code') => void
+      setActiveMode: (mode: AppMode) => void
       setOptionsOpen: (open: boolean) => void
+      getWidgetMode: () => Promise<WidgetMode>
+      onWidgetMode: (cb: (mode: WidgetMode) => void) => () => void
+      setChatWidgetHeight: (height: number | null) => void
       onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => () => void
       onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => () => void
       onSoundCue: (cb: (cue: SoundCue) => void) => () => void

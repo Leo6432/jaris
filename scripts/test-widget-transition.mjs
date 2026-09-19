@@ -5,11 +5,15 @@ import test from 'node:test'
 import ts from 'typescript'
 
 const main=readFileSync(new URL('../electron/main.ts',import.meta.url),'utf8')
-function fixture(){
+// `mode`/`chatHeight` : positionWidgetWindow dérive maintenant sa taille de la forme du widget (cercle
+// vocal ou barre de texte, voir currentWidgetMode dans main.ts) et, pour la barre, de la hauteur mesurée
+// que le renderer lui renvoie. Les deux sont des globaux du module, donc injectés ici comme le reste —
+// sans ça, ce faux pont plantait sur "currentWidgetMode is not defined" dès que main.ts s'en est servi.
+function fixture(mode='voice',chatHeight=null){
  const timers=new Map();let id=0;const changes=[];const shapes=[]
  const win={isDestroyed:()=>false,isVisible:()=>true,setBounds:b=>changes.push(b),setShape:r=>shapes.push(r)}
  const source=main.slice(main.indexOf('let widgetCollapseTimer:'),main.indexOf('/** Les deux fenêtres'))+'\nexports.position = positionWidgetWindow'
- const context={exports:{},process:{platform:"win32"},screen:{getPrimaryDisplay:()=>({workArea:{x:100,y:20,width:1920}})},WIDGET_WIDTH:320,WIDGET_HEIGHT:460,WIDGET_COLLAPSED_WIDTH:84,WIDGET_COLLAPSED_HEIGHT:48,setTimeout:fn=>{timers.set(++id,fn);return id},clearTimeout:key=>timers.delete(key)}
+ const context={exports:{},process:{platform:"win32"},screen:{getPrimaryDisplay:()=>({workArea:{x:100,y:20,width:1920}})},WIDGET_WIDTH:320,WIDGET_HEIGHT:460,WIDGET_COLLAPSED_WIDTH:84,WIDGET_COLLAPSED_HEIGHT:48,WIDGET_CHAT_WIDTH:460,WIDGET_CHAT_COLLAPSED_HEIGHT:56,WIDGET_CHAT_MAX_HEIGHT:440,currentWidgetMode:()=>mode,chatWidgetHeight:chatHeight,setTimeout:fn=>{timers.set(++id,fn);return id},clearTimeout:key=>timers.delete(key)}
  vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,context)
  return {win,changes,shapes,position:context.exports.position,flush:()=>{const work=[...timers.values()];timers.clear();work.forEach(fn=>fn())}}
 }
@@ -30,6 +34,24 @@ test('aucun redimensionnement tardif après fermeture ou masquage',()=>{
 })
 test('un affichage replié immédiat annule aussi le minuteur',()=>{
  const f=fixture();f.position(f.win,false,true);f.position(f.win,false);f.flush();assert.equal(f.changes.length,1)
+})
+// Widget TEXTE (repli depuis le mode Chat) : une barre de saisie ne tiendrait pas dans la pilule de 84px du
+// widget vocal — la fenêtre native doit prendre les dimensions de ce que le renderer y dessine vraiment.
+test('la barre de texte a ses propres dimensions, au repos comme dépliée',()=>{
+ const f=fixture('chat',177)
+ f.position(f.win,false)
+ assert.equal(f.changes[0].width,460);assert.equal(f.changes[0].height,56)
+ // Au repos, seule la barre capte les clics : la zone couvre toute la largeur, pas les 84px du cercle.
+ assert.equal(f.shapes[0][0].width,460);assert.equal(f.shapes[0][0].height,56);assert.equal(f.shapes[0][0].x,0)
+ f.position(f.win,true)
+ assert.equal(f.changes[1].width,460);assert.equal(f.changes[1].height,177)
+ assert.equal(f.changes[1].x+230,1060);assert.equal(f.changes[1].y,20)
+})
+test('la hauteur demandée par le widget texte est bornée',()=>{
+ // Une réponse très longue ne doit pas manger la moitié de l'écran : elle défile dans le widget.
+ const f=fixture('chat',9000);f.position(f.win,true);assert.equal(f.changes[0].height,440)
+ // Et une hauteur absente (widget pas encore mesuré) retombe sur la barre, jamais sur 0.
+ const g=fixture('chat',null);g.position(g.win,true);assert.equal(g.changes[0].height,56)
 })
 test('toutes les commandes internes de dépendances masquent la console Windows',()=>{
  const source=ts.createSourceFile('dependencyServices.ts',readFileSync(new URL('../electron/services/dependencyServices.ts',import.meta.url),'utf8'),ts.ScriptTarget.Latest,true)

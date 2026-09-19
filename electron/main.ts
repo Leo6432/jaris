@@ -40,6 +40,7 @@ import {
   IPC_CHANNELS,
   IMAGE_TYPES_BY_EXTENSION,
   type AnalysisScope,
+  type AppMode,
   type AudioInputDevice,
   type CapacityScanResult,
   type ChatMessage,
@@ -52,7 +53,8 @@ import {
   type Profile,
   type SoundCue,
   type VoiceReplyPayload,
-  type VoiceSetupStatusPayload
+  type VoiceSetupStatusPayload,
+  type WidgetMode
 } from '../shared/ipc'
 
 /**
@@ -114,6 +116,16 @@ const WIDGET_HEIGHT = 460
 const WIDGET_COLLAPSED_WIDTH = 84
 const WIDGET_COLLAPSED_HEIGHT = 48
 
+// Widget TEXTE (mode Chat) : même emplacement et même forme de pilule que le widget vocal, mais une barre
+// où écrire à la place du cercle qui écoute. Forcément bien plus large que la pilule du cercle (84px) : une
+// barre de saisie de 84px ne laisserait la place à aucun mot. Déplié (une question est partie), la fenêtre
+// s'agrandit vers le bas pour la réponse, comme le widget vocal le fait pour la sienne.
+const WIDGET_CHAT_WIDTH = 460
+const WIDGET_CHAT_COLLAPSED_HEIGHT = 56
+// Borne haute de la hauteur MESURÉE renvoyée par le widget (voir chatWidgetHeight) : au-delà, la réponse
+// défile dans le widget plutôt que de manger la moitié de l'écran.
+const WIDGET_CHAT_MAX_HEIGHT = 440
+
 /**
  * Dernier statut connu du pipeline vocal, mis à jour uniquement par un vrai succès/échec de démarrage
  * (voir startVoicePipeline) — plus de pré-vérification de fichiers à faire depuis le retrait du mot
@@ -129,6 +141,46 @@ let lastSetupStatus: VoiceSetupStatusPayload = { ready: true, missing: [] }
  * information, sinon les deux se contredisent (voir showWidgetWindow).
  */
 let lastEmotion: JarisEmotion = 'idle'
+
+/**
+ * Dernier mode choisi dans la fenêtre de réglages (Agent vocal / Chat / Code), tenu à jour par
+ * `setActiveMode` — le même signal qui suspend déjà l'écoute vocale hors du mode voix.
+ *
+ * Il décide maintenant aussi de ce que Jaris devient quand on quitte sa fenêtre, à la demande de Léo :
+ * depuis Chat, une barre de texte à la place du cercle qui écoute ; depuis Code, rien du tout. Retenu ici
+ * plutôt que redemandé au renderer au moment du repli : la fenêtre est déjà en train de perdre le focus
+ * quand on en a besoin, et un aller-retour IPC à cet instant arriverait trop tard pour choisir la taille
+ * de la fenêtre AVANT de l'afficher.
+ */
+let activeMode: AppMode = 'voice'
+
+/**
+ * Hauteur demandée par le widget texte, mesurée sur son contenu réel (`null` = sa simple barre). Voir
+ * `setChatWidgetHeight` : la fenêtre capte les clics sur toute sa surface une fois dépliée et reste ouverte
+ * tant qu'on ne l'a pas fermée, donc sa hauteur suit ce qui est vraiment dessiné plutôt qu'une valeur fixe
+ * taillée pour la réponse la plus longue.
+ */
+let chatWidgetHeight: number | null = null
+
+/**
+ * La forme du widget vient du mode actif, et d'une SEULE source : la taille native de la fenêtre (ici) et
+ * le contenu dessiné (App.tsx) doivent en dériver ensemble. Les faire décider séparément est exactement ce
+ * qui avait produit l'orbe rogné en fine bande (le renderer dessinait déplié, le main forçait replié).
+ *
+ * Le mode Code n'a pas de forme : c'est `showWidgetWindow` qui n'affiche alors aucune fenêtre.
+ */
+function currentWidgetMode(): WidgetMode {
+  return activeMode === 'chat' ? 'chat' : 'voice'
+}
+
+/**
+ * Le widget vocal est le seul à écouter. En repliant depuis Chat (barre de texte) ou Code (rien du tout),
+ * l'écoute reste suspendue : un Jaris qui réagirait encore au mot d'activation alors qu'il n'affiche
+ * qu'une barre de texte — ou rien — n'aurait aucun moyen de montrer qu'il a entendu.
+ */
+function applyListeningForActiveMode(): void {
+  pipeline?.setListeningSuspended(activeMode !== 'voice')
+}
 
 /** Ajoute un nœud central représentant l'utilisateur, relié à chaque note, pour donner une vraie structure au graphe (sinon les notes flottent sans lien tant que Jaris n'a pas écrit de [[...]] entre elles). */
 async function buildMemoryGraphWithUser(): Promise<MemoryGraph> {
@@ -188,7 +240,7 @@ function createFullWindow(): BrowserWindow {
     if (!onboardingDone) return
     win.hide()
     showWidgetWindow()
-    pipeline?.setListeningSuspended(false)
+    applyListeningForActiveMode()
   })
   // Léo a signalé qu'en changeant simplement d'application (ex: passer sur le navigateur) SANS cliquer sur
   // réduire, rien n'indiquait plus que Jaris tournait ("jaris est ouvert mais pas en haut") — contrairement à
@@ -216,7 +268,7 @@ function createFullWindow(): BrowserWindow {
     if (!onboardingDone || dialogOpen || quitting || optionsOpen) return
     win.hide()
     showWidgetWindow()
-    pipeline?.setListeningSuspended(false)
+    applyListeningForActiveMode()
   })
   win.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -299,8 +351,16 @@ function positionWidgetWindow(win: BrowserWindow, expanded: boolean, animate = f
   // Garder le même x et la même largeur évite que Windows déplace l’ancienne
   // image avant que Chromium ait recalculé son centrage (saut de 118 px).
   const shaped = process.platform === 'win32' || process.platform === 'linux'
-  const width = shaped || expanded ? WIDGET_WIDTH : WIDGET_COLLAPSED_WIDTH
-  const height = expanded ? WIDGET_HEIGHT : WIDGET_COLLAPSED_HEIGHT
+  // Le widget texte (mode Chat) a ses propres dimensions : sa barre de saisie ne tiendrait pas dans la
+  // pilule de 84px du widget vocal. Les deux formes gardent la même mécanique (pleine largeur de fenêtre en
+  // permanence, `setShape` qui restreint la zone qui capte les clics au repos).
+  const chat = currentWidgetMode() === 'chat'
+  const fullWidth = chat ? WIDGET_CHAT_WIDTH : WIDGET_WIDTH
+  const restWidth = chat ? WIDGET_CHAT_WIDTH : WIDGET_COLLAPSED_WIDTH
+  const restHeight = chat ? WIDGET_CHAT_COLLAPSED_HEIGHT : WIDGET_COLLAPSED_HEIGHT
+  const chatHeight = Math.min(chatWidgetHeight ?? restHeight, WIDGET_CHAT_MAX_HEIGHT)
+  const width = shaped || expanded ? fullWidth : restWidth
+  const height = expanded ? (chat ? Math.max(chatHeight, restHeight) : WIDGET_HEIGHT) : restHeight
   win.setBounds({
     x: workArea.x + Math.round((workArea.width - width) / 2),
     y: workArea.y,
@@ -310,8 +370,8 @@ function positionWidgetWindow(win: BrowserWindow, expanded: boolean, animate = f
   if (shaped) {
     // La région native laisse réellement passer les clics hors de la pilule.
     win.setShape(expanded ? [] : [{
-      x: Math.round((WIDGET_WIDTH - WIDGET_COLLAPSED_WIDTH) / 2),
-      y: 0, width: WIDGET_COLLAPSED_WIDTH, height: WIDGET_COLLAPSED_HEIGHT
+      x: Math.round((fullWidth - restWidth) / 2),
+      y: 0, width: restWidth, height: restHeight
     }])
   }
 }
@@ -338,8 +398,22 @@ function showFullWindow(): void {
  */
 function showWidgetWindow(): void {
   if (fullWindow && !fullWindow.isDestroyed() && fullWindow.isVisible()) return
+  // Depuis le mode Code, Jaris disparaît complètement : "ça doit rien faire aucun widget" (Léo). Un widget
+  // déjà affiché est caché plutôt que laissé tel quel — sinon, passer en Code puis quitter la fenêtre
+  // laisserait à l'écran la forme du mode précédent, qui ne correspond plus à rien. Jaris reste joignable
+  // par son icône dans la barre système ("Ouvrir Jaris").
+  if (activeMode === 'code') {
+    if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide()
+    return
+  }
   if (!widgetWindow || widgetWindow.isDestroyed()) widgetWindow = createWidgetWindow()
-  positionWidgetWindow(widgetWindow, lastEmotion !== 'idle')
+  // Envoyé AVANT show() : le renderer doit dessiner la bonne forme dès la première frame peinte, sinon le
+  // widget apparaît sous son ancienne forme puis change sous les yeux de l'utilisateur (même famille de
+  // défaut que la transition rejouée depuis un état périmé, corrigée par `widgetInstant` côté App.tsx).
+  widgetWindow.webContents.send(IPC_CHANNELS.widgetMode, currentWidgetMode())
+  // Le widget texte s'ouvre toujours sur sa simple barre : l'émotion du pipeline vocal ne le concerne pas
+  // (il n'écoute pas), c'est l'envoi d'une question depuis la barre qui le dépliera.
+  positionWidgetWindow(widgetWindow, currentWidgetMode() === 'voice' && lastEmotion !== 'idle')
   widgetWindow.show()
 }
 
@@ -364,7 +438,14 @@ async function startVoicePipeline(): Promise<void> {
     // Étape 68 : le widget se déplie pendant l'écoute/réflexion/réponse et se replie dès le retour au repos
     // ('idle') — seulement s'il est vraiment affiché (jamais en plein onboarding/fenêtre de réglages ouverte,
     // où widgetWindow existe déjà en mémoire mais reste caché).
-    if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) {
+    // Jamais quand le widget affiche sa barre de texte (mode Chat) : il n'écoute pas, donc une émotion du
+    // pipeline vocal n'a aucune raison d'y changer quoi que ce soit — et le déplier "pour une réponse
+    // vocale" par-dessus une barre de saisie rejouerait exactement la contradiction taille/contenu déjà
+    // corrigée une fois ici.
+    if (
+      widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible() &&
+      currentWidgetMode() === 'voice'
+    ) {
       positionWidgetWindow(widgetWindow, emotion !== 'idle', true)
     }
     broadcast(IPC_CHANNELS.emotion, emotion)
@@ -496,9 +577,21 @@ app.whenReady().then(async () => {
   })
   ipcMain.on(IPC_CHANNELS.testMicrophone, () => pipeline?.testMic())
   ipcMain.on(IPC_CHANNELS.stopTestMicrophone, () => pipeline?.stopTestMic())
-  ipcMain.on(IPC_CHANNELS.setActiveMode, (_event, mode: 'voice' | 'chat' | 'code') =>
-    pipeline?.setListeningSuspended(mode !== 'voice')
-  )
+  ipcMain.on(IPC_CHANNELS.setActiveMode, (_event, mode: AppMode) => {
+    activeMode = mode
+    applyListeningForActiveMode()
+  })
+  ipcMain.handle(IPC_CHANNELS.getWidgetMode, (): WidgetMode => currentWidgetMode())
+  ipcMain.on(IPC_CHANNELS.setChatWidgetHeight, (_event, height: number | null) => {
+    chatWidgetHeight = height
+    if (!widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible()) return
+    if (currentWidgetMode() !== 'chat') return
+    // Pas d'animation différée ici (contrairement au repli du widget vocal, qui attend son fondu) : la
+    // barre revient d'un coup, et un repli différé laisserait la grande zone de capture des clics active
+    // plusieurs centaines de millisecondes de plus par-dessus ce que l'utilisateur essaie justement de
+    // cliquer en fermant le widget.
+    positionWidgetWindow(widgetWindow, height !== null)
+  })
   ipcMain.on(IPC_CHANNELS.setOptionsOpen, (_event, open: boolean) => {
     optionsOpen = open
   })
