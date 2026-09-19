@@ -2954,3 +2954,69 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   cet environnement) : le mécanisme est prouvé par test, son efficacité réelle chez Léo reste à confirmer —
   notamment si `search_web` échoue ou renvoie un résultat non concluant, où le modèle pourrait encore
   répondre à côté malgré la relance.
+
+- **Étape 126, Léo : "et aussi quand on envoie un message dans le widget chat, ça réponse doit disparaitre
+  apres sa doit varier selon la longueur de la réponse".** Jusqu'ici, une fois une réponse affichée dans le
+  widget Chat (ChatWidget.tsx), elle restait ouverte indéfiniment tant que Léo ne cliquait pas sur "Fermer"
+  (ou n'appuyait pas sur Échap) — `setChatWidgetKeepOpen(input.length > 0 || expanded)` bloque en effet tout
+  repli automatique par survol tant qu'une réponse est affichée (`expanded` ne redevient `false` qu'via
+  `dismiss()`), un mécanisme déjà en place pour une tout autre raison (ne pas perdre une réponse qu'on est en
+  train de lire simplement parce que la souris a glissé hors du widget).
+  **`computeReplyDismissDelayMs`** (ChatWidget.tsx, fonction pure exportée pour être testable sans attendre
+  le vrai délai) calcule un délai calé sur une vitesse de lecture moyenne (~200 mots/min, donc 300ms/mot),
+  borné aux deux extrémités : plancher de 4s (une réponse d'un seul mot garde quand même quelques secondes à
+  l'écran) et plafond de 25s (une réponse très longue ne bloque pas le widget ouvert indéfiniment — elle
+  reste de toute façon consultable dans le vrai Chat via "Ouvrir le Chat"). Un nouvel état `hovering` (posé
+  par les handlers `onMouseEnter`/`onMouseLeave` déjà existants du widget) suspend ce délai tant que la
+  souris survole le widget ou qu'un brouillon est en cours de saisie — même logique que
+  `setChatWidgetKeepOpen` : le but même de ce délai est de laisser le temps de lire, le couper pendant que
+  Léo est justement en train de lire ou de composer une suite serait contre-productif. Ne se déclenche QUE
+  sur une réponse reçue avec succès (`!sending`, `!error`) : un message d'erreur reste affiché jusqu'à une
+  action explicite, rien à "laisser le temps de lire" dans un texte d'échec qui appelle une action de Léo.
+  **Piège de test, le plus coûteux de cette étape — deux fausses pistes avant la vraie cause.** Le délai réel
+  (4 à 25s) est trop lent à attendre littéralement dans un test.
+  1. Première tentative : l'horloge simulée de Playwright (`page.clock.install`/`runFor`). A fini par geler
+     tout le fichier de tests jusqu'à un SIGKILL externe après ~85s, malgré `{ polling: 100 }` explicite sur
+     les `waitForFunction` (le polling par défaut, `'raf'`, reste gelé sous une horloge virtuelle). Abandonné
+     après plusieurs cycles de débogage infructueux (un script de diagnostic isolé avec journalisation
+     synchrone n'a jamais réussi à capturer où exactement ça bloquait, et `pkill` par motif de nom a
+     lui-même échoué à tuer le process node/chromium bloqué — `ps aux` + `kill -9` sur les PID exacts a été
+     nécessaire pour nettoyer avant de changer d'approche).
+  2. Deuxième tentative, en remplacement : de VRAIES attentes bornées (`page.waitForTimeout`), en s'appuyant
+     sur le fait que la réponse simulée du test (8 mots) plafonne exactement au plancher (4000ms) — donc une
+     attente réelle de quelques secondes reste raisonnable. Toujours un blocage identique (le fichier entier
+     gelait à nouveau jusqu'à SIGKILL), qui a fait CROIRE un instant que `page.clock` n'était pas le vrai
+     coupable. Diagnostiqué correctement cette fois en isolant méthodiquement : un script autonome (hors
+     `node --test`) reproduisant EXACTEMENT la même séquence Playwright s'est exécuté sans blocage en ~5
+     secondes — la même séquence, réintégrée dans un `test()` de `node:test`, bloquait quand même. Le
+     dénominateur commun, trouvé par une dernière isolation ciblée : `assert.equal(handle, null, message)`
+     où `handle` est un VRAI `ElementHandle` Playwright (retourné par `page.$(...)`) **ne rend jamais la main
+     si l'assertion échoue** — `node:assert` tente de formater l'objet dans le message d'erreur, et un
+     `ElementHandle` référence toute la connexion CDP sous-jacente (objets circulaires, promesses en
+     attente), dont la sérialisation par `util.inspect()` ne se termine jamais. Confirmé par un test minimal
+     dédié (`assert.equal(handle, null)` sur un `ElementHandle` bien réel et non-null : aucune erreur levée,
+     aucune sortie, même après 20s). **La vraie cause de l'échec de l'assertion, une fois ce piège de test
+     lui-même écarté** : une assertion que j'avais moi-même mal écrite — `.chat-widget__input` (la barre de
+     saisie) n'est JAMAIS retirée du DOM par `dismiss()` (qui ne fait que replier la RÉPONSE, `expanded =
+     false`) ; seule la pilule minuscule pilotée par le prop `inactive` (lui-même piloté par main.ts quand la
+     souris quitte VRAIMENT le widget) fait disparaître la barre. Cette assertion était donc fausse à la fois
+     dans son attente ET dans sa façon de comparer un ElementHandle — corrigée sur les deux plans : l'attente
+     inversée (la barre doit RESTER visible, prête pour la question suivante) et la comparaison passée par un
+     booléen explicite (`(await page.$(sélecteur)) === null`) plutôt que le handle brut.
+  **Leçon générale, la plus utile de cette étape : ne jamais passer un ElementHandle/JSHandle Playwright
+  directement à `assert.equal`/`assert.deepEqual` — toujours comparer un booléen ou une valeur primitive
+  dérivée (`=== null`, `.textContent`, etc.).** Si l'assertion réussit, rien ne se voit ; si elle échoue,
+  `node:assert` tente de sérialiser l'objet entier pour le message d'erreur et le processus reste bloqué
+  sans la moindre erreur ni sortie — un piège d'autant plus vicieux qu'un test AVEC cette même forme
+  (`assert.equal(await page.$(...), null, ...)`) peut très bien passer pendant des mois si l'assertion
+  n'échoue jamais en pratique, puis geler silencieusement le jour où elle échoue enfin pour une vraie raison —
+  ce qui explique aussi pourquoi ce piège n'avait jamais été repéré dans les 15 tests déjà existants de ce
+  même fichier (leur comparaison à `null` a toujours réussi jusqu'ici).
+  Régression : `node --test scripts/test-chat-widget-ui.mjs` (18 tests, dont les 2 nouveaux — "la réponse
+  disparaît toute seule après le délai calculé, sans survol" et "survoler le widget suspend la disparition
+  automatique" — vérifiés mordants en désactivant temporairement l'effet de disparition : le premier échoue
+  bien, proprement et rapidement (~4,6s, pas de blocage), sans faire échouer les 17 autres). **Non vérifié en
+  usage réel** (pas d'accès à une vraie fenêtre Electron dans cet environnement) : le mécanisme est prouvé
+  par un vrai navigateur avec le vrai CSS compilé, son ressenti exact (le bon moment pour disparaître, ni
+  trop tôt ni trop tard) reste à confirmer par Léo — même réserve que pour tout jugement de "qualité perçue"
+  déjà documenté dans ce fichier (Kokoro, le rendu de l'orbe).

@@ -30,8 +30,9 @@ const entryPath = join(projectRoot, 'tmp-chat-widget-entry.tsx')
 
 const ENTRY = `
 import { createRoot } from 'react-dom/client'
-import ChatWidget from './src/components/ChatWidget'
+import ChatWidget, { computeReplyDismissDelayMs } from './src/components/ChatWidget'
 
+window.__computeReplyDismissDelayMs = computeReplyDismissDelayMs
 window.__heights = []
 window.__openedSettings = 0
 window.__collapsed = 0
@@ -339,5 +340,82 @@ test('les boutons du widget sont habillés par le CSS de Jaris, pas laissés au 
       assert.match(style.background, /gradient/, 'bouton sans le fond de la famille HUD')
       assert.match(style.clip, /polygon/, 'bouton sans les coins coupés de la famille HUD')
     }
+  })
+})
+
+/**
+ * Léo : "quand on envoie un message dans le widget chat, ça réponse doit disparaitre après, ça doit varier
+ * selon la longueur de la réponse" — computeReplyDismissDelayMs (ChatWidget.tsx) calcule le délai avant
+ * disparition automatique, calé sur une vitesse de lecture (~300ms/mot), borné aux deux extrémités.
+ */
+test('le délai avant disparition varie avec la longueur de la réponse, borné aux deux extrémités', options, async () => {
+  await withWidget(async (page) => {
+    const delays = await page.evaluate(() => ({
+      unMot: window.__computeReplyDismissDelayMs('Paris'),
+      // 20 mots à 300ms/mot = 6000ms : au-dessus du plancher (4s), en dessous du plafond (25s).
+      moyenne: window.__computeReplyDismissDelayMs(Array(20).fill('mot').join(' ')),
+      longue: window.__computeReplyDismissDelayMs(
+        Array(120).fill('mot').join(' ') // bien au-delà du plafond à 300ms/mot
+      )
+    }))
+    assert.equal(delays.unMot, 4000, 'un seul mot doit rester au plancher (4s)')
+    assert.equal(delays.moyenne, 6000, 'une réponse de 20 mots doit suivre la formule (300ms/mot)')
+    assert.ok(delays.moyenne > delays.unMot, 'une réponse plus longue doit rester affichée plus longtemps')
+    assert.equal(delays.longue, 25000, 'une réponse très longue doit être plafonnée (25s), pas illimitée')
+  })
+})
+
+/**
+ * De vraies attentes (Playwright `clock` s'est révélée instable dans ce sandbox : les deux tests qu'elle
+ * portait ont fini par geler tout le fichier jusqu'au SIGKILL externe, malgré `polling: 100`). Le faux
+ * `sendChatMessage` répond "Il fait 18 degrés à Paris, ciel couvert." — 8 mots, donc `computeReplyDismissDelayMs`
+ * PLAFONNE au plancher (4000ms, pas la formule 300ms/mot) : une vraie attente de quelques secondes suffit.
+ */
+
+test('la réponse disparaît toute seule après le délai calculé, sans survol', options, async () => {
+  await withWidget(async (page) => {
+    await page.setViewportSize({ width: 460, height: 400 })
+    await page.fill('.chat-widget__input', 'quel temps fait-il à Paris ?')
+    await page.click('.chat-widget__send')
+    await page.waitForFunction(() => document.querySelector('.chat-widget__reply')?.textContent?.includes('18 degrés'))
+
+    // Le clic sur "Envoyer" a déplacé la souris DANS le widget : la déplacer hors de la fenêtre déclenche un
+    // vrai mouseleave, sans quoi `hovering` resterait vrai et suspendrait indéfiniment la disparition.
+    await page.mouse.move(459, 399)
+
+    const wanted = await page.evaluate(() => window.__computeReplyDismissDelayMs('Il fait 18 degrés à Paris, ciel couvert.'))
+    assert.equal(wanted, 4000, 'ce test suppose le délai plancher (8 mots) pour rester rapide')
+    assert.ok(await page.$('.chat-widget__answer'), 'la réponse doit encore être là juste avant le délai')
+
+    await page.waitForTimeout(wanted - 500)
+    assert.ok(await page.$('.chat-widget__answer'), `la réponse a disparu trop tôt (avant ${wanted}ms)`)
+
+    await page.waitForTimeout(700)
+    // Comparer un ElementHandle Playwright directement à `null` via assert.equal/deepEqual GÈLE tout le
+    // processus si l'assertion échoue : node:assert tente de formater l'objet dans le message d'erreur, et
+    // un ElementHandle référence toute la connexion CDP (objets circulaires, promesses en attente) — sa
+    // sérialisation par `util.inspect` ne rend jamais la main. Repéré en isolant le blocage avec un script de
+    // diagnostic minimal (`assert.equal(handle, null)` sur un VRAI ElementHandle ne rend jamais la main, ni
+    // ne lève d'erreur, même après 20s). Toujours comparer un BOOLÉEN (`=== null`), jamais le handle lui-même.
+    assert.equal((await page.$('.chat-widget__answer')) === null, true, 'la réponse aurait dû disparaître toute seule')
+    // La barre de saisie, elle, reste affichée : `dismiss()` ne fait que replier la RÉPONSE (expanded=false),
+    // pas revenir à la pilule minuscule — ça, c'est le rôle du prop `inactive`, piloté par main.ts quand la
+    // souris quitte VRAIMENT le widget, pas par ce délai de lecture.
+    assert.equal((await page.$('.chat-widget__input')) === null, false, 'la barre de saisie doit rester prête pour la question suivante')
+  })
+})
+
+test('survoler le widget suspend la disparition automatique tant que la souris reste dessus', options, async () => {
+  await withWidget(async (page) => {
+    await page.setViewportSize({ width: 460, height: 400 })
+    await page.fill('.chat-widget__input', 'quel temps fait-il à Paris ?')
+    await page.click('.chat-widget__send')
+    await page.waitForFunction(() => document.querySelector('.chat-widget__reply')?.textContent?.includes('18 degrés'))
+
+    // Reste survolé (la souris du clic précédent est déjà dans le widget) au-delà du délai calculé : la
+    // réponse ne doit jamais disparaître tant que Léo est en train de la lire.
+    const wanted = await page.evaluate(() => window.__computeReplyDismissDelayMs('Il fait 18 degrés à Paris, ciel couvert.'))
+    await page.waitForTimeout(wanted + 700)
+    assert.ok(await page.$('.chat-widget__answer'), 'le survol continu n’a pas empêché la disparition automatique')
   })
 })

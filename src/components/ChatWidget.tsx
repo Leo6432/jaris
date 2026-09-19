@@ -2,6 +2,24 @@ import { useEffect, useRef, useState } from 'react'
 import { renderFormattedText } from '@/lib/formatReply'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 
+// Délai de disparition automatique de la réponse, calé sur une vitesse de lecture moyenne (~200 mots/min,
+// soit 300ms/mot) — voir computeReplyDismissDelayMs et l'effet plus bas. Bornes pour rester raisonnable aux
+// deux extrêmes : une réponse d'un seul mot garde quand même quelques secondes à l'écran, une réponse très
+// longue ne bloque pas le widget ouvert indéfiniment (elle reste de toute façon consultable dans le Chat,
+// "Ouvrir le Chat").
+const REPLY_DISMISS_MS_PER_WORD = 300
+const MIN_REPLY_DISMISS_MS = 4000
+const MAX_REPLY_DISMISS_MS = 25000
+
+/** Exportée pour être testée directement (le vrai délai, plusieurs secondes à minutes, est trop lent à
+ * attendre dans un test — voir scripts/test-chat-widget-ui.mjs, qui vérifie séparément que l'effet s'en
+ * sert vraiment via de vraies attentes bornées sur le plancher de 4s, l'horloge simulée de Playwright
+ * s'étant révélée instable dans cet environnement). */
+export function computeReplyDismissDelayMs(reply: string): number {
+  const words = reply.trim().split(/\s+/).filter(Boolean).length
+  return Math.min(MAX_REPLY_DISMISS_MS, Math.max(MIN_REPLY_DISMISS_MS, words * REPLY_DISMISS_MS_PER_WORD))
+}
+
 /**
  * Le widget quand on quitte Jaris depuis le mode Chat : une barre de texte au même endroit que le cercle
  * vocal (en haut au centre, même pilule HUD), pour poser une question écrite sans rouvrir l'application.
@@ -23,6 +41,7 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
   const [progress, setProgress] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [hovering, setHovering] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -129,6 +148,24 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
     setProgress(null)
   }
 
+  /**
+   * Léo : "quand on envoie un message dans le widget chat, ça réponse doit disparaitre après, ça doit
+   * varier selon la longueur de la réponse" — la réponse se referme donc TOUTE SEULE après un délai de
+   * lecture, plus long pour un texte plus long, plutôt que de rester ouverte indéfiniment jusqu'au clic sur
+   * "Fermer".
+   *
+   * Ne se déclenche QUE sur une réponse reçue avec succès (`!sending`, `!error`) : un message d'erreur reste
+   * affiché jusqu'à une action explicite, il n'y a rien à "laisser le temps de lire" dans un texte d'échec
+   * qui appelle plutôt une action de la part de Léo. Suspendu tant que la souris survole le widget ou qu'un
+   * brouillon est en cours de saisie : le but même de ce délai est de laisser le temps de lire, le couper
+   * pendant que Léo est justement en train de lire ou de composer une suite serait contre-productif.
+   */
+  useEffect(() => {
+    if (inactive || sending || error || !reply || hovering || input.length > 0) return
+    const timer = setTimeout(dismiss, computeReplyDismissDelayMs(reply))
+    return () => clearTimeout(timer)
+  }, [inactive, sending, error, reply, hovering, input])
+
   if (inactive) {
     return (
       <button
@@ -147,8 +184,14 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
     <div
       className={`chat-widget${expanded ? ' chat-widget--expanded' : ''}`}
       ref={rootRef}
-      onMouseEnter={() => window.jaris.armChatWidgetPointer()}
-      onMouseLeave={() => window.jaris.collapseChatWidget()}
+      onMouseEnter={() => {
+        setHovering(true)
+        window.jaris.armChatWidgetPointer()
+      }}
+      onMouseLeave={() => {
+        setHovering(false)
+        window.jaris.collapseChatWidget()
+      }}
     >
       <form
         className="chat-widget__bar"
