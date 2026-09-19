@@ -2833,3 +2833,8 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   La protection ne doit PAS être calculée sur le champ seul : l'envoi vide normalement ce champ avant que la
   réponse arrive. Elle doit rester vraie tant qu'une question/réponse est affichée, sinon le widget disparaît
   pendant la réflexion et l'utilisateur entend ou devine une réponse qu'il ne peut plus lire.
+- **Une règle globale `:focus-visible` peut redessiner un rectangle dans une pilule.** Le champ Chat reçoit
+  le focus automatiquement après + ; la règle générale des champs lui ajoutait alors `box-shadow` et bordure
+  par-dessus le contour arrondi de la pilule. Ajouter une exception après la règle globale, avec `box-shadow:
+  none` et bordure transparente, puis mesurer le style calculé sur un vrai focus : compter les déclarations
+  CSS ne prouve pas quel sélecteur gagne réellement.

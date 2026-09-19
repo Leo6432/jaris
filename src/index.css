@@ -2761,6 +2761,16 @@ textarea:not(.composer__input):focus-visible {
     0 0 16px rgba(var(--hud-accent-rgb), 0.5);
 }
 
+/* Le champ du widget est déjà contenu dans une pilule qui porte son propre halo arrondi. La règle globale
+   ci-dessus dessinait par-dessus une seconde lueur rectangulaire dès que + lui donnait le focus — visible
+   autour du texte quand la souris entrait dans le widget. Garder le focus clavier, mais laisser la pilule
+   être l'unique contour lumineux. */
+.chat-widget__input:focus-visible {
+  outline: none;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
 /*
  * Boutons de la MÊME famille (coins coupés, Rajdhani) mais en plus petit : actions secondaires posées à
  * côté du sujet de l'écran (l'aperçu de l'application, la ligne à supprimer), qui ne doivent pas lui faire

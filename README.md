@@ -1121,6 +1121,8 @@ toujours l'application complète. **Fermer sa croix quitte vraiment Jaris**.
   l'évènement de la page afin que les passages rapides hors d'une fenêtre
   transparente soient eux aussi détectés. Après l'envoi, elle reste également ouverte pendant la réflexion
   et pour permettre de lire la réponse, jusqu'au bouton « Fermer ». Depuis Code, aucun widget n'est affiché.
+- **Focus du Chat** : la sélection automatique du champ ne dessine pas de second rectangle lumineux ; la
+  pilule garde uniquement son halo arrondi.
 - **Halo entièrement fondu** : les formes Vocal et Chat gardent 14 px de zone
   transparente autour de leur lueur de 12 px, afin que Windows ne la coupe plus
   au bord de la fenêtre native.

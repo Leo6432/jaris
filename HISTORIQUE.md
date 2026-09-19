@@ -1090,3 +1090,8 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   pendant que Jaris réfléchissait et rendre sa réponse invisible. La protection couvre maintenant trois états
   continus : texte saisi, question en cours, puis réponse affichée. Elle ne s'arrête qu'en fermant la réponse,
   ce qui permet ensuite au mécanisme normal de replier une barre redevenue vide.
+
+- ✅ Étape 129 (v0.15.7) — Le champ Chat reçoit automatiquement le focus après +, mais la règle globale de
+  focus-visible lui ajoutait une lueur rectangulaire par-dessus la pilule arrondie. Une exception dédiée au
+  widget supprime uniquement ce second contour et conserve le halo de la pilule, avec une régression mesurant
+  directement le style calculé du champ focalisé.

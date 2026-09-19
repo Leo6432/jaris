@@ -236,6 +236,18 @@ test('le champ n’a pas de second cadre carré à l’intérieur de la pilule a
   })
 })
 
+test('le focus du champ ne dessine pas un rectangle lumineux dans la pilule', options, async () => {
+  await withWidget(async (page) => {
+    await page.click('.chat-widget__input')
+    const style = await page.$eval('.chat-widget__input', (el) => {
+      const computed = getComputedStyle(el)
+      return { boxShadow: computed.boxShadow, borderColor: computed.borderTopColor }
+    })
+    assert.equal(style.boxShadow, 'none', 'la lueur rectangulaire du focus doit être désactivée dans le widget')
+    assert.match(style.borderColor, /rgba?\(0, 0, 0, 0\)|transparent/, 'le champ ne doit pas ajouter son propre contour')
+  })
+})
+
 test('envoyer une question déplie la réponse et donne au main la hauteur RÉELLE', options, async () => {
   await withWidget(async (page) => {
     await page.setViewportSize({ width: 460, height: 400 })
