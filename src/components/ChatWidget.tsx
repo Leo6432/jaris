@@ -71,6 +71,12 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
   }, [inactive])
 
   useEffect(() => {
+    // Ne jamais utiliser trim() ici : un espace est déjà un caractère saisi et fait donc partie du
+    // brouillon que Léo demande de protéger quand il clique ailleurs.
+    window.jaris.setChatWidgetDraftPresent(input.length > 0)
+  }, [input])
+
+  useEffect(() => {
     if (!inactive) return
     // Le prochain + doit rouvrir une simple barre, pas ressusciter l'ancienne réponse dépliée. Le texte en
     // cours de saisie est conservé comme brouillon ; seuls les éléments de réponse sont remis au repos.
@@ -139,6 +145,7 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
     <div
       className={`chat-widget${expanded ? ' chat-widget--expanded' : ''}`}
       ref={rootRef}
+      onMouseEnter={() => window.jaris.armChatWidgetPointer()}
       onMouseLeave={() => window.jaris.collapseChatWidget()}
     >
       <form

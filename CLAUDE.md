@@ -2862,3 +2862,8 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   sinon une barre ouverte au clavier alors que la souris se trouve ailleurs se refermerait instantanément.
   Comparer à la surface dessinée, sans compter la marge transparente réservée au halo, et arrêter le minuteur
   dès le repli ou le masquage afin qu'il ne tourne jamais pendant l'état inactif.
+- **Le repli automatique d'une saisie flottante doit distinguer une barre vide d'un brouillon.** Une sortie
+  de souris ou un `blur` natif peut replier immédiatement une barre vide, mais dès le premier caractère
+  (même un espace) le renderer doit signaler cet état au main pour bloquer TOUS les chemins de repli. Sinon
+  cliquer ailleurs détruit visuellement une saisie en cours. Pour une fenêtre Electron, écouter aussi `blur`
+  fournit la réaction immédiate au clic extérieur que le seul suivi périodique du pointeur ne garantit pas.

@@ -168,6 +168,8 @@ let displayedWidgetMode: WidgetMode = 'voice'
  * taillée pour la réponse la plus longue.
  */
 let chatWidgetHeight: number | null = null
+/** Vrai dès le premier caractère, espaces compris : un brouillon ne doit jamais disparaître sur un clic dehors. */
+let chatWidgetDraftPresent = false
 
 /**
  * Filet natif pour la sortie de souris du Chat. Chromium peut perdre `mouseleave` quand le pointeur franchit
@@ -375,6 +377,9 @@ function createWidgetWindow(): BrowserWindow {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
+  // Un clic dans une autre application fait perdre le focus avant que Chromium ne garantisse un mouseleave.
+  // C'est le chemin immédiat demandé par Léo pour une barre VIDE ; collapseChatWidget protège le brouillon.
+  win.on('blur', () => collapseChatWidget())
 
   loadRenderer(win, 'widget')
   return win
@@ -504,7 +509,7 @@ function triggerVisibleWake(): void {
 function collapseChatWidget(): void {
   if (
     currentWidgetMode() !== 'chat' || displayedWidgetMode !== 'chat' ||
-    !widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible()
+    !widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible() || chatWidgetDraftPresent
   ) return
   stopChatPointerWatch()
   displayedWidgetMode = 'chat-idle'
@@ -694,6 +699,12 @@ app.whenReady().then(async () => {
     // plusieurs centaines de millisecondes de plus par-dessus ce que l'utilisateur essaie justement de
     // cliquer en fermant le widget.
     positionWidgetWindow(widgetWindow, true)
+  })
+  ipcMain.on(IPC_CHANNELS.setChatWidgetDraftPresent, (_event, present: boolean) => {
+    chatWidgetDraftPresent = present
+  })
+  ipcMain.on(IPC_CHANNELS.armChatWidgetPointer, () => {
+    if (displayedWidgetMode === 'chat') chatPointerWasInside = true
   })
   ipcMain.on(IPC_CHANNELS.collapseChatWidget, () => collapseChatWidget())
   ipcMain.on(IPC_CHANNELS.setOptionsOpen, (_event, open: boolean) => {

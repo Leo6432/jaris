@@ -35,13 +35,16 @@ import ChatWidget from './src/components/ChatWidget'
 window.__heights = []
 window.__openedSettings = 0
 window.__collapsed = 0
+window.__draftPresent = false
 const overrides = {
   sendChatMessage: async () => {
     await new Promise((resolve) => setTimeout(resolve, 60))
     return { role: 'assistant', content: "Il fait 18 degrés à Paris, ciel **couvert**." }
   },
   setChatWidgetHeight: (height) => window.__heights.push(height),
-  collapseChatWidget: () => { window.__collapsed += 1 },
+  setChatWidgetDraftPresent: (present) => { window.__draftPresent = present },
+  armChatWidgetPointer: () => {},
+  collapseChatWidget: () => { if (!window.__draftPresent) window.__collapsed += 1 },
   openSettings: () => { window.__openedSettings += 1 },
   getProfile: async () => ({ name: 'Léo', soundEffectsEnabled: false })
 }
@@ -143,6 +146,17 @@ test('sortir réellement la souris de la barre demande son retour à l’état i
     await page.mouse.move(459, 67)
     await page.waitForFunction(() => window.__collapsed === 1)
     assert.equal(await page.evaluate(() => window.__collapsed), 1)
+  })
+})
+
+test('un seul caractère protège le brouillon quand la souris quitte la barre', options, async () => {
+  await withWidget(async (page) => {
+    await page.fill('.chat-widget__input', 'a')
+    await page.waitForFunction(() => window.__draftPresent === true)
+    await page.hover('.chat-widget__bar')
+    await page.mouse.move(459, 67)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    assert.equal(await page.evaluate(() => window.__collapsed), 0)
   })
 })
 

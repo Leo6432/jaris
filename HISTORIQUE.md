@@ -1078,3 +1078,9 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   entrée sur la surface visible, puis replie le Chat dès la sortie, y compris dans le halo transparent. Ainsi,
   une ouverture au clavier avec la souris ailleurs reste ouverte. Le suivi s'arrête dès le repli, le retour à
   la grande fenêtre, le mode Code ou la disparition du widget.
+
+- ✅ Étape 127 (v0.15.5) — Le repli est aligné sur l'intention exacte de Léo : une barre vide revient
+  immédiatement à l'état inactif quand la souris sort ou lors d'un clic ailleurs, grâce aussi à l'évènement
+  natif de perte de focus de la fenêtre. Dès qu'un caractère est présent, espaces compris, le brouillon est
+  signalé au processus principal et bloque tous les replis automatiques. Une entrée souris explicite arme en
+  plus le suivi natif sans attendre son prochain relevé, supprimant le délai intermittent observé.

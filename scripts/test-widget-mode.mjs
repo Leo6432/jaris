@@ -153,6 +153,10 @@ test('quitter la barre avec la souris replie réellement la fenêtre en Chat ina
   assert.match(mainSource, /ipcMain\.on\(IPC_CHANNELS\.collapseChatWidget/)
   assert.match(mainSource, /function startChatPointerWatch\(\)[\s\S]{0,900}?screen\.getCursorScreenPoint\(\)[\s\S]{0,400}?chatPointerWasInside[\s\S]{0,200}?collapseChatWidget\(\)/)
   assert.match(mainSource, /displayedWidgetMode === ['"]chat['"][\s\S]{0,160}?startChatPointerWatch\(\)/)
+  assert.match(mainSource, /win\.on\(['"]blur['"],\s*\(\)\s*=>\s*collapseChatWidget\(\)\)/)
+  assert.match(mainSource, /function collapseChatWidget\(\)[\s\S]{0,350}?chatWidgetDraftPresent/)
+  assert.match(widgetSource, /setChatWidgetDraftPresent\(input\.length > 0\)/)
+  assert.match(widgetSource, /onMouseEnter[\s\S]{0,100}?armChatWidgetPointer\(\)/)
 })
 
 test('la fenêtre native réserve une vraie marge au halo de tous les widgets', () => {

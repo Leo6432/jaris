@@ -644,6 +644,10 @@ export const IPC_CHANNELS = {
    * celui-ci reste ouvert tant que la souris reste dessus, puis revient à son indicateur inactif.
    */
   setChatWidgetHeight: 'jaris:set-chat-widget-height',
+  /** widget Chat -> main : protège la barre du repli automatique dès qu'elle contient un brouillon. */
+  setChatWidgetDraftPresent: 'jaris:set-chat-widget-draft-present',
+  /** widget Chat -> main : la souris a réellement atteint la barre visible ; arme le filet natif de sortie. */
+  armChatWidgetPointer: 'jaris:arm-chat-widget-pointer',
   /** widget Chat -> main : la souris a quitté toute la barre/réponse, revenir au petit état inactif. */
   collapseChatWidget: 'jaris:collapse-chat-widget',
   /**
