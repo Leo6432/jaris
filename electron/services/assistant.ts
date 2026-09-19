@@ -95,6 +95,20 @@ const NOT_A_KNOWLEDGE_QUESTION =
 // volontairement ancré sur la phrase entière : « Pourquoi ça va mal dans l'économie ? » reste ainsi une
 // vraie question factuelle, tandis que « tu vas bien ? » ne déclenche plus une recherche web absurde.
 const SOCIAL_CHECK_IN = /^(?:salut[, !]*)?(?:tu vas bien|vas-tu bien|est-ce que tu vas bien|comment vas-tu|comment tu vas|ça va|ca va)\s*[?!.]*$/i
+const SIMPLE_GREETING = /^(?:salut|bonjour|bonsoir|coucou|hello|hey)(?:\s+jaris)?\s*[!?.,]*$/iu
+
+/**
+ * Les salutations très simples n'ont besoin ni d'un modèle ni d'un outil. En usage réel, le modèle rapide
+ * a interprété son propre paramètre interne `think` comme si Léo avait tapé une commande `/think`, puis lui
+ * a expliqué cette commande imaginaire après un simple « salut ». Court-circuiter le modèle rend cette
+ * confusion impossible, comme les autres garde-fous mécaniques de ce fichier.
+ */
+export function directSocialReply(prompt: string): string | undefined {
+  const trimmed = prompt.trim()
+  if (SIMPLE_GREETING.test(trimmed)) return "Salut ! Comment puis-je t'aider ?"
+  if (SOCIAL_CHECK_IN.test(trimmed)) return "Oui, tout va bien. Comment puis-je t'aider ?"
+  return undefined
+}
 
 /**
  * true si la phrase RESSEMBLE à une demande d'information (question de connaissance générale — fait,
@@ -409,6 +423,12 @@ export async function converse(
   // ne connaît que les outils, jamais l'état ambiant du canal appelant.
   onSoundCue?: (cue: SoundCue) => void
 ): Promise<string> {
+  const socialReply = directSocialReply(prompt)
+  if (socialReply) {
+    onLog?.('Réponse sociale courte, sans appel au modèle.')
+    return socialReply
+  }
+
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
   const executeTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel, onLog, signal)
@@ -501,7 +521,15 @@ export async function converse(
     ...history.filter((message, index) => {
       const isToolFailure = (entry?: OllamaMessage): boolean =>
         entry?.role === 'assistant' && entry.content.trimStart().startsWith("Échec de l'outil :")
-      return !isToolFailure(message) && !(message.role === 'user' && isToolFailure(history[index + 1]))
+      // Nettoie aussi le vrai échange erroné déjà écrit sur disque : « salut » suivi d'une explication
+      // inventée de `/think`. Le garder dans les 12 derniers messages inciterait le modèle à le répéter.
+      const isHallucinatedThinkReply = (entry: OllamaMessage | undefined, previous?: OllamaMessage): boolean =>
+        entry?.role === 'assistant' && /\/think\b/i.test(entry.content) &&
+        previous?.role === 'user' && directSocialReply(previous.content) !== undefined
+      return !isToolFailure(message) &&
+        !(message.role === 'user' && isToolFailure(history[index + 1])) &&
+        !isHallucinatedThinkReply(message, history[index - 1]) &&
+        !(message.role === 'user' && isHallucinatedThinkReply(history[index + 1], message))
     }),
     { role: 'user', content: prompt }
   ]

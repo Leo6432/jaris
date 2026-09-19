@@ -3,10 +3,10 @@ import { renderFormattedText } from '@/lib/formatReply'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 
 // Délai de disparition automatique de la réponse, volontairement confortable pour la lecture
-// (400ms par mot) — voir computeReplyDismissDelayMs et l'effet plus bas. Une réponse courte reste au
+// (300ms par mot) — voir computeReplyDismissDelayMs et l'effet plus bas. Une réponse courte reste au
 // moins 5 secondes. À la demande de Léo, aucune limite haute ne coupe une réponse longue avant que son
 // temps de lecture calculé soit écoulé.
-const REPLY_DISMISS_MS_PER_WORD = 400
+const REPLY_DISMISS_MS_PER_WORD = 300
 const MIN_REPLY_DISMISS_MS = 5000
 
 /** Exportée pour être testée directement (le vrai délai, plusieurs secondes à minutes, est trop lent à

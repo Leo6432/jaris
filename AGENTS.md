@@ -1339,6 +1339,14 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   de saisie en bas, dernier élément du panneau) et un test qui vérifie que le bouton de création a bien un
   fond et une couleur, pas le style par défaut du navigateur.
 
+- **Le paramètre interne de réflexion d'Ollama (`think`) peut être pris par un petit modèle pour une commande
+  `/think` tapée par l'utilisateur.** Constaté après un simple « salut » : le modèle expliquait cette
+  commande imaginaire au lieu de saluer. Pour les échanges sociaux entièrement déterministes (salutation,
+  « ça va ? »), court-circuiter le modèle avec une réponse locale courte ; une consigne supplémentaire dans
+  le prompt ne rendrait pas l'erreur impossible. Exclure aussi du contexte court terme l'ancien couple
+  salutation/réponse qui contient `/think`, sans effacer l'historique visible. Régression :
+  `scripts/test-assistant-history.mjs`.
+
 ## Commandes utiles
 
 ```

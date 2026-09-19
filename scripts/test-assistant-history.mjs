@@ -76,6 +76,35 @@ test('une nouvelle demande sans recherche ne force aucun outil', async () => {
   assert.equal(await converse('Ne cherche pas sur internet', null, () => {}, undefined, history), "D'accord")
 })
 
+for (const channel of ['chat', 'voice']) {
+  test(`${channel}: un simple salut répond naturellement sans exposer /think`, async () => {
+    const converse = setup(
+      async () => assert.fail('un simple salut ne doit jamais atteindre le modèle'),
+      async () => assert.fail('un simple salut ne doit appeler aucun outil')
+    )
+    assert.equal(
+      await converse('Salut', null, () => {}, undefined, [], undefined, undefined, channel),
+      "Salut ! Comment puis-je t'aider ?"
+    )
+  })
+}
+
+test("l'ancienne hallucination /think après un salut est retirée du contexte suivant", async () => {
+  const pollutedHistory = [
+    { role: 'user', content: 'salut' },
+    { role: 'assistant', content: 'Vous avez utilisé le /think, une commande pour que je pensais.' },
+    { role: 'user', content: 'Je préfère les réponses courtes.' },
+    { role: 'assistant', content: "D'accord." }
+  ]
+  const converse = setup(async messages => {
+    assert.ok(!messages.some(message => message.content.includes('/think')))
+    assert.ok(!messages.some(message => message.role === 'user' && message.content === 'salut'))
+    assert.ok(messages.some(message => message.content === 'Je préfère les réponses courtes.'))
+    return { role: 'assistant', content: 'Compris.' }
+  }, async () => assert.fail('aucun outil attendu'))
+  assert.equal(await converse('Réponds brièvement', null, () => {}, undefined, pollutedHistory), 'Compris.')
+})
+
 for (const channel of ['voice', 'chat']) {
   for (const app of ['Steam', 'Blocnotes']) {
     test(`${channel}: ouverture explicite de ${app} sans fausse confirmation du modèle`, async () => {
