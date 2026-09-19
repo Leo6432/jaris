@@ -3013,3 +3013,25 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   `search_web` transformait une salutation en recherche en ligne absurde. Garder une exclusion ancrée sur la
   phrase entière (`SOCIAL_CHECK_IN`) pour ne pas masquer une vraie question telle que « Pourquoi ça va mal
   dans l'économie ? ». Régression : `scripts/test-knowledge-question.mjs`.
+
+## Idées à explorer (pas encore commencées)
+
+Backlog de pistes discutées avec Léo après une recherche sur les avancées 2026 pertinentes pour un assistant
+vocal local — aucune des trois n'est codée, à reprendre seulement si Léo donne le feu vert à l'une d'elles.
+Classées par ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
+
+1. **Voix full-duplex (interruption en temps réel).** Pouvoir parler PAR-DESSUS Jaris pour l'interrompre en
+   pleine réponse (façon GPT-Live d'OpenAI, lancé en juillet 2026, "barge-in") au lieu du cycle actuel
+   strictement séquentiel (écoute -> transcription -> réponse -> synthèse, un tour après l'autre,
+   voir `voicePipeline.ts`). **Ne change PAS la voix elle-même** (Supertonic resterait identique) —
+   uniquement le minutage : il faudrait une détection vocale (VAD) qui tourne en continu MÊME pendant que
+   Jaris parle, capable de couper la synthèse en cours dès qu'une vraie voix reprend. Chantier lourd : toute
+   la boucle vocale actuelle suppose un tour à la fois, du début à la fin, sans jamais s'interrompre.
+2. **Migrer Electron → Tauri.** Gains mesurés ailleurs sur des applis comparables : ~80 Mo de RAM et ~0,8s
+   de démarrage contre 600 Mo/2,5s pour un Electron équivalent, binaire ~30 Mo au lieu de 150-200 Mo. Le prix :
+   réécrire tout le process main (aujourd'hui Node/TypeScript dans `electron/main.ts`) en Rust — fenêtres,
+   IPC, sidecars Python, raccourcis globaux, tout serait à refaire. Chantier de plusieurs mois, pas une étape.
+3. **Jaris en hub MCP (Model Context Protocol).** Transformer `tools.ts` en client MCP pour consommer les
+   plus de 200 serveurs communautaires déjà publiés (GitHub, Docker, Slack...) sans coder chaque outil à la
+   main. Changement d'architecture des outils, mais éviterait de tout réinventer à chaque nouvelle idée
+   d'intégration future.
