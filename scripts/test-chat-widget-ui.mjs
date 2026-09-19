@@ -260,6 +260,9 @@ test('envoyer une question déplie la réponse et donne au main la hauteur RÉEL
     assert.match(content, /quel temps fait-il à Paris/, 'la question posée doit rester visible')
     assert.match(content, /18 degrés/, 'la réponse doit s’afficher dans le widget, sans rouvrir l’application')
     assert.ok(await page.$('.chat-widget__reply strong'), 'le **gras** du modèle doit être rendu, pas affiché tel quel')
+    const answerBackground = await page.$eval('.chat-widget__answer', (el) => getComputedStyle(el).backgroundColor)
+    const alpha = Number(answerBackground.match(/[\d.]+(?=\)$)/)?.[0] ?? 1)
+    assert.ok(alpha >= 0.9, `le fond de la réponse reste trop transparent (${answerBackground})`)
 
     const heights = await page.evaluate(() => window.__heights)
     assert.equal(heights[0], null, 'au repos, le widget doit demander sa simple barre')
@@ -345,22 +348,22 @@ test('les boutons du widget sont habillés par le CSS de Jaris, pas laissés au 
 /**
  * Léo : "quand on envoie un message dans le widget chat, ça réponse doit disparaitre après, ça doit varier
  * selon la longueur de la réponse" — computeReplyDismissDelayMs (ChatWidget.tsx) calcule le délai avant
- * disparition automatique, calé sur une vitesse de lecture confortable (600ms/mot), borné aux deux extrémités.
+ * disparition automatique, calé sur une seconde par mot, avec un plancher de 5 secondes et aucun plafond.
  */
-test('le délai avant disparition varie avec la longueur de la réponse, borné aux deux extrémités', options, async () => {
+test('le délai vaut une seconde par mot, avec 5 secondes minimum et aucun maximum', options, async () => {
   await withWidget(async (page) => {
     const delays = await page.evaluate(() => ({
       unMot: window.__computeReplyDismissDelayMs('Paris'),
-      // 20 mots à 600ms/mot = 12000ms : au-dessus du plancher (4s), en dessous du plafond (25s).
+      // 20 mots à 1 seconde/mot = 20000ms : au-dessus du plancher de 5 secondes.
       moyenne: window.__computeReplyDismissDelayMs(Array(20).fill('mot').join(' ')),
       longue: window.__computeReplyDismissDelayMs(
-        Array(120).fill('mot').join(' ') // bien au-delà du plafond à 600ms/mot
+        Array(120).fill('mot').join(' ')
       )
     }))
-    assert.equal(delays.unMot, 4000, 'un seul mot doit rester au plancher (4s)')
-    assert.equal(delays.moyenne, 12000, 'une réponse de 20 mots doit suivre la formule (600ms/mot)')
+    assert.equal(delays.unMot, 5000, 'un seul mot doit rester au plancher (5s)')
+    assert.equal(delays.moyenne, 20000, 'une réponse de 20 mots doit rester 20 secondes')
     assert.ok(delays.moyenne > delays.unMot, 'une réponse plus longue doit rester affichée plus longtemps')
-    assert.equal(delays.longue, 25000, 'une réponse très longue doit être plafonnée (25s), pas illimitée')
+    assert.equal(delays.longue, 120000, 'une réponse longue ne doit subir aucun plafond')
   })
 })
 
@@ -368,7 +371,7 @@ test('le délai avant disparition varie avec la longueur de la réponse, borné 
  * De vraies attentes (Playwright `clock` s'est révélée instable dans ce sandbox : les deux tests qu'elle
  * portait ont fini par geler tout le fichier jusqu'au SIGKILL externe, malgré `polling: 100`). Le faux
  * `sendChatMessage` répond "Il fait 18 degrés à Paris, ciel couvert." — 8 mots, donc `computeReplyDismissDelayMs`
- * donne 4800ms : une vraie attente de quelques secondes suffit.
+ * donne 8000ms : une vraie attente de quelques secondes suffit.
  */
 
 test('la réponse disparaît toute seule après le délai calculé, sans survol', options, async () => {
@@ -383,7 +386,7 @@ test('la réponse disparaît toute seule après le délai calculé, sans survol'
     await page.mouse.move(459, 399)
 
     const wanted = await page.evaluate(() => window.__computeReplyDismissDelayMs('Il fait 18 degrés à Paris, ciel couvert.'))
-    assert.equal(wanted, 4800, '8 mots doivent rester visibles 4800ms à 600ms par mot')
+    assert.equal(wanted, 8000, '8 mots doivent rester visibles 8 secondes à 1 seconde par mot')
     assert.ok(await page.$('.chat-widget__answer'), 'la réponse doit encore être là juste avant le délai')
 
     await page.waitForTimeout(wanted - 500)

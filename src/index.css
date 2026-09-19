@@ -1743,7 +1743,7 @@ body.body--scan::after {
   height: 40px;
   padding: 0;
   color: var(--hud-accent-bright);
-  background: var(--hud-panel-raised);
+  background: rgba(6, 16, 25, 0.92);
   border: 1px solid var(--hud-line);
   border-radius: 999px;
   box-shadow: var(--hud-glow);
@@ -1756,7 +1756,7 @@ body.body--scan::after {
   align-items: center;
   gap: 6px;
   padding: 4px 6px 4px 14px;
-  background: var(--hud-panel-raised);
+  background: rgba(6, 16, 25, 0.92);
   border: 1px solid var(--hud-line);
   border-radius: 999px;
   box-shadow: var(--hud-glow);
@@ -1823,7 +1823,10 @@ body.body--scan::after {
   flex-direction: column;
   gap: 8px;
   padding: 12px 14px;
-  background: var(--hud-panel-raised);
+  /* Le widget flotte au-dessus de n'importe quelle application : à 55 % d'opacité, un fond clair ou très
+     détaillé traversait le panneau et réduisait fortement la lisibilité. Le fond reste légèrement translucide
+     pour conserver l'effet HUD, mais suffisamment sombre et opaque pour que la réponse soit toujours nette. */
+  background: rgba(6, 16, 25, 0.94);
   border: 1px solid var(--hud-line);
   border-radius: 14px;
   box-shadow: var(--hud-glow);

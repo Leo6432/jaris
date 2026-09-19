@@ -3,13 +3,11 @@ import { renderFormattedText } from '@/lib/formatReply'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 
 // Délai de disparition automatique de la réponse, volontairement confortable pour la lecture
-// (600ms/mot) — voir computeReplyDismissDelayMs et l'effet plus bas. Bornes pour rester raisonnable aux
-// deux extrêmes : une réponse d'un seul mot garde quand même quelques secondes à l'écran, une réponse très
-// longue ne bloque pas le widget ouvert indéfiniment (elle reste de toute façon consultable dans le Chat,
-// "Ouvrir le Chat").
-const REPLY_DISMISS_MS_PER_WORD = 600
-const MIN_REPLY_DISMISS_MS = 4000
-const MAX_REPLY_DISMISS_MS = 25000
+// (1 seconde par mot) — voir computeReplyDismissDelayMs et l'effet plus bas. Une réponse courte reste au
+// moins 5 secondes. À la demande de Léo, aucune limite haute ne coupe une réponse longue avant que son
+// temps de lecture calculé soit écoulé.
+const REPLY_DISMISS_MS_PER_WORD = 1000
+const MIN_REPLY_DISMISS_MS = 5000
 
 /** Exportée pour être testée directement (le vrai délai, plusieurs secondes à minutes, est trop lent à
  * attendre dans un test — voir scripts/test-chat-widget-ui.mjs, qui vérifie séparément que l'effet s'en
@@ -17,7 +15,7 @@ const MAX_REPLY_DISMISS_MS = 25000
  * s'étant révélée instable dans cet environnement). */
 export function computeReplyDismissDelayMs(reply: string): number {
   const words = reply.trim().split(/\s+/).filter(Boolean).length
-  return Math.min(MAX_REPLY_DISMISS_MS, Math.max(MIN_REPLY_DISMISS_MS, words * REPLY_DISMISS_MS_PER_WORD))
+  return Math.max(MIN_REPLY_DISMISS_MS, words * REPLY_DISMISS_MS_PER_WORD)
 }
 
 /**
