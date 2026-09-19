@@ -154,31 +154,34 @@ test('chaque page de réglages a son titre + sous-titre de la maquette (repéré
   })
 })
 
-test('Général regroupe VRAIMENT mise à jour et historique sur UNE seule page', options, async () => {
+test('Général regroupe VRAIMENT mise à jour, fichiers/moteur local et historique sur UNE seule page', options, async () => {
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Général")')
     await page.waitForSelector('.options-menu__section-title')
     const titles = await page.$$eval('.options-page__content .options-menu__section-title', (els) => els.map((el) => el.textContent))
-    // "Emplacement des modèles" a rejoint Modèles à l'étape 119 (maquette "Options Jaris.dc.html") : ce
-    // n'est plus un réglage de l'application elle-même, donc plus une section de Général — voir le test
-    // "Modèles regroupe..." ci-dessous, qui vérifie qu'elle est bien réapparue là-bas plutôt que d'avoir
-    // simplement disparu.
-    assert.deepEqual(titles, ['Mise à jour', 'Historique des conversations'])
-    assert.ok((await page.textContent('.options-page__content')).includes('Rechercher une mise à jour'), 'la section mise à jour doit être présente')
+    // "Fichiers et moteur local" (Ollama + dossier des modèles) était passé dans Modèles à l'étape 119
+    // (maquette "Options Jaris.dc.html"), remis ici à l'étape 122 sur demande explicite de Léo ("deplace
+    // Fichiers et moteur local avec dossier etc... dans général") — voir le test "Modèles regroupe..."
+    // ci-dessous, qui vérifie qu'il a bien disparu de Modèles plutôt que d'avoir simplement été dupliqué.
+    assert.deepEqual(titles, ['Mise à jour', 'Fichiers et moteur local', 'Historique des conversations'])
+    const content = await page.textContent('.options-page__content')
+    assert.ok(content.includes('Rechercher une mise à jour'), 'la section mise à jour doit être présente')
+    assert.ok(content.includes('Dossier des modèles'), 'le déplacement du dossier des modèles doit être présent')
+    assert.ok(await page.$('.options-menu__models-location-list'), 'la liste des emplacements doit être présente')
   })
 })
 
-test('Modèles regroupe VRAIMENT mémoire, matériel et fichiers/moteur local (dont l’emplacement des modèles) sur UNE seule page', options, async () => {
+test('Modèles regroupe VRAIMENT mémoire et matériel, sans fichiers/moteur local (déplacé dans Général)', options, async () => {
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Modèles")')
     await page.waitForSelector('.options-menu__section-title')
     const titles = await page.$$eval('.options-page__content .options-menu__section-title', (els) => els.map((el) => el.textContent))
     // Titres alignés sur la copie exacte de la maquette (étape 119) : "Mémoire de conversation" et "Ce que
     // ta machine fait tourner" au lieu de "Longueur de mémoire"/"Les paliers de configuration".
-    assert.deepEqual(titles, ['Mémoire de conversation', 'Ce que ta machine fait tourner', 'Fichiers et moteur local'])
+    assert.deepEqual(titles, ['Mémoire de conversation', 'Ce que ta machine fait tourner'])
     const content = await page.textContent('.options-page__content')
-    assert.ok(content.includes('Dossier des modèles'), 'le déplacement du dossier des modèles doit être présent')
-    assert.ok(await page.$('.options-menu__models-location-list'), 'la liste des emplacements doit être présente')
+    assert.ok(!content.includes('Dossier des modèles'), 'le dossier des modèles ne doit plus être dans Modèles')
+    assert.ok(!(await page.$('.options-menu__models-location-list')), 'la liste des emplacements ne doit plus être dans Modèles')
   })
 })
 

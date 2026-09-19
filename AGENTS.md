@@ -2704,3 +2704,32 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   vérifié mordant en remettant temporairement l'ancien padding/gap (le test échoue bien, confirmé avant de le
   committer). Vérifié en plus par capture d'écran réelle pleine page, comparée à la disposition demandée par
   Léo.
+
+- **Étape 122, Léo : "deplace Fichiers et moteur local avec dossier etc... dans général" (capture de l'onglet
+  Général montrant seulement "Mise à jour", pour montrer où la carte manquait).** La carte "Fichiers et
+  moteur local" (Ollama + dossier des modèles) avait rejoint Modèles à l'étape 119 en suivant la maquette
+  "Options Jaris.dc.html" — demande explicite de Léo pour la remettre dans Général, qui l'emporte sur le
+  choix de la maquette (même convention que l'étape 96 face à l'étape 47, ou l'étape 121 face à l'étape 119).
+  Bloc JSX déplacé tel quel (SettingGroup "Fichiers et moteur local") de la section `tab === 'modeles'` vers
+  `tab === 'general'`, entre "Mise à jour" et "Historique des conversations" — l'ordre historique de Général
+  avant l'étape 119 (Mise à jour/Stockage/Historique, étape 115).
+  **Piège trouvé en lançant `npm test`, pas en relisant le JSX** : les deux lectures IPC qui remplissent
+  cette carte (`getOllamaVersionStatus`, `getModelsLocationStatus`) étaient armées par un `useEffect` gaté
+  sur `tab === 'modeles'` (logique de l'étape 119, jamais retouchée en déplaçant le JSX) — la carte se
+  serait donc affichée FIGÉE, sans jamais recevoir ses données, dès qu'on ouvrait Général en premier. Un test
+  Playwright existant (`Général regroupe VRAIMENT...`) a échoué exactement là-dessus ("la liste des
+  emplacements doit être présente"), pas une intuition. Corrigé en déplaçant ces deux appels dans le bloc
+  `if (tab === 'general')` du même effet, à côté de `getAppVersionStatus`/`getAppVersion` déjà là. **Leçon
+  générale, déjà rencontrée sous d'autres formes dans ce fichier (le "+" gaté d'un seul côté, le check WSL
+  dans la mauvaise branche) : déplacer un bloc de RENDU (JSX) ne déplace pas avec lui la logique qui le
+  NOURRIT (l'effet qui charge ses données) — les deux doivent être cherchés et déplacés ensemble.**
+  Deux tests mis à jour dans `test-options-reorganization-ui.mjs` : celui de Général vérifie maintenant les 3
+  titres dans l'ordre (`Mise à jour`, `Fichiers et moteur local`, `Historique des conversations`) et que le
+  contenu (dossier des modèles, liste des emplacements) y est bien présent ; celui de Modèles vérifie
+  l'inverse (seulement `Mémoire de conversation`/`Ce que ta machine fait tourner`, et que "Dossier des
+  modèles" en a bien disparu — pas seulement qu'il reste ailleurs, mais qu'il n'est plus dupliqué ici).
+  Vérifié par capture d'écran réelle de l'onglet Général (bundle esbuild + vrai CSS compilé) : les 3 cartes
+  s'affichent dans le bon ordre, avec de vraies données (version Ollama, chemins des dossiers), avant de
+  considérer le déplacement terminé — pas seulement le passage des tests.
+  Régression : `npm test` (306/306, `Fichiers et moteur local` déplacé de Modèles vers Général dans les deux
+  tests concernés).

@@ -295,15 +295,15 @@ export default function OptionsMenu(): JSX.Element {
       // Recalculé à CHAQUE ouverture de l'onglet, jamais mis en cache : la VRAM libre change d'un
       // lancement à l'autre selon ce qui tourne en parallèle sur la machine (jeu, navigateur...).
       void window.jaris.getContextLengthOptions().then(setContextLengthOptions)
-      // Emplacement des modèles déplacé ici depuis Général (refonte étape 119, maquette
-      // "Options Jaris.dc.html") : Ollama et le dossier des modèles parlent tous les deux de "ce que ta
-      // machine fait tourner localement", pas de l'application Jaris elle-même — Général garde uniquement
-      // ce qui concerne l'application (sa version, son historique).
-      void window.jaris.getModelsLocationStatus().then(setModelsLocation)
     }
     if (tab === 'general') {
       void window.jaris.getAppVersionStatus().then(setAppVersionStatus)
       void window.jaris.getAppVersion().then(setInstalledVersion)
+      // "Fichiers et moteur local" (Ollama + dossier des modèles) a rejoint Général à l'étape 122, sur
+      // demande explicite de Léo — ces deux lectures doivent donc s'armer avec l'onglet, pas avec 'modeles'
+      // qui ne montre plus ce bloc depuis ce même correctif (sinon la carte resterait vide au premier clic).
+      void window.jaris.getOllamaVersionStatus().then(setOllamaVersionStatus)
+      void window.jaris.getModelsLocationStatus().then(setModelsLocation)
     }
   }, [tab])
 
@@ -1016,14 +1016,56 @@ export default function OptionsMenu(): JSX.Element {
                 </SettingRow>
               )}
             </SettingGroup>
+          </div>
+        )}
 
-            {/* "Fichiers et moteur local" (refonte étape 119, maquette "Options Jaris.dc.html") : Ollama et
-                le dossier de stockage des modèles rejoignent Modèles, déplacés depuis Général — les deux
-                parlent de ce qui fait tourner les modèles sur cette machine, pas de l'application Jaris
-                elle-même (mission-design, section 1 : "Modèles (... mise à jour d'Ollama, emplacement des
-                modèles)"). La ligne Ollama reste visible même à jour désormais (avant : rien du tout ne
-                s'affichait tant qu'aucune mise à jour n'était disponible) — seule la donnée déjà lue par
-                getOllamaVersionStatus() change de forme d'affichage, aucun nouvel appel IPC. */}
+        {tab === 'general' && (
+          <div className="options-menu__section">
+            {/* Mise à jour/Historique regroupés dans "Général" depuis l'étape 115 (Léo : "des categorie...
+                peuvent etre ensemble") : deux réglages "à propos de l'application" plutôt que deux sujets
+                distincts, à la manière du même onglet chez ChatGPT/Claude. Chaque réglage passe par
+                `SettingRow`/`SettingGroup` (étape 116) pour la même raison que l'onglet Voix ci-dessus : un
+                bouton et une liste doivent se présenter pareil. "Fichiers et moteur local" (Ollama + dossier
+                des modèles) était passé dans Modèles à l'étape 119 en suivant la maquette "Options
+                Jaris.dc.html" — remis ici à l'étape 122 sur demande explicite de Léo ("deplace Fichiers et
+                moteur local avec dossier etc... dans général"), qui l'emporte sur le choix de la maquette. */}
+            <SettingGroup title="Mise à jour">
+              <SettingRow
+                label="Rechercher une mise à jour"
+                description={
+                  <>
+                    Version installée : <strong>{installedVersion ?? appVersionStatus?.current ?? '...'}</strong>
+                    {updateCheckMessage ? <> — {updateCheckMessage}</> : null}
+                  </>
+                }
+              >
+                <button className="options-menu__action" onClick={handleCheckForUpdate} disabled={checkingUpdate}>
+                  {checkingUpdate ? 'Recherche en cours…' : 'Rechercher une mise à jour'}
+                </button>
+              </SettingRow>
+
+              {appVersionStatus?.outdated && (
+                <div className="options-menu__ollama-warning">
+                  Jaris {appVersionStatus.current} installé, la dernière version est{' '}
+                  {appVersionStatus.latest}.
+                  <div className="options-menu__ollama-update-actions">
+                    <button onClick={handleUpdateApp} disabled={updatingApp}>
+                      {updatingApp ? 'Mise à jour en cours…' : 'Mettre à jour'}
+                    </button>
+                  </div>
+                  {/* Étape 98 : une VRAIE barre qui avance, à la place d'une phrase figée. L'installeur pèse
+                      ~98 Mo, soit plusieurs minutes sur une connexion modeste — "on ne sait pas quand c'est
+                      terminé et des fois c'est bloqué et ça fait rien" (Léo) décrivait exactement ce vide. */}
+                  {updatingApp && <AppUpdateProgress progress={updateProgress} />}
+                </div>
+              )}
+              {!updatingApp && appUpdateMessage && <p className="options-menu__ollama-update-note">{appUpdateMessage}</p>}
+            </SettingGroup>
+
+            {/* Ollama et le dossier de stockage des modèles : ce qui fait tourner les modèles sur cette
+                machine, pas les modèles eux-mêmes (déjà dans Modèles, à côté du choix du palier). La ligne
+                Ollama reste visible même à jour (seule la donnée déjà lue par getOllamaVersionStatus()
+                change de forme d'affichage, aucun nouvel appel IPC). */}
             <SettingGroup title="Fichiers et moteur local">
               <SettingRow
                 label="Ollama"
@@ -1083,50 +1125,6 @@ export default function OptionsMenu(): JSX.Element {
                 </ul>
               )}
               {modelsLocationMessage && <p className="options-menu__ollama-update-note">{modelsLocationMessage}</p>}
-            </SettingGroup>
-          </div>
-        )}
-
-        {tab === 'general' && (
-          <div className="options-menu__section">
-            {/* Mise à jour/Historique regroupés dans "Général" depuis l'étape 115 (Léo : "des categorie...
-                peuvent etre ensemble") : deux réglages "à propos de l'application" plutôt que deux sujets
-                distincts, à la manière du même onglet chez ChatGPT/Claude. Chaque réglage passe par
-                `SettingRow`/`SettingGroup` (étape 116) pour la même raison que l'onglet Voix ci-dessus : un
-                bouton et une liste doivent se présenter pareil. "Emplacement des modèles" a rejoint Modèles à
-                l'étape 119 (maquette "Options Jaris.dc.html") : ce n'est pas l'application elle-même qui est
-                stockée là, mais les modèles/moteurs locaux qu'elle fait tourner. */}
-            <SettingGroup title="Mise à jour">
-              <SettingRow
-                label="Rechercher une mise à jour"
-                description={
-                  <>
-                    Version installée : <strong>{installedVersion ?? appVersionStatus?.current ?? '...'}</strong>
-                    {updateCheckMessage ? <> — {updateCheckMessage}</> : null}
-                  </>
-                }
-              >
-                <button className="options-menu__action" onClick={handleCheckForUpdate} disabled={checkingUpdate}>
-                  {checkingUpdate ? 'Recherche en cours…' : 'Rechercher une mise à jour'}
-                </button>
-              </SettingRow>
-
-              {appVersionStatus?.outdated && (
-                <div className="options-menu__ollama-warning">
-                  Jaris {appVersionStatus.current} installé, la dernière version est{' '}
-                  {appVersionStatus.latest}.
-                  <div className="options-menu__ollama-update-actions">
-                    <button onClick={handleUpdateApp} disabled={updatingApp}>
-                      {updatingApp ? 'Mise à jour en cours…' : 'Mettre à jour'}
-                    </button>
-                  </div>
-                  {/* Étape 98 : une VRAIE barre qui avance, à la place d'une phrase figée. L'installeur pèse
-                      ~98 Mo, soit plusieurs minutes sur une connexion modeste — "on ne sait pas quand c'est
-                      terminé et des fois c'est bloqué et ça fait rien" (Léo) décrivait exactement ce vide. */}
-                  {updatingApp && <AppUpdateProgress progress={updateProgress} />}
-                </div>
-              )}
-              {!updatingApp && appUpdateMessage && <p className="options-menu__ollama-update-note">{appUpdateMessage}</p>}
             </SettingGroup>
 
             <SettingGroup title="Historique des conversations">
