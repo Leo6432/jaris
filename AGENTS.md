@@ -2880,3 +2880,40 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   d'un tour de phrase poli). Chaque nouvelle assertion vérifiée mordante : revenue temporairement à l'ancien
   comportement (`.test()` sur le regex simple), les 3 nouveaux cas de faux positif échouent bien, les 24
   autres (déjà établis) continuent de passer.
+
+- **Étape 125, Léo (juste après la 124) : "fait en sorte qu'il regarde tout le temps sur le web".** Question
+  posée avant de coder (le sujet du "tout le temps" était ambigu — commandes comprises ?) : réponse "Toute
+  les information, il ne doit pas rechercher dans sa base de données car les modèles sont trop vieux" — donc
+  toute question de CONNAISSANCE, pas les commandes d'action ni la discussion.
+  **Ce qui existait déjà** : le prompt système forçait déjà `search_web` avant de répondre, mais UNIQUEMENT
+  pour "des commerces, lieux, personnes ou entités réels" — une catégorie bien plus étroite que "qui a créé
+  ChatGPT" (une question de culture générale, pas une entité locale à chercher). Élargi à TOUTE question
+  factuelle ou de connaissance, avec une exception explicite pour ce qui n'en a pas besoin (Jaris lui-même,
+  une info déjà dans la conversation/la mémoire locale, la date/l'heure déjà données plus haut dans le
+  prompt) — sans cette dernière exception, "quelle heure est-il ?" aurait aussi déclenché une recherche.
+  **Même leçon que l'étape 124 : une consigne seule ne suffit pas à un petit modèle local.** Exactement comme
+  `wantsEmailSent` force déjà une relance vers `computer_use_task` quand un mail est demandé sans jamais être
+  envoyé, `looksLikeKnowledgeQuestion` (assistant.ts) détecte qu'une question RESSEMBLE à une demande
+  d'info (mot interrogatif en tête, "?" final, ou impératif du type "trouve-moi"/"cherche-moi" — repris
+  directement de l'exemple déjà présent dans le prompt système, "trouve trois boulangeries") et force une
+  relance corrective d'un tour vers `search_web` si le modèle répond sans l'avoir appelé. Même mécanique que
+  `wantsEmailSent`/`PROMISE_WITHOUT_ACTION` : un seul essai de relance, suivi mécaniquement (`searchCalledThisTurn`,
+  posé à `true` dès qu'un appel à `search_web` a vraiment lieu ce tour-ci).
+  **Piège attrapé par le test avant de livrer** : la première version de `looksLikeKnowledgeQuestion` ne
+  détectait que les vraies QUESTIONS (mot interrogatif ou "?") — "Trouve-moi une boulangerie ouverte près de
+  chez moi" (une demande à l'impératif, sans "?") passait au travers. Repéré en testant le cas EXACT déjà
+  cité comme exemple dans le prompt système lui-même : si l'exemple du prompt ne matche pas le détecteur
+  censé forcer ce même comportement, quelque chose cloche. Corrigé en ajoutant l'alternance des impératifs
+  d'info ("trouve(-moi)", "cherche(-moi)", "recherche", "dis-moi", "donne-moi").
+  **Limite assumée, pas résolue, comme pour PROMISE_WITHOUT_ACTION (étape 124)** : ce détecteur reste un
+  filet MÉCANIQUE de dernier recours, pas une vraie compréhension du langage — une question de connaissance
+  formulée sans mot interrogatif ni "?" ni impératif reconnu (rare en pratique) resterait non détectée ; la
+  vraie ligne de défense reste la consigne système élargie, ce filet ne fait que rattraper les cas où elle
+  ne suffit pas.
+  Régression : `node --test scripts/test-knowledge-question.mjs` (21 tests, dont le cas réel rapporté par
+  Léo et l'exemple "boulangerie" du prompt système lui-même) — chaque assertion vérifiée mordante en
+  désactivant temporairement le détecteur (`return false`) : les 11 cas positifs échouent bien, les 10 cas
+  négatifs restent corrects. **Non vérifié en usage réel** (pas d'accès à Ollama/au petit modèle local dans
+  cet environnement) : le mécanisme est prouvé par test, son efficacité réelle chez Léo reste à confirmer —
+  notamment si `search_web` échoue ou renvoie un résultat non concluant, où le modèle pourrait encore
+  répondre à côté malgré la relance.

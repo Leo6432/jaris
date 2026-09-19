@@ -77,6 +77,35 @@ function hasUnnegatedMailIntent(prompt: string): boolean {
   return !NEGATION_WORDS.test(prompt.slice(windowStart, windowEnd))
 }
 
+// Léo : "fait en sorte qu'il regarde tout le temps sur le web ... il ne doit pas répondre depuis sa base de
+// données car les modèles sont trop vieux" — le prompt système (voir plus bas) le demande déjà explicitement,
+// mais exactement comme pour wantsEmailSent ci-dessous, une simple consigne ne suffit pas toujours à un petit
+// modèle local : une relance corrective mécanique rattrape les cas où il répond quand même de mémoire.
+const QUESTION_START_WORDS =
+  /^(qui|que|qu['’]|quoi|quel|quelle|quels|quelles|quand|où|comment|pourquoi|combien|c['’]est quoi|est-ce que|est-ce qu['’])\b/i
+// Une demande d'info peut aussi être une commande à l'impératif plutôt qu'une vraie question — l'exemple
+// même déjà présent dans le prompt système ("trouve trois boulangeries") n'a ni mot interrogatif ni "?".
+const INFO_SEEKING_IMPERATIVE = /^(trouve|trouve[- ]moi|cherche|cherche[- ]moi|recherche|dis[- ]moi|donne[- ]moi)\b/i
+// Exclus explicitement : l'heure/la date (déjà données dans le prompt système, jamais une question de
+// "connaissance" au sens où ce filet est pensé) et tout ce qui porte sur Jaris/l'utilisateur lui-même
+// (fonctionnement, mémoire locale) — une relance search_web y serait à la fois inutile et hors sujet.
+const NOT_A_KNOWLEDGE_QUESTION =
+  /\b(quelle heure|quel jour|quelle date|tu t['’]appelles|ton nom|comment tu vas|comment ça va|qui es-tu|je m['’]appelle|mon nom|retiens|retenir|souviens|rappelle-toi|n['’]oublie pas|mémorise)\b/i
+
+/**
+ * true si la phrase RESSEMBLE à une demande d'information (question de connaissance générale — fait,
+ * personne, entreprise, définition, événement... — ou demande à l'impératif du même genre) plutôt qu'une
+ * commande d'action ou une question sur Jaris/l'utilisateur lui-même — sert uniquement à décider s'il faut
+ * relancer le modèle vers search_web (voir wantsWebInfo plus bas), jamais une vraie analyse de langage : un
+ * début de phrase interrogatif/impératif ou un simple "?" final suffit, exactement le niveau de rigueur déjà
+ * utilisé pour `hasUnnegatedMailIntent` juste au-dessus.
+ */
+export function looksLikeKnowledgeQuestion(prompt: string): boolean {
+  const trimmed = prompt.trim()
+  if (!trimmed || NOT_A_KNOWLEDGE_QUESTION.test(trimmed)) return false
+  return QUESTION_START_WORDS.test(trimmed) || INFO_SEEKING_IMPERATIVE.test(trimmed) || trimmed.endsWith('?')
+}
+
 /** Choisit le palier de complexité le plus adapté à la question, sans appel LLM supplémentaire (juste des mots-clés). */
 function pickTier(prompt: string): Tier {
   const lower = prompt.toLowerCase()
@@ -164,16 +193,22 @@ function buildSystemPrompt(userName: string | null, memoryTitles: string[], chan
     "l'utilisateur demande ce qui y est affiché (\"qu'est-ce que tu vois\", \"regarde l'écran\"...), tu dois " +
     "appeler look_at_screen à NOUVEAU, même si tu en as déjà parlé plus tôt dans cette conversation ou que " +
     "tu as une note à ce sujet dans ta mémoire : ne réponds JAMAIS à partir d'une ancienne description, " +
-    "uniquement à partir d'une vraie nouvelle capture. Dès que la demande porte sur des commerces, lieux, " +
-    "personnes ou entités réels que tu ne connais pas avec certitude absolue (trouver des boulangeries, une " +
-    "adresse, un mail, un numéro...), tu dois IMPÉRATIVEMENT appeler search_web AVANT de répondre quoi que " +
-    "ce soit à ce sujet, dans ce même tour — ne réponds JAMAIS avec des noms de commerces, adresses, mails " +
-    "ou numéros sortis de ta seule mémoire : sans recherche réelle, ils sont presque toujours inventés et " +
-    'faux, même s\'ils sonnent plausibles. Exemple concret : pour "trouve trois boulangeries et envoie-leur ' +
+    "uniquement à partir d'une vraie nouvelle capture. Ta mémoire de connaissances générales (tout ce qui " +
+    "N'EST PAS déjà dans cette conversation ou dans ta mémoire locale) date de ton entraînement et est " +
+    "ANCIENNE et non fiable : pour TOUTE question factuelle ou de connaissance (qui, quoi, quand, où, " +
+    "combien — une personne, une entreprise, un événement, une définition, un fait historique ou " +
+    "d'actualité, des commerces, lieux, adresses, mails, numéros...), tu dois IMPÉRATIVEMENT appeler " +
+    "search_web AVANT de répondre quoi que ce soit à ce sujet, dans ce même tour — ne réponds JAMAIS de " +
+    "mémoire à une question factuelle, même si tu es sûr de la réponse : ta certitude ne vaut rien face à " +
+    "une info potentiellement périmée ou fausse. Seules les questions sur TOI-MÊME (ton fonctionnement, tes " +
+    "réglages), sur une info déjà connue de cette conversation ou de la mémoire locale de l'utilisateur, ou " +
+    "sur la date/l'heure actuelle (déjà données plus haut), n'ont pas besoin de recherche. " +
+    'Exemple concret : pour "trouve trois boulangeries et envoie-leur ' +
     'un mail", tu dois appeler search_web pour trouver de vraies boulangeries avec de vraies adresses mail, ' +
     "PUIS appeler computer_use_task pour envoyer le mail à chacune (un objectif par destinataire) — jamais " +
     'inventer trois boulangeries fictives avec des mails "proposés". Quand tu donnes une information ' +
-    "factuelle (prix, cours, score, statistique, adresse, téléphone, mail, nom d'un commerce...), elle doit " +
+    "factuelle (prix, cours, score, statistique, adresse, téléphone, mail, nom d'un commerce, ou toute " +
+    "autre info vérifiable), elle doit " +
     "toujours venir d'un vrai résultat de search_web : choisis la donnée la plus claire et la plus récente " +
     "parmi les résultats, jamais une moyenne ou une fourchette entre plusieurs sites, et précise le nom du " +
     "site source. Si le résultat de recherche ne contient pas l'info demandée, dis-le plutôt que d'inventer " +
@@ -473,8 +508,14 @@ export async function converse(
   // de LA PHRASE ACTUELLE (pas l'historique, pour ne jamais relancer sur une intention d'un tour précédent
   // déjà traitée) plutôt que sur TOOL_SIGNAL_WORDS (pensé pour choisir un palier, pas pour ça).
   const wantsEmailSent = hasUnnegatedMailIntent(prompt)
+  // Contrairement à wantsEmailSent (recalculé sur la seule phrase actuelle, jamais l'historique), cette
+  // relance n'a de sens que pour la question posée à CE tour : sinon une conversation qui a déjà cherché une
+  // fois relancerait sans arrêt sur une intention d'un tour précédent déjà traité.
+  const wantsWebInfo = looksLikeKnowledgeQuestion(prompt)
   let computerUseCalled = false
+  let searchCalledThisTurn = false
   let nudgedForEmail = false
+  let nudgedForSearch = false
   let toolCalledThisTurn = false
   let nudgedForNoAction = false
 
@@ -493,6 +534,20 @@ export async function converse(
             "appelle computer_use_task maintenant avec un objectif d'envoi de mail, un appel par " +
             "destinataire. Si une adresse manque encore pour un des destinataires, appelle search_web pour " +
             "la trouver avant de répondre."
+        })
+        continue
+      }
+      if (wantsWebInfo && !searchCalledThisTurn && !nudgedForSearch) {
+        nudgedForSearch = true
+        onLog?.("Question de connaissance sans recherche web : relance corrective d'un tour.")
+        messages.push(message)
+        messages.push({
+          role: 'user',
+          content:
+            "Tu n'as pas appelé search_web pour cette question, alors qu'elle demande une information " +
+            "factuelle. Ta mémoire de connaissances générales est ancienne et non fiable pour ce genre de " +
+            "question : appelle search_web MAINTENANT avec les mots-clés de la question, puis réponds à " +
+            "partir du résultat réel — jamais de ta seule mémoire, même si tu es sûr de la réponse."
         })
         continue
       }
@@ -569,6 +624,7 @@ export async function converse(
       }
 
       if (call.function.name === 'computer_use_task') computerUseCalled = true
+      if (call.function.name === 'search_web') searchCalledThisTurn = true
 
       // Constaté en usage réel (Léo : « même quand je dit ouvre l'application youtube ou bloc note il dit
       // c'est lancé mais il lance pas ») : quand open_app échoue (aucune application de ce nom installée,
