@@ -1385,6 +1385,15 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   salutation/réponse qui contient `/think`, sans effacer l'historique visible. Régression :
   `scripts/test-assistant-history.mjs`.
 
+- **Le streaming du Chat ne doit pas afficher une réponse factuelle avant que l'obligation de recherche web
+  soit satisfaite.** Constaté avec « Qui est Dario Amodei ? » : le modèle rapide a d'abord streamé « je ne
+  sais pas, regarde Wikipédia », puis la relance mécanique a appelé `search_web` et remplacé ce brouillon
+  2-3 secondes plus tard par la vraie réponse. Pour toute phrase reconnue par `looksLikeKnowledgeQuestion`,
+  retenir les fragments de texte côté `converse()` pendant les tours de décision/outils et n'émettre que la
+  réponse finale acceptée. Profiter de cette frontière finale pour décoder les entités numériques HTML
+  (`&#x20;`) et retirer les émojis spontanés, sauf si l'utilisateur parle lui-même d'un émoji. Régression :
+  `scripts/test-assistant-history.mjs`.
+
 ## Commandes utiles
 
 ```

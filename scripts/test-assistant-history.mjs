@@ -105,6 +105,48 @@ test("l'ancienne hallucination /think après un salut est retirée du contexte s
   assert.equal(await converse('Réponds brièvement', null, () => {}, undefined, pollutedHistory), 'Compris.')
 })
 
+test('une question factuelle ne streame jamais le brouillon avant la recherche web', async () => {
+  let modelCalls = 0
+  const streamed = []
+  const finalAnswer = '**Dario&#x20;Amodei** dirige Anthropic. 😊'
+  const converse = setup(async (...args) => {
+    modelCalls++
+    const onToken = args[6]
+    if (modelCalls === 1) {
+      onToken?.('Je ne sais pas, regarde sur Wikipédia.')
+      return { role: 'assistant', content: 'Je ne sais pas, regarde sur Wikipédia.' }
+    }
+    if (modelCalls === 2) {
+      return {
+        role: 'assistant',
+        content: '',
+        tool_calls: [{ function: { name: 'search_web', arguments: { query: 'Dario Amodei' } } }]
+      }
+    }
+    onToken?.(finalAnswer)
+    return { role: 'assistant', content: finalAnswer }
+  }, async (name, args) => {
+    assert.equal(name, 'search_web')
+    assert.equal(args.query, 'Dario Amodei')
+    return 'Dario Amodei est le CEO d’Anthropic.'
+  })
+
+  const reply = await converse(
+    'Qui est Dario Amodei ?',
+    null,
+    () => {},
+    undefined,
+    [],
+    undefined,
+    undefined,
+    'chat',
+    delta => streamed.push(delta)
+  )
+  assert.equal(reply, '**Dario Amodei** dirige Anthropic.')
+  assert.deepEqual(streamed, ['**Dario Amodei** dirige Anthropic.'])
+  assert.equal(modelCalls, 3)
+})
+
 for (const channel of ['voice', 'chat']) {
   for (const app of ['Steam', 'Blocnotes']) {
     test(`${channel}: ouverture explicite de ${app} sans fausse confirmation du modèle`, async () => {

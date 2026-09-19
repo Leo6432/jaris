@@ -280,6 +280,30 @@ function stripMarkdownForVoice(text: string): string {
     .trim()
 }
 
+/**
+ * Nettoie les artefacts de présentation que les petits modèles laissent parfois dans leur texte malgré le
+ * prompt : entités numériques HTML affichées littéralement (`&#x20;`) et émojis ajoutés spontanément. Les
+ * émojis restent autorisés quand la question de l'utilisateur en contient elle-même, afin de pouvoir les
+ * expliquer sans effacer le sujet de la réponse.
+ */
+export function normalizeAssistantText(text: string, userPrompt: string): string {
+  const decoded = text
+    .replace(/&#(?:x([0-9a-f]{1,6})|([0-9]{1,7}));/gi, (entity, hex: string | undefined, decimal: string | undefined) => {
+      const codePoint = Number.parseInt(hex ?? decimal ?? '', hex ? 16 : 10)
+      return Number.isInteger(codePoint) && codePoint <= 0x10ffff && !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+        ? String.fromCodePoint(codePoint)
+        : entity
+    })
+    .replace(/&nbsp;/gi, ' ')
+
+  const userUsedEmoji = /\p{Extended_Pictographic}/u.test(userPrompt)
+  const withoutUnrequestedEmoji = userUsedEmoji
+    ? decoded
+    : decoded.replace(/\p{Extended_Pictographic}(?:\uFE0E|\uFE0F)?(?:\u200D\p{Extended_Pictographic}(?:\uFE0E|\uFE0F)?)*/gu, '')
+
+  return withoutUnrequestedEmoji.replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+\n/g, '\n').trim()
+}
+
 const MAX_TOOL_ROUNDS = 10
 
 /**
@@ -507,8 +531,9 @@ export async function converse(
    */
   const finalize = (text: string): string => {
     const trimmed = text.trim()
-    const safe = trimmed || "Désolé, je n'ai pas trouvé quoi répondre, tu peux reformuler ?"
-    const cleaned = channel === 'voice' ? stripMarkdownForVoice(safe) : safe
+    const fallback = "Désolé, je n'ai pas trouvé quoi répondre, tu peux reformuler ?"
+    const normalized = normalizeAssistantText(trimmed || fallback, prompt) || fallback
+    const cleaned = channel === 'voice' ? stripMarkdownForVoice(normalized) : normalized
     return withOverloadWarning(cleaned)
   }
 
@@ -550,9 +575,22 @@ export async function converse(
   let nudgedForSearch = false
   let toolCalledThisTurn = false
   let nudgedForNoAction = false
+  // Une question factuelle peut produire un premier texte de mémoire avant que le filet mécanique impose
+  // search_web. Ne jamais streamer ce brouillon : il serait visible 2-3 secondes puis remplacé par la vraie
+  // réponse, exactement le comportement signalé avec « Qui est Dario Amodei ? ». On garde les fragments en
+  // attente et on n'affiche que la réponse finale, une fois la recherche réellement effectuée.
+  const holdKnowledgeStream = wantsWebInfo && Boolean(onToken)
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const message = await chatWithOllama(messages, TOOLS, model, think, signal, numCtx, onToken)
+    const message = await chatWithOllama(
+      messages,
+      TOOLS,
+      model,
+      think,
+      signal,
+      numCtx,
+      holdKnowledgeStream ? () => {} : onToken
+    )
     if (!message.tool_calls?.length) {
       if (wantsEmailSent && !computerUseCalled && !nudgedForEmail) {
         nudgedForEmail = true
@@ -607,7 +645,9 @@ export async function converse(
         })
         continue
       }
-      return finalize(message.content)
+      const finalText = finalize(message.content)
+      if (holdKnowledgeStream) onToken?.(finalText)
+      return finalText
     }
 
     toolCalledThisTurn = true
