@@ -53,6 +53,23 @@ test('la hauteur demandée par le widget texte est bornée',()=>{
  // Et une hauteur absente (widget pas encore mesuré) retombe sur la barre, jamais sur 0.
  const g=fixture('chat',null);g.position(g.win,true);assert.equal(g.changes[0].height,56)
 })
+
+test('après l’onboarding, le lancement reste caché jusqu’à une activation',()=>{
+ const source=ts.transpileModule(main,{compilerOptions:{removeComments:true,target:ts.ScriptTarget.ES2022}}).outputText
+ assert.match(source,/fullWindow\s*=\s*createFullWindow\(!onboardingDone\)/)
+ assert.match(source,/function triggerVisibleWake\(\)[\s\S]{0,500}showWidgetWindow\(true\)[\s\S]{0,200}pipeline\.triggerWake\(\)/)
+})
+
+test('la touche + ouvre la forme du mode actif et le repos cache le widget vocal',()=>{
+ const source=ts.transpileModule(main,{compilerOptions:{removeComments:true,target:ts.ScriptTarget.ES2022}}).outputText
+ const shortcut=source.slice(source.indexOf('function registerWakeShortcut'),source.indexOf("registerWakeShortcut('numadd')"))
+ assert.match(shortcut,/triggerVisibleWake\(\)/,'le raccourci global ne montre pas la barre avant l’écoute')
+ const wake=source.slice(source.indexOf('function triggerVisibleWake'),source.indexOf('/** Envoie un évènement'))
+ assert.match(wake,/activeMode\s*===\s*['"]chat['"][\s\S]*showWidgetWindow\(true\)[\s\S]*return/,'+ ne montre pas la barre du Chat')
+ const emotion=source.slice(source.indexOf("pipeline.on('emotion'"),source.indexOf("pipeline.on('transcript'"))
+ assert.match(emotion,/emotion\s*!==\s*['"]idle['"][\s\S]*showWidgetWindow\(true\)/,'le mot d’activation ne montre pas la barre')
+ assert.match(emotion,/emotion\s*===\s*['"]idle['"][\s\S]*hideIdleWidget\(\)/,'le retour au repos ne cache pas la barre')
+})
 test('toutes les commandes internes de dépendances masquent la console Windows',()=>{
  const source=ts.createSourceFile('dependencyServices.ts',readFileSync(new URL('../electron/services/dependencyServices.ts',import.meta.url),'utf8'),ts.ScriptTarget.Latest,true)
  let count=0

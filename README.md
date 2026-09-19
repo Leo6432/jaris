@@ -1081,26 +1081,25 @@ et affichée dans l'interface : `localStorage` y est bloqué (d'où le try/catch
 imposé dans les consignes de génération), mais refonctionne dès qu'on ouvre le
 fichier depuis son dossier.
 
-## Widget flottant toujours visible (étape 19)
+## Widgets à la demande
 
-Jaris se lance toujours normalement, dans sa fenêtre classique (comme avant
-cette étape) — rien ne change au démarrage. Ce qui change : dès qu'on la
-réduit (bouton "Réduire"), au lieu de disparaître dans la barre des tâches,
-elle laisse la place à un petit widget (`JarisOrb`, sans fenêtre ni fond)
-posé en haut au centre de l'écran (étape 68), au-dessus de toutes les autres
-fenêtres — visible même en travaillant dans le navigateur ou une autre appli.
-Jaris continue de tourner en arrière-plan, il n'y a juste plus la grande
-fenêtre à l'écran. **Fermer la croix, elle, quitte vraiment Jaris** (étape
-72) : contrairement à réduire, ce n'est plus un repli silencieux en widget.
+Après le premier réglage, Jaris démarre discrètement en arrière-plan : ni la
+fenêtre classique ni le widget ne s'imposent à l'écran au lancement. Le
+**+ du pavé numérique** ouvre la forme du dernier mode actif : une barre de
+saisie en Chat, ou le widget d'écoute en Agent vocal. Dire « Jaris » ouvre
+aussi le widget vocal pendant l'écoute, la réflexion et la réponse ; il
+disparaît au retour à l'état inactif. Le mode Code reste sans widget. L'icône
+près de l'horloge rouvre toujours l'application complète. **Fermer sa croix
+quitte vraiment Jaris** (étape 72).
 - **Sans fond** : la fenêtre Electron du widget est transparente
   (`transparent: true`, sans bordure) ; seul l'anneau lumineux de `JarisOrb`
   est visible, pas de rectangle derrière.
-- **Toujours au-dessus** : `alwaysOnTop` + visible sur tous les bureaux
-  virtuels, donc il reste affiché même en changeant d'application ou de
-  bureau.
+- **Au-dessus pendant l'activité** : `alwaysOnTop` + visible sur tous les
+  bureaux virtuels, puis fenêtre entièrement cachée au repos.
 - **Réagit depuis n'importe où** : le mot d'activation "Jaris" (déjà basé sur
-  le micro, indépendant de la fenêtre) et le **+ du pavé numérique** (`globalShortcut`,
-  enregistré au démarrage) déclenchent l'écoute quel que soit le programme
+  le micro, indépendant de la fenêtre) déclenche l'écoute. Le **+ du pavé
+  numérique** (`globalShortcut`, enregistré au démarrage) déclenche l'écoute
+  en mode vocal ou ouvre la saisie en mode Chat, quel que soit le programme
   qui a le focus.
   > Le caractère "+" tout seul (celui à côté du Entrée sur un clavier
   > AZERTY) n'est pas un accelerator valide pour `globalShortcut` : Electron
@@ -1115,9 +1114,12 @@ fenêtre à l'écran. **Fermer la croix, elle, quitte vraiment Jaris** (étape
   > réservée par une autre appli...), le terminal l'indique clairement au
   > démarrage (`[jaris] Raccourci global ... enregistré avec succès` ou
   > `Impossible de réserver...`).
-- **Cliquer sur le widget** rouvre la fenêtre classique (l'orbe en grand, la
-  conversation, le bouton Options, le cerveau de Jaris). Une icône dans la
-  barre système (clic droit) permet aussi de la rouvrir, ou de vraiment
+- **Depuis Chat**, quitter la fenêtre affiche aussi la barre de saisie afin de
+  continuer à écrire sans rouvrir toute l'application. Depuis Code, aucun
+  widget n'est affiché.
+- **Cliquer sur le widget vocal actif** rouvre la fenêtre classique (l'orbe en
+  grand, la conversation, le bouton Options, le cerveau de Jaris). Une icône
+  dans la barre système (clic droit) permet aussi de la rouvrir, ou de vraiment
   quitter Jaris.
 - **Messages longs** : le widget est volontairement plus haut que large
   (320×520) et son contenu est ancré en bas (donc collé au vrai coin
@@ -1129,9 +1131,8 @@ fenêtre à l'écran. **Fermer la croix, elle, quitte vraiment Jaris** (étape
   figé une fois pour toutes) : pas de délai ni de mauvais cadrage la
   première fois qu'on réduit la fenêtre.
 - **La conversation s'efface toute seule** : la transcription et la réponse
-  restent affichées tant que Jaris parle, puis disparaissent une fois qu'il
-  a fini (retour à "idle" une fois la lecture audio terminée) — pas de
-  vieille conversation qui traîne à l'écran indéfiniment.
+  restent affichées tant que Jaris parle, puis la barre entière disparaît une
+  fois qu'il a fini (`idle` après la lecture audio).
 - Les deux fenêtres ne sont jamais affichées en même temps, pour éviter que
   la réponse vocale soit jouée deux fois.
 

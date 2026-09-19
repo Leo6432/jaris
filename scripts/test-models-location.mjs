@@ -23,11 +23,11 @@ const nodeRequire = createRequire(import.meta.url)
  * téléchargé après une mise à jour continue de passer par la jonction déjà posée. Ce fichier n'a JAMAIS eu
  * de test de régression avant cette vérification (grep confirmé avant d'écrire celui-ci).
  *
- * `createJunction` (modelsLocation.ts) lance `cmd.exe`/`mklink /J`, injoignable ici (pas de Windows) : le
- * `child_process.spawn` mocké ci-dessous pose un VRAI lien symbolique Linux à la place (même effet observable
- * pour le reste du module : `lstat().isSymbolicLink()` + `readlink()`, utilisés par `currentRealDir`, se
- * comportent pareil pour une jonction Windows et un symlink Linux). Tout le reste (cp/mkdir/rm/lstat/readlink)
- * est du VRAI fs sur un VRAI dossier temporaire, pas un mock — seule la commande Windows elle-même est feinte.
+ * `createJunction` (modelsLocation.ts) lance `cmd.exe`/`mklink /J` : le `child_process.spawn` mocké ci-dessous
+ * pose un VRAI lien équivalent à la place (jonction sur Windows, lien symbolique sur Linux). Une jonction ne
+ * demande pas le privilège spécial exigé par les symlinks Windows ; le test peut donc tourner sur la machine
+ * de développement comme dans le runner Linux. Tout le reste (cp/mkdir/rm/lstat/readlink) est du VRAI fs sur
+ * un VRAI dossier temporaire, pas un mock — seule la commande Windows elle-même est feinte.
  * `process` est shadowé (paramètre de la fonction wrapper, pas le global Node) pour forcer `process.platform`
  * à 'win32' (sinon `moveModelsLocation` ressort immédiatement, "Windows pour l'instant") et contrôler
  * `process.env.USERPROFILE`/`LOCALAPPDATA` sans toucher au vrai environnement du process de test.
@@ -48,7 +48,7 @@ function loadModelsLocation(env) {
       emitter.stderr = new EventEmitter()
       queueMicrotask(() => {
         try {
-          nodeRequire('fs').symlinkSync(target, link)
+          nodeRequire('fs').symlinkSync(target, link, process.platform === 'win32' ? 'junction' : undefined)
           emitter.emit('close', 0)
         } catch (err) {
           emitter.stderr.emit('data', Buffer.from(String(err)))

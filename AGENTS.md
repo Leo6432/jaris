@@ -2803,3 +2803,17 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   **Non vérifiable ici, à confirmer par Léo en usage réel** : qu'une fenêtre Electron `alwaysOnTop` +
   `skipTaskbar` prenne bien le focus clavier au clic sur Windows (il n'y a ni Windows ni vraie fenêtre
   Electron dans cet environnement) — tout le reste est prouvé par les mesures ci-dessus, pas ça.
+
+- **Une fenêtre préchargée n'a pas besoin d'être visible au repos.** À partir de v0.15.1, après l'onboarding,
+  Jaris crée ses deux fenêtres cachées et écoute en arrière-plan. Le raccourci global + affiche la forme du
+  mode actif : il ouvre la barre de saisie en Chat, ou montre le widget vocal avant de déclencher l'écoute en
+  Agent vocal ; le mode Code reste sans widget. Le mot « Jaris » affiche aussi le widget vocal dès le premier
+  évènement non inactif. Au retour à `idle`, laisser 340 ms au fondu CSS puis faire `widgetWindow.hide()` :
+  réduire la fenêtre native à une pilule laisserait encore un élément inactif à l'écran. Ne jamais enregistrer
+  `ready-to-show => show()` pour la fenêtre complète après l'onboarding : ce callback tardif annulerait le
+  démarrage caché. Le premier lancement garde la fenêtre visible pour l'onboarding, et l'icône près de
+  l'horloge garde l'accès volontaire à l'interface complète.
+- **Un test qui remplace une jonction Windows par un vrai lien doit rester exécutable sur Windows.** Un
+  `symlinkSync()` sans type fonctionne dans le runner Linux, mais demande un privilège spécial sur Windows et
+  faisait échouer `npm test` avec `EPERM` sans défaut du code testé. Utiliser le type `junction` sur Windows,
+  qui reproduit justement `mklink /J` et ne demande pas ce privilège, puis garder le symlink classique ailleurs.

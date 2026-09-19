@@ -203,13 +203,13 @@ function loadRenderer(win: BrowserWindow, mode: 'full' | 'widget'): void {
 }
 
 /**
- * Fenêtre normale de Jaris (onboarding, orbe, conversation, Options, cerveau de Jaris) : c'est celle-là
- * qui s'ouvre au lancement, comme avant l'étape 19. La réduire cache la fenêtre et fait apparaître le widget
- * flottant à la place (voir `onboardingDone`) ; fermer sa croix, elle, quitte VRAIMENT Jaris (voir
+ * Fenêtre normale de Jaris (onboarding, orbe, conversation, Options, cerveau de Jaris). Elle s'affiche au
+ * tout premier lancement, puis reste préchargée mais cachée aux démarrages suivants : l'icône près de
+ * l'horloge permet toujours de l'ouvrir. La réduire la cache ; fermer sa croix quitte VRAIMENT Jaris (voir
  * `quitting`) — Léo s'attend à ce que fermer l'appli la ferme pour de bon, pas qu'elle continue de tourner
- * en widget sans qu'il s'en rende compte.
+ * sans qu'il s'en rende compte.
  */
-function createFullWindow(): BrowserWindow {
+function createFullWindow(showWhenReady = true): BrowserWindow {
   const win = new BrowserWindow({
     width: 1000,
     height: 760,
@@ -224,7 +224,11 @@ function createFullWindow(): BrowserWindow {
     }
   })
 
-  win.on('ready-to-show', () => win.show())
+  // Après l'onboarding, Jaris démarre désormais discrètement : la fenêtre complète reste chargée mais
+  // cachée, prête à être ouverte depuis l'icône près de l'horloge. Au tout premier lancement elle doit en
+  // revanche apparaître pour permettre la configuration. Le paramètre évite un `show()` tardif du
+  // ready-to-show qui ferait réapparaître la fenêtre après l'avoir volontairement cachée au démarrage.
+  if (showWhenReady) win.on('ready-to-show', () => win.show())
   // Fermer la croix quitte vraiment Jaris (widget compris, via app.quit() qui referme aussi les autres
   // fenêtres) — avant cette version, fermer la croix se repliait silencieusement en widget comme minimize,
   // ce qui laissait Jaris tourner en arrière-plan sans que Léo s'en rende compte en cliquant la croix.
@@ -283,8 +287,10 @@ function createFullWindow(): BrowserWindow {
  * Widget flottant façon J.A.R.V.I.S. (étape 19) : sans bordure, transparent, toujours au-dessus des autres
  * fenêtres, en haut au centre de l'écran (étape 68) — visible même quand une autre appli (navigateur, jeu...)
  * a le focus, y compris en changeant simplement d'appli SANS minimiser (voir `win.on('blur', ...)` dans
- * createFullWindow). C'est la vue "toujours là" une fois l'onboarding terminé ; cliquer dessus ouvre la
- * fenêtre de réglages pour le reste (Options, cerveau de Jaris).
+ * createFullWindow). Elle n'est plus « toujours là » au lancement : le + l'affiche dans la forme du mode
+ * actif, et le widget vocal apparaît aussi pendant une activation par « Jaris », puis disparaît quand le
+ * pipeline redevient inactif. En Chat, quitter la fenêtre complète affiche la barre de saisie ; en Code,
+ * aucune forme n'est affichée.
  */
 function createWidgetWindow(): BrowserWindow {
   // Position définitive posée juste avant l'affichage par positionWidgetWindow() (recalculée à chaque
@@ -326,10 +332,10 @@ function createWidgetWindow(): BrowserWindow {
  * Recalcule la position en haut au centre de l'écran actuel (étape 68) : pas fixée une fois pour toutes à la
  * création, au cas où l'écran/la zone de travail a changé depuis (résolution, second écran...). Collé au
  * bord haut (y = workArea.y, sans marge) façon "notch" — seule la largeur/hauteur change entre `expanded`
- * (orbe + statut + conversation, comme avant à l'étape 19) et l'état "repos" (juste le petit orbe réduit,
- * voir WIDGET_COLLAPSED_WIDTH/HEIGHT) : `showWidgetWindow` démarre à la taille correspondant à l'émotion en
- * cours (`lastEmotion`, jamais forcée à "replié" — voir le commentaire de cette fonction), et
- * `pipeline.on('emotion', ...)` plus bas rappelle celle-ci à chaque changement pour agrandir/replier en direct.
+ * (orbe + statut + conversation, comme avant à l'étape 19) et l'état "repos" (désormais utilisé seulement
+ * pendant les 340 ms du fondu avant de cacher entièrement la fenêtre). `showWidgetWindow` démarre à la
+ * taille correspondant à l'émotion en cours (`lastEmotion`) et `pipeline.on('emotion', ...)` plus bas
+ * rappelle celle-ci à chaque changement pour afficher/cacher en direct.
  * Un simple `setBounds` (pas d'animation native) : Electron n'anime pas les changements de bounds sur
  * Windows, contrairement à macOS — le CSS interne (.app--widget-collapsed, index.css) compense en faisant
  * un fondu/zoom sur le CONTENU. Le repli natif est différé jusqu’à la fin de cette transition.
@@ -396,7 +402,7 @@ function showFullWindow(): void {
  * une fine bande horizontale flottant par-dessus les autres applis ("ça fait sa avec google chatgpt claude
  * partout").
  */
-function showWidgetWindow(): void {
+function showWidgetWindow(forceExpanded = false): void {
   if (fullWindow && !fullWindow.isDestroyed() && fullWindow.isVisible()) return
   // Depuis le mode Code, Jaris disparaît complètement : "ça doit rien faire aucun widget" (Léo). Un widget
   // déjà affiché est caché plutôt que laissé tel quel — sinon, passer en Code puis quitter la fenêtre
@@ -411,10 +417,40 @@ function showWidgetWindow(): void {
   // widget apparaît sous son ancienne forme puis change sous les yeux de l'utilisateur (même famille de
   // défaut que la transition rejouée depuis un état périmé, corrigée par `widgetInstant` côté App.tsx).
   widgetWindow.webContents.send(IPC_CHANNELS.widgetMode, currentWidgetMode())
-  // Le widget texte s'ouvre toujours sur sa simple barre : l'émotion du pipeline vocal ne le concerne pas
-  // (il n'écoute pas), c'est l'envoi d'une question depuis la barre qui le dépliera.
-  positionWidgetWindow(widgetWindow, currentWidgetMode() === 'voice' && lastEmotion !== 'idle')
+  const voice = currentWidgetMode() === 'voice'
+  const expanded = voice && (forceExpanded || lastEmotion !== 'idle')
+  // Le widget vocal n'occupe plus le haut de l'écran au repos. La barre Chat, elle, n'arrive ici qu'après
+  // un repli volontaire depuis le Chat ou une pression sur + : elle reste alors une simple barre tant
+  // qu'aucune question n'est partie.
+  if (voice && !expanded) {
+    widgetWindow.hide()
+    return
+  }
+  positionWidgetWindow(widgetWindow, expanded)
   widgetWindow.show()
+}
+
+/** Cache la barre à la fin de sa transition CSS vers l'état inactif. */
+function hideIdleWidget(): void {
+  clearTimeout(widgetCollapseTimer)
+  widgetCollapseTimer = setTimeout(() => {
+    widgetCollapseTimer = undefined
+    if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide()
+  }, 340)
+}
+
+/** La touche + ouvre la forme du mode actif : barre écrite en Chat, écoute visible en Agent vocal. */
+function triggerVisibleWake(): void {
+  if (activeMode === 'code') return
+  if (activeMode === 'chat') {
+    if (!fullWindow?.isVisible()) showWidgetWindow(true)
+    return
+  }
+  // Une pression pendant les toutes premières secondes du démarrage ne doit pas laisser une barre vide
+  // affichée indéfiniment si le pipeline n'existe pas encore : dans ce cas, on ignore simplement la touche.
+  if (!pipeline) return
+  if (!fullWindow?.isVisible()) showWidgetWindow(true)
+  pipeline.triggerWake()
 }
 
 /** Envoie un évènement du pipeline vocal à toutes les fenêtres actuellement ouvertes (réglages et/ou widget). */
@@ -442,11 +478,15 @@ async function startVoicePipeline(): Promise<void> {
     // pipeline vocal n'a aucune raison d'y changer quoi que ce soit — et le déplier "pour une réponse
     // vocale" par-dessus une barre de saisie rejouerait exactement la contradiction taille/contenu déjà
     // corrigée une fois ici.
-    if (
-      widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible() &&
-      currentWidgetMode() === 'voice'
+    if (currentWidgetMode() === 'voice' && emotion !== 'idle' && onboardingDone && !fullWindow?.isVisible()) {
+      // Couvre aussi le mot d'activation « Jaris » : il doit ouvrir la barre de la même façon que +.
+      showWidgetWindow(true)
+    } else if (
+      currentWidgetMode() === 'voice' && emotion === 'idle' &&
+      widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()
     ) {
-      positionWidgetWindow(widgetWindow, emotion !== 'idle', true)
+      // Le renderer reçoit l'émotion juste après et joue son fondu ; la fenêtre native disparaît à sa fin.
+      hideIdleWidget()
     }
     broadcast(IPC_CHANNELS.emotion, emotion)
   })
@@ -500,7 +540,7 @@ app.whenReady().then(async () => {
   void checkAppFreshness()
 
   ipcMain.handle(IPC_CHANNELS.setupStatus, () => lastSetupStatus)
-  ipcMain.on(IPC_CHANNELS.triggerWake, () => pipeline?.triggerWake())
+  ipcMain.on(IPC_CHANNELS.triggerWake, () => triggerVisibleWake())
   ipcMain.on(IPC_CHANNELS.audioEnded, () => pipeline?.notifyAudioEnded())
   ipcMain.handle(IPC_CHANNELS.getProfile, () => getProfile())
   ipcMain.handle(IPC_CHANNELS.saveProfile, (_event, profile: Profile) => saveProfile(profile))
@@ -882,7 +922,7 @@ app.whenReady().then(async () => {
         // "je desactive le plus je fait plus sa sactive").
         void getProfile().then((profile) => {
           if (profile?.activationKeyEnabled === false) return
-          pipeline?.triggerWake()
+          triggerVisibleWake()
         })
       })
       if (registered) {
@@ -902,11 +942,11 @@ app.whenReady().then(async () => {
   // d'ambiguïté d'agencement clavier) — visuellement c'est quand même la touche "+" cherchée à l'origine.
   registerWakeShortcut('numadd')
 
-  // Toujours lancée dans sa fenêtre normale, comme avant l'étape 19 : la réduire ou la fermer bascule
-  // ensuite vers le widget (voir createFullWindow), mais le lancement lui-même ne change pas.
+  // Après la première configuration, aucun panneau ne s'impose au démarrage : Jaris écoute en arrière-plan
+  // et la barre apparaît seulement avec « Jaris » ou +. L'onboarding reste visible au premier lancement.
   const profile = await getProfile()
   onboardingDone = Boolean(profile?.capacityScanDone)
-  fullWindow = createFullWindow()
+  fullWindow = createFullWindow(!onboardingDone)
 
   // Widget pré-créé et chargé en arrière-plan dès le démarrage (caché) : sans ça, la première fois qu'on
   // réduit la fenêtre, il fallait créer la fenêtre Electron ET charger toute la page React avant de

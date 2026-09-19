@@ -43,7 +43,7 @@ test('le mode actif est RETENU côté main, pas seulement utilisé pour suspendr
 })
 
 test('quitter Jaris depuis le mode Code n’affiche AUCUN widget', () => {
-  const showWidget = /function showWidgetWindow\(\)[\s\S]{0,900}?\n\}/.exec(mainSource)
+  const showWidget = /function showWidgetWindow\([^)]*\)[\s\S]{0,1200}?\n\}/.exec(mainSource)
   assert.ok(showWidget, 'showWidgetWindow introuvable dans main.ts')
   assert.match(
     showWidget[0],
@@ -54,7 +54,7 @@ test('quitter Jaris depuis le mode Code n’affiche AUCUN widget', () => {
 })
 
 test('un widget déjà affiché est caché quand on passe en mode Code, pas laissé sous son ancienne forme', () => {
-  const showWidget = /function showWidgetWindow\(\)[\s\S]{0,900}?\n\}/.exec(mainSource)
+  const showWidget = /function showWidgetWindow\([^)]*\)[\s\S]{0,1200}?\n\}/.exec(mainSource)
   assert.match(
     showWidget[0],
     /activeMode === ['"]code['"][\s\S]{0,200}?widgetWindow\.hide\(\)/,

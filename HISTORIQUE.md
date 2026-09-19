@@ -1048,3 +1048,12 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   accent arrivait à l'écran en caractère de remplacement — invisible chez Léo (sa machine est déjà en UTF-8),
   cassé chez quelqu'un d'autre. Cause reproduite à l'identique avant correctif. Régression : `npm test`
   (302 tests).
+
+- ✅ Étape 123 (v0.15.1) — La barre widget n'est plus imposée au lancement après l'onboarding : Jaris reste
+  chargé en arrière-plan avec ses fenêtres préchargées mais cachées. Le + du pavé numérique ouvre la forme
+  correspondant au dernier mode actif — barre de saisie en Chat, écoute visible en Agent vocal, rien en Code.
+  Le mot « Jaris » affiche le widget vocal dès l'activation ; son retour à l'état inactif laisse finir le
+  fondu de 340 ms avant de cacher entièrement la fenêtre. La fenêtre complète reste accessible depuis
+  l'icône près de l'horloge et le premier onboarding reste visible. Le test du déplacement des modèles a
+  aussi été rendu portable sous Windows : sa fausse jonction utilise désormais une vraie jonction locale,
+  sans privilège de lien symbolique requis.
