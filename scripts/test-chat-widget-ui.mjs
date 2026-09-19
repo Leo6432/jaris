@@ -341,22 +341,22 @@ test('les boutons du widget sont habillés par le CSS de Jaris, pas laissés au 
 /**
  * Léo : "quand on envoie un message dans le widget chat, ça réponse doit disparaitre après, ça doit varier
  * selon la longueur de la réponse" — computeReplyDismissDelayMs (ChatWidget.tsx) calcule le délai avant
- * disparition automatique, calé sur 600ms par mot, avec un plancher de 5 secondes et aucun plafond.
+ * disparition automatique, calé sur 400ms par mot, avec un plancher de 5 secondes et aucun plafond.
  */
-test('le délai vaut 0,6 seconde par mot, avec 5 secondes minimum et aucun maximum', options, async () => {
+test('le délai vaut 0,4 seconde par mot, avec 5 secondes minimum et aucun maximum', options, async () => {
   await withWidget(async (page) => {
     const delays = await page.evaluate(() => ({
       unMot: window.__computeReplyDismissDelayMs('Paris'),
-      // 20 mots à 600ms/mot = 12000ms : au-dessus du plancher de 5 secondes.
+      // 20 mots à 400ms/mot = 8000ms : au-dessus du plancher de 5 secondes.
       moyenne: window.__computeReplyDismissDelayMs(Array(20).fill('mot').join(' ')),
       longue: window.__computeReplyDismissDelayMs(
         Array(120).fill('mot').join(' ')
       )
     }))
     assert.equal(delays.unMot, 5000, 'un seul mot doit rester au plancher (5s)')
-    assert.equal(delays.moyenne, 12000, 'une réponse de 20 mots doit rester 12 secondes')
+    assert.equal(delays.moyenne, 8000, 'une réponse de 20 mots doit rester 8 secondes')
     assert.ok(delays.moyenne > delays.unMot, 'une réponse plus longue doit rester affichée plus longtemps')
-    assert.equal(delays.longue, 72000, 'une réponse longue ne doit subir aucun plafond')
+    assert.equal(delays.longue, 48000, 'une réponse longue ne doit subir aucun plafond')
   })
 })
 
