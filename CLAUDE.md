@@ -2709,3 +2709,35 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   doit rester sous 250px de haut), vérifié mordant en forçant temporairement `flex-direction: column` sur
   `.options-menu__voice-picker` (le test échoue bien, confirmé avant de le committer). Vérifié en plus par
   capture d'écran réelle RECADRÉE sur cette seule carte, comparée directement à celle envoyée par Léo.
+
+- **v0.14.11 corrigeait bien la disposition de "La voix de Jaris", mais Léo a ensuite pointé un défaut de
+  RESPIRATION resté partout (v0.14.12), capture annotée de traits rouges cette fois plutôt qu'une phrase
+  seule.** "augmente un peut la taille des carre la ou j'ai entourée entre la barre et le texte et la fin du
+  rectangle pour tout les rectangle dans option" — les traits entouraient le dessous du titre de CHAQUE carte
+  ("la barre", le trait qui suit le titre de section) ET le bas de la première carte, juste avant le bord.
+  **Cause exacte, mesurée avant de corriger** : `.options-menu__group` (la carte commune à TOUS les groupes
+  de réglages, Voix/Modèles/Général) n'avait AUCUN `gap` entre son titre et son contenu — le seul espace
+  visible entre le titre et le premier réglage venait du `padding-top` PROPRE de `.options-menu__row` (14px),
+  jamais d'un espacement au niveau de la carte elle-même ; pareil en bas, où seul le `padding-bottom` de la
+  carte (14px, déjà cumulé avec le padding-bottom du dernier `.options-menu__row`) donnait de l'air. Mesuré
+  avec Playwright AVANT toute correction (`getBoundingClientRect` sur le titre, la première ligne et le bas
+  de la carte) : 14px en haut comme en bas — exactement ce que Léo montrait comme trop serré.
+  **Piège dans mon premier réglage, corrigé avant de livrer** : `gap: 14px` (la même valeur que le padding
+  d'une ligne) semblait un choix naturel, mais ce `gap` s'AJOUTE au padding-top de 14px déjà présent sur la
+  première ligne, doublant l'écart réel à 28px — bien plus que "un peu" demandé. Redescendu à `gap: 8px`
+  (mesuré : 14px -> 22px, +8px, un vrai "un peu") et le padding bas de la carte relevé de 14px à 24px
+  (14px -> 25px mesuré, la ligne garde son propre padding inchangé). Le `gap` est posé sur `.options-menu__group`
+  lui-même (titre / description optionnelle / bloc des lignes), donc il n'ajoute RIEN entre les lignes
+  individuelles À L'INTÉRIEUR d'une carte (gérées par leur propre padding, jamais touché) — seulement entre le
+  titre et le premier contenu, exactement le périmètre demandé.
+  **"Pour tout les rectangle dans option" couvert par construction** : `.options-menu__group` est la classe
+  PARTAGÉE par les 8 `SettingGroup` de l'app (Voix, Modèles, Général) — un seul correctif dans cette classe
+  s'applique automatiquement partout, sans avoir à toucher chaque onglet séparément (le composant `SettingRow`/
+  `SettingGroup`, étape 116, existe justement pour ça : une seule source de vérité pour l'apparence de toutes
+  les cartes de réglages).
+  Régression : `node --test scripts/test-options-reorganization-ui.mjs` (306 tests) — nouveau test dédié qui
+  mesure les VRAIS écarts en pixels (titre -> premier réglage, dernier réglage -> bas de carte) sur une carte
+  réelle et exige qu'ils dépassent 18px (contre 14px avant) sans dépasser 40px (pour éviter l'excès inverse),
+  vérifié mordant en remettant temporairement l'ancien padding/gap (le test échoue bien, confirmé avant de le
+  committer). Vérifié en plus par capture d'écran réelle pleine page, comparée à la disposition demandée par
+  Léo.

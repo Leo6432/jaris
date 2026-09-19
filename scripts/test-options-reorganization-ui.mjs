@@ -219,3 +219,29 @@ test('"La voix de Jaris" est une carte COMPACTE (orbe à gauche, texte à droite
     assert.ok(cardBox.height < 250, `la carte doit être compacte, pas la grande carte verticale d'avant : ${cardBox.height}px`)
   })
 })
+
+test('les cartes de réglages ont de l\'air entre le titre et le contenu, et entre le contenu et le bas de la carte', options, async () => {
+  // Léo, capture annotée de rouge sur plusieurs cartes : "augmente un peut la taille des carre la ou j'ai
+  // entourée entre la barre et le texte et la fin du rectangle pour tout les rectangle dans option" — avant
+  // ce correctif, le premier réglage touchait quasiment le trait sous le titre (14px, seulement le padding
+  // propre de la ligne) et le dernier réglage touchait quasiment le bord bas de la carte (14px). Les deux
+  // gaps doivent être mesurablement plus grands maintenant, sans pour autant écarter les réglages ENTRE eux
+  // (jamais demandé, et ça casserait l'alignement avec les autres onglets déjà validés).
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Voix")')
+    await page.waitForSelector('.options-menu__voice-picker')
+    const group = page.locator('.options-menu__section--voix .options-menu__group').nth(1) // "Son et périphériques"
+    const title = await group.locator('.options-menu__section-title').boundingBox()
+    const rows = await group.locator('.options-menu__row').all()
+    const firstLabel = await rows[0].locator('.options-menu__row-label').boundingBox()
+    const lastRowBox = await rows[rows.length - 1].boundingBox()
+    const cardBox = await group.boundingBox()
+    const titleToFirstRow = firstLabel.y - (title.y + title.height)
+    const lastRowToBottom = cardBox.y + cardBox.height - (lastRowBox.y + lastRowBox.height)
+    assert.ok(titleToFirstRow > 18, `l'écart titre -> premier réglage doit être visiblement augmenté (était 14px) : ${titleToFirstRow}px`)
+    assert.ok(lastRowToBottom > 18, `l'écart dernier réglage -> bas de la carte doit être visiblement augmenté (était 14px) : ${lastRowToBottom}px`)
+    // Pas de dérive vers l'excès non plus : "un peu", pas un vide béant qui casserait la compacité voulue
+    // pour la carte "La voix de Jaris" juste au-dessus.
+    assert.ok(titleToFirstRow < 40, `l'écart titre -> premier réglage ne doit pas devenir excessif : ${titleToFirstRow}px`)
+  })
+})
