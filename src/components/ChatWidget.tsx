@@ -137,6 +137,11 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
     } finally {
       setSending(false)
       setProgress(null)
+      // Une fois la réponse complète, le widget doit rendre la main à l'écran derrière lui. La protection
+      // du brouillon est relâchée explicitement avant le repli : sinon la fenêtre peut rester ouverte parce
+      // que le champ a été vidé dès l'envoi mais que `expanded` vaut encore vrai.
+      window.jaris.setChatWidgetKeepOpen(false)
+      window.jaris.collapseChatWidget()
     }
   }
 
@@ -193,32 +198,34 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
         window.jaris.collapseChatWidget()
       }}
     >
-      <form
-        className="chat-widget__bar"
-        onSubmit={(event) => {
-          event.preventDefault()
-          void send()
-        }}
-      >
-        <input
-          ref={inputRef}
-          className="chat-widget__input"
-          type="text"
-          value={input}
-          placeholder="Pose ta question à Jaris…"
-          aria-label="Pose ta question à Jaris"
-          disabled={sending}
-          onChange={(event) => setInput(event.target.value)}
-          onKeyDown={(event) => {
-            // Échap referme la réponse sans avoir à viser un bouton — le geste attendu pour une fenêtre
-            // qui flotte par-dessus tout le reste.
-            if (event.key === 'Escape') dismiss()
+      {!expanded && (
+        <form
+          className="chat-widget__bar"
+          onSubmit={(event) => {
+            event.preventDefault()
+            void send()
           }}
-        />
-        <button className="chat-widget__send" type="submit" disabled={sending || !input.trim()} title="Envoyer">
-          <SendIcon />
-        </button>
-      </form>
+        >
+          <input
+            ref={inputRef}
+            className="chat-widget__input"
+            type="text"
+            value={input}
+            placeholder="Pose ta question à Jaris…"
+            aria-label="Pose ta question à Jaris"
+            disabled={sending}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              // Échap referme la réponse sans avoir à viser un bouton — le geste attendu pour une fenêtre
+              // qui flotte par-dessus tout le reste.
+              if (event.key === 'Escape') dismiss()
+            }}
+          />
+          <button className="chat-widget__send" type="submit" disabled={sending || !input.trim()} title="Envoyer">
+            <SendIcon />
+          </button>
+        </form>
+      )}
 
       {expanded && (
         <div className="chat-widget__answer">

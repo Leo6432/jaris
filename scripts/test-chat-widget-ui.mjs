@@ -161,20 +161,18 @@ test('un seul caractère protège le brouillon quand la souris quitte la barre',
   })
 })
 
-test('envoyer garde le widget ouvert pendant la réflexion puis pour lire la réponse', options, async () => {
+test('envoyer masque la barre puis replie le widget après la réponse', options, async () => {
   await withWidget(async (page) => {
     await page.setViewportSize({ width: 460, height: 400 })
     await page.fill('.chat-widget__input', 'salut')
     await page.click('.chat-widget__send')
     await page.waitForSelector('.chat-widget__answer')
     assert.equal(await page.evaluate(() => window.__keepOpen), true, 'la question en cours n’est pas protégée')
+    assert.equal((await page.$('.chat-widget__bar')) === null, true, 'la barre doit disparaître pendant la réponse')
     await page.waitForFunction(() => document.querySelector('.chat-widget__reply')?.textContent?.includes('18 degrés'))
-    await page.hover('.chat-widget__answer')
-    await page.mouse.move(459, 399)
-    await new Promise((resolve) => setTimeout(resolve, 100))
-    assert.equal(await page.evaluate(() => window.__collapsed), 0, 'la réponse affichée a été repliée avant lecture')
-    assert.equal(await page.evaluate(() => window.__keepOpen), true)
-  })
+    await page.waitForFunction(() => window.__collapsed === 1)
+    assert.equal(await page.evaluate(() => window.__keepOpen), false, 'la protection doit être libérée après la réponse')
+})
 })
 
 test('après un repli souris, le prochain + rouvre une simple barre sans ancienne réponse', options, async () => {
