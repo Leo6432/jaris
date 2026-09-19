@@ -35,16 +35,16 @@ import ChatWidget from './src/components/ChatWidget'
 window.__heights = []
 window.__openedSettings = 0
 window.__collapsed = 0
-window.__draftPresent = false
+window.__keepOpen = false
 const overrides = {
   sendChatMessage: async () => {
     await new Promise((resolve) => setTimeout(resolve, 60))
     return { role: 'assistant', content: "Il fait 18 degrés à Paris, ciel **couvert**." }
   },
   setChatWidgetHeight: (height) => window.__heights.push(height),
-  setChatWidgetDraftPresent: (present) => { window.__draftPresent = present },
+  setChatWidgetKeepOpen: (keepOpen) => { window.__keepOpen = keepOpen },
   armChatWidgetPointer: () => {},
-  collapseChatWidget: () => { if (!window.__draftPresent) window.__collapsed += 1 },
+  collapseChatWidget: () => { if (!window.__keepOpen) window.__collapsed += 1 },
   openSettings: () => { window.__openedSettings += 1 },
   getProfile: async () => ({ name: 'Léo', soundEffectsEnabled: false })
 }
@@ -152,11 +152,27 @@ test('sortir réellement la souris de la barre demande son retour à l’état i
 test('un seul caractère protège le brouillon quand la souris quitte la barre', options, async () => {
   await withWidget(async (page) => {
     await page.fill('.chat-widget__input', 'a')
-    await page.waitForFunction(() => window.__draftPresent === true)
+    await page.waitForFunction(() => window.__keepOpen === true)
     await page.hover('.chat-widget__bar')
     await page.mouse.move(459, 67)
     await new Promise((resolve) => setTimeout(resolve, 100))
     assert.equal(await page.evaluate(() => window.__collapsed), 0)
+  })
+})
+
+test('envoyer garde le widget ouvert pendant la réflexion puis pour lire la réponse', options, async () => {
+  await withWidget(async (page) => {
+    await page.setViewportSize({ width: 460, height: 400 })
+    await page.fill('.chat-widget__input', 'salut')
+    await page.click('.chat-widget__send')
+    await page.waitForSelector('.chat-widget__answer')
+    assert.equal(await page.evaluate(() => window.__keepOpen), true, 'la question en cours n’est pas protégée')
+    await page.waitForFunction(() => document.querySelector('.chat-widget__reply')?.textContent?.includes('18 degrés'))
+    await page.hover('.chat-widget__answer')
+    await page.mouse.move(459, 399)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    assert.equal(await page.evaluate(() => window.__collapsed), 0, 'la réponse affichée a été repliée avant lecture')
+    assert.equal(await page.evaluate(() => window.__keepOpen), true)
   })
 })
 

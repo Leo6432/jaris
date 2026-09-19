@@ -120,8 +120,8 @@ const api = {
   onWidgetMode: (cb: (mode: WidgetMode) => void) => subscribe(IPC_CHANNELS.widgetMode, cb),
   setChatWidgetHeight: (height: number | null): void =>
     ipcRenderer.send(IPC_CHANNELS.setChatWidgetHeight, height),
-  setChatWidgetDraftPresent: (present: boolean): void =>
-    ipcRenderer.send(IPC_CHANNELS.setChatWidgetDraftPresent, present),
+  setChatWidgetKeepOpen: (keepOpen: boolean): void =>
+    ipcRenderer.send(IPC_CHANNELS.setChatWidgetKeepOpen, keepOpen),
   armChatWidgetPointer: (): void => ipcRenderer.send(IPC_CHANNELS.armChatWidgetPointer),
   collapseChatWidget: (): void => ipcRenderer.send(IPC_CHANNELS.collapseChatWidget),
   onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => subscribe(IPC_CHANNELS.micTestLevel, cb),

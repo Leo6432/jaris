@@ -168,8 +168,8 @@ let displayedWidgetMode: WidgetMode = 'voice'
  * taillée pour la réponse la plus longue.
  */
 let chatWidgetHeight: number | null = null
-/** Vrai dès le premier caractère, espaces compris : un brouillon ne doit jamais disparaître sur un clic dehors. */
-let chatWidgetDraftPresent = false
+/** Protège le brouillon puis la question/réponse : leur contenu ne doit jamais disparaître sur un clic dehors. */
+let chatWidgetKeepOpen = false
 
 /**
  * Filet natif pour la sortie de souris du Chat. Chromium peut perdre `mouseleave` quand le pointeur franchit
@@ -509,7 +509,7 @@ function triggerVisibleWake(): void {
 function collapseChatWidget(): void {
   if (
     currentWidgetMode() !== 'chat' || displayedWidgetMode !== 'chat' ||
-    !widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible() || chatWidgetDraftPresent
+    !widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible() || chatWidgetKeepOpen
   ) return
   stopChatPointerWatch()
   displayedWidgetMode = 'chat-idle'
@@ -700,8 +700,8 @@ app.whenReady().then(async () => {
     // cliquer en fermant le widget.
     positionWidgetWindow(widgetWindow, true)
   })
-  ipcMain.on(IPC_CHANNELS.setChatWidgetDraftPresent, (_event, present: boolean) => {
-    chatWidgetDraftPresent = present
+  ipcMain.on(IPC_CHANNELS.setChatWidgetKeepOpen, (_event, keepOpen: boolean) => {
+    chatWidgetKeepOpen = keepOpen
   })
   ipcMain.on(IPC_CHANNELS.armChatWidgetPointer, () => {
     if (displayedWidgetMode === 'chat') chatPointerWasInside = true

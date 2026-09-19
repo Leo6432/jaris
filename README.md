@@ -1119,7 +1119,8 @@ toujours l'application complète. **Fermer sa croix quitte vraiment Jaris**.
   zone Chat vide, ou cliquer ailleurs, le replie immédiatement. Dès qu'un
   caractère est saisi, la barre reste ouverte pour conserver le brouillon. Un suivi natif temporaire complète
   l'évènement de la page afin que les passages rapides hors d'une fenêtre
-  transparente soient eux aussi détectés. Depuis Code, aucun widget n'est affiché.
+  transparente soient eux aussi détectés. Après l'envoi, elle reste également ouverte pendant la réflexion
+  et pour permettre de lire la réponse, jusqu'au bouton « Fermer ». Depuis Code, aucun widget n'est affiché.
 - **Halo entièrement fondu** : les formes Vocal et Chat gardent 14 px de zone
   transparente autour de leur lueur de 12 px, afin que Windows ne la coupe plus
   au bord de la fenêtre native.

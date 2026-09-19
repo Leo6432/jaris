@@ -2830,3 +2830,6 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   (même un espace) le renderer doit signaler cet état au main pour bloquer TOUS les chemins de repli. Sinon
   cliquer ailleurs détruit visuellement une saisie en cours. Pour une fenêtre Electron, écouter aussi `blur`
   fournit la réaction immédiate au clic extérieur que le seul suivi périodique du pointeur ne garantit pas.
+  La protection ne doit PAS être calculée sur le champ seul : l'envoi vide normalement ce champ avant que la
+  réponse arrive. Elle doit rester vraie tant qu'une question/réponse est affichée, sinon le widget disparaît
+  pendant la réflexion et l'utilisateur entend ou devine une réponse qu'il ne peut plus lire.

@@ -111,7 +111,7 @@ declare global {
       getWidgetMode: () => Promise<WidgetMode>
       onWidgetMode: (cb: (mode: WidgetMode) => void) => () => void
       setChatWidgetHeight: (height: number | null) => void
-      setChatWidgetDraftPresent: (present: boolean) => void
+      setChatWidgetKeepOpen: (keepOpen: boolean) => void
       armChatWidgetPointer: () => void
       collapseChatWidget: () => void
       onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => () => void

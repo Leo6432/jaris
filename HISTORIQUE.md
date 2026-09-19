@@ -1084,3 +1084,9 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   natif de perte de focus de la fenêtre. Dès qu'un caractère est présent, espaces compris, le brouillon est
   signalé au processus principal et bloque tous les replis automatiques. Une entrée souris explicite arme en
   plus le suivi natif sans attendre son prochain relevé, supprimant le délai intermittent observé.
+
+- ✅ Étape 128 (v0.15.6) — Correction du cycle d'envoi signalé immédiatement après v0.15.5 : vider le champ
+  au moment d'envoyer « salut » retirait la protection du brouillon, donc le widget pouvait devenir inactif
+  pendant que Jaris réfléchissait et rendre sa réponse invisible. La protection couvre maintenant trois états
+  continus : texte saisi, question en cours, puis réponse affichée. Elle ne s'arrête qu'en fermant la réponse,
+  ce qui permet ensuite au mécanisme normal de replier une barre redevenue vide.

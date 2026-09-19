@@ -72,9 +72,11 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
 
   useEffect(() => {
     // Ne jamais utiliser trim() ici : un espace est déjà un caractère saisi et fait donc partie du
-    // brouillon que Léo demande de protéger quand il clique ailleurs.
-    window.jaris.setChatWidgetDraftPresent(input.length > 0)
-  }, [input])
+    // brouillon que Léo demande de protéger quand il clique ailleurs. Après l'envoi, le champ redevient
+    // vide mais `expanded` reste vrai pendant la réflexion ET une fois la réponse affichée : protéger les
+    // deux évite que la question disparaisse précisément pendant que Léo attend de pouvoir lire la réponse.
+    window.jaris.setChatWidgetKeepOpen(input.length > 0 || expanded)
+  }, [input, expanded])
 
   useEffect(() => {
     if (!inactive) return
