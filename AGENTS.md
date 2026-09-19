@@ -2983,3 +2983,9 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   par un vrai navigateur avec le vrai CSS compilé, son ressenti exact (le bon moment pour disparaître, ni
   trop tôt ni trop tard) reste à confirmer par Léo — même réserve que pour tout jugement de "qualité perçue"
   déjà documenté dans ce fichier (Kokoro, le rendu de l'orbe).
+
+- **Un filet mécanique qui classe toute phrase terminée par `?` comme question factuelle doit exclure les
+  échanges sociaux adressés à l'assistant.** Constaté avec « tu vas bien ? » : la relance corrective vers
+  `search_web` transformait une salutation en recherche en ligne absurde. Garder une exclusion ancrée sur la
+  phrase entière (`SOCIAL_CHECK_IN`) pour ne pas masquer une vraie question telle que « Pourquoi ça va mal
+  dans l'économie ? ». Régression : `scripts/test-knowledge-question.mjs`.

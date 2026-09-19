@@ -91,6 +91,10 @@ const INFO_SEEKING_IMPERATIVE = /^(trouve|trouve[- ]moi|cherche|cherche[- ]moi|r
 // (fonctionnement, mémoire locale) — une relance search_web y serait à la fois inutile et hors sujet.
 const NOT_A_KNOWLEDGE_QUESTION =
   /\b(quelle heure|quel jour|quelle date|tu t['’]appelles|ton nom|comment tu vas|comment ça va|qui es-tu|je m['’]appelle|mon nom|retiens|retenir|souviens|rappelle-toi|n['’]oublie pas|mémorise)\b/i
+// Les petites questions sociales adressées à Jaris ne demandent aucune donnée extérieure. Le motif est
+// volontairement ancré sur la phrase entière : « Pourquoi ça va mal dans l'économie ? » reste ainsi une
+// vraie question factuelle, tandis que « tu vas bien ? » ne déclenche plus une recherche web absurde.
+const SOCIAL_CHECK_IN = /^(?:salut[, !]*)?(?:tu vas bien|vas-tu bien|est-ce que tu vas bien|comment vas-tu|comment tu vas|ça va|ca va)\s*[?!.]*$/i
 
 /**
  * true si la phrase RESSEMBLE à une demande d'information (question de connaissance générale — fait,
@@ -102,7 +106,7 @@ const NOT_A_KNOWLEDGE_QUESTION =
  */
 export function looksLikeKnowledgeQuestion(prompt: string): boolean {
   const trimmed = prompt.trim()
-  if (!trimmed || NOT_A_KNOWLEDGE_QUESTION.test(trimmed)) return false
+  if (!trimmed || NOT_A_KNOWLEDGE_QUESTION.test(trimmed) || SOCIAL_CHECK_IN.test(trimmed)) return false
   return QUESTION_START_WORDS.test(trimmed) || INFO_SEEKING_IMPERATIVE.test(trimmed) || trimmed.endsWith('?')
 }
 

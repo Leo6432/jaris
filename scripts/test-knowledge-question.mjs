@@ -59,6 +59,10 @@ for (const prompt of [
   'Quelle heure est-il ?',
   'Quel jour on est ?',
   "Comment tu t'appelles ?",
+  'Tu vas bien ?',
+  'Est-ce que tu vas bien ?',
+  'Comment vas-tu ?',
+  'Ça va ?',
   'Écris bonjour',
   'Éteins l’ordinateur',
   'Merci beaucoup',
@@ -68,3 +72,7 @@ for (const prompt of [
     assert.ok(!looksLikeKnowledgeQuestion(prompt))
   })
 }
+
+test('une vraie question factuelle contenant « ça va » reste recherchée', () => {
+  assert.ok(looksLikeKnowledgeQuestion("Pourquoi ça va mal dans l'économie ?"))
+})

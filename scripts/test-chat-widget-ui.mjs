@@ -302,7 +302,7 @@ test('à la hauteur demandée, aucun bout du widget n’est coupé', options, as
   })
 })
 
-test('"Fermer" ramène la simple barre, "Ouvrir le Chat" rouvre l’application', options, async () => {
+test('le widget garde seulement "Ouvrir le Chat", qui rouvre l’application', options, async () => {
   await withWidget(async (page) => {
     await page.setViewportSize({ width: 460, height: 400 })
     await page.fill('.chat-widget__input', 'bonjour')
@@ -311,14 +311,7 @@ test('"Fermer" ramène la simple barre, "Ouvrir le Chat" rouvre l’application'
 
     await page.click('.chat-widget__action:has-text("Ouvrir le Chat")')
     assert.equal(await page.evaluate(() => window.__openedSettings), 1, 'le bouton ne rouvre pas Jaris')
-
-    await page.click('.chat-widget__action:has-text("Fermer")')
-    assert.equal(await page.$('.chat-widget__answer'), null, 'la réponse doit disparaître')
-    assert.equal(
-      await page.evaluate(() => window.__heights[window.__heights.length - 1]),
-      null,
-      'le main doit être prévenu de replier la fenêtre à sa simple barre'
-    )
+    assert.equal(await page.$('.chat-widget__action:has-text("Fermer")'), null, 'le bouton Fermer doit être absent')
   })
 })
 
@@ -336,7 +329,7 @@ test('les boutons du widget sont habillés par le CSS de Jaris, pas laissés au 
         return { font: computed.fontFamily, background: computed.backgroundImage, clip: computed.clipPath }
       })
     )
-    assert.equal(styles.length, 2, 'les deux boutons doivent être présents')
+    assert.equal(styles.length, 1, 'seul le bouton Ouvrir le Chat doit être présent')
     for (const style of styles) {
       assert.match(style.font, /Rajdhani/, 'bouton laissé à la police par défaut du navigateur')
       assert.match(style.background, /gradient/, 'bouton sans le fond de la famille HUD')
@@ -348,22 +341,22 @@ test('les boutons du widget sont habillés par le CSS de Jaris, pas laissés au 
 /**
  * Léo : "quand on envoie un message dans le widget chat, ça réponse doit disparaitre après, ça doit varier
  * selon la longueur de la réponse" — computeReplyDismissDelayMs (ChatWidget.tsx) calcule le délai avant
- * disparition automatique, calé sur une seconde par mot, avec un plancher de 5 secondes et aucun plafond.
+ * disparition automatique, calé sur 800ms par mot, avec un plancher de 5 secondes et aucun plafond.
  */
-test('le délai vaut une seconde par mot, avec 5 secondes minimum et aucun maximum', options, async () => {
+test('le délai vaut 0,8 seconde par mot, avec 5 secondes minimum et aucun maximum', options, async () => {
   await withWidget(async (page) => {
     const delays = await page.evaluate(() => ({
       unMot: window.__computeReplyDismissDelayMs('Paris'),
-      // 20 mots à 1 seconde/mot = 20000ms : au-dessus du plancher de 5 secondes.
+      // 20 mots à 800ms/mot = 16000ms : au-dessus du plancher de 5 secondes.
       moyenne: window.__computeReplyDismissDelayMs(Array(20).fill('mot').join(' ')),
       longue: window.__computeReplyDismissDelayMs(
         Array(120).fill('mot').join(' ')
       )
     }))
     assert.equal(delays.unMot, 5000, 'un seul mot doit rester au plancher (5s)')
-    assert.equal(delays.moyenne, 20000, 'une réponse de 20 mots doit rester 20 secondes')
+    assert.equal(delays.moyenne, 16000, 'une réponse de 20 mots doit rester 16 secondes')
     assert.ok(delays.moyenne > delays.unMot, 'une réponse plus longue doit rester affichée plus longtemps')
-    assert.equal(delays.longue, 120000, 'une réponse longue ne doit subir aucun plafond')
+    assert.equal(delays.longue, 96000, 'une réponse longue ne doit subir aucun plafond')
   })
 })
 
@@ -371,7 +364,7 @@ test('le délai vaut une seconde par mot, avec 5 secondes minimum et aucun maxim
  * De vraies attentes (Playwright `clock` s'est révélée instable dans ce sandbox : les deux tests qu'elle
  * portait ont fini par geler tout le fichier jusqu'au SIGKILL externe, malgré `polling: 100`). Le faux
  * `sendChatMessage` répond "Il fait 18 degrés à Paris, ciel couvert." — 8 mots, donc `computeReplyDismissDelayMs`
- * donne 8000ms : une vraie attente de quelques secondes suffit.
+ * donne 6400ms : une vraie attente de quelques secondes suffit.
  */
 
 test('la réponse disparaît toute seule après le délai calculé, sans survol', options, async () => {
@@ -386,7 +379,7 @@ test('la réponse disparaît toute seule après le délai calculé, sans survol'
     await page.mouse.move(459, 399)
 
     const wanted = await page.evaluate(() => window.__computeReplyDismissDelayMs('Il fait 18 degrés à Paris, ciel couvert.'))
-    assert.equal(wanted, 8000, '8 mots doivent rester visibles 8 secondes à 1 seconde par mot')
+    assert.equal(wanted, 6400, '8 mots doivent rester visibles 6,4 secondes à 800ms par mot')
     assert.ok(await page.$('.chat-widget__answer'), 'la réponse doit encore être là juste avant le délai')
 
     await page.waitForTimeout(wanted - 500)

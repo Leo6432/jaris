@@ -3,10 +3,10 @@ import { renderFormattedText } from '@/lib/formatReply'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 
 // Délai de disparition automatique de la réponse, volontairement confortable pour la lecture
-// (1 seconde par mot) — voir computeReplyDismissDelayMs et l'effet plus bas. Une réponse courte reste au
+// (800ms par mot) — voir computeReplyDismissDelayMs et l'effet plus bas. Une réponse courte reste au
 // moins 5 secondes. À la demande de Léo, aucune limite haute ne coupe une réponse longue avant que son
 // temps de lecture calculé soit écoulé.
-const REPLY_DISMISS_MS_PER_WORD = 1000
+const REPLY_DISMISS_MS_PER_WORD = 800
 const MIN_REPLY_DISMISS_MS = 5000
 
 /** Exportée pour être testée directement (le vrai délai, plusieurs secondes à minutes, est trop lent à
@@ -149,8 +149,7 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
   /**
    * Léo : "quand on envoie un message dans le widget chat, ça réponse doit disparaitre après, ça doit
    * varier selon la longueur de la réponse" — la réponse se referme donc TOUTE SEULE après un délai de
-   * lecture, plus long pour un texte plus long, plutôt que de rester ouverte indéfiniment jusqu'au clic sur
-   * "Fermer".
+   * lecture, plus long pour un texte plus long, plutôt que de rester ouverte indéfiniment.
    *
    * Ne se déclenche QUE sur une réponse reçue avec succès (`!sending`, `!error`) : un message d'erreur reste
    * affiché jusqu'à une action explicite, il n'y a rien à "laisser le temps de lire" dans un texte d'échec
@@ -240,9 +239,6 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
           <div className="chat-widget__actions">
             <button className="chat-widget__action" onClick={() => window.jaris.openSettings()}>
               Ouvrir le Chat
-            </button>
-            <button className="chat-widget__action" onClick={dismiss} disabled={sending}>
-              Fermer
             </button>
           </div>
         </div>
