@@ -1735,6 +1735,22 @@ body.body--scan::after {
   width: 100%;
 }
 
+.chat-widget__idle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 40px;
+  padding: 0;
+  color: var(--hud-accent-bright);
+  background: var(--hud-panel-raised);
+  border: 1px solid var(--hud-line);
+  border-radius: 999px;
+  box-shadow: var(--hud-glow);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
 .chat-widget__bar {
   display: flex;
   align-items: center;
@@ -3522,6 +3538,13 @@ a:hover {
   justify-content: flex-start;
   align-items: center;
   padding: 4px 6px;
+}
+.app--widget-chat-idle {
+  justify-content: flex-start;
+  padding: 4px;
+}
+.app--widget-chat-idle .chat-widget {
+  align-items: center;
 }
 .app--widget .jaris-orb { animation: none; }
 .widget-rest, .widget-active {

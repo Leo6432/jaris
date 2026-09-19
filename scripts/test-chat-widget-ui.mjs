@@ -57,7 +57,12 @@ document.documentElement.classList.add('body--widget')
 document.body.classList.add('body--widget')
 
 const root = createRoot(document.getElementById('root'))
-root.render(<div className="app app--widget app--widget-chat"><ChatWidget /></div>)
+window.__renderChatWidget = (inactive) => root.render(
+  <div className={\`app app--widget app--widget-chat\${inactive ? ' app--widget-chat-idle' : ''}\`}>
+    <ChatWidget inactive={inactive} />
+  </div>
+)
+window.__renderChatWidget(false)
 `
 
 let pageHtml = null
@@ -102,6 +107,24 @@ test('le widget affiche une barre de saisie, jamais le cercle du widget vocal', 
     assert.ok(await page.$('.chat-widget__input'), 'la barre de saisie est absente')
     assert.equal(await page.$('.jaris-orb'), null, 'le cercle vocal ne doit pas être dessiné dans le widget texte')
     assert.equal(await page.$('.chat-widget__answer'), null, 'au repos, rien ne doit être déplié')
+  })
+})
+
+test('le Chat inactif reste un petit widget puis + peut afficher une barre déjà prête à écrire', options, async () => {
+  await withWidget(async (page) => {
+    await page.evaluate(() => window.__renderChatWidget(true))
+    await page.waitForSelector('.chat-widget__idle')
+    assert.equal(await page.$('.chat-widget__input'), null, 'la barre est visible avant la pression sur +')
+    const idle = await page.$eval('.chat-widget__idle', (el) => {
+      const rect = el.getBoundingClientRect()
+      return { width: rect.width, height: rect.height }
+    })
+    assert.deepEqual(idle, { width: 76, height: 40 })
+
+    // Simule le changement de forme envoyé par main.ts quand le raccourci + est pressé.
+    await page.evaluate(() => window.__renderChatWidget(false))
+    await page.waitForSelector('.chat-widget__input')
+    assert.equal(await page.$eval('.chat-widget__input', (el) => document.activeElement === el), true)
   })
 })
 

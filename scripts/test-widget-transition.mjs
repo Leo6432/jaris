@@ -37,12 +37,12 @@ test('un affichage replié immédiat annule aussi le minuteur',()=>{
 })
 // Widget TEXTE (repli depuis le mode Chat) : une barre de saisie ne tiendrait pas dans la pilule de 84px du
 // widget vocal — la fenêtre native doit prendre les dimensions de ce que le renderer y dessine vraiment.
-test('la barre de texte a ses propres dimensions, au repos comme dépliée',()=>{
+test('le Chat a un petit état inactif puis la barre prend ses vraies dimensions',()=>{
  const f=fixture('chat',177)
  f.position(f.win,false)
- assert.equal(f.changes[0].width,460);assert.equal(f.changes[0].height,56)
- // Au repos, seule la barre capte les clics : la zone couvre toute la largeur, pas les 84px du cercle.
- assert.equal(f.shapes[0][0].width,460);assert.equal(f.shapes[0][0].height,56);assert.equal(f.shapes[0][0].x,0)
+ assert.equal(f.changes[0].width,460);assert.equal(f.changes[0].height,48)
+ // Au repos, seul le petit indicateur central capte les clics, comme l'orbe vocal inactif.
+ assert.equal(f.shapes[0][0].width,84);assert.equal(f.shapes[0][0].height,48);assert.equal(f.shapes[0][0].x,188)
  f.position(f.win,true)
  assert.equal(f.changes[1].width,460);assert.equal(f.changes[1].height,177)
  assert.equal(f.changes[1].x+230,1060);assert.equal(f.changes[1].y,20)
@@ -54,13 +54,14 @@ test('la hauteur demandée par le widget texte est bornée',()=>{
  const g=fixture('chat',null);g.position(g.win,true);assert.equal(g.changes[0].height,56)
 })
 
-test('après l’onboarding, le lancement reste caché jusqu’à une activation',()=>{
+test('après l’onboarding, la grande fenêtre reste cachée mais le widget inactif apparaît',()=>{
  const source=ts.transpileModule(main,{compilerOptions:{removeComments:true,target:ts.ScriptTarget.ES2022}}).outputText
  assert.match(source,/fullWindow\s*=\s*createFullWindow\(!onboardingDone\)/)
+ assert.match(source,/widgetWindow\.once\(['"]ready-to-show['"][\s\S]{0,100}showWidgetWindow\(\)/)
  assert.match(source,/function triggerVisibleWake\(\)[\s\S]{0,500}showWidgetWindow\(true\)[\s\S]{0,200}pipeline\.triggerWake\(\)/)
 })
 
-test('la touche + ouvre la forme du mode actif et le repos cache le widget vocal',()=>{
+test('la touche + ouvre la forme active et idle replie le widget vocal sans le cacher',()=>{
  const source=ts.transpileModule(main,{compilerOptions:{removeComments:true,target:ts.ScriptTarget.ES2022}}).outputText
  const shortcut=source.slice(source.indexOf('function registerWakeShortcut'),source.indexOf("registerWakeShortcut('numadd')"))
  assert.match(shortcut,/triggerVisibleWake\(\)/,'le raccourci global ne montre pas la barre avant l’écoute')
@@ -68,7 +69,8 @@ test('la touche + ouvre la forme du mode actif et le repos cache le widget vocal
  assert.match(wake,/activeMode\s*===\s*['"]chat['"][\s\S]*showWidgetWindow\(true\)[\s\S]*return/,'+ ne montre pas la barre du Chat')
  const emotion=source.slice(source.indexOf("pipeline.on('emotion'"),source.indexOf("pipeline.on('transcript'"))
  assert.match(emotion,/emotion\s*!==\s*['"]idle['"][\s\S]*showWidgetWindow\(true\)/,'le mot d’activation ne montre pas la barre')
- assert.match(emotion,/emotion\s*===\s*['"]idle['"][\s\S]*hideIdleWidget\(\)/,'le retour au repos ne cache pas la barre')
+ assert.match(emotion,/positionWidgetWindow\(widgetWindow,\s*emotion\s*!==\s*['"]idle['"],\s*true\)/,'le retour au repos ne replie pas le widget vocal')
+ assert.doesNotMatch(emotion,/hideIdleWidget/,'idle ne doit plus faire disparaître le widget permanent')
 })
 test('toutes les commandes internes de dépendances masquent la console Windows',()=>{
  const source=ts.createSourceFile('dependencyServices.ts',readFileSync(new URL('../electron/services/dependencyServices.ts',import.meta.url),'utf8'),ts.ScriptTarget.Latest,true)

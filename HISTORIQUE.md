@@ -1057,3 +1057,10 @@ Les commandes explicites « ouvre le Bloc-notes et écris … » préparent un n
   l'icône près de l'horloge et le premier onboarding reste visible. Le test du déplacement des modèles a
   aussi été rendu portable sous Windows : sa fausse jonction utilise désormais une vraie jonction locale,
   sans privilège de lien symbolique requis.
+
+- ✅ Étape 124 (v0.15.2) — Correction de l'interprétation précédente : Léo ne demandait pas de supprimer le
+  widget au repos. Hors de la grande fenêtre, le widget permanent est rétabli en haut au centre. En Vocal,
+  il reste sous forme de petit orbe puis + ou « Jaris » le déplie pour écouter. En Chat, un nouveau petit
+  indicateur inactif remplace la barre au repos ; + le transforme en vraie barre de saisie déjà focalisée.
+  Le mode Code reste sans widget. Vérifié avec les tests structurels et un vrai clic navigateur sur le passage
+  indicateur → barre.

@@ -9,13 +9,12 @@ export type AppMode = 'voice' | 'chat' | 'code'
 /**
  * Ce que devient Jaris quand on quitte sa fenêtre, dérivé du dernier mode actif :
  * - 'voice' : le widget cercle qui écoute, tel qu'il a toujours été ;
- * - 'chat' : une barre de texte au même endroit, pour poser une question écrite sans rouvrir l'application
- *   (Léo : "à la place d'avoir un cercle, et qui écoute, ... une barre de texte pour le chat") — Jaris ne
- *   réagit alors PAS à la voix, exactement comme le cercle qu'elle remplace ne réagit pas au clavier ;
+ * - 'chat-idle' : le petit état inactif du Chat, visible comme l'orbe vocal au repos ;
+ * - 'chat' : la barre de texte ouverte par +, pour écrire sans rouvrir l'application ;
  * - depuis le mode Code, aucun widget n'est affiché du tout ("ça doit rien faire aucun widget") : il n'y a
  *   donc pas de valeur 'code' ici, c'est l'absence de fenêtre qui l'exprime (voir showWidgetWindow, main.ts).
  */
-export type WidgetMode = 'voice' | 'chat'
+export type WidgetMode = 'voice' | 'chat-idle' | 'chat'
 
 /**
  * Identifiants des sons courts du design sonore de Jaris (étape 31) — synthétisés à la volée côté renderer

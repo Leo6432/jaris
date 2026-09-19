@@ -71,8 +71,13 @@ test('la forme du widget vient du mode actif, pas d’une valeur décidée sépa
   )
   assert.match(
     mainSource,
-    /widgetWindow\.webContents\.send\(IPC_CHANNELS\.widgetMode, currentWidgetMode\(\)\)/,
+    /widgetWindow\.webContents\.send\(IPC_CHANNELS\.widgetMode, displayedWidgetMode\)/,
     'le renderer du widget n’est jamais prévenu de la forme à dessiner'
+  )
+  assert.match(
+    mainSource,
+    /currentWidgetMode\(\) === ['"]chat['"][\s\S]{0,120}?['"]chat-idle['"]/,
+    'le mode Chat ne possède pas de forme inactive distincte de sa barre de saisie'
   )
 })
 
@@ -133,6 +138,13 @@ test('le widget texte dit au main la hauteur qu’il occupe VRAIMENT', () => {
     /ipcMain\.on\(IPC_CHANNELS\.setChatWidgetHeight,[\s\S]{0,400}?positionWidgetWindow\(/,
     'le main reçoit la hauteur mais ne redimensionne jamais la fenêtre avec'
   )
+})
+
+test('le rendu Chat possède un état inactif et + le remplace par la barre', () => {
+  assert.match(widgetSource, /inactive[\s\S]{0,800}?chat-widget__idle/)
+  assert.match(appSource, /widgetMode === ['"]chat-idle['"][\s\S]{0,300}?inactive=/)
+  assert.match(mainSource, /activeMode === ['"]chat['"][\s\S]{0,180}?showWidgetWindow\(true\)/)
+  assert.match(mainSource, /displayedWidgetMode === ['"]chat['"][\s\S]{0,80}?widgetWindow\.focus\(\)/)
 })
 
 test('le renderer du widget demande sa forme au montage ET écoute les changements', () => {

@@ -154,6 +154,9 @@ let lastEmotion: JarisEmotion = 'idle'
  */
 let activeMode: AppMode = 'voice'
 
+/** Forme réellement affichée par la fenêtre widget ; le Chat alterne entre son état réduit et sa barre. */
+let displayedWidgetMode: WidgetMode = 'voice'
+
 /**
  * Hauteur demandée par le widget texte, mesurée sur son contenu réel (`null` = sa simple barre). Voir
  * `setChatWidgetHeight` : la fenêtre capte les clics sur toute sa surface une fois dépliée et reste ouverte
@@ -287,10 +290,9 @@ function createFullWindow(showWhenReady = true): BrowserWindow {
  * Widget flottant façon J.A.R.V.I.S. (étape 19) : sans bordure, transparent, toujours au-dessus des autres
  * fenêtres, en haut au centre de l'écran (étape 68) — visible même quand une autre appli (navigateur, jeu...)
  * a le focus, y compris en changeant simplement d'appli SANS minimiser (voir `win.on('blur', ...)` dans
- * createFullWindow). Elle n'est plus « toujours là » au lancement : le + l'affiche dans la forme du mode
- * actif, et le widget vocal apparaît aussi pendant une activation par « Jaris », puis disparaît quand le
- * pipeline redevient inactif. En Chat, quitter la fenêtre complète affiche la barre de saisie ; en Code,
- * aucune forme n'est affichée.
+ * createFullWindow). C'est bien la présence permanente attendue hors de l'application : petit orbe inactif
+ * en Vocal, petit indicateur inactif en Chat, aucune forme en Code. Le + déplie l'écoute vocale ou la barre
+ * de saisie Chat ; « Jaris » déplie aussi le widget vocal, qui revient ensuite à son petit état au repos.
  */
 function createWidgetWindow(): BrowserWindow {
   // Position définitive posée juste avant l'affichage par positionWidgetWindow() (recalculée à chaque
@@ -316,9 +318,8 @@ function createWidgetWindow(): BrowserWindow {
 
   win.setAlwaysOnTop(true, 'floating')
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-  // Pas d'auto-show ici (contrairement à la fenêtre normale) : le widget est créé caché dès le démarrage
-  // (voir plus bas) pour être déjà chargé le jour où on réduit la fenêtre, et ne s'affiche que sur demande
-  // via showWidgetWindow() — sinon il clignoterait à l'écran dès qu'il finit de charger, au lancement.
+  // Pas d'auto-show Electron avant le rendu : le widget est créé caché, puis showWidgetWindow() l'affiche
+  // dès `ready-to-show` dans son petit état inactif. Cela conserve sa présence permanente sans flash vide.
   win.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
@@ -332,10 +333,9 @@ function createWidgetWindow(): BrowserWindow {
  * Recalcule la position en haut au centre de l'écran actuel (étape 68) : pas fixée une fois pour toutes à la
  * création, au cas où l'écran/la zone de travail a changé depuis (résolution, second écran...). Collé au
  * bord haut (y = workArea.y, sans marge) façon "notch" — seule la largeur/hauteur change entre `expanded`
- * (orbe + statut + conversation, comme avant à l'étape 19) et l'état "repos" (désormais utilisé seulement
- * pendant les 340 ms du fondu avant de cacher entièrement la fenêtre). `showWidgetWindow` démarre à la
- * taille correspondant à l'émotion en cours (`lastEmotion`) et `pipeline.on('emotion', ...)` plus bas
- * rappelle celle-ci à chaque changement pour afficher/cacher en direct.
+ * (orbe + statut + conversation, ou barre Chat) et l'état "repos" permanent (petit orbe ou petit indicateur
+ * Chat). `showWidgetWindow` démarre à la taille correspondant au mode et `pipeline.on('emotion', ...)` plus
+ * bas rappelle celle-ci à chaque changement pour déplier/replier en direct.
  * Un simple `setBounds` (pas d'animation native) : Electron n'anime pas les changements de bounds sur
  * Windows, contrairement à macOS — le CSS interne (.app--widget-collapsed, index.css) compense en faisant
  * un fondu/zoom sur le CONTENU. Le repli natif est différé jusqu’à la fin de cette transition.
@@ -362,9 +362,9 @@ function positionWidgetWindow(win: BrowserWindow, expanded: boolean, animate = f
   // permanence, `setShape` qui restreint la zone qui capte les clics au repos).
   const chat = currentWidgetMode() === 'chat'
   const fullWidth = chat ? WIDGET_CHAT_WIDTH : WIDGET_WIDTH
-  const restWidth = chat ? WIDGET_CHAT_WIDTH : WIDGET_COLLAPSED_WIDTH
-  const restHeight = chat ? WIDGET_CHAT_COLLAPSED_HEIGHT : WIDGET_COLLAPSED_HEIGHT
-  const chatHeight = Math.min(chatWidgetHeight ?? restHeight, WIDGET_CHAT_MAX_HEIGHT)
+  const restWidth = WIDGET_COLLAPSED_WIDTH
+  const restHeight = WIDGET_COLLAPSED_HEIGHT
+  const chatHeight = Math.min(chatWidgetHeight ?? WIDGET_CHAT_COLLAPSED_HEIGHT, WIDGET_CHAT_MAX_HEIGHT)
   const width = shaped || expanded ? fullWidth : restWidth
   const height = expanded ? (chat ? Math.max(chatHeight, restHeight) : WIDGET_HEIGHT) : restHeight
   win.setBounds({
@@ -416,27 +416,16 @@ function showWidgetWindow(forceExpanded = false): void {
   // Envoyé AVANT show() : le renderer doit dessiner la bonne forme dès la première frame peinte, sinon le
   // widget apparaît sous son ancienne forme puis change sous les yeux de l'utilisateur (même famille de
   // défaut que la transition rejouée depuis un état périmé, corrigée par `widgetInstant` côté App.tsx).
-  widgetWindow.webContents.send(IPC_CHANNELS.widgetMode, currentWidgetMode())
+  displayedWidgetMode = currentWidgetMode() === 'chat' && !forceExpanded ? 'chat-idle' : currentWidgetMode()
+  widgetWindow.webContents.send(IPC_CHANNELS.widgetMode, displayedWidgetMode)
   const voice = currentWidgetMode() === 'voice'
-  const expanded = voice && (forceExpanded || lastEmotion !== 'idle')
-  // Le widget vocal n'occupe plus le haut de l'écran au repos. La barre Chat, elle, n'arrive ici qu'après
-  // un repli volontaire depuis le Chat ou une pression sur + : elle reste alors une simple barre tant
-  // qu'aucune question n'est partie.
-  if (voice && !expanded) {
-    widgetWindow.hide()
-    return
-  }
+  const expanded = voice ? forceExpanded || lastEmotion !== 'idle' : forceExpanded
   positionWidgetWindow(widgetWindow, expanded)
   widgetWindow.show()
-}
-
-/** Cache la barre à la fin de sa transition CSS vers l'état inactif. */
-function hideIdleWidget(): void {
-  clearTimeout(widgetCollapseTimer)
-  widgetCollapseTimer = setTimeout(() => {
-    widgetCollapseTimer = undefined
-    if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide()
-  }, 340)
+  // Le raccourci + part souvent pendant qu'une autre application a le focus. Afficher la barre Chat sans
+  // lui donner le focus obligerait à recliquer dedans avant d'écrire, alors que + vient précisément de
+  // demander cette saisie. Le widget vocal, lui, ne vole jamais le focus pendant une activation à la voix.
+  if (displayedWidgetMode === 'chat') widgetWindow.focus()
 }
 
 /** La touche + ouvre la forme du mode actif : barre écrite en Chat, écoute visible en Agent vocal. */
@@ -478,15 +467,18 @@ async function startVoicePipeline(): Promise<void> {
     // pipeline vocal n'a aucune raison d'y changer quoi que ce soit — et le déplier "pour une réponse
     // vocale" par-dessus une barre de saisie rejouerait exactement la contradiction taille/contenu déjà
     // corrigée une fois ici.
-    if (currentWidgetMode() === 'voice' && emotion !== 'idle' && onboardingDone && !fullWindow?.isVisible()) {
+    if (
+      currentWidgetMode() === 'voice' && onboardingDone && !fullWindow?.isVisible() &&
+      (!widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible()) && emotion !== 'idle'
+    ) {
       // Couvre aussi le mot d'activation « Jaris » : il doit ouvrir la barre de la même façon que +.
       showWidgetWindow(true)
     } else if (
-      currentWidgetMode() === 'voice' && emotion === 'idle' &&
+      currentWidgetMode() === 'voice' &&
       widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()
     ) {
-      // Le renderer reçoit l'émotion juste après et joue son fondu ; la fenêtre native disparaît à sa fin.
-      hideIdleWidget()
+      // Comme avant : l'activité déplie le widget vocal, puis idle le ramène à son petit état permanent.
+      positionWidgetWindow(widgetWindow, emotion !== 'idle', true)
     }
     broadcast(IPC_CHANNELS.emotion, emotion)
   })
@@ -621,16 +613,16 @@ app.whenReady().then(async () => {
     activeMode = mode
     applyListeningForActiveMode()
   })
-  ipcMain.handle(IPC_CHANNELS.getWidgetMode, (): WidgetMode => currentWidgetMode())
+  ipcMain.handle(IPC_CHANNELS.getWidgetMode, (): WidgetMode => displayedWidgetMode)
   ipcMain.on(IPC_CHANNELS.setChatWidgetHeight, (_event, height: number | null) => {
     chatWidgetHeight = height
     if (!widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible()) return
-    if (currentWidgetMode() !== 'chat') return
+    if (displayedWidgetMode !== 'chat') return
     // Pas d'animation différée ici (contrairement au repli du widget vocal, qui attend son fondu) : la
     // barre revient d'un coup, et un repli différé laisserait la grande zone de capture des clics active
     // plusieurs centaines de millisecondes de plus par-dessus ce que l'utilisateur essaie justement de
     // cliquer en fermant le widget.
-    positionWidgetWindow(widgetWindow, height !== null)
+    positionWidgetWindow(widgetWindow, true)
   })
   ipcMain.on(IPC_CHANNELS.setOptionsOpen, (_event, open: boolean) => {
     optionsOpen = open
@@ -952,7 +944,13 @@ app.whenReady().then(async () => {
   // réduit la fenêtre, il fallait créer la fenêtre Electron ET charger toute la page React avant de
   // pouvoir l'afficher, ce qui se voyait clairement comme un délai. Là, il ne reste plus qu'à le
   // positionner et l'afficher (quasi instantané).
-  if (onboardingDone) widgetWindow = createWidgetWindow()
+  if (onboardingDone) {
+    widgetWindow = createWidgetWindow()
+    // Une fois Jaris hors de sa fenêtre principale, son état inactif reste visible en haut au centre dès le
+    // démarrage : petit orbe en Vocal, petit indicateur Chat dans ce mode. La création reste préchargée pour
+    // éviter un flash blanc avant que React ait peint la bonne forme.
+    widgetWindow.once('ready-to-show', () => showWidgetWindow())
+  }
 
   void startVoicePipeline()
 })

@@ -16,7 +16,7 @@ import { playSoundCueIfEnabled } from '@/lib/soundDesign'
  * conversation : ce qui est demandé ici se retrouve dans le fil en rouvrant Jaris, et la voix continue le
  * même fil. Rien de dupliqué côté main — le widget n'est qu'une deuxième porte d'entrée sur le Chat.
  */
-export default function ChatWidget(): JSX.Element {
+export default function ChatWidget({ inactive = false }: { inactive?: boolean }): JSX.Element {
   const [input, setInput] = useState('')
   const [question, setQuestion] = useState<string | null>(null)
   const [reply, setReply] = useState('')
@@ -24,6 +24,7 @@ export default function ChatWidget(): JSX.Element {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const expanded = question !== null
 
@@ -44,7 +45,7 @@ export default function ChatWidget(): JSX.Element {
    */
   useEffect(() => {
     const node = rootRef.current
-    if (!node || !expanded) {
+    if (!node || inactive || !expanded) {
       window.jaris.setChatWidgetHeight(null)
       return
     }
@@ -63,7 +64,11 @@ export default function ChatWidget(): JSX.Element {
     const observer = new ResizeObserver(report)
     observer.observe(node)
     return () => observer.disconnect()
-  }, [expanded])
+  }, [expanded, inactive])
+
+  useEffect(() => {
+    if (!inactive) inputRef.current?.focus()
+  }, [inactive])
 
   useEffect(() => {
     return window.jaris.onChatStreamToken((delta) => setReply((prev) => prev + delta))
@@ -106,6 +111,20 @@ export default function ChatWidget(): JSX.Element {
     setProgress(null)
   }
 
+  if (inactive) {
+    return (
+      <button
+        className="chat-widget__idle"
+        type="button"
+        title="Jaris Chat — appuie sur + pour écrire"
+        aria-label="Jaris Chat inactif"
+        onClick={() => window.jaris.openSettings()}
+      >
+        <ChatIcon />
+      </button>
+    )
+  }
+
   return (
     <div className={`chat-widget${expanded ? ' chat-widget--expanded' : ''}`} ref={rootRef}>
       <form
@@ -116,6 +135,7 @@ export default function ChatWidget(): JSX.Element {
         }}
       >
         <input
+          ref={inputRef}
           className="chat-widget__input"
           type="text"
           value={input}
@@ -155,6 +175,15 @@ export default function ChatWidget(): JSX.Element {
         </div>
       )}
     </div>
+  )
+}
+
+function ChatIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" focusable="false">
+      <path d="M5 5.5h14v9H10l-4 3v-3H5z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M8.5 9h7M8.5 12h4.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
   )
 }
 

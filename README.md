@@ -1081,21 +1081,21 @@ et affichée dans l'interface : `localStorage` y est bloqué (d'où le try/catch
 imposé dans les consignes de génération), mais refonctionne dès qu'on ouvre le
 fichier depuis son dossier.
 
-## Widgets à la demande
+## Widget permanent, actions à la demande
 
-Après le premier réglage, Jaris démarre discrètement en arrière-plan : ni la
-fenêtre classique ni le widget ne s'imposent à l'écran au lancement. Le
-**+ du pavé numérique** ouvre la forme du dernier mode actif : une barre de
-saisie en Chat, ou le widget d'écoute en Agent vocal. Dire « Jaris » ouvre
-aussi le widget vocal pendant l'écoute, la réflexion et la réponse ; il
-disparaît au retour à l'état inactif. Le mode Code reste sans widget. L'icône
-près de l'horloge rouvre toujours l'application complète. **Fermer sa croix
-quitte vraiment Jaris** (étape 72).
+Après le premier réglage, la grande fenêtre démarre discrètement en arrière-plan,
+mais le petit widget inactif reste visible en haut au centre comme avant. Le
+**+ du pavé numérique** déplie la forme du dernier mode actif : l'écoute en
+Agent vocal, ou la barre de saisie en Chat. Dire « Jaris » déplie aussi le
+widget vocal pendant l'écoute, la réflexion et la réponse ; il revient au petit
+orbe au repos. Le Chat revient à son petit indicateur inactif avant l'ouverture
+de la barre. Le mode Code reste sans widget. L'icône près de l'horloge rouvre
+toujours l'application complète. **Fermer sa croix quitte vraiment Jaris**.
 - **Sans fond** : la fenêtre Electron du widget est transparente
   (`transparent: true`, sans bordure) ; seul l'anneau lumineux de `JarisOrb`
   est visible, pas de rectangle derrière.
-- **Au-dessus pendant l'activité** : `alwaysOnTop` + visible sur tous les
-  bureaux virtuels, puis fenêtre entièrement cachée au repos.
+- **Toujours au-dessus hors de l'application** : `alwaysOnTop` + visible sur
+  tous les bureaux virtuels. Le contenu se replie au repos sans disparaître.
 - **Réagit depuis n'importe où** : le mot d'activation "Jaris" (déjà basé sur
   le micro, indépendant de la fenêtre) déclenche l'écoute. Le **+ du pavé
   numérique** (`globalShortcut`, enregistré au démarrage) déclenche l'écoute
@@ -1114,9 +1114,9 @@ quitte vraiment Jaris** (étape 72).
   > réservée par une autre appli...), le terminal l'indique clairement au
   > démarrage (`[jaris] Raccourci global ... enregistré avec succès` ou
   > `Impossible de réserver...`).
-- **Depuis Chat**, quitter la fenêtre affiche aussi la barre de saisie afin de
-  continuer à écrire sans rouvrir toute l'application. Depuis Code, aucun
-  widget n'est affiché.
+- **Depuis Chat**, quitter la fenêtre affiche le petit indicateur inactif. La
+  touche + le remplace par la barre de saisie. Depuis Code, aucun widget n'est
+  affiché.
 - **Cliquer sur le widget vocal actif** rouvre la fenêtre classique (l'orbe en
   grand, la conversation, le bouton Options, le cerveau de Jaris). Une icône
   dans la barre système (clic droit) permet aussi de la rouvrir, ou de vraiment
@@ -1126,13 +1126,11 @@ quitte vraiment Jaris** (étape 72).
   bas-droit au repos, vide et transparent donc invisible tant qu'il n'y a
   rien à dire) — une réponse longue pousse vers le haut sans être coupée,
   avec un défilement en dernier recours si elle dépasse quand même.
-- **Pré-chargé au démarrage** (cette fenêtre existe déjà, cachée, dès le
-  lancement de Jaris) et repositionné juste avant chaque affichage (pas
-  figé une fois pour toutes) : pas de délai ni de mauvais cadrage la
-  première fois qu'on réduit la fenêtre.
+- **Pré-chargé au démarrage**, puis affiché dès que son rendu est prêt, et
+  repositionné à chaque changement de forme : pas de délai ni de flash vide.
 - **La conversation s'efface toute seule** : la transcription et la réponse
-  restent affichées tant que Jaris parle, puis la barre entière disparaît une
-  fois qu'il a fini (`idle` après la lecture audio).
+  restent affichées tant que Jaris parle, puis le widget revient à son petit
+  état inactif une fois qu'il a fini (`idle` après la lecture audio).
 - Les deux fenêtres ne sont jamais affichées en même temps, pour éviter que
   la réponse vocale soit jouée deux fois.
 

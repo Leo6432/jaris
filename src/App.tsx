@@ -496,10 +496,10 @@ export default function App(): JSX.Element {
   // ChatWidget.tsx). Rendu à part plutôt qu'en variante du widget vocal : les deux n'ont ni le même contenu,
   // ni la même mécanique (l'un suit l'émotion du pipeline vocal, l'autre ce que l'utilisateur tape), et les
   // mélanger dans un seul arbre aurait fait cohabiter deux logiques de dépliage sur les mêmes éléments.
-  if (widgetMode === 'chat') {
+  if (widgetMode === 'chat' || widgetMode === 'chat-idle') {
     return (
-      <div className={`app app--widget app--widget-chat${widgetInstant ? ' app--widget-instant' : ''}`}>
-        <ChatWidget />
+      <div className={`app app--widget app--widget-chat${widgetMode === 'chat-idle' ? ' app--widget-chat-idle' : ''}${widgetInstant ? ' app--widget-instant' : ''}`}>
+        <ChatWidget inactive={widgetMode === 'chat-idle'} />
       </div>
     )
   }

@@ -2804,15 +2804,11 @@ nécessite `docker compose restart`, pas seulement `docker compose up -d`.
   `skipTaskbar` prenne bien le focus clavier au clic sur Windows (il n'y a ni Windows ni vraie fenêtre
   Electron dans cet environnement) — tout le reste est prouvé par les mesures ci-dessus, pas ça.
 
-- **Une fenêtre préchargée n'a pas besoin d'être visible au repos.** À partir de v0.15.1, après l'onboarding,
-  Jaris crée ses deux fenêtres cachées et écoute en arrière-plan. Le raccourci global + affiche la forme du
-  mode actif : il ouvre la barre de saisie en Chat, ou montre le widget vocal avant de déclencher l'écoute en
-  Agent vocal ; le mode Code reste sans widget. Le mot « Jaris » affiche aussi le widget vocal dès le premier
-  évènement non inactif. Au retour à `idle`, laisser 340 ms au fondu CSS puis faire `widgetWindow.hide()` :
-  réduire la fenêtre native à une pilule laisserait encore un élément inactif à l'écran. Ne jamais enregistrer
-  `ready-to-show => show()` pour la fenêtre complète après l'onboarding : ce callback tardif annulerait le
-  démarrage caché. Le premier lancement garde la fenêtre visible pour l'onboarding, et l'icône près de
-  l'horloge garde l'accès volontaire à l'interface complète.
+- **"Inactif" ne veut pas dire "invisible" pour le widget permanent.** Correction v0.15.2 de la mauvaise
+  interprétation v0.15.1 : après l'onboarding, la grande fenêtre reste cachée mais le widget est affiché dès
+  `ready-to-show`. En Vocal, `idle` le replie vers le petit orbe sans `hide()` ; en Chat, le repli affiche un
+  petit indicateur distinct (`chat-idle`) et + le remplace par la barre (`chat`). Le mode Code reste la seule
+  absence de widget. Garder la forme dessinée, la taille native et la région `setShape` dérivées du même état.
 - **Un test qui remplace une jonction Windows par un vrai lien doit rester exécutable sur Windows.** Un
   `symlinkSync()` sans type fonctionne dans le runner Linux, mais demande un privilège spécial sur Windows et
   faisait échouer `npm test` avec `EPERM` sans défaut du code testé. Utiliser le type `junction` sur Windows,
