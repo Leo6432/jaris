@@ -710,7 +710,7 @@ app.whenReady().then(async () => {
   ipcMain.on(IPC_CHANNELS.setOptionsOpen, (_event, open: boolean) => {
     optionsOpen = open
   })
-  ipcMain.handle(IPC_CHANNELS.getModelOverview, () => getModelOverview())
+  ipcMain.handle(IPC_CHANNELS.getModelOverview, async () => getModelOverview(await getProfile()))
   // Étape suivante (Léo : "jaris voit les model et regarde la vram et propose une barre... personnalisé à
   // chacun pour que le dernier ne dépasse pas la vram") : le modèle de référence est celui du palier
   // PUISSANT (le plus gros modèle de conversation configuré, voir computeContextLengthOptions pour le

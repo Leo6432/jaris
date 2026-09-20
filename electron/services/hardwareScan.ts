@@ -5,7 +5,7 @@ import { join } from 'path'
 import { promisify } from 'util'
 import { RESOURCE_SAFETY_MARGIN_GB, detectRamGb } from './systemResources'
 import { getInstalledModelSizeBytes, getModelInfo } from './ollama'
-import type { CapacityScanResult, ContextLengthOptions, HardwareTierPreview, ModelOverviewEntry, ModelOverviewResult, ModelTiers } from '../../shared/ipc'
+import type { CapacityScanResult, ContextLengthOptions, HardwareTierPreview, ModelOverviewEntry, ModelOverviewResult, ModelTiers, Profile } from '../../shared/ipc'
 
 const execAsync = promisify(exec)
 
@@ -844,10 +844,29 @@ const TIER_LABELS: Record<Tier, string> = { flash: 'Rapide', medium: 'Médium', 
  * Un même modèle candidat à plusieurs paliers (ex: le plus petit, repli ultime de Rapide/Médium/Puissant)
  * apparaît dans chacun des groupes concernés — chaque liste doit rester une image complète de ce palier.
  */
-export async function getModelOverview(): Promise<ModelOverviewResult> {
+export async function getModelOverview(profile?: Profile | null): Promise<ModelOverviewResult> {
   const localBenchmark = parseLocalBenchmark()
   const verifiedToolScores = parseVerifiedToolScores()
   const { name: gpuName, vramGb } = await detectGpu()
+  const picks = computeModelPicks(vramGb, detectRamGb(), gpuName, localBenchmark, verifiedToolScores)
+  const activeModels = {
+    flash: profile?.models?.flash ?? picks.flash.model,
+    medium: profile?.models?.medium ?? picks.medium.model,
+    large: profile?.models?.large ?? picks.large.model,
+    vision: profile?.visionModel ?? picks.vision.model,
+    code: profile?.codeModel ?? picks.code.model
+  }
+  const usageByModel = new Map<string, string[]>()
+  const addUsage = (model: string, label: string): void => {
+    const labels = usageByModel.get(model) ?? []
+    labels.push(label)
+    usageByModel.set(model, labels)
+  }
+  addUsage(activeModels.flash, 'Rapide')
+  addUsage(activeModels.medium, 'Médium')
+  addUsage(activeModels.large, 'Puissant')
+  addUsage(activeModels.vision, 'Vision')
+  addUsage(activeModels.code, 'Code')
 
   // Priorité à une vraie mesure locale (le vrai benchmark a tourné sur CETTE machine pour ce modèle) —
   // sinon, pour un modèle déjà vérifié par ailleurs (voir verified-tool-scores.md), fiabilité partagée +
@@ -862,13 +881,14 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
     const artificialAnalysisIndex = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null
     const local = localBenchmark[tier].get(model)
     if (local) {
-      return { model, vramGb: modelVramGb, speedTokPerSec: local.speedTokPerSec, toolCalling: local.toolCalling, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, artificialAnalysisIndex }
+      return { model, vramGb: modelVramGb, usedIn: usageByModel.get(model) ?? [], speedTokPerSec: local.speedTokPerSec, toolCalling: local.toolCalling, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, artificialAnalysisIndex }
     }
     const verifiedTool = verifiedToolScores[tier].get(model)
     if (verifiedTool) {
       return {
         model,
         vramGb: modelVramGb,
+        usedIn: usageByModel.get(model) ?? [],
         speedTokPerSec: estimateSpeedTokPerSec(modelVramGb, gpuName),
         speedEstimated: true,
         toolCalling: verifiedTool,
@@ -877,7 +897,7 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
         artificialAnalysisIndex
       }
     }
-    return { model, vramGb: modelVramGb, speedTokPerSec: null, toolCalling: null, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, artificialAnalysisIndex }
+    return { model, vramGb: modelVramGb, usedIn: usageByModel.get(model) ?? [], speedTokPerSec: null, toolCalling: null, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, artificialAnalysisIndex }
   }
 
   // Léo, sur la page "Tous les modèles" (Options → Modèles) : "fait pour rapide etc... celui qui faut le
@@ -899,8 +919,7 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
     { tier: 'Code', entries: byAscendingVram(CODE_CANDIDATES.map((c) => buildEntry(c.model, c.vramGb, 'code'))) }
   ]
 
-  const codeModel = computeModelPicks(vramGb, detectRamGb(), gpuName, localBenchmark, verifiedToolScores).code.model
-  return { vramGb, groups, codeModel }
+  return { vramGb, groups, codeModel: picks.code.model }
 }
 
 /**

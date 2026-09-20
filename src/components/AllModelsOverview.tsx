@@ -130,6 +130,7 @@ export default function AllModelsOverview(): JSX.Element {
                             <thead>
                               <tr>
                                 <th>Modèle</th>
+                                <th>Utilisé par Jaris</th>
                                 <th className="options-menu__col-num">VRAM nécessaire</th>
                                 <th className="options-menu__col-num">Appel d'outils</th>
                                 {/* Intelligence Index lu directement chez Artificial Analysis. */}
@@ -147,6 +148,7 @@ export default function AllModelsOverview(): JSX.Element {
                                   <td className="options-menu__model-name" title={entry.model}>
                                     {formatModelName(entry.model)}
                                   </td>
+                                  <td>{entry.usedIn?.length ? `Oui — ${entry.usedIn.join(', ')}` : 'Non'}</td>
                                   <td className="options-menu__col-num">{entry.vramGb} Go</td>
                                   <td className="options-menu__col-num">
                                     <ReliabilityBadge value={entry.toolCalling} />

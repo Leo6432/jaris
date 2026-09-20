@@ -246,6 +246,8 @@ export interface HardwareTierPreview {
 export interface ModelOverviewEntry {
   model: string
   vramGb: number
+  /** Paliers/rôles qui utilisent actuellement ce modèle dans le profil actif. Vide = modèle candidat non retenu. */
+  usedIn?: string[]
   speedTokPerSec: number | null
   speedEstimated?: boolean
   toolCalling: string | null

@@ -106,3 +106,19 @@ test('expose les 15 Intelligence Index lus directement chez Artificial Analysis 
   for (const [model, score] of Object.entries(expected)) assert.equal(byModel.get(model), score, model)
   assert.equal(byModel.get('qwen3.5:35b'), null, 'un modèle exact absent d’Artificial Analysis doit rester sans score')
 })
+
+test('indique tous les paliers qui utilisent réellement chaque modèle du profil actif', async () => {
+  const { getModelOverview } = setup()
+  const overview = await getModelOverview({
+    name: 'Léo',
+    models: { flash: 'qwen3.5:0.8b', medium: 'qwen3.5:4b', large: 'qwen3.8:27b' },
+    visionModel: 'qwen3.5:4b',
+    codeModel: 'qwen2.5-coder:7b'
+  })
+  const qwen4bEntries = overview.groups.flatMap((group) => group.entries).filter((entry) => entry.model === 'qwen3.5:4b')
+  assert.ok(qwen4bEntries.length >= 2, 'le modèle partagé doit apparaître dans plusieurs groupes candidats')
+  for (const entry of qwen4bEntries) assert.deepEqual(Array.from(entry.usedIn), ['Médium', 'Vision'])
+
+  const unused = overview.groups.flatMap((group) => group.entries).find((entry) => entry.model === 'qwen3.5:2b')
+  assert.deepEqual(Array.from(unused.usedIn), [])
+})

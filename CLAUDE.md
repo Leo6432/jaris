@@ -132,6 +132,10 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   reste de Jaris, à la demande explicite de Léo. Le calcul existait déjà (`computeModelPicks` calculait un
   pick "code" depuis le début) mais son résultat était juste jeté sans être utilisé — vérifier si une valeur
   déjà calculée est réellement exploitée en aval avant de supposer qu'un comportement différent est voulu.
+- **Afficher qu'un modèle est « utilisé » doit lire le profil réellement enregistré**, pas recalculer ce que
+  le scan choisirait aujourd'hui : le matériel, les benchmarks ou les candidats peuvent avoir changé depuis
+  le dernier scan, tandis que les services utilisent encore `profile.models`, `profile.visionModel` et
+  `profile.codeModel`. Le recalcul ne sert que de repli avant la création d'un profil.
 - **Un tableau "illustratif" qui met en évidence la ligne "ta configuration" doit vraiment refléter cette
   configuration, pas le point représentatif fixe le plus proche** : `previewHardwareTiers` (hardwareScan.ts)
   calculait les 3 paliers avec 3 VRAM fixes (6/12/24 Go), y compris la ligne marquée comme correspondant à la

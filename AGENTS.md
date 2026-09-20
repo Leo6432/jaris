@@ -122,6 +122,10 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   comportement plus cohérent avec le reste du système était possible depuis longtemps sans jamais avoir été
   branché — vérifier si une valeur déjà calculée est réellement utilisée avant de supposer qu'un
   comportement différent est intentionnel.
+- **Afficher qu'un modèle est « utilisé » doit lire le profil réellement enregistré**, pas recalculer ce que
+  le scan choisirait aujourd'hui : le matériel, les benchmarks ou les candidats peuvent avoir changé depuis
+  le dernier scan, tandis que les services utilisent encore `profile.models`, `profile.visionModel` et
+  `profile.codeModel`. Le recalcul ne sert que de repli avant la création d'un profil.
 - **Un tableau "illustratif" avec une ligne mise en avant comme "ta configuration" doit vraiment refléter
   cette configuration, pas le point représentatif fixe le plus proche** : un calcul de paliers par 3 points
   fixes de VRAM (6/12/24 Go) donnait la même ligne "current" à deux machines pourtant différentes (7 Go et 11

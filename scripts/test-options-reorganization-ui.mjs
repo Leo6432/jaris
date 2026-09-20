@@ -72,13 +72,13 @@ const overrides = {
         {
           tier: 'Rapide',
           entries: [
-            { model: 'ministral-3:3b', vramGb: 3.0, speedTokPerSec: 120.4, toolCalling: '6/6', intelligence: null, artificialAnalysisIndex: 5 },
-            { model: 'qwen3:1.7b', vramGb: 2, speedTokPerSec: 200.1, toolCalling, intelligence: null, artificialAnalysisIndex: null }
+            { model: 'ministral-3:3b', vramGb: 3.0, usedIn: ['Rapide', 'Médium'], speedTokPerSec: 120.4, toolCalling: '6/6', intelligence: null, artificialAnalysisIndex: 5 },
+            { model: 'qwen3:1.7b', vramGb: 2, usedIn: [], speedTokPerSec: 200.1, toolCalling, intelligence: null, artificialAnalysisIndex: null }
           ]
         },
         {
           tier: 'Vision',
-          entries: [{ model: 'gemma4:31b', vramGb: 20, speedTokPerSec: null, toolCalling: null, intelligence: null, artificialAnalysisIndex: null }]
+          entries: [{ model: 'gemma4:31b', vramGb: 20, usedIn: ['Vision'], speedTokPerSec: null, toolCalling: null, intelligence: null, artificialAnalysisIndex: null }]
         }
       ]
     }
@@ -344,11 +344,13 @@ test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste d
       els.map((el) => Array.from(el.querySelectorAll('td')).map((td) => td.textContent?.trim()))
     )
     assert.equal(rows.length, 3, `3 modèles attendus (2 Rapide + 1 Vision) : ${rows.length}`)
-    // ministral-3:3b : VRAM et Intelligence Index officiel (5).
-    assert.ok(rows[0][1].includes('3'), `VRAM du premier modèle : ${rows[0][1]}`)
-    assert.equal(rows[0][3], '5', `Intelligence Index attendu (5) : ${rows[0][3]}`)
+    // ministral-3:3b : utilisé pour deux paliers, VRAM et Intelligence Index officiel (5).
+    assert.equal(rows[0][1], 'Oui — Rapide, Médium', `paliers actifs attendus : ${rows[0][1]}`)
+    assert.ok(rows[0][2].includes('3'), `VRAM du premier modèle : ${rows[0][2]}`)
+    assert.equal(rows[0][4], '5', `Intelligence Index attendu (5) : ${rows[0][4]}`)
     // qwen3:1.7b : aucun score officiel connu, clairement indiqué sans chiffre inventé.
-    assert.equal(rows[1][3], 'Non publié', `absence de score officiel attendue : ${rows[1][3]}`)
+    assert.equal(rows[1][1], 'Non', `le modèle non retenu doit être indiqué : ${rows[1][1]}`)
+    assert.equal(rows[1][4], 'Non publié', `absence de score officiel attendue : ${rows[1][4]}`)
 
     // "Fermer" revient sur la page Options, toujours sur l'onglet Modèles — elle n'a jamais été fermée.
     await page.click('.options-page--models .options-page__close')
@@ -384,6 +386,7 @@ test('"Lancer l\'analyse" affiche un suivi en direct puis rafraîchit le tableau
 
     // Avant le run : le tableau STATIQUE avec l'Intelligence Index officiel, aucun suivi en direct.
     const headersBefore = await page.$$eval('.options-page--models thead th', (els) => els.map((el) => el.textContent))
+    assert.ok(headersBefore.includes('Utilisé par Jaris'), `colonne d'utilisation attendue : ${headersBefore.join(', ')}`)
     assert.ok(headersBefore.includes('Intelligence (Artificial Analysis)'), `tableau statique attendu avant le run : ${headersBefore.join(', ')}`)
     assert.equal(await page.$('.options-menu__progress'), null, 'aucune barre de progression avant le clic')
 
@@ -412,6 +415,6 @@ test('"Lancer l\'analyse" affiche un suivi en direct puis rafraîchit le tableau
     )
     const qwenRow = rows.find((r) => r[0] === 'qwen3:1.7b')
     assert.ok(qwenRow, `ligne qwen3:1.7b introuvable après rafraîchissement : ${JSON.stringify(rows)}`)
-    assert.equal(qwenRow[2], '5/6', `score d'appel d'outils frais attendu (5/6) : ${qwenRow[2]}`)
+    assert.equal(qwenRow[3], '5/6', `score d'appel d'outils frais attendu (5/6) : ${qwenRow[3]}`)
   })
 })
