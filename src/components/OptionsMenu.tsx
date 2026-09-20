@@ -12,6 +12,7 @@ import type {
   UpdateProgress
 } from '../../shared/ipc'
 import { CAPABILITIES } from '../../shared/capabilities'
+import AllModelsOverview from './AllModelsOverview'
 import AppUpdateProgress from './AppUpdateProgress'
 import HardwareTierPreview from './HardwareTierPreview'
 import JarisOrb from './JarisOrb'
@@ -995,7 +996,10 @@ export default function OptionsMenu(): JSX.Element {
               {hardwareTiers === null ? (
                 <p className="capacity-scan__status">Chargement...</p>
               ) : (
-                <HardwareTierPreview tiers={hardwareTiers} />
+                <>
+                  <HardwareTierPreview tiers={hardwareTiers} />
+                  <AllModelsOverview />
+                </>
               )}
               <SettingRow
                 label="Retester la configuration"

@@ -259,6 +259,16 @@ export interface ModelOverviewEntry {
    * de ##MODEL_TESTING##/##MODEL_DONE## le concernant) d'un modèle simplement pas encore commencé.
    */
   verifiedSkip?: boolean
+  /**
+   * "Intelligence Index" publié par le site tiers CanIRun.ai (canirun.ai), demandé par Léo pour la liste
+   * "Tous les modèles" (Options → Modèles) — voir CANIRUN_INTELLIGENCE_INDEX dans hardwareScan.ts pour la
+   * source exacte et sa date de vérification. `null` si ce modèle n'y figure pas ou n'a pas encore ce score
+   * chez eux (leur catalogue reste très incomplet sur ce champ au moment d'écrire ceci) — jamais un chiffre
+   * inventé pour combler le vide. Contrairement à `intelligence` (MMLU-Pro, une mesure indépendante déjà
+   * utilisée par Jaris pour départager deux candidats), celui-ci n'est PAS utilisé pour choisir un modèle,
+   * uniquement affiché à titre indicatif.
+   */
+  canirunIndex: number | null
 }
 
 /**

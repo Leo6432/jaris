@@ -50,7 +50,24 @@ const overrides = {
     hfCacheDir: 'C\\\\cache'
   }),
   getConversationHistory: async () => [],
-  previewHardwareTiers: async () => []
+  previewHardwareTiers: async () => [],
+  getModelOverview: async () => ({
+    vramGb: 8,
+    codeModel: 'qwen2.5-coder:7b',
+    groups: [
+      {
+        tier: 'Rapide',
+        entries: [
+          { model: 'ministral-3:3b', vramGb: 3.0, speedTokPerSec: 120.4, toolCalling: '6/6', intelligence: null, canirunIndex: 7 },
+          { model: 'qwen3:1.7b', vramGb: 2, speedTokPerSec: 200.1, toolCalling: '6/6', intelligence: null, canirunIndex: null }
+        ]
+      },
+      {
+        tier: 'Vision',
+        entries: [{ model: 'gemma4:31b', vramGb: 20, speedTokPerSec: null, toolCalling: null, intelligence: null, canirunIndex: null }]
+      }
+    ]
+  })
 }
 
 window.jaris = new Proxy({}, {
@@ -246,5 +263,48 @@ test('les cartes de réglages ont de l\'air entre le titre et le contenu, et ent
     // Pas de dérive vers l'excès non plus : "un peu", pas un vide béant qui casserait la compacité voulue
     // pour la carte "La voix de Jaris" juste au-dessus.
     assert.ok(titleToFirstRow < 40, `l'écart titre -> premier réglage ne doit pas devenir excessif : ${titleToFirstRow}px`)
+  })
+})
+
+// Léo : "dans model ajoute un bouton en dessou de tout les palier, tout les model et met tout les model
+// qu'on a utiliser met le score apelle outil la vram necessaire pour le model, et le score sur canirun.ai"
+// (AllModelsOverview.tsx). Le bouton reste replié par défaut (la liste, tous paliers confondus, est bien
+// plus longue que le résumé déjà affiché au-dessus) : un clic la déplie, un second la replie.
+test('"Tous les modèles" reste replié par défaut, un clic déplie la liste complète groupée par palier', options, async () => {
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Modèles")')
+    await page.waitForSelector('.options-menu__all-models')
+    assert.equal(await page.$('.options-menu__model-overview'), null, 'la liste ne doit pas être dépliée par défaut')
+
+    await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
+    await page.waitForSelector('.options-menu__model-overview')
+    const groupTitles = await page.$$eval('.options-menu__all-models .options-menu__model-group-title', (els) => els.map((el) => el.textContent))
+    assert.deepEqual(groupTitles, ['Rapide', 'Vision'], `paliers affichés : ${groupTitles.join(', ')}`)
+
+    const rows = await page.$$eval('.options-menu__all-models tbody tr', (els) =>
+      els.map((el) => Array.from(el.querySelectorAll('td')).map((td) => td.textContent?.trim()))
+    )
+    assert.equal(rows.length, 3, `3 modèles attendus (2 Rapide + 1 Vision) : ${rows.length}`)
+    // ministral-3:3b : VRAM, un vrai score CanIRun.ai (7).
+    assert.ok(rows[0][1].includes('3'), `VRAM du premier modèle : ${rows[0][1]}`)
+    assert.equal(rows[0][3], '7', `score CanIRun.ai attendu (7) : ${rows[0][3]}`)
+    // qwen3:1.7b : aucun score CanIRun.ai connu -> tiret, jamais un chiffre inventé.
+    assert.equal(rows[1][3], '—', `absence de score CanIRun.ai doit rester un tiret, pas un 0 : ${rows[1][3]}`)
+
+    await page.click('.options-menu__all-models button:has-text("Réduire")')
+    await page.waitForFunction(() => document.querySelector('.options-menu__all-models .options-menu__model-overview') === null)
+  })
+})
+
+test('le bouton "Tous les modèles" est réellement habillé par le CSS de Jaris, pas laissé au style du navigateur', options, async () => {
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Modèles")')
+    await page.waitForSelector('.options-menu__all-models')
+    const style = await page.$eval('.options-menu__all-models button', (el) => {
+      const s = getComputedStyle(el)
+      return { background: s.backgroundImage, clip: s.clipPath }
+    })
+    assert.match(style.background, /gradient/, 'bouton sans le fond de la famille HUD')
+    assert.match(style.clip, /polygon/, 'bouton sans les coins coupés de la famille HUD')
   })
 })

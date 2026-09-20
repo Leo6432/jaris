@@ -881,6 +881,16 @@ body.body--scan::after {
   overflow-x: auto;
 }
 
+/* Bouton "Tous les modèles" (AllModelsOverview.tsx) sous les paliers de configuration : un peu d'air avant
+   et, une fois déplié, avant le tableau qui suit. */
+.options-menu__all-models {
+  margin-top: 14px;
+}
+
+.options-menu__all-models .options-menu__model-overview-scroll {
+  margin-top: 10px;
+}
+
 /* Chaque palier dans sa propre carte : plus facile à distinguer d'un seul coup d'œil que 5 tableaux qui
    s'enchaînent sans séparation visuelle. */
 .options-menu__model-group {

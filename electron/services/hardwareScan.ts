@@ -632,6 +632,31 @@ const INTELLIGENCE_MMLU_PRO: Record<string, number> = {
   'qwen3.8:27b': 84.3
 }
 
+/**
+ * "Intelligence Index" publié par le site tiers CanIRun.ai (github.com/midudev/canirun.ai, API publique
+ * `/api/models/<id>`), à la demande de Léo pour la liste "Tous les modèles" (Options → Modèles). Vérifié
+ * directement via leur API le 20/09/2026, PAS pris à sa parole — sur les 38 modèles candidats de Jaris à
+ * cette date, seuls 8 ont ce champ renseigné chez eux (leur catalogue reste incomplet sur ce point pour la
+ * plupart des modèles récents, y compris certains qu'ils listent par ailleurs) : absence d'un modèle ici =
+ * pas encore chiffré par CanIRun.ai, jamais un 0 ou une estimation inventée pour combler le vide. Repéré au
+ * passage (sans conséquence pour Jaris, juste à titre d'exemple) : leur propre `ollamaId` pour la famille
+ * Granite pointe vers `ibm/granite4.1:8b` — exactement le préfixe communautaire non officiel déjà écarté
+ * pour cette famille plus haut dans ce fichier (MEDIUM_CANDIDATES), signe que leur base a le même genre
+ * d'erreur que celle déjà corrigée ici une fois. Totalement indépendant de INTELLIGENCE_MMLU_PRO ci-dessus
+ * (échelles différentes, jamais comparés l'un à l'autre) et jamais utilisé pour le choix réel d'un modèle
+ * (pickBestFrom) — affichage seul, à titre indicatif.
+ */
+const CANIRUN_INTELLIGENCE_INDEX: Record<string, number> = {
+  'qwen3.5:0.8b': 5,
+  'qwen3.5:2b': 7,
+  'qwen3.5:4b': 20,
+  'qwen3.5:9b': 22,
+  'qwen3.6:27b': 38,
+  'qwen3.6:35b-a3b': 32,
+  'qwen3.8:27b': 52,
+  'gpt-oss:20b': 15
+}
+
 export interface LocalBenchmarkEntry {
   speedTokPerSec: number | null
   toolCalling: string | null
@@ -809,9 +834,10 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
     // commentaire) — l'UI (ModelAnalysisProgress.tsx) en a besoin pour ne pas laisser ce modèle bloqué sur
     // "En attente" pour toujours pendant un run, faute de ##MODEL_TESTING##/##MODEL_DONE## le concernant.
     const verifiedSkip = verifiedToolScores[tier].has(model)
+    const canirunIndex = CANIRUN_INTELLIGENCE_INDEX[model] ?? null
     const local = localBenchmark.get(model)
     if (local) {
-      return { model, vramGb: modelVramGb, speedTokPerSec: local.speedTokPerSec, toolCalling: local.toolCalling, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip }
+      return { model, vramGb: modelVramGb, speedTokPerSec: local.speedTokPerSec, toolCalling: local.toolCalling, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, canirunIndex }
     }
     const verifiedTool = verifiedToolScores[tier].get(model)
     if (verifiedTool) {
@@ -822,10 +848,11 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
         speedEstimated: true,
         toolCalling: verifiedTool,
         intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
-        verifiedSkip
+        verifiedSkip,
+        canirunIndex
       }
     }
-    return { model, vramGb: modelVramGb, speedTokPerSec: null, toolCalling: null, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip }
+    return { model, vramGb: modelVramGb, speedTokPerSec: null, toolCalling: null, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, canirunIndex }
   }
 
   const groups = [
@@ -948,7 +975,8 @@ function computeModelPicks(
         speedTokPerSec: result?.speedTokPerSec ?? null,
         speedEstimated: result?.speedEstimated,
         toolCalling: result?.toolCalling ?? null,
-        intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null
+        intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
+        canirunIndex: CANIRUN_INTELLIGENCE_INDEX[model] ?? null
       }
     }
 
@@ -967,7 +995,8 @@ function computeModelPicks(
       speedTokPerSec: winner.result.speedTokPerSec,
       speedEstimated: winner.result.speedEstimated,
       toolCalling: winner.result.toolCalling,
-      intelligence: INTELLIGENCE_MMLU_PRO[winner.model] ?? null
+      intelligence: INTELLIGENCE_MMLU_PRO[winner.model] ?? null,
+      canirunIndex: CANIRUN_INTELLIGENCE_INDEX[winner.model] ?? null
     }
   }
 

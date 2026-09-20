@@ -3149,3 +3149,48 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   machine de Léo) : seul `ministral-3:3b` a une preuve de fiabilité réelle (6/6 déjà mesuré) ; les 5 autres
   restent des candidats informatifs, à confirmer via "Lancer l'analyse" avant de leur faire pleinement
   confiance.
+- **Étape 129, Léo : "dans model ajoute un bouton en dessou de tout les palier, tout les model et met tout
+  les model qu'on a utiliser met le score apelle outil la vram necessaire pour le model, et le score sur
+  canirun.ai".** Nouveau bouton "Tous les modèles" (Options → Modèles, sous les paliers de configuration),
+  qui déplie une liste COMPLÈTE de tous les modèles candidats de Jaris — tous paliers confondus (Rapide/
+  Médium/Puissant/Vision/Code), pas seulement celui réellement choisi pour la machine de l'utilisateur (déjà
+  visible juste au-dessus). Chaque ligne : modèle, VRAM nécessaire, score d'appel d'outils (déjà connu de
+  Jaris), score CanIRun.ai (nouveau).
+  **Réutilise entièrement `getModelOverview` (hardwareScan.ts), déjà existant mais jusqu'ici consommé
+  UNIQUEMENT par `ModelAnalysisProgress.tsx` pendant un run de "Lancer l'analyse" en cours** — la fonction
+  produisait déjà exactement les groupes/colonnes demandés (vitesse, fiabilité, intelligence MMLU-Pro), il
+  ne manquait qu'un endroit pour l'afficher en PERMANENCE plutôt que seulement pendant un run actif, et le
+  score CanIRun.ai en plus. Nouveau composant `AllModelsOverview.tsx` (repose sur le même canal IPC déjà
+  exposé, aucun nouveau canal créé), branché dans `OptionsMenu.tsx` juste après `<HardwareTierPreview>`.
+  **Score CanIRun.ai : vérifié via leur VRAIE API avant d'écrire le moindre chiffre, pas deviné.** Requêté
+  `canirun.ai/api/models/<id>` pour les 104 modèles de leur catalogue (le 20/09/2026) afin de retrouver les
+  38 modèles candidats de Jaris par leur `ollamaId`. Résultat honnête : seuls 8/38 ont ce score chez eux
+  (`CANIRUN_INTELLIGENCE_INDEX`, hardwareScan.ts) — leur catalogue reste incomplet sur ce champ précis pour
+  la plupart des modèles récents. Les 30 autres affichent "—", jamais un chiffre inventé pour combler le
+  vide (même discipline que `INTELLIGENCE_MMLU_PRO`/`toolCalling`, déjà établie dans ce fichier). Repéré au
+  passage, sans conséquence pour Jaris : leur `ollamaId` pour Granite pointe vers `ibm/granite4.1:8b` —
+  exactement le préfixe communautaire non officiel que ce projet avait déjà écarté pour cette même famille.
+  **Piège technique rencontré en interrogeant leur API, à garder en tête pour toute future requête vers un
+  service derrière Cloudflare** : un premier essai via `urllib.request` de Python (User-Agent par défaut,
+  `Python-urllib/3.x`) s'est fait bloquer en 403 Forbidden sur les 104 requêtes sans exception — alors que
+  les mêmes appels via `curl` passaient sans problème. Corrigé en fixant un User-Agent de navigateur
+  classique sur les requêtes `urllib` — Cloudflare (qui sert leur site) bloque visiblement les User-Agents de
+  bibliothèques HTTP par défaut, indépendamment de tout rate-limiting réel.
+  **`ModelOverviewEntry` (shared/ipc.ts) gagne un champ `canirunIndex: number | null`, RENDU OBLIGATOIRE (pas
+  optionnel)** : TypeScript a donc forcé la mise à jour des 4 endroits de hardwareScan.ts qui construisent ce
+  type (`getModelOverview`/`buildEntry`, et les 2 branches de `pickBestFrom` dans `computeModelPicks`) — un
+  filet gratuit qui aurait empêché d'en oublier un silencieusement si ce champ avait été optionnel.
+  **Volontairement PAS intégré comme appel réseau live** : les 8 valeurs connues sont figées en dur dans le
+  code (comme `INTELLIGENCE_MMLU_PRO`), pas récupérées à chaque ouverture de l'onglet Modèles — cohérent avec
+  le principe "100% local" de Jaris et avec la réponse déjà donnée à Léo quand il a proposé CanIRun.ai comme
+  outil d'intégration directe.
+  Régression : `node --test scripts/test-options-reorganization-ui.mjs` (10 tests, dont 2 nouveaux — le
+  bouton reste replié par défaut, un clic affiche les groupes/colonnes attendus avec un vrai "—" pour un
+  modèle sans score CanIRun.ai, et le bouton est réellement habillé par le CSS de Jaris) ; vérifié mordant en
+  cassant temporairement le repli "—" (`entry.canirunIndex` sans son `?? '—'`) : le test dédié échoue bien,
+  sans faire échouer les 9 autres. `npm run typecheck`, `npm run build` et `npm test` (380 tests) au vert.
+  Vérifié aussi par une capture d'écran réelle du rendu compilé (4 groupes, VRAM/score d'outils/score
+  CanIRun.ai bien alignés, famille visuelle HUD respectée) avant de considérer la fonctionnalité terminée.
+  **Non vérifié en usage réel** (pas d'accès à la machine de Léo) : le mécanisme est prouvé par un vrai
+  navigateur avec des données simulées ; son utilité concrète avec les VRAIES données de sa machine (~38
+  lignes réparties sur 5 groupes) reste à confirmer.
