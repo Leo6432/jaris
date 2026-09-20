@@ -9,19 +9,16 @@ import ts from 'typescript'
 /**
  * Reproduit la question de Léo ("pourquoi on regarde pas les vrais benchmarks pour départager les 6/6 ?") :
  * quand deux candidats du palier Puissant sont tous les deux à "6/6" (verified-tool-scores.md), l'ancien
- * comportement départageait UNIQUEMENT par VRAM (le plus gros gagne) — qwen3.8:27b (18 Go) aurait donc battu
- * qwen3.5:27b (17 Go) même si son score MMLU-Pro réel (84.3, voir INTELLIGENCE_MMLU_PRO) est plus bas que
- * celui de qwen3.5:27b (86.1). Vérifie que pickBestFrom (dans computeModelPicks) utilise maintenant ce vrai
- * chiffre en premier, la VRAM ne restant un repli que si aucun des deux candidats à égalité n'a de score
- * MMLU-Pro connu. Mêmes mocks no-op qu'ailleurs pour fs/child_process/systemResources (pas de vraie machine
- * ni de vrai fichier disque dans ce test).
+ * comportement départageait par MMLU-Pro puis par VRAM. Vérifie que pickBestFrom utilise maintenant
+ * l'Intelligence Index officiel quand les deux modèles exacts sont couverts, puis seulement MMLU-Pro et la
+ * VRAM comme replis. Mêmes mocks no-op qu'ailleurs pour fs/child_process/systemResources.
  */
 const nodeRequire = createRequire(import.meta.url)
 const source = ts.transpileModule(readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText
 
-function setup({ verifiedToolScoresMd = '', benchmarkResultsMd = '', vramMib = 30 * 1024, ramGb = 32 } = {}) {
+function setup({ verifiedToolScoresMd = '', vramMib = 30 * 1024, ramGb = 32 } = {}) {
   // hardwareScan.ts appelle exec() via util.promisify (execAsync = promisify(exec)), qui résout normalement
   // vers {stdout, stderr} grâce à la marque [util.promisify.custom] posée par le VRAI child_process.exec de
   // Node — un mock sans cette marque fait résoudre promisify vers un tableau [stdout, stderr] à la place,
@@ -39,7 +36,6 @@ function setup({ verifiedToolScoresMd = '', benchmarkResultsMd = '', vramMib = 3
     fs: {
       readFileSync: (path) => {
         if (String(path).includes('verified-tool-scores.md')) return verifiedToolScoresMd
-        if (String(path).includes('benchmark-results.md') && benchmarkResultsMd) return benchmarkResultsMd
         const err = new Error('ENOENT')
         err.code = 'ENOENT'
         throw err
@@ -61,35 +57,16 @@ function setup({ verifiedToolScoresMd = '', benchmarkResultsMd = '', vramMib = 3
   return exports
 }
 
-test('à appel d’outils égal, le score de qualité local départage avant le benchmark public', async () => {
-  const benchmarkResultsMd = [
-    '## Conversation',
-    '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité | Qualité locale |',
-    '|---|---|---|---|---|',
-    // qwen3.5:27b a le meilleur MMLU-Pro public, mais le test exact de Jaris favorise ici qwen3.8:27b.
-    '| qwen3.5:27b | 1000 ms | 20 tok/s | 6/6 | 4/6 |',
-    '| qwen3.8:27b | 1000 ms | 20 tok/s | 6/6 | 6/6 |',
-    '',
-    '## Vision',
-    '',
-    '## Code'
-  ].join('\n')
-  const { pickBestModelsFromBenchmark } = setup({ benchmarkResultsMd })
-  const result = await pickBestModelsFromBenchmark()
-  assert.equal(result.models.large, 'qwen3.8:27b')
-})
-
-test('à 6/6 égalité, départage par MMLU-Pro (réel) plutôt que par la VRAM la plus grosse', async () => {
+test('à 6/6 égalité, départage d’abord par l’Intelligence Index officiel', async () => {
   const { pickBestModelsFromBenchmark } = setup({
     verifiedToolScoresMd: ['## Conversation', '| Modèle | Fiabilité |', '| --- | --- |', '| qwen3.5:27b | 6/6 |', '| qwen3.8:27b | 6/6 |'].join(
       '\n'
     )
   })
   const result = await pickBestModelsFromBenchmark()
-  // qwen3.8:27b (18 Go) est PLUS GROS que qwen3.5:27b (17 Go) : l'ancien départage par VRAM seule l'aurait
-  // choisi. Son MMLU-Pro réel (84.3) est pourtant plus bas que celui de qwen3.5:27b (86.1, voir
-  // INTELLIGENCE_MMLU_PRO) — le nouveau départage doit donc préférer qwen3.5:27b malgré sa VRAM plus petite.
-  assert.equal(result.models.large, 'qwen3.5:27b')
+  // Artificial Analysis note qwen3.8:27b à 34 contre 23 pour qwen3.5:27b. Ce signal demandé par Léo passe
+  // maintenant avant leurs anciens chiffres MMLU-Pro, qui donnaient l'ordre inverse.
+  assert.equal(result.models.large, 'qwen3.8:27b')
 })
 
 test('à 6/6 égalité SANS MMLU-Pro connu pour les deux, repli sur la VRAM la plus grosse (comportement inchangé)', async () => {
@@ -104,27 +81,28 @@ test('à 6/6 égalité SANS MMLU-Pro connu pour les deux, repli sur la VRAM la p
   assert.equal(result.models.large, 'qwen3.6:35b')
 })
 
-test('expose les 14 scores AA trouvés dans le catalogue CanIRun sans en inventer pour les variantes absentes', async () => {
+test('expose les 15 Intelligence Index lus directement chez Artificial Analysis sans en inventer', async () => {
   const { getModelOverview } = setup()
   const overview = await getModelOverview()
-  const byModel = new Map(overview.groups.flatMap((group) => group.entries.map((entry) => [entry.model, entry.canirunIndex])))
+  const byModel = new Map(overview.groups.flatMap((group) => group.entries.map((entry) => [entry.model, entry.artificialAnalysisIndex])))
   const expected = {
-    'qwen3.5:0.8b': 5,
+    'qwen3.5:0.8b': 6,
     'qwen3.5:2b': 7,
-    'qwen3.5:4b': 20,
-    'qwen3.5:9b': 22,
-    'qwen3.6:27b': 38,
-    'qwen3.6:35b-a3b': 32,
-    'qwen3.8:27b': 52,
-    'gpt-oss:20b': 15,
-    'gemma4:e4b': 12,
-    'gemma4:12b': 22,
-    'gemma4:26b': 26,
-    'gemma4:31b': 30,
-    'ministral-3:3b': 7,
-    'ministral-3:14b': 11
+    'qwen3.5:4b': 13,
+    'qwen3.5:9b': 14,
+    'qwen3.5:27b': 23,
+    'qwen3.6:27b': 21,
+    'qwen3.6:35b-a3b': 18,
+    'qwen3.8:27b': 34,
+    'gpt-oss:20b': 9,
+    'gemma4:e4b': 9,
+    'gemma4:12b': 14,
+    'gemma4:26b': 17,
+    'gemma4:31b': 19,
+    'ministral-3:3b': 5,
+    'ministral-3:14b': 6
   }
 
   for (const [model, score] of Object.entries(expected)) assert.equal(byModel.get(model), score, model)
-  assert.equal(byModel.get('qwen3.5:27b'), null, 'une variante absente de CanIRun doit rester sans score')
+  assert.equal(byModel.get('qwen3.5:35b'), null, 'un modèle exact absent d’Artificial Analysis doit rester sans score')
 })

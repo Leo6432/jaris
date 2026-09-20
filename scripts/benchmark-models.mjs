@@ -33,10 +33,10 @@ const OLLAMA_HOST = process.env.OLLAMA_HOST?.trim() || 'http://127.0.0.1:11434'
 
 /**
  * Modèles déjà vérifiés une fois par Léo (voir verified-tool-scores.md, commité dans le dépôt — valable
- * pour tout le monde, cette fiabilité ne dépend pas du matériel, contrairement à la vitesse). Leur test de
- * rôle n'est pas rejoué : Conversation réutilise le score d'outils mais exécute la nouvelle suite de qualité ;
- * Vision et Code sont entièrement sautés car leur score vérifié mesure déjà leur qualité propre. La vitesse
- * reste recalculée par formule pour cette machine (voir
+ * pour tout le monde, cette fiabilité ne dépend pas du matériel, contrairement à la vitesse). Exclus du
+ * téléchargement/test de CE script (voir SCOPED_MODELS/SCOPED_VISION_CANDIDATES/SCOPED_CODE_CANDIDATES plus
+ * bas) : aucune raison de retélécharger et retester un modèle dont le résultat ne peut pas changer d'une
+ * machine à l'autre — seule sa vitesse est recalculée par formule pour cette machine (voir
  * estimateSpeedTokPerSec plus bas et hardwareScan.ts côté app, qui applique la même logique). Trois listes
  * séparées par palier (sections "## Conversation/Vision/Code" du fichier), PAS une seule liste par nom de
  * modèle : `qwen3.5:4b` (et `gemma4:e4b`) sont candidats à la fois en Conversation et en Vision — un score
@@ -45,7 +45,7 @@ const OLLAMA_HOST = process.env.OLLAMA_HOST?.trim() || 'http://127.0.0.1:11434'
  * qui applique la même correction côté app).
  */
 function readVerifiedModels() {
-  const result = { conversation: new Map(), vision: new Map(), code: new Map() }
+  const result = { conversation: new Set(), vision: new Set(), code: new Set() }
   let raw
   try {
     raw = readFileSync(VERIFIED_TOOL_SCORES_PATH, 'utf-8')
@@ -65,7 +65,7 @@ function readVerifiedModels() {
       .map((c) => c.trim())
       .filter(Boolean)
     if (cells.length !== 2) continue
-    result[currentTier].set(cells[0], cells[1])
+    result[currentTier].add(cells[0])
   }
   return result
 }
@@ -388,8 +388,8 @@ const VISION_TIER_MODELS = new Set(VISION_CANDIDATES.map((c) => c.model))
  * FLASH/MEDIUM/LARGE_TIER_MODELS) puisque c'est une liste plate qui couvre les trois à la fois ; pour
  * vision/code, on garde ou on vide la liste entière (déjà séparée). `scope === 'all'` (comportement par
  * défaut) garde tout, exactement comme avant l'ajout de SCOPE. Exclut aussi tout modèle déjà dans
- * VERIFIED_MODELS (voir sa définition) : en Conversation, seul le test d'outils est sauté et la qualité
- * locale est quand même mesurée ; en Vision/Code le test de rôle déjà vérifié est entièrement sauté. La bonne liste par palier
+ * VERIFIED_MODELS (voir sa définition) : jamais téléchargé ni testé par ce script, sa fiabilité vient de
+ * verified-tool-scores.md, sa vitesse d'une formule côté app — pas de ce script. La bonne liste par palier
  * (`.conversation`/`.vision`/`.code`) évite qu'un modèle candidat aux deux (ex: qwen3.5:4b, Conversation ET
  * Vision) ne saute son test vision juste parce qu'il a un score conversation, et inversement.
  */
@@ -403,7 +403,7 @@ const SCOPED_MODELS = (
         : SCOPE === 'large'
           ? MODELS.filter((m) => LARGE_TIER_MODELS.has(m))
           : []
-)
+).filter((m) => !VERIFIED_MODELS.conversation.has(m))
 const SCOPED_VISION_CANDIDATES = (SCOPE === 'all' || SCOPE === 'vision' ? VISION_CANDIDATES : []).filter(
   (c) => !VERIFIED_MODELS.vision.has(c.model)
 )
@@ -558,54 +558,16 @@ const SYSTEM_PROMPT =
   "concrète, appelle IMPÉRATIVEMENT l'outil correspondant via un vrai appel de fonction, immédiatement, sans " +
   "phrase d'annonce avant. Si aucune action n'est demandée, réponds directement sans outil."
 
-/** Chaque prompt réaliste tiré de vrais usages de Jaris, réservé à la fiabilité d'appel d'outils. */
+/** Chaque prompt réaliste tiré de vrais usages de Jaris ; expectedTool: null = pas d'outil attendu (juste conversationnel). */
 const TEST_CASES = [
   { prompt: 'Écris bonjour dans le champ de texte ouvert.', expectedTool: 'type_text' },
   { prompt: 'Cherche le prix du Bitcoin aujourd\'hui.', expectedTool: 'search_web' },
   { prompt: "Rappelle-moi d'appeler le dentiste dans 20 minutes.", expectedTool: 'set_reminder' },
   { prompt: 'Qu\'est-ce qui est affiché sur mon écran en ce moment ?', expectedTool: 'look_at_screen' },
   { prompt: 'Ouvre le bloc-notes.', expectedTool: 'open_app' },
-  { prompt: 'Retiens que mon code postal est 75001.', expectedTool: 'remember' }
-]
-
-/**
- * Mini-suite déterministe inspirée des familles MMLU-Pro (raisonnement) et IFEval (respect de contraintes),
- * mais volontairement nommée « qualité locale Jaris » : ce n'est PAS le score officiel de ces benchmarks.
- * Chaque réponse est vérifiée mécaniquement, sans jugement humain ni accès réseau. Les outils restent
- * disponibles comme en production : un appel d'outil inutile fait échouer le cas.
- */
-const CONVERSATION_QUALITY_CASES = [
-  {
-    prompt: 'Calcule 27 multiplié par 14. Réponds uniquement avec le nombre.',
-    check: (answer) => answer.trim() === '378'
-  },
-  {
-    prompt: 'Tous les néris sont bleus. Aucun objet bleu n’est rouge. Un néri peut-il être rouge ? Réponds uniquement oui ou non.',
-    check: (answer) => /^non[.!]?$/i.test(answer.trim())
-  },
-  {
-    prompt: 'Paul a 12 billes. Il en donne 5 puis en gagne 3. Combien en a-t-il ? Réponds uniquement avec le nombre.',
-    check: (answer) => answer.trim() === '10'
-  },
-  {
-    prompt: 'Réponds exactement avec ces deux mots en minuscules, séparés par une barre verticale et sans espace : Alpha puis Bêta.',
-    check: (answer) => answer.trim() === 'alpha|bêta'
-  },
-  {
-    prompt: 'Réponds uniquement avec un objet JSON valide contenant la clé resultat et la valeur numérique 12.',
-    check: (answer) => {
-      try {
-        const parsed = JSON.parse(answer.trim().replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim())
-        return Object.keys(parsed).length === 1 && parsed.resultat === 12
-      } catch {
-        return false
-      }
-    }
-  },
-  {
-    prompt: 'Ne cherche pas sur internet. Quelle est la capitale de la France ? Réponds uniquement par son nom.',
-    check: (answer) => /^paris[.!]?$/i.test(answer.trim())
-  }
+  { prompt: 'Retiens que mon code postal est 75001.', expectedTool: 'remember' },
+  { prompt: 'Explique-moi en une phrase pourquoi le ciel est bleu.', expectedTool: null },
+  { prompt: 'Comment tu t\'appelles et qu\'est-ce que tu peux faire pour moi ?', expectedTool: null }
 ]
 
 /**
@@ -1228,8 +1190,8 @@ async function main() {
   const verifiedTotal = VERIFIED_MODELS.conversation.size + VERIFIED_MODELS.vision.size + VERIFIED_MODELS.code.size
   if (verifiedTotal) {
     console.log(
-      `${verifiedTotal} score(s) de rôle déjà vérifié(s) (verified-tool-scores.md — ${VERIFIED_MODELS.conversation.size} conversation, ` +
-        `${VERIFIED_MODELS.vision.size} vision, ${VERIFIED_MODELS.code.size} code) : les appels d'outils connus sont réutilisés ; la nouvelle qualité conversationnelle reste testée localement.\n`
+      `${verifiedTotal} modèle(s) déjà vérifié(s) (verified-tool-scores.md — ${VERIFIED_MODELS.conversation.size} conversation, ` +
+        `${VERIFIED_MODELS.vision.size} vision, ${VERIFIED_MODELS.code.size} code) : ni téléchargés ni testés ce run-ci, leur vitesse est estimée par formule côté app.\n`
     )
   }
 
@@ -1258,9 +1220,11 @@ async function main() {
         .split('|')
         .map((c) => c.trim())
         .filter(Boolean)
+      // Tolère le format v0.15.29 à cinq colonnes ; la dernière mesure a été retirée de l'interface et du
+      // choix des modèles, mais les quatre mesures historiques restent valides et sont conservées.
       if (cells.length !== 4 && cells.length !== 5) continue
-      const [model, latency, speed, reliability, quality = '—'] = cells
-      existingRows[currentTier].set(model, { latency, speed, reliability, quality })
+      const [model, latency, speed, reliability] = cells
+      existingRows[currentTier].set(model, { latency, speed, reliability })
     }
   } catch {
     // Pas de fichier précédent (tout premier run) : rien à conserver, existingRows reste vide.
@@ -1345,10 +1309,7 @@ async function main() {
   const testWeightOf = (model) => modelWeightGb(model)
   const totalPullWeight = missing.reduce((sum, m) => sum + modelWeightGb(m), 0)
   const totalTestWeight =
-    toRun.reduce(
-      (sum, m) => sum + testWeightOf(m) * (CONVERSATION_QUALITY_CASES.length + (VERIFIED_MODELS.conversation.has(m) ? 0 : TEST_CASES.length)),
-      0
-    ) +
+    toRun.reduce((sum, m) => sum + testWeightOf(m) * TEST_CASES.length, 0) +
     visionToRun.reduce((sum, m) => sum + testWeightOf(m) * VISION_TEST_CASES.length, 0) +
     codeToRun.reduce((sum, m) => sum + testWeightOf(m) * CODE_TEST_CASES.length, 0)
   const totalWeight = totalPullWeight + totalTestWeight || 1
@@ -1482,9 +1443,7 @@ async function main() {
   const errors = []
   let testsDone = 0
   const testsTotal =
-    toRun.reduce((sum, m) => sum + CONVERSATION_QUALITY_CASES.length + (VERIFIED_MODELS.conversation.has(m) ? 0 : TEST_CASES.length), 0) +
-    visionToRun.length * VISION_TEST_CASES.length +
-    codeToRun.length * CODE_TEST_CASES.length
+    toRun.length * TEST_CASES.length + visionToRun.length * VISION_TEST_CASES.length + codeToRun.length * CODE_TEST_CASES.length
   // Remonté avant les boucles de test (pas défini seulement à l'écriture des résultats comme avant) :
   // considerPruning en a besoin pendant le run, pas seulement à la toute fin.
   const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null)
@@ -1523,17 +1482,16 @@ async function main() {
       lines.push('')
       lines.push(`## ${heading}`)
       lines.push('')
-      lines.push('| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité | Qualité locale |')
-      lines.push('|---|---|---|---|---|')
+      lines.push('| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |')
+      lines.push('|---|---|---|---|')
       const testedThisRun = new Set(byRole[role].map((r) => r.model))
       for (const r of byRole[role]) {
         const acc = r.total ? `${r.correct}/${r.total}` : '—'
-        const quality = r.qualityTotal ? `${r.qualityCorrect}/${r.qualityTotal}` : role === 'conversation' ? '—' : acc
-        lines.push(`| ${r.model} | ${fmt(avg(r.latencies), 0)} ms | ${fmt(avg(r.speeds))} tok/s | ${acc} | ${quality} |`)
+        lines.push(`| ${r.model} | ${fmt(avg(r.latencies), 0)} ms | ${fmt(avg(r.speeds))} tok/s | ${acc} |`)
       }
       for (const [model, row] of existingRows[role]) {
         if (testedThisRun.has(model)) continue
-        lines.push(`| ${model} | ${row.latency} | ${row.speed} | ${row.reliability} | ${row.quality} |`)
+        lines.push(`| ${model} | ${row.latency} | ${row.speed} | ${row.reliability} |`)
       }
     }
 
@@ -1569,50 +1527,24 @@ async function main() {
     }
     console.log(`\n=== ${model} ===`)
     console.log(`##MODEL_TESTING## ${model}`)
-    const verifiedToolScore = VERIFIED_MODELS.conversation.get(model)
-    const [verifiedCorrect, verifiedTotal] = verifiedToolScore?.split('/').map(Number) ?? [0, 0]
-    const perModel = {
-      model,
-      role: 'conversation',
-      latencies: [],
-      speeds: [],
-      correct: Number.isFinite(verifiedCorrect) ? verifiedCorrect : 0,
-      total: Number.isFinite(verifiedTotal) ? verifiedTotal : 0,
-      qualityCorrect: 0,
-      qualityTotal: 0
-    }
+    const perModel = { model, role: 'conversation', latencies: [], speeds: [], correct: 0, total: 0 }
 
-    for (const { prompt, expectedTool } of verifiedToolScore ? [] : TEST_CASES) {
+    for (const { prompt, expectedTool } of TEST_CASES) {
       process.stdout.write(`  "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}" ... `)
       try {
         const r = await chat(model, prompt)
         perModel.latencies.push(r.wallMs)
         if (r.tokPerSec !== null) perModel.speeds.push(r.tokPerSec)
 
-        perModel.total++
-        const ok = r.toolName === expectedTool
-        if (ok) perModel.correct++
-        console.log(`${ok ? 'OK' : 'RATÉ'} (attendu: ${expectedTool}, obtenu: ${r.toolName ?? 'aucun outil'}) — ${fmt(r.wallMs, 0)}ms, ${fmt(r.tokPerSec)} tok/s`)
-      } catch (err) {
-        console.log(`ERREUR (${err.message})`)
-        errors.push({ model, prompt, message: err.message })
-      }
-      testsDone++
-      console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
-      weightDone += testWeightOf(model)
-      emitProgress()
-    }
-
-    for (const { prompt, check } of CONVERSATION_QUALITY_CASES) {
-      process.stdout.write(`  Qualité : "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}" ... `)
-      try {
-        const r = await chat(model, prompt)
-        perModel.latencies.push(r.wallMs)
-        if (r.tokPerSec !== null) perModel.speeds.push(r.tokPerSec)
-        perModel.qualityTotal++
-        const ok = r.toolName === null && check(r.content)
-        if (ok) perModel.qualityCorrect++
-        console.log(`${ok ? 'OK' : 'RATÉ'} (réponse: "${(r.content || `[outil: ${r.toolName}]`).slice(0, 60)}") — ${fmt(r.wallMs, 0)}ms, ${fmt(r.tokPerSec)} tok/s`)
+        if (expectedTool) {
+          perModel.total++
+          const ok = r.toolName === expectedTool
+          if (ok) perModel.correct++
+          console.log(`${ok ? 'OK' : 'RATÉ'} (attendu: ${expectedTool}, obtenu: ${r.toolName ?? 'aucun outil'}) — ${fmt(r.wallMs, 0)}ms, ${fmt(r.tokPerSec)} tok/s`)
+        } else {
+          console.log(`${fmt(r.wallMs, 0)}ms, ${fmt(r.tokPerSec)} tok/s${r.toolName ? ` (outil inattendu: ${r.toolName})` : ''}`)
+          reasoningAnswers.push({ model, prompt, answer: r.content || `[outil appelé au lieu de répondre: ${r.toolName}]` })
+        }
       } catch (err) {
         console.log(`ERREUR (${err.message})`)
         errors.push({ model, prompt, message: err.message })
@@ -1625,7 +1557,7 @@ async function main() {
 
     results.push(perModel)
     // Lu par le tableau de suivi en direct (OptionsMenu.tsx) : ce modèle a fini tous ses tests, avec ce score.
-    console.log(`##MODEL_DONE## ${model} ${perModel.correct + perModel.qualityCorrect} ${perModel.total + perModel.qualityTotal}`)
+    console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
     persistResults()
 
     // Espace disque serré uniquement : ce modèle vient de finir son test, et n'appartient qu'à UN SEUL
@@ -1646,7 +1578,7 @@ async function main() {
     }
     console.log(`\n=== ${model} (vision) ===`)
     console.log(`##MODEL_TESTING## ${model}`)
-    const perModel = { model, role: 'vision', latencies: [], speeds: [], correct: 0, total: 0, qualityCorrect: 0, qualityTotal: 0 }
+    const perModel = { model, role: 'vision', latencies: [], speeds: [], correct: 0, total: 0 }
 
     for (let i = 0; i < VISION_TEST_CASES.length; i++) {
       const { prompt, check } = VISION_TEST_CASES[i]
@@ -1656,12 +1588,8 @@ async function main() {
         perModel.latencies.push(r.wallMs)
         if (r.tokPerSec !== null) perModel.speeds.push(r.tokPerSec)
         perModel.total++
-        perModel.qualityTotal++
         const ok = check(r.content.toLowerCase())
-        if (ok) {
-          perModel.correct++
-          perModel.qualityCorrect++
-        }
+        if (ok) perModel.correct++
         console.log(`${ok ? 'OK' : 'RATÉ'} (réponse: "${r.content.slice(0, 60)}") — ${fmt(r.wallMs, 0)}ms, ${fmt(r.tokPerSec)} tok/s`)
       } catch (err) {
         console.log(`ERREUR (${err.message})`)
@@ -1695,7 +1623,7 @@ async function main() {
     }
     console.log(`\n=== ${model} (code) ===`)
     console.log(`##MODEL_TESTING## ${model}`)
-    const perModel = { model, role: 'code', latencies: [], speeds: [], correct: 0, total: 0, qualityCorrect: 0, qualityTotal: 0 }
+    const perModel = { model, role: 'code', latencies: [], speeds: [], correct: 0, total: 0 }
 
     for (const prompt of CODE_TEST_CASES) {
       process.stdout.write(`  "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}" ... `)
@@ -1704,15 +1632,11 @@ async function main() {
         perModel.latencies.push(r.wallMs)
         if (r.tokPerSec !== null) perModel.speeds.push(r.tokPerSec)
         perModel.total++
-        perModel.qualityTotal++
 
         const html = extractHtml(r.content)
         const issues = html ? validateGeneratedHtml(html) : ['pas de code HTML exploitable dans la réponse']
         const ok = issues.length === 0
-        if (ok) {
-          perModel.correct++
-          perModel.qualityCorrect++
-        }
+        if (ok) perModel.correct++
         console.log(
           `${ok ? 'OK' : 'RATÉ'} (${issues.length} problème(s)${issues.length ? ' : ' + issues[0] : ''}) — ${fmt(r.wallMs, 0)}ms, ${fmt(r.tokPerSec)} tok/s`
         )

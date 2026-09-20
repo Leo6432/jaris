@@ -6,14 +6,9 @@ import { formatModelName } from '../lib/formatModelName'
 import ModelAnalysisProgress from './ModelAnalysisProgress'
 import { ReliabilityBadge } from './OptionsMenu'
 
-function BenchmarkBadge({ value }: { value: string | null }): JSX.Element {
-  if (value) return <ReliabilityBadge value={value} />
-  return <span className="options-menu__badge options-menu__badge--none">Non testé</span>
-}
-
 /**
  * Léo : "dans model ajoute un bouton en dessous de tout les palier, tout les model et met tout les model
- * qu'on a utiliser met le score apelle outil la vram necessaire pour le model, et le score sur canirun.ai"
+ * qu'on a utiliser met le score apelle outil la vram necessaire pour le model, et un score d'intelligence externe"
  * — la liste COMPLÈTE de tous les modèles candidats de Jaris (tous paliers confondus), pas seulement celui
  * réellement choisi pour la machine de l'utilisateur (déjà visible dans les paliers juste au-dessus).
  *
@@ -30,7 +25,7 @@ function BenchmarkBadge({ value }: { value: string | null }): JSX.Element {
  * revient sur la page Options exactement où elle était, sans perdre l'onglet Modèles en cours. Pas de
  * colonne de navigation à gauche comme la page Options : un seul contenu, rien à onglet ici.
  *
- * Léo, juste après : "il manque encore des score canirun et ajoute le bouton dans cette mis a jour pour que
+ * Léo, juste après : "il manque encore des scores d'intelligence et ajoute le bouton dans cette mis a jour pour que
  * j'analyse et je te donne les appelle outils pour ceux que je peut" — un bouton "Lancer l'analyse" qui
  * teste réellement, EN LOCAL sur SA machine, les modèles qui n'ont pas encore de score d'appel d'outils
  * connu (colonne "Appel d'outils"), pour qu'il puisse ensuite me communiquer les résultats et que je les
@@ -104,18 +99,19 @@ export default function AllModelsOverview(): JSX.Element {
                   </div>
                   {loading && <p className="capacity-scan__status">Chargement...</p>}
 
-                  {/* Teste réellement, en local, les modèles compatibles avec la machine. Les scores de
-                      rôle déjà partagés restent réutilisés, tandis que la qualité conversationnelle doit
-                      être mesurée sur le modèle exact. */}
+                  {/* Teste réellement, en local, les modèles de la colonne "Appel d'outils" encore vides —
+                      saute automatiquement ceux déjà connus et ceux trop gros pour cette machine. Résultat
+                      RIEN QU'à toi (fichier gitignoré sur ta machine) : les valeurs qui comptent pour tout le
+                      monde vivent dans le dépôt (verified-tool-scores.md), à me communiquer ensuite. */}
                   {overview && !analysis.benchmarking && (
                     <div className="options-menu__all-models-analysis">
                       <button className="options-menu__action" onClick={() => void runAnalysis()}>
                         Lancer l'analyse
                       </button>
                       <p className="capacity-scan__hint">
-                        Mesure chaque modèle compatible avec ton PC : appel d'outils et raisonnement pour la
-                        conversation, compréhension d'image pour Vision, génération fonctionnelle pour Code.
-                        Les scores locaux ne se comparent qu'entre modèles du même palier.
+                        Teste en local les modèles qui n'ont pas encore de score d'appel d'outils connu. Une
+                        fois terminé, donne-moi les résultats affichés ici pour que je les garde pour tout le
+                        monde.
                       </p>
                     </div>
                   )}
@@ -127,10 +123,7 @@ export default function AllModelsOverview(): JSX.Element {
 
                   {overview && !analysis.benchmarking && (
                     <div className="options-menu__model-overview-scroll">
-                      {overview.groups.map((group) => {
-                        const isConversation = group.tier !== 'Vision' && group.tier !== 'Code'
-                        const roleScoreLabel = group.tier === 'Vision' ? 'Test vision' : group.tier === 'Code' ? 'Test code' : "Appel d'outils"
-                        return (
+                      {overview.groups.map((group) => (
                         <div key={group.tier} className="options-menu__model-group">
                           <div className="options-menu__model-group-title">{group.tier}</div>
                           <table className="options-menu__model-overview">
@@ -138,24 +131,13 @@ export default function AllModelsOverview(): JSX.Element {
                               <tr>
                                 <th>Modèle</th>
                                 <th className="options-menu__col-num">VRAM nécessaire</th>
-                                <th className="options-menu__col-num">{roleScoreLabel}</th>
-                                {isConversation && (
-                                  <th
-                                    className="options-menu__col-num"
-                                    title="Raisonnement et respect de consignes, mesurés localement par Jaris"
-                                  >
-                                    Qualité locale
-                                  </th>
-                                )}
-                                {/* Score CanIRun.ai (site tiers, voir CANIRUN_INTELLIGENCE_INDEX dans
-                                    hardwareScan.ts) : indicatif seulement, jamais utilisé pour choisir un
-                                    modèle — beaucoup de "—" au moment d'écrire ceci, leur catalogue restant
-                                    incomplet sur ce champ précis, même pour un modèle qu'ils cataloguent. */}
+                                <th className="options-menu__col-num">Appel d'outils</th>
+                                {/* Intelligence Index lu directement chez Artificial Analysis. */}
                                 <th
                                   className="options-menu__col-num"
-                                  title="Indice d’intelligence Artificial Analysis repris par CanIRun.ai"
+                                  title="Artificial Analysis Intelligence Index v4.3.2"
                                 >
-                                  Score AA (CanIRun.ai)
+                                  Intelligence (Artificial Analysis)
                                 </th>
                               </tr>
                             </thead>
@@ -167,23 +149,17 @@ export default function AllModelsOverview(): JSX.Element {
                                   </td>
                                   <td className="options-menu__col-num">{entry.vramGb} Go</td>
                                   <td className="options-menu__col-num">
-                                    <BenchmarkBadge value={entry.toolCalling} />
+                                    <ReliabilityBadge value={entry.toolCalling} />
                                   </td>
-                                  {isConversation && (
-                                    <td className="options-menu__col-num">
-                                      <BenchmarkBadge value={entry.localQuality} />
-                                    </td>
-                                  )}
                                   <td className="options-menu__col-num">
-                                    {entry.canirunIndex === null ? 'Non publié' : `${entry.canirunIndex} AA`}
+                                    {entry.artificialAnalysisIndex === null ? 'Non publié' : entry.artificialAnalysisIndex}
                                   </td>
                                 </tr>
                               ))}
                             </tbody>
                           </table>
                         </div>
-                        )
-                      })}
+                      ))}
                     </div>
                   )}
                 </div>

@@ -33,20 +33,20 @@ const BENCHMARK_RESULTS_MD = [
   '',
   '## Conversation',
   '',
-  '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité | Qualité locale |',
-  '|---|---|---|---|---|',
-  '| ministral-3:8b | 600 ms | 40.0 tok/s | 5/6 | 4/6 |',
+  '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
+  '|---|---|---|---|',
+  '| ministral-3:8b | 600 ms | 40.0 tok/s | 5/6 |',
   '',
   '## Vision',
   '',
-  '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité | Qualité locale |',
-  '|---|---|---|---|---|',
-  '| ministral-3:8b | 800 ms | 30.0 tok/s | 2/3 | 2/3 |',
+  '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
+  '|---|---|---|---|',
+  '| ministral-3:8b | 800 ms | 30.0 tok/s | 2/3 |',
   '',
   '## Code',
   '',
-  '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité | Qualité locale |',
-  '|---|---|---|---|---|'
+  '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
+  '|---|---|---|---|'
 ].join('\n')
 
 function setup({ benchmarkResultsMd = '', vramMib = 30 * 1024, ramGb = 32 } = {}) {
@@ -92,9 +92,7 @@ test('parseLocalBenchmark sépare bien conversation/vision/code, pas une seule m
   const { parseLocalBenchmark } = setup({ benchmarkResultsMd: BENCHMARK_RESULTS_MD })
   const local = parseLocalBenchmark()
   assert.equal(local.conversation.get('ministral-3:8b')?.toolCalling, '5/6', 'score de conversation attendu (5/6)')
-  assert.equal(local.conversation.get('ministral-3:8b')?.localQuality, '4/6', 'score de qualité conversation attendu (4/6)')
   assert.equal(local.vision.get('ministral-3:8b')?.toolCalling, '2/3', 'score de vision attendu (2/3)')
-  assert.equal(local.vision.get('ministral-3:8b')?.localQuality, '2/3', 'score de qualité vision attendu (2/3)')
   assert.equal(local.code.has('ministral-3:8b'), false, "ministral-3:8b n'a jamais été testé en Code")
 })
 
@@ -122,4 +120,24 @@ test('un benchmark-results.md de l\'ANCIEN format (sans sections) se lit comme "
   const local = parseLocalBenchmark()
   assert.equal(local.conversation.has('ministral-3:8b'), false, "l'ancien format ne doit jamais être mal réparti dans une section")
   assert.equal(local.vision.has('ministral-3:8b'), false, "l'ancien format ne doit jamais être mal réparti dans une section")
+})
+
+test('le format transitoire v0.15.29 à cinq colonnes conserve les scores utiles sans qualité locale', () => {
+  const transitional = [
+    '## Conversation',
+    '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité | Qualité locale |',
+    '|---|---|---|---|---|',
+    '| qwen3.5:4b | 500 ms | 50 tok/s | 6/6 | 4/6 |',
+    '',
+    '## Vision',
+    '',
+    '## Code'
+  ].join('\n')
+  const { parseLocalBenchmark } = setup({ benchmarkResultsMd: transitional })
+  const local = parseLocalBenchmark()
+  assert.equal(local.conversation.get('qwen3.5:4b')?.toolCalling, '6/6')
+  assert.deepEqual(
+    Object.keys(local.conversation.get('qwen3.5:4b')).sort(),
+    ['speedTokPerSec', 'toolCalling'].sort()
+  )
 })

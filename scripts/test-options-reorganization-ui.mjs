@@ -72,13 +72,13 @@ const overrides = {
         {
           tier: 'Rapide',
           entries: [
-            { model: 'ministral-3:3b', vramGb: 3.0, speedTokPerSec: 120.4, toolCalling: '6/6', intelligence: null, canirunIndex: 7 },
-            { model: 'qwen3:1.7b', vramGb: 2, speedTokPerSec: 200.1, toolCalling, intelligence: null, canirunIndex: null }
+            { model: 'ministral-3:3b', vramGb: 3.0, speedTokPerSec: 120.4, toolCalling: '6/6', intelligence: null, artificialAnalysisIndex: 5 },
+            { model: 'qwen3:1.7b', vramGb: 2, speedTokPerSec: 200.1, toolCalling, intelligence: null, artificialAnalysisIndex: null }
           ]
         },
         {
           tier: 'Vision',
-          entries: [{ model: 'gemma4:31b', vramGb: 20, speedTokPerSec: null, toolCalling: null, intelligence: null, canirunIndex: null }]
+          entries: [{ model: 'gemma4:31b', vramGb: 20, speedTokPerSec: null, toolCalling: null, intelligence: null, artificialAnalysisIndex: null }]
         }
       ]
     }
@@ -301,7 +301,7 @@ test('les cartes de réglages ont de l\'air entre le titre et le contenu, et ent
 })
 
 // Léo : "dans model ajoute un bouton en dessou de tout les palier, tout les model et met tout les model
-// qu'on a utiliser met le score apelle outil la vram necessaire pour le model, et le score sur canirun.ai"
+// qu'on a utiliser met le score apelle outil la vram necessaire pour le model, et un score d'intelligence externe"
 // (AllModelsOverview.tsx). Repris juste après (Léo : "quand on clique sur tout les models on doit ouvrire
 // un page entierement pour ça") : un clic n'ouvre plus une liste dépliée EN PLACE dans la petite carte des
 // paliers, mais une vraie page plein écran (.options-page--models, empilée par-dessus la page Options),
@@ -344,11 +344,11 @@ test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste d
       els.map((el) => Array.from(el.querySelectorAll('td')).map((td) => td.textContent?.trim()))
     )
     assert.equal(rows.length, 3, `3 modèles attendus (2 Rapide + 1 Vision) : ${rows.length}`)
-    // ministral-3:3b : VRAM, un vrai score CanIRun.ai (7).
+    // ministral-3:3b : VRAM et Intelligence Index officiel (5).
     assert.ok(rows[0][1].includes('3'), `VRAM du premier modèle : ${rows[0][1]}`)
-    assert.equal(rows[0][3], '7 AA', `score CanIRun.ai attendu (7 AA) : ${rows[0][3]}`)
-    // qwen3:1.7b : aucun score CanIRun.ai connu -> tiret, jamais un chiffre inventé.
-    assert.equal(rows[1][3], '—', `absence de score CanIRun.ai doit rester un tiret, pas un 0 : ${rows[1][3]}`)
+    assert.equal(rows[0][3], '5', `Intelligence Index attendu (5) : ${rows[0][3]}`)
+    // qwen3:1.7b : aucun score officiel connu, clairement indiqué sans chiffre inventé.
+    assert.equal(rows[1][3], 'Non publié', `absence de score officiel attendue : ${rows[1][3]}`)
 
     // "Fermer" revient sur la page Options, toujours sur l'onglet Modèles — elle n'a jamais été fermée.
     await page.click('.options-page--models .options-page__close')
@@ -370,7 +370,7 @@ test('le bouton "Tous les modèles" est réellement habillé par le CSS de Jaris
   })
 })
 
-// Léo : "il manque encore des score canirun et ajoute le bouton dans cette mis a jour pour que j'analyse et
+// Léo : "il manque encore des scores d'intelligence et ajoute le bouton dans cette mis a jour pour que j'analyse et
 // je te donne les appelle outils pour ceux que je peut" — le bouton "Lancer l'analyse" (useModelAnalysis +
 // ModelAnalysisProgress, existants mais jamais rendus nulle part avant ce correctif) doit réellement se
 // déclencher, afficher un suivi en direct PENDANT le run (un seul cadre à la fois, jamais les deux tableaux
@@ -382,10 +382,9 @@ test('"Lancer l\'analyse" affiche un suivi en direct puis rafraîchit le tableau
     await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
 
-    // Avant le run : le tableau STATIQUE (colonnes VRAM/Appel d'outils/CanIRun.ai), aucun suivi en direct.
+    // Avant le run : le tableau STATIQUE avec l'Intelligence Index officiel, aucun suivi en direct.
     const headersBefore = await page.$$eval('.options-page--models thead th', (els) => els.map((el) => el.textContent))
-    assert.ok(headersBefore.includes('Score AA (CanIRun.ai)'), `tableau statique attendu avant le run : ${headersBefore.join(', ')}`)
-    assert.ok(headersBefore.includes('Qualité locale'), `score local de conversation attendu : ${headersBefore.join(', ')}`)
+    assert.ok(headersBefore.includes('Intelligence (Artificial Analysis)'), `tableau statique attendu avant le run : ${headersBefore.join(', ')}`)
     assert.equal(await page.$('.options-menu__progress'), null, 'aucune barre de progression avant le clic')
 
     await page.click('.options-page--models .options-menu__all-models-analysis button:has-text("Lancer l\'analyse")')
@@ -397,14 +396,14 @@ test('"Lancer l\'analyse" affiche un suivi en direct puis rafraîchit le tableau
     // ici, ce qui compte est qu'AUCUN autre jeu d'en-têtes (celui du tableau statique) n'apparaisse en même temps.
     const headersDuring = await page.$$eval('.options-page--models thead th', (els) => [...new Set(els.map((el) => el.textContent))])
     assert.deepEqual(headersDuring, ['Modèle', 'Fiabilité connue', 'Statut'], `un seul tableau (suivi en direct) attendu pendant le run : ${headersDuring.join(', ')}`)
-    assert.equal(await page.$('.options-page--models .options-menu__col-num:has-text("Score AA (CanIRun.ai)")'), null, 'le tableau statique ne doit pas rester affiché pendant le run')
+    assert.equal(await page.$('.options-page--models .options-menu__col-num:has-text("Intelligence (Artificial Analysis)")'), null, 'le tableau statique ne doit pas rester affiché pendant le run')
 
     const scope = await page.evaluate(() => window.__lastAnalysisScope)
     assert.equal(scope, 'all', `périmètre 'all' attendu (Léo dit "LE bouton", singulier) : ${scope}`)
 
     // Débloque le run simulé (voir runModelAnalysis dans le pont de test) et attend le retour au tableau statique.
     await page.evaluate(() => window.__releaseAnalysis())
-    await page.waitForSelector('.options-page--models .options-menu__model-overview thead th:has-text("Score AA (CanIRun.ai)")')
+    await page.waitForSelector('.options-page--models .options-menu__model-overview thead th:has-text("Intelligence (Artificial Analysis)")')
 
     // Le tableau doit refléter le RÉSULTAT FRAIS du run (getModelOverview rappelé après coup) : qwen3:1.7b
     // passe de "—" (aucun score connu) à "5/6" une fois le run terminé, sans recharger la page.

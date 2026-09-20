@@ -249,30 +249,24 @@ export interface ModelOverviewEntry {
   speedTokPerSec: number | null
   speedEstimated?: boolean
   toolCalling: string | null
-  /**
-   * Score de qualité mesuré par le benchmark local adapté au rôle : raisonnement et respect des consignes
-   * pour Conversation, compréhension d'image pour Vision, génération fonctionnelle pour Code. Ce score
-   * n'est comparable qu'entre modèles d'un même palier. `null` signifie « pas encore testé ».
-   */
-  localQuality: string | null
   intelligence: number | null
   /**
-   * true si le test de ce rôle est déjà entièrement vérifié et sera sauté au prochain run. Vision et Code
-   * réutilisent directement leur score partagé. Conversation reste à false même avec un score d'outils
-   * vérifié, car sa qualité de raisonnement doit encore être mesurée localement. Sert à
-   * ModelAnalysisProgress.tsx pour distinguer un modèle jamais touché par ce run d'un modèle en attente.
+   * true si ce modèle est présent dans scripts/verified-tool-scores.md pour SON palier — indépendamment de
+   * speedEstimated (qui ne dit que "pas de mesure locale, on affiche le score vérifié à la place") : même un
+   * modèle déjà mesuré localement une fois reste, lui aussi, exclu du prochain run de
+   * scripts/benchmark-models.mjs s'il est vérifié. Sert à ModelAnalysisProgress.tsx (OptionsMenu.tsx) pour
+   * distinguer, dans le tableau de suivi en direct, un modèle qui ne sera JAMAIS touché par ce run (jamais
+   * de ##MODEL_TESTING##/##MODEL_DONE## le concernant) d'un modèle simplement pas encore commencé.
    */
   verifiedSkip?: boolean
   /**
-   * Indice d'intelligence AA publié par CanIRun.ai (canirun.ai), demandé par Léo pour la liste
-   * "Tous les modèles" (Options → Modèles) — voir CANIRUN_INTELLIGENCE_INDEX dans hardwareScan.ts pour la
-   * source exacte et sa date de vérification. `null` si ce modèle n'y figure pas ou n'a pas encore ce score
-   * chez eux (leur catalogue reste très incomplet sur ce champ au moment d'écrire ceci) — jamais un chiffre
-   * inventé pour combler le vide. Contrairement à `intelligence` (MMLU-Pro, une mesure indépendante déjà
-   * utilisée par Jaris pour départager deux candidats), celui-ci n'est PAS utilisé pour choisir un modèle,
-   * uniquement affiché à titre indicatif.
+   * Intelligence Index publié directement par Artificial Analysis — voir
+   * ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX dans hardwareScan.ts pour la version et la date de vérification.
+   * `null` si le modèle exact n'est pas évalué, jamais un chiffre inventé pour combler le vide.
+   * À fiabilité égale, Jaris l'utilise pour départager deux modèles exacts qui possèdent tous les deux un
+   * score publié ; MMLU-Pro reste le repli quand cette comparaison officielle n'est pas possible.
    */
-  canirunIndex: number | null
+  artificialAnalysisIndex: number | null
 }
 
 /**
