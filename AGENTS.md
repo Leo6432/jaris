@@ -3048,3 +3048,49 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
    Playwright déjà utilisés dans ce dépôt) pour capturer les VRAIES erreurs JS/console avant de les redonner
    au modèle à corriger serait plus fiable qu'un motif de texte. Changement ciblé sur `codeGenerator.ts`, pas
    une refonte — prolonge la passe de relecture/réparation déjà en place plutôt que de la remplacer.
+
+- **Étape 127, Léo (capture d'écran à l'appui) : "regarde les palier tout le monde a les meme model pour les
+  palier... pour le palier 4 par exemple" — plusieurs paliers consécutifs du tableau "Ce que ta machine fait
+  tourner" affichaient EXACTEMENT les 5 mêmes modèles (Rapide/Médium/Puissant/Vision/Code), et le tout premier
+  s'intitulait "(moins de 0 Go)", une étiquette absurde (aucune machine n'a moins de 0 Go).**
+  Diagnostiqué en relisant `previewVramSteps`/`previewHardwareTiers` (hardwareScan.ts), pas deviné. Chaque
+  VALEUR de `previewVramSteps` est bien une frontière VRAIE où au moins un candidat devient/cesse d'être
+  atteignable — mais ça ne garantit PAS que ce changement soit VISIBLE dans les 5 colonnes affichées :
+  1. **Le repli "aucun candidat ne rentre encore" (`pickForBudget` dans `computeModelPicks`) peut déjà
+     afficher le même modèle qu'une fois son propre seuil réellement atteint.** Exemple concret : sur une
+     machine sans assez de VRAM pour AUCUN candidat Médium, Jaris retombe sur le plus petit (`qwen3.5:0.8b`,
+     dernier de `MEDIUM_CANDIDATES`) — bien AVANT que ce modèle "rentre" vraiment (son propre seuil réel,
+     1,0+4,5=5,5 Go de VRAM totale). Résultat : la ligne à 0 Go et la ligne à 5,5 Go affichent le MÊME nom de
+     modèle Médium, pour deux raisons complètement différentes (repli vs vrai calcul), sans que rien ne le
+     distingue à l'écran.
+  2. **Le tout premier palier peut légitimement valoir 0 Go.** Un candidat "Puissant" qui tolère de déborder
+     sur la RAM (`LARGE_RAM_OFFLOAD_MODELS`) peut ne plus avoir besoin d'AUCUNE VRAM sur une machine avec
+     assez de RAM (`totalVramNeededFor` plafonne à 0 via `Math.max(0, ...)`) — mais "moins de 0 Go" n'a alors
+     aucun sens : il n'existe aucune machine avec MOINS que ça.
+  **Corrigé sur les deux plans.** `previewHardwareTiers` fusionne maintenant les paliers CONSÉCUTIFS dont les
+  5 modèles choisis sont RIGOUREUSEMENT identiques (`sameCombo`) : une seule ligne par combinaison vraiment
+  distincte, gardant la frontière du PREMIER palier du groupe (celle où ce résultat apparaît réellement) et
+  le statut "actuel" si N'IMPORTE LEQUEL des paliers fusionnés l'était. `formatVramRange`
+  (HardwareTierPreview.tsx) affiche "(0 Go)" au lieu de "(moins de 0 Go)" quand la toute première frontière
+  vaut exactement 0.
+  **Pourquoi ne pas avoir touché `previewVramSteps` lui-même** : ses frontières restent mathématiquement
+  correctes et nécessaires (elles servent aussi à `pickBestFrom`/`computeModelPicks` pour garantir que deux
+  machines dans le même intervalle reçoivent le même modèle, étape 114/117) — le problème n'était que dans
+  l'AFFICHAGE d'une ligne par frontière sans vérifier que le résultat affiché change vraiment.
+  Régression : `node --test scripts/test-hardwarescan-preview-steps.mjs` — nouveau cas qui reproduit EXACTEMENT
+  le bug de Léo (deux frontières réelles et distinctes, 0 et 5,5 Go, mais un résultat rigoureusement identique
+  sur les 5 modèles) et vérifie qu'un seul palier reste affiché. Vérifié mordant : dédup temporairement
+  désactivée, le test échoue bien (2 paliers reçus au lieu d'1), sans toucher aux 4 autres tests déjà
+  existants de ce fichier (toujours au vert). `formatVramRange` exportée pour être testable directement (pas
+  de test dédié écrit pour son cas "(0 Go)" — fonction .tsx avec JSX, testable seulement via un navigateur
+  complet type Playwright pour un gain jugé trop faible ici vu la trivialité du correctif ; sa branche
+  d'entrée, elle, EST prouvée réelle par le test ci-dessus qui produit bien un palier à `vramGb: 0`).
+  **Non vérifié en usage réel** (pas d'accès à une vraie fenêtre Electron/à la machine de Léo dans cet
+  environnement) : le mécanisme est prouvé par test avec des données simulées, son rendu exact sur SA machine
+  reste à confirmer.
+  **Note en marge, sans rapport avec ce correctif** : en creusant cette session, une branche orpheline
+  (`claude/admiring-ride-ow6t1v`) a été repérée — un seul commit isolé (refonte Options/gpuName/RAM,
+  v0.14.6) jamais fusionné dans cette branche, divergée juste après v0.14.5 et abandonnée depuis. Le vrai
+  code de Léo (confirmé par sa capture d'écran, qui correspond au rendu SANS vue compacte) est bien celui de
+  cette branche-ci (`claude/jaris-local-ai-assistant-a2drk4`) — l'autre ne contient rien d'utilisé en
+  pratique, mais reste à supprimer ou réconcilier un jour si Léo le souhaite.

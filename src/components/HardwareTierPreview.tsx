@@ -32,9 +32,13 @@ function formatSpeed(entry: ModelOverviewEntry): string {
  * recopiant des valeurs fixes en dur ici : les mêmes bornes servent déjà à choisir le palier "actuel" côté
  * previewHardwareTiers, pas la peine de les dupliquer et risquer qu'elles divergent si l'une des deux est
  * modifiée sans l'autre. Générique quel que soit le nombre de paliers (jamais figé à 3).
+ *
+ * Le tout premier palier peut légitimement avoir une frontière à 0 Go (un candidat "Puissant" qui déborde
+ * assez sur la RAM pour ne plus avoir besoin d'AUCUNE VRAM, voir LARGE_RAM_OFFLOAD_MODELS) : "moins de 0 Go"
+ * n'a alors aucun sens (aucune machine n'a moins de 0 Go), d'où ce cas à part.
  */
-function formatVramRange(tiers: HardwareTierPreviewData[], i: number): string {
-  if (i === 0) return `(moins de ${tiers[0].vramGb} Go)`
+export function formatVramRange(tiers: HardwareTierPreviewData[], i: number): string {
+  if (i === 0) return tiers[0].vramGb === 0 ? '(0 Go)' : `(moins de ${tiers[0].vramGb} Go)`
   if (i === tiers.length - 1) return `(plus de ${tiers[i - 1].vramGb} Go)`
   return `(${tiers[i - 1].vramGb} à ${tiers[i].vramGb} Go)`
 }

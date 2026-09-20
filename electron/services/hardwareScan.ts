@@ -1017,6 +1017,16 @@ function previewLabelFor(index: number, total: number): string {
  * proche), puisque chaque ligne fixe EST déjà la frontière réelle où le résultat peut changer. Sans jamais
  * lancer le moindre téléchargement (computeModelPicks est pur, verified-tool-scores.md/benchmark-results.md
  * sont déjà sur le disque).
+ *
+ * Léo a repéré plusieurs paliers D'AFFILÉE strictement identiques (mêmes 5 modèles pour Rapide/Médium/
+ * Puissant/Vision/Code) : chaque VALEUR de `previewVramSteps` est bien une frontière réelle où AU MOINS UN
+ * candidat devient/cesse d'être atteignable, mais ça ne garantit pas que ce changement soit VISIBLE dans les
+ * 5 lignes affichées — un repli "aucun candidat ne rentre encore" (pickForBudget dans computeModelPicks)
+ * peut déjà afficher le même modèle qu'une fois son propre seuil réellement atteint, et le tout premier
+ * palier (VRAM=0) n'a par définition rien "avant" lui à distinguer. Fusionne donc les paliers consécutifs
+ * dont les 5 modèles sont identiques : une seule ligne par combinaison VRAIMENT distincte, gardant la
+ * frontière du PREMIER palier du groupe (celle où ce résultat apparaît réellement) et le statut "actuel" s'il
+ * appartenait à N'IMPORTE LEQUEL des paliers fusionnés.
  */
 export async function previewHardwareTiers(): Promise<HardwareTierPreview[]> {
   const { name, vramGb: actualVramGb } = await detectGpu()
@@ -1033,8 +1043,7 @@ export async function previewHardwareTiers(): Promise<HardwareTierPreview[]> {
     if (actualVramGb !== null && steps[i] <= actualVramGb) currentIndex = i
   }
 
-  return steps.map((vramGb, i) => ({
-    label: previewLabelFor(i, steps.length),
+  const rows = steps.map((vramGb, i) => ({
     vramGb,
     current: i === currentIndex,
     // Ligne "ta configuration" calculée avec la VRAM RÉELLE de cette machine, les autres avec leur propre
@@ -1042,5 +1051,27 @@ export async function previewHardwareTiers(): Promise<HardwareTierPreview[]> {
     // la frontière exacte où le résultat change (voir previewVramSteps), mais garder le calcul sur la VRAM
     // réelle pour "ta configuration" reste la source la plus directe de vérité, sans intermédiaire.
     ...computeModelPicks(i === currentIndex && actualVramGb !== null ? actualVramGb : vramGb, ramGb, name, localBenchmark, verifiedToolScores)
+  }))
+
+  const sameCombo = (a: (typeof rows)[number], b: (typeof rows)[number]): boolean =>
+    a.flash.model === b.flash.model &&
+    a.medium.model === b.medium.model &&
+    a.large.model === b.large.model &&
+    a.vision.model === b.vision.model &&
+    a.code.model === b.code.model
+
+  const merged: typeof rows = []
+  for (const row of rows) {
+    const last = merged[merged.length - 1]
+    if (last && sameCombo(last, row)) {
+      if (row.current) last.current = true
+      continue
+    }
+    merged.push({ ...row })
+  }
+
+  return merged.map((row, i) => ({
+    label: previewLabelFor(i, merged.length),
+    ...row
   }))
 }

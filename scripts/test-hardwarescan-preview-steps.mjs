@@ -102,3 +102,28 @@ test('"ta configuration" (current) coïncide avec la ligne fixe correspondante, 
   assert.ok(Math.abs(current.vramGb - 7.9) < 1e-9)
   assert.equal(current.medium.model, 'qwen3.5:4b')
 })
+
+// Léo, capture d'écran à l'appui : "regarde les palier tout le monde a les meme model pour les palier...
+// pour le palier 4 par exemple" — plusieurs paliers consécutifs affichaient exactement les 5 mêmes modèles.
+// Reproduit ici avec le cas le plus simple et le plus réel : qwen3.5:35b (24 Go, tolère de déborder sur la
+// RAM — LARGE_RAM_OFFLOAD_MODELS) devient atteignable dès 0 Go de VRAM totale une fois assez de RAM
+// disponible (24 - (40-4) + 4,5 = -7,5, plafonné à 0) ; qwen3.5:0.8b (1 Go, Rapide ET Médium) devient
+// RÉELLEMENT atteignable à 5,5 Go (1,0+4,5) — mais ni l'un ni l'autre ne change ce qui s'affiche : Puissant
+// montre déjà qwen3.5:35b dès 0 Go, et Rapide/Médium montrent déjà qwen3.5:0.8b par repli ("aucun candidat
+// ne rentre encore") AVANT MÊME sa propre frontière réelle. Les 2 frontières (0 et 5,5) sont réelles et
+// distinctes, mais les 5 modèles affichés sont RIGOUREUSEMENT identiques sur les deux paliers : un seul doit
+// rester à l'écran, pas deux.
+const VERIFIED_MD_DUP = ['## Conversation', '| Modèle | Fiabilité |', '| --- | --- |', '| qwen3.5:35b | 6/6 |', '| qwen3.5:0.8b | 6/6 |'].join(
+  '\n'
+)
+
+test('deux frontières réelles mais un résultat identique se fusionnent en un seul palier', async () => {
+  const { previewHardwareTiers } = setup({ verifiedToolScoresMd: VERIFIED_MD_DUP, vramMib: 0, ramGb: 40 })
+  const tiers = await previewHardwareTiers()
+  assert.equal(tiers.length, 1, `paliers identiques non fusionnés : ${JSON.stringify(tiers.map((t) => t.vramGb))}`)
+  assert.ok(Math.abs(tiers[0].vramGb - 0) < 1e-9)
+  assert.equal(tiers[0].large.model, 'qwen3.5:35b')
+  assert.equal(tiers[0].medium.model, 'qwen3.5:0.8b')
+  assert.equal(tiers[0].flash.model, 'qwen3.5:0.8b')
+  assert.ok(tiers[0].current, 'le seul palier restant doit rester marqué "ta configuration"')
+})
