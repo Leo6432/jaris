@@ -21,7 +21,7 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/har
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText
 
-function setup({ verifiedToolScoresMd = '', vramMib = 30 * 1024, ramGb = 32 } = {}) {
+function setup({ verifiedToolScoresMd = '', benchmarkResultsMd = '', vramMib = 30 * 1024, ramGb = 32 } = {}) {
   // hardwareScan.ts appelle exec() via util.promisify (execAsync = promisify(exec)), qui résout normalement
   // vers {stdout, stderr} grâce à la marque [util.promisify.custom] posée par le VRAI child_process.exec de
   // Node — un mock sans cette marque fait résoudre promisify vers un tableau [stdout, stderr] à la place,
@@ -39,6 +39,7 @@ function setup({ verifiedToolScoresMd = '', vramMib = 30 * 1024, ramGb = 32 } = 
     fs: {
       readFileSync: (path) => {
         if (String(path).includes('verified-tool-scores.md')) return verifiedToolScoresMd
+        if (String(path).includes('benchmark-results.md') && benchmarkResultsMd) return benchmarkResultsMd
         const err = new Error('ENOENT')
         err.code = 'ENOENT'
         throw err
@@ -59,6 +60,24 @@ function setup({ verifiedToolScoresMd = '', vramMib = 30 * 1024, ramGb = 32 } = 
   })
   return exports
 }
+
+test('à appel d’outils égal, le score de qualité local départage avant le benchmark public', async () => {
+  const benchmarkResultsMd = [
+    '## Conversation',
+    '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité | Qualité locale |',
+    '|---|---|---|---|---|',
+    // qwen3.5:27b a le meilleur MMLU-Pro public, mais le test exact de Jaris favorise ici qwen3.8:27b.
+    '| qwen3.5:27b | 1000 ms | 20 tok/s | 6/6 | 4/6 |',
+    '| qwen3.8:27b | 1000 ms | 20 tok/s | 6/6 | 6/6 |',
+    '',
+    '## Vision',
+    '',
+    '## Code'
+  ].join('\n')
+  const { pickBestModelsFromBenchmark } = setup({ benchmarkResultsMd })
+  const result = await pickBestModelsFromBenchmark()
+  assert.equal(result.models.large, 'qwen3.8:27b')
+})
 
 test('à 6/6 égalité, départage par MMLU-Pro (réel) plutôt que par la VRAM la plus grosse', async () => {
   const { pickBestModelsFromBenchmark } = setup({

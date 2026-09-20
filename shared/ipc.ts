@@ -249,14 +249,18 @@ export interface ModelOverviewEntry {
   speedTokPerSec: number | null
   speedEstimated?: boolean
   toolCalling: string | null
+  /**
+   * Score de qualité mesuré par le benchmark local adapté au rôle : raisonnement et respect des consignes
+   * pour Conversation, compréhension d'image pour Vision, génération fonctionnelle pour Code. Ce score
+   * n'est comparable qu'entre modèles d'un même palier. `null` signifie « pas encore testé ».
+   */
+  localQuality: string | null
   intelligence: number | null
   /**
-   * true si ce modèle est présent dans scripts/verified-tool-scores.md pour SON palier — indépendamment de
-   * speedEstimated (qui ne dit que "pas de mesure locale, on affiche le score vérifié à la place") : même un
-   * modèle déjà mesuré localement une fois reste, lui aussi, exclu du prochain run de
-   * scripts/benchmark-models.mjs s'il est vérifié. Sert à ModelAnalysisProgress.tsx (OptionsMenu.tsx) pour
-   * distinguer, dans le tableau de suivi en direct, un modèle qui ne sera JAMAIS touché par ce run (jamais
-   * de ##MODEL_TESTING##/##MODEL_DONE## le concernant) d'un modèle simplement pas encore commencé.
+   * true si le test de ce rôle est déjà entièrement vérifié et sera sauté au prochain run. Vision et Code
+   * réutilisent directement leur score partagé. Conversation reste à false même avec un score d'outils
+   * vérifié, car sa qualité de raisonnement doit encore être mesurée localement. Sert à
+   * ModelAnalysisProgress.tsx pour distinguer un modèle jamais touché par ce run d'un modèle en attente.
    */
   verifiedSkip?: boolean
   /**

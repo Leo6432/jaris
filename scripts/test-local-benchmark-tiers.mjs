@@ -33,20 +33,20 @@ const BENCHMARK_RESULTS_MD = [
   '',
   '## Conversation',
   '',
-  '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
-  '|---|---|---|---|',
-  '| ministral-3:8b | 600 ms | 40.0 tok/s | 5/6 |',
+  '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité | Qualité locale |',
+  '|---|---|---|---|---|',
+  '| ministral-3:8b | 600 ms | 40.0 tok/s | 5/6 | 4/6 |',
   '',
   '## Vision',
   '',
-  '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
-  '|---|---|---|---|',
-  '| ministral-3:8b | 800 ms | 30.0 tok/s | 2/3 |',
+  '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité | Qualité locale |',
+  '|---|---|---|---|---|',
+  '| ministral-3:8b | 800 ms | 30.0 tok/s | 2/3 | 2/3 |',
   '',
   '## Code',
   '',
-  '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
-  '|---|---|---|---|'
+  '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité | Qualité locale |',
+  '|---|---|---|---|---|'
 ].join('\n')
 
 function setup({ benchmarkResultsMd = '', vramMib = 30 * 1024, ramGb = 32 } = {}) {
@@ -92,7 +92,9 @@ test('parseLocalBenchmark sépare bien conversation/vision/code, pas une seule m
   const { parseLocalBenchmark } = setup({ benchmarkResultsMd: BENCHMARK_RESULTS_MD })
   const local = parseLocalBenchmark()
   assert.equal(local.conversation.get('ministral-3:8b')?.toolCalling, '5/6', 'score de conversation attendu (5/6)')
+  assert.equal(local.conversation.get('ministral-3:8b')?.localQuality, '4/6', 'score de qualité conversation attendu (4/6)')
   assert.equal(local.vision.get('ministral-3:8b')?.toolCalling, '2/3', 'score de vision attendu (2/3)')
+  assert.equal(local.vision.get('ministral-3:8b')?.localQuality, '2/3', 'score de qualité vision attendu (2/3)')
   assert.equal(local.code.has('ministral-3:8b'), false, "ministral-3:8b n'a jamais été testé en Code")
 })
 

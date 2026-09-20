@@ -684,6 +684,7 @@ const CANIRUN_INTELLIGENCE_INDEX: Record<string, number> = {
 export interface LocalBenchmarkEntry {
   speedTokPerSec: number | null
   toolCalling: string | null
+  localQuality: string | null
   speedEstimated?: boolean
 }
 
@@ -843,13 +844,16 @@ export function parseLocalBenchmark(): Record<VerifiedTier, Map<string, LocalBen
       .split('|')
       .map((c) => c.trim())
       .filter(Boolean)
-    if (cells.length !== 4) continue
+    if (cells.length !== 4 && cells.length !== 5) continue
 
-    const [model, , speed, tool] = cells
+    const [model, , speed, tool, quality] = cells
     const speedNum = parseFloat(speed)
     results[currentTier].set(model, {
       speedTokPerSec: Number.isFinite(speedNum) ? speedNum : null,
-      toolCalling: tool === '—' ? null : tool
+      toolCalling: tool === '—' ? null : tool,
+      // Ancien format : le score Vision/Code était déjà le test de qualité propre à ce rôle. Pour la
+      // conversation, l'ancien score ne mesurait que l'appel d'outils et ne doit pas être rebaptisé.
+      localQuality: quality && quality !== '—' ? quality : currentTier === 'conversation' ? null : tool === '—' ? null : tool
     })
   }
   return results
@@ -875,15 +879,14 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
   // vitesse estimée par formule pour cette machine — sinon rien de connu. `tier` sélectionne la BONNE table
   // du fichier (voir VerifiedTier) : `qwen3.5:4b` par ex. a un score différent en Conversation qu'en Vision.
   const buildEntry = (model: string, modelVramGb: number, tier: VerifiedTier): ModelOverviewEntry => {
-    // Indépendant de local/verifiedTool ci-dessous : même un modèle déjà mesuré localement une fois reste
-    // exclu du PROCHAIN run de benchmark-models.mjs s'il est dans verified-tool-scores.md (voir son
-    // commentaire) — l'UI (ModelAnalysisProgress.tsx) en a besoin pour ne pas laisser ce modèle bloqué sur
-    // "En attente" pour toujours pendant un run, faute de ##MODEL_TESTING##/##MODEL_DONE## le concernant.
+    // Vision/Code réutilisent entièrement leur test de rôle vérifié. En Conversation, le score d'outils
+    // partagé évite de refaire ces cas, mais la suite de qualité locale doit encore s'exécuter : la ligne
+    // ne doit donc pas être présentée comme entièrement sautée dans le suivi du run.
     const verifiedSkip = verifiedToolScores[tier].has(model)
     const canirunIndex = CANIRUN_INTELLIGENCE_INDEX[model] ?? null
     const local = localBenchmark[tier].get(model)
     if (local) {
-      return { model, vramGb: modelVramGb, speedTokPerSec: local.speedTokPerSec, toolCalling: local.toolCalling, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, canirunIndex }
+      return { model, vramGb: modelVramGb, speedTokPerSec: local.speedTokPerSec, toolCalling: local.toolCalling, localQuality: local.localQuality, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip: tier === 'conversation' ? false : verifiedSkip, canirunIndex }
     }
     const verifiedTool = verifiedToolScores[tier].get(model)
     if (verifiedTool) {
@@ -893,12 +896,13 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
         speedTokPerSec: estimateSpeedTokPerSec(modelVramGb, gpuName),
         speedEstimated: true,
         toolCalling: verifiedTool,
+        localQuality: tier === 'conversation' ? null : verifiedTool,
         intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
-        verifiedSkip,
+        verifiedSkip: tier === 'conversation' ? false : verifiedSkip,
         canirunIndex
       }
     }
-    return { model, vramGb: modelVramGb, speedTokPerSec: null, toolCalling: null, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, canirunIndex }
+    return { model, vramGb: modelVramGb, speedTokPerSec: null, toolCalling: null, localQuality: null, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, canirunIndex }
   }
 
   // Léo, sur la page "Tous les modèles" (Options → Modèles) : "fait pour rapide etc... celui qui faut le
@@ -944,7 +948,7 @@ function resolveBenchmarkResult(
   if (local) return local
   const verifiedTool = verifiedToolScores[tier].get(candidate.model)
   if (!verifiedTool) return undefined
-  return { speedTokPerSec: estimateSpeedTokPerSec(candidate.vramGb, gpuName), toolCalling: verifiedTool, speedEstimated: true }
+  return { speedTokPerSec: estimateSpeedTokPerSec(candidate.vramGb, gpuName), toolCalling: verifiedTool, localQuality: tier === 'conversation' ? null : verifiedTool, speedEstimated: true }
 }
 
 /** "6/6" -> 6, absent/invalide -> -1 (toujours perdant face à un vrai score dans le tri de pickBestModelsFromBenchmark). */
@@ -952,6 +956,16 @@ function parseToolScore(toolCalling: string | null): number {
   if (!toolCalling) return -1
   const correct = Number(toolCalling.split('/')[0])
   return Number.isFinite(correct) ? correct : -1
+}
+
+/** Score normalisé 0..1 pour comparer les suites locales même si leur nombre de cas évolue. */
+function parseQualityScore(score: string | null): number {
+  if (!score) return -1
+  const match = /^(\d+)\/(\d+)$/.exec(score)
+  if (!match) return -1
+  const correct = Number(match[1])
+  const total = Number(match[2])
+  return total > 0 ? correct / total : -1
 }
 
 /**
@@ -1031,6 +1045,7 @@ function computeModelPicks(
         speedTokPerSec: result?.speedTokPerSec ?? null,
         speedEstimated: result?.speedEstimated,
         toolCalling: result?.toolCalling ?? null,
+        localQuality: result?.localQuality ?? null,
         intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
         canirunIndex: CANIRUN_INTELLIGENCE_INDEX[model] ?? null
       }
@@ -1039,6 +1054,10 @@ function computeModelPicks(
     benchmarked.sort((a, b) => {
       const toolDiff = parseToolScore(b.result.toolCalling) - parseToolScore(a.result.toolCalling)
       if (toolDiff !== 0) return toolDiff
+      // À score de rôle égal, la mesure faite sur cette machine passe avant un score public générique.
+      // Elle teste le comportement exact attendu par Jaris et reste comparable uniquement dans ce palier.
+      const qualityDiff = parseQualityScore(b.result.localQuality) - parseQualityScore(a.result.localQuality)
+      if (qualityDiff !== 0) return qualityDiff
       const aIntel = INTELLIGENCE_MMLU_PRO[a.model]
       const bIntel = INTELLIGENCE_MMLU_PRO[b.model]
       if (aIntel !== undefined && bIntel !== undefined && aIntel !== bIntel) return bIntel - aIntel
@@ -1051,6 +1070,7 @@ function computeModelPicks(
       speedTokPerSec: winner.result.speedTokPerSec,
       speedEstimated: winner.result.speedEstimated,
       toolCalling: winner.result.toolCalling,
+      localQuality: winner.result.localQuality,
       intelligence: INTELLIGENCE_MMLU_PRO[winner.model] ?? null,
       canirunIndex: CANIRUN_INTELLIGENCE_INDEX[winner.model] ?? null
     }

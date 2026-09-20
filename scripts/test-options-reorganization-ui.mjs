@@ -385,6 +385,7 @@ test('"Lancer l\'analyse" affiche un suivi en direct puis rafraîchit le tableau
     // Avant le run : le tableau STATIQUE (colonnes VRAM/Appel d'outils/CanIRun.ai), aucun suivi en direct.
     const headersBefore = await page.$$eval('.options-page--models thead th', (els) => els.map((el) => el.textContent))
     assert.ok(headersBefore.includes('Score AA (CanIRun.ai)'), `tableau statique attendu avant le run : ${headersBefore.join(', ')}`)
+    assert.ok(headersBefore.includes('Qualité locale'), `score local de conversation attendu : ${headersBefore.join(', ')}`)
     assert.equal(await page.$('.options-menu__progress'), null, 'aucune barre de progression avant le clic')
 
     await page.click('.options-page--models .options-menu__all-models-analysis button:has-text("Lancer l\'analyse")')
