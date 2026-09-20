@@ -37,14 +37,6 @@ import OptionsMenu from './src/components/OptionsMenu'
 
 window.__orbClicks = 0
 
-// Simule l'IPC runModelAnalysis/onModelBenchmarkLine (useModelAnalysis.ts) pour tester le bouton "Lancer
-// l'analyse" (AllModelsOverview.tsx) sans jamais lancer de vrai processus : un run reste "en cours" tant que
-// window.__releaseAnalysis() n'a pas été appelé depuis le test, pour observer l'état intermédiaire.
-const benchmarkListeners = new Set()
-let releaseAnalysis = null
-window.__releaseAnalysis = () => releaseAnalysis && releaseAnalysis()
-window.__overviewCallCount = 0
-
 const overrides = {
   getProfile: async () => ({ name: 'Léo' }),
   saveProfile: async () => {},
@@ -60,48 +52,23 @@ const overrides = {
   }),
   getConversationHistory: async () => [],
   previewHardwareTiers: async () => [],
-  getModelOverview: async () => {
-    window.__overviewCallCount += 1
-    // Score frais UNIQUEMENT après un run terminé (2e appel ou plus) : vérifie que le tableau se rafraîchit
-    // vraiment avec le résultat du run, pas juste avec les mêmes données statiques rechargées à l'identique.
-    const toolCalling = window.__overviewCallCount > 1 ? '5/6' : null
-    return {
-      vramGb: 8,
-      codeModel: 'qwen2.5-coder:7b',
-      groups: [
-        {
-          tier: 'Rapide',
-          entries: [
-            { model: 'ministral-3:3b', vramGb: 3.0, usedIn: ['Rapide', 'Médium'], speedTokPerSec: 120.4, toolCalling: '6/6', intelligence: null, artificialAnalysisIndex: 5 },
-            { model: 'qwen3:1.7b', vramGb: 2, usedIn: [], speedTokPerSec: 200.1, toolCalling, intelligence: null, artificialAnalysisIndex: null }
-          ]
-        },
-        {
-          tier: 'Vision',
-          entries: [{ model: 'gemma4:31b', vramGb: 20, usedIn: ['Vision'], speedTokPerSec: null, toolCalling: null, intelligence: null, artificialAnalysisIndex: null }]
-        }
-      ]
-    }
-  },
-  onModelBenchmarkLine: (cb) => {
-    benchmarkListeners.add(cb)
-    return () => benchmarkListeners.delete(cb)
-  },
-  runModelAnalysis: async (scope) => {
-    window.__lastAnalysisScope = scope
-    benchmarkListeners.forEach((cb) => cb('##MODEL_TESTING## qwen3:1.7b'))
-    await new Promise((resolve) => {
-      releaseAnalysis = resolve
-    })
-    benchmarkListeners.forEach((cb) => cb('##MODEL_DONE## qwen3:1.7b 5 6'))
-    return {
-      gpuName: 'Test GPU',
-      vramGb: 8,
-      models: { flash: 'qwen3:1.7b', medium: 'qwen3:1.7b', large: 'qwen3:1.7b' },
-      visionModel: 'gemma4:31b',
-      codeModel: 'qwen2.5-coder:7b'
-    }
-  }
+  getModelOverview: async () => ({
+    vramGb: 8,
+    codeModel: 'qwen2.5-coder:7b',
+    groups: [
+      {
+        tier: 'Rapide',
+        entries: [
+          { model: 'ministral-3:3b', vramGb: 3.0, usedIn: ['Rapide', 'Médium'], speedTokPerSec: 120.4, toolCalling: '6/6', intelligence: null, artificialAnalysisIndex: 5 },
+          { model: 'qwen3:1.7b', vramGb: 2, usedIn: [], speedTokPerSec: 200.1, toolCalling: null, intelligence: null, artificialAnalysisIndex: null }
+        ]
+      },
+      {
+        tier: 'Vision',
+        entries: [{ model: 'gemma4:31b', vramGb: 20, usedIn: ['Vision'], speedTokPerSec: null, toolCalling: null, intelligence: null, artificialAnalysisIndex: null }]
+      }
+    ]
+  })
 }
 
 window.jaris = new Proxy({}, {
@@ -372,49 +339,24 @@ test('le bouton "Tous les modèles" est réellement habillé par le CSS de Jaris
   })
 })
 
-// Léo : "il manque encore des scores d'intelligence et ajoute le bouton dans cette mis a jour pour que j'analyse et
-// je te donne les appelle outils pour ceux que je peut" — le bouton "Lancer l'analyse" (useModelAnalysis +
-// ModelAnalysisProgress, existants mais jamais rendus nulle part avant ce correctif) doit réellement se
-// déclencher, afficher un suivi en direct PENDANT le run (un seul cadre à la fois, jamais les deux tableaux
-// en même temps — même discipline que l'étape 101 du changelog), puis rafraîchir le tableau avec les
-// VRAIS résultats une fois terminé.
-test('"Lancer l\'analyse" affiche un suivi en direct puis rafraîchit le tableau avec les résultats du run', options, async () => {
+// Léo, relayant un avis de ChatGPT : "enleve le bouton lancer l'analyse pour le public c'est pas bien" —
+// le bouton "Lancer l'analyse" (ajouté puis restauré dans une étape précédente) déclenchait potentiellement
+// des dizaines de Go de téléchargement et un run de plusieurs dizaines de minutes, sans garde-fou pour
+// quelqu'un qui ne sait pas ce qu'il fait. Retiré de l'interface (le canal IPC/le composant
+// ModelAnalysisProgress.tsx restent intacts, juste plus exposés ici) : ce test vérifie que la page "Tous
+// les modèles" affiche bien le tableau statique SANS jamais montrer ce bouton ni le moindre suivi en direct.
+test('le bouton "Lancer l\'analyse" a disparu de "Tous les modèles" — seul le tableau statique reste', options, async () => {
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Modèles")')
     await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
 
-    // Avant le run : le tableau STATIQUE avec l'Intelligence Index officiel, aucun suivi en direct.
-    const headersBefore = await page.$$eval('.options-page--models thead th', (els) => els.map((el) => el.textContent))
-    assert.ok(headersBefore.includes('Utilisé par Jaris'), `colonne d'utilisation attendue : ${headersBefore.join(', ')}`)
-    assert.ok(headersBefore.includes('Intelligence (Artificial Analysis)'), `tableau statique attendu avant le run : ${headersBefore.join(', ')}`)
-    assert.equal(await page.$('.options-menu__progress'), null, 'aucune barre de progression avant le clic')
+    const buttonTexts = await page.$$eval('.options-page--models button', (els) => els.map((el) => el.textContent?.trim()))
+    assert.ok(!buttonTexts.some((t) => t?.includes("Lancer l'analyse")), `le bouton "Lancer l'analyse" ne doit plus exister : ${buttonTexts.join(', ')}`)
+    assert.equal(await page.$('.options-menu__progress'), null, 'aucune barre de progression ne doit jamais apparaître ici')
 
-    await page.click('.options-page--models .options-menu__all-models-analysis button:has-text("Lancer l\'analyse")')
-    await page.waitForSelector('.options-menu__progress')
-
-    // Pendant le run : UN SEUL cadre affiché, celui du suivi en direct (colonnes Fiabilité connue/Statut),
-    // jamais le tableau statique en même temps à côté (étape 101 : deux cadres qui racontent la même chose).
-    // Deux paliers dans le mock (Rapide + Vision), donc ces 3 en-têtes reviennent une fois par groupe — dédupliqués
-    // ici, ce qui compte est qu'AUCUN autre jeu d'en-têtes (celui du tableau statique) n'apparaisse en même temps.
-    const headersDuring = await page.$$eval('.options-page--models thead th', (els) => [...new Set(els.map((el) => el.textContent))])
-    assert.deepEqual(headersDuring, ['Modèle', 'Fiabilité connue', 'Statut'], `un seul tableau (suivi en direct) attendu pendant le run : ${headersDuring.join(', ')}`)
-    assert.equal(await page.$('.options-page--models .options-menu__col-num:has-text("Intelligence (Artificial Analysis)")'), null, 'le tableau statique ne doit pas rester affiché pendant le run')
-
-    const scope = await page.evaluate(() => window.__lastAnalysisScope)
-    assert.equal(scope, 'all', `périmètre 'all' attendu (Léo dit "LE bouton", singulier) : ${scope}`)
-
-    // Débloque le run simulé (voir runModelAnalysis dans le pont de test) et attend le retour au tableau statique.
-    await page.evaluate(() => window.__releaseAnalysis())
-    await page.waitForSelector('.options-page--models .options-menu__model-overview thead th:has-text("Intelligence (Artificial Analysis)")')
-
-    // Le tableau doit refléter le RÉSULTAT FRAIS du run (getModelOverview rappelé après coup) : qwen3:1.7b
-    // passe de "—" (aucun score connu) à "5/6" une fois le run terminé, sans recharger la page.
-    const rows = await page.$$eval('.options-page--models tbody tr', (els) =>
-      els.map((el) => Array.from(el.querySelectorAll('td')).map((td) => td.textContent?.trim()))
-    )
-    const qwenRow = rows.find((r) => r[0] === 'qwen3:1.7b')
-    assert.ok(qwenRow, `ligne qwen3:1.7b introuvable après rafraîchissement : ${JSON.stringify(rows)}`)
-    assert.equal(qwenRow[3], '5/6', `score d'appel d'outils frais attendu (5/6) : ${qwenRow[3]}`)
+    const headers = await page.$$eval('.options-page--models thead th', (els) => els.map((el) => el.textContent))
+    assert.ok(headers.includes('Utilisé par Jaris'), `colonne d'utilisation attendue : ${headers.join(', ')}`)
+    assert.ok(headers.includes('Intelligence (Artificial Analysis)'), `tableau statique attendu : ${headers.join(', ')}`)
   })
 })

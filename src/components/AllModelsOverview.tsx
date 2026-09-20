@@ -1,9 +1,7 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ModelOverviewResult } from '../../shared/ipc'
-import { useModelAnalysis } from '../hooks/useModelAnalysis'
 import { formatModelName } from '../lib/formatModelName'
-import ModelAnalysisProgress from './ModelAnalysisProgress'
 import { ReliabilityBadge } from './OptionsMenu'
 
 /**
@@ -25,26 +23,19 @@ import { ReliabilityBadge } from './OptionsMenu'
  * revient sur la page Options exactement où elle était, sans perdre l'onglet Modèles en cours. Pas de
  * colonne de navigation à gauche comme la page Options : un seul contenu, rien à onglet ici.
  *
- * Léo, juste après : "il manque encore des scores d'intelligence et ajoute le bouton dans cette mis a jour pour que
- * j'analyse et je te donne les appelle outils pour ceux que je peut" — un bouton "Lancer l'analyse" qui
- * teste réellement, EN LOCAL sur SA machine, les modèles qui n'ont pas encore de score d'appel d'outils
- * connu (colonne "Appel d'outils"), pour qu'il puisse ensuite me communiquer les résultats et que je les
- * fige dans scripts/verified-tool-scores.md pour tout le monde — exactement le mécanisme déjà décrit dans le
- * commentaire de benchmarkRunner.ts ("runModelAnalysis... reste disponible à la main depuis Options →
- * Modèles"), mais dont le bouton avait disparu de l'interface (aucun composant ne rendait plus
- * `<ModelAnalysisProgress>` ni n'appelait `useModelAnalysis` nulle part dans le dépôt — vérifié par grep
- * avant de conclure, pas supposé) alors que tout le reste (canal IPC `runModelAnalysis`, main.ts, preload.ts,
- * ModelAnalysisProgress.tsx lui-même) existait déjà et fonctionnait. Périmètre 'all' plutôt qu'un bouton par
- * palier (Léo dit "LE bouton", singulier) : le script sous-jacent (scripts/benchmark-models.mjs) saute déjà
- * tout seul les modèles déjà vérifiés (verified-tool-scores.md) ET ceux trop gros pour la VRAM/RAM détectée
- * (voir RunStatusBadge, statut "Ignoré") — lancer 'all' ne re-teste donc jamais ce qui est déjà su, et ne
- * télécharge jamais un modèle que la machine ne peut de toute façon pas faire tourner.
+ * Le bouton "Lancer l'analyse" (ajouté puis restauré dans une étape précédente) a été RETIRÉ à la demande de
+ * Léo, relayant un avis de ChatGPT : "c'est pas bien pour le public" — cliquer dessus peut déclencher le
+ * téléchargement de dizaines de Go de modèles et un run de plusieurs dizaines de minutes, sans le moindre
+ * garde-fou pour quelqu'un qui ne sait pas ce qu'il fait (contrairement à Léo lui-même, qui sait ce qu'il
+ * déclenche). `useModelAnalysis`/`ModelAnalysisProgress.tsx`/le canal IPC `runModelAnalysis` restent tous
+ * intacts (aucune raison de les supprimer, juste de ne plus les exposer dans l'interface) : le chemin
+ * documenté dans CLAUDE.md ("Commandes utiles", `npm run benchmark:models`) reste la façon d'obtenir ces
+ * mesures, un geste délibéré depuis un terminal plutôt qu'un bouton à portée de clic dans l'app.
  */
 export default function AllModelsOverview(): JSX.Element {
   const [open, setOpen] = useState(false)
   const [overview, setOverview] = useState<ModelOverviewResult | null>(null)
   const [loading, setLoading] = useState(false)
-  const analysis = useModelAnalysis(overview)
 
   const openPage = async (): Promise<void> => {
     setOpen(true)
@@ -55,19 +46,6 @@ export default function AllModelsOverview(): JSX.Element {
     } finally {
       setLoading(false)
     }
-  }
-
-  const runAnalysis = async (): Promise<void> => {
-    try {
-      await analysis.run('all')
-    } catch {
-      // L'échec est déjà retenu dans analysis.error et affiché plus bas — pas la peine de le relever ici,
-      // juste éviter une rejection non gérée.
-      return
-    }
-    // Rafraîchit avec les VRAIS résultats du run qui vient de se terminer (fiabilité fraîchement mesurée) —
-    // sans ça, le tableau statique en dessous continuerait d'afficher les anciennes valeurs.
-    setOverview(await window.jaris.getModelOverview())
   }
 
   return (
@@ -98,30 +76,7 @@ export default function AllModelsOverview(): JSX.Element {
                     </p>
                   </div>
                   {loading && <p className="capacity-scan__status">Chargement...</p>}
-
-                  {/* Teste réellement, en local, les modèles de la colonne "Appel d'outils" encore vides —
-                      saute automatiquement ceux déjà connus et ceux trop gros pour cette machine. Résultat
-                      RIEN QU'à toi (fichier gitignoré sur ta machine) : les valeurs qui comptent pour tout le
-                      monde vivent dans le dépôt (verified-tool-scores.md), à me communiquer ensuite. */}
-                  {overview && !analysis.benchmarking && (
-                    <div className="options-menu__all-models-analysis">
-                      <button className="options-menu__action" onClick={() => void runAnalysis()}>
-                        Lancer l'analyse
-                      </button>
-                      <p className="capacity-scan__hint">
-                        Teste en local les modèles qui n'ont pas encore de score d'appel d'outils connu. Une
-                        fois terminé, donne-moi les résultats affichés ici pour que je les garde pour tout le
-                        monde.
-                      </p>
-                    </div>
-                  )}
-                  {analysis.error && !analysis.benchmarking && (
-                    <p className="capacity-scan__status">L'analyse a échoué : {analysis.error}</p>
-                  )}
-
-                  <ModelAnalysisProgress state={analysis} modelOverview={overview} />
-
-                  {overview && !analysis.benchmarking && (
+                  {overview && (
                     <div className="options-menu__model-overview-scroll">
                       {overview.groups.map((group) => (
                         <div key={group.tier} className="options-menu__model-group">

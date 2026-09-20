@@ -3382,3 +3382,51 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   régénère bien `benchmark-results.md` dans le nouveau format et retest correctement `ministral-3:8b` sous
   ses deux rôles — le mécanisme est prouvé par le code et les tests, pas encore par un vrai run sur sa
   machine.
+
+- **Étape 134, Léo, relayant un avis de ChatGPT : "enleve le bouton lancer l'analyse pour le public c'est
+  pas bien".** Le bouton "Lancer l'analyse" (page "Tous les modèles", restauré à l'étape 131) peut déclencher
+  le téléchargement de dizaines de Go de modèles candidats et un run de plusieurs dizaines de minutes — sans
+  le moindre garde-fou pour quelqu'un qui clique dessus sans savoir ce qu'il fait, contrairement à Léo
+  lui-même qui sait exactement ce qu'il déclenche. Retiré de `AllModelsOverview.tsx` (le bouton, sa phrase
+  d'explication, `useModelAnalysis`/`ModelAnalysisProgress` ne sont plus importés ni rendus) — MAIS le canal
+  IPC `runModelAnalysis` (main.ts/preload.ts), `benchmarkRunner.ts`, `ModelAnalysisProgress.tsx` et
+  `useModelAnalysis.ts` restent tous intacts, aucune raison de les supprimer, juste de ne plus les exposer
+  dans l'interface. `npm run benchmark:models` (déjà documenté dans "Commandes utiles" de ce fichier) reste
+  la façon d'obtenir ces mesures : un geste délibéré depuis un terminal, jamais un bouton à portée de clic
+  dans l'app livrée au public. CSS mort (`.options-menu__all-models-analysis`) retiré au passage, vérifié
+  par grep avant suppression (CLAUDE.md, étape 3).
+  Régression : `node --test scripts/test-options-reorganization-ui.mjs` (le test qui exerçait le bouton
+  remplacé par un test qui vérifie son ABSENCE, vérifié mordant en réintroduisant temporairement un faux
+  bouton "Lancer l'analyse" dans le JSX — le test échoue bien). `npm run typecheck`, `npm run build` et
+  `npm test` (390 tests) au vert.
+
+- **Étape 134 (suite), même message : "a la place de trouver un score sur Intelligence (Artificial Analysis)
+  et vue qu'il n'on pas tout les model regarde huggin face... [3 leaderboards HF proposés par Gemini, un par
+  palier : Open LLM Leaderboard pour Rapide/Médium/Puissant, Open VLM Leaderboard (opencompass) pour Vision,
+  BigCode Models Leaderboard pour Code]".** Investigation menée AVANT tout code, en interrogeant les VRAIES
+  sources de données derrière ces trois pages (jamais leur rendu Gradio, qui ne montre rien en HTML brut) —
+  résultat : **les trois leaderboards proposés se sont révélés INUTILISABLES, moins complets que l'Artificial
+  Analysis Index déjà en place, pas mieux comme le supposait la suggestion de départ.**
+  - **BigCode Models Leaderboard** : son fichier de données (`data/code_eval_board.csv` dans le dépôt de
+    l'Espace HF, récupéré directement) s'arrête à Qwen2.5-Coder-32B — sa page HF confirme d'ailleurs sa
+    dernière vraie mise à jour en novembre 2024. Aucun des candidats Code de Jaris (qwen3-coder, qwen3.6:
+    35b-a3b, devstral-small-2, north-mini-code-1.0, qwen3-coder-next, devstral-2) n'y figure : 0/9.
+  - **Open LLM Leaderboard** : sa page ne sert que le HTML d'une appli React/Gradio (aucune donnée dans le
+    HTML brut) — le vrai stockage est le jeu de données `open-llm-leaderboard/contents` sur Hugging Face
+    (retrouvé via l'API HF), dont le `lastModified` remonte à mars 2025. Confirmé par une recherche ciblée
+    dans ce jeu de données (API `datasets-server.huggingface.co`) : "gpt-oss" ne matche que "gpt2", "granite4"
+    ne remonte que Granite 3.0/3.1 (jamais 4.x), "qwen3.5" ne remonte que Qwen1.5/Qwen2/Qwen2.5 — aucun des
+    candidats Rapide/Médium/Puissant de Jaris (tous des familles Qwen3.5/3.6/3.8, Gemma4, Ministral-3,
+    Granite4.x, plus récents que ce que ce jeu de données a jamais connu) n'y est mesuré.
+  - **Open VLM Leaderboard (opencompass)** : son code source (`gen_table.py`/`meta_data.py`, lus directement
+    depuis le dépôt de l'Espace HF) charge ses résultats depuis une URL externe
+    (`opencompass.openxlab.space/assets/OpenVLM.json`) — récupérée directement : le fichier porte lui-même un
+    horodatage `time: 20250917132916` (17 septembre 2025) et liste 285 modèles, mais AUCUN Qwen3-VL, AUCUN
+    Ministral, AUCUN GLM-4.6V — seulement une ancienne "Gemma3-4B" (pas Gemma4). 0/9 candidats Vision de Jaris.
+  **Aucun code changé pour ce point** : remplacer l'Artificial Analysis Index (15/40 candidats couverts,
+  déjà en place) par ces trois leaderboards aurait fait RÉGRESSER la couverture à 0/40, l'inverse du but
+  recherché. Signalé honnêtement à Léo plutôt que d'implémenter une suggestion qui aurait rendu la page pire
+  — même discipline que la vérification systématique des sources externes déjà établie dans ce fichier
+  (CanIRun.ai, chiffres MMLU-Pro tiers...) : une suggestion d'une autre IA (ici Gemini, relayée par Léo via
+  ChatGPT) doit être vérifiée sur les VRAIES données avant d'être implémentée, jamais prise pour argent
+  comptant parce qu'elle "a l'air" raisonnable en surface.
