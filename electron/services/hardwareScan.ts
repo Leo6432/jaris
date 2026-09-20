@@ -633,8 +633,9 @@ const INTELLIGENCE_MMLU_PRO: Record<string, number> = {
 }
 
 /**
- * "Intelligence Index" publié par le site tiers CanIRun.ai (github.com/midudev/canirun.ai, API publique
- * `/api/models/<id>`), à la demande de Léo pour la liste "Tous les modèles" (Options → Modèles). Vérifié
+ * Indice d'intelligence AA publié par CanIRun.ai (github.com/midudev/canirun.ai,
+ * `src/data/aa-benchmarks.json`, catalogue v4.1.1 relevé le 20/09/2026), à la demande de Léo pour la liste
+ * "Tous les modèles" (Options → Modèles). Vérifié
  * directement via leur API — sur les 39 modèles candidats de Jaris à cette date, 14 ont ce champ renseigné
  * chez eux (leur catalogue reste incomplet sur ce point pour la plupart des modèles récents, y compris
  * certains qu'ils cataloguent par ailleurs avec un `ollamaId` correct mais sans intelligenceIndex) : absence

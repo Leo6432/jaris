@@ -136,7 +136,12 @@ export default function AllModelsOverview(): JSX.Element {
                                     hardwareScan.ts) : indicatif seulement, jamais utilisé pour choisir un
                                     modèle — beaucoup de "—" au moment d'écrire ceci, leur catalogue restant
                                     incomplet sur ce champ précis, même pour un modèle qu'ils cataloguent. */}
-                                <th className="options-menu__col-num">CanIRun.ai</th>
+                                <th
+                                  className="options-menu__col-num"
+                                  title="Indice d’intelligence Artificial Analysis repris par CanIRun.ai"
+                                >
+                                  Score AA (CanIRun.ai)
+                                </th>
                               </tr>
                             </thead>
                             <tbody>
@@ -149,7 +154,9 @@ export default function AllModelsOverview(): JSX.Element {
                                   <td className="options-menu__col-num">
                                     <ReliabilityBadge value={entry.toolCalling} />
                                   </td>
-                                  <td className="options-menu__col-num">{entry.canirunIndex ?? '—'}</td>
+                                  <td className="options-menu__col-num">
+                                    {entry.canirunIndex === null ? '—' : `${entry.canirunIndex} AA`}
+                                  </td>
                                 </tr>
                               ))}
                             </tbody>

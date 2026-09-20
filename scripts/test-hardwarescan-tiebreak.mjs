@@ -84,3 +84,28 @@ test('à 6/6 égalité SANS MMLU-Pro connu pour les deux, repli sur la VRAM la p
   // rester purement par VRAM (35b, 24 Go, plus gros que 27b, 18 Go) — comportement d'avant ce correctif.
   assert.equal(result.models.large, 'qwen3.6:35b')
 })
+
+test('expose les 14 scores AA trouvés dans le catalogue CanIRun sans en inventer pour les variantes absentes', async () => {
+  const { getModelOverview } = setup()
+  const overview = await getModelOverview()
+  const byModel = new Map(overview.groups.flatMap((group) => group.entries.map((entry) => [entry.model, entry.canirunIndex])))
+  const expected = {
+    'qwen3.5:0.8b': 5,
+    'qwen3.5:2b': 7,
+    'qwen3.5:4b': 20,
+    'qwen3.5:9b': 22,
+    'qwen3.6:27b': 38,
+    'qwen3.6:35b-a3b': 32,
+    'qwen3.8:27b': 52,
+    'gpt-oss:20b': 15,
+    'gemma4:e4b': 12,
+    'gemma4:12b': 22,
+    'gemma4:26b': 26,
+    'gemma4:31b': 30,
+    'ministral-3:3b': 7,
+    'ministral-3:14b': 11
+  }
+
+  for (const [model, score] of Object.entries(expected)) assert.equal(byModel.get(model), score, model)
+  assert.equal(byModel.get('qwen3.5:27b'), null, 'une variante absente de CanIRun doit rester sans score')
+})

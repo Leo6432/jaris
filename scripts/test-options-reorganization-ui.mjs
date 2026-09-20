@@ -346,7 +346,7 @@ test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste d
     assert.equal(rows.length, 3, `3 modèles attendus (2 Rapide + 1 Vision) : ${rows.length}`)
     // ministral-3:3b : VRAM, un vrai score CanIRun.ai (7).
     assert.ok(rows[0][1].includes('3'), `VRAM du premier modèle : ${rows[0][1]}`)
-    assert.equal(rows[0][3], '7', `score CanIRun.ai attendu (7) : ${rows[0][3]}`)
+    assert.equal(rows[0][3], '7 AA', `score CanIRun.ai attendu (7 AA) : ${rows[0][3]}`)
     // qwen3:1.7b : aucun score CanIRun.ai connu -> tiret, jamais un chiffre inventé.
     assert.equal(rows[1][3], '—', `absence de score CanIRun.ai doit rester un tiret, pas un 0 : ${rows[1][3]}`)
 
@@ -384,7 +384,7 @@ test('"Lancer l\'analyse" affiche un suivi en direct puis rafraîchit le tableau
 
     // Avant le run : le tableau STATIQUE (colonnes VRAM/Appel d'outils/CanIRun.ai), aucun suivi en direct.
     const headersBefore = await page.$$eval('.options-page--models thead th', (els) => els.map((el) => el.textContent))
-    assert.ok(headersBefore.includes('CanIRun.ai'), `tableau statique attendu avant le run : ${headersBefore.join(', ')}`)
+    assert.ok(headersBefore.includes('Score AA (CanIRun.ai)'), `tableau statique attendu avant le run : ${headersBefore.join(', ')}`)
     assert.equal(await page.$('.options-menu__progress'), null, 'aucune barre de progression avant le clic')
 
     await page.click('.options-page--models .options-menu__all-models-analysis button:has-text("Lancer l\'analyse")')
@@ -396,14 +396,14 @@ test('"Lancer l\'analyse" affiche un suivi en direct puis rafraîchit le tableau
     // ici, ce qui compte est qu'AUCUN autre jeu d'en-têtes (celui du tableau statique) n'apparaisse en même temps.
     const headersDuring = await page.$$eval('.options-page--models thead th', (els) => [...new Set(els.map((el) => el.textContent))])
     assert.deepEqual(headersDuring, ['Modèle', 'Fiabilité connue', 'Statut'], `un seul tableau (suivi en direct) attendu pendant le run : ${headersDuring.join(', ')}`)
-    assert.equal(await page.$('.options-page--models .options-menu__col-num:has-text("CanIRun.ai")'), null, 'le tableau statique ne doit pas rester affiché pendant le run')
+    assert.equal(await page.$('.options-page--models .options-menu__col-num:has-text("Score AA (CanIRun.ai)")'), null, 'le tableau statique ne doit pas rester affiché pendant le run')
 
     const scope = await page.evaluate(() => window.__lastAnalysisScope)
     assert.equal(scope, 'all', `périmètre 'all' attendu (Léo dit "LE bouton", singulier) : ${scope}`)
 
     // Débloque le run simulé (voir runModelAnalysis dans le pont de test) et attend le retour au tableau statique.
     await page.evaluate(() => window.__releaseAnalysis())
-    await page.waitForSelector('.options-page--models .options-menu__model-overview thead th:has-text("CanIRun.ai")')
+    await page.waitForSelector('.options-page--models .options-menu__model-overview thead th:has-text("Score AA (CanIRun.ai)")')
 
     // Le tableau doit refléter le RÉSULTAT FRAIS du run (getModelOverview rappelé après coup) : qwen3:1.7b
     // passe de "—" (aucun score connu) à "5/6" une fois le run terminé, sans recharger la page.

@@ -35,6 +35,11 @@ Dans cet ordre, sans en sauter :
    re-pousser un nouveau commit.
 9. Confirmer à Léo en une ligne courte une fois la Release publiée (ex: "v0.2.4 est publiée."), jamais avant.
 
+Juste avant le bump de version, faire `git fetch origin claude/jaris-local-ai-assistant-a2drk4` et relire la
+version distante : plusieurs IA peuvent publier sur cette branche pendant une même session. Toujours partir de
+la dernière version distante et intégrer ses commits avant de choisir X.Y.Z+1, sinon deux travaux distincts
+peuvent annoncer ou tenter de publier le même numéro.
+
 Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
 
 ## Pièges déjà rencontrés dans ce projet (pour ne pas les refaire)

@@ -260,7 +260,7 @@ export interface ModelOverviewEntry {
    */
   verifiedSkip?: boolean
   /**
-   * "Intelligence Index" publié par le site tiers CanIRun.ai (canirun.ai), demandé par Léo pour la liste
+   * Indice d'intelligence AA publié par CanIRun.ai (canirun.ai), demandé par Léo pour la liste
    * "Tous les modèles" (Options → Modèles) — voir CANIRUN_INTELLIGENCE_INDEX dans hardwareScan.ts pour la
    * source exacte et sa date de vérification. `null` si ce modèle n'y figure pas ou n'a pas encore ce score
    * chez eux (leur catalogue reste très incomplet sur ce champ au moment d'écrire ceci) — jamais un chiffre
