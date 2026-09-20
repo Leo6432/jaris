@@ -3287,3 +3287,43 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   réintroduisant chacun des deux défauts séparément). `npm run typecheck`, `npm run build` et `npm test`
   (380 tests) au vert. Vérifié aussi par capture d'écran réelle du rendu compilé (page plein écran, 5 groupes,
   scores CanIRun.ai visibles pour les nouvelles entrées) avant de considérer le correctif terminé.
+
+- **Étape 131, suite du point 2 du message de Léo (le point 1, sur le tri des candidats par palier, reste en
+  attente d'une clarification — voir la question posée avant ce correctif) : "il manque encore des score
+  canirun et ajoute le bouton dans cette mis a jour pour que j'analyse et je te donne les appelle outils pour
+  ceux que je peut".** Recherché AVANT de coder quoi que ce soit, par grep du dépôt entier plutôt que supposé :
+  `useModelAnalysis` (le hook qui lance `scripts/benchmark-models.mjs` via l'IPC `runModelAnalysis` déjà
+  fonctionnel de bout en bout — main.ts/preload.ts/shared/ipc.ts tous en place) et
+  `ModelAnalysisProgress.tsx` (le tableau de suivi en direct qui va avec) n'étaient RENDUS NULLE PART dans le
+  dépôt — ni `<ModelAnalysisProgress` ni `useModelAnalysis(` n'apparaissaient dans aucun composant. Pourtant
+  le commentaire de `benchmarkRunner.ts` affirme depuis longtemps que "runModelAnalysis... reste disponible à
+  la main depuis Options → Modèles" — le bouton qui l'appelait a dû disparaître au fil des refontes
+  successives de l'onglet Modèles (étapes 115/116/121), remplacé par "Retester la configuration"
+  (`handleRetestConfiguration`), qui ne fait qu'une chose différente (redétecter + télécharger les modèles
+  déjà connus, sans jamais re-tester quoi que ce soit) — sans que personne ne remarque que l'ancien mécanisme
+  de test comparatif restait orphelin, composants toujours présents, jamais nettoyés ni reconnectés.
+  Restauré dans `AllModelsOverview.tsx` (la page "Tous les modèles" livrée à l'étape 129/130, l'endroit
+  naturel : c'est justement là que la colonne "Appel d'outils" affiche le plus de "—") plutôt que recréé de
+  zéro : un seul bouton "Lancer l'analyse" (scope `'all'`, Léo dit "LE bouton" au singulier) — le script
+  sous-jacent saute déjà tout seul les modèles déjà connus (`verified-tool-scores.md`) ET ceux trop gros pour
+  la VRAM/RAM détectée (badge "Ignoré"), donc `'all'` ne re-teste jamais ce qui est déjà su et ne télécharge
+  jamais un modèle que la machine ne peut pas faire tourner — pas besoin d'un bouton par palier.
+  **Discipline "un seul cadre" (déjà établie à l'étape 101) appliquée dès l'écriture, pas ajoutée après
+  coup** : le tableau STATIQUE (colonnes VRAM/Appel d'outils/CanIRun.ai) et le tableau de SUIVI EN DIRECT
+  (colonnes Fiabilité connue/Statut, rendu par `ModelAnalysisProgress`) ne s'affichent jamais en même temps —
+  le premier est masqué tant que `analysis.benchmarking` est vrai. Après un run réussi, `getModelOverview()`
+  est rappelé pour rafraîchir le tableau statique avec les VRAIS résultats fraîchement mesurés (sans ça,
+  Léo aurait vu son run se terminer sans que rien ne change à l'écran).
+  **Vérifié mordant avant de livrer** : un test retire temporairement le garde `!analysis.benchmarking` sur
+  le tableau statique — le test dédié échoue bien (assertion sur les en-têtes de colonnes, qui distinguent
+  sans ambiguïté les deux tableaux). Un second test vérifie le rafraîchissement réel après coup : le mock
+  `getModelOverview` renvoie un score DIFFÉRENT à son second appel (simulant un vrai résultat de run), et le
+  test confirme que la ligne concernée affiche bien ce nouveau score après la fin du run — pas juste que le
+  tableau se réaffiche à l'identique.
+  Régression : `node --test scripts/test-options-reorganization-ui.mjs` (11 tests, 1 nouveau). `npm run
+  typecheck`, `npm run build` et `npm test` (381 tests) au vert. Vérifié aussi par capture d'écran réelle du
+  rendu compilé, avant ET pendant un run simulé.
+  **Non vérifié en usage réel** (pas d'accès à la machine de Léo) : que `scripts/benchmark-models.mjs`
+  tourne bien de bout en bout sur sa configuration précise une fois qu'il clique vraiment sur ce bouton —
+  seul le fil IPC/UI est prouvé ici, pas le script Node lui-même (déjà utilisé par ailleurs, jamais retouché
+  dans ce correctif).

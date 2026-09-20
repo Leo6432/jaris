@@ -888,6 +888,16 @@ body.body--scan::after {
   margin-top: 14px;
 }
 
+/* Bouton "Lancer l'analyse" + sa phrase d'explication, en tête de la page "Tous les modèles" — un peu d'air
+   après la description de la page et avant les tableaux/le suivi en direct qui peuvent suivre. */
+.options-menu__all-models-analysis {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+
 /* Chaque palier dans sa propre carte : plus facile à distinguer d'un seul coup d'œil que 5 tableaux qui
    s'enchaînent sans séparation visuelle. */
 .options-menu__model-group {
