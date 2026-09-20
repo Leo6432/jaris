@@ -120,7 +120,11 @@ function spawnBenchmarkScript(onLine: (line: string) => void, scope: AnalysisSco
  * benchmark lui-même a pu faire installer.
  */
 async function cleanupUnselectedModels(onLine: (line: string) => void): Promise<void> {
-  const tested = [...parseLocalBenchmark().keys()]
+  // Un modèle peut avoir été testé sous PLUSIEURS rôles (ex: ministral-3:8b, conversation ET vision) depuis
+  // que parseLocalBenchmark renvoie trois maps séparées par palier (voir son commentaire, hardwareScan.ts) —
+  // l'union des trois donne la liste complète de ce que ce run a pu installer, peu importe le rôle testé.
+  const localBenchmark = parseLocalBenchmark()
+  const tested = [...new Set([...localBenchmark.conversation.keys(), ...localBenchmark.vision.keys(), ...localBenchmark.code.keys()])]
   if (!tested.length) return
 
   const profile = await getProfile()

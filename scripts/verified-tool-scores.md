@@ -58,6 +58,7 @@ lignes) — même convention que la colonne "Fiabilité" de `benchmark-results.m
 | granite4.2:8b | 6/6 |
 | granite4.2:3b | 5/6 |
 | granite4.2:30b | 6/6 |
+| mistral-small3.2:24b | 6/6 |
 
 **Note sur `granite4.1:8b`** (mesuré le 06/09/2026, avec `qwen3.5:4b`/`qwen3.6:35b`/`qwen3.8:27b`
 ci-dessus) : 6/6 à l'appel d'outils, mais sa réponse à la question de raisonnement libre ("qu'est-ce que tu
@@ -84,6 +85,7 @@ granite4.1:3b, malgré la version plus récente.
 | qwen3-vl:4b | 3/3 |
 | qwen3-vl:2b | 3/3 |
 | qwen3.5:4b | 3/3 |
+| ministral-3:8b | 2/3 |
 
 ## Code — génération de code
 

@@ -799,14 +799,30 @@ export function parseVerifiedToolScores(): Record<VerifiedTier, Map<string, stri
 }
 
 /**
- * Relit scripts/benchmark-results.md (généré par `npm run benchmark:models`, voir ce script) s'il existe,
- * pour remonter de vraies mesures faites sur LA machine de l'utilisateur plutôt que des chiffres publiés
- * génériques. Absent (jamais lancé) : renvoie une map vide, sans faire échouer l'aperçu pour autant.
- * Exportée en plus de son usage dans getModelOverview ci-dessous : sert aussi à benchmarkRunner.ts pour
- * savoir quels modèles ont été testés lors du dernier run (et donc candidats à un nettoyage après coup).
+ * Relit scripts/benchmark-results.md (généré par `npm run benchmark:models`/le bouton "Lancer l'analyse",
+ * voir ce script) s'il existe, pour remonter de vraies mesures faites sur LA machine de l'utilisateur plutôt
+ * que des chiffres publiés génériques. Absent (jamais lancé) : renvoie des maps vides, sans faire échouer
+ * l'aperçu pour autant. Exportée en plus de son usage dans getModelOverview ci-dessous : sert aussi à
+ * benchmarkRunner.ts pour savoir quels modèles ont été testés lors du dernier run (et donc candidats à un
+ * nettoyage après coup).
+ *
+ * **Trois maps séparées par palier (sections "## Conversation/Vision/Code" du fichier), PAS une seule map
+ * globale par nom de modèle** — même correctif déjà appliqué à `parseVerifiedToolScores` ci-dessus pour
+ * `verified-tool-scores.md`, ici étendu à son fichier jumeau qui l'avait manqué : `ministral-3:8b` (candidat
+ * à la fois Médium et Vision, voir MEDIUM_CANDIDATES/VISION_CANDIDATES) a un score de 2/3 en Vision qui, une
+ * fois testé LOCALEMENT lors du même run (bouton "Lancer l'analyse"), écrasait silencieusement son propre
+ * score de conversation (sur 6) dans une map plate — repéré directement sur une capture d'écran envoyée par
+ * Léo montrant "2/3" identique dans les deux paliers, jamais deviné. L'ancien format (une seule table sans
+ * section) n'est plus reconnu : un `benchmark-results.md` généré par une version antérieure se lit comme
+ * "rien de connu localement" (repli sûr sur verified-tool-scores.md/un re-test, jamais un score corrompu
+ * affiché comme s'il était correct) plutôt que d'essayer de le deviner section par section.
  */
-export function parseLocalBenchmark(): Map<string, LocalBenchmarkEntry> {
-  const results = new Map<string, LocalBenchmarkEntry>()
+export function parseLocalBenchmark(): Record<VerifiedTier, Map<string, LocalBenchmarkEntry>> {
+  const results: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>> = {
+    conversation: new Map(),
+    vision: new Map(),
+    code: new Map()
+  }
   let raw: string
   try {
     raw = readFileSync(join(resourcesRoot(), 'scripts', 'benchmark-results.md'), 'utf-8')
@@ -814,8 +830,14 @@ export function parseLocalBenchmark(): Map<string, LocalBenchmarkEntry> {
     return results
   }
 
+  let currentTier: VerifiedTier | null = null
   for (const line of raw.split('\n')) {
-    if (!line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
+    if (line.startsWith('## ')) {
+      const heading = line.slice(3).trim().toLowerCase()
+      currentTier = heading.startsWith('conversation') ? 'conversation' : heading.startsWith('vision') ? 'vision' : heading.startsWith('code') ? 'code' : null
+      continue
+    }
+    if (!currentTier || !line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
     const cells = line
       .split('|')
       .map((c) => c.trim())
@@ -824,7 +846,7 @@ export function parseLocalBenchmark(): Map<string, LocalBenchmarkEntry> {
 
     const [model, , speed, tool] = cells
     const speedNum = parseFloat(speed)
-    results.set(model, {
+    results[currentTier].set(model, {
       speedTokPerSec: Number.isFinite(speedNum) ? speedNum : null,
       toolCalling: tool === '—' ? null : tool
     })
@@ -858,7 +880,7 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
     // "En attente" pour toujours pendant un run, faute de ##MODEL_TESTING##/##MODEL_DONE## le concernant.
     const verifiedSkip = verifiedToolScores[tier].has(model)
     const canirunIndex = CANIRUN_INTELLIGENCE_INDEX[model] ?? null
-    const local = localBenchmark.get(model)
+    const local = localBenchmark[tier].get(model)
     if (local) {
       return { model, vramGb: modelVramGb, speedTokPerSec: local.speedTokPerSec, toolCalling: local.toolCalling, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, canirunIndex }
     }
@@ -914,10 +936,10 @@ function resolveBenchmarkResult(
   candidate: ModelCandidate,
   tier: VerifiedTier,
   gpuName: string | null,
-  localBenchmark: Map<string, LocalBenchmarkEntry>,
+  localBenchmark: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>>,
   verifiedToolScores: Record<VerifiedTier, Map<string, string>>
 ): LocalBenchmarkEntry | undefined {
-  const local = localBenchmark.get(candidate.model)
+  const local = localBenchmark[tier].get(candidate.model)
   if (local) return local
   const verifiedTool = verifiedToolScores[tier].get(candidate.model)
   if (!verifiedTool) return undefined
@@ -955,7 +977,7 @@ function computeModelPicks(
   vramGb: number | null,
   ramGb: number,
   gpuName: string | null,
-  localBenchmark: Map<string, LocalBenchmarkEntry>,
+  localBenchmark: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>>,
   verifiedToolScores: Record<VerifiedTier, Map<string, string>>
 ): {
   flash: ModelOverviewEntry
@@ -1092,7 +1114,7 @@ export async function pickBestCodeModel(): Promise<string> {
 function previewVramSteps(
   gpuName: string | null,
   ramGb: number,
-  localBenchmark: Map<string, LocalBenchmarkEntry>,
+  localBenchmark: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>>,
   verifiedToolScores: Record<VerifiedTier, Map<string, string>>
 ): number[] {
   const hasScore = (c: ModelCandidate): boolean =>

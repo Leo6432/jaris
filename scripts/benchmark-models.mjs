@@ -1198,40 +1198,54 @@ async function main() {
   // Résultats déjà écrits (run précédent, ou sauvegarde incrémentale de CE run avant une interruption — voir
   // persistResults plus bas) : lus ICI, avant de savoir quoi installer/tester, pour pouvoir sauter les
   // modèles déjà faits quand JARIS_RESUME=1 (voir son commentaire plus haut). Même format de parsing que
-  // parseLocalBenchmark (hardwareScan.ts) : lignes "| modèle | latence | vitesse | fiabilité |", 4 cellules.
-  const existingRows = new Map()
+  // parseLocalBenchmark (hardwareScan.ts) : trois sections "## Conversation/Vision/Code", PAS une seule map
+  // par nom de modèle — même correctif que readVerifiedModels un peu plus haut dans ce fichier, ici étendu
+  // au fichier JUMEAU (benchmark-results.md) qui l'avait manqué. Repéré directement sur une capture d'écran
+  // de Léo : ministral-3:8b (candidat Médium ET Vision) montrait le même "2/3" dans les deux paliers, son
+  // vrai score de conversation (sur 6) écrasé par son score vision testé dans le même run. Sans cette
+  // séparation, `alreadyDone` sautait aussi À TORT le test de conversation d'un modèle dont seul le test
+  // vision avait déjà tourné (et vice versa) : les deux bugs partagent la même cause, corrigés ensemble.
+  const existingRows = { conversation: new Map(), vision: new Map(), code: new Map() }
   try {
     const previous = readFileSync(RESULTS_PATH, 'utf-8')
+    let currentTier = null
     for (const line of previous.split('\n')) {
-      if (!line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
+      if (line.startsWith('## ')) {
+        const heading = line.slice(3).trim().toLowerCase()
+        currentTier = heading.startsWith('conversation') ? 'conversation' : heading.startsWith('vision') ? 'vision' : heading.startsWith('code') ? 'code' : null
+        continue
+      }
+      if (!currentTier || !line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
       const cells = line
         .split('|')
         .map((c) => c.trim())
         .filter(Boolean)
       if (cells.length !== 4) continue
       const [model, latency, speed, reliability] = cells
-      existingRows.set(model, { latency, speed, reliability })
+      existingRows[currentTier].set(model, { latency, speed, reliability })
     }
   } catch {
     // Pas de fichier précédent (tout premier run) : rien à conserver, existingRows reste vide.
   }
-  const alreadyDone = (model) => RESUME && existingRows.has(model)
+  // Un ancien fichier (avant ce correctif, sans section "## ") ne matche jamais `currentTier` : ses lignes
+  // sont ignorées plutôt que mal réparties — repli sûr, mieux vaut re-tester une fois que réutiliser des
+  // scores qu'on ne peut plus garantir corrects.
+  const alreadyDone = (model, tier) => RESUME && existingRows[tier].has(model)
 
   // SCOPED_MODELS/SCOPED_VISION_CANDIDATES/SCOPED_CODE_CANDIDATES (pas MODELS/VISION_CANDIDATES/
   // CODE_CANDIDATES directement) : un run ciblé sur un seul palier (SCOPE) ne doit installer/tester QUE ses
   // propres candidats, jamais les autres — la barre de progression (OptionsMenu.tsx) n'a pas besoin de les
   // distinguer, seulement combien reste à installer au total pour CE run.
   const allInstallable = [
-    ...SCOPED_MODELS,
-    ...SCOPED_VISION_CANDIDATES.map((c) => c.model),
-    ...SCOPED_CODE_CANDIDATES.map((c) => c.model)
-  ].filter((m) => !alreadyDone(m))
-  if (RESUME && existingRows.size) {
-    const resumedCount = [
-      ...SCOPED_MODELS,
-      ...SCOPED_VISION_CANDIDATES.map((c) => c.model),
-      ...SCOPED_CODE_CANDIDATES.map((c) => c.model)
-    ].filter((m) => alreadyDone(m)).length
+    ...SCOPED_MODELS.filter((m) => !alreadyDone(m, 'conversation')),
+    ...SCOPED_VISION_CANDIDATES.map((c) => c.model).filter((m) => !alreadyDone(m, 'vision')),
+    ...SCOPED_CODE_CANDIDATES.map((c) => c.model).filter((m) => !alreadyDone(m, 'code'))
+  ]
+  if (RESUME) {
+    const resumedCount =
+      SCOPED_MODELS.filter((m) => alreadyDone(m, 'conversation')).length +
+      SCOPED_VISION_CANDIDATES.filter((c) => alreadyDone(c.model, 'vision')).length +
+      SCOPED_CODE_CANDIDATES.filter((c) => alreadyDone(c.model, 'code')).length
     if (resumedCount) {
       console.log(
         `Reprise (JARIS_RESUME=1) : ${resumedCount} modèle(s) du périmètre déjà présent(s) dans ${RESULTS_PATH}, ni retéléchargé(s) ni retesté(s).\n`
@@ -1272,12 +1286,12 @@ async function main() {
     console.log('')
   }
 
-  const toRun = SCOPED_MODELS.filter((m) => !alreadyDone(m) && (installed.includes(m) || missing.includes(m)))
+  const toRun = SCOPED_MODELS.filter((m) => !alreadyDone(m, 'conversation') && (installed.includes(m) || missing.includes(m)))
   const visionToRun = SCOPED_VISION_CANDIDATES.map((c) => c.model).filter(
-    (m) => !alreadyDone(m) && (installed.includes(m) || missing.includes(m))
+    (m) => !alreadyDone(m, 'vision') && (installed.includes(m) || missing.includes(m))
   )
   const codeToRun = SCOPED_CODE_CANDIDATES.map((c) => c.model).filter(
-    (m) => !alreadyDone(m) && (installed.includes(m) || missing.includes(m))
+    (m) => !alreadyDone(m, 'code') && (installed.includes(m) || missing.includes(m))
   )
   if (!toRun.length && !visionToRun.length && !codeToRun.length) {
     console.log('Aucun des modèles à tester n\'a pu être installé.')
@@ -1441,23 +1455,42 @@ async function main() {
    * incrémentale, sans elle il n'y aurait rien de plus récent que le tout dernier run complet à reprendre.
    */
   function persistResults() {
-    const testedThisRun = new Set(results.map((r) => r.model))
+    // Trois sections séparées ("## Conversation/Vision/Code"), PAS un seul tableau par nom de modèle — même
+    // correctif que readVerifiedModels un peu plus haut dans ce fichier (voir son commentaire), appliqué ici
+    // au fichier JUMEAU qui l'avait manqué : un modèle candidat à plusieurs paliers (ex: ministral-3:8b,
+    // Conversation ET Vision) écrivait sinon DEUX lignes sous le même nom dans un tableau plat, la seconde
+    // écrasant silencieusement la première au moment de la relecture (parseLocalBenchmark, hardwareScan.ts) —
+    // repéré directement sur une capture d'écran de Léo montrant le même score "2/3" dans les deux paliers.
+    const byRole = { conversation: [], vision: [], code: [] }
+    for (const r of results) byRole[r.role].push(r)
+
     const lines = []
     lines.push(`# Résultats du benchmark Jaris — ${new Date().toLocaleString('fr-FR')}`)
     lines.push('')
-    // "Fiabilité" plutôt que "Tool-calling" : ce tableau mélange trois épreuves différentes selon le
-    // palier — appel d'outils (conversation, TEST_CASES), compréhension d'image (vision, VISION_TEST_CASES)
-    // et génération de HTML valide (code, CODE_TEST_CASES). La colonne reste un score "X/Y" dans les trois
-    // cas, mais ce n'est jamais la même épreuve.
-    lines.push('| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité (épreuve selon le palier du modèle) |')
-    lines.push('|---|---|---|---|')
-    for (const r of results) {
-      const acc = r.total ? `${r.correct}/${r.total}` : '—'
-      lines.push(`| ${r.model} | ${fmt(avg(r.latencies), 0)} ms | ${fmt(avg(r.speeds))} tok/s | ${acc} |`)
-    }
-    for (const [model, row] of existingRows) {
-      if (testedThisRun.has(model)) continue
-      lines.push(`| ${model} | ${row.latency} | ${row.speed} | ${row.reliability} |`)
+    lines.push(
+      "Trois épreuves distinctes, une section par palier : appel d'outils (Conversation), compréhension " +
+        "d'image (Vision), génération de HTML valide (Code) — jamais la même mesure sous le même nom de " +
+        'modèle, même pour un modèle candidat à plusieurs paliers à la fois (ex: ministral-3:8b).'
+    )
+    for (const [role, heading] of [
+      ['conversation', 'Conversation'],
+      ['vision', 'Vision'],
+      ['code', 'Code']
+    ]) {
+      lines.push('')
+      lines.push(`## ${heading}`)
+      lines.push('')
+      lines.push('| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |')
+      lines.push('|---|---|---|---|')
+      const testedThisRun = new Set(byRole[role].map((r) => r.model))
+      for (const r of byRole[role]) {
+        const acc = r.total ? `${r.correct}/${r.total}` : '—'
+        lines.push(`| ${r.model} | ${fmt(avg(r.latencies), 0)} ms | ${fmt(avg(r.speeds))} tok/s | ${acc} |`)
+      }
+      for (const [model, row] of existingRows[role]) {
+        if (testedThisRun.has(model)) continue
+        lines.push(`| ${model} | ${row.latency} | ${row.speed} | ${row.reliability} |`)
+      }
     }
 
     lines.push('')
@@ -1492,7 +1525,7 @@ async function main() {
     }
     console.log(`\n=== ${model} ===`)
     console.log(`##MODEL_TESTING## ${model}`)
-    const perModel = { model, latencies: [], speeds: [], correct: 0, total: 0 }
+    const perModel = { model, role: 'conversation', latencies: [], speeds: [], correct: 0, total: 0 }
 
     for (const { prompt, expectedTool } of TEST_CASES) {
       process.stdout.write(`  "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}" ... `)
@@ -1543,7 +1576,7 @@ async function main() {
     }
     console.log(`\n=== ${model} (vision) ===`)
     console.log(`##MODEL_TESTING## ${model}`)
-    const perModel = { model, latencies: [], speeds: [], correct: 0, total: 0 }
+    const perModel = { model, role: 'vision', latencies: [], speeds: [], correct: 0, total: 0 }
 
     for (let i = 0; i < VISION_TEST_CASES.length; i++) {
       const { prompt, check } = VISION_TEST_CASES[i]
@@ -1588,7 +1621,7 @@ async function main() {
     }
     console.log(`\n=== ${model} (code) ===`)
     console.log(`##MODEL_TESTING## ${model}`)
-    const perModel = { model, latencies: [], speeds: [], correct: 0, total: 0 }
+    const perModel = { model, role: 'code', latencies: [], speeds: [], correct: 0, total: 0 }
 
     for (const prompt of CODE_TEST_CASES) {
       process.stdout.write(`  "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}" ... `)

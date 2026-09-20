@@ -3314,3 +3314,62 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   juste "déjà dans cet ordre" —, et `pickBestModelsFromBenchmark()` intact après coup). Vérifié mordant en
   retirant temporairement le tri : 2 des 3 tests échouent bien. `npm run typecheck`, `npm run build` et
   `npm test` (384 tests) au vert.
+
+- **Étape 133, Léo répond au point 2 de l'étape 130 en envoyant deux captures d'écran réelles de "Tous les
+  modèles" après avoir utilisé le bouton "Lancer l'analyse" restauré à l'étape 131, juste "tient" — les
+  résultats promis pour qu'ils soient gardés pour tout le monde.** Avant de recopier le moindre chiffre dans
+  `verified-tool-scores.md`, comparaison ligne par ligne avec ce qui y était déjà — et une anomalie a sauté
+  aux yeux : `ministral-3:8b` affichait EXACTEMENT le même score "2/3" dans le palier Médium (conversation,
+  qui devrait être sur 6) ET dans le palier Vision (correctement sur 3). Jamais pris pour argent comptant,
+  creusé jusqu'à la cause exacte plutôt que simplement ignoré ou re-demandé à Léo.
+  **Cause trouvée dans le code, pas devinée : `parseLocalBenchmark()` (hardwareScan.ts) lisait
+  `benchmark-results.md` dans une seule Map plate par NOM DE MODÈLE, sans distinguer le palier.**
+  `ministral-3:8b`, candidat À LA FOIS Médium (MEDIUM_CANDIDATES) ET Vision (VISION_CANDIDATES) depuis
+  l'étape 128, vient d'être testé pour de vrai sous les DEUX rôles dans le MÊME run (le bouton restauré à
+  l'étape 131) — `scripts/benchmark-models.mjs` écrivait bien deux lignes distinctes dans le fichier (un
+  score de conversation sur 6, un score vision sur 3), mais `parseLocalBenchmark()` ne gardait que la
+  DERNIÈRE ligne lue pour ce nom de modèle, écrasant silencieusement le score de conversation par le score
+  vision testé juste après dans le script.
+  **Le plus frappant : ce bug avait déjà été identifié et corrigé une fois — mais seulement à MOITIÉ.** Le
+  commentaire de `parseVerifiedToolScores()` (hardwareScan.ts, fichier JUMEAU pour les scores COMMITÉS) dit
+  littéralement "bug déjà rencontré une fois dans benchmark-results.md avant qu'on ne le corrige ici" — la
+  correction (trois sections "## Conversation/Vision/Code" au lieu d'une liste plate) avait bien été
+  appliquée à `verified-tool-scores.md`/`parseVerifiedToolScores` ET à `readVerifiedModels()` (déjà
+  tier-aware dans benchmark-models.mjs, même commentaire), mais JAMAIS étendue au fichier LOCAL
+  (`benchmark-results.md`) ni à `parseLocalBenchmark()`/`existingRows` (`alreadyDone`) qui le lisent — la
+  même faille structurelle, oubliée sur son jumeau. **Deuxième conséquence, plus grave, trouvée en creusant
+  `alreadyDone`** : comme il vérifiait juste "ce NOM DE MODÈLE a-t-il une ligne, peu importe laquelle",
+  qu'un modèle multi-palier ait été testé pour UN SEUL de ses rôles suffisait à le faire sauter, À TORT,
+  lors de TOUS ses futurs tests (`JARIS_RESUME=1`) — son rôle jamais réellement testé restait bloqué "déjà
+  fait" pour toujours, sans qu'aucun run futur ne le corrige de lui-même.
+  **Corrigé en appliquant EXACTEMENT le même correctif déjà validé pour le fichier jumeau, des deux côtés** :
+  `parseLocalBenchmark()` renvoie désormais `Record<VerifiedTier, Map<...>>` (trois maps, comme
+  `parseVerifiedToolScores`), relu par `buildEntry`/`resolveBenchmarkResult`/`computeModelPicks`/
+  `previewVramSteps` avec le bon palier à chaque fois ; côté script, `existingRows`/`alreadyDone` et
+  `persistResults()` écrivent/relisent désormais trois sections distinctes, chaque `perModel` porte son
+  `role` depuis sa création (conversation/vision/code) pour savoir dans quelle section il va. Un ancien
+  `benchmark-results.md` (avant ce correctif, sans section) se lit comme "rien de connu localement" plutôt
+  que mal réparti — jamais un score qu'on ne peut plus garantir correct affiché comme s'il l'était ; le
+  fichier se régénère proprement au prochain "Lancer l'analyse", `ministral-3:8b` y sera alors re-testé pour
+  de vrai sous ses deux rôles, correctement séparés cette fois.
+  **Vérifié pour de vrai avant de faire confiance au correctif** : un script jetable a rejoué le nouveau
+  `persistResults()` avec deux résultats fictifs pour `ministral-3:8b` (5/6 conversation, 2/3 vision), écrit
+  le markdown généré, puis le relit avec la logique du nouveau `parseLocalBenchmark()` — confirmé que les
+  deux scores ressortent intacts et distincts, pas confondus. Un test dédié
+  (`test-local-benchmark-tiers.mjs`) reproduit ensuite le même scénario sur le VRAI `getModelOverview()`,
+  vérifié mordant en revenant temporairement à la lecture plate : le test échoue bien, avec le score vision
+  (2/3) qui remonte à tort dans le palier Médium — exactement le symptôme de la capture de Léo.
+  **Scores réellement nouveaux extraits des deux captures, ajoutés à `verified-tool-scores.md`** (tout le
+  reste correspondait déjà à ce qui y était, une bonne confirmation de cohérence) : `mistral-small3.2:24b`
+  (6/6, Conversation) et `ministral-3:8b` (2/3, Vision — SON score vision, correctement isolé, pas celui
+  corrompu affiché à tort dans Médium). Le score de conversation de `ministral-3:8b` n'a PAS été recopié
+  (2/3) : c'était précisément la valeur corrompue par ce bug, jamais fiable à commiter — il sera re-mesuré
+  correctement par Léo au prochain "Lancer l'analyse", une fois ce correctif en place.
+  Régression : `node --test scripts/test-local-benchmark-tiers.mjs` (nouveau fichier, 3 tests sur le vrai
+  `getModelOverview()`/`parseLocalBenchmark()`, vérifiés mordants). `npm run typecheck`, `npm run build` et
+  `npm test` (387 tests) au vert. `scripts/benchmark-models.mjs` vérifié par `node --check` (pas de test
+  automatisé possible sans lancer un vrai run Ollama) et par la simulation jetable décrite ci-dessus.
+  **Non vérifié en usage réel** (pas d'accès à la machine de Léo) : que son prochain "Lancer l'analyse"
+  régénère bien `benchmark-results.md` dans le nouveau format et retest correctement `ministral-3:8b` sous
+  ses deux rôles — le mécanisme est prouvé par le code et les tests, pas encore par un vrai run sur sa
+  machine.
