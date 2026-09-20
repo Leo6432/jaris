@@ -881,14 +881,11 @@ body.body--scan::after {
   overflow-x: auto;
 }
 
-/* Bouton "Tous les modèles" (AllModelsOverview.tsx) sous les paliers de configuration : un peu d'air avant
-   et, une fois déplié, avant le tableau qui suit. */
+/* Bouton "Tous les modèles" (AllModelsOverview.tsx) sous les paliers de configuration : un peu d'air avant.
+   Le tableau lui-même vit maintenant dans sa propre page plein écran (.options-page--models), plus dans ce
+   conteneur — voir la règle .options-page--models plus bas dans ce fichier, juste après .options-page__body. */
 .options-menu__all-models {
   margin-top: 14px;
-}
-
-.options-menu__all-models .options-menu__model-overview-scroll {
-  margin-top: 10px;
 }
 
 /* Chaque palier dans sa propre carte : plus facile à distinguer d'un seul coup d'œil que 5 tableaux qui
@@ -3424,6 +3421,22 @@ a:hover {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(200px, 250px) minmax(0, 1fr);
+}
+
+/* "Tous les modèles" (AllModelsOverview.tsx) : une page à part, empilée PAR-DESSUS la page Options plutôt
+   que dedans — un z-index plus élevé suffit, .options-page est déjà en position fixed/inset:0.
+   .options-page__body--models retire la colonne de navigation de gauche (une seule grille à 1 colonne) :
+   cette page n'a rien à onglet, contrairement à la page Options qu'elle recouvre. ÉCRIT ICI, APRÈS la
+   règle .options-page__body ci-dessus (pas avant, plus haut dans le fichier) — à spécificité égale (une
+   seule classe chacune), c'est l'ordre dans le fichier qui décide, et une variante écrite AVANT la règle de
+   base qu'elle doit remplacer se fait silencieusement écraser par elle (piège déjà rencontré plusieurs fois
+   dans ce fichier, ex. étapes 95/117 du changelog CLAUDE.md). */
+.options-page__body--models {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.options-page--models {
+  z-index: 25;
 }
 
 .options-page__navigation {

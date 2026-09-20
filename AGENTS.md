@@ -3194,3 +3194,57 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   **Non vérifié en usage réel** (pas d'accès à la machine de Léo) : le mécanisme est prouvé par un vrai
   navigateur avec des données simulées ; son utilité concrète avec les VRAIES données de sa machine (~38
   lignes réparties sur 5 groupes) reste à confirmer.
+
+- **Étape 130, Léo, juste après avoir vu la première version : "quand on clique sur tout les models on doit
+  ouvrire un page entierement pour ça et aussi pourquoi il ya pas beaucoup de score canirun.ai".** Deux
+  retours dans le même message, sur "Tous les modèles" livré à l'étape 129.
+  1. **Page plein écran, pas une liste dépliée sur place.** La liste (5 paliers, ~39 modèles) se dépliait
+     jusqu'ici DANS la petite carte "Ce que ta machine fait tourner", tassée sous les paliers déjà affichés —
+     jamais assez de place. Remplacé par une VRAIE page (`AllModelsOverview.tsx`), sur le même principe que
+     la page Options elle-même : `createPortal` vers `document.body`, `position: fixed; inset: 0`, empilée
+     PAR-DESSUS la page Options avec un z-index plus élevé (`.options-page--models`, z-index 25 contre 20)
+     plutôt qu'un second onglet DANS Options — "Fermer" revient exactement là où on était (même onglet
+     Modèles), sans jamais fermer la page Options elle-même en dessous. Pas de colonne de navigation à
+     gauche comme la page Options (`.options-page__body--models { grid-template-columns: minmax(0, 1fr) }`) :
+     un seul contenu, rien à onglet ici.
+     **Piège attrapé PAR LE TEST avant de livrer, pas en relecture — la même faute déjà documentée deux fois
+     dans ce fichier (étapes 95 et 117) : une règle CSS qui doit en réécrire une autre doit être ÉCRITE APRÈS
+     elle dans le fichier, pas avant, même à spécificité égale.** Un premier essai avait placé
+     `.options-page__body--models`/`.options-page--models` juste après la définition la plus ANCIENNE (et
+     déjà supplantée) de `.options-page` (~ligne 315, celle qui n'a plus cours depuis la refonte "design
+     importé" de l'étape 121) au lieu de la définition ACTIVE de `.options-page__body` (~ligne 3420, celle
+     avec la vraie grille à 2 colonnes) — la règle à 1 colonne se faisait donc silencieusement écraser par
+     la grille à 2 colonnes, plus bas dans le fichier. Un test dédié mesure maintenant le rectangle RÉEL du
+     contenu (`.options-page__workspace`, doit démarrer près de x=0, pas décalé de ~200-250px comme si une
+     colonne de navigation vide était encore réservée) — vérifié mordant en reproduisant l'erreur de
+     placement exacte : le test échoue bien, corrigé en déplaçant la règle juste après la bonne définition de
+     `.options-page__body`. Deux autres assertions nouvelles, mesurées plutôt que supposées : le rectangle de
+     `.options-page--models` couvre pile tout le viewport (x=0, y=0, largeur/hauteur = celles de la fenêtre),
+     et son z-index calculé est bien supérieur à celui de la page Options qu'il recouvre (2 éléments
+     `.options-page` coexistent dans le DOM, jamais un seul).
+  2. **"Pourquoi il n'y a pas beaucoup de score CanIRun.ai" : revérifié à la source, pas juste réexpliqué.**
+     La première passe (étape 129) ne comparait que par nom EXACT du tag Ollama contre le champ `ollamaId` de
+     CanIRun.ai — ratant les entrées où CanIRun catalogue le même modèle sous un autre nom SANS jamais
+     renseigner `ollamaId` (ex: "gemma4-12b-it", `ollamaId: null` chez eux, mais un `intelligenceIndex` de 22
+     qui s'applique bien au même modèle que `gemma4:12b` — "IT"/instruction-tuned est simplement le nom que
+     CanIRun donne à la variante de conversation, celle que Jaris télécharge). Revérifié directement contre
+     leur API (104 modèles listés, détail de chaque candidat plausible récupéré un par un) : 6 correspondances
+     RÉELLES et sûres retrouvées ainsi (familles Gemma 4 et Ministral 3 — `gemma4:12b`=22, `gemma4:26b`=26,
+     `gemma4:31b`=30, `gemma4:e4b`=12, `ministral-3:14b`=11, `ministral-3:3b`=7), portant la couverture de
+     8/39 à 14/39. Le reste du constat de l'étape 129 tient toujours : pour la majorité des modèles restants,
+     ce n'est PAS un problème de correspondance — CanIRun les catalogue bien (avec un `ollamaId` correct :
+     `command-r:35b`, `north-mini-code-1.0`, `qwen3-coder-next`, `qwen3.5:27b`, `qwen3:1.7b`...) mais sans
+     jamais renseigner `intelligenceIndex` pour eux : un vrai manque côté données de CanIRun, pas quelque
+     chose que Jaris peut corriger.
+     **Trois correspondances plausibles écartées explicitement, faute de certitude suffisante (jamais un
+     score deviné)** : `mistral-small3.2:24b` (CanIRun ne liste que "Mistral Small 3.1 24B", une version
+     PLUS ANCIENNE — l'écart figure noir sur blanc dans leur propre `name`) ; `devstral-2:123b` (CanIRun n'a
+     que "Devstral Small 2 24B", une taille bien trop différente pour être le même modèle) ; `qwen3.5:35b`
+     (CanIRun n'a que la variante MoE "35B-A3B", possiblement une architecture différente du tag dense de
+     Jaris — non confirmé, donc non ajouté). `ministral-3:8b` reste aussi sans score : CanIRun le catalogue
+     bien sous "ministral-8b" (`ollamaId` confirmé), mais sans `intelligenceIndex` chez eux non plus.
+  Régression : `node --test scripts/test-options-reorganization-ui.mjs` (10 tests, le test "Tous les modèles"
+  réécrit avec les 3 nouvelles mesures ci-dessus, vérifié mordant sur le placement CSS ET sur le z-index en
+  réintroduisant chacun des deux défauts séparément). `npm run typecheck`, `npm run build` et `npm test`
+  (380 tests) au vert. Vérifié aussi par capture d'écran réelle du rendu compilé (page plein écran, 5 groupes,
+  scores CanIRun.ai visibles pour les nouvelles entrées) avant de considérer le correctif terminé.

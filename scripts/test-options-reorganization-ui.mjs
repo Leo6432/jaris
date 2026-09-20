@@ -268,20 +268,45 @@ test('les cartes de réglages ont de l\'air entre le titre et le contenu, et ent
 
 // Léo : "dans model ajoute un bouton en dessou de tout les palier, tout les model et met tout les model
 // qu'on a utiliser met le score apelle outil la vram necessaire pour le model, et le score sur canirun.ai"
-// (AllModelsOverview.tsx). Le bouton reste replié par défaut (la liste, tous paliers confondus, est bien
-// plus longue que le résumé déjà affiché au-dessus) : un clic la déplie, un second la replie.
-test('"Tous les modèles" reste replié par défaut, un clic déplie la liste complète groupée par palier', options, async () => {
+// (AllModelsOverview.tsx). Repris juste après (Léo : "quand on clique sur tout les models on doit ouvrire
+// un page entierement pour ça") : un clic n'ouvre plus une liste dépliée EN PLACE dans la petite carte des
+// paliers, mais une vraie page plein écran (.options-page--models, empilée par-dessus la page Options),
+// avec son propre bouton "Fermer" qui revient sur la page Options — sans perdre l'onglet Modèles en cours.
+test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste dépliée sur place', options, async () => {
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Modèles")')
     await page.waitForSelector('.options-menu__all-models')
-    assert.equal(await page.$('.options-menu__model-overview'), null, 'la liste ne doit pas être dépliée par défaut')
+    assert.equal(await page.$('.options-page--models'), null, 'la page plein écran ne doit pas exister avant le clic')
 
     await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
-    await page.waitForSelector('.options-menu__model-overview')
-    const groupTitles = await page.$$eval('.options-menu__all-models .options-menu__model-group-title', (els) => els.map((el) => el.textContent))
+    await page.waitForSelector('.options-page--models .options-menu__model-overview')
+
+    // "Page entièrement" vérifié pour de vrai (rectangle mesuré), pas juste un nom de classe : elle doit
+    // recouvrir tout le viewport, exactement comme la page Options qu'elle empile par-dessus.
+    const viewport = page.viewportSize()
+    const box = await page.$eval('.options-page--models', (el) => {
+      const r = el.getBoundingClientRect()
+      return { x: r.x, y: r.y, width: r.width, height: r.height }
+    })
+    assert.equal(box.x, 0, `la page doit toucher le bord gauche : ${box.x}`)
+    assert.equal(box.y, 0, `la page doit toucher le bord haut : ${box.y}`)
+    assert.equal(box.width, viewport.width, `la page doit couvrir toute la largeur : ${box.width} vs ${viewport.width}`)
+    assert.equal(box.height, viewport.height, `la page doit couvrir toute la hauteur : ${box.height} vs ${viewport.height}`)
+
+    // Réellement AU-DESSUS de la page Options (z-index plus élevé), pas juste peinte par-dessus par hasard.
+    const zIndexes = await page.$$eval('.options-page', (els) => els.map((el) => Number(getComputedStyle(el).zIndex)))
+    assert.equal(zIndexes.length, 2, `2 pages .options-page attendues (Options + Tous les modèles) : ${zIndexes.length}`)
+    assert.ok(Math.max(...zIndexes) > Math.min(...zIndexes), `la page des modèles doit avoir un z-index plus élevé : ${zIndexes}`)
+
+    // Sans colonne de navigation de gauche (contrairement à la page Options qu'elle recouvre) : le contenu
+    // doit démarrer près du bord gauche, pas laisser un vide de ~200-250px où vivrait cette colonne absente.
+    const contentX = await page.$eval('.options-page--models .options-page__workspace', (el) => el.getBoundingClientRect().x)
+    assert.ok(contentX < 50, `le contenu doit occuper toute la largeur, sans gouttière de navigation : x=${contentX}`)
+
+    const groupTitles = await page.$$eval('.options-page--models .options-menu__model-group-title', (els) => els.map((el) => el.textContent))
     assert.deepEqual(groupTitles, ['Rapide', 'Vision'], `paliers affichés : ${groupTitles.join(', ')}`)
 
-    const rows = await page.$$eval('.options-menu__all-models tbody tr', (els) =>
+    const rows = await page.$$eval('.options-page--models tbody tr', (els) =>
       els.map((el) => Array.from(el.querySelectorAll('td')).map((td) => td.textContent?.trim()))
     )
     assert.equal(rows.length, 3, `3 modèles attendus (2 Rapide + 1 Vision) : ${rows.length}`)
@@ -291,8 +316,10 @@ test('"Tous les modèles" reste replié par défaut, un clic déplie la liste co
     // qwen3:1.7b : aucun score CanIRun.ai connu -> tiret, jamais un chiffre inventé.
     assert.equal(rows[1][3], '—', `absence de score CanIRun.ai doit rester un tiret, pas un 0 : ${rows[1][3]}`)
 
-    await page.click('.options-menu__all-models button:has-text("Réduire")')
-    await page.waitForFunction(() => document.querySelector('.options-menu__all-models .options-menu__model-overview') === null)
+    // "Fermer" revient sur la page Options, toujours sur l'onglet Modèles — elle n'a jamais été fermée.
+    await page.click('.options-page--models .options-page__close')
+    await page.waitForFunction(() => document.querySelector('.options-page--models') === null)
+    assert.ok(await page.$('.options-menu__tab--active:has-text("Modèles")'), 'la page Options doit rester ouverte sur Modèles après Fermer')
   })
 })
 

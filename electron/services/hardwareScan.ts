@@ -635,16 +635,33 @@ const INTELLIGENCE_MMLU_PRO: Record<string, number> = {
 /**
  * "Intelligence Index" publié par le site tiers CanIRun.ai (github.com/midudev/canirun.ai, API publique
  * `/api/models/<id>`), à la demande de Léo pour la liste "Tous les modèles" (Options → Modèles). Vérifié
- * directement via leur API le 20/09/2026, PAS pris à sa parole — sur les 38 modèles candidats de Jaris à
- * cette date, seuls 8 ont ce champ renseigné chez eux (leur catalogue reste incomplet sur ce point pour la
- * plupart des modèles récents, y compris certains qu'ils listent par ailleurs) : absence d'un modèle ici =
- * pas encore chiffré par CanIRun.ai, jamais un 0 ou une estimation inventée pour combler le vide. Repéré au
- * passage (sans conséquence pour Jaris, juste à titre d'exemple) : leur propre `ollamaId` pour la famille
- * Granite pointe vers `ibm/granite4.1:8b` — exactement le préfixe communautaire non officiel déjà écarté
- * pour cette famille plus haut dans ce fichier (MEDIUM_CANDIDATES), signe que leur base a le même genre
- * d'erreur que celle déjà corrigée ici une fois. Totalement indépendant de INTELLIGENCE_MMLU_PRO ci-dessus
- * (échelles différentes, jamais comparés l'un à l'autre) et jamais utilisé pour le choix réel d'un modèle
- * (pickBestFrom) — affichage seul, à titre indicatif.
+ * directement via leur API — sur les 39 modèles candidats de Jaris à cette date, 14 ont ce champ renseigné
+ * chez eux (leur catalogue reste incomplet sur ce point pour la plupart des modèles récents, y compris
+ * certains qu'ils cataloguent par ailleurs avec un `ollamaId` correct mais sans intelligenceIndex) : absence
+ * d'un modèle ici = pas encore chiffré par CanIRun.ai, jamais un 0 ou une estimation inventée pour combler
+ * le vide.
+ *
+ * Revérifié le 20/09/2026 (Léo : "pourquoi il n'y a pas beaucoup de score canirun.ai") : la première passe
+ * (étape 129) n'avait comparé que par nom EXACT du tag Ollama contre `ollamaId`, ratant les entrées où
+ * CanIRun.ai catalogue le modèle sous un nom différent sans jamais renseigner `ollamaId` lui-même (ex:
+ * "gemma4-12b-it", sans ollamaId chez eux, mais dont l'intelligenceIndex s'applique bien au même modèle que
+ * gemma4:12b — la variante "IT"/instruction-tuned est le nom que CanIRun donne au modèle de conversation,
+ * celui-là même que Jaris télécharge). Les 6 nouvelles entrées ci-dessous (familles Gemma 4 et Ministral 3)
+ * ont été rapprochées à la main sur cette base : même famille, mêmes paramètres, variante conversationnelle.
+ * Écartés explicitement malgré un nom proche, faute de certitude suffisante (jamais un score deviné) :
+ * `mistral-small3.2:24b` (CanIRun ne liste que "Mistral Small 3.1 24B", une version PLUS ANCIENNE — texte
+ * explicite dans leur `name`), `ministral-3:8b` (CanIRun le catalogue sous "ministral-8b", `ollamaId`
+ * confirmé, mais sans intelligenceIndex — reste donc "—"), `devstral-2:123b` (CanIRun n'a que "Devstral
+ * Small 2 24B", une taille très différente, pas le même modèle), `qwen3.5:35b` (CanIRun n'a que la variante
+ * MoE "35B-A3B", possiblement une architecture différente du tag dense de Jaris — pas confirmé, donc pas
+ * ajouté). Repéré au passage (sans conséquence pour Jaris, juste à titre d'exemple) : leur propre `ollamaId`
+ * pour la famille Granite pointe vers `ibm/granite4.1:8b` — exactement le préfixe communautaire non officiel
+ * déjà écarté pour cette famille plus haut dans ce fichier (MEDIUM_CANDIDATES), signe que leur base a le même
+ * genre d'erreur que celle déjà corrigée ici une fois.
+ *
+ * Totalement indépendant de INTELLIGENCE_MMLU_PRO ci-dessus (échelles différentes, jamais comparés l'un à
+ * l'autre) et jamais utilisé pour le choix réel d'un modèle (pickBestFrom) — affichage seul, à titre
+ * indicatif.
  */
 const CANIRUN_INTELLIGENCE_INDEX: Record<string, number> = {
   'qwen3.5:0.8b': 5,
@@ -654,7 +671,13 @@ const CANIRUN_INTELLIGENCE_INDEX: Record<string, number> = {
   'qwen3.6:27b': 38,
   'qwen3.6:35b-a3b': 32,
   'qwen3.8:27b': 52,
-  'gpt-oss:20b': 15
+  'gpt-oss:20b': 15,
+  'gemma4:12b': 22,
+  'gemma4:26b': 26,
+  'gemma4:31b': 30,
+  'gemma4:e4b': 12,
+  'ministral-3:14b': 11,
+  'ministral-3:3b': 7
 }
 
 export interface LocalBenchmarkEntry {
