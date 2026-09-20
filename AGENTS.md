@@ -3094,3 +3094,58 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   code de Léo (confirmé par sa capture d'écran, qui correspond au rendu SANS vue compacte) est bien celui de
   cette branche-ci (`claude/jaris-local-ai-assistant-a2drk4`) — l'autre ne contient rien d'utilisé en
   pratique, mais reste à supprimer ou réconcilier un jour si Léo le souhaite.
+- **Étape 128, Léo : "cherche meilleur model et dit lui bien tout les palier" puis "oui" — 6 nouveaux
+  candidats ajoutés aux listes de Jaris, après une recherche externe VÉRIFIÉE point par point avant d'y
+  toucher, pas prise à sa parole.** Une IA externe (prompt de recherche fourni par ce fichier, incluant
+  cette fois l'explication du mécanisme des paliers avec un exemple réel tiré de la machine de Léo) a proposé
+  ministral-3:3b/8b/14b, gemma4:31b, qwen3-coder-next et devstral-2:123b, avec des bugs Ollama précis pour
+  justifier l'exclusion d'autres modèles (qwen3.8:27b, gpt-oss:20b, toute la famille Gemma 4) des rôles à
+  outils. **Chaque affirmation vérifiée indépendamment avant d'agir** : les 6 tags Ollama existent bien
+  (`ollama.com/library/<tag>`, tailles confirmées par WebFetch direct des pages officielles) et les 4 bugs
+  GitHub cités (#13750 response_format+tools, #17638 gpt-oss HTTP 500, #17825 qwen3.8:27b retry-hang,
+  #18390/#17888/#15539 parsing Gemma 4) sont tous réels, récents (2026), et correspondent précisément aux
+  descriptions données — rien d'halluciné, contrairement à d'autres propositions externes déjà rejetées dans
+  ce fichier (llama3.2:1b présenté à tort comme récent, "Hermes 4 14B" introuvable en officiel...).
+  **Une clarification propre à Jaris que l'IA externe ne pouvait pas connaître** : la réserve "Ministral perd
+  ses outils si `response_format`/`format` est envoyé EN MÊME TEMPS que `tools`" ne s'applique PAS à Jaris —
+  vérifié directement dans `ollama.ts` (`grep -n "format:"`) : Jaris n'envoie JAMAIS ce paramètre en même
+  temps que des outils, sur aucun appel. Ministral 3 est donc un candidat sûr sans réserve pour Jaris, pas
+  juste "sous condition" comme l'IA externe le présentait par prudence générique.
+  **Découverte en ajoutant `ministral-3:3b` : il était déjà présent dans `scripts/benchmark-models.mjs`
+  (MODELS/MODEL_SIZE_HINTS) sans jamais avoir été promu dans `hardwareScan.ts`** — et surtout déjà VÉRIFIÉ
+  pour de vrai : `scripts/verified-tool-scores.md` contient déjà `| ministral-3:3b | 6/6 |`, mesuré sur la
+  machine de Léo. Pas une simple entrée "informative en attente de test" comme les 5 autres ajouts de cette
+  étape : celui-ci est déjà confirmé fiable en usage réel, pas seulement sur le papier.
+  **Répartition finale, par catégorie** (voir hardwareScan.ts pour le détail complet de chaque ajout) :
+  - Rapide : `ministral-3:3b` (3,0 Go, 6/6 déjà mesuré).
+  - Médium : `ministral-3:14b` (9,1 Go), `ministral-3:8b` (6,0 Go) — pas encore testés pour de vrai.
+  - Vision : `gemma4:31b` (20 Go, PAS ajouté en Médium/Puissant/Code à cause des bugs de parsing Gemma 4
+    ouverts, mais Vision n'a pas cette exigence), `ministral-3:8b` (réutilisation, comme gemma4:e4b/qwen3.5:4b
+    déjà présents des deux côtés).
+  - Code : `devstral-2:123b` (75 Go) et `qwen3-coder-next` (52 Go), tous deux ajoutés à
+    `LARGE_RAM_OFFLOAD_MODELS` (indispensable ici : aucun GPU grand public n'a assez de VRAM à lui seul pour
+    les atteindre, seule la RAM système les rend joignables du tout).
+  - Puissant : aucun ajout — aucun candidat n'a passé le filtre de fiabilité d'appel d'outils, conclusion de
+    l'IA externe confirmée par la vérification des bugs GitHub.
+  **`scripts/benchmark-models.mjs` mis à jour en miroir** (MODELS/MODEL_SIZE_HINTS/VISION_CANDIDATES/
+  CODE_CANDIDATES/RAM_OFFLOAD_MODELS/FLASH_TIER_MODELS/MEDIUM_TIER_MODELS) pour que "Lancer l'analyse" puisse
+  un jour mesurer pour de vrai les 5 candidats encore non testés — sans ce miroir, ils resteraient
+  dormants indéfiniment dans `hardwareScan.ts`, jamais réellement sélectionnables.
+  **Limite assumée, pas résolue** : aucun score MMLU-Pro ajouté à `INTELLIGENCE_MMLU_PRO` pour ces nouveaux
+  modèles — les chiffres rapportés par l'IA externe (MMLU 70,7/76,1/79,4 pour ministral 3b/8b/14b) n'ont pas
+  été retracés jusqu'à une fiche officielle Mistral avant d'écrire cette entrée, contrairement aux tags/
+  tailles/bugs qui, eux, ont chacun été revérifiés à la source. Ne pas les ajouter au départage plutôt que de
+  recopier un chiffre non confirmé.
+  **CanIRun.ai (github.com/midudev/canirun.ai)**, proposé par Léo entre-temps comme outil de recoupement :
+  vérifié comme un vrai outil (104 modèles, détection matérielle + API publique gratuite), utilisé pour
+  recouper cette recherche — confirme gemma4:31b/qwen3-coder-next/devstral-small-2-24b, mais ne liste PAS
+  encore ministral-3:8b ni devstral-2:123b dans son propre catalogue (trop récents pour leur curation, sans
+  rapport avec leur existence réelle déjà vérifiée directement sur Ollama). Gardé comme source de recoupement
+  ponctuelle pour de futures recherches, pas intégré à Jaris (resterait un appel réseau, contraire au principe
+  "100% local").
+  Régression : `npm run typecheck`, `npm run build`, `npm test` (378 tests, aucun nouveau test dédié — une
+  addition de candidat n'introduit aucune logique nouvelle, déjà entièrement couverte par les tests existants
+  de `pickBestFrom`/`computeModelPicks`). **Non vérifié en usage réel pour 5 des 6 ajouts** (pas d'accès à la
+  machine de Léo) : seul `ministral-3:3b` a une preuve de fiabilité réelle (6/6 déjà mesuré) ; les 5 autres
+  restent des candidats informatifs, à confirmer via "Lancer l'analyse" avant de leur faire pleinement
+  confiance.

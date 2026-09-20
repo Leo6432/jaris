@@ -135,6 +135,10 @@ const RAM_OFFLOAD_MODELS = new Set([
   'north-mini-code-1.0',
   'qwen2.5-coder:32b',
   'devstral-small-2:24b',
+  // devstral-2:123b et qwen3-coder-next : voir CODE_CANDIDATES plus bas, encore plus indispensable ici
+  // qu'ailleurs (aucun GPU grand public n'a 52-75 Go de VRAM à lui seul).
+  'devstral-2:123b',
+  'qwen3-coder-next',
   'qwen3.5:35b',
   'qwen3.6:35b',
   'qwen3.5:27b',
@@ -214,7 +218,12 @@ const MODELS = [
   'gpt-oss:20b',
   'command-r:35b',
   'mistral-small3.2:24b',
-  'glm-4.7-flash:q4_K_M'
+  'glm-4.7-flash:q4_K_M',
+  // ministral-3:8b/14b (MEDIUM_CANDIDATES dans hardwareScan.ts) : ministral-3:3b est déjà ici et déjà
+  // vérifié (6/6, verified-tool-scores.md) — ces deux tailles restent à tester pour de vrai, un score pour
+  // une taille ne valant pas pour une autre.
+  'ministral-3:8b',
+  'ministral-3:14b'
   // Les candidats du palier "Code" (qwen2.5-coder:7b/32b, qwen3.6:35b-a3b, qwen3-coder:30b,
   // north-mini-code-1.0, devstral-small-2:24b) NE sont PAS
   // ici : codeGenerator.ts (mode Code) n'appelle JAMAIS chatWithOllama avec des outils (le paramètre `tools`
@@ -229,6 +238,10 @@ const MODELS = [
 // Même ordre (du plus gros au plus petit) que hardwareScan.ts, pour la même raison (voir son commentaire) —
 // gemma4:e4b (le plus gros) doit rester en tête, pas en queue.
 const VISION_CANDIDATES = [
+  // gemma4:31b (VISION_CANDIDATES dans hardwareScan.ts) : 20 Go, dense, vision native — voir son commentaire
+  // complet là-bas pour pourquoi il n'est QUE en Vision (bugs de tool-calling ouverts sur toute la famille
+  // Gemma 4, sans impact sur ce rôle).
+  { model: 'gemma4:31b', vramGb: 20 },
   // qwen3.5/gemma4:e4b sont nativement multimodaux (déjà dans MEDIUM_CANDIDATES) : testés ici pour savoir
   // si réutiliser le modèle de conversation déjà chargé tient tête à un modèle vision dédié — voir le
   // commentaire complet dans hardwareScan.ts.
@@ -236,6 +249,8 @@ const VISION_CANDIDATES = [
   { model: 'qwen3-vl:8b', vramGb: 8 },
   { model: 'gemma4:12b', vramGb: 7.6 },
   { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 6.5 },
+  // ministral-3:8b (voir MEDIUM_CANDIDATES/VISION_CANDIDATES dans hardwareScan.ts) : nativement multimodal.
+  { model: 'ministral-3:8b', vramGb: 6.0 },
   { model: 'qwen3-vl:4b', vramGb: 5 },
   { model: 'qwen3.5:4b', vramGb: 3.4 },
   { model: 'qwen3-vl:2b', vramGb: 3 }
@@ -245,6 +260,11 @@ const VISION_CANDIDATES = [
 // VISION_CANDIDATES/detectVramGb ci-dessus). Testés séparément de MODELS : pas sur l'appel d'outils
 // (codeGenerator.ts n'en utilise jamais, voir CODE_TEST_CASES plus bas) mais sur la génération de code.
 const CODE_CANDIDATES = [
+  // devstral-2:123b et qwen3-coder-next (CODE_CANDIDATES dans hardwareScan.ts) : voir son commentaire
+  // complet pour la vérification des tags/tailles/bugs. Réservés aux très grosses machines (VRAM+RAM,
+  // RAM_OFFLOAD_MODELS plus haut).
+  { model: 'devstral-2:123b', vramGb: 75 },
+  { model: 'qwen3-coder-next', vramGb: 52 },
   { model: 'qwen3.6:35b-a3b', vramGb: 22 },
   // Ligne dédiée code d'Alibaba, DISTINCTE de qwen3.6:35b-a3b malgré une taille/architecture proche (30 Md
   // total / 3,3 Md actifs, MoE, 19 Go) — vérifié directement sur Ollama, les deux tags existent séparément.
@@ -281,6 +301,8 @@ const MODEL_SIZE_HINTS = {
   'granite4.1:3b': 2.1,
   'nemotron-3-nano:4b': 2.8,
   'ministral-3:3b': 3.0,
+  'ministral-3:8b': 6.0,
+  'ministral-3:14b': 9.1,
   'hf.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF': 0.73,
   'qwen3:1.7b': 2.0,
   'granite4:1b': 3.3,
@@ -322,10 +344,12 @@ function modelWeightGb(model) {
  * tightDiskMode dans main()) — jamais pour la sélection finale du meilleur modèle de chaque palier, qui reste
  * entièrement décidée par pickBestFrom (hardwareScan.ts) à partir du fichier de résultats.
  */
-const FLASH_TIER_MODELS = new Set(['qwen3:1.7b', 'qwen3.5:0.8b'])
+const FLASH_TIER_MODELS = new Set(['ministral-3:3b', 'qwen3:1.7b', 'qwen3.5:0.8b'])
 const MEDIUM_TIER_MODELS = new Set([
   'gemma4:e4b',
+  'ministral-3:14b',
   'gemma4:12b',
+  'ministral-3:8b',
   'qwen3.5:9b',
   'granite4.2:8b',
   'granite4.1:8b',

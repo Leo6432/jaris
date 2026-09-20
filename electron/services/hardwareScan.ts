@@ -40,6 +40,14 @@ interface ModelCandidate {
 // qwen3.5:2b tout en demandant moins de VRAM (~2 Go contre 2,7 Go) — qwen3.5:2b devenait donc de toute
 // façon inatteignable dans la liste une fois qwen3:1.7b ajouté avant lui.
 const FLASH_CANDIDATES: ModelCandidate[] = [
+  // ministral-3:3b/8b/14b (Mistral AI, Apache 2.0) ajoutés suite à une recherche externe demandée par Léo
+  // ("cherche meilleur model... regarde benchmark arena"), PAS pris à sa parole — tailles/architecture/
+  // support vision+tools revérifiés directement sur ollama.com/library/ministral-3/tags (3b: 3,0 Go dense,
+  // 8b: 6,0 Go, 14b: 9,1 Go, tous "Text, Image" natif) et les bugs cités confirmés réels sur
+  // github.com/ollama/ollama (voir MEDIUM_CANDIDATES plus bas pour le détail complet). Le 3b, lui, a DÉJÀ un
+  // vrai score mesuré sur la machine de Léo (6/6, `scripts/verified-tool-scores.md`) — pas juste informatif
+  // en attente de test, déjà confirmé fiable pour de vrai. Rejoint Rapide.
+  { model: 'ministral-3:3b', vramGb: 3.0 },
   { model: 'qwen3:1.7b', vramGb: 2 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
 ]
@@ -71,8 +79,17 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
 // aucune mesure : les remplacer perdrait une preuve réelle au profit d'un chiffre encore jamais vérifié.
 const MEDIUM_CANDIDATES: ModelCandidate[] = [
   { model: 'gemma4:e4b', vramGb: 9.6 },
+  // ministral-3:14b/8b (voir FLASH_CANDIDATES plus haut pour le contexte de cet ajout) : function calling
+  // natif annoncé par Mistral, mais un bug OUVERT (github.com/ollama/ollama/issues/13750) fait ignorer les
+  // outils quand `response_format`/`format` est envoyé EN MÊME TEMPS que `tools` sur une instance Ollama
+  // auto-hébergée. VÉRIFIÉ dans ollama.ts : Jaris n'envoie JAMAIS `format` en même temps que `tools`, sur
+  // aucun appel — ce bug ne s'applique donc pas à l'usage réel de Jaris, contrairement à une réserve
+  // générique. D'autres bugs Ministral existants (#13328/#13334, "plus de 2 outils" / appels multiples) sont
+  // antérieurs et non reconfirmés sur les tailles ajoutées ici.
+  { model: 'ministral-3:14b', vramGb: 9.1 },
   { model: 'gemma4:12b', vramGb: 7.6 },
   { model: 'qwen3.5:9b', vramGb: 6.6 },
+  { model: 'ministral-3:8b', vramGb: 6.0 },
   { model: 'granite4.2:8b', vramGb: 5.3 },
   { model: 'granite4.1:8b', vramGb: 5.3 },
   { model: 'qwen3.5:4b', vramGb: 3.4 },
@@ -171,7 +188,12 @@ const LARGE_RAM_OFFLOAD_MODELS = new Set([
   'qwen3-coder:30b',
   'north-mini-code-1.0',
   'qwen2.5-coder:32b',
-  'devstral-small-2:24b'
+  'devstral-small-2:24b',
+  // devstral-2:123b et qwen3-coder-next (CODE_CANDIDATES, 75 et 52 Go) : encore plus indispensable ici que
+  // pour les autres candidats Code — aucun GPU grand public n'a assez de VRAM à lui seul pour les atteindre,
+  // seule la RAM système les rend joignables du tout.
+  'devstral-2:123b',
+  'qwen3-coder-next'
 ])
 
 const TIER_CANDIDATES: Record<Tier, ModelCandidate[]> = {
@@ -190,11 +212,19 @@ const TIER_CANDIDATES: Record<Tier, ModelCandidate[]> = {
 // en TÊTE de liste, pas en queue (bug corrigé : il y était placé en dernier, faisant retomber le repli sur le
 // plus gros modèle vision au lieu du plus petit sur une machine très contrainte).
 const VISION_CANDIDATES: ModelCandidate[] = [
+  // gemma4:31b (Google, Apache 2.0) : ajouté suite à la même recherche externe que ministral-3 ci-dessus,
+  // vérifié directement sur ollama.com/library/gemma4:31b (20 Go, 31,3 Md de paramètres DENSE, vision
+  // native "Text, Image", ~550M de paramètres dans l'encodeur visuel). Volontairement PAS ajouté en
+  // Médium/Puissant/Code : plusieurs bugs de parsing d'appel d'outils OUVERTS sur toute la famille Gemma 4
+  // (github.com/ollama/ollama/issues/18390, #17888, #15539 — clés d'objet sans guillemets, séparateur `=`
+  // non géré, appel abandonné sur un accolade manquante) rendent l'appel d'outils non fiable pour ce
+  // modèle sur Ollama ; la Vision n'a pas cette exigence (look_at_screen ne rappelle pas d'outil depuis ce
+  // modèle). En tête de liste (le plus gros candidat vision) : l'ordre doit rester strictement décroissant.
+  { model: 'gemma4:31b', vramGb: 20 },
   // Même candidat "réutilisation" que gemma4:e4b/gemma4:12b plus bas, mais pour gemma4:26b (déjà dans
   // LARGE_CANDIDATES, palier Puissant) — signalé par Léo, vérifié directement sur ollama.com/library/gemma4 :
   // le tag `gemma4:26b` porte bien le badge "Text, Image" (vision native), pas seulement les tags plus
-  // petits de la famille. En tête de liste (19 Go, le plus gros candidat vision) : l'ordre doit rester
-  // strictement décroissant en VRAM (voir le commentaire de pickForBudget plus haut dans ce fichier).
+  // petits de la famille.
   { model: 'gemma4:26b', vramGb: 19 },
   // Candidat "réutilisation" : gemma4:e4b (déjà dans MEDIUM_CANDIDATES) est NATIVEMENT multimodal (vérifié
   // sur ollama.com/library/gemma4 : badge vision+tools+thinking), donc candidat légitime pour la vision
@@ -213,6 +243,11 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   // autres quantifications communautaires (Q2_K, Q3_K) sont purement textuelles, sans le module de vision.
   // ~6,2 Go mesurés en Q4_K_M, marge de sécurité incluse ci-dessous.
   { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 6.5 },
+  // Candidat "réutilisation" : ministral-3:8b (déjà dans MEDIUM_CANDIDATES) est NATIVEMENT multimodal
+  // (vérifié sur ollama.com/library/ministral-3, badge "Text, Image"). Aucune exigence de tool-calling ici
+  // (voir gemma4:31b plus haut) : la réserve response_format+tools qui vaut pour son usage en Médium ne
+  // s'applique pas à ce rôle.
+  { model: 'ministral-3:8b', vramGb: 6.0 },
   { model: 'qwen3-vl:4b', vramGb: 5 },
   // Même candidat "réutilisation" que gemma4:e4b ci-dessus, mais pour qwen3.5 (déjà dans MEDIUM_CANDIDATES) :
   // vérifié nativement multimodal sur ollama.com/library/qwen3.5 (badge vision+tools+thinking).
@@ -251,6 +286,22 @@ const VISION_CANDIDATES: ModelCandidate[] = [
 //   confusion avec celui-ci — vérifié directement sur ollama.com/library/qwen3.6/tags : les deux tags
 //   existent bel et bien, séparément. Ajouté en informatif, à comparer aux autres via "Lancer l'analyse".
 const CODE_CANDIDATES: ModelCandidate[] = [
+  // devstral-2:123b (Mistral AI) et qwen3-coder-next (Alibaba) : ajoutés suite à la même recherche externe
+  // que ministral-3/gemma4:31b ci-dessus, réservés aux très grosses machines (VRAM+RAM, LARGE_RAM_OFFLOAD_MODELS
+  // plus bas — aucun GPU grand public n'a 52-75 Go de VRAM à lui seul).
+  // - devstral-2:123b : vérifié sur ollama.com/library/devstral-2:123b (75 Go en Q4_K_M — la page indique
+  //   "125B parameters" alors que le tag dit "123b" ; probablement le nombre de paramètres actifs/publiés
+  //   diffère légèrement du nom commercial, sans lien avec un bug — le tag Ollama exact reste `devstral-2:123b`).
+  //   DENSE, orienté agents de code (SWE-Bench Verified ~72%). Licence Mistral (usage commercial limité pour
+  //   les grandes entreprises, sans effet pour Jaris). Aucun bug Ollama de tool-calling trouvé pour ce modèle
+  //   précis au moment de la recherche — contrairement à Devstral Small 2 (24b), qui a des soucis de
+  //   paramètres d'outils connus dans sa propre famille : garder un œil dessus via "Lancer l'analyse".
+  // - qwen3-coder-next : vérifié sur ollama.com/library/qwen3-coder-next (52 Go en q4_K_M, 80 Md total/
+  //   3 Md actifs MoE, appel d'outils annoncé "out of the box" pour agents de code). Ne remplace pas
+  //   qwen3.6:35b-a3b déjà en tête (pas de gain confirmé sur TOUS les benchmarks de code), plutôt un
+  //   complément haut de gamme pour le travail agentique sur de grosses bases de code.
+  { model: 'devstral-2:123b', vramGb: 75 },
+  { model: 'qwen3-coder-next', vramGb: 52 },
   { model: 'qwen3.6:35b-a3b', vramGb: 22 },
   { model: 'qwen3-coder:30b', vramGb: 19 },
   { model: 'north-mini-code-1.0', vramGb: 19 },
