@@ -3288,3 +3288,29 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   tourne bien de bout en bout sur sa configuration précise une fois qu'il clique vraiment sur ce bouton —
   seul le fil IPC/UI est prouvé ici, pas le script Node lui-même (déjà utilisé par ailleurs, jamais retouché
   dans ce correctif).
+
+- **Étape 132, réponse au point 1 du message de l'étape 130 ("fait pour rapide etc... celui qui faut le moin
+  de ram avec le plus pour tout"), tranché par une question à choix simple plutôt que deviné.** Trois lectures
+  possibles avaient été identifiées (un simple tri d'affichage, une mise en avant du meilleur rapport VRAM/
+  score, ou un changement du VRAI choix de modèle de Jaris pour tout le monde) — la dernière aurait changé un
+  comportement réel, jamais à décider seul sur une phrase ambiguë. Léo a choisi la plus simple : trier chaque
+  palier de "Tous les modèles" par VRAM CROISSANTE (le moins gourmand en tête).
+  **Un tri PUREMENT d'affichage, prouvé sans effet sur le vrai choix de Jaris, pas juste affirmé.** Trié à la
+  source (`getModelOverview`, hardwareScan.ts) plutôt que dans le composant React : les deux consommateurs
+  (`AllModelsOverview.tsx` ET `ModelAnalysisProgress.tsx`, qui partagent les mêmes données) héritent du même
+  ordre sans jamais avoir à le refaire séparément — éviter la duplication qui a déjà fait diverger deux
+  écrans plusieurs fois dans ce fichier (composeur du Chat/Code avant l'étape 92, sélecteurs de voix...).
+  `pickBestFrom` (computeModelPicks) lit directement `TIER_CANDIDATES`/`VISION_CANDIDATES`/`CODE_CANDIDATES`
+  — jamais les groupes construits par `getModelOverview` — donc AUCUN risque qu'un tri d'affichage change
+  quel modèle Jaris télécharge réellement : vérifié par un test dédié qui appelle le VRAI
+  `pickBestModelsFromBenchmark()` juste après un appel à `getModelOverview()` dans le même test, pour
+  confirmer que le second n'a pas perturbé le premier (pas seulement une relecture du code qui semble sûre).
+  Le tri se fait sur une COPIE (`.map()` renvoie déjà un nouveau tableau, `.sort()` le trie en place sans
+  toucher à l'original) : les tableaux `FLASH_CANDIDATES`/`MEDIUM_CANDIDATES`/etc. restent en ordre
+  DÉCROISSANT de VRAM, l'ordre dont `pickBestFrom` a besoin — jamais mutés par ce correctif.
+  Régression : `node --test scripts/test-model-overview-sort.mjs` (nouveau fichier, 3 tests sur le VRAI
+  `getModelOverview()`, pas un mock : chaque palier réellement croissant, le premier modèle du palier Rapide
+  change bien de `ministral-3:3b` à `qwen3.5:0.8b` — la preuve que le tri fait vraiment quelque chose, pas
+  juste "déjà dans cet ordre" —, et `pickBestModelsFromBenchmark()` intact après coup). Vérifié mordant en
+  retirant temporairement le tri : 2 des 3 tests échouent bien. `npm run typecheck`, `npm run build` et
+  `npm test` (384 tests) au vert.

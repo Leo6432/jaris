@@ -878,13 +878,23 @@ export async function getModelOverview(): Promise<ModelOverviewResult> {
     return { model, vramGb: modelVramGb, speedTokPerSec: null, toolCalling: null, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, canirunIndex }
   }
 
+  // Léo, sur la page "Tous les modèles" (Options → Modèles) : "fait pour rapide etc... celui qui faut le
+  // moin de ram avec le plus pour tout" — chaque palier trié par VRAM CROISSANTE (le moins gourmand
+  // d'abord), pour lire d'un coup d'œil le meilleur rapport capacité/VRAM sans avoir à comparer des chiffres
+  // dispersés. PUREMENT un tri d'AFFICHAGE, sur une COPIE (`.map` renvoie déjà un nouveau tableau, `.sort`
+  // le trie en place sans toucher à l'original) : `TIER_CANDIDATES`/`VISION_CANDIDATES`/`CODE_CANDIDATES`
+  // eux-mêmes restent en ordre décroissant, l'ordre dont `pickBestFrom` (computeModelPicks, plus bas dans ce
+  // fichier) a besoin pour choisir le VRAI modèle de Jaris — jamais reliés, une réponse à Léo confirmée avant
+  // de coder : ce tri ne change RIEN au modèle réellement choisi, ni chez lui ni chez personne d'autre.
+  const byAscendingVram = (entries: ModelOverviewEntry[]): ModelOverviewEntry[] => [...entries].sort((a, b) => a.vramGb - b.vramGb)
+
   const groups = [
     ...(Object.keys(TIER_CANDIDATES) as Tier[]).map((tier) => ({
       tier: TIER_LABELS[tier],
-      entries: TIER_CANDIDATES[tier].map((c) => buildEntry(c.model, c.vramGb, 'conversation'))
+      entries: byAscendingVram(TIER_CANDIDATES[tier].map((c) => buildEntry(c.model, c.vramGb, 'conversation')))
     })),
-    { tier: 'Vision', entries: VISION_CANDIDATES.map((c) => buildEntry(c.model, c.vramGb, 'vision')) },
-    { tier: 'Code', entries: CODE_CANDIDATES.map((c) => buildEntry(c.model, c.vramGb, 'code')) }
+    { tier: 'Vision', entries: byAscendingVram(VISION_CANDIDATES.map((c) => buildEntry(c.model, c.vramGb, 'vision'))) },
+    { tier: 'Code', entries: byAscendingVram(CODE_CANDIDATES.map((c) => buildEntry(c.model, c.vramGb, 'code'))) }
   ]
 
   const codeModel = computeModelPicks(vramGb, detectRamGb(), gpuName, localBenchmark, verifiedToolScores).code.model
