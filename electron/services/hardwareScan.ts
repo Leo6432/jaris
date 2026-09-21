@@ -4,8 +4,18 @@ import { resourcesRoot } from '../paths'
 import { join } from 'path'
 import { promisify } from 'util'
 import { RESOURCE_SAFETY_MARGIN_GB, detectRamGb } from './systemResources'
+import { getExternalScoreOverrides } from './externalScoresStore'
 import { getInstalledModelSizeBytes, getModelInfo } from './ollama'
-import type { CapacityScanResult, ContextLengthOptions, HardwareTierPreview, ModelOverviewEntry, ModelOverviewResult, ModelTiers, Profile } from '../../shared/ipc'
+import type {
+  CapacityScanResult,
+  ContextLengthOptions,
+  ExternalScoreOverride,
+  HardwareTierPreview,
+  ModelOverviewEntry,
+  ModelOverviewResult,
+  ModelTiers,
+  Profile
+} from '../../shared/ipc'
 
 const execAsync = promisify(exec)
 
@@ -847,8 +857,9 @@ const TIER_LABELS: Record<Tier, string> = { flash: 'Rapide', medium: 'Médium', 
 export async function getModelOverview(profile?: Profile | null): Promise<ModelOverviewResult> {
   const localBenchmark = parseLocalBenchmark()
   const verifiedToolScores = parseVerifiedToolScores()
+  const externalOverrides = await getExternalScoreOverrides()
   const { name: gpuName, vramGb } = await detectGpu()
-  const picks = computeModelPicks(vramGb, detectRamGb(), gpuName, localBenchmark, verifiedToolScores)
+  const picks = computeModelPicks(vramGb, detectRamGb(), gpuName, localBenchmark, verifiedToolScores, externalOverrides)
   const activeModels = {
     flash: profile?.models?.flash ?? picks.flash.model,
     medium: profile?.models?.medium ?? picks.medium.model,
@@ -878,10 +889,16 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
     // commentaire) — l'UI (ModelAnalysisProgress.tsx) en a besoin pour ne pas laisser ce modèle bloqué sur
     // "En attente" pour toujours pendant un run, faute de ##MODEL_TESTING##/##MODEL_DONE## le concernant.
     const verifiedSkip = verifiedToolScores[tier].has(model)
-    const artificialAnalysisIndex = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null
+    // Une correction manuelle de Léo (page "Tous les modèles") prime toujours sur la table figée dans le
+    // code — voir ExternalScoreOverride (shared/ipc.ts) : la table peut se tromper ou dater, lui a le site
+    // sous les yeux. artificialAnalysisSpeed n'a AUCUN repli figé (jamais mesuré/publié en dur ici) : "—"
+    // tant qu'il ne l'a pas notée lui-même.
+    const override = externalOverrides[model]
+    const artificialAnalysisIndex = override?.intelligence ?? ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null
+    const artificialAnalysisSpeed = override?.speed ?? null
     const local = localBenchmark[tier].get(model)
     if (local) {
-      return { model, vramGb: modelVramGb, usedIn: usageByModel.get(model) ?? [], speedTokPerSec: local.speedTokPerSec, toolCalling: local.toolCalling, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, artificialAnalysisIndex }
+      return { model, vramGb: modelVramGb, usedIn: usageByModel.get(model) ?? [], speedTokPerSec: local.speedTokPerSec, toolCalling: local.toolCalling, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, artificialAnalysisIndex, artificialAnalysisSpeed }
     }
     const verifiedTool = verifiedToolScores[tier].get(model)
     if (verifiedTool) {
@@ -894,10 +911,11 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
         toolCalling: verifiedTool,
         intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
         verifiedSkip,
-        artificialAnalysisIndex
+        artificialAnalysisIndex,
+        artificialAnalysisSpeed
       }
     }
-    return { model, vramGb: modelVramGb, usedIn: usageByModel.get(model) ?? [], speedTokPerSec: null, toolCalling: null, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, artificialAnalysisIndex }
+    return { model, vramGb: modelVramGb, usedIn: usageByModel.get(model) ?? [], speedTokPerSec: null, toolCalling: null, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, artificialAnalysisIndex, artificialAnalysisSpeed }
   }
 
   // Léo, sur la page "Tous les modèles" (Options → Modèles) : "fait pour rapide etc... celui qui faut le
@@ -977,7 +995,8 @@ function computeModelPicks(
   ramGb: number,
   gpuName: string | null,
   localBenchmark: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>>,
-  verifiedToolScores: Record<VerifiedTier, Map<string, string>>
+  verifiedToolScores: Record<VerifiedTier, Map<string, string>>,
+  externalOverrides: Record<string, ExternalScoreOverride> = {}
 ): {
   flash: ModelOverviewEntry
   medium: ModelOverviewEntry
@@ -1030,17 +1049,23 @@ function computeModelPicks(
         speedEstimated: result?.speedEstimated,
         toolCalling: result?.toolCalling ?? null,
         intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
-        artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null
+        artificialAnalysisIndex: externalOverrides[model]?.intelligence ?? ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
+        artificialAnalysisSpeed: externalOverrides[model]?.speed ?? null
       }
     }
+
+    // Une correction manuelle de Léo (ExternalScoreOverride) prime toujours sur la table figée — même
+    // fusion que dans buildEntry (getModelOverview) plus haut, jamais deux sources qui divergent pour le
+    // même modèle entre l'affichage et le VRAI choix de Jaris.
+    const artificialAnalysisFor = (model: string): number | undefined => externalOverrides[model]?.intelligence ?? ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model]
 
     benchmarked.sort((a, b) => {
       const toolDiff = parseToolScore(b.result.toolCalling) - parseToolScore(a.result.toolCalling)
       if (toolDiff !== 0) return toolDiff
       // À fiabilité égale, privilégie l'Intelligence Index demandé par Léo, mais uniquement quand
       // Artificial Analysis a évalué les DEUX modèles exacts. Une absence ne vaut jamais zéro.
-      const aArtificialAnalysis = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[a.model]
-      const bArtificialAnalysis = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[b.model]
+      const aArtificialAnalysis = artificialAnalysisFor(a.model)
+      const bArtificialAnalysis = artificialAnalysisFor(b.model)
       if (
         aArtificialAnalysis !== undefined &&
         bArtificialAnalysis !== undefined &&
@@ -1061,7 +1086,8 @@ function computeModelPicks(
       speedEstimated: winner.result.speedEstimated,
       toolCalling: winner.result.toolCalling,
       intelligence: INTELLIGENCE_MMLU_PRO[winner.model] ?? null,
-      artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[winner.model] ?? null
+      artificialAnalysisIndex: externalOverrides[winner.model]?.intelligence ?? ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[winner.model] ?? null,
+      artificialAnalysisSpeed: externalOverrides[winner.model]?.speed ?? null
     }
   }
 
@@ -1076,7 +1102,7 @@ function computeModelPicks(
 
 export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult> {
   const { name, vramGb } = await detectGpu()
-  const picks = computeModelPicks(vramGb, detectRamGb(), name, parseLocalBenchmark(), parseVerifiedToolScores())
+  const picks = computeModelPicks(vramGb, detectRamGb(), name, parseLocalBenchmark(), parseVerifiedToolScores(), await getExternalScoreOverrides())
   return {
     gpuName: name,
     vramGb,
@@ -1095,7 +1121,7 @@ export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult>
  */
 export async function pickBestCodeModel(): Promise<string> {
   const { name, vramGb } = await detectGpu()
-  const picks = computeModelPicks(vramGb, detectRamGb(), name, parseLocalBenchmark(), parseVerifiedToolScores())
+  const picks = computeModelPicks(vramGb, detectRamGb(), name, parseLocalBenchmark(), parseVerifiedToolScores(), await getExternalScoreOverrides())
   return picks.code.model
 }
 
@@ -1178,6 +1204,7 @@ export async function previewHardwareTiers(): Promise<HardwareTierPreview[]> {
   const ramGb = detectRamGb()
   const localBenchmark = parseLocalBenchmark()
   const verifiedToolScores = parseVerifiedToolScores()
+  const externalOverrides = await getExternalScoreOverrides()
 
   const steps = previewVramSteps(name, ramGb, localBenchmark, verifiedToolScores)
 
@@ -1195,7 +1222,7 @@ export async function previewHardwareTiers(): Promise<HardwareTierPreview[]> {
     // point représentatif — mathématiquement identique dans les deux cas puisque `vramGb` ci-dessus EST déjà
     // la frontière exacte où le résultat change (voir previewVramSteps), mais garder le calcul sur la VRAM
     // réelle pour "ta configuration" reste la source la plus directe de vérité, sans intermédiaire.
-    ...computeModelPicks(i === currentIndex && actualVramGb !== null ? actualVramGb : vramGb, ramGb, name, localBenchmark, verifiedToolScores)
+    ...computeModelPicks(i === currentIndex && actualVramGb !== null ? actualVramGb : vramGb, ramGb, name, localBenchmark, verifiedToolScores, externalOverrides)
   }))
 
   const sameCombo = (a: (typeof rows)[number], b: (typeof rows)[number]): boolean =>

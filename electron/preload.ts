@@ -11,6 +11,7 @@ import {
   type ConversationEntry,
   type ConversationList,
   type CodeGenProgress,
+  type ExternalScoreOverride,
   type GeneratedApp,
   type GeneratedAppSummary,
   type HardwareTierPreview,
@@ -61,6 +62,8 @@ const api = {
   clearConversationHistory: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.clearConversationHistory),
   openConversationHistoryFile: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openConversationHistoryFile),
   getModelOverview: (): Promise<ModelOverviewResult> => ipcRenderer.invoke(IPC_CHANNELS.getModelOverview),
+  setExternalScoreOverride: (model: string, field: keyof ExternalScoreOverride, value: number | null): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.setExternalScoreOverride, model, field, value),
   getContextLengthOptions: (): Promise<ContextLengthOptions> => ipcRenderer.invoke(IPC_CHANNELS.getContextLengthOptions),
   setContextLength: (contextLength: number | undefined): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.setContextLength, contextLength),

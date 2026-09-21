@@ -18,7 +18,7 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/har
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText
 
-function setup({ verifiedToolScoresMd = '', vramMib = 30 * 1024, ramGb = 32 } = {}) {
+function setup({ verifiedToolScoresMd = '', vramMib = 30 * 1024, ramGb = 32, externalOverrides = {} } = {}) {
   // hardwareScan.ts appelle exec() via util.promisify (execAsync = promisify(exec)), qui résout normalement
   // vers {stdout, stderr} grâce à la marque [util.promisify.custom] posée par le VRAI child_process.exec de
   // Node — un mock sans cette marque fait résoudre promisify vers un tableau [stdout, stderr] à la place,
@@ -46,7 +46,8 @@ function setup({ verifiedToolScoresMd = '', vramMib = 30 * 1024, ramGb = 32 } = 
     // Curseur de longueur de contexte : hardwareScan.ts importe désormais ces deux fonctions d'ollama.ts,
     // jamais appelées par les tests de ce fichier (aucune assertion ici ne porte dessus) — sans ce stub,
     // le require shim ne trouve pas './ollama' et fait échouer tout le module à charger.
-    './ollama': { getModelInfo: async () => null, getInstalledModelSizeBytes: async () => null }
+    './ollama': { getModelInfo: async () => null, getInstalledModelSizeBytes: async () => null },
+    './externalScoresStore': { getExternalScoreOverrides: async () => externalOverrides }
   }
   const exports = {}
   vm.runInNewContext(source, {
@@ -121,4 +122,51 @@ test('indique tous les paliers qui utilisent réellement chaque modèle du profi
 
   const unused = overview.groups.flatMap((group) => group.entries).find((entry) => entry.model === 'qwen3.5:2b')
   assert.deepEqual(Array.from(unused.usedIn), [])
+})
+
+/**
+ * Léo : "je ne sais pas pourquoi tu a pas mis ces scores mais sur le site il ya des models que tu a mis non
+ * publier, mais au pire je le fait manuelement, fait moi un petit system pour que je note moi meme le score" —
+ * une correction manuelle (externalScoresStore.ts) doit primer sur ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX
+ * (hardwareScan.ts), pour CE modèle seulement, aussi bien dans l'AFFICHAGE que dans le vrai départage utilisé
+ * pour choisir un modèle (pickBestFrom) — pas juste dans le tableau "Tous les modèles".
+ */
+test('une correction manuelle remplace l’Intelligence Index figé, dans l’affichage ET dans le départage réel', async () => {
+  // qwen3.5:27b a 23 dans la table figée (voir le test ci-dessus) ; qwen3.8:27b a 34, donc gagne déjà "à
+  // égalité 6/6" sans override. On corrige ICI qwen3.5:27b à 99 (Léo a vu un chiffre différent sur le site) :
+  // le départage doit désormais s'inverser, la table figée ne devant plus jamais l'emporter pour ce modèle.
+  const { getModelOverview, pickBestModelsFromBenchmark } = setup({
+    verifiedToolScoresMd: ['## Conversation', '| Modèle | Fiabilité |', '| --- | --- |', '| qwen3.5:27b | 6/6 |', '| qwen3.8:27b | 6/6 |'].join(
+      '\n'
+    ),
+    externalOverrides: { 'qwen3.5:27b': { intelligence: 99 } }
+  })
+
+  const overview = await getModelOverview()
+  const entry = overview.groups.flatMap((g) => g.entries).find((e) => e.model === 'qwen3.5:27b')
+  assert.equal(entry.artificialAnalysisIndex, 99, 'la correction manuelle doit remplacer la table figée (23) dans l’affichage')
+
+  const result = await pickBestModelsFromBenchmark()
+  assert.equal(result.models.large, 'qwen3.5:27b', 'le départage réel doit aussi suivre la correction manuelle, pas la table figée')
+})
+
+test('une correction manuelle de vitesse n’efface pas une correction d’intelligence déjà là, et réciproquement', async () => {
+  // externalScoresStore.ts fusionne les deux champs indépendamment (voir setExternalScoreOverride) : ce test
+  // vérifie seulement que hardwareScan.ts LIT bien les deux depuis un même override, sans qu'aucun des deux
+  // ne masque l'autre côté lecture — l'indépendance de l'ÉCRITURE elle-même est testée dans
+  // test-external-scores.mjs (externalScoresStore.ts chargé directement, pas via hardwareScan.ts).
+  const { getModelOverview } = setup({
+    externalOverrides: { 'ministral-3:3b': { intelligence: 42, speed: 77 } }
+  })
+  const overview = await getModelOverview()
+  const entry = overview.groups.flatMap((g) => g.entries).find((e) => e.model === 'ministral-3:3b')
+  assert.equal(entry.artificialAnalysisIndex, 42)
+  assert.equal(entry.artificialAnalysisSpeed, 77)
+})
+
+test('artificialAnalysisSpeed reste null sans correction manuelle : aucune table figée pour ce champ', async () => {
+  const { getModelOverview } = setup()
+  const overview = await getModelOverview()
+  const entry = overview.groups.flatMap((g) => g.entries).find((e) => e.model === 'ministral-3:3b')
+  assert.equal(entry.artificialAnalysisSpeed, null, 'aucune vitesse ne doit jamais être devinée')
 })

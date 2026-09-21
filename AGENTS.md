@@ -3430,3 +3430,78 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   (CanIRun.ai, chiffres MMLU-Pro tiers...) : une suggestion d'une autre IA (ici Gemini, relayée par Léo via
   ChatGPT) doit être vérifiée sur les VRAIES données avant d'être implémentée, jamais prise pour argent
   comptant parce qu'elle "a l'air" raisonnable en surface.
+
+- **Étape 122, Léo : "je ne sais pas pourquoi tu a pas mis ces scores mais sur le site il ya des models que
+  tu a mis non publier, mais au pire je le fait manuelement, fait moi un petit system pour que je note moi
+  meme le score, et ajoute speed (Artificial Analysis)" — suite directe de plusieurs recherches de sources
+  externes menées plus haut dans cette même session (les 3 leaderboards Hugging Face, Vellum AI, LiveBench.ai)
+  et toutes rejetées faute de vraie couverture des 39 modèles candidats de Jaris.** Deux investigations
+  supplémentaires, jamais documentées ici avant cette entrée, ont confirmé la même conclusion avant que Léo ne
+  demande la correction manuelle : **Vellum AI** (leaderboard tourné vers les modèles commerciaux frontière,
+  ~1/39 de recoupement réel avec les candidats de Jaris, aucun code changé) et **LiveBench.ai** (figé depuis
+  ~2025, 0/39) — plus **Dubesor Benchtable**, une piste prometteuse par le NOM de ses modèles mais
+  concrètement INACCESSIBLE depuis cet environnement (curl ET Playwright headless échouent tous deux de façon
+  identique, `ws_closed_mid_exchange`/"upstream request failed" — un blocage réseau de l'environnement de
+  développement, pas du site lui-même). Un tableau comparatif complet a été présenté à Léo (couverture réelle
+  de chaque source), et un message prêt à envoyer à Artificial Analysis (24 modèles non couverts listés par
+  famille) a été rédigé pour lui, sans aucun code changé sur ces points — Artificial Analysis n'a pas de
+  robot conversationnel, seulement un formulaire de contact.
+  **Décision de Léo, une fois ces pistes épuisées : "au pire je le fait manuelement".** La table figée
+  (`ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX`, hardwareScan.ts) ne couvre que 15 modèles sur 39, et peut être
+  fausse/datée (Léo a le site sous les yeux, un score peut y avoir changé) — plutôt que de continuer à
+  chercher une SOURCE tierce parfaite (5 pistes déjà vérifiées et rejetées sur des données réelles), on donne
+  à Léo le moyen de CORRIGER lui-même, pour de vrai, ce qu'il voit sur le site.
+  **Architecture, trois couches, chacune pour une raison précise** :
+  1. **`electron/services/externalScoresStore.ts`** (nouveau fichier) : un simple JSON dans `getDataRoot()`
+     (userData, déplaçable avec le reste des données via "Déplacer", étape 121) — PAS commité dans le dépôt
+     comme `verified-tool-scores.md`. Ces valeurs sont propres à ce que LÉO a lui-même relevé sur le site,
+     jamais régénérées par `npm run build`, et un futur correctif de la table figée dans le code ne doit
+     jamais les écraser silencieusement. `Record<string, ExternalScoreOverride>` avec `{intelligence?, speed?}`
+     — un modèle -> deux champs modifiables INDÉPENDAMMENT (`setExternalScoreOverride(model, field, value)`,
+     `value: null` efface CE champ précis, sans toucher à l'autre déjà enregistré pour le même modèle).
+  2. **`hardwareScan.ts`** : `getModelOverview`/`computeModelPicks`/`pickBestFrom` fusionnent désormais
+     `externalOverrides` — une correction manuelle prime TOUJOURS sur `ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX`
+     pour ce modèle. Point décisif, pas seulement cosmétique : la fusion se fait aussi dans le VRAI départage
+     (`pickBestFrom`, via un nouveau `artificialAnalysisFor(model)`), pas juste dans l'affichage de "Tous les
+     modèles" — une correction de Léo peut donc réellement faire basculer le modèle choisi pour SA machine,
+     exactement comme s'il avait corrigé la table figée elle-même. `externalOverrides` propagé aux 4 sites
+     d'appel de `computeModelPicks` (`getModelOverview`, `pickBestModelsFromBenchmark`, `pickBestCodeModel`,
+     `previewHardwareTiers`).
+  3. **"Vitesse (Artificial Analysis)"** : un CHAMP ENTIÈREMENT NOUVEAU (`artificialAnalysisSpeed`), demandé
+     par Léo mais sans le moindre équivalent dans le code existant — contrairement à `intelligence`, AUCUNE
+     table figée n'a jamais été maintenue pour ce champ : `null` pour tout le monde tant que Léo ne l'a pas
+     notée lui-même, jamais un chiffre deviné ou extrapolé d'un autre score.
+  **Interface (`AllModelsOverview.tsx`)** : les deux colonnes Intelligence/Vitesse deviennent des `<input
+  type="number">` cliquables directement dans le tableau (`EditableScore`), pas un formulaire à part — Léo
+  voit déjà le tableau complet, corriger une case dedans est le geste le plus court. **Non contrôlé
+  (`defaultValue`, pas `value`) à dessein** : la page entière se démonte/remonte à chaque fermeture/
+  réouverture de "Tous les modèles" (`{open && createPortal(...)}`), donc `defaultValue` repart toujours
+  d'une valeur fraîche sans jamais rester figée sur un ancien chiffre entre deux ouvertures — pas besoin de
+  synchroniser un état contrôlé avec la prop à chaque frappe. `onBlur` déclenche l'enregistrement (pas
+  `onChange` à chaque frappe, qui écrirait sur le disque à chaque caractère tapé) ; Entrée fait perdre le
+  focus au champ pour déclencher le même chemin sans devoir cliquer ailleurs.
+  **Piège déjà documenté dans ce fichier, retombé dessus une nouvelle fois en ajoutant l'import
+  `./externalScoresStore` à `hardwareScan.ts`** : 5 tests vm-sandbox qui chargent ce fichier via un faux pont
+  `require` (`test-context-length.mjs`, `test-hardwarescan-preview-steps.mjs`, `test-hardwarescan-tiebreak.mjs`,
+  `test-local-benchmark-tiers.mjs`, `test-model-overview-sort.mjs`) ont échoué d'un coup ("Cannot find module
+  './externalScoresStore'") tant que chacun n'a pas reçu le même stub `getExternalScoreOverrides: async () =>
+  ({})`. Réflexe déjà écrit ici pour la même raison à plusieurs reprises (contextLength, capabilities,
+  codegen-progress...) : après avoir ajouté un `import` à un module déjà chargé par plusieurs tests, `grep`
+  TOUS les faux ponts avant de lancer la suite.
+  **Piège trouvé dans MON PROPRE test navigateur (`test-options-reorganization-ui.mjs`), pas en relecture** :
+  une assertion existante lisait `td.textContent?.trim()` pour vérifier l'Intelligence Index affiché — devenu
+  un `<input>` avec cette étape, `textContent` y est TOUJOURS vide (la valeur d'un champ de saisie n'est
+  jamais dans son `textContent`, ni son `placeholder`). Corrigé en lisant `input.value` (ou son `placeholder`
+  entre crochets si vide) quand la cellule contient un champ, sinon le `textContent` comme avant — sans quoi
+  ce test serait resté vert par accident (comparant `undefined`/chaîne vide à des valeurs elles-mêmes fausses)
+  plutôt que de vérifier quoi que ce soit de réel.
+  Régression : `node --test scripts/test-external-scores.mjs` (nouveau fichier, 7 tests sur un faux disque en
+  mémoire — premier chargement sans fichier, indépendance RÉELLE des deux champs dans les deux sens, un champ
+  vidé n'efface que lui-même, vider le dernier champ retire le modèle entier, deux modèles ne se mélangent
+  jamais, relu depuis une seconde instance du module pour simuler un redémarrage) et 3 nouveaux tests dans
+  `scripts/test-hardwarescan-tiebreak.mjs` (une correction manuelle remplace la table figée dans l'affichage
+  ET dans le VRAI départage de `pickBestModelsFromBenchmark`, les deux champs coexistent sans se marcher
+  dessus une fois lus par `hardwareScan.ts`, `artificialAnalysisSpeed` reste `null` sans donnée manuelle).
+  Chaque assertion critique a été vérifiée en réintroduisant temporairement son défaut (le merge du
+  départage réel, et l'indépendance des deux champs dans `externalScoresStore.ts`) : les deux échouent bien
+  seuls avant correction. `npm test` : 400 tests, 0 échec.

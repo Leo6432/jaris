@@ -47,7 +47,8 @@ function setup({ verifiedToolScoresMd = '', vramMib = 30 * 1024, ramGb = 32 } = 
     },
     '../paths': { resourcesRoot: () => '/fake/resources' },
     './systemResources': { RESOURCE_SAFETY_MARGIN_GB: 4, detectRamGb: () => ramGb },
-    './ollama': { getModelInfo: async () => null, getInstalledModelSizeBytes: async () => null }
+    './ollama': { getModelInfo: async () => null, getInstalledModelSizeBytes: async () => null },
+    './externalScoresStore': { getExternalScoreOverrides: async () => ({}) }
   }
   const exports = {}
   vm.runInNewContext(source, {

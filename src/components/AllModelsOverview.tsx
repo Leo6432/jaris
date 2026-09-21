@@ -4,6 +4,49 @@ import type { ModelOverviewResult } from '../../shared/ipc'
 import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge } from './OptionsMenu'
 
+type ExternalScoreField = 'intelligence' | 'speed'
+
+/**
+ * Une case "Intelligence (Artificial Analysis)" ou "Vitesse (Artificial Analysis)", éditable directement
+ * au clic — Léo : "je ne sais pas pourquoi tu a pas mis ces scores mais sur le site il ya des models que
+ * tu a mis non publier, mais au pire je le fait manuelement, fait moi un petit system pour que je note moi
+ * meme le score". La table figée dans le code (ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX, hardwareScan.ts)
+ * peut se tromper ou dater ; Léo a le site sous les yeux, lui.
+ *
+ * Non contrôlé (`defaultValue`, pas `value`) à dessein : après enregistrement, `openPage` ne refait la
+ * demande qu'une seule fois par ouverture de la page (`if (overview) return`) — le composant entier se
+ * démonte/remonte à chaque fermeture/réouverture de "Tous les modèles" (voir `{open && createPortal(...)}`
+ * plus bas), donc `defaultValue` repart toujours d'une valeur fraîche sans jamais rester figée sur un
+ * ancien chiffre.
+ */
+function EditableScore({
+  model,
+  field,
+  value,
+  placeholder,
+  onSave
+}: {
+  model: string
+  field: ExternalScoreField
+  value: number | null
+  placeholder: string
+  onSave: (model: string, field: ExternalScoreField, rawValue: string) => void
+}): JSX.Element {
+  return (
+    <input
+      type="number"
+      inputMode="decimal"
+      className="options-menu__score-input"
+      defaultValue={value ?? ''}
+      placeholder={placeholder}
+      onBlur={(e) => onSave(model, field, e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur()
+      }}
+    />
+  )
+}
+
 /**
  * Léo : "dans model ajoute un bouton en dessous de tout les palier, tout les model et met tout les model
  * qu'on a utiliser met le score apelle outil la vram necessaire pour le model, et un score d'intelligence externe"
@@ -31,6 +74,14 @@ import { ReliabilityBadge } from './OptionsMenu'
  * intacts (aucune raison de les supprimer, juste de ne plus les exposer dans l'interface) : le chemin
  * documenté dans CLAUDE.md ("Commandes utiles", `npm run benchmark:models`) reste la façon d'obtenir ces
  * mesures, un geste délibéré depuis un terminal plutôt qu'un bouton à portée de clic dans l'app.
+ *
+ * Colonnes Intelligence/Vitesse (Artificial Analysis) désormais éditables (voir EditableScore ci-dessus) :
+ * `setExternalScoreOverride` (IPC) écrit dans un fichier PROPRE à cette machine (externalScoresStore.ts,
+ * userData — jamais commité comme verified-tool-scores.md), fusionné par hardwareScan.ts à chaque lecture
+ * (une correction manuelle prime toujours sur la table figée dans le code, pour CE modèle uniquement — les
+ * deux colonnes s'éditent indépendamment). "Vitesse (Artificial Analysis)" est un nouveau champ SANS aucune
+ * table figée (rien n'a jamais été relevé en dur pour ce champ) : vide pour tout le monde tant que Léo ne
+ * l'a pas notée lui-même, jamais un chiffre deviné.
  */
 export default function AllModelsOverview(): JSX.Element {
   const [open, setOpen] = useState(false)
@@ -46,6 +97,17 @@ export default function AllModelsOverview(): JSX.Element {
     } finally {
       setLoading(false)
     }
+  }
+
+  const saveScore = async (model: string, field: ExternalScoreField, rawValue: string): Promise<void> => {
+    const trimmed = rawValue.trim()
+    const parsed = trimmed === '' ? null : Number(trimmed)
+    // Saisie invalide (rare, le clavier numérique du champ filtre déjà l'essentiel) : ignorée plutôt que
+    // silencieusement remplacée par un chiffre au hasard — le champ reprendra sa vraie valeur à la
+    // prochaine ouverture de la page (defaultValue non contrôlé, voir EditableScore).
+    if (parsed !== null && !Number.isFinite(parsed)) return
+    await window.jaris.setExternalScoreOverride(model, field, parsed)
+    setOverview(await window.jaris.getModelOverview())
   }
 
   return (
@@ -72,7 +134,8 @@ export default function AllModelsOverview(): JSX.Element {
                     <h3>Tous les modèles candidats</h3>
                     <p>
                       Chaque modèle que Jaris sait choisir, tous paliers confondus — pas seulement celui retenu
-                      pour ta machine, déjà visible dans le tableau des paliers.
+                      pour ta machine, déjà visible dans le tableau des paliers. Les colonnes Artificial
+                      Analysis sont modifiables : clique dedans pour corriger ou compléter un score toi-même.
                     </p>
                   </div>
                   {loading && <p className="capacity-scan__status">Chargement...</p>}
@@ -91,9 +154,15 @@ export default function AllModelsOverview(): JSX.Element {
                                 {/* Intelligence Index lu directement chez Artificial Analysis. */}
                                 <th
                                   className="options-menu__col-num"
-                                  title="Artificial Analysis Intelligence Index v4.3.2"
+                                  title="Artificial Analysis Intelligence Index v4.3.2 — modifiable"
                                 >
                                   Intelligence (Artificial Analysis)
+                                </th>
+                                <th
+                                  className="options-menu__col-num"
+                                  title="Vitesse de génération publiée par Artificial Analysis (tokens/s) — modifiable"
+                                >
+                                  Vitesse (Artificial Analysis)
                                 </th>
                               </tr>
                             </thead>
@@ -109,7 +178,22 @@ export default function AllModelsOverview(): JSX.Element {
                                     <ReliabilityBadge value={entry.toolCalling} />
                                   </td>
                                   <td className="options-menu__col-num">
-                                    {entry.artificialAnalysisIndex === null ? 'Non publié' : entry.artificialAnalysisIndex}
+                                    <EditableScore
+                                      model={entry.model}
+                                      field="intelligence"
+                                      value={entry.artificialAnalysisIndex}
+                                      placeholder="Non publié"
+                                      onSave={(m, f, v) => void saveScore(m, f, v)}
+                                    />
+                                  </td>
+                                  <td className="options-menu__col-num">
+                                    <EditableScore
+                                      model={entry.model}
+                                      field="speed"
+                                      value={entry.artificialAnalysisSpeed}
+                                      placeholder="—"
+                                      onSave={(m, f, v) => void saveScore(m, f, v)}
+                                    />
                                   </td>
                                 </tr>
                               ))}

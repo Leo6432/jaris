@@ -47,7 +47,8 @@ function loadHardwareScan({ freeVramMib, tempC = 40, modelInfo, sizeBytes }) {
     './ollama': {
       getModelInfo: async () => modelInfo ?? null,
       getInstalledModelSizeBytes: async () => sizeBytes ?? null
-    }
+    },
+    './externalScoresStore': { getExternalScoreOverrides: async () => ({}) }
   }
   const exports = {}
   vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(exports, { exports }, (name) => modules[name] ?? nodeRequire(name))
