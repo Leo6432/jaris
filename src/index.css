@@ -1689,6 +1689,14 @@ body.body--scan::after {
   padding-right: 10px !important;
 }
 
+/* Intelligence Index du modèle retenu (étape 130) — volontairement plus terne que la vitesse juste à
+   gauche et que le badge de fiabilité juste à droite : c'est un chiffre de CONTEXTE (à quel point ce modèle
+   est réputé bon en général), pas une mesure faite sur la machine de l'utilisateur comme les deux autres. */
+.capacity-scan__tier-intelligence {
+  padding-right: 10px !important;
+  color: var(--hud-text-faint);
+}
+
 .capacity-scan__tier-badge {
   margin-top: 6px;
   font-size: 0.78rem;

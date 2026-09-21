@@ -3836,3 +3836,31 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   dû passer d'une égalité stricte à une comparaison par sous-chaîne sur le texte des en-têtes, qui porte
   maintenant l'indicateur "↕" collé au titre. `npm run typecheck`, `npm run build` et `npm test` (396 tests)
   au vert, plus deux captures du rendu réel (avant/après) comparées.
+
+- **Étape 130, Léo : "met dans : Ce que ta machine fait tourner, le score Intelligence (Artificial
+  Analysis)".** La carte des paliers (`HardwareTierPreview.tsx`, partagée entre l'écran d'accueil et
+  Options → Modèles) affichait par ligne : le rôle (Rapide/Médium/Puissant/Vision/Code), le modèle retenu, sa
+  vitesse et son badge de fiabilité d'appel d'outils — mais pas l'Intelligence Index, pourtant visible juste
+  à côté dans "Tous les modèles".
+  **Rien à ajouter côté backend : la donnée arrivait DÉJÀ jusqu'au renderer.** Chaque emplacement de palier
+  est un `ModelOverviewEntry` complet (voir `HardwareTierPreview` dans shared/ipc.ts), qui porte
+  `artificialAnalysisIndex` depuis que la table existe — `previewHardwareTiers` étale déjà le résultat de
+  `computeModelPicks` tel quel. Vérifié avant de coder plutôt que de supposer qu'il fallait un nouveau champ
+  IPC : la correction se limite donc à afficher une valeur déjà transmise, pas à la faire transiter.
+  **Libellé COLLÉ à la valeur ("Intelligence 34"), pas un nombre nu** : ce tableau-là n'a aucune ligne
+  d'en-tête (contrairement à celui de "Tous les modèles", qui a des titres de colonne), donc un "34" seul
+  posé entre une vitesse et un badge "6/6" n'aurait eu aucun moyen d'être compris. "—" quand Artificial
+  Analysis n'a rien publié pour ce modèle exact — même convention que la colonne vitesse juste à gauche, et
+  jamais "Non publié" (trop long pour cette ligne compacte, contrairement au tableau large).
+  **Volontairement plus terne que ses deux voisines** (`--hud-text-faint`) : la vitesse et la fiabilité sont
+  des mesures faites sur LA machine de l'utilisateur, l'Intelligence Index est un chiffre de contexte publié
+  par un tiers — les mettre au même niveau visuel les ferait passer pour trois mesures de même nature.
+  **Largeur revérifiée par capture réelle à 820/760/640/560 px** (cette carte apparaît aussi sur l'écran
+  d'accueil, où la fenêtre peut être bien plus étroite que la page Options) : aucun débordement horizontal,
+  le nom de modèle se tronque proprement comme il le faisait déjà — piège déjà documenté à l'étape 97
+  ("ça ne se voit qu'en mesurant une fenêtre étroite, jamais sur la fenêtre de développement").
+  Régression : nouveau `scripts/test-hardware-tier-preview-ui.mjs` (vrai navigateur, premier test dédié à ce
+  composant — il n'en avait aucun jusqu'ici) : une cellule Intelligence par emplacement avec son libellé, "—"
+  pour un modèle sans score publié, et aucun débordement à 560 px. Vérifié en retirant temporairement la
+  colonne : les deux tests de contenu échouent bien. `npm run typecheck`, `npm run build` et `npm test`
+  (399 tests) au vert, plus deux captures du rendu réel (avant/après) comparées.

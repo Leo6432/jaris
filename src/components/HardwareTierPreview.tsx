@@ -27,6 +27,22 @@ function formatSpeed(entry: ModelOverviewEntry): string {
 }
 
 /**
+ * Intelligence Index (Artificial Analysis) du modèle retenu pour ce palier — étape 130, demande de Léo :
+ * "met dans : Ce que ta machine fait tourner, le score Intelligence (Artificial Analysis)". La donnée
+ * arrivait DÉJÀ jusqu'ici (chaque emplacement de palier est un `ModelOverviewEntry` complet, qui porte
+ * `artificialAnalysisIndex` depuis que la table existe) : rien à ajouter côté IPC ni côté hardwareScan.ts,
+ * seulement à l'afficher.
+ *
+ * Le libellé est COLLÉ à la valeur ("Intelligence 34") plutôt qu'un simple nombre nu : ce tableau n'a aucune
+ * ligne d'en-tête (contrairement à celui de "Tous les modèles"), donc un "34" seul à côté d'un badge "6/6"
+ * n'aurait aucun moyen d'être compris. "—" quand Artificial Analysis n'a rien publié pour ce modèle exact,
+ * même convention que la vitesse juste à côté — jamais "Non publié" (trop long pour cette ligne compacte).
+ */
+function formatIntelligence(entry: ModelOverviewEntry): string {
+  return entry.artificialAnalysisIndex === null ? '—' : `Intelligence ${entry.artificialAnalysisIndex}`
+}
+
+/**
  * "moins de X Go" / "X à Y Go" / "plus de Y Go" à partir des VRAM représentatives des paliers eux-mêmes
  * (tier.vramGb, une frontière réelle par palier — voir previewVramSteps, hardwareScan.ts), plutôt qu'en
  * recopiant des valeurs fixes en dur ici : les mêmes bornes servent déjà à choisir le palier "actuel" côté
@@ -74,6 +90,9 @@ export default function HardwareTierPreview({ tiers }: HardwareTierPreviewProps)
                         {formatModelName(entry.model)}
                       </td>
                       <td className="capacity-scan__tier-speed">{formatSpeed(entry)}</td>
+                      <td className="capacity-scan__tier-intelligence" title="Artificial Analysis Intelligence Index v4.3.2">
+                        {formatIntelligence(entry)}
+                      </td>
                       <td>
                         <ReliabilityBadge value={entry.toolCalling} />
                       </td>
