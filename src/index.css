@@ -971,6 +971,57 @@ body.body--scan::after {
   color: var(--hud-accent);
 }
 
+/* Flèche "↕" au repos : présente en permanence pour signaler qu'un titre est cliquable, mais volontairement
+   très discrète — sinon 4 flèches vives concurrenceraient visuellement celle de la colonne réellement
+   active, qui elle doit ressortir. */
+.options-menu__sort-button[aria-pressed='false'] .options-menu__sort-arrow {
+  color: var(--hud-text-faint);
+}
+
+/* Barre "Trier par" (étape 129) — Léo, sur la version précédente où seuls les titres de colonne étaient
+   cliquables : "je voit pas de truc pour filtrés dans tout les models". Un titre de colonne cliquable est
+   invisible en tant que commande : mêmes police, couleur et taille qu'un titre normal. Ces pastilles
+   reprennent la famille visuelle des onglets d'Options (`.options-menu__tab`) — déjà comprise comme
+   cliquable ailleurs dans l'app — plutôt qu'un style inventé à côté. */
+.options-menu__sort-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.options-menu__sort-bar-label {
+  font-family: var(--hud-font-display);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--hud-text-faint);
+  margin-right: 2px;
+}
+
+.options-menu__sort-chip {
+  font-family: var(--hud-font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  background: transparent;
+  border: 1px solid var(--hud-line);
+  color: var(--hud-text-dim);
+  padding: 4px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.options-menu__sort-chip:hover {
+  color: var(--hud-text);
+}
+
+.options-menu__sort-chip--active {
+  background: rgba(var(--hud-accent-rgb), 0.15);
+  border-color: rgba(var(--hud-accent-rgb), 0.45);
+  color: var(--hud-text);
+}
+
 /* Les imports Hugging Face (hf.co/...) peuvent être très longs et étiraient tout le tableau — tronqués
    avec le nom complet toujours accessible au survol (attribut title natif). */
 .options-menu__model-name {

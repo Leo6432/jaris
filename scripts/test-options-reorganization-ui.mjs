@@ -358,9 +358,47 @@ test('le bouton "Lancer l\'analyse" a disparu de "Tous les modèles" — seul le
     assert.ok(!buttonTexts.some((t) => t?.includes("Lancer l'analyse")), `le bouton "Lancer l'analyse" ne doit plus exister : ${buttonTexts.join(', ')}`)
     assert.equal(await page.$('.options-menu__progress'), null, 'aucune barre de progression ne doit jamais apparaître ici')
 
+    // Comparaison par SOUS-CHAÎNE, pas égalité stricte : les colonnes triables portent depuis l'étape 129 un
+    // indicateur permanent (" ↕"/" ▲"/" ▼") collé au titre, qui n'a rien à voir avec ce que ce test vérifie.
     const headers = await page.$$eval('.options-page--models thead th', (els) => els.map((el) => el.textContent))
     assert.ok(headers.includes('Utilisé par Jaris'), `colonne d'utilisation attendue : ${headers.join(', ')}`)
-    assert.ok(headers.includes('Intelligence (Artificial Analysis)'), `tableau statique attendu : ${headers.join(', ')}`)
+    assert.ok(
+      headers.some((h) => h?.includes('Intelligence (Artificial Analysis)')),
+      `tableau statique attendu : ${headers.join(', ')}`
+    )
+  })
+})
+
+// Léo, étape 129, sur la première version où SEULS les titres de colonne étaient cliquables : "je voit pas
+// de truc pour filtrés dans tout les models". Le tri marchait (le test ci-dessous le prouvait déjà), mais
+// rien ne le SIGNALAIT : un titre cliquable avait exactement la même police, la même couleur et la même
+// taille qu'un titre normal. Ce test vérifie la COMMANDE VISIBLE, pas seulement le mécanisme — c'est
+// précisément la distinction qui manquait pour attraper le problème avant livraison.
+test('une barre "Trier par" VISIBLE propose les 4 critères, sans avoir à deviner que les titres sont cliquables', options, async () => {
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Modèles")')
+    await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
+    await page.waitForSelector('.options-page--models .options-menu__model-overview')
+
+    const chips = await page.$$eval('.options-page--models .options-menu__sort-chip', (els) => els.map((el) => el.textContent?.trim()))
+    assert.deepEqual(chips, ['VRAM', "Appel d'outils", 'Intelligence', 'Vitesse', 'Par défaut'], `pastilles de tri attendues : ${chips.join(', ')}`)
+
+    // Réellement habillées par le CSS de Jaris (famille des onglets), pas laissées au style par défaut du
+    // navigateur — même piège que le bouton resté gris d'une étape précédente, vérifié par MESURE.
+    const style = await page.$eval('.options-page--models .options-menu__sort-chip', (el) => {
+      const s = getComputedStyle(el)
+      return { radius: s.borderRadius, border: s.borderStyle, cursor: s.cursor }
+    })
+    assert.match(style.radius, /999px|499\.5px/, `pastille sans coins arrondis : ${style.radius}`)
+    assert.equal(style.border, 'solid', 'la pastille doit avoir une vraie bordure visible')
+    assert.equal(style.cursor, 'pointer', 'la pastille doit se signaler comme cliquable')
+
+    // Cliquer une pastille trie pour de vrai, et la pastille active se distingue des autres.
+    await page.locator('.options-menu__sort-chip', { hasText: 'Intelligence' }).first().click()
+    const pressed = await page.$$eval('.options-page--models .options-menu__sort-chip', (els) =>
+      els.filter((el) => el.getAttribute('aria-pressed') === 'true').map((el) => el.textContent?.trim())
+    )
+    assert.deepEqual(pressed, ['Intelligence ▼'], `une seule pastille active attendue : ${pressed.join(', ')}`)
   })
 })
 

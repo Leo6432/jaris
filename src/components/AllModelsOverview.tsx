@@ -72,6 +72,17 @@ const SORT_LABELS: Record<SortKey, string> = {
   artificialAnalysisSpeed: 'Vitesse (Artificial Analysis)'
 }
 
+/** Libellés COURTS pour la barre "Trier par" (étape 129) : les titres de colonne complets ci-dessus
+ * ("Intelligence (Artificial Analysis)") sont bien trop longs pour tenir en pastilles sur une seule ligne. */
+const SORT_CHIP_LABELS: Record<SortKey, string> = {
+  vramGb: 'VRAM',
+  toolCalling: "Appel d'outils",
+  artificialAnalysisIndex: 'Intelligence',
+  artificialAnalysisSpeed: 'Vitesse'
+}
+
+const SORT_KEYS: SortKey[] = ['vramGb', 'toolCalling', 'artificialAnalysisIndex', 'artificialAnalysisSpeed']
+
 /** "6/6"/"2/3" -> 6/2, absent ou illisible -> null (toujours en fin de tri, jamais confondu avec un vrai 0). */
 function toolScoreValue(toolCalling: string | null): number | null {
   if (!toolCalling) return null
@@ -103,8 +114,49 @@ function SortButton({ sortKey, sort, onSort }: { sortKey: SortKey; sort: SortSta
   return (
     <button type="button" className="options-menu__sort-button" onClick={() => onSort(sortKey)} aria-pressed={active}>
       {SORT_LABELS[sortKey]}
-      {active && <span className="options-menu__sort-arrow">{sort.dir === 'asc' ? ' ▲' : ' ▼'}</span>}
+      {/* Indicateur TOUJOURS présent (↕ au repos), jamais seulement une fois la colonne active : sans lui,
+          un titre cliquable est indiscernable d'un titre normal — c'est très exactement ce que Léo n'a pas
+          vu ("je voit pas de truc pour filtrés"). */}
+      <span className="options-menu__sort-arrow">{active ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ' ↕'}</span>
     </button>
+  )
+}
+
+/**
+ * Barre "Trier par" visible AU-DESSUS des tableaux (étape 129) — la vraie réponse à "je voit pas de truc
+ * pour filtrés" : des pastilles évidemment cliquables, dans la famille visuelle déjà utilisée par les
+ * onglets d'Options (`.options-menu__tab`, fond cyan translucide quand actif), plutôt qu'un titre de colonne
+ * qui ressemble à du texte mort. "Par défaut" ramène à l'ordre d'origine (par VRAM croissante, celui que
+ * renvoie déjà getModelOverview) sans avoir à deviner quel sens de tri annule quoi.
+ */
+function SortBar({ sort, onSort, onReset }: { sort: SortState; onSort: (key: SortKey) => void; onReset: () => void }): JSX.Element {
+  return (
+    <div className="options-menu__sort-bar">
+      <span className="options-menu__sort-bar-label">Trier par</span>
+      {SORT_KEYS.map((key) => {
+        const active = sort?.key === key
+        return (
+          <button
+            key={key}
+            type="button"
+            className={`options-menu__sort-chip${active ? ' options-menu__sort-chip--active' : ''}`}
+            onClick={() => onSort(key)}
+            aria-pressed={active}
+          >
+            {SORT_CHIP_LABELS[key]}
+            {active && <span className="options-menu__sort-arrow">{sort.dir === 'asc' ? ' ▲' : ' ▼'}</span>}
+          </button>
+        )
+      })}
+      <button
+        type="button"
+        className={`options-menu__sort-chip${sort === null ? ' options-menu__sort-chip--active' : ''}`}
+        onClick={onReset}
+        aria-pressed={sort === null}
+      >
+        Par défaut
+      </button>
+    </div>
   )
 }
 
@@ -161,11 +213,11 @@ export default function AllModelsOverview(): JSX.Element {
                     <h3>Tous les modèles candidats</h3>
                     <p>
                       Chaque modèle que Jaris sait choisir, tous paliers confondus — pas seulement celui retenu
-                      pour ta machine, déjà visible dans le tableau des paliers. Clique sur un titre de colonne
-                      pour trier.
+                      pour ta machine, déjà visible dans le tableau des paliers.
                     </p>
                   </div>
                   {loading && <p className="capacity-scan__status">Chargement...</p>}
+                  {sortedGroups && <SortBar sort={sort} onSort={toggleSort} onReset={() => setSort(null)} />}
                   {sortedGroups && (
                     <div className="options-menu__model-overview-scroll">
                       {sortedGroups.map((group) => (

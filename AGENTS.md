@@ -3761,3 +3761,39 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   défaut, premier clic sur VRAM (croissant), second clic (inversé), clic sur Appel d'outils (décroissant,
   score absent toujours en fin de liste). Vérifié en cassant temporairement le basculement de sens : le test
   échoue bien. `npm run typecheck`, `npm run build` et `npm test` (395 tests) au vert.
+
+- **Étape 129, Léo, sur la version livrée juste avant : "? mais je voit pas de truc pour filtrés dans tout
+  les models"** — il était bien à jour (0.15.39 confirmée), donc pas un problème de version : le tri de
+  l'étape 128 FONCTIONNAIT (son test le prouvait, clic + réordonnancement vérifiés dans un vrai navigateur),
+  mais rien ne le SIGNALAIT à l'écran.
+  **Diagnostic confirmé par une VRAIE capture du rendu compilé avant de toucher au code, pas supposé** : les
+  4 titres de colonne cliquables (`<button>` avec `font: inherit; background: none; border: none`) étaient
+  visuellement IDENTIQUES aux 2 titres non cliquables ("Modèle", "Utilisé par Jaris") — même police, même
+  gris terne, même taille, aucune bordure, aucune icône. Le seul indice existant était une flèche ▲/▼ qui
+  n'apparaissait qu'APRÈS avoir cliqué (donc invisible tant qu'on n'a pas deviné qu'il fallait cliquer), plus
+  une phrase "Clique sur un titre de colonne pour trier" noyée en fin de paragraphe d'introduction en petit
+  gris. Léo a donc regardé la page et conclu, à juste titre, qu'il n'y avait aucune commande.
+  **Corrigé en rendant la commande VISIBLE, pas en ajoutant une explication de plus** : une barre "Trier par"
+  au-dessus des tableaux, avec 5 pastilles évidemment cliquables (VRAM / Appel d'outils / Intelligence /
+  Vitesse / Par défaut). Elles reprennent la famille visuelle des onglets d'Options (`.options-menu__tab` :
+  pastille arrondie, bordure, fond cyan translucide quand active) — déjà comprise comme cliquable ailleurs
+  dans l'app — plutôt qu'un style inventé à côté, même discipline que le bouton d'envoi du composeur et les
+  actions du mode Code. La pastille active affiche son sens (▲/▼) et "Par défaut" ramène à l'ordre d'origine
+  sans avoir à deviner quel tri annule quoi. Les titres de colonne restent cliquables (raccourci pour qui
+  l'a compris) mais portent désormais un indicateur PERMANENT "↕" au repos, volontairement discret
+  (`--hud-text-faint`) pour ne pas concurrencer la flèche vive de la colonne réellement active.
+  **Leçon générale, déjà écrite deux fois dans ce fichier sous d'autres formes (le bouton resté gris de
+  l'étape 97, "une vérification de layout ne dit rien de la qualité perçue" des étapes 69-71) et à retenir
+  pour de bon : un test qui prouve qu'un mécanisme MARCHE ne prouve pas qu'il est TROUVABLE.** Le test de
+  l'étape 128 cliquait directement le sélecteur CSS du bouton — il ne pouvait structurellement pas détecter
+  que rien, à l'écran, n'invitait un humain à ce clic. Pour toute commande nouvelle, il faut une assertion
+  distincte sur son AFFORDANCE (existe-t-elle visiblement ? a-t-elle une bordure, un curseur, une forme de
+  bouton ?) en plus de celle sur son comportement — et une capture du rendu réel, qui aurait montré le
+  problème en une seconde.
+  Régression : nouveau test dans `scripts/test-options-reorganization-ui.mjs` qui vérifie que les 5 pastilles
+  existent, qu'elles sont réellement habillées par le CSS (coins arrondis, bordure, `cursor: pointer`
+  MESURÉS via `getComputedStyle`, pas juste présentes dans le DOM) et qu'une seule est active à la fois après
+  un clic. Vérifié en retirant temporairement la barre : le test échoue bien. Une assertion PRÉ-EXISTANTE a
+  dû passer d'une égalité stricte à une comparaison par sous-chaîne sur le texte des en-têtes, qui porte
+  maintenant l'indicateur "↕" collé au titre. `npm run typecheck`, `npm run build` et `npm test` (396 tests)
+  au vert, plus deux captures du rendu réel (avant/après) comparées.
