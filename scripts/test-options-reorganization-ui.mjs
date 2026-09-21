@@ -307,27 +307,20 @@ test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste d
     const groupTitles = await page.$$eval('.options-page--models .options-menu__model-group-title', (els) => els.map((el) => el.textContent))
     assert.deepEqual(groupTitles, ['Rapide', 'Vision'], `paliers affichés : ${groupTitles.join(', ')}`)
 
-    // Colonnes Intelligence/Vitesse (Artificial Analysis) éditables (EditableScore) : ce ne sont plus du
-    // texte dans le <td> mais un <input>, donc `textContent` y est toujours vide — lire sa valeur/placeholder.
     const rows = await page.$$eval('.options-page--models tbody tr', (els) =>
-      els.map((el) =>
-        Array.from(el.querySelectorAll('td')).map((td) => {
-          const input = td.querySelector('input')
-          return input ? input.value || `[${input.placeholder}]` : td.textContent?.trim()
-        })
-      )
+      els.map((el) => Array.from(el.querySelectorAll('td')).map((td) => td.textContent?.trim()))
     )
     assert.equal(rows.length, 3, `3 modèles attendus (2 Rapide + 1 Vision) : ${rows.length}`)
     // ministral-3:3b : utilisé pour deux paliers, VRAM et Intelligence Index officiel (5).
     assert.equal(rows[0][1], 'Oui — Rapide, Médium', `paliers actifs attendus : ${rows[0][1]}`)
     assert.ok(rows[0][2].includes('3'), `VRAM du premier modèle : ${rows[0][2]}`)
     assert.equal(rows[0][4], '5', `Intelligence Index attendu (5) : ${rows[0][4]}`)
+    // "Vitesse (Artificial Analysis)" (nouveau champ, étape 122) : "—" quand Artificial Analysis n'a pas
+    // publié de mesure de vitesse fiable pour ce modèle.
+    assert.equal(rows[0][5], '—', `Vitesse doit rester "—" sans mesure publiée : ${rows[0][5]}`)
     // qwen3:1.7b : aucun score officiel connu, clairement indiqué sans chiffre inventé.
     assert.equal(rows[1][1], 'Non', `le modèle non retenu doit être indiqué : ${rows[1][1]}`)
-    assert.equal(rows[1][4], '[Non publié]', `absence de score officiel attendue : ${rows[1][4]}`)
-    // "Vitesse (Artificial Analysis)" (nouveau champ) : aucune table figée dans le code, toujours vide au
-    // départ pour tout le monde tant que Léo ne l'a pas notée lui-même.
-    assert.equal(rows[0][5], '[—]', `Vitesse doit être vide sans donnée manuelle : ${rows[0][5]}`)
+    assert.equal(rows[1][4], 'Non publié', `absence de score officiel attendue : ${rows[1][4]}`)
 
     // "Fermer" revient sur la page Options, toujours sur l'onglet Modèles — elle n'a jamais été fermée.
     await page.click('.options-page--models .options-page__close')

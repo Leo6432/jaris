@@ -12,7 +12,6 @@ import {
 import { getModelsLocationStatus, moveModelsLocation } from './services/modelsLocation'
 import { moveDataLocation } from './services/dataLocation'
 import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, previewHardwareTiers } from './services/hardwareScan'
-import { setExternalScoreOverride } from './services/externalScoresStore'
 import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { runModelAnalysis, runQuickSetup } from './services/benchmarkRunner'
@@ -46,7 +45,6 @@ import {
   type CapacityScanResult,
   type ChatMessage,
   type ConversationList,
-  type ExternalScoreOverride,
   type GeneratedApp,
   type GeneratedAppSummary,
   type JarisEmotion,
@@ -713,10 +711,6 @@ app.whenReady().then(async () => {
     optionsOpen = open
   })
   ipcMain.handle(IPC_CHANNELS.getModelOverview, async () => getModelOverview(await getProfile()))
-  ipcMain.handle(
-    IPC_CHANNELS.setExternalScoreOverride,
-    async (_event, model: string, field: keyof ExternalScoreOverride, value: number | null) => setExternalScoreOverride(model, field, value)
-  )
   // Étape suivante (Léo : "jaris voit les model et regarde la vram et propose une barre... personnalisé à
   // chacun pour que le dernier ne dépasse pas la vram") : le modèle de référence est celui du palier
   // PUISSANT (le plus gros modèle de conversation configuré, voir computeContextLengthOptions pour le

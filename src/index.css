@@ -3185,17 +3185,6 @@ textarea::placeholder {
   color: var(--hud-text-faint);
 }
 
-/* Case Intelligence/Vitesse (Artificial Analysis) éditable dans "Tous les modèles" (AllModelsOverview.tsx) —
-   ÉCRIT ICI, APRÈS la règle générale `input` ci-dessus (pas avant) : à spécificité égale, c'est l'ordre dans
-   le fichier qui décide, piège déjà rencontré plusieurs fois dans ce fichier (étapes 95/117/130 du
-   changelog). Juste une taille compacte pour tenir dans une cellule de tableau, le fond/la bordure/la
-   couleur du texte viennent déjà de la règle générale, pas besoin de les redéfinir. */
-.options-menu__score-input {
-  width: 68px;
-  padding: 3px 6px;
-  font-size: 0.75rem;
-  text-align: right;
-}
 
 /* --- Barres de progression ------------------------------------------------ */
 

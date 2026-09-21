@@ -9,7 +9,6 @@ import type {
   ConversationEntry,
   ConversationList,
   CodeGenProgress,
-  ExternalScoreOverride,
   GeneratedApp,
   GeneratedAppSummary,
   HardwareTierPreview,
@@ -58,7 +57,6 @@ declare global {
       clearConversationHistory: () => Promise<void>
       openConversationHistoryFile: () => Promise<void>
       getModelOverview: () => Promise<ModelOverviewResult>
-      setExternalScoreOverride: (model: string, field: keyof ExternalScoreOverride, value: number | null) => Promise<void>
       getContextLengthOptions: () => Promise<ContextLengthOptions>
       setContextLength: (contextLength: number | undefined) => Promise<void>
       getOllamaVersionStatus: () => Promise<OllamaVersionStatus | null>

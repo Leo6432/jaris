@@ -3505,3 +3505,72 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Chaque assertion critique a été vérifiée en réintroduisant temporairement son défaut (le merge du
   départage réel, et l'indépendance des deux champs dans `externalScoresStore.ts`) : les deux échouent bien
   seuls avant correction. `npm test` : 400 tests, 0 échec.
+
+- **Étape 123, suite immédiate de l'étape 122, deux demandes de Léo dans le même message : "1. j'ai
+  commencer a remplir, tu peut les noter et enleve la possibilité de noter 2. termine recherche les model
+  un part un sur le web".** Léo a testé le système d'édition manuelle livré à l'étape 122, rempli une bonne
+  partie du tableau lui-même (2 captures d'écran envoyées), puis a demandé l'INVERSE de ce qui venait d'être
+  livré : baker ses valeurs + finir la recherche pour les modèles restants, PUIS retirer la possibilité
+  d'éditer. Le système d'édition manuelle (`externalScoresStore.ts`, `ExternalScoreOverride`, la fusion dans
+  `pickBestFrom`, `EditableScore` dans AllModelsOverview.tsx) a donc vécu moins d'une journée avant d'être
+  entièrement retiré — pas un échec du correctif précédent (il faisait ce qui était demandé), juste Léo qui a
+  préféré, après l'avoir essayé, un tableau à nouveau simple à lire une fois la vraie recherche terminée
+  plutôt que de garder la possibilité de le modifier lui-même.
+  **Recherche menée un par un sur artificialanalysis.ai (jamais un agrégateur tiers), avant tout code** :
+  couverture passée de 15/39 à 34/39 modèles candidats. Chaque chiffre vérifié par une VRAIE requête sur la
+  fiche du modèle exact (jamais un rapprochement approximatif), avec deux leçons méthodologiques retenues en
+  cours de route :
+  - **Une synthèse de recherche web peut mélanger deux versions différentes de l'Intelligence Index (les
+    scores sont retravaillés au fil des révisions de méthodologie, déjà documenté plus haut pour ce même
+    index) sans le signaler** — repéré sur `qwen3:1.7b` (2 puis 5 selon la source), `north-mini-code-1.0`
+    (27,6 puis 10) et `devstral-small-2:24b` (18 puis 8) : à chaque fois, une seconde lecture DIRECTE
+    de la fiche du modèle (pas une synthèse de recherche) a donné un chiffre cohérent avec le reste de la
+    table déjà vérifiée (échelle à un ou deux chiffres, jamais les anciens scores à deux chiffres d'une
+    méthodologie antérieure recopiés par un tweet ou un article tiers). Toujours privilégié la lecture directe
+    de la fiche sur toute synthèse qui ne cite pas la fiche elle-même.
+  - **Deux corrections apportées aux valeurs entrées par Léo, trouvées en vérifiant plutôt qu'en recopiant** :
+    (1) `qwen3.5:27b` : Léo avait noté 22, la fiche officielle donne 23 (confirmée deux fois, chiffre resté
+    identique) — gardé 23. (2) `qwen3.6:35b`/`qwen3.5:35b` (les modèles DENSES que Jaris utilise vraiment,
+    23-24 Go) : Léo avait noté 18/19, qui sont en réalité les scores de `qwen3.6:35b-a3b`/`qwen3.5:35b-a3b`
+    (la variante MoE, un modèle DIFFÉRENT malgré le nom presque identique — Jaris a d'ailleurs déjà
+    `qwen3.6:35b-a3b` comme candidat séparé dans CODE_CANDIDATES). Vérifié explicitement qu'aucune fiche
+    Artificial Analysis dédiée n'existe pour la variante dense de ces deux familles avant de conclure — les
+    deux restent donc "Non publié", la confusion de Léo n'a pas été reprise telle quelle.
+  **Toutes les valeurs de Léo par ailleurs se sont révélées exactes une fois vérifiées** (granite4.1:3b,
+  granite4.2:3b+vitesse, ministral-3:8b+vitesse, granite4.2:8b+vitesse, granite4.1:8b+vitesse,
+  granite4.2:30b+vitesse, command-r:35b, ministral-3:3b+vitesse, ministral-3:14b+vitesse) — un signe que sa
+  méthode (lire directement la fiche du site) était la bonne depuis le début.
+  **Nouvelle table `ARTIFICIAL_ANALYSIS_SPEED`** (hardwareScan.ts), en plus de l'extension de
+  `ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX` (15 -> 34 entrées) : même discipline (relevée le 21/09/2026,
+  variante Reasoning, absence = jamais publiée). Contrairement à l'Intelligence Index, Artificial Analysis
+  n'a pas de mesure de vitesse pour une partie des modèles même quand l'Intelligence Index est connu (fiche
+  marquée "N/A" côté vitesse) : ces cas restent "—", jamais une estimation à la place d'une vraie mesure.
+  **Revert complet du système d'édition manuelle de l'étape 122** (Léo : "enleve la possibilité de noter"),
+  jamais un simple masquage côté interface — CLAUDE.md documente déjà pourquoi un code mort n'a aucune raison
+  de rester après le retrait de son seul usage :
+  - `electron/services/externalScoresStore.ts` supprimé en entier (le fichier, pas seulement ses appels).
+  - `ExternalScoreOverride` (type), le canal IPC `setExternalScoreOverride` et sa fonction preload retirés de
+    `shared/ipc.ts`/`electron/main.ts`/`electron/preload.ts`/`src/global.d.ts`.
+  - `hardwareScan.ts` : `computeModelPicks`/`pickBestFrom`/`getModelOverview`/`previewHardwareTiers`/
+    `pickBestModelsFromBenchmark`/`pickBestCodeModel` reviennent à une lecture DIRECTE des deux tables figées,
+    sans la moindre couche de fusion — même simplicité qu'avant l'étape 122, juste avec beaucoup plus de
+    modèles couverts et un second champ (vitesse).
+  - `AllModelsOverview.tsx` : `EditableScore`/`saveScore` retirés, les deux colonnes redeviennent du texte
+    simple (`entry.artificialAnalysisIndex ?? 'Non publié'`, `entry.artificialAnalysisSpeed ?? '—'`), comme
+    le reste du tableau — la règle CSS dédiée à l'input (`.options-menu__score-input`) retirée avec.
+  Régression : `scripts/test-external-scores.mjs` supprimé (plus rien de ce fichier à tester) ;
+  `scripts/test-hardwarescan-tiebreak.mjs` mis à jour — la table "expose les Intelligence Index" couvre
+  désormais les 34 modèles (avec une assertion dédiée qui vérifie que la variante dense `qwen3.6:35b` reste
+  bien SANS score, contrairement à sa cousine A3B), un nouveau test couvre `artificialAnalysisSpeed`, les 3
+  tests de départage par correction manuelle retirés (le mécanisme qu'ils testaient n'existe plus) ; les 5
+  faux ponts `./externalScoresStore` retirés des tests qui n'en ont plus besoin (hardwareScan.ts ne l'importe
+  plus) ; `scripts/test-options-reorganization-ui.mjs` : lecture des lignes du tableau revenue à un simple
+  `textContent` (les cellules ne sont plus des `<input>`). `npm run typecheck`, `npm run build` et
+  `npm test` (391 tests) au vert.
+  **Leçon générale, qui rejoint et prolonge celle déjà tirée pour le bouton "Lancer l'analyse" (étape
+  précédente) : une fonctionnalité livrée EXACTEMENT comme demandée peut quand même être retirée le jour
+  même, une fois que l'utilisateur l'a réellement essayée et a changé d'avis en connaissance de cause** — ce
+  n'est pas un signe que le correctif précédent était mal conçu, juste que certains choix (ici : éditer
+  soi-même vs. avoir une recherche déjà faite) ne se jugent vraiment qu'à l'usage. Le retirer proprement
+  (fichier supprimé, pas juste caché ; tests qui testaient le mécanisme retiré supprimés, pas laissés à
+  vérifier du code mort) compte alors autant que l'avoir bien construit la première fois.

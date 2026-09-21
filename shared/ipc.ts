@@ -267,34 +267,15 @@ export interface ModelOverviewEntry {
    * `null` si le modèle exact n'est pas évalué, jamais un chiffre inventé pour combler le vide.
    * À fiabilité égale, Jaris l'utilise pour départager deux modèles exacts qui possèdent tous les deux un
    * score publié ; MMLU-Pro reste le repli quand cette comparaison officielle n'est pas possible.
-   *
-   * Léo : "je ne sais pas pourquoi tu a pas mis ces scores mais sur le site il ya des models que tu a mis
-   * non publier" — la table figée dans le code peut se tromper ou dater vite (Artificial Analysis publie de
-   * nouveaux scores en continu). Ce champ renvoie donc TOUJOURS le résultat déjà fusionné avec une éventuelle
-   * correction manuelle de Léo (voir ExternalScoreOverride/externalScoresStore.ts) : la valeur manuelle prime
-   * quand elle existe, sinon c'est la table figée qui répond, exactement comme avant.
    */
   artificialAnalysisIndex: number | null
   /**
    * Vitesse de génération (tokens/s) publiée par Artificial Analysis pour ce modèle — PAS la vitesse estimée
    * par formule pour la machine de l'utilisateur (`speedTokPerSec` ci-dessus, qui reste une estimation locale
-   * indépendante). Aucune table figée dans le code pour ce champ (contrairement à artificialAnalysisIndex) :
-   * `null` tant que Léo ne l'a pas notée lui-même (voir ExternalScoreOverride) — jamais un chiffre deviné.
+   * indépendante). Voir ARTIFICIAL_ANALYSIS_SPEED dans hardwareScan.ts. `null` si Artificial Analysis n'a pas
+   * encore publié de mesure de vitesse fiable pour ce modèle exact.
    */
   artificialAnalysisSpeed: number | null
-}
-
-/**
- * Correction manuelle d'un score externe (Artificial Analysis) pour UN modèle — Léo : "au pire je le fait
- * manuelement, fait moi un petit system pour que je note moi meme le score, et ajoute speed". Persisté par
- * modèle dans externalScoresStore.ts (userData, jamais commité dans le dépôt : propre à sa machine, à l'abri
- * d'un prochain "npm run build" qui régénérerait la table figée du code). Chaque champ omis (`undefined`)
- * laisse la valeur déjà enregistrée pour l'AUTRE champ intacte — les deux colonnes s'éditent indépendamment,
- * une case à la fois, jamais l'une n'écrase l'autre par accident.
- */
-export interface ExternalScoreOverride {
-  intelligence?: number
-  speed?: number
 }
 
 /**
@@ -544,8 +525,6 @@ export const IPC_CHANNELS = {
   openConversationHistoryFile: 'jaris:open-conversation-history-file',
   /** renderer <-> main : liste tous les modèles candidats (tous paliers + vision) avec leurs métriques, pour l'onglet Modèles. */
   getModelOverview: 'jaris:get-model-overview',
-  /** renderer -> main : corrections manuelles de Léo aux scores Artificial Analysis (voir ExternalScoreOverride). */
-  setExternalScoreOverride: 'jaris:set-external-score-override',
   getOllamaVersionStatus: 'jaris:get-ollama-version-status',
   updateOllama: 'jaris:update-ollama',
   /** renderer -> main : lance le benchmark complet (scripts/benchmark-models.mjs) puis choisit et active le

@@ -4,12 +4,10 @@ import { resourcesRoot } from '../paths'
 import { join } from 'path'
 import { promisify } from 'util'
 import { RESOURCE_SAFETY_MARGIN_GB, detectRamGb } from './systemResources'
-import { getExternalScoreOverrides } from './externalScoresStore'
 import { getInstalledModelSizeBytes, getModelInfo } from './ollama'
 import type {
   CapacityScanResult,
   ContextLengthOptions,
-  ExternalScoreOverride,
   HardwareTierPreview,
   ModelOverviewEntry,
   ModelOverviewResult,
@@ -644,11 +642,19 @@ const INTELLIGENCE_MMLU_PRO: Record<string, number> = {
 
 /**
  * Artificial Analysis Intelligence Index officiel, relevé directement sur artificialanalysis.ai le
- * 20/09/2026 (méthodologie v4.3.2). Pour les familles proposant deux variantes, on reprend la variante
- * Reasoning, celle qui correspond au mode de réflexion employé par Jaris. Absence ici = Artificial Analysis
- * n'a pas publié de score pour ce modèle exact ; jamais de rapprochement approximatif ni de chiffre repris
- * d'un agrégateur. À fiabilité égale, ce score départage deux modèles exacts couverts ; MMLU-Pro reste le
- * repli quand cette comparaison officielle n'est pas possible.
+ * 21/09/2026 (méthodologie v4.3.2) — étape 122 : Léo a rempli une bonne partie de ce tableau lui-même
+ * (page "Tous les modèles", système d'édition manuelle d'une version précédente), demandant ensuite de
+ * finir la recherche pour les modèles restants puis de retirer la possibilité d'éditer — cette table
+ * remplace donc à la fois l'ancienne version (15 modèles) et le système d'édition manuelle (revert complet,
+ * voir externalScoresStore.ts dans l'historique du dépôt). Pour les familles proposant deux variantes, on
+ * reprend la variante Reasoning, celle qui correspond au mode de réflexion employé par Jaris. Absence ici =
+ * Artificial Analysis n'a pas publié de score pour ce modèle EXACT (vérifié un par un, jamais un
+ * rapprochement approximatif ni un chiffre repris d'un agrégateur tiers) — notamment `qwen3.5:35b` et
+ * `qwen3.6:35b` (les variantes DENSES utilisées par Jaris) : Artificial Analysis ne couvre que la variante
+ * MoE "A3B" de ces deux familles (`qwen3.6:35b-a3b`, déjà dans cette table), un modèle différent malgré le
+ * nom très proche — confirmé en cherchant explicitement une page dédiée à la variante dense, absente. À
+ * fiabilité égale, ce score départage deux modèles exacts couverts ; MMLU-Pro reste le repli quand cette
+ * comparaison officielle n'est pas possible.
  */
 const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   'qwen3.5:0.8b': 6,
@@ -665,7 +671,64 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   'gemma4:31b': 19,
   'gemma4:e4b': 9,
   'ministral-3:14b': 6,
-  'ministral-3:3b': 5
+  'ministral-3:3b': 5,
+  'granite4.1:3b': 6,
+  'granite4.2:3b': 9,
+  'ministral-3:8b': 5,
+  'granite4.2:8b': 11,
+  'granite4.1:8b': 7,
+  'mistral-small3.2:24b': 7,
+  'granite4.2:30b': 15,
+  // "(estimated)" sur la fiche Artificial Analysis elle-même (méthode d'estimation, pas une mesure directe
+  // complète) — gardé tel quel, c'est le seul chiffre officiel publié pour ce modèle.
+  'command-r:35b': 5,
+  'qwen3:1.7b': 5,
+  'glm-4.7-flash:q4_K_M': 15,
+  'qwen3-vl:8b': 7,
+  'qwen3-vl:4b': 6,
+  'devstral-2:123b': 9,
+  'qwen3-coder-next': 9,
+  'qwen3-coder:30b': 10,
+  'north-mini-code-1.0': 10,
+  'qwen2.5-coder:32b': 2,
+  'devstral-small-2:24b': 8,
+  'qwen2.5-coder:7b': 4
+}
+
+/**
+ * Vitesse de génération (tokens/s) publiée par Artificial Analysis pour ce modèle — relevée en même temps
+ * que ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX ci-dessus, le 21/09/2026, avec la même discipline (jamais un
+ * chiffre estimé ou repris d'un agrégateur tiers). PAS la vitesse estimée par formule pour la machine de
+ * l'utilisateur (`speedTokPerSec`, ModelOverviewEntry, calculée séparément par estimateSpeedTokPerSec) : une
+ * mesure Artificial Analysis, indépendante du matériel de qui regarde. Absence ici = Artificial Analysis
+ * publie l'Intelligence Index de ce modèle mais pas encore de mesure de vitesse fiable ("N/A" sur sa fiche).
+ */
+const ARTIFICIAL_ANALYSIS_SPEED: Record<string, number> = {
+  'qwen3.5:4b': 19,
+  'qwen3.5:9b': 56,
+  'qwen3.5:27b': 75,
+  'qwen3.6:27b': 60,
+  'qwen3.6:35b-a3b': 109,
+  'qwen3.8:27b': 47,
+  'gpt-oss:20b': 168,
+  'gemma4:12b': 113,
+  'gemma4:31b': 35,
+  'gemma4:e4b': 42,
+  'ministral-3:14b': 89,
+  'ministral-3:3b': 215,
+  'granite4.2:3b': 220,
+  'ministral-3:8b': 81,
+  'granite4.2:8b': 90,
+  'granite4.1:8b': 84,
+  'mistral-small3.2:24b': 156,
+  'granite4.2:30b': 73,
+  'glm-4.7-flash:q4_K_M': 79,
+  'qwen3-vl:8b': 112,
+  'devstral-2:123b': 133,
+  'qwen3-coder-next': 111,
+  'qwen3-coder:30b': 87,
+  'north-mini-code-1.0': 100,
+  'devstral-small-2:24b': 131
 }
 
 export interface LocalBenchmarkEntry {
@@ -857,9 +920,8 @@ const TIER_LABELS: Record<Tier, string> = { flash: 'Rapide', medium: 'Médium', 
 export async function getModelOverview(profile?: Profile | null): Promise<ModelOverviewResult> {
   const localBenchmark = parseLocalBenchmark()
   const verifiedToolScores = parseVerifiedToolScores()
-  const externalOverrides = await getExternalScoreOverrides()
   const { name: gpuName, vramGb } = await detectGpu()
-  const picks = computeModelPicks(vramGb, detectRamGb(), gpuName, localBenchmark, verifiedToolScores, externalOverrides)
+  const picks = computeModelPicks(vramGb, detectRamGb(), gpuName, localBenchmark, verifiedToolScores)
   const activeModels = {
     flash: profile?.models?.flash ?? picks.flash.model,
     medium: profile?.models?.medium ?? picks.medium.model,
@@ -889,13 +951,8 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
     // commentaire) — l'UI (ModelAnalysisProgress.tsx) en a besoin pour ne pas laisser ce modèle bloqué sur
     // "En attente" pour toujours pendant un run, faute de ##MODEL_TESTING##/##MODEL_DONE## le concernant.
     const verifiedSkip = verifiedToolScores[tier].has(model)
-    // Une correction manuelle de Léo (page "Tous les modèles") prime toujours sur la table figée dans le
-    // code — voir ExternalScoreOverride (shared/ipc.ts) : la table peut se tromper ou dater, lui a le site
-    // sous les yeux. artificialAnalysisSpeed n'a AUCUN repli figé (jamais mesuré/publié en dur ici) : "—"
-    // tant qu'il ne l'a pas notée lui-même.
-    const override = externalOverrides[model]
-    const artificialAnalysisIndex = override?.intelligence ?? ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null
-    const artificialAnalysisSpeed = override?.speed ?? null
+    const artificialAnalysisIndex = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null
+    const artificialAnalysisSpeed = ARTIFICIAL_ANALYSIS_SPEED[model] ?? null
     const local = localBenchmark[tier].get(model)
     if (local) {
       return { model, vramGb: modelVramGb, usedIn: usageByModel.get(model) ?? [], speedTokPerSec: local.speedTokPerSec, toolCalling: local.toolCalling, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, artificialAnalysisIndex, artificialAnalysisSpeed }
@@ -996,7 +1053,6 @@ function computeModelPicks(
   gpuName: string | null,
   localBenchmark: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>>,
   verifiedToolScores: Record<VerifiedTier, Map<string, string>>,
-  externalOverrides: Record<string, ExternalScoreOverride> = {}
 ): {
   flash: ModelOverviewEntry
   medium: ModelOverviewEntry
@@ -1049,15 +1105,12 @@ function computeModelPicks(
         speedEstimated: result?.speedEstimated,
         toolCalling: result?.toolCalling ?? null,
         intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
-        artificialAnalysisIndex: externalOverrides[model]?.intelligence ?? ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
-        artificialAnalysisSpeed: externalOverrides[model]?.speed ?? null
+        artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
+        artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[model] ?? null
       }
     }
 
-    // Une correction manuelle de Léo (ExternalScoreOverride) prime toujours sur la table figée — même
-    // fusion que dans buildEntry (getModelOverview) plus haut, jamais deux sources qui divergent pour le
-    // même modèle entre l'affichage et le VRAI choix de Jaris.
-    const artificialAnalysisFor = (model: string): number | undefined => externalOverrides[model]?.intelligence ?? ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model]
+    const artificialAnalysisFor = (model: string): number | undefined => ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model]
 
     benchmarked.sort((a, b) => {
       const toolDiff = parseToolScore(b.result.toolCalling) - parseToolScore(a.result.toolCalling)
@@ -1086,8 +1139,8 @@ function computeModelPicks(
       speedEstimated: winner.result.speedEstimated,
       toolCalling: winner.result.toolCalling,
       intelligence: INTELLIGENCE_MMLU_PRO[winner.model] ?? null,
-      artificialAnalysisIndex: externalOverrides[winner.model]?.intelligence ?? ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[winner.model] ?? null,
-      artificialAnalysisSpeed: externalOverrides[winner.model]?.speed ?? null
+      artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[winner.model] ?? null,
+      artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[winner.model] ?? null
     }
   }
 
@@ -1102,7 +1155,7 @@ function computeModelPicks(
 
 export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult> {
   const { name, vramGb } = await detectGpu()
-  const picks = computeModelPicks(vramGb, detectRamGb(), name, parseLocalBenchmark(), parseVerifiedToolScores(), await getExternalScoreOverrides())
+  const picks = computeModelPicks(vramGb, detectRamGb(), name, parseLocalBenchmark(), parseVerifiedToolScores())
   return {
     gpuName: name,
     vramGb,
@@ -1121,7 +1174,7 @@ export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult>
  */
 export async function pickBestCodeModel(): Promise<string> {
   const { name, vramGb } = await detectGpu()
-  const picks = computeModelPicks(vramGb, detectRamGb(), name, parseLocalBenchmark(), parseVerifiedToolScores(), await getExternalScoreOverrides())
+  const picks = computeModelPicks(vramGb, detectRamGb(), name, parseLocalBenchmark(), parseVerifiedToolScores())
   return picks.code.model
 }
 
@@ -1204,7 +1257,6 @@ export async function previewHardwareTiers(): Promise<HardwareTierPreview[]> {
   const ramGb = detectRamGb()
   const localBenchmark = parseLocalBenchmark()
   const verifiedToolScores = parseVerifiedToolScores()
-  const externalOverrides = await getExternalScoreOverrides()
 
   const steps = previewVramSteps(name, ramGb, localBenchmark, verifiedToolScores)
 
@@ -1222,7 +1274,7 @@ export async function previewHardwareTiers(): Promise<HardwareTierPreview[]> {
     // point représentatif — mathématiquement identique dans les deux cas puisque `vramGb` ci-dessus EST déjà
     // la frontière exacte où le résultat change (voir previewVramSteps), mais garder le calcul sur la VRAM
     // réelle pour "ta configuration" reste la source la plus directe de vérité, sans intermédiaire.
-    ...computeModelPicks(i === currentIndex && actualVramGb !== null ? actualVramGb : vramGb, ramGb, name, localBenchmark, verifiedToolScores, externalOverrides)
+    ...computeModelPicks(i === currentIndex && actualVramGb !== null ? actualVramGb : vramGb, ramGb, name, localBenchmark, verifiedToolScores)
   }))
 
   const sameCombo = (a: (typeof rows)[number], b: (typeof rows)[number]): boolean =>
