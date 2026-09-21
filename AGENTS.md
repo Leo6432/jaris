@@ -3574,3 +3574,43 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   soi-même vs. avoir une recherche déjà faite) ne se jugent vraiment qu'à l'usage. Le retirer proprement
   (fichier supprimé, pas juste caché ; tests qui testaient le mécanisme retiré supprimés, pas laissés à
   vérifier du code mort) compte alors autant que l'avoir bien construit la première fois.
+
+- **Étape 124, Léo, après avoir vu par lui-même ce qui restait sur le C une fois "Déplacer" utilisé (question
+  posée : "mais je changer le dossier et je met le d mais il ya encore des choses de jaris dans le c",
+  clarifié par une question à choix simple en "Petit (quelques Mo)") : "Je veut tout dans le dossier choisit
+  TOUT".** Renverse explicitement le choix de l'étape 121 ("les originaux ne sont JAMAIS supprimés... même
+  politique que l'ancien conversation-history.json conservé... parce que Léo s'était inquiété de perdre des
+  données") — une demande explicite qui contredit un choix précédent l'emporte toujours (même convention déjà
+  appliquée à l'étape 96 face à l'étape 47, puis à l'étape 121 elle-même face à l'étape 47 originale).
+  **Vérifié avant de coder, pas supposé** : les 3 briques lourdes (`modelsLocation.ts`, modèles Ollama/
+  environnement Python/cache HuggingFace) suppriment DÉJÀ leurs originaux une fois la copie confirmée
+  (`redirectFolder`, `rm(real, ...)`) — seule la 4e brique, les données propres de Jaris (`dataLocation.ts`,
+  conversations/profil/mémoire/applications générées/rappels), gardait volontairement un filet. C'est cette
+  seule brique qui manquait la suppression, pas les 4.
+  **`moveDataLocation` (dataLocation.ts) supprime maintenant les originaux, mais seulement APRÈS que la copie
+  ET l'écriture du marqueur ont réussi** — jamais l'inverse, même garantie que `redirectFolder` : si la copie
+  échoue en cours de route (disque plein, fichier verrouillé), rien n'a encore été supprimé, le message
+  d'erreur existant ("elles restent à leur emplacement actuel, rien n'est perdu") reste donc vrai. Seules les
+  entrées CONNUES (`OWNED_ENTRIES`) sont supprimées une par une, jamais `from` en bloc quand `from` est encore
+  le vrai `userData` (premier déplacement) — userData héberge aussi les fichiers internes de Chromium (Cache,
+  GPUCache, Network Persistent State...), qu'il ne faut jamais toucher, exactement la même règle qui empêchait
+  déjà de les COPIER. Si `from` était un ancien dossier `jaris-data` (un déplacement précédent, ex: C -> D
+  puis Léo redéplace D -> E), ce dossier entier est retiré une fois vide : sans ça, chaque nouveau
+  déplacement laisserait une copie périmée de plus derrière lui, l'inverse exact de "TOUT dans le dossier
+  choisi" pour quelqu'un qui déplace ses données plusieurs fois au fil du temps.
+  **Compromis assumé, documenté plutôt que caché** : avant ce changement, débrancher le disque externe après
+  un déplacement faisait retomber Jaris sur les VRAIES données d'origine (toujours là, jamais supprimées) —
+  un vrai filet de sécurité. Depuis ce changement, `getDataRoot()` retombe toujours sur le même chemin par
+  défaut en cas de disque manquant, mais ce chemin est désormais VIDE (les données ont vraiment déménagé) :
+  Jaris repartirait de zéro tant que le disque n'est pas rebranché, plutôt que de retrouver les anciennes
+  données. C'est le prix exact de "TOUT" que Léo a demandé en connaissance de cause (même mécanisme déjà
+  accepté pour les 3 briques lourdes depuis le début) — pas un oubli.
+  Régression : `scripts/test-data-location.mjs` — le test "les originaux ne sont JAMAIS supprimés" remplacé
+  par son inverse ("les originaux SONT supprimés une fois la copie confirmée"), un nouveau test confirme que
+  le cache Chromium reste intact même en supprimant les originaux connus autour de lui (le point le plus
+  sensible de ce changement), et un nouveau test couvre un DEUXIÈME déplacement (D -> E) pour vérifier que
+  l'ancien dossier `jaris-data` ne s'accumule pas. Les deux assertions critiques (suppression réelle,
+  nettoyage au second déplacement) ont été vérifiées en retirant temporairement le bloc de suppression : les
+  deux échouent bien avant correction, sans faire échouer les autres tests du fichier (dont celui qui protège
+  le cache Chromium — jamais touché, avec ou sans ce bloc). `npm run typecheck`, `npm run build` et
+  `npm test` (393 tests) au vert.

@@ -18,8 +18,13 @@ const nodeRequire = createRequire(import.meta.url)
  * Mécanisme volontairement DIFFÉRENT des trois autres briques (voir dataLocation.ts) : pas de jonction NTFS
  * sur userData, qui héberge aussi les fichiers internes de Chromium ouverts en permanence par Electron —
  * seulement une copie des fichiers que Jaris écrit lui-même, plus un marqueur laissé dans userData (l'ancrage
- * fixe) qui dit où ils vivent désormais. Les originaux ne sont JAMAIS supprimés : ce sont les seules données
- * irremplaçables de Jaris (les modèles, eux, se retéléchargent).
+ * fixe) qui dit où ils vivent désormais.
+ *
+ * Étape 124, Léo, après avoir constaté par lui-même ce qui restait sur le C une fois "Déplacer" utilisé (une
+ * copie de secours de quelques Mo, choix délibéré de l'étape 121) : "Je veut tout dans le dossier choisit
+ * TOUT". Les originaux sont donc désormais SUPPRIMÉS après confirmation de la copie — seule la suppression a
+ * changé, la copie reste faite AVANT toute suppression (jamais l'inverse), et le cache Chromium (jamais notre
+ * fichier) n'est toujours jamais touché.
  */
 function loadDataLocation(userDataDir) {
   const source = ts.transpileModule(readFileSync(new URL('../electron/services/dataLocation.ts', import.meta.url), 'utf8'), {
@@ -107,18 +112,50 @@ test('les fichiers internes de Chromium ne sont JAMAIS copiés (ils restent dans
   rmSync(root, { recursive: true, force: true })
 })
 
-test('les originaux ne sont JAMAIS supprimés (filet de sécurité sur les seules données irremplaçables)', async () => {
+test('les originaux SONT supprimés une fois la copie confirmée (étape 124 : "je veut tout dans le dossier choisi TOUT")', async () => {
   const { root, userData } = setupUserData()
   fillUserData(userData)
   const { moveDataLocation } = loadDataLocation(userData)
 
   await moveDataLocation(join(root, 'D-disque', 'jaris'), () => {})
 
-  // Même politique que l'ancien conversation-history.json conservé à l'étape 96 : Léo s'était inquiété
-  // explicitement de perdre des données ("j'ai peur que plus on avance plus tu vas perdre des données").
-  assert.equal(readFileSync(join(userData, 'conversations', 'abc.json'), 'utf8'), '[{"transcript":"Salut Jaris"}]')
-  assert.equal(readFileSync(join(userData, 'profile.json'), 'utf8'), '{"name":"Léo"}')
-  assert.ok(existsSync(join(userData, 'memory', 'Adresse.md')))
+  assert.ok(!existsSync(join(userData, 'conversations')), 'les conversations ne doivent plus rester sur le C')
+  assert.ok(!existsSync(join(userData, 'profile.json')), 'le profil ne doit plus rester sur le C')
+  assert.ok(!existsSync(join(userData, 'memory')), 'la mémoire ne doit plus rester sur le C')
+  assert.ok(!existsSync(join(userData, 'generated-apps')), 'les applications générées ne doivent plus rester sur le C')
+  assert.ok(!existsSync(join(userData, 'reminders.json')), 'les rappels ne doivent plus rester sur le C')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('le cache Chromium n’est JAMAIS supprimé, même en supprimant les originaux connus autour de lui', async () => {
+  const { root, userData } = setupUserData()
+  fillUserData(userData)
+  const { moveDataLocation } = loadDataLocation(userData)
+
+  await moveDataLocation(join(root, 'D-disque', 'jaris'), () => {})
+
+  // Le point le plus sensible de ce changement : supprimer les entrées CONNUES de userData sans jamais
+  // supprimer userData lui-même, qui héberge aussi les fichiers internes de Chromium ouverts par Electron.
+  assert.ok(existsSync(join(userData, 'Cache', 'data_0')), 'le cache Chromium doit rester intact après suppression des originaux')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('un second déplacement supprime aussi l’ancien dossier "jaris-data", rien ne s’accumule au fil des déplacements', async () => {
+  const { root, userData } = setupUserData()
+  fillUserData(userData)
+  const { moveDataLocation, getDataRoot } = loadDataLocation(userData)
+
+  const firstDest = join(root, 'D-disque', 'jaris')
+  await moveDataLocation(firstDest, () => {})
+  assert.ok(existsSync(join(firstDest, 'jaris-data', 'profile.json')), 'les données doivent bien être sur le premier disque avant le second déplacement')
+
+  const secondDest = join(root, 'E-disque', 'jaris')
+  const result = await moveDataLocation(secondDest, () => {})
+  assert.equal(result.success, true, `second déplacement attendu réussi, reçu : ${JSON.stringify(result)}`)
+
+  assert.ok(!existsSync(join(firstDest, 'jaris-data')), 'l’ancien dossier jaris-data (D) ne doit plus rester après un déplacement vers E')
+  assert.equal(readFileSync(join(secondDest, 'jaris-data', 'profile.json'), 'utf8'), '{"name":"Léo"}')
+  assert.equal(getDataRoot(), join(secondDest, 'jaris-data'))
   rmSync(root, { recursive: true, force: true })
 })
 
@@ -141,8 +178,11 @@ test('un marqueur qui pointe vers un dossier disparu (disque débranché) retomb
   await moveDataLocation(newDir, () => {})
   assert.equal(getDataRoot(), join(newDir, 'jaris-data'))
 
-  // Disque externe débranché / dossier supprimé à la main : Jaris doit repartir sur les données d'origine
-  // (toujours là, jamais supprimées) plutôt que d'échouer à lire quoi que ce soit au démarrage.
+  // Disque externe débranché / dossier supprimé à la main : `getDataRoot()` doit retomber sur le chemin par
+  // défaut (userData) plutôt que d'échouer à lire quoi que ce soit au démarrage — CE CHEMIN EST DÉSORMAIS
+  // VIDE depuis l'étape 124 (les originaux sont supprimés une fois la copie confirmée, "TOUT" dans le
+  // dossier choisi, à la demande explicite de Léo) : contrairement à avant, débrancher le disque ne
+  // retrouve plus les données d'origine, seulement un dossier vide, le compromis assumé de "TOUT".
   rmSync(join(root, 'D-disque'), { recursive: true, force: true })
   assert.equal(getDataRoot(), userData)
   rmSync(root, { recursive: true, force: true })

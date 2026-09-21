@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
-import { cp, mkdir } from 'fs/promises'
+import { cp, mkdir, rm } from 'fs/promises'
 import { join } from 'path'
 
 /**
@@ -66,11 +66,14 @@ export function getDataRoot(): string {
  * Copie les données de Jaris vers `newDir` et enregistre le marqueur. Appelée par le MÊME bouton "Déplacer"
  * que modelsLocation.ts (main.ts), juste après les trois briques lourdes.
  *
- * **Les originaux ne sont JAMAIS supprimés**, contrairement aux trois autres briques : ce sont les seules
- * données irremplaçables de Jaris (les modèles, eux, se retéléchargent). Même politique que l'ancien
- * `conversation-history.json`, conservé à l'étape 96 comme filet ("j'ai peur que plus on avance plus tu vas
- * perdre des données", Léo) — au pire il reste une copie périmée à l'ancien emplacement, ce qui ne coûte que
- * quelques Mo et ne peut rien casser, puisque plus rien ne la lit une fois le marqueur écrit.
+ * **Les originaux SONT supprimés une fois la copie confirmée**, comme les trois autres briques — Léo,
+ * ayant vu par lui-même ce qui restait sur le C après un premier "Déplacer" : "Je veut tout dans le dossier
+ * choisit TOUT". Remplace le choix de l'étape 121 (garder un filet sur le C, "les originaux ne sont JAMAIS
+ * supprimés") : une demande explicite contredisant un choix précédent l'emporte toujours (même convention
+ * que l'étape 96 face à l'étape 47, déjà appliquée ici une fois). Seule la suppression est nouvelle — la
+ * COPIE reste faite AVANT toute suppression (jamais l'inverse) : si la copie échoue en cours de route, rien
+ * n'a encore été supprimé, exactement la même garantie que `redirectFolder` (modelsLocation.ts) applique déjà
+ * à ses trois briques.
  */
 export async function moveDataLocation(
   newDir: string,
@@ -89,6 +92,21 @@ export async function moveDataLocation(
       await cp(source, join(dest, entry), { recursive: true, force: true })
     }
     writeFileSync(markerPath(), JSON.stringify({ dataDir: dest }, null, 2), 'utf-8')
+
+    // La copie a réussi et le marqueur pointe déjà vers `dest` : Jaris ne relira plus jamais `from`, les
+    // originaux peuvent donc disparaître sans rien perdre. Seules les entrées CONNUES (OWNED_ENTRIES) sont
+    // supprimées une par une, jamais `from` en bloc — si `from` est encore le vrai userData (premier
+    // déplacement), il héberge aussi les fichiers internes de Chromium (voir le commentaire en tête de
+    // fichier), qu'il ne faut jamais toucher.
+    for (const entry of OWNED_ENTRIES) {
+      const source = join(from, entry)
+      if (existsSync(source)) await rm(source, { recursive: true, force: true })
+    }
+    // `from` n'était PAS le vrai userData (un déplacement précédent avait déjà créé ce dossier `jaris-data`,
+    // qui n'a jamais contenu que des copies de OWNED_ENTRIES) : il ne reste plus rien dedans, autant le
+    // retirer plutôt que de laisser un dossier vide traîner à chaque nouveau déplacement.
+    if (from !== app.getPath('userData')) await rm(from, { recursive: true, force: true })
+
     return { success: true, message: `Tes conversations et réglages sont maintenant dans ${dest}.` }
   } catch (err) {
     return {
