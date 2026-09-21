@@ -19,11 +19,20 @@ const SLOT_LABELS: { key: 'flash' | 'medium' | 'large' | 'vision' | 'code'; labe
   { key: 'code', label: 'Code' }
 ]
 
-/** Même formatage que le tableau détaillé (OptionsMenu.tsx) : "(estimé)" distingue une vitesse calculée par
- * formule (verified-tool-scores.md) d'une vraie mesure locale, jamais confondues à l'affichage. */
+/**
+ * Vitesse de génération publiée par Artificial Analysis (tokens/s), étape 131, demande de Léo : "enleve
+ * token suprimer et prend le score speed". Remplace la vitesse ESTIMÉE par formule pour la machine de
+ * l'utilisateur (bande passante GPU ÷ poids du modèle, retirée avec toute sa table de cartes graphiques) :
+ * un chiffre calculé à partir d'une table de bande passante forcément incomplète (cartes pro/mobile/AMD
+ * absentes) affichait "—" pour tous ceux qu'elle ne connaissait pas, là où Artificial Analysis publie une
+ * mesure RÉELLE, identique pour tout le monde, qui permet au moins de comparer les modèles entre eux.
+ *
+ * Contrepartie ASSUMÉE et dite à Léo avant de coder : ce chiffre est mesuré sur le matériel d'Artificial
+ * Analysis (serveurs), donc il ne prédit PAS la vitesse sur la machine de qui regarde — d'où la légende
+ * sous le tableau, qui le dit en toutes lettres plutôt que de laisser deviner.
+ */
 function formatSpeed(entry: ModelOverviewEntry): string {
-  if (entry.speedTokPerSec === null) return '—'
-  return `${entry.speedTokPerSec.toFixed(1)} tok/s${entry.speedEstimated ? ' (estimé)' : ''}`
+  return entry.artificialAnalysisSpeed === null ? '—' : `${entry.artificialAnalysisSpeed} tok/s`
 }
 
 /**
@@ -89,7 +98,12 @@ export default function HardwareTierPreview({ tiers }: HardwareTierPreviewProps)
                       <td className="capacity-scan__tier-model" title={entry.model}>
                         {formatModelName(entry.model)}
                       </td>
-                      <td className="capacity-scan__tier-speed">{formatSpeed(entry)}</td>
+                      <td
+                        className="capacity-scan__tier-speed"
+                        title="Vitesse de génération publiée par Artificial Analysis — mesurée sur leur matériel, pas sur ta machine"
+                      >
+                        {formatSpeed(entry)}
+                      </td>
                       <td className="capacity-scan__tier-intelligence" title="Artificial Analysis Intelligence Index v4.3.2">
                         {formatIntelligence(entry)}
                       </td>
@@ -106,6 +120,13 @@ export default function HardwareTierPreview({ tiers }: HardwareTierPreviewProps)
           {i < tiers.length - 1 && <div className="capacity-scan__tier-arrow">↓</div>}
         </Fragment>
       ))}
+      {/* Une seule fois sous toute la liste, jamais répétée dans chacune des ~10 cartes : les deux chiffres
+          viennent du même endroit, et sans cette phrase un "148 tok/s" se lirait naturellement comme la
+          vitesse attendue sur SA machine — exactement le contresens que ce remplacement pouvait créer. */}
+      <p className="capacity-scan__tier-legend">
+        Vitesse et Intelligence : mesures publiées par Artificial Analysis, identiques pour tout le monde —
+        elles servent à comparer les modèles entre eux, pas à prédire la vitesse sur ta machine.
+      </p>
     </div>
   )
 }

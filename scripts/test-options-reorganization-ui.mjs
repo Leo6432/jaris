@@ -59,13 +59,13 @@ const overrides = {
       {
         tier: 'Rapide',
         entries: [
-          { model: 'ministral-3:3b', vramGb: 3.0, usedIn: ['Rapide', 'Médium'], speedTokPerSec: 120.4, toolCalling: '6/6', intelligence: null, artificialAnalysisIndex: 5 },
-          { model: 'qwen3:1.7b', vramGb: 2, usedIn: [], speedTokPerSec: 200.1, toolCalling: null, intelligence: null, artificialAnalysisIndex: null }
+          { model: 'ministral-3:3b', vramGb: 3.0, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', intelligence: null, artificialAnalysisIndex: 5 },
+          { model: 'qwen3:1.7b', vramGb: 2, usedIn: [], toolCalling: null, intelligence: null, artificialAnalysisIndex: null }
         ]
       },
       {
         tier: 'Vision',
-        entries: [{ model: 'gemma4:31b', vramGb: 20, usedIn: ['Vision'], speedTokPerSec: null, toolCalling: null, intelligence: null, artificialAnalysisIndex: null }]
+        entries: [{ model: 'gemma4:31b', vramGb: 20, usedIn: ['Vision'], toolCalling: null, intelligence: null, artificialAnalysisIndex: null }]
       }
     ]
   })

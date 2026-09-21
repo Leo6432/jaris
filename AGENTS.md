@@ -3825,3 +3825,47 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   pour un modèle sans score publié, et aucun débordement à 560 px. Vérifié en retirant temporairement la
   colonne : les deux tests de contenu échouent bien. `npm run typecheck`, `npm run build` et `npm test`
   (399 tests) au vert, plus deux captures du rendu réel (avant/après) comparées.
+
+- **Étape 131, Léo : "faut mieux garder 82.1 tok/s (estimé) ou score speed de artificalanalyse" puis, après
+  ma réponse, "oui mais le score, te donne une idée, en faite enleve token suprimer et prend le score
+  speed".** Ma recommandation initiale était de GARDER la vitesse locale estimée dans "Ce que ta machine fait
+  tourner" (elle est calculée avec la carte graphique de l'utilisateur, donc elle répond à "ça va aller vite
+  chez moi ?", là où Artificial Analysis mesure sur des serveurs). Léo a maintenu sa demande en donnant la
+  raison qui tranche : "le score te donne une idée" — il veut un repère COMPARATIF entre modèles, pas une
+  prédiction locale. Demande réaffirmée = demande qui gagne (même convention qu'aux étapes 96 et 21bis).
+  **Ce que son choix corrige réellement, et que je n'avais pas mis dans la balance en recommandant l'inverse** :
+  l'estimation locale reposait sur `GPU_MEMORY_BANDWIDTH_GBPS`, une table de 24 cartes NVIDIA grand public
+  (RTX 30/40/50) écrite à la main — toute carte absente (professionnelle, portable, AMD, Intel, ou simplement
+  une génération plus récente que la table) donnait `null`, donc "—" à l'écran. Un chiffre juste pour les
+  cartes listées mais ABSENT pour les autres est un moins bon compromis qu'un chiffre toujours présent et
+  honnêtement étiqueté : Artificial Analysis publie la même mesure pour tout le monde, et son absence ne
+  dépend plus du matériel de qui regarde mais uniquement de ce que le site a publié pour ce modèle exact.
+  **Le vrai risque du remplacement, traité DANS le code plutôt qu'en espérant que ça se devine** : "218 tok/s"
+  posé dans une carte intitulée "Ce que ta machine fait tourner" se lit naturellement comme ce que SA machine
+  va faire. D'où une légende, une seule fois sous toute la liste (jamais répétée dans chacune des ~10 cartes) :
+  "Vitesse et Intelligence : mesures publiées par Artificial Analysis, identiques pour tout le monde — elles
+  servent à comparer les modèles entre eux, pas à prédire la vitesse sur ta machine." Un test échoue si cette
+  phrase disparaît ou cesse de nommer sa source — la mise en garde fait partie du correctif, pas du commentaire.
+  **Nettoyage complet plutôt qu'un simple changement d'affichage** (CLAUDE.md, étape 3) : une fois la vitesse
+  estimée retirée de l'écran, `estimateSpeedTokPerSec`, `detectGpuBandwidthGbps`, `MEMORY_BANDWIDTH_EFFICIENCY`
+  et toute la table `GPU_MEMORY_BANDWIDTH_GBPS` n'avaient plus AUCUN consommateur — supprimés, ainsi que
+  `speedTokPerSec`/`speedEstimated` de `ModelOverviewEntry` (shared/ipc.ts) et le paramètre `gpuName` devenu
+  mort dans `computeModelPicks`/`previewVramSteps`/`resolveBenchmarkResult`. Vérifié AVANT de supprimer que
+  la vitesse locale n'entrait dans AUCUNE décision (`pickBestFrom` départage par fiabilité -> Intelligence
+  Index -> MMLU-Pro -> VRAM, jamais par vitesse) : c'était un affichage et rien d'autre, donc aucun modèle
+  choisi ne change. `LocalBenchmarkEntry.speedTokPerSec` est en revanche GARDÉE : elle reste la colonne que
+  `scripts/benchmark-models.mjs` écrit dans `benchmark-results.md`, un fichier lisible tel quel — arrêter de
+  la lire aurait désynchronisé le parseur du format du fichier pour rien.
+  **Piège de MON PROPRE correctif, attrapé par une capture d'écran du rendu compilé et pas en relecture** :
+  en fusionnant les deux colonnes dans une seule règle CSS (`.capacity-scan__tier-intelligence,
+  .capacity-scan__tier-speed { color: ... }`) pour leur donner la même teinte "chiffre de contexte", j'ai
+  perdu au passage le `padding-right: 10px !important` que chacune portait séparément — "Intelligence 9" se
+  retrouvait collé au badge "6/6" juste à droite. Invisible en relisant le CSS (les deux règles semblaient
+  simplement regroupées), évident sur la capture. **Leçon générale : fusionner deux règles CSS qui se
+  ressemblent n'est jamais un pur nettoyage — vérifier ce que CHACUNE déclarait avant de n'en garder qu'une,
+  et regarder le rendu réel, pas seulement le fichier.**
+  Régression : `node --test scripts/test-hardware-tier-preview-ui.mjs` (5 tests) — la vitesse affichée est
+  bien celle d'Artificial Analysis pour chaque emplacement de palier, plus aucune mention "(estimé)", "—"
+  quand rien n'est publié, et la légende existe en un seul exemplaire en nommant sa source. Les deux nouveaux
+  tests ont été vérifiés en réintroduisant temporairement leur défaut (vitesse locale estimée remise, légende
+  retirée) : chacun échoue bien seul. Capture du rendu compilé relue avant de livrer, pas seulement le JSX.

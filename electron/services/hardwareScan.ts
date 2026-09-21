@@ -731,9 +731,10 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
 /**
  * Vitesse de génération (tokens/s) publiée par Artificial Analysis pour ce modèle — relevée en même temps
  * que ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX ci-dessus, le 21/09/2026, avec la même discipline (jamais un
- * chiffre estimé ou repris d'un agrégateur tiers). PAS la vitesse estimée par formule pour la machine de
- * l'utilisateur (`speedTokPerSec`, ModelOverviewEntry, calculée séparément par estimateSpeedTokPerSec) : une
- * mesure Artificial Analysis, indépendante du matériel de qui regarde. Absence ici = Artificial Analysis
+ * chiffre estimé ou repris d'un agrégateur tiers). Mesure Artificial Analysis, indépendante du matériel de
+ * qui regarde : depuis l'étape 131, c'est la SEULE vitesse affichée (l'estimation par formule pour la machine
+ * de l'utilisateur, et la table de bande passante GPU qu'elle exigeait, ont été retirées avec elle — voir
+ * HardwareTierPreview.tsx pour le pourquoi). Absence ici = Artificial Analysis
  * publie l'Intelligence Index de ce modèle mais pas encore de mesure de vitesse fiable ("N/A" sur sa fiche).
  */
 const ARTIFICIAL_ANALYSIS_SPEED: Record<string, number> = {
@@ -766,78 +767,15 @@ const ARTIFICIAL_ANALYSIS_SPEED: Record<string, number> = {
   'devstral-small-2:24b': 131
 }
 
+/**
+ * Une ligne de scripts/benchmark-results.md (mesure RÉELLE faite sur la machine de qui a lancé l'analyse).
+ * `speedTokPerSec` reste lue pour rester fidèle au format du fichier (colonne écrite par
+ * scripts/benchmark-models.mjs, et lisible telle quelle dedans), mais n'est plus affichée nulle part depuis
+ * l'étape 131 — seule `toolCalling` sert encore à choisir les modèles (voir pickBestFrom).
+ */
 export interface LocalBenchmarkEntry {
   speedTokPerSec: number | null
   toolCalling: string | null
-  speedEstimated?: boolean
-}
-
-/**
- * Bande passante mémoire (Go/s) des GPU NVIDIA grand public courants — sources : article Wikipedia de
- * chaque génération ("GeForce RTX 30/40/50 series"), RTX 5080 corrigé à 960 Go/s via Tom's Hardware après
- * une première lecture erronée de la page RTX 50 (qui avait recopié le chiffre de la ligne RTX 5090).
- * Triée du nom le plus spécifique au moins spécifique (voir detectGpuBandwidthGbps) : "RTX 4070 Ti Super"
- * doit être trouvé avant "RTX 4070 Ti", lui-même avant "RTX 4070", sinon la carte la plus précise ne
- * matcherait jamais. Pas exhaustif (cartes pro/mobile absentes) : `null` plutôt qu'un chiffre inventé pour
- * toute carte non reconnue, voir estimateSpeedTokPerSec.
- */
-const GPU_MEMORY_BANDWIDTH_GBPS: Record<string, number> = {
-  'RTX 3060 Ti': 448,
-  'RTX 3060': 360,
-  'RTX 3070 Ti': 608,
-  'RTX 3070': 448,
-  'RTX 3080 Ti': 960,
-  'RTX 3080': 760,
-  'RTX 3090 Ti': 1008,
-  'RTX 3090': 936,
-  'RTX 4060 Ti': 288,
-  'RTX 4060': 272,
-  'RTX 4070 Ti Super': 672,
-  'RTX 4070 Ti': 504,
-  'RTX 4070 Super': 504,
-  'RTX 4070': 504,
-  'RTX 4080 Super': 736,
-  'RTX 4080': 716.8,
-  'RTX 4090': 1008,
-  'RTX 5050': 320,
-  'RTX 5060 Ti': 672,
-  'RTX 5060': 448,
-  'RTX 5070 Ti': 960,
-  'RTX 5070': 896,
-  'RTX 5080': 960,
-  'RTX 5090': 1792
-}
-
-function detectGpuBandwidthGbps(gpuName: string): number | null {
-  const upper = gpuName.toUpperCase()
-  const key = Object.keys(GPU_MEMORY_BANDWIDTH_GBPS)
-    .sort((a, b) => b.length - a.length)
-    .find((k) => upper.includes(k.toUpperCase()))
-  return key ? GPU_MEMORY_BANDWIDTH_GBPS[key] : null
-}
-
-/**
- * Efficacité empirique (bande passante réellement atteinte ÷ bande passante théorique) : l'inférence LLM en
- * génération est limitée par la bande passante mémoire (chaque token relit tout le poids du modèle une
- * fois), jamais 100% de la bande passante théorique en pratique (overhead noyau, cache KV, contrôleur
- * mémoire...). Même ordre de grandeur que la valeur utilisée en interne par llmfit (0.55) avant qu'on
- * retire cette dépendance (voir l'historique de ce fichier) — construite indépendamment, pas recopiée.
- */
-const MEMORY_BANDWIDTH_EFFICIENCY = 0.55
-
-/**
- * Estimation de vitesse par pur calcul (bande passante ÷ taille du modèle) — JAMAIS une mesure réelle,
- * jamais de téléchargement ni d'exécution. Réservée aux modèles déjà vérifiés en fiabilité d'appel d'outils
- * par ailleurs (parseVerifiedToolScores) : leur fiabilité ne dépend pas du matériel (vérifiée une fois pour
- * tous), mais leur vitesse si — recalculée ici pour la machine de CET utilisateur plutôt que de partager le
- * chiffre mesuré sur celle de Léo, qui n'aurait aucun sens ailleurs. `null` si la carte n'est pas reconnue
- * ou sa VRAM inconnue : jamais un chiffre inventé faute de mieux.
- */
-export function estimateSpeedTokPerSec(modelVramGb: number, gpuName: string | null): number | null {
-  if (!gpuName || modelVramGb <= 0) return null
-  const bandwidthGbps = detectGpuBandwidthGbps(gpuName)
-  if (bandwidthGbps === null) return null
-  return Math.round(((bandwidthGbps * MEMORY_BANDWIDTH_EFFICIENCY) / modelVramGb) * 10) / 10
 }
 
 /** Les trois paliers couverts par scripts/verified-tool-scores.md, voir parseVerifiedToolScores. */
@@ -846,7 +784,7 @@ export type VerifiedTier = 'conversation' | 'vision' | 'code'
 /**
  * Relit scripts/verified-tool-scores.md (commité dans le dépôt, voir son en-tête pour le pourquoi) : scores
  * de fiabilité vérifiés une fois par Léo sur sa machine, valables pour tout le monde — jamais de vitesse
- * dedans (toujours recalculée par estimateSpeedTokPerSec pour la machine de chaque utilisateur). Trois
+ * dedans (l'app affiche la vitesse publiée par Artificial Analysis, voir ARTIFICIAL_ANALYSIS_SPEED). Trois
  * tableaux séparés par palier (sections "## Conversation/Vision/Code"), PAS une seule map globale par nom de
  * modèle : `qwen3.5:4b` (et `gemma4:e4b`) sont candidats à la fois en Conversation et en Vision — un score
  * conversation ne doit jamais être confondu avec, ni écraser, un score vision pour le même nom de modèle
@@ -955,8 +893,8 @@ const TIER_LABELS: Record<Tier, string> = { flash: 'Rapide', medium: 'Médium', 
 export async function getModelOverview(profile?: Profile | null): Promise<ModelOverviewResult> {
   const localBenchmark = parseLocalBenchmark()
   const verifiedToolScores = parseVerifiedToolScores()
-  const { name: gpuName, vramGb } = await detectGpu()
-  const picks = computeModelPicks(vramGb, detectRamGb(), gpuName, localBenchmark, verifiedToolScores)
+  const { vramGb } = await detectGpu()
+  const picks = computeModelPicks(vramGb, detectRamGb(), localBenchmark, verifiedToolScores)
   const activeModels = {
     flash: profile?.models?.flash ?? picks.flash.model,
     medium: profile?.models?.medium ?? picks.medium.model,
@@ -977,8 +915,8 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
   addUsage(activeModels.code, 'Code')
 
   // Priorité à une vraie mesure locale (le vrai benchmark a tourné sur CETTE machine pour ce modèle) —
-  // sinon, pour un modèle déjà vérifié par ailleurs (voir verified-tool-scores.md), fiabilité partagée +
-  // vitesse estimée par formule pour cette machine — sinon rien de connu. `tier` sélectionne la BONNE table
+  // sinon, pour un modèle déjà vérifié par ailleurs (voir verified-tool-scores.md), la fiabilité partagée —
+  // sinon rien de connu. `tier` sélectionne la BONNE table
   // du fichier (voir VerifiedTier) : `qwen3.5:4b` par ex. a un score différent en Conversation qu'en Vision.
   const buildEntry = (model: string, modelVramGb: number, tier: VerifiedTier): ModelOverviewEntry => {
     // Indépendant de local/verifiedTool ci-dessous : même un modèle déjà mesuré localement une fois reste
@@ -990,7 +928,7 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
     const artificialAnalysisSpeed = ARTIFICIAL_ANALYSIS_SPEED[model] ?? null
     const local = localBenchmark[tier].get(model)
     if (local) {
-      return { model, vramGb: modelVramGb, usedIn: usageByModel.get(model) ?? [], speedTokPerSec: local.speedTokPerSec, toolCalling: local.toolCalling, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, artificialAnalysisIndex, artificialAnalysisSpeed }
+      return { model, vramGb: modelVramGb, usedIn: usageByModel.get(model) ?? [], toolCalling: local.toolCalling, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, artificialAnalysisIndex, artificialAnalysisSpeed }
     }
     const verifiedTool = verifiedToolScores[tier].get(model)
     if (verifiedTool) {
@@ -998,8 +936,6 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
         model,
         vramGb: modelVramGb,
         usedIn: usageByModel.get(model) ?? [],
-        speedTokPerSec: estimateSpeedTokPerSec(modelVramGb, gpuName),
-        speedEstimated: true,
         toolCalling: verifiedTool,
         intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
         verifiedSkip,
@@ -1007,7 +943,7 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
         artificialAnalysisSpeed
       }
     }
-    return { model, vramGb: modelVramGb, usedIn: usageByModel.get(model) ?? [], speedTokPerSec: null, toolCalling: null, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, artificialAnalysisIndex, artificialAnalysisSpeed }
+    return { model, vramGb: modelVramGb, usedIn: usageByModel.get(model) ?? [], toolCalling: null, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, artificialAnalysisIndex, artificialAnalysisSpeed }
   }
 
   // Léo, sur la page "Tous les modèles" (Options → Modèles) : "fait pour rapide etc... celui qui faut le
@@ -1044,7 +980,6 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
 function resolveBenchmarkResult(
   candidate: ModelCandidate,
   tier: VerifiedTier,
-  gpuName: string | null,
   localBenchmark: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>>,
   verifiedToolScores: Record<VerifiedTier, Map<string, string>>
 ): LocalBenchmarkEntry | undefined {
@@ -1052,7 +987,8 @@ function resolveBenchmarkResult(
   if (local) return local
   const verifiedTool = verifiedToolScores[tier].get(candidate.model)
   if (!verifiedTool) return undefined
-  return { speedTokPerSec: estimateSpeedTokPerSec(candidate.vramGb, gpuName), toolCalling: verifiedTool, speedEstimated: true }
+  // Pas de vitesse : elle n'était qu'estimée par formule, et n'est plus affichée depuis l'étape 131.
+  return { speedTokPerSec: null, toolCalling: verifiedTool }
 }
 
 /** "6/6" -> 6, absent/invalide -> -1 (toujours perdant face à un vrai score dans le tri de pickBestModelsFromBenchmark). */
@@ -1071,21 +1007,20 @@ function parseToolScore(toolCalling: string | null): number {
  *
  * D'après de vraies mesures — soit un run local du benchmark (parseLocalBenchmark : vitesse + fiabilité
  * mesurées sur CETTE machine), soit, pour un modèle déjà vérifié par ailleurs (parseVerifiedToolScores), sa
- * fiabilité partagée combinée à une vitesse estimée par formule (voir estimateSpeedTokPerSec) — jamais en
+ * fiabilité partagée (valable pour tout le monde, elle ne dépend pas du matériel) — jamais en
  * supposant que le plus gros qui rentre est forcément le meilleur. Priorité à la fiabilité, la VRAM du
  * candidat ne départageant qu'à égalité (le plus gros gagne, pas le plus rapide — voir pickBestFrom
  * ci-dessous). Une vraie mesure locale prime toujours sur un score vérifié partagé pour le même modèle (plus
  * précise, spécifique à cette machine). Repli sur pickForBudget (par taille) si aucun candidat n'a de
  * résultat exploitable pour ce palier (jamais testé nulle part, ni localement ni vérifié) — renvoie alors une
- * entrée sans vitesse/fiabilité connues plutôt qu'un chiffre inventé.
+ * entrée sans fiabilité connue plutôt qu'un chiffre inventé.
  *
  * Renvoie l'entrée COMPLÈTE (pas juste le nom du modèle) pour chaque palier : previewHardwareTiers en a
- * besoin pour afficher vitesse/fiabilité à côté de chaque modèle, pas seulement son nom.
+ * besoin pour afficher les scores publiés et la fiabilité à côté de chaque modèle, pas seulement son nom.
  */
 function computeModelPicks(
   vramGb: number | null,
   ramGb: number,
-  gpuName: string | null,
   localBenchmark: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>>,
   verifiedToolScores: Record<VerifiedTier, Map<string, string>>,
 ): {
@@ -1104,7 +1039,7 @@ function computeModelPicks(
   const budgetForCandidate = (model: string): number => (LARGE_RAM_OFFLOAD_MODELS.has(model) ? ramOffloadBudgetGb : budgetGb)
 
   const resultFor = (candidate: ModelCandidate, tier: VerifiedTier): LocalBenchmarkEntry | undefined =>
-    resolveBenchmarkResult(candidate, tier, gpuName, localBenchmark, verifiedToolScores)
+    resolveBenchmarkResult(candidate, tier, localBenchmark, verifiedToolScores)
 
   // Départage à égalité de fiabilité (6/6) : d'abord par MMLU-Pro (INTELLIGENCE_MMLU_PRO) quand les DEUX
   // candidats à égalité ont un chiffre connu, sinon par la VRAM du candidat (le plus GROS gagne) — à la
@@ -1118,9 +1053,8 @@ function computeModelPicks(
     const benchmarked = candidates
       .filter((c) => c.vramGb <= budgetForCandidate(c.model))
       .map((c) => ({ model: c.model, vramGb: c.vramGb, result: resultFor(c, tier) }))
-      // toolCalling (pas speedTokPerSec) est le critère de validité : un modèle vérifié dont la vitesse n'a
-      // pas pu être estimée (carte inconnue, voir estimateSpeedTokPerSec) reste un candidat légitime, juste
-      // départagé par 0 dans le tri ci-dessous plutôt qu'exclu.
+      // toolCalling est le seul critère de validité : un modèle vérifié en fiabilité reste un candidat
+      // légitime, quoi qu'on sache par ailleurs de sa vitesse.
       .filter((c): c is { model: string; vramGb: number; result: LocalBenchmarkEntry } => c.result?.toolCalling != null)
 
     // Repli VRAM seule (jamais élargi) : aucun candidat ne tient dans le budget de ce palier (ex: le plus
@@ -1136,8 +1070,6 @@ function computeModelPicks(
       return {
         model,
         vramGb: candidate?.vramGb ?? 0,
-        speedTokPerSec: result?.speedTokPerSec ?? null,
-        speedEstimated: result?.speedEstimated,
         toolCalling: result?.toolCalling ?? null,
         intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
         artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
@@ -1170,8 +1102,6 @@ function computeModelPicks(
     return {
       model: winner.model,
       vramGb: winner.vramGb,
-      speedTokPerSec: winner.result.speedTokPerSec,
-      speedEstimated: winner.result.speedEstimated,
       toolCalling: winner.result.toolCalling,
       intelligence: INTELLIGENCE_MMLU_PRO[winner.model] ?? null,
       artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[winner.model] ?? null,
@@ -1190,7 +1120,7 @@ function computeModelPicks(
 
 export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult> {
   const { name, vramGb } = await detectGpu()
-  const picks = computeModelPicks(vramGb, detectRamGb(), name, parseLocalBenchmark(), parseVerifiedToolScores())
+  const picks = computeModelPicks(vramGb, detectRamGb(), parseLocalBenchmark(), parseVerifiedToolScores())
   return {
     gpuName: name,
     vramGb,
@@ -1208,8 +1138,8 @@ export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult>
  * extrait à part : resolveCodeModel n'a besoin QUE du pick Code, pas des 4 autres paliers.
  */
 export async function pickBestCodeModel(): Promise<string> {
-  const { name, vramGb } = await detectGpu()
-  const picks = computeModelPicks(vramGb, detectRamGb(), name, parseLocalBenchmark(), parseVerifiedToolScores())
+  const { vramGb } = await detectGpu()
+  const picks = computeModelPicks(vramGb, detectRamGb(), parseLocalBenchmark(), parseVerifiedToolScores())
   return picks.code.model
 }
 
@@ -1236,13 +1166,12 @@ export async function pickBestCodeModel(): Promise<string> {
  * les 2 autres rôles — seul le NOMBRE et le CHOIX des points représentatifs change, pas le calcul lui-même.
  */
 function previewVramSteps(
-  gpuName: string | null,
   ramGb: number,
   localBenchmark: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>>,
   verifiedToolScores: Record<VerifiedTier, Map<string, string>>
 ): number[] {
   const hasScore = (c: ModelCandidate): boolean =>
-    resolveBenchmarkResult(c, 'conversation', gpuName, localBenchmark, verifiedToolScores)?.toolCalling != null
+    resolveBenchmarkResult(c, 'conversation', localBenchmark, verifiedToolScores)?.toolCalling != null
 
   // `candidate.vramGb` est le poids DU MODÈLE (comparé à budgetForCandidate dans computeModelPicks), pas la
   // VRAM TOTALE de la machine (le paramètre attendu par computeModelPicks, qui lui retire STT_RESERVED_GB
@@ -1288,12 +1217,12 @@ function previewLabelFor(index: number, total: number): string {
  * appartenait à N'IMPORTE LEQUEL des paliers fusionnés.
  */
 export async function previewHardwareTiers(): Promise<HardwareTierPreview[]> {
-  const { name, vramGb: actualVramGb } = await detectGpu()
+  const { vramGb: actualVramGb } = await detectGpu()
   const ramGb = detectRamGb()
   const localBenchmark = parseLocalBenchmark()
   const verifiedToolScores = parseVerifiedToolScores()
 
-  const steps = previewVramSteps(name, ramGb, localBenchmark, verifiedToolScores)
+  const steps = previewVramSteps(ramGb, localBenchmark, verifiedToolScores)
 
   // Le palier atteint = le plus haut dont la VRAM tient dans le budget réel de cette machine — jamais hors
   // tableau (repli sur le premier palier si même le plus petit ne rentre pas encore).
@@ -1309,7 +1238,7 @@ export async function previewHardwareTiers(): Promise<HardwareTierPreview[]> {
     // point représentatif — mathématiquement identique dans les deux cas puisque `vramGb` ci-dessus EST déjà
     // la frontière exacte où le résultat change (voir previewVramSteps), mais garder le calcul sur la VRAM
     // réelle pour "ta configuration" reste la source la plus directe de vérité, sans intermédiaire.
-    ...computeModelPicks(i === currentIndex && actualVramGb !== null ? actualVramGb : vramGb, ramGb, name, localBenchmark, verifiedToolScores)
+    ...computeModelPicks(i === currentIndex && actualVramGb !== null ? actualVramGb : vramGb, ramGb, localBenchmark, verifiedToolScores)
   }))
 
   const sameCombo = (a: (typeof rows)[number], b: (typeof rows)[number]): boolean =>

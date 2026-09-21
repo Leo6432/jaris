@@ -235,26 +235,23 @@ export interface HardwareTierPreview {
 
 /**
  * Un modèle candidat pour UN palier donné (voir ModelOverviewGroup), pour le tableau comparatif de l'onglet
- * Modèles du menu Options. speedTokPerSec/toolCalling viennent soit d'un vrai run local de
- * `npm run benchmark:models` (scripts/benchmark-models.mjs) sur cette machine, soit — pour un modèle déjà
- * vérifié par ailleurs (scripts/verified-tool-scores.md) — d'un score de fiabilité partagé (valable pour
- * tout le monde, ne dépend pas du matériel) combiné à une vitesse estimée par formule pour CETTE machine
- * (voir estimateSpeedTokPerSec dans hardwareScan.ts). `null` si rien de tout ça n'existe pour ce modèle
- * (jamais de chiffre inventé). `speedEstimated` distingue les deux cas pour ne jamais les confondre à
- * l'affichage : true = calculé par formule, false/undefined = vraie mesure locale.
+ * Modèles du menu Options. `toolCalling` vient soit d'un vrai run local de `npm run benchmark:models`
+ * (scripts/benchmark-models.mjs) sur cette machine, soit — pour un modèle déjà vérifié par ailleurs
+ * (scripts/verified-tool-scores.md) — du score de fiabilité partagé, valable pour tout le monde puisqu'il ne
+ * dépend pas du matériel. `null` si rien de tout ça n'existe pour ce modèle (jamais de chiffre inventé).
+ *
+ * Plus aucune vitesse LOCALE ici depuis l'étape 131 : les deux écrans qui affichent une vitesse montrent
+ * désormais `artificialAnalysisSpeed` (voir plus bas), une mesure publiée identique pour tout le monde.
  */
 export interface ModelOverviewEntry {
   model: string
   vramGb: number
   /** Paliers/rôles qui utilisent actuellement ce modèle dans le profil actif. Vide = modèle candidat non retenu. */
   usedIn?: string[]
-  speedTokPerSec: number | null
-  speedEstimated?: boolean
   toolCalling: string | null
   intelligence: number | null
   /**
-   * true si ce modèle est présent dans scripts/verified-tool-scores.md pour SON palier — indépendamment de
-   * speedEstimated (qui ne dit que "pas de mesure locale, on affiche le score vérifié à la place") : même un
+   * true si ce modèle est présent dans scripts/verified-tool-scores.md pour SON palier : même un
    * modèle déjà mesuré localement une fois reste, lui aussi, exclu du prochain run de
    * scripts/benchmark-models.mjs s'il est vérifié. Sert à ModelAnalysisProgress.tsx (OptionsMenu.tsx) pour
    * distinguer, dans le tableau de suivi en direct, un modèle qui ne sera JAMAIS touché par ce run (jamais
@@ -270,9 +267,10 @@ export interface ModelOverviewEntry {
    */
   artificialAnalysisIndex: number | null
   /**
-   * Vitesse de génération (tokens/s) publiée par Artificial Analysis pour ce modèle — PAS la vitesse estimée
-   * par formule pour la machine de l'utilisateur (`speedTokPerSec` ci-dessus, qui reste une estimation locale
-   * indépendante). Voir ARTIFICIAL_ANALYSIS_SPEED dans hardwareScan.ts. `null` si Artificial Analysis n'a pas
+   * Vitesse de génération (tokens/s) publiée par Artificial Analysis pour ce modèle. Mesurée sur LEUR
+   * matériel, identique pour tout le monde : sert à comparer les modèles entre eux, jamais à prédire la
+   * vitesse sur la machine de qui regarde (dit explicitement à l'écran, voir HardwareTierPreview.tsx).
+   * Voir ARTIFICIAL_ANALYSIS_SPEED dans hardwareScan.ts. `null` si Artificial Analysis n'a pas
    * encore publié de mesure de vitesse fiable pour ce modèle exact.
    */
   artificialAnalysisSpeed: number | null

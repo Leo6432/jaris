@@ -1685,15 +1685,22 @@ body.body--scan::after {
   width: 100%;
 }
 
+/* Intelligence Index du modèle retenu (étape 130) — volontairement plus terne que le badge de fiabilité
+   juste à droite : comme la vitesse à sa gauche depuis l'étape 131, c'est un chiffre de CONTEXTE publié par
+   Artificial Analysis (à quel point ce modèle est réputé bon/rapide en général), jamais une mesure faite sur
+   la machine de l'utilisateur — seule la fiabilité d'appel d'outils l'est. */
+.capacity-scan__tier-intelligence,
 .capacity-scan__tier-speed {
   padding-right: 10px !important;
+  color: var(--hud-text-faint);
 }
 
-/* Intelligence Index du modèle retenu (étape 130) — volontairement plus terne que la vitesse juste à
-   gauche et que le badge de fiabilité juste à droite : c'est un chiffre de CONTEXTE (à quel point ce modèle
-   est réputé bon en général), pas une mesure faite sur la machine de l'utilisateur comme les deux autres. */
-.capacity-scan__tier-intelligence {
-  padding-right: 10px !important;
+/* Une seule légende sous toute la liste des paliers (jamais répétée dans chaque carte) : sans elle, un
+   "148 tok/s" se lirait comme la vitesse attendue sur la machine de qui regarde. */
+.capacity-scan__tier-legend {
+  margin: 8px 2px 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
   color: var(--hud-text-faint);
 }
 

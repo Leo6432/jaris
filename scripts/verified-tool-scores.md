@@ -7,8 +7,9 @@ fiabilité vérifiés une fois par Léo sur sa propre machine, valables pour tou
 Pourquoi c'est possible : la fiabilité d'un modèle (répond-il avec le bon outil et les bons arguments,
 comprend-il vraiment une image, génère-t-il du code valide) est une propriété du modèle lui-même, pas du
 matériel qui le fait tourner — un score mesuré une fois reste valable sur n'importe quelle machine. La
-**vitesse**, elle, dépend du matériel de chacun : jamais stockée ici, toujours recalculée par formule pour
-la config de l'utilisateur (voir `estimateSpeedTokPerSec` dans `electron/services/hardwareScan.ts`).
+**vitesse**, elle, dépend du matériel de chacun : jamais stockée ici. Jaris affiche à la place la vitesse
+publiée par Artificial Analysis (`ARTIFICIAL_ANALYSIS_SPEED` dans `electron/services/hardwareScan.ts`),
+identique pour tout le monde et présentée comme un repère comparatif, jamais comme une prédiction locale.
 
 `scripts/benchmark-models.mjs` saute le téléchargement et le test de tout modèle présent dans la bonne
 section ci-dessous (voir `VERIFIED_MODELS` dans le script) : aucune installation nécessaire chez

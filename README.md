@@ -593,16 +593,17 @@ automatiquement le téléchargement et le test de tout modèle présent dans
 la bonne section pour son palier. Concrètement, aucun de ces modèles n'est
 jamais téléchargé pour l'analyse chez l'utilisateur final.
 
-La **vitesse**, elle, dépend du matériel de chacun et n'est donc jamais
-stockée dans `verified-tool-scores.md` : pour ces modèles-là, elle est
-recalculée par une formule (`estimateSpeedTokPerSec` dans
-`electron/services/hardwareScan.ts`) à partir de la VRAM qu'occupe le
-modèle et de la bande passante mémoire de la carte graphique détectée
-(table `GPU_MEMORY_BANDWIDTH_GBPS`, RTX 30/40/50 séries) — sans jamais
-installer le modèle. Le tableau de l'onglet **Modèles** affiche ces vitesses
-avec la mention "(estimé)" pour les distinguer d'une vraie mesure. Sur une
-carte graphique non reconnue, la formule ne devine pas : la vitesse affichée
-reste `—`.
+La **vitesse** affichée dans l'onglet **Modèles** est celle publiée par
+Artificial Analysis (table `ARTIFICIAL_ANALYSIS_SPEED` dans
+`electron/services/hardwareScan.ts`), mesurée sur leur matériel : identique
+pour tout le monde, elle sert à comparer les modèles entre eux et ne prédit
+pas la vitesse sur la machine de qui regarde — ce que l'écran dit en toutes
+lettres sous le tableau des paliers. Jusqu'à la v0.15.42, Jaris affichait à
+la place une vitesse ESTIMÉE par formule (bande passante de la carte
+graphique ÷ poids du modèle) : retirée avec sa table de cartes graphiques,
+forcément incomplète, qui affichait `—` pour toute carte non reconnue
+(cartes pro, portables, AMD…). `—` ici signifie donc seulement qu'Artificial
+Analysis n'a pas encore publié de mesure pour ce modèle exact.
 
 Les modèles trop gros pour la machine de Léo (donc jamais testés par lui)
 continuent de suivre le chemin d'origine, inchangé : téléchargés et

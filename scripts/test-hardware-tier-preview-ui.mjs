@@ -31,19 +31,19 @@ const ENTRY = `
 import { createRoot } from 'react-dom/client'
 import HardwareTierPreview from './src/components/HardwareTierPreview'
 
-const e = (model, speed, tool, ai) => ({
-  model, vramGb: 8, usedIn: [], speedTokPerSec: speed, speedEstimated: true,
-  toolCalling: tool, intelligence: null, artificialAnalysisIndex: ai, artificialAnalysisSpeed: null
+const e = (model, tool, ai, aiSpeed) => ({
+  model, vramGb: 8, usedIn: [],
+  toolCalling: tool, intelligence: null, artificialAnalysisIndex: ai, artificialAnalysisSpeed: aiSpeed
 })
 
 const tiers = [
   { label: 'Moyenne configuration', vramGb: 11.1, current: true,
-    flash: e('granite4.2:3b', 180.2, '6/6', 9),
-    medium: e('qwen3.5:9b', 31.5, '6/6', 14),
-    large: e('qwen3.8:27b', 11.6, '6/6', 34),
-    vision: e('qwen3-vl:4b', 42.1, '3/3', 6),
+    flash: e('granite4.2:3b', '6/6', 9, 218),
+    medium: e('qwen3.5:9b', '6/6', 14, 56),
+    large: e('qwen3.8:27b', '6/6', 34, 47),
+    vision: e('qwen3-vl:4b', '3/3', 6, 109),
     // Modèle sans score publié chez Artificial Analysis : doit afficher "—", jamais un chiffre inventé.
-    code: e('qwen2.5-coder:14b', 47.3, '3/3', null) }
+    code: e('qwen2.5-coder:14b', '3/3', null, null) }
 ]
 
 const root = createRoot(document.getElementById('root'))
@@ -101,6 +101,33 @@ test('un modèle sans score publié affiche "—", jamais un chiffre inventé ni
       return row?.querySelector('.capacity-scan__tier-intelligence')?.textContent?.trim()
     })
     assert.equal(codeRow, '—', `le palier Code (sans score publié) doit afficher "—" : ${codeRow}`)
+  })
+})
+
+test('la vitesse affichée est celle publiée par Artificial Analysis, jamais une estimation locale', options, async () => {
+  // Étape 131, Léo : "enleve token suprimer et prend le score speed". La colonne montrait auparavant une
+  // vitesse ESTIMÉE par formule pour la machine de l'utilisateur (bande passante GPU ÷ poids du modèle),
+  // affichée "82.1 tok/s (estimé)" — et "—" dès que la carte n'était pas dans la table, forcément incomplète.
+  await withPreview(async (page) => {
+    const cells = await page.$$eval('.capacity-scan__tier-speed', (els) => els.map((el) => el.textContent?.trim()))
+    assert.deepEqual(
+      cells,
+      ['218 tok/s', '56 tok/s', '47 tok/s', '109 tok/s', '—'],
+      `une vitesse Artificial Analysis par emplacement de palier attendue : ${cells.join(' | ')}`
+    )
+    const estimated = cells.filter((c) => c?.includes('estimé'))
+    assert.deepEqual(estimated, [], 'plus aucune mention "(estimé)" : la vitesse estimée par formule est retirée')
+  })
+})
+
+test('une légende dit que ces chiffres ne prédisent pas la vitesse sur la machine de l’utilisateur', options, async () => {
+  // Sans elle, "218 tok/s" se lirait naturellement comme ce que SA machine va faire — le contresens exact
+  // que le remplacement d'une mesure locale par une mesure publiée pouvait créer.
+  await withPreview(async (page) => {
+    const legends = await page.$$eval('.capacity-scan__tier-legend', (els) => els.map((el) => el.textContent?.trim()))
+    assert.equal(legends.length, 1, `une seule légende sous toute la liste, pas une par carte : ${legends.length}`)
+    assert.match(legends[0], /Artificial Analysis/, 'la légende doit nommer la source des deux chiffres')
+    assert.match(legends[0], /pas à prédire la vitesse sur ta machine/, 'la légende doit lever le contresens')
   })
 })
 
