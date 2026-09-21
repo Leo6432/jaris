@@ -3647,3 +3647,51 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Artificial Analysis", plus vrai depuis cette correction) est reconstruit sur une VRAIE égalité stricte de
   score (mistral-small3.2:24b et qwen3.5:2b, tous deux à 7) plutôt que sur une absence. `npm run typecheck`,
   `npm run build` et `npm test` (393 tests) au vert.
+
+- **Étape 126, Léo, après la correction de l'étape 125 : "1. je veut que tu reevérifie chaque score et je
+  veut pas de faux score 2. vas sur le site https://artificialanalysis.ai/models/recommend... regarde si on
+  a bien les meilleur model pour les palier".** Deux demandes distinctes, traitées séparément.
+  **Point 1 : re-vérification complète des 36 entrées de `ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX`, cette
+  fois avec une discipline plus stricte que lors de la recherche initiale (étape 122)** — chaque page relue
+  directement via une requête qui exige une CITATION EXACTE de la phrase source ("quote exactly, word for
+  word"), jamais une synthèse. Trois VRAIS faux scores trouvés et corrigés, tous originaires d'une synthèse
+  de recherche (jamais d'une lecture directe de la fiche, exactement le piège déjà documenté 3 fois à l'étape
+  122 pour qwen3:1.7b/north-mini-code-1.0/devstral-small-2:24b — la leçon n'avait pas été appliquée
+  systématiquement à TOUTES les entrées, seulement à celles qui avaient semblé douteuses sur le moment) :
+  - `mistral-small3.2:24b` : 7 -> 8 (vitesse 156 -> 146)
+  - `qwen2.5-coder:32b` : 2 -> 7
+  - `qwen2.5-coder:7b` : 4 -> 6
+  Plus des ajustements mineurs de VITESSE (le chiffre publié par Artificial Analysis fluctue légèrement
+  d'une lecture à l'autre — déjà observé à l'étape 122 pour qwen3-coder-next/qwen3-coder:30b — mis à jour
+  vers la lecture la plus récente pour : gemma4:12b (113->114), gemma4:e4b (42->41), ministral-3:14b
+  (89->87), ministral-3:3b (215->221), granite4.2:3b (220->218), ministral-3:8b (81->87), granite4.2:8b
+  (90->94), qwen3-vl:8b (112->109), qwen3.6:35b/qwen3.6:35b-a3b (109->115). Aucun Intelligence Index n'a
+  changé lors de cette relecture stricte hormis les 3 corrections ci-dessus — tous les autres étaient déjà
+  exacts. **Leçon générale, cette fois vraiment retenue pour de bon : la synthèse d'un moteur de recherche
+  n'est fiable NULLE PART dans ce genre de vérification, même pour une entrée qui n'a jamais semblé douteuse
+  — systématiquement re-lire la fiche PRIMAIRE avec une citation exacte avant de faire confiance à un
+  chiffre, sans exception pour les entrées "faciles".**
+  **Point 2 : le comparateur interactif `/models/recommend` s'est révélé INACCESSIBLE depuis cet
+  environnement** — c'est une application JavaScript qui ne rend rien via une simple requête HTTP (WebFetch),
+  et une tentative via un navigateur headless (Playwright) s'est heurtée au même blocage réseau déjà rencontré
+  pour Dubesor Benchtable plus tôt dans cette session (proxy de l'environnement, pas le site lui-même).
+  **Contournement partiel, en cherchant plutôt les articles/annonces récents d'Artificial Analysis** : a
+  révélé **Muse Glimmer** (Meta, 30B dense + encodeur vision ~1,8B, Apache 2.0, sorti le 10 août 2026,
+  disponible sur Ollama — `muse-glimmer:30b`, 18 Go), un modèle candidat que Jaris ne connaît pas du tout
+  aujourd'hui, explicitement optimisé pour l'usage agentique/appel d'outils local. **Piège évité de justesse
+  ici aussi, même leçon que le point 1** : un article de blog Artificial Analysis annonçait "35" pour ce
+  modèle, une comparaison de recherche synthétisée annonçait "38" pour qwen3.6:27b (alors que sa fiche directe
+  donne 21, déjà vérifié 3 fois de façon cohérente) — la fiche DIRECTE du modèle, relue deux fois avec la même
+  discipline de citation exacte, donne un score cohérent avec le reste de la table : 17 (vitesse 92 tok/s),
+  proche mais légèrement EN DESSOUS de gemma4:31b (19) déjà candidat — pas le bond spectaculaire que
+  suggérait l'article. **Non ajouté au code pour l'instant** : l'Intelligence Index n'est qu'un DÉPARTAGE
+  dans `pickBestFrom` (hardwareScan.ts), jamais le critère principal — le critère principal est la fiabilité
+  d'appel d'outils mesurée LOCALEMENT (`verified-tool-scores.md`/`benchmark-results.md`), qu'aucune recherche
+  web ne peut fournir pour un modèle jamais testé par Jaris. Proposé à Léo comme candidat à ajouter puis à
+  tester via `npm run benchmark:models` sur sa machine, plutôt que de l'ajouter à l'aveugle sans savoir s'il
+  appelle vraiment les outils correctement.
+  Régression : `scripts/test-hardwarescan-tiebreak.mjs` mis à jour avec les 3 corrections et les ajustements
+  de vitesse ; le test de repli VRAM (qui reposait sur `mistral-small3.2:24b`/`qwen3.5:2b` À ÉGALITÉ de score,
+  plus vrai depuis la correction 7->8) reconstruit sur une VRAIE égalité entre `granite4.2:30b` et
+  `glm-4.7-flash:q4_K_M` (tous deux à 15). `npm run typecheck`, `npm run build` et `npm test` (393 tests)
+  au vert.

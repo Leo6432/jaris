@@ -70,23 +70,23 @@ test('à 6/6 égalité, départage d’abord par l’Intelligence Index officiel
 })
 
 test('à 6/6 ET Intelligence Index EXACTEMENT égaux, repli sur MMLU-Pro puis la VRAM la plus grosse', async () => {
-  // Étape 122 a fait passer la couverture Artificial Analysis de 15 à 34/39 candidats — il n'existe donc
+  // Étape 122 a fait passer la couverture Artificial Analysis de 15 à 36/39 candidats — il n'existe donc
   // plus de paire de candidats du palier Puissant SANS AUCUN score connu des deux côtés (l'ancien scénario
-  // de ce test). mistral-small3.2:24b (7) et qwen3.5:2b (7) partagent maintenant le MÊME Intelligence Index
-  // : ce cas-là (égalité stricte, pas absence) tombe toujours sur le repli suivant — qwen3.5:2b a un chiffre
-  // MMLU-Pro connu (55.3) mais pas mistral-small3.2:24b, donc ce repli aussi ne s'applique pas aux DEUX à la
-  // fois : le départage final reste purement par VRAM (mistral-small3.2:24b, 15 Go, bien plus gros).
+  // de ce test). granite4.2:30b (15) et glm-4.7-flash:q4_K_M (15) partagent le MÊME Intelligence Index : ce
+  // cas-là (égalité stricte, pas absence) tombe toujours sur le repli suivant — ni l'un ni l'autre n'a de
+  // chiffre MMLU-Pro connu, donc ce repli non plus ne s'applique pas : le départage final reste purement par
+  // VRAM (glm-4.7-flash:q4_K_M, 19 Go, légèrement plus gros que granite4.2:30b, 18 Go).
   const { pickBestModelsFromBenchmark } = setup({
     verifiedToolScoresMd: [
       '## Conversation',
       '| Modèle | Fiabilité |',
       '| --- | --- |',
-      '| mistral-small3.2:24b | 6/6 |',
-      '| qwen3.5:2b | 6/6 |'
+      '| granite4.2:30b | 6/6 |',
+      '| glm-4.7-flash:q4_K_M | 6/6 |'
     ].join('\n')
   })
   const result = await pickBestModelsFromBenchmark()
-  assert.equal(result.models.large, 'mistral-small3.2:24b')
+  assert.equal(result.models.large, 'glm-4.7-flash:q4_K_M')
 })
 
 test('expose les Intelligence Index lus directement chez Artificial Analysis sans en inventer (étape 125 : 36/39 modèles couverts)', async () => {
@@ -116,7 +116,7 @@ test('expose les Intelligence Index lus directement chez Artificial Analysis san
     'ministral-3:8b': 5,
     'granite4.2:8b': 11,
     'granite4.1:8b': 7,
-    'mistral-small3.2:24b': 7,
+    'mistral-small3.2:24b': 8,
     'granite4.2:30b': 15,
     'command-r:35b': 5,
     'qwen3:1.7b': 5,
@@ -127,9 +127,9 @@ test('expose les Intelligence Index lus directement chez Artificial Analysis san
     'qwen3-coder-next': 9,
     'qwen3-coder:30b': 10,
     'north-mini-code-1.0': 10,
-    'qwen2.5-coder:32b': 2,
+    'qwen2.5-coder:32b': 7,
     'devstral-small-2:24b': 8,
-    'qwen2.5-coder:7b': 4
+    'qwen2.5-coder:7b': 6
   }
 
   for (const [model, score] of Object.entries(expected)) assert.equal(byModel.get(model), score, model)
@@ -142,8 +142,8 @@ test('expose aussi la vitesse (tokens/s) publiée par Artificial Analysis, absen
   const { getModelOverview } = setup()
   const overview = await getModelOverview()
   const byModel = new Map(overview.groups.flatMap((group) => group.entries.map((entry) => [entry.model, entry.artificialAnalysisSpeed])))
-  assert.equal(byModel.get('ministral-3:3b'), 215)
-  assert.equal(byModel.get('granite4.2:3b'), 220)
+  assert.equal(byModel.get('ministral-3:3b'), 221)
+  assert.equal(byModel.get('granite4.2:3b'), 218)
   assert.equal(byModel.get('devstral-2:123b'), 133)
   // qwen3.5:0.8b a un Intelligence Index connu (6) mais Artificial Analysis affiche "N/A" pour sa vitesse.
   assert.equal(byModel.get('qwen3.5:0.8b'), null, 'aucune vitesse ne doit être devinée quand Artificial Analysis ne la publie pas')
