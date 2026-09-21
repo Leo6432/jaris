@@ -69,19 +69,27 @@ test('à 6/6 égalité, départage d’abord par l’Intelligence Index officiel
   assert.equal(result.models.large, 'qwen3.8:27b')
 })
 
-test('à 6/6 égalité SANS MMLU-Pro connu pour les deux, repli sur la VRAM la plus grosse (comportement inchangé)', async () => {
+test('à 6/6 ET Intelligence Index EXACTEMENT égaux, repli sur MMLU-Pro puis la VRAM la plus grosse', async () => {
+  // Étape 122 a fait passer la couverture Artificial Analysis de 15 à 34/39 candidats — il n'existe donc
+  // plus de paire de candidats du palier Puissant SANS AUCUN score connu des deux côtés (l'ancien scénario
+  // de ce test). mistral-small3.2:24b (7) et qwen3.5:2b (7) partagent maintenant le MÊME Intelligence Index
+  // : ce cas-là (égalité stricte, pas absence) tombe toujours sur le repli suivant — qwen3.5:2b a un chiffre
+  // MMLU-Pro connu (55.3) mais pas mistral-small3.2:24b, donc ce repli aussi ne s'applique pas aux DEUX à la
+  // fois : le départage final reste purement par VRAM (mistral-small3.2:24b, 15 Go, bien plus gros).
   const { pickBestModelsFromBenchmark } = setup({
-    verifiedToolScoresMd: ['## Conversation', '| Modèle | Fiabilité |', '| --- | --- |', '| qwen3.6:35b | 6/6 |', '| qwen3.6:27b | 6/6 |'].join(
-      '\n'
-    )
+    verifiedToolScoresMd: [
+      '## Conversation',
+      '| Modèle | Fiabilité |',
+      '| --- | --- |',
+      '| mistral-small3.2:24b | 6/6 |',
+      '| qwen3.5:2b | 6/6 |'
+    ].join('\n')
   })
   const result = await pickBestModelsFromBenchmark()
-  // Ni qwen3.6:35b ni qwen3.6:27b n'ont d'entrée dans INTELLIGENCE_MMLU_PRO à ce jour : le départage doit
-  // rester purement par VRAM (35b, 24 Go, plus gros que 27b, 18 Go) — comportement d'avant ce correctif.
-  assert.equal(result.models.large, 'qwen3.6:35b')
+  assert.equal(result.models.large, 'mistral-small3.2:24b')
 })
 
-test('expose les Intelligence Index lus directement chez Artificial Analysis sans en inventer (étape 122 : 34/39 modèles couverts)', async () => {
+test('expose les Intelligence Index lus directement chez Artificial Analysis sans en inventer (étape 125 : 36/39 modèles couverts)', async () => {
   const { getModelOverview } = setup()
   const overview = await getModelOverview()
   const byModel = new Map(overview.groups.flatMap((group) => group.entries.map((entry) => [entry.model, entry.artificialAnalysisIndex])))
@@ -91,7 +99,9 @@ test('expose les Intelligence Index lus directement chez Artificial Analysis san
     'qwen3.5:4b': 13,
     'qwen3.5:9b': 14,
     'qwen3.5:27b': 23,
+    'qwen3.5:35b': 19,
     'qwen3.6:27b': 21,
+    'qwen3.6:35b': 18,
     'qwen3.6:35b-a3b': 18,
     'qwen3.8:27b': 34,
     'gpt-oss:20b': 9,
@@ -123,11 +133,9 @@ test('expose les Intelligence Index lus directement chez Artificial Analysis san
   }
 
   for (const [model, score] of Object.entries(expected)) assert.equal(byModel.get(model), score, model)
-  // Les variantes DENSES de qwen3.5:35b/qwen3.6:35b n'ont jamais de fiche Artificial Analysis dédiée (seule
-  // la variante MoE "A3B" en a une, un modèle différent malgré le nom très proche — vérifié explicitement
-  // avant de conclure) : jamais de rapprochement approximatif entre les deux.
-  assert.equal(byModel.get('qwen3.5:35b'), null, 'un modèle exact absent d’Artificial Analysis doit rester sans score')
-  assert.equal(byModel.get('qwen3.6:35b'), null, 'la variante dense ne doit jamais reprendre le score de la variante A3B')
+  // Modèle réellement absent d'Artificial Analysis (vérifié : aucune fiche à ce nom) — jamais de chiffre
+  // inventé pour combler le vide.
+  assert.equal(byModel.get('qwen2.5-coder:14b'), null, 'un modèle exact absent d’Artificial Analysis doit rester sans score')
 })
 
 test('expose aussi la vitesse (tokens/s) publiée par Artificial Analysis, absente quand non mesurée', async () => {

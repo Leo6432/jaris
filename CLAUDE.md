@@ -3653,3 +3653,36 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   deux échouent bien avant correction, sans faire échouer les autres tests du fichier (dont celui qui protège
   le cache Chromium — jamais touché, avec ou sans ce bloc). `npm run typecheck`, `npm run build` et
   `npm test` (393 tests) au vert.
+
+- **Étape 125, Léo, après avoir lu l'entrée de l'étape précédente : "mais on est d'accord que Qwen3.6 35B
+  A3B c'est qwen3.6 35b ?"** J'avais conclu, à l'étape 122, que `qwen3.5:35b`/`qwen3.6:35b` (les tags DENSES
+  utilisés par Jaris) étaient des modèles DIFFÉRENTS de `qwen3.6:35b-a3b`/`qwen3.5:35b-a3b` (la variante MoE),
+  sur la seule base qu'aucune fiche Artificial Analysis dédiée au nom "dense" n'existait. Léo avait raison de
+  douter — vérifié cette fois DIRECTEMENT sur `ollama.com/library/qwen3.6/tags` et
+  `ollama.com/library/qwen3.5/tags`, en comparant le DIGEST du fichier plutôt que son nom : `qwen3.6:35b` et
+  `qwen3.6:35b-a3b` partagent EXACTEMENT le même digest (`096fdbd02fe6`, 23 Go) — deux ÉTIQUETTES pour le
+  MÊME fichier, jamais deux modèles. Même chose pour `qwen3.5:35b`/`qwen3.5:35b-a3b` (`3460ffeede54`, 24 Go).
+  Il n'existe donc AUCUNE variante "dense" séparée à ces tailles chez Qwen3.5/3.6 : le tag court est un
+  simple alias du tag complet, exactement comme Léo le pensait.
+  **Cause de mon erreur initiale, pour ne pas la refaire** : j'avais vérifié "aucune fiche Artificial
+  Analysis pour le NOM `qwen3.6:35b` (dense)" et conclu "donc c'est un modèle différent, non couvert" —
+  un raisonnement qui aurait été correct SI un modèle dense distinct existait vraiment, mais faux ici car il
+  n'en existe pas du tout : l'absence de fiche prouvait juste qu'Artificial Analysis ne nomme pas de variante
+  "dense" (parce qu'aucune n'existe), pas que le tag de Jaris pointe vers un modèle non couvert. **Leçon
+  générale : quand deux noms de tags très proches (`:35b` et `:35b-a3b`) pourraient désigner soit le même
+  fichier soit deux fichiers différents, vérifier le DIGEST (l'identifiant unique du contenu réel), jamais
+  seulement l'absence d'une fiche externe à l'un des deux noms — une source externe qui ne nomme qu'une seule
+  variante ne prouve rien sur le nombre RÉEL de modèles distincts qui existent.** Repris directement au piège
+  déjà documenté ici pour `gemma-4-26b-a4b`/le nom "a4b" (nombre de paramètres actifs, pas un tag à part) :
+  toujours vérifier la source la plus PRIMAIRE possible (ici le registre Ollama lui-même, pas Artificial
+  Analysis) avant de conclure que deux noms désignent deux choses différentes.
+  Corrigé dans `ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX`/`ARTIFICIAL_ANALYSIS_SPEED` (hardwareScan.ts) :
+  `qwen3.5:35b` (19, vitesse 148 — revérifiée directement sur la fiche A3B, chiffres identiques puisque même
+  fichier) et `qwen3.6:35b` (18, vitesse 109) ajoutés, avec les mêmes valeurs que leurs alias `-a3b` déjà
+  présents dans la table. Couverture Artificial Analysis : 34/39 -> 36/39 modèles candidats.
+  Régression : `scripts/test-hardwarescan-tiebreak.mjs` — le test qui affirmait "qwen3.6:35b/qwen3.5:35b
+  doivent rester sans score" (qui codait en dur l'erreur elle-même) est retiré ; la liste "Intelligence Index
+  attendus" inclut désormais les deux ; le test de repli VRAM (qui reposait sur "aucun des deux n'a de score
+  Artificial Analysis", plus vrai depuis cette correction) est reconstruit sur une VRAIE égalité stricte de
+  score (mistral-small3.2:24b et qwen3.5:2b, tous deux à 7) plutôt que sur une absence. `npm run typecheck`,
+  `npm run build` et `npm test` (393 tests) au vert.

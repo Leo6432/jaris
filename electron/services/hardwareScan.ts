@@ -649,11 +649,22 @@ const INTELLIGENCE_MMLU_PRO: Record<string, number> = {
  * voir externalScoresStore.ts dans l'historique du dépôt). Pour les familles proposant deux variantes, on
  * reprend la variante Reasoning, celle qui correspond au mode de réflexion employé par Jaris. Absence ici =
  * Artificial Analysis n'a pas publié de score pour ce modèle EXACT (vérifié un par un, jamais un
- * rapprochement approximatif ni un chiffre repris d'un agrégateur tiers) — notamment `qwen3.5:35b` et
- * `qwen3.6:35b` (les variantes DENSES utilisées par Jaris) : Artificial Analysis ne couvre que la variante
- * MoE "A3B" de ces deux familles (`qwen3.6:35b-a3b`, déjà dans cette table), un modèle différent malgré le
- * nom très proche — confirmé en cherchant explicitement une page dédiée à la variante dense, absente. À
- * fiabilité égale, ce score départage deux modèles exacts couverts ; MMLU-Pro reste le repli quand cette
+ * rapprochement approximatif ni un chiffre repris d'un agrégateur tiers).
+ *
+ * **Correction, étape 125 — Léo : "mais on est d'accord que Qwen3.6 35B A3B c'est qwen3.6 35b ?"** : la
+ * version précédente de ce commentaire affirmait que `qwen3.5:35b`/`qwen3.6:35b` (les tags utilisés par
+ * Jaris) étaient des variantes DENSES différentes de `qwen3.6:35b-a3b`, sans fiche Artificial Analysis
+ * dédiée. C'était FAUX — vérifié cette fois directement sur ollama.com/library/qwen3.6/tags et
+ * ollama.com/library/qwen3.5/tags (le digest du fichier, pas juste son nom) : `qwen3.6:35b` et
+ * `qwen3.6:35b-a3b` partagent EXACTEMENT le même digest (096fdbd02fe6, 23 Go) — ce sont deux ÉTIQUETTES pour
+ * le MÊME fichier, jamais deux modèles différents ; même chose pour `qwen3.5:35b`/`qwen3.5:35b-a3b`
+ * (3460ffeede54, 24 Go). Il n'existe donc pas de variante "dense" séparée à ces tailles chez Qwen3.5/3.6 :
+ * le tag court (`:35b`) est un simple alias du tag complet (`:35b-a3b`). La fiche Artificial Analysis de la
+ * variante A3B s'applique donc bien telle quelle aux deux tags. Leçon retenue : une absence de fiche dédiée
+ * pour un NOM ne prouve pas l'absence d'un modèle — toujours vérifier le DIGEST du fichier avant de conclure
+ * que deux tags désignent des modèles différents, pas seulement leurs noms.
+ *
+ * À fiabilité égale, ce score départage deux modèles exacts couverts ; MMLU-Pro reste le repli quand cette
  * comparaison officielle n'est pas possible.
  */
 const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
@@ -662,7 +673,9 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   'qwen3.5:4b': 13,
   'qwen3.5:9b': 14,
   'qwen3.5:27b': 23,
+  'qwen3.5:35b': 19,
   'qwen3.6:27b': 21,
+  'qwen3.6:35b': 18,
   'qwen3.6:35b-a3b': 18,
   'qwen3.8:27b': 34,
   'gpt-oss:20b': 9,
@@ -707,7 +720,9 @@ const ARTIFICIAL_ANALYSIS_SPEED: Record<string, number> = {
   'qwen3.5:4b': 19,
   'qwen3.5:9b': 56,
   'qwen3.5:27b': 75,
+  'qwen3.5:35b': 148,
   'qwen3.6:27b': 60,
+  'qwen3.6:35b': 109,
   'qwen3.6:35b-a3b': 109,
   'qwen3.8:27b': 47,
   'gpt-oss:20b': 168,
