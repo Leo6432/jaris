@@ -195,6 +195,9 @@ const MODELS = [
   'hf.co/openbmb/MiniCPM5-1B-GGUF',
   // Pas de tag officiel non plus : import depuis la requantification GGUF de bartowski (quantifieur
   // reconnu et fiable dans la communauté Ollama/llama.cpp), à partir du dépôt officiel ai9stars/G9v3-3B.
+  // Promu dans FLASH_CANDIDATES/MEDIUM_CANDIDATES (hardwareScan.ts) à l'étape 132 : 6/6 déjà vérifié
+  // ci-dessus n'avait jamais été suivi de sa promotion — reste dans cette liste comme tout autre candidat
+  // déjà vérifié, sauté au prochain run (voir VERIFIED_MODELS plus bas).
   'hf.co/bartowski/ai9stars_G9v3-3B-GGUF',
   // Ignorés jusqu'ici car trop gros pour la machine de dev (RTX 3070, 8 Go) : maintenant que le script
   // détecte la VRAM disponible et saute automatiquement ce qui ne rentre pas (voir detectVramGb ci-dessous),

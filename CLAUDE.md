@@ -3908,3 +3908,36 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   quand rien n'est publié, et la légende existe en un seul exemplaire en nommant sa source. Les deux nouveaux
   tests ont été vérifiés en réintroduisant temporairement leur défaut (vitesse locale estimée remise, légende
   retirée) : chacun échoue bien seul. Capture du rendu compilé relue avant de livrer, pas seulement le JSX.
+
+- **Étape 132, Léo : "on a un bon tableau avec score d'inteligence d'outils la les palier qu'on a, on a bien
+  les meilleur model regarde bien"** — audit des 5 listes de candidats à l'aide du tableau désormais complet
+  (fiabilité + Intelligence Artificial Analysis), suite directe de la question précédente sur `G9v3-3B`.
+  **Trouvaille concrète, pas un simple "tout va bien"** : en vérifiant précisément ce modèle après ma
+  réponse précédente ("à surveiller, pas à adopter"), j'ai découvert que `scripts/verified-tool-scores.md`
+  contient DÉJÀ une ligne `hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 6/6` — un score RÉEL, mesuré sur la
+  machine de Léo le 12/09/2026 (présent dans `scripts/benchmark-models.mjs` comme candidat exploratoire
+  depuis cette date), jamais promu dans `FLASH_CANDIDATES`/`MEDIUM_CANDIDATES` : un oubli, pas un choix
+  délibéré. **Ma réponse précédente était donc incomplète, corrigée ici plutôt que laissée telle quelle** :
+  je n'avais vérifié que la fiche Artificial Analysis (Intelligence Index 11, confirmé) et une bibliothèque
+  Ollama tierce peu fiable (`schien/g9v3-3b`, 43 téléchargements) — sans chercher si ce modèle précis avait
+  déjà été testé dans le dépôt lui-même par une session précédente, via l'import `hf.co/bartowski/...`
+  (quantifieur reconnu de la communauté Ollama/llama.cpp, à partir du dépôt OFFICIEL ai9stars/G9v3-3B) —
+  un mécanisme OFFICIEL d'Ollama, PAS le même risque que le réupload communautaire que j'avais écarté à
+  raison. **Leçon générale : avant de juger un modèle "pas encore fiable", vérifier si le dépôt lui-même n'a
+  pas déjà une mesure LOCALE vérifiée pour lui — `grep` du nom exact dans `verified-tool-scores.md` ET
+  `benchmark-models.mjs`, pas seulement une recherche web externe.**
+  Sur cette base vérifiée (6/6 en appel d'outils, Intelligence 11, 1,9 Go — plus léger ET meilleur sur les
+  deux scores que `granite4.2:3b`, le meilleur candidat Rapide jusqu'ici), promu dans `FLASH_CANDIDATES` ET
+  `MEDIUM_CANDIDATES` (même raisonnement que `granite4.2:3b`, déjà candidat dans les deux paliers). **Vérifié
+  par une vraie simulation de `previewHardwareTiers()` avant de considérer ça fini** (pas seulement en
+  relisant le code) : ce modèle gagne désormais le palier Rapide pour tout budget ≥ 1,9 Go, et le palier
+  Médium pour tout budget entre 1,9 et 3,4 Go (en dessous de `qwen3.5:4b`) — sans changer aucun autre palier
+  ni aucune machine déjà sur un budget plus large (`qwen3.5:4b`/`qwen3.5:9b` continuent de gagner Médium dès
+  qu'ils tiennent, inchangé).
+  **Reste du passage en revue** : aucune autre lacune trouvée dans Médium/Puissant/Vision/Code — les scores
+  Artificial Analysis + fiabilité déjà en place départagent correctement partout ailleurs (vérifié par la
+  même simulation, palier par palier), et la revue de familles majeures manquantes (étape 113/126) reste à
+  jour à ce jour.
+  Régression : `npm test` (401 tests, aucun cassé par cet ajout — `test-model-overview-sort.mjs` vérifie déjà
+  que le plus petit candidat Rapide affiché reste `qwen3.5:0.8b`, toujours vrai puisque le nouveau candidat
+  est plus gros que lui).
