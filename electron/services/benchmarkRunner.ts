@@ -56,8 +56,8 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
     // déjà le gagnant, pas de vrai benchmark à lancer) ne faisait QUE télécharger les nouveaux modèles
     // choisis, sans jamais nettoyer les anciens qu'ils remplacent — contrairement à runModelAnalysis
     // (l'analyse comparative complète, plus bas) qui a toujours eu cette étape (cleanupUnselectedModels +
-    // le nettoyage dédié du modèle vision). Un oubli du même genre que celui qui a fait manquer G9v3-3B :
-    // le mécanisme de nettoyage existait déjà ailleurs dans ce même fichier, jamais repris ici.
+    // le nettoyage dédié du modèle vision). Le mécanisme de nettoyage existait déjà ailleurs dans ce même
+    // fichier, mais n'avait jamais été repris ici.
     //
     // `keep` retient, pour chaque rôle, le modèle qui reste RÉELLEMENT en service après ce run : le nouveau
     // choix s'il a bien été téléchargé (pas dans skippedModels), sinon l'ANCIEN choix de ce rôle — sans ce

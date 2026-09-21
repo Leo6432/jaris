@@ -311,6 +311,11 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   sinon le modèle peut le reformuler ou relancer la même tâche. Les attentes répétées doivent être bornées.
   Ce garde-fou fournit un diagnostic, il ne prouve pas à lui seul pourquoi une tâche réelle YouTube échoue.
   Les logs intermédiaires du Chat ne sont pas lus à voix haute pendant une tâche vocale.
+- **Un import direct `hf.co/...` documenté par Ollama n'est pas assez stable pour un palier automatique** :
+  Ollama 0.34.2 refuse les redirections de Hugging Face vers son CDN avec `blocked redirect to a different
+  host`, ce qui faisait échouer entièrement « Retester la configuration » dès que G9v3-3B était choisi.
+  N'ajouter aux listes automatiques de `hardwareScan.ts` que des tags présents dans la bibliothèque Ollama ;
+  un modèle Hugging Face direct peut rester expérimental, mais ne doit jamais bloquer le parcours rapide.
 
 - **"Les boutons marchent jamais" en mode Code (Léo) : le vrai bug n'était NI dans le HTML/JS généré, NI
   dans le mécanisme d'aperçu (iframe `sandbox="allow-scripts"`, testé sain à part)** — c'était une

@@ -66,23 +66,6 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   // (`npm run benchmark:models`) : ce score externe ne le fait pas gagner tout seul, seulement candidat.
   { model: 'granite4.2:3b', vramGb: 2.2 },
   { model: 'qwen3:1.7b', vramGb: 2 },
-  // Étape 132, Léo : "on a bien les meilleur model... regarde bien". Déjà présent dans
-  // scripts/benchmark-models.mjs comme candidat EXPLORATOIRE depuis longtemps (import Hugging Face direct,
-  // quantification GGUF par bartowski — quantifieur reconnu de la communauté Ollama/llama.cpp, PAS le même
-  // risque qu'un réupload communautaire non vérifié sur la bibliothèque Ollama elle-même, voir plus bas) à
-  // partir du dépôt OFFICIEL ai9stars/G9v3-3B, mais jamais promu dans les vraies listes de candidats : un
-  // oubli, pas un choix délibéré. Déjà VÉRIFIÉ 6/6 en appel d'outils sur la machine de Léo
-  // (verified-tool-scores.md, mesuré le 12/09/2026) — meilleur que TOUS les autres candidats de ce palier à
-  // cette taille (granite4.2:3b n'a que 5/6). Score Artificial Analysis Intelligence Index 11, vérifié
-  // directement sur sa fiche (voir ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX plus haut) — le meilleur du palier
-  // Rapide, devant granite4.2:3b (9). Poids réel 1,9 Go (scripts/benchmark-models.mjs), plus léger que
-  // granite4.2:3b (2,2 Go). Repose sur ce que Jaris fait déjà ailleurs pour des modèles sans tag officiel
-  // Ollama (GLM-4.6V-Flash-GGUF, MiniCPM5-1B, LFM2.5-1.2B) : un import `hf.co/<dépôt>` direct depuis
-  // Hugging Face est un mécanisme OFFICIEL d'Ollama, pas un contournement — à ne pas confondre avec un tag
-  // republié par un tiers non vérifié DANS la bibliothèque Ollama elle-même (voir la réserve sur "Hermes 4
-  // 14B" et les namespaces communautaires, plus bas dans ce fichier). Rejoint aussi Médium (voir
-  // MEDIUM_CANDIDATES), même raisonnement que granite4.2:3b.
-  { model: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF', vramGb: 1.9 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
 ]
 // gemma4:e4b et granite4:3b (devenu granite4.1:3b, voir plus bas) ajoutés suite au même benchmark local :
@@ -130,9 +113,6 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3.5:2b', vramGb: 2.7 },
   { model: 'granite4.2:3b', vramGb: 2.2 },
   { model: 'granite4.1:3b', vramGb: 2.1 },
-  // Candidat "réutilisation" : hf.co/bartowski/ai9stars_G9v3-3B-GGUF (voir FLASH_CANDIDATES pour le détail
-  // complet de la vérification) — même raisonnement que granite4.2:3b, déjà candidat dans les deux paliers.
-  { model: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF', vramGb: 1.9 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
 ]
 const LARGE_CANDIDATES: ModelCandidate[] = [
@@ -182,8 +162,8 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   // 32K de contexte seulement, texte uniquement) et ajoute la vision + un contexte de 128K. Remplacé : aucune
   // raison de garder l'ancienne version une fois la bonne trouvée.
   { model: 'mistral-small3.2:24b', vramGb: 15 },
-  // GLM-4.7-Flash (Zhipu/Z.ai) : plus récent que GLM-4.6V-Flash déjà en Vision (2 mois vs plus ancien),
-  // tools+thinking, texte seul. Vérifié sur ollama.com/library/glm-4.7-flash/tags (tag q4_K_M, 19 Go).
+  // GLM-4.7-Flash (Zhipu/Z.ai) : tools+thinking, texte seul. Vérifié sur
+  // ollama.com/library/glm-4.7-flash/tags (tag q4_K_M, 19 Go).
   // Réexaminé (même revue que Mistral Small ci-dessus) : plusieurs bugs OFFICIELS (github.com/ollama/ollama,
   // issues #13840/#13820/#14273/#16497, de janvier à juin 2026, jamais dits résolus) montrent que l'appel
   // d'outils peut casser en cours de conversation avec CE modèle précis sur Ollama — même famille de risque
@@ -286,11 +266,6 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   // Même candidat "réutilisation" que gemma4:e4b ci-dessus, mais pour gemma4:12b (déjà dans
   // MEDIUM_CANDIDATES, tag réel confirmé sur ollama.com/library/gemma4).
   { model: 'gemma4:12b', vramGb: 7.6 },
-  // Pas de tag officiel dans la bibliothèque Ollama : import depuis le dépôt GGUF de ggml-org (mainteneurs
-  // de llama.cpp), à partir du modèle officiel zai-org/GLM-4.6V-Flash. Le tag Q4_K_M est important : les
-  // autres quantifications communautaires (Q2_K, Q3_K) sont purement textuelles, sans le module de vision.
-  // ~6,2 Go mesurés en Q4_K_M, marge de sécurité incluse ci-dessous.
-  { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 6.5 },
   // Candidat "réutilisation" : ministral-3:8b (déjà dans MEDIUM_CANDIDATES) est NATIVEMENT multimodal
   // (vérifié sur ollama.com/library/ministral-3, badge "Text, Image"). Aucune exigence de tool-calling ici
   // (voir gemma4:31b plus haut) : la réserve response_format+tools qui vaut pour son usage en Médium ne
@@ -745,12 +720,7 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   'north-mini-code-1.0': 10,
   'qwen2.5-coder:32b': 7,
   'devstral-small-2:24b': 8,
-  'qwen2.5-coder:7b': 6,
-  // Vérifié directement sur artificialanalysis.ai/models/g9v3-3b le 21/09/2026 ("scores 11 on the
-  // Artificial Analysis Intelligence Index, placing it well above average among comparable models
-  // (median: 6)") — pas un résumé de recherche : un premier résumé automatique avait annoncé 16.1, faux,
-  // écarté avant d'entrer ici. Voir FLASH_CANDIDATES pour le contexte complet de cet ajout.
-  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 11
+  'qwen2.5-coder:7b': 6
 }
 
 /**

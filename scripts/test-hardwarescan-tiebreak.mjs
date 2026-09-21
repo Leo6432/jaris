@@ -149,6 +149,21 @@ test('expose aussi la vitesse (tokens/s) publiée par Artificial Analysis, absen
   assert.equal(byModel.get('qwen3.5:0.8b'), null, 'aucune vitesse ne doit être devinée quand Artificial Analysis ne la publie pas')
 })
 
+test('les paliers automatiques ne proposent que des tags téléchargeables depuis la bibliothèque Ollama', async () => {
+  const { getModelOverview } = setup()
+  const overview = await getModelOverview()
+  const automaticTiers = new Set(['Rapide', 'Médium', 'Puissant', 'Vision', 'Code'])
+  const automaticModels = overview.groups
+    .filter((group) => automaticTiers.has(group.tier))
+    .flatMap((group) => group.entries.map((entry) => entry.model))
+
+  assert.equal(
+    automaticModels.some((model) => model.startsWith('hf.co/')),
+    false,
+    'un import Hugging Face direct ne doit pas pouvoir bloquer « Retester la configuration »'
+  )
+})
+
 test('indique tous les paliers qui utilisent réellement chaque modèle du profil actif', async () => {
   const { getModelOverview } = setup()
   const overview = await getModelOverview({
