@@ -363,3 +363,38 @@ test('le bouton "Lancer l\'analyse" a disparu de "Tous les modèles" — seul le
     assert.ok(headers.includes('Intelligence (Artificial Analysis)'), `tableau statique attendu : ${headers.join(', ')}`)
   })
 })
+
+// Léo, étape 128 : "ajoute pouvoir filtrer les models par la ram, par de la moin de vram a la plus, le plus
+// rapide, le plus inteligent, le plus appelle outils" — un tri (pas un filtre) sur 4 colonnes, cliquables.
+test('cliquer une colonne trie "Tous les modèles" ; une seconde fois inverse le sens', options, async () => {
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Modèles")')
+    await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
+    await page.waitForSelector('.options-page--models .options-menu__model-overview')
+
+    const rapideModels = () =>
+      page.$$eval('.options-page--models .options-menu__model-group', (groups) => {
+        const rapide = groups.find((g) => g.querySelector('.options-menu__model-group-title')?.textContent === 'Rapide')
+        return Array.from(rapide.querySelectorAll('tbody tr')).map((tr) => tr.querySelector('.options-menu__model-name')?.title)
+      })
+
+    // Ordre par défaut (aucun tri actif) : celui renvoyé tel quel par getModelOverview, ministral-3:3b avant
+    // qwen3:1.7b dans le faux pont de ce test.
+    assert.deepEqual(await rapideModels(), ['ministral-3:3b', 'qwen3:1.7b'], 'ordre par défaut inattendu')
+
+    // Premier clic sur "VRAM nécessaire" : croissante par défaut (Léo : "de la moin de vram a la plus") —
+    // qwen3:1.7b (2 Go) doit passer devant ministral-3:3b (3 Go).
+    await page.locator('.options-menu__sort-button', { hasText: 'VRAM nécessaire' }).first().click()
+    assert.deepEqual(await rapideModels(), ['qwen3:1.7b', 'ministral-3:3b'], 'tri croissant par VRAM attendu au premier clic')
+
+    // Second clic sur la MÊME colonne : inverse le sens plutôt que de rester bloqué en croissant.
+    await page.locator('.options-menu__sort-button', { hasText: 'VRAM nécessaire' }).first().click()
+    assert.deepEqual(await rapideModels(), ['ministral-3:3b', 'qwen3:1.7b'], 'un second clic doit inverser le sens du tri')
+
+    // "Appel d'outils" : décroissant par défaut (Léo : "le plus appelle outils" — la meilleure valeur en
+    // tête). qwen3:1.7b (aucun score connu, null) doit toujours finir en dernier, jamais remonter en tête
+    // par erreur — sinon un modèle jamais testé se ferait passer pour "le meilleur en appel d'outils".
+    await page.locator('.options-menu__sort-button', { hasText: "Appel d'outils" }).first().click()
+    assert.deepEqual(await rapideModels(), ['ministral-3:3b', 'qwen3:1.7b'], 'un score absent doit toujours finir en fin de tri')
+  })
+})

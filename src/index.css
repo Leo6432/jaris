@@ -946,6 +946,31 @@ body.body--scan::after {
   white-space: nowrap;
 }
 
+/* Titre de colonne cliquable pour trier "Tous les modèles" (étape 128) — `font: inherit` est nécessaire
+   car un <button> a sa propre police par défaut dans la feuille de style du navigateur, qui ne s'hérite
+   PAS automatiquement du <th> parent (contrairement à text-transform/letter-spacing/couleur, qui eux
+   s'héritent normalement) : sans cette ligne, le bouton retomberait sur la police système au lieu de
+   Rajdhani, détonnant avec le reste de l'en-tête. */
+.options-menu__sort-button {
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.options-menu__sort-button:hover,
+.options-menu__sort-button[aria-pressed='true'] {
+  color: var(--hud-text);
+}
+
+.options-menu__sort-arrow {
+  color: var(--hud-accent);
+}
+
 /* Les imports Hugging Face (hf.co/...) peuvent être très longs et étiraient tout le tableau — tronqués
    avec le nom complet toujours accessible au survol (attribut title natif). */
 .options-menu__model-name {

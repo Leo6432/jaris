@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { ModelOverviewResult } from '../../shared/ipc'
+import type { ModelOverviewEntry, ModelOverviewResult } from '../../shared/ipc'
 import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge } from './OptionsMenu'
 
@@ -40,11 +40,79 @@ import { ReliabilityBadge } from './OptionsMenu'
  * sur artificialanalysis.ai plutôt que devinées), il a préféré un tableau à nouveau simple à lire plutôt que
  * de garder la possibilité de le modifier lui-même. Les deux colonnes redeviennent donc un simple texte en
  * lecture seule, comme le reste du tableau.
+ *
+ * Étape 128, Léo : "ajoute pouvoir filtrer les models par la ram, par de la moin de vram a la plus, le plus
+ * rapide, le plus inteligent, le plus appelle outils" — en réalité un TRI (pas un filtre qui masquerait des
+ * lignes), sur 4 colonnes déjà affichées : VRAM, appel d'outils, Intelligence, Vitesse. Un SEUL état de tri
+ * partagé par les 5 tableaux (un par palier) : cliquer "VRAM nécessaire" trie chacun des 5 en même temps,
+ * plutôt que 5 états indépendants à gérer un par un pour une même colonne. Cliquer une deuxième fois sur la
+ * même colonne inverse le sens ; changer de colonne repart d'un sens de lecture "utile" par défaut — VRAM
+ * repart croissante (Léo : "de la moin de vram a la plus"), les 3 autres repartent décroissantes ("le
+ * plus" rapide/intelligent/appelle outils, la meilleure valeur en tête). Une valeur absente (`null`, "Non
+ * publié"/"—") retombe TOUJOURS en fin de liste, quel que soit le sens du tri — sinon un tri décroissant sur
+ * "Intelligence" ferait remonter en tête tous les modèles jamais évalués par Artificial Analysis, l'inverse
+ * de ce qu'on cherche à voir.
  */
+type SortKey = 'vramGb' | 'toolCalling' | 'artificialAnalysisIndex' | 'artificialAnalysisSpeed'
+type SortState = { key: SortKey; dir: 'asc' | 'desc' } | null
+
+/** Sens de lecture "utile" au premier clic sur chaque colonne : VRAM du plus léger au plus lourd, les 3
+ * autres du meilleur au moins bon (Léo : "le plus rapide, le plus inteligent, le plus appelle outils"). */
+const DEFAULT_SORT_DIR: Record<SortKey, 'asc' | 'desc'> = {
+  vramGb: 'asc',
+  toolCalling: 'desc',
+  artificialAnalysisIndex: 'desc',
+  artificialAnalysisSpeed: 'desc'
+}
+
+const SORT_LABELS: Record<SortKey, string> = {
+  vramGb: 'VRAM nécessaire',
+  toolCalling: "Appel d'outils",
+  artificialAnalysisIndex: 'Intelligence (Artificial Analysis)',
+  artificialAnalysisSpeed: 'Vitesse (Artificial Analysis)'
+}
+
+/** "6/6"/"2/3" -> 6/2, absent ou illisible -> null (toujours en fin de tri, jamais confondu avec un vrai 0). */
+function toolScoreValue(toolCalling: string | null): number | null {
+  if (!toolCalling) return null
+  const correct = Number(toolCalling.split('/')[0])
+  return Number.isFinite(correct) ? correct : null
+}
+
+function sortValue(entry: ModelOverviewEntry, key: SortKey): number | null {
+  if (key === 'toolCalling') return toolScoreValue(entry.toolCalling)
+  return entry[key]
+}
+
+function sortEntries(entries: ModelOverviewEntry[], sort: SortState): ModelOverviewEntry[] {
+  if (!sort) return entries
+  const sign = sort.dir === 'asc' ? 1 : -1
+  return [...entries].sort((a, b) => {
+    const va = sortValue(a, sort.key)
+    const vb = sortValue(b, sort.key)
+    // Une valeur absente reste toujours en fin de liste, dans les deux sens de tri.
+    if (va === null && vb === null) return 0
+    if (va === null) return 1
+    if (vb === null) return -1
+    return (va - vb) * sign
+  })
+}
+
+function SortButton({ sortKey, sort, onSort }: { sortKey: SortKey; sort: SortState; onSort: (key: SortKey) => void }): JSX.Element {
+  const active = sort?.key === sortKey
+  return (
+    <button type="button" className="options-menu__sort-button" onClick={() => onSort(sortKey)} aria-pressed={active}>
+      {SORT_LABELS[sortKey]}
+      {active && <span className="options-menu__sort-arrow">{sort.dir === 'asc' ? ' ▲' : ' ▼'}</span>}
+    </button>
+  )
+}
+
 export default function AllModelsOverview(): JSX.Element {
   const [open, setOpen] = useState(false)
   const [overview, setOverview] = useState<ModelOverviewResult | null>(null)
   const [loading, setLoading] = useState(false)
+  const [sort, setSort] = useState<SortState>(null)
 
   const openPage = async (): Promise<void> => {
     setOpen(true)
@@ -56,6 +124,18 @@ export default function AllModelsOverview(): JSX.Element {
       setLoading(false)
     }
   }
+
+  const toggleSort = (key: SortKey): void => {
+    setSort((current) => {
+      if (current?.key === key) return { key, dir: current.dir === 'asc' ? 'desc' : 'asc' }
+      return { key, dir: DEFAULT_SORT_DIR[key] }
+    })
+  }
+
+  const sortedGroups = useMemo(
+    () => overview?.groups.map((group) => ({ ...group, entries: sortEntries(group.entries, sort) })) ?? null,
+    [overview, sort]
+  )
 
   return (
     <div className="options-menu__all-models">
@@ -81,13 +161,14 @@ export default function AllModelsOverview(): JSX.Element {
                     <h3>Tous les modèles candidats</h3>
                     <p>
                       Chaque modèle que Jaris sait choisir, tous paliers confondus — pas seulement celui retenu
-                      pour ta machine, déjà visible dans le tableau des paliers.
+                      pour ta machine, déjà visible dans le tableau des paliers. Clique sur un titre de colonne
+                      pour trier.
                     </p>
                   </div>
                   {loading && <p className="capacity-scan__status">Chargement...</p>}
-                  {overview && (
+                  {sortedGroups && (
                     <div className="options-menu__model-overview-scroll">
-                      {overview.groups.map((group) => (
+                      {sortedGroups.map((group) => (
                         <div key={group.tier} className="options-menu__model-group">
                           <div className="options-menu__model-group-title">{group.tier}</div>
                           <table className="options-menu__model-overview">
@@ -95,14 +176,21 @@ export default function AllModelsOverview(): JSX.Element {
                               <tr>
                                 <th>Modèle</th>
                                 <th>Utilisé par Jaris</th>
-                                <th className="options-menu__col-num">VRAM nécessaire</th>
-                                <th className="options-menu__col-num">Appel d'outils</th>
+                                <th className="options-menu__col-num">
+                                  <SortButton sortKey="vramGb" sort={sort} onSort={toggleSort} />
+                                </th>
+                                <th className="options-menu__col-num">
+                                  <SortButton sortKey="toolCalling" sort={sort} onSort={toggleSort} />
+                                </th>
                                 {/* Intelligence Index lu directement chez Artificial Analysis. */}
                                 <th className="options-menu__col-num" title="Artificial Analysis Intelligence Index v4.3.2">
-                                  Intelligence (Artificial Analysis)
+                                  <SortButton sortKey="artificialAnalysisIndex" sort={sort} onSort={toggleSort} />
                                 </th>
-                                <th className="options-menu__col-num" title="Vitesse de génération publiée par Artificial Analysis (tokens/s)">
-                                  Vitesse (Artificial Analysis)
+                                <th
+                                  className="options-menu__col-num"
+                                  title="Vitesse de génération publiée par Artificial Analysis (tokens/s)"
+                                >
+                                  <SortButton sortKey="artificialAnalysisSpeed" sort={sort} onSort={toggleSort} />
                                 </th>
                               </tr>
                             </thead>

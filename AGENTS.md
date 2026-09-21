@@ -3729,3 +3729,35 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : nouveau test dans `scripts/test-hardwarescan-tiebreak.mjs` qui confirme que les deux nouveaux
   modèles apparaissent bien dans leur palier respectif — vérifié en retirant temporairement les deux lignes
   ajoutées, le test échoue bien. `npm run typecheck`, `npm run build` et `npm test` (394 tests) au vert.
+
+- **Étape 128, Léo : "ajoute pouvoir filtrer les models par la ram, par de la moin de vram a la plus, le plus
+  rapide, le plus inteligent, le plus appelle outils un peut tout".** En réalité un TRI (pas un filtre qui
+  masquerait des lignes) sur les 4 colonnes chiffrées déjà affichées dans "Tous les modèles" : VRAM nécessaire,
+  Appel d'outils, Intelligence (Artificial Analysis), Vitesse (Artificial Analysis).
+  **Titres de colonne cliquables** (`AllModelsOverview.tsx`) : un clic trie, un second clic sur la MÊME
+  colonne inverse le sens (▲/▼ affiché à côté du titre actif). Changer de colonne repart d'un sens de
+  lecture "utile" par défaut plutôt que de toujours repartir croissant : VRAM repart CROISSANTE (Léo : "de la
+  moin de vram a la plus"), les 3 autres repartent DÉCROISSANTES — la meilleure valeur en tête ("le plus"
+  rapide/intelligent/appelle outils). **Un SEUL état de tri partagé par les 5 tableaux** (un par palier,
+  Rapide/Médium/Puissant/Vision/Code) : cliquer "VRAM nécessaire" trie les 5 en même temps, plutôt que gérer
+  5 états de tri indépendants pour une même colonne qui existe identiquement dans chacun.
+  **Piège identifié avant de coder, pas après** : une valeur ABSENTE (modèle jamais évalué par Artificial
+  Analysis, "Non publié"/"—") doit toujours retomber en FIN de tri, quel que soit le sens choisi — un tri
+  DÉCROISSANT naïf sur "Intelligence" ferait sinon remonter en tête tous les modèles jamais testés (souvent
+  traités comme `null`, qui peut se comparer de façon incohérente selon le langage), l'exact inverse de ce
+  qu'on cherche en triant "le plus intelligent en premier". `sortEntries` traite `null` comme un cas à part,
+  toujours perdant, dans les deux sens.
+  **Colonne "Appel d'outils"** (`toolCalling`, une chaîne "6/6"/"2/3", pas un nombre) : `toolScoreValue`
+  extrait le numérateur pour trier, cohérent avec `parseToolScore` déjà utilisé côté serveur
+  (hardwareScan.ts, `pickBestFrom`) pour la même comparaison — même logique, pas une seconde implémentation
+  divergente à maintenir en parallèle.
+  **Piège CSS attrapé avant de livrer, pas en relecture** : transformer le titre de colonne en `<button>`
+  pour le rendre cliquable lui fait perdre l'héritage de la police d'affichage (Rajdhani) — un `<button>` a
+  sa propre police par défaut dans la feuille de style du navigateur, qui ne s'hérite PAS automatiquement du
+  `<th>` parent contrairement à `text-transform`/`letter-spacing`/couleur. `font: inherit` explicite sur
+  `.options-menu__sort-button` (index.css) corrige ça — sans cette ligne, le bouton aurait détonné avec le
+  reste de l'en-tête (police système au lieu de Rajdhani).
+  Régression : nouveau test dans `scripts/test-options-reorganization-ui.mjs`, vrai navigateur — ordre par
+  défaut, premier clic sur VRAM (croissant), second clic (inversé), clic sur Appel d'outils (décroissant,
+  score absent toujours en fin de liste). Vérifié en cassant temporairement le basculement de sens : le test
+  échoue bien. `npm run typecheck`, `npm run build` et `npm test` (395 tests) au vert.
