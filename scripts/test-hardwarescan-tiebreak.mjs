@@ -165,3 +165,25 @@ test('indique tous les paliers qui utilisent réellement chaque modèle du profi
   assert.deepEqual(Array.from(unused.usedIn), [])
 })
 
+/**
+ * Étape 127, Léo a demandé à ChatGPT de vérifier .../models/recommend (inaccessible depuis cet
+ * environnement) et a relayé deux propositions. Vérifiées indépendamment ici (et sur ollama.com/
+ * artificialanalysis.ai directement avant d'y toucher, deux autres chiffres du même rapport s'étant révélés
+ * faux) : granite4.2:3b rejoint Rapide (déjà candidat Médium), qwen3.8:27b rejoint Vision (déjà candidat
+ * Puissant, et son support image confirmé directement sur sa fiche Ollama).
+ */
+test('granite4.2:3b (Rapide) et qwen3.8:27b (Vision) sont bien de nouveaux candidats "réutilisation"', async () => {
+  const { getModelOverview } = setup()
+  const overview = await getModelOverview()
+  const rapide = overview.groups.find((g) => g.tier === 'Rapide')
+  const vision = overview.groups.find((g) => g.tier === 'Vision')
+  assert.ok(
+    rapide.entries.some((e) => e.model === 'granite4.2:3b'),
+    'granite4.2:3b doit maintenant apparaître dans le palier Rapide'
+  )
+  assert.ok(
+    vision.entries.some((e) => e.model === 'qwen3.8:27b'),
+    'qwen3.8:27b doit maintenant apparaître dans le palier Vision'
+  )
+})
+

@@ -3734,3 +3734,37 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   plus vrai depuis la correction 7->8) reconstruit sur une VRAIE égalité entre `granite4.2:30b` et
   `glm-4.7-flash:q4_K_M` (tous deux à 15). `npm run typecheck`, `npm run build` et `npm test` (393 tests)
   au vert.
+
+- **Étape 127, Léo a relayé une réponse de ChatGPT ("bas fait un prompt a chatgpt lui il peut"), à qui
+  j'avais rédigé un prompt pour ouvrir le comparateur interactif `/models/recommend`, inaccessible depuis
+  cet environnement (étape 126).** ChatGPT a bien accédé au comparateur (avec des filtres d'URL précis :
+  `?image=true&open=true&size=small` pour Vision, `?types=coding&open=true&size=small` pour Code) et a
+  rapporté 6 points, chacun avec une citation censée venir de la fiche directe du modèle.
+  **Deux des six citations rapportées se sont révélées FAUSSES en les revérifiant nous-mêmes avant d'y
+  toucher** — même discipline que l'étape 126, appliquée cette fois à un rapport d'une AUTRE IA, pas
+  seulement à mes propres recherches : "Gemma 4 31B (Reasoning) scores 15" (relu directement, deux fois : 19,
+  jamais 15) et "Qwen3.6 35B A3B (Reasoning) scores 19" (relu directement : 18, jamais 19 — c'est très
+  exactement le chiffre déjà en place dans la table, inchangé). Aucun des deux n'a donc bougé dans le code.
+  **Leçon générale, qui étend celle de l'étape 126 : la consigne "cite la phrase exacte de la fiche" donnée à
+  une autre IA ne suffit pas à garantir un chiffre exact — une citation qui SE PRÉSENTE comme exacte peut
+  quand même être fausse (résumée par erreur, tirée d'une page de comparaison plutôt que de la fiche
+  elle-même, ou simplement inventée avec un format convaincant). Un chiffre transmis par un tiers, humain ou
+  IA, reste à revérifier soi-même sur la source primaire avant d'entrer dans le code — la consigne donnée en
+  amont ne remplace jamais la vérification en aval.**
+  **Les deux autres propositions, elles, ont résisté à la revérification et ont été ajoutées** :
+  - **`granite4.2:3b` rejoint Rapide** (déjà candidat Médium, voir MEDIUM_CANDIDATES) : 2,2 Go, Intelligence
+    Index 9 — au-dessus des 3 candidats Rapide déjà en place (qwen3.5:0.8b 6, ministral-3:3b/qwen3:1.7b 5).
+  - **`qwen3.8:27b` rejoint Vision** (déjà candidat Puissant, voir LARGE_CANDIDATES) : support image confirmé
+    directement sur sa fiche Ollama ("text, image, and video" en entrée, FAQ explicite), Intelligence Index 34
+    contre 19 pour gemma4:31b, le meilleur candidat Vision jusqu'ici. Aucun poids supplémentaire à télécharger
+    pour qui l'a déjà comme modèle Puissant.
+  Les deux restent des candidats "réutilisation" (comme qwen3.5:4b/gemma4:e4b déjà partagés entre plusieurs
+  paliers) : leur score Artificial Analysis ne les fait PAS gagner automatiquement — c'est un départage
+  utilisé seulement à égalité de fiabilité d'appel d'outils, qui reste à mesurer localement
+  (`npm run benchmark:models`) avant qu'ils ne soient réellement choisis pour une machine donnée.
+  **Sur Code**, ChatGPT a vérifié que le comparateur (filtré coding + open + small) garde `qwen3.6:35b-a3b`
+  devant `qwen3.8:27b` malgré son score général supérieur — cohérent avec le fait que Jaris l'a déjà comme
+  seul vrai candidat Code de cette taille : rien à changer là.
+  Régression : nouveau test dans `scripts/test-hardwarescan-tiebreak.mjs` qui confirme que les deux nouveaux
+  modèles apparaissent bien dans leur palier respectif — vérifié en retirant temporairement les deux lignes
+  ajoutées, le test échoue bien. `npm run typecheck`, `npm run build` et `npm test` (394 tests) au vert.

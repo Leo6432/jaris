@@ -56,6 +56,15 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   // vrai score mesuré sur la machine de Léo (6/6, `scripts/verified-tool-scores.md`) — pas juste informatif
   // en attente de test, déjà confirmé fiable pour de vrai. Rejoint Rapide.
   { model: 'ministral-3:3b', vramGb: 3.0 },
+  // granite4.2:3b (déjà candidat Médium, voir MEDIUM_CANDIDATES plus bas) rejoint aussi Rapide — étape 127,
+  // proposé par ChatGPT (relayé par Léo, "vas sur le site .../recommend") après avoir ouvert le
+  // comparateur interactif, inaccessible depuis cet environnement (voir le commentaire au-dessus de
+  // ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX). Score Artificial Analysis (9) confirmé plus haut que les 3
+  // candidats déjà présents ici (qwen3.5:0.8b 6, ministral-3:3b/qwen3:1.7b 5), pour une taille intermédiaire
+  // (2,2 Go) entre eux — comme granite4.1:3b/4.2:3b en Médium, rejette `think` (voir le filet "sans think"
+  // dans chatWithOllama, ollama.ts). Sa fiabilité d'appel d'outils reste à mesurer localement
+  // (`npm run benchmark:models`) : ce score externe ne le fait pas gagner tout seul, seulement candidat.
+  { model: 'granite4.2:3b', vramGb: 2.2 },
   { model: 'qwen3:1.7b', vramGb: 2 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
 ]
@@ -234,6 +243,17 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   // le tag `gemma4:26b` porte bien le badge "Text, Image" (vision native), pas seulement les tags plus
   // petits de la famille.
   { model: 'gemma4:26b', vramGb: 19 },
+  // Candidat "réutilisation" : qwen3.8:27b (déjà dans LARGE_CANDIDATES, palier Puissant) — étape 127,
+  // proposé par ChatGPT (via le comparateur .../models/recommend, inaccessible depuis cet environnement,
+  // voir le commentaire au-dessus de ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX). Vérifié directement sur sa
+  // fiche ollama.com : "text, image, and video" en entrée, la FAQ confirme explicitement le support de
+  // l'analyse d'image. Score Artificial Analysis (34) largement au-dessus de gemma4:31b (19), le meilleur
+  // candidat Vision jusqu'ici — et déjà téléchargé pour qui l'a comme modèle Puissant, aucun poids
+  // supplémentaire. Deux chiffres du même rapport se sont révélés FAUX en les revérifiant nous-mêmes avant
+  // d'y toucher (gemma4:31b annoncé à 15 au lieu de 19, qwen3.6:35b-a3b annoncé à 19 au lieu de 18 — la
+  // table ci-dessous n'a pas bougé sur ces deux-là) : seule cette proposition-ci a été retenue, après
+  // vérification indépendante du score ET du support image.
+  { model: 'qwen3.8:27b', vramGb: 18 },
   // Candidat "réutilisation" : gemma4:e4b (déjà dans MEDIUM_CANDIDATES) est NATIVEMENT multimodal (vérifié
   // sur ollama.com/library/gemma4 : badge vision+tools+thinking), donc candidat légitime pour la vision
   // aussi — pas juste un modèle de conversation qu'on force à faire autre chose. Intérêt concret : s'il tient
