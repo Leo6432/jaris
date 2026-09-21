@@ -3941,3 +3941,58 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `npm test` (401 tests, aucun cassé par cet ajout — `test-model-overview-sort.mjs` vérifie déjà
   que le plus petit candidat Rapide affiché reste `qwen3.5:0.8b`, toujours vrai puisque le nouveau candidat
   est plus gros que lui).
+
+- **Étape 133, trois questions de Léo dans le même message après la promotion de G9v3-3B.**
+  1. **"met pas ai9stars_G9v3-3B mais G9v3-3B"** — le nom de dépôt choisi par bartowski pour sa
+     requantification GGUF embarque le nom de l'organisation d'origine ("ai9stars_G9v3-3B-GGUF"),
+     que l'algorithme générique de `formatModelName.ts` (qui ne fait que retirer le suffixe "-GGUF") ne peut
+     pas deviner être un préfixe à couper — un modèle appelé légitimement "Org_Quelquechose" existe tout
+     aussi bien. Corrigé par une table d'exceptions EXPLICITE (un identifiant exact -> son nom d'affichage),
+     jamais une règle générique ("retirer tout ce qui précède un underscore") qui couperait mal un futur
+     import au nom légitimement composé d'un underscore. Première fois que `formatModelName` a un vrai test
+     de régression (`scripts/test-format-model-name.mjs`) — jusqu'ici jamais testé directement.
+  2. **"pourquoi je voit que 4 palier pas 9"** — pas un bug d'affichage, la conjonction de deux causes
+     réelles, vérifiées par une vraie simulation de `previewHardwareTiers()` (pas devinée) :
+     - Le relèvement de `RESOURCE_SAFETY_MARGIN_GB` (8 -> 16 Go, une session précédente, pour empêcher un
+       modèle Puissant de saturer la RAM d'un ami de Léo) avait DÉJÀ fait chuter le nombre de paliers
+       distincts de ~11 à 7 sur une machine simulée avec les mêmes 32 Go de RAM que Léo — un effet de bord
+       jamais remarqué jusqu'ici, silencieux puisqu'aucune erreur ne peut signaler "moins de lignes que
+       prévu".
+     - La promotion de G9v3-3B (ce message) a réduit encore la diversité dans la tranche basse de VRAM : il
+       gagne maintenant Rapide ET Médium simultanément sur une large plage, là où deux modèles différents se
+       partageaient ces deux paliers avant — le mécanisme de fusion des lignes consécutives strictement
+       identiques (`previewHardwareTiers`, déjà en place et voulu par Léo lui-même à une étape antérieure
+       pour éviter des doublons visuels) en absorbe donc plusieurs de plus.
+     Le nombre de paliers n'a jamais été un compte FIXE (contrairement au minimum de 4 crans du curseur de
+     contexte) : il varie avec la qualité réelle des candidats connus — moins de paliers ici, précisément
+     parce qu'un même modèle est maintenant le meilleur choix sur une plage plus large, pas un défaut.
+     **Non vérifiable ici avec certitude à l'exact chiffre 4 de Léo** (le compte dépend aussi de son propre
+     `benchmark-results.md` local, invérifiable depuis cet environnement) : le mécanisme est prouvé et
+     honnête, sa valeur exacte chez lui ne l'est que par lui.
+  3. **"pour mon palier on a changer de model comment on fait ça me réinstalle pas les nouveaux model direct
+     et désinstalle l'ancien"** — un vrai gap trouvé en lisant le code plutôt que deviné : `runQuickSetup`
+     (le chemin RAPIDE de "Retester la configuration", Options → Modèles) téléchargeait bien les nouveaux
+     modèles choisis, mais ne supprimait JAMAIS ceux qu'ils remplacent — contrairement à `runModelAnalysis`
+     (l'analyse comparative complète), qui a TOUJOURS eu ce nettoyage (`cleanupUnselectedModels` + un
+     nettoyage dédié pour le modèle vision). Le mécanisme existait déjà dans le même fichier, jamais repris
+     dans le chemin le plus emprunté (celui que "Retester la configuration" utilise) : même famille d'oubli
+     que G9v3-3B, jamais promu malgré un score déjà vérifié.
+     Corrigé en comparant, pour chacun des 5 rôles (Rapide/Médium/Puissant/Vision/Code), l'ANCIEN modèle du
+     profil au NOUVEAU choix : si le nouveau a bien été téléchargé (pas dans `skippedModels`) et diffère de
+     l'ancien, ET que l'ancien n'est utilisé par AUCUN autre rôle (ex: un même modèle repli sur Médium ET
+     Puissant), l'ancien est supprimé via `deleteModel` (API HTTP `DELETE /api/delete` d'Ollama, déjà utilisée
+     ailleurs) — jamais avant confirmation que le nouveau est bien là, pour ne jamais laisser un palier sans
+     AUCUN modèle installé si le téléchargement du remplaçant échoue (VRAM/disque insuffisant).
+     Un échec de suppression individuel (verrou antivirus, Ollama déjà occupé...) est journalisé en clair
+     mais n'interrompt jamais le reste du run — même discipline que le reste de ce fichier pour tout ce qui
+     n'est pas strictement nécessaire à la réussite globale.
+     Répond littéralement à "comment on fait ça" : cliquer sur Options → Modèles → "Retester la
+     configuration" (ou attendre le popup "nouveaux modèles disponibles" qui y renvoie déjà) suffit
+     maintenant à la fois pour installer le nouveau ET désinstaller l'ancien, sans étape manuelle
+     supplémentaire.
+     Régression : `node --test scripts/test-benchmark-runner-cleanup.mjs` (5 cas : remplacement simple,
+     modèle partagé entre deux rôles jamais supprimé, nouveau modèle ignoré -> ancien gardé sur le disque,
+     aucun profil existant -> rien à supprimer, échec de suppression journalisé sans interrompre le run).
+     Chacun vérifié en retirant temporairement le correctif : 2 des 5 échouent alors, confirmant qu'ils
+     mordent vraiment.
+  Régression complète : `npm test` (410 tests, 0 échec).

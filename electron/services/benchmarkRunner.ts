@@ -51,6 +51,41 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
 
   const profile = await getProfile()
   if (profile) {
+    // Étape 133, Léo : "pour mon palier on a changer de model comment on fait ça me réinstalle pas les
+    // nouveaux model direct et désinstalle l'ancien". Ce chemin RAPIDE (verified-tool-scores.md connaît
+    // déjà le gagnant, pas de vrai benchmark à lancer) ne faisait QUE télécharger les nouveaux modèles
+    // choisis, sans jamais nettoyer les anciens qu'ils remplacent — contrairement à runModelAnalysis
+    // (l'analyse comparative complète, plus bas) qui a toujours eu cette étape (cleanupUnselectedModels +
+    // le nettoyage dédié du modèle vision). Un oubli du même genre que celui qui a fait manquer G9v3-3B :
+    // le mécanisme de nettoyage existait déjà ailleurs dans ce même fichier, jamais repris ici.
+    //
+    // `keep` retient, pour chaque rôle, le modèle qui reste RÉELLEMENT en service après ce run : le nouveau
+    // choix s'il a bien été téléchargé (pas dans skippedModels), sinon l'ANCIEN choix de ce rôle — sans ce
+    // repli, un modèle "puissant" ignoré faute de VRAM/disque perdrait son ancien modèle fonctionnel en plus
+    // de ne jamais recevoir le nouveau, laissant ce palier sans rien d'installé du tout.
+    const skipped = new Set(skippedModels.map((s) => s.model))
+    const keep = new Set<string>()
+    const roles: [string | undefined, string][] = [
+      [profile.models?.flash, picked.models.flash],
+      [profile.models?.medium, picked.models.medium],
+      [profile.models?.large, picked.models.large],
+      [profile.visionModel, picked.visionModel],
+      [profile.codeModel, picked.codeModel]
+    ]
+    for (const [before, after] of roles) {
+      keep.add(skipped.has(after) && before ? before : after)
+    }
+    const oldModels = roles.map(([before]) => before).filter((m): m is string => Boolean(m))
+    const toRemove = [...new Set(oldModels)].filter((m) => !keep.has(m))
+    for (const model of toRemove) {
+      try {
+        await deleteModel(model)
+        onLine(`Ancien modèle ${model} supprimé (remplacé par un meilleur choix pour ta configuration).`)
+      } catch (err) {
+        onLine(`Échec de la suppression de l'ancien modèle ${model} : ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+
     await saveProfile({
       ...profile,
       models: picked.models,
