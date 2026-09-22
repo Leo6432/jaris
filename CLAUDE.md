@@ -350,11 +350,17 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   sinon le modèle peut le reformuler ou relancer la même tâche. Les attentes répétées doivent être bornées.
   Ce garde-fou fournit un diagnostic, il ne prouve pas à lui seul pourquoi une tâche réelle YouTube échoue.
   Les logs intermédiaires du Chat ne sont pas lus à voix haute pendant une tâche vocale.
-- **Un import direct `hf.co/...` documenté par Ollama n'est pas assez stable pour un palier automatique** :
-  Ollama 0.34.2 refuse les redirections de Hugging Face vers son CDN avec `blocked redirect to a different
-  host`, ce qui faisait échouer entièrement « Retester la configuration » dès que G9v3-3B était choisi.
-  N'ajouter aux listes automatiques de `hardwareScan.ts` que des tags présents dans la bibliothèque Ollama ;
-  un modèle Hugging Face direct peut rester expérimental, mais ne doit jamais bloquer le parcours rapide.
+- **Un import direct `hf.co/...` peut échouer à cause d'une version précise d'Ollama : traiter l'échec, pas
+  retirer le modèle** : Ollama 0.34.2 refuse les redirections de Hugging Face vers son CDN avec `blocked
+  redirect to a different host` (github.com/ollama/ollama/issues/18526, corrigé en v0.34.3, pré-version au
+  22/09/2026), ce qui faisait échouer entièrement « Retester la configuration » dès que G9v3-3B était choisi.
+  Une première correction (autre IA) avait retiré G9v3-3B et GLM-4.6V-Flash des paliers — et effacé au
+  passage leurs scores RÉELLEMENT mesurés de `verified-tool-scores.md`. Léo a demandé de les remettre
+  (étape 136) : `runQuickSetup` écarte maintenant, pour ce run seulement, tout import `hf.co/` dont le
+  téléchargement échoue et retombe sur le meilleur modèle suivant (`pickBestModelsFromBenchmark(exclude)`),
+  avec un message clair pour Léo. Une erreur sur un tag de la bibliothèque Ollama remonte toujours telle
+  quelle. **Leçon générale : un bug d'une version d'un outil tiers ne justifie pas de dégrader le choix pour
+  tout le monde ni d'effacer des mesures réelles — contenir l'échec là où il se produit.**
 
 - **"Les boutons marchent jamais" en mode Code (Léo) : le vrai bug n'était NI dans le HTML/JS généré, NI
   dans le mécanisme d'aperçu (iframe `sandbox="allow-scripts"`, testé sain à part)** — c'était une
@@ -4001,3 +4007,24 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
      Chacun vérifié en retirant temporairement le correctif : 2 des 5 échouent alors, confirmant qu'ils
      mordent vraiment.
   Régression complète : `npm test` (410 tests, 0 échec).
+
+- **Étape 135, Léo : "je veut que les models soit pareil pour le palier 1, je veut pas des model différent
+  entre un palier 1 et un palier 1"** (répété après une première réponse à côté de la plaque). Vérifié par
+  simulation : à VRAM égale, Rapide/Médium étaient déjà identiques partout, mais Puissant/Code dépendaient
+  de la RAM de la machine qui regarde (débordement RAM de `LARGE_RAM_OFFLOAD_MODELS`) — et comme leurs
+  seuils entrent dans la liste des frontières, le NOMBRE et le CONTENU des paliers changeaient avec la RAM
+  (32 Go : 7 paliers, 64 Go : 4 paliers, même code). `previewHardwareTiers` utilise maintenant une RAM de
+  référence fixe, `RESOURCE_SAFETY_MARGIN_GB` (à cette valeur exacte le débordement vaut 0, aucune nouvelle
+  constante) : le tableau est identique sur toute installation d'une même version. Le TÉLÉCHARGEMENT réel
+  (`pickBestModelsFromBenchmark`) garde la vraie RAM : Léo voulait un tableau comparable, pas renoncer au
+  Puissant plus fort permis par sa RAM. Régression : `scripts/test-hardwarescan-preview-steps.mjs` (16 Go et
+  64 Go produisent le même tableau ; le test de fusion qui reposait sur la RAM a été refait sans elle).
+  Piège revécu : `vm.runInNewContext` + `assert.deepEqual` → "same structure but not reference-equal",
+  contourné en comparant des chaînes JSON.
+- **Étape 136, Léo : "Rajoute les 2 model car pour regler le bug chatgpt les a envlever"** — voir l'entrée
+  "Un import direct hf.co/..." plus haut. G9v3-3B et GLM-4.6V-Flash remis dans leurs paliers avec leurs
+  scores vérifiés ; le test qui interdisait tout `hf.co/` remplacé par un test qui exige leur présence.
+  Régression : `scripts/test-benchmark-runner-cleanup.mjs` (échec hf.co → repli sur le suivant, profil jamais
+  enregistré avec un modèle non téléchargé, message expliqué ; échec sur un tag Ollama → toujours levé).
+  Vérifié en désactivant le repli : le test échoue bien. **Non vérifiable ici** : le vrai échec sur la
+  machine de Léo avec Ollama 0.34.2 (pas de Windows ni d'Ollama dans cet environnement).

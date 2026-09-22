@@ -30,9 +30,10 @@ function loadModule(relativePath, requireShim) {
  * @param {Set<string>} [skippedRoles] rôles ('flash'/'medium'/'large'/'vision'/'code') dont le pull doit échouer
  *   avec ModelTooLargeError, pour simuler un modèle ignoré faute de VRAM/disque.
  */
-function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor = new Set()) {
+function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor = new Set(), { pullErrorFor = new Set(), repick } = {}) {
   const deletedModels = []
   const pulledModels = []
+  const pickCalls = []
   let profile = initialProfile ? { ...initialProfile } : null
   const lines = []
 
@@ -46,6 +47,8 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
   // runQuickSetup (err instanceof ModelTooLargeError) la reconnaisse.
   ollamaModule.pullModelIfMissing = async (model) => {
     if (skippedRoles.has(model)) throw new ollamaModule.ModelTooLargeError(`${model} trop gros pour cette configuration`)
+    // Reproduit l'erreur réelle d'Ollama 0.34.2 sur un import Hugging Face (github.com/ollama/ollama/issues/18526).
+    if (pullErrorFor.has(model)) throw new Error('pull model manifest: blocked redirect to a different host')
     pulledModels.push(model)
   }
   ollamaModule.deleteModel = async (model) => {
@@ -56,13 +59,17 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
   const hardwareScanModule = {
     getAllCandidateModelIds: () => ['ignoré-dans-ce-test'],
     parseLocalBenchmark: () => ({ conversation: new Map(), vision: new Map(), code: new Map() }),
-    pickBestModelsFromBenchmark: async () => ({
-      gpuName: 'GPU de test',
-      vramGb: 8,
-      models: { flash: picked.flash, medium: picked.medium, large: picked.large },
-      visionModel: picked.visionModel,
-      codeModel: picked.codeModel
-    })
+    pickBestModelsFromBenchmark: async (exclude = new Set()) => {
+      pickCalls.push([...exclude])
+      const p = exclude.size && repick ? repick(exclude) : picked
+      return {
+        gpuName: 'GPU de test',
+        vramGb: 8,
+        models: { flash: p.flash, medium: p.medium, large: p.large },
+        visionModel: p.visionModel,
+        codeModel: p.codeModel
+      }
+    }
   }
 
   const profileStoreModule = {
@@ -87,6 +94,7 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
     run: () => runQuickSetup((line) => lines.push(line)),
     deletedModels,
     pulledModels,
+    pickCalls,
     lines,
     getProfile: () => profile
   }
@@ -155,4 +163,35 @@ test('un échec de suppression est journalisé mais ne fait jamais échouer tout
     `l'échec doit être journalisé lisiblement pour Léo : ${JSON.stringify(t.lines)}`
   )
   assert.equal(result.models?.flash ?? t.getProfile().models.flash, picked.flash, "le run continue normalement malgré l'échec de nettoyage")
+})
+
+// Étape 136 : bug Ollama 0.34.2 ("blocked redirect to a different host") sur tout import hf.co/. Avant, cette
+// erreur faisait échouer TOUT « Retester la configuration » dès que G9v3-3B était choisi.
+const G9 = 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF'
+const GLM = 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M'
+
+test('un import Hugging Face qui échoue retombe sur le meilleur modèle suivant, sans faire échouer le retest', async () => {
+  const picked = { flash: G9, medium: G9, large: 'qwen3.8:27b', visionModel: GLM, codeModel: 'qwen2.5-coder:7b' }
+  const before = { models: { flash: 'ministral-3:3b', medium: 'qwen3.5:4b', large: 'qwen3.8:27b' }, visionModel: 'qwen3-vl:4b', codeModel: 'qwen2.5-coder:7b' }
+  const repick = (exclude) => ({
+    flash: exclude.has(G9) ? 'ministral-3:3b' : G9,
+    medium: exclude.has(G9) ? 'qwen3.5:4b' : G9,
+    large: 'qwen3.8:27b',
+    visionModel: exclude.has(GLM) ? 'qwen3-vl:4b' : GLM,
+    codeModel: 'qwen2.5-coder:7b'
+  })
+  const t = setup(picked, before, new Set(), new Set(), { pullErrorFor: new Set([G9, GLM]), repick })
+  const result = await t.run()
+  assert.deepEqual([...t.pickCalls.at(-1)].sort(), [G9, GLM].sort(), 'le nouveau choix doit exclure les deux imports en échec')
+  assert.equal(result.models.flash, 'ministral-3:3b')
+  assert.equal(result.visionModel, 'qwen3-vl:4b')
+  assert.equal(t.getProfile().models.flash, 'ministral-3:3b', "le profil ne doit jamais enregistrer un modèle jamais téléchargé")
+  assert.deepEqual(t.deletedModels, [], "aucun ancien modèle supprimé : les modèles de repli sont ceux déjà en place")
+  assert.ok(t.lines.some((l) => l.includes('bug connu') && l.includes('Ollama')), `l'échec doit être expliqué à Léo : ${JSON.stringify(t.lines)}`)
+})
+
+test("une erreur sur un tag de la bibliothèque Ollama n'est JAMAIS masquée par le repli", async () => {
+  const picked = { flash: 'ministral-3:3b', medium: 'qwen3.5:4b', large: 'qwen3.8:27b', visionModel: 'qwen3-vl:4b', codeModel: 'qwen2.5-coder:7b' }
+  const t = setup(picked, null, new Set(), new Set(), { pullErrorFor: new Set(['qwen3.5:4b']) })
+  await assert.rejects(t.run(), /blocked redirect/)
 })

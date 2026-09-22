@@ -193,6 +193,12 @@ const MODELS = [
   // fois de réponse rapide ("No-Think") et de réflexion approfondie ("Think") selon le chat template —
   // pensé explicitement pour assistants locaux / agents de code / appel d'outils, comme Jaris.
   'hf.co/openbmb/MiniCPM5-1B-GGUF',
+  // Pas de tag officiel non plus : import depuis la requantification GGUF de bartowski (quantifieur
+  // reconnu et fiable dans la communauté Ollama/llama.cpp), à partir du dépôt officiel ai9stars/G9v3-3B.
+  // Promu dans FLASH_CANDIDATES/MEDIUM_CANDIDATES (hardwareScan.ts) à l'étape 132 : 6/6 déjà vérifié
+  // ci-dessus n'avait jamais été suivi de sa promotion — reste dans cette liste comme tout autre candidat
+  // déjà vérifié, sauté au prochain run (voir VERIFIED_MODELS plus bas).
+  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF',
   // Ignorés jusqu'ici car trop gros pour la machine de dev (RTX 3070, 8 Go) : maintenant que le script
   // détecte la VRAM disponible et saute automatiquement ce qui ne rentre pas (voir detectVramGb ci-dessous),
   // les garder dans la liste permet aux utilisateurs avec plus de VRAM de vraiment les tester chez eux —
@@ -245,6 +251,7 @@ const VISION_CANDIDATES = [
   { model: 'gemma4:e4b', vramGb: 9.6 },
   { model: 'qwen3-vl:8b', vramGb: 8 },
   { model: 'gemma4:12b', vramGb: 7.6 },
+  { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 6.5 },
   // ministral-3:8b (voir MEDIUM_CANDIDATES/VISION_CANDIDATES dans hardwareScan.ts) : nativement multimodal.
   { model: 'ministral-3:8b', vramGb: 6.0 },
   { model: 'qwen3-vl:4b', vramGb: 5 },
@@ -305,6 +312,7 @@ const MODEL_SIZE_HINTS = {
   'qwen3.5:0.8b': 1.0,
   'functiongemma:270m': 0.3,
   'hf.co/openbmb/MiniCPM5-1B-GGUF': 0.69,
+  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 1.9,
   'qwen3.5:35b': 24,
   'qwen3.6:35b': 24,
   'qwen3.5:27b': 17,

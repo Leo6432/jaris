@@ -149,19 +149,17 @@ test('expose aussi la vitesse (tokens/s) publiée par Artificial Analysis, absen
   assert.equal(byModel.get('qwen3.5:0.8b'), null, 'aucune vitesse ne doit être devinée quand Artificial Analysis ne la publie pas')
 })
 
-test('les paliers automatiques ne proposent que des tags téléchargeables depuis la bibliothèque Ollama', async () => {
+// Étape 136, Léo : "Rajoute les 2 model". Une autre IA avait retiré G9v3-3B et GLM-4.6V-Flash (et
+// interdit tout import hf.co/ par un test) à cause d'un bug d'Ollama 0.34.2 sur les redirections Hugging Face.
+// Le risque est désormais traité là où il se produit — runQuickSetup retombe sur le modèle suivant si le
+// téléchargement échoue (test-benchmark-runner-cleanup.mjs) — donc les deux modèles restent candidats.
+test('G9v3-3B (Rapide/Médium) et GLM-4.6V-Flash (Vision) restent candidats malgré le bug Ollama 0.34.2', async () => {
   const { getModelOverview } = setup()
   const overview = await getModelOverview()
-  const automaticTiers = new Set(['Rapide', 'Médium', 'Puissant', 'Vision', 'Code'])
-  const automaticModels = overview.groups
-    .filter((group) => automaticTiers.has(group.tier))
-    .flatMap((group) => group.entries.map((entry) => entry.model))
-
-  assert.equal(
-    automaticModels.some((model) => model.startsWith('hf.co/')),
-    false,
-    'un import Hugging Face direct ne doit pas pouvoir bloquer « Retester la configuration »'
-  )
+  const tierHas = (tier, model) => overview.groups.find((g) => g.tier === tier)?.entries.some((e) => e.model === model)
+  assert.ok(tierHas('Rapide', 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF'), 'G9v3-3B doit être candidat Rapide')
+  assert.ok(tierHas('Médium', 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF'), 'G9v3-3B doit être candidat Médium')
+  assert.ok(tierHas('Vision', 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M'), 'GLM-4.6V-Flash doit être candidat Vision')
 })
 
 test('indique tous les paliers qui utilisent réellement chaque modèle du profil actif', async () => {

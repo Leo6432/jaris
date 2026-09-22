@@ -66,6 +66,23 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   // (`npm run benchmark:models`) : ce score externe ne le fait pas gagner tout seul, seulement candidat.
   { model: 'granite4.2:3b', vramGb: 2.2 },
   { model: 'qwen3:1.7b', vramGb: 2 },
+  // Étape 132, Léo : "on a bien les meilleur model... regarde bien". Déjà présent dans
+  // scripts/benchmark-models.mjs comme candidat EXPLORATOIRE depuis longtemps (import Hugging Face direct,
+  // quantification GGUF par bartowski — quantifieur reconnu de la communauté Ollama/llama.cpp, PAS le même
+  // risque qu'un réupload communautaire non vérifié sur la bibliothèque Ollama elle-même, voir plus bas) à
+  // partir du dépôt OFFICIEL ai9stars/G9v3-3B, mais jamais promu dans les vraies listes de candidats : un
+  // oubli, pas un choix délibéré. Déjà VÉRIFIÉ 6/6 en appel d'outils sur la machine de Léo
+  // (verified-tool-scores.md, mesuré le 12/09/2026) — meilleur que TOUS les autres candidats de ce palier à
+  // cette taille (granite4.2:3b n'a que 5/6). Score Artificial Analysis Intelligence Index 11, vérifié
+  // directement sur sa fiche (voir ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX plus haut) — le meilleur du palier
+  // Rapide, devant granite4.2:3b (9). Poids réel 1,9 Go (scripts/benchmark-models.mjs), plus léger que
+  // granite4.2:3b (2,2 Go). Repose sur ce que Jaris fait déjà ailleurs pour des modèles sans tag officiel
+  // Ollama (GLM-4.6V-Flash-GGUF, MiniCPM5-1B, LFM2.5-1.2B) : un import `hf.co/<dépôt>` direct depuis
+  // Hugging Face est un mécanisme OFFICIEL d'Ollama, pas un contournement — à ne pas confondre avec un tag
+  // republié par un tiers non vérifié DANS la bibliothèque Ollama elle-même (voir la réserve sur "Hermes 4
+  // 14B" et les namespaces communautaires, plus bas dans ce fichier). Rejoint aussi Médium (voir
+  // MEDIUM_CANDIDATES), même raisonnement que granite4.2:3b.
+  { model: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF', vramGb: 1.9 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
 ]
 // gemma4:e4b et granite4:3b (devenu granite4.1:3b, voir plus bas) ajoutés suite au même benchmark local :
@@ -113,6 +130,9 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3.5:2b', vramGb: 2.7 },
   { model: 'granite4.2:3b', vramGb: 2.2 },
   { model: 'granite4.1:3b', vramGb: 2.1 },
+  // Candidat "réutilisation" : hf.co/bartowski/ai9stars_G9v3-3B-GGUF (voir FLASH_CANDIDATES pour le détail
+  // complet de la vérification) — même raisonnement que granite4.2:3b, déjà candidat dans les deux paliers.
+  { model: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF', vramGb: 1.9 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
 ]
 const LARGE_CANDIDATES: ModelCandidate[] = [
@@ -162,8 +182,8 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   // 32K de contexte seulement, texte uniquement) et ajoute la vision + un contexte de 128K. Remplacé : aucune
   // raison de garder l'ancienne version une fois la bonne trouvée.
   { model: 'mistral-small3.2:24b', vramGb: 15 },
-  // GLM-4.7-Flash (Zhipu/Z.ai) : tools+thinking, texte seul. Vérifié sur
-  // ollama.com/library/glm-4.7-flash/tags (tag q4_K_M, 19 Go).
+  // GLM-4.7-Flash (Zhipu/Z.ai) : plus récent que GLM-4.6V-Flash déjà en Vision (2 mois vs plus ancien),
+  // tools+thinking, texte seul. Vérifié sur ollama.com/library/glm-4.7-flash/tags (tag q4_K_M, 19 Go).
   // Réexaminé (même revue que Mistral Small ci-dessus) : plusieurs bugs OFFICIELS (github.com/ollama/ollama,
   // issues #13840/#13820/#14273/#16497, de janvier à juin 2026, jamais dits résolus) montrent que l'appel
   // d'outils peut casser en cours de conversation avec CE modèle précis sur Ollama — même famille de risque
@@ -266,6 +286,11 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   // Même candidat "réutilisation" que gemma4:e4b ci-dessus, mais pour gemma4:12b (déjà dans
   // MEDIUM_CANDIDATES, tag réel confirmé sur ollama.com/library/gemma4).
   { model: 'gemma4:12b', vramGb: 7.6 },
+  // Pas de tag officiel dans la bibliothèque Ollama : import depuis le dépôt GGUF de ggml-org (mainteneurs
+  // de llama.cpp), à partir du modèle officiel zai-org/GLM-4.6V-Flash. Le tag Q4_K_M est important : les
+  // autres quantifications communautaires (Q2_K, Q3_K) sont purement textuelles, sans le module de vision.
+  // ~6,2 Go mesurés en Q4_K_M, marge de sécurité incluse ci-dessous.
+  { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', vramGb: 6.5 },
   // Candidat "réutilisation" : ministral-3:8b (déjà dans MEDIUM_CANDIDATES) est NATIVEMENT multimodal
   // (vérifié sur ollama.com/library/ministral-3, badge "Text, Image"). Aucune exigence de tool-calling ici
   // (voir gemma4:31b plus haut) : la réserve response_format+tools qui vaut pour son usage en Médium ne
@@ -720,7 +745,12 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   'north-mini-code-1.0': 10,
   'qwen2.5-coder:32b': 7,
   'devstral-small-2:24b': 8,
-  'qwen2.5-coder:7b': 6
+  'qwen2.5-coder:7b': 6,
+  // Vérifié directement sur artificialanalysis.ai/models/g9v3-3b le 21/09/2026 ("scores 11 on the
+  // Artificial Analysis Intelligence Index, placing it well above average among comparable models
+  // (median: 6)") — pas un résumé de recherche : un premier résumé automatique avait annoncé 16.1, faux,
+  // écarté avant d'entrer ici. Voir FLASH_CANDIDATES pour le contexte complet de cet ajout.
+  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 11
 }
 
 /**
@@ -1018,6 +1048,7 @@ function computeModelPicks(
   ramGb: number,
   localBenchmark: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>>,
   verifiedToolScores: Record<VerifiedTier, Map<string, string>>,
+  exclude: ReadonlySet<string> = new Set()
 ): {
   flash: ModelOverviewEntry
   medium: ModelOverviewEntry
@@ -1044,7 +1075,14 @@ function computeModelPicks(
   // taille. La VRAM reste le repli : MMLU-Pro n'est renseigné que pour une poignée de modèles (voir la table),
   // donc la plupart des départages continuent de se faire par taille faute de chiffre comparable pour les deux
   // candidats à la fois.
-  const pickBestFrom = (candidates: ModelCandidate[], tier: VerifiedTier): ModelOverviewEntry => {
+  const pickBestFrom = (allCandidates: ModelCandidate[], tier: VerifiedTier): ModelOverviewEntry => {
+    // `exclude` (étape 136) : modèles dont le téléchargement vient d'échouer sur CETTE machine (voir
+    // runQuickSetup, benchmarkRunner.ts) — retirés AVANT tout calcul, repli ultime compris, pour que le
+    // palier retombe sur le meilleur modèle suivant plutôt que de redemander le même téléchargement cassé.
+    // Jamais la liste entière : si tout était exclu, on garde la liste d'origine (mieux vaut un palier qui
+    // réessaie qu'un palier sans aucun modèle).
+    const filtered = allCandidates.filter((c) => !exclude.has(c.model))
+    const candidates = filtered.length ? filtered : allCandidates
     const benchmarked = candidates
       .filter((c) => c.vramGb <= budgetForCandidate(c.model))
       .map((c) => ({ model: c.model, vramGb: c.vramGb, result: resultFor(c, tier) }))
@@ -1113,9 +1151,9 @@ function computeModelPicks(
   }
 }
 
-export async function pickBestModelsFromBenchmark(): Promise<CapacityScanResult> {
+export async function pickBestModelsFromBenchmark(exclude: ReadonlySet<string> = new Set()): Promise<CapacityScanResult> {
   const { name, vramGb } = await detectGpu()
-  const picks = computeModelPicks(vramGb, detectRamGb(), parseLocalBenchmark(), parseVerifiedToolScores())
+  const picks = computeModelPicks(vramGb, detectRamGb(), parseLocalBenchmark(), parseVerifiedToolScores(), exclude)
   return {
     gpuName: name,
     vramGb,
@@ -1210,10 +1248,35 @@ function previewLabelFor(index: number, total: number): string {
  * dont les 5 modèles sont identiques : une seule ligne par combinaison VRAIMENT distincte, gardant la
  * frontière du PREMIER palier du groupe (celle où ce résultat apparaît réellement) et le statut "actuel" s'il
  * appartenait à N'IMPORTE LEQUEL des paliers fusionnés.
+ *
+ * **RAM de référence FIXE depuis l'étape 135, pas la vraie RAM de la machine qui regarde**, à la demande
+ * explicite de Léo (deux fois de suite : "je veut que tout les model dans les palier sont les meme" puis,
+ * après une première réponse qui n'avait pas compris la vraie demande, "je veut que les models soit pareil
+ * pour le palier 1, je veut pas des model différent entre un palier 1 et un palier 1") — deux PC affichant
+ * "Palier 1" doivent voir EXACTEMENT les mêmes 5 modèles, quelle que soit leur RAM respective.
+ * Vérifié par une vraie simulation AVANT de comprendre le problème (jamais deviné) : Rapide/Médium étaient
+ * DÉJÀ universels (aucun débordement RAM pour ces deux paliers), mais Puissant/Code, eux, dépendent de la
+ * RAM pour déborder au-delà de la VRAM (`LARGE_RAM_OFFLOAD_MODELS`, à la demande explicite de Léo à une
+ * étape antérieure — "un vrai grand modèle plus lent... plutôt qu'un petit modèle rapide") : à VRAM égale,
+ * une machine à 64 Go de RAM affichait `qwen3.8:27b` en Puissant là où une machine à 16 Go affichait encore
+ * `qwen3.5:0.8b` — la VRAIE cause du "palier 1 différent d'un PC à l'autre".
+ * `RESOURCE_SAFETY_MARGIN_GB` (déjà utilisée comme seuil "pas de débordement en dessous de cette RAM") sert
+ * de RAM de référence ici plutôt qu'une nouvelle constante inventée : à cette valeur exacte,
+ * `ramOffloadAllowance` (computeModelPicks) vaut TOUJOURS 0 (`max(0, RESOURCE_SAFETY_MARGIN_GB -
+ * RESOURCE_SAFETY_MARGIN_GB)`), donc Puissant/Code redeviennent purement basés sur la VRAM, exactement comme
+ * Rapide/Médium — le tableau entier devient une vraie table FIGÉE dans le code, identique pour toute
+ * installation de cette version de Jaris, plus jamais calculée à partir de `detectRamGb()`.
+ * **Ce que ce changement ne touche PAS, volontairement** : `pickBestModelsFromBenchmark`/`pickBestCodeModel`
+ * (ce qui est RÉELLEMENT téléchargé/utilisé par `runQuickSetup`) continuent d'utiliser la VRAIE RAM de la
+ * machine — une machine avec plus de RAM que la référence continue donc de profiter d'un Puissant plus fort
+ * EN PRATIQUE, même si le tableau affiché (à but de comparaison, pas de garantie exacte de ce qui sera
+ * installé) montre la version "plancher" à cette VRAM. Léo n'a jamais demandé de renoncer à cet avantage
+ * pour sa propre machine, seulement que le TABLEAU DE COMPARAISON soit lisible et identique pour tout le
+ * monde — les deux demandes ne sont pas contradictoires une fois séparées comme ça.
  */
 export async function previewHardwareTiers(): Promise<HardwareTierPreview[]> {
   const { vramGb: actualVramGb } = await detectGpu()
-  const ramGb = detectRamGb()
+  const ramGb = RESOURCE_SAFETY_MARGIN_GB
   const localBenchmark = parseLocalBenchmark()
   const verifiedToolScores = parseVerifiedToolScores()
 

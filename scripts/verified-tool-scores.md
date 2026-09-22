@@ -44,6 +44,7 @@ lignes) — même convention que la colonne "Fiabilité" de `benchmark-results.m
 | qwen3.5:0.8b | 5/6 |
 | functiongemma:270m | 1/6 |
 | hf.co/openbmb/MiniCPM5-1B-GGUF | 2/6 |
+| hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 6/6 |
 | qwen3.5:35b | 6/6 |
 | qwen3.5:27b | 6/6 |
 | qwen3.6:27b | 6/6 |
@@ -81,6 +82,7 @@ granite4.1:3b, malgré la version plus récente.
 
 | Modèle | Fiabilité |
 |---|---|
+| hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M | 3/3 |
 | qwen3-vl:4b | 3/3 |
 | qwen3-vl:2b | 3/3 |
 | qwen3.5:4b | 3/3 |
