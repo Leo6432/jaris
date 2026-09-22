@@ -9,9 +9,10 @@ import {
   stopOllamaIfStartedByJaris,
   updateOllama
 } from './services/dependencyServices'
+import { deleteModel } from './services/ollama'
 import { getModelsLocationStatus, moveModelsLocation } from './services/modelsLocation'
 import { moveDataLocation } from './services/dataLocation'
-import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, getMyModelPicks } from './services/hardwareScan'
+import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, getMyModelPicks, isUnusedInstalledModel } from './services/hardwareScan'
 import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { runModelAnalysis, runQuickSetup } from './services/benchmarkRunner'
@@ -841,6 +842,14 @@ app.whenReady().then(async () => {
     return runModelAnalysis((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line), scope)
   })
   ipcMain.handle(IPC_CHANNELS.getMyModelPicks, async () => getMyModelPicks(await getProfile()))
+  // Étape 140 : le nom vient du renderer, donc revérifié ICI avant toute suppression — un modèle utilisé par
+  // un rôle du profil (ou inconnu d'Ollama) n'est jamais supprimé, quoi que demande l'interface.
+  ipcMain.handle(IPC_CHANNELS.deleteUnusedModel, async (_event, model: string): Promise<void> => {
+    if (typeof model !== 'string' || !(await isUnusedInstalledModel(model, await getProfile()))) {
+      throw new Error("Ce modèle est utilisé par Jaris ou n'est pas installé : il n'a pas été supprimé.")
+    }
+    await deleteModel(model)
+  })
   ipcMain.handle(IPC_CHANNELS.runQuickSetup, async (event): Promise<CapacityScanResult> => {
     return runQuickSetup((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))
   })

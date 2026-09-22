@@ -21,7 +21,7 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/har
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText
 
-function setup({ verifiedToolScoresMd = '', vramMib, ramGb = 32 } = {}) {
+function setup({ verifiedToolScoresMd = '', vramMib, ramGb = 32, installed = null } = {}) {
   // Voir le même commentaire dans test-hardwarescan-tiebreak.mjs : execAsync = promisify(exec) a besoin de la
   // marque [util.promisify.custom] pour résoudre vers {stdout, stderr} plutôt qu'un tableau positionnel —
   // sans elle, detectGpu() retombe silencieusement sur {name: null, vramGb: null} et ignore vramMib.
@@ -46,7 +46,15 @@ function setup({ verifiedToolScoresMd = '', vramMib, ramGb = 32 } = {}) {
     // Curseur de longueur de contexte : hardwareScan.ts importe désormais ces deux fonctions d'ollama.ts,
     // jamais appelées par les tests de ce fichier (aucune assertion ici ne porte dessus) — sans ce stub,
     // le require shim ne trouve pas './ollama' et fait échouer tout le module à charger.
-    './ollama': { getModelInfo: async () => null, getInstalledModelSizeBytes: async () => null }
+    './ollama': {
+      getModelInfo: async () => null,
+      getInstalledModelSizeBytes: async () => null,
+      // `null` = Ollama injoignable (la vérification ne doit alors rien prétendre).
+      listInstalledModels: async () => {
+        if (installed === null) throw new Error('Ollama injoignable')
+        return installed
+      }
+    }
   }
   const exports = {}
   vm.runInNewContext(source, {
@@ -141,4 +149,50 @@ test('sans profil (écran d\'accueil) ou profil déjà à jour : aucun meilleur 
     codeModel: fresh.code.model
   })
   assert.equal(Object.keys(upToDate.upgrades).length, 0)
+})
+
+// Étape 140, Léo : "je veut etre sur que les model visbile sont réel et pas un autre model". La carte
+// compare ce qu'elle affiche à la liste RÉELLE d'Ollama (/api/tags), au lieu de le supposer.
+const PROFILE = { name: 'Léo', models: { flash: 'qwen3.5:4b', medium: 'qwen3.5:4b', large: 'qwen3.5:9b' }, visionModel: 'qwen3-vl:4b', codeModel: 'qwen2.5-coder:7b' }
+
+test('tout est installé : aucun rôle signalé, et les modèles en trop sont listés', async () => {
+  const { getMyModelPicks } = setup({
+    verifiedToolScoresMd: VERIFIED_MD,
+    vramMib: 12 * 1024,
+    installed: ['qwen3.5:4b', 'qwen3.5:9b', 'qwen3-vl:4b', 'qwen2.5-coder:7b', 'ministral-3:3b', 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF:latest']
+  })
+  const picks = await getMyModelPicks(PROFILE)
+  assert.deepEqual([...picks.installCheck.notInstalled], [])
+  assert.deepEqual([...picks.installCheck.otherInstalled], ['ministral-3:3b', 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF:latest'])
+})
+
+test('un modèle affiché mais absent du disque est signalé', async () => {
+  const { getMyModelPicks } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 12 * 1024, installed: ['qwen3.5:4b', 'qwen3-vl:4b', 'qwen2.5-coder:7b'] })
+  const picks = await getMyModelPicks(PROFILE)
+  assert.deepEqual([...picks.installCheck.notInstalled], ['large'])
+})
+
+test('un modèle sans tag est reconnu sous son nom ":latest" (comme Ollama le liste)', async () => {
+  const profile = { ...PROFILE, models: { ...PROFILE.models, flash: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF' } }
+  const { getMyModelPicks } = setup({
+    verifiedToolScoresMd: VERIFIED_MD,
+    vramMib: 12 * 1024,
+    installed: ['hf.co/bartowski/ai9stars_G9v3-3B-GGUF:latest', 'qwen3.5:4b', 'qwen3.5:9b', 'qwen3-vl:4b', 'qwen2.5-coder:7b']
+  })
+  const picks = await getMyModelPicks(profile)
+  assert.deepEqual([...picks.installCheck.notInstalled], [])
+  assert.deepEqual([...picks.installCheck.otherInstalled], [])
+})
+
+test("Ollama injoignable : la vérification ne prétend rien (null), jamais \"tout est installé\"", async () => {
+  const { getMyModelPicks } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 12 * 1024, installed: null })
+  const picks = await getMyModelPicks(PROFILE)
+  assert.equal(picks.installCheck, null)
+})
+
+test("seul un modèle installé ET inutilisé peut être supprimé", async () => {
+  const { isUnusedInstalledModel } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 12 * 1024, installed: ['qwen3.5:4b', 'qwen3.5:9b', 'ministral-3:3b'] })
+  assert.equal(await isUnusedInstalledModel('ministral-3:3b', PROFILE), true)
+  assert.equal(await isUnusedInstalledModel('qwen3.5:4b', PROFILE), false, 'utilisé par Rapide/Médium : jamais supprimable')
+  assert.equal(await isUnusedInstalledModel('llama3:8b', PROFILE), false, 'pas installé : rien à supprimer')
 })

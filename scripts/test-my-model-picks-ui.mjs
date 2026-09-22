@@ -46,11 +46,13 @@ const picks = {
   upgrades: {
     medium: { model: 'qwen3.5:9b', blockedReason: null },
     vision: { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', blockedReason: "bloqué par ta version d'Ollama" }
-  }
+  },
+  installCheck: '__installCheck' in window ? window.__installCheck : { notInstalled: [], otherInstalled: [] }
 }
+window.__deleted = []
 
 const root = createRoot(document.getElementById('root'))
-root.render(<div style={{ padding: 20, maxWidth: 760 }}><MyModelPicks picks={picks} /></div>)
+root.render(<div style={{ padding: 20, maxWidth: 760 }}><MyModelPicks picks={picks} onDeleteUnused={async (m) => { window.__deleted.push(m) }} /></div>)
 `
 
 let pageHtml = null
@@ -70,13 +72,16 @@ function buildPage() {
   return pageHtml
 }
 
-async function withPreview(run, width = 760) {
+async function withPreview(run, width = 760, installCheck = undefined) {
   const html = buildPage()
   const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
   try {
     const page = await browser.newPage()
     await page.setViewportSize({ width, height: 900 })
-    await page.setContent(html)
+    // Données de vérification propres à ce test, posées AVANT le script de la page (setContent n'exécute pas
+    // les scripts d'initialisation de Playwright).
+    const injected = installCheck === undefined ? '' : `<script>window.__installCheck = ${JSON.stringify(installCheck)}</script>`
+    await page.setContent(html.replace('<div id="root"></div>', `${injected}<div id="root"></div>`))
     await page.waitForSelector('.capacity-scan__tier-table')
     await run(page)
   } finally {
@@ -134,4 +139,54 @@ test('un meilleur modèle non utilisé est signalé sous sa ligne, avec la raiso
     assert.match(notes[0], /Meilleur choix disponible : qwen3\.5:9b .*Retester la configuration/)
     assert.match(notes[1], /GLM-4\.6V-Flash \(Q4_K_M\), pas encore installé — bloqué par ta version d'Ollama/)
   })
+})
+
+// Étape 140, Léo : "je veut etre sur que les model visbile sont réel et pas un autre model".
+test('tout est vérifié auprès d\'Ollama et rien d\'autre n\'est installé : la carte le dit clairement', options, async () => {
+  await withPreview(async (page) => {
+    const text = await page.$eval('.capacity-scan__install-check', (el) => el.textContent ?? '')
+    assert.match(text, /Vérifié auprès d'Ollama/)
+    assert.match(text, /Aucun autre modèle installé/)
+  })
+})
+
+test('un modèle affiché mais pas installé est signalé en rouge sous sa ligne', options, async () => {
+  await withPreview(
+    async (page) => {
+      const notes = await page.$$eval('.capacity-scan__tier-missing', (els) => els.map((el) => el.textContent?.trim()))
+      assert.equal(notes.length, 1)
+      assert.match(notes[0], /Pas installé sur ce PC/)
+      const text = await page.$eval('.capacity-scan__install-check', (el) => el.textContent ?? '')
+      assert.doesNotMatch(text, /Vérifié auprès d'Ollama/, 'jamais "vérifié" quand un modèle manque')
+    },
+    760,
+    { notInstalled: ['large'], otherInstalled: [] }
+  )
+})
+
+test('les autres modèles installés sont listés, et la suppression demande une confirmation', options, async () => {
+  await withPreview(
+    async (page) => {
+      const items = await page.$$eval('.capacity-scan__other-models li span[title]', (els) => els.map((el) => el.textContent))
+      assert.deepEqual(JSON.parse(JSON.stringify(items)), ['ministral-3:3b'])
+      await page.click('.capacity-scan__other-models button:has-text("Supprimer")')
+      assert.deepEqual(await page.evaluate(() => window.__deleted), [], 'un premier clic ne supprime rien : il demande confirmation')
+      await page.click('.capacity-scan__delete-confirm')
+      await page.waitForFunction(() => window.__deleted.length === 1)
+      assert.deepEqual(await page.evaluate(() => window.__deleted), ['ministral-3:3b'])
+    },
+    760,
+    { notInstalled: [], otherInstalled: ['ministral-3:3b'] }
+  )
+})
+
+test("Ollama injoignable : la carte le dit au lieu de prétendre que tout est installé", options, async () => {
+  await withPreview(
+    async (page) => {
+      const text = await page.$eval('.capacity-scan__install-check', (el) => el.textContent ?? '')
+      assert.match(text, /Impossible de vérifier/)
+    },
+    760,
+    null
+  )
 })

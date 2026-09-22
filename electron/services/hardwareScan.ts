@@ -4,7 +4,7 @@ import { resourcesRoot } from '../paths'
 import { join } from 'path'
 import { promisify } from 'util'
 import { RESOURCE_SAFETY_MARGIN_GB, detectRamGb } from './systemResources'
-import { getInstalledModelSizeBytes, getModelInfo } from './ollama'
+import { getInstalledModelSizeBytes, getModelInfo, listInstalledModels } from './ollama'
 import type {
   CapacityScanResult,
   ContextLengthOptions,
@@ -1217,7 +1217,37 @@ export async function getMyModelPicks(profile?: Profile | null): Promise<MyModel
       upgrades[role] = { model: ideal[role].model, blockedReason: profile?.blockedModels?.[ideal[role].model] ?? null }
     }
   }
-  return { gpuName: name, vramGb, ramGb, ...entries, upgrades }
+  return { gpuName: name, vramGb, ramGb, ...entries, upgrades, installCheck: await checkInstalled(inUse) }
+}
+
+/** Ollama liste un modèle sans tag sous `:latest` : les deux écritures désignent le même modèle. */
+function sameModel(a: string, b: string): boolean {
+  const withTag = (m: string): string => (m.slice(m.lastIndexOf('/') + 1).includes(':') ? m : `${m}:latest`)
+  return withTag(a) === withTag(b)
+}
+
+/**
+ * Étape 140 : ce qu'Ollama a RÉELLEMENT sur le disque, comparé aux modèles affichés. `null` si Ollama ne
+ * répond pas — jamais "tout est installé" ni "rien n'est installé" deviné faute de réponse.
+ */
+async function checkInstalled(inUse: Record<ModelRole, string>): Promise<MyModelPicks['installCheck']> {
+  let installed: string[]
+  try {
+    installed = await listInstalledModels()
+  } catch {
+    return null
+  }
+  const used = Object.values(inUse)
+  return {
+    notInstalled: (Object.keys(inUse) as ModelRole[]).filter((role) => !installed.some((m) => sameModel(m, inUse[role]))),
+    otherInstalled: installed.filter((m) => !used.some((u) => sameModel(m, u)))
+  }
+}
+
+/** Vrai si `model` est installé mais utilisé par AUCUN rôle du profil — seul cas où sa suppression est permise. */
+export async function isUnusedInstalledModel(model: string, profile?: Profile | null): Promise<boolean> {
+  const picks = await getMyModelPicks(profile)
+  return picks.installCheck?.otherInstalled.includes(model) ?? false
 }
 
 /** Entrée complète (scores publiés, fiabilité connue) pour un modèle quelconque — le modèle du profil n'est

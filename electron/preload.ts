@@ -79,6 +79,7 @@ const api = {
   onRuntimeSetupProgress: (cb: (progress: RuntimeSetupProgress) => void) => subscribe(IPC_CHANNELS.runtimeSetupProgress, cb),
   runModelAnalysis: (scope?: AnalysisScope): Promise<CapacityScanResult> => ipcRenderer.invoke(IPC_CHANNELS.runModelAnalysis, scope),
   getMyModelPicks: (): Promise<MyModelPicks> => ipcRenderer.invoke(IPC_CHANNELS.getMyModelPicks),
+  deleteUnusedModel: (model: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.deleteUnusedModel, model),
   runQuickSetup: (): Promise<CapacityScanResult> => ipcRenderer.invoke(IPC_CHANNELS.runQuickSetup),
   onModelBenchmarkLine: (cb: (line: string) => void) => subscribe(IPC_CHANNELS.modelBenchmarkLine, cb),
   getNewModels: (): Promise<string[]> => ipcRenderer.invoke(IPC_CHANNELS.getNewModels),

@@ -243,6 +243,13 @@ export interface MyModelPicks {
    * (il suffit de « Retester la configuration »), soit bloqué au téléchargement (`blockedReason`).
    */
   upgrades: Partial<Record<ModelRole, { model: string; blockedReason: string | null }>>
+  /**
+   * Étape 140, Léo : "je veut etre sur que les model visbile sont réel". Vérifié auprès d'Ollama lui-même
+   * (`/api/tags`), jamais supposé : les rôles dont le modèle affiché n'est PAS réellement installé, et les
+   * modèles installés que Jaris n'utilise pour aucun rôle. `null` si Ollama n'a pas pu répondre (on ne
+   * prétend alors rien, dans un sens comme dans l'autre).
+   */
+  installCheck: { notInstalled: ModelRole[]; otherInstalled: string[] } | null
 }
 
 /**
@@ -545,6 +552,8 @@ export const IPC_CHANNELS = {
   /** renderer -> main : modèles choisis pour CETTE machine, sans rien télécharger (voir getMyModelPicks,
    * hardwareScan.ts) — écran d'accueil et Options → Modèles. */
   getMyModelPicks: 'jaris:get-my-model-picks',
+  /** renderer -> main : supprime un modèle installé que Jaris n'utilise pour AUCUN rôle (revérifié côté main). */
+  deleteUnusedModel: 'jaris:delete-unused-model',
   /** renderer -> main : détecte le matériel et télécharge directement les modèles déjà choisis pour lui
    * (voir runQuickSetup, benchmarkRunner.ts) — le nouveau chemin par défaut de l'écran d'accueil, sans passer
    * par le benchmark comparatif complet. Réutilise modelBenchmarkLine pour la progression des téléchargements. */

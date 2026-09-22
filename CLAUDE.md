@@ -4100,3 +4100,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   projecteur, fichier déjà présent jamais retéléchargé, fichier corrompu jamais installé, trop gros refusé
   avant téléchargement, coupure reprise sans tout recommencer). **Non vérifiable ici** : la même chose sous
   Windows chez Léo.
+
+- **Étape 140, Léo : "Je clique sur une nouvelle detection, et ça fait rien ça charge" puis "je veut etre sur
+  que les model visbile sont réel et pas un autre model"** — (1) le retest d'Options télécharge parfois
+  plusieurs Go (G9v3-3B : 1,9 Go, via l'import de l'étape 139), mais son avancement ne partait que sur le canal
+  `modelBenchmarkLine`, qu'Options n'écoutait pas : le bouton restait sur "Nouvelle détection en cours..."
+  sans rien montrer — même famille que l'étape 98 (toute action longue doit dire où elle en est). La
+  dernière ligne d'avancement s'affiche maintenant sous le bouton. (2) La carte compare ce qu'elle affiche à
+  la liste RÉELLE d'Ollama (`/api/tags`, `installCheck` dans `getMyModelPicks`) : "✓ Vérifié auprès d'Ollama"
+  seulement si les 5 modèles sont vraiment installés, un rôle dont le modèle manque est signalé en rouge,
+  les modèles installés mais utilisés par AUCUN rôle sont listés avec un bouton Supprimer (confirmation dans
+  la ligne ; nom revérifié côté main par `isUnusedInstalledModel` avant tout effacement — un modèle utilisé
+  n'est jamais supprimable, quoi que demande l'interface). Ollama injoignable : `null`, la carte dit
+  "impossible de vérifier" au lieu de prétendre quoi que ce soit. Comparaison tolérante au `:latest"
+  qu'Ollama ajoute aux noms sans tag. Piège attrapé par la suite de tests : un faux pont preload existant
+  (Options) ne fournissait pas le nouveau champ, et la carte plantait sur une valeur ABSENTE — corrigé des
+  deux côtés (faux pont complété, composant robuste à `undefined`), leçon déjà notée ici pour les canaux IPC
+  et qui vaut aussi pour les CHAMPS ajoutés à une réponse existante. Régression :
+  `test-hardwarescan-my-picks.mjs` (+5 cas) et `test-my-model-picks-ui.mjs` (+4 cas).

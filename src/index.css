@@ -1696,6 +1696,44 @@ body.body--scan::after {
   color: var(--hud-text-faint);
 }
 
+/* Étape 140 : vérification auprès d'Ollama (ce qui est VRAIMENT installé) sous la carte. */
+.capacity-scan__tier-missing td,
+p.capacity-scan__tier-missing {
+  color: var(--hud-danger);
+}
+
+.capacity-scan__install-check {
+  margin: 8px 2px 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--hud-text-soft);
+}
+
+.capacity-scan__install-check p {
+  margin: 4px 0;
+}
+
+.capacity-scan__other-models {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+}
+
+.capacity-scan__other-models li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px solid var(--hud-line);
+  font-family: var(--hud-font-mono);
+}
+
+.capacity-scan__other-actions {
+  display: flex;
+  gap: 6px;
+}
+
 /* Légende sous la carte : sans elle, un "148 tok/s" se lirait comme la vitesse attendue sur la machine de
    qui regarde. */
 .capacity-scan__tier-legend {

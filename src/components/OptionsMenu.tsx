@@ -234,6 +234,9 @@ export default function OptionsMenu(): JSX.Element {
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
   const [retestingConfig, setRetestingConfig] = useState(false)
+  // Étape 140, Léo : "je clique sur une nouvelle detection, et ça fait rien ça charge". Le retest télécharge
+  // parfois plusieurs Go (G9v3-3B : 1,9 Go) : sans afficher son avancement, le bouton semblait bloqué.
+  const [retestLine, setRetestLine] = useState<string | null>(null)
   const [inputDevices, setInputDevices] = useState<AudioInputDevice[] | null>(null)
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[] | null>(null)
   const [savingAudioDevice, setSavingAudioDevice] = useState(false)
@@ -408,8 +411,14 @@ export default function OptionsMenu(): JSX.Element {
   // configuration (runQuickSetup, même chemin que l'écran d'accueil) — utile après un changement matériel
   // (nouvelle carte graphique...), sans repasser par l'ancienne analyse comparative complète (des dizaines
   // de minutes à tout retélécharger/retester alors que verified-tool-scores.md connaît déjà le gagnant).
+  useEffect(() => {
+    if (!retestingConfig) return
+    return window.jaris.onModelBenchmarkLine(setRetestLine)
+  }, [retestingConfig])
+
   const handleRetestConfiguration = async (): Promise<void> => {
     setError(null)
+    setRetestLine('Détection du matériel...')
     setRetestingConfig(true)
     try {
       const result = await window.jaris.runQuickSetup()
@@ -428,7 +437,13 @@ export default function OptionsMenu(): JSX.Element {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setRetestingConfig(false)
+      setRetestLine(null)
     }
+  }
+
+  const handleDeleteUnusedModel = async (model: string): Promise<void> => {
+    await window.jaris.deleteUnusedModel(model)
+    setMyPicks(await window.jaris.getMyModelPicks())
   }
 
   const handleClearHistory = async (): Promise<void> => {
@@ -997,7 +1012,7 @@ export default function OptionsMenu(): JSX.Element {
                 <p className="capacity-scan__status">Chargement...</p>
               ) : (
                 <>
-                  <MyModelPicks picks={myPicks} />
+                  <MyModelPicks picks={myPicks} onDeleteUnused={handleDeleteUnusedModel} />
                   <AllModelsOverview />
                 </>
               )}
@@ -1011,6 +1026,7 @@ export default function OptionsMenu(): JSX.Element {
                   {retestingConfig ? 'Nouvelle détection en cours...' : 'Retester la configuration'}
                 </button>
               </SettingRow>
+              {retestingConfig && retestLine && <p className="capacity-scan__status options-menu__retest-progress">{retestLine}</p>}
               {profile?.codeModel && (
                 <SettingRow
                   label="Modèle du mode Code"

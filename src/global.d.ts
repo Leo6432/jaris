@@ -76,6 +76,7 @@ declare global {
       onRuntimeSetupProgress: (cb: (progress: RuntimeSetupProgress) => void) => () => void
       runModelAnalysis: (scope?: AnalysisScope) => Promise<CapacityScanResult>
       getMyModelPicks: () => Promise<MyModelPicks>
+      deleteUnusedModel: (model: string) => Promise<void>
       runQuickSetup: () => Promise<CapacityScanResult>
       onModelBenchmarkLine: (cb: (line: string) => void) => () => void
       getNewModels: () => Promise<string[]>
