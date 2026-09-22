@@ -1,9 +1,12 @@
+import { Fragment } from 'react'
 import type { ModelOverviewEntry, MyModelPicks as MyModelPicksData } from '../../shared/ipc'
 import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge } from './OptionsMenu'
 
 interface MyModelPicksProps {
   picks: MyModelPicksData
+  /** Avant la toute première installation (écran d'accueil), rien n'est encore "utilisé" : "choisis". */
+  title?: string
 }
 
 const ROLES: { key: 'flash' | 'medium' | 'large' | 'vision' | 'code'; label: string }[] = [
@@ -41,37 +44,52 @@ export function formatHardware(picks: MyModelPicksData): string {
  * Analysis, puis taille (pickBestFrom, hardwareScan.ts). Partagée entre l'écran d'accueil (CapacityScan.tsx)
  * et Options → Modèles, comme l'ancienne.
  */
-export default function MyModelPicks({ picks }: MyModelPicksProps): JSX.Element {
+export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta machine' }: MyModelPicksProps): JSX.Element {
   return (
     <div className="capacity-scan__tiers">
       <div className="capacity-scan__tier capacity-scan__tier--current">
         <div className="capacity-scan__tier-header">
-          <span className="capacity-scan__tier-label">Modèles choisis pour ta machine</span>
+          <span className="capacity-scan__tier-label">{title}</span>
           <span className="capacity-scan__tier-hardware">{formatHardware(picks)}</span>
         </div>
         <table className="capacity-scan__tier-table">
           <tbody>
             {ROLES.map(({ key, label }) => {
               const entry = picks[key]
+              const upgrade = picks.upgrades[key]
               return (
-                <tr key={key}>
-                  <td className="capacity-scan__tier-slot">{label}</td>
-                  <td className="capacity-scan__tier-model" title={entry.model}>
-                    {formatModelName(entry.model)}
-                  </td>
-                  <td
-                    className="capacity-scan__tier-speed"
-                    title="Vitesse de génération publiée par Artificial Analysis — mesurée sur leur matériel, pas sur ta machine"
-                  >
-                    {formatSpeed(entry)}
-                  </td>
-                  <td className="capacity-scan__tier-intelligence" title="Artificial Analysis Intelligence Index v4.3.2">
-                    {formatIntelligence(entry)}
-                  </td>
-                  <td>
-                    <ReliabilityBadge value={entry.toolCalling} />
-                  </td>
-                </tr>
+                <Fragment key={key}>
+                  <tr>
+                    <td className="capacity-scan__tier-slot">{label}</td>
+                    <td className="capacity-scan__tier-model" title={entry.model}>
+                      {formatModelName(entry.model)}
+                    </td>
+                    <td
+                      className="capacity-scan__tier-speed"
+                      title="Vitesse de génération publiée par Artificial Analysis — mesurée sur leur matériel, pas sur ta machine"
+                    >
+                      {formatSpeed(entry)}
+                    </td>
+                    <td className="capacity-scan__tier-intelligence" title="Artificial Analysis Intelligence Index v4.3.2">
+                      {formatIntelligence(entry)}
+                    </td>
+                    <td>
+                      <ReliabilityBadge value={entry.toolCalling} />
+                    </td>
+                  </tr>
+                  {/* Étape 138 : la ligne ci-dessus est le modèle RÉELLEMENT utilisé. Quand le meilleur choix
+                      est un autre, on le dit ici avec la raison — plus jamais un modèle affiché mais pas utilisé. */}
+                  {upgrade && (
+                    <tr className="capacity-scan__tier-upgrade">
+                      <td />
+                      <td colSpan={4}>
+                        {upgrade.blockedReason
+                          ? `Meilleur choix : ${formatModelName(upgrade.model)}, pas encore installé — ${upgrade.blockedReason}.`
+                          : `Meilleur choix disponible : ${formatModelName(upgrade.model)} — clique « Retester la configuration » pour l'installer.`}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               )
             })}
           </tbody>

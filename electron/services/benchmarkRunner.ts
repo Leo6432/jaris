@@ -41,6 +41,8 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
   // Limité aux imports hf.co/ : une erreur sur un tag de la bibliothèque Ollama (réseau coupé...) continue
   // de remonter telle quelle, jamais masquée par un repli silencieux.
   const failedHuggingFace = new Set<string>()
+  const blockedReasons = new Map<string, string>()
+  const pulledOk = new Set<string>()
   // Borné : chaque tour exclut au moins un modèle de plus, et il n'y a que quelques imports hf.co/.
   for (let round = 0; round < 4; round++) {
     // Mode Code (étape 46) : le meilleur candidat qui tient dans la VRAM+RAM de cette machine
@@ -51,6 +53,7 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
     for (const model of modelsToInstall) {
       try {
         await pullModelIfMissing(model, onLine)
+        pulledOk.add(model)
       } catch (err) {
         if (err instanceof ModelTooLargeError || err instanceof DiskFullError) {
           if (!skippedModels.has(model)) onLine(`Modèle ${model} ignoré : ${err.message}`)
@@ -62,6 +65,8 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
               'suivant en attendant. Mets Ollama à jour puis relance « Retester la configuration » pour le récupérer.'
           )
           failedHuggingFace.add(model)
+          // Phrase courte pour Léo (affichée dans Options → Modèles) ; l'erreur brute reste dans le journal ci-dessus.
+          blockedReasons.set(model, "ta version d'Ollama bloque ce téléchargement (bug corrigé dans sa prochaine version)")
           newFailure = true
         } else {
           throw err
@@ -115,12 +120,23 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
       visionModel: picked.visionModel,
       codeModel: picked.codeModel,
       capacityScanDone: true,
-      knownModelCandidates: getAllCandidateModelIds()
+      knownModelCandidates: getAllCandidateModelIds(),
+      // Étape 138 : mémorisé pour que la carte "Modèles choisis pour ta machine" explique pourquoi le
+      // meilleur modèle n'est pas celui utilisé ; oublié dès qu'un téléchargement du même modèle réussit.
+      blockedModels: Object.fromEntries([
+        ...Object.entries(profile.blockedModels ?? {}).filter(([model]) => !pulledOk.has(model) && !blockedReasons.has(model)),
+        ...blockedReasons
+      ])
     })
   }
 
+  const blockedList = [...blockedReasons].map(([model, reason]) => ({ model, reason }))
   const skippedList = [...skippedModels].map(([model, reason]) => ({ model, reason }))
-  return { ...picked, skippedModels: skippedList.length ? skippedList : undefined }
+  return {
+    ...picked,
+    skippedModels: skippedList.length ? skippedList : undefined,
+    blockedModels: blockedList.length ? blockedList : undefined
+  }
 }
 
 /**

@@ -77,6 +77,13 @@ export interface Profile {
    * directement. `undefined` seulement pour un profil créé avant l'étape 46.
    */
   codeModel?: string
+  /**
+   * Étape 138 : meilleurs modèles dont le téléchargement a échoué au dernier « Retester la configuration »
+   * (import Hugging Face bloqué par une version d'Ollama, voir runQuickSetup), avec la raison — pour que
+   * Options → Modèles explique pourquoi Jaris utilise un autre modèle au lieu de laisser croire que le
+   * meilleur est installé. Retiré dès qu'un téléchargement du même modèle réussit.
+   */
+  blockedModels?: Record<string, string>
   /** Design sonore (étape 31) : absent/true par défaut, false pour couper les bips d'interface (Options → Voix). */
   soundEffectsEnabled?: boolean
   /**
@@ -209,6 +216,8 @@ export interface CapacityScanResult {
    * succès même quand un palier entier manquait, sans jamais le dire clairement à l'utilisateur (étape 45).
    */
   skippedModels?: { model: string; reason: string }[]
+  /** Étape 138 : meilleurs modèles non téléchargeables pour l'instant (voir Profile.blockedModels), remplacés par le suivant. */
+  blockedModels?: { model: string; reason: string }[]
 }
 
 /**
@@ -217,15 +226,23 @@ export interface CapacityScanResult {
  * "paliers" de comparaison (Palier 1/2/3...) à la demande de Léo — un choix personnalisé, calculé sur la VRAM
  * et la RAM réellement détectées, exactement comme ce qui est téléchargé.
  */
+export type ModelRole = 'flash' | 'medium' | 'large' | 'vision' | 'code'
+
 export interface MyModelPicks {
   gpuName: string | null
   vramGb: number | null
   ramGb: number
+  /** Étape 138 : le modèle RÉELLEMENT utilisé par Jaris pour chaque rôle (celui du profil), pas l'idéal. */
   flash: ModelOverviewEntry
   medium: ModelOverviewEntry
   large: ModelOverviewEntry
   vision: ModelOverviewEntry
   code: ModelOverviewEntry
+  /**
+   * Rôles pour lesquels un meilleur modèle existe mais n'est pas celui utilisé : soit pas encore installé
+   * (il suffit de « Retester la configuration »), soit bloqué au téléchargement (`blockedReason`).
+   */
+  upgrades: Partial<Record<ModelRole, { model: string; blockedReason: string | null }>>
 }
 
 /**

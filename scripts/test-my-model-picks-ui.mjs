@@ -40,7 +40,13 @@ const picks = {
   large: e('qwen3.8:27b', '6/6', 34, 47),
   vision: e('qwen3-vl:4b', '3/3', 6, 109),
   // Modèle sans score publié chez Artificial Analysis : doit afficher "—", jamais un chiffre inventé.
-  code: e('qwen2.5-coder:14b', '3/3', null, null)
+  code: e('qwen2.5-coder:14b', '3/3', null, null),
+  // Étape 138 : Médium a un meilleur choix pas encore installé (il suffit de retester), Vision un meilleur
+  // choix BLOQUÉ au téléchargement.
+  upgrades: {
+    medium: { model: 'qwen3.5:9b', blockedReason: null },
+    vision: { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', blockedReason: "bloqué par ta version d'Ollama" }
+  }
 }
 
 const root = createRoot(document.getElementById('root'))
@@ -93,7 +99,7 @@ test("une seule carte pour la machine détectée, sans aucun \"Palier N\"", opti
 
 test('chaque rôle affiche son modèle, sa vitesse et son Intelligence (avec libellé, "—" si non publié)', options, async () => {
   await withPreview(async (page) => {
-    const rows = await page.$$eval('.capacity-scan__tier-table tr', (trs) =>
+    const rows = await page.$$eval('.capacity-scan__tier-table tr:not(.capacity-scan__tier-upgrade)', (trs) =>
       trs.map((tr) => [...tr.querySelectorAll('td')].slice(0, 4).map((td) => td.textContent?.trim()))
     )
     assert.deepEqual(JSON.parse(JSON.stringify(rows)), [
@@ -119,4 +125,13 @@ test('la carte ne déborde pas, même dans une fenêtre étroite', options, asyn
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
     assert.equal(overflow, false, 'la carte ne doit pas déborder horizontalement à 560px')
   }, 560)
+})
+
+test('un meilleur modèle non utilisé est signalé sous sa ligne, avec la raison s\'il est bloqué', options, async () => {
+  await withPreview(async (page) => {
+    const notes = await page.$$eval('.capacity-scan__tier-upgrade', (els) => els.map((el) => el.textContent?.trim()))
+    assert.equal(notes.length, 2, `deux rôles concernés attendus : ${JSON.stringify(notes)}`)
+    assert.match(notes[0], /Meilleur choix disponible : qwen3\.5:9b .*Retester la configuration/)
+    assert.match(notes[1], /GLM-4\.6V-Flash \(Q4_K_M\), pas encore installé — bloqué par ta version d'Ollama/)
+  })
 })

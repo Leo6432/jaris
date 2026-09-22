@@ -840,7 +840,7 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.runModelAnalysis, async (event, scope?: AnalysisScope): Promise<CapacityScanResult> => {
     return runModelAnalysis((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line), scope)
   })
-  ipcMain.handle(IPC_CHANNELS.getMyModelPicks, () => getMyModelPicks())
+  ipcMain.handle(IPC_CHANNELS.getMyModelPicks, async () => getMyModelPicks(await getProfile()))
   ipcMain.handle(IPC_CHANNELS.runQuickSetup, async (event): Promise<CapacityScanResult> => {
     return runQuickSetup((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))
   })

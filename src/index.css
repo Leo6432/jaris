@@ -1680,6 +1680,16 @@ body.body--scan::after {
    juste à droite : comme la vitesse à sa gauche depuis l'étape 131, c'est un chiffre de CONTEXTE publié par
    Artificial Analysis (à quel point ce modèle est réputé bon/rapide en général), jamais une mesure faite sur
    la machine de l'utilisateur — seule la fiabilité d'appel d'outils l'est. */
+/* Étape 138 : sous la ligne d'un rôle, le meilleur modèle quand ce n'est pas celui utilisé (et pourquoi).
+   Retour à la ligne autorisé, contrairement aux cellules de scores : c'est une phrase, pas un chiffre. */
+.capacity-scan__tier-upgrade td {
+  white-space: normal !important;
+  padding: 0 0 6px !important;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--hud-gold);
+}
+
 .capacity-scan__tier-intelligence,
 .capacity-scan__tier-speed {
   padding-right: 10px !important;

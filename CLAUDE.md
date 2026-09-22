@@ -4049,3 +4049,24 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `scripts/test-hardwarescan-my-picks.mjs` (affiché = téléchargé, vraie RAM prise en compte, matériel non
   inventé) et `scripts/test-my-model-picks-ui.mjs` (une seule carte, aucun "Palier", scores libellés, "—"
   si non publié, pas de débordement à 560 px).
+
+- **Étape 138, Léo : "dans le palier rapide j'ai G9v3-3B mais il utilise pas G9v3-3B ça a rien telecharger
+  et sa a pas supprimer l'ancien model rapide ni telecharger"** — deux défauts de MON travail des étapes
+  136-137, trouvés en relisant le chemin complet plutôt que le seul calcul : (1) avec Ollama 0.34.2, le
+  téléchargement de G9v3-3B échoue, le repli de l'étape 136 retombe sur le modèle suivant — qui était DÉJÀ
+  l'ancien modèle Rapide, donc rien téléchargé, rien supprimé — et le message qui l'expliquait ne partait que
+  dans le journal `onLine`, que l'onglet Options n'affiche pas ; (2) la carte de l'étape 137 montrait le
+  modèle IDÉAL (`computeModelPicks`) et non celui du PROFIL (celui que Jaris utilise réellement), alors que
+  je l'avais présentée comme "ce qui s'affiche est ce qui est installé" — vrai seulement juste après un
+  retest réussi. Corrigé : `getMyModelPicks(profile)` affiche pour chaque rôle le modèle du profil, et signale
+  à part (`upgrades`) le meilleur choix quand ce n'est pas lui, avec la raison s'il est bloqué ;
+  `runQuickSetup` mémorise les imports bloqués dans `profile.blockedModels` (oubliés dès qu'un téléchargement
+  du même modèle réussit) et les renvoie (`blockedModels`, affiché aussi en fin d'installation). Relu sur
+  capture : la raison brute ("pull model manifest: blocked redirect...") faisait quatre lignes illisibles
+  pour Léo — remplacée par une phrase courte, l'erreur brute restant dans le journal. **Leçon générale : une
+  carte qui dit "ce que Jaris utilise" doit lire la source que Jaris utilise VRAIMENT (le profil), pas
+  recalculer ce qu'il devrait utiliser — et un repli silencieux n'est acceptable que si l'écran que
+  l'utilisateur regarde le dit.** Régression : `test-hardwarescan-my-picks.mjs` (profil affiché, meilleur
+  signalé, raison de blocage), `test-benchmark-runner-cleanup.mjs` (blocage mémorisé puis oublié),
+  `test-my-model-picks-ui.mjs` (ligne sous le rôle concerné). **Non vérifiable ici** : l'échec réel sur la
+  machine de Léo ; G9v3-3B ne sera réellement utilisé qu'une fois Ollama 0.34.3 sorti en version stable.

@@ -195,3 +195,20 @@ test("une erreur sur un tag de la bibliothèque Ollama n'est JAMAIS masquée par
   const t = setup(picked, null, new Set(), new Set(), { pullErrorFor: new Set(['qwen3.5:4b']) })
   await assert.rejects(t.run(), /blocked redirect/)
 })
+
+// Étape 138 : le blocage doit être MÉMORISÉ (pour que la carte d'Options l'explique) et oublié dès que le
+// même modèle finit par se télécharger (Ollama corrigé).
+test('un import Hugging Face bloqué est mémorisé dans le profil, puis oublié quand il se télécharge', async () => {
+  const picked = { flash: G9, medium: 'qwen3.5:4b', large: 'qwen3.8:27b', visionModel: 'qwen3-vl:4b', codeModel: 'qwen2.5-coder:7b' }
+  const before = { models: { flash: 'ministral-3:3b', medium: 'qwen3.5:4b', large: 'qwen3.8:27b' }, visionModel: 'qwen3-vl:4b', codeModel: 'qwen2.5-coder:7b' }
+  const repick = () => ({ ...picked, flash: 'ministral-3:3b' })
+  const blocked = setup(picked, before, new Set(), new Set(), { pullErrorFor: new Set([G9]), repick })
+  const result = await blocked.run()
+  assert.equal(result.blockedModels?.[0]?.model, G9, 'le résultat doit remonter le modèle bloqué')
+  assert.match(blocked.getProfile().blockedModels?.[G9] ?? '', /Ollama/, 'la raison doit être mémorisée dans le profil')
+
+  const later = setup(picked, blocked.getProfile())
+  await later.run()
+  assert.equal(later.getProfile().blockedModels?.[G9], undefined, 'une fois téléchargé, le blocage doit être oublié')
+  assert.equal(later.getProfile().models.flash, G9)
+})

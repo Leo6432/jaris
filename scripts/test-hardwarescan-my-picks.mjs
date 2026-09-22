@@ -109,3 +109,36 @@ test('la vraie RAM de la machine compte pour Puissant (choix personnalisé)', as
   assert.equal((await littleRam()).large.model, 'qwen3.5:0.8b', '8 Go de RAM : pas assez pour faire déborder un modèle de 24 Go')
   assert.equal((await lotsOfRam()).large.model, 'qwen3.5:35b', '64 Go de RAM : le gros modèle Puissant devient atteignable')
 })
+
+// Étape 138, Léo : "dans le palier rapide j'ai G9v3-3B mais il utilise pas G9v3-3B ça a rien telecharger".
+// La carte affichait le modèle IDÉAL, pas celui du profil (celui que Jaris utilise vraiment).
+test('la carte montre le modèle RÉELLEMENT utilisé (profil), et le meilleur à part s\'il diffère', async () => {
+  const { getMyModelPicks } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 12 * 1024 })
+  const picks = await getMyModelPicks({ name: 'Léo', models: { flash: 'qwen3.5:4b', medium: 'qwen3.5:4b', large: 'qwen3.5:4b' } })
+  assert.equal(picks.medium.model, 'qwen3.5:4b', 'la ligne Médium doit montrer le modèle utilisé, pas l\'idéal')
+  assert.equal(picks.upgrades.medium?.model, 'qwen3.5:9b', 'le meilleur choix (qwen3.5:9b) doit être signalé à part')
+  assert.equal(picks.upgrades.medium?.blockedReason, null, 'pas bloqué : il suffit de retester')
+})
+
+test('un meilleur modèle bloqué au téléchargement est signalé avec sa raison', async () => {
+  const { getMyModelPicks } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 12 * 1024 })
+  const picks = await getMyModelPicks({
+    name: 'Léo',
+    models: { flash: 'qwen3.5:4b', medium: 'qwen3.5:4b', large: 'qwen3.5:4b' },
+    blockedModels: { 'qwen3.5:9b': 'bloqué par ta version d\'Ollama' }
+  })
+  assert.equal(picks.upgrades.medium?.blockedReason, 'bloqué par ta version d\'Ollama')
+})
+
+test('sans profil (écran d\'accueil) ou profil déjà à jour : aucun meilleur choix signalé', async () => {
+  const { getMyModelPicks } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 12 * 1024 })
+  const fresh = await getMyModelPicks()
+  assert.equal(Object.keys(fresh.upgrades).length, 0)
+  const upToDate = await getMyModelPicks({
+    name: 'Léo',
+    models: { flash: fresh.flash.model, medium: fresh.medium.model, large: fresh.large.model },
+    visionModel: fresh.vision.model,
+    codeModel: fresh.code.model
+  })
+  assert.equal(Object.keys(upToDate.upgrades).length, 0)
+})

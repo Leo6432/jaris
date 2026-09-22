@@ -57,7 +57,7 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
               Jaris a regardé ta machine et choisi, pour chaque rôle, le meilleur modèle qui y tient — voici
               ce qu'il va installer.
             </p>
-            {picks === null ? <p className="capacity-scan__status">Détection du matériel...</p> : <MyModelPicks picks={picks} />}
+            {picks === null ? <p className="capacity-scan__status">Détection du matériel...</p> : <MyModelPicks picks={picks} title="Modèles choisis pour ta machine" />}
             <button onClick={start} disabled={picks === null}>
               Continuer
             </button>
@@ -103,6 +103,21 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
                 </p>
                 <ul>
                   {result.skippedModels.map(({ model, reason }) => (
+                    <li key={model}>
+                      {formatModelName(model)} : {reason}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {result.blockedModels && result.blockedModels.length > 0 && (
+              <div className="capacity-scan__warning">
+                <p>
+                  {result.blockedModels.length > 1 ? 'Ces meilleurs modèles n\'ont' : 'Ce meilleur modèle n\'a'} pas pu être
+                  téléchargé pour l'instant, Jaris utilise le suivant à la place :
+                </p>
+                <ul>
+                  {result.blockedModels.map(({ model, reason }) => (
                     <li key={model}>
                       {formatModelName(model)} : {reason}
                     </li>

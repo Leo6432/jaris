@@ -10,6 +10,7 @@ import type {
   ContextLengthOptions,
   ModelOverviewEntry,
   ModelOverviewResult,
+  ModelRole,
   ModelTiers,
   MyModelPicks,
   Profile
@@ -1186,13 +1187,54 @@ export async function pickBestCodeModel(): Promise<string> {
  * disparaît avec elle : un choix personnalisé tient compte de la vraie RAM, qui permet à Puissant/Code de
  * déborder au-delà de la VRAM.
  */
-export async function getMyModelPicks(): Promise<MyModelPicks> {
+export async function getMyModelPicks(profile?: Profile | null): Promise<MyModelPicks> {
   const { name, vramGb } = await detectGpu()
   const ramGb = detectRamGb()
+  const localBenchmark = parseLocalBenchmark()
+  const verifiedToolScores = parseVerifiedToolScores()
+  const ideal = computeModelPicks(vramGb, ramGb, localBenchmark, verifiedToolScores)
+
+  // Étape 138, Léo : "dans le palier rapide j'ai G9v3-3B mais il utilise pas G9v3-3B ça a rien telecharger".
+  // La carte affichait le modèle IDÉAL, alors que Jaris utilise celui enregistré dans le profil — les deux
+  // divergent tant que « Retester la configuration » n'a pas été relancé, ou quand le meilleur modèle n'a
+  // pas pu être téléchargé (import Hugging Face bloqué par Ollama 0.34.2 : runQuickSetup retombe alors sur
+  // le suivant). La carte montre maintenant le modèle RÉELLEMENT utilisé, et signale à part le meilleur
+  // quand ce n'est pas lui, avec la raison s'il est bloqué — jamais plus un modèle affiché mais pas utilisé.
+  const inUse: Record<ModelRole, string> = {
+    flash: profile?.models?.flash ?? ideal.flash.model,
+    medium: profile?.models?.medium ?? ideal.medium.model,
+    large: profile?.models?.large ?? ideal.large.model,
+    vision: profile?.visionModel ?? ideal.vision.model,
+    code: profile?.codeModel ?? ideal.code.model
+  }
+  const tierOf: Record<ModelRole, VerifiedTier> = { flash: 'conversation', medium: 'conversation', large: 'conversation', vision: 'vision', code: 'code' }
+  const upgrades: MyModelPicks['upgrades'] = {}
+  const entries = {} as Record<ModelRole, ModelOverviewEntry>
+  for (const role of Object.keys(inUse) as ModelRole[]) {
+    const model = inUse[role]
+    entries[role] = model === ideal[role].model ? ideal[role] : entryForModel(model, tierOf[role], localBenchmark, verifiedToolScores)
+    if (model !== ideal[role].model) {
+      upgrades[role] = { model: ideal[role].model, blockedReason: profile?.blockedModels?.[ideal[role].model] ?? null }
+    }
+  }
+  return { gpuName: name, vramGb, ramGb, ...entries, upgrades }
+}
+
+/** Entrée complète (scores publiés, fiabilité connue) pour un modèle quelconque — le modèle du profil n'est
+ * pas forcément le gagnant du calcul, mais sa ligne doit afficher ses VRAIS scores, pas ceux de l'idéal. */
+function entryForModel(
+  model: string,
+  tier: VerifiedTier,
+  localBenchmark: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>>,
+  verifiedToolScores: Record<VerifiedTier, Map<string, string>>
+): ModelOverviewEntry {
+  const all = [...FLASH_CANDIDATES, ...MEDIUM_CANDIDATES, ...LARGE_CANDIDATES, ...VISION_CANDIDATES, ...CODE_CANDIDATES]
   return {
-    gpuName: name,
-    vramGb,
-    ramGb,
-    ...computeModelPicks(vramGb, ramGb, parseLocalBenchmark(), parseVerifiedToolScores())
+    model,
+    vramGb: all.find((c) => c.model === model)?.vramGb ?? 0,
+    toolCalling: localBenchmark[tier].get(model)?.toolCalling ?? verifiedToolScores[tier].get(model) ?? null,
+    intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
+    artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
+    artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[model] ?? null
   }
 }
