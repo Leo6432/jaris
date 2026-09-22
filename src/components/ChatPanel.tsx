@@ -7,6 +7,7 @@ import { renderFormattedText } from '@/lib/formatReply'
 import { formatChatProgress } from '@/lib/formatChatProgress'
 import type { ImageAttachment } from '@/lib/imageAttachment'
 import type { ChatMessage, ConversationList } from '../../shared/ipc'
+import ModelPicker from './ModelPicker'
 
 /**
  * Mode Chat (étape 30) : la même conversation que la voix, au clavier. Le fil vit côté main
@@ -172,6 +173,7 @@ export default function ChatPanel(): JSX.Element {
           submitLabel="Envoyer"
           busyLabel="Envoi…"
           busy={sending}
+          extraActions={<ModelPicker mode="chat" disabled={sending} />}
           attachment={attachment}
           onAttachmentChange={setAttachment}
           onError={setError}

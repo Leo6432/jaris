@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { modelChoiceModule } from './load-model-choice.mjs'
 
 /**
  * PROMISE_WITHOUT_ACTION (assistant.ts) détecte une promesse d'action du modèle ("je vais faire X") sans
@@ -24,6 +25,7 @@ const modules = {
   // du module ici aussi, avant même d'atteindre PROMISE_WITHOUT_ACTION.
   './tools': { TOOLS: [{ function: { name: 'open_app' } }], createToolExecutor: () => {} },
   './hardwareScan': {},
+  './modelChoice': modelChoiceModule,
   './resourceMonitor': {}
 }
 const exports = {}

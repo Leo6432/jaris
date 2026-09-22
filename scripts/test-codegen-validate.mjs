@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { modelChoiceModule } from './load-model-choice.mjs'
 
 // `vm.runInNewContext` crée un realm SANS les globaux de Node : depuis l'étape 99, generateApp arme un
 // battement de cœur (setInterval) pendant chaque appel au modèle, qui échouait ici sur un simple
@@ -32,6 +33,7 @@ const modules = {
     DiskFullError: class extends Error {}
   },
   './hardwareScan': { pickBestCodeModel: async () => 'test-model' },
+  './modelChoice': modelChoiceModule,
   './profileStore': { getProfile: async () => null }
 }
 const exports = {}

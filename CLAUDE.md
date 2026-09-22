@@ -4118,3 +4118,37 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   deux côtés (faux pont complété, composant robuste à `undefined`), leçon déjà notée ici pour les canaux IPC
   et qui vaut aussi pour les CHAMPS ajoutés à une réponse existante. Régression :
   `test-hardwarescan-my-picks.mjs` (+5 cas) et `test-my-model-picks-ui.mjs` (+4 cas).
+
+- **Étape 141, Léo : "ajoute dans chat code vocal, la possibilité de choisir le model ou faire auto, comme se
+  qui se passe maintenant".** Un sélecteur de modèle par mode : dans la barre du champ de saisie du Chat et du
+  mode Code (à côté de la pièce jointe, comme chez Claude/ChatGPT), et sous l'astuce de l'écran vocal. "Auto"
+  = le comportement d'avant, STRICTEMENT inchangé (paliers Rapide/Médium/Puissant en Chat/Vocal,
+  `profile.codeModel` en Code). Choix enregistré par mode dans `profile.modelChoices` — le choix du Chat ne
+  s'applique pas à la voix, chacun a le sien.
+  **Logique pure et testée à part** (`electron/services/modelChoice.ts`, aucun accès à Ollama ni au disque) :
+  main.ts, assistant.ts et codeGenerator.ts lui passent la liste des modèles installés qu'ils ont déjà. Le
+  nom choisi vient du renderer, donc il est revérifié côté main contre la liste RÉELLE d'Ollama avant d'être
+  enregistré ; un modèle d'embedding n'est jamais proposé (il ne sait pas discuter). Un choix dont le modèle a
+  été supprimé depuis retombe sur Auto (avec une ligne de journal) au lieu de faire échouer chaque réponse
+  avec "modèle introuvable" — Léo n'aurait aucun moyen de comprendre pourquoi Jaris ne répond plus.
+  **Un choix à la main n'est jamais défait en silence** : pas de repli VRAM automatique, pas de bascule vers
+  le palier Médium après un appel d'outil — c'est un choix explicite. Le palier garde seulement son rôle pour
+  l'effort de réflexion.
+  **Piège évité en faisant le tour de ce qui SUPPRIME des modèles (leçon de l'étape 112 : lister tous les
+  appelants)** : trois chemins effacent des modèles "inutilisés" — le nettoyage du retest (`runQuickSetup`),
+  celui de l'analyse complète (`cleanupUnselectedModels`) et le bouton Supprimer de la carte des modèles
+  (`isUnusedInstalledModel`). Aucun ne connaissait les choix à la main : un modèle choisi pour le Chat aurait
+  été proposé à la suppression, ou effacé au prochain retest, sans prévenir. Les trois le comptent maintenant
+  comme utilisé.
+  **Défaut d'affichage trouvé par le test navigateur, pas en relecture** : Ollama liste un modèle sans tag
+  sous `:latest`, donc G9v3-3B redevenait "ai9stars_G9v3-3B (latest)" dans la liste — `formatModelName`
+  retire désormais `:latest` avant tout. Et la règle globale `select { ... !important }` (index.css) donnait
+  au sélecteur un cadre plein de champ de saisie, aussi lourd que le bouton d'envoi : exclu de cette règle,
+  comme `.composer__input`, vérifié par MESURE du style calculé.
+  Régression : `test-model-choice.mjs` (9 cas), `test-assistant-history.mjs` (+5 : choix appliqué en Chat et
+  en Vocal séparément, gardé après un appel d'outil, retour à Auto si supprimé), `test-codegen-generate.mjs`
+  (+3), `test-hardwarescan-my-picks.mjs` et `test-benchmark-runner-cleanup.mjs` (+1 chacun : jamais supprimé),
+  `test-model-picker-ui.mjs` (vrai navigateur : placement dans la barre, noms lisibles, VRAI identifiant
+  envoyé, style discret). Chaque groupe vérifié en retirant temporairement le correctif correspondant.
+  **Non vérifié ici** : le rendu du sélecteur sur l'écran vocal (même composant, capture faite seulement pour
+  le Chat) et la liste native déroulée sous Windows — à confirmer par Léo.

@@ -196,3 +196,15 @@ test("seul un modèle installé ET inutilisé peut être supprimé", async () =>
   assert.equal(await isUnusedInstalledModel('qwen3.5:4b', PROFILE), false, 'utilisé par Rapide/Médium : jamais supprimable')
   assert.equal(await isUnusedInstalledModel('llama3:8b', PROFILE), false, 'pas installé : rien à supprimer')
 })
+
+test("étape 141 : un modèle choisi à la main (Chat/Code/Vocal) est utilisé, donc jamais proposé à la suppression", async () => {
+  const profile = { ...PROFILE, modelChoices: { chat: 'ministral-3:3b' } }
+  const { getMyModelPicks, isUnusedInstalledModel } = setup({
+    verifiedToolScoresMd: VERIFIED_MD,
+    vramMib: 12 * 1024,
+    installed: ['qwen3.5:4b', 'qwen3.5:9b', 'qwen3-vl:4b', 'qwen2.5-coder:7b', 'ministral-3:3b']
+  })
+  const picks = await getMyModelPicks(profile)
+  assert.deepEqual([...picks.installCheck.otherInstalled], [])
+  assert.equal(await isUnusedInstalledModel('ministral-3:3b', profile), false)
+})

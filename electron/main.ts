@@ -9,7 +9,8 @@ import {
   stopOllamaIfStartedByJaris,
   updateOllama
 } from './services/dependencyServices'
-import { deleteModel } from './services/ollama'
+import { deleteModel, listInstalledModels } from './services/ollama'
+import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES } from './services/modelChoice'
 import { getModelsLocationStatus, moveModelsLocation } from './services/modelsLocation'
 import { moveDataLocation } from './services/dataLocation'
 import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, getMyModelPicks, isUnusedInstalledModel } from './services/hardwareScan'
@@ -50,6 +51,8 @@ import {
   type GeneratedAppSummary,
   type JarisEmotion,
   type MemoryGraph,
+  type ModelChoiceInfo,
+  type ModelChoiceMode,
   type PickedImageFile,
   type Profile,
   type SoundCue,
@@ -849,6 +852,19 @@ app.whenReady().then(async () => {
       throw new Error("Ce modèle est utilisé par Jaris ou n'est pas installé : il n'a pas été supprimé.")
     }
     await deleteModel(model)
+  })
+  // Étape 141 : choix du modèle par mode (Chat, Code, Vocal). Le nom vient du renderer : applyModelChoice le
+  // revérifie contre la liste RÉELLE d'Ollama avant de l'enregistrer.
+  ipcMain.handle(IPC_CHANNELS.getModelChoice, async (_event, mode: ModelChoiceMode): Promise<ModelChoiceInfo> => {
+    if (!MODEL_CHOICE_MODES.includes(mode)) throw new Error(`Mode inconnu : ${String(mode)}`)
+    const installed = await listInstalledModels().catch(() => null)
+    return buildModelChoiceInfo(await getProfile(), mode, installed)
+  })
+  ipcMain.handle(IPC_CHANNELS.setModelChoice, async (_event, mode: ModelChoiceMode, model: string | null): Promise<void> => {
+    const profile = await getProfile()
+    if (!profile) throw new Error('Profil introuvable.')
+    const installed = model === null ? [] : await listInstalledModels()
+    await saveProfile(applyModelChoice(profile, mode, model, installed))
   })
   ipcMain.handle(IPC_CHANNELS.runQuickSetup, async (event): Promise<CapacityScanResult> => {
     return runQuickSetup((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))

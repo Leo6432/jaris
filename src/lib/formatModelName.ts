@@ -19,7 +19,10 @@ const DISPLAY_NAME_OVERRIDES: Record<string, string> = {
  * plus longs et moins lisibles que les tags de la bibliothèque Ollama officielle (ex: "qwen3.5:9b") — ceux-ci
  * restent affichés tels quels, rien à raccourcir.
  */
-export function formatModelName(model: string): string {
+export function formatModelName(rawModel: string): string {
+  // Ollama liste un modèle installé sans tag sous `:latest` (étape 141, sélecteur de modèle) : même modèle,
+  // même nom affiché — sinon G9v3-3B redevenait « ai9stars_G9v3-3B (latest) » dans la liste.
+  const model = rawModel.endsWith(':latest') ? rawModel.slice(0, -':latest'.length) : rawModel
   if (model in DISPLAY_NAME_OVERRIDES) return DISPLAY_NAME_OVERRIDES[model]
   if (!model.startsWith('hf.co/')) return model
   const afterOrg = model.split('/').slice(2).join('/')

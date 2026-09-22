@@ -79,6 +79,8 @@ window.jaris = {
     window.__failGen?.(new Error('aborted'))
   },
   openGeneratedApp: () => Promise.resolve(),
+  getModelChoice: () => Promise.resolve({ selected: null, installed: [], autoModel: null }),
+  setModelChoice: () => Promise.resolve(),
   pickImageFile: () => Promise.resolve(null),
   // Le vrai main process efface le dossier puis la liste est rechargée : simulé à l'identique ici, pour
   // que le test vérifie aussi que la liste affichée se met à jour après la suppression.

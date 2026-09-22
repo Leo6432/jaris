@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { modelChoiceModule } from './load-model-choice.mjs'
 
 // Exécute la vraie boucle de conversation sans Electron ni services externes.
 const source = ts.transpileModule(readFileSync(new URL('../electron/services/assistant.ts', import.meta.url), 'utf8'), {
@@ -21,16 +22,17 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../electron/services
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText, { exports: noteExports, require: name => name === 'util' ? {promisify: () => {}} : {} })
 
-function setup(chat, execute, writeNote = async () => assert.fail('pas de document attendu')) {
+function setup(chat, execute, writeNote = async () => assert.fail('pas de document attendu'), { profile = null, installed = ['test'] } = {}) {
   const config = { ollama: { model: 'test', visionModel: 'vision', numCtx: 8192 } }
   const modules = {
     '../config': { config },
-    './ollama': { chatWithOllama: chat, listInstalledModels: async () => ['test'] },
+    './ollama': { chatWithOllama: chat, listInstalledModels: async () => installed },
     './memoryStore': { listMemoryTitles: async () => [] },
-    './profileStore': { getProfile: async () => null },
+    './profileStore': { getProfile: async () => profile },
     './notepad': { requestedNotepadText: noteExports.requestedNotepadText, openNotepadText: writeNote },
     './appLauncher': { didAppLaunch: result => result.endsWith('a été lancé.') },
     './hardwareScan': { GPU_TEMP_LIMIT_C: 85 },
+    './modelChoice': modelChoiceModule,
     './resourceMonitor': { checkOverloadWarning: async () => null },
     './tools': { TOOLS: [], createToolExecutor: () => execute }
   }
@@ -192,4 +194,51 @@ for (const prompt of ['N’ouvre pas le Bloc-notes et écris Bonjour', 'Comment 
 }
 test('le texte dicté reste littéral, y compris caractères PowerShell', () => {
   assert.equal(noteExports.requestedNotepadText('Ouvre le Bloc-notes et écris « Bonjour $HOME ; Stop-Process ».'), 'Bonjour $HOME ; Stop-Process')
+})
+
+// Étape 141 : sélecteur de modèle (Auto ou un modèle précis) dans le Chat et l'écran vocal.
+const threeTiers = { flash: 'rapide:1b', medium: 'moyen:4b', large: 'gros:27b' }
+const installedAll = ['rapide:1b', 'moyen:4b', 'gros:27b', 'choisi:9b']
+
+async function modelUsedFor(channel, prompt, profile, installed = installedAll) {
+  const used = []
+  const converse = setup(async (_messages, _tools, model) => {
+    used.push(model)
+    return { role: 'assistant', content: 'ok' }
+  }, async () => assert.fail('aucun outil'), undefined, { profile, installed })
+  await converse(prompt, null, () => {}, undefined, [], undefined, undefined, channel)
+  return used
+}
+
+test('Auto : rien de choisi à la main, le palier décide exactement comme avant', async () => {
+  assert.deepEqual(await modelUsedFor('chat', 'quelle heure est-il', { models: threeTiers }), ['rapide:1b'])
+})
+
+for (const channel of ['chat', 'voice']) {
+  test(`${channel} : un modèle choisi à la main remplace le palier, quelle que soit la question`, async () => {
+    const profile = { models: threeTiers, modelChoices: { [channel]: 'choisi:9b' } }
+    assert.deepEqual(await modelUsedFor(channel, 'quelle heure est-il', profile), ['choisi:9b'])
+    assert.deepEqual(await modelUsedFor(channel, 'explique en détail et compare deux architectures de processeurs modernes', profile), ['choisi:9b'])
+  })
+}
+
+test('le choix du Chat ne s’applique pas à la voix (chaque mode a le sien)', async () => {
+  const profile = { models: threeTiers, modelChoices: { chat: 'choisi:9b' } }
+  assert.deepEqual(await modelUsedFor('voice', 'quelle heure est-il', profile), ['rapide:1b'])
+})
+
+test('un modèle choisi puis supprimé d’Ollama retombe sur Auto au lieu de faire échouer chaque réponse', async () => {
+  const profile = { models: threeTiers, modelChoices: { chat: 'choisi:9b' } }
+  assert.deepEqual(await modelUsedFor('chat', 'quelle heure est-il', profile, ['rapide:1b', 'moyen:4b', 'gros:27b']), ['rapide:1b'])
+})
+
+test('un appel d’outil garde le modèle choisi à la main (pas de bascule vers le palier médium)', async () => {
+  const used = []
+  const converse = setup(async (messages, _tools, model) => {
+    used.push(model)
+    if (messages.at(-1).role === 'tool') return { role: 'assistant', content: 'fini' }
+    return { role: 'assistant', content: '', tool_calls: [{ function: { name: 'search_web', arguments: { query: 'x' } } }] }
+  }, async () => 'résultat', undefined, { profile: { models: threeTiers, modelChoices: { chat: 'choisi:9b' } }, installed: installedAll })
+  await converse('cherche la météo', null, () => {}, undefined, [], undefined, undefined, 'chat')
+  assert.deepEqual(used, ['choisi:9b', 'choisi:9b'])
 })

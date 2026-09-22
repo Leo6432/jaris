@@ -75,6 +75,8 @@ window.jaris = {
   onLog: () => () => {},
   onChatStreamToken: () => () => {},
   getProfile: () => Promise.resolve({ soundEffectsEnabled: false }),
+  getModelChoice: () => Promise.resolve({ selected: null, installed: [], autoModel: null }),
+  setModelChoice: () => Promise.resolve(),
   pickImageFile: () => Promise.resolve(null),
   sendChatMessage: () => Promise.resolve({ role: 'assistant', content: 'ok' })
 }

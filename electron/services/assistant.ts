@@ -1,3 +1,4 @@
+import { resolveChosenModel } from './modelChoice'
 import { requestedNotepadText, openNotepadText } from './notepad'
 import { config } from '../config'
 import { chatWithOllama, listInstalledModels, type OllamaMessage, type ThinkLevel } from './ollama'
@@ -505,8 +506,17 @@ export async function converse(
     tier = 'flash'
   }
 
+  // Étape 141 : un modèle choisi à la main pour ce mode (sélecteur du Chat / de l'écran vocal) remplace le
+  // choix par palier. Le palier garde son rôle pour l'effort de réflexion, mais pas de repli VRAM automatique :
+  // c'est un choix explicite de Léo, pas à défaire en silence. `null` = Auto, strictement comme avant.
+  const chosenModel = resolveChosenModel(profile, channel, installedModels)
+  if (!chosenModel && profile?.modelChoices?.[channel]) {
+    onLog?.(`${profile.modelChoices[channel]} n'est plus installé : retour au choix automatique.`)
+  }
+
   /** Résout modèle + effort de réflexion pour un palier donné, avec le même repli VRAM temps réel que ci-dessus. */
   const resolveModelForTier = (t: Tier): { model: string; think: ThinkLevel } => {
+    if (chosenModel) return { model: chosenModel, think: THINK_LEVEL[t] }
     let m = models[t]
     if (live.freeVramGb !== null) {
       const safeModel = pickSafeModel(t, live.freeVramGb, installedModels, m)
@@ -519,7 +529,7 @@ export async function converse(
   }
 
   let { model, think } = resolveModelForTier(tier)
-  onLog?.(`Modèle choisi : ${model} (réflexion : ${think})`)
+  onLog?.(`Modèle ${chosenModel ? 'choisi à la main' : 'choisi'} : ${model} (réflexion : ${think})`)
 
   /** Si la machine est surchargée, l'avertissement précède la vraie réponse dans la même phrase parlée. */
   const withOverloadWarning = (text: string): string => (overloadWarning ? `${overloadWarning} ${text}` : text)
@@ -658,7 +668,7 @@ export async function converse(
     if (tier === 'flash') {
       tier = 'medium'
       ;({ model, think } = resolveModelForTier(tier))
-      onLog?.(`Appel d'outil détecté : passage au palier médium pour la suite (${model}).`)
+      if (!chosenModel) onLog?.(`Appel d'outil détecté : passage au palier médium pour la suite (${model}).`)
     }
 
     for (const call of message.tool_calls) {

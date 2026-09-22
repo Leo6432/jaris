@@ -103,6 +103,8 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
     for (const [before, after] of roles) {
       keep.add(skipped.has(after) && before ? before : after)
     }
+    // Étape 141 : un modèle choisi à la main dans Chat/Code/Vocal reste en service, jamais supprimé ici.
+    for (const chosen of Object.values(profile.modelChoices ?? {})) if (chosen) keep.add(chosen)
     const oldModels = roles.map(([before]) => before).filter((m): m is string => Boolean(m))
     const toRemove = [...new Set(oldModels)].filter((m) => !keep.has(m))
     for (const model of toRemove) {
@@ -209,6 +211,8 @@ async function cleanupUnselectedModels(onLine: (line: string) => void): Promise<
   if (profile?.models?.large) keep.add(profile.models.large)
   if (profile?.visionModel) keep.add(profile.visionModel)
   if (profile?.codeModel) keep.add(profile.codeModel)
+  // Étape 141 : un modèle choisi à la main dans Chat/Code/Vocal reste en service, jamais supprimé ici.
+  for (const chosen of Object.values(profile?.modelChoices ?? {})) if (chosen) keep.add(chosen)
 
   const toRemove = tested.filter((model) => !keep.has(model))
   if (!toRemove.length) {

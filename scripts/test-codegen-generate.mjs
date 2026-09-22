@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { modelChoiceModule } from './load-model-choice.mjs'
 
 /**
  * Reproduit en usage réel (Léo, "un jeu Snake") : le modèle a répondu en Python/tkinter au lieu de HTML,
@@ -29,8 +30,9 @@ const PYTHON_RESPONSE =
 const TIMERS = { setInterval, clearInterval }
 
 /** Fabrique un module généré avec une file de réponses successives pour chatWithOllama (dans l'ordre d'appel). */
-function setup(responses) {
+function setup(responses, { profile = { codeModel: 'test-model', visionModel: 'vision-test' }, installed = ['test-model'] } = {}) {
   const calls = []
+  const models = []
   const statusLines = []
   const visionCalls = []
   const modules = {
@@ -39,19 +41,21 @@ function setup(responses) {
     'fs/promises': { mkdir: async () => {}, writeFile: async () => {} },
     path: { join: (...parts) => parts.join('/') },
     './ollama': {
-      chatWithOllama: async (messages) => {
+      chatWithOllama: async (messages, _tools, model) => {
         calls.push(messages)
+        models.push(model)
         const next = responses.shift()
         if (next === undefined) throw new Error('plus de réponse simulée disponible (critique/réparation)')
         return { role: 'assistant', content: next }
       },
-      listInstalledModels: async () => ['test-model'],
+      listInstalledModels: async () => installed,
       pullModelIfMissing: async () => {},
       ModelTooLargeError: class extends Error {},
       DiskFullError: class extends Error {}
     },
     './hardwareScan': { pickBestCodeModel: async () => 'test-model' },
-    './profileStore': { getProfile: async () => ({ codeModel: 'test-model', visionModel: 'vision-test' }) },
+    './modelChoice': modelChoiceModule,
+    './profileStore': { getProfile: async () => profile },
     // Étape 91 : une maquette jointe est d'abord traduite en TEXTE par le modèle de vision (le modèle de
     // code ne sait pas lire une image, et les deux ne tiennent pas ensemble en VRAM).
     '../config': { config: { ollama: { visionModel: 'vision-par-defaut' } } },
@@ -69,6 +73,7 @@ function setup(responses) {
     generateApp: (description, currentHtml, imageBase64) =>
       exports.generateApp(description, (line) => statusLines.push(line), currentHtml, imageBase64),
     calls,
+    models,
     statusLines,
     visionCalls
   }
@@ -138,4 +143,29 @@ test("sans image, le prompt du modèle de code est inchangé", async () => {
   assert.equal(app.visionCalls.length, 0)
   const userPrompt = app.calls[0].find((message) => message.role === 'user').content
   assert.equal(userPrompt, 'Application à créer : une todo list')
+})
+
+// Étape 141 : sélecteur de modèle du mode Code (Auto ou un modèle précis).
+test('mode Code : un modèle choisi à la main est utilisé pour écrire ET relire le code', async () => {
+  const app = setup([VALID_HTML, VALID_HTML], {
+    profile: { codeModel: 'test-model', modelChoices: { code: 'choisi:14b' } },
+    installed: ['test-model', 'choisi:14b']
+  })
+  await app.generateApp('une todo list')
+  assert.ok(app.models.length >= 1)
+  assert.ok(app.models.every((m) => m === 'choisi:14b'), `modèles utilisés : ${app.models.join(', ')}`)
+  assert.ok(app.statusLines.some((line) => /choisi à la main : choisi:14b/.test(line)))
+})
+
+test('mode Code : sur Auto, le modèle calculé pour la machine reste utilisé comme avant', async () => {
+  const app = setup([VALID_HTML, VALID_HTML], { profile: { codeModel: 'test-model' }, installed: ['test-model', 'choisi:14b'] })
+  await app.generateApp('une todo list')
+  assert.ok(app.models.every((m) => m === 'test-model'))
+})
+
+test('mode Code : un choix dont le modèle a été supprimé retombe sur Auto', async () => {
+  const app = setup([VALID_HTML, VALID_HTML], { profile: { codeModel: 'test-model', modelChoices: { code: 'choisi:14b' } } })
+  await app.generateApp('une todo list')
+  assert.ok(app.models.every((m) => m === 'test-model'))
+  assert.ok(app.statusLines.some((line) => /n'est plus installé/.test(line)))
 })

@@ -212,3 +212,17 @@ test('un import Hugging Face bloqué est mémorisé dans le profil, puis oublié
   assert.equal(later.getProfile().blockedModels?.[G9], undefined, 'une fois téléchargé, le blocage doit être oublié')
   assert.equal(later.getProfile().models.flash, G9)
 })
+
+test('étape 141 : un modèle choisi à la main dans Chat/Code/Vocal n’est jamais supprimé par le retest', async () => {
+  const picked = { flash: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF', medium: 'qwen3.5:9b', large: 'qwen3.5:27b', visionModel: 'qwen3-vl:4b', codeModel: 'qwen2.5-coder:7b' }
+  const before = {
+    models: { flash: 'ministral-3:3b', medium: 'qwen3.5:9b', large: 'qwen3.5:27b' },
+    visionModel: 'qwen3-vl:4b',
+    codeModel: 'qwen2.5-coder:7b',
+    modelChoices: { voice: 'ministral-3:3b' }
+  }
+  const t = setup(picked, before)
+  await t.run()
+  assert.deepEqual(t.deletedModels, [], `ministral-3:3b est choisi à la main pour la voix : obtenu ${t.deletedModels.join(', ')}`)
+  assert.equal(t.getProfile().modelChoices?.voice, 'ministral-3:3b', 'le choix à la main survit au retest')
+})

@@ -49,6 +49,19 @@ export interface ModelTiers {
   large: string
 }
 
+/** Les trois modes où l'on peut choisir le modèle à la main (étape 141). */
+export type ModelChoiceMode = 'chat' | 'code' | 'voice'
+
+/** Ce qu'affiche le sélecteur de modèle d'un mode (getModelChoice, main.ts). */
+export interface ModelChoiceInfo {
+  /** Modèle choisi à la main, `null` = Auto. */
+  selected: string | null
+  /** Modèles réellement installés dans Ollama et utilisables pour discuter/coder, `null` si Ollama ne répond pas. */
+  installed: string[] | null
+  /** Ce qu'Auto utilise : un seul modèle en mode Code, `null` en Chat/Vocal (le modèle change selon la question). */
+  autoModel: string | null
+}
+
 export interface Profile {
   name: string
   /** Voix Supertonic HD choisie dans le menu Options (ex: "M3"), vide = valeur par défaut de .env. */
@@ -84,6 +97,12 @@ export interface Profile {
    * meilleur est installé. Retiré dès qu'un téléchargement du même modèle réussit.
    */
   blockedModels?: Record<string, string>
+  /**
+   * Étape 141, Léo : « ajoute dans chat code vocal, la possibilité de choisir le model ou faire auto ».
+   * Modèle choisi à la main pour chaque mode ; absent = Auto (le choix automatique d'avant, inchangé).
+   * Ignoré — donc retour à Auto — si le modèle n'est plus installé (voir resolveChosenModel, modelChoice.ts).
+   */
+  modelChoices?: Partial<Record<ModelChoiceMode, string>>
   /** Design sonore (étape 31) : absent/true par défaut, false pour couper les bips d'interface (Options → Voix). */
   soundEffectsEnabled?: boolean
   /**
@@ -554,6 +573,9 @@ export const IPC_CHANNELS = {
   getMyModelPicks: 'jaris:get-my-model-picks',
   /** renderer -> main : supprime un modèle installé que Jaris n'utilise pour AUCUN rôle (revérifié côté main). */
   deleteUnusedModel: 'jaris:delete-unused-model',
+  /** renderer -> main : choix du modèle d'un mode (Auto ou un modèle installé), étape 141. */
+  getModelChoice: 'jaris:get-model-choice',
+  setModelChoice: 'jaris:set-model-choice',
   /** renderer -> main : détecte le matériel et télécharge directement les modèles déjà choisis pour lui
    * (voir runQuickSetup, benchmarkRunner.ts) — le nouveau chemin par défaut de l'écran d'accueil, sans passer
    * par le benchmark comparatif complet. Réutilise modelBenchmarkLine pour la progression des téléchargements. */

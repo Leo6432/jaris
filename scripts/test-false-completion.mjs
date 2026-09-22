@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { modelChoiceModule } from './load-model-choice.mjs'
 
 /**
  * findLeakedToolName (assistant.ts) détecte qu'une réponse SANS appel d'outil mentionne malgré tout le nom
@@ -36,6 +37,7 @@ const modules = {
     createToolExecutor: () => {}
   },
   './hardwareScan': {},
+  './modelChoice': modelChoiceModule,
   './resourceMonitor': {}
 }
 const exports = {}

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import {
   fileToImageAttachment,
   findImageInDataTransfer,
@@ -35,6 +36,8 @@ interface ComposerProps {
   rows?: number
   /** Rappel discret des raccourcis, sous le champ — plus lisible que dans le placeholder, qui débordait. */
   hint?: string
+  /** Contrôle secondaire posé à côté de la pièce jointe (sélecteur de modèle, étape 141). */
+  extraActions?: ReactNode
 }
 
 function AttachIcon(): JSX.Element {
@@ -60,7 +63,8 @@ export default function Composer({
   onError,
   submitOnEnter = false,
   rows = 2,
-  hint
+  hint,
+  extraActions
 }: ComposerProps): JSX.Element {
   const attach = async (file: File | Blob, name = ''): Promise<void> => {
     try {
@@ -163,6 +167,8 @@ export default function Composer({
         >
           <AttachIcon />
         </button>
+
+        {extraActions}
 
         {hint && <span className="composer__hint">{hint}</span>}
 

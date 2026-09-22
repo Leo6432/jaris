@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { modelChoiceModule } from './load-model-choice.mjs'
 
 /**
  * Avancement et arrêt d'une génération en mode Code (étape 99).
@@ -71,6 +72,7 @@ function setup(responses, { onBeforeCall } = {}) {
       DiskFullError: class extends Error {}
     },
     './hardwareScan': { pickBestCodeModel: async () => 'test-model' },
+    './modelChoice': modelChoiceModule,
     './profileStore': { getProfile: async () => ({ codeModel: 'test-model', visionModel: 'vision-test' }) },
     '../config': { config: { ollama: { visionModel: 'vision-par-defaut' } } },
     './vision': { IMAGE_FOR_CODE_SYSTEM_PROMPT: 'prompt', describeImage: async () => 'une maquette' }

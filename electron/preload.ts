@@ -22,6 +22,8 @@ import {
   type ModelsLocationStatus,
   type OllamaVersionStatus,
   type PickedImageFile,
+  type ModelChoiceInfo,
+  type ModelChoiceMode,
   type Profile,
   type RuntimeSetupProgress,
   type RuntimeSetupStatus,
@@ -80,6 +82,9 @@ const api = {
   runModelAnalysis: (scope?: AnalysisScope): Promise<CapacityScanResult> => ipcRenderer.invoke(IPC_CHANNELS.runModelAnalysis, scope),
   getMyModelPicks: (): Promise<MyModelPicks> => ipcRenderer.invoke(IPC_CHANNELS.getMyModelPicks),
   deleteUnusedModel: (model: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.deleteUnusedModel, model),
+  getModelChoice: (mode: ModelChoiceMode): Promise<ModelChoiceInfo> => ipcRenderer.invoke(IPC_CHANNELS.getModelChoice, mode),
+  setModelChoice: (mode: ModelChoiceMode, model: string | null): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.setModelChoice, mode, model),
   runQuickSetup: (): Promise<CapacityScanResult> => ipcRenderer.invoke(IPC_CHANNELS.runQuickSetup),
   onModelBenchmarkLine: (cb: (line: string) => void) => subscribe(IPC_CHANNELS.modelBenchmarkLine, cb),
   getNewModels: (): Promise<string[]> => ipcRenderer.invoke(IPC_CHANNELS.getNewModels),

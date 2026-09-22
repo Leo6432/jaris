@@ -1217,7 +1217,7 @@ export async function getMyModelPicks(profile?: Profile | null): Promise<MyModel
       upgrades[role] = { model: ideal[role].model, blockedReason: profile?.blockedModels?.[ideal[role].model] ?? null }
     }
   }
-  return { gpuName: name, vramGb, ramGb, ...entries, upgrades, installCheck: await checkInstalled(inUse) }
+  return { gpuName: name, vramGb, ramGb, ...entries, upgrades, installCheck: await checkInstalled(inUse, Object.values(profile?.modelChoices ?? {})) }
 }
 
 /** Ollama liste un modèle sans tag sous `:latest` : les deux écritures désignent le même modèle. */
@@ -1230,14 +1230,18 @@ function sameModel(a: string, b: string): boolean {
  * Étape 140 : ce qu'Ollama a RÉELLEMENT sur le disque, comparé aux modèles affichés. `null` si Ollama ne
  * répond pas — jamais "tout est installé" ni "rien n'est installé" deviné faute de réponse.
  */
-async function checkInstalled(inUse: Record<ModelRole, string>): Promise<MyModelPicks['installCheck']> {
+async function checkInstalled(
+  inUse: Record<ModelRole, string>,
+  // Modèles choisis à la main dans Chat/Code/Vocal (étape 141) : utilisés, donc jamais proposés à la suppression.
+  chosenByHand: string[] = []
+): Promise<MyModelPicks['installCheck']> {
   let installed: string[]
   try {
     installed = await listInstalledModels()
   } catch {
     return null
   }
-  const used = Object.values(inUse)
+  const used = [...Object.values(inUse), ...chosenByHand]
   return {
     notInstalled: (Object.keys(inUse) as ModelRole[]).filter((role) => !installed.some((m) => sameModel(m, inUse[role]))),
     otherInstalled: installed.filter((m) => !used.some((u) => sameModel(m, u)))

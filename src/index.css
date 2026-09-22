@@ -2183,6 +2183,70 @@ p.capacity-scan__tier-missing {
   cursor: default;
 }
 
+/* Sélecteur de modèle (étape 141) : même discrétion que l'icône de pièce jointe à côté — un libellé fin et
+   un menu sans cadre au repos, qui ne s'allume qu'au survol/focus. Le bouton d'envoi reste la seule action
+   remplie de la barre. */
+.model-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.model-picker__label {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-text-faint);
+  white-space: nowrap;
+}
+
+.model-picker__select {
+  min-width: 0;
+  max-width: 220px;
+  height: 30px;
+  padding: 0 8px;
+  font-family: var(--hud-font-body);
+  font-size: 0.78rem;
+  color: var(--hud-text-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  text-overflow: ellipsis;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.model-picker__select:not(:disabled):hover,
+.model-picker__select:focus-visible {
+  color: var(--hud-accent-bright);
+  border-color: var(--hud-line);
+  background: rgba(var(--hud-accent-rgb), 0.08);
+  outline: none;
+}
+
+.model-picker__select:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* La liste déroulante native reprend le fond de l'app : sans ça, Windows l'affiche en blanc. */
+.model-picker__select option {
+  background: var(--hud-panel);
+  color: var(--hud-text);
+}
+
+/* Écran vocal : sous l'astuce, centré avec le reste du groupe orbe + texte. */
+.app__model-picker {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
 /* Action PRINCIPALE : elle rejoint la famille de boutons HUD du reste de l'app (coins coupés, Rajdhani
    en majuscules) plutôt que d'inventer un style à elle — voir la règle groupée plus bas. Ici, seul ce qui
    la distingue dans le composeur : c'est la seule action remplie de la barre, donc la seule que l'œil
@@ -3280,10 +3344,13 @@ textarea:not(.composer__input):focus-visible {
    mesure du style RÉELLEMENT appliqué le prouve).
    `.chat-widget__input` (barre du widget texte) est exclu pour la même raison que `.composer__input` : la
    PILULE qui l'entoure porte déjà le cadre et les coins arrondis, un second contour carré à l'intérieur
-   casserait la forme. */
+   casserait la forme.
+   `.model-picker__select` (sélecteur de modèle, étape 141) est exclu pour la même raison : c'est un contrôle
+   discret posé dans la barre du composeur, comme l'icône de pièce jointe — un cadre de champ plein en
+   `!important` lui donnait le même poids visuel que le bouton d'envoi. */
 input:not(.options-menu__context-slider):not(.chat-widget__input),
 textarea:not(.composer__input),
-select {
+select:not(.model-picker__select) {
   font-family: var(--hud-font-body);
   border-radius: 0 !important;
   background: rgba(1, 4, 10, 0.75) !important;

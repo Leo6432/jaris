@@ -10,6 +10,7 @@ import OptionsMenu from '@/components/OptionsMenu'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import { useJarisStore, type JarisEmotion } from '@/store/useJarisStore'
 import type { AppVersionStatus, MemoryGraph, OllamaVersionStatus, WidgetMode } from '../shared/ipc'
+import ModelPicker from '@/components/ModelPicker'
 
 const STATUS_LABEL: Record<JarisEmotion, string> = {
   idle: 'Jaris dort...',
@@ -459,6 +460,11 @@ export default function App(): JSX.Element {
                 <div className="app__hint">
                   Astuce : dis "Jaris", clique sur le cercle, ou appuie sur le + du pavé numérique depuis
                   n'importe quelle appli, pour activer l'écoute (personnalisable dans Options → Activation)
+                </div>
+
+                {/* Étape 141 : même sélecteur que le Chat et le mode Code — Auto ou un modèle précis pour la voix. */}
+                <div className="app__model-picker">
+                  <ModelPicker mode="voice" />
                 </div>
 
                 {(transcript || reply) && (

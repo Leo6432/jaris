@@ -56,6 +56,8 @@ window.jaris = {
   cancelCodeGen: () => {},
   getGeneratedApps: () => Promise.resolve([]),
   getProfile: () => Promise.resolve({ soundEffectsEnabled: false }),
+  getModelChoice: () => Promise.resolve({ selected: null, installed: [], autoModel: null }),
+  setModelChoice: () => Promise.resolve(),
   pickImageFile: () => {
     window.__pickCalls += 1
     return Promise.resolve(window.__nextPickedFile)

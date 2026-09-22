@@ -11,6 +11,8 @@ import type {
   CodeGenProgress,
   GeneratedApp,
   GeneratedAppSummary,
+  ModelChoiceInfo,
+  ModelChoiceMode,
   MyModelPicks,
   JarisEmotion,
   MemoryGraph,
@@ -77,6 +79,8 @@ declare global {
       runModelAnalysis: (scope?: AnalysisScope) => Promise<CapacityScanResult>
       getMyModelPicks: () => Promise<MyModelPicks>
       deleteUnusedModel: (model: string) => Promise<void>
+      getModelChoice: (mode: ModelChoiceMode) => Promise<ModelChoiceInfo>
+      setModelChoice: (mode: ModelChoiceMode, model: string | null) => Promise<void>
       runQuickSetup: () => Promise<CapacityScanResult>
       onModelBenchmarkLine: (cb: (line: string) => void) => () => void
       getNewModels: () => Promise<string[]>
