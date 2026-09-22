@@ -5,7 +5,7 @@ import type {
   AudioInputDevice,
   ContextLengthOptions,
   ConversationEntry,
-  HardwareTierPreview as HardwareTierPreviewData,
+  MyModelPicks as MyModelPicksData,
   ModelsLocationStatus,
   OllamaVersionStatus,
   Profile,
@@ -14,7 +14,7 @@ import type {
 import { CAPABILITIES } from '../../shared/capabilities'
 import AllModelsOverview from './AllModelsOverview'
 import AppUpdateProgress from './AppUpdateProgress'
-import HardwareTierPreview from './HardwareTierPreview'
+import MyModelPicks from './MyModelPicks'
 import JarisOrb from './JarisOrb'
 import { formatModelName } from '../lib/formatModelName'
 import { formatContextLength } from '../lib/formatContextLength'
@@ -96,7 +96,7 @@ function dedupeAudioOutputs(devices: MediaDeviceInfo[]): MediaDeviceInfo[] {
  * "3/3", "6/6" etc. en petit badge coloré (vert = parfait, ambre = partiel, rouge = raté) plutôt qu'en
  * texte brut au milieu du tableau — un coup d'œil suffit pour repérer les bons/mauvais élèves, pas besoin
  * de lire chaque cellule. "—" (jamais testé) reste un texte neutre, pas un badge. Exporté : réutilisé par
- * HardwareTierPreview.tsx (paliers de configuration) et ModelAnalysisProgress.tsx (analyse comparative
+ * MyModelPicks.tsx (modèles choisis pour ta machine) et ModelAnalysisProgress.tsx (analyse comparative
  * complète, toujours lançable via `npm run benchmark:models`), pas seulement ici.
  */
 export function ReliabilityBadge({ value }: { value: string | null }): JSX.Element {
@@ -208,7 +208,7 @@ export default function OptionsMenu(): JSX.Element {
   const [previewing, setPreviewing] = useState(false)
   const [history, setHistory] = useState<ConversationEntry[] | null>(null)
   const [clearingHistory, setClearingHistory] = useState(false)
-  const [hardwareTiers, setHardwareTiers] = useState<HardwareTierPreviewData[] | null>(null)
+  const [myPicks, setMyPicks] = useState<MyModelPicksData | null>(null)
   /**
    * Curseur de longueur de contexte (Léo : "jaris voit les model et regarde la vram et propose une barre
    * comme sur ollama... personnalisé à chacun pour que le dernier ne dépasse pas la vram") — `null` tant
@@ -274,19 +274,19 @@ export default function OptionsMenu(): JSX.Element {
   }, [tab, history])
 
   // Pas la peine à chaque ouverture du menu si l'utilisateur ne va jamais voir cet onglet Modèles :
-  // previewHardwareTiers relit scripts/verified-tool-scores.md/benchmark-results.md côté main.
+  // getMyModelPicks relit scripts/verified-tool-scores.md/benchmark-results.md côté main.
   // PAS de lecture automatique à l'ouverture de l'onglet, contrairement aux autres réglages : la toute
   // première lecture déclenche une demande d'autorisation Windows (documenté par Microsoft pour
   // UserNotificationListener). Une fenêtre système qui surgit parce qu'on a simplement ouvert un onglet
   // serait incompréhensible — c'est le clic sur le bouton qui la provoque, en sachant pourquoi.
 
   useEffect(() => {
-    if (tab === 'modeles' && hardwareTiers === null) {
-      void window.jaris.previewHardwareTiers().then(setHardwareTiers)
+    if (tab === 'modeles' && myPicks === null) {
+      void window.jaris.getMyModelPicks().then(setMyPicks)
     }
-  }, [tab, hardwareTiers])
+  }, [tab, myPicks])
 
-  // Contrairement à hardwareTiers ci-dessus (coûteux, relit un fichier), une simple lecture d'une valeur
+  // Contrairement à myPicks ci-dessus (coûteux, relit un fichier), une simple lecture d'une valeur
   // déjà en cache côté main (voir getOllamaVersionStatus) : pas besoin de garde "déjà chargé", on relit à
   // chaque ouverture de l'onglet — utile si le check réseau en tâche de fond au lancement de Jaris n'avait
   // pas encore fini la première fois que l'utilisateur a ouvert cet onglet.
@@ -414,7 +414,7 @@ export default function OptionsMenu(): JSX.Element {
     try {
       const result = await window.jaris.runQuickSetup()
       setProfile((prev) => (prev ? { ...prev, models: result.models, visionModel: result.visionModel, capacityScanDone: true } : prev))
-      setHardwareTiers(await window.jaris.previewHardwareTiers())
+      setMyPicks(await window.jaris.getMyModelPicks())
       // Un modèle ignoré (trop gros pour VRAM+RAM, ou pas assez de disque) ne doit jamais passer inaperçu :
       // sans ça, le profil listait un modèle qui n'est en réalité pas installé, jusqu'à ce que Jaris échoue
       // à l'utiliser bien plus tard, loin du vrai moment de la cause (voir aussi CapacityScan.tsx).
@@ -993,11 +993,11 @@ export default function OptionsMenu(): JSX.Element {
             )}
 
             <SettingGroup title="Ce que ta machine fait tourner">
-              {hardwareTiers === null ? (
+              {myPicks === null ? (
                 <p className="capacity-scan__status">Chargement...</p>
               ) : (
                 <>
-                  <HardwareTierPreview tiers={hardwareTiers} />
+                  <MyModelPicks picks={myPicks} />
                   <AllModelsOverview />
                 </>
               )}
@@ -1014,7 +1014,7 @@ export default function OptionsMenu(): JSX.Element {
               {profile?.codeModel && (
                 <SettingRow
                   label="Modèle du mode Code"
-                  description="Choisi et téléchargé automatiquement selon ta configuration, comme les paliers ci-dessus."
+                  description="Choisi et téléchargé automatiquement selon ta configuration, comme les modèles ci-dessus."
                 >
                   <strong>{formatModelName(profile.codeModel)}</strong>
                 </SettingRow>

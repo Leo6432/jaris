@@ -212,20 +212,15 @@ export interface CapacityScanResult {
 }
 
 /**
- * Une ligne de previewHardwareTiers (hardwareScan.ts) : illustre "à quoi ressemble le choix de Jaris" à une
- * VRAM représentative, affichée sur l'écran d'accueil (CapacityScan.tsx) et l'onglet Modèles (OptionsMenu.tsx)
- * pour montrer clairement où se situe la machine de l'utilisateur — jamais utilisée pour choisir un modèle
- * pour de vrai (ça reste le rôle de pickBestModelsFromBenchmark, sur la VRAM/RAM exactes). `vramGb` est une
- * FRONTIÈRE RÉELLE (voir previewVramSteps) où le modèle choisi peut changer, pas un point arbitraire (6/12/24
- * Go) : deux machines dont la VRAM tombe entre deux lignes obtiennent garanti le même modèle. `current`
- * marque la ligne qui correspond à la machine RÉELLE détectée. Chaque palier (flash/medium/large/vision)
- * porte l'entrée COMPLÈTE (vitesse, fiabilité...), pas juste le nom du modèle — voir ModelOverviewEntry
- * ci-dessous.
+ * Les modèles choisis pour CETTE machine (getMyModelPicks, hardwareScan.ts), rôle par rôle, avec leurs scores
+ * — affichés à l'écran d'accueil (CapacityScan.tsx) et dans Options → Modèles. Étape 137 : remplace les
+ * "paliers" de comparaison (Palier 1/2/3...) à la demande de Léo — un choix personnalisé, calculé sur la VRAM
+ * et la RAM réellement détectées, exactement comme ce qui est téléchargé.
  */
-export interface HardwareTierPreview {
-  label: string
-  vramGb: number
-  current: boolean
+export interface MyModelPicks {
+  gpuName: string | null
+  vramGb: number | null
+  ramGb: number
   flash: ModelOverviewEntry
   medium: ModelOverviewEntry
   large: ModelOverviewEntry
@@ -269,7 +264,7 @@ export interface ModelOverviewEntry {
   /**
    * Vitesse de génération (tokens/s) publiée par Artificial Analysis pour ce modèle. Mesurée sur LEUR
    * matériel, identique pour tout le monde : sert à comparer les modèles entre eux, jamais à prédire la
-   * vitesse sur la machine de qui regarde (dit explicitement à l'écran, voir HardwareTierPreview.tsx).
+   * vitesse sur la machine de qui regarde (dit explicitement à l'écran, voir MyModelPicks.tsx).
    * Voir ARTIFICIAL_ANALYSIS_SPEED dans hardwareScan.ts. `null` si Artificial Analysis n'a pas
    * encore publié de mesure de vitesse fiable pour ce modèle exact.
    */
@@ -530,9 +525,9 @@ export const IPC_CHANNELS = {
   runModelAnalysis: 'jaris:run-model-analysis',
   /** main -> renderer : une ligne de sortie du benchmark en cours, au fil de l'eau (progression comprise, voir OptionsMenu.tsx). */
   modelBenchmarkLine: 'jaris:model-benchmark-line',
-  /** renderer -> main : aperçu instantané (sans rien télécharger) des modèles choisis à 3 échelles de VRAM
-   * représentatives, pour l'écran d'accueil (voir previewHardwareTiers, hardwareScan.ts). */
-  previewHardwareTiers: 'jaris:preview-hardware-tiers',
+  /** renderer -> main : modèles choisis pour CETTE machine, sans rien télécharger (voir getMyModelPicks,
+   * hardwareScan.ts) — écran d'accueil et Options → Modèles. */
+  getMyModelPicks: 'jaris:get-my-model-picks',
   /** renderer -> main : détecte le matériel et télécharge directement les modèles déjà choisis pour lui
    * (voir runQuickSetup, benchmarkRunner.ts) — le nouveau chemin par défaut de l'écran d'accueil, sans passer
    * par le benchmark comparatif complet. Réutilise modelBenchmarkLine pour la progression des téléchargements. */

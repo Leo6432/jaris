@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import type { CapacityScanResult, HardwareTierPreview as HardwareTierPreviewData } from '../../shared/ipc'
+import type { CapacityScanResult, MyModelPicks as MyModelPicksData } from '../../shared/ipc'
 import { formatModelName } from '../lib/formatModelName'
-import HardwareTierPreview from './HardwareTierPreview'
+import MyModelPicks from './MyModelPicks'
 
 interface CapacityScanProps {
   onDone: () => void
@@ -12,21 +12,20 @@ interface CapacityScanProps {
  * (voir runQuickSetup, benchmarkRunner.ts) — remplace l'ancienne analyse comparative obligatoire complète
  * (qui pouvait prendre des dizaines de minutes) maintenant que scripts/verified-tool-scores.md couvre la
  * quasi-totalité des configurations courantes : plus besoin de comparer des dizaines de candidats pour
- * savoir lequel gagne, juste télécharger le gagnant déjà connu. Présente d'abord les paliers de
- * configuration (previewHardwareTiers) avec une flèche sur celui qui correspond à cette machine, pour que
- * l'utilisateur comprenne pourquoi Jaris a choisi ce qu'il a choisi avant même de cliquer "Continuer" — à la
- * demande explicite de Léo. L'ancienne analyse comparative complète reste disponible à la main depuis
+ * savoir lequel gagne, juste télécharger le gagnant déjà connu. Présente d'abord les modèles choisis pour
+ * CETTE machine (getMyModelPicks — plus de paliers de comparaison depuis l'étape 137), pour que
+ * l'utilisateur voie ce que Jaris va installer avant même de cliquer "Continuer". L'ancienne analyse comparative complète reste disponible à la main depuis
  * Options → Modèles pour qui veut vérifier/affiner au-delà de ce qui est déjà vérifié.
  */
 export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element {
-  const [tiers, setTiers] = useState<HardwareTierPreviewData[] | null>(null)
+  const [picks, setPicks] = useState<MyModelPicksData | null>(null)
   const [installing, setInstalling] = useState(false)
   const [log, setLog] = useState<string[]>([])
   const [result, setResult] = useState<CapacityScanResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    void window.jaris.previewHardwareTiers().then(setTiers)
+    void window.jaris.getMyModelPicks().then(setPicks)
   }, [])
 
   useEffect(() => {
@@ -55,11 +54,11 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
         {!result && !installing && !error && (
           <>
             <p>
-              Jaris détecte ta machine et choisit directement les modèles déjà adaptés à sa taille, sans
-              tout comparer un par un — voici les 3 configurations possibles, la tienne est repérée ci-dessous.
+              Jaris a regardé ta machine et choisi, pour chaque rôle, le meilleur modèle qui y tient — voici
+              ce qu'il va installer.
             </p>
-            {tiers === null ? <p className="capacity-scan__status">Détection du matériel...</p> : <HardwareTierPreview tiers={tiers} />}
-            <button onClick={start} disabled={tiers === null}>
+            {picks === null ? <p className="capacity-scan__status">Détection du matériel...</p> : <MyModelPicks picks={picks} />}
+            <button onClick={start} disabled={picks === null}>
               Continuer
             </button>
           </>

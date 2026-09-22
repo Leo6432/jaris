@@ -11,7 +11,7 @@ import type {
   CodeGenProgress,
   GeneratedApp,
   GeneratedAppSummary,
-  HardwareTierPreview,
+  MyModelPicks,
   JarisEmotion,
   MemoryGraph,
   MicTestDonePayload,
@@ -75,7 +75,7 @@ declare global {
       runRuntimeSetup: () => Promise<RuntimeSetupStatus>
       onRuntimeSetupProgress: (cb: (progress: RuntimeSetupProgress) => void) => () => void
       runModelAnalysis: (scope?: AnalysisScope) => Promise<CapacityScanResult>
-      previewHardwareTiers: () => Promise<HardwareTierPreview[]>
+      getMyModelPicks: () => Promise<MyModelPicks>
       runQuickSetup: () => Promise<CapacityScanResult>
       onModelBenchmarkLine: (cb: (line: string) => void) => () => void
       getNewModels: () => Promise<string[]>

@@ -11,7 +11,7 @@ import {
 } from './services/dependencyServices'
 import { getModelsLocationStatus, moveModelsLocation } from './services/modelsLocation'
 import { moveDataLocation } from './services/dataLocation'
-import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, previewHardwareTiers } from './services/hardwareScan'
+import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, getMyModelPicks } from './services/hardwareScan'
 import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { runModelAnalysis, runQuickSetup } from './services/benchmarkRunner'
@@ -840,7 +840,7 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.runModelAnalysis, async (event, scope?: AnalysisScope): Promise<CapacityScanResult> => {
     return runModelAnalysis((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line), scope)
   })
-  ipcMain.handle(IPC_CHANNELS.previewHardwareTiers, () => previewHardwareTiers())
+  ipcMain.handle(IPC_CHANNELS.getMyModelPicks, () => getMyModelPicks())
   ipcMain.handle(IPC_CHANNELS.runQuickSetup, async (event): Promise<CapacityScanResult> => {
     return runQuickSetup((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))
   })

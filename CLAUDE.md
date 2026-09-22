@@ -4028,3 +4028,24 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   enregistré avec un modèle non téléchargé, message expliqué ; échec sur un tag Ollama → toujours levé).
   Vérifié en désactivant le repli : le test échoue bien. **Non vérifiable ici** : le vrai échec sur la
   machine de Léo avec Ollama 0.34.2 (pas de Windows ni d'Ollama dans cet environnement).
+
+- **Étape 137, Léo : "a la place de plalier 1 2 3 on vas faire un palier personnaliser a chacun, il ya plus
+  de palier jaris regarde la vram les apelle outils Intelligence (Artificial Analysis) et choisit le meilleur
+  model pour rapide etc..."** — fin du système de paliers de comparaison (étapes 114-135 : une dizaine de
+  lignes "Palier N" calculées à des VRAM hypothétiques, la machine repérée parmi elles). Le choix lui-même
+  n'a PAS changé : `pickBestFrom` (hardwareScan.ts) faisait déjà exactement ce que décrit Léo (ce qui tient
+  dans la VRAM, puis fiabilité d'appel d'outils, puis Intelligence Artificial Analysis, puis taille). Seul
+  l'affichage change : `getMyModelPicks` (remplace `previewHardwareTiers`/`previewVramSteps`/
+  `previewLabelFor`, type `MyModelPicks` au lieu de `HardwareTierPreview`, canal IPC `getMyModelPicks`)
+  renvoie le choix pour la VRAM ET la RAM réellement détectées, via le MÊME `computeModelPicks` que ce qui
+  est téléchargé — ce qui s'affiche est donc toujours ce qui est installé (vérifié par un test sur plusieurs
+  VRAM). `MyModelPicks.tsx` (remplace `HardwareTierPreview.tsx`) : une seule carte, matériel détecté + un
+  modèle par rôle avec ses scores, sur l'écran d'accueil et dans Options → Modèles. La RAM de référence fixe
+  de l'étape 135 disparaît avec les paliers : elle n'existait que pour rendre la liste identique d'un PC à
+  l'autre ; un choix personnalisé doit au contraire tenir compte de la vraie RAM (débordement de Puissant/
+  Code). CSS des flèches/badge/numéro de palier retiré, textes "tableau des paliers" reformulés (grep des
+  chaînes visibles, pas seulement des identifiants). Relu sur capture : le titre "Choisis pour ta machine"
+  se lisait comme un impératif, remplacé par "Modèles choisis pour ta machine". Régression :
+  `scripts/test-hardwarescan-my-picks.mjs` (affiché = téléchargé, vraie RAM prise en compte, matériel non
+  inventé) et `scripts/test-my-model-picks-ui.mjs` (une seule carte, aucun "Palier", scores libellés, "—"
+  si non publié, pas de débordement à 560 px).

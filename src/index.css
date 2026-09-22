@@ -1609,9 +1609,8 @@ body.body--scan::after {
   padding-left: 18px;
 }
 
-/* Les paliers de configuration (previewHardwareTiers) présentés à l'écran d'accueil, reliés par des
-   flèches verticales — celui qui correspond à la machine détectée (.capacity-scan__tier--current) ressort
-   nettement en cyan, les autres restent discrets pour ne pas distraire de l'essentiel. */
+/* Les modèles choisis pour la machine détectée (MyModelPicks.tsx, étape 137 — plus de paliers de
+   comparaison) : une seule carte, dans le style "courant" (.capacity-scan__tier--current). */
 .capacity-scan__tiers {
   display: flex;
   flex-direction: column;
@@ -1640,25 +1639,17 @@ body.body--scan::after {
   margin-bottom: 4px;
 }
 
-.capacity-scan__tier-index {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--hud-text-faint);
-}
-
 .capacity-scan__tier-label {
   font-size: 0.95rem;
   color: var(--hud-text);
 }
 
-.capacity-scan__tier-vram-range {
+.capacity-scan__tier-hardware {
   font-size: 0.78rem;
-  color: var(--hud-text);
+  color: var(--hud-text-soft);
 }
 
-/* Une ligne par palier (Rapide/Médium/Puissant/Vision), avec vitesse + fiabilité de son modèle — remplace le
-   tableau détaillé de tous les candidats (retiré, ce résumé par palier suffit). */
+/* Une ligne par rôle (Rapide/Médium/Puissant/Vision/Code), avec les scores de son modèle. */
 .capacity-scan__tier-table {
   width: 100%;
   border-collapse: collapse;
@@ -1695,28 +1686,13 @@ body.body--scan::after {
   color: var(--hud-text-faint);
 }
 
-/* Une seule légende sous toute la liste des paliers (jamais répétée dans chaque carte) : sans elle, un
-   "148 tok/s" se lirait comme la vitesse attendue sur la machine de qui regarde. */
+/* Légende sous la carte : sans elle, un "148 tok/s" se lirait comme la vitesse attendue sur la machine de
+   qui regarde. */
 .capacity-scan__tier-legend {
   margin: 8px 2px 0;
   font-size: 0.72rem;
   line-height: 1.45;
   color: var(--hud-text-faint);
-}
-
-.capacity-scan__tier-badge {
-  margin-top: 6px;
-  font-size: 0.78rem;
-  color: var(--hud-accent);
-  font-weight: 600;
-}
-
-.capacity-scan__tier-arrow {
-  align-self: center;
-  color: var(--hud-text-faint);
-  font-size: 1.1rem;
-  line-height: 1;
-  margin: 2px 0;
 }
 
 /* Apparition initiale de l’orbe des réglages ; le widget utilise ses transitions persistantes. */
@@ -2745,7 +2721,6 @@ h3,
 .options-menu__model-group-title,
 .options-menu__tab,
 .capacity-scan__tier-label,
-.capacity-scan__tier-index,
 .code-panel__view-tab,
 .app__status {
   font-family: var(--hud-font-display);
@@ -3426,17 +3401,6 @@ a {
 a:hover {
   color: var(--hud-accent-bright);
   border-bottom-color: var(--hud-accent-bright);
-}
-
-/* Le repère "← ta configuration" reprend l'or du palier courant plutôt que le
-   cyan général : c'est la même information que les équerres dorées autour de la
-   carte, elle doit se lire d'un seul coup d'œil. */
-.capacity-scan__tier-badge {
-  font-family: var(--hud-font-display);
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--hud-gold);
 }
 
 /* Bandeaux d'alerte : texte à gauche et bouton dans le flux, au lieu de tout

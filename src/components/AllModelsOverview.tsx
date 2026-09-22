@@ -212,8 +212,8 @@ export default function AllModelsOverview(): JSX.Element {
                   <div className="options-page__tab-header">
                     <h3>Tous les modèles candidats</h3>
                     <p>
-                      Chaque modèle que Jaris sait choisir, tous paliers confondus — pas seulement celui retenu
-                      pour ta machine, déjà visible dans le tableau des paliers.
+                      Chaque modèle que Jaris sait choisir, tous rôles confondus — pas seulement ceux retenus
+                      pour ta machine, déjà visibles juste au-dessus.
                     </p>
                   </div>
                   {loading && <p className="capacity-scan__status">Chargement...</p>}
