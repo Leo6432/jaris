@@ -1,5 +1,6 @@
 import { config } from '../config'
 import { DISK_SAFETY_MARGIN_GB, detectFreeDiskGb, getDownloadBudgetGb } from './systemResources'
+import { importHuggingFaceModel } from './huggingFaceImport'
 
 export interface OllamaToolCall {
   function: { name: string; arguments: Record<string, unknown> }
@@ -281,9 +282,37 @@ export class DiskFullError extends Error {
  * aucun modèle n'y échappe : ces filets de sécurité vivent ici, au point d'entrée unique de tout
  * téléchargement de Jaris.
  */
+/** Ollama liste un modèle sans tag sous `:latest` (`hf.co/org/depot` -> `hf.co/org/depot:latest`). */
+function withTag(model: string): string {
+  const lastSegment = model.slice(model.lastIndexOf('/') + 1)
+  return lastSegment.includes(':') ? model : `${model}:latest`
+}
+
 export async function pullModelIfMissing(model: string, onStatus?: (message: string) => void): Promise<void> {
   const installed = await listInstalledModels()
-  if (installed.includes(model)) return
+  if (installed.includes(model) || installed.includes(withTag(model))) return
+
+  try {
+    await pullWithOllama(model, onStatus)
+  } catch (err) {
+    // Étape 139 : Ollama 0.34.2 bloque tout `pull hf.co/...` (redirection entre hôtes, voir
+    // huggingFaceImport.ts). Plutôt que d'abandonner ce modèle, Jaris le récupère lui-même depuis Hugging
+    // Face, à l'identique. Jamais pour un manque de place (VRAM/disque) : réessayer n'y changerait rien.
+    if (!model.startsWith('hf.co/') || err instanceof ModelTooLargeError || err instanceof DiskFullError) throw err
+    // Phrase courte : l'erreur brute d'Ollama contient une URL de plusieurs centaines de caractères.
+    onStatus?.(`Ollama n'arrive pas à télécharger ${model} : Jaris le récupère directement depuis Hugging Face…`)
+    try {
+      await importHuggingFaceModel(model, onStatus)
+    } catch (importErr) {
+      if (importErr instanceof ModelTooLargeError || importErr instanceof DiskFullError) throw importErr
+      // Les deux voies ont échoué : on remonte l'erreur d'ORIGINE (celle d'Ollama, que runQuickSetup sait
+      // reconnaître pour retomber sur le modèle suivant), complétée de la raison du second échec.
+      throw new Error(`${err instanceof Error ? err.message : String(err)} ; import direct aussi impossible : ${importErr instanceof Error ? importErr.message : String(importErr)}`)
+    }
+  }
+}
+
+async function pullWithOllama(model: string, onStatus?: (message: string) => void): Promise<void> {
 
   const budgetGb = await getDownloadBudgetGb()
   const freeDiskGb = detectFreeDiskGb()

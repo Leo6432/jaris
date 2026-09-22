@@ -322,6 +322,7 @@ Ne JAMAIS annoncer un correctif "terminé" avant l'étape 8 confirmée.
   avec un message clair pour Léo. Une erreur sur un tag de la bibliothèque Ollama remonte toujours telle
   quelle. **Leçon générale : un bug d'une version d'un outil tiers ne justifie pas de dégrader le choix pour
   tout le monde ni d'effacer des mesures réelles — contenir l'échec là où il se produit.**
+  Depuis l'étape 139, l'échec est même contourné : Jaris importe lui-même le modèle (huggingFaceImport.ts).
 
 - **"Les boutons marchent jamais" en mode Code (Léo) : le vrai bug n'était NI dans le HTML/JS généré, NI
   dans le mécanisme d'aperçu (iframe `sandbox="allow-scripts"`, testé sain à part)** — c'était une
@@ -4031,3 +4032,32 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   signalé, raison de blocage), `test-benchmark-runner-cleanup.mjs` (blocage mémorisé puis oublié),
   `test-my-model-picks-ui.mjs` (ligne sous le rôle concerné). **Non vérifiable ici** : l'échec réel sur la
   machine de Léo ; G9v3-3B ne sera réellement utilisé qu'une fois Ollama 0.34.3 sorti en version stable.
+
+- **Étape 139, Léo : "oui" (au contournement pour que G9v3-3B soit VRAIMENT utilisé malgré Ollama 0.34.2)** —
+  `electron/services/huggingFaceImport.ts`, appelé par `pullModelIfMissing` (ollama.ts) quand `ollama pull
+  hf.co/...` échoue pour une autre raison qu'un manque de place : Jaris refait le pull lui-même — manifeste du
+  registre Ollama de Hugging Face, envoi de chaque GGUF (modèle + projecteur de vision) directement de
+  Hugging Face vers Ollama (`POST /api/blobs/<sha256>`, en flux, sans fichier temporaire), puis `POST
+  /api/create` sous le même nom avec le gabarit et les paramètres du manifeste. Cause racine VÉRIFIÉE, pas
+  supposée : `https://hf.co/v2/...` répond 307 vers `https://huggingface.co/v2/...`, redirection entre hôtes
+  que 0.34.2 bloque. Comportement de `/api/create` vérifié dans le CODE SOURCE d'Ollama (server/create.go :
+  plusieurs GGUF acceptés, projecteur reconnu par `isProjectorGGUF`), la doc officielle ne le disant pas.
+  **Vérifié de bout en bout ICI, pour la première fois sur ce dépôt avec un vrai Ollama** : binaire Linux
+  officiel d'Ollama 0.34.2 lancé sur un port isolé → bug reproduit à l'identique (`blocked redirect to a
+  different host`) → import réel de G9v3-3B (1,9 Go) et GLM-4.6V-Flash (6,2 Go + 1 Go de projecteur) →
+  couches installées identiques au manifeste Hugging Face (modèle, projecteur, gabarit ; paramètres identiques
+  au contenu près de l'échappement JSON) → VRAI appel d'outil `open_app({app_name: "Google Chrome"})` avec
+  G9v3-3B, VRAIE description d'image ("un carré rouge et un cercle bleu") avec GLM-4.6V-Flash, et parcours
+  complet `pullModelIfMissing` (échec du pull → import → installé ; second appel en 4 ms). **Deux défauts
+  trouvés par cette vérification réelle, jamais visibles en relecture** : (1) une coupure réseau à 70 % d'un
+  fichier de 6 Go faisait tout recommencer — reprise ajoutée (en-tête HTTP Range, jusqu'à 5 fois, dans le
+  même flux envoyé à Ollama, qui revérifie l'empreinte à la fin) ; (2) `pullModelIfMissing` ne reconnaissait
+  pas un modèle sans tag listé `:latest` par Ollama et le retentait à chaque retest — corrigé (`withTag`).
+  Le test a aussi trouvé que `hf.co/../etc` passait la validation (`..`) : resserrée. Message d'état raccourci
+  (l'erreur brute d'Ollama contenait une URL de plusieurs centaines de caractères). **Leçon générale : quand
+  un outil tiers peut tourner dans l'environnement de dev (ici le binaire Linux d'Ollama), le lancer pour de
+  vrai vaut mieux que n'importe quel mock — deux des trois défauts de cette étape n'existaient pas dans les
+  mocks.** Régression : `node --test scripts/test-huggingface-import.mjs` (nom/tag, modèle seul, modèle +
+  projecteur, fichier déjà présent jamais retéléchargé, fichier corrompu jamais installé, trop gros refusé
+  avant téléchargement, coupure reprise sans tout recommencer). **Non vérifiable ici** : la même chose sous
+  Windows chez Léo.
