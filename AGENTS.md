@@ -4310,3 +4310,12 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   attendre son accord avant le moindre commit.
   Régression : `npm test` (476 tests ; les deux tests propres au thème doux, test-soft-theme.mjs et
   test-mascot-ui.mjs, partent avec lui). Capture du rendu compilé : accueil vocal et Chat en thème HUD.
+
+- **Étape 148, déplacement vers un nouveau disque : créer le parent AVANT d'ouvrir un WriteStream.**
+  `relocateEverything` préparait l'installeur Jaris sous `<nouvelle racine>/downloads`, mais ce dossier
+  n'existait pas encore. `createWriteStream` émettait `ENOENT` sans listener et faisait planter le
+  processus principal Electron, au lieu de renvoyer un échec lisible. Le téléchargeur partagé crée désormais
+  le dossier parent et intercepte les erreurs du flux. Tester le premier téléchargement dans une racine
+  totalement neuve, pas seulement dans un dossier `downloads` précréé. Lors d'un déplacement complet,
+  Docker doit aussi être réinstallé tout de suite avec ses chemins programme et données sur la nouvelle
+  racine ; si cela échoue, le message final doit dire explicitement que cette partie reste à faire.

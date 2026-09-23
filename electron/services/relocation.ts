@@ -77,6 +77,8 @@ export interface RelocationDeps {
   onProgress: (message: string) => void
   /** Démarre Docker Desktop s'il ne répond pas (pour vérifier ce qu'il contient). */
   startDocker: () => Promise<void>
+  /** Réinstalle Docker directement dans la nouvelle racine après sa désinstallation. */
+  installDocker: (root: string) => Promise<boolean>
 }
 
 export interface RelocationResult {
@@ -84,6 +86,7 @@ export interface RelocationResult {
   programInstaller: string | null
   programTarget: string | null
   dockerUninstalled: boolean
+  dockerReinstalled: boolean
   leftovers: string[]
 }
 
@@ -222,7 +225,19 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
     await removeIfEmpty(previousRoot)
   }
 
-  return { programInstaller, programTarget, dockerUninstalled, leftovers }
+  // Docker ne peut pas être déplacé par jonction : l'installation officielle doit recréer son programme
+  // ET son disque WSL dans la nouvelle racine. Ne pas reporter cette étape à une future recherche web.
+  let dockerReinstalled = !dockerUninstalled
+  if (dockerUninstalled) {
+    onProgress('Réinstallation de Docker Desktop et de ses données dans le nouveau dossier…')
+    try {
+      dockerReinstalled = await deps.installDocker(newRoot)
+    } catch {
+      dockerReinstalled = false
+    }
+  }
+
+  return { programInstaller, programTarget, dockerUninstalled, dockerReinstalled, leftovers }
 }
 
 let reconciling: Promise<void> | null = null

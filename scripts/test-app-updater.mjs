@@ -35,6 +35,7 @@ const downloadModule = loadModule('../electron/services/download.ts', (id) => {
   if (id === 'fs') return nodeFs
   if (id === 'fs/promises') return nodeFsPromises
   if (id === 'events') return nodeEvents
+  if (id === 'path') return nodePath
   if (id.endsWith('formatBytes')) return sharedFormat
   throw new Error(`module non simulé dans le test : ${id}`)
 })

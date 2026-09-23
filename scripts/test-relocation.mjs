@@ -22,7 +22,7 @@ function transpile(path) {
   }).outputText
 }
 
-function setup({ dockerPlan = { action: 'none' }, dockerUninstallOk = true } = {}) {
+function setup({ dockerPlan = { action: 'none' }, dockerUninstallOk = true, dockerInstallOk = true } = {}) {
   const base = mkdtempSync(join(tmpdir(), 'jaris-relocation-'))
   const env = { USERPROFILE: join(base, 'user'), LOCALAPPDATA: join(base, 'local'), SystemDrive: 'C:' }
   const userData = join(base, 'roaming', 'Jaris')
@@ -46,7 +46,7 @@ function setup({ dockerPlan = { action: 'none' }, dockerUninstallOk = true } = {
     })
     return emitter
   }
-  const calls = { dockerUninstall: 0 }
+  const calls = { dockerUninstall: 0, dockerInstall: [] }
   const load = (path, modules) => {
     const exports = {}
     vm.runInThisContext(`(function (exports, module, require, process) { ${transpile(path)} })`)(
@@ -85,10 +85,17 @@ function setup({ dockerPlan = { action: 'none' }, dockerUninstallOk = true } = {
     './dockerLocation': dockerLocation,
     './download': { downloadToFile: async () => 0 }
   })
-  return { base, env, userData, relocation, calls, platform }
+  return { base, env, userData, relocation, calls, platform, dockerInstallOk }
 }
 
-const run = (t, newRoot) => t.relocation.relocateEverything(newRoot, { onProgress: () => {}, startDocker: async () => {} })
+const run = (t, newRoot) => t.relocation.relocateEverything(newRoot, {
+  onProgress: () => {},
+  startDocker: async () => {},
+  installDocker: async (root) => {
+    t.calls.dockerInstall.push(root)
+    return t.dockerInstallOk
+  }
+})
 
 function assertUntouched(t, newRoot) {
   assert.equal(readFileSync(join(t.userData, 'profile.json'), 'utf8'), '{"name":"Léo"}', 'conversations/réglages intacts')
@@ -135,7 +142,19 @@ test('Docker installé ailleurs et ne contenant que Jaris : désinstallé, pour 
   const newRoot = join(t.base, 'D', 'Jaris')
   const result = await run(t, newRoot)
   assert.equal(result.dockerUninstalled, true)
+  assert.equal(result.dockerReinstalled, true)
+  assert.deepEqual(t.calls.dockerInstall, [newRoot])
   assert.equal(JSON.parse(readFileSync(join(t.userData, 'storage-location.json'), 'utf8')).root, newRoot)
+  rmSync(t.base, { recursive: true, force: true })
+})
+
+test('si Docker refuse sa réinstallation, le résultat ne prétend pas que tout a été déplacé', async () => {
+  const t = setup({ dockerPlan: { action: 'uninstall', installDir: 'C:\\Program Files\\Docker\\Docker' }, dockerInstallOk: false })
+  const newRoot = join(t.base, 'D', 'Jaris')
+  const result = await run(t, newRoot)
+  assert.equal(result.dockerUninstalled, true)
+  assert.equal(result.dockerReinstalled, false)
+  assert.deepEqual(t.calls.dockerInstall, [newRoot])
   rmSync(t.base, { recursive: true, force: true })
 })
 

@@ -8,6 +8,7 @@ import { readFile } from 'fs/promises'
 import {
   ensureOllamaRunning,
   ensureSearxngRunning,
+  installDockerDesktop,
   getOllamaVersionStatus,
   stopOllamaCompletely,
   stopOllamaIfStartedByJaris,
@@ -798,7 +799,8 @@ app.whenReady().then(async () => {
         onProgress: log,
         startDocker: async () => {
           log(await openApp('Docker Desktop'))
-        }
+        },
+        installDocker: (root) => installDockerDesktop(log, root)
       })
       quitting = true
       if (outcome.programInstaller) {
@@ -821,12 +823,17 @@ app.whenReady().then(async () => {
       // ne se résout jamais et le bouton reste figé sur "Déplacement en cours…" jusqu'à la relance.
       setTimeout(() => app.quit(), 800)
       const notes = [
-        outcome.dockerUninstalled
-          ? 'Docker Desktop a été désinstallé : Jaris le réinstallera dans ce dossier la prochaine fois que la recherche web en aura besoin (une autorisation Windows sera demandée).'
+        outcome.dockerUninstalled && !outcome.dockerReinstalled
+          ? 'Docker Desktop n’a pas pu être réinstallé dans ce dossier. La recherche web réessaiera au prochain lancement ; vérifie son emplacement dans Options → Modèles.'
           : '',
         outcome.leftovers.length ? `Quelques anciens fichiers verrouillés n'ont pas pu être effacés : ${outcome.leftovers.join(', ')}.` : ''
       ].filter(Boolean)
-      return { success: true, message: [`Tout Jaris est maintenant dans ${newDir}.`, ...notes].join(' ') }
+      return { success: true, message: [
+        outcome.dockerUninstalled && !outcome.dockerReinstalled
+          ? `Jaris et Ollama ont été déplacés dans ${newDir}, mais Docker Desktop reste à réinstaller.`
+          : `Jaris, Ollama et Docker Desktop sont déplacés dans ${newDir}.`,
+        ...notes
+      ].join(' ') }
     } catch (err) {
       log('Redémarrage des services…')
       void ensureOllamaRunning(log)

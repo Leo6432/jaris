@@ -43,7 +43,7 @@ test('installation dans le dossier de Jaris avec les indicateurs officiels, rien
 
 test('l’installation de Docker par Jaris passe bien ces indicateurs', () => {
   const services = readFileSync(new URL('../electron/services/dependencyServices.ts', import.meta.url), 'utf8')
-  assert.match(services, /'install', '--quiet', '--accept-license', \.\.\.dockerInstallFlags\(getStorageRoot\(\)\)/)
+  assert.match(services, /'install', '--quiet', '--accept-license', \.\.\.dockerInstallFlags\(targetRoot \?\? getStorageRoot\(\)\)/)
 })
 
 test('la désinstallation ne passe aucun texte variable dans une commande PowerShell', () => {

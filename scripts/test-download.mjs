@@ -3,7 +3,8 @@ import nodeEvents from 'node:events'
 import nodeFs, { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import nodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import * as nodeRequirePath from 'node:path'
+const { join } = nodeRequirePath
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
@@ -35,6 +36,7 @@ const { downloadToFile, describeDownloadFailure, DownloadError } = loadModule('.
   if (id === 'fs') return nodeFs
   if (id === 'fs/promises') return nodeFsPromises
   if (id === 'events') return nodeEvents
+  if (id === 'path') return nodeRequirePath
   if (id.endsWith('formatBytes')) return sharedFormat
   throw new Error(`module non simulé dans le test : ${id}`)
 })
@@ -99,6 +101,20 @@ test('le téléchargement rapporte son avancement au fil de l\'eau, pas seulemen
   assert.ok(events.length >= 2, `aucun avancement rapporté : ${events.length} évènement(s)`)
   assert.deepEqual(events[0], { receivedBytes: 0, totalBytes: 10000, percent: 0 })
   assert.deepEqual(events.at(-1), { receivedBytes: 10000, totalBytes: 10000, percent: 100 })
+})
+
+test('un déplacement vers un nouveau dossier crée downloads avant d’ouvrir l’installeur', async () => {
+  served = { chunks: [chunk(4, 1)] }
+  const destination = join(outDir, 'nouveau-disque', 'jaris', 'downloads', 'Jaris-Setup.exe')
+  await downloadToFile('https://exemple/installeur.exe', destination)
+  assert.equal(readFileSync(destination).length, 4)
+})
+
+test('une erreur d’ouverture du fichier reste une erreur affichable, sans exception non interceptée', async () => {
+  served = { chunks: [chunk(4, 1)] }
+  const destination = join(outDir, 'repertoire-a-la-place-du-fichier')
+  nodeFs.mkdirSync(destination)
+  await assert.rejects(() => downloadToFile('https://exemple/installeur.exe', destination), DownloadError)
 })
 
 test('un téléchargement tronqué échoue et ne laisse AUCUN fichier derrière lui', async () => {

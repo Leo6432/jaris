@@ -1,6 +1,7 @@
 import { createWriteStream } from 'fs'
-import { unlink } from 'fs/promises'
+import { mkdir, unlink } from 'fs/promises'
 import { once } from 'events'
+import { dirname } from 'path'
 import { formatBytes } from '../../shared/formatBytes'
 
 /**
@@ -123,6 +124,10 @@ export async function downloadToFile(url: string, destination: string, options: 
   let totalBytes: number | null = null
 
   try {
+    // Une nouvelle racine choisie dans « Déplacer » n'a pas encore de dossier downloads.
+    // Créer le parent avant la requête évite qu'un WriteStream émette ENOENT sans listener
+    // (exception non interceptée dans le processus principal Electron).
+    await mkdir(dirname(destination), { recursive: true })
     arm(connectTimeoutMs)
     const response = await fetch(url, { signal: controller.signal })
     if (!response.ok) {
@@ -143,6 +148,11 @@ export async function downloadToFile(url: string, destination: string, options: 
     report()
 
     const file = createWriteStream(destination)
+    let streamError: Error | null = null
+    file.on('error', (error) => {
+      streamError = error
+      controller.abort()
+    })
     const reader = response.body.getReader()
     let lastReport = 0
     try {
@@ -155,6 +165,7 @@ export async function downloadToFile(url: string, destination: string, options: 
         // `write` renvoie false quand le tampon est plein : sans attendre 'drain', un fichier d'1,5 Go
         // s'accumulerait en mémoire au lieu de partir sur le disque — exactement ce qu'on voulait éviter.
         if (!file.write(value)) await once(file, 'drain')
+        if (streamError) throw streamError
         const now = Date.now()
         if (now - lastReport >= PROGRESS_INTERVAL_MS) {
           lastReport = now
@@ -162,9 +173,10 @@ export async function downloadToFile(url: string, destination: string, options: 
         }
       }
       await new Promise<void>((resolve, reject) => file.end((error?: Error | null) => (error ? reject(error) : resolve())))
+      if (streamError) throw streamError
     } catch (err) {
       file.destroy()
-      throw err
+      throw streamError ?? err
     }
     report()
 

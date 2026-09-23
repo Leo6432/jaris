@@ -669,9 +669,9 @@ async function installWsl(onProgress: (message: string) => void): Promise<boolea
  * code de sortie — l'appelant (ensureSearxngRunning) le découvre plutôt en essayant de relancer Docker
  * Desktop juste après et en observant s'il répond vraiment, jamais en devinant depuis un code non documenté.
  */
-async function installDockerDesktop(onProgress: (message: string) => void): Promise<boolean> {
+export async function installDockerDesktop(onProgress: (message: string) => void, targetRoot?: string): Promise<boolean> {
   onProgress('Téléchargement de Docker Desktop (environ 600 Mo, ça peut prendre plusieurs minutes)…')
-  const installerPath = join(downloadsDir(), 'JarisDockerDesktopInstaller.exe')
+  const installerPath = join(targetRoot ? join(targetRoot, 'downloads') : downloadsDir(), 'JarisDockerDesktopInstaller.exe')
   try {
     // Le plafond était ici de 10 minutes pour le téléchargement entier, choisi à partir de la taille
     // réelle du fichier (~600 Mo) — déjà mieux que les 2 minutes d'Ollama, mais ça exigeait quand même
@@ -696,7 +696,7 @@ async function installDockerDesktop(onProgress: (message: string) => void): Prom
   const exitCode = await new Promise<number | null>((resolve) => {
     // Étape 143 : dans le dossier de Jaris quand il y en a un (programme ET disque virtuel où vivent les images),
     // avec les indicateurs officiels de Docker — sinon Docker se mettrait sur C quoi que Léo ait choisi.
-    const proc = spawn(installerPath, ['install', '--quiet', '--accept-license', ...dockerInstallFlags(getStorageRoot())], { windowsHide: true })
+    const proc = spawn(installerPath, ['install', '--quiet', '--accept-license', ...dockerInstallFlags(targetRoot ?? getStorageRoot())], { windowsHide: true })
     proc.on('error', () => resolve(null))
     proc.on('close', (code) => resolve(code))
   })
