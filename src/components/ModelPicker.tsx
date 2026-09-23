@@ -62,7 +62,7 @@ export default function ModelPicker({ mode, disabled = false }: ModelPickerProps
         aria-label="Modèle utilisé"
       >
         <option value={AUTO}>Auto</option>
-        {info?.roles.map((role) => (
+        {(info?.roles ?? []).map((role) => (
           <option key={role.value} value={role.value} disabled={!role.installed} title={role.model}>
             {role.label}
           </option>

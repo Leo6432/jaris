@@ -59,14 +59,14 @@ test('le code 448 déclenche un essai ciblé puis la fenêtre du même installeu
       }
       if (id === 'fs') return { existsSync: () => false, mkdirSync: () => {} }
       if (id === 'fs/promises') return { readFile: async () => 'CreateFile failed; code 448.', rm: async () => {} }
-      if (id === 'path') return nodePath
+      if (id === 'path') return nodePath.win32 // chemins Windows quel que soit le système qui lance le test
       if (id === 'util') return { promisify: () => async () => ({ stdout: '' }) }
       if (id === './storageRoot') return { downloadsDir: () => 'D:\\Jaris-data\\downloads', getStorageRoot: () => 'D:\\Jaris-data' }
       if (id === './dockerLocation') return { dockerInstallFlags: () => [] }
       if (id === '../config') return { config: { ollama: { host: 'http://127.0.0.1:11434' } } }
       if (id === './appLauncher') return { didAppLaunch: () => true, openApp: async () => '' }
       if (id === './download') return { downloadToFile: async () => { downloads++ } }
-      if (id === '../paths') return { resourcesRoot: () => '' }
+      if (id === './searxngHome') return {} // SearXNG (étape 153) : sans rapport avec l'installation d'Ollama
       if (id === '../../shared/formatBytes') return { formatBytes: () => '' }
       throw new Error(`Module inattendu : ${id}`)
     })

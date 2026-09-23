@@ -2,13 +2,22 @@ import { dockerInstallFlags } from './dockerLocation'
 import { downloadsDir, getStorageRoot } from './storageRoot'
 import { exec, execSync, spawn, type ChildProcess } from 'child_process'
 import { existsSync, mkdirSync } from 'fs'
-import { readFile, rm } from 'fs/promises'
-import { join } from 'path'
+import { readFile, rm, rmdir } from 'fs/promises'
+import { basename, dirname, join } from 'path'
 import { promisify } from 'util'
 import { config } from '../config'
 import { didAppLaunch, openApp } from './appLauncher'
 import { downloadToFile } from './download'
-import { resourcesRoot } from '../paths'
+import {
+  LEGACY_SEARXNG_PROJECT,
+  SEARXNG_PROJECT,
+  composeCommand,
+  composeWorkingDir,
+  parseContainerIds,
+  prepareSearxngComposeDir,
+  sameDir,
+  searxngComposeDir
+} from './searxngHome'
 import { formatBytes } from '../../shared/formatBytes'
 import type { UpdateProgress } from '../../shared/ipc'
 
@@ -629,8 +638,8 @@ async function searxngJsonSearchWorks(): Promise<boolean> {
  */
 async function readSearxngPortBinding(): Promise<string | null> {
   try {
-    const { stdout } = await execAsync('docker compose port searxng 8080', {
-      cwd: resourcesRoot(),
+    const { stdout } = await execAsync(composeCommand('port searxng 8080'), {
+      cwd: searxngComposeDir(),
       windowsHide: true
     })
     return stdout.trim() || null
@@ -671,8 +680,8 @@ export function isLocalOnlyBinding(binding: string | null): boolean {
  */
 export async function readSearxngContainerSettings(): Promise<string | null> {
   try {
-    const { stdout } = await execAsync('docker compose exec -T searxng cat /etc/searxng/settings.yml', {
-      cwd: resourcesRoot(),
+    const { stdout } = await execAsync(composeCommand('exec -T searxng cat /etc/searxng/settings.yml'), {
+      cwd: searxngComposeDir(),
       windowsHide: true
     })
     return stdout.trim() || null
@@ -785,6 +794,58 @@ export async function installDockerDesktop(onProgress: (message: string) => void
   return exitCode === 0
 }
 
+/** Identifiants des conteneurs SearXNG d'un projet Compose donné (liste vide si Docker ne répond pas). */
+async function searxngContainers(project: string): Promise<string[]> {
+  try {
+    const { stdout } = await execAsync(
+      `docker ps -aq --filter label=com.docker.compose.project=${project} --filter label=com.docker.compose.service=searxng`,
+      { windowsHide: true }
+    )
+    return parseContainerIds(stdout)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Étape 153 (voir searxngHome.ts) : retire les conteneurs SearXNG qui ne sont pas montés depuis `dir` —
+ * l'ancien projet créé depuis le dossier du programme (il bloquait les mises à jour de Jaris), ou le projet
+ * actuel créé depuis un ancien dossier de données (après un « Déplacer »). `true` si un conteneur a été
+ * retiré. Constaté sur un fait (l'étiquette que Docker pose sur le conteneur), jamais deviné ; une étiquette
+ * illisible ne fait rien retirer.
+ */
+async function retireMisplacedSearxng(dir: string): Promise<boolean> {
+  const retired = await searxngContainers(LEGACY_SEARXNG_PROJECT)
+  const oldDirs: string[] = []
+  for (const id of await searxngContainers(SEARXNG_PROJECT)) {
+    try {
+      const { stdout } = await execAsync(`docker inspect --format "{{json .Config.Labels}}" ${id}`, { windowsHide: true })
+      const workingDir = composeWorkingDir(stdout.trim())
+      if (workingDir && !sameDir(workingDir, dir)) {
+        retired.push(id)
+        oldDirs.push(workingDir)
+      }
+    } catch {
+      // illisible : on ne touche pas à un conteneur qui fonctionne peut-être très bien
+    }
+  }
+  if (!retired.length) return false
+  try {
+    await execAsync(`docker rm -f ${retired.join(' ')}`, { windowsHide: true })
+  } catch {
+    return false
+  }
+  // Le conteneur retenait son ancien dossier (un « Déplacer » n'avait donc pas pu l'effacer) : maintenant
+  // libre, il est effacé — seulement s'il s'agit bien d'un dossier `searxng-docker` de Jaris, jamais autre
+  // chose — puis son parent s'il ne contient plus rien.
+  for (const oldDir of oldDirs) {
+    if (basename(oldDir) !== basename(dir)) continue
+    await rm(oldDir, { recursive: true, force: true }).catch(() => {})
+    await rmdir(dirname(oldDir)).catch(() => {})
+  }
+  return true
+}
+
 /**
  * Démarre Docker Desktop (si besoin) puis `docker compose up -d` pour SearXNG (recherche web) — ou, si le
  * conteneur tourne déjà mais refuse le format JSON (searxngJsonSearchWorks ci-dessus), `docker compose up -d
@@ -794,6 +855,16 @@ export async function installDockerDesktop(onProgress: (message: string) => void
  * indisponible en attendant.
  */
 export async function ensureSearxngRunning(log: LogFn): Promise<void> {
+  let dir: string
+  try {
+    dir = prepareSearxngComposeDir()
+  } catch (err) {
+    log(`Impossible de préparer le dossier de SearXNG : ${err instanceof Error ? err.message : String(err)}`)
+    return
+  }
+  if ((await isUp(config.searxng.host)) && (await retireMisplacedSearxng(dir))) {
+    log('SearXNG ne dépend plus du dossier du programme : recréation du conteneur dans le dossier de Jaris…')
+  }
   if (await isUp(config.searxng.host)) {
     // Deux raisons de recréer un conteneur DÉJÀ lancé, constatées chacune sur un fait observable : il
     // refuse le format JSON, ou il publie son port sur tout le réseau local. Les deux sont vérifiées avant
@@ -807,7 +878,7 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
           : 'SearXNG répond mais refuse le format JSON : recréation du conteneur avec la configuration actuelle…'
       )
       try {
-        await execAsync('docker compose up -d --force-recreate', { cwd: resourcesRoot(), windowsHide: true })
+        await execAsync(composeCommand('up -d --force-recreate'), { cwd: searxngComposeDir(), windowsHide: true })
         if (jsonBroken) {
           const fixed = await waitUntil(() => searxngJsonSearchWorks(), 30000)
           log(fixed ? 'SearXNG recréé, le format JSON fonctionne.' : 'SearXNG recréé, mais refuse toujours le format JSON — vérifie searxng/settings.yml.')
@@ -918,7 +989,9 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
   }
 
   try {
-    await execAsync('docker compose up -d', { cwd: resourcesRoot(), windowsHide: true })
+    // Un ancien conteneur (monté depuis le programme) redémarré tout seul avec Docker occuperait le port 8091.
+    await retireMisplacedSearxng(dir)
+    await execAsync(composeCommand('up -d'), { cwd: dir, windowsHide: true })
   } catch (err) {
     log(`Échec du démarrage de SearXNG : ${err instanceof Error ? err.message : String(err)}`)
     return

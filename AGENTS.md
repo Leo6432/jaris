@@ -4354,3 +4354,55 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `wsl --install --no-distribution` (y compris dans le message de dépannage) pour éviter une distribution
   supplémentaire persistante sur C:. Ne jamais supprimer une distribution déjà présente sans vérifier
   à qui elle appartient : elle pourrait contenir les données de l'utilisateur.
+
+- **Étape 153, Léo : la mise à jour échouait avec « Échec de désinstallation des anciens fichiers
+  d'application. Veuillez réessayer d'exécuter l'installeur.: 2 ».** Cause lue dans le CODE de l'installeur
+  d'electron-builder (node_modules/app-builder-lib/templates/nsis), pas devinée : pendant une mise à jour,
+  l'ancien désinstalleur DÉPLACE chaque fichier du dossier du programme (`un.atomicRMDir`) et abandonne
+  (`Abort` = code de sortie 2) au premier fichier qu'il ne peut pas déplacer ; le nouvel installeur réessaie
+  5 fois puis affiche ce message. Le « 2 » veut donc dire : un fichier du dossier du programme est resté occupé
+  par quelque chose qui survit à la fermeture de Jaris.
+  En passant en revue tout ce que Jaris lance, un seul candidat restait accroché à ce dossier : le conteneur
+  SearXNG (recherche web). `docker compose up` était lancé DEPUIS le dossier des ressources du programme,
+  qui montait `./searxng` dans le conteneur, et ce conteneur tourne en permanence
+  (`restart: unless-stopped` : relancé à chaque démarrage de Docker, même Jaris fermé). Découvert au passage,
+  un second défaut : les deux programmes Python (écoute, synthèse vocale) n'étaient arrêtés que dans
+  'window-all-closed', que `app.quit()` ne déclenche pas (mise à jour, croix, « Quitter ») — ils survivaient à
+  Jaris, micro ouvert. Corrigé en trois endroits :
+  1. `searxngHome.ts` : SearXNG vit dans le dossier de DONNÉES (sur le disque choisi, jamais dans le
+     programme), sous un nom de projet Compose fixe (`jaris-searxng`) ; le programme ne sert plus que de modèle
+     (docker-compose.yml et settings.yml recopiés s'ils ont changé). Au démarrage, un conteneur mal placé est
+     retiré puis recréé au bon endroit, constaté sur un fait (l'étiquette
+     `com.docker.compose.project.working_dir` que Docker pose sur le conteneur) : l'ancien projet
+     `resources`, ou le projet actuel créé depuis un ancien dossier de données après un « Déplacer » — dont
+     l'ancien dossier `searxng-docker`, que le conteneur empêchait d'effacer, est effacé à ce moment-là.
+  2. `main.ts` : les deux programmes Python sont arrêtés dans 'before-quit'.
+  3. `installer/jaris.nsh` (`nsis.include`) : l'installeur de la NOUVELLE version retire l'ancien conteneur
+     et les Python orphelins AVANT de lancer l'ancien désinstalleur (`customInit`, dans `.onInit`). C'est lui
+     qui débloque la mise à jour depuis une version déjà installée : le code de l'ancienne version ne peut
+     plus être corrigé. Commandes en clair, sans élévation, et ciblées sur ce qui est à Jaris (service
+     `searxng` du projet `resources` ; Python qui exécutent voice_server.py/tts_server.py, et seulement si
+     Jaris est déjà fermé). **Piège évité** : `customCheckAppRunning`, qui semblait le crochet naturel, fait
+     disparaître l'inclusion de getProcessInfo.nsh et la variable `$pid` dont le contrôle par défaut a
+     besoin (`!ifmacrondef customCheckAppRunning` dans allowOnlyOneInstallerInstance.nsh) — `customInit`
+     n'a aucun effet de bord de ce genre. Compilé ici avec le makensis Linux d'electron-builder en
+     `-WX` (avertissements = erreurs) ; la syntaxe PowerShell des deux commandes est vérifiée par le vrai
+     analyseur PowerShell dans la CI Windows.
+  **Honnêteté sur ce qui est prouvé** : le mécanisme du code 2 est prouvé par le code source de l'installeur ;
+  que ce soit bien le conteneur qui tenait le fichier chez Léo est la cause la mieux étayée (seul processus
+  lié au dossier du programme qui survit à Jaris), pas une mesure faite sur sa machine. Si l'erreur revenait
+  avec cette version, quitter Docker Desktop avant de relancer la mise à jour trancherait.
+  Régression : `node --test scripts/test-searxng-home.mjs` (SearXNG jamais lancé depuis le programme, ancien
+  conteneur retiré et recréé, conteneur bien placé jamais recréé, ancien dossier effacé après un « Déplacer »,
+  identifiants filtrés avant d'être réinjectés dans une commande, nettoyage de l'installeur présent et ciblé,
+  syntaxe PowerShell sous Windows) et `scripts/test-quit-blur-guard.mjs` (arrêt des Python dans
+  'before-quit'). Chaque assertion clé a été vérifiée en réintroduisant son défaut.
+  **Trouvé en intégrant les commits poussés entre-temps par un autre outil (Codex, v0.16.4 à v0.16.9)** : 21
+  tests navigateur (Chat, mode Code, image jointe) échouaient depuis le passage du sélecteur de modèle aux
+  « rôles » — `info?.roles.map(...)` plantait quand la réponse n'avait pas de liste `roles` (faux ponts des
+  tests plus anciens), et le composant ne se montait plus. La CI était pourtant verte : **ces tests sont
+  IGNORÉS sur le runner Windows, où Playwright n'est pas installé** (skip explicite, étape 91). Rendu tolérant
+  (`(info?.roles ?? []).map`), et le test du code 448 (`test-first-run-setup.mjs`) utilise désormais les
+  chemins Windows quel que soit le système. **Leçon générale : une CI verte ne dit rien des tests qu'elle
+  ignore — avant de pousser, lancer `npm test` là où Playwright existe (cet environnement) et lire le nombre
+  de tests ignorés, pas seulement le mot « pass ».**

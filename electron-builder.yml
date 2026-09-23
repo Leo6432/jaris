@@ -76,3 +76,6 @@ nsis:
   runAfterFinish: true
   shortcutName: Jaris
   artifactName: Jaris-Setup-${version}.exe
+  # Étape 148 : nettoyage avant la désinstallation de l'ancienne version (conteneur SearXNG et programmes Python
+  # de la voix qui gardaient le dossier du programme occupé — erreur « Échec de désinstallation… : 2 »).
+  include: installer/jaris.nsh

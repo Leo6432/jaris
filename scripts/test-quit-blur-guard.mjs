@@ -83,3 +83,13 @@ test('OptionsMenu.tsx prévient bien main.ts à chaque ouverture/fermeture de la
       'que la page Options est ouverte, et `optionsOpen` reste figé à `false` pour toute la session'
   )
 })
+
+test("quitter Jaris arrête aussi les deux programmes Python de la voix (étape 153)", () => {
+  // app.quit() (mise à jour, croix, « Quitter ») ne déclenche pas 'window-all-closed' : sans cet arrêt dans
+  // 'before-quit', l'écoute et la synthèse vocale survivaient à Jaris, micro ouvert.
+  const source = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+  const handler = source.match(/app\.on\('before-quit', \(\) => \{([\s\S]*?)\n\}\)/)
+  assert.ok(handler, "gestionnaire 'before-quit' introuvable")
+  assert.match(handler[1], /pipeline\?\.stop\(\)/)
+  assert.match(handler[1], /ttsClient\.stop\(\)/)
+})

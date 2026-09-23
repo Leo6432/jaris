@@ -38,7 +38,7 @@ function setup({ binding = '0.0.0.0:8091', jsonStatus = 200 } = {}) {
   let currentJsonStatus = jsonStatus
   const run = (command) => {
     commands.push(command)
-    if (command.includes('docker compose port')) return { stdout: `${currentBinding}\n`, stderr: '' }
+    if (command.includes(' port searxng 8080')) return { stdout: `${currentBinding}\n`, stderr: '' }
     // Une recréation réussie repart du fichier corrigé : port refermé ET settings.yml relu (c'est ce que
     // la v0.3.7 avait établi). Sans cette remise en état, le test resterait 30 s dans waitUntil.
     if (command.includes('--force-recreate')) {
@@ -66,7 +66,18 @@ function setup({ binding = '0.0.0.0:8091', jsonStatus = 200 } = {}) {
     './download': { downloadToFile: async () => 0 },
     './storageRoot': { downloadsDir: () => '/tmp', getStorageRoot: () => null },
     './dockerLocation': { dockerInstallFlags: () => [] },
-    '../paths': { resourcesRoot: () => '/fake/resources' },
+    // Étape 153 : SearXNG vit dans le dossier de données (searxngHome.ts, testé à part dans
+    // test-searxng-home.mjs) ; ici, aucun conteneur mal placé à retirer.
+    './searxngHome': {
+      LEGACY_SEARXNG_PROJECT: 'resources',
+      SEARXNG_PROJECT: 'jaris-searxng',
+      composeCommand: (args) => `docker compose -p jaris-searxng ${args}`,
+      composeWorkingDir: () => null,
+      parseContainerIds: () => [],
+      prepareSearxngComposeDir: () => '/fake/data/searxng-docker',
+      sameDir: (a, b) => a === b,
+      searxngComposeDir: () => '/fake/data/searxng-docker'
+    },
     '../../shared/formatBytes': { formatBytes: (n) => `${n} o` }
   }
   const exports = {}

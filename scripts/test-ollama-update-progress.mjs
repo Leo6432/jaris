@@ -78,12 +78,12 @@ function loadDependencyServices({ onDownload }) {
       if (id === 'fs/promises') return { rm: async () => {} }
       if (id.endsWith('/storageRoot')) return { downloadsDir: () => '/tmp', getStorageRoot: () => null }
       if (id.endsWith('/dockerLocation')) return { dockerInstallFlags: () => [] }
-      if (id === 'path') return { join: (...parts) => parts.join('/') }
+      if (id === 'path') return { join: (...parts) => parts.join('/'), basename: (p) => p.split('/').pop(), dirname: (p) => p.split('/').slice(0, -1).join('/') }
       if (id === 'util') return { promisify: (fn) => (...args) => new Promise((resolve) => fn(...args, () => resolve({ stdout: '', stderr: '' }))) }
       if (id.endsWith('/config')) return { config: { ollama: { host: 'http://127.0.0.1:11434' } } }
       if (id.endsWith('/appLauncher')) return { didAppLaunch: () => true, openApp: async () => '' }
       if (id.endsWith('/download')) return { downloadToFile: onDownload }
-      if (id.endsWith('/paths')) return { resourcesRoot: () => '/resources' }
+      if (id.endsWith('/searxngHome')) return {} // SearXNG (étape 153) : sans rapport avec la mise à jour d'Ollama
       if (id.endsWith('/formatBytes')) return { formatBytes: (n) => `${n} o` }
       throw new Error(`module non simulé dans le test : ${id}`)
     })

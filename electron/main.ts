@@ -1108,6 +1108,11 @@ app.whenReady().then(async () => {
 // que Jaris a lui-même démarré, plutôt qu'un process qui continue de tourner indéfiniment en arrière-plan.
 app.on('before-quit', () => {
   stopOllamaIfStartedByJaris()
+  // Étape 153 : app.quit() (mise à jour, croix, « Quitter ») ne déclenche PAS 'window-all-closed' — seul
+  // endroit où les deux programmes Python (écoute, voix) étaient arrêtés. Ils survivaient donc à Jaris, micro
+  // ouvert, jusqu'au redémarrage de Windows.
+  pipeline?.stop()
+  ttsClient.stop()
 })
 
 // Déclenché sur la toute première instance (celle qui a le verrou, voir requestSingleInstanceLock tout en
