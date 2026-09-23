@@ -248,3 +248,10 @@ test('les deux commandes PowerShell de l’installeur sont syntaxiquement valide
     execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', check], { env: { ...process.env, JARIS_PS: command }, stdio: 'pipe' })
   }
 })
+
+test('le dossier d’installation est aussi écrit là où Windows le lit pour ranger Jaris par disque (étape 154)', () => {
+  // Sans InstallLocation dans la clé « Uninstall », Paramètres → Applications range Jaris sur C même installé sur D.
+  const block = nsh.replace(/\r\n/g, '\n').match(/!macro customInstall\n([\s\S]*?)!macroend/)
+  assert.ok(block, 'macro customInstall absente')
+  assert.match(block[1], /WriteRegStr SHELL_CONTEXT "\$\{UNINSTALL_REGISTRY_KEY\}" InstallLocation "\$INSTDIR"/)
+})

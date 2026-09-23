@@ -21,3 +21,13 @@
   nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -Command "if (-not (Get-Process -Name Jaris -ErrorAction SilentlyContinue)) { Get-CimInstance Win32_Process | Where-Object { $$_.Name -match '^pythonw?\.exe$$' -and $$_.CommandLine -match '(voice|tts)_server\.py' } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue } }"`
   Pop $0
 !macroend
+
+; Étape 154, Léo (capture de Paramètres → Applications, filtre « C: ») : Jaris y apparaissait sur C alors
+; qu'il est installé sur D. electron-builder n'écrit le dossier d'installation (InstallLocation) que dans sa
+; propre clé de registre, jamais dans la clé « Uninstall » que Windows lit pour ranger les applications par
+; disque : sans elle, Windows les range d'office sur le disque système. Seul l'affichage était faux (les
+; 355 Mo indiqués sont la taille du programme, qui est bien sur D). Écrite après registryAddInstallInfo ;
+; la clé entière est supprimée à la désinstallation, rien à nettoyer.
+!macro customInstall
+  WriteRegStr SHELL_CONTEXT "${UNINSTALL_REGISTRY_KEY}" InstallLocation "$INSTDIR"
+!macroend

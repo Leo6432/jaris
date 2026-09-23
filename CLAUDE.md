@@ -4445,3 +4445,18 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   chemins Windows quel que soit le système. **Leçon générale : une CI verte ne dit rien des tests qu'elle
   ignore — avant de pousser, lancer `npm test` là où Playwright existe (cet environnement) et lire le nombre
   de tests ignorés, pas seulement le mot « pass ».**
+
+- **Étape 154, Léo (capture de Paramètres → Applications installées, filtre « C: ») : « tu peux voir Jaris
+  sur le C, mais tout est dans le D ».** Sa liste Options → Modèles montrait pourtant chaque morceau sur D, le
+  programme compris. Cause lue dans les modèles NSIS d'electron-builder, pas devinée : `registryAddInstallInfo`
+  n'écrit `InstallLocation` que dans la clé propre à l'application (`Software\<appId>`), jamais dans la clé
+  `…\CurrentVersion\Uninstall\…` que Windows lit pour lister les applications ; sans elle, Paramètres les range
+  d'office sur le disque système. Seul l'AFFICHAGE était faux : les 355 Mo indiqués sont la taille estimée du
+  programme (`EstimatedSize`), physiquement sur D. Corrigé par une macro `customInstall` (installer/jaris.nsh)
+  qui écrit aussi `InstallLocation` dans la clé Uninstall, après `registryAddInstallInfo` ; la clé entière
+  est déjà supprimée à la désinstallation. **Leçon générale : avant de chercher des fichiers égarés sur C,
+  vérifier d'où vient le chiffre affiché — une liste de Windows peut ranger une application sur un disque
+  d'après une valeur de registre absente, sans rien mesurer sur le disque.** Non vérifiable ici : le rendu
+  exact dans Paramètres (à confirmer par Léo après la mise à jour ; l'entrée se met à jour à l'installation).
+  Régression : `scripts/test-searxng-home.mjs` (macro présente et ciblée) ; compilé avec le makensis
+  d'electron-builder en `-WX`.
