@@ -4460,3 +4460,25 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   exact dans Paramètres (à confirmer par Léo après la mise à jour ; l'entrée se met à jour à l'installation).
   Régression : `scripts/test-searxng-home.mjs` (macro présente et ciblée) ; compilé avec le makensis
   d'electron-builder en `-WX`.
+
+- **Étape 155, Léo : « si je regarde le dernier fichier téléchargé : C:\Users\happy\.cache\supertonic3\onnx\
+  vector_estimator.onnx — Supertonic, c'est pas Jaris ? ».** Si : c'est la voix de Jaris, et elle échappait
+  au « tout sur D ». Vérifié dans le CODE de la bibliothèque réellement figée (`supertonic==1.3.1`, roue
+  téléchargée et lue, pas supposé) : `get_model_cache_dir` range le modèle dans `~/.cache/<cache_dir>` du
+  modèle par défaut (`DEFAULT_MODEL = "supertonic-3"` -> `supertonic3`), ou dans `SUPERTONIC_CACHE_DIR` s'il
+  est défini — jamais dans le cache HuggingFace que Jaris déplaçait déjà. La liste des dossiers déplacés
+  (`bricks()`, modelsLocation.ts) avait été établie d'après le seul cache HuggingFace, qu'on croyait commun à
+  la transcription ET à la synthèse vocale.
+  Corrigé en ajoutant `%USERPROFILE%\.cache\supertonic3` comme dossier déplacé (jonction), plutôt qu'en
+  définissant `SUPERTONIC_CACHE_DIR` : la variable ne déplacerait pas le modèle DÉJÀ téléchargé sur C
+  (il serait retéléchargé à côté, et l'ancien resterait), alors que la réconciliation du démarrage
+  (`reconcileStorage`, avant le lancement de la voix) déplace l'existant tout ou rien, comme les autres ; et
+  la variable s'appliquerait à tous les modèles Supertonic à la fois, avec les mêmes noms de fichiers d'un
+  modèle à l'autre — un changement de modèle pourrait alors relire les fichiers de l'ancien. Le nom du
+  dossier dépend de la version de Supertonic : un test échoue si requirements.txt change de version, pour
+  forcer à revérifier ce nom.
+  **Leçon générale : pour savoir où un logiciel écrit, lire SON code (sa fonction de chemin de cache), jamais
+  supposer qu'il suit la convention d'un voisin** — ici « cache HuggingFace » pour tout ce qui vient de
+  HuggingFace, alors que Supertonic télécharge depuis HuggingFace mais range ailleurs.
+  Régression : `node --test scripts/test-models-location.mjs` (le modèle de la voix part avec le reste et
+  reste lisible au même chemin ; garde-fou sur la version).

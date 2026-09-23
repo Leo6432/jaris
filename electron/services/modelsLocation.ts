@@ -11,6 +11,7 @@ import { dirname, join } from 'path'
  *   et mises à jour téléchargées, 1,5 Go à chaque fois) — étape 143, « tout, jamais une partie »
  * - l'environnement Python géré par Jaris (`%LOCALAPPDATA%\Jaris\python-runtime`, torch en tête)
  * - le cache HuggingFace (`%USERPROFILE%\.cache\huggingface`) : modèles de transcription et de synthèse vocale
+ * - le modèle de la voix, Supertonic (`%USERPROFILE%\.cache\supertonic3`), rangé hors du cache HuggingFace
  *
  * Une JONCTION NTFS remplace chaque emplacement habituel et pointe vers le dossier de Jaris : Ollama, Python
  * et huggingface_hub continuent d'écrire au même chemin qu'avant sans rien savoir du changement, les données
@@ -39,7 +40,12 @@ export function bricks(): Brick[] {
     { label: 'le programme Ollama', link: join(local, 'Programs', 'Ollama'), subdir: 'ollama-app' },
     { label: "les données d'Ollama (journaux, mises à jour)", link: join(local, 'Ollama'), subdir: 'ollama-data' },
     { label: "l'environnement Python (voix)", link: join(local, 'Jaris', 'python-runtime'), subdir: 'python-runtime' },
-    { label: 'le cache de reconnaissance et de synthèse vocale', link: join(profile, '.cache', 'huggingface'), subdir: 'huggingface-cache' }
+    { label: 'le cache de reconnaissance et de synthèse vocale', link: join(profile, '.cache', 'huggingface'), subdir: 'huggingface-cache' },
+    // Étape 155 (Léo : « C:\Users\happy\.cache\supertonic3\onnx\vector_estimator.onnx, Supertonic c'est pas
+    // Jaris ? ») : la voix de Jaris range son modèle HORS du cache HuggingFace, dans ~/.cache/<cache_dir> du
+    // modèle par défaut (supertonic/config.py, supertonic==1.3.1 : DEFAULT_MODEL = "supertonic-3" -> "supertonic3").
+    // À revoir si requirements.txt change de version de Supertonic (garde-fou : test-models-location.mjs).
+    { label: 'la voix de Jaris (Supertonic)', link: join(profile, '.cache', 'supertonic3'), subdir: 'supertonic-cache' }
   ]
 }
 

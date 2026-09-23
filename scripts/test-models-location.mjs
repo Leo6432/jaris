@@ -96,7 +96,8 @@ function fillEverything({ userProfile, localAppData }) {
     [join(localAppData, 'Programs', 'Ollama', 'ollama.exe')]: 'programme ollama',
     [join(localAppData, 'Ollama', 'server.log')]: 'journal',
     [join(localAppData, 'Jaris', 'python-runtime', 'python.exe')]: 'python',
-    [join(userProfile, '.cache', 'huggingface', 'hub', 'model.bin')]: 'voix'
+    [join(userProfile, '.cache', 'huggingface', 'hub', 'model.bin')]: 'voix',
+    [join(userProfile, '.cache', 'supertonic3', 'onnx', 'vector_estimator.onnx')]: 'voix de Jaris'
   }
   for (const [path, content] of Object.entries(files)) {
     mkdirSync(join(path, '..'), { recursive: true })
@@ -105,7 +106,7 @@ function fillEverything({ userProfile, localAppData }) {
   return files
 }
 
-const SUBDIRS = ['ollama-models', 'ollama-app', 'ollama-data', 'python-runtime', 'huggingface-cache']
+const SUBDIRS = ['ollama-models', 'ollama-app', 'ollama-data', 'python-runtime', 'huggingface-cache', 'supertonic-cache']
 
 test('tout part : modèles ET programme Ollama, données d’Ollama, Python et voix — accessibles au même chemin qu’avant', async () => {
   const home = setupFakeHome()
@@ -230,4 +231,14 @@ test('pip n’écrit pas son cache sur C : chaque installation Python passe --no
   const installs = [...source.matchAll(/run\(python, \[([^\]]*)/g)].map((m) => m[1]).filter((args) => args.includes('pip') || args.includes('PIP_INSTALL'))
   assert.ok(installs.length >= 2)
   for (const args of installs) assert.ok(args.startsWith('...PIP_INSTALL'), `installation pip sans --no-cache-dir : ${args}`)
+})
+
+test('la voix de Jaris (Supertonic) est déplacée elle aussi, et le dossier suit la version installée (étape 155)', () => {
+  // Supertonic range son modèle dans ~/.cache/<cache_dir du modèle par défaut>, HORS du cache HuggingFace :
+  // « supertonic3 » pour supertonic==1.3.1 (supertonic/config.py, DEFAULT_MODEL = "supertonic-3"). Une autre
+  // version pourrait changer ce dossier : ce test oblige alors à revérifier avant de mettre à jour.
+  const requirements = readFileSync(new URL('../python/requirements.txt', import.meta.url), 'utf8')
+  assert.match(requirements, /^supertonic==1\.3\.1\r?$/m, 'Supertonic a changé de version : revérifier son dossier de cache (modelsLocation.ts)')
+  const source = readFileSync(new URL('../electron/services/modelsLocation.ts', import.meta.url), 'utf8')
+  assert.match(source, /join\(profile, '\.cache', 'supertonic3'\)/)
 })
