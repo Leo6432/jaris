@@ -54,12 +54,14 @@ export type ModelChoiceMode = 'chat' | 'code' | 'voice'
 
 /** Ce qu'affiche le sélecteur de modèle d'un mode (getModelChoice, main.ts). */
 export interface ModelChoiceInfo {
-  /** Modèle choisi à la main, `null` = Auto. */
+  /** Rôle choisi (ex. role:flash), ancien modèle explicite, ou `null` = Auto. */
   selected: string | null
   /** Modèles réellement installés dans Ollama et utilisables pour discuter/coder, `null` si Ollama ne répond pas. */
   installed: string[] | null
   /** Ce qu'Auto utilise : un seul modèle en mode Code, `null` en Chat/Vocal (le modèle change selon la question). */
   autoModel: string | null
+  /** Les cinq rôles du profil de cette machine et leur modèle actuel. */
+  roles: { value: string; label: string; model: string; installed: boolean }[]
 }
 
 export interface Profile {
@@ -99,8 +101,8 @@ export interface Profile {
   blockedModels?: Record<string, string>
   /**
    * Étape 141, Léo : « ajoute dans chat code vocal, la possibilité de choisir le model ou faire auto ».
-   * Modèle choisi à la main pour chaque mode ; absent = Auto (le choix automatique d'avant, inchangé).
-   * Ignoré — donc retour à Auto — si le modèle n'est plus installé (voir resolveChosenModel, modelChoice.ts).
+   * Rôle choisi à la main pour chaque mode (`role:flash` etc.) ; absent = Auto. Les anciens noms de modèles
+   * explicites restent lisibles pour préserver les préférences enregistrées avant le sélecteur par rôle.
    */
   modelChoices?: Partial<Record<ModelChoiceMode, string>>
   /** Design sonore (étape 31) : absent/true par défaut, false pour couper les bips d'interface (Options → Voix). */

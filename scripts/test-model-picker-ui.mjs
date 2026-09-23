@@ -45,7 +45,14 @@ window.jaris = {
   getModelChoice: (mode) => Promise.resolve({
     selected: window.__choices[mode] ?? null,
     installed: INSTALLED,
-    autoModel: mode === 'code' ? 'qwen2.5-coder:7b' : null
+    autoModel: mode === 'code' ? 'qwen2.5-coder:7b' : null,
+    roles: [
+      { value: 'role:flash', label: 'Rapide', model: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF:latest', installed: true },
+      { value: 'role:medium', label: 'Médium', model: 'gemma4:12b', installed: true },
+      { value: 'role:large', label: 'Puissant', model: 'qwen3.5:4b', installed: true },
+      { value: 'role:vision', label: 'Vision', model: 'gemma4:12b', installed: true },
+      { value: 'role:code', label: 'Code', model: 'qwen2.5-coder:7b', installed: false }
+    ]
   }),
   setModelChoice: (mode, model) => {
     window.__calls.push([mode, model])
@@ -113,32 +120,33 @@ async function withPage(run) {
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
 
-test('le sélecteur est dans la barre du champ du Chat et propose Auto + les modèles installés, sous leur nom lisible', options, async () => {
+test('le sélecteur est dans la barre du Chat et propose Auto + les cinq rôles', options, async () => {
   await withPage(async (page) => {
     assert.equal(await page.locator('#root .composer__actions .model-picker__select').count(), 1)
     const labels = await page.locator('#root .model-picker__select option').allTextContents()
-    assert.deepEqual(labels, ['Auto (selon la question)', 'gemma4:12b', 'G9v3-3B', 'qwen3.5:4b'])
+    assert.deepEqual(labels, ['Auto', 'Rapide', 'Médium', 'Puissant', 'Vision', 'Code'])
     assert.equal(await page.inputValue('#root .model-picker__select'), '', 'Auto par défaut')
   })
 })
 
-test('choisir un modèle envoie son VRAI identifiant, et revenir à Auto envoie null', options, async () => {
+test('choisir un rôle enregistre ce rôle, et revenir à Auto envoie null', options, async () => {
   await withPage(async (page) => {
-    await page.selectOption('#root .model-picker__select', { label: 'G9v3-3B' })
+    await page.selectOption('#root .model-picker__select', { label: 'Rapide' })
     await page.waitForFunction(() => window.__calls.length === 1)
-    await page.selectOption('#root .model-picker__select', { label: 'Auto (selon la question)' })
+    await page.selectOption('#root .model-picker__select', { label: 'Auto' })
     await page.waitForFunction(() => window.__calls.length === 2)
     assert.deepEqual(await page.evaluate(() => window.__calls), [
-      ['chat', 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF:latest'],
+      ['chat', 'role:flash'],
       ['chat', null]
     ])
   })
 })
 
-test("en mode Code, Auto nomme le modèle qu'il utilise", options, async () => {
+test('en mode Code, le bouton Auto reste court et le rôle Code est présent', options, async () => {
   await withPage(async (page) => {
     await page.waitForSelector('#code-picker .model-picker__select option:nth-child(2)', { state: 'attached' })
-    assert.equal(await page.textContent('#code-picker .model-picker__select option:first-child'), 'Auto (qwen2.5-coder:7b)')
+    assert.equal(await page.textContent('#code-picker .model-picker__select option:first-child'), 'Auto')
+    assert.equal(await page.textContent('#code-picker .model-picker__select option:last-child'), 'Code')
   })
 })
 

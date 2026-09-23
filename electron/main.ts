@@ -886,8 +886,8 @@ app.whenReady().then(async () => {
     }
     await deleteModel(model)
   })
-  // Étape 141 : choix du modèle par mode (Chat, Code, Vocal). Le nom vient du renderer : applyModelChoice le
-  // revérifie contre la liste RÉELLE d'Ollama avant de l'enregistrer.
+  // Choix d'un rôle par mode (Chat, Code, Vocal). applyModelChoice vérifie que son modèle actuel est
+  // réellement installé dans Ollama avant d'enregistrer ce rôle.
   ipcMain.handle(IPC_CHANNELS.getModelChoice, async (_event, mode: ModelChoiceMode): Promise<ModelChoiceInfo> => {
     if (!MODEL_CHOICE_MODES.includes(mode)) throw new Error(`Mode inconnu : ${String(mode)}`)
     const installed = await listInstalledModels().catch(() => null)

@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ModelChoiceInfo, ModelChoiceMode } from '../../shared/ipc'
-import { formatModelName } from '../lib/formatModelName'
 
 /**
  * Étape 141, Léo : « ajoute dans chat code vocal, la possibilité de choisir le model ou faire auto, comme se
  * qui se passe maintenant ». Un seul composant pour les trois modes, comme le sélecteur de modèle de
- * Claude/ChatGPT posé à côté du champ de saisie : Auto (le choix automatique d'avant) ou un modèle installé.
+ * Claude/ChatGPT posé à côté du champ de saisie : Auto ou un des cinq rôles de la configuration personnelle.
  *
- * La liste est relue à chaque ouverture (focus) plutôt qu'une seule fois au montage : un modèle installé ou
- * supprimé entre-temps (retest, Options → Modèles) apparaît ou disparaît sans relancer Jaris.
+ * La liste est relue à chaque ouverture (focus) : un modèle changé par le retest reste accessible sous le
+ * même rôle sans que l'utilisateur voie son nom technique dans le bouton.
  */
 interface ModelPickerProps {
   mode: ModelChoiceMode
@@ -16,11 +15,6 @@ interface ModelPickerProps {
 }
 
 const AUTO = ''
-
-function autoLabel(info: ModelChoiceInfo | null): string {
-  if (info?.autoModel) return `Auto (${formatModelName(info.autoModel)})`
-  return 'Auto (selon la question)'
-}
 
 export default function ModelPicker({ mode, disabled = false }: ModelPickerProps): JSX.Element {
   const [info, setInfo] = useState<ModelChoiceInfo | null>(null)
@@ -51,8 +45,7 @@ export default function ModelPicker({ mode, disabled = false }: ModelPickerProps
   }
 
   const selected = info?.selected ?? AUTO
-  // Ollama injoignable : on garde le choix enregistré visible, mais sans liste à proposer.
-  const models = info?.installed ?? (info?.selected ? [info.selected] : [])
+  const legacyChoice = selected && !selected.startsWith('role:')
 
   return (
     <label
@@ -68,12 +61,13 @@ export default function ModelPicker({ mode, disabled = false }: ModelPickerProps
         onChange={(e) => void change(e.target.value)}
         aria-label="Modèle utilisé"
       >
-        <option value={AUTO}>{autoLabel(info)}</option>
-        {models.map((m) => (
-          <option key={m} value={m}>
-            {formatModelName(m)}
+        <option value={AUTO}>Auto</option>
+        {info?.roles.map((role) => (
+          <option key={role.value} value={role.value} disabled={!role.installed} title={role.model}>
+            {role.label}
           </option>
         ))}
+        {legacyChoice && <option value={selected}>Personnalisé</option>}
       </select>
     </label>
   )
