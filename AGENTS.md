@@ -4134,3 +4134,52 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   (arguments réellement passés au lancement), vérifiés en remettant l'ancienne config.
   **Non vérifiable ici (pas de Windows)** : le vrai déroulé de l'assistant et d'une mise à jour silencieuse —
   à confirmer par Léo.
+
+- **Étape 143, Léo : "si il choisit dès l'installation le D tout est dans le D, ou si il veut changer dans
+  les options ça doit tout déplacer, jamais une partie".** Inventaire fait AVANT de coder de tout ce que Jaris
+  écrit sur C (grep de `LOCALAPPDATA`/`APPDATA`/`USERPROFILE`/`tmpdir()`/`getPath(`) : ses données, le cache
+  interne de Chromium, les modèles, le programme ET les données d'Ollama (journaux + mises à jour de 1,5 Go,
+  docs.ollama.com/windows), Python, le cache vocal, Docker, et les installeurs téléchargés dans %TEMP%.
+  **Une racine unique** (`storageRoot.ts`) : le dossier choisi dans « Déplacer », ou — si le PROGRAMME est
+  installé sur un autre disque que celui de Windows — `Jaris-data` à côté du dossier du programme (jamais
+  dedans : chaque mise à jour efface le dossier du programme). Seul un fichier-repère reste dans %APPDATA%\Jaris.
+  Le module s'exécute à son chargement, importé EN PREMIER dans main.ts : `app.setPath('userData')` (cache de
+  Chromium) n'est pris en compte qu'avant `ready` et avant le verrou d'instance unique, et les stores calculent
+  leur chemin à leur chargement — un test vérifie cet ordre d'import.
+  **Tout ou rien** (`relocation.ts` + `modelsLocation.ts`), à la place de l'ancien "un échec isolé n'empêche
+  pas les autres" : (1) vérifications sans rien toucher (place libre, Docker, installeur du programme
+  téléchargé), (2) copie de tout, (3) bascule de tout — chaque dossier d'origine renommé en `.jaris-old` puis
+  remplacé par une jonction, défait dans l'ordre inverse au moindre échec —, (4) effacement des anciens
+  emplacements seulement à la fin. **Au démarrage**, ce qui n'est pas encore dans la racine y est rangé
+  (`reconcileStorage`), AVANT de lancer Ollama et la voix : sur une machine neuve les jonctions existent
+  avant qu'Ollama/Python ne s'installent, donc ils s'installent directement sur D ; un Ollama installé plus
+  tard sur C est rapatrié (même leçon qu'à l'étape 103 : constater l'état réel au démarrage).
+  **Piège trouvé en lisant le code d'installation de Python** : il faisait `rm(dossier)` puis `mkdir` —
+  effacer une jonction puis recréer le dossier l'aurait remis sur C sans prévenir. Il vide maintenant le
+  CONTENU. Même précaution pour retirer une jonction : `unlink`, jamais `rm -r` (qui viderait sa cible).
+  **Docker** ne se redirige pas par jonction (programme machine + disque WSL enregistré) : installé avec les
+  indicateurs officiels `--installation-dir` et `--wsl-default-data-root` (docs.docker.com, vérifié) ; déjà
+  installé ailleurs, il est désinstallé (commande officielle, une autorisation Windows) puis réinstallé dans
+  la racine au prochain besoin. Désinstaller EFFACE son contenu : refus du déplacement ENTIER, avant d'avoir
+  touché à quoi que ce soit, si Docker contient autre chose que la recherche web de Jaris.
+  **Le programme Jaris** ne peut pas se déplacer pendant qu'il tourne : son installeur (même version,
+  téléchargé AVANT toute modification) le réinstalle après fermeture avec `/S --updated --force-run /D=…` —
+  `/D=` l'emporte sur le dossier enregistré (gabarit `multiUser.nsh`), doit être le DERNIER argument sans
+  guillemets (règle NSIS), d'où `windowsVerbatimArguments`. L'ancien dossier est effacé par l'installeur.
+  **Garde-fou qui a mordu pendant l'écriture** : `test-ollama-update-progress.mjs` interdit tout
+  `downloadToFile` sans avancement — mon téléchargement de l'installeur n'en avait pas.
+  **Piège de sécurité évité** : une première version passait un script PowerShell encodé (`-EncodedCommand`)
+  à une élévation administrateur pour effacer aussi les restes de Docker dans ProgramData — bloquée, à raison :
+  un script opaque exécuté en administrateur est exactement ce qu'on ne veut jamais lire dans ce dépôt. Seul le
+  désinstalleur officiel est élevé (chemin passé par variable d'environnement) ; les restes machine de Docker
+  (quelques Mo dans ProgramData) sont laissés et dits tels quels.
+  **Restent forcément sur C** : le fichier-repère, les raccourcis et entrées de registre de Windows, WSL
+  lui-même (composant de Windows), les réglages machine de Docker, et un Docker installé sur C avant le choix
+  de D tant que « Déplacer » n'est pas utilisé.
+  Régression : `test-relocation.mjs` (tout ou rien de bout en bout sur un vrai dossier : Docker refusé,
+  désinstallation refusée, dossier interdit, hors Windows), `test-models-location.mjs` (les 5 dossiers, bascule
+  défaite en entier sur le 4e échec, copie ratée sans effet, second déplacement, machine neuve),
+  `test-data-location.mjs` (démarrage, ancien repère, disque débranché jamais recréé vide, nettoyage),
+  `test-docker-location.mjs`. Chaque garde-fou vérifié en le retirant temporairement.
+  **Non vérifiable ici (pas de Windows)** : les vraies jonctions NTFS avec Ollama/Inno Setup, la
+  désinstallation de Docker, la réinstallation du programme par `/D=` — à confirmer par Léo.

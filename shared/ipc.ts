@@ -181,10 +181,13 @@ export interface ConversationEntry {
  * simple valeur de profil qui pourrait dériver de la réalité si l'utilisateur ou un autre outil touche à
  * ces dossiers en dehors de Jaris.
  */
+/**
+ * Étape 143 : où vit RÉELLEMENT chaque partie de Jaris (lu sur le disque), et le dossier choisi (`root`,
+ * `null` = emplacements par défaut de Windows).
+ */
 export interface ModelsLocationStatus {
-  ollamaModelsDir: string
-  pythonRuntimeDir: string
-  hfCacheDir: string
+  root: string | null
+  items: { label: string; path: string }[]
 }
 
 /** Un micro détecté par PortAudio (sounddevice --list-devices), pour le sélecteur d'Options → Voix. */

@@ -1,77 +1,85 @@
 import { existsSync } from 'fs'
-import { cp, lstat, mkdir, readlink, rm } from 'fs/promises'
+import { cp, lstat, mkdir, readdir, readlink, rename, rm, stat, statfs, unlink } from 'fs/promises'
 import { spawn } from 'child_process'
 import { dirname, join } from 'path'
 
 /**
- * Où vivent les téléchargements lourds de Jaris (Options → Modèles → "Choisir un dossier"), et comment les
- * déplacer vers un autre disque. Trois briques, chacune avec son propre emplacement Windows habituel, que
- * ni Ollama ni Python/huggingface_hub ne permettent de choisir depuis Jaris directement :
- * - les modèles Ollama (`%USERPROFILE%\.ollama\models`, plusieurs Go par palier)
- * - l'environnement Python géré par Jaris (`%LOCALAPPDATA%\Jaris\python-runtime`, torch en tête, voir
- *   pythonRuntime.ts)
- * - le cache HuggingFace (`%USERPROFILE%\.cache\huggingface`), où atterrissent le modèle de transcription
- *   ET celui de synthèse vocale (tous deux téléchargés via `huggingface_hub`)
+ * Les dossiers LOURDS que d'autres logiciels écrivent à leur emplacement Windows habituel (sur C), et comment
+ * les faire vivre dans le dossier de Jaris (storageRoot.ts) :
+ * - les modèles Ollama (`%USERPROFILE%\.ollama\models`, plusieurs Go par modèle)
+ * - le programme Ollama (`%LOCALAPPDATA%\Programs\Ollama`) et ses données (`%LOCALAPPDATA%\Ollama` : journaux
+ *   et mises à jour téléchargées, 1,5 Go à chaque fois) — étape 143, « tout, jamais une partie »
+ * - l'environnement Python géré par Jaris (`%LOCALAPPDATA%\Jaris\python-runtime`, torch en tête)
+ * - le cache HuggingFace (`%USERPROFILE%\.cache\huggingface`) : modèles de transcription et de synthèse vocale
  *
- * Plutôt que d'apprendre à chaque outil un nouvel emplacement (variable d'environnement différente pour
- * chacun, config à modifier séparément, risque de casser un usage en dehors de Jaris), une JONCTION NTFS
- * redirige chaque emplacement habituel vers le dossier choisi par l'utilisateur : totalement transparent
- * pour Ollama/Python/huggingface_hub, qui continuent de lire/écrire au même chemin qu'avant sans rien
- * savoir du changement — les données, elles, vivent physiquement sur le disque choisi. Une jonction ne
- * demande jamais de droits administrateur (contrairement à un lien symbolique Windows, qui en a besoin
- * sauf le mode développeur activé) et fonctionne aussi bien entre deux disques différents que sur le même
- * disque.
+ * Une JONCTION NTFS remplace chaque emplacement habituel et pointe vers le dossier de Jaris : Ollama, Python
+ * et huggingface_hub continuent d'écrire au même chemin qu'avant sans rien savoir du changement, les données
+ * vivent physiquement ailleurs. Une jonction ne demande jamais de droits administrateur.
+ *
+ * Étape 143, Léo : « ça doit tout déplacer, jamais une partie ». Le déplacement est donc TRANSACTIONNEL, en
+ * trois temps, au lieu de traiter chaque dossier indépendamment comme avant (un échec isolé laissait un
+ * déplacement partiel) :
+ *   1. copier : tous les dossiers sont copiés à destination — rien n'est encore touché à l'origine ;
+ *   2. basculer : chaque dossier d'origine est renommé en `.jaris-old` et la jonction posée à sa place — un
+ *      échec remet tout comme avant, dossier par dossier, dans l'ordre inverse ;
+ *   3. finaliser : les `.jaris-old` et les anciens dossiers ne sont effacés que quand TOUT a basculé.
  */
-export interface ModelsLocationStatus {
-  ollamaModelsDir: string
-  pythonRuntimeDir: string
-  hfCacheDir: string
+
+export interface Brick {
+  label: string
+  link: string
+  subdir: string
 }
 
-function ollamaModelsLink(): string {
-  return join(process.env.USERPROFILE ?? '', '.ollama', 'models')
-}
-
-function hfCacheLink(): string {
-  return join(process.env.USERPROFILE ?? '', '.cache', 'huggingface')
-}
-
-function pythonRuntimeLink(): string {
-  return join(process.env.LOCALAPPDATA ?? process.env.APPDATA ?? '', 'Jaris', 'python-runtime')
+export function bricks(): Brick[] {
+  const profile = process.env.USERPROFILE ?? ''
+  const local = process.env.LOCALAPPDATA ?? process.env.APPDATA ?? ''
+  return [
+    { label: 'les modèles Ollama', link: join(profile, '.ollama', 'models'), subdir: 'ollama-models' },
+    { label: 'le programme Ollama', link: join(local, 'Programs', 'Ollama'), subdir: 'ollama-app' },
+    { label: "les données d'Ollama (journaux, mises à jour)", link: join(local, 'Ollama'), subdir: 'ollama-data' },
+    { label: "l'environnement Python (voix)", link: join(local, 'Jaris', 'python-runtime'), subdir: 'python-runtime' },
+    { label: 'le cache de reconnaissance et de synthèse vocale', link: join(profile, '.cache', 'huggingface'), subdir: 'huggingface-cache' }
+  ]
 }
 
 /**
- * Le VRAI dossier où vivent les données actuellement : `link` lui-même s'il s'agit d'un dossier normal, sa
- * cible s'il s'agit d'une jonction déjà posée par un changement d'emplacement précédent, ou `null` s'il
- * n'existe pas encore (rien n'a jamais été téléchargé à cet endroit).
+ * Le VRAI dossier où vivent les données : `link` lui-même s'il s'agit d'un dossier normal, sa cible s'il
+ * s'agit d'une jonction, ou `null` s'il n'existe pas encore (rien n'a jamais été installé à cet endroit).
  */
-async function currentRealDir(link: string): Promise<string | null> {
+export async function currentRealDir(link: string): Promise<string | null> {
   try {
-    const stat = await lstat(link)
-    return stat.isSymbolicLink() ? await readlink(link) : link
+    const info = await lstat(link)
+    return info.isSymbolicLink() ? await readlink(link) : link
   } catch {
     return null
   }
 }
 
-/** État actuel, lu en direct sur le disque (jamais un simple champ de profil qui pourrait dériver de la réalité). */
-export async function getModelsLocationStatus(): Promise<ModelsLocationStatus> {
-  const [ollama, python, hf] = await Promise.all([
-    currentRealDir(ollamaModelsLink()),
-    currentRealDir(pythonRuntimeLink()),
-    currentRealDir(hfCacheLink())
-  ])
-  return {
-    ollamaModelsDir: ollama ?? ollamaModelsLink(),
-    pythonRuntimeDir: python ?? pythonRuntimeLink(),
-    hfCacheDir: hf ?? hfCacheLink()
+async function isLink(path: string): Promise<boolean> {
+  try {
+    return (await lstat(path)).isSymbolicLink()
+  } catch {
+    return false
   }
 }
 
-/** `mklink /J` plutôt que l'API `fs.symlink('junction', ...)` de Node, pour éviter un bug connu où cette
- * dernière redemande des droits administrateur sur certaines versions de Windows alors que la vraie
- * commande Windows, elle, n'en a jamais eu besoin pour une jonction. */
-function createJunction(link: string, target: string): Promise<void> {
+async function exists(path: string): Promise<boolean> {
+  try {
+    await lstat(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Retire une jonction SANS toucher à son contenu (un `rm -r` sur une jonction viderait sa cible). */
+async function removeLink(path: string): Promise<void> {
+  await unlink(path)
+}
+
+/** `mklink /J` plutôt que `fs.symlink('junction')`, qui redemande des droits administrateur sur certains Windows. */
+export function createJunction(link: string, target: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const proc = spawn('cmd.exe', ['/c', 'mklink', '/J', link, target], { windowsHide: true })
     let stderr = ''
@@ -83,62 +91,181 @@ function createJunction(link: string, target: string): Promise<void> {
   })
 }
 
-/**
- * Redirige `link` vers `target`. Copie d'abord entièrement vers `target` AVANT de toucher à `link` : si la
- * copie échoue en cours de route (disque de destination plein, par exemple), l'exception remonte sans que
- * rien n'ait été supprimé — la brique reste exactement comme avant l'essai, jamais dans un état à moitié
- * déplacé.
- */
-async function redirectFolder(link: string, target: string, onProgress: (message: string) => void): Promise<void> {
-  const real = await currentRealDir(link)
-  if (real === target) return // déjà à la bonne destination
-
-  await mkdir(target, { recursive: true })
-  if (real && existsSync(real)) {
-    onProgress(`Déplacement de ${link}...`)
-    await cp(real, target, { recursive: true, force: true })
-    // `real` était la cible d'une jonction posée par un déplacement précédent (donc différente de `link`
-    // lui-même) : ses données viennent d'être copiées dans `target`, les garder en double sur l'ancien
-    // disque ne ferait que gaspiller de la place.
-    if (real !== link) await rm(real, { recursive: true, force: true })
+/** Taille totale d'un dossier, en octets (les jonctions internes ne sont pas suivies). */
+export async function folderSize(path: string): Promise<number> {
+  let entries
+  try {
+    entries = await readdir(path, { withFileTypes: true })
+  } catch {
+    return 0
   }
-  await rm(link, { recursive: true, force: true })
-  // `mklink /J` (createJunction) ne crée jamais le dossier PARENT de `link` lui-même — exactement comme un
-  // symlink Unix classique. Sur une machine où rien n'a encore jamais tourné (Ollama/Python/huggingface_hub
-  // jamais lancés une seule fois), ce parent peut ne pas exister du tout (ex: %USERPROFILE%\.cache si
-  // huggingface_hub n'a jamais téléchargé quoi que ce soit) : sans cette ligne, la jonction échouerait avec
-  // un simple "dossier introuvable", empêchant de préparer un déplacement AVANT le tout premier usage.
-  await mkdir(dirname(link), { recursive: true })
-  await createJunction(link, target)
+  let total = 0
+  for (const entry of entries) {
+    const full = join(path, entry.name)
+    if (entry.isSymbolicLink()) continue
+    if (entry.isDirectory()) total += await folderSize(full)
+    else total += (await stat(full).catch(() => ({ size: 0 }))).size
+  }
+  return total
+}
+
+/** Place libre sur le disque qui contiendra `path` (via son premier parent existant), `null` si illisible. */
+export async function freeBytes(path: string): Promise<number | null> {
+  let probe = path
+  while (!existsSync(probe) && dirname(probe) !== probe) probe = dirname(probe)
+  try {
+    const info = await statfs(probe)
+    return info.bavail * info.bsize
+  } catch {
+    return null
+  }
+}
+
+export interface PreparedMove {
+  brick: Brick
+  /** Où sont les données aujourd'hui (`null` : rien d'installé encore, seule la jonction sera posée). */
+  real: string | null
+  target: string
+  /** Vrai si CE déplacement a créé `target` : lui seul a le droit de l'effacer en cas d'abandon. */
+  createdTarget: boolean
+}
+
+export interface CommittedMove extends PreparedMove {
+  /** L'ancien `link` renommé (dossier normal ou ancienne jonction), `null` s'il n'existait pas. */
+  backup: string | null
+}
+
+/** Ce qu'il faut déplacer vers `root` : tout dossier qui n'y est pas déjà. */
+export async function planMoves(root: string, list: Brick[] = bricks()): Promise<PreparedMove[]> {
+  const plans: PreparedMove[] = []
+  for (const brick of list) {
+    const target = join(root, brick.subdir)
+    const real = await currentRealDir(brick.link)
+    if (real === target) continue
+    plans.push({ brick, real: real && existsSync(real) ? real : null, target, createdTarget: false })
+  }
+  return plans
+}
+
+/** Octets à copier pour ces déplacements. */
+export async function bytesToCopy(plans: PreparedMove[]): Promise<number> {
+  let total = 0
+  for (const plan of plans) if (plan.real) total += await folderSize(plan.real)
+  return total
 }
 
 /**
- * Déplace les trois briques vers `newDir` (Options → Modèles). Chacune est traitée indépendamment : l'échec
- * de l'une (ex: rien à voir avec Ollama, juste un souci sur le cache HuggingFace) n'empêche pas les autres
- * de réussir — un déplacement partiel reste plus utile qu'un échec total pour un problème isolé.
+ * Étape 1 : copie tout vers la destination, sans rien toucher à l'origine. En cas d'échec, les dossiers créés
+ * par CETTE copie sont effacés et l'erreur remonte — tout reste exactement comme avant.
  */
-export async function moveModelsLocation(newDir: string, onProgress: (message: string) => void): Promise<{ success: boolean; message: string }> {
-  if (process.platform !== 'win32') {
-    return { success: false, message: "Cette fonctionnalité n'est disponible que sur Windows pour l'instant." }
+export async function copyAll(plans: PreparedMove[], onProgress: (message: string) => void): Promise<void> {
+  try {
+    for (const plan of plans) {
+      plan.createdTarget = !existsSync(plan.target)
+      await mkdir(plan.target, { recursive: true })
+      if (plan.real) {
+        onProgress(`Copie de ${plan.brick.label}…`)
+        await cp(plan.real, plan.target, { recursive: true, force: true })
+      }
+    }
+  } catch (err) {
+    await discardCopies(plans)
+    throw err
   }
+}
 
-  const steps: { label: string; link: string; subdir: string }[] = [
-    { label: 'les modèles Ollama', link: ollamaModelsLink(), subdir: 'ollama-models' },
-    { label: "l'environnement Python (voix)", link: pythonRuntimeLink(), subdir: 'python-runtime' },
-    { label: 'le cache de reconnaissance vocale et de synthèse vocale', link: hfCacheLink(), subdir: 'huggingface-cache' }
-  ]
+export async function discardCopies(plans: PreparedMove[]): Promise<void> {
+  for (const plan of plans) {
+    if (plan.createdTarget) await rm(plan.target, { recursive: true, force: true }).catch(() => {})
+  }
+}
 
-  const failures: string[] = []
-  for (const step of steps) {
+/**
+ * Étape 2 : bascule chaque emplacement habituel vers sa copie. Un échec défait les bascules déjà faites, dans
+ * l'ordre inverse, puis l'erreur remonte (les copies restent : à l'appelant de les effacer).
+ */
+export async function switchAll(plans: PreparedMove[]): Promise<CommittedMove[]> {
+  const done: CommittedMove[] = []
+  try {
+    for (const plan of plans) {
+      let backup: string | null = null
+      if (await exists(plan.brick.link)) {
+        backup = `${plan.brick.link}.jaris-old`
+        if (await exists(backup)) {
+          // Reste d'un essai interrompu : une jonction est retirée seule, un vrai dossier effacé.
+          if (await isLink(backup)) await removeLink(backup)
+          else await rm(backup, { recursive: true, force: true })
+        }
+        await rename(plan.brick.link, backup)
+      }
+      try {
+        // `mklink /J` ne crée jamais le dossier PARENT (ex: %USERPROFILE%\.cache sur une machine neuve).
+        await mkdir(dirname(plan.brick.link), { recursive: true })
+        await createJunction(plan.brick.link, plan.target)
+      } catch (err) {
+        if (backup) await rename(backup, plan.brick.link)
+        throw new Error(`${plan.brick.label} : ${err instanceof Error ? err.message : String(err)}`)
+      }
+      done.push({ ...plan, backup })
+    }
+    return done
+  } catch (err) {
+    await undoSwitches(done)
+    throw err
+  }
+}
+
+export async function undoSwitches(done: CommittedMove[]): Promise<void> {
+  for (const move of [...done].reverse()) {
+    await removeLink(move.brick.link).catch(() => {})
+    if (move.backup) await rename(move.backup, move.brick.link).catch(() => {})
+  }
+}
+
+/**
+ * Étape 3 : tout a basculé, les anciens emplacements peuvent disparaître. Un effacement qui échoue (fichier
+ * verrouillé) ne remet rien en cause : les données sont déjà à destination, il ne reste qu'un résidu, renvoyé
+ * pour être signalé.
+ */
+export async function finalizeAll(done: CommittedMove[]): Promise<string[]> {
+  const leftovers: string[] = []
+  for (const move of done) {
     try {
-      await redirectFolder(step.link, join(newDir, step.subdir), onProgress)
-    } catch (err) {
-      failures.push(`${step.label} : ${err instanceof Error ? err.message : String(err)}`)
+      if (move.backup && (await isLink(move.backup))) {
+        await removeLink(move.backup)
+        // L'ancienne jonction pointait vers `real` (un ancien dossier de Jaris) : c'est lui qu'on efface.
+        if (move.real && move.real !== move.target) await rm(move.real, { recursive: true, force: true })
+      } else if (move.backup) {
+        await rm(move.backup, { recursive: true, force: true })
+      }
+    } catch {
+      leftovers.push(move.backup ?? move.brick.link)
     }
   }
+  return leftovers
+}
 
-  if (failures.length === 0) {
-    return { success: true, message: `Tout a été déplacé vers ${newDir}.` }
+/**
+ * Les trois temps d'un coup, pour la réconciliation au démarrage (storageRoot.ts a une racine, mais un
+ * dossier n'y est pas encore : Ollama installé depuis sur C, machine neuve où rien n'existe…). Tout ou rien.
+ */
+export async function moveBricksInto(root: string, onProgress: (message: string) => void): Promise<string[]> {
+  const plans = await planMoves(root)
+  if (!plans.length) return []
+  await copyAll(plans, onProgress)
+  let done: CommittedMove[]
+  try {
+    done = await switchAll(plans)
+  } catch (err) {
+    await discardCopies(plans)
+    throw err
   }
-  return { success: false, message: `Déplacement partiel vers ${newDir} — échec sur ${failures.join(' ; ')}` }
+  return finalizeAll(done)
+}
+
+/** État affiché dans Options : où vit réellement chaque dossier, lu sur le disque. */
+export async function listBrickLocations(): Promise<{ label: string; path: string }[]> {
+  const out: { label: string; path: string }[] = []
+  for (const brick of bricks()) out.push({ label: brick.label, path: (await currentRealDir(brick.link)) ?? brick.link })
+  return out
 }

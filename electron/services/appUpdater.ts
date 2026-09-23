@@ -1,6 +1,6 @@
+import { downloadsDir } from './storageRoot'
 import { app } from 'electron'
 import { spawn } from 'child_process'
-import { tmpdir } from 'os'
 import { join } from 'path'
 import { DownloadError, downloadToFile } from './download'
 import type { UpdateProgress } from '../../shared/ipc'
@@ -147,7 +147,7 @@ export async function updateApp(
 
   // Nommé d'après la version téléchargée : un reste d'une tentative précédente (fichier encore verrouillé
   // par un antivirus, installation abandonnée) ne peut plus faire échouer l'écriture de celle-ci.
-  const installerPath = join(tmpdir(), `Jaris-Setup-${cachedStatus.latest}.exe`)
+  const installerPath = join(downloadsDir(), `Jaris-Setup-${cachedStatus.latest}.exe`)
 
   try {
     // Téléchargé au fil de l'eau, avec l'avancement renvoyé à l'interface (étape 98) : l'installeur pèse

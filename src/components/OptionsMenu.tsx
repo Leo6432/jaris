@@ -1128,20 +1128,23 @@ export default function OptionsMenu(): JSX.Element {
               {!updatingOllama && ollamaUpdateMessage && <p className="options-menu__ollama-update-note">{ollamaUpdateMessage}</p>}
 
               <SettingRow
-                label="Dossier des modèles"
-                description="Les modèles Ollama, l'environnement Python (voix) et le cache de reconnaissance/synthèse
-                  vocale peuvent peser plusieurs dizaines de Go au total — regroupe-les ailleurs (un autre disque,
-                  par exemple) sans que rien d'autre n'ait à changer."
+                label="Dossier de Jaris"
+                description="Tout ce que Jaris installe et enregistre — le programme, tes conversations, Ollama et ses
+                  modèles, la voix, Docker — peut vivre ailleurs que sur C (un autre disque, par exemple). « Déplacer »
+                  emporte TOUT d'un coup, ou rien si quelque chose l'en empêche."
               >
                 <button className="options-menu__action" onClick={handleChooseModelsLocation} disabled={movingModelsLocation}>
-                  {movingModelsLocation ? 'Déplacement en cours…' : 'Choisir un dossier…'}
+                  {movingModelsLocation ? 'Déplacement en cours…' : 'Déplacer…'}
                 </button>
               </SettingRow>
               {modelsLocation && (
                 <ul className="options-menu__models-location-list">
-                  <li>Modèles Ollama : {modelsLocation.ollamaModelsDir}</li>
-                  <li>Environnement Python : {modelsLocation.pythonRuntimeDir}</li>
-                  <li>Cache vocal : {modelsLocation.hfCacheDir}</li>
+                  {modelsLocation.items.map((item) => (
+                    <li key={item.label}>
+                      <span className="options-menu__models-location-label">{item.label.charAt(0).toUpperCase() + item.label.slice(1)}</span> :{' '}
+                      {item.path}
+                    </li>
+                  ))}
                 </ul>
               )}
               {modelsLocationMessage && <p className="options-menu__ollama-update-note">{modelsLocationMessage}</p>}

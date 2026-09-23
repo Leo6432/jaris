@@ -60,9 +60,12 @@ function setup({ binding = '0.0.0.0:8091', jsonStatus = 200 } = {}) {
   const modules = {
     child_process: { exec, execSync: () => '', spawn: () => ({ on: () => {} }) },
     fs: { existsSync: () => false },
+    'fs/promises': { rm: async () => {} },
     '../config': { config: { searxng: { host: 'http://127.0.0.1:8091' }, ollama: { host: 'http://127.0.0.1:11434' } } },
     './appLauncher': { didAppLaunch: () => true, openApp: async () => 'a été lancé.' },
     './download': { downloadToFile: async () => 0 },
+    './storageRoot': { downloadsDir: () => '/tmp', getStorageRoot: () => null },
+    './dockerLocation': { dockerInstallFlags: () => [] },
     '../paths': { resourcesRoot: () => '/fake/resources' },
     '../../shared/formatBytes': { formatBytes: (n) => `${n} o` }
   }

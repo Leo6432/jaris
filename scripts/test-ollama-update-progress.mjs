@@ -72,7 +72,9 @@ function loadDependencyServices({ onDownload }) {
       // immédiatement et updateOllama passe directement au téléchargement de l'installeur — le chemin qui
       // a occupé Léo pendant 5 minutes.
       if (id === 'fs') return { existsSync: () => false }
-      if (id === 'os') return { tmpdir: () => '/tmp' }
+      if (id === 'fs/promises') return { rm: async () => {} }
+      if (id.endsWith('/storageRoot')) return { downloadsDir: () => '/tmp', getStorageRoot: () => null }
+      if (id.endsWith('/dockerLocation')) return { dockerInstallFlags: () => [] }
       if (id === 'path') return { join: (...parts) => parts.join('/') }
       if (id === 'util') return { promisify: (fn) => (...args) => new Promise((resolve) => fn(...args, () => resolve({ stdout: '', stderr: '' }))) }
       if (id.endsWith('/config')) return { config: { ollama: { host: 'http://127.0.0.1:11434' } } }

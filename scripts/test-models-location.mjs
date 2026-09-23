@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -11,7 +11,11 @@ import { EventEmitter } from 'node:events'
 const nodeRequire = createRequire(import.meta.url)
 
 /**
- * "Déplacer" (Options -> Modèles, étape 44) : redirige les modèles Ollama, l'environnement Python et le
+ * Étape 143, Léo : « ça doit tout déplacer, jamais une partie ». Les dossiers lourds (modèles ET programme
+ * Ollama, données d'Ollama, Python, voix) basculent en TOUT OU RIEN : copie de tout, puis bascule de tout
+ * (défaite entièrement au moindre échec), puis seulement l'effacement des anciens emplacements.
+ *
+ * Historique : "Déplacer" (Options -> Modèles, étape 44) : redirige les modèles Ollama, l'environnement Python et le
  * cache HuggingFace vers un dossier choisi via des jonctions NTFS (`mklink /J`, transparentes pour Ollama/
  * Python, qui continuent de lire/écrire au même chemin habituel sans rien savoir du changement).
  *
@@ -32,7 +36,7 @@ const nodeRequire = createRequire(import.meta.url)
  * à 'win32' (sinon `moveModelsLocation` ressort immédiatement, "Windows pour l'instant") et contrôler
  * `process.env.USERPROFILE`/`LOCALAPPDATA` sans toucher au vrai environnement du process de test.
  */
-function loadModelsLocation(env) {
+function loadModelsLocation(env, { failJunctionFor = null } = {}) {
   const source = ts.transpileModule(readFileSync(new URL('../electron/services/modelsLocation.ts', import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   }).outputText
@@ -48,6 +52,7 @@ function loadModelsLocation(env) {
       emitter.stderr = new EventEmitter()
       queueMicrotask(() => {
         try {
+          if (failJunctionFor && link.endsWith(failJunctionFor)) throw new Error('mklink refusé (simulé)')
           nodeRequire('fs').symlinkSync(target, link, process.platform === 'win32' ? 'junction' : undefined)
           emitter.emit('close', 0)
         } catch (err) {
@@ -81,90 +86,121 @@ function setupFakeHome() {
   const localAppData = join(root, 'localappdata')
   mkdirSync(userProfile, { recursive: true })
   mkdirSync(localAppData, { recursive: true })
-  return { root, userProfile, localAppData }
+  return { root, userProfile, localAppData, env: { USERPROFILE: userProfile, LOCALAPPDATA: localAppData } }
 }
 
-test('moveModelsLocation déplace les 3 briques, OLLAMA COMPRIS (pas seulement Python/HuggingFace)', async () => {
-  const { root, userProfile, localAppData } = setupFakeHome()
-  const { moveModelsLocation, getModelsLocationStatus } = loadModelsLocation({ USERPROFILE: userProfile, LOCALAPPDATA: localAppData })
+/** Une machine où tout est installé, sur C, avec un fichier témoin dans chaque dossier. */
+function fillEverything({ userProfile, localAppData }) {
+  const files = {
+    [join(userProfile, '.ollama', 'models', 'blobs', 'sha256-1')]: 'poids du modèle',
+    [join(localAppData, 'Programs', 'Ollama', 'ollama.exe')]: 'programme ollama',
+    [join(localAppData, 'Ollama', 'server.log')]: 'journal',
+    [join(localAppData, 'Jaris', 'python-runtime', 'python.exe')]: 'python',
+    [join(userProfile, '.cache', 'huggingface', 'hub', 'model.bin')]: 'voix'
+  }
+  for (const [path, content] of Object.entries(files)) {
+    mkdirSync(join(path, '..'), { recursive: true })
+    writeFileSync(path, content)
+  }
+  return files
+}
 
-  // Contenu réel préexistant pour les 3 briques, comme sur une vraie installation.
-  mkdirSync(join(userProfile, '.ollama', 'models'), { recursive: true })
-  writeFileSync(join(userProfile, '.ollama', 'models', 'qwen3.5-9b.gguf'), 'faux poids de modèle')
-  mkdirSync(join(localAppData, 'Jaris', 'python-runtime'), { recursive: true })
-  writeFileSync(join(localAppData, 'Jaris', 'python-runtime', 'python.exe'), 'faux binaire python')
-  mkdirSync(join(userProfile, '.cache', 'huggingface'), { recursive: true })
-  writeFileSync(join(userProfile, '.cache', 'huggingface', 'stt-model.bin'), 'faux modèle de transcription')
+const SUBDIRS = ['ollama-models', 'ollama-app', 'ollama-data', 'python-runtime', 'huggingface-cache']
 
-  const newDir = join(root, 'D-disque', 'jaris-data')
-  const progress = []
-  const result = await moveModelsLocation(newDir, (m) => progress.push(m))
+test('tout part : modèles ET programme Ollama, données d’Ollama, Python et voix — accessibles au même chemin qu’avant', async () => {
+  const home = setupFakeHome()
+  const files = fillEverything(home)
+  const newRoot = join(home.root, 'D', 'Jaris-data')
+  const { moveBricksInto, bricks } = loadModelsLocation(home.env)
 
-  assert.equal(result.success, true, `déplacement attendu réussi, reçu : ${JSON.stringify(result)}`)
-  assert.ok(result.message.includes(newDir), 'le message doit citer le dossier de destination')
+  await moveBricksInto(newRoot, () => {})
 
-  // Les 3 fichiers doivent être RÉELLEMENT arrivés sur le nouveau disque — Ollama comme les deux autres.
-  assert.equal(readFileSync(join(newDir, 'ollama-models', 'qwen3.5-9b.gguf'), 'utf8'), 'faux poids de modèle')
-  assert.equal(readFileSync(join(newDir, 'python-runtime', 'python.exe'), 'utf8'), 'faux binaire python')
-  assert.equal(readFileSync(join(newDir, 'huggingface-cache', 'stt-model.bin'), 'utf8'), 'faux modèle de transcription')
-
-  // L'ancien emplacement des modèles Ollama doit maintenant être une jonction (symlink ici) vers le nouveau
-  // disque, PAS un dossier normal laissé en place avec une copie en double.
-  const ollamaLink = join(userProfile, '.ollama', 'models')
-  assert.ok(lstatSync(ollamaLink).isSymbolicLink(), "l'ancien chemin Ollama doit être redirigé (jonction), pas un dossier ordinaire")
-
-  // getModelsLocationStatus doit refléter le VRAI dossier (celui du nouveau disque), pas l'ancien chemin.
-  const status = await getModelsLocationStatus()
-  assert.equal(status.ollamaModelsDir, join(newDir, 'ollama-models'))
-  assert.equal(status.pythonRuntimeDir, join(newDir, 'python-runtime'))
-  assert.equal(status.hfCacheDir, join(newDir, 'huggingface-cache'))
-
-  rmSync(root, { recursive: true, force: true })
+  for (const brick of bricks()) {
+    assert.ok(lstatSync(brick.link).isSymbolicLink(), `${brick.label} : l'emplacement habituel doit être une jonction`)
+    assert.ok(existsSync(join(newRoot, brick.subdir)), `${brick.label} : doit exister dans le dossier de Jaris`)
+    assert.ok(!existsSync(`${brick.link}.jaris-old`), `${brick.label} : aucune sauvegarde ne doit traîner`)
+  }
+  // Chaque fichier se relit au même chemin qu'avant (à travers la jonction) : Ollama et Python n'y voient rien.
+  for (const [path, content] of Object.entries(files)) assert.equal(readFileSync(path, 'utf8'), content)
+  assert.deepEqual(SUBDIRS.map((sub) => existsSync(join(newRoot, sub))), SUBDIRS.map(() => true))
+  rmSync(home.root, { recursive: true, force: true })
 })
 
-test('un problème sur une seule brique ne bloque pas les deux autres', async () => {
-  const { root, userProfile, localAppData } = setupFakeHome()
-  const { moveModelsLocation } = loadModelsLocation({ USERPROFILE: userProfile, LOCALAPPDATA: localAppData })
+test('jamais une partie : si la bascule d’UN dossier échoue, TOUS reviennent comme avant', async () => {
+  const home = setupFakeHome()
+  const files = fillEverything(home)
+  const newRoot = join(home.root, 'D', 'Jaris-data')
+  // La 4e bascule (Python) échoue : les 3 premières, déjà faites, doivent être défaites.
+  const { moveBricksInto, bricks } = loadModelsLocation(home.env, { failJunctionFor: 'python-runtime' })
 
-  mkdirSync(join(userProfile, '.ollama', 'models'), { recursive: true })
-  writeFileSync(join(userProfile, '.ollama', 'models', 'model.gguf'), 'poids ollama')
-  mkdirSync(join(localAppData, 'Jaris', 'python-runtime'), { recursive: true })
-  writeFileSync(join(localAppData, 'Jaris', 'python-runtime', 'python.exe'), 'binaire python')
-  mkdirSync(join(userProfile, '.cache', 'huggingface'), { recursive: true })
-  writeFileSync(join(userProfile, '.cache', 'huggingface', 'stt.bin'), 'modèle vocal')
+  await assert.rejects(moveBricksInto(newRoot, () => {}), /Python/)
 
-  const newDir = join(root, 'D-disque', 'jaris-data')
-  // Un FICHIER (pas un dossier) à l'endroit exact où le cache HuggingFace devrait être copié : mkdir()
-  // dessus échoue (ENOTDIR), forçant un échec RÉEL et ciblé sur cette seule brique, sans mock du fs.
-  mkdirSync(newDir, { recursive: true })
-  writeFileSync(join(newDir, 'huggingface-cache'), 'bloque volontairement cette brique')
-
-  const result = await moveModelsLocation(newDir, () => {})
-
-  assert.equal(result.success, false, 'un échec partiel doit être signalé, pas un faux succès')
-  assert.ok(result.message.includes('huggingface') || result.message.toLowerCase().includes('cache'), `le message doit nommer la brique en échec : ${result.message}`)
-
-  // Ollama ET Python, eux, doivent avoir quand même réussi malgré l'échec du cache HuggingFace.
-  assert.equal(readFileSync(join(newDir, 'ollama-models', 'model.gguf'), 'utf8'), 'poids ollama')
-  assert.equal(readFileSync(join(newDir, 'python-runtime', 'python.exe'), 'utf8'), 'binaire python')
-  assert.ok(lstatSync(join(userProfile, '.ollama', 'models')).isSymbolicLink(), 'Ollama doit être redirigé même si le cache HuggingFace a échoué')
-
-  rmSync(root, { recursive: true, force: true })
+  for (const brick of bricks()) {
+    assert.ok(!lstatSync(brick.link).isSymbolicLink(), `${brick.label} : doit être redevenu un dossier normal`)
+    assert.ok(!existsSync(`${brick.link}.jaris-old`), `${brick.label} : la sauvegarde doit avoir été remise en place`)
+  }
+  for (const [path, content] of Object.entries(files)) assert.equal(readFileSync(path, 'utf8'), content, `${path} intact`)
+  assert.ok(!existsSync(join(newRoot, 'ollama-models')), 'les copies faites pour rien sont effacées')
+  rmSync(home.root, { recursive: true, force: true })
 })
 
-test("rien à copier (première installation, rien encore téléchargé) n'empêche pas de poser la jonction", async () => {
-  const { root, userProfile, localAppData } = setupFakeHome()
-  const { moveModelsLocation } = loadModelsLocation({ USERPROFILE: userProfile, LOCALAPPDATA: localAppData })
-  // Aucun des 3 dossiers sources n'existe : cas d'un déplacement fait AVANT le premier téléchargement.
+test('une copie qui échoue ne touche à RIEN à l’origine, et n’efface pas ce qui existait déjà à destination', async () => {
+  const home = setupFakeHome()
+  const files = fillEverything(home)
+  const newRoot = join(home.root, 'D', 'Jaris-data')
+  mkdirSync(newRoot, { recursive: true })
+  // Un FICHIER là où la copie de Python doit créer un dossier : la copie échoue à mi-chemin.
+  writeFileSync(join(newRoot, 'python-runtime'), 'fichier de quelqu’un d’autre')
+  const { moveBricksInto, bricks } = loadModelsLocation(home.env)
 
-  const newDir = join(root, 'D-disque', 'jaris-data')
-  const result = await moveModelsLocation(newDir, () => {})
+  await assert.rejects(moveBricksInto(newRoot, () => {}))
 
-  assert.equal(result.success, true, `attendu un succès même sans rien à copier, reçu : ${JSON.stringify(result)}`)
-  assert.ok(lstatSync(join(userProfile, '.ollama', 'models')).isSymbolicLink(), 'la jonction doit être posée même sans données préexistantes')
-  assert.ok(existsSync(join(newDir, 'ollama-models')), 'le dossier de destination doit exister, prêt à recevoir le premier modèle téléchargé')
+  for (const brick of bricks()) assert.ok(!lstatSync(brick.link).isSymbolicLink(), `${brick.label} : non basculé`)
+  for (const [path, content] of Object.entries(files)) assert.equal(readFileSync(path, 'utf8'), content)
+  assert.ok(!existsSync(join(newRoot, 'ollama-models')), 'les copies créées par cet essai sont effacées')
+  assert.equal(readFileSync(join(newRoot, 'python-runtime'), 'utf8'), 'fichier de quelqu’un d’autre', 'un fichier préexistant n’est jamais effacé')
+  rmSync(home.root, { recursive: true, force: true })
+})
 
-  rmSync(root, { recursive: true, force: true })
+test('un second déplacement emporte tout vers le nouveau dossier et efface l’ancien, sans rien perdre', async () => {
+  const home = setupFakeHome()
+  const files = fillEverything(home)
+  const first = join(home.root, 'D', 'Jaris-data')
+  const second = join(home.root, 'E', 'Jaris')
+  const { moveBricksInto, bricks } = loadModelsLocation(home.env)
+
+  await moveBricksInto(first, () => {})
+  await moveBricksInto(second, () => {})
+
+  for (const brick of bricks()) {
+    assert.equal(readlinkSync(brick.link), join(second, brick.subdir))
+    assert.ok(!existsSync(join(first, brick.subdir)), `${brick.label} : l'ancien dossier est effacé`)
+  }
+  for (const [path, content] of Object.entries(files)) assert.equal(readFileSync(path, 'utf8'), content)
+  rmSync(home.root, { recursive: true, force: true })
+})
+
+test('machine neuve (rien d’installé) : les jonctions sont posées AVANT, Ollama et Python s’installeront directement dans le dossier', async () => {
+  const home = setupFakeHome()
+  const newRoot = join(home.root, 'D', 'Jaris-data')
+  const { moveBricksInto, bricks, planMoves } = loadModelsLocation(home.env)
+
+  await moveBricksInto(newRoot, () => {})
+
+  for (const brick of bricks()) assert.equal(readlinkSync(brick.link), join(newRoot, brick.subdir))
+  // Un fichier écrit plus tard au chemin habituel (installation d'Ollama) atterrit dans le dossier de Jaris.
+  writeFileSync(join(home.env.LOCALAPPDATA, 'Programs', 'Ollama', 'ollama.exe'), 'installé ensuite')
+  assert.equal(readFileSync(join(newRoot, 'ollama-app', 'ollama.exe'), 'utf8'), 'installé ensuite')
+  assert.equal((await planMoves(newRoot)).length, 0, 'au démarrage suivant, plus rien à ranger')
+  rmSync(home.root, { recursive: true, force: true })
+})
+
+test('réinstaller Python vide son dossier au lieu de le supprimer (sinon la jonction disparaîtrait et Python repartirait sur C)', () => {
+  const source = readFileSync(new URL('../electron/services/pythonRuntime.ts', import.meta.url), 'utf8')
+  const install = source.slice(source.indexOf('export async function installPythonRuntime('))
+  const beforeDownload = install.slice(0, install.indexOf('findPythonArchiveUrl'))
+  assert.ok(!/await rm\(dir,/.test(beforeDownload), 'le dossier lui-même ne doit plus être supprimé')
+  assert.match(beforeDownload, /readdir\(dir\)/)
 })
 
 test("le bouton \"Mettre à jour\" d'Ollama ne touche JAMAIS au dossier des modèles lui-même", () => {

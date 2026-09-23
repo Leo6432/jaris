@@ -1,7 +1,7 @@
 import { spawn } from 'child_process'
 import { createHash } from 'crypto'
 import { existsSync, readdirSync } from 'fs'
-import { mkdir, readFile, rm, writeFile } from 'fs/promises'
+import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { config } from '../config'
 import { pythonScriptsDir } from '../paths'
@@ -197,9 +197,11 @@ async function installDependencies(python: string, onProgress: InstallProgress):
 export async function installPythonRuntime(onProgress: InstallProgress): Promise<void> {
   const dir = runtimeDir()
   // Repart d'un dossier propre : une installation précédente interrompue en plein milieu laisserait une
-  // arborescence à moitié extraite, dont on ne peut rien conclure de fiable.
-  await rm(dir, { recursive: true, force: true })
+  // arborescence à moitié extraite, dont on ne peut rien conclure de fiable. On vide son CONTENU sans
+  // supprimer le dossier lui-même : quand il est une jonction vers le dossier de Jaris (étape 143, autre
+  // disque), l'effacer puis le recréer le remettrait sur C sans prévenir.
   await mkdir(dir, { recursive: true })
+  for (const entry of await readdir(dir)) await rm(join(dir, entry), { recursive: true, force: true })
 
   onProgress('Recherche de la dernière version de Python…', 0)
   const archive = await download(await findPythonArchiveUrl(), onProgress)

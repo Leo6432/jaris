@@ -1,4 +1,8 @@
 import { app, dialog, ipcMain, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu } from 'electron'
+// Étape 143 : EN PREMIER — redirige le dossier interne de Chromium et les données vers le dossier de Jaris
+// (installé sur D, ou déplacé) avant que quoi que ce soit ne calcule un chemin ou ne prenne le verrou d'instance.
+import { cleanupStaleChromiumData, getStorageRoot } from './services/storageRoot'
+import { spawn } from 'child_process'
 import { basename, extname, join } from 'path'
 import { readFile } from 'fs/promises'
 import {
@@ -11,8 +15,9 @@ import {
 } from './services/dependencyServices'
 import { deleteModel, listInstalledModels } from './services/ollama'
 import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES } from './services/modelChoice'
-import { getModelsLocationStatus, moveModelsLocation } from './services/modelsLocation'
-import { moveDataLocation } from './services/dataLocation'
+import { getStorageStatus, programMoveCommandLine, reconcileStorage, relocateEverything } from './services/relocation'
+import { DOCKER_APP_SUBDIR, findDockerInstallDir } from './services/dockerLocation'
+import { openApp } from './services/appLauncher'
 import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, getMyModelPicks, isUnusedInstalledModel } from './services/hardwareScan'
 import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
@@ -532,6 +537,9 @@ function broadcast(channel: string, payload?: unknown): void {
 
 async function startVoicePipeline(): Promise<void> {
   const log = (message: string): void => broadcast(IPC_CHANNELS.log, message)
+  // Étape 143 : range dans le dossier de Jaris ce qui n'y est pas encore, avant de démarrer Ollama et la voix
+  // (leurs fichiers seraient sinon ouverts, donc impossibles à déplacer).
+  await reconcileStorage(log, stopOllamaCompletely)
   void ensureOllamaRunning(log)
   void ensureSearxngRunning(log)
 
@@ -597,6 +605,7 @@ app.whenReady().then(async () => {
   // déjà perdu la course au verrou continuerait quand même à créer sa fenêtre, démarrer Ollama, etc. avant
   // de se fermer — exactement le flash visible à corriger ici.
   if (!gotSingleInstanceLock) return
+  void cleanupStaleChromiumData()
   registerPreviewHandler()
 
   // Autorise silencieusement l'accès micro pour les fenêtres de Jaris (enumerateDevices() ne révèle les
@@ -753,11 +762,14 @@ app.whenReady().then(async () => {
   )
   ipcMain.handle(IPC_CHANNELS.getAppVersion, () => getInstalledVersion())
   ipcMain.handle(IPC_CHANNELS.checkForUpdate, () => checkForUpdate())
-  ipcMain.handle(IPC_CHANNELS.getModelsLocationStatus, () => getModelsLocationStatus())
+  ipcMain.handle(IPC_CHANNELS.getModelsLocationStatus, async () => {
+    const root = getStorageRoot()
+    return getStorageStatus(await findDockerInstallDir(root ? [join(root, DOCKER_APP_SUBDIR)] : []))
+  })
   ipcMain.handle(IPC_CHANNELS.chooseModelsLocation, async () => {
     const dialogOptions = {
       properties: ['openDirectory' as const, 'createDirectory' as const],
-      title: 'Choisir où stocker les modèles et fichiers lourds de Jaris'
+      title: 'Choisir le dossier où mettre tout Jaris'
     }
     // try/finally : un échec du dialogue laissait sinon `dialogOpen` bloqué à true pour toute la session,
     // et la fenêtre de réglages ne se serait plus JAMAIS repliée en widget en changeant d'application.
@@ -779,38 +791,59 @@ app.whenReady().then(async () => {
     ttsClient.stop()
     await stopOllamaCompletely()
 
-    const outcome = await moveModelsLocation(newDir, log)
-    // Étape 121, Léo : "sa doit déplacer tout" — les conversations/profil/mémoire/applications générées
-    // partent aussi, pas seulement les trois briques lourdes ci-dessus (voir dataLocation.ts pour le
-    // pourquoi d'un mécanisme différent : pas de jonction sur userData, qui héberge aussi les fichiers
-    // internes de Chromium ouverts en permanence).
-    const dataOutcome = await moveDataLocation(newDir, log)
-
-    if (dataOutcome.success) {
-      // Les stores calculent leur chemin UNE fois au chargement du module : copier les fichiers ne suffit
-      // pas, il faut relancer Jaris pour qu'il relise tout depuis le nouvel emplacement. Inutile de
-      // redémarrer les services ici — l'instance suivante les relance elle-même à son démarrage normal.
-      log('Redémarrage de Jaris pour utiliser le nouvel emplacement…')
+    // Étape 143, Léo : « ça doit tout déplacer, jamais une partie » — programme, conversations, Ollama,
+    // Python, voix, Docker : tout ou rien (relocation.ts).
+    try {
+      const outcome = await relocateEverything(newDir, {
+        onProgress: log,
+        startDocker: async () => {
+          log(await openApp('Docker Desktop'))
+        }
+      })
       quitting = true
-      app.relaunch()
+      if (outcome.programInstaller) {
+        // Le programme lui-même ne peut pas se déplacer pendant qu'il tourne : son installeur le réinstalle
+        // dans le nouveau dossier une fois Jaris fermé (et efface l'ancien), puis le relance.
+        const installer = outcome.programInstaller
+        const commandLine = programMoveCommandLine(outcome.programTarget ?? newDir)
+        app.once('will-quit', () => {
+          spawn(installer, [commandLine], { detached: true, stdio: 'ignore', windowsVerbatimArguments: true })
+            .on('error', () => {})
+            .unref()
+        })
+        log('Tout est copié. Jaris se ferme, se réinstalle dans le nouveau dossier et se rouvre tout seul…')
+      } else {
+        log('Tout est déplacé. Redémarrage de Jaris pour utiliser le nouveau dossier…')
+        // Les stores calculent leur chemin UNE fois au chargement du module : il faut relancer Jaris.
+        app.relaunch()
+      }
       // Laisse la réponse IPC repartir vers l'interface avant de couper : sinon la promesse côté renderer
       // ne se résout jamais et le bouton reste figé sur "Déplacement en cours…" jusqu'à la relance.
-      setTimeout(() => app.quit(), 500)
-    } else {
+      setTimeout(() => app.quit(), 800)
+      const notes = [
+        outcome.dockerUninstalled
+          ? 'Docker Desktop a été désinstallé : Jaris le réinstallera dans ce dossier la prochaine fois que la recherche web en aura besoin (une autorisation Windows sera demandée).'
+          : '',
+        outcome.leftovers.length ? `Quelques anciens fichiers verrouillés n'ont pas pu être effacés : ${outcome.leftovers.join(', ')}.` : ''
+      ].filter(Boolean)
+      return { success: true, message: [`Tout Jaris est maintenant dans ${newDir}.`, ...notes].join(' ') }
+    } catch (err) {
       log('Redémarrage des services…')
       void ensureOllamaRunning(log)
       await startVoicePipeline()
-    }
-
-    return {
-      success: outcome.success && dataOutcome.success,
-      message: [outcome.message, dataOutcome.message].filter(Boolean).join(' ')
+      return { success: false, message: err instanceof Error ? err.message : String(err) }
     }
   })
   ipcMain.handle(IPC_CHANNELS.getRuntimeSetupStatus, () => getRuntimeSetupStatus())
   // L'installation du premier lancement (Python, Ollama) dure plusieurs minutes : chaque étape est
   // diffusée au fil de l'eau plutôt qu'attendre la fin, pour que l'utilisateur voie que ça avance.
   ipcMain.handle(IPC_CHANNELS.runRuntimeSetup, async () => {
+    // Étape 143 : jonctions posées AVANT d'installer Ollama/Python, pour qu'ils s'installent directement dans
+    // le dossier de Jaris (installé sur D) au lieu d'arriver sur C.
+    await reconcileStorage((message) => {
+      broadcast(IPC_CHANNELS.log, message)
+      broadcast(IPC_CHANNELS.runtimeSetupProgress, { step: 'ollama', message })
+    }, stopOllamaCompletely)
     const status = await runFirstRunSetup((progress) => broadcast(IPC_CHANNELS.runtimeSetupProgress, progress))
     // Le pipeline vocal a déjà tenté de démarrer au lancement de Jaris (voir plus bas), forcément en
     // échec sur une machine où Python n'était pas encore installé. Sans ce redémarrage, la voix resterait

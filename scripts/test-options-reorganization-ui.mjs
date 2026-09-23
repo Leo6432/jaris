@@ -46,9 +46,11 @@ const overrides = {
   getAppVersionStatus: async () => ({ current: '0.13.0', latest: '0.13.0', outdated: false }),
   getAppVersion: async () => '0.13.0',
   getModelsLocationStatus: async () => ({
-    ollamaModelsDir: 'C\\\\models',
-    pythonRuntimeDir: 'C\\\\python',
-    hfCacheDir: 'C\\\\cache'
+    root: null,
+    items: [
+      { label: 'le programme Jaris', path: 'C\\\\Jaris' },
+      { label: 'les modèles Ollama', path: 'C\\\\models' }
+    ]
   }),
   getConversationHistory: async () => [],
   getMyModelPicks: async () => ({ gpuName: 'RTX 3070', vramGb: 8, ramGb: 32, flash: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, medium: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, large: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, vision: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, code: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 } , upgrades: {}, installCheck: { notInstalled: [], otherInstalled: [] } }),
@@ -184,7 +186,7 @@ test('Général regroupe VRAIMENT mise à jour, fichiers/moteur local et histori
     assert.deepEqual(titles, ['Mise à jour', 'Fichiers et moteur local', 'Historique des conversations'])
     const content = await page.textContent('.options-page__content')
     assert.ok(content.includes('Rechercher une mise à jour'), 'la section mise à jour doit être présente')
-    assert.ok(content.includes('Dossier des modèles'), 'le déplacement du dossier des modèles doit être présent')
+    assert.ok(content.includes('Dossier de Jaris'), 'le déplacement du dossier de Jaris doit être présent')
     assert.ok(await page.$('.options-menu__models-location-list'), 'la liste des emplacements doit être présente')
   })
 })
@@ -198,7 +200,7 @@ test('Modèles regroupe VRAIMENT mémoire et matériel, sans fichiers/moteur loc
     // ta machine fait tourner" au lieu de "Longueur de mémoire"/"Les paliers de configuration".
     assert.deepEqual(titles, ['Mémoire de conversation', 'Ce que ta machine fait tourner'])
     const content = await page.textContent('.options-page__content')
-    assert.ok(!content.includes('Dossier des modèles'), 'le dossier des modèles ne doit plus être dans Modèles')
+    assert.ok(!content.includes('Dossier de Jaris'), 'le dossier de Jaris ne doit pas être dans Modèles')
     assert.ok(!(await page.$('.options-menu__models-location-list')), 'la liste des emplacements ne doit plus être dans Modèles')
   })
 })

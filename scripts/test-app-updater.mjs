@@ -63,7 +63,7 @@ const { checkForUpdate, updateApp } = loadModule('../electron/services/appUpdate
       }
     }
   }
-  if (id === 'os') return { ...nodeFs, tmpdir: () => fakeTmp }
+  if (id.endsWith('/storageRoot')) return { downloadsDir: () => fakeTmp }
   if (id === 'path') return nodePath
   if (id.endsWith('/download')) return downloadModule
   throw new Error(`module non simulé dans le test : ${id}`)

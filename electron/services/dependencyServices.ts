@@ -1,6 +1,8 @@
+import { dockerInstallFlags } from './dockerLocation'
+import { downloadsDir, getStorageRoot } from './storageRoot'
 import { exec, execSync, spawn, type ChildProcess } from 'child_process'
 import { existsSync } from 'fs'
-import { tmpdir } from 'os'
+import { rm } from 'fs/promises'
 import { join } from 'path'
 import { promisify } from 'util'
 import { config } from '../config'
@@ -246,7 +248,7 @@ async function downloadAndLaunchOfficialInstaller(onProgress?: OllamaUpdateProgr
     // minutes sur une connexion ordinaire. Sans lui, le bouton restait figé sur "Mise à jour en cours…"
     // tout ce temps ("ça bloque depuis 5m", Léo), impossible à distinguer d'un plantage. C'était le SEUL
     // des quatre appels à downloadToFile du dépôt à ne rien remonter, alors que c'est le plus long.
-    const installerPath = join(tmpdir(), 'JarisOllamaSetup.exe')
+    const installerPath = join(downloadsDir(), 'JarisOllamaSetup.exe')
     await downloadToFile(OLLAMA_INSTALLER_URL, installerPath, {
       onProgress: (progress) => onProgress?.({ phase: 'download', ...progress })
     })
@@ -292,7 +294,7 @@ export async function isOllamaInstalled(): Promise<boolean> {
  */
 export async function installOllamaSilently(onProgress: (message: string, percent?: number) => void): Promise<boolean> {
   onProgress("Téléchargement d'Ollama…", 0)
-  const installerPath = join(tmpdir(), 'JarisOllamaSetup.exe')
+  const installerPath = join(downloadsDir(), 'JarisOllamaSetup.exe')
   try {
     // 1,5 Go (mesuré) : l'ancien plafond de 120 secondes sur le téléchargement ENTIER exigeait 100 Mbit/s
     // soutenus, donc le tout premier lancement de Jaris échouait à installer Ollama sur la quasi-totalité
@@ -318,6 +320,8 @@ export async function installOllamaSilently(onProgress: (message: string, percen
     proc.on('error', () => resolve(false))
     proc.on('close', (code) => resolve(code === 0))
   })
+  // 1,5 Go qui n'a plus aucune utilité une fois l'installation terminée (réussie ou non).
+  await rm(installerPath, { force: true }).catch(() => {})
   if (!installed) return false
 
   // L'installeur rend la main avant qu'Ollama ait fini de démarrer son serveur : sans cette attente, la
@@ -667,7 +671,7 @@ async function installWsl(onProgress: (message: string) => void): Promise<boolea
  */
 async function installDockerDesktop(onProgress: (message: string) => void): Promise<boolean> {
   onProgress('Téléchargement de Docker Desktop (environ 600 Mo, ça peut prendre plusieurs minutes)…')
-  const installerPath = join(tmpdir(), 'JarisDockerDesktopInstaller.exe')
+  const installerPath = join(downloadsDir(), 'JarisDockerDesktopInstaller.exe')
   try {
     // Le plafond était ici de 10 minutes pour le téléchargement entier, choisi à partir de la taille
     // réelle du fichier (~600 Mo) — déjà mieux que les 2 minutes d'Ollama, mais ça exigeait quand même
@@ -690,7 +694,9 @@ async function installDockerDesktop(onProgress: (message: string) => void): Prom
 
   onProgress("Installation de Docker Desktop en cours (une fenêtre Windows peut demander une autorisation — accepte-la pour continuer)…")
   const exitCode = await new Promise<number | null>((resolve) => {
-    const proc = spawn(installerPath, ['install', '--quiet', '--accept-license'], { windowsHide: true })
+    // Étape 143 : dans le dossier de Jaris quand il y en a un (programme ET disque virtuel où vivent les images),
+    // avec les indicateurs officiels de Docker — sinon Docker se mettrait sur C quoi que Léo ait choisi.
+    const proc = spawn(installerPath, ['install', '--quiet', '--accept-license', ...dockerInstallFlags(getStorageRoot())], { windowsHide: true })
     proc.on('error', () => resolve(null))
     proc.on('close', (code) => resolve(code))
   })
