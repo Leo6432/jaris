@@ -63,6 +63,9 @@ function loadDependencyServices({ onDownload }) {
             if (String(command) === 'winget') {
               // Machine sans winget : exactement le cas où Jaris doit renvoyer un message actionnable.
               setImmediate(() => handlers.error?.(new Error('winget introuvable')))
+            } else if (String(command) === 'powershell.exe') {
+              // La signature officielle de l'installeur est vérifiée avant son lancement.
+              setImmediate(() => handlers.close?.(0))
             }
             return proc
           }
