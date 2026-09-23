@@ -1739,10 +1739,10 @@ p.capacity-scan__tier-missing {
   cursor: pointer;
 }
 
-/* --- Mascotte (étape 144) : couleurs fixes du visage, puis une animation par humeur. -------------------- */
+/* --- Mascotte (étapes 144-145) : une bulle bleue brillante à deux yeux, animée par humeur. --------------- */
 
 .jaris-mascot__shadow {
-  fill: rgba(31, 41, 55, 0.1);
+  fill: rgba(31, 41, 55, 0.12);
   transform-box: fill-box;
   transform-origin: center;
   animation: mascot-shadow 3.4s ease-in-out infinite;
@@ -1750,33 +1750,27 @@ p.capacity-scan__tier-missing {
 
 .jaris-mascot__body {
   transform-box: view-box;
-  transform-origin: 60px 64px;
+  transform-origin: 60px 62px;
   animation: mascot-float 3.4s ease-in-out infinite;
 }
 
-.jaris-mascot__antenna line {
-  stroke: #9fb6e6;
-  stroke-width: 3;
-  stroke-linecap: round;
+.jaris-mascot__shine {
+  fill: #ffffff;
+  opacity: 0.42;
 }
 
-.jaris-mascot__bulb {
+.jaris-mascot__eye {
+  fill: #ffffff;
   transform-box: fill-box;
   transform-origin: center;
-  transition: fill 0.3s ease;
+  transition: transform 0.35s ease;
 }
 
-.jaris-mascot__face {
-  fill: #ffffff;
-  opacity: 0.94;
-}
-
-.jaris-mascot__eye ellipse {
-  fill: #1f2937;
-}
-
-.jaris-mascot__glint {
-  fill: #ffffff;
+.jaris-mascot__eyes--happy path {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 3.4;
+  stroke-linecap: round;
 }
 
 /* Clignement : les deux yeux se ferment brièvement toutes les 4 secondes environ. */
@@ -1786,29 +1780,16 @@ p.capacity-scan__tier-missing {
   animation: mascot-blink 4.6s ease-in-out infinite;
 }
 
-.jaris-mascot__eye {
-  transition: transform 0.35s ease;
-}
-
-.jaris-mascot__cheek {
-  fill: #f59ab5;
-  opacity: 0.35;
-}
-
-.jaris-mascot__mouth {
-  fill: none;
-  stroke: #1f2937;
-  stroke-width: 2.6;
-  stroke-linecap: round;
-}
-
-.jaris-mascot__mouth-open,
-.jaris-mascot__mouth-o {
-  fill: #1f2937;
+/* Halo : invisible au repos, il pulse doucement autour de la bulle quand Jaris écoute. */
+.jaris-mascot__halo {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 0.3s ease;
 }
 
 .jaris-mascot__dots circle {
-  fill: #b9c8ea;
+  fill: #b8cdf5;
   animation: mascot-dot 1.2s ease-in-out infinite;
 }
 
@@ -1820,15 +1801,18 @@ p.capacity-scan__tier-missing {
   animation-delay: 0.4s;
 }
 
-/* J'écoute : l'antenne pulse, les yeux s'agrandissent un peu, la mascotte se penche vers toi. */
-.jaris-mascot--listening .jaris-mascot__bulb {
-  animation: mascot-bulb 1.1s ease-in-out infinite;
+/* En tout petit (widget replié, 24-32 px), des yeux plus grands pour rester lisibles. */
+.jaris-mascot--minimal .jaris-mascot__eye {
+  transform: scale(1.45);
+}
+
+/* J'écoute : halo qui pulse, yeux un peu plus grands, la bulle se penche vers toi. */
+.jaris-mascot--listening .jaris-mascot__halo {
+  animation: mascot-halo 1.6s ease-out infinite;
 }
 
 .jaris-mascot--listening .jaris-mascot__eye {
-  transform: scale(1.12);
-  transform-box: fill-box;
-  transform-origin: center;
+  transform: scale(1.15);
 }
 
 .jaris-mascot--listening .jaris-mascot__body {
@@ -1837,23 +1821,21 @@ p.capacity-scan__tier-missing {
 
 /* Je réfléchis : regard en l'air, sur le côté. */
 .jaris-mascot--thinking .jaris-mascot__eye {
-  transform: translate(3px, -3px);
+  transform: translate(3px, -4px);
 }
 
-.jaris-mascot--thinking .jaris-mascot__bulb {
-  animation: mascot-bulb 1.6s ease-in-out infinite;
-}
-
-/* Je réponds : petits rebonds joyeux. */
+/* Je réponds : petits rebonds joyeux (les yeux plissés font le sourire). */
 .jaris-mascot--happy .jaris-mascot__body {
   animation: mascot-bounce 1.4s ease-in-out infinite;
 }
 
+.jaris-mascot--happy .jaris-mascot__eyes {
+  animation: none;
+}
+
 /* Surpris : grands yeux ronds. */
 .jaris-mascot--surprised .jaris-mascot__eye {
-  transform: scale(1.25);
-  transform-box: fill-box;
-  transform-origin: center;
+  transform: scale(1.35, 1.1);
 }
 
 .jaris-mascot--surprised .jaris-mascot__eyes {
@@ -1893,13 +1875,14 @@ p.capacity-scan__tier-missing {
   }
 }
 
-@keyframes mascot-bulb {
-  0%,
-  100% {
-    transform: scale(1);
+@keyframes mascot-halo {
+  0% {
+    opacity: 0.5;
+    transform: scale(0.88);
   }
-  50% {
-    transform: scale(1.35);
+  100% {
+    opacity: 0;
+    transform: scale(1.12);
   }
 }
 
@@ -1942,7 +1925,7 @@ p.capacity-scan__tier-missing {
   .jaris-mascot__shadow,
   .jaris-mascot__body,
   .jaris-mascot__eyes,
-  .jaris-mascot__bulb,
+  .jaris-mascot__halo,
   .jaris-mascot__dots circle {
     animation: none !important;
     transition: none;

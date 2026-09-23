@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
 /**
- * La mascotte de Jaris (étape 144, src/components/JarisOrb.tsx) dans un vrai navigateur, avec le vrai CSS
+ * La mascotte de Jaris (étapes 144-145, src/components/JarisOrb.tsx : une bulle bleue à deux yeux blancs) dans un vrai navigateur, avec le vrai CSS
  * compilé : chaque humeur se voit sur le visage (pas seulement dans une classe), les petites tailles
  * restent un visage lisible, la couleur d'une voix s'applique, et un clic déclenche bien l'écoute.
  * Playwright absent : tests ignorés, jamais verts en silence.
@@ -66,54 +66,59 @@ async function withPage(run) {
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
 
-test('chaque humeur change vraiment le visage : antenne, bouche, petits points de réflexion', options, async () => {
+test('chaque humeur change vraiment la bulle : halo, yeux, bulles de pensée', options, async () => {
   await withPage(async (page) => {
     const look = await page.evaluate(() =>
       Object.fromEntries(
         ['idle', 'listening', 'thinking', 'happy', 'surprised'].map((e) => {
           const root = document.querySelector('#m-' + e)
+          const eye = root.querySelector('.jaris-mascot__eye')
           return [
             e,
             {
-              bulb: root.querySelector('.jaris-mascot__bulb').getAttribute('fill'),
-              smile: Boolean(root.querySelector('.jaris-mascot__mouth')),
-              open: Boolean(root.querySelector('.jaris-mascot__mouth-open')),
-              o: Boolean(root.querySelector('.jaris-mascot__mouth-o')),
+              halo: getComputedStyle(root.querySelector('.jaris-mascot__halo')).animationName,
+              eyes: root.querySelectorAll('.jaris-mascot__eye').length,
+              happyEyes: root.querySelectorAll('.jaris-mascot__eyes--happy path').length,
+              eyeTransform: eye ? getComputedStyle(eye).transform : null,
               dots: Boolean(root.querySelector('.jaris-mascot__dots'))
             }
           ]
         })
       )
     )
-    assert.equal(look.listening.bulb, '#34c27a', 'antenne verte quand Jaris écoute')
-    assert.notEqual(look.idle.bulb, look.listening.bulb)
-    assert.ok(look.thinking.dots && !look.idle.dots, 'petits points seulement quand il réfléchit')
-    assert.ok(look.happy.open && !look.happy.smile, 'sourire ouvert quand il répond')
-    assert.ok(look.surprised.o, 'bouche en « o » quand il est surpris')
-    assert.ok(look.idle.smile)
+    assert.equal(look.listening.halo, 'mascot-halo', 'halo qui pulse quand Jaris écoute')
+    assert.equal(look.idle.halo, 'none', 'pas de halo au repos')
+    assert.ok(look.thinking.dots && !look.idle.dots, 'bulles de pensée seulement quand il réfléchit')
+    assert.equal(look.happy.happyEyes, 2, 'yeux plissés en sourire quand il répond')
+    assert.equal(look.happy.eyes, 0)
+    assert.equal(look.idle.eyes, 2, 'deux yeux ovales au repos')
+    assert.equal(look.surprised.eyes, 2)
+    assert.notEqual(look.surprised.eyeTransform, look.idle.eyeTransform, 'yeux agrandis quand il est surpris')
   })
 })
 
-test('en tout petit (widget replié), un visage lisible sans antenne ni joues', options, async () => {
+test('en tout petit (widget replié), la bulle et ses deux yeux, sans ombre ni bulles de pensée', options, async () => {
   await withPage(async (page) => {
     const small = await page.evaluate(() => {
       const root = document.querySelector('#m-small')
-      const box = { width: root.querySelector('.jaris-orb').offsetWidth } // taille de mise en page : l'animation d'apparition (zoom) ne la fausse pas
-      return { antenna: Boolean(root.querySelector('.jaris-mascot__antenna')), cheeks: root.querySelectorAll('.jaris-mascot__cheek').length, eyes: root.querySelectorAll('.jaris-mascot__eye').length, w: box.width }
+      return {
+        shadow: Boolean(root.querySelector('.jaris-mascot__shadow')),
+        eyes: root.querySelectorAll('.jaris-mascot__eye').length,
+        w: root.querySelector('.jaris-orb').offsetWidth // taille de mise en page : l'animation d'apparition (zoom) ne la fausse pas
+      }
     })
-    assert.equal(small.antenna, false)
-    assert.equal(small.cheeks, 0)
+    assert.equal(small.shadow, false)
     assert.equal(small.eyes, 2)
     assert.equal(Math.round(small.w), 24)
   })
 })
 
-test('la couleur d’une voix s’applique au corps, le reste du visage ne change pas', options, async () => {
+test('la couleur d’une voix s’applique à la bulle, les yeux restent blancs', options, async () => {
   await withPage(async (page) => {
-    const stop = await page.evaluate(() => document.querySelector('#m-voice radialGradient stop:last-child').getAttribute('stop-color'))
+    const stop = await page.evaluate(() => document.querySelector('#m-voice radialGradient stop:nth-child(2)').getAttribute('stop-color'))
     assert.equal(stop, '#e07a5f')
-    const face = await page.evaluate(() => getComputedStyle(document.querySelector('#m-voice .jaris-mascot__face')).fill)
-    assert.equal(face, 'rgb(255, 255, 255)', 'le visage reste blanc (le CSS de la mascotte est bien appliqué)')
+    const eye = await page.evaluate(() => getComputedStyle(document.querySelector('#m-voice .jaris-mascot__eye')).fill)
+    assert.equal(eye, 'rgb(255, 255, 255)', 'les yeux restent blancs (le CSS de la mascotte est bien appliqué)')
   })
 })
 

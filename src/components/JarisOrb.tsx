@@ -3,24 +3,21 @@ import type { RefObject } from 'react'
 import type { JarisEmotion } from '@/store/useJarisStore'
 
 /**
- * La mascotte de Jaris — étape 144, Léo : « un design rassurant » (grand public, plus de science-fiction),
- * et pour l'ancien cercle au bord irrégulier : « je te laisse carte blanche, Grok a une petite mascotte ».
+ * La mascotte de Jaris — étape 144 (design « rassurant », grand public), redessinée à l'étape 145 d'après
+ * l'image envoyée par Léo (« comme ça ») : une BULLE bleue brillante avec deux petits yeux blancs en amande,
+ * sans bouche ni antenne. Plus simple que le premier personnage, et lisible jusqu'à 24 px.
  *
- * Un petit personnage rond et bleu, avec un visage clair, de grands yeux et une antenne : on doit y lire
- * « un assistant gentil », jamais « une machine ». Le composant garde le nom et EXACTEMENT les réglages de
- * l'ancien orbe (emotion, size, audioElRef, onClick, color) : tous les écrans qui l'affichent (accueil vocal,
- * widget, sélecteur de voix) suivent sans modification.
+ * Le composant garde le nom et EXACTEMENT les réglages de l'ancien orbe (emotion, size, audioElRef, onClick,
+ * color) : tous les écrans qui l'affichent (accueil vocal, widget, sélecteur de voix) suivent sans
+ * modification. Dessiné en SVG, animé en CSS (index.css, `.jaris-mascot`) ; seule la « respiration » qui suit
+ * la voix est animée en JavaScript.
  *
- * Dessiné en SVG (plus en canvas) : net à toutes les tailles, de 24 px dans le widget replié à 320 px sur
- * l'accueil, et animé en CSS (index.css, `.jaris-mascot`). Seule la bouche est animée en JavaScript, pour
- * suivre la voix de Jaris quand il parle.
- *
- * Ce que chaque humeur montre, sans avoir besoin de lire le statut :
- * - idle       : flotte doucement et cligne des yeux de temps en temps ;
- * - listening  : grands yeux attentifs, antenne verte qui pulse (« je t'écoute ») ;
- * - thinking   : regarde en l'air, antenne ambre, trois petits points ;
- * - happy      : sourire, petits rebonds ; la bouche s'ouvre au rythme de la voix ;
- * - surprised  : yeux ronds, bouche en « o ».
+ * Sans bouche, tout passe par les yeux et la lumière :
+ * - idle       : flotte doucement, cligne des yeux de temps en temps ;
+ * - listening  : halo lumineux qui pulse autour de la bulle, yeux un peu plus grands (« je t'écoute ») ;
+ * - thinking   : regarde en l'air, trois petites bulles de pensée ;
+ * - happy      : yeux plissés en sourire (« ^ ^ »), petits rebonds ; la bulle gonfle au rythme de la voix ;
+ * - surprised  : yeux ronds et grands.
  */
 interface JarisOrbProps {
   emotion: JarisEmotion
@@ -32,19 +29,10 @@ interface JarisOrbProps {
   color?: string
 }
 
-/** Couleur du corps par défaut : le bleu d'accent de l'interface (--ui-accent). */
-const BODY_COLOR = '#4b7fe8'
+/** Couleur de la bulle par défaut : un bleu vif et doux, proche de l'accent de l'interface. */
+const BODY_COLOR = '#3d8bff'
 
-/** Couleur de la petite boule de l'antenne selon l'humeur : le seul signal coloré, pour ne pas surcharger. */
-const ANTENNA_COLOR: Record<JarisEmotion, string> = {
-  idle: '#c7d4f0',
-  listening: '#34c27a',
-  thinking: '#f0a830',
-  happy: '#7fb0ff',
-  surprised: '#f0a830'
-}
-
-/** Sous cette taille (widget replié), on ne garde que le corps et les yeux : antenne et joues deviennent du bruit. */
+/** Sous cette taille (widget replié), pas d'ombre au sol ni de bulles de pensée : juste la bulle et ses yeux. */
 export const MINIMAL_SIZE_THRESHOLD = 48
 
 interface AudioAnalysis {
@@ -93,18 +81,27 @@ export function lighten(hex: string, amount: number): string {
   return `#${[channel(16), channel(8), channel(0)].map((c) => c.toString(16).padStart(2, '0')).join('')}`
 }
 
-/** Sourire ouvert étiré verticalement depuis son bord haut : 1 = au repos, plus grand = bouche plus ouverte. */
-function mouthTransform(openness: number): string {
-  return `translate(60 74) scale(1 ${openness.toFixed(2)}) translate(-60 -74)`
+/** Assombrit une couleur hexadécimale (#rrggbb) vers le noir, pour le bord de la bulle. */
+export function darken(hex: string, amount: number): string {
+  const match = /^#?([0-9a-f]{6})$/i.exec(hex)
+  if (!match) return hex
+  const value = parseInt(match[1], 16)
+  const channel = (shift: number): number => Math.round(((value >> shift) & 0xff) * (1 - amount))
+  return `#${[channel(16), channel(8), channel(0)].map((c) => c.toString(16).padStart(2, '0')).join('')}`
+}
+
+/** La bulle « respire » avec la voix : 1 = au repos, un peu plus grand quand Jaris parle fort. */
+function breathTransform(scale: number): string {
+  return `translate(60 62) scale(${scale.toFixed(3)}) translate(-60 -62)`
 }
 
 export default function JarisOrb({ emotion, size = 320, audioElRef, onClick, color }: JarisOrbProps): JSX.Element {
-  const mouthRef = useRef<SVGGElement>(null)
+  const breathRef = useRef<SVGGElement>(null)
   const gradientId = `jaris-body-${useId().replace(/:/g, '')}`
   const minimal = size < MINIMAL_SIZE_THRESHOLD
   const body = color ?? BODY_COLOR
 
-  // Bouche qui suit la voix : seulement quand un <audio> est fourni (accueil vocal, widget), et seulement le
+  // La bulle suit la voix : seulement quand un <audio> est fourni (accueil vocal, widget), et seulement le
   // temps qu'il joue — aucune boucle d'animation qui tourne pour rien le reste du temps.
   useEffect(() => {
     const audioEl = audioElRef?.current
@@ -113,10 +110,10 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick, col
     let analysis: AudioAnalysis | null = null
     let buffer: Uint8Array<ArrayBuffer> | null = null
     const tick = (): void => {
-      const mouth = mouthRef.current
-      if (mouth && analysis && buffer) {
+      const breath = breathRef.current
+      if (breath && analysis && buffer) {
         const level = readAudioLevel(analysis.analyser, buffer)
-        mouth.setAttribute('transform', mouthTransform(0.55 + Math.min(1, level * 3) * 1.1))
+        breath.setAttribute('transform', breathTransform(1 + Math.min(1, level * 3) * 0.07))
       }
       frame = requestAnimationFrame(tick)
     }
@@ -125,14 +122,14 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick, col
         analysis ??= getOrCreateAudioAnalysis(audioEl)
         buffer ??= new Uint8Array(analysis.analyser.frequencyBinCount)
       } catch {
-        return // pas d'AudioContext disponible : la bouche garde simplement sa forme de sourire
+        return // pas d'AudioContext disponible : la bulle reste simplement à sa taille
       }
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(tick)
     }
     const stop = (): void => {
       cancelAnimationFrame(frame)
-      mouthRef.current?.setAttribute('transform', mouthTransform(1))
+      breathRef.current?.setAttribute('transform', breathTransform(1))
     }
     audioEl.addEventListener('play', start)
     audioEl.addEventListener('pause', stop)
@@ -156,63 +153,50 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick, col
     .filter(Boolean)
     .join(' ')
 
+  const eyes =
+    emotion === 'happy' ? (
+      // Yeux plissés en sourire : deux petits arcs « ^ ^ ».
+      <g className="jaris-mascot__eyes jaris-mascot__eyes--happy">
+        <path d="M60 57 Q64 50 68 57" />
+        <path d="M74 57 Q78 50 82 57" />
+      </g>
+    ) : (
+      <g className="jaris-mascot__eyes">
+        <ellipse className="jaris-mascot__eye" cx="64" cy="56" rx="3.8" ry="6.8" />
+        <ellipse className="jaris-mascot__eye" cx="78" cy="56" rx="3.8" ry="6.8" />
+      </g>
+    )
+
   return (
     <div className={classes} style={{ width: size, height: size }} onClick={onClick}>
       <svg viewBox="0 0 120 120" width={size} height={size} role="img" aria-label="Jaris">
         <defs>
-          <radialGradient id={gradientId} cx="38%" cy="30%" r="75%">
-            <stop offset="0%" stopColor={lighten(body, 0.45)} />
-            <stop offset="100%" stopColor={body} />
+          <radialGradient id={gradientId} cx="36%" cy="30%" r="78%">
+            <stop offset="0%" stopColor={lighten(body, 0.55)} />
+            <stop offset="45%" stopColor={body} />
+            <stop offset="100%" stopColor={darken(body, 0.35)} />
           </radialGradient>
         </defs>
 
-        {/* Ombre au sol : se resserre quand la mascotte flotte vers le haut. */}
+        {/* Ombre au sol : se resserre quand la bulle flotte vers le haut. */}
         {!minimal && <ellipse className="jaris-mascot__shadow" cx="60" cy="113" rx="26" ry="4" />}
 
         <g className="jaris-mascot__body">
-          {!minimal && (
-            <g className="jaris-mascot__antenna">
-              <line x1="60" y1="24" x2="60" y2="13" />
-              <circle className="jaris-mascot__bulb" cx="60" cy="11" r="5" fill={ANTENNA_COLOR[emotion]} />
-            </g>
-          )}
+          {/* Halo : visible seulement quand Jaris écoute (CSS), pour dire « je t'entends » sans texte. */}
+          <circle className="jaris-mascot__halo" cx="60" cy="62" r="50" fill={body} />
 
-          <circle cx="60" cy="64" r="42" fill={`url(#${gradientId})`} />
-          <ellipse className="jaris-mascot__face" cx="60" cy="67" rx="30" ry="24" />
-
-          <g className="jaris-mascot__eyes">
-            <g className="jaris-mascot__eye">
-              <ellipse cx="48" cy="63" rx="5" ry="7" />
-              <circle className="jaris-mascot__glint" cx="49.8" cy="60" r="1.8" />
-            </g>
-            <g className="jaris-mascot__eye">
-              <ellipse cx="72" cy="63" rx="5" ry="7" />
-              <circle className="jaris-mascot__glint" cx="73.8" cy="60" r="1.8" />
-            </g>
+          <g ref={breathRef} transform={breathTransform(1)}>
+            <circle className="jaris-mascot__sphere" cx="60" cy="62" r="44" fill={`url(#${gradientId})`} />
+            {/* Reflet brillant en haut à gauche : c'est lui qui donne l'aspect « bulle ». */}
+            <ellipse className="jaris-mascot__shine" cx="42" cy="38" rx="13" ry="7" transform="rotate(-32 42 38)" />
+            {eyes}
           </g>
-
-          {!minimal && (
-            <>
-              <circle className="jaris-mascot__cheek" cx="40" cy="74" r="4" />
-              <circle className="jaris-mascot__cheek" cx="80" cy="74" r="4" />
-            </>
-          )}
-
-          {emotion === 'surprised' ? (
-            <circle className="jaris-mascot__mouth-o" cx="60" cy="78" r="3.5" />
-          ) : emotion === 'happy' ? (
-            <g ref={mouthRef} transform={mouthTransform(1)}>
-              <path className="jaris-mascot__mouth-open" d="M52 74 Q60 85 68 74 Z" />
-            </g>
-          ) : (
-            <path className="jaris-mascot__mouth" d="M53 75 Q60 81 67 75" />
-          )}
 
           {emotion === 'thinking' && !minimal && (
             <g className="jaris-mascot__dots">
-              <circle cx="92" cy="30" r="3" />
-              <circle cx="101" cy="22" r="3.6" />
-              <circle cx="111" cy="13" r="4.2" />
+              <circle cx="96" cy="30" r="3" />
+              <circle cx="104" cy="21" r="3.8" />
+              <circle cx="113" cy="11" r="4.6" />
             </g>
           )}
         </g>

@@ -4240,3 +4240,23 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   **Non vérifiable ici** : le rendu dans la vraie fenêtre Windows (police, widget transparent sur le bureau) —
   à confirmer par Léo. Les écrans n'ont pas été réorganisés : seul l'habillage change ; simplifier les textes
   et parcours pour le grand public est une étape à part.
+
+- **Étape 145, Léo : la première mascotte « ça va pas », puis une image de référence « comme ça » : une bulle
+  bleue brillante avec deux petits yeux blancs ovales, sans bouche ni antenne.** Mascotte redessinée d'après
+  CETTE image plutôt qu'une nouvelle interprétation libre : la carte blanche de l'étape 144 avait donné un
+  personnage que Léo n'a pas reconnu comme le sien, et une référence visuelle tranche mieux qu'une
+  description. Même leçon que le widget et le sélecteur de voix (étapes 69-76) : un jugement de goût ne se
+  devine pas, on le reprend tel qu'il est montré.
+  `JarisOrb.tsx` garde exactement les mêmes réglages (`emotion`, `size`, `audioElRef`, `onClick`, `color`),
+  donc aucun écran n'a changé. Sans bouche, les humeurs passent par les yeux et la lumière : halo qui pulse
+  quand Jaris écoute, regard vers le haut et bulles de pensée quand il réfléchit, yeux plissés en « ^ ^ »
+  quand il répond (la bulle gonfle au rythme de la voix), yeux agrandis quand il est surpris. En petit
+  (widget replié, icône de la barre système), les yeux sont agrandis : à 24-32 px, deux ovales de taille
+  normale ne font plus qu'un point.
+  **Un seul dessin pour le composant et les icônes** : `shared/mascotPixels.ts` reprend au pixel près les
+  formes et couleurs du SVG (même repère 120 × 120), vérifié en regardant l'icône 256 px, l'icône de la
+  barre système 32 px et le widget réellement rendus, pas seulement les tests.
+  Régression : `test-mascot-ui.mjs` (vrai navigateur : halo seulement à l'écoute, yeux « ^ ^ » en réponse,
+  bulles de pensée, taille minimale sans ombre, couleur de voix sur la bulle, clic) et `test-soft-theme.mjs`
+  (icône : bulle bleue, deux yeux blancs DISTINCTS, coins transparents). Le test du halo a été vérifié en le
+  retirant du CSS : il échoue bien. **Non vérifiable ici** : le rendu dans la vraie fenêtre Windows.
