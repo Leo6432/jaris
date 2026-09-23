@@ -1,74 +1,57 @@
 /* ==========================================================================
-   Jaris — thème « doux » (étape 144)
+   Jaris — thème "HUD" (interface technique façon cockpit / réacteur ARC)
    --------------------------------------------------------------------------
-   Léo : « je veux un design rassurant, car Jaris ça va être une application
-   d'IA locale facile à installer, pour les personnes qui ne sont pas fortes en
-   informatique ». Remplace le thème « HUD » science-fiction (fond noir, néons
-   cyan, grille, coins coupés, capitales espacées), pensé pour des initiés.
+   Un seul jeu de tokens ici, utilisé partout ailleurs dans ce fichier : changer
+   l'accent ou le fond se fait à un seul endroit, jamais en repassant sur des
+   centaines de couleurs écrites en dur (ce qui était le cas avant).
 
-   Principes, dans l'ordre où ils se voient :
-   - un fond SOMBRE et doux (gris-bleu, étape 146), du texte gris clair — jamais
-     noir pur ni blanc pur, qui fatiguent ;
-   - UNE couleur d'accent, un bleu doux, réservée à ce qui se clique ;
-   - des coins bien arrondis et des ombres légères au lieu de liserés lumineux ;
-   - une seule police, Nunito (ronde, très lisible), en casse normale : les
-     capitales espacées font « machine », la phrase normale fait « conversation ».
-
-   Un seul jeu de tokens, utilisé partout ailleurs dans ce fichier : changer une
-   couleur se fait ici, jamais en repassant sur des valeurs écrites en dur. Les
-   tokens s'appelaient `--hud-*` avec l'ancien thème ; renommés `--ui-*`.
+   Deux polices seulement, embarquées dans le bundle (voir src/main.tsx, jamais
+   Google Fonts : Jaris doit marcher hors ligne) :
+   - Rajdhani, condensée et anguleuse, pour tout ce qui est étiquette/titre/bouton
+     — c'est elle qui donne le ton "instrument de bord".
+   - Barlow, plus neutre et lisible, pour le texte courant et les réponses de
+     Jaris, qui peuvent être longues : une police d'affichage sur des paragraphes
+     entiers fatiguerait à la lecture.
+   Le monospace reste celui de Windows (Consolas/Cascadia, toujours présent) :
+   utilisé uniquement pour des identifiants techniques et des chiffres alignés.
    ========================================================================== */
 :root {
   color-scheme: dark;
 
-  /* Fonds (étape 146, Léo : « mets le mode dark, pas blanc ») : un gris-bleu très sombre, jamais du noir
-     pur (dur pour les yeux), et des cartes un cran plus claires pour se détacher sans liseré lumineux. */
-  --ui-bg: #15171c;
-  --ui-panel: #1d2027;
-  --ui-panel-raised: #242832;
-  --ui-surface-rgb: 36, 40, 50;
-  /* Encre : sert aux traits et aux voiles (clairs sur fond sombre), jamais comme couleur de texte directe. */
-  --ui-ink-rgb: 226, 232, 240;
-  /* Ombres : toujours noires — une ombre claire sur fond sombre ferait un halo, pas une profondeur. */
-  --ui-shadow-rgb: 0, 0, 0;
+  /* Fonds : presque noir, très légèrement bleuté (un noir pur écrase les lueurs). */
+  --hud-bg: #01040a;
+  --hud-panel: #061019;
+  --hud-panel-raised: rgba(12, 28, 44, 0.55);
 
-  /* Texte, du plus lisible au plus discret (tous lisibles sur --ui-bg). */
-  --ui-text: #eceff4;
-  --ui-text-soft: #d3d8e0;
-  --ui-text-dim: #a3abb8;
-  --ui-text-faint: #7f8795;
+  /* Texte, du plus lisible au plus discret. */
+  --hud-text: #e6f7ff;
+  --hud-text-soft: #a9cfe8;
+  --hud-text-dim: #7fb0d4;
+  --hud-text-faint: #4f7391;
 
-  /* Accent : un bleu doux. --bright sert aux survols (plus CLAIR sur fond sombre). */
-  --ui-accent: #3a7bf2;
-  --ui-accent-bright: #6a9df7;
-  --ui-accent-deep: #2a63d1;
-  --ui-accent-rgb: 58, 123, 242;
-  --ui-accent-soft: #1c2a45;
+  /* Accent principal : le cyan du réacteur. --bright sert aux survols/lueurs. */
+  --hud-accent: #3ddcff;
+  --hud-accent-bright: #9ff2ff;
+  --hud-accent-deep: #1f6fff;
+  --hud-accent-rgb: 61, 220, 255;
 
-  /* Couleurs de sens (jamais décoratives) : ambre = attention, vert = OK, rouge = échec. */
-  --ui-gold: #e3a84f;
-  --ui-gold-rgb: 227, 168, 79;
-  --ui-ok: #4cc38a;
-  --ui-ok-rgb: 76, 195, 138;
-  --ui-danger: #f26d6d;
-  --ui-danger-rgb: 242, 109, 109;
-  --ui-danger-soft: #3a1f23;
+  /* Couleurs de sens (jamais décoratives) : or = attention, vert = OK, rouge = échec. */
+  --hud-gold: #ffb020;
+  --hud-ok: #31ffb0;
+  --hud-ok-rgb: 49, 255, 176;
+  --hud-danger: #ff4d68;
+  --hud-danger-soft: #ffb8c2;
 
-  /* Traits et ombres : des séparations discrètes, pas des contours lumineux. */
-  --ui-line: rgba(var(--ui-ink-rgb), 0.1);
-  --ui-line-strong: rgba(var(--ui-ink-rgb), 0.2);
-  --ui-glow: 0 1px 2px rgba(var(--ui-shadow-rgb), 0.3), 0 4px 14px rgba(var(--ui-shadow-rgb), 0.35);
-  --ui-shadow-card: 0 1px 2px rgba(var(--ui-shadow-rgb), 0.25), 0 2px 8px rgba(var(--ui-shadow-rgb), 0.25);
+  /* Traits : le HUD est fait de hairlines, pas de gros contours. */
+  --hud-line: rgba(var(--hud-accent-rgb), 0.22);
+  --hud-line-strong: rgba(var(--hud-accent-rgb), 0.5);
+  --hud-glow: 0 0 12px rgba(var(--hud-accent-rgb), 0.35);
 
-  /* Arrondis : généreux, c'est une grande partie de l'impression de douceur. */
-  --ui-radius: 12px;
-  --ui-radius-lg: 18px;
+  --hud-font-display: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+  --hud-font-body: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+  --hud-font-mono: 'Cascadia Mono', Consolas, ui-monospace, monospace;
 
-  --ui-font-display: 'Nunito', 'Segoe UI', system-ui, sans-serif;
-  --ui-font-body: 'Nunito', 'Segoe UI', system-ui, sans-serif;
-  --ui-font-mono: 'Cascadia Mono', Consolas, ui-monospace, monospace;
-
-  font-family: var(--ui-font-body);
+  font-family: var(--hud-font-body);
   font-synthesis-weight: none;
 }
 
@@ -83,20 +66,65 @@ body,
   margin: 0;
 }
 
-/* Chromium ne fait PAS hériter la police aux contrôles de formulaire : sans ça, boutons et onglets
-   restaient dans la police système au milieu de Nunito (vu sur capture, étape 144). */
-button,
-input,
-select,
-textarea {
-  font-family: inherit;
+/*
+ * Le fond n'est pas un simple dégradé : trois couches superposées (grille
+ * technique, halo du réacteur, vignette) qui donnent la profondeur d'un écran
+ * de cockpit. Tout est en CSS pur — aucune image à charger, donc rien qui
+ * puisse manquer hors ligne, et zéro coût de rendu continu (pas d'animation
+ * sur ces couches-là, seule la ligne de balayage plus bas bouge).
+ */
+body {
+  background:
+    linear-gradient(rgba(var(--hud-accent-rgb), 0.045) 1px, transparent 1px) 0 0 / 100% 44px,
+    linear-gradient(90deg, rgba(var(--hud-accent-rgb), 0.045) 1px, transparent 1px) 0 0 / 44px 100%,
+    radial-gradient(circle at 50% 26%, rgba(var(--hud-accent-rgb), 0.13) 0%, transparent 58%),
+    radial-gradient(circle at 50% 30%, var(--hud-panel) 0%, var(--hud-bg) 72%);
+  color: var(--hud-text);
+  overflow: hidden;
 }
 
-/* Un fond uni et calme : plus de grille, de halo ni de ligne de balayage. */
-body {
-  background: var(--ui-bg);
-  color: var(--ui-text);
-  overflow: hidden;
+/*
+ * Ligne de balayage : une seule barre lumineuse qui descend lentement, comme un
+ * radar qui rafraîchit l'écran. Volontairement très lente (9 s) et très peu
+ * contrastée — l'effet doit se remarquer du coin de l'œil, jamais distraire
+ * pendant qu'on lit une réponse. `pointer-events: none` : purement décoratif,
+ * ne doit jamais intercepter un clic.
+ */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(var(--hud-accent-rgb), 0.055) 48%,
+    rgba(var(--hud-accent-rgb), 0.09) 50%,
+    rgba(var(--hud-accent-rgb), 0.055) 52%,
+    transparent 100%
+  );
+  background-size: 100% 240px;
+  background-repeat: no-repeat;
+  animation: hud-sweep 9s linear infinite;
+}
+
+@keyframes hud-sweep {
+  from {
+    background-position: 0 -240px;
+  }
+  to {
+    background-position: 0 100vh;
+  }
+}
+
+/* Respecte le réglage système "réduire les animations" : la ligne de balayage et
+   les pulsations disparaissent, le reste de l'interface est identique. */
+@media (prefers-reduced-motion: reduce) {
+  body::after {
+    animation: none;
+    opacity: 0.4;
+  }
 }
 
 /* Widget flottant (étape 19) : fenêtre Electron transparente, donc pas de fond du tout ici — grille et
@@ -110,6 +138,11 @@ body.body--widget {
 html.body--scan,
 body.body--scan {
   background: transparent;
+}
+
+body.body--widget::after,
+body.body--scan::after {
+  display: none;
 }
 
 .screen-scan {
@@ -148,14 +181,14 @@ body.body--scan {
   flex-direction: column;
   gap: 24px;
   padding: 20px 14px;
-  border-right: 1px solid rgba(var(--ui-ink-rgb), 0.18);
-  background: rgba(var(--ui-surface-rgb), 0.5);
+  border-right: 1px solid rgba(122, 176, 214, 0.18);
+  background: rgba(1, 4, 10, 0.5);
 }
 
 .sidebar__brand {
   font-size: 0.85rem;
-  letter-spacing: 0.01em;
-  color: var(--ui-accent);
+  letter-spacing: 0.32em;
+  color: var(--hud-accent);
   padding-left: 8px;
 }
 
@@ -173,7 +206,7 @@ body.body--scan {
   background: transparent;
   border: none;
   border-left: 2px solid transparent;
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
   padding: 9px 12px;
   border-radius: 0 8px 8px 0;
   cursor: pointer;
@@ -181,14 +214,14 @@ body.body--scan {
 }
 
 .sidebar__mode:hover {
-  background: rgba(var(--ui-ink-rgb), 0.07);
-  color: var(--ui-text);
+  background: rgba(122, 176, 214, 0.07);
+  color: var(--hud-text);
 }
 
 .sidebar__mode--active {
-  background: rgba(var(--ui-accent-rgb), 0.1);
-  border-left-color: var(--ui-accent);
-  color: var(--ui-text);
+  background: rgba(61, 220, 255, 0.1);
+  border-left-color: var(--hud-accent);
+  color: var(--hud-text);
 }
 
 .sidebar__mode-label {
@@ -197,7 +230,7 @@ body.body--scan {
 
 .sidebar__mode-hint {
   font-size: 0.68rem;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 /* Repoussé en bas de la colonne : les réglages ne sont pas au même niveau que les 3 modes. */
@@ -211,8 +244,8 @@ body.body--scan {
 
 .sidebar__link {
   background: transparent;
-  border: 1px solid rgba(var(--ui-ink-rgb), 0.18);
-  color: var(--ui-text-dim);
+  border: 1px solid rgba(122, 176, 214, 0.35);
+  color: var(--hud-text-dim);
   padding: 6px 16px;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -221,8 +254,8 @@ body.body--scan {
 }
 
 .sidebar__link:hover {
-  border-color: var(--ui-accent);
-  color: var(--ui-text);
+  border-color: var(--hud-accent);
+  color: var(--hud-text);
 }
 
 .app-main {
@@ -264,8 +297,8 @@ body.body--scan {
 
 .options-menu__trigger {
   background: transparent;
-  border: 1px solid rgba(var(--ui-ink-rgb), 0.18);
-  color: var(--ui-text-dim);
+  border: 1px solid rgba(122, 176, 214, 0.35);
+  color: var(--hud-text-dim);
   padding: 6px 16px;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -273,8 +306,8 @@ body.body--scan {
 }
 
 .options-menu__trigger:hover {
-  border-color: var(--ui-accent);
-  color: var(--ui-text);
+  border-color: var(--hud-accent);
+  color: var(--hud-text);
 }
 
 /* Page pleine (pas un petit menu déroulant) : même structure que .memory-brain, pour de la place à
@@ -285,7 +318,7 @@ body.body--scan {
   z-index: 20;
   display: flex;
   flex-direction: column;
-  background: radial-gradient(circle at 50% 30%, var(--ui-panel) 0%, var(--ui-bg) 70%);
+  background: radial-gradient(circle at 50% 30%, var(--hud-panel) 0%, var(--hud-bg) 70%);
 }
 
 .options-page__header {
@@ -294,13 +327,13 @@ body.body--scan {
   justify-content: space-between;
   gap: 16px;
   padding: 14px 20px;
-  border-bottom: 1px solid rgba(var(--ui-ink-rgb), 0.1);
+  border-bottom: 1px solid rgba(122, 176, 214, 0.2);
 }
 
 .options-page__close {
   background: transparent;
-  border: 1px solid rgba(var(--ui-ink-rgb), 0.18);
-  color: var(--ui-text-dim);
+  border: 1px solid rgba(122, 176, 214, 0.35);
+  color: var(--hud-text-dim);
   padding: 6px 14px;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -308,8 +341,8 @@ body.body--scan {
 }
 
 .options-page__close:hover {
-  border-color: var(--ui-accent);
-  color: var(--ui-text);
+  border-color: var(--hud-accent);
+  color: var(--hud-text);
 }
 
 .options-page__content {
@@ -333,19 +366,19 @@ body.body--scan {
 .options-page__tab-header h3 {
   margin: 0;
   font-size: 1.3rem;
-  color: var(--ui-text);
+  color: var(--hud-text);
 }
 
 .options-page__tab-header p {
   margin: 4px 0 0;
   font-size: 0.85rem;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 .options-menu__tabs {
   display: flex;
   gap: 6px;
-  background: rgba(var(--ui-ink-rgb), 0.05);
+  background: rgba(122, 176, 214, 0.08);
   border-radius: 999px;
   padding: 3px;
 }
@@ -354,7 +387,7 @@ body.body--scan {
   flex: 1;
   background: transparent;
   border: none;
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
   padding: 6px 14px;
   border-radius: 999px;
   font-size: 0.8rem;
@@ -362,12 +395,12 @@ body.body--scan {
 }
 
 .options-menu__tab:hover {
-  color: var(--ui-text);
+  color: var(--hud-text);
 }
 
 .options-menu__tab--active {
-  background: rgba(var(--ui-accent-rgb), 0.15);
-  color: var(--ui-text);
+  background: rgba(61, 220, 255, 0.15);
+  color: var(--hud-text);
 }
 
 .options-menu__section {
@@ -378,23 +411,23 @@ body.body--scan {
 
 .options-menu__section-title {
   font-size: 0.7rem;
-  text-transform: none;
-  letter-spacing: 0.01em;
-  color: var(--ui-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--hud-text-faint);
 }
 
 /* Refonte des réglages (étape 116), Léo : "tu voit sur claude chatgpt tout se ressemble mais dans les
    option rien ne se ressemble micro comment se déclencher" — avant, un menu déroulant (`.options-menu__field`),
    une case isolée (`.options-menu__checkbox`) et un bouton nu avaient chacun leur propre mise en forme.
    `.options-menu__group` regroupe plusieurs réglages dans une même carte (même famille visuelle que
-   `.options-menu__capability`, fond `--ui-panel-raised` + bordure `--ui-line`, juste sans le grillage en
+   `.options-menu__capability`, fond `--hud-panel-raised` + bordure `--hud-line`, juste sans le grillage en
    colonnes) ; `.options-menu__row` est LA ligne de réglage commune, quel que soit le contrôle qu'elle
    porte : intitulé + description à gauche, contrôle aligné à droite. */
 .options-menu__group {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--ui-line);
-  background: var(--ui-panel-raised);
+  border: 1px solid var(--hud-line);
+  background: var(--hud-panel-raised);
   padding: 10px 18px 24px;
   /* Léo, capture annotée de rouge sur PLUSIEURS cartes : "augmente un peut la taille des carre la ou j'ai
      entourée entre la barre et le texte et la fin du rectangle pour tout les rectangle dans option" — le
@@ -411,7 +444,7 @@ body.body--scan {
 .options-menu__group-description {
   margin: 0;
   font-size: 0.76rem;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 .options-menu__group-rows {
@@ -425,7 +458,7 @@ body.body--scan {
   justify-content: space-between;
   gap: 20px;
   padding: 14px 0;
-  border-bottom: 1px solid rgba(var(--ui-ink-rgb), 0.07);
+  border-bottom: 1px solid rgba(122, 176, 214, 0.12);
 }
 
 .options-menu__group-rows > .options-menu__row:last-child {
@@ -461,13 +494,13 @@ body.body--scan {
 
 .options-menu__row-label {
   font-size: 0.85rem;
-  color: var(--ui-text);
+  color: var(--hud-text);
 }
 
 .options-menu__row-description {
   margin: 0;
   font-size: 0.72rem;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 .options-menu__row-control {
@@ -478,19 +511,22 @@ body.body--scan {
 }
 
 /* Interrupteur d'une ligne de réglage (refonte étape 119, remplace la case à cocher native
-   `.options-menu__toggle`) : étape 144, un interrupteur rond classique (celui de tous les téléphones) — le
-   réglage le plus universellement compris, bleu quand il est activé (voir le composant `Toggle`). */
+   `.options-menu__toggle`) : rail + curseur en coins coupés, même famille que les boutons HUD plutôt qu'un
+   style de case de formulaire par défaut (voir le composant `Toggle`, OptionsMenu.tsx). Dimensions et
+   décalage du curseur repris de la maquette "Options Jaris.dc.html" (rail 44x22, curseur 16x14). */
 .options-menu__switch {
   position: relative;
   flex: 0 0 auto;
   width: 44px;
-  height: 24px;
+  height: 22px;
   padding: 0;
-  border: none;
-  background: rgba(var(--ui-ink-rgb), 0.18);
+  border: 1px solid var(--hud-line-strong);
+  background: rgba(1, 4, 10, 0.6);
   cursor: pointer;
-  border-radius: 999px;
-  transition: background 0.18s ease;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .options-menu__switch:disabled {
@@ -499,23 +535,26 @@ body.body--scan {
 }
 
 .options-menu__switch--on {
-  background: var(--ui-accent);
+  background: rgba(var(--hud-accent-rgb), 0.16);
+  border-color: var(--hud-accent);
 }
 
 .options-menu__switch-knob {
   position: absolute;
   top: 3px;
   left: 3px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(var(--ui-shadow-rgb), 0.4);
-  transition: left 0.18s ease;
+  width: 16px;
+  height: 14px;
+  background: var(--hud-text-faint);
+  transition:
+    left 0.14s ease,
+    background 0.14s ease;
 }
 
 .options-menu__switch--on .options-menu__switch-knob {
-  left: 23px;
+  left: 25px;
+  background: var(--hud-accent);
+  box-shadow: 0 0 8px rgba(var(--hud-accent-rgb), 0.7);
 }
 
 .options-menu__select {
@@ -546,7 +585,7 @@ body.body--scan {
 .options-menu__capability-intro {
   margin: 0 0 6px;
   font-size: 0.85rem;
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
 }
 
 .options-menu__capability-group {
@@ -562,13 +601,13 @@ body.body--scan {
   font-size: 1.05rem;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--ui-text);
+  color: var(--hud-text);
 }
 
 .options-menu__capability-group-summary {
   margin: 2px 0 12px;
   font-size: 0.82rem;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 .options-menu__capability-cards {
@@ -582,25 +621,25 @@ body.body--scan {
   flex-direction: column;
   gap: 4px;
   padding: 13px 15px;
-  border: 1px solid var(--ui-line);
+  border: 1px solid var(--hud-line);
   border-radius: 10px;
-  background: var(--ui-panel-raised);
+  background: var(--hud-panel-raised);
 }
 
 .options-menu__capability-title {
   margin: 0;
-  font-family: var(--ui-font-display);
+  font-family: var(--hud-font-display);
   font-size: 0.98rem;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--ui-text);
+  color: var(--hud-text);
 }
 
 .options-menu__capability-description {
   margin: 0;
   font-size: 0.82rem;
   line-height: 1.45;
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
 }
 
 /* La phrase à dire est la seule chose vraiment actionnable de la carte : elle est détachée du paragraphe
@@ -615,23 +654,23 @@ body.body--scan {
   gap: 8px;
   margin: auto 0 0;
   padding-top: 8px;
-  border-top: 1px solid rgba(var(--ui-accent-rgb), 0.12);
+  border-top: 1px solid rgba(var(--hud-accent-rgb), 0.12);
 }
 
 .options-menu__capability-example-label {
   flex: 0 0 auto;
-  font-family: var(--ui-font-display);
+  font-family: var(--hud-font-display);
   font-size: 0.62rem;
   font-weight: 600;
-  letter-spacing: 0.01em;
-  text-transform: none;
-  color: var(--ui-text-faint);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--hud-text-faint);
 }
 
 .options-menu__capability-example-text {
   font-size: 0.84rem;
   line-height: 1.4;
-  color: var(--ui-accent);
+  color: var(--hud-accent);
 }
 
 /* Une limitation n'est pas une capacité : pas de carte, pas de bordure pleine — un liseré à gauche, comme
@@ -639,27 +678,27 @@ body.body--scan {
 .options-menu__capability-limitation {
   margin: 10px 0 0;
   padding: 9px 13px;
-  border-left: 2px solid var(--ui-line-strong);
+  border-left: 2px solid var(--hud-line-strong);
   font-size: 0.8rem;
   line-height: 1.45;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 .options-menu__capability-limitation strong {
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
   font-weight: 600;
 }
 
 .options-menu__account {
   font-size: 0.85rem;
-  color: var(--ui-text);
+  color: var(--hud-text);
   word-break: break-all;
 }
 
 .options-menu__action {
-  background: rgba(var(--ui-accent-rgb), 0.12);
-  border: 1px solid rgba(var(--ui-accent-rgb), 0.4);
-  color: var(--ui-text);
+  background: rgba(61, 220, 255, 0.12);
+  border: 1px solid rgba(61, 220, 255, 0.4);
+  color: var(--hud-text);
   padding: 6px 14px;
   border-radius: 999px;
   font-size: 0.8rem;
@@ -672,21 +711,21 @@ body.body--scan {
 }
 
 .options-menu__action:not(:disabled):hover {
-  border-color: var(--ui-accent);
+  border-color: var(--hud-accent);
 }
 
 .options-menu__error {
   font-size: 0.75rem;
-  color: var(--ui-danger);
+  color: var(--hud-danger);
 }
 
 /* Rappel "ferme tout le reste pendant l'analyse" — même code couleur ambre que .app__setup-warning (avertit
    sans alarmer), affiché avant ET pendant tout run (onboarding et ré-analyse depuis Options → Modèles). */
 .options-menu__analysis-notice {
   font-size: 0.76rem;
-  color: var(--ui-gold);
-  background: rgba(var(--ui-gold-rgb), 0.08);
-  border: 1px solid rgba(var(--ui-gold-rgb), 0.3);
+  color: var(--hud-gold);
+  background: rgba(255, 176, 32, 0.08);
+  border: 1px solid rgba(255, 176, 32, 0.3);
   border-radius: 10px;
   padding: 8px 14px;
   margin: 8px 0;
@@ -696,9 +735,9 @@ body.body--scan {
    jour" (onglet Modèles) — bouton "Mettre à jour" (winget) + lien manuel côte à côte. */
 .options-menu__ollama-warning {
   font-size: 0.76rem;
-  color: var(--ui-gold);
-  background: rgba(var(--ui-gold-rgb), 0.08);
-  border: 1px solid rgba(var(--ui-gold-rgb), 0.3);
+  color: var(--hud-gold);
+  background: rgba(255, 176, 32, 0.08);
+  border: 1px solid rgba(255, 176, 32, 0.3);
   border-radius: 10px;
   padding: 8px 14px;
   margin: 0 0 10px;
@@ -723,7 +762,7 @@ body.body--scan {
   position: fixed;
   inset: 0;
   z-index: 30;
-  background: rgba(var(--ui-shadow-rgb), 0.55);
+  background: rgba(1, 3, 8, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -731,8 +770,8 @@ body.body--scan {
 }
 
 .options-menu__scope-dialog {
-  background: var(--ui-panel);
-  border: 1px solid rgba(var(--ui-ink-rgb), 0.25);
+  background: var(--hud-panel);
+  border: 1px solid rgba(122, 176, 214, 0.25);
   border-radius: 14px;
   padding: 22px 24px;
   max-width: 380px;
@@ -742,13 +781,13 @@ body.body--scan {
 .options-menu__scope-dialog h3 {
   margin: 0 0 8px;
   font-size: 1rem;
-  color: var(--ui-text);
+  color: var(--hud-text);
 }
 
 .options-menu__scope-dialog p {
   margin: 0 0 16px;
   font-size: 0.78rem;
-  color: var(--ui-text-soft);
+  color: var(--hud-text-soft);
 }
 
 .options-menu__scope-dialog-options {
@@ -759,9 +798,9 @@ body.body--scan {
 }
 
 .options-menu__scope-dialog-options button {
-  background: rgba(var(--ui-accent-rgb), 0.1);
-  border: 1px solid rgba(var(--ui-accent-rgb), 0.3);
-  color: var(--ui-text);
+  background: rgba(61, 220, 255, 0.1);
+  border: 1px solid rgba(61, 220, 255, 0.3);
+  color: var(--hud-text);
   padding: 9px 10px;
   border-radius: 8px;
   font-size: 0.78rem;
@@ -769,19 +808,19 @@ body.body--scan {
 }
 
 .options-menu__scope-dialog-options button:hover {
-  border-color: var(--ui-accent);
-  background: rgba(var(--ui-accent-rgb), 0.18);
+  border-color: var(--hud-accent);
+  background: rgba(61, 220, 255, 0.18);
 }
 
 .options-menu__scope-dialog-options button.options-menu__scope-dialog-all {
   grid-column: 1 / -1;
-  background: rgba(var(--ui-accent-rgb), 0.18);
+  background: rgba(61, 220, 255, 0.18);
 }
 
 .options-menu__scope-dialog-cancel {
   background: transparent;
-  border: 1px solid rgba(var(--ui-ink-rgb), 0.18);
-  color: var(--ui-text-dim);
+  border: 1px solid rgba(122, 176, 214, 0.35);
+  color: var(--hud-text-dim);
   padding: 7px 16px;
   border-radius: 999px;
   font-size: 0.78rem;
@@ -795,20 +834,20 @@ body.body--scan {
 
 .options-menu__progress-label {
   font-size: 0.72rem;
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
   margin-bottom: 4px;
 }
 
 .options-menu__progress-bar {
   height: 6px;
   border-radius: 999px;
-  background: rgba(var(--ui-ink-rgb), 0.08);
+  background: rgba(122, 176, 214, 0.15);
   overflow: hidden;
 }
 
 .options-menu__progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--ui-accent-deep), var(--ui-accent));
+  background: linear-gradient(90deg, var(--hud-accent-deep), var(--hud-accent));
   border-radius: 999px;
   transition: width 0.3s ease;
 }
@@ -819,7 +858,7 @@ body.body--scan {
   gap: 4px 14px;
   margin-top: 6px;
   font-size: 0.68rem;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 .options-menu__benchmark-log {
@@ -827,13 +866,13 @@ body.body--scan {
   padding: 10px 12px;
   max-height: 180px;
   overflow-y: auto;
-  background: rgba(var(--ui-surface-rgb), 0.6);
-  border: 1px solid rgba(var(--ui-ink-rgb), 0.1);
+  background: rgba(1, 4, 10, 0.6);
+  border: 1px solid rgba(122, 176, 214, 0.2);
   border-radius: 8px;
   font-family: inherit;
   font-size: 0.68rem;
   line-height: 1.5;
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -852,8 +891,8 @@ body.body--scan {
 /* Chaque palier dans sa propre carte : plus facile à distinguer d'un seul coup d'œil que 5 tableaux qui
    s'enchaînent sans séparation visuelle. */
 .options-menu__model-group {
-  background: rgba(var(--ui-ink-rgb), 0.04);
-  border: 1px solid rgba(var(--ui-ink-rgb), 0.07);
+  background: rgba(122, 176, 214, 0.04);
+  border: 1px solid rgba(122, 176, 214, 0.12);
   border-radius: 10px;
   padding: 10px 12px;
 }
@@ -863,11 +902,11 @@ body.body--scan {
 }
 
 .options-menu__model-group-title {
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
   font-size: 0.72rem;
   font-weight: 600;
-  text-transform: none;
-  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   margin-bottom: 6px;
 }
 
@@ -881,19 +920,19 @@ body.body--scan {
 .options-menu__model-overview td {
   padding: 6px 10px;
   text-align: left;
-  border-bottom: 1px solid rgba(var(--ui-ink-rgb), 0.07);
+  border-bottom: 1px solid rgba(122, 176, 214, 0.12);
 }
 
 .options-menu__model-overview th {
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
   font-weight: 500;
   font-size: 0.66rem;
-  text-transform: none;
-  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .options-menu__model-overview td {
-  color: var(--ui-text);
+  color: var(--hud-text);
 }
 
 .options-menu__model-overview tr:last-child td {
@@ -925,18 +964,18 @@ body.body--scan {
 
 .options-menu__sort-button:hover,
 .options-menu__sort-button[aria-pressed='true'] {
-  color: var(--ui-text);
+  color: var(--hud-text);
 }
 
 .options-menu__sort-arrow {
-  color: var(--ui-accent);
+  color: var(--hud-accent);
 }
 
 /* Flèche "↕" au repos : présente en permanence pour signaler qu'un titre est cliquable, mais volontairement
    très discrète — sinon 4 flèches vives concurrenceraient visuellement celle de la colonne réellement
    active, qui elle doit ressortir. */
 .options-menu__sort-button[aria-pressed='false'] .options-menu__sort-arrow {
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 /* Barre "Trier par" (étape 129) — Léo, sur la version précédente où seuls les titres de colonne étaient
@@ -953,34 +992,34 @@ body.body--scan {
 }
 
 .options-menu__sort-bar-label {
-  font-family: var(--ui-font-display);
+  font-family: var(--hud-font-display);
   font-size: 0.68rem;
-  text-transform: none;
-  letter-spacing: 0.01em;
-  color: var(--ui-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--hud-text-faint);
   margin-right: 2px;
 }
 
 .options-menu__sort-chip {
-  font-family: var(--ui-font-display);
+  font-family: var(--hud-font-display);
   font-size: 0.72rem;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.06em;
   background: transparent;
-  border: 1px solid var(--ui-line);
-  color: var(--ui-text-dim);
+  border: 1px solid var(--hud-line);
+  color: var(--hud-text-dim);
   padding: 4px 12px;
   border-radius: 999px;
   cursor: pointer;
 }
 
 .options-menu__sort-chip:hover {
-  color: var(--ui-text);
+  color: var(--hud-text);
 }
 
 .options-menu__sort-chip--active {
-  background: rgba(var(--ui-accent-rgb), 0.15);
-  border-color: rgba(var(--ui-accent-rgb), 0.45);
-  color: var(--ui-text);
+  background: rgba(var(--hud-accent-rgb), 0.15);
+  border-color: rgba(var(--hud-accent-rgb), 0.45);
+  color: var(--hud-text);
 }
 
 /* Les imports Hugging Face (hf.co/...) peuvent être très longs et étiraient tout le tableau — tronqués
@@ -1001,22 +1040,22 @@ body.body--scan {
 }
 
 .options-menu__badge--good {
-  background: rgba(var(--ui-ok-rgb), 0.15);
-  color: var(--ui-ok);
+  background: rgba(49, 255, 176, 0.15);
+  color: var(--hud-ok);
 }
 
 .options-menu__badge--mid {
-  background: rgba(var(--ui-gold-rgb), 0.15);
-  color: var(--ui-gold);
+  background: rgba(255, 176, 32, 0.15);
+  color: var(--hud-gold);
 }
 
 .options-menu__badge--bad {
-  background: rgba(var(--ui-danger-rgb), 0.15);
-  color: var(--ui-danger);
+  background: rgba(255, 77, 104, 0.15);
+  color: var(--hud-danger);
 }
 
 .options-menu__badge--none {
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
   font-weight: 400;
 }
 
@@ -1029,7 +1068,7 @@ body.body--scan {
   height: 6px;
   margin: 10px 0 6px;
   border-radius: 999px;
-  background: rgba(var(--ui-ink-rgb), 0.08);
+  background: rgba(122, 176, 214, 0.15);
   cursor: pointer;
 }
 
@@ -1039,8 +1078,8 @@ body.body--scan {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--ui-accent);
-  box-shadow: var(--ui-glow);
+  background: var(--hud-accent);
+  box-shadow: var(--hud-glow);
   cursor: pointer;
 }
 
@@ -1049,22 +1088,22 @@ body.body--scan {
   height: 16px;
   border: none;
   border-radius: 50%;
-  background: var(--ui-accent);
-  box-shadow: var(--ui-glow);
+  background: var(--hud-accent);
+  box-shadow: var(--hud-glow);
   cursor: pointer;
 }
 
 .options-menu__context-slider::-moz-range-track {
   height: 6px;
   border-radius: 999px;
-  background: rgba(var(--ui-ink-rgb), 0.08);
+  background: rgba(122, 176, 214, 0.15);
 }
 
 .options-menu__context-slider-ticks {
   display: flex;
   justify-content: space-between;
   font-size: 0.68rem;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 .options-menu__models-location-list {
@@ -1075,7 +1114,7 @@ body.body--scan {
   flex-direction: column;
   gap: 4px;
   font-size: 0.8rem;
-  color: var(--ui-text-soft);
+  color: var(--hud-text-soft);
   overflow-wrap: anywhere;
 }
 
@@ -1089,7 +1128,7 @@ body.body--scan {
 }
 
 .options-menu__history-entry {
-  border: 1px solid rgba(var(--ui-ink-rgb), 0.1);
+  border: 1px solid rgba(122, 176, 214, 0.2);
   border-radius: 10px;
   padding: 10px 14px;
   display: flex;
@@ -1099,34 +1138,34 @@ body.body--scan {
 
 .options-menu__history-date {
   font-size: 0.65rem;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 .options-menu__history-transcript {
   font-size: 0.8rem;
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
   overflow-wrap: anywhere;
 }
 
 .options-menu__history-reply {
   font-size: 0.85rem;
-  color: var(--ui-text);
+  color: var(--hud-text);
   overflow-wrap: anywhere;
 }
 
 .options-menu__history-empty {
   font-size: 0.8rem;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 .options-menu__action--danger {
-  background: rgba(var(--ui-danger-rgb), 0.12);
-  border-color: rgba(var(--ui-danger-rgb), 0.4);
-  color: var(--ui-danger);
+  background: rgba(255, 77, 104, 0.12);
+  border-color: rgba(255, 77, 104, 0.4);
+  color: var(--hud-danger);
 }
 
 .options-menu__action--danger:not(:disabled):hover {
-  border-color: var(--ui-danger);
+  border-color: var(--hud-danger);
 }
 
 /* Refonte étape 120 (maquette "Options Jaris.dc.html") : carte COMPACTE, orbe + flèches à gauche, bloc de
@@ -1152,7 +1191,7 @@ body.body--scan {
 .options-menu__arrow {
   background: transparent;
   border: none;
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
   font-size: 1.6rem;
   line-height: 1;
   cursor: pointer;
@@ -1160,7 +1199,7 @@ body.body--scan {
 }
 
 .options-menu__arrow:not(:disabled):hover {
-  color: var(--ui-text);
+  color: var(--hud-text);
 }
 
 .options-menu__arrow:disabled {
@@ -1184,12 +1223,12 @@ body.body--scan {
 .options-menu__voice-name {
   font-size: 1.5rem;
   font-weight: 600;
-  color: var(--ui-text);
+  color: var(--hud-text);
 }
 
 .options-menu__voice-description {
   font-size: 0.95rem;
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
 }
 
 .options-menu__voice-dots {
@@ -1200,7 +1239,7 @@ body.body--scan {
 .options-menu__voice-hint {
   margin: 0;
   font-size: 0.76rem;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
   max-width: 480px;
 }
 
@@ -1210,9 +1249,9 @@ body.body--scan {
 .options-menu__dot {
   width: 4px;
   height: 14px;
-  border-radius: var(--ui-radius);
+  border-radius: 0;
   border: none;
-  background: var(--ui-text-faint);
+  background: var(--hud-text-faint);
   cursor: pointer;
   padding: 0;
   transition:
@@ -1225,8 +1264,8 @@ body.body--scan {
 }
 
 .options-menu__dot--active {
-  background: var(--ui-accent);
-  box-shadow: 0 0 8px rgba(var(--ui-accent-rgb), 0.7);
+  background: var(--hud-accent);
+  box-shadow: 0 0 8px rgba(var(--hud-accent-rgb), 0.7);
 }
 
 /* Rangée de barres façon Discord (fenêtre glissante des derniers niveaux sonores, voir micLevels dans
@@ -1240,14 +1279,14 @@ body.body--scan {
   height: 44px;
   padding: 0 4px;
   border-radius: 8px;
-  background: rgba(var(--ui-surface-rgb), 0.5);
+  background: rgba(6, 16, 25, 0.5);
 }
 
 .options-menu__mic-bar {
   flex: 1;
   min-width: 2px;
   border-radius: 999px;
-  background: var(--ui-accent);
+  background: var(--hud-accent);
   /* Transition courte : assez rapide pour ne pas paraître en retard sur la voix, assez longue pour lisser
      le passage d'une valeur à l'autre plutôt qu'un saut brut. */
   transition: height 80ms ease-out;
@@ -1255,25 +1294,25 @@ body.body--scan {
 
 .options-menu__mic-result--ok {
   font-size: 0.8rem;
-  color: var(--ui-ok);
+  color: var(--hud-ok);
 }
 
 .options-menu__mic-result--bad {
   font-size: 0.8rem;
-  color: var(--ui-danger);
+  color: var(--hud-danger);
 }
 
 .app__status {
   font-size: 0.95rem;
-  letter-spacing: 0.01em;
-  text-transform: none;
-  color: var(--ui-text-dim);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-text-dim);
   min-height: 1.4em;
 }
 
 .app__hint {
   font-size: 0.75rem;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 .app__conversation {
@@ -1286,13 +1325,13 @@ body.body--scan {
 
 .app__transcript {
   margin: 0;
-  color: var(--ui-text-soft);
+  color: var(--hud-text-soft);
   font-style: italic;
 }
 
 .app__reply {
   margin: 0;
-  color: var(--ui-text);
+  color: var(--hud-text);
   font-weight: 500;
 }
 
@@ -1302,7 +1341,7 @@ body.body--scan {
   z-index: 10;
   display: flex;
   flex-direction: column;
-  background: radial-gradient(circle at 50% 30%, var(--ui-panel) 0%, var(--ui-bg) 70%);
+  background: radial-gradient(circle at 50% 30%, var(--hud-panel) 0%, var(--hud-bg) 70%);
 }
 
 .memory-brain__header {
@@ -1311,8 +1350,8 @@ body.body--scan {
   justify-content: space-between;
   padding: 14px 20px;
   font-size: 0.85rem;
-  color: var(--ui-text-soft);
-  border-bottom: 1px solid rgba(var(--ui-ink-rgb), 0.1);
+  color: var(--hud-text-soft);
+  border-bottom: 1px solid rgba(122, 176, 214, 0.2);
 }
 
 .memory-brain__actions {
@@ -1322,8 +1361,8 @@ body.body--scan {
 
 .memory-brain__actions button {
   background: transparent;
-  border: 1px solid rgba(var(--ui-ink-rgb), 0.18);
-  color: var(--ui-text-dim);
+  border: 1px solid rgba(122, 176, 214, 0.35);
+  color: var(--hud-text-dim);
   padding: 6px 14px;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -1331,8 +1370,8 @@ body.body--scan {
 }
 
 .memory-brain__actions button:hover {
-  border-color: var(--ui-accent);
-  color: var(--ui-text);
+  border-color: var(--hud-accent);
+  color: var(--hud-text);
 }
 
 .memory-brain__canvas {
@@ -1344,7 +1383,7 @@ body.body--scan {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
   font-size: 0.85rem;
   text-align: center;
   padding: 0 32px;
@@ -1356,8 +1395,8 @@ body.body--scan {
   right: 20px;
   bottom: 20px;
   width: min(360px, 80vw);
-  background: rgba(var(--ui-surface-rgb), 0.92);
-  border: 1px solid rgba(var(--ui-ink-rgb), 0.3);
+  background: rgba(1, 4, 10, 0.92);
+  border: 1px solid rgba(122, 176, 214, 0.3);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -1371,20 +1410,20 @@ body.body--scan {
   padding: 10px 14px;
   font-size: 0.85rem;
   font-weight: 500;
-  color: var(--ui-text);
-  border-bottom: 1px solid rgba(var(--ui-ink-rgb), 0.1);
+  color: var(--hud-text);
+  border-bottom: 1px solid rgba(122, 176, 214, 0.2);
 }
 
 .memory-brain__note-header button {
   background: transparent;
   border: none;
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
   cursor: pointer;
   font-size: 0.9rem;
 }
 
 .memory-brain__note-header button:hover {
-  color: var(--ui-text);
+  color: var(--hud-text);
 }
 
 .memory-brain__note-content {
@@ -1396,7 +1435,7 @@ body.body--scan {
   font-family: inherit;
   font-size: 0.8rem;
   line-height: 1.5;
-  color: var(--ui-text-soft);
+  color: var(--hud-text-soft);
 }
 
 .app__new-models {
@@ -1407,9 +1446,9 @@ body.body--scan {
   max-width: 480px;
   text-align: center;
   font-size: 0.8rem;
-  color: var(--ui-accent-bright);
-  background: rgba(var(--ui-accent-rgb), 0.08);
-  border: 1px solid rgba(var(--ui-accent-rgb), 0.3);
+  color: var(--hud-accent-bright);
+  background: rgba(61, 220, 255, 0.08);
+  border: 1px solid rgba(61, 220, 255, 0.3);
   border-radius: 12px;
   padding: 10px 16px;
   display: flex;
@@ -1420,8 +1459,8 @@ body.body--scan {
 
 .app__new-models button {
   background: transparent;
-  border: 1px solid rgba(var(--ui-accent-rgb), 0.35);
-  color: var(--ui-accent-bright);
+  border: 1px solid rgba(61, 220, 255, 0.35);
+  color: var(--hud-accent-bright);
   padding: 4px 14px;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -1429,17 +1468,17 @@ body.body--scan {
 }
 
 .app__new-models button:hover {
-  border-color: var(--ui-accent);
-  color: var(--ui-text);
+  border-color: var(--hud-accent);
+  color: var(--hud-text);
 }
 
 .app__setup-warning {
   max-width: 480px;
   text-align: center;
   font-size: 0.8rem;
-  color: var(--ui-gold);
-  background: rgba(var(--ui-gold-rgb), 0.08);
-  border: 1px solid rgba(var(--ui-gold-rgb), 0.3);
+  color: var(--hud-gold);
+  background: rgba(255, 176, 32, 0.08);
+  border: 1px solid rgba(255, 176, 32, 0.3);
   border-radius: 12px;
   padding: 10px 16px;
 }
@@ -1466,14 +1505,14 @@ body.body--scan {
 
 .app__onboarding p {
   margin: 0 0 8px;
-  color: var(--ui-text-soft);
+  color: var(--hud-text-soft);
 }
 
 .app__onboarding input {
   width: 100%;
-  background: var(--ui-panel);
-  border: 1px solid rgba(var(--ui-ink-rgb), 0.18);
-  color: var(--ui-text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(122, 176, 214, 0.35);
+  color: var(--hud-text);
   padding: 10px 14px;
   border-radius: 999px;
   font-size: 0.95rem;
@@ -1482,13 +1521,13 @@ body.body--scan {
 
 .app__onboarding input:focus {
   outline: none;
-  border-color: var(--ui-accent);
+  border-color: var(--hud-accent);
 }
 
 .app__onboarding button {
-  background: rgba(var(--ui-accent-rgb), 0.18);
-  border: 1px solid var(--ui-accent);
-  color: var(--ui-text);
+  background: rgba(61, 220, 255, 0.18);
+  border: 1px solid var(--hud-accent);
+  color: var(--hud-text);
   padding: 8px 20px;
   border-radius: 999px;
   font-size: 0.9rem;
@@ -1502,8 +1541,8 @@ body.body--scan {
 
 .app__onboarding button.app__onboarding-secondary {
   background: transparent;
-  border: 1px solid rgba(var(--ui-ink-rgb), 0.18);
-  color: var(--ui-text-dim);
+  border: 1px solid rgba(122, 176, 214, 0.35);
+  color: var(--hud-text-dim);
 }
 
 .capacity-scan {
@@ -1519,8 +1558,8 @@ body.body--scan {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  border: 3px solid rgba(var(--ui-accent-rgb), 0.15);
-  border-top-color: var(--ui-accent);
+  border: 3px solid rgba(61, 220, 255, 0.15);
+  border-top-color: var(--hud-accent);
   animation: capacity-scan-spin 0.9s linear infinite;
   margin: 8px 0;
 }
@@ -1532,7 +1571,7 @@ body.body--scan {
 }
 
 .capacity-scan__status {
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
   font-size: 0.85rem;
 }
 
@@ -1543,13 +1582,13 @@ body.body--scan {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  color: var(--ui-text);
+  color: var(--hud-text);
   font-size: 0.85rem;
 }
 
 .capacity-scan__hint {
   font-size: 0.75rem;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 /* Même code couleur ambre que .options-menu__ollama-warning : un modèle ignoré pendant la configuration
@@ -1557,9 +1596,9 @@ body.body--scan {
    l'écran final, pas seulement défiler dans le journal d'installation puis disparaître. */
 .capacity-scan__warning {
   font-size: 0.76rem;
-  color: var(--ui-gold);
-  background: rgba(var(--ui-gold-rgb), 0.08);
-  border: 1px solid rgba(var(--ui-gold-rgb), 0.3);
+  color: var(--hud-gold);
+  background: rgba(255, 176, 32, 0.08);
+  border: 1px solid rgba(255, 176, 32, 0.3);
   border-radius: 10px;
   padding: 8px 14px;
   text-align: left;
@@ -1582,15 +1621,15 @@ body.body--scan {
 
 .capacity-scan__tier {
   text-align: left;
-  background: rgba(var(--ui-ink-rgb), 0.04);
-  border: 1px solid rgba(var(--ui-ink-rgb), 0.1);
+  background: rgba(122, 176, 214, 0.06);
+  border: 1px solid rgba(122, 176, 214, 0.2);
   border-radius: 14px;
   padding: 10px 16px;
 }
 
 .capacity-scan__tier--current {
-  background: rgba(var(--ui-accent-rgb), 0.1);
-  border-color: var(--ui-accent);
+  background: rgba(61, 220, 255, 0.1);
+  border-color: var(--hud-accent);
 }
 
 .capacity-scan__tier-header {
@@ -1602,12 +1641,12 @@ body.body--scan {
 
 .capacity-scan__tier-label {
   font-size: 0.95rem;
-  color: var(--ui-text);
+  color: var(--hud-text);
 }
 
 .capacity-scan__tier-hardware {
   font-size: 0.78rem;
-  color: var(--ui-text-soft);
+  color: var(--hud-text-soft);
 }
 
 /* Une ligne par rôle (Rapide/Médium/Puissant/Vision/Code), avec les scores de son modèle. */
@@ -1615,7 +1654,7 @@ body.body--scan {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.78rem;
-  color: var(--ui-text-soft);
+  color: var(--hud-text-soft);
 }
 
 .capacity-scan__tier-table td {
@@ -1624,12 +1663,12 @@ body.body--scan {
 }
 
 .capacity-scan__tier-slot {
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
   padding-right: 8px !important;
 }
 
 .capacity-scan__tier-model {
-  color: var(--ui-text);
+  color: var(--hud-text);
   padding-right: 10px !important;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1648,26 +1687,26 @@ body.body--scan {
   padding: 0 0 6px !important;
   font-size: 0.72rem;
   line-height: 1.4;
-  color: var(--ui-gold);
+  color: var(--hud-gold);
 }
 
 .capacity-scan__tier-intelligence,
 .capacity-scan__tier-speed {
   padding-right: 10px !important;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 /* Étape 140 : vérification auprès d'Ollama (ce qui est VRAIMENT installé) sous la carte. */
 .capacity-scan__tier-missing td,
 p.capacity-scan__tier-missing {
-  color: var(--ui-danger);
+  color: var(--hud-danger);
 }
 
 .capacity-scan__install-check {
   margin: 8px 2px 0;
   font-size: 0.78rem;
   line-height: 1.45;
-  color: var(--ui-text-soft);
+  color: var(--hud-text-soft);
 }
 
 .capacity-scan__install-check p {
@@ -1686,8 +1725,8 @@ p.capacity-scan__tier-missing {
   justify-content: space-between;
   gap: 8px;
   padding: 4px 0;
-  border-top: 1px solid var(--ui-line);
-  font-family: var(--ui-font-mono);
+  border-top: 1px solid var(--hud-line);
+  font-family: var(--hud-font-mono);
 }
 
 .capacity-scan__other-actions {
@@ -1701,7 +1740,7 @@ p.capacity-scan__tier-missing {
   margin: 8px 2px 0;
   font-size: 0.72rem;
   line-height: 1.45;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 /* Apparition initiale de l’orbe des réglages ; le widget utilise ses transitions persistantes. */
@@ -1731,10 +1770,11 @@ p.capacity-scan__tier-missing {
   transition: width 0.2s ease, height 0.2s ease;
 }
 
-.jaris-orb svg {
+.jaris-orb canvas {
   display: block;
-  overflow: visible;
-  /* Même raison que .jaris-orb ci-dessus : le dessin est redimensionné en même temps que sa boîte. */
+  /* Même raison que .jaris-orb ci-dessus : le canvas est redimensionné par JS (JarisOrb.tsx, style.width/
+     height) exactement en même temps que son conteneur — animer les deux ensemble évite que le canvas
+     "saute" pendant que sa boîte englobante rétrécit en douceur (ou l'inverse). */
   transition: width 0.2s ease, height 0.2s ease;
 }
 
@@ -1742,228 +1782,10 @@ p.capacity-scan__tier-missing {
   cursor: pointer;
 }
 
-/* --- Mascotte (étapes 144-146) : une bulle bleue au bord lumineux, deux yeux qui vivent. ---------------- */
-
-.jaris-mascot__shadow {
-  fill: rgba(0, 0, 0, 0.45);
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: mascot-shadow 3.4s ease-in-out infinite;
-}
-
-.jaris-mascot__body {
-  transform-box: view-box;
-  transform-origin: 60px 62px;
-  animation: mascot-float 3.4s ease-in-out infinite;
-}
-
-.jaris-mascot__glow {
-  opacity: 0.45;
-}
-
-.jaris-mascot__eye {
-  fill: #ffffff;
-  transform-box: fill-box;
-  transform-origin: center;
-  transition: transform 0.35s ease;
-}
-
-.jaris-mascot__eyes--happy path {
-  fill: none;
-  stroke: #ffffff;
-  stroke-width: 4;
-  stroke-linecap: round;
-}
-
-/* Le regard : au repos, Jaris jette de temps en temps un coup d'œil ailleurs (en haut à droite, à gauche)
-   puis revient vers toi — des mouvements rapides suivis d'arrêts, comme un vrai regard. */
-.jaris-mascot__gaze {
-  transition: transform 0.3s ease;
-  animation: mascot-gaze 11s ease-in-out infinite;
-}
-
-/* Clignement : les deux yeux se ferment brièvement toutes les 4 secondes environ. */
-.jaris-mascot__eyes {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: mascot-blink 4.6s ease-in-out infinite;
-}
-
-/* Halo : invisible au repos, il pulse doucement autour de la bulle quand Jaris écoute. */
-.jaris-mascot__halo {
-  opacity: 0;
-  transform-box: fill-box;
-  transform-origin: center;
-  transition: opacity 0.3s ease;
-}
-
-.jaris-mascot__dots circle {
-  fill: #9cc4ff;
-  animation: mascot-dot 1.2s ease-in-out infinite;
-}
-
-.jaris-mascot__dots circle:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.jaris-mascot__dots circle:nth-child(3) {
-  animation-delay: 0.4s;
-}
-
-/* En tout petit (widget replié, 24-32 px), des yeux plus grands pour rester lisibles. */
-.jaris-mascot--minimal .jaris-mascot__eye {
-  transform: scale(1.3);
-}
-
-/* J'écoute : halo qui pulse, yeux un peu plus grands et fixés sur toi, la bulle se penche vers toi. */
-.jaris-mascot--listening .jaris-mascot__gaze,
-.jaris-mascot--happy .jaris-mascot__gaze,
-.jaris-mascot--surprised .jaris-mascot__gaze {
-  animation: none;
-}
-
-.jaris-mascot--listening .jaris-mascot__halo {
-  animation: mascot-halo 1.6s ease-out infinite;
-}
-
-.jaris-mascot--listening .jaris-mascot__eye {
-  transform: scale(1.15);
-}
-
-.jaris-mascot--listening .jaris-mascot__body {
-  animation: mascot-lean 2.2s ease-in-out infinite;
-}
-
-/* Je réfléchis : regard en l'air, sur le côté, vers les bulles de pensée. */
-.jaris-mascot--thinking .jaris-mascot__gaze {
-  animation: none;
-  transform: translate(8px, -7px);
-}
-
-/* Je réponds : petits rebonds joyeux (les yeux plissés font le sourire). */
-.jaris-mascot--happy .jaris-mascot__body {
-  animation: mascot-bounce 1.4s ease-in-out infinite;
-}
-
-.jaris-mascot--happy .jaris-mascot__eyes {
-  animation: none;
-}
-
-/* Surpris : grands yeux ronds. */
-.jaris-mascot--surprised .jaris-mascot__eye {
-  transform: scale(1.35, 1.1);
-}
-
-.jaris-mascot--surprised .jaris-mascot__eyes {
-  animation: none;
-}
-
-@keyframes mascot-float {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-4px);
-  }
-}
-
-@keyframes mascot-shadow {
-  0%,
-  100% {
-    transform: scaleX(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scaleX(0.85);
-    opacity: 0.7;
-  }
-}
-
-@keyframes mascot-gaze {
-  0%,
-  28%,
-  50%,
-  64%,
-  78%,
-  100% {
-    transform: translate(0, 0);
-  }
-  31%,
-  47% {
-    transform: translate(8px, -6px);
-  }
-  67%,
-  75% {
-    transform: translate(-8px, 1px);
-  }
-}
-
-@keyframes mascot-blink {
-  0%,
-  92%,
-  100% {
-    transform: scaleY(1);
-  }
-  95% {
-    transform: scaleY(0.1);
-  }
-}
-
-@keyframes mascot-halo {
-  0% {
-    opacity: 0.5;
-    transform: scale(0.88);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.12);
-  }
-}
-
-@keyframes mascot-lean {
-  0%,
-  100% {
-    transform: rotate(-3deg) translateY(-1px);
-  }
-  50% {
-    transform: rotate(3deg) translateY(-3px);
-  }
-}
-
-@keyframes mascot-bounce {
-  0%,
-  100% {
-    transform: translateY(0) scale(1, 1);
-  }
-  40% {
-    transform: translateY(-6px) scale(0.98, 1.02);
-  }
-  70% {
-    transform: translateY(0) scale(1.02, 0.98);
-  }
-}
-
-@keyframes mascot-dot {
-  0%,
-  100% {
-    opacity: 0.35;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .jaris-orb,
-  .jaris-orb svg,
-  .jaris-mascot__shadow,
-  .jaris-mascot__body,
-  .jaris-mascot__eyes,
-  .jaris-mascot__gaze,
-  .jaris-mascot__halo,
-  .jaris-mascot__dots circle {
-    animation: none !important;
+  .jaris-orb canvas {
+    animation: none;
     transition: none;
   }
 }
@@ -2014,16 +1836,16 @@ p.capacity-scan__tier-missing {
   align-items: center;
   justify-content: center;
   padding: 3px 10px;
-  background: var(--ui-panel-raised);
-  border: 1px solid var(--ui-line);
+  background: var(--hud-panel-raised);
+  border: 1px solid var(--hud-line);
   border-radius: 999px;
-  box-shadow: var(--ui-glow);
+  box-shadow: var(--hud-glow);
 }
 
 /* --- Widget TEXTE (quitter Jaris depuis le mode Chat) ---
  *
- * Même emplacement et même vocabulaire visuel que la pilule du widget vocal (fond `--ui-panel-raised`,
- * bordure `--ui-line`, `--ui-glow`, coins en pilule) : seule la barre de saisie remplace le cercle, à la
+ * Même emplacement et même vocabulaire visuel que la pilule du widget vocal (fond `--hud-panel-raised`,
+ * bordure `--hud-line`, `--hud-glow`, coins en pilule) : seule la barre de saisie remplace le cercle, à la
  * demande de Léo. Aucune couleur ni forme inventée à côté — la leçon déjà tirée deux fois ici (le cercle
  * lisse du widget replié, celui du sélecteur de voix) : se raccrocher à la famille existante.
  */
@@ -2042,11 +1864,11 @@ p.capacity-scan__tier-missing {
   width: 76px;
   height: 40px;
   padding: 0;
-  color: var(--ui-accent-bright);
-  background: rgba(var(--ui-surface-rgb), 0.92);
-  border: 1px solid var(--ui-line);
+  color: var(--hud-accent-bright);
+  background: rgba(6, 16, 25, 0.92);
+  border: 1px solid var(--hud-line);
   border-radius: 999px;
-  box-shadow: var(--ui-glow);
+  box-shadow: var(--hud-glow);
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
@@ -2056,10 +1878,10 @@ p.capacity-scan__tier-missing {
   align-items: center;
   gap: 6px;
   padding: 4px 6px 4px 14px;
-  background: rgba(var(--ui-surface-rgb), 0.92);
-  border: 1px solid var(--ui-line);
+  background: rgba(6, 16, 25, 0.92);
+  border: 1px solid var(--hud-line);
   border-radius: 999px;
-  box-shadow: var(--ui-glow);
+  box-shadow: var(--hud-glow);
   /* `.app--widget` met TOUTE la fenêtre en zone de déplacement (`-webkit-app-region: drag`) pour qu'on
      puisse attraper le widget : sans cette exception, un champ de saisie posé dedans serait impossible à
      cliquer ET impossible à remplir — Chromium donne le geste à la fenêtre avant le champ. Piège de la
@@ -2076,14 +1898,15 @@ p.capacity-scan__tier-missing {
   min-width: 0;
   padding: 6px 0;
   font-size: 0.85rem;
-  color: var(--ui-text);
+  color: var(--hud-text);
   background: transparent;
   border: none;
   outline: none;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
 }
 
 .chat-widget__input::placeholder {
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 /* Même bouton icône que la pièce jointe du composeur (`.composer__attach`) : une action secondaire dans un
@@ -2100,16 +1923,16 @@ p.capacity-scan__tier-missing {
   border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
   -webkit-app-region: no-drag;
 }
 
 .chat-widget__send:not(:disabled):hover {
-  color: var(--ui-accent-bright);
-  border-color: var(--ui-line);
-  background: rgba(var(--ui-accent-rgb), 0.08);
+  color: var(--hud-accent-bright);
+  border-color: var(--hud-line);
+  background: rgba(var(--hud-accent-rgb), 0.08);
 }
 
 .chat-widget__send:disabled {
@@ -2125,10 +1948,10 @@ p.capacity-scan__tier-missing {
   /* Le widget flotte au-dessus de n'importe quelle application : à 55 % d'opacité, un fond clair ou très
      détaillé traversait le panneau et réduisait fortement la lisibilité. Le fond reste légèrement translucide
      pour conserver l'effet HUD, mais suffisamment sombre et opaque pour que la réponse soit toujours nette. */
-  background: rgba(var(--ui-surface-rgb), 0.94);
-  border: 1px solid var(--ui-line);
+  background: rgba(6, 16, 25, 0.94);
+  border: 1px solid var(--hud-line);
   border-radius: 14px;
-  box-shadow: var(--ui-glow);
+  box-shadow: var(--hud-glow);
   max-height: 300px;
   overflow-y: auto;
   -webkit-app-region: no-drag;
@@ -2137,14 +1960,14 @@ p.capacity-scan__tier-missing {
 .chat-widget__question {
   margin: 0;
   font-size: 0.75rem;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
   overflow-wrap: anywhere;
 }
 
 .chat-widget__reply {
   font-size: 0.8rem;
   line-height: 1.45;
-  color: var(--ui-text);
+  color: var(--hud-text);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -2153,7 +1976,7 @@ p.capacity-scan__tier-missing {
   margin: 0;
   font-size: 0.8rem;
   line-height: 1.45;
-  color: var(--ui-danger);
+  color: var(--hud-danger);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -2169,9 +1992,10 @@ p.capacity-scan__tier-missing {
 
 .app__status--widget {
   font-size: 0.7rem;
-  letter-spacing: 0.01em;
-  text-transform: none;
-  color: var(--ui-text-soft);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--hud-text-soft);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
 }
 
 .app__conversation--widget {
@@ -2185,6 +2009,7 @@ p.capacity-scan__tier-missing {
   font-size: 0.75rem;
   line-height: 1.4;
   overflow-wrap: anywhere;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
 }
 
 /* --- Mode Chat (étape 30) --- */
@@ -2219,7 +2044,7 @@ p.capacity-scan__tier-missing {
   text-align: center;
   font-size: 0.8rem;
   line-height: 1.6;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 .chat-panel__message {
@@ -2236,28 +2061,28 @@ p.capacity-scan__tier-missing {
 
 .chat-panel__message--user {
   align-self: flex-end;
-  background: rgba(var(--ui-accent-rgb), 0.13);
-  border: 1px solid rgba(var(--ui-accent-rgb), 0.25);
-  color: var(--ui-text);
+  background: rgba(61, 220, 255, 0.13);
+  border: 1px solid rgba(61, 220, 255, 0.25);
+  color: var(--hud-text);
 }
 
 .chat-panel__message--assistant {
   align-self: flex-start;
-  background: rgba(var(--ui-ink-rgb), 0.05);
-  border: 1px solid rgba(var(--ui-ink-rgb), 0.1);
-  color: var(--ui-text);
+  background: rgba(122, 176, 214, 0.08);
+  border: 1px solid rgba(122, 176, 214, 0.2);
+  color: var(--hud-text);
 }
 
 .chat-panel__message--pending {
   align-self: flex-start;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
   font-style: italic;
 }
 
 .chat-panel__error {
   margin: 0;
   font-size: 0.75rem;
-  color: var(--ui-gold);
+  color: var(--hud-gold);
 }
 
 /* ==========================================================================
@@ -2278,16 +2103,16 @@ p.capacity-scan__tier-missing {
   flex-direction: column;
   gap: 8px;
   padding: 10px 10px 8px;
-  border: 1px solid var(--ui-line);
+  border: 1px solid var(--hud-line);
   border-radius: 16px;
-  background: var(--ui-panel-raised);
+  background: var(--hud-panel-raised);
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 /* La carte entière s'allume quand le champ a le focus : le contour ne saute plus d'un élément à l'autre. */
 .composer:focus-within {
-  border-color: var(--ui-line-strong);
-  box-shadow: var(--ui-glow);
+  border-color: var(--hud-line-strong);
+  box-shadow: var(--hud-glow);
 }
 
 .composer--busy {
@@ -2298,7 +2123,7 @@ p.capacity-scan__tier-missing {
   resize: none;
   border: none;
   background: transparent;
-  color: var(--ui-text);
+  color: var(--hud-text);
   padding: 6px 6px 0;
   font-family: inherit;
   font-size: 0.88rem;
@@ -2310,7 +2135,7 @@ p.capacity-scan__tier-missing {
 }
 
 .composer__input::placeholder {
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 .composer__actions {
@@ -2325,7 +2150,7 @@ p.capacity-scan__tier-missing {
   flex: 1;
   min-width: 0;
   font-size: 0.68rem;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2342,15 +2167,15 @@ p.capacity-scan__tier-missing {
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
 .composer__attach:not(:disabled):hover {
-  color: var(--ui-accent-bright);
-  border-color: var(--ui-line);
-  background: rgba(var(--ui-accent-rgb), 0.08);
+  color: var(--hud-accent-bright);
+  border-color: var(--hud-line);
+  background: rgba(var(--hud-accent-rgb), 0.08);
 }
 
 .composer__attach:disabled {
@@ -2371,9 +2196,9 @@ p.capacity-scan__tier-missing {
 
 .model-picker__label {
   font-size: 0.68rem;
-  letter-spacing: 0.01em;
-  text-transform: none;
-  color: var(--ui-text-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-text-faint);
   white-space: nowrap;
 }
 
@@ -2382,9 +2207,9 @@ p.capacity-scan__tier-missing {
   max-width: 220px;
   height: 30px;
   padding: 0 8px;
-  font-family: var(--ui-font-body);
+  font-family: var(--hud-font-body);
   font-size: 0.78rem;
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 10px;
@@ -2398,9 +2223,9 @@ p.capacity-scan__tier-missing {
 
 .model-picker__select:not(:disabled):hover,
 .model-picker__select:focus-visible {
-  color: var(--ui-accent-bright);
-  border-color: var(--ui-line);
-  background: rgba(var(--ui-accent-rgb), 0.08);
+  color: var(--hud-accent-bright);
+  border-color: var(--hud-line);
+  background: rgba(var(--hud-accent-rgb), 0.08);
   outline: none;
 }
 
@@ -2411,8 +2236,8 @@ p.capacity-scan__tier-missing {
 
 /* La liste déroulante native reprend le fond de l'app : sans ça, Windows l'affiche en blanc. */
 .model-picker__select option {
-  background: var(--ui-panel);
-  color: var(--ui-text);
+  background: var(--hud-panel);
+  color: var(--hud-text);
 }
 
 /* Écran vocal : sous l'astuce, centré avec le reste du groupe orbe + texte. */
@@ -2444,9 +2269,9 @@ p.capacity-scan__tier-missing {
   align-self: flex-start;
   max-width: 100%;
   padding: 6px 8px;
-  border: 1px solid var(--ui-line);
+  border: 1px solid var(--hud-line);
   border-radius: 12px;
-  background: rgba(var(--ui-surface-rgb), 0.5);
+  background: rgba(1, 4, 10, 0.5);
 }
 
 .composer__attachment img {
@@ -2454,14 +2279,14 @@ p.capacity-scan__tier-missing {
   height: 40px;
   object-fit: cover;
   border-radius: 8px;
-  border: 1px solid var(--ui-line);
+  border: 1px solid var(--hud-line);
 }
 
 .composer__attachment-name {
   min-width: 0;
   max-width: 240px;
   font-size: 0.75rem;
-  color: var(--ui-text-soft);
+  color: var(--hud-text-soft);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2470,7 +2295,7 @@ p.capacity-scan__tier-missing {
 .composer__attachment-remove {
   border: none;
   background: transparent;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
   font-size: 0.8rem;
   line-height: 1;
   padding: 4px 6px;
@@ -2480,8 +2305,8 @@ p.capacity-scan__tier-missing {
 }
 
 .composer__attachment-remove:not(:disabled):hover {
-  color: var(--ui-danger);
-  background: rgba(var(--ui-danger-rgb), 0.12);
+  color: var(--hud-danger-soft);
+  background: rgba(255, 77, 104, 0.12);
 }
 
 /* Vignette d'une image déjà envoyée, dans le fil. `display: block` + margin plutôt qu'un flex sur le
@@ -2493,7 +2318,7 @@ p.capacity-scan__tier-missing {
   max-height: 260px;
   width: auto;
   border-radius: 10px;
-  border: 1px solid var(--ui-line);
+  border: 1px solid var(--hud-line);
   margin-bottom: 8px;
 }
 
@@ -2520,8 +2345,8 @@ p.capacity-scan__tier-missing {
   flex-direction: column;
   gap: 10px;
   padding: 16px 12px;
-  border-right: 1px solid var(--ui-line);
-  background: rgba(var(--ui-surface-rgb), 0.35);
+  border-right: 1px solid var(--hud-line);
+  background: rgba(1, 4, 10, 0.35);
 }
 
 .workspace__new {
@@ -2533,7 +2358,7 @@ p.capacity-scan__tier-missing {
   margin: 4px 6px;
   font-size: 0.74rem;
   line-height: 1.5;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 .workspace__list {
@@ -2551,7 +2376,7 @@ p.capacity-scan__tier-missing {
 .workspace__list li {
   display: flex;
   align-items: center;
-  border-bottom: 1px solid rgba(var(--ui-accent-rgb), 0.07);
+  border-bottom: 1px solid rgba(var(--hud-accent-rgb), 0.07);
 }
 
 .workspace__list li:last-child {
@@ -2567,8 +2392,8 @@ p.capacity-scan__tier-missing {
   gap: 2px;
   background: transparent;
   border: none;
-  border-radius: var(--ui-radius);
-  color: var(--ui-text-soft);
+  border-radius: 0;
+  color: var(--hud-text-soft);
   padding: 9px 8px;
   font-family: inherit;
   font-size: 0.82rem;
@@ -2580,15 +2405,15 @@ p.capacity-scan__tier-missing {
 }
 
 .workspace__item:hover {
-  background: rgba(var(--ui-accent-rgb), 0.08);
-  color: var(--ui-text);
+  background: rgba(var(--hud-accent-rgb), 0.08);
+  color: var(--hud-text);
 }
 
 /* Un liseré à gauche en plus de la couleur : sur une liste de titres tous en clair, la seule nuance de
    couleur ne saute pas aux yeux. */
 .workspace__item--active {
-  color: var(--ui-accent-bright);
-  box-shadow: inset 2px 0 0 var(--ui-accent);
+  color: var(--hud-accent-bright);
+  box-shadow: inset 2px 0 0 var(--hud-accent);
 }
 
 .workspace__item-title {
@@ -2600,12 +2425,12 @@ p.capacity-scan__tier-missing {
 
 /* Seule la première lettre passe en majuscule : `text-transform: capitalize` écrirait "Liste De Courses". */
 .workspace__item-title::first-letter {
-  text-transform: none;
+  text-transform: uppercase;
 }
 
 .workspace__item-meta {
   font-size: 0.68rem;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 /* Discrète tant qu'on ne la survole pas : c'est l'action rare et irréversible de la ligne. */
@@ -2615,8 +2440,8 @@ p.capacity-scan__tier-missing {
   align-items: center;
   background: transparent;
   border: none;
-  border-radius: var(--ui-radius);
-  color: var(--ui-text-faint);
+  border-radius: 0;
+  color: var(--hud-text-faint);
   padding: 9px 8px;
   cursor: pointer;
   /* 0,55 sur une couleur déjà "faint" rendait la corbeille délavée au point qu'on ne distinguait plus sa
@@ -2629,7 +2454,7 @@ p.capacity-scan__tier-missing {
 }
 
 .workspace__delete:hover {
-  color: var(--ui-danger);
+  color: var(--hud-danger);
   opacity: 1;
 }
 
@@ -2641,8 +2466,8 @@ p.capacity-scan__tier-missing {
   padding: 8px;
   font-size: 0.74rem;
   line-height: 1.4;
-  color: var(--ui-text);
-  background: rgba(var(--ui-danger-rgb), 0.07);
+  color: var(--hud-text);
+  background: rgba(255, 77, 104, 0.07);
 }
 
 .workspace__confirm span {
@@ -2670,8 +2495,8 @@ p.capacity-scan__tier-missing {
   align-items: center;
   background: transparent;
   border: none;
-  border-radius: var(--ui-radius);
-  color: var(--ui-text-faint);
+  border-radius: 0;
+  color: var(--hud-text-faint);
   padding: 4px;
   cursor: pointer;
   opacity: 0.6;
@@ -2681,7 +2506,7 @@ p.capacity-scan__tier-missing {
 }
 
 .workspace__rail-toggle:hover {
-  color: var(--ui-accent-bright);
+  color: var(--hud-accent-bright);
   opacity: 1;
 }
 
@@ -2712,7 +2537,7 @@ p.capacity-scan__tier-missing {
 .code-panel__error {
   margin: 0;
   font-size: 0.75rem;
-  color: var(--ui-gold);
+  color: var(--hud-gold);
 }
 
 .code-panel__intro {
@@ -2720,7 +2545,7 @@ p.capacity-scan__tier-missing {
   max-width: 78ch;
   font-size: 0.82rem;
   line-height: 1.6;
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
 }
 
 /*
@@ -2733,9 +2558,9 @@ p.capacity-scan__tier-missing {
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  background: rgba(var(--ui-accent-rgb), 0.08);
-  border: 1px solid var(--ui-line-strong);
-  box-shadow: var(--ui-glow);
+  background: rgba(var(--hud-accent-rgb), 0.08);
+  border: 1px solid var(--hud-line-strong);
+  box-shadow: var(--hud-glow);
 }
 
 .code-panel__live-text {
@@ -2750,12 +2575,12 @@ p.capacity-scan__tier-missing {
 
 .code-panel__live-title {
   font-size: 0.78rem;
-  color: var(--ui-accent-bright);
+  color: var(--hud-accent-bright);
 }
 
 .code-panel__live-detail {
   font-size: 0.7rem;
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
 }
 
 /* Écrit APRÈS la règle partagée ci-dessus, jamais avant : à spécificité égale c'est l'ordre qui décide,
@@ -2763,18 +2588,18 @@ p.capacity-scan__tier-missing {
 .code-panel__done {
   margin: 0;
   font-size: 0.78rem;
-  color: var(--ui-ok);
-  border-color: rgba(var(--ui-ok-rgb), 0.45);
-  background: rgba(var(--ui-ok-rgb), 0.08);
-  box-shadow: 0 0 12px rgba(var(--ui-ok-rgb), 0.25);
+  color: var(--hud-ok);
+  border-color: rgba(var(--hud-ok-rgb), 0.45);
+  background: rgba(var(--hud-ok-rgb), 0.08);
+  box-shadow: 0 0 12px rgba(var(--hud-ok-rgb), 0.25);
 }
 
 /* Un arrêt demandé n'est ni un succès ni une panne : même bandeau, au même endroit, mais en neutre.
    Écrit APRÈS la règle de succès ci-dessus — à spécificité égale, c'est l'ordre qui décide. */
 .code-panel__done--stopped {
-  color: var(--ui-text-dim);
-  border-color: var(--ui-line);
-  background: rgba(var(--ui-ink-rgb), 0.04);
+  color: var(--hud-text-dim);
+  border-color: var(--hud-line);
+  background: rgba(122, 176, 214, 0.06);
   box-shadow: none;
 }
 
@@ -2783,13 +2608,13 @@ p.capacity-scan__tier-missing {
   padding: 10px 12px;
   max-height: 110px;
   overflow-y: auto;
-  background: rgba(var(--ui-surface-rgb), 0.6);
-  border: 1px solid rgba(var(--ui-ink-rgb), 0.1);
+  background: rgba(1, 4, 10, 0.6);
+  border: 1px solid rgba(122, 176, 214, 0.2);
   border-radius: 8px;
   font-family: inherit;
   font-size: 0.68rem;
   line-height: 1.5;
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
   white-space: pre-wrap;
 }
 
@@ -2820,7 +2645,7 @@ p.capacity-scan__tier-missing {
 .code-panel__view-tabs {
   display: flex;
   gap: 6px;
-  background: rgba(var(--ui-ink-rgb), 0.05);
+  background: rgba(122, 176, 214, 0.08);
   border-radius: 999px;
   padding: 3px;
 }
@@ -2828,7 +2653,7 @@ p.capacity-scan__tier-missing {
 .code-panel__view-tab {
   background: transparent;
   border: none;
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
   padding: 5px 16px;
   border-radius: 999px;
   font-size: 0.76rem;
@@ -2837,8 +2662,8 @@ p.capacity-scan__tier-missing {
 }
 
 .code-panel__view-tab--active {
-  background: rgba(var(--ui-accent-rgb), 0.15);
-  color: var(--ui-text);
+  background: rgba(61, 220, 255, 0.15);
+  color: var(--hud-text);
 }
 
 /* Fond blanc explicite : une page générée qui ne définit pas son propre fond serait sinon transparente
@@ -2847,7 +2672,7 @@ p.capacity-scan__tier-missing {
   flex: 1;
   min-height: 0;
   width: 100%;
-  border: 1px solid rgba(var(--ui-ink-rgb), 0.1);
+  border: 1px solid rgba(122, 176, 214, 0.2);
   border-radius: 10px;
   background: #ffffff;
 }
@@ -2858,31 +2683,31 @@ p.capacity-scan__tier-missing {
   overflow: auto;
   margin: 0;
   padding: 12px 14px;
-  background: rgba(var(--ui-surface-rgb), 0.6);
-  border: 1px solid rgba(var(--ui-ink-rgb), 0.1);
+  background: rgba(1, 4, 10, 0.6);
+  border: 1px solid rgba(122, 176, 214, 0.2);
   border-radius: 10px;
   font-size: 0.7rem;
   line-height: 1.55;
-  color: var(--ui-text-soft);
+  color: var(--hud-text-soft);
 }
 
 .code-panel__hint {
   margin: 0;
   font-size: 0.68rem;
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
 
 .code-panel__hint code {
-  color: var(--ui-text-dim);
+  color: var(--hud-text-dim);
   word-break: break-all;
 }
 
 .code-panel__issues {
   font-size: 0.72rem;
   line-height: 1.55;
-  color: var(--ui-gold);
-  background: rgba(var(--ui-gold-rgb), 0.08);
-  border: 1px solid rgba(var(--ui-gold-rgb), 0.3);
+  color: var(--hud-gold);
+  background: rgba(255, 176, 32, 0.08);
+  border: 1px solid rgba(255, 176, 32, 0.3);
   border-radius: 10px;
   padding: 10px 14px;
 }
@@ -2911,12 +2736,12 @@ p.capacity-scan__tier-missing {
 
 .runtime-setup__intro {
   margin: 0;
-  color: var(--ui-text-soft);
+  color: var(--hud-text-soft);
   line-height: 1.5;
 }
 
 .runtime-setup__status {
-  color: var(--ui-text);
+  color: var(--hud-text);
   font-size: 0.9rem;
   min-height: 1.2em;
   /* Une ligne de sortie de pip peut être très longue (URL de paquet) : coupée plutôt que d'élargir
@@ -2928,7 +2753,7 @@ p.capacity-scan__tier-missing {
   width: 100%;
   height: 6px;
   border-radius: 999px;
-  background: rgba(var(--ui-ink-rgb), 0.1);
+  background: rgba(122, 176, 214, 0.2);
   overflow: hidden;
 }
 
@@ -2936,7 +2761,7 @@ p.capacity-scan__tier-missing {
   height: 100%;
   width: 0;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--ui-accent), var(--ui-accent-deep));
+  background: linear-gradient(90deg, var(--hud-accent), var(--hud-accent-deep));
   transition: width 0.3s ease;
 }
 
@@ -2956,7 +2781,7 @@ p.capacity-scan__tier-missing {
   margin: 0;
   padding-left: 20px;
   text-align: left;
-  color: var(--ui-danger);
+  color: var(--hud-danger-soft);
   font-size: 0.85rem;
 }
 
@@ -2966,9 +2791,9 @@ p.capacity-scan__tier-missing {
 }
 
 .runtime-setup__actions button {
-  background: rgba(var(--ui-accent-rgb), 0.18);
-  border: 1px solid var(--ui-accent);
-  color: var(--ui-text);
+  background: rgba(61, 220, 255, 0.18);
+  border: 1px solid var(--hud-accent);
+  color: var(--hud-text);
   padding: 8px 18px;
   border-radius: 999px;
   cursor: pointer;
@@ -2977,53 +2802,77 @@ p.capacity-scan__tier-missing {
 
 .runtime-setup__actions .runtime-setup__skip {
   background: transparent;
-  border-color: rgba(var(--ui-ink-rgb), 0.18);
-  color: var(--ui-text-soft);
+  border-color: rgba(122, 176, 214, 0.35);
+  color: var(--hud-text-soft);
 }
 
 /* ==========================================================================
-   COUCHE « DOUCE » (étape 144 — remplace l'ancienne couche HUD)
+   COUCHE HUD
    --------------------------------------------------------------------------
-   Toujours en fin de fichier et pour la même raison qu'avant : ces règles
-   réhabillent les classes définies plus haut sans toucher à leur mise en page
-   (flex/grid déjà éprouvés) ; à spécificité égale, les dernières gagnent.
+   Volontairement en fin de fichier : ces règles réhabillent les mêmes classes
+   que celles définies plus haut (mise en page inchangée, seul l'aspect change),
+   et étant les dernières à spécificité égale, ce sont elles qui gagnent. Garder
+   la mise en page d'origine intacte plus haut évite de recalculer des dizaines
+   de flex/grid déjà éprouvés juste pour changer un look.
 
-   Les trois motifs « cockpit » de l'ancien thème sont retirés partout :
-   coins coupés en diagonale, équerres lumineuses dans les angles, capitales
-   espacées. À la place : coins arrondis, ombres légères, phrases normales.
+   Trois motifs reviennent partout, et un seul suffit à faire lire "instrument"
+   plutôt que "site web" :
+   1. les coins coupés en diagonale (clip-path) à la place des coins arrondis,
+   2. les équerres lumineuses dans les angles des panneaux,
+   3. les étiquettes en capitales très espacées, dans la police d'affichage.
    ========================================================================== */
 
 /* --- Typographie ---------------------------------------------------------- */
 
 h1,
 h2,
-h3 {
-  font-family: var(--ui-font-display);
-  color: var(--ui-text);
+h3,
+.sidebar__brand,
+.sidebar__mode-label,
+.options-menu__section-title,
+.options-menu__model-group-title,
+.options-menu__tab,
+.capacity-scan__tier-label,
+.code-panel__view-tab,
+.app__status {
+  font-family: var(--hud-font-display);
 }
 
 h1 {
-  font-weight: 800;
-  letter-spacing: -0.01em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 
-/* Titres de section : une phrase en gras, sobre — plus de capitales ni de trait lumineux. */
+/* Toutes les étiquettes de section : capitales espacées + un trait qui part vers
+   la droite, comme les intitulés de zone sur un tableau de bord. */
 .options-menu__section-title,
 .options-menu__model-group-title {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--ui-text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  color: var(--hud-accent);
+  text-transform: uppercase;
+}
+
+.options-menu__section-title::after,
+.options-menu__model-group-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--hud-line-strong), transparent);
 }
 
 /* --- Boutons -------------------------------------------------------------- */
 
 /*
- * Un seul aspect pour tous les boutons d'action : une pastille arrondie, fond bleu très pâle, texte bleu.
- * Assez visible pour être trouvé du premier coup d'œil, assez calme pour ne pas crier. L'action principale
- * du composeur (Envoyer) est pleine, plus bas : c'est la seule qu'on veut voir en premier.
+ * Un seul aspect pour tous les boutons d'action, quelle que soit la classe
+ * d'origine (elles étaient toutes légèrement différentes) : coins coupés en bas
+ * à droite / haut à gauche, fond très sombre, liseré cyan qui s'allume au
+ * survol. Le `clip-path` fait tout le travail — pas d'image, pas de bordure
+ * biseautée bricolée.
  */
 .options-menu__action,
 .options-menu__trigger,
@@ -3044,15 +2893,15 @@ h1 {
 .runtime-setup__actions button,
 .app__onboarding button {
   position: relative;
-  font-family: var(--ui-font-display);
-  font-size: 0.92rem;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--ui-accent);
-  background: var(--ui-accent-soft);
-  border: 1px solid rgba(var(--ui-accent-rgb), 0.18);
-  border-radius: 999px;
+  font-family: var(--hud-font-display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--hud-accent);
+  background: linear-gradient(180deg, rgba(var(--hud-accent-rgb), 0.14), rgba(var(--hud-accent-rgb), 0.05));
+  border: 1px solid var(--hud-line-strong);
+  border-radius: 0;
   padding: 9px 20px;
   cursor: pointer;
   transition:
@@ -3060,6 +2909,7 @@ h1 {
     border-color 0.15s ease,
     box-shadow 0.15s ease,
     background 0.15s ease;
+  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
 }
 
 .options-menu__action:not(:disabled):hover,
@@ -3070,6 +2920,7 @@ h1 {
 .options-menu__ollama-update-actions button:not(:disabled):hover,
 .app__new-models button:hover,
 .memory-brain__actions button:hover,
+.composer__send:not(:disabled):hover,
 .code-panel__result-actions button:not(:disabled):hover,
 .code-panel__live-stop:not(:disabled):hover,
 .workspace__new:not(:disabled):hover,
@@ -3079,48 +2930,29 @@ h1 {
 .capacity-scan button:not(:disabled):hover,
 .runtime-setup__actions button:not(:disabled):hover,
 .app__onboarding button:hover {
-  color: var(--ui-accent-bright);
-  border-color: rgba(var(--ui-accent-rgb), 0.35);
-  background: rgba(var(--ui-accent-rgb), 0.22);
+  color: var(--hud-accent-bright);
+  border-color: var(--hud-accent);
+  background: linear-gradient(180deg, rgba(var(--hud-accent-rgb), 0.26), rgba(var(--hud-accent-rgb), 0.1));
+  box-shadow: var(--hud-glow);
 }
 
-/* L'action principale (Envoyer / Générer / Continuer) : pleine, bleue, texte blanc. */
-.composer__send,
-.app__onboarding button,
-.capacity-scan button,
-.runtime-setup__actions button:not(.runtime-setup__skip) {
-  color: #ffffff;
-  background: var(--ui-accent);
-  border-color: var(--ui-accent);
-  box-shadow: 0 1px 2px rgba(var(--ui-accent-rgb), 0.3);
-}
-
-.composer__send:not(:disabled):hover,
-.app__onboarding button:hover,
-.capacity-scan button:not(:disabled):hover,
-.runtime-setup__actions button:not(.runtime-setup__skip):not(:disabled):hover {
-  color: #ffffff;
-  background: var(--ui-accent-bright);
-  border-color: var(--ui-accent-bright);
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-/* Le clavier doit voir où il est au moins aussi bien que la souris : un anneau bleu doux, bien visible. */
+/* Le clavier doit voir où il est au moins aussi bien que la souris : le contour
+   natif disparaîtrait sous le clip-path, remplacé par une lueur nette. */
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:not(.composer__input):focus-visible {
   outline: none;
-  border-color: var(--ui-accent) !important;
-  box-shadow: 0 0 0 3px rgba(var(--ui-accent-rgb), 0.25);
+  border-color: var(--hud-accent-bright) !important;
+  box-shadow:
+    0 0 0 1px var(--hud-accent-bright),
+    0 0 16px rgba(var(--hud-accent-rgb), 0.5);
 }
 
-/* Le champ du widget est déjà contenu dans une pilule qui porte son propre contour arrondi : pas de second
-   anneau de focus rectangulaire autour du texte. */
+/* Le champ du widget est déjà contenu dans une pilule qui porte son propre halo arrondi. La règle globale
+   ci-dessus dessinait par-dessus une seconde lueur rectangulaire dès que + lui donnait le focus — visible
+   autour du texte quand la souris entrait dans le widget. Garder le focus clavier, mais laisser la pilule
+   être l'unique contour lumineux. */
 .chat-widget__input:focus-visible {
   outline: none;
   border-color: transparent !important;
@@ -3128,9 +2960,11 @@ textarea:not(.composer__input):focus-visible {
 }
 
 /*
- * Même famille en plus petit : actions secondaires posées à côté du sujet de l'écran (l'aperçu de
- * l'application, la ligne à supprimer), qui ne doivent pas lui faire concurrence. APRÈS la famille : à
- * spécificité égale, seule la dernière règle gagne (piège de l'étape 95).
+ * Boutons de la MÊME famille (coins coupés, Rajdhani) mais en plus petit : actions secondaires posées à
+ * côté du sujet de l'écran (l'aperçu de l'application, la ligne à supprimer), qui ne doivent pas lui faire
+ * concurrence. Placé APRÈS la famille : ces règles ont exactement la même spécificité qu'elle, donc à cet
+ * endroit seulement elles gagnent — écrites plus haut (dans la section du mode Code), elles étaient
+ * silencieusement écrasées et n'avaient aucun effet.
  */
 .code-panel__result-actions button,
 .code-panel__live-stop,
@@ -3138,24 +2972,38 @@ textarea:not(.composer__input):focus-visible {
 .workspace__confirm-yes,
 .workspace__confirm-no,
 .chat-widget__action {
-  font-size: 0.82rem;
-  padding: 6px 14px;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  padding: 6px 12px;
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+}
+
+/* "NOUVELLE CONVERSATION" (21 caractères en majuscules) passait sur deux lignes dans la colonne de 240px :
+   l'interlettrage de la famille, pensé pour des boutons courts, coûte ici une ligne entière. Mesuré à
+   40px de haut avant, 27px après — la même hauteur que "Nouvelle application". Placé APRÈS la famille,
+   sinon la règle serait écrasée à spécificité égale (piège de l'étape 95). */
+.workspace__new {
+  letter-spacing: 0.05em;
 }
 
 .options-menu__action--danger,
 .workspace__confirm-yes,
 .options-menu__action--danger:not(:disabled):hover,
 .workspace__confirm-yes:not(:disabled):hover {
-  color: var(--ui-danger);
-  border-color: rgba(var(--ui-danger-rgb), 0.3);
-  background: var(--ui-danger-soft);
+  color: var(--hud-danger);
+  border-color: rgba(255, 77, 104, 0.55);
+  background: linear-gradient(180deg, rgba(255, 77, 104, 0.16), rgba(255, 77, 104, 0.05));
   box-shadow: none;
 }
 
-/* --- Cartes ---------------------------------------------------------------- */
+/* --- Panneaux et équerres ------------------------------------------------- */
 
-/* Toutes les « boîtes » de l'interface : blanches, arrondies, une ombre à peine visible. Plus d'équerres
-   lumineuses dans les angles (le détail le plus « cockpit » de l'ancien thème). */
+/*
+ * Les équerres d'angle : deux pseudo-éléments qui ne dessinent que deux côtés de
+ * bordure chacun, en haut à gauche et en bas à droite. C'est le détail le plus
+ * "cockpit" de tout le thème, et il ne coûte rien — aucun élément supplémentaire
+ * dans le DOM, donc applicable à des composants qu'on ne touche pas côté React.
+ */
 .options-menu__group,
 .options-menu__model-group,
 .capacity-scan__tier,
@@ -3166,98 +3014,224 @@ textarea:not(.composer__input):focus-visible {
 .code-panel__result,
 .memory-brain__note {
   position: relative;
-  border-radius: var(--ui-radius-lg) !important;
-  background: var(--ui-panel-raised);
-  border: 1px solid var(--ui-line);
-  box-shadow: var(--ui-shadow-card);
+  border-radius: 0 !important;
+  background: var(--hud-panel-raised);
+  border: 1px solid var(--hud-line);
+  backdrop-filter: blur(6px);
 }
 
-/* Le palier correspondant à la machine : un liseré ambre doux — l'information la plus importante de cet
-   écran reste repérable sans lire les libellés, sans lueur. */
+/* `.options-menu__group` (les cartes de réglages, ex "Son", "Micro et haut-parleur"...) a rejoint les
+   équerres à l'étape 119 : la maquette "Options Jaris.dc.html" en met sur CHAQUE panneau de la page Options,
+   pas seulement sur les cartes matérielles/messages/résultats déjà équipées — sans elles, ces cartes étaient
+   la seule famille de panneaux "plats" (juste bordure + fond) au milieu d'un thème où l'équerre d'angle est
+   justement le motif qui fait lire "instrument" plutôt que "site web" (voir le commentaire de tête de
+   section, plus haut dans ce fichier). */
+.options-menu__group::before,
+.options-menu__model-group::before,
+.capacity-scan__tier::before,
+.options-menu__scope-dialog::before,
+.app__new-models::before,
+.chat-panel__message::before,
+.code-panel__result::before,
+.memory-brain__note::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 14px;
+  height: 14px;
+  border-top: 2px solid var(--hud-accent);
+  border-left: 2px solid var(--hud-accent);
+  pointer-events: none;
+}
+
+.options-menu__group::after,
+.options-menu__model-group::after,
+.capacity-scan__tier::after,
+.options-menu__scope-dialog::after,
+.app__new-models::after,
+.chat-panel__message::after,
+.code-panel__result::after,
+.memory-brain__note::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 14px;
+  height: 14px;
+  border-right: 2px solid var(--hud-accent);
+  border-bottom: 2px solid var(--hud-accent);
+  pointer-events: none;
+}
+
+/* Le palier correspondant à la machine : équerres dorées au lieu de cyan, plus une
+   lueur — c'est l'information la plus importante de cet écran, elle doit sauter
+   aux yeux sans avoir à lire les libellés. */
 .capacity-scan__tier--current {
-  border-color: rgba(var(--ui-gold-rgb), 0.55);
-  box-shadow: 0 0 0 3px rgba(var(--ui-gold-rgb), 0.12);
+  border-color: rgba(255, 176, 32, 0.5);
+  box-shadow: 0 0 24px rgba(255, 176, 32, 0.12);
+}
+
+.capacity-scan__tier--current::before,
+.capacity-scan__tier--current::after {
+  border-color: var(--hud-gold);
 }
 
 /* --- Colonne latérale ----------------------------------------------------- */
 
 .sidebar {
-  background: var(--ui-panel);
-  border-right: 1px solid var(--ui-line);
+  background: linear-gradient(180deg, rgba(6, 16, 25, 0.92), rgba(1, 4, 10, 0.92));
+  border-right: 1px solid var(--hud-line);
+  backdrop-filter: blur(8px);
 }
 
+/* Le nom de l'appli traité comme la plaque d'un appareil : lettres très espacées,
+   lueur cyan, et un trait plein dessous qui court sur toute la largeur. */
 .sidebar__brand {
-  font-size: 1.35rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: var(--ui-text);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.42em;
+  color: var(--hud-accent);
+  text-shadow: 0 0 18px rgba(var(--hud-accent-rgb), 0.55);
   padding: 4px 0 14px 8px;
-  border-bottom: 1px solid var(--ui-line);
+  border-bottom: 1px solid var(--hud-line);
 }
 
 .sidebar__mode {
   position: relative;
   border-left: none;
-  border-radius: var(--ui-radius);
+  border-radius: 0;
   padding: 11px 14px;
   transition:
     background 0.15s ease,
     color 0.15s ease;
 }
 
-.sidebar__mode:hover {
-  background: rgba(var(--ui-ink-rgb), 0.04);
+/* Le trait vertical d'état est dessiné en ::before plutôt qu'en border-left : il
+   peut ainsi s'allonger/s'illuminer à l'activation sans décaler le texte d'un
+   pixel, ce qui se voyait à chaque changement de mode. */
+.sidebar__mode::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 12px;
+  background: var(--hud-text-faint);
+  transition:
+    height 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.sidebar__mode:hover::before {
+  height: 60%;
+  background: var(--hud-text-dim);
 }
 
 .sidebar__mode--active {
-  background: var(--ui-accent-soft);
-  color: var(--ui-accent-bright);
+  background: linear-gradient(90deg, rgba(var(--hud-accent-rgb), 0.16), transparent);
+  color: var(--hud-text);
+}
+
+.sidebar__mode--active::before {
+  height: 100%;
+  background: var(--hud-accent);
+  box-shadow: 0 0 12px rgba(var(--hud-accent-rgb), 0.8);
 }
 
 .sidebar__mode-label {
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .sidebar__mode-hint {
-  font-size: 0.78rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
 }
 
-/* --- Écran vocal : la mascotte et son statut ------------------------------ */
+/* --- Écran vocal : l'orbe et son statut ----------------------------------- */
 
+/*
+ * Deux anneaux concentriques autour de l'orbe, dessinés en CSS (l'orbe lui-même
+ * reste un canvas, voir JarisOrb.tsx) : un cercle fin fixe et un arc en rotation
+ * lente. C'est ce qui transforme "une sphère au milieu d'une page" en "cible
+ * d'un viseur". `inset` négatif : les anneaux débordent volontairement de la
+ * boîte de l'orbe.
+ */
 .app--voice .jaris-orb {
   position: relative;
 }
 
-/* Le statut (« Je t'écoute »…) : une phrase calme, précédée d'une petite pastille qui respire. */
+.app--voice .jaris-orb::before,
+.app--voice .jaris-orb::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.app--voice .jaris-orb::before {
+  inset: -26px;
+  border: 1px solid rgba(var(--hud-accent-rgb), 0.18);
+}
+
+.app--voice .jaris-orb::after {
+  inset: -44px;
+  border: 1px dashed rgba(var(--hud-accent-rgb), 0.28);
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+  animation: hud-ring-spin 14s linear infinite;
+}
+
+@keyframes hud-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app--voice .jaris-orb::after {
+    animation: none;
+  }
+}
+
+/* Le statut ("Jaris t'écoute"...) devient l'indicateur principal de l'écran :
+   capitales espacées, précédé d'un point qui bat au rythme de l'état. */
 .app__status {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-family: var(--ui-font-display);
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: var(--ui-text);
+  gap: 12px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--hud-accent);
+  text-shadow: 0 0 16px rgba(var(--hud-accent-rgb), 0.4);
 }
 
 .app__status::before {
   content: '';
-  width: 9px;
-  height: 9px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: var(--ui-accent);
-  animation: ui-breathe 2.4s ease-in-out infinite;
+  background: var(--hud-accent);
+  box-shadow: 0 0 10px var(--hud-accent);
+  animation: hud-pulse 2.4s ease-in-out infinite;
 }
 
-@keyframes ui-breathe {
+@keyframes hud-pulse {
   0%,
   100% {
-    opacity: 0.45;
+    opacity: 0.35;
     transform: scale(0.85);
   }
   50% {
     opacity: 1;
-    transform: scale(1.1);
+    transform: scale(1.15);
   }
 }
 
@@ -3269,89 +3243,119 @@ textarea:not(.composer__input):focus-visible {
 }
 
 .app__hint {
-  font-family: var(--ui-font-body);
-  color: var(--ui-text-dim);
+  font-family: var(--hud-font-display);
+  letter-spacing: 0.08em;
+  color: var(--hud-text-faint);
   max-width: 46ch;
   text-align: center;
 }
 
-/* Ce qui a été dit, puis la réponse de Jaris : la question en bleu discret, la réponse en texte lisible. */
+/* Transcription et réponse : la question de l'utilisateur en cyan discret, la
+   réponse de Jaris en blanc lisible — la hiérarchie doit se lire sans étiquette. */
 .app__transcript {
-  font-family: var(--ui-font-body);
-  color: var(--ui-accent-bright);
+  font-family: var(--hud-font-display);
+  letter-spacing: 0.06em;
+  color: var(--hud-accent);
 }
 
 .app__reply {
-  font-family: var(--ui-font-body);
-  color: var(--ui-text);
+  font-family: var(--hud-font-body);
+  color: var(--hud-text);
 }
 
 /* --- Onglets (Options, mode Code) ----------------------------------------- */
 
 .options-menu__tabs,
 .code-panel__view-tabs {
-  border-radius: var(--ui-radius);
-  background: rgba(var(--ui-ink-rgb), 0.05);
-  border: 1px solid transparent;
-  padding: 3px;
-  gap: 2px;
+  border-radius: 0;
+  background: rgba(1, 4, 10, 0.6);
+  border: 1px solid var(--hud-line);
+  padding: 0;
+  gap: 0;
 }
 
 .options-menu__tab,
 .code-panel__view-tab {
-  border-radius: 9px;
-  font-size: 0.9rem;
-  font-weight: 700;
-  padding: 7px 14px;
-  border: none;
-  color: var(--ui-text-dim);
+  border-radius: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 9px 14px;
+  border-bottom: 2px solid transparent;
   transition:
     color 0.15s ease,
-    background 0.15s ease;
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .options-menu__tab--active,
 .code-panel__view-tab--active {
-  background: var(--ui-panel);
-  color: var(--ui-text);
-  box-shadow: 0 1px 3px rgba(var(--ui-shadow-rgb), 0.3);
+  background: rgba(var(--hud-accent-rgb), 0.12);
+  border-bottom-color: var(--hud-accent);
+  color: var(--hud-accent-bright);
 }
 
 /* --- En-têtes de page ----------------------------------------------------- */
 
-.memory-brain,
+.memory-brain {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(var(--hud-accent-rgb), 0.1) 0%, transparent 55%),
+    linear-gradient(180deg, var(--hud-panel) 0%, var(--hud-bg) 70%);
+}
+
+/* Le fond d'Options reprend exactement celui de la page d'accueil (voir `body` en haut du fichier) : cette
+   page recouvre tout l'écran par-dessus body (position: fixed, z-index: 20), donc son propre dégradé plus
+   plat remplaçait complètement la grille/halo du fond principal — Options avait l'air d'un écran différent
+   plutôt que d'un simple panneau ouvert par-dessus l'accueil. */
 .options-page {
-  background: var(--ui-bg);
+  background:
+    linear-gradient(rgba(var(--hud-accent-rgb), 0.045) 1px, transparent 1px) 0 0 / 100% 44px,
+    linear-gradient(90deg, rgba(var(--hud-accent-rgb), 0.045) 1px, transparent 1px) 0 0 / 44px 100%,
+    radial-gradient(circle at 50% 26%, rgba(var(--hud-accent-rgb), 0.13) 0%, transparent 58%),
+    radial-gradient(circle at 50% 30%, var(--hud-panel) 0%, var(--hud-bg) 72%);
 }
 
 .options-page__header,
 .memory-brain__header {
-  border-bottom: 1px solid var(--ui-line);
-  background: var(--ui-panel);
+  border-bottom: 1px solid var(--hud-line);
+  background: rgba(1, 4, 10, 0.5);
 }
 
 .options-page__header h2,
 .memory-brain__header h2,
 .options-page__header > span:first-child {
-  font-family: var(--ui-font-display);
-  font-weight: 800;
-  color: var(--ui-text);
+  font-family: var(--hud-font-display);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--hud-accent);
 }
 
 /* --- Champs de saisie ----------------------------------------------------- */
 
-/* Exceptions (inchangées depuis l'ancien thème) : `.composer__input` et `.chat-widget__input` vivent dans
-   une carte/pilule qui porte déjà le cadre ; `.options-menu__context-slider` est un curseur, pas un champ ;
-   `.model-picker__select` est un contrôle discret de la barre du composeur. Sans elles, ce `!important`
-   redessinerait un cadre de champ par-dessus leur style dédié (vérifié par mesure, étapes 97 et 141). */
+/* `.composer__input` est exclu : dans le composeur (étape 92), c'est la CARTE qui porte le cadre et la
+   lueur de focus, pas le champ lui-même — sans cette exception, ce `!important` redessinerait un second
+   contour à l'intérieur de la carte (constaté sur la capture avant/après).
+   `.options-menu__context-slider` (curseur de longueur de contexte) est exclu pour la même raison : c'est
+   un `<input type="range">`, pas un champ de texte — sans cette exception, le `!important` de cette règle
+   écrase le style DÉDIÉ du curseur (fond de piste, coins arrondis) et dessine par-dessus un cadre de champ
+   de texte classique, attrapé par une vraie mesure de style calculé avant de livrer (même piège que le
+   bouton "Nouvelle conversation" resté gris, étape 97 : compter les occurrences ne suffit jamais, seule une
+   mesure du style RÉELLEMENT appliqué le prouve).
+   `.chat-widget__input` (barre du widget texte) est exclu pour la même raison que `.composer__input` : la
+   PILULE qui l'entoure porte déjà le cadre et les coins arrondis, un second contour carré à l'intérieur
+   casserait la forme.
+   `.model-picker__select` (sélecteur de modèle, étape 141) est exclu pour la même raison : c'est un contrôle
+   discret posé dans la barre du composeur, comme l'icône de pièce jointe — un cadre de champ plein en
+   `!important` lui donnait le même poids visuel que le bouton d'envoi. */
 input:not(.options-menu__context-slider):not(.chat-widget__input),
 textarea:not(.composer__input),
 select:not(.model-picker__select) {
-  font-family: var(--ui-font-body);
-  border-radius: var(--ui-radius) !important;
-  background: var(--ui-panel) !important;
-  border: 1px solid var(--ui-line-strong) !important;
-  color: var(--ui-text) !important;
+  font-family: var(--hud-font-body);
+  border-radius: 0 !important;
+  background: rgba(1, 4, 10, 0.75) !important;
+  border: 1px solid var(--hud-line) !important;
+  color: var(--hud-text) !important;
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease;
@@ -3359,53 +3363,53 @@ select:not(.model-picker__select) {
 
 input::placeholder,
 textarea::placeholder {
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
 }
+
 
 /* --- Barres de progression ------------------------------------------------ */
 
 .options-menu__progress-bar,
 .runtime-setup__bar {
-  border-radius: 999px;
-  border: none;
-  background: rgba(var(--ui-ink-rgb), 0.08);
+  border-radius: 0;
+  border: 1px solid var(--hud-line);
+  background: rgba(1, 4, 10, 0.8);
 }
 
 .options-menu__progress-bar-fill,
 .runtime-setup__bar-fill {
-  border-radius: 999px;
-  background: var(--ui-accent);
+  border-radius: 0;
+  background: linear-gradient(90deg, var(--hud-accent-deep), var(--hud-accent));
+  box-shadow: 0 0 14px rgba(var(--hud-accent-rgb), 0.6);
 }
 
 /* --- Badges et pastilles -------------------------------------------------- */
 
 .options-menu__badge {
-  border-radius: 999px;
-  font-family: var(--ui-font-body);
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 2px 10px;
-  border: none;
-  background: rgba(var(--ui-ink-rgb), 0.06);
+  border-radius: 0;
+  font-family: var(--hud-font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  background: transparent;
 }
 
 .options-menu__badge--good {
-  color: var(--ui-ok);
-  background: rgba(var(--ui-ok-rgb), 0.12);
+  color: var(--hud-ok);
 }
 
 .options-menu__badge--mid {
-  color: var(--ui-gold);
-  background: rgba(var(--ui-gold-rgb), 0.14);
+  color: var(--hud-gold);
 }
 
 .options-menu__badge--bad {
-  color: var(--ui-danger);
-  background: rgba(var(--ui-danger-rgb), 0.1);
+  color: var(--hud-danger);
 }
 
 .options-menu__badge--none {
-  color: var(--ui-text-faint);
+  color: var(--hud-text-faint);
+  border-color: var(--hud-text-faint);
 }
 
 /* --- Données techniques en monospace -------------------------------------- */
@@ -3417,7 +3421,7 @@ textarea::placeholder {
 .capacity-scan__tier-speed,
 .options-menu__benchmark-log,
 code {
-  font-family: var(--ui-font-mono);
+  font-family: var(--hud-font-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -3427,26 +3431,26 @@ code {
 .options-menu__ollama-warning,
 .options-menu__analysis-notice,
 .app__setup-warning {
-  border-radius: var(--ui-radius);
-  border-left: 3px solid var(--ui-gold);
+  border-radius: 0;
+  border-left: 3px solid var(--hud-gold);
 }
 
 .app__setup-warning,
 .options-menu__error,
 .chat-panel__error,
 .code-panel__error {
-  font-family: var(--ui-font-display);
-  letter-spacing: 0.01em;
+  font-family: var(--hud-font-display);
+  letter-spacing: 0.06em;
 }
 
 /* --- Tableaux ------------------------------------------------------------- */
 
 .options-menu__model-overview th,
 .capacity-scan__tier-slot {
-  font-family: var(--ui-font-display);
-  letter-spacing: 0.01em;
-  text-transform: none;
-  color: var(--ui-accent);
+  font-family: var(--hud-font-display);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--hud-accent);
 }
 
 /* --- Barres de défilement ------------------------------------------------- */
@@ -3457,17 +3461,17 @@ code {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(var(--ui-surface-rgb), 0.6);
+  background: rgba(1, 4, 10, 0.6);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(var(--ui-accent-rgb), 0.28);
+  background: rgba(var(--hud-accent-rgb), 0.28);
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(var(--ui-accent-rgb), 0.5);
+  background: rgba(var(--hud-accent-rgb), 0.5);
   background-clip: content-box;
 }
 
@@ -3480,7 +3484,7 @@ code {
   white-space: nowrap;
   padding: 9px 12px;
   font-size: 0.74rem;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.08em;
 }
 
 /* Avec le texte non coupé ci-dessus, les 7 onglets ("Micro & Haut-parleur" et
@@ -3501,17 +3505,17 @@ code {
 /* Les liens gardaient le bleu/violet souligné par défaut du navigateur, seule
    chose de l'interface à ne pas suivre le thème. */
 a {
-  color: var(--ui-accent);
+  color: var(--hud-accent);
   text-decoration: none;
-  border-bottom: 1px solid var(--ui-line-strong);
+  border-bottom: 1px solid var(--hud-line-strong);
   transition:
     color 0.15s ease,
     border-color 0.15s ease;
 }
 
 a:hover {
-  color: var(--ui-accent-bright);
-  border-bottom-color: var(--ui-accent-bright);
+  color: var(--hud-accent-bright);
+  border-bottom-color: var(--hud-accent-bright);
 }
 
 /* Bandeaux d'alerte : texte à gauche et bouton dans le flux, au lieu de tout
@@ -3539,7 +3543,7 @@ a:hover {
    en petit corps, elle demandait un effort de lecture pour une phrase qu'on lit
    justement une seule fois, au début. */
 .app__hint {
-  font-family: var(--ui-font-body);
+  font-family: var(--hud-font-body);
   letter-spacing: 0.01em;
   line-height: 1.6;
 }
@@ -3575,12 +3579,12 @@ a:hover {
 .options-page__eyebrow,
 .options-page__navigation-label {
   display: block;
-  font-family: var(--ui-font-display);
+  font-family: var(--hud-font-display);
   font-size: 0.7rem;
   font-weight: 600;
-  letter-spacing: 0.01em;
-  text-transform: none;
-  color: var(--ui-text-faint);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--hud-text-faint);
 }
 
 .options-page__body {
@@ -3609,8 +3613,8 @@ a:hover {
 .options-page__navigation {
   min-height: 0;
   padding: 28px 16px;
-  border-right: 1px solid var(--ui-line);
-  background: rgba(var(--ui-surface-rgb), 0.5);
+  border-right: 1px solid var(--hud-line);
+  background: rgba(1, 4, 10, 0.5);
 }
 
 .options-page__navigation-label {
@@ -3642,9 +3646,9 @@ a:hover {
 }
 
 .options-page .options-menu__tab--active {
-  border-color: var(--ui-line);
-  border-left-color: var(--ui-accent);
-  border-bottom-color: var(--ui-line);
+  border-color: var(--hud-line);
+  border-left-color: var(--hud-accent);
+  border-bottom-color: var(--hud-line);
 }
 
 .options-page__workspace {
@@ -3685,7 +3689,7 @@ a:hover {
     overflow-x: auto;
     padding: 8px 12px;
     border-right: 0;
-    border-bottom: 1px solid var(--ui-line);
+    border-bottom: 1px solid var(--hud-line);
   }
 
   .options-page__navigation-label {
@@ -3707,7 +3711,7 @@ a:hover {
   .options-page .options-menu__tabs + .options-page__navigation-label + .options-menu__tabs {
     margin-left: 10px;
     padding-left: 10px;
-    border-left: 1px solid var(--ui-line);
+    border-left: 1px solid var(--hud-line);
   }
 
   .options-page .options-menu__tab {
@@ -3718,7 +3722,7 @@ a:hover {
 
   .options-page .options-menu__tab--active {
     border-left-color: transparent;
-    border-bottom-color: var(--ui-accent);
+    border-bottom-color: var(--hud-accent);
   }
 
   .options-page__content {
@@ -3807,78 +3811,4 @@ a:hover {
 
 @media (prefers-reduced-motion: reduce) {
   .widget-rest, .widget-active, .widget-details { transition: none; }
-}
-
-/* --- Retouches du thème doux (étape 144), vérifiées sur captures ------------------------------------ */
-
-/* Marque : la mascotte en petit + « Jaris » en casse normale (plus de plaque « JARIS » espacée). */
-.sidebar__brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* Liens du bas de la colonne (Cerveau, Options) : pleine largeur, texte à gauche, comme les modes au-dessus
-   — en pastilles centrées, « Cerveau de Jaris » passait sur deux lignes. */
-.sidebar__link {
-  width: 100%;
-  text-align: left;
-  border-radius: var(--ui-radius);
-  background: transparent;
-  border-color: transparent;
-  color: var(--ui-text-soft);
-  padding: 10px 14px;
-}
-
-.sidebar__link:hover {
-  background: rgba(var(--ui-ink-rgb), 0.05);
-  border-color: transparent;
-  color: var(--ui-text);
-}
-
-/* Chat : ta bulle en bleu pâle, celle de Jaris en blanc — on sait qui parle sans lire. */
-.chat-panel__message--user {
-  background: var(--ui-accent-soft);
-  border-color: rgba(var(--ui-accent-rgb), 0.15);
-}
-
-/* Le bouton « Options » de la colonne est rendu par OptionsMenu (classe `.options-menu__trigger`) : même
-   apparence que « Cerveau de Jaris » juste au-dessus, sinon il restait seul en pastille. */
-.sidebar .options-menu__trigger {
-  width: 100%;
-  text-align: left;
-  border-radius: var(--ui-radius);
-  background: transparent;
-  border-color: transparent;
-  color: var(--ui-text-soft);
-  padding: 10px 14px;
-}
-
-.sidebar .options-menu__trigger:hover {
-  background: rgba(var(--ui-ink-rgb), 0.05);
-  border-color: transparent;
-  color: var(--ui-text);
-}
-
-/* Mascotte en tête des écrans d'accueil (prénom, installation, configuration) : le premier contact avec Jaris
-   est un visage, pas un formulaire. */
-.welcome-mascot {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 4px;
-}
-
-/* Noms de modèles : en texte normal gras plutôt qu'en police « terminal » — les chemins de dossiers et le
-   journal d'analyse, eux, restent en monospace (vrais identifiants techniques, alignés). */
-.capacity-scan__tier-model,
-.options-menu__model-name {
-  font-family: var(--ui-font-body);
-  font-weight: 700;
-}
-
-/* Onglets de la colonne d'Options : lisibles d'un coup d'œil (ils étaient en 0,78 rem, trop petits pour
-   des libellés en phrase normale). */
-.options-page .options-menu__tab {
-  font-size: 0.95rem;
-  font-weight: 700;
 }

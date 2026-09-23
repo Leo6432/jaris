@@ -20,9 +20,9 @@ function isCenterNode(node: NodeObject): boolean {
 function makeNodeLabel(node: NodeObject): SpriteText {
   const isCenter = isCenterNode(node)
   const sprite = new SpriteText(String(node.id))
-  sprite.color = isCenter ? '#9a6412' : '#1f2937'
+  sprite.color = isCenter ? '#ffb648' : '#d9ecff'
   sprite.textHeight = isCenter ? 5 : 3.5
-  sprite.backgroundColor = 'rgba(255, 255, 255, 0.92)'
+  sprite.backgroundColor = 'rgba(5, 7, 12, 0.75)'
   sprite.padding = 2
   sprite.borderRadius = 3
   sprite.position.set(0, isCenter ? 13 : 9, 0)
@@ -43,13 +43,13 @@ export default function MemoryBrain({ graph, onClose }: MemoryBrainProps): JSX.E
       .backgroundColor('rgba(0,0,0,0)')
       .nodeRelSize(4)
       .nodeVal((node) => (isCenterNode(node) ? 3 : 1))
-      .nodeColor((node) => (isCenterNode(node) ? '#f0a830' : '#4b7fe8'))
+      .nodeColor((node) => (isCenterNode(node) ? '#ffb648' : '#37e2ff'))
       .nodeOpacity(0.9)
       .nodeThreeObject(makeNodeLabel)
       .nodeThreeObjectExtend(true)
-      .linkColor(() => 'rgba(226, 232, 240, 0.25)')
+      .linkColor(() => 'rgba(127, 163, 201, 0.55)')
       .linkDirectionalParticles(2)
-      .linkDirectionalParticleColor(() => '#4b7fe8')
+      .linkDirectionalParticleColor(() => '#37e2ff')
       .onNodeClick((node) => {
         const title = String(node.id)
         setSelectedNote({ title, content: null })

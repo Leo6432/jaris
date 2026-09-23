@@ -30,16 +30,16 @@ interface VoiceOption {
 }
 
 const TTS_VOICES: VoiceOption[] = [
-  { id: 'M1', description: 'Vive, énergique', color: '#3fa7d6' },
-  { id: 'M2', description: 'Grave, sérieuse', color: '#3b6fe0' },
-  { id: 'M3', description: 'Autoritaire, confiante', color: '#7c6cf0' },
-  { id: 'M4', description: 'Douce, jeune', color: '#2fb38a' },
-  { id: 'M5', description: 'Chaleureuse, narrative', color: '#e0a030' },
-  { id: 'F1', description: 'Calme, posée', color: '#d46cb4' },
-  { id: 'F2', description: 'Vive, enjouée', color: '#e0607a' },
-  { id: 'F3', description: 'Professionnelle', color: '#35b3c8' },
-  { id: 'F4', description: 'Nette, confiante', color: '#8a9bb3' },
-  { id: 'F5', description: 'Douce, bienveillante', color: '#e88a8a' }
+  { id: 'M1', description: 'Vive, énergique', color: '#37e2ff' },
+  { id: 'M2', description: 'Grave, sérieuse', color: '#2b6cff' },
+  { id: 'M3', description: 'Autoritaire, confiante', color: '#6c5ce7' },
+  { id: 'M4', description: 'Douce, jeune', color: '#55e6c1' },
+  { id: 'M5', description: 'Chaleureuse, narrative', color: '#feca57' },
+  { id: 'F1', description: 'Calme, posée', color: '#ff9ff3' },
+  { id: 'F2', description: 'Vive, enjouée', color: '#ff6b81' },
+  { id: 'F3', description: 'Professionnelle', color: '#48dbfb' },
+  { id: 'F4', description: 'Nette, confiante', color: '#c8d6e5' },
+  { id: 'F5', description: 'Douce, bienveillante', color: '#ffb8b8' }
 ]
 
 const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
@@ -829,7 +829,7 @@ export default function OptionsMenu(): JSX.Element {
                   ))}
                 </div>
                 <p className="options-menu__voice-hint">
-                  Chaque voix est écoutée dès qu'elle est choisie. Jaris prend sa couleur pour que tu la
+                  Chaque voix est écoutée dès qu'elle est choisie. Le cercle prend sa couleur pour que tu la
                   reconnaisses d'un coup d'œil.
                 </p>
               </div>
@@ -940,9 +940,9 @@ export default function OptionsMenu(): JSX.Element {
                   onChange={(next) => void toggleActivationKey(next)}
                 />
               </SettingRow>
-              <SettingRow label="Clic sur Jaris" description="Sur la page Agent vocal comme sur le widget.">
+              <SettingRow label="Clic sur le cercle de Jaris" description="Sur la page Agent vocal comme sur le widget.">
                 <Toggle
-                  label="Clic sur Jaris"
+                  label="Clic sur le cercle de Jaris"
                   checked={profile?.activationOrbClickEnabled !== false}
                   onChange={(next) => void toggleActivationOrbClick(next)}
                 />

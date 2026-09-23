@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import type { CapacityScanResult, MyModelPicks as MyModelPicksData } from '../../shared/ipc'
 import { formatModelName } from '../lib/formatModelName'
 import MyModelPicks from './MyModelPicks'
-import JarisOrb from './JarisOrb'
 
 interface CapacityScanProps {
   onDone: () => void
@@ -50,9 +49,6 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
   return (
     <div className="app">
       <div className="app__onboarding capacity-scan">
-        <div className="welcome-mascot">
-          <JarisOrb emotion={result ? 'happy' : 'thinking'} size={96} />
-        </div>
         <h1>{result ? 'Configuration terminée' : 'Configuration de Jaris'}</h1>
 
         {!result && !installing && !error && (

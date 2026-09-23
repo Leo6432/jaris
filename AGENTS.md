@@ -4294,3 +4294,19 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   prouver que le regard va à droite puis à gauche au repos, reste fixe à l'écoute et monte en réflexion).
   Vérifiés en figeant le regard et en remettant le fond blanc de la fenêtre : chacun échoue bien.
   **Non vérifiable ici** : le rendu dans la vraie fenêtre Windows.
+
+- **Étape 147, Léo après la v0.16.2 : « remets comme avant, en fait tout le design ».** Les étapes 144 à 146
+  (thème doux clair puis sombre, mascotte bulle) sont annulées d'un bloc par `git revert` de leurs trois
+  commits, plutôt qu'une réécriture à la main : le thème science-fiction (HUD, orbe déchiqueté, Rajdhani/
+  Barlow) revient exactement tel qu'il était en v0.15.54, sans risque d'en oublier un morceau. Vérifié avant
+  d'annuler que ces commits ne contenaient QUE du design (textes d'accueil, couleurs des voix, icônes, CSS,
+  polices) — aucune fonctionnalité des étapes 138-143 (choix du modèle, installation sur D, « Déplacer »
+  tout ou rien) n'est touchée. Les entrées 144-146 de ce fichier restent : leurs leçons valent toujours.
+  La version AVANCE (0.16.3) au lieu de revenir à 0.15.54 : la mise à jour automatique ne propose qu'une
+  version plus récente, un retour à un ancien numéro ne serait jamais installé.
+  **Leçon générale, après trois versions de design refusées d'affilée : une refonte visuelle complète se
+  valide sur des captures AVANT d'être livrée** — une maquette montrée à Léo (quelques images) coûte bien
+  moins qu'une version publiée puis annulée. Pour un prochain changement de design, envoyer les captures et
+  attendre son accord avant le moindre commit.
+  Régression : `npm test` (476 tests ; les deux tests propres au thème doux, test-soft-theme.mjs et
+  test-mascot-ui.mjs, partent avec lui). Capture du rendu compilé : accueil vocal et Chat en thème HUD.
