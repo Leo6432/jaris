@@ -701,11 +701,12 @@ async function isWslInstalled(): Promise<boolean> {
 
 /**
  * Installe WSL, prérequis silencieusement manquant de Docker Desktop sur une machine qui ne l'avait jamais
- * utilisé (vécu en usage réel par Léo). `wsl --install` DOIT être lancé depuis un terminal Administrateur
+ * utilisé (vécu en usage réel par Léo). `wsl --install --no-distribution` DOIT être lancé depuis un terminal Administrateur
  * (vérifié sur learn.microsoft.com/windows/wsl/install avant d'écrire cette fonction) : Jaris lui-même ne
  * tourne pas élevé, donc on déclenche l'élévation via PowerShell `Start-Process -Verb RunAs`, qui affiche la
  * même fenêtre Windows (UAC) que pour l'installation de Docker Desktop — sert le même accord explicite,
- * jamais contournable de toute façon. Un redémarrage est TOUJOURS nécessaire après un premier `wsl --install`
+ * jamais contournable de toute façon. `--no-distribution` évite d'installer Ubuntu sur C: : Docker Desktop
+ * utilise sa propre distribution WSL et n'en demande pas d'autre. Un redémarrage est TOUJOURS nécessaire après un premier `wsl --install`
  * réussi (documenté explicitement par Microsoft, contrairement aux codes de sortie non documentés de Docker
  * Desktop) : jamais redémarrer le PC à la place de Léo, seulement le lui dire clairement à l'appelant.
  */
@@ -716,7 +717,7 @@ async function installWsl(onProgress: (message: string) => void): Promise<boolea
   const exitCode = await new Promise<number | null>((resolve) => {
     const proc = spawn(
       'powershell',
-      ['-NoProfile', '-Command', "Start-Process wsl.exe -ArgumentList '--install' -Verb RunAs -WindowStyle Hidden -Wait"],
+      ['-NoProfile', '-Command', "Start-Process wsl.exe -ArgumentList '--install --no-distribution' -Verb RunAs -WindowStyle Hidden -Wait"],
       { windowsHide: true }
     )
     proc.on('error', () => resolve(null))
@@ -854,7 +855,7 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
               ? "WSL a été installé, mais Windows doit redémarrer pour l'activer avant que Docker Desktop " +
                   'puisse fonctionner : redémarre ton PC, puis relance Jaris pour continuer.'
               : "WSL n'a pas pu s'installer (autorisation Windows refusée, ou échec du téléchargement) : " +
-                  'lance "wsl --install" toi-même dans un PowerShell en administrateur, redémarre, puis ' +
+                  'lance "wsl --install --no-distribution" toi-même dans un PowerShell en administrateur, redémarre, puis ' +
                   'relance Jaris pour activer la recherche web.'
           )
           return

@@ -4346,3 +4346,11 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   racine Jaris sur D: aux sous-processus d'installation Ollama/Docker, et `TEMP`/`TMP`/`TMPDIR` au Python
   géré par Jaris. Ne pas modifier les variables globales de Windows. Une baisse du libre sur C: pendant
   l'installation doit être vérifiée aussi APRÈS la fin, car des fichiers temporaires sont effacés.
+
+- **Étape 152, `wsl --install` ajoute Ubuntu par défaut alors que Docker n'en a pas besoin.**
+  Les docs Microsoft confirment que la commande installe WSL ET Ubuntu, et `--no-distribution` évite la
+  distribution ; les docs Docker confirment qu'il utilise sa propre distribution `docker-desktop` sans
+  demander Ubuntu. Sur une machine où Jaris prépare Docker depuis zéro, toujours utiliser
+  `wsl --install --no-distribution` (y compris dans le message de dépannage) pour éviter une distribution
+  supplémentaire persistante sur C:. Ne jamais supprimer une distribution déjà présente sans vérifier
+  à qui elle appartient : elle pourrait contenir les données de l'utilisateur.
