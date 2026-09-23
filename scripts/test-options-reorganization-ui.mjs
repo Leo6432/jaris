@@ -208,17 +208,17 @@ test('Modèles regroupe VRAIMENT mémoire et matériel, sans fichiers/moteur loc
 test("l'orbe de la voix reste visible et cliquable une fois partagé avec les autres sections", options, async () => {
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Voix")')
-    await page.waitForSelector('.jaris-orb canvas')
+    await page.waitForSelector('.jaris-orb svg')
     // Plus de `position: absolute` spécial (retiré à l'étape 115) : l'orbe doit rester dans le flux normal,
     // entièrement visible (jamais rogné/décalé hors de l'écran) même avec tout le contenu ajouté en dessous.
-    const box = await page.locator('.jaris-orb canvas').first().boundingBox()
+    const box = await page.locator('.jaris-orb svg').first().boundingBox()
     assert.ok(box, "l'orbe doit avoir une position mesurable")
     assert.ok(box.width > 0 && box.height > 0, `l'orbe ne doit pas être réduit à rien : ${JSON.stringify(box)}`)
     assert.ok(box.x >= 0 && box.y >= 0, `l'orbe ne doit pas être positionné hors écran : ${JSON.stringify(box)}`)
     // Un vrai clic Playwright échoue si un élément invisible intercepte le point cliqué (ex: un ancien
     // conteneur `pointer-events: none` mal dimensionné) — ce test échouerait avec une erreur explicite de
     // Playwright si un tel conteneur existait encore au-dessus de l'orbe.
-    await page.locator('.jaris-orb canvas').first().click()
+    await page.locator('.jaris-orb svg').first().click()
   })
 })
 
@@ -229,8 +229,8 @@ test('"La voix de Jaris" est une carte COMPACTE (orbe à gauche, texte à droite
   // 76-78, "même taille que l'accueil"), qui n'a jamais été celle de la maquette pour cette carte précise.
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Voix")')
-    await page.waitForSelector('.jaris-orb canvas')
-    const orbBox = await page.locator('.jaris-orb canvas').first().boundingBox()
+    await page.waitForSelector('.jaris-orb svg')
+    const orbBox = await page.locator('.jaris-orb svg').first().boundingBox()
     const nameBox = await page.locator('.options-menu__voice-name').boundingBox()
     const cardBox = await page.locator('.options-menu__section--voix .options-menu__group').first().boundingBox()
     // Horizontal, pas vertical : le nom doit être À CÔTÉ de l'orbe (chevauchement vertical réel), pas
@@ -337,10 +337,10 @@ test('le bouton "Tous les modèles" est réellement habillé par le CSS de Jaris
     await page.waitForSelector('.options-menu__all-models')
     const style = await page.$eval('.options-menu__all-models button', (el) => {
       const s = getComputedStyle(el)
-      return { background: s.backgroundImage, clip: s.clipPath }
+      return { background: s.backgroundColor, radius: s.borderTopLeftRadius }
     })
-    assert.match(style.background, /gradient/, 'bouton sans le fond de la famille HUD')
-    assert.match(style.clip, /polygon/, 'bouton sans les coins coupés de la famille HUD')
+    assert.notEqual(style.background, 'rgba(0, 0, 0, 0)', 'bouton sans le fond de la famille de boutons')
+    assert.notEqual(style.radius, '0px', 'bouton sans les coins arrondis de la famille de boutons')
   })
 })
 

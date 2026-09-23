@@ -13,7 +13,7 @@ import type { AppVersionStatus, MemoryGraph, OllamaVersionStatus, WidgetMode } f
 import ModelPicker from '@/components/ModelPicker'
 
 const STATUS_LABEL: Record<JarisEmotion, string> = {
-  idle: 'Jaris dort...',
+  idle: 'Prêt à t’aider',
   listening: "Jaris t'écoute",
   thinking: 'Jaris réfléchit...',
   happy: 'Tâche accomplie',
@@ -338,6 +338,9 @@ export default function App(): JSX.Element {
       return (
         <div className="app">
           <form className="app__onboarding" onSubmit={handleOnboardingSubmit}>
+            <div className="welcome-mascot">
+              <JarisOrb emotion="happy" size={120} />
+            </div>
             <h1>Bonjour !</h1>
             <p>Comment dois-je t'appeler ?</p>
             <input
@@ -375,7 +378,10 @@ export default function App(): JSX.Element {
     return (
       <div className="app-shell">
         <nav className="sidebar">
-          <div className="sidebar__brand">JARIS</div>
+          <div className="sidebar__brand">
+            <JarisOrb emotion="idle" size={34} />
+            Jaris
+          </div>
 
           <div className="sidebar__modes">
             {MODES.map(({ id, label, hint }) => (
@@ -458,7 +464,7 @@ export default function App(): JSX.Element {
               <div className="app__voice-footer">
                 <div className="app__status">{STATUS_LABEL[emotion]}</div>
                 <div className="app__hint">
-                  Astuce : dis "Jaris", clique sur le cercle, ou appuie sur le + du pavé numérique depuis
+                  Astuce : dis « Jaris », clique sur lui, ou appuie sur le + du pavé numérique depuis
                   n'importe quelle appli, pour activer l'écoute (personnalisable dans Options → Activation)
                 </div>
 

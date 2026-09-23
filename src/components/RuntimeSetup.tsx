@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RuntimeSetupProgress } from '../../shared/ipc'
+import JarisOrb from './JarisOrb'
 
 /**
  * Écran d'installation du premier lancement (étape 16 du roadmap) : Jaris installe lui-même Python, ses
@@ -53,6 +54,9 @@ export default function RuntimeSetup({ onDone }: { onDone: () => void }): JSX.El
   return (
     <div className="app">
       <div className="runtime-setup">
+        <div className="welcome-mascot">
+          <JarisOrb emotion="thinking" size={110} />
+        </div>
         <h1>Installation de Jaris</h1>
         <p className="runtime-setup__intro">
           Jaris télécharge ce dont il a besoin pour fonctionner entièrement sur ton ordinateur : le moteur

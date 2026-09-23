@@ -354,14 +354,15 @@ test('les boutons du widget sont habillés par le CSS de Jaris, pas laissés au 
     const styles = await page.$$eval('.chat-widget__actions button', (els) =>
       els.map((el) => {
         const computed = getComputedStyle(el)
-        return { font: computed.fontFamily, background: computed.backgroundImage, clip: computed.clipPath }
+        return { font: computed.fontFamily, background: computed.backgroundColor, radius: computed.borderTopLeftRadius }
       })
     )
     assert.equal(styles.length, 1, 'seul le bouton Ouvrir le Chat doit être présent')
     for (const style of styles) {
-      assert.match(style.font, /Rajdhani/, 'bouton laissé à la police par défaut du navigateur')
-      assert.match(style.background, /gradient/, 'bouton sans le fond de la famille HUD')
-      assert.match(style.clip, /polygon/, 'bouton sans les coins coupés de la famille HUD')
+      // Thème doux (étape 144) : police Nunito, pastille arrondie avec un vrai fond.
+      assert.match(style.font, /Nunito/, 'bouton laissé à la police par défaut du navigateur')
+      assert.notEqual(style.background, 'rgba(0, 0, 0, 0)', 'bouton sans le fond de la famille de boutons')
+      assert.notEqual(style.radius, '0px', 'bouton sans les coins arrondis de la famille de boutons')
     }
   })
 })

@@ -149,7 +149,7 @@ test('les conversations sont listées en colonne, la conversation ouverte est si
     // Léo en v0.8.0 : la classe manquait dans la famille de boutons partagée, le bouton restait blanc).
     const style = await page.evaluate(() => {
       const s = getComputedStyle(document.querySelector('.workspace__new'))
-      return { color: s.color, hasBackground: s.backgroundImage !== 'none' }
+      return { color: s.color, hasBackground: s.backgroundColor !== 'rgba(0, 0, 0, 0)' }
     })
     assert.equal(style.hasBackground, true, 'le bouton "Nouvelle conversation" est resté sans fond')
     assert.notEqual(style.color, 'rgb(255, 255, 255)', 'le bouton est resté au style par défaut du navigateur')

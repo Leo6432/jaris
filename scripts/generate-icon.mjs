@@ -8,13 +8,22 @@
  * Lancé automatiquement avant chaque `npm run dist` (voir package.json).
  */
 import { deflateSync } from 'zlib'
-import { mkdirSync, writeFileSync } from 'fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 
 const SIZE = 256
-/** Teal du noyau de JarisOrb (voir src/components/JarisOrb.tsx), la couleur d'identité de Jaris. */
-const TEAL = [55, 226, 255]
+/**
+ * Étape 144 : la mascotte de Jaris, dessinée par `shared/mascotPixels.ts` — le MÊME dessin que l'icône de
+ * la barre système (electron/services/trayIcon.ts), chargé ici en transpilant le TypeScript à la volée
+ * (TypeScript est déjà une dépendance de développement, présente partout où `npm run dist` tourne).
+ */
+const { renderMascotRgba } = await (async () => {
+  const ts = (await import('typescript')).default
+  const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'shared', 'mascotPixels.ts'), 'utf8')
+  const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
+  return import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)
+})()
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256)
@@ -50,30 +59,9 @@ function coverage(distance, radius) {
   return Math.min(1, Math.max(0, radius + 0.5 - distance))
 }
 
-/** Orbe Jaris : un anneau fin et un noyau plein au centre, sur fond transparent. */
-function drawOrb() {
-  const pixels = Buffer.alloc(SIZE * SIZE * 4)
-  const center = (SIZE - 1) / 2
-  const ringOuter = SIZE * 0.47
-  const ringInner = SIZE * 0.38
-  const coreRadius = SIZE * 0.2
-
-  for (let y = 0; y < SIZE; y++) {
-    for (let x = 0; x < SIZE; x++) {
-      const distance = Math.hypot(x - center, y - center)
-      // L'anneau est la partie du grand disque à laquelle on retire le disque intérieur : les deux bords
-      // sont lissés séparément, sinon l'intérieur de l'anneau redeviendrait net alors que l'extérieur non.
-      const ring = coverage(distance, ringOuter) * (1 - coverage(distance, ringInner))
-      const core = coverage(distance, coreRadius)
-      const alpha = Math.min(1, ring + core)
-      const offset = (y * SIZE + x) * 4
-      pixels[offset] = TEAL[0]
-      pixels[offset + 1] = TEAL[1]
-      pixels[offset + 2] = TEAL[2]
-      pixels[offset + 3] = Math.round(alpha * 255)
-    }
-  }
-  return pixels
+/** La mascotte, en RGBA 256 × 256 sur fond transparent. */
+function drawMascot() {
+  return Buffer.from(renderMascotRgba(SIZE))
 }
 
 function encodePng(pixels) {
@@ -122,5 +110,5 @@ function wrapAsIco(png) {
 
 const outPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'build', 'icon.ico')
 mkdirSync(dirname(outPath), { recursive: true })
-writeFileSync(outPath, wrapAsIco(encodePng(drawOrb())))
+writeFileSync(outPath, wrapAsIco(encodePng(drawMascot())))
 console.log(`Icône générée : ${outPath}`)

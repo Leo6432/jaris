@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 
-/** Même cyan que JarisOrb en émotion "listening" (voir EMOTION_STYLES) : le scan doit se reconnaître comme du Jaris. */
-const SCAN_COLOR = '#37e2ff'
+/** Même bleu que la mascotte (JarisOrb.tsx) : le scan doit se reconnaître comme du Jaris. */
+const SCAN_COLOR = '#4b7fe8'
 const SWEEP_DURATION_MS = 2600
 const BEAM_HEIGHT = 220
 const CORNER_SIZE = 42
@@ -41,8 +41,8 @@ function drawScanLine(ctx: CanvasRenderingContext2D, width: number, y: number, a
 
   const beamTop = Math.max(0, y - BEAM_HEIGHT)
   const gradient = ctx.createLinearGradient(0, beamTop, 0, y)
-  gradient.addColorStop(0, 'rgba(55, 226, 255, 0)')
-  gradient.addColorStop(1, 'rgba(55, 226, 255, 0.16)')
+  gradient.addColorStop(0, 'rgba(75, 127, 232, 0)')
+  gradient.addColorStop(1, 'rgba(75, 127, 232, 0.16)')
   ctx.fillStyle = gradient
   ctx.fillRect(0, beamTop, width, y - beamTop)
 

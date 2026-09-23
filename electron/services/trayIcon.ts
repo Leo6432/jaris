@@ -1,5 +1,6 @@
 import { deflateSync } from 'zlib'
 import { nativeImage, type NativeImage } from 'electron'
+import { renderMascotRgba } from '../../shared/mascotPixels'
 
 const CRC_TABLE = ((): Uint32Array => {
   const table = new Uint32Array(256)
@@ -33,29 +34,17 @@ function pngChunk(type: string, data: Buffer): Buffer {
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
 /**
- * Dessine un simple disque teal (couleur du noyau JarisOrb) sur fond transparent, encodé en PNG à la main
- * (zlib pour la compression, pas de dépendance externe) : sert d'icône pour la barre système, sans avoir
- * besoin d'un fichier d'icône dans le dépôt.
+ * La mascotte de Jaris (étape 144 — `shared/mascotPixels.ts`, même dessin que l'icône de l'application),
+ * encodée en PNG à la main (zlib pour la compression, pas de dépendance externe) : sert d'icône pour la barre
+ * système, sans avoir besoin d'un fichier d'icône dans le dépôt.
  */
 function buildOrbPng(size: number): Buffer {
   const stride = 1 + size * 4
   const raw = Buffer.alloc(size * stride)
-  const center = (size - 1) / 2
-  const radius = size * 0.42
-
+  const pixels = renderMascotRgba(size, size < 48)
   for (let y = 0; y < size; y++) {
-    const rowStart = y * stride
-    raw[rowStart] = 0 // type de filtre PNG "None" pour cette ligne
-    for (let x = 0; x < size; x++) {
-      const dx = x - center
-      const dy = y - center
-      const inside = Math.sqrt(dx * dx + dy * dy) <= radius
-      const offset = rowStart + 1 + x * 4
-      raw[offset] = 0x33
-      raw[offset + 1] = 0xe6
-      raw[offset + 2] = 0xc8
-      raw[offset + 3] = inside ? 255 : 0
-    }
+    raw[y * stride] = 0 // type de filtre PNG "None" pour cette ligne
+    Buffer.from(pixels.buffer, y * size * 4, size * 4).copy(raw, y * stride + 1)
   }
 
   const ihdr = Buffer.alloc(13)

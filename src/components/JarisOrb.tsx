@@ -1,190 +1,51 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import type { RefObject } from 'react'
 import type { JarisEmotion } from '@/store/useJarisStore'
 
+/**
+ * La mascotte de Jaris — étape 144, Léo : « un design rassurant » (grand public, plus de science-fiction),
+ * et pour l'ancien cercle au bord irrégulier : « je te laisse carte blanche, Grok a une petite mascotte ».
+ *
+ * Un petit personnage rond et bleu, avec un visage clair, de grands yeux et une antenne : on doit y lire
+ * « un assistant gentil », jamais « une machine ». Le composant garde le nom et EXACTEMENT les réglages de
+ * l'ancien orbe (emotion, size, audioElRef, onClick, color) : tous les écrans qui l'affichent (accueil vocal,
+ * widget, sélecteur de voix) suivent sans modification.
+ *
+ * Dessiné en SVG (plus en canvas) : net à toutes les tailles, de 24 px dans le widget replié à 320 px sur
+ * l'accueil, et animé en CSS (index.css, `.jaris-mascot`). Seule la bouche est animée en JavaScript, pour
+ * suivre la voix de Jaris quand il parle.
+ *
+ * Ce que chaque humeur montre, sans avoir besoin de lire le statut :
+ * - idle       : flotte doucement et cligne des yeux de temps en temps ;
+ * - listening  : grands yeux attentifs, antenne verte qui pulse (« je t'écoute ») ;
+ * - thinking   : regarde en l'air, antenne ambre, trois petits points ;
+ * - happy      : sourire, petits rebonds ; la bouche s'ouvre au rythme de la voix ;
+ * - surprised  : yeux ronds, bouche en « o ».
+ */
 interface JarisOrbProps {
   emotion: JarisEmotion
   size?: number
-  /** Élément <audio> qui joue la voix de Jaris : sert à faire vibrer l'anneau en rythme avec la parole. */
+  /** Élément <audio> qui joue la voix de Jaris : la bouche s'ouvre en rythme avec la parole. */
   audioElRef?: RefObject<HTMLAudioElement>
   onClick?: () => void
-  /** Remplace UNIQUEMENT la couleur de `EMOTION_STYLES[emotion]` (jamais modifiée elle-même) — vitesse de
-   * rotation/pulsation restent celles de `emotion`. Sert au sélecteur de voix (Options → Voix) : même forme
-   * reconnaissable (anneau déchiqueté) que sur l'accueil, une couleur différente par voix pour les distinguer
-   * (demande explicite de Léo : "fait pas un cercle rond... fait le même cercle que dans l'accueil... change
-   * juste la couleur"). */
+  /** Couleur du corps (sélecteur de voix, Options → Voix : même mascotte, une couleur par voix). */
   color?: string
 }
 
-interface EmotionStyle {
-  color: string
-  spinSpeed: number
-  coreSpin: number
-  pulse: number
+/** Couleur du corps par défaut : le bleu d'accent de l'interface (--ui-accent). */
+const BODY_COLOR = '#4b7fe8'
+
+/** Couleur de la petite boule de l'antenne selon l'humeur : le seul signal coloré, pour ne pas surcharger. */
+const ANTENNA_COLOR: Record<JarisEmotion, string> = {
+  idle: '#c7d4f0',
+  listening: '#34c27a',
+  thinking: '#f0a830',
+  happy: '#7fb0ff',
+  surprised: '#f0a830'
 }
 
-const EMOTION_STYLES: Record<JarisEmotion, EmotionStyle> = {
-  idle: { color: '#33e6c8', spinSpeed: 0.05, coreSpin: 0.12, pulse: 0.02 },
-  listening: { color: '#37e2ff', spinSpeed: 0.22, coreSpin: 0.3, pulse: 0.045 },
-  thinking: { color: '#ffb648', spinSpeed: 0.85, coreSpin: 0.7, pulse: 0.07 },
-  happy: { color: '#4dffa6', spinSpeed: 0.3, coreSpin: 0.4, pulse: 0.06 },
-  surprised: { color: '#ff5d7a', spinSpeed: 1.3, coreSpin: 1.1, pulse: 0.12 }
-}
-
-type Vec3 = [number, number, number]
-
-/** Répartit N points quasi uniformément sur une sphère (spirale de Fibonacci), pour le maillage filaire du noyau. */
-function fibonacciSphere(count: number): Vec3[] {
-  const points: Vec3[] = []
-  const golden = Math.PI * (3 - Math.sqrt(5))
-  for (let i = 0; i < count; i++) {
-    const y = 1 - (i / (count - 1)) * 2
-    const radiusAtY = Math.sqrt(Math.max(0, 1 - y * y))
-    const theta = golden * i
-    points.push([Math.cos(theta) * radiusAtY, y, Math.sin(theta) * radiusAtY])
-  }
-  return points
-}
-
-function squaredDistance(a: Vec3, b: Vec3): number {
-  const dx = a[0] - b[0]
-  const dy = a[1] - b[1]
-  const dz = a[2] - b[2]
-  return dx * dx + dy * dy + dz * dz
-}
-
-/** Relie chaque point à ses k plus proches voisins pour donner au noyau un aspect "maillage géodésique" triangulé. */
-function buildMeshEdges(points: Vec3[], k: number): Array<[number, number]> {
-  const seen = new Set<string>()
-  const edges: Array<[number, number]> = []
-  for (let i = 0; i < points.length; i++) {
-    const neighbors = points
-      .map((p, j): [number, number] => [j, squaredDistance(points[i], p)])
-      .filter(([j]) => j !== i)
-      .sort((a, b) => a[1] - b[1])
-      .slice(0, k)
-    for (const [j] of neighbors) {
-      const key = i < j ? `${i}:${j}` : `${j}:${i}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        edges.push([i, j])
-      }
-    }
-  }
-  return edges
-}
-
-const CORE_POINTS = fibonacciSphere(46)
-const CORE_EDGES = buildMeshEdges(CORE_POINTS, 3)
-const CORE_TILT = 0.5
-
-/**
- * Sous ce seuil (widget "notch" replié, étape 68 : 24px), le rendu détaillé ci-dessous (2 anneaux déchiquetés
- * + noyau filaire, pensé pour 160-320px) devient un petit amas confus plutôt qu'un vrai logo — signalé par
- * Léo en usage réel ("on a un logo de jaris mais en tout petit, règle ça"). Un premier remplacement par un
- * simple point plein rejeté aussi par Léo ("fait pas la forme ronde, fait la forme de jarvis comme sur
- * l'accueil") : la vraie signature visuelle de Jaris n'est pas "un cercle", c'est un anneau au bord IRRÉGULIER
- * (voir drawJaggedRing plus haut — la déchiqueté vient des harmoniques, pas un cercle lisse comme
- * drawGlassRing). En dessous de ce seuil, `draw()` réutilise donc drawJaggedRing tel quel, juste UN SEUL
- * anneau (pas deux + le noyau maillé) pour rester lisible à cette taille.
- */
-const MINIMAL_SIZE_THRESHOLD = 48
-
-interface RingHarmonic {
-  freq: number
-  amp: number
-  phase: number
-}
-
-/** Quelques harmoniques fixes (tirées une fois au montage) donnent au contour son aspect "déchiré" irrégulier, sans jamais changer de forme de base. */
-function randomHarmonics(count: number): RingHarmonic[] {
-  return Array.from({ length: count }, () => ({
-    freq: 3 + Math.floor(Math.random() * 6),
-    amp: 0.02 + Math.random() * 0.045,
-    phase: Math.random() * Math.PI * 2
-  }))
-}
-
-const RING_SEGMENTS = 140
-
-/**
- * Anneau au contour irrégulier façon hologramme : rayon perturbé par des harmoniques fixes, plus un
- * tremblement proportionnel au niveau audio (vibre quand Jaris parle). `maxRadius` borne le résultat
- * (jamais au-delà du bord du canvas) : la respiration + les harmoniques + le tremblement peuvent sinon
- * se cumuler et faire dépasser le rayon de base de 30% et plus, ce qui coupait le contour à l'écran.
- */
-function drawJaggedRing(
-  ctx: CanvasRenderingContext2D,
-  baseRadius: number,
-  maxRadius: number,
-  harmonics: RingHarmonic[],
-  rotation: number,
-  color: string,
-  alpha: number,
-  jitter: number,
-  time: number
-): void {
-  ctx.beginPath()
-  for (let i = 0; i <= RING_SEGMENTS; i++) {
-    const angle = (i / RING_SEGMENTS) * Math.PI * 2
-    let r = baseRadius
-    for (const h of harmonics) {
-      r += baseRadius * h.amp * Math.sin(angle * h.freq + h.phase + rotation)
-    }
-    r += baseRadius * jitter * 0.06 * Math.sin(angle * 19 + time * 0.006)
-    r = Math.min(r, maxRadius)
-    const x = Math.cos(angle + rotation) * r
-    const y = Math.sin(angle + rotation) * r
-    if (i === 0) ctx.moveTo(x, y)
-    else ctx.lineTo(x, y)
-  }
-  ctx.closePath()
-  ctx.strokeStyle = color
-  ctx.globalAlpha = alpha
-  ctx.stroke()
-  ctx.globalAlpha = 1
-}
-
-function drawGlassRing(ctx: CanvasRenderingContext2D, radius: number, color: string, alpha: number): void {
-  ctx.beginPath()
-  ctx.arc(0, 0, radius, 0, Math.PI * 2)
-  ctx.strokeStyle = color
-  ctx.globalAlpha = alpha
-  ctx.lineWidth = 1
-  ctx.stroke()
-  ctx.globalAlpha = 1
-}
-
-/** Projette un point 3D (rotation autour de Y + léger tilt fixe autour de X) en coordonnées écran normalisées, avec une profondeur pour l'ombrage. */
-function project(point: Vec3, angleY: number, tiltX: number): { x: number; y: number; depth: number } {
-  const [x, y, z] = point
-  const cosY = Math.cos(angleY)
-  const sinY = Math.sin(angleY)
-  const x1 = x * cosY - z * sinY
-  const z1 = x * sinY + z * cosY
-  const cosX = Math.cos(tiltX)
-  const sinX = Math.sin(tiltX)
-  const y2 = y * cosX - z1 * sinX
-  const z2 = y * sinX + z1 * cosX
-  return { x: x1, y: y2, depth: (z2 + 1) / 2 }
-}
-
-function drawCore(ctx: CanvasRenderingContext2D, radius: number, angleY: number, color: string): void {
-  const projected = CORE_POINTS.map((p) => project(p, angleY, CORE_TILT))
-  ctx.lineWidth = 0.6
-  for (const [a, b] of CORE_EDGES) {
-    const pa = projected[a]
-    const pb = projected[b]
-    const depth = (pa.depth + pb.depth) / 2
-    ctx.beginPath()
-    ctx.moveTo(pa.x * radius, pa.y * radius)
-    ctx.lineTo(pb.x * radius, pb.y * radius)
-    ctx.strokeStyle = color
-    ctx.globalAlpha = 0.15 + depth * 0.55
-    ctx.stroke()
-  }
-  ctx.globalAlpha = 1
-}
+/** Sous cette taille (widget replié), on ne garde que le corps et les yeux : antenne et joues deviennent du bruit. */
+export const MINIMAL_SIZE_THRESHOLD = 48
 
 interface AudioAnalysis {
   analyser: AnalyserNode
@@ -199,7 +60,6 @@ const audioAnalysisCache = new WeakMap<HTMLAudioElement, AudioAnalysis>()
 function getOrCreateAudioAnalysis(audioEl: HTMLAudioElement): AudioAnalysis {
   const cached = audioAnalysisCache.get(audioEl)
   if (cached) return cached
-
   const audioCtx = new AudioContext()
   const source = audioCtx.createMediaElementSource(audioEl)
   const analyser = audioCtx.createAnalyser()
@@ -208,13 +68,12 @@ function getOrCreateAudioAnalysis(audioEl: HTMLAudioElement): AudioAnalysis {
   source.connect(analyser)
   analyser.connect(audioCtx.destination)
   if (audioCtx.state === 'suspended') void audioCtx.resume()
-
   const result: AudioAnalysis = { analyser }
   audioAnalysisCache.set(audioEl, result)
   return result
 }
 
-/** Niveau sonore moyen courant (0-1) ; le lissage vient de smoothingTimeConstant sur l'AnalyserNode lui-même. */
+/** Niveau sonore moyen courant (0-1). */
 function readAudioLevel(analyser: AnalyserNode, buffer: Uint8Array<ArrayBuffer>): number {
   analyser.getByteFrequencyData(buffer)
   let sum = 0
@@ -222,138 +81,142 @@ function readAudioLevel(analyser: AnalyserNode, buffer: Uint8Array<ArrayBuffer>)
   return sum / buffer.length / 255
 }
 
-/** Cœur visuel de Jaris façon J.A.R.V.I.S. : anneau holographique irrégulier + noyau filaire, qui vibre avec la voix. */
+/** Éclaircit une couleur hexadécimale (#rrggbb) vers le blanc, pour le haut du dégradé du corps. */
+export function lighten(hex: string, amount: number): string {
+  const match = /^#?([0-9a-f]{6})$/i.exec(hex)
+  if (!match) return hex
+  const value = parseInt(match[1], 16)
+  const channel = (shift: number): number => {
+    const c = (value >> shift) & 0xff
+    return Math.round(c + (255 - c) * amount)
+  }
+  return `#${[channel(16), channel(8), channel(0)].map((c) => c.toString(16).padStart(2, '0')).join('')}`
+}
+
+/** Sourire ouvert étiré verticalement depuis son bord haut : 1 = au repos, plus grand = bouche plus ouverte. */
+function mouthTransform(openness: number): string {
+  return `translate(60 74) scale(1 ${openness.toFixed(2)}) translate(-60 -74)`
+}
+
 export default function JarisOrb({ emotion, size = 320, audioElRef, onClick, color }: JarisOrbProps): JSX.Element {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const emotionRef = useRef(emotion)
-  const colorRef = useRef(color)
-  const analyserRef = useRef<AnalyserNode | null>(null)
-  const audioBufferRef = useRef<Uint8Array<ArrayBuffer> | null>(null)
-  const angleRef = useRef(0)
-  const coreAngleRef = useRef(0)
-  const harmonicsRef = useRef({ outer: randomHarmonics(4), inner: randomHarmonics(3) })
+  const mouthRef = useRef<SVGGElement>(null)
+  const gradientId = `jaris-body-${useId().replace(/:/g, '')}`
+  const minimal = size < MINIMAL_SIZE_THRESHOLD
+  const body = color ?? BODY_COLOR
 
-  useEffect(() => {
-    emotionRef.current = emotion
-  }, [emotion])
-
-  useEffect(() => {
-    colorRef.current = color
-  }, [color])
-
+  // Bouche qui suit la voix : seulement quand un <audio> est fourni (accueil vocal, widget), et seulement le
+  // temps qu'il joue — aucune boucle d'animation qui tourne pour rien le reste du temps.
   useEffect(() => {
     const audioEl = audioElRef?.current
     if (!audioEl) return
-    const { analyser } = getOrCreateAudioAnalysis(audioEl)
-    analyserRef.current = analyser
-    audioBufferRef.current = new Uint8Array(analyser.frequencyBinCount)
+    let frame = 0
+    let analysis: AudioAnalysis | null = null
+    let buffer: Uint8Array<ArrayBuffer> | null = null
+    const tick = (): void => {
+      const mouth = mouthRef.current
+      if (mouth && analysis && buffer) {
+        const level = readAudioLevel(analysis.analyser, buffer)
+        mouth.setAttribute('transform', mouthTransform(0.55 + Math.min(1, level * 3) * 1.1))
+      }
+      frame = requestAnimationFrame(tick)
+    }
+    const start = (): void => {
+      try {
+        analysis ??= getOrCreateAudioAnalysis(audioEl)
+        buffer ??= new Uint8Array(analysis.analyser.frequencyBinCount)
+      } catch {
+        return // pas d'AudioContext disponible : la bouche garde simplement sa forme de sourire
+      }
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(tick)
+    }
+    const stop = (): void => {
+      cancelAnimationFrame(frame)
+      mouthRef.current?.setAttribute('transform', mouthTransform(1))
+    }
+    audioEl.addEventListener('play', start)
+    audioEl.addEventListener('pause', stop)
+    audioEl.addEventListener('ended', stop)
+    if (!audioEl.paused) start()
+    return () => {
+      stop()
+      audioEl.removeEventListener('play', start)
+      audioEl.removeEventListener('pause', stop)
+      audioEl.removeEventListener('ended', stop)
+    }
   }, [audioElRef])
 
-  useEffect(() => {
-    const canvas = canvasRef.current
-    const ctx = canvas?.getContext('2d')
-    if (!canvas || !ctx) return
-
-    const dpr = window.devicePixelRatio || 1
-    canvas.width = size * dpr
-    canvas.height = size * dpr
-    canvas.style.width = `${size}px`
-    canvas.style.height = `${size}px`
-    ctx.scale(dpr, dpr)
-
-    const center = size / 2
-    let lastTime = performance.now()
-    let frameId: number
-
-    const draw = (time: number): void => {
-      const dt = Math.min(0.05, (time - lastTime) / 1000)
-      lastTime = time
-
-      const style = EMOTION_STYLES[emotionRef.current]
-      const color = colorRef.current ?? style.color
-      const level =
-        analyserRef.current && audioBufferRef.current ? readAudioLevel(analyserRef.current, audioBufferRef.current) : 0
-
-      angleRef.current += style.spinSpeed * dt
-      coreAngleRef.current += style.coreSpin * dt
-
-      const breathe = 1 + Math.sin(time * 0.0015) * style.pulse + level * 0.08
-
-      ctx.clearRect(0, 0, size, size)
-      ctx.save()
-      ctx.translate(center, center)
-      ctx.globalCompositeOperation = 'lighter'
-
-      if (size < MINIMAL_SIZE_THRESHOLD) {
-        // Un seul anneau déchiqueté (pas deux + le noyau maillé, voir le grand rendu ci-dessous) : garde la
-        // vraie signature visuelle de Jaris (bord irrégulier via les harmoniques, pas un cercle lisse) à une
-        // taille où le détail complet deviendrait juste du bruit.
-        //
-        // Respiration/rotation AMPLIFIÉES rien que pour ce rendu minimal (jamais touché à EMOTION_STYLES
-        // lui-même, partagé avec le grand orbe) : Léo en usage réel, "le cercle au milieu ne bouge pas" — le
-        // réglage 'idle' d'origine (pulse 0.02, spinSpeed 0.05) est réglé pour un anneau de 160-320px, où même
-        // un mouvement relatif discret reste visible ; sur un anneau de 32px ce même mouvement devient
-        // quasi imperceptible en valeur absolue. Multiplié ici seulement, pas dans la table partagée.
-        const minimalBreathe = 1 + Math.sin(time * 0.0015) * style.pulse * 4 + level * 0.08
-        const minimalRotation = angleRef.current * 2.5
-        ctx.shadowColor = color
-        ctx.shadowBlur = 5 + level * 6
-        ctx.lineWidth = 1.4
-        drawJaggedRing(ctx, center * 0.62 * minimalBreathe, center * 0.92, harmonicsRef.current.outer, minimalRotation, color, 0.9, level, time)
-      } else {
-        // Marge sous le bord réel du canvas (center) pour que le flou de la lueur (shadowBlur) ait la place
-        // de s'estomper avant d'être coupé net par les bords du canvas.
-        const maxRingRadius = center * 0.9
-
-        ctx.shadowColor = color
-        ctx.shadowBlur = 8 + level * 10
-        ctx.lineWidth = 1.6
-        drawJaggedRing(
-          ctx,
-          center * 0.68 * breathe,
-          maxRingRadius,
-          harmonicsRef.current.outer,
-          angleRef.current,
-          color,
-          0.85,
-          level,
-          time
-        )
-        drawJaggedRing(
-          ctx,
-          center * 0.6 * breathe,
-          maxRingRadius,
-          harmonicsRef.current.inner,
-          -angleRef.current * 0.55,
-          color,
-          0.45,
-          level,
-          time
-        )
-
-        ctx.shadowBlur = 5
-        drawGlassRing(ctx, center * 0.46, color, 0.3)
-        drawGlassRing(ctx, center * 0.35, color, 0.2)
-
-        ctx.shadowBlur = 7 + level * 8
-        drawCore(ctx, center * 0.14 * (1 + level * 0.2), coreAngleRef.current, color)
-      }
-
-      ctx.restore()
-      frameId = requestAnimationFrame(draw)
-    }
-
-    frameId = requestAnimationFrame(draw)
-    return () => cancelAnimationFrame(frameId)
-  }, [size])
+  const classes = [
+    'jaris-orb',
+    'jaris-mascot',
+    `jaris-mascot--${emotion}`,
+    minimal ? 'jaris-mascot--minimal' : '',
+    onClick ? 'jaris-orb--clickable' : ''
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
-    <div
-      className={`jaris-orb${onClick ? ' jaris-orb--clickable' : ''}`}
-      style={{ width: size, height: size }}
-      onClick={onClick}
-    >
-      <canvas ref={canvasRef} />
+    <div className={classes} style={{ width: size, height: size }} onClick={onClick}>
+      <svg viewBox="0 0 120 120" width={size} height={size} role="img" aria-label="Jaris">
+        <defs>
+          <radialGradient id={gradientId} cx="38%" cy="30%" r="75%">
+            <stop offset="0%" stopColor={lighten(body, 0.45)} />
+            <stop offset="100%" stopColor={body} />
+          </radialGradient>
+        </defs>
+
+        {/* Ombre au sol : se resserre quand la mascotte flotte vers le haut. */}
+        {!minimal && <ellipse className="jaris-mascot__shadow" cx="60" cy="113" rx="26" ry="4" />}
+
+        <g className="jaris-mascot__body">
+          {!minimal && (
+            <g className="jaris-mascot__antenna">
+              <line x1="60" y1="24" x2="60" y2="13" />
+              <circle className="jaris-mascot__bulb" cx="60" cy="11" r="5" fill={ANTENNA_COLOR[emotion]} />
+            </g>
+          )}
+
+          <circle cx="60" cy="64" r="42" fill={`url(#${gradientId})`} />
+          <ellipse className="jaris-mascot__face" cx="60" cy="67" rx="30" ry="24" />
+
+          <g className="jaris-mascot__eyes">
+            <g className="jaris-mascot__eye">
+              <ellipse cx="48" cy="63" rx="5" ry="7" />
+              <circle className="jaris-mascot__glint" cx="49.8" cy="60" r="1.8" />
+            </g>
+            <g className="jaris-mascot__eye">
+              <ellipse cx="72" cy="63" rx="5" ry="7" />
+              <circle className="jaris-mascot__glint" cx="73.8" cy="60" r="1.8" />
+            </g>
+          </g>
+
+          {!minimal && (
+            <>
+              <circle className="jaris-mascot__cheek" cx="40" cy="74" r="4" />
+              <circle className="jaris-mascot__cheek" cx="80" cy="74" r="4" />
+            </>
+          )}
+
+          {emotion === 'surprised' ? (
+            <circle className="jaris-mascot__mouth-o" cx="60" cy="78" r="3.5" />
+          ) : emotion === 'happy' ? (
+            <g ref={mouthRef} transform={mouthTransform(1)}>
+              <path className="jaris-mascot__mouth-open" d="M52 74 Q60 85 68 74 Z" />
+            </g>
+          ) : (
+            <path className="jaris-mascot__mouth" d="M53 75 Q60 81 67 75" />
+          )}
+
+          {emotion === 'thinking' && !minimal && (
+            <g className="jaris-mascot__dots">
+              <circle cx="92" cy="30" r="3" />
+              <circle cx="101" cy="22" r="3.6" />
+              <circle cx="111" cy="13" r="4.2" />
+            </g>
+          )}
+        </g>
+      </svg>
     </div>
   )
 }

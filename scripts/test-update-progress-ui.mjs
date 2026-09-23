@@ -132,10 +132,11 @@ test("la barre est bien habillée par le CSS de Jaris, pas laissée au style par
     const style = await page.evaluate(() => {
       const fill = getComputedStyle(document.querySelector('.options-menu__progress-bar-fill'))
       const bar = getComputedStyle(document.querySelector('.options-menu__progress-bar'))
-      return { fillImage: fill.backgroundImage, barBorder: bar.borderTopWidth, barBackground: bar.backgroundColor }
+      return { fillColor: fill.backgroundColor, barRadius: bar.borderTopLeftRadius, barBackground: bar.backgroundColor }
     })
-    assert.match(style.fillImage, /linear-gradient/, 'le remplissage n\'a pas le dégradé HUD')
-    assert.notEqual(style.barBorder, '0px')
+    // Thème doux (étape 144) : une barre arrondie, remplie de la couleur d'accent.
+    assert.notEqual(style.fillColor, 'rgba(0, 0, 0, 0)', 'le remplissage n\'a pas la couleur de Jaris')
+    assert.notEqual(style.barRadius, '0px')
     assert.notEqual(style.barBackground, 'rgba(0, 0, 0, 0)')
   })
 })

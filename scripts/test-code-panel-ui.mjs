@@ -317,11 +317,12 @@ test('le bouton "Arrêter" arrête vraiment, et ne laisse pas une erreur rouge',
     // gris, étape 97) : on mesure le style RÉELLEMENT calculé.
     const style = await page.evaluate(() => {
       const css = getComputedStyle(document.querySelector('.code-panel__live-stop'))
-      return { image: css.backgroundImage, clip: css.clipPath, transform: css.textTransform }
+      return { background: css.backgroundColor, radius: css.borderTopLeftRadius, transform: css.textTransform }
     })
-    assert.match(style.image, /linear-gradient/, 'le bouton Arrêter est resté au style par défaut du navigateur')
-    assert.match(style.clip, /polygon/)
-    assert.equal(style.transform, 'uppercase')
+    assert.notEqual(style.background, 'rgba(0, 0, 0, 0)', 'le bouton Arrêter est resté au style par défaut du navigateur')
+    assert.notEqual(style.radius, '0px')
+    // Thème doux (étape 144) : des phrases normales, plus de capitales « machine ».
+    assert.equal(style.transform, 'none')
 
     await page.click('.code-panel__live-stop')
     assert.equal(await page.evaluate(() => window.__cancelled), true)

@@ -4238,3 +4238,44 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   de pip, de navigateurs, journaux) — passer aussi en revue chaque outil lancé et ses emplacements par défaut.**
   Restent aussi sur C, minuscules : les clés et l'historique d'Ollama (`%USERPROFILE%\.ollama`, hors
   `models`), les notes temporaires du Bloc-notes (%TEMP%).
+
+- **Étape 144, Léo : "on voulait un design science-fiction et la cible c'était les personnes fortes en
+  informatique, mais on change : je veux un design rassurant, car Jaris va être une application d'IA locale
+  facile à installer, pour les personnes qui ne sont pas fortes en informatique".** Deux choix posés à Léo
+  en questions simples AVANT de coder (goût, pas technique) : fond **clair** ; et pour l'ancien cercle au bord
+  irrégulier, **carte blanche pour une petite mascotte** ("Grok a une petite mascotte").
+  **Thème « doux »** (index.css) : les tokens `--hud-*` deviennent `--ui-*` avec des valeurs claires (fond
+  blanc cassé chaud, cartes blanches, texte gris foncé, UN bleu doux pour ce qui se clique, ambre/vert/rouge
+  seulement pour le sens). La « couche HUD » de fin de fichier est remplacée par une « couche douce » qui
+  réhabille les mêmes classes sans toucher à la mise en page : coins arrondis, ombres légères, pastilles —
+  plus de coins coupés (`clip-path`), d'équerres lumineuses, de grille ni de ligne de balayage, de lueurs, de
+  capitales espacées. Une seule police, **Nunito** (ronde, lisible), embarquée via @fontsource comme avant
+  (Rajdhani/Barlow retirées des dépendances) : Jaris reste 100 % hors ligne. ~100 couleurs sombres écrites en
+  dur converties en tokens (script de remplacement, puis revue des restes un par un).
+  **La mascotte** (`JarisOrb.tsx`, même nom et MÊMES réglages que l'ancien orbe pour que tous les écrans
+  suivent sans modification) : un petit personnage rond, visage clair, grands yeux, antenne ; dessiné en SVG
+  (net de 24 à 320 px), animé en CSS : flotte et cligne au repos, antenne verte qui pulse quand il écoute,
+  regard en l'air + petits points quand il réfléchit, sourire ouvert qui suit la voix quand il parle, yeux
+  ronds quand il est surpris. Sous 48 px (widget replié), seul le visage reste. Elle accueille aussi les écrans
+  de premier lancement (prénom, installation, configuration), et la même mascotte est dessinée pixel par
+  pixel (`shared/mascotPixels.ts`) pour l'icône de l'application ET celle de la barre système — un seul dessin
+  pour les deux, repris du SVG.
+  **Défauts trouvés sur CAPTURES du vrai rendu compilé (banc Playwright de tous les écrans), pas en relecture** :
+  (1) Chromium ne fait PAS hériter la police aux boutons — onglets et boutons restaient en police système au
+  milieu de Nunito ; corrigé par `button, input, select, textarea { font-family: inherit }` ; (2) une ligne
+  d'erreur de l'installation était devenue quasi invisible : `--ui-danger-soft` (fond rose pâle) servait de
+  couleur de TEXTE, pensée pour l'ancien fond noir. **Leçon générale : changer de thème clair/sombre inverse le
+  rôle des couleurs « pâles » — une couleur de texte lisible sur fond sombre devient un fond sur fond clair ;
+  relire chaque usage `color:` des tokens pâles, pas seulement leurs valeurs.** (3) « Cerveau de Jaris » passait
+  sur deux lignes et « Options » gardait seul l'ancienne pastille (bouton rendu par un autre composant).
+  Textes rendus cohérents avec la mascotte (« clique sur le cercle » → « clique sur lui », statut au repos
+  « Prêt à t'aider » au lieu de « Jaris dort… »), couleurs du Cerveau (graphe 3D) et du balayage d'écran
+  adoucies, couleurs des 10 voix passées à des teintes moyennes (le visage blanc reste lisible dessus).
+  Tests : 7 tests UI vérifiaient l'ANCIEN style (dégradé, coins coupés, Rajdhani, `canvas`) — réécrits pour
+  vérifier la même intention (« habillé par le CSS de Jaris ») avec le nouveau. Nouveaux :
+  `test-soft-theme.mjs` (garde-fou : échoue si un motif science-fiction revient ; icône = mascotte, vérifiée
+  pixel par pixel) et `test-mascot-ui.mjs` (vrai navigateur : chaque humeur change le visage, petite taille
+  lisible, couleur de voix, clic). Garde-fou vérifié en réintroduisant une règle de l'ancien thème.
+  **Non vérifiable ici** : le rendu dans la vraie fenêtre Windows (police, widget transparent sur le bureau) —
+  à confirmer par Léo. Les écrans n'ont pas été réorganisés : seul l'habillage change ; simplifier les textes
+  et parcours pour le grand public est une étape à part.
