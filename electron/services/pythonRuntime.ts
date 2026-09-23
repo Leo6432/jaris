@@ -176,17 +176,24 @@ const TORCH_CUDA_INDEX = 'https://download.pytorch.org/whl/cu126'
  * Si l'installation GPU échoue malgré tout (pilote trop ancien, dépôt PyTorch injoignable), on retombe
  * sur la version processeur : Jaris marchera plus lentement, mais il marchera.
  */
+/**
+ * `--no-cache-dir` (étape 143, « tout sur D, jamais une partie ») : sans lui, pip garde une copie de chaque
+ * paquet téléchargé dans %LOCALAPPDATA%\pip\cache — sur C quoi que Léo ait choisi, torch en tête (~2,5 Go).
+ * Rien à perdre : Jaris n'installe ces paquets qu'une fois, le cache ne resservirait qu'à une réinstallation.
+ */
+export const PIP_INSTALL = ['-m', 'pip', 'install', '--no-cache-dir'] as const
+
 async function installDependencies(python: string, onProgress: InstallProgress): Promise<void> {
   if (await hasNvidiaGpu()) {
     onProgress('Carte graphique NVIDIA détectée : installation de PyTorch avec accélération GPU…')
-    const code = await run(python, ['-m', 'pip', 'install', 'torch', '--index-url', TORCH_CUDA_INDEX], onProgress)
+    const code = await run(python, [...PIP_INSTALL, 'torch', '--index-url', TORCH_CUDA_INDEX], onProgress)
     if (code !== 0) {
       onProgress("L'installation GPU de PyTorch a échoué : repli sur la version processeur, plus lente.")
     }
   }
 
   onProgress('Installation des dépendances Python (plusieurs minutes)…')
-  const code = await run(python, ['-m', 'pip', 'install', '-r', requirementsPath()], onProgress)
+  const code = await run(python, [...PIP_INSTALL, '-r', requirementsPath()], onProgress)
   if (code !== 0) throw new Error(`installation des dépendances Python échouée (code ${code})`)
 }
 

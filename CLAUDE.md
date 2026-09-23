@@ -4227,3 +4227,14 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   était juste — et le vrai garde-fou a même tenu sous Windows (copie refusée, « rien n'a été déplacé »).
   **Leçon générale : un test qui manipule des chemins doit passer par `path` (join/relative/sep), jamais par
   un `/` écrit en dur — le dépôt se teste sous Linux ici mais la CI tourne sous Windows.**
+
+- **Suite de l'étape 143, trouvé en revérifiant pour répondre à Léo ("tout se déplace pour être sûr ?") :
+  pip gardait une copie de chaque paquet dans `%LOCALAPPDATA%\pip\cache`** — sur C quoi qu'on ait choisi,
+  torch en tête (~2,5 Go). Absent de l'inventaire initial parce que ce chemin n'apparaît nulle part dans le
+  code de Jaris : c'est pip lui-même qui le décide. Corrigé par `--no-cache-dir` sur toutes les installations
+  pip (`PIP_INSTALL`, pythonRuntime.ts), verrouillé par un test. Un cache pip DÉJÀ présent sur C n'est pas
+  effacé : il peut servir à d'autres programmes Python que Jaris. **Leçon générale : un inventaire de « ce
+  que Jaris écrit » fait par grep dans le code de Jaris rate ce que ses OUTILS écrivent d'eux-mêmes (caches
+  de pip, de navigateurs, journaux) — passer aussi en revue chaque outil lancé et ses emplacements par défaut.**
+  Restent aussi sur C, minuscules : les clés et l'historique d'Ollama (`%USERPROFILE%\.ollama`, hors
+  `models`), les notes temporaires du Bloc-notes (%TEMP%).
