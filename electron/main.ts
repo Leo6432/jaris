@@ -282,7 +282,7 @@ function createFullWindow(showWhenReady = true): BrowserWindow {
     minHeight: 600,
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: '#f6f4ef',
+    backgroundColor: '#15171c',
     webPreferences: {
       preload: join(__dirname, '../preload/preload.mjs'),
       sandbox: false

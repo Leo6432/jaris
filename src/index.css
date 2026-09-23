@@ -7,8 +7,8 @@
    cyan, grille, coins coupés, capitales espacées), pensé pour des initiés.
 
    Principes, dans l'ordre où ils se voient :
-   - un fond CLAIR et chaud (blanc cassé), du texte gris foncé — jamais noir pur
-     ni blanc pur, qui fatiguent ;
+   - un fond SOMBRE et doux (gris-bleu, étape 146), du texte gris clair — jamais
+     noir pur ni blanc pur, qui fatiguent ;
    - UNE couleur d'accent, un bleu doux, réservée à ce qui se clique ;
    - des coins bien arrondis et des ombres légères au lieu de liserés lumineux ;
    - une seule police, Nunito (ronde, très lisible), en casse normale : les
@@ -19,43 +19,46 @@
    tokens s'appelaient `--hud-*` avec l'ancien thème ; renommés `--ui-*`.
    ========================================================================== */
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 
-  /* Fonds : blanc cassé chaud pour la page, blanc pour les cartes posées dessus. */
-  --ui-bg: #f6f4ef;
-  --ui-panel: #ffffff;
-  --ui-panel-raised: #ffffff;
-  --ui-surface-rgb: 255, 255, 255;
-  /* Encre : sert aux ombres et aux voiles, jamais comme couleur de texte directe. */
-  --ui-ink-rgb: 31, 41, 55;
+  /* Fonds (étape 146, Léo : « mets le mode dark, pas blanc ») : un gris-bleu très sombre, jamais du noir
+     pur (dur pour les yeux), et des cartes un cran plus claires pour se détacher sans liseré lumineux. */
+  --ui-bg: #15171c;
+  --ui-panel: #1d2027;
+  --ui-panel-raised: #242832;
+  --ui-surface-rgb: 36, 40, 50;
+  /* Encre : sert aux traits et aux voiles (clairs sur fond sombre), jamais comme couleur de texte directe. */
+  --ui-ink-rgb: 226, 232, 240;
+  /* Ombres : toujours noires — une ombre claire sur fond sombre ferait un halo, pas une profondeur. */
+  --ui-shadow-rgb: 0, 0, 0;
 
   /* Texte, du plus lisible au plus discret (tous lisibles sur --ui-bg). */
-  --ui-text: #1f2937;
-  --ui-text-soft: #374151;
-  --ui-text-dim: #5b6472;
-  --ui-text-faint: #8a919c;
+  --ui-text: #eceff4;
+  --ui-text-soft: #d3d8e0;
+  --ui-text-dim: #a3abb8;
+  --ui-text-faint: #7f8795;
 
-  /* Accent : un bleu doux. --bright sert aux survols (plus FONCÉ sur fond clair). */
-  --ui-accent: #3b6fe0;
-  --ui-accent-bright: #2856c4;
-  --ui-accent-deep: #1f47a8;
-  --ui-accent-rgb: 59, 111, 224;
-  --ui-accent-soft: #eaf0fd;
+  /* Accent : un bleu doux. --bright sert aux survols (plus CLAIR sur fond sombre). */
+  --ui-accent: #3a7bf2;
+  --ui-accent-bright: #6a9df7;
+  --ui-accent-deep: #2a63d1;
+  --ui-accent-rgb: 58, 123, 242;
+  --ui-accent-soft: #1c2a45;
 
   /* Couleurs de sens (jamais décoratives) : ambre = attention, vert = OK, rouge = échec. */
-  --ui-gold: #b7791f;
-  --ui-gold-rgb: 214, 150, 40;
-  --ui-ok: #2f855a;
-  --ui-ok-rgb: 47, 133, 90;
-  --ui-danger: #c53030;
-  --ui-danger-rgb: 197, 48, 48;
-  --ui-danger-soft: #fdecec;
+  --ui-gold: #e3a84f;
+  --ui-gold-rgb: 227, 168, 79;
+  --ui-ok: #4cc38a;
+  --ui-ok-rgb: 76, 195, 138;
+  --ui-danger: #f26d6d;
+  --ui-danger-rgb: 242, 109, 109;
+  --ui-danger-soft: #3a1f23;
 
   /* Traits et ombres : des séparations discrètes, pas des contours lumineux. */
   --ui-line: rgba(var(--ui-ink-rgb), 0.1);
   --ui-line-strong: rgba(var(--ui-ink-rgb), 0.2);
-  --ui-glow: 0 1px 2px rgba(var(--ui-ink-rgb), 0.06), 0 4px 14px rgba(var(--ui-ink-rgb), 0.08);
-  --ui-shadow-card: 0 1px 2px rgba(var(--ui-ink-rgb), 0.05), 0 2px 8px rgba(var(--ui-ink-rgb), 0.05);
+  --ui-glow: 0 1px 2px rgba(var(--ui-shadow-rgb), 0.3), 0 4px 14px rgba(var(--ui-shadow-rgb), 0.35);
+  --ui-shadow-card: 0 1px 2px rgba(var(--ui-shadow-rgb), 0.25), 0 2px 8px rgba(var(--ui-shadow-rgb), 0.25);
 
   /* Arrondis : généreux, c'est une grande partie de l'impression de douceur. */
   --ui-radius: 12px;
@@ -507,7 +510,7 @@ body.body--scan {
   height: 18px;
   border-radius: 50%;
   background: #ffffff;
-  box-shadow: 0 1px 3px rgba(var(--ui-ink-rgb), 0.3);
+  box-shadow: 0 1px 3px rgba(var(--ui-shadow-rgb), 0.4);
   transition: left 0.18s ease;
 }
 
@@ -720,7 +723,7 @@ body.body--scan {
   position: fixed;
   inset: 0;
   z-index: 30;
-  background: rgba(var(--ui-ink-rgb), 0.35);
+  background: rgba(var(--ui-shadow-rgb), 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1739,10 +1742,10 @@ p.capacity-scan__tier-missing {
   cursor: pointer;
 }
 
-/* --- Mascotte (étapes 144-145) : une bulle bleue brillante à deux yeux, animée par humeur. --------------- */
+/* --- Mascotte (étapes 144-146) : une bulle bleue au bord lumineux, deux yeux qui vivent. ---------------- */
 
 .jaris-mascot__shadow {
-  fill: rgba(31, 41, 55, 0.12);
+  fill: rgba(0, 0, 0, 0.45);
   transform-box: fill-box;
   transform-origin: center;
   animation: mascot-shadow 3.4s ease-in-out infinite;
@@ -1754,9 +1757,8 @@ p.capacity-scan__tier-missing {
   animation: mascot-float 3.4s ease-in-out infinite;
 }
 
-.jaris-mascot__shine {
-  fill: #ffffff;
-  opacity: 0.42;
+.jaris-mascot__glow {
+  opacity: 0.45;
 }
 
 .jaris-mascot__eye {
@@ -1769,8 +1771,15 @@ p.capacity-scan__tier-missing {
 .jaris-mascot__eyes--happy path {
   fill: none;
   stroke: #ffffff;
-  stroke-width: 3.4;
+  stroke-width: 4;
   stroke-linecap: round;
+}
+
+/* Le regard : au repos, Jaris jette de temps en temps un coup d'œil ailleurs (en haut à droite, à gauche)
+   puis revient vers toi — des mouvements rapides suivis d'arrêts, comme un vrai regard. */
+.jaris-mascot__gaze {
+  transition: transform 0.3s ease;
+  animation: mascot-gaze 11s ease-in-out infinite;
 }
 
 /* Clignement : les deux yeux se ferment brièvement toutes les 4 secondes environ. */
@@ -1789,7 +1798,7 @@ p.capacity-scan__tier-missing {
 }
 
 .jaris-mascot__dots circle {
-  fill: #b8cdf5;
+  fill: #9cc4ff;
   animation: mascot-dot 1.2s ease-in-out infinite;
 }
 
@@ -1803,10 +1812,16 @@ p.capacity-scan__tier-missing {
 
 /* En tout petit (widget replié, 24-32 px), des yeux plus grands pour rester lisibles. */
 .jaris-mascot--minimal .jaris-mascot__eye {
-  transform: scale(1.45);
+  transform: scale(1.3);
 }
 
-/* J'écoute : halo qui pulse, yeux un peu plus grands, la bulle se penche vers toi. */
+/* J'écoute : halo qui pulse, yeux un peu plus grands et fixés sur toi, la bulle se penche vers toi. */
+.jaris-mascot--listening .jaris-mascot__gaze,
+.jaris-mascot--happy .jaris-mascot__gaze,
+.jaris-mascot--surprised .jaris-mascot__gaze {
+  animation: none;
+}
+
 .jaris-mascot--listening .jaris-mascot__halo {
   animation: mascot-halo 1.6s ease-out infinite;
 }
@@ -1819,9 +1834,10 @@ p.capacity-scan__tier-missing {
   animation: mascot-lean 2.2s ease-in-out infinite;
 }
 
-/* Je réfléchis : regard en l'air, sur le côté. */
-.jaris-mascot--thinking .jaris-mascot__eye {
-  transform: translate(3px, -4px);
+/* Je réfléchis : regard en l'air, sur le côté, vers les bulles de pensée. */
+.jaris-mascot--thinking .jaris-mascot__gaze {
+  animation: none;
+  transform: translate(8px, -7px);
 }
 
 /* Je réponds : petits rebonds joyeux (les yeux plissés font le sourire). */
@@ -1861,6 +1877,25 @@ p.capacity-scan__tier-missing {
   50% {
     transform: scaleX(0.85);
     opacity: 0.7;
+  }
+}
+
+@keyframes mascot-gaze {
+  0%,
+  28%,
+  50%,
+  64%,
+  78%,
+  100% {
+    transform: translate(0, 0);
+  }
+  31%,
+  47% {
+    transform: translate(8px, -6px);
+  }
+  67%,
+  75% {
+    transform: translate(-8px, 1px);
   }
 }
 
@@ -1925,6 +1960,7 @@ p.capacity-scan__tier-missing {
   .jaris-mascot__shadow,
   .jaris-mascot__body,
   .jaris-mascot__eyes,
+  .jaris-mascot__gaze,
   .jaris-mascot__halo,
   .jaris-mascot__dots circle {
     animation: none !important;
@@ -3045,7 +3081,7 @@ h1 {
 .app__onboarding button:hover {
   color: var(--ui-accent-bright);
   border-color: rgba(var(--ui-accent-rgb), 0.35);
-  background: #dde7fc;
+  background: rgba(var(--ui-accent-rgb), 0.22);
 }
 
 /* L'action principale (Envoyer / Générer / Continuer) : pleine, bleue, texte blanc. */
@@ -3278,7 +3314,7 @@ textarea:not(.composer__input):focus-visible {
 .code-panel__view-tab--active {
   background: var(--ui-panel);
   color: var(--ui-text);
-  box-shadow: 0 1px 3px rgba(var(--ui-ink-rgb), 0.1);
+  box-shadow: 0 1px 3px rgba(var(--ui-shadow-rgb), 0.3);
 }
 
 /* --- En-têtes de page ----------------------------------------------------- */

@@ -47,7 +47,7 @@ export default function MemoryBrain({ graph, onClose }: MemoryBrainProps): JSX.E
       .nodeOpacity(0.9)
       .nodeThreeObject(makeNodeLabel)
       .nodeThreeObjectExtend(true)
-      .linkColor(() => 'rgba(31, 41, 55, 0.22)')
+      .linkColor(() => 'rgba(226, 232, 240, 0.25)')
       .linkDirectionalParticles(2)
       .linkDirectionalParticleColor(() => '#4b7fe8')
       .onNodeClick((node) => {

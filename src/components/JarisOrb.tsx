@@ -3,9 +3,11 @@ import type { RefObject } from 'react'
 import type { JarisEmotion } from '@/store/useJarisStore'
 
 /**
- * La mascotte de Jaris — étape 144 (design « rassurant », grand public), redessinée à l'étape 145 d'après
- * l'image envoyée par Léo (« comme ça ») : une BULLE bleue brillante avec deux petits yeux blancs en amande,
- * sans bouche ni antenne. Plus simple que le premier personnage, et lisible jusqu'à 24 px.
+ * La mascotte de Jaris — étape 144 (design « rassurant », grand public), redessinée aux étapes 145-146
+ * d'après l'image envoyée par Léo : une BULLE bleue avec deux yeux blancs ovales, sans bouche ni antenne.
+ * Étape 146 (« c'est un rond 3D moche ») : plus de gros reflet blanc ni d'ombrage sombre en bas — un bleu vif
+ * presque uni, dont c'est le BORD qui s'illumine, comme sur son image ; et les yeux regardent autour d'eux de
+ * temps en temps au lieu de rester figés.
  *
  * Le composant garde le nom et EXACTEMENT les réglages de l'ancien orbe (emotion, size, audioElRef, onClick,
  * color) : tous les écrans qui l'affichent (accueil vocal, widget, sélecteur de voix) suivent sans
@@ -13,8 +15,8 @@ import type { JarisEmotion } from '@/store/useJarisStore'
  * la voix est animée en JavaScript.
  *
  * Sans bouche, tout passe par les yeux et la lumière :
- * - idle       : flotte doucement, cligne des yeux de temps en temps ;
- * - listening  : halo lumineux qui pulse autour de la bulle, yeux un peu plus grands (« je t'écoute ») ;
+ * - idle       : flotte doucement, cligne des yeux, et regarde autour de lui de temps en temps ;
+ * - listening  : halo lumineux qui pulse, yeux un peu plus grands et fixés sur toi (« je t'écoute ») ;
  * - thinking   : regarde en l'air, trois petites bulles de pensée ;
  * - happy      : yeux plissés en sourire (« ^ ^ »), petits rebonds ; la bulle gonfle au rythme de la voix ;
  * - surprised  : yeux ronds et grands.
@@ -29,10 +31,10 @@ interface JarisOrbProps {
   color?: string
 }
 
-/** Couleur de la bulle par défaut : un bleu vif et doux, proche de l'accent de l'interface. */
-const BODY_COLOR = '#3d8bff'
+/** Couleur de la bulle par défaut : le bleu vif de l'image de référence de Léo. */
+const BODY_COLOR = '#2f88ff'
 
-/** Sous cette taille (widget replié), pas d'ombre au sol ni de bulles de pensée : juste la bulle et ses yeux. */
+/** Sous cette taille (widget replié), pas d'ombre, de lueur ni de bulles de pensée : juste la bulle et ses yeux. */
 export const MINIMAL_SIZE_THRESHOLD = 48
 
 interface AudioAnalysis {
@@ -69,7 +71,7 @@ function readAudioLevel(analyser: AnalyserNode, buffer: Uint8Array<ArrayBuffer>)
   return sum / buffer.length / 255
 }
 
-/** Éclaircit une couleur hexadécimale (#rrggbb) vers le blanc, pour le haut du dégradé du corps. */
+/** Éclaircit une couleur hexadécimale (#rrggbb) vers le blanc, pour le bord lumineux de la bulle. */
 export function lighten(hex: string, amount: number): string {
   const match = /^#?([0-9a-f]{6})$/i.exec(hex)
   if (!match) return hex
@@ -81,7 +83,7 @@ export function lighten(hex: string, amount: number): string {
   return `#${[channel(16), channel(8), channel(0)].map((c) => c.toString(16).padStart(2, '0')).join('')}`
 }
 
-/** Assombrit une couleur hexadécimale (#rrggbb) vers le noir, pour le bord de la bulle. */
+/** Assombrit une couleur hexadécimale (#rrggbb) vers le noir, pour le cœur de la bulle. */
 export function darken(hex: string, amount: number): string {
   const match = /^#?([0-9a-f]{6})$/i.exec(hex)
   if (!match) return hex
@@ -97,7 +99,10 @@ function breathTransform(scale: number): string {
 
 export default function JarisOrb({ emotion, size = 320, audioElRef, onClick, color }: JarisOrbProps): JSX.Element {
   const breathRef = useRef<SVGGElement>(null)
-  const gradientId = `jaris-body-${useId().replace(/:/g, '')}`
+  const uid = useId().replace(/:/g, '')
+  const gradientId = `jaris-body-${uid}`
+  const rimId = `jaris-rim-${uid}`
+  const glowId = `jaris-glow-${uid}`
   const minimal = size < MINIMAL_SIZE_THRESHOLD
   const body = color ?? BODY_COLOR
 
@@ -157,13 +162,13 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick, col
     emotion === 'happy' ? (
       // Yeux plissés en sourire : deux petits arcs « ^ ^ ».
       <g className="jaris-mascot__eyes jaris-mascot__eyes--happy">
-        <path d="M60 57 Q64 50 68 57" />
-        <path d="M74 57 Q78 50 82 57" />
+        <path d="M42 54 Q47 45 52 54" />
+        <path d="M68 54 Q73 45 78 54" />
       </g>
     ) : (
       <g className="jaris-mascot__eyes">
-        <ellipse className="jaris-mascot__eye" cx="64" cy="56" rx="3.8" ry="6.8" />
-        <ellipse className="jaris-mascot__eye" cx="78" cy="56" rx="3.8" ry="6.8" />
+        <ellipse className="jaris-mascot__eye" cx="47" cy="53" rx="4.8" ry="9.5" />
+        <ellipse className="jaris-mascot__eye" cx="73" cy="53" rx="4.8" ry="9.5" />
       </g>
     )
 
@@ -171,25 +176,37 @@ export default function JarisOrb({ emotion, size = 320, audioElRef, onClick, col
     <div className={classes} style={{ width: size, height: size }} onClick={onClick}>
       <svg viewBox="0 0 120 120" width={size} height={size} role="img" aria-label="Jaris">
         <defs>
-          <radialGradient id={gradientId} cx="36%" cy="30%" r="78%">
-            <stop offset="0%" stopColor={lighten(body, 0.55)} />
-            <stop offset="45%" stopColor={body} />
-            <stop offset="100%" stopColor={darken(body, 0.35)} />
+          {/* Bleu presque uni, qui s'éclaircit seulement tout au bord : c'est le bord qui brille, pas un reflet. */}
+          <radialGradient id={gradientId} cx="50%" cy="46%" r="52%">
+            <stop offset="0%" stopColor={darken(body, 0.05)} />
+            <stop offset="62%" stopColor={body} />
+            <stop offset="88%" stopColor={lighten(body, 0.28)} />
+            <stop offset="100%" stopColor={lighten(body, 0.6)} />
           </radialGradient>
+          {/* Liseré plus clair en haut, qui s'efface vers le bas. */}
+          <linearGradient id={rimId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={lighten(body, 0.75)} stopOpacity="0.9" />
+            <stop offset="55%" stopColor={lighten(body, 0.75)} stopOpacity="0" />
+          </linearGradient>
+          <filter id={glowId} x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="5" />
+          </filter>
         </defs>
 
         {/* Ombre au sol : se resserre quand la bulle flotte vers le haut. */}
         {!minimal && <ellipse className="jaris-mascot__shadow" cx="60" cy="113" rx="26" ry="4" />}
 
         <g className="jaris-mascot__body">
+          {/* Lueur douce autour de la bulle, comme sur l'image de référence (fond sombre). */}
+          {!minimal && <circle className="jaris-mascot__glow" cx="60" cy="62" r="44" fill={body} filter={`url(#${glowId})`} />}
           {/* Halo : visible seulement quand Jaris écoute (CSS), pour dire « je t'entends » sans texte. */}
           <circle className="jaris-mascot__halo" cx="60" cy="62" r="50" fill={body} />
 
           <g ref={breathRef} transform={breathTransform(1)}>
             <circle className="jaris-mascot__sphere" cx="60" cy="62" r="44" fill={`url(#${gradientId})`} />
-            {/* Reflet brillant en haut à gauche : c'est lui qui donne l'aspect « bulle ». */}
-            <ellipse className="jaris-mascot__shine" cx="42" cy="38" rx="13" ry="7" transform="rotate(-32 42 38)" />
-            {eyes}
+            <circle className="jaris-mascot__rim" cx="60" cy="62" r="43.2" fill="none" stroke={`url(#${rimId})`} strokeWidth="1.6" />
+            {/* Le regard bouge (CSS) indépendamment du clignement : deux groupes imbriqués, deux animations. */}
+            <g className="jaris-mascot__gaze">{eyes}</g>
           </g>
 
           {emotion === 'thinking' && !minimal && (

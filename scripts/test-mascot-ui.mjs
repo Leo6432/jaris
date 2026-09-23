@@ -97,6 +97,34 @@ test('chaque humeur change vraiment la bulle : halo, yeux, bulles de pensée', o
   })
 })
 
+test('au repos, les yeux regardent vraiment ailleurs de temps en temps ; à l’écoute, ils restent fixés sur toi', options, async () => {
+  await withPage(async (page) => {
+    const gaze = await page.evaluate(() => {
+      const at = (id, ms) => {
+        const el = document.querySelector(id + ' .jaris-mascot__gaze')
+        const anim = el.getAnimations().find((a) => a.animationName === 'mascot-gaze')
+        if (!anim) return getComputedStyle(el).transform
+        anim.pause()
+        anim.currentTime = ms
+        return getComputedStyle(el).transform
+      }
+      return {
+        idleStart: at('#m-idle', 0),
+        idleLookRight: at('#m-idle', 4400), // ~40 % de l'animation : coup d'œil en haut à droite
+        idleLookLeft: at('#m-idle', 7800), // ~71 % : coup d'œil à gauche
+        listening: at('#m-listening', 4400),
+        thinking: getComputedStyle(document.querySelector('#m-thinking .jaris-mascot__gaze')).transform
+      }
+    })
+    const tx = (m) => (m === 'none' ? 0 : Number(m.match(/matrix\(([^)]+)\)/)[1].split(',')[4]))
+    assert.equal(tx(gaze.idleStart), 0, 'regard centré au départ')
+    assert.ok(tx(gaze.idleLookRight) > 4, `coup d’œil à droite attendu, obtenu ${gaze.idleLookRight}`)
+    assert.ok(tx(gaze.idleLookLeft) < -4, `coup d’œil à gauche attendu, obtenu ${gaze.idleLookLeft}`)
+    assert.equal(tx(gaze.listening), 0, 'à l’écoute, le regard ne se promène pas')
+    assert.ok(tx(gaze.thinking) > 4, 'en réfléchissant, il regarde en l’air sur le côté')
+  })
+})
+
 test('en tout petit (widget replié), la bulle et ses deux yeux, sans ombre ni bulles de pensée', options, async () => {
   await withPage(async (page) => {
     const small = await page.evaluate(() => {

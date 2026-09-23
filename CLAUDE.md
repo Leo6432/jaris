@@ -4299,3 +4299,37 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   bulles de pensée, taille minimale sans ombre, couleur de voix sur la bulle, clic) et `test-soft-theme.mjs`
   (icône : bulle bleue, deux yeux blancs DISTINCTS, coins transparents). Le test du halo a été vérifié en le
   retirant du CSS : il échoue bien. **Non vérifiable ici** : le rendu dans la vraie fenêtre Windows.
+
+- **Étape 146, Léo sur la v0.16.1 : « mets le mode dark, pas blanc » et « c'est une catastrophe, c'est moche,
+  les yeux doivent bouger des fois, tu as fait un rond 3D moche » — avec deux captures de la bulle voulue.**
+  1. **Mode sombre.** Le thème doux de l'étape 144 passe en sombre sans rien changer d'autre : c'est le jeu de
+     tokens `--ui-*` qui change, pas les règles — la preuve que « un seul jeu de tokens, jamais de valeur en
+     dur » (étape 144) paie. Fond gris-bleu très sombre (jamais du noir pur), cartes un cran plus claires.
+     **Piège évité en passant en revue chaque usage plutôt qu'en inversant les couleurs** : `--ui-ink-rgb`
+     servait À LA FOIS aux traits (qui doivent devenir clairs sur fond sombre) et aux ombres (qui doivent
+     rester noires — une ombre claire sur fond sombre fait un halo). Nouveau token `--ui-shadow-rgb` pour les
+     ombres, le fond du dialogue modal et le bouton des interrupteurs. Trois valeurs claires écrites en dur
+     trouvées par grep : le survol des boutons (`#dde7fc`), les liens du Cerveau de Jaris (encre sombre,
+     invisibles sur fond noir) et `backgroundColor` de la fenêtre dans main.ts (sinon un éclair blanc à
+     chaque ouverture, avant que le CSS ne charge). L'aperçu du mode Code garde volontairement son fond blanc :
+     il montre la page générée telle qu'elle s'affichera, pas l'habillage de Jaris.
+  2. **La bulle, refaite d'après l'image cette fois vraiment regardée.** Agrandies, ses deux captures montrent
+     un bleu vif presque UNI dont c'est le BORD qui s'illumine — pas un gros reflet blanc en haut à gauche ni
+     un ombrage sombre en bas, ce que j'avais ajouté en « interprétant » une bulle brillante et qui donnait
+     l'effet « rond 3D » rejeté. Dégradé inversé (cœur bleu, bord clair), liseré clair en haut, lueur douce
+     autour, yeux plus grands et centrés. **Leçon générale : une image de référence de quelques dizaines de
+     pixels doit être AGRANDIE et comparée côte à côte avec le rendu, jamais « comprise » puis redessinée de
+     mémoire** — les détails qui font le style (d'où vient la lumière) disparaissent à la taille d'origine.
+  3. **Les yeux bougent.** Les deux captures de Léo montraient d'ailleurs deux regards différents (centré, puis
+     en haut à droite) : au repos, un groupe `jaris-mascot__gaze` jette un coup d'œil en haut à droite puis à
+     gauche, par mouvements rapides suivis d'arrêts, indépendamment du clignement (deux groupes imbriqués,
+     deux animations). À l'écoute, le regard reste fixé sur l'utilisateur ; en réflexion, il monte vers les
+     bulles de pensée.
+  L'icône de l'application et celle de la barre système (`shared/mascotPixels.ts`) suivent le même dessin,
+  vérifiées en les regardant rendues sur fond sombre.
+  Régression : `test-soft-theme.mjs` (mode sombre annoncé, fond sombre mais pas noir, contraste WCAG de chaque
+  niveau de texte sur chaque surface, fenêtre ouverte directement sur le fond sombre, icône à deux yeux
+  distincts) et `test-mascot-ui.mjs` (vrai navigateur : l'animation est figée à plusieurs instants pour
+  prouver que le regard va à droite puis à gauche au repos, reste fixe à l'écoute et monte en réflexion).
+  Vérifiés en figeant le regard et en remettant le fond blanc de la fenêtre : chacun échoue bien.
+  **Non vérifiable ici** : le rendu dans la vraie fenêtre Windows.

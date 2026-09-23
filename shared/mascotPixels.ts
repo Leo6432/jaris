@@ -1,5 +1,5 @@
 /**
- * La mascotte de Jaris (étapes 144-145 : une bulle bleue brillante à deux yeux blancs) dessinée pixel par
+ * La mascotte de Jaris (étapes 144-146 : une bulle bleue au bord lumineux, deux yeux blancs) dessinée pixel par
  * pixel, pour les deux icônes qui ne peuvent pas être du SVG : l'icône de l'application
  * (`scripts/generate-icon.mjs` -> build/icon.ico : fenêtre, barre des tâches, installeur) et l'icône de la
  * barre système (`electron/services/trayIcon.ts`). Un seul dessin pour les deux, reprenant EXACTEMENT les
@@ -11,10 +11,13 @@
 
 type Rgb = [number, number, number]
 
-/** Les trois arrêts du dégradé de la bulle : BODY éclairci de 55 %, BODY (#3d8bff), BODY assombri de 35 %. */
-const LIGHT: Rgb = [0xae, 0xd0, 0xff]
-const BODY: Rgb = [0x3d, 0x8b, 0xff]
-const DARK: Rgb = [0x28, 0x5a, 0xa6]
+/** Les arrêts du dégradé de la bulle (JarisOrb.tsx) : BODY (#2f88ff) assombri de 5 %, BODY, puis le bord qui
+ *  s'éclaircit (BODY éclairci de 28 % puis de 60 %). RIM : le liseré clair du haut (BODY éclairci de 75 %). */
+const CORE: Rgb = [45, 129, 242]
+const BODY: Rgb = [0x2f, 0x88, 0xff]
+const EDGE: Rgb = [105, 169, 255]
+const OUTER: Rgb = [172, 207, 255]
+const RIM: Rgb = [203, 225, 255]
 const WHITE: Rgb = [255, 255, 255]
 
 /** Portion du repère 120 × 120 cadrée dans l'icône : la bulle seule (sans l'ombre au sol), avec une marge. */
@@ -46,7 +49,7 @@ export function renderMascotRgba(size: number, minimal = false): Uint8Array {
   const out = new Uint8Array(size * size * 4)
   const unit = VIEW.size / size
   const aa = unit * 1.2 // largeur du lissage des bords : un peu plus d'un pixel
-  const eyeScale = minimal ? 1.45 : 1
+  const eyeScale = minimal ? 1.3 : 1
 
   for (let py = 0; py < size; py++) {
     for (let px = 0; px < size; px++) {
@@ -66,23 +69,20 @@ export function renderMascotRgba(size: number, minimal = false): Uint8Array {
         a = outA
       }
 
-      const sphere = cover(Math.hypot(x - 60, y - 62) - 44, aa)
+      const dist = Math.hypot(x - 60, y - 62)
+      const sphere = cover(dist - 44, aa)
       if (sphere > 0) {
-        // Dégradé radial comme le SVG : centre (36 %, 30 %) de la boîte de la bulle, rayon 78 %.
-        const t = clamp01(Math.hypot(x - (16 + 0.36 * 88), y - (18 + 0.3 * 88)) / (0.78 * 88))
-        over(t < 0.45 ? mix(LIGHT, BODY, t / 0.45) : mix(BODY, DARK, (t - 0.45) / 0.55), sphere)
+        // Dégradé radial comme le SVG : centre (50 %, 46 %) de la boîte de la bulle, rayon 52 %.
+        const t = clamp01(Math.hypot(x - 60, y - (18 + 0.46 * 88)) / (0.52 * 88))
+        const color = t < 0.62 ? mix(CORE, BODY, t / 0.62) : t < 0.88 ? mix(BODY, EDGE, (t - 0.62) / 0.26) : mix(EDGE, OUTER, (t - 0.88) / 0.12)
+        over(color, sphere)
+        // Liseré clair en haut, qui s'efface vers le bas (55 % de la hauteur).
+        const fade = 0.9 * clamp01(1 - (y - 18) / (0.55 * 88))
+        over(RIM, fade * cover(Math.abs(dist - 43.2) - 0.8, aa) * sphere)
       }
 
-      // Reflet : ellipse 13 × 7 tournée de -32°, centrée en (42, 38).
-      const angle = (32 * Math.PI) / 180
-      const dx = x - 42
-      const dy = y - 38
-      const rx = dx * Math.cos(angle) - dy * Math.sin(angle)
-      const ry = dx * Math.sin(angle) + dy * Math.cos(angle)
-      over(WHITE, 0.42 * cover(ellipseEdge(rx, ry, 0, 0, 13, 7), aa))
-
-      over(WHITE, cover(ellipseEdge(x, y, 64, 56, 3.8 * eyeScale, 6.8 * eyeScale), aa))
-      over(WHITE, cover(ellipseEdge(x, y, 78, 56, 3.8 * eyeScale, 6.8 * eyeScale), aa))
+      over(WHITE, cover(ellipseEdge(x, y, 47, 53, 4.8 * eyeScale, 9.5 * eyeScale), aa))
+      over(WHITE, cover(ellipseEdge(x, y, 73, 53, 4.8 * eyeScale, 9.5 * eyeScale), aa))
 
       const o = (py * size + px) * 4
       out[o] = Math.round(r)
