@@ -57,13 +57,20 @@ win:
   icon: build/icon.ico
 
 nsis:
-  # Un seul clic, sans assistant : pas d'écran "Suivant / Suivant / Terminer", l'installation démarre au
-  # double-clic et l'application se lance à la fin. C'est exactement ce que demande l'étape 16.
-  oneClick: true
-  # Installation pour l'utilisateur courant (%LOCALAPPDATA%\Programs) plutôt que pour toute la machine :
-  # évite l'invite d'élévation Windows (UAC), qui serait une action de plus demandée à l'utilisateur.
+  # Étape 142, Léo : "pouvoir choisir le dossier où mettre Jaris quand tu l'installes la première fois". Un
+  # installeur "un clic" (oneClick: true, choix de l'étape 16) n'a AUCUN écran : il installe toujours dans
+  # %LOCALAPPDATA%\Programs, sans rien demander. Seul l'installeur assisté d'electron-builder propose l'écran
+  # "Dossier d'installation" (allowToChangeInstallationDirectory). Il n'apparaît qu'à la PREMIÈRE
+  # installation : les mises à jour lancées depuis Jaris passent `/S --updated --force-run` (appUpdater.ts),
+  # donc restent silencieuses, réutilisent le dossier déjà choisi (InstallLocation, lu dans le registre par
+  # l'installeur lui-même) et relancent Jaris à la fin, comme avant.
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  # Installation pour l'utilisateur courant par défaut (%LOCALAPPDATA%\Programs) : pas d'invite d'élévation
+  # Windows (UAC). L'installeur assisté affiche aussi le choix "Pour moi seulement / Pour tous les
+  # utilisateurs" (seul "tous" demande l'UAC) — electron-builder ne permet pas de garder le choix du dossier
+  # sans cet écran, sauf à imposer une installation pour toute la machine, avec UAC à chaque mise à jour.
   perMachine: false
-  allowToChangeInstallationDirectory: false
   createDesktopShortcut: always
   createStartMenuShortcut: true
   runAfterFinish: true

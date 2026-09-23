@@ -113,11 +113,14 @@ export async function checkForUpdate(): Promise<{ status: AppVersionStatus | nul
   }
 }
 
+/** Arguments de l'installeur pour une MISE À JOUR : silencieuse, même dossier, Jaris relancé à la fin. */
+export const UPDATE_INSTALLER_ARGS = ['/S', '--updated', '--force-run']
+
 /**
  * Déclenché par le bouton "Mettre à jour" (OptionsMenu.tsx, comme celui d'Ollama). Télécharge le VRAI
  * installeur de la Release GitHub (jamais un fichier généré à la volée) et le lance seulement une fois Jaris
  * réellement en train de quitter (voir plus bas), pour ne jamais déclencher l'invite "Jaris tourne déjà,
- * fermer et continuer ?" de l'installeur NSIS "un clic" (electron-builder.yml).
+ * fermer et continuer ?" de l'installeur NSIS (electron-builder.yml).
  *
  * `onBeforeQuit` : la fenêtre principale (main.ts) intercepte sa propre fermeture pour se cacher en widget
  * au lieu de vraiment quitter, sauf si le drapeau module `quitting` est déjà à `true` (voir le menu barre
@@ -165,7 +168,12 @@ export async function updateApp(
     // chaque fois en usage réel (Léo). windowsHide: false — cette invite doit rester visible si jamais elle
     // apparaît encore malgré ce nouvel ordre (Jaris trop lent à quitter sur une machine chargée, par exemple).
     app.once('will-quit', () => {
-      spawn(installerPath, [], { detached: true, stdio: 'ignore', windowsHide: false })
+      // Étape 142 : l'installeur est devenu ASSISTÉ (choix du dossier à la première installation,
+      // electron-builder.yml). Sans arguments, chaque mise à jour rouvrirait tout l'assistant. `/S` = silencieux,
+      // dans le dossier déjà choisi (InstallLocation du registre) ; `--updated` = ne jamais redemander le
+      // dossier ; `--force-run` = relancer Jaris à la fin, ce que l'assistant ne fait sinon qu'avec une case à
+      // cocher sur sa dernière page.
+      spawn(installerPath, UPDATE_INSTALLER_ARGS, { detached: true, stdio: 'ignore', windowsHide: false })
         .on('error', () => {
           // Rien à faire de plus ici : Jaris est de toute façon en train de quitter, plus personne à qui
           // rapporter un échec asynchrone du spawn lui-même à ce stade.

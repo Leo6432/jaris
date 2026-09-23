@@ -4113,3 +4113,24 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   envoyé, style discret). Chaque groupe vérifié en retirant temporairement le correctif correspondant.
   **Non vérifié ici** : le rendu du sélecteur sur l'écran vocal (même composant, capture faite seulement pour
   le Chat) et la liste native déroulée sous Windows — à confirmer par Léo.
+
+- **Étape 142, Léo : "peut tu faire en sorte de pouvoir choisir le dossier où mettre Jaris quand tu
+  l'installes la première fois car tu peux pas choisir".** L'installeur était "un clic" depuis l'étape 16
+  (`oneClick: true`) : aucun écran, toujours `%LOCALAPPDATA%\Programs`. Dans electron-builder, seul
+  l'installeur ASSISTÉ a l'écran "Dossier d'installation" (`oneClick: false` +
+  `allowToChangeInstallationDirectory: true`). Il affiche aussi "Pour moi seulement / Pour tous les
+  utilisateurs" (vérifié dans les gabarits NSIS d'app-builder-lib 26.15.3, `assistedInstaller.nsh` :
+  `PAGE_INSTALL_MODE` n'est retiré qu'avec `perMachine: true`, qui imposerait l'UAC à chaque mise à jour) —
+  gardé `perMachine: false`, "pour moi seulement" reste le choix par défaut, sans UAC.
+  **Le piège évité, lu dans les gabarits avant de coder** : l'assistant se serait rouvert à CHAQUE mise à jour,
+  puisque `updateApp` (appUpdater.ts) lançait l'installeur sans arguments — et il ne relance Jaris à la fin
+  qu'avec une case à cocher. Les mises à jour passent maintenant `/S --updated --force-run` : silencieuses,
+  dans le dossier déjà choisi (`InstallLocation`, relu dans le registre par `multiUser.nsh`), écran du
+  dossier sauté (`skipPageIfUpdated`), Jaris relancé (`isForceRun` + `Silent` dans `installSection.nsh`).
+  **Transition assumée** : une version ≤ 0.15.51 lance encore le nouvel installeur SANS arguments, donc la
+  toute première mise à jour vers 0.15.52 montre l'assistant une fois (dossier actuel proposé par défaut) ;
+  les suivantes sont silencieuses.
+  Régression : `test-installer-config.mjs` (config assistée + arguments silencieux) et `test-app-updater.mjs`
+  (arguments réellement passés au lancement), vérifiés en remettant l'ancienne config.
+  **Non vérifiable ici (pas de Windows)** : le vrai déroulé de l'assistant et d'une mise à jour silencieuse —
+  à confirmer par Léo.

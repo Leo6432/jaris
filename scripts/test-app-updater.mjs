@@ -142,6 +142,9 @@ test('une mise à jour rapporte son avancement, puis lance l\'installeur seuleme
   electronApp.handlers['will-quit']()
   assert.equal(spawned.length, 1)
   assert.equal(spawned[0].command, installerPath)
+  // Étape 142 : l'installeur est assisté (choix du dossier) — une mise à jour doit rester SILENCIEUSE, dans le
+  // dossier déjà choisi, et relancer Jaris. Sans ces arguments, tout l'assistant se rouvrirait à chaque fois.
+  assert.equal(JSON.stringify(spawned[0].args), JSON.stringify(['/S', '--updated', '--force-run']))
 })
 
 test('un installeur incomplet ne ferme PAS Jaris et ne se lance jamais', async () => {
