@@ -4366,3 +4366,13 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   installeur en mode visible (sans télécharger encore 1,5 Go), garder le code de sortie et le journal Inno
   Setup, puis afficher ces détails dans le message d'échec final. Un succès n'est pas prouvé par la seule
   sortie de l'installeur : relire aussi l'état réel de l'installation.
+
+- **Étape 150, Ollama sur D : Inno Setup refuse une jonction Jaris créée sans élévation (code 448).**
+  Le journal réel du PC de l'ami de Léo montre `RedirectionGuard status: Enabled in enforcing mode`,
+  puis `CreateFile failed; code 448` en créant `%LOCALAPPDATA%\\Programs\\Ollama\\unins000.dat` : ce chemin
+  était une jonction Jaris vers `D:\\Jaris-data\\ollama-app`. La documentation primaire d'Inno Setup confirme
+  ce code et recommande d'éviter les traversées non fiables. Passer `/DIR=<vrai dossier sur D>` à
+  l'installeur officiel (option documentée par le script d'Ollama) ; ne permettre
+  `/NOREDIRECTIONGUARD` qu'après vérification de sa signature Ollama Inc. et un premier journal qui
+  confirme encore le code 448 sur une autre jonction Jaris. Tester la suite exacte : premier essai sûr,
+  reprise ciblée, puis fenêtre visible si nécessaire — sans second téléchargement.

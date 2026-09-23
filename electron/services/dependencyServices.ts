@@ -219,6 +219,28 @@ async function restartOllamaApp(): Promise<boolean> {
 
 const OLLAMA_INSTALLER_URL = 'https://ollama.com/download/OllamaSetup.exe'
 
+/** Comme le script d'installation officiel d'Ollama : exécuter seulement un installeur signé par Ollama Inc. */
+async function isOfficialOllamaInstaller(installerPath: string): Promise<boolean> {
+  const script =
+    "$sig = Get-AuthenticodeSignature -LiteralPath $env:JARIS_OLLAMA_INSTALLER; " +
+    "if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch '(^|, )O=Ollama Inc\\.(,|$)') { exit 1 }"
+  return new Promise((resolve) => {
+    const proc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      windowsHide: true,
+      env: { ...process.env, JARIS_OLLAMA_INSTALLER: installerPath }
+    })
+    proc.on('error', () => resolve(false))
+    proc.on('close', (code) => resolve(code === 0))
+  })
+}
+
+/** Installe directement dans la racine choisie. Si Inno Setup bloque encore une autre jonction Jaris
+ * (code Windows 448), l'exception est limitée à cet installeur officiel vérifié et signé. */
+function ollamaInstallerLocationArgs(allowJunctions = false): string[] {
+  const root = getStorageRoot()
+  return root ? [`/DIR=${join(root, 'ollama-app')}`, ...(allowJunctions ? ['/NOREDIRECTIONGUARD'] : [])] : []
+}
+
 /**
  * Avancement remonté pendant la mise à jour d'Ollama (étape 112) — `target` est ajouté par main.ts, qui seul
  * sait sur quel canal l'envoyer : ce module n'a pas à connaître la forme exacte du message IPC.
@@ -252,10 +274,13 @@ async function downloadAndLaunchOfficialInstaller(onProgress?: OllamaUpdateProgr
     await downloadToFile(OLLAMA_INSTALLER_URL, installerPath, {
       onProgress: (progress) => onProgress?.({ phase: 'download', ...progress })
     })
+    if (!(await isOfficialOllamaInstaller(installerPath))) return false
     onProgress?.({ phase: 'install', receivedBytes: 0, totalBytes: null, percent: 100 })
     // windowsHide: false ici, volontairement, contrairement au reste du fichier : l'utilisateur DOIT voir
     // et pouvoir interagir avec cette fenêtre pour terminer l'installation.
-    spawn(installerPath, [], { detached: true, stdio: 'ignore', windowsHide: false })
+    // Mise à jour lancée sans attendre sa fin : pas de second essai possible après lecture du journal.
+    // Le fichier est vérifié signé juste au-dessus ; les jonctions Jaris doivent rester utilisables.
+    spawn(installerPath, ollamaInstallerLocationArgs(true), { detached: true, stdio: 'ignore', windowsHide: false })
       .on('error', () => {
         // Rien à faire : updateOllama() traite déjà `false` (renvoyé plus bas si le téléchargement échoue)
         // comme un échec de cette méthode et retombe sur winget — un échec asynchrone du spawn lui-même,
@@ -315,22 +340,39 @@ export async function installOllamaSilently(onProgress: (message: string, percen
     return false
   }
 
-  const runInstaller = (silent: boolean): Promise<string | null> => new Promise((resolve) => {
+  if (!(await isOfficialOllamaInstaller(installerPath))) {
+    onProgress("L'installeur téléchargé n'a pas une signature valide d'Ollama Inc. ; installation arrêtée.")
+    await rm(installerPath, { force: true }).catch(() => {})
+    return false
+  }
+
+  const runInstaller = (silent: boolean, allowJunctions: boolean): Promise<string | null> => new Promise((resolve) => {
     const args = silent ? ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'] : ['/NORESTART']
     // Inno Setup prend en charge /LOG= et Ollama active ses logs d'installation. Le chemin fixe permet de
     // retrouver la vraie erreur sur la machine concernée, même après fermeture de l'écran d'installation.
-    const proc = spawn(installerPath, [...args, `/LOG=${logPath}`], { windowsHide: silent })
+    const proc = spawn(installerPath, [...args, ...ollamaInstallerLocationArgs(allowJunctions), `/LOG=${logPath}`], { windowsHide: silent })
     proc.on('error', (err) => resolve(`Windows n'a pas pu ouvrir l'installeur Ollama : ${err.message}`))
     proc.on('close', (code) => resolve(code === 0 ? null : `L'installeur Ollama s'est arrêté avec le code ${code ?? 'inconnu'}.`))
   })
 
   onProgress("Installation d'Ollama en cours…")
-  let failure = await runInstaller(true)
+  let allowJunctions = false
+  let failure = await runInstaller(true, allowJunctions)
+  if (failure && getStorageRoot()) {
+    const firstLog = await readFile(logPath, 'utf8').catch(() => '')
+    if (/code 448\b|untrusted mount point|point de montage non approuv/i.test(firstLog)) {
+      // Inno Setup 6.7 protège les jonctions non élevées. Tenter d'abord /DIR= vers le vrai dossier,
+      // puis n'ouvrir cette exception que si le journal prouve qu'une autre jonction Jaris est bloquée.
+      allowJunctions = true
+      onProgress("Windows bloque un dossier Jaris redirigé vers D:. Nouvelle tentative avec l'installeur Ollama signé…")
+      failure = await runInstaller(true, allowJunctions)
+    }
+  }
   if (failure) {
     // L'installation silencieuse masque les boîtes d'erreur. Une seule reprise avec la fenêtre officielle
     // laisse voir le problème et permet de terminer sans retélécharger 1,5 Go.
     onProgress("L'installation silencieuse d'Ollama a échoué. Son installeur s'ouvre : termine les étapes affichées…")
-    failure = await runInstaller(false)
+    failure = await runInstaller(false, allowJunctions)
   }
   // 1,5 Go qui n'a plus aucune utilité une fois l'installation terminée (réussie ou non).
   await rm(installerPath, { force: true }).catch(() => {})

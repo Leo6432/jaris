@@ -31,7 +31,7 @@ test('un échec d’Ollama conserve sa vraie raison dans le message final du pre
   assert.doesNotMatch(failure.message, /installer depuis ollama\.com/)
 })
 
-test('un échec silencieux ouvre le même installeur Ollama avec une fenêtre, sans second téléchargement', async () => {
+test('le code 448 déclenche un essai ciblé puis la fenêtre du même installeur, sans second téléchargement', async () => {
   const source = readFileSync(new URL('../electron/services/dependencyServices.ts', import.meta.url), 'utf8')
   const compiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
@@ -48,16 +48,20 @@ test('un échec silencieux ouvre le même installeur Ollama avec une fenêtre, s
         execSync: () => '',
         spawn: (file, args, options) => {
           const child = new EventEmitter()
+          if (file === 'powershell.exe') {
+            queueMicrotask(() => child.emit('close', 0))
+            return child
+          }
           launches.push({ file, args, options })
-          queueMicrotask(() => child.emit('close', launches.length === 1 ? 1 : 0))
+          queueMicrotask(() => child.emit('close', launches.length < 3 ? 4 : 0))
           return child
         }
       }
       if (id === 'fs') return { existsSync: () => false }
-      if (id === 'fs/promises') return { readFile: async () => '', rm: async () => {} }
+      if (id === 'fs/promises') return { readFile: async () => 'CreateFile failed; code 448.', rm: async () => {} }
       if (id === 'path') return nodePath
       if (id === 'util') return { promisify: () => async () => ({ stdout: '' }) }
-      if (id === './storageRoot') return { downloadsDir: () => 'D:\\Jaris\\downloads', getStorageRoot: () => null }
+      if (id === './storageRoot') return { downloadsDir: () => 'D:\\Jaris-data\\downloads', getStorageRoot: () => 'D:\\Jaris-data' }
       if (id === './dockerLocation') return { dockerInstallFlags: () => [] }
       if (id === '../config') return { config: { ollama: { host: 'http://127.0.0.1:11434' } } }
       if (id === './appLauncher') return { didAppLaunch: () => true, openApp: async () => '' }
@@ -69,9 +73,14 @@ test('un échec silencieux ouvre le même installeur Ollama avec une fenêtre, s
     const messages = []
     assert.equal(await exports.installOllamaSilently((message) => messages.push(message)), true)
     assert.equal(downloads, 1)
-    assert.equal(launches.length, 2)
+    assert.equal(launches.length, 3)
     assert.ok(launches[0].args.includes('/VERYSILENT'))
-    assert.ok(!launches[1].args.includes('/VERYSILENT'))
+    assert.ok(!launches[0].args.includes('/NOREDIRECTIONGUARD'))
+    assert.ok(launches[1].args.includes('/VERYSILENT'))
+    assert.ok(launches[1].args.includes('/NOREDIRECTIONGUARD'))
+    assert.ok(!launches[2].args.includes('/VERYSILENT'))
+    assert.ok(launches[2].args.includes('/NOREDIRECTIONGUARD'))
+    assert.ok(launches.every((launch) => launch.args.some((arg) => arg.includes('/DIR=D:\\Jaris-data\\ollama-app'))))
     assert.ok(messages.some((message) => /fenêtre|s'ouvre/.test(message)))
   } finally {
     globalThis.fetch = originalFetch
