@@ -57,7 +57,7 @@ test('le code 448 déclenche un essai ciblé puis la fenêtre du même installeu
           return child
         }
       }
-      if (id === 'fs') return { existsSync: () => false }
+      if (id === 'fs') return { existsSync: () => false, mkdirSync: () => {} }
       if (id === 'fs/promises') return { readFile: async () => 'CreateFile failed; code 448.', rm: async () => {} }
       if (id === 'path') return nodePath
       if (id === 'util') return { promisify: () => async () => ({ stdout: '' }) }
@@ -81,6 +81,8 @@ test('le code 448 déclenche un essai ciblé puis la fenêtre du même installeu
     assert.ok(!launches[2].args.includes('/VERYSILENT'))
     assert.ok(launches[2].args.includes('/NOREDIRECTIONGUARD'))
     assert.ok(launches.every((launch) => launch.args.some((arg) => arg.includes('/DIR=D:\\Jaris-data\\ollama-app'))))
+    assert.ok(launches.every((launch) => launch.options.env.TEMP === 'D:\\Jaris-data\\downloads\\ollama-temp'))
+    assert.ok(launches.every((launch) => launch.options.env.TMP === 'D:\\Jaris-data\\downloads\\ollama-temp'))
     assert.ok(messages.some((message) => /fenêtre|s'ouvre/.test(message)))
   } finally {
     globalThis.fetch = originalFetch

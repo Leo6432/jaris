@@ -1,10 +1,11 @@
 import { spawn } from 'child_process'
 import { createHash } from 'crypto'
-import { existsSync, readdirSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync } from 'fs'
 import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { config } from '../config'
 import { pythonScriptsDir } from '../paths'
+import { getStorageRoot } from './storageRoot'
 
 /**
  * Installe et gère le Python de Jaris (étape 16 du roadmap).
@@ -93,7 +94,12 @@ export type InstallProgress = (message: string, percent?: number) => void
 /** Lance une commande en relayant sa sortie ligne par ligne, pour que l'utilisateur voie que ça avance. */
 function run(exe: string, args: string[], onProgress: InstallProgress): Promise<number> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(exe, args, { windowsHide: true })
+    // pip désarchive les grosses roues PyTorch dans le TEMP du processus, même avec --no-cache-dir.
+    // Garder ce travail transitoire dans la racine de Jaris évite de saturer C: pendant l'installation.
+    const tempDir = getStorageRoot() ? join(runtimeDir(), '.install-temp') : null
+    if (tempDir) mkdirSync(tempDir, { recursive: true })
+    const env = tempDir ? { ...process.env, TEMP: tempDir, TMP: tempDir, TMPDIR: tempDir } : process.env
+    const proc = spawn(exe, args, { windowsHide: true, env })
     const relay = (chunk: Buffer): void => {
       const line = chunk.toString().trim().split('\n').pop()?.trim()
       if (line) onProgress(line)
@@ -226,6 +232,7 @@ export async function installPythonRuntime(onProgress: InstallProgress): Promise
   if (!python) throw new Error("python.exe est introuvable dans l'archive téléchargée")
 
   await installDependencies(python, onProgress)
+  await rm(join(dir, '.install-temp'), { recursive: true, force: true }).catch(() => {})
   await writeFile(stampPath(), await requirementsHash())
   onProgress('Python et ses dépendances sont installés.', 100)
 }

@@ -1,7 +1,7 @@
 import { dockerInstallFlags } from './dockerLocation'
 import { downloadsDir, getStorageRoot } from './storageRoot'
 import { exec, execSync, spawn, type ChildProcess } from 'child_process'
-import { existsSync } from 'fs'
+import { existsSync, mkdirSync } from 'fs'
 import { readFile, rm } from 'fs/promises'
 import { join } from 'path'
 import { promisify } from 'util'
@@ -241,6 +241,17 @@ function ollamaInstallerLocationArgs(allowJunctions = false): string[] {
   return root ? [`/DIR=${join(root, 'ollama-app')}`, ...(allowJunctions ? ['/NOREDIRECTIONGUARD'] : [])] : []
 }
 
+/** Inno Setup copie son installeur et extrait des fichiers dans TEMP. Le journal du PC de test montre
+ * que ce dossier restait sur C: malgré une installation sur D:. Ne changer que l'environnement du
+ * sous-processus Ollama, pas celui de Jaris ni les préférences Windows de l'utilisateur. */
+function ollamaInstallerEnv(): NodeJS.ProcessEnv {
+  const root = getStorageRoot()
+  if (!root) return process.env
+  const tempDir = join(downloadsDir(), 'ollama-temp')
+  mkdirSync(tempDir, { recursive: true })
+  return { ...process.env, TEMP: tempDir, TMP: tempDir }
+}
+
 /**
  * Avancement remonté pendant la mise à jour d'Ollama (étape 112) — `target` est ajouté par main.ts, qui seul
  * sait sur quel canal l'envoyer : ce module n'a pas à connaître la forme exacte du message IPC.
@@ -280,7 +291,7 @@ async function downloadAndLaunchOfficialInstaller(onProgress?: OllamaUpdateProgr
     // et pouvoir interagir avec cette fenêtre pour terminer l'installation.
     // Mise à jour lancée sans attendre sa fin : pas de second essai possible après lecture du journal.
     // Le fichier est vérifié signé juste au-dessus ; les jonctions Jaris doivent rester utilisables.
-    spawn(installerPath, ollamaInstallerLocationArgs(true), { detached: true, stdio: 'ignore', windowsHide: false })
+    spawn(installerPath, ollamaInstallerLocationArgs(true), { detached: true, stdio: 'ignore', windowsHide: false, env: ollamaInstallerEnv() })
       .on('error', () => {
         // Rien à faire : updateOllama() traite déjà `false` (renvoyé plus bas si le téléchargement échoue)
         // comme un échec de cette méthode et retombe sur winget — un échec asynchrone du spawn lui-même,
@@ -350,7 +361,10 @@ export async function installOllamaSilently(onProgress: (message: string, percen
     const args = silent ? ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'] : ['/NORESTART']
     // Inno Setup prend en charge /LOG= et Ollama active ses logs d'installation. Le chemin fixe permet de
     // retrouver la vraie erreur sur la machine concernée, même après fermeture de l'écran d'installation.
-    const proc = spawn(installerPath, [...args, ...ollamaInstallerLocationArgs(allowJunctions), `/LOG=${logPath}`], { windowsHide: silent })
+    const proc = spawn(installerPath, [...args, ...ollamaInstallerLocationArgs(allowJunctions), `/LOG=${logPath}`], {
+      windowsHide: silent,
+      env: ollamaInstallerEnv()
+    })
     proc.on('error', (err) => resolve(`Windows n'a pas pu ouvrir l'installeur Ollama : ${err.message}`))
     proc.on('close', (code) => resolve(code === 0 ? null : `L'installeur Ollama s'est arrêté avec le code ${code ?? 'inconnu'}.`))
   })
@@ -759,7 +773,11 @@ export async function installDockerDesktop(onProgress: (message: string) => void
   const exitCode = await new Promise<number | null>((resolve) => {
     // Étape 143 : dans le dossier de Jaris quand il y en a un (programme ET disque virtuel où vivent les images),
     // avec les indicateurs officiels de Docker — sinon Docker se mettrait sur C quoi que Léo ait choisi.
-    const proc = spawn(installerPath, ['install', '--quiet', '--accept-license', ...dockerInstallFlags(targetRoot ?? getStorageRoot())], { windowsHide: true })
+    const root = targetRoot ?? getStorageRoot()
+    const tempDir = root ? join(root, 'downloads', 'docker-temp') : null
+    if (tempDir) mkdirSync(tempDir, { recursive: true })
+    const env = tempDir ? { ...process.env, TEMP: tempDir, TMP: tempDir } : process.env
+    const proc = spawn(installerPath, ['install', '--quiet', '--accept-license', ...dockerInstallFlags(root)], { windowsHide: true, env })
     proc.on('error', () => resolve(null))
     proc.on('close', (code) => resolve(code))
   })

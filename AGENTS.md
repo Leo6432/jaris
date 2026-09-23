@@ -4337,3 +4337,12 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `/NOREDIRECTIONGUARD` qu'après vérification de sa signature Ollama Inc. et un premier journal qui
   confirme encore le code 448 sur une autre jonction Jaris. Tester la suite exacte : premier essai sûr,
   reprise ciblée, puis fenêtre visible si nécessaire — sans second téléchargement.
+
+- **Étape 151, choisir D: ne déplace pas le dossier TEMP des installeurs et de pip.**
+  Le journal réel d'Ollama après installation sur D: montre encore un dossier temporaire sous
+  `C:\\Users\\happy\\AppData\\Local\\Temp\\is-...`. Inno Setup documente que son chargeur se copie dans
+  le TEMP de l'utilisateur ; pip décompresse aussi les grosses roues PyTorch dans son TEMP malgré
+  `--no-cache-dir` (qui ne désactive que le cache persistant). Fournir `TEMP` et `TMP` pointant vers la
+  racine Jaris sur D: aux sous-processus d'installation Ollama/Docker, et `TEMP`/`TMP`/`TMPDIR` au Python
+  géré par Jaris. Ne pas modifier les variables globales de Windows. Une baisse du libre sur C: pendant
+  l'installation doit être vérifiée aussi APRÈS la fin, car des fichiers temporaires sont effacés.
