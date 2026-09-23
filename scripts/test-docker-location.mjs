@@ -37,8 +37,8 @@ test('installation dans le dossier de Jaris avec les indicateurs officiels, rien
   assert.deepEqual([...dockerInstallFlags(null)], [])
   const flags = dockerInstallFlags('D:/Jaris-data')
   assert.equal(flags.length, 2)
-  assert.match(flags[0], /^--installation-dir=D:\/Jaris-data.docker$/)
-  assert.match(flags[1], /^--wsl-default-data-root=D:\/Jaris-data.docker-data$/)
+  assert.match(flags[0], /^--installation-dir=D:[\\/]Jaris-data[\\/]docker$/)
+  assert.match(flags[1], /^--wsl-default-data-root=D:[\\/]Jaris-data[\\/]docker-data$/)
 })
 
 test('l’installation de Docker par Jaris passe bien ces indicateurs', () => {

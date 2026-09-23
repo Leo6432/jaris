@@ -4183,3 +4183,8 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `test-docker-location.mjs`. Chaque garde-fou vérifié en le retirant temporairement.
   **Non vérifiable ici (pas de Windows)** : les vraies jonctions NTFS avec Ollama/Inno Setup, la
   désinstallation de Docker, la réinstallation du programme par `/D=` — à confirmer par Léo.
+  **La CI (Windows) a refusé le premier envoi : deux de MES tests, écrits sous Linux, supposaient `/` comme
+  séparateur** (une regex sur `D:/Jaris-data`, et un faux `isInside` en `startsWith(p + '/')`). Le code, lui,
+  était juste — et le vrai garde-fou a même tenu sous Windows (copie refusée, « rien n'a été déplacé »).
+  **Leçon générale : un test qui manipule des chemins doit passer par `path` (join/relative/sep), jamais par
+  un `/` écrit en dur — le dépôt se teste sous Linux ici mais la CI tourne sous Windows.**

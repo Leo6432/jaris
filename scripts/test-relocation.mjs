@@ -63,7 +63,11 @@ function setup({ dockerPlan = { action: 'none' }, dockerUninstallOk = true } = {
   const dockerLocation = {
     DOCKER_APP_SUBDIR: 'docker',
     DOCKER_DATA_SUBDIR: 'docker-data',
-    isInside: (c, p) => c === p || c.startsWith(p + '/'),
+    // Même règle que le vrai isInside : séparateur du système (\\ sous Windows, où tourne la CI).
+    isInside: (c, p) => {
+      const rel = nodeRequire('path').relative(p, c)
+      return rel === '' || (!rel.startsWith('..') && !nodeRequire('path').isAbsolute(rel))
+    },
     planDockerMove: async () => {
       if (dockerPlan instanceof Error) throw dockerPlan
       return dockerPlan
