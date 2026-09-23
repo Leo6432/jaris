@@ -37,11 +37,15 @@ export async function runFirstRunSetup(onProgress: (progress: RuntimeSetupProgre
 
   if (!status.ollamaReady) {
     onProgress({ step: 'ollama', message: "Installation d'Ollama (le moteur de conversation)…" })
-    const installed = await installOllamaSilently((message, percent) => onProgress({ step: 'ollama', message, percent }))
+    let lastOllamaMessage = ''
+    const installed = await installOllamaSilently((message, percent) => {
+      lastOllamaMessage = message
+      onProgress({ step: 'ollama', message, percent })
+    })
     if (!installed) {
       onProgress({
         step: 'ollama',
-        message: "Ollama n'a pas pu s'installer tout seul. Jaris réessaiera, ou tu peux l'installer depuis ollama.com/download.",
+        message: `Ollama n'a pas pu s'installer. ${lastOllamaMessage || "Réessaie depuis Jaris ; si le problème persiste, installe Ollama depuis ollama.com/download."}`,
         failed: true
       })
     }

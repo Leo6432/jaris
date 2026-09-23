@@ -4319,3 +4319,11 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   totalement neuve, pas seulement dans un dossier `downloads` précréé. Lors d'un déplacement complet,
   Docker doit aussi être réinstallé tout de suite avec ses chemins programme et données sur la nouvelle
   racine ; si cela échoue, le message final doit dire explicitement que cette partie reste à faire.
+
+- **Étape 149, installation d'Ollama sur un autre PC : ne jamais remplacer l'échec réel par « installe-le
+  depuis le site ».** Le premier lancement renvoyait un booléen et finissait sur une phrase générique,
+  impossible de savoir si le téléchargement, l'ouverture de l'exécutable ou l'installeur avait échoué. Les
+  options silencieuses sont bien celles du script officiel d'Ollama. Si elles échouent, rouvrir le MÊME
+  installeur en mode visible (sans télécharger encore 1,5 Go), garder le code de sortie et le journal Inno
+  Setup, puis afficher ces détails dans le message d'échec final. Un succès n'est pas prouvé par la seule
+  sortie de l'installeur : relire aussi l'état réel de l'installation.

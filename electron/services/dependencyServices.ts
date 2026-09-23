@@ -2,7 +2,7 @@ import { dockerInstallFlags } from './dockerLocation'
 import { downloadsDir, getStorageRoot } from './storageRoot'
 import { exec, execSync, spawn, type ChildProcess } from 'child_process'
 import { existsSync } from 'fs'
-import { rm } from 'fs/promises'
+import { readFile, rm } from 'fs/promises'
 import { join } from 'path'
 import { promisify } from 'util'
 import { config } from '../config'
@@ -295,6 +295,7 @@ export async function isOllamaInstalled(): Promise<boolean> {
 export async function installOllamaSilently(onProgress: (message: string, percent?: number) => void): Promise<boolean> {
   onProgress("Téléchargement d'Ollama…", 0)
   const installerPath = join(downloadsDir(), 'JarisOllamaSetup.exe')
+  const logPath = join(downloadsDir(), 'JarisOllamaSetup.log')
   try {
     // 1,5 Go (mesuré) : l'ancien plafond de 120 secondes sur le téléchargement ENTIER exigeait 100 Mbit/s
     // soutenus, donc le tout premier lancement de Jaris échouait à installer Ollama sur la quasi-totalité
@@ -314,20 +315,40 @@ export async function installOllamaSilently(onProgress: (message: string, percen
     return false
   }
 
-  onProgress("Installation d'Ollama en cours…")
-  const installed = await new Promise<boolean>((resolve) => {
-    const proc = spawn(installerPath, ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'], { windowsHide: true })
-    proc.on('error', () => resolve(false))
-    proc.on('close', (code) => resolve(code === 0))
+  const runInstaller = (silent: boolean): Promise<string | null> => new Promise((resolve) => {
+    const args = silent ? ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'] : ['/NORESTART']
+    // Inno Setup prend en charge /LOG= et Ollama active ses logs d'installation. Le chemin fixe permet de
+    // retrouver la vraie erreur sur la machine concernée, même après fermeture de l'écran d'installation.
+    const proc = spawn(installerPath, [...args, `/LOG=${logPath}`], { windowsHide: silent })
+    proc.on('error', (err) => resolve(`Windows n'a pas pu ouvrir l'installeur Ollama : ${err.message}`))
+    proc.on('close', (code) => resolve(code === 0 ? null : `L'installeur Ollama s'est arrêté avec le code ${code ?? 'inconnu'}.`))
   })
+
+  onProgress("Installation d'Ollama en cours…")
+  let failure = await runInstaller(true)
+  if (failure) {
+    // L'installation silencieuse masque les boîtes d'erreur. Une seule reprise avec la fenêtre officielle
+    // laisse voir le problème et permet de terminer sans retélécharger 1,5 Go.
+    onProgress("L'installation silencieuse d'Ollama a échoué. Son installeur s'ouvre : termine les étapes affichées…")
+    failure = await runInstaller(false)
+  }
   // 1,5 Go qui n'a plus aucune utilité une fois l'installation terminée (réussie ou non).
   await rm(installerPath, { force: true }).catch(() => {})
-  if (!installed) return false
+  if (failure) {
+    const installerLog = await readFile(logPath, 'utf8').catch(() => '')
+    const detail = installerLog.split(/\r?\n/).filter((line) => /error|failed|cannot|denied|erreur|impossible|refus/i.test(line)).at(-1)?.trim()
+    onProgress(`${failure}${detail ? ` Détail : ${detail.slice(-300)}.` : ''} Journal : ${logPath}`)
+    return false
+  }
 
   // L'installeur rend la main avant qu'Ollama ait fini de démarrer son serveur : sans cette attente, la
   // suite (téléchargement des modèles) partirait sur un service qui ne répond pas encore.
   onProgress("Démarrage d'Ollama…")
   await waitUntil(() => isUp(`${config.ollama.host}/api/tags`), 60000)
+  if (!(await isOllamaInstalled())) {
+    onProgress(`L'installeur Ollama s'est terminé sans erreur, mais Jaris ne trouve ni son programme ni son serveur. Journal : ${logPath}`)
+    return false
+  }
   return true
 }
 
