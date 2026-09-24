@@ -4619,3 +4619,43 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   l'ancien code : 3 tests échouent. Vérifié aussi contre le vrai Ollama : fenêtre de 2048 → `ContextFullError`,
   fenêtre de 8192 → 7 376 caractères de code. **Non vérifié en usage réel** avec qwen3.6:35b-a3b sur la
   machine de Léo (trop gros pour ce conteneur).
+
+- **Étape 160, Léo : « ça sert à quoi d'avoir un modèle de code qwen3.6:35b-a3b moins fort que le puissant
+  qwen3.8:27b ? » puis « que tous les modèles soient au même endroit, pas des modèles code, pas des modèles
+  rapide : Jaris choisit le plus rapide dans tous les modèles, le meilleur pour le code, ça peut être des
+  modèles puissants — il n'y a plus de catégorie, sauf pour que l'utilisateur voie quel modèle est rapide ».**
+  Cause du constat : chaque rôle ne cherchait QUE dans sa propre liste (CODE_CANDIDATES pour Code), donc le
+  modèle Code ne pouvait jamais être un modèle « Puissant », même bien plus intelligent (34 contre 18).
+  Deux questions à choix posées avant de coder : Léo a répondu « le plus rapide, comme d'habitude mais dans
+  tous les modèles » pour Rapide, et « le plus intelligent, même lent » pour Code — annoncé AVANT de coder que
+  qwen3.8:27b, dense, déborde sur la RAM d'une carte de 8 Go et sera nettement plus lent (estimation ~5-6×).
+  **Nouvelle règle** (`computeModelPicks`, hardwareScan.ts) : une liste unique `ALL_MODELS` (les anciennes
+  listes restent le catalogue, avec l'historique de recherche de chaque modèle), et chaque rôle pose SA
+  question à tous les modèles, toujours parmi les plus fiables à leur test :
+  Rapide = le plus rapide (vitesse publiée par Artificial Analysis, repère choisi par Léo à l'étape 131), sur
+  la carte seule ; Médium = le plus intelligent sur la carte seule ; Puissant = le plus intelligent, RAM
+  comprise ; Code = pareil, avec le test de code quand le modèle l'a passé, sinon son test de conversation ;
+  Vision = le plus intelligent parmi ceux qui lisent une image (seule restriction restante : une capacité
+  réelle du modèle, pas une catégorie). Résultat simulé sur 8 Go : Rapide ministral-3:3b (221 tok/s publiés),
+  Médium qwen3.5:9b, Puissant ET Code qwen3.8:27b — qwen3.6:35b-a3b (23 Go) n'est plus utilisé.
+  **Deux pièges attrapés en le faisant :**
+  1. **Des scores sur des échelles différentes** : le test de code est sur 3, celui de conversation sur 6.
+     Comparés en nombre brut, n'importe quel 6/6 battait un 3/3 pourtant parfait. Comparés désormais en
+     PROPORTION (`parseToolScore`, et le tri de « Tous les modèles » qui mélange maintenant les deux).
+  2. **Le repli en direct (`pickSafeModel`) aurait saboté Rapide** : il prenait « le plus gros modèle installé
+     qui tient dans la VRAM libre ». Avec des petites listes par rôle, ça restait dans le même genre de modèle ;
+     dans une liste unique, Rapide aurait été remplacé par un gros modèle plus lent à CHAQUE question. Il garde
+     maintenant le modèle choisi tant qu'il tient, et ne remplace que celui qui ne tient plus.
+  **Leçon générale : quand on fusionne des listes séparées en une seule, toute règle qui disait « le plus
+  gros » ou « le premier qui tient » change de sens** — elle était sûre DANS une petite liste homogène, elle
+  choisit autre chose dans la grande. Relire chaque consommateur de l'ancienne liste, pas seulement le calcul
+  principal.
+  « Tous les modèles » : un seul tableau (plus un par palier), chaque modèle une fois, avec une colonne
+  Catégorie (Rapide ≤ 3 Go, Moyen ≤ 10 Go, Puissant au-delà, « · lit les images » quand c'est le cas) —
+  affichée seulement, jamais utilisée pour choisir.
+  Régression : `node --test scripts/test-hardwarescan-single-pool.mjs` (sur les VRAIS scores du dépôt : Code
+  = Puissant sur 8 Go, Rapide = le plus rapide, Rapide/Médium jamais sur la RAM même avec 128 Go, Médium peut
+  être un gros modèle sur 24 Go, Vision seulement parmi les lecteurs d'image, 3/3 ≡ 6/6, repli qui garde le
+  modèle qui tient, une seule ligne par modèle). Vérifié en remettant l'ancien code : les 8 échouent.
+  **À faire par Léo** : relancer « Retester la configuration » pour que le profil prenne les nouveaux choix ;
+  la vitesse réelle de qwen3.8:27b en mode Code sur sa carte n'est pas vérifiée ici.

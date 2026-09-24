@@ -43,9 +43,8 @@ import { ReliabilityBadge } from './OptionsMenu'
  *
  * Étape 128, Léo : "ajoute pouvoir filtrer les models par la ram, par de la moin de vram a la plus, le plus
  * rapide, le plus inteligent, le plus appelle outils" — en réalité un TRI (pas un filtre qui masquerait des
- * lignes), sur 4 colonnes déjà affichées : VRAM, appel d'outils, Intelligence, Vitesse. Un SEUL état de tri
- * partagé par les 5 tableaux (un par palier) : cliquer "VRAM nécessaire" trie chacun des 5 en même temps,
- * plutôt que 5 états indépendants à gérer un par un pour une même colonne. Cliquer une deuxième fois sur la
+ * lignes), sur 4 colonnes déjà affichées : VRAM, appel d'outils, Intelligence, Vitesse. Un seul tableau depuis
+ * l'étape 160 (tous les modèles au même endroit), donc un seul état de tri. Cliquer une deuxième fois sur la
  * même colonne inverse le sens ; changer de colonne repart d'un sens de lecture "utile" par défaut — VRAM
  * repart croissante (Léo : "de la moin de vram a la plus"), les 3 autres repartent décroissantes ("le
  * plus" rapide/intelligent/appelle outils, la meilleure valeur en tête). Une valeur absente (`null`, "Non
@@ -83,11 +82,16 @@ const SORT_CHIP_LABELS: Record<SortKey, string> = {
 
 const SORT_KEYS: SortKey[] = ['vramGb', 'toolCalling', 'artificialAnalysisIndex', 'artificialAnalysisSpeed']
 
-/** "6/6"/"2/3" -> 6/2, absent ou illisible -> null (toujours en fin de tri, jamais confondu avec un vrai 0). */
+/**
+ * "6/6" -> 1, "2/3" -> 0,67, absent ou illisible -> null (toujours en fin de tri, jamais confondu avec un vrai
+ * 0). En proportion depuis l'étape 160 : la liste unique mélange des tests sur 6 (conversation) et sur 3
+ * (code, vision) — en nombre brut, un 5/6 serait passé devant un 3/3 parfait.
+ */
 function toolScoreValue(toolCalling: string | null): number | null {
   if (!toolCalling) return null
-  const correct = Number(toolCalling.split('/')[0])
-  return Number.isFinite(correct) ? correct : null
+  const [correct, total] = toolCalling.split('/').map(Number)
+  if (!Number.isFinite(correct)) return null
+  return Number.isFinite(total) && total > 0 ? correct / total : correct
 }
 
 function sortValue(entry: ModelOverviewEntry, key: SortKey): number | null {
@@ -184,10 +188,7 @@ export default function AllModelsOverview(): JSX.Element {
     })
   }
 
-  const sortedGroups = useMemo(
-    () => overview?.groups.map((group) => ({ ...group, entries: sortEntries(group.entries, sort) })) ?? null,
-    [overview, sort]
-  )
+  const sortedEntries = useMemo(() => (overview ? sortEntries(overview.entries, sort) : null), [overview, sort])
 
   return (
     <div className="options-menu__all-models">
@@ -212,59 +213,62 @@ export default function AllModelsOverview(): JSX.Element {
                   <div className="options-page__tab-header">
                     <h3>Tous les modèles candidats</h3>
                     <p>
-                      Chaque modèle que Jaris sait choisir, tous rôles confondus — pas seulement ceux retenus
-                      pour ta machine, déjà visibles juste au-dessus.
+                      Tous les modèles que Jaris connaît, dans une seule liste. Pour chaque rôle, Jaris cherche
+                      dans toute la liste : le plus rapide pour Rapide, le plus intelligent qui tient sur ta carte
+                      pour Médium, le plus intelligent tout court pour Puissant et Code. La catégorie sert
+                      seulement à repérer les modèles rapides ou puissants.
                     </p>
                   </div>
                   {loading && <p className="capacity-scan__status">Chargement...</p>}
-                  {sortedGroups && <SortBar sort={sort} onSort={toggleSort} onReset={() => setSort(null)} />}
-                  {sortedGroups && (
+                  {sortedEntries && <SortBar sort={sort} onSort={toggleSort} onReset={() => setSort(null)} />}
+                  {/* Étape 160 : UN seul tableau. Chaque rôle de Jaris cherche dans tous les modèles ; la colonne
+                      Catégorie n'est qu'un repère pour lire la liste, jamais un critère de choix. */}
+                  {sortedEntries && (
                     <div className="options-menu__model-overview-scroll">
-                      {sortedGroups.map((group) => (
-                        <div key={group.tier} className="options-menu__model-group">
-                          <div className="options-menu__model-group-title">{group.tier}</div>
-                          <table className="options-menu__model-overview">
-                            <thead>
-                              <tr>
-                                <th>Modèle</th>
-                                <th>Utilisé par Jaris</th>
-                                <th className="options-menu__col-num">
-                                  <SortButton sortKey="vramGb" sort={sort} onSort={toggleSort} />
-                                </th>
-                                <th className="options-menu__col-num">
-                                  <SortButton sortKey="toolCalling" sort={sort} onSort={toggleSort} />
-                                </th>
-                                {/* Intelligence Index lu directement chez Artificial Analysis. */}
-                                <th className="options-menu__col-num" title="Artificial Analysis Intelligence Index v4.3.2">
-                                  <SortButton sortKey="artificialAnalysisIndex" sort={sort} onSort={toggleSort} />
-                                </th>
-                                <th
-                                  className="options-menu__col-num"
-                                  title="Vitesse de génération publiée par Artificial Analysis (tokens/s)"
-                                >
-                                  <SortButton sortKey="artificialAnalysisSpeed" sort={sort} onSort={toggleSort} />
-                                </th>
+                      <div className="options-menu__model-group">
+                        <table className="options-menu__model-overview">
+                          <thead>
+                            <tr>
+                              <th>Modèle</th>
+                              <th>Catégorie</th>
+                              <th>Utilisé par Jaris</th>
+                              <th className="options-menu__col-num">
+                                <SortButton sortKey="vramGb" sort={sort} onSort={toggleSort} />
+                              </th>
+                              <th className="options-menu__col-num">
+                                <SortButton sortKey="toolCalling" sort={sort} onSort={toggleSort} />
+                              </th>
+                              {/* Intelligence Index lu directement chez Artificial Analysis. */}
+                              <th className="options-menu__col-num" title="Artificial Analysis Intelligence Index v4.3.2">
+                                <SortButton sortKey="artificialAnalysisIndex" sort={sort} onSort={toggleSort} />
+                              </th>
+                              <th className="options-menu__col-num" title="Vitesse de génération publiée par Artificial Analysis (tokens/s)">
+                                <SortButton sortKey="artificialAnalysisSpeed" sort={sort} onSort={toggleSort} />
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sortedEntries.map((entry) => (
+                              <tr key={entry.model}>
+                                <td className="options-menu__model-name" title={entry.model}>
+                                  {formatModelName(entry.model)}
+                                </td>
+                                <td>
+                                  {entry.category ?? '—'}
+                                  {entry.readsImages ? ' · lit les images' : ''}
+                                </td>
+                                <td>{entry.usedIn?.length ? `Oui — ${entry.usedIn.join(', ')}` : 'Non'}</td>
+                                <td className="options-menu__col-num">{entry.vramGb} Go</td>
+                                <td className="options-menu__col-num">
+                                  <ReliabilityBadge value={entry.toolCalling} />
+                                </td>
+                                <td className="options-menu__col-num">{entry.artificialAnalysisIndex ?? 'Non publié'}</td>
+                                <td className="options-menu__col-num">{entry.artificialAnalysisSpeed ?? '—'}</td>
                               </tr>
-                            </thead>
-                            <tbody>
-                              {group.entries.map((entry) => (
-                                <tr key={entry.model}>
-                                  <td className="options-menu__model-name" title={entry.model}>
-                                    {formatModelName(entry.model)}
-                                  </td>
-                                  <td>{entry.usedIn?.length ? `Oui — ${entry.usedIn.join(', ')}` : 'Non'}</td>
-                                  <td className="options-menu__col-num">{entry.vramGb} Go</td>
-                                  <td className="options-menu__col-num">
-                                    <ReliabilityBadge value={entry.toolCalling} />
-                                  </td>
-                                  <td className="options-menu__col-num">{entry.artificialAnalysisIndex ?? 'Non publié'}</td>
-                                  <td className="options-menu__col-num">{entry.artificialAnalysisSpeed ?? '—'}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ))}
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
                 </div>

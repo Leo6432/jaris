@@ -182,12 +182,9 @@ export function useModelAnalysis(modelOverview: ModelOverviewResult | null): Mod
     etaFrozenRef.current = null
     // Tableau de suivi initialisé avec TOUS les candidats connus à "en attente" : sans ça, un modèle
     // n'apparaîtrait dans le tableau qu'au moment où une ligne le mentionne pour la première fois. Pas filtré
-    // par périmètre ici (ModelAnalysisProgress s'en charge à l'affichage, voir SCOPE_TO_TIER_LABEL) : garder
-    // le statut de TOUS les modèles, même hors périmètre, ne coûte rien et évite de le perdre au passage.
+    // par périmètre : garder le statut de TOUS les modèles ne coûte rien et évite de le perdre au passage.
     const initialStatus: Record<string, ModelRunStatus> = {}
-    for (const group of modelOverviewRef.current?.groups ?? []) {
-      for (const entry of group.entries) initialStatus[entry.model] = { kind: 'pending' }
-    }
+    for (const entry of modelOverviewRef.current?.entries ?? []) initialStatus[entry.model] = { kind: 'pending' }
     setModelRunStatus(initialStatus)
     try {
       return await window.jaris.runModelAnalysis(requestedScope)

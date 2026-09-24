@@ -57,18 +57,11 @@ const overrides = {
   getModelOverview: async () => ({
     vramGb: 8,
     codeModel: 'qwen2.5-coder:7b',
-    groups: [
-      {
-        tier: 'Rapide',
-        entries: [
-          { model: 'ministral-3:3b', vramGb: 3.0, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', intelligence: null, artificialAnalysisIndex: 5 },
-          { model: 'qwen3:1.7b', vramGb: 2, usedIn: [], toolCalling: null, intelligence: null, artificialAnalysisIndex: null }
-        ]
-      },
-      {
-        tier: 'Vision',
-        entries: [{ model: 'gemma4:31b', vramGb: 20, usedIn: ['Vision'], toolCalling: null, intelligence: null, artificialAnalysisIndex: null }]
-      }
+    // Étape 160 : une seule liste de modèles, chacun avec son étiquette (repère affiché seulement).
+    entries: [
+      { model: 'ministral-3:3b', vramGb: 3.0, category: 'Rapide', readsImages: true, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', intelligence: null, artificialAnalysisIndex: 5 },
+      { model: 'qwen3:1.7b', vramGb: 2, category: 'Rapide', readsImages: false, usedIn: [], toolCalling: null, intelligence: null, artificialAnalysisIndex: null },
+      { model: 'gemma4:31b', vramGb: 20, category: 'Puissant', readsImages: true, usedIn: ['Vision'], toolCalling: null, intelligence: null, artificialAnalysisIndex: null }
     ]
   })
 }
@@ -306,23 +299,26 @@ test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste d
     const contentX = await page.$eval('.options-page--models .options-page__workspace', (el) => el.getBoundingClientRect().x)
     assert.ok(contentX < 50, `le contenu doit occuper toute la largeur, sans gouttière de navigation : x=${contentX}`)
 
-    const groupTitles = await page.$$eval('.options-page--models .options-menu__model-group-title', (els) => els.map((el) => el.textContent))
-    assert.deepEqual(groupTitles, ['Rapide', 'Vision'], `paliers affichés : ${groupTitles.join(', ')}`)
+    // Étape 160 (Léo : « tous les modèles au même endroit ») : UN seul tableau, plus de titre par palier.
+    assert.equal(await page.$('.options-page--models .options-menu__model-group-title'), null, 'plus aucun tableau par palier')
+    assert.equal((await page.$$('.options-page--models table')).length, 1, 'un seul tableau attendu')
 
     const rows = await page.$$eval('.options-page--models tbody tr', (els) =>
       els.map((el) => Array.from(el.querySelectorAll('td')).map((td) => td.textContent?.trim()))
     )
-    assert.equal(rows.length, 3, `3 modèles attendus (2 Rapide + 1 Vision) : ${rows.length}`)
-    // ministral-3:3b : utilisé pour deux paliers, VRAM et Intelligence Index officiel (5).
-    assert.equal(rows[0][1], 'Oui — Rapide, Médium', `paliers actifs attendus : ${rows[0][1]}`)
-    assert.ok(rows[0][2].includes('3'), `VRAM du premier modèle : ${rows[0][2]}`)
-    assert.equal(rows[0][4], '5', `Intelligence Index attendu (5) : ${rows[0][4]}`)
-    // "Vitesse (Artificial Analysis)" (nouveau champ, étape 122) : "—" quand Artificial Analysis n'a pas
-    // publié de mesure de vitesse fiable pour ce modèle.
-    assert.equal(rows[0][5], '—', `Vitesse doit rester "—" sans mesure publiée : ${rows[0][5]}`)
+    assert.equal(rows.length, 3, `3 modèles attendus : ${rows.length}`)
+    // La catégorie reste visible comme repère (Léo : « pour que les utilisateurs voient quel modèle est rapide »).
+    assert.equal(rows[0][1], 'Rapide · lit les images', `catégorie affichée : ${rows[0][1]}`)
+    assert.equal(rows[2][1], 'Puissant · lit les images', `catégorie affichée : ${rows[2][1]}`)
+    // ministral-3:3b : utilisé pour deux rôles, VRAM et Intelligence Index officiel (5).
+    assert.equal(rows[0][2], 'Oui — Rapide, Médium', `rôles actifs attendus : ${rows[0][2]}`)
+    assert.ok(rows[0][3].includes('3'), `VRAM du premier modèle : ${rows[0][3]}`)
+    assert.equal(rows[0][5], '5', `Intelligence Index attendu (5) : ${rows[0][5]}`)
+    // "Vitesse (Artificial Analysis)" : "—" quand Artificial Analysis n'a pas publié de mesure fiable.
+    assert.equal(rows[0][6], '—', `Vitesse doit rester "—" sans mesure publiée : ${rows[0][6]}`)
     // qwen3:1.7b : aucun score officiel connu, clairement indiqué sans chiffre inventé.
-    assert.equal(rows[1][1], 'Non', `le modèle non retenu doit être indiqué : ${rows[1][1]}`)
-    assert.equal(rows[1][4], 'Non publié', `absence de score officiel attendue : ${rows[1][4]}`)
+    assert.equal(rows[1][2], 'Non', `le modèle non retenu doit être indiqué : ${rows[1][2]}`)
+    assert.equal(rows[1][5], 'Non publié', `absence de score officiel attendue : ${rows[1][5]}`)
 
     // "Fermer" revient sur la page Options, toujours sur l'onglet Modèles — elle n'a jamais été fermée.
     await page.click('.options-page--models .options-page__close')
@@ -412,29 +408,23 @@ test('cliquer une colonne trie "Tous les modèles" ; une seconde fois inverse le
     await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
 
-    const rapideModels = () =>
-      page.$$eval('.options-page--models .options-menu__model-group', (groups) => {
-        const rapide = groups.find((g) => g.querySelector('.options-menu__model-group-title')?.textContent === 'Rapide')
-        return Array.from(rapide.querySelectorAll('tbody tr')).map((tr) => tr.querySelector('.options-menu__model-name')?.title)
-      })
+    const models = () =>
+      page.$$eval('.options-page--models tbody tr', (rows) => rows.map((tr) => tr.querySelector('.options-menu__model-name')?.title))
 
-    // Ordre par défaut (aucun tri actif) : celui renvoyé tel quel par getModelOverview, ministral-3:3b avant
-    // qwen3:1.7b dans le faux pont de ce test.
-    assert.deepEqual(await rapideModels(), ['ministral-3:3b', 'qwen3:1.7b'], 'ordre par défaut inattendu')
+    // Ordre par défaut (aucun tri actif) : celui renvoyé tel quel par getModelOverview.
+    assert.deepEqual(await models(), ['ministral-3:3b', 'qwen3:1.7b', 'gemma4:31b'], 'ordre par défaut inattendu')
 
-    // Premier clic sur "VRAM nécessaire" : croissante par défaut (Léo : "de la moin de vram a la plus") —
-    // qwen3:1.7b (2 Go) doit passer devant ministral-3:3b (3 Go).
+    // Premier clic sur "VRAM nécessaire" : croissante par défaut (Léo : "de la moin de vram a la plus").
     await page.locator('.options-menu__sort-button', { hasText: 'VRAM nécessaire' }).first().click()
-    assert.deepEqual(await rapideModels(), ['qwen3:1.7b', 'ministral-3:3b'], 'tri croissant par VRAM attendu au premier clic')
+    assert.deepEqual(await models(), ['qwen3:1.7b', 'ministral-3:3b', 'gemma4:31b'], 'tri croissant par VRAM attendu au premier clic')
 
     // Second clic sur la MÊME colonne : inverse le sens plutôt que de rester bloqué en croissant.
     await page.locator('.options-menu__sort-button', { hasText: 'VRAM nécessaire' }).first().click()
-    assert.deepEqual(await rapideModels(), ['ministral-3:3b', 'qwen3:1.7b'], 'un second clic doit inverser le sens du tri')
+    assert.deepEqual(await models(), ['gemma4:31b', 'ministral-3:3b', 'qwen3:1.7b'], 'un second clic doit inverser le sens du tri')
 
-    // "Appel d'outils" : décroissant par défaut (Léo : "le plus appelle outils" — la meilleure valeur en
-    // tête). qwen3:1.7b (aucun score connu, null) doit toujours finir en dernier, jamais remonter en tête
-    // par erreur — sinon un modèle jamais testé se ferait passer pour "le meilleur en appel d'outils".
+    // "Appel d'outils" : décroissant par défaut. Un score absent finit toujours en dernier, jamais en tête.
     await page.locator('.options-menu__sort-button', { hasText: "Appel d'outils" }).first().click()
-    assert.deepEqual(await rapideModels(), ['ministral-3:3b', 'qwen3:1.7b'], 'un score absent doit toujours finir en fin de tri')
+    const byTools = await models()
+    assert.equal(byTools[0], 'ministral-3:3b', 'le seul modèle testé doit passer en tête')
   })
 })

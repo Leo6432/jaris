@@ -519,7 +519,7 @@ export async function converse(
     if (chosenModel) return { model: chosenModel, think: THINK_LEVEL[t] }
     let m = models[t]
     if (live.freeVramGb !== null) {
-      const safeModel = pickSafeModel(t, live.freeVramGb, installedModels, m)
+      const safeModel = pickSafeModel(live.freeVramGb, installedModels, m)
       if (safeModel !== m) {
         onLog?.(`VRAM libre actuelle : ${live.freeVramGb} Go (insuffisant pour ${m}) : repli sur ${safeModel}.`)
         m = safeModel

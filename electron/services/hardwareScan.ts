@@ -8,17 +8,15 @@ import { getInstalledModelSizeBytes, getModelInfo, listInstalledModels } from '.
 import type {
   CapacityScanResult,
   ContextLengthOptions,
+  ModelCategory,
   ModelOverviewEntry,
   ModelOverviewResult,
   ModelRole,
-  ModelTiers,
   MyModelPicks,
   Profile
 } from '../../shared/ipc'
 
 const execAsync = promisify(exec)
-
-type Tier = keyof ModelTiers
 
 /**
  * VRAM gardée hors de portée des modèles d'Ollama : Windows (affichage), le pilote et la fenêtre de Jaris. À
@@ -239,12 +237,6 @@ const LARGE_RAM_OFFLOAD_MODELS = new Set([
   'qwen3-coder-next'
 ])
 
-const TIER_CANDIDATES: Record<Tier, ModelCandidate[]> = {
-  flash: FLASH_CANDIDATES,
-  medium: MEDIUM_CANDIDATES,
-  large: LARGE_CANDIDATES
-}
-
 // Le modèle de vision (étape 6) était fixe (qwen3-vl:8b, ~8 Go de VRAM) pour tout le monde : sur une carte
 // contrainte, il ne tient pas à côté du modèle de conversation déjà chargé, forçant Ollama à décharger/
 // recharger à chaque appel (des dizaines de secondes). Mêmes tailles/logique que les paliers de conversation
@@ -384,19 +376,55 @@ const CODE_CANDIDATES: ModelCandidate[] = [
 // le fabricant d'origine — même risque déjà écarté ailleurs dans ce fichier (voir granite4.1:8b) d'importer
 // une requantification tierce non vérifiée à la place du modèle officiel.
 /**
+ * Étape 160, Léo : « que tous les modèles soient au même endroit, pas des modèles code, pas des modèles
+ * rapide : Jaris choisit le plus rapide dans tous les modèles, le meilleur pour le code — ça peut être des
+ * modèles puissants — il n'y a plus de catégorie, sauf pour que l'utilisateur voie quel modèle est rapide ».
+ * Déclencheur : le modèle Code (qwen3.6:35b-a3b, Intelligence 18) était moins fort que le Puissant
+ * (qwen3.8:27b, 34), simplement parce que le Code ne cherchait QUE dans CODE_CANDIDATES.
+ *
+ * Les listes ci-dessus restent le CATALOGUE (avec l'historique de recherche de chaque modèle), mais plus aucun
+ * rôle ne se limite à « sa » liste : chaque rôle cherche dans ALL_MODELS, avec son propre critère (voir
+ * computeModelPicks). Seules les CAPACITÉS réelles d'un modèle restreignent encore un rôle : lire une image
+ * (Vision) — un fait sur le modèle, pas une catégorie.
+ */
+const ALL_MODELS: ModelCandidate[] = (() => {
+  const byModel = new Map<string, ModelCandidate>()
+  for (const c of [...FLASH_CANDIDATES, ...MEDIUM_CANDIDATES, ...LARGE_CANDIDATES, ...VISION_CANDIDATES, ...CODE_CANDIDATES]) {
+    if (!byModel.has(c.model)) byModel.set(c.model, c)
+  }
+  // Du plus gros au plus petit : l'ordre dont pickForBudget a besoin (premier qui tient = le plus gros).
+  return [...byModel.values()].sort((a, b) => b.vramGb - a.vramGb)
+})()
+
+/** Modèles qui lisent une image (vision native vérifiée sur ollama.com, voir VISION_CANDIDATES). */
+const READS_IMAGES = new Set(VISION_CANDIDATES.map((c) => c.model))
+
+/**
+ * Modèles qui savent tenir une conversation avec appel d'outils — tous sauf les spécialistes du code, jamais
+ * testés en conversation. Sert au repli en direct (pickSafeModel) : jamais basculer une conversation sur un
+ * modèle qui n'a pas fait ses preuves pour ça.
+ */
+const CONVERSATION_MODELS = new Set([...FLASH_CANDIDATES, ...MEDIUM_CANDIDATES, ...LARGE_CANDIDATES].map((c) => c.model))
+
+/**
+ * Étiquette AFFICHÉE seulement (Léo : « garde quand même rapide, moyen, pour que les utilisateurs voient ») —
+ * n'entre dans AUCUN choix. Seuils tirés des anciennes listes : Rapide allait jusqu'à 3 Go, Médium jusqu'à
+ * ~10 Go, Puissant commençait à 14 Go.
+ */
+export function modelCategory(vramGb: number): ModelCategory {
+  if (vramGb <= 3) return 'Rapide'
+  if (vramGb <= 10) return 'Moyen'
+  return 'Puissant'
+}
+
+/**
  * Tous les identifiants de modèles candidats (tous paliers + vision confondus, sans doublon), pour l'étape
  * 29 (veille) : comparé au dernier snapshot connu du profil pour détecter les modèles ajoutés à ce fichier
  * depuis (nouvelle version de Jaris) et prévenir l'utilisateur au lieu d'attendre qu'il relance l'analyse
  * de lui-même.
  */
 export function getAllCandidateModelIds(): string[] {
-  const ids = new Set<string>()
-  for (const list of Object.values(TIER_CANDIDATES)) {
-    for (const c of list) ids.add(c.model)
-  }
-  for (const c of VISION_CANDIDATES) ids.add(c.model)
-  for (const c of CODE_CANDIDATES) ids.add(c.model)
-  return [...ids]
+  return ALL_MODELS.map((c) => c.model)
 }
 
 function pickForBudget(candidates: ModelCandidate[], budgetGb: number): string {
@@ -472,11 +500,24 @@ export async function getLiveGpuStatus(): Promise<LiveGpuStatus> {
  * modèle à chaque question, annulant le choix fait par pickBestModelsFromBenchmark. Ollama gère lui-même le
  * débordement RAM à chaque chargement, pas besoin de ce filet de sécurité pour ces candidats-là.
  */
-export function pickSafeModel(tier: Tier, freeVramGb: number, installedModels: string[], fallbackModel: string): string {
+export function pickSafeModel(freeVramGb: number, installedModels: string[], fallbackModel: string): string {
   if (LARGE_RAM_OFFLOAD_MODELS.has(fallbackModel)) return fallbackModel
-  const installedCandidates = TIER_CANDIDATES[tier].filter((c) => installedModels.includes(c.model))
+  return pickSafeAmong(ALL_MODELS.filter((c) => CONVERSATION_MODELS.has(c.model)), freeVramGb, installedModels, fallbackModel)
+}
+
+/**
+ * Étape 160 : le modèle choisi est GARDÉ tant qu'il tient dans la VRAM libre — seul un modèle qui ne tient
+ * plus est remplacé, par le plus gros modèle installé qui tient. Avant, chaque rôle avait sa propre petite
+ * liste, donc « le plus gros qui tient » restait dans le même genre de modèle ; dans une liste unique, sans ce
+ * garde, le modèle Rapide aurait été remplacé par un plus gros (plus lent) à chaque question.
+ */
+function pickSafeAmong(pool: ModelCandidate[], freeVramGb: number, installedModels: string[], fallbackModel: string): string {
+  const budget = Math.max(0, freeVramGb - LIVE_SAFETY_MARGIN_GB)
+  const current = pool.find((c) => c.model === fallbackModel)
+  if (current && current.vramGb <= budget) return fallbackModel
+  const installedCandidates = pool.filter((c) => installedModels.includes(c.model))
   if (installedCandidates.length === 0) return fallbackModel
-  return pickForBudget(installedCandidates, Math.max(0, freeVramGb - LIVE_SAFETY_MARGIN_GB))
+  return pickForBudget(installedCandidates, budget)
 }
 
 /**
@@ -486,9 +527,7 @@ export function pickSafeModel(tier: Tier, freeVramGb: number, installedModels: s
  * ce qui forcerait sinon Ollama à décharger/recharger un gros modèle et ferait traîner look_at_screen.
  */
 export function pickSafeVisionModel(freeVramGb: number, installedModels: string[], fallbackModel: string): string {
-  const installedCandidates = VISION_CANDIDATES.filter((c) => installedModels.includes(c.model))
-  if (installedCandidates.length === 0) return fallbackModel
-  return pickForBudget(installedCandidates, Math.max(0, freeVramGb - LIVE_SAFETY_MARGIN_GB))
+  return pickSafeAmong(ALL_MODELS.filter((c) => READS_IMAGES.has(c.model)), freeVramGb, installedModels, fallbackModel)
 }
 
 // Curseur de longueur de contexte (Options -> Modèles, demande de Léo : "jaris voit les model et regarde
@@ -911,15 +950,11 @@ export function parseLocalBenchmark(): Record<VerifiedTier, Map<string, LocalBen
   return results
 }
 
-const TIER_LABELS: Record<Tier, string> = { flash: 'Rapide', medium: 'Médium', large: 'Puissant' }
-
 /**
- * Vue d'ensemble des modèles candidats pour l'onglet Modèles, GROUPÉE PAR PALIER (Rapide/Médium/Puissant/
- * Vision/Code) plutôt qu'une liste unique tous paliers confondus : chaque palier n'a pas les mêmes colonnes
- * pertinentes (ex: Vision n'a pas de score d'intelligence MMLU-Pro, ça ne s'y applique pas — mais a bien sa
- * propre vitesse/fiabilité mesurées localement, voir VISION_TEST_CASES dans scripts/benchmark-models.mjs).
- * Un même modèle candidat à plusieurs paliers (ex: le plus petit, repli ultime de Rapide/Médium/Puissant)
- * apparaît dans chacun des groupes concernés — chaque liste doit rester une image complète de ce palier.
+ * Tous les modèles de Jaris dans UNE seule liste (étape 160, Léo : « enlève puissant, rapide dans tous les
+ * modèles, mais garde quand même rapide, moyen pour que les utilisateurs [voient] »). Plus de tableau par
+ * palier : chaque modèle apparaît une fois, avec son étiquette (Rapide/Moyen/Puissant, modelCategory), le fait
+ * qu'il lise les images, et les rôles où Jaris l'utilise. Trié du plus léger au plus lourd (Léo, étape 132).
  */
 export async function getModelOverview(profile?: Profile | null): Promise<ModelOverviewResult> {
   const localBenchmark = parseLocalBenchmark()
@@ -945,58 +980,32 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
   addUsage(activeModels.vision, 'Vision')
   addUsage(activeModels.code, 'Code')
 
-  // Priorité à une vraie mesure locale (le vrai benchmark a tourné sur CETTE machine pour ce modèle) —
-  // sinon, pour un modèle déjà vérifié par ailleurs (voir verified-tool-scores.md), la fiabilité partagée —
-  // sinon rien de connu. `tier` sélectionne la BONNE table
-  // du fichier (voir VerifiedTier) : `qwen3.5:4b` par ex. a un score différent en Conversation qu'en Vision.
-  const buildEntry = (model: string, modelVramGb: number, tier: VerifiedTier): ModelOverviewEntry => {
-    // Indépendant de local/verifiedTool ci-dessous : même un modèle déjà mesuré localement une fois reste
-    // exclu du PROCHAIN run de benchmark-models.mjs s'il est dans verified-tool-scores.md (voir son
-    // commentaire) — l'UI (ModelAnalysisProgress.tsx) en a besoin pour ne pas laisser ce modèle bloqué sur
-    // "En attente" pour toujours pendant un run, faute de ##MODEL_TESTING##/##MODEL_DONE## le concernant.
-    const verifiedSkip = verifiedToolScores[tier].has(model)
-    const artificialAnalysisIndex = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null
-    const artificialAnalysisSpeed = ARTIFICIAL_ANALYSIS_SPEED[model] ?? null
-    const local = localBenchmark[tier].get(model)
-    if (local) {
-      return { model, vramGb: modelVramGb, usedIn: usageByModel.get(model) ?? [], toolCalling: local.toolCalling, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, artificialAnalysisIndex, artificialAnalysisSpeed }
+  // Fiabilité affichée : le test de conversation quand le modèle l'a passé (le cas général), sinon celui de
+  // code, sinon celui de vision — une vraie mesure locale primant toujours sur un score vérifié partagé.
+  // Chaque table reste lue séparément (VerifiedTier) : un score vision ne remplace jamais un score conversation.
+  const scoreOf = (model: string): { toolCalling: string | null; verifiedSkip: boolean } => {
+    for (const tier of ['conversation', 'code', 'vision'] as VerifiedTier[]) {
+      const toolCalling = localBenchmark[tier].get(model)?.toolCalling ?? verifiedToolScores[tier].get(model) ?? null
+      if (toolCalling) return { toolCalling, verifiedSkip: verifiedToolScores[tier].has(model) }
     }
-    const verifiedTool = verifiedToolScores[tier].get(model)
-    if (verifiedTool) {
-      return {
-        model,
-        vramGb: modelVramGb,
-        usedIn: usageByModel.get(model) ?? [],
-        toolCalling: verifiedTool,
-        intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
-        verifiedSkip,
-        artificialAnalysisIndex,
-        artificialAnalysisSpeed
-      }
-    }
-    return { model, vramGb: modelVramGb, usedIn: usageByModel.get(model) ?? [], toolCalling: null, intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null, verifiedSkip, artificialAnalysisIndex, artificialAnalysisSpeed }
+    return { toolCalling: null, verifiedSkip: false }
   }
 
-  // Léo, sur la page "Tous les modèles" (Options → Modèles) : "fait pour rapide etc... celui qui faut le
-  // moin de ram avec le plus pour tout" — chaque palier trié par VRAM CROISSANTE (le moins gourmand
-  // d'abord), pour lire d'un coup d'œil le meilleur rapport capacité/VRAM sans avoir à comparer des chiffres
-  // dispersés. PUREMENT un tri d'AFFICHAGE, sur une COPIE (`.map` renvoie déjà un nouveau tableau, `.sort`
-  // le trie en place sans toucher à l'original) : `TIER_CANDIDATES`/`VISION_CANDIDATES`/`CODE_CANDIDATES`
-  // eux-mêmes restent en ordre décroissant, l'ordre dont `pickBestFrom` (computeModelPicks, plus bas dans ce
-  // fichier) a besoin pour choisir le VRAI modèle de Jaris — jamais reliés, une réponse à Léo confirmée avant
-  // de coder : ce tri ne change RIEN au modèle réellement choisi, ni chez lui ni chez personne d'autre.
-  const byAscendingVram = (entries: ModelOverviewEntry[]): ModelOverviewEntry[] => [...entries].sort((a, b) => a.vramGb - b.vramGb)
+  const entries: ModelOverviewEntry[] = [...ALL_MODELS]
+    .sort((a, b) => a.vramGb - b.vramGb)
+    .map((c) => ({
+      model: c.model,
+      vramGb: c.vramGb,
+      category: modelCategory(c.vramGb),
+      readsImages: READS_IMAGES.has(c.model),
+      usedIn: usageByModel.get(c.model) ?? [],
+      ...scoreOf(c.model),
+      intelligence: INTELLIGENCE_MMLU_PRO[c.model] ?? null,
+      artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[c.model] ?? null,
+      artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[c.model] ?? null
+    }))
 
-  const groups = [
-    ...(Object.keys(TIER_CANDIDATES) as Tier[]).map((tier) => ({
-      tier: TIER_LABELS[tier],
-      entries: byAscendingVram(TIER_CANDIDATES[tier].map((c) => buildEntry(c.model, c.vramGb, 'conversation')))
-    })),
-    { tier: 'Vision', entries: byAscendingVram(VISION_CANDIDATES.map((c) => buildEntry(c.model, c.vramGb, 'vision'))) },
-    { tier: 'Code', entries: byAscendingVram(CODE_CANDIDATES.map((c) => buildEntry(c.model, c.vramGb, 'code'))) }
-  ]
-
-  return { vramGb, groups, codeModel: picks.code.model }
+  return { vramGb, entries, codeModel: picks.code.model }
 }
 
 /**
@@ -1019,11 +1028,16 @@ function resolveBenchmarkResult(
   return { speedTokPerSec: null, toolCalling: verifiedTool }
 }
 
-/** "6/6" -> 6, absent/invalide -> -1 (toujours perdant face à un vrai score dans le tri de pickBestModelsFromBenchmark). */
+/**
+ * "6/6" -> 1, "5/6" -> 0,83, absent/invalide -> -1 (toujours perdant face à un vrai score). En PROPORTION
+ * depuis l'étape 160 : le rôle Code compare désormais des modèles testés au test de code (sur 3) et d'autres
+ * au test de conversation (sur 6) — en nombre brut, un 6/6 aurait toujours battu un 3/3 pourtant parfait.
+ */
 function parseToolScore(toolCalling: string | null): number {
   if (!toolCalling) return -1
-  const correct = Number(toolCalling.split('/')[0])
-  return Number.isFinite(correct) ? correct : -1
+  const [correct, total] = toolCalling.split('/').map(Number)
+  if (!Number.isFinite(correct)) return -1
+  return Number.isFinite(total) && total > 0 ? correct / total : correct
 }
 
 /**
@@ -1069,87 +1083,113 @@ function computeModelPicks(
   const resultFor = (candidate: ModelCandidate, tier: VerifiedTier): LocalBenchmarkEntry | undefined =>
     resolveBenchmarkResult(candidate, tier, localBenchmark, verifiedToolScores)
 
-  // Départage à égalité de fiabilité (6/6) : d'abord par MMLU-Pro (INTELLIGENCE_MMLU_PRO) quand les DEUX
-  // candidats à égalité ont un chiffre connu, sinon par la VRAM du candidat (le plus GROS gagne) — à la
-  // demande explicite de Léo, qui a fait remarquer qu'un score "parfait" ne veut pas dire "le meilleur" (nos
-  // 6/6 questions ne distinguent pas "juste assez bon" de "vraiment plus intelligent" une fois le score max
-  // atteint) et qu'il fallait aller chercher un VRAI signal externe (benchmark) avant de se rabattre sur la
-  // taille. La VRAM reste le repli : MMLU-Pro n'est renseigné que pour une poignée de modèles (voir la table),
-  // donc la plupart des départages continuent de se faire par taille faute de chiffre comparable pour les deux
-  // candidats à la fois.
-  const pickBestFrom = (allCandidates: ModelCandidate[], tier: VerifiedTier): ModelOverviewEntry => {
-    // `exclude` (étape 136) : modèles dont le téléchargement vient d'échouer sur CETTE machine (voir
-    // runQuickSetup, benchmarkRunner.ts) — retirés AVANT tout calcul, repli ultime compris, pour que le
-    // palier retombe sur le meilleur modèle suivant plutôt que de redemander le même téléchargement cassé.
-    // Jamais la liste entière : si tout était exclu, on garde la liste d'origine (mieux vaut un palier qui
-    // réessaie qu'un palier sans aucun modèle).
-    const filtered = allCandidates.filter((c) => !exclude.has(c.model))
-    const candidates = filtered.length ? filtered : allCandidates
-    const benchmarked = candidates
-      .filter((c) => c.vramGb <= budgetForCandidate(c.model))
-      .map((c) => ({ model: c.model, vramGb: c.vramGb, result: resultFor(c, tier) }))
-      // toolCalling est le seul critère de validité : un modèle vérifié en fiabilité reste un candidat
-      // légitime, quoi qu'on sache par ailleurs de sa vitesse.
-      .filter((c): c is { model: string; vramGb: number; result: LocalBenchmarkEntry } => c.result?.toolCalling != null)
+  const entryOf = (model: string, vramGbOfModel: number, result: LocalBenchmarkEntry | undefined): ModelOverviewEntry => ({
+    model,
+    vramGb: vramGbOfModel,
+    toolCalling: result?.toolCalling ?? null,
+    intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
+    artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
+    artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[model] ?? null
+  })
 
-    // Repli VRAM seule (jamais élargi) : aucun candidat ne tient dans le budget de ce palier (ex: le plus
-    // petit modèle vision, 3 Go, ne rentre déjà plus dans les 1,5 Go restants une fois la réservation STT
-    // déduite sur le palier "Petite"). On garde quand même son score/sa vitesse s'il en a un connu (mesure
-    // locale ou verified-tool-scores.md) plutôt que de les effacer : le modèle affiché EST celui-là qu'on le
-    // veuille ou non (repli ultime), donc autant montrer ce qu'on sait vraiment de lui — seul un modèle
-    // jamais testé nulle part garde des cases vides ci-dessous.
-    if (!benchmarked.length) {
-      const model = pickForBudget(candidates, budgetGb)
-      const candidate = candidates.find((c) => c.model === model)
-      const result = candidate ? resultFor(candidate, tier) : undefined
-      return {
-        model,
-        vramGb: candidate?.vramGb ?? 0,
-        toolCalling: result?.toolCalling ?? null,
-        intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
-        artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
-        artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[model] ?? null
-      }
-    }
+  type Scored = { model: string; vramGb: number; result: LocalBenchmarkEntry }
 
-    const artificialAnalysisFor = (model: string): number | undefined => ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model]
-
-    benchmarked.sort((a, b) => {
-      const toolDiff = parseToolScore(b.result.toolCalling) - parseToolScore(a.result.toolCalling)
-      if (toolDiff !== 0) return toolDiff
-      // À fiabilité égale, privilégie l'Intelligence Index demandé par Léo, mais uniquement quand
-      // Artificial Analysis a évalué les DEUX modèles exacts. Une absence ne vaut jamais zéro.
-      const aArtificialAnalysis = artificialAnalysisFor(a.model)
-      const bArtificialAnalysis = artificialAnalysisFor(b.model)
-      if (
-        aArtificialAnalysis !== undefined &&
-        bArtificialAnalysis !== undefined &&
-        aArtificialAnalysis !== bArtificialAnalysis
-      ) {
-        return bArtificialAnalysis - aArtificialAnalysis
-      }
-      const aIntel = INTELLIGENCE_MMLU_PRO[a.model]
-      const bIntel = INTELLIGENCE_MMLU_PRO[b.model]
-      if (aIntel !== undefined && bIntel !== undefined && aIntel !== bIntel) return bIntel - aIntel
-      return b.vramGb - a.vramGb
-    })
-    const winner = benchmarked[0]
-    return {
-      model: winner.model,
-      vramGb: winner.vramGb,
-      toolCalling: winner.result.toolCalling,
-      intelligence: INTELLIGENCE_MMLU_PRO[winner.model] ?? null,
-      artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[winner.model] ?? null,
-      artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[winner.model] ?? null
-    }
+  /**
+   * Le plus intelligent d'abord, à fiabilité égale : Intelligence Index d'Artificial Analysis quand les DEUX
+   * modèles en ont un, sinon MMLU-Pro, sinon le plus gros (inchangé depuis l'étape 125). Une absence de score
+   * ne vaut jamais zéro.
+   */
+  const smartestFirst = (a: Scored, b: Scored): number => {
+    const aIndex = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[a.model]
+    const bIndex = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[b.model]
+    if (aIndex !== undefined && bIndex !== undefined && aIndex !== bIndex) return bIndex - aIndex
+    const aIntel = INTELLIGENCE_MMLU_PRO[a.model]
+    const bIntel = INTELLIGENCE_MMLU_PRO[b.model]
+    if (aIntel !== undefined && bIntel !== undefined && aIntel !== bIntel) return bIntel - aIntel
+    return b.vramGb - a.vramGb
   }
 
+  /**
+   * Le plus rapide d'abord (rôle Rapide, étape 160) : vitesse publiée par Artificial Analysis — le repère
+   * comparatif choisi par Léo à l'étape 131 —, un modèle sans vitesse publiée passant après ceux qui en ont
+   * une ; entre deux modèles sans vitesse publiée, le plus léger (moins de mémoire à lire par mot écrit).
+   */
+  const fastestFirst = (a: Scored, b: Scored): number => {
+    const aSpeed = ARTIFICIAL_ANALYSIS_SPEED[a.model]
+    const bSpeed = ARTIFICIAL_ANALYSIS_SPEED[b.model]
+    if (aSpeed !== undefined && bSpeed !== undefined && aSpeed !== bSpeed) return bSpeed - aSpeed
+    if (aSpeed !== undefined && bSpeed === undefined) return -1
+    if (aSpeed === undefined && bSpeed !== undefined) return 1
+    return a.vramGb - b.vramGb
+  }
+
+  /**
+   * Un rôle = une question posée à TOUS les modèles (étape 160) :
+   * - `pool` : les modèles capables de ce rôle (tous, sauf Vision qui exige de lire une image) ;
+   * - `resultOf` : le score de fiabilité qui compte pour ce rôle — critère de validité, jamais départagé ;
+   * - `allowRam` : le modèle peut-il déborder sur la RAM (LARGE_RAM_OFFLOAD_MODELS) ? Non pour Rapide et
+   *   Médium, qui doivent répondre sans à-coups ;
+   * - `order` : à fiabilité égale, qui gagne.
+   */
+  const pickRole = (
+    pool: ModelCandidate[],
+    resultOf: (c: ModelCandidate) => LocalBenchmarkEntry | undefined,
+    allowRam: boolean,
+    order: (a: Scored, b: Scored) => number
+  ): ModelOverviewEntry => {
+    // `exclude` (étape 136) : modèles dont le téléchargement vient d'échouer sur CETTE machine (voir
+    // runQuickSetup, benchmarkRunner.ts) — retirés AVANT tout calcul, repli ultime compris. Jamais la liste
+    // entière : si tout était exclu, on garde la liste d'origine.
+    const filtered = pool.filter((c) => !exclude.has(c.model))
+    const candidates = filtered.length ? filtered : pool
+    const budgetOf = (c: ModelCandidate): number => (allowRam ? budgetForCandidate(c.model) : budgetGb)
+    const scored = candidates
+      .filter((c) => c.vramGb <= budgetOf(c))
+      .map((c) => ({ model: c.model, vramGb: c.vramGb, result: resultOf(c) }))
+      .filter((c): c is Scored => c.result?.toolCalling != null)
+
+    // Repli : aucun modèle testé ne tient (ex. pas de carte graphique du tout). Le plus gros modèle qui tient,
+    // sinon le plus petit — parmi ceux qui ont un score pour ce rôle quand il y en a, pour ne jamais tomber
+    // sur un modèle jamais testé pour ça.
+    if (!scored.length) {
+      const known = candidates.filter((c) => resultOf(c)?.toolCalling != null)
+      const fallbackPool = known.length ? known : candidates
+      const model = pickForBudget(fallbackPool, budgetGb)
+      const candidate = fallbackPool.find((c) => c.model === model)
+      return entryOf(model, candidate?.vramGb ?? 0, candidate ? resultOf(candidate) : undefined)
+    }
+
+    scored.sort((a, b) => {
+      const toolDiff = parseToolScore(b.result.toolCalling) - parseToolScore(a.result.toolCalling)
+      if (toolDiff !== 0) return toolDiff
+      return order(a, b)
+    })
+    const winner = scored[0]
+    return entryOf(winner.model, winner.vramGb, winner.result)
+  }
+
+  const conversation = (c: ModelCandidate): LocalBenchmarkEntry | undefined => resultFor(c, 'conversation')
+  // Code : le test de code quand le modèle l'a passé, sinon son test de conversation (il suit déjà des
+  // consignes précises : c'est ce qui permet à un modèle Puissant, jamais passé par le test de code, d'être
+  // choisi — Léo : « le meilleur pour le code, ça peut être des modèles puissants »).
+  const code = (c: ModelCandidate): LocalBenchmarkEntry | undefined => resultFor(c, 'code') ?? resultFor(c, 'conversation')
+
   return {
-    flash: pickBestFrom(TIER_CANDIDATES.flash, 'conversation'),
-    medium: pickBestFrom(TIER_CANDIDATES.medium, 'conversation'),
-    large: pickBestFrom(TIER_CANDIDATES.large, 'conversation'),
-    vision: pickBestFrom(VISION_CANDIDATES, 'vision'),
-    code: pickBestFrom(CODE_CANDIDATES, 'code')
+    // Rapide : le plus rapide de tous, qui tient entièrement sur la carte.
+    flash: pickRole(ALL_MODELS, conversation, false, fastestFirst),
+    // Médium : le plus intelligent qui tient entièrement sur la carte.
+    medium: pickRole(ALL_MODELS, conversation, false, smartestFirst),
+    // Puissant : le plus intelligent de tous, même en débordant sur la RAM.
+    large: pickRole(ALL_MODELS, conversation, true, smartestFirst),
+    // Vision : le plus intelligent parmi ceux qui lisent une image.
+    vision: pickRole(
+      ALL_MODELS.filter((c) => READS_IMAGES.has(c.model)),
+      (c) => resultFor(c, 'vision'),
+      true,
+      smartestFirst
+    ),
+    // Code : le plus intelligent de tous, même lent (choix de Léo, étape 160).
+    code: pickRole(ALL_MODELS, code, true, smartestFirst)
   }
 }
 
@@ -1267,10 +1307,9 @@ function entryForModel(
   localBenchmark: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>>,
   verifiedToolScores: Record<VerifiedTier, Map<string, string>>
 ): ModelOverviewEntry {
-  const all = [...FLASH_CANDIDATES, ...MEDIUM_CANDIDATES, ...LARGE_CANDIDATES, ...VISION_CANDIDATES, ...CODE_CANDIDATES]
   return {
     model,
-    vramGb: all.find((c) => c.model === model)?.vramGb ?? 0,
+    vramGb: ALL_MODELS.find((c) => c.model === model)?.vramGb ?? 0,
     toolCalling: localBenchmark[tier].get(model)?.toolCalling ?? verifiedToolScores[tier].get(model) ?? null,
     intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
     artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,

@@ -99,15 +99,12 @@ test('parseLocalBenchmark sépare bien conversation/vision/code, pas une seule m
 test('"Tous les modèles" affiche le VRAI score de conversation de ministral-3:8b, pas son score vision qui aurait dû l\'écraser', async () => {
   const { getModelOverview } = setup({ benchmarkResultsMd: BENCHMARK_RESULTS_MD })
   const overview = await getModelOverview()
-  const medium = overview.groups.find((g) => g.tier === 'Médium')
-  const vision = overview.groups.find((g) => g.tier === 'Vision')
-  const mediumEntry = medium.entries.find((e) => e.model === 'ministral-3:8b')
-  const visionEntry = vision.entries.find((e) => e.model === 'ministral-3:8b')
-  assert.ok(mediumEntry, 'ministral-3:8b introuvable dans le palier Médium')
-  assert.ok(visionEntry, 'ministral-3:8b introuvable dans le palier Vision')
-  assert.equal(mediumEntry.toolCalling, '5/6', `score Médium (conversation) corrompu : ${mediumEntry.toolCalling}`)
-  assert.equal(visionEntry.toolCalling, '2/3', `score Vision corrompu : ${visionEntry.toolCalling}`)
-  assert.notEqual(mediumEntry.toolCalling, visionEntry.toolCalling, 'les deux scores ne doivent JAMAIS être identiques par collision')
+  // Étape 160 : une seule ligne par modèle. Elle affiche le score de CONVERSATION (le cas général) ; le score
+  // vision (2/3) reste lu à part et ne doit jamais le remplacer.
+  const entries = overview.entries.filter((e) => e.model === 'ministral-3:8b')
+  assert.equal(entries.length, 1, 'ministral-3:8b doit apparaître une seule fois')
+  assert.equal(entries[0].toolCalling, '5/6', `score de conversation corrompu : ${entries[0].toolCalling}`)
+  assert.equal(entries[0].readsImages, true)
 })
 
 test('un benchmark-results.md de l\'ANCIEN format (sans sections) se lit comme "rien de connu", jamais un score corrompu', () => {

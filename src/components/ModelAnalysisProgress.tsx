@@ -1,17 +1,8 @@
 import { useEffect, useRef } from 'react'
-import type { AnalysisScope, ModelOverviewResult } from '../../shared/ipc'
+import type { ModelOverviewResult } from '../../shared/ipc'
 import type { ModelAnalysisState, ModelRunStatus } from '../hooks/useModelAnalysis'
 import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge } from './OptionsMenu'
-
-/** Fait le lien entre AnalysisScope ('flash'|'medium'|...) et le libellé de palier utilisé par ModelOverviewGroup.tier (voir TIER_LABELS dans hardwareScan.ts). */
-const SCOPE_TO_TIER_LABEL: Partial<Record<AnalysisScope, string>> = {
-  flash: 'Rapide',
-  medium: 'Médium',
-  large: 'Puissant',
-  vision: 'Vision',
-  code: 'Code'
-}
 
 /**
  * Rappel affiché avant ET pendant tout run (onboarding et ré-analyse depuis Options → Modèles, à la demande
@@ -77,12 +68,10 @@ interface ModelAnalysisProgressProps {
  * ("enlève le panel le script") : celui-ci ne réapparaît qu'en cas d'échec, comme détail de dépannage.
  */
 export default function ModelAnalysisProgress({ state, modelOverview }: ModelAnalysisProgressProps): JSX.Element {
-  const { benchmarking, scope, pullCount, testCount, progressFraction, etaMs, modelRunStatus, benchmarkLog, error } = state
+  const { benchmarking, pullCount, testCount, progressFraction, etaMs, modelRunStatus, benchmarkLog, error } = state
   const benchmarkLogRef = useRef<HTMLPreElement>(null)
-  // Un run ciblé sur un seul palier n'affiche QUE ce palier dans le tableau — les 4 autres restent inertes
-  // (aucune ligne ne bougera), les montrer quand même n'aiderait pas à suivre ce qui se passe réellement.
-  const scopedTierLabel = SCOPE_TO_TIER_LABEL[scope]
-  const visibleGroups = modelOverview?.groups.filter((g) => !scopedTierLabel || g.tier === scopedTierLabel) ?? []
+  // Une seule liste de modèles depuis l'étape 160 (plus de tableau par palier).
+  const entries = modelOverview?.entries ?? []
 
   useEffect(() => {
     benchmarkLogRef.current?.scrollTo({ top: benchmarkLogRef.current.scrollHeight })
@@ -122,41 +111,38 @@ export default function ModelAnalysisProgress({ state, modelOverview }: ModelAna
       {/* Tableau de suivi en direct plutôt qu'un journal brut : une vue d'ensemble de chaque candidat (en
           attente / en téléchargement / en cours de test / terminé / ignoré), pas un flux de texte à faire
           défiler pour deviner où en est le run. */}
-      {benchmarking && visibleGroups.length > 0 && (
+      {benchmarking && entries.length > 0 && (
         <div className="options-menu__model-overview-scroll">
-          {visibleGroups.map((group) => (
-            <div key={group.tier} className="options-menu__model-group">
-              <div className="options-menu__model-group-title">{group.tier}</div>
-              <table className="options-menu__model-overview">
-                <thead>
-                  <tr>
-                    <th>Modèle</th>
-                    {/* Score déjà connu (mesure locale passée ou verified-tool-scores.md) affiché dès
-                        l'arrivée sur l'écran, avant même que ce run ait touché quoi que ce soit à ce modèle
-                        — pas seulement une fois "Terminé" (voir RunStatusBadge, qui lui montre le score
-                        FRAIS de CE run une fois fini, potentiellement différent). */}
-                    <th className="options-menu__col-num">Fiabilité connue</th>
-                    <th>Statut</th>
+          <div className="options-menu__model-group">
+            <table className="options-menu__model-overview">
+              <thead>
+                <tr>
+                  <th>Modèle</th>
+                  {/* Score déjà connu (mesure locale passée ou verified-tool-scores.md) affiché dès
+                      l'arrivée sur l'écran, avant même que ce run ait touché quoi que ce soit à ce modèle
+                      — pas seulement une fois "Terminé" (voir RunStatusBadge, qui lui montre le score
+                      FRAIS de CE run une fois fini, potentiellement différent). */}
+                  <th className="options-menu__col-num">Fiabilité connue</th>
+                  <th>Statut</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((entry) => (
+                  <tr key={entry.model}>
+                    <td className="options-menu__model-name" title={entry.model}>
+                      {formatModelName(entry.model)}
+                    </td>
+                    <td className="options-menu__col-num">
+                      <ReliabilityBadge value={entry.toolCalling} />
+                    </td>
+                    <td>
+                      <RunStatusBadge status={modelRunStatus[entry.model]} verifiedSkip={entry.verifiedSkip} />
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {group.entries.map((entry) => (
-                    <tr key={entry.model}>
-                      <td className="options-menu__model-name" title={entry.model}>
-                        {formatModelName(entry.model)}
-                      </td>
-                      <td className="options-menu__col-num">
-                        <ReliabilityBadge value={entry.toolCalling} />
-                      </td>
-                      <td>
-                        <RunStatusBadge status={modelRunStatus[entry.model]} verifiedSkip={entry.verifiedSkip} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

@@ -58,41 +58,33 @@ function setup({ verifiedToolScoresMd = '', vramMib = 30 * 1024, ramGb = 32 } = 
   return exports
 }
 
-test('"Tous les modèles" liste chaque palier par VRAM croissante, le moins gourmand en premier', async () => {
+test('"Tous les modèles" : une seule liste, triée par VRAM croissante, le moins gourmand en premier', async () => {
   const { getModelOverview } = setup()
   const overview = await getModelOverview()
-  assert.ok(overview.groups.length > 0, 'au moins un palier attendu')
-  for (const group of overview.groups) {
-    for (let i = 1; i < group.entries.length; i++) {
-      assert.ok(
-        group.entries[i - 1].vramGb <= group.entries[i].vramGb,
-        `palier ${group.tier} pas trié par VRAM croissante : ${group.entries.map((e) => `${e.model}(${e.vramGb})`).join(', ')}`
-      )
-    }
+  assert.ok(overview.entries.length > 30, 'tous les modèles du catalogue attendus')
+  for (let i = 1; i < overview.entries.length; i++) {
+    assert.ok(overview.entries[i - 1].vramGb <= overview.entries[i].vramGb, `pas trié : ${overview.entries[i].model}`)
   }
+  assert.equal(overview.entries[0].model, 'qwen3.5:0.8b')
 })
 
-test('le palier Rapide place bien le modèle le moins gourmand en tête (pas juste "déjà dans cet ordre")', async () => {
+test('chaque modèle n\'apparaît qu\'une fois, avec son étiquette Rapide/Moyen/Puissant (repère affiché)', async () => {
   const { getModelOverview } = setup()
   const overview = await getModelOverview()
-  const flash = overview.groups.find((g) => g.tier === 'Rapide')
-  assert.ok(flash, 'palier Rapide introuvable')
-  // Source (FLASH_CANDIDATES) volontairement en ordre DÉCROISSANT (ministral-3:3b, 3,0 Go, en tête) — si le
-  // tri ne faisait rien, ce serait encore ministral-3:3b en première position ici, pas qwen3.5:0.8b (1 Go).
-  assert.equal(flash.entries[0].model, 'qwen3.5:0.8b', `premier modèle attendu (le moins gourmand) : ${flash.entries[0].model}`)
+  const models = overview.entries.map((e) => e.model)
+  assert.equal(new Set(models).size, models.length, 'un modèle en double dans la liste unique')
+  const category = (m) => overview.entries.find((e) => e.model === m).category
+  assert.equal(category('qwen3.5:0.8b'), 'Rapide')
+  assert.equal(category('qwen3.5:9b'), 'Moyen')
+  assert.equal(category('qwen3.8:27b'), 'Puissant')
 })
 
-test('le tri d\'affichage ne modifie pas les tableaux sources dont pickBestFrom a besoin (toujours décroissants)', async () => {
+test('le tri d\'affichage ne modifie pas la liste dont le choix des modèles a besoin', async () => {
   const scan = setup()
-  // Deux appels successifs à getModelOverview() : si le tri mutait TIER_CANDIDATES en place (un tableau
-  // partagé au niveau module), le second appel afficherait un résultat différent du premier.
   const first = await scan.getModelOverview()
+  const before = await scan.pickBestModelsFromBenchmark()
   const second = await scan.getModelOverview()
-  const flashFirst = first.groups.find((g) => g.tier === 'Rapide').entries.map((e) => e.model)
-  const flashSecond = second.groups.find((g) => g.tier === 'Rapide').entries.map((e) => e.model)
-  assert.deepEqual(flashSecond, flashFirst, 'deux appels successifs doivent donner le même ordre trié')
-  // pickBestFrom (via pickBestModelsFromBenchmark) doit toujours choisir sur la base du VRAI budget, sans être
-  // perturbé par le tri d'affichage exercé juste avant par getModelOverview() dans ce même test.
-  const picked = await scan.pickBestModelsFromBenchmark()
-  assert.ok(picked.models.flash, 'pickBestModelsFromBenchmark doit toujours renvoyer un modèle Rapide après ce tri')
+  const after = await scan.pickBestModelsFromBenchmark()
+  assert.deepEqual(second.entries.map((e) => e.model), first.entries.map((e) => e.model))
+  assert.equal(JSON.stringify(after), JSON.stringify(before), 'le choix des modèles ne doit pas dépendre de l\'affichage')
 })

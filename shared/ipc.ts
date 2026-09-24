@@ -291,6 +291,10 @@ export interface ModelOverviewEntry {
   vramGb: number
   /** Paliers/rôles qui utilisent actuellement ce modèle dans le profil actif. Vide = modèle candidat non retenu. */
   usedIn?: string[]
+  /** Repère affiché (Rapide/Moyen/Puissant), jamais un critère de choix — voir ModelCategory. */
+  category?: ModelCategory
+  /** Le modèle lit les images (seuls ceux-là peuvent tenir le rôle Vision). */
+  readsImages?: boolean
   toolCalling: string | null
   intelligence: number | null
   /**
@@ -320,24 +324,16 @@ export interface ModelOverviewEntry {
 }
 
 /**
- * Les candidats d'UN palier (Rapide/Médium/Puissant/Vision/Code) — une liste séparée par palier plutôt
- * qu'une liste unique tous paliers confondus, pour que chaque tableau n'affiche que les colonnes qui ont un
- * sens pour lui (ex: Vision n'a pas de score d'intelligence MMLU-Pro, ça ne s'y applique pas — mais a bien
- * sa propre vitesse/fiabilité mesurées, voir VISION_TEST_CASES dans scripts/benchmark-models.mjs).
- * Un même modèle peut apparaître dans plusieurs groupes s'il est candidat à plusieurs paliers (ex: le plus
- * petit modèle, repli ultime de Rapide/Médium/Puissant).
+ * Étiquette affichée à côté d'un modèle dans « Tous les modèles » (étape 160) : ce n'est PLUS une catégorie
+ * de choix — chaque rôle cherche dans tous les modèles —, seulement un repère pour l'utilisateur.
  */
-export interface ModelOverviewGroup {
-  tier: string
-  entries: ModelOverviewEntry[]
-}
+export type ModelCategory = 'Rapide' | 'Moyen' | 'Puissant'
 
-/** Résultat de getModelOverview : les candidats groupés par palier, plus la VRAM totale détectée sur la
- * machine, pour que l'onglet Modèles puisse expliquer pourquoi certains candidats (trop gros) ne sont
- * jamais testés. */
+/** Résultat de getModelOverview : TOUS les modèles dans une seule liste (étape 160), plus la VRAM totale
+ * détectée sur la machine. */
 export interface ModelOverviewResult {
   vramGb: number | null
-  groups: ModelOverviewGroup[]
+  entries: ModelOverviewEntry[]
   /**
    * Modèle de code choisi automatiquement pour cette machine (étape 46, voir pickBestCodeModel dans
    * hardwareScan.ts) si aucun choix explicite n'est enregistré dans le profil — toujours défini, jamais null.

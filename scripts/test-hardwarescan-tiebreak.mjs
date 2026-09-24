@@ -92,7 +92,7 @@ test('à 6/6 ET Intelligence Index EXACTEMENT égaux, repli sur MMLU-Pro puis la
 test('expose les Intelligence Index lus directement chez Artificial Analysis sans en inventer (étape 125 : 36/39 modèles couverts)', async () => {
   const { getModelOverview } = setup()
   const overview = await getModelOverview()
-  const byModel = new Map(overview.groups.flatMap((group) => group.entries.map((entry) => [entry.model, entry.artificialAnalysisIndex])))
+  const byModel = new Map(overview.entries.map((entry) => [entry.model, entry.artificialAnalysisIndex]))
   const expected = {
     'qwen3.5:0.8b': 6,
     'qwen3.5:2b': 7,
@@ -141,7 +141,7 @@ test('expose les Intelligence Index lus directement chez Artificial Analysis san
 test('expose aussi la vitesse (tokens/s) publiée par Artificial Analysis, absente quand non mesurée', async () => {
   const { getModelOverview } = setup()
   const overview = await getModelOverview()
-  const byModel = new Map(overview.groups.flatMap((group) => group.entries.map((entry) => [entry.model, entry.artificialAnalysisSpeed])))
+  const byModel = new Map(overview.entries.map((entry) => [entry.model, entry.artificialAnalysisSpeed]))
   assert.equal(byModel.get('ministral-3:3b'), 221)
   assert.equal(byModel.get('granite4.2:3b'), 218)
   assert.equal(byModel.get('devstral-2:123b'), 133)
@@ -153,13 +153,13 @@ test('expose aussi la vitesse (tokens/s) publiée par Artificial Analysis, absen
 // interdit tout import hf.co/ par un test) à cause d'un bug d'Ollama 0.34.2 sur les redirections Hugging Face.
 // Le risque est désormais traité là où il se produit — runQuickSetup retombe sur le modèle suivant si le
 // téléchargement échoue (test-benchmark-runner-cleanup.mjs) — donc les deux modèles restent candidats.
-test('G9v3-3B (Rapide/Médium) et GLM-4.6V-Flash (Vision) restent candidats malgré le bug Ollama 0.34.2', async () => {
+test('G9v3-3B et GLM-4.6V-Flash restent dans la liste des modèles malgré le bug Ollama 0.34.2', async () => {
   const { getModelOverview } = setup()
   const overview = await getModelOverview()
-  const tierHas = (tier, model) => overview.groups.find((g) => g.tier === tier)?.entries.some((e) => e.model === model)
-  assert.ok(tierHas('Rapide', 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF'), 'G9v3-3B doit être candidat Rapide')
-  assert.ok(tierHas('Médium', 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF'), 'G9v3-3B doit être candidat Médium')
-  assert.ok(tierHas('Vision', 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M'), 'GLM-4.6V-Flash doit être candidat Vision')
+  const entry = (model) => overview.entries.find((e) => e.model === model)
+  assert.ok(entry('hf.co/bartowski/ai9stars_G9v3-3B-GGUF'), 'G9v3-3B doit rester candidat')
+  // GLM-4.6V-Flash doit rester candidat ET reconnu comme lisant les images (seuls ceux-là peuvent tenir Vision).
+  assert.equal(entry('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M')?.readsImages, true)
 })
 
 test('indique tous les paliers qui utilisent réellement chaque modèle du profil actif', async () => {
@@ -170,33 +170,22 @@ test('indique tous les paliers qui utilisent réellement chaque modèle du profi
     visionModel: 'qwen3.5:4b',
     codeModel: 'qwen2.5-coder:7b'
   })
-  const qwen4bEntries = overview.groups.flatMap((group) => group.entries).filter((entry) => entry.model === 'qwen3.5:4b')
-  assert.ok(qwen4bEntries.length >= 2, 'le modèle partagé doit apparaître dans plusieurs groupes candidats')
-  for (const entry of qwen4bEntries) assert.deepEqual(Array.from(entry.usedIn), ['Médium', 'Vision'])
+  // Étape 160 : une seule liste, donc une seule ligne par modèle, qui porte tous ses rôles à la fois.
+  const qwen4bEntries = overview.entries.filter((entry) => entry.model === 'qwen3.5:4b')
+  assert.equal(qwen4bEntries.length, 1, 'chaque modèle apparaît une seule fois dans la liste unique')
+  assert.deepEqual(Array.from(qwen4bEntries[0].usedIn), ['Médium', 'Vision'])
 
-  const unused = overview.groups.flatMap((group) => group.entries).find((entry) => entry.model === 'qwen3.5:2b')
+  const unused = overview.entries.find((entry) => entry.model === 'qwen3.5:2b')
   assert.deepEqual(Array.from(unused.usedIn), [])
 })
 
 /**
- * Étape 127, Léo a demandé à ChatGPT de vérifier .../models/recommend (inaccessible depuis cet
- * environnement) et a relayé deux propositions. Vérifiées indépendamment ici (et sur ollama.com/
- * artificialanalysis.ai directement avant d'y toucher, deux autres chiffres du même rapport s'étant révélés
- * faux) : granite4.2:3b rejoint Rapide (déjà candidat Médium), qwen3.8:27b rejoint Vision (déjà candidat
- * Puissant, et son support image confirmé directement sur sa fiche Ollama).
+ * Étape 127 : granite4.2:3b et qwen3.8:27b, proposés par ChatGPT puis vérifiés, restent au catalogue — et
+ * qwen3.8:27b est bien reconnu comme lisant les images (support vérifié sur sa fiche Ollama).
  */
-test('granite4.2:3b (Rapide) et qwen3.8:27b (Vision) sont bien de nouveaux candidats "réutilisation"', async () => {
+test('granite4.2:3b et qwen3.8:27b restent au catalogue, qwen3.8:27b reconnu comme lisant les images', async () => {
   const { getModelOverview } = setup()
   const overview = await getModelOverview()
-  const rapide = overview.groups.find((g) => g.tier === 'Rapide')
-  const vision = overview.groups.find((g) => g.tier === 'Vision')
-  assert.ok(
-    rapide.entries.some((e) => e.model === 'granite4.2:3b'),
-    'granite4.2:3b doit maintenant apparaître dans le palier Rapide'
-  )
-  assert.ok(
-    vision.entries.some((e) => e.model === 'qwen3.8:27b'),
-    'qwen3.8:27b doit maintenant apparaître dans le palier Vision'
-  )
+  assert.ok(overview.entries.some((e) => e.model === 'granite4.2:3b'))
+  assert.equal(overview.entries.find((e) => e.model === 'qwen3.8:27b')?.readsImages, true)
 })
-
