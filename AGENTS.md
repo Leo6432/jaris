@@ -4443,3 +4443,43 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   HuggingFace, alors que Supertonic télécharge depuis HuggingFace mais range ailleurs.
   Régression : `node --test scripts/test-models-location.mjs` (le modèle de la voix part avec le reste et
   reste lisible au même chemin ; garde-fou sur la version).
+
+- **Étape 156, Léo : « la reconnaissance de la voix prend deux fois plus que le modèle, 4,5 Go sur la carte,
+  c'est pas normal [...] fais un test de vitesse quand on la met sur la VRAM et sur la RAM, avec la RAM prise,
+  la VRAM et la vitesse ».** Point de départ : sur une carte de 6 Go, les 4,5 Go réservés à la transcription
+  (`STT_RESERVED_GB`, hardwareScan.ts) ne laissent que 1,5 Go au cerveau, donc qwen3.5:0.8b partout —
+  simulé avec le vrai `pickBestModelsFromBenchmark` avant de répondre, pas supposé. Les 4,5 Go ne sont pas un
+  gaspillage : Cohere Transcribe a 2 milliards de paramètres (4,13 Go en float16), plus que le cerveau.
+  **Mesuré ici, pas estimé** (processeur 4 cœurs à 2,1 GHz, sans carte graphique ; mêmes versions figées que
+  requirements.txt ; phrases dites par Supertonic) : Cohere en RAM 1,7-2,0 s pour 5 s de parole et ~12 Go de
+  RAM ; Parakeet v3 (NVIDIA, 0,6 milliard de paramètres, via onnx-asr) 0,5 s, 2,5 Go, erreurs comparables ou
+  moindres ; sa version compressée 0,55 s, 1,2 Go ; Whisper Turbo 5,7 s (trop lent sur processeur). La
+  version compressée de Cohere (int8 dynamique) a été tuée faute de RAM lors d'un premier essai — la
+  conversion copie le modèle : `inplace=True` obligatoire.
+  **Impossible ici : la vitesse sur la carte graphique.** Plutôt que de l'estimer, un bouton Options → Voix
+  « Tester la vitesse de la transcription » (python/stt_benchmark.py) mesure SUR le PC de l'utilisateur, pour
+  chaque façon de comprendre la voix : temps pour 5 s de parole, RAM prise, VRAM prise, erreurs, et ce qui a
+  été compris. Choix structurants :
+  - **Un processus par configuration** (le script se relance avec `--config`) : la RAM se mesure proprement
+    (mémoire maximale moins la mémoire avant chargement) — un allocateur ne rend jamais tout, la mesure
+    suivante serait sinon faussée par la précédente.
+  - **La carte est libérée avant le test** : la transcription de Jaris (4,5 Go) est arrêtée, et les modèles
+    d'Ollama gardés « au chaud » sont déchargés (`unloadAllModels`, ollama.ts : `GET /api/ps` puis
+    `keep_alive: 0`, API documentée d'Ollama) — sinon Cohere sur la carte manquerait de place ou serait mesuré
+    à côté d'un autre modèle. La voix repart dans un `finally`, même si le test échoue.
+  - **Phrases dites par Supertonic plutôt qu'au micro** : compter les erreurs exige le texte exact, et chaque
+    configuration entend le même son. Aucune phrase ne contient de nombre (« 18 » contre « dix-huit » serait
+    compté comme une erreur).
+  - Cohere en RAM n'est tenté qu'avec ~10 Go de RAM libre ; une ligne non mesurable dit POURQUOI au lieu
+    d'afficher des chiffres vides. Délai d'inactivité de 20 min, jamais de durée totale (étape 98 : le premier
+    test télécharge jusqu'à 3 Go).
+  - Parakeet sur la carte n'est pas mesuré : il faudrait la version GPU d'onnxruntime, pas installée par Jaris.
+  `onnx-asr==0.12.0` figé dans requirements.txt après résolution de l'ensemble (`pip install --dry-run
+  --report`, leçon librosa/scipy) : il ne dépend que de numpy, onnxruntime et huggingface_hub étant déjà figés.
+  Aucun changement de comportement de Jaris lui-même à cette étape : le test sert à décider, avec les vrais
+  chiffres de la carte de Léo, s'il faut déplacer la transcription en RAM ou changer de modèle.
+  Régression : `node --test scripts/test-stt-benchmark.mjs scripts/test-stt-benchmark-ui.mjs` (lecture de la
+  sortie du script, message lisible si le script s'arrête sans tableau, voix relancée dans un `finally`,
+  taux d'erreurs au mot, version figée ; et dans un vrai navigateur : avancement affiché, bouton verrouillé
+  pendant le test, tableau vitesse/RAM/VRAM/erreurs, ligne non mesurable expliquée, tableau habillé par le CSS
+  compilé). Le script lui-même a tourné en entier ici (lignes RAM mesurées, ligne carte « non disponible »).

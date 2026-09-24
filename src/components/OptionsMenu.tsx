@@ -9,7 +9,8 @@ import type {
   ModelsLocationStatus,
   OllamaVersionStatus,
   Profile,
-  UpdateProgress
+  UpdateProgress,
+  SttBenchmarkResult
 } from '../../shared/ipc'
 import { CAPABILITIES } from '../../shared/capabilities'
 import AllModelsOverview from './AllModelsOverview'
@@ -246,6 +247,12 @@ export default function OptionsMenu(): JSX.Element {
   // affichée comme une rangée de barres qui défilent façon Discord, pas un seul chiffre.
   const [micLevels, setMicLevels] = useState<number[]>(() => Array(MIC_TEST_BAR_COUNT).fill(0))
   const [micTestResult, setMicTestResult] = useState<boolean | null>(null)
+  // Étape 156 : test de vitesse de la transcription (carte graphique contre RAM).
+  const [sttBenchRunning, setSttBenchRunning] = useState(false)
+  const [sttBenchProgress, setSttBenchProgress] = useState<string | null>(null)
+  const [sttBenchResult, setSttBenchResult] = useState<SttBenchmarkResult | null>(null)
+
+  useEffect(() => window.jaris.onSttBenchmarkProgress((message) => setSttBenchProgress(message)), [])
 
   useEffect(() => {
     window.jaris.getProfile().then((p) => {
@@ -685,6 +692,20 @@ export default function OptionsMenu(): JSX.Element {
     window.jaris.testMicrophone()
   }
 
+  const runSttBenchmark = async (): Promise<void> => {
+    setSttBenchRunning(true)
+    setSttBenchResult(null)
+    setSttBenchProgress('Arrêt de la voix de Jaris pendant le test…')
+    try {
+      setSttBenchResult(await window.jaris.runSttBenchmark())
+    } catch (err) {
+      setSttBenchResult({ ok: false, message: err instanceof Error ? err.message : String(err), rows: [] })
+    } finally {
+      setSttBenchRunning(false)
+      setSttBenchProgress(null)
+    }
+  }
+
   if (!open) {
     return (
       <button className="options-menu__trigger" onClick={() => setOpen(true)}>
@@ -925,6 +946,57 @@ export default function OptionsMenu(): JSX.Element {
                       {micTestResult ? 'Micro détecté : du son a bien été capté.' : "Rien capté : vérifie que le bon micro est sélectionné et qu'il n'est pas coupé."}
                     </p>
                   )}
+                </div>
+              )}
+              <SettingRow
+                label="Tester la vitesse de la transcription"
+                description="Compare, sur ce PC, la compréhension de ta voix sur la carte graphique et dans la RAM : vitesse, RAM et VRAM prises. Quelques minutes (le premier test télécharge jusqu'à 3 Go) ; la voix de Jaris est coupée pendant le test."
+              >
+                <button className="options-menu__action" onClick={() => void runSttBenchmark()} disabled={sttBenchRunning}>
+                  {sttBenchRunning ? 'Test en cours…' : 'Lancer le test'}
+                </button>
+              </SettingRow>
+              {sttBenchRunning && sttBenchProgress && <p className="options-menu__stt-bench-progress">{sttBenchProgress}</p>}
+              {sttBenchResult && !sttBenchResult.ok && (
+                <p className="options-menu__mic-result--bad">{sttBenchResult.message}</p>
+              )}
+              {sttBenchResult?.ok && (
+                <div className="options-menu__stt-bench">
+                  <table className="options-menu__stt-bench-table">
+                    <thead>
+                      <tr>
+                        <th>Façon de comprendre ta voix</th>
+                        <th>Pour 5 s de parole</th>
+                        <th>RAM prise</th>
+                        <th>VRAM prise</th>
+                        <th>Erreurs</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sttBenchResult.rows.map((row) =>
+                        row.available ? (
+                          <tr key={row.id}>
+                            <td>
+                              {row.label}
+                              {row.sample && <span className="options-menu__stt-bench-sample">Compris : « {row.sample} »</span>}
+                            </td>
+                            <td>{row.secondsPer5s?.toLocaleString('fr-FR')} s</td>
+                            <td>{row.ramGb?.toLocaleString('fr-FR')} Go</td>
+                            <td>{row.vramGb ? `${row.vramGb.toLocaleString('fr-FR')} Go` : '—'}</td>
+                            <td>{row.errorsPct?.toLocaleString('fr-FR')} %</td>
+                          </tr>
+                        ) : (
+                          <tr key={row.id} className="options-menu__stt-bench-row--unavailable">
+                            <td>{row.label}</td>
+                            <td colSpan={4}>Non mesuré : {row.reason}</td>
+                          </tr>
+                        )
+                      )}
+                    </tbody>
+                  </table>
+                  <p className="options-menu__row-description">
+                    Mesuré sur ce PC{sttBenchResult.gpu ? ` (carte : ${sttBenchResult.gpu})` : ''}, avec cinq phrases dites par la voix de Jaris.
+                  </p>
                 </div>
               )}
             </SettingGroup>

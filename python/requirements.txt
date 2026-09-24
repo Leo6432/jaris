@@ -19,6 +19,10 @@ supertonic==1.3.1
 # mot d'activation "Jaris" (voir python/models/, jaris.onnx) — sans cette ligne, une évolution future de
 # supertonic qui abandonnerait onnxruntime casserait wakeword.py silencieusement, sans rapport avec la TTS.
 onnxruntime==1.30.0
+# Étape 156 : Parakeet v3 (transcription NVIDIA, 0,6 milliard de paramètres) pour le test de vitesse de la
+# transcription (python/stt_benchmark.py). Ne dépend que de numpy ; onnxruntime et huggingface_hub, qu'il utilise,
+# sont déjà figés au-dessus — ensemble résolu avec `pip install --dry-run --report` avant d'être figé.
+onnx-asr==0.12.0
 # torch délibérément SANS version figée ici : installé à part et en amont pour les machines NVIDIA
 # (pythonRuntime.ts, index CUDA dédié) avant que cette liste ne soit appliquée — une version figée ici
 # risquerait de forcer pip à réinstaller une version différente (donc potentiellement sans support GPU)
