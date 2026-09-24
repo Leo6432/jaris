@@ -225,11 +225,11 @@ test("le bouton \"Mettre à jour\" d'Ollama ne touche JAMAIS au dossier des mod�
 })
 
 test('pip n’écrit pas son cache sur C : chaque installation Python passe --no-cache-dir', () => {
-  // Sans ça, torch (~2,5 Go) finissait aussi dans %LOCALAPPDATA%\pip\cache, quel que soit le disque choisi.
+  // Sans ça, chaque paquet téléchargé finissait aussi dans %LOCALAPPDATA%\pip\cache, quel que soit le disque choisi.
   const source = readFileSync(new URL('../electron/services/pythonRuntime.ts', import.meta.url), 'utf8')
   assert.match(source, /PIP_INSTALL = \['-m', 'pip', 'install', '--no-cache-dir'\]/)
   const installs = [...source.matchAll(/run\(python, \[([^\]]*)/g)].map((m) => m[1]).filter((args) => args.includes('pip') || args.includes('PIP_INSTALL'))
-  assert.ok(installs.length >= 2)
+  assert.ok(installs.length >= 1) // une seule depuis l’étape 158 (plus d’installation de torch à part)
   for (const args of installs) assert.ok(args.startsWith('...PIP_INSTALL'), `installation pip sans --no-cache-dir : ${args}`)
 })
 

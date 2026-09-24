@@ -13,8 +13,11 @@ class ConfirmationTests(unittest.TestCase):
         # sur un mot RÉEL non lié est donc nul en pratique).
         for text in ('Jaris', 'Jarice, ouvre YouTube.', 'Bonjour Jarisse !', 'Jarissa.', 'Jariste.', 'Jarisses.', 'jarisien'):
             self.assertTrue(contains_wake_name(text))
-        for text in ('Paris', 'Jarvis', 'Le rendez-vous est demain.', "J'arrive.", "J'arrise.", '', 'Voici la météo.'):
-            self.assertFalse(contains_wake_name(text))
+        # Étape 158 : graphies de Parakeet v3, mesurées sur 50 échantillons (voir wake_confirmation.py).
+        for text in ('Jarry Stop.', 'Jarris.', 'Salut Jarry.', 'Dijaris, quelle heure est-il?', 'Jarisque.'):
+            self.assertTrue(contains_wake_name(text), text)
+        for text in ('Paris', 'Jarvis', 'Jerry.', 'Le rendez-vous est demain.', "J'arrive.", "J'arrise.", "j'arrive dans 5 minutes", '', 'Voici la météo.', 'Le jardin.', 'Un jarret de porc.'):
+            self.assertFalse(contains_wake_name(text), text)
 
     def test_retains_audio_until_word_complete(self):
         gate = WakeConfirmation()
@@ -26,6 +29,8 @@ class ConfirmationTests(unittest.TestCase):
         self.assertEqual(sum(len(x) for x in audio), 9 * 1280)
         self.assertEqual(remove_wake_prefix('Jaris, ouvre YouTube maintenant.'), 'ouvre YouTube maintenant.')
         self.assertEqual(remove_wake_prefix('Jaris.'), '')
+        self.assertEqual(remove_wake_prefix('Jarry, ouvre YouTube.'), 'ouvre YouTube.')
+        self.assertEqual(remove_wake_prefix('Dijaris, quelle heure est-il ?'), 'quelle heure est-il ?')
 
     def test_manual_cancels_pending_and_stale_name(self):
         gate = WakeConfirmation()

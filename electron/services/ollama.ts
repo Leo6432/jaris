@@ -177,32 +177,6 @@ export async function listInstalledModels(): Promise<string[]> {
 }
 
 /**
- * Décharge de la mémoire (carte graphique comprise) tous les modèles qu'Ollama garde « au chaud ». API
- * documentée d'Ollama : `GET /api/ps` liste les modèles chargés, `POST /api/generate` avec `keep_alive: 0` et
- * sans prompt en décharge un. Sert au test de vitesse de la transcription (étape 156) : sans ça, un modèle
- * chargé par une question récente occuperait la carte et fausserait la mesure « transcription sur la carte ».
- * Sans effet si Ollama ne répond pas.
- */
-export async function unloadAllModels(): Promise<void> {
-  try {
-    const response = await fetch(`${config.ollama.host}/api/ps`)
-    if (!response.ok) return
-    const data = (await response.json()) as { models?: Array<{ name?: string; model?: string }> }
-    for (const entry of data.models ?? []) {
-      const model = entry.model ?? entry.name
-      if (!model) continue
-      await fetch(`${config.ollama.host}/api/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, keep_alive: 0 })
-      }).catch(() => undefined)
-    }
-  } catch {
-    // Ollama arrêté : rien n'est chargé, rien à décharger
-  }
-}
-
-/**
  * Taille réelle sur disque (octets) d'un modèle déjà installé, telle que rapportée par `/api/tags` (champ
  * `size`) — sert d'approximation de son poids en VRAM (curseur de longueur de contexte, hardwareScan.ts).
  * Préférée à la table `vramGb` maintenue à la main dans hardwareScan.ts (ModelCandidate) : cette dernière

@@ -4,9 +4,9 @@ Regroupe dans un seul process : écoute continue du micro, détection du mot
 d'activation "Jaris" (modèle openWakeWord dédié, entraîné spécifiquement
 pour ce mot, puis confirmation par transcription locale — voir wakeword.py et wake_confirmation.py ;
 déclenchement manuel via `trigger`/touche "+" toujours possible) — capture
-de l'énoncé qui suit jusqu'au silence, puis transcription (Cohere
-Transcribe) — directement depuis les échantillons en mémoire, sans passer
-par des fichiers WAV intermédiaires.
+de l'énoncé qui suit jusqu'au silence, puis transcription (Parakeet v3,
+en RAM, étape 158) — directement depuis les échantillons en mémoire, sans
+passer par des fichiers WAV intermédiaires.
 
 Léo trouvait le double clap utilisé avant (voir git log) "galère" et
 voulait simplement dire "Jaris" — remplacé ici par un modèle dédié plutôt
@@ -42,6 +42,7 @@ Lancé par electron/services/voiceClient.ts, jamais directement.
 
 import argparse
 import json
+import os
 import queue
 import sys
 import threading
@@ -122,33 +123,57 @@ def rms(chunk: np.ndarray) -> float:
     return float(np.sqrt(np.mean(chunk.astype(np.float64) ** 2)))
 
 
-# Copie non protégée du modèle de transcription officiel (CohereLabs/cohere-transcribe-03-2026), dont
-# l'accès demande un compte Hugging Face et l'acceptation de conditions en ligne. Ce compte est exactement
-# ce que l'étape 16 du roadmap interdit ("aucun compte Hugging Face à créer, même pour un débutant
-# complet") : sans ça, la reconnaissance vocale ne démarre tout simplement pas sur une machine fraîchement
-# installée.
+# Étape 158 (Léo : « enlève le test, et on décale sur Parakeet v3 ») : la transcription passe de Cohere Transcribe
+# (2 milliards de paramètres, 3,9 Go sur la carte graphique) à Parakeet TDT 0.6B v3 de NVIDIA, EN RAM. Mesuré sur
+# la RTX 3070 de Léo avec le test de l'étape 156 (5 phrases dites par la voix de Jaris) : Parakeet en RAM 0,26 s
+# pour 5 s de parole et 4,5 % de mots faux, contre 0,84 s et 9,1 % pour Cohere sur la carte — plus rapide, moins
+# d'erreurs, et toute la carte graphique rendue au modèle de conversation (GPU_RESERVED_GB, hardwareScan.ts).
 #
-# Ce ne sont pas d'autres poids, ni une version allégée : le fichier model.safetensors de cette copie a
-# exactement la même empreinte SHA256 que l'officiel (987bd3e141c7bfdb5a78f5db11397ee7737308357e6cc0a3f36a4979b158137a,
-# 4 131 862 976 octets), vérifié via l'API Hugging Face. La licence Apache 2.0 du modèle autorise
-# explicitement cette redistribution.
-DEFAULT_STT_MODEL = "evewashere/cohere-transcribe-03-2026-ungated"
+# Version ONNX de istupakov (format lu par onnx-asr), tirée des poids officiels de NVIDIA (licence CC-BY-4.0 :
+# « Parakeet TDT 0.6B v3 », NVIDIA). Épinglée par identifiant de commit, comme l'était Cohere : un dépôt tiers
+# pourrait sinon remplacer les fichiers d'un jour à l'autre et Jaris les téléchargerait sans broncher.
+STT_REPO = "istupakov/parakeet-tdt-0.6b-v3-onnx"
+STT_REVISION = "8f23f0c03c8761650bdb5b40aaf3e40d2c15f1ce"
+STT_MODEL_TYPE = "nemo-parakeet-tdt-0.6b-v3"
+# Version non compressée (≈ 2,5 Go, ≈ 2,5 Go de RAM) : mesurée plus juste que la compressée (4,5 % contre 6,8 %
+# d'erreurs chez Léo) pour un écart de vitesse négligeable (0,26 s contre 0,22 s).
+STT_FILES = ["config.json", "vocab.txt", "nemo128.onnx", "encoder-model.onnx", "encoder-model.onnx.data", "decoder_joint-model.onnx"]
 
-# Version exacte (identifiant de commit) plutôt que la dernière en date : un dépôt tiers pourrait sinon
-# remplacer les poids par n'importe quoi d'un jour à l'autre, et Jaris le téléchargerait sans broncher.
-# Un identifiant de commit, lui, est immuable — c'est ce qui rend l'usage d'une copie tierce sûr.
-DEFAULT_STT_REVISION = "29b9036c65620e1a148127c6147543b52358da6a"
+# Ancien modèle (Cohere Transcribe, ~4 Go) : effacé du cache une fois Parakeet chargé — plus rien ne s'en sert.
+OLD_STT_CACHE_DIR = "models--evewashere--cohere-transcribe-03-2026-ungated"
+
+
+def load_parakeet():
+    """Télécharge (première fois seulement) et charge Parakeet sur le processeur. Renvoie transcrire(audio)."""
+    import onnx_asr
+    from huggingface_hub import snapshot_download
+
+    path = snapshot_download(STT_REPO, revision=STT_REVISION, allow_patterns=STT_FILES)
+    # CPUExecutionProvider explicite : la transcription reste en RAM et ne prend rien sur la carte graphique,
+    # même si une version GPU d'onnxruntime venait un jour à être installée.
+    model = onnx_asr.load_model(STT_MODEL_TYPE, path, providers=["CPUExecutionProvider"])
+
+    def transcribe(audio: np.ndarray) -> str:
+        return str(model.recognize(audio, sample_rate=SAMPLE_RATE)).strip()
+
+    return transcribe
+
+
+def remove_old_stt_model() -> None:
+    """Rend les ~4 Go de Cohere Transcribe, inutiles depuis l'étape 158. Silencieux si absent ou verrouillé."""
+    try:
+        import shutil
+        from huggingface_hub.constants import HF_HUB_CACHE
+
+        old = os.path.join(HF_HUB_CACHE, OLD_STT_CACHE_DIR)
+        if os.path.isdir(old):
+            shutil.rmtree(old, ignore_errors=True)
+    except Exception:
+        pass
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--stt-model", default=DEFAULT_STT_MODEL)
-    parser.add_argument("--stt-revision", default=DEFAULT_STT_REVISION)
-    # "auto" plutôt que "cpu" : c'est torch, une fois chargé, qui sait si une carte graphique est
-    # réellement utilisable (voir plus bas). Un défaut "cpu" ferait tourner la transcription sur le
-    # processeur sur une machine équipée d'un GPU — des secondes au lieu d'une fraction de seconde.
-    parser.add_argument("--stt-device", default="auto")
-    parser.add_argument("--stt-language", default="fr")
     parser.add_argument("--input-device", type=int, default=None)
     parser.add_argument("--list-devices", action="store_true")
     # Options → Activation (étape 81) : quand Léo préfère la touche "+"/le clic sur l'orbe, aucune raison de
@@ -198,40 +223,17 @@ def main() -> None:
     try:
         import sounddevice as sd  # lève OSError (pas ImportError) si PortAudio est absent
         import scipy.signal
-        import torch
-        from transformers import AutoProcessor, CohereAsrForConditionalGeneration
     except (ImportError, OSError) as exc:
         emit({"event": "fatal", "message": f"dépendance Python manquante ou inutilisable ({exc}). Lance : pip install -r python/requirements.txt"})
         sys.exit(1)
 
-    emit({"event": "log", "message": f"Chargement de la transcription '{args.stt_model}' (téléchargement HuggingFace au premier lancement, ~4 Go, peut prendre plusieurs minutes)…"})
+    emit({"event": "log", "message": "Chargement de la transcription (Parakeet v3 : ~2,5 Go à télécharger au premier lancement, peut prendre plusieurs minutes)…"})
     try:
-        # Résolu ici et pas plus tôt : seul torch peut dire si CUDA est vraiment disponible (carte
-        # présente ET pilote compatible ET version GPU de torch installée — voir pythonRuntime.ts, qui
-        # installe la version GPU quand une carte NVIDIA est détectée, mais retombe sur la version
-        # processeur si cette installation échoue).
-        stt_device = args.stt_device
-        if stt_device == "auto":
-            stt_device = "cuda" if torch.cuda.is_available() else "cpu"
-            emit({"event": "log", "message": f"Transcription sur {stt_device}."})
-        stt_dtype = torch.float16 if stt_device == "cuda" else torch.float32
-        # La révision n'est épinglée que pour le modèle par défaut : un modèle choisi explicitement par
-        # l'utilisateur (STT_MODEL du .env) n'a évidemment pas les mêmes identifiants de commit.
-        revision = args.stt_revision if args.stt_model == DEFAULT_STT_MODEL else None
-        stt_processor = AutoProcessor.from_pretrained(args.stt_model, revision=revision)
-        stt_model = CohereAsrForConditionalGeneration.from_pretrained(
-            args.stt_model, revision=revision, dtype=stt_dtype, device_map=stt_device
-        )
+        transcribe = load_parakeet()
     except Exception as exc:
-        hint = (
-            f" Le modèle '{args.stt_model}' est protégé ('gated') : accepte les conditions sur "
-            f"https://huggingface.co/{args.stt_model} puis lance `hf auth login`, ou laisse STT_MODEL "
-            f"vide dans le .env pour utiliser le modèle par défaut, qui lui ne demande aucun compte."
-            if "gated" in str(exc).lower() or "401" in str(exc) or "access" in str(exc).lower()
-            else ""
-        )
-        emit({"event": "fatal", "message": f"échec de chargement de la transcription '{args.stt_model}': {exc}.{hint}"})
+        emit({"event": "fatal", "message": f"échec de chargement de la transcription (Parakeet v3) : {exc}"})
         sys.exit(1)
+    remove_old_stt_model()
 
     audio_queue: "queue.Queue[np.ndarray]" = queue.Queue()
 
@@ -393,11 +395,7 @@ def main() -> None:
                 # ne suffit donc jamais à activer l'interface ou envoyer une demande.
                 audio = np.concatenate(pending_audio).astype(np.float32) / 32768.0
                 try:
-                    inputs = stt_processor(audio, sampling_rate=SAMPLE_RATE, return_tensors="pt", language=args.stt_language)
-                    inputs.to(stt_model.device, dtype=stt_model.dtype)
-                    with torch.no_grad():
-                        outputs = stt_model.generate(**inputs, max_new_tokens=64)
-                    candidate_text = stt_processor.decode(outputs[0], skip_special_tokens=True).strip()
+                    candidate_text = transcribe(audio)
                     if contains_wake_name(candidate_text):
                         triggered = True
                         voice_activated = True
@@ -463,11 +461,7 @@ def main() -> None:
 
         audio = np.concatenate(capture_chunks).astype(np.float32) / 32768.0
         try:
-            inputs = stt_processor(audio, sampling_rate=SAMPLE_RATE, return_tensors="pt", language=args.stt_language)
-            inputs.to(stt_model.device, dtype=stt_model.dtype)
-            with torch.no_grad():
-                outputs = stt_model.generate(**inputs, max_new_tokens=256)
-            text = stt_processor.decode(outputs[0], skip_special_tokens=True).strip()
+            text = transcribe(audio)
             if voice_activated:
                 text = remove_wake_prefix(text)
             if is_hallucination(text):

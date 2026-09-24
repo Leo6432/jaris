@@ -3,14 +3,16 @@
 # scipy 1.18.1, se sont révélées incompatibles entre elles une fois résolues toutes ensemble). Sans ça, deux
 # installations de la même version de Jaris, à quelques semaines d'écart, pouvaient récupérer des versions
 # différentes de chaque dépendance — jamais testées ensemble, un risque inutile pour un simple sidecar voix.
-transformers==5.16.1
+#
+# Étape 158 : la transcription passe de Cohere Transcribe à Parakeet v3 (onnx-asr, en RAM). torch, transformers,
+# accelerate, sentencepiece et librosa ne servaient QU'À Cohere : retirés (plus de 3 Go de moins à installer, dont
+# torch ~2,5 Go). Ensemble restant re-résolu depuis un environnement vide (`pip install --dry-run --report`).
 huggingface_hub==1.30.0
+# Lu par supertonic (synthèse vocale), pas directement par Jaris.
 soundfile==0.14.0
-librosa==0.11.0
 scipy==1.17.1
-sentencepiece==0.2.2
+# Demandé par onnxruntime (pas par Jaris directement) : figé à la version déjà résolue et éprouvée.
 protobuf==7.36.1
-accelerate==1.14.0
 sounddevice==0.5.6
 numpy==2.4.6
 supertonic==1.3.1
@@ -19,12 +21,5 @@ supertonic==1.3.1
 # mot d'activation "Jaris" (voir python/models/, jaris.onnx) — sans cette ligne, une évolution future de
 # supertonic qui abandonnerait onnxruntime casserait wakeword.py silencieusement, sans rapport avec la TTS.
 onnxruntime==1.30.0
-# Étape 156 : Parakeet v3 (transcription NVIDIA, 0,6 milliard de paramètres) pour le test de vitesse de la
-# transcription (python/stt_benchmark.py). Ne dépend que de numpy ; onnxruntime et huggingface_hub, qu'il utilise,
-# sont déjà figés au-dessus — ensemble résolu avec `pip install --dry-run --report` avant d'être figé.
+# Transcription (étape 158) : charge Parakeet TDT 0.6B v3 (NVIDIA) avec onnxruntime, sur le processeur.
 onnx-asr==0.12.0
-# torch délibérément SANS version figée ici : installé à part et en amont pour les machines NVIDIA
-# (pythonRuntime.ts, index CUDA dédié) avant que cette liste ne soit appliquée — une version figée ici
-# risquerait de forcer pip à réinstaller une version différente (donc potentiellement sans support GPU)
-# par-dessus celle déjà installée. Voir le commentaire d'installDependencies() dans pythonRuntime.ts.
-torch

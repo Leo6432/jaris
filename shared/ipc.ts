@@ -209,39 +209,6 @@ export interface MicTestDonePayload {
 }
 
 /**
- * Étape 156 (Options → Voix, « Tester la vitesse de la transcription ») : une façon de comprendre la voix,
- * mesurée sur la machine de l'utilisateur par python/stt_benchmark.py.
- */
-export interface SttBenchmarkRow {
-  id: string
-  label: string
-  /** Où tourne la transcription : sur la carte graphique ou dans la mémoire normale. */
-  where: 'vram' | 'ram'
-  available: boolean
-  /** Pourquoi cette ligne n'a pas pu être mesurée (pas de carte NVIDIA, pas assez de RAM libre…). */
-  reason?: string
-  /** Secondes pour comprendre une phrase de 5 secondes. */
-  secondsPer5s?: number
-  /** RAM prise en fonctionnement ; `null` si la mesure a échoué (jamais un 0 à la place). */
-  ramGb?: number | null
-  /** VRAM prise (lue par nvidia-smi, contexte CUDA compris) ; `null` si elle n'a pas pu être lue. */
-  vramGb?: number | null
-  /** Pourcentage de mots mal compris. */
-  errorsPct?: number
-  loadSeconds?: number
-  /** Ce qui a été compris sur la première phrase, pour juger soi-même. */
-  sample?: string
-}
-
-export interface SttBenchmarkResult {
-  ok: boolean
-  /** Message d'échec lisible, quand `ok` est faux. */
-  message?: string
-  gpu?: string | null
-  rows: SttBenchmarkRow[]
-}
-
-/**
  * Périmètre d'un run d'analyse (runModelAnalysis) : 'all' teste tout comme avant, un palier précis ne teste
  * QUE ses propres candidats (bien plus rapide) — utile pour re-tester un seul palier après un changement qui
  * ne concerne que lui (ex: débloquer "Puissant" via VRAM+RAM) sans refaire tourner tout le reste. Les
@@ -678,10 +645,6 @@ export const IPC_CHANNELS = {
   micTestLevel: 'jaris:mic-test-level',
   /** main -> renderer : verdict final d'un test micro (un signal a été détecté ou non). */
   micTestDone: 'jaris:mic-test-done',
-  /** renderer <-> main : test de vitesse de la transcription, carte graphique contre RAM (étape 156). */
-  runSttBenchmark: 'jaris:run-stt-benchmark',
-  /** main -> renderer : étape en cours du test de vitesse de la transcription. */
-  sttBenchmarkProgress: 'jaris:stt-benchmark-progress',
   /** renderer <-> main : version de Jaris comparée à la dernière Release GitHub stable (étape 20). */
   getAppVersionStatus: 'jaris:get-app-version-status',
   /** renderer -> main : télécharge et lance l'installeur de la dernière version, puis ferme Jaris. */

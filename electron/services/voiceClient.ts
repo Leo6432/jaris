@@ -26,7 +26,7 @@ const voiceServerScript = (): string => join(pythonScriptsDir(), 'voice_server.p
 /**
  * Sidecar Python persistant : écoute continue du micro, détection du mot
  * d'activation "Jaris" (ou déclenchement manuel, voir triggerWake) et transcription
- * (Cohere Transcribe) dans un seul process. Émet 'wake', 'transcript' (text: string),
+ * (Parakeet v3, en RAM — étape 158) dans un seul process. Émet 'wake', 'transcript' (text: string),
  * 'log', 'error', 'micTestLevel' (level: number) et 'micTestDone' (detected: boolean).
  */
 export class VoiceClient extends EventEmitter {
@@ -44,12 +44,8 @@ export class VoiceClient extends EventEmitter {
     if (this.ready) return this.ready
 
     this.ready = new Promise((resolveReady, rejectReady) => {
-      const args = ['-u', voiceServerScript(), '--stt-device', config.stt.device, '--stt-language', config.stt.language]
-      // Transmis seulement si l'utilisateur a explicitement choisi un autre modèle : sinon voice_server.py
-      // applique le sien, avec la version exacte épinglée qui l'accompagne (voir DEFAULT_STT_MODEL).
-      if (config.stt.model !== '') {
-        args.push('--stt-model', config.stt.model)
-      }
+      // Transcription : Parakeet v3, version épinglée dans voice_server.py (étape 158) — plus de réglage à passer.
+      const args = ['-u', voiceServerScript()]
       if (inputDeviceIndex !== undefined && inputDeviceIndex !== null) {
         args.push('--input-device', String(inputDeviceIndex))
       } else if (config.voice.inputDevice !== '') {

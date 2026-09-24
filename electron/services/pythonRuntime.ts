@@ -116,8 +116,8 @@ function run(exe: string, args: string[], onProgress: InstallProgress): Promise<
 const PYTHON_RELEASES_API = 'https://api.github.com/repos/astral-sh/python-build-standalone/releases/latest'
 
 /**
- * Version de Python visée. Volontairement pas la toute dernière : les paquets scientifiques (torch en
- * tête) publient leurs versions compilées pour Windows avec plusieurs mois de retard sur une nouvelle
+ * Version de Python visée. Volontairement pas la toute dernière : les paquets scientifiques (onnxruntime,
+ * scipy...) publient leurs versions compilées pour Windows avec plusieurs mois de retard sur une nouvelle
  * version de Python, et `pip install` échouerait faute de version compatible.
  */
 const PYTHON_SERIES = '3.12'
@@ -160,44 +160,19 @@ async function download(url: string, onProgress: InstallProgress): Promise<Buffe
   return Buffer.concat(chunks)
 }
 
-/** true si une carte NVIDIA est présente : décide des paquets PyTorch à installer (voir installDependencies). */
-async function hasNvidiaGpu(): Promise<boolean> {
-  return (await run('nvidia-smi', ['--query-gpu=name', '--format=csv,noheader'], () => {}).catch(() => 1)) === 0
-}
-
-/**
- * Version de CUDA visée pour les paquets PyTorch. Les pilotes NVIDIA sont rétrocompatibles (un pilote
- * récent fait tourner des paquets compilés pour une version de CUDA plus ancienne), donc viser une
- * version éprouvée plutôt que la toute dernière est le choix le plus sûr : ça marche sur une machine à
- * jour comme sur une machine dont le pilote a un peu de retard.
- */
-const TORCH_CUDA_INDEX = 'https://download.pytorch.org/whl/cu126'
-
-/**
- * Installe les dépendances Python. PyTorch est traité à part et en premier : sur Windows, le paquet
- * `torch` publié sur PyPI (celui qu'installerait un simple `pip install -r requirements.txt`) est une
- * version SANS support GPU. L'installer tel quel ferait tourner la transcription sur le processeur, des
- * secondes au lieu d'une fraction de seconde sur une machine qui a pourtant une carte graphique — ce que
- * l'étape 16 interdit explicitement ("jamais une version allégée ou dégradée" par rapport au dev).
- * Si l'installation GPU échoue malgré tout (pilote trop ancien, dépôt PyTorch injoignable), on retombe
- * sur la version processeur : Jaris marchera plus lentement, mais il marchera.
- */
 /**
  * `--no-cache-dir` (étape 143, « tout sur D, jamais une partie ») : sans lui, pip garde une copie de chaque
- * paquet téléchargé dans %LOCALAPPDATA%\pip\cache — sur C quoi que Léo ait choisi, torch en tête (~2,5 Go).
+ * paquet téléchargé dans %LOCALAPPDATA%\pip\cache — sur C quoi que Léo ait choisi.
  * Rien à perdre : Jaris n'installe ces paquets qu'une fois, le cache ne resservirait qu'à une réinstallation.
  */
 export const PIP_INSTALL = ['-m', 'pip', 'install', '--no-cache-dir'] as const
 
+/**
+ * Installe les dépendances Python. Plus de PyTorch depuis l'étape 158 : il ne servait qu'à Cohere Transcribe,
+ * remplacé par Parakeet v3 (onnx-asr, sur le processeur) — plus d'installation à part avec un index CUDA dédié,
+ * et plus de 2,5 Go à télécharger.
+ */
 async function installDependencies(python: string, onProgress: InstallProgress): Promise<void> {
-  if (await hasNvidiaGpu()) {
-    onProgress('Carte graphique NVIDIA détectée : installation de PyTorch avec accélération GPU…')
-    const code = await run(python, [...PIP_INSTALL, 'torch', '--index-url', TORCH_CUDA_INDEX], onProgress)
-    if (code !== 0) {
-      onProgress("L'installation GPU de PyTorch a échoué : repli sur la version processeur, plus lente.")
-    }
-  }
-
   onProgress('Installation des dépendances Python (plusieurs minutes)…')
   const code = await run(python, [...PIP_INSTALL, '-r', requirementsPath()], onProgress)
   if (code !== 0) throw new Error(`installation des dépendances Python échouée (code ${code})`)

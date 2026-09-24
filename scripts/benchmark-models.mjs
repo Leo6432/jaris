@@ -94,8 +94,8 @@ const RESUME = process.env.JARIS_RESUME === '1'
 
 /**
  * Petite marge sous la VRAM totale détectée, pour le contexte (num_ctx, 4096 par défaut) et l'overhead
- * OS/pilote pendant le test — contrairement à STT_RESERVED_GB côté app (electron/services/hardwareScan.ts),
- * pas besoin de réserver de la place pour le STT ici : ce script tourne seul, sans le pipeline vocal.
+ * OS/pilote pendant le test — même valeur que GPU_RESERVED_GB côté app (electron/services/hardwareScan.ts)
+ * depuis l'étape 158 (la transcription tourne en RAM, elle ne prend plus de place sur la carte).
  */
 const VRAM_SAFETY_MARGIN_GB = 1
 
@@ -122,7 +122,7 @@ const RAM_SAFETY_MARGIN_GB = 16
  * mistral-small3.2:24b, glm-4.7-flash:q4_K_M) sont les candidats du palier Puissant (LARGE_CANDIDATES dans
  * hardwareScan.ts) au-delà de la VRAM disponible sur une machine comme celle de Léo — ajoutés à la demande
  * explicite de Léo après avoir vu "Puissant" retomber sur un petit modèle faute de place : sur cette machine,
- * réserver 4,5 Go de VRAM en permanence pour le STT (voir STT_RESERVED_GB dans hardwareScan.ts) ne laissait
+ * réserver 4,5 Go de VRAM en permanence pour le STT (avant l'étape 158, où il est passé en RAM) ne laissait
  * jamais assez de place pour un vrai grand modèle. Certains sont MoE (gemma4:26b, gpt-oss:20b probablement
  * glm-4.7-flash) et restent rapides même en débordant sur la RAM ; les autres sont denses (qwen3.5:35b/27b,
  * qwen3.8:27b, qwen3.6:27b, command-r:35b, mistral-small3.2:24b) et seront NETTEMENT plus lents une fois

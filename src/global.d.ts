@@ -18,7 +18,6 @@ import type {
   MemoryGraph,
   MicTestDonePayload,
   MicTestLevelPayload,
-  SttBenchmarkResult,
   ModelOverviewResult,
   ModelsLocationStatus,
   OllamaVersionStatus,
@@ -111,8 +110,6 @@ declare global {
       setAudioInputDevice: (deviceIndex: number | null) => Promise<void>
       setWakewordEnabled: (enabled: boolean) => Promise<void>
       testMicrophone: () => void
-      runSttBenchmark: () => Promise<SttBenchmarkResult>
-      onSttBenchmarkProgress: (cb: (message: string) => void) => () => void
       stopTestMicrophone: () => void
       setActiveMode: (mode: AppMode) => void
       setOptionsOpen: (open: boolean) => void

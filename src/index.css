@@ -576,64 +576,6 @@ body.body--scan::after {
   padding: 0 0 14px;
 }
 
-/* Test de vitesse de la transcription (étape 156) : un tableau qui défile horizontalement sur une fenêtre
-   étroite plutôt que de déborder de la carte, avec les chiffres alignés à droite pour se comparer d'un coup d'œil. */
-.options-menu__stt-bench-progress {
-  margin: 0 0 12px;
-  font-size: 0.8rem;
-  color: var(--hud-accent);
-}
-
-.options-menu__stt-bench {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 0 0 14px;
-  overflow-x: auto;
-}
-
-.options-menu__stt-bench-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.8rem;
-  color: var(--hud-text);
-}
-
-.options-menu__stt-bench-table th,
-.options-menu__stt-bench-table td {
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--hud-line);
-  text-align: right;
-  white-space: nowrap;
-}
-
-.options-menu__stt-bench-table th {
-  font-weight: 600;
-  color: var(--hud-text-dim);
-}
-
-.options-menu__stt-bench-table th:first-child,
-.options-menu__stt-bench-table td:first-child {
-  text-align: left;
-  white-space: normal;
-}
-
-.options-menu__stt-bench-sample {
-  display: block;
-  margin-top: 2px;
-  font-size: 0.72rem;
-  color: var(--hud-text-faint);
-}
-
-.options-menu__stt-bench-row--unavailable td {
-  color: var(--hud-text-faint);
-}
-
-.options-menu__stt-bench-row--unavailable td:last-child {
-  text-align: left;
-  white-space: normal;
-}
-
 /* Onglet "Ce que Jaris sait faire" (étape 108, entièrement repris à l'étape 111 : "fait une meilleur
    présentation car on comprend pas trop").
    Chaque capacité est une CARTE (titre / à quoi ça sert / la phrase à dire) au lieu d'une ligne de texte

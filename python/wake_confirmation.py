@@ -14,7 +14,13 @@ import numpy as np
 # et "j'arrive"/"j'arrise" (préfixe "arriv"/"arris", pas "jari") ne matchent jamais — la confusion réelle et
 # fréquente avec "j'arrive" (un vrai mot français très courant) n'est PAS ajoutée à la liste acceptée,
 # risque trop élevé de fausse activation sur une phrase innocente ("j'arrive dans 5 minutes").
-WAKE_NAME = re.compile(r'\bjari\w*\b', re.IGNORECASE)
+#
+# Étape 158 : avec Parakeet v3 (qui remplace Cohere), mesuré sur 50 échantillons « Jaris » (10 voix, 5 tournures) :
+# « Jaris » 21 fois, « Jarry » 16, « Jarris » 3, « Dijaris » 2 (« Dis Jaris » collé), « j'arrive » 2, « Jerry » 1…
+# L'ancien motif n'en reconnaissait que 24 sur 50. Élargi au PATRON observé — « jar », un « r » doublé ou non,
+# puis « i » ou « y » — plus le « di » collé de « Dis Jaris » : 46 sur 50. Toujours pas « j'arrive » (vrai mot
+# courant, faux réveil sur « j'arrive dans 5 minutes »), ni « Jarvis », « Jerry » ou « Paris ».
+WAKE_NAME = re.compile(r'\b(?:di)?jarr?[iy]\w*\b', re.IGNORECASE)
 
 
 def contains_wake_name(text: str) -> bool:

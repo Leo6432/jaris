@@ -66,21 +66,21 @@ function setup({ verifiedToolScoresMd = '', vramMib, ramGb = 32, installed = nul
 }
 
 // qwen3.5:4b (3,4 Go) et qwen3.5:9b (6,6 Go) sont tous deux candidats Médium (MEDIUM_CANDIDATES,
-// hardwareScan.ts) : ils deviennent atteignables à 3,4+4,5=7,9 Go et 6,6+4,5=11,1 Go de VRAM totale
-// (STT_RESERVED_GB=4,5 dans le vrai fichier).
+// hardwareScan.ts) : ils deviennent atteignables à 3,4+1=4,4 Go et 6,6+1=7,6 Go de VRAM totale
+// (GPU_RESERVED_GB=1 dans le vrai fichier depuis l'étape 158 : la transcription ne prend plus la carte).
 const VERIFIED_MD = ['## Conversation', '| Modèle | Fiabilité |', '| --- | --- |', '| qwen3.5:4b | 6/6 |', '| qwen3.5:9b | 6/6 |'].join('\n')
 
 test('deux VRAM TOTALES dans le même intervalle obtiennent garanti le même modèle Médium', async () => {
-  const { pickBestModelsFromBenchmark: pick8 } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 8 * 1024 })
-  const { pickBestModelsFromBenchmark: pick10 } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 10 * 1024 })
-  const result8 = await pick8()
-  const result10 = await pick10()
-  assert.equal(result8.models.medium, 'qwen3.5:4b')
-  assert.equal(result10.models.medium, 'qwen3.5:4b')
+  const { pickBestModelsFromBenchmark: pick5 } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 5 * 1024 })
+  const { pickBestModelsFromBenchmark: pick7 } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 7 * 1024 })
+  const result5 = await pick5()
+  const result7 = await pick7()
+  assert.equal(result5.models.medium, 'qwen3.5:4b')
+  assert.equal(result7.models.medium, 'qwen3.5:4b')
 })
 
-test('une VRAM au-delà du seuil suivant obtient le modèle Médium suivant (qwen3.5:9b)', async () => {
-  const { pickBestModelsFromBenchmark } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 12 * 1024 })
+test('une VRAM au-delà du seuil suivant obtient le modèle Médium suivant (qwen3.5:9b), dès 8 Go (étape 158)', async () => {
+  const { pickBestModelsFromBenchmark } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 8 * 1024 })
   const result = await pickBestModelsFromBenchmark()
   assert.equal(result.models.medium, 'qwen3.5:9b')
 })

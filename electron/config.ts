@@ -25,19 +25,6 @@ export const config = {
      * voir voiceClient.ts. */
     inputDevice: readEnv('MIC_INPUT_DEVICE')
   },
-  stt: {
-    /**
-     * Reconnaissance vocale : Cohere Transcribe (2 Md de paramètres, #1 du Open ASR Leaderboard). Vide par
-     * défaut À DESSEIN : le modèle utilisé (et la version exacte épinglée qui va avec) est décidé par
-     * voice_server.py, seul endroit où les deux sont définis ensemble. Renseigner STT_MODEL ici sert
-     * uniquement à imposer un autre modèle que celui par défaut.
-     */
-    model: readEnv('STT_MODEL'),
-    language: readEnv('STT_LANGUAGE', 'fr'),
-    /** "auto" = c'est torch qui tranche au chargement (voir voice_server.py), selon ce qui est réellement
-     * utilisable sur la machine. "cuda"/"cpu" pour forcer l'un des deux. */
-    device: readEnv('STT_DEVICE', 'auto')
-  },
   tts: {
     /** Synthèse vocale : Supertonic HD (99M paramètres, modèle téléchargé automatiquement au premier lancement). */
     voice: readEnv('TTS_VOICE', 'M3'),

@@ -14,8 +14,7 @@ import {
   stopOllamaIfStartedByJaris,
   updateOllama
 } from './services/dependencyServices'
-import { deleteModel, listInstalledModels, unloadAllModels } from './services/ollama'
-import { runSttBenchmark } from './services/sttBenchmark'
+import { deleteModel, listInstalledModels } from './services/ollama'
 import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES } from './services/modelChoice'
 import { getStorageStatus, programMoveCommandLine, reconcileStorage, relocateEverything } from './services/relocation'
 import { DOCKER_APP_SUBDIR, findDockerInstallDir } from './services/dockerLocation'
@@ -63,7 +62,6 @@ import {
   type PickedImageFile,
   type Profile,
   type SoundCue,
-  type SttBenchmarkResult,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload,
   type WidgetMode
@@ -93,8 +91,6 @@ let tray: Tray | null = null
  * (les deux quittent vraiment Jaris désormais) — seul minimize (juste en dessous) continue de replier en
  * widget sans jamais toucher à ce drapeau. */
 let quitting = false
-/** Un seul test de vitesse de la transcription à la fois (étape 156) : chacun arrête et relance la voix. */
-let sttBenchmarkRunning = false
 /** Tant que l'onboarding n'est pas fini, fermer la fenêtre de réglages doit quitter l'appli normalement (pas de widget à replier sur un profil pas encore configuré). */
 let onboardingDone = false
 /** Génération d'application en cours (mode Code), pour que le bouton "Arrêter" puisse l'interrompre
@@ -700,23 +696,6 @@ app.whenReady().then(async () => {
     await saveProfile({ ...profile, activationWakeWordEnabled: enabled })
     pipeline?.stop()
     await startVoicePipeline()
-  })
-  // Étape 156 : test de vitesse de la transcription, carte graphique contre RAM (python/stt_benchmark.py). La
-  // carte est libérée d'abord — la transcription de Jaris (4,5 Go) et les modèles d'Ollama gardés « au chaud »
-  // y resteraient sinon, et fausseraient (ou empêcheraient) la mesure sur la carte. La voix repart à la fin,
-  // même si le test échoue.
-  ipcMain.handle(IPC_CHANNELS.runSttBenchmark, async (): Promise<SttBenchmarkResult> => {
-    if (sttBenchmarkRunning) return { ok: false, message: 'Un test est déjà en cours.', rows: [] }
-    sttBenchmarkRunning = true
-    pipeline?.stop()
-    ttsClient.stop()
-    await unloadAllModels()
-    try {
-      return await runSttBenchmark((message) => broadcast(IPC_CHANNELS.sttBenchmarkProgress, message))
-    } finally {
-      sttBenchmarkRunning = false
-      await startVoicePipeline()
-    }
   })
   ipcMain.on(IPC_CHANNELS.testMicrophone, () => pipeline?.testMic())
   ipcMain.on(IPC_CHANNELS.stopTestMicrophone, () => pipeline?.stopTestMic())

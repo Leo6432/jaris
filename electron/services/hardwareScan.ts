@@ -21,9 +21,14 @@ const execAsync = promisify(exec)
 type Tier = keyof ModelTiers
 
 /**
- * VRAM réservée en permanence par le sidecar STT (Cohere Transcribe, chargé une fois au démarrage de
- * Jaris et jamais déchargé) + petite marge de sécurité pour le pilote/l'OS. À soustraire du total avant
- * de choisir des modèles Ollama, sinon on risque de dépasser la VRAM réellement disponible.
+ * VRAM gardée hors de portée des modèles d'Ollama : Windows (affichage), le pilote et la fenêtre de Jaris. À
+ * soustraire du total avant de choisir des modèles, sinon on risque de dépasser la VRAM réellement disponible.
+ *
+ * Étape 158 : 4,5 -> 1 Go. Les 4,5 Go d'avant réservaient surtout la transcription (Cohere Transcribe, 3,9 Go
+ * mesurés sur la RTX 3070 de Léo), chargée en permanence sur la carte. Elle tourne désormais en RAM (Parakeet v3,
+ * voir voice_server.py) : la carte revient au modèle de conversation — sur 6 Go, Rapide/Médium passent de
+ * qwen3.5:0.8b à des modèles fiables à 6/6 ; sur 8 Go, Médium passe de qwen3.5:4b à qwen3.5:9b. 1 Go, comme
+ * la marge du script d'analyse (VRAM_SAFETY_MARGIN_GB, benchmark-models.mjs).
  *
  * Volontairement basé sur la VRAM *totale* de la carte (fixe), pas sur la VRAM libre à l'instant du
  * scan : cette dernière varie selon ce qui tourne au même moment (jeu, navigateur...), ce qui donnerait
@@ -31,7 +36,7 @@ type Tier = keyof ModelTiers
  * Options sert à re-choisir les modèles si la config matérielle change (nouvelle carte...), pas à
  * s'adapter à l'usage instantané du GPU.
  */
-const STT_RESERVED_GB = 4.5
+const GPU_RESERVED_GB = 1
 
 interface ModelCandidate {
   model: string
@@ -1053,7 +1058,7 @@ function computeModelPicks(
   vision: ModelOverviewEntry
   code: ModelOverviewEntry
 } {
-  const budgetGb = vramGb !== null ? Math.max(0, vramGb - STT_RESERVED_GB) : 0
+  const budgetGb = vramGb !== null ? Math.max(0, vramGb - GPU_RESERVED_GB) : 0
   // Budget élargi pour les candidats "Puissant" qui tolèrent de déborder sur la RAM (voir
   // LARGE_RAM_OFFLOAD_MODELS) : VRAM (déjà amputée de la réservation STT) + RAM (moins la marge pour
   // l'OS/les autres logiciels) — jamais pour les autres candidats, qui doivent tenir entièrement en VRAM

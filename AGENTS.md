@@ -4508,3 +4508,40 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `node --test scripts/test-stt-benchmark.mjs scripts/test-stt-benchmark-ui.mjs` (mesure réelle
   de +300 Mo ; « non mesuré » affiché pour une mesure ratée, « 0 Go » pour la VRAM d'une configuration en RAM).
   Script relancé en entier ici : Cohere en RAM 12,1 Go, Parakeet v3 2,5 Go, compressé 1,1 Go.
+
+- **Étape 158, Léo : « enlève le test, et on décale sur Parakeet v3 ».** Le test de vitesse de l'étape 156
+  (Options → Voix, `stt_benchmark.py`/`sttBenchmark.ts`, ses canaux IPC et son tableau) est retiré en entier :
+  il a rendu son verdict, et un bouton qui télécharge ~12 Go de modèles pour une mesure n'a pas sa place dans
+  les réglages de tous les jours. La transcription passe de Cohere Transcribe (sur la carte graphique) à
+  **Parakeet TDT 0.6B v3 en RAM** (onnx-asr 0.12.0, `CPUExecutionProvider`, dépôt
+  `istupakov/parakeet-tdt-0.6b-v3-onnx` épinglé par commit, fp32, ~2,5 Go). Décidé sur les MESURES de Léo sur
+  sa RTX 3070, pas sur un comparatif : Parakeet en RAM 0,26 s et 4,5 % de mots faux, contre Cohere sur la carte
+  0,84 s, 9,1 % et 3,9 Go de VRAM. La version compressée (int8, 0,22 s, 6,8 %) n'a pas été retenue : 2 points
+  d'erreur de plus pour 1,3 Go de RAM gagnés.
+  **Conséquences, chacune traitée** :
+  1. **La VRAM rendue au modèle de conversation.** `STT_RESERVED_GB = 4.5` (hardwareScan.ts) devient
+     `GPU_RESERVED_GB = 1` (Windows, affichage, contexte). Simulé avec un faux `nvidia-smi` avant de livrer :
+     sur 6 Go, Rapide/Médium passent de qwen3.5:0.8b à un 3B/qwen3.5:4b ; sur 8 Go, Médium passe de
+     qwen3.5:4b à qwen3.5:9b. **Rien ne change tant que l'analyse n'est pas relancée** : les choix sont figés
+     dans le profil par le dernier scan (`runQuickSetup`), jamais recalculés en direct.
+  2. **torch, transformers, accelerate, sentencepiece et librosa retirés de requirements.txt** — ils ne
+     servaient qu'à Cohere. Ensemble restant re-résolu depuis un environnement VIDE (`pip install --dry-run
+     --report`), jamais version par version (leçon librosa/scipy). L'installation de torch depuis l'index CUDA
+     (pythonRuntime.ts) disparaît avec. Le changement d'empreinte de requirements.txt fait réinstaller Python
+     une fois, proprement, ce qui retire aussi les ~3 Go de torch des machines existantes.
+  3. **L'ancien modèle effacé automatiquement** (`remove_old_stt_model`, voice_server.py) — seulement APRÈS
+     que Parakeet s'est chargé, jamais avant : si le nouveau modèle échoue, rien n'est perdu. Silencieux si le
+     dossier est absent ou verrouillé.
+  4. **Le nom « Jaris » réécrit autrement par la nouvelle transcription.** Mesuré sur 50 échantillons (10 voix,
+     5 tournures) AVANT de toucher au motif : Jaris 21, Jarry 16, Jarris 3, Dijaris 2, j'arrive 2, Jerry 1.
+     L'ancien motif (`\bjari\w*`) aurait raté « Jarry » — un tiers des activations. Nouveau motif
+     `\b(?:di)?jarr?[iy]\w*\b` ; toujours strict sur « Jerry », « j'arrive », « jardin », « jarret », « Jarvis ».
+     **Leçon générale : changer le modèle de transcription change aussi tout ce qui lit sa sortie** — un motif
+     calé sur les graphies d'un modèle ne vaut rien pour le suivant sans une nouvelle mesure.
+  5. **Réglages `STT_*` supprimés** (`.env.example`, config.ts, arguments du sidecar) : il n'y a plus de
+     modèle, de révision, d'appareil ni de langue à choisir — Parakeet v3 détecte la langue seul, et ne l'a
+     jamais changée sur 15 phrases françaises courtes mesurées.
+  Régression : `npm test` (494 tests), `python scripts/test-wake-confirmation.py` (vérifié en remettant
+  l'ancien motif : 2 tests échouent). Sidecar lancé ici de bout en bout jusqu'à l'ouverture du micro :
+  téléchargement épinglé, chargement, cache Cohere effacé. **Non vérifié en usage réel** : la reconnaissance
+  sur le vrai micro de Léo, et les nouveaux modèles choisis après « Lancer l'analyse ».

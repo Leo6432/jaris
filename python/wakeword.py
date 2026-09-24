@@ -3,7 +3,7 @@
 
 Réimplémentation MINIMALE (numpy + onnxruntime seulement, déjà une dépendance de Supertonic — voir
 requirements.txt) du pipeline de `openwakeword.utils.AudioFeatures` (Apache-2.0, réimplémentation autorisée
-par la licence — même logique que la copie non protégée du modèle Cohere Transcribe, voir voice_server.py) :
+par la licence — même logique que l'ancienne copie non protégée du modèle Cohere Transcribe, remplacé à l'étape 158) :
 le paquet PyPI `openwakeword` lui-même ne peut PAS être installé sur Windows/Python récent, sa dépendance
 `tflite-runtime` n'a aucune roue disponible pour ce couple plateforme/version (vérifié sur PyPI). Trois
 modèles ONNX (melspectrogram.onnx, embedding_model.onnx : partagés par tous les modèles openWakeWord,

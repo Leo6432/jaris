@@ -111,7 +111,7 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   dépendances inutilisées
 - ⬜ Étape 22 — Vérification des licences avant mise en vente : vérifier la
   compatibilité des licences des briques open source utilisées (Ollama,
-  modèles Qwen, Cohere Transcribe, Supertonic HD, SearXNG) avec
+  modèles Qwen, Parakeet v3 (CC-BY-4.0, attribution à NVIDIA requise), Supertonic HD, SearXNG) avec
   une distribution commerciale, avant de passer aux étapes de mise sur le
   marché ci-dessous (mentions légales, protection contre la redistribution,
   publication et monétisation)
@@ -189,41 +189,18 @@ python/venv/Scripts/activate   # (Windows) — python/venv/bin/activate sur Mac/
 pip install -r python/requirements.txt
 ```
 
-Si tu as une carte graphique NVIDIA et veux utiliser `STT_DEVICE=cuda` : `pip install
-torch` (ci-dessus) installe par défaut une version **CPU uniquement** de
-PyTorch sur Windows. Réinstalle-le depuis l'index CUDA officiel (regarde la
-ligne `CUDA Version` dans `nvidia-smi` pour choisir `cu121`/`cu124`/`cu126`
-selon ton driver) :
+La reconnaissance vocale utilise **Parakeet TDT 0.6B v3** (NVIDIA, licence
+CC-BY-4.0), exporté en ONNX et chargé par
+[onnx-asr](https://pypi.org/project/onnx-asr/) **sur le processeur, en RAM**
+(~2,5 Go). Il se télécharge tout seul au premier lancement (~2,5 Go, depuis
+`istupakov/parakeet-tdt-0.6b-v3-onnx`, épinglé par identifiant de commit
+dans `python/voice_server.py`). Aucun réglage dans `.env`.
 
-```bash
-pip uninstall -y torch
-pip install torch --index-url https://download.pytorch.org/whl/cu124
-```
-
-La reconnaissance vocale utilise [Cohere Transcribe](https://huggingface.co/CohereLabs/cohere-transcribe-03-2026)
-(open source, #1 du classement Open ASR Leaderboard). Le dépôt officiel est
-"gated" (compte Hugging Face + acceptation de conditions en ligne), ce que
-l'étape 16 interdit explicitement pour le public. Jaris télécharge donc une
-**copie non protégée** du même modèle, à la version exacte épinglée
-(`DEFAULT_STT_MODEL`/`DEFAULT_STT_REVISION` dans `python/voice_server.py`) :
-
-- ce ne sont pas d'autres poids ni une version allégée — le fichier
-  `model.safetensors` a exactement la même empreinte SHA256 que l'officiel
-  (`987bd3e1…`, 4 131 862 976 octets), vérifié via l'API Hugging Face ;
-- la licence Apache 2.0 du modèle autorise explicitement cette
-  redistribution ;
-- la version est épinglée par identifiant de commit, immuable : le dépôt
-  tiers ne peut pas remplacer les poids sous nos pieds.
-
-> À faire avant la mise en vente (étapes 22/38) : héberger cette copie
-> nous-mêmes plutôt que dépendre d'un dépôt tiers qui pourrait être supprimé.
-> La licence le permet ; seule la disponibilité est en jeu, pas le contenu.
-
-Renseigne dans `.env` :
-- `PYTHON_BIN` → chemin vers `python/venv/Scripts/python.exe`
-- `STT_DEVICE` peut rester vide : le GPU est détecté automatiquement au
-  chargement (`torch.cuda.is_available()`), avec repli sur le processeur.
-  Ne le renseigne que pour forcer `cuda` ou `cpu`.
+Pourquoi pas sur la carte graphique : mesuré sur la RTX 3070 de Léo, Parakeet
+en RAM transcrit 5 s de parole en ~0,26 s avec 4,5 % de mots faux, contre
+0,84 s, 9,1 % et 3,9 Go de mémoire vidéo pour l'ancien modèle (Cohere
+Transcribe) sur la carte. Toute la mémoire vidéo reste donc au modèle de
+conversation. PyTorch n'est plus nécessaire.
 
 **Déclenchement par mot d'activation "Jaris".** Aucun mot-clé "Jaris"
 n'existe tout fait dans openWakeWord (le seul mot d'activation qu'il propose
@@ -248,11 +225,11 @@ confiance.
 **Le score ONNX seul ne suffit pas** : mesuré en usage réel, il confond
 parfois la parole ordinaire avec "Jaris" ("Paris", la météo, des nombres...).
 Une seconde étape (`python/wake_confirmation.py`) transcrit localement les
-~3 secondes autour d'un candidat (Cohere Transcribe, déjà chargé pour la
+~3 secondes autour d'un candidat (Parakeet v3, déjà chargé pour la
 reconnaissance vocale) et n'active Jaris que si le nom y apparaît vraiment
-— jamais sur le seul score ONNX. Reconnaît les graphies que Cohere produit
-réellement pour "Jaris" ("Jarisse", "Jariste"...) via un motif généralisant
-(préfixe "jari" + n'importe quelle terminaison) plutôt qu'une liste figée,
+— jamais sur le seul score ONNX. Reconnaît les graphies que la transcription
+produit réellement pour "Jaris" ("Jarry", "Jarris", "Dijaris"...) via un
+motif généralisant ("jar"/"jarr" + i/y + n'importe quelle terminaison) plutôt qu'une liste figée,
 tout en restant strict sur "Jarvis" (l'ancien nom) qui ne matche jamais.
 
 **Précision mesurée pour de vrai**, pas estimée : sur 25 échantillons TTS
@@ -276,7 +253,7 @@ l'ancien double clap.
 
 Rien à installer à la main : `supertonic` est dans `python/requirements.txt`
 (déjà installé à l'étape 1), et le modèle (~100 Mo, léger) se télécharge tout
-seul au premier lancement de Jaris, comme Cohere Transcribe. `TTS_VOICE`
+seul au premier lancement de Jaris, comme la transcription (Parakeet v3). `TTS_VOICE`
 dans `.env` fixe la voix par défaut (`M3` de base) ; 10 voix sont dispo au
 total (`M1`-`M5`, `F1`-`F5`) et peuvent être écoutées et choisies directement
 depuis le menu **Options** de l'appli (clic sur une voix = phrase d'exemple
@@ -488,11 +465,9 @@ respect de la consigne "pas de mise en forme" cruciale pour un assistant
 vocal) avant de les retenir — `qwen3:1.7b` et `gemma4:e4b` ont remplacé les
 choix initiaux (`qwen3.5:2b`/`9b`) suite à ces tests locaux.
 
-Le calcul réserve ~4,5 Go de VRAM pour le STT (Cohere Transcribe, chargé en
-permanence pendant toute la session) avant de choisir les modèles : le
-palier "puissant" ne peut donc jamais dépasser ce que la carte supporte
-réellement, même sur une machine avec beaucoup de VRAM totale mais peu de
-marge une fois le STT pris en compte. Les modèles manquants sont
+Le calcul réserve ~1 Go de VRAM (Windows, l'affichage et le contexte de
+conversation) avant de choisir les modèles — la transcription (Parakeet v3)
+tourne en RAM depuis l'étape 158 et ne prend plus rien sur la carte. Les modèles manquants sont
 téléchargés automatiquement pendant l'écran de scan (`ollama pull`), donc
 peut prendre plusieurs minutes selon la connexion.
 
@@ -764,19 +739,14 @@ premier démarrage, avec une barre de progression (`RuntimeSetup.tsx`,
 | --- | --- | --- |
 | Ollama | installeur officiel lancé en mode silencieux (`/VERYSILENT`) | `dependencyServices.ts` |
 | Python | version autonome (python-build-standalone), décompressée dans `%LOCALAPPDATA%\Jaris` | `pythonRuntime.ts` |
-| PyTorch, transformers… | `pip install` dans ce Python-là | `pythonRuntime.ts` |
+| onnx-asr, Supertonic… | `pip install` dans ce Python-là | `pythonRuntime.ts` |
 | Modèles de conversation | écran de configuration existant, selon la VRAM détectée | `benchmarkRunner.ts` |
 | Transcription et voix | téléchargés au premier usage par les sidecars Python | `voice_server.py`, `tts_server.py` |
 
-**PyTorch est installé à part, et avant le reste.** Sur Windows, le paquet
-`torch` publié sur PyPI — celui qu'installerait un simple `pip install -r
-requirements.txt` — est une version **sans support GPU**. L'installer tel
-quel ferait tourner la transcription sur le processeur (des secondes au lieu
-d'une fraction de seconde) sur une machine qui a pourtant une carte
-graphique : exactement la "version dégradée" que cette étape interdit. Jaris
-détecte donc la carte NVIDIA et installe la version GPU depuis l'index
-officiel PyTorch, avec repli automatique sur la version processeur si ça
-échoue.
+**Plus de PyTorch depuis l'étape 158** : la transcription (Parakeet v3) et
+la synthèse vocale tournent toutes deux sur onnxruntime, en RAM. Un simple
+`pip install -r requirements.txt` suffit, sans index spécial pour la carte
+graphique.
 
 L'empreinte de `requirements.txt` est enregistrée après installation : une
 future version de Jaris qui ajoute une dépendance déclenchera l'installation
@@ -871,8 +841,8 @@ Windows habituel, sur le disque système par défaut :
 | Brique | Emplacement habituel | Poids typique |
 | --- | --- | --- |
 | Modèles Ollama | `%USERPROFILE%\.ollama\models` | plusieurs Go par palier |
-| Environnement Python (voix) | `%LOCALAPPDATA%\Jaris\python-runtime` | quelques Go (torch en tête) |
-| Cache reconnaissance/synthèse vocale | `%USERPROFILE%\.cache\huggingface` | ~4 Go |
+| Environnement Python (voix) | `%LOCALAPPDATA%\Jaris\python-runtime` | ~1 Go |
+| Cache reconnaissance vocale | `%USERPROFILE%\.cache\huggingface` | ~2,5 Go |
 
 **Options → Stockage → "Choisir un dossier…"** ouvre un sélecteur de dossier
 puis déplace les trois vers l'endroit choisi (`modelsLocation.ts`) — utile
