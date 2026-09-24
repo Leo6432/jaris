@@ -4545,3 +4545,38 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   l'ancien motif : 2 tests échouent). Sidecar lancé ici de bout en bout jusqu'à l'ouverture du micro :
   téléchargement épinglé, chargement, cache Cohere effacé. **Non vérifié en usage réel** : la reconnaissance
   sur le vrai micro de Léo, et les nouveaux modèles choisis après « Lancer l'analyse ».
+
+- **Étape 159, Léo : « j'ai fait un prompt sur Code, il a fait ; j'ai refait un nouveau prompt pour corriger
+  des trucs, ça met : Réponse vide d'Ollama (modèle 'qwen3.6:35b-a3b' bien installé ?) ».** Cause REPRODUITE
+  avec un vrai Ollama (0.34.4, téléchargé dans le conteneur) et qwen3.5:0.8b, de la même famille que le
+  modèle de Léo, avant d'écrire le correctif. Le mode Code utilisait une fenêtre de contexte FIXE de 16384.
+  Or une modification y fait entrer le fichier actuel, doit en faire sortir le fichier modifié, et la
+  réflexion cachée (`think: 'high'`) passe avant les deux. Mesuré : la réflexion remplit la fenêtre avant le
+  premier caractère de code (`done_reason: "length"`, 0 caractère écrit). Les modèles qwen3.5/3.6 ne peuvent
+  pas faire glisser leur contexte (couches récurrentes) : Ollama s'arrête net. qwen3 classique, lui, fait
+  glisser le contexte et perd la consigne (11 000 tokens générés sans fin). **Deuxième défaut mesuré au
+  passage** : une demande plus grande que la fenêtre est coupée sans prévenir par Ollama (2 500 tokens
+  envoyés, 1 026 lus) — le modèle ne voit plus qu'une partie du code.
+  Corrigé en trois points :
+  1. **La fenêtre suit la demande** (`computeCodeNumCtx`, codeGenerator.ts) : demande + fichier attendu
+     (+30 %) + réserve de réflexion, arrondi à 4096. 2,5 caractères par token, d'après une mesure faite avec
+     le tokenizer qwen3.5 (CSS 2,9 ; JavaScript 3,6 ; français 3,8). Plancher 16384 : une NOUVELLE
+     application retombe exactement sur l'ancienne fenêtre (vérifié par un test avec les vraies consignes),
+     seules les modifications et relectures de gros fichiers reçoivent plus. Plafond 65536, abaissé à la
+     limite du modèle (`*.context_length` de `/api/show`) quand elle est connue.
+  2. **Une fenêtre pleine est reconnue comme telle** (`ContextFullError`, ollama.ts, lu sur `done_reason`) :
+     l'ancien message « bien installé ? » envoyait sur une fausse piste — le modèle était installé et avait
+     travaillé. Plus de second essai « sans think » dans ce cas : qwen3.5/3.6 réfléchissent quand même par
+     défaut, il remplissait la même fenêtre pareil (c'est pour ça que Léo a vu l'erreur après DEUX essais).
+  3. **Une seule nouvelle tentative avec une fenêtre doublée** si l'estimation reste trop juste, puis un
+     message qui dit quoi faire (changement plus petit, ou nouvelle application).
+  **Leçon générale : une fenêtre de contexte fixe convient à une demande de taille fixe, jamais à une
+  demande qui contient un fichier de taille variable** — et avec un modèle qui réfléchit, la réflexion se
+  paie dans la même fenêtre que la réponse. Même famille que le passage de `OLLAMA_NUM_CTX` de 4096 à 8192 :
+  mesurer ce qui doit tenir dedans plutôt que garder un chiffre choisi pour un autre usage.
+  Régression : `node --test scripts/test-codegen-context.mjs` (11 tests : fenêtre pleine reconnue en
+  streaming et sans, pas de second essai inutile, fenêtre agrandie pour une grosse modification, inchangée
+  pour une nouvelle application, plafonds, nouvelle tentative, message final). Vérifié en remettant
+  l'ancien code : 3 tests échouent. Vérifié aussi contre le vrai Ollama : fenêtre de 2048 → `ContextFullError`,
+  fenêtre de 8192 → 7 376 caractères de code. **Non vérifié en usage réel** avec qwen3.6:35b-a3b sur la
+  machine de Léo (trop gros pour ce conteneur).

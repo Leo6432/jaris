@@ -2,7 +2,7 @@ import { resolveChosenModel } from './modelChoice'
 import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { config } from '../config'
-import { chatWithOllama, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError, type OllamaMessage } from './ollama'
+import { chatWithOllama, getModelInfo, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError, type OllamaMessage } from './ollama'
 import { pickBestCodeModel } from './hardwareScan'
 import { getProfile } from './profileStore'
 import { IMAGE_FOR_CODE_SYSTEM_PROMPT, describeImage } from './vision'
@@ -12,9 +12,78 @@ import { getDataRoot } from './dataLocation'
 /**
  * Fenêtre de contexte dédiée à la génération de code : le modèle doit produire un fichier HTML complet
  * (souvent 200+ lignes), puis le relire EN ENTIER pour le corriger à la passe suivante. La valeur par
- * défaut de la conversation (4096) tronquerait le fichier en pleine relecture.
+ * défaut de la conversation tronquerait le fichier en pleine relecture.
+ *
+ * Étape 159 (Léo : une application générée, puis une demande de correction → « Réponse vide d'Ollama ») :
+ * une fenêtre FIXE de 16384 ne suffisait plus dès qu'on modifie une application existante. Le fichier
+ * actuel entre dans la demande, le fichier modifié doit en ressortir, et la réflexion cachée passe avant :
+ * reproduit avec un vrai Ollama et un modèle qwen3.5, la réflexion remplissait la fenêtre avant le premier
+ * caractère de code (`done_reason: "length"`, 0 caractère écrit). Pire, une demande PLUS grande que la
+ * fenêtre est coupée sans prévenir par Ollama (mesuré : 2 500 tokens envoyés, 1 026 lus) — le modèle ne
+ * voit alors plus qu'une partie du code. La fenêtre est donc désormais calculée d'après ce qui doit
+ * réellement y tenir (computeCodeNumCtx), jamais en dessous de l'ancienne valeur fixe.
  */
-const CODE_NUM_CTX = 16384
+const CODE_NUM_CTX_MIN = 16384
+/**
+ * Plafond : au-delà, une seule application ne devrait jamais en avoir besoin, et le cache K/V d'un modèle
+ * classique (non hybride) coûterait plusieurs Go de mémoire vidéo de plus. Abaissé encore à la limite du
+ * modèle lui-même quand Ollama la donne.
+ */
+const CODE_NUM_CTX_MAX = 65536
+/**
+ * Caractères par token, volontairement pessimiste : mesuré avec le tokenizer qwen3.5 (étape 159), du CSS
+ * donne 2,9 caractères par token, du JavaScript 3,6, du français 3,8. Un HTML généré est surtout du CSS et
+ * du JavaScript — 2,5 laisse de la marge sans surestimer grossièrement.
+ */
+const CODE_CHARS_PER_TOKEN = 2.5
+/**
+ * Place gardée pour la réflexion cachée (`think: 'high'`), qui passe AVANT le premier caractère de code. Sa
+ * longueur réelle varie d'une demande à l'autre : si elle déborde, la nouvelle tentative de runModelStep
+ * (fenêtre doublée) prend le relais.
+ */
+const CODE_THINKING_RESERVE_TOKENS = 8192
+/**
+ * Taille attendue d'une application NOUVELLE (aucun fichier existant pour s'en faire une idée). Avec les
+ * consignes réelles (~4 000 caractères), une nouvelle application retombe exactement sur l'ancienne fenêtre
+ * de 16384 — celle qui fonctionnait déjà : seules les modifications et les relectures de gros fichiers
+ * reçoivent plus.
+ */
+const NEW_APP_EXPECTED_CHARS = 12000
+/** Arrondi de la fenêtre : un multiple rond évite de recharger le modèle pour quelques tokens d'écart. */
+const CODE_NUM_CTX_GRANULARITY = 4096
+
+/**
+ * La fenêtre de contexte d'un appel : la demande (messages) + la réponse attendue (le fichier complet, avec
+ * 30 % de marge pour ce que la modification ajoute) + la réflexion. Fonction pure, testée à part.
+ */
+export function computeCodeNumCtx(messages: OllamaMessage[], expectedOutputChars: number, modelMax: number | null = null): number {
+  const promptChars = messages.reduce((total, message) => total + message.content.length, 0)
+  const needed =
+    Math.ceil(promptChars / CODE_CHARS_PER_TOKEN) +
+    Math.ceil((expectedOutputChars * 1.3) / CODE_CHARS_PER_TOKEN) +
+    CODE_THINKING_RESERVE_TOKENS
+  const rounded = Math.ceil(needed / CODE_NUM_CTX_GRANULARITY) * CODE_NUM_CTX_GRANULARITY
+  const ceiling = modelMax && modelMax > 0 ? Math.min(CODE_NUM_CTX_MAX, modelMax) : CODE_NUM_CTX_MAX
+  return Math.max(CODE_NUM_CTX_MIN, Math.min(rounded, ceiling))
+}
+
+/** Limite de contexte du modèle lui-même (`*.context_length` dans `/api/show`), `null` si inconnue. */
+async function readModelMaxContext(model: string): Promise<number | null> {
+  try {
+    const info = await getModelInfo(model)
+    for (const [key, value] of Object.entries(info ?? {})) {
+      if (key.endsWith('.context_length') && typeof value === 'number' && value > 0) return value
+    }
+  } catch {
+    // Diagnostic indisponible : le plafond général s'applique.
+  }
+  return null
+}
+
+/** Reconnu par son nom, pour la même raison qu'isAbortError ci-dessous (realm des tests, classe importée). */
+function isContextFullError(error: unknown): boolean {
+  return (error as { name?: string } | null)?.name === 'ContextFullError'
+}
 
 /** Rythme du battement de cœur d'avancement pendant une étape (voir runModelStep, étape 99). */
 const PROGRESS_HEARTBEAT_MS = 1000
@@ -444,7 +513,7 @@ export async function generateApp(
    * toutes les secondes qui porte `idleMs` — le temps écoulé depuis le dernier fragment reçu, seul moyen de
    * distinguer "ça travaille" de "c'est bloqué".
    */
-  const runModelStep = async (label: string, messages: OllamaMessage[]): Promise<OllamaMessage> => {
+  const runModelStep = async (label: string, messages: OllamaMessage[], expectedOutputChars: number): Promise<OllamaMessage> => {
     stepIndex += 1
     const currentStep = stepIndex
     let charsWritten = 0
@@ -472,14 +541,14 @@ export async function generateApp(
     // monte) et ce battement de cœur (même quand plus rien n'arrive, `idleMs` continue de grandir — c'est
     // ce qui permet de dire "bloqué" au lieu de laisser un écran figé sans explication).
     const heartbeat = setInterval(() => emit(), PROGRESS_HEARTBEAT_MS)
-    try {
-      const message = await chatWithOllama(
+    const call = (numCtx: number): Promise<OllamaMessage> =>
+      chatWithOllama(
         messages,
         undefined,
         model,
         'high',
         signal,
-        CODE_NUM_CTX,
+        numCtx,
         (delta) => {
           thinking = false
           charsWritten += delta.length
@@ -493,6 +562,31 @@ export async function generateApp(
           emit(true)
         }
       )
+    try {
+      const numCtx = computeCodeNumCtx(messages, expectedOutputChars, modelMaxContext)
+      let message: OllamaMessage
+      try {
+        message = await call(numCtx)
+      } catch (err) {
+        // Filet de sécurité : l'estimation ci-dessus peut rester trop juste si le modèle réfléchit bien plus
+        // longtemps que prévu. Une seule nouvelle tentative, avec le double (dans la limite du modèle) — et
+        // seulement si ça change vraiment quelque chose.
+        const larger = Math.min(numCtx * 2, modelMaxContext ?? CODE_NUM_CTX_MAX, CODE_NUM_CTX_MAX)
+        if (!isContextFullError(err)) throw err
+        if (larger <= numCtx) throw contextTooSmallError(numCtx)
+        onStatus('Le modèle a manqué de mémoire de travail en réfléchissant : nouvelle tentative avec plus de mémoire…')
+        // Même étape (le travail à faire n'a pas changé), compteurs repartis de zéro.
+        charsWritten = 0
+        thinking = true
+        lastActivity = Date.now()
+        emit()
+        try {
+          message = await call(larger)
+        } catch (retryErr) {
+          if (isContextFullError(retryErr)) throw contextTooSmallError(larger)
+          throw retryErr
+        }
+      }
       // État final de l'étape, sans étranglement : les tout derniers fragments arrivent souvent dans les
       // 200 ms qui précèdent la fin, donc sans cet envoi le compteur resterait figé sur une valeur d'avant.
       emit()
@@ -529,6 +623,15 @@ export async function generateApp(
   }
 
   const model = await resolveCodeModel(onStatus, profile)
+  const modelMaxContext = await readModelMaxContext(model)
+
+  /** Message final quand même la plus grande fenêtre permise ne suffit pas : lisible, et avec quoi faire. */
+  const contextTooSmallError = (numCtx: number): Error =>
+    new Error(
+      `Le modèle a rempli toute sa mémoire de travail (${numCtx} tokens) avant d'avoir fini d'écrire. ` +
+        "L'application est sans doute trop longue pour être modifiée d'un bloc : demande un changement plus " +
+        'petit, ou crée une nouvelle application.'
+    )
 
   const withImage = (base: string): string =>
     imageDescription
@@ -552,7 +655,12 @@ export async function generateApp(
     { role: 'system', content: GENERATE_SYSTEM_PROMPT },
     { role: 'user', content: userPrompt }
   ]
-  const first = await runModelStep(currentHtml ? "Modification de l'application" : "Écriture de l'application", generateMessages)
+  const expectedChars = currentHtml ? currentHtml.length : NEW_APP_EXPECTED_CHARS
+  const first = await runModelStep(
+    currentHtml ? "Modification de l'application" : "Écriture de l'application",
+    generateMessages,
+    expectedChars
+  )
   let draft = extractHtml(first.content)
   if (!draft) {
     // Cause réelle identifiée en usage réel (Léo, "un jeu Snake") : le modèle a ignoré la consigne HTML et
@@ -584,7 +692,7 @@ export async function generateApp(
     // première — l'annoncer évite de laisser croire que l'étape en cours patine. Le total prévu monte
     // d'autant : mieux vaut un total qui s'ajuste qu'une "étape 4 sur 3".
     stepCount += 1
-    const retry = await runModelStep('Nouvelle tentative', retryMessages)
+    const retry = await runModelStep('Nouvelle tentative', retryMessages, expectedChars)
     draft = extractHtml(retry.content)
     if (!draft) {
       // Un message générique ("reformule, ou relance") ne dit rien de la VRAIE cause si ça se reproduit :
@@ -611,7 +719,7 @@ export async function generateApp(
         content: `Demande initiale de l'utilisateur : ${description}\n\nCode à relire :\n\n\`\`\`html\n${draft}\n\`\`\``
       }
     ]
-    const reviewed = await runModelStep('Relecture du code', critiqueMessages)
+    const reviewed = await runModelStep('Relecture du code', critiqueMessages, draft.length)
     const reviewedHtml = extractHtml(reviewed.content)
     if (reviewedHtml) {
       final = reviewedHtml
@@ -644,7 +752,7 @@ export async function generateApp(
         }
       ]
       stepCount += 1
-      const repaired = await runModelStep('Réparation des problèmes détectés', repairMessages)
+      const repaired = await runModelStep('Réparation des problèmes détectés', repairMessages, final.length)
       const repairedHtml = extractHtml(repaired.content)
       // La réparation n'est gardée que si elle améliore vraiment les choses : un modèle peut très bien
       // renvoyer une version differemment cassée, auquel cas on garde la précédente.

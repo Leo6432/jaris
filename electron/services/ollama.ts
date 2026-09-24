@@ -30,6 +30,30 @@ export interface OllamaTool {
 
 interface OllamaChatResponse {
   message?: OllamaMessage
+  /** Présent sur le dernier fragment : "stop" (fin normale) ou "length" (fenêtre de contexte pleine). */
+  done_reason?: string
+}
+
+/**
+ * Le modèle a rempli TOUTE sa fenêtre de contexte (`done_reason: "length"`) sans rien écrire. Reproduit ici
+ * avec un vrai Ollama et un modèle de la famille qwen3.5 (étape 159) : une demande de modification en mode
+ * Code (code existant + consigne) plus la réflexion cachée remplissaient les 16384 tokens avant le premier
+ * caractère de réponse. Les modèles qwen3.5/3.6 ne peuvent pas « faire glisser » leur contexte (couches
+ * récurrentes), donc Ollama s'arrête net au lieu de continuer. Distincte de la réponse vide ordinaire : le
+ * modèle est bien installé et a bien travaillé, il a juste manqué de place — l'ancien message (« bien
+ * installé ? ») envoyait sur une fausse piste.
+ */
+export class ContextFullError extends Error {
+  constructor(
+    readonly model: string,
+    readonly numCtx: number
+  ) {
+    super(
+      `Le modèle '${model}' a rempli toute sa mémoire de travail (${numCtx} tokens) en réfléchissant, avant ` +
+        "d'écrire sa réponse."
+    )
+    this.name = 'ContextFullError'
+  }
 }
 
 export type ThinkLevel = 'low' | 'medium' | 'high'
@@ -49,6 +73,7 @@ async function requestChat(
   onThinking?: (delta: string) => void
 ): Promise<OllamaMessage> {
   const streaming = Boolean(onToken || onThinking)
+  const numCtx = (body.options as { num_ctx?: number } | undefined)?.num_ctx ?? config.ollama.numCtx
   let response: Response
   try {
     response = await fetch(`${config.ollama.host}/api/chat`, {
@@ -68,6 +93,9 @@ async function requestChat(
 
   if (!streaming) {
     const data = (await response.json()) as OllamaChatResponse
+    if (data.done_reason === 'length' && !data.message?.content && !data.message?.tool_calls?.length) {
+      throw new ContextFullError(model, numCtx)
+    }
     if (!data.message) throw new Error(`Réponse vide d'Ollama (modèle '${model}' bien installé ?)`)
     return data.message
   }
@@ -79,6 +107,7 @@ async function requestChat(
   let content = ''
   let toolCalls: OllamaToolCall[] | undefined
   let role: OllamaMessage['role'] = 'assistant'
+  let doneReason: string | undefined
 
   for (;;) {
     const { done, value } = await reader.read()
@@ -106,10 +135,14 @@ async function requestChat(
       if (chunk.message?.thinking) onThinking?.(chunk.message.thinking)
       if (chunk.message?.tool_calls?.length) toolCalls = chunk.message.tool_calls
       if (chunk.message?.role) role = chunk.message.role
+      if (chunk.done_reason) doneReason = chunk.done_reason
     }
   }
 
-  if (!content && !toolCalls) throw new Error(`Réponse vide d'Ollama (modèle '${model}' bien installé ?)`)
+  if (!content && !toolCalls) {
+    if (doneReason === 'length') throw new ContextFullError(model, numCtx)
+    throw new Error(`Réponse vide d'Ollama (modèle '${model}' bien installé ?)`)
+  }
   return { role, content, tool_calls: toolCalls }
 }
 
@@ -155,6 +188,9 @@ export async function chatWithOllama(
     // ne doit jamais déclencher le second essai sans `think` : ce serait un appel Ollama inutile pour une
     // réponse qui va de toute façon être remplacée par la relance avec la phrase fusionnée.
     if (firstErr instanceof Error && firstErr.name === 'AbortError') throw firstErr
+    // Même fenêtre, même modèle : sans `think`, qwen3.5/3.6 réfléchissent quand même (c'est leur mode par
+    // défaut) et rempliraient la fenêtre exactement pareil. C'est à l'appelant d'en demander une plus grande.
+    if ((firstErr as { name?: string } | null)?.name === 'ContextFullError') throw firstErr
     try {
       // Sans `think`, aucun fragment de raisonnement n'arrivera : onThinking est quand même
       // transmis, il ne sera simplement jamais appelé.
