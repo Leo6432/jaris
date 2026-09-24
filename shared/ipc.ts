@@ -222,8 +222,10 @@ export interface SttBenchmarkRow {
   reason?: string
   /** Secondes pour comprendre une phrase de 5 secondes. */
   secondsPer5s?: number
-  ramGb?: number
-  vramGb?: number
+  /** RAM prise en fonctionnement ; `null` si la mesure a échoué (jamais un 0 à la place). */
+  ramGb?: number | null
+  /** VRAM prise (lue par nvidia-smi, contexte CUDA compris) ; `null` si elle n'a pas pu être lue. */
+  vramGb?: number | null
   /** Pourcentage de mots mal compris. */
   errorsPct?: number
   loadSeconds?: number

@@ -33,7 +33,8 @@ window.__release = null
 const rows = [
   { id: 'cohere-vram', label: "Cohere (l'actuel) sur la carte graphique", where: 'vram', available: true, secondsPer5s: 0.31, ramGb: 1.2, vramGb: 4.6, errorsPct: 2.3, loadSeconds: 12, sample: 'Jaris, quel temps fera-t-il demain à Lyon ?' },
   { id: 'cohere-ram', label: "Cohere (l'actuel) en RAM", where: 'ram', available: false, reason: 'Il faudrait environ 10 Go de RAM libre (seulement 6.2 Go).' },
-  { id: 'parakeet-ram', label: 'Parakeet v3 en RAM', where: 'ram', available: true, secondsPer5s: 0.53, ramGb: 2.5, vramGb: 0, errorsPct: 0, loadSeconds: 20 }
+  { id: 'parakeet-ram', label: 'Parakeet v3 en RAM', where: 'ram', available: true, secondsPer5s: 0.53, ramGb: 2.5, vramGb: 0, errorsPct: 0, loadSeconds: 20 },
+  { id: 'parakeet-ram-int8', label: 'Parakeet v3 compressé en RAM', where: 'ram', available: true, secondsPer5s: 0.22, ramGb: null, vramGb: null, errorsPct: 6.8, loadSeconds: 9 }
 ]
 const overrides = {
   getProfile: async () => ({ name: 'Léo' }),
@@ -118,8 +119,10 @@ test('à la fin : un tableau avec la vitesse, la RAM prise et la VRAM prise de c
     // Une ligne non mesurable dit pourquoi, au lieu de chiffres vides.
     assert.equal(cells[1].length, 2)
     assert.match(cells[1][1], /^Non mesuré : Il faudrait environ 10 Go de RAM libre/)
-    // Pas de VRAM prise quand la transcription tourne en RAM : un tiret, pas « 0 Go ».
-    assert.equal(cells[2][3], '—')
+    // En RAM, la carte n'est pas touchée : la VRAM mesurée s'affiche telle quelle, 0 Go.
+    assert.deepEqual(cells[2].slice(2, 4), ['2,5 Go', '0 Go'])
+    // Étape 157 : une mesure ratée s'affiche comme telle — jamais « 0 Go », qui se lirait « ne prend rien ».
+    assert.deepEqual(cells[3].slice(2, 4), ['non mesuré', 'non mesuré'])
     assert.match(await page.textContent('.options-menu__stt-bench'), /carte : NVIDIA GeForce RTX 3070/)
     // Le bouton est de nouveau utilisable, l'avancement a disparu.
     assert.equal(await page.getByRole('button', { name: 'Lancer le test' }).isDisabled(), false)

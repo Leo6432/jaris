@@ -119,3 +119,22 @@ test('le taux d’erreurs compte les mots, sans pénaliser la ponctuation ni la 
   ].join('\n')], { encoding: 'utf8' })
   assert.deepEqual(JSON.parse(out), [[0, 9], [2, 7], [3, 3]])
 })
+
+test('la RAM se mesure vraiment : +300 Mo alloués se voient, jamais un 0 silencieux (étape 157)', { skip: python ? false : 'Python indisponible' }, () => {
+  // Chez Léo (Windows), la colonne « RAM prise » affichait 0 Go partout : l'appel Windows, déclaré sans ses
+  // types, échouait sans rien dire. Lancé aussi par la CI Windows, ce test y exerce le vrai chemin ctypes.
+  const script = fileURLToPath(new URL('python/', root))
+  const out = execFileSync(python, ['-c', [
+    'import sys, json',
+    `sys.path.insert(0, ${JSON.stringify(script)})`,
+    'from stt_benchmark import process_memory_bytes',
+    'before = process_memory_bytes()[0]',
+    'block = bytearray(300 * 1024 * 1024)',
+    'for i in range(0, len(block), 4096): block[i] = 1',
+    'after = process_memory_bytes()[0]',
+    'print(json.dumps({"before": before, "after": after}))'
+  ].join('\n')], { encoding: 'utf8' })
+  const { before, after } = JSON.parse(out)
+  assert.ok(before > 5 * 1024 * 1024, `mémoire initiale non lue : ${before}`)
+  assert.ok(after - before > 250 * 1024 * 1024, `+300 Mo non vus : ${before} -> ${after}`)
+})

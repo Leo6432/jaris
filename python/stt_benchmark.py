@@ -72,15 +72,25 @@ def _windows_process_memory():
             ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t),
         ]
 
+    # Types déclarés EXPLICITEMENT (étape 157) : sans eux, ctypes suppose un `int` 32 bits partout. Le
+    # pseudo-handle de GetCurrentProcess (-1, soit 0xFFFF…FFFF sur 64 bits) arrivait alors tronqué, l'appel
+    # échouait SANS RIEN DIRE et les compteurs restaient à zéro : « RAM prise : 0 Go » sur chaque ligne chez Léo.
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    psapi = ctypes.WinDLL("psapi", use_last_error=True)
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.GetCurrentProcess.argtypes = []
+    psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+    psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(PMC), wintypes.DWORD]
     counters = PMC()
     counters.cb = ctypes.sizeof(PMC)
-    handle = ctypes.windll.kernel32.GetCurrentProcess()
-    ctypes.windll.psapi.GetProcessMemoryInfo(handle, ctypes.byref(counters), counters.cb)
+    if not psapi.GetProcessMemoryInfo(kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
+        raise OSError(ctypes.get_last_error(), "GetProcessMemoryInfo a échoué")
     return counters.WorkingSetSize, counters.PeakWorkingSetSize
 
 
 def process_memory_bytes():
-    """(mémoire actuelle, mémoire maximale) du processus, en octets."""
+    """(mémoire actuelle, mémoire maximale) du processus, en octets. Lève une erreur si la mesure échoue :
+    jamais un zéro silencieux, qui se lirait « ne prend pas de RAM »."""
     if sys.platform == "win32":
         return _windows_process_memory()
     now = peak = 0
@@ -90,7 +100,40 @@ def process_memory_bytes():
                 now = int(line.split()[1]) * 1024
             elif line.startswith("VmHWM:"):
                 peak = int(line.split()[1]) * 1024
+    if not now:
+        raise OSError("mémoire du processus illisible")
     return now, peak
+
+
+def _nvidia_smi_candidates():
+    yield "nvidia-smi"
+    # Certains pilotes NVIDIA ne mettent pas nvidia-smi dans le PATH : ses deux emplacements habituels.
+    system_root = os.environ.get("SystemRoot")
+    if system_root:
+        yield os.path.join(system_root, "System32", "nvidia-smi.exe")
+    program_files = os.environ.get("ProgramFiles")
+    if program_files:
+        yield os.path.join(program_files, "NVIDIA Corporation", "NVSMI", "nvidia-smi.exe")
+
+
+def gpu_used_mb():
+    """Mémoire utilisée sur la carte (Mo), TOUS processus confondus, lue par nvidia-smi — ce que la carte
+    perd vraiment, contexte CUDA compris (torch ne compte que ses propres tenseurs). `None` sans nvidia-smi."""
+    for exe in _nvidia_smi_candidates():
+        try:
+            out = subprocess.run(
+                [exe, "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=10,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if out.returncode == 0 and out.stdout.strip():
+            try:
+                return float(out.stdout.strip().splitlines()[0])
+            except ValueError:
+                return None
+    return None
 
 
 def available_ram_gb():
@@ -178,9 +221,13 @@ def run_config(config, clips_dir):
 
     refs = json.load(open(os.path.join(clips_dir, "refs.json"), encoding="utf-8"))
     clips = [sf.read(os.path.join(clips_dir, r["file"]), dtype="float32")[0] for r in refs]
-    ram_before, _ = process_memory_bytes()
+    try:
+        ram_before = process_memory_bytes()[0]
+    except OSError:
+        ram_before = None
+    gpu_before = gpu_used_mb()
     started = time.perf_counter()
-    transcribe, vram_gb = load_engine(config)
+    transcribe, torch_vram_gb = load_engine(config)
     load_seconds = time.perf_counter() - started
     transcribe(clips[0])  # préchauffage : le tout premier passage n'est pas représentatif
     per_5s, errors, words, texts = [], 0, 0, []
@@ -192,13 +239,25 @@ def run_config(config, clips_dir):
         errors += e
         words += n
         texts.append(text)
-    _, ram_peak = process_memory_bytes()
+    # Mesures prises modèle toujours chargé, après les transcriptions : ce que la transcription occupe EN
+    # FONCTIONNEMENT (pas le pic du chargement, où le modèle transite par la RAM même s'il finit sur la carte).
+    try:
+        ram_gb = round(max(0, process_memory_bytes()[0] - ram_before) / 1024 ** 3, 2) if ram_before is not None else None
+    except OSError:
+        ram_gb = None
+    gpu_after = gpu_used_mb()
+    if gpu_before is not None and gpu_after is not None:
+        vram_gb = round(max(0.0, gpu_after - gpu_before) / 1024, 2)
+    elif config == "cohere-vram":
+        vram_gb = round(torch_vram_gb(), 2)  # repli : ce que torch a réservé (sans le contexte CUDA)
+    else:
+        vram_gb = 0.0  # en RAM, la transcription ne touche pas la carte (torch et onnxruntime en mode processeur)
     per_5s.sort()
     emit({
         "event": "row",
         "secondsPer5s": round(per_5s[len(per_5s) // 2], 2),
-        "ramGb": round(max(0, ram_peak - ram_before) / 1024 ** 3, 2),
-        "vramGb": round(vram_gb(), 2),
+        "ramGb": ram_gb,
+        "vramGb": vram_gb,
         "errorsPct": round(100 * errors / max(1, words), 1),
         "loadSeconds": round(load_seconds, 1),
         "sample": texts[0],

@@ -4522,3 +4522,28 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   taux d'erreurs au mot, version figée ; et dans un vrai navigateur : avancement affiché, bouton verrouillé
   pendant le test, tableau vitesse/RAM/VRAM/erreurs, ligne non mesurable expliquée, tableau habillé par le CSS
   compilé). Le script lui-même a tourné en entier ici (lignes RAM mesurées, ligne carte « non disponible »).
+
+- **Étape 157, Léo (capture du test de l'étape 156 sur sa RTX 3070) : « RAM prise : 0 Go » sur chaque ligne —
+  « règle le bug du tableau avec la RAM et aussi la VRAM ».** Deux défauts, corrigés à la source :
+  1. **RAM à 0 : appel Windows déclaré sans ses types.** `ctypes.windll.kernel32.GetCurrentProcess()` et
+     `GetProcessMemoryInfo` étaient appelés sans `restype`/`argtypes` : ctypes suppose alors un `int` 32 bits
+     partout, le pseudo-handle du processus (-1, soit 0xFFFF…FFFF sur 64 bits) arrivait tronqué, l'appel
+     échouait SANS erreur et les compteurs restaient à zéro. Types déclarés, retour vérifié, et une mesure
+     ratée lève désormais une erreur → la case affiche « non mesuré », jamais « 0 Go » (qui se lit « ne prend
+     rien »). **Leçon générale : avec ctypes, toujours déclarer `restype` et `argtypes` d'une fonction Windows
+     qui prend ou rend un handle ou un pointeur — sans eux, un appel peut échouer silencieusement sur 64 bits.**
+     Et vérifier le BOOL de retour : ici, c'était le seul signal que rien n'avait été mesuré.
+  2. **VRAM : seulement ce que torch réservait.** `torch.cuda.max_memory_reserved()` ne compte que les
+     tenseurs de torch, pas le contexte CUDA (plusieurs centaines de Mo). La VRAM est maintenant lue par
+     `nvidia-smi` (mémoire utilisée de la carte avant chargement, puis modèle chargé), cherché aussi dans ses
+     deux emplacements habituels hors du PATH ; repli sur torch si nvidia-smi est introuvable. Une
+     configuration en RAM affiche « 0 Go » (elle ne touche pas la carte), plus un tiret ambigu.
+  La RAM retenue est celle EN FONCTIONNEMENT (modèle chargé, après les transcriptions), plus le pic du
+  chargement : Cohere transite par la RAM même quand il finit sur la carte, et ce pic ne dit rien de ce qu'il
+  occupe ensuite.
+  **Pourquoi la CI ne l'a pas vu : aucun test n'exerçait la mesure réelle.** Ajouté un test qui alloue 300 Mo
+  dans un vrai Python et exige de les voir — lancé par la CI Windows (Python y est disponible pendant `npm
+  test`, vérifié dans le journal de la CI : le test du taux d'erreurs y tourne), donc sur le vrai chemin ctypes.
+  Régression : `node --test scripts/test-stt-benchmark.mjs scripts/test-stt-benchmark-ui.mjs` (mesure réelle
+  de +300 Mo ; « non mesuré » affiché pour une mesure ratée, « 0 Go » pour la VRAM d'une configuration en RAM).
+  Script relancé en entier ici : Cohere en RAM 12,1 Go, Parakeet v3 2,5 Go, compressé 1,1 Go.

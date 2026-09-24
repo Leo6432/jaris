@@ -182,6 +182,11 @@ function Toggle({
 
 /** Regroupe plusieurs `SettingRow` dans une même carte (fond + bordure), avec un titre au-dessus — le
  *  "groupe de réglages" façon Claude/ChatGPT, plutôt que des lignes qui flottent seules dans la page. */
+/** Case RAM/VRAM du test de transcription : une mesure ratée s'affiche comme telle, jamais comme « 0 Go ». */
+function formatGbCell(value: number | null | undefined): string {
+  return typeof value === 'number' ? `${value.toLocaleString('fr-FR')} Go` : 'non mesuré'
+}
+
 function SettingGroup({
   title,
   description,
@@ -981,8 +986,8 @@ export default function OptionsMenu(): JSX.Element {
                               {row.sample && <span className="options-menu__stt-bench-sample">Compris : « {row.sample} »</span>}
                             </td>
                             <td>{row.secondsPer5s?.toLocaleString('fr-FR')} s</td>
-                            <td>{row.ramGb?.toLocaleString('fr-FR')} Go</td>
-                            <td>{row.vramGb ? `${row.vramGb.toLocaleString('fr-FR')} Go` : '—'}</td>
+                            <td>{formatGbCell(row.ramGb)}</td>
+                            <td>{formatGbCell(row.vramGb)}</td>
                             <td>{row.errorsPct?.toLocaleString('fr-FR')} %</td>
                           </tr>
                         ) : (
