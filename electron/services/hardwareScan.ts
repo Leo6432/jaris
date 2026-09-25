@@ -194,6 +194,13 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   // que DeepSeek-R1 (déjà exclu plus haut pour la même raison). Léo, informé, a choisi de le garder : le vrai
   // test de Jaris est passé 6/6 sur sa machine (verified-tool-scores.md), aucun signalement réel ici — à
   // retirer si un vrai échec d'appel d'outils avec ce modèle est un jour rapporté en usage réel.
+  // Nemotron 3.5 Lightning (NVIDIA, août 2026) — ajouté à la demande de Léo (étape 167) : « moi ça tient pas
+  // dans ma carte mais un autre utilisateur peut-être ». 30B MoE, 3B actifs, tools+thinking, vérifié sur
+  // ollama.com/library/nemotron-3.5-lightning/tags (tag 30b = q4_K_M, 25 Go). Intelligence Index 13, vitesse
+  // 264 tokens/s (artificialanalysis.ai/models/nemotron-3-5-lightning, v4.3.2). Sa force est la vitesse, pas
+  // l'intelligence : utile en Rapide sur une carte de 32 Go+. Pas encore de score d'appel d'outils (trop
+  // gros pour être testé ici comme sur la machine de Léo) : Jaris ne le choisit pas tant qu'il n'est pas mesuré.
+  { model: 'nemotron-3.5-lightning:30b', vramGb: 25 },
   { model: 'glm-4.7-flash:q4_K_M', vramGb: 19 },
   { model: 'qwen3.5:9b', vramGb: 6.6 },
   { model: 'qwen3.5:4b', vramGb: 3.4 },
@@ -225,6 +232,7 @@ const LARGE_RAM_OFFLOAD_MODELS = new Set([
   'command-r:35b',
   'mistral-small3.2:24b',
   'glm-4.7-flash:q4_K_M',
+  'nemotron-3.5-lightning:30b',
   'qwen3.6:35b-a3b',
   'qwen3-coder:30b',
   'north-mini-code-1.0',
@@ -789,6 +797,8 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   'command-r:35b': 5,
   'qwen3:1.7b': 5,
   'glm-4.7-flash:q4_K_M': 15,
+  // Vérifié sur artificialanalysis.ai/models/nemotron-3-5-lightning (v4.3.2) le 25/09/2026.
+  'nemotron-3.5-lightning:30b': 13,
   'qwen3-vl:8b': 7,
   'qwen3-vl:4b': 6,
   'devstral-2:123b': 9,
@@ -836,6 +846,7 @@ const ARTIFICIAL_ANALYSIS_SPEED: Record<string, number> = {
   'mistral-small3.2:24b': 146,
   'granite4.2:30b': 73,
   'glm-4.7-flash:q4_K_M': 79,
+  'nemotron-3.5-lightning:30b': 264,
   'qwen3-vl:8b': 109,
   'devstral-2:123b': 133,
   'qwen3-coder-next': 111,

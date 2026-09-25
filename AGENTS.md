@@ -4811,3 +4811,19 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   granite4.2:8b (17/17, devant qwen3.5:9b 16/17), Puissant et Code qwen3.8:27b.
   Régression : `node --test scripts/test-verified-scores.mjs scripts/test-benchmark-cases.mjs
   scripts/test-options-reorganization-ui.mjs` ; chaque garde-fou vérifié en réintroduisant son défaut.
+
+- **Nemotron 3.5 Lightning ajouté + qwen2.5-coder:14b rendu testable (étape 167).** Léo : « ajoute-le, car
+  moi ça tient pas dans ma carte mais un autre utilisateur peut-être ». `nemotron-3.5-lightning:30b` (NVIDIA,
+  30B MoE / 3B actifs, tools+thinking, 25 Go — vérifié sur ollama.com/library ; Intelligence Index 13 et
+  264 tokens/s vérifiés sur la fiche Artificial Analysis, pas sur un résumé de recherche qui donnait aussi
+  « 24 » pour une autre version de l'index). Sa force est la vitesse (candidat Rapide sur une carte de 32 Go+),
+  pas l'intelligence (13, comme qwen3.5:4b). **Sans score d'appel d'outils, il n'est choisi nulle part**
+  (vérifié jusqu'à 48 Go de VRAM) : trop gros pour être testé dans cet environnement (15 Go de RAM, 21 Go de
+  disque), jamais un score deviné.
+  **Défaut de ma part trouvé en répondant à Léo** : qwen2.5-coder:14b était un modèle de Jaris mais manquait
+  dans la COPIE des listes de `benchmark-models.mjs` — jamais testé lors de son analyse, sans que rien ne le
+  signale. Test permanent `scripts/test-benchmark-candidates-sync.mjs` : tout modèle de Jaris doit être
+  testable par le script, avec la même règle de débordement RAM (vérifié en retirant chaque ajout). **Leçon
+  générale : une liste recopiée à la main entre deux fichiers qui ne peuvent pas s'importer finit toujours par
+  diverger — un test qui compare les deux copies coûte moins cher qu'une analyse de plusieurs heures qui
+  oublie un modèle.**

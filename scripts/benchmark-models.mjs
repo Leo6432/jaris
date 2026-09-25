@@ -171,7 +171,8 @@ const RAM_OFFLOAD_MODELS = new Set([
   'gpt-oss:20b',
   'command-r:35b',
   'mistral-small3.2:24b',
-  'glm-4.7-flash:q4_K_M'
+  'glm-4.7-flash:q4_K_M',
+  'nemotron-3.5-lightning:30b'
 ])
 
 const MODELS = [
@@ -244,6 +245,8 @@ const MODELS = [
   'command-r:35b',
   'mistral-small3.2:24b',
   'glm-4.7-flash:q4_K_M',
+  // Étape 167 : voir LARGE_CANDIDATES dans hardwareScan.ts.
+  'nemotron-3.5-lightning:30b',
   // ministral-3:8b/14b (MEDIUM_CANDIDATES dans hardwareScan.ts) : ministral-3:3b est déjà ici et déjà
   // vérifié (6/6, verified-tool-scores.md) — ces deux tailles restent à tester pour de vrai, un score pour
   // une taille ne valant pas pour une autre.
@@ -303,6 +306,9 @@ const CODE_CANDIDATES = [
   // Mistral, agent de code autonome. DENSE (comme qwen2.5-coder:32b) : voir la même remarque dans
   // hardwareScan.ts. Vérifié sur ollama.com/library/devstral-small-2 (15 Go).
   { model: 'devstral-small-2:24b', vramGb: 15 },
+  // Étape 167 : oublié ici alors que Jaris le connaît (CODE_CANDIDATES de hardwareScan.ts) — jamais testé
+  // lors de l'analyse de Léo du 25/09/2026. Test permanent désormais : test-benchmark-candidates-sync.mjs.
+  { model: 'qwen2.5-coder:14b', vramGb: 9 },
   { model: 'qwen2.5-coder:7b', vramGb: 4.7 }
 ]
 
@@ -349,7 +355,8 @@ const MODEL_SIZE_HINTS = {
   'gpt-oss:20b': 14,
   'command-r:35b': 19,
   'mistral-small3.2:24b': 15,
-  'glm-4.7-flash:q4_K_M': 19
+  'glm-4.7-flash:q4_K_M': 19,
+  'nemotron-3.5-lightning:30b': 25
 }
 
 // Combine MODEL_SIZE_HINTS avec les tailles déjà présentes sur VISION_CANDIDATES/CODE_CANDIDATES (pas la
@@ -400,6 +407,7 @@ const LARGE_TIER_MODELS = new Set([
   'command-r:35b',
   'mistral-small3.2:24b',
   'glm-4.7-flash:q4_K_M',
+  'nemotron-3.5-lightning:30b',
   // hardwareScan.ts reprend aussi ces 4 dans LARGE_CANDIDATES comme repli si rien de plus gros ne rentre,
   // ce qui les rend multi-paliers (voir isSafeToPruneEarly ci-dessous) : présents ici pour que
   // FLASH/MEDIUM/LARGE_TIER_MODELS reflètent fidèlement hardwareScan.ts, même si en pratique ça les exclut
