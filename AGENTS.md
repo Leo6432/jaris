@@ -4620,3 +4620,23 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   modèle qui tient, une seule ligne par modèle). Vérifié en remettant l'ancien code : les 8 échouent.
   **À faire par Léo** : relancer « Retester la configuration » pour que le profil prenne les nouveaux choix ;
   la vitesse réelle de qwen3.8:27b en mode Code sur sa carte n'est pas vérifiée ici.
+
+- **Étape 161, Léo : « revois Rapide : il ne faut pas le plus rapide sans regarder l'intelligence, par
+  exemple un modèle qui a 5 points d'intelligence en plus mais ne perd que 3 points de vitesse ».** La règle
+  de l'étape 160 (Rapide = le plus rapide, point) ignorait l'intelligence dès qu'un modèle était un tout petit
+  peu plus lent. Nouvelle règle (`fastEnoughThenSmartest`, hardwareScan.ts) : parmi les modèles les plus
+  fiables, ceux qui gardent au moins 75 % de la vitesse publiée du plus rapide (`RAPIDE_MIN_SPEED_RATIO`, au
+  plus un quart plus lent), puis le plus INTELLIGENT d'entre eux. Un modèle sans vitesse publiée ne peut pas
+  prouver qu'il est rapide : écarté tant qu'un autre en a une.
+  **Ce qui a été dit honnêtement à Léo plutôt que de lui laisser croire que ça changeait tout** : son exemple
+  correspond exactement à granite4.2:3b face à ministral-3:3b (9 contre 5 d'intelligence, 218 contre 221 de
+  vitesse) — mais granite4.2:3b n'avait PAS perdu à cause de la vitesse : il n'a que 5/6 au test d'appel
+  d'outils, et la fiabilité passe toujours avant. Sur une carte de 8 Go, Rapide reste donc ministral-3:3b ;
+  la nouvelle règle change le choix sur 16 Go et plus (gpt-oss:20b : 9 d'intelligence, 168 tok/s).
+  **Leçon générale : quand l'utilisateur illustre une règle par un exemple, vérifier sur les vraies données
+  pourquoi cet exemple précis a perdu** — ici la cause était une autre règle (la fiabilité), et la
+  simulation avant/après sur plusieurs tailles de carte évite d'annoncer un changement qui n'aura pas lieu
+  chez lui.
+  Régression : `node --test scripts/test-hardwarescan-single-pool.mjs` (+4 d'intelligence pour −3 de vitesse
+  gagne ; plus intelligent mais bien plus lent ne gagne jamais ; la fiabilité passe avant tout ; 8 Go reste
+  ministral-3:3b). Vérifié en remettant l'ancien code : le test de l'exemple de Léo échoue.

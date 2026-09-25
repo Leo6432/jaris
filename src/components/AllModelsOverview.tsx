@@ -214,7 +214,7 @@ export default function AllModelsOverview(): JSX.Element {
                     <h3>Tous les modèles candidats</h3>
                     <p>
                       Tous les modèles que Jaris connaît, dans une seule liste. Pour chaque rôle, Jaris cherche
-                      dans toute la liste : le plus rapide pour Rapide, le plus intelligent qui tient sur ta carte
+                      dans toute la liste : le plus intelligent parmi les plus rapides pour Rapide, le plus intelligent qui tient sur ta carte
                       pour Médium, le plus intelligent tout court pour Puissant et Code. La catégorie sert
                       seulement à repérer les modèles rapides ou puissants.
                     </p>

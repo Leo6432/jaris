@@ -387,6 +387,13 @@ const CODE_CANDIDATES: ModelCandidate[] = [
  * computeModelPicks). Seules les CAPACITÉS réelles d'un modèle restreignent encore un rôle : lire une image
  * (Vision) — un fait sur le modèle, pas une catégorie.
  */
+/**
+ * Rôle Rapide (étape 161) : part de la vitesse du plus rapide qu'un modèle doit garder pour rester candidat
+ * — au plus un quart plus lent. Au-dessus de ce seuil, c'est l'intelligence qui départage (voir
+ * fastEnoughThenSmartest dans computeModelPicks).
+ */
+const RAPIDE_MIN_SPEED_RATIO = 0.75
+
 const ALL_MODELS: ModelCandidate[] = (() => {
   const byModel = new Map<string, ModelCandidate>()
   for (const c of [...FLASH_CANDIDATES, ...MEDIUM_CANDIDATES, ...LARGE_CANDIDATES, ...VISION_CANDIDATES, ...CODE_CANDIDATES]) {
@@ -1110,9 +1117,9 @@ function computeModelPicks(
   }
 
   /**
-   * Le plus rapide d'abord (rôle Rapide, étape 160) : vitesse publiée par Artificial Analysis — le repère
-   * comparatif choisi par Léo à l'étape 131 —, un modèle sans vitesse publiée passant après ceux qui en ont
-   * une ; entre deux modèles sans vitesse publiée, le plus léger (moins de mémoire à lire par mot écrit).
+   * Le plus rapide d'abord : vitesse publiée par Artificial Analysis — le repère comparatif choisi par Léo à
+   * l'étape 131 —, un modèle sans vitesse publiée passant après ceux qui en ont une ; entre deux modèles sans
+   * vitesse publiée, le plus léger (moins de mémoire à lire par mot écrit).
    */
   const fastestFirst = (a: Scored, b: Scored): number => {
     const aSpeed = ARTIFICIAL_ANALYSIS_SPEED[a.model]
@@ -1124,18 +1131,44 @@ function computeModelPicks(
   }
 
   /**
+   * Rôle Rapide (étape 161, Léo : « il ne faut pas le plus rapide sans regarder l'intelligence, par exemple
+   * un modèle qui a 5 points d'intelligence en plus mais ne perd que 3 points de vitesse »). Parmi les modèles
+   * qui restent au moins à RAPIDE_MIN_SPEED_RATIO de la vitesse du plus rapide, le plus INTELLIGENT (à
+   * intelligence égale, le plus rapide). Un modèle sans vitesse publiée ne peut pas prouver qu'il est rapide :
+   * écarté tant qu'au moins un modèle en a une ; si aucun n'en a, retour au plus léger.
+   */
+  const fastEnoughThenSmartest = (best: Scored[]): Scored[] => {
+    const speeds = best.map((c) => ARTIFICIAL_ANALYSIS_SPEED[c.model]).filter((v): v is number => v !== undefined)
+    if (!speeds.length) return [...best].sort(fastestFirst)
+    const floor = Math.max(...speeds) * RAPIDE_MIN_SPEED_RATIO
+    return best
+      .filter((c) => (ARTIFICIAL_ANALYSIS_SPEED[c.model] ?? -1) >= floor)
+      .sort((a, b) => smartestFirstOrNull(a, b) ?? fastestFirst(a, b))
+  }
+
+  /** smartestFirst sans son dernier repli (la taille) : `null` quand l'intelligence ne départage pas. */
+  const smartestFirstOrNull = (a: Scored, b: Scored): number | null => {
+    const aIndex = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[a.model]
+    const bIndex = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[b.model]
+    if (aIndex !== undefined && bIndex !== undefined && aIndex !== bIndex) return bIndex - aIndex
+    if (aIndex !== undefined && bIndex === undefined) return -1
+    if (aIndex === undefined && bIndex !== undefined) return 1
+    return null
+  }
+
+  /**
    * Un rôle = une question posée à TOUS les modèles (étape 160) :
    * - `pool` : les modèles capables de ce rôle (tous, sauf Vision qui exige de lire une image) ;
    * - `resultOf` : le score de fiabilité qui compte pour ce rôle — critère de validité, jamais départagé ;
    * - `allowRam` : le modèle peut-il déborder sur la RAM (LARGE_RAM_OFFLOAD_MODELS) ? Non pour Rapide et
    *   Médium, qui doivent répondre sans à-coups ;
-   * - `order` : à fiabilité égale, qui gagne.
+   * - `rank` : parmi les plus fiables (même proportion de réussite au test), le classement du rôle.
    */
   const pickRole = (
     pool: ModelCandidate[],
     resultOf: (c: ModelCandidate) => LocalBenchmarkEntry | undefined,
     allowRam: boolean,
-    order: (a: Scored, b: Scored) => number
+    rank: (best: Scored[]) => Scored[]
   ): ModelOverviewEntry => {
     // `exclude` (étape 136) : modèles dont le téléchargement vient d'échouer sur CETTE machine (voir
     // runQuickSetup, benchmarkRunner.ts) — retirés AVANT tout calcul, repli ultime compris. Jamais la liste
@@ -1159,15 +1192,14 @@ function computeModelPicks(
       return entryOf(model, candidate?.vramGb ?? 0, candidate ? resultOf(candidate) : undefined)
     }
 
-    scored.sort((a, b) => {
-      const toolDiff = parseToolScore(b.result.toolCalling) - parseToolScore(a.result.toolCalling)
-      if (toolDiff !== 0) return toolDiff
-      return order(a, b)
-    })
-    const winner = scored[0]
+    // La fiabilité passe toujours en premier : seuls les modèles au meilleur taux de réussite sont classés.
+    const topScore = Math.max(...scored.map((c) => parseToolScore(c.result.toolCalling)))
+    const best = scored.filter((c) => parseToolScore(c.result.toolCalling) === topScore)
+    const winner = rank(best)[0] ?? best[0]
     return entryOf(winner.model, winner.vramGb, winner.result)
   }
 
+  const smartest = (best: Scored[]): Scored[] => [...best].sort(smartestFirst)
   const conversation = (c: ModelCandidate): LocalBenchmarkEntry | undefined => resultFor(c, 'conversation')
   // Code : le test de code quand le modèle l'a passé, sinon son test de conversation (il suit déjà des
   // consignes précises : c'est ce qui permet à un modèle Puissant, jamais passé par le test de code, d'être
@@ -1175,21 +1207,21 @@ function computeModelPicks(
   const code = (c: ModelCandidate): LocalBenchmarkEntry | undefined => resultFor(c, 'code') ?? resultFor(c, 'conversation')
 
   return {
-    // Rapide : le plus rapide de tous, qui tient entièrement sur la carte.
-    flash: pickRole(ALL_MODELS, conversation, false, fastestFirst),
+    // Rapide : le plus intelligent parmi les quasi aussi rapides que le plus rapide, sur la carte seule.
+    flash: pickRole(ALL_MODELS, conversation, false, fastEnoughThenSmartest),
     // Médium : le plus intelligent qui tient entièrement sur la carte.
-    medium: pickRole(ALL_MODELS, conversation, false, smartestFirst),
+    medium: pickRole(ALL_MODELS, conversation, false, smartest),
     // Puissant : le plus intelligent de tous, même en débordant sur la RAM.
-    large: pickRole(ALL_MODELS, conversation, true, smartestFirst),
+    large: pickRole(ALL_MODELS, conversation, true, smartest),
     // Vision : le plus intelligent parmi ceux qui lisent une image.
     vision: pickRole(
       ALL_MODELS.filter((c) => READS_IMAGES.has(c.model)),
       (c) => resultFor(c, 'vision'),
       true,
-      smartestFirst
+      smartest
     ),
     // Code : le plus intelligent de tous, même lent (choix de Léo, étape 160).
-    code: pickRole(ALL_MODELS, code, true, smartestFirst)
+    code: pickRole(ALL_MODELS, code, true, smartest)
   }
 }
 

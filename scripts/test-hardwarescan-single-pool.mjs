@@ -57,10 +57,36 @@ test('machine de Léo (8 Go de VRAM) : Code prend le plus intelligent de TOUS le
   assert.equal(picks.code, 'qwen3.8:27b', `Code attendu : le plus intelligent de tous (qwen3.8:27b, 34), obtenu ${picks.code}`)
 })
 
-test('Rapide : le plus rapide (vitesse publiée) de TOUS les modèles fiables qui tiennent sur la carte', async () => {
+test('Rapide sur 8 Go : ministral-3:3b, seul modèle fiable presque aussi rapide que le plus rapide', async () => {
   const picks = await picksFor(8, 32)
-  // ministral-3:3b : 221 tokens/s publiés, le plus rapide des modèles à 6/6 qui tiennent sur 7 Go.
+  // ministral-3:3b : 221 tokens/s publiés. granite4.2:3b (218) n'a que 5/6 au test d'appel d'outils, et les
+  // modèles fiables suivants (granite4.2:8b, 94) sont bien plus lents : aucun autre ne reste dans la course.
   assert.equal(picks.flash, 'ministral-3:3b')
+})
+
+/**
+ * Étape 161, Léo : « il ne faut pas le plus rapide sans regarder l'intelligence, par exemple un modèle qui a
+ * 5 points d'intelligence en plus mais ne perd que 3 points de vitesse ». Exactement le cas de granite4.2:3b
+ * face à ministral-3:3b (9 contre 5 d'intelligence, 218 contre 221 de vitesse), rendu fiable ici exprès.
+ */
+test('Rapide : un modèle nettement plus intelligent et à peine plus lent l’emporte sur le plus rapide', async () => {
+  const scores = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 6/6 |', '| granite4.2:3b | 6/6 |', '| qwen3.5:9b | 6/6 |'].join('\n')
+  const r = await setup({ vramMib: 8 * 1024, scores }).pickBestModelsFromBenchmark()
+  assert.equal(r.models.flash, 'granite4.2:3b', '+4 d’intelligence pour -3 de vitesse : le plus intelligent doit gagner')
+  // qwen3.5:9b (14 d'intelligence) est bien plus lent (56 contre 221) : il ne compte pas comme « rapide ».
+  assert.notEqual(r.models.flash, 'qwen3.5:9b')
+})
+
+test('Rapide : un modèle plus intelligent mais bien plus lent ne passe JAMAIS devant', async () => {
+  const scores = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 6/6 |', '| qwen3.5:9b | 6/6 |', '| granite4.2:8b | 6/6 |'].join('\n')
+  const r = await setup({ vramMib: 8 * 1024, scores }).pickBestModelsFromBenchmark()
+  assert.equal(r.models.flash, 'ministral-3:3b')
+})
+
+test('Rapide : la fiabilité passe avant tout, même devant un modèle plus rapide ET plus intelligent', async () => {
+  const scores = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 6/6 |', '| granite4.2:3b | 5/6 |'].join('\n')
+  const r = await setup({ vramMib: 8 * 1024, scores }).pickBestModelsFromBenchmark()
+  assert.equal(r.models.flash, 'ministral-3:3b')
 })
 
 test('Rapide et Médium ne débordent JAMAIS sur la RAM, même avec beaucoup de RAM', async () => {
