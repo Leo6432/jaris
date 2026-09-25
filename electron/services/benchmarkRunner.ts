@@ -1,5 +1,10 @@
+import { spawn } from 'child_process'
+import { join } from 'path'
+import { config } from '../config'
+import { resourcesRoot } from '../paths'
+import { getDataRoot } from './dataLocation'
 import { deleteModel, pullModelIfMissing, ModelTooLargeError, DiskFullError } from './ollama'
-import { getAllCandidateModelIds, pickBestModelsFromBenchmark } from './hardwareScan'
+import { getAllCandidateModelIds, getUnscoredModels, pickBestModelsFromBenchmark } from './hardwareScan'
 import { getProfile, saveProfile } from './profileStore'
 import type { CapacityScanResult } from '../../shared/ipc'
 
@@ -129,4 +134,57 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
     skippedModels: skippedList.length ? skippedList : undefined,
     blockedModels: blockedList.length ? blockedList : undefined
   }
+}
+
+/** Fichier où le bouton « Tester les modèles sans score » écrit ses résultats (dossier de données de Jaris). */
+export function unscoredResultsPath(): string {
+  return join(getDataRoot(), 'benchmark-nouveaux-modeles.md')
+}
+
+/**
+ * Étape 168 (Léo : « remets le bouton pour Lightning et qwen2.5-coder:14b ») : teste UNIQUEMENT les modèles de
+ * Jaris qui n'ont encore aucun score (getUnscoredModels), avec le script de test habituel. Contrairement à
+ * l'ancienne analyse complète (retirée à l'étape 166), rien n'est choisi ni installé à la fin : les scores
+ * restent dans ce fichier, que Léo envoie pour qu'ils soient recopiés dans verified-tool-scores.md — la seule
+ * source des scores de Jaris. Les modèles téléchargés pour le test sont supprimés par le script juste après.
+ *
+ * `process.execPath` + ELECTRON_RUN_AS_NODE : l'exécutable de Jaris est lui-même un Node complet, l'appli
+ * installée n'a jamais besoin d'un `node` système. JARIS_RESUME : un PC éteint en route reprend là où il en
+ * était au clic suivant. Marge RAM de 12 Go au lieu de 16 : voir RAM_SAFETY_MARGIN_GB dans le script.
+ */
+export function testUnscoredModels(onLine: (line: string) => void): Promise<{ models: string[]; resultsPath: string }> {
+  const models = getUnscoredModels()
+  const resultsPath = unscoredResultsPath()
+  if (!models.length) return Promise.resolve({ models, resultsPath })
+  return new Promise((resolve, reject) => {
+    const proc = spawn(process.execPath, [join(resourcesRoot(), 'scripts', 'benchmark-models.mjs')], {
+      windowsHide: true,
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: '1',
+        OLLAMA_HOST: config.ollama.host,
+        JARIS_ONLY_MODELS: models.join(','),
+        JARIS_RESULTS_PATH: resultsPath,
+        JARIS_RESUME: '1',
+        JARIS_RAM_SAFETY_MARGIN_GB: '12'
+      }
+    })
+    let buffer = ''
+    const handleChunk = (chunk: Buffer): void => {
+      buffer += chunk.toString()
+      let newlineIndex: number
+      while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+        onLine(buffer.slice(0, newlineIndex))
+        buffer = buffer.slice(newlineIndex + 1)
+      }
+    }
+    proc.stdout.on('data', handleChunk)
+    proc.stderr.on('data', handleChunk)
+    proc.on('error', (err) => reject(new Error(`Impossible de lancer le test : ${err.message}`)))
+    proc.on('close', (code) => {
+      if (buffer.trim()) onLine(buffer)
+      if (code === 0) resolve({ models, resultsPath })
+      else reject(new Error(`Le test s'est arrêté avant la fin (code ${code ?? '?'}). Relance-le : il reprendra là où il en était.`))
+    })
+  })
 }

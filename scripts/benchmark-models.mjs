@@ -115,6 +115,19 @@ const SCOPE = (process.env.JARIS_ANALYSIS_SCOPE?.trim() || 'all')
 const RESUME = process.env.JARIS_RESUME === '1'
 
 /**
+ * Étape 168 : bouton « Tester les modèles sans score » (Options → Modèles → Tous les modèles). Jaris transmet
+ * la liste exacte des modèles à tester, séparés par des virgules ; tous les autres sont ignorés, dans les trois
+ * épreuves. Absente (lancé à la main), rien ne change.
+ */
+const ONLY_MODELS = new Set(
+  (process.env.JARIS_ONLY_MODELS ?? '')
+    .split(',')
+    .map((m) => m.trim())
+    .filter(Boolean)
+)
+const inOnlyModels = (model) => ONLY_MODELS.size === 0 || ONLY_MODELS.has(model)
+
+/**
  * Petite marge sous la VRAM totale détectée, pour le contexte (num_ctx, 4096 par défaut) et l'overhead
  * OS/pilote pendant le test — même valeur que GPU_RESERVED_GB côté app (electron/services/hardwareScan.ts)
  * depuis l'étape 158 (la transcription tourne en RAM, elle ne prend plus de place sur la carte).
@@ -128,7 +141,11 @@ const VRAM_SAFETY_MARGIN_GB = 1
  * dupliquée ici volontairement, même raisonnement (un ami de Léo à faible VRAM dédiée s'est retrouvé avec
  * un modèle Puissant tournant presque entièrement sur sa RAM, saturant sa machine entière).
  */
-const RAM_SAFETY_MARGIN_GB = 16
+const RAM_SAFETY_MARGIN_GB = Number(process.env.JARIS_RAM_SAFETY_MARGIN_GB) > 0 ? Number(process.env.JARIS_RAM_SAFETY_MARGIN_GB) : 16
+// Étape 168 : le bouton « Tester les modèles sans score » passe 12 — un test ponctuel, lancé exprès, pendant
+// lequel on ferme le reste (dit dans la confirmation). Avec 16, nemotron-3.5-lightning (25 Go) était sauté
+// d'office sur la machine de Léo (8 Go de VRAM + 32 Go de RAM - 16 = 24 Go). L'usage quotidien de Jaris
+// garde 16 (RESOURCE_SAFETY_MARGIN_GB), inchangé.
 
 /**
  * Modèles dont le filtre de taille ci-dessous vérifie VRAM + RAM combinées, pas la VRAM seule : contrairement
@@ -439,12 +456,12 @@ const SCOPED_MODELS = (
         : SCOPE === 'large'
           ? MODELS.filter((m) => LARGE_TIER_MODELS.has(m))
           : []
-).filter((m) => !VERIFIED_MODELS.conversation.has(m))
+).filter((m) => !VERIFIED_MODELS.conversation.has(m) && inOnlyModels(m))
 const SCOPED_VISION_CANDIDATES = (SCOPE === 'all' || SCOPE === 'vision' ? VISION_CANDIDATES : []).filter(
-  (c) => !VERIFIED_MODELS.vision.has(c.model)
+  (c) => !VERIFIED_MODELS.vision.has(c.model) && inOnlyModels(c.model)
 )
 const SCOPED_CODE_CANDIDATES = (SCOPE === 'all' || SCOPE === 'code' ? CODE_CANDIDATES : []).filter(
-  (c) => !VERIFIED_MODELS.code.has(c.model)
+  (c) => !VERIFIED_MODELS.code.has(c.model) && inOnlyModels(c.model)
 )
 
 async function deleteModelViaApi(model) {

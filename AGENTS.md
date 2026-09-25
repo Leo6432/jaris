@@ -4827,3 +4827,22 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   générale : une liste recopiée à la main entre deux fichiers qui ne peuvent pas s'importer finit toujours par
   diverger — un test qui compare les deux copies coûte moins cher qu'une analyse de plusieurs heures qui
   oublie un modèle.**
+
+- **Bouton « Tester les modèles sans score » (étape 168, Léo : « remets le bouton pour Lightning et
+  qwen2.5-coder:14b »).** Tout modèle ajouté après le retrait de l'analyse (étape 166) n'avait plus aucun moyen
+  d'être mesuré, alors que Jaris ne choisit jamais un modèle sans score. Le bouton (Tous les modèles) ne teste
+  QUE `getUnscoredModels()` — les modèles de Jaris sans aucun score (aujourd'hui G9v3-3B, qwen2.5-coder:14b,
+  nemotron-3.5-lightning:30b, devstral-2:123b) — via `JARIS_ONLY_MODELS`, et ne choisit rien à la fin : le
+  fichier `benchmark-nouveaux-modeles.md` (dossier de données) est envoyé par Léo et recopié à la main dans
+  verified-tool-scores.md, la seule source des scores. Suivi volontairement réduit (barre, étape en cours, une
+  ligne par modèle terminé) : l'ancien tableau listait les ~40 modèles « En attente » et faisait croire à Léo
+  que tout allait être retéléchargé.
+  **Piège évité en recalculant le budget avant de livrer** : la marge RAM du script (16 Go) laissait 8 + 32 -
+  16 = 24 Go sur la machine de Léo, et Lightning pèse 25 Go — il aurait été « sauté (trop gros) » par le bouton
+  même créé pour lui. Marge de 12 Go pour ce seul test ponctuel (la confirmation demande de fermer le reste) ;
+  l'usage quotidien garde 16.
+  **Piège dans mon propre test, attrapé en vérifiant qu'il mordait** : le premier test du filtre passait AUSSI
+  sans le filtre — les autres modèles installés avaient déjà un score et étaient sautés de toute façon. Ajout
+  d'un modèle installé sans score et non demandé : le test échoue bien sans le filtre.
+  Régression : `node --test scripts/test-benchmark-cases.mjs scripts/test-hardwarescan-single-pool.mjs
+  scripts/test-options-reorganization-ui.mjs`.

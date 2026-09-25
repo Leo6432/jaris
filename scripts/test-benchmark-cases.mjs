@@ -93,11 +93,15 @@ test('sans outil : une réponse vide ou un appel d’outil écrit en texte compt
   for (const content of passes) assert.equal(isCorrectAnswer(noTool, { toolName: null, toolArgs: null, content }), true, content)
 })
 
-test('le script d’analyse n’est plus embarqué dans l’installeur (étape 166 : analyse retirée de Jaris)', () => {
+// Étape 168 : le bouton « Tester les modèles sans score » lance le script depuis l'appli installée.
+test('chaque fichier importé par le script de test est bien embarqué dans l’installeur', () => {
+  const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8')
   const builder = readFileSync(new URL('../electron-builder.yml', import.meta.url), 'utf8')
-  assert.doesNotMatch(builder, /- benchmark-models\.mjs/)
-  assert.doesNotMatch(builder, /- benchmark-cases\.mjs/)
-  assert.match(builder, /- verified-tool-scores\.md/, 'les scores, eux, restent indispensables à l’application')
+  const localImports = [...script.matchAll(/from '\.\/([^']+)'/g)].map((m) => m[1])
+  assert.ok(localImports.includes('benchmark-cases.mjs'))
+  for (const file of ['benchmark-models.mjs', 'verified-tool-scores.md', ...localImports]) {
+    assert.match(builder, new RegExp(`- ${file.replace('.', '\\.')}`), `${file} absent de electron-builder.yml`)
+  }
 })
 
 // ---------------------------------------------------------------------------------------------------------
@@ -199,6 +203,37 @@ test('le vrai script : vraies consignes et 14 outils envoyés, 17 questions not�
     assert.equal(scoreOf('qwen3:1.7b'), `${TEST_CASES.length - 2}/${TEST_CASES.length}`)
     // Aucun outil jamais : seules les 4 questions « sans outil » sont justes.
     assert.equal(scoreOf('qwen3.5:0.8b'), `4/${TEST_CASES.length}`)
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('JARIS_ONLY_MODELS : seuls les modèles demandés sont testés, dans leur épreuve (conversation ou code)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const fake = await startFakeOllama({
+    // MiniCPM5 et devstral-2:123b n'ont PAS de score non plus : sans le filtre, ils seraient testés eux aussi.
+    installed: ['ministral-3:3b', 'nemotron-3.5-lightning:30b', 'qwen2.5-coder:14b', 'qwen2.5-coder:7b', 'hf.co/openbmb/MiniCPM5-1B-GGUF', 'devstral-2:123b'],
+    answer: (_m, p) => perfectAnswer(p)
+  })
+  try {
+    const resultsPath = join(dir, 'benchmark-nouveaux-modeles.md')
+    const { code, out } = await runScript({
+      OLLAMA_HOST: fake.host,
+      JARIS_ANALYSIS_SCOPE: 'all',
+      JARIS_RESULTS_PATH: resultsPath,
+      JARIS_RESUME: '1',
+      JARIS_ONLY_MODELS: 'nemotron-3.5-lightning:30b,qwen2.5-coder:14b'
+    })
+    assert.equal(code, 0, out)
+    const tested = new Set(fake.requests.map((r) => r.model))
+    assert.deepEqual([...tested].sort(), ['nemotron-3.5-lightning:30b', 'qwen2.5-coder:14b'])
+    const lightning = fake.requests.filter((r) => r.model === 'nemotron-3.5-lightning:30b')
+    assert.equal(lightning.length, TEST_CASES.length, 'Lightning passe les 17 questions d’appel d’outils')
+    assert.ok(fake.requests.filter((r) => r.model === 'qwen2.5-coder:14b').every((r) => !r.tools), 'le modèle de code passe le test de code')
+    const results = readFileSync(resultsPath, 'utf8')
+    assert.match(results, /\| nemotron-3\.5-lightning:30b \|[^\n]*\| 17\/17 \|/)
+    assert.match(results, /## Code[\s\S]*\| qwen2\.5-coder:14b \|/)
   } finally {
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })

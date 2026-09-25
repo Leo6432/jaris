@@ -142,3 +142,9 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
   assert.ok(overview.entries.every((e) => ['Rapide', 'Moyen', 'Puissant'].includes(e.category)))
   assert.equal(overview.groups, undefined, 'plus de groupes par palier')
 })
+
+// Étape 168 : la liste que teste le bouton « Tester les modèles sans score ».
+test('modèles sans aucun score : ceux que le bouton de test mesurera, du plus léger au plus lourd', () => {
+  const unscored = [...setup({ vramMib: 8 * 1024 }).getUnscoredModels()]
+  assert.deepEqual(unscored, ['hf.co/bartowski/ai9stars_G9v3-3B-GGUF', 'qwen2.5-coder:14b', 'nemotron-3.5-lightning:30b', 'devstral-2:123b'])
+})

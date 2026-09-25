@@ -910,6 +910,19 @@ export function parseVerifiedToolScores(): Record<VerifiedTier, Map<string, stri
 }
 
 /**
+ * Modèles de Jaris sans AUCUN score (ni appel d'outils, ni vision, ni code) — ceux que Jaris ne peut jamais
+ * choisir tant qu'ils ne sont pas mesurés. Étape 168 : c'est la liste que teste le bouton « Tester les modèles
+ * sans score » (Tous les modèles), du plus léger au plus lourd.
+ */
+export function getUnscoredModels(): string[] {
+  const scores = parseVerifiedToolScores()
+  return [...ALL_MODELS]
+    .sort((a, b) => a.vramGb - b.vramGb)
+    .filter((c) => !scores.conversation.has(c.model) && !scores.vision.has(c.model) && !scores.code.has(c.model))
+    .map((c) => c.model)
+}
+
+/**
  * Tous les modèles de Jaris dans UNE seule liste (étape 160, Léo : « enlève puissant, rapide dans tous les
  * modèles, mais garde quand même rapide, moyen pour que les utilisateurs [voient] »). Plus de tableau par
  * palier : chaque modèle apparaît une fois, avec son étiquette (Rapide/Moyen/Puissant, modelCategory), le fait

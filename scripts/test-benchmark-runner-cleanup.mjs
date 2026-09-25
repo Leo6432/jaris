@@ -85,6 +85,7 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
     if (id === './hardwareScan') return hardwareScanModule
     if (id === './profileStore') return profileStoreModule
     if (id.endsWith('paths')) return { resourcesRoot: () => '.' }
+    if (id === './dataLocation') return { getDataRoot: () => '/fake/data' }
     throw new Error(`module non simulé dans le test : ${id}`)
   })
 

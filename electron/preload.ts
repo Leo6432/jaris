@@ -85,6 +85,10 @@ const api = {
   setModelChoice: (mode: ModelChoiceMode, model: string | null): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.setModelChoice, mode, model),
   runQuickSetup: (): Promise<CapacityScanResult> => ipcRenderer.invoke(IPC_CHANNELS.runQuickSetup),
+  getUnscoredModels: (): Promise<string[]> => ipcRenderer.invoke(IPC_CHANNELS.getUnscoredModels),
+  testUnscoredModels: (): Promise<{ models: string[]; resultsPath: string }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.testUnscoredModels),
+  showUnscoredResults: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.showUnscoredResults),
   onModelBenchmarkLine: (cb: (line: string) => void) => subscribe(IPC_CHANNELS.modelBenchmarkLine, cb),
   getNewModels: (): Promise<string[]> => ipcRenderer.invoke(IPC_CHANNELS.getNewModels),
   acknowledgeNewModels: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.acknowledgeNewModels),

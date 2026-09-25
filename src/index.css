@@ -860,6 +860,54 @@ body.body--scan::after {
   margin-top: 14px;
 }
 
+/* Test des modèles sans score (étape 168), en tête de la page « Tous les modèles ». */
+.options-menu__unscored {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--hud-line);
+  background: var(--hud-panel-raised);
+}
+
+.options-menu__unscored-title {
+  margin: 0;
+  color: var(--hud-text);
+}
+
+.options-menu__unscored-text,
+.options-menu__unscored-confirm p {
+  margin: 0;
+  max-width: 70ch;
+  font-size: 0.8rem;
+  color: var(--hud-text-dim);
+}
+
+.options-menu__unscored-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.options-menu__unscored-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.options-menu__unscored .options-menu__progress {
+  align-self: stretch;
+}
+
+.options-menu__unscored-results {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 0.8rem;
+  color: var(--hud-text);
+}
+
 /* Chaque palier dans sa propre carte : plus facile à distinguer d'un seul coup d'œil que 5 tableaux qui
    s'enchaînent sans séparation visuelle. */
 .options-menu__model-group {

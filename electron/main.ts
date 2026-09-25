@@ -19,10 +19,10 @@ import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES } from './se
 import { getStorageStatus, programMoveCommandLine, reconcileStorage, relocateEverything } from './services/relocation'
 import { DOCKER_APP_SUBDIR, findDockerInstallDir } from './services/dockerLocation'
 import { openApp } from './services/appLauncher'
-import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, getMyModelPicks, isUnusedInstalledModel } from './services/hardwareScan'
+import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, getMyModelPicks, getUnscoredModels, isUnusedInstalledModel } from './services/hardwareScan'
 import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
-import { runQuickSetup } from './services/benchmarkRunner'
+import { runQuickSetup, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
 import { deleteGeneratedApp, generateApp, getGeneratedAppsDir, listGeneratedApps, loadGeneratedApp } from './services/codeGenerator'
 import { createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
@@ -897,6 +897,12 @@ app.whenReady().then(async () => {
     await saveProfile({ ...profile, knownModelCandidates: getAllCandidateModelIds() })
   })
   ipcMain.handle(IPC_CHANNELS.getMyModelPicks, async () => getMyModelPicks(await getProfile()))
+  // Étape 168 : test des seuls modèles sans score (voir testUnscoredModels, benchmarkRunner.ts).
+  ipcMain.handle(IPC_CHANNELS.getUnscoredModels, () => getUnscoredModels())
+  ipcMain.handle(IPC_CHANNELS.testUnscoredModels, (event) =>
+    testUnscoredModels((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))
+  )
+  ipcMain.handle(IPC_CHANNELS.showUnscoredResults, () => shell.showItemInFolder(unscoredResultsPath()))
   // Étape 140 : le nom vient du renderer, donc revérifié ICI avant toute suppression — un modèle utilisé par
   // un rôle du profil (ou inconnu d'Ollama) n'est jamais supprimé, quoi que demande l'interface.
   ipcMain.handle(IPC_CHANNELS.deleteUnusedModel, async (_event, model: string): Promise<void> => {
