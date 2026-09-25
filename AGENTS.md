@@ -4754,3 +4754,11 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   (socket détruit) : coupure passagère → vrai score noté ; coupure durable → arrêt sans score enregistré ; ligne
   sans aucune réponse refaite à la reprise ; plus aucune question posée avec `fetch`. Chaque garde-fou vérifié
   en remettant l'ancien code.
+  **Suite (Léo : « les modèles qu'on ne reteste pas, tu es sûr que leur score n'est pas faux ? »)** : relu un par un.
+  Vision (9 modèles) : demande de quelques dizaines de tokens + une petite image, sans consignes ni outils, aucune
+  erreur dans son fichier — valables. Code : fenêtre 16384 (celle de Jaris), aucune erreur SAUF qwen2.5-coder:32b,
+  noté « 2/2 » : une de ses trois générations avait planté (très probablement le délai de 5 minutes de fetch,
+  sa moyenne était à 4 min 30). Une mesure INCOMPLÈTE n'est plus jamais reprise, en vision et en code comme en
+  conversation (total ≠ nombre de questions → refaite). Vérifié de bout en bout avec un vrai Ollama ici :
+  qwen3.5:0.8b, qui plafonnait à 4/17 avec les consignes coupées, appelle maintenant de vrais outils avec le bon
+  contenu (ses ratés restent de vraies erreurs d'un modèle de 0,8 Md de paramètres).

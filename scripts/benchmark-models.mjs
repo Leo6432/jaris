@@ -1179,7 +1179,10 @@ async function main() {
   // scores qu'on ne peut plus garantir corrects.
   // Étape 162 : une ligne de conversation ne compte comme « déjà faite » que si elle vient du test ACTUEL (même
   // nombre de questions) — une ligne de l'ancien test (x/6) est refaite, jamais reprise telle quelle.
-  const madeWithCurrentTest = (tier, row) => tier !== 'conversation' || row.reliability?.endsWith(`/${TEST_CASES.length}`)
+  // Étape 164 : vision et code aussi — une mesure INCOMPLÈTE n'est jamais reprise (qwen2.5-coder:32b à « 2/2 » :
+  // une des trois générations avait planté, très probablement sur l'ancien délai de 5 minutes de fetch).
+  const questionsPerTier = { conversation: TEST_CASES.length, vision: VISION_TEST_CASES.length, code: CODE_TEST_CASES.length }
+  const madeWithCurrentTest = (tier, row) => row.reliability?.endsWith(`/${questionsPerTier[tier]}`)
   // Étape 164 : une ligne sans AUCUNE réponse (latence « — », toutes les questions en erreur) n'est pas un score :
   // elle est refaite. C'est ce qui bloquait ministral-3:3b, granite4.1:8b et gemma4:26b à 0/17 chez Léo, notés
   // pendant qu'Ollama était injoignable.

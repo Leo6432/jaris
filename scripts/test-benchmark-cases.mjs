@@ -388,3 +388,39 @@ test('aucune question n’est posée avec fetch (qui abandonne au bout de 5 minu
   assert.ok(!/fetch\(`\$\{OLLAMA_HOST\}\/api\/chat`/.test(script), 'les questions doivent passer par postChat (http.request, sans délai)')
   assert.equal((script.match(/await postChat\(/g) ?? []).length, 3, 'conversation, vision et code passent tous par postChat')
 })
+
+test('reprise : une mesure de code INCOMPLÈTE (2/2 au lieu de 3/3) est refaite, une complète est gardée', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const fake = await startFakeOllama({ installed: ['qwen2.5-coder:32b', 'qwen2.5-coder:7b'], answer: () => null })
+  try {
+    const resultsPath = join(dir, 'benchmark-results.md')
+    // Le vrai cas de Léo : qwen2.5-coder:32b n'avait passé que 2 des 3 générations.
+    writeFileSync(
+      resultsPath,
+      [
+        `Version du test de conversation : ${CONVERSATION_TEST_VERSION}`,
+        '',
+        '## Code',
+        '',
+        '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
+        '|---|---|---|---|',
+        '| qwen2.5-coder:32b | 271491 ms | 3.1 tok/s | 2/2 |',
+        '| qwen2.5-coder:7b | 20745 ms | 50.0 tok/s | 3/3 |'
+      ].join('\n')
+    )
+    const { code, out } = await runScript({
+      OLLAMA_HOST: fake.host,
+      JARIS_RESULTS_PATH: resultsPath,
+      JARIS_RETEST_ALL: '1',
+      JARIS_RESUME: '1',
+      JARIS_ANALYSIS_SCOPE: 'code'
+    })
+    assert.equal(code, 0, out)
+    const tested = new Set(fake.requests.map((r) => r.model))
+    assert.ok(tested.has('qwen2.5-coder:32b'), 'une mesure incomplète doit être refaite')
+    assert.ok(!tested.has('qwen2.5-coder:7b'), 'une mesure complète est gardée')
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
