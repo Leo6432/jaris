@@ -15,6 +15,21 @@
  * diverge de l'original : régénérer alors ce fichier plutôt que de le corriger à la main.
  */
 
+/**
+ * Version du test de conversation, écrite en tête du fichier de résultats. Étape 163 : la version 1 (première
+ * analyse de Léo, 25/09/2026) n'imposait pas la fenêtre de contexte, et Ollama prenait 4096 — trop peu pour les
+ * vraies consignes + 14 outils (~4 600 tokens) : granite4.2 et G9v3-3B refusaient tout, les qwen recevaient des
+ * consignes COUPÉES sans prévenir. Tout résultat de conversation sans cette version est donc refait, et ignoré
+ * par Jaris en attendant (parseLocalBenchmark, hardwareScan.ts). À augmenter à chaque changement du test.
+ */
+export const CONVERSATION_TEST_VERSION = 2
+
+/**
+ * Fenêtre de contexte des questions de conversation : la valeur minimale que Jaris utilise en vrai
+ * (OLLAMA_NUM_CTX, electron/config.ts). Sans elle, Ollama prend sa valeur par défaut (4096).
+ */
+export const CONVERSATION_NUM_CTX = 8192
+
 export const TOOLS = [
   {
     "type": "function",

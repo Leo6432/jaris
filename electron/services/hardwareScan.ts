@@ -927,6 +927,15 @@ export function localBenchmarkResultsPath(): string {
   return join(getDataRoot(), 'benchmark-results.md')
 }
 
+/**
+ * Version du test de conversation dont Jaris accepte les résultats locaux (même valeur que
+ * CONVERSATION_TEST_VERSION, scripts/benchmark-cases.mjs — scripts/test-benchmark-cases.mjs vérifie qu'elles
+ * restent égales). Étape 163 : la première analyse de Léo n'imposait pas la fenêtre de contexte, les consignes
+ * étaient coupées pour une partie des modèles (qwen à 5/17, granite4.2 à 0/17). Ces scores faux ne doivent pas
+ * choisir ses modèles en attendant la nouvelle analyse : sans cette version, les scores vérifiés s'appliquent.
+ */
+export const LOCAL_CONVERSATION_TEST_VERSION = 2
+
 export function parseLocalBenchmark(): Record<VerifiedTier, Map<string, LocalBenchmarkEntry>> {
   const results: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>> = {
     conversation: new Map(),
@@ -945,6 +954,8 @@ export function parseLocalBenchmark(): Record<VerifiedTier, Map<string, LocalBen
     }
   }
   if (raw === null) return results
+  const conversationVersion = Number(raw.match(/Version du test de conversation : (\d+)/)?.[1])
+  const acceptConversation = conversationVersion === LOCAL_CONVERSATION_TEST_VERSION
 
   let currentTier: VerifiedTier | null = null
   for (const line of raw.split('\n')) {
@@ -954,6 +965,7 @@ export function parseLocalBenchmark(): Record<VerifiedTier, Map<string, LocalBen
       continue
     }
     if (!currentTier || !line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
+    if (currentTier === 'conversation' && !acceptConversation) continue
     const cells = line
       .split('|')
       .map((c) => c.trim())

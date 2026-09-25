@@ -4683,3 +4683,34 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   « tout retester »). Chaque garde-fou vérifié en remettant l'ancien code. **Non vérifié ici** : l'analyse réelle
   sur la machine de Léo (durée, espace disque) ; ses résultats (`benchmark-results.md`, dossier de données)
   remplaceront ensuite verified-tool-scores.md pour tout le monde.
+
+- **Étape 163, Léo envoie le `benchmark-results.md` de sa première analyse complète (v0.16.19).** Relu ligne par
+  ligne AVANT d'enregistrer quoi que ce soit, et une partie des scores de conversation s'est révélée FAUSSE à
+  cause de mon script, pas des modèles :
+  - granite4.2:3b/8b/30b et G9v3-3B à **0/17** : la section « Erreurs » du fichier donnait la cause exacte —
+    `request (4569 tokens) exceeds the available context size (4096 tokens)` ;
+  - toute la famille qwen3.5/3.6/3.8 à **4-6/17**, soit exactement les 4 questions SANS outil et presque rien
+    d'autre : même cause, mais ces modèles (moteur récent d'Ollama) coupent la demande au lieu de la refuser —
+    les consignes et les outils arrivaient tronqués, sans la moindre erreur.
+  Cause : la requête de conversation du script n'imposait pas `num_ctx`, donc Ollama prenait 4096, alors que les
+  vraies consignes + 14 outils (étape 162) pèsent ~4 600 tokens. Jaris, lui, utilise au minimum 8192
+  (`OLLAMA_NUM_CTX`). **Le passage aux vraies consignes a fait grossir la demande sans que je revérifie ce qui
+  la contenait** — même leçon que le passage de 4096 à 8192 dans config.ts, retombée cette fois dans le script
+  de test : quand ce qu'on envoie grossit, relire la fenêtre qui doit le contenir, partout où elle est fixée.
+  Corrigé : `CONVERSATION_NUM_CTX = 8192` envoyé à chaque question ; une **version du test de conversation**
+  (`CONVERSATION_TEST_VERSION = 2`) est écrite en tête du fichier de résultats. Un score de conversation d'une
+  autre version (ou sans version, comme ce premier run) est refait par l'analyse, jamais recopié, et **ignoré
+  par Jaris en attendant** (`LOCAL_CONVERSATION_TEST_VERSION`, parseLocalBenchmark) — sans ça, ces scores
+  faussés auraient choisi les modèles de Léo (un qwen3.5:9b à 5/17 exclu de Médium, par exemple). Un test
+  vérifie que les deux constantes restent égales.
+  **Ce qui était bon dans ce run, et a été gardé** : les sections Vision et Code (fenêtre déjà imposée, 16384
+  pour le code, prompts courts pour la vision) → reportées dans `verified-tool-scores.md` pour tout le monde
+  (nouveau : gemma4:31b, qwen3-vl:8b, gemma4:12b à 3/3 en vision, gemma4:e4b à 1/3 ; qwen3-coder-next à 3/3 en
+  code). À la relance, la reprise saute vision et code (déjà faits) et ne refait que la conversation.
+  **Leçon générale : avant d'enregistrer des résultats de mesure, lire les erreurs et chercher les motifs
+  suspects (ici, toute une famille bloquée exactement au nombre de questions sans outil) — un score très bas
+  et uniforme accuse plus souvent le banc de test que les modèles.**
+  Régression : `node --test scripts/test-benchmark-cases.mjs scripts/test-local-benchmark-tiers.mjs` — fenêtre
+  réellement envoyée, place suffisante pour consignes + outils, version écrite, scores d'une version précédente
+  refaits et non recopiés (avec le vrai fichier de Léo comme cas), et ignorés par Jaris. Chaque garde-fou
+  vérifié en remettant l'ancien code.

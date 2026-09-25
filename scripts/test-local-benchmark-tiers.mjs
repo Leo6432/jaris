@@ -31,6 +31,8 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/har
 const BENCHMARK_RESULTS_MD = [
   '# Résultats du benchmark Jaris — test',
   '',
+  'Version du test de conversation : 2',
+  '',
   '## Conversation',
   '',
   '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
@@ -121,7 +123,10 @@ test('un benchmark-results.md de l\'ANCIEN format (sans sections) se lit comme "
 })
 
 test('le format transitoire v0.15.29 à cinq colonnes conserve les scores utiles sans qualité locale', () => {
+  // Ligne de version ajoutée à l'étape 163 : sans elle, les scores de conversation sont ignorés (voir le test
+  // suivant) — ce test ne vérifie que la lecture du format à cinq colonnes.
   const transitional = [
+    'Version du test de conversation : 2',
     '## Conversation',
     '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité | Qualité locale |',
     '|---|---|---|---|---|',
@@ -138,4 +143,18 @@ test('le format transitoire v0.15.29 à cinq colonnes conserve les scores utiles
     Object.keys(local.conversation.get('qwen3.5:4b')).sort(),
     ['speedTokPerSec', 'toolCalling'].sort()
   )
+})
+
+/**
+ * Étape 163 : la première analyse de Léo (sans fenêtre de contexte imposée) a donné des scores de conversation
+ * FAUX (consignes coupées : qwen à 5/17, granite4.2 à 0/17). Sans la version du test en tête du fichier, Jaris
+ * ignore ces scores de conversation (les scores vérifiés s'appliquent) — mais garde ceux de vision et de code,
+ * qui avaient déjà la bonne fenêtre.
+ */
+test('des scores de conversation sans version du test (première analyse, consignes coupées) sont ignorés', () => {
+  const firstRun = BENCHMARK_RESULTS_MD.replace('Version du test de conversation : 2', '')
+  const { parseLocalBenchmark } = setup({ benchmarkResultsMd: firstRun })
+  const local = parseLocalBenchmark()
+  assert.equal(local.conversation.size, 0, 'scores de conversation d’une version inconnue : ignorés')
+  assert.equal(local.vision.get('ministral-3:8b')?.toolCalling, '2/3', 'les scores de vision restent valables')
 })

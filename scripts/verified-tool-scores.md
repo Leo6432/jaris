@@ -80,18 +80,29 @@ granite4.1:3b, malgré la version plus récente.
 
 ## Vision — compréhension d'image
 
+Mesurés par l'analyse complète de Léo du 25/09/2026 (étape 163) — la fenêtre de contexte y était déjà la bonne,
+contrairement aux questions de conversation de ce même run (voir CONVERSATION_TEST_VERSION, benchmark-cases.mjs).
+
 | Modèle | Fiabilité |
 |---|---|
+| gemma4:31b | 3/3 |
+| gemma4:e4b | 1/3 |
+| qwen3-vl:8b | 3/3 |
+| gemma4:12b | 3/3 |
 | hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M | 3/3 |
-| qwen3-vl:4b | 3/3 |
-| qwen3-vl:2b | 3/3 |
-| qwen3.5:4b | 3/3 |
 | ministral-3:8b | 2/3 |
+| qwen3-vl:4b | 3/3 |
+| qwen3.5:4b | 3/3 |
+| qwen3-vl:2b | 3/3 |
 
 ## Code — génération de code
 
+Même analyse (25/09/2026). qwen2.5-coder:32b : une des trois générations a échoué sur une erreur d'Ollama
+(« ne gère pas la réflexion »), d'où 2/2 sur les deux réellement passées.
+
 | Modèle | Fiabilité |
 |---|---|
+| qwen3-coder-next | 3/3 |
 | qwen3.6:35b-a3b | 3/3 |
 | qwen3-coder:30b | 3/3 |
 | north-mini-code-1.0 | 3/3 |

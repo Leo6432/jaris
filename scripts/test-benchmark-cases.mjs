@@ -7,7 +7,15 @@ import { join } from 'node:path'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
-import { TEST_CASES, TOOLS, SYSTEM_PROMPT_TEMPLATE, buildBenchmarkSystemPrompt, isCorrectAnswer } from './benchmark-cases.mjs'
+import {
+  CONVERSATION_NUM_CTX,
+  CONVERSATION_TEST_VERSION,
+  TEST_CASES,
+  TOOLS,
+  SYSTEM_PROMPT_TEMPLATE,
+  buildBenchmarkSystemPrompt,
+  isCorrectAnswer
+} from './benchmark-cases.mjs'
 import { systemPromptModule } from './load-system-prompt.mjs'
 
 /**
@@ -154,7 +162,10 @@ test('le vrai script : vraies consignes et 14 outils envoyés, 17 questions not�
     for (const r of fake.requests) {
       assert.equal(r.tools.length, 14)
       assert.ok(r.messages[0].content.startsWith('Tu es Jaris, un assistant personnel'))
+      // Étape 163 : sans fenêtre imposée, Ollama prenait 4096 et coupait les consignes (~4 600 tokens).
+      assert.equal(r.options?.num_ctx, CONVERSATION_NUM_CTX)
     }
+    assert.match(readFileSync(resultsPath, 'utf8'), new RegExp(`Version du test de conversation : ${CONVERSATION_TEST_VERSION}`))
 
     const results = readFileSync(resultsPath, 'utf8')
     const scoreOf = (model) => results.match(new RegExp(`\\| ${model.replace(/[.:]/g, '\\$&')} \\|[^\\n]*\\| (\\d+/\\d+) \\|`))?.[1]
@@ -177,6 +188,8 @@ test('reprise : un modèle déjà passé au NOUVEAU test est sauté, une ligne d
     writeFileSync(
       resultsPath,
       [
+        `Version du test de conversation : ${CONVERSATION_TEST_VERSION}`,
+        '',
         '## Conversation — appel d’outils',
         '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
         '|---|---|---|---|',
@@ -219,4 +232,45 @@ test('pendant l’analyse, TOUS les modèles peuvent déborder sur la RAM (gemma
   const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8')
   assert.match(script, /const memBudget = Math\.max\(vramBudgetGb, ramOffloadBudgetGb\)/)
   assert.ok(script.includes("'gemma4:12b'"), 'gemma4:12b doit rester dans la liste des modèles testés')
+})
+
+test('la fenêtre de contexte des questions laisse de la place aux vraies consignes et aux 14 outils', () => {
+  // ~2,9 caractères par token pour ce genre de texte (mesuré à l'étape 159) : consignes + outils + question.
+  const promptChars = buildBenchmarkSystemPrompt().length + JSON.stringify(TOOLS).length + 200
+  assert.ok(CONVERSATION_NUM_CTX >= promptChars / 2.5 + 1024, `fenêtre ${CONVERSATION_NUM_CTX} trop petite pour ~${Math.round(promptChars / 2.5)} tokens`)
+  assert.ok(CONVERSATION_NUM_CTX > 4096, 'la valeur par défaut d’Ollama (4096) coupait les consignes')
+})
+
+test('la version du test lue par Jaris est la même que celle écrite par l’analyse', () => {
+  const hardwareScan = readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8')
+  assert.match(hardwareScan, new RegExp(`LOCAL_CONVERSATION_TEST_VERSION = ${CONVERSATION_TEST_VERSION}\\b`))
+})
+
+test('reprise : des scores de conversation d’une version PRÉCÉDENTE du test (même sur 17) sont refaits', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const fake = await startFakeOllama({ installed: ['ministral-3:3b', 'qwen3:1.7b', 'qwen3.5:0.8b'], answer: (_m, p) => perfectAnswer(p) })
+  try {
+    const resultsPath = join(dir, 'benchmark-results.md')
+    // Le fichier réel de la première analyse de Léo : aucune ligne de version, des scores sur 17 faussés.
+    writeFileSync(
+      resultsPath,
+      [
+        '# Résultats du benchmark Jaris — 25/09/2026 17:46:33',
+        '',
+        '## Conversation',
+        '',
+        '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
+        '|---|---|---|---|',
+        '| ministral-3:3b | 900 ms | 85.4 tok/s | 17/17 |',
+        '| qwen3.5:0.8b | 3857 ms | 151.6 tok/s | 4/17 |'
+      ].join('\n')
+    )
+    const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: resultsPath, JARIS_RETEST_ALL: '1', JARIS_RESUME: '1' })
+    assert.equal(code, 0, out)
+    assert.equal(new Set(fake.requests.map((r) => r.model)).size, 3, 'les trois modèles doivent être refaits')
+    assert.ok(!readFileSync(resultsPath, 'utf8').includes('| 4/17 |'), 'l’ancien score faussé ne doit pas être recopié')
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

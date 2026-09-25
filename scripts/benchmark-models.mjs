@@ -23,7 +23,14 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { promisify } from 'util'
 import { deflateSync } from 'zlib'
-import { TEST_CASES, TOOLS, buildBenchmarkSystemPrompt, isCorrectAnswer } from './benchmark-cases.mjs'
+import {
+  CONVERSATION_NUM_CTX,
+  CONVERSATION_TEST_VERSION,
+  TEST_CASES,
+  TOOLS,
+  buildBenchmarkSystemPrompt,
+  isCorrectAnswer
+} from './benchmark-cases.mjs'
 
 const execAsync = promisify(exec)
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -882,7 +889,9 @@ async function chatOnce(model, prompt, withThink) {
       { role: 'user', content: prompt }
     ],
     tools: TOOLS,
-    stream: false
+    stream: false,
+    // Étape 163 : sans num_ctx, Ollama prenait 4096 et coupait les vraies consignes de Jaris (~4 600 tokens).
+    options: { num_ctx: CONVERSATION_NUM_CTX }
   }
   if (withThink) body.think = 'medium'
 
@@ -1098,6 +1107,10 @@ async function main() {
       const [model, latency, speed, reliability] = cells
       existingRows[currentTier].set(model, { latency, speed, reliability })
     }
+    // Étape 163 : des résultats de conversation d'une AUTRE version du test (ou sans version, la toute première
+    // analyse) ne valent rien pour celle-ci — oubliés, jamais recopiés dans le nouveau fichier.
+    const version = previous.match(/Version du test de conversation : (\d+)/)?.[1]
+    if (Number(version) !== CONVERSATION_TEST_VERSION) existingRows.conversation.clear()
   } catch {
     // Pas de fichier précédent (tout premier run) : rien à conserver, existingRows reste vide.
   }
@@ -1332,6 +1345,8 @@ async function main() {
     const lines = []
     lines.push(`# Résultats du benchmark Jaris — ${new Date().toLocaleString('fr-FR')}`)
     lines.push('')
+    lines.push(`Version du test de conversation : ${CONVERSATION_TEST_VERSION}`)
+    lines.push('')
     lines.push(
       "Trois épreuves distinctes, une section par palier : appel d'outils (Conversation), compréhension " +
         "d'image (Vision), génération de HTML valide (Code) — jamais la même mesure sous le même nom de " +
@@ -1406,7 +1421,10 @@ async function main() {
         if (ok) perModel.correct++
         const got = r.toolName ? `${r.toolName} ${JSON.stringify(r.toolArgs ?? {})}` : 'aucun outil'
         console.log(`${ok ? 'OK' : 'RATÉ'} (attendu: ${expectedTool ?? 'aucun outil'}, obtenu: ${got}) — ${fmt(r.wallMs, 0)}ms`)
-        if (!expectedTool) reasoningAnswers.push({ model, prompt, answer: r.content || `[outil appelé au lieu de répondre: ${r.toolName}]` })
+        if (!expectedTool) {
+          const answer = r.toolName ? `[outil appelé au lieu de répondre : ${r.toolName}]` : r.content || '[réponse vide]'
+          reasoningAnswers.push({ model, prompt, answer })
+        }
       } catch (err) {
         console.log(`ERREUR (${err.message})`)
         errors.push({ model, prompt, message: err.message })
