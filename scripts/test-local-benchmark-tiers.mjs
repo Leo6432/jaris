@@ -31,7 +31,7 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/har
 const BENCHMARK_RESULTS_MD = [
   '# Résultats du benchmark Jaris — test',
   '',
-  'Version du test de conversation : 2',
+  'Version du test de conversation : 3',
   '',
   '## Conversation',
   '',
@@ -126,7 +126,7 @@ test('le format transitoire v0.15.29 à cinq colonnes conserve les scores utiles
   // Ligne de version ajoutée à l'étape 163 : sans elle, les scores de conversation sont ignorés (voir le test
   // suivant) — ce test ne vérifie que la lecture du format à cinq colonnes.
   const transitional = [
-    'Version du test de conversation : 2',
+    'Version du test de conversation : 3',
     '## Conversation',
     '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité | Qualité locale |',
     '|---|---|---|---|---|',
@@ -152,7 +152,7 @@ test('le format transitoire v0.15.29 à cinq colonnes conserve les scores utiles
  * qui avaient déjà la bonne fenêtre.
  */
 test('des scores de conversation sans version du test (première analyse, consignes coupées) sont ignorés', () => {
-  const firstRun = BENCHMARK_RESULTS_MD.replace('Version du test de conversation : 2', '')
+  const firstRun = BENCHMARK_RESULTS_MD.replace('Version du test de conversation : 3', '')
   const { parseLocalBenchmark } = setup({ benchmarkResultsMd: firstRun })
   const local = parseLocalBenchmark()
   assert.equal(local.conversation.size, 0, 'scores de conversation d’une version inconnue : ignorés')

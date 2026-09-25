@@ -115,8 +115,10 @@ function startFakeOllama({ installed, answer }) {
         requests.push(json)
         const prompt = json.messages.at(-1).content
         const call = answer(json.model, prompt)
+        // 'length' : fenêtre pleine pendant la réflexion, aucune réponse (vrai comportement d'Ollama, étape 159).
+        if (call === 'length') return res.end(JSON.stringify({ message: { role: 'assistant', content: '' }, done_reason: 'length', eval_count: 10, eval_duration: 1e8 }))
         const message = call ? { role: 'assistant', content: '', tool_calls: [{ function: { name: call[0], arguments: call[1] } }] } : { role: 'assistant', content: 'Je suis Jaris.' }
-        return res.end(JSON.stringify({ message, eval_count: 10, eval_duration: 1e8 }))
+        return res.end(JSON.stringify({ message, done_reason: 'stop', eval_count: 10, eval_duration: 1e8 }))
       }
       res.statusCode = 404
       res.end('{}')
@@ -273,4 +275,34 @@ test('reprise : des scores de conversation d’une version PRÉCÉDENTE du test 
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+test('une réponse coupée faute de place compte comme un échec, jamais comme « aucun outil » réussi', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const fake = await startFakeOllama({
+    installed: ['ministral-3:3b', 'qwen3:1.7b', 'qwen3.5:0.8b'],
+    answer: (model, prompt) => (model === 'qwen3.5:0.8b' ? 'length' : perfectAnswer(prompt))
+  })
+  try {
+    const resultsPath = join(dir, 'benchmark-results.md')
+    const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: resultsPath, JARIS_RETEST_ALL: '1' })
+    assert.equal(code, 0, out)
+    const results = readFileSync(resultsPath, 'utf8')
+    // Sans ce garde-fou, les 4 questions « sans outil » auraient été comptées justes : 4/17.
+    assert.match(results, new RegExp(`\\| qwen3\\.5:0\\.8b \\|[^\\n]*\\| 0/${TEST_CASES.length} \\|`))
+    assert.match(results, /fenêtre de contexte pleine/)
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('les vérifications jugent le fond, pas la forme (« BTC », « return », « guitar »...)', () => {
+  const find = (start) => TEST_CASES.find((c) => c.prompt.startsWith(start))
+  assert.equal(isCorrectAnswer(find('Cherche le prix'), { toolName: 'search_web', toolArgs: { query: 'cours BTC' } }), true)
+  assert.equal(isCorrectAnswer(find('Appuie sur'), { toolName: 'press_key', toolArgs: { key: 'return' } }), true)
+  assert.equal(isCorrectAnswer(find('Va sur YouTube'), { toolName: 'computer_use_task', toolArgs: { goal: 'Open YouTube and search for a guitar tutorial' } }), true)
+  assert.equal(isCorrectAnswer(find('Qui est le président'), { toolName: 'search_web', toolArgs: { query: "chef de l'État français" } }), true)
+  // Le fond reste exigé : une recherche sans rapport reste fausse.
+  assert.equal(isCorrectAnswer(find('Cherche le prix'), { toolName: 'search_web', toolArgs: { query: 'météo Paris' } }), false)
 })

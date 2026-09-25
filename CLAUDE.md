@@ -4753,3 +4753,19 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   réellement envoyée, place suffisante pour consignes + outils, version écrite, scores d'une version précédente
   refaits et non recopiés (avec le vrai fichier de Léo comme cas), et ignorés par Jaris. Chaque garde-fou
   vérifié en remettant l'ancien code.
+
+- **Étape 163 (suite), Léo : « tu es sûr qu'il ne faut pas tout relancer ? regarde bien, je ne veux pas que tu
+  me dises à la fin de refaire ».** Relecture complète du banc de test AVANT sa relance, et deux défauts de plus
+  trouvés, corrigés dans la version 3 du test (`CONVERSATION_TEST_VERSION`/`LOCAL_CONVERSATION_TEST_VERSION`) :
+  1. **une réponse coupée faute de place passait pour juste** : `done_reason: "length"` sans outil était lu comme
+     « aucun outil appelé », donc réussi sur les 4 questions sans outil. C'est maintenant un échec, noté dans les
+     erreurs avec la cause ;
+  2. **des vérifications jugeaient la forme, pas le fond** : « BTC » au lieu de « bitcoin », « return » au lieu
+     d'« Entrée », « guitar » au lieu de « guitare », « chef de l'État » au lieu de « président » comptaient faux.
+  Revérifié et gardé tel quel : vision (demande de quelques dizaines de tokens, sans outils ni consignes — la
+  fenêtre par défaut n'y était jamais atteinte) et code (fenêtre 16384, la même que Jaris pour une nouvelle
+  application). Sur la relance, seule la conversation est refaite, pour TOUS les modèles.
+  **Leçon générale : quand l'utilisateur doit relancer une mesure longue, relire tout le banc de test avant la
+  relance plutôt qu'après — chaque défaut trouvé après coup coûte une relance de plus à quelqu'un d'autre.**
+  Régression : `node --test scripts/test-benchmark-cases.mjs` (réponse coupée comptée comme échec — vérifié en
+  retirant le garde-fou —, fond jugé plutôt que forme).

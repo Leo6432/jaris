@@ -920,6 +920,11 @@ async function chat(model, prompt) {
   const evalDurationS = (data.eval_duration ?? 0) / 1e9
   const tokPerSec = evalDurationS > 0 ? evalCount / evalDurationS : null
   const toolCalls = data.message?.tool_calls ?? []
+  // Étape 163 : une réponse coupée faute de place (fenêtre pleine pendant la réflexion) n'est PAS « aucun outil » —
+  // sinon elle passerait pour juste sur les questions où il n'en faut pas. C'est un échec, noté dans les erreurs.
+  if (data.done_reason === 'length' && !toolCalls.length) {
+    throw new Error(`réponse coupée : fenêtre de contexte pleine (${data.prompt_eval_count ?? '?'} tokens de demande)`)
+  }
   return {
     wallMs,
     tokPerSec,

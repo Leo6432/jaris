@@ -934,7 +934,7 @@ export function localBenchmarkResultsPath(): string {
  * étaient coupées pour une partie des modèles (qwen à 5/17, granite4.2 à 0/17). Ces scores faux ne doivent pas
  * choisir ses modèles en attendant la nouvelle analyse : sans cette version, les scores vérifiés s'appliquent.
  */
-export const LOCAL_CONVERSATION_TEST_VERSION = 2
+export const LOCAL_CONVERSATION_TEST_VERSION = 3
 
 export function parseLocalBenchmark(): Record<VerifiedTier, Map<string, LocalBenchmarkEntry>> {
   const results: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>> = {

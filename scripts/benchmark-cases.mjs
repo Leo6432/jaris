@@ -21,8 +21,11 @@
  * vraies consignes + 14 outils (~4 600 tokens) : granite4.2 et G9v3-3B refusaient tout, les qwen recevaient des
  * consignes COUPÉES sans prévenir. Tout résultat de conversation sans cette version est donc refait, et ignoré
  * par Jaris en attendant (parseLocalBenchmark, hardwareScan.ts). À augmenter à chaque changement du test.
+ * Version 3 (même étape, avant la relance de Léo) : une réponse coupée faute de place compte comme un échec,
+ * plus comme « aucun outil » (qui passait pour juste sur les questions sans outil) ; vérifications moins
+ * pointilleuses sur la forme (« BTC », « return », « guitar »...), pour ne noter que le fond.
  */
-export const CONVERSATION_TEST_VERSION = 2
+export const CONVERSATION_TEST_VERSION = 3
 
 /**
  * Fenêtre de contexte des questions de conversation : la valeur minimale que Jaris utilise en vrai
@@ -355,18 +358,18 @@ const num = (v) => (typeof v === 'number' ? v : Number(v))
  */
 export const TEST_CASES = [
   { prompt: 'Écris bonjour dans le champ de texte ouvert.', expectedTool: 'type_text', check: (a) => text(a.text).includes('bonjour') },
-  { prompt: "Cherche le prix du Bitcoin aujourd'hui.", expectedTool: 'search_web', check: (a) => text(a.query).includes('bitcoin') },
-  { prompt: 'Qui est le président de la France en ce moment ?', expectedTool: 'search_web', check: (a) => text(a.query).includes('président') || text(a.query).includes('president') },
+  { prompt: "Cherche le prix du Bitcoin aujourd'hui.", expectedTool: 'search_web', check: (a) => /bitcoin|btc/.test(text(a.query)) },
+  { prompt: 'Qui est le président de la France en ce moment ?', expectedTool: 'search_web', check: (a) => /pr[ée]sident|chef de l'[ée]tat|macron|[ée]lys[ée]e/.test(text(a.query)) },
   { prompt: "Rappelle-moi d'appeler le dentiste dans 20 minutes.", expectedTool: 'set_reminder', check: (a) => num(a.delay_minutes) === 20 && text(a.message).includes('dentiste') },
   { prompt: 'Préviens-moi dans une heure et demie de sortir le linge.', expectedTool: 'set_reminder', check: (a) => num(a.delay_minutes) === 90 },
   { prompt: "Qu'est-ce qui est affiché sur mon écran en ce moment ?", expectedTool: 'look_at_screen', check: () => true },
-  { prompt: 'Ouvre le bloc-notes.', expectedTool: 'open_app', check: (a) => /bloc|notepad/.test(text(a.app_name)) },
+  { prompt: 'Ouvre le bloc-notes.', expectedTool: 'open_app', check: (a) => /bloc|notepad|notes/.test(text(a.app_name)) },
   { prompt: "Lance Spotify, s'il te plaît.", expectedTool: 'open_app', check: (a) => text(a.app_name).includes('spotify') },
   { prompt: 'Retiens que mon code postal est 75001.', expectedTool: 'remember', check: (a) => text(a.content).includes('75001') || text(a.title).includes('75001') },
   { prompt: 'Monte le son.', expectedTool: 'media_control', check: (a) => a.action === 'volume_up' },
-  { prompt: 'Appuie sur Entrée.', expectedTool: 'press_key', check: (a) => /entr|enter/.test(text(a.key)) },
+  { prompt: 'Appuie sur Entrée.', expectedTool: 'press_key', check: (a) => /entr|enter|return/.test(text(a.key)) },
   { prompt: "Combien de mémoire vive j'utilise en ce moment ?", expectedTool: 'get_system_stats', check: () => true },
-  { prompt: 'Va sur YouTube et cherche un tuto de guitare.', expectedTool: 'computer_use_task', check: (a) => text(a.goal).includes('youtube') && text(a.goal).includes('guitare') },
+  { prompt: 'Va sur YouTube et cherche un tuto de guitare.', expectedTool: 'computer_use_task', check: (a) => text(a.goal).includes('youtube') && text(a.goal).includes('guitar') },
   { prompt: "Merci, c'est parfait !", expectedTool: null },
   { prompt: "Comment tu t'appelles et qu'est-ce que tu peux faire pour moi ?", expectedTool: null },
   { prompt: 'Quelle heure est-il ?', expectedTool: null },
