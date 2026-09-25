@@ -43,6 +43,7 @@ function loadHardwareScan({ freeVramMib, tempC = 40, modelInfo, sizeBytes }) {
       }
     },
     '../paths': { resourcesRoot: () => '/fake/resources' },
+    './dataLocation': { getDataRoot: () => '/fake/data' },
     './systemResources': { RESOURCE_SAFETY_MARGIN_GB: 4, detectRamGb: () => 32 },
     './ollama': {
       getModelInfo: async () => modelInfo ?? null,

@@ -44,6 +44,9 @@ extraResources:
     filter:
       - verified-tool-scores.md
       - benchmark-models.mjs
+      # Étape 162 : questions, outils et consignes du test, importés par benchmark-models.mjs — sans cette
+      # ligne, le script échouerait dès son import dans l'appli installée (même piège que ci-dessus).
+      - benchmark-cases.mjs
   # Recherche web : la configuration du conteneur SearXNG. Docker Desktop ne s'installe pas en silence,
   # donc la recherche web reste indisponible sur une machine qui ne l'a pas (voir README) — mais sur une
   # machine qui l'a déjà, il ne manquait que ces fichiers pour que ça marche.

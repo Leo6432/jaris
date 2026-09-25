@@ -881,8 +881,8 @@ app.whenReady().then(async () => {
     if (!profile) return
     await saveProfile({ ...profile, knownModelCandidates: getAllCandidateModelIds() })
   })
-  ipcMain.handle(IPC_CHANNELS.runModelAnalysis, async (event, scope?: AnalysisScope): Promise<CapacityScanResult> => {
-    return runModelAnalysis((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line), scope)
+  ipcMain.handle(IPC_CHANNELS.runModelAnalysis, async (event, scope?: AnalysisScope, retestAll?: boolean): Promise<CapacityScanResult> => {
+    return runModelAnalysis((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line), scope, { retestAll: retestAll === true })
   })
   ipcMain.handle(IPC_CHANNELS.getMyModelPicks, async () => getMyModelPicks(await getProfile()))
   // Étape 140 : le nom vient du renderer, donc revérifié ICI avant toute suppression — un modèle utilisé par

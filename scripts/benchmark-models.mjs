@@ -23,10 +23,24 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { promisify } from 'util'
 import { deflateSync } from 'zlib'
+import { TEST_CASES, TOOLS, buildBenchmarkSystemPrompt, isCorrectAnswer } from './benchmark-cases.mjs'
 
 const execAsync = promisify(exec)
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const RESULTS_PATH = join(__dirname, 'benchmark-results.md')
+/**
+ * Où écrire les résultats. Étape 162 : Jaris transmet un chemin dans son dossier de DONNÉES
+ * (JARIS_RESULTS_PATH, benchmarkRunner.ts) — à côté du script (dossier du programme), les résultats étaient
+ * effacés par la mise à jour suivante, qui remplace tout le dossier du programme. Lancé à la main depuis un
+ * terminal, rien ne change : le fichier reste à côté du script.
+ */
+const RESULTS_PATH = process.env.JARIS_RESULTS_PATH?.trim() || join(__dirname, 'benchmark-results.md')
+
+/**
+ * Tout retester (étape 162, Léo : « on refait l'analyse de tout ») : ignore verified-tool-scores.md, dont les
+ * scores viennent de l'ANCIEN test (6 questions, consignes simplifiées) — sans ça, les modèles déjà notés ne
+ * seraient jamais repassés au nouveau test et les scores ne seraient pas comparables entre eux.
+ */
+const RETEST_ALL = process.env.JARIS_RETEST_ALL === '1'
 const VERIFIED_TOOL_SCORES_PATH = join(__dirname, 'verified-tool-scores.md')
 
 const OLLAMA_HOST = process.env.OLLAMA_HOST?.trim() || 'http://127.0.0.1:11434'
@@ -69,7 +83,7 @@ function readVerifiedModels() {
   }
   return result
 }
-const VERIFIED_MODELS = readVerifiedModels()
+const VERIFIED_MODELS = RETEST_ALL ? { conversation: new Set(), vision: new Set(), code: new Set() } : readVerifiedModels()
 
 /**
  * Périmètre du run (AnalysisScope côté TS, shared/ipc.ts) : 'all' teste tout comme avant (comportement par
@@ -226,7 +240,11 @@ const MODELS = [
   // vérifié (6/6, verified-tool-scores.md) — ces deux tailles restent à tester pour de vrai, un score pour
   // une taille ne valant pas pour une autre.
   'ministral-3:8b',
-  'ministral-3:14b'
+  'ministral-3:14b',
+  // gemma4:31b (étape 162, « on refait l'analyse de tout ») : jusqu'ici seulement candidat Vision, à cause de
+  // bugs Ollama connus sur l'appel d'outils de la famille Gemma 4 (voir VISION_CANDIDATES dans hardwareScan.ts).
+  // Le nouveau test, avec les vrais outils et les vraies consignes de Jaris, dira pour de vrai s'il les évite.
+  'gemma4:31b'
   // Les candidats du palier "Code" (qwen2.5-coder:7b/32b, qwen3.6:35b-a3b, qwen3-coder:30b,
   // north-mini-code-1.0, devstral-small-2:24b) NE sont PAS
   // ici : codeGenerator.ts (mode Code) n'appelle JAMAIS chatWithOllama avec des outils (le paramètre `tools`
@@ -383,7 +401,6 @@ const LARGE_TIER_MODELS = new Set([
   'qwen3.5:2b',
   'qwen3.5:0.8b'
 ])
-const VISION_TIER_MODELS = new Set(VISION_CANDIDATES.map((c) => c.model))
 
 /**
  * Sous-ensembles de MODELS/VISION_CANDIDATES/CODE_CANDIDATES réellement testés CE run, d'après SCOPE — pour
@@ -414,32 +431,6 @@ const SCOPED_CODE_CANDIDATES = (SCOPE === 'all' || SCOPE === 'code' ? CODE_CANDI
   (c) => !VERIFIED_MODELS.code.has(c.model)
 )
 
-/**
- * `true` seulement si `model` appartient à EXACTEMENT un des trois paliers de conversation ET n'est candidat
- * vision nulle part ailleurs — dans ce cas (et SEULEMENT dans ce cas), on sait avec certitude, dès que son
- * propre test est fini, s'il peut être supprimé sans risquer de le priver d'un autre palier qui en aurait
- * encore besoin (ex: qwen3.5:4b sert À LA FOIS de candidat médium ET de candidat vision — le supprimer trop
- * tôt parce qu'il perd en médium le priverait d'une chance en vision, testée plus tard). Les modèles
- * multi-paliers (qwen3.5:0.8b/2b/4b/9b, gemma4:e4b) restent simplement gardés jusqu'à la fin du run, comme
- * avant — cette prudence ne coûte pas cher : ce sont aussi les plus petits modèles, jamais les gros qui
- * remplissent vraiment le disque.
- */
-function singleTierOf(model) {
-  if (VISION_TIER_MODELS.has(model)) return null
-  const tiers = ['flash', 'medium', 'large'].filter(
-    (t) => (t === 'flash' ? FLASH_TIER_MODELS : t === 'medium' ? MEDIUM_TIER_MODELS : LARGE_TIER_MODELS).has(model)
-  )
-  return tiers.length === 1 ? tiers[0] : null
-}
-
-/**
- * Sous-ensemble de VISION_CANDIDATES sans double-emploi avec un autre palier (qwen3.5:4b et gemma4:e4b sont
- * EXCLUS : déjà candidats médium, voir singleTierOf) — mêmes garanties que ci-dessus, pour le palier vision.
- */
-const PRUNABLE_VISION_MODELS = new Set(
-  VISION_CANDIDATES.map((c) => c.model).filter((m) => !MEDIUM_TIER_MODELS.has(m) && !FLASH_TIER_MODELS.has(m) && !LARGE_TIER_MODELS.has(m))
-)
-
 async function deleteModelViaApi(model) {
   const res = await fetch(`${OLLAMA_HOST}/api/delete`, {
     method: 'DELETE',
@@ -449,129 +440,7 @@ async function deleteModelViaApi(model) {
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`)
 }
 
-// Copié tel quel depuis electron/services/tools.ts : mêmes schémas que Jaris utilise réellement en
-// conversation, pour que le test reflète le vrai comportement de tool calling, pas un cas simplifié.
-const TOOLS = [
-  {
-    type: 'function',
-    function: {
-      name: 'open_app',
-      description:
-        "Ouvre n'importe quelle application installée sur l'ordinateur de l'utilisateur (pas seulement " +
-        "quelques applications connues : appelle toujours cet outil avec le nom demandé, il cherche lui-même " +
-        "parmi toutes les applications installées sur la machine).",
-      parameters: {
-        type: 'object',
-        properties: { app_name: { type: 'string', description: "Nom de l'application à ouvrir, tel que demandé par l'utilisateur" } },
-        required: ['app_name']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'set_reminder',
-      description: 'Programme un rappel vocal qui sera dit à voix haute dans un certain nombre de minutes.',
-      parameters: {
-        type: 'object',
-        properties: {
-          message: { type: 'string', description: 'Le contenu du rappel à dire à voix haute' },
-          delay_minutes: { type: 'number', description: 'Dans combien de minutes déclencher le rappel' }
-        },
-        required: ['message', 'delay_minutes']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'look_at_screen',
-      description:
-        "Capture une image de l'écran de l'utilisateur et la décrit, ou répond à une question précise sur " +
-        "ce qui y est affiché (ex: lire un message d'erreur, décrire une fenêtre ouverte).",
-      parameters: {
-        type: 'object',
-        properties: { question: { type: 'string', description: "Ce qu'il faut chercher ou décrire sur l'écran, en français" } },
-        required: ['question']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'search_web',
-      description: "Recherche sur le web (moteur local) pour des informations récentes, actuelles, ou que tu ne connais pas avec certitude.",
-      parameters: {
-        type: 'object',
-        properties: { query: { type: 'string', description: 'Les mots-clés de recherche' } },
-        required: ['query']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'remember',
-      description:
-        "Enregistre une information importante à retenir sur le long terme dans la mémoire locale de Jaris " +
-        "(préférence de l'utilisateur, fait donné en conversation, résumé à garder).",
-      parameters: {
-        type: 'object',
-        properties: {
-          title: { type: 'string', description: 'Titre court de la note' },
-          content: { type: 'string', description: 'Le contenu à retenir, en markdown' }
-        },
-        required: ['title', 'content']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'send_email',
-      description: "Envoie un vrai mail via le compte configuré par l'utilisateur.",
-      parameters: {
-        type: 'object',
-        properties: {
-          to: { type: 'string', description: "Adresse mail EXACTE du destinataire" },
-          subject: { type: 'string', description: 'Objet du mail' },
-          body: { type: 'string', description: 'Contenu du mail, en texte simple' }
-        },
-        required: ['to', 'subject', 'body']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'type_text',
-      description: "Écrit du texte à l'endroit où se trouve le curseur/focus actuel sur l'ordinateur.",
-      parameters: {
-        type: 'object',
-        properties: { text: { type: 'string', description: 'Le texte exact à taper' } },
-        required: ['text']
-      }
-    }
-  }
-]
-
-const SYSTEM_PROMPT =
-  "Tu es Jaris, un assistant vocal personnel qui tourne entièrement en local. Réponds en français, de façon " +
-  "concise et naturelle, comme dans une conversation orale, sans émojis ni mise en forme. Pour toute action " +
-  "concrète, appelle IMPÉRATIVEMENT l'outil correspondant via un vrai appel de fonction, immédiatement, sans " +
-  "phrase d'annonce avant. Si aucune action n'est demandée, réponds directement sans outil."
-
-/** Chaque prompt réaliste tiré de vrais usages de Jaris ; expectedTool: null = pas d'outil attendu (juste conversationnel). */
-const TEST_CASES = [
-  { prompt: 'Écris bonjour dans le champ de texte ouvert.', expectedTool: 'type_text' },
-  { prompt: 'Cherche le prix du Bitcoin aujourd\'hui.', expectedTool: 'search_web' },
-  { prompt: "Rappelle-moi d'appeler le dentiste dans 20 minutes.", expectedTool: 'set_reminder' },
-  { prompt: 'Qu\'est-ce qui est affiché sur mon écran en ce moment ?', expectedTool: 'look_at_screen' },
-  { prompt: 'Ouvre le bloc-notes.', expectedTool: 'open_app' },
-  { prompt: 'Retiens que mon code postal est 75001.', expectedTool: 'remember' },
-  { prompt: 'Explique-moi en une phrase pourquoi le ciel est bleu.', expectedTool: null },
-  { prompt: 'Comment tu t\'appelles et qu\'est-ce que tu peux faire pour moi ?', expectedTool: null }
-]
+// TOOLS, les vraies consignes de Jaris et TEST_CASES : voir scripts/benchmark-cases.mjs (étape 162).
 
 /**
  * Encodeur PNG minimal (RGB 8 bits, sans dépendance externe — juste zlib, déjà dans Node) pour générer les
@@ -1009,7 +878,7 @@ async function chatOnce(model, prompt, withThink) {
   const body = {
     model,
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: buildBenchmarkSystemPrompt() },
       { role: 'user', content: prompt }
     ],
     tools: TOOLS,
@@ -1235,7 +1104,10 @@ async function main() {
   // Un ancien fichier (avant ce correctif, sans section "## ") ne matche jamais `currentTier` : ses lignes
   // sont ignorées plutôt que mal réparties — repli sûr, mieux vaut re-tester une fois que réutiliser des
   // scores qu'on ne peut plus garantir corrects.
-  const alreadyDone = (model, tier) => RESUME && existingRows[tier].has(model)
+  // Étape 162 : une ligne de conversation ne compte comme « déjà faite » que si elle vient du test ACTUEL (même
+  // nombre de questions) — une ligne de l'ancien test (x/6) est refaite, jamais reprise telle quelle.
+  const madeWithCurrentTest = (tier, row) => tier !== 'conversation' || row.reliability?.endsWith(`/${TEST_CASES.length}`)
+  const alreadyDone = (model, tier) => RESUME && existingRows[tier].has(model) && madeWithCurrentTest(tier, existingRows[tier].get(model))
 
   // SCOPED_MODELS/SCOPED_VISION_CANDIDATES/SCOPED_CODE_CANDIDATES (pas MODELS/VISION_CANDIDATES/
   // CODE_CANDIDATES directement) : un run ciblé sur un seul palier (SCOPE) ne doit installer/tester QUE ses
@@ -1264,7 +1136,10 @@ async function main() {
   // chargé tout en étant impossible à télécharger faute de place sur le disque, et inversement) : le plus
   // petit des deux budgets gagne.
   const budgetFor = (model) => {
-    const memBudget = RAM_OFFLOAD_MODELS.has(model) ? ramOffloadBudgetGb : vramBudgetGb
+    // Étape 162 : TOUS les modèles peuvent déborder sur la RAM pendant le test. Réussir ou non une question
+    // ne dépend pas du matériel — seule la durée change. Avant, un modèle un peu plus gros que la carte et
+    // absent de RAM_OFFLOAD_MODELS n'était jamais testé (gemma4:12b, 7,6 Go, sur une carte de 8 Go).
+    const memBudget = Math.max(vramBudgetGb, ramOffloadBudgetGb)
     const diskBudget = freeDiskGbAtStart !== null ? Math.max(0, freeDiskGbAtStart - DISK_SAFETY_MARGIN_GB) : Infinity
     return Math.min(memBudget, diskBudget)
   }
@@ -1324,9 +1199,9 @@ async function main() {
   // en même temps jusqu'à la toute fin (le fonctionnement habituel, le plus simple — voir cleanupUnselectedModels
   // dans benchmarkRunner.ts, qui fait le ménage une fois le gagnant de chaque palier connu). Dans ce cas,
   // deux ajustements : téléchargements strictement l'un après l'autre (pas 2 à la fois, pour ne jamais avoir
-  // 2 gros modèles "en trop" sur le disque en même temps) et suppression immédiate d'un modèle DÈS qu'on sait
-  // avec certitude qu'il a perdu (voir singleTierOf/considerPruning plus bas) — plutôt que d'attendre la fin
-  // du run pendant laquelle TOUS les modèles testés jusqu'ici restent installés simultanément. `null` (espace
+  // 2 gros modèles "en trop" sur le disque en même temps) et suppression d'un modèle dès la fin de son dernier
+  // test (voir releaseAfterLastTest plus bas) — plutôt que d'attendre la fin du run pendant laquelle TOUS les
+  // modèles testés jusqu'ici restent installés simultanément. `null` (espace
   // disque non détectable) retombe sur le comportement généreux habituel : impossible de juger la marge sans
   // pouvoir la mesurer.
   const tightDiskMode = freeDiskGbAtStart !== null && freeDiskGbAtStart - DISK_SAFETY_MARGIN_GB < totalPullWeight
@@ -1342,33 +1217,18 @@ async function main() {
   // CE run a lui-même téléchargés sont candidats à une suppression anticipée.
   const initiallyInstalledSet = new Set(installed)
 
-  // Suivi du "champion" actuel de chaque palier (flash/medium/large/vision), UNIQUEMENT pour les modèles
-  // qui n'appartiennent qu'à UN SEUL palier (singleTierOf/PRUNABLE_VISION_MODELS) : dans ce cas précis, dès
-  // que son propre test est fini, on sait avec certitude s'il peut être supprimé sans risquer de priver un
-  // AUTRE palier qui en aurait encore besoin plus tard. Comparaison identique à pickBestFrom
-  // (hardwareScan.ts) : score d'outils/fiabilité d'abord, vitesse en départage.
-  const champion = { flash: null, medium: null, large: null, vision: null }
-  const championResult = { flash: null, medium: null, large: null, vision: null }
-  const isBetter = (a, b) => (a.toolScore !== b.toolScore ? a.toolScore > b.toolScore : (a.tokPerSec ?? 0) > (b.tokPerSec ?? 0))
-
-  async function deleteNowPruned(model) {
+  // Espace disque serré (étape 162) : un modèle téléchargé par CE run est supprimé dès la fin de son DERNIER
+  // test (conversation, puis vision, puis code). L'ancien tri par « champion de palier » n'a plus de sens depuis
+  // que chaque rôle choisit dans tous les modèles (étape 160) ; Jaris retélécharge ensuite, à la fin de
+  // l'analyse, les modèles qu'il a choisis (runModelAnalysis, benchmarkRunner.ts).
+  const lastPhaseOf = (model) => (codeToRun.includes(model) ? 'code' : visionToRun.includes(model) ? 'vision' : 'conversation')
+  async function releaseAfterLastTest(model, phase) {
+    if (!tightDiskMode || initiallyInstalledSet.has(model) || lastPhaseOf(model) !== phase) return
     try {
       await deleteModelViaApi(model)
-      console.log(`  ${model} : supprimé immédiatement (dépassé par un meilleur candidat, espace disque limité)`)
+      console.log(`  ${model} : supprimé après son test (espace disque limité)`)
     } catch (err) {
-      console.log(`  ${model} : échec de la suppression anticipée (${err.message}), ignoré`)
-    }
-  }
-
-  async function considerPruning(tier, model, result) {
-    if (!tightDiskMode || initiallyInstalledSet.has(model)) return
-    if (champion[tier] === null || isBetter(result, championResult[tier])) {
-      const dethroned = champion[tier]
-      champion[tier] = model
-      championResult[tier] = result
-      if (dethroned) await deleteNowPruned(dethroned)
-    } else {
-      await deleteNowPruned(model)
+      console.log(`  ${model} : échec de la suppression après test (${err.message}), ignoré`)
     }
   }
 
@@ -1448,7 +1308,7 @@ async function main() {
   const testsTotal =
     toRun.length * TEST_CASES.length + visionToRun.length * VISION_TEST_CASES.length + codeToRun.length * CODE_TEST_CASES.length
   // Remonté avant les boucles de test (pas défini seulement à l'écriture des résultats comme avant) :
-  // considerPruning en a besoin pendant le run, pas seulement à la toute fin.
+  // utilisée pendant le run, pas seulement à la toute fin.
   const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null)
 
   /**
@@ -1532,22 +1392,21 @@ async function main() {
     console.log(`##MODEL_TESTING## ${model}`)
     const perModel = { model, role: 'conversation', latencies: [], speeds: [], correct: 0, total: 0 }
 
-    for (const { prompt, expectedTool } of TEST_CASES) {
+    for (const testCase of TEST_CASES) {
+      const { prompt, expectedTool } = testCase
       process.stdout.write(`  "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}" ... `)
+      // Étape 162 : chaque question compte, y compris celles où il ne faut AUCUN outil, et un appel n'est
+      // réussi que si son contenu l'est aussi (bon délai de rappel, bon nom d'application...).
+      perModel.total++
       try {
         const r = await chat(model, prompt)
         perModel.latencies.push(r.wallMs)
         if (r.tokPerSec !== null) perModel.speeds.push(r.tokPerSec)
-
-        if (expectedTool) {
-          perModel.total++
-          const ok = r.toolName === expectedTool
-          if (ok) perModel.correct++
-          console.log(`${ok ? 'OK' : 'RATÉ'} (attendu: ${expectedTool}, obtenu: ${r.toolName ?? 'aucun outil'}) — ${fmt(r.wallMs, 0)}ms, ${fmt(r.tokPerSec)} tok/s`)
-        } else {
-          console.log(`${fmt(r.wallMs, 0)}ms, ${fmt(r.tokPerSec)} tok/s${r.toolName ? ` (outil inattendu: ${r.toolName})` : ''}`)
-          reasoningAnswers.push({ model, prompt, answer: r.content || `[outil appelé au lieu de répondre: ${r.toolName}]` })
-        }
+        const ok = isCorrectAnswer(testCase, r)
+        if (ok) perModel.correct++
+        const got = r.toolName ? `${r.toolName} ${JSON.stringify(r.toolArgs ?? {})}` : 'aucun outil'
+        console.log(`${ok ? 'OK' : 'RATÉ'} (attendu: ${expectedTool ?? 'aucun outil'}, obtenu: ${got}) — ${fmt(r.wallMs, 0)}ms`)
+        if (!expectedTool) reasoningAnswers.push({ model, prompt, answer: r.content || `[outil appelé au lieu de répondre: ${r.toolName}]` })
       } catch (err) {
         console.log(`ERREUR (${err.message})`)
         errors.push({ model, prompt, message: err.message })
@@ -1563,10 +1422,7 @@ async function main() {
     console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
     persistResults()
 
-    // Espace disque serré uniquement : ce modèle vient de finir son test, et n'appartient qu'à UN SEUL
-    // palier (ni multi-palier, ni candidat vision) — on sait donc déjà, avec certitude, s'il faut le garder.
-    const tier = singleTierOf(model)
-    if (tier) await considerPruning(tier, model, { toolScore: perModel.correct, tokPerSec: avg(perModel.speeds) })
+    await releaseAfterLastTest(model, 'conversation')
   }
 
   // Modèles Vision : les images de VISION_TEST_CASES sont générées une seule fois ici (pas à chaque appel
@@ -1608,12 +1464,7 @@ async function main() {
     console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
     persistResults()
 
-    // Le palier vision, comme le texte ci-dessus : seulement pour les 4 candidats vision "purs" (jamais
-    // qwen3.5:4b/gemma4:e4b, aussi candidats médium — voir PRUNABLE_VISION_MODELS), et seulement si l'espace
-    // disque est serré.
-    if (PRUNABLE_VISION_MODELS.has(model)) {
-      await considerPruning('vision', model, { toolScore: perModel.correct, tokPerSec: avg(perModel.speeds) })
-    }
+    await releaseAfterLastTest(model, 'vision')
   }
 
   // Modèles Code : une seule passe de génération par cas (pas de critique/réparation, voir la note sur
@@ -1656,6 +1507,7 @@ async function main() {
     results.push(perModel)
     console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
     persistResults()
+    await releaseAfterLastTest(model, 'code')
   }
 
   // Sécurité : s'assurer qu'aucun téléchargement en tâche de fond ne reste en vol avant d'écrire les

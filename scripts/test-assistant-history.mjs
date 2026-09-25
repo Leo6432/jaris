@@ -4,6 +4,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 import { modelChoiceModule } from './load-model-choice.mjs'
+import { systemPromptModule } from './load-system-prompt.mjs'
 
 // Exécute la vraie boucle de conversation sans Electron ni services externes.
 const source = ts.transpileModule(readFileSync(new URL('../electron/services/assistant.ts', import.meta.url), 'utf8'), {
@@ -27,6 +28,7 @@ function setup(chat, execute, writeNote = async () => assert.fail('pas de docume
   const modules = {
     '../config': { config },
     './ollama': { chatWithOllama: chat, listInstalledModels: async () => installed },
+    './systemPrompt': systemPromptModule,
     './memoryStore': { listMemoryTitles: async () => [] },
     './profileStore': { getProfile: async () => profile },
     './notepad': { requestedNotepadText: noteExports.requestedNotepadText, openNotepadText: writeNote },

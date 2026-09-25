@@ -1,6 +1,7 @@
 import { exec } from 'child_process'
 import { readFileSync } from 'fs'
 import { resourcesRoot } from '../paths'
+import { getDataRoot } from './dataLocation'
 import { join } from 'path'
 import { promisify } from 'util'
 import { RESOURCE_SAFETY_MARGIN_GB, detectRamGb } from './systemResources'
@@ -918,18 +919,32 @@ export function parseVerifiedToolScores(): Record<VerifiedTier, Map<string, stri
  * "rien de connu localement" (repli sûr sur verified-tool-scores.md/un re-test, jamais un score corrompu
  * affiché comme s'il était correct) plutôt que d'essayer de le deviner section par section.
  */
+/**
+ * Où l'analyse des modèles écrit ses résultats (étape 162) : dans le dossier de données de Jaris, que les mises à
+ * jour ne touchent jamais — à côté du script, dans le dossier du programme, la mise à jour suivante les effaçait.
+ */
+export function localBenchmarkResultsPath(): string {
+  return join(getDataRoot(), 'benchmark-results.md')
+}
+
 export function parseLocalBenchmark(): Record<VerifiedTier, Map<string, LocalBenchmarkEntry>> {
   const results: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>> = {
     conversation: new Map(),
     vision: new Map(),
     code: new Map()
   }
-  let raw: string
-  try {
-    raw = readFileSync(join(resourcesRoot(), 'scripts', 'benchmark-results.md'), 'utf-8')
-  } catch {
-    return results
+  // Étape 162 : les résultats vivent désormais dans le dossier de DONNÉES (voir localBenchmarkResultsPath) ;
+  // l'ancien emplacement, à côté du script dans le dossier du programme, reste lu en repli.
+  let raw: string | null = null
+  for (const path of [localBenchmarkResultsPath(), join(resourcesRoot(), 'scripts', 'benchmark-results.md')]) {
+    try {
+      raw = readFileSync(path, 'utf-8')
+      break
+    } catch {
+      // Emplacement suivant.
+    }
   }
+  if (raw === null) return results
 
   let currentTier: VerifiedTier | null = null
   for (const line of raw.split('\n')) {

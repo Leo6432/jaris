@@ -888,6 +888,32 @@ body.body--scan::after {
   margin-top: 14px;
 }
 
+/* Bouton "Lancer l'analyse complète" (étape 162) + sa confirmation, en tête de la page "Tous les modèles". */
+.options-menu__all-models-analysis {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+
+.options-menu__analysis-confirm {
+  padding: 12px 14px;
+  border: 1px solid var(--hud-line);
+  background: var(--hud-panel-raised);
+}
+
+.options-menu__analysis-confirm p {
+  margin: 0;
+  max-width: 70ch;
+}
+
+.options-menu__analysis-confirm-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 /* Chaque palier dans sa propre carte : plus facile à distinguer d'un seul coup d'œil que 5 tableaux qui
    s'enchaînent sans séparation visuelle. */
 .options-menu__model-group {

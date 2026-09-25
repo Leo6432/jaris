@@ -4640,3 +4640,46 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `node --test scripts/test-hardwarescan-single-pool.mjs` (+4 d'intelligence pour −3 de vitesse
   gagne ; plus intelligent mais bien plus lent ne gagne jamais ; la fiabilité passe avant tout ; 8 Go reste
   ministral-3:3b). Vérifié en remettant l'ancien code : le test de l'exemple de Léo échoue.
+
+- **Étape 162, Léo : « rajoute le test des appels d'outils pour que je le lance cet aprem ; c'est bizarre,
+  gemma4:12b n'a pas de score alors qu'il n'est pas lourd et que granite4.2:30b en a un ; est-ce que les tests
+  d'outils sont bien, ou on en rajoute pour un score fiable, et on refait l'analyse de tout ».**
+  **gemma4:12b sans score : cause trouvée dans le script, pas devinée.** L'analyse n'autorisait à déborder sur
+  la RAM que les modèles de `RAM_OFFLOAD_MODELS` (les gros « Puissant »). gemma4:12b pèse 7,6 Go, sa carte laisse
+  7 Go au test : sauté à chaque analyse, alors que granite4.2:30b (18 Go, dans la liste) passait par la RAM.
+  Réussir ou non une question ne dépend pas du matériel, seule la durée change : TOUS les modèles peuvent
+  désormais déborder sur la RAM pendant le test.
+  **Le test lui-même était faible, trois défauts trouvés en le relisant contre le vrai Jaris :**
+  1. une copie PÉRIMÉE des outils — 7 au lieu des 14 réels, dont `send_email`, retiré de Jaris depuis longtemps ;
+  2. des consignes simplifiées (4 lignes) au lieu des vraies, qui imposent search_web pour toute question
+     factuelle — l'ancien test attendait « pas d'outil » pour « pourquoi le ciel est bleu », l'inverse de ce que
+     Jaris demande réellement au modèle ;
+  3. 6 questions notées (une par outil), sans regarder le contenu de l'appel : un rappel « dans 20 minutes »
+     programmé à 2 minutes comptait juste, et beaucoup de modèles plafonnaient à 6/6.
+  Nouveau test (`scripts/benchmark-cases.mjs`) : les 14 VRAIS outils et les VRAIES consignes (canal voix),
+  copies exactes surveillées par un test qui échoue dès qu'elles divergent de `tools.ts`/`systemPrompt.ts` ;
+  17 questions notées, dont 4 où il ne faut AUCUN outil (remerciement, question sur Jaris, heure, négation
+  « n'éteins surtout pas ») ; chaque appel vérifié sur son contenu (délai du rappel, nom de l'application...).
+  Pour que le script puisse reprendre les vraies consignes, `buildSystemPrompt` sort d'assistant.ts vers
+  `systemPrompt.ts`, un module pur (les 4 faux ponts d'assistant.ts le chargent via `load-system-prompt.mjs`).
+  **« Lancer l'analyse complète » revient dans « Tous les modèles »**, retiré à l'étape 134 (« pas bien pour le
+  public ») : il passe maintenant par une confirmation qui annonce plusieurs heures de téléchargements et de
+  tests — le garde-fou qui manquait. Il reteste TOUT (`JARIS_RETEST_ALL`, ignore verified-tool-scores.md, noté
+  avec l'ancien test) et REPREND après une interruption (`JARIS_RESUME`) ; une ligne de l'ancien test (x/6)
+  n'est jamais reprise, seulement une ligne notée sur les 17 questions actuelles.
+  **Deux défauts de fond corrigés au passage, trouvés en suivant le chemin des résultats :**
+  1. les résultats s'écrivaient à côté du script, dans le dossier du PROGRAMME : la mise à jour suivante les
+     effaçait. Ils vont désormais dans le dossier de DONNÉES (`JARIS_RESULTS_PATH`, `localBenchmarkResultsPath`),
+     l'ancien emplacement restant lu en repli ;
+  2. quand la place manque, le tri par « champion de palier » n'avait plus de sens depuis l'étape 160 : chaque
+     modèle téléchargé par l'analyse est supprimé après son DERNIER test, et Jaris retélécharge à la fin les
+     modèles qu'il a choisis (`runModelAnalysis`).
+  **Leçon générale : une copie « de référence » (outils, consignes) dans un script de test finit toujours par
+  diverger de l'original — ici au point de tester un outil qui n'existait plus. Soit la copie est générée,
+  soit un test la compare à l'original ; jamais une copie à la main laissée sans surveillance.**
+  Régression : `node --test scripts/test-benchmark-cases.mjs` — copies fidèles, contenu des appels vérifié, et le
+  VRAI script lancé de bout en bout contre un faux Ollama (vraies consignes et 14 outils reçus, scores attendus
+  pour un modèle parfait, un modèle qui se trompe de délai et un modèle qui n'appelle jamais d'outil, reprise,
+  « tout retester »). Chaque garde-fou vérifié en remettant l'ancien code. **Non vérifié ici** : l'analyse réelle
+  sur la machine de Léo (durée, espace disque) ; ses résultats (`benchmark-results.md`, dossier de données)
+  remplaceront ensuite verified-tool-scores.md pour tout le monde.

@@ -54,6 +54,11 @@ const overrides = {
   }),
   getConversationHistory: async () => [],
   getMyModelPicks: async () => ({ gpuName: 'RTX 3070', vramGb: 8, ramGb: 32, flash: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, medium: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, large: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, vision: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, code: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 } , upgrades: {}, installCheck: { notInstalled: [], otherInstalled: [] } }),
+  // Étape 162 : l'analyse complète est relancée depuis « Tous les modèles » — le test vérifie ce qui est demandé.
+  runModelAnalysis: async (scope, retestAll) => {
+    window.__analysisCalls = (window.__analysisCalls ?? []).concat([[scope, retestAll]])
+    return { gpuName: null, vramGb: 8, models: { flash: 'ministral-3:3b', medium: 'ministral-3:3b', large: 'ministral-3:3b' }, visionModel: 'gemma4:31b', codeModel: 'ministral-3:3b' }
+  },
   getModelOverview: async () => ({
     vramGb: 8,
     codeModel: 'qwen2.5-coder:7b',
@@ -340,30 +345,37 @@ test('le bouton "Tous les modèles" est réellement habillé par le CSS de Jaris
   })
 })
 
-// Léo, relayant un avis de ChatGPT : "enleve le bouton lancer l'analyse pour le public c'est pas bien" —
-// le bouton "Lancer l'analyse" (ajouté puis restauré dans une étape précédente) déclenchait potentiellement
-// des dizaines de Go de téléchargement et un run de plusieurs dizaines de minutes, sans garde-fou pour
-// quelqu'un qui ne sait pas ce qu'il fait. Retiré de l'interface (le canal IPC/le composant
-// ModelAnalysisProgress.tsx restent intacts, juste plus exposés ici) : ce test vérifie que la page "Tous
-// les modèles" affiche bien le tableau statique SANS jamais montrer ce bouton ni le moindre suivi en direct.
-test('le bouton "Lancer l\'analyse" a disparu de "Tous les modèles" — seul le tableau statique reste', options, async () => {
+// Étape 162, Léo : « rajoute le test des appels d'outils pour que je le lance cet aprem ». Le bouton avait été
+// retiré à l'étape 134 (« pas bien pour le public » : des heures de test et des dizaines de Go sans garde-fou) ;
+// il revient derrière une CONFIRMATION qui dit la durée, et lance une analyse qui reteste TOUT.
+test('« Lancer l\'analyse complète » demande d\'abord confirmation, puis reteste tous les modèles', options, async () => {
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Modèles")')
     await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
 
-    const buttonTexts = await page.$$eval('.options-page--models button', (els) => els.map((el) => el.textContent?.trim()))
-    assert.ok(!buttonTexts.some((t) => t?.includes("Lancer l'analyse")), `le bouton "Lancer l'analyse" ne doit plus exister : ${buttonTexts.join(', ')}`)
-    assert.equal(await page.$('.options-menu__progress'), null, 'aucune barre de progression ne doit jamais apparaître ici')
+    // Rien ne démarre au premier clic : une confirmation dit d'abord la durée.
+    await page.click('.options-page--models button:has-text("Lancer l\'analyse complète")')
+    const confirm = await page.textContent('.options-page--models .options-menu__analysis-confirm')
+    assert.match(confirm, /plusieurs heures/)
+    assert.equal(await page.evaluate(() => window.__analysisCalls?.length ?? 0), 0, 'rien ne doit démarrer avant « Lancer »')
 
-    // Comparaison par SOUS-CHAÎNE, pas égalité stricte : les colonnes triables portent depuis l'étape 129 un
-    // indicateur permanent (" ↕"/" ▲"/" ▼") collé au titre, qui n'a rien à voir avec ce que ce test vérifie.
-    const headers = await page.$$eval('.options-page--models thead th', (els) => els.map((el) => el.textContent))
-    assert.ok(headers.includes('Utilisé par Jaris'), `colonne d'utilisation attendue : ${headers.join(', ')}`)
-    assert.ok(
-      headers.some((h) => h?.includes('Intelligence (Artificial Analysis)')),
-      `tableau statique attendu : ${headers.join(', ')}`
-    )
+    // Annuler referme sans rien lancer.
+    await page.click('.options-page--models .options-menu__analysis-confirm button:has-text("Annuler")')
+    assert.equal(await page.$('.options-page--models .options-menu__analysis-confirm'), null)
+    assert.equal(await page.evaluate(() => window.__analysisCalls?.length ?? 0), 0)
+
+    // Lancer : TOUS les modèles, en retestant même ceux déjà notés (ancien test).
+    await page.click('.options-page--models button:has-text("Lancer l\'analyse complète")')
+    await page.click('.options-page--models .options-menu__analysis-confirm button:has-text("Lancer")')
+    await page.waitForFunction(() => (window.__analysisCalls?.length ?? 0) === 1)
+    assert.deepEqual(await page.evaluate(() => window.__analysisCalls[0]), ['all', true])
+    await page.waitForSelector('.options-page--models .capacity-scan__status:has-text("Analyse terminée")')
+
+    // La confirmation est réellement habillée par le CSS de Jaris (bordure de carte), pas du texte nu.
+    await page.click('.options-page--models button:has-text("Lancer l\'analyse complète")')
+    const border = await page.$eval('.options-menu__analysis-confirm', (el) => getComputedStyle(el).borderStyle)
+    assert.equal(border, 'solid')
   })
 })
 

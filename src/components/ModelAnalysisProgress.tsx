@@ -59,6 +59,8 @@ function RunStatusBadge({ status, verifiedSkip }: { status: ModelRunStatus | und
 interface ModelAnalysisProgressProps {
   state: ModelAnalysisState
   modelOverview: ModelOverviewResult | null
+  /** Analyse complète (étape 162) : les modèles déjà vérifiés sont retestés, jamais affichés « déjà vérifié ». */
+  retestAll?: boolean
 }
 
 /**
@@ -67,7 +69,7 @@ interface ModelAnalysisProgressProps {
  * premier lancement) — voir useModelAnalysis pour la logique. Remplace un journal brut qui défilait en bas
  * ("enlève le panel le script") : celui-ci ne réapparaît qu'en cas d'échec, comme détail de dépannage.
  */
-export default function ModelAnalysisProgress({ state, modelOverview }: ModelAnalysisProgressProps): JSX.Element {
+export default function ModelAnalysisProgress({ state, modelOverview, retestAll = false }: ModelAnalysisProgressProps): JSX.Element {
   const { benchmarking, pullCount, testCount, progressFraction, etaMs, modelRunStatus, benchmarkLog, error } = state
   const benchmarkLogRef = useRef<HTMLPreElement>(null)
   // Une seule liste de modèles depuis l'étape 160 (plus de tableau par palier).
@@ -136,7 +138,7 @@ export default function ModelAnalysisProgress({ state, modelOverview }: ModelAna
                       <ReliabilityBadge value={entry.toolCalling} />
                     </td>
                     <td>
-                      <RunStatusBadge status={modelRunStatus[entry.model]} verifiedSkip={entry.verifiedSkip} />
+                      <RunStatusBadge status={modelRunStatus[entry.model]} verifiedSkip={!retestAll && entry.verifiedSkip} />
                     </td>
                   </tr>
                 ))}

@@ -4,6 +4,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 import { modelChoiceModule } from './load-model-choice.mjs'
+import { systemPromptModule } from './load-system-prompt.mjs'
 
 /**
  * PROMISE_WITHOUT_ACTION (assistant.ts) détecte une promesse d'action du modèle ("je vais faire X") sans
@@ -18,6 +19,7 @@ const modules = {
   './notepad': { requestedNotepadText: () => undefined },
     '../config': { config: { ollama: {} } },
   './ollama': {},
+  './systemPrompt': systemPromptModule,
   './memoryStore': {},
   './profileStore': {},
   // TOOLS doit être un vrai tableau (pas {}) : assistant.ts calcule `TOOL_NAMES = TOOLS.map(...)` au niveau

@@ -4,6 +4,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 import { modelChoiceModule } from './load-model-choice.mjs'
+import { systemPromptModule } from './load-system-prompt.mjs'
 
 /**
  * findLeakedToolName (assistant.ts) détecte qu'une réponse SANS appel d'outil mentionne malgré tout le nom
@@ -30,6 +31,7 @@ const modules = {
   './notepad': { requestedNotepadText: () => undefined },
     '../config': { config: { ollama: {} } },
   './ollama': {},
+  './systemPrompt': systemPromptModule,
   './memoryStore': {},
   './profileStore': {},
   './tools': {

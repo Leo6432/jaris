@@ -4,6 +4,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 import { modelChoiceModule } from './load-model-choice.mjs'
+import { systemPromptModule } from './load-system-prompt.mjs'
 
 /**
  * looksLikeKnowledgeQuestion (assistant.ts) — Léo : "fait en sorte qu'il regarde tout le temps sur le web
@@ -22,6 +23,7 @@ const modules = {
   './notepad': { requestedNotepadText: () => undefined },
   '../config': { config: { ollama: {} } },
   './ollama': {},
+  './systemPrompt': systemPromptModule,
   './memoryStore': {},
   './profileStore': {},
   './tools': { TOOLS: [{ function: { name: 'open_app' } }], createToolExecutor: () => {} },

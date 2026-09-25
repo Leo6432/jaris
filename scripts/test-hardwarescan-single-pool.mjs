@@ -37,6 +37,7 @@ function setup({ vramMib, ramGb = 32, scores = REAL_SCORES } = {}) {
       }
     },
     '../paths': { resourcesRoot: () => '/fake/resources' },
+    './dataLocation': { getDataRoot: () => '/fake/data' },
     './systemResources': { RESOURCE_SAFETY_MARGIN_GB: 16, detectRamGb: () => ramGb },
     './ollama': { getModelInfo: async () => null, getInstalledModelSizeBytes: async () => null, listInstalledModels: async () => [] }
   }

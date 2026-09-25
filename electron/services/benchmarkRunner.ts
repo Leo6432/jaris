@@ -2,7 +2,7 @@ import { spawn } from 'child_process'
 import { join } from 'path'
 import { config } from '../config'
 import { deleteModel, pullModelIfMissing, ModelTooLargeError, DiskFullError } from './ollama'
-import { getAllCandidateModelIds, parseLocalBenchmark, pickBestModelsFromBenchmark } from './hardwareScan'
+import { getAllCandidateModelIds, localBenchmarkResultsPath, parseLocalBenchmark, pickBestModelsFromBenchmark } from './hardwareScan'
 import { getProfile, saveProfile } from './profileStore'
 import type { AnalysisScope, CapacityScanResult } from '../../shared/ipc'
 import { resourcesRoot } from '../paths'
@@ -159,12 +159,22 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
  * pour ne tester que les candidats du palier demandé (voir son commentaire sur SCOPE) — jamais interprété
  * ici, seulement transmis tel quel.
  */
-function spawnBenchmarkScript(onLine: (line: string) => void, scope: AnalysisScope): Promise<void> {
+function spawnBenchmarkScript(onLine: (line: string) => void, scope: AnalysisScope, retestAll: boolean): Promise<void> {
   return new Promise((resolve, reject) => {
     const scriptPath = join(resourcesRoot(), 'scripts', 'benchmark-models.mjs')
     const proc = spawn(process.execPath, [scriptPath], {
       windowsHide: true,
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', OLLAMA_HOST: config.ollama.host, JARIS_ANALYSIS_SCOPE: scope }
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: '1',
+        OLLAMA_HOST: config.ollama.host,
+        JARIS_ANALYSIS_SCOPE: scope,
+        // Étape 162 : résultats dans le dossier de données (les mises à jour effaçaient ceux du dossier programme).
+        JARIS_RESULTS_PATH: localBenchmarkResultsPath(),
+        // « Tout retester » : ignore les scores déjà vérifiés (ancien test) et reprend là où un run interrompu
+        // s'était arrêté — une analyse complète dure des heures, un PC éteint en route ne doit pas tout perdre.
+        ...(retestAll ? { JARIS_RETEST_ALL: '1', JARIS_RESUME: '1' } : {})
+      }
     })
 
     let buffer = ''
@@ -244,14 +254,29 @@ async function cleanupUnselectedModels(onLine: (line: string) => void): Promise<
  * (scripts/benchmark-results.md), sont conservés tels quels par le script — jamais effacés par un run ciblé,
  * donc pickBestModelsFromBenchmark garde les mêmes choix pour les paliers non re-testés.
  */
-export async function runModelAnalysis(onLine: (line: string) => void, scope: AnalysisScope = 'all'): Promise<CapacityScanResult> {
+export async function runModelAnalysis(
+  onLine: (line: string) => void,
+  scope: AnalysisScope = 'all',
+  options: { retestAll?: boolean } = {}
+): Promise<CapacityScanResult> {
   const before = await getProfile()
 
-  await spawnBenchmarkScript(onLine, scope)
+  await spawnBenchmarkScript(onLine, scope, options.retestAll === true)
   onLine('')
 
   onLine("Sélection du meilleur modèle pour chaque palier, d'après les résultats du benchmark…")
   const picked = await pickBestModelsFromBenchmark()
+
+  // Étape 162 : quand la place manque, l'analyse supprime chaque modèle juste après l'avoir testé — les modèles
+  // choisis ne sont donc pas forcément encore installés. Un échec ici n'arrête pas l'analyse : le rôle concerné
+  // le retéléchargera au prochain usage, comme n'importe quel modèle manquant.
+  for (const model of new Set([picked.models.flash, picked.models.medium, picked.models.large, picked.codeModel])) {
+    try {
+      await pullModelIfMissing(model, onLine)
+    } catch (err) {
+      onLine(`Modèle ${model} non retéléchargé : ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
   // Seul le modèle vision n'est jamais installé par le benchmark (pas testé) : les modèles texte/tool-
   // calling retenus, eux, ont forcément déjà été téléchargés pour être testés (donc déjà passés par ce
   // même filet de sécurité). Si même le vision le plus léger ne rentre pas, on continue sans lui plutôt que

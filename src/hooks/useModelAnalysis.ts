@@ -40,7 +40,7 @@ export interface ModelAnalysisState {
    * Lance scripts/benchmark-models.mjs (via l'IPC runModelAnalysis) et suit sa progression en direct.
    * `scope` ('all' par défaut) limite le test à un seul palier, bien plus rapide — voir AnalysisScope.
    */
-  run: (scope?: AnalysisScope) => Promise<CapacityScanResult>
+  run: (scope?: AnalysisScope, retestAll?: boolean) => Promise<CapacityScanResult>
 }
 
 /**
@@ -168,7 +168,7 @@ export function useModelAnalysis(modelOverview: ModelOverviewResult | null): Mod
     return () => clearInterval(id)
   }, [benchmarking])
 
-  const run = async (requestedScope: AnalysisScope = 'all'): Promise<CapacityScanResult> => {
+  const run = async (requestedScope: AnalysisScope = 'all', retestAll = false): Promise<CapacityScanResult> => {
     setError(null)
     setBenchmarking(true)
     setScope(requestedScope)
@@ -187,7 +187,7 @@ export function useModelAnalysis(modelOverview: ModelOverviewResult | null): Mod
     for (const entry of modelOverviewRef.current?.entries ?? []) initialStatus[entry.model] = { kind: 'pending' }
     setModelRunStatus(initialStatus)
     try {
-      return await window.jaris.runModelAnalysis(requestedScope)
+      return await window.jaris.runModelAnalysis(requestedScope, retestAll)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       throw err
