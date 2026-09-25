@@ -4,6 +4,7 @@ import {
   type AnalysisScope,
   type AppMode,
   type AppVersionStatus,
+  type LaunchAtStartupStatus,
   type AudioInputDevice,
   type CapacityScanResult,
   type ChatMessage,
@@ -123,6 +124,9 @@ const api = {
   stopTestMicrophone: (): void => ipcRenderer.send(IPC_CHANNELS.stopTestMicrophone),
   setActiveMode: (mode: AppMode): void => ipcRenderer.send(IPC_CHANNELS.setActiveMode, mode),
   setOptionsOpen: (open: boolean): void => ipcRenderer.send(IPC_CHANNELS.setOptionsOpen, open),
+  getLaunchAtStartup: (): Promise<LaunchAtStartupStatus> => ipcRenderer.invoke(IPC_CHANNELS.getLaunchAtStartup),
+  setLaunchAtStartup: (enabled: boolean): Promise<LaunchAtStartupStatus> =>
+    ipcRenderer.invoke(IPC_CHANNELS.setLaunchAtStartup, enabled),
   getWidgetMode: (): Promise<WidgetMode> => ipcRenderer.invoke(IPC_CHANNELS.getWidgetMode),
   onWidgetMode: (cb: (mode: WidgetMode) => void) => subscribe(IPC_CHANNELS.widgetMode, cb),
   setChatWidgetHeight: (height: number | null): void =>

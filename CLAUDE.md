@@ -4801,3 +4801,27 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   conversation (total ≠ nombre de questions → refaite). Vérifié de bout en bout avec un vrai Ollama ici :
   qwen3.5:0.8b, qui plafonnait à 4/17 avec les consignes coupées, appelle maintenant de vrais outils avec le bon
   contenu (ses ratés restent de vraies erreurs d'un modèle de 0,8 Md de paramètres).
+
+- **Ouvrir Jaris au démarrage de Windows (étape 165, Léo : « dès que le PC démarre on voit la fenêtre Jaris et
+  pas le fond d'écran, et pour l'activer/désactiver »).** Interrupteur dans Options → Général → Démarrage.
+  **La seule source de vérité est l'entrée de démarrage de Windows** (`app.setLoginItemSettings`, clé Run),
+  jamais un champ du profil : l'entrée peut être retirée ou désactivée depuis le Gestionnaire des tâches, et un
+  champ à part afficherait alors « activé » à tort. L'état est RELU après chaque bascule et à chaque ouverture
+  de l'onglet ; une entrée présente mais désactivée par Windows (`executableWillLaunchAtLogin === false`) est
+  signalée au lieu d'être montrée comme active. Refusé hors version installée (en développement, l'entrée
+  pointerait vers `electron.exe` sans l'application).
+  **La commande enregistrée porte `--launched-at-login`** : c'est ce qui distingue « Windows vient d'ouvrir la
+  session » (afficher la fenêtre en grand) d'un démarrage normal (rester discret en widget, inchangé). Sur
+  Windows, `getLoginItemSettings` doit recevoir les MÊMES arguments pour retrouver l'entrée — une seule
+  constante sert aux deux appels.
+  **Piège anticipé, pas encore constaté** : pendant l'ouverture de session, l'Explorateur et les autres
+  programmes de démarrage prennent le focus tour à tour. Le handler 'blur' (repli en widget) aurait replié la
+  fenêtre aussitôt — retour au fond d'écran, exactement ce que Léo ne veut pas. D'où un délai de 30 s après un
+  lancement au démarrage pendant lequel 'blur' ne replie rien (4e garde sur ce handler, après `dialogOpen`,
+  `quitting`, `optionsOpen`). La fenêtre passe aussi brièvement « toujours au premier plan » : Windows peut
+  refuser le focus à un programme de démarrage, et elle resterait derrière les autres.
+  Régression : `node --test scripts/test-launch-at-startup.mjs scripts/test-options-reorganization-ui.mjs`
+  (faux `app` qui imite l'entrée Run, arguments identiques exigés, blocage par Windows signalé, rien
+  d'enregistré en développement ; branchement main.ts ; vrai clic sur l'interrupteur). Les gardes de main.ts
+  vérifiés en les retirant. **Non vérifiable ici** : une vraie ouverture de session Windows — à confirmer par
+  Léo au prochain redémarrage.

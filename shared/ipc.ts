@@ -357,6 +357,15 @@ export interface OllamaVersionStatus {
  * Version de Jaris lui-même comparée à la dernière Release GitHub stable (étape 20, voir appUpdater.ts) —
  * même principe qu'OllamaVersionStatus ci-dessus, `null` tant que le check réseau n'a pas abouti.
  */
+/** Lancement de Jaris au démarrage de Windows (Options → Général, étape 165). */
+export interface LaunchAtStartupStatus {
+  /** false hors d'une version installée sous Windows (développement) : l'interrupteur est alors grisé. */
+  supported: boolean
+  enabled: boolean
+  /** Entrée présente mais désactivée dans les applications de démarrage de Windows : Jaris ne se lancera pas. */
+  blockedByWindows: boolean
+}
+
 export interface AppVersionStatus {
   current: string
   latest: string
@@ -726,5 +735,9 @@ export const IPC_CHANNELS = {
    */
   getContextLengthOptions: 'jaris:get-context-length-options',
   /** renderer -> main : enregistre la longueur de contexte choisie dans le profil (Profile.contextLength). */
-  setContextLength: 'jaris:set-context-length'
+  setContextLength: 'jaris:set-context-length',
+  /** renderer <-> main : état réel de l'entrée de démarrage de Windows (voir launchAtStartup.ts). */
+  getLaunchAtStartup: 'jaris:get-launch-at-startup',
+  /** renderer <-> main : active/désactive le lancement de Jaris au démarrage de Windows. */
+  setLaunchAtStartup: 'jaris:set-launch-at-startup'
 } as const

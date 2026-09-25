@@ -43,6 +43,12 @@ import {
   setActiveConversation
 } from './services/conversationStore'
 import { getProfile, saveProfile } from './services/profileStore'
+import {
+  getLaunchAtStartup,
+  LOGIN_REVEAL_GRACE_MS,
+  setLaunchAtStartup,
+  wasLaunchedAtLogin
+} from './services/launchAtStartup'
 import { checkAppFreshness, checkForUpdate, getAppVersionStatus, getInstalledVersion, updateApp } from './services/appUpdater'
 import {
   IPC_CHANNELS,
@@ -108,6 +114,9 @@ let dialogOpen = false
  * jugé perturbant en pleine configuration (Options a son propre bouton "Fermer", pas besoin du repli en
  * plus). Mis à jour par IPC_CHANNELS.setOptionsOpen, envoyé par OptionsMenu.tsx à chaque ouverture/fermeture. */
 let optionsOpen = false
+/** Horodatage jusqu'auquel 'blur' ne replie pas la fenêtre, après un lancement au démarrage de Windows
+ * (voir LOGIN_REVEAL_GRACE_MS, launchAtStartup.ts). 0 = aucun délai en cours. */
+let loginRevealUntil = 0
 
 // Plus haut que large : le contenu (orbe + texte) reste ancré en haut de la fenêtre (voir .app--widget en
 // CSS), donc collé au vrai bord haut de l'écran (étape 68, façon "notch"). Le reste de la hauteur, vide et
@@ -336,6 +345,9 @@ function createFullWindow(showWhenReady = true): BrowserWindow {
   // le petit widget) — Options a déjà son propre bouton "Fermer" pour signaler qu'on a vraiment fini.
   win.on('blur', () => {
     if (!onboardingDone || dialogOpen || quitting || optionsOpen) return
+    // Étape 165 : juste après l'ouverture de session, l'Explorateur et les autres programmes de démarrage
+    // prennent le focus — ce n'est pas Léo qui change d'appli, la fenêtre doit rester affichée.
+    if (Date.now() < loginRevealUntil) return
     win.hide()
     showWidgetWindow()
     applyListeningForActiveMode()
@@ -721,6 +733,10 @@ app.whenReady().then(async () => {
     if (displayedWidgetMode === 'chat') chatPointerWasInside = true
   })
   ipcMain.on(IPC_CHANNELS.collapseChatWidget, () => collapseChatWidget())
+  ipcMain.handle(IPC_CHANNELS.getLaunchAtStartup, () => getLaunchAtStartup(app, process.platform))
+  ipcMain.handle(IPC_CHANNELS.setLaunchAtStartup, (_event, enabled: boolean) =>
+    setLaunchAtStartup(app, process.platform, enabled)
+  )
   ipcMain.on(IPC_CHANNELS.setOptionsOpen, (_event, open: boolean) => {
     optionsOpen = open
   })
@@ -1086,7 +1102,23 @@ app.whenReady().then(async () => {
   // et la barre apparaît seulement avec « Jaris » ou +. L'onboarding reste visible au premier lancement.
   const profile = await getProfile()
   onboardingDone = Boolean(profile?.capacityScanDone)
+  // Étape 165 : lancé par Windows à l'ouverture de session (Options → Général), Jaris s'affiche en grand au
+  // lieu de démarrer discrètement — « dès que le PC démarre on voit la fenêtre Jaris et pas le fond d'écran ».
+  const revealAtLogin = onboardingDone && wasLaunchedAtLogin(process.argv)
   fullWindow = createFullWindow(!onboardingDone)
+  if (revealAtLogin) {
+    loginRevealUntil = Date.now() + LOGIN_REVEAL_GRACE_MS
+    const win = fullWindow
+    win.once('ready-to-show', () => {
+      if (win.isDestroyed()) return
+      win.maximize()
+      // Brièvement au premier plan forcé : pendant l'ouverture de session, Windows peut refuser le focus à un
+      // programme de démarrage, et la fenêtre resterait derrière celles qui s'ouvrent en même temps.
+      win.setAlwaysOnTop(true)
+      showFullWindow()
+      win.setAlwaysOnTop(false)
+    })
+  }
 
   // Widget pré-créé et chargé en arrière-plan dès le démarrage (caché) : sans ça, la première fois qu'on
   // réduit la fenêtre, il fallait créer la fenêtre Electron ET charger toute la page React avant de
@@ -1097,7 +1129,9 @@ app.whenReady().then(async () => {
     // Une fois Jaris hors de sa fenêtre principale, son état inactif reste visible en haut au centre dès le
     // démarrage : petit orbe en Vocal, petit indicateur Chat dans ce mode. La création reste préchargée pour
     // éviter un flash blanc avant que React ait peint la bonne forme.
-    widgetWindow.once('ready-to-show', () => showWidgetWindow())
+    widgetWindow.once('ready-to-show', () => {
+      if (!revealAtLogin) showWidgetWindow()
+    })
   }
 
   void startVoicePipeline()

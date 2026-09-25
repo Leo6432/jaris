@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type {
   AppVersionStatus,
+  LaunchAtStartupStatus,
   AudioInputDevice,
   ContextLengthOptions,
   ConversationEntry,
@@ -221,6 +222,8 @@ export default function OptionsMenu(): JSX.Element {
   const [ollamaUpdateMessage, setOllamaUpdateMessage] = useState<string | null>(null)
   const [appVersionStatus, setAppVersionStatus] = useState<AppVersionStatus | null>(null)
   const [installedVersion, setInstalledVersion] = useState<string | null>(null)
+  const [launchAtStartup, setLaunchAtStartupStatus] = useState<LaunchAtStartupStatus | null>(null)
+  const [savingLaunchAtStartup, setSavingLaunchAtStartup] = useState(false)
   const [updatingApp, setUpdatingApp] = useState(false)
   const [appUpdateMessage, setAppUpdateMessage] = useState<string | null>(null)
   /** Avancement du téléchargement en cours (étape 98) — `null` tant qu'aucun octet n'est encore arrivé. */
@@ -303,6 +306,9 @@ export default function OptionsMenu(): JSX.Element {
     if (tab === 'general') {
       void window.jaris.getAppVersionStatus().then(setAppVersionStatus)
       void window.jaris.getAppVersion().then(setInstalledVersion)
+      // Relu à chaque ouverture de l'onglet : l'entrée de démarrage peut avoir été retirée ou désactivée
+      // depuis Windows lui-même (Gestionnaire des tâches) entre-temps.
+      void window.jaris.getLaunchAtStartup().then(setLaunchAtStartupStatus)
       // "Fichiers et moteur local" (Ollama + dossier des modèles) a rejoint Général à l'étape 122, sur
       // demande explicite de Léo — ces deux lectures doivent donc s'armer avec l'onglet, pas avec 'modeles'
       // qui ne montre plus ce bloc depuis ce même correctif (sinon la carte resterait vide au premier clic).
@@ -1049,6 +1055,37 @@ export default function OptionsMenu(): JSX.Element {
                 des modèles) était passé dans Modèles à l'étape 119 en suivant la maquette "Options
                 Jaris.dc.html" — remis ici à l'étape 122 sur demande explicite de Léo ("deplace Fichiers et
                 moteur local avec dossier etc... dans général"), qui l'emporte sur le choix de la maquette. */}
+            {/* Étape 165 (Léo : « dès que le PC démarre on voit la fenêtre Jaris et pas le fond d'écran, et
+                pour l'activer/désactiver »). L'état affiché est celui que Windows a réellement enregistré,
+                relu après chaque bascule (voir launchAtStartup.ts), jamais supposé. */}
+            <SettingGroup title="Démarrage">
+              <SettingRow
+                label="Ouvrir Jaris au démarrage de Windows"
+                description={
+                  launchAtStartup && !launchAtStartup.supported
+                    ? 'Disponible seulement dans la version installée de Jaris.'
+                    : launchAtStartup?.blockedByWindows
+                      ? 'Windows bloque ce lancement : réactive Jaris dans Paramètres → Applications → Démarrage.'
+                      : 'Dès que tu allumes ton PC, la fenêtre de Jaris s\'ouvre en grand, à la place du bureau.'
+                }
+              >
+                <Toggle
+                  label="Ouvrir Jaris au démarrage de Windows"
+                  checked={Boolean(launchAtStartup?.enabled)}
+                  disabled={!launchAtStartup?.supported || savingLaunchAtStartup}
+                  onChange={(next) => {
+                    setSavingLaunchAtStartup(true)
+                    void window.jaris
+                      .setLaunchAtStartup(next)
+                      .then(setLaunchAtStartupStatus)
+                      // En cas d'échec, on relit l'état réel plutôt que de laisser l'interrupteur mentir.
+                      .catch(() => window.jaris.getLaunchAtStartup().then(setLaunchAtStartupStatus))
+                      .finally(() => setSavingLaunchAtStartup(false))
+                  }}
+                />
+              </SettingRow>
+            </SettingGroup>
+
             <SettingGroup title="Mise à jour">
               <SettingRow
                 label="Rechercher une mise à jour"

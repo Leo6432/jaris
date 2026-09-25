@@ -2,6 +2,7 @@ import type {
   AnalysisScope,
   AppMode,
   AppVersionStatus,
+  LaunchAtStartupStatus,
   AudioInputDevice,
   CapacityScanResult,
   ChatMessage,
@@ -113,6 +114,8 @@ declare global {
       stopTestMicrophone: () => void
       setActiveMode: (mode: AppMode) => void
       setOptionsOpen: (open: boolean) => void
+      getLaunchAtStartup: () => Promise<LaunchAtStartupStatus>
+      setLaunchAtStartup: (enabled: boolean) => Promise<LaunchAtStartupStatus>
       getWidgetMode: () => Promise<WidgetMode>
       onWidgetMode: (cb: (mode: WidgetMode) => void) => () => void
       setChatWidgetHeight: (height: number | null) => void
