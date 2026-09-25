@@ -102,9 +102,12 @@ const PERFECT = {
   'Va sur YouTube': ['computer_use_task', { goal: 'Va sur YouTube et cherche un tuto de guitare' }]
 }
 
-function startFakeOllama({ installed, answer }) {
+function startFakeOllama({ installed, answer, dropChat = () => false }) {
   const requests = []
+  let chatCalls = 0
   const server = createServer((req, res) => {
+    // Coupure de connexion (Ollama arrêté ou en train de redémarrer) : la requête meurt sans réponse.
+    if (req.url === '/api/chat' && dropChat(chatCalls++)) return req.socket.destroy()
     let body = ''
     req.on('data', (chunk) => (body += chunk))
     req.on('end', () => {
@@ -130,7 +133,8 @@ function startFakeOllama({ installed, answer }) {
 function runScript(env) {
   return new Promise((resolve) => {
     const proc = spawn(process.execPath, [new URL('./benchmark-models.mjs', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')], {
-      env: { ...process.env, JARIS_ANALYSIS_SCOPE: 'flash', ...env }
+      // Attente d'Ollama raccourcie pour les tests (3 minutes en vrai).
+      env: { ...process.env, JARIS_ANALYSIS_SCOPE: 'flash', JARIS_OLLAMA_WAIT_MS: '400', JARIS_OLLAMA_POLL_MS: '50', ...env }
     })
     let out = ''
     proc.stdout.on('data', (c) => (out += c))
@@ -305,4 +309,82 @@ test('les vérifications jugent le fond, pas la forme (« BTC », « return », 
   assert.equal(isCorrectAnswer(find('Qui est le président'), { toolName: 'search_web', toolArgs: { query: "chef de l'État français" } }), true)
   // Le fond reste exigé : une recherche sans rapport reste fausse.
   assert.equal(isCorrectAnswer(find('Cherche le prix'), { toolName: 'search_web', toolArgs: { query: 'météo Paris' } }), false)
+})
+
+/**
+ * Étape 164 : la deuxième analyse de Léo a noté 0/17 à plusieurs modèles, « fetch failed » sur toutes les
+ * questions — Ollama était injoignable (arrêté ou en train de redémarrer), les modèles n'y étaient pour rien. Et
+ * la reprise prenait ensuite ces faux 0/17 pour des scores.
+ */
+test('Ollama coupé un instant : l’analyse attend son retour et note le VRAI score, jamais un faux 0', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  // Les 3 premières questions tombent sur une coupure, puis Ollama répond de nouveau.
+  const fake = await startFakeOllama({ installed: ['ministral-3:3b'], answer: (_m, p) => perfectAnswer(p), dropChat: (n) => n < 3 })
+  try {
+    const resultsPath = join(dir, 'benchmark-results.md')
+    const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: resultsPath, JARIS_RETEST_ALL: '1' })
+    assert.equal(code, 0, out)
+    assert.match(out, /Ollama ne répond plus/)
+    assert.match(readFileSync(resultsPath, 'utf8'), new RegExp(`\\| ministral-3:3b \\|[^\\n]*\\| ${TEST_CASES.length}/${TEST_CASES.length} \\|`))
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('Ollama qui ne revient pas : l’analyse s’arrête et n’enregistre AUCUN score pour le modèle en cours', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const fake = await startFakeOllama({ installed: ['ministral-3:3b'], answer: (_m, p) => perfectAnswer(p), dropChat: () => true })
+  try {
+    const resultsPath = join(dir, 'benchmark-results.md')
+    const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: resultsPath, JARIS_RETEST_ALL: '1' })
+    assert.notEqual(code, 0, 'l’analyse doit s’arrêter en erreur')
+    assert.match(out, /Ollama ne répond plus : l'analyse s'arrête/)
+    let results = ''
+    try {
+      results = readFileSync(resultsPath, 'utf8')
+    } catch {
+      // Aucun fichier écrit : c'est aussi un bon résultat.
+    }
+    assert.ok(!results.includes('| ministral-3:3b |'), 'aucun faux score ne doit être enregistré')
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('reprise : une ligne sans AUCUNE réponse (0/17, latence « — ») est refaite, pas prise pour un score', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const fake = await startFakeOllama({ installed: ['ministral-3:3b', 'qwen3:1.7b', 'qwen3.5:0.8b'], answer: (_m, p) => perfectAnswer(p) })
+  try {
+    const resultsPath = join(dir, 'benchmark-results.md')
+    // Le vrai fichier de la deuxième analyse de Léo.
+    writeFileSync(
+      resultsPath,
+      [
+        `Version du test de conversation : ${CONVERSATION_TEST_VERSION}`,
+        '',
+        '## Conversation',
+        '',
+        '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
+        '|---|---|---|---|',
+        `| ministral-3:3b | — ms | — tok/s | 0/${TEST_CASES.length} |`,
+        `| qwen3:1.7b | 900 ms | 85.4 tok/s | ${TEST_CASES.length}/${TEST_CASES.length} |`
+      ].join('\n')
+    )
+    const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: resultsPath, JARIS_RETEST_ALL: '1', JARIS_RESUME: '1' })
+    assert.equal(code, 0, out)
+    const tested = new Set(fake.requests.map((r) => r.model))
+    assert.ok(tested.has('ministral-3:3b'), 'un 0/17 sans aucune réponse doit être refait')
+    assert.ok(!tested.has('qwen3:1.7b'), 'un vrai score du test actuel est gardé')
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('aucune question n’est posée avec fetch (qui abandonne au bout de 5 minutes sans réponse)', () => {
+  const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8')
+  assert.ok(!/fetch\(`\$\{OLLAMA_HOST\}\/api\/chat`/.test(script), 'les questions doivent passer par postChat (http.request, sans délai)')
+  assert.equal((script.match(/await postChat\(/g) ?? []).length, 3, 'conversation, vision et code passent tous par postChat')
 })

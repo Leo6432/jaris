@@ -4769,3 +4769,27 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   relance plutôt qu'après — chaque défaut trouvé après coup coûte une relance de plus à quelqu'un d'autre.**
   Régression : `node --test scripts/test-benchmark-cases.mjs` (réponse coupée comptée comme échec — vérifié en
   retirant le garde-fou —, fond jugé plutôt que forme).
+
+- **Étape 164, deuxième analyse de Léo (v0.16.21) : ministral-3:3b, granite4.1:8b, gemma4:26b et qwen3.5:2b-q4_K_M
+  à 0/17, alors que les trois premiers avaient 17/17.** Son fichier de résultats donnait la cause : « fetch failed »
+  sur TOUTES les questions — le script n'arrivait plus du tout à joindre Ollama (arrêté ou en train de redémarrer,
+  par exemple pendant une mise à jour automatique). Les modèles n'y étaient pour rien ; le même script, lancé ici
+  contre un vrai Ollama, donnait 10/10 à granite4.2:3b au même moment. Trois défauts du script, corrigés :
+  1. **aucune réaction à une coupure** : chaque question en erreur de connexion comptait comme ratée. Désormais
+     `postChat` attend qu'Ollama revienne (3 minutes max, en interrogeant `/api/tags`), repose la question, et
+     s'il ne revient pas l'analyse S'ARRÊTE avec un message clair (`OllamaDownError`) sans enregistrer le modèle
+     en cours — jamais un faux 0/17 ;
+  2. **la reprise prenait ces faux 0/17 pour des scores** : c'est ce qui les laissait bloqués d'un lancement à
+     l'autre. Une ligne sans AUCUNE réponse (latence « — ») est maintenant refaite ;
+  3. **trouvé en relisant, pas encore arrivé** : `fetch` (undici) abandonne une requête après 5 minutes sans
+     en-têtes de réponse, et sans streaming Ollama n'en envoie qu'une fois la réponse entière prête. Un gros
+     modèle qui tourne dans la RAM peut réfléchir plus longtemps (qwen2.5-coder:32b : 4 min 30 en moyenne chez
+     Léo, à 30 secondes du seuil). Les questions passent donc par `http.request`, sans délai maximal.
+  **Leçon générale : dans une mesure longue, une panne de l'OUTIL de mesure (ici le serveur Ollama) ne doit jamais
+  s'enregistrer comme un résultat de la chose mesurée** — la distinguer (erreur de connexion vs vraie réponse
+  d'erreur), attendre, et sinon s'arrêter sans rien écrire. Et une reprise ne doit reprendre que de vrais
+  résultats : « une ligne existe » ne veut pas dire « une mesure a eu lieu ».
+  Régression : `node --test scripts/test-benchmark-cases.mjs` — faux Ollama qui coupe VRAIMENT la connexion
+  (socket détruit) : coupure passagère → vrai score noté ; coupure durable → arrêt sans score enregistré ; ligne
+  sans aucune réponse refaite à la reprise ; plus aucune question posée avec `fetch`. Chaque garde-fou vérifié
+  en remettant l'ancien code.

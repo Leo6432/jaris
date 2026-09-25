@@ -17,6 +17,8 @@
  */
 
 import { exec } from 'child_process'
+import { request as httpRequest } from 'http'
+import { request as httpsRequest } from 'https'
 import { readFileSync, statfsSync, writeFileSync } from 'fs'
 import { homedir, totalmem } from 'os'
 import { fileURLToPath } from 'url'
@@ -880,6 +882,75 @@ async function pullModel(model, budgetGb, diskCtx, onBucket) {
  * supportent toutes. Plutôt que de maintenir une liste de compatibilité à la main (fragile, à mettre à
  * jour à chaque nouveau modèle testé), on retente une fois sans `think` si le premier essai échoue.
  */
+/**
+ * Ollama injoignable (arrêté, en train de redémarrer — par exemple pendant une mise à jour automatique) et pas
+ * revenu à temps. Étape 164 : la deuxième analyse de Léo notait alors 0/17 à chaque modèle (« fetch failed » sur
+ * toutes les questions), et la reprise prenait ces faux 0/17 pour des scores. Désormais l'analyse ATTEND qu'Ollama
+ * revienne, et s'arrête proprement s'il ne revient pas : le modèle en cours n'est jamais enregistré.
+ */
+class OllamaDownError extends Error {}
+
+const OLLAMA_WAIT_MS = Number(process.env.JARIS_OLLAMA_WAIT_MS) || 3 * 60 * 1000
+const OLLAMA_POLL_MS = Number(process.env.JARIS_OLLAMA_POLL_MS) || 5000
+
+/**
+ * POST JSON vers Ollama SANS délai maximal. Le `fetch` de Node abandonne une requête après 5 minutes sans en-têtes
+ * de réponse (« fetch failed ») ; or, sans streaming, Ollama n'en envoie qu'une fois la réponse entière prête — un
+ * gros modèle qui tourne dans la RAM peut réfléchir plus longtemps que ça (qwen2.5-coder:32b : 4 min 30 en
+ * moyenne chez Léo). `http.request` n'a aucun délai par défaut. Une erreur de CONNEXION est marquée
+ * `ollamaUnreachable`, pour la distinguer d'une vraie réponse d'erreur d'Ollama.
+ */
+function postJson(path, body) {
+  const url = new URL(path, OLLAMA_HOST)
+  const send = url.protocol === 'https:' ? httpsRequest : httpRequest
+  return new Promise((resolve, reject) => {
+    const req = send(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } }, (res) => {
+      let text = ''
+      res.setEncoding('utf8')
+      res.on('data', (chunk) => (text += chunk))
+      res.on('end', () => resolve({ status: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, text }))
+      res.on('error', (err) => reject(Object.assign(err, { ollamaUnreachable: true })))
+    })
+    req.on('error', (err) => reject(Object.assign(err, { ollamaUnreachable: true })))
+    req.end(JSON.stringify(body))
+  })
+}
+
+/** Vrai si Ollama répond de nouveau dans les OLLAMA_WAIT_MS. */
+async function waitForOllama() {
+  const deadline = Date.now() + OLLAMA_WAIT_MS
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${OLLAMA_HOST}/api/tags`)
+      if (res.ok) return true
+    } catch {
+      // Toujours injoignable.
+    }
+    await new Promise((resolve) => setTimeout(resolve, OLLAMA_POLL_MS))
+  }
+  return false
+}
+
+/** Une question à Ollama : attend son retour s'il est injoignable, et abandonne l'analyse s'il ne revient pas. */
+async function postChat(body) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await postJson('/api/chat', body)
+      if (!res.ok) throw new Error(`${res.status} ${res.text}`)
+      return JSON.parse(res.text)
+    } catch (err) {
+      if (!err.ollamaUnreachable) throw err
+      console.log(`\n  Ollama ne répond plus (${err.message}) : attente de son retour…`)
+      if (attempt >= 3 || !(await waitForOllama())) {
+        throw new OllamaDownError(
+          "Ollama ne répond plus : l'analyse s'arrête. Vérifie qu'Ollama tourne, puis relance l'analyse — elle " +
+            "reprendra là où elle s'était arrêtée."
+        )
+      }
+    }
+  }
+}
+
 async function chatOnce(model, prompt, withThink) {
   const start = performance.now()
   const body = {
@@ -895,14 +966,8 @@ async function chatOnce(model, prompt, withThink) {
   }
   if (withThink) body.think = 'medium'
 
-  const res = await fetch(`${OLLAMA_HOST}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  })
-  const wallMs = performance.now() - start
-  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`)
-  return { wallMs, data: await res.json() }
+  const data = await postChat(body)
+  return { wallMs: performance.now() - start, data }
 }
 
 async function chat(model, prompt) {
@@ -910,6 +975,7 @@ async function chat(model, prompt) {
   try {
     ;({ wallMs, data } = await chatOnce(model, prompt, true))
   } catch (firstErr) {
+    if (firstErr instanceof OllamaDownError) throw firstErr
     try {
       ;({ wallMs, data } = await chatOnce(model, prompt, false))
     } catch {
@@ -941,19 +1007,13 @@ async function chat(model, prompt) {
  */
 async function chatVision(model, prompt, imageBase64) {
   const start = performance.now()
-  const res = await fetch(`${OLLAMA_HOST}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: 'user', content: prompt, images: [imageBase64] }],
-      stream: false,
-      think: false
-    })
+  const data = await postChat({
+    model,
+    messages: [{ role: 'user', content: prompt, images: [imageBase64] }],
+    stream: false,
+    think: false
   })
   const wallMs = performance.now() - start
-  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`)
-  const data = await res.json()
   const evalCount = data.eval_count ?? 0
   const evalDurationS = (data.eval_duration ?? 0) / 1e9
   return {
@@ -982,14 +1042,8 @@ async function chatCodeOnce(model, prompt, withThink) {
   }
   if (withThink) body.think = 'high'
 
-  const res = await fetch(`${OLLAMA_HOST}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  })
-  const wallMs = performance.now() - start
-  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`)
-  return { wallMs, data: await res.json() }
+  const data = await postChat(body)
+  return { wallMs: performance.now() - start, data }
 }
 
 async function chatCode(model, prompt) {
@@ -997,6 +1051,7 @@ async function chatCode(model, prompt) {
   try {
     ;({ wallMs, data } = await chatCodeOnce(model, prompt, true))
   } catch (firstErr) {
+    if (firstErr instanceof OllamaDownError) throw firstErr
     try {
       ;({ wallMs, data } = await chatCodeOnce(model, prompt, false))
     } catch {
@@ -1125,7 +1180,12 @@ async function main() {
   // Étape 162 : une ligne de conversation ne compte comme « déjà faite » que si elle vient du test ACTUEL (même
   // nombre de questions) — une ligne de l'ancien test (x/6) est refaite, jamais reprise telle quelle.
   const madeWithCurrentTest = (tier, row) => tier !== 'conversation' || row.reliability?.endsWith(`/${TEST_CASES.length}`)
-  const alreadyDone = (model, tier) => RESUME && existingRows[tier].has(model) && madeWithCurrentTest(tier, existingRows[tier].get(model))
+  // Étape 164 : une ligne sans AUCUNE réponse (latence « — », toutes les questions en erreur) n'est pas un score :
+  // elle est refaite. C'est ce qui bloquait ministral-3:3b, granite4.1:8b et gemma4:26b à 0/17 chez Léo, notés
+  // pendant qu'Ollama était injoignable.
+  const answeredSomething = (row) => !row.latency?.startsWith('—')
+  const alreadyDone = (model, tier) =>
+    RESUME && existingRows[tier].has(model) && madeWithCurrentTest(tier, existingRows[tier].get(model)) && answeredSomething(existingRows[tier].get(model))
 
   // SCOPED_MODELS/SCOPED_VISION_CANDIDATES/SCOPED_CODE_CANDIDATES (pas MODELS/VISION_CANDIDATES/
   // CODE_CANDIDATES directement) : un run ciblé sur un seul palier (SCOPE) ne doit installer/tester QUE ses
@@ -1431,6 +1491,8 @@ async function main() {
           reasoningAnswers.push({ model, prompt, answer })
         }
       } catch (err) {
+        // Ollama injoignable : l'analyse s'arrête AVANT d'enregistrer ce modèle (jamais un faux 0/17).
+        if (err instanceof OllamaDownError) throw err
         console.log(`ERREUR (${err.message})`)
         errors.push({ model, prompt, message: err.message })
       }
@@ -1474,6 +1536,8 @@ async function main() {
         if (ok) perModel.correct++
         console.log(`${ok ? 'OK' : 'RATÉ'} (réponse: "${r.content.slice(0, 60)}") — ${fmt(r.wallMs, 0)}ms, ${fmt(r.tokPerSec)} tok/s`)
       } catch (err) {
+        // Ollama injoignable : l'analyse s'arrête AVANT d'enregistrer ce modèle (jamais un faux 0/17).
+        if (err instanceof OllamaDownError) throw err
         console.log(`ERREUR (${err.message})`)
         errors.push({ model, prompt, message: err.message })
       }
@@ -1518,6 +1582,8 @@ async function main() {
           `${ok ? 'OK' : 'RATÉ'} (${issues.length} problème(s)${issues.length ? ' : ' + issues[0] : ''}) — ${fmt(r.wallMs, 0)}ms, ${fmt(r.tokPerSec)} tok/s`
         )
       } catch (err) {
+        // Ollama injoignable : l'analyse s'arrête AVANT d'enregistrer ce modèle (jamais un faux 0/17).
+        if (err instanceof OllamaDownError) throw err
         console.log(`ERREUR (${err.message})`)
         errors.push({ model, prompt, message: err.message })
       }
@@ -1547,4 +1613,7 @@ async function main() {
   console.log(`\n(Résultats aussi sauvegardés dans ${RESULTS_PATH})`)
 }
 
-main()
+main().catch((err) => {
+  console.log(`\n${err instanceof OllamaDownError ? err.message : `Erreur : ${err.message}`}`)
+  process.exit(1)
+})
