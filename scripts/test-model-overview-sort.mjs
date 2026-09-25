@@ -35,18 +35,12 @@ function setup({ verifiedToolScoresMd = '', vramMib = 30 * 1024, ramGb = 32 } = 
     fs: {
       readFileSync: (path) => {
         if (String(path).includes('verified-tool-scores.md')) return verifiedToolScoresMd
-        if (String(path).includes('benchmark-results.md')) {
-          const err = new Error('ENOENT')
-          err.code = 'ENOENT'
-          throw err
-        }
         const err = new Error('ENOENT')
         err.code = 'ENOENT'
         throw err
       }
     },
     '../paths': { resourcesRoot: () => '/fake/resources' },
-    './dataLocation': { getDataRoot: () => '/fake/data' },
     './systemResources': { RESOURCE_SAFETY_MARGIN_GB: 4, detectRamGb: () => ramGb },
     './ollama': { getModelInfo: async () => null, getInstalledModelSizeBytes: async () => null }
   }

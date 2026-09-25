@@ -1,9 +1,7 @@
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ModelOverviewEntry, ModelOverviewResult } from '../../shared/ipc'
-import { useModelAnalysis } from '../hooks/useModelAnalysis'
 import { formatModelName } from '../lib/formatModelName'
-import ModelAnalysisProgress from './ModelAnalysisProgress'
 import { ReliabilityBadge } from './OptionsMenu'
 
 /**
@@ -12,9 +10,7 @@ import { ReliabilityBadge } from './OptionsMenu'
  * — la liste COMPLÈTE de tous les modèles candidats de Jaris (tous paliers confondus), pas seulement celui
  * réellement choisi pour la machine de l'utilisateur (déjà visible dans les paliers juste au-dessus).
  *
- * Réutilise `getModelOverview` (déjà utilisé par ModelAnalysisProgress.tsx pendant "Lancer l'analyse", voir
- * hardwareScan.ts) plutôt qu'un nouveau canal IPC : mêmes données, juste affichées en permanence au lieu de
- * seulement pendant un run.
+ * Données : `getModelOverview` (hardwareScan.ts).
  *
  * Léo, juste après avoir vu la première version : "quand on clique sur tout les models on doit ouvrire un
  * page entierement pour ça" — une simple liste dépliée EN PLACE, dans la petite carte "Ce que ta machine
@@ -25,11 +21,9 @@ import { ReliabilityBadge } from './OptionsMenu'
  * revient sur la page Options exactement où elle était, sans perdre l'onglet Modèles en cours. Pas de
  * colonne de navigation à gauche comme la page Options : un seul contenu, rien à onglet ici.
  *
- * Le bouton "Lancer l'analyse" avait été retiré à l'étape 134 (Léo, relayant ChatGPT : « pas bien pour le
- * public » — des dizaines de Go téléchargés et des heures de test, sans le moindre garde-fou). Il revient à
- * l'étape 162, à la demande de Léo (« rajoute le test des appels d'outils pour que je le lance »), sous la forme
- * « Lancer l'analyse complète » : une étape de confirmation dit d'abord la durée et les téléchargements, et
- * l'analyse retente TOUS les modèles avec le nouveau test (voir scripts/benchmark-cases.mjs).
+ * Plus de bouton d'analyse (retiré pour de bon à l'étape 166, comme convenu avec Léo : « après je peux te
+ * donner les scores et après on va enlever l'analyse ») : son analyse complète du 25/09/2026 est recopiée dans
+ * scripts/verified-tool-scores.md, seule source des scores affichés ici.
  *
  * Colonnes Intelligence/Vitesse (Artificial Analysis) : une VERSION ÉDITABLE directement dans le tableau a
  * existé brièvement (étape 122, système de correction manuelle par Léo, persistée dans un fichier propre à
@@ -168,26 +162,6 @@ export default function AllModelsOverview(): JSX.Element {
   const [overview, setOverview] = useState<ModelOverviewResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [sort, setSort] = useState<SortState>(null)
-  // Étape 162, Léo : « rajoute le test des appels d'outils pour que je le lance cet aprem ». Le bouton avait été
-  // retiré (étape 134, « pas bien pour le public ») : il revient derrière une étape de CONFIRMATION qui dit
-  // clairement la durée et les téléchargements, le garde-fou qui manquait à l'époque.
-  const analysis = useModelAnalysis(overview)
-  const [confirmingAnalysis, setConfirmingAnalysis] = useState(false)
-  const [analysisDone, setAnalysisDone] = useState(false)
-
-  const runFullAnalysis = async (): Promise<void> => {
-    setConfirmingAnalysis(false)
-    setAnalysisDone(false)
-    try {
-      await analysis.run('all', true)
-    } catch {
-      // Déjà retenu dans analysis.error et affiché par ModelAnalysisProgress.
-      return
-    }
-    setAnalysisDone(true)
-    // Les nouveaux scores remplacent les anciens dans le tableau.
-    setOverview(await window.jaris.getModelOverview())
-  }
 
   const openPage = async (): Promise<void> => {
     setOpen(true)
@@ -240,36 +214,6 @@ export default function AllModelsOverview(): JSX.Element {
                   </div>
                   {loading && <p className="capacity-scan__status">Chargement...</p>}
 
-                  {overview && !analysis.benchmarking && !confirmingAnalysis && (
-                    <div className="options-menu__all-models-analysis">
-                      <button className="options-menu__action" onClick={() => setConfirmingAnalysis(true)}>
-                        Lancer l'analyse complète
-                      </button>
-                      {analysisDone && <p className="capacity-scan__status">Analyse terminée : le tableau montre les nouveaux scores.</p>}
-                    </div>
-                  )}
-                  {confirmingAnalysis && (
-                    <div className="options-menu__all-models-analysis options-menu__analysis-confirm">
-                      <p>
-                        Jaris va retester TOUS ses modèles avec le nouveau test d'appel d'outils (17 questions, les vrais
-                        outils et les vraies consignes de Jaris), puis choisir les meilleurs pour ta machine.
-                      </p>
-                      <p>
-                        Ça prend plusieurs heures : chaque modèle est téléchargé puis testé, et les gros modèles qui
-                        débordent sur la RAM sont lents. Si le PC s'éteint en route, relance l'analyse : elle reprend
-                        là où elle s'était arrêtée.
-                      </p>
-                      <div className="options-menu__analysis-confirm-actions">
-                        <button className="options-menu__action" onClick={() => void runFullAnalysis()}>
-                          Lancer
-                        </button>
-                        <button className="options-menu__action" onClick={() => setConfirmingAnalysis(false)}>
-                          Annuler
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  <ModelAnalysisProgress state={analysis} modelOverview={overview} retestAll />
                   {sortedEntries && <SortBar sort={sort} onSort={toggleSort} onReset={() => setSort(null)} />}
                   {/* Étape 160 : UN seul tableau. Chaque rôle de Jaris cherche dans tous les modèles ; la colonne
                       Catégorie n'est qu'un repère pour lire la liste, jamais un critère de choix. */}

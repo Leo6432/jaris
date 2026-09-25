@@ -4825,3 +4825,28 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   d'enregistré en développement ; branchement main.ts ; vrai clic sur l'interrupteur). Les gardes de main.ts
   vérifiés en les retirant. **Non vérifiable ici** : une vraie ouverture de session Windows — à confirmer par
   Léo au prochain redémarrage.
+
+- **Analyse des modèles retirée, scores de Léo recopiés (étape 166, comme convenu : « après je peux te donner
+  les scores et après on va enlever l'analyse »).** Son analyse complète du 25/09/2026 (v0.16.23, test v3,
+  17 questions) est dans `scripts/verified-tool-scores.md`, devenu la SEULE source des scores : bouton,
+  confirmation, suivi en direct, IPC `runModelAnalysis`, `spawnBenchmarkScript`/`cleanupUnselectedModels` et
+  la lecture de `benchmark-results.md` local sont retirés ; le script reste un outil de développement (plus
+  embarqué dans l'installeur). **Pourquoi ne plus lire le fichier local** : sans bouton, il ne pourrait plus
+  jamais être remis à jour, et il prime sur les scores vérifiés — un vieux fichier (ex : vision/code mesurés
+  avec l'ancien délai de 5 min de fetch) aurait choisi les modèles pour toujours, en silence.
+  **Relu ligne par ligne AVANT de recopier, pas copié tel quel** : aux 4 questions sans outil, le script
+  comptait juste toute réponse sans appel d'outil, y compris une réponse VIDE ou un appel d'outil écrit en texte
+  (que Jaris lirait à voix haute). Trois scores corrigés à la main depuis les réponses écrites dans le même
+  fichier : command-r:35b 6→2, granite4.1:3b 13→12, phi4-mini 4→3 ; le script compte désormais ces cas faux
+  (`isRealReply`, test v4). **Leçon générale : un score « juste » sur une question sans outil ne prouve rien si
+  le critère est « aucun outil appelé » — le silence et le texte cassé passent aussi ; vérifier que la réponse
+  est une vraie réponse.**
+  **Piège attrapé en recalculant les choix de modèles avant de livrer** : les trois imports Hugging Face
+  n'avaient pas pu être remesurés et gardaient leur score de l'ANCIEN test à 6 questions (celui qui coupait les
+  consignes). Le 6/6 de G9v3-3B passait alors devant qwen3.5:4b (15/17) comme Médium/Puissant/Code sur une carte
+  de 6 Go. Scores retirés : un score d'un autre test n'est pas comparable, même converti en proportion. Test
+  permanent : tout score de conversation doit être sur 17, vision/code sur 3.
+  Choix obtenus (règles inchangées, fiabilité d'abord) : 8 Go/32 Go → Rapide ministral-3:3b, Médium
+  granite4.2:8b (17/17, devant qwen3.5:9b 16/17), Puissant et Code qwen3.8:27b.
+  Régression : `node --test scripts/test-verified-scores.mjs scripts/test-benchmark-cases.mjs
+  scripts/test-options-reorganization-ui.mjs` ; chaque garde-fou vérifié en réintroduisant son défaut.

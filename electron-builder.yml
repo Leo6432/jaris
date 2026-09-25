@@ -33,20 +33,12 @@ extraResources:
   # machine (voir parseVerifiedToolScores, hardwareScan.ts). Sans ce fichier, plus aucun candidat n'a de
   # score connu : le choix retombe sur "le plus gros modèle qui tient en VRAM", sans considération de sa
   # fiabilité en appels d'outils — exactement la version dégradée que l'étape 16 interdit.
-  #
-  # benchmark-models.mjs (le vrai script d'analyse comparative, "Tester tous les modèles et choisir les
-  # meilleurs" dans Options → Modèles) : ne dépend que de modules natifs Node (aucun node_modules à
-  # embarquer, voir benchmarkRunner.ts) — mais était ABSENT d'ici jusqu'à cette ligne, alors que le bouton
-  # qui le lance existe dans l'appli installée : `spawn`ait un fichier inexistant, échec immédiat avec le
-  # code 1 (jamais vu en dev, où le script est bien là dans le dépôt).
+  # Étape 166 : l'analyse des modèles a été retirée de l'application, benchmark-models.mjs/benchmark-cases.mjs
+  # ne sont donc plus embarqués (ils restent un outil de développement dans le dépôt).
   - from: scripts
     to: scripts
     filter:
       - verified-tool-scores.md
-      - benchmark-models.mjs
-      # Étape 162 : questions, outils et consignes du test, importés par benchmark-models.mjs — sans cette
-      # ligne, le script échouerait dès son import dans l'appli installée (même piège que ci-dessus).
-      - benchmark-cases.mjs
   # Recherche web : la configuration du conteneur SearXNG. Docker Desktop ne s'installe pas en silence,
   # donc la recherche web reste indisponible sur une machine qui ne l'a pas (voir README) — mais sur une
   # machine qui l'a déjà, il ne manquait que ces fichiers pour que ça marche.

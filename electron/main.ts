@@ -22,7 +22,7 @@ import { openApp } from './services/appLauncher'
 import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, getMyModelPicks, isUnusedInstalledModel } from './services/hardwareScan'
 import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
-import { runModelAnalysis, runQuickSetup } from './services/benchmarkRunner'
+import { runQuickSetup } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
 import { deleteGeneratedApp, generateApp, getGeneratedAppsDir, listGeneratedApps, loadGeneratedApp } from './services/codeGenerator'
 import { createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
@@ -53,7 +53,6 @@ import { checkAppFreshness, checkForUpdate, getAppVersionStatus, getInstalledVer
 import {
   IPC_CHANNELS,
   IMAGE_TYPES_BY_EXTENSION,
-  type AnalysisScope,
   type AppMode,
   type AudioInputDevice,
   type CapacityScanResult,
@@ -896,9 +895,6 @@ app.whenReady().then(async () => {
     const profile = await getProfile()
     if (!profile) return
     await saveProfile({ ...profile, knownModelCandidates: getAllCandidateModelIds() })
-  })
-  ipcMain.handle(IPC_CHANNELS.runModelAnalysis, async (event, scope?: AnalysisScope, retestAll?: boolean): Promise<CapacityScanResult> => {
-    return runModelAnalysis((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line), scope, { retestAll: retestAll === true })
   })
   ipcMain.handle(IPC_CHANNELS.getMyModelPicks, async () => getMyModelPicks(await getProfile()))
   // Étape 140 : le nom vient du renderer, donc revérifié ICI avant toute suppression — un modèle utilisé par

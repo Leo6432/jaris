@@ -1,22 +1,15 @@
-import { spawn } from 'child_process'
-import { join } from 'path'
-import { config } from '../config'
 import { deleteModel, pullModelIfMissing, ModelTooLargeError, DiskFullError } from './ollama'
-import { getAllCandidateModelIds, localBenchmarkResultsPath, parseLocalBenchmark, pickBestModelsFromBenchmark } from './hardwareScan'
+import { getAllCandidateModelIds, pickBestModelsFromBenchmark } from './hardwareScan'
 import { getProfile, saveProfile } from './profileStore'
-import type { AnalysisScope, CapacityScanResult } from '../../shared/ipc'
-import { resourcesRoot } from '../paths'
+import type { CapacityScanResult } from '../../shared/ipc'
 
 /**
- * Chemin rapide de l'écran d'accueil (CapacityScan.tsx) : contrairement à runModelAnalysis ci-dessous, ne
- * lance JAMAIS scripts/benchmark-models.mjs (donc jamais des dizaines de modèles téléchargés juste pour
- * comparer) — pickBestModelsFromBenchmark (hardwareScan.ts) répond déjà instantanément dès qu'un candidat
- * vérifié (verified-tool-scores.md) couvre le budget de la machine, ce qui est maintenant le cas pour la
- * quasi-totalité des configurations courantes. Ne télécharge QUE les modèles réellement choisis (jusqu'à 5 :
- * rapide/médium/puissant, souvent les mêmes sur une machine contrainte, + vision + le modèle Code rapide),
- * jamais les candidats perdants. `runModelAnalysis` (le vrai test comparatif complet) reste disponible à la
- * main depuis Options → Modèles pour qui veut vérifier/affiner au-delà de ce que verified-tool-scores.md
- * couvre déjà.
+ * Configuration de l'écran d'accueil (CapacityScan.tsx) et de « Retester la configuration » : ne lance JAMAIS
+ * de test de modèles — pickBestModelsFromBenchmark (hardwareScan.ts) choisit instantanément d'après les
+ * scores mesurés par Léo (verified-tool-scores.md, seule source depuis que l'analyse a été retirée de
+ * l'application, étape 166). Ne télécharge QUE les modèles réellement choisis (jusqu'à 5 :
+ * rapide/médium/puissant, souvent les mêmes sur une machine contrainte, + vision + code), jamais les
+ * candidats perdants.
  */
 export async function runQuickSetup(onLine: (line: string) => void): Promise<CapacityScanResult> {
   onLine('Détection du matériel...')
@@ -82,10 +75,7 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
     // Étape 133, Léo : "pour mon palier on a changer de model comment on fait ça me réinstalle pas les
     // nouveaux model direct et désinstalle l'ancien". Ce chemin RAPIDE (verified-tool-scores.md connaît
     // déjà le gagnant, pas de vrai benchmark à lancer) ne faisait QUE télécharger les nouveaux modèles
-    // choisis, sans jamais nettoyer les anciens qu'ils remplacent — contrairement à runModelAnalysis
-    // (l'analyse comparative complète, plus bas) qui a toujours eu cette étape (cleanupUnselectedModels +
-    // le nettoyage dédié du modèle vision). Le mécanisme de nettoyage existait déjà ailleurs dans ce même
-    // fichier, mais n'avait jamais été repris ici.
+    // choisis, sans jamais nettoyer les anciens qu'ils remplacent.
     //
     // `keep` retient, pour chaque rôle, le modèle qui reste RÉELLEMENT en service après ce run : le nouveau
     // choix s'il a bien été téléchargé (pas dans skippedModels), sinon l'ANCIEN choix de ce rôle — sans ce
@@ -139,189 +129,4 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
     skippedModels: skippedList.length ? skippedList : undefined,
     blockedModels: blockedList.length ? blockedList : undefined
   }
-}
-
-/**
- * Lance scripts/benchmark-models.mjs comme un vrai process Node, en streamant chaque ligne de sa sortie
- * via `onLine` au fur et à mesure — plutôt que d'attendre la fin complète (le benchmark peut prendre
- * 20-40+ minutes avec plusieurs modèles à charger un par un). Réutilise le script tel quel (pas de logique
- * dupliquée) : le fichier est bundlé via `extraResources` (electron-builder.yml, `scripts/`), à côté de
- * verified-tool-scores.md — il n'utilise que des modules Node natifs, aucun node_modules à embarquer avec.
- *
- * `spawn(process.execPath, ..., ELECTRON_RUN_AS_NODE: '1')` plutôt que `spawn('node', ...)` : l'exécutable
- * de Jaris (Electron) EST déjà un runtime Node complet, cette variable le fait tourner en pur Node (aucune
- * fenêtre Chromium) — l'appli installée n'a donc jamais besoin d'un `node` système, qu'étape 16 ne garantit
- * jamais (seuls Python et Ollama sont auto-installés). Avant ce correctif, ça plantait immédiatement dans
- * l'appli installée (`spawn('node', ...)` : commande introuvable, ou pire, un `node` système sans rapport
- * qui échouait tout de suite faute de trouver le fichier — les deux ressemblant à "code 1" une fois remonté).
- *
- * `scope` passé en variable d'environnement (JARIS_ANALYSIS_SCOPE) : le script lit lui-même cette variable
- * pour ne tester que les candidats du palier demandé (voir son commentaire sur SCOPE) — jamais interprété
- * ici, seulement transmis tel quel.
- */
-function spawnBenchmarkScript(onLine: (line: string) => void, scope: AnalysisScope, retestAll: boolean): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const scriptPath = join(resourcesRoot(), 'scripts', 'benchmark-models.mjs')
-    const proc = spawn(process.execPath, [scriptPath], {
-      windowsHide: true,
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: '1',
-        OLLAMA_HOST: config.ollama.host,
-        JARIS_ANALYSIS_SCOPE: scope,
-        // Étape 162 : résultats dans le dossier de données (les mises à jour effaçaient ceux du dossier programme).
-        JARIS_RESULTS_PATH: localBenchmarkResultsPath(),
-        // « Tout retester » : ignore les scores déjà vérifiés (ancien test) et reprend là où un run interrompu
-        // s'était arrêté — une analyse complète dure des heures, un PC éteint en route ne doit pas tout perdre.
-        ...(retestAll ? { JARIS_RETEST_ALL: '1', JARIS_RESUME: '1' } : {})
-      }
-    })
-
-    let buffer = ''
-    const handleChunk = (chunk: Buffer): void => {
-      buffer += chunk.toString()
-      let newlineIndex: number
-      while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
-        onLine(buffer.slice(0, newlineIndex))
-        buffer = buffer.slice(newlineIndex + 1)
-      }
-    }
-
-    proc.stdout.on('data', handleChunk)
-    proc.stderr.on('data', handleChunk)
-    proc.on('error', (err) => reject(new Error(`Impossible de lancer le benchmark : ${err.message}`)))
-    proc.on('close', (code) => {
-      if (buffer.trim()) onLine(buffer)
-      if (code === 0) resolve()
-      else reject(new Error(`Le benchmark s'est arrêté avec le code ${code ?? '?'}`))
-    })
-  })
-}
-
-/**
- * Supprime (via l'API Ollama) tout modèle testé par le dernier run — d'après
- * scripts/benchmark-results.md, voir parseLocalBenchmark — qui n'est PAS actuellement retenu par le
- * profil (rapide/médium/puissant/vision) : le benchmark installe tout ce qui manque pour tester à fond,
- * mais rien n'a de raison de rester sur le disque une fois le gagnant de chaque palier connu. Ne touche
- * jamais à un modèle absent de ce fichier (jamais testé par ce script) : uniquement le ménage de ce que le
- * benchmark lui-même a pu faire installer.
- */
-async function cleanupUnselectedModels(onLine: (line: string) => void): Promise<void> {
-  // Un modèle peut avoir été testé sous PLUSIEURS rôles (ex: ministral-3:8b, conversation ET vision) depuis
-  // que parseLocalBenchmark renvoie trois maps séparées par palier (voir son commentaire, hardwareScan.ts) —
-  // l'union des trois donne la liste complète de ce que ce run a pu installer, peu importe le rôle testé.
-  const localBenchmark = parseLocalBenchmark()
-  const tested = [...new Set([...localBenchmark.conversation.keys(), ...localBenchmark.vision.keys(), ...localBenchmark.code.keys()])]
-  if (!tested.length) return
-
-  const profile = await getProfile()
-  const keep = new Set<string>()
-  if (profile?.models?.flash) keep.add(profile.models.flash)
-  if (profile?.models?.medium) keep.add(profile.models.medium)
-  if (profile?.models?.large) keep.add(profile.models.large)
-  if (profile?.visionModel) keep.add(profile.visionModel)
-  if (profile?.codeModel) keep.add(profile.codeModel)
-  // Étape 141 : un modèle choisi à la main dans Chat/Code/Vocal reste en service, jamais supprimé ici.
-  for (const chosen of Object.values(profile?.modelChoices ?? {})) if (chosen) keep.add(chosen)
-
-  const toRemove = tested.filter((model) => !keep.has(model))
-  if (!toRemove.length) {
-    onLine('Rien à supprimer : tous les modèles testés sont retenus par le profil actuel.')
-    return
-  }
-
-  onLine(`Suppression de ${toRemove.length} modèle(s) testé(s) non retenu(s) par le profil actuel...`)
-  for (const model of toRemove) {
-    try {
-      await deleteModel(model)
-      onLine(`  Supprimé : ${model}`)
-    } catch (err) {
-      onLine(`  Échec de la suppression de ${model} : ${err instanceof Error ? err.message : String(err)}`)
-    }
-  }
-}
-
-/**
- * Lance le benchmark (installation des modèles manquants, tests), choisit le meilleur modèle de chaque
- * palier d'après les vrais résultats (pickBestModelsFromBenchmark), l'enregistre dans le profil, supprime
- * les anciens modèles remplacés, puis fait le ménage de tout ce qui a été testé mais n'est finalement
- * retenu par aucun palier (cleanupUnselectedModels) — un seul geste ("Tester tous les modèles et choisir
- * les meilleurs" dans l'onglet Modèles) au lieu d'un scan par taille puis un benchmark séparé qui ne
- * changeait rien aux modèles réellement utilisés.
- *
- * `scope` ('all' par défaut) limite le test à un seul palier — bien plus rapide pour re-tester juste "Puissant"
- * après un changement qui ne concerne que lui, par exemple. Les résultats des autres paliers, déjà connus
- * (scripts/benchmark-results.md), sont conservés tels quels par le script — jamais effacés par un run ciblé,
- * donc pickBestModelsFromBenchmark garde les mêmes choix pour les paliers non re-testés.
- */
-export async function runModelAnalysis(
-  onLine: (line: string) => void,
-  scope: AnalysisScope = 'all',
-  options: { retestAll?: boolean } = {}
-): Promise<CapacityScanResult> {
-  const before = await getProfile()
-
-  await spawnBenchmarkScript(onLine, scope, options.retestAll === true)
-  onLine('')
-
-  onLine("Sélection du meilleur modèle pour chaque palier, d'après les résultats du benchmark…")
-  const picked = await pickBestModelsFromBenchmark()
-
-  // Étape 162 : quand la place manque, l'analyse supprime chaque modèle juste après l'avoir testé — les modèles
-  // choisis ne sont donc pas forcément encore installés. Un échec ici n'arrête pas l'analyse : le rôle concerné
-  // le retéléchargera au prochain usage, comme n'importe quel modèle manquant.
-  for (const model of new Set([picked.models.flash, picked.models.medium, picked.models.large, picked.codeModel])) {
-    try {
-      await pullModelIfMissing(model, onLine)
-    } catch (err) {
-      onLine(`Modèle ${model} non retéléchargé : ${err instanceof Error ? err.message : String(err)}`)
-    }
-  }
-  // Seul le modèle vision n'est jamais installé par le benchmark (pas testé) : les modèles texte/tool-
-  // calling retenus, eux, ont forcément déjà été téléchargés pour être testés (donc déjà passés par ce
-  // même filet de sécurité). Si même le vision le plus léger ne rentre pas, on continue sans lui plutôt que
-  // de faire échouer toute l'analyse pour une fonctionnalité annexe (voir look_at_screen) — texte/outils
-  // restent utilisables.
-  const skippedModels: { model: string; reason: string }[] = []
-  try {
-    await pullModelIfMissing(picked.visionModel, onLine)
-  } catch (err) {
-    if (err instanceof ModelTooLargeError || err instanceof DiskFullError) {
-      onLine(`Modèle vision ${picked.visionModel} ignoré : ${err.message}`)
-      skippedModels.push({ model: picked.visionModel, reason: err.message })
-    } else {
-      throw err
-    }
-  }
-
-  // Les anciens modèles texte/tool-calling remplacés sont nettoyés juste en dessous par
-  // cleanupUnselectedModels (ils ont forcément été testés par ce run, donc suivis par parseLocalBenchmark).
-  // Vision n'a pas de résultat de benchmark (jamais testé) : géré ici à part, seulement s'il a changé —
-  // sinon un ancien modèle vision resterait installé indéfiniment sans jamais être nettoyé.
-  if (before?.visionModel && before.visionModel !== picked.visionModel) {
-    try {
-      await deleteModel(before.visionModel)
-      onLine(`Ancien modèle vision ${before.visionModel} supprimé (remplacé par un meilleur choix).`)
-    } catch (err) {
-      onLine(`Échec de la suppression de l'ancien modèle vision ${before.visionModel} : ${err instanceof Error ? err.message : String(err)}`)
-    }
-  }
-
-  const profile = await getProfile()
-  if (profile) {
-    await saveProfile({
-      ...profile,
-      models: picked.models,
-      visionModel: picked.visionModel,
-      codeModel: picked.codeModel,
-      capacityScanDone: true,
-      // Resynchronise la veille de l'étape 29 au passage : ce run vient de tester tout ce que Jaris connaît.
-      knownModelCandidates: getAllCandidateModelIds()
-    })
-  }
-
-  onLine('')
-  await cleanupUnselectedModels(onLine)
-
-  return { ...picked, skippedModels: skippedModels.length ? skippedModels : undefined }
 }

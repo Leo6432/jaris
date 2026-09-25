@@ -19,13 +19,16 @@
  * Version du test de conversation, écrite en tête du fichier de résultats. Étape 163 : la version 1 (première
  * analyse de Léo, 25/09/2026) n'imposait pas la fenêtre de contexte, et Ollama prenait 4096 — trop peu pour les
  * vraies consignes + 14 outils (~4 600 tokens) : granite4.2 et G9v3-3B refusaient tout, les qwen recevaient des
- * consignes COUPÉES sans prévenir. Tout résultat de conversation sans cette version est donc refait, et ignoré
- * par Jaris en attendant (parseLocalBenchmark, hardwareScan.ts). À augmenter à chaque changement du test.
+ * consignes COUPÉES sans prévenir. Tout résultat de conversation sans cette version est donc refait. À
+ * augmenter à chaque changement du test.
  * Version 3 (même étape, avant la relance de Léo) : une réponse coupée faute de place compte comme un échec,
  * plus comme « aucun outil » (qui passait pour juste sur les questions sans outil) ; vérifications moins
  * pointilleuses sur la forme (« BTC », « return », « guitar »...), pour ne noter que le fond.
+ * Version 4 (étape 166, en relisant l'analyse de Léo) : aux 4 questions sans outil, une réponse VIDE ou un
+ * appel d'outil écrit en texte (« {"name": "get_system_stats", …} », « look_at_screen{…} », « Action : ```json »)
+ * comptait juste — Jaris lirait pourtant ce texte à voix haute, ou ne dirait rien. Compté faux désormais.
  */
-export const CONVERSATION_TEST_VERSION = 3
+export const CONVERSATION_TEST_VERSION = 4
 
 /**
  * Fenêtre de contexte des questions de conversation : la valeur minimale que Jaris utilise en vrai
@@ -376,9 +379,23 @@ export const TEST_CASES = [
   { prompt: "N'éteins surtout pas l'ordinateur, je voulais juste savoir si tu m'entends.", expectedTool: null }
 ]
 
-/** Vrai si la réponse du modèle est celle attendue : bon outil ET bon contenu, ou aucun outil quand il n'en faut pas. */
-export function isCorrectAnswer(testCase, { toolName, toolArgs }) {
-  if (testCase.expectedTool === null) return !toolName
+/**
+ * Vrai si un texte sans appel d'outil est une VRAIE réponse : ni vide, ni un appel d'outil écrit en texte au
+ * lieu d'être réellement fait (JSON avec un nom d'outil, `nom_outil{…}`, bloc « Action : ```json »).
+ */
+export function isRealReply(content) {
+  const text = String(content ?? '').trim()
+  if (!text) return false
+  if (/^(action\s*:\s*)?```/i.test(text)) return false
+  if (/^\{[\s\S]*"(name|tool_name)"\s*:/.test(text)) return false
+  if (/^\[?\s*\{[\s\S]*"(tool_name|parameters|arguments)"\s*:/.test(text)) return false
+  if (/^[a-z_]+\s*\{/.test(text)) return false
+  return true
+}
+
+/** Vrai si la réponse du modèle est celle attendue : bon outil ET bon contenu, ou une vraie réponse sans outil quand il n'en faut pas. */
+export function isCorrectAnswer(testCase, { toolName, toolArgs, content }) {
+  if (testCase.expectedTool === null) return !toolName && isRealReply(content)
   if (toolName !== testCase.expectedTool) return false
   return testCase.check(argsOf(toolArgs))
 }

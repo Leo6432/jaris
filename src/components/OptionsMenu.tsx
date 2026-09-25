@@ -97,8 +97,7 @@ function dedupeAudioOutputs(devices: MediaDeviceInfo[]): MediaDeviceInfo[] {
  * "3/3", "6/6" etc. en petit badge coloré (vert = parfait, ambre = partiel, rouge = raté) plutôt qu'en
  * texte brut au milieu du tableau — un coup d'œil suffit pour repérer les bons/mauvais élèves, pas besoin
  * de lire chaque cellule. "—" (jamais testé) reste un texte neutre, pas un badge. Exporté : réutilisé par
- * MyModelPicks.tsx (modèles choisis pour ta machine) et ModelAnalysisProgress.tsx (analyse comparative
- * complète, toujours lançable via `npm run benchmark:models`), pas seulement ici.
+ * MyModelPicks.tsx (modèles choisis pour ta machine) et AllModelsOverview.tsx, pas seulement ici.
  */
 export function ReliabilityBadge({ value }: { value: string | null }): JSX.Element {
   if (!value) return <span className="options-menu__badge options-menu__badge--none">—</span>

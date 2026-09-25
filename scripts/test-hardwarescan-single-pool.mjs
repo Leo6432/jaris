@@ -97,7 +97,8 @@ test('Rapide et Médium ne débordent JAMAIS sur la RAM, même avec beaucoup de 
   const vramOf = (m) => overview.entries.find((e) => e.model === m).vramGb
   assert.ok(vramOf(r.models.flash) <= 7, `Rapide ${r.models.flash} ne tient pas sur la carte`)
   assert.ok(vramOf(r.models.medium) <= 7, `Médium ${r.models.medium} ne tient pas sur la carte`)
-  assert.equal(r.models.medium, 'qwen3.5:9b', 'Médium = le plus intelligent qui tient ENTIÈREMENT sur la carte')
+  // Étape 166 : granite4.2:8b (17/17) passe devant qwen3.5:9b (16/17) — la fiabilité départage d'abord.
+  assert.equal(r.models.medium, 'granite4.2:8b', 'Médium = le plus fiable, puis le plus intelligent, qui tient ENTIÈREMENT sur la carte')
 })
 
 test('Médium peut être un « gros » modèle quand la carte le permet (plus de liste réservée)', async () => {

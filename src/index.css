@@ -719,19 +719,7 @@ body.body--scan::after {
   color: var(--hud-danger);
 }
 
-/* Rappel "ferme tout le reste pendant l'analyse" — même code couleur ambre que .app__setup-warning (avertit
-   sans alarmer), affiché avant ET pendant tout run (onboarding et ré-analyse depuis Options → Modèles). */
-.options-menu__analysis-notice {
-  font-size: 0.76rem;
-  color: var(--hud-gold);
-  background: rgba(255, 176, 32, 0.08);
-  border: 1px solid rgba(255, 176, 32, 0.3);
-  border-radius: 10px;
-  padding: 8px 14px;
-  margin: 8px 0;
-}
-
-/* Même code couleur ambre que .options-menu__analysis-notice ci-dessus, pour le bandeau "Ollama pas à
+/* Code couleur ambre (avertit sans alarmer), pour le bandeau "Ollama pas à
    jour" (onglet Modèles) — bouton "Mettre à jour" (winget) + lien manuel côte à côte. */
 .options-menu__ollama-warning {
   font-size: 0.76rem;
@@ -861,22 +849,6 @@ body.body--scan::after {
   color: var(--hud-text-faint);
 }
 
-.options-menu__benchmark-log {
-  margin: 4px 0 0;
-  padding: 10px 12px;
-  max-height: 180px;
-  overflow-y: auto;
-  background: rgba(1, 4, 10, 0.6);
-  border: 1px solid rgba(122, 176, 214, 0.2);
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 0.68rem;
-  line-height: 1.5;
-  color: var(--hud-text-dim);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
 .options-menu__model-overview-scroll {
   overflow-x: auto;
 }
@@ -886,32 +858,6 @@ body.body--scan::after {
    conteneur — voir la règle .options-page--models plus bas dans ce fichier, juste après .options-page__body. */
 .options-menu__all-models {
   margin-top: 14px;
-}
-
-/* Bouton "Lancer l'analyse complète" (étape 162) + sa confirmation, en tête de la page "Tous les modèles". */
-.options-menu__all-models-analysis {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  margin: 4px 0 10px;
-}
-
-.options-menu__analysis-confirm {
-  padding: 12px 14px;
-  border: 1px solid var(--hud-line);
-  background: var(--hud-panel-raised);
-}
-
-.options-menu__analysis-confirm p {
-  margin: 0;
-  max-width: 70ch;
-}
-
-.options-menu__analysis-confirm-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
 }
 
 /* Chaque palier dans sa propre carte : plus facile à distinguer d'un seul coup d'œil que 5 tableaux qui
@@ -3445,7 +3391,6 @@ textarea::placeholder {
 .options-menu__models-location-list,
 .options-menu__col-num,
 .capacity-scan__tier-speed,
-.options-menu__benchmark-log,
 code {
   font-family: var(--hud-font-mono);
   font-variant-numeric: tabular-nums;
@@ -3455,7 +3400,6 @@ code {
 
 .app__new-models,
 .options-menu__ollama-warning,
-.options-menu__analysis-notice,
 .app__setup-warning {
   border-radius: 0;
   border-left: 3px solid var(--hud-gold);

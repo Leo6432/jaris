@@ -37,10 +37,9 @@ import {
 const execAsync = promisify(exec)
 const __dirname = dirname(fileURLToPath(import.meta.url))
 /**
- * Où écrire les résultats. Étape 162 : Jaris transmet un chemin dans son dossier de DONNÉES
- * (JARIS_RESULTS_PATH, benchmarkRunner.ts) — à côté du script (dossier du programme), les résultats étaient
- * effacés par la mise à jour suivante, qui remplace tout le dossier du programme. Lancé à la main depuis un
- * terminal, rien ne change : le fichier reste à côté du script.
+ * Où écrire les résultats : à côté du script, sauf si JARIS_RESULTS_PATH en donne un autre (utilisé par les
+ * tests). Depuis l'étape 166, le script n'est plus lancé par Jaris : c'est un outil de développement, dont on
+ * recopie les résultats à la main dans verified-tool-scores.md.
  */
 const RESULTS_PATH = process.env.JARIS_RESULTS_PATH?.trim() || join(__dirname, 'benchmark-results.md')
 
@@ -1301,7 +1300,7 @@ async function main() {
   // Espace disque serré (étape 162) : un modèle téléchargé par CE run est supprimé dès la fin de son DERNIER
   // test (conversation, puis vision, puis code). L'ancien tri par « champion de palier » n'a plus de sens depuis
   // que chaque rôle choisit dans tous les modèles (étape 160) ; Jaris retélécharge ensuite, à la fin de
-  // l'analyse, les modèles qu'il a choisis (runModelAnalysis, benchmarkRunner.ts).
+  // l'analyse, les modèles qu'il a choisis (« Retester la configuration »).
   const lastPhaseOf = (model) => (codeToRun.includes(model) ? 'code' : visionToRun.includes(model) ? 'vision' : 'conversation')
   async function releaseAfterLastTest(model, phase) {
     if (!tightDiskMode || initiallyInstalledSet.has(model) || lastPhaseOf(model) !== phase) return

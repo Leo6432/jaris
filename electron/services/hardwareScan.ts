@@ -1,7 +1,6 @@
 import { exec } from 'child_process'
 import { readFileSync } from 'fs'
 import { resourcesRoot } from '../paths'
-import { getDataRoot } from './dataLocation'
 import { join } from 'path'
 import { promisify } from 'util'
 import { RESOURCE_SAFETY_MARGIN_GB, detectRamGb } from './systemResources'
@@ -711,8 +710,8 @@ export async function computeContextLengthOptions(model: string, currentContext:
 /**
  * Score MMLU-Pro publié (fiche modèle officielle / éditeur), pour donner une idée de l'"intelligence"
  * générale de chaque candidat dans l'onglet Modèles du menu Options — en complément de la vitesse et de la
- * fiabilité d'appel d'outils, qui elles viennent du benchmark local (voir parseLocalBenchmark ci-dessous),
- * pas d'un score publié. Absent = pas de chiffre MMLU-Pro publié trouvé pour ce modèle.
+ * fiabilité d'appel d'outils, qui vient des scores mesurés par Léo (verified-tool-scores.md, voir
+ * parseVerifiedToolScores ci-dessous), pas d'un score publié. Absent = pas de chiffre MMLU-Pro publié trouvé pour ce modèle.
  */
 const INTELLIGENCE_MMLU_PRO: Record<string, number> = {
   'qwen3.5:0.8b': 29.7,
@@ -846,10 +845,9 @@ const ARTIFICIAL_ANALYSIS_SPEED: Record<string, number> = {
 }
 
 /**
- * Une ligne de scripts/benchmark-results.md (mesure RÉELLE faite sur la machine de qui a lancé l'analyse).
- * `speedTokPerSec` reste lue pour rester fidèle au format du fichier (colonne écrite par
- * scripts/benchmark-models.mjs, et lisible telle quelle dedans), mais n'est plus affichée nulle part depuis
- * l'étape 131 — seule `toolCalling` sert encore à choisir les modèles (voir pickBestFrom).
+ * Résultat connu d'un modèle pour un rôle. Depuis l'étape 166, il vient uniquement de
+ * scripts/verified-tool-scores.md (l'analyse locale a été retirée) : `speedTokPerSec` reste donc toujours
+ * `null` — la vitesse affichée est celle publiée par Artificial Analysis.
  */
 export interface LocalBenchmarkEntry {
   speedTokPerSec: number | null
@@ -901,100 +899,15 @@ export function parseVerifiedToolScores(): Record<VerifiedTier, Map<string, stri
 }
 
 /**
- * Relit scripts/benchmark-results.md (généré par `npm run benchmark:models`/le bouton "Lancer l'analyse",
- * voir ce script) s'il existe, pour remonter de vraies mesures faites sur LA machine de l'utilisateur plutôt
- * que des chiffres publiés génériques. Absent (jamais lancé) : renvoie des maps vides, sans faire échouer
- * l'aperçu pour autant. Exportée en plus de son usage dans getModelOverview ci-dessous : sert aussi à
- * benchmarkRunner.ts pour savoir quels modèles ont été testés lors du dernier run (et donc candidats à un
- * nettoyage après coup).
- *
- * **Trois maps séparées par palier (sections "## Conversation/Vision/Code" du fichier), PAS une seule map
- * globale par nom de modèle** — même correctif déjà appliqué à `parseVerifiedToolScores` ci-dessus pour
- * `verified-tool-scores.md`, ici étendu à son fichier jumeau qui l'avait manqué : `ministral-3:8b` (candidat
- * à la fois Médium et Vision, voir MEDIUM_CANDIDATES/VISION_CANDIDATES) a un score de 2/3 en Vision qui, une
- * fois testé LOCALEMENT lors du même run (bouton "Lancer l'analyse"), écrasait silencieusement son propre
- * score de conversation (sur 6) dans une map plate — repéré directement sur une capture d'écran envoyée par
- * Léo montrant "2/3" identique dans les deux paliers, jamais deviné. L'ancien format (une seule table sans
- * section) n'est plus reconnu : un `benchmark-results.md` généré par une version antérieure se lit comme
- * "rien de connu localement" (repli sûr sur verified-tool-scores.md/un re-test, jamais un score corrompu
- * affiché comme s'il était correct) plutôt que d'essayer de le deviner section par section.
- */
-/**
- * Où l'analyse des modèles écrit ses résultats (étape 162) : dans le dossier de données de Jaris, que les mises à
- * jour ne touchent jamais — à côté du script, dans le dossier du programme, la mise à jour suivante les effaçait.
- */
-export function localBenchmarkResultsPath(): string {
-  return join(getDataRoot(), 'benchmark-results.md')
-}
-
-/**
- * Version du test de conversation dont Jaris accepte les résultats locaux (même valeur que
- * CONVERSATION_TEST_VERSION, scripts/benchmark-cases.mjs — scripts/test-benchmark-cases.mjs vérifie qu'elles
- * restent égales). Étape 163 : la première analyse de Léo n'imposait pas la fenêtre de contexte, les consignes
- * étaient coupées pour une partie des modèles (qwen à 5/17, granite4.2 à 0/17). Ces scores faux ne doivent pas
- * choisir ses modèles en attendant la nouvelle analyse : sans cette version, les scores vérifiés s'appliquent.
- */
-export const LOCAL_CONVERSATION_TEST_VERSION = 3
-
-export function parseLocalBenchmark(): Record<VerifiedTier, Map<string, LocalBenchmarkEntry>> {
-  const results: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>> = {
-    conversation: new Map(),
-    vision: new Map(),
-    code: new Map()
-  }
-  // Étape 162 : les résultats vivent désormais dans le dossier de DONNÉES (voir localBenchmarkResultsPath) ;
-  // l'ancien emplacement, à côté du script dans le dossier du programme, reste lu en repli.
-  let raw: string | null = null
-  for (const path of [localBenchmarkResultsPath(), join(resourcesRoot(), 'scripts', 'benchmark-results.md')]) {
-    try {
-      raw = readFileSync(path, 'utf-8')
-      break
-    } catch {
-      // Emplacement suivant.
-    }
-  }
-  if (raw === null) return results
-  const conversationVersion = Number(raw.match(/Version du test de conversation : (\d+)/)?.[1])
-  const acceptConversation = conversationVersion === LOCAL_CONVERSATION_TEST_VERSION
-
-  let currentTier: VerifiedTier | null = null
-  for (const line of raw.split('\n')) {
-    if (line.startsWith('## ')) {
-      const heading = line.slice(3).trim().toLowerCase()
-      currentTier = heading.startsWith('conversation') ? 'conversation' : heading.startsWith('vision') ? 'vision' : heading.startsWith('code') ? 'code' : null
-      continue
-    }
-    if (!currentTier || !line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
-    if (currentTier === 'conversation' && !acceptConversation) continue
-    const cells = line
-      .split('|')
-      .map((c) => c.trim())
-      .filter(Boolean)
-    // v0.15.29 a brièvement ajouté une 5e colonne « Qualité locale ». Elle n'est plus utilisée, mais lire
-    // encore ses fichiers évite de jeter les vrais scores de rôle déjà mesurés par cette version.
-    if (cells.length !== 4 && cells.length !== 5) continue
-
-    const [model, , speed, tool] = cells
-    const speedNum = parseFloat(speed)
-    results[currentTier].set(model, {
-      speedTokPerSec: Number.isFinite(speedNum) ? speedNum : null,
-      toolCalling: tool === '—' ? null : tool
-    })
-  }
-  return results
-}
-
-/**
  * Tous les modèles de Jaris dans UNE seule liste (étape 160, Léo : « enlève puissant, rapide dans tous les
  * modèles, mais garde quand même rapide, moyen pour que les utilisateurs [voient] »). Plus de tableau par
  * palier : chaque modèle apparaît une fois, avec son étiquette (Rapide/Moyen/Puissant, modelCategory), le fait
  * qu'il lise les images, et les rôles où Jaris l'utilise. Trié du plus léger au plus lourd (Léo, étape 132).
  */
 export async function getModelOverview(profile?: Profile | null): Promise<ModelOverviewResult> {
-  const localBenchmark = parseLocalBenchmark()
   const verifiedToolScores = parseVerifiedToolScores()
   const { vramGb } = await detectGpu()
-  const picks = computeModelPicks(vramGb, detectRamGb(), localBenchmark, verifiedToolScores)
+  const picks = computeModelPicks(vramGb, detectRamGb(), verifiedToolScores)
   const activeModels = {
     flash: profile?.models?.flash ?? picks.flash.model,
     medium: profile?.models?.medium ?? picks.medium.model,
@@ -1015,14 +928,14 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
   addUsage(activeModels.code, 'Code')
 
   // Fiabilité affichée : le test de conversation quand le modèle l'a passé (le cas général), sinon celui de
-  // code, sinon celui de vision — une vraie mesure locale primant toujours sur un score vérifié partagé.
+  // code, sinon celui de vision.
   // Chaque table reste lue séparément (VerifiedTier) : un score vision ne remplace jamais un score conversation.
-  const scoreOf = (model: string): { toolCalling: string | null; verifiedSkip: boolean } => {
+  const scoreOf = (model: string): { toolCalling: string | null } => {
     for (const tier of ['conversation', 'code', 'vision'] as VerifiedTier[]) {
-      const toolCalling = localBenchmark[tier].get(model)?.toolCalling ?? verifiedToolScores[tier].get(model) ?? null
-      if (toolCalling) return { toolCalling, verifiedSkip: verifiedToolScores[tier].has(model) }
+      const toolCalling = verifiedToolScores[tier].get(model) ?? null
+      if (toolCalling) return { toolCalling }
     }
-    return { toolCalling: null, verifiedSkip: false }
+    return { toolCalling: null }
   }
 
   const entries: ModelOverviewEntry[] = [...ALL_MODELS]
@@ -1043,19 +956,15 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
 }
 
 /**
- * Résultat connu pour UN candidat donné : une vraie mesure locale (benchmark-results.md) si elle existe,
- * sinon la fiabilité partagée (verified-tool-scores.md, valable pour tout le monde) combinée à une vitesse
- * estimée par formule pour CETTE machine — `undefined` si rien de connu du tout (jamais de chiffre inventé).
+ * Résultat connu pour UN candidat donné : sa fiabilité mesurée (verified-tool-scores.md, valable pour tout le
+ * monde) — `undefined` si rien de connu du tout (jamais de chiffre inventé).
  * Utilisé par computeModelPicks (pickBestFrom l'utilise pour départager les candidats).
  */
 function resolveBenchmarkResult(
   candidate: ModelCandidate,
   tier: VerifiedTier,
-  localBenchmark: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>>,
   verifiedToolScores: Record<VerifiedTier, Map<string, string>>
 ): LocalBenchmarkEntry | undefined {
-  const local = localBenchmark[tier].get(candidate.model)
-  if (local) return local
   const verifiedTool = verifiedToolScores[tier].get(candidate.model)
   if (!verifiedTool) return undefined
   // Pas de vitesse : elle n'était qu'estimée par formule, et n'est plus affichée depuis l'étape 131.
@@ -1075,19 +984,17 @@ function parseToolScore(toolCalling: string | null): number {
 }
 
 /**
- * Cœur PUR (aucun accès disque/réseau ici — localBenchmark/verifiedToolScores déjà lus par l'appelant) du
+ * Cœur PUR (aucun accès disque/réseau ici — verifiedToolScores déjà lus par l'appelant) du
  * choix du meilleur modèle de chaque palier (+ vision) pour un profil matériel donné (vramGb/ramGb/gpuName)
  * — partagé par pickBestModelsFromBenchmark (ce qui est téléchargé) et getMyModelPicks (ce qui est affiché),
  * pour que les deux ne puissent jamais diverger.
  *
- * D'après de vraies mesures — soit un run local du benchmark (parseLocalBenchmark : vitesse + fiabilité
- * mesurées sur CETTE machine), soit, pour un modèle déjà vérifié par ailleurs (parseVerifiedToolScores), sa
- * fiabilité partagée (valable pour tout le monde, elle ne dépend pas du matériel) — jamais en
+ * D'après de vraies mesures — la fiabilité mesurée par Léo (parseVerifiedToolScores, valable pour tout le
+ * monde, elle ne dépend pas du matériel) — jamais en
  * supposant que le plus gros qui rentre est forcément le meilleur. Priorité à la fiabilité, la VRAM du
  * candidat ne départageant qu'à égalité (le plus gros gagne, pas le plus rapide — voir pickBestFrom
- * ci-dessous). Une vraie mesure locale prime toujours sur un score vérifié partagé pour le même modèle (plus
- * précise, spécifique à cette machine). Repli sur pickForBudget (par taille) si aucun candidat n'a de
- * résultat exploitable pour ce palier (jamais testé nulle part, ni localement ni vérifié) — renvoie alors une
+ * ci-dessous). Repli sur pickForBudget (par taille) si aucun candidat n'a de
+ * résultat exploitable pour ce palier (jamais mesuré) — renvoie alors une
  * entrée sans fiabilité connue plutôt qu'un chiffre inventé.
  *
  * Renvoie l'entrée COMPLÈTE (pas juste le nom du modèle) pour chaque palier : getMyModelPicks en a
@@ -1096,7 +1003,6 @@ function parseToolScore(toolCalling: string | null): number {
 function computeModelPicks(
   vramGb: number | null,
   ramGb: number,
-  localBenchmark: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>>,
   verifiedToolScores: Record<VerifiedTier, Map<string, string>>,
   exclude: ReadonlySet<string> = new Set()
 ): {
@@ -1115,7 +1021,7 @@ function computeModelPicks(
   const budgetForCandidate = (model: string): number => (LARGE_RAM_OFFLOAD_MODELS.has(model) ? ramOffloadBudgetGb : budgetGb)
 
   const resultFor = (candidate: ModelCandidate, tier: VerifiedTier): LocalBenchmarkEntry | undefined =>
-    resolveBenchmarkResult(candidate, tier, localBenchmark, verifiedToolScores)
+    resolveBenchmarkResult(candidate, tier, verifiedToolScores)
 
   const entryOf = (model: string, vramGbOfModel: number, result: LocalBenchmarkEntry | undefined): ModelOverviewEntry => ({
     model,
@@ -1254,7 +1160,7 @@ function computeModelPicks(
 
 export async function pickBestModelsFromBenchmark(exclude: ReadonlySet<string> = new Set()): Promise<CapacityScanResult> {
   const { name, vramGb } = await detectGpu()
-  const picks = computeModelPicks(vramGb, detectRamGb(), parseLocalBenchmark(), parseVerifiedToolScores(), exclude)
+  const picks = computeModelPicks(vramGb, detectRamGb(), parseVerifiedToolScores(), exclude)
   return {
     gpuName: name,
     vramGb,
@@ -1273,7 +1179,7 @@ export async function pickBestModelsFromBenchmark(exclude: ReadonlySet<string> =
  */
 export async function pickBestCodeModel(): Promise<string> {
   const { vramGb } = await detectGpu()
-  const picks = computeModelPicks(vramGb, detectRamGb(), parseLocalBenchmark(), parseVerifiedToolScores())
+  const picks = computeModelPicks(vramGb, detectRamGb(), parseVerifiedToolScores())
   return picks.code.model
 }
 
@@ -1294,9 +1200,8 @@ export async function pickBestCodeModel(): Promise<string> {
 export async function getMyModelPicks(profile?: Profile | null): Promise<MyModelPicks> {
   const { name, vramGb } = await detectGpu()
   const ramGb = detectRamGb()
-  const localBenchmark = parseLocalBenchmark()
   const verifiedToolScores = parseVerifiedToolScores()
-  const ideal = computeModelPicks(vramGb, ramGb, localBenchmark, verifiedToolScores)
+  const ideal = computeModelPicks(vramGb, ramGb, verifiedToolScores)
 
   // Étape 138, Léo : "dans le palier rapide j'ai G9v3-3B mais il utilise pas G9v3-3B ça a rien telecharger".
   // La carte affichait le modèle IDÉAL, alors que Jaris utilise celui enregistré dans le profil — les deux
@@ -1316,7 +1221,7 @@ export async function getMyModelPicks(profile?: Profile | null): Promise<MyModel
   const entries = {} as Record<ModelRole, ModelOverviewEntry>
   for (const role of Object.keys(inUse) as ModelRole[]) {
     const model = inUse[role]
-    entries[role] = model === ideal[role].model ? ideal[role] : entryForModel(model, tierOf[role], localBenchmark, verifiedToolScores)
+    entries[role] = model === ideal[role].model ? ideal[role] : entryForModel(model, tierOf[role], verifiedToolScores)
     if (model !== ideal[role].model) {
       upgrades[role] = { model: ideal[role].model, blockedReason: profile?.blockedModels?.[ideal[role].model] ?? null }
     }
@@ -1363,13 +1268,12 @@ export async function isUnusedInstalledModel(model: string, profile?: Profile | 
 function entryForModel(
   model: string,
   tier: VerifiedTier,
-  localBenchmark: Record<VerifiedTier, Map<string, LocalBenchmarkEntry>>,
   verifiedToolScores: Record<VerifiedTier, Map<string, string>>
 ): ModelOverviewEntry {
   return {
     model,
     vramGb: ALL_MODELS.find((c) => c.model === model)?.vramGb ?? 0,
-    toolCalling: localBenchmark[tier].get(model)?.toolCalling ?? verifiedToolScores[tier].get(model) ?? null,
+    toolCalling: verifiedToolScores[tier].get(model) ?? null,
     intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
     artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
     artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[model] ?? null

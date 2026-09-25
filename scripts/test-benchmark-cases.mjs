@@ -69,16 +69,35 @@ test('une réponse n’est juste que si l’outil ET son contenu le sont', () =>
   assert.equal(isCorrectAnswer(reminder, { toolName: 'set_reminder', toolArgs: '{"message":"dentiste","delay_minutes":"20"}' }), true)
 
   const negation = TEST_CASES.find((c) => c.prompt.startsWith("N'éteins"))
-  assert.equal(isCorrectAnswer(negation, { toolName: null, toolArgs: null }), true)
+  assert.equal(isCorrectAnswer(negation, { toolName: null, toolArgs: null, content: 'Oui, je t’entends.' }), true)
   assert.equal(isCorrectAnswer(negation, { toolName: 'shutdown_pc', toolArgs: {} }), false)
 })
 
-test('chaque fichier importé par le script d’analyse est bien embarqué dans l’installeur', () => {
-  const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8')
+// Étape 166 : les vraies réponses fautives relevées dans l'analyse de Léo du 25/09/2026, mot pour mot.
+test('sans outil : une réponse vide ou un appel d’outil écrit en texte compte faux, une vraie phrase compte juste', () => {
+  const noTool = TEST_CASES.find((c) => c.prompt.startsWith("N'éteins"))
+  const fails = [
+    '',
+    '   ',
+    null,
+    '{"name": "get_system_stats", "arguments": {}}',
+    'look_at_screen{"question":"qu\'élément d\'affichage montre l\'heure"}',
+    'Action : ```json\n[\n    {\n        "tool_name": "directly-answer",\n        "parameters": {}\n    }\n]\n```'
+  ]
+  for (const content of fails) assert.equal(isCorrectAnswer(noTool, { toolName: null, toolArgs: null, content }), false, JSON.stringify(content))
+  const passes = [
+    'Oui, je t’entends parfaitement.',
+    "De rien ! Si vous avez besoin d'aide, n'hésitez pas à demander. [look_at_screen]",
+    'Je m’appelle Jaris. Je peux chercher sur le web avec search_web et mémoriser avec remember.'
+  ]
+  for (const content of passes) assert.equal(isCorrectAnswer(noTool, { toolName: null, toolArgs: null, content }), true, content)
+})
+
+test('le script d’analyse n’est plus embarqué dans l’installeur (étape 166 : analyse retirée de Jaris)', () => {
   const builder = readFileSync(new URL('../electron-builder.yml', import.meta.url), 'utf8')
-  const localImports = [...script.matchAll(/from '\.\/([^']+)'/g)].map((m) => m[1])
-  assert.ok(localImports.includes('benchmark-cases.mjs'))
-  for (const file of localImports) assert.match(builder, new RegExp(`- ${file.replace('.', '\\.')}`), `${file} absent de electron-builder.yml`)
+  assert.doesNotMatch(builder, /- benchmark-models\.mjs/)
+  assert.doesNotMatch(builder, /- benchmark-cases\.mjs/)
+  assert.match(builder, /- verified-tool-scores\.md/, 'les scores, eux, restent indispensables à l’application')
 })
 
 // ---------------------------------------------------------------------------------------------------------
@@ -245,11 +264,6 @@ test('la fenêtre de contexte des questions laisse de la place aux vraies consig
   const promptChars = buildBenchmarkSystemPrompt().length + JSON.stringify(TOOLS).length + 200
   assert.ok(CONVERSATION_NUM_CTX >= promptChars / 2.5 + 1024, `fenêtre ${CONVERSATION_NUM_CTX} trop petite pour ~${Math.round(promptChars / 2.5)} tokens`)
   assert.ok(CONVERSATION_NUM_CTX > 4096, 'la valeur par défaut d’Ollama (4096) coupait les consignes')
-})
-
-test('la version du test lue par Jaris est la même que celle écrite par l’analyse', () => {
-  const hardwareScan = readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8')
-  assert.match(hardwareScan, new RegExp(`LOCAL_CONVERSATION_TEST_VERSION = ${CONVERSATION_TEST_VERSION}\\b`))
 })
 
 test('reprise : des scores de conversation d’une version PRÉCÉDENTE du test (même sur 17) sont refaits', async () => {

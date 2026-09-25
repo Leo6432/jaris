@@ -87,7 +87,7 @@ export interface Profile {
   audioOutputDeviceId?: string
   /**
    * Meilleur modèle du mode Code pour cette machine (pickBestCodeModel, hardwareScan.ts), calculé et
-   * enregistré par runQuickSetup/runModelAnalysis (benchmarkRunner.ts) exactement comme `visionModel`
+   * enregistré par runQuickSetup (benchmarkRunner.ts) exactement comme `visionModel`
    * ci-dessus — pas de choix manuel dans Options, resolveCodeModel (codeGenerator.ts) lit cette valeur
    * directement. `undefined` seulement pour un profil créé avant l'étape 46.
    */
@@ -209,15 +209,6 @@ export interface MicTestDonePayload {
 }
 
 /**
- * Périmètre d'un run d'analyse (runModelAnalysis) : 'all' teste tout comme avant, un palier précis ne teste
- * QUE ses propres candidats (bien plus rapide) — utile pour re-tester un seul palier après un changement qui
- * ne concerne que lui (ex: débloquer "Puissant" via VRAM+RAM) sans refaire tourner tout le reste. Les
- * résultats des autres paliers, déjà dans scripts/benchmark-results.md, sont conservés tels quels (voir le
- * commentaire sur la fusion dans benchmark-models.mjs) — jamais effacés par un run ciblé.
- */
-export type AnalysisScope = 'all' | 'flash' | 'medium' | 'large' | 'vision' | 'code'
-
-/**
  * Résultat de l'analyse complète des modèles (étape 13, obligatoire au premier lancement — voir
  * CapacityScan.tsx) : GPU détecté et meilleur modèle mesuré pour chaque palier + vision.
  */
@@ -297,14 +288,6 @@ export interface ModelOverviewEntry {
   readsImages?: boolean
   toolCalling: string | null
   intelligence: number | null
-  /**
-   * true si ce modèle est présent dans scripts/verified-tool-scores.md pour SON palier : même un
-   * modèle déjà mesuré localement une fois reste, lui aussi, exclu du prochain run de
-   * scripts/benchmark-models.mjs s'il est vérifié. Sert à ModelAnalysisProgress.tsx (OptionsMenu.tsx) pour
-   * distinguer, dans le tableau de suivi en direct, un modèle qui ne sera JAMAIS touché par ce run (jamais
-   * de ##MODEL_TESTING##/##MODEL_DONE## le concernant) d'un modèle simplement pas encore commencé.
-   */
-  verifiedSkip?: boolean
   /**
    * Intelligence Index publié directement par Artificial Analysis — voir
    * ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX dans hardwareScan.ts pour la version et la date de vérification.
@@ -573,10 +556,7 @@ export const IPC_CHANNELS = {
   getModelOverview: 'jaris:get-model-overview',
   getOllamaVersionStatus: 'jaris:get-ollama-version-status',
   updateOllama: 'jaris:update-ollama',
-  /** renderer -> main : lance le benchmark complet (scripts/benchmark-models.mjs) puis choisit et active le
-   * meilleur modèle de chaque palier d'après les résultats (résout une fois toute l'analyse terminée). */
-  runModelAnalysis: 'jaris:run-model-analysis',
-  /** main -> renderer : une ligne de sortie du benchmark en cours, au fil de l'eau (progression comprise, voir OptionsMenu.tsx). */
+  /** main -> renderer : une ligne de progression de la configuration (runQuickSetup), au fil de l'eau. */
   modelBenchmarkLine: 'jaris:model-benchmark-line',
   /** renderer -> main : modèles choisis pour CETTE machine, sans rien télécharger (voir getMyModelPicks,
    * hardwareScan.ts) — écran d'accueil et Options → Modèles. */

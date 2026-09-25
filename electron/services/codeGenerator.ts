@@ -363,7 +363,7 @@ function describeDownloadFailure(err: unknown): Error | null {
  * machine, EXACTEMENT comme les paliers flash/médium/puissant/vision — pas de choix manuel dans Options, à
  * la demande explicite de Léo ("pourquoi mettre un menu déroulant, et pas directement mettre les meilleurs
  * modèles par palier comme vision"). `profile.codeModel` est le pick déjà calculé et enregistré par
- * runQuickSetup/runModelAnalysis (benchmarkRunner.ts) — lu directement ici sans le recalculer, exactement
+ * runQuickSetup (benchmarkRunner.ts) — lu directement ici sans le recalculer, exactement
  * comme `profile.visionModel` (voir assistant.ts). `pickBestCodeModel()` ne sert plus que de repli pour un
  * profil créé avant l'étape 46 (jamais passé par un scan qui l'aurait renseigné).
  */

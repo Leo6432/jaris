@@ -6,7 +6,7 @@ import type { UpdateProgress } from '../../shared/ipc'
  * travaille — demande de Léo : "quand on demande une mise à jour on ne sait pas quand c'est terminé".
  *
  * Réutilise TELLE QUELLE la famille de barres de progression déjà partagée par l'analyse des modèles
- * (`.options-menu__progress*`, voir ModelAnalysisProgress.tsx) plutôt que d'inventer une barre à côté :
+ * (`.options-menu__progress*`) plutôt que d'inventer une barre à côté :
  * même leçon que le bouton d'envoi du composeur (étape 92) et les boutons du mode Code (étape 94) — quand
  * une famille existe déjà, s'y raccrocher avant d'en créer une nouvelle.
  *

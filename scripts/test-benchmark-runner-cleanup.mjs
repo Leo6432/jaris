@@ -10,8 +10,7 @@ import ts from 'typescript'
  *
  * Étape 133, Léo : "pour mon palier on a changer de model comment on fait ça me réinstalle pas les nouveaux
  * model direct et désinstalle l'ancien". Avant ce correctif, runQuickSetup téléchargeait bien les nouveaux
- * modèles choisis, mais ne supprimait JAMAIS les anciens qu'ils remplacent — contrairement à
- * runModelAnalysis (l'analyse comparative complète), qui a toujours eu ce nettoyage. Les tests ci-dessous
+ * modèles choisis, mais ne supprimait JAMAIS les anciens qu'ils remplacent. Les tests ci-dessous
  * exercent runQuickSetup avec un `deleteModel`/`pullModelIfMissing` simulés (aucun vrai réseau, aucun vrai
  * Ollama) pour vérifier QUELS modèles sont réellement supprimés, sans jamais toucher au disque ou au réseau.
  */
@@ -58,7 +57,6 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
 
   const hardwareScanModule = {
     getAllCandidateModelIds: () => ['ignoré-dans-ce-test'],
-    parseLocalBenchmark: () => ({ conversation: new Map(), vision: new Map(), code: new Map() }),
     pickBestModelsFromBenchmark: async (exclude = new Set()) => {
       pickCalls.push([...exclude])
       const p = exclude.size && repick ? repick(exclude) : picked
