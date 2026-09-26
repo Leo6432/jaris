@@ -240,6 +240,33 @@ test('JARIS_ONLY_MODELS : seuls les modèles demandés sont testés, dans leur �
   }
 })
 
+// Étape 169 : G9v3-3B (1,9 Go) « sauté (trop gros ou téléchargement impossible) » chez Léo, sans aucun moyen
+// de savoir lequel des deux — alors que le vrai message d'Ollama était connu du script.
+test('un modèle sauté donne sa VRAIE raison, dans le suivi en direct et dans le fichier de résultats', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const fake = await startFakeOllama({ installed: [], answer: (_m, p) => perfectAnswer(p) })
+  try {
+    const resultsPath = join(dir, 'benchmark-nouveaux-modeles.md')
+    const { code, out } = await runScript({
+      OLLAMA_HOST: fake.host,
+      JARIS_ANALYSIS_SCOPE: 'all',
+      JARIS_RESULTS_PATH: resultsPath,
+      JARIS_RESUME: '1',
+      JARIS_ONLY_MODELS: 'hf.co/openbmb/MiniCPM5-1B-GGUF',
+      // Marge minimale : la machine de test a peu de RAM, le modèle doit être jugé téléchargeable.
+      JARIS_RAM_SAFETY_MARGIN_GB: '0.1'
+    })
+    assert.equal(code, 0, out)
+    const skipped = out.split('\n').find((l) => l.startsWith('##MODEL_SKIPPED## hf.co/openbmb/MiniCPM5-1B-GGUF'))
+    assert.ok(skipped, out)
+    assert.match(skipped, /téléchargement impossible : .+/, 'la raison doit suivre le nom du modèle')
+    assert.match(readFileSync(resultsPath, 'utf8'), /## Modèles non testés[\s\S]*MiniCPM5-1B-GGUF\*\* : téléchargement impossible/)
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('reprise : un modèle déjà passé au NOUVEAU test est sauté, une ligne de l’ANCIEN test (x/6) est refaite', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
   const fake = await startFakeOllama({ installed: ['ministral-3:3b', 'qwen3:1.7b', 'qwen3.5:0.8b'], answer: (_m, p) => perfectAnswer(p) })

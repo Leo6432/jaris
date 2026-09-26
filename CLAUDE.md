@@ -4885,3 +4885,16 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   d'un modèle installé sans score et non demandé : le test échoue bien sans le filtre.
   Régression : `node --test scripts/test-benchmark-cases.mjs scripts/test-hardwarescan-single-pool.mjs
   scripts/test-options-reorganization-ui.mjs`.
+
+- **« sauté (trop gros ou téléchargement impossible) » ne disait pas lequel des deux (étape 169).** Léo : pour
+  devstral-2:123b c'est normal, mais G9v3-3B (1,9 Go) « il y a assez de place ». Le script connaissait la vraie
+  cause (message d'Ollama) mais ne la transmettait pas : le bouton affichait une phrase générique qui couvrait
+  deux causes opposées. `##MODEL_SKIPPED## <modèle> <raison>` porte maintenant la vraie raison (« trop gros pour
+  ce PC (~75 Go, 28 Go disponibles) » ou « téléchargement impossible : <message d'Ollama> »), affichée telle
+  quelle et écrite dans une section « Modèles non testés » du fichier de résultats — même principe que pour les
+  outils : relayer le vrai message plutôt qu'un résumé qui cache la cause. Cause probable pour G9v3-3B (import
+  hf.co/) : Ollama 0.34.2, dont le téléchargement depuis Hugging Face est cassé (corrigé en 0.34.3, sortie le
+  19/09/2026) — pas confirmé tant que Léo n'a pas relancé avec le message affiché.
+  Régression : `node --test scripts/test-benchmark-cases.mjs` (téléchargement refusé par le faux Ollama : la raison
+  suit le nom du modèle et figure dans le fichier ; vérifié en retirant la raison, le test échoue) et
+  `scripts/test-options-reorganization-ui.mjs` (la raison s'affiche dans le suivi).

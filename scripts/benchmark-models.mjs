@@ -1261,12 +1261,18 @@ async function main() {
   // jamais un remplacement du vrai contrôle.
   const missing = missingAll.filter((m) => modelWeightGb(m) <= budgetFor(m))
   const tooLargeUpfront = missingAll.filter((m) => modelWeightGb(m) > budgetFor(m))
+  // Étape 169 : la VRAIE raison d'un modèle sauté, transmise avec ##MODEL_SKIPPED## et écrite dans le fichier de
+  // résultats — Léo voyait seulement « sauté (trop gros ou téléchargement impossible) » pour G9v3-3B, un modèle de
+  // 1,9 Go qui ne pouvait évidemment pas être trop gros, sans aucun moyen de savoir ce qui avait échoué.
+  const skipReasons = new Map()
   if (tooLargeUpfront.length) {
     console.log(`${tooLargeUpfront.length} modèle(s) ignoré(s) d'emblée (trop gros pour cette machine) :`)
     for (const m of tooLargeUpfront) {
-      console.log(`  ${m} ignoré : ~${modelWeightGb(m).toFixed(1)} Go estimés, au-delà des ${budgetFor(m).toFixed(1)} Go disponibles`)
-      // Lu par le tableau de suivi en direct (OptionsMenu.tsx) : ce modèle ne sera jamais testé ce run-ci.
-      console.log(`##MODEL_SKIPPED## ${m}`)
+      const reason = `trop gros pour ce PC (~${modelWeightGb(m).toFixed(1)} Go, ${budgetFor(m).toFixed(1)} Go disponibles)`
+      console.log(`  ${m} ignoré : ${reason}`)
+      skipReasons.set(m, reason)
+      // Lu par le suivi en direct (UnscoredModelsTest.tsx) : ce modèle ne sera jamais testé ce run-ci.
+      console.log(`##MODEL_SKIPPED## ${m} ${reason}`)
     }
     console.log('')
   }
@@ -1359,6 +1365,7 @@ async function main() {
       })
     } catch (err) {
       ok = false
+      skipReasons.set(model, `téléchargement impossible : ${err.message}`)
       if (err instanceof ModelTooLargeError || err instanceof DiskFullError) {
         console.log(`  ${model} ignoré : ${err.message}`)
       } else {
@@ -1483,6 +1490,13 @@ async function main() {
       lines.push('')
     }
 
+    if (skipReasons.size) {
+      lines.push('## Modèles non testés')
+      lines.push('')
+      for (const [model, reason] of skipReasons) lines.push(`- **${model}** : ${reason}`)
+      lines.push('')
+    }
+
     // Écrit aussi le rapport dans un fichier : plus simple à envoyer/coller ailleurs qu'à faire défiler et
     // copier depuis le terminal, surtout avec autant de modèles testés d'affilée.
     writeFileSync(RESULTS_PATH, lines.join('\n'), 'utf-8')
@@ -1492,7 +1506,7 @@ async function main() {
   for (const model of toRun) {
     const ready = await ensureReady(model)
     if (!ready) {
-      console.log(`##MODEL_SKIPPED## ${model}`)
+      console.log(`##MODEL_SKIPPED## ${model} ${skipReasons.get(model) ?? ''}`.trimEnd())
       continue
     }
     console.log(`\n=== ${model} ===`)
@@ -1544,7 +1558,7 @@ async function main() {
   for (const model of visionToRun) {
     const readyVision = await ensureReady(model)
     if (!readyVision) {
-      console.log(`##MODEL_SKIPPED## ${model}`)
+      console.log(`##MODEL_SKIPPED## ${model} ${skipReasons.get(model) ?? ''}`.trimEnd())
       continue
     }
     console.log(`\n=== ${model} (vision) ===`)
@@ -1586,7 +1600,7 @@ async function main() {
   for (const model of codeToRun) {
     const readyCode = await ensureReady(model)
     if (!readyCode) {
-      console.log(`##MODEL_SKIPPED## ${model}`)
+      console.log(`##MODEL_SKIPPED## ${model} ${skipReasons.get(model) ?? ''}`.trimEnd())
       continue
     }
     console.log(`\n=== ${model} (code) ===`)

@@ -12,7 +12,7 @@ import { formatModelName } from '../lib/formatModelName'
  * L'ancien tableau listait les ~40 modèles « En attente », ce qui faisait croire à Léo que tout allait être
  * retéléchargé.
  */
-type Row = { model: string; status: 'done' | 'skipped'; correct?: number; total?: number }
+type Row = { model: string; status: 'done' | 'skipped'; correct?: number; total?: number; reason?: string }
 type Phase = 'idle' | 'confirming' | 'running' | 'done' | 'error'
 
 export default function UnscoredModelsTest(): JSX.Element | null {
@@ -42,7 +42,8 @@ export default function UnscoredModelsTest(): JSX.Element | null {
       } else if (marker === '##MODEL_DONE##') {
         upsert({ model: args[0], status: 'done', correct: Number(args[1]), total: Number(args[2]) })
       } else if (marker === '##MODEL_SKIPPED##') {
-        upsert({ model: args[0], status: 'skipped' })
+        // Étape 169 : la vraie raison, jamais un « trop gros ou téléchargement impossible » générique.
+        upsert({ model: args[0], status: 'skipped', reason: args.slice(1).join(' ') || undefined })
       }
     })
   }, [phase])
@@ -113,7 +114,7 @@ export default function UnscoredModelsTest(): JSX.Element | null {
               {rows.map((row) => (
                 <li key={row.model}>
                   {formatModelName(row.model)} :{' '}
-                  {row.status === 'done' ? `${row.correct}/${row.total}` : 'sauté (trop gros ou téléchargement impossible)'}
+                  {row.status === 'done' ? `${row.correct}/${row.total}` : `sauté — ${row.reason ?? 'raison inconnue'}`}
                 </li>
               ))}
             </ul>

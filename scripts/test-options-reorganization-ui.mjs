@@ -411,13 +411,13 @@ test('« Tester les modèles sans score » : nomme les modèles, confirme, puis 
     assert.equal(width, '50%')
     await page.evaluate(() => {
       window.__benchLine('##MODEL_DONE## nemotron-3.5-lightning:30b 16 17')
-      window.__benchLine('##MODEL_SKIPPED## qwen2.5-coder:14b')
+      window.__benchLine('##MODEL_SKIPPED## qwen2.5-coder:14b téléchargement impossible : pull model manifest: file does not exist')
       window.__finishTest()
     })
     await page.waitForSelector('.options-menu__unscored button:has-text("Ouvrir le fichier des résultats")')
     const results = await page.textContent('.options-menu__unscored-results')
     assert.match(results, /16\/17/)
-    assert.match(results, /sauté/)
+    assert.match(results, /sauté — téléchargement impossible : pull model manifest: file does not exist/)
     // Habillé par le CSS de Jaris (carte), pas du texte nu.
     assert.equal(await page.$eval('.options-menu__unscored', (el) => getComputedStyle(el).borderStyle), 'solid')
   })
