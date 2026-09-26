@@ -71,12 +71,15 @@ en anglais) — aucun appel d'outil réussi.
 | command-r:35b | 2/17 |
 | mistral-small3.2:24b | 17/17 |
 | glm-4.7-flash:q4_K_M | 17/17 |
+| nemotron-3.5-lightning:30b | 17/17 |
+| hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 12/17 |
 
-Les trois imports Hugging Face (LFM2.5-1.2B, MiniCPM5-1B, G9v3-3B) n'ont PAS de score : leur téléchargement a
-été ignoré sur la machine de Léo, et leurs anciens scores (0/6, 2/6, 6/6) venaient de l'ancien test à 6
-questions, celui qui coupait les consignes faute de place. Gardé, le 6/6 de G9v3-3B passait devant des modèles
-mesurés sur 17 (qwen3.5:4b, 15/17) sur les cartes de 6 Go — pour un score jamais vérifié avec le vrai test.
-Sans score, Jaris ne les choisit plus ; à remesurer quand l'import Hugging Face remarchera.
+nemotron-3.5-lightning:30b et G9v3-3B : mesurés le 26/09/2026 par le bouton « Tester les modèles sans score »
+(test version 4, même machine), après la mise à jour d'Ollama qui répare les téléchargements depuis Hugging Face.
+G9v3-3B : 12/17 — son ancien 6/6 (ancien test à 6 questions, consignes coupées) était donc bien trop flatteur.
+
+LFM2.5-1.2B et MiniCPM5-1B (imports Hugging Face, plus dans la liste de Jaris) n'ont pas de score : leurs anciens
+scores venaient de l'ancien test à 6 questions.
 
 ## Vision — compréhension d'image
 
@@ -98,7 +101,7 @@ contrairement aux questions de conversation de ce même run (voir CONVERSATION_T
 ## Code — génération de code
 
 Même analyse (25/09/2026), qwen2.5-coder:32b remesuré en entier le soir même (3/3 : la mesure précédente,
-2/2, était incomplète).
+2/2, était incomplète). qwen2.5-coder:14b : mesuré le 26/09/2026 (bouton « Tester les modèles sans score »).
 
 | Modèle | Fiabilité |
 |---|---|
@@ -108,4 +111,5 @@ Même analyse (25/09/2026), qwen2.5-coder:32b remesuré en entier le soir même 
 | north-mini-code-1.0 | 3/3 |
 | qwen2.5-coder:32b | 3/3 |
 | devstral-small-2:24b | 3/3 |
+| qwen2.5-coder:14b | 3/3 |
 | qwen2.5-coder:7b | 3/3 |

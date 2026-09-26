@@ -223,6 +223,9 @@ test('JARIS_ONLY_MODELS : seuls les modèles demandés sont testés, dans leur �
       JARIS_ANALYSIS_SCOPE: 'all',
       JARIS_RESULTS_PATH: resultsPath,
       JARIS_RESUME: '1',
+      // Ces deux modèles ont désormais un score (26/09/2026) : RETEST_ALL isole le filtre de ce test du contenu
+      // de verified-tool-scores.md. Sans le filtre, ministral-3:3b et les autres installés seraient testés aussi.
+      JARIS_RETEST_ALL: '1',
       JARIS_ONLY_MODELS: 'nemotron-3.5-lightning:30b,qwen2.5-coder:14b'
     })
     assert.equal(code, 0, out)

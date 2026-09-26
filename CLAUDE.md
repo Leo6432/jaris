@@ -4919,3 +4919,15 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   installeur fermé → « pas à jour » revient ; `installerPending` renvoyé) et
   `scripts/test-options-reorganization-ui.mjs` (pas de second bouton pendant l'installeur, « à jour » sans
   redémarrer). Vérifiés en retirant chaque correctif.
+
+- **Scores des modèles sans score, mesurés par Léo (étape 171, bouton « Tester les modèles sans score »,
+  26/09/2026, test v4).** nemotron-3.5-lightning:30b 17/17, G9v3-3B 12/17, qwen2.5-coder:14b 3/3 en code ;
+  devstral-2:123b sauté (75 Go, 59 Go disponibles). Réponses sans outil relues avant de recopier : toutes de
+  vraies phrases (celles de G9v3-3B sont maladroites — « Je t'appelle Jaris » — mais comptent). Le 12/17 de
+  G9v3-3B confirme le retrait de son ancien 6/6 (étape 166) : l'ancien test était bien trop flatteur.
+  Effet sur les choix (règles inchangées) : Lightning devient Rapide sur les cartes de 32 Go et plus (264 tokens/s
+  publiés, 17/17) ; aucun changement jusqu'à 24 Go — rien ne change pour la machine de Léo.
+  **Piège évité** : le test du filtre `JARIS_ONLY_MODELS` utilisait Lightning et qwen2.5-coder:14b, sans score au
+  moment de l'écrire ; une fois leurs scores recopiés, ils étaient sautés d'office et le test ne mesurait plus le
+  filtre. Il force maintenant `JARIS_RETEST_ALL` pour ne plus dépendre du contenu de verified-tool-scores.md
+  (vérifié : il échoue toujours sans le filtre).
