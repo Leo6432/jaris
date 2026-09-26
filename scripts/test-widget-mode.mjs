@@ -191,3 +191,21 @@ test('le Chat relit son fil en redevenant visible (une question posée depuis le
   )
   assert.match(chatPanelSource, /visibilitychange[\s\S]{0,300}?getChatHistory\(\)/)
 })
+
+// Étape 176, Léo : « si je clique sur une autre application il disparaît sans widget… il montre le widget
+// que quand je diminue la page avec le bouton ». Même code des deux côtés : seule la perte de focus arrive
+// EN PLEIN changement de fenêtre active de Windows.
+test('perte de focus : le widget s’affiche APRÈS la bascule de Windows, sans voler le focus, et c’est vérifié', () => {
+  const blur = /win\.on\(['"]blur['"],[\s\S]{0,600}?\}\);/.exec(mainSource)?.[0] ?? ''
+  assert.match(blur, /win\.hide\(\)/)
+  assert.match(blur, /setTimeout\(\(\) => revealWidgetAfterLeaving\(win\)/, 'le widget ne doit plus s’afficher pendant la bascule')
+  assert.doesNotMatch(blur, /showWidgetWindow\(\)/, 'plus d’affichage direct dans le handler blur')
+
+  const reveal = /function revealWidgetAfterLeaving\([\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
+  assert.match(reveal, /showWidgetWindow\(\)[\s\S]*setTimeout\([\s\S]*widgetWindow\.isVisible\(\)[\s\S]*showWidgetWindow\(\)/,
+    'le widget doit être revérifié, et réaffiché s’il manque')
+  assert.match(reveal, /win\.isVisible\(\)\)\s*return/, 'jamais de widget si la grande fenêtre est revenue entre-temps')
+
+  const show = /function showWidgetWindow\([\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
+  assert.match(show, /showInactive\(\)/, 'hors barre Chat, le widget ne doit pas reprendre le focus à l’appli cliquée')
+})

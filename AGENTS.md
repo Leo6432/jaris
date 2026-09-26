@@ -4969,3 +4969,22 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   que le code refusait de dessiner — toute attente dans un test doit être bornée et échouer avec un message.
   Régression : `node --test scripts/test-image-generation.mjs scripts/test-benchmark-runner-cleanup.mjs
   scripts/test-options-reorganization-ui.mjs`, chaque garde vérifiée en réintroduisant son défaut.
+
+- **Le petit Jaris n'apparaissait que par le bouton « réduire » (étape 176, Léo : « si je clique sur une autre
+  application il disparaît sans widget, si je clique sur une autre application en bas il disparaît sans widget,
+  si je fais raccourci capture d'écran il disparaît sans widget… il montre le widget que quand je diminue la page
+  avec le bouton »)**. Il a fallu TROIS questions à choix simples pour arriver à cette phrase : ma première
+  lecture (« widget invisible car pas redessiné ») était fausse — la réduction, qui affiche le MÊME widget par le
+  MÊME code, marchait. **Leçon générale : quand un chemin marche et un autre non, et qu'ils appellent le même
+  code, la cause est dans ce qui les DIFFÉRENCIE (ici le moment de l'appel), pas dans le code partagé — chercher
+  la différence avant de corriger le code commun.** Différence ici : 'blur' arrive EN PLEIN changement de fenêtre
+  active de Windows (l'autre appli prend la main) ; 'minimize' non. Le widget, affiché à cet instant avec `show()`
+  (qui tente de prendre le focus), entrait en conflit avec la bascule. Corrigé : la grande fenêtre se cache tout
+  de suite, le widget s'affiche 80 ms plus tard (`revealWidgetAfterLeaving`), avec `showInactive()` (ne reprend
+  jamais le focus à l'appli cliquée ; la barre Chat, qui a besoin du clavier, garde `show()` + `focus()`), puis
+  on VÉRIFIE 400 ms après qu'il est bien visible et on le réaffiche une fois sinon — un widget absent laisse
+  Jaris joignable seulement près de l'horloge. « Toujours au-dessus » réaffirmé à chaque affichage. Rien si la
+  grande fenêtre est revenue entre-temps, ni en mode Code (aucun widget, à dessein). **Non vérifiable ici (pas
+  de Windows) : que ce soit bien la cause exacte — le mécanisme est déduit de la seule différence entre les deux
+  chemins, à confirmer par Léo en usage réel.** Régression : `node --test scripts/test-widget-mode.mjs`
+  (structurel), vérifié en remettant l'affichage direct puis `show()`.

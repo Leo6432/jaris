@@ -351,8 +351,13 @@ function createFullWindow(showWhenReady = true): BrowserWindow {
     // prennent le focus — ce n'est pas Léo qui change d'appli, la fenêtre doit rester affichée.
     if (Date.now() < loginRevealUntil) return
     win.hide()
-    showWidgetWindow()
     applyListeningForActiveMode()
+    // Étape 176 (Léo : « si je clique sur une autre application il disparaît sans widget… il montre le
+    // widget que quand je diminue la page avec le bouton ») : réduire marchait, perdre le focus non, alors
+    // que les deux appelaient exactement le même code. Seule différence : ici, on est EN PLEIN changement de
+    // fenêtre active de Windows (l'autre appli prend la main). Afficher le widget à cet instant précis
+    // entrait en conflit avec cette bascule. On attend qu'elle soit finie, puis on vérifie qu'il est là.
+    setTimeout(() => revealWidgetAfterLeaving(win), WIDGET_AFTER_BLUR_DELAY_MS)
   })
   win.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -483,6 +488,23 @@ function showFullWindow(): void {
  * une fine bande horizontale flottant par-dessus les autres applis ("ça fait sa avec google chatgpt claude
  * partout").
  */
+/** Délai avant d'afficher le widget après une perte de focus : juste le temps que Windows finisse la bascule. */
+const WIDGET_AFTER_BLUR_DELAY_MS = 80
+
+/**
+ * Étape 176 : affiche le widget une fois la bascule de Windows terminée, puis VÉRIFIE qu'il est bien là et le
+ * réaffiche une fois sinon — un widget qui manque laisse Jaris invisible, seulement joignable près de l'horloge.
+ */
+function revealWidgetAfterLeaving(win: BrowserWindow): void {
+  if (quitting || win.isDestroyed() || win.isVisible()) return
+  showWidgetWindow()
+  setTimeout(() => {
+    if (quitting || activeMode === 'code' || win.isDestroyed() || win.isVisible()) return
+    if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) return
+    showWidgetWindow()
+  }, 400)
+}
+
 function showWidgetWindow(forceExpanded = false): void {
   if (fullWindow && !fullWindow.isDestroyed() && fullWindow.isVisible()) return
   // Depuis le mode Code, Jaris disparaît complètement : "ça doit rien faire aucun widget" (Léo). Un widget
@@ -503,16 +525,22 @@ function showWidgetWindow(forceExpanded = false): void {
   const voice = currentWidgetMode() === 'voice'
   const expanded = voice ? forceExpanded || lastEmotion !== 'idle' : forceExpanded
   positionWidgetWindow(widgetWindow, expanded)
-  widgetWindow.show()
   // Le raccourci + part souvent pendant qu'une autre application a le focus. Afficher la barre Chat sans
   // lui donner le focus obligerait à recliquer dedans avant d'écrire, alors que + vient précisément de
   // demander cette saisie. Le widget vocal, lui, ne vole jamais le focus pendant une activation à la voix.
   if (displayedWidgetMode === 'chat') {
+    widgetWindow.show()
     widgetWindow.focus()
     startChatPointerWatch()
   } else {
+    // Étape 176 : showInactive, pas show() — show() tentait de reprendre le focus à l'application sur
+    // laquelle Léo vient de cliquer, au moment même où Windows la lui donne.
+    widgetWindow.showInactive()
     stopChatPointerWatch()
   }
+  // Réaffirmé à chaque affichage : Windows peut perdre le « toujours au-dessus » d'une fenêtre cachée puis
+  // réaffichée, et le widget passerait alors derrière l'application ouverte.
+  widgetWindow.setAlwaysOnTop(true, 'floating')
 }
 
 /** La touche + ouvre la forme du mode actif : barre écrite en Chat, écoute visible en Agent vocal. */
