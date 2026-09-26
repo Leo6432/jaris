@@ -175,6 +175,11 @@ export interface ConversationEntry {
   timestamp: string
   transcript: string
   reply: string
+  /**
+   * Étape 173 : NOM du fichier PNG d'une image dessinée par Jaris (dossier generated-images), jamais l'image
+   * elle-même — le Chat la relit sur le disque pour la réafficher après un redémarrage.
+   */
+  image?: string
 }
 
 /**
@@ -389,7 +394,9 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   /**
-   * Aperçu (data URL) d'une image jointe par l'utilisateur, étape 91 — UNIQUEMENT pour l'affichage dans le
+   * Aperçu (data URL) d'une image jointe par l'utilisateur, étape 91 — ou, depuis l'étape 173, d'une image
+   * DESSINÉE par Jaris (message assistant, relue sur le disque à partir de ConversationEntry.image). Pour une
+   * image jointe par l'utilisateur, UNIQUEMENT pour l'affichage dans le
    * fil pendant la session en cours. Jamais renvoyé par le main process ni écrit dans
    * conversation-history.json : y stocker du base64 ferait grossir ce fichier de plusieurs mégaoctets par
    * image, pour une vignette que personne ne relit. Rouvrir Jaris remontre donc la question et la réponse,

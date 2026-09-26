@@ -91,6 +91,12 @@ export const CAPABILITIES: CapabilityGroup[] = [
         toolNames: ['computer_use_task']
       },
       {
+        title: 'Dessiner une image',
+        description: "Crée l'image que tu décris, sur ton PC, et l'affiche dans le Chat. La toute première fois, environ 5 Go sont téléchargés.",
+        example: 'dessine-moi un chat roux sur un canapé bleu',
+        toolNames: ['generate_image']
+      },
+      {
         title: "Te dire l'état de la machine",
         description: 'Processeur, mémoire, carte graphique, température.',
         example: 'ça chauffe, mon PC ?',

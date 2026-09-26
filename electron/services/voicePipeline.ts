@@ -268,6 +268,7 @@ export class VoicePipeline extends EventEmitter {
 
       let reply = ''
       let aborted = false
+      let generatedImage: string | undefined
       try {
         const profile = await getProfile()
         // Étape 47 : session partagée avec le mode Chat (conversationSession.ts), relue à chaque tour plutôt
@@ -284,7 +285,12 @@ export class VoicePipeline extends EventEmitter {
           live,
           'voice',
           undefined,
-          (cue) => this.emit('soundCue', cue)
+          (cue) => this.emit('soundCue', cue),
+          (image) => {
+            // Étape 173 : pas de Chat à l'écran en voix, l'image s'ouvre dans la visionneuse de Windows (main.ts).
+            generatedImage = image.fileName
+            this.emit('image', image.path)
+          }
         )
         if (gpuStatus.action === 'warn') reply = `${gpuStatus.message} ${reply}`
       } catch (err) {
@@ -320,7 +326,7 @@ export class VoicePipeline extends EventEmitter {
       // fois. Ne retarde jamais la réponse déjà en train d'être dite (this.speak juste après).
       void extractMemoryFromExchange(combined, reply, (message) => this.emit('log', message))
 
-      await this.speak(reply, combined)
+      await this.speak(reply, combined, generatedImage)
       break
     }
 
@@ -337,7 +343,7 @@ export class VoicePipeline extends EventEmitter {
     }
   }
 
-  private async speak(reply: string, transcript = ''): Promise<void> {
+  private async speak(reply: string, transcript = '', image?: string): Promise<void> {
     try {
       const audio = await synthesizeSpeech(reply)
       const audioBuffer = audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer
@@ -351,7 +357,8 @@ export class VoicePipeline extends EventEmitter {
           id: randomUUID(),
           timestamp: new Date().toISOString(),
           transcript,
-          reply
+          reply,
+          ...(image ? { image } : {})
         })
       }
 

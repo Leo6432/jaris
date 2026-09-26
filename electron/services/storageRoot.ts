@@ -37,7 +37,7 @@ export const AUTO_ROOT_NAME = 'Jaris-data'
  * Ce que Jaris écrit lui-même dans son dossier de données, et RIEN d'autre : jamais les fichiers internes de
  * Chromium qui partageaient autrefois le même dossier.
  */
-export const OWNED_ENTRIES = ['conversations', 'conversation-history.json', 'profile.json', 'memory', 'generated-apps', 'reminders.json']
+export const OWNED_ENTRIES = ['conversations', 'conversation-history.json', 'profile.json', 'memory', 'generated-apps', 'generated-images', 'reminders.json']
 
 interface StorageMarker {
   root?: unknown

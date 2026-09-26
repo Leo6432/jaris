@@ -8,6 +8,7 @@ import { searchWeb } from './webSearch'
 import { readWebPage } from './webPage'
 import { clickMouse, mediaKey, pressKey, typeText } from './inputControl'
 import { getSystemStatsText, shutdownPc } from './systemControl'
+import { generateImage, type GeneratedImage } from './imageGenerator'
 
 export const TOOLS: OllamaTool[] = [
   {
@@ -261,6 +262,29 @@ export const TOOLS: OllamaTool[] = [
   {
     type: 'function',
     function: {
+      name: 'generate_image',
+      description:
+        "Dessine une image (illustration, photo, logo, paysage...) à partir d'une description, entièrement sur " +
+        "l'ordinateur de l'utilisateur. N'appelle cet outil que si l'utilisateur demande de CRÉER une image " +
+        "(dessine, génère une image, fais-moi une image de...), jamais pour regarder l'écran ou décrire une " +
+        'image existante.',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: {
+            type: 'string',
+            description:
+              "Description détaillée de l'image à dessiner, EN ANGLAIS (sujet, décor, style, lumière, cadrage), " +
+              'ex: "a ginger cat sitting on a blue sofa, realistic photo, soft daylight".'
+          }
+        },
+        required: ['prompt']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'shutdown_pc',
       description:
         "Éteint ou redémarre l'ordinateur. Action CRITIQUE et irréversible : n'appelle cet outil que si " +
@@ -277,14 +301,20 @@ export const TOOLS: OllamaTool[] = [
   }
 ]
 
+/** Début de la réponse d'une image réussie (court-circuit d'assistant.ts : jamais reformulée par le modèle). */
+export const IMAGE_DONE_REPLY = 'Voilà ton image.'
+
 type ReminderFireHandler = (message: string) => void
 type LogHandler = (message: string) => void
+/** Étape 173 : reçoit chaque image dessinée (le Chat l'affiche, la voix l'ouvre). */
+export type ImageHandler = (image: GeneratedImage) => void
 
 export function createToolExecutor(
   onReminderFire: ReminderFireHandler,
   visionModel: string,
   onLog?: LogHandler,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onImage?: ImageHandler
 ) {
   return async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
     switch (name) {
@@ -317,6 +347,11 @@ export function createToolExecutor(
         return getSystemStatsText()
       case 'media_control':
         return mediaKey(String(args.action ?? ''))
+      case 'generate_image': {
+        const image = await generateImage(String(args.prompt ?? ''), onLog, signal)
+        onImage?.(image)
+        return IMAGE_DONE_REPLY
+      }
       case 'shutdown_pc':
         return shutdownPc(Boolean(args.restart))
       default:

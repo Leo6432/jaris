@@ -2294,6 +2294,12 @@ p.capacity-scan__tier-missing {
   margin-bottom: 8px;
 }
 
+/* Étape 173 : une image dessinée est le résultat lui-même, pas une vignette jointe. */
+.chat-panel__message-image--generated {
+  max-height: min(512px, 60vh);
+  margin: 10px 0 0;
+}
+
 /* --- Espace de travail partagé : Chat et mode Code (étape 97) ------------- */
 
 /* Colonne de gauche façon Claude/ChatGPT, demandée par Léo ("les conversation et code fait comme claude ou

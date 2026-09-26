@@ -435,3 +435,31 @@ export async function deleteModel(model: string): Promise<void> {
     throw new Error(`Échec de la suppression de ${model} (Ollama a répondu ${response.status})`)
   }
 }
+
+/**
+ * Décharge de la mémoire (carte graphique et RAM) tous les modèles qu'Ollama garde « au chaud » (étape 173,
+ * génération d'images) : Ollama garde un modèle chargé plusieurs minutes après une réponse, et le modèle de
+ * dessin ne tiendrait pas en plus sur une carte 8 Go. `keep_alive: 0` sur /api/generate est la méthode
+ * documentée par Ollama pour décharger un modèle tout de suite. Ne lève jamais : Ollama injoignable = rien
+ * de chargé, donc rien à libérer. Renvoie les modèles déchargés (pour le journal).
+ */
+export async function unloadOllamaModels(): Promise<string[]> {
+  try {
+    const response = await fetch(`${config.ollama.host}/api/ps`)
+    if (!response.ok) return []
+    const data = (await response.json()) as { models?: { name?: string; model?: string }[] }
+    const loaded = (data.models ?? []).map((m) => m.model ?? m.name ?? '').filter(Boolean)
+    await Promise.all(
+      loaded.map((model) =>
+        fetch(`${config.ollama.host}/api/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model, keep_alive: 0 })
+        }).catch(() => undefined)
+      )
+    )
+    return loaded
+  } catch {
+    return []
+  }
+}

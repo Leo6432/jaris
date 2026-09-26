@@ -4,7 +4,7 @@ import { config } from '../config'
 import { chatWithOllama, listInstalledModels, type OllamaMessage, type ThinkLevel } from './ollama'
 import { listMemoryTitles } from './memoryStore'
 import { getProfile } from './profileStore'
-import { TOOLS, createToolExecutor } from './tools'
+import { TOOLS, createToolExecutor, type ImageHandler } from './tools'
 import { didAppLaunch } from './appLauncher'
 import { GPU_TEMP_LIMIT_C, pickSafeModel, type LiveGpuStatus } from './hardwareScan'
 import { checkOverloadWarning } from './resourceMonitor'
@@ -330,7 +330,9 @@ export async function converse(
   // succès/échec) ne viennent PAS d'ici : la voix les tire déjà de ses propres transitions d'émotion
   // (voicePipeline.ts), et le chat les émet lui-même autour de cet appel (chatSession.ts) — cette fonction
   // ne connaît que les outils, jamais l'état ambiant du canal appelant.
-  onSoundCue?: (cue: SoundCue) => void
+  onSoundCue?: (cue: SoundCue) => void,
+  // Étape 173 : reçoit l'image dessinée par generate_image (voir ImageHandler, tools.ts).
+  onImage?: ImageHandler
 ): Promise<string> {
   const socialReply = directSocialReply(prompt)
   if (socialReply) {
@@ -340,7 +342,7 @@ export async function converse(
 
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
-  const executeTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel, onLog, signal)
+  const executeTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel, onLog, signal, onImage)
 
   const noteText = requestedNotepadText(prompt)
   if (noteText !== undefined) {
@@ -610,6 +612,13 @@ export async function converse(
       // une carte 8 Go, donc repasser par qwen3.5 pour reformuler forcerait un
       // rechargement complet. Le modèle de vision répond déjà comme Jaris.
       if (call.function.name === 'look_at_screen') {
+        return finalize(result)
+      }
+
+      // Étape 173 : l'image est déjà affichée (Chat) ou ouverte (voix) par onImage. Repasser par le modèle de
+      // conversation le rechargerait sur la carte graphique qu'on vient de libérer pour le dessin, pour
+      // n'ajouter qu'une phrase — et un petit modèle pourrait décrire une image qu'il n'a jamais vue.
+      if (call.function.name === 'generate_image') {
         return finalize(result)
       }
 

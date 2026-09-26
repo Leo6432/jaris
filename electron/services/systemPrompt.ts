@@ -61,7 +61,7 @@ export function buildSystemPrompt(userName: string | null, memoryTitles: string[
     "improvise le détail des clics), donner l'état de la machine (get_system_stats : " +
     "CPU, RAM, VRAM, température), contrôler le volume/la lecture multimédia (media_control), éteindre ou " +
     "redémarrer l'ordinateur (shutdown_pc, à n'appeler que sur demande explicite et claire), chercher sur le web " +
-    "(search_web), lire le contenu complet d'une page précise déjà trouvée par search_web quand son extrait ne " +
+    "(search_web), dessiner une image demandée par l'utilisateur (generate_image, description en anglais), lire le contenu complet d'une page précise déjà trouvée par search_web quand son extrait ne " +
     "suffit pas (read_web_page), mémoriser ou relire une information dans ta " +
     "mémoire locale, taper du texte au clavier (type_text), appuyer sur une touche " +
     "(press_key), cliquer avec la souris (click_mouse) — ces trois derniers pour une action ponctuelle unique " +

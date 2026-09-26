@@ -8,6 +8,7 @@ import { extractMemoryFromExchange } from './memoryExtractor'
 import { getLiveGpuStatus } from './hardwareScan'
 import { getProfile } from './profileStore'
 import { checkGpuTempSafety } from './resourceMonitor'
+import { readGeneratedImageDataUrl, type GeneratedImage } from './imageGenerator'
 import type { ChatMessage, SoundCue } from '../../shared/ipc'
 
 /**
@@ -47,9 +48,10 @@ class ChatSession {
     if (this.loaded) return
     this.loaded = true
     const pastEntries = await getConversationHistory(MAX_VISIBLE_MESSAGES / 2)
-    this.visible = pastEntries.flatMap((entry): ChatMessage[] => [
+    const images = await Promise.all(pastEntries.map((entry) => (entry.image ? readGeneratedImageDataUrl(entry.image) : null)))
+    this.visible = pastEntries.flatMap((entry, i): ChatMessage[] => [
       { role: 'user', content: entry.transcript },
-      { role: 'assistant', content: entry.reply }
+      { role: 'assistant', content: entry.reply, ...(images[i] ? { image: images[i] as string } : {}) }
     ])
   }
 
@@ -130,6 +132,8 @@ class ChatSession {
     }
 
     let reply: string
+    // Étape 173 : image dessinée pendant ce tour (generate_image), affichée sous la réponse et gardée sur le disque.
+    let generated: GeneratedImage | null = null
     try {
       const profile = await getProfile()
       // Étape 47 : session partagée avec le pipeline vocal (conversationSession.ts), relue à chaque envoi —
@@ -147,7 +151,10 @@ class ChatSession {
             live,
             'chat',
             onToken,
-            onSoundCue
+            onSoundCue,
+            (image) => {
+              generated = image
+            }
           )
       if (gpuStatus.action === 'warn') reply = `${gpuStatus.message}\n\n${reply}`
     } catch (err) {
@@ -169,14 +176,17 @@ class ChatSession {
     // Exactement comme à la voix : la mémoire longue durée s'enrichit toute seule, et l'échange rejoint
     // l'historique commun (onglet Historique du menu Options, et amorçage du contexte au prochain lancement).
     void extractMemoryFromExchange(prompt, reply, onLog)
+    const image = generated as GeneratedImage | null
     await appendConversationEntry({
       id: randomUUID(),
       timestamp: new Date().toISOString(),
       transcript: prompt,
-      reply
+      reply,
+      ...(image ? { image: image.fileName } : {})
     })
 
-    return this.pushVisible({ role: 'assistant', content: reply })
+    const imageUrl = image ? await readGeneratedImageDataUrl(image.fileName) : null
+    return this.pushVisible({ role: 'assistant', content: reply, ...(imageUrl ? { image: imageUrl } : {}) })
   }
 
   private pushVisible(message: ChatMessage): ChatMessage {

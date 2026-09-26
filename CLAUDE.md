@@ -4939,3 +4939,33 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   le script (outil de développement) : `JARIS_ONLY_MODELS`, la vraie raison des modèles sautés, la marge RAM
   réglable — tous couverts par test-benchmark-cases.mjs. Un test d'interface vérifie qu'aucun bouton « Tester »
   ni « analyse » ne revient dans « Tous les modèles ».
+
+- **Génération d'images en local (étape 173, Léo : « existe-t-il des modèles locaux image » puis « oui » à
+  stable-diffusion.cpp + FLUX.2 [klein] 4B)**. Licences vérifiées AVANT de choisir : sd.cpp MIT, FLUX.2 klein 4B
+  Apache 2.0 ; Wan2GP écarté par Léo (« il vont devoir avoir une licence »), Qwen-Image-2.1 écarté après
+  vérification (licence réservée à la recherche). Nouveau `imageGenerator.ts` : sd-cli.exe Vulkan (NVIDIA/AMD/
+  Intel sans CUDA, 32 Mo) + 3 fichiers de modèle (~5 Go), téléchargés au premier dessin avec avancement dans le
+  journal. **Tout est figé** : tag exact du programme, révision exacte de chaque fichier Hugging Face (jamais
+  `main`), empreinte SHA-256 recalculée sur le fichier reçu AVANT de le mettre à son nom final — un fichier
+  présent sous son nom final est donc toujours complet et vérifié (la taille suffit ensuite). Décompression par
+  `tar.exe` de Windows via execFile, description passée en UN argument de `spawn` (jamais un shell), chevrons
+  retirés (sd.cpp lit `<lora:…>` dans le texte comme un fichier à charger). La carte graphique est libérée AVANT
+  le dessin (`unloadOllamaModels` : `/api/ps` puis `keep_alive: 0`, méthode documentée d'Ollama), et le résultat
+  court-circuite la conversation comme look_at_screen : recharger le modèle de conversation sur la carte qu'on
+  vient de libérer, pour une phrase, serait absurde. Chat : l'image s'affiche en grand sous la réponse et se
+  réaffiche après un redémarrage (seul son NOM de fichier est écrit dans l'historique, relu uniquement dans
+  `generated-images` — jamais un chemin venu du disque). Voix : l'image s'ouvre dans la visionneuse de Windows.
+  Les images suivent les données de Léo (`OWNED_ENTRIES`), le moteur suit « Déplacer » (nouvelle brique).
+  **Vérifié POUR DE VRAI avant d'écrire le code** (sd.cpp compilé pour processeur sur le conteneur, fichiers
+  réellement téléchargés, empreintes conformes) : la commande documentée produit bien une image (6 min sur
+  processeur en 512 px). **Et une vraie surprise** : « un chat roux assis sur un canapé bleu » en FRANÇAIS a
+  dessiné un CHIEN. D'où la description demandée en ANGLAIS au modèle (paramètre de l'outil + consignes).
+  **Leçon générale : un modèle « multilingue » sur le papier ne l'est pas forcément dans un usage précis —
+  essayer la vraie phrase de l'utilisateur, dans sa langue, avant de décider du format d'entrée.**
+  Conséquence assumée : l'outil s'ajoute aux copies d'outils/consignes du script de test des modèles (15 outils
+  au lieu de 14) ; les scores existants ont été mesurés avec 14 outils — écart jugé minime, pas de remesure.
+  Piège revécu : le test d'interface du Chat lit le CSS COMPILÉ (`out/renderer`) — sans `npm run build` avant,
+  il vérifie l'ancien style et échoue (ou pire, passe) sur un état qui n'est plus le code.
+  **Non vérifiable ici, à confirmer par Léo** : la vitesse et la mémoire réelles sur sa carte (Vulkan, 1024 px),
+  et la qualité perçue. Régression : `node --test scripts/test-image-generation.mjs` (+ chat-session-restore,
+  chat-conversations-ui, models-location) ; chaque garde vérifiée en réintroduisant son défaut.

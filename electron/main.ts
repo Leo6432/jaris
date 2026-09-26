@@ -587,6 +587,8 @@ async function startVoicePipeline(): Promise<void> {
   pipeline.on('reply', (payload: VoiceReplyPayload) => broadcast(IPC_CHANNELS.reply, payload))
   pipeline.on('log', (message: string) => broadcast(IPC_CHANNELS.log, message))
   pipeline.on('soundCue', (cue: SoundCue) => broadcast(IPC_CHANNELS.soundCue, cue))
+  // Étape 173 : une image dessinée à la voix s'ouvre dans la visionneuse de Windows (pas de Chat à l'écran).
+  pipeline.on('image', (path: string) => void shell.openPath(path))
   pipeline.on('micTestLevel', (level: number) => broadcast(IPC_CHANNELS.micTestLevel, { level }))
   pipeline.on('micTestDone', (detected: boolean) => broadcast(IPC_CHANNELS.micTestDone, { detected }))
   // Arrêt d'urgence déclenché par la sécurité thermique GPU (voicePipeline/resourceMonitor) : un vrai

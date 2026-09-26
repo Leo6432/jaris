@@ -45,7 +45,9 @@ export function bricks(): Brick[] {
     // Jaris ? ») : la voix de Jaris range son modèle HORS du cache HuggingFace, dans ~/.cache/<cache_dir> du
     // modèle par défaut (supertonic/config.py, supertonic==1.3.1 : DEFAULT_MODEL = "supertonic-3" -> "supertonic3").
     // À revoir si requirements.txt change de version de Supertonic (garde-fou : test-models-location.mjs).
-    { label: 'la voix de Jaris (Supertonic)', link: join(profile, '.cache', 'supertonic3'), subdir: 'supertonic-cache' }
+    { label: 'la voix de Jaris (Supertonic)', link: join(profile, '.cache', 'supertonic3'), subdir: 'supertonic-cache' },
+    // Étape 173 : le moteur et le modèle de dessin (environ 5 Go, voir imageGenerator.ts).
+    { label: "la génération d'images", link: join(local, 'Jaris', 'image-generation'), subdir: 'image-generation' }
   ]
 }
 

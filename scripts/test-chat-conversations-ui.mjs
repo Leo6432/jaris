@@ -28,6 +28,9 @@ try {
 const projectRoot = fileURLToPath(new URL('..', import.meta.url))
 const entryPath = join(projectRoot, 'tmp-chat-conversations-entry.tsx')
 
+/** PNG 8x8 gris, pour une vraie image décodable par le navigateur. */
+const PNG_8x8 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAAAAADhZOFXAAAAEElEQVR4nGNoaGBgYGBgAAAHCAEBw3tAvAAAAABJRU5ErkJggg==', 'base64')
+
 /** Faux main process : deux conversations, chacune avec ses propres messages. */
 const ENTRY = `
 import { createRoot } from 'react-dom/client'
@@ -36,7 +39,10 @@ import Panel from './src/components/ChatPanel'
 const THREADS = {
   a: [
     { role: 'user', content: 'parle moi des chats' },
-    { role: 'assistant', content: 'Les chats dorment beaucoup.' }
+    { role: 'assistant', content: 'Les chats dorment beaucoup.' },
+    { role: 'user', content: 'dessine-moi un chat' },
+    // Étape 173 : image dessinée par Jaris (PNG 8x8 réel), renvoyée par le main sur le message assistant.
+    { role: 'assistant', content: 'Voilà ton image.', image: 'data:image/png;base64,${Buffer.from(PNG_8x8).toString('base64')}' }
   ],
   b: [{ role: 'user', content: 'recette de crêpes' }]
 }
@@ -202,4 +208,27 @@ test('supprimer une conversation demande confirmation', options, async () => {
 
 test.after(() => {
   if (outDir) rmSync(outDir, { recursive: true, force: true })
+})
+
+test('image dessinée par Jaris : affichée EN GRAND sous sa réponse, jamais en vignette de pièce jointe', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.chat-panel__message-image--generated')
+    const info = await page.evaluate(() => {
+      const img = document.querySelector('.chat-panel__message-image--generated')
+      const message = img.closest('.chat-panel__message')
+      const text = [...message.childNodes].find((n) => n !== img)
+      return {
+        role: message.className,
+        alt: img.alt,
+        imageAfterText: text.compareDocumentPosition(img) & Node.DOCUMENT_POSITION_FOLLOWING,
+        maxHeight: getComputedStyle(img).maxHeight,
+        decoded: img.naturalWidth
+      }
+    })
+    assert.match(info.role, /chat-panel__message--assistant/)
+    assert.equal(info.alt, 'Image dessinée par Jaris')
+    assert.ok(info.imageAfterText, 'l’image vient après le texte de la réponse')
+    assert.notEqual(info.maxHeight, '260px', 'pas la petite taille des images jointes')
+    assert.equal(info.decoded, 8, 'l’image est réellement décodée')
+  })
 })

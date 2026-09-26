@@ -165,7 +165,7 @@ function runScript(env) {
 
 const perfectAnswer = (prompt) => Object.entries(PERFECT).find(([start]) => prompt.startsWith(start))?.[1] ?? null
 
-test('le vrai script : vraies consignes et 14 outils envoyés, 17 questions notées, résultats dans le dossier de données', async () => {
+test('le vrai script : vraies consignes et 15 outils envoyés, 17 questions notées, résultats dans le dossier de données', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
   const fake = await startFakeOllama({
     installed: ['ministral-3:3b', 'qwen3:1.7b', 'qwen3.5:0.8b'],
@@ -186,7 +186,7 @@ test('le vrai script : vraies consignes et 14 outils envoyés, 17 questions not�
     // Ce que les modèles ont reçu : les VRAIES consignes et les 14 VRAIS outils.
     assert.ok(fake.requests.length >= 3 * TEST_CASES.length)
     for (const r of fake.requests) {
-      assert.equal(r.tools.length, 14)
+      assert.equal(r.tools.length, 15)
       assert.ok(r.messages[0].content.startsWith('Tu es Jaris, un assistant personnel'))
       // Étape 163 : sans fenêtre imposée, Ollama prenait 4096 et coupait les consignes (~4 600 tokens).
       assert.equal(r.options?.num_ctx, CONVERSATION_NUM_CTX)
@@ -321,7 +321,7 @@ test('pendant l’analyse, TOUS les modèles peuvent déborder sur la RAM (gemma
   assert.ok(script.includes("'gemma4:12b'"), 'gemma4:12b doit rester dans la liste des modèles testés')
 })
 
-test('la fenêtre de contexte des questions laisse de la place aux vraies consignes et aux 14 outils', () => {
+test('la fenêtre de contexte des questions laisse de la place aux vraies consignes et aux 15 outils', () => {
   // ~2,9 caractères par token pour ce genre de texte (mesuré à l'étape 159) : consignes + outils + question.
   const promptChars = buildBenchmarkSystemPrompt().length + JSON.stringify(TOOLS).length + 200
   assert.ok(CONVERSATION_NUM_CTX >= promptChars / 2.5 + 1024, `fenêtre ${CONVERSATION_NUM_CTX} trop petite pour ~${Math.round(promptChars / 2.5)} tokens`)

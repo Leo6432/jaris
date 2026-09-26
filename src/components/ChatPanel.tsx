@@ -143,16 +143,24 @@ export default function ChatPanel(): JSX.Element {
           {messages.length === 0 && !sending && (
             <p className="chat-panel__empty">
               Écris à Jaris comme tu lui parles. Il a exactement les mêmes outils qu'à la voix : ouvrir une
-              application, chercher sur le web, regarder ton écran, retenir une information, envoyer un mail.
+              application, chercher sur le web, regarder ton écran, retenir une information, envoyer un mail, dessiner une image.
             </p>
           )}
 
           {messages.map((message, index) => (
             <div key={index} className={`chat-panel__message chat-panel__message--${message.role}`}>
-              {message.image && (
+              {message.image && message.role === 'user' && (
                 <img className="chat-panel__message-image" src={message.image} alt="Image envoyée à Jaris" />
               )}
               {renderFormattedText(message.content)}
+              {/* Étape 173 : image dessinée par Jaris, sous sa réponse et en grand. */}
+              {message.image && message.role === 'assistant' && (
+                <img
+                  className="chat-panel__message-image chat-panel__message-image--generated"
+                  src={message.image}
+                  alt="Image dessinée par Jaris"
+                />
+              )}
             </div>
           ))}
 

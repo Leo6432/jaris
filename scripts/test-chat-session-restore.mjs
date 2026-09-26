@@ -22,8 +22,13 @@ function setup(pastEntries) {
   const calls = { converse: 0, vision: [] }
   const modules = {
     './assistant': {
-      converse: async () => {
+      converse: async (prompt, ...rest) => {
         calls.converse += 1
+        // Étape 173 : dernier argument = onImage, appelé quand generate_image a dessiné une image.
+        if (prompt.startsWith('dessine')) {
+          rest[9]({ path: '/donnees/generated-images/chat.png', fileName: 'chat.png' })
+          return 'Voilà ton image.'
+        }
         return 'réponse test'
       }
     },
@@ -49,7 +54,10 @@ function setup(pastEntries) {
     './memoryExtractor': { extractMemoryFromExchange: async () => {} },
     './hardwareScan': { getLiveGpuStatus: async () => ({ freeVramGb: null, tempC: null }) },
     './profileStore': { getProfile: async () => null },
-    './resourceMonitor': { checkGpuTempSafety: () => ({ action: 'ok', message: '' }) }
+    './resourceMonitor': { checkGpuTempSafety: () => ({ action: 'ok', message: '' }) },
+    './imageGenerator': {
+      readGeneratedImageDataUrl: async (fileName) => (fileName === 'chat.png' ? 'data:image/png;base64,UE5H' : null)
+    }
   }
   const exports = {}
   vm.runInNewContext(source, {
@@ -154,4 +162,23 @@ test('une image sans texte est acceptée : la question devient une demande de de
   const { chatSession, calls } = setup([])
   await chatSession.send('', () => {}, () => {}, undefined, undefined, 'BASE64IMAGE')
   assert.equal(calls.vision[0].question, 'Décris cette image.')
+})
+
+test('image dessinée (étape 173) : affichée sous la réponse, enregistrée par son NOM de fichier seulement', async () => {
+  const { chatSession, appended } = setup([])
+  const reply = await chatSession.send('dessine-moi un chat', () => {}, () => {})
+  assert.equal(reply.content, 'Voilà ton image.')
+  assert.equal(reply.image, 'data:image/png;base64,UE5H')
+  assert.equal(appended[0].image, 'chat.png', 'le nom du fichier, jamais les octets de l’image')
+})
+
+test('image dessinée : réaffichée après un redémarrage, et absente sans erreur si le fichier a été effacé', async () => {
+  const { chatSession } = setup([
+    { id: '1', timestamp: 't1', transcript: 'dessine-moi un chat', reply: 'Voilà ton image.', image: 'chat.png' },
+    { id: '2', timestamp: 't2', transcript: 'dessine-moi un chien', reply: 'Voilà ton image.', image: 'efface.png' }
+  ])
+  const messages = await chatSession.getVisibleMessages()
+  assert.equal(messages[1].image, 'data:image/png;base64,UE5H')
+  assert.equal(messages[3].image, undefined)
+  assert.equal(messages[0].image, undefined, 'jamais sur le message de l’utilisateur')
 })
