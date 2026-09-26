@@ -219,6 +219,11 @@ export default function OptionsMenu(): JSX.Element {
   const [ollamaVersionStatus, setOllamaVersionStatus] = useState<OllamaVersionStatus | null>(null)
   const [updatingOllama, setUpdatingOllama] = useState(false)
   const [ollamaUpdateMessage, setOllamaUpdateMessage] = useState<string | null>(null)
+  // Étape 170 : l'installeur officiel d'Ollama a été lancé et se termine dans SA fenêtre. Tant qu'il tourne, pas de
+  // second bouton « Mettre à jour » (Léo le relançait, croyant que rien ne s'était passé) ; le statut arrive tout
+  // seul à la fin (onOllamaVersionStatus). Ref en plus de l'état : lue dans l'abonnement, créé une seule fois.
+  const [ollamaInstallerPending, setOllamaInstallerPending] = useState(false)
+  const ollamaInstallerPendingRef = useRef(false)
   const [appVersionStatus, setAppVersionStatus] = useState<AppVersionStatus | null>(null)
   const [installedVersion, setInstalledVersion] = useState<string | null>(null)
   const [launchAtStartup, setLaunchAtStartupStatus] = useState<LaunchAtStartupStatus | null>(null)
@@ -519,6 +524,22 @@ export default function OptionsMenu(): JSX.Element {
       .finally(() => setCheckingUpdate(false))
   }
 
+  useEffect(
+    () =>
+      window.jaris.onOllamaVersionStatus((status) => {
+        setOllamaVersionStatus(status)
+        if (!ollamaInstallerPendingRef.current) return
+        ollamaInstallerPendingRef.current = false
+        setOllamaInstallerPending(false)
+        setOllamaUpdateMessage(
+          status.outdated
+            ? `L'installation d'Ollama n'a pas abouti : la version ${status.current} est toujours là. Tu peux relancer la mise à jour.`
+            : `Ollama est à jour (${status.current}).`
+        )
+      }),
+    []
+  )
+
   const handleUpdateOllama = (): void => {
     setUpdatingOllama(true)
     setOllamaUpdateMessage(null)
@@ -527,8 +548,10 @@ export default function OptionsMenu(): JSX.Element {
     setOllamaUpdateProgress(null)
     window.jaris
       .updateOllama()
-      .then(({ message }) => {
+      .then(({ message, installerPending }) => {
         setOllamaUpdateMessage(message)
+        ollamaInstallerPendingRef.current = Boolean(installerPending)
+        setOllamaInstallerPending(Boolean(installerPending))
         return window.jaris.getOllamaVersionStatus()
       })
       .then(setOllamaVersionStatus)
@@ -1133,7 +1156,7 @@ export default function OptionsMenu(): JSX.Element {
                     : 'Vérification de la version…'
                 }
               >
-                {ollamaVersionStatus?.outdated && (
+                {ollamaVersionStatus?.outdated && !ollamaInstallerPending && (
                   <button className="options-menu__action" onClick={handleUpdateOllama} disabled={updatingOllama}>
                     {updatingOllama ? 'Mise à jour en cours…' : 'Mettre à jour'}
                   </button>
@@ -1162,6 +1185,11 @@ export default function OptionsMenu(): JSX.Element {
                   message de succès avec le reste du bandeau s'il restait imbriqué dedans — jamais vu le
                   message alors que la mise à jour avait réellement marché. */}
               {!updatingOllama && ollamaUpdateMessage && <p className="options-menu__ollama-update-note">{ollamaUpdateMessage}</p>}
+              {ollamaInstallerPending && (
+                <p className="options-menu__ollama-update-note">
+                  Jaris attend la fin de l'installation : ce message se mettra à jour tout seul.
+                </p>
+              )}
 
               <SettingRow
                 label="Dossier de Jaris"

@@ -4898,3 +4898,24 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `node --test scripts/test-benchmark-cases.mjs` (téléchargement refusé par le faux Ollama : la raison
   suit le nom du modèle et figure dans le fichier ; vérifié en retirant la raison, le test échoue) et
   `scripts/test-options-reorganization-ui.mjs` (la raison s'affiche dans le suivi).
+
+- **Après la mise à jour d'Ollama, le bandeau « Mettre à jour » restait jusqu'au redémarrage (étape 170, Léo :
+  « ça fait la mise à jour mais le message ne se supprime pas et on peut refaire la mise à jour »).** Le chemin
+  qui marche en pratique est l'installeur officiel : Jaris le lance, puis l'installation se termine PLUS TARD,
+  dans la fenêtre d'Ollama. Or la page Options relisait le statut une seule fois, juste après le lancement —
+  donc toujours « pas à jour » — et plus rien ne le relisait ensuite. Corrigé côté main :
+  `watchOllamaInstallerCompletion` interroge la version locale toutes les 5 s (30 min max, minuteur `unref` pour
+  ne jamais retenir Jaris) et relit le statut dès qu'elle change ; chaque nouveau statut est diffusé à l'écran
+  (`onOllamaVersionStatus` → IPC `ollamaVersionStatusChanged`). Côté écran, `installerPending` masque le bouton
+  pendant l'installeur (Léo le relançait, croyant que rien ne s'était passé) et affiche « Ollama est à jour
+  (x.y.z) » à la fin — ou « n'a pas abouti » si l'installeur a été fermé sans installer, bouton rendu.
+  **Leçon générale : une action qui se termine HORS de Jaris (installeur, élévation, autre fenêtre) ne peut pas
+  être suivie d'une seule relecture juste après son lancement — il faut attendre l'effet réel (ici, la version
+  qui change) et le diffuser, sinon l'écran affirme un état périmé jusqu'au redémarrage.**
+  **Piège dans mon propre test** : le minuteur `unref` laissait Node s'arrêter PENDANT l'attente du test
+  (« Promise resolution is still pending but the event loop has already resolved ») ; le test garde un minuteur
+  normal actif le temps de l'attente.
+  Régression : `node --test scripts/test-ollama-update-progress.mjs` (version qui change → statut diffusé ;
+  installeur fermé → « pas à jour » revient ; `installerPending` renvoyé) et
+  `scripts/test-options-reorganization-ui.mjs` (pas de second bouton pendant l'installeur, « à jour » sans
+  redémarrer). Vérifiés en retirant chaque correctif.

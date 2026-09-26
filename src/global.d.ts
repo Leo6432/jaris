@@ -62,7 +62,8 @@ declare global {
       getContextLengthOptions: () => Promise<ContextLengthOptions>
       setContextLength: (contextLength: number | undefined) => Promise<void>
       getOllamaVersionStatus: () => Promise<OllamaVersionStatus | null>
-      updateOllama: () => Promise<{ success: boolean; message: string }>
+      updateOllama: () => Promise<{ success: boolean; message: string; installerPending?: boolean }>
+      onOllamaVersionStatus: (cb: (status: OllamaVersionStatus) => void) => () => void
       getAppVersionStatus: () => Promise<AppVersionStatus | null>
       updateApp: () => Promise<{ success: boolean; message: string }>
       // Étape 98 : avancement du téléchargement de l'installeur, sans lequel le bouton "Mettre à jour"

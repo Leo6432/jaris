@@ -141,6 +141,49 @@ export function getOllamaVersionStatus(): OllamaVersionStatus | null {
 }
 
 /**
+ * Étape 170 : prévenu à CHAQUE nouveau résultat de checkOllamaFreshness — main.ts le relaie à l'écran. Sans ça,
+ * la page Options ne relisait le statut qu'une fois, juste après le clic : après l'installeur officiel (fini
+ * plus tard, dans sa propre fenêtre), le bandeau « Mettre à jour » restait affiché jusqu'au redémarrage de Jaris.
+ */
+const ollamaVersionListeners = new Set<(status: OllamaVersionStatus) => void>()
+export function onOllamaVersionStatus(listener: (status: OllamaVersionStatus) => void): () => void {
+  ollamaVersionListeners.add(listener)
+  return () => ollamaVersionListeners.delete(listener)
+}
+
+/** Relit la version réellement installée (serveur local), `null` tant qu'Ollama ne répond pas. */
+async function readLocalOllamaVersion(): Promise<string | null> {
+  try {
+    const response = await fetch(`${config.ollama.host}/api/version`)
+    if (!response.ok) return null
+    return ((await response.json()) as { version?: string }).version ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Surveille la fin de l'installeur officiel lancé par updateOllama (étape 170) : dès que le serveur local répond
+ * avec une AUTRE version qu'avant, le statut est relu et diffusé (bandeau retiré tout seul). Toutes les 5 s,
+ * au plus 30 min — l'installeur attend des clics de l'utilisateur, sa durée n'est pas prévisible. À la fin du
+ * délai, le statut est relu quand même : un installeur fermé sans installer fait réapparaître le bouton.
+ */
+export async function watchOllamaInstallerCompletion(
+  previousVersion: string | null,
+  options: { intervalMs?: number; timeoutMs?: number } = {}
+): Promise<void> {
+  const { intervalMs = 5000, timeoutMs = 30 * 60 * 1000 } = options
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    // unref : cette attente ne doit jamais, à elle seule, empêcher un process de se terminer.
+    await new Promise((resolve) => setTimeout(resolve, intervalMs).unref?.())
+    const version = await readLocalOllamaVersion()
+    if (version && version !== previousVersion) break
+  }
+  await checkOllamaFreshness()
+}
+
+/**
  * Dernière version publiée d'Ollama sur GitHub (contrairement à MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH, un
  * plancher fixe qu'il faudrait remonter à la main à chaque fois qu'un modèle exige une version plus
  * récente qu'installée — voir l'échec `pull model manifest: 412` de scripts/benchmark-models.mjs) : ce
@@ -182,6 +225,7 @@ async function checkOllamaFreshness(): Promise<void> {
     const latest = await fetchLatestOllamaVersion()
     if (!latest) return
     cachedOllamaVersionStatus = { current: data.version, latest, outdated: isVersionOlder(data.version, latest) }
+    for (const listener of ollamaVersionListeners) listener(cachedOllamaVersionStatus)
   } catch {
     // Best-effort, comme warnIfOllamaOutdated : ne doit jamais empêcher Jaris de démarrer.
   }
@@ -430,7 +474,14 @@ export async function installOllamaSilently(onProgress: (message: string, percen
  *    (élévation UAC) reste possible ici — ni winget ni Jaris ne peuvent la contourner, et il ne faut pas
  *    essayer.
  */
-export async function updateOllama(onProgress?: OllamaUpdateProgress): Promise<{ success: boolean; message: string }> {
+export interface OllamaUpdateResult {
+  success: boolean
+  message: string
+  /** Installeur officiel lancé : l'installation se termine plus tard, dans la fenêtre d'Ollama (étape 170). */
+  installerPending?: boolean
+}
+
+export async function updateOllama(onProgress?: OllamaUpdateProgress): Promise<OllamaUpdateResult> {
   try {
     return await updateOllamaInner(onProgress)
   } catch (err) {
@@ -441,7 +492,7 @@ export async function updateOllama(onProgress?: OllamaUpdateProgress): Promise<{
   }
 }
 
-async function updateOllamaInner(onProgress?: OllamaUpdateProgress): Promise<{ success: boolean; message: string }> {
+async function updateOllamaInner(onProgress?: OllamaUpdateProgress): Promise<OllamaUpdateResult> {
   const restarted = await restartOllamaApp()
   if (restarted) {
     // Attend que le serveur revienne avant de reverifier : quelques secondes le temps qu'Ollama redémarre
@@ -458,9 +509,13 @@ async function updateOllamaInner(onProgress?: OllamaUpdateProgress): Promise<{ s
     // garantie de fonctionner, pas juste un message d'erreur.
   }
 
+  const versionBeforeInstaller = await readLocalOllamaVersion()
   if (await downloadAndLaunchOfficialInstaller(onProgress)) {
+    // L'installeur se termine plus tard, dans sa propre fenêtre : le bandeau se met à jour tout seul à la fin.
+    void watchOllamaInstallerCompletion(versionBeforeInstaller)
     return {
       success: true,
+      installerPending: true,
       message:
         "L'installeur Ollama officiel a été téléchargé et lancé : termine l'installation dans la fenêtre " +
         'qui vient de s\'ouvrir (Ollama redémarre automatiquement à la fin).'

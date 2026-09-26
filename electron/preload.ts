@@ -67,7 +67,9 @@ const api = {
   setContextLength: (contextLength: number | undefined): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.setContextLength, contextLength),
   getOllamaVersionStatus: (): Promise<OllamaVersionStatus | null> => ipcRenderer.invoke(IPC_CHANNELS.getOllamaVersionStatus),
-  updateOllama: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.updateOllama),
+  updateOllama: (): Promise<{ success: boolean; message: string; installerPending?: boolean }> =>
+    ipcRenderer.invoke(IPC_CHANNELS.updateOllama),
+  onOllamaVersionStatus: (cb: (status: OllamaVersionStatus) => void) => subscribe(IPC_CHANNELS.ollamaVersionStatusChanged, cb),
   getAppVersionStatus: (): Promise<AppVersionStatus | null> => ipcRenderer.invoke(IPC_CHANNELS.getAppVersionStatus),
   updateApp: (): Promise<{ success: boolean; message: string }> => ipcRenderer.invoke(IPC_CHANNELS.updateApp),
   onUpdateProgress: (cb: (progress: UpdateProgress) => void) => subscribe(IPC_CHANNELS.updateProgress, cb),

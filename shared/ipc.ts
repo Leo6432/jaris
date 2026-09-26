@@ -555,6 +555,8 @@ export const IPC_CHANNELS = {
   /** renderer <-> main : liste tous les modèles candidats (tous paliers + vision) avec leurs métriques, pour l'onglet Modèles. */
   getModelOverview: 'jaris:get-model-overview',
   getOllamaVersionStatus: 'jaris:get-ollama-version-status',
+  /** main -> renderer : nouveau statut de version d'Ollama (ex : fin de l'installeur officiel, étape 170). */
+  ollamaVersionStatusChanged: 'jaris:ollama-version-status-changed',
   updateOllama: 'jaris:update-ollama',
   /** renderer <-> main : modèles de Jaris sans aucun score (getUnscoredModels, hardwareScan.ts). */
   getUnscoredModels: 'jaris:get-unscored-models',

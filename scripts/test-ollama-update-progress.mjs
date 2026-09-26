@@ -137,6 +137,68 @@ test("aucun avancement n'est inventé quand le téléchargement échoue", async 
   )
 })
 
+/**
+ * Étape 170, Léo : « après la mise à jour le message ne se supprime pas et on peut refaire la mise à jour, faut
+ * redémarrer l'appli ». L'installeur officiel se termine dans SA fenêtre, bien après le clic ; le statut n'était
+ * relu qu'une fois, juste après son lancement. Faux Ollama local : la version change quand l'installeur a fini.
+ */
+function fakeOllamaFetch(versions) {
+  let calls = 0
+  return async (url) => {
+    if (String(url).endsWith('/api/version')) {
+      const version = versions[Math.min(calls++, versions.length - 1)]
+      return { ok: true, json: async () => ({ version }) }
+    }
+    if (String(url).includes('api.github.com/repos/ollama/ollama/releases/latest')) {
+      return { ok: true, json: async () => ({ tag_name: 'v0.34.4' }) }
+    }
+    throw new Error(`requête inattendue : ${url}`)
+  }
+}
+
+async function withFetch(fetchImpl, run) {
+  const original = globalThis.fetch
+  globalThis.fetch = fetchImpl
+  // La surveillance attend avec des minuteurs « unref » (elle ne doit jamais retenir Jaris) : sans ce minuteur
+  // normal, Node s'arrêterait pendant l'attente du test.
+  const keepAlive = setInterval(() => {}, 1000)
+  try {
+    await run()
+  } finally {
+    clearInterval(keepAlive)
+    globalThis.fetch = original
+  }
+}
+
+test("fin de l'installeur officiel : la nouvelle version est diffusée sans redémarrer Jaris", async () => {
+  const { module } = loadDependencyServices({ onDownload: async () => {} })
+  const recu = []
+  module.onOllamaVersionStatus((status) => recu.push(status))
+  await withFetch(fakeOllamaFetch(['0.34.2', '0.34.2', '0.34.4']), () =>
+    module.watchOllamaInstallerCompletion('0.34.2', { intervalMs: 5, timeoutMs: 5000 })
+  )
+  assert.deepEqual(recu.at(-1), { current: '0.34.4', latest: '0.34.4', outdated: false })
+  assert.deepEqual(module.getOllamaVersionStatus(), { current: '0.34.4', latest: '0.34.4', outdated: false })
+})
+
+test("installeur fermé sans installer : le statut « pas à jour » revient, pour pouvoir relancer", async () => {
+  const { module } = loadDependencyServices({ onDownload: async () => {} })
+  const recu = []
+  module.onOllamaVersionStatus((status) => recu.push(status))
+  await withFetch(fakeOllamaFetch(['0.34.2']), () =>
+    module.watchOllamaInstallerCompletion('0.34.2', { intervalMs: 5, timeoutMs: 60 })
+  )
+  assert.equal(recu.at(-1)?.outdated, true)
+})
+
+test("updateOllama signale que l'installeur tourne encore (le bouton ne doit pas réapparaître)", async () => {
+  const { module } = loadDependencyServices({ onDownload: async () => {} })
+  await withFetch(fakeOllamaFetch(['0.34.2']), async () => {
+    const result = await module.updateOllama()
+    assert.equal(result.installerPending, true, result.message)
+  })
+})
+
 test('aucun téléchargement du dépôt ne se fait en silence', () => {
   // Garde pour la suite : c'est précisément l'oubli d'un `onProgress` sur UN seul appel (le plus lourd) qui a
   // produit le blocage apparent. Un futur téléchargement ajouté sans avancement se lirait pareil.

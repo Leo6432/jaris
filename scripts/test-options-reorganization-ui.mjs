@@ -42,7 +42,13 @@ const overrides = {
   saveProfile: async () => {},
   listAudioInputDevices: async () => [],
   getContextLengthOptions: async () => ({ current: 8192, max: 32768, availableSteps: [8192, 16384, 24576, 32768] }),
-  getOllamaVersionStatus: async () => null,
+  getOllamaVersionStatus: async () => window.__ollamaStatus ?? null,
+  // Étape 170 : l'installeur officiel se termine plus tard ; le test diffuse lui-même le nouveau statut.
+  updateOllama: async () => ({ success: true, message: 'Installeur lancé.', installerPending: true }),
+  onOllamaVersionStatus: (cb) => {
+    window.__emitOllamaStatus = cb
+    return () => {}
+  },
   getAppVersionStatus: async () => ({ current: '0.13.0', latest: '0.13.0', outdated: false }),
   getAppVersion: async () => '0.13.0',
   // Étape 165 : imite l'entrée de démarrage de Windows, relue après chaque bascule.
@@ -381,6 +387,37 @@ test('« Tous les modèles » n’a plus de bouton d’analyse, seulement le tab
     const buttons = await page.$$eval('.options-page--models button', (els) => els.map((el) => el.textContent?.trim() ?? ''))
     assert.ok(!buttons.some((t) => /analyse/i.test(t)), `bouton d'analyse encore présent : ${buttons.join(', ')}`)
   })
+})
+
+// Étape 170, Léo : « après la mise à jour le message ne se supprime pas et on peut refaire la mise à jour, faut
+// redémarrer l'appli ».
+test('mise à jour d’Ollama : pas de second bouton pendant l’installeur, puis « à jour » sans redémarrer', options, async () => {
+  const html = buildPage()
+  const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
+  try {
+    const page = await browser.newPage()
+    await page.setViewportSize({ width: 1200, height: 900 })
+    await page.setContent(html)
+    await page.evaluate(() => {
+      window.__ollamaStatus = { current: '0.34.2', latest: '0.34.4', outdated: true }
+    })
+    await page.click('.options-menu__trigger')
+    await page.click('.options-menu__tab:has-text("Général")')
+    const ollamaRow = page.locator('.options-menu__row', { hasText: 'Ollama' }).first()
+    await ollamaRow.locator('button:has-text("Mettre à jour")').click()
+    await page.waitForSelector('text=Jaris attend la fin de l\'installation')
+    assert.equal(await ollamaRow.locator('button:has-text("Mettre à jour")').count(), 0, 'le bouton ne doit pas revenir pendant l’installeur')
+
+    await page.evaluate(() => {
+      window.__ollamaStatus = { current: '0.34.4', latest: '0.34.4', outdated: false }
+      window.__emitOllamaStatus(window.__ollamaStatus)
+    })
+    await page.waitForSelector('text=Ollama est à jour (0.34.4).')
+    assert.match(await ollamaRow.textContent(), /0\.34\.4 installée · à jour/)
+    assert.equal(await page.locator('text=Jaris attend la fin de l\'installation').count(), 0)
+  } finally {
+    await browser.close()
+  }
 })
 
 // Étape 168, Léo : « remets le bouton pour Lightning et qwen2.5-coder:14b ».

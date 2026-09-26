@@ -10,6 +10,7 @@ import {
   ensureSearxngRunning,
   installDockerDesktop,
   getOllamaVersionStatus,
+  onOllamaVersionStatus,
   stopOllamaCompletely,
   stopOllamaIfStartedByJaris,
   updateOllama
@@ -759,6 +760,8 @@ app.whenReady().then(async () => {
   // Même canal d'avancement que la mise à jour de Jaris, distingué par `target` (étape 112) : l'installeur
   // d'Ollama pèse 1,5 Go, soit plusieurs minutes pendant lesquelles le bouton restait muet ("ça bloque
   // depuis 5m", Léo).
+  // Étape 170 : tout nouveau statut d'Ollama (fin de l'installeur officiel notamment) rafraîchit la page Options.
+  onOllamaVersionStatus((status) => broadcast(IPC_CHANNELS.ollamaVersionStatusChanged, status))
   ipcMain.handle(IPC_CHANNELS.updateOllama, () =>
     updateOllama((progress) => broadcast(IPC_CHANNELS.updateProgress, { target: 'ollama', ...progress }))
   )
