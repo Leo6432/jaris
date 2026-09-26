@@ -67,15 +67,6 @@ const overrides = {
   getConversationHistory: async () => [],
   getMyModelPicks: async () => ({ gpuName: 'RTX 3070', vramGb: 8, ramGb: 32, flash: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, medium: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, large: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, vision: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, code: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 } , upgrades: {}, installCheck: { notInstalled: [], otherInstalled: [] } }),
   // Étape 168 : test des seuls modèles sans score — le test pilote lui-même les lignes du script et sa fin.
-  getUnscoredModels: async () => ['qwen2.5-coder:14b', 'nemotron-3.5-lightning:30b'],
-  onModelBenchmarkLine: (cb) => {
-    window.__benchLine = cb
-    return () => {}
-  },
-  testUnscoredModels: () => {
-    window.__testCalls = (window.__testCalls ?? 0) + 1
-    return new Promise((resolve) => (window.__finishTest = () => resolve({ models: [], resultsPath: 'x' })))
-  },
   getModelOverview: async () => ({
     vramGb: 8,
     codeModel: 'qwen2.5-coder:7b',
@@ -386,6 +377,8 @@ test('« Tous les modèles » n’a plus de bouton d’analyse, seulement le tab
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
     const buttons = await page.$$eval('.options-page--models button', (els) => els.map((el) => el.textContent?.trim() ?? ''))
     assert.ok(!buttons.some((t) => /analyse/i.test(t)), `bouton d'analyse encore présent : ${buttons.join(', ')}`)
+    // Étape 172 : le bouton « Tester les modèles sans score » (étape 168) est retiré à son tour.
+    assert.ok(!buttons.some((t) => /tester/i.test(t)), `bouton de test encore présent : ${buttons.join(', ')}`)
   })
 })
 
@@ -420,51 +413,6 @@ test('mise à jour d’Ollama : pas de second bouton pendant l’installeur, pui
   }
 })
 
-// Étape 168, Léo : « remets le bouton pour Lightning et qwen2.5-coder:14b ».
-test('« Tester les modèles sans score » : nomme les modèles, confirme, puis suit le test modèle par modèle', options, async () => {
-  await withOptions(async (page) => {
-    await page.click('.options-menu__tab:has-text("Modèles")')
-    await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
-    await page.waitForSelector('.options-menu__unscored')
-    const title = await page.textContent('.options-menu__unscored-title')
-    assert.match(title, /\(2\)/)
-    assert.match(title, /qwen2\.5-coder:14b|Qwen2\.5/i)
-
-    // Rien ne démarre avant la confirmation, et Annuler ne lance rien.
-    await page.click('.options-menu__unscored button:has-text("Tester les modèles sans score")')
-    assert.match(await page.textContent('.options-menu__unscored-confirm'), /une heure/)
-    await page.click('.options-menu__unscored button:has-text("Annuler")')
-    assert.equal(await page.evaluate(() => window.__testCalls ?? 0), 0)
-
-    await page.click('.options-menu__unscored button:has-text("Tester les modèles sans score")')
-    await page.click('.options-menu__unscored button:has-text("Lancer le test")')
-    await page.waitForFunction(() => window.__testCalls === 1 && typeof window.__benchLine === 'function')
-    await page.evaluate(() => {
-      window.__benchLine('##PULL_MODEL_PROGRESS## nemotron-3.5-lightning:30b 40')
-      window.__benchLine('##PROGRESS## 5 10')
-    })
-    await page.waitForSelector('.options-menu__unscored .options-menu__progress-label:has-text("40 %")')
-    const width = await page.$eval('.options-menu__unscored .options-menu__progress-bar-fill', (el) => el.style.width)
-    assert.equal(width, '50%')
-    await page.evaluate(() => {
-      window.__benchLine('##MODEL_DONE## nemotron-3.5-lightning:30b 16 17')
-      window.__benchLine('##MODEL_SKIPPED## qwen2.5-coder:14b téléchargement impossible : pull model manifest: file does not exist')
-      window.__finishTest()
-    })
-    await page.waitForSelector('.options-menu__unscored button:has-text("Ouvrir le fichier des résultats")')
-    const results = await page.textContent('.options-menu__unscored-results')
-    assert.match(results, /16\/17/)
-    assert.match(results, /sauté — téléchargement impossible : pull model manifest: file does not exist/)
-    // Habillé par le CSS de Jaris (carte), pas du texte nu.
-    assert.equal(await page.$eval('.options-menu__unscored', (el) => getComputedStyle(el).borderStyle), 'solid')
-  })
-})
-
-// Léo, étape 129, sur la première version où SEULS les titres de colonne étaient cliquables : "je voit pas
-// de truc pour filtrés dans tout les models". Le tri marchait (le test ci-dessous le prouvait déjà), mais
-// rien ne le SIGNALAIT : un titre cliquable avait exactement la même police, la même couleur et la même
-// taille qu'un titre normal. Ce test vérifie la COMMANDE VISIBLE, pas seulement le mécanisme — c'est
-// précisément la distinction qui manquait pour attraper le problème avant livraison.
 test('une barre "Trier par" VISIBLE propose les 4 critères, sans avoir à deviner que les titres sont cliquables', options, async () => {
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Modèles")')

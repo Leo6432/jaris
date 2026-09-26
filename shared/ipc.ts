@@ -558,12 +558,6 @@ export const IPC_CHANNELS = {
   /** main -> renderer : nouveau statut de version d'Ollama (ex : fin de l'installeur officiel, étape 170). */
   ollamaVersionStatusChanged: 'jaris:ollama-version-status-changed',
   updateOllama: 'jaris:update-ollama',
-  /** renderer <-> main : modèles de Jaris sans aucun score (getUnscoredModels, hardwareScan.ts). */
-  getUnscoredModels: 'jaris:get-unscored-models',
-  /** renderer -> main : teste ces modèles avec le script de test (étape 168), résout à la fin. */
-  testUnscoredModels: 'jaris:test-unscored-models',
-  /** renderer -> main : montre le fichier de résultats de ce test dans l'Explorateur. */
-  showUnscoredResults: 'jaris:show-unscored-results',
   /** main -> renderer : une ligne de progression (configuration ou test des modèles), au fil de l'eau. */
   modelBenchmarkLine: 'jaris:model-benchmark-line',
   /** renderer -> main : modèles choisis pour CETTE machine, sans rien télécharger (voir getMyModelPicks,

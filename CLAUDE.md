@@ -4931,3 +4931,11 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   moment de l'écrire ; une fois leurs scores recopiés, ils étaient sautés d'office et le test ne mesurait plus le
   filtre. Il force maintenant `JARIS_RETEST_ALL` pour ne plus dépendre du contenu de verified-tool-scores.md
   (vérifié : il échoue toujours sans le filtre).
+
+- **Bouton « Tester les modèles sans score » retiré (étape 172, Léo : « enlève test »)**, comme l'analyse complète à
+  l'étape 166 : ses résultats (étape 171) sont recopiés dans verified-tool-scores.md, seule source des scores.
+  Retirés : UnscoredModelsTest.tsx et son CSS, les 3 canaux IPC, `testUnscoredModels`/`unscoredResultsPath`
+  (benchmarkRunner.ts), `getUnscoredModels` (hardwareScan.ts), et le script de test de l'installeur. Gardés dans
+  le script (outil de développement) : `JARIS_ONLY_MODELS`, la vraie raison des modèles sautés, la marge RAM
+  réglable — tous couverts par test-benchmark-cases.mjs. Un test d'interface vérifie qu'aucun bouton « Tester »
+  ni « analyse » ne revient dans « Tous les modèles ».

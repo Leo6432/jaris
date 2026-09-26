@@ -1271,7 +1271,7 @@ async function main() {
       const reason = `trop gros pour ce PC (~${modelWeightGb(m).toFixed(1)} Go, ${budgetFor(m).toFixed(1)} Go disponibles)`
       console.log(`  ${m} ignoré : ${reason}`)
       skipReasons.set(m, reason)
-      // Lu par le suivi en direct (UnscoredModelsTest.tsx) : ce modèle ne sera jamais testé ce run-ci.
+      // Lu par qui suit la sortie du script : ce modèle ne sera jamais testé ce run-ci.
       console.log(`##MODEL_SKIPPED## ${m} ${reason}`)
     }
     console.log('')
