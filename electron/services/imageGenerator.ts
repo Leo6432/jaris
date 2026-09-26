@@ -6,6 +6,9 @@ import { join } from 'path'
 import { getDataRoot } from './dataLocation'
 import { downloadToFile } from './download'
 import { unloadOllamaModels } from './ollama'
+import { detectGpu } from './hardwareScan'
+import { detectRamGb } from './systemResources'
+import { pickImageModel } from '../../shared/imageModel'
 import { formatBytes } from '../../shared/formatBytes'
 
 /**
@@ -354,6 +357,12 @@ export async function generateImage(prompt: string, onLog: Log = () => {}, signa
   if (process.platform !== 'win32') throw new Error("La génération d'images n'est disponible que sur Windows pour l'instant.")
   const text = cleanPrompt(prompt)
   if (!text) throw new Error("Je n'ai pas de description de l'image à dessiner : dis-moi ce que tu veux voir.")
+  // Étape 174 : même décision que la ligne « Image » d'Options → Modèles. Vérifié AVANT tout téléchargement :
+  // 5 Go téléchargés pour une machine qui ne pourra jamais dessiner seraient 5 Go perdus.
+  const { vramGb } = await detectGpu()
+  const pick = pickImageModel(vramGb, detectRamGb())
+  if (!pick.model) throw new Error(`Ton PC n'a pas assez de puissance pour dessiner des images : ${pick.reason}.`)
+  // Vérifié APRÈS l'attente ci-dessus, juste avant de le poser : deux demandes simultanées ne passent jamais toutes les deux.
   if (busy) throw new Error("Je suis déjà en train de dessiner une image : attends qu'elle soit finie, puis redemande.")
   busy = true
   try {
@@ -379,6 +388,13 @@ export async function generateImage(prompt: string, onLog: Log = () => {}, signa
   } finally {
     busy = false
   }
+}
+
+/** Étape 174 : les trois fichiers du modèle sont-ils déjà téléchargés (et donc vérifiés, voir downloadVerified) ? */
+export async function isImageModelInstalled(): Promise<boolean> {
+  const dir = join(imageEngineRoot(), 'models')
+  const sizes = await Promise.all(IMAGE_MODEL_FILES.map((file) => sizeOf(join(dir, file.fileName))))
+  return sizes.every((size, i) => size === IMAGE_MODEL_FILES[i].bytes)
 }
 
 /** Lecture d'une image dessinée pour l'afficher dans le Chat (null si le fichier a été effacé depuis). */

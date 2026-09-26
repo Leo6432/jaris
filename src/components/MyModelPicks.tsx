@@ -119,6 +119,33 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
                 </Fragment>
               )
             })}
+            {/* Étape 174, Léo : « dans model ajoute image et met le seul image, et si pas assez de puissance met
+                aucun model ». Pas de vitesse/intelligence/fiabilité : ces mesures ne concernent que les modèles
+                de texte, un « — » vaut mieux qu'un chiffre qui ne veut rien dire ici. */}
+            {picks.image && (
+              <>
+                <tr className="capacity-scan__tier-image">
+                  <td className="capacity-scan__tier-slot">Image</td>
+                  <td className="capacity-scan__tier-model">{picks.image.model ?? 'Aucun modèle'}</td>
+                  <td className="capacity-scan__tier-speed">—</td>
+                  <td className="capacity-scan__tier-intelligence">—</td>
+                  <td />
+                </tr>
+                {!picks.image.model ? (
+                  <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
+                    <td />
+                    <td colSpan={4}>Pas assez de puissance pour dessiner : {picks.image.reason}.</td>
+                  </tr>
+                ) : (
+                  picks.image.installed === false && (
+                    <tr className="capacity-scan__tier-upgrade">
+                      <td />
+                      <td colSpan={4}>Pas géré par Ollama : téléchargé au premier dessin (environ 5 Go).</td>
+                    </tr>
+                  )
+                )}
+              </>
+            )}
           </tbody>
         </table>
       </div>
@@ -164,7 +191,7 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
         Pour chaque rôle, Jaris cherche dans tous ses modèles, parmi les plus fiables en appel d'outils qui
         tiennent dans ta machine : Rapide prend le plus intelligent parmi les plus rapides, Médium le plus intelligent qui tient sur ta
         carte graphique, Puissant et Code le plus intelligent même s'il déborde sur la RAM, Vision le plus
-        intelligent qui lit les images. Vitesse et Intelligence : mesures publiées par Artificial
+        intelligent qui lit les images, Image le seul modèle de dessin s'il tient sur ta machine. Vitesse et Intelligence : mesures publiées par Artificial
         Analysis, identiques pour tout le monde — elles comparent les modèles entre eux, pas la vitesse sur ta
         machine.
       </p>

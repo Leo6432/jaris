@@ -65,7 +65,7 @@ const overrides = {
     ]
   }),
   getConversationHistory: async () => [],
-  getMyModelPicks: async () => ({ gpuName: 'RTX 3070', vramGb: 8, ramGb: 32, flash: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, medium: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, large: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, vision: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, code: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 } , upgrades: {}, installCheck: { notInstalled: [], otherInstalled: [] } }),
+  getMyModelPicks: async () => ({ gpuName: 'RTX 3070', vramGb: 8, ramGb: 32, flash: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, medium: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, large: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, vision: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, code: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 } , upgrades: {}, installCheck: { notInstalled: [], otherInstalled: [] }, image: window.__imagePick ?? { model: 'FLUX.2 klein 4B', reason: null, installed: false } }),
   // Étape 168 : test des seuls modèles sans score — le test pilote lui-même les lignes du script et sa fin.
   getModelOverview: async () => ({
     vramGb: 8,
@@ -467,5 +467,45 @@ test('cliquer une colonne trie "Tous les modèles" ; une seconde fois inverse le
     await page.locator('.options-menu__sort-button', { hasText: "Appel d'outils" }).first().click()
     const byTools = await models()
     assert.equal(byTools[0], 'ministral-3:3b', 'le seul modèle testé doit passer en tête')
+  })
+})
+
+/** Ligne « Image » du tableau des modèles (étape 174) : son texte, et la ligne d'explication juste dessous. */
+async function imageRow(page, pick) {
+  if (pick) await page.evaluate((p) => { window.__imagePick = p }, pick)
+  await page.click('.options-menu__tab:has-text("Modèles")')
+  await page.waitForSelector('.capacity-scan__tier-image')
+  return page.evaluate(() => {
+    const row = document.querySelector('.capacity-scan__tier-image')
+    const next = row.nextElementSibling
+    return {
+      cells: [...row.cells].map((c) => c.textContent.trim()),
+      note: next && next.classList.contains('capacity-scan__tier-upgrade') ? next.textContent.trim() : null,
+      afterCode: row.previousElementSibling ? true : false
+    }
+  })
+}
+
+test('Modèles : une ligne « Image » avec le seul modèle d’image quand la machine le fait tourner', options, async () => {
+  await withOptions(async (page) => {
+    const row = await imageRow(page)
+    assert.deepEqual(row.cells, ['Image', 'FLUX.2 klein 4B', '—', '—', ''])
+    assert.match(row.note, /téléchargé au premier dessin/, 'pas encore téléchargé : dit, jamais présenté comme installé')
+  })
+})
+
+test('Modèles : pas assez de puissance → « Aucun modèle », avec la raison', options, async () => {
+  await withOptions(async (page) => {
+    const row = await imageRow(page, { model: null, reason: 'carte graphique trop petite (4 Go de VRAM, il en faut 6 ou plus)' })
+    assert.equal(row.cells[1], 'Aucun modèle')
+    assert.equal(row.note, 'Pas assez de puissance pour dessiner : carte graphique trop petite (4 Go de VRAM, il en faut 6 ou plus).')
+  })
+})
+
+test('Modèles : modèle d’image déjà téléchargé → aucune note de téléchargement', options, async () => {
+  await withOptions(async (page) => {
+    const row = await imageRow(page, { model: 'FLUX.2 klein 4B', reason: null, installed: true })
+    assert.equal(row.cells[1], 'FLUX.2 klein 4B')
+    assert.equal(row.note, null)
   })
 })

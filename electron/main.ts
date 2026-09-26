@@ -2,6 +2,8 @@ import { app, dialog, ipcMain, session, shell, BrowserWindow, globalShortcut, sc
 // Étape 143 : EN PREMIER — redirige le dossier interne de Chromium et les données vers le dossier de Jaris
 // (installé sur D, ou déplacé) avant que quoi que ce soit ne calcule un chemin ou ne prenne le verrou d'instance.
 import { cleanupStaleChromiumData, getStorageRoot } from './services/storageRoot'
+import { pickImageModel } from '../shared/imageModel'
+import { isImageModelInstalled } from './services/imageGenerator'
 import { spawn } from 'child_process'
 import { basename, extname, join } from 'path'
 import { readFile } from 'fs/promises'
@@ -901,7 +903,12 @@ app.whenReady().then(async () => {
     if (!profile) return
     await saveProfile({ ...profile, knownModelCandidates: getAllCandidateModelIds() })
   })
-  ipcMain.handle(IPC_CHANNELS.getMyModelPicks, async () => getMyModelPicks(await getProfile()))
+  ipcMain.handle(IPC_CHANNELS.getMyModelPicks, async () => {
+    const picks = await getMyModelPicks(await getProfile())
+    // Étape 174 : le modèle d'image se décide sur le MÊME matériel détecté que les autres rôles.
+    const image = pickImageModel(picks.vramGb, picks.ramGb)
+    return { ...picks, image: image.model ? { ...image, installed: await isImageModelInstalled() } : image }
+  })
   // Étape 140 : le nom vient du renderer, donc revérifié ICI avant toute suppression — un modèle utilisé par
   // un rôle du profil (ou inconnu d'Ollama) n'est jamais supprimé, quoi que demande l'interface.
   ipcMain.handle(IPC_CHANNELS.deleteUnusedModel, async (_event, model: string): Promise<void> => {

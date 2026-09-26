@@ -1,4 +1,5 @@
 /** Types partagés entre le process principal (electron/) et le renderer (src/). */
+import type { ImageModelPick } from './imageModel'
 
 export type JarisEmotion = 'idle' | 'listening' | 'thinking' | 'happy' | 'surprised'
 
@@ -270,6 +271,12 @@ export interface MyModelPicks {
    * prétend alors rien, dans un sens comme dans l'autre).
    */
   installCheck: { notInstalled: ModelRole[]; otherInstalled: string[] } | null
+  /**
+   * Étape 174 : le modèle d'image (un seul, FLUX.2 klein 4B), ou aucun si la machine n'a pas assez de puissance
+   * (pickImageModel, shared/imageModel.ts). Ajouté par le canal IPC (main.ts) à partir du matériel détecté
+   * ci-dessus : absent seulement dans les appels internes qui n'en ont pas besoin.
+   */
+  image?: ImageModelPick
 }
 
 /**

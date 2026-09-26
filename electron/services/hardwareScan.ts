@@ -447,7 +447,7 @@ function pickForBudget(candidates: ModelCandidate[], budgetGb: number): string {
   return (fit ?? candidates[candidates.length - 1]).model
 }
 
-async function detectGpu(): Promise<{ name: string | null; vramGb: number | null }> {
+export async function detectGpu(): Promise<{ name: string | null; vramGb: number | null }> {
   try {
     const { stdout } = await execAsync('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits', {
       windowsHide: true

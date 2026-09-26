@@ -4930,3 +4930,22 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   **Non vérifiable ici, à confirmer par Léo** : la vitesse et la mémoire réelles sur sa carte (Vulkan, 1024 px),
   et la qualité perçue. Régression : `node --test scripts/test-image-generation.mjs` (+ chat-session-restore,
   chat-conversations-ui, models-location) ; chaque garde vérifiée en réintroduisant son défaut.
+
+- **Ligne « Image » dans Options → Modèles (étape 174, Léo : « dans model ajoute image et met le seul image, et
+  si pas assez de puissance met aucun model »)**. Un seul modèle d'image (FLUX.2 klein 4B), affiché sous Code,
+  ou « Aucun modèle » avec la raison en une phrase. Décision dans un module PUR partagé (`shared/imageModel.ts`,
+  `pickImageModel`) : la MÊME fonction décide de l'affichage (canal IPC getMyModelPicks, sur le matériel déjà
+  détecté pour les autres rôles) et du refus dans `generateImage` — deux copies du seuil auraient fini par
+  diverger (leçon de l'étape 72/82 : un même état décidé à deux endroits se contredit toujours un jour). Le refus
+  arrive AVANT tout téléchargement : 5 Go pour une machine qui ne pourra jamais dessiner seraient perdus.
+  **Seuils CALCULÉS, pas mesurés** (aucune carte ici) : avec `--offload-to-cpu`, un seul morceau monte à la fois
+  sur la carte (~2,5 Go + calculs 1024 px, ~4 Go au plus fort) → 6 Go de VRAM minimum ; ~5 Go de poids en RAM
+  pendant le dessin → 16 Go de RAM. Seuils posés à 5,5/15 parce que Windows lit une carte « 6 Go » à 5,8-6 et
+  un PC « 16 Go » à ~15,8 : un seuil écrit avec le chiffre de la boîte refuserait exactement les machines visées.
+  Limite connue : seul nvidia-smi détecte la carte, donc une carte AMD donne « Aucun modèle » alors que Vulkan
+  saurait l'utiliser — même limite que le choix des autres modèles, pas corrigée ici. « Pas géré par Ollama :
+  téléchargé au premier dessin » tant que les fichiers ne sont pas sur le disque (`isImageModelInstalled`) : le
+  message « vérifié auprès d'Ollama, bien installés » juste dessous ne doit pas laisser croire le contraire.
+  Pas de vitesse/intelligence/fiabilité sur cette ligne (« — ») : ces mesures ne concernent que les modèles de
+  texte. `detectGpu` (hardwareScan.ts) est désormais exporté pour ce refus. Régression :
+  `node --test scripts/test-image-generation.mjs scripts/test-options-reorganization-ui.mjs`.

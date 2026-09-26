@@ -26,6 +26,12 @@ import { systemPromptModule } from './load-system-prompt.mjs'
  * FRANÇAIS (« un chat roux… ») a donné un CHIEN — d'où la description demandée en anglais au modèle.
  */
 const projectRoot = fileURLToPath(new URL('..', import.meta.url))
+
+function loadPure(relativePath) {
+  const module = { exports: {} }
+  vm.runInThisContext(`(function (exports, module) { ${transpile(relativePath)} })`)(module.exports, module)
+  return module.exports
+}
 const nodeRequire = createRequire(import.meta.url)
 
 function transpile(relativePath) {
@@ -33,6 +39,8 @@ function transpile(relativePath) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   }).outputText
 }
+
+const imageModel = loadPure('shared/imageModel.ts')
 
 /** Lignes réelles de sd-cli (génération FLUX.2 klein sur ce conteneur), barres de progression comprises. */
 const REAL_OUTPUT = [
@@ -54,7 +62,7 @@ function sha(content) {
  * Charge imageGenerator.ts avec des faux : téléchargement (écrit un contenu connu), tar.exe (pose sd-cli.exe),
  * sd-cli (écrit la vraie sortie ci-dessus puis l'image), Ollama (note le déchargement).
  */
-function loadGenerator({ corruptFile = null, engineExitCode = 0, engineOutput = REAL_OUTPUT, holdEngine = false } = {}) {
+function loadGenerator({ corruptFile = null, engineExitCode = 0, engineOutput = REAL_OUTPUT, holdEngine = false, vramGb = 8, ramGb = 32 } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'jaris-images-'))
   const env = { LOCALAPPDATA: join(root, 'Local'), SystemRoot: 'C:\\Windows' }
   const dataRoot = join(root, 'data')
@@ -113,7 +121,10 @@ function loadGenerator({ corruptFile = null, engineExitCode = 0, engineOutput = 
         return content.length
       }
     },
-    '../../shared/formatBytes': { formatBytes: (n) => `${n} o` }
+    '../../shared/formatBytes': { formatBytes: (n) => `${n} o` },
+    './hardwareScan': { detectGpu: async () => ({ name: 'RTX 3070', vramGb }) },
+    './systemResources': { detectRamGb: () => ramGb },
+    '../../shared/imageModel': imageModel
   }
   const fakeProcess = { platform: 'win32', env }
   const module = { exports: {} }
@@ -288,4 +299,35 @@ test('les copies du test des modèles (outils + consignes) connaissent generate_
   const { TOOLS } = await import('./benchmark-cases.mjs')
   assert.ok(TOOLS.some((t) => t.function.name === 'generate_image'))
   assert.match(systemPromptModule.buildSystemPrompt(null, [], 'voice'), /generate_image, description en anglais/)
+})
+
+// --- Étape 174 : le modèle d'image seulement si la machine a la puissance ---
+
+test('un seul modèle d’image, ou aucun si la machine n’a pas la puissance', () => {
+  const { pickImageModel, IMAGE_MODEL } = imageModel
+  assert.equal(IMAGE_MODEL, 'FLUX.2 klein 4B')
+  assert.equal(pickImageModel(8, 32).model, 'FLUX.2 klein 4B')
+  assert.equal(pickImageModel(5.8, 15.8).model, 'FLUX.2 klein 4B', 'une carte « 6 Go » et un PC « 16 Go » tels que lus par Windows')
+  for (const [vram, ram, why] of [[null, 32, /aucune carte graphique/], [4, 32, /trop petite \(4 Go/], [12, 8, /pas assez de RAM \(8 Go/]]) {
+    const pick = pickImageModel(vram, ram)
+    assert.equal(pick.model, null)
+    assert.match(pick.reason, why)
+  }
+})
+
+test('pas assez de puissance : refus lisible AVANT tout téléchargement (5 Go jamais perdus)', async () => {
+  const t = loadGenerator({ vramGb: 4 })
+  await assert.rejects(t.gen.generateImage('a cat'), /Ton PC n'a pas assez de puissance pour dessiner des images : carte graphique trop petite/)
+  assert.equal(t.downloads.length, 0)
+  assert.deepEqual(t.events, [])
+  // Et le refus ne bloque pas la suite (verrou jamais posé).
+  t.cleanup()
+})
+
+test('isImageModelInstalled : vrai seulement quand les trois fichiers sont là, à la bonne taille', async () => {
+  const t = loadGenerator()
+  assert.equal(await t.gen.isImageModelInstalled(), false)
+  await t.gen.generateImage('a cat')
+  assert.equal(await t.gen.isImageModelInstalled(), true)
+  t.cleanup()
 })
