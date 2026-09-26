@@ -8,7 +8,7 @@ import { downloadToFile } from './download'
 import { unloadOllamaModels } from './ollama'
 import { detectGpu } from './hardwareScan'
 import { detectRamGb } from './systemResources'
-import { pickImageModel } from '../../shared/imageModel'
+import { IMAGE_MODEL, pickImageModel } from '../../shared/imageModel'
 import { formatBytes } from '../../shared/formatBytes'
 
 /**
@@ -27,7 +27,7 @@ import { formatBytes } from '../../shared/formatBytes'
  * et leur empreinte SHA-256 (lue sur Hugging Face et recalculée ici sur le fichier réellement téléchargé).
  * Un fichier corrompu ou remplacé en ligne est refusé plutôt que lancé.
  *
- * Premier usage : environ 5 Go à télécharger (une seule fois), avec l'avancement dans le journal du Chat.
+ * Installation (environ 5 Go) : par installImageModel, avec les autres modèles (runQuickSetup), jamais au dessin.
  */
 
 const SD_TAG = 'master-920-2f88688'
@@ -212,16 +212,30 @@ function runExecFile(file: string, args: string[]): Promise<void> {
   })
 }
 
+function engineExe(): string {
+  return join(imageEngineRoot(), 'bin', 'sd-cli.exe')
+}
+
+function modelPaths(): Record<ImageModelFile['role'], string> {
+  const dir = join(imageEngineRoot(), 'models')
+  return Object.fromEntries(IMAGE_MODEL_FILES.map((f) => [f.role, join(dir, f.fileName)])) as Record<ImageModelFile['role'], string>
+}
+
+/** Le moteur installé est bien la version figée ci-dessus (une nouvelle version de Jaris peut en changer). */
+async function engineReady(): Promise<boolean> {
+  const stamp = join(imageEngineRoot(), 'bin', '.version')
+  return existsSync(engineExe()) && (await readFile(stamp, 'utf-8').catch(() => '')) === SD_ENGINE.tag
+}
+
 /** Programme sd-cli prêt à l'emploi (téléchargé, vérifié, décompressé au besoin). */
 async function ensureEngine(onLog: Log): Promise<string> {
   const binDir = join(imageEngineRoot(), 'bin')
-  const exe = join(binDir, 'sd-cli.exe')
-  const stamp = join(binDir, '.version')
-  if (existsSync(exe) && (await readFile(stamp, 'utf-8').catch(() => '')) === SD_ENGINE.tag) return exe
+  const exe = engineExe()
+  if (await engineReady()) return exe
 
   await mkdir(imageEngineRoot(), { recursive: true })
   const zip = join(imageEngineRoot(), 'sd-cli.zip')
-  onLog('Premier dessin : installation du moteur d’images (une seule fois)…')
+  onLog('Installation du moteur d’images…')
   await downloadVerified(SD_ENGINE.url, zip, SD_ENGINE, 'le moteur d’images', onLog)
   const staging = `${binDir}.new`
   await rm(staging, { recursive: true, force: true })
@@ -245,24 +259,31 @@ async function ensureEngine(onLog: Log): Promise<string> {
 }
 
 /** Les trois fichiers du modèle, téléchargés au besoin. Un fichier à la bonne taille a déjà été vérifié. */
-async function ensureModels(onLog: Log): Promise<Record<ImageModelFile['role'], string>> {
-  const dir = join(imageEngineRoot(), 'models')
-  await mkdir(dir, { recursive: true })
-  const paths = {} as Record<ImageModelFile['role'], string>
+async function ensureModels(onLog: Log): Promise<void> {
+  await mkdir(join(imageEngineRoot(), 'models'), { recursive: true })
+  const paths = modelPaths()
   const missing = []
   for (const file of IMAGE_MODEL_FILES) {
-    const path = join(dir, file.fileName)
-    paths[file.role] = path
-    if ((await sizeOf(path)) !== file.bytes) missing.push(file)
+    if ((await sizeOf(paths[file.role])) !== file.bytes) missing.push(file)
   }
   if (missing.length) {
     const total = missing.reduce((sum, f) => sum + f.bytes, 0)
-    onLog(`Premier dessin : ${formatBytes(total)} à télécharger une seule fois, ça peut prendre plusieurs minutes.`)
+    onLog(`Modèle d'image (${IMAGE_MODEL}) : ${formatBytes(total)} à télécharger, ça peut prendre plusieurs minutes.`)
   }
   for (const file of missing) {
     await downloadVerified(file.url, paths[file.role], file, file.label, onLog)
   }
-  return paths
+}
+
+/**
+ * Étape 175, Léo : « il doit pas s'installer au premier dessin mais dans la page modèles comme tous les
+ * modèles si pas présent ». Appelé par runQuickSetup (écran d'accueil et « Retester la configuration »), au
+ * même moment que les modèles Ollama — jamais par un dessin.
+ */
+export async function installImageModel(onLog: Log = () => {}): Promise<void> {
+  if (process.platform !== 'win32') throw new Error("La génération d'images n'est disponible que sur Windows pour l'instant.")
+  await ensureEngine(onLog)
+  await ensureModels(onLog)
 }
 
 function killTree(pid: number | undefined, kill: () => void): void {
@@ -366,8 +387,12 @@ export async function generateImage(prompt: string, onLog: Log = () => {}, signa
   if (busy) throw new Error("Je suis déjà en train de dessiner une image : attends qu'elle soit finie, puis redemande.")
   busy = true
   try {
-    const exe = await ensureEngine(onLog)
-    const models = await ensureModels(onLog)
+    // Étape 175 : un dessin n'installe JAMAIS rien — c'est le rôle d'Options → Modèles, comme pour les autres modèles.
+    if (!(await isImageModelInstalled())) {
+      throw new Error("Le modèle d'image n'est pas encore installé sur ce PC : ouvre Options → Modèles et clique « Retester la configuration ».")
+    }
+    const exe = engineExe()
+    const models = modelPaths()
     if (signal?.aborted) throw new Error('Dessin annulé.')
 
     // Le modèle de conversation est encore chargé sur la carte graphique (il vient de décider de dessiner) :
@@ -390,10 +415,14 @@ export async function generateImage(prompt: string, onLog: Log = () => {}, signa
   }
 }
 
-/** Étape 174 : les trois fichiers du modèle sont-ils déjà téléchargés (et donc vérifiés, voir downloadVerified) ? */
+/**
+ * Étape 174 : le moteur (bonne version) et les trois fichiers du modèle sont-ils sur le disque ? Un fichier à la
+ * bonne taille a déjà été vérifié par son empreinte (downloadVerified ne le renomme qu'après).
+ */
 export async function isImageModelInstalled(): Promise<boolean> {
-  const dir = join(imageEngineRoot(), 'models')
-  const sizes = await Promise.all(IMAGE_MODEL_FILES.map((file) => sizeOf(join(dir, file.fileName))))
+  if (!(await engineReady())) return false
+  const paths = modelPaths()
+  const sizes = await Promise.all(IMAGE_MODEL_FILES.map((file) => sizeOf(paths[file.role])))
   return sizes.every((size, i) => size === IMAGE_MODEL_FILES[i].bytes)
 }
 

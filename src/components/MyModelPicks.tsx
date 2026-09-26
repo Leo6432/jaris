@@ -138,9 +138,9 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
                   </tr>
                 ) : (
                   picks.image.installed === false && (
-                    <tr className="capacity-scan__tier-upgrade">
+                    <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
-                      <td colSpan={4}>Pas géré par Ollama : téléchargé au premier dessin (environ 5 Go).</td>
+                      <td colSpan={4}>Pas installé sur ce PC pour l'instant — clique « Retester la configuration » (environ 5 Go).</td>
                     </tr>
                   )
                 )}

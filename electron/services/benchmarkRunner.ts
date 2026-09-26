@@ -2,6 +2,9 @@ import { deleteModel, pullModelIfMissing, ModelTooLargeError, DiskFullError } fr
 import { getAllCandidateModelIds, pickBestModelsFromBenchmark } from './hardwareScan'
 import { getProfile, saveProfile } from './profileStore'
 import type { CapacityScanResult } from '../../shared/ipc'
+import { installImageModel } from './imageGenerator'
+import { detectRamGb } from './systemResources'
+import { pickImageModel } from '../../shared/imageModel'
 
 /**
  * Configuration de l'écran d'accueil (CapacityScan.tsx) et de « Retester la configuration » : ne lance JAMAIS
@@ -70,6 +73,24 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
     picked = await pickBestModelsFromBenchmark(failedHuggingFace)
   }
 
+  // Étape 175, Léo : le modèle d'image « doit s'installer dans la page modèles comme tous les modèles » —
+  // ici, juste après ceux d'Ollama, et seulement si la machine a la puissance (même décision que la ligne
+  // « Image » d'Options → Modèles). Un échec ne fait jamais échouer le reste de la configuration.
+  const imagePick = pickImageModel(picked.vramGb, detectRamGb())
+  let image: CapacityScanResult['image'] = imagePick
+  if (imagePick.model) {
+    try {
+      await installImageModel(onLine)
+      image = { ...imagePick, installed: true }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      onLine(`Modèle d'image ${imagePick.model} non installé : ${message}`)
+      image = { ...imagePick, installed: false, error: message }
+    }
+  } else {
+    onLine(`Pas de modèle d'image : ${imagePick.reason}.`)
+  }
+
   const profile = await getProfile()
   if (profile) {
     // Étape 133, Léo : "pour mon palier on a changer de model comment on fait ça me réinstalle pas les
@@ -127,6 +148,7 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
   return {
     ...picked,
     skippedModels: skippedList.length ? skippedList : undefined,
-    blockedModels: blockedList.length ? blockedList : undefined
+    blockedModels: blockedList.length ? blockedList : undefined,
+    image
   }
 }

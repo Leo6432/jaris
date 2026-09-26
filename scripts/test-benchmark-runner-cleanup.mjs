@@ -29,7 +29,8 @@ function loadModule(relativePath, requireShim) {
  * @param {Set<string>} [skippedRoles] rôles ('flash'/'medium'/'large'/'vision'/'code') dont le pull doit échouer
  *   avec ModelTooLargeError, pour simuler un modèle ignoré faute de VRAM/disque.
  */
-function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor = new Set(), { pullErrorFor = new Set(), repick } = {}) {
+function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor = new Set(), { pullErrorFor = new Set(), repick, vramGb = 8, ramGb = 32, imageInstallError = null } = {}) {
+  const imageInstalls = []
   const deletedModels = []
   const pulledModels = []
   const pickCalls = []
@@ -62,7 +63,7 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
       const p = exclude.size && repick ? repick(exclude) : picked
       return {
         gpuName: 'GPU de test',
-        vramGb: 8,
+        vramGb,
         models: { flash: p.flash, medium: p.medium, large: p.large },
         visionModel: p.visionModel,
         codeModel: p.codeModel
@@ -86,6 +87,17 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
     if (id === './profileStore') return profileStoreModule
     if (id.endsWith('paths')) return { resourcesRoot: () => '.' }
     if (id === './dataLocation') return { getDataRoot: () => '/fake/data' }
+    // Étape 175 : le modèle d'image s'installe dans le même passage que les modèles Ollama.
+    if (id === './imageGenerator') {
+      return {
+        installImageModel: async () => {
+          imageInstalls.push('FLUX.2 klein 4B')
+          if (imageInstallError) throw new Error(imageInstallError)
+        }
+      }
+    }
+    if (id === './systemResources') return { detectRamGb: () => ramGb }
+    if (id === '../../shared/imageModel') return loadModule('../shared/imageModel.ts', () => ({}))
     throw new Error(`module non simulé dans le test : ${id}`)
   })
 
@@ -95,6 +107,7 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
     pulledModels,
     pickCalls,
     lines,
+    imageInstalls,
     getProfile: () => profile
   }
 }
@@ -224,4 +237,33 @@ test('étape 141 : un modèle choisi à la main dans Chat/Code/Vocal n’est jam
   await t.run()
   assert.deepEqual(t.deletedModels, [], `ministral-3:3b est choisi à la main pour la voix : obtenu ${t.deletedModels.join(', ')}`)
   assert.equal(t.getProfile().modelChoices?.voice, 'ministral-3:3b', 'le choix à la main survit au retest')
+})
+
+// --- Étape 175 : le modèle d'image s'installe ICI (page Modèles / écran d'accueil), jamais au premier dessin ---
+
+const IMAGE_PICKED = { flash: 'a', medium: 'b', large: 'c', visionModel: 'v', codeModel: 'k' }
+
+test('machine assez puissante : le modèle d’image est installé avec les autres, et annoncé dans le résultat', async () => {
+  const t = setup(IMAGE_PICKED, null)
+  const result = await t.run()
+  assert.deepEqual(t.imageInstalls, ['FLUX.2 klein 4B'])
+  assert.equal(result.image.model, 'FLUX.2 klein 4B')
+  assert.equal(result.image.installed, true)
+})
+
+test('pas assez de puissance : rien n’est téléchargé, « aucun modèle » avec la raison', async () => {
+  const t = setup(IMAGE_PICKED, null, new Set(), new Set(), { vramGb: 4 })
+  const result = await t.run()
+  assert.deepEqual(t.imageInstalls, [])
+  assert.equal(result.image.model, null)
+  assert.match(t.lines.join('\n'), /Pas de modèle d'image : carte graphique trop petite/)
+})
+
+test('échec du modèle d’image : les autres modèles restent configurés, l’erreur est rapportée telle quelle', async () => {
+  const t = setup(IMAGE_PICKED, { models: {} }, new Set(), new Set(), { imageInstallError: 'Pas assez de place sur le disque.' })
+  const result = await t.run()
+  assert.deepEqual(t.pulledModels.sort(), ['a', 'b', 'c', 'k', 'v'])
+  assert.equal(t.getProfile().capacityScanDone, true)
+  assert.equal(result.image.installed, false)
+  assert.equal(result.image.error, 'Pas assez de place sur le disque.')
 })

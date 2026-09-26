@@ -90,7 +90,13 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
               <li>Médium : {formatModelName(result.models.medium)}</li>
               <li>Puissant : {formatModelName(result.models.large)}</li>
               <li>Vision : {formatModelName(result.visionModel)}</li>
+              {result.image && <li>Image : {result.image.model ?? 'aucun modèle (pas assez de puissance)'}</li>}
             </ul>
+            {result.image?.error && (
+              <div className="capacity-scan__warning">
+                <p>Le modèle d'image n'a pas pu être installé : {result.image.error}</p>
+              </div>
+            )}
             <p className="capacity-scan__hint">
               Jaris choisit automatiquement le modèle le plus adapté à chaque question. Modifiable plus tard
               depuis Options → Modèles.

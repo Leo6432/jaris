@@ -4949,3 +4949,23 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Pas de vitesse/intelligence/fiabilité sur cette ligne (« — ») : ces mesures ne concernent que les modèles de
   texte. `detectGpu` (hardwareScan.ts) est désormais exporté pour ce refus. Régression :
   `node --test scripts/test-image-generation.mjs scripts/test-options-reorganization-ui.mjs`.
+
+- **Le modèle d'image s'installe avec les autres, plus jamais au premier dessin (étape 175, Léo : « il doit pas
+  s'installer au premier dessin mais dans la page model comme tout les model si pas présent »)**. REMPLACE ce
+  que disaient les étapes 173-174 (« téléchargé au premier dessin »). `installImageModel` (imageGenerator.ts) est
+  appelé par `runQuickSetup` — écran d'accueil ET « Retester la configuration » —, juste après les modèles
+  Ollama, seulement si `pickImageModel` dit que la machine le fait tourner. `generateImage` ne télécharge plus
+  RIEN : modèle absent → message qui renvoie vers Options → Modèles → « Retester la configuration ». La ligne
+  « Image » affiche le même « Pas installé sur ce PC pour l'instant — clique « Retester la configuration » »
+  que les modèles Ollama absents. Un échec d'installation de l'image ne fait jamais échouer le reste de la
+  configuration (les modèles de conversation passent avant) : il est rapporté à part (`CapacityScanResult.image.error`),
+  jamais mélangé aux `skippedModels` dont le texte (« Jaris utilisera un repli moins bon ») serait faux pour
+  l'image — il n'y a pas de repli. `isImageModelInstalled` vérifie maintenant aussi le MOTEUR (bonne version),
+  pas seulement les trois fichiers : une nouvelle version de Jaris qui change de moteur redemande l'installation
+  au lieu de lancer l'ancien. **Leçon générale : « comme tous les modèles » veut dire le MÊME chemin
+  d'installation, pas seulement la même ligne à l'écran — un modèle affiché comme les autres mais installé
+  autrement (au premier usage) surprend exactement au pire moment, en pleine demande.** Piège attrapé en
+  lançant la suite : une boucle d'attente non bornée dans un test (`while (!lastSpawn)`) tournait à l'infini dès
+  que le code refusait de dessiner — toute attente dans un test doit être bornée et échouer avec un message.
+  Régression : `node --test scripts/test-image-generation.mjs scripts/test-benchmark-runner-cleanup.mjs
+  scripts/test-options-reorganization-ui.mjs`, chaque garde vérifiée en réintroduisant son défaut.

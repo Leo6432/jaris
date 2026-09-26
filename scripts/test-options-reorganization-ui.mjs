@@ -490,7 +490,7 @@ test('Modèles : une ligne « Image » avec le seul modèle d’image quand la m
   await withOptions(async (page) => {
     const row = await imageRow(page)
     assert.deepEqual(row.cells, ['Image', 'FLUX.2 klein 4B', '—', '—', ''])
-    assert.match(row.note, /téléchargé au premier dessin/, 'pas encore téléchargé : dit, jamais présenté comme installé')
+    assert.equal(row.note, "Pas installé sur ce PC pour l'instant — clique « Retester la configuration » (environ 5 Go).", 'pas encore installé : dit, avec le même bouton que les autres modèles')
   })
 })
 

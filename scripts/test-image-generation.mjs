@@ -148,13 +148,40 @@ function loadGenerator({ corruptFile = null, engineExitCode = 0, engineOutput = 
   return { gen: loaded, root, env, dataRoot, events, downloads, killed, cleanup: () => rmSync(root, { recursive: true, force: true }) }
 }
 
-test('premier dessin : tout se télécharge, la carte graphique est libérée AVANT de lancer sd-cli, l’image est créée', async () => {
+/** Étape 175 : le modèle s'installe comme les autres (runQuickSetup), puis on dessine. */
+async function installed(opts) {
+  const t = loadGenerator(opts)
+  await t.gen.installImageModel()
+  return t
+}
+
+test('installation (page Modèles) : le moteur + les trois fichiers, rien d’autre', async () => {
   const t = loadGenerator()
+  const logs = []
+  await t.gen.installImageModel((m) => logs.push(m))
+  assert.equal(t.downloads.length, 4, 'le moteur + les trois fichiers du modèle')
+  assert.deepEqual(t.events, ['extract'], 'installer ne dessine rien et ne touche pas à Ollama')
+  assert.ok(logs.some((l) => /Téléchargement de .* : 100 %/.test(l)), 'avancement visible pendant l’installation')
+  t.cleanup()
+})
+
+test('dessiner n’installe JAMAIS rien : sans modèle installé, message qui renvoie vers Options → Modèles', async () => {
+  const t = loadGenerator()
+  await assert.rejects(t.gen.generateImage('a cat'), /pas encore installé sur ce PC : ouvre Options → Modèles et clique « Retester la configuration »/)
+  assert.equal(t.downloads.length, 0)
+  assert.deepEqual(t.events, [])
+  t.cleanup()
+})
+
+test('dessin : la carte graphique est libérée AVANT de lancer sd-cli, l’image est créée, rien n’est téléchargé', async () => {
+  const t = await installed()
+  const downloadsBefore = t.downloads.length
+  t.events.length = 0
   const logs = []
   const image = await t.gen.generateImage('a ginger cat on a blue sofa', (m) => logs.push(m))
 
-  assert.equal(t.downloads.length, 4, 'le moteur + les trois fichiers du modèle')
-  assert.deepEqual(t.events, ['extract', 'unload', 'spawn'])
+  assert.equal(t.downloads.length, downloadsBefore, 'aucun téléchargement pendant un dessin')
+  assert.deepEqual(t.events, ['unload', 'spawn'])
   assert.ok(existsSync(image.path), 'le PNG existe')
   assert.equal(dirname(image.path), join(t.dataRoot, 'generated-images'), 'rangé avec les données de Léo')
   assert.match(image.fileName, /^\d{4}-\d{2}-\d{2}T[\d-]+-a-ginger-cat-on-a-blue-sofa\.png$/)
@@ -164,17 +191,16 @@ test('premier dessin : tout se télécharge, la carte graphique est libérée AV
   t.cleanup()
 })
 
-test('deuxième dessin : rien n’est retéléchargé', async () => {
-  const t = loadGenerator()
-  await t.gen.generateImage('first')
+test('réinstaller un modèle déjà présent ne retélécharge rien', async () => {
+  const t = await installed()
   const before = t.downloads.length
-  await t.gen.generateImage('second')
+  await t.gen.installImageModel()
   assert.equal(t.downloads.length, before)
   t.cleanup()
 })
 
 test('la description passe en UN argument (jamais un shell), avec la commande documentée pour FLUX.2 klein', async () => {
-  const t = loadGenerator()
+  const t = await installed()
   const piege = 'cat" & shutdown -s -t 0 & echo "'
   await t.gen.generateImage(piege)
   const { exe, args, options } = t.gen.lastSpawn.spawnArgs
@@ -199,7 +225,9 @@ test('les chevrons sont retirés : sd.cpp lirait <lora:…> comme un fichier à 
 
 test('un fichier dont l’empreinte ne correspond pas est effacé et refusé, sd-cli n’est jamais lancé', async () => {
   const t = loadGenerator({ corruptFile: 'Qwen3-4B' })
-  await assert.rejects(t.gen.generateImage('cat'), /ne correspond pas à l'original/)
+  await assert.rejects(t.gen.installImageModel(), /ne correspond pas à l'original/)
+  assert.equal(await t.gen.isImageModelInstalled(), false)
+  await assert.rejects(t.gen.generateImage('cat'), /pas encore installé/)
   assert.ok(!t.events.includes('spawn'))
   const models = join(t.env.LOCALAPPDATA, 'Jaris', 'image-generation', 'models')
   assert.deepEqual(readdirSync(models).filter((f) => f.startsWith('Qwen3')), [], 'ni fichier final, ni fichier partiel')
@@ -207,16 +235,17 @@ test('un fichier dont l’empreinte ne correspond pas est effacé et refusé, sd
 })
 
 test('un manque de mémoire devient une phrase lisible par Léo', async () => {
-  const t = loadGenerator({ engineExitCode: 1, engineOutput: ['ggml_vulkan: Device memory allocation failed', 'ErrorOutOfDeviceMemory'] })
+  const t = await installed({ engineExitCode: 1, engineOutput: ['ggml_vulkan: Device memory allocation failed', 'ErrorOutOfDeviceMemory'] })
   await assert.rejects(t.gen.generateImage('cat'), /Pas assez de mémoire pour dessiner/)
   t.cleanup()
 })
 
 test('une seule image à la fois, et un arrêt demandé tue vraiment sd-cli', async () => {
-  const t = loadGenerator({ holdEngine: true })
+  const t = await installed({ holdEngine: true })
   const controller = new AbortController()
   const first = t.gen.generateImage('cat', () => {}, controller.signal)
-  while (!t.gen.lastSpawn) await new Promise((r) => setImmediate(r))
+  for (let i = 0; !t.gen.lastSpawn && i < 1000; i++) await new Promise((r) => setImmediate(r))
+  assert.ok(t.gen.lastSpawn, 'sd-cli aurait dû être lancé')
   await assert.rejects(t.gen.generateImage('dog'), /déjà en train de dessiner/)
   controller.abort()
   await assert.rejects(first, /annulé/)
@@ -225,7 +254,7 @@ test('une seule image à la fois, et un arrêt demandé tue vraiment sd-cli', as
 })
 
 test('une image n’est relue que par son NOM, jamais par un chemin venu de l’historique', async () => {
-  const t = loadGenerator()
+  const t = await installed()
   const image = await t.gen.generateImage('cat')
   assert.match(await t.gen.readGeneratedImageDataUrl(image.fileName), /^data:image\/png;base64,/)
   assert.equal(await t.gen.readGeneratedImageDataUrl('../../profile.png'), null)
@@ -324,10 +353,12 @@ test('pas assez de puissance : refus lisible AVANT tout téléchargement (5 Go j
   t.cleanup()
 })
 
-test('isImageModelInstalled : vrai seulement quand les trois fichiers sont là, à la bonne taille', async () => {
+test('isImageModelInstalled : vrai seulement avec le moteur ET les trois fichiers à la bonne taille', async () => {
   const t = loadGenerator()
   assert.equal(await t.gen.isImageModelInstalled(), false)
-  await t.gen.generateImage('a cat')
+  await t.gen.installImageModel()
   assert.equal(await t.gen.isImageModelInstalled(), true)
+  rmSync(join(t.env.LOCALAPPDATA, 'Jaris', 'image-generation', 'bin', 'sd-cli.exe'))
+  assert.equal(await t.gen.isImageModelInstalled(), false, 'moteur absent = pas installé')
   t.cleanup()
 })

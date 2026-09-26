@@ -239,6 +239,11 @@ export interface CapacityScanResult {
   skippedModels?: { model: string; reason: string }[]
   /** Étape 138 : meilleurs modèles non téléchargeables pour l'instant (voir Profile.blockedModels), remplacés par le suivant. */
   blockedModels?: { model: string; reason: string }[]
+  /**
+   * Étape 175 : le modèle d'image, installé par le même passage que les modèles Ollama. `error` = la machine
+   * le fait tourner mais son installation a échoué (message déjà lisible par Léo).
+   */
+  image?: ImageModelPick & { error?: string }
 }
 
 /**

@@ -92,7 +92,7 @@ export const CAPABILITIES: CapabilityGroup[] = [
       },
       {
         title: 'Dessiner une image',
-        description: "Crée l'image que tu décris, sur ton PC, et l'affiche dans le Chat. La toute première fois, environ 5 Go sont téléchargés.",
+        description: "Crée l'image que tu décris, sur ton PC, et l'affiche dans le Chat. Son modèle s'installe avec les autres (Options → Modèles).",
         example: 'dessine-moi un chat roux sur un canapé bleu',
         toolNames: ['generate_image']
       },
