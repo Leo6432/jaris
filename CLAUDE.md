@@ -5120,3 +5120,12 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   l'étape 158 donnaient 46/50, la voix réelle 2/12 avec la même règle.** Régression :
   `python scripts/test-wake-confirmation.py` (les 12 transcriptions réelles, et jamais dans une phrase), vérifié
   en laissant la forme souple s'appliquer au premier mot d'une phrase.
+
+- **« Jaris » transcrit en cyrillique (étape 182, Léo : « il met souvent Compris « Жайс. » »)**. Parakeet v3 devine
+  seul la langue ; un mot isolé si court est parfois pris pour du RUSSE et écrit en cyrillique — il échappait
+  alors à toute comparaison (aucune lettre latine). « Жайс » se lit « jaïs », forme déjà acceptée à l'étape 181 :
+  les lettres cyrilliques sont ramenées à leur son en lettres latines, à la française (Ж → « j »), avant la
+  comparaison uniquement — jamais dans le texte transcrit lui-même. Du vrai russe dans une phrase ne réveille
+  toujours pas Jaris. **Leçon générale : un modèle de transcription multilingue qui devine la langue peut changer
+  d'ALPHABET sur un mot court — toute comparaison de texte en aval doit d'abord ramener l'écriture à celle qu'on
+  attend.** Régression : `python scripts/test-wake-confirmation.py` (vérifié en retirant la conversion).

@@ -28,6 +28,15 @@ class ConfirmationTests(unittest.TestCase):
         for text in ('Rice?', 'Rice.', 'Nice.', 'Rice'):
             self.assertFalse(contains_wake_name(text), text)
 
+    def test_cyrillic_transcription(self):
+        # Étape 182 : réel, voix de Léo — Parakeet a pris le mot seul pour du russe.
+        for text in ('Жайс.', 'Жарис', 'Жайс'):
+            self.assertTrue(contains_wake_name(text), text)
+            self.assertEqual(remove_wake_prefix(text), '')
+        # Du vrai russe dans une phrase ne réveille pas Jaris pour autant.
+        for text in ('Привет, как дела?', 'Жаль, что ты не пришёл.', 'Париж'):
+            self.assertFalse(contains_wake_name(text), text)
+
     def test_loose_forms_only_when_said_alone(self):
         # Dans une vraie phrase, seule la forme stricte compte : « j'ai ce livre » ne réveille jamais Jaris.
         for text in ("J'ai ce livre sur la table.", 'Jazz ce soir au club ?', 'Je sais pas.', "J'ai ce qu'il faut.", 'Jessica arrive.'):

@@ -43,12 +43,27 @@ WAKE_NAME = re.compile(r'\b(?:di)?jarr?[iy]\w*\b', re.IGNORECASE)
 SHORT_WAKE_NAME = re.compile(r'^(?:hey|dis|di)?j(?!arriv)(?:ai|ei|ay|a|e|é)[rszcçx]\w{0,3}$')
 
 
+# Étape 182 (Léo : « il met souvent Compris « Жайс. » ») : Parakeet v3 devine lui-même la langue, et un mot seul
+# si court est parfois pris pour du russe — écrit en cyrillique, il échappait à toute comparaison. « Жайс » se
+# lit pourtant « jaïs » : les lettres cyrilliques sont ramenées à leur son en lettres latines, à la française
+# (Ж = « j » de « jour »), AVANT la comparaison. Seul le TEXTE COMPARÉ change, jamais ce qui est transcrit.
+CYRILLIC_TO_LATIN = str.maketrans({
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'j', 'з': 'z', 'и': 'i', 'й': 'i',
+    'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'ou', 'ф': 'f',
+    'х': 'h', 'ц': 'ts', 'ч': 'tch', 'ш': 'ch', 'щ': 'ch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'iou', 'я': 'ia',
+})
+
+
+def _latin(text: str) -> str:
+    return text.lower().translate(CYRILLIC_TO_LATIN)
+
+
 def _compact(text: str) -> str:
-    return re.sub(r"[\s'’.,!?;:«»\"—-]+", '', text.lower())
+    return re.sub(r"[\s'’.,!?;:«»\"—-]+", '', _latin(text))
 
 
 def contains_wake_name(text: str) -> bool:
-    return WAKE_NAME.search(text) is not None or SHORT_WAKE_NAME.match(_compact(text)) is not None
+    return WAKE_NAME.search(_latin(text)) is not None or SHORT_WAKE_NAME.match(_compact(text)) is not None
 
 
 def remove_wake_prefix(text: str) -> str:
