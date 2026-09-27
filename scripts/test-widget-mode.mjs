@@ -231,3 +231,17 @@ test('sans widget (Code, Options), réduire ou changer d’appli laisse Jaris da
   const full = /function showFullWindow\(\)[\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
   assert.match(full, /isMinimized\(\)\)\s*fullWindow\.restore\(\)/, 'une fenêtre réduite dans la barre des tâches doit se rouvrir')
 })
+
+// Étape 178, Léo : après Windows + Maj + S, « il est plus là… il revient jamais ».
+test('surveillance : tant que la grande fenêtre est cachée, le widget est remis s’il a disparu', () => {
+  const watch = /function watchWidgetPresence\(\)[\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
+  assert.ok(watch, 'watchWidgetPresence introuvable')
+  assert.match(watch, /setInterval\(/)
+  assert.match(watch, /!hasWidgetToShow\(\)\)\s*return/, 'jamais de widget en mode Code ni pendant les Options')
+  assert.match(watch, /fullWindow\.isVisible\(\)\)\s*return/, 'jamais de widget par-dessus la grande fenêtre')
+  assert.match(watch, /!widgetWindow\.isVisible\(\)\)\s*\{\s*showWidgetWindow\(\)/, 'un widget disparu doit être remis')
+  assert.match(watch, /showInactive\(\)[\s\S]*setAlwaysOnTop\(true[\s\S]*invalidate\(\)/, 'un widget « visible » mais absent de l’écran doit être réaffiché')
+  assert.doesNotMatch(watch, /\.focus\(\)/, 'la surveillance ne doit jamais voler le focus')
+  const ready = mainSource.slice(mainSource.indexOf('app.whenReady()'))
+  assert.match(ready, /watchWidgetPresence\(\)/, 'la surveillance doit être lancée au démarrage')
+})

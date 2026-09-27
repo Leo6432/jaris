@@ -5047,3 +5047,18 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   fenêtre réduite (show() seul ne la rouvre pas). **Leçon : une fenêtre ne doit disparaître de la barre des tâches
   que si quelque chose la remplace à l'écran — sinon l'utilisateur la croit fermée.** Régression :
   `node --test scripts/test-widget-mode.mjs scripts/test-quit-blur-guard.mjs`, gardes vérifiées en les retirant.
+
+- **Capture d'écran (Windows + Maj + S) : le widget disparaissait encore, et ne revenait jamais (étape 178)**.
+  En v0.16.36 tout le reste marchait (réduire, autre appli, barre des tâches, Code/Options). Deux réponses à choix
+  simples de Léo : pendant la capture il voit encore la page Jaris (l'écran figé est une PHOTO prise avant), et
+  après la capture le widget ne revient jamais, même en cliquant ailleurs. Après deux hypothèses sur la cause
+  (report hors de la bascule de focus, calcul de recouvrement de Chromium) qui ont réglé les autres chemins mais
+  pas celui-ci, pas de 3e hypothèse invérifiable sans Windows : `watchWidgetPresence` CONSTATE l'état réel chaque
+  seconde — grande fenêtre cachée + widget attendu (`hasWidgetToShow`) → widget absent : remis ; « visible »
+  pour Windows : réaffiché sans voler le focus (`showInactive`), remis au premier plan, redessiné (sans effet
+  quand tout va bien). **Leçon générale, même famille que SearXNG (étape 103) et le rangement du stockage : quand
+  un état peut être cassé par un chemin qu'on ne voit pas (ici un outil de Windows, sans évènement côté Jaris),
+  un contrôle périodique de l'état réel vaut mieux qu'une hypothèse de plus sur l'évènement manquant.** La cause
+  exacte reste inconnue ; le correctif ne dépend pas d'elle. Non vérifié sur Windows. Régression :
+  `node --test scripts/test-widget-mode.mjs` (surveillance lancée au démarrage, jamais en Code/Options, jamais
+  par-dessus la grande fenêtre, jamais de vol de focus).

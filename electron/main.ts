@@ -530,6 +530,32 @@ function revealWidgetAfterLeaving(win: BrowserWindow): void {
   }, 400)
 }
 
+/**
+ * Étape 178 (Léo : après Windows + Maj + S, « dès que je finis la capture il est plus là… il revient jamais »,
+ * alors que réduire, changer d'appli, la barre des tâches marchent désormais). L'outil de capture de Windows fait
+ * disparaître le widget par un chemin que Jaris ne voit pas (aucun évènement, invérifiable sans Windows). Plutôt
+ * qu'une 3e hypothèse sur la cause, Jaris CONSTATE l'état réel chaque seconde : grande fenêtre cachée et un
+ * widget attendu → le widget doit être visible et au premier plan, sinon il est remis. Même principe que le
+ * contrôle SearXNG (étape 103) : vérifier ce qui est vrai à l'écran plutôt que supposer qu'un évènement a suffi.
+ */
+const WIDGET_WATCHDOG_MS = 1000
+
+function watchWidgetPresence(): void {
+  setInterval(() => {
+    if (!onboardingDone || quitting || !hasWidgetToShow()) return
+    if (!fullWindow || fullWindow.isDestroyed() || fullWindow.isVisible()) return
+    if (!widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible()) {
+      showWidgetWindow()
+      return
+    }
+    // « Visible » pour Windows ne veut pas dire affiché : réaffiché sans voler le focus, remis au premier
+    // plan et redessiné — trois opérations sans effet quand tout va déjà bien.
+    widgetWindow.showInactive()
+    widgetWindow.setAlwaysOnTop(true, 'floating')
+    widgetWindow.webContents.invalidate()
+  }, WIDGET_WATCHDOG_MS)
+}
+
 function showWidgetWindow(forceExpanded = false): void {
   if (fullWindow && !fullWindow.isDestroyed() && fullWindow.isVisible()) return
   // Depuis le mode Code, Jaris disparaît complètement : "ça doit rien faire aucun widget" (Léo). Un widget
@@ -1197,6 +1223,7 @@ app.whenReady().then(async () => {
     })
   }
 
+  watchWidgetPresence()
   void startVoicePipeline()
 })
 
