@@ -209,3 +209,25 @@ test('perte de focus : le widget s’affiche APRÈS la bascule de Windows, sans 
   const show = /function showWidgetWindow\([\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
   assert.match(show, /showInactive\(\)/, 'hors barre Chat, le widget ne doit pas reprendre le focus à l’appli cliquée')
 })
+
+// Étape 177, Léo : Windows + Maj + S sur la page Agent vocal → « après il y a aucun widget » ; et « dans code et
+// option il y a aucun widget, ça veut dire qu'ils doivent pas disparaître dès que je fais moins ».
+test('le widget ne devient jamais une fenêtre transparente vide : calcul de recouvrement coupé, jamais mis en veille', () => {
+  assert.match(mainSource, /appendSwitch\(['"]disable-features['"], ['"]CalculateNativeWinOcclusion['"]\)/)
+  const beforeReady = mainSource.slice(0, mainSource.indexOf('app.whenReady()'))
+  assert.ok(beforeReady.includes('CalculateNativeWinOcclusion'), 'le commutateur doit être posé AVANT ready')
+  const widget = /function createWidgetWindow\(\)[\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
+  assert.match(widget, /backgroundThrottling: false/)
+  const show = /function showWidgetWindow\([\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
+  assert.match(show, /webContents\.invalidate\(\)/)
+})
+
+test('sans widget (Code, Options), réduire ou changer d’appli laisse Jaris dans la barre des tâches', () => {
+  assert.match(mainSource, /function hasWidgetToShow\(\)[\s\S]{0,120}?activeMode !== ['"]code['"] && !optionsOpen/)
+  for (const event of ['minimize', 'blur']) {
+    const handler = new RegExp(`win\\.on\\(['"]${event}['"],[\\s\\S]{0,400}?\\}\\);`).exec(mainSource)?.[0] ?? ''
+    assert.match(handler, /!hasWidgetToShow\(\)\)\s*return/, `'${event}' ne doit rien cacher quand aucun widget ne remplace Jaris`)
+  }
+  const full = /function showFullWindow\(\)[\s\S]*?\n}\n/.exec(mainSource)?.[0] ?? ''
+  assert.match(full, /isMinimized\(\)\)\s*fullWindow\.restore\(\)/, 'une fenêtre réduite dans la barre des tâches doit se rouvrir')
+})

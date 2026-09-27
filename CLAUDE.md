@@ -5027,3 +5027,23 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   de Windows) : que ce soit bien la cause exacte — le mécanisme est déduit de la seule différence entre les deux
   chemins, à confirmer par Léo en usage réel.** Régression : `node --test scripts/test-widget-mode.mjs`
   (structurel), vérifié en remettant l'affichage direct puis `show()`.
+
+- **Suite de l'étape 176 : toujours aucun widget après Windows + Maj + S sur la page Agent vocal, en v0.16.35
+  (étape 177)**. Le report de 80 ms + `showInactive` ne suffisait donc pas (ou n'était pas la cause). Hypothèse
+  retenue, cohérente avec TOUS les faits donnés par Léo (réduire marche ; clic sur une autre appli, barre des
+  tâches, capture d'écran non ; « rien nulle part ») : Chromium calcule lui-même si une fenêtre est RECOUVERTE
+  (`CalculateNativeWinOcclusion`) et arrête de la dessiner ; le widget, affiché au moment où l'écran figé de la
+  capture ou l'appli cliquée le recouvre, était marqué « recouvert » — et une fenêtre TRANSPARENTE non dessinée est
+  invisible, sans se redessiner une fois découverte. Réduire ne met rien par-dessus : seul chemin qui marchait.
+  Corrigé par trois gardes complémentaires : commutateur `disable-features=CalculateNativeWinOcclusion` posé
+  avant `ready` (Jaris n'a que deux fenêtres, ce calcul ne lui apporte rien), `backgroundThrottling: false` sur
+  le widget, et `webContents.invalidate()` à chaque affichage. **Leçon générale : pour une fenêtre transparente,
+  « pas dessinée » et « pas affichée » se voient pareil — chercher aussi du côté du moteur de rendu quand Windows
+  dit que la fenêtre est bien là.** Toujours NON vérifié sur Windows.
+  Même étape, demande de Léo : « dans code et option il y a aucun widget, ça veut dire qu'ils doivent pas
+  disparaître dès que je fais moins… pour le rouvrir on doit aller à côté de l'horloge ». `hasWidgetToShow()`
+  (mode ≠ Code et Options fermées) garde maintenant 'minimize' ET 'blur' : sans widget pour le remplacer, Jaris
+  se réduit comme une application normale et reste dans la barre des tâches ; `showFullWindow` restaure une
+  fenêtre réduite (show() seul ne la rouvre pas). **Leçon : une fenêtre ne doit disparaître de la barre des tâches
+  que si quelque chose la remplace à l'écran — sinon l'utilisateur la croit fermée.** Régression :
+  `node --test scripts/test-widget-mode.mjs scripts/test-quit-blur-guard.mjs`, gardes vérifiées en les retirant.

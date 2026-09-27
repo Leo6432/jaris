@@ -58,12 +58,14 @@ test("le repli en widget sur perte de focus ('blur') ne se déclenche jamais pen
 test("le repli en widget sur perte de focus ('blur') ne se déclenche jamais pendant que la page Options est ouverte", () => {
   const blurHandler = /win\.on\(['"]blur['"],[\s\S]{0,400}?\}\);/.exec(mainSource)
   assert.ok(blurHandler, "handler 'blur' introuvable dans main.ts")
+  // Étape 177 : consulté à travers hasWidgetToShow(), partagé avec 'minimize' (Options ET mode Code).
   assert.match(
     blurHandler[0],
-    /optionsOpen/,
-    "le handler 'blur' ne consulte pas `optionsOpen` : perdre le focus en pleine configuration (Options) " +
+    /hasWidgetToShow\(\)/,
+    "le handler 'blur' ne consulte pas hasWidgetToShow() : perdre le focus en pleine configuration (Options) " +
       'repliait Jaris en widget, alors que la page Options a déjà son propre bouton pour se fermer'
   )
+  assert.match(mainSource, /function hasWidgetToShow\(\)[\s\S]{0,120}?!optionsOpen/, 'hasWidgetToShow doit tenir compte des Options')
 })
 
 test('`optionsOpen` est bien mis à jour par le canal IPC dédié, pas laissé figé à sa valeur initiale', () => {

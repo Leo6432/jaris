@@ -85,6 +85,13 @@ import {
  * d'ouvrir sa propre fenêtre.
  */
 registerPreviewScheme()
+// Étape 177 (Léo : Windows + Maj + S sur la page Agent vocal → « après il y a aucun widget ») : Chromium
+// calcule lui-même si une fenêtre est RECOUVERTE par une autre (l'écran figé de la capture, l'appli sur
+// laquelle on vient de cliquer) et arrête alors de la dessiner. Pour une fenêtre TRANSPARENTE comme le petit
+// Jaris, « plus dessinée » veut dire invisible — et elle ne se redessinait pas une fois découverte. Réduire
+// ne recouvre rien, d'où le seul chemin qui marchait. Ce calcul est coupé : Jaris n'a que deux fenêtres.
+// À poser avant `ready`, comme tout commutateur Chromium.
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 if (!gotSingleInstanceLock) {
   app.quit()
@@ -318,7 +325,10 @@ function createFullWindow(showWhenReady = true): BrowserWindow {
   // Windows réduire, puis on cache complètement la fenêtre (plus d'icône dans la barre des tâches) et
   // on montre le widget à la place.
   win.on('minimize', () => {
-    if (!onboardingDone) return
+    // Étape 177 (Léo : « dans code et option il y a aucun widget, ça veut dire qu'ils doivent pas disparaître
+    // dès que je fais moins… pour le rouvrir on doit aller à côté de l'horloge ») : sans widget à montrer,
+    // Jaris se réduit comme n'importe quelle application — il reste dans la barre des tâches.
+    if (!onboardingDone || !hasWidgetToShow()) return
     win.hide()
     showWidgetWindow()
     applyListeningForActiveMode()
@@ -346,7 +356,7 @@ function createFullWindow(showWhenReady = true): BrowserWindow {
   // Jaris en widget, perdant l'accès direct à la page Options (repliée avec le reste de la fenêtre derrière
   // le petit widget) — Options a déjà son propre bouton "Fermer" pour signaler qu'on a vraiment fini.
   win.on('blur', () => {
-    if (!onboardingDone || dialogOpen || quitting || optionsOpen) return
+    if (!onboardingDone || dialogOpen || quitting || !hasWidgetToShow()) return
     // Étape 165 : juste après l'ouverture de session, l'Explorateur et les autres programmes de démarrage
     // prennent le focus — ce n'est pas Léo qui change d'appli, la fenêtre doit rester affichée.
     if (Date.now() < loginRevealUntil) return
@@ -394,7 +404,10 @@ function createWidgetWindow(): BrowserWindow {
     show: false,
     webPreferences: {
       preload: join(__dirname, '../preload/preload.mjs'),
-      sandbox: false
+      sandbox: false,
+      // Étape 177 : caché la plupart du temps, le widget ne doit pas être mis en veille par Chromium — sinon il
+      // réapparaît sans image (donc invisible, puisque transparent) jusqu'à son prochain rafraîchissement.
+      backgroundThrottling: false
     }
   })
 
@@ -472,6 +485,8 @@ function showFullWindow(): void {
   stopChatPointerWatch()
   if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide()
   if (!fullWindow || fullWindow.isDestroyed()) fullWindow = createFullWindow()
+  // Réduit dans la barre des tâches (mode Code, Options) : show() seul ne le rouvrirait pas.
+  if (fullWindow.isMinimized()) fullWindow.restore()
   fullWindow.show()
   fullWindow.focus()
 }
@@ -488,6 +503,16 @@ function showFullWindow(): void {
  * une fine bande horizontale flottant par-dessus les autres applis ("ça fait sa avec google chatgpt claude
  * partout").
  */
+/**
+ * Étape 177 : Jaris ne disparaît de la barre des tâches (réduire, perte de focus) QUE s'il laisse un widget à
+ * sa place. En mode Code (aucun widget, à dessein) et pendant les Options (Léo : « quand on est dans les
+ * options, Jaris ne doit pas partir »), il reste une fenêtre normale : sinon, seule l'icône près de l'horloge
+ * permettait de le retrouver.
+ */
+function hasWidgetToShow(): boolean {
+  return activeMode !== 'code' && !optionsOpen
+}
+
 /** Délai avant d'afficher le widget après une perte de focus : juste le temps que Windows finisse la bascule. */
 const WIDGET_AFTER_BLUR_DELAY_MS = 80
 
@@ -541,6 +566,8 @@ function showWidgetWindow(forceExpanded = false): void {
   // Réaffirmé à chaque affichage : Windows peut perdre le « toujours au-dessus » d'une fenêtre cachée puis
   // réaffichée, et le widget passerait alors derrière l'application ouverte.
   widgetWindow.setAlwaysOnTop(true, 'floating')
+  // Étape 177 : une image neuve tout de suite, pour ne jamais réafficher une fenêtre transparente vide.
+  widgetWindow.webContents.invalidate()
 }
 
 /** La touche + ouvre la forme du mode actif : barre écrite en Chat, écoute visible en Agent vocal. */
