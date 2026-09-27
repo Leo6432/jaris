@@ -65,13 +65,6 @@ const overrides = {
     ]
   }),
   getConversationHistory: async () => [],
-  // Étape 180 : le test du mot « Jaris » — le test diffuse lui-même ce que le sidecar aurait compris.
-  testWakeWord: () => { window.__wakeTest = 'on' },
-  stopTestWakeWord: () => { window.__wakeTest = 'off' },
-  onWakeTestHeard: (cb) => {
-    window.__emitWakeHeard = cb
-    return () => {}
-  },
   getMyModelPicks: async () => ({ gpuName: 'RTX 3070', vramGb: 8, ramGb: 32, flash: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, medium: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, large: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, vision: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, code: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 } , upgrades: {}, installCheck: { notInstalled: [], otherInstalled: [] }, image: window.__imagePick ?? { model: 'FLUX.2 klein 4B', reason: null, installed: false } }),
   // Étape 168 : test des seuls modèles sans score — le test pilote lui-même les lignes du script et sa fin.
   getModelOverview: async () => ({
@@ -517,30 +510,12 @@ test('Modèles : modèle d’image déjà téléchargé → aucune note de tél�
   })
 })
 
-test('Voix : le test du mot « Jaris » montre ce qui a été compris à chaque fois, et le compte', options, async () => {
+test('Voix : le test du mot « Jaris » a été retiré (étape 184, demande de Léo)', options, async () => {
   await withOptions(async (page) => {
-    const row = page.locator('.options-menu__row', { hasText: 'Tester le mot « Jaris »' })
-    await row.locator('button').click()
-    assert.equal(await page.evaluate(() => window.__wakeTest), 'on')
-    await page.waitForSelector('.options-menu__wake-test')
-    assert.match(await page.textContent('.options-menu__wake-test-summary'), /dis « Jaris »/)
-
-    await page.evaluate(() => {
-      window.__emitWakeHeard({ text: 'Jaris.', matched: true, tooShort: false, peak: 0.42 })
-      window.__emitWakeHeard({ text: 'Paris.', matched: false, tooShort: false, peak: 0.3 })
-      window.__emitWakeHeard({ text: '', matched: false, tooShort: true, peak: 0.08 })
-    })
-    await page.waitForFunction(() => document.querySelectorAll('.options-menu__wake-test-list li').length === 3)
-    assert.equal(await page.textContent('.options-menu__wake-test-summary'), '1 reconnu(s) sur 3')
-    const lines = await page.$$eval('.options-menu__wake-test-list li', (els) => els.map((el) => [el.textContent, el.className]))
-    assert.deepEqual(lines, [
-      ['Reconnu : « Jaris. »', 'options-menu__mic-result--ok'],
-      ['Compris « Paris. », pas reconnu comme « Jaris » (volume 30 %)', 'options-menu__mic-result--bad'],
-      ['Son trop court ou trop faible pour être compris (volume 8 %)', 'options-menu__mic-result--bad']
-    ])
-
-    await row.locator('button').click()
-    assert.equal(await page.evaluate(() => window.__wakeTest), 'off', 'Arrêter doit vraiment arrêter le test côté Jaris')
-    assert.equal(await page.locator('.options-menu__wake-test-list li').count(), 3, 'les résultats restent lisibles après l’arrêt')
+    await page.waitForSelector('.options-menu__row')
+    const labels = await page.$$eval('.options-menu__row-label', (els) => els.map((el) => el.textContent))
+    assert.ok(labels.includes('Dire « Jaris » à voix haute'), 'l’option d’activation par la voix reste')
+    assert.ok(!labels.some((l) => l.includes('Tester le mot')), 'plus de test du mot « Jaris »')
+    assert.equal(await page.locator('.options-menu__wake-test').count(), 0)
   })
 })

@@ -215,18 +215,6 @@ export interface MicTestDonePayload {
 }
 
 /**
- * Une phrase entendue pendant le test du mot « Jaris » (étape 180, voir wake_test_heard dans voice_server.py) :
- * ce que la transcription a écrit, si le nom y a été reconnu, et si le son était trop court pour être transcrit.
- */
-export interface WakeTestHeardPayload {
-  text: string
-  matched: boolean
-  tooShort: boolean
-  /** Niveau sonore le plus fort de la phrase, 0..1 (même échelle que le test micro). */
-  peak: number
-}
-
-/**
  * Résultat de l'analyse complète des modèles (étape 13, obligatoire au premier lancement — voir
  * CapacityScan.tsx) : GPU détecté et meilleur modèle mesuré pour chaque palier + vision.
  */
@@ -663,11 +651,6 @@ export const IPC_CHANNELS = {
   micTestLevel: 'jaris:mic-test-level',
   /** main -> renderer : verdict final d'un test micro (un signal a été détecté ou non). */
   micTestDone: 'jaris:mic-test-done',
-  /** renderer -> main : démarre / arrête le test du mot « Jaris » (étape 180). */
-  testWakeWord: 'jaris:test-wake-word',
-  stopTestWakeWord: 'jaris:stop-test-wake-word',
-  /** main -> renderer : une phrase entendue pendant ce test. */
-  wakeTestHeard: 'jaris:wake-test-heard',
   /** renderer <-> main : version de Jaris comparée à la dernière Release GitHub stable (étape 20). */
   getAppVersionStatus: 'jaris:get-app-version-status',
   /** renderer -> main : télécharge et lance l'installeur de la dernière version, puis ferme Jaris. */

@@ -5145,3 +5145,15 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   « Rice » dit seul rejoint `SHORT_WAKE_NAME` (sa transcription la plus fréquente après « Jaice », 4 sur 12) :
   11 sur 12 sur ses transcriptions réelles ; « Nice » (la ville) et « Rice » dans une phrase restent refusés.
   Régression : `python scripts/test-wake-confirmation.py`, `node --test scripts/test-widget-mode.mjs`.
+
+- **Accents ignorés pour « Jaris », test d'Options retiré (étape 184, Léo : « ajoute Jáis, et enlève le test de
+  Jaris »)**. « Jáis » : plutôt que d'ajouter une graphie de plus, les accents sont retirés avant la comparaison
+  (`unicodedata`, décomposition NFD), comme l'alphabet cyrillique à l'étape 182 — « Jáis », « Jàis », « Jaïs »
+  redeviennent « jais », déjà accepté. **Même leçon que PROMISE_WITHOUT_ACTION : ramener le texte à une forme
+  commune bat l'ajout de variantes une par une.** Le test du mot « Jaris » (étape 180) a rempli son rôle — il a
+  donné les vraies transcriptions (Jaice, Jais, Rice, Жайс, Jáis) — et il est retiré partout : bouton et liste
+  d'Options, canaux IPC `testWakeWord`/`stopTestWakeWord`/`wakeTestHeard`, `WakeTestHeardPayload`, commandes
+  `test-wake`/`stop-test-wake` et évènement `wake_test_heard` du sidecar, `WakeSegmenter.dropped` qui n'existait
+  que pour lui. Les entrées 180-183 plus haut restent : elles décrivent ce qui a été mesuré avec. Régression :
+  `python scripts/test-wake-confirmation.py` (accents, test absent du sidecar), `node --test
+  scripts/test-options-reorganization-ui.mjs` (plus de ligne « Tester le mot »).

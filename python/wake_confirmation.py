@@ -10,6 +10,7 @@ transcription réveille Jaris. Plus aucun modèle non commercial, un filtre en m
 """
 from collections import deque
 import re
+import unicodedata
 import numpy as np
 
 # Un test réel (25 échantillons TTS "Jaris" synthétiques transcrits par Cohere Transcribe, voir
@@ -57,7 +58,10 @@ CYRILLIC_TO_LATIN = str.maketrans({
 
 
 def _latin(text: str) -> str:
-    return text.lower().translate(CYRILLIC_TO_LATIN)
+    # Étape 184 (Léo : « ajoute Jáis ») : les accents sont retirés avant de comparer — « Jáis », « Jàis », « Jaïs »
+    # redeviennent « jais », forme déjà acceptée, plutôt que d'ajouter chaque accent un par un.
+    plain = unicodedata.normalize('NFD', text.lower().translate(CYRILLIC_TO_LATIN))
+    return ''.join(c for c in plain if not unicodedata.combining(c))
 
 
 def _compact(text: str) -> str:
@@ -92,16 +96,12 @@ class WakeSegmenter:
         self.segment: list[np.ndarray] | None = None
         self.loud = 0
         self.silence = 0
-        # Dernier son écarté car trop court (test du mot « Jaris », étape 180) : dire « trop court » vaut mieux
-        # que ne rien afficher du tout quand Léo parle trop doucement ou trop vite.
-        self.dropped: list[np.ndarray] | None = None
 
     def clear(self):
         self.pre_roll.clear()
         self.segment = None
         self.loud = 0
         self.silence = 0
-        self.dropped = None
 
     @property
     def trailing_silence_chunks(self) -> int:
@@ -127,7 +127,4 @@ class WakeSegmenter:
             return None
         segment, loud = self.segment, self.loud
         self.segment = None
-        if loud >= MIN_LOUD_CHUNKS:
-            return segment
-        self.dropped = segment
-        return None
+        return segment if loud >= MIN_LOUD_CHUNKS else None
