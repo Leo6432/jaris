@@ -105,6 +105,14 @@ class SegmenterTests(unittest.TestCase):
         self.assertEqual(len(phrases), 3)
         self.assertTrue(all(len(p) <= MAX_SEGMENT_CHUNKS for p in phrases))
 
+    def test_short_sound_kept_aside_for_the_wake_test(self):
+        # Étapes 180/186 : le test du mot « Jaris » doit pouvoir dire « trop court » au lieu de ne rien afficher.
+        seg = WakeSegmenter()
+        self.assertEqual(feed(seg, [(True, 2), (False, END_SILENCE_CHUNKS)]), [])
+        self.assertIsNotNone(seg.dropped)
+        seg.clear()
+        self.assertIsNone(seg.dropped)
+
     def test_clear_forgets_a_phrase_in_progress(self):
         seg = WakeSegmenter()
         feed(seg, [(True, 5)])
@@ -135,10 +143,15 @@ class VoiceServerWiringTests(unittest.TestCase):
         self.assertIn('elif line == "pause-wake":', self.source)
         self.assertIn('elif line == "resume-wake":', self.source)
 
-    def test_wake_test_removed(self):
-        # Étape 184 (Léo : « enlève le test de Jaris ») : plus aucune commande ni évènement de test.
-        for gone in ('test-wake', 'wake_test'):
-            self.assertNotIn(gone, self.source)
+    def test_wake_test_never_wakes_jaris(self):
+        # Étape 186 (Léo : « remets le test de Jaris pour tester ») : de retour, toujours sans jamais réveiller Jaris.
+        test_block = self.source[self.source.index('elif wake_test_on.is_set():'):self.source.index('elif wake_paused.is_set():')]
+        self.assertIn('"event": "wake_test_heard"', test_block)
+        self.assertNotIn('triggered = True', test_block)
+        self.assertIn('elif line == "test-wake":', self.source)
+        self.assertIn('elif line == "stop-test-wake":', self.source)
+        # Le test d'Options passe AVANT la pause : il marche pendant que les Options sont ouvertes.
+        self.assertLess(self.source.index('elif wake_test_on.is_set():'), self.source.index('elif wake_paused.is_set():'))
 
     def test_overheard_speech_never_logged(self):
         # Chaque phrase de la pièce est transcrite : rien ne doit en sortir quand le nom n'y est pas.

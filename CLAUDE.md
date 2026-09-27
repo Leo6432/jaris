@@ -5171,3 +5171,13 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   test faisait 8 px, trop petite pour contenir le bouton — le test fabrique maintenant un vrai PNG de 256 px
   (zlib), taille réaliste, plutôt que d'assouplir la vérification. Régression : `node --test
   scripts/test-image-save.mjs scripts/test-native-dialog-guard.mjs scripts/test-chat-conversations-ui.mjs`.
+
+- **Test du mot « Jaris » remis dans Options → Voix (étape 186, Léo : « remets le test de Jaris pour tester »)**,
+  retiré à l'étape 184. Restauré en appliquant à l'envers la partie « retrait » du commit de l'étape 184
+  (`git diff <commit>^ <commit> -- <fichiers>` puis `git apply -R --3way`), fichier par fichier — et PAS par un
+  `git revert` du commit entier, qui aurait aussi défait la suppression des accents faite dans le même commit.
+  **Leçon générale : quand un commit mélange deux changements et qu'un seul doit être annulé, inverser le diff
+  des seuls fichiers concernés (puis reprendre à la main les fichiers mixtes) plutôt que réécrire de mémoire** —
+  le code rétabli est exactement celui qui avait été testé. Le test garde tout ce qui a été ajouté depuis :
+  accents, cyrillique, « Rice », et il passe AVANT la pause d'écoute (il marche Options ouvertes). Régression :
+  `python scripts/test-wake-confirmation.py`, `node --test scripts/test-options-reorganization-ui.mjs`.

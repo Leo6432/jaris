@@ -10,7 +10,8 @@ import type {
   ModelsLocationStatus,
   OllamaVersionStatus,
   Profile,
-  UpdateProgress
+  UpdateProgress,
+  WakeTestHeardPayload
 } from '../../shared/ipc'
 import { CAPABILITIES } from '../../shared/capabilities'
 import AllModelsOverview from './AllModelsOverview'
@@ -50,6 +51,17 @@ const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
  * sonores, pas un seul cercle qui pulse) — voir micLevels plus bas.
  */
 const MIC_TEST_BAR_COUNT = 42
+
+/** Test du mot « Jaris » (étape 180) : les dernières phrases entendues, pas tout l'historique. */
+const WAKE_TEST_MAX_LINES = 12
+
+/** Une ligne du test, en français courant : ce qui a été compris, et pourquoi ça n'a pas marché le cas échéant. */
+export function describeWakeHeard(heard: WakeTestHeardPayload): string {
+  const volume = `volume ${Math.round(heard.peak * 100)} %`
+  if (heard.tooShort) return `Son trop court ou trop faible pour être compris (${volume})`
+  if (!heard.text) return `Rien compris (${volume})`
+  return heard.matched ? `Reconnu : « ${heard.text} »` : `Compris « ${heard.text} », pas reconnu comme « Jaris » (${volume})`
+}
 
 // Refonte étape 115 (Léo : "il ya des categorie dans les options qui peuvent etre ensemble, refait
 // totalement option bien comme claude gpt") : Micro et Activation (2 réglages, chacun quelques lignes)
@@ -253,6 +265,9 @@ export default function OptionsMenu(): JSX.Element {
   // affichée comme une rangée de barres qui défilent façon Discord, pas un seul chiffre.
   const [micLevels, setMicLevels] = useState<number[]>(() => Array(MIC_TEST_BAR_COUNT).fill(0))
   const [micTestResult, setMicTestResult] = useState<boolean | null>(null)
+  // Étape 180 (Léo : « ça marche 1 fois sur 3 ») : ce que Jaris a compris à chaque « Jaris » dit pendant le test.
+  const [wakeTesting, setWakeTesting] = useState(false)
+  const [wakeHeard, setWakeHeard] = useState<WakeTestHeardPayload[]>([])
 
   useEffect(() => {
     window.jaris.getProfile().then((p) => {
@@ -411,9 +426,11 @@ export default function OptionsMenu(): JSX.Element {
       setMicTesting(false)
       setMicTestResult(detected)
     })
+    const offWake = window.jaris.onWakeTestHeard((heard) => setWakeHeard((prev) => [...prev, heard].slice(-WAKE_TEST_MAX_LINES)))
     return () => {
       offLevel()
       offDone()
+      offWake()
     }
   }, [])
 
@@ -699,6 +716,18 @@ export default function OptionsMenu(): JSX.Element {
    * bouton resterait bloqué sur "Arrêter le test" pour toujours sans ça — voir mic_test_done qui, lui,
    * arrivera quand même mettre à jour le verdict s'il finit par arriver.
    */
+  /** Même principe que le test micro : l'arrêt est appliqué tout de suite côté écran, quoi que réponde le sidecar. */
+  const toggleWakeTest = (): void => {
+    if (wakeTesting) {
+      window.jaris.stopTestWakeWord()
+      setWakeTesting(false)
+      return
+    }
+    setWakeHeard([])
+    setWakeTesting(true)
+    window.jaris.testWakeWord()
+  }
+
   const toggleMicTest = (): void => {
     if (micTesting) {
       window.jaris.stopTestMicrophone()
@@ -737,6 +766,10 @@ export default function OptionsMenu(): JSX.Element {
               window.jaris.stopTestMicrophone()
               setMicTesting(false)
               setMicLevels(Array(MIC_TEST_BAR_COUNT).fill(0))
+            }
+            if (wakeTesting) {
+              window.jaris.stopTestWakeWord()
+              setWakeTesting(false)
             }
             setOpen(false)
           }}
@@ -990,6 +1023,33 @@ export default function OptionsMenu(): JSX.Element {
                   onChange={(next) => void toggleActivationWakeword(next)}
                 />
               </SettingRow>
+              <SettingRow
+                label="Tester le mot « Jaris »"
+                description="Dis « Jaris » plusieurs fois : Jaris affiche ce qu'il a compris, sans se réveiller."
+              >
+                <button
+                  className={`options-menu__action${wakeTesting ? ' options-menu__action--danger' : ''}`}
+                  onClick={toggleWakeTest}
+                >
+                  {wakeTesting ? 'Arrêter' : 'Tester'}
+                </button>
+              </SettingRow>
+              {(wakeTesting || wakeHeard.length > 0) && (
+                <div className="options-menu__wake-test">
+                  <p className="options-menu__wake-test-summary">
+                    {wakeHeard.length === 0
+                      ? 'À toi : dis « Jaris », attends une seconde, recommence.'
+                      : `${wakeHeard.filter((h) => h.matched).length} reconnu(s) sur ${wakeHeard.length}`}
+                  </p>
+                  <ul className="options-menu__wake-test-list">
+                    {wakeHeard.map((heard, i) => (
+                      <li key={i} className={heard.matched ? 'options-menu__mic-result--ok' : 'options-menu__mic-result--bad'}>
+                        {describeWakeHeard(heard)}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </SettingGroup>
           </div>
         )}

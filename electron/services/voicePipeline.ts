@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events'
 import { randomUUID } from 'crypto'
-import type { JarisEmotion, SoundCue, VoiceReplyPayload } from '../../shared/ipc'
+import type { JarisEmotion, SoundCue, VoiceReplyPayload, WakeTestHeardPayload } from '../../shared/ipc'
 import { VoiceClient } from './voiceClient'
 import { synthesizeSpeech } from './tts'
 import { appendConversationEntry } from './conversationStore'
@@ -161,6 +161,7 @@ export class VoicePipeline extends EventEmitter {
     this.voice.on('micTestStarted', () => this.emit('micTestStarted'))
     this.voice.on('micTestLevel', (level: number) => this.emit('micTestLevel', level))
     this.voice.on('micTestDone', (detected: boolean) => this.emit('micTestDone', detected))
+    this.voice.on('wakeTestHeard', (heard: WakeTestHeardPayload) => this.emit('wakeTestHeard', heard))
 
     await restoreReminders((message) => void this.announceReminder(message))
     await this.voice.start(inputDeviceIndex, wakewordEnabled)
@@ -196,6 +197,15 @@ export class VoicePipeline extends EventEmitter {
   /** Arrête un test micro démarré par testMic(). */
   stopTestMic(): void {
     this.voice.stopTestMic()
+  }
+
+  /** Test du mot « Jaris » (étape 180), voir VoiceClient.testWakeWord. */
+  testWakeWord(): void {
+    this.voice.testWakeWord()
+  }
+
+  stopTestWakeWord(): void {
+    this.voice.stopTestWakeWord()
   }
 
   /**
