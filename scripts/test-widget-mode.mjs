@@ -47,7 +47,7 @@ test('quitter Jaris depuis le mode Code n’affiche AUCUN widget', () => {
   assert.ok(showWidget, 'showWidgetWindow introuvable dans main.ts')
   assert.match(
     showWidget[0],
-    /activeMode === ['"]code['"][\s\S]{0,200}?return/,
+    /modeWithoutWidget\(\)\)[\s\S]{0,200}?return/,
     'showWidgetWindow ne sort pas en mode Code : Jaris continuerait d’afficher un widget alors que Léo ' +
       'a demandé qu’il disparaisse complètement'
   )
@@ -57,7 +57,7 @@ test('un widget déjà affiché est caché quand on passe en mode Code, pas lais
   const showWidget = /function showWidgetWindow\([^)]*\)[\s\S]{0,1200}?\n\}/.exec(mainSource)
   assert.match(
     showWidget[0],
-    /activeMode === ['"]code['"][\s\S]{0,200}?widgetWindow\.hide\(\)/,
+    /modeWithoutWidget\(\)\)[\s\S]{0,200}?widgetWindow\.hide\(\)/,
     'le widget du mode précédent resterait à l’écran en mode Code, sous une forme qui ne correspond plus à rien'
   )
 })
@@ -223,7 +223,9 @@ test('le widget ne devient jamais une fenêtre transparente vide : calcul de rec
 })
 
 test('sans widget (Code, Options), réduire ou changer d’appli laisse Jaris dans la barre des tâches', () => {
-  assert.match(mainSource, /function hasWidgetToShow\(\)[\s\S]{0,120}?activeMode !== ['"]code['"] && !optionsOpen/)
+  assert.match(mainSource, /function hasWidgetToShow\(\)[\s\S]{0,120}?!modeWithoutWidget\(\) && !optionsOpen/)
+  // Étape 189 : le Montage n'a pas de widget non plus (écran de travail, comme Code).
+  assert.match(mainSource, /function modeWithoutWidget\(\)[\s\S]{0,120}?activeMode === ['"]code['"] \|\| activeMode === ['"]montage['"]/)
   for (const event of ['minimize', 'blur']) {
     const handler = new RegExp(`win\\.on\\(['"]${event}['"],[\\s\\S]{0,400}?\\}\\);`).exec(mainSource)?.[0] ?? ''
     assert.match(handler, /!hasWidgetToShow\(\)\)\s*return/, `'${event}' ne doit rien cacher quand aucun widget ne remplace Jaris`)

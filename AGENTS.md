@@ -5170,3 +5170,45 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   scripts/test-options-reorganization-ui.mjs` (états suivis, vrai message relayé, arrêt voulu ≠ échec ; à l'écran :
   raison affichée, bouton non bloqué, messages silence total / trop faible / détecté), chacun vérifié en
   réintroduisant le défaut. Non vérifiable ici : la partie Python (numpy absent) — relue et syntaxe vérifiée.
+
+- **Montage vidéo avec Remotion (étape 189, Léo : « un bouton montage à gauche qui n'est pas installé par
+  défaut, faut cliquer et il te dit que c'est lourd, et ça fait avec Remotion »).** Nouveau mode « Montage »
+  dans la colonne de gauche. Tant qu'il n'est pas installé, l'écran dit ce qu'il fait, ce qu'il pèse (mesuré :
+  ~85 Mo de paquet + ~100 Mo de navigateur téléchargés, ~520 Mo sur le disque, annoncés « environ 200 Mo /
+  600 Mo ») et la licence de Remotion (vérifiée sur son LICENSE.md : gratuite pour un particulier ou une
+  entreprise de 3 personnes au plus, PAS un logiciel libre) — rien n'est téléchargé sans clic.
+  **Architecture, décidée par une contrainte : Léo n'a ni Node ni npm.** Remotion est un ensemble de paquets npm
+  avec des programmes natifs (compositeur + FFmpeg, esbuild, rspack). La CI Windows installe donc le paquet exact
+  (`montage/package-lock.json`, Remotion figé à 4.0.529 — la constante, le paquet et le lockfile sont vérifiés
+  identiques par un test), le zippe et le publie avec chaque Release (`Jaris-Montage-remotion-X.zip`) ; Jaris le
+  télécharge depuis la Release de SA version, puis Remotion télécharge son propre navigateur. Le rendu tourne avec
+  le Node embarqué dans Electron (`process.execPath` + `ELECTRON_RUN_AS_NODE=1`) via `montage/render.cjs`, livré
+  avec Jaris (extraResources) : il reçoit sa tâche par un fichier JSON, jamais par la ligne de commande, et
+  répond une ligne JSON par évènement. **La CI fabrique une vraie vidéo avec Jaris.exe avant de publier** : un
+  paquet qui ne sait pas filmer n'est jamais mis en ligne.
+  **Deux pièges de Remotion trouvés en le faisant tourner pour de vrai ici** : (1) webpack ne cherche les modules
+  qu'en remontant depuis le fichier importé — un projet rangé dans les données de Léo ne trouve ni `remotion` ni
+  `react` sans `webpackOverride` qui ajoute le dossier du paquet à `resolve.modules` ; (2) Remotion range son
+  navigateur dans `node_modules/.remotion` du premier dossier PARENT du dossier courant qui a un package.json —
+  le rendu doit donc démarrer dans le dossier du paquet, avec son package.json, sinon il ne retrouve pas le
+  navigateur déjà téléchargé.
+  **Génération** : le modèle du mode Code écrit une composition Remotion (TSX). Le moteur d'étapes du mode Code
+  (`createModelStepRunner`, extrait de `generateApp` pour être partagé plutôt que recopié) donne le même bandeau
+  d'avancement et le même bouton « Arrêter ». Avant le rendu, les défauts mécaniques sont nommés au modèle
+  (imports autres que remotion/react — aussi une question de sécurité, webpack embarquerait sinon n'importe quel
+  fichier du disque —, URL, Math.random/Date/setTimeout, animations CSS que Remotion ne filme pas). Après une
+  VRAIE erreur de Remotion, sa ligne utile (sans chemins du disque ni pile) est renvoyée au modèle, deux fois au
+  plus. Une vidéo ratée ou arrêtée ne reste pas dans la liste. **Défaut attrapé par mon propre test** : après une
+  correction, le second rendu s'affichait « étape 4 sur 3 » (même règle que le mode Code : un rendu de plus est
+  une étape de plus, compté au moment où il arrive).
+  **Leçon générale : quand une dépendance ne peut pas être installée chez l'utilisateur de la façon normale (ici
+  npm), la construire là où elle peut l'être (la CI, sur le bon système), la publier comme un artefact figé, ET
+  la faire réellement tourner dans la CI avec le même exécutable que l'utilisateur — sinon rien ne prouve que
+  le paquet publié marche une fois hors de la machine qui l'a construit.**
+  Régression : `node --test scripts/test-montage.mjs` (dont un rendu Remotion RÉEL de bout en bout, modèle
+  simulé qui écrit d'abord un code cassé : l'erreur réelle est renvoyée, le code corrigé, un vrai MP4 fabriqué ;
+  et « Arrêter » pendant le rendu ; ignorés avec leur raison si le paquet n'est pas installé localement, comme en
+  CI avant sa construction) et `scripts/test-montage-panel-ui.mjs` (vrai navigateur : aucune installation sans
+  clic, poids et licence affichés, avancement, lecteur vidéo, bouton habillé par le CSS, pas de bouton image,
+  désinstallation confirmée dans la page). Non vérifié en usage réel : la vitesse du rendu et la qualité des
+  vidéos écrites par le modèle Code sur la machine de Léo.

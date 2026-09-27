@@ -38,6 +38,8 @@ interface ComposerProps {
   hint?: string
   /** Contrôle secondaire posé à côté de la pièce jointe (sélecteur de modèle, étape 141). */
   extraActions?: ReactNode
+  /** Faux : ni bouton image, ni collage/glisser d'image (Montage, étape 189, qui ne lit pas encore d'image). */
+  imagesAllowed?: boolean
 }
 
 function AttachIcon(): JSX.Element {
@@ -64,7 +66,8 @@ export default function Composer({
   submitOnEnter = false,
   rows = 2,
   hint,
-  extraActions
+  extraActions,
+  imagesAllowed = true
 }: ComposerProps): JSX.Element {
   const attach = async (file: File | Blob, name = ''): Promise<void> => {
     try {
@@ -98,6 +101,7 @@ export default function Composer({
   // faudrait d'abord l'enregistrer dans un fichier juste pour pouvoir la choisir. Le glisser-déposer passe
   // par le même chemin, pour la même raison.
   const handlePaste = (event: React.ClipboardEvent): void => {
+    if (!imagesAllowed) return
     const file = findImageInDataTransfer(event.clipboardData.items)
     if (!file) return
     event.preventDefault()
@@ -105,6 +109,7 @@ export default function Composer({
   }
 
   const handleDrop = (event: React.DragEvent): void => {
+    if (!imagesAllowed) return
     const file = findImageInDataTransfer(event.dataTransfer.items)
     if (!file) return
     event.preventDefault()
@@ -157,16 +162,18 @@ export default function Composer({
       />
 
       <div className="composer__actions">
-        <button
-          type="button"
-          className="composer__attach"
-          onClick={() => void pick()}
-          disabled={busy}
-          title="Joindre une image (ou Ctrl+V pour coller)"
-          aria-label="Joindre une image"
-        >
-          <AttachIcon />
-        </button>
+        {imagesAllowed && (
+          <button
+            type="button"
+            className="composer__attach"
+            onClick={() => void pick()}
+            disabled={busy}
+            title="Joindre une image (ou Ctrl+V pour coller)"
+            aria-label="Joindre une image"
+          >
+            <AttachIcon />
+          </button>
+        )}
 
         {extraActions}
 

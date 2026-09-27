@@ -2909,6 +2909,8 @@ h1 {
 .chat-widget__action,
 .capacity-scan button,
 .runtime-setup__actions button,
+.montage-install__button,
+.montage-panel__uninstall button,
 .app__onboarding button {
   position: relative;
   font-family: var(--hud-font-display);
@@ -2947,6 +2949,8 @@ h1 {
 .chat-widget__action:not(:disabled):hover,
 .capacity-scan button:not(:disabled):hover,
 .runtime-setup__actions button:not(:disabled):hover,
+.montage-install__button:not(:disabled):hover,
+.montage-panel__uninstall button:not(:disabled):hover,
 .app__onboarding button:hover {
   color: var(--hud-accent-bright);
   border-color: var(--hud-accent);
@@ -2989,6 +2993,7 @@ textarea:not(.composer__input):focus-visible {
 .workspace__new,
 .workspace__confirm-yes,
 .workspace__confirm-no,
+.montage-panel__uninstall button,
 .chat-widget__action {
   font-size: 0.7rem;
   letter-spacing: 0.1em;
@@ -3006,8 +3011,10 @@ textarea:not(.composer__input):focus-visible {
 
 .options-menu__action--danger,
 .workspace__confirm-yes,
+.montage-panel__uninstall-yes,
 .options-menu__action--danger:not(:disabled):hover,
-.workspace__confirm-yes:not(:disabled):hover {
+.workspace__confirm-yes:not(:disabled):hover,
+.montage-panel__uninstall-yes:not(:disabled):hover {
   color: var(--hud-danger);
   border-color: rgba(255, 77, 104, 0.55);
   background: linear-gradient(180deg, rgba(255, 77, 104, 0.16), rgba(255, 77, 104, 0.05));
@@ -3868,4 +3875,123 @@ a:hover {
   width: 64px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================================
+   Montage (étape 189) : écran d'installation (module optionnel, « c'est lourd ») puis lecteur de vidéo.
+   Même famille que le reste : panneau HUD, boutons de la famille partagée, aucune couleur inventée.
+   ============================================================================ */
+.montage-install {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  overflow-y: auto;
+}
+
+.montage-install__card {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 26px 28px;
+  background: var(--hud-panel-raised);
+  border: 1px solid var(--hud-line);
+}
+
+.montage-install__card h2 {
+  margin: 0;
+  font-family: var(--hud-font-display);
+  font-size: 1.5rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-text);
+}
+
+.montage-install__eyebrow {
+  font-family: var(--hud-font-display);
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--hud-accent);
+}
+
+.montage-install__lead {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--hud-text-dim);
+}
+
+.montage-install__facts {
+  margin: 0;
+  padding: 0 0 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--hud-text-dim);
+}
+
+.montage-install__facts strong {
+  color: var(--hud-text);
+}
+
+.montage-install__button {
+  align-self: flex-start;
+}
+
+.montage-panel__intro {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.montage-panel__uninstall-link {
+  padding: 0;
+  font-size: 0.74rem;
+  color: var(--hud-text-faint);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.montage-panel__uninstall-link:hover {
+  color: var(--hud-text-dim);
+}
+
+.montage-panel__uninstall {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--hud-text-dim);
+}
+
+.montage-panel__video {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  background: #000000;
+  border: 1px solid var(--hud-line);
+}
+
+.montage-panel__save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Le champ reste EN BAS même quand il n'y a encore aucune vidéo au-dessus (pendant la première fabrication),
+   comme dans le Chat — repéré sur une capture, où il remontait en haut de l'écran. */
+.montage-panel > .composer {
+  margin-top: auto;
 }

@@ -1,0 +1,13 @@
+{
+  "name": "jaris-montage-pack",
+  "private": true,
+  "description": "Paquet Montage de Jaris (étape 189) : Remotion et ses dépendances, installé à la demande. Construit par la CI Windows (npm ci) puis publié en asset de Release — jamais installé avec Jaris lui-même.",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@remotion/bundler": "4.0.529",
+    "@remotion/renderer": "4.0.529",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "remotion": "4.0.529"
+  }
+}

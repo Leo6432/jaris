@@ -47,7 +47,9 @@ export function bricks(): Brick[] {
     // À revoir si requirements.txt change de version de Supertonic (garde-fou : test-models-location.mjs).
     { label: 'la voix de Jaris (Supertonic)', link: join(profile, '.cache', 'supertonic3'), subdir: 'supertonic-cache' },
     // Étape 173 : le moteur et le modèle de dessin (environ 5 Go, voir imageGenerator.ts).
-    { label: "la génération d'images", link: join(local, 'Jaris', 'image-generation'), subdir: 'image-generation' }
+    { label: "la génération d'images", link: join(local, 'Jaris', 'image-generation'), subdir: 'image-generation' },
+    // Étape 189 : le Montage (Remotion + son navigateur, environ 600 Mo, voir montage.ts), s'il est installé.
+    { label: 'le Montage (Remotion)', link: join(local, 'Jaris', 'montage'), subdir: 'montage' }
   ]
 }
 

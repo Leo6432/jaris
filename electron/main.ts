@@ -6,7 +6,7 @@ import { pickImageModel } from '../shared/imageModel'
 import { isImageModelInstalled } from './services/imageGenerator'
 import { spawn } from 'child_process'
 import { basename, extname, join } from 'path'
-import { readFile, writeFile } from 'fs/promises'
+import { copyFile, readFile, writeFile } from 'fs/promises'
 import { decodePngDataUrl, defaultImageFileName, withPngExtension } from './services/imageSave'
 import {
   ensureOllamaRunning,
@@ -29,6 +29,16 @@ import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetu
 import { runQuickSetup } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
 import { deleteGeneratedApp, generateApp, getGeneratedAppsDir, listGeneratedApps, loadGeneratedApp } from './services/codeGenerator'
+import { getMontageStatus, installMontage, uninstallMontage } from './services/montage'
+import {
+  deleteGeneratedVideo,
+  generateMontage,
+  generatedVideoFile,
+  getGeneratedVideosDir,
+  listGeneratedVideos,
+  loadGeneratedVideo,
+  readGeneratedVideo
+} from './services/montageGenerator'
 import { createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
 import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
@@ -76,6 +86,9 @@ import {
   type VoiceSetupStatusPayload,
   type WakeTestHeardPayload,
   type MicTestDonePayload,
+  type MontageStatus,
+  type GeneratedVideo,
+  type GeneratedVideoSummary,
   type VoiceTestStartResult,
   type WidgetMode
 } from '../shared/ipc'
@@ -117,6 +130,8 @@ let onboardingDone = false
  * (étape 99) — `null` quand rien ne tourne. Avant, une génération partie ne pouvait plus être arrêtée
  * autrement qu'en fermant Jaris. */
 let codeGenAbort: AbortController | null = null
+/** Même rôle pour le Montage (étape 189) : la fabrication de vidéo en cours, que « Arrêter » interrompt. */
+let montageAbort: AbortController | null = null
 /** Vrai pendant qu'un vrai dialogue natif Windows est ouvert sur fullWindow (ex: chooseModelsLocation) : le
  * dialogue prend le focus OS, ce qui déclenche 'blur' sur fullWindow comme un changement d'appli normal —
  * sans ce garde, le handler 'blur' plus bas cacherait fullWindow (et son dialogue enfant orphelin avec) alors
@@ -516,7 +531,12 @@ function showFullWindow(): void {
  * permettait de le retrouver.
  */
 function hasWidgetToShow(): boolean {
-  return activeMode !== 'code' && !optionsOpen
+  return !modeWithoutWidget() && !optionsOpen
+}
+
+/** Code et Montage (étape 189) n'ont pas de widget : ce sont des écrans de travail, pas des assistants. */
+function modeWithoutWidget(): boolean {
+  return activeMode === 'code' || activeMode === 'montage'
 }
 
 /** Délai avant d'afficher le widget après une perte de focus : juste le temps que Windows finisse la bascule. */
@@ -530,7 +550,7 @@ function revealWidgetAfterLeaving(win: BrowserWindow): void {
   if (quitting || win.isDestroyed() || win.isVisible()) return
   showWidgetWindow()
   setTimeout(() => {
-    if (quitting || activeMode === 'code' || win.isDestroyed() || win.isVisible()) return
+    if (quitting || modeWithoutWidget() || win.isDestroyed() || win.isVisible()) return
     if (widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()) return
     showWidgetWindow()
   }, 400)
@@ -568,7 +588,7 @@ function showWidgetWindow(forceExpanded = false): void {
   // déjà affiché est caché plutôt que laissé tel quel — sinon, passer en Code puis quitter la fenêtre
   // laisserait à l'écran la forme du mode précédent, qui ne correspond plus à rien. Jaris reste joignable
   // par son icône dans la barre système ("Ouvrir Jaris").
-  if (activeMode === 'code') {
+  if (modeWithoutWidget()) {
     stopChatPointerWatch()
     if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide()
     return
@@ -604,7 +624,7 @@ function showWidgetWindow(forceExpanded = false): void {
 
 /** La touche + ouvre la forme du mode actif : barre écrite en Chat, écoute visible en Agent vocal. */
 function triggerVisibleWake(): void {
-  if (activeMode === 'code') return
+  if (modeWithoutWidget()) return
   if (activeMode === 'chat') {
     if (!fullWindow?.isVisible()) showWidgetWindow(true)
     return
@@ -1147,6 +1167,64 @@ app.whenReady().then(async () => {
     }
   )
   ipcMain.on(IPC_CHANNELS.cancelCodeGen, () => codeGenAbort?.abort())
+
+  // Montage (étape 189) : installé à la demande (écran d'avertissement dans MontagePanel), puis vidéos Remotion.
+  ipcMain.handle(IPC_CHANNELS.getMontageStatus, (): Promise<MontageStatus> => getMontageStatus())
+  ipcMain.handle(IPC_CHANNELS.installMontage, (event) =>
+    installMontage((progress) => {
+      if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.montageInstallProgress, progress)
+    })
+  )
+  ipcMain.handle(IPC_CHANNELS.uninstallMontage, () => uninstallMontage())
+  ipcMain.handle(IPC_CHANNELS.generateMontage, async (event, description: string, currentCode?: string): Promise<GeneratedVideo> => {
+    montageAbort?.abort()
+    const controller = new AbortController()
+    montageAbort = controller
+    try {
+      return await generateMontage(
+        String(description),
+        (message) => event.sender.send(IPC_CHANNELS.montageGenStatus, message),
+        typeof currentCode === 'string' ? currentCode : undefined,
+        {
+          onProgress: (progress) => event.sender.send(IPC_CHANNELS.montageGenProgress, progress),
+          signal: controller.signal
+        }
+      )
+    } finally {
+      if (montageAbort === controller) montageAbort = null
+    }
+  })
+  ipcMain.on(IPC_CHANNELS.cancelMontageGen, () => montageAbort?.abort())
+  ipcMain.handle(IPC_CHANNELS.getGeneratedVideos, (): Promise<GeneratedVideoSummary[]> => listGeneratedVideos())
+  ipcMain.handle(IPC_CHANNELS.loadGeneratedVideo, (_event, path: string): Promise<GeneratedVideo> => loadGeneratedVideo(String(path)))
+  ipcMain.handle(IPC_CHANNELS.readGeneratedVideo, (_event, path: string): Promise<Buffer> => readGeneratedVideo(String(path)))
+  ipcMain.handle(IPC_CHANNELS.deleteGeneratedVideo, (_event, path: string) => deleteGeneratedVideo(String(path)))
+  ipcMain.handle(IPC_CHANNELS.openGeneratedVideos, async (_event, path?: string) => {
+    await shell.openPath(path ? generatedVideoFile(String(path)) : getGeneratedVideosDir())
+  })
+  ipcMain.handle(IPC_CHANNELS.saveGeneratedVideo, async (_event, path: string): Promise<SaveImageResult> => {
+    const source = generatedVideoFile(String(path))
+    const dialogOptions = {
+      title: 'Enregistrer la vidéo',
+      defaultPath: join(app.getPath('videos'), `jaris-video-${basename(String(path))}.mp4`),
+      filters: [{ name: 'Vidéo MP4', extensions: ['mp4'] }]
+    }
+    dialogOpen = true
+    let target: string | undefined
+    try {
+      const result = fullWindow ? await dialog.showSaveDialog(fullWindow, dialogOptions) : await dialog.showSaveDialog(dialogOptions)
+      target = result.canceled ? undefined : result.filePath
+    } finally {
+      dialogOpen = false
+    }
+    if (!target) return { saved: false }
+    try {
+      await copyFile(source, /\.mp4$/i.test(target) ? target : `${target}.mp4`)
+      return { saved: true }
+    } catch (err) {
+      return { saved: false, error: `Impossible d'enregistrer la vidéo : ${err instanceof Error ? err.message : String(err)}` }
+    }
+  })
   ipcMain.handle(IPC_CHANNELS.openGeneratedApp, async (_event, path?: string) => {
     await shell.openPath(path || getGeneratedAppsDir())
   })

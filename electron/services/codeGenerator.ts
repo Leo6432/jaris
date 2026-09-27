@@ -68,7 +68,7 @@ export function computeCodeNumCtx(messages: OllamaMessage[], expectedOutputChars
 }
 
 /** Limite de contexte du modèle lui-même (`*.context_length` dans `/api/show`), `null` si inconnue. */
-async function readModelMaxContext(model: string): Promise<number | null> {
+export async function readModelMaxContext(model: string): Promise<number | null> {
   try {
     const info = await getModelInfo(model)
     for (const [key, value] of Object.entries(info ?? {})) {
@@ -96,7 +96,7 @@ const PROGRESS_THROTTLE_MS = 200
  * erreurs avec un AUTRE constructeur Error — `instanceof` y répond false pour une erreur pourtant bien
  * réelle. Le seul critère fiable est donc le NOM, jamais la classe.
  */
-function isAbortError(error: unknown): boolean {
+export function isAbortError(error: unknown): boolean {
   return (error as { name?: string } | null)?.name === 'AbortError'
 }
 
@@ -115,6 +115,132 @@ export interface GenerateAppOptions {
 export class GenerationStoppedError extends Error {
   constructor() {
     super("Génération arrêtée.")
+  }
+}
+
+/** Étape en cours et nombre d'étapes prévu, partagés par toutes les étapes d'une même génération. */
+export interface GenerationSteps {
+  index: number
+  count: number
+}
+
+export interface ModelStepRunnerOptions {
+  model: string
+  modelMaxContext: number | null
+  steps: GenerationSteps
+  onStatus: (message: string) => void
+  onProgress?: (progress: CodeGenProgress) => void
+  signal?: AbortSignal
+}
+
+/** Message final quand même la plus grande fenêtre permise ne suffit pas : lisible, et avec quoi faire. */
+function contextTooSmallError(numCtx: number): Error {
+  return new Error(
+    `Le modèle a rempli toute sa mémoire de travail (${numCtx} tokens) avant d'avoir fini d'écrire. ` +
+      "La demande est sans doute trop longue pour être traitée d'un bloc : demande un changement plus " +
+      'petit, ou recommence à zéro.'
+  )
+}
+
+/**
+ * Étape 189 : partagé par le mode Code et le Montage (même modèle, mêmes besoins d'avancement et d'arrêt),
+ * plutôt que recopié — deux copies auraient fini par diverger comme les deux composeurs avant l'étape 92.
+ */
+export function createModelStepRunner({ model, modelMaxContext, steps, onStatus, onProgress, signal }: ModelStepRunnerOptions) {
+  /**
+   * Un appel au modèle, avec un vrai signe de vie pendant qu'il travaille.
+   *
+   * Le cœur du problème signalé par Léo : chacun de ces appels peut durer plusieurs minutes, et rien
+   * n'arrivait entre le "Génération de l'application…" du début et la ligne suivante. Deux signaux ici :
+   * `charsWritten`, qui monte tant que le modèle écrit (la preuve que ça avance), et un battement de cœur
+   * toutes les secondes qui porte `idleMs` — le temps écoulé depuis le dernier fragment reçu, seul moyen de
+   * distinguer "ça travaille" de "c'est bloqué".
+   */
+  return async (label: string, messages: OllamaMessage[], expectedOutputChars: number): Promise<OllamaMessage> => {
+    steps.index += 1
+    const currentStep = steps.index
+    let charsWritten = 0
+    let thinking = true
+    let lastActivity = Date.now()
+
+    let lastEmit = 0
+    const emit = (throttled = false): void => {
+      const now = Date.now()
+      // Un modèle écrit par petits fragments très rapprochés : sans ce filtre, l'IPC recevrait des milliers
+      // de messages pour un seul fichier généré.
+      if (throttled && now - lastEmit < PROGRESS_THROTTLE_MS) return
+      lastEmit = now
+      onProgress?.({
+        label,
+        stepIndex: currentStep,
+        stepCount: steps.count,
+        charsWritten,
+        thinking,
+        idleMs: now - lastActivity
+      })
+    }
+    emit()
+    // Deux sources d'avancement, complémentaires : les fragments reçus (ça avance, avec le compteur qui
+    // monte) et ce battement de cœur (même quand plus rien n'arrive, `idleMs` continue de grandir — c'est
+    // ce qui permet de dire "bloqué" au lieu de laisser un écran figé sans explication).
+    const heartbeat = setInterval(() => emit(), PROGRESS_HEARTBEAT_MS)
+    const call = (numCtx: number): Promise<OllamaMessage> =>
+      chatWithOllama(
+        messages,
+        undefined,
+        model,
+        'high',
+        signal,
+        numCtx,
+        (delta) => {
+          thinking = false
+          charsWritten += delta.length
+          lastActivity = Date.now()
+          emit(true)
+        },
+        // Raisonnement caché : aucun caractère de code, mais ça prouve que le modèle est bien en train de
+        // travailler — sans ça, une longue réflexion est indiscernable d'un blocage.
+        () => {
+          lastActivity = Date.now()
+          emit(true)
+        }
+      )
+    try {
+      const numCtx = computeCodeNumCtx(messages, expectedOutputChars, modelMaxContext)
+      let message: OllamaMessage
+      try {
+        message = await call(numCtx)
+      } catch (err) {
+        // Filet de sécurité : l'estimation ci-dessus peut rester trop juste si le modèle réfléchit bien plus
+        // longtemps que prévu. Une seule nouvelle tentative, avec le double (dans la limite du modèle) — et
+        // seulement si ça change vraiment quelque chose.
+        const larger = Math.min(numCtx * 2, modelMaxContext ?? CODE_NUM_CTX_MAX, CODE_NUM_CTX_MAX)
+        if (!isContextFullError(err)) throw err
+        if (larger <= numCtx) throw contextTooSmallError(numCtx)
+        onStatus('Le modèle a manqué de mémoire de travail en réfléchissant : nouvelle tentative avec plus de mémoire…')
+        // Même étape (le travail à faire n'a pas changé), compteurs repartis de zéro.
+        charsWritten = 0
+        thinking = true
+        lastActivity = Date.now()
+        emit()
+        try {
+          message = await call(larger)
+        } catch (retryErr) {
+          if (isContextFullError(retryErr)) throw contextTooSmallError(larger)
+          throw retryErr
+        }
+      }
+      // État final de l'étape, sans étranglement : les tout derniers fragments arrivent souvent dans les
+      // 200 ms qui précèdent la fin, donc sans cet envoi le compteur resterait figé sur une valeur d'avant.
+      emit()
+      return message
+    } catch (err) {
+      // Un arrêt ne veut pas dire "panne" : c'est l'utilisateur qui a cliqué sur "Arrêter".
+      if (isAbortError(err)) throw new GenerationStoppedError()
+      throw err
+    } finally {
+      clearInterval(heartbeat)
+    }
   }
 }
 
@@ -367,7 +493,7 @@ function describeDownloadFailure(err: unknown): Error | null {
  * comme `profile.visionModel` (voir assistant.ts). `pickBestCodeModel()` ne sert plus que de repli pour un
  * profil créé avant l'étape 46 (jamais passé par un scan qui l'aurait renseigné).
  */
-async function resolveCodeModel(onStatus: (message: string) => void, profile: Profile | null): Promise<string> {
+export async function resolveCodeModel(onStatus: (message: string) => void, profile: Profile | null): Promise<string> {
   const savedCodeModel = profile?.codeModel
   const installed = await listInstalledModels().catch(() => [] as string[])
 
@@ -401,7 +527,7 @@ async function resolveCodeModel(onStatus: (message: string) => void, profile: Pr
 }
 
 /** Nom de dossier lisible et sans surprise pour le système de fichiers, dérivé de la demande. */
-function slugify(description: string): string {
+export function slugify(description: string): string {
   const slug = description
     .toLowerCase()
     .normalize('NFD')
@@ -501,104 +627,7 @@ export async function generateApp(
    * instantanée. Une relance ou une réparation ajoutent leur étape au moment où elles deviennent
    * nécessaires, plutôt que d'être comptées d'avance alors qu'elles n'arrivent pas la plupart du temps.
    */
-  let stepCount = imageBase64 ? 3 : 2
-  let stepIndex = 0
-
-  /**
-   * Un appel au modèle, avec un vrai signe de vie pendant qu'il travaille.
-   *
-   * Le cœur du problème signalé par Léo : chacun de ces appels peut durer plusieurs minutes, et rien
-   * n'arrivait entre le "Génération de l'application…" du début et la ligne suivante. Deux signaux ici :
-   * `charsWritten`, qui monte tant que le modèle écrit (la preuve que ça avance), et un battement de cœur
-   * toutes les secondes qui porte `idleMs` — le temps écoulé depuis le dernier fragment reçu, seul moyen de
-   * distinguer "ça travaille" de "c'est bloqué".
-   */
-  const runModelStep = async (label: string, messages: OllamaMessage[], expectedOutputChars: number): Promise<OllamaMessage> => {
-    stepIndex += 1
-    const currentStep = stepIndex
-    let charsWritten = 0
-    let thinking = true
-    let lastActivity = Date.now()
-
-    let lastEmit = 0
-    const emit = (throttled = false): void => {
-      const now = Date.now()
-      // Un modèle écrit par petits fragments très rapprochés : sans ce filtre, l'IPC recevrait des milliers
-      // de messages pour un seul fichier généré.
-      if (throttled && now - lastEmit < PROGRESS_THROTTLE_MS) return
-      lastEmit = now
-      onProgress?.({
-        label,
-        stepIndex: currentStep,
-        stepCount,
-        charsWritten,
-        thinking,
-        idleMs: now - lastActivity
-      })
-    }
-    emit()
-    // Deux sources d'avancement, complémentaires : les fragments reçus (ça avance, avec le compteur qui
-    // monte) et ce battement de cœur (même quand plus rien n'arrive, `idleMs` continue de grandir — c'est
-    // ce qui permet de dire "bloqué" au lieu de laisser un écran figé sans explication).
-    const heartbeat = setInterval(() => emit(), PROGRESS_HEARTBEAT_MS)
-    const call = (numCtx: number): Promise<OllamaMessage> =>
-      chatWithOllama(
-        messages,
-        undefined,
-        model,
-        'high',
-        signal,
-        numCtx,
-        (delta) => {
-          thinking = false
-          charsWritten += delta.length
-          lastActivity = Date.now()
-          emit(true)
-        },
-        // Raisonnement caché : aucun caractère de code, mais ça prouve que le modèle est bien en train de
-        // travailler — sans ça, une longue réflexion est indiscernable d'un blocage.
-        () => {
-          lastActivity = Date.now()
-          emit(true)
-        }
-      )
-    try {
-      const numCtx = computeCodeNumCtx(messages, expectedOutputChars, modelMaxContext)
-      let message: OllamaMessage
-      try {
-        message = await call(numCtx)
-      } catch (err) {
-        // Filet de sécurité : l'estimation ci-dessus peut rester trop juste si le modèle réfléchit bien plus
-        // longtemps que prévu. Une seule nouvelle tentative, avec le double (dans la limite du modèle) — et
-        // seulement si ça change vraiment quelque chose.
-        const larger = Math.min(numCtx * 2, modelMaxContext ?? CODE_NUM_CTX_MAX, CODE_NUM_CTX_MAX)
-        if (!isContextFullError(err)) throw err
-        if (larger <= numCtx) throw contextTooSmallError(numCtx)
-        onStatus('Le modèle a manqué de mémoire de travail en réfléchissant : nouvelle tentative avec plus de mémoire…')
-        // Même étape (le travail à faire n'a pas changé), compteurs repartis de zéro.
-        charsWritten = 0
-        thinking = true
-        lastActivity = Date.now()
-        emit()
-        try {
-          message = await call(larger)
-        } catch (retryErr) {
-          if (isContextFullError(retryErr)) throw contextTooSmallError(larger)
-          throw retryErr
-        }
-      }
-      // État final de l'étape, sans étranglement : les tout derniers fragments arrivent souvent dans les
-      // 200 ms qui précèdent la fin, donc sans cet envoi le compteur resterait figé sur une valeur d'avant.
-      emit()
-      return message
-    } catch (err) {
-      // Un arrêt ne veut pas dire "panne" : c'est l'utilisateur qui a cliqué sur "Arrêter".
-      if (isAbortError(err)) throw new GenerationStoppedError()
-      throw err
-    } finally {
-      clearInterval(heartbeat)
-    }
-  }
+  const steps: GenerationSteps = { index: 0, count: imageBase64 ? 3 : 2 }
 
   /**
    * Image jointe (étape 91) : le modèle de code ne sait pas lire une image, et un modèle de vision ne tient
@@ -612,7 +641,7 @@ export async function generateApp(
     // Compte comme l'étape 1 sur 4 pour que la numérotation des suivantes reste juste. Pas d'avancement en
     // direct ici : describeImage ne streame pas, donc il n'y a rien de vrai à afficher — le journal dit
     // simplement ce qui se passe, comme avant.
-    stepIndex = 1
+    steps.index = 1
     onStatus("Lecture de l'image jointe…")
     imageDescription = await describeImage(
       imageBase64,
@@ -625,13 +654,7 @@ export async function generateApp(
   const model = await resolveCodeModel(onStatus, profile)
   const modelMaxContext = await readModelMaxContext(model)
 
-  /** Message final quand même la plus grande fenêtre permise ne suffit pas : lisible, et avec quoi faire. */
-  const contextTooSmallError = (numCtx: number): Error =>
-    new Error(
-      `Le modèle a rempli toute sa mémoire de travail (${numCtx} tokens) avant d'avoir fini d'écrire. ` +
-        "L'application est sans doute trop longue pour être modifiée d'un bloc : demande un changement plus " +
-        'petit, ou crée une nouvelle application.'
-    )
+  const runModelStep = createModelStepRunner({ model, modelMaxContext, steps, onStatus, onProgress, signal })
 
   const withImage = (base: string): string =>
     imageDescription
@@ -691,7 +714,7 @@ export async function generateApp(
     // La relance compte comme une étape à part : elle repart de zéro et dure aussi longtemps que la
     // première — l'annoncer évite de laisser croire que l'étape en cours patine. Le total prévu monte
     // d'autant : mieux vaut un total qui s'ajuste qu'une "étape 4 sur 3".
-    stepCount += 1
+    steps.count += 1
     const retry = await runModelStep('Nouvelle tentative', retryMessages, expectedChars)
     draft = extractHtml(retry.content)
     if (!draft) {
@@ -751,7 +774,7 @@ export async function generateApp(
             `Fichier à réparer :\n\n\`\`\`html\n${final}\n\`\`\``
         }
       ]
-      stepCount += 1
+      steps.count += 1
       const repaired = await runModelStep('Réparation des problèmes détectés', repairMessages, final.length)
       const repairedHtml = extractHtml(repaired.content)
       // La réparation n'est gardée que si elle améliore vraiment les choses : un modèle peut très bien

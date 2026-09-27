@@ -5,7 +5,7 @@ export type JarisEmotion = 'idle' | 'listening' | 'thinking' | 'happy' | 'surpri
 
 /** Les trois modes de la fenêtre de réglages (App.tsx), aussi retenus côté main pour choisir la forme du
  * widget au repli (voir WidgetMode juste en dessous et `setActiveMode`). */
-export type AppMode = 'voice' | 'chat' | 'code'
+export type AppMode = 'voice' | 'chat' | 'code' | 'montage'
 
 /**
  * Ce que devient Jaris quand on quitte sa fenêtre, dérivé du dernier mode actif :
@@ -537,6 +537,34 @@ export interface GeneratedApp {
  * Contrairement à `codeGenStatus` (une ligne AJOUTÉE au journal à chaque étape franchie), ce message
  * REMPLACE le précédent : c'est l'état courant, pas un historique.
  */
+/** Le Montage (étape 189) : installé à la demande, jamais avec Jaris. */
+export interface MontageStatus {
+  installed: boolean
+  /** Windows uniquement pour l'instant : le paquet publié par la CI ne contient que les programmes Windows. */
+  supported: boolean
+}
+
+/** Avancement de l'installation du Montage, affiché en barre. */
+export interface MontageInstallProgress {
+  phase: 'download' | 'extract' | 'browser'
+  /** 0-100, `null` quand l'étape ne sait pas mesurer (décompression). */
+  percent: number | null
+}
+
+/** Une vidéo fabriquée par le Montage : son code Remotion, et la vidéo elle-même (lue à part, voir readGeneratedVideo). */
+export interface GeneratedVideo {
+  path: string
+  code: string
+  /** Faux quand le code existe mais que le rendu a échoué (la vidéo n'a pas été fabriquée). */
+  hasVideo: boolean
+}
+
+export interface GeneratedVideoSummary {
+  path: string
+  label: string
+  timestamp: number
+}
+
 export interface CodeGenProgress {
   /** Ce que Jaris fait en ce moment ("Écriture de l'application", "Relecture du code"…). */
   label: string
@@ -554,6 +582,11 @@ export interface CodeGenProgress {
    * mort.
    */
   idleMs: number
+  /**
+   * Étape 189 : une étape mesurable sans passer par le modèle (le rendu de la vidéo) donne son pourcentage ;
+   * absent pour une étape où seul le modèle travaille.
+   */
+  percent?: number
 }
 
 /**
@@ -636,6 +669,21 @@ export const IPC_CHANNELS = {
   pickImageFile: 'jaris:pick-image-file',
   /** renderer <-> main : enregistre une image dessinée par Jaris là où Léo le choisit (étape 185). */
   saveGeneratedImage: 'jaris:save-generated-image',
+  /** Montage (étape 189) : installé à la demande, puis vidéos fabriquées avec Remotion. */
+  getMontageStatus: 'jaris:get-montage-status',
+  installMontage: 'jaris:install-montage',
+  montageInstallProgress: 'jaris:montage-install-progress',
+  uninstallMontage: 'jaris:uninstall-montage',
+  generateMontage: 'jaris:generate-montage',
+  montageGenStatus: 'jaris:montage-gen-status',
+  montageGenProgress: 'jaris:montage-gen-progress',
+  cancelMontageGen: 'jaris:cancel-montage-gen',
+  getGeneratedVideos: 'jaris:get-generated-videos',
+  loadGeneratedVideo: 'jaris:load-generated-video',
+  readGeneratedVideo: 'jaris:read-generated-video',
+  deleteGeneratedVideo: 'jaris:delete-generated-video',
+  saveGeneratedVideo: 'jaris:save-generated-video',
+  openGeneratedVideos: 'jaris:open-generated-videos',
   /** renderer <-> main : récupère les messages du mode Chat, amorcés depuis conversation-history.json au
    * premier appel après un lancement (voir ChatSession.ensureLoaded) — plus seulement ceux de la session en cours. */
   getChatHistory: 'jaris:get-chat-history',

@@ -76,6 +76,51 @@ jobs:
           Write-Host "Jaris tourne toujours après 15s, aucun plantage détecté."
           Stop-Process -Id $proc.Id -Force
 
+      # Étape 189 : le paquet Montage (Remotion, installé seulement si Léo le demande). Construit ici, sur
+      # Windows, pour embarquer les programmes Windows de Remotion (compositeur + FFmpeg, esbuild, rspack) ;
+      # les versions exactes viennent de montage/package-lock.json. Puis une VRAIE vidéo est fabriquée avec le
+      # Node de Jaris.exe (ELECTRON_RUN_AS_NODE), exactement comme sur le PC de Léo : un paquet qui ne sait pas
+      # filmer n'est jamais publié.
+      - name: Construit et vérifie le paquet Montage (Remotion)
+        shell: pwsh
+        run: |
+          Push-Location montage
+          npm ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw "npm ci du paquet Montage a échoué" }
+          $version = (Get-Content package.json | ConvertFrom-Json).dependencies.remotion
+          Pop-Location
+          $asset = "Jaris-Montage-remotion-$version.zip"
+          $packDir = Join-Path $env:RUNNER_TEMP "montage-pack"
+          New-Item -ItemType Directory -Force -Path $packDir | Out-Null
+          Copy-Item montage/package.json $packDir
+          Move-Item montage/node_modules (Join-Path $packDir "node_modules")
+          tar.exe -a -c -f "release/$asset" -C $packDir package.json node_modules
+          if ($LASTEXITCODE -ne 0) { throw "compression du paquet Montage impossible" }
+          Write-Host "Paquet : $asset ($([math]::Round((Get-Item "release/$asset").Length / 1MB)) Mo)"
+
+          $env:ELECTRON_RUN_AS_NODE = "1"
+          $exe = (Resolve-Path "release\win-unpacked\Jaris.exe").Path
+          $runner = (Resolve-Path "release\win-unpacked\resources\montage\render.cjs").Path
+          $nodeModules = Join-Path $packDir "node_modules"
+          $jobs = Join-Path $env:RUNNER_TEMP "montage-jobs"
+          New-Item -ItemType Directory -Force -Path $jobs | Out-Null
+          @{ action = "ensure-browser"; nodeModules = $nodeModules } | ConvertTo-Json | Set-Content -Encoding utf8 "$jobs/browser.json"
+          Push-Location $packDir
+          & $exe $runner "$jobs/browser.json" | Select-Object -Last 2
+          if ($LASTEXITCODE -ne 0) { throw "le navigateur de rendu n'a pas pu être téléchargé" }
+          $project = Join-Path $env:RUNNER_TEMP "montage-project"
+          New-Item -ItemType Directory -Force -Path $project | Out-Null
+          Copy-Item "$env:GITHUB_WORKSPACE/scripts/fixtures/montage/*.tsx" $project
+          $video = Join-Path $project "video.mp4"
+          @{ action = "render"; nodeModules = $nodeModules; projectDir = $project; output = $video } | ConvertTo-Json | Set-Content -Encoding utf8 "$jobs/render.json"
+          & $exe $runner "$jobs/render.json" | Select-Object -Last 2
+          if ($LASTEXITCODE -ne 0) { throw "Remotion n'a pas réussi à fabriquer la vidéo de test" }
+          Pop-Location
+          $size = (Get-Item $video).Length
+          if ($size -lt 10000) { throw "vidéo de test trop petite ($size octets)" }
+          Write-Host "Vidéo de test fabriquée : $size octets."
+          Remove-Item Env:ELECTRON_RUN_AS_NODE
+
       # Récupérable depuis l'onglet Actions de GitHub, sur chaque commit poussé : c'est le moyen le plus
       # rapide de tester une version en cours de développement sur un vrai PC Windows.
       - uses: actions/upload-artifact@v4
@@ -89,7 +134,8 @@ jobs:
       - if: startsWith(github.ref, 'refs/tags/v')
         run: |
           $exe = (Get-Item release/Jaris-Setup-*.exe).FullName
-          gh release create "$env:GITHUB_REF_NAME" "$exe" --generate-notes
+          $pack = (Get-Item release/Jaris-Montage-*.zip).FullName
+          gh release create "$env:GITHUB_REF_NAME" "$exe" "$pack" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -116,11 +162,13 @@ jobs:
           $version = (Get-Content package.json | ConvertFrom-Json).version
           $tag = "v$version"
           $exe = (Get-Item release/Jaris-Setup-*.exe).FullName
+          $pack = (Get-Item release/Jaris-Montage-*.zip).FullName
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
             Write-Host "Release $tag déjà publiée, rien à faire."
           } else {
-            gh release create $tag "$exe" --title $tag --generate-notes --target $env:GITHUB_SHA
+            # Le paquet Montage accompagne chaque version : Jaris le cherche dans la Release de SA version.
+            gh release create $tag "$exe" "$pack" --title $tag --generate-notes --target $env:GITHUB_SHA
           }
         env:
           GH_TOKEN: ${{ github.token }}

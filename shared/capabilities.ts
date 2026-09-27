@@ -174,6 +174,28 @@ export const CAPABILITIES: CapabilityGroup[] = [
     ]
   },
   {
+    title: 'Faire une vidéo (Montage)',
+    summary: "À installer d'abord depuis le bouton Montage (environ 200 Mo) : Jaris écrit la vidéo avec Remotion et la fabrique en MP4.",
+    exampleLabel: 'Écris',
+    items: [
+      {
+        title: 'Titres et textes animés',
+        description: 'Intro, générique, message animé : décris ce qu’on voit, les textes exacts et la durée.',
+        example: 'intro de 6 secondes, fond bleu nuit, le titre JARIS apparaît en grand'
+      },
+      {
+        title: 'Retoucher une vidéo',
+        description: 'Redemande un changement sur une vidéo ouverte ; l’ancienne version reste dans la liste.',
+        example: 'le titre plus gros et 10 secondes au lieu de 6'
+      },
+      {
+        title: 'Pas de vraies scènes filmées',
+        description: 'Le Montage anime du texte, des formes et des graphiques : il ne génère pas de personnes ni de paysages filmés.',
+        limitation: true
+      }
+    ]
+  },
+  {
     title: 'Discuter par écrit',
     summary: "Le Chat, pour quand tu ne veux pas parler à voix haute.",
     items: [

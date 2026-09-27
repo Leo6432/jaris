@@ -3,6 +3,7 @@ import CapacityScan from '@/components/CapacityScan'
 import ChatPanel from '@/components/ChatPanel'
 import ChatWidget from '@/components/ChatWidget'
 import CodePanel from '@/components/CodePanel'
+import MontagePanel from '@/components/MontagePanel'
 import RuntimeSetup from '@/components/RuntimeSetup'
 import JarisOrb from '@/components/JarisOrb'
 import MemoryBrain from '@/components/MemoryBrain'
@@ -20,13 +21,14 @@ const STATUS_LABEL: Record<JarisEmotion, string> = {
   surprised: 'Oups !'
 }
 
-/** Les 3 modes de la colonne latérale permanente (étape 30). */
-type AppMode = 'voice' | 'chat' | 'code'
+/** Les modes de la colonne latérale permanente (étape 30 ; Montage ajouté à l'étape 189). */
+type AppMode = 'voice' | 'chat' | 'code' | 'montage'
 
 const MODES: Array<{ id: AppMode; label: string; hint: string }> = [
   { id: 'voice', label: 'Agent vocal', hint: 'Parler à Jaris' },
   { id: 'chat', label: 'Chat', hint: 'Écrire à Jaris' },
-  { id: 'code', label: 'Code', hint: 'Générer une application' }
+  { id: 'code', label: 'Code', hint: 'Générer une application' },
+  { id: 'montage', label: 'Montage', hint: 'Créer une vidéo (Remotion)' }
 ]
 
 /**
@@ -491,6 +493,7 @@ export default function App(): JSX.Element {
 
           {appMode === 'chat' && <ChatPanel />}
           {appMode === 'code' && <CodePanel />}
+          {appMode === 'montage' && <MontagePanel />}
         </main>
 
         {memoryGraph && <MemoryBrain graph={memoryGraph} onClose={() => setMemoryGraph(null)} />}

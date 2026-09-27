@@ -43,6 +43,12 @@ extraResources:
   # machine qui l'a déjà, il ne manquait que ces fichiers pour que ça marche.
   - from: docker-compose.yml
     to: docker-compose.yml
+  # Étape 189 : le programme de rendu du Montage, lancé par le Node d'Electron. Seul ce fichier est livré avec
+  # Jaris : Remotion lui-même (paquet de ~85 Mo) n'est téléchargé que si Léo installe le Montage.
+  - from: montage
+    to: montage
+    filter:
+      - render.cjs
   - from: searxng
     to: searxng
 

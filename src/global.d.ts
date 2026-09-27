@@ -25,6 +25,10 @@ import type {
   OllamaVersionStatus,
   PickedImageFile,
   SaveImageResult,
+  MontageStatus,
+  MontageInstallProgress,
+  GeneratedVideo,
+  GeneratedVideoSummary,
   Profile,
   RuntimeSetupProgress,
   RuntimeSetupStatus,
@@ -100,6 +104,20 @@ declare global {
       // Jaris en widget en prenant le focus). null si l'utilisateur annule.
       pickImageFile: () => Promise<PickedImageFile | null>
       saveGeneratedImage: (dataUrl: string) => Promise<SaveImageResult>
+      getMontageStatus: () => Promise<MontageStatus>
+      installMontage: () => Promise<void>
+      onMontageInstallProgress: (cb: (progress: MontageInstallProgress) => void) => () => void
+      uninstallMontage: () => Promise<void>
+      generateMontage: (description: string, currentCode?: string) => Promise<GeneratedVideo>
+      onMontageGenStatus: (cb: (message: string) => void) => () => void
+      onMontageGenProgress: (cb: (progress: CodeGenProgress) => void) => () => void
+      cancelMontageGen: () => void
+      getGeneratedVideos: () => Promise<GeneratedVideoSummary[]>
+      loadGeneratedVideo: (path: string) => Promise<GeneratedVideo>
+      readGeneratedVideo: (path: string) => Promise<Uint8Array>
+      deleteGeneratedVideo: (path: string) => Promise<void>
+      saveGeneratedVideo: (path: string) => Promise<SaveImageResult>
+      openGeneratedVideos: (path?: string) => Promise<void>
       generateApp: (description: string, currentHtml?: string, imageBase64?: string) => Promise<GeneratedApp>
       onCodeGenStatus: (cb: (message: string) => void) => () => void
       // Étape 99 : avancement en direct pendant une génération (l'étape en cours, les caractères déjà
