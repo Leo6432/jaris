@@ -66,7 +66,22 @@ const overrides = {
   }),
   getConversationHistory: async () => [],
   // Étape 180 : le test du mot « Jaris » — le test diffuse lui-même ce que le sidecar aurait compris.
-  testWakeWord: () => { window.__wakeTest = 'on' },
+  testWakeWord: async () => {
+    if (window.__listeningIssue) return { started: false, reason: window.__listeningIssue }
+    window.__wakeTest = 'on'
+    return { started: true, reason: null }
+  },
+  // Étape 188 : le test micro répond s'il a pu démarrer ; sa fin est diffusée par le test lui-même.
+  testMicrophone: async () => {
+    if (window.__listeningIssue) return { started: false, reason: window.__listeningIssue }
+    window.__micTest = 'on'
+    return { started: true, reason: null }
+  },
+  stopTestMicrophone: () => { window.__micTest = 'off' },
+  onMicTestDone: (cb) => {
+    window.__emitMicDone = cb
+    return () => {}
+  },
   stopTestWakeWord: () => { window.__wakeTest = 'off' },
   onWakeTestHeard: (cb) => {
     window.__emitWakeHeard = cb
@@ -550,5 +565,51 @@ test('Voix : le test du mot « Jaris » regroupe les essais en tableau — réus
     await row.locator('button').click()
     assert.equal(await page.evaluate(() => window.__wakeTest), 'off', 'Arrêter doit vraiment arrêter le test côté Jaris')
     assert.equal(await page.locator('.options-menu__wake-test-table tbody tr').count(), 4, 'le tableau reste lisible après l’arrêt')
+  })
+})
+
+// Étape 188 (l'ami de Léo : « il parle, il entend rien ») : un test envoyé à une écoute qui charge encore
+// ne recevait jamais de réponse, et l'écran restait muet comme si le micro était en cause.
+test('Voix : le test micro dit POURQUOI il ne démarre pas quand l’écoute charge encore', options, async () => {
+  await withOptions(async (page) => {
+    await page.evaluate(() => {
+      window.__listeningIssue = "L'écoute démarre encore. Au premier lancement, Jaris télécharge la transcription (environ 2,5 Go) : réessaie dans quelques minutes."
+    })
+    const row = page.locator('.options-menu__row', { hasText: 'Tester le micro' })
+    await row.locator('button').click()
+    await page.waitForSelector('.options-menu__voice-test-issue')
+    assert.match(await page.textContent('.options-menu__voice-test-issue'), /télécharge la transcription/)
+    assert.equal(await row.locator('button').textContent(), 'Tester', 'le bouton ne doit pas rester bloqué sur « Arrêter »')
+    assert.equal(await page.locator('.options-menu__mic-bars').count(), 0, 'pas de barres vides qui font croire à un micro muet')
+
+    const color = await page.$eval('.options-menu__voice-test-issue', (el) => getComputedStyle(el).color)
+    assert.notEqual(color, 'rgb(0, 0, 0)', 'le message doit être habillé par le CSS de Jaris')
+
+    // Même garde sur le test du mot « Jaris », message affiché sous CE test-là.
+    const wakeRow = page.locator('.options-menu__row', { hasText: 'Tester le mot « Jaris »' })
+    await wakeRow.locator('button').click()
+    await page.waitForFunction(() => document.querySelectorAll('.options-menu__voice-test-issue').length === 1)
+    assert.equal(await wakeRow.locator('button').textContent(), 'Tester')
+    assert.equal(await page.evaluate(() => window.__wakeTest), undefined)
+  })
+})
+
+test('Voix : un flux de silence total désigne Windows (micro coupé ou bloqué), un son faible désigne le micro', options, async () => {
+  await withOptions(async (page) => {
+    const row = page.locator('.options-menu__row', { hasText: 'Tester le micro' })
+    await row.locator('button').click()
+    assert.equal(await page.evaluate(() => window.__micTest), 'on')
+    await page.evaluate(() => window.__emitMicDone({ detected: false, silentStream: true }))
+    await page.waitForSelector('.options-menu__mic-result--bad')
+    assert.match(await page.textContent('.options-menu__mic-result--bad'), /Confidentialité.*Microphone/)
+
+    await row.locator('button').click()
+    await page.evaluate(() => window.__emitMicDone({ detected: false, silentStream: false }))
+    await page.waitForFunction(() => /trop faible/.test(document.querySelector('.options-menu__mic-result--bad')?.textContent ?? ''))
+
+    await row.locator('button').click()
+    await page.evaluate(() => window.__emitMicDone({ detected: true, silentStream: false }))
+    await page.waitForSelector('.options-menu__mic-result--ok')
+    assert.match(await page.textContent('.options-menu__mic-result--ok'), /Micro détecté/)
   })
 })

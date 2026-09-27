@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events'
 import { randomUUID } from 'crypto'
-import type { JarisEmotion, SoundCue, VoiceReplyPayload, WakeTestHeardPayload } from '../../shared/ipc'
-import { VoiceClient } from './voiceClient'
+import type { JarisEmotion, MicTestDonePayload, SoundCue, VoiceReplyPayload, WakeTestHeardPayload } from '../../shared/ipc'
+import { VoiceClient, listeningUnavailableReason } from './voiceClient'
 import { synthesizeSpeech } from './tts'
 import { appendConversationEntry } from './conversationStore'
 import { converse } from './assistant'
@@ -160,7 +160,7 @@ export class VoicePipeline extends EventEmitter {
     })
     this.voice.on('micTestStarted', () => this.emit('micTestStarted'))
     this.voice.on('micTestLevel', (level: number) => this.emit('micTestLevel', level))
-    this.voice.on('micTestDone', (detected: boolean) => this.emit('micTestDone', detected))
+    this.voice.on('micTestDone', (done: MicTestDonePayload) => this.emit('micTestDone', done))
     this.voice.on('wakeTestHeard', (heard: WakeTestHeardPayload) => this.emit('wakeTestHeard', heard))
 
     await restoreReminders((message) => void this.announceReminder(message))
@@ -189,9 +189,14 @@ export class VoicePipeline extends EventEmitter {
     this.voice.setWakePaused(suspended)
   }
 
-  /** Démarre le test micro, actif jusqu'à stopTestMic() (voir 'micTestStarted'/'micTestLevel'/'micTestDone'). */
-  testMic(): void {
-    this.voice.testMic()
+  /**
+   * Démarre le test micro, actif jusqu'à stopTestMic() (voir 'micTestStarted'/'micTestLevel'/'micTestDone').
+   * Renvoie pourquoi il ne peut pas tourner (écoute en chargement ou arrêtée), `null` s'il est lancé.
+   */
+  testMic(): string | null {
+    const reason = listeningUnavailableReason(this.voice.getStatus())
+    if (reason === null) this.voice.testMic()
+    return reason
   }
 
   /** Arrête un test micro démarré par testMic(). */
@@ -199,9 +204,11 @@ export class VoicePipeline extends EventEmitter {
     this.voice.stopTestMic()
   }
 
-  /** Test du mot « Jaris » (étape 180), voir VoiceClient.testWakeWord. */
-  testWakeWord(): void {
-    this.voice.testWakeWord()
+  /** Test du mot « Jaris » (étape 180), voir VoiceClient.testWakeWord. Même garde que testMic (étape 188). */
+  testWakeWord(): string | null {
+    const reason = listeningUnavailableReason(this.voice.getStatus())
+    if (reason === null) this.voice.testWakeWord()
+    return reason
   }
 
   stopTestWakeWord(): void {

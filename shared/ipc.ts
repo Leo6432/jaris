@@ -212,6 +212,17 @@ export interface MicTestLevelPayload {
 /** Verdict final d'un test micro (voir mic_test_done dans voice_server.py). */
 export interface MicTestDonePayload {
   detected: boolean
+  /**
+   * Étape 188 : que des zéros parfaits pendant tout le test — Windows donne un flux vide (micro coupé dans
+   * Windows, ou accès au micro refusé aux applications de bureau), ce qu'un micro trop faible ne fait jamais.
+   */
+  silentStream: boolean
+}
+
+/** Réponse au lancement d'un test micro ou du mot « Jaris » : `reason` dit pourquoi il n'a pas pu démarrer. */
+export interface VoiceTestStartResult {
+  started: boolean
+  reason: string | null
 }
 
 /**

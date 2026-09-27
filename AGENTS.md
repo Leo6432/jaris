@@ -5152,3 +5152,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   décider quoi corriger, le classement des ratés par fréquence vaut mieux qu'un fil chronologique — c'est le mot
   le plus fréquent qui mérite d'être accepté en premier.** Régression : `node --test
   scripts/test-options-reorganization-ui.mjs` (regroupement, ordre, couleurs, arrêt).
+
+- **Test micro muet chez un ami de Léo (étape 188 : « son micro n'est pas détecté, il parle, Jaris n'entend
+  rien » — le test audio d'Options, pas le test du mot « Jaris »)**. Cause exacte chez lui non confirmée (pas
+  d'accès à sa machine) : plutôt qu'une hypothèse de plus, le test DIT maintenant ce qui se passe. Deux angles
+  morts réels, trouvés en relisant le chemin du test : (1) le test était envoyé au programme d'écoute sans vérifier
+  qu'il tournait — au premier lancement il télécharge encore la transcription (~2,5 Go), ou il a pu s'arrêter sur
+  « impossible d'ouvrir le micro » ; la commande restait alors sans réponse et l'écran affichait des barres vides,
+  exactement comme un micro muet. `VoiceClient` suit maintenant son état (chargement/prêt/échec/arrêté) et le test
+  (micro ET mot « Jaris ») renvoie la raison, avec le VRAI message d'erreur relayé tel quel ; (2) « Rien capté »
+  ne distinguait pas un micro trop faible d'un flux VIDE : un vrai micro a toujours un léger souffle, jamais des
+  zéros parfaits — un test entièrement à zéro (≥ 400 ms, `silentStream`) désigne Windows (micro coupé, ou accès
+  refusé aux applications de bureau dans Confidentialité → Microphone). **Leçon : une commande envoyée à un
+  process qui ne répond pas encore doit vérifier son état AVANT, sinon « aucune réponse » se lit comme « rien
+  entendu » — et quand la cause est inconnue chez un tiers, livrer un diagnostic qui la nomme vaut mieux qu'un
+  correctif deviné.** Régression : `node --test scripts/test-voice-listening-status.mjs
+  scripts/test-options-reorganization-ui.mjs` (états suivis, vrai message relayé, arrêt voulu ≠ échec ; à l'écran :
+  raison affichée, bouton non bloqué, messages silence total / trop faible / détecté), chacun vérifié en
+  réintroduisant le défaut. Non vérifiable ici : la partie Python (numpy absent) — relue et syntaxe vérifiée.

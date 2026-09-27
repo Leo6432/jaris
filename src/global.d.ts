@@ -17,6 +17,7 @@ import type {
   JarisEmotion,
   MemoryGraph,
   MicTestDonePayload,
+  VoiceTestStartResult,
   MicTestLevelPayload,
   WakeTestHeardPayload,
   ModelOverviewResult,
@@ -112,9 +113,9 @@ declare global {
       listAudioInputDevices: () => Promise<AudioInputDevice[]>
       setAudioInputDevice: (deviceIndex: number | null) => Promise<void>
       setWakewordEnabled: (enabled: boolean) => Promise<void>
-      testMicrophone: () => void
+      testMicrophone: () => Promise<VoiceTestStartResult>
       stopTestMicrophone: () => void
-      testWakeWord: () => void
+      testWakeWord: () => Promise<VoiceTestStartResult>
       stopTestWakeWord: () => void
       onWakeTestHeard: (cb: (payload: WakeTestHeardPayload) => void) => () => void
       setActiveMode: (mode: AppMode) => void

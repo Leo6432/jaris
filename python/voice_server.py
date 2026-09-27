@@ -33,7 +33,7 @@ Une ligne JSON par événement sur stdout :
   {"event": "fatal", "message": "..."}     (démarrage impossible)
   {"event": "mic_test_started"}
   {"event": "mic_test_level", "level": 0.0-1.0}
-  {"event": "mic_test_done", "detected": true|false}
+  {"event": "mic_test_done", "detected": true|false, "silentStream": true|false}
   {"event": "wake_test_heard", "text": "...", "matched": true|false, "tooShort": true|false, "peak": 0.0-1.0}
 
 Avec --list-devices : ignore tous les autres arguments, n'ouvre aucun micro et ne charge aucun modèle —
@@ -348,6 +348,12 @@ def main() -> None:
 
     mic_test_active = False
     mic_test_detected = False
+    # Étape 188 (le micro d'un ami de Léo « n'entend rien ») : un vrai micro, même dans une pièce silencieuse,
+    # renvoie toujours un léger souffle — jamais des zéros parfaits. Des zéros du début à la fin du test veulent
+    # dire que Windows donne un flux VIDE : micro coupé dans Windows, ou accès au micro refusé aux applications
+    # de bureau (Confidentialité → Microphone). Ce cas se distingue ainsi d'un micro simplement trop faible.
+    mic_test_any_signal = False
+    mic_test_chunks = 0  # un test arrêté avant 400 ms n'a pas assez écouté pour conclure au silence total
 
     while True:
         chunk = audio_queue.get()
@@ -361,16 +367,21 @@ def main() -> None:
             mic_test_start_requested.clear()
             mic_test_active = True
             mic_test_detected = False
+            mic_test_any_signal = False
+            mic_test_chunks = 0
             emit({"event": "mic_test_started"})
 
         if mic_test_stop_requested.is_set():
             mic_test_stop_requested.clear()
             if mic_test_active:
                 mic_test_active = False
-                emit({"event": "mic_test_done", "detected": mic_test_detected})
+                emit({"event": "mic_test_done", "detected": mic_test_detected, "silentStream": mic_test_chunks >= 5 and not mic_test_any_signal})
 
         if mic_test_active:
             level = rms(chunk)
+            mic_test_chunks += 1
+            if not mic_test_any_signal and np.any(chunk):
+                mic_test_any_signal = True
             if level >= MIC_TEST_RMS_THRESHOLD:
                 mic_test_detected = True
             emit({"event": "mic_test_level", "level": min(1.0, level / MIC_TEST_LEVEL_DIVISOR)})

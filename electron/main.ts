@@ -75,6 +75,8 @@ import {
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload,
   type WakeTestHeardPayload,
+  type MicTestDonePayload,
+  type VoiceTestStartResult,
   type WidgetMode
 } from '../shared/ipc'
 
@@ -677,7 +679,7 @@ async function startVoicePipeline(): Promise<void> {
   // Étape 173 : une image dessinée à la voix s'ouvre dans la visionneuse de Windows (pas de Chat à l'écran).
   pipeline.on('image', (path: string) => void shell.openPath(path))
   pipeline.on('micTestLevel', (level: number) => broadcast(IPC_CHANNELS.micTestLevel, { level }))
-  pipeline.on('micTestDone', (detected: boolean) => broadcast(IPC_CHANNELS.micTestDone, { detected }))
+  pipeline.on('micTestDone', (done: MicTestDonePayload) => broadcast(IPC_CHANNELS.micTestDone, done))
   pipeline.on('wakeTestHeard', (heard: WakeTestHeardPayload) => broadcast(IPC_CHANNELS.wakeTestHeard, heard))
   // Arrêt d'urgence déclenché par la sécurité thermique GPU (voicePipeline/resourceMonitor) : un vrai
   // app.quit() (pas juste cacher la fenêtre, voir `quitting` plus haut), pour protéger la machine.
@@ -799,9 +801,16 @@ app.whenReady().then(async () => {
     pipeline?.stop()
     await startVoicePipeline()
   })
-  ipcMain.on(IPC_CHANNELS.testMicrophone, () => pipeline?.testMic())
+  // Étape 188 : un test envoyé à une écoute qui charge encore (ou arrêtée) ne recevait jamais de réponse et
+  // l'écran restait muet, comme si le micro n'entendait rien. La raison revient maintenant à l'écran.
+  const voiceTestStart = (reason: string | null): VoiceTestStartResult => ({ started: reason === null, reason })
+  ipcMain.handle(IPC_CHANNELS.testMicrophone, (): VoiceTestStartResult =>
+    voiceTestStart(pipeline ? pipeline.testMic() : "L'écoute n'est pas encore lancée. Réessaie dans un instant.")
+  )
   ipcMain.on(IPC_CHANNELS.stopTestMicrophone, () => pipeline?.stopTestMic())
-  ipcMain.on(IPC_CHANNELS.testWakeWord, () => pipeline?.testWakeWord())
+  ipcMain.handle(IPC_CHANNELS.testWakeWord, (): VoiceTestStartResult =>
+    voiceTestStart(pipeline ? pipeline.testWakeWord() : "L'écoute n'est pas encore lancée. Réessaie dans un instant.")
+  )
   ipcMain.on(IPC_CHANNELS.stopTestWakeWord, () => pipeline?.stopTestWakeWord())
   ipcMain.on(IPC_CHANNELS.setActiveMode, (_event, mode: AppMode) => {
     activeMode = mode

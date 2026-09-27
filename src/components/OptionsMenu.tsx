@@ -11,6 +11,7 @@ import type {
   OllamaVersionStatus,
   Profile,
   UpdateProgress,
+  MicTestDonePayload,
   WakeTestHeardPayload
 } from '../../shared/ipc'
 import { CAPABILITIES } from '../../shared/capabilities'
@@ -67,6 +68,29 @@ export interface WakeTestRow {
 }
 
 /** Pur (testé à part) : regroupe les essais du test en lignes du tableau. */
+/** Verdict affiché sous le test micro (étape 188) : `ok` colore la phrase en vert, sinon en rouge. */
+export interface MicTestVerdict {
+  ok: boolean
+  text: string
+}
+
+/**
+ * Traduit la fin d'un test micro en une phrase pour Léo. Un flux fait uniquement de zéros ne vient jamais d'un
+ * micro trop faible (un vrai micro a toujours un léger souffle) : c'est Windows qui ne donne aucun son.
+ */
+export function micTestVerdict(done: MicTestDonePayload): MicTestVerdict {
+  if (done.detected) return { ok: true, text: 'Micro détecté : du son a bien été capté.' }
+  if (done.silentStream) {
+    return {
+      ok: false,
+      text:
+        "Windows n'envoie aucun son (silence total). Le micro est sans doute coupé dans Windows, ou bloqué : " +
+        'Paramètres Windows → Confidentialité et sécurité → Microphone → active « Autoriser les applications de bureau à accéder au microphone ».'
+    }
+  }
+  return { ok: false, text: "Son trop faible : vérifie que le bon micro est sélectionné et parle plus près." }
+}
+
 export function groupWakeHeard(heard: WakeTestHeardPayload[]): WakeTestRow[] {
   const recognized = heard.filter((h) => h.matched).length
   const misses = new Map<string, WakeTestRow>()
@@ -284,7 +308,9 @@ export default function OptionsMenu(): JSX.Element {
   // Fenêtre glissante des derniers niveaux sonores (une valeur par évènement mic_test_level, ~12/seconde) :
   // affichée comme une rangée de barres qui défilent façon Discord, pas un seul chiffre.
   const [micLevels, setMicLevels] = useState<number[]>(() => Array(MIC_TEST_BAR_COUNT).fill(0))
-  const [micTestResult, setMicTestResult] = useState<boolean | null>(null)
+  const [micTestResult, setMicTestResult] = useState<MicTestVerdict | null>(null)
+  /** Étape 188 : pourquoi le test micro ou du mot « Jaris » n'a pas pu démarrer (écoute en chargement, arrêtée…). */
+  const [voiceTestIssue, setVoiceTestIssue] = useState<{ test: 'mic' | 'wake'; text: string } | null>(null)
   // Étape 180 (Léo : « ça marche 1 fois sur 3 ») : ce que Jaris a compris à chaque « Jaris » dit pendant le test.
   const [wakeTesting, setWakeTesting] = useState(false)
   const [wakeHeard, setWakeHeard] = useState<WakeTestHeardPayload[]>([])
@@ -442,9 +468,9 @@ export default function OptionsMenu(): JSX.Element {
     const offLevel = window.jaris.onMicTestLevel(({ level }) =>
       setMicLevels((prev) => [...prev.slice(1), level])
     )
-    const offDone = window.jaris.onMicTestDone(({ detected }) => {
+    const offDone = window.jaris.onMicTestDone((done) => {
       setMicTesting(false)
-      setMicTestResult(detected)
+      setMicTestResult(micTestVerdict(done))
     })
     const offWake = window.jaris.onWakeTestHeard((heard) => setWakeHeard((prev) => [...prev, heard].slice(-WAKE_TEST_MAX_HEARD)))
     return () => {
@@ -744,8 +770,13 @@ export default function OptionsMenu(): JSX.Element {
       return
     }
     setWakeHeard([])
+    setVoiceTestIssue(null)
     setWakeTesting(true)
-    window.jaris.testWakeWord()
+    void window.jaris.testWakeWord().then(({ started, reason }) => {
+      if (started) return
+      setWakeTesting(false)
+      setVoiceTestIssue({ test: 'wake', text: reason ?? "Le test n'a pas pu démarrer." })
+    })
   }
 
   const toggleMicTest = (): void => {
@@ -758,8 +789,13 @@ export default function OptionsMenu(): JSX.Element {
     setError(null)
     setMicTestResult(null)
     setMicLevels(Array(MIC_TEST_BAR_COUNT).fill(0))
+    setVoiceTestIssue(null)
     setMicTesting(true)
-    window.jaris.testMicrophone()
+    void window.jaris.testMicrophone().then(({ started, reason }) => {
+      if (started) return
+      setMicTesting(false)
+      setVoiceTestIssue({ test: 'mic', text: reason ?? "Le test n'a pas pu démarrer." })
+    })
   }
 
   if (!open) {
@@ -1002,11 +1038,16 @@ export default function OptionsMenu(): JSX.Element {
                     ))}
                   </div>
                   {!micTesting && micTestResult !== null && (
-                    <p className={micTestResult ? 'options-menu__mic-result--ok' : 'options-menu__mic-result--bad'}>
-                      {micTestResult ? 'Micro détecté : du son a bien été capté.' : "Rien capté : vérifie que le bon micro est sélectionné et qu'il n'est pas coupé."}
+                    <p className={micTestResult.ok ? 'options-menu__mic-result--ok' : 'options-menu__mic-result--bad'}>
+                      {micTestResult.text}
                     </p>
                   )}
                 </div>
+              )}
+              {voiceTestIssue?.test === 'mic' && (
+                <p className="options-menu__mic-result--bad options-menu__voice-test-issue" role="alert">
+                  {voiceTestIssue.text}
+                </p>
               )}
             </SettingGroup>
 
@@ -1054,6 +1095,11 @@ export default function OptionsMenu(): JSX.Element {
                   {wakeTesting ? 'Arrêter' : 'Tester'}
                 </button>
               </SettingRow>
+              {voiceTestIssue?.test === 'wake' && (
+                <p className="options-menu__mic-result--bad options-menu__voice-test-issue" role="alert">
+                  {voiceTestIssue.text}
+                </p>
+              )}
               {(wakeTesting || wakeHeard.length > 0) && (
                 <div className="options-menu__wake-test">
                   <p className="options-menu__wake-test-summary">

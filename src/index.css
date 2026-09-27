@@ -1274,6 +1274,13 @@ body.body--scan::after {
   color: var(--hud-danger);
 }
 
+/* Étape 188 : pourquoi un test d'écoute n'a pas pu démarrer — dans la carte, aligné sur les lignes de réglage. */
+.options-menu__voice-test-issue {
+  margin: 0;
+  padding: 10px 16px;
+  line-height: 1.45;
+}
+
 .app__status {
   font-size: 0.95rem;
   letter-spacing: 0.08em;
