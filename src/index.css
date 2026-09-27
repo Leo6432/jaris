@@ -3995,3 +3995,63 @@ a:hover {
 .montage-panel > .composer {
   margin-top: auto;
 }
+
+/* Étape 190 : les vidéos jointes au montage, en pastilles au-dessus du champ (comme la pièce jointe du Chat). */
+.montage-panel__clips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  /* Collées au champ : c'est avec lui qu'elles partent (repéré sur une capture, où elles flottaient en haut). */
+  margin-top: auto;
+}
+
+.montage-panel__clips + .composer {
+  margin-top: 0;
+}
+
+/* Le bouton des vidéos garde un libellé visible : l'écran parle du bouton « Vidéos », une icône seule ne le
+   laissait pas retrouver. */
+.montage-panel__add-videos {
+  width: auto;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 0.78rem;
+}
+
+.montage-panel__clip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  color: var(--hud-text);
+  background: var(--hud-panel-raised);
+  border: 1px solid var(--hud-line-strong);
+  border-radius: 999px;
+  overflow-wrap: anywhere;
+}
+
+.montage-panel__clip--kept {
+  color: var(--hud-text-dim);
+  border-style: dashed;
+  border-color: var(--hud-line);
+}
+
+.montage-panel__clip svg {
+  flex: none;
+  color: var(--hud-accent);
+}
+
+.montage-panel__clip-remove {
+  padding: 0 2px;
+  font-size: 0.8rem;
+  color: var(--hud-text-faint);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.montage-panel__clip-remove:hover {
+  color: var(--hud-danger);
+}

@@ -57,13 +57,24 @@ export async function getMontageStatus(): Promise<MontageStatus> {
 /** Un évènement du programme de rendu (une ligne JSON sur sa sortie, voir montage/render.cjs). */
 export type RunnerEvent =
   | { event: 'progress'; stage: 'browser' | 'bundle' | 'render'; progress: number }
+  | { event: 'metadata'; items: VideoFileMetadata[] }
   | { event: 'done' }
-  | { event: 'error'; stage: 'browser' | 'bundle' | 'render'; message: string }
+  | { event: 'error'; stage: 'browser' | 'bundle' | 'render' | 'probe'; message: string }
+
+/** Durée et format d'une vidéo de Léo (étape 190), lus par le compositeur de Remotion. */
+export interface VideoFileMetadata {
+  file: string
+  durationInSeconds: number | null
+  width: number
+  height: number
+  fps: number
+}
 
 export interface RunnerJob {
-  action: 'ensure-browser' | 'render'
+  action: 'ensure-browser' | 'render' | 'probe'
   projectDir?: string
   output?: string
+  files?: string[]
 }
 
 /** Levée quand Léo arrête lui-même le rendu : même nom que les autres arrêts, reconnu sans `instanceof`. */
@@ -89,7 +100,8 @@ function killTree(pid: number | undefined, kill: () => void): void {
 export async function runMontageRunner(
   job: RunnerJob,
   onProgress: (stage: 'browser' | 'bundle' | 'render', progress: number) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onEvent?: (event: RunnerEvent) => void
 ): Promise<void> {
   if (signal?.aborted) throw stoppedError()
   await mkdir(montageRoot(), { recursive: true })
@@ -124,6 +136,7 @@ export async function runMontageRunner(
         } catch {
           return
         }
+        onEvent?.(payload)
         if (payload.event === 'progress') onProgress(payload.stage, payload.progress)
         else if (payload.event === 'error') failure = { stage: payload.stage, message: payload.message }
       })
@@ -153,6 +166,23 @@ export async function runMontageRunner(
   } finally {
     await rm(jobFile, { force: true })
   }
+}
+
+/**
+ * Étape 190 : durée et format des vidéos que Léo joint au Montage. Le modèle ne voit pas les images : ces
+ * chiffres sont tout ce qu'il sait d'une vidéo, et c'est ce qui lui permet de couper au bon endroit.
+ */
+export async function probeMontageVideos(files: string[]): Promise<VideoFileMetadata[]> {
+  if (!files.length) return []
+  let items: VideoFileMetadata[] = []
+  try {
+    await runMontageRunner({ action: 'probe', files }, () => {}, undefined, (event) => {
+      if (event.event === 'metadata') items = event.items
+    })
+  } catch (err) {
+    throw new Error(`Cette vidéo n'a pas pu être lue (format non reconnu ou fichier abîmé) : ${err instanceof Error ? err.message : String(err)}`)
+  }
+  return items
 }
 
 /** Échec rapporté par Remotion lui-même, avec l'étape en cause : le code (bundle/render) ou le navigateur. */

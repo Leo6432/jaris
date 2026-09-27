@@ -4,12 +4,28 @@ import Workspace from '@/components/Workspace'
 import { formatCodeGenProgress, formatDuration } from '@/lib/formatCodeGenProgress'
 import { formatRecentDate } from '@/lib/formatRecentDate'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
-import type { CodeGenProgress, GeneratedVideo, GeneratedVideoSummary, MontageInstallProgress, MontageStatus } from '../../shared/ipc'
+import type { CodeGenProgress, GeneratedVideo, GeneratedVideoSummary, MontageInstallProgress, MontageStatus, PickedMontageClip } from '../../shared/ipc'
 import { MONTAGE_DISK_LABEL, MONTAGE_DOWNLOAD_LABEL } from '../../shared/montage'
 import { DownloadIcon } from './icons'
 import ModelPicker from './ModelPicker'
 
 type View = 'video' | 'code'
+
+/** « 1 min 05 » / « 42 s » : la durée d'une vidéo jointe, lisible d'un coup d'œil. */
+export function formatClipDuration(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds))
+  return total < 60 ? `${total} s` : `${Math.floor(total / 60)} min ${String(total % 60).padStart(2, '0')}`
+}
+
+/** Pellicule, pour le bouton « Vidéos » (même trait que les autres icônes du composeur). */
+function FilmIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4" />
+    </svg>
+  )
+}
 
 /** Ce que dit la barre pendant l'installation : une phrase par étape, jamais un nom technique. */
 export function formatMontageInstall(progress: MontageInstallProgress | null): string {
@@ -33,6 +49,9 @@ export default function MontagePanel(): JSX.Element {
   const [confirmUninstall, setConfirmUninstall] = useState(false)
 
   const [description, setDescription] = useState('')
+  /** Étape 190 : vidéos de Léo jointes à la prochaine demande (celles déjà dans le montage sont dans `video.clips`). */
+  const [clips, setClips] = useState<PickedMontageClip[]>([])
+  const [picking, setPicking] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [statusLines, setStatusLines] = useState<string[]>([])
   const [video, setVideo] = useState<GeneratedVideo | null>(null)
@@ -128,10 +147,16 @@ export default function MontagePanel(): JSX.Element {
     stoppedRef.current = false
     const startedAt = Date.now()
     try {
-      const result = await window.jaris.generateMontage(prompt, video?.code)
+      const result = await window.jaris.generateMontage(
+        prompt,
+        video?.code,
+        clips.map((clip) => clip.id),
+        video?.path
+      )
       setVideo(result)
       setView('video')
       setDescription('')
+      setClips([])
       setLastOutcome({ kind: 'done', durationMs: Date.now() - startedAt })
       void playSoundCueIfEnabled('success')
       void window.jaris.getGeneratedVideos().then(setRecent)
@@ -145,6 +170,19 @@ export default function MontagePanel(): JSX.Element {
     } finally {
       setGenerating(false)
       setProgress(null)
+    }
+  }
+
+  const pickVideos = async (): Promise<void> => {
+    setError(null)
+    setPicking(true)
+    try {
+      const picked = await window.jaris.pickMontageVideos()
+      setClips((prev) => [...prev, ...picked])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setPicking(false)
     }
   }
 
@@ -186,6 +224,7 @@ export default function MontagePanel(): JSX.Element {
     setVideo(null)
     clearFeedback()
     setDescription('')
+    setClips([])
   }
 
   if (!status) return <div className="montage-panel montage-panel--loading" />
@@ -210,8 +249,9 @@ export default function MontagePanel(): JSX.Element {
               filme image par image).
             </li>
             <li>
-              <strong>Pas de vraies images filmées :</strong> du texte, des formes, des couleurs et des
-              graphiques animés. La qualité dépend du modèle Code de ta machine.
+              <strong>Tes vidéos ou des animations :</strong> Jaris coupe tes vidéos et écrit du texte animé
+              dessus, ou crée des animations (titres, formes, graphiques). Il ne voit pas les images de tes vidéos :
+              dis-lui quels passages garder. La qualité dépend du modèle Code de ta machine.
             </li>
             <li>
               <strong>Licence Remotion :</strong> gratuite pour toi (un particulier), mais ce n'est pas un logiciel
@@ -259,6 +299,9 @@ export default function MontagePanel(): JSX.Element {
             <p className="code-panel__intro">
               Décris ta vidéo : ce qu'on voit, les textes exacts, les couleurs et la durée (ex : « intro de 6
               secondes, fond bleu nuit, le titre JARIS apparaît en grand puis “Ton assistant local” en dessous »).
+              Tu peux aussi joindre tes vidéos avec le bouton « Vidéos » et dire quoi garder, couper et écrire
+              dessus (ex : « garde de 0:10 à 0:25, ajoute le titre VACANCES au début »). Jaris ne voit pas les
+              images de ta vidéo : c'est toi qui lui dis quels passages garder.
             </p>
             {confirmUninstall ? (
               <p className="montage-panel__uninstall">
@@ -338,15 +381,61 @@ export default function MontagePanel(): JSX.Element {
         {statusLines.length > 0 && <pre className="code-panel__status">{statusLines.join('\n')}</pre>}
         {error && <p className="code-panel__error">{error}</p>}
 
+        {(clips.length > 0 || (video?.clips.length ?? 0) > 0) && (
+          <div className="montage-panel__clips" aria-label="Vidéos du montage">
+            {video?.clips.map((clip) => (
+              <span key={`projet-${clip.name}`} className="montage-panel__clip montage-panel__clip--kept" title="Déjà dans ce montage : reprise à chaque modification">
+                <FilmIcon /> {clip.name} · {formatClipDuration(clip.durationSeconds)}
+              </span>
+            ))}
+            {clips.map((clip) => (
+              <span key={clip.id} className="montage-panel__clip">
+                <FilmIcon /> {clip.name} · {formatClipDuration(clip.durationSeconds)}
+                <button
+                  type="button"
+                  className="montage-panel__clip-remove"
+                  onClick={() => setClips((prev) => prev.filter((c) => c.id !== clip.id))}
+                  disabled={generating}
+                  title="Retirer cette vidéo"
+                  aria-label={`Retirer ${clip.name}`}
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
         <Composer
           value={description}
           onChange={setDescription}
           onSubmit={() => void generate()}
-          placeholder={video ? 'Que veux-tu changer ? (ex : titre plus gros, fond rouge, 10 secondes…)' : 'Décris la vidéo à créer…'}
+          placeholder={
+            clips.length > 0
+              ? 'Dis quoi garder, couper et écrire (ex : garde de 0:10 à 0:25, titre VACANCES au début)…'
+              : video
+                ? 'Que veux-tu changer ? (ex : titre plus gros, coupe les 5 premières secondes…)'
+                : 'Décris la vidéo à créer, ou joins tes vidéos…'
+          }
           submitLabel={video ? 'Modifier' : 'Créer la vidéo'}
           busyLabel="Fabrication…"
           busy={generating}
-          extraActions={<ModelPicker mode="code" disabled={generating} />}
+          extraActions={
+            <>
+              <button
+                type="button"
+                className="composer__attach montage-panel__add-videos"
+                onClick={() => void pickVideos()}
+                disabled={generating || picking}
+                title="Joindre tes vidéos à monter"
+                aria-label="Joindre des vidéos"
+              >
+                <FilmIcon />
+                <span>Vidéos</span>
+              </button>
+              <ModelPicker mode="code" disabled={generating} />
+            </>
+          }
           attachment={null}
           onAttachmentChange={() => {}}
           onError={setError}

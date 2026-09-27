@@ -29,6 +29,7 @@ import {
   type MontageInstallProgress,
   type GeneratedVideo,
   type GeneratedVideoSummary,
+  type PickedMontageClip,
   type ModelChoiceInfo,
   type ModelChoiceMode,
   type Profile,
@@ -117,8 +118,9 @@ const api = {
   installMontage: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.installMontage),
   onMontageInstallProgress: (cb: (progress: MontageInstallProgress) => void) => subscribe(IPC_CHANNELS.montageInstallProgress, cb),
   uninstallMontage: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.uninstallMontage),
-  generateMontage: (description: string, currentCode?: string): Promise<GeneratedVideo> =>
-    ipcRenderer.invoke(IPC_CHANNELS.generateMontage, description, currentCode),
+  generateMontage: (description: string, currentCode?: string, clipIds?: string[], previousPath?: string): Promise<GeneratedVideo> =>
+    ipcRenderer.invoke(IPC_CHANNELS.generateMontage, description, currentCode, clipIds, previousPath),
+  pickMontageVideos: (): Promise<PickedMontageClip[]> => ipcRenderer.invoke(IPC_CHANNELS.pickMontageVideos),
   onMontageGenStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.montageGenStatus, cb),
   onMontageGenProgress: (cb: (progress: CodeGenProgress) => void) => subscribe(IPC_CHANNELS.montageGenProgress, cb),
   cancelMontageGen: (): void => ipcRenderer.send(IPC_CHANNELS.cancelMontageGen),

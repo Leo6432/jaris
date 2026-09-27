@@ -189,8 +189,13 @@ export const CAPABILITIES: CapabilityGroup[] = [
         example: 'le titre plus gros et 10 secondes au lieu de 6'
       },
       {
-        title: 'Pas de vraies scènes filmées',
-        description: 'Le Montage anime du texte, des formes et des graphiques : il ne génère pas de personnes ni de paysages filmés.',
+        title: 'Monter tes vidéos',
+        description: 'Joins tes vidéos avec le bouton « Vidéos » : Jaris garde les passages que tu indiques et écrit du texte animé par-dessus.',
+        example: 'garde de 0:10 à 0:25 et ajoute le titre VACANCES au début'
+      },
+      {
+        title: 'Il ne voit pas tes images',
+        description: 'Jaris connaît la durée de tes vidéos, pas ce qu’elles montrent : c’est toi qui dis quels moments garder. Il ne crée pas non plus de scènes filmées.',
         limitation: true
       }
     ]

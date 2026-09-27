@@ -119,6 +119,26 @@ jobs:
           $size = (Get-Item $video).Length
           if ($size -lt 10000) { throw "vidéo de test trop petite ($size octets)" }
           Write-Host "Vidéo de test fabriquée : $size octets."
+
+          # Étape 190 : monter une VRAIE vidéo sur Windows — durée lue par le compositeur, puis coupée avec
+          # OffthreadVideo et un texte par-dessus (le chemin exact d'une vidéo que Léo joint au Montage).
+          @{ action = "probe"; nodeModules = $nodeModules; files = @($video) } | ConvertTo-Json | Set-Content -Encoding utf8 "$jobs/probe.json"
+          Push-Location $packDir
+          $probe = & $exe $runner "$jobs/probe.json" | Where-Object { $_ -match '"metadata"' } | ConvertFrom-Json
+          Pop-Location
+          $duration = $probe.items[0].durationInSeconds
+          if ([math]::Abs($duration - 2) -gt 0.2) { throw "durée lue sur la vidéo de test : $duration s (2 s attendues)" }
+          $clipProject = Join-Path $env:RUNNER_TEMP "montage-clip-project"
+          New-Item -ItemType Directory -Force -Path (Join-Path $clipProject "public") | Out-Null
+          Copy-Item "$env:GITHUB_WORKSPACE/scripts/fixtures/montage-clip/*.tsx" $clipProject
+          Copy-Item $video (Join-Path $clipProject "public/clip1.mp4")
+          $edited = Join-Path $clipProject "video.mp4"
+          @{ action = "render"; nodeModules = $nodeModules; projectDir = $clipProject; output = $edited } | ConvertTo-Json | Set-Content -Encoding utf8 "$jobs/render-clip.json"
+          Push-Location $packDir
+          & $exe $runner "$jobs/render-clip.json" | Select-Object -Last 2
+          if ($LASTEXITCODE -ne 0) { throw "Remotion n'a pas réussi à monter la vidéo de test" }
+          Pop-Location
+          Write-Host "Vidéo montée (coupée + texte) : $((Get-Item $edited).Length) octets."
           Remove-Item Env:ELECTRON_RUN_AS_NODE
 
       # Récupérable depuis l'onglet Actions de GitHub, sur chaque commit poussé : c'est le moyen le plus

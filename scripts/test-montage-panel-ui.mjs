@@ -30,7 +30,7 @@ import MontagePanel from './src/components/MontagePanel'
 
 window.__installed = window.__preinstalled === true
 window.__calls = []
-const VIDEO = { path: 'C:/donnees/generated-videos/1-intro', code: 'export const Video = () => null', hasVideo: true }
+const VIDEO = { path: 'C:/donnees/generated-videos/1-intro', code: 'export const Video = () => null', hasVideo: true, clips: [] }
 
 window.jaris = {
   getMontageStatus: async () => ({ installed: window.__installed, supported: true }),
@@ -42,9 +42,13 @@ window.jaris = {
   uninstallMontage: async () => { window.__calls.push('uninstall'); window.__installed = false },
   onMontageGenStatus: () => () => {},
   onMontageGenProgress: (cb) => { window.__genProgress = cb; return () => {} },
-  generateMontage: (description, currentCode) => {
-    window.__calls.push(['generate', description, currentCode ?? null])
-    return new Promise((resolve) => { window.__finishGen = () => resolve(VIDEO) })
+  generateMontage: (description, currentCode, clipIds, previousPath) => {
+    window.__calls.push(['generate', description, currentCode ?? null, clipIds ?? [], previousPath ?? null])
+    return new Promise((resolve) => { window.__finishGen = (result) => resolve(result ?? VIDEO) })
+  },
+  pickMontageVideos: async () => {
+    window.__calls.push('pick')
+    return [{ id: 'id-plage', name: 'plage.mp4', durationSeconds: 72.4, width: 1920, height: 1080 }]
   },
   cancelMontageGen: () => {},
   getGeneratedVideos: async () => (window.__installed ? [{ path: VIDEO.path, label: 'intro', timestamp: Date.now() }] : []),
@@ -96,6 +100,8 @@ async function withPage(run, { installed = false } = {}) {
   }
 }
 
+const VIDEO_PATH = 'C:/donnees/generated-videos/1-intro'
+
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
 
 test('pas installé : l’écran dit que c’est lourd, ce que ça pèse et la licence, SANS rien télécharger', options, async () => {
@@ -132,7 +138,8 @@ test('installer montre son avancement, puis ouvre le Montage', options, async ()
     await page.evaluate(() => window.__finishInstall())
     await page.waitForSelector('.workspace__rail')
     assert.match(await page.textContent('.workspace__new'), /Nouvelle vidéo/i)
-    assert.equal(await page.locator('.composer__attach').count(), 0, 'pas de bouton image : le Montage ne lit pas encore d’image')
+    assert.equal(await page.locator('[aria-label="Joindre une image"]').count(), 0, 'pas de bouton image : le Montage ne lit pas encore d’image')
+    assert.equal(await page.locator('[aria-label="Joindre des vidéos"]').count(), 1, 'mais bien le bouton des vidéos (étape 190)')
   })
 })
 
@@ -160,7 +167,7 @@ test('une vidéo fabriquée s’affiche dans un lecteur, avec un bouton Enregist
     await page.fill('.composer__input', 'titre plus gros')
     await page.click('.composer__send')
     const calls = await page.evaluate(() => window.__calls.filter((c) => Array.isArray(c) && c[0] === 'generate'))
-    assert.deepEqual(calls.at(-1), ['generate', 'titre plus gros', 'export const Video = () => null'])
+    assert.deepEqual(calls.at(-1), ['generate', 'titre plus gros', 'export const Video = () => null', [], VIDEO_PATH])
   }, { installed: true })
 })
 
@@ -173,5 +180,39 @@ test('désinstaller demande confirmation dans la page, puis revient à l’écra
     await page.click('.montage-panel__uninstall-yes')
     await page.waitForSelector('.montage-install__card')
     assert.deepEqual(await page.evaluate(() => window.__calls), ['uninstall'])
+  }, { installed: true })
+})
+
+// Étape 190 (Léo : « on peut pas lui envoyer une vidéo pour qu'il la monte »).
+test('joindre une vidéo : elle s’affiche avec sa durée, part avec la demande, puis reste attachée au montage', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.montage-panel__add-videos')
+    const icon = await page.$eval('.montage-panel__add-videos', (el) => ({ label: el.getAttribute('aria-label'), clip: getComputedStyle(el).borderRadius }))
+    assert.equal(icon.label, 'Joindre des vidéos')
+    await page.click('.montage-panel__add-videos')
+    await page.waitForSelector('.montage-panel__clip')
+    assert.match(await page.textContent('.montage-panel__clip'), /plage\.mp4 · 1 min 12/)
+    assert.match(await page.getAttribute('.composer__input', 'placeholder'), /garder, couper et écrire/)
+
+    await page.fill('.composer__input', 'garde de 0:10 à 0:25, titre VACANCES')
+    await page.click('.composer__send')
+    const generate = (await page.evaluate(() => window.__calls)).filter((c) => Array.isArray(c) && c[0] === 'generate').at(-1)
+    assert.deepEqual(generate, ['generate', 'garde de 0:10 à 0:25, titre VACANCES', null, ['id-plage'], null], 'l’identifiant part, jamais un chemin')
+
+    await page.evaluate(() => window.__finishGen({ ...{ path: 'C:/donnees/generated-videos/2-vacances', code: 'x', hasVideo: true }, clips: [{ name: 'plage.mp4', durationSeconds: 72.4 }] }))
+    await page.waitForSelector('.montage-panel__clip--kept')
+    assert.equal(await page.locator('.montage-panel__clip').count(), 1, 'la vidéo jointe n’est plus « à joindre » : elle fait partie du montage')
+    assert.equal(await page.locator('.montage-panel__clip-remove').count(), 0)
+    const kept = await page.$eval('.montage-panel__clip--kept', (el) => getComputedStyle(el).borderStyle)
+    assert.equal(kept, 'dashed')
+  }, { installed: true })
+})
+
+test('une vidéo jointe par erreur se retire avant l’envoi', options, async () => {
+  await withPage(async (page) => {
+    await page.click('.montage-panel__add-videos')
+    await page.waitForSelector('.montage-panel__clip-remove')
+    await page.click('.montage-panel__clip-remove')
+    assert.equal(await page.locator('.montage-panel__clip').count(), 0)
   }, { installed: true })
 })

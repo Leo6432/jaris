@@ -29,6 +29,7 @@ import type {
   MontageInstallProgress,
   GeneratedVideo,
   GeneratedVideoSummary,
+  PickedMontageClip,
   Profile,
   RuntimeSetupProgress,
   RuntimeSetupStatus,
@@ -108,7 +109,8 @@ declare global {
       installMontage: () => Promise<void>
       onMontageInstallProgress: (cb: (progress: MontageInstallProgress) => void) => () => void
       uninstallMontage: () => Promise<void>
-      generateMontage: (description: string, currentCode?: string) => Promise<GeneratedVideo>
+      generateMontage: (description: string, currentCode?: string, clipIds?: string[], previousPath?: string) => Promise<GeneratedVideo>
+      pickMontageVideos: () => Promise<PickedMontageClip[]>
       onMontageGenStatus: (cb: (message: string) => void) => () => void
       onMontageGenProgress: (cb: (progress: CodeGenProgress) => void) => () => void
       cancelMontageGen: () => void

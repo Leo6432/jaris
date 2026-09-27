@@ -5251,3 +5251,31 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   clic, poids et licence affichés, avancement, lecteur vidéo, bouton habillé par le CSS, pas de bouton image,
   désinstallation confirmée dans la page). Non vérifié en usage réel : la vitesse du rendu et la qualité des
   vidéos écrites par le modèle Code sur la machine de Léo.
+
+- **Monter SES vidéos dans le Montage (étape 190, Léo : « on peut pas lui envoyer une vidéo pour qu'il la
+  monte… comme Claude Code avec Remotion : prendre la vidéo, cut, mettre animation, du texte »).** Bouton
+  « Vidéos » dans le champ du Montage (dialogue Windows ouvert par le main, sous le garde `dialogOpen`, plusieurs
+  fichiers mp4/mov/m4v/webm/mkv/avi). **Le chemin ne quitte jamais le main** : l'écran ne reçoit qu'un
+  identifiant, et la fabrication n'accepte que des identifiants sortis de ce dialogue — un chemin venu de l'écran
+  aurait permis de faire copier n'importe quel fichier du disque dans un projet. Chaque vidéo est mesurée par le
+  compositeur de Remotion (`getVideoMetadata`, nouvelle tâche `probe` de render.cjs), puis COPIÉE dans le projet
+  (`public/clipN.ext`, nom choisi par Jaris) : le fichier de Léo n'est jamais modifié ni déplacé, et une
+  modification reprend les vidéos du projet précédent sans qu'il les rejoigne (`montage.json`). Le modèle reçoit
+  nom, durée et format de chaque vidéo, et la façon exacte de couper (`OffthreadVideo` + `trimBefore`/`trimAfter`,
+  les noms actuels — `startFrom`/`endAt` sont dépréciés dans cette version de Remotion, vérifié dans ses types).
+  `staticFile` n'est accepté que pour les vidéos réellement jointes, sous leur nom exact. Vidéo de téléphone
+  (portrait) : montage vertical 1080x1920. Durée maximale portée de 60 s à 5 min.
+  **Limite dite à Léo, pas cachée** : le modèle ne voit PAS les images de la vidéo (seulement sa durée et son
+  format) — c'est Léo qui dit quels passages garder ; écrit sur l'écran d'installation, dans l'intro et dans « Ce
+  que Jaris sait faire ».
+  **Deux défauts de présentation trouvés sur capture, pas en relecture** : les pastilles des vidéos jointes
+  flottaient en haut de l'écran, loin du champ avec lequel elles partent (le champ est poussé en bas par
+  `margin-top: auto` : les pastilles doivent prendre ce `auto` à sa place) ; et l'intro parlait d'un bouton
+  « Vidéos » qui n'était qu'une icône sans libellé.
+  **La CI monte aussi une vraie vidéo sur Windows** (lecture de sa durée, puis coupe + texte par-dessus avec
+  OffthreadVideo, fixture `scripts/fixtures/montage-clip`) : c'est le compositeur Windows qui extrait les images,
+  un chemin que le rendu d'animation seul n'exerce pas.
+  Régression : `node --test scripts/test-montage.mjs` (dont un montage RÉEL : durée lue, vidéo coupée à 1,5 s,
+  fichier source intact, vidéo reprise à la modification, ancienne version gardée) et
+  `scripts/test-montage-panel-ui.mjs` (pastille avec durée, identifiant envoyé et jamais un chemin, vidéo
+  reprise au montage, retrait avant envoi).

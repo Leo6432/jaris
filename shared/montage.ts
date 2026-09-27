@@ -25,7 +25,10 @@ export const MONTAGE_DISK_LABEL = 'environ 600 Mo'
 export const VIDEO_WIDTH = 1920
 export const VIDEO_HEIGHT = 1080
 export const VIDEO_FPS = 30
-/** Durée quand le modèle n'en précise pas, et bornes : au-delà d'une minute, le rendu devient très long. */
+/**
+ * Durée quand le modèle n'en précise pas, et bornes. 5 minutes au plus depuis que Léo peut monter ses propres
+ * vidéos (étape 190) : au-delà, le rendu image par image dure trop longtemps pour un PC ordinaire.
+ */
 export const DEFAULT_VIDEO_SECONDS = 8
 export const MIN_VIDEO_SECONDS = 1
-export const MAX_VIDEO_SECONDS = 60
+export const MAX_VIDEO_SECONDS = 300

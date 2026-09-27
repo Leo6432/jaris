@@ -557,6 +557,17 @@ export interface GeneratedVideo {
   code: string
   /** Faux quand le code existe mais que le rendu a échoué (la vidéo n'a pas été fabriquée). */
   hasVideo: boolean
+  /** Étape 190 : les vidéos de Léo utilisées par ce montage (reprises à chaque modification). */
+  clips: Array<{ name: string; durationSeconds: number }>
+}
+
+/** Une vidéo choisie par Léo pour le Montage (étape 190) : le chemin reste côté main, l'écran n'a qu'un id. */
+export interface PickedMontageClip {
+  id: string
+  name: string
+  durationSeconds: number
+  width: number
+  height: number
 }
 
 export interface GeneratedVideoSummary {
@@ -675,6 +686,7 @@ export const IPC_CHANNELS = {
   montageInstallProgress: 'jaris:montage-install-progress',
   uninstallMontage: 'jaris:uninstall-montage',
   generateMontage: 'jaris:generate-montage',
+  pickMontageVideos: 'jaris:pick-montage-videos',
   montageGenStatus: 'jaris:montage-gen-status',
   montageGenProgress: 'jaris:montage-gen-progress',
   cancelMontageGen: 'jaris:cancel-montage-gen',

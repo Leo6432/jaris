@@ -6,12 +6,14 @@
  * Il ne reçoit qu'un chemin de fichier JSON (la tâche), écrit par Jaris : aucun texte venant du modèle ou de
  * l'utilisateur ne passe par la ligne de commande. Il répond par une ligne JSON par évènement sur stdout :
  *   {"event":"progress","stage":"browser"|"bundle"|"render","progress":0..1}
+ *   {"event":"metadata","items":[{"file":"...","durationInSeconds":12.3,"width":1920,"height":1080,"fps":30}]}
  *   {"event":"done"}
  *   {"event":"error","stage":"browser"|"bundle"|"render","message":"..."}
  *
  * Tâches :
  *   {"action":"ensure-browser","nodeModules":"..."}                   télécharge Chrome Headless Shell
  *   {"action":"render","nodeModules":"...","projectDir":"...","output":"...","browserExecutable"?:"..."}
+ *   {"action":"probe","nodeModules":"...","files":["..."]}                durée et format de vidéos de Léo
  *
  * Les modules Remotion sont chargés depuis `nodeModules` (le paquet Montage téléchargé), jamais depuis
  * Jaris : ce fichier est livré avec Jaris, le paquet ne l'est pas.
@@ -63,6 +65,18 @@ async function ensureBrowser(job) {
   report(1)
 }
 
+/** Étape 190 : durée et format de chaque vidéo jointe, lus par le compositeur de Remotion (FFmpeg). */
+async function probe(job) {
+  stage = 'probe'
+  const { getVideoMetadata } = require(path.join(job.nodeModules, '@remotion/renderer'))
+  const items = []
+  for (const file of [].concat(job.files)) {
+    const meta = await getVideoMetadata(file, { logLevel: 'error' })
+    items.push({ file, durationInSeconds: meta.durationInSeconds, width: meta.width, height: meta.height, fps: meta.fps })
+  }
+  send({ event: 'metadata', items })
+}
+
 async function render(job) {
   const { bundle } = require(path.join(job.nodeModules, '@remotion/bundler'))
   const { renderMedia, selectComposition } = require(path.join(job.nodeModules, '@remotion/renderer'))
@@ -72,6 +86,8 @@ async function render(job) {
   const serveUrl = await bundle({
     entryPoint: path.join(job.projectDir, 'index.tsx'),
     rootDir: job.projectDir,
+    // Les vidéos de Léo, copiées dans le projet : `staticFile('clip1.mp4')` les retrouve ici.
+    publicDir: path.join(job.projectDir, 'public'),
     outDir: path.join(job.projectDir, '.bundle'),
     onProgress: (percent) => bundleReport(percent / 100),
     // Le projet vit dans les données de Léo, loin du paquet : sans ce chemin, « remotion » et « react » ne
@@ -109,6 +125,7 @@ async function main() {
   currentJob = job
   if (job.action === 'ensure-browser') await ensureBrowser(job)
   else if (job.action === 'render') await render(job)
+  else if (job.action === 'probe') await probe(job)
   else throw new Error(`tâche inconnue : ${job.action}`)
   send({ event: 'done' })
   process.exit(0)

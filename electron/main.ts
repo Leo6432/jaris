@@ -5,6 +5,7 @@ import { cleanupStaleChromiumData, getStorageRoot } from './services/storageRoot
 import { pickImageModel } from '../shared/imageModel'
 import { isImageModelInstalled } from './services/imageGenerator'
 import { spawn } from 'child_process'
+import { randomUUID } from 'crypto'
 import { basename, extname, join } from 'path'
 import { copyFile, readFile, writeFile } from 'fs/promises'
 import { decodePngDataUrl, defaultImageFileName, withPngExtension } from './services/imageSave'
@@ -29,7 +30,7 @@ import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetu
 import { runQuickSetup } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
 import { deleteGeneratedApp, generateApp, getGeneratedAppsDir, listGeneratedApps, loadGeneratedApp } from './services/codeGenerator'
-import { getMontageStatus, installMontage, uninstallMontage } from './services/montage'
+import { getMontageStatus, installMontage, probeMontageVideos, uninstallMontage } from './services/montage'
 import {
   deleteGeneratedVideo,
   generateMontage,
@@ -87,6 +88,7 @@ import {
   type WakeTestHeardPayload,
   type MicTestDonePayload,
   type MontageStatus,
+  type PickedMontageClip,
   type GeneratedVideo,
   type GeneratedVideoSummary,
   type VoiceTestStartResult,
@@ -132,6 +134,9 @@ let onboardingDone = false
 let codeGenAbort: AbortController | null = null
 /** Même rôle pour le Montage (étape 189) : la fabrication de vidéo en cours, que « Arrêter » interrompt. */
 let montageAbort: AbortController | null = null
+/** Étape 190 : vidéos choisies dans le dialogue du Montage, par identifiant (l'écran ne voit jamais le chemin). */
+const pickedMontageClips = new Map<string, PickedMontageClip & { path: string }>()
+const MONTAGE_VIDEO_EXTENSIONS = ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi']
 /** Vrai pendant qu'un vrai dialogue natif Windows est ouvert sur fullWindow (ex: chooseModelsLocation) : le
  * dialogue prend le focus OS, ce qui déclenche 'blur' sur fullWindow comme un changement d'appli normal —
  * sans ce garde, le handler 'blur' plus bas cacherait fullWindow (et son dialogue enfant orphelin avec) alors
@@ -1176,7 +1181,40 @@ app.whenReady().then(async () => {
     })
   )
   ipcMain.handle(IPC_CHANNELS.uninstallMontage, () => uninstallMontage())
-  ipcMain.handle(IPC_CHANNELS.generateMontage, async (event, description: string, currentCode?: string): Promise<GeneratedVideo> => {
+  // Étape 190 : les vidéos de Léo. Le chemin choisi dans la fenêtre de Windows reste ICI : l'écran ne reçoit
+  // qu'un identifiant, et la fabrication n'accepte que des identifiants sortis de ce dialogue.
+  ipcMain.handle(IPC_CHANNELS.pickMontageVideos, async (): Promise<PickedMontageClip[]> => {
+    const dialogOptions = {
+      properties: ['openFile' as const, 'multiSelections' as const],
+      title: 'Choisir les vidéos à monter',
+      filters: [{ name: 'Vidéos', extensions: MONTAGE_VIDEO_EXTENSIONS }]
+    }
+    dialogOpen = true
+    let chosen: string[] = []
+    try {
+      const result = fullWindow ? await dialog.showOpenDialog(fullWindow, dialogOptions) : await dialog.showOpenDialog(dialogOptions)
+      chosen = result.canceled ? [] : result.filePaths
+    } finally {
+      dialogOpen = false
+    }
+    const accepted = chosen.filter((file) => MONTAGE_VIDEO_EXTENSIONS.includes(extname(file).slice(1).toLowerCase()))
+    const metadata = await probeMontageVideos(accepted)
+    return metadata.map((meta) => {
+      if (!meta.durationInSeconds || meta.durationInSeconds <= 0) {
+        throw new Error(`« ${basename(meta.file)} » n'a pas de durée lisible : ce n'est sans doute pas une vidéo complète.`)
+      }
+      const id = randomUUID()
+      const clip = { id, name: basename(meta.file), durationSeconds: meta.durationInSeconds, width: meta.width, height: meta.height }
+      pickedMontageClips.set(id, { ...clip, path: meta.file })
+      return clip
+    })
+  })
+  ipcMain.handle(IPC_CHANNELS.generateMontage, async (event, description: string, currentCode?: string, clipIds?: string[], previousPath?: string): Promise<GeneratedVideo> => {
+    const clips = (Array.isArray(clipIds) ? clipIds : []).map((id) => {
+      const clip = pickedMontageClips.get(String(id))
+      if (!clip) throw new Error('Une vidéo jointe a expiré : rejoins-la avec le bouton « Vidéos ».')
+      return clip
+    })
     montageAbort?.abort()
     const controller = new AbortController()
     montageAbort = controller
@@ -1187,7 +1225,9 @@ app.whenReady().then(async () => {
         typeof currentCode === 'string' ? currentCode : undefined,
         {
           onProgress: (progress) => event.sender.send(IPC_CHANNELS.montageGenProgress, progress),
-          signal: controller.signal
+          signal: controller.signal,
+          clips,
+          previousPath: typeof previousPath === 'string' ? previousPath : undefined
         }
       )
     } finally {
