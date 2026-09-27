@@ -32,11 +32,28 @@ import numpy as np
 WAKE_NAME = re.compile(r'\b(?:di)?jarr?[iy]\w*\b', re.IGNORECASE)
 
 
+# Étape 181 : 12 « Jaris » dits par Léo avec le test d'Options (volume à 100 % à chaque fois : le son n'était pas
+# en cause), seuls 2 reconnus. Parakeet écrivait, pour le mot dit SEUL : « Jeis », « Rice? », « J'ai ce », « Jazz »,
+# « Jaice. » (×2), « Rice. », « Nice. », « Rice », « Jais. » — un mot isolé si court n'a aucun contexte, et sonne
+# comme de l'anglais. Point commun de 6 des 10 ratés : un J, puis a/ai/e/ei, puis un son en R, S, Z ou C.
+# SHORT_WAKE_NAME l'accepte, mais UNIQUEMENT quand toute la phrase se réduit à ce mot (« J'ai ce » compacté en
+# « jaice ») : dans une vraie phrase, « j'ai ce livre » ne doit jamais réveiller Jaris — WAKE_NAME, strict, reste
+# seul juge. « Rice »/« Nice » (J perdu) ne sont PAS acceptés : sans J, rien ne les distingue de vrais mots.
+# « j'arrive » dit seul reste refusé (vrai mot courant, déjà écarté à l'étape 158).
+SHORT_WAKE_NAME = re.compile(r'^(?:hey|dis|di)?j(?!arriv)(?:ai|ei|ay|a|e|é)[rszcçx]\w{0,3}$')
+
+
+def _compact(text: str) -> str:
+    return re.sub(r"[\s'’.,!?;:«»\"—-]+", '', text.lower())
+
+
 def contains_wake_name(text: str) -> bool:
-    return WAKE_NAME.search(text) is not None
+    return WAKE_NAME.search(text) is not None or SHORT_WAKE_NAME.match(_compact(text)) is not None
 
 
 def remove_wake_prefix(text: str) -> str:
+    if SHORT_WAKE_NAME.match(_compact(text)):
+        return ''
     match = WAKE_NAME.search(text)
     return text[match.end():].lstrip(' ,.!?:;—-') if match else text
 

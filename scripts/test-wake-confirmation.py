@@ -17,8 +17,24 @@ class ConfirmationTests(unittest.TestCase):
         # Étape 158 : graphies de Parakeet v3, mesurées sur 50 échantillons (voir wake_confirmation.py).
         for text in ('Jarry Stop.', 'Jarris.', 'Salut Jarry.', 'Dijaris, quelle heure est-il?', 'Jarisque.'):
             self.assertTrue(contains_wake_name(text), text)
-        for text in ('Paris', 'Jarvis', 'Jerry.', 'Le rendez-vous est demain.', "J'arrive.", "J'arrise.", "j'arrive dans 5 minutes", '', 'Voici la météo.', 'Le jardin.', 'Un jarret de porc.'):
+        for text in ('Paris', 'Le rendez-vous est demain.', "J'arrive.", "J'arrive !", "j'arrive dans 5 minutes", '', 'Voici la météo.', 'Le jardin.', 'Un jarret de porc.'):
             self.assertFalse(contains_wake_name(text), text)
+
+    def test_leo_real_voice(self):
+        # Étape 181 : les 12 transcriptions RÉELLES du test d'Options (voix de Léo), dans l'ordre. 2 reconnues avant.
+        heard = ['Jeis', 'Rice?', "J'ai ce", 'Jaris.', 'Jazz', 'Jaice.', 'Jaris.', 'Rice.', 'Jaice.', 'Nice.', 'Rice', 'Jais.']
+        self.assertEqual(sum(contains_wake_name(t) for t in heard), 8)
+        # Sans J, rien ne distingue « Rice »/« Nice » de vrais mots : volontairement refusés.
+        for text in ('Rice?', 'Rice.', 'Nice.', 'Rice'):
+            self.assertFalse(contains_wake_name(text), text)
+
+    def test_loose_forms_only_when_said_alone(self):
+        # Dans une vraie phrase, seule la forme stricte compte : « j'ai ce livre » ne réveille jamais Jaris.
+        for text in ("J'ai ce livre sur la table.", 'Jazz ce soir au club ?', 'Je sais pas.', "J'ai ce qu'il faut.", 'Jessica arrive.'):
+            self.assertFalse(contains_wake_name(text), text)
+        for text in ('Jaice.', 'Jais !', "J'ai ce.", 'Jazz', 'Hey Jaice.'):
+            self.assertTrue(contains_wake_name(text), text)
+            self.assertEqual(remove_wake_prefix(text), '', 'le nom dit seul ne laisse aucune demande')
 
     def test_prefix_removed(self):
         self.assertEqual(remove_wake_prefix('Jaris, ouvre YouTube maintenant.'), 'ouvre YouTube maintenant.')

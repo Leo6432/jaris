@@ -5066,3 +5066,18 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   ou assouplir `MIN_LOUD_CHUNKS`/`SILENCE_RMS_THRESHOLD` (son écarté). Régression :
   `python scripts/test-wake-confirmation.py` (test jamais réveillant, son court gardé à part),
   `node --test scripts/test-options-reorganization-ui.mjs` (lignes, compte, arrêt réel).
+
+- **« Jaris » dit seul : formes proches acceptées, mesurées sur la VRAIE voix de Léo (étape 181)**. Premier
+  résultat du test d'Options (étape 180) : 12 « Jaris », volume 100 % à chaque fois (le son n'était PAS en cause),
+  2 reconnus. Parakeet écrivait « Jeis », « Rice? », « J'ai ce », « Jazz », « Jaice. » ×2, « Rice. », « Nice. »,
+  « Rice », « Jais. » : un mot isolé si court n'a aucun contexte, et sonne comme de l'anglais. `SHORT_WAKE_NAME`
+  accepte « J + a/ai/e/ei + R/S/Z/C/X + 0 à 3 lettres », mais UNIQUEMENT quand toute la phrase, compactée (sans
+  espaces ni apostrophes ni ponctuation), se réduit à ce mot : « j'ai ce livre sur la table » ne réveille jamais
+  Jaris, `WAKE_NAME` strict reste seul juge dans une phrase. 8 sur 12 sur ses propres transcriptions (2 avant).
+  « Rice »/« Nice » (J perdu) volontairement refusés : sans J, rien ne les distingue de vrais mots. Conséquence
+  assumée : « Jarvis », « Jerry », « Jardin » DITS SEULS réveillent aussi Jaris (déjà annoncé pour Jarvis dans
+  Options) ; « J'arrive ! » seul reste refusé. **Leçon générale : pour une reconnaissance sur une voix précise,
+  une seule série de VRAIES mesures vaut mieux que toutes les voix de synthèse — les 50 échantillons TTS de
+  l'étape 158 donnaient 46/50, la voix réelle 2/12 avec la même règle.** Régression :
+  `python scripts/test-wake-confirmation.py` (les 12 transcriptions réelles, et jamais dans une phrase), vérifié
+  en laissant la forme souple s'appliquer au premier mot d'une phrase.
