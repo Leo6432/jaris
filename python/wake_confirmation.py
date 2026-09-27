@@ -38,9 +38,11 @@ WAKE_NAME = re.compile(r'\b(?:di)?jarr?[iy]\w*\b', re.IGNORECASE)
 # comme de l'anglais. Point commun de 6 des 10 ratés : un J, puis a/ai/e/ei, puis un son en R, S, Z ou C.
 # SHORT_WAKE_NAME l'accepte, mais UNIQUEMENT quand toute la phrase se réduit à ce mot (« J'ai ce » compacté en
 # « jaice ») : dans une vraie phrase, « j'ai ce livre » ne doit jamais réveiller Jaris — WAKE_NAME, strict, reste
-# seul juge. « Rice »/« Nice » (J perdu) ne sont PAS acceptés : sans J, rien ne les distingue de vrais mots.
+# seul juge. « Nice » (J perdu) n'est PAS accepté : sans J, rien ne le distingue d'un vrai mot (la ville).
+# Étape 183 : « Rice » dit seul, lui, est ajouté à la demande de Léo — sa transcription la plus fréquente après
+# « Jaice » (4 sur 12), et un mot anglais qu'on ne prononce pas seul en français.
 # « j'arrive » dit seul reste refusé (vrai mot courant, déjà écarté à l'étape 158).
-SHORT_WAKE_NAME = re.compile(r'^(?:hey|dis|di)?j(?!arriv)(?:ai|ei|ay|a|e|é)[rszcçx]\w{0,3}$')
+SHORT_WAKE_NAME = re.compile(r'^(?:hey|dis|di)?(?:j(?!arriv)(?:ai|ei|ay|a|e|é)[rszcçx]\w{0,3}|rice)$')
 
 
 # Étape 182 (Léo : « il met souvent Compris « Жайс. » ») : Parakeet v3 devine lui-même la langue, et un mot seul

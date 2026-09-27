@@ -23,9 +23,13 @@ class ConfirmationTests(unittest.TestCase):
     def test_leo_real_voice(self):
         # Étape 181 : les 12 transcriptions RÉELLES du test d'Options (voix de Léo), dans l'ordre. 2 reconnues avant.
         heard = ['Jeis', 'Rice?', "J'ai ce", 'Jaris.', 'Jazz', 'Jaice.', 'Jaris.', 'Rice.', 'Jaice.', 'Nice.', 'Rice', 'Jais.']
-        self.assertEqual(sum(contains_wake_name(t) for t in heard), 8)
-        # Sans J, rien ne distingue « Rice »/« Nice » de vrais mots : volontairement refusés.
-        for text in ('Rice?', 'Rice.', 'Nice.', 'Rice'):
+        # 8 à l'étape 181, 11 depuis « Rice » (étape 183, demande de Léo).
+        self.assertEqual(sum(contains_wake_name(t) for t in heard), 11)
+        for text in ('Rice?', 'Rice.', 'Rice'):
+            self.assertTrue(contains_wake_name(text), text)
+            self.assertEqual(remove_wake_prefix(text), '')
+        # « Nice » : la ville, un vrai mot — toujours refusé. « Rice » dans une phrase aussi.
+        for text in ('Nice.', 'Du rice au curry.', 'Rice is good.'):
             self.assertFalse(contains_wake_name(text), text)
 
     def test_cyrillic_transcription(self):
@@ -124,6 +128,15 @@ class VoiceServerWiringTests(unittest.TestCase):
         # Option « Jaris » désactivée : aucune phrase transcrite en attendant le nom.
         self.assertIn('listen_for_name = not args.wakeword_disabled', self.source)
         self.assertIn('elif listen_for_name:', self.source)
+
+    def test_pause_stops_all_transcription(self):
+        # Étape 183 : en pause (Chat, Code, Options), la branche d'écoute du nom n'est jamais atteinte.
+        wake_block = self.source[self.source.index('elif wake_paused.is_set():'):self.source.index('elif listen_for_name:')]
+        self.assertNotIn('transcribe(', wake_block)
+        self.assertIn('elif line == "pause-wake":', self.source)
+        self.assertIn('elif line == "resume-wake":', self.source)
+        # Le test d'Options passe AVANT la pause : il marche même quand l'écoute est en pause.
+        self.assertLess(self.source.index('elif wake_test_on.is_set():'), self.source.index('elif wake_paused.is_set():'))
 
     def test_wake_test_never_wakes_jaris(self):
         test_block = self.source[self.source.index('elif wake_test_on.is_set():'):self.source.index('elif listen_for_name:')]

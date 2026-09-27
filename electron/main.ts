@@ -264,7 +264,8 @@ function currentWidgetMode(): WidgetMode {
  * qu'une barre de texte — ou rien — n'aurait aucun moyen de montrer qu'il a entendu.
  */
 function applyListeningForActiveMode(): void {
-  pipeline?.setListeningSuspended(activeMode !== 'voice')
+  // Étape 183 : les Options aussi — le détecteur de voix n'écoute qu'en mode Agent vocal, Options fermées.
+  pipeline?.setListeningSuspended(activeMode !== 'voice' || optionsOpen)
 }
 
 /** Ajoute un nœud central représentant l'utilisateur, relié à chaque note, pour donner une vraie structure au graphe (sinon les notes flottent sans lien tant que Jaris n'a pas écrit de [[...]] entre elles). */
@@ -828,6 +829,7 @@ app.whenReady().then(async () => {
   )
   ipcMain.on(IPC_CHANNELS.setOptionsOpen, (_event, open: boolean) => {
     optionsOpen = open
+    applyListeningForActiveMode()
   })
   ipcMain.handle(IPC_CHANNELS.getModelOverview, async () => getModelOverview(await getProfile()))
   // Étape suivante (Léo : "jaris voit les model et regarde la vram et propose une barre... personnalisé à

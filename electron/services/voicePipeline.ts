@@ -184,6 +184,9 @@ export class VoicePipeline extends EventEmitter {
    */
   setListeningSuspended(suspended: boolean): void {
     this.suspended = suspended
+    // Étape 183 : ignorer ne suffisait pas — le sidecar transcrivait toujours chaque phrase entendue en Chat,
+    // Code et Options. Il ne le fait plus du tout tant que l'écoute est suspendue.
+    this.voice.setWakePaused(suspended)
   }
 
   /** Démarre le test micro, actif jusqu'à stopTestMic() (voir 'micTestStarted'/'micTestLevel'/'micTestDone'). */

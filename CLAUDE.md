@@ -5129,3 +5129,19 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   toujours pas Jaris. **Leçon générale : un modèle de transcription multilingue qui devine la langue peut changer
   d'ALPHABET sur un mot court — toute comparaison de texte en aval doit d'abord ramener l'écriture à celle qu'on
   attend.** Régression : `python scripts/test-wake-confirmation.py` (vérifié en retirant la conversion).
+
+- **Le détecteur de « Jaris » n'écoute plus qu'en mode Agent vocal, Options fermées ; « Rice » accepté (étape 183,
+  Léo : « le détecteur de voix doit être actif que quand on est en vocal, et pas chat ni code ni option, et ajoute
+  Rice »)**. Depuis l'étape 72, Chat/Code ne faisaient qu'IGNORER les évènements côté Electron (`suspended`) : le
+  sidecar, lui, transcrivait toujours chaque phrase entendue (étape 179) — du travail processeur et une écoute
+  que Léo ne veut pas. `setListeningSuspended` envoie maintenant `pause-wake`/`resume-wake` au sidecar, qui ne
+  transcrit plus rien en pause (une phrase commencée est oubliée). Les Options comptent aussi
+  (`activeMode !== 'voice' || optionsOpen`, réappliqué à chaque ouverture/fermeture). Le test du mot « Jaris »
+  d'Options passe AVANT la pause dans voice_server.py : il marche donc pendant que les Options sont ouvertes.
+  **Piège évité** : un sidecar redémarré (changement de micro, option « En disant Jaris ») repartait en écoute —
+  `VoiceClient` retient l'état et le réécrit dès le lancement (les lignes attendent dans le tube jusqu'à la fin du
+  chargement). **Leçon générale : « ignorer » un résultat n'est pas « arrêter » le travail qui le produit — quand
+  l'utilisateur demande qu'une écoute soit inactive, couper la source, pas seulement le bout de la chaîne.**
+  « Rice » dit seul rejoint `SHORT_WAKE_NAME` (sa transcription la plus fréquente après « Jaice », 4 sur 12) :
+  11 sur 12 sur ses transcriptions réelles ; « Nice » (la ville) et « Rice » dans une phrase restent refusés.
+  Régression : `python scripts/test-wake-confirmation.py`, `node --test scripts/test-widget-mode.mjs`.

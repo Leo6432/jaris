@@ -21,6 +21,8 @@ Sur stdin, une ligne par commande :
                  transcrite et renvoyée telle quelle (wake_test_heard), SANS réveiller Jaris — actif jusqu'à
                  stop-test-wake
   stop-test-wake arrête ce test
+  pause-wake     arrête d'écouter « Jaris » (Chat, Code, Options : étape 183) — plus aucune phrase transcrite
+  resume-wake    reprend l'écoute de « Jaris »
 
 Une ligne JSON par événement sur stdout :
   {"event": "ready"}
@@ -267,6 +269,7 @@ def main() -> None:
     mic_test_start_requested = threading.Event()
     mic_test_stop_requested = threading.Event()
     wake_test_on = threading.Event()
+    wake_paused = threading.Event()
 
     def stdin_listener() -> None:
         for raw_line in sys.stdin:
@@ -283,6 +286,10 @@ def main() -> None:
                 wake_test_on.set()
             elif line == "stop-test-wake":
                 wake_test_on.clear()
+            elif line == "pause-wake":
+                wake_paused.set()
+            elif line == "resume-wake":
+                wake_paused.clear()
 
     threading.Thread(target=stdin_listener, daemon=True).start()
 
@@ -402,6 +409,9 @@ def main() -> None:
                         "tooShort": segment is None,
                         "peak": round(peak, 3),
                     })
+            elif wake_paused.is_set():
+                # Étape 183 : hors du mode Agent vocal, rien n'est transcrit ; une phrase commencée est oubliée.
+                segmenter.clear()
             elif listen_for_name:
                 segment = segmenter.push(chunk, rms(chunk) >= SILENCE_RMS_THRESHOLD)
                 if segment is not None:

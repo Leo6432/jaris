@@ -58,6 +58,9 @@ export class VoiceClient extends EventEmitter {
 
       const proc = spawn(resolvePythonBin(), args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
       this.proc = proc
+      // Un sidecar (re)démarré repart en écoute : l'état voulu est réappliqué tout de suite (lu par voice_server.py
+      // dès qu'il a fini de charger, les lignes attendent dans le tube d'ici là).
+      if (this.wakePaused) proc.stdin.write('pause-wake\n')
 
       let settled = false
       const rl = createInterface({ input: proc.stdout })
@@ -127,6 +130,19 @@ export class VoiceClient extends EventEmitter {
     this.proc?.kill()
     this.proc = null
     this.ready = null
+  }
+
+  private wakePaused = false
+
+  /**
+   * Étape 183 (Léo : « le détecteur de voix doit être actif que quand on est en vocal, et pas chat ni code ni
+   * option ») : en pause, le sidecar ne transcrit plus rien en attendant « Jaris » — le micro reste ouvert (tests
+   * d'Options, touche « + »), mais plus aucune phrase entendue n'est analysée.
+   */
+  setWakePaused(paused: boolean): void {
+    if (paused === this.wakePaused) return
+    this.wakePaused = paused
+    this.proc?.stdin.write(paused ? 'pause-wake\n' : 'resume-wake\n')
   }
 
   /** Force un déclenchement manuel (touche "+"), comme si le mot d'activation "Jaris" avait été détecté. */

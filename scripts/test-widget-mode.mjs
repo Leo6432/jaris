@@ -96,7 +96,7 @@ test('la taille native du widget texte est différente de celle du widget vocal'
 test('l’écoute vocale ne reprend au repli QUE depuis le mode Agent vocal', () => {
   assert.match(
     mainSource,
-    /function applyListeningForActiveMode\(\)[\s\S]{0,200}?setListeningSuspended\(activeMode !== ['"]voice['"]\)/,
+    /function applyListeningForActiveMode\(\)[\s\S]{0,300}?setListeningSuspended\(activeMode !== ['"]voice['"] \|\| optionsOpen\)/,
     'l’écoute doit rester suspendue au repli depuis Chat/Code : la barre de texte ne montre pas qu’on est ' +
       'entendu, et en mode Code il n’y a même plus de fenêtre pour le montrer'
   )
@@ -244,4 +244,16 @@ test('surveillance : tant que la grande fenêtre est cachée, le widget est remi
   assert.doesNotMatch(watch, /\.focus\(\)/, 'la surveillance ne doit jamais voler le focus')
   const ready = mainSource.slice(mainSource.indexOf('app.whenReady()'))
   assert.match(ready, /watchWidgetPresence\(\)/, 'la surveillance doit être lancée au démarrage')
+})
+
+// Étape 183, Léo : « le détecteur de voix doit être actif que quand on est en vocal, et pas chat ni code ni option ».
+test('hors Agent vocal ou Options ouvertes : le sidecar ne transcrit plus rien, pas seulement ignoré', () => {
+  assert.match(mainSource, /ipcMain\.on\(IPC_CHANNELS\.setOptionsOpen,[\s\S]{0,120}?optionsOpen = open;?\s*applyListeningForActiveMode\(\)/,
+    'ouvrir ou fermer les Options doit remettre l’écoute à jour')
+  const pipelineSource = sourceWithoutComments('electron/services/voicePipeline.ts')
+  assert.match(pipelineSource, /setListeningSuspended\(suspended\)\s*\{[\s\S]{0,120}?this\.voice\.setWakePaused\(suspended\)/)
+  const clientSource = sourceWithoutComments('electron/services/voiceClient.ts')
+  assert.match(clientSource, /this\.proc = proc;?\s*if \(this\.wakePaused\)\s*proc\.stdin\.write\(['"]pause-wake\\n['"]\)/,
+    'un sidecar redémarré (changement de micro…) doit repartir en pause s’il l’était')
+  assert.match(clientSource, /paused \? ['"]pause-wake\\n['"] : ['"]resume-wake\\n['"]/)
 })
