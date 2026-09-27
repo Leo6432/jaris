@@ -52,15 +52,35 @@ const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
  */
 const MIC_TEST_BAR_COUNT = 42
 
-/** Test du mot « Jaris » (étape 180) : les dernières phrases entendues, pas tout l'historique. */
-const WAKE_TEST_MAX_LINES = 12
+/**
+ * Test du mot « Jaris » (étape 187, Léo : « fais un tableau avec par exemple réussi 10, Jain 5 fois, Onal 10 fois ») :
+ * au lieu d'une ligne par essai, les essais sont REGROUPÉS — toutes les réussites sur une ligne, puis chaque mot
+ * mal compris avec son nombre de fois, le plus fréquent d'abord. C'est ce classement qui dit quoi corriger.
+ * Plafond large (un test ne dure pas si longtemps) pour ne jamais grossir sans fin si le test reste ouvert.
+ */
+const WAKE_TEST_MAX_HEARD = 500
 
-/** Une ligne du test, en français courant : ce qui a été compris, et pourquoi ça n'a pas marché le cas échéant. */
-export function describeWakeHeard(heard: WakeTestHeardPayload): string {
-  const volume = `volume ${Math.round(heard.peak * 100)} %`
-  if (heard.tooShort) return `Son trop court ou trop faible pour être compris (${volume})`
-  if (!heard.text) return `Rien compris (${volume})`
-  return heard.matched ? `Reconnu : « ${heard.text} »` : `Compris « ${heard.text} », pas reconnu comme « Jaris » (${volume})`
+export interface WakeTestRow {
+  label: string
+  count: number
+  matched: boolean
+}
+
+/** Pur (testé à part) : regroupe les essais du test en lignes du tableau. */
+export function groupWakeHeard(heard: WakeTestHeardPayload[]): WakeTestRow[] {
+  const recognized = heard.filter((h) => h.matched).length
+  const misses = new Map<string, WakeTestRow>()
+  for (const h of heard) {
+    if (h.matched) continue
+    // « Rice. », « Rice? » et « rice » sont le même mot compris : regroupés, affichés sans ponctuation finale.
+    const shown = h.tooShort ? 'Son trop court ou trop faible' : h.text ? h.text.replace(/[\s.,!?;:…]+$/u, '') : 'Rien compris'
+    const key = shown.toLowerCase()
+    const row = misses.get(key) ?? { label: h.tooShort || !h.text ? shown : `« ${shown} »`, count: 0, matched: false }
+    row.count += 1
+    misses.set(key, row)
+  }
+  const rows = [...misses.values()].sort((a, b) => b.count - a.count)
+  return recognized ? [{ label: 'Reconnu', count: recognized, matched: true }, ...rows] : rows
 }
 
 // Refonte étape 115 (Léo : "il ya des categorie dans les options qui peuvent etre ensemble, refait
@@ -426,7 +446,7 @@ export default function OptionsMenu(): JSX.Element {
       setMicTesting(false)
       setMicTestResult(detected)
     })
-    const offWake = window.jaris.onWakeTestHeard((heard) => setWakeHeard((prev) => [...prev, heard].slice(-WAKE_TEST_MAX_LINES)))
+    const offWake = window.jaris.onWakeTestHeard((heard) => setWakeHeard((prev) => [...prev, heard].slice(-WAKE_TEST_MAX_HEARD)))
     return () => {
       offLevel()
       offDone()
@@ -1041,13 +1061,24 @@ export default function OptionsMenu(): JSX.Element {
                       ? 'À toi : dis « Jaris », attends une seconde, recommence.'
                       : `${wakeHeard.filter((h) => h.matched).length} reconnu(s) sur ${wakeHeard.length}`}
                   </p>
-                  <ul className="options-menu__wake-test-list">
-                    {wakeHeard.map((heard, i) => (
-                      <li key={i} className={heard.matched ? 'options-menu__mic-result--ok' : 'options-menu__mic-result--bad'}>
-                        {describeWakeHeard(heard)}
-                      </li>
-                    ))}
-                  </ul>
+                  {wakeHeard.length > 0 && (
+                    <table className="options-menu__wake-test-table">
+                      <thead>
+                        <tr>
+                          <th>Ce que Jaris a compris</th>
+                          <th>Fois</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupWakeHeard(wakeHeard).map((row) => (
+                          <tr key={row.label} className={row.matched ? 'options-menu__mic-result--ok' : 'options-menu__mic-result--bad'}>
+                            <td>{row.label}</td>
+                            <td>{row.count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               )}
             </SettingGroup>

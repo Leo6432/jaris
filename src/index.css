@@ -3836,11 +3836,29 @@ a:hover {
   color: var(--hud-text);
 }
 
-.options-menu__wake-test-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.options-menu__wake-test-table {
+  width: 100%;
+  max-width: 420px;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.options-menu__wake-test-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--hud-text-dim);
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--hud-line);
+}
+
+.options-menu__wake-test-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--hud-line);
+}
+
+.options-menu__wake-test-table th:last-child,
+.options-menu__wake-test-table td:last-child {
+  width: 64px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }

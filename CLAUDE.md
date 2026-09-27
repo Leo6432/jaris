@@ -5181,3 +5181,13 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   le code rétabli est exactement celui qui avait été testé. Le test garde tout ce qui a été ajouté depuis :
   accents, cyrillique, « Rice », et il passe AVANT la pause d'écoute (il marche Options ouvertes). Régression :
   `python scripts/test-wake-confirmation.py`, `node --test scripts/test-options-reorganization-ui.mjs`.
+
+- **Test du mot « Jaris » : tableau regroupé (étape 187, Léo : « fais un tableau avec par exemple réussi 10, Jain
+  5 fois, Onal 10 fois »)**. La liste d'une ligne par essai (12 dernières) devient un tableau : « Reconnu » avec le
+  nombre de réussites, puis chaque mot mal compris avec son nombre de fois, le plus fréquent d'abord, puis « Son
+  trop court » / « Rien compris ». `groupWakeHeard` (OptionsMenu.tsx, pur) regroupe sans tenir compte de la
+  ponctuation finale ni de la casse (« Rice. », « Rice? », « rice » = une ligne). Plus de coupure à 12 essais
+  (plafond de 500) : un test long doit compter TOUS les essais, sinon les chiffres seraient faux. **Leçon : pour
+  décider quoi corriger, le classement des ratés par fréquence vaut mieux qu'un fil chronologique — c'est le mot
+  le plus fréquent qui mérite d'être accepté en premier.** Régression : `node --test
+  scripts/test-options-reorganization-ui.mjs` (regroupement, ordre, couleurs, arrêt).

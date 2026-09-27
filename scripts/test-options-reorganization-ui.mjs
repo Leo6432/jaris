@@ -517,7 +517,7 @@ test('Modèles : modèle d’image déjà téléchargé → aucune note de tél�
   })
 })
 
-test('Voix : le test du mot « Jaris » montre ce qui a été compris à chaque fois, et le compte', options, async () => {
+test('Voix : le test du mot « Jaris » regroupe les essais en tableau — réussites, puis chaque mot raté avec son nombre de fois', options, async () => {
   await withOptions(async (page) => {
     const row = page.locator('.options-menu__row', { hasText: 'Tester le mot « Jaris »' })
     await row.locator('button').click()
@@ -525,22 +525,30 @@ test('Voix : le test du mot « Jaris » montre ce qui a été compris à chaque 
     await page.waitForSelector('.options-menu__wake-test')
     assert.match(await page.textContent('.options-menu__wake-test-summary'), /dis « Jaris »/)
 
+    // Étape 187 (Léo : « fais un tableau avec par exemple réussi 10, Jain 5 fois, Onal 10 fois »).
     await page.evaluate(() => {
-      window.__emitWakeHeard({ text: 'Jaris.', matched: true, tooShort: false, peak: 0.42 })
-      window.__emitWakeHeard({ text: 'Paris.', matched: false, tooShort: false, peak: 0.3 })
-      window.__emitWakeHeard({ text: '', matched: false, tooShort: true, peak: 0.08 })
+      const heard = (text, matched, tooShort = false) => window.__emitWakeHeard({ text, matched, tooShort, peak: 0.5 })
+      heard('Jaris.', true)
+      heard('Rice.', false)
+      heard('Jain', false)
+      heard('Jaice.', true)
+      heard('Rice?', false)
+      heard('', false, true)
     })
-    await page.waitForFunction(() => document.querySelectorAll('.options-menu__wake-test-list li').length === 3)
-    assert.equal(await page.textContent('.options-menu__wake-test-summary'), '1 reconnu(s) sur 3')
-    const lines = await page.$$eval('.options-menu__wake-test-list li', (els) => els.map((el) => [el.textContent, el.className]))
-    assert.deepEqual(lines, [
-      ['Reconnu : « Jaris. »', 'options-menu__mic-result--ok'],
-      ['Compris « Paris. », pas reconnu comme « Jaris » (volume 30 %)', 'options-menu__mic-result--bad'],
-      ['Son trop court ou trop faible pour être compris (volume 8 %)', 'options-menu__mic-result--bad']
+    await page.waitForFunction(() => document.querySelectorAll('.options-menu__wake-test-table tbody tr').length === 4)
+    assert.equal(await page.textContent('.options-menu__wake-test-summary'), '2 reconnu(s) sur 6')
+    const rows = await page.$$eval('.options-menu__wake-test-table tbody tr', (els) =>
+      els.map((tr) => [...tr.cells].map((td) => td.textContent).concat(tr.className))
+    )
+    assert.deepEqual(rows, [
+      ['Reconnu', '2', 'options-menu__mic-result--ok'],
+      ['« Rice »', '2', 'options-menu__mic-result--bad'],
+      ['« Jain »', '1', 'options-menu__mic-result--bad'],
+      ['Son trop court ou trop faible', '1', 'options-menu__mic-result--bad']
     ])
 
     await row.locator('button').click()
     assert.equal(await page.evaluate(() => window.__wakeTest), 'off', 'Arrêter doit vraiment arrêter le test côté Jaris')
-    assert.equal(await page.locator('.options-menu__wake-test-list li').count(), 3, 'les résultats restent lisibles après l’arrêt')
+    assert.equal(await page.locator('.options-menu__wake-test-table tbody tr').count(), 4, 'le tableau reste lisible après l’arrêt')
   })
 })
