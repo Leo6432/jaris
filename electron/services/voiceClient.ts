@@ -20,6 +20,7 @@ type VoiceServerEvent =
   | { event: 'mic_test_started' }
   | { event: 'mic_test_level'; level: number }
   | { event: 'mic_test_done'; detected: boolean }
+  | { event: 'wake_test_heard'; text: string; matched: boolean; tooShort: boolean; peak: number }
 
 const voiceServerScript = (): string => join(pythonScriptsDir(), 'voice_server.py')
 
@@ -98,6 +99,9 @@ export class VoiceClient extends EventEmitter {
           case 'mic_test_done':
             this.emit('micTestDone', payload.detected)
             break
+          case 'wake_test_heard':
+            this.emit('wakeTestHeard', { text: payload.text, matched: payload.matched, tooShort: payload.tooShort, peak: payload.peak })
+            break
         }
       })
 
@@ -138,6 +142,15 @@ export class VoiceClient extends EventEmitter {
   /** Arrête un test micro démarré par testMic(). */
   stopTestMic(): void {
     this.proc?.stdin.write('stop-mic-test\n')
+  }
+
+  /** Étape 180 : chaque phrase entendue est renvoyée telle que comprise ('wakeTestHeard'), sans réveiller Jaris. */
+  testWakeWord(): void {
+    this.proc?.stdin.write('test-wake\n')
+  }
+
+  stopTestWakeWord(): void {
+    this.proc?.stdin.write('stop-test-wake\n')
   }
 }
 

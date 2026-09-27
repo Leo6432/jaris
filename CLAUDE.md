@@ -5088,3 +5088,20 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   échoue si un .onnx est encore livré). **Non vérifié sur la voix réelle de Léo** : à confirmer en usage réel.
   Régression : `python scripts/test-wake-confirmation.py` (découpage + câblage de voice_server.py, aucune phrase
   sans le nom journalisée), vérifié en retirant le pré-roll puis le seuil de son minimal.
+
+- **Test du mot « Jaris » dans Options → Voix (étape 180, Léo : « ça marche vraiment mieux mais on peut pas
+  améliorer, ça marche 1 fois sur 3 »)**. De 1 sur 20 à 1 sur 3 avec l'étape 179 ; pour aller plus loin, il faut
+  savoir POURQUOI les deux autres ratent, et deux causes très différentes sont possibles : le son n'est même pas
+  retenu comme une phrase (trop court/trop faible pour `WakeSegmenter`), ou Parakeet écrit autre chose que ce que
+  `WAKE_NAME` accepte. Aucune n'est devinable d'ici, et « Candidat rejeté » n'est plus journalisé depuis
+  l'étape 179 (confidentialité). Plutôt qu'une 3e retouche à l'aveugle d'un seuil : un test déclenché par Léo
+  lui-même (bouton « Tester le mot « Jaris » »), qui renvoie pour chaque phrase entendue ce qui a été compris,
+  si le nom a été reconnu, le volume, et « trop court » quand le son a été écarté (`WakeSegmenter.dropped`) —
+  sans jamais réveiller Jaris pendant le test. Commandes sidecar `test-wake`/`stop-test-wake`, évènement
+  `wake_test_heard`, canal IPC `wakeTestHeard`. Les phrases ne sont montrées QUE pendant ce test demandé,
+  jamais en écoute normale. **Leçon générale, même que la saga SearXNG : quand un correctif améliore sans
+  suffire et que la cause restante n'est pas observable, construire l'outil qui la rend observable avant de
+  toucher un seuil de plus.** Prochaine étape selon les résultats de Léo : élargir `WAKE_NAME` (texte mal compris)
+  ou assouplir `MIN_LOUD_CHUNKS`/`SILENCE_RMS_THRESHOLD` (son écarté). Régression :
+  `python scripts/test-wake-confirmation.py` (test jamais réveillant, son court gardé à part),
+  `node --test scripts/test-options-reorganization-ui.mjs` (lignes, compte, arrêt réel).

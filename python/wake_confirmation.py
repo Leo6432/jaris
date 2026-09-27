@@ -58,12 +58,16 @@ class WakeSegmenter:
         self.segment: list[np.ndarray] | None = None
         self.loud = 0
         self.silence = 0
+        # Dernier son écarté car trop court (test du mot « Jaris », étape 180) : dire « trop court » vaut mieux
+        # que ne rien afficher du tout quand Léo parle trop doucement ou trop vite.
+        self.dropped: list[np.ndarray] | None = None
 
     def clear(self):
         self.pre_roll.clear()
         self.segment = None
         self.loud = 0
         self.silence = 0
+        self.dropped = None
 
     @property
     def trailing_silence_chunks(self) -> int:
@@ -89,4 +93,7 @@ class WakeSegmenter:
             return None
         segment, loud = self.segment, self.loud
         self.segment = None
-        return segment if loud >= MIN_LOUD_CHUNKS else None
+        if loud >= MIN_LOUD_CHUNKS:
+            return segment
+        self.dropped = segment
+        return None

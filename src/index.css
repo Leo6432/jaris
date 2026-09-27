@@ -3788,3 +3788,26 @@ a:hover {
 @media (prefers-reduced-motion: reduce) {
   .widget-rest, .widget-active, .widget-details { transition: none; }
 }
+
+/* Test du mot « Jaris » (étape 180) : même emplacement dépliable que le test micro, une ligne par phrase entendue. */
+.options-menu__wake-test {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 0 14px;
+}
+
+.options-menu__wake-test-summary {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--hud-text);
+}
+
+.options-menu__wake-test-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

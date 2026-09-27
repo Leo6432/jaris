@@ -69,6 +69,14 @@ class SegmenterTests(unittest.TestCase):
         self.assertEqual(len(phrases), 3)
         self.assertTrue(all(len(p) <= MAX_SEGMENT_CHUNKS for p in phrases))
 
+    def test_short_sound_kept_aside_for_the_wake_test(self):
+        # Étape 180 : le test du mot « Jaris » doit pouvoir dire « trop court » au lieu de ne rien afficher.
+        seg = WakeSegmenter()
+        self.assertEqual(feed(seg, [(True, 2), (False, END_SILENCE_CHUNKS)]), [])
+        self.assertIsNotNone(seg.dropped)
+        seg.clear()
+        self.assertIsNone(seg.dropped)
+
     def test_clear_forgets_a_phrase_in_progress(self):
         seg = WakeSegmenter()
         feed(seg, [(True, 5)])
@@ -91,6 +99,13 @@ class VoiceServerWiringTests(unittest.TestCase):
         # Option « Jaris » désactivée : aucune phrase transcrite en attendant le nom.
         self.assertIn('listen_for_name = not args.wakeword_disabled', self.source)
         self.assertIn('elif listen_for_name:', self.source)
+
+    def test_wake_test_never_wakes_jaris(self):
+        test_block = self.source[self.source.index('elif wake_test_on.is_set():'):self.source.index('elif listen_for_name:')]
+        self.assertIn('"event": "wake_test_heard"', test_block)
+        self.assertNotIn('triggered = True', test_block)
+        self.assertIn('elif line == "test-wake":', self.source)
+        self.assertIn('elif line == "stop-test-wake":', self.source)
 
     def test_overheard_speech_never_logged(self):
         # Chaque phrase de la pièce est transcrite : rien ne doit en sortir quand le nom n'y est pas.

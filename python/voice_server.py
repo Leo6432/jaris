@@ -17,6 +17,10 @@ Sur stdin, une ligne par commande :
   test-mic       démarre le test micro (voir mic_test_* ci-dessous) — reste actif jusqu'à stop-mic-test,
                  pas de durée fixe : l'utilisateur active/désactive lui-même depuis Options → Micro
   stop-mic-test  arrête le test micro démarré par test-mic
+  test-wake      démarre le test du mot « Jaris » (Options → Voix, étape 180) : chaque phrase entendue est
+                 transcrite et renvoyée telle quelle (wake_test_heard), SANS réveiller Jaris — actif jusqu'à
+                 stop-test-wake
+  stop-test-wake arrête ce test
 
 Une ligne JSON par événement sur stdout :
   {"event": "ready"}
@@ -28,6 +32,7 @@ Une ligne JSON par événement sur stdout :
   {"event": "mic_test_started"}
   {"event": "mic_test_level", "level": 0.0-1.0}
   {"event": "mic_test_done", "detected": true|false}
+  {"event": "wake_test_heard", "text": "...", "matched": true|false, "tooShort": true|false, "peak": 0.0-1.0}
 
 Avec --list-devices : ignore tous les autres arguments, n'ouvre aucun micro et ne charge aucun modèle —
 imprime juste {"devices": [{"index": 0, "name": "..."}, ...]} (ou {"error": "..."}) et quitte. Utilisé par
@@ -261,6 +266,7 @@ def main() -> None:
     manual_trigger = threading.Event()
     mic_test_start_requested = threading.Event()
     mic_test_stop_requested = threading.Event()
+    wake_test_on = threading.Event()
 
     def stdin_listener() -> None:
         for raw_line in sys.stdin:
@@ -273,6 +279,10 @@ def main() -> None:
             elif line == "stop-mic-test":
                 mic_test_start_requested.clear()
                 mic_test_stop_requested.set()
+            elif line == "test-wake":
+                wake_test_on.set()
+            elif line == "stop-test-wake":
+                wake_test_on.clear()
 
     threading.Thread(target=stdin_listener, daemon=True).start()
 
@@ -370,6 +380,28 @@ def main() -> None:
             if triggered:
                 segmenter.clear()
                 voice_activated = False
+            elif wake_test_on.is_set():
+                # Étape 180 (Léo : « ça marche 1 fois sur 3 ») : Léo, et lui seul, a demandé ce test depuis
+                # Options — ce qui a été compris est donc renvoyé tel quel, pour savoir POURQUOI ça rate (son
+                # trop faible ? mot mal compris ?) au lieu de deviner. Jaris ne se réveille jamais pendant ce test.
+                segment = segmenter.push(chunk, rms(chunk) >= SILENCE_RMS_THRESHOLD)
+                heard_audio = segment if segment is not None else segmenter.dropped
+                if heard_audio is not None:
+                    segmenter.dropped = None
+                    peak = min(1.0, max(rms(part) for part in heard_audio) / MIC_TEST_LEVEL_DIVISOR)
+                    text = ""
+                    if segment is not None:
+                        try:
+                            text = transcribe(np.concatenate(segment).astype(np.float32) / 32768.0)
+                        except Exception as exc:
+                            emit({"event": "log", "message": f"Test du mot Jaris : transcription impossible ({exc})"})
+                    emit({
+                        "event": "wake_test_heard",
+                        "text": text,
+                        "matched": bool(text) and contains_wake_name(text),
+                        "tooShort": segment is None,
+                        "peak": round(peak, 3),
+                    })
             elif listen_for_name:
                 segment = segmenter.push(chunk, rms(chunk) >= SILENCE_RMS_THRESHOLD)
                 if segment is not None:

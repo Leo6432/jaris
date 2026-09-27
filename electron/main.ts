@@ -72,6 +72,7 @@ import {
   type SoundCue,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload,
+  type WakeTestHeardPayload,
   type WidgetMode
 } from '../shared/ipc'
 
@@ -674,6 +675,7 @@ async function startVoicePipeline(): Promise<void> {
   pipeline.on('image', (path: string) => void shell.openPath(path))
   pipeline.on('micTestLevel', (level: number) => broadcast(IPC_CHANNELS.micTestLevel, { level }))
   pipeline.on('micTestDone', (detected: boolean) => broadcast(IPC_CHANNELS.micTestDone, { detected }))
+  pipeline.on('wakeTestHeard', (heard: WakeTestHeardPayload) => broadcast(IPC_CHANNELS.wakeTestHeard, heard))
   // Arrêt d'urgence déclenché par la sécurité thermique GPU (voicePipeline/resourceMonitor) : un vrai
   // app.quit() (pas juste cacher la fenêtre, voir `quitting` plus haut), pour protéger la machine.
   pipeline.on('shutdown', () => {
@@ -796,6 +798,8 @@ app.whenReady().then(async () => {
   })
   ipcMain.on(IPC_CHANNELS.testMicrophone, () => pipeline?.testMic())
   ipcMain.on(IPC_CHANNELS.stopTestMicrophone, () => pipeline?.stopTestMic())
+  ipcMain.on(IPC_CHANNELS.testWakeWord, () => pipeline?.testWakeWord())
+  ipcMain.on(IPC_CHANNELS.stopTestWakeWord, () => pipeline?.stopTestWakeWord())
   ipcMain.on(IPC_CHANNELS.setActiveMode, (_event, mode: AppMode) => {
     activeMode = mode
     applyListeningForActiveMode()

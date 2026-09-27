@@ -18,6 +18,7 @@ import type {
   MemoryGraph,
   MicTestDonePayload,
   MicTestLevelPayload,
+  WakeTestHeardPayload,
   ModelOverviewResult,
   ModelsLocationStatus,
   OllamaVersionStatus,
@@ -111,6 +112,9 @@ declare global {
       setWakewordEnabled: (enabled: boolean) => Promise<void>
       testMicrophone: () => void
       stopTestMicrophone: () => void
+      testWakeWord: () => void
+      stopTestWakeWord: () => void
+      onWakeTestHeard: (cb: (payload: WakeTestHeardPayload) => void) => () => void
       setActiveMode: (mode: AppMode) => void
       setOptionsOpen: (open: boolean) => void
       getLaunchAtStartup: () => Promise<LaunchAtStartupStatus>
