@@ -39,3 +39,24 @@ export function DeleteIcon(): JSX.Element {
     </svg>
   )
 }
+
+/** Télécharger (étape 185) : une flèche vers un bac, même tracé arrondi que la corbeille. */
+export function DownloadIcon(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 4v11" />
+      <path d="M7.5 10.5 12 15l4.5-4.5" />
+      <path d="M5 17v1.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V17" />
+    </svg>
+  )
+}

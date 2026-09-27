@@ -22,6 +22,7 @@ import type {
   ModelsLocationStatus,
   OllamaVersionStatus,
   PickedImageFile,
+  SaveImageResult,
   Profile,
   RuntimeSetupProgress,
   RuntimeSetupStatus,
@@ -96,6 +97,7 @@ declare global {
       // Étape 93 : sélecteur d'image ouvert par le main process (jamais un <input type="file">, qui repliait
       // Jaris en widget en prenant le focus). null si l'utilisateur annule.
       pickImageFile: () => Promise<PickedImageFile | null>
+      saveGeneratedImage: (dataUrl: string) => Promise<SaveImageResult>
       generateApp: (description: string, currentHtml?: string, imageBase64?: string) => Promise<GeneratedApp>
       onCodeGenStatus: (cb: (message: string) => void) => () => void
       // Étape 99 : avancement en direct pendant une génération (l'étape en cours, les caractères déjà

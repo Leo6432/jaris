@@ -22,6 +22,7 @@ import {
   type ModelsLocationStatus,
   type OllamaVersionStatus,
   type PickedImageFile,
+  type SaveImageResult,
   type ModelChoiceInfo,
   type ModelChoiceMode,
   type Profile,
@@ -105,6 +106,7 @@ const api = {
   // peut encadrer le dialogue natif du garde `dialogOpen`, sans lequel Jaris se replie en widget dès que ce
   // dialogue prend le focus. Renvoie null si l'utilisateur annule.
   pickImageFile: (): Promise<PickedImageFile | null> => ipcRenderer.invoke(IPC_CHANNELS.pickImageFile),
+  saveGeneratedImage: (dataUrl: string): Promise<SaveImageResult> => ipcRenderer.invoke(IPC_CHANNELS.saveGeneratedImage, dataUrl),
   generateApp: (description: string, currentHtml?: string, imageBase64?: string): Promise<GeneratedApp> =>
     ipcRenderer.invoke(IPC_CHANNELS.generateApp, description, currentHtml, imageBase64),
   onCodeGenStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.codeGenStatus, cb),

@@ -463,6 +463,13 @@ export const IMAGE_TYPES_BY_EXTENSION: Record<string, string> = {
   bmp: 'image/bmp'
 }
 
+/** Résultat de « Enregistrer l'image » (étape 185) : `saved` false si Léo a annulé ou si l'écriture a échoué. */
+export interface SaveImageResult {
+  saved: boolean
+  /** Message lisible par Léo quand l'écriture a échoué (jamais sur une simple annulation). */
+  error?: string
+}
+
 /**
  * Fichier image choisi via le sélecteur NATIF ouvert par le main process (voir `pickImageFile`) : les
  * octets bruts, tels que lus sur le disque, à réduire ensuite côté renderer par le MÊME chemin que le
@@ -604,6 +611,8 @@ export const IPC_CHANNELS = {
    * (signalé en usage réel par Léo).
    */
   pickImageFile: 'jaris:pick-image-file',
+  /** renderer <-> main : enregistre une image dessinée par Jaris là où Léo le choisit (étape 185). */
+  saveGeneratedImage: 'jaris:save-generated-image',
   /** renderer <-> main : récupère les messages du mode Chat, amorcés depuis conversation-history.json au
    * premier appel après un lancement (voir ChatSession.ensureLoaded) — plus seulement ceux de la session en cours. */
   getChatHistory: 'jaris:get-chat-history',

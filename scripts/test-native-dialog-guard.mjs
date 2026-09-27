@@ -44,8 +44,10 @@ function context(source, index) {
 const mainSource = sourceWithoutComments('electron/main.ts')
 
 test('chaque dialogue natif du main process est ouvert pendant que dialogOpen vaut true', () => {
-  const events = [...mainSource.matchAll(/(let )?dialogOpen = (true|false)|dialog\.showOpenDialog/g)]
-  const dialogs = events.filter((event) => event[0] === 'dialog.showOpenDialog')
+  // Étape 185 : « Enregistrer l'image » ouvre aussi un dialogue natif (showSaveDialog) — même garde.
+  const events = [...mainSource.matchAll(/(let )?dialogOpen = (true|false)|dialog\.show(?:Open|Save)Dialog/g)]
+  const dialogs = events.filter((event) => event[0].startsWith('dialog.show'))
+  assert.ok(dialogs.some((event) => event[0] === 'dialog.showSaveDialog'), 'le dialogue « Enregistrer l’image » doit être vérifié lui aussi')
   assert.ok(dialogs.length > 0, 'aucun dialog.showOpenDialog trouvé : ce test ne vérifie plus rien')
 
   let guarded = false

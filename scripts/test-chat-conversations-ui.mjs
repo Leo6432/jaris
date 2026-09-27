@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, globSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { deflateSync } from 'node:zlib'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
@@ -29,7 +30,44 @@ const projectRoot = fileURLToPath(new URL('..', import.meta.url))
 const entryPath = join(projectRoot, 'tmp-chat-conversations-entry.tsx')
 
 /** PNG 8x8 gris, pour une vraie image décodable par le navigateur. */
-const PNG_8x8 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAAAAADhZOFXAAAAEElEQVR4nGNoaGBgYGBgAAAHCAEBw3tAvAAAAABJRU5ErkJggg==', 'base64')
+/**
+ * PNG gris de 256×256, fabriqué ici (zlib de Node) : une vraie image dessinée fait 1024 px, et une image de 8 px
+ * ne laisse aucune place au bouton « Télécharger » posé dessus (étape 185).
+ */
+function grayPng(size) {
+  const crcTable = Array.from({ length: 256 }, (_, n) => {
+    let c = n
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
+    return c >>> 0
+  })
+  const crc = (buf) => {
+    let c = 0xffffffff
+    for (const byte of buf) c = crcTable[(c ^ byte) & 0xff] ^ (c >>> 8)
+    return (c ^ 0xffffffff) >>> 0
+  }
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4)
+    len.writeUInt32BE(data.length)
+    const body = Buffer.concat([Buffer.from(type), data])
+    const sum = Buffer.alloc(4)
+    sum.writeUInt32BE(crc(body))
+    return Buffer.concat([len, body, sum])
+  }
+  const header = Buffer.alloc(13)
+  header.writeUInt32BE(size, 0)
+  header.writeUInt32BE(size, 4)
+  header[8] = 8 // 8 bits
+  header[9] = 0 // niveaux de gris
+  const rows = Buffer.alloc((size + 1) * size, 128)
+  for (let y = 0; y < size; y++) rows[y * (size + 1)] = 0 // filtre « aucun » en tête de chaque ligne
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(rows)),
+    chunk('IEND', Buffer.alloc(0))
+  ])
+}
+const TEST_PNG = grayPng(256)
 
 /** Faux main process : deux conversations, chacune avec ses propres messages. */
 const ENTRY = `
@@ -42,7 +80,7 @@ const THREADS = {
     { role: 'assistant', content: 'Les chats dorment beaucoup.' },
     { role: 'user', content: 'dessine-moi un chat' },
     // Étape 173 : image dessinée par Jaris (PNG 8x8 réel), renvoyée par le main sur le message assistant.
-    { role: 'assistant', content: 'Voilà ton image.', image: 'data:image/png;base64,${Buffer.from(PNG_8x8).toString('base64')}' }
+    { role: 'assistant', content: 'Voilà ton image.', image: 'data:image/png;base64,${TEST_PNG.toString('base64')}' }
   ],
   b: [{ role: 'user', content: 'recette de crêpes' }]
 }
@@ -84,6 +122,11 @@ window.jaris = {
   getModelChoice: () => Promise.resolve({ selected: null, installed: [], autoModel: null }),
   setModelChoice: () => Promise.resolve(),
   pickImageFile: () => Promise.resolve(null),
+  // Étape 185 : le test choisit lui-même la réponse de la fenêtre « Enregistrer sous ».
+  saveGeneratedImage: (dataUrl) => {
+    window.__saved = (window.__saved ?? []).concat(dataUrl)
+    return Promise.resolve(window.__saveResult ?? { saved: true })
+  },
   sendChatMessage: () => Promise.resolve({ role: 'assistant', content: 'ok' })
 }
 
@@ -229,6 +272,41 @@ test('image dessinée par Jaris : affichée EN GRAND sous sa réponse, jamais en
     assert.equal(info.alt, 'Image dessinée par Jaris')
     assert.ok(info.imageAfterText, 'l’image vient après le texte de la réponse')
     assert.notEqual(info.maxHeight, '260px', 'pas la petite taille des images jointes')
-    assert.equal(info.decoded, 8, 'l’image est réellement décodée')
+    assert.equal(info.decoded, 256, 'l’image est réellement décodée')
+  })
+})
+
+test('image dessinée : l’icône « Télécharger » envoie l’image à enregistrer, et confirme seulement si c’est fait', options, async () => {
+  await withPage(async (page) => {
+    const button = page.locator('.chat-panel__save-image')
+    await button.waitFor()
+    assert.equal(await button.getAttribute('aria-label'), "Télécharger l'image")
+
+    // Annulé dans la fenêtre de Windows : rien d'enregistré, aucune fausse confirmation.
+    await page.evaluate(() => { window.__saveResult = { saved: false } })
+    await button.click()
+    await page.waitForFunction(() => (window.__saved ?? []).length === 1)
+    assert.equal(await button.getAttribute('aria-label'), "Télécharger l'image")
+
+    await page.evaluate(() => { window.__saveResult = { saved: true } })
+    await button.click()
+    await page.waitForFunction(() => document.querySelector('.chat-panel__save-image').getAttribute('aria-label') === 'Image enregistrée')
+    const sent = await page.evaluate(() => window.__saved[1])
+    assert.match(sent, /^data:image\/png;base64,/, 'c’est bien l’image affichée qui est envoyée')
+
+    // Échec d'écriture : le message lisible s'affiche.
+    await page.evaluate(() => { window.__saveResult = { saved: false, error: "Impossible d'enregistrer l'image : disque plein" } })
+    await page.waitForTimeout(2100)
+    await button.click()
+    await page.waitForSelector('.chat-panel__error')
+    assert.match(await page.textContent('.chat-panel__error'), /disque plein/)
+
+    // Le bouton est dans le coin de l'image, pas une ligne de plus dans le fil.
+    const box = await page.evaluate(() => {
+      const img = document.querySelector('.chat-panel__message-image--generated').getBoundingClientRect()
+      const btn = document.querySelector('.chat-panel__save-image').getBoundingClientRect()
+      return { inside: btn.left >= img.left && btn.right <= img.right && btn.top >= img.top && btn.bottom <= img.bottom }
+    })
+    assert.ok(box.inside, 'le bouton doit être posé sur l’image')
   })
 })

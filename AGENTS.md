@@ -5118,3 +5118,17 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   que pour lui. Les entrées 180-183 plus haut restent : elles décrivent ce qui a été mesuré avec. Régression :
   `python scripts/test-wake-confirmation.py` (accents, test absent du sidecar), `node --test
   scripts/test-options-reorganization-ui.mjs` (plus de ligne « Tester le mot »).
+
+- **Icône « Télécharger » sur les images dessinées (étape 185, Léo : « met une petite icône à côté des images
+  générées pour la télécharger et ça demande où télécharger »)**. Bouton posé dans le coin haut-droit de l'image
+  (`.chat-panel__save-image`, `DownloadIcon` dans icons.tsx), qui ouvre la fenêtre « Enregistrer sous » de Windows
+  (`dialog.showSaveDialog`, canal `saveGeneratedImage`), dossier Images proposé, nom daté. Le renderer envoie
+  l'image qu'il AFFICHE (data URL) — il n'a jamais besoin du chemin sur le disque — et le main n'accepte qu'un
+  vrai PNG (préfixe ET signature des 8 premiers octets, `imageSave.ts`, pur et testé) ; c'est Léo qui choisit
+  où écrire. Même garde `dialogOpen` que `pickImageFile` (sinon la fenêtre de Windows fait perdre le focus et
+  replie Jaris en widget, étape 93) : test-native-dialog-guard.mjs vérifie désormais aussi `showSaveDialog`.
+  ✓ affiché 2 s seulement si l'image a VRAIMENT été écrite — une annulation n'affiche rien, un échec
+  d'écriture affiche son message. **Piège attrapé par le test de mise en page, pas en relecture** : l'image de
+  test faisait 8 px, trop petite pour contenir le bouton — le test fabrique maintenant un vrai PNG de 256 px
+  (zlib), taille réaliste, plutôt que d'assouplir la vérification. Régression : `node --test
+  scripts/test-image-save.mjs scripts/test-native-dialog-guard.mjs scripts/test-chat-conversations-ui.mjs`.

@@ -8,6 +8,7 @@ import { formatChatProgress } from '@/lib/formatChatProgress'
 import type { ImageAttachment } from '@/lib/imageAttachment'
 import type { ChatMessage, ConversationList } from '../../shared/ipc'
 import ModelPicker from './ModelPicker'
+import { DownloadIcon } from './icons'
 
 /**
  * Mode Chat (étape 30) : la même conversation que la voix, au clavier. Le fil vit côté main
@@ -27,6 +28,16 @@ export default function ChatPanel(): JSX.Element {
   /** Conversations (étape 96) : la liste complète et laquelle est active — affichées par Workspace. */
   const [conversations, setConversations] = useState<ConversationList | null>(null)
   const threadRef = useRef<HTMLDivElement>(null)
+  /** Étape 185 : image tout juste enregistrée (index du message), le temps d'afficher ✓. */
+  const [savedIndex, setSavedIndex] = useState<number | null>(null)
+
+  const saveImage = async (dataUrl: string, index: number): Promise<void> => {
+    const result = await window.jaris.saveGeneratedImage(dataUrl)
+    if (result.error) setError(result.error)
+    if (!result.saved) return
+    setSavedIndex(index)
+    setTimeout(() => setSavedIndex((current) => (current === index ? null : current)), 2000)
+  }
 
   useEffect(() => {
     void window.jaris.getChatHistory().then(setMessages)
@@ -155,11 +166,23 @@ export default function ChatPanel(): JSX.Element {
               {renderFormattedText(message.content)}
               {/* Étape 173 : image dessinée par Jaris, sous sa réponse et en grand. */}
               {message.image && message.role === 'assistant' && (
-                <img
-                  className="chat-panel__message-image chat-panel__message-image--generated"
-                  src={message.image}
-                  alt="Image dessinée par Jaris"
-                />
+                <figure className="chat-panel__generated">
+                  <img
+                    className="chat-panel__message-image chat-panel__message-image--generated"
+                    src={message.image}
+                    alt="Image dessinée par Jaris"
+                  />
+                  {/* Étape 185 : Windows demande où l'enregistrer (fenêtre « Enregistrer sous », côté main). */}
+                  <button
+                    type="button"
+                    className="chat-panel__save-image"
+                    title={savedIndex === index ? 'Image enregistrée' : "Télécharger l'image"}
+                    aria-label={savedIndex === index ? 'Image enregistrée' : "Télécharger l'image"}
+                    onClick={() => void saveImage(message.image as string, index)}
+                  >
+                    {savedIndex === index ? '✓' : <DownloadIcon />}
+                  </button>
+                </figure>
               )}
             </div>
           ))}

@@ -2300,6 +2300,39 @@ p.capacity-scan__tier-missing {
   margin: 10px 0 0;
 }
 
+/* Étape 185 : l'image dessinée porte son bouton « Télécharger » dans son coin, sans ajouter de ligne au fil. */
+.chat-panel__generated {
+  position: relative;
+  display: inline-block;
+  margin: 0;
+}
+
+.chat-panel__save-image {
+  position: absolute;
+  top: 18px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--hud-line);
+  border-radius: 8px;
+  background: rgba(6, 16, 25, 0.78);
+  color: var(--hud-text);
+  font-size: 0.95rem;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.chat-panel__save-image:hover {
+  opacity: 1;
+  color: var(--hud-accent);
+  border-color: var(--hud-accent);
+}
+
 /* --- Espace de travail partagé : Chat et mode Code (étape 97) ------------- */
 
 /* Colonne de gauche façon Claude/ChatGPT, demandée par Léo ("les conversation et code fait comme claude ou

@@ -6,7 +6,8 @@ import { pickImageModel } from '../shared/imageModel'
 import { isImageModelInstalled } from './services/imageGenerator'
 import { spawn } from 'child_process'
 import { basename, extname, join } from 'path'
-import { readFile } from 'fs/promises'
+import { readFile, writeFile } from 'fs/promises'
+import { decodePngDataUrl, defaultImageFileName, withPngExtension } from './services/imageSave'
 import {
   ensureOllamaRunning,
   ensureSearxngRunning,
@@ -68,6 +69,7 @@ import {
   type ModelChoiceInfo,
   type ModelChoiceMode,
   type PickedImageFile,
+  type SaveImageResult,
   type Profile,
   type SoundCue,
   type VoiceReplyPayload,
@@ -1049,6 +1051,32 @@ app.whenReady().then(async () => {
    * Le fichier n'est ici QUE lu : la réduction reste côté renderer (src/lib/imageAttachment.ts), par le
    * même chemin que le collage et le glisser-déposer.
    */
+  // Étape 185 : « Enregistrer sous » d'une image dessinée. Même garde dialogOpen que pickImageFile juste en
+  // dessous : sans lui, la fenêtre de Windows faisait perdre le focus à Jaris, qui se repliait en widget.
+  ipcMain.handle(IPC_CHANNELS.saveGeneratedImage, async (_event, dataUrl: string): Promise<SaveImageResult> => {
+    const bytes = decodePngDataUrl(String(dataUrl))
+    if (!bytes) return { saved: false, error: "Cette image ne peut pas être enregistrée (ce n'est pas une image PNG)." }
+    const dialogOptions = {
+      title: "Enregistrer l'image",
+      defaultPath: join(app.getPath('pictures'), defaultImageFileName(new Date())),
+      filters: [{ name: 'Image PNG', extensions: ['png'] }]
+    }
+    dialogOpen = true
+    let target: string | undefined
+    try {
+      const result = fullWindow ? await dialog.showSaveDialog(fullWindow, dialogOptions) : await dialog.showSaveDialog(dialogOptions)
+      target = result.canceled ? undefined : result.filePath
+    } finally {
+      dialogOpen = false
+    }
+    if (!target) return { saved: false }
+    try {
+      await writeFile(withPngExtension(target), bytes)
+      return { saved: true }
+    } catch (err) {
+      return { saved: false, error: `Impossible d'enregistrer l'image : ${err instanceof Error ? err.message : String(err)}` }
+    }
+  })
   ipcMain.handle(IPC_CHANNELS.pickImageFile, async (): Promise<PickedImageFile | null> => {
     const dialogOptions = {
       properties: ['openFile' as const],
