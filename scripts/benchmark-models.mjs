@@ -157,14 +157,14 @@ const RAM_SAFETY_MARGIN_GB = Number(process.env.JARIS_RAM_SAFETY_MARGIN_GB) > 0 
  * dédié) : sans ce filtre, ce script tenterait de télécharger des dizaines de Go pour un modèle qui ne
  * tournerait de toute façon jamais correctement.
  *
- * Les 9 derniers (qwen3.5:35b/27b, qwen3.8:27b, qwen3.6:27b, gemma4:26b, gpt-oss:20b, command-r:35b,
+ * Les 8 derniers (qwen3.5:35b/27b, qwen3.8:27b, qwen3.6:27b, gemma4:26b, gpt-oss:20b,
  * mistral-small3.2:24b, glm-4.7-flash:q4_K_M) sont les candidats du palier Puissant (LARGE_CANDIDATES dans
  * hardwareScan.ts) au-delà de la VRAM disponible sur une machine comme celle de Léo — ajoutés à la demande
  * explicite de Léo après avoir vu "Puissant" retomber sur un petit modèle faute de place : sur cette machine,
  * réserver 4,5 Go de VRAM en permanence pour le STT (avant l'étape 158, où il est passé en RAM) ne laissait
  * jamais assez de place pour un vrai grand modèle. Certains sont MoE (gemma4:26b, gpt-oss:20b probablement
  * glm-4.7-flash) et restent rapides même en débordant sur la RAM ; les autres sont denses (qwen3.5:35b/27b,
- * qwen3.8:27b, qwen3.6:27b, command-r:35b, mistral-small3.2:24b) et seront NETTEMENT plus lents une fois
+ * qwen3.8:27b, qwen3.6:27b, mistral-small3.2:24b) et seront NETTEMENT plus lents une fois
  * débordés — accepté en connaissance de cause, mieux vaut un vrai grand modèle plus lent qu'un petit modèle
  * rapide pour les questions qui demandent explicitement une réflexion poussée.
  */
@@ -186,7 +186,6 @@ const RAM_OFFLOAD_MODELS = new Set([
   'granite4.2:30b',
   'gemma4:26b',
   'gpt-oss:20b',
-  'command-r:35b',
   'mistral-small3.2:24b',
   'glm-4.7-flash:q4_K_M',
   'nemotron-3.5-lightning:30b'
@@ -259,7 +258,6 @@ const MODELS = [
   'granite4.2:30b',
   'gemma4:26b',
   'gpt-oss:20b',
-  'command-r:35b',
   'mistral-small3.2:24b',
   'glm-4.7-flash:q4_K_M',
   // Étape 167 : voir LARGE_CANDIDATES dans hardwareScan.ts.
@@ -370,7 +368,6 @@ const MODEL_SIZE_HINTS = {
   'granite4.2:30b': 18,
   'gemma4:26b': 19,
   'gpt-oss:20b': 14,
-  'command-r:35b': 19,
   'mistral-small3.2:24b': 15,
   'glm-4.7-flash:q4_K_M': 19,
   'nemotron-3.5-lightning:30b': 25
@@ -421,7 +418,6 @@ const LARGE_TIER_MODELS = new Set([
   'granite4.2:30b',
   'gemma4:26b',
   'gpt-oss:20b',
-  'command-r:35b',
   'mistral-small3.2:24b',
   'glm-4.7-flash:q4_K_M',
   'nemotron-3.5-lightning:30b',

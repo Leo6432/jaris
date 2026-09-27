@@ -1,4 +1,13 @@
-"""Confirmation du nom par transcription locale avant toute activation vocale."""
+"""Mot d'activation « Jaris » par transcription locale (étape 179).
+
+Avant : un détecteur openWakeWord (modèles sous licence NON commerciale CC BY-NC-SA 4.0, entraîné sur des voix de
+synthèse, seuil 0,995) proposait un candidat, puis la transcription le confirmait. Léo : « le hey Jaris marche une
+fois sur 20 ». Le goulot le plus probable (déduit, pas mesuré sur sa voix) : le détecteur, strict et entraîné sur
+des voix de synthèse — alors que sur 50 « Jaris » (voix de synthèse, étape 158), Parakeet v3 écrivait un nom
+reconnu par WAKE_NAME 46 fois. Le détecteur est donc
+supprimé : chaque phrase entendue est découpée par WakeSegmenter puis transcrite localement, et seul le NOM dans la
+transcription réveille Jaris. Plus aucun modèle non commercial, un filtre en moins.
+"""
 from collections import deque
 import re
 import numpy as np
@@ -32,28 +41,52 @@ def remove_wake_prefix(text: str) -> str:
     return text[match.end():].lstrip(' ,.!?:;—-') if match else text
 
 
-class WakeConfirmation:
-    """Mémoire bornée de 3 s ; attend 640 ms après le candidat pour finir le mot."""
+# Découpage d'une phrase dans le flux du micro (morceaux de 80 ms) : commence au premier morceau assez fort, se
+# termine après un court silence. Assez court pour réagir vite après « Jaris », assez long pour ne pas couper
+# « Jaris, ouvre YouTube » à la virgule.
+PRE_ROLL_CHUNKS = 4       # 320 ms gardés AVANT le premier son fort : le « J » de « Jaris » est souvent faible
+END_SILENCE_CHUNKS = 7    # 560 ms de silence = fin de phrase
+MIN_LOUD_CHUNKS = 3       # moins de 240 ms de son fort : un claquement, une toux — rien à transcrire
+MAX_SEGMENT_CHUNKS = 75   # 6 s au plus : une longue conversation dans la pièce est découpée, jamais accumulée
+
+
+class WakeSegmenter:
+    """Découpe le flux du micro en phrases. Pur (aucun modèle) : testé sans micro ni transcription."""
+
     def __init__(self):
-        self.history = deque(maxlen=38)
-        self.remaining = None
-        self.cooldown = 0
+        self.pre_roll = deque(maxlen=PRE_ROLL_CHUNKS)
+        self.segment: list[np.ndarray] | None = None
+        self.loud = 0
+        self.silence = 0
 
     def clear(self):
-        self.history.clear()
-        self.remaining = None
-        self.cooldown = 0
+        self.pre_roll.clear()
+        self.segment = None
+        self.loud = 0
+        self.silence = 0
 
-    def push(self, chunk: np.ndarray, candidate: bool):
-        self.history.append(chunk.copy())
-        if self.remaining is not None:
-            self.remaining -= 1
-            if self.remaining == 0:
-                self.remaining = None
-                self.cooldown = 38
-                return list(self.history)
-        elif self.cooldown:
-            self.cooldown -= 1
-        elif candidate:
-            self.remaining = 8
-        return None
+    @property
+    def trailing_silence_chunks(self) -> int:
+        return self.silence
+
+    def push(self, chunk: np.ndarray, is_loud: bool):
+        """Renvoie la phrase (liste de morceaux) quand elle se termine et contient assez de son, sinon None."""
+        if self.segment is None:
+            if not is_loud:
+                self.pre_roll.append(chunk.copy())
+                return None
+            self.segment = list(self.pre_roll)
+            self.pre_roll.clear()
+            self.loud = 0
+            self.silence = 0
+        self.segment.append(chunk.copy())
+        if is_loud:
+            self.loud += 1
+            self.silence = 0
+        else:
+            self.silence += 1
+        if self.silence < END_SILENCE_CHUNKS and len(self.segment) < MAX_SEGMENT_CHUNKS:
+            return None
+        segment, loud = self.segment, self.loud
+        self.segment = None
+        return segment if loud >= MIN_LOUD_CHUNKS else None

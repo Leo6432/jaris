@@ -123,8 +123,8 @@ export class VoicePipeline extends EventEmitter {
 
   /**
    * @param inputDeviceIndex Voir VoiceClient.start — micro choisi dans Options → Voix, prioritaire sur .env.
-   * @param wakewordEnabled Options → Activation (étape 81) : `false` désactive le détecteur ONNX du mot
-   * "Jaris" côté sidecar Python (voir VoiceClient.start) — la touche "+" et le clic sur l'orbe restent
+   * @param wakewordEnabled Options → Activation (étape 81) : `false` désactive l'écoute du mot "Jaris"
+   * côté sidecar Python (voir VoiceClient.start) — la touche "+" et le clic sur l'orbe restent
    * disponibles quoi qu'il arrive, ce drapeau ne concerne QUE l'écoute passive du micro.
    */
   async start(inputDeviceIndex?: number | null, wakewordEnabled = true): Promise<void> {

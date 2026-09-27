@@ -673,7 +673,7 @@ export default function OptionsMenu(): JSX.Element {
 
   /**
    * Contrairement aux deux bascules ci-dessus, le mot d'activation redémarre le pipeline vocal (voir
-   * setWakewordEnabled dans main.ts — le sidecar Python décide de charger le détecteur ONNX une seule fois,
+   * setWakewordEnabled dans main.ts — le sidecar Python décide d’écouter le mot « Jaris » une seule fois,
    * à son démarrage, pas quelque chose qui se bascule à chaud) : même pattern que chooseInputDevice
    * (savingWakewordSetting affiche un message pendant les quelques secondes de rechargement des modèles).
    */

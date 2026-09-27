@@ -37,8 +37,8 @@ export class VoiceClient extends EventEmitter {
    * @param inputDeviceIndex Index PortAudio choisi dans Options → Voix (voir Profile.audioInputDeviceIndex),
    * prioritaire sur MIC_INPUT_DEVICE (.env) s'il est fourni. `undefined`/`null` = retombe sur .env.
    * @param wakewordEnabled Options → Activation (étape 81, Profile.activationWakeWordEnabled) : `false`
-   * passe `--wakeword-disabled` à voice_server.py, qui saute alors le chargement du détecteur ONNX du mot
-   * "Jaris" (rien à charger/ré-échantillonner en trop pour un utilisateur qui préfère la touche "+"/l'orbe).
+   * passe `--wakeword-disabled` à voice_server.py, qui ne transcrit alors plus chaque phrase entendue en
+   * attendant le mot "Jaris" (étape 179) — rien à calculer pour un utilisateur qui préfère la touche "+"/l'orbe.
    */
   start(inputDeviceIndex?: number | null, wakewordEnabled = true): Promise<void> {
     if (this.ready) return this.ready

@@ -119,7 +119,6 @@ test('expose les Intelligence Index lus directement chez Artificial Analysis san
     'granite4.1:8b': 7,
     'mistral-small3.2:24b': 8,
     'granite4.2:30b': 15,
-    'command-r:35b': 5,
     'qwen3:1.7b': 5,
     'glm-4.7-flash:q4_K_M': 15,
     'qwen3-vl:8b': 7,

@@ -68,7 +68,6 @@ en anglais) — aucun appel d'outil réussi.
 | ministral-3:8b | 17/17 |
 | ministral-3:14b | 14/17 |
 | gpt-oss:20b | 16/17 |
-| command-r:35b | 2/17 |
 | mistral-small3.2:24b | 17/17 |
 | glm-4.7-flash:q4_K_M | 17/17 |
 | nemotron-3.5-lightning:30b | 17/17 |

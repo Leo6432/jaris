@@ -17,9 +17,8 @@ sounddevice==0.5.6
 numpy==2.4.6
 supertonic==1.3.1
 # Déjà installé de fait comme dépendance transitive de supertonic (vérifié : la même version, 1.30.0, est
-# celle que pip résout) : épinglé ici explicitement car wakeword.py l'importe maintenant directement pour le
-# mot d'activation "Jaris" (voir python/models/, jaris.onnx) — sans cette ligne, une évolution future de
-# supertonic qui abandonnerait onnxruntime casserait wakeword.py silencieusement, sans rapport avec la TTS.
+# celle que pip résout) : épinglé ici explicitement car la transcription (onnx-asr, juste en dessous) en
+# dépend aussi — y compris pour le mot d'activation "Jaris" depuis l'étape 179 (plus de détecteur à part).
 onnxruntime==1.30.0
 # Transcription (étape 158) : charge Parakeet TDT 0.6B v3 (NVIDIA) avec onnxruntime, sur le processeur.
 onnx-asr==0.12.0

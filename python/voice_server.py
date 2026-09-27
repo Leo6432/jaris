@@ -1,17 +1,16 @@
 """Sidecar vocal persistant pour Jaris.
 
 Regroupe dans un seul process : écoute continue du micro, détection du mot
-d'activation "Jaris" (modèle openWakeWord dédié, entraîné spécifiquement
-pour ce mot, puis confirmation par transcription locale — voir wakeword.py et wake_confirmation.py ;
-déclenchement manuel via `trigger`/touche "+" toujours possible) — capture
+d'activation "Jaris" (chaque phrase entendue est transcrite localement, et seul le nom dans le texte
+réveille Jaris — voir wake_confirmation.py, étape 179 ; déclenchement manuel via `trigger`/touche "+"
+toujours possible) — capture
 de l'énoncé qui suit jusqu'au silence, puis transcription (Parakeet v3,
 en RAM, étape 158) — directement depuis les échantillons en mémoire, sans
 passer par des fichiers WAV intermédiaires.
 
 Léo trouvait le double clap utilisé avant (voir git log) "galère" et
-voulait simplement dire "Jaris" — remplacé ici par un modèle dédié plutôt
-que par le mot "Hey Jarvis" (anglais) qu'imposait openWakeWord avant son
-retrait initial, faute de mot-clé "Jaris" pré-entraîné.
+voulait simplement dire "Jaris". Le détecteur openWakeWord utilisé ensuite (licence non commerciale, et « une
+fois sur 20 » selon Léo) a été retiré à l'étape 179 au profit de la transcription seule.
 
 Sur stdin, une ligne par commande :
   trigger        déclenche une capture manuellement (touche "+", voir App.tsx)
@@ -34,8 +33,8 @@ Avec --list-devices : ignore tous les autres arguments, n'ouvre aucun micro et n
 imprime juste {"devices": [{"index": 0, "name": "..."}, ...]} (ou {"error": "..."}) et quitte. Utilisé par
 Electron pour peupler la liste des micros dans le menu Options, sans lancer tout le sidecar pour ça.
 
-Avec --wakeword-disabled (Options → Activation, étape 81) : le détecteur ONNX du mot "Jaris" n'est ni
-chargé ni exécuté, seul `trigger` (touche "+"/clic sur l'orbe) déclenche une capture.
+Avec --wakeword-disabled (Options → Activation, étape 81) : aucune phrase n'est transcrite en attendant le
+nom, seul `trigger` (touche "+"/clic sur l'orbe) déclenche une capture.
 
 Lancé par electron/services/voiceClient.ts, jamais directement.
 """
@@ -61,11 +60,10 @@ import numpy as np
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
-from wakeword import JarisWakeWordDetector
-from wake_confirmation import WakeConfirmation, contains_wake_name, remove_wake_prefix
+from wake_confirmation import WakeSegmenter, contains_wake_name, remove_wake_prefix
 
 SAMPLE_RATE = 16000
-CHUNK_SAMPLES = 1280  # 80 ms : le pas fixe attendu par JarisWakeWordDetector (voir wakeword.py)
+CHUNK_SAMPLES = 1280  # 80 ms : le pas du découpage des phrases (voir WakeSegmenter, wake_confirmation.py)
 SILENCE_RMS_THRESHOLD = 300
 SILENCE_DURATION_MS = 900
 MIN_UTTERANCE_MS = 400
@@ -76,12 +74,6 @@ MAX_UTTERANCE_MS = 12_000
 MIC_TEST_RMS_THRESHOLD = 150
 # Normalise le RMS en 0..1 pour la jauge de la UI (empirique : une voix normale dépasse largement ce seuil).
 MIC_TEST_LEVEL_DIVISOR = 3000.0
-
-# Le score ONNX ne constitue qu'un candidat : tests réels de v0.5.1, des phrases
-# météo et « Paris » dépassent aussi ce seuil. WakeConfirmation exige ensuite
-# une transcription locale contenant le nom avant tout événement wake.
-WAKEWORD_THRESHOLD = 0.995
-WAKEWORD_DEBOUNCE_CHUNKS = 15  # ~1,2s : couvre la durée d'un "Jaris" dit une fois, sans bloquer trop longtemps après
 
 # Formules "génériques" que les modèles de transcription peuvent halluciner sur
 # du silence/bruit résiduel (héritées de leur entraînement sur des sous-titres).
@@ -177,8 +169,7 @@ def main() -> None:
     parser.add_argument("--input-device", type=int, default=None)
     parser.add_argument("--list-devices", action="store_true")
     # Options → Activation (étape 81) : quand Léo préfère la touche "+"/le clic sur l'orbe, aucune raison de
-    # charger les 3 modèles ONNX du détecteur (voir wakeword.py) ni de les faire tourner en continu sur
-    # chaque chunk de micro pour rien.
+    # transcrire chaque phrase entendue en attendant le nom.
     parser.add_argument("--wakeword-disabled", action="store_true")
     args = parser.parse_args()
 
@@ -261,7 +252,7 @@ def main() -> None:
             # contenu (vérifié : ton pur ET bruit aléatoire donnent 0 en int16, un résultat correct en
             # float64) — jamais détecté avant faute d'accès à un micro qui déclenche vraiment cette
             # retombée (débit natif ≠ 16 kHz) en usage réel. Convertir en float AVANT le ré-échantillonnage
-            # corrige ça : c'est déjà le format attendu par les modèles ONNX de melspectrogramme en aval.
+            # corrige ça.
             resampled = scipy.signal.resample_poly(indata[:, 0].astype(np.float64), up, down)
             audio_queue.put(np.clip(resampled, -32768, 32767).astype(np.int16))
 
@@ -325,19 +316,12 @@ def main() -> None:
         emit({"event": "fatal", "message": f"impossible d'ouvrir le micro : {exc}"})
         sys.exit(1)
 
-    detector = None
-    if not args.wakeword_disabled:
-        try:
-            detector = JarisWakeWordDetector(threshold=WAKEWORD_THRESHOLD, debounce_chunks=WAKEWORD_DEBOUNCE_CHUNKS, minimum_rms=SILENCE_RMS_THRESHOLD)
-        except Exception as exc:
-            stream.stop()
-            stream.close()
-            emit({"event": "fatal", "message": f"impossible de charger le détecteur du mot Jaris : {exc}"})
-            sys.exit(1)
+    # Étape 179 : plus de détecteur à charger — le mot d'activation passe par la transcription déjà chargée.
+    listen_for_name = not args.wakeword_disabled
 
     emit({"event": "ready"})
 
-    confirmation = WakeConfirmation()
+    segmenter = WakeSegmenter()
     voice_activated = False
     mode = "wake"  # "wake" | "capture"
     capture_chunks: list[np.ndarray] = []
@@ -379,47 +363,39 @@ def main() -> None:
             if triggered:
                 manual_trigger.clear()
 
-            # detector est None avec --wakeword-disabled (Options → Activation, Léo préfère la touche "+"/le
-            # clic sur l'orbe) : rien à faire tourner sur ce chunk, seul le déclenchement manuel compte.
-            pending_audio = None
+            # Étape 179 : chaque phrase entendue est transcrite, et seul le NOM dans le texte réveille Jaris.
+            # Rien n'est envoyé ni affiché quand le nom n'y est pas : la transcription reste dans ce process.
             confirmed_audio = None
-            if detector is not None:
-                score = detector.process_chunk(chunk)
-                candidate = detector.should_trigger(score) if not triggered else False
-                pending_audio = confirmation.push(chunk, candidate)
+            trailing_silence_ms = 0.0
             if triggered:
-                confirmation.clear()
+                segmenter.clear()
                 voice_activated = False
-            elif pending_audio is not None:
-                # Le classifieur confond la parole courante avec le nom. Son score
-                # ne suffit donc jamais à activer l'interface ou envoyer une demande.
-                audio = np.concatenate(pending_audio).astype(np.float32) / 32768.0
-                try:
-                    candidate_text = transcribe(audio)
-                    if contains_wake_name(candidate_text):
-                        triggered = True
-                        voice_activated = True
-                        confirmed_audio = pending_audio
-                        confirmation.clear()
-                        # Diagnostic seulement (debug(), pas emit(..., "event": "log")) : le vrai signal visible
-                        # côté utilisateur est l'évènement "wake" qui suit (change l'émotion de l'orbe) — cette
-                        # phrase technique ("confirmé par la transcription locale") n'ajoute rien pour Léo.
-                        debug("Mot Jaris confirmé par la transcription locale.")
-                    else:
-                        # Visibilité indispensable pour ajuster WAKE_NAME (wake_confirmation.py) à partir de
-                        # vraies transcriptions rejetées, plutôt qu'à l'aveugle — même logique que le "Pic
-                        # candidat" du double clap ou le "Score mot d'activation" plus haut. debug(), pas emit()
-                        # : ce texte ne concerne QUE le réglage de WAKE_NAME, jamais l'utilisateur (voir debug()).
-                        debug(f"Candidat rejeté (transcription : {candidate_text!r}).")
-                except Exception as exc:
-                    # Une vérification échouée ne donne jamais une activation par défaut.
-                    emit({"event": "log", "message": f"Vérification du mot Jaris impossible : {exc}"})
+            elif listen_for_name:
+                segment = segmenter.push(chunk, rms(chunk) >= SILENCE_RMS_THRESHOLD)
+                if segment is not None:
+                    audio = np.concatenate(segment).astype(np.float32) / 32768.0
+                    try:
+                        heard = transcribe(audio)
+                        if contains_wake_name(heard):
+                            triggered = True
+                            voice_activated = True
+                            confirmed_audio = segment
+                            # « Jaris, ouvre YouTube » d'une traite : la demande est déjà là, le silence entendu
+                            # après compte. « Jaris » seul : Léo attend souvent de voir l'orbe réagir avant de
+                            # parler — le délai de silence repart de zéro pour lui laisser ce temps.
+                            if remove_wake_prefix(heard).strip():
+                                trailing_silence_ms = segmenter.trailing_silence_chunks * chunk_ms
+                            segmenter.clear()
+                    except Exception as exc:
+                        # Une vérification échouée ne donne jamais une activation par défaut.
+                        emit({"event": "log", "message": f"Écoute du mot Jaris impossible : {exc}"})
 
             if triggered:
                 mode = "capture"
-                # Conserver le son pendant la confirmation, y compris « Jaris, ouvre… ».
+                # La phrase qui contenait le nom est gardée (« Jaris, ouvre YouTube » d'une traite), et le silence
+                # déjà entendu après elle compte : si la demande était dans la même phrase, pas d'attente en plus.
                 capture_chunks = confirmed_audio or []
-                silent_ms = 0.0
+                silent_ms = trailing_silence_ms
                 captured_ms = len(capture_chunks) * chunk_ms
                 loud_ms = sum(chunk_ms for part in capture_chunks if rms(part) >= SILENCE_RMS_THRESHOLD)
                 emit({"event": "wake"})

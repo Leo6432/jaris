@@ -175,9 +175,6 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   { model: 'granite4.2:30b', vramGb: 18 },
   { model: 'gemma4:26b', vramGb: 19 },
   { model: 'gpt-oss:20b', vramGb: 14 },
-  // Command R (Cohere) : orienté RAG/tool-use long contexte (128K), tools confirmés. Vérifié sur
-  // ollama.com/library/command-r (19 Go).
-  { model: 'command-r:35b', vramGb: 19 },
   // Mistral Small : la conclusion précédente ("3.1"/"3.2" n'existent pas sous ce nom sur Ollama") était
   // FAUSSE — vérifiée à nouveau sur ollama.com/library/mistral-small3.2 (revue des 5 listes de candidats,
   // demande de Léo "regarde lm studio... fait tes analyse de ton coté") : mistral-small3.2:24b est un tag
@@ -229,7 +226,6 @@ const LARGE_RAM_OFFLOAD_MODELS = new Set([
   'granite4.2:30b',
   'gemma4:26b',
   'gpt-oss:20b',
-  'command-r:35b',
   'mistral-small3.2:24b',
   'glm-4.7-flash:q4_K_M',
   'nemotron-3.5-lightning:30b',
@@ -792,9 +788,6 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   'granite4.1:8b': 7,
   'mistral-small3.2:24b': 8,
   'granite4.2:30b': 15,
-  // "(estimated)" sur la fiche Artificial Analysis elle-même (méthode d'estimation, pas une mesure directe
-  // complète) — gardé tel quel, c'est le seul chiffre officiel publié pour ce modèle.
-  'command-r:35b': 5,
   'qwen3:1.7b': 5,
   'glm-4.7-flash:q4_K_M': 15,
   // Vérifié sur artificialanalysis.ai/models/nemotron-3-5-lightning (v4.3.2) le 25/09/2026.

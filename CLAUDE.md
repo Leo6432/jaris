@@ -5062,3 +5062,29 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   exacte reste inconnue ; le correctif ne dépend pas d'elle. Non vérifié sur Windows. Régression :
   `node --test scripts/test-widget-mode.mjs` (surveillance lancée au démarrage, jamais en Code/Options, jamais
   par-dessus la grande fenêtre, jamais de vol de focus).
+
+- **Licences, mot d'activation et command-r (étape 179, Léo : « supprime command-r:35b en plus il est nul ;
+  devstral-2:123b on le garde, on va pas faire plus de 20 millions ; pour le mot d'activation trouve une autre
+  alternative, et le hey Jaris marche une fois sur 20 »)**. Audit des licences fait sur les fiches Hugging Face
+  (API `huggingface.co/api/models/<dépôt>`, champ `cardData.license`), pas de mémoire : quasiment tout est
+  Apache 2.0/MIT ; command-r = CC-BY-NC 4.0 (retiré : candidats, index d'intelligence, script de test, scores) ;
+  devstral-2 = MIT modifiée (> 20 M$/mois interdit, gardé sur décision de Léo) ; Parakeet v3 = CC-BY 4.0 ;
+  Supertonic = OpenRAIL ; **les deux modèles openWakeWord livrés (melspectrogram, embedding) = CC BY-NC-SA 4.0**
+  selon le README d'openWakeWord (« All of the included pre-trained models »), non commerciaux.
+  **Le mot d'activation ne passe plus par aucun détecteur** : chaque phrase entendue est découpée
+  (`WakeSegmenter`, wake_confirmation.py : départ au premier son fort avec 320 ms gardés avant, fin après 560 ms
+  de silence, rien sous 240 ms de son, 6 s au plus) puis transcrite par Parakeet, déjà chargé ; seul le NOM dans
+  le texte (`WAKE_NAME`) réveille Jaris. Le détecteur supprimé était le premier des DEUX filtres en série, strict
+  (0,995) et entraîné sur des voix de synthèse ; la transcription reconnaissait déjà 46 « Jaris » sur 50 (voix de
+  synthèse, étape 158) — goulot DÉDUIT, pas mesuré sur la voix de Léo. **Leçon générale : quand deux filtres sont
+  en série, le taux de réussite est le PRODUIT des deux — un second filtre fiable ne rattrape jamais un premier
+  qui laisse passer une fois sur vingt ; supprimer le mauvais vaut mieux que régler les deux.** « Jaris, ouvre
+  YouTube » d'une traite : la phrase et son silence final comptent déjà, pas d'attente en plus ; « Jaris » seul :
+  le délai de silence repart de zéro (Léo attend l'orbe). Rien n'est journalisé des phrases sans le nom : toute
+  la pièce est transcrite, localement, et ça ne doit laisser aucune trace. Coût assumé : chaque phrase entendue
+  est transcrite (Parakeet sur processeur, ~0,26 s pour 5 s de parole mesurés à l'étape 158) ; l'option
+  « En disant Jaris » d'Options l'arrête complètement. Supprimés : wakeword.py, python/models/*.onnx, le filtre
+  `models/*.onnx` d'electron-builder.yml, check-packaged-wakeword.py (remplacé par check-packaged-voice.py, qui
+  échoue si un .onnx est encore livré). **Non vérifié sur la voix réelle de Léo** : à confirmer en usage réel.
+  Régression : `python scripts/test-wake-confirmation.py` (découpage + câblage de voice_server.py, aucune phrase
+  sans le nom journalisée), vérifié en retirant le pré-roll puis le seuil de son minimal.
