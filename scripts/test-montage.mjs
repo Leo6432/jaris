@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
@@ -15,7 +16,8 @@ import ts from 'typescript'
  *   programme de rendu, webpack, le navigateur et l'encodage MP4 sont les vrais — ignoré avec sa raison si le
  *   paquet Montage n'est pas installé localement (cd montage && npm ci), comme dans la CI avant sa construction.
  */
-const root = new URL('..', import.meta.url).pathname
+// fileURLToPath et pas `.pathname` : sous Windows, `.pathname` donne « /D:/… », d'où un chemin « D:\D:\… » (CI).
+const root = fileURLToPath(new URL('..', import.meta.url))
 const nodeRequire = createRequire(import.meta.url)
 
 function compile(path) {
