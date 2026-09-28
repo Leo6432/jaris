@@ -5353,3 +5353,20 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `scripts/test-model-picker-ui.mjs` (vrai navigateur : modèle affiché dès l'ouverture, icône
   seulement si le modèle réfléchit, barre avec exactement les niveaux réels, interrupteur pour avec/sans, rien
   pour un modèle sans réflexion, « off » envoie false, ↻ revient à Auto, barre habillée par le CSS).
+
+- **« Mets pas un truc à cocher pour raisonnement mais cliquer directement sur le cerveau » + « les levels ça
+  doit remplir avant, parce que c'est qu'un cercle » (Léo, étape 194, capture de ChatGPT à l'appui).**
+  1. Modèle « avec ou sans » (gemma4, qwen3.5) : l'interrupteur de l'étape 193 est retiré, le CERVEAU lui-même
+     est le bouton (`aria-pressed`) — allumé (accent + halo) = réflexion activée, éteint = coupée. Une phrase
+     dit quoi faire (« Clique sur le cerveau… »), puisque rien d'autre n'indique qu'une icône est cliquable.
+  2. La barre à niveaux se remplit de la gauche jusqu'au cran choisi, comme ChatGPT : un `::before` dont la
+     largeur suit `--fill` (rang du cran / nombre de crans − 1), calculée pour s'arrêter pile au bord du disque
+     choisi ; les points déjà passés deviennent clairs. En Auto (aucun cran choisi), rien n'est rempli.
+  **Vu sur capture, pas en relecture** : le disque clair se perdait sur un remplissage cyan plein (deux
+  couleurs trop proches) ; le remplissage est passé à l'accent à 55 %, le disque ressort.
+  **Leçon générale : quand l'utilisateur montre une capture de référence, reproduire aussi l'ÉTAT visuel (ici :
+  la partie déjà « acquise » de la barre), pas seulement les éléments — un curseur à un seul cercle ne dit pas
+  « jusqu'où » on est, c'est le remplissage qui le dit.**
+  Régression : `scripts/test-model-picker-ui.mjs` (vrai navigateur : aucun interrupteur/case pour un modèle
+  avec/sans, un clic sur le cerveau envoie true puis false et son allure change ; le remplissage mesuré
+  s'arrête au cran choisi pour low, medium et xhigh, et rien n'est rempli en Auto).

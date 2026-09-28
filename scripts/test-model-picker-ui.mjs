@@ -226,16 +226,24 @@ test('modèle à niveaux (qwen3.8) : icône de raisonnement + barre avec SES niv
   })
 })
 
-test('modèle avec ou sans (gemma4) : icône de raisonnement + interrupteur, pas de barre', options, async () => {
+test('modèle avec ou sans (gemma4) : on clique DIRECTEMENT sur le cerveau, pas de case ni de barre', options, async () => {
   await withPage(async (page) => {
     await openPicker(page)
     await chooseRole(page, 'Médium')
-    await page.waitForSelector('#root .effort-picker__toggle')
-    assert.equal(await hasReasoningIcon(page), 1)
-    assert.equal(await page.locator('#root .effort-picker__slider').count(), 0)
-    await page.click('#root .effort-picker__toggle')
-    await page.waitForSelector('#root .effort-picker__toggle[aria-checked="true"]')
+    await page.waitForSelector('#root .effort-picker__brain')
+    assert.equal(await page.locator('#root .effort-picker__slider, #root [role="switch"], #root input[type="checkbox"]').count(), 0)
+    assert.equal(await page.getAttribute('#root .effort-picker__brain', 'aria-pressed'), 'false')
+    await page.click('#root .effort-picker__brain')
+    await page.waitForSelector('#root .effort-picker__brain[aria-pressed="true"]')
     assert.deepEqual((await page.evaluate(() => window.__calls)).at(-1), ['think', 'chat', true])
+    await page.waitForTimeout(200)
+    const on = await page.$eval('#root .effort-picker__brain', (el) => getComputedStyle(el).borderColor)
+    await page.click('#root .effort-picker__brain')
+    await page.waitForSelector('#root .effort-picker__brain[aria-pressed="false"]')
+    assert.deepEqual((await page.evaluate(() => window.__calls)).at(-1), ['think', 'chat', false])
+    await page.waitForTimeout(200)
+    const off = await page.$eval('#root .effort-picker__brain', (el) => getComputedStyle(el).borderColor)
+    assert.notEqual(on, off, 'le cerveau allumé se distingue du cerveau éteint')
   })
 })
 
@@ -264,14 +272,30 @@ test('Code en Auto : le modèle d’Auto est affiché avec ses vrais choix ; un 
   })
 })
 
-test('la barre est habillée par le CSS de Jaris (pilule, cran choisi en disque clair)', options, async () => {
+test('la barre est habillée par le CSS de Jaris et se REMPLIT jusqu’au cran choisi', options, async () => {
   await withPage(async (page) => {
     await openPicker(page)
     await chooseRole(page, 'Puissant')
-    await page.click('#root .effort-picker__step[aria-label="medium"]')
-    await page.waitForSelector('#root .effort-picker__step--active')
+    const fillOf = () => page.$eval('#root .effort-picker__slider', (el) => {
+      const before = getComputedStyle(el, '::before')
+      const knob = el.querySelector('.effort-picker__step--active')
+      const box = el.getBoundingClientRect()
+      return {
+        content: before.content,
+        right: box.left + parseFloat(before.width),
+        knobCenter: knob ? knob.getBoundingClientRect().left + knob.getBoundingClientRect().width / 2 : null,
+        radius: getComputedStyle(el).borderRadius
+      }
+    })
+    assert.equal((await fillOf()).content, 'none', 'Auto : rien de rempli')
+    for (const level of ['low', 'medium', 'xhigh']) {
+      await page.click(`#root .effort-picker__step[aria-label="${level}"]`)
+      await page.waitForSelector(`#root .effort-picker__step--active[aria-label="${level}"]`)
+      await page.waitForTimeout(250)
+      const fill = await fillOf()
+      assert.ok(parseFloat(fill.radius) >= 15, `barre en pilule (rayon ${fill.radius})`)
+      assert.ok(Math.abs(fill.right - (fill.knobCenter + 11)) <= 2, `${level} : le remplissage s’arrête au cran choisi (${fill.right} vs ${fill.knobCenter})`)
+    }
     await page.waitForFunction(() => getComputedStyle(document.querySelector('#root .effort-picker__step--active')).backgroundColor === 'rgb(230, 247, 255)')
-    const slider = await page.$eval('#root .effort-picker__slider', (el) => getComputedStyle(el).borderRadius)
-    assert.ok(parseFloat(slider) >= 15, `barre en pilule (rayon ${slider})`)
   })
 })

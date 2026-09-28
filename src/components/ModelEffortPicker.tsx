@@ -172,9 +172,23 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
           {view === 'think' ? (
             <>
               <div className="effort-picker__head">
-                <span className="effort-picker__head-icon" aria-hidden="true">
-                  {canThink && <ReasoningIcon />}
-                </span>
+                {kind === 'toggle' ? (
+                  // Modèle « avec ou sans » : on clique directement sur le cerveau (étape 194, Léo).
+                  <button
+                    type="button"
+                    className={`effort-picker__head-icon effort-picker__brain${thinkSelected === true ? ' effort-picker__brain--on' : ''}`}
+                    onClick={() => void chooseThink(thinkSelected !== true)}
+                    aria-pressed={thinkSelected === true}
+                    aria-label="Réfléchir avant de répondre"
+                    title={thinkSelected === true ? 'Réflexion activée : cliquer pour la couper' : 'Cliquer pour activer la réflexion'}
+                  >
+                    <ReasoningIcon />
+                  </button>
+                ) : (
+                  <span className="effort-picker__head-icon" aria-hidden="true">
+                    {canThink && <ReasoningIcon />}
+                  </span>
+                )}
                 <div className="effort-picker__head-text">
                   <span className="effort-picker__current">{title}</span>
                   <button type="button" className="effort-picker__model-link" onClick={() => setView('model')}>
@@ -201,7 +215,9 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
 
               {kind === 'levels' && (
                 <div
-                  className="effort-picker__slider"
+                  className={`effort-picker__slider${index >= 0 ? ' effort-picker__slider--filled' : ''}`}
+                  // La barre se remplit jusqu'au cran choisi (étape 194, Léo : « ça doit remplir avant »).
+                  style={{ '--fill': options.length > 1 && index >= 0 ? index / (options.length - 1) : 0 } as React.CSSProperties}
                   role="slider"
                   tabIndex={0}
                   aria-label="Niveau de réflexion"
@@ -216,7 +232,7 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
                       key={String(option.value)}
                       type="button"
                       tabIndex={-1}
-                      className={`effort-picker__step${i === index ? ' effort-picker__step--active' : ''}`}
+                      className={`effort-picker__step${i === index ? ' effort-picker__step--active' : i < index ? ' effort-picker__step--filled' : ''}`}
                       onClick={() => void chooseThink(option.value)}
                       title={option.label}
                       aria-label={option.label}
@@ -231,17 +247,11 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
                 </div>
               )}
 
+
               {kind === 'toggle' && (
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={thinkSelected === true}
-                  className="effort-picker__toggle"
-                  onClick={() => void chooseThink(thinkSelected !== true)}
-                >
-                  <span>Réfléchir avant de répondre</span>
-                  <span className={`effort-picker__switch${thinkSelected === true ? ' effort-picker__switch--on' : ''}`} aria-hidden="true" />
-                </button>
+                <p className="effort-picker__note">
+                  {thinkSelected === true ? 'Réflexion activée : clique sur le cerveau pour la couper.' : 'Clique sur le cerveau pour activer la réflexion.'}
+                </p>
               )}
 
               {!canThink && (
