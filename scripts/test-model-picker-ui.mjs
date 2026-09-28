@@ -7,11 +7,11 @@ import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
 /**
- * Sélecteur de modèle (étape 141) devenu « modèle + réflexion » façon ChatGPT (étape 191), puis corrigé à
- * l'étape 192 (Léo : « faut d'abord choisir le modèle… on peut choisir un modèle qui a rien et choisir max ») :
- * sur le VRAI ChatPanel et le vrai CSS compilé, le panneau montre d'abord les modèles, puis « Think » avec les
- * SEULS choix du modèle choisi — aucun pour un modèle qui ne réfléchit pas. Playwright absent : tests ignorés,
- * jamais verts en silence.
+ * Sélecteur de modèle (étape 141) devenu « modèle + réflexion » façon ChatGPT (étapes 191 à 193), sur le VRAI
+ * ChatPanel et le vrai CSS compilé. Léo (étape 193, capture de ChatGPT à l'appui) : le modèle est affiché dès
+ * l'ouverture ; l'icône de raisonnement n'apparaît que si le modèle réfléchit ; la barre seulement s'il a des
+ * niveaux, avec un cran par niveau RÉEL — jamais « max » sur un modèle qui n'a rien. Playwright absent : tests
+ * ignorés, jamais verts en silence.
  */
 let chromium = null
 try {
@@ -177,97 +177,101 @@ test('« + » ouvre le menu Ajouter, avec l’image et le rappel Ctrl+V ; un cli
 
 async function openPicker(page, root = '#root') {
   await page.click(`${root} .effort-picker__trigger`)
-  await page.waitForSelector(`${root} .effort-picker__panel`)
-}
-
-async function chips(page, root = '#root') {
-  return page.$$eval(`${root} .effort-picker__chip`, (els) => els.map((el) => el.textContent))
+  await page.waitForSelector(`${root} .effort-picker__head`)
 }
 
 async function chooseRole(page, label, root = '#root') {
+  await page.click(`${root} .effort-picker__model-link`)
   await page.click(`${root} .effort-picker__option:has-text("${label}")`)
+  await page.waitForSelector(`${root} .effort-picker__head`)
 }
 
-test('pas d’éclair ni de curseur générique : d’abord « Modèle », puis « Think »', options, async () => {
+const hasReasoningIcon = (page, root = '#root') => page.locator(`${root} .effort-picker__head-icon svg`).count()
+const steps = (page, root = '#root') => page.$$eval(`${root} .effort-picker__step`, (els) => els.map((el) => el.getAttribute('aria-label')))
+
+test('dès l’ouverture : le modèle est affiché ; en Chat Auto, ni icône de raisonnement ni barre', options, async () => {
   await withPage(async (page) => {
     await openPicker(page)
-    const titles = await page.$$eval('#root .effort-picker__section-title', (els) => els.map((el) => el.textContent))
-    assert.deepEqual(titles, ['Modèle', 'Think'], 'le modèle se choisit avant la réflexion')
+    assert.match(await page.textContent('#root .effort-picker__model-link'), /Auto/)
+    assert.equal(await hasReasoningIcon(page), 0)
+    assert.equal(await page.locator('#root .effort-picker__slider').count(), 0)
+    assert.match(await page.textContent('#root .effort-picker__note'), /choisis un modèle/)
     assert.equal(await page.locator('#root .effort-picker__panel svg path[d^="M13 3L5"]').count(), 0, 'plus d’éclair')
-    assert.equal(await page.locator('#root [role="slider"]').count(), 0, 'plus de curseur commun à 5 crans')
-    // Chat en Auto : le modèle change selon la question, rien d'exact à proposer.
-    assert.deepEqual(await chips(page), [])
-    assert.match(await page.textContent('#root .effort-picker__think'), /Choisis d'abord un modèle/)
   })
 })
 
-test('modèle à niveaux (qwen3.8) : SES niveaux, jamais « high » ni « max » ; le choix part au main', options, async () => {
+test('modèle à niveaux (qwen3.8) : icône de raisonnement + barre avec SES niveaux, jamais « high » ni « max »', options, async () => {
   await withPage(async (page) => {
     await openPicker(page)
     await chooseRole(page, 'Puissant')
-    await page.waitForSelector('#root .effort-picker__chip')
-    assert.deepEqual(await chips(page), ['Auto', 'off', 'low', 'medium', 'xhigh'])
-    assert.match(await page.textContent('#root .effort-picker__think'), /qwen3\.8:27b/)
+    await page.waitForSelector('#root .effort-picker__slider')
+    assert.match(await page.textContent('#root .effort-picker__model-link'), /Puissant.*qwen3\.8:27b/)
+    assert.equal(await hasReasoningIcon(page), 1)
+    assert.deepEqual(await steps(page), ['off', 'low', 'medium', 'xhigh'])
+    assert.match(await page.textContent('#root .effort-picker__current'), /^Auto$/)
 
-    await page.click('#root .effort-picker__chip:has-text("medium")')
-    await page.waitForSelector('#root .effort-picker__chip--active:has-text("medium")')
+    await page.click('#root .effort-picker__step[aria-label="medium"]')
+    await page.waitForSelector('#root .effort-picker__step--active[aria-label="medium"]')
     assert.deepEqual((await page.evaluate(() => window.__calls)).at(-1), ['think', 'chat', 'medium'])
-    assert.match(await page.textContent('#root .effort-picker__trigger'), /Puissant\s*think medium/)
+    assert.match(await page.textContent('#root .effort-picker__current'), /^medium$/)
+    assert.match(await page.textContent('#root .effort-picker__trigger'), /Puissant\s*medium/)
 
-    await page.click('#root .effort-picker__chip:has-text("off")')
-    await page.waitForSelector('#root .effort-picker__chip--active:has-text("off")')
+    await page.click('#root .effort-picker__step[aria-label="off"]')
+    await page.waitForSelector('#root .effort-picker__step--active[aria-label="off"]')
     assert.deepEqual((await page.evaluate(() => window.__calls)).at(-1), ['think', 'chat', false], '« off » envoie false, pas un texte')
 
-    await page.click('#root .effort-picker__chip:has-text("Auto")')
-    await page.waitForSelector('#root .effort-picker__chip--active:has-text("Auto")')
+    await page.click('#root .effort-picker__reset')
+    await page.waitForFunction(() => document.querySelector('#root .effort-picker__current').textContent === 'Auto')
     assert.deepEqual((await page.evaluate(() => window.__calls)).at(-1), ['think', 'chat', null])
   })
 })
 
-test('modèle avec ou sans (gemma4) : Auto · off · on', options, async () => {
+test('modèle avec ou sans (gemma4) : icône de raisonnement + interrupteur, pas de barre', options, async () => {
   await withPage(async (page) => {
     await openPicker(page)
     await chooseRole(page, 'Médium')
-    await page.waitForSelector('#root .effort-picker__chip')
-    assert.deepEqual(await chips(page), ['Auto', 'off', 'on'])
+    await page.waitForSelector('#root .effort-picker__toggle')
+    assert.equal(await hasReasoningIcon(page), 1)
+    assert.equal(await page.locator('#root .effort-picker__slider').count(), 0)
+    await page.click('#root .effort-picker__toggle')
+    await page.waitForSelector('#root .effort-picker__toggle[aria-checked="true"]')
+    assert.deepEqual((await page.evaluate(() => window.__calls)).at(-1), ['think', 'chat', true])
   })
 })
 
-test('modèle qui ne réfléchit pas : AUCUN choix, et changer de modèle efface la réflexion précédente', options, async () => {
+test('modèle qui ne réfléchit pas : ni icône, ni barre — et changer de modèle efface la réflexion précédente', options, async () => {
   await withPage(async (page) => {
     await openPicker(page)
     await chooseRole(page, 'Puissant')
-    await page.click('#root .effort-picker__chip:has-text("xhigh")')
-    await page.waitForFunction(() => /think xhigh/.test(document.querySelector('#root .effort-picker__trigger').textContent))
+    await page.click('#root .effort-picker__step[aria-label="xhigh"]')
+    await page.waitForFunction(() => /xhigh/.test(document.querySelector('#root .effort-picker__trigger').textContent))
 
     await chooseRole(page, 'Rapide')
-    await page.waitForFunction(() => /ne réfléchit pas/.test(document.querySelector('#root .effort-picker__think').textContent))
-    assert.deepEqual(await chips(page), [], 'rien à choisir : impossible de mettre « max » sur ce modèle')
-    assert.doesNotMatch(await page.textContent('#root .effort-picker__trigger'), /think/)
+    await page.waitForFunction(() => /ne réfléchit pas/.test(document.querySelector('#root .effort-picker__panel').textContent))
+    assert.equal(await hasReasoningIcon(page), 0)
+    assert.equal(await page.locator('#root .effort-picker__slider, #root .effort-picker__toggle').count(), 0, 'impossible de mettre « max » sur ce modèle')
+    assert.doesNotMatch(await page.textContent('#root .effort-picker__trigger'), /xhigh/)
   })
 })
 
-test('Code en Auto : un seul modèle connu, ses vrais choix (ici aucun) ; un rôle non installé est grisé', options, async () => {
+test('Code en Auto : le modèle d’Auto est affiché avec ses vrais choix ; un rôle non installé est grisé', options, async () => {
   await withPage(async (page) => {
     await openPicker(page, '#code-picker')
-    assert.match(await page.textContent('#code-picker .effort-picker__option'), /qwen2\.5-coder:7b/)
-    assert.match(await page.textContent('#code-picker .effort-picker__think'), /qwen2\.5-coder:7b.*ne réfléchit pas/s)
-    assert.deepEqual(await chips(page, '#code-picker'), [])
+    assert.match(await page.textContent('#code-picker .effort-picker__model-link'), /qwen2\.5-coder:7b/)
+    assert.match(await page.textContent('#code-picker .effort-picker__note'), /ne réfléchit pas/)
+    await page.click('#code-picker .effort-picker__model-link')
     assert.equal(await page.locator('#code-picker .effort-picker__option').last().isDisabled(), true)
   })
 })
 
-test('les choix de réflexion sont habillés par le CSS de Jaris (pilule, choix actif rempli)', options, async () => {
+test('la barre est habillée par le CSS de Jaris (pilule, cran choisi en disque clair)', options, async () => {
   await withPage(async (page) => {
     await openPicker(page)
     await chooseRole(page, 'Puissant')
-    await page.click('#root .effort-picker__chip:has-text("medium")')
-    await page.waitForSelector('#root .effort-picker__chip--active')
-    await page.waitForTimeout(200)
-    const style = await page.$$eval('#root .effort-picker__chip', (els) => els.map((el) => ({ radius: getComputedStyle(el).borderRadius, bg: getComputedStyle(el).backgroundColor, active: el.classList.contains('effort-picker__chip--active') })))
-    for (const chip of style) assert.ok(parseFloat(chip.radius) >= 15, `pilule (rayon ${chip.radius})`)
-    const active = style.find((c) => c.active)
-    const inactive = style.find((c) => !c.active)
-    assert.notEqual(active.bg, inactive.bg, 'le choix actif se voit')
+    await page.click('#root .effort-picker__step[aria-label="medium"]')
+    await page.waitForSelector('#root .effort-picker__step--active')
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#root .effort-picker__step--active')).backgroundColor === 'rgb(230, 247, 255)')
+    const slider = await page.$eval('#root .effort-picker__slider', (el) => getComputedStyle(el).borderRadius)
+    assert.ok(parseFloat(slider) >= 15, `barre en pilule (rayon ${slider})`)
   })
 })

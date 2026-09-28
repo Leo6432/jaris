@@ -3997,7 +3997,7 @@ a:hover {
 }
 
 .composer__menu-title,
-.effort-picker__section-title {
+.effort-picker__list-head {
   padding: 4px 8px 6px;
   font-size: 0.72rem;
   color: var(--hud-text-faint);
@@ -4146,56 +4146,202 @@ a:hover {
   max-width: calc(100vw - 32px);
 }
 
-/* Étape 192 : d'abord le modèle, puis « Think » avec les seuls choix que ce modèle accepte. */
-.effort-picker__think {
-  margin-top: 6px;
-  padding-top: 8px;
-  border-top: 1px solid var(--hud-line);
+.effort-picker__head {
+  display: grid;
+  grid-template-columns: 28px 1fr 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 10px;
 }
 
-.effort-picker__think-model {
+.effort-picker__head-icon {
+  display: inline-flex;
+  justify-content: center;
+  color: var(--hud-accent);
+}
+
+.effort-picker__head-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.effort-picker__current {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--hud-accent-bright);
+}
+
+.effort-picker__model-link,
+.effort-picker__back,
+.effort-picker__reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  font-family: var(--hud-font-body);
+  font-size: 0.76rem;
+  color: var(--hud-text-dim);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.effort-picker__model-link:hover,
+.effort-picker__back:hover,
+.effort-picker__reset:not(:disabled):hover {
+  color: var(--hud-accent-bright);
+  background: rgba(var(--hud-accent-rgb), 0.08);
+}
+
+.effort-picker__reset:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.effort-picker__model-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--hud-text-faint);
+}
+
+.effort-picker__model-link {
+  gap: 4px;
+}
+
+.effort-picker__model-role {
+  flex: none;
+}
+
+/* Le nom d'un modèle peut être très long (hf.co/…) : il se coupe proprement, la flèche reste visible. */
+.effort-picker__model-link svg {
+  flex: none;
+}
+
+/* La barre : un cran par niveau RÉEL du modèle ; le cran choisi est un grand disque clair. */
+.effort-picker__slider {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 34px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(1, 4, 10, 0.6);
+  border: 1px solid var(--hud-line);
+}
+
+.effort-picker__slider:focus-visible {
+  outline: none;
+  border-color: var(--hud-accent-bright);
+  box-shadow: 0 0 0 1px var(--hud-accent-bright);
+}
+
+.effort-picker__slider--off {
+  opacity: 0.4;
+}
+
+.effort-picker__step {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--hud-text-faint) 0 2.5px, transparent 3px);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.effort-picker__step:not(:disabled):hover {
+  background: radial-gradient(circle, var(--hud-accent-bright) 0 3.5px, transparent 4px);
+}
+
+.effort-picker__step--active,
+.effort-picker__step--active:not(:disabled):hover {
+  background: var(--hud-text);
+  box-shadow: 0 0 10px rgba(var(--hud-accent-rgb), 0.45);
+}
+
+.effort-picker__step:disabled {
+  cursor: default;
+}
+
+.effort-picker__scale {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 8px 0;
+  font-size: 0.68rem;
+  color: var(--hud-text-faint);
+}
+
+.effort-picker__note {
+  margin: 8px 4px 2px;
+  font-size: 0.72rem;
+  line-height: 1.45;
   color: var(--hud-text-dim);
 }
 
-.effort-picker__chips {
+.effort-picker__list-head {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
-  padding: 2px 8px 6px;
+  padding-left: 0;
 }
 
-.effort-picker__chip {
-  flex: 1 1 auto;
-  height: 30px;
-  padding: 0 9px;
+/* Modèle qui réfléchit seulement « avec ou sans » : un interrupteur au lieu de la barre. */
+.effort-picker__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
   font-family: var(--hud-font-body);
   font-size: 0.8rem;
-  color: var(--hud-text-dim);
+  color: var(--hud-text);
   background: rgba(1, 4, 10, 0.6);
   border: 1px solid var(--hud-line);
   border-radius: 999px;
   cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
-.effort-picker__chip:hover {
-  color: var(--hud-text);
-  border-color: var(--hud-line-strong);
+.effort-picker__switch {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(var(--hud-accent-rgb), 0.15);
+  border: 1px solid var(--hud-line-strong);
+  transition: background 0.15s ease;
 }
 
-.effort-picker__chip--active,
-.effort-picker__chip--active:hover {
-  color: var(--hud-bg);
+.effort-picker__switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--hud-text-dim);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.effort-picker__switch--on {
   background: var(--hud-accent);
-  border-color: var(--hud-accent);
-  font-weight: 600;
 }
 
-.effort-picker__note {
-  margin: 2px 8px 6px;
-  font-size: 0.74rem;
-  line-height: 1.45;
-  color: var(--hud-text-dim);
+.effort-picker__switch--on::after {
+  transform: translateX(14px);
+  background: var(--hud-bg);
 }
 
 .effort-picker__list {

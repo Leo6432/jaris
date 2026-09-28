@@ -5292,3 +5292,25 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   et `scripts/test-model-picker-ui.mjs` (vrai navigateur : plus d'éclair ni de curseur, « Modèle » avant
   « Think », vrais choix par modèle, « off » envoie false, changer de modèle efface la réflexion, choix sur une
   seule ligne et habillés par le CSS). **Non vérifié contre un vrai Ollama ici** (téléchargement bloqué).
+
+- **Retour au panneau façon ChatGPT, mais honnête (étape 193, Léo, capture de ChatGPT à l'appui : « ça doit
+  être un peu comme ça mais dès le début il y a le modèle, et si le modèle a think tu mets le petit icône
+  raisonnement à la place de l'éclair, et s'il a des levels mettre la barre »).** L'étape 192 avait bien
+  corrigé le fond (plus de choix inventés) mais changé la FORME que Léo voulait garder : une liste de modèles
+  puis des pastilles. Le panneau reprend la forme de l'étape 191 (icône à gauche, niveau en titre, modèle en
+  lien « › » en dessous, ↻ à droite, barre à crans), avec le fond de l'étape 192 :
+  - le modèle est affiché dès l'ouverture (« Puissant · qwen3.8:27b › ») ; un clic ouvre la liste ;
+  - modèle à niveaux → icône de raisonnement + barre, UN CRAN PAR NIVEAU RÉEL (qwen3.8 : off · low · medium ·
+    xhigh — 4 crans, pas 5) ;
+  - modèle avec ou sans → icône de raisonnement + interrupteur « Réfléchir avant de répondre », pas de barre ;
+  - modèle qui ne réfléchit pas, ou Chat/Vocal en Auto → ni icône, ni barre, une phrase qui dit pourquoi.
+  **Leçon générale : quand l'utilisateur critique un détail (« pourquoi un éclair », « on peut choisir max sur
+  un modèle qui n'a rien »), corriger CE détail sans jeter la forme qu'il avait validée ; une refonte complète
+  en réponse à une remarque ponctuelle répond à une question qu'il n'a pas posée.** Le backend de l'étape 192
+  (réglage lié au modèle, revérifié par le main) est inchangé.
+  Deux défauts vus sur capture, pas en relecture : l'icône de raisonnement, dans la couleur pâle de l'éclair,
+  était presque invisible (passée en couleur d'accent) ; un nom de modèle long (hf.co/…) coupait la flèche
+  « › » au lieu de se raccourcir lui-même (le nom a maintenant sa propre coupure, la flèche ne rétrécit plus).
+  Régression : `scripts/test-model-picker-ui.mjs` (vrai navigateur : modèle affiché dès l'ouverture, icône
+  seulement si le modèle réfléchit, barre avec exactement les niveaux réels, interrupteur pour avec/sans, rien
+  pour un modèle sans réflexion, « off » envoie false, ↻ revient à Auto, barre habillée par le CSS).
