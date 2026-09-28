@@ -5370,3 +5370,25 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `scripts/test-model-picker-ui.mjs` (vrai navigateur : aucun interrupteur/case pour un modèle
   avec/sans, un clic sur le cerveau envoie true puis false et son allure change ; le remplissage mesuré
   s'arrête au cran choisi pour low, medium et xhigh, et rien n'est rempli en Auto).
+
+- **Trois retours sur le panneau de réflexion (étape 195, Léo, captures à l'appui) : « améliore encore un peu la
+  barre », « quand le mode think n'est pas dispo enlève le cerveau », « ça met le nom complet du modèle, c'est
+  bizarre ».**
+  1. **La barre** reprend vraiment l'allure de ChatGPT : piste sombre SANS bordure, remplissage bleu PLEIN
+     (`--hud-accent-deep`, déjà dans la palette) jusqu'au bord du disque choisi, disque BLANC pur avec une
+     ombre. Le disque « presque blanc » (#e6f7ff) sur du cyan de l'étape 194 manquait de contraste : deux
+     clairs l'un sur l'autre.
+  2. **Le cerveau** : ma question à choix (« dans quel cas ? ») était mal posée — Léo : « faut juste mettre le
+     cerveau quand le modèle peut raisonner ou pas… pour le Puissant il y a des levels mais il y a le
+     cerveau ». Le cerveau veut dire « réfléchit ou pas » : il n'apparaît plus QUE pour un modèle avec/sans
+     (où il est le bouton). Un modèle à niveaux a déjà sa barre, un modèle sans réflexion n'a rien. **Leçon :
+     une question de clarification doit reprendre les mots de l'utilisateur et proposer des cas qu'il peut
+     reconnaître à l'écran ; trois hypothèses techniques qu'il n'a pas formulées l'ont juste perdu.**
+  3. **Le nom du modèle** : `formatModelName` (src/lib, étape 133) existait déjà et servait dans Options, mais
+     le sélecteur affichait l'identifiant brut (« hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M »). Branché, avec
+     une option `{ quant: false }` pour ne garder que « GLM-4.6V-Flash » dans ce petit panneau ; l'identifiant
+     complet reste en infobulle. **Même famille que « vérifier si un mécanisme existe déjà » : un formateur
+     d'affichage existant doit être utilisé par TOUT nouvel écran qui montre la même donnée.**
+  Régression : `scripts/test-model-picker-ui.mjs` (pas de cerveau pour un modèle à niveaux, nom court sans
+  hf.co/GGUF avec l'identifiant complet en infobulle, remplissage mesuré jusqu'au bord du disque, disque
+  blanc) et `scripts/test-format-model-name.mjs` (option sans quantification, tag Ollama officiel inchangé).

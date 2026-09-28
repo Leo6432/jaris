@@ -35,3 +35,9 @@ test('un import hf.co/<org>/<dépôt>-GGUF (sans quant) retire juste le suffixe 
 test('G9v3-3B (bartowski, exception explicite) s\'affiche sans le préfixe d\'organisation "ai9stars_"', () => {
   assert.equal(formatModelName('hf.co/bartowski/ai9stars_G9v3-3B-GGUF'), 'G9v3-3B')
 })
+
+test('étape 195 : le sélecteur du champ de saisie affiche le nom sans la quantification', () => {
+  assert.equal(formatModelName('hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', { quant: false }), 'GLM-4.6V-Flash')
+  assert.equal(formatModelName('hf.co/bartowski/ai9stars_G9v3-3B-GGUF:latest', { quant: false }), 'G9v3-3B')
+  assert.equal(formatModelName('qwen3.8:27b', { quant: false }), 'qwen3.8:27b', 'la taille d’un tag Ollama officiel reste')
+})

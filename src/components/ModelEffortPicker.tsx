@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { thinkLabel, type ThinkValue } from '../../shared/effort'
 import type { ModelChoiceInfo, ModelChoiceMode } from '../../shared/ipc'
+import { formatModelName } from '@/lib/formatModelName'
 
 /**
  * Modèle et réflexion (« think »), présentés comme le panneau de ChatGPT — étapes 191 à 193.
@@ -185,15 +186,19 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
                     <ReasoningIcon />
                   </button>
                 ) : (
-                  <span className="effort-picker__head-icon" aria-hidden="true">
-                    {canThink && <ReasoningIcon />}
-                  </span>
+                  // Étape 195 (Léo) : le cerveau ne sert qu'à dire « réfléchit ou pas » ; un modèle à niveaux a
+                  // déjà sa barre, un modèle sans réflexion n'a rien : place vide, le titre reste centré.
+                  <span className="effort-picker__head-icon" aria-hidden="true" />
                 )}
                 <div className="effort-picker__head-text">
                   <span className="effort-picker__current">{title}</span>
                   <button type="button" className="effort-picker__model-link" onClick={() => setView('model')}>
                     <span className="effort-picker__model-role">{modelLabel}</span>
-                    {thinking && <span className="effort-picker__model-name">· {thinking.model}</span>}
+                    {thinking && (
+                      <span className="effort-picker__model-name" title={thinking.model}>
+                        · {formatModelName(thinking.model, { quant: false })}
+                      </span>
+                    )}
                     <ChevronIcon direction="right" />
                   </button>
                 </div>
@@ -277,7 +282,7 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
                   <button type="button" className="effort-picker__option" onClick={() => void chooseModel(AUTO)}>
                     <span className="effort-picker__option-text">
                       <span className="effort-picker__option-title">Auto</span>
-                      <span className="effort-picker__option-sub">{info?.autoModel ?? 'Jaris choisit le bon modèle pour chaque demande'}</span>
+                      <span className="effort-picker__option-sub">{info?.autoModel ? formatModelName(info.autoModel, { quant: false }) : 'Jaris choisit le bon modèle pour chaque demande'}</span>
                     </span>
                     {selected === AUTO && <CheckIcon />}
                   </button>
@@ -293,7 +298,10 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
                     >
                       <span className="effort-picker__option-text">
                         <span className="effort-picker__option-title">{r.label}</span>
-                        <span className="effort-picker__option-sub">{r.installed ? r.model : `${r.model} — pas installé`}</span>
+                        <span className="effort-picker__option-sub">
+                          {formatModelName(r.model, { quant: false })}
+                          {r.installed ? '' : ' — pas installé'}
+                        </span>
                       </span>
                       {selected === r.value && <CheckIcon />}
                     </button>

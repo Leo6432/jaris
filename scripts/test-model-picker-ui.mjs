@@ -37,7 +37,7 @@ const ROLES = [
   { value: 'role:flash', label: 'Rapide', model: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF:latest', installed: true },
   { value: 'role:medium', label: 'Médium', model: 'gemma4:12b', installed: true },
   { value: 'role:large', label: 'Puissant', model: 'qwen3.8:27b', installed: true },
-  { value: 'role:vision', label: 'Vision', model: 'gemma4:12b', installed: true },
+  { value: 'role:vision', label: 'Vision', model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', installed: true },
   { value: 'role:code', label: 'Code', model: 'qwen2.5-coder:14b', installed: false }
 ]
 // Ce que le main calcule depuis /api/show (shared/effort.ts), pour chaque modèle.
@@ -200,13 +200,13 @@ test('dès l’ouverture : le modèle est affiché ; en Chat Auto, ni icône de 
   })
 })
 
-test('modèle à niveaux (qwen3.8) : icône de raisonnement + barre avec SES niveaux, jamais « high » ni « max »', options, async () => {
+test('modèle à niveaux (qwen3.8) : la barre avec SES niveaux, sans cerveau, jamais « high » ni « max »', options, async () => {
   await withPage(async (page) => {
     await openPicker(page)
     await chooseRole(page, 'Puissant')
     await page.waitForSelector('#root .effort-picker__slider')
     assert.match(await page.textContent('#root .effort-picker__model-link'), /Puissant.*qwen3\.8:27b/)
-    assert.equal(await hasReasoningIcon(page), 1)
+    assert.equal(await hasReasoningIcon(page), 0, 'modèle à niveaux : la barre suffit, pas de cerveau (étape 195)')
     assert.deepEqual(await steps(page), ['off', 'low', 'medium', 'xhigh'])
     assert.match(await page.textContent('#root .effort-picker__current'), /^Auto$/)
 
@@ -262,6 +262,19 @@ test('modèle qui ne réfléchit pas : ni icône, ni barre — et changer de mod
   })
 })
 
+test('le nom du modèle est raccourci (pas hf.co/…/…-GGUF:Q4_K_M), le nom complet reste en infobulle', options, async () => {
+  await withPage(async (page) => {
+    await openPicker(page)
+    await chooseRole(page, 'Rapide')
+    const link = await page.textContent('#root .effort-picker__model-link')
+    assert.match(link, /G9v3-3B/)
+    assert.doesNotMatch(link, /hf\.co|GGUF|bartowski/)
+    assert.equal(await page.getAttribute('#root .effort-picker__model-name', 'title'), 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF:latest')
+    await page.click('#root .effort-picker__model-link')
+    assert.doesNotMatch(await page.textContent('#root .effort-picker__list'), /hf\.co|GGUF/)
+  })
+})
+
 test('Code en Auto : le modèle d’Auto est affiché avec ses vrais choix ; un rôle non installé est grisé', options, async () => {
   await withPage(async (page) => {
     await openPicker(page, '#code-picker')
@@ -283,7 +296,7 @@ test('la barre est habillée par le CSS de Jaris et se REMPLIT jusqu’au cran c
       return {
         content: before.content,
         right: box.left + parseFloat(before.width),
-        knobCenter: knob ? knob.getBoundingClientRect().left + knob.getBoundingClientRect().width / 2 : null,
+        knobRight: knob ? knob.getBoundingClientRect().right : null,
         radius: getComputedStyle(el).borderRadius
       }
     })
@@ -294,8 +307,8 @@ test('la barre est habillée par le CSS de Jaris et se REMPLIT jusqu’au cran c
       await page.waitForTimeout(250)
       const fill = await fillOf()
       assert.ok(parseFloat(fill.radius) >= 15, `barre en pilule (rayon ${fill.radius})`)
-      assert.ok(Math.abs(fill.right - (fill.knobCenter + 11)) <= 2, `${level} : le remplissage s’arrête au cran choisi (${fill.right} vs ${fill.knobCenter})`)
+      assert.ok(Math.abs(fill.right - (fill.knobRight + 2)) <= 1.5, `${level} : le remplissage s’arrête au disque choisi (${fill.right} vs ${fill.knobRight})`)
     }
-    await page.waitForFunction(() => getComputedStyle(document.querySelector('#root .effort-picker__step--active')).backgroundColor === 'rgb(230, 247, 255)')
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#root .effort-picker__step--active')).backgroundColor === 'rgb(255, 255, 255)')
   })
 })

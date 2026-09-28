@@ -19,7 +19,7 @@ const DISPLAY_NAME_OVERRIDES: Record<string, string> = {
  * plus longs et moins lisibles que les tags de la bibliothèque Ollama officielle (ex: "qwen3.5:9b") — ceux-ci
  * restent affichés tels quels, rien à raccourcir.
  */
-export function formatModelName(rawModel: string): string {
+export function formatModelName(rawModel: string, options: { quant?: boolean } = {}): string {
   // Ollama liste un modèle installé sans tag sous `:latest` (étape 141, sélecteur de modèle) : même modèle,
   // même nom affiché — sinon G9v3-3B redevenait « ai9stars_G9v3-3B (latest) » dans la liste.
   const model = rawModel.endsWith(':latest') ? rawModel.slice(0, -':latest'.length) : rawModel
@@ -28,5 +28,7 @@ export function formatModelName(rawModel: string): string {
   const afterOrg = model.split('/').slice(2).join('/')
   const [namePart, quant] = afterOrg.split(':')
   const cleanName = namePart.replace(/-GGUF$/i, '')
-  return quant ? `${cleanName} (${quant})` : cleanName
+  // Étape 195 : le sélecteur du champ de saisie n'affiche que le nom (« GLM-4.6V-Flash »), la quantification
+  // ne dit rien à Léo et allongeait la ligne ; l'identifiant complet reste dans l'infobulle.
+  return quant && options.quant !== false ? `${cleanName} (${quant})` : cleanName
 }

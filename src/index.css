@@ -4226,69 +4226,64 @@ a:hover {
   flex: none;
 }
 
-/* La barre : un cran par niveau RÉEL du modèle ; le cran choisi est un grand disque clair. */
+/* La barre (étape 195, sur le modèle de ChatGPT) : une piste sombre sans bordure, un cran par niveau RÉEL
+   du modèle, remplie en bleu plein jusqu'au cran choisi, qui est un disque blanc. */
 .effort-picker__slider {
   position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  height: 34px;
-  padding: 0 6px;
+  height: 30px;
+  padding: 0 2px;
   border-radius: 999px;
-  background: rgba(1, 4, 10, 0.6);
-  border: 1px solid var(--hud-line);
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .effort-picker__slider:focus-visible {
   outline: none;
-  border-color: var(--hud-accent-bright);
-  box-shadow: 0 0 0 1px var(--hud-accent-bright);
+  box-shadow: 0 0 0 2px var(--hud-accent-bright);
 }
 
-.effort-picker__slider--off {
-  opacity: 0.4;
-}
-
-/* Remplissage de la gauche jusqu'au centre du cran choisi : 6px de marge + 11px de demi-cran, puis
-   la fraction --fill de la distance entre le premier et le dernier cran. */
+/* Du bord gauche jusqu'au bord droit du disque choisi : 2px de marge + un disque de 26px, plus la fraction
+   --fill de la distance entre le premier et le dernier cran. */
 .effort-picker__slider--filled::before {
   content: '';
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
-  width: calc(6px + 11px + (100% - 12px - 22px) * var(--fill) + 11px);
+  width: calc(2px + 26px + (100% - 4px - 26px) * var(--fill) + 2px);
   border-radius: 999px;
-  background: rgba(var(--hud-accent-rgb), 0.55);
-  transition: width 0.15s ease;
+  background: var(--hud-accent-deep);
+  transition: width 0.18s ease;
 }
 
 .effort-picker__step {
   position: relative;
   z-index: 1;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: none;
   border-radius: 999px;
-  background: radial-gradient(circle, var(--hud-text-faint) 0 2.5px, transparent 3px);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0 2px, transparent 2.5px);
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .effort-picker__step:not(:disabled):hover {
-  background: radial-gradient(circle, var(--hud-accent-bright) 0 3.5px, transparent 4px);
-}
-
-.effort-picker__step--active,
-.effort-picker__step--active:not(:disabled):hover {
-  background: var(--hud-text);
-  box-shadow: 0 0 10px rgba(var(--hud-accent-rgb), 0.45);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.7) 0 3px, transparent 3.5px);
 }
 
 .effort-picker__step--filled,
 .effort-picker__step--filled:not(:disabled):hover {
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.7) 0 2.5px, transparent 3px);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.6) 0 2px, transparent 2.5px);
+}
+
+.effort-picker__step--active,
+.effort-picker__step--active:not(:disabled):hover {
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
 }
 
 .effort-picker__step:disabled {
