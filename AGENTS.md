@@ -5394,3 +5394,12 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `scripts/test-model-choice.mjs` (plus de Vision dans la liste, ancien choix Vision → Auto et
   refusé à l'enregistrement) et `scripts/test-model-picker-ui.mjs` (jamais « Auto / Auto », titre = modèle
   sans niveau choisi, = niveau sinon, aucune petite phrase).
+
+- **« La couleur de la barre, c'est pas la couleur de Jaris, tu as mis la couleur exacte de GPT » (Léo,
+  étape 199).** À l'étape 195, j'avais recopié le bleu plein de la capture de ChatGPT (`--hud-accent-deep`)
+  au lieu de transposer la FORME dans l'identité de Jaris. Remplissage passé au cyan de Jaris, en dégradé avec
+  son halo (comme l'orbe et les boutons) ; le disque blanc garde un liseré couleur du fond pour ne pas se
+  confondre avec le cyan (le défaut de contraste de l'étape 194). **Leçon générale, déjà vécue avec le cercle
+  lisse du widget et du sélecteur de voix : une capture d'une autre appli donne la forme à suivre, jamais ses
+  couleurs — Jaris garde toujours sa propre palette.** Régression : `scripts/test-model-picker-ui.mjs` (le
+  remplissage mesuré contient le cyan de Jaris, rgb(61, 220, 255)).

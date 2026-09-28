@@ -4254,7 +4254,10 @@ a:hover {
   left: 0;
   width: calc(2px + 26px + (100% - 4px - 26px) * var(--fill) + 2px);
   border-radius: 999px;
-  background: var(--hud-accent-deep);
+  /* Étape 199 (Léo : « c'est pas la couleur de Jaris, tu as mis la couleur exacte de GPT ») : le cyan de Jaris,
+     en dégradé avec son halo, comme l'orbe et les boutons — plus le bleu de ChatGPT. */
+  background: linear-gradient(90deg, rgba(var(--hud-accent-rgb), 0.35), var(--hud-accent));
+  box-shadow: 0 0 12px rgba(var(--hud-accent-rgb), 0.35);
   transition: width 0.18s ease;
 }
 
@@ -4283,7 +4286,8 @@ a:hover {
 .effort-picker__step--active,
 .effort-picker__step--active:not(:disabled):hover {
   background: #ffffff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+  /* Un liseré de la couleur du fond détache le disque blanc du cyan, sinon les deux clairs se confondent. */
+  box-shadow: 0 0 0 2px var(--hud-bg), 0 0 10px rgba(var(--hud-accent-rgb), 0.6);
 }
 
 .effort-picker__step:disabled {
