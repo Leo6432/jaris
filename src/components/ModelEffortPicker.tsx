@@ -259,13 +259,12 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
                 </p>
               )}
 
-              {!canThink && (
+              {/* Étape 196 (Léo) : pas de phrase pour un modèle qui ne réfléchit pas, le titre « Sans réflexion » suffit. */}
+              {!canThink && kind !== 'none' && (
                 <p className="effort-picker__note">
                   {!thinking
                     ? "En Auto, le modèle change selon la question : choisis un modèle pour régler sa réflexion."
-                    : kind === 'none'
-                      ? 'Ce modèle ne réfléchit pas : rien à régler.'
-                      : "Ollama n'a pas dit comment ce modèle réfléchit : Jaris garde son réglage."}
+                    : "Ollama n'a pas dit comment ce modèle réfléchit : Jaris garde son réglage."}
                 </p>
               )}
             </>

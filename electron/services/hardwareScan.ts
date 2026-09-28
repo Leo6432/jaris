@@ -88,6 +88,16 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   // MEDIUM_CANDIDATES), même raisonnement que granite4.2:3b.
   { model: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF', vramGb: 1.9 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
+  // Étape 196, Léo : « on peut ajouter K2 Horizon 3.7B ? il est le meilleur sur les benchmarks ». Vérifié le
+  // 28/09/2026 et PAS ajouté pour l'instant : le modèle existe bien (IFM/MBZUAI, Apache 2.0, GGUF officiel
+  // hf.co/IFM/K2-Horizon-3.7B-GGUF, Q4_K_M 3,16 Go, Intelligence Index Artificial Analysis 16), mais son GGUF
+  // déclare une architecture NOUVELLE (`k2-horizon`) que le llama.cpp officiel ne sait pas encore charger
+  // (« unknown model architecture: 'k2-horizon' », github.com/ggml-org/llama.cpp/issues/28361 et #29424,
+  // ouverts) et aucune note de version d'Ollama (jusqu'à 0.34.4 / 0.40.0 pré-version) ne l'annonce. Jaris le
+  // téléchargerait (3 Go) pour un modèle qui ne démarre pas. Autres réserves : modèle annoncé en anglais
+  // seulement, et format d'appel d'outils propre (parseur `k2_horizon` dans vLLM). À revoir dès qu'une version
+  // d'Ollama le charge : l'ajouter ici, puis mesurer son score d'outils (verified-tool-scores.md) avant qu'il
+  // puisse être choisi.
 ]
 // gemma4:e4b et granite4:3b (devenu granite4.1:3b, voir plus bas) ajoutés suite au même benchmark local :
 // gemma4:e4b (6/6 en tool-calling, bien plus rapide que qwen3.5:9b) en tête si la VRAM le permet, la famille

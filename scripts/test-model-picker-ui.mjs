@@ -255,7 +255,8 @@ test('modèle qui ne réfléchit pas : ni icône, ni barre — et changer de mod
     await page.waitForFunction(() => /xhigh/.test(document.querySelector('#root .effort-picker__trigger').textContent))
 
     await chooseRole(page, 'Rapide')
-    await page.waitForFunction(() => /ne réfléchit pas/.test(document.querySelector('#root .effort-picker__panel').textContent))
+    await page.waitForFunction(() => document.querySelector('#root .effort-picker__current').textContent === 'Sans réflexion')
+    assert.equal(await page.locator('#root .effort-picker__note').count(), 0, 'pas de petite phrase en plus (étape 196)')
     assert.equal(await hasReasoningIcon(page), 0)
     assert.equal(await page.locator('#root .effort-picker__slider, #root .effort-picker__toggle').count(), 0, 'impossible de mettre « max » sur ce modèle')
     assert.doesNotMatch(await page.textContent('#root .effort-picker__trigger'), /xhigh/)
@@ -279,7 +280,8 @@ test('Code en Auto : le modèle d’Auto est affiché avec ses vrais choix ; un 
   await withPage(async (page) => {
     await openPicker(page, '#code-picker')
     assert.match(await page.textContent('#code-picker .effort-picker__model-link'), /qwen2\.5-coder:7b/)
-    assert.match(await page.textContent('#code-picker .effort-picker__note'), /ne réfléchit pas/)
+    assert.equal(await page.textContent('#code-picker .effort-picker__current'), 'Sans réflexion')
+    assert.equal(await page.locator('#code-picker .effort-picker__note').count(), 0)
     await page.click('#code-picker .effort-picker__model-link')
     assert.equal(await page.locator('#code-picker .effort-picker__option').last().isDisabled(), true)
   })

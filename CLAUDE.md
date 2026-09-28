@@ -5392,3 +5392,19 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `scripts/test-model-picker-ui.mjs` (pas de cerveau pour un modèle à niveaux, nom court sans
   hf.co/GGUF avec l'identifiant complet en infobulle, remplissage mesuré jusqu'au bord du disque, disque
   blanc) et `scripts/test-format-model-name.mjs` (option sans quantification, tag Ollama officiel inchangé).
+
+- **« Enlève le petit texte "Ce modèle ne réfléchit pas : rien à régler" » + « on peut ajouter K2 Horizon 3.7B ?
+  il est le meilleur sur les benchmarks » (Léo, étape 196).**
+  1. Phrase retirée : pour un modèle sans réflexion, le titre « Sans réflexion » suffit. Les deux autres
+     phrases restent (Chat/Vocal en Auto, Ollama muet) : elles disent quoi faire, pas une redite du titre.
+  2. **K2 Horizon 3.7B : vérifié puis PAS ajouté, et dit tel quel à Léo.** Le modèle existe (IFM/MBZUAI,
+     Apache 2.0, GGUF officiel `hf.co/IFM/K2-Horizon-3.7B-GGUF`, Q4_K_M 3,16 Go, Intelligence Index 16 chez
+     Artificial Analysis), mais les métadonnées du GGUF (API Hugging Face, champ `gguf.architecture`)
+     déclarent une architecture NOUVELLE, `k2-horizon`, que le llama.cpp officiel ne charge pas encore
+     (issues #28361 « unknown model architecture » et #29424, ouvertes) ; aucune note de version d'Ollama
+     ne l'annonce. Un résumé de recherche web affirmait « Ollama day-zero support » : contredit par les
+     sources primaires, écarté. **Leçon générale : avant d'ajouter un modèle récent, vérifier que le MOTEUR
+     sait le charger (architecture déclarée dans le GGUF vs support de llama.cpp/Ollama), pas seulement que
+     le modèle et ses benchmarks existent — sinon Jaris télécharge des gigaoctets pour un modèle qui ne
+     démarre pas.** Consigné en commentaire dans FLASH_CANDIDATES (hardwareScan.ts) pour le revoir dès
+     qu'une version d'Ollama le charge.
