@@ -11,11 +11,13 @@ import type { ModelChoiceInfo, ModelChoiceMode, Profile } from '../../shared/ipc
 
 export const MODEL_CHOICE_MODES: readonly ModelChoiceMode[] = ['chat', 'code', 'voice']
 
+// Étape 198 (Léo : « pourquoi on peut choisir Vision, c'est pas un modèle pour la conversation ») : le rôle
+// Vision ne sert qu'à regarder l'écran ou une image, il n'est plus proposé pour discuter. Un ancien choix
+// « role:vision » enregistré retombe sur Auto (modelForRole ne le connaît plus).
 const ROLES = [
   { key: 'flash', label: 'Rapide' },
   { key: 'medium', label: 'Médium' },
   { key: 'large', label: 'Puissant' },
-  { key: 'vision', label: 'Vision' },
   { key: 'code', label: 'Code' }
 ] as const
 
@@ -24,7 +26,6 @@ function modelForRole(profile: Profile | null, value: string): string | null {
     case 'role:flash': return profile?.models?.flash ?? null
     case 'role:medium': return profile?.models?.medium ?? null
     case 'role:large': return profile?.models?.large ?? null
-    case 'role:vision': return profile?.visionModel ?? null
     case 'role:code': return profile?.codeModel ?? null
     default: return null
   }

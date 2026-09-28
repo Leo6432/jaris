@@ -136,15 +136,11 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
     void chooseThink(options[next].value)
   }
 
-  const title = !thinking
-    ? 'Auto'
-    : kind === 'none'
-      ? 'Sans réflexion'
-      : kind === 'unknown'
-        ? 'Réflexion inconnue'
-        : thinkSelected === null
-          ? 'Auto'
-          : thinkLabel(thinkSelected)
+  // Étape 198 (Léo : « ça fait Auto / Vision », « auto auto, sans rien ») : le titre est le niveau de réflexion
+  // quand on en a choisi un, sinon le modèle lui-même ; la ligne du dessous ne répète jamais le titre.
+  const levelChosen = canThink && thinkSelected !== null
+  const title = levelChosen ? thinkLabel(thinkSelected) : modelLabel
+  const modelShort = thinking ? formatModelName(thinking.model, { quant: false }) : null
 
   return (
     <div className="effort-picker" ref={rootRef}>
@@ -193,11 +189,13 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
                 <div className="effort-picker__head-text">
                   <span className="effort-picker__current">{title}</span>
                   <button type="button" className="effort-picker__model-link" onClick={() => setView('model')}>
-                    <span className="effort-picker__model-role">{modelLabel}</span>
-                    {thinking && (
-                      <span className="effort-picker__model-name" title={thinking.model}>
-                        · {formatModelName(thinking.model, { quant: false })}
+                    {levelChosen && <span className="effort-picker__model-role">{modelLabel}</span>}
+                    {modelShort ? (
+                      <span className="effort-picker__model-name" title={thinking?.model}>
+                        {levelChosen ? `· ${modelShort}` : modelShort}
                       </span>
+                    ) : (
+                      <span className="effort-picker__model-role">Choisir un modèle</span>
                     )}
                     <ChevronIcon direction="right" />
                   </button>
@@ -255,13 +253,6 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
 
 
               {/* Étape 196 (Léo) : pas de phrase pour un modèle qui ne réfléchit pas, le titre « Sans réflexion » suffit. */}
-              {!canThink && kind !== 'none' && (
-                <p className="effort-picker__note">
-                  {!thinking
-                    ? "En Auto, le modèle change selon la question : choisis un modèle pour régler sa réflexion."
-                    : "Ollama n'a pas dit comment ce modèle réfléchit : Jaris garde son réglage."}
-                </p>
-              )}
             </>
           ) : (
             <>

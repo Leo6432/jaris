@@ -59,7 +59,7 @@ test('le sélecteur expose les cinq rôles sans utiliser les noms comme choix', 
   const voice = buildModelChoiceInfo(profile, 'voice', installed)
   assert.equal(voice.autoModel, null)
   assert.equal(voice.selected, 'role:medium')
-  assert.deepEqual(Array.from(voice.roles, (role) => role.label), ['Rapide', 'Médium', 'Puissant', 'Vision', 'Code'])
+  assert.deepEqual(Array.from(voice.roles, (role) => role.label), ['Rapide', 'Médium', 'Puissant', 'Code'], 'Vision n’est pas un modèle de conversation (étape 198)')
   assert.ok(!voice.installed.includes('nomic-embed-text:latest'))
 })
 
@@ -74,4 +74,11 @@ test("Ollama injoignable : le choix enregistré reste affiché, jamais présent�
   const info = buildModelChoiceInfo({ modelChoices: { chat: 'gemma4:12b' } }, 'chat', null)
   assert.equal(info.selected, 'gemma4:12b')
   assert.equal(info.installed, null)
+})
+
+test('étape 198 : un ancien choix « role:vision » retombe sur Auto, et ne peut plus être enregistré', () => {
+  const profile = { models: { flash: 'qwen3.5:4b', medium: 'gemma4:12b', large: 'qwen3.5:4b' }, visionModel: 'gemma4:12b', modelChoices: { chat: 'role:vision' } }
+  assert.equal(resolveChosenModel(profile, 'chat', ['gemma4:12b', 'qwen3.5:4b']), null)
+  assert.equal(buildModelChoiceInfo(profile, 'chat', ['gemma4:12b', 'qwen3.5:4b']).selected, null)
+  assert.throws(() => applyModelChoice(profile, 'chat', 'role:vision', ['gemma4:12b']))
 })

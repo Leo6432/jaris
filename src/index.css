@@ -4298,13 +4298,6 @@ a:hover {
   color: var(--hud-text-faint);
 }
 
-.effort-picker__note {
-  margin: 8px 4px 2px;
-  font-size: 0.72rem;
-  line-height: 1.45;
-  color: var(--hud-text-dim);
-}
-
 .effort-picker__list-head {
   display: flex;
   align-items: center;

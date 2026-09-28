@@ -37,7 +37,6 @@ const ROLES = [
   { value: 'role:flash', label: 'Rapide', model: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF:latest', installed: true },
   { value: 'role:medium', label: 'Médium', model: 'gemma4:12b', installed: true },
   { value: 'role:large', label: 'Puissant', model: 'qwen3.8:27b', installed: true },
-  { value: 'role:vision', label: 'Vision', model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', installed: true },
   { value: 'role:code', label: 'Code', model: 'qwen2.5-coder:14b', installed: false }
 ]
 // Ce que le main calcule depuis /api/show (shared/effort.ts), pour chaque modèle.
@@ -192,10 +191,11 @@ const steps = (page, root = '#root') => page.$$eval(`${root} .effort-picker__ste
 test('dès l’ouverture : le modèle est affiché ; en Chat Auto, ni icône de raisonnement ni barre', options, async () => {
   await withPage(async (page) => {
     await openPicker(page)
-    assert.match(await page.textContent('#root .effort-picker__model-link'), /Auto/)
+    assert.equal(await page.textContent('#root .effort-picker__current'), 'Auto')
+    assert.equal(await page.textContent('#root .effort-picker__model-link'), 'Choisir un modèle', 'jamais « Auto / Auto » (étape 198)')
     assert.equal(await hasReasoningIcon(page), 0)
     assert.equal(await page.locator('#root .effort-picker__slider').count(), 0)
-    assert.match(await page.textContent('#root .effort-picker__note'), /choisis un modèle/)
+    assert.equal(await page.locator('#root .effort-picker__note').count(), 0, 'plus de phrase « En Auto… » (étape 198)')
     assert.equal(await page.locator('#root .effort-picker__panel svg path[d^="M13 3L5"]').count(), 0, 'plus d’éclair')
   })
 })
@@ -205,15 +205,16 @@ test('modèle à niveaux (qwen3.8) : la barre avec SES niveaux, sans cerveau, ja
     await openPicker(page)
     await chooseRole(page, 'Puissant')
     await page.waitForSelector('#root .effort-picker__slider')
-    assert.match(await page.textContent('#root .effort-picker__model-link'), /Puissant.*qwen3\.8:27b/)
+    assert.equal(await page.textContent('#root .effort-picker__current'), 'Puissant', 'sans niveau choisi, le titre est le modèle')
+    assert.equal(await page.textContent('#root .effort-picker__model-link'), 'qwen3.8:27b', 'le titre n’est pas répété dessous')
     assert.equal(await hasReasoningIcon(page), 0, 'modèle à niveaux : la barre suffit, pas de cerveau (étape 195)')
     assert.deepEqual(await steps(page), ['off', 'low', 'medium', 'xhigh'])
-    assert.match(await page.textContent('#root .effort-picker__current'), /^Auto$/)
 
     await page.click('#root .effort-picker__step[aria-label="medium"]')
     await page.waitForSelector('#root .effort-picker__step--active[aria-label="medium"]')
     assert.deepEqual((await page.evaluate(() => window.__calls)).at(-1), ['think', 'chat', 'medium'])
     assert.match(await page.textContent('#root .effort-picker__current'), /^medium$/)
+    assert.equal(await page.textContent('#root .effort-picker__model-link'), 'Puissant· qwen3.8:27b')
     assert.match(await page.textContent('#root .effort-picker__trigger'), /Puissant\s*medium/)
 
     await page.click('#root .effort-picker__step[aria-label="off"]')
@@ -221,7 +222,7 @@ test('modèle à niveaux (qwen3.8) : la barre avec SES niveaux, sans cerveau, ja
     assert.deepEqual((await page.evaluate(() => window.__calls)).at(-1), ['think', 'chat', false], '« off » envoie false, pas un texte')
 
     await page.click('#root .effort-picker__reset')
-    await page.waitForFunction(() => document.querySelector('#root .effort-picker__current').textContent === 'Auto')
+    await page.waitForFunction(() => document.querySelector('#root .effort-picker__current').textContent === 'Puissant')
     assert.deepEqual((await page.evaluate(() => window.__calls)).at(-1), ['think', 'chat', null])
   })
 })
@@ -256,7 +257,7 @@ test('modèle qui ne réfléchit pas : ni icône, ni barre — et changer de mod
     await page.waitForFunction(() => /xhigh/.test(document.querySelector('#root .effort-picker__trigger').textContent))
 
     await chooseRole(page, 'Rapide')
-    await page.waitForFunction(() => document.querySelector('#root .effort-picker__current').textContent === 'Sans réflexion')
+    await page.waitForFunction(() => document.querySelector('#root .effort-picker__current').textContent === 'Rapide')
     assert.equal(await page.locator('#root .effort-picker__note').count(), 0, 'pas de petite phrase en plus (étape 196)')
     assert.equal(await hasReasoningIcon(page), 0)
     assert.equal(await page.locator('#root .effort-picker__slider, #root .effort-picker__toggle').count(), 0, 'impossible de mettre « max » sur ce modèle')
@@ -281,7 +282,7 @@ test('Code en Auto : le modèle d’Auto est affiché avec ses vrais choix ; un 
   await withPage(async (page) => {
     await openPicker(page, '#code-picker')
     assert.match(await page.textContent('#code-picker .effort-picker__model-link'), /qwen2\.5-coder:7b/)
-    assert.equal(await page.textContent('#code-picker .effort-picker__current'), 'Sans réflexion')
+    assert.equal(await page.textContent('#code-picker .effort-picker__current'), 'Auto')
     assert.equal(await page.locator('#code-picker .effort-picker__note').count(), 0)
     await page.click('#code-picker .effort-picker__model-link')
     assert.equal(await page.locator('#code-picker .effort-picker__option').last().isDisabled(), true)

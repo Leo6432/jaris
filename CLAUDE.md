@@ -5415,3 +5415,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   phrase qui répète ce que l'écran montre déjà. Léo a aussi confirmé en usage réel le diagnostic de l'étape
   196 sur K2 Horizon : `ollama run hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M` échoue avec « unknown model
   architecture: 'k2-horizon' » — ne pas l'ajouter tant qu'une version d'Ollama ne le charge pas.
+
+- **« Enlève "En Auto, le modèle change selon la question…" », « ça fait Auto / Vision · GLM-4.6V-Flash »,
+  « pourquoi on peut choisir Vision, c'est pas un modèle pour la conversation », « ça fait auto auto, sans
+  rien » (Léo, étape 198).**
+  1. Plus aucune petite phrase dans le panneau (la dernière, « En Auto… », et celle d'Ollama muet).
+  2. **Le titre ne dit plus « Auto » pour la RÉFLEXION** : « Auto » y désignait la réflexion laissée à Jaris,
+     alors que juste en dessous « Auto » désignait le MODÈLE — même mot pour deux choses, d'où « Auto / Auto »
+     et « Auto / Vision ». Le titre est maintenant le niveau quand on en a choisi un (« medium », avec
+     « Puissant · qwen3.8:27b › » dessous), sinon le modèle lui-même (« Puissant », avec « qwen3.8:27b › »
+     dessous) ; en Auto : « Auto » et « Choisir un modèle › ». La ligne du dessous ne répète jamais le titre.
+     **Leçon générale : un même mot (« Auto ») ne doit pas désigner deux réglages différents dans le même
+     petit panneau — l'utilisateur lit les deux lignes ensemble.**
+  3. **Rôle Vision retiré du choix de modèle** (`ROLES`, modelChoice.ts) : il ne sert qu'à regarder l'écran ou
+     une image, pas à discuter. Un ancien choix « role:vision » enregistré retombe sur Auto (modelForRole ne le
+     connaît plus) au lieu de rester affiché comme « Personnalisé ».
+  Régression : `scripts/test-model-choice.mjs` (plus de Vision dans la liste, ancien choix Vision → Auto et
+  refusé à l'enregistrement) et `scripts/test-model-picker-ui.mjs` (jamais « Auto / Auto », titre = modèle
+  sans niveau choisi, = niveau sinon, aucune petite phrase).
