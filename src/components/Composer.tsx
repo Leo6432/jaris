@@ -24,7 +24,7 @@ import {
  * bouton rond. Les pièces jointes passent toutes par ce menu, quel que soit l'écran.
  */
 
-/** Une entrée du menu « + » propre à un écran (ex. « Vidéos » dans le Montage). */
+/** Une entrée du menu « + » propre à un écran (le Montage y ajoutait ses vidéos, étapes 190-200). */
 export interface ComposerAddItem {
   id: string
   label: string
@@ -49,7 +49,7 @@ interface ComposerProps {
   rows?: number
   /** Contrôle posé à droite, avant l'envoi (sélecteur de modèle et d'effort, étapes 141 et 191). */
   extraActions?: ReactNode
-  /** Faux : ni bouton image, ni collage/glisser d'image (Montage, étape 189, qui ne lit pas encore d'image). */
+  /** Faux : ni bouton image, ni collage/glisser d'image (mode Image : il dessine, il ne lit pas d'image). */
   imagesAllowed?: boolean
   /** Entrées supplémentaires du menu « + » (étape 191). */
   addItems?: ComposerAddItem[]
@@ -169,7 +169,7 @@ export default function Composer({
   // bouton ne dépend donc pas que du texte.
   const canSubmit = !busy && (value.trim().length > 0 || attachment !== null)
 
-  // L'image d'abord (Chat, Code), puis ce que l'écran ajoute (Vidéos du Montage). Le rappel Ctrl+V, avant affiché
+  // L'image d'abord (Chat, Code), puis ce que l'écran ajoute. Le rappel Ctrl+V, avant affiché
   // dans la barre, accompagne maintenant l'entrée « Image » du menu.
   const menuItems: ComposerAddItem[] = [
     ...(imagesAllowed

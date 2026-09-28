@@ -137,7 +137,7 @@ export interface ModelStepRunnerOptions {
 }
 
 /**
- * Étape 192 : la réflexion choisie pour le modèle du mode Code (partagée avec le Montage), si elle a été
+ * Étape 192 : la réflexion choisie pour le modèle du mode Code, si elle a été
  * choisie pour CE modèle et qu'il l'accepte ; « high » comme avant sinon. Le journal dit ce qui est envoyé.
  */
 export async function resolveCodeThink(profile: Profile | null, model: string, onStatus: (message: string) => void): Promise<ThinkLevel | ThinkValue> {
@@ -159,8 +159,8 @@ function contextTooSmallError(numCtx: number): Error {
 }
 
 /**
- * Étape 189 : partagé par le mode Code et le Montage (même modèle, mêmes besoins d'avancement et d'arrêt),
- * plutôt que recopié — deux copies auraient fini par diverger comme les deux composeurs avant l'étape 92.
+ * Un appel au modèle de code avec avancement et arrêt (extrait à l'étape 189 pour le Montage, retiré à l'étape
+ * 200 ; reste utilisé par le mode Code).
  */
 export function createModelStepRunner({ model, think = 'high', modelMaxContext, steps, onStatus, onProgress, signal }: ModelStepRunnerOptions) {
   /**

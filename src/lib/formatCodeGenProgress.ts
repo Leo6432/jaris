@@ -39,13 +39,6 @@ export function formatCodeGenProgress(progress: CodeGenProgress | null, elapsedM
 
   const title = `Étape ${progress.stepIndex} sur ${progress.stepCount} · ${progress.label}`
 
-  // Étape 189 : le rendu d'une vidéo (Montage) ne passe pas par le modèle — son avancement est un pourcentage,
-  // et un silence n'y est pas « rien reçu du modèle ».
-  if (progress.percent !== undefined) {
-    const stalled = progress.idleMs >= STALL_HINT_MS ? ` · rien n'a avancé depuis ${formatDuration(progress.idleMs)}` : ''
-    return { title, detail: `${elapsed} · ${progress.percent} %${stalled}` }
-  }
-
   // L'ordre compte : un silence prolongé est l'information la plus utile du moment, il passe devant le
   // reste. Sinon, les caractères écrits (qui montent) prouvent que ça avance.
   if (progress.idleMs >= STALL_HINT_MS) {

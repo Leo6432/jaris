@@ -6,7 +6,7 @@ export type JarisEmotion = 'idle' | 'listening' | 'thinking' | 'happy' | 'surpri
 
 /** Les trois modes de la fenêtre de réglages (App.tsx), aussi retenus côté main pour choisir la forme du
  * widget au repli (voir WidgetMode juste en dessous et `setActiveMode`). */
-export type AppMode = 'voice' | 'chat' | 'code' | 'montage'
+export type AppMode = 'voice' | 'chat' | 'code' | 'image'
 
 /**
  * Ce que devient Jaris quand on quitte sa fenêtre, dérivé du dernier mode actif :
@@ -115,7 +115,7 @@ export interface Profile {
   modelChoices?: Partial<Record<ModelChoiceMode, string>>
   /**
    * Étape 192 : réflexion choisie pour le modèle d'un mode (absent = Auto, la réflexion habituelle de Jaris).
-   * Liée au modèle pour lequel elle a été choisie : jamais appliquée à un autre. Le Montage suit le mode Code.
+   * Liée au modèle pour lequel elle a été choisie : jamais appliquée à un autre.
    */
   thinkChoices?: Partial<Record<ModelChoiceMode, StoredThinkChoice>>
   /** Design sonore (étape 31) : absent/true par défaut, false pour couper les bips d'interface (Options → Voix). */
@@ -539,6 +539,30 @@ export interface GeneratedApp {
 }
 
 /**
+ * Mode Image (étape 200, Léo : « enlève Montage, on le remplace par Image comme ChatGPT »). Le moteur de dessin
+ * local existe depuis l'étape 173 (imageGenerator.ts) ; cet écran lui donne sa propre page.
+ */
+export interface ImageStudioStatus {
+  /** Windows uniquement : le moteur publié (sd-cli) est un programme Windows. */
+  supported: boolean
+  /** La machine a-t-elle assez de mémoire pour dessiner (même décision qu'Options → Modèles) ? */
+  capable: boolean
+  /** Pourquoi elle ne peut pas, en clair, quand `capable` est faux. */
+  reason: string | null
+  /** Moteur et modèle de dessin présents sur le disque. */
+  installed: boolean
+  /** Ce qu'il reste à télécharger, en clair (« 5,1 Go »). */
+  downloadLabel: string
+}
+
+/** Une image dessinée, telle que la liste l'affiche (seul le NOM du fichier voyage, jamais un chemin). */
+export interface GeneratedImageSummary {
+  fileName: string
+  label: string
+  timestamp: number
+}
+
+/**
  * Avancement EN DIRECT de l'étape en cours d'une génération (mode Code, étape 99).
  *
  * Léo : "quand on demande une mise à jour [d'une application, en mode Code] on ne sait pas quand c'est
@@ -549,45 +573,6 @@ export interface GeneratedApp {
  * Contrairement à `codeGenStatus` (une ligne AJOUTÉE au journal à chaque étape franchie), ce message
  * REMPLACE le précédent : c'est l'état courant, pas un historique.
  */
-/** Le Montage (étape 189) : installé à la demande, jamais avec Jaris. */
-export interface MontageStatus {
-  installed: boolean
-  /** Windows uniquement pour l'instant : le paquet publié par la CI ne contient que les programmes Windows. */
-  supported: boolean
-}
-
-/** Avancement de l'installation du Montage, affiché en barre. */
-export interface MontageInstallProgress {
-  phase: 'download' | 'extract' | 'browser'
-  /** 0-100, `null` quand l'étape ne sait pas mesurer (décompression). */
-  percent: number | null
-}
-
-/** Une vidéo fabriquée par le Montage : son code Remotion, et la vidéo elle-même (lue à part, voir readGeneratedVideo). */
-export interface GeneratedVideo {
-  path: string
-  code: string
-  /** Faux quand le code existe mais que le rendu a échoué (la vidéo n'a pas été fabriquée). */
-  hasVideo: boolean
-  /** Étape 190 : les vidéos de Léo utilisées par ce montage (reprises à chaque modification). */
-  clips: Array<{ name: string; durationSeconds: number }>
-}
-
-/** Une vidéo choisie par Léo pour le Montage (étape 190) : le chemin reste côté main, l'écran n'a qu'un id. */
-export interface PickedMontageClip {
-  id: string
-  name: string
-  durationSeconds: number
-  width: number
-  height: number
-}
-
-export interface GeneratedVideoSummary {
-  path: string
-  label: string
-  timestamp: number
-}
-
 export interface CodeGenProgress {
   /** Ce que Jaris fait en ce moment ("Écriture de l'application", "Relecture du code"…). */
   label: string
@@ -605,11 +590,6 @@ export interface CodeGenProgress {
    * mort.
    */
   idleMs: number
-  /**
-   * Étape 189 : une étape mesurable sans passer par le modèle (le rendu de la vidéo) donne son pourcentage ;
-   * absent pour une étape où seul le modèle travaille.
-   */
-  percent?: number
 }
 
 /**
@@ -693,22 +673,16 @@ export const IPC_CHANNELS = {
   pickImageFile: 'jaris:pick-image-file',
   /** renderer <-> main : enregistre une image dessinée par Jaris là où Léo le choisit (étape 185). */
   saveGeneratedImage: 'jaris:save-generated-image',
-  /** Montage (étape 189) : installé à la demande, puis vidéos fabriquées avec Remotion. */
-  getMontageStatus: 'jaris:get-montage-status',
-  installMontage: 'jaris:install-montage',
-  montageInstallProgress: 'jaris:montage-install-progress',
-  uninstallMontage: 'jaris:uninstall-montage',
-  generateMontage: 'jaris:generate-montage',
-  pickMontageVideos: 'jaris:pick-montage-videos',
-  montageGenStatus: 'jaris:montage-gen-status',
-  montageGenProgress: 'jaris:montage-gen-progress',
-  cancelMontageGen: 'jaris:cancel-montage-gen',
-  getGeneratedVideos: 'jaris:get-generated-videos',
-  loadGeneratedVideo: 'jaris:load-generated-video',
-  readGeneratedVideo: 'jaris:read-generated-video',
-  deleteGeneratedVideo: 'jaris:delete-generated-video',
-  saveGeneratedVideo: 'jaris:save-generated-video',
-  openGeneratedVideos: 'jaris:open-generated-videos',
+  /** Mode Image (étape 200) : état du moteur, installation, dessin, et images déjà dessinées. */
+  getImageStudioStatus: 'jaris:get-image-studio-status',
+  installImageStudio: 'jaris:install-image-studio',
+  imageStudioLog: 'jaris:image-studio-log',
+  generateStudioImage: 'jaris:generate-studio-image',
+  cancelStudioImage: 'jaris:cancel-studio-image',
+  listGeneratedImages: 'jaris:list-generated-images',
+  readGeneratedImage: 'jaris:read-generated-image',
+  deleteGeneratedImage: 'jaris:delete-generated-image',
+  openGeneratedImages: 'jaris:open-generated-images',
   /** renderer <-> main : récupère les messages du mode Chat, amorcés depuis conversation-history.json au
    * premier appel après un lancement (voir ChatSession.ensureLoaded) — plus seulement ceux de la session en cours. */
   getChatHistory: 'jaris:get-chat-history',

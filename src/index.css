@@ -2797,8 +2797,7 @@ h1 {
 .chat-widget__action,
 .capacity-scan button,
 .runtime-setup__actions button,
-.montage-install__button,
-.montage-panel__uninstall button,
+.image-install__button,
 .app__onboarding button {
   position: relative;
   font-family: var(--hud-font-display);
@@ -2836,8 +2835,7 @@ h1 {
 .chat-widget__action:not(:disabled):hover,
 .capacity-scan button:not(:disabled):hover,
 .runtime-setup__actions button:not(:disabled):hover,
-.montage-install__button:not(:disabled):hover,
-.montage-panel__uninstall button:not(:disabled):hover,
+.image-install__button:not(:disabled):hover,
 .app__onboarding button:hover {
   color: var(--hud-accent-bright);
   border-color: var(--hud-accent);
@@ -2880,7 +2878,6 @@ textarea:not(.composer__input):focus-visible {
 .workspace__new,
 .workspace__confirm-yes,
 .workspace__confirm-no,
-.montage-panel__uninstall button,
 .chat-widget__action {
   font-size: 0.7rem;
   letter-spacing: 0.1em;
@@ -2898,10 +2895,8 @@ textarea:not(.composer__input):focus-visible {
 
 .options-menu__action--danger,
 .workspace__confirm-yes,
-.montage-panel__uninstall-yes,
 .options-menu__action--danger:not(:disabled):hover,
-.workspace__confirm-yes:not(:disabled):hover,
-.montage-panel__uninstall-yes:not(:disabled):hover {
+.workspace__confirm-yes:not(:disabled):hover {
   color: var(--hud-danger);
   border-color: rgba(255, 77, 104, 0.55);
   background: linear-gradient(180deg, rgba(255, 77, 104, 0.16), rgba(255, 77, 104, 0.05));
@@ -3762,10 +3757,11 @@ a:hover {
 }
 
 /* ============================================================================
-   Montage (étape 189) : écran d'installation (module optionnel, « c'est lourd ») puis lecteur de vidéo.
-   Même famille que le reste : panneau HUD, boutons de la famille partagée, aucune couleur inventée.
+   Mode Image (étape 200, à la place du Montage) : écran d'installation du modèle de dessin, puis la même
+   présentation que Chat/Code — vignettes des dernières images sur l'accueil (comme la page Images de
+   ChatGPT), image au centre, champ en bas. Tokens HUD uniquement, aucune couleur inventée.
    ============================================================================ */
-.montage-install {
+.image-install {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -3775,7 +3771,7 @@ a:hover {
   overflow-y: auto;
 }
 
-.montage-install__card {
+.image-install__card {
   width: 100%;
   max-width: 640px;
   display: flex;
@@ -3786,7 +3782,7 @@ a:hover {
   border: 1px solid var(--hud-line);
 }
 
-.montage-install__card h2 {
+.image-install__card h2 {
   margin: 0;
   font-family: var(--hud-font-display);
   font-size: 1.5rem;
@@ -3795,7 +3791,7 @@ a:hover {
   color: var(--hud-text);
 }
 
-.montage-install__eyebrow {
+.image-install__eyebrow {
   font-family: var(--hud-font-display);
   font-size: 0.7rem;
   letter-spacing: 0.18em;
@@ -3803,133 +3799,109 @@ a:hover {
   color: var(--hud-accent);
 }
 
-.montage-install__lead {
+.image-install__lead {
   margin: 0;
   font-size: 0.9rem;
   line-height: 1.6;
   color: var(--hud-text-dim);
 }
 
-.montage-install__facts {
-  margin: 0;
-  padding: 0 0 0 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 0.84rem;
-  line-height: 1.5;
-  color: var(--hud-text-dim);
-}
-
-.montage-install__facts strong {
-  color: var(--hud-text);
-}
-
-.montage-install__button {
+.image-install__button {
   align-self: flex-start;
 }
 
-.montage-panel__intro {
+.image-panel__home {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  gap: 16px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.image-panel__gallery {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 10px;
 }
 
-.montage-panel__uninstall-link {
+.image-panel__thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
   padding: 0;
-  font-size: 0.74rem;
-  color: var(--hud-text-faint);
-  background: none;
-  border: none;
-  text-decoration: underline;
+  overflow: hidden;
+  background: var(--hud-panel-raised);
+  border: 1px solid var(--hud-line);
+  border-radius: 10px;
   cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.montage-panel__uninstall-link:hover {
-  color: var(--hud-text-dim);
+.image-panel__thumb:hover {
+  border-color: var(--hud-accent);
+  box-shadow: 0 0 12px rgba(var(--hud-accent-rgb), 0.3);
 }
 
-.montage-panel__uninstall {
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.8rem;
-  color: var(--hud-text-dim);
+.image-panel__thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-.montage-panel__video {
+.image-panel__thumb-empty {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: rgba(var(--hud-accent-rgb), 0.05);
+}
+
+.image-panel__result {
   flex: 1;
   min-height: 0;
-  width: 100%;
-  background: #000000;
+}
+
+.image-panel__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.86rem;
+  color: var(--hud-text);
+}
+
+.image-panel__save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* L'image entière reste visible quelle que soit la taille de la fenêtre (jamais rognée ni déformée). */
+.image-panel__stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-panel__image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
   border: 1px solid var(--hud-line);
 }
 
-.montage-panel__save {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.image-panel__progress {
+  margin-top: 6px;
 }
 
-/* Le champ reste EN BAS même quand il n'y a encore aucune vidéo au-dessus (pendant la première fabrication),
-   comme dans le Chat — repéré sur une capture, où il remontait en haut de l'écran. */
-.montage-panel > .composer {
+/* Le champ reste EN BAS même sans image au-dessus (leçon du Montage, étape 189 : il remontait en haut). */
+.image-panel > .composer {
   margin-top: auto;
-}
-
-/* Étape 190 : les vidéos jointes au montage, en pastilles au-dessus du champ (comme la pièce jointe du Chat). */
-.montage-panel__clips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  /* Collées au champ : c'est avec lui qu'elles partent (repéré sur une capture, où elles flottaient en haut). */
-  margin-top: auto;
-}
-
-.montage-panel__clips + .composer {
-  margin-top: 0;
-}
-
-
-.montage-panel__clip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  padding: 5px 10px;
-  font-size: 0.78rem;
-  color: var(--hud-text);
-  background: var(--hud-panel-raised);
-  border: 1px solid var(--hud-line-strong);
-  border-radius: 999px;
-  overflow-wrap: anywhere;
-}
-
-.montage-panel__clip--kept {
-  color: var(--hud-text-dim);
-  border-style: dashed;
-  border-color: var(--hud-line);
-}
-
-.montage-panel__clip svg {
-  flex: none;
-  color: var(--hud-accent);
-}
-
-.montage-panel__clip-remove {
-  padding: 0 2px;
-  font-size: 0.8rem;
-  color: var(--hud-text-faint);
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-.montage-panel__clip-remove:hover {
-  color: var(--hud-danger);
 }
 
 /* ============================================================================
@@ -4140,10 +4112,13 @@ a:hover {
   white-space: nowrap;
 }
 
+/* Étape 200 (Léo : « ça doit être centré, là ça va à gauche ») : centré sur son bouton, comme chez ChatGPT.
+   Le décalage --shift, calculé à l'ouverture, le ramène dans la fenêtre si le bouton est trop près d'un bord. */
 .effort-picker__panel {
-  right: 0;
+  left: 50%;
   width: 320px;
   max-width: calc(100vw - 32px);
+  transform: translateX(calc(-50% + var(--shift, 0px)));
 }
 
 .effort-picker__head {
@@ -4383,9 +4358,3 @@ a:hover {
   color: var(--hud-danger);
 }
 
-/* Écran vocal : le panneau s'ouvre au-dessus, centré sous l'orbe. */
-.app__model-picker .effort-picker__panel {
-  right: auto;
-  left: 50%;
-  transform: translateX(-50%);
-}

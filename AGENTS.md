@@ -5403,3 +5403,44 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   lisse du widget et du sélecteur de voix : une capture d'une autre appli donne la forme à suivre, jamais ses
   couleurs — Jaris garde toujours sa propre palette.** Régression : `scripts/test-model-picker-ui.mjs` (le
   remplissage mesuré contient le cyan de Jaris, rgb(61, 220, 255)).
+
+- **« Ça doit être centré, là ça va à gauche » + « enlève Montage, on le remplace par Image comme ChatGPT »
+  (Léo, étape 200).**
+  1. **Panneau Modèle/réflexion centré sur son bouton** (il était aligné à droite, donc débordait vers la
+     gauche). Centré en CSS (`left: 50%` + `translateX(-50%)`), plus un décalage `--shift` mesuré à
+     l'ouverture (`useLayoutEffect`, avant d'être peint) qui le ramène dans la fenêtre quand le bouton est
+     près d'un bord — un simple centrage coupait le panneau sur un bouton collé au bord.
+  2. **Montage retiré en entier** (étapes 189-190) : écran, services, paquet Remotion construit par la CI et
+     publié avec chaque Release, `montage/render.cjs` embarqué, fixtures, tests, capacités, brique
+     « Déplacer ». Le paquet déjà installé chez Léo (~600 Mo) est effacé au démarrage
+     (`legacyCleanup.ts`) — y compris sur l'autre disque s'il avait été déplacé : pour une jonction, le vrai
+     dossier est effacé puis la jonction retirée par `unlink` (jamais un `rm -r` sur la jonction), et
+     seulement si elle pointe vers un dossier « montage » (une jonction vers ailleurs n'est jamais suivie).
+     **Les vidéos déjà fabriquées ne sont pas touchées** : `generated-videos` reste dans OWNED_ENTRIES et
+     suit ses données comme avant. **Leçon générale : retirer une fonctionnalité qui a téléchargé quelque
+     chose chez l'utilisateur, c'est aussi retirer ce qu'elle a installé — sinon des centaines de Mo restent
+     sur son disque sans que plus rien ne les utilise ni ne puisse les désinstaller ; mais ce qu'il a CRÉÉ
+     avec (ses vidéos) reste à lui.**
+  3. **Mode Image** (bouton « Image » à gauche, `ImagePanel.tsx`) : même présentation que Chat/Code — liste
+     à gauche, image au centre, champ en bas — et, sans image ouverte, les dernières images en vignettes comme
+     la page Images de ChatGPT. Réutilise le moteur de dessin local de l'étape 173 (`generateImage`, FLUX.2
+     klein) plutôt que d'en créer un : dessin avec barre d'étapes (« Dessin : étape 2 sur 4 »), « Arrêter »
+     (le signal d'annulation existait déjà), Enregistrer (même dialogue gardé par `dialogOpen` que le Chat),
+     Ouvrir le dossier, suppression avec confirmation dans la ligne. Les images dessinées depuis le Chat ou à
+     la voix y apparaissent aussi (même dossier). Si le modèle de dessin manque, l'écran propose de
+     l'installer avec sa taille ; si le PC n'est pas assez puissant, il donne la raison (même décision
+     qu'Options → Modèles, `pickImageModel`). **Seul un NOM de fichier PNG voyage entre l'écran et le main**
+     (`isGeneratedImageFileName`, revérifié côté main avant toute lecture ou SUPPRESSION) : jamais un chemin.
+  **Défaut attrapé par le test navigateur, pas en relecture** : les vignettes étaient chargées (chaque image
+  entière par l'IPC) même derrière l'écran d'installation. Elles ne le sont plus que quand la galerie est
+  réellement affichée. **Piège déjà écrit ici, revécu une fois de plus** : le nouvel import de
+  `shared/imageGallery` dans imageGenerator.ts manquait au faux pont de `test-image-generation.mjs` —
+  14 tests rouges d'un coup, sans message clair.
+  Régression : `scripts/test-image-gallery.mjs` (noms refusés : chemins, `..`, non-PNG),
+  `scripts/test-legacy-cleanup.mjs` (vraie jonction : paquet et vrai dossier effacés, vidéos intactes,
+  jonction vers ailleurs jamais suivie — vérifié en retirant ce garde), `scripts/test-image-generation.mjs`
+  (liste et suppression refusant tout chemin), `scripts/test-image-panel-ui.mjs` (vrai navigateur :
+  vignettes, avancement, arrêt, enregistrement, suppression confirmée, installation, PC trop faible) et
+  `scripts/test-model-picker-ui.mjs` (panneau centré et jamais coupé — vérifié en remettant l'ancien CSS).
+  **Non vérifié ici** : un vrai dessin (moteur Windows + carte graphique) et l'effacement réel du paquet
+  Montage sur la machine de Léo.

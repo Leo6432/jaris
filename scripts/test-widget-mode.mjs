@@ -224,8 +224,8 @@ test('le widget ne devient jamais une fenêtre transparente vide : calcul de rec
 
 test('sans widget (Code, Options), réduire ou changer d’appli laisse Jaris dans la barre des tâches', () => {
   assert.match(mainSource, /function hasWidgetToShow\(\)[\s\S]{0,120}?!modeWithoutWidget\(\) && !optionsOpen/)
-  // Étape 189 : le Montage n'a pas de widget non plus (écran de travail, comme Code).
-  assert.match(mainSource, /function modeWithoutWidget\(\)[\s\S]{0,120}?activeMode === ['"]code['"] \|\| activeMode === ['"]montage['"]/)
+  // Étape 200 : le mode Image (à la place du Montage) n'a pas de widget non plus (écran de travail, comme Code).
+  assert.match(mainSource, /function modeWithoutWidget\(\)[\s\S]{0,120}?activeMode === ['"]code['"] \|\| activeMode === ['"]image['"]/)
   for (const event of ['minimize', 'blur']) {
     const handler = new RegExp(`win\\.on\\(['"]${event}['"],[\\s\\S]{0,400}?\\}\\);`).exec(mainSource)?.[0] ?? ''
     assert.match(handler, /!hasWidgetToShow\(\)\)\s*return/, `'${event}' ne doit rien cacher quand aucun widget ne remplace Jaris`)

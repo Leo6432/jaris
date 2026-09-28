@@ -41,6 +41,8 @@ function transpile(relativePath) {
 }
 
 const imageModel = loadPure('shared/imageModel.ts')
+// Étape 200 : le mode Image lit le nom et la date des images (module pur, chargé tel quel).
+const imageGallery = loadPure('shared/imageGallery.ts')
 
 /** Lignes réelles de sd-cli (génération FLUX.2 klein sur ce conteneur), barres de progression comprises. */
 const REAL_OUTPUT = [
@@ -124,7 +126,8 @@ function loadGenerator({ corruptFile = null, engineExitCode = 0, engineOutput = 
     '../../shared/formatBytes': { formatBytes: (n) => `${n} o` },
     './hardwareScan': { detectGpu: async () => ({ name: 'RTX 3070', vramGb }) },
     './systemResources': { detectRamGb: () => ramGb },
-    '../../shared/imageModel': imageModel
+    '../../shared/imageModel': imageModel,
+    '../../shared/imageGallery': imageGallery
   }
   const fakeProcess = { platform: 'win32', env }
   const module = { exports: {} }
@@ -259,6 +262,21 @@ test('une image n’est relue que par son NOM, jamais par un chemin venu de l’
   assert.match(await t.gen.readGeneratedImageDataUrl(image.fileName), /^data:image\/png;base64,/)
   assert.equal(await t.gen.readGeneratedImageDataUrl('../../profile.png'), null)
   assert.equal(await t.gen.readGeneratedImageDataUrl('C:\\Windows\\x.png'), null)
+  t.cleanup()
+})
+
+test('mode Image (étape 200) : la liste montre les images dessinées, la suppression refuse tout chemin', async () => {
+  const t = await installed()
+  const image = await t.gen.generateImage('un chat sur la lune')
+  const list = await t.gen.listGeneratedImages()
+  assert.equal(list.length, 1)
+  assert.equal(list[0].fileName, image.fileName)
+  assert.equal(list[0].label, 'Un chat sur la lune')
+  for (const bad of ['../../profile.json', '..\\profile.png', 'C:\\Windows\\x.png', 'sous/dossier.png']) {
+    await assert.rejects(t.gen.deleteGeneratedImage(bad), /Image inconnue/, bad)
+  }
+  await t.gen.deleteGeneratedImage(image.fileName)
+  assert.deepEqual([...(await t.gen.listGeneratedImages())], [])
   t.cleanup()
 })
 

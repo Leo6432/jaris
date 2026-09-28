@@ -174,29 +174,18 @@ export const CAPABILITIES: CapabilityGroup[] = [
     ]
   },
   {
-    title: 'Faire une vidéo (Montage)',
-    summary: "À installer d'abord depuis le bouton Montage (environ 200 Mo) : Jaris écrit la vidéo avec Remotion et la fabrique en MP4.",
+    title: 'Créer des images (Image)',
+    summary: "Le bouton Image à gauche : Jaris dessine sur ton PC, sans rien envoyer sur internet. Tes images restent dans la liste.",
     exampleLabel: 'Écris',
     items: [
       {
-        title: 'Titres et textes animés',
-        description: 'Intro, générique, message animé : décris ce qu’on voit, les textes exacts et la durée.',
-        example: 'intro de 6 secondes, fond bleu nuit, le titre JARIS apparaît en grand'
+        title: 'Une image à partir d’une description',
+        description: 'Décris le sujet, le style et les couleurs : Jaris la dessine, puis tu peux l’enregistrer où tu veux.',
+        example: 'un chat astronaute sur la Lune, style aquarelle, tons bleus'
       },
       {
-        title: 'Retoucher une vidéo',
-        description: 'Redemande un changement sur une vidéo ouverte ; l’ancienne version reste dans la liste.',
-        example: 'le titre plus gros et 10 secondes au lieu de 6'
-      },
-      {
-        title: 'Monter tes vidéos',
-        description: 'Joins tes vidéos avec le bouton « + » du champ : Jaris garde les passages que tu indiques et écrit du texte animé par-dessus.',
-        example: 'garde de 0:10 à 0:25 et ajoute le titre VACANCES au début'
-      },
-      {
-        title: 'Il ne voit pas tes images',
-        description: 'Jaris connaît la durée de tes vidéos, pas ce qu’elles montrent : c’est toi qui dis quels moments garder. Il ne crée pas non plus de scènes filmées.',
-        limitation: true
+        title: 'Retrouver tes images',
+        description: 'Toutes tes images, même celles demandées dans le Chat ou à la voix, sont dans la colonne de gauche.'
       }
     ]
   },

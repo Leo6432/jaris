@@ -98,9 +98,7 @@ function fillEverything({ userProfile, localAppData }) {
     [join(localAppData, 'Jaris', 'python-runtime', 'python.exe')]: 'python',
     [join(userProfile, '.cache', 'huggingface', 'hub', 'model.bin')]: 'voix',
     [join(userProfile, '.cache', 'supertonic3', 'onnx', 'vector_estimator.onnx')]: 'voix de Jaris',
-    [join(localAppData, 'Jaris', 'image-generation', 'models', 'flux-2-klein-4b-Q4_0.gguf')]: 'modèle de dessin',
-    // Étape 189 : le Montage (Remotion), quand il est installé.
-    [join(localAppData, 'Jaris', 'montage', 'node_modules', 'remotion', 'package.json')]: 'remotion'
+    [join(localAppData, 'Jaris', 'image-generation', 'models', 'flux-2-klein-4b-Q4_0.gguf')]: 'modèle de dessin'
   }
   for (const [path, content] of Object.entries(files)) {
     mkdirSync(join(path, '..'), { recursive: true })
@@ -109,7 +107,7 @@ function fillEverything({ userProfile, localAppData }) {
   return files
 }
 
-const SUBDIRS = ['ollama-models', 'ollama-app', 'ollama-data', 'python-runtime', 'huggingface-cache', 'supertonic-cache', 'image-generation', 'montage']
+const SUBDIRS = ['ollama-models', 'ollama-app', 'ollama-data', 'python-runtime', 'huggingface-cache', 'supertonic-cache', 'image-generation']
 
 test('tout part : modèles ET programme Ollama, données d’Ollama, Python et voix — accessibles au même chemin qu’avant', async () => {
   const home = setupFakeHome()

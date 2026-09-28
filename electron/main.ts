@@ -3,11 +3,22 @@ import { app, dialog, ipcMain, session, shell, BrowserWindow, globalShortcut, sc
 // (installé sur D, ou déplacé) avant que quoi que ce soit ne calcule un chemin ou ne prenne le verrou d'instance.
 import { cleanupStaleChromiumData, getStorageRoot } from './services/storageRoot'
 import { pickImageModel } from '../shared/imageModel'
-import { isImageModelInstalled } from './services/imageGenerator'
+import {
+  deleteGeneratedImage,
+  generateImage,
+  generatedImagePath,
+  generatedImagesDir,
+  getImageStudioStatus,
+  installImageModel,
+  isImageModelInstalled,
+  listGeneratedImages,
+  readGeneratedImageDataUrl
+} from './services/imageGenerator'
+import { imageLabelFromFileName } from '../shared/imageGallery'
+import { removeLeftoverMontage } from './services/legacyCleanup'
 import { spawn } from 'child_process'
-import { randomUUID } from 'crypto'
 import { basename, extname, join } from 'path'
-import { copyFile, readFile, writeFile } from 'fs/promises'
+import { readFile, writeFile } from 'fs/promises'
 import { decodePngDataUrl, defaultImageFileName, withPngExtension } from './services/imageSave'
 import {
   ensureOllamaRunning,
@@ -31,16 +42,6 @@ import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetu
 import { runQuickSetup } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
 import { deleteGeneratedApp, generateApp, getGeneratedAppsDir, listGeneratedApps, loadGeneratedApp } from './services/codeGenerator'
-import { getMontageStatus, installMontage, probeMontageVideos, uninstallMontage } from './services/montage'
-import {
-  deleteGeneratedVideo,
-  generateMontage,
-  generatedVideoFile,
-  getGeneratedVideosDir,
-  listGeneratedVideos,
-  loadGeneratedVideo,
-  readGeneratedVideo
-} from './services/montageGenerator'
 import { createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
 import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
@@ -88,10 +89,8 @@ import {
   type VoiceSetupStatusPayload,
   type WakeTestHeardPayload,
   type MicTestDonePayload,
-  type MontageStatus,
-  type PickedMontageClip,
-  type GeneratedVideo,
-  type GeneratedVideoSummary,
+  type GeneratedImageSummary,
+  type ImageStudioStatus,
   type VoiceTestStartResult,
   type WidgetMode
 } from '../shared/ipc'
@@ -133,11 +132,8 @@ let onboardingDone = false
  * (étape 99) — `null` quand rien ne tourne. Avant, une génération partie ne pouvait plus être arrêtée
  * autrement qu'en fermant Jaris. */
 let codeGenAbort: AbortController | null = null
-/** Même rôle pour le Montage (étape 189) : la fabrication de vidéo en cours, que « Arrêter » interrompt. */
-let montageAbort: AbortController | null = null
-/** Étape 190 : vidéos choisies dans le dialogue du Montage, par identifiant (l'écran ne voit jamais le chemin). */
-const pickedMontageClips = new Map<string, PickedMontageClip & { path: string }>()
-const MONTAGE_VIDEO_EXTENSIONS = ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi']
+/** Même rôle pour le mode Image (étape 200) : le dessin en cours, que « Arrêter » interrompt. */
+let imageStudioAbort: AbortController | null = null
 /** Vrai pendant qu'un vrai dialogue natif Windows est ouvert sur fullWindow (ex: chooseModelsLocation) : le
  * dialogue prend le focus OS, ce qui déclenche 'blur' sur fullWindow comme un changement d'appli normal —
  * sans ce garde, le handler 'blur' plus bas cacherait fullWindow (et son dialogue enfant orphelin avec) alors
@@ -540,9 +536,9 @@ function hasWidgetToShow(): boolean {
   return !modeWithoutWidget() && !optionsOpen
 }
 
-/** Code et Montage (étape 189) n'ont pas de widget : ce sont des écrans de travail, pas des assistants. */
+/** Code et Image (étape 200, à la place du Montage) n'ont pas de widget : ce sont des écrans de travail. */
 function modeWithoutWidget(): boolean {
-  return activeMode === 'code' || activeMode === 'montage'
+  return activeMode === 'code' || activeMode === 'image'
 }
 
 /** Délai avant d'afficher le widget après une perte de focus : juste le temps que Windows finisse la bascule. */
@@ -737,6 +733,8 @@ app.whenReady().then(async () => {
   // de se fermer — exactement le flash visible à corriger ici.
   if (!gotSingleInstanceLock) return
   void cleanupStaleChromiumData()
+  // Étape 200 : le Montage a été retiré ; son paquet Remotion (environ 600 Mo) ne sert plus à rien.
+  void removeLeftoverMontage()
   registerPreviewHandler()
 
   // Autorise silencieusement l'accès micro pour les fenêtres de Jaris (enumerateDevices() ne révèle les
@@ -1209,97 +1207,38 @@ app.whenReady().then(async () => {
   )
   ipcMain.on(IPC_CHANNELS.cancelCodeGen, () => codeGenAbort?.abort())
 
-  // Montage (étape 189) : installé à la demande (écran d'avertissement dans MontagePanel), puis vidéos Remotion.
-  ipcMain.handle(IPC_CHANNELS.getMontageStatus, (): Promise<MontageStatus> => getMontageStatus())
-  ipcMain.handle(IPC_CHANNELS.installMontage, (event) =>
-    installMontage((progress) => {
-      if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.montageInstallProgress, progress)
+  // Mode Image (étape 200, remplace le Montage) : le moteur de dessin de l'étape 173 a sa propre page. Seuls des
+  // NOMS de fichiers PNG voyagent entre l'écran et ici, revérifiés à chaque fois (generatedImagePath).
+  ipcMain.handle(IPC_CHANNELS.getImageStudioStatus, (): Promise<ImageStudioStatus> => getImageStudioStatus())
+  ipcMain.handle(IPC_CHANNELS.installImageStudio, (event) =>
+    installImageModel((message) => {
+      if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.imageStudioLog, message)
     })
   )
-  ipcMain.handle(IPC_CHANNELS.uninstallMontage, () => uninstallMontage())
-  // Étape 190 : les vidéos de Léo. Le chemin choisi dans la fenêtre de Windows reste ICI : l'écran ne reçoit
-  // qu'un identifiant, et la fabrication n'accepte que des identifiants sortis de ce dialogue.
-  ipcMain.handle(IPC_CHANNELS.pickMontageVideos, async (): Promise<PickedMontageClip[]> => {
-    const dialogOptions = {
-      properties: ['openFile' as const, 'multiSelections' as const],
-      title: 'Choisir les vidéos à monter',
-      filters: [{ name: 'Vidéos', extensions: MONTAGE_VIDEO_EXTENSIONS }]
-    }
-    dialogOpen = true
-    let chosen: string[] = []
-    try {
-      const result = fullWindow ? await dialog.showOpenDialog(fullWindow, dialogOptions) : await dialog.showOpenDialog(dialogOptions)
-      chosen = result.canceled ? [] : result.filePaths
-    } finally {
-      dialogOpen = false
-    }
-    const accepted = chosen.filter((file) => MONTAGE_VIDEO_EXTENSIONS.includes(extname(file).slice(1).toLowerCase()))
-    const metadata = await probeMontageVideos(accepted)
-    return metadata.map((meta) => {
-      if (!meta.durationInSeconds || meta.durationInSeconds <= 0) {
-        throw new Error(`« ${basename(meta.file)} » n'a pas de durée lisible : ce n'est sans doute pas une vidéo complète.`)
-      }
-      const id = randomUUID()
-      const clip = { id, name: basename(meta.file), durationSeconds: meta.durationInSeconds, width: meta.width, height: meta.height }
-      pickedMontageClips.set(id, { ...clip, path: meta.file })
-      return clip
-    })
-  })
-  ipcMain.handle(IPC_CHANNELS.generateMontage, async (event, description: string, currentCode?: string, clipIds?: string[], previousPath?: string): Promise<GeneratedVideo> => {
-    const clips = (Array.isArray(clipIds) ? clipIds : []).map((id) => {
-      const clip = pickedMontageClips.get(String(id))
-      if (!clip) throw new Error('Une vidéo jointe a expiré : rejoins-la avec le bouton « Vidéos ».')
-      return clip
-    })
-    montageAbort?.abort()
+  ipcMain.handle(IPC_CHANNELS.generateStudioImage, async (event, prompt: string): Promise<GeneratedImageSummary> => {
+    imageStudioAbort?.abort()
     const controller = new AbortController()
-    montageAbort = controller
+    imageStudioAbort = controller
     try {
-      return await generateMontage(
-        String(description),
-        (message) => event.sender.send(IPC_CHANNELS.montageGenStatus, message),
-        typeof currentCode === 'string' ? currentCode : undefined,
-        {
-          onProgress: (progress) => event.sender.send(IPC_CHANNELS.montageGenProgress, progress),
-          signal: controller.signal,
-          clips,
-          previousPath: typeof previousPath === 'string' ? previousPath : undefined
-        }
+      const image = await generateImage(
+        String(prompt),
+        (message) => {
+          if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.imageStudioLog, message)
+        },
+        controller.signal
       )
+      return { fileName: image.fileName, label: imageLabelFromFileName(image.fileName), timestamp: Date.now() }
     } finally {
-      if (montageAbort === controller) montageAbort = null
+      if (imageStudioAbort === controller) imageStudioAbort = null
     }
   })
-  ipcMain.on(IPC_CHANNELS.cancelMontageGen, () => montageAbort?.abort())
-  ipcMain.handle(IPC_CHANNELS.getGeneratedVideos, (): Promise<GeneratedVideoSummary[]> => listGeneratedVideos())
-  ipcMain.handle(IPC_CHANNELS.loadGeneratedVideo, (_event, path: string): Promise<GeneratedVideo> => loadGeneratedVideo(String(path)))
-  ipcMain.handle(IPC_CHANNELS.readGeneratedVideo, (_event, path: string): Promise<Buffer> => readGeneratedVideo(String(path)))
-  ipcMain.handle(IPC_CHANNELS.deleteGeneratedVideo, (_event, path: string) => deleteGeneratedVideo(String(path)))
-  ipcMain.handle(IPC_CHANNELS.openGeneratedVideos, async (_event, path?: string) => {
-    await shell.openPath(path ? generatedVideoFile(String(path)) : getGeneratedVideosDir())
-  })
-  ipcMain.handle(IPC_CHANNELS.saveGeneratedVideo, async (_event, path: string): Promise<SaveImageResult> => {
-    const source = generatedVideoFile(String(path))
-    const dialogOptions = {
-      title: 'Enregistrer la vidéo',
-      defaultPath: join(app.getPath('videos'), `jaris-video-${basename(String(path))}.mp4`),
-      filters: [{ name: 'Vidéo MP4', extensions: ['mp4'] }]
-    }
-    dialogOpen = true
-    let target: string | undefined
-    try {
-      const result = fullWindow ? await dialog.showSaveDialog(fullWindow, dialogOptions) : await dialog.showSaveDialog(dialogOptions)
-      target = result.canceled ? undefined : result.filePath
-    } finally {
-      dialogOpen = false
-    }
-    if (!target) return { saved: false }
-    try {
-      await copyFile(source, /\.mp4$/i.test(target) ? target : `${target}.mp4`)
-      return { saved: true }
-    } catch (err) {
-      return { saved: false, error: `Impossible d'enregistrer la vidéo : ${err instanceof Error ? err.message : String(err)}` }
-    }
+  ipcMain.on(IPC_CHANNELS.cancelStudioImage, () => imageStudioAbort?.abort())
+  ipcMain.handle(IPC_CHANNELS.listGeneratedImages, (): Promise<GeneratedImageSummary[]> => listGeneratedImages())
+  ipcMain.handle(IPC_CHANNELS.readGeneratedImage, (_event, fileName: string): Promise<string | null> => readGeneratedImageDataUrl(String(fileName)))
+  ipcMain.handle(IPC_CHANNELS.deleteGeneratedImage, (_event, fileName: string) => deleteGeneratedImage(String(fileName)))
+  ipcMain.handle(IPC_CHANNELS.openGeneratedImages, async (_event, fileName?: string) => {
+    if (fileName) shell.showItemInFolder(generatedImagePath(String(fileName)))
+    else await shell.openPath(generatedImagesDir())
   })
   ipcMain.handle(IPC_CHANNELS.openGeneratedApp, async (_event, path?: string) => {
     await shell.openPath(path || getGeneratedAppsDir())

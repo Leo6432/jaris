@@ -65,12 +65,3 @@ test("juste en dessous du seuil, on n'alarme pas pour rien", () => {
   assert.match(detail, /caractères écrits/)
   assert.doesNotMatch(detail, /rien reçu/)
 })
-
-// Étape 189 : le rendu d'une vidéo (Montage) avance en pourcentage, sans le modèle.
-test('le rendu vidéo montre un pourcentage, et un blocage sans parler du modèle', () => {
-  const rendering = progress({ label: 'Fabrication de la vidéo (Remotion)', stepIndex: 2, thinking: false, percent: 42 })
-  assert.equal(formatCodeGenProgress(rendering, 30_000).detail, '30 s · 42 %')
-  const stuck = formatCodeGenProgress({ ...rendering, idleMs: STALL_HINT_MS + 5000 }, 90_000).detail
-  assert.match(stuck, /42 % · rien n'a avancé depuis 25 s/)
-  assert.doesNotMatch(stuck, /modèle/)
-})

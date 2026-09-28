@@ -1,7 +1,7 @@
 import { execFile, spawn } from 'child_process'
 import { createHash } from 'crypto'
 import { createReadStream, existsSync } from 'fs'
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'fs/promises'
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { getDataRoot } from './dataLocation'
 import { downloadToFile } from './download'
@@ -10,6 +10,8 @@ import { detectGpu } from './hardwareScan'
 import { detectRamGb } from './systemResources'
 import { IMAGE_MODEL, pickImageModel } from '../../shared/imageModel'
 import { formatBytes } from '../../shared/formatBytes'
+import { imageLabelFromFileName, imageTimestampFromFileName, isGeneratedImageFileName } from '../../shared/imageGallery'
+import type { GeneratedImageSummary, ImageStudioStatus } from '../../shared/ipc'
 
 /**
  * Génération d'images en local (étape 173, Léo : « existe-t-il des modèles locaux image » puis « oui » à
@@ -435,5 +437,51 @@ export async function readGeneratedImageDataUrl(fileName: string): Promise<strin
     return `data:image/png;base64,${data.toString('base64')}`
   } catch {
     return null
+  }
+}
+
+/**
+ * Mode Image (étape 200) : les images déjà dessinées, les plus récentes d'abord — celles du mode Image comme
+ * celles dessinées depuis le Chat ou à la voix (même dossier).
+ */
+export async function listGeneratedImages(): Promise<GeneratedImageSummary[]> {
+  let names: string[]
+  try {
+    names = await readdir(generatedImagesDir())
+  } catch {
+    return []
+  }
+  const images = await Promise.all(
+    names.filter(isGeneratedImageFileName).map(async (fileName) => ({
+      fileName,
+      label: imageLabelFromFileName(fileName),
+      timestamp: imageTimestampFromFileName(fileName) ?? (await stat(join(generatedImagesDir(), fileName)).then((s) => s.mtimeMs, () => 0))
+    }))
+  )
+  return images.sort((a, b) => b.timestamp - a.timestamp)
+}
+
+/** Chemin d'une image dessinée ; le nom vient de l'écran, il est donc revérifié ici (jamais un chemin). */
+export function generatedImagePath(fileName: string): string {
+  if (!isGeneratedImageFileName(fileName)) throw new Error('Image inconnue.')
+  return join(generatedImagesDir(), fileName)
+}
+
+export async function deleteGeneratedImage(fileName: string): Promise<void> {
+  await rm(generatedImagePath(fileName), { force: true })
+}
+
+/** État du mode Image : ce que l'écran doit afficher (dessiner, installer, ou pourquoi c'est impossible). */
+export async function getImageStudioStatus(): Promise<ImageStudioStatus> {
+  const total = SD_ENGINE.bytes + IMAGE_MODEL_FILES.reduce((sum, file) => sum + file.bytes, 0)
+  const supported = process.platform === 'win32'
+  const { vramGb } = await detectGpu()
+  const pick = pickImageModel(vramGb, detectRamGb())
+  return {
+    supported,
+    capable: pick.model !== null,
+    reason: pick.reason,
+    installed: supported && (await isImageModelInstalled()),
+    downloadLabel: formatBytes(total)
   }
 }

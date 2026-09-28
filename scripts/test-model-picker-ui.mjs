@@ -318,3 +318,42 @@ test('la barre est habillée par le CSS de Jaris et se REMPLIT jusqu’au cran c
     assert.match(fillImage, /rgb\(61, 220, 255\)/, 'le remplissage est le cyan de Jaris, pas le bleu de ChatGPT (étape 199)')
   })
 })
+
+test('le panneau est centré sur son bouton, sans jamais dépasser de la fenêtre (étape 200)', options, async () => {
+  await withPage(async (page) => {
+    const centers = async (root) => page.evaluate((r) => {
+      const t = document.querySelector(`${r} .effort-picker__trigger`).getBoundingClientRect()
+      const p = document.querySelector(`${r} .effort-picker__panel`).getBoundingClientRect()
+      return { trigger: t.left + t.width / 2, panel: p.left + p.width / 2, left: p.left, right: p.right, width: innerWidth }
+    }, root)
+    // Chat : le bouton a de la place des deux côtés → centré dessus.
+    await page.setViewportSize({ width: 1400, height: 800 })
+    await openPicker(page)
+    await page.waitForTimeout(100)
+    const chat = await centers('#root')
+    assert.ok(chat.right <= chat.width - 8 + 0.5 && chat.left >= 7.5, 'dans la fenêtre')
+    await page.keyboard.press('Escape')
+    // Code : bouton collé au bord gauche → le panneau est ramené dans la fenêtre au lieu d'être coupé.
+    await openPicker(page, '#code-picker')
+    await page.waitForTimeout(100)
+    const code = await centers('#code-picker')
+    assert.ok(code.left >= 7.5, `jamais coupé à gauche (${code.left})`)
+  })
+})
+
+test('avec de la place, le centre du panneau est pile sur le centre du bouton', options, async () => {
+  await withPage(async (page) => {
+    await page.evaluate(() => {
+      const el = document.getElementById('code-picker')
+      el.style.left = '500px'
+    })
+    await openPicker(page, '#code-picker')
+    await page.waitForTimeout(100)
+    const c = await page.evaluate(() => {
+      const t = document.querySelector('#code-picker .effort-picker__trigger').getBoundingClientRect()
+      const p = document.querySelector('#code-picker .effort-picker__panel').getBoundingClientRect()
+      return { trigger: t.left + t.width / 2, panel: p.left + p.width / 2 }
+    })
+    assert.ok(Math.abs(c.trigger - c.panel) <= 1, `centré (${c.trigger} vs ${c.panel})`)
+  })
+})
