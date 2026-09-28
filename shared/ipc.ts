@@ -1,4 +1,4 @@
-import type { EffortChoice } from './effort'
+import type { ModelThinkingChoice, StoredThinkChoice } from './effort'
 /** Types partagés entre le process principal (electron/) et le renderer (src/). */
 import type { ImageModelPick } from './imageModel'
 
@@ -64,14 +64,12 @@ export interface ModelChoiceInfo {
   autoModel: string | null
   /** Les cinq rôles du profil de cette machine et leur modèle actuel. */
   roles: { value: string; label: string; model: string; installed: boolean }[]
-  /** Étape 191 : effort choisi pour ce mode, `null` = Auto. */
-  effort?: EffortChoice | null
-  /** Le modèle dont on connaît les niveaux (choisi à la main, ou celui d'Auto en Code) ; `null` si Auto varie. */
-  effortModel?: string | null
-  /** Ses niveaux réels, en clair (« off · low · medium · xhigh ») ; `null` si inconnus. */
-  effortLevels?: string | null
-  /** Ce que l'effort choisi donnera vraiment sur ce modèle (« medium », « sans réflexion »…). */
-  effortApplied?: string | null
+  /**
+   * Étape 192 : la réflexion du modèle qui sera VRAIMENT utilisé (choisi à la main, ou l'unique modèle d'Auto en
+   * Code) et ses vrais choix. `null` en Chat/Vocal Auto : le modèle change selon la question, on ne peut rien
+   * proposer d'exact — il faut d'abord choisir un modèle.
+   */
+  thinking?: ModelThinkingChoice | null
 }
 
 export interface Profile {
@@ -116,10 +114,10 @@ export interface Profile {
    */
   modelChoices?: Partial<Record<ModelChoiceMode, string>>
   /**
-   * Étape 191 : effort de réflexion choisi à côté du modèle, par mode (absent = Auto, l'effort habituel de
-   * Jaris). Traduit au niveau réel du modèle par shared/effort.ts. Le Montage suit le mode Code.
+   * Étape 192 : réflexion choisie pour le modèle d'un mode (absent = Auto, la réflexion habituelle de Jaris).
+   * Liée au modèle pour lequel elle a été choisie : jamais appliquée à un autre. Le Montage suit le mode Code.
    */
-  effortChoices?: Partial<Record<ModelChoiceMode, EffortChoice>>
+  thinkChoices?: Partial<Record<ModelChoiceMode, StoredThinkChoice>>
   /** Design sonore (étape 31) : absent/true par défaut, false pour couper les bips d'interface (Options → Voix). */
   soundEffectsEnabled?: boolean
   /**
@@ -675,7 +673,7 @@ export const IPC_CHANNELS = {
   /** renderer -> main : choix du modèle d'un mode (Auto ou un modèle installé), étape 141. */
   getModelChoice: 'jaris:get-model-choice',
   setModelChoice: 'jaris:set-model-choice',
-  setEffortChoice: 'jaris:set-effort-choice',
+  setThinkChoice: 'jaris:set-think-choice',
   /** renderer -> main : détecte le matériel et télécharge directement les modèles déjà choisis pour lui
    * (voir runQuickSetup, benchmarkRunner.ts) — le nouveau chemin par défaut de l'écran d'accueil, sans passer
    * par le benchmark comparatif complet. Réutilise modelBenchmarkLine pour la progression des téléchargements. */

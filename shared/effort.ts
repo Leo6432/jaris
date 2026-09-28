@@ -1,34 +1,18 @@
 /**
- * Effort de réflexion (étape 191, Léo : « même présentation que ChatGPT… ajoute effort et modèle »).
+ * Réflexion (« think ») du modèle choisi — étapes 191 puis 192.
  *
- * Chaque modèle a SES niveaux, vérifiés sur les fiches officielles (étape 191) : qwen3.8 = off/low/medium/xhigh
- * (par défaut xhigh), gpt-oss = low/medium/high, granite4.2 = off/low/high, la plupart des autres = réfléchit
- * ou pas, et certains ne réfléchissent pas du tout. Jaris envoyait « high » à tous : un modèle qui ne connaît
- * pas ce mot retombe sur SON niveau par défaut (documentation d'Ollama) — qwen3.8 réfléchissait donc au
- * maximum sans que personne l'ait demandé.
+ * Étape 191 : un curseur commun à cinq crans (Aucune → Maximale), traduit vers le niveau le plus proche. Léo
+ * (étape 192) : « faut d'abord choisir le modèle… on peut choisir un modèle qui a rien et choisir max ». Il
+ * avait raison : une échelle commune affiche des choix qui n'existent pas sur le modèle. On ne propose donc
+ * plus que ce que CE modèle annonce lui-même dans `/api/show` (`capabilities` et `thinking.values`) :
+ *   - des niveaux nommés (qwen3.8 : off/low/medium/xhigh, gpt-oss : low/medium/high) → ces niveaux-là ;
+ *   - seulement avec/sans (qwen3.5, gemma4…) → on / off ;
+ *   - aucune réflexion (qwen3-coder, devstral…) → rien du tout.
+ * Le défaut d'origine reste corrigé : Jaris envoyait « high » à tous, et un modèle qui ne connaît pas ce mot
+ * retombe sur SON niveau par défaut (qwen3.8 : xhigh, le maximum).
  *
- * L'écran propose donc UNE échelle commune à cinq crans, et ce module la traduit vers le niveau réel le plus
- * proche que le modèle accepte, d'après ce qu'Ollama annonce lui-même (`/api/show` : `capabilities` et
- * `thinking.values`). Module pur : partagé par le main et l'écran, testé sans Ollama.
+ * Module pur : partagé par le main et l'écran, testé sans Ollama.
  */
-
-export type EffortChoice = 'none' | 'low' | 'medium' | 'high' | 'max'
-
-export const EFFORT_STEPS: ReadonlyArray<{ value: EffortChoice; label: string }> = [
-  { value: 'none', label: 'Aucune' },
-  { value: 'low', label: 'Faible' },
-  { value: 'medium', label: 'Moyenne' },
-  { value: 'high', label: 'Élevée' },
-  { value: 'max', label: 'Maximale' }
-]
-
-export function isEffortChoice(value: unknown): value is EffortChoice {
-  return EFFORT_STEPS.some((step) => step.value === value)
-}
-
-export function effortLabel(choice: EffortChoice | null): string {
-  return EFFORT_STEPS.find((step) => step.value === choice)?.label ?? 'Auto'
-}
 
 /** Ce qu'Ollama dit de la réflexion d'un modèle (`/api/show`). `null` partout = Ollama n'a rien dit. */
 export interface ModelThinking {
@@ -39,70 +23,66 @@ export interface ModelThinking {
   default: string | boolean | null
 }
 
-/** Ce qu'on envoie à Ollama dans `think` : un niveau du modèle, true/false, ou rien (comportement habituel). */
+/** Ce qu'on envoie à Ollama dans `think` : un niveau du modèle, ou true/false. */
 export type ThinkValue = string | boolean
 
-const EFFORT_RANK: Record<EffortChoice, number> = { none: 0, low: 1, medium: 2, high: 3, max: 4 }
+/** `levels` : niveaux nommés ; `toggle` : avec ou sans ; `none` : ne réfléchit pas ; `unknown` : Ollama muet. */
+export type ThinkingKind = 'levels' | 'toggle' | 'none' | 'unknown'
 
-/** Rang des noms de niveaux connus ; un nom inconnu est placé d'après sa position dans la liste du modèle. */
-const KNOWN_RANK: Record<string, number> = { minimal: 0.5, low: 1, medium: 2, high: 3, xhigh: 4, max: 4 }
-
-function rankedLevels(values: Array<string | boolean>): Array<{ name: string; rank: number }> {
-  const named = values.filter((v): v is string => typeof v === 'string')
-  return named.map((name, index) => ({
-    name,
-    rank: KNOWN_RANK[name.toLowerCase()] ?? 1 + (named.length > 1 ? (3 * index) / (named.length - 1) : 1)
-  }))
+export interface ThinkOption {
+  value: ThinkValue
+  label: string
 }
 
-export interface ResolvedEffort {
-  /** À envoyer dans `think` ; `undefined` = ne rien changer au comportement habituel de Jaris. */
-  think: ThinkValue | undefined
-  /** Ce que le modèle fera vraiment, en clair : « medium », « sans réflexion », « ne réfléchit pas »… */
-  applied: string
+/** Le modèle choisi et ses vrais choix de réflexion, tels que les montre le sélecteur. */
+export interface ModelThinkingChoice {
+  model: string
+  kind: ThinkingKind
+  options: ThinkOption[]
+  /** Réglage enregistré pour ce modèle ; `null` = Auto (Jaris décide, comme avant). */
+  selected: ThinkValue | null
+}
+
+/** Réglage enregistré : lié au modèle pour lequel il a été choisi, jamais appliqué à un autre. */
+export interface StoredThinkChoice {
+  model: string
+  think: ThinkValue
+}
+
+export function thinkingKind(meta: ModelThinking | null): ThinkingKind {
+  if (!meta || (meta.canThink === null && !meta.values)) return 'unknown'
+  if (meta.canThink === false && !meta.values) return 'none'
+  const values = meta.values ?? [true, false]
+  if (values.some((v) => typeof v === 'string')) return 'levels'
+  return values.includes(true) ? 'toggle' : 'none'
+}
+
+/** Les choix affichés, dans l'ordre croissant : « off » d'abord s'il existe, puis les niveaux du modèle. */
+export function thinkOptions(meta: ModelThinking | null): ThinkOption[] {
+  const kind = thinkingKind(meta)
+  if (kind === 'toggle') return [{ value: false, label: 'off' }, { value: true, label: 'on' }]
+  if (kind !== 'levels') return []
+  const values = meta?.values ?? []
+  const named = values.filter((v): v is string => typeof v === 'string')
+  return [...(values.includes(false) ? [{ value: false as ThinkValue, label: 'off' }] : []), ...named.map((name) => ({ value: name, label: name }))]
+}
+
+/** Vrai seulement si CE modèle annonce accepter cette valeur : jamais « max » sur un modèle qui n'a rien. */
+export function isAcceptedThink(value: unknown, meta: ModelThinking | null): value is ThinkValue {
+  return thinkOptions(meta).some((option) => option.value === value)
+}
+
+export function thinkLabel(value: ThinkValue): string {
+  return value === true ? 'on' : value === false ? 'off' : value
 }
 
 /**
- * Traduit le cran choisi vers ce que CE modèle accepte. Le niveau le plus proche l'emporte ; à égalité, le
- * plus haut (on a demandé « Élevée », pas « Moyenne »). Un modèle qui ne sait pas couper sa réflexion (gpt-oss)
- * reçoit son plus bas niveau pour « Aucune ».
+ * La réflexion à envoyer : le réglage enregistré s'il a été choisi pour CE modèle et que ce modèle l'accepte
+ * toujours, sinon `undefined` (Jaris garde son comportement habituel).
  */
-export function resolveEffort(choice: EffortChoice | null, meta: ModelThinking | null): ResolvedEffort {
-  if (choice === null) return { think: undefined, applied: 'automatique' }
-  if (!meta || (meta.canThink === null && !meta.values)) {
-    // Ollama n'a rien dit : couper la réflexion reste sûr, le reste garde le comportement habituel.
-    return choice === 'none' ? { think: false, applied: 'sans réflexion' } : { think: undefined, applied: 'automatique' }
-  }
-  if (meta.canThink === false && !meta.values) return { think: undefined, applied: 'ne réfléchit pas' }
-
-  const values = meta.values ?? [true, false]
-  const levels = rankedLevels(values)
-  const canTurnOff = values.includes(false)
-
-  if (choice === 'none') {
-    if (canTurnOff || !levels.length) return { think: false, applied: 'sans réflexion' }
-    const lowest = levels.reduce((a, b) => (b.rank < a.rank ? b : a))
-    return { think: lowest.name, applied: lowest.name }
-  }
-  if (!levels.length) return { think: true, applied: 'avec réflexion' }
-
-  const target = EFFORT_RANK[choice]
-  const best = levels.reduce((a, b) => {
-    const da = Math.abs(a.rank - target)
-    const db = Math.abs(b.rank - target)
-    return db < da || (db === da && b.rank > a.rank) ? b : a
-  })
-  return { think: best.name, applied: best.name }
-}
-
-/** Les niveaux du modèle, pour l'écran : « off · low · medium · xhigh », « avec ou sans », « ne réfléchit pas ». */
-export function describeModelThinking(meta: ModelThinking | null): string {
-  if (!meta || (meta.canThink === null && !meta.values)) return 'inconnu'
-  if (meta.canThink === false && !meta.values) return 'ne réfléchit pas'
-  const values = meta.values ?? [true, false]
-  const levels = rankedLevels(values).map((level) => level.name)
-  if (!levels.length) return values.includes(false) ? 'avec ou sans réflexion' : 'réfléchit toujours'
-  return [...(values.includes(false) ? ['off'] : []), ...levels].join(' · ')
+export function chosenThink(stored: StoredThinkChoice | null | undefined, model: string, meta: ModelThinking | null): ThinkValue | undefined {
+  if (!stored || stored.model !== model) return undefined
+  return isAcceptedThink(stored.think, meta) ? stored.think : undefined
 }
 
 /** Lecture tolérante de la réponse de `/api/show` : un champ absent ou d'un type inattendu vaut « inconnu ». */

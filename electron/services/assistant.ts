@@ -2,7 +2,7 @@ import { resolveChosenModel } from './modelChoice'
 import { requestedNotepadText, openNotepadText } from './notepad'
 import { config } from '../config'
 import { chatWithOllama, getModelThinking, listInstalledModels, type OllamaMessage, type ThinkLevel } from './ollama'
-import { resolveEffort, type ThinkValue } from '../../shared/effort'
+import { chosenThink, thinkLabel, type ThinkValue } from '../../shared/effort'
 import { listMemoryTitles } from './memoryStore'
 import { getProfile } from './profileStore'
 import { TOOLS, createToolExecutor, type ImageHandler } from './tools'
@@ -415,17 +415,17 @@ export async function converse(
     return { model: m, think: THINK_LEVEL[t] }
   }
 
-  // Étape 191 : l'effort choisi à côté du modèle (« Aucune » à « Maximale ») remplace l'effort du palier, traduit
-  // vers un niveau que CE modèle accepte vraiment (shared/effort.ts). Pas de choix = comportement d'avant.
-  const effortChoice = profile?.effortChoices?.[channel] ?? null
+  // Étape 192 : la réflexion choisie à côté du modèle remplace celle du palier, seulement pour le modèle pour
+  // lequel Léo l'a choisie et s'il l'accepte vraiment (shared/effort.ts). Pas de choix = comportement d'avant.
+  const thinkChoice = profile?.thinkChoices?.[channel]
   const withEffort = async (r: { model: string; think: ThinkLevel | ThinkValue }): Promise<{ model: string; think: ThinkLevel | ThinkValue }> => {
-    if (!effortChoice) return r
-    const resolved = resolveEffort(effortChoice, await getModelThinking(r.model))
-    return resolved.think === undefined ? r : { model: r.model, think: resolved.think }
+    if (!thinkChoice) return r
+    const think = chosenThink(thinkChoice, r.model, await getModelThinking(r.model))
+    return think === undefined ? r : { model: r.model, think }
   }
 
   let { model, think } = await withEffort(resolveModelForTier(tier))
-  onLog?.(`Modèle ${chosenModel ? 'choisi à la main' : 'choisi'} : ${model} (réflexion : ${think})`)
+  onLog?.(`Modèle ${chosenModel ? 'choisi à la main' : 'choisi'} : ${model} (réflexion : ${typeof think === 'boolean' ? thinkLabel(think) : think})`)
 
   /** Si la machine est surchargée, l'avertissement précède la vraie réponse dans la même phrase parlée. */
   const withOverloadWarning = (text: string): string => (overloadWarning ? `${overloadWarning} ${text}` : text)

@@ -21,7 +21,7 @@ import {
 } from './services/dependencyServices'
 import { deleteModel, getModelThinking, listInstalledModels } from './services/ollama'
 import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES, resolveChosenModel } from './services/modelChoice'
-import { describeModelThinking, isEffortChoice, resolveEffort } from '../shared/effort'
+import { chosenThink, isAcceptedThink, thinkOptions, thinkingKind } from '../shared/effort'
 import { getStorageStatus, programMoveCommandLine, reconcileStorage, relocateEverything } from './services/relocation'
 import { DOCKER_APP_SUBDIR, findDockerInstallDir } from './services/dockerLocation'
 import { openApp } from './services/appLauncher'
@@ -1048,34 +1048,46 @@ app.whenReady().then(async () => {
     const installed = await listInstalledModels().catch(() => null)
     const profile = await getProfile()
     const info = buildModelChoiceInfo(profile, mode, installed)
-    // Étape 191 : l'effort et ce qu'il donnera sur le modèle concerné. En Chat/Vocal Auto, le modèle change selon
-    // la question : on ne peut alors pas annoncer de niveau précis.
-    const effort = profile?.effortChoices?.[mode] ?? null
-    const effortModel = (installed && resolveChosenModel(profile, mode, installed)) || info.autoModel
-    const meta = effortModel ? await getModelThinking(effortModel) : null
+    // Étape 192 : d'abord le modèle, puis SES vrais choix de réflexion. En Chat/Vocal Auto le modèle change
+    // selon la question : rien à proposer d'exact, l'écran demande de choisir un modèle d'abord.
+    const model = thinkingModelFor(profile, mode, installed, info.autoModel)
+    if (!model) return { ...info, thinking: null }
+    const meta = await getModelThinking(model)
     return {
       ...info,
-      effort,
-      effortModel,
-      effortLevels: effortModel && meta ? describeModelThinking(meta) : null,
-      effortApplied: effortModel ? resolveEffort(effort, meta).applied : null
+      thinking: {
+        model,
+        kind: thinkingKind(meta),
+        options: thinkOptions(meta),
+        selected: chosenThink(profile?.thinkChoices?.[mode], model, meta) ?? null
+      }
     }
   })
-  ipcMain.handle(IPC_CHANNELS.setEffortChoice, async (_event, mode: ModelChoiceMode, effort: unknown): Promise<void> => {
+  ipcMain.handle(IPC_CHANNELS.setThinkChoice, async (_event, mode: ModelChoiceMode, think: unknown): Promise<void> => {
     if (!MODEL_CHOICE_MODES.includes(mode)) throw new Error(`Mode inconnu : ${String(mode)}`)
-    if (effort !== null && !isEffortChoice(effort)) throw new Error(`Effort inconnu : ${String(effort)}`)
     const profile = await getProfile()
     if (!profile) throw new Error('Profil introuvable.')
-    const effortChoices = { ...profile.effortChoices }
-    if (effort === null) delete effortChoices[mode]
-    else effortChoices[mode] = effort
-    await saveProfile({ ...profile, effortChoices })
+    const thinkChoices = { ...profile.thinkChoices }
+    if (think === null) {
+      delete thinkChoices[mode]
+    } else {
+      // La valeur vient de l'écran : revérifiée ICI contre ce que le modèle annonce vraiment.
+      const installed = await listInstalledModels()
+      const model = thinkingModelFor(profile, mode, installed, buildModelChoiceInfo(profile, mode, installed).autoModel)
+      if (!model) throw new Error("Choisis d'abord un modèle : en Auto, il change selon la question.")
+      if (!isAcceptedThink(think, await getModelThinking(model))) throw new Error(`${model} n'accepte pas ce réglage de réflexion.`)
+      thinkChoices[mode] = { model, think }
+    }
+    await saveProfile({ ...profile, thinkChoices })
   })
   ipcMain.handle(IPC_CHANNELS.setModelChoice, async (_event, mode: ModelChoiceMode, model: string | null): Promise<void> => {
     const profile = await getProfile()
     if (!profile) throw new Error('Profil introuvable.')
     const installed = model === null ? [] : await listInstalledModels()
-    await saveProfile(applyModelChoice(profile, mode, model, installed))
+    // Étape 192 : la réflexion était choisie pour l'ancien modèle ; elle repart en Auto avec le nouveau.
+    const thinkChoices = { ...profile.thinkChoices }
+    delete thinkChoices[mode]
+    await saveProfile(applyModelChoice({ ...profile, thinkChoices }, mode, model, installed))
   })
   ipcMain.handle(IPC_CHANNELS.runQuickSetup, async (event): Promise<CapacityScanResult> => {
     return runQuickSetup((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))
@@ -1441,3 +1453,11 @@ app.on('window-all-closed', () => {
   ttsClient.stop()
   app.quit()
 })
+
+/**
+ * Étape 192 : le modèle dont on peut régler la réflexion pour un mode — celui choisi à la main, ou l'unique
+ * modèle d'Auto en Code. `null` en Chat/Vocal Auto (le modèle change selon la question).
+ */
+function thinkingModelFor(profile: Profile | null, mode: ModelChoiceMode, installed: string[] | null, autoModel: string | null): string | null {
+  return (installed && resolveChosenModel(profile, mode, installed)) || autoModel
+}

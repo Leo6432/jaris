@@ -1,4 +1,4 @@
-import type { EffortChoice } from '../shared/effort'
+import type { ThinkValue } from '../shared/effort'
 import type {
   AppMode,
   AppVersionStatus,
@@ -89,7 +89,7 @@ declare global {
       getMyModelPicks: () => Promise<MyModelPicks>
       deleteUnusedModel: (model: string) => Promise<void>
       getModelChoice: (mode: ModelChoiceMode) => Promise<ModelChoiceInfo>
-      setEffortChoice: (mode: ModelChoiceMode, effort: EffortChoice | null) => Promise<void>
+      setThinkChoice: (mode: ModelChoiceMode, think: ThinkValue | null) => Promise<void>
       setModelChoice: (mode: ModelChoiceMode, model: string | null) => Promise<void>
       runQuickSetup: () => Promise<CapacityScanResult>
       onModelBenchmarkLine: (cb: (line: string) => void) => () => void

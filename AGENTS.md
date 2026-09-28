@@ -5269,3 +5269,26 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   réflexion intact, lecture tolérante de `/api/show` ; vérifié en réintroduisant l'envoi de « high » à tous) et
   `scripts/test-model-picker-ui.mjs` (vrai navigateur : disposition, menu « + », curseur, liste des modèles,
   niveaux réels affichés, curseur désactivé pour un modèle qui ne réfléchit pas).
+
+- **« Pourquoi un petit éclair ? » + « faut d'abord choisir le modèle… on peut choisir un modèle qui a rien et
+  choisir max » (Léo, étape 192) — le curseur commun de l'étape 191 était FAUX, et c'est lui qui l'a vu.**
+  Une échelle commune à cinq crans (Aucune → Maximale) affichait des choix qui n'existent pas sur le modèle :
+  « Maximale » sur un modèle qui ne réfléchit pas du tout, par exemple. Traduire vers le niveau le plus proche
+  ne rendait pas le choix vrai, ça le rendait juste silencieusement différent de ce qui était affiché. L'éclair,
+  lui, était une décoration sans aucun sens. **Leçon générale : un réglage ne doit proposer que ce que la chose
+  réglée accepte vraiment ; une échelle « universelle » traduite en coulisses montre des choix qui n'existent
+  pas, et l'utilisateur ne peut pas savoir lesquels.**
+  Refait dans l'ordre demandé : le panneau montre d'abord « Modèle » (Auto + rôles), puis « Think · <modèle> »
+  avec les SEULS choix que ce modèle annonce dans `/api/show` — ses niveaux (qwen3.8 : Auto · off · low ·
+  medium · xhigh), ou off/on (qwen3.5, gemma4), ou une phrase et aucun bouton s'il ne réfléchit pas. En
+  Chat/Vocal Auto, le modèle change selon la question : on dit de choisir un modèle d'abord. En Code, Auto est
+  un seul modèle connu, ses vrais choix sont donc proposés.
+  **Le réglage est lié au modèle pour lequel il a été choisi** (`profile.thinkChoices[mode] = {model, think}`,
+  remplace `effortChoices`) : changer de modèle le remet en Auto (main.ts), et même un réglage resté en place
+  n'est appliqué qu'au modèle d'origine et seulement s'il l'accepte encore (`chosenThink`). Le main revérifie
+  aussi la valeur reçue de l'écran contre `/api/show` avant de l'enregistrer.
+  Régression : `node --test scripts/test-effort.mjs` (un modèle sans réflexion n'a AUCUN choix, qwen3.8 n'a ni
+  « high » ni « max », réglage ignoré sur un autre modèle ; vérifié en faisant tout accepter : 5 tests échouent)
+  et `scripts/test-model-picker-ui.mjs` (vrai navigateur : plus d'éclair ni de curseur, « Modèle » avant
+  « Think », vrais choix par modèle, « off » envoie false, changer de modèle efface la réflexion, choix sur une
+  seule ligne et habillés par le CSS). **Non vérifié contre un vrai Ollama ici** (téléchargement bloqué).

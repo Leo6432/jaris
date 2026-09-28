@@ -3,7 +3,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { config } from '../config'
 import { chatWithOllama, getModelInfo, getModelThinking, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError, type OllamaMessage, type ThinkLevel } from './ollama'
-import { resolveEffort, type ThinkValue } from '../../shared/effort'
+import { chosenThink, thinkLabel, type ThinkValue } from '../../shared/effort'
 import { pickBestCodeModel } from './hardwareScan'
 import { getProfile } from './profileStore'
 import { IMAGE_FOR_CODE_SYSTEM_PROMPT, describeImage } from './vision'
@@ -137,16 +137,16 @@ export interface ModelStepRunnerOptions {
 }
 
 /**
- * Étape 191 : l'effort choisi pour le mode Code (partagé avec le Montage), traduit au niveau réel du modèle ;
- * « high » comme avant quand Léo n'a rien choisi. Le journal dit ce que le modèle fera vraiment.
+ * Étape 192 : la réflexion choisie pour le modèle du mode Code (partagée avec le Montage), si elle a été
+ * choisie pour CE modèle et qu'il l'accepte ; « high » comme avant sinon. Le journal dit ce qui est envoyé.
  */
 export async function resolveCodeThink(profile: Profile | null, model: string, onStatus: (message: string) => void): Promise<ThinkLevel | ThinkValue> {
-  const choice = profile?.effortChoices?.code ?? null
+  const choice = profile?.thinkChoices?.code
   if (!choice) return 'high'
-  const resolved = resolveEffort(choice, await getModelThinking(model))
-  if (resolved.think === undefined) return 'high'
-  onStatus(`Réflexion de ${model} : ${resolved.applied}.`)
-  return resolved.think
+  const think = chosenThink(choice, model, await getModelThinking(model))
+  if (think === undefined) return 'high'
+  onStatus(`Réflexion de ${model} : ${thinkLabel(think)}.`)
+  return think
 }
 
 /** Message final quand même la plus grande fenêtre permise ne suffit pas : lisible, et avec quoi faire. */
