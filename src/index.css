@@ -1888,9 +1888,7 @@ p.capacity-scan__tier-missing {
   color: var(--hud-text-faint);
 }
 
-/* Même bouton icône que la pièce jointe du composeur (`.composer__attach`) : une action secondaire dans un
-   champ, pas un bouton d'action pleine largeur — reprendre le style existant plutôt que d'en inventer un
-   troisième, comme pour le bouton d'envoi du Chat. */
+/* Petit bouton icône : une action secondaire dans un champ, pas un bouton d'action pleine largeur. */
 .chat-widget__send {
   display: inline-flex;
   align-items: center;
@@ -2123,120 +2121,11 @@ p.capacity-scan__tier-missing {
   gap: 10px;
 }
 
-/* Le rappel des raccourcis pousse le bouton d'envoi à droite et disparaît en premier si la place manque :
-   c'est l'information la moins importante de la barre. */
-.composer__hint {
-  flex: 1;
-  min-width: 0;
-  font-size: 0.68rem;
-  color: var(--hud-text-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Bouton d'action SECONDAIRE : une icône, sans fond ni libellé, pour ne jamais concurrencer "Envoyer". */
-.composer__attach {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--hud-text-dim);
-  cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
-}
-
-.composer__attach:not(:disabled):hover {
-  color: var(--hud-accent-bright);
-  border-color: var(--hud-line);
-  background: rgba(var(--hud-accent-rgb), 0.08);
-}
-
-.composer__attach:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-/* Sélecteur de modèle (étape 141) : même discrétion que l'icône de pièce jointe à côté — un libellé fin et
-   un menu sans cadre au repos, qui ne s'allume qu'au survol/focus. Le bouton d'envoi reste la seule action
-   remplie de la barre. */
-.model-picker {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  flex-shrink: 1;
-}
-
-.model-picker__label {
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--hud-text-faint);
-  white-space: nowrap;
-}
-
-.model-picker__select {
-  min-width: 0;
-  max-width: 220px;
-  height: 30px;
-  padding: 0 8px;
-  font-family: var(--hud-font-body);
-  font-size: 0.78rem;
-  color: var(--hud-text-dim);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  cursor: pointer;
-  text-overflow: ellipsis;
-  transition:
-    color 0.15s ease,
-    border-color 0.15s ease,
-    background 0.15s ease;
-}
-
-.model-picker__select:not(:disabled):hover,
-.model-picker__select:focus-visible {
-  color: var(--hud-accent-bright);
-  border-color: var(--hud-line);
-  background: rgba(var(--hud-accent-rgb), 0.08);
-  outline: none;
-}
-
-.model-picker__select:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-/* La liste déroulante native reprend le fond de l'app : sans ça, Windows l'affiche en blanc. */
-.model-picker__select option {
-  background: var(--hud-panel);
-  color: var(--hud-text);
-}
-
 /* Écran vocal : sous l'astuce, centré avec le reste du groupe orbe + texte. */
 .app__model-picker {
   display: flex;
   justify-content: center;
   margin-top: 10px;
-}
-
-/* Action PRINCIPALE : elle rejoint la famille de boutons HUD du reste de l'app (coins coupés, Rajdhani
-   en majuscules) plutôt que d'inventer un style à elle — voir la règle groupée plus bas. Ici, seul ce qui
-   la distingue dans le composeur : c'est la seule action remplie de la barre, donc la seule que l'œil
-   trouve en premier, face à l'icône de pièce jointe volontairement discrète. */
-.composer__send {
-  flex: none;
-}
-
-.composer__send:disabled {
-  opacity: 0.35;
-  cursor: default;
 }
 
 /* Pièce jointe : une puce DANS la carte, pas une barre pleine largeur au-dessus — elle appartient
@@ -2900,7 +2789,6 @@ h1 {
 .options-menu__ollama-update-actions button,
 .app__new-models button,
 .memory-brain__actions button,
-.composer__send,
 .code-panel__result-actions button,
 .code-panel__live-stop,
 .workspace__new,
@@ -2940,7 +2828,6 @@ h1 {
 .options-menu__ollama-update-actions button:not(:disabled):hover,
 .app__new-models button:hover,
 .memory-brain__actions button:hover,
-.composer__send:not(:disabled):hover,
 .code-panel__result-actions button:not(:disabled):hover,
 .code-panel__live-stop:not(:disabled):hover,
 .workspace__new:not(:disabled):hover,
@@ -3369,13 +3256,10 @@ textarea:not(.composer__input):focus-visible {
    mesure du style RÉELLEMENT appliqué le prouve).
    `.chat-widget__input` (barre du widget texte) est exclu pour la même raison que `.composer__input` : la
    PILULE qui l'entoure porte déjà le cadre et les coins arrondis, un second contour carré à l'intérieur
-   casserait la forme.
-   `.model-picker__select` (sélecteur de modèle, étape 141) est exclu pour la même raison : c'est un contrôle
-   discret posé dans la barre du composeur, comme l'icône de pièce jointe — un cadre de champ plein en
-   `!important` lui donnait le même poids visuel que le bouton d'envoi. */
+   casserait la forme. */
 input:not(.options-menu__context-slider):not(.chat-widget__input),
 textarea:not(.composer__input),
-select:not(.model-picker__select) {
+select {
   font-family: var(--hud-font-body);
   border-radius: 0 !important;
   background: rgba(1, 4, 10, 0.75) !important;
@@ -4009,14 +3893,6 @@ a:hover {
   margin-top: 0;
 }
 
-/* Le bouton des vidéos garde un libellé visible : l'écran parle du bouton « Vidéos », une icône seule ne le
-   laissait pas retrouver. */
-.montage-panel__add-videos {
-  width: auto;
-  gap: 6px;
-  padding: 0 10px;
-  font-size: 0.78rem;
-}
 
 .montage-panel__clip {
   display: inline-flex;
@@ -4054,4 +3930,405 @@ a:hover {
 
 .montage-panel__clip-remove:hover {
   color: var(--hud-danger);
+}
+
+/* ============================================================================
+   Champ de saisie façon ChatGPT (étape 191) : le texte en haut, puis UNE rangée — « + » à gauche, modèle +
+   effort et envoi rond à droite. Les panneaux (menu « + », modèle/effort) s'ouvrent AU-DESSUS : le champ est
+   en bas de l'écran. Tokens HUD uniquement, aucune couleur inventée.
+   ============================================================================ */
+.composer__actions {
+  gap: 6px;
+}
+
+.composer__spacer {
+  flex: 1;
+}
+
+.composer__add {
+  position: relative;
+}
+
+.composer__plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--hud-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--hud-text-dim);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.composer__plus:not(:disabled):hover,
+.composer__plus--open {
+  color: var(--hud-accent-bright);
+  border-color: var(--hud-line-strong);
+  background: rgba(var(--hud-accent-rgb), 0.08);
+}
+
+.composer__plus:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.composer__menu,
+.effort-picker__panel {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  padding: 8px;
+  background: var(--hud-panel);
+  border: 1px solid var(--hud-line-strong);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+.composer__menu {
+  left: 0;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.composer__menu-title,
+.effort-picker__list-head {
+  padding: 4px 8px 6px;
+  font-size: 0.72rem;
+  color: var(--hud-text-faint);
+}
+
+.composer__menu-item,
+.effort-picker__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  font-family: var(--hud-font-body);
+  font-size: 0.82rem;
+  text-align: left;
+  color: var(--hud-text);
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.composer__menu-item:hover,
+.effort-picker__option:not(:disabled):hover {
+  background: rgba(var(--hud-accent-rgb), 0.1);
+}
+
+.composer__menu-icon {
+  display: inline-flex;
+  color: var(--hud-accent);
+}
+
+.composer__menu-label {
+  white-space: nowrap;
+}
+
+.composer__menu-hint {
+  margin-left: auto;
+  padding-left: 12px;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  color: var(--hud-text-faint);
+}
+
+/* Envoi : rond et plein, la seule action remplie de la barre (comme ChatGPT). */
+.composer__send {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--hud-accent);
+  color: #02121c;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.composer__send:not(:disabled):hover {
+  background: var(--hud-accent-bright);
+  box-shadow: var(--hud-glow);
+}
+
+.composer__send:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.composer__send--busy:disabled {
+  opacity: 0.8;
+}
+
+.composer__spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(2, 18, 28, 0.3);
+  border-top-color: #02121c;
+  border-radius: 999px;
+  animation: composer-spin 0.8s linear infinite;
+}
+
+@keyframes composer-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer__spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+/* Modèle + effort : « Auto  Moyenne ⌄ », sans cadre au repos, comme le choix de modèle de ChatGPT. */
+.effort-picker {
+  position: relative;
+  min-width: 0;
+}
+
+.effort-picker__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  font-family: var(--hud-font-body);
+  font-size: 0.82rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--hud-text-dim);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.effort-picker__trigger:not(:disabled):hover,
+.effort-picker__trigger--open {
+  color: var(--hud-text);
+  border-color: var(--hud-line);
+  background: rgba(var(--hud-accent-rgb), 0.08);
+}
+
+.effort-picker__trigger:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.effort-picker__model {
+  font-weight: 600;
+  color: var(--hud-text);
+  white-space: nowrap;
+}
+
+.effort-picker__effort {
+  color: var(--hud-text-faint);
+  white-space: nowrap;
+}
+
+.effort-picker__panel {
+  right: 0;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+}
+
+.effort-picker__head {
+  display: grid;
+  grid-template-columns: 28px 1fr 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 10px;
+}
+
+.effort-picker__head-icon {
+  display: inline-flex;
+  justify-content: center;
+  color: var(--hud-text-faint);
+}
+
+.effort-picker__head-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.effort-picker__current {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--hud-accent-bright);
+}
+
+.effort-picker__model-link,
+.effort-picker__back,
+.effort-picker__reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  font-family: var(--hud-font-body);
+  font-size: 0.76rem;
+  color: var(--hud-text-dim);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.effort-picker__model-link:hover,
+.effort-picker__back:hover,
+.effort-picker__reset:not(:disabled):hover {
+  color: var(--hud-accent-bright);
+  background: rgba(var(--hud-accent-rgb), 0.08);
+}
+
+.effort-picker__reset:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.effort-picker__model-name {
+  color: var(--hud-text-faint);
+}
+
+/* Le curseur : une piste en pilule avec cinq crans ; le cran choisi est un grand disque clair. */
+.effort-picker__slider {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 34px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(1, 4, 10, 0.6);
+  border: 1px solid var(--hud-line);
+}
+
+.effort-picker__slider:focus-visible {
+  outline: none;
+  border-color: var(--hud-accent-bright);
+  box-shadow: 0 0 0 1px var(--hud-accent-bright);
+}
+
+.effort-picker__slider--off {
+  opacity: 0.4;
+}
+
+.effort-picker__step {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--hud-text-faint) 0 2.5px, transparent 3px);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.effort-picker__step:not(:disabled):hover {
+  background: radial-gradient(circle, var(--hud-accent-bright) 0 3.5px, transparent 4px);
+}
+
+.effort-picker__step--active,
+.effort-picker__step--active:not(:disabled):hover {
+  background: var(--hud-text);
+  box-shadow: 0 0 10px rgba(var(--hud-accent-rgb), 0.45);
+}
+
+.effort-picker__step:disabled {
+  cursor: default;
+}
+
+.effort-picker__scale {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 8px 0;
+  font-size: 0.68rem;
+  color: var(--hud-text-faint);
+}
+
+.effort-picker__note {
+  margin: 8px 4px 2px;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--hud-text-dim);
+}
+
+.effort-picker__list-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 0;
+}
+
+.effort-picker__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.effort-picker__option {
+  justify-content: space-between;
+}
+
+.effort-picker__option:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.effort-picker__option svg {
+  flex: none;
+  color: var(--hud-accent-bright);
+}
+
+.effort-picker__option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.effort-picker__option-title {
+  font-weight: 600;
+}
+
+.effort-picker__option-sub {
+  font-size: 0.72rem;
+  color: var(--hud-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.effort-picker__error {
+  margin: 8px 4px 0;
+  font-size: 0.74rem;
+  color: var(--hud-danger);
+}
+
+/* Écran vocal : le panneau s'ouvre au-dessus, centré sous l'orbe. */
+.app__model-picker .effort-picker__panel {
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
 }

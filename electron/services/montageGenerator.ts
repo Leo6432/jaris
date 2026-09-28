@@ -6,6 +6,7 @@ import {
   isAbortError,
   readModelMaxContext,
   resolveCodeModel,
+  resolveCodeThink,
   slugify,
   type GenerationSteps
 } from './codeGenerator'
@@ -382,7 +383,8 @@ export async function generateMontage(
   const modelMaxContext = await readModelMaxContext(model)
   // Écriture du code, puis fabrication de la vidéo ; relance et réparations s'ajoutent quand elles arrivent.
   const steps: GenerationSteps = { index: 0, count: 2 }
-  const runModelStep = createModelStepRunner({ model, modelMaxContext, steps, onStatus, onProgress, signal })
+  const think = await resolveCodeThink(profile, model, onStatus)
+  const runModelStep = createModelStepRunner({ model, think, modelMaxContext, steps, onStatus, onProgress, signal })
 
   const userPrompt = currentCode
     ? `Voici le fichier actuel de la vidéo :\n\n\`\`\`tsx\n${currentCode}\n\`\`\`\n\nModification demandée : ${description}\n\n` +

@@ -19,8 +19,9 @@ import {
   stopOllamaIfStartedByJaris,
   updateOllama
 } from './services/dependencyServices'
-import { deleteModel, listInstalledModels } from './services/ollama'
-import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES } from './services/modelChoice'
+import { deleteModel, getModelThinking, listInstalledModels } from './services/ollama'
+import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES, resolveChosenModel } from './services/modelChoice'
+import { describeModelThinking, isEffortChoice, resolveEffort } from '../shared/effort'
 import { getStorageStatus, programMoveCommandLine, reconcileStorage, relocateEverything } from './services/relocation'
 import { DOCKER_APP_SUBDIR, findDockerInstallDir } from './services/dockerLocation'
 import { openApp } from './services/appLauncher'
@@ -1045,7 +1046,30 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.getModelChoice, async (_event, mode: ModelChoiceMode): Promise<ModelChoiceInfo> => {
     if (!MODEL_CHOICE_MODES.includes(mode)) throw new Error(`Mode inconnu : ${String(mode)}`)
     const installed = await listInstalledModels().catch(() => null)
-    return buildModelChoiceInfo(await getProfile(), mode, installed)
+    const profile = await getProfile()
+    const info = buildModelChoiceInfo(profile, mode, installed)
+    // Étape 191 : l'effort et ce qu'il donnera sur le modèle concerné. En Chat/Vocal Auto, le modèle change selon
+    // la question : on ne peut alors pas annoncer de niveau précis.
+    const effort = profile?.effortChoices?.[mode] ?? null
+    const effortModel = (installed && resolveChosenModel(profile, mode, installed)) || info.autoModel
+    const meta = effortModel ? await getModelThinking(effortModel) : null
+    return {
+      ...info,
+      effort,
+      effortModel,
+      effortLevels: effortModel && meta ? describeModelThinking(meta) : null,
+      effortApplied: effortModel ? resolveEffort(effort, meta).applied : null
+    }
+  })
+  ipcMain.handle(IPC_CHANNELS.setEffortChoice, async (_event, mode: ModelChoiceMode, effort: unknown): Promise<void> => {
+    if (!MODEL_CHOICE_MODES.includes(mode)) throw new Error(`Mode inconnu : ${String(mode)}`)
+    if (effort !== null && !isEffortChoice(effort)) throw new Error(`Effort inconnu : ${String(effort)}`)
+    const profile = await getProfile()
+    if (!profile) throw new Error('Profil introuvable.')
+    const effortChoices = { ...profile.effortChoices }
+    if (effort === null) delete effortChoices[mode]
+    else effortChoices[mode] = effort
+    await saveProfile({ ...profile, effortChoices })
   })
   ipcMain.handle(IPC_CHANNELS.setModelChoice, async (_event, mode: ModelChoiceMode, model: string | null): Promise<void> => {
     const profile = await getProfile()

@@ -100,6 +100,13 @@ async function withPage(run, { installed = false } = {}) {
   }
 }
 
+/** Étape 191 : les vidéos se joignent par le menu « + » du champ. */
+async function pickVideos(page) {
+  await page.waitForSelector('.composer__plus')
+  await page.click('.composer__plus')
+  await page.click('.composer__menu-item:has-text("Joindre des vidéos")')
+}
+
 const VIDEO_PATH = 'C:/donnees/generated-videos/1-intro'
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
@@ -138,8 +145,10 @@ test('installer montre son avancement, puis ouvre le Montage', options, async ()
     await page.evaluate(() => window.__finishInstall())
     await page.waitForSelector('.workspace__rail')
     assert.match(await page.textContent('.workspace__new'), /Nouvelle vidéo/i)
-    assert.equal(await page.locator('[aria-label="Joindre une image"]').count(), 0, 'pas de bouton image : le Montage ne lit pas encore d’image')
-    assert.equal(await page.locator('[aria-label="Joindre des vidéos"]').count(), 1, 'mais bien le bouton des vidéos (étape 190)')
+    await page.click('.composer__plus')
+    const items = await page.$$eval('.composer__menu-item', (els) => els.map((el) => el.textContent))
+    assert.ok(!items.some((t) => /Joindre une image/.test(t)), 'pas d’image : le Montage ne lit pas encore d’image')
+    assert.ok(items.some((t) => /Joindre des vidéos/.test(t)), 'mais bien les vidéos, dans le menu « + » (étapes 190-191)')
   })
 })
 
@@ -186,10 +195,7 @@ test('désinstaller demande confirmation dans la page, puis revient à l’écra
 // Étape 190 (Léo : « on peut pas lui envoyer une vidéo pour qu'il la monte »).
 test('joindre une vidéo : elle s’affiche avec sa durée, part avec la demande, puis reste attachée au montage', options, async () => {
   await withPage(async (page) => {
-    await page.waitForSelector('.montage-panel__add-videos')
-    const icon = await page.$eval('.montage-panel__add-videos', (el) => ({ label: el.getAttribute('aria-label'), clip: getComputedStyle(el).borderRadius }))
-    assert.equal(icon.label, 'Joindre des vidéos')
-    await page.click('.montage-panel__add-videos')
+    await pickVideos(page)
     await page.waitForSelector('.montage-panel__clip')
     assert.match(await page.textContent('.montage-panel__clip'), /plage\.mp4 · 1 min 12/)
     assert.match(await page.getAttribute('.composer__input', 'placeholder'), /garder, couper et écrire/)
@@ -210,7 +216,7 @@ test('joindre une vidéo : elle s’affiche avec sa durée, part avec la demande
 
 test('une vidéo jointe par erreur se retire avant l’envoi', options, async () => {
   await withPage(async (page) => {
-    await page.click('.montage-panel__add-videos')
+    await pickVideos(page)
     await page.waitForSelector('.montage-panel__clip-remove')
     await page.click('.montage-panel__clip-remove')
     assert.equal(await page.locator('.montage-panel__clip').count(), 0)

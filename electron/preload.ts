@@ -1,3 +1,4 @@
+import type { EffortChoice } from '../shared/effort'
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC_CHANNELS,
@@ -92,6 +93,8 @@ const api = {
   getMyModelPicks: (): Promise<MyModelPicks> => ipcRenderer.invoke(IPC_CHANNELS.getMyModelPicks),
   deleteUnusedModel: (model: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.deleteUnusedModel, model),
   getModelChoice: (mode: ModelChoiceMode): Promise<ModelChoiceInfo> => ipcRenderer.invoke(IPC_CHANNELS.getModelChoice, mode),
+  setEffortChoice: (mode: ModelChoiceMode, effort: EffortChoice | null): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.setEffortChoice, mode, effort),
   setModelChoice: (mode: ModelChoiceMode, model: string | null): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.setModelChoice, mode, model),
   runQuickSetup: (): Promise<CapacityScanResult> => ipcRenderer.invoke(IPC_CHANNELS.runQuickSetup),

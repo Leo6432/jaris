@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   fileToImageAttachment,
   findImageInDataTransfer,
@@ -18,7 +18,20 @@ import {
  * parce qu'un bouton texte secondaire a exactement le même poids visuel que l'action principale à côté — ce
  * que montrait la capture avant/après (voir HISTORIQUE). L'icône est un SVG inline (aucune dépendance, aucun
  * emoji) qui hérite de `currentColor`, donc suit l'état normal/survol/désactivé sans code couleur en double.
+ *
+ * Étape 191 (Léo : « même présentation que ChatGPT ») : le texte en haut, puis une seule rangée — le bouton « + »
+ * à gauche (menu « Ajouter » : image, vidéos…), le choix du modèle et de l'effort à droite, et l'envoi en
+ * bouton rond. Les pièces jointes passent toutes par ce menu, quel que soit l'écran.
  */
+
+/** Une entrée du menu « + » propre à un écran (ex. « Vidéos » dans le Montage). */
+export interface ComposerAddItem {
+  id: string
+  label: string
+  hint?: string
+  icon: ReactNode
+  onSelect: () => void
+}
 interface ComposerProps {
   value: string
   onChange: (value: string) => void
@@ -34,12 +47,28 @@ interface ComposerProps {
   /** Entrée envoie (Chat). En mode Code, la description est souvent multi-lignes : Entrée va à la ligne. */
   submitOnEnter?: boolean
   rows?: number
-  /** Rappel discret des raccourcis, sous le champ — plus lisible que dans le placeholder, qui débordait. */
-  hint?: string
-  /** Contrôle secondaire posé à côté de la pièce jointe (sélecteur de modèle, étape 141). */
+  /** Contrôle posé à droite, avant l'envoi (sélecteur de modèle et d'effort, étapes 141 et 191). */
   extraActions?: ReactNode
   /** Faux : ni bouton image, ni collage/glisser d'image (Montage, étape 189, qui ne lit pas encore d'image). */
   imagesAllowed?: boolean
+  /** Entrées supplémentaires du menu « + » (étape 191). */
+  addItems?: ComposerAddItem[]
+}
+
+function PlusIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  )
+}
+
+function SendIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 19V5M6 11l6-6 6 6" />
+    </svg>
+  )
 }
 
 function AttachIcon(): JSX.Element {
@@ -65,10 +94,30 @@ export default function Composer({
   onError,
   submitOnEnter = false,
   rows = 2,
-  hint,
   extraActions,
-  imagesAllowed = true
+  imagesAllowed = true,
+  addItems = []
 }: ComposerProps): JSX.Element {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Le menu « + » se ferme au clic en dehors ou sur Échap, comme celui de ChatGPT.
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDown = (event: MouseEvent): void => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setMenuOpen(false)
+    }
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menuOpen])
+
   const attach = async (file: File | Blob, name = ''): Promise<void> => {
     try {
       onAttachmentChange(await fileToImageAttachment(file, name))
@@ -120,6 +169,15 @@ export default function Composer({
   // bouton ne dépend donc pas que du texte.
   const canSubmit = !busy && (value.trim().length > 0 || attachment !== null)
 
+  // L'image d'abord (Chat, Code), puis ce que l'écran ajoute (Vidéos du Montage). Le rappel Ctrl+V, avant affiché
+  // dans la barre, accompagne maintenant l'entrée « Image » du menu.
+  const menuItems: ComposerAddItem[] = [
+    ...(imagesAllowed
+      ? [{ id: 'image', label: 'Joindre une image', hint: 'ou Ctrl+V pour coller', icon: <AttachIcon />, onSelect: () => void pick() }]
+      : []),
+    ...addItems
+  ]
+
   return (
     <div
       className={`composer${busy ? ' composer--busy' : ''}`}
@@ -162,25 +220,57 @@ export default function Composer({
       />
 
       <div className="composer__actions">
-        {imagesAllowed && (
-          <button
-            type="button"
-            className="composer__attach"
-            onClick={() => void pick()}
-            disabled={busy}
-            title="Joindre une image (ou Ctrl+V pour coller)"
-            aria-label="Joindre une image"
-          >
-            <AttachIcon />
-          </button>
+        {menuItems.length > 0 && (
+          <div className="composer__add" ref={menuRef}>
+            <button
+              type="button"
+              className={`composer__plus${menuOpen ? ' composer__plus--open' : ''}`}
+              onClick={() => setMenuOpen(!menuOpen)}
+              disabled={busy}
+              title="Ajouter"
+              aria-label="Ajouter"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+            >
+              <PlusIcon />
+            </button>
+            {menuOpen && (
+              <div className="composer__menu" role="menu">
+                <span className="composer__menu-title">Ajouter</span>
+                {menuItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="menuitem"
+                    className="composer__menu-item"
+                    onClick={() => {
+                      setMenuOpen(false)
+                      item.onSelect()
+                    }}
+                  >
+                    <span className="composer__menu-icon">{item.icon}</span>
+                    <span className="composer__menu-label">{item.label}</span>
+                    {item.hint && <span className="composer__menu-hint">{item.hint}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
+
+        <span className="composer__spacer" />
 
         {extraActions}
 
-        {hint && <span className="composer__hint">{hint}</span>}
-
-        <button type="button" className="composer__send" onClick={onSubmit} disabled={!canSubmit}>
-          {busy ? busyLabel : submitLabel}
+        <button
+          type="button"
+          className={`composer__send${busy ? ' composer__send--busy' : ''}`}
+          onClick={onSubmit}
+          disabled={!canSubmit}
+          title={busy ? busyLabel : submitLabel}
+          aria-label={busy ? busyLabel : submitLabel}
+        >
+          {busy ? <span className="composer__spinner" aria-hidden="true" /> : <SendIcon />}
         </button>
       </div>
     </div>

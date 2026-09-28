@@ -1,3 +1,4 @@
+import type { EffortChoice } from './effort'
 /** Types partagés entre le process principal (electron/) et le renderer (src/). */
 import type { ImageModelPick } from './imageModel'
 
@@ -63,6 +64,14 @@ export interface ModelChoiceInfo {
   autoModel: string | null
   /** Les cinq rôles du profil de cette machine et leur modèle actuel. */
   roles: { value: string; label: string; model: string; installed: boolean }[]
+  /** Étape 191 : effort choisi pour ce mode, `null` = Auto. */
+  effort?: EffortChoice | null
+  /** Le modèle dont on connaît les niveaux (choisi à la main, ou celui d'Auto en Code) ; `null` si Auto varie. */
+  effortModel?: string | null
+  /** Ses niveaux réels, en clair (« off · low · medium · xhigh ») ; `null` si inconnus. */
+  effortLevels?: string | null
+  /** Ce que l'effort choisi donnera vraiment sur ce modèle (« medium », « sans réflexion »…). */
+  effortApplied?: string | null
 }
 
 export interface Profile {
@@ -106,6 +115,11 @@ export interface Profile {
    * explicites restent lisibles pour préserver les préférences enregistrées avant le sélecteur par rôle.
    */
   modelChoices?: Partial<Record<ModelChoiceMode, string>>
+  /**
+   * Étape 191 : effort de réflexion choisi à côté du modèle, par mode (absent = Auto, l'effort habituel de
+   * Jaris). Traduit au niveau réel du modèle par shared/effort.ts. Le Montage suit le mode Code.
+   */
+  effortChoices?: Partial<Record<ModelChoiceMode, EffortChoice>>
   /** Design sonore (étape 31) : absent/true par défaut, false pour couper les bips d'interface (Options → Voix). */
   soundEffectsEnabled?: boolean
   /**
@@ -661,6 +675,7 @@ export const IPC_CHANNELS = {
   /** renderer -> main : choix du modèle d'un mode (Auto ou un modèle installé), étape 141. */
   getModelChoice: 'jaris:get-model-choice',
   setModelChoice: 'jaris:set-model-choice',
+  setEffortChoice: 'jaris:set-effort-choice',
   /** renderer -> main : détecte le matériel et télécharge directement les modèles déjà choisis pour lui
    * (voir runQuickSetup, benchmarkRunner.ts) — le nouveau chemin par défaut de l'écran d'accueil, sans passer
    * par le benchmark comparatif complet. Réutilise modelBenchmarkLine pour la progression des téléchargements. */

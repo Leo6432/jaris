@@ -35,6 +35,9 @@ function load(path, modules, fetchImpl = fetch) {
   return module.exports
 }
 
+/** Étape 191 : ollama.ts et codeGenerator.ts importent le VRAI module d'effort (pur, sans dépendance). */
+const sharedEffort = load('../shared/effort.ts', {})
+
 // ---------------------------------------------------------------------------------------------------------
 // ollama.ts : une fenêtre pleine sans réponse devient ContextFullError, jamais « bien installé ? »
 // ---------------------------------------------------------------------------------------------------------
@@ -45,7 +48,8 @@ function loadOllama(fetchImpl) {
     {
       '../config': { config: { ollama: { host: 'http://ollama.test', numCtx: 8192, model: 'm' } } },
       './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: async () => 100, getDownloadBudgetGb: async () => 100 },
-      './huggingFaceImport': { importHuggingFaceModel: async () => {} }
+      './huggingFaceImport': { importHuggingFaceModel: async () => {} },
+      '../../shared/effort': sharedEffort
     },
     fetchImpl
   )
@@ -131,6 +135,7 @@ function setupCodegen(answer, { modelMax = 262144 } = {}) {
   const exports = load('../electron/services/codeGenerator.ts', {
     electron: { app: { getPath: () => '/tmp' } },
     './dataLocation': { getDataRoot: () => '/tmp' },
+    '../../shared/effort': sharedEffort,
     'fs/promises': { mkdir: async () => {}, writeFile: async () => {}, readdir: async () => [], readFile: async () => '', rm: async () => {} },
     path: { join: (...parts) => parts.join('/'), isAbsolute: () => true, relative: () => '', resolve: (p) => p, sep: '/' },
     './ollama': {
@@ -142,6 +147,7 @@ function setupCodegen(answer, { modelMax = 262144 } = {}) {
         return { role: 'assistant', content: next }
       },
       getModelInfo: async () => (modelMax === null ? null : { 'qwen35moe.context_length': modelMax, 'general.architecture': 'qwen35moe' }),
+      getModelThinking: async () => null,
       listInstalledModels: async () => ['test-model'],
       pullModelIfMissing: async () => {},
       ModelTooLargeError: class extends Error {},

@@ -190,7 +190,7 @@ export const CAPABILITIES: CapabilityGroup[] = [
       },
       {
         title: 'Monter tes vidéos',
-        description: 'Joins tes vidéos avec le bouton « Vidéos » : Jaris garde les passages que tu indiques et écrit du texte animé par-dessus.',
+        description: 'Joins tes vidéos avec le bouton « + » du champ : Jaris garde les passages que tu indiques et écrit du texte animé par-dessus.',
         example: 'garde de 0:10 à 0:25 et ajoute le titre VACANCES au début'
       },
       {

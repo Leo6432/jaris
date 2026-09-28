@@ -1,7 +1,8 @@
 import { resolveChosenModel } from './modelChoice'
 import { requestedNotepadText, openNotepadText } from './notepad'
 import { config } from '../config'
-import { chatWithOllama, listInstalledModels, type OllamaMessage, type ThinkLevel } from './ollama'
+import { chatWithOllama, getModelThinking, listInstalledModels, type OllamaMessage, type ThinkLevel } from './ollama'
+import { resolveEffort, type ThinkValue } from '../../shared/effort'
 import { listMemoryTitles } from './memoryStore'
 import { getProfile } from './profileStore'
 import { TOOLS, createToolExecutor, type ImageHandler } from './tools'
@@ -401,7 +402,7 @@ export async function converse(
   }
 
   /** Résout modèle + effort de réflexion pour un palier donné, avec le même repli VRAM temps réel que ci-dessus. */
-  const resolveModelForTier = (t: Tier): { model: string; think: ThinkLevel } => {
+  const resolveModelForTier = (t: Tier): { model: string; think: ThinkLevel | ThinkValue } => {
     if (chosenModel) return { model: chosenModel, think: THINK_LEVEL[t] }
     let m = models[t]
     if (live.freeVramGb !== null) {
@@ -414,7 +415,16 @@ export async function converse(
     return { model: m, think: THINK_LEVEL[t] }
   }
 
-  let { model, think } = resolveModelForTier(tier)
+  // Étape 191 : l'effort choisi à côté du modèle (« Aucune » à « Maximale ») remplace l'effort du palier, traduit
+  // vers un niveau que CE modèle accepte vraiment (shared/effort.ts). Pas de choix = comportement d'avant.
+  const effortChoice = profile?.effortChoices?.[channel] ?? null
+  const withEffort = async (r: { model: string; think: ThinkLevel | ThinkValue }): Promise<{ model: string; think: ThinkLevel | ThinkValue }> => {
+    if (!effortChoice) return r
+    const resolved = resolveEffort(effortChoice, await getModelThinking(r.model))
+    return resolved.think === undefined ? r : { model: r.model, think: resolved.think }
+  }
+
+  let { model, think } = await withEffort(resolveModelForTier(tier))
   onLog?.(`Modèle ${chosenModel ? 'choisi à la main' : 'choisi'} : ${model} (réflexion : ${think})`)
 
   /** Si la machine est surchargée, l'avertissement précède la vraie réponse dans la même phrase parlée. */
@@ -553,7 +563,7 @@ export async function converse(
     // à reformuler une vraie réponse après un résultat d'outil est éprouvée (voir THINK_LEVEL plus haut).
     if (tier === 'flash') {
       tier = 'medium'
-      ;({ model, think } = resolveModelForTier(tier))
+      ;({ model, think } = await withEffort(resolveModelForTier(tier)))
       if (!chosenModel) onLog?.(`Appel d'outil détecté : passage au palier médium pour la suite (${model}).`)
     }
 

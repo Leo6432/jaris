@@ -169,7 +169,9 @@ async function pickFile(page, picked) {
   await page.evaluate((file) => {
     window.__nextPickedFile = file
   }, picked)
-  await page.click('.composer__attach')
+  // Étape 191 : l'image se joint par le menu « + » du champ, comme dans ChatGPT.
+  await page.click('.composer__plus')
+  await page.click('.composer__menu-item:has-text("Joindre une image")')
 }
 
 test('une image jointe est réduite, prévisualisée, puis envoyée en base64 avec le message', options, async () => {

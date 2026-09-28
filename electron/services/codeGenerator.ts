@@ -2,7 +2,8 @@ import { resolveChosenModel } from './modelChoice'
 import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { config } from '../config'
-import { chatWithOllama, getModelInfo, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError, type OllamaMessage } from './ollama'
+import { chatWithOllama, getModelInfo, getModelThinking, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError, type OllamaMessage, type ThinkLevel } from './ollama'
+import { resolveEffort, type ThinkValue } from '../../shared/effort'
 import { pickBestCodeModel } from './hardwareScan'
 import { getProfile } from './profileStore'
 import { IMAGE_FOR_CODE_SYSTEM_PROMPT, describeImage } from './vision'
@@ -126,11 +127,26 @@ export interface GenerationSteps {
 
 export interface ModelStepRunnerOptions {
   model: string
+  /** Réflexion demandée à Ollama (étape 191 : effort choisi par Léo, sinon « high » comme avant). */
+  think?: ThinkLevel | ThinkValue
   modelMaxContext: number | null
   steps: GenerationSteps
   onStatus: (message: string) => void
   onProgress?: (progress: CodeGenProgress) => void
   signal?: AbortSignal
+}
+
+/**
+ * Étape 191 : l'effort choisi pour le mode Code (partagé avec le Montage), traduit au niveau réel du modèle ;
+ * « high » comme avant quand Léo n'a rien choisi. Le journal dit ce que le modèle fera vraiment.
+ */
+export async function resolveCodeThink(profile: Profile | null, model: string, onStatus: (message: string) => void): Promise<ThinkLevel | ThinkValue> {
+  const choice = profile?.effortChoices?.code ?? null
+  if (!choice) return 'high'
+  const resolved = resolveEffort(choice, await getModelThinking(model))
+  if (resolved.think === undefined) return 'high'
+  onStatus(`Réflexion de ${model} : ${resolved.applied}.`)
+  return resolved.think
 }
 
 /** Message final quand même la plus grande fenêtre permise ne suffit pas : lisible, et avec quoi faire. */
@@ -146,7 +162,7 @@ function contextTooSmallError(numCtx: number): Error {
  * Étape 189 : partagé par le mode Code et le Montage (même modèle, mêmes besoins d'avancement et d'arrêt),
  * plutôt que recopié — deux copies auraient fini par diverger comme les deux composeurs avant l'étape 92.
  */
-export function createModelStepRunner({ model, modelMaxContext, steps, onStatus, onProgress, signal }: ModelStepRunnerOptions) {
+export function createModelStepRunner({ model, think = 'high', modelMaxContext, steps, onStatus, onProgress, signal }: ModelStepRunnerOptions) {
   /**
    * Un appel au modèle, avec un vrai signe de vie pendant qu'il travaille.
    *
@@ -189,7 +205,7 @@ export function createModelStepRunner({ model, modelMaxContext, steps, onStatus,
         messages,
         undefined,
         model,
-        'high',
+        think,
         signal,
         numCtx,
         (delta) => {
@@ -654,7 +670,8 @@ export async function generateApp(
   const model = await resolveCodeModel(onStatus, profile)
   const modelMaxContext = await readModelMaxContext(model)
 
-  const runModelStep = createModelStepRunner({ model, modelMaxContext, steps, onStatus, onProgress, signal })
+  const think = await resolveCodeThink(profile, model, onStatus)
+  const runModelStep = createModelStepRunner({ model, think, modelMaxContext, steps, onStatus, onProgress, signal })
 
   const withImage = (base: string): string =>
     imageDescription

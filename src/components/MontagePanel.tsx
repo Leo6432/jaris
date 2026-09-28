@@ -7,7 +7,7 @@ import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import type { CodeGenProgress, GeneratedVideo, GeneratedVideoSummary, MontageInstallProgress, MontageStatus, PickedMontageClip } from '../../shared/ipc'
 import { MONTAGE_DISK_LABEL, MONTAGE_DOWNLOAD_LABEL } from '../../shared/montage'
 import { DownloadIcon } from './icons'
-import ModelPicker from './ModelPicker'
+import ModelEffortPicker from './ModelEffortPicker'
 
 type View = 'video' | 'code'
 
@@ -17,7 +17,7 @@ export function formatClipDuration(seconds: number): string {
   return total < 60 ? `${total} s` : `${Math.floor(total / 60)} min ${String(total % 60).padStart(2, '0')}`
 }
 
-/** Pellicule, pour le bouton « Vidéos » (même trait que les autres icônes du composeur). */
+/** Pellicule, pour l'entrée « Joindre des vidéos » du menu « + » (même trait que les autres icônes). */
 function FilmIcon(): JSX.Element {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -299,7 +299,7 @@ export default function MontagePanel(): JSX.Element {
             <p className="code-panel__intro">
               Décris ta vidéo : ce qu'on voit, les textes exacts, les couleurs et la durée (ex : « intro de 6
               secondes, fond bleu nuit, le titre JARIS apparaît en grand puis “Ton assistant local” en dessous »).
-              Tu peux aussi joindre tes vidéos avec le bouton « Vidéos » et dire quoi garder, couper et écrire
+              Tu peux aussi joindre tes vidéos avec le bouton « + » puis « Joindre des vidéos », et dire quoi garder, couper et écrire
               dessus (ex : « garde de 0:10 à 0:25, ajoute le titre VACANCES au début »). Jaris ne voit pas les
               images de ta vidéo : c'est toi qui lui dis quels passages garder.
             </p>
@@ -420,22 +420,16 @@ export default function MontagePanel(): JSX.Element {
           submitLabel={video ? 'Modifier' : 'Créer la vidéo'}
           busyLabel="Fabrication…"
           busy={generating}
-          extraActions={
-            <>
-              <button
-                type="button"
-                className="composer__attach montage-panel__add-videos"
-                onClick={() => void pickVideos()}
-                disabled={generating || picking}
-                title="Joindre tes vidéos à monter"
-                aria-label="Joindre des vidéos"
-              >
-                <FilmIcon />
-                <span>Vidéos</span>
-              </button>
-              <ModelPicker mode="code" disabled={generating} />
-            </>
-          }
+          extraActions={<ModelEffortPicker mode="code" disabled={generating} />}
+          addItems={[
+            {
+              id: 'videos',
+              label: 'Joindre des vidéos',
+              hint: picking ? 'lecture…' : 'à couper et monter',
+              icon: <FilmIcon />,
+              onSelect: () => void pickVideos()
+            }
+          ]}
           attachment={null}
           onAttachmentChange={() => {}}
           onError={setError}

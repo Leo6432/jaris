@@ -5279,3 +5279,32 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   fichier source intact, vidéo reprise à la modification, ancienne version gardée) et
   `scripts/test-montage-panel-ui.mjs` (pastille avec durée, identifiant envoyé et jamais un chemin, vidéo
   reprise au montage, retrait avant envoi).
+
+- **Champ de saisie façon ChatGPT + effort de réflexion (étape 191, Léo : « change présentation comme chatgpt,
+  pas exactement… mais même présentation, et ajoute effort et modèle »).** Le champ (Chat, Code, Montage) a
+  désormais le texte en haut et une rangée en bas : « + » à gauche (menu « Ajouter » : image, ou vidéos en
+  Montage), puis le sélecteur « Modèle · Effort » et un bouton d'envoi rond à droite. Le sélecteur ouvre un
+  panneau avec un curseur à 5 crans (Aucune → Maximale), le nom du modèle (clic → liste « Par défaut » + rôles)
+  et un retour à Auto. `ModelPicker.tsx` (menu déroulant de l'étape 141) est remplacé par `ModelEffortPicker.tsx`.
+  **Le vrai défaut trouvé en préparant l'effort** : Jaris envoyait `think: "high"` à TOUS les modèles. Or chaque
+  modèle a SES niveaux (vérifié sur les fiches officielles : qwen3.8 = off/low/medium/xhigh, défaut xhigh ;
+  gpt-oss = low/medium/high ; granite4.2 = off/low/high ; la plupart = avec ou sans ; certains ne réfléchissent
+  pas), et un niveau inconnu retombe sur le DÉFAUT du modèle — qwen3.8 réfléchissait donc au maximum sans que
+  personne l'ait demandé, ce qui explique une partie des montages de 18 minutes de Léo. **Leçon générale : le
+  badge « thinking » d'un modèle ne dit pas QUELS niveaux il accepte ; un paramètre commun envoyé à tous les
+  modèles doit être traduit vers ce que chacun annonce (`/api/show` : `capabilities` + `thinking.values`),
+  jamais supposé.** `shared/effort.ts` (pur, testé) traduit le cran choisi vers le niveau réel le plus proche
+  (à égalité le plus haut ; « Aucune » = le plus bas niveau pour un modèle qui ne sait pas couper). Ollama muet
+  ou choix Auto : rien n'est imposé (comportement d'avant), sauf « Aucune » qui coupe la réflexion, toujours
+  sûr. Réglage enregistré par mode (`profile.effortChoices`), appliqué par la conversation, le mode Code et le
+  Montage.
+  **Piège déjà écrit ici, revécu** : `ollama.ts` importait `shared/effort` en TYPE seul (effacé à la
+  compilation), puis en VALEUR une fois `parseModelThinking` déplacé dedans — les faux ponts de
+  `test-codegen-context.mjs` et `test-montage.mjs` ne le fournissaient pas et 14 tests ont échoué d'un coup.
+  Passer d'un `import type` à un import de valeur ajoute une dépendance réelle : `grep` les faux ponts.
+  **Non vérifié ici** : contre un vrai Ollama (téléchargement bloqué dans cet environnement) — le calcul repose
+  sur la documentation officielle de `/api/show` et les fiches des modèles ; le premier essai de Léo tranchera.
+  Régression : `node --test scripts/test-effort.mjs` (niveaux réels de qwen3.8/gpt-oss/granite4.2, modèle sans
+  réflexion intact, lecture tolérante de `/api/show` ; vérifié en réintroduisant l'envoi de « high » à tous) et
+  `scripts/test-model-picker-ui.mjs` (vrai navigateur : disposition, menu « + », curseur, liste des modèles,
+  niveaux réels affichés, curseur désactivé pour un modèle qui ne réfléchit pas).

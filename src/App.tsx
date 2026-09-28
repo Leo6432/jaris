@@ -11,7 +11,7 @@ import OptionsMenu from '@/components/OptionsMenu'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import { useJarisStore, type JarisEmotion } from '@/store/useJarisStore'
 import type { AppVersionStatus, MemoryGraph, OllamaVersionStatus, WidgetMode } from '../shared/ipc'
-import ModelPicker from '@/components/ModelPicker'
+import ModelEffortPicker from '@/components/ModelEffortPicker'
 
 const STATUS_LABEL: Record<JarisEmotion, string> = {
   idle: 'Jaris dort...',
@@ -466,7 +466,7 @@ export default function App(): JSX.Element {
 
                 {/* Étape 141 : même sélecteur que le Chat et le mode Code — Auto ou un modèle précis pour la voix. */}
                 <div className="app__model-picker">
-                  <ModelPicker mode="voice" />
+                  <ModelEffortPicker mode="voice" />
                 </div>
 
                 {(transcript || reply) && (

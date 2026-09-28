@@ -6,7 +6,7 @@ import { formatRecentDate } from '@/lib/formatRecentDate'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import type { ImageAttachment } from '@/lib/imageAttachment'
 import type { CodeGenProgress, GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
-import ModelPicker from './ModelPicker'
+import ModelEffortPicker from './ModelEffortPicker'
 
 type View = 'preview' | 'code'
 
@@ -332,12 +332,11 @@ export default function CodePanel(): JSX.Element {
           submitLabel={appResult ? 'Modifier' : "Générer l'application"}
           busyLabel="Génération…"
           busy={generating}
-          extraActions={<ModelPicker mode="code" disabled={generating} />}
+          extraActions={<ModelEffortPicker mode="code" disabled={generating} />}
           attachment={attachment}
           onAttachmentChange={setAttachment}
           onError={setError}
           rows={3}
-          hint="Ctrl+V pour coller une capture, ou glisse une image ici"
         />
       </div>
     </Workspace>

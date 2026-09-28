@@ -51,6 +51,7 @@ function loadGenerator(overrides = {}) {
       isAbortError: (err) => err?.name === 'AbortError',
       readModelMaxContext: async () => null,
       resolveCodeModel: async () => 'modele-de-test',
+      resolveCodeThink: async () => 'high',
       slugify: (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'video'
     },
     './dataLocation': { getDataRoot: () => '/donnees' },
@@ -236,6 +237,7 @@ test('de bout en bout : un code cassé est corrigé grâce à la VRAIE erreur de
         isAbortError: (err) => err?.name === 'AbortError',
         readModelMaxContext: async () => null,
         resolveCodeModel: async () => 'modele-de-test',
+      resolveCodeThink: async () => 'high',
         slugify: () => 'intro-jaris'
       },
       './dataLocation': { getDataRoot: () => dataRoot },
@@ -308,6 +310,7 @@ test('« Arrêter » pendant le rendu tue Remotion et ne laisse aucune vidéo à
         isAbortError: (err) => err?.name === 'AbortError',
         readModelMaxContext: async () => null,
         resolveCodeModel: async () => 'modele-de-test',
+      resolveCodeThink: async () => 'high',
         slugify: () => 'a-arreter'
       },
       './dataLocation': { getDataRoot: () => dataRoot },
@@ -366,6 +369,7 @@ test('monter une VRAIE vidéo : coupée, texte par-dessus, reprise à la modific
         isAbortError: (err) => err?.name === 'AbortError',
         readModelMaxContext: async () => null,
         resolveCodeModel: async () => 'modele-de-test',
+      resolveCodeThink: async () => 'high',
         slugify: (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
       },
       './dataLocation': { getDataRoot: () => dataRoot },

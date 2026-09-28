@@ -1,4 +1,5 @@
 import { config } from '../config'
+import { parseModelThinking, type ModelThinking, type ThinkValue } from '../../shared/effort'
 import { DISK_SAFETY_MARGIN_GB, detectFreeDiskGb, getDownloadBudgetGb } from './systemResources'
 import { importHuggingFaceModel } from './huggingFaceImport'
 
@@ -160,7 +161,8 @@ export async function chatWithOllama(
   messages: OllamaMessage[],
   tools?: OllamaTool[],
   model: string = config.ollama.model,
-  think: ThinkLevel = 'medium',
+  // Étape 191 : aussi un niveau propre au modèle (« xhigh »…) ou true/false, voir shared/effort.ts.
+  think: ThinkLevel | ThinkValue = 'medium',
   signal?: AbortSignal,
   // Surcharge ponctuelle de la fenêtre de contexte : la conversation normale tient largement dans la
   // valeur par défaut (OLLAMA_NUM_CTX), mais la génération de code (étape 30) produit un fichier complet
@@ -244,6 +246,31 @@ export async function getModelInfo(model: string): Promise<Record<string, unknow
   if (!response.ok) return null
   const data = (await response.json()) as { model_info?: Record<string, unknown> }
   return data.model_info ?? null
+}
+
+/**
+ * Étape 191 : ce qu'Ollama annonce de la réflexion d'un modèle (`/api/show` : `capabilities` et, sur les
+ * versions récentes, `thinking: { values, default }` — format de la documentation officielle d'Ollama). Mis en
+ * cache : la réponse ne change pas tant que le modèle n'est pas retéléchargé, et elle est lue à chaque message.
+ */
+const thinkingCache = new Map<string, ModelThinking>()
+
+export async function getModelThinking(model: string): Promise<ModelThinking | null> {
+  const cached = thinkingCache.get(model)
+  if (cached) return cached
+  try {
+    const response = await fetch(`${config.ollama.host}/api/show`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model })
+    })
+    if (!response.ok) return null
+    const meta = parseModelThinking(await response.json())
+    thinkingCache.set(model, meta)
+    return meta
+  } catch {
+    return null
+  }
 }
 
 interface OllamaPullProgress {

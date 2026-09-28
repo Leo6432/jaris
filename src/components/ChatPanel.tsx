@@ -7,7 +7,7 @@ import { renderFormattedText } from '@/lib/formatReply'
 import { formatChatProgress } from '@/lib/formatChatProgress'
 import type { ImageAttachment } from '@/lib/imageAttachment'
 import type { ChatMessage, ConversationList } from '../../shared/ipc'
-import ModelPicker from './ModelPicker'
+import ModelEffortPicker from './ModelEffortPicker'
 import { DownloadIcon } from './icons'
 
 /**
@@ -204,12 +204,11 @@ export default function ChatPanel(): JSX.Element {
           submitLabel="Envoyer"
           busyLabel="Envoi…"
           busy={sending}
-          extraActions={<ModelPicker mode="chat" disabled={sending} />}
+          extraActions={<ModelEffortPicker mode="chat" disabled={sending} />}
           attachment={attachment}
           onAttachmentChange={setAttachment}
           onError={setError}
           submitOnEnter
-          hint="Entrée pour envoyer · Maj+Entrée : nouvelle ligne · Ctrl+V : coller une image"
         />
       </div>
     </Workspace>

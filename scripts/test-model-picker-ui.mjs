@@ -7,10 +7,11 @@ import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
 /**
- * Sélecteur de modèle (étape 141, Léo : « ajoute dans chat code vocal, la possibilité de choisir le model ou
- * faire auto »), sur le VRAI ChatPanel et le vrai CSS compilé : il est bien dans la barre du champ de saisie,
- * il propose Auto + les modèles installés sous leur nom lisible, et un choix envoie le VRAI identifiant du
- * modèle au main process (jamais le nom affiché). Playwright absent : tests ignorés, jamais verts en silence.
+ * Sélecteur de modèle (étape 141) devenu « modèle + effort » façon ChatGPT (étape 191, Léo : « même présentation
+ * que ChatGPT… ajoute effort et modèle »), sur le VRAI ChatPanel et le vrai CSS compilé : le champ a le texte en
+ * haut, « + » à gauche, modèle/effort puis envoi rond à droite ; le panneau propose un curseur à cinq crans et
+ * la liste des modèles, et chaque choix part au main process sous son vrai identifiant. Playwright absent :
+ * tests ignorés, jamais verts en silence.
  */
 let chromium = null
 try {
@@ -25,10 +26,11 @@ const entryPath = join(projectRoot, 'tmp-model-picker-entry.tsx')
 const ENTRY = `
 import { createRoot } from 'react-dom/client'
 import Panel from './src/components/ChatPanel'
-import ModelPicker from './src/components/ModelPicker'
+import ModelEffortPicker from './src/components/ModelEffortPicker'
 
 const INSTALLED = ['gemma4:12b', 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF:latest', 'qwen3.5:4b']
 window.__choices = { code: null, chat: null }
+window.__efforts = { code: null, chat: null }
 window.__calls = []
 
 window.jaris = {
@@ -46,6 +48,10 @@ window.jaris = {
     selected: window.__choices[mode] ?? null,
     installed: INSTALLED,
     autoModel: mode === 'code' ? 'qwen2.5-coder:7b' : null,
+    effort: window.__efforts[mode] ?? null,
+    effortModel: mode === 'code' ? (window.__codeModel ?? 'qwen3.8:27b') : null,
+    effortLevels: mode === 'code' ? (window.__codeLevels ?? 'off · low · medium · xhigh') : null,
+    effortApplied: mode === 'code' ? ({ none: 'sans réflexion', low: 'low', medium: 'medium', high: 'xhigh', max: 'xhigh' }[window.__efforts.code] ?? 'automatique') : null,
     roles: [
       { value: 'role:flash', label: 'Rapide', model: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF:latest', installed: true },
       { value: 'role:medium', label: 'Médium', model: 'gemma4:12b', installed: true },
@@ -54,6 +60,11 @@ window.jaris = {
       { value: 'role:code', label: 'Code', model: 'qwen2.5-coder:7b', installed: false }
     ]
   }),
+  setEffortChoice: (mode, effort) => {
+    window.__calls.push(['effort', mode, effort])
+    window.__efforts[mode] = effort
+    return Promise.resolve()
+  },
   setModelChoice: (mode, model) => {
     window.__calls.push([mode, model])
     window.__choices[mode] = model
@@ -62,7 +73,7 @@ window.jaris = {
 }
 
 createRoot(document.getElementById('root')).render(<Panel />)
-createRoot(document.getElementById('code-picker')).render(<ModelPicker mode="code" />)
+createRoot(document.getElementById('code-picker')).render(<ModelEffortPicker mode="code" />)
 `
 
 let pageHtml = null
@@ -98,19 +109,20 @@ function buildPage() {
     html,body{margin:0;height:100%;background:#05070c;}
     #root{height:90%;display:flex;}
     ${css}
+    #code-picker{position:fixed;left:40px;bottom:40px;}
   </style></head><body><div id="root"></div><div id="code-picker"></div><script>${readFileSync(bundlePath, 'utf8')}</script></body></html>`
   return pageHtml
 }
 
 /** try/finally : sinon une assertion qui échoue laisse Chromium ouvert et `node --test` ne se termine jamais. */
-async function withPage(run) {
+async function withPage(run, init = '') {
   const html = buildPage()
   const browser = await chromium.launch()
   try {
     const page = await browser.newPage()
     await page.setViewportSize({ width: 1100, height: 800 })
-    await page.setContent(html)
-    await page.waitForSelector('#root .model-picker__select option:nth-child(2)', { state: 'attached' })
+    await page.setContent(init ? html.replace('<body>', `<body><script>${init}</script>`) : html)
+    await page.waitForSelector('#root .effort-picker__trigger')
     await run(page)
   } finally {
     await browser.close()
@@ -120,44 +132,87 @@ async function withPage(run) {
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
 
-test('le sélecteur est dans la barre du Chat et propose Auto + les cinq rôles', options, async () => {
+test('le champ du Chat : texte en haut, « + » à gauche, modèle/effort puis envoi rond à droite', options, async () => {
   await withPage(async (page) => {
-    assert.equal(await page.locator('#root .composer__actions .model-picker__select').count(), 1)
-    const labels = await page.locator('#root .model-picker__select option').allTextContents()
-    assert.deepEqual(labels, ['Auto', 'Rapide', 'Médium', 'Puissant', 'Vision', 'Code'])
-    assert.equal(await page.inputValue('#root .model-picker__select'), '', 'Auto par défaut')
+    const box = async (sel) => page.$eval(sel, (el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height } })
+    const input = await box('#root .composer__input')
+    const plus = await box('#root .composer__plus')
+    const picker = await box('#root .effort-picker__trigger')
+    const send = await box('#root .composer__send')
+    assert.ok(input.y + input.h <= plus.y + 1, 'le texte est au-dessus de la rangée de boutons')
+    assert.ok(plus.x < picker.x && picker.x < send.x, '« + » à gauche, puis modèle/effort, puis envoi')
+    assert.ok(send.x + send.w > input.x + input.w - 30, 'envoi tout à droite')
+    const sendStyle = await page.$eval('#root .composer__send', (el) => ({ radius: getComputedStyle(el).borderRadius, clip: getComputedStyle(el).clipPath, bg: getComputedStyle(el).backgroundColor }))
+    assert.equal(sendStyle.clip, 'none', 'plus de coins coupés : un bouton rond')
+    assert.ok(parseFloat(sendStyle.radius) >= 18, `envoi rond (rayon ${sendStyle.radius})`)
+    assert.notEqual(sendStyle.bg, 'rgba(0, 0, 0, 0)', 'envoi rempli')
+    assert.match(await page.textContent('#root .effort-picker__trigger'), /Auto\s*Auto/)
   })
 })
 
-test('choisir un rôle enregistre ce rôle, et revenir à Auto envoie null', options, async () => {
+test('« + » ouvre le menu Ajouter, avec l’image et le rappel Ctrl+V ; un clic ailleurs le ferme', options, async () => {
   await withPage(async (page) => {
-    await page.selectOption('#root .model-picker__select', { label: 'Rapide' })
-    await page.waitForFunction(() => window.__calls.length === 1)
-    await page.selectOption('#root .model-picker__select', { label: 'Auto' })
-    await page.waitForFunction(() => window.__calls.length === 2)
-    assert.deepEqual(await page.evaluate(() => window.__calls), [
-      ['chat', 'role:flash'],
-      ['chat', null]
-    ])
+    await page.click('#root .composer__plus')
+    await page.waitForSelector('#root .composer__menu')
+    assert.match(await page.textContent('#root .composer__menu'), /Ajouter.*Joindre une image.*Ctrl\+V/s)
+    const menu = await page.$eval('#root .composer__menu', (el) => el.getBoundingClientRect().bottom)
+    const plus = await page.$eval('#root .composer__plus', (el) => el.getBoundingClientRect().top)
+    assert.ok(menu <= plus, 'le menu s’ouvre AU-DESSUS du champ (le champ est en bas de l’écran)')
+    await page.mouse.click(600, 100)
+    await page.waitForSelector('#root .composer__menu', { state: 'detached' })
   })
 })
 
-test('en mode Code, le bouton Auto reste court et le rôle Code est présent', options, async () => {
+test('effort : cinq crans ; choisir « Moyenne » l’enregistre, ↻ revient à Auto', options, async () => {
   await withPage(async (page) => {
-    await page.waitForSelector('#code-picker .model-picker__select option:nth-child(2)', { state: 'attached' })
-    assert.equal(await page.textContent('#code-picker .model-picker__select option:first-child'), 'Auto')
-    assert.equal(await page.textContent('#code-picker .model-picker__select option:last-child'), 'Code')
+    await page.click('#root .effort-picker__trigger')
+    await page.waitForSelector('#root .effort-picker__panel')
+    assert.equal(await page.locator('#root .effort-picker__step').count(), 5)
+    const panel = await page.$eval('#root .effort-picker__panel', (el) => el.getBoundingClientRect().bottom)
+    const trigger = await page.$eval('#root .effort-picker__trigger', (el) => el.getBoundingClientRect().top)
+    assert.ok(panel <= trigger, 'le panneau s’ouvre au-dessus')
+    await page.click('#root .effort-picker__step[aria-label="Moyenne"]')
+    await page.waitForFunction(() => document.querySelector('#root .effort-picker__current')?.textContent === 'Moyenne')
+    assert.match(await page.textContent('#root .effort-picker__trigger'), /Auto\s*Moyenne/)
+    // Le cran s'allume en 0,15 s (transition) : on attend la fin plutôt que de lire la toute première image.
+    await page.waitForFunction(() => {
+      const el = document.querySelector('#root .effort-picker__step--active')
+      return el && getComputedStyle(el).backgroundColor === 'rgb(230, 247, 255)'
+    }, null, { timeout: 2000 })
+    await page.click('#root .effort-picker__reset')
+    await page.waitForFunction(() => document.querySelector('#root .effort-picker__current')?.textContent === 'Auto')
+    assert.deepEqual(await page.evaluate(() => window.__calls.filter((c) => c[0] === 'effort')), [['effort', 'chat', 'medium'], ['effort', 'chat', null]])
   })
 })
 
-test("le sélecteur reste discret : pas le cadre plein des champs de saisie (règle globale en !important)", options, async () => {
+test('le nom du modèle ouvre la liste « Par défaut » + rôles ; un rôle non installé est grisé', options, async () => {
   await withPage(async (page) => {
-    const style = await page.evaluate(() => {
-      const s = getComputedStyle(document.querySelector('#root .model-picker__select'))
-      return { border: s.borderTopColor, radius: s.borderTopLeftRadius, background: s.backgroundColor }
-    })
-    assert.equal(style.border, 'rgba(0, 0, 0, 0)', 'bordure transparente au repos')
-    assert.equal(style.radius, '10px', 'coins arrondis comme l’icône de pièce jointe')
-    assert.equal(style.background, 'rgba(0, 0, 0, 0)')
+    await page.click('#root .effort-picker__trigger')
+    await page.click('#root .effort-picker__model-link')
+    await page.waitForSelector('#root .effort-picker__list')
+    const titles = await page.$$eval('#root .effort-picker__option-title', (els) => els.map((el) => el.textContent))
+    assert.deepEqual(titles, ['Par défaut', 'Rapide', 'Médium', 'Puissant', 'Vision', 'Code'])
+    assert.equal(await page.locator('#root .effort-picker__option:has-text("Code")').isDisabled(), true)
+    await page.click('#root .effort-picker__option:has-text("Puissant")')
+    await page.waitForSelector('#root .effort-picker__slider')
+    assert.match(await page.textContent('#root .effort-picker__trigger'), /Puissant/)
+    assert.deepEqual(await page.evaluate(() => window.__calls.filter((c) => c[0] === 'chat')), [['chat', 'role:large']])
   })
+})
+
+test('Code : le panneau dit les VRAIS niveaux du modèle et ce que l’effort donnera dessus', options, async () => {
+  await withPage(async (page) => {
+    await page.click('#code-picker .effort-picker__trigger')
+    await page.click('#code-picker .effort-picker__step[aria-label="Élevée"]')
+    await page.waitForFunction(() => /qwen3\.8:27b : off · low · medium · xhigh → xhigh/.test(document.querySelector('#code-picker .effort-picker__note')?.textContent ?? ''))
+  })
+})
+
+test('un modèle qui ne réfléchit pas : curseur désactivé et expliqué', options, async () => {
+  await withPage(async (page) => {
+    await page.click('#code-picker .effort-picker__trigger')
+    await page.waitForSelector('#code-picker .effort-picker__slider--off')
+    assert.match(await page.textContent('#code-picker .effort-picker__note'), /qwen2\.5-coder:7b ne réfléchit pas/)
+    assert.equal(await page.locator('#code-picker .effort-picker__step').first().isDisabled(), true)
+  }, "window.__codeModel = 'qwen2.5-coder:7b'; window.__codeLevels = 'ne réfléchit pas'")
 })
