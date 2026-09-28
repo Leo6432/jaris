@@ -5369,3 +5369,10 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
      le modèle et ses benchmarks existent — sinon Jaris télécharge des gigaoctets pour un modèle qui ne
      démarre pas.** Consigné en commentaire dans FLASH_CANDIDATES (hardwareScan.ts) pour le revoir dès
      qu'une version d'Ollama le charge.
+
+- **« Enlève "Clique sur le cerveau pour activer la réflexion" » (Léo, étape 197).** Phrase retirée (et sa
+  variante « Réflexion activée : clique sur le cerveau pour la couper ») : le cerveau allumé/éteint et le
+  titre (on/off) suffisent, l'infobulle du bouton garde l'explication. Même logique que l'étape 196 : pas de
+  phrase qui répète ce que l'écran montre déjà. Léo a aussi confirmé en usage réel le diagnostic de l'étape
+  196 sur K2 Horizon : `ollama run hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M` échoue avec « unknown model
+  architecture: 'k2-horizon' » — ne pas l'ajouter tant qu'une version d'Ollama ne le charge pas.

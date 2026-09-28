@@ -233,6 +233,7 @@ test('modèle avec ou sans (gemma4) : on clique DIRECTEMENT sur le cerveau, pas 
     await page.waitForSelector('#root .effort-picker__brain')
     assert.equal(await page.locator('#root .effort-picker__slider, #root [role="switch"], #root input[type="checkbox"]').count(), 0)
     assert.equal(await page.getAttribute('#root .effort-picker__brain', 'aria-pressed'), 'false')
+    assert.equal(await page.locator('#root .effort-picker__note').count(), 0, 'pas de phrase « Clique sur le cerveau » (étape 197)')
     await page.click('#root .effort-picker__brain')
     await page.waitForSelector('#root .effort-picker__brain[aria-pressed="true"]')
     assert.deepEqual((await page.evaluate(() => window.__calls)).at(-1), ['think', 'chat', true])

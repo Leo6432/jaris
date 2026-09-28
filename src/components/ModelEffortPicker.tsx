@@ -253,11 +253,6 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
               )}
 
 
-              {kind === 'toggle' && (
-                <p className="effort-picker__note">
-                  {thinkSelected === true ? 'Réflexion activée : clique sur le cerveau pour la couper.' : 'Clique sur le cerveau pour activer la réflexion.'}
-                </p>
-              )}
 
               {/* Étape 196 (Léo) : pas de phrase pour un modèle qui ne réfléchit pas, le titre « Sans réflexion » suffit. */}
               {!canThink && kind !== 'none' && (
