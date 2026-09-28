@@ -145,27 +145,20 @@ test("sans image, le prompt du modèle de code est inchangé", async () => {
   assert.equal(userPrompt, 'Application à créer : une todo list')
 })
 
-// Étape 141 : sélecteur de modèle du mode Code (Auto ou un modèle précis).
-test('mode Code : un modèle choisi à la main est utilisé pour écrire ET relire le code', async () => {
+// Étape 141 : sélecteur de modèle du mode Code — retiré à l'étape 201 (toujours le modèle Code).
+test('mode Code (étape 201) : toujours le modèle Code, même avec un ancien choix à la main enregistré', async () => {
   const app = setup([VALID_HTML, VALID_HTML], {
     profile: { codeModel: 'test-model', modelChoices: { code: 'choisi:14b' } },
     installed: ['test-model', 'choisi:14b']
   })
   await app.generateApp('une todo list')
   assert.ok(app.models.length >= 1)
-  assert.ok(app.models.every((m) => m === 'choisi:14b'), `modèles utilisés : ${app.models.join(', ')}`)
-  assert.ok(app.statusLines.some((line) => /choisi à la main : choisi:14b/.test(line)))
+  assert.ok(app.models.every((m) => m === 'test-model'), `modèles utilisés : ${app.models.join(', ')}`)
+  assert.ok(!app.statusLines.some((line) => /choisi à la main/.test(line)))
 })
 
 test('mode Code : sur Auto, le modèle calculé pour la machine reste utilisé comme avant', async () => {
   const app = setup([VALID_HTML, VALID_HTML], { profile: { codeModel: 'test-model' }, installed: ['test-model', 'choisi:14b'] })
   await app.generateApp('une todo list')
   assert.ok(app.models.every((m) => m === 'test-model'))
-})
-
-test('mode Code : un choix dont le modèle a été supprimé retombe sur Auto', async () => {
-  const app = setup([VALID_HTML, VALID_HTML], { profile: { codeModel: 'test-model', modelChoices: { code: 'choisi:14b' } } })
-  await app.generateApp('une todo list')
-  assert.ok(app.models.every((m) => m === 'test-model'))
-  assert.ok(app.statusLines.some((line) => /n'est plus installé/.test(line)))
 })

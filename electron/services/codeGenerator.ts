@@ -1,4 +1,3 @@
-import { resolveChosenModel } from './modelChoice'
 import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { config } from '../config'
@@ -513,13 +512,8 @@ export async function resolveCodeModel(onStatus: (message: string) => void, prof
   const savedCodeModel = profile?.codeModel
   const installed = await listInstalledModels().catch(() => [] as string[])
 
-  // Étape 141 : modèle choisi à la main dans le sélecteur du mode Code. Retour à Auto s'il n'est plus installé.
-  const chosen = resolveChosenModel(profile, 'code', installed)
-  if (chosen) {
-    onStatus(`Modèle de code choisi à la main : ${chosen}.`)
-    return chosen
-  }
-  if (profile?.modelChoices?.code) onStatus(`${profile.modelChoices.code} n'est plus installé : retour au choix automatique.`)
+  // Étape 201 (Léo) : le mode Code utilise TOUJOURS le modèle Code — plus de choix à la main (étape 141), même
+  // un ancien choix enregistré est ignoré, comme le mode Image avec son modèle de dessin.
 
   const model = savedCodeModel ?? (await pickBestCodeModel())
 

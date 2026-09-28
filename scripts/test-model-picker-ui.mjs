@@ -36,8 +36,7 @@ window.__calls = []
 const ROLES = [
   { value: 'role:flash', label: 'Rapide', model: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF:latest', installed: true },
   { value: 'role:medium', label: 'Médium', model: 'gemma4:12b', installed: true },
-  { value: 'role:large', label: 'Puissant', model: 'qwen3.8:27b', installed: true },
-  { value: 'role:code', label: 'Code', model: 'qwen2.5-coder:14b', installed: false }
+  { value: 'role:large', label: 'Puissant', model: 'qwen3.8:27b', installed: true }
 ]
 // Ce que le main calcule depuis /api/show (shared/effort.ts), pour chaque modèle.
 const THINKING = {
@@ -66,7 +65,8 @@ window.jaris = {
       selected,
       installed: INSTALLED,
       autoModel,
-      roles: ROLES,
+      // Comme le main (étape 201) : Rapide/Médium/Puissant pour discuter, aucun choix en Code.
+      roles: mode === 'code' ? [] : ROLES,
       thinking: model ? { model, ...THINKING[model], selected: window.__thinks[mode] } : null
     })
   },
@@ -278,14 +278,36 @@ test('le nom du modèle est raccourci (pas hf.co/…/…-GGUF:Q4_K_M), le nom co
   })
 })
 
-test('Code en Auto : le modèle d’Auto est affiché avec ses vrais choix ; un rôle non installé est grisé', options, async () => {
+test('Code : toujours le modèle Code — affiché, jamais cliquable, aucune liste (étape 201)', options, async () => {
   await withPage(async (page) => {
     await openPicker(page, '#code-picker')
-    assert.match(await page.textContent('#code-picker .effort-picker__model-link'), /qwen2\.5-coder:7b/)
-    assert.equal(await page.textContent('#code-picker .effort-picker__current'), 'Auto')
-    assert.equal(await page.locator('#code-picker .effort-picker__note').count(), 0)
+    assert.equal(await page.textContent('#code-picker .effort-picker__current'), 'Code')
+    assert.equal(await page.textContent('#code-picker .effort-picker__model-link'), 'qwen2.5-coder:7b')
+    assert.equal(await page.$eval('#code-picker .effort-picker__model-link', (el) => el.tagName), 'SPAN', 'pas un bouton')
     await page.click('#code-picker .effort-picker__model-link')
-    assert.equal(await page.locator('#code-picker .effort-picker__option').last().isDisabled(), true)
+    assert.equal(await page.locator('#code-picker .effort-picker__option').count(), 0, 'aucune liste de modèles')
+    assert.match(await page.textContent('#code-picker .effort-picker__trigger'), /^Code/)
+  })
+})
+
+test('Chat : seulement Rapide, Médium et Puissant — pas Code, pas Vision (étape 201)', options, async () => {
+  await withPage(async (page) => {
+    await openPicker(page)
+    await page.click('#root .effort-picker__model-link')
+    const titles = await page.$$eval('#root .effort-picker__option-title', (els) => els.map((el) => el.textContent))
+    assert.deepEqual(titles, ['Auto', 'Rapide', 'Médium', 'Puissant'])
+  })
+})
+
+test('le texte du bouton ne se surligne pas au double-clic, et le panneau ne sort jamais par le haut (étape 201)', options, async () => {
+  await withPage(async (page) => {
+    assert.equal(await page.$eval('#root .effort-picker__trigger', (el) => getComputedStyle(el).userSelect), 'none')
+    await page.setViewportSize({ width: 1100, height: 240 })
+    await openPicker(page)
+    await page.click('#root .effort-picker__model-link')
+    await page.waitForTimeout(100)
+    const top = await page.$eval('#root .effort-picker__panel', (el) => el.getBoundingClientRect().top)
+    assert.ok(top >= 0, `le haut du panneau reste dans la fenêtre (${top})`)
   })
 })
 

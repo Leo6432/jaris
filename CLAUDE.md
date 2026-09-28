@@ -5483,3 +5483,26 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `scripts/test-model-picker-ui.mjs` (panneau centré et jamais coupé — vérifié en remettant l'ancien CSS).
   **Non vérifié ici** : un vrai dessin (moteur Windows + carte graphique) et l'effacement réel du paquet
   Montage sur la machine de Léo.
+
+- **« Petit bug » (texte « Auto » surligné en bleu), « dans Code on ne peut pas choisir le modèle, c'est
+  toujours Code, comme Image avec le modèle Image », « dans Chat et Vocal on ne doit pas avoir Code » (Léo,
+  étape 201).**
+  1. **Le surlignage** : un double-clic sur « Auto » sélectionnait le texte du bouton comme du texte de page
+     (capture de Léo). `user-select: none` sur le sélecteur. Sur la même capture, la liste sortait par le haut
+     de la fenêtre : la hauteur du panneau est maintenant bornée à l'espace au-dessus du bouton (le reste
+     défile) — test vérifié en retirant la borne, mais SEULEMENT après avoir réduit la fenêtre de test à 240 px
+     (à 330 px le test passait sans la borne : il ne mordait pas).
+  2. **Code : plus de choix de modèle** (étape 141 retirée pour ce mode). Le sélecteur affiche « Code » et le
+     modèle, sans flèche ni liste ; `resolveCodeModel` ignore tout ancien choix enregistré et prend toujours le
+     modèle Code du profil (comme le mode Image avec son modèle de dessin). Ma question à choix (« il manque
+     des choix ? la liste est coupée ? ») était à côté : Léo voulait qu'il n'y ait AUCUN choix. **Leçon : quand
+     l'utilisateur dit « ça ne doit pas être possible », c'est une suppression, pas un réglage — ne pas
+     proposer d'amélioration du réglage.**
+  3. **Chat et Vocal : plus de rôle Code** (`ROLES_BY_MODE`, modelChoice.ts) : Rapide, Médium, Puissant
+     seulement. Le rôle Code n'a aucun sens pour discuter. Un ancien « role:code » enregistré en Chat retombe
+     sur Auto, et l'enregistrement d'un choix en mode Code est refusé côté main (jamais fait confiance à
+     l'écran).
+  Régression : `scripts/test-model-choice.mjs` (Code ne se choisit pas, ancien choix ignoré, refus
+  d'enregistrement), `scripts/test-codegen-generate.mjs` (un ancien choix à la main est ignoré, remplace les
+  deux tests de l'étape 141 devenus faux) et `scripts/test-model-picker-ui.mjs` (Code affiché sans bouton ni
+  liste, Chat sans Code ni Vision, texte non sélectionnable, panneau jamais coupé par le haut).

@@ -14,19 +14,30 @@ export const MODEL_CHOICE_MODES: readonly ModelChoiceMode[] = ['chat', 'code', '
 // Étape 198 (Léo : « pourquoi on peut choisir Vision, c'est pas un modèle pour la conversation ») : le rôle
 // Vision ne sert qu'à regarder l'écran ou une image, il n'est plus proposé pour discuter. Un ancien choix
 // « role:vision » enregistré retombe sur Auto (modelForRole ne le connaît plus).
-const ROLES = [
+//
+// Étape 201 (Léo : « dans chat et vocal on doit pas avoir code », « dans code on peut choisir le modèle, mais
+// ça doit pas être possible, c'est toujours code, comme image avec le modèle image ») : chaque mode ne propose
+// que ses propres rôles. Chat et Vocal : Rapide, Médium, Puissant. Code : AUCUN choix, toujours le modèle Code
+// du profil (comme le mode Image avec son modèle de dessin). Un ancien choix enregistré hors de cette liste
+// (« role:code » en Chat, n'importe quoi en Code) retombe sur Auto.
+const CONVERSATION_ROLES = [
   { key: 'flash', label: 'Rapide' },
   { key: 'medium', label: 'Médium' },
-  { key: 'large', label: 'Puissant' },
-  { key: 'code', label: 'Code' }
+  { key: 'large', label: 'Puissant' }
 ] as const
 
-function modelForRole(profile: Profile | null, value: string): string | null {
+const ROLES_BY_MODE: Record<ModelChoiceMode, ReadonlyArray<{ key: string; label: string }>> = {
+  chat: CONVERSATION_ROLES,
+  voice: CONVERSATION_ROLES,
+  code: []
+}
+
+function modelForRole(profile: Profile | null, value: string, mode: ModelChoiceMode): string | null {
+  if (!ROLES_BY_MODE[mode].some(({ key }) => value === `role:${key}`)) return null
   switch (value) {
     case 'role:flash': return profile?.models?.flash ?? null
     case 'role:medium': return profile?.models?.medium ?? null
     case 'role:large': return profile?.models?.large ?? null
-    case 'role:code': return profile?.codeModel ?? null
     default: return null
   }
 }
@@ -57,8 +68,8 @@ export function selectableModels(installed: string[]): string[] {
  */
 export function resolveChosenModel(profile: Profile | null, mode: ModelChoiceMode, installed: string[]): string | null {
   const chosen = profile?.modelChoices?.[mode]
-  if (!chosen) return null
-  const model = chosen.startsWith('role:') ? modelForRole(profile, chosen) : chosen
+  if (!chosen || mode === 'code') return null
+  const model = chosen.startsWith('role:') ? modelForRole(profile, chosen, mode) : chosen
   return model && isInstalled(model, selectableModels(installed)) ? model : null
 }
 
@@ -69,9 +80,9 @@ export function buildModelChoiceInfo(profile: Profile | null, mode: ModelChoiceM
       (resolveChosenModel(profile, mode, installed) ? (profile?.modelChoices?.[mode] ?? null) : null),
     installed: installed === null ? null : selectableModels(installed),
     autoModel: mode === 'code' ? (profile?.codeModel ?? null) : null,
-    roles: ROLES.flatMap(({ key, label }) => {
+    roles: ROLES_BY_MODE[mode].flatMap(({ key, label }) => {
       const value = `role:${key}`
-      const model = modelForRole(profile, value)
+      const model = modelForRole(profile, value, mode)
       return model ? [{ value, label, model, installed: installed === null || isInstalled(model, selectableModels(installed)) }] : []
     })
   }
@@ -92,7 +103,8 @@ export function applyModelChoice(
   if (model === null) {
     delete choices[mode]
   } else {
-    const target = modelForRole(profile, model)
+    if (mode === 'code') throw new Error('Le mode Code utilise toujours le modèle Code : il ne se choisit pas.')
+    const target = modelForRole(profile, model, mode)
     if (!target || !isInstalled(target, selectableModels(installed))) throw new Error(`Le modèle du rôle ${model} n'est pas installé dans Ollama.`)
     choices[mode] = model
   }

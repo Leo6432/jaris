@@ -69,6 +69,10 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
   const panelRef = useRef<HTMLDivElement>(null)
   /** Décalage qui ramène le panneau (centré sur le bouton) dans la fenêtre quand le bouton est près d'un bord. */
   const [shift, setShift] = useState(0)
+  /** Hauteur disponible au-dessus du bouton : le panneau ne sort jamais par le haut de la fenêtre (étape 201). */
+  const [maxHeight, setMaxHeight] = useState<number | null>(null)
+  /** Étape 201 (Léo) : en Code, pas de choix de modèle — toujours le modèle Code, comme Image avec le sien. */
+  const locked = mode === 'code'
 
   const load = useCallback(async () => {
     try {
@@ -93,7 +97,9 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
     if (centeredRight > window.innerWidth - margin) next = window.innerWidth - margin - centeredRight
     if (centeredLeft + next < margin) next = margin - centeredLeft
     if (next !== shift) setShift(next)
-  }, [open, view, info, shift])
+    const room = rootRef.current ? Math.floor(rootRef.current.getBoundingClientRect().top - 16) : null
+    if (room !== maxHeight) setMaxHeight(room)
+  }, [open, view, info, shift, maxHeight])
 
   // Fermeture au clic en dehors ou sur Échap, comme les menus de ChatGPT/Claude.
   useEffect(() => {
@@ -114,7 +120,7 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
 
   const selected = info?.selected ?? AUTO
   const role = info?.roles?.find((r) => r.value === selected)
-  const modelLabel = selected === AUTO ? 'Auto' : role?.label ?? 'Personnalisé'
+  const modelLabel = locked ? 'Code' : selected === AUTO ? 'Auto' : role?.label ?? 'Personnalisé'
   const thinking = info?.thinking ?? null
   const kind = thinking?.kind ?? null
   const canThink = kind === 'levels' || kind === 'toggle'
@@ -186,7 +192,7 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
           className="effort-picker__panel"
           role="dialog"
           aria-label="Modèle et réflexion"
-          style={{ '--shift': `${shift}px` } as React.CSSProperties}
+          style={{ '--shift': `${shift}px`, maxHeight: maxHeight ?? undefined } as React.CSSProperties}
         >
           {view === 'think' ? (
             <>
@@ -210,17 +216,29 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
                 )}
                 <div className="effort-picker__head-text">
                   <span className="effort-picker__current">{title}</span>
-                  <button type="button" className="effort-picker__model-link" onClick={() => setView('model')}>
-                    {levelChosen && <span className="effort-picker__model-role">{modelLabel}</span>}
-                    {modelShort ? (
-                      <span className="effort-picker__model-name" title={thinking?.model}>
-                        {levelChosen ? `· ${modelShort}` : modelShort}
-                      </span>
-                    ) : (
-                      <span className="effort-picker__model-role">Choisir un modèle</span>
-                    )}
-                    <ChevronIcon direction="right" />
-                  </button>
+                  {locked ? (
+                    // Le modèle Code ne se change pas : affiché, jamais cliquable (ni flèche, ni liste).
+                    <span className="effort-picker__model-link effort-picker__model-link--fixed">
+                      {levelChosen && <span className="effort-picker__model-role">{modelLabel}</span>}
+                      {modelShort && (
+                        <span className="effort-picker__model-name" title={thinking?.model}>
+                          {levelChosen ? `· ${modelShort}` : modelShort}
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    <button type="button" className="effort-picker__model-link" onClick={() => setView('model')}>
+                      {levelChosen && <span className="effort-picker__model-role">{modelLabel}</span>}
+                      {modelShort ? (
+                        <span className="effort-picker__model-name" title={thinking?.model}>
+                          {levelChosen ? `· ${modelShort}` : modelShort}
+                        </span>
+                      ) : (
+                        <span className="effort-picker__model-role">Choisir un modèle</span>
+                      )}
+                      <ChevronIcon direction="right" />
+                    </button>
+                  )}
                 </div>
                 {canThink ? (
                   <button

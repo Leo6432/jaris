@@ -4070,6 +4070,8 @@ a:hover {
 .effort-picker {
   position: relative;
   min-width: 0;
+  /* Étape 201 : un double-clic sur « Auto » le surlignait en bleu comme du texte (repéré par Léo). */
+  user-select: none;
 }
 
 .effort-picker__trigger {
@@ -4119,6 +4121,17 @@ a:hover {
   width: 320px;
   max-width: calc(100vw - 32px);
   transform: translateX(calc(-50% + var(--shift, 0px)));
+  /* La hauteur est bornée à l'espace au-dessus du bouton (maxHeight, calculé à l'ouverture) : le reste défile. */
+  overflow-y: auto;
+}
+
+.effort-picker__model-link--fixed {
+  cursor: default;
+}
+
+.effort-picker__model-link--fixed:hover {
+  color: var(--hud-text-dim);
+  background: transparent;
 }
 
 .effort-picker__head {

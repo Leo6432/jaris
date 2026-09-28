@@ -24,8 +24,8 @@ test('un rôle choisi utilise le modèle actuel de ce rôle, pour CE mode seulem
 })
 
 test('un nom sans tag et son écriture `:latest` désignent le même modèle installé', () => {
-  const profile = { modelChoices: { code: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF' } }
-  assert.equal(resolveChosenModel(profile, 'code', installed), 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF')
+  const profile = { modelChoices: { chat: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF' } }
+  assert.equal(resolveChosenModel(profile, 'chat', installed), 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF')
 })
 
 test('un modèle choisi puis supprimé retombe sur Auto', () => {
@@ -59,7 +59,8 @@ test('le sélecteur expose les cinq rôles sans utiliser les noms comme choix', 
   const voice = buildModelChoiceInfo(profile, 'voice', installed)
   assert.equal(voice.autoModel, null)
   assert.equal(voice.selected, 'role:medium')
-  assert.deepEqual(Array.from(voice.roles, (role) => role.label), ['Rapide', 'Médium', 'Puissant', 'Code'], 'Vision n’est pas un modèle de conversation (étape 198)')
+  assert.deepEqual(Array.from(voice.roles, (role) => role.label), ['Rapide', 'Médium', 'Puissant'], 'ni Vision (étape 198) ni Code (étape 201) pour discuter')
+  assert.deepEqual(Array.from(code.roles), [], 'en Code, aucun choix : toujours le modèle Code (étape 201)')
   assert.ok(!voice.installed.includes('nomic-embed-text:latest'))
 })
 
@@ -81,4 +82,13 @@ test('étape 198 : un ancien choix « role:vision » retombe sur Auto, et ne peu
   assert.equal(resolveChosenModel(profile, 'chat', ['gemma4:12b', 'qwen3.5:4b']), null)
   assert.equal(buildModelChoiceInfo(profile, 'chat', ['gemma4:12b', 'qwen3.5:4b']).selected, null)
   assert.throws(() => applyModelChoice(profile, 'chat', 'role:vision', ['gemma4:12b']))
+})
+
+test('étape 201 : Code ne se choisit pas, et « role:code » n’existe plus en Chat/Vocal', () => {
+  const profile = { models: { flash: 'qwen3.5:4b', medium: 'gemma4:12b', large: 'qwen3.5:4b' }, codeModel: 'gemma4:12b', modelChoices: { chat: 'role:code', code: 'role:large' } }
+  assert.equal(resolveChosenModel(profile, 'chat', ['gemma4:12b', 'qwen3.5:4b']), null, 'ancien choix Code en Chat → Auto')
+  assert.equal(resolveChosenModel(profile, 'code', ['gemma4:12b', 'qwen3.5:4b']), null, 'ancien choix en Code ignoré')
+  assert.throws(() => applyModelChoice(profile, 'code', 'role:large', ['qwen3.5:4b']), /toujours le modèle Code/)
+  assert.throws(() => applyModelChoice(profile, 'chat', 'role:code', ['gemma4:12b']))
+  assert.equal(applyModelChoice(profile, 'code', null, []).modelChoices.code, undefined, 'revenir à Auto reste possible')
 })
