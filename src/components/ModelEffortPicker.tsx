@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { thinkLabel, type ThinkValue } from '../../shared/effort'
 import type { ModelChoiceInfo, ModelChoiceMode } from '../../shared/ipc'
 import { formatModelName } from '@/lib/formatModelName'
+import { usePickerPanel } from '@/lib/usePickerPanel'
 
 /**
  * Modèle et réflexion (« think »), présentés comme le panneau de ChatGPT — étapes 191 à 193.
@@ -65,12 +66,8 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<'think' | 'model'>('think')
   const [error, setError] = useState<string | null>(null)
-  const rootRef = useRef<HTMLDivElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
-  /** Décalage qui ramène le panneau (centré sur le bouton) dans la fenêtre quand le bouton est près d'un bord. */
-  const [shift, setShift] = useState(0)
-  /** Hauteur disponible au-dessus du bouton : le panneau ne sort jamais par le haut de la fenêtre (étape 201). */
-  const [maxHeight, setMaxHeight] = useState<number | null>(null)
+  // Centré sur le bouton sans sortir de la fenêtre, fermé au clic dehors/Échap (étapes 200-201, src/lib).
+  const { rootRef, panelRef, panelStyle } = usePickerPanel(open, setOpen, [view, info])
   /** Étape 201 (Léo) : en Code, pas de choix de modèle — toujours le modèle Code, comme Image avec le sien. */
   const locked = mode === 'code'
 
@@ -96,38 +93,6 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
     const timer = setInterval(() => void load(), 3000)
     return () => clearInterval(timer)
   }, [ollamaMissing, load])
-
-  // Étape 200 : centré sur le bouton, mais jamais coupé par le bord de la fenêtre (mesuré avant d'être peint).
-  useLayoutEffect(() => {
-    if (!open || !panelRef.current) return
-    const margin = 8
-    const rect = panelRef.current.getBoundingClientRect()
-    const centeredLeft = rect.left - shift
-    const centeredRight = rect.right - shift
-    let next = 0
-    if (centeredRight > window.innerWidth - margin) next = window.innerWidth - margin - centeredRight
-    if (centeredLeft + next < margin) next = margin - centeredLeft
-    if (next !== shift) setShift(next)
-    const room = rootRef.current ? Math.floor(rootRef.current.getBoundingClientRect().top - 16) : null
-    if (room !== maxHeight) setMaxHeight(room)
-  }, [open, view, info, shift, maxHeight])
-
-  // Fermeture au clic en dehors ou sur Échap, comme les menus de ChatGPT/Claude.
-  useEffect(() => {
-    if (!open) return
-    const onDown = (event: MouseEvent): void => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false)
-    }
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
 
   const selected = info?.selected ?? AUTO
   const role = info?.roles?.find((r) => r.value === selected)
@@ -203,7 +168,7 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
           className="effort-picker__panel"
           role="dialog"
           aria-label="Modèle et réflexion"
-          style={{ '--shift': `${shift}px`, maxHeight: maxHeight ?? undefined } as React.CSSProperties}
+          style={panelStyle}
         >
           {view === 'think' ? (
             <>

@@ -6,8 +6,21 @@ import { formatRecentDate } from '@/lib/formatRecentDate'
 import type { ImageAttachment } from '@/lib/imageAttachment'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import { imageStepFromLog } from '../../shared/imageGallery'
+import { DEFAULT_VIDEO_SECONDS, normalizeVideoSeconds, type VideoSeconds } from '../../shared/videoModel'
 import type { GeneratedVideoSummary, VideoStudioStatus } from '../../shared/ipc'
 import { DownloadIcon } from './icons'
+import VideoDurationPicker from './VideoDurationPicker'
+
+const DURATION_KEY = 'jaris.videoSeconds'
+
+/** Dernière durée choisie, gardée d'une ouverture à l'autre (confort seulement : illisible → 2 s). */
+function readSavedSeconds(): VideoSeconds {
+  try {
+    return normalizeVideoSeconds(Number(localStorage.getItem(DURATION_KEY)))
+  } catch {
+    return DEFAULT_VIDEO_SECONDS
+  }
+}
 
 /**
  * Mode Vidéo (étape 203, Léo : « ajoute vidéo : Wan 2.2-TI2V-5B »). Même présentation que le mode Image — liste à
@@ -19,6 +32,7 @@ export default function VideoPanel(): JSX.Element {
   const [installing, setInstalling] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [attachment, setAttachment] = useState<ImageAttachment | null>(null)
+  const [seconds, setSeconds] = useState<VideoSeconds>(readSavedSeconds)
   const [generating, setGenerating] = useState(false)
   const [logLine, setLogLine] = useState<string | null>(null)
   const [elapsedMs, setElapsedMs] = useState(0)
@@ -106,7 +120,7 @@ export default function VideoPanel(): JSX.Element {
       ? { base64: attachment.base64, mimeType: attachment.dataUrl.slice(5, attachment.dataUrl.indexOf(';')) }
       : undefined
     try {
-      const video = await window.jaris.generateStudioVideo(text, image)
+      const video = await window.jaris.generateStudioVideo(text, image ?? null, seconds)
       setPrompt('')
       setAttachment(null)
       setSelected(video)
@@ -123,6 +137,15 @@ export default function VideoPanel(): JSX.Element {
     } finally {
       setGenerating(false)
       setLogLine(null)
+    }
+  }
+
+  const chooseSeconds = (value: VideoSeconds): void => {
+    setSeconds(value)
+    try {
+      localStorage.setItem(DURATION_KEY, String(value))
+    } catch {
+      // Pas de stockage : la durée reste choisie jusqu'à la fermeture de Jaris.
     }
   }
 
@@ -169,7 +192,7 @@ export default function VideoPanel(): JSX.Element {
           <span className="image-install__eyebrow">Vidéo</span>
           <h2>Créer des vidéos</h2>
           <p className="image-install__lead">
-            Décris une scène en français, ou joins une image à animer : Jaris crée une courte vidéo (environ 2 secondes)
+            Décris une scène en français, ou joins une image à animer : Jaris crée une courte vidéo (de 1 à 5 secondes)
             sur ton PC avec Wan 2.2, sans rien envoyer sur internet.
           </p>
           {!status.supported ? (
@@ -284,6 +307,7 @@ export default function VideoPanel(): JSX.Element {
           onAttachmentChange={setAttachment}
           onError={setError}
           rows={2}
+          extraActions={<VideoDurationPicker value={seconds} onChange={chooseSeconds} disabled={generating} />}
         />
       </div>
     </Workspace>

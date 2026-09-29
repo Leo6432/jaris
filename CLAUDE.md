@@ -5567,3 +5567,23 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   officielle, texte piégé resté inerte, verrou partagé image/vidéo, arrêt réel, image de départ effacée, liste
   qui refuse tout chemin ; et dans un vrai navigateur : avancement, lecteur, image jointe transmise, arrêt,
   écran d'installation) + `test-keep-alive-ui.mjs`/`test-widget-mode.mjs` étendus au mode Vidéo.
+
+- **Durée d'une vidéo au choix, « comme l'effort » (Léo, étape 204).** Un bouton horloge dans le champ du mode
+  Vidéo ouvre le même panneau que la réflexion : une barre de 1 à 5 secondes, remplie jusqu'au cran choisi.
+  Borne haute vérifiée sur le README officiel de Wan 2.2 (« a 5-second 720P video », 24 images/s), pas devinée ;
+  `videoFramesFor` donne 24 images par seconde + 1, donc toujours 4n + 1 comme l'exige le modèle (5 s → 121).
+  La durée venue de l'écran est revérifiée côté main (`normalizeVideoSeconds`) : toute autre valeur → 2 s,
+  jamais passée telle quelle à sd-cli. Dernière durée gardée dans localStorage (simple confort, lecture et
+  écriture protégées : la page de test l'interdit, et l'écran fonctionne quand même).
+  **Placement du panneau extrait dans `usePickerPanel` (src/lib)** plutôt que recopié : centrage sur le bouton,
+  jamais coupé par un bord, fermeture au clic dehors/Échap — deux copies du même calcul auraient divergé
+  (même leçon que les deux composeurs de l'étape 92). Les 14 tests du sélecteur de modèle passent inchangés.
+  **Piège de capture d'écran** : une capture prise juste après un clic sur la barre montre la transition
+  (0,18 s) à mi-course — bouton blanc sur l'ANCIEN cran, remplissage à moitié. Ce n'est pas un bug : attendre la
+  fin de l'animation avant de juger un rendu.
+  **Non vérifié** : le temps réel d'une vidéo de 5 s sur la RTX 3070. Le calcul croît plus vite que la durée
+  (attention sur toutes les images à la fois), et une vidéo longue demande aussi plus de mémoire vidéo.
+  Régression : `scripts/test-video-generation.mjs` (1 à 5 s, 121 images à 5 s, valeur hors limites ramenée à
+  2 s jusqu'à la ligne de commande) et `scripts/test-video-panel-ui.mjs` (vrai clic sur la barre, durée envoyée
+  avec la vidéo, reprise à la prochaine ouverture, valeur abîmée → 2 s ; vérifié en ne transmettant plus la
+  durée : le test échoue).

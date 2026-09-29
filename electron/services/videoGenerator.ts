@@ -19,7 +19,17 @@ import {
   sizeOf,
   type Log
 } from './imageGenerator'
-import { VIDEO_FPS, VIDEO_FRAMES, VIDEO_HEIGHT, VIDEO_MODEL, VIDEO_WIDTH, pickVideoModel } from '../../shared/videoModel'
+import {
+  DEFAULT_VIDEO_SECONDS,
+  VIDEO_FPS,
+  VIDEO_HEIGHT,
+  VIDEO_MODEL,
+  VIDEO_WIDTH,
+  normalizeVideoSeconds,
+  pickVideoModel,
+  videoFramesFor,
+  type VideoSeconds
+} from '../../shared/videoModel'
 import { imageLabelFromFileName, imageTimestampFromFileName, isGeneratedVideoFileName } from '../../shared/imageGallery'
 import { formatBytes } from '../../shared/formatBytes'
 import type { GeneratedVideoSummary, VideoStudioStatus } from '../../shared/ipc'
@@ -99,12 +109,14 @@ export interface VideoArgsInput {
   prompt: string
   output: string
   seed: number
+  /** Durée choisie dans l'écran (1 à 5 s). */
+  seconds: VideoSeconds
   /** Image à animer (image → vidéo), sinon la vidéo part du texte seul. */
   initImage?: string
 }
 
 /** Ligne de commande de sd-cli pour Wan 2.2 TI2V 5B, d'après l'exemple officiel de sd.cpp (docs/wan.md). */
-export function buildVideoArgs({ models, prompt, output, seed, initImage }: VideoArgsInput): string[] {
+export function buildVideoArgs({ models, prompt, output, seed, seconds, initImage }: VideoArgsInput): string[] {
   return [
     '-M', 'vid_gen',
     '--diffusion-model', models.diffusion,
@@ -117,7 +129,7 @@ export function buildVideoArgs({ models, prompt, output, seed, initImage }: Vide
     '--flow-shift', '3.0',
     '-W', String(VIDEO_WIDTH),
     '-H', String(VIDEO_HEIGHT),
-    '--video-frames', String(VIDEO_FRAMES),
+    '--video-frames', String(videoFramesFor(normalizeVideoSeconds(seconds))),
     '--fps', String(VIDEO_FPS),
     '-s', String(seed),
     // Mêmes économies de mémoire que les images : poids en RAM montés au besoin, décodage par morceaux.
@@ -176,7 +188,8 @@ export async function generateVideo(
   prompt: string,
   onLog: Log = () => {},
   signal?: AbortSignal,
-  initImage?: { bytes: Uint8Array; extension: 'png' | 'jpg' }
+  initImage?: { bytes: Uint8Array; extension: 'png' | 'jpg' },
+  seconds: VideoSeconds = DEFAULT_VIDEO_SECONDS
 ): Promise<GeneratedVideoFile> {
   if (process.platform !== 'win32') throw new Error("La création de vidéos n'est disponible que sur Windows pour l'instant.")
   const text = cleanPrompt(prompt)
@@ -207,7 +220,14 @@ export async function generateVideo(
     onLog('Préparation de la vidéo…')
     await runEngine(
       engineExe(),
-      buildVideoArgs({ models: modelPaths(), prompt: text, output, seed: Math.floor(Math.random() * 2 ** 31), initImage: initPath }),
+      buildVideoArgs({
+        models: modelPaths(),
+        prompt: text,
+        output,
+        seed: Math.floor(Math.random() * 2 ** 31),
+        seconds: normalizeVideoSeconds(seconds),
+        initImage: initPath
+      }),
       onLog,
       signal,
       VIDEO_WORDING

@@ -196,7 +196,7 @@ export const CAPABILITIES: CapabilityGroup[] = [
     items: [
       {
         title: 'Une vidéo à partir d’une description',
-        description: 'Décris la scène et ce qui bouge : Jaris crée environ 2 secondes de vidéo, que tu peux enregistrer où tu veux.',
+        description: 'Décris la scène et ce qui bouge : Jaris crée de 1 à 5 secondes de vidéo (durée choisie avec l’horloge du champ), que tu peux enregistrer où tu veux.',
         example: 'un chat roux marche dans la neige au coucher du soleil'
       },
       {

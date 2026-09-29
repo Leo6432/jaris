@@ -16,9 +16,26 @@ export const VIDEO_MIN_RAM_GB = 15
 /** 832 x 480 : le format de départ rapide conseillé par sd.cpp (multiples de 16, coût proportionnel à la surface). */
 export const VIDEO_WIDTH = 832
 export const VIDEO_HEIGHT = 480
-/** 49 images à 24 images/s ≈ 2 s : un nombre « propre » pour le modèle (4n + 1), et un calcul qui reste supportable. */
-export const VIDEO_FRAMES = 49
 export const VIDEO_FPS = 24
+
+/**
+ * Durées proposées (étape 204, Léo : « choisir la durée, comme l'effort »). Wan 2.2 TI2V 5B produit au plus
+ * 5 secondes à 24 images/s (README officiel : « a 5-second 720P video », 121 images) : de 1 à 5 s, une seconde
+ * par cran. Plus c'est long, plus le calcul est long — et plus que proportionnellement.
+ */
+export const VIDEO_DURATIONS = [1, 2, 3, 4, 5] as const
+export type VideoSeconds = (typeof VIDEO_DURATIONS)[number]
+export const DEFAULT_VIDEO_SECONDS: VideoSeconds = 2
+
+/** Toute valeur venue de l'écran est ramenée à une durée proposée (sinon la durée par défaut). */
+export function normalizeVideoSeconds(value: unknown): VideoSeconds {
+  return (VIDEO_DURATIONS as readonly unknown[]).includes(value) ? (value as VideoSeconds) : DEFAULT_VIDEO_SECONDS
+}
+
+/** Nombre d'images pour une durée : 24 par seconde + 1, soit toujours 4n + 1 comme l'exige le modèle (5 s → 121). */
+export function videoFramesFor(seconds: VideoSeconds): number {
+  return seconds * VIDEO_FPS + 1
+}
 
 export interface VideoModelPick {
   model: string | null

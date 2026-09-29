@@ -38,8 +38,9 @@ window.jaris = {
     return new Promise((resolve) => { window.__finishInstall = () => { window.__status = { ...window.__status, installed: true }; resolve() } })
   },
   onVideoStudioLog: (cb) => { window.__log = cb; return () => {} },
-  generateStudioVideo: (prompt, image) => {
+  generateStudioVideo: (prompt, image, seconds) => {
     window.__calls.push(['generate', prompt, image ? image.mimeType : null])
+    window.__seconds = seconds
     return new Promise((resolve, reject) => {
       window.__finishGen = () => {
         const video = { fileName: '2026-09-28T18-00-00-un-chat.webm', label: 'Un chat', timestamp: Date.now() }
@@ -96,6 +97,9 @@ async function withPage(run, init = '') {
     await browser.close()
   }
 }
+
+// La page de test (about:blank) interdit localStorage : les autres tests prouvent déjà que l'écran s'en passe.
+const FAKE_STORAGE = "window.__store = {}; Object.defineProperty(window, 'localStorage', { value: { getItem: (k) => (k in window.__store ? window.__store[k] : null), setItem: (k, v) => { window.__store[k] = String(v) } } });"
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
 
@@ -184,4 +188,44 @@ test('PC trop faible : la raison est affichée, aucun bouton d’installation', 
     },
     "window.__status = { supported: true, capable: false, reason: 'carte graphique trop petite (6 Go de VRAM, il en faut 8 ou plus)', installed: false, downloadLabel: '8,5 Go' }"
   )
+})
+
+test('durée (étape 204) : 2 s par défaut, choisie sur la barre comme l’effort, envoyée avec la vidéo et gardée', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duration-picker .effort-picker__trigger')
+    assert.match(await page.textContent('.duration-picker .effort-picker__trigger'), /2 s/)
+    await page.click('.duration-picker .effort-picker__trigger')
+    await page.waitForSelector('.duration-picker .effort-picker__panel')
+    assert.equal(await page.locator('.duration-picker .effort-picker__step').count(), 5, 'un cran par seconde, de 1 à 5')
+    assert.equal(await page.locator('.duration-picker .effort-picker__step--filled').count(), 1, 'barre remplie jusqu’à 2 s')
+    await page.click('.duration-picker .effort-picker__step >> nth=4')
+    assert.match(await page.textContent('.duration-picker .effort-picker__current'), /5 secondes/)
+    assert.equal(await page.locator('.duration-picker .effort-picker__step--filled').count(), 4)
+    // Le panneau est habillé par le CSS partagé (pas le style par défaut du navigateur) et tient dans la fenêtre.
+    const panel = await page.$eval('.duration-picker .effort-picker__panel', (el) => {
+      const r = el.getBoundingClientRect()
+      return { left: r.left, right: r.right, top: r.top, position: getComputedStyle(el).position }
+    })
+    assert.equal(panel.position, 'absolute')
+    assert.ok(panel.left >= 0 && panel.right <= 1280 && panel.top >= 0, JSON.stringify(panel))
+    await page.keyboard.press('Escape')
+    assert.equal(await page.locator('.duration-picker .effort-picker__panel').count(), 0, 'Échap ferme le panneau')
+
+    await page.fill('.composer__input', 'la mer au lever du soleil')
+    await page.click('.composer__send')
+    await page.waitForFunction(() => window.__seconds !== undefined, null, { timeout: 5000 }).catch(() => assert.fail('aucune durée envoyée avec la vidéo'))
+    assert.equal(await page.evaluate(() => window.__seconds), 5)
+    assert.equal(await page.evaluate(() => window.__store['jaris.videoSeconds']), '5', 'retrouvée à la prochaine ouverture')
+  }, FAKE_STORAGE)
+})
+
+test('durée : une durée gardée d’une fois précédente est reprise ; une valeur abîmée retombe sur 2 s', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.duration-picker .effort-picker__trigger')
+    assert.match(await page.textContent('.duration-picker .effort-picker__trigger'), /4 s/)
+  }, FAKE_STORAGE + "window.__store['jaris.videoSeconds'] = '4';")
+  await withPage(async (page) => {
+    await page.waitForSelector('.duration-picker .effort-picker__trigger')
+    assert.match(await page.textContent('.duration-picker .effort-picker__trigger'), /2 s/)
+  }, FAKE_STORAGE + "window.__store['jaris.videoSeconds'] = '37';")
 })

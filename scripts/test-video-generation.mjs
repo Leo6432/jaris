@@ -164,7 +164,25 @@ test('seuils : 8 Go de carte graphique et 16 Go de RAM, sinon une raison lisible
   // Dimensions exigées par Wan : multiples de 16, et 4n + 1 images.
   assert.equal(videoModel.VIDEO_WIDTH % 16, 0)
   assert.equal(videoModel.VIDEO_HEIGHT % 16, 0)
-  assert.equal((videoModel.VIDEO_FRAMES - 1) % 4, 0)
+  for (const seconds of videoModel.VIDEO_DURATIONS) assert.equal((videoModel.videoFramesFor(seconds) - 1) % 4, 0, `${seconds} s`)
+})
+
+test('durée (étape 204) : 1 à 5 s à 24 images/s, 5 s = les 121 images officielles, valeur inconnue → 2 s', () => {
+  assert.deepEqual([...videoModel.VIDEO_DURATIONS], [1, 2, 3, 4, 5])
+  assert.equal(videoModel.videoFramesFor(5), 121)
+  assert.equal(videoModel.videoFramesFor(2), 49)
+  for (const bad of [0, 6, 2.5, '3', null, undefined, NaN, -1]) assert.equal(videoModel.normalizeVideoSeconds(bad), 2, String(bad))
+  assert.equal(videoModel.normalizeVideoSeconds(4), 4)
+})
+
+test('la durée choisie arrive jusqu’à sd-cli (--video-frames), jamais une valeur hors limites', async () => {
+  const t = await installed()
+  await t.video.generateVideo('a cat', () => {}, undefined, undefined, 5)
+  await t.video.generateVideo('a cat', () => {}, undefined, undefined, 99)
+  await t.video.generateVideo('a cat')
+  const frames = t.spawns.map(({ args }) => args[args.indexOf('--video-frames') + 1])
+  assert.deepEqual(frames, ['121', '49', '49'])
+  t.cleanup()
 })
 
 test('les noms de vidéo sont des .webm simples : jamais un chemin, jamais une image', () => {

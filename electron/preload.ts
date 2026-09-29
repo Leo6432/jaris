@@ -130,8 +130,8 @@ const api = {
   getVideoStudioStatus: (): Promise<VideoStudioStatus> => ipcRenderer.invoke(IPC_CHANNELS.getVideoStudioStatus),
   installVideoStudio: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.installVideoStudio),
   onVideoStudioLog: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.videoStudioLog, cb),
-  generateStudioVideo: (prompt: string, image?: { base64: string; mimeType?: string }): Promise<GeneratedVideoSummary> =>
-    ipcRenderer.invoke(IPC_CHANNELS.generateStudioVideo, prompt, image),
+  generateStudioVideo: (prompt: string, image?: { base64: string; mimeType?: string } | null, seconds?: number): Promise<GeneratedVideoSummary> =>
+    ipcRenderer.invoke(IPC_CHANNELS.generateStudioVideo, prompt, image ?? null, seconds),
   cancelStudioVideo: (): void => ipcRenderer.send(IPC_CHANNELS.cancelStudioVideo),
   listGeneratedVideos: (): Promise<GeneratedVideoSummary[]> => ipcRenderer.invoke(IPC_CHANNELS.listGeneratedVideos),
   readGeneratedVideo: (fileName: string): Promise<Uint8Array> => ipcRenderer.invoke(IPC_CHANNELS.readGeneratedVideo, fileName),

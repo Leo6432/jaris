@@ -15,6 +15,7 @@ import {
   readGeneratedImageDataUrl
 } from './services/imageGenerator'
 import { imageLabelFromFileName } from '../shared/imageGallery'
+import { normalizeVideoSeconds } from '../shared/videoModel'
 import {
   deleteGeneratedVideo,
   generateVideo,
@@ -1264,7 +1265,7 @@ app.whenReady().then(async () => {
   )
   ipcMain.handle(
     IPC_CHANNELS.generateStudioVideo,
-    async (event, prompt: string, image?: { base64: string; mimeType?: string }): Promise<GeneratedVideoSummary> => {
+    async (event, prompt: string, image?: { base64: string; mimeType?: string } | null, seconds?: number): Promise<GeneratedVideoSummary> => {
       videoStudioAbort?.abort()
       const controller = new AbortController()
       videoStudioAbort = controller
@@ -1279,7 +1280,8 @@ app.whenReady().then(async () => {
             if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.videoStudioLog, message)
           },
           controller.signal,
-          initImage
+          initImage,
+          normalizeVideoSeconds(seconds)
         )
         return { fileName: video.fileName, label: imageLabelFromFileName(video.fileName), timestamp: Date.now() }
       } finally {

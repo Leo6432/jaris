@@ -118,7 +118,7 @@ declare global {
       getVideoStudioStatus: () => Promise<VideoStudioStatus>
       installVideoStudio: () => Promise<void>
       onVideoStudioLog: (cb: (message: string) => void) => () => void
-      generateStudioVideo: (prompt: string, image?: { base64: string; mimeType?: string }) => Promise<GeneratedVideoSummary>
+      generateStudioVideo: (prompt: string, image?: { base64: string; mimeType?: string } | null, seconds?: number) => Promise<GeneratedVideoSummary>
       cancelStudioVideo: () => void
       listGeneratedVideos: () => Promise<GeneratedVideoSummary[]>
       readGeneratedVideo: (fileName: string) => Promise<Uint8Array>
