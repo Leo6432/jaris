@@ -9,7 +9,7 @@
  * minimum — la documentation de sd.cpp prévient que le décodeur Wan « demande vraiment beaucoup de VRAM ».
  * Seuils par qualité (étape 205) : VIDEO_QUALITIES plus bas.
  */
-export const VIDEO_MODEL = 'Wan 2.2 TI2V 5B'
+export const VIDEO_MODEL = 'FastWan 2.2 TI2V 5B'
 
 /** 832 x 480 : le format de départ rapide conseillé par sd.cpp (multiples de 16, coût proportionnel à la surface). */
 export const VIDEO_WIDTH = 832
@@ -40,16 +40,17 @@ export function videoFramesFor(seconds: VideoSeconds): number {
  * elle n'a que Q4 et Q6 »). Chaque cran = le modèle vidéo ET le lecteur de description au même niveau de
  * compression (le décodeur n'existe qu'en version originale). Tailles réelles des fichiers (API Hugging Face).
  *
+ * Étape 206 : le modèle vidéo est FastWan (Wan 2.2 TI2V 5B distillé), publié en Q6 et Q8 seulement — plus de Q4.
+ *
  * Seuils DÉDUITS des tailles, pas mesurés sur une vraie carte (aucune ici) :
  * - carte graphique : le modèle vidéo y monte seul (le lecteur reste en RAM avec --offload-to-cpu), plus
  *   ~2,5 Go pour le calcul et le décodage par morceaux, sur une carte dont Windows occupe déjà ~0,5 Go :
- *   Q4 (3,4 Go → ~5,9 Go) et Q6 (4,2 Go → ~6,7 Go) tiennent sur 8 Go ; Q8 (5,4 Go → ~7,9 Go) ne laisse plus
- *   de marge sur 8 Go et demande 10 Go ou plus. Le plancher reste 8 Go (étape 203) : le décodeur Wan est
- *   réputé très gourmand (docs/wan.md), et rien ici ne permet de le descendre sans le mesurer.
- * - RAM : sd.cpp charge les trois fichiers en RAM, plus ~5 Go pour Windows et Jaris → Q4 (8,5 Go) tient dans
- *   16 Go, Q6 (10,3 Go) et Q8 (12,8 Go) demandent 24 Go ou plus.
+ *   Q6 (4,2 Go → ~6,7 Go) tient sur 8 Go ; Q8 (5,4 Go → ~7,9 Go) ne laisse plus de marge sur 8 Go et demande
+ *   10 Go ou plus. Le plancher reste 8 Go (étape 203) : le décodeur Wan est réputé très gourmand (docs/wan.md).
+ * - RAM : sd.cpp charge les trois fichiers en RAM, plus ~5 Go pour Windows et Jaris → Q6 (10,3 Go) et Q8
+ *   (12,8 Go) demandent 24 Go ou plus.
  */
-export type VideoQuality = 'q4' | 'q6' | 'q8'
+export type VideoQuality = 'q6' | 'q8'
 
 export interface VideoQualityLevel {
   id: VideoQuality
@@ -63,7 +64,6 @@ export interface VideoQualityLevel {
 }
 
 export const VIDEO_QUALITIES: VideoQualityLevel[] = [
-  { id: 'q4', label: 'Q4', minVramGb: 7.5, minRamGb: 15, vramLabel: 8, ramLabel: 16 },
   { id: 'q6', label: 'Q6', minVramGb: 7.5, minRamGb: 23, vramLabel: 8, ramLabel: 24 },
   { id: 'q8', label: 'Q8', minVramGb: 9.5, minRamGb: 23, vramLabel: 10, ramLabel: 24 }
 ]

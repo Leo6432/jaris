@@ -158,17 +158,16 @@ async function installed(opts) {
 
 test('qualités (étape 205) : seuls les crans que la machine peut faire tourner, sinon une raison lisible', () => {
   const q = (vram, ram) => [...videoModel.availableVideoQualities(vram, ram).qualities]
-  assert.deepEqual(q(8, 32), ['q4', 'q6'], 'RTX 3070 + 32 Go : Q8 laisse trop peu de marge sur 8 Go')
-  assert.deepEqual(q(12, 32), ['q4', 'q6', 'q8'])
-  assert.deepEqual(q(8, 16), ['q4'], '16 Go de RAM : seul Q4 tient')
-  assert.deepEqual(q(24, 15.8), ['q4'], 'une machine « 16 Go » en annonce un peu moins')
-  assert.deepEqual(q(7.9, 31.8), ['q4', 'q6'], 'une carte « 8 Go » en annonce parfois un peu moins')
+  assert.deepEqual(q(8, 32), ['q6'], 'RTX 3070 + 32 Go : Q8 laisse trop peu de marge sur 8 Go')
+  assert.deepEqual(q(12, 32), ['q6', 'q8'])
+  assert.deepEqual(q(7.9, 31.8), ['q6'], 'une carte « 8 Go » en annonce parfois un peu moins')
+  assert.deepEqual(q(12, 23.5), ['q6', 'q8'], 'une machine « 24 Go » en annonce un peu moins')
   assert.match(videoModel.availableVideoQualities(null, 32).reason, /aucune carte graphique NVIDIA/)
   assert.match(videoModel.availableVideoQualities(6, 32).reason, /trop petite \(6 Go de VRAM, il en faut 8 ou plus\)/)
-  assert.match(videoModel.availableVideoQualities(12, 8).reason, /pas assez de RAM \(8 Go, il en faut 16 ou plus\)/)
+  assert.match(videoModel.availableVideoQualities(12, 16).reason, /pas assez de RAM \(16 Go, il en faut 24 ou plus\)/)
   assert.equal(videoModel.availableVideoQualities(4, 32).qualities.length, 0)
   assert.equal(videoModel.isVideoQuality('q8'), true)
-  for (const bad of ['Q8', 'q5', 'original', '', null, 8]) assert.equal(videoModel.isVideoQuality(bad), false, String(bad))
+  for (const bad of ['Q8', 'q4', 'q5', 'original', '', null, 8]) assert.equal(videoModel.isVideoQuality(bad), false, String(bad))
   // Dimensions exigées par Wan : multiples de 16, et 4n + 1 images.
   assert.equal(videoModel.VIDEO_WIDTH % 16, 0)
   assert.equal(videoModel.VIDEO_HEIGHT % 16, 0)
@@ -204,12 +203,12 @@ test('les noms de vidéo sont des .webm simples : jamais un chemin, jamais une i
 test('installation : le moteur + les trois fichiers de Wan 2.2, vérifiés ; rien n’est dessiné', async () => {
   const t = loadVideo()
   const logs = []
-  await t.video.installVideoModel('q4', (m) => logs.push(m))
+  await t.video.installVideoModel('q6', (m) => logs.push(m))
   assert.equal(t.downloads.length, 4)
   assert.deepEqual(t.events, ['extract'])
-  assert.equal(await t.video.isVideoQualityInstalled('q4'), true)
-  assert.equal(await t.video.isVideoQualityInstalled('q6'), false, 'une qualité ne se télécharge que si on la choisit')
-  assert.ok(logs.some((l) => /Wan 2\.2 TI2V 5B/.test(l)), 'Léo voit ce qui se télécharge')
+  assert.equal(await t.video.isVideoQualityInstalled('q6'), true)
+  assert.equal(await t.video.isVideoQualityInstalled('q8'), false, 'une qualité ne se télécharge que si on la choisit')
+  assert.ok(logs.some((l) => /FastWan 2\.2 TI2V 5B, Q6/.test(l)), 'Léo voit ce qui se télécharge')
   t.cleanup()
 })
 
@@ -220,34 +219,34 @@ test('le moteur déjà installé pour les images n’est jamais retéléchargé 
   await t.video.installVideoModel()
   assert.equal(t.downloads.length - before, 3, 'seulement les trois fichiers vidéo')
   const status = await t.video.getVideoStudioStatus()
-  assert.deepEqual(status.qualities.map((q) => [q.id, q.installed]), [['q4', true], ['q6', false]])
+  assert.deepEqual(status.qualities.map((q) => [q.id, q.installed]), [['q6', true]], '8 Go de carte : Q6 seulement')
   t.cleanup()
 })
 
 test('état : la taille à télécharger ne compte le moteur que s’il manque, et le décodeur commun une seule fois', async () => {
-  const t = loadVideo()
+  const t = loadVideo({ vramGb: 12 })
   const size = (q) => t.video.videoFilesFor(q).reduce((s, f) => s + f.bytes, 0)
   const label = async (q) => (await t.video.getVideoStudioStatus()).qualities.find((x) => x.id === q).downloadLabel
-  assert.equal(await label('q4'), `${size('q4') + t.image.SD_ENGINE.bytes} o`)
+  assert.equal(await label('q6'), `${size('q6') + t.image.SD_ENGINE.bytes} o`)
   await t.image.installImageModel()
-  assert.equal(await label('q4'), `${size('q4')} o`)
-  await t.video.installVideoModel('q4')
-  const vae = t.video.videoFilesFor('q6').find((f) => f.role === 'vae').bytes
-  assert.equal(await label('q6'), `${size('q6') - vae} o`, 'le décodeur, déjà là pour Q4, n’est pas recompté')
+  assert.equal(await label('q6'), `${size('q6')} o`)
+  await t.video.installVideoModel('q6')
+  const vae = t.video.videoFilesFor('q8').find((f) => f.role === 'vae').bytes
+  assert.equal(await label('q8'), `${size('q8') - vae} o`, 'le décodeur, déjà là pour Q6, n’est pas recompté')
   t.cleanup()
 })
 
-test('Q6 après Q4 : seulement son modèle vidéo et son lecteur (le décodeur est commun), puis la vidéo les utilise', async () => {
-  const t = await installed()
+test('Q8 après Q6 (carte de 12 Go) : seulement son modèle vidéo et son lecteur (le décodeur est commun), puis la vidéo les utilise', async () => {
+  const t = await installed({ vramGb: 12 })
   const before = t.downloads.length
-  await t.video.installVideoModel('q6')
+  await t.video.installVideoModel('q8')
   const fetched = t.downloads.slice(before)
   assert.equal(fetched.length, 2)
-  assert.ok(fetched.every((url) => /Q6_K\.gguf$/.test(url)), fetched.join(' '))
-  await t.video.generateVideo('a cat', () => {}, undefined, undefined, 2, 'q6')
+  assert.ok(fetched.every((url) => /(q8_0|Q8_0)\.gguf$/.test(url)), fetched.join(' '))
+  await t.video.generateVideo('a cat', () => {}, undefined, undefined, 2, 'q8')
   const { args } = t.spawns[0]
-  assert.match(args[args.indexOf('--diffusion-model') + 1], /Wan2\.2-TI2V-5B-Q6_K\.gguf$/)
-  assert.match(args[args.indexOf('--t5xxl') + 1], /umt5-xxl-encoder-Q6_K\.gguf$/)
+  assert.match(args[args.indexOf('--diffusion-model') + 1], /FastWan2\.2-TI2V-5B-q8_0\.gguf$/)
+  assert.match(args[args.indexOf('--t5xxl') + 1], /umt5-xxl-encoder-Q8_0\.gguf$/)
   assert.match(args[args.indexOf('--vae') + 1], /wan2\.2_vae\.safetensors$/)
   t.cleanup()
 })
@@ -263,17 +262,17 @@ test('Q8 sur une carte de 8 Go : refusé avec une phrase claire, AVANT tout tél
   t.cleanup()
 })
 
-test('qualité pas encore téléchargée : message qui dit où la télécharger, rien n’est lancé', async () => {
-  const t = await installed()
+test('qualité pas encore téléchargée (Q8 sur une carte de 12 Go) : message qui dit où la télécharger, rien n’est lancé', async () => {
+  const t = await installed({ vramGb: 12 })
   t.events.length = 0
-  await assert.rejects(t.video.generateVideo('a cat', () => {}, undefined, undefined, 2, 'q6'), /qualité Q6 n'est pas encore téléchargée/)
+  await assert.rejects(t.video.generateVideo('a cat', () => {}, undefined, undefined, 2, 'q8'), /qualité Q8 n'est pas encore téléchargée/)
   assert.deepEqual(t.events, [])
   t.cleanup()
 })
 
 test('PC trop faible : refus lisible AVANT tout calcul, rien n’est lancé', async () => {
   const t = loadVideo({ vramGb: 4 })
-  await assert.rejects(t.video.installVideoModel('q4'), /carte graphique trop petite/)
+  await assert.rejects(t.video.installVideoModel('q6'), /carte graphique trop petite/)
   assert.equal(t.downloads.length, 0, 'pas un octet téléchargé pour rien')
   await assert.rejects(t.video.generateVideo('a cat'), /pas assez de puissance pour créer des vidéos : carte graphique trop petite/)
   assert.deepEqual(t.events, [])
@@ -285,7 +284,7 @@ test('PC trop faible : refus lisible AVANT tout calcul, rien n’est lancé', as
 
 test('modèle absent : message qui renvoie vers le bouton d’installation, rien n’est téléchargé', async () => {
   const t = loadVideo()
-  await assert.rejects(t.video.generateVideo('a cat'), /qualité Q4 n'est pas encore téléchargée/)
+  await assert.rejects(t.video.generateVideo('a cat'), /qualité Q6 n'est pas encore téléchargée/)
   assert.equal(t.downloads.length, 0)
   t.cleanup()
 })
@@ -302,7 +301,8 @@ test('vidéo : Ollama libéré AVANT sd-cli, commande officielle de Wan 2.2, des
   assert.equal(options.shell, undefined, 'aucun shell')
   assert.equal(args[args.indexOf('-p') + 1], piege, 'texte intact, en un seul argument')
   assert.equal(args[args.indexOf('-M') + 1], 'vid_gen')
-  for (const [flag, value] of [['--cfg-scale', '6.0'], ['--sampling-method', 'euler'], ['--flow-shift', '3.0'], ['-W', '832'], ['-H', '480'], ['--video-frames', '49'], ['--fps', '24']]) {
+  // FastWan (étape 206) : 3 étapes, CFG 1 (pas de second passage), planificateur lcm — la commande mesurée ici.
+  for (const [flag, value] of [['--cfg-scale', '1.0'], ['--steps', '3'], ['--scheduler', 'lcm'], ['--sampling-method', 'euler'], ['--flow-shift', '3.0'], ['-W', '832'], ['-H', '480'], ['--video-frames', '49'], ['--fps', '24']]) {
     assert.equal(args[args.indexOf(flag) + 1], value, flag)
   }
   for (const flag of ['--diffusion-model', '--vae', '--t5xxl', '--offload-to-cpu', '--diffusion-fa', '--vae-tiling']) assert.ok(args.includes(flag), flag)
@@ -378,12 +378,10 @@ test('hors Windows : refus lisible, rien n’est installé', async () => {
 test('les fichiers figés sont ceux vérifiés sur Hugging Face (Apache 2.0, révision exacte, empreinte)', () => {
   const source = readFileSync(join(projectRoot, 'electron/services/videoGenerator.ts'), 'utf8')
   for (const [rev, hash] of [
-    ['57437632ddd08bdcbd1508c866aa22e126ed51d2', '95b19697b7f98e65b0a543640e9ca7b4dfec32e2a6e3731e8e10708be52655e2'],
     ['ee6f4a40737a995bf5818954cfce6d59443b0f04', 'e40321bd36b9709991dae2530eb4ac303dd168276980d3e9bc4b6e2b75fed156'],
-    ['b535255bee98c2b0a59ea7c0ae2dcd0c6657b3b7', '17cf97a5bbbc60a646d6105b832b6f657ce904a8a1ad970e4b59df0c67584a40'],
-    // Étape 205 : Q6 et Q8, mêmes dépôts, mêmes révisions.
-    ['57437632ddd08bdcbd1508c866aa22e126ed51d2', '355f6bee35c4c6cbd0f275112619fe8ac6f7b9b067b885723667b3bde29497c3'],
-    ['57437632ddd08bdcbd1508c866aa22e126ed51d2', '57bece983817ab2f957546683bb670f13be7d99022d45674840cd999a050ea8f'],
+    // Étape 206 : FastWan (Green-Sky, Apache 2.0) et le lecteur UMT5 en Q6/Q8.
+    ['3e8fe5537b1200654868aa24ea8d0f4012fb3a1e', '416a87e30f2328dbefd7666ac90b395ead74f443748ff31c83483ac4ac6121cc'],
+    ['3e8fe5537b1200654868aa24ea8d0f4012fb3a1e', 'b62f50ff87c4dfa2910c6883d45015e05b709366581698b302e259e7f25c9208'],
     ['b535255bee98c2b0a59ea7c0ae2dcd0c6657b3b7', '9209b4c77b34ad8cf3f06b04c6eaa27e7beeebb348a31f85e3b38a1d719b09ed'],
     ['b535255bee98c2b0a59ea7c0ae2dcd0c6657b3b7', '2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc']
   ]) {
@@ -391,4 +389,18 @@ test('les fichiers figés sont ceux vérifiés sur Hugging Face (Apache 2.0, ré
     assert.ok(source.includes(hash), hash)
   }
   assert.ok(!/\bexec\(|shell:\s*true/.test(source), 'aucun shell')
+})
+
+test('les fichiers de l’ancien Wan 2.2 de base sont effacés, et SEULEMENT eux', async () => {
+  const t = await installed()
+  const dir = t.video.videoModelsDir()
+  for (const name of t.video.OBSOLETE_VIDEO_FILES) writeFileSync(join(dir, name), 'ancien')
+  writeFileSync(join(dir, 'notes-de-leo.txt'), 'à garder')
+  const kept = readdirSync(dir).filter((n) => !t.video.OBSOLETE_VIDEO_FILES.includes(n))
+  const removed = await t.video.removeObsoleteVideoFiles()
+  assert.deepEqual([...removed].sort(), [...t.video.OBSOLETE_VIDEO_FILES].sort())
+  assert.deepEqual(readdirSync(dir).sort(), kept.sort(), 'les fichiers FastWan installés et tout le reste sont intacts')
+  assert.equal(await t.video.isVideoQualityInstalled('q6'), true)
+  assert.deepEqual(await t.video.removeObsoleteVideoFiles(), [], 'rien à refaire au démarrage suivant')
+  t.cleanup()
 })

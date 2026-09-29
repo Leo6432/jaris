@@ -565,7 +565,7 @@ export interface GeneratedImageSummary {
 /** Mode Vidéo (étape 203) : mêmes informations que le mode Image, pour le modèle Wan 2.2. */
 /** Une qualité du modèle vidéo telle que l'écran la montre (étape 205). */
 export interface VideoQualityStatus {
-  id: 'q4' | 'q6' | 'q8'
+  id: 'q6' | 'q8'
   label: string
   /** Téléchargée et prête. */
   installed: boolean

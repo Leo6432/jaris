@@ -22,6 +22,7 @@ import {
   generatedVideoPath,
   generatedVideosDir,
   getVideoStudioStatus,
+  removeObsoleteVideoFiles,
   installVideoModel,
   listGeneratedVideos,
   readGeneratedVideo
@@ -750,6 +751,8 @@ app.whenReady().then(async () => {
   void cleanupStaleChromiumData()
   // Étape 200 : le Montage a été retiré ; son paquet Remotion (environ 600 Mo) ne sert plus à rien.
   void removeLeftoverMontage()
+  // Étape 206 : les fichiers du Wan 2.2 de base, remplacé par FastWan, ne servent plus (jusqu'à ~15 Go).
+  void removeObsoleteVideoFiles().catch(() => {})
   registerPreviewHandler()
 
   // Autorise silencieusement l'accès micro pour les fenêtres de Jaris (enumerateDevices() ne révèle les
@@ -1258,10 +1261,10 @@ app.whenReady().then(async () => {
   // Mode Vidéo (étape 203) : Wan 2.2 TI2V 5B avec le même moteur que les images. Seuls des NOMS de fichiers
   // .webm voyagent entre l'écran et ici, revérifiés à chaque fois (generatedVideoPath).
   ipcMain.handle(IPC_CHANNELS.getVideoStudioStatus, (): Promise<VideoStudioStatus> => getVideoStudioStatus())
-  // Étape 205 : la qualité vient de l'écran — ramenée à Q4 si elle n'en est pas une, puis revérifiée pour la
+  // Étape 205 : la qualité vient de l'écran — ramenée à Q6 si elle n'en est pas une, puis revérifiée pour la
   // machine par installVideoModel/generateVideo (jamais crue sur parole).
   ipcMain.handle(IPC_CHANNELS.installVideoStudio, (event, quality?: unknown) =>
-    installVideoModel(isVideoQuality(quality) ? quality : 'q4', (message) => {
+    installVideoModel(isVideoQuality(quality) ? quality : 'q6', (message) => {
       if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.videoStudioLog, message)
     })
   )
@@ -1290,7 +1293,7 @@ app.whenReady().then(async () => {
           controller.signal,
           initImage,
           normalizeVideoSeconds(seconds),
-          isVideoQuality(quality) ? quality : 'q4'
+          isVideoQuality(quality) ? quality : 'q6'
         )
         return { fileName: video.fileName, label: imageLabelFromFileName(video.fileName), timestamp: Date.now() }
       } finally {

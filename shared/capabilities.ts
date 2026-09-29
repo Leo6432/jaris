@@ -205,7 +205,7 @@ export const CAPABILITIES: CapabilityGroup[] = [
       },
       {
         title: 'Choisir la qualité',
-        description: "Le bouton étoile du champ : Q4, Q6 ou Q8, plus fidèle mais plus lourde à chaque cran. Seules les qualités que ton PC peut faire tourner sont proposées."
+        description: "Le bouton étoile du champ : Q6 ou Q8, la seconde plus fidèle mais plus lourde. Seules les qualités que ton PC peut faire tourner sont proposées."
       }
     ]
   },

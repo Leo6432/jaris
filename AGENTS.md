@@ -5575,3 +5575,26 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   (choix de qualité avant installation, barre limitée à la machine, téléchargement depuis le panneau avec bandeau,
   envoi bloqué si la qualité manque, qualité envoyée avec la vidéo et gardée, choix gardé devenu impossible
   ignoré ; vérifié en ne transmettant plus la qualité : le test échoue).
+
+- **1 h 05 pour 5 s de vidéo, et un rendu granuleux : Wan 2.2 5B de base remplacé par FastWan (Léo, étape 206,
+  captures de sa PREMIÈRE vraie vidéo à l'appui : « attendre 1h05 pour ça c'est chiant »).** Chaque étape de Wan
+  de base coûtait DEUX passages (CFG 6 : description + prompt négatif) × 20 étapes = 40 passages. FastWan est le
+  MÊME Wan 2.2 TI2V 5B distillé par FastVideo (Apache 2.0) pour 3 étapes en CFG 1, soit 3 passages. Piste trouvée
+  dans une discussion de sd.cpp sur le même rendu « poubelle » du 5B de base (leejet/stable-diffusion.cpp#1243),
+  où un contributeur de sd.cpp donne la commande (`--cfg-scale 1 --steps 3 --scheduler lcm --flow-shift 3.0`) —
+  puis **MESURÉE ici avant de changer quoi que ce soit** : même processeur, même description, même graine,
+  calcul de la vidéo 214 s (Wan, 10 étapes) → 41 s (FastWan, 3 étapes), et en 832x480 un chat roux net dans la
+  neige, sans grain. `--scheduler lcm` vérifié présent dans la version figée du moteur (`sd-cli --help`).
+  **Écarté, et pourquoi** : Wan2.2-TI2V-5B-Turbo (4 étapes) — sa copie GGUF se dit Apache 2.0, mais le dépôt
+  d'origine est sous CC BY-NC-SA (non commercial) : toujours lire la licence du dépôt D'ORIGINE, pas celle
+  recopiée sur une conversion. Le moteur CUDA (au lieu de Vulkan) existe mais pèse ~900 Mo et son gain est
+  invérifiable ici sans carte NVIDIA : pas changé sans mesure.
+  **Ce qui reste long** : le décodeur (VAE), inchangé — ici, en 832x480, 3 min de calcul de vidéo pour 16 min de
+  décodage sur processeur. Sur une vraie carte, la part exacte reste à mesurer chez Léo.
+  FastWan n'existe qu'en Q6 et Q8 (GGUF de Green-Sky, contributeur de sd.cpp) : plus de Q4. Seuils inchangés
+  (Q6 sur 8 Go de carte, Q8 à partir de 10 Go ; 24 Go de RAM). Les fichiers de l'ancien Wan de base (jusqu'à
+  ~15 Go) sont effacés au démarrage par NOM exact (`removeObsoleteVideoFiles`), jamais autre chose du dossier.
+  **Leçon générale : face à un modèle lent ET médiocre, chercher d'abord une version distillée du MÊME modèle
+  (moins d'étapes, sans CFG) avant d'optimiser le moteur — le nombre de passages domine tout le reste.**
+  Régression : `scripts/test-video-generation.mjs` (commande FastWan, crans Q6/Q8, anciens fichiers effacés et
+  seulement eux, empreintes figées) et `scripts/test-video-panel-ui.mjs`.

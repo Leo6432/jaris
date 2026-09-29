@@ -60,7 +60,7 @@ export interface VideoModelFile {
   sha256: string
 }
 
-const WAN_REPO = 'https://huggingface.co/QuantStack/Wan2.2-TI2V-5B-GGUF/resolve/57437632ddd08bdcbd1508c866aa22e126ed51d2'
+const FASTWAN_REPO = 'https://huggingface.co/Green-Sky/FastWan2.2-TI2V-5B-FullAttn-GGUF/resolve/3e8fe5537b1200654868aa24ea8d0f4012fb3a1e'
 const UMT5_REPO = 'https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/b535255bee98c2b0a59ea7c0ae2dcd0c6657b3b7'
 
 /** Le décodeur n'existe qu'en version originale : le même pour toutes les qualités. */
@@ -74,37 +74,24 @@ const VIDEO_VAE: VideoModelFile = {
 }
 
 /**
- * Étape 205 : le modèle vidéo et le lecteur de description, à chaque niveau de compression. Mêmes dépôts et mêmes
- * révisions figées que Q4 (étape 203), tailles et SHA-256 lues sur l'API Hugging Face (licence Apache 2.0 des deux
- * dépôts vérifiée). Les noms de fichiers Q4 n'ont pas changé : une installation existante reste valable.
+ * Étape 206 (Léo, après une vraie vidéo de 5 s : « attendre 1h05 pour ça c'est chiant », et un rendu granuleux) :
+ * le modèle vidéo est FastWan 2.2 TI2V 5B — le MÊME Wan 2.2 5B, distillé par FastVideo (Apache 2.0) pour produire
+ * en 3 étapes et sans double passage (CFG 1) au lieu de 20 × 2. Conseillé par un contributeur de sd.cpp face au
+ * même rendu « poubelle » du 5B de base (discussion leejet/stable-diffusion.cpp#1243). MESURÉ ici sur le même
+ * processeur, même description, même graine : calcul de la vidéo 214 s (Wan, 10 étapes) → 41 s (FastWan, 3), soit
+ * ~10× moins qu'avec les 20 étapes d'avant ; et en 832x480, un chat roux net dans la neige, sans le grain du 5B.
+ * GGUF de Green-Sky (contributeur de sd.cpp), publiés en Q6 et Q8 seulement. Lecteur de description : mêmes
+ * dépôt et révision que l'étape 205. Tailles et SHA-256 lues sur l'API Hugging Face, recalculées au téléchargement.
  */
 export const VIDEO_QUALITY_FILES: Record<VideoQuality, { diffusion: VideoModelFile; t5xxl: VideoModelFile }> = {
-  q4: {
-    diffusion: {
-      role: 'diffusion',
-      fileName: 'Wan2.2-TI2V-5B-Q4_K_M.gguf',
-      label: 'le modèle vidéo (Wan 2.2 TI2V 5B, Q4)',
-      url: `${WAN_REPO}/Wan2.2-TI2V-5B-Q4_K_M.gguf`,
-      bytes: 3_433_116_000,
-      sha256: '95b19697b7f98e65b0a543640e9ca7b4dfec32e2a6e3731e8e10708be52655e2'
-    },
-    t5xxl: {
-      role: 't5xxl',
-      fileName: 'umt5-xxl-encoder-Q4_K_M.gguf',
-      label: 'le lecteur de description (UMT5, Q4)',
-      url: `${UMT5_REPO}/umt5-xxl-encoder-Q4_K_M.gguf`,
-      bytes: 3_655_145_312,
-      sha256: '17cf97a5bbbc60a646d6105b832b6f657ce904a8a1ad970e4b59df0c67584a40'
-    }
-  },
   q6: {
     diffusion: {
       role: 'diffusion',
-      fileName: 'Wan2.2-TI2V-5B-Q6_K.gguf',
-      label: 'le modèle vidéo (Wan 2.2 TI2V 5B, Q6)',
-      url: `${WAN_REPO}/Wan2.2-TI2V-5B-Q6_K.gguf`,
-      bytes: 4_211_683_680,
-      sha256: '355f6bee35c4c6cbd0f275112619fe8ac6f7b9b067b885723667b3bde29497c3'
+      fileName: 'FastWan2.2-TI2V-5B-q6_k.gguf',
+      label: 'le modèle vidéo (FastWan 2.2 TI2V 5B, Q6)',
+      url: `${FASTWAN_REPO}/FastWan2.2-TI2V-5B-q6_k.gguf`,
+      bytes: 4_210_247_200,
+      sha256: '416a87e30f2328dbefd7666ac90b395ead74f443748ff31c83483ac4ac6121cc'
     },
     t5xxl: {
       role: 't5xxl',
@@ -118,11 +105,11 @@ export const VIDEO_QUALITY_FILES: Record<VideoQuality, { diffusion: VideoModelFi
   q8: {
     diffusion: {
       role: 'diffusion',
-      fileName: 'Wan2.2-TI2V-5B-Q8_0.gguf',
-      label: 'le modèle vidéo (Wan 2.2 TI2V 5B, Q8)',
-      url: `${WAN_REPO}/Wan2.2-TI2V-5B-Q8_0.gguf`,
-      bytes: 5_400_179_040,
-      sha256: '57bece983817ab2f957546683bb670f13be7d99022d45674840cd999a050ea8f'
+      fileName: 'FastWan2.2-TI2V-5B-q8_0.gguf',
+      label: 'le modèle vidéo (FastWan 2.2 TI2V 5B, Q8)',
+      url: `${FASTWAN_REPO}/FastWan2.2-TI2V-5B-q8_0.gguf`,
+      bytes: 5_412_844_128,
+      sha256: 'b62f50ff87c4dfa2910c6883d45015e05b709366581698b302e259e7f25c9208'
     },
     t5xxl: {
       role: 't5xxl',
@@ -135,6 +122,28 @@ export const VIDEO_QUALITY_FILES: Record<VideoQuality, { diffusion: VideoModelFi
   }
 }
 
+/**
+ * Fichiers des versions précédentes (Wan 2.2 5B de base en Q4/Q6/Q8, lecteur Q4) : plus jamais lus. Effacés au
+ * démarrage — jusqu'à ~15 Go sinon perdus. Seuls ces NOMS exacts, dans le dossier des modèles vidéo, jamais autre chose.
+ */
+export const OBSOLETE_VIDEO_FILES = [
+  'Wan2.2-TI2V-5B-Q4_K_M.gguf',
+  'Wan2.2-TI2V-5B-Q6_K.gguf',
+  'Wan2.2-TI2V-5B-Q8_0.gguf',
+  'umt5-xxl-encoder-Q4_K_M.gguf'
+]
+
+export async function removeObsoleteVideoFiles(): Promise<string[]> {
+  const removed: string[] = []
+  for (const name of OBSOLETE_VIDEO_FILES) {
+    const path = join(videoModelsDir(), name)
+    if ((await sizeOf(path)) === null) continue
+    await rm(path, { force: true })
+    removed.push(name)
+  }
+  return removed
+}
+
 /** Les trois fichiers d'une qualité : son modèle vidéo, le décodeur commun, son lecteur de description. */
 export function videoFilesFor(quality: VideoQuality): VideoModelFile[] {
   const { diffusion, t5xxl } = VIDEO_QUALITY_FILES[quality]
@@ -143,13 +152,6 @@ export function videoFilesFor(quality: VideoQuality): VideoModelFile[] {
 
 /** Tous les fichiers possibles, sans doublon (le décodeur une seule fois). */
 export const VIDEO_MODEL_FILES: VideoModelFile[] = [VIDEO_VAE, ...Object.values(VIDEO_QUALITY_FILES).flatMap((q) => [q.diffusion, q.t5xxl])]
-
-/**
- * Le « prompt négatif » officiel de Wan (celui des exemples de sd.cpp, écrit en chinois par Alibaba) : ce que la
- * vidéo doit éviter (flou, image figée, mains mal dessinées…). Le modèle a été entraîné avec lui.
- */
-export const WAN_NEGATIVE_PROMPT =
-  '色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走'
 
 export function videoModelsDir(): string {
   return join(imageEngineRoot(), 'models', 'video')
@@ -175,7 +177,11 @@ export interface VideoArgsInput {
   initImage?: string
 }
 
-/** Ligne de commande de sd-cli pour Wan 2.2 TI2V 5B, d'après l'exemple officiel de sd.cpp (docs/wan.md). */
+/**
+ * Ligne de commande de sd-cli pour FastWan (étape 206) : celle donnée par un contributeur de sd.cpp
+ * (discussion #1243) — 3 étapes, CFG 1, planificateur lcm. Avec CFG 1, pas de second passage « négatif » :
+ * le prompt négatif de Wan ne sert plus à rien, il n'est plus passé.
+ */
 export function buildVideoArgs({ models, prompt, output, seed, seconds, initImage }: VideoArgsInput): string[] {
   return [
     '-M', 'vid_gen',
@@ -183,9 +189,10 @@ export function buildVideoArgs({ models, prompt, output, seed, seconds, initImag
     '--vae', models.vae,
     '--t5xxl', models.t5xxl,
     '-p', prompt,
-    '-n', WAN_NEGATIVE_PROMPT,
-    '--cfg-scale', '6.0',
+    '--cfg-scale', '1.0',
     '--sampling-method', 'euler',
+    '--scheduler', 'lcm',
+    '--steps', '3',
     '--flow-shift', '3.0',
     '-W', String(VIDEO_WIDTH),
     '-H', String(VIDEO_HEIGHT),
@@ -239,7 +246,7 @@ async function assertQualityFits(quality: VideoQuality): Promise<void> {
 }
 
 /** Installé à la demande, depuis le mode Vidéo : le moteur (s'il manque) puis les fichiers de la qualité choisie. */
-export async function installVideoModel(quality: VideoQuality = 'q4', onLog: Log = () => {}): Promise<void> {
+export async function installVideoModel(quality: VideoQuality = 'q6', onLog: Log = () => {}): Promise<void> {
   if (process.platform !== 'win32') throw new Error("La création de vidéos n'est disponible que sur Windows pour l'instant.")
   await assertQualityFits(quality)
   await ensureEngine(onLog)
@@ -267,7 +274,7 @@ export async function generateVideo(
   signal?: AbortSignal,
   initImage?: { bytes: Uint8Array; extension: 'png' | 'jpg' },
   seconds: VideoSeconds = DEFAULT_VIDEO_SECONDS,
-  quality: VideoQuality = 'q4'
+  quality: VideoQuality = 'q6'
 ): Promise<GeneratedVideoFile> {
   if (process.platform !== 'win32') throw new Error("La création de vidéos n'est disponible que sur Windows pour l'instant.")
   const text = cleanPrompt(prompt)
