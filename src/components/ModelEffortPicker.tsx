@@ -86,6 +86,17 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
     void load()
   }, [load])
 
+  // Étape 202 (Léo : « quand on ouvre Jaris on ne peut pas changer de modèle, c'est grisé, je dois aller sur
+  // Chat et revenir ») : au lancement, Ollama ne répond pas encore quand ce bouton demande la liste des modèles.
+  // Il était grisé jusqu'à ce qu'un changement d'onglet le recrée. Il redemande maintenant toutes les 3 s tant
+  // qu'Ollama n'a pas répondu, puis s'arrête.
+  const ollamaMissing = info === null || info.installed === null
+  useEffect(() => {
+    if (!ollamaMissing) return
+    const timer = setInterval(() => void load(), 3000)
+    return () => clearInterval(timer)
+  }, [ollamaMissing, load])
+
   // Étape 200 : centré sur le bouton, mais jamais coupé par le bord de la fenêtre (mesuré avant d'être peint).
   useLayoutEffect(() => {
     if (!open || !panelRef.current) return

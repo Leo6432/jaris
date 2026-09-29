@@ -5467,3 +5467,30 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   d'enregistrement), `scripts/test-codegen-generate.mjs` (un ancien choix à la main est ignoré, remplace les
   deux tests de l'étape 141 devenus faux) et `scripts/test-model-picker-ui.mjs` (Code affiché sans bouton ni
   liste, Chat sans Code ni Vision, texte non sélectionnable, panneau jamais coupé par le haut).
+
+- **« Si je fais un prompt à Code, je pars dans Chat ou Vocal et je reviens dans Code, c'est vide et ça
+  travaille encore sur mon processeur » + « quand on ouvre Jaris on ne peut pas changer de modèle, c'est grisé,
+  je dois aller sur Chat et revenir sur Vocal » (Léo, étape 202). Deux bugs, une même famille : un état qui
+  ne vit que dans un composant React disparaît ou se fige selon le moment où ce composant est (re)créé.**
+  1. **Écran détruit en changeant d'onglet.** `{appMode === 'code' && <CodePanel />}` (App.tsx) DÉTRUISAIT
+     l'écran Code à chaque changement d'onglet, avec son état (génération en cours, avancement, résultat),
+     alors que la génération continuait dans le main process (d'où le processeur occupé). Au retour, un écran
+     neuf ne savait rien, et la réponse arrivait sur un composant qui n'existait plus : perdue. Même chose
+     pour le Chat et le mode Image. Corrigé par `KeepAlive` (src/components/KeepAlive.tsx) : l'écran est
+     monté à sa première ouverture (rien n'est chargé pour un onglet jamais visité), puis seulement CACHÉ
+     (`display: none`, et `display: contents` quand il est visible pour ne rien changer à la mise en page).
+     **Leçon générale : un écran qui lance un travail long (génération, dessin, envoi) ne doit jamais être
+     détruit tant que ce travail tourne ailleurs — sinon le travail continue sans personne pour recevoir le
+     résultat ni montrer l'avancement.**
+  2. **Sélecteur de modèle grisé au lancement.** Le sélecteur demande la liste des modèles une seule fois, en
+     se montant. Au lancement de Jaris, Ollama ne répond pas encore : `installed: null`, bouton grisé, et
+     plus rien ne redemandait — seul un changement d'onglet, qui recréait le composant (justement le
+     comportement corrigé au point 1 pour d'autres écrans), le « réparait ». Il redemande maintenant toutes
+     les 3 s tant qu'Ollama n'a pas répondu, puis s'arrête. **Leçon générale : une donnée lue une seule fois
+     au montage auprès d'un service qui démarre en même temps que l'appli doit être relue tant qu'elle manque —
+     sinon l'écran reste figé sur l'état « pas encore prêt ».**
+  Régression : `scripts/test-keep-alive-ui.mjs` (vrai écran Code dans un navigateur : l'avancement survit à un
+  aller-retour d'onglet, un résultat arrivé pendant l'absence s'affiche au retour, un onglet jamais ouvert ne
+  charge rien, App.tsx garde les trois écrans en vie — vérifié en remettant « détruire si inactif » : 2 tests
+  échouent) et `scripts/test-model-picker-ui.mjs` (Ollama absent puis présent : le bouton se dégrise tout
+  seul — vérifié en coupant la relance).

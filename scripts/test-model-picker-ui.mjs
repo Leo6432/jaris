@@ -63,7 +63,7 @@ window.jaris = {
     const model = selected ? ROLES.find((r) => r.value === selected).model : autoModel
     return Promise.resolve({
       selected,
-      installed: INSTALLED,
+      installed: window.__ollamaDown ? null : INSTALLED,
       autoModel,
       // Comme le main (étape 201) : Rapide/Médium/Puissant pour discuter, aucun choix en Code.
       roles: mode === 'code' ? [] : ROLES,
@@ -378,4 +378,12 @@ test('avec de la place, le centre du panneau est pile sur le centre du bouton', 
     })
     assert.ok(Math.abs(c.trigger - c.panel) <= 1, `centré (${c.trigger} vs ${c.panel})`)
   })
+})
+
+test('au lancement, Ollama pas encore prêt : le bouton se dégrise tout seul dès qu’il répond (étape 202)', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForFunction(() => document.querySelector('#root .effort-picker__trigger').disabled)
+    await page.evaluate(() => { window.__ollamaDown = false })
+    await page.waitForFunction(() => !document.querySelector('#root .effort-picker__trigger').disabled, null, { timeout: 5000 })
+  }, 'window.__ollamaDown = true')
 })

@@ -4,6 +4,7 @@ import ChatPanel from '@/components/ChatPanel'
 import ChatWidget from '@/components/ChatWidget'
 import CodePanel from '@/components/CodePanel'
 import ImagePanel from '@/components/ImagePanel'
+import KeepAlive from '@/components/KeepAlive'
 import RuntimeSetup from '@/components/RuntimeSetup'
 import JarisOrb from '@/components/JarisOrb'
 import MemoryBrain from '@/components/MemoryBrain'
@@ -491,9 +492,16 @@ export default function App(): JSX.Element {
             </div>
           )}
 
-          {appMode === 'chat' && <ChatPanel />}
-          {appMode === 'code' && <CodePanel />}
-          {appMode === 'image' && <ImagePanel />}
+          {/* Étape 202 : cachés, jamais détruits, en changeant d'onglet — une génération en cours reste visible au retour. */}
+          <KeepAlive active={appMode === 'chat'}>
+            <ChatPanel />
+          </KeepAlive>
+          <KeepAlive active={appMode === 'code'}>
+            <CodePanel />
+          </KeepAlive>
+          <KeepAlive active={appMode === 'image'}>
+            <ImagePanel />
+          </KeepAlive>
         </main>
 
         {memoryGraph && <MemoryBrain graph={memoryGraph} onClose={() => setMemoryGraph(null)} />}
