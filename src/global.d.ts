@@ -1,4 +1,5 @@
 import type { ThinkValue } from '../shared/effort'
+import type { VideoQuality } from '../shared/videoModel'
 import type {
   AppMode,
   AppVersionStatus,
@@ -116,9 +117,14 @@ declare global {
       deleteGeneratedImage: (fileName: string) => Promise<void>
       openGeneratedImages: (fileName?: string) => Promise<void>
       getVideoStudioStatus: () => Promise<VideoStudioStatus>
-      installVideoStudio: () => Promise<void>
+      installVideoStudio: (quality: VideoQuality) => Promise<void>
       onVideoStudioLog: (cb: (message: string) => void) => () => void
-      generateStudioVideo: (prompt: string, image?: { base64: string; mimeType?: string } | null, seconds?: number) => Promise<GeneratedVideoSummary>
+      generateStudioVideo: (
+        prompt: string,
+        image?: { base64: string; mimeType?: string } | null,
+        seconds?: number,
+        quality?: VideoQuality
+      ) => Promise<GeneratedVideoSummary>
       cancelStudioVideo: () => void
       listGeneratedVideos: () => Promise<GeneratedVideoSummary[]>
       readGeneratedVideo: (fileName: string) => Promise<Uint8Array>

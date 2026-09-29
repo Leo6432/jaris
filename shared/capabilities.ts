@@ -202,6 +202,10 @@ export const CAPABILITIES: CapabilityGroup[] = [
       {
         title: 'Animer une image',
         description: 'Joins une image avec le « + » du champ et décris le mouvement : Jaris la fait bouger.'
+      },
+      {
+        title: 'Choisir la qualité',
+        description: "Le bouton étoile du champ : Q4, Q6 ou Q8, plus fidèle mais plus lourde à chaque cran. Seules les qualités que ton PC peut faire tourner sont proposées."
       }
     ]
   },

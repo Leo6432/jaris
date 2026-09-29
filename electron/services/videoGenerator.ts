@@ -25,8 +25,11 @@ import {
   VIDEO_HEIGHT,
   VIDEO_MODEL,
   VIDEO_WIDTH,
+  availableVideoQualities,
   normalizeVideoSeconds,
-  pickVideoModel,
+  videoQualityLabel,
+  VIDEO_QUALITIES,
+  type VideoQuality,
   videoFramesFor,
   type VideoSeconds
 } from '../../shared/videoModel'
@@ -57,32 +60,89 @@ export interface VideoModelFile {
   sha256: string
 }
 
-export const VIDEO_MODEL_FILES: VideoModelFile[] = [
-  {
-    role: 'diffusion',
-    fileName: 'Wan2.2-TI2V-5B-Q4_K_M.gguf',
-    label: 'le modèle vidéo (Wan 2.2 TI2V 5B)',
-    url: 'https://huggingface.co/QuantStack/Wan2.2-TI2V-5B-GGUF/resolve/57437632ddd08bdcbd1508c866aa22e126ed51d2/Wan2.2-TI2V-5B-Q4_K_M.gguf',
-    bytes: 3_433_116_000,
-    sha256: '95b19697b7f98e65b0a543640e9ca7b4dfec32e2a6e3731e8e10708be52655e2'
+const WAN_REPO = 'https://huggingface.co/QuantStack/Wan2.2-TI2V-5B-GGUF/resolve/57437632ddd08bdcbd1508c866aa22e126ed51d2'
+const UMT5_REPO = 'https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/b535255bee98c2b0a59ea7c0ae2dcd0c6657b3b7'
+
+/** Le décodeur n'existe qu'en version originale : le même pour toutes les qualités. */
+const VIDEO_VAE: VideoModelFile = {
+  role: 'vae',
+  fileName: 'wan2.2_vae.safetensors',
+  label: 'le décodeur vidéo',
+  url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/ee6f4a40737a995bf5818954cfce6d59443b0f04/split_files/vae/wan2.2_vae.safetensors',
+  bytes: 1_409_400_960,
+  sha256: 'e40321bd36b9709991dae2530eb4ac303dd168276980d3e9bc4b6e2b75fed156'
+}
+
+/**
+ * Étape 205 : le modèle vidéo et le lecteur de description, à chaque niveau de compression. Mêmes dépôts et mêmes
+ * révisions figées que Q4 (étape 203), tailles et SHA-256 lues sur l'API Hugging Face (licence Apache 2.0 des deux
+ * dépôts vérifiée). Les noms de fichiers Q4 n'ont pas changé : une installation existante reste valable.
+ */
+export const VIDEO_QUALITY_FILES: Record<VideoQuality, { diffusion: VideoModelFile; t5xxl: VideoModelFile }> = {
+  q4: {
+    diffusion: {
+      role: 'diffusion',
+      fileName: 'Wan2.2-TI2V-5B-Q4_K_M.gguf',
+      label: 'le modèle vidéo (Wan 2.2 TI2V 5B, Q4)',
+      url: `${WAN_REPO}/Wan2.2-TI2V-5B-Q4_K_M.gguf`,
+      bytes: 3_433_116_000,
+      sha256: '95b19697b7f98e65b0a543640e9ca7b4dfec32e2a6e3731e8e10708be52655e2'
+    },
+    t5xxl: {
+      role: 't5xxl',
+      fileName: 'umt5-xxl-encoder-Q4_K_M.gguf',
+      label: 'le lecteur de description (UMT5, Q4)',
+      url: `${UMT5_REPO}/umt5-xxl-encoder-Q4_K_M.gguf`,
+      bytes: 3_655_145_312,
+      sha256: '17cf97a5bbbc60a646d6105b832b6f657ce904a8a1ad970e4b59df0c67584a40'
+    }
   },
-  {
-    role: 'vae',
-    fileName: 'wan2.2_vae.safetensors',
-    label: 'le décodeur vidéo',
-    url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/ee6f4a40737a995bf5818954cfce6d59443b0f04/split_files/vae/wan2.2_vae.safetensors',
-    bytes: 1_409_400_960,
-    sha256: 'e40321bd36b9709991dae2530eb4ac303dd168276980d3e9bc4b6e2b75fed156'
+  q6: {
+    diffusion: {
+      role: 'diffusion',
+      fileName: 'Wan2.2-TI2V-5B-Q6_K.gguf',
+      label: 'le modèle vidéo (Wan 2.2 TI2V 5B, Q6)',
+      url: `${WAN_REPO}/Wan2.2-TI2V-5B-Q6_K.gguf`,
+      bytes: 4_211_683_680,
+      sha256: '355f6bee35c4c6cbd0f275112619fe8ac6f7b9b067b885723667b3bde29497c3'
+    },
+    t5xxl: {
+      role: 't5xxl',
+      fileName: 'umt5-xxl-encoder-Q6_K.gguf',
+      label: 'le lecteur de description (UMT5, Q6)',
+      url: `${UMT5_REPO}/umt5-xxl-encoder-Q6_K.gguf`,
+      bytes: 4_667_283_296,
+      sha256: '9209b4c77b34ad8cf3f06b04c6eaa27e7beeebb348a31f85e3b38a1d719b09ed'
+    }
   },
-  {
-    role: 't5xxl',
-    fileName: 'umt5-xxl-encoder-Q4_K_M.gguf',
-    label: 'le lecteur de description (UMT5)',
-    url: 'https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/b535255bee98c2b0a59ea7c0ae2dcd0c6657b3b7/umt5-xxl-encoder-Q4_K_M.gguf',
-    bytes: 3_655_145_312,
-    sha256: '17cf97a5bbbc60a646d6105b832b6f657ce904a8a1ad970e4b59df0c67584a40'
+  q8: {
+    diffusion: {
+      role: 'diffusion',
+      fileName: 'Wan2.2-TI2V-5B-Q8_0.gguf',
+      label: 'le modèle vidéo (Wan 2.2 TI2V 5B, Q8)',
+      url: `${WAN_REPO}/Wan2.2-TI2V-5B-Q8_0.gguf`,
+      bytes: 5_400_179_040,
+      sha256: '57bece983817ab2f957546683bb670f13be7d99022d45674840cd999a050ea8f'
+    },
+    t5xxl: {
+      role: 't5xxl',
+      fileName: 'umt5-xxl-encoder-Q8_0.gguf',
+      label: 'le lecteur de description (UMT5, Q8)',
+      url: `${UMT5_REPO}/umt5-xxl-encoder-Q8_0.gguf`,
+      bytes: 6_043_068_256,
+      sha256: '2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc'
+    }
   }
-]
+}
+
+/** Les trois fichiers d'une qualité : son modèle vidéo, le décodeur commun, son lecteur de description. */
+export function videoFilesFor(quality: VideoQuality): VideoModelFile[] {
+  const { diffusion, t5xxl } = VIDEO_QUALITY_FILES[quality]
+  return [diffusion, VIDEO_VAE, t5xxl]
+}
+
+/** Tous les fichiers possibles, sans doublon (le décodeur une seule fois). */
+export const VIDEO_MODEL_FILES: VideoModelFile[] = [VIDEO_VAE, ...Object.values(VIDEO_QUALITY_FILES).flatMap((q) => [q.diffusion, q.t5xxl])]
 
 /**
  * Le « prompt négatif » officiel de Wan (celui des exemples de sd.cpp, écrit en chinois par Alibaba) : ce que la
@@ -100,8 +160,8 @@ export function generatedVideosDir(): string {
   return join(getDataRoot(), 'generated-videos')
 }
 
-function modelPaths(): Record<VideoModelFile['role'], string> {
-  return Object.fromEntries(VIDEO_MODEL_FILES.map((f) => [f.role, join(videoModelsDir(), f.fileName)])) as Record<VideoModelFile['role'], string>
+function modelPaths(quality: VideoQuality): Record<VideoModelFile['role'], string> {
+  return Object.fromEntries(videoFilesFor(quality).map((f) => [f.role, join(videoModelsDir(), f.fileName)])) as Record<VideoModelFile['role'], string>
 }
 
 export interface VideoArgsInput {
@@ -144,34 +204,51 @@ export function buildVideoArgs({ models, prompt, output, seed, seconds, initImag
 
 const VIDEO_WORDING = { step: 'Vidéo', finishing: 'Assemblage de la vidéo…', cancelled: 'Vidéo annulée.' }
 
-async function ensureVideoModels(onLog: Log): Promise<void> {
-  await mkdir(videoModelsDir(), { recursive: true })
-  const paths = modelPaths()
-  const missing = []
-  for (const file of VIDEO_MODEL_FILES) {
-    if ((await sizeOf(paths[file.role])) !== file.bytes) missing.push(file)
+/** Ce qui manque sur le disque pour une qualité (fichier absent ou pas à la bonne taille). */
+async function missingFiles(quality: VideoQuality): Promise<VideoModelFile[]> {
+  const missing: VideoModelFile[] = []
+  for (const file of videoFilesFor(quality)) {
+    if ((await sizeOf(join(videoModelsDir(), file.fileName))) !== file.bytes) missing.push(file)
   }
+  return missing
+}
+
+async function ensureVideoModels(quality: VideoQuality, onLog: Log): Promise<void> {
+  await mkdir(videoModelsDir(), { recursive: true })
+  const missing = await missingFiles(quality)
   if (missing.length) {
     const total = missing.reduce((sum, f) => sum + f.bytes, 0)
-    onLog(`Modèle vidéo (${VIDEO_MODEL}) : ${formatBytes(total)} à télécharger, ça peut prendre un moment.`)
+    onLog(`Modèle vidéo (${VIDEO_MODEL}, ${videoQualityLabel(quality)}) : ${formatBytes(total)} à télécharger, ça peut prendre un moment.`)
   }
   for (const file of missing) {
-    await downloadVerified(file.url, paths[file.role], file, file.label, onLog)
+    await downloadVerified(file.url, join(videoModelsDir(), file.fileName), file, file.label, onLog)
   }
 }
 
-/** Installé à la demande, depuis le mode Vidéo : le moteur (s'il manque) puis les trois fichiers du modèle. */
-export async function installVideoModel(onLog: Log = () => {}): Promise<void> {
-  if (process.platform !== 'win32') throw new Error("La création de vidéos n'est disponible que sur Windows pour l'instant.")
-  await ensureEngine(onLog)
-  await ensureVideoModels(onLog)
+/** Refus lisible si la qualité demandée ne tient pas sur CETTE machine (revérifié côté main, jamais cru sur parole). */
+async function assertQualityFits(quality: VideoQuality): Promise<void> {
+  const { vramGb } = await detectGpu()
+  const pick = availableVideoQualities(vramGb, detectRamGb())
+  if (!pick.qualities.length) throw new Error(`Ton PC n'a pas assez de puissance pour créer des vidéos : ${pick.reason}.`)
+  if (!pick.qualities.includes(quality)) {
+    const level = VIDEO_QUALITIES.find((q) => q.id === quality)
+    throw new Error(
+      `La qualité ${videoQualityLabel(quality)} demande une carte graphique de ${level?.vramLabel} Go et ${level?.ramLabel} Go de RAM : choisis une qualité plus légère.`
+    )
+  }
 }
 
-export async function isVideoModelInstalled(): Promise<boolean> {
+/** Installé à la demande, depuis le mode Vidéo : le moteur (s'il manque) puis les fichiers de la qualité choisie. */
+export async function installVideoModel(quality: VideoQuality = 'q4', onLog: Log = () => {}): Promise<void> {
+  if (process.platform !== 'win32') throw new Error("La création de vidéos n'est disponible que sur Windows pour l'instant.")
+  await assertQualityFits(quality)
+  await ensureEngine(onLog)
+  await ensureVideoModels(quality, onLog)
+}
+
+export async function isVideoQualityInstalled(quality: VideoQuality): Promise<boolean> {
   if (!(await engineReady())) return false
-  const paths = modelPaths()
-  const sizes = await Promise.all(VIDEO_MODEL_FILES.map((file) => sizeOf(paths[file.role])))
-  return sizes.every((size, i) => size === VIDEO_MODEL_FILES[i].bytes)
+  return (await missingFiles(quality)).length === 0
 }
 
 export interface GeneratedVideoFile {
@@ -189,19 +266,20 @@ export async function generateVideo(
   onLog: Log = () => {},
   signal?: AbortSignal,
   initImage?: { bytes: Uint8Array; extension: 'png' | 'jpg' },
-  seconds: VideoSeconds = DEFAULT_VIDEO_SECONDS
+  seconds: VideoSeconds = DEFAULT_VIDEO_SECONDS,
+  quality: VideoQuality = 'q4'
 ): Promise<GeneratedVideoFile> {
   if (process.platform !== 'win32') throw new Error("La création de vidéos n'est disponible que sur Windows pour l'instant.")
   const text = cleanPrompt(prompt)
   if (!text) throw new Error("Je n'ai pas de description de la vidéo : dis-moi ce que tu veux voir.")
-  const { vramGb } = await detectGpu()
-  const pick = pickVideoModel(vramGb, detectRamGb())
-  if (!pick.model) throw new Error(`Ton PC n'a pas assez de puissance pour créer des vidéos : ${pick.reason}.`)
+  await assertQualityFits(quality)
   claimEngine('video')
   let initPath: string | undefined
   try {
-    if (!(await isVideoModelInstalled())) {
-      throw new Error("Le modèle vidéo n'est pas encore installé : clique « Installer le modèle vidéo » dans le mode Vidéo.")
+    if (!(await isVideoQualityInstalled(quality))) {
+      throw new Error(
+        `La qualité ${videoQualityLabel(quality)} n'est pas encore téléchargée : télécharge-la depuis le bouton de qualité du mode Vidéo.`
+      )
     }
     if (signal?.aborted) throw new Error('Vidéo annulée.')
 
@@ -221,7 +299,7 @@ export async function generateVideo(
     await runEngine(
       engineExe(),
       buildVideoArgs({
-        models: modelPaths(),
+        models: modelPaths(quality),
         prompt: text,
         output,
         seed: Math.floor(Math.random() * 2 ** 31),
@@ -275,14 +353,14 @@ export async function deleteGeneratedVideo(fileName: string): Promise<void> {
 export async function getVideoStudioStatus(): Promise<VideoStudioStatus> {
   const supported = process.platform === 'win32'
   const { vramGb } = await detectGpu()
-  const pick = pickVideoModel(vramGb, detectRamGb())
+  const pick = availableVideoQualities(vramGb, detectRamGb())
   const engineMissing = !(await engineReady())
-  const total = VIDEO_MODEL_FILES.reduce((sum, file) => sum + file.bytes, 0) + (engineMissing ? SD_ENGINE.bytes : 0)
-  return {
-    supported,
-    capable: pick.model !== null,
-    reason: pick.reason,
-    installed: supported && (await isVideoModelInstalled()),
-    downloadLabel: formatBytes(total)
-  }
+  const qualities = await Promise.all(
+    pick.qualities.map(async (id) => {
+      const missing = await missingFiles(id)
+      const bytes = missing.reduce((sum, f) => sum + f.bytes, 0) + (engineMissing ? SD_ENGINE.bytes : 0)
+      return { id, label: videoQualityLabel(id), installed: supported && !engineMissing && missing.length === 0, downloadLabel: formatBytes(bytes) }
+    })
+  )
+  return { supported, capable: pick.qualities.length > 0, reason: pick.reason, qualities }
 }

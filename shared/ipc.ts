@@ -563,7 +563,26 @@ export interface GeneratedImageSummary {
 }
 
 /** Mode Vidéo (étape 203) : mêmes informations que le mode Image, pour le modèle Wan 2.2. */
-export type VideoStudioStatus = ImageStudioStatus
+/** Une qualité du modèle vidéo telle que l'écran la montre (étape 205). */
+export interface VideoQualityStatus {
+  id: 'q4' | 'q6' | 'q8'
+  label: string
+  /** Téléchargée et prête. */
+  installed: boolean
+  /** Ce qu'il reste à télécharger pour elle (moteur compris s'il manque), ex. « 12,8 Go ». */
+  downloadLabel: string
+}
+
+export interface VideoStudioStatus {
+  /** Windows uniquement : le moteur publié (sd-cli) est un programme Windows. */
+  supported: boolean
+  /** Au moins une qualité tient sur cette machine. */
+  capable: boolean
+  /** Pourquoi aucune ne tient, en clair, quand `capable` est faux. */
+  reason: string | null
+  /** Les qualités que CETTE machine peut faire tourner, de la plus légère à la plus fidèle. */
+  qualities: VideoQualityStatus[]
+}
 
 /** Une vidéo créée par le mode Vidéo (fichier .webm ; seul son NOM voyage entre l'écran et le main). */
 export interface GeneratedVideoSummary {

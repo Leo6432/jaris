@@ -6,20 +6,46 @@ import { formatRecentDate } from '@/lib/formatRecentDate'
 import type { ImageAttachment } from '@/lib/imageAttachment'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import { imageStepFromLog } from '../../shared/imageGallery'
-import { DEFAULT_VIDEO_SECONDS, normalizeVideoSeconds, type VideoSeconds } from '../../shared/videoModel'
+import { DEFAULT_VIDEO_SECONDS, normalizeVideoSeconds, videoQualityLabel, type VideoQuality, type VideoSeconds } from '../../shared/videoModel'
 import type { GeneratedVideoSummary, VideoStudioStatus } from '../../shared/ipc'
 import { DownloadIcon } from './icons'
 import VideoDurationPicker from './VideoDurationPicker'
+import VideoQualityPicker from './VideoQualityPicker'
 
 const DURATION_KEY = 'jaris.videoSeconds'
+const QUALITY_KEY = 'jaris.videoQuality'
+
+function readSaved(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeSaved(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    // Pas de stockage : le choix reste valable jusqu'à la fermeture de Jaris.
+  }
+}
+
+/**
+ * Qualité de départ (étape 205) : la dernière choisie si cette machine la propose encore, sinon la plus fidèle déjà
+ * téléchargée, sinon la plus fidèle que la machine peut faire tourner.
+ */
+function initialQuality(status: VideoStudioStatus): VideoQuality | null {
+  const saved = status.qualities.find((q) => q.id === readSaved(QUALITY_KEY))
+  if (saved) return saved.id
+  const installed = status.qualities.filter((q) => q.installed)
+  return (installed[installed.length - 1] ?? status.qualities[status.qualities.length - 1])?.id ?? null
+}
 
 /** Dernière durée choisie, gardée d'une ouverture à l'autre (confort seulement : illisible → 2 s). */
 function readSavedSeconds(): VideoSeconds {
-  try {
-    return normalizeVideoSeconds(Number(localStorage.getItem(DURATION_KEY)))
-  } catch {
-    return DEFAULT_VIDEO_SECONDS
-  }
+  const saved = readSaved(DURATION_KEY)
+  return saved === null ? DEFAULT_VIDEO_SECONDS : normalizeVideoSeconds(Number(saved))
 }
 
 /**
@@ -33,6 +59,7 @@ export default function VideoPanel(): JSX.Element {
   const [prompt, setPrompt] = useState('')
   const [attachment, setAttachment] = useState<ImageAttachment | null>(null)
   const [seconds, setSeconds] = useState<VideoSeconds>(readSavedSeconds)
+  const [quality, setQuality] = useState<VideoQuality | null>(null)
   const [generating, setGenerating] = useState(false)
   const [logLine, setLogLine] = useState<string | null>(null)
   const [elapsedMs, setElapsedMs] = useState(0)
@@ -50,8 +77,15 @@ export default function VideoPanel(): JSX.Element {
     return list
   }
 
+  const refreshStatus = async (): Promise<VideoStudioStatus> => {
+    const next = await window.jaris.getVideoStudioStatus()
+    setStatus(next)
+    setQuality((current) => (current && next.qualities.some((q) => q.id === current) ? current : initialQuality(next)))
+    return next
+  }
+
   useEffect(() => {
-    void window.jaris.getVideoStudioStatus().then(setStatus)
+    void refreshStatus()
     void refreshVideos()
   }, [])
   useEffect(() => window.jaris.onVideoStudioLog(setLogLine), [])
@@ -94,13 +128,13 @@ export default function VideoPanel(): JSX.Element {
     setLogLine(null)
   }
 
-  const install = async (): Promise<void> => {
+  const install = async (level: VideoQuality): Promise<void> => {
     setError(null)
     setInstalling(true)
     setLogLine(null)
     try {
-      await window.jaris.installVideoStudio()
-      setStatus(await window.jaris.getVideoStudioStatus())
+      await window.jaris.installVideoStudio(level)
+      await refreshStatus()
       void playSoundCueIfEnabled('success')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -111,8 +145,12 @@ export default function VideoPanel(): JSX.Element {
 
   const generate = async (): Promise<void> => {
     const text = prompt.trim()
-    if (!text || generating) return
+    if (!text || generating || installing || !quality) return
     clearFeedback()
+    if (!status?.qualities.find((q) => q.id === quality)?.installed) {
+      setError(`La qualité ${videoQualityLabel(quality)} n'est pas encore téléchargée : clique sur le bouton de qualité puis « Télécharger ».`)
+      return
+    }
     setGenerating(true)
     stoppedRef.current = false
     const startedAt = Date.now()
@@ -120,7 +158,7 @@ export default function VideoPanel(): JSX.Element {
       ? { base64: attachment.base64, mimeType: attachment.dataUrl.slice(5, attachment.dataUrl.indexOf(';')) }
       : undefined
     try {
-      const video = await window.jaris.generateStudioVideo(text, image ?? null, seconds)
+      const video = await window.jaris.generateStudioVideo(text, image ?? null, seconds, quality)
       setPrompt('')
       setAttachment(null)
       setSelected(video)
@@ -142,11 +180,13 @@ export default function VideoPanel(): JSX.Element {
 
   const chooseSeconds = (value: VideoSeconds): void => {
     setSeconds(value)
-    try {
-      localStorage.setItem(DURATION_KEY, String(value))
-    } catch {
-      // Pas de stockage : la durée reste choisie jusqu'à la fermeture de Jaris.
-    }
+    writeSaved(DURATION_KEY, String(value))
+  }
+
+  const chooseQuality = (value: VideoQuality): void => {
+    setQuality(value)
+    setError(null)
+    writeSaved(QUALITY_KEY, value)
   }
 
   const stop = (): void => {
@@ -185,7 +225,9 @@ export default function VideoPanel(): JSX.Element {
 
   if (!status) return <div className="image-panel image-panel--loading" />
 
-  if (!status.supported || !status.capable || !status.installed) {
+  const current = status.qualities.find((q) => q.id === quality) ?? null
+
+  if (!status.supported || !status.capable || !status.qualities.some((q) => q.installed)) {
     return (
       <div className="image-panel image-install">
         <div className="image-install__card">
@@ -209,11 +251,18 @@ export default function VideoPanel(): JSX.Element {
           ) : (
             <>
               <p className="image-install__lead">
-                C'est lourd : {status.downloadLabel} à télécharger, une seule fois. Et c'est lent : plusieurs minutes par
-                vidéo, la carte graphique tourne à fond pendant ce temps.
+                C'est lourd : {current?.downloadLabel} à télécharger, une seule fois. Et c'est lent : plusieurs minutes
+                par vidéo, la carte graphique tourne à fond pendant ce temps.
               </p>
-              <button className="image-install__button" onClick={() => void install()}>
-                Installer le modèle vidéo
+              {/* Étape 205 : la qualité se choisit AVANT de télécharger — seuls les crans possibles sur ce PC. */}
+              {current && (
+                <div className="video-install__quality">
+                  <span>Qualité</span>
+                  <VideoQualityPicker qualities={status.qualities} value={current.id} onChange={chooseQuality} />
+                </div>
+              )}
+              <button className="image-install__button" onClick={() => current && void install(current.id)}>
+                Installer la qualité {current?.label}
               </button>
             </>
           )}
@@ -283,6 +332,16 @@ export default function VideoPanel(): JSX.Element {
           </div>
         )}
 
+        {/* Étape 205 : une autre qualité se télécharge depuis son bouton ; l'avancement s'affiche ici. */}
+        {installing && (
+          <div className="code-panel__live">
+            <div className="code-panel__live-text">
+              <span className="code-panel__live-title">Téléchargement de la qualité {current?.label}…</span>
+              <span className="code-panel__live-detail">{logLine ?? 'Préparation du téléchargement…'}</span>
+            </div>
+          </div>
+        )}
+
         {!generating && lastOutcome !== null && (
           <p className={`code-panel__done${lastOutcome.kind === 'stopped' ? ' code-panel__done--stopped' : ''}`}>
             <span>
@@ -302,12 +361,25 @@ export default function VideoPanel(): JSX.Element {
           placeholder={attachment ? "Décris le mouvement à donner à l'image…" : 'Décris la vidéo à créer…'}
           submitLabel="Créer la vidéo"
           busyLabel="Vidéo…"
-          busy={generating}
           attachment={attachment}
           onAttachmentChange={setAttachment}
           onError={setError}
           rows={2}
-          extraActions={<VideoDurationPicker value={seconds} onChange={chooseSeconds} disabled={generating} />}
+          busy={generating || installing}
+          extraActions={
+            <>
+              {current && (
+                <VideoQualityPicker
+                  qualities={status.qualities}
+                  value={current.id}
+                  onChange={chooseQuality}
+                  onDownload={(level) => void install(level)}
+                  disabled={generating || installing}
+                />
+              )}
+              <VideoDurationPicker value={seconds} onChange={chooseSeconds} disabled={generating} />
+            </>
+          }
         />
       </div>
     </Workspace>

@@ -1,4 +1,5 @@
 import type { ThinkValue } from '../shared/effort'
+import type { VideoQuality } from '../shared/videoModel'
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC_CHANNELS,
@@ -128,10 +129,14 @@ const api = {
   openGeneratedImages: (fileName?: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openGeneratedImages, fileName),
   // Mode Vidéo (étape 203) : même principe, seuls des NOMS de fichiers voyagent.
   getVideoStudioStatus: (): Promise<VideoStudioStatus> => ipcRenderer.invoke(IPC_CHANNELS.getVideoStudioStatus),
-  installVideoStudio: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.installVideoStudio),
+  installVideoStudio: (quality: VideoQuality): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.installVideoStudio, quality),
   onVideoStudioLog: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.videoStudioLog, cb),
-  generateStudioVideo: (prompt: string, image?: { base64: string; mimeType?: string } | null, seconds?: number): Promise<GeneratedVideoSummary> =>
-    ipcRenderer.invoke(IPC_CHANNELS.generateStudioVideo, prompt, image ?? null, seconds),
+  generateStudioVideo: (
+    prompt: string,
+    image?: { base64: string; mimeType?: string } | null,
+    seconds?: number,
+    quality?: VideoQuality
+  ): Promise<GeneratedVideoSummary> => ipcRenderer.invoke(IPC_CHANNELS.generateStudioVideo, prompt, image ?? null, seconds, quality),
   cancelStudioVideo: (): void => ipcRenderer.send(IPC_CHANNELS.cancelStudioVideo),
   listGeneratedVideos: (): Promise<GeneratedVideoSummary[]> => ipcRenderer.invoke(IPC_CHANNELS.listGeneratedVideos),
   readGeneratedVideo: (fileName: string): Promise<Uint8Array> => ipcRenderer.invoke(IPC_CHANNELS.readGeneratedVideo, fileName),

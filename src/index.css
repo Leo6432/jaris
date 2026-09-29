@@ -2798,6 +2798,7 @@ h1 {
 .capacity-scan button,
 .runtime-setup__actions button,
 .image-install__button,
+.quality-picker__download,
 .app__onboarding button {
   position: relative;
   font-family: var(--hud-font-display);
@@ -2836,6 +2837,7 @@ h1 {
 .capacity-scan button:not(:disabled):hover,
 .runtime-setup__actions button:not(:disabled):hover,
 .image-install__button:not(:disabled):hover,
+.quality-picker__download:hover,
 .app__onboarding button:hover {
   color: var(--hud-accent-bright);
   border-color: var(--hud-accent);
@@ -3893,6 +3895,24 @@ a:hover {
   max-height: 100%;
   object-fit: contain;
   border: 1px solid var(--hud-line);
+}
+
+/* Étape 205 : « Télécharger » une qualité, dans son panneau — la famille du bouton « Installer », en plus petit
+   (écrit APRÈS cette famille : à spécificité égale, c'est la dernière règle qui gagne). */
+.quality-picker__download {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px 12px;
+  font-size: 0.72rem;
+}
+
+.video-install__quality {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--hud-text-dim);
+  font-size: 0.85rem;
 }
 
 /* Étape 203 : la vidéo occupe la même scène que l'image, sur fond noir comme un lecteur. */

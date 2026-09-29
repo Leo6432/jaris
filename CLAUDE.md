@@ -5587,3 +5587,30 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   2 s jusqu'à la ligne de commande) et `scripts/test-video-panel-ui.mjs` (vrai clic sur la barre, durée envoyée
   avec la vidéo, reprise à la prochaine ouverture, valeur abîmée → 2 s ; vérifié en ne transmettant plus la
   durée : le test échoue).
+
+- **Qualité de la vidéo Q4 · Q6 · Q8, limitée à ce que la machine peut faire tourner (Léo, étape 205 : « une
+  barre d'effort Q4, Q6 ou Q8, et si une personne ne peut que Q6 elle n'a que Q4 et Q6 »).** Un cran = le modèle
+  vidéo ET le lecteur de description au même niveau de compression (le décodeur n'existe qu'en original, il est
+  commun). Fichiers Q6/Q8 pris dans les MÊMES dépôts et aux MÊMES révisions figées que Q4, tailles et SHA-256 lues
+  sur l'API Hugging Face, licence Apache 2.0 des deux dépôts vérifiée. Les noms Q4 n'ont pas changé : une
+  installation v0.21.x reste valable telle quelle.
+  **Seuils déduits des tailles, pas mesurés** (`VIDEO_QUALITIES`, shared/videoModel.ts) : carte = modèle vidéo +
+  ~2,5 Go de calcul, sur une carte dont Windows occupe déjà ~0,5 Go ; RAM = les trois fichiers + ~5 Go. D'où Q4
+  et Q6 sur 8 Go de carte, Q8 à partir de 10 Go ; Q4 dans 16 Go de RAM, Q6/Q8 à partir de 24 Go. **Correction
+  d'une affirmation faite à Léo juste avant** : je lui avais annoncé Q8 « juste » sur sa RTX 3070 à partir de la
+  seule taille du modèle (5,4 Go) ; en comptant la marge de calcul et ce que Windows occupe, il ne reste plus de
+  marge — Q8 n'est donc pas proposé sur 8 Go, et je le lui ai dit plutôt que de laisser l'ancienne réponse.
+  Le plancher reste 8 Go (étape 203) : rien ici ne permet de le descendre sans mesure.
+  **La qualité venue de l'écran est revérifiée côté main** (`isVideoQuality`, puis `assertQualityFits` dans
+  installVideoModel ET generateVideo) : une qualité hors de la machine est refusée avec une phrase claire AVANT
+  tout téléchargement ou calcul. Chaque qualité se télécharge à la demande, depuis l'écran d'installation (choix
+  avant de télécharger) ou depuis le panneau de qualité (bouton « Télécharger (taille) »), jamais toutes d'un coup
+  (~29 Go). La taille affichée ne recompte ni le moteur ni le décodeur déjà présents.
+  **SliderPicker** (src/components) : bouton + panneau à barre, partagé par la durée et la qualité — le même
+  panneau écrit deux fois aurait divergé (leçon de l'étape 92).
+  Régression : `scripts/test-video-generation.mjs` (crans par machine, Q6 après Q4 = 2 fichiers seulement, Q8
+  refusé sur 8 Go sans rien télécharger, qualité absente, fichiers utilisés par sd-cli, empreintes figées ;
+  vérifié en retirant le contrôle machine à l'installation : 2 tests échouent) et `scripts/test-video-panel-ui.mjs`
+  (choix de qualité avant installation, barre limitée à la machine, téléchargement depuis le panneau avec bandeau,
+  envoi bloqué si la qualité manque, qualité envoyée avec la vidéo et gardée, choix gardé devenu impossible
+  ignoré ; vérifié en ne transmettant plus la qualité : le test échoue).

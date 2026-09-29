@@ -15,7 +15,7 @@ import {
   readGeneratedImageDataUrl
 } from './services/imageGenerator'
 import { imageLabelFromFileName } from '../shared/imageGallery'
-import { normalizeVideoSeconds } from '../shared/videoModel'
+import { isVideoQuality, normalizeVideoSeconds } from '../shared/videoModel'
 import {
   deleteGeneratedVideo,
   generateVideo,
@@ -1258,14 +1258,22 @@ app.whenReady().then(async () => {
   // Mode Vidéo (étape 203) : Wan 2.2 TI2V 5B avec le même moteur que les images. Seuls des NOMS de fichiers
   // .webm voyagent entre l'écran et ici, revérifiés à chaque fois (generatedVideoPath).
   ipcMain.handle(IPC_CHANNELS.getVideoStudioStatus, (): Promise<VideoStudioStatus> => getVideoStudioStatus())
-  ipcMain.handle(IPC_CHANNELS.installVideoStudio, (event) =>
-    installVideoModel((message) => {
+  // Étape 205 : la qualité vient de l'écran — ramenée à Q4 si elle n'en est pas une, puis revérifiée pour la
+  // machine par installVideoModel/generateVideo (jamais crue sur parole).
+  ipcMain.handle(IPC_CHANNELS.installVideoStudio, (event, quality?: unknown) =>
+    installVideoModel(isVideoQuality(quality) ? quality : 'q4', (message) => {
       if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.videoStudioLog, message)
     })
   )
   ipcMain.handle(
     IPC_CHANNELS.generateStudioVideo,
-    async (event, prompt: string, image?: { base64: string; mimeType?: string } | null, seconds?: number): Promise<GeneratedVideoSummary> => {
+    async (
+      event,
+      prompt: string,
+      image?: { base64: string; mimeType?: string } | null,
+      seconds?: number,
+      quality?: unknown
+    ): Promise<GeneratedVideoSummary> => {
       videoStudioAbort?.abort()
       const controller = new AbortController()
       videoStudioAbort = controller
@@ -1281,7 +1289,8 @@ app.whenReady().then(async () => {
           },
           controller.signal,
           initImage,
-          normalizeVideoSeconds(seconds)
+          normalizeVideoSeconds(seconds),
+          isVideoQuality(quality) ? quality : 'q4'
         )
         return { fileName: video.fileName, label: imageLabelFromFileName(video.fileName), timestamp: Date.now() }
       } finally {

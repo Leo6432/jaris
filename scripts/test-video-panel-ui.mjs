@@ -9,7 +9,8 @@ import test from 'node:test'
 /**
  * Mode Vidéo (étape 203, Wan 2.2 TI2V 5B), sur le VRAI composant et le vrai CSS compilé : même présentation que le
  * mode Image, création avec avancement et arrêt, lecteur vidéo, image jointe à animer, et écran d'installation
- * (le modèle, 8,5 Go, ne s'installe qu'à la demande).
+ * (le modèle, 8,5 Go en Q4, ne s'installe qu'à la demande), et qualité Q4/Q6/Q8 limitée à ce que la machine peut faire
+ * tourner (étape 205).
  */
 let chromium = null
 try {
@@ -26,21 +27,30 @@ import { createRoot } from 'react-dom/client'
 import VideoPanel from './src/components/VideoPanel'
 
 window.__calls = []
-window.__status = window.__status || { supported: true, capable: true, reason: null, installed: true, downloadLabel: '8,5 Go' }
+const Q = (id, installed, downloadLabel) => ({ id, label: id.toUpperCase(), installed, downloadLabel })
+window.__Q = Q
+// Par défaut : une RTX 3070 avec 32 Go — Q4 installée, Q6 possible mais pas encore téléchargée, pas de Q8.
+window.__status = window.__status || { supported: true, capable: true, reason: null, qualities: [Q('q4', true, '0 o'), Q('q6', false, '8,9 Go')] }
 window.__videos = window.__videos || [
   { fileName: '2026-09-28T17-22-15-la-mer.webm', label: 'La mer', timestamp: Date.now() - 60000 }
 ]
 
 window.jaris = {
   getVideoStudioStatus: async () => window.__status,
-  installVideoStudio: () => {
-    window.__calls.push('install')
-    return new Promise((resolve) => { window.__finishInstall = () => { window.__status = { ...window.__status, installed: true }; resolve() } })
+  installVideoStudio: (quality) => {
+    window.__calls.push(['install', quality])
+    return new Promise((resolve) => {
+      window.__finishInstall = () => {
+        window.__status = { ...window.__status, qualities: window.__status.qualities.map((q) => (q.id === quality ? { ...q, installed: true } : q)) }
+        resolve()
+      }
+    })
   },
   onVideoStudioLog: (cb) => { window.__log = cb; return () => {} },
-  generateStudioVideo: (prompt, image, seconds) => {
+  generateStudioVideo: (prompt, image, seconds, quality) => {
     window.__calls.push(['generate', prompt, image ? image.mimeType : null])
     window.__seconds = seconds
+    window.__quality = quality
     return new Promise((resolve, reject) => {
       window.__finishGen = () => {
         const video = { fileName: '2026-09-28T18-00-00-un-chat.webm', label: 'Un chat', timestamp: Date.now() }
@@ -165,17 +175,73 @@ test('« Arrêter » interrompt la vidéo et le dit, sans erreur rouge', options
   })
 })
 
-test('modèle absent : écran d’installation qui annonce la taille et la lenteur, puis la création s’ouvre', options, async () => {
+test('modèle absent : on choisit la qualité AVANT de télécharger, la taille suit le choix, puis la création s’ouvre', options, async () => {
   await withPage(
     async (page) => {
       await page.waitForSelector('.image-install__button')
-      assert.match(await page.textContent('.image-install__card'), /8,5 Go à télécharger.*plusieurs minutes par\s+vidéo/s)
+      // Par défaut la plus fidèle que la machine peut faire tourner (ici Q6).
+      assert.match(await page.textContent('.image-install__button'), /Installer la qualité Q6/)
+      assert.match(await page.textContent('.image-install__card'), /10,3 Go à télécharger.*plusieurs minutes\s+par vidéo/s)
       assert.equal(await page.locator('.composer').count(), 0)
+      await page.click('.image-install__card .quality-picker .effort-picker__trigger')
+      assert.equal(await page.locator('.quality-picker .effort-picker__step').count(), 2, 'Q4 et Q6 seulement : pas de Q8 sur 8 Go')
+      assert.equal(await page.locator('.quality-picker__download').count(), 0, 'l’écran d’installation a déjà son bouton')
+      await page.click('.quality-picker .effort-picker__step >> nth=0')
+      assert.match(await page.textContent('.image-install__card'), /8,5 Go à télécharger/)
       await page.click('.image-install__button')
+      assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'install'), ['install', 'q4'])
       await page.evaluate(() => window.__finishInstall())
       await page.waitForSelector('.composer__input')
     },
-    "window.__status = { supported: true, capable: true, reason: null, installed: false, downloadLabel: '8,5 Go' }"
+    "window.__status = { supported: true, capable: true, reason: null, qualities: [{ id: 'q4', label: 'Q4', installed: false, downloadLabel: '8,5 Go' }, { id: 'q6', label: 'Q6', installed: false, downloadLabel: '10,3 Go' }] }"
+  )
+})
+
+test('qualité (étape 205) : barre limitée à la machine, une qualité absente se télécharge depuis son panneau', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.quality-picker .effort-picker__trigger')
+    assert.match(await page.textContent('.quality-picker .effort-picker__trigger'), /Q4/, 'la qualité déjà téléchargée par défaut')
+    await page.click('.quality-picker .effort-picker__trigger')
+    assert.equal(await page.locator('.quality-picker .effort-picker__step').count(), 2)
+    assert.equal(await page.locator('.quality-picker__download').count(), 0, 'Q4 est déjà là')
+    await page.click('.quality-picker .effort-picker__step >> nth=1')
+    assert.match(await page.textContent('.quality-picker .effort-picker__current'), /Qualité Q6/)
+    // Le bouton de téléchargement est habillé par la famille « Installer », pas laissé au style du navigateur.
+    const button = await page.$eval('.quality-picker__download', (el) => ({ text: el.textContent, font: getComputedStyle(el).textTransform, color: getComputedStyle(el).color }))
+    assert.match(button.text, /Télécharger \(8,9 Go\)/)
+    assert.equal(button.font, 'uppercase')
+    assert.notEqual(button.color, 'rgb(0, 0, 0)')
+
+    // Envoyer avec une qualité pas encore téléchargée : message clair, aucune génération lancée.
+    await page.keyboard.press('Escape')
+    await page.fill('.composer__input', 'la mer')
+    await page.click('.composer__send')
+    await page.waitForSelector('.code-panel__error')
+    assert.match(await page.textContent('.code-panel__error'), /qualité Q6 n'est pas encore téléchargée/)
+    assert.equal((await page.evaluate(() => window.__calls)).some((c) => c[0] === 'generate'), false)
+
+    await page.click('.quality-picker .effort-picker__trigger')
+    await page.click('.quality-picker__download')
+    assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => c[0] === 'install'), ['install', 'q6'])
+    await page.waitForFunction(() => /Téléchargement de la qualité Q6/.test(document.querySelector('.code-panel__live')?.textContent ?? ''))
+    await page.evaluate(() => window.__finishInstall())
+    await page.waitForFunction(() => !document.querySelector('.code-panel__live'))
+    await page.click('.composer__send')
+    await page.waitForFunction(() => window.__quality !== undefined, null, { timeout: 5000 }).catch(() => assert.fail('aucune qualité envoyée'))
+    assert.equal(await page.evaluate(() => window.__quality), 'q6')
+    assert.equal(await page.evaluate(() => window.__store['jaris.videoQuality']), 'q6', 'retrouvée à la prochaine ouverture')
+  }, FAKE_STORAGE)
+})
+
+test('qualité : une machine qui ne peut que Q4 n’a qu’un cran, et un choix gardé qui n’est plus possible est ignoré', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.quality-picker .effort-picker__trigger')
+      assert.match(await page.textContent('.quality-picker .effort-picker__trigger'), /Q4/)
+      await page.click('.quality-picker .effort-picker__trigger')
+      assert.equal(await page.locator('.quality-picker .effort-picker__step').count(), 1)
+    },
+    FAKE_STORAGE + "window.__store['jaris.videoQuality'] = 'q8'; window.__status = { supported: true, capable: true, reason: null, qualities: [{ id: 'q4', label: 'Q4', installed: true, downloadLabel: '0 o' }] }"
   )
 })
 
@@ -186,7 +252,7 @@ test('PC trop faible : la raison est affichée, aucun bouton d’installation', 
       assert.match(await page.textContent('.image-install__card'), /carte graphique trop petite/)
       assert.equal(await page.locator('.image-install__button').count(), 0)
     },
-    "window.__status = { supported: true, capable: false, reason: 'carte graphique trop petite (6 Go de VRAM, il en faut 8 ou plus)', installed: false, downloadLabel: '8,5 Go' }"
+    "window.__status = { supported: true, capable: false, reason: 'carte graphique trop petite (6 Go de VRAM, il en faut 8 ou plus)', qualities: [] }"
   )
 })
 
