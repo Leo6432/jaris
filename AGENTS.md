@@ -5494,3 +5494,37 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   charge rien, App.tsx garde les trois écrans en vie — vérifié en remettant « détruire si inactif » : 2 tests
   échouent) et `scripts/test-model-picker-ui.mjs` (Ollama absent puis présent : le bouton se dégrise tout
   seul — vérifié en coupant la relance).
+
+- **Mode Vidéo avec Wan 2.2 TI2V 5B (Léo, étape 203 : « et pour finir ajoute vidéo : Wan 2.2-TI2V-5B »).**
+  Même présentation que le mode Image (liste à gauche, vidéo au centre, champ en bas), même moteur :
+  stable-diffusion.cpp en `-M vid_gen`. **Aucun nouveau moteur à installer** : le sd-cli figé (SD_ENGINE) contient
+  déjà la vidéo ET l'écriture WebM — vérifié dans le binaire lui-même (webm.dll + chaîne « WebM muxer »), pas
+  supposé. Sans WebM compilé, sd-cli aurait écrit un AVI sous un nom `.webm`, illisible par l'écran.
+  **Fichiers vérifiés sur les sources primaires** : les trois recommandés par docs/wan.md de sd.cpp À LA MÊME
+  VERSION que le moteur (GGUF QuantStack Q4_K_M, VAE wan2.2 — le VAE wan2.1 ne marche PAS avec ce modèle —, UMT5
+  city96), Apache 2.0, figés à une révision exacte avec leur SHA-256 lue sur l'API Hugging Face puis recalculée
+  après un vrai téléchargement ici (identique pour les trois). ~8,5 Go : jamais installé avec les autres
+  modèles, seulement sur « Installer le modèle vidéo », et l'écran le dit (taille + plusieurs minutes par vidéo).
+  **Essai RÉEL ici, sur processeur** (sd-cli Linux de la même version, les trois vrais fichiers, les mêmes
+  options que `buildVideoArgs` mais en tout petit : 320x192, 5 images, 10 étapes) : un vrai `.webm` produit,
+  relu dans Chromium comme le fait l'écran (blob + `<video>`), avec une scène enneigée et une forme rousse qui
+  bouge d'une image à l'autre. Refait SANS `--vae-tiling` : images identiques (mêmes mesures de luminosité), donc
+  le découpage du décodeur, gardé pour économiser la VRAM, n'altère pas le résultat. Le message `gguf_init_from_reader: tensor 'patch_embedding.weight' has invalid
+  number of dimensions: 5 > 4` s'affiche au chargement mais N'EST PAS bloquant : sd.cpp retombe sur son propre
+  lecteur GGUF et reconnaît bien « Wan2.2-TI2V-5B » — ne pas le prendre pour la cause d'un futur problème sans
+  autre indice. **Non vérifié** : la qualité et la durée aux vrais réglages (832x480, 49 images, 20 étapes) sur
+  une vraie carte graphique — aucune ici, et le seuil 8 Go de VRAM / 16 Go de RAM est déduit de la taille des
+  fichiers, pas mesuré. À confirmer par Léo sur sa RTX 3070.
+  **Un seul calcul à la fois sur la carte graphique** : le verrou d'imageGenerator.ts est devenu PARTAGÉ
+  (`claimEngine`/`releaseEngine`) — deux verrous séparés auraient laissé une image et une vidéo se lancer
+  ensemble et se disputer 8 Go de VRAM. Relâché dans un `finally` (test vérifié en le retirant : échoue).
+  **Image → vidéo** : une image jointe avec le « + » est écrite en fichier temporaire (`.depart-…`, jamais un
+  nom de vidéo valide donc jamais listé) et effacée dans le `finally`. Seuls des NOMS de fichier traversent
+  l'IPC, revérifiés côté main (`isGeneratedVideoFileName`) ; description passée en UN argument, jamais un shell.
+  **Piège de test, encore** : un sd-cli simulé qui ne se termine jamais (`holdEngine`) garde vivante la minuterie
+  « plus de signe de vie » de `runEngine` — tout test qui en lance un doit l'arrêter lui-même à la fin, sinon
+  `node --test` ne rend jamais la main et n'affiche aucun échec.
+  Régression : `node --test scripts/test-video-generation.mjs scripts/test-video-panel-ui.mjs` (seuils, commande
+  officielle, texte piégé resté inerte, verrou partagé image/vidéo, arrêt réel, image de départ effacée, liste
+  qui refuse tout chemin ; et dans un vrai navigateur : avancement, lecteur, image jointe transmise, arrêt,
+  écran d'installation) + `test-keep-alive-ui.mjs`/`test-widget-mode.mjs` étendus au mode Vidéo.

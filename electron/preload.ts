@@ -27,7 +27,9 @@ import {
   type PickedImageFile,
   type SaveImageResult,
   type GeneratedImageSummary,
+  type GeneratedVideoSummary,
   type ImageStudioStatus,
+  type VideoStudioStatus,
   type ModelChoiceInfo,
   type ModelChoiceMode,
   type Profile,
@@ -124,6 +126,18 @@ const api = {
   readGeneratedImage: (fileName: string): Promise<string | null> => ipcRenderer.invoke(IPC_CHANNELS.readGeneratedImage, fileName),
   deleteGeneratedImage: (fileName: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.deleteGeneratedImage, fileName),
   openGeneratedImages: (fileName?: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openGeneratedImages, fileName),
+  // Mode Vidéo (étape 203) : même principe, seuls des NOMS de fichiers voyagent.
+  getVideoStudioStatus: (): Promise<VideoStudioStatus> => ipcRenderer.invoke(IPC_CHANNELS.getVideoStudioStatus),
+  installVideoStudio: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.installVideoStudio),
+  onVideoStudioLog: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.videoStudioLog, cb),
+  generateStudioVideo: (prompt: string, image?: { base64: string; mimeType?: string }): Promise<GeneratedVideoSummary> =>
+    ipcRenderer.invoke(IPC_CHANNELS.generateStudioVideo, prompt, image),
+  cancelStudioVideo: (): void => ipcRenderer.send(IPC_CHANNELS.cancelStudioVideo),
+  listGeneratedVideos: (): Promise<GeneratedVideoSummary[]> => ipcRenderer.invoke(IPC_CHANNELS.listGeneratedVideos),
+  readGeneratedVideo: (fileName: string): Promise<Uint8Array> => ipcRenderer.invoke(IPC_CHANNELS.readGeneratedVideo, fileName),
+  deleteGeneratedVideo: (fileName: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.deleteGeneratedVideo, fileName),
+  saveGeneratedVideo: (fileName: string): Promise<SaveImageResult> => ipcRenderer.invoke(IPC_CHANNELS.saveGeneratedVideo, fileName),
+  openGeneratedVideos: (fileName?: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openGeneratedVideos, fileName),
   generateApp: (description: string, currentHtml?: string, imageBase64?: string): Promise<GeneratedApp> =>
     ipcRenderer.invoke(IPC_CHANNELS.generateApp, description, currentHtml, imageBase64),
   onCodeGenStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.codeGenStatus, cb),

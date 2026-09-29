@@ -15,10 +15,20 @@ import {
   readGeneratedImageDataUrl
 } from './services/imageGenerator'
 import { imageLabelFromFileName } from '../shared/imageGallery'
+import {
+  deleteGeneratedVideo,
+  generateVideo,
+  generatedVideoPath,
+  generatedVideosDir,
+  getVideoStudioStatus,
+  installVideoModel,
+  listGeneratedVideos,
+  readGeneratedVideo
+} from './services/videoGenerator'
 import { removeLeftoverMontage } from './services/legacyCleanup'
 import { spawn } from 'child_process'
 import { basename, extname, join } from 'path'
-import { readFile, writeFile } from 'fs/promises'
+import { copyFile, readFile, writeFile } from 'fs/promises'
 import { decodePngDataUrl, defaultImageFileName, withPngExtension } from './services/imageSave'
 import {
   ensureOllamaRunning,
@@ -90,7 +100,9 @@ import {
   type WakeTestHeardPayload,
   type MicTestDonePayload,
   type GeneratedImageSummary,
+  type GeneratedVideoSummary,
   type ImageStudioStatus,
+  type VideoStudioStatus,
   type VoiceTestStartResult,
   type WidgetMode
 } from '../shared/ipc'
@@ -134,6 +146,8 @@ let onboardingDone = false
 let codeGenAbort: AbortController | null = null
 /** Même rôle pour le mode Image (étape 200) : le dessin en cours, que « Arrêter » interrompt. */
 let imageStudioAbort: AbortController | null = null
+/** Et pour le mode Vidéo (étape 203). */
+let videoStudioAbort: AbortController | null = null
 /** Vrai pendant qu'un vrai dialogue natif Windows est ouvert sur fullWindow (ex: chooseModelsLocation) : le
  * dialogue prend le focus OS, ce qui déclenche 'blur' sur fullWindow comme un changement d'appli normal —
  * sans ce garde, le handler 'blur' plus bas cacherait fullWindow (et son dialogue enfant orphelin avec) alors
@@ -536,9 +550,9 @@ function hasWidgetToShow(): boolean {
   return !modeWithoutWidget() && !optionsOpen
 }
 
-/** Code et Image (étape 200, à la place du Montage) n'ont pas de widget : ce sont des écrans de travail. */
+/** Code, Image et Vidéo (étapes 200 et 203) n'ont pas de widget : ce sont des écrans de travail. */
 function modeWithoutWidget(): boolean {
-  return activeMode === 'code' || activeMode === 'image'
+  return activeMode === 'code' || activeMode === 'image' || activeMode === 'video'
 }
 
 /** Délai avant d'afficher le widget après une perte de focus : juste le temps que Windows finisse la bascule. */
@@ -1239,6 +1253,71 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.openGeneratedImages, async (_event, fileName?: string) => {
     if (fileName) shell.showItemInFolder(generatedImagePath(String(fileName)))
     else await shell.openPath(generatedImagesDir())
+  })
+  // Mode Vidéo (étape 203) : Wan 2.2 TI2V 5B avec le même moteur que les images. Seuls des NOMS de fichiers
+  // .webm voyagent entre l'écran et ici, revérifiés à chaque fois (generatedVideoPath).
+  ipcMain.handle(IPC_CHANNELS.getVideoStudioStatus, (): Promise<VideoStudioStatus> => getVideoStudioStatus())
+  ipcMain.handle(IPC_CHANNELS.installVideoStudio, (event) =>
+    installVideoModel((message) => {
+      if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.videoStudioLog, message)
+    })
+  )
+  ipcMain.handle(
+    IPC_CHANNELS.generateStudioVideo,
+    async (event, prompt: string, image?: { base64: string; mimeType?: string }): Promise<GeneratedVideoSummary> => {
+      videoStudioAbort?.abort()
+      const controller = new AbortController()
+      videoStudioAbort = controller
+      const initImage =
+        image && typeof image.base64 === 'string'
+          ? { bytes: Buffer.from(image.base64, 'base64'), extension: image.mimeType === 'image/png' ? ('png' as const) : ('jpg' as const) }
+          : undefined
+      try {
+        const video = await generateVideo(
+          String(prompt),
+          (message) => {
+            if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.videoStudioLog, message)
+          },
+          controller.signal,
+          initImage
+        )
+        return { fileName: video.fileName, label: imageLabelFromFileName(video.fileName), timestamp: Date.now() }
+      } finally {
+        if (videoStudioAbort === controller) videoStudioAbort = null
+      }
+    }
+  )
+  ipcMain.on(IPC_CHANNELS.cancelStudioVideo, () => videoStudioAbort?.abort())
+  ipcMain.handle(IPC_CHANNELS.listGeneratedVideos, (): Promise<GeneratedVideoSummary[]> => listGeneratedVideos())
+  ipcMain.handle(IPC_CHANNELS.readGeneratedVideo, (_event, fileName: string): Promise<Buffer> => readGeneratedVideo(String(fileName)))
+  ipcMain.handle(IPC_CHANNELS.deleteGeneratedVideo, (_event, fileName: string) => deleteGeneratedVideo(String(fileName)))
+  ipcMain.handle(IPC_CHANNELS.openGeneratedVideos, async (_event, fileName?: string) => {
+    if (fileName) shell.showItemInFolder(generatedVideoPath(String(fileName)))
+    else await shell.openPath(generatedVideosDir())
+  })
+  // Même garde dialogOpen que « Enregistrer l'image » : sinon la fenêtre de Windows replie Jaris en widget.
+  ipcMain.handle(IPC_CHANNELS.saveGeneratedVideo, async (_event, fileName: string): Promise<SaveImageResult> => {
+    const source = generatedVideoPath(String(fileName))
+    const dialogOptions = {
+      title: 'Enregistrer la vidéo',
+      defaultPath: join(app.getPath('videos'), String(fileName).replace(/^[\d-]+T[\d-]+-/, '')),
+      filters: [{ name: 'Vidéo WebM', extensions: ['webm'] }]
+    }
+    dialogOpen = true
+    let target: string | undefined
+    try {
+      const result = fullWindow ? await dialog.showSaveDialog(fullWindow, dialogOptions) : await dialog.showSaveDialog(dialogOptions)
+      target = result.canceled ? undefined : result.filePath
+    } finally {
+      dialogOpen = false
+    }
+    if (!target) return { saved: false }
+    try {
+      await copyFile(source, /\.webm$/i.test(target) ? target : `${target}.webm`)
+      return { saved: true }
+    } catch (err) {
+      return { saved: false, error: `Impossible d'enregistrer la vidéo : ${err instanceof Error ? err.message : String(err)}` }
+    }
   })
   ipcMain.handle(IPC_CHANNELS.openGeneratedApp, async (_event, path?: string) => {
     await shell.openPath(path || getGeneratedAppsDir())

@@ -166,7 +166,7 @@ export async function sha256OfFile(path: string): Promise<string> {
   return hash.digest('hex')
 }
 
-async function sizeOf(path: string): Promise<number | null> {
+export async function sizeOf(path: string): Promise<number | null> {
   try {
     return (await stat(path)).size
   } catch {
@@ -174,13 +174,13 @@ async function sizeOf(path: string): Promise<number | null> {
   }
 }
 
-type Log = (message: string) => void
+export type Log = (message: string) => void
 
 /**
  * Télécharge `url` dans `destination` et vérifie son empreinte AVANT de le mettre à sa place définitive : un
  * fichier présent sous son nom final est donc toujours un fichier complet et vérifié.
  */
-async function downloadVerified(
+export async function downloadVerified(
   url: string,
   destination: string,
   expected: { bytes: number; sha256: string },
@@ -214,7 +214,7 @@ function runExecFile(file: string, args: string[]): Promise<void> {
   })
 }
 
-function engineExe(): string {
+export function engineExe(): string {
   return join(imageEngineRoot(), 'bin', 'sd-cli.exe')
 }
 
@@ -224,13 +224,13 @@ function modelPaths(): Record<ImageModelFile['role'], string> {
 }
 
 /** Le moteur installé est bien la version figée ci-dessus (une nouvelle version de Jaris peut en changer). */
-async function engineReady(): Promise<boolean> {
+export async function engineReady(): Promise<boolean> {
   const stamp = join(imageEngineRoot(), 'bin', '.version')
   return existsSync(engineExe()) && (await readFile(stamp, 'utf-8').catch(() => '')) === SD_ENGINE.tag
 }
 
 /** Programme sd-cli prêt à l'emploi (téléchargé, vérifié, décompressé au besoin). */
-async function ensureEngine(onLog: Log): Promise<string> {
+export async function ensureEngine(onLog: Log): Promise<string> {
   const binDir = join(imageEngineRoot(), 'bin')
   const exe = engineExe()
   if (await engineReady()) return exe
@@ -296,9 +296,18 @@ function killTree(pid: number | undefined, kill: () => void): void {
   }
 }
 
-function runEngine(exe: string, args: string[], onLog: Log, signal?: AbortSignal): Promise<void> {
+/** Ce que le journal dit pendant le calcul : « Dessin » pour une image, « Vidéo » pour une vidéo (étape 203). */
+export interface EngineWording {
+  step: string
+  finishing: string
+  cancelled: string
+}
+
+const IMAGE_WORDING: EngineWording = { step: 'Dessin', finishing: "Finition de l'image…", cancelled: 'Dessin annulé.' }
+
+export function runEngine(exe: string, args: string[], onLog: Log, signal?: AbortSignal, wording: EngineWording = IMAGE_WORDING): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (signal?.aborted) return reject(new Error('Dessin annulé.'))
+    if (signal?.aborted) return reject(new Error(wording.cancelled))
     const proc = spawn(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
     const lastLines: string[] = []
     let lastStep = 0
@@ -322,7 +331,7 @@ function runEngine(exe: string, args: string[], onLog: Log, signal?: AbortSignal
     }
     const onAbort = (): void => {
       killTree(proc.pid, () => proc.kill())
-      finish(new Error('Dessin annulé.'))
+      finish(new Error(wording.cancelled))
     }
     signal?.addEventListener('abort', onAbort)
     armStall()
@@ -336,8 +345,8 @@ function runEngine(exe: string, args: string[], onLog: Log, signal?: AbortSignal
         const progress = parseSdProgress(line)
         if (progress && progress.step !== lastStep) {
           lastStep = progress.step
-          onLog(`Dessin : étape ${progress.step} sur ${progress.total}`)
-          if (progress.step === progress.total) onLog("Finition de l'image…")
+          onLog(`${wording.step} : étape ${progress.step} sur ${progress.total}`)
+          if (progress.step === progress.total) onLog(wording.finishing)
         }
       }
     }
@@ -353,6 +362,11 @@ function runEngine(exe: string, args: string[], onLog: Log, signal?: AbortSignal
 
 /** Nom de fichier lisible : date + début de la description. */
 export function imageFileName(prompt: string, now: Date): string {
+  return mediaFileName(prompt, now, 'png', 'image')
+}
+
+/** Même règle pour les vidéos (étape 203) : `<date>-<description>.<extension>`. */
+export function mediaFileName(prompt: string, now: Date, extension: string, fallback: string): string {
   const slug = prompt
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -362,7 +376,7 @@ export function imageFileName(prompt: string, now: Date): string {
     .slice(0, 40)
     .replace(/-+$/, '')
   const stamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19)
-  return `${stamp}-${slug || 'image'}.png`
+  return `${stamp}-${slug || fallback}.${extension}`
 }
 
 export interface GeneratedImage {
@@ -370,7 +384,21 @@ export interface GeneratedImage {
   fileName: string
 }
 
-let busy = false
+/**
+ * Une seule chose à la fois sur la carte graphique : une image OU une vidéo (étape 203). Deux calculs en même
+ * temps ne tiendraient pas sur une carte 8 Go, et le second ferait échouer le premier.
+ */
+let busyWith: 'image' | 'video' | null = null
+
+export function claimEngine(kind: 'image' | 'video'): void {
+  if (busyWith === 'image') throw new Error("Je suis déjà en train de dessiner une image : attends qu'elle soit finie, puis redemande.")
+  if (busyWith === 'video') throw new Error("Je suis déjà en train de créer une vidéo : attends qu'elle soit finie, puis redemande.")
+  busyWith = kind
+}
+
+export function releaseEngine(): void {
+  busyWith = null
+}
 
 /**
  * Dessine l'image décrite par `prompt` et renvoie le fichier PNG créé. Lève une erreur au message déjà
@@ -386,8 +414,7 @@ export async function generateImage(prompt: string, onLog: Log = () => {}, signa
   const pick = pickImageModel(vramGb, detectRamGb())
   if (!pick.model) throw new Error(`Ton PC n'a pas assez de puissance pour dessiner des images : ${pick.reason}.`)
   // Vérifié APRÈS l'attente ci-dessus, juste avant de le poser : deux demandes simultanées ne passent jamais toutes les deux.
-  if (busy) throw new Error("Je suis déjà en train de dessiner une image : attends qu'elle soit finie, puis redemande.")
-  busy = true
+  claimEngine('image')
   try {
     // Étape 175 : un dessin n'installe JAMAIS rien — c'est le rôle d'Options → Modèles, comme pour les autres modèles.
     if (!(await isImageModelInstalled())) {
@@ -413,7 +440,7 @@ export async function generateImage(prompt: string, onLog: Log = () => {}, signa
     }
     return { path: output, fileName }
   } finally {
-    busy = false
+    releaseEngine()
   }
 }
 

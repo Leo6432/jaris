@@ -3895,6 +3895,11 @@ a:hover {
   border: 1px solid var(--hud-line);
 }
 
+/* Étape 203 : la vidéo occupe la même scène que l'image, sur fond noir comme un lecteur. */
+.video-panel__video {
+  background: #000;
+}
+
 .image-panel__progress {
   margin-top: 6px;
 }

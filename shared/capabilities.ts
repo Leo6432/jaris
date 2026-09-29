@@ -190,6 +190,22 @@ export const CAPABILITIES: CapabilityGroup[] = [
     ]
   },
   {
+    title: 'Créer des vidéos (Vidéo)',
+    summary: "Le bouton Vidéo à gauche : Jaris crée une courte vidéo sur ton PC avec Wan 2.2. C'est lent : plusieurs minutes par vidéo.",
+    exampleLabel: 'Écris',
+    items: [
+      {
+        title: 'Une vidéo à partir d’une description',
+        description: 'Décris la scène et ce qui bouge : Jaris crée environ 2 secondes de vidéo, que tu peux enregistrer où tu veux.',
+        example: 'un chat roux marche dans la neige au coucher du soleil'
+      },
+      {
+        title: 'Animer une image',
+        description: 'Joins une image avec le « + » du champ et décris le mouvement : Jaris la fait bouger.'
+      }
+    ]
+  },
+  {
     title: 'Discuter par écrit',
     summary: "Le Chat, pour quand tu ne veux pas parler à voix haute.",
     items: [

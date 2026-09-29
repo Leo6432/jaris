@@ -4,6 +4,7 @@ import ChatPanel from '@/components/ChatPanel'
 import ChatWidget from '@/components/ChatWidget'
 import CodePanel from '@/components/CodePanel'
 import ImagePanel from '@/components/ImagePanel'
+import VideoPanel from '@/components/VideoPanel'
 import KeepAlive from '@/components/KeepAlive'
 import RuntimeSetup from '@/components/RuntimeSetup'
 import JarisOrb from '@/components/JarisOrb'
@@ -23,13 +24,14 @@ const STATUS_LABEL: Record<JarisEmotion, string> = {
 }
 
 /** Les modes de la colonne latérale permanente (étape 30 ; Image à la place du Montage depuis l'étape 200). */
-type AppMode = 'voice' | 'chat' | 'code' | 'image'
+type AppMode = 'voice' | 'chat' | 'code' | 'image' | 'video'
 
 const MODES: Array<{ id: AppMode; label: string; hint: string }> = [
   { id: 'voice', label: 'Agent vocal', hint: 'Parler à Jaris' },
   { id: 'chat', label: 'Chat', hint: 'Écrire à Jaris' },
   { id: 'code', label: 'Code', hint: 'Générer une application' },
-  { id: 'image', label: 'Image', hint: 'Créer une image' }
+  { id: 'image', label: 'Image', hint: 'Créer une image' },
+  { id: 'video', label: 'Vidéo', hint: 'Créer une vidéo' }
 ]
 
 /**
@@ -501,6 +503,9 @@ export default function App(): JSX.Element {
           </KeepAlive>
           <KeepAlive active={appMode === 'image'}>
             <ImagePanel />
+          </KeepAlive>
+          <KeepAlive active={appMode === 'video'}>
+            <VideoPanel />
           </KeepAlive>
         </main>
 

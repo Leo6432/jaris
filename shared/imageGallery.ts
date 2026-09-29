@@ -19,10 +19,16 @@ export function imageTimestampFromFileName(fileName: string): number | null {
   return Number.isNaN(time) ? null : time
 }
 
-/** « un-chat-sur-la-lune » → « Un chat sur la lune » ; « Image » quand la description n'a laissé aucun mot. */
+/** Étape 203 : même règle pour une vidéo créée par le mode Vidéo (`.webm`, lisible directement par l'écran). */
+export function isGeneratedVideoFileName(name: unknown): name is string {
+  return typeof name === 'string' && /^[\w-]+(\.[\w-]+)*\.webm$/.test(name) && !name.includes('..')
+}
+
+/** « un-chat-sur-la-lune » → « Un chat sur la lune » ; « Image » / « Vidéo » quand la description n'a laissé aucun mot. */
 export function imageLabelFromFileName(fileName: string): string {
-  const words = fileName.replace(/\.png$/i, '').replace(STAMP, '').replace(/-+/g, ' ').trim()
+  const words = fileName.replace(/\.(png|webm)$/i, '').replace(STAMP, '').replace(/-+/g, ' ').trim()
   if (!words || words === 'image') return 'Image'
+  if (words === 'video') return 'Vidéo'
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
 

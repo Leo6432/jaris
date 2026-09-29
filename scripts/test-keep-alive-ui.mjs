@@ -148,7 +148,7 @@ test('un onglet jamais ouvert ne charge rien', options, async () => {
 
 test('App.tsx garde Chat, Code et Image en vie au lieu de les détruire', () => {
   const app = readFileSync(join(projectRoot, 'src/App.tsx'), 'utf8')
-  for (const panel of ['ChatPanel', 'CodePanel', 'ImagePanel']) {
+  for (const panel of ['ChatPanel', 'CodePanel', 'ImagePanel', 'VideoPanel']) {
     assert.doesNotMatch(app, new RegExp(`appMode === '\\w+' && <${panel}`), `${panel} ne doit plus être rendu conditionnellement`)
     assert.match(app, new RegExp(`<KeepAlive active=\\{appMode === '\\w+'\\}>\\s*<${panel} />`), `${panel} dans KeepAlive`)
   }

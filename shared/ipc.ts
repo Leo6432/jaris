@@ -6,7 +6,7 @@ export type JarisEmotion = 'idle' | 'listening' | 'thinking' | 'happy' | 'surpri
 
 /** Les trois modes de la fenêtre de réglages (App.tsx), aussi retenus côté main pour choisir la forme du
  * widget au repli (voir WidgetMode juste en dessous et `setActiveMode`). */
-export type AppMode = 'voice' | 'chat' | 'code' | 'image'
+export type AppMode = 'voice' | 'chat' | 'code' | 'image' | 'video'
 
 /**
  * Ce que devient Jaris quand on quitte sa fenêtre, dérivé du dernier mode actif :
@@ -562,6 +562,16 @@ export interface GeneratedImageSummary {
   timestamp: number
 }
 
+/** Mode Vidéo (étape 203) : mêmes informations que le mode Image, pour le modèle Wan 2.2. */
+export type VideoStudioStatus = ImageStudioStatus
+
+/** Une vidéo créée par le mode Vidéo (fichier .webm ; seul son NOM voyage entre l'écran et le main). */
+export interface GeneratedVideoSummary {
+  fileName: string
+  label: string
+  timestamp: number
+}
+
 /**
  * Avancement EN DIRECT de l'étape en cours d'une génération (mode Code, étape 99).
  *
@@ -683,6 +693,17 @@ export const IPC_CHANNELS = {
   readGeneratedImage: 'jaris:read-generated-image',
   deleteGeneratedImage: 'jaris:delete-generated-image',
   openGeneratedImages: 'jaris:open-generated-images',
+  /** Mode Vidéo (étape 203) : même principe que le mode Image, avec Wan 2.2 TI2V 5B. */
+  getVideoStudioStatus: 'jaris:get-video-studio-status',
+  installVideoStudio: 'jaris:install-video-studio',
+  videoStudioLog: 'jaris:video-studio-log',
+  generateStudioVideo: 'jaris:generate-studio-video',
+  cancelStudioVideo: 'jaris:cancel-studio-video',
+  listGeneratedVideos: 'jaris:list-generated-videos',
+  readGeneratedVideo: 'jaris:read-generated-video',
+  deleteGeneratedVideo: 'jaris:delete-generated-video',
+  saveGeneratedVideo: 'jaris:save-generated-video',
+  openGeneratedVideos: 'jaris:open-generated-videos',
   /** renderer <-> main : récupère les messages du mode Chat, amorcés depuis conversation-history.json au
    * premier appel après un lancement (voir ChatSession.ensureLoaded) — plus seulement ceux de la session en cours. */
   getChatHistory: 'jaris:get-chat-history',

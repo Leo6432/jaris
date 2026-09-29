@@ -27,7 +27,9 @@ import type {
   PickedImageFile,
   SaveImageResult,
   GeneratedImageSummary,
+  GeneratedVideoSummary,
   ImageStudioStatus,
+  VideoStudioStatus,
   Profile,
   RuntimeSetupProgress,
   RuntimeSetupStatus,
@@ -113,6 +115,16 @@ declare global {
       readGeneratedImage: (fileName: string) => Promise<string | null>
       deleteGeneratedImage: (fileName: string) => Promise<void>
       openGeneratedImages: (fileName?: string) => Promise<void>
+      getVideoStudioStatus: () => Promise<VideoStudioStatus>
+      installVideoStudio: () => Promise<void>
+      onVideoStudioLog: (cb: (message: string) => void) => () => void
+      generateStudioVideo: (prompt: string, image?: { base64: string; mimeType?: string }) => Promise<GeneratedVideoSummary>
+      cancelStudioVideo: () => void
+      listGeneratedVideos: () => Promise<GeneratedVideoSummary[]>
+      readGeneratedVideo: (fileName: string) => Promise<Uint8Array>
+      deleteGeneratedVideo: (fileName: string) => Promise<void>
+      saveGeneratedVideo: (fileName: string) => Promise<SaveImageResult>
+      openGeneratedVideos: (fileName?: string) => Promise<void>
       generateApp: (description: string, currentHtml?: string, imageBase64?: string) => Promise<GeneratedApp>
       onCodeGenStatus: (cb: (message: string) => void) => () => void
       // Étape 99 : avancement en direct pendant une génération (l'étape en cours, les caractères déjà
