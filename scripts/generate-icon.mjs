@@ -1,13 +1,14 @@
 /** Convertit le logo transparent choisi par Léo en icône Windows multirésolution. */
 import sharp from 'sharp'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+const frame = JSON.parse(readFileSync(join(root, 'assets', 'icon-frame.json'), 'utf8').replace(/^\uFEFF/, ''))
 const sizes = [16, 24, 32, 48, 64, 128, 256]
 const images = await Promise.all(sizes.map(size =>
-  sharp(join(root, 'assets', 'jaris-logo.png')).resize(size, size).png().toBuffer()
+  sharp(join(root, 'assets', 'jaris-logo.png')).extract(frame).resize(size, size).png().toBuffer()
 ))
 const header = Buffer.alloc(6)
 header.writeUInt16LE(1, 2)
