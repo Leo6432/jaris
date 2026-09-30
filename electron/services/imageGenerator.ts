@@ -147,17 +147,31 @@ export function parseSdProgress(line: string): { step: number; total: number } |
   return { step: Number(match[1]), total: Number(match[2]) }
 }
 
-/** Échec de sd-cli, traduit en phrase lisible par Léo (affichée telle quelle, jamais reformulée). */
-export function describeEngineFailure(code: number | null, lastLines: string[]): string {
+/**
+ * Échec de sd-cli, traduit en phrase lisible par Léo (affichée telle quelle, jamais reformulée).
+ * Étape 211 (Léo, vidéo : « s'est arrêté sans finir l'image (code 3221226505) ») : le texte disait « image » pour
+ * une vidéo, le code Windows était illisible (3221226505 = 0xC0000409, un arrêt brutal du programme), et seule la
+ * dernière ligne était gardée — souvent celle du chargement, qui n'explique rien. Les lignes d'erreur du moteur
+ * sont maintenant reprises, et un arrêt brutal est dit comme tel, sans prétendre en connaître la cause.
+ */
+export function describeEngineFailure(code: number | null, lastLines: string[], kind: 'image' | 'video' = 'image'): string {
   const text = lastLines.join('\n')
+  const what = kind === 'video' ? 'créer la vidéo' : "dessiner l'image"
   if (/out of (device )?memory|ErrorOutOfDeviceMemory|failed to allocate/i.test(text)) {
-    return "Pas assez de mémoire pour dessiner l'image (carte graphique ou RAM) : ferme les jeux ou logiciels lourds ouverts, puis redemande."
+    return `Pas assez de mémoire pour ${what} (carte graphique ou RAM) : ferme les jeux ou logiciels lourds ouverts${kind === 'video' ? ', ou choisis une durée plus courte ou une qualité plus basse' : ''}, puis redemande.`
   }
   if (/vulkan/i.test(text) && /(fail|error|not found|no device)/i.test(text)) {
-    return "Ta carte graphique n'a pas pu être utilisée pour dessiner (Vulkan) : mets à jour le pilote de ta carte graphique, puis redemande."
+    return `Ta carte graphique n'a pas pu être utilisée pour ${what} (Vulkan) : mets à jour le pilote de ta carte graphique, puis redemande.`
   }
-  const last = lastLines.filter((l) => l.trim()).slice(-1)[0]?.trim()
-  return `Le moteur d'images s'est arrêté sans finir l'image (code ${code ?? 'inconnu'})${last ? ` : ${last}` : ''}.`
+  const engine = kind === 'video' ? 'Le moteur vidéo' : "Le moteur d'images"
+  const unfinished = kind === 'video' ? 'sans finir la vidéo' : "sans finir l'image"
+  const codeText = code === null ? 'inconnu' : code > 0xffff ? `0x${(code >>> 0).toString(16).toUpperCase()}` : String(code)
+  const meaningful = lastLines.map((l) => l.trim()).filter(Boolean)
+  const errors = meaningful.filter((l) => /\b(error|erreur|assert|failed|abort)\b/i.test(l)).slice(-3)
+  const detail = (errors.length ? errors : meaningful.slice(-1)).join(' / ')
+  // 0xC0000409 : Windows a arrêté le programme d'un coup (assertion interne, pile corrompue…) — sans message.
+  const brutal = (code ?? 0) >>> 0 === 0xc0000409 ? ' — arrêt brutal, sans message du moteur' : ''
+  return `${engine} s'est arrêté ${unfinished} (code ${codeText}${brutal})${detail ? `. Dernière ligne : ${detail}` : ''}.`
 }
 
 export async function sha256OfFile(path: string): Promise<string> {
@@ -301,6 +315,8 @@ export interface EngineWording {
   step: string
   finishing: string
   cancelled: string
+  /** Pour le message d'échec (étape 211) : « image » ou « vidéo ». */
+  kind?: 'image' | 'video'
 }
 
 const IMAGE_WORDING: EngineWording = { step: 'Dessin', finishing: "Finition de l'image…", cancelled: 'Dessin annulé.' }
@@ -355,7 +371,7 @@ export function runEngine(exe: string, args: string[], onLog: Log, signal?: Abor
     proc.on('error', (err) => finish(new Error(`Impossible de lancer le moteur d'images : ${err.message}`)))
     proc.on('close', (code) => {
       if (code === 0) finish()
-      else finish(new Error(describeEngineFailure(code, lastLines)))
+      else finish(new Error(describeEngineFailure(code, lastLines, wording.kind)))
     })
   })
 }

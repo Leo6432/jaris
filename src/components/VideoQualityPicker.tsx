@@ -16,20 +16,12 @@ interface Props {
   disabled?: boolean
 }
 
-function QualityIcon(): JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z" />
-    </svg>
-  )
-}
-
 export default function VideoQualityPicker({ qualities, value, onChange, onDownload, disabled = false }: Props): JSX.Element {
   const current = qualities.find((q) => q.id === value) ?? qualities[0]
   return (
     <SliderPicker
       className="quality-picker"
-      icon={<QualityIcon />}
+      icon={null}
       triggerLabel={current?.label ?? ''}
       name="Qualité de la vidéo"
       title={`Qualité ${current?.label ?? ''}`}

@@ -257,7 +257,7 @@ export function buildVideoArgs({ models, prompt, output, seed, seconds, initImag
   ]
 }
 
-const VIDEO_WORDING = { step: 'Vidéo', finishing: 'Assemblage de la vidéo…', cancelled: 'Vidéo annulée.' }
+const VIDEO_WORDING = { step: 'Vidéo', finishing: 'Assemblage de la vidéo…', cancelled: 'Vidéo annulée.', kind: 'video' as const }
 
 /** Ce qui manque sur le disque pour une qualité (fichier absent ou pas à la bonne taille). */
 async function missingFiles(quality: VideoQuality): Promise<VideoModelFile[]> {

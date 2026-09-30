@@ -5694,3 +5694,15 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   sélecteur) : c'est la recherche des mêmes mots dans tout `src/` qui a trouvé les 4 autres écrans. **Leçon
   générale : un renommage demandé pour un écran vaut pour TOUS les endroits qui montrent la même chose — chercher
   le mot partout avant de livrer, sinon l'utilisateur voit deux noms pour le même modèle.**
+
+- **Première vidéo FastWan chez Léo : sd-cli s'arrête net, code 3221226505, juste après « loading tensors
+  completed » (étape 211).** 3221226505 = 0xC0000409 : Windows a arrêté le programme d'un coup (assertion interne,
+  corruption de pile…), SANS que le moteur écrive la moindre erreur. La cause n'est PAS établie : la même commande
+  FastWan a produit une vidéo ici (processeur, Linux), et Wan de base avait tourné chez Léo en Vulkan (1 h 05).
+  Pas de correctif spéculatif à l'aveugle (leçon SearXNG) : le message d'échec est rendu exploitable d'abord —
+  « vidéo » au lieu d'« image » (le texte était celui des images), code affiché en hexadécimal (cherchable),
+  « arrêt brutal, sans message du moteur » dit comme tel, et les lignes d'ERREUR des 20 dernières reprises au
+  lieu de la seule dernière ligne (souvent celle du chargement, qui n'explique rien). Question posée à Léo sur la
+  qualité et la durée choisies pour réduire les hypothèses. Étoile retirée du bouton de qualité (demande de Léo :
+  l'icône n'avait pas de sens).
+  Régression : `scripts/test-video-generation.mjs` (message d'échec vidéo).

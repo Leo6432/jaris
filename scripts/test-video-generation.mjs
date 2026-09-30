@@ -475,3 +475,14 @@ test('le lecteur Q4 du cran Léger n’est JAMAIS effacé au démarrage comme un
   for (const file of t.video.VIDEO_MODEL_FILES) assert.equal(t.video.OBSOLETE_VIDEO_FILES.includes(file.fileName), false, file.fileName)
   t.cleanup()
 })
+
+test('échec du moteur (étape 211) : « vidéo » et pas « image », code lisible, lignes d’erreur reprises', () => {
+  const { image } = loadVideo()
+  const crash = image.describeEngineFailure(3221226505, ['[INFO ] model_loader.cpp:1380 - loading tensors completed, taking 2.91s'], 'video')
+  assert.match(crash, /^Le moteur vidéo s'est arrêté sans finir la vidéo \(code 0xC0000409 — arrêt brutal, sans message du moteur\)/)
+  assert.doesNotMatch(crash, /image/, 'plus jamais « image » pour une vidéo')
+  const withError = image.describeEngineFailure(1, ['[INFO ] chargement', '[ERROR] GGML_ASSERT(ne00 % 32 == 0) failed', '[INFO ] fin'], 'video')
+  assert.match(withError, /Dernière ligne : \[ERROR\] GGML_ASSERT\(ne00 % 32 == 0\) failed/, 'la ligne d’erreur, pas la dernière ligne quelconque')
+  assert.match(image.describeEngineFailure(1, ['vk::Device::allocateMemory: ErrorOutOfDeviceMemory'], 'video'), /Pas assez de mémoire pour créer la vidéo.*durée plus courte/)
+  assert.match(image.describeEngineFailure(1, ['x'], 'image'), /Le moteur d'images s'est arrêté sans finir l'image \(code 1\)/, 'les images gardent leur texte')
+})
