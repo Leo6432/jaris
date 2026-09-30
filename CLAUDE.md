@@ -5675,3 +5675,26 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `scripts/test-transcript-corrector.mjs` (verrous : réponse, reformulation, ajout refusés ;
   délai, panne, JSON illisible → phrase entendue ; annulation qui remonte ; pipeline qui répond à la phrase
   corrigée) et `scripts/test-video-generation.mjs` / `test-video-panel-ui.mjs` (cran Original).
+
+- **Une carte AMD passait pour « pas de carte du tout » (Léo, étape 208, capture du Gestionnaire des tâches
+  d'un ami : AMD Radeon RX 7600, 8 Go — « aucune carte graphique NVIDIA détectée, mais j'en ai assez ? »).**
+  `detectGpu` ne demandait qu'à `nvidia-smi`, qui n'existe QUE sur les cartes NVIDIA : sur une AMD ou une Intel,
+  l'échec était lu comme « aucune carte » — vidéo et image refusées alors que leur moteur (sd.cpp Vulkan) marche
+  sur AMD, ET paliers Ollama choisis comme pour une machine sans carte. Repli ajouté, seulement quand
+  nvidia-smi échoue et seulement sous Windows : la mémoire de chaque carte, toutes marques, lue dans le registre
+  de la classe des cartes graphiques (`HardwareInformation.qwMemorySize`, 64 bits). **Écarté exprès** :
+  `Win32_VideoController.AdapterRAM`, limité à 32 bits, qui plafonne à 4 Go et aurait annoncé 4 Go pour cette
+  carte de 8 Go. La carte la plus grosse gagne ; moins de 1 Go (intégrée seule) compte comme « pas de carte ».
+  Messages « NVIDIA » retirés. Les relevés en direct (VRAM libre, température) restent NVIDIA seulement :
+  sur une autre marque, ils répondent « inconnu », comme avant.
+  **Script PowerShell vérifié pour de vrai, pas seulement relu** : PowerShell 7.5 installé ici, script exécuté
+  avec une lecture du registre simulée (une carte, plusieurs, mémoire en nombre ou en octets, carte sans
+  mémoire) et par le chemin réel `-EncodedCommand`. Le test garde ce contrôle : sur le runner Windows de la CI,
+  c'est Windows PowerShell 5.1 — celui de Léo — qui exécute le vrai script. **Non vérifiable ici** : la valeur
+  réellement écrite par le pilote AMD sur la machine de l'ami.
+  **Ce qui reste refusé chez cet ami, à juste titre** : sa RAM semble être de 16 Go (8 Go de mémoire GPU
+  partagée = la moitié de la RAM, règle de Windows) ; la vidéo demande 24 Go de RAM, donc elle restera refusée,
+  mais avec la VRAIE raison (« pas assez de RAM ») au lieu d'une fausse.
+  **Leçon générale : un outil propre à un fabricant (nvidia-smi) ne dit rien de l'ABSENCE de matériel — son
+  échec veut dire « pas une carte de CE fabricant », jamais « pas de carte ».**
+  Régression : `node --test scripts/test-gpu-detection.mjs`.

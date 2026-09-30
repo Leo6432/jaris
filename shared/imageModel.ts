@@ -28,7 +28,7 @@ export interface ImageModelPick {
 
 export function pickImageModel(vramGb: number | null, ramGb: number): ImageModelPick {
   if (vramGb === null) {
-    return { model: null, reason: 'aucune carte graphique NVIDIA détectée (il en faut une de 6 Go ou plus)' }
+    return { model: null, reason: 'aucune carte graphique détectée (il en faut une de 6 Go ou plus)' }
   }
   if (vramGb < IMAGE_MIN_VRAM_GB) {
     return { model: null, reason: `carte graphique trop petite (${vramGb} Go de VRAM, il en faut 6 ou plus)` }

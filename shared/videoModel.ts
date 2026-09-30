@@ -90,7 +90,7 @@ export interface VideoQualityPick {
 
 export function availableVideoQualities(vramGb: number | null, ramGb: number): VideoQualityPick {
   const lightest = VIDEO_QUALITIES[0]
-  if (vramGb === null) return { qualities: [], reason: `aucune carte graphique NVIDIA détectée (il en faut une de ${lightest.vramLabel} Go ou plus)` }
+  if (vramGb === null) return { qualities: [], reason: `aucune carte graphique détectée (il en faut une de ${lightest.vramLabel} Go ou plus)` }
   if (vramGb < lightest.minVramGb) {
     return { qualities: [], reason: `carte graphique trop petite (${vramGb} Go de VRAM, il en faut ${lightest.vramLabel} ou plus)` }
   }

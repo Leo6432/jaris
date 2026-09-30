@@ -463,6 +463,61 @@ export async function detectGpu(): Promise<{ name: string | null; vramGb: number
     const mib = parseInt(mibRaw, 10)
     return { name: name || null, vramGb: Number.isFinite(mib) ? Math.round((mib / 1024) * 10) / 10 : null }
   } catch {
+    // Étape 208 : pas de nvidia-smi = pas forcément pas de carte (AMD, Intel) — voir detectGpuFromRegistry.
+    return process.platform === 'win32' ? detectGpuFromRegistry() : { name: null, vramGb: null }
+  }
+}
+
+/**
+ * Étape 208 (Léo, PC d'un ami avec une AMD Radeon RX 7600 de 8 Go : « aucune carte graphique NVIDIA détectée,
+ * mais j'en ai assez ? ») : nvidia-smi n'existe QUE sur les cartes NVIDIA, donc une AMD ou une Intel passait pour
+ * « pas de carte du tout » — vidéo refusée, et modèles Ollama choisis comme pour une machine sans carte. Windows
+ * note la mémoire de chaque carte graphique, toutes marques confondues, dans le registre de sa classe de
+ * périphériques (valeur `HardwareInformation.qwMemorySize`, sur 64 bits). `Win32_VideoController.AdapterRAM`
+ * n'est PAS utilisé : il est limité à 32 bits et plafonne à 4 Go, donc faux pour une carte de 8 Go.
+ * Script sans aucune donnée venue de l'extérieur, passé encodé (`-EncodedCommand`) : rien à échapper.
+ */
+export const REGISTRY_GPU_SCRIPT = [
+  "$ErrorActionPreference = 'SilentlyContinue'",
+  "Get-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0*' |",
+  "  Where-Object { $_.'HardwareInformation.qwMemorySize' } |",
+  "  ForEach-Object {",
+  "    $v = $_.'HardwareInformation.qwMemorySize'",
+  '    if ($v -is [byte[]]) { $v = [BitConverter]::ToUInt64($v, 0) }',
+  '    [pscustomobject]@{ name = [string]$_.DriverDesc; bytes = [double]$v }',
+  '  } | ConvertTo-Json -Compress'
+].join('\n')
+
+/**
+ * Lit la sortie du script ci-dessus : la carte qui a le PLUS de mémoire (une carte intégrée Intel à côté d'une
+ * AMD dédiée n'a que quelques centaines de Mo). PowerShell 5.1 sort UN objet seul au lieu d'un tableau d'un
+ * élément (`ConvertTo-Json` sans `-AsArray`, piège déjà rencontré à l'étape 32) : les deux formes sont acceptées.
+ */
+export function parseRegistryGpus(stdout: string): { name: string | null; vramGb: number | null } {
+  let data: unknown
+  try {
+    data = JSON.parse(stdout.trim())
+  } catch {
+    return { name: null, vramGb: null }
+  }
+  const entries = (Array.isArray(data) ? data : [data]) as Array<{ name?: unknown; bytes?: unknown }>
+  let best: { name: string | null; bytes: number } | null = null
+  for (const entry of entries) {
+    const bytes = typeof entry?.bytes === 'number' ? entry.bytes : NaN
+    if (!Number.isFinite(bytes) || bytes <= 0) continue
+    if (!best || bytes > best.bytes) best = { name: typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim() : null, bytes }
+  }
+  // Moins de 1 Go : une carte intégrée seule, qui n'accélère rien de ce que fait Jaris — traitée comme « pas de carte ».
+  if (!best || best.bytes < 1024 ** 3) return { name: null, vramGb: null }
+  return { name: best.name, vramGb: Math.round((best.bytes / 1024 ** 3) * 10) / 10 }
+}
+
+async function detectGpuFromRegistry(): Promise<{ name: string | null; vramGb: number | null }> {
+  try {
+    const encoded = Buffer.from(REGISTRY_GPU_SCRIPT, 'utf16le').toString('base64')
+    const { stdout } = await execAsync(`powershell -NoProfile -NonInteractive -EncodedCommand ${encoded}`, { windowsHide: true, timeout: 10_000 })
+    return parseRegistryGpus(stdout)
+  } catch {
     return { name: null, vramGb: null }
   }
 }

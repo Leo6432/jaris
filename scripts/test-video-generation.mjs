@@ -168,7 +168,7 @@ test('qualités (étape 205) : seuls les crans que la machine peut faire tourner
   assert.deepEqual(q(24, 24), ['q6', 'q8'], 'grosse carte mais 24 Go de RAM : pas d’original (22,8 Go de fichiers)')
   assert.deepEqual(q(12, 64), ['q6', 'q8'], 'beaucoup de RAM mais carte de 12 Go : pas d’original')
   assert.equal(videoModel.videoQualityLabel('original'), 'Original')
-  assert.match(videoModel.availableVideoQualities(null, 32).reason, /aucune carte graphique NVIDIA/)
+  assert.match(videoModel.availableVideoQualities(null, 32).reason, /aucune carte graphique détectée/)
   assert.match(videoModel.availableVideoQualities(6, 32).reason, /trop petite \(6 Go de VRAM, il en faut 8 ou plus\)/)
   assert.match(videoModel.availableVideoQualities(12, 16).reason, /pas assez de RAM \(16 Go, il en faut 24 ou plus\)/)
   assert.equal(videoModel.availableVideoQualities(4, 32).qualities.length, 0)
