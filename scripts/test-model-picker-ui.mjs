@@ -213,9 +213,9 @@ test('modèle à niveaux (qwen3.8) : la barre avec SES niveaux, sans cerveau, ja
     await page.click('#root .effort-picker__step[aria-label="medium"]')
     await page.waitForSelector('#root .effort-picker__step--active[aria-label="medium"]')
     assert.deepEqual((await page.evaluate(() => window.__calls)).at(-1), ['think', 'chat', 'medium'])
-    assert.match(await page.textContent('#root .effort-picker__current'), /^medium$/)
+    assert.match(await page.textContent('#root .effort-picker__current'), /^Moyen$/)
     assert.equal(await page.textContent('#root .effort-picker__model-link'), 'Puissant· qwen3.8:27b')
-    assert.match(await page.textContent('#root .effort-picker__trigger'), /Puissant\s*medium/)
+    assert.match(await page.textContent('#root .effort-picker__trigger'), /Puissant\s*Moyen/)
 
     await page.click('#root .effort-picker__step[aria-label="off"]')
     await page.waitForSelector('#root .effort-picker__step--active[aria-label="off"]')
@@ -254,14 +254,14 @@ test('modèle qui ne réfléchit pas : ni icône, ni barre — et changer de mod
     await openPicker(page)
     await chooseRole(page, 'Puissant')
     await page.click('#root .effort-picker__step[aria-label="xhigh"]')
-    await page.waitForFunction(() => /xhigh/.test(document.querySelector('#root .effort-picker__trigger').textContent))
+    await page.waitForFunction(() => /Extra/.test(document.querySelector('#root .effort-picker__trigger').textContent))
 
     await chooseRole(page, 'Rapide')
     await page.waitForFunction(() => document.querySelector('#root .effort-picker__current').textContent === 'Rapide')
     assert.equal(await page.locator('#root .effort-picker__note').count(), 0, 'pas de petite phrase en plus (étape 196)')
     assert.equal(await hasReasoningIcon(page), 0)
     assert.equal(await page.locator('#root .effort-picker__slider, #root .effort-picker__toggle').count(), 0, 'impossible de mettre « max » sur ce modèle')
-    assert.doesNotMatch(await page.textContent('#root .effort-picker__trigger'), /xhigh/)
+    assert.doesNotMatch(await page.textContent('#root .effort-picker__trigger'), /Extra/)
   })
 })
 

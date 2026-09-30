@@ -167,7 +167,7 @@ test('qualités (étape 205) : seuls les crans que la machine peut faire tourner
   assert.deepEqual(q(16, 31.8), ['light', 'q6', 'q8', 'original'])
   assert.deepEqual(q(24, 24), ['light', 'q6', 'q8'], 'grosse carte mais 24 Go de RAM : pas d’original (22,8 Go de fichiers)')
   assert.deepEqual(q(12, 64), ['light', 'q6', 'q8'], 'beaucoup de RAM mais carte de 12 Go : pas d’original')
-  assert.equal(videoModel.videoQualityLabel('original'), 'Original')
+  assert.equal(videoModel.videoQualityLabel('original'), 'Extra')
   assert.match(videoModel.availableVideoQualities(null, 32).reason, /aucune carte graphique détectée/)
   assert.match(videoModel.availableVideoQualities(6, 32).reason, /trop petite \(6 Go de VRAM, il en faut 8 ou plus\)/)
   // Étape 209 : l'AMD 8 Go + 16 Go de RAM de l'ami de Léo a maintenant le cran Léger (et seulement lui).
@@ -263,8 +263,8 @@ test('Q8 sur une carte de 8 Go : refusé avec une phrase claire, AVANT tout tél
   const t = await installed()
   const before = t.downloads.length
   t.events.length = 0
-  await assert.rejects(t.video.installVideoModel('q8'), /qualité Q8 demande une carte graphique de 10 Go et 24 Go de RAM/)
-  await assert.rejects(t.video.generateVideo('a cat', () => {}, undefined, undefined, 2, 'q8'), /qualité Q8 demande/)
+  await assert.rejects(t.video.installVideoModel('q8'), /qualité Élevé demande une carte graphique de 10 Go et 24 Go de RAM/)
+  await assert.rejects(t.video.generateVideo('a cat', () => {}, undefined, undefined, 2, 'q8'), /qualité Élevé demande/)
   assert.equal(t.downloads.length, before)
   assert.deepEqual(t.events, [])
   t.cleanup()
@@ -273,7 +273,7 @@ test('Q8 sur une carte de 8 Go : refusé avec une phrase claire, AVANT tout tél
 test('qualité pas encore téléchargée (Q8 sur une carte de 12 Go) : message qui dit où la télécharger, rien n’est lancé', async () => {
   const t = await installed({ vramGb: 12 })
   t.events.length = 0
-  await assert.rejects(t.video.generateVideo('a cat', () => {}, undefined, undefined, 2, 'q8'), /qualité Q8 n'est pas encore téléchargée/)
+  await assert.rejects(t.video.generateVideo('a cat', () => {}, undefined, undefined, 2, 'q8'), /qualité Élevé n'est pas encore téléchargée/)
   assert.deepEqual(t.events, [])
   t.cleanup()
 })
@@ -292,7 +292,7 @@ test('PC trop faible : refus lisible AVANT tout calcul, rien n’est lancé', as
 
 test('modèle absent : message qui renvoie vers le bouton d’installation, rien n’est téléchargé', async () => {
   const t = loadVideo()
-  await assert.rejects(t.video.generateVideo('a cat'), /qualité Q6 n'est pas encore téléchargée/)
+  await assert.rejects(t.video.generateVideo('a cat'), /qualité Moyen n'est pas encore téléchargée/)
   assert.equal(t.downloads.length, 0)
   t.cleanup()
 })
@@ -429,14 +429,14 @@ test('Original (grosse machine) : ses deux fichiers non compressés, le décodeu
   assert.match(args[args.indexOf('--diffusion-model') + 1], /FastWanFullAttn_bf16\.safetensors$/)
   assert.match(args[args.indexOf('--t5xxl') + 1], /umt5_xxl_fp16\.safetensors$/)
   const status = await t.video.getVideoStudioStatus()
-  assert.deepEqual(status.qualities.map((q) => q.label), ['Léger', 'Q6', 'Q8', 'Original'])
+  assert.deepEqual(status.qualities.map((q) => q.label), ['Faible', 'Moyen', 'Élevé', 'Extra'])
   t.cleanup()
 })
 
 test('Original refusé sur la machine de Léo (8 Go de carte), avant tout téléchargement', async () => {
   const t = await installed()
   const before = t.downloads.length
-  await assert.rejects(t.video.installVideoModel('original'), /qualité Original demande une carte graphique de 16 Go et 32 Go de RAM/)
+  await assert.rejects(t.video.installVideoModel('original'), /qualité Extra demande une carte graphique de 16 Go et 32 Go de RAM/)
   assert.equal(t.downloads.length, before)
   t.cleanup()
 })
@@ -459,7 +459,7 @@ test('PC à 16 Go de RAM : Léger proposé, Q6 refusé avec la vraie raison', as
   const status = await t.video.getVideoStudioStatus()
   assert.equal(status.capable, true)
   assert.deepEqual(status.qualities.map((q) => q.id), ['light'])
-  await assert.rejects(t.video.installVideoModel('q6'), /qualité Q6 demande une carte graphique de 8 Go et 24 Go de RAM/)
+  await assert.rejects(t.video.installVideoModel('q6'), /qualité Moyen demande une carte graphique de 8 Go et 24 Go de RAM/)
   await t.video.installVideoModel('light')
   assert.equal(await t.video.isVideoQualityInstalled('light'), true)
   t.cleanup()

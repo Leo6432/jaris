@@ -60,11 +60,11 @@ export function thinkingKind(meta: ModelThinking | null): ThinkingKind {
 /** Les choix affichés, dans l'ordre croissant : « off » d'abord s'il existe, puis les niveaux du modèle. */
 export function thinkOptions(meta: ModelThinking | null): ThinkOption[] {
   const kind = thinkingKind(meta)
-  if (kind === 'toggle') return [{ value: false, label: 'off' }, { value: true, label: 'on' }]
+  if (kind === 'toggle') return [{ value: false, label: thinkLabel(false) }, { value: true, label: thinkLabel(true) }]
   if (kind !== 'levels') return []
   const values = meta?.values ?? []
   const named = values.filter((v): v is string => typeof v === 'string')
-  return [...(values.includes(false) ? [{ value: false as ThinkValue, label: 'off' }] : []), ...named.map((name) => ({ value: name, label: name }))]
+  return [...(values.includes(false) ? [{ value: false as ThinkValue, label: thinkLabel(false) }] : []), ...named.map((name) => ({ value: name, label: thinkLabel(name) }))]
 }
 
 /** Vrai seulement si CE modèle annonce accepter cette valeur : jamais « max » sur un modèle qui n'a rien. */
@@ -72,8 +72,24 @@ export function isAcceptedThink(value: unknown, meta: ModelThinking | null): val
   return thinkOptions(meta).some((option) => option.value === value)
 }
 
+/**
+ * Étape 210 (Léo : « mets comme Claude : faible, moyen, élevé, et pour l'original mets extra ») : les niveaux
+ * techniques d'Ollama (low/medium/high/xhigh) affichés en français, avec les mêmes mots que la qualité vidéo.
+ * Un niveau inconnu garde son nom d'origine plutôt que d'être deviné.
+ */
+const THINK_LABELS: Record<string, string> = {
+  off: 'Désactivée',
+  low: 'Faible',
+  medium: 'Moyen',
+  high: 'Élevé',
+  xhigh: 'Extra',
+  max: 'Max'
+}
+
 export function thinkLabel(value: ThinkValue): string {
-  return value === true ? 'on' : value === false ? 'off' : value
+  if (value === true) return 'Activée'
+  if (value === false) return 'Désactivée'
+  return THINK_LABELS[value] ?? value
 }
 
 /**

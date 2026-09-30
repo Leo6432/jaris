@@ -24,20 +24,20 @@ const labels = (meta) => thinkOptions(meta).map((o) => o.label)
 
 test('qwen3.8 : ses VRAIS niveaux, rien d’autre (pas de « high », pas de « max »)', () => {
   assert.equal(thinkingKind(QWEN38), 'levels')
-  assert.deepEqual(labels(QWEN38), ['off', 'low', 'medium', 'xhigh'])
+  assert.deepEqual(labels(QWEN38), ['Désactivée', 'Faible', 'Moyen', 'Extra'], 'étape 210 : les mots de Claude')
   assert.equal(isAcceptedThink('medium', QWEN38), true)
   assert.equal(isAcceptedThink('high', QWEN38), false)
   assert.equal(isAcceptedThink('max', QWEN38), false)
 })
 
 test('gpt-oss ne sait pas couper : pas de « off » proposé', () => {
-  assert.deepEqual(labels(GPT_OSS), ['low', 'medium', 'high'])
+  assert.deepEqual(labels(GPT_OSS), ['Faible', 'Moyen', 'Élevé'])
   assert.equal(isAcceptedThink(false, GPT_OSS), false)
 })
 
 test('modèle avec ou sans (qwen3.5) : off / on, jamais un niveau nommé', () => {
   assert.equal(thinkingKind(QWEN35), 'toggle')
-  assert.deepEqual(labels(QWEN35), ['off', 'on'])
+  assert.deepEqual(labels(QWEN35), ['Désactivée', 'Activée'])
   assert.equal(isAcceptedThink(true, QWEN35), true)
   assert.equal(isAcceptedThink('medium', QWEN35), false)
 })
@@ -65,9 +65,10 @@ test('le réglage enregistré ne s’applique qu’au modèle pour lequel il a �
 })
 
 test('libellés et lecture tolérante de /api/show', () => {
-  assert.equal(thinkLabel(true), 'on')
-  assert.equal(thinkLabel(false), 'off')
-  assert.equal(thinkLabel('xhigh'), 'xhigh')
+  assert.equal(thinkLabel(true), 'Activée')
+  assert.equal(thinkLabel(false), 'Désactivée')
+  assert.equal(thinkLabel('xhigh'), 'Extra')
+  assert.equal(thinkLabel('niveau-inconnu'), 'niveau-inconnu', 'un niveau inconnu garde son nom, jamais deviné')
   const meta = parseModelThinking({ capabilities: 'thinking', thinking: { values: [1, 'low', null], default: 3 } })
   assert.equal(meta.canThink, null)
   assert.deepEqual([...meta.values], ['low'])

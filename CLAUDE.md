@@ -5715,3 +5715,13 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   encore utilisé.**
   Régression : `scripts/test-video-generation.mjs` (Léger réutilise le modèle Q6, PC à 16 Go de RAM : Léger
   proposé et Q6 refusé avec la vraie raison, lecteur Q4 jamais effacé au démarrage).
+
+- **Mêmes mots que Claude partout : Faible · Moyen · Élevé · Extra (Léo, étape 210 : « enlève les Léger, les Q6,
+  et aussi dans les modèles conversation, mets comme Claude : faible, moyen, élevé, et pour l'original extra »).**
+  Qualité vidéo : Léger → Faible, Q6 → Moyen, Q8 → Élevé, Original → Extra (seuls les LIBELLÉS changent ; les
+  identifiants internes light/q6/q8/original restent, donc un choix déjà enregistré reste valable). Réflexion des
+  modèles de conversation : `thinkLabel` traduit les niveaux d'Ollama (low → Faible, medium → Moyen, high →
+  Élevé, xhigh → Extra, off/on → Désactivée/Activée) — dans le titre, le bouton ET les crans de la barre
+  (`thinkOptions`, oubliés au premier passage, repérés par les tests). Seul l'affichage change : la valeur
+  envoyée à Ollama reste « medium », « xhigh »… Un niveau inconnu garde son nom, jamais deviné.
+  Régression : `scripts/test-effort.mjs`, `test-model-picker-ui.mjs`, `test-video-generation.mjs`.

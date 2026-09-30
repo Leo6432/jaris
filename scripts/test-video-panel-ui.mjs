@@ -217,7 +217,7 @@ test('qualité (étape 205) : barre limitée à la machine, une qualité absente
     await page.fill('.composer__input', 'la mer')
     await page.click('.composer__send')
     await page.waitForSelector('.code-panel__error')
-    assert.match(await page.textContent('.code-panel__error'), /qualité Q8 n'est pas encore téléchargée/)
+    assert.match(await page.textContent('.code-panel__error'), /qualité Élevé n'est pas encore téléchargée/)
     assert.equal((await page.evaluate(() => window.__calls)).some((c) => c[0] === 'generate'), false)
 
     await page.click('.quality-picker .effort-picker__trigger')
