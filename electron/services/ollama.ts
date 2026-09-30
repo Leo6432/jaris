@@ -207,6 +207,27 @@ interface OllamaTagsResponse {
   models?: Array<{ name: string; size?: number }>
 }
 
+/**
+ * Étape 207 : une réponse courte au format imposé (sortie structurée d'Ollama, `format` = schéma JSON), sans
+ * réflexion ni outils, à température 0 — pour un petit travail mécanique comme corriger une transcription, où
+ * le modèle ne doit rien inventer. Renvoie le texte brut (le JSON), à valider par l'appelant. Même second essai
+ * sans `think` que chatWithOllama pour les modèles qui refusent ce champ.
+ */
+export async function structuredChat(
+  messages: OllamaMessage[],
+  model: string,
+  schema: Record<string, unknown>,
+  signal?: AbortSignal
+): Promise<string> {
+  const body = { model, messages, format: schema, options: { temperature: 0, num_ctx: 2048 } }
+  try {
+    return (await requestChat({ ...body, think: false }, model, signal)).content ?? ''
+  } catch (err) {
+    if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) throw err
+    return (await requestChat(body, model, signal)).content ?? ''
+  }
+}
+
 export async function listInstalledModels(): Promise<string[]> {
   const response = await fetch(`${config.ollama.host}/api/tags`)
   if (!response.ok) throw new Error(`Ollama a répondu ${response.status} en listant les modèles installés`)

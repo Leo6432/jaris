@@ -49,8 +49,10 @@ export function videoFramesFor(seconds: VideoSeconds): number {
  *   10 Go ou plus. Le plancher reste 8 Go (étape 203) : le décodeur Wan est réputé très gourmand (docs/wan.md).
  * - RAM : sd.cpp charge les trois fichiers en RAM, plus ~5 Go pour Windows et Jaris → Q6 (10,3 Go) et Q8
  *   (12,8 Go) demandent 24 Go ou plus.
+ * Étape 207 : un cran « Original » (sans compression, 22,8 Go) pour les grosses machines — pas de Q4, qui ne
+ * servirait qu'aux cartes de moins de 8 Go, sous le plancher.
  */
-export type VideoQuality = 'q6' | 'q8'
+export type VideoQuality = 'q6' | 'q8' | 'original'
 
 export interface VideoQualityLevel {
   id: VideoQuality
@@ -65,7 +67,10 @@ export interface VideoQualityLevel {
 
 export const VIDEO_QUALITIES: VideoQualityLevel[] = [
   { id: 'q6', label: 'Q6', minVramGb: 7.5, minRamGb: 23, vramLabel: 8, ramLabel: 24 },
-  { id: 'q8', label: 'Q8', minVramGb: 9.5, minRamGb: 23, vramLabel: 10, ramLabel: 24 }
+  { id: 'q8', label: 'Q8', minVramGb: 9.5, minRamGb: 23, vramLabel: 10, ramLabel: 24 },
+  // Étape 207 (Léo : « jusqu'à l'original, comme l'effort ») : sans compression. Modèle 10 Go + ~2,5 Go de calcul
+  // + ~0,5 Go pour Windows → cartes de 16 Go ; trois fichiers 22,8 Go en RAM + ~5 Go → machines de 32 Go.
+  { id: 'original', label: 'Original', minVramGb: 15.5, minRamGb: 30, vramLabel: 16, ramLabel: 32 }
 ]
 
 export function isVideoQuality(value: unknown): value is VideoQuality {

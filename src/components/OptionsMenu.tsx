@@ -693,10 +693,15 @@ export default function OptionsMenu(): JSX.Element {
   }
 
   /** Design sonore (étape 31) : absent/true par défaut (voir App.tsx), false pour tout couper. */
-  const toggleSoundEffects = async (enabled: boolean): Promise<void> => {
+  const toggleSoundEffects = (enabled: boolean): Promise<void> => saveProfileFlag({ soundEffectsEnabled: enabled })
+
+  /** Correcteur de ce que tu as dit (étape 207) : relu à chaque phrase par le pipeline vocal, sans redémarrage. */
+  const toggleVoiceCorrection = (enabled: boolean): Promise<void> => saveProfileFlag({ voiceCorrectionEnabled: enabled })
+
+  const saveProfileFlag = async (change: Partial<Profile>): Promise<void> => {
     if (!profile) return
     setError(null)
-    const updated = { ...profile, soundEffectsEnabled: enabled }
+    const updated = { ...profile, ...change }
     setProfile(updated)
     try {
       await window.jaris.saveProfile(updated)
@@ -1011,6 +1016,13 @@ export default function OptionsMenu(): JSX.Element {
                   label="Bips d'interface"
                   checked={profile?.soundEffectsEnabled !== false}
                   onChange={(next) => void toggleSoundEffects(next)}
+                />
+              </SettingRow>
+              <SettingRow label="Corriger ce que je dis" description="Remet les mots mal compris avant que Jaris réponde.">
+                <Toggle
+                  label="Corriger ce que je dis"
+                  checked={profile?.voiceCorrectionEnabled !== false}
+                  onChange={(next) => void toggleVoiceCorrection(next)}
                 />
               </SettingRow>
               <SettingRow label="Tester le micro" description="Vérifie que Jaris capte bien ta voix.">

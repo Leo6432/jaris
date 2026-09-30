@@ -295,3 +295,18 @@ test('durée : une durée gardée d’une fois précédente est reprise ; une va
     assert.match(await page.textContent('.duration-picker .effort-picker__trigger'), /2 s/)
   }, FAKE_STORAGE + "window.__store['jaris.videoSeconds'] = '37';")
 })
+
+test('qualité (étape 207) : une grosse machine a trois crans, jusqu’à « Original »', options, async () => {
+  await withPage(
+    async (page) => {
+      await page.waitForSelector('.quality-picker .effort-picker__trigger')
+      await page.click('.quality-picker .effort-picker__trigger')
+      assert.equal(await page.locator('.quality-picker .effort-picker__step').count(), 3)
+      assert.match(await page.textContent('.quality-picker .effort-picker__scale'), /Q6\s*Original/)
+      await page.click('.quality-picker .effort-picker__step >> nth=2')
+      assert.match(await page.textContent('.quality-picker .effort-picker__current'), /Qualité Original/)
+      assert.match(await page.textContent('.quality-picker__download'), /Télécharger \(21,4 Go\)/)
+    },
+    "window.__status = { supported: true, capable: true, reason: null, qualities: [{ id: 'q6', label: 'Q6', installed: true, downloadLabel: '0 o' }, { id: 'q8', label: 'Q8', installed: false, downloadLabel: '11,5 Go' }, { id: 'original', label: 'Original', installed: false, downloadLabel: '21,4 Go' }] }"
+  )
+})

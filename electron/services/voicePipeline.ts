@@ -11,6 +11,9 @@ import { restoreReminders } from './reminders'
 import { getProfile } from './profileStore'
 import { getLiveGpuStatus } from './hardwareScan'
 import { checkGpuTempSafety } from './resourceMonitor'
+import { CORRECTION_SCHEMA, correctTranscript } from './transcriptCorrector'
+import { structuredChat } from './ollama'
+import { config } from '../config'
 
 /** Retour à idle après une erreur (pas d'audio en cours, donc pas besoin d'attendre une fin de lecture). */
 const ERROR_IDLE_DELAY_MS = 2500
@@ -289,14 +292,33 @@ export class VoicePipeline extends EventEmitter {
       let reply = ''
       let aborted = false
       let generatedImage: string | undefined
+      // Étape 207 : la phrase telle que Jaris va la traiter — corrigée si le correcteur est actif et a trouvé
+      // un mot mal compris, sinon exactement ce qui a été entendu.
+      let question = combined
       try {
         const profile = await getProfile()
+        if (profile?.voiceCorrectionEnabled !== false) {
+          const model = profile?.models?.flash ?? config.ollama.model
+          const corrected = await correctTranscript(
+            combined,
+            (system, user, signal) =>
+              structuredChat([{ role: 'system', content: system }, { role: 'user', content: user }], model, CORRECTION_SCHEMA, signal),
+            profile?.name ?? null,
+            controller.signal
+          )
+          if (corrected.changed) {
+            question = corrected.text
+            // L'écran montre la phrase corrigée, comme la dictée d'Apple remplace le mot mal compris.
+            this.emit('transcript', question)
+            console.info(`[correcteur] « ${combined} » → « ${question} »`)
+          }
+        }
         // Étape 47 : session partagée avec le mode Chat (conversationSession.ts), relue à chaque tour plutôt
         // que gardée dans une copie locale — un échange écrit dans l'autre canal juste avant est donc déjà
         // visible ici, sans avoir à redémarrer Jaris ni changer d'onglet dans un ordre précis.
         const history = await getSessionHistory()
         reply = await converse(
-          combined,
+          question,
           profile?.name ?? null,
           (message) => void this.announceReminder(message),
           (message) => this.emit('log', message),
@@ -339,14 +361,14 @@ export class VoicePipeline extends EventEmitter {
         continue
       }
 
-      pushSessionExchange(combined, reply)
+      pushSessionExchange(question, reply)
 
       // En arrière-plan, sans attendre : la mémoire longue durée s'enrichit toute seule à partir de la
       // conversation, sans compter sur le fait que l'utilisateur pense à dire "retiens que..." à chaque
       // fois. Ne retarde jamais la réponse déjà en train d'être dite (this.speak juste après).
-      void extractMemoryFromExchange(combined, reply, (message) => this.emit('log', message))
+      void extractMemoryFromExchange(question, reply, (message) => this.emit('log', message))
 
-      await this.speak(reply, combined, generatedImage)
+      await this.speak(reply, question, generatedImage)
       break
     }
 

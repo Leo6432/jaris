@@ -121,6 +121,11 @@ export interface Profile {
   /** Design sonore (étape 31) : absent/true par défaut, false pour couper les bips d'interface (Options → Voix). */
   soundEffectsEnabled?: boolean
   /**
+   * Étape 207 (Léo : « un correcteur un peu comme Apple ») : absent/true par défaut — la phrase dite est corrigée
+   * (mots mal compris) avant que Jaris y réponde (transcriptCorrector.ts). false = la transcription brute.
+   */
+  voiceCorrectionEnabled?: boolean
+  /**
    * Options → Activation (étape 81) : les 3 façons de déclencher l'écoute sont toutes activables/
    * désactivables indépendamment, absent/true par défaut pour chacune. `activationWakeWordEnabled` est
    * le seul des trois qui redémarre le pipeline vocal quand il change (voir setWakewordEnabled,
@@ -565,7 +570,7 @@ export interface GeneratedImageSummary {
 /** Mode Vidéo (étape 203) : mêmes informations que le mode Image, pour le modèle Wan 2.2. */
 /** Une qualité du modèle vidéo telle que l'écran la montre (étape 205). */
 export interface VideoQualityStatus {
-  id: 'q6' | 'q8'
+  id: 'q6' | 'q8' | 'original'
   label: string
   /** Téléchargée et prête. */
   installed: boolean

@@ -62,6 +62,9 @@ export interface VideoModelFile {
 
 const FASTWAN_REPO = 'https://huggingface.co/Green-Sky/FastWan2.2-TI2V-5B-FullAttn-GGUF/resolve/3e8fe5537b1200654868aa24ea8d0f4012fb3a1e'
 const UMT5_REPO = 'https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/b535255bee98c2b0a59ea7c0ae2dcd0c6657b3b7'
+/** Étape 207, cran « Original » : FastWan non compressé (bf16) et lecteur UMT5 non compressé (fp16). */
+const KIJAI_REPO = 'https://huggingface.co/Kijai/WanVideo_comfy/resolve/8260d429d19fd7a72304cad059160b95d843913f'
+const COMFY_WAN21_REPO = 'https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/123acf1cc74bccbb9bfff8ac1ee72edc08c2341d'
 
 /** Le décodeur n'existe qu'en version originale : le même pour toutes les qualités. */
 const VIDEO_VAE: VideoModelFile = {
@@ -118,6 +121,30 @@ export const VIDEO_QUALITY_FILES: Record<VideoQuality, { diffusion: VideoModelFi
       url: `${UMT5_REPO}/umt5-xxl-encoder-Q8_0.gguf`,
       bytes: 6_043_068_256,
       sha256: '2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc'
+    }
+  },
+  /**
+   * Sans compression (étape 207). Le FastWan bf16 de Kijai est la conversion d'où viennent les GGUF de Green-Sky
+   * (même nom) ; sa table des tenseurs, lue ici, est IDENTIQUE à celle du Wan 2.2 5B officiel de Comfy-Org que
+   * cite la doc de sd.cpp (825 tenseurs, mêmes noms, mêmes formes — seul bf16/fp16 change) : sd.cpp le lit.
+   * Le dépôt de Kijai n'affiche pas de licence ; le modèle converti est celui de FastVideo, sous Apache 2.0.
+   */
+  original: {
+    diffusion: {
+      role: 'diffusion',
+      fileName: 'Wan2_2-TI2V-5B-FastWanFullAttn_bf16.safetensors',
+      label: 'le modèle vidéo (FastWan 2.2 TI2V 5B, original)',
+      url: `${KIJAI_REPO}/FastWan/Wan2_2-TI2V-5B-FastWanFullAttn_bf16.safetensors`,
+      bytes: 9_999_659_744,
+      sha256: '5f464f043fab64d43e61d6ee162316a445209c066027c4d8082d265b74ecd328'
+    },
+    t5xxl: {
+      role: 't5xxl',
+      fileName: 'umt5_xxl_fp16.safetensors',
+      label: 'le lecteur de description (UMT5, original)',
+      url: `${COMFY_WAN21_REPO}/split_files/text_encoders/umt5_xxl_fp16.safetensors`,
+      bytes: 11_366_399_385,
+      sha256: '7b8850f1961e1cf8a77cca4c964a358d303f490833c6c087d0cff4b2f99db2af'
     }
   }
 }

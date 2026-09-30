@@ -146,7 +146,8 @@ function loadVideo({ vramGb = 8, ramGb = 32, platform = 'win32', holdEngine = fa
 }
 
 async function untilSpawned(t) {
-  for (let i = 0; !t.spawns.length && i < 1000; i++) await new Promise((r) => setImmediate(r))
+  // Attente en temps réel (5 s max), pas en tours de boucle : sous charge, 1000 tours passaient trop vite.
+  for (const end = Date.now() + 5000; !t.spawns.length && Date.now() < end; ) await new Promise((r) => setTimeout(r, 5))
   assert.ok(t.spawns.length, 'sd-cli aurait dû être lancé')
 }
 
@@ -162,12 +163,17 @@ test('qualités (étape 205) : seuls les crans que la machine peut faire tourner
   assert.deepEqual(q(12, 32), ['q6', 'q8'])
   assert.deepEqual(q(7.9, 31.8), ['q6'], 'une carte « 8 Go » en annonce parfois un peu moins')
   assert.deepEqual(q(12, 23.5), ['q6', 'q8'], 'une machine « 24 Go » en annonce un peu moins')
+  // Étape 207 : « Original » seulement pour les grosses machines (carte 16 Go ET 32 Go de RAM).
+  assert.deepEqual(q(16, 31.8), ['q6', 'q8', 'original'])
+  assert.deepEqual(q(24, 24), ['q6', 'q8'], 'grosse carte mais 24 Go de RAM : pas d’original (22,8 Go de fichiers)')
+  assert.deepEqual(q(12, 64), ['q6', 'q8'], 'beaucoup de RAM mais carte de 12 Go : pas d’original')
+  assert.equal(videoModel.videoQualityLabel('original'), 'Original')
   assert.match(videoModel.availableVideoQualities(null, 32).reason, /aucune carte graphique NVIDIA/)
   assert.match(videoModel.availableVideoQualities(6, 32).reason, /trop petite \(6 Go de VRAM, il en faut 8 ou plus\)/)
   assert.match(videoModel.availableVideoQualities(12, 16).reason, /pas assez de RAM \(16 Go, il en faut 24 ou plus\)/)
   assert.equal(videoModel.availableVideoQualities(4, 32).qualities.length, 0)
   assert.equal(videoModel.isVideoQuality('q8'), true)
-  for (const bad of ['Q8', 'q4', 'q5', 'original', '', null, 8]) assert.equal(videoModel.isVideoQuality(bad), false, String(bad))
+  for (const bad of ['Q8', 'q4', 'q5', 'Original', 'bf16', '', null, 8]) assert.equal(videoModel.isVideoQuality(bad), false, String(bad))
   // Dimensions exigées par Wan : multiples de 16, et 4n + 1 images.
   assert.equal(videoModel.VIDEO_WIDTH % 16, 0)
   assert.equal(videoModel.VIDEO_HEIGHT % 16, 0)
@@ -383,7 +389,10 @@ test('les fichiers figés sont ceux vérifiés sur Hugging Face (Apache 2.0, ré
     ['3e8fe5537b1200654868aa24ea8d0f4012fb3a1e', '416a87e30f2328dbefd7666ac90b395ead74f443748ff31c83483ac4ac6121cc'],
     ['3e8fe5537b1200654868aa24ea8d0f4012fb3a1e', 'b62f50ff87c4dfa2910c6883d45015e05b709366581698b302e259e7f25c9208'],
     ['b535255bee98c2b0a59ea7c0ae2dcd0c6657b3b7', '9209b4c77b34ad8cf3f06b04c6eaa27e7beeebb348a31f85e3b38a1d719b09ed'],
-    ['b535255bee98c2b0a59ea7c0ae2dcd0c6657b3b7', '2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc']
+    ['b535255bee98c2b0a59ea7c0ae2dcd0c6657b3b7', '2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc'],
+    // Étape 207 : cran « Original » (FastWan bf16 de Kijai, UMT5 fp16 de Comfy-Org).
+    ['8260d429d19fd7a72304cad059160b95d843913f', '5f464f043fab64d43e61d6ee162316a445209c066027c4d8082d265b74ecd328'],
+    ['123acf1cc74bccbb9bfff8ac1ee72edc08c2341d', '7b8850f1961e1cf8a77cca4c964a358d303f490833c6c087d0cff4b2f99db2af']
   ]) {
     assert.ok(source.includes(rev), rev)
     assert.ok(source.includes(hash), hash)
@@ -402,5 +411,30 @@ test('les fichiers de l’ancien Wan 2.2 de base sont effacés, et SEULEMENT eux
   assert.deepEqual(readdirSync(dir).sort(), kept.sort(), 'les fichiers FastWan installés et tout le reste sont intacts')
   assert.equal(await t.video.isVideoQualityInstalled('q6'), true)
   assert.deepEqual(await t.video.removeObsoleteVideoFiles(), [], 'rien à refaire au démarrage suivant')
+  t.cleanup()
+})
+
+test('Original (grosse machine) : ses deux fichiers non compressés, le décodeur commun, et la commande les utilise', async () => {
+  const t = await installed({ vramGb: 24, ramGb: 64 })
+  const before = t.downloads.length
+  await t.video.installVideoModel('original')
+  const fetched = t.downloads.slice(before)
+  assert.equal(fetched.length, 2)
+  assert.ok(fetched.some((u) => u.endsWith('Wan2_2-TI2V-5B-FastWanFullAttn_bf16.safetensors')))
+  assert.ok(fetched.some((u) => u.endsWith('umt5_xxl_fp16.safetensors')))
+  await t.video.generateVideo('a cat', () => {}, undefined, undefined, 2, 'original')
+  const { args } = t.spawns[0]
+  assert.match(args[args.indexOf('--diffusion-model') + 1], /FastWanFullAttn_bf16\.safetensors$/)
+  assert.match(args[args.indexOf('--t5xxl') + 1], /umt5_xxl_fp16\.safetensors$/)
+  const status = await t.video.getVideoStudioStatus()
+  assert.deepEqual(status.qualities.map((q) => q.label), ['Q6', 'Q8', 'Original'])
+  t.cleanup()
+})
+
+test('Original refusé sur la machine de Léo (8 Go de carte), avant tout téléchargement', async () => {
+  const t = await installed()
+  const before = t.downloads.length
+  await assert.rejects(t.video.installVideoModel('original'), /qualité Original demande une carte graphique de 16 Go et 32 Go de RAM/)
+  assert.equal(t.downloads.length, before)
   t.cleanup()
 })

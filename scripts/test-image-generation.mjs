@@ -247,7 +247,9 @@ test('une seule image à la fois, et un arrêt demandé tue vraiment sd-cli', as
   const t = await installed({ holdEngine: true })
   const controller = new AbortController()
   const first = t.gen.generateImage('cat', () => {}, controller.signal)
-  for (let i = 0; !t.gen.lastSpawn && i < 1000; i++) await new Promise((r) => setImmediate(r))
+  // Attente en temps réel (5 s max), pas en tours de boucle : sous charge (suite complète), 1000 tours
+  // s'écoulaient avant la fin des lectures disque et le test échouait sans aucun défaut du code.
+  for (const end = Date.now() + 5000; !t.gen.lastSpawn && Date.now() < end; ) await new Promise((r) => setTimeout(r, 5))
   assert.ok(t.gen.lastSpawn, 'sd-cli aurait dû être lancé')
   await assert.rejects(t.gen.generateImage('dog'), /déjà en train de dessiner/)
   controller.abort()

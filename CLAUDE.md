@@ -5637,3 +5637,41 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   (moins d'étapes, sans CFG) avant d'optimiser le moteur — le nombre de passages domine tout le reste.**
   Régression : `scripts/test-video-generation.mjs` (commande FastWan, crans Q6/Q8, anciens fichiers effacés et
   seulement eux, empreintes figées) et `scripts/test-video-panel-ui.mjs`.
+
+- **Correcteur de ce que Léo dit, « un peu comme Apple » (étape 207).** Question à choix d'abord (le mot
+  « correcteur » pouvait désigner 4 choses : correction silencieuse, texte à corriger soi-même, isolation de la
+  voix, orthographe du Chat) — Léo a choisi « corriger ce que j'ai dit », tout seul, avant la réponse.
+  `transcriptCorrector.ts` : une passe par le modèle du palier Rapide, sortie STRUCTURÉE (schéma JSON à un seul
+  champ, `structuredChat` dans ollama.ts, température 0, sans réflexion), puis trois verrous — la correction
+  doit rester très proche de l'original (`acceptCorrection` : distance d'édition ≤ 30 %, au plus un mot de
+  plus ou de moins), délai de 6 s, et au moindre échec la phrase ENTENDUE est gardée. Une annulation (nouvelle
+  phrase captée pendant la réflexion) remonte comme pour la réflexion elle-même. Réglage Options → Voix
+  « Corriger ce que je dis » (actif par défaut), relu à chaque phrase.
+  **Mesuré avec de vrais modèles dans Ollama, pas supposé** — et en évitant un biais repéré à la première
+  mesure : 3 des 10 phrases testées étaient aussi les EXEMPLES écrits dans la consigne, que le modèle pouvait
+  recopier ; refait sur 10 phrases jamais vues. ministral-3:3b : 10/10 (« spotifaille » → Spotify, « ouatsap »
+  → WhatsApp, « Jariste » → Jaris), jamais de réponse à la place de la phrase, négations gardées. qwen3.5:0.8b
+  (le plus petit Rapide) : 8/10, jamais de réponse, mais il a tourné « envoie » en « envoyez » et abîmé
+  « Squeezie » — règle ajoutée (garder le tutoiement, ne pas toucher un nom propre bien écrit). ~1,5 à 2,5 s
+  par phrase sur le processeur d'ici ; sur la carte de Léo, non mesuré. **Leçon générale : quand on évalue une
+  consigne à exemples, ne jamais tester sur les exemples eux-mêmes — un résultat parfait peut n'être qu'une
+  recopie.**
+  **Piège trouvé par les tests** : `AbortSignal.timeout` ne retient pas la boucle d'évènements de Node — un
+  délai pouvait ne jamais se déclencher si rien d'autre ne tournait (4 tests annulés, « Promise resolution is
+  still pending »). Remplacé par un vrai `setTimeout` relié à un AbortController.
+  **Vidéo, cran « Original »** (Léo : « Q6 … jusqu'à l'original, comme l'effort ») : FastWan bf16 (10,0 Go,
+  dépôt Kijai — la conversion d'où viennent les GGUF de Green-Sky) + lecteur UMT5 fp16 (11,4 Go, Comfy-Org,
+  Apache 2.0). Lisibilité par sd.cpp vérifiée sans tout télécharger : la table des tenseurs (en-tête
+  safetensors, lu par requête HTTP Range) est IDENTIQUE à celle du Wan 2.2 5B officiel cité par la doc de sd.cpp
+  (825 tenseurs, mêmes noms, mêmes formes, seul bf16/fp16 change). Seuils déduits : carte de 16 Go, 32 Go de
+  RAM. Pas de Q4 : il ne servirait qu'aux cartes de moins de 8 Go, sous le plancher. Non exécuté ici (22,8 Go
+  de fichiers, plus que la RAM de ce conteneur).
+  **Test rendu fiable au passage** : deux tests attendaient le lancement de sd-cli en comptant 1000 tours de
+  boucle — sous la charge de la suite complète, ça passait avant la fin des lectures disque (échec sans défaut du
+  code, réussi 3 fois sur 3 seul). Attente remplacée par une durée réelle (5 s max).
+  **Piège de manipulation, deux fois dans cette session** : `pkill -f "motif"` tue aussi le shell dont la ligne
+  de commande contient ce motif — la commande entière s'arrête (code 144) au milieu. Tuer par PID, ou choisir un
+  motif absent de sa propre commande.
+  Régression : `scripts/test-transcript-corrector.mjs` (verrous : réponse, reformulation, ajout refusés ;
+  délai, panne, JSON illisible → phrase entendue ; annulation qui remonte ; pipeline qui répond à la phrase
+  corrigée) et `scripts/test-video-generation.mjs` / `test-video-panel-ui.mjs` (cran Original).
