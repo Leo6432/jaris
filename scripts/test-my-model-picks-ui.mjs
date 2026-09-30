@@ -108,9 +108,9 @@ test('chaque rôle affiche son modèle, sa vitesse et son Intelligence (avec lib
       trs.map((tr) => [...tr.querySelectorAll('td')].slice(0, 4).map((td) => td.textContent?.trim()))
     )
     assert.deepEqual(JSON.parse(JSON.stringify(rows)), [
-      ['Rapide', 'G9v3-3B', '—', 'Intelligence 11'],
-      ['Médium', 'qwen3.5:4b', '19 tok/s', 'Intelligence 13'],
-      ['Puissant', 'qwen3.8:27b', '47 tok/s', 'Intelligence 34'],
+      ['Faible', 'G9v3-3B', '—', 'Intelligence 11'],
+      ['Moyen', 'qwen3.5:4b', '19 tok/s', 'Intelligence 13'],
+      ['Élevé', 'qwen3.8:27b', '47 tok/s', 'Intelligence 34'],
       ['Vision', 'qwen3-vl:4b', '109 tok/s', 'Intelligence 6'],
       ['Code', 'qwen2.5-coder:14b', '—', '—']
     ])

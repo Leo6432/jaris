@@ -358,8 +358,8 @@ test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste d
     )
     assert.equal(rows.length, 3, `3 modèles attendus : ${rows.length}`)
     // La catégorie reste visible comme repère (Léo : « pour que les utilisateurs voient quel modèle est rapide »).
-    assert.equal(rows[0][1], 'Rapide · lit les images', `catégorie affichée : ${rows[0][1]}`)
-    assert.equal(rows[2][1], 'Puissant · lit les images', `catégorie affichée : ${rows[2][1]}`)
+    assert.equal(rows[0][1], 'Faible · lit les images', `catégorie affichée : ${rows[0][1]}`)
+    assert.equal(rows[2][1], 'Élevé · lit les images', `catégorie affichée : ${rows[2][1]}`)
     // ministral-3:3b : utilisé pour deux rôles, VRAM et Intelligence Index officiel (5).
     assert.equal(rows[0][2], 'Oui — Rapide, Médium', `rôles actifs attendus : ${rows[0][2]}`)
     assert.ok(rows[0][3].includes('3'), `VRAM du premier modèle : ${rows[0][3]}`)

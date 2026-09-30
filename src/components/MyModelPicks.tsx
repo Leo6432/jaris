@@ -12,9 +12,9 @@ interface MyModelPicksProps {
 }
 
 const ROLES: { key: 'flash' | 'medium' | 'large' | 'vision' | 'code'; label: string }[] = [
-  { key: 'flash', label: 'Rapide' },
-  { key: 'medium', label: 'Médium' },
-  { key: 'large', label: 'Puissant' },
+  { key: 'flash', label: 'Faible' },
+  { key: 'medium', label: 'Moyen' },
+  { key: 'large', label: 'Élevé' },
   { key: 'vision', label: 'Vision' },
   { key: 'code', label: 'Code' }
 ]
@@ -189,8 +189,8 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
       )}
       <p className="capacity-scan__tier-legend">
         Pour chaque rôle, Jaris cherche dans tous ses modèles, parmi les plus fiables en appel d'outils qui
-        tiennent dans ta machine : Rapide prend le plus intelligent parmi les plus rapides, Médium le plus intelligent qui tient sur ta
-        carte graphique, Puissant et Code le plus intelligent même s'il déborde sur la RAM, Vision le plus
+        tiennent dans ta machine : Faible prend le plus intelligent parmi les plus rapides, Moyen le plus intelligent qui tient sur ta
+        carte graphique, Élevé et Code le plus intelligent même s'il déborde sur la RAM, Vision le plus
         intelligent qui lit les images, Image le seul modèle de dessin s'il tient sur ta machine. Vitesse et Intelligence : mesures publiées par Artificial
         Analysis, identiques pour tout le monde — elles comparent les modèles entre eux, pas la vitesse sur ta
         machine.

@@ -990,9 +990,9 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
     labels.push(label)
     usageByModel.set(model, labels)
   }
-  addUsage(activeModels.flash, 'Rapide')
-  addUsage(activeModels.medium, 'Médium')
-  addUsage(activeModels.large, 'Puissant')
+  addUsage(activeModels.flash, 'Faible')
+  addUsage(activeModels.medium, 'Moyen')
+  addUsage(activeModels.large, 'Élevé')
   addUsage(activeModels.vision, 'Vision')
   addUsage(activeModels.code, 'Code')
 

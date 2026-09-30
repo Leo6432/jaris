@@ -173,7 +173,7 @@ test('indique tous les paliers qui utilisent réellement chaque modèle du profi
   // Étape 160 : une seule liste, donc une seule ligne par modèle, qui porte tous ses rôles à la fois.
   const qwen4bEntries = overview.entries.filter((entry) => entry.model === 'qwen3.5:4b')
   assert.equal(qwen4bEntries.length, 1, 'chaque modèle apparaît une seule fois dans la liste unique')
-  assert.deepEqual(Array.from(qwen4bEntries[0].usedIn), ['Médium', 'Vision'])
+  assert.deepEqual(Array.from(qwen4bEntries[0].usedIn), ['Moyen', 'Vision'])
 
   const unused = overview.entries.find((entry) => entry.model === 'qwen3.5:2b')
   assert.deepEqual(Array.from(unused.usedIn), [])

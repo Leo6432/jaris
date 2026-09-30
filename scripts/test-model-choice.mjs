@@ -59,7 +59,7 @@ test('le sélecteur expose les cinq rôles sans utiliser les noms comme choix', 
   const voice = buildModelChoiceInfo(profile, 'voice', installed)
   assert.equal(voice.autoModel, null)
   assert.equal(voice.selected, 'role:medium')
-  assert.deepEqual(Array.from(voice.roles, (role) => role.label), ['Rapide', 'Médium', 'Puissant'], 'ni Vision (étape 198) ni Code (étape 201) pour discuter')
+  assert.deepEqual(Array.from(voice.roles, (role) => role.label), ['Faible', 'Moyen', 'Élevé'], 'ni Vision (étape 198) ni Code (étape 201) pour discuter')
   assert.deepEqual(Array.from(code.roles), [], 'en Code, aucun choix : toujours le modèle Code (étape 201)')
   assert.ok(!voice.installed.includes('nomic-embed-text:latest'))
 })

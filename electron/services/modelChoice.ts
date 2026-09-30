@@ -21,9 +21,9 @@ export const MODEL_CHOICE_MODES: readonly ModelChoiceMode[] = ['chat', 'code', '
 // du profil (comme le mode Image avec son modèle de dessin). Un ancien choix enregistré hors de cette liste
 // (« role:code » en Chat, n'importe quoi en Code) retombe sur Auto.
 const CONVERSATION_ROLES = [
-  { key: 'flash', label: 'Rapide' },
-  { key: 'medium', label: 'Médium' },
-  { key: 'large', label: 'Puissant' }
+  { key: 'flash', label: 'Faible' },
+  { key: 'medium', label: 'Moyen' },
+  { key: 'large', label: 'Élevé' }
 ] as const
 
 const ROLES_BY_MODE: Record<ModelChoiceMode, ReadonlyArray<{ key: string; label: string }>> = {

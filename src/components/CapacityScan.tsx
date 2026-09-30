@@ -86,9 +86,9 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
               {result.vramGb !== null ? ` (${result.vramGb} Go de VRAM)` : ''}
             </p>
             <ul className="capacity-scan__models">
-              <li>Rapide : {formatModelName(result.models.flash)}</li>
-              <li>Médium : {formatModelName(result.models.medium)}</li>
-              <li>Puissant : {formatModelName(result.models.large)}</li>
+              <li>Faible : {formatModelName(result.models.flash)}</li>
+              <li>Moyen : {formatModelName(result.models.medium)}</li>
+              <li>Élevé : {formatModelName(result.models.large)}</li>
               <li>Vision : {formatModelName(result.visionModel)}</li>
               {result.image && <li>Image : {result.image.model ?? 'aucun modèle (pas assez de puissance)'}</li>}
             </ul>

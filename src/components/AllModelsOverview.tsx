@@ -1,8 +1,14 @@
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { ModelOverviewEntry, ModelOverviewResult } from '../../shared/ipc'
+import type { ModelCategory, ModelOverviewEntry, ModelOverviewResult } from '../../shared/ipc'
 import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge } from './OptionsMenu'
+
+/**
+ * Étape 210 : mêmes mots que le choix du modèle dans le Chat et le Vocal (Faible · Moyen · Élevé). La catégorie
+ * interne (hardwareScan.ts) garde ses valeurs : seul l'affichage change.
+ */
+const CATEGORY_LABELS: Record<ModelCategory, string> = { Rapide: 'Faible', Moyen: 'Moyen', Puissant: 'Élevé' }
 
 /**
  * Léo : "dans model ajoute un bouton en dessous de tout les palier, tout les model et met tout les model
@@ -207,8 +213,8 @@ export default function AllModelsOverview(): JSX.Element {
                     <h3>Tous les modèles candidats</h3>
                     <p>
                       Tous les modèles que Jaris connaît, dans une seule liste. Pour chaque rôle, Jaris cherche
-                      dans toute la liste : le plus intelligent parmi les plus rapides pour Rapide, le plus intelligent qui tient sur ta carte
-                      pour Médium, le plus intelligent tout court pour Puissant et Code. La catégorie sert
+                      dans toute la liste : le plus intelligent parmi les plus rapides pour Faible, le plus intelligent qui tient sur ta carte
+                      pour Moyen, le plus intelligent tout court pour Élevé et Code. La catégorie sert
                       seulement à repérer les modèles rapides ou puissants.
                     </p>
                   </div>
@@ -248,7 +254,7 @@ export default function AllModelsOverview(): JSX.Element {
                                   {formatModelName(entry.model)}
                                 </td>
                                 <td>
-                                  {entry.category ?? '—'}
+                                  {entry.category ? CATEGORY_LABELS[entry.category] : '—'}
                                   {entry.readsImages ? ' · lit les images' : ''}
                                 </td>
                                 <td>{entry.usedIn?.length ? `Oui — ${entry.usedIn.join(', ')}` : 'Non'}</td>

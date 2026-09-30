@@ -5686,3 +5686,11 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   (`thinkOptions`, oubliés au premier passage, repérés par les tests). Seul l'affichage change : la valeur
   envoyée à Ollama reste « medium », « xhigh »… Un niveau inconnu garde son nom, jamais deviné.
   Régression : `scripts/test-effort.mjs`, `test-model-picker-ui.mjs`, `test-video-generation.mjs`.
+  **Suite (Léo : « dans chat et vocal je vois encore Rapide etc. »)** : les rôles de modèle de conversation
+  Rapide · Médium · Puissant deviennent Faible · Moyen · Élevé partout où ils s'AFFICHENT — sélecteur Chat/Vocal
+  (`modelChoice.ts`), Options → Modèles (`MyModelPicks`, `CapacityScan`, liste « Tous les modèles » : colonne
+  catégorie et « utilisé en »). Les valeurs internes (clés flash/medium/large, catégorie `ModelCategory` de
+  hardwareScan.ts) ne changent pas : un choix enregistré reste valable. Premier passage trop étroit (seulement le
+  sélecteur) : c'est la recherche des mêmes mots dans tout `src/` qui a trouvé les 4 autres écrans. **Leçon
+  générale : un renommage demandé pour un écran vaut pour TOUS les endroits qui montrent la même chose — chercher
+  le mot partout avant de livrer, sinon l'utilisateur voit deux noms pour le même modèle.**
