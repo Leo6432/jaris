@@ -57,7 +57,7 @@ import { deleteGeneratedApp, generateApp, getGeneratedAppsDir, listGeneratedApps
 import { createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
 import { previewVoice } from './services/tts'
 import { ttsClient } from './services/ttsClient'
-import { createTrayIcon } from './services/trayIcon'
+import { createAppIcon, createTrayIcon } from './services/trayIcon'
 import { VoicePipeline } from './services/voicePipeline'
 import { listAudioInputDevices } from './services/voiceClient'
 import { ensureMemoryDir, getMemoryDir, getMemoryGraph, recallNote } from './services/memoryStore'
@@ -334,6 +334,7 @@ function loadRenderer(win: BrowserWindow, mode: 'full' | 'widget'): void {
  */
 function createFullWindow(showWhenReady = true): BrowserWindow {
   const win = new BrowserWindow({
+    icon: createAppIcon(),
     width: 1000,
     height: 760,
     minWidth: 480,
@@ -429,6 +430,7 @@ function createWidgetWindow(): BrowserWindow {
   // Position définitive posée juste avant l'affichage par positionWidgetWindow() (recalculée à chaque
   // fois, pas figée ici) : la valeur de départ n'a pas d'importance tant que la fenêtre reste cachée.
   const win = new BrowserWindow({
+    icon: createAppIcon(),
     width: WIDGET_WIDTH,
     height: WIDGET_HEIGHT,
     frame: false,
