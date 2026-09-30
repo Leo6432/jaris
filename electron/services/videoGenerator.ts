@@ -86,16 +86,34 @@ const VIDEO_VAE: VideoModelFile = {
  * GGUF de Green-Sky (contributeur de sd.cpp), publiés en Q6 et Q8 seulement. Lecteur de description : mêmes
  * dépôt et révision que l'étape 205. Tailles et SHA-256 lues sur l'API Hugging Face, recalculées au téléchargement.
  */
+const FASTWAN_Q6: VideoModelFile = {
+  role: 'diffusion',
+  fileName: 'FastWan2.2-TI2V-5B-q6_k.gguf',
+  label: 'le modèle vidéo (FastWan 2.2 TI2V 5B, Q6)',
+  url: `${FASTWAN_REPO}/FastWan2.2-TI2V-5B-q6_k.gguf`,
+  bytes: 4_210_247_200,
+  sha256: '416a87e30f2328dbefd7666ac90b395ead74f443748ff31c83483ac4ac6121cc'
+}
+
 export const VIDEO_QUALITY_FILES: Record<VideoQuality, { diffusion: VideoModelFile; t5xxl: VideoModelFile }> = {
+  /**
+   * Étape 209 : pour les PC à 16 Go de RAM. Même modèle vidéo que Q6 (fichier partagé, jamais téléchargé deux
+   * fois), lecteur de description en Q4 — mêmes dépôt, révision et empreinte qu'à l'étape 203, recalculées ici
+   * sur un vrai téléchargement.
+   */
+  light: {
+    diffusion: FASTWAN_Q6,
+    t5xxl: {
+      role: 't5xxl',
+      fileName: 'umt5-xxl-encoder-Q4_K_M.gguf',
+      label: 'le lecteur de description (UMT5, Q4)',
+      url: `${UMT5_REPO}/umt5-xxl-encoder-Q4_K_M.gguf`,
+      bytes: 3_655_145_312,
+      sha256: '17cf97a5bbbc60a646d6105b832b6f657ce904a8a1ad970e4b59df0c67584a40'
+    }
+  },
   q6: {
-    diffusion: {
-      role: 'diffusion',
-      fileName: 'FastWan2.2-TI2V-5B-q6_k.gguf',
-      label: 'le modèle vidéo (FastWan 2.2 TI2V 5B, Q6)',
-      url: `${FASTWAN_REPO}/FastWan2.2-TI2V-5B-q6_k.gguf`,
-      bytes: 4_210_247_200,
-      sha256: '416a87e30f2328dbefd7666ac90b395ead74f443748ff31c83483ac4ac6121cc'
-    },
+    diffusion: FASTWAN_Q6,
     t5xxl: {
       role: 't5xxl',
       fileName: 'umt5-xxl-encoder-Q6_K.gguf',
@@ -156,8 +174,9 @@ export const VIDEO_QUALITY_FILES: Record<VideoQuality, { diffusion: VideoModelFi
 export const OBSOLETE_VIDEO_FILES = [
   'Wan2.2-TI2V-5B-Q4_K_M.gguf',
   'Wan2.2-TI2V-5B-Q6_K.gguf',
-  'Wan2.2-TI2V-5B-Q8_0.gguf',
-  'umt5-xxl-encoder-Q4_K_M.gguf'
+  'Wan2.2-TI2V-5B-Q8_0.gguf'
+  // « umt5-xxl-encoder-Q4_K_M.gguf » n'est PLUS obsolète depuis l'étape 209 : le cran Léger s'en sert. Le laisser
+  // ici effacerait au démarrage un fichier utilisé (et forcerait à le retélécharger à chaque lancement).
 ]
 
 export async function removeObsoleteVideoFiles(): Promise<string[]> {
@@ -178,7 +197,9 @@ export function videoFilesFor(quality: VideoQuality): VideoModelFile[] {
 }
 
 /** Tous les fichiers possibles, sans doublon (le décodeur une seule fois). */
-export const VIDEO_MODEL_FILES: VideoModelFile[] = [VIDEO_VAE, ...Object.values(VIDEO_QUALITY_FILES).flatMap((q) => [q.diffusion, q.t5xxl])]
+export const VIDEO_MODEL_FILES: VideoModelFile[] = [
+  ...new Set([VIDEO_VAE, ...Object.values(VIDEO_QUALITY_FILES).flatMap((q) => [q.diffusion, q.t5xxl])])
+]
 
 export function videoModelsDir(): string {
   return join(imageEngineRoot(), 'models', 'video')

@@ -52,7 +52,7 @@ export function videoFramesFor(seconds: VideoSeconds): number {
  * Étape 207 : un cran « Original » (sans compression, 22,8 Go) pour les grosses machines — pas de Q4, qui ne
  * servirait qu'aux cartes de moins de 8 Go, sous le plancher.
  */
-export type VideoQuality = 'q6' | 'q8' | 'original'
+export type VideoQuality = 'light' | 'q6' | 'q8' | 'original'
 
 export interface VideoQualityLevel {
   id: VideoQuality
@@ -66,6 +66,10 @@ export interface VideoQualityLevel {
 }
 
 export const VIDEO_QUALITIES: VideoQualityLevel[] = [
+  // Étape 209 (Léo, PC d'un ami avec 16 Go de RAM : Q6 refusé faute de RAM) : le MÊME modèle vidéo que Q6, mais
+  // le lecteur de description en Q4 (3,7 Go au lieu de 4,7) — 9,3 Go de fichiers, ~14,3 Go de RAM avec Windows
+  // et Jaris : tient dans 16 Go. Le lecteur ne sert qu'une fois par vidéo, à lire la description.
+  { id: 'light', label: 'Léger', minVramGb: 7.5, minRamGb: 15, vramLabel: 8, ramLabel: 16 },
   { id: 'q6', label: 'Q6', minVramGb: 7.5, minRamGb: 23, vramLabel: 8, ramLabel: 24 },
   { id: 'q8', label: 'Q8', minVramGb: 9.5, minRamGb: 23, vramLabel: 10, ramLabel: 24 },
   // Étape 207 (Léo : « jusqu'à l'original, comme l'effort ») : sans compression. Modèle 10 Go + ~2,5 Go de calcul

@@ -159,18 +159,20 @@ async function installed(opts) {
 
 test('qualités (étape 205) : seuls les crans que la machine peut faire tourner, sinon une raison lisible', () => {
   const q = (vram, ram) => [...videoModel.availableVideoQualities(vram, ram).qualities]
-  assert.deepEqual(q(8, 32), ['q6'], 'RTX 3070 + 32 Go : Q8 laisse trop peu de marge sur 8 Go')
-  assert.deepEqual(q(12, 32), ['q6', 'q8'])
-  assert.deepEqual(q(7.9, 31.8), ['q6'], 'une carte « 8 Go » en annonce parfois un peu moins')
-  assert.deepEqual(q(12, 23.5), ['q6', 'q8'], 'une machine « 24 Go » en annonce un peu moins')
+  assert.deepEqual(q(8, 32), ['light', 'q6'], 'RTX 3070 + 32 Go : Q8 laisse trop peu de marge sur 8 Go')
+  assert.deepEqual(q(12, 32), ['light', 'q6', 'q8'])
+  assert.deepEqual(q(7.9, 31.8), ['light', 'q6'], 'une carte « 8 Go » en annonce parfois un peu moins')
+  assert.deepEqual(q(12, 23.5), ['light', 'q6', 'q8'], 'une machine « 24 Go » en annonce un peu moins')
   // Étape 207 : « Original » seulement pour les grosses machines (carte 16 Go ET 32 Go de RAM).
-  assert.deepEqual(q(16, 31.8), ['q6', 'q8', 'original'])
-  assert.deepEqual(q(24, 24), ['q6', 'q8'], 'grosse carte mais 24 Go de RAM : pas d’original (22,8 Go de fichiers)')
-  assert.deepEqual(q(12, 64), ['q6', 'q8'], 'beaucoup de RAM mais carte de 12 Go : pas d’original')
+  assert.deepEqual(q(16, 31.8), ['light', 'q6', 'q8', 'original'])
+  assert.deepEqual(q(24, 24), ['light', 'q6', 'q8'], 'grosse carte mais 24 Go de RAM : pas d’original (22,8 Go de fichiers)')
+  assert.deepEqual(q(12, 64), ['light', 'q6', 'q8'], 'beaucoup de RAM mais carte de 12 Go : pas d’original')
   assert.equal(videoModel.videoQualityLabel('original'), 'Original')
   assert.match(videoModel.availableVideoQualities(null, 32).reason, /aucune carte graphique détectée/)
   assert.match(videoModel.availableVideoQualities(6, 32).reason, /trop petite \(6 Go de VRAM, il en faut 8 ou plus\)/)
-  assert.match(videoModel.availableVideoQualities(12, 16).reason, /pas assez de RAM \(16 Go, il en faut 24 ou plus\)/)
+  // Étape 209 : l'AMD 8 Go + 16 Go de RAM de l'ami de Léo a maintenant le cran Léger (et seulement lui).
+  assert.deepEqual(q(8, 15.8), ['light'])
+  assert.match(videoModel.availableVideoQualities(12, 8).reason, /pas assez de RAM \(8 Go, il en faut 16 ou plus\)/)
   assert.equal(videoModel.availableVideoQualities(4, 32).qualities.length, 0)
   assert.equal(videoModel.isVideoQuality('q8'), true)
   for (const bad of ['Q8', 'q4', 'q5', 'Original', 'bf16', '', null, 8]) assert.equal(videoModel.isVideoQuality(bad), false, String(bad))
@@ -225,7 +227,7 @@ test('le moteur déjà installé pour les images n’est jamais retéléchargé 
   await t.video.installVideoModel()
   assert.equal(t.downloads.length - before, 3, 'seulement les trois fichiers vidéo')
   const status = await t.video.getVideoStudioStatus()
-  assert.deepEqual(status.qualities.map((q) => [q.id, q.installed]), [['q6', true]], '8 Go de carte : Q6 seulement')
+  assert.deepEqual(status.qualities.map((q) => [q.id, q.installed]), [['light', false], ['q6', true]], '8 Go de carte : Léger et Q6')
   t.cleanup()
 })
 
@@ -427,7 +429,7 @@ test('Original (grosse machine) : ses deux fichiers non compressés, le décodeu
   assert.match(args[args.indexOf('--diffusion-model') + 1], /FastWanFullAttn_bf16\.safetensors$/)
   assert.match(args[args.indexOf('--t5xxl') + 1], /umt5_xxl_fp16\.safetensors$/)
   const status = await t.video.getVideoStudioStatus()
-  assert.deepEqual(status.qualities.map((q) => q.label), ['Q6', 'Q8', 'Original'])
+  assert.deepEqual(status.qualities.map((q) => q.label), ['Léger', 'Q6', 'Q8', 'Original'])
   t.cleanup()
 })
 
@@ -436,5 +438,40 @@ test('Original refusé sur la machine de Léo (8 Go de carte), avant tout télé
   const before = t.downloads.length
   await assert.rejects(t.video.installVideoModel('original'), /qualité Original demande une carte graphique de 16 Go et 32 Go de RAM/)
   assert.equal(t.downloads.length, before)
+  t.cleanup()
+})
+
+test('Léger (étape 209) : même modèle vidéo que Q6, lecteur Q4 — après Q6, seul le lecteur se télécharge', async () => {
+  const t = await installed({ ramGb: 32 })
+  const before = t.downloads.length
+  await t.video.installVideoModel('light')
+  const fetched = t.downloads.slice(before)
+  assert.deepEqual(fetched.map((u) => u.split('/').pop()), ['umt5-xxl-encoder-Q4_K_M.gguf'], 'le modèle vidéo Q6 est partagé')
+  await t.video.generateVideo('a cat', () => {}, undefined, undefined, 2, 'light')
+  const { args } = t.spawns[0]
+  assert.match(args[args.indexOf('--diffusion-model') + 1], /FastWan2\.2-TI2V-5B-q6_k\.gguf$/)
+  assert.match(args[args.indexOf('--t5xxl') + 1], /umt5-xxl-encoder-Q4_K_M\.gguf$/)
+  t.cleanup()
+})
+
+test('PC à 16 Go de RAM : Léger proposé, Q6 refusé avec la vraie raison', async () => {
+  const t = loadVideo({ ramGb: 15.8 })
+  const status = await t.video.getVideoStudioStatus()
+  assert.equal(status.capable, true)
+  assert.deepEqual(status.qualities.map((q) => q.id), ['light'])
+  await assert.rejects(t.video.installVideoModel('q6'), /qualité Q6 demande une carte graphique de 8 Go et 24 Go de RAM/)
+  await t.video.installVideoModel('light')
+  assert.equal(await t.video.isVideoQualityInstalled('light'), true)
+  t.cleanup()
+})
+
+test('le lecteur Q4 du cran Léger n’est JAMAIS effacé au démarrage comme un ancien fichier', async () => {
+  const t = await installed({ ramGb: 32 })
+  await t.video.installVideoModel('light')
+  assert.equal(t.video.OBSOLETE_VIDEO_FILES.includes('umt5-xxl-encoder-Q4_K_M.gguf'), false)
+  await t.video.removeObsoleteVideoFiles()
+  assert.equal(await t.video.isVideoQualityInstalled('light'), true, 'toujours installé après le nettoyage')
+  // Aucun fichier d'une qualité actuelle ne doit figurer parmi les « anciens ».
+  for (const file of t.video.VIDEO_MODEL_FILES) assert.equal(t.video.OBSOLETE_VIDEO_FILES.includes(file.fileName), false, file.fileName)
   t.cleanup()
 })

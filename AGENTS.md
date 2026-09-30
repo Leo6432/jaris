@@ -5659,3 +5659,20 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   **Leçon générale : un outil propre à un fabricant (nvidia-smi) ne dit rien de l'ABSENCE de matériel — son
   échec veut dire « pas une carte de CE fabricant », jamais « pas de carte ».**
   Régression : `node --test scripts/test-gpu-detection.mjs`.
+
+- **Cran vidéo « Léger » pour les PC à 16 Go de RAM (Léo, étape 209, suite du PC AMD de son ami).** Une fois la
+  carte AMD détectée (étape 208), la vidéo restait refusée chez cet ami, à juste titre : sd.cpp charge les trois
+  fichiers en RAM, Q6 en fait 10,3 Go, soit ~15,3 Go avec Windows et Jaris sur 16 Go. Tableau montré à Léo, choix
+  fait par lui : le MÊME modèle vidéo que Q6 (FastWan Q6, fichier partagé, jamais téléchargé deux fois) avec le
+  lecteur de description en Q4 (3,7 Go au lieu de 4,7) → 9,3 Go de fichiers, ~14,3 Go de RAM. Le lecteur ne
+  travaille qu'une fois par vidéo ; la perte de qualité n'a pas été mesurée. Écarté : convertir FastWan en Q4 sur
+  le PC (il aurait fallu télécharger le Q8 puis le convertir).
+  **Piège évité avant de coder, pas après** : `umt5-xxl-encoder-Q4_K_M.gguf` figurait dans OBSOLETE_VIDEO_FILES
+  depuis l'étape 206 (fichiers de l'ancien Wan de base, effacés au démarrage). En le réutilisant sans le retirer
+  de cette liste, Jaris l'aurait effacé à CHAQUE démarrage et retéléchargé à chaque usage. Retiré, et un test
+  vérifie désormais qu'aucun fichier d'une qualité actuelle ne figure parmi les « anciens » (vérifié en le remettant
+  dans la liste : le test échoue). **Leçon générale : quand un fichier déclaré obsolète redevient utile, chercher
+  d'abord s'il est sur une liste de nettoyage — un nettoyage automatique n'avertit jamais qu'il efface un fichier
+  encore utilisé.**
+  Régression : `scripts/test-video-generation.mjs` (Léger réutilise le modèle Q6, PC à 16 Go de RAM : Léger
+  proposé et Q6 refusé avec la vraie raison, lecteur Q4 jamais effacé au démarrage).
