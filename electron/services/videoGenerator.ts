@@ -251,6 +251,13 @@ export function buildVideoArgs({ models, prompt, output, seed, seconds, initImag
     '--diffusion-fa',
     '--offload-to-cpu',
     '--vae-tiling',
+    // Étape 212 (Léo, arrêt brutal 0xC0000409 juste après « loading tensors completed ») : reproduit ici sur un
+    // Vulkan émulé, le moteur s'arrêtait en préparant le lecteur de description (UMT5), dont la table de
+    // vocabulaire fait à elle seule 861 Mo — trop gros pour certaines cartes, qui refusent un bloc de cette
+    // taille (« pre-allocated tensor … cannot run the operation »). Il ne travaille qu'une fois par vidéo : sur le
+    // processeur il coûte quelques dizaines de secondes, et plus aucune carte ne peut le refuser. FastWan et le
+    // décodeur, eux, restent sur la carte graphique (vérifié : FastWan tourne sur le même Vulkan émulé).
+    '--backend', 'te=cpu',
     ...(initImage ? ['-i', initImage] : []),
     // .webm : lisible directement par l'écran de Jaris (un .avi MJPEG ne l'est pas).
     '-o', output

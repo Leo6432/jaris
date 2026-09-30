@@ -167,10 +167,14 @@ export function describeEngineFailure(code: number | null, lastLines: string[], 
   const unfinished = kind === 'video' ? 'sans finir la vidéo' : "sans finir l'image"
   const codeText = code === null ? 'inconnu' : code > 0xffff ? `0x${(code >>> 0).toString(16).toUpperCase()}` : String(code)
   const meaningful = lastLines.map((l) => l.trim()).filter(Boolean)
-  const errors = meaningful.filter((l) => /\b(error|erreur|assert|failed|abort)\b/i.test(l)).slice(-3)
+  // Une assertion de ggml s'écrit « …/ggml-backend.cpp:930: pre-allocated tensor … » : sans mot « error », elle
+  // passait pour une ligne ordinaire et n'était jamais reprise (étape 212).
+  const errors = meaningful
+    .filter((l) => /\b(error|erreur|assert|failed|abort)\b/i.test(l) || /\.(c|cc|cpp|h|hpp):\d+: /.test(l))
+    .slice(-3)
   const detail = (errors.length ? errors : meaningful.slice(-1)).join(' / ')
   // 0xC0000409 : Windows a arrêté le programme d'un coup (assertion interne, pile corrompue…) — sans message.
-  const brutal = (code ?? 0) >>> 0 === 0xc0000409 ? ' — arrêt brutal, sans message du moteur' : ''
+  const brutal = (code ?? 0) >>> 0 === 0xc0000409 ? (errors.length ? ' — arrêt brutal' : ' — arrêt brutal, sans message du moteur') : ''
   return `${engine} s'est arrêté ${unfinished} (code ${codeText}${brutal})${detail ? `. Dernière ligne : ${detail}` : ''}.`
 }
 

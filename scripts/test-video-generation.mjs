@@ -314,6 +314,10 @@ test('vidéo : Ollama libéré AVANT sd-cli, commande officielle de Wan 2.2, des
     assert.equal(args[args.indexOf(flag) + 1], value, flag)
   }
   for (const flag of ['--diffusion-model', '--vae', '--t5xxl', '--offload-to-cpu', '--diffusion-fa', '--vae-tiling']) assert.ok(args.includes(flag), flag)
+  // Étape 212 : le lecteur de description (UMT5, table de vocabulaire de 861 Mo) tourne sur le processeur —
+  // sur la carte, certaines la refusent et le moteur s'arrête net (0xC0000409), reproduit sur un Vulkan émulé.
+  assert.equal(args[args.indexOf('--backend') + 1], 'te=cpu', 'lecteur de description sur le processeur')
+  assert.ok(!args.includes('--clip-on-cpu'), 'option dépréciée par sd.cpp, remplacée par --backend')
   assert.ok(!args.includes('-i'), 'sans image jointe, la vidéo part du texte seul')
   assert.match(args[args.indexOf('-o') + 1], /\.webm$/, 'WebM : lisible directement par l’écran')
   assert.equal(dirname(result.path), join(t.dataRoot, 'generated-videos'))
@@ -483,6 +487,11 @@ test('échec du moteur (étape 211) : « vidéo » et pas « image », code lisi
   assert.doesNotMatch(crash, /image/, 'plus jamais « image » pour une vidéo')
   const withError = image.describeEngineFailure(1, ['[INFO ] chargement', '[ERROR] GGML_ASSERT(ne00 % 32 == 0) failed', '[INFO ] fin'], 'video')
   assert.match(withError, /Dernière ligne : \[ERROR\] GGML_ASSERT\(ne00 % 32 == 0\) failed/, 'la ligne d’erreur, pas la dernière ligne quelconque')
+  // Étape 212 : l'assertion réelle reproduite ici n'a pas le mot « error » — elle doit quand même être reprise.
+  const assertion = '/home/runner/work/stable-diffusion.cpp/stable-diffusion.cpp/ggml/src/ggml-backend.cpp:930: pre-allocated tensor (text_encoders.t5xxl.transformer.shared.weight) in a buffer (Vulkan0) that cannot run the operation (NONE)'
+  const real = image.describeEngineFailure(3221226505, ['[INFO ] loading tensors completed', assertion, '[Thread debugging using libthread_db enabled]'], 'video')
+  assert.ok(real.includes('pre-allocated tensor (text_encoders.t5xxl'), 'l’assertion de ggml est reprise')
+  assert.doesNotMatch(real, /sans message du moteur/, 'le moteur a laissé un message : ne pas dire le contraire')
   assert.match(image.describeEngineFailure(1, ['vk::Device::allocateMemory: ErrorOutOfDeviceMemory'], 'video'), /Pas assez de mémoire pour créer la vidéo.*durée plus courte/)
   assert.match(image.describeEngineFailure(1, ['x'], 'image'), /Le moteur d'images s'est arrêté sans finir l'image \(code 1\)/, 'les images gardent leur texte')
 })

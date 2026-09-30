@@ -5706,3 +5706,31 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   qualité et la durée choisies pour réduire les hypothèses. Étoile retirée du bouton de qualité (demande de Léo :
   l'icône n'avait pas de sens).
   Régression : `scripts/test-video-generation.mjs` (message d'échec vidéo).
+
+- **Arrêt brutal 0xC0000409 de la vidéo juste après « loading tensors completed » (Léo, étape 212, Faible,
+  3-4 s) : ma première piste était FAUSSE, et c'est la reproduction qui l'a montré.** J'avais comparé les
+  en-têtes GGUF et supposé que FastWan, qui compresse aussi ses poids de normalisation en q6_K, faisait
+  planter Vulkan. Le code source de sd.cpp dément déjà cette hypothèse : ces poids sont déclarés en f32 par le
+  modèle et convertis au chargement. Reproduit ensuite pour de vrai, avec le build Linux Vulkan de sd.cpp au même
+  commit sur lavapipe (Vulkan logiciel ; `GGML_VK_VISIBLE_DEVICES=0` est obligatoire, sinon ggml écarte un
+  périphérique de type CPU et tout tourne sur le processeur sans rien dire). Le plantage tombe au même endroit
+  que chez Léo : sd.cpp charge chaque modèle juste avant de s'en servir, donc la dernière ligne « loading
+  tensors completed » était celle du LECTEUR DE DESCRIPTION (UMT5), pas celle de FastWan. Assertion obtenue :
+  `pre-allocated tensor (text_encoders.t5xxl.transformer.shared.weight) in a buffer (Vulkan0) that cannot run
+  the operation`. Sa table de vocabulaire fait 861 Mo, au-delà de la limite de tampon de cette carte
+  (maxStorageBufferRange = 128 Mo sur lavapipe).
+  Corrigé par `--backend te=cpu` : le lecteur tourne sur le processeur (42 s ici sur 4 cœurs, une seule fois
+  par vidéo), tandis que FastWan et le décodeur restent sur la carte. Vérifié de bout en bout sur ce Vulkan
+  émulé : vidéo produite. FastWan a lui-même tourné sur Vulkan, ce qui écarte définitivement la piste des
+  poids de normalisation.
+  **Non vérifié à 100 %** : la limite exacte de la carte de Léo n'est pas celle de lavapipe. C'est le même
+  point de plantage et le même type de refus, mais sa carte reste à tester en usage réel.
+  Au passage, une assertion ggml s'écrit « fichier.cpp:930: message », sans le mot « error » : elle n'était
+  jamais reprise dans le message d'échec. C'est maintenant le cas, et l'échec ne dit plus « sans message du
+  moteur » quand le moteur en a laissé un.
+  **Leçon générale : avec un chargement paresseux, la dernière ligne « chargé » désigne le DERNIER modèle
+  chargé, pas le modèle principal.** Il faut situer le plantage par une vraie reproduction avant d'accuser le
+  fichier qu'on vient de changer. **Une hypothèse tirée d'une différence réelle (q6_K au lieu de f16) reste une
+  hypothèse** tant que le code qui lit ces poids n'a pas été consulté.
+  Régression : `node --test scripts/test-video-generation.mjs` (lecteur sur le processeur, assertion ggml
+  reprise telle quelle ; les deux vérifiés en retirant le correctif).
