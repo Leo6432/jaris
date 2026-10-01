@@ -18,11 +18,45 @@ export interface PhoneReply {
   image?: string
 }
 
+/** Ce que le téléphone peut créer, d'après l'état des modes Image et Vidéo du PC. */
+export interface PhoneStudio {
+  image: { ready: boolean; reason: string | null }
+  video: { ready: boolean; reason: string | null; qualities: { id: string; label: string }[]; durations: number[] }
+}
+
+export interface PhoneMedia {
+  fileName: string
+  label: string
+  timestamp: number
+}
+
 export interface PhoneServerDeps {
-  /** Envoie le message dans la conversation active de Jaris (outils restreints), progression comprise. */
-  sendMessage(text: string, onStatus: (status: string) => void): Promise<PhoneReply>
+  /**
+   * Envoie le message dans la conversation active de Jaris (outils restreints), progression comprise.
+   * `mode` vaut 'voice' pour l'onglet Vocal : la réponse sera lue à voix haute, donc sans mise en forme.
+   */
+  sendMessage(text: string, onStatus: (status: string) => void, mode: 'chat' | 'voice'): Promise<PhoneReply>
   /** Transcrit un WAV 16 kHz mono sur le PC (la même transcription que la voix). */
   transcribe(wav: Buffer): Promise<string>
+  /** Lit la réponse avec la voix de Jaris (Supertonic, sur le PC) : un WAV. */
+  speak(text: string): Promise<Buffer>
+  /** État des modes Image et Vidéo : seules les qualités DÉJÀ installées sur le PC sont proposées. */
+  studio(): Promise<PhoneStudio>
+  generateImage(prompt: string, onStatus: (status: string) => void, signal: AbortSignal): Promise<{ fileName: string }>
+  generateVideo(
+    prompt: string,
+    seconds: number,
+    quality: string,
+    onStatus: (status: string) => void,
+    signal: AbortSignal
+  ): Promise<{ fileName: string }>
+  listImages(): Promise<PhoneMedia[]>
+  listVideos(): Promise<PhoneMedia[]>
+  /** Lève une erreur pour un nom qui n'est pas une image (ou vidéo) créée par Jaris : jamais un chemin. */
+  readImage(fileName: string): Promise<Buffer>
+  /** Vignette JPEG réduite pour la galerie : quelques dizaines de Ko au lieu d'un PNG de plus d'1 Mo en 4G. */
+  readImageThumbnail(fileName: string): Promise<Buffer>
+  readVideo(fileName: string): Promise<Buffer>
   /** Derniers messages de la conversation active, pour que le téléphone reprenne là où on en est. */
   history(): Promise<ChatMessage[]>
   devices: PhoneDeviceStore
@@ -31,17 +65,29 @@ export interface PhoneServerDeps {
   now?: () => number
 }
 
-export type JobState = 'running' | 'done' | 'error'
+export type JobState = 'running' | 'done' | 'error' | 'cancelled'
+
+/**
+ * Deux files indépendantes : parler à Jaris (Chat, Vocal) et créer (Image, Vidéo). Une vidéo de plusieurs
+ * minutes ne bloque donc pas la conversation, mais deux messages ne se croisent jamais dans la même conversation.
+ */
+type Lane = 'conversation' | 'studio'
 
 interface Job {
   id: string
+  lane: Lane
   state: JobState
   status: string
   transcript?: string
   reply?: string
   image?: string
+  /** Réponse lue à voix haute (onglet Vocal), servie à part par /api/jobs/:id/audio. */
+  audio?: Buffer
+  /** Image ou vidéo créée (onglets Image et Vidéo). */
+  fileName?: string
   error?: string
   finishedAt?: number
+  abort?: AbortController
 }
 
 /** Fichiers de la page, servis par leur nom exact uniquement : aucun chemin venu de la requête n'est suivi. */
@@ -62,7 +108,10 @@ const MAX_JSON_BYTES = 64 * 1024
 /** ~2 min 40 de voix en WAV 16 kHz mono 16 bits : largement assez pour un message vocal. */
 export const MAX_VOICE_BYTES = 5 * 1024 * 1024
 const MAX_TEXT_CHARS = 4000
+const MAX_PROMPT_CHARS = 1000
 const KEPT_JOBS = 20
+/** Un nom de fichier créé par Jaris (horodatage + mots sans accent) : rien d'autre n'est même regardé. */
+const MEDIA_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/
 
 const SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
@@ -139,7 +188,7 @@ export class PhoneServer {
   private pairing: { code: string; expiresAt: number; attemptsLeft: number } | null = null
   private pairAttempts: number[] = []
   private jobs = new Map<string, Job>()
-  private busy = false
+  private busy: Record<Lane, boolean> = { conversation: false, studio: false }
   private readonly now: () => number
 
   constructor(private readonly deps: PhoneServerDeps) {
@@ -216,33 +265,143 @@ export class PhoneServer {
     return { token }
   }
 
-  private startJob(work: (job: Job) => Promise<void>): Job {
-    if (this.busy) throw new HttpError(409, 'Jaris répond encore au message précédent.')
-    this.busy = true
-    const job: Job = { id: randomUUID(), state: 'running', status: 'Jaris réfléchit…' }
+  private startJob(lane: Lane, work: (job: Job) => Promise<void>, abort?: AbortController): Job {
+    if (this.busy[lane])
+      throw new HttpError(
+        409,
+        lane === 'conversation' ? 'Jaris répond encore au message précédent.' : 'Une création est déjà en cours : attends qu’elle soit finie.'
+      )
+    this.busy[lane] = true
+    const job: Job = { id: randomUUID(), lane, state: 'running', status: lane === 'conversation' ? 'Jaris réfléchit…' : 'Préparation…', abort }
     this.jobs.set(job.id, job)
-    while (this.jobs.size > KEPT_JOBS) this.jobs.delete(this.jobs.keys().next().value as string)
+    // Seuls des travaux FINIS sont oubliés : une vidéo longue ne doit jamais disparaître pendant qu'elle se fait.
+    for (const [id, old] of this.jobs) {
+      if (this.jobs.size <= KEPT_JOBS) break
+      if (old.state !== 'running') this.jobs.delete(id)
+    }
     void work(job)
       .then(() => {
         job.state = 'done'
       })
       .catch((err: unknown) => {
+        if (abort?.signal.aborted) {
+          job.state = 'cancelled'
+          return
+        }
         job.state = 'error'
         job.error = err instanceof Error ? err.message : String(err)
       })
       .finally(() => {
         job.finishedAt = this.now()
-        this.busy = false
+        job.abort = undefined
+        this.busy[lane] = false
       })
     return job
   }
 
-  private async answer(job: Job, text: string): Promise<void> {
-    const result = await this.deps.sendMessage(text, (status) => {
-      job.status = status
-    })
+  private async answer(job: Job, text: string, mode: 'chat' | 'voice'): Promise<void> {
+    const result = await this.deps.sendMessage(
+      text,
+      (status) => {
+        job.status = status
+      },
+      mode
+    )
     job.reply = result.reply
     if (result.image) job.image = result.image
+  }
+
+  private async transcribeInto(job: Job, wav: Buffer): Promise<string> {
+    job.status = 'Transcription sur ton PC…'
+    const transcript = (await this.deps.transcribe(wav)).trim()
+    if (!transcript) throw new Error("Je n'ai rien entendu : réessaie en parlant un peu plus près du téléphone.")
+    job.transcript = transcript
+    job.status = 'Jaris réfléchit…'
+    return transcript
+  }
+
+  /** Onglet Vocal : transcription, réponse courte, puis la voix de Jaris. Sans voix, la réponse reste écrite. */
+  private async talk(job: Job, wav: Buffer): Promise<void> {
+    const transcript = await this.transcribeInto(job, wav)
+    await this.answer(job, transcript, 'voice')
+    if (!job.reply) return
+    job.status = 'Jaris prépare sa voix…'
+    try {
+      job.audio = await this.deps.speak(job.reply)
+    } catch {
+      // La réponse est déjà là : une voix indisponible ne doit pas la transformer en erreur.
+    }
+  }
+
+  private async studioStatus(): Promise<PhoneStudio> {
+    return this.deps.studio()
+  }
+
+  private async createImage(body: Record<string, unknown>): Promise<Job> {
+    const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : ''
+    if (!prompt) throw new HttpError(400, 'Décris l’image à créer.')
+    if (prompt.length > MAX_PROMPT_CHARS) throw new HttpError(413, 'Description trop longue.')
+    const studio = await this.studioStatus()
+    if (!studio.image.ready) throw new HttpError(409, studio.image.reason ?? 'Le mode Image n’est pas prêt sur ton PC.')
+    const abort = new AbortController()
+    return this.startJob(
+      'studio',
+      async (job) => {
+        const image = await this.deps.generateImage(prompt, (status) => (job.status = status), abort.signal)
+        job.fileName = image.fileName
+      },
+      abort
+    )
+  }
+
+  private async createVideo(body: Record<string, unknown>): Promise<Job> {
+    const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : ''
+    if (!prompt) throw new HttpError(400, 'Décris la vidéo à créer.')
+    if (prompt.length > MAX_PROMPT_CHARS) throw new HttpError(413, 'Description trop longue.')
+    const studio = await this.studioStatus()
+    if (!studio.video.ready) throw new HttpError(409, studio.video.reason ?? 'Le mode Vidéo n’est pas prêt sur ton PC.')
+    // Jamais cru sur parole : seules une durée et une qualité DÉJÀ proposées par le PC sont acceptées.
+    const seconds = typeof body.seconds === 'number' ? body.seconds : Number.NaN
+    if (!studio.video.durations.includes(seconds)) throw new HttpError(400, 'Durée inconnue.')
+    const quality = typeof body.quality === 'string' ? body.quality : ''
+    if (!studio.video.qualities.some((q) => q.id === quality)) throw new HttpError(400, 'Qualité non installée sur ton PC.')
+    const abort = new AbortController()
+    return this.startJob(
+      'studio',
+      async (job) => {
+        const video = await this.deps.generateVideo(prompt, seconds, quality, (status) => (job.status = status), abort.signal)
+        job.fileName = video.fileName
+      },
+      abort
+    )
+  }
+
+  private async sendMedia(res: ServerResponse, kind: 'image' | 'thumbnail' | 'video', rawName: string): Promise<void> {
+    let fileName: string
+    try {
+      fileName = decodeURIComponent(rawName)
+    } catch {
+      throw new HttpError(404, 'Fichier introuvable.')
+    }
+    if (!MEDIA_NAME.test(fileName)) throw new HttpError(404, 'Fichier introuvable.')
+    let content: Buffer
+    try {
+      content =
+        kind === 'image'
+          ? await this.deps.readImage(fileName)
+          : kind === 'thumbnail'
+            ? await this.deps.readImageThumbnail(fileName)
+            : await this.deps.readVideo(fileName)
+    } catch {
+      throw new HttpError(404, 'Fichier introuvable.')
+    }
+    res.writeHead(200, {
+      ...SECURITY_HEADERS,
+      'Content-Type': kind === 'image' ? 'image/png' : kind === 'thumbnail' ? 'image/jpeg' : 'video/webm',
+      'Content-Length': String(content.length),
+      'Cache-Control': 'private, no-store'
+    })
+    res.end(content)
   }
 
   private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -280,31 +439,67 @@ export class PhoneServer {
         const text = typeof body.text === 'string' ? body.text.trim() : ''
         if (!text) throw new HttpError(400, 'Message vide.')
         if (text.length > MAX_TEXT_CHARS) throw new HttpError(413, 'Message trop long.')
-        const job = this.startJob((j) => this.answer(j, text))
+        const job = this.startJob('conversation', (j) => this.answer(j, text, 'chat'))
         send(res, 202, { jobId: job.id })
         return
       }
-      if (req.method === 'POST' && path === '/api/voice') {
+      if (req.method === 'POST' && path === '/api/talk') {
         const wav = await readBody(req, MAX_VOICE_BYTES)
         if (!isExpectedWav(wav)) throw new HttpError(400, 'Enregistrement illisible.')
-        const job = this.startJob(async (j) => {
-          j.status = 'Transcription sur ton PC…'
-          const transcript = (await this.deps.transcribe(wav)).trim()
-          if (!transcript) throw new Error("Je n'ai rien entendu dans ce message vocal.")
-          j.transcript = transcript
-          j.status = 'Jaris réfléchit…'
-          await this.answer(j, transcript)
-        })
+        const job = this.startJob('conversation', (j) => this.talk(j, wav))
         send(res, 202, { jobId: job.id })
         return
       }
-      const jobMatch = path.match(/^\/api\/jobs\/([0-9a-f-]{36})$/)
-      if (req.method === 'GET' && jobMatch) {
+      if (req.method === 'GET' && path === '/api/studio') {
+        send(res, 200, await this.studioStatus())
+        return
+      }
+      if (req.method === 'POST' && path === '/api/image') {
+        const job = await this.createImage(await readJson(req))
+        send(res, 202, { jobId: job.id })
+        return
+      }
+      if (req.method === 'POST' && path === '/api/video') {
+        const job = await this.createVideo(await readJson(req))
+        send(res, 202, { jobId: job.id })
+        return
+      }
+      if (req.method === 'GET' && path === '/api/images') {
+        send(res, 200, { items: await this.deps.listImages() })
+        return
+      }
+      if (req.method === 'GET' && path === '/api/videos') {
+        send(res, 200, { items: await this.deps.listVideos() })
+        return
+      }
+      const mediaMatch = path.match(/^\/api\/(images|videos)\/([^/]+)$/)
+      if (req.method === 'GET' && mediaMatch) {
+        const kind = mediaMatch[1] === 'videos' ? 'video' : url.searchParams.has('thumb') ? 'thumbnail' : 'image'
+        await this.sendMedia(res, kind, mediaMatch[2])
+        return
+      }
+      const jobMatch = path.match(/^\/api\/jobs\/([0-9a-f-]{36})(\/audio|\/cancel)?$/)
+      if (jobMatch) {
         const job = this.jobs.get(jobMatch[1])
         if (!job) throw new HttpError(404, 'Message introuvable.')
-        const { id, state, status, transcript, reply, image, error } = job
-        send(res, 200, { id, state, status, transcript, reply, image, error })
-        return
+        if (req.method === 'GET' && !jobMatch[2]) {
+          const { id, state, status, transcript, reply, image, fileName, error } = job
+          send(res, 200, { id, state, status, transcript, reply, image, fileName, error, audio: Boolean(job.audio) })
+          return
+        }
+        if (req.method === 'GET' && jobMatch[2] === '/audio') {
+          if (!job.audio) throw new HttpError(404, 'Pas de voix pour cette réponse.')
+          res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': 'audio/wav', 'Content-Length': String(job.audio.length), 'Cache-Control': 'private, no-store' })
+          res.end(job.audio)
+          return
+        }
+        if (req.method === 'POST' && jobMatch[2] === '/cancel') {
+          // Seule une création s'arrête : une réponse de Jaris déjà partie va de toute façon jusqu'au bout.
+          if (job.lane !== 'studio') throw new HttpError(400, 'Ce travail ne peut pas être arrêté.')
+          job.abort?.abort()
+          send(res, 200, { ok: true })
+          return
+        }
       }
       throw new HttpError(404, 'Page introuvable.')
     } catch (err) {

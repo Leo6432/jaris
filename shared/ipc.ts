@@ -882,7 +882,9 @@ export const IPC_CHANNELS = {
   /** main -> renderer : l'état de l'accès téléphone a changé (connexion Tailscale, adresse prête…). */
   phoneAccessChanged: 'jaris:phone-access-changed',
   /** main -> renderer : un message envoyé depuis le téléphone a rejoint la conversation active. */
-  chatHistoryChanged: 'jaris:chat-history-changed'
+  chatHistoryChanged: 'jaris:chat-history-changed',
+  /** Une image ou une vidéo a été créée depuis le téléphone : les galeries du PC se rechargent. */
+  studioGalleryChanged: 'jaris:studio-gallery-changed'
 } as const
 
 /** Un téléphone appairé (étape 214) — le jeton n'en fait jamais partie, il ne quitte pas le téléphone. */

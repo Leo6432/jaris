@@ -173,6 +173,7 @@ declare global {
       openPhoneAccessLink: () => Promise<void>
       onPhoneAccessChanged: (cb: (status: PhoneAccessStatus) => void) => () => void
       onChatHistoryChanged: (cb: () => void) => () => void
+      onStudioGalleryChanged?: (cb: () => void) => () => void
     }
   }
 }

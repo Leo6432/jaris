@@ -97,6 +97,8 @@ export default function VideoPanel(): JSX.Element {
     void refreshVideos()
   }, [])
   useEffect(() => window.jaris.onVideoStudioLog(setLogLine), [])
+  // Vidéo créée depuis le téléphone : elle apparaît aussi ici sans avoir à rouvrir le mode.
+  useEffect(() => window.jaris.onStudioGalleryChanged?.(() => void refreshVideos()), [])
 
   useEffect(() => {
     if (!generating) return

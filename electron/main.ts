@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu } from 'electron'
+import { app, dialog, ipcMain, nativeImage, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu } from 'electron'
 // Étape 143 : EN PREMIER — redirige le dossier interne de Chromium et les données vers le dossier de Jaris
 // (installé sur D, ou déplacé) avant que quoi que ce soit ne calcule un chemin ou ne prenne le verrou d'instance.
 import { cleanupStaleChromiumData, getStorageRoot } from './services/storageRoot'
@@ -15,7 +15,7 @@ import {
   readGeneratedImageDataUrl
 } from './services/imageGenerator'
 import { imageLabelFromFileName } from '../shared/imageGallery'
-import { isVideoQuality, normalizeVideoSeconds } from '../shared/videoModel'
+import { isVideoQuality, normalizeVideoSeconds, VIDEO_DURATIONS } from '../shared/videoModel'
 import {
   deleteGeneratedVideo,
   generateVideo,
@@ -61,7 +61,7 @@ import { randomUUID } from 'crypto'
 import { tmpdir } from 'os'
 import { deleteGeneratedApp, generateApp, getGeneratedAppsDir, listGeneratedApps, loadGeneratedApp } from './services/codeGenerator'
 import { createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
-import { previewVoice } from './services/tts'
+import { previewVoice, synthesizeSpeech } from './services/tts'
 import { ttsClient } from './services/ttsClient'
 import { createAppIcon, createTrayIcon } from './services/trayIcon'
 import { VoicePipeline } from './services/voicePipeline'
@@ -717,35 +717,90 @@ function getPhoneAccess(): PhoneAccessManager {
     tunnelStateDir: join(app.getPath('userData'), PHONE_TUNNEL_DIR),
     devicesFile: join(getDataRoot(), 'phone-devices.json'),
     pageDir: join(resourcesRoot(), 'phone'),
-    history: () => chatSession.getVisibleMessages(),
-    transcribe: async (wav) => {
-      if (!pipeline) throw new Error("L'écoute n'est pas lancée sur le PC : la transcription n'est pas disponible.")
-      const path = join(tmpdir(), `jaris-phone-${randomUUID()}.wav`)
-      await writeFile(path, wav)
-      try {
-        return await pipeline.transcribeFile(path)
-      } finally {
-        await rm(path, { force: true })
-      }
-    },
-    // Même conversation que le Chat (et que la voix) : ce qui est dit depuis le téléphone se retrouve sur le
-    // PC, et inversement. Seuls les outils sans risque existent pour ce tour (PHONE_RESTRICTIONS).
-    sendMessage: async (text, onStatus) => {
-      const message = await chatSession.send(
-        text,
-        (reminder) => void pipeline?.announceReminder(reminder),
-        (line) => {
-          broadcast(IPC_CHANNELS.log, line)
-          const status = phoneStatusFromLog(line)
-          if (status) onStatus(status)
-        },
-        undefined,
-        undefined,
-        undefined,
-        PHONE_RESTRICTIONS
-      )
-      broadcast(IPC_CHANNELS.chatHistoryChanged)
-      return { reply: message.content, ...(message.image ? { image: message.image } : {}) }
+    actions: {
+      history: () => chatSession.getVisibleMessages(),
+      transcribe: async (wav) => {
+        if (!pipeline) throw new Error("L'écoute n'est pas lancée sur le PC : la transcription n'est pas disponible.")
+        const path = join(tmpdir(), `jaris-phone-${randomUUID()}.wav`)
+        await writeFile(path, wav)
+        try {
+          return await pipeline.transcribeFile(path)
+        } finally {
+          await rm(path, { force: true })
+        }
+      },
+      // Même conversation que le Chat (et que la voix) : ce qui est dit depuis le téléphone se retrouve sur le
+      // PC, et inversement. Seuls les outils sans risque existent pour ce tour (PHONE_RESTRICTIONS).
+      sendMessage: async (text, onStatus, mode) => {
+        const message = await chatSession.send(
+          text,
+          (reminder) => void pipeline?.announceReminder(reminder),
+          (line) => {
+            broadcast(IPC_CHANNELS.log, line)
+            const status = phoneStatusFromLog(line)
+            if (status) onStatus(status)
+          },
+          undefined,
+          undefined,
+          undefined,
+          PHONE_RESTRICTIONS,
+          mode
+        )
+        broadcast(IPC_CHANNELS.chatHistoryChanged)
+        return { reply: message.content, ...(message.image ? { image: message.image } : {}) }
+      },
+      // Onglet Vocal : la même voix que sur le PC (Options → Voix), synthétisée ici puis jouée sur le téléphone.
+      speak: (text) => synthesizeSpeech(text),
+      // Le téléphone ne télécharge rien : seules les choses DÉJÀ installées sur le PC lui sont proposées.
+      studio: async () => {
+        const [image, video] = await Promise.all([getImageStudioStatus(), getVideoStudioStatus()])
+        const imageReason = !image.supported
+          ? 'La création d’images ne fonctionne que sur Windows.'
+          : !image.capable
+            ? image.reason
+            : !image.installed
+              ? 'Le mode Image n’est pas encore installé : installe-le une fois depuis Jaris sur ton PC (mode Image).'
+              : null
+        const qualities = video.qualities.filter((q) => q.installed).map(({ id, label }) => ({ id, label }))
+        const videoReason = !video.supported
+          ? 'La création de vidéos ne fonctionne que sur Windows.'
+          : !video.capable
+            ? video.reason
+            : !qualities.length
+              ? 'Le mode Vidéo n’est pas encore installé : installe une qualité une fois depuis Jaris sur ton PC (mode Vidéo).'
+              : null
+        return {
+          image: { ready: imageReason === null, reason: imageReason },
+          video: { ready: videoReason === null, reason: videoReason, qualities, durations: [...VIDEO_DURATIONS] }
+        }
+      },
+      generateImage: async (prompt, onStatus, signal) => {
+        const image = await generateImage(prompt, onStatus, signal)
+        broadcast(IPC_CHANNELS.studioGalleryChanged)
+        return { fileName: image.fileName }
+      },
+      generateVideo: async (prompt, seconds, quality, onStatus, signal) => {
+        const video = await generateVideo(
+          prompt,
+          onStatus,
+          signal,
+          undefined,
+          normalizeVideoSeconds(seconds),
+          isVideoQuality(quality) ? quality : 'q6'
+        )
+        broadcast(IPC_CHANNELS.studioGalleryChanged)
+        return { fileName: video.fileName }
+      },
+      listImages: () => listGeneratedImages(),
+      listVideos: () => listGeneratedVideos(),
+      // generatedImagePath/generatedVideoPath revérifient le nom : jamais un chemin venu du téléphone.
+      readImage: (fileName) => readFile(generatedImagePath(fileName)),
+      readImageThumbnail: async (fileName) => {
+        const image = nativeImage.createFromPath(generatedImagePath(fileName))
+        if (image.isEmpty()) throw new Error('Image illisible.')
+        return image.resize({ width: 360, quality: 'good' }).toJPEG(78)
+      },
+      readVideo: (fileName) => readGeneratedVideo(fileName)
     }
   })
   manager.on('change', (status: PhoneAccessStatus) => {

@@ -188,7 +188,8 @@ const api = {
   logoutPhoneAccess: (): Promise<PhoneAccessStatus> => ipcRenderer.invoke(IPC_CHANNELS.logoutPhoneAccess),
   openPhoneAccessLink: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openPhoneAccessLink),
   onPhoneAccessChanged: (cb: (status: PhoneAccessStatus) => void) => subscribe(IPC_CHANNELS.phoneAccessChanged, cb),
-  onChatHistoryChanged: (cb: () => void) => subscribe(IPC_CHANNELS.chatHistoryChanged, cb)
+  onChatHistoryChanged: (cb: () => void) => subscribe(IPC_CHANNELS.chatHistoryChanged, cb),
+  onStudioGalleryChanged: (cb: () => void) => subscribe(IPC_CHANNELS.studioGalleryChanged, cb)
 }
 
 export type JarisApi = typeof api

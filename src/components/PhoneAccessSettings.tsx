@@ -86,7 +86,7 @@ export default function PhoneAccessSettings(): JSX.Element {
     <div className="options-menu__section phone-access">
       <SettingGroup
         title="Parler à Jaris depuis ton téléphone"
-        description="Écris ou envoie des messages vocaux à Jaris depuis ton téléphone, même loin de chez toi en 4G. C'est la même conversation que le Chat."
+        description="Écris ou parle à Jaris depuis ton téléphone, et crée des images et des vidéos, même loin de chez toi en 4G. C'est la même conversation que le Chat."
       >
         <SettingRow
           label="Accès depuis le téléphone"

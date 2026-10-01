@@ -5853,3 +5853,36 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `go test ./...` (tunnel/ : alerte de certificat transmise une seule fois avec le vrai message,
   vérification qui exige une vraie réponse de Jaris), `scripts/test-phone-tunnel.mjs` et
   `scripts/test-phone-tab-ui.mjs` (étapes de préparation et avertissement affichés).
+
+- **Téléphone : Chat sans dictaphone, plus Vocal, Image et Vidéo (étape 215, Léo : « enleve le dictaphone
+  dans le telephone, et ajoute image vidéo, et vocal »).** Choix de Léo par questions : Vocal « comme l'Agent
+  vocal du PC », Image/Vidéo « créer + voir la galerie ». Barre d'onglets en bas de la page (`phone/`).
+  - **Vocal** : on touche l'orbe, on parle ; l'envoi part à la pause (mesure du volume) ou au second toucher.
+    `POST /api/talk` transcrit sur le PC, répond avec le canal `'voice'` (`chatSession.send(..., channel)`,
+    pas de listes ni de gras puisque lu à voix haute), puis `synthesizeSpeech` produit le WAV, servi par
+    `GET /api/jobs/:id/audio` avec le jeton. Une voix en échec ne transforme JAMAIS la réponse en erreur :
+    elle reste écrite. **Piège iPhone, non vérifiable ici** : un son ne peut démarrer que pendant un geste ;
+    le lecteur `<audio>` est donc « ouvert » avec un silence au moment du toucher, et c'est ce MÊME lecteur
+    qui joue la réponse ensuite. Chromium (tests) garde l'activation de la page, il ne distingue donc pas un
+    oubli de ce déverrouillage : seul l'essai de Léo sur iPhone le confirme. Repli prévu : « Écouter la
+    réponse » si le téléphone refuse la lecture.
+  - **Image/Vidéo** : le téléphone n'installe et ne télécharge RIEN ; `studio()` (main.ts) ne propose que ce
+    qui est déjà prêt sur le PC (qualités vidéo INSTALLÉES seulement), et sinon la raison en français. Durée
+    et qualité revérifiées côté serveur contre cette liste (un `"2"` texte est refusé, pas converti). Deux
+    files de travaux indépendantes (conversation / création) : une vidéo de plusieurs minutes ne bloque pas
+    le Chat. Arrêter = vrai `AbortSignal` ; un arrêt demandé finit en `cancelled`, jamais en erreur rouge.
+  - **Les travaux EN COURS ne sont jamais oubliés** par le plafond de 20 travaux gardés : avant, l'éviction
+    supprimait le plus ancien quel qu'il soit, donc une vidéo longue pouvait disparaître du suivi après une
+    vingtaine de messages. Test dédié, vérifié en remettant l'ancienne éviction.
+  - **Fichiers** : seuls des NOMS voyagent (`/api/images/:nom`, `/api/videos/:nom`), filtrés par un motif
+    strict AVANT même d'appeler le PC, puis revérifiés par `generatedImagePath`/`generatedVideoPath`. La page
+    les récupère avec le jeton et les affiche par `blob:` (jamais une adresse publique du fichier). Vignettes
+    d'images réduites côté PC (`nativeImage`, JPEG 360 px) : un PNG 1024 px pèse plus d'1 Mo, une galerie
+    entière en 4G aurait coûté des dizaines de Mo.
+  - **Vidéos WebM** : lisibles par Chromium/Android ; sur iPhone, ça dépend de la version d'iOS (non vérifié
+    ici). Si le navigateur répond non à `canPlayType('video/webm')`, la page le dit et propose d'enregistrer,
+    au lieu d'afficher un cadre noir.
+  - Les galeries du PC se rechargent quand le téléphone crée quelque chose (`studioGalleryChanged`).
+  Régression : `node --test scripts/test-phone-server.mjs scripts/test-phone-page-ui.mjs` (vrai serveur, vrai
+  navigateur au format téléphone, faux micro de Chromium). Vérifiés en réintroduisant le défaut : garde des
+  noms de fichiers, éviction des travaux en cours, lecture de la voix.

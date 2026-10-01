@@ -115,7 +115,9 @@ class ChatSession {
     onToken?: (delta: string) => void,
     imageBase64?: string,
     // Étape 214 : message venu du téléphone (voir phoneAccess.ts), dans la MÊME conversation que le Chat.
-    restrictions?: ConverseRestrictions
+    restrictions?: ConverseRestrictions,
+    // Onglet Vocal du téléphone : réponse courte, sans liste ni gras, puisqu'elle sera lue à voix haute.
+    channel: 'chat' | 'voice' = 'chat'
   ): Promise<ChatMessage> {
     // Sans ça, un message envoyé avant que le premier getVisibleMessages() (appelé au montage de
     // ChatPanel.tsx) ait fini de charger l'historique pourrait écraser la restauration en cours.
@@ -151,7 +153,7 @@ class ChatSession {
             history,
             undefined,
             live,
-            'chat',
+            channel,
             onToken,
             onSoundCue,
             (image) => {

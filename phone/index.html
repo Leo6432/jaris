@@ -29,32 +29,118 @@
       <p id="pair-error" class="error" role="alert" hidden></p>
     </main>
 
-    <!-- Conversation : la même que le Chat de Jaris sur le PC. -->
-    <section id="chat" class="chat" hidden>
-      <header class="chat__header">
-        <img class="orb" src="/logo.png" alt="" aria-hidden="true" />
-        <div class="chat__title">
-          <span class="chat__name">Jaris</span>
-          <span id="chat-status" class="chat__status">Connecté à ton PC</span>
+    <div id="app" class="app" hidden>
+      <header class="topbar">
+        <img id="top-orb" class="orb" src="/logo.png" alt="" aria-hidden="true" />
+        <div class="topbar__title">
+          <span class="topbar__name">Jaris</span>
+          <span id="top-status" class="topbar__status">Connecté à ton PC</span>
         </div>
       </header>
-      <ol id="messages" class="messages" aria-live="polite"></ol>
-      <form id="composer" class="composer" autocomplete="off">
-        <textarea id="input" class="composer__input" rows="1" placeholder="Écris à Jaris…" aria-label="Message"></textarea>
-        <button id="mic" class="composer__mic" type="button" aria-label="Message vocal" title="Message vocal">
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg>
+
+      <!-- Chat : la même conversation que le Chat de Jaris sur le PC. -->
+      <section id="tab-chat" class="tab chat" data-tab="chat">
+        <ol id="messages" class="messages" aria-live="polite"></ol>
+        <form id="composer" class="composer" autocomplete="off">
+          <textarea id="input" class="composer__input" rows="1" placeholder="Écris à Jaris…" aria-label="Message"></textarea>
+          <button id="send" class="composer__send" type="submit" aria-label="Envoyer" title="Envoyer">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 4 5 11l1.4 1.4L11 7.8V20h2V7.8l4.6 4.6L19 11z"/></svg>
+          </button>
+        </form>
+      </section>
+
+      <!-- Vocal : comme l'Agent vocal du PC. Jaris répond à voix haute, avec sa voix. -->
+      <section id="tab-voice" class="tab voice" data-tab="voice" hidden>
+        <button id="voice-orb" class="voice__orb" type="button" aria-label="Parler à Jaris">
+          <img src="/logo.png" alt="" aria-hidden="true" />
         </button>
-        <button id="send" class="composer__send" type="submit" aria-label="Envoyer" title="Envoyer">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 4 5 11l1.4 1.4L11 7.8V20h2V7.8l4.6 4.6L19 11z"/></svg>
+        <p id="voice-state" class="voice__state" aria-live="polite">Touche Jaris pour parler</p>
+        <p id="voice-help" class="voice__help">Parle, puis fais une pause ou touche encore Jaris : il te répond à voix haute.</p>
+        <button id="voice-cancel" class="link" type="button" hidden>Annuler</button>
+        <div id="voice-last" class="voice__last" hidden>
+          <p class="voice__line"><span class="voice__who">Toi</span><span id="voice-transcript"></span></p>
+          <p class="voice__line"><span class="voice__who">Jaris</span><span id="voice-reply"></span></p>
+          <img id="voice-image" class="voice__image" alt="Image créée par Jaris" hidden />
+          <button id="voice-replay" class="chip" type="button" hidden>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+            <span id="voice-replay-label">Réécouter</span>
+          </button>
+        </div>
+        <audio id="voice-audio" playsinline preload="auto"></audio>
+      </section>
+
+      <!-- Image : décrire, créer sur le PC, et retrouver toutes les images déjà faites. -->
+      <section id="tab-image" class="tab studio" data-tab="image" hidden>
+        <p id="image-unavailable" class="notice" hidden></p>
+        <form id="image-form" class="studio__form" autocomplete="off">
+          <textarea id="image-prompt" class="studio__prompt" rows="3" maxlength="1000" placeholder="Décris l'image… (ex : un chat astronaute, style aquarelle)" aria-label="Description de l'image"></textarea>
+          <button id="image-create" class="button button--primary" type="submit">Créer l'image</button>
+        </form>
+        <div id="image-progress" class="progress" hidden>
+          <span class="progress__spinner" aria-hidden="true"></span>
+          <span id="image-status" class="progress__text">Préparation…</span>
+          <button id="image-stop" class="link" type="button">Arrêter</button>
+        </div>
+        <p id="image-error" class="error" role="alert" hidden></p>
+        <h2 class="studio__title">Tes images</h2>
+        <ul id="image-gallery" class="gallery"></ul>
+        <button id="image-more" class="link studio__more" type="button" hidden>Voir plus</button>
+      </section>
+
+      <!-- Vidéo : même principe, avec la qualité (déjà installée sur le PC) et la durée. -->
+      <section id="tab-video" class="tab studio" data-tab="video" hidden>
+        <p id="video-unavailable" class="notice" hidden></p>
+        <form id="video-form" class="studio__form" autocomplete="off">
+          <textarea id="video-prompt" class="studio__prompt" rows="3" maxlength="1000" placeholder="Décris la vidéo… (ex : des vagues au coucher du soleil)" aria-label="Description de la vidéo"></textarea>
+          <span class="studio__label">Qualité</span>
+          <div id="video-qualities" class="chips" role="radiogroup" aria-label="Qualité"></div>
+          <span class="studio__label">Durée</span>
+          <div id="video-durations" class="chips" role="radiogroup" aria-label="Durée"></div>
+          <button id="video-create" class="button button--primary" type="submit">Créer la vidéo</button>
+        </form>
+        <div id="video-progress" class="progress" hidden>
+          <span class="progress__spinner" aria-hidden="true"></span>
+          <span id="video-status" class="progress__text">Préparation…</span>
+          <button id="video-stop" class="link" type="button">Arrêter</button>
+        </div>
+        <p id="video-error" class="error" role="alert" hidden></p>
+        <h2 class="studio__title">Tes vidéos</h2>
+        <ul id="video-gallery" class="gallery"></ul>
+        <button id="video-more" class="link studio__more" type="button" hidden>Voir plus</button>
+      </section>
+
+      <nav class="tabbar" aria-label="Sections">
+        <button class="tabbar__item" type="button" data-target="chat">
+          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Zm0 2v11.2L7.2 16H20V6H4Z"/></svg>
+          <span>Chat</span>
         </button>
-      </form>
-      <div id="recording" class="recording" hidden>
-        <span class="recording__dot" aria-hidden="true"></span>
-        <span id="recording-time">0:00</span>
-        <button id="recording-cancel" class="recording__cancel" type="button">Annuler</button>
-        <button id="recording-send" class="button" type="button">Envoyer</button>
+        <button class="tabbar__item" type="button" data-target="voice">
+          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg>
+          <span>Vocal</span>
+        </button>
+        <button class="tabbar__item" type="button" data-target="image">
+          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 2v9.6l3.5-3.5 3 3 4.5-4.5 3 3V6H5Zm4 4.5A1.5 1.5 0 1 1 9 7.5a1.5 1.5 0 0 1 0 3Z"/></svg>
+          <span>Image</span>
+        </button>
+        <button class="tabbar__item" type="button" data-target="video">
+          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M4 5h11a2 2 0 0 1 2 2v2.5l4-2.5v10l-4-2.5V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm0 2v10h11V7H4Z"/></svg>
+          <span>Vidéo</span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- Visionneuse plein écran d'une image ou d'une vidéo, avec « Enregistrer » sur le téléphone. -->
+    <div id="viewer" class="viewer" role="dialog" aria-modal="true" aria-label="Aperçu" hidden>
+      <div class="viewer__bar">
+        <span id="viewer-title" class="viewer__title"></span>
+        <button id="viewer-close" class="viewer__close" type="button" aria-label="Fermer">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg>
+        </button>
       </div>
-    </section>
+      <div id="viewer-media" class="viewer__media"></div>
+      <p id="viewer-note" class="viewer__note" hidden></p>
+      <a id="viewer-save" class="button button--primary viewer__save" href="#" download>Enregistrer sur le téléphone</a>
+    </div>
     <script src="/app.js"></script>
   </body>
 </html>

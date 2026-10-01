@@ -9,9 +9,8 @@ export interface PhoneAccessOptions {
   tunnelStateDir: string
   devicesFile: string
   pageDir: string
-  sendMessage: PhoneServerDeps['sendMessage']
-  transcribe: PhoneServerDeps['transcribe']
-  history: PhoneServerDeps['history']
+  /** Ce que le téléphone peut demander au PC (conversation, voix, création d'images et de vidéos). */
+  actions: Omit<PhoneServerDeps, 'devices' | 'pageDir' | 'now'>
   /** Pour les tests : remplace le vrai tunnel. */
   tunnel?: PhoneTunnel
 }
@@ -29,9 +28,7 @@ export class PhoneAccessManager extends EventEmitter {
     super()
     this.devices = new PhoneDeviceStore(options.devicesFile)
     this.server = new PhoneServer({
-      sendMessage: options.sendMessage,
-      transcribe: options.transcribe,
-      history: options.history,
+      ...options.actions,
       devices: this.devices,
       pageDir: options.pageDir
     })

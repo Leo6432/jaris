@@ -44,6 +44,8 @@ export default function ImagePanel(): JSX.Element {
     void refreshImages()
   }, [])
   useEffect(() => window.jaris.onImageStudioLog(setLogLine), [])
+  // Image créée depuis le téléphone : elle apparaît aussi ici sans avoir à rouvrir le mode.
+  useEffect(() => window.jaris.onStudioGalleryChanged?.(() => void refreshImages()), [])
 
   useEffect(() => {
     if (!generating) return
