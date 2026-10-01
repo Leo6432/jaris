@@ -13,6 +13,8 @@ import VideoDurationPicker from './VideoDurationPicker'
 import VideoQualityPicker from './VideoQualityPicker'
 
 const DURATION_KEY = 'jaris.videoSeconds'
+/** Comme l'écran Image : les dernières créations en vignettes sur l'accueil (étape 213). */
+const GALLERY_SIZE = 8
 const QUALITY_KEY = 'jaris.videoQuality'
 
 function readSaved(key: string): string | null {
@@ -70,6 +72,12 @@ export default function VideoPanel(): JSX.Element {
   const [saved, setSaved] = useState(false)
   const [lastOutcome, setLastOutcome] = useState<{ kind: 'done' | 'stopped'; durationMs: number } | null>(null)
   const stoppedRef = useRef(false)
+  // Vignettes de l'accueil (étape 213, Léo : « sur image on voit toutes les images, sur vidéo on ne voit rien »).
+  // Chaque vidéo arrive en entier par l'IPC et devient une adresse blob: locale, libérée quand la vidéo est
+  // supprimée ou que l'écran se ferme — sinon chaque passage par l'onglet garderait toutes ces vidéos en mémoire.
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({})
+  const thumbnailsRef = useRef<Record<string, string>>({})
+  thumbnailsRef.current = thumbnails
 
   const refreshVideos = async (): Promise<GeneratedVideoSummary[]> => {
     const list = await window.jaris.listGeneratedVideos()
@@ -119,6 +127,43 @@ export default function VideoPanel(): JSX.Element {
       if (url) URL.revokeObjectURL(url)
     }
   }, [selected])
+
+  const ready = status !== null && status.supported && status.capable && status.qualities.some((q) => q.installed)
+
+  useEffect(() => {
+    if (!ready) return
+    let cancelled = false
+    for (const video of videos.slice(0, GALLERY_SIZE)) {
+      if (thumbnailsRef.current[video.fileName]) continue
+      void window.jaris
+        .readGeneratedVideo(video.fileName)
+        .then((bytes) => {
+          if (cancelled) return
+          const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'video/webm' }))
+          setThumbnails((prev) => {
+            // Arrivée en double (deux rafraîchissements rapprochés) : garder la première, libérer l'autre.
+            if (prev[video.fileName]) {
+              URL.revokeObjectURL(url)
+              return prev
+            }
+            return { ...prev, [video.fileName]: url }
+          })
+        })
+        .catch(() => {
+          // Vidéo effacée entre la liste et la lecture : la vignette reste vide, rien de plus.
+        })
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [videos, ready])
+
+  useEffect(
+    () => () => {
+      for (const url of Object.values(thumbnailsRef.current)) URL.revokeObjectURL(url)
+    },
+    []
+  )
 
   /** Le bandeau de fin et l'erreur décrivent UNE vidéo : effacés dès qu'on en change (leçon de l'étape 102). */
   const clearFeedback = (): void => {
@@ -203,6 +248,13 @@ export default function VideoPanel(): JSX.Element {
     setError(null)
     try {
       await window.jaris.deleteGeneratedVideo(fileName)
+      setThumbnails((prev) => {
+        if (!prev[fileName]) return prev
+        URL.revokeObjectURL(prev[fileName])
+        const next = { ...prev }
+        delete next[fileName]
+        return next
+      })
       await refreshVideos()
       if (selected?.fileName === fileName) startOver()
     } catch (err) {
@@ -273,6 +325,7 @@ export default function VideoPanel(): JSX.Element {
   }
 
   const step = logLine ? imageStepFromLog(logLine) : null
+  const gallery = videos.slice(0, GALLERY_SIZE)
 
   return (
     <Workspace
@@ -291,6 +344,35 @@ export default function VideoPanel(): JSX.Element {
               Décris la scène : ce qui bouge, le décor, la lumière (ex : « un chat roux marche dans la neige au
               coucher du soleil, caméra qui le suit »). Pour animer une image, joins-la avec le « + » du champ.
             </p>
+            {gallery.length > 0 && (
+              <ul className="image-panel__gallery video-panel__gallery" aria-label="Dernières vidéos">
+                {gallery.map((video) => (
+                  <li key={video.fileName}>
+                    <button className="image-panel__thumb video-panel__thumb" onClick={() => open(video.fileName)} title={video.label}>
+                      {thumbnails[video.fileName] ? (
+                        // Première image affichée à l'arrêt, lecture au survol : on voit ce qui bouge sans tout lancer.
+                        <video
+                          src={thumbnails[video.fileName]}
+                          muted
+                          loop
+                          playsInline
+                          preload="auto"
+                          aria-label={video.label}
+                          onMouseEnter={(e) => void e.currentTarget.play().catch(() => undefined)}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.pause()
+                            e.currentTarget.currentTime = 0
+                          }}
+                        />
+                      ) : (
+                        <span className="image-panel__thumb-empty" />
+                      )}
+                      <span className="video-panel__thumb-play" aria-hidden="true" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 

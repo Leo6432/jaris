@@ -5734,3 +5734,18 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   hypothèse** tant que le code qui lit ces poids n'a pas été consulté.
   Régression : `node --test scripts/test-video-generation.mjs` (lecteur sur le processeur, assertion ggml
   reprise telle quelle ; les deux vérifiés en retirant le correctif).
+
+- **L'accueil Vidéo restait vide alors que celui d'Image montre une galerie (Léo, étape 213 : « sur image on
+  peut voir toutes les images, mais sur vidéo on voit rien »).** Les deux écrans partagent la même présentation
+  depuis l'étape 203, mais seule la galerie d'Image avait été faite. L'écran Vidéo affiche maintenant ses 8
+  dernières vidéos en vignettes, au format vidéo et non en carré. Chaque vignette montre la première image de sa
+  vidéo et se lance au survol, sans le son. Un symbole « lecture » la distingue d'une simple image. Un clic ouvre
+  la vidéo.
+  Chaque vidéo traverse l'IPC en entier et devient une adresse blob: locale. Elle est libérée quand la vidéo est
+  supprimée ou que l'écran se ferme, sinon chaque passage par l'onglet garderait toutes ces vidéos en mémoire.
+  **Leçon générale : quand deux écrans sont annoncés comme « la même présentation », vérifier qu'ils ont
+  vraiment les MÊMES éléments, pas seulement la même mise en page.** C'est le contenu de l'accueil qui
+  manquait, pas la structure.
+  Vérifié dans un vrai navigateur avec une vraie vidéo WebM produite par sd.cpp : la première image s'affiche
+  dans les 5 vignettes. Régression : `scripts/test-video-panel-ui.mjs` (une vignette par vidéo, format vidéo
+  mesuré sur le CSS compilé, muette, un clic ouvre, la suppression retire la vignette).

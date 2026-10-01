@@ -124,6 +124,33 @@ test('accueil : même présentation que le mode Image (liste à gauche, champ en
   })
 })
 
+test('accueil (étape 213) : les dernières vidéos en vignettes, comme les images ; un clic ouvre, supprimer retire la vignette', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.video-panel__thumb video')
+    const count = await page.evaluate(() => window.__videos.length)
+    assert.ok(count >= 1)
+    assert.equal(await page.locator('.video-panel__thumb').count(), count, 'une vignette par vidéo')
+    assert.match(await page.$eval('.video-panel__thumb video', (v) => v.src), /^blob:/, 'la vraie vidéo, chargée localement')
+    assert.equal(await page.$eval('.video-panel__thumb video', (v) => v.muted), true, 'jamais de son en survolant la galerie')
+    // Habillée par le CSS compilé (format vidéo, pas le carré des images) et avec son symbole « lecture ».
+    const box = await page.$eval('.video-panel__thumb', (el) => el.getBoundingClientRect())
+    assert.ok(box.width > box.height * 1.5, `vignette au format vidéo (${box.width}x${box.height})`)
+    assert.equal(await page.locator('.video-panel__thumb-play').count(), count)
+
+    const first = await page.evaluate(() => window.__videos[0])
+    await page.click('.video-panel__thumb')
+    await page.waitForSelector('.image-panel__result')
+    assert.equal(await page.textContent('.image-panel__title'), first.label, 'le clic ouvre cette vidéo')
+
+    await page.click('.workspace__new')
+    await page.waitForSelector('.video-panel__thumb')
+    await page.click('.workspace__delete >> nth=0')
+    await page.click('.workspace__confirm-yes')
+    await page.waitForFunction((n) => document.querySelectorAll('.video-panel__thumb').length === n - 1, count)
+    assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => Array.isArray(c) && c[0] === 'delete'), ['delete', first.fileName])
+  })
+})
+
 test('créer : avancement avec barre, puis la vidéo se lit et rejoint la liste', options, async () => {
   await withPage(async (page) => {
     await page.waitForSelector('.composer__input')
