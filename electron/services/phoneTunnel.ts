@@ -7,10 +7,10 @@ import type { Readable, Writable } from 'stream'
 /** État du tunnel, sans les appareils (ajoutés par phoneAccessManager). */
 export type TunnelState =
   | { state: 'off' }
-  | { state: 'starting' }
+  | { state: 'starting'; message?: string }
   | { state: 'login'; actionUrl: string }
   | { state: 'enable_funnel'; actionUrl?: string; message?: string }
-  | { state: 'ready'; address: string }
+  | { state: 'ready'; address: string; warning?: string }
   | { state: 'error'; message: string }
   | { state: 'unsupported'; message: string }
 
@@ -18,7 +18,9 @@ type TunnelEvent =
   | { event: 'starting' }
   | { event: 'login'; url: string }
   | { event: 'enable_funnel'; url?: string; text?: string }
-  | { event: 'ready'; url: string }
+  | { event: 'preparing'; text: string }
+  | { event: 'ready'; url: string; warning?: string }
+  | { event: 'tls_error'; message: string }
   | { event: 'error'; message: string }
   | { event: 'logged_out' }
 
@@ -99,9 +101,17 @@ export class PhoneTunnel extends EventEmitter {
             ...(event.text ? { message: event.text } : {})
           })
           break
+        case 'preparing':
+          this.set({ state: 'starting', message: event.text })
+          break
         case 'ready':
-          if (isTailscaleUrl(event.url, 'address')) this.set({ state: 'ready', address: event.url })
+          if (isTailscaleUrl(event.url, 'address')) this.set({ state: 'ready', address: event.url, ...(event.warning ? { warning: event.warning } : {}) })
           else this.set({ state: 'error', message: `Adresse inattendue reçue de Tailscale : ${event.url}` })
+          break
+        case 'tls_error':
+          // Une connexion sécurisée a échoué (téléphone ou vérification) : on le dit au lieu de le cacher.
+          if (this.current.state === 'ready') this.set({ ...this.current, warning: `Connexion sécurisée refusée : ${event.message}` })
+          else if (this.current.state === 'starting') this.set({ state: 'starting', message: `${this.current.message ?? 'Démarrage…'} (dernière erreur : ${event.message})` })
           break
         case 'error':
           this.set({ state: 'error', message: event.message })

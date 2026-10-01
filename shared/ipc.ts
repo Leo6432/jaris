@@ -896,10 +896,11 @@ export interface PhoneDevice {
 /**
  * Où en est l'accès depuis le téléphone (étape 214) :
  * - 'off' : désactivé (par défaut) ;
- * - 'starting' : le tunnel Tailscale démarre ;
+ * - 'starting' : le tunnel Tailscale démarre (`message` : l'étape en cours, ex. le certificat) ;
  * - 'login' : se connecter à Tailscale, une fois, dans le navigateur (`actionUrl`) ;
  * - 'enable_funnel' : autoriser l'adresse web publique, une fois (`actionUrl`) ;
- * - 'ready' : l'adresse `address` est joignable depuis le téléphone ;
+ * - 'ready' : l'adresse `address` est joignable depuis le téléphone (`message` : dernière erreur de connexion
+ *   sécurisée, s'il y en a une) ;
  * - 'error' : `message` dit pourquoi ;
  * - 'unsupported' : tunnel absent de cette installation.
  */

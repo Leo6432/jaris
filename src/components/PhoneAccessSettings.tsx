@@ -111,7 +111,7 @@ export default function PhoneAccessSettings(): JSX.Element {
         </p>
       </SettingGroup>
 
-      {status.state === 'starting' && <p className="phone-access__step">Démarrage de la connexion…</p>}
+      {status.state === 'starting' && <p className="phone-access__step">{status.message ?? 'Démarrage de la connexion…'}</p>}
 
       {status.state === 'login' && (
         <div className="phone-access__step phone-access__step--action">
@@ -152,6 +152,7 @@ export default function PhoneAccessSettings(): JSX.Element {
 
       {status.state === 'ready' && (
         <SettingGroup title="Connecter un téléphone">
+          {status.message && <p className="phone-access__step phone-access__step--error">{status.message}</p>}
           <SettingRow label="Adresse de ton Jaris" description={<span className="phone-access__address">{status.address}</span>}>
             <button className="options-menu__action" disabled={busy} onClick={showPairing}>
               {pairing ? 'Nouveau code' : 'Connecter un téléphone'}

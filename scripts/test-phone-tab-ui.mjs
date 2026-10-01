@@ -172,6 +172,16 @@ test('déconnecter un téléphone, et se déconnecter de Tailscale après confir
   })
 })
 
+test('étapes de préparation et avertissement de l’adresse affichés tels quels', options, async () => {
+  await withPhoneTab(async (page) => {
+    await page.evaluate(() => window.__emitPhone({ state: 'starting', message: 'Préparation du certificat sécurisé (jusqu’à 2 minutes la première fois)…', devices: [] }))
+    await page.waitForSelector('text=Préparation du certificat sécurisé')
+    await page.evaluate(() => window.__emitPhone({ state: 'ready', address: 'https://jaris.tail1234.ts.net', message: 'Connexion sécurisée refusée : acme: rate limited', devices: [] }))
+    await page.waitForSelector('text=acme: rate limited')
+    assert.ok(await page.isVisible('button:has-text("Connecter un téléphone")'), 'l’adresse reste utilisable')
+  })
+})
+
 test('échec : la vraie raison et un bouton pour réessayer', options, async () => {
   await withPhoneTab(async (page) => {
     await page.evaluate(() => window.__emitPhone({ state: 'error', message: 'démarrage de Tailscale impossible : pas de réseau', devices: [] }))

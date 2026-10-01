@@ -52,7 +52,9 @@ export class PhoneAccessManager extends EventEmitter {
       case 'enable_funnel':
         return { state: 'enable_funnel', actionUrl: tunnel.actionUrl, message: tunnel.message, devices }
       case 'ready':
-        return { state: 'ready', address: tunnel.address, devices }
+        return { state: 'ready', address: tunnel.address, ...(tunnel.warning ? { message: tunnel.warning } : {}), devices }
+      case 'starting':
+        return { state: 'starting', ...(tunnel.message ? { message: tunnel.message } : {}), devices }
       case 'error':
       case 'unsupported':
         return { state: tunnel.state, message: tunnel.message, devices }

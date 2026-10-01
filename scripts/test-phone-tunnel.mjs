@@ -149,5 +149,44 @@ test('le dossier d’état du tunnel ne s’appelle jamais « tailscale »', () 
   assert.notEqual(dirName.toLowerCase(), 'tailscale')
   assert.match(main, /tunnelStateDir: join\(app\.getPath\('userData'\), PHONE_TUNNEL_DIR\)/)
   const go = readFileSync(new URL('../tunnel/main.go', import.meta.url), 'utf8')
-  assert.match(go, /Dir:\s+stateDirFor\(\*stateDir\)/, 'le tunnel doit aussi se protéger lui-même')
+  assert.match(go, /dir := stateDirFor\(\*stateDir\)/, 'le tunnel doit aussi se protéger lui-même')
+  assert.match(go, /Dir:\s+dir,/)
+})
+
+// v0.22.1 chez Léo : ERR_SSL_PROTOCOL_ERROR sur le téléphone, rien de visible sur le PC. Le tunnel prépare
+// maintenant le certificat et vérifie l'adresse depuis internet AVANT de la donner, et chaque étape (puis toute
+// erreur de connexion sécurisée) arrive jusqu'à l'écran au lieu de rester cachée.
+test('préparation visible, puis adresse prête ; une erreur de certificat ensuite est affichée', async () => {
+  const fake = fakeTunnel([
+    { event: 'preparing', text: 'Préparation du certificat sécurisé…' },
+    { event: 'preparing', text: "Vérification de l'adresse depuis internet…" },
+    { event: 'ready', url: 'https://jaris.tail1234.ts.net' },
+    { event: 'tls_error', message: 'acme: rate limited' }
+  ])
+  const tunnel = new PhoneTunnel(fake.path, fake.dir)
+  const messages = []
+  tunnel.on('change', (s) => s.state === 'starting' && s.message && messages.push(s.message))
+  try {
+    tunnel.start(4321)
+    const state = await waitFor(tunnel, (s) => s.state === 'ready' && s.warning)
+    assert.deepEqual(messages, ['Préparation du certificat sécurisé…', "Vérification de l'adresse depuis internet…"])
+    assert.equal(state.address, 'https://jaris.tail1234.ts.net')
+    assert.match(state.warning, /acme: rate limited/)
+  } finally {
+    tunnel.stop()
+    fake.cleanup()
+  }
+})
+
+test('adresse donnée malgré une vérification qui échoue : l’avertissement suit, avec la vraie raison', async () => {
+  const fake = fakeTunnel([{ event: 'ready', url: 'https://jaris.tail1234.ts.net', warning: "L'adresse ne répond pas encore depuis internet : no such host" }])
+  const tunnel = new PhoneTunnel(fake.path, fake.dir)
+  try {
+    tunnel.start(4321)
+    const state = await waitFor(tunnel, (s) => s.state === 'ready')
+    assert.match(state.warning, /no such host/)
+  } finally {
+    tunnel.stop()
+    fake.cleanup()
+  }
 })

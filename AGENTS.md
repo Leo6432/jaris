@@ -5833,3 +5833,23 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Et un test en CI ne prouve rien sur ce qui demande des droits : la CI est administrateur, Léo non.**
   Régression : `go test ./...` (tunnel/, vérifié en retirant le garde) et `scripts/test-phone-tunnel.mjs`
   (le nom n'est jamais « tailscale », des deux côtés).
+
+- **ERR_SSL_PROTOCOL_ERROR sur le téléphone en scannant le QR code (Léo, v0.22.1), et RIEN de visible côté
+  PC.** Le tunnel avait bien publié l'adresse (le téléphone l'atteignait), mais la connexion sécurisée
+  échouait. Cause exacte NON confirmée, faute de journaux : la v0.22.0 jetait tous les messages de tsnet.
+  Plutôt qu'une hypothèse de plus (leçon de la saga SearXNG), le tunnel teste maintenant le comportement
+  réel et rend les erreurs visibles :
+  1. il obtient le certificat HTTPS AVANT d'annoncer l'adresse (`lc.CertPair`, jusqu'à 4 min). La première
+     fois, Let's Encrypt peut prendre une minute : un téléphone arrivé avant tombait sur l'échec ;
+  2. il fait lui-même une vraie requête HTTPS vers l'adresse publique, par internet et le relais Funnel,
+     comme le téléphone. L'adresse n'est donnée qu'une fois cette requête réussie. Une adresse neuve peut
+     mettre plusieurs minutes à exister sur internet. Au-delà de 10 min, l'adresse est donnée quand même,
+     avec la vraie erreur affichée ;
+  3. toute erreur de certificat pendant une connexion remonte à l'écran (`tls_error`, au plus toutes les 30 s) ;
+  4. le journal de tsnet est gardé SUR LE PC (`phone-tunnel/jaris-tunnel.log`, 2 Mo max), jamais envoyé.
+
+  **Leçon générale : couper complètement les journaux d'une bibliothèque réseau pour raison de
+  confidentialité rend le premier échec réel indiagnostiquable. Couper l'ENVOI, pas l'écriture locale.**
+  Régression : `go test ./...` (tunnel/ : alerte de certificat transmise une seule fois avec le vrai message,
+  vérification qui exige une vraie réponse de Jaris), `scripts/test-phone-tunnel.mjs` et
+  `scripts/test-phone-tab-ui.mjs` (étapes de préparation et avertissement affichés).

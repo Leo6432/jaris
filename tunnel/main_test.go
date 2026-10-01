@@ -1,7 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"crypto/tls"
+	"errors"
 	"io"
+	"os"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -80,5 +85,71 @@ func TestStateDirNeverNamedTailscale(t *testing.T) {
 	}
 	if got := stateDirFor("/data/phone-tunnel"); got != "/data/phone-tunnel" {
 		t.Fatalf("un autre nom doit rester tel quel, obtenu %q", got)
+	}
+}
+
+// Une erreur de certificat est transmise à Jaris (au lieu d'une simple page d'erreur sur le téléphone), mais
+// sans inonder : au plus une fois toutes les 30 secondes.
+func TestReportingCertificatesEmitsOnceAndPassesErrorThrough(t *testing.T) {
+	calls := 0
+	get := reportingCertificates(func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+		calls++
+		return nil, errors.New("acme: rate limited")
+	})
+	var out bytes.Buffer
+	restore := captureStdout(&out)
+	for i := 0; i < 3; i++ {
+		if _, err := get(&tls.ClientHelloInfo{ServerName: "jaris.example.ts.net"}); err == nil {
+			t.Fatal("l'erreur doit rester une erreur pour la connexion")
+		}
+	}
+	restore()
+	if calls != 3 {
+		t.Fatalf("chaque connexion doit demander le certificat : %d", calls)
+	}
+	if n := strings.Count(out.String(), `"tls_error"`); n != 1 {
+		t.Fatalf("une seule alerte attendue, obtenu %d : %s", n, out.String())
+	}
+	if !strings.Contains(out.String(), "acme: rate limited") {
+		t.Fatalf("le vrai message doit être transmis : %s", out.String())
+	}
+}
+
+// La vérification de l'adresse ne se contente pas d'une connexion : il faut une vraie réponse de Jaris.
+func TestCheckPublicAddressNeedsRealAnswer(t *testing.T) {
+	ok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/manifest.webmanifest" {
+			w.Write([]byte("{}"))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ok.Close()
+	if err := checkPublicAddress(context.Background(), ok.URL); err != nil {
+		t.Fatalf("adresse qui répond : %v", err)
+	}
+	down := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "Jaris ne répond pas sur le PC.", http.StatusBadGateway)
+	}))
+	defer down.Close()
+	if err := checkPublicAddress(context.Background(), down.URL); err == nil {
+		t.Fatal("une réponse 502 n'est pas une adresse qui marche")
+	}
+}
+
+// captureStdout redirige les événements émis (stdout) vers buf le temps d'un test.
+func captureStdout(buf *bytes.Buffer) func() {
+	r, w, _ := os.Pipe()
+	old := os.Stdout
+	os.Stdout = w
+	done := make(chan struct{})
+	go func() {
+		io.Copy(buf, r)
+		close(done)
+	}()
+	return func() {
+		w.Close()
+		<-done
+		os.Stdout = old
 	}
 }

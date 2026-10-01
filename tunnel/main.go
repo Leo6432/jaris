@@ -11,7 +11,9 @@
 //	{"event":"starting"}
 //	{"event":"login","url":"https://login.tailscale.com/a/..."}  connexion Tailscale à faire dans le navigateur
 //	{"event":"enable_funnel","url":"...","text":"..."}           autoriser l'adresse web publique, une fois
-//	{"event":"ready","url":"https://jaris.xxx.ts.net"}
+//	{"event":"preparing","text":"..."}                          certificat, puis vérification depuis internet
+//	{"event":"ready","url":"https://jaris.xxx.ts.net"}           (+ "warning" si l'adresse ne répond pas encore)
+//	{"event":"tls_error","message":"..."}                        une connexion sécurisée a échoué
 //	{"event":"error","message":"..."}
 //	{"event":"logged_out"}                                       (avec --logout)
 //
@@ -21,6 +23,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -97,6 +100,77 @@ func newHTTPServer(handler http.Handler) *http.Server {
 		WriteTimeout:      2 * time.Minute,
 		IdleTimeout:       2 * time.Minute,
 		MaxHeaderBytes:    32 << 10,
+	}
+}
+
+// prefetchCertificate : la première fois, Tailscale doit obtenir un certificat HTTPS (Let's Encrypt) pour
+// l'adresse, ce qui peut prendre une minute. Si un téléphone arrive pendant ce temps, la connexion sécurisée
+// échoue (ERR_SSL_PROTOCOL_ERROR, vécu par Léo en v0.22.1). On l'obtient donc AVANT d'annoncer l'adresse.
+func prefetchCertificate(ctx context.Context, lc *local.Client, domain string) error {
+	ctx, cancel := context.WithTimeout(ctx, 4*time.Minute)
+	defer cancel()
+	_, _, err := lc.CertPair(ctx, domain)
+	return err
+}
+
+// checkPublicAddress fait depuis le PC exactement ce que fera le téléphone : une vraie requête HTTPS vers
+// l'adresse publique, par internet et le relais Funnel. Seul ce test prouve que l'adresse marche.
+func checkPublicAddress(ctx context.Context, address string) error {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address+"/manifest.webmanifest", nil)
+	if err != nil {
+		return err
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("réponse inattendue (%d)", res.StatusCode)
+	}
+	return nil
+}
+
+// reportingCertificates transmet à Jaris toute erreur de connexion sécurisée (au plus une fois toutes les 30 s),
+// au lieu de la laisser invisible : sans elle, Léo ne voyait qu'une page d'erreur sur son téléphone.
+func reportingCertificates(get func(*tls.ClientHelloInfo) (*tls.Certificate, error)) func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	var mu sync.Mutex
+	var last time.Time
+	return func(hi *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		cert, err := get(hi)
+		if err != nil {
+			mu.Lock()
+			if time.Since(last) > 30*time.Second {
+				last = time.Now()
+				emit(map[string]string{"event": "tls_error", "message": err.Error()})
+			}
+			mu.Unlock()
+		}
+		return cert, err
+	}
+}
+
+// openLogFile : journal technique de Tailscale, gardé SUR LE PC uniquement (jamais envoyé), pour comprendre un
+// échec. Repart à zéro au-delà de 2 Mo.
+func openLogFile(dir string) func(string, ...any) {
+	path := filepath.Join(dir, "jaris-tunnel.log")
+	if fi, err := os.Stat(path); err == nil && fi.Size() > 2<<20 {
+		_ = os.Remove(path)
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return func(string, ...any) {}
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return func(string, ...any) {}
+	}
+	var mu sync.Mutex
+	return func(format string, args ...any) {
+		mu.Lock()
+		defer mu.Unlock()
+		fmt.Fprintf(f, "%s "+format+"\n", append([]any{time.Now().Format(time.RFC3339)}, args...)...)
 	}
 }
 
@@ -177,10 +251,12 @@ func main() {
 	envknob.SetNoLogsNoSupport()
 	logtail.Disable()
 
+	dir := stateDirFor(*stateDir)
+	logf := openLogFile(dir)
 	srv := &tsnet.Server{
-		Dir:      stateDirFor(*stateDir),
+		Dir:      dir,
 		Hostname: *hostname,
-		Logf:     func(string, ...any) {},
+		Logf:     logf,
 		// Messages destinés à un humain devant un terminal (« restart with TS_AUTHKEY… », répétés toutes les
 		// 5 s) : l'adresse de connexion est déjà transmise par l'événement "login", rien d'autre à en tirer.
 		UserLogf: func(string, ...any) {},
@@ -230,13 +306,50 @@ func main() {
 		stopOrFail(ctx, err)
 	}
 
-	ln, err := srv.ListenFunnel("tcp", ":443")
+	domain := st.CertDomains[0]
+	address := "https://" + domain
+
+	emit(map[string]string{"event": "preparing", "text": "Préparation du certificat sécurisé (jusqu'à 2 minutes la première fois)…"})
+	if err := prefetchCertificate(ctx, lc, domain); err != nil {
+		stopOrFail(ctx, fmt.Errorf("certificat HTTPS impossible à obtenir : %w", err))
+	}
+
+	ln, err := srv.ListenFunnel("tcp", ":443", tsnet.FunnelTLSConfig(&tls.Config{
+		GetCertificate: reportingCertificates(lc.GetCertificate),
+		NextProtos:     []string{"h2", "http/1.1"},
+	}))
 	if err != nil {
 		fail(fmt.Errorf("adresse web publique impossible à ouvrir : %w", err))
 	}
-	emit(map[string]string{"event": "ready", "url": "https://" + st.CertDomains[0]})
+	served := make(chan error, 1)
+	go func() { served <- newHTTPServer(newProxy(targetURL)).Serve(ln) }()
 
-	if err := newHTTPServer(newProxy(targetURL)).Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
+	// La toute première fois, l'adresse peut mettre plusieurs minutes à exister sur internet (DNS). On ne la
+	// donne au téléphone qu'une fois qu'elle répond vraiment ; au-delà de 10 minutes, on la donne quand même,
+	// avec la dernière erreur, pour ne jamais bloquer une adresse qui marcherait depuis un autre réseau.
+	emit(map[string]string{"event": "preparing", "text": "Vérification de l'adresse depuis internet (jusqu'à 10 minutes la première fois)…"})
+	deadline := time.Now().Add(10 * time.Minute)
+	for {
+		checkErr := checkPublicAddress(ctx, address)
+		if checkErr == nil {
+			emit(map[string]string{"event": "ready", "url": address})
+			break
+		}
+		logf("vérification de %s : %v", address, checkErr)
+		if time.Now().After(deadline) {
+			emit(map[string]string{"event": "ready", "url": address, "warning": "L'adresse ne répond pas encore depuis internet : " + checkErr.Error()})
+			break
+		}
+		select {
+		case <-ctx.Done():
+			os.Exit(0)
+		case err := <-served:
+			fail(err)
+		case <-time.After(10 * time.Second):
+		}
+	}
+
+	if err := <-served; err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
 		fail(err)
 	}
 }
