@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import { config } from '../config'
-import { converse } from './assistant'
+import { converse, type ConverseRestrictions } from './assistant'
 import { IMAGE_CHAT_SYSTEM_PROMPT, describeImage } from './vision'
 import { appendConversationEntry, getConversationHistory } from './conversationStore'
 import { clearSessionHistory, getSessionHistory, pushSessionExchange } from './conversationSession'
@@ -113,7 +113,9 @@ class ChatSession {
     // cues d'outil (clic/scan, voir TOOL_SOUND_CUES dans assistant.ts) : un seul callback pour les deux.
     onSoundCue?: (cue: SoundCue) => void,
     onToken?: (delta: string) => void,
-    imageBase64?: string
+    imageBase64?: string,
+    // Étape 214 : message venu du téléphone (voir phoneAccess.ts), dans la MÊME conversation que le Chat.
+    restrictions?: ConverseRestrictions
   ): Promise<ChatMessage> {
     // Sans ça, un message envoyé avant que le premier getVisibleMessages() (appelé au montage de
     // ChatPanel.tsx) ait fini de charger l'historique pourrait écraser la restauration en cours.
@@ -154,7 +156,8 @@ class ChatSession {
             onSoundCue,
             (image) => {
               generated = image
-            }
+            },
+            restrictions
           )
       if (gpuStatus.action === 'warn') reply = `${gpuStatus.message}\n\n${reply}`
     } catch (err) {

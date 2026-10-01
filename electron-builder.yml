@@ -45,6 +45,13 @@ extraResources:
     to: docker-compose.yml
   - from: searxng
     to: searxng
+  # Étape 214 : parler à Jaris depuis son téléphone. jaris-tunnel.exe (Tailscale embarqué, compilé par la CI
+  # depuis tunnel/) est un vrai programme lancé à côté de Jaris, donc hors de l'archive asar ; la page du
+  # téléphone (phone/) est servie telle quelle par le serveur local de Jaris.
+  - from: tunnel/dist/jaris-tunnel.exe
+    to: bin/jaris-tunnel.exe
+  - from: phone
+    to: phone
 
 win:
   target: nsis

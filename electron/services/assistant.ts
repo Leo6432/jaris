@@ -147,6 +147,17 @@ function pickTier(prompt: string): Tier {
 export type { ConverseChannel } from './systemPrompt'
 
 /**
+ * Étape 214 (téléphone) : un tour de conversation où seuls certains outils existent. `note` est ajoutée au
+ * prompt système pour que le modèle sache pourquoi certaines actions manquent ; `refusal` est la réponse
+ * donnée quand une action interdite est quand même demandée.
+ */
+export interface ConverseRestrictions {
+  allowedTools: ReadonlySet<string>
+  note: string
+  refusal: string
+}
+
+/**
  * Le prompt système interdit déjà toute mise en forme en voix ("texte normal uniquement"), mais un petit
  * modèle local ne suit pas toujours cette consigne (observé : **gras**, listes numérotées, `code`) — filet
  * de sécurité indépendant du prompt, comme le nettoyage des émojis côté synthèse vocale (voir tts.ts).
@@ -333,7 +344,9 @@ export async function converse(
   // ne connaît que les outils, jamais l'état ambiant du canal appelant.
   onSoundCue?: (cue: SoundCue) => void,
   // Étape 173 : reçoit l'image dessinée par generate_image (voir ImageHandler, tools.ts).
-  onImage?: ImageHandler
+  onImage?: ImageHandler,
+  // Étape 214 : message venu du téléphone — seuls certains outils existent pour ce tour (voir phoneAccess.ts).
+  restrictions?: ConverseRestrictions
 ): Promise<string> {
   const socialReply = directSocialReply(prompt)
   if (socialReply) {
@@ -343,9 +356,19 @@ export async function converse(
 
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
-  const executeTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel, onLog, signal, onImage)
+  const runTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel, onLog, signal, onImage)
+  const isToolAllowed = (name: string): boolean => !restrictions || restrictions.allowedTools.has(name)
+  // Deux barrières plutôt qu'une : les outils interdits ne sont même pas présentés au modèle (plus bas), ET
+  // l'exécution les refuse quand même — un modèle peut inventer un appel à un outil qu'on ne lui a pas donné.
+  const executeTool: typeof runTool = async (name, args) => {
+    if (!isToolAllowed(name)) throw new Error(restrictions?.refusal ?? 'Action indisponible ici.')
+    return runTool(name, args)
+  }
+  const tools = restrictions ? TOOLS.filter((tool) => isToolAllowed(tool.function.name)) : TOOLS
 
   const noteText = requestedNotepadText(prompt)
+  // Le Bloc-notes écrit sur le PC : jamais depuis le téléphone (Léo : « pas taper à ta place »).
+  if (noteText !== undefined && restrictions) return restrictions.refusal
   if (noteText !== undefined) {
     onLog?.('Préparation du document et ouverture du Bloc-notes…')
     try {
@@ -444,7 +467,10 @@ export async function converse(
   }
 
   const messages: OllamaMessage[] = [
-    { role: 'system', content: buildSystemPrompt(userName, memoryTitles, channel) },
+    {
+      role: 'system',
+      content: restrictions ? `${buildSystemPrompt(userName, memoryTitles, channel)}\n\n${restrictions.note}` : buildSystemPrompt(userName, memoryTitles, channel)
+    },
     // Les erreurs d'outils sont conservées dans l'historique visible, mais pas réinjectées au modèle :
     // qwen3.5:4b a reproduit un ancien 403 SANS appeler search_web, alors que le service répondait 200.
     // Retirer aussi la question associée évite une suite de demandes anciennes laissées sans réponse.
@@ -470,7 +496,8 @@ export async function converse(
   // mail"), et répond à la place par un simple résumé texte de ce qu'il a trouvé. Détecté sur l'intention
   // de LA PHRASE ACTUELLE (pas l'historique, pour ne jamais relancer sur une intention d'un tour précédent
   // déjà traitée) plutôt que sur TOOL_SIGNAL_WORDS (pensé pour choisir un palier, pas pour ça).
-  const wantsEmailSent = hasUnnegatedMailIntent(prompt)
+  // Sans computer_use_task (téléphone), relancer vers lui pousserait le modèle vers un outil absent.
+  const wantsEmailSent = isToolAllowed('computer_use_task') && hasUnnegatedMailIntent(prompt)
   // Contrairement à wantsEmailSent (recalculé sur la seule phrase actuelle, jamais l'historique), cette
   // relance n'a de sens que pour la question posée à CE tour : sinon une conversation qui a déjà cherché une
   // fois relancerait sans arrêt sur une intention d'un tour précédent déjà traité.
@@ -490,7 +517,7 @@ export async function converse(
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const message = await chatWithOllama(
       messages,
-      TOOLS,
+      tools,
       model,
       think,
       signal,
@@ -579,6 +606,13 @@ export async function converse(
       // SearXNG pas lancé pour search_web). Le message d'erreur, lui, est déjà clair et actionnable (voir
       // webSearch.ts) : mieux vaut le transmettre au modèle comme un résultat d'outil normal, pour qu'il le
       // relaie fidèlement (voir la consigne "ne jamais inventer de dépannage" plus bas) plutôt que le perdre.
+      // Téléphone (étape 214) : un outil interdit que le modèle appelle quand même (il n'en avait pas la liste)
+      // n'est jamais exécuté, et la réponse est le refus lui-même, sans « Échec de l'outil » technique devant.
+      if (restrictions && !isToolAllowed(call.function.name)) {
+        onLog?.(`Outil refusé depuis le téléphone : ${call.function.name}`)
+        return finalize(restrictions.refusal)
+      }
+
       let result: string
       let toolFailed = false
       try {

@@ -1,0 +1,331 @@
+/* Page du téléphone (étape 214) : mêmes couleurs que Jaris sur le PC (jetons --hud-* de src/index.css). */
+:root {
+  --bg: #01040a;
+  --panel: #061019;
+  --raised: rgba(12, 28, 44, 0.75);
+  --text: #e6f7ff;
+  --soft: #a9cfe8;
+  --faint: #4f7391;
+  --accent: #3ddcff;
+  --accent-rgb: 61, 220, 255;
+  --line: rgba(61, 220, 255, 0.22);
+  --danger: #ff4d68;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: radial-gradient(ellipse at 50% 0%, rgba(var(--accent-rgb), 0.12), transparent 60%), var(--bg);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.button {
+  border: 1px solid rgba(var(--accent-rgb), 0.6);
+  background: rgba(var(--accent-rgb), 0.16);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  padding: 11px 18px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.5;
+}
+
+.error {
+  color: var(--danger);
+  margin: 0;
+}
+
+/* Orbe : le vrai logo de Jaris (anneau irrégulier), qui respire ; plus vite pendant que Jaris travaille. */
+.orb {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), 0.45));
+  animation: breathe 3.2s ease-in-out infinite;
+}
+
+.orb--big {
+  width: 150px;
+  height: 150px;
+}
+
+.orb--busy {
+  animation: spin 2.4s linear infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.93);
+    opacity: 0.85;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb,
+  .orb--busy {
+    animation: none;
+  }
+}
+
+/* Appairage */
+.pair {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: calc(24px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom));
+  text-align: center;
+}
+
+.pair h1 {
+  margin: 8px 0 0;
+  font-size: 30px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.pair__lead {
+  margin: 0;
+  font-size: 18px;
+}
+
+.pair__hint {
+  margin: 0;
+  color: var(--soft);
+  max-width: 340px;
+}
+
+.pair__form {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  max-width: 340px;
+}
+
+.pair__code::placeholder {
+  color: var(--faint);
+}
+
+.pair__code {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 20px;
+  letter-spacing: 0.15em;
+  text-align: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+}
+
+/* Conversation */
+.chat {
+  height: 100%;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(1, 4, 10, 0.85);
+}
+
+.chat__title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chat__name {
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.chat__status {
+  color: var(--soft);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.message {
+  max-width: 85%;
+  padding: 9px 13px;
+  border-radius: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.message--user {
+  align-self: flex-end;
+  background: rgba(var(--accent-rgb), 0.2);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  border-bottom-right-radius: 5px;
+}
+
+.message--assistant {
+  align-self: flex-start;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 5px;
+}
+
+.message--pending {
+  color: var(--soft);
+  font-style: italic;
+}
+
+.message--error {
+  border-color: rgba(255, 77, 104, 0.6);
+  color: #ffb8c2;
+}
+
+.message img {
+  display: block;
+  max-width: 100%;
+  border-radius: 10px;
+  margin-top: 8px;
+}
+
+.empty {
+  margin: auto;
+  color: var(--faint);
+  text-align: center;
+  padding: 0 24px;
+}
+
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: rgba(1, 4, 10, 0.92);
+}
+
+.composer__input {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  max-height: 140px;
+  font: inherit;
+  padding: 10px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.composer__input:focus {
+  outline: none;
+  border-color: rgba(var(--accent-rgb), 0.6);
+}
+
+.composer__mic,
+.composer__send {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(var(--accent-rgb), 0.5);
+  background: rgba(var(--accent-rgb), 0.14);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.composer__send {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.composer__mic:disabled,
+.composer__send:disabled {
+  opacity: 0.4;
+}
+
+.recording {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: rgba(1, 4, 10, 0.95);
+}
+
+.recording__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: breathe 1s ease-in-out infinite;
+}
+
+.recording #recording-time {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.recording__cancel {
+  border: none;
+  background: none;
+  color: var(--soft);
+  font: inherit;
+  padding: 10px;
+  cursor: pointer;
+}

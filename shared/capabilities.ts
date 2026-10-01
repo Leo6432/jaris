@@ -224,6 +224,11 @@ export const CAPABILITIES: CapabilityGroup[] = [
       {
         title: 'Continuer à la voix',
         description: 'Ce que tu dis à voix haute continue la conversation ouverte dans le Chat, et inversement.'
+      },
+      {
+        title: 'Depuis ton téléphone',
+        description:
+          'Options → Téléphone : écris ou envoie des messages vocaux à Jaris de n’importe où, chiffré, sans appli à installer. Il ne peut alors ni taper, ni cliquer, ni éteindre le PC.'
       }
     ]
   }

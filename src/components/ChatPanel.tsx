@@ -58,7 +58,13 @@ export default function ChatPanel(): JSX.Element {
       void window.jaris.listConversations().then(setConversations)
     }
     document.addEventListener('visibilitychange', refresh)
-    return () => document.removeEventListener('visibilitychange', refresh)
+    // Étape 214 : un message envoyé depuis le téléphone rejoint la conversation active pendant que le Chat
+    // est peut-être affiché : il doit apparaître tout de suite, pas au prochain changement de fenêtre.
+    const unsubscribe = window.jaris.onChatHistoryChanged?.(refresh)
+    return () => {
+      document.removeEventListener('visibilitychange', refresh)
+      unsubscribe?.()
+    }
   }, [])
 
   /**

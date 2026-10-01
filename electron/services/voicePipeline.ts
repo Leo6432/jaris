@@ -176,6 +176,11 @@ export class VoicePipeline extends EventEmitter {
     this.voice.stop()
   }
 
+  /** Étape 214 : transcrit un message vocal du téléphone avec le modèle déjà chargé pour le micro. */
+  transcribeFile(path: string): Promise<string> {
+    return this.voice.transcribeFile(path)
+  }
+
   triggerWake(): void {
     this.voice.triggerWake()
   }

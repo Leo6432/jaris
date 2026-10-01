@@ -150,10 +150,13 @@ async function withOptions(run) {
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
 
-test('onglets réduits : les anciens onglets Micro/Activation/Mise à jour/Stockage/Historique/Téléphone ont disparu', options, async () => {
+// Étape 214 : « Téléphone » revient, pour parler à Jaris depuis son téléphone (Tailscale) — sans rapport avec
+// l'ancien onglet Mobile connecté retiré à l'étape 116, qui, lui, ne doit jamais revenir.
+test('onglets réduits : les anciens onglets Micro/Activation/Mise à jour/Stockage/Historique ont disparu', options, async () => {
   await withOptions(async (page) => {
     const labels = await page.$$eval('.options-menu__tab', (els) => els.map((el) => el.textContent?.trim()))
-    assert.deepEqual(labels, ['Ce que Jaris sait faire', 'Voix', 'Modèles', 'Général'], `onglets affichés : ${labels.join(', ')}`)
+    assert.deepEqual(labels, ['Ce que Jaris sait faire', 'Voix', 'Modèles', 'Téléphone', 'Général'], `onglets affichés : ${labels.join(', ')}`)
+    assert.doesNotMatch(await page.textContent('body'), /Mobile connecté/)
   })
 })
 

@@ -30,6 +30,8 @@ const modules = {
   child_process: { spawn: fakeSpawn },
   events: { EventEmitter },
   readline: await import('node:readline'),
+  // Étape 214 : identifiants des transcriptions de messages vocaux du téléphone.
+  crypto: await import('node:crypto'),
   path: await import('node:path'),
   '../config': { config: { voice: { inputDevice: '' } } },
   '../paths': { pythonScriptsDir: () => '/python' },
@@ -91,4 +93,32 @@ test('la fin du test micro transmet aussi le « silence total »', async () => {
   const done = new Promise((resolve) => client.once('micTestDone', resolve))
   emitLine({ event: 'mic_test_done', detected: false, silentStream: true })
   assert.deepEqual({ ...(await done) }, { detected: false, silentStream: true })
+})
+
+// Étape 214 : un message vocal du téléphone est transcrit par le MÊME programme d'écoute (déjà chargé) — la
+// commande part sur stdin avec un identifiant, et seule la réponse portant cet identifiant la termine.
+test('message vocal du téléphone : commande envoyée, réponse rattachée à SON identifiant', async () => {
+  const client = new VoiceClient()
+  const ready = client.start()
+  emitLine({ event: 'ready' })
+  await ready
+  const result = client.transcribeFile('C:\\Users\\Léo\\Temp\\vocal.wav')
+  const line = lastProc.stdin.written.at(-1)
+  assert.match(line, /^transcribe-file \{.*\}\n$/)
+  const { id, path } = JSON.parse(line.slice('transcribe-file '.length))
+  assert.equal(path, 'C:\\Users\\Léo\\Temp\\vocal.wav')
+  emitLine({ event: 'file_transcript', id: 'autre-id', text: 'pas pour moi' })
+  emitLine({ event: 'file_transcript', id, text: 'allume la lumière' })
+  assert.equal(await result, 'allume la lumière')
+
+  const failing = client.transcribeFile('x.wav')
+  const failingId = JSON.parse(lastProc.stdin.written.at(-1).slice('transcribe-file '.length)).id
+  emitLine({ event: 'file_transcript', id: failingId, error: 'format audio inattendu' })
+  await assert.rejects(failing, /format audio inattendu/)
+})
+
+test('message vocal pendant que l’écoute charge encore : la vraie raison, pas une attente sans fin', async () => {
+  const client = new VoiceClient()
+  void client.start().catch(() => {})
+  await assert.rejects(client.transcribeFile('x.wav'), /télécharge la transcription/)
 })

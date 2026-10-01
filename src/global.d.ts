@@ -4,6 +4,8 @@ import type {
   AppMode,
   AppVersionStatus,
   LaunchAtStartupStatus,
+  PhoneAccessStatus,
+  PhonePairing,
   AudioInputDevice,
   CapacityScanResult,
   ChatMessage,
@@ -162,6 +164,15 @@ declare global {
       onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => () => void
       onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => () => void
       onSoundCue: (cb: (cue: SoundCue) => void) => () => void
+      getPhoneAccess: () => Promise<PhoneAccessStatus>
+      setPhoneAccessEnabled: (enabled: boolean) => Promise<PhoneAccessStatus>
+      createPhonePairing: () => Promise<PhonePairing>
+      removePhoneDevice: (id: string) => Promise<PhoneAccessStatus>
+      logoutPhoneAccess: () => Promise<PhoneAccessStatus>
+      /** Ouvre dans le navigateur la page Tailscale à visiter (connexion ou autorisation), jamais une autre. */
+      openPhoneAccessLink: () => Promise<void>
+      onPhoneAccessChanged: (cb: (status: PhoneAccessStatus) => void) => () => void
+      onChatHistoryChanged: (cb: () => void) => () => void
     }
   }
 }

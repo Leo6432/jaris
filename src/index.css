@@ -4441,3 +4441,93 @@ a:hover {
   color: var(--hud-danger);
 }
 
+
+/* Options → Téléphone (étape 214) : mêmes cartes que les autres réglages, plus le QR code et le code. */
+.phone-access__safety {
+  margin: 4px 0 0;
+  color: var(--hud-text-dim);
+  font-size: 0.85rem;
+}
+
+.phone-access__step {
+  margin: 0 0 18px;
+  font-size: 0.9rem;
+  padding: 14px 16px;
+  background: var(--hud-panel-raised);
+  border: 1px solid var(--hud-line);
+  color: var(--hud-text-soft);
+}
+
+.phone-access__step p {
+  margin: 6px 0 12px;
+}
+
+.phone-access__step strong {
+  color: var(--hud-text);
+}
+
+.phone-access__step--action {
+  border-color: var(--hud-line-strong);
+}
+
+.phone-access__step--error {
+  border-color: rgba(255, 77, 104, 0.5);
+}
+
+.phone-access__address {
+  font-family: var(--hud-font-mono);
+  color: var(--hud-accent-bright);
+  overflow-wrap: anywhere;
+}
+
+.phone-access__pairing {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  padding: 14px 0 4px;
+}
+
+.phone-access__qr {
+  width: 200px;
+  height: 200px;
+  flex: none;
+  image-rendering: pixelated;
+  border: 1px solid var(--hud-line-strong);
+}
+
+.phone-access__pairing-text {
+  flex: 1 1 260px;
+  min-width: 0;
+  color: var(--hud-text-soft);
+}
+
+.phone-access__pairing-text ol {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+
+.phone-access__pairing-text li + li {
+  margin-top: 6px;
+}
+
+.phone-access__code {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--hud-font-mono);
+  font-size: 1.8rem;
+  letter-spacing: 0.12em;
+  color: var(--hud-text);
+}
+
+.phone-access__expiry,
+.phone-access__empty {
+  margin: 0;
+  color: var(--hud-text-faint);
+  font-size: 0.85rem;
+}
+
+.phone-access__confirm {
+  display: inline-flex;
+  gap: 8px;
+}

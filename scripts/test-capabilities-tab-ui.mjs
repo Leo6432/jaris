@@ -221,7 +221,7 @@ test('"Ce que Jaris sait faire" est dans sa propre catégorie, pas dans les rég
     // disparu par erreur.
     const reglages = nav.listes.find((l) => l.onglets.includes('Voix'))
     assert.match(reglages.categorie, /réglages/i, 'les réglages ont perdu leur intitulé de catégorie')
-    assert.deepEqual(reglages.onglets, ['Voix', 'Modèles', 'Général'], `réglages inattendus : ${JSON.stringify(reglages.onglets)}`)
+    assert.deepEqual(reglages.onglets, ['Voix', 'Modèles', 'Téléphone', 'Général'], `réglages inattendus : ${JSON.stringify(reglages.onglets)}`)
   })
 })
 

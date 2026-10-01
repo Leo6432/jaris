@@ -30,7 +30,7 @@ import {
 import { removeLeftoverMontage } from './services/legacyCleanup'
 import { spawn } from 'child_process'
 import { basename, extname, join } from 'path'
-import { copyFile, readFile, writeFile } from 'fs/promises'
+import { copyFile, readFile, rm, writeFile } from 'fs/promises'
 import { decodePngDataUrl, defaultImageFileName, withPngExtension } from './services/imageSave'
 import {
   ensureOllamaRunning,
@@ -53,6 +53,12 @@ import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { runQuickSetup } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
+import { PhoneAccessManager } from './services/phoneAccessManager'
+import { PHONE_RESTRICTIONS, phoneStatusFromLog } from './services/phoneAccess'
+import { getDataRoot } from './services/dataLocation'
+import { resourcesRoot } from './paths'
+import { randomUUID } from 'crypto'
+import { tmpdir } from 'os'
 import { deleteGeneratedApp, generateApp, getGeneratedAppsDir, listGeneratedApps, loadGeneratedApp } from './services/codeGenerator'
 import { createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
 import { previewVoice } from './services/tts'
@@ -86,6 +92,8 @@ import {
   type AudioInputDevice,
   type CapacityScanResult,
   type ChatMessage,
+  type PhoneAccessStatus,
+  type PhonePairing,
   type ConversationList,
   type GeneratedApp,
   type GeneratedAppSummary,
@@ -677,6 +685,74 @@ function broadcast(channel: string, payload?: unknown): void {
   }
 }
 
+/**
+ * Accès depuis le téléphone (étape 214, Léo : « on va faire parler depuis son téléphone », partout et
+ * confidentiel, sans appli à installer à côté). Créé à la première utilisation seulement : tant que Léo ne
+ * l'active pas, rien n'écoute et aucun tunnel ne tourne.
+ */
+let phoneAccess: PhoneAccessManager | null = null
+/** Pages Tailscale déjà ouvertes automatiquement dans le navigateur (une seule fois chacune). */
+const openedPhoneLinks = new Set<string>()
+/** Vrai juste après un clic sur « Activer » : seulement là, les pages Tailscale s'ouvrent toutes seules. */
+let phoneLinksAutoOpen = false
+
+function tunnelBinaryPath(): string {
+  const name = process.platform === 'win32' ? 'jaris-tunnel.exe' : 'jaris-tunnel'
+  return app.isPackaged ? join(process.resourcesPath, 'bin', name) : join(__dirname, '../../tunnel/dist', name)
+}
+
+function getPhoneAccess(): PhoneAccessManager {
+  if (phoneAccess) return phoneAccess
+  const manager = new PhoneAccessManager({
+    tunnelBinary: tunnelBinaryPath(),
+    // L'identité Tailscale de ce PC reste à l'emplacement fixe de Windows : elle n'a pas à suivre un
+    // déplacement des données (Options → Général), et la perdre obligerait à se reconnecter.
+    tunnelStateDir: join(app.getPath('userData'), 'tailscale'),
+    devicesFile: join(getDataRoot(), 'phone-devices.json'),
+    pageDir: join(resourcesRoot(), 'phone'),
+    history: () => chatSession.getVisibleMessages(),
+    transcribe: async (wav) => {
+      if (!pipeline) throw new Error("L'écoute n'est pas lancée sur le PC : la transcription n'est pas disponible.")
+      const path = join(tmpdir(), `jaris-phone-${randomUUID()}.wav`)
+      await writeFile(path, wav)
+      try {
+        return await pipeline.transcribeFile(path)
+      } finally {
+        await rm(path, { force: true })
+      }
+    },
+    // Même conversation que le Chat (et que la voix) : ce qui est dit depuis le téléphone se retrouve sur le
+    // PC, et inversement. Seuls les outils sans risque existent pour ce tour (PHONE_RESTRICTIONS).
+    sendMessage: async (text, onStatus) => {
+      const message = await chatSession.send(
+        text,
+        (reminder) => void pipeline?.announceReminder(reminder),
+        (line) => {
+          broadcast(IPC_CHANNELS.log, line)
+          const status = phoneStatusFromLog(line)
+          if (status) onStatus(status)
+        },
+        undefined,
+        undefined,
+        undefined,
+        PHONE_RESTRICTIONS
+      )
+      broadcast(IPC_CHANNELS.chatHistoryChanged)
+      return { reply: message.content, ...(message.image ? { image: message.image } : {}) }
+    }
+  })
+  manager.on('change', (status: PhoneAccessStatus) => {
+    broadcast(IPC_CHANNELS.phoneAccessChanged, status)
+    if (status.state === 'ready' || status.state === 'error' || status.state === 'off') phoneLinksAutoOpen = false
+    if (phoneLinksAutoOpen && status.actionUrl && !openedPhoneLinks.has(status.actionUrl)) {
+      openedPhoneLinks.add(status.actionUrl)
+      void shell.openExternal(status.actionUrl)
+    }
+  })
+  phoneAccess = manager
+  return manager
+}
+
 async function startVoicePipeline(): Promise<void> {
   const log = (message: string): void => broadcast(IPC_CHANNELS.log, message)
   // Étape 143 : range dans le dossier de Jaris ce qui n'y est pas encore, avant de démarrer Ollama et la voix
@@ -1125,6 +1201,37 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle(IPC_CHANNELS.getChatHistory, (): Promise<ChatMessage[]> => chatSession.getVisibleMessages())
 
+  // Téléphone (étape 214) : Options → Téléphone.
+  ipcMain.handle(IPC_CHANNELS.getPhoneAccess, (): Promise<PhoneAccessStatus> => getPhoneAccess().status())
+  ipcMain.handle(IPC_CHANNELS.setPhoneAccessEnabled, async (_event, enabled: boolean): Promise<PhoneAccessStatus> => {
+    const profile = await getProfile()
+    if (profile) await saveProfile({ ...profile, phoneAccessEnabled: enabled })
+    const manager = getPhoneAccess()
+    if (enabled) {
+      phoneLinksAutoOpen = true
+      await manager.enable()
+    } else {
+      await manager.disable()
+    }
+    return manager.status()
+  })
+  ipcMain.handle(IPC_CHANNELS.createPhonePairing, (): PhonePairing => getPhoneAccess().createPairing())
+  ipcMain.handle(IPC_CHANNELS.removePhoneDevice, async (_event, id: string): Promise<PhoneAccessStatus> => {
+    await getPhoneAccess().removeDevice(id)
+    return getPhoneAccess().status()
+  })
+  ipcMain.handle(IPC_CHANNELS.logoutPhoneAccess, async (): Promise<PhoneAccessStatus> => {
+    const profile = await getProfile()
+    if (profile) await saveProfile({ ...profile, phoneAccessEnabled: false })
+    await getPhoneAccess().logout()
+    return getPhoneAccess().status()
+  })
+  // L'adresse vient de l'état du tunnel (déjà vérifiée : une page de tailscale.com), jamais du renderer.
+  ipcMain.handle(IPC_CHANNELS.openPhoneAccessLink, async (): Promise<void> => {
+    const status = await getPhoneAccess().status()
+    if (status.actionUrl) await shell.openExternal(status.actionUrl)
+  })
+
   /**
    * Sélecteur d'image du Chat et du mode Code (étape 93).
    *
@@ -1456,6 +1563,10 @@ app.whenReady().then(async () => {
 
   watchWidgetPresence()
   void startVoicePipeline()
+  // Étape 214 : accès téléphone relancé au démarrage s'il était activé (sans ouvrir le navigateur tout seul).
+  void getProfile().then((profile) => {
+    if (profile?.phoneAccessEnabled) void getPhoneAccess().enable().catch((err) => broadcast(IPC_CHANNELS.log, `Téléphone : ${String(err)}`))
+  })
 })
 
 // Se déclenche une seule fois quel que soit le chemin de sortie (Quitter dans la barre système,
@@ -1468,6 +1579,7 @@ app.on('before-quit', () => {
   // ouvert, jusqu'au redémarrage de Windows.
   pipeline?.stop()
   ttsClient.stop()
+  void phoneAccess?.disable()
 })
 
 // Déclenché sur la toute première instance (celle qui a le verrou, voir requestSingleInstanceLock tout en

@@ -61,6 +61,35 @@ test('les deux sidecars Python forcent UTF-8 sur stdout ET stderr', () => {
   }
 })
 
+// Étape 214 (reproduit avant correctif) : dans l'autre sens aussi. Le texte à prononcer (tts_server.py) et le
+// chemin des messages vocaux du téléphone (voice_server.py) arrivent en UTF-8 depuis Node : lus avec la page de
+// codes Windows, « Ça va, Léo ? » devenait « Ã‡a va, LÃ©o ? ».
+test('les deux sidecars Python lisent stdin en UTF-8', () => {
+  for (const relative of SIDECARS) {
+    const source = readFileSync(new URL(relative, projectRoot), 'utf8')
+    assert.ok(source.includes('sys.stdin.reconfigure(encoding="utf-8")'), `${relative} doit lire stdin en UTF-8`)
+  }
+})
+
+test(
+  'un accent traverse vraiment le tube Node -> Python, même avec une page de codes Windows (cp1252)',
+  { skip: python ? false : 'Python indisponible dans cet environnement' },
+  async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'jaris-encoding-in-'))
+    const script = join(dir, 'read.py')
+    writeFileSync(
+      script,
+      ['import json, sys', 'sys.stdin.reconfigure(encoding="utf-8")', 'line = sys.stdin.readline()', 'print(ascii(json.loads(line)["text"]))'].join('\n')
+    )
+    try {
+      const run = spawnSync(python, [script], { input: JSON.stringify({ text: 'Ça va, Léo ?' }) + '\n', env: { ...process.env, PYTHONIOENCODING: 'cp1252' } })
+      assert.equal(run.stdout.toString().trim(), "'\\xc7a va, L\\xe9o ?'", 'le texte reçu par Python doit être exactement celui envoyé')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+)
+
 test(
   'un accent traverse vraiment le tube Python -> Node, même avec une page de codes Windows (cp1252)',
   { skip: python ? false : 'Python indisponible dans cet environnement' },

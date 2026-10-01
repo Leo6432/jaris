@@ -1,0 +1,15 @@
+{
+  "name": "Jaris",
+  "short_name": "Jaris",
+  "description": "Ton assistant Jaris, depuis ton téléphone.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#01040a",
+  "theme_color": "#01040a",
+  "lang": "fr",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -125,6 +125,8 @@ export interface Profile {
    * (mots mal compris) avant que Jaris y réponde (transcriptCorrector.ts). false = la transcription brute.
    */
   voiceCorrectionEnabled?: boolean
+  /** Étape 214 : accès depuis le téléphone (Tailscale) — absent/false = désactivé, choix explicite de Léo. */
+  phoneAccessEnabled?: boolean
   /**
    * Options → Activation (étape 81) : les 3 façons de déclencher l'écoute sont toutes activables/
    * désactivables indépendamment, absent/true par défaut pour chacune. `activationWakeWordEnabled` est
@@ -869,5 +871,49 @@ export const IPC_CHANNELS = {
   /** renderer <-> main : état réel de l'entrée de démarrage de Windows (voir launchAtStartup.ts). */
   getLaunchAtStartup: 'jaris:get-launch-at-startup',
   /** renderer <-> main : active/désactive le lancement de Jaris au démarrage de Windows. */
-  setLaunchAtStartup: 'jaris:set-launch-at-startup'
+  setLaunchAtStartup: 'jaris:set-launch-at-startup',
+  /** Téléphone (étape 214) : état de l'accès, activation, code d'appairage, appareils connectés. */
+  getPhoneAccess: 'jaris:get-phone-access',
+  setPhoneAccessEnabled: 'jaris:set-phone-access-enabled',
+  createPhonePairing: 'jaris:create-phone-pairing',
+  removePhoneDevice: 'jaris:remove-phone-device',
+  logoutPhoneAccess: 'jaris:logout-phone-access',
+  openPhoneAccessLink: 'jaris:open-phone-access-link',
+  /** main -> renderer : l'état de l'accès téléphone a changé (connexion Tailscale, adresse prête…). */
+  phoneAccessChanged: 'jaris:phone-access-changed',
+  /** main -> renderer : un message envoyé depuis le téléphone a rejoint la conversation active. */
+  chatHistoryChanged: 'jaris:chat-history-changed'
 } as const
+
+/** Un téléphone appairé (étape 214) — le jeton n'en fait jamais partie, il ne quitte pas le téléphone. */
+export interface PhoneDevice {
+  id: string
+  name: string
+  createdAt: string
+  lastSeenAt: string
+}
+
+/**
+ * Où en est l'accès depuis le téléphone (étape 214) :
+ * - 'off' : désactivé (par défaut) ;
+ * - 'starting' : le tunnel Tailscale démarre ;
+ * - 'login' : se connecter à Tailscale, une fois, dans le navigateur (`actionUrl`) ;
+ * - 'enable_funnel' : autoriser l'adresse web publique, une fois (`actionUrl`) ;
+ * - 'ready' : l'adresse `address` est joignable depuis le téléphone ;
+ * - 'error' : `message` dit pourquoi ;
+ * - 'unsupported' : tunnel absent de cette installation.
+ */
+export interface PhoneAccessStatus {
+  state: 'off' | 'starting' | 'login' | 'enable_funnel' | 'ready' | 'error' | 'unsupported'
+  address?: string
+  actionUrl?: string
+  message?: string
+  devices: PhoneDevice[]
+}
+
+/** Code d'appairage affiché sur le PC : à taper sur le téléphone, ou contenu dans le QR code (`link`). */
+export interface PhonePairing {
+  code: string
+  link: string
+  expiresAt: number
+}

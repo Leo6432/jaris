@@ -17,6 +17,8 @@ import type {
 import { CAPABILITIES } from '../../shared/capabilities'
 import AllModelsOverview from './AllModelsOverview'
 import AppUpdateProgress from './AppUpdateProgress'
+import { SettingGroup, SettingRow, Toggle } from './SettingsLayout'
+import PhoneAccessSettings from './PhoneAccessSettings'
 import MyModelPicks from './MyModelPicks'
 import JarisOrb from './JarisOrb'
 import { formatModelName } from '../lib/formatModelName'
@@ -113,7 +115,9 @@ export function groupWakeHeard(heard: WakeTestHeardPayload[]): WakeTestRow[] {
 // l'expérience vocale dans son ensemble. Même chose pour Mise à jour/Stockage/Historique, trois réglages
 // "à propos de l'application" plutôt que trois sujets distincts — regroupés dans "Général", à la manière du
 // même onglet chez ChatGPT/Claude (thème, langue, effacer les discussions...). 9 onglets -> 5.
-type Tab = 'capacites' | 'voix' | 'modeles' | 'general'
+// Étape 214 : « Téléphone » revient (Léo : « on va faire parler depuis son téléphone »), cette fois pour
+// parler à Jaris depuis le téléphone — rien à voir avec l'ancien onglet Mobile connecté retiré à l'étape 116.
+type Tab = 'capacites' | 'voix' | 'modeles' | 'telephone' | 'general'
 
 /**
  * Titre + sous-titre en tête de chaque page de réglages (design importé, "Options Jaris.dc.html") —
@@ -126,6 +130,7 @@ type Tab = 'capacites' | 'voix' | 'modeles' | 'general'
 const TAB_META: Partial<Record<Tab, { title: string; subtitle: string }>> = {
   voix: { title: 'Voix', subtitle: "La voix de Jaris, les périphériques qu'il utilise, et les façons de le réveiller." },
   modeles: { title: 'Modèles', subtitle: 'Ce que ta machine fait tourner, et combien Jaris garde en tête pendant une conversation.' },
+  telephone: { title: 'Téléphone', subtitle: 'Parler à Jaris depuis ton téléphone, de n’importe où, sans rien installer dessus.' },
   general: { title: 'Général', subtitle: "L'application elle-même : version, fichiers, historique." }
 }
 
@@ -166,94 +171,6 @@ export function ReliabilityBadge({ value }: { value: string | null }): JSX.Eleme
   return <span className={`options-menu__badge options-menu__badge--${level}`}>{value}</span>
 }
 
-/**
- * Une ligne de réglage uniforme (étape 116, Léo : "tu voit sur claude chatgpt tout se ressemble mais dans
- * les option rien ne se ressemble micro comment se déclencher") : intitulé + description à gauche, le
- * contrôle (case à cocher, menu déroulant, bouton, valeur en lecture seule...) aligné à droite. Avant cette
- * refonte, chaque type de réglage avait sa propre mise en forme ad hoc (`.options-menu__field` pour un menu
- * déroulant, `.options-menu__checkbox` en ligne isolée pour une case à cocher, un bouton nu pour une action)
- * — Léo comparait "Micro utilisé" (un menu) et "Comment se déclencher" (des cases) et n'y voyait aucun point
- * commun. `stacked` réserve le cas où le contrôle a besoin de toute la largeur (le curseur de longueur de
- * contexte, un visualiseur de micro) plutôt que de rester coincé à droite d'une ligne étroite.
- */
-function SettingRow({
-  label,
-  description,
-  stacked = false,
-  className,
-  children
-}: {
-  label: string
-  description?: React.ReactNode
-  stacked?: boolean
-  className?: string
-  children: React.ReactNode
-}): JSX.Element {
-  return (
-    <div className={`options-menu__row${stacked ? ' options-menu__row--stacked' : ''}${className ? ` ${className}` : ''}`}>
-      <div className="options-menu__row-text">
-        <span className="options-menu__row-label">{label}</span>
-        {description && <p className="options-menu__row-description">{description}</p>}
-      </div>
-      <div className="options-menu__row-control">{children}</div>
-    </div>
-  )
-}
-
-/**
- * Interrupteur à coins coupés (refonte visuelle Options, étape 119 — maquette `Options Jaris.dc.html`),
- * remplace la case à cocher native utilisée jusqu'ici dans `SettingRow` : une case de formulaire par défaut
- * est la seule commande de tout l'écran qui ne suivait pas la famille de boutons HUD (coins coupés en
- * `clip-path`, pas de coins arrondis). Un `<button role="switch">` plutôt qu'un vrai `<input type="checkbox">`
- * stylé : impossible d'obtenir un rail + curseur en `clip-path` sur une case native (son apparence est
- * remplacée en bloc par `accent-color`/`appearance`, pas composée de deux calques indépendants) — `aria-checked`
- * garde la même sémantique d'accessibilité qu'une case à cocher pour qui utilise un lecteur d'écran.
- */
-function Toggle({
-  checked,
-  onChange,
-  disabled = false,
-  label
-}: {
-  checked: boolean
-  onChange: (next: boolean) => void
-  disabled?: boolean
-  label: string
-}): JSX.Element {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      className={`options-menu__switch${checked ? ' options-menu__switch--on' : ''}`}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-    >
-      <span className="options-menu__switch-knob" />
-    </button>
-  )
-}
-
-/** Regroupe plusieurs `SettingRow` dans une même carte (fond + bordure), avec un titre au-dessus — le
- *  "groupe de réglages" façon Claude/ChatGPT, plutôt que des lignes qui flottent seules dans la page. */
-function SettingGroup({
-  title,
-  description,
-  children
-}: {
-  title: string
-  description?: string
-  children: React.ReactNode
-}): JSX.Element {
-  return (
-    <div className="options-menu__group">
-      <div className="options-menu__section-title">{title}</div>
-      {description && <p className="options-menu__group-description">{description}</p>}
-      <div className="options-menu__group-rows">{children}</div>
-    </div>
-  )
-}
 
 export default function OptionsMenu(): JSX.Element {
   const [open, setOpen] = useState(false)
@@ -858,6 +775,9 @@ export default function OptionsMenu(): JSX.Element {
             <button className={`options-menu__tab${tab === 'modeles' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('modeles')}>
               Modèles
             </button>
+            <button className={`options-menu__tab${tab === 'telephone' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('telephone')}>
+              Téléphone
+            </button>
             <button className={`options-menu__tab${tab === 'general' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('general')}>
               Général
             </button>
@@ -1215,6 +1135,8 @@ export default function OptionsMenu(): JSX.Element {
             </SettingGroup>
           </div>
         )}
+
+        {tab === 'telephone' && <PhoneAccessSettings />}
 
         {tab === 'general' && (
           <div className="options-menu__section">

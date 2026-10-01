@@ -44,7 +44,38 @@ jobs:
       # secondes, aucun service externe requis) et servent justement à ne pas refaire les bugs déjà corrigés.
       - run: npm test
 
+      # Étape 214 : le tunnel du téléphone (Tailscale embarqué, tunnel/main.go), testé puis compilé ici et
+      # inclus dans l'installeur (electron-builder.yml). La version de Go suit tunnel/go.mod.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tunnel/go.mod
+          cache-dependency-path: tunnel/go.sum
+
+      # Une commande par étape : dans un bloc PowerShell, l'échec d'une commande au milieu ne fait pas
+      # forcément échouer l'étape (seul le code de sortie de la dernière compte).
+      - name: Vérifie le tunnel du téléphone
+        working-directory: tunnel
+        run: go vet ./...
+
+      - name: Teste le tunnel du téléphone
+        working-directory: tunnel
+        run: go test ./...
+
+      - name: Compile le tunnel du téléphone
+        working-directory: tunnel
+        run: go build -trimpath -ldflags "-s -w" -o dist/jaris-tunnel.exe .
+
       - run: npm run dist
+
+      # Un fichier manquant dans extraResources ne fait pas échouer electron-builder : on vérifie nous-mêmes que
+      # le tunnel et la page du téléphone sont bien dans l'installeur, sinon l'onglet Téléphone serait inutilisable.
+      - name: Vérifie que le module téléphone est empaqueté
+        shell: pwsh
+        run: |
+          foreach ($f in @('release\win-unpacked\resources\bin\jaris-tunnel.exe', 'release\win-unpacked\resources\phone\index.html', 'release\win-unpacked\resources\phone\app.js')) {
+            if (-not (Test-Path $f)) { throw "Absent de l'installeur : $f" }
+          }
+          Write-Host "Module téléphone présent."
 
       - uses: actions/setup-python@v5
         with:
@@ -54,6 +85,9 @@ jobs:
         run: |
           python -m pip install numpy==2.4.6
           python scripts/test-wake-confirmation.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python scripts/test-phone-wav.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python scripts/check-packaged-voice.py release/win-unpacked/resources/python
 
       # Étape 45 : lance vraiment l'appli packagée (pas l'unpacked, avant l'installeur NSIS) pour attraper un

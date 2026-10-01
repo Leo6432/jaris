@@ -6,6 +6,8 @@ import {
   type AppMode,
   type AppVersionStatus,
   type LaunchAtStartupStatus,
+  type PhoneAccessStatus,
+  type PhonePairing,
   type AudioInputDevice,
   type CapacityScanResult,
   type ChatMessage,
@@ -177,7 +179,16 @@ const api = {
   collapseChatWidget: (): void => ipcRenderer.send(IPC_CHANNELS.collapseChatWidget),
   onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => subscribe(IPC_CHANNELS.micTestLevel, cb),
   onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => subscribe(IPC_CHANNELS.micTestDone, cb),
-  onSoundCue: (cb: (cue: SoundCue) => void) => subscribe(IPC_CHANNELS.soundCue, cb)
+  onSoundCue: (cb: (cue: SoundCue) => void) => subscribe(IPC_CHANNELS.soundCue, cb),
+  // Téléphone (étape 214)
+  getPhoneAccess: (): Promise<PhoneAccessStatus> => ipcRenderer.invoke(IPC_CHANNELS.getPhoneAccess),
+  setPhoneAccessEnabled: (enabled: boolean): Promise<PhoneAccessStatus> => ipcRenderer.invoke(IPC_CHANNELS.setPhoneAccessEnabled, enabled),
+  createPhonePairing: (): Promise<PhonePairing> => ipcRenderer.invoke(IPC_CHANNELS.createPhonePairing),
+  removePhoneDevice: (id: string): Promise<PhoneAccessStatus> => ipcRenderer.invoke(IPC_CHANNELS.removePhoneDevice, id),
+  logoutPhoneAccess: (): Promise<PhoneAccessStatus> => ipcRenderer.invoke(IPC_CHANNELS.logoutPhoneAccess),
+  openPhoneAccessLink: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openPhoneAccessLink),
+  onPhoneAccessChanged: (cb: (status: PhoneAccessStatus) => void) => subscribe(IPC_CHANNELS.phoneAccessChanged, cb),
+  onChatHistoryChanged: (cb: () => void) => subscribe(IPC_CHANNELS.chatHistoryChanged, cb)
 }
 
 export type JarisApi = typeof api

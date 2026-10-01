@@ -25,6 +25,9 @@ import tempfile
 # forcer en UTF-8 ici aussi, jamais laissé au réglage Windows de la machine.
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
+# stdin aussi (étape 214, reproduit) : le texte à prononcer arrive en UTF-8 depuis Node ; lu avec la page de
+# codes Windows (cp1252), « Ça va, Léo ? » devenait « Ã‡a va, LÃ©o ? » — prononcé tel quel par la voix.
+sys.stdin.reconfigure(encoding="utf-8")
 
 
 def emit(payload: dict) -> None:

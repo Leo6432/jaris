@@ -23,6 +23,9 @@ Sur stdin, une ligne par commande :
   stop-test-wake arrête ce test
   pause-wake     arrête d'écouter « Jaris » (Chat, Code, Options : étape 183) — plus aucune phrase transcrite
   resume-wake    reprend l'écoute de « Jaris »
+  transcribe-file {"id": "...", "path": "..."}
+                 transcrit un fichier WAV 16 kHz mono 16 bits (message vocal du téléphone, étape 214) avec le
+                 même modèle que le micro, puis répond file_transcript — le fichier est écrit par Jaris lui-même
 
 Une ligne JSON par événement sur stdout :
   {"event": "ready"}
@@ -35,6 +38,7 @@ Une ligne JSON par événement sur stdout :
   {"event": "mic_test_level", "level": 0.0-1.0}
   {"event": "mic_test_done", "detected": true|false, "silentStream": true|false}
   {"event": "wake_test_heard", "text": "...", "matched": true|false, "tooShort": true|false, "peak": 0.0-1.0}
+  {"event": "file_transcript", "id": "...", "text": "..."}  ou  {"event": "file_transcript", "id": "...", "error": "..."}
 
 Avec --list-devices : ignore tous les autres arguments, n'ouvre aucun micro et ne charge aucun modèle —
 imprime juste {"devices": [{"index": 0, "name": "..."}, ...]} (ou {"error": "..."}) et quitte. Utilisé par
@@ -66,6 +70,9 @@ import numpy as np
 # TOUJOURS de l'UTF-8, quelle que soit la machine. stderr aussi (les diagnostics de debug() sont en français).
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
+# Étape 214 : stdin aussi — les messages vocaux du téléphone arrivent avec un chemin de fichier qui peut
+# contenir des accents (dossier « Léo »), décodé sinon avec la page de codes Windows.
+sys.stdin.reconfigure(encoding="utf-8")
 
 from wake_confirmation import WakeSegmenter, contains_wake_name, remove_wake_prefix
 
@@ -156,6 +163,17 @@ def load_parakeet():
         return str(model.recognize(audio, sample_rate=SAMPLE_RATE)).strip()
 
     return transcribe
+
+
+def read_wav_16k_mono(path: str) -> np.ndarray:
+    """Lit un WAV PCM 16 bits mono 16 kHz (le seul format que la page du téléphone envoie) en float32."""
+    import wave
+
+    with wave.open(path, "rb") as wav:
+        if wav.getnchannels() != 1 or wav.getsampwidth() != 2 or wav.getframerate() != SAMPLE_RATE:
+            raise ValueError("format audio inattendu")
+        frames = wav.readframes(wav.getnframes())
+    return np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
 
 
 def remove_old_stt_model() -> None:
@@ -270,6 +288,7 @@ def main() -> None:
     mic_test_stop_requested = threading.Event()
     wake_test_on = threading.Event()
     wake_paused = threading.Event()
+    file_requests: "queue.Queue[dict]" = queue.Queue()
 
     def stdin_listener() -> None:
         for raw_line in sys.stdin:
@@ -290,6 +309,12 @@ def main() -> None:
                 wake_paused.set()
             elif line == "resume-wake":
                 wake_paused.clear()
+            elif line.startswith("transcribe-file "):
+                try:
+                    request = json.loads(line[len("transcribe-file "):])
+                    file_requests.put({"id": str(request["id"]), "path": str(request["path"])})
+                except Exception:
+                    pass
 
     threading.Thread(target=stdin_listener, daemon=True).start()
 
@@ -358,6 +383,17 @@ def main() -> None:
     while True:
         chunk = audio_queue.get()
         chunk_ms = (len(chunk) / SAMPLE_RATE) * 1000
+
+        # Message vocal du téléphone (étape 214) : traité ici, dans la boucle qui possède déjà le modèle, plutôt
+        # que dans un second fil qui l'utiliserait en même temps que l'écoute du micro.
+        while not file_requests.empty():
+            request = file_requests.get_nowait()
+            try:
+                audio = read_wav_16k_mono(request["path"])
+                text = transcribe(audio) if audio.size else ""
+                emit({"event": "file_transcript", "id": request["id"], "text": "" if is_hallucination(text) else text})
+            except Exception as exc:
+                emit({"event": "file_transcript", "id": request["id"], "error": str(exc)})
 
         # Lit le même flux que la détection de déclenchement, sans jamais interagir avec `mode` : le test
         # micro tourne "à côté" (voir docstring en tête de fichier), pas à la place du mot d'activation.

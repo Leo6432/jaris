@@ -1,5 +1,6 @@
 import { ChildProcessByStdio, spawn } from 'child_process'
 import { EventEmitter } from 'events'
+import { randomUUID } from 'crypto'
 import { createInterface } from 'readline'
 import { join } from 'path'
 import type { Readable, Writable } from 'stream'
@@ -21,6 +22,7 @@ type VoiceServerEvent =
   | { event: 'mic_test_level'; level: number }
   | { event: 'mic_test_done'; detected: boolean; silentStream?: boolean }
   | { event: 'wake_test_heard'; text: string; matched: boolean; tooShort: boolean; peak: number }
+  | { event: 'file_transcript'; id: string; text?: string; error?: string }
 
 const voiceServerScript = (): string => join(pythonScriptsDir(), 'voice_server.py')
 
@@ -140,6 +142,15 @@ export class VoiceClient extends EventEmitter {
           case 'wake_test_heard':
             this.emit('wakeTestHeard', { text: payload.text, matched: payload.matched, tooShort: payload.tooShort, peak: payload.peak })
             break
+          case 'file_transcript': {
+            const pending = this.fileTranscripts.get(payload.id)
+            if (pending) {
+              this.fileTranscripts.delete(payload.id)
+              if (payload.error) pending.reject(new Error(payload.error))
+              else pending.resolve(payload.text ?? '')
+            }
+            break
+          }
         }
       })
 
@@ -177,6 +188,34 @@ export class VoiceClient extends EventEmitter {
   }
 
   private wakePaused = false
+  private fileTranscripts = new Map<string, { resolve: (text: string) => void; reject: (err: Error) => void }>()
+
+  /**
+   * Transcrit un fichier WAV 16 kHz mono (message vocal du téléphone, étape 214) avec le modèle déjà chargé
+   * pour le micro : aucune seconde copie du modèle en mémoire. Le chemin est écrit par Jaris lui-même.
+   */
+  transcribeFile(path: string, timeoutMs = 120_000): Promise<string> {
+    const reason = listeningUnavailableReason(this.status)
+    if (reason || !this.proc) return Promise.reject(new Error(reason ?? "L'écoute n'est pas lancée sur le PC."))
+    const id = randomUUID()
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.fileTranscripts.delete(id)
+        reject(new Error('La transcription a pris trop de temps.'))
+      }, timeoutMs)
+      this.fileTranscripts.set(id, {
+        resolve: (text) => {
+          clearTimeout(timer)
+          resolve(text)
+        },
+        reject: (err) => {
+          clearTimeout(timer)
+          reject(err)
+        }
+      })
+      this.proc?.stdin.write(`transcribe-file ${JSON.stringify({ id, path })}\n`)
+    })
+  }
 
   /**
    * Étape 183 (Léo : « le détecteur de voix doit être actif que quand on est en vocal, et pas chat ni code ni

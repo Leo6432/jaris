@@ -5749,3 +5749,65 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Vérifié dans un vrai navigateur avec une vraie vidéo WebM produite par sd.cpp : la première image s'affiche
   dans les 5 vignettes. Régression : `scripts/test-video-panel-ui.mjs` (une vignette par vidéo, format vidéo
   mesuré sur le CSS compilé, muette, un clic ouvre, la suppression retire la vignette).
+
+- **Parler à Jaris depuis son téléphone (Léo, étape 214 : « on va faire parler depuis son téléphone »,
+  partout ET confidentiel, puis « pas faut installer l'application à côté »).** Choix faits avec Léo, questions
+  à choix simples à l'appui. Bot Telegram écarté : les bots ne sont pas chiffrés de bout en bout, Telegram
+  peut les lire. Page Wi-Fi seule écartée : elle ne marche qu'à la maison. Retenu : **Tailscale embarqué dans
+  Jaris** (`tunnel/`, Go + tsnet, compilé par la CI en `jaris-tunnel.exe`) avec **Funnel**, qui publie une
+  adresse `https://jaris.<réseau>.ts.net`. Le chiffrement TLS se termine sur le PC et le relais de Tailscale
+  ne fait que transporter des octets chiffrés (vérifié dans la documentation de Funnel et dans le code de
+  tsnet). Sur le téléphone, aucune appli : une page web à ajouter à l'écran d'accueil (`phone/`). Seule
+  démarche : un compte Tailscale gratuit, une fois, puis un clic pour autoriser l'adresse. Jaris ouvre ces
+  pages tout seul juste après un clic sur « Activer », jamais au démarrage.
+  **Confidentialité** : tsnet envoie par défaut ses journaux techniques aux serveurs de Tailscale, coupé avec
+  l'option officielle (`envknob.SetNoLogsNoSupport` + `logtail.Disable`) avant tout démarrage. Lu dans le code
+  de tsnet (`startLogger`), jamais supposé.
+  **Sécurité**, puisque l'adresse est joignable depuis internet :
+  - le serveur de Jaris n'écoute que sur 127.0.0.1 ;
+  - code d'appairage à 8 chiffres, 10 minutes, usage unique, 5 essais par code et 10 essais par minute ;
+  - un jeton par téléphone, révocable, gardé sur le PC sous forme d'empreinte seulement ;
+  - aucun fichier servi hors d'une liste fixe ;
+  - tailles bornées ;
+  - CSP stricte, sans script en ligne ;
+  - le code du QR voyage après « # » : il n'est jamais envoyé dans une requête.
+
+  **Outils** : choix de Léo, « tout sauf le risqué ». C'est une LISTE BLANCHE (`phoneAccess.ts`) : un outil
+  ajouté plus tard reste interdit depuis le téléphone tant que personne ne l'a déclaré sans risque. Deux
+  barrières : les outils interdits ne sont pas donnés au modèle, et un appel inventé quand même est refusé avant
+  exécution, réponse = le refus lui-même. La commande directe du Bloc-notes (qui écrit sur le PC) est refusée
+  elle aussi : elle contournait les outils.
+  **Même conversation que le Chat** : `chatSession.send(..., PHONE_RESTRICTIONS)`, et le Chat du PC se met à
+  jour en direct (`chatHistoryChanged`).
+  **Messages vocaux** : le téléphone décode lui-même son enregistrement (webm ou mp4 selon la marque) et le
+  convertit en WAV 16 kHz mono. Le PC le transcrit avec le modèle DÉJÀ chargé pour le micro
+  (`transcribe-file` dans `voice_server.py`, traité dans la boucle qui possède le modèle), sans seconde copie
+  en mémoire. Vérifié de bout en bout dans Chromium avec un faux micro : enregistrement → WAV → serveur →
+  transcription → réponse.
+  **Défaut existant trouvé et reproduit en passant** : les sidecars Python ne forçaient UTF-8 que sur
+  stdout/stderr, pas sur stdin. Sous cp1252, « Ça va, Léo ? » envoyé à la voix arrivait en « Ã‡a va, LÃ©o ? ».
+  Invisible chez Léo, dont le Windows est déjà en UTF-8. Corrigé dans les deux sidecars.
+  **Pièges rencontrés** :
+  - `server.close()` attend la fin des connexions gardées ouvertes : sans `closeAllConnections()`,
+    « Désactiver » pouvait ne jamais aboutir tant qu'un téléphone restait sur la page.
+  - Une ancre `#code=` ouverte sur une page déjà chargée ne la recharge pas : il faut écouter `hashchange`.
+  - Une redirection `cat > "a b.ts"` mal citée a laissé un fichier VIDE `phoneAccess` sans extension.
+    Rollup l'a résolu AVANT `phoneAccess.ts` (« phoneStatusFromLog is not exported »). **Leçon générale :
+    un fichier vide portant le nom d'un module sans extension masque le vrai module pour le bundler,
+    sans erreur claire.**
+  - Le test existant de voiceClient a sa propre liste de modules autorisés : tout nouvel `import` doit y
+    être ajouté (même leçon que les faux ponts preload).
+  - Sous PowerShell, un bloc `run:` multi-lignes peut masquer l'échec d'une commande du milieu : une
+    commande Go par étape dans la CI.
+  - electron-builder ne signale pas un fichier `extraResources` manquant : une étape vérifie que le tunnel
+    et la page sont bien dans l'installeur.
+
+  **Vérifié ici** : connexion réelle à Tailscale jusqu'à l'adresse de connexion (`login.tailscale.com/a/…`),
+  le serveur, la page en vrai navigateur et l'onglet Options. **Non vérifié** : Funnel de bout en bout sur un
+  vrai compte (il faut se connecter), et la page sur un vrai iPhone/Android (micro, ajout à l'écran d'accueil).
+  Léo doit tester en usage réel.
+  Régression : `node --test scripts/test-phone-server.mjs scripts/test-phone-page-ui.mjs
+  scripts/test-phone-tab-ui.mjs scripts/test-phone-restrictions.mjs scripts/test-phone-tunnel.mjs
+  scripts/test-voice-listening-status.mjs scripts/test-sidecar-encoding.mjs`, `go test ./...` (tunnel/),
+  `python scripts/test-phone-wav.py`. Les tests de sécurité du serveur et des restrictions ont été vérifiés en
+  réintroduisant chaque faille une par une.
