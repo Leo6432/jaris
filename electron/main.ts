@@ -701,13 +701,20 @@ function tunnelBinaryPath(): string {
   return app.isPackaged ? join(process.resourcesPath, 'bin', name) : join(__dirname, '../../tunnel/dist', name)
 }
 
+const PHONE_TUNNEL_DIR = 'phone-tunnel'
+
 function getPhoneAccess(): PhoneAccessManager {
   if (phoneAccess) return phoneAccess
+  // Dossier « tailscale » laissé à moitié créé par la v0.22.0 (journaux seulement : la connexion n'avait jamais
+  // abouti). Rien d'autre que Jaris n'écrit sous ce nom dans son propre dossier.
+  void rm(join(app.getPath('userData'), 'tailscale'), { recursive: true, force: true }).catch(() => {})
   const manager = new PhoneAccessManager({
     tunnelBinary: tunnelBinaryPath(),
-    // L'identité Tailscale de ce PC reste à l'emplacement fixe de Windows : elle n'a pas à suivre un
-    // déplacement des données (Options → Général), et la perdre obligerait à se reconnecter.
-    tunnelStateDir: join(app.getPath('userData'), 'tailscale'),
+    // L'identité Tailscale de ce PC reste dans le dossier de Jaris : elle n'a pas à suivre un déplacement des
+    // données (Options → Général), et la perdre obligerait à se reconnecter. JAMAIS nommé « tailscale » : sous
+    // Windows, Tailscale réécrit alors les droits du dossier, ce qui est refusé sans administrateur (« Access
+    // is denied », v0.22.0 chez Léo). Voir aussi stateDirFor (tunnel/main.go).
+    tunnelStateDir: join(app.getPath('userData'), PHONE_TUNNEL_DIR),
     devicesFile: join(getDataRoot(), 'phone-devices.json'),
     pageDir: join(resourcesRoot(), 'phone'),
     history: () => chatSession.getVisibleMessages(),

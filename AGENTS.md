@@ -5811,3 +5811,25 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   scripts/test-voice-listening-status.mjs scripts/test-sidecar-encoding.mjs`, `go test ./...` (tunnel/),
   `python scripts/test-phone-wav.py`. Les tests de sécurité du serveur et des restrictions ont été vérifiés en
   réintroduisant chaque faille une par une.
+
+- **« démarrage de Tailscale impossible : tsnet: creating state directory: Access is denied » (Léo, v0.22.0,
+  dès l'activation de l'accès téléphone).** La cause a été trouvée dans le CODE SOURCE de Tailscale, pas
+  devinée. `paths.ensureStateDirPermsWindows` réécrit le propriétaire, le groupe et les droits de tout dossier
+  d'état nommé EXACTEMENT « tailscale » : c'est prévu pour le service Tailscale, qui tourne en SYSTEM. Le
+  dossier de Jaris s'appelait justement `userData\tailscale`, et un programme lancé sans droits
+  d'administrateur n'a pas le droit de faire ce changement. La création du dossier, elle, avait réussi : c'est
+  ce réglage de droits qui échouait, sous le même message.
+  Corrigé des deux côtés :
+  - Jaris utilise `phone-tunnel` et efface le dossier `tailscale` à moitié créé par la v0.22.0 (des journaux
+    seulement) ;
+  - le tunnel refuse lui-même ce nom (`stateDirFor`, tunnel/main.go), au cas où un futur appelant
+    l'utiliserait.
+
+  Le module TPM de Tailscale (même message) n'est pas compilé dans le tunnel : vérifié par `go list -deps`.
+  **Pourquoi aucun test ne l'a vu** : le développement tourne sous Linux (ce code est propre à Windows) et le
+  runner Windows de la CI tourne EN ADMINISTRATEUR, où ce changement de droits réussit. **Leçon générale :
+  une bibliothèque tierce peut avoir un comportement spécial déclenché par un simple NOM de dossier ou de
+  fichier. Avant de nommer un dossier d'après l'outil qui l'utilise, chercher ce nom dans le code de l'outil.
+  Et un test en CI ne prouve rien sur ce qui demande des droits : la CI est administrateur, Léo non.**
+  Régression : `go test ./...` (tunnel/, vérifié en retirant le garde) et `scripts/test-phone-tunnel.mjs`
+  (le nom n'est jamais « tailscale », des deux côtés).

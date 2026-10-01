@@ -31,6 +31,8 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -149,6 +151,17 @@ func waitForFunnel(ctx context.Context, lc *local.Client) (*ipnstate.Status, err
 	}
 }
 
+// stateDirFor : sous Windows, Tailscale réécrit le propriétaire et les droits de tout dossier d'état nommé
+// exactement « tailscale » (paths.ensureStateDirPermsWindows), ce qu'un programme lancé SANS droits
+// d'administrateur n'a pas le droit de faire : « creating state directory: Access is denied » (vécu par Léo en
+// v0.22.0, dont le dossier s'appelait justement « tailscale »). Ce nom est donc toujours évité.
+func stateDirFor(dir string) string {
+	if strings.EqualFold(filepath.Base(filepath.Clean(dir)), "tailscale") {
+		return filepath.Join(dir, "jaris")
+	}
+	return dir
+}
+
 func main() {
 	stateDir := flag.String("state", "", "dossier où Tailscale garde l'identité de ce PC")
 	target := flag.String("target", "", "adresse du serveur local de Jaris (127.0.0.1:port)")
@@ -165,7 +178,7 @@ func main() {
 	logtail.Disable()
 
 	srv := &tsnet.Server{
-		Dir:      *stateDir,
+		Dir:      stateDirFor(*stateDir),
 		Hostname: *hostname,
 		Logf:     func(string, ...any) {},
 		// Messages destinés à un humain devant un terminal (« restart with TS_AUTHKEY… », répétés toutes les

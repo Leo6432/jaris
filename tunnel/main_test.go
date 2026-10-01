@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -66,5 +67,18 @@ func TestProxyBackendDown(t *testing.T) {
 	b, _ := io.ReadAll(res.Body)
 	if res.StatusCode != http.StatusBadGateway || !strings.Contains(string(b), "Jaris ne répond pas") {
 		t.Fatalf("réponse inattendue : %d %q", res.StatusCode, b)
+	}
+}
+
+// Un dossier d'état nommé « tailscale » déclenche, sous Windows, une réécriture des droits refusée sans
+// administrateur (« Access is denied », v0.22.0) : il n'est jamais utilisé tel quel.
+func TestStateDirNeverNamedTailscale(t *testing.T) {
+	for _, dir := range []string{"/data/tailscale", "/data/Tailscale", "/data/TAILSCALE/"} {
+		if got := stateDirFor(dir); strings.EqualFold(filepath.Base(got), "tailscale") {
+			t.Fatalf("%q -> %q : encore nommé tailscale", dir, got)
+		}
+	}
+	if got := stateDirFor("/data/phone-tunnel"); got != "/data/phone-tunnel" {
+		t.Fatalf("un autre nom doit rester tel quel, obtenu %q", got)
 	}
 }

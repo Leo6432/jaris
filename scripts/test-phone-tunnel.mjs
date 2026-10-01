@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
@@ -137,4 +137,17 @@ test('le message d’erreur du tunnel arrive tel quel', async () => {
     tunnel.stop()
     fake.cleanup()
   }
+})
+
+// v0.22.0 chez Léo : « tsnet: creating state directory: Access is denied ». Sous Windows, Tailscale réécrit
+// les droits de tout dossier d'état nommé exactement « tailscale » (refusé sans administrateur). Ni Jaris ni
+// le tunnel ne doivent utiliser ce nom — vérifié des deux côtés, la CI tournant, elle, en administrateur.
+test('le dossier d’état du tunnel ne s’appelle jamais « tailscale »', () => {
+  const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
+  const dirName = main.match(/const PHONE_TUNNEL_DIR = '([^']+)'/)?.[1]
+  assert.ok(dirName, 'PHONE_TUNNEL_DIR introuvable dans main.ts')
+  assert.notEqual(dirName.toLowerCase(), 'tailscale')
+  assert.match(main, /tunnelStateDir: join\(app\.getPath\('userData'\), PHONE_TUNNEL_DIR\)/)
+  const go = readFileSync(new URL('../tunnel/main.go', import.meta.url), 'utf8')
+  assert.match(go, /Dir:\s+stateDirFor\(\*stateDir\)/, 'le tunnel doit aussi se protéger lui-même')
 })
