@@ -21,15 +21,16 @@ export const PHONE_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
 ])
 
 export const PHONE_REFUSAL =
-  "Depuis ton téléphone, je ne peux pas taper, cliquer, regarder ton écran ni éteindre le PC : c'est bloqué " +
-  'pour ta sécurité. Fais-le depuis le PC.'
+  "Depuis ton téléphone, je ne peux pas taper, cliquer ni regarder ton écran : c'est bloqué pour ta sécurité. " +
+  'Fais-le depuis le PC. Pour éteindre le PC, utilise le bouton d’extinction en haut de la page.'
 
 export const PHONE_RESTRICTIONS: ConverseRestrictions = {
   allowedTools: PHONE_ALLOWED_TOOLS,
   note:
     "Ce message vient du téléphone de l'utilisateur, loin du PC. Depuis le téléphone, tu ne peux ni taper, ni " +
     "cliquer, ni regarder l'écran, ni éteindre le PC : ces outils n'existent pas ici. Si on te le demande, dis " +
-    'simplement que c’est bloqué depuis le téléphone pour sa sécurité, sans rien inventer.',
+    'simplement que c’est bloqué depuis le téléphone pour sa sécurité, sans rien inventer. Pour éteindre le PC, ' +
+    'il existe un bouton d’extinction en haut de la page du téléphone : indique-le.',
   refusal: PHONE_REFUSAL
 }
 

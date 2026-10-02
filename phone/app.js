@@ -83,7 +83,9 @@
     })
       .catch(function (err) {
         if (controller && controller.signal.aborted) throw new Error("L'envoi à ton PC n'a pas abouti à temps : vérifie le réseau, puis réessaie.")
-        throw err
+        // Aucune réponse du tout : le PC est éteint ou injoignable, on le dit plutôt qu'un « Load failed ».
+        if (token && path !== '/api/pair') setPc('off')
+        throw new Error('Ton PC ne répond pas : il est peut-être éteint.')
       })
       .then(function (res) {
         clearTimeout(timer)
@@ -219,7 +221,116 @@
   }
 
   function setStatus(text) {
-    $('top-status').textContent = text || 'Connecté à ton PC'
+    $('top-status').textContent = text || pcStatusText()
+  }
+
+  // --- État du PC et extinction (étape 218) -----------------------------------------------------------
+  // La page demande au PC s'il répond toutes les 15 s. PC éteint (ou en veille, ou Jaris fermé), la page reste
+  // ouverte grâce à sa copie (sw.js) et le dit clairement, au lieu d'échouer à chaque action.
+
+  var STATUS_POLL_MS = 15000
+  var STATUS_TIMEOUT_MS = 8000
+  var pc = { state: 'unknown', shutdownAt: null }
+  var countdownTimer = null
+
+  function formatCountdown(ms) {
+    var s = Math.max(0, Math.ceil(ms / 1000))
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0')
+  }
+
+  function pcStatusText() {
+    if (pc.state === 'off') return navigator.onLine === false ? 'Pas de réseau sur le téléphone' : 'PC éteint ou injoignable'
+    if (pc.state === 'unknown') return 'Connexion à ton PC…'
+    if (pc.shutdownAt) {
+      var left = pc.shutdownAt - Date.now()
+      return left > 0 ? 'Extinction du PC dans ' + formatCountdown(left) : 'Le PC s’éteint…'
+    }
+    return 'PC allumé'
+  }
+
+  function renderPc() {
+    var pending = pc.state === 'on' && Boolean(pc.shutdownAt)
+    $('pc-dot').className = 'pc-dot' + (pc.state === 'off' ? ' pc-dot--off' : pending ? ' pc-dot--pending' : pc.state === 'on' ? ' pc-dot--on' : '')
+    $('power').classList.toggle('power--pending', pending)
+    $('power').disabled = pc.state !== 'on'
+    var offline = $('offline')
+    offline.hidden = pc.state !== 'off'
+    if (pc.state === 'off')
+      offline.textContent =
+        navigator.onLine === false
+          ? 'Ton téléphone n’a pas de réseau : reconnecte-le (Wi-Fi ou 4G).'
+          : pc.shutdownAt
+            ? 'Ton PC est éteint (extinction demandée depuis le téléphone). Le téléphone ne peut pas le rallumer.'
+            : 'Ton PC ne répond pas : il est éteint, en veille, ou Jaris n’est pas ouvert dessus. Tout revient ici dès qu’il répond.'
+    if (!conversationBusy && !studioBusy) setStatus('')
+    renderPowerSheet()
+  }
+
+  function setPc(state, shutdownAt) {
+    var wasOff = pc.state === 'off'
+    pc.state = state
+    if (state === 'on') pc.shutdownAt = shutdownAt || null
+    clearInterval(countdownTimer)
+    countdownTimer = pc.state === 'on' && pc.shutdownAt ? setInterval(renderPc, 1000) : null
+    renderPc()
+    // Le PC revient : la conversation a pu avancer pendant ce temps.
+    if (wasOff && state === 'on' && !conversationBusy) loadHistory()
+  }
+
+  function checkPc() {
+    if (!token) return Promise.resolve()
+    var controller = window.AbortController ? new AbortController() : null
+    var timer = controller
+      ? setTimeout(function () {
+          controller.abort()
+        }, STATUS_TIMEOUT_MS)
+      : null
+    return fetch('/api/status', { headers: authHeaders(), cache: 'no-store', signal: controller ? controller.signal : undefined })
+      .then(function (res) {
+        clearTimeout(timer)
+        checkAuth(res, '/api/status')
+        if (!res.ok) throw new Error('PC injoignable')
+        return res.json()
+      })
+      .then(function (data) {
+        setPc('on', data.shutdownAt)
+      })
+      .catch(function () {
+        clearTimeout(timer)
+        if (token) setPc('off')
+      })
+  }
+
+  function renderPowerSheet() {
+    var pending = pc.state === 'on' && Boolean(pc.shutdownAt)
+    $('power-confirm').hidden = pending
+    $('power-cancel').hidden = !pending
+    $('power-text').textContent = pending
+      ? 'Ton PC s’éteint dans ' + formatCountdown(pc.shutdownAt - Date.now()) + '. Tu peux encore annuler.'
+      : 'Ton PC s’éteindra dans 1 minute. D’ici là, tu peux encore annuler. Pense à enregistrer ce qui est ouvert dessus.'
+  }
+
+  function showPowerError(message) {
+    $('power-error').hidden = !message
+    $('power-error').textContent = message || ''
+  }
+
+  function power(action) {
+    showPowerError('')
+    $('power-confirm').disabled = true
+    $('power-cancel').disabled = true
+    api('POST', '/api/power', { action: action })
+      .then(function (data) {
+        setPc('on', data.shutdownAt)
+        if (action === 'cancel') $('power-sheet').hidden = true
+      })
+      .catch(function (err) {
+        showPowerError(err.message)
+      })
+      .then(function () {
+        $('power-confirm').disabled = false
+        $('power-cancel').disabled = false
+      })
   }
 
   function refreshBusyLook() {
@@ -304,6 +415,7 @@
     resumeStudio()
     loadModel('chat')
     loadModel('voice')
+    checkPc()
   }
 
   // --- Chat ------------------------------------------------------------------------------------------
@@ -1254,6 +1366,33 @@
     })
   })
   $('sheet-close').addEventListener('click', closeSheet)
+  $('power').addEventListener('click', function () {
+    showPowerError('')
+    renderPowerSheet()
+    $('power-sheet').hidden = false
+  })
+  $('power-close').addEventListener('click', function () {
+    $('power-sheet').hidden = true
+  })
+  $('power-sheet').addEventListener('click', function (e) {
+    if (e.target === $('power-sheet')) $('power-sheet').hidden = true
+  })
+  $('power-confirm').addEventListener('click', function () {
+    power('shutdown')
+  })
+  $('power-cancel').addEventListener('click', function () {
+    power('cancel')
+  })
+  setInterval(checkPc, STATUS_POLL_MS)
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') checkPc()
+  })
+  window.addEventListener('online', checkPc)
+  window.addEventListener('offline', function () {
+    if (token) setPc('off')
+  })
+  // Copie de la page sur le téléphone (sw.js) : elle s'ouvre même quand le PC est éteint.
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function () {})
   // Toucher le fond sombre ferme le panneau, comme sur une appli de téléphone.
   $('sheet').addEventListener('click', function (e) {
     if (e.target === $('sheet')) closeSheet()

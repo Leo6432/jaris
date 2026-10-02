@@ -72,7 +72,7 @@ async function start({ sendMessage, transcribe, history, now, ...overrides } = {
   const devicesFile = join(dir, 'phone-devices.json')
   const devices = new PhoneDeviceStore(devicesFile)
   const models = fakeModelChoices()
-  const calls = { messages: [], modes: [], transcribed: [], spoken: [], images: [], videos: [], read: [] }
+  const calls = { power: [], messages: [], modes: [], transcribed: [], spoken: [], images: [], videos: [], read: [] }
   const server = new PhoneServer({
     devices,
     pageDir: PAGE_DIR,
@@ -124,6 +124,12 @@ async function start({ sendMessage, transcribe, history, now, ...overrides } = {
       return Buffer.from('1a45dfa3', 'hex')
     },
     ...models,
+    shutdown: async (seconds) => {
+      calls.power.push(['shutdown', seconds])
+    },
+    cancelShutdown: async () => {
+      calls.power.push(['cancel'])
+    },
     ...overrides
   })
   const port = await server.listen()
@@ -181,7 +187,7 @@ test('la page se charge sans connexion, avec une politique de sécurité stricte
     assert.match(csp, /script-src 'self'/)
     assert.doesNotMatch(csp, /unsafe-inline'[^;]*script|script-src[^;]*unsafe/, 'aucun script en ligne autorisé')
     assert.equal(page.headers.get('x-frame-options'), 'DENY')
-    for (const path of ['/app.js', '/app.css', '/manifest.webmanifest', '/icon-192.png']) {
+    for (const path of ['/app.js', '/app.css', '/manifest.webmanifest', '/icon-192.png', '/sw.js']) {
       assert.equal((await t.request(path)).status, 200, path)
     }
     for (const path of ['/../package.json', '/%2e%2e/package.json', '/index.html/../../electron/main.ts', '/phone-devices.json', '/api']) {
@@ -587,6 +593,51 @@ test('Modèle : le même sélecteur que le PC, pour le Chat et le Vocal seulemen
       ['think', 'voice', 'high'],
       ['model', 'chat', 'role:large']
     ])
+  } finally {
+    await t.close()
+  }
+})
+
+test('État du PC et extinction : seulement avec le jeton, une minute pour annuler, jamais deux extinctions', async () => {
+  let clock = 1_000_000
+  const t = await start({ now: () => clock })
+  try {
+    assert.equal((await t.request('/api/status')).status, 401)
+    assert.equal((await t.request('/api/power', { method: 'POST', body: { action: 'shutdown' } })).status, 401)
+    assert.deepEqual(t.calls.power, [], 'sans jeton, rien n’est éteint')
+    const token = await t.paired()
+    assert.deepEqual(await (await t.request('/api/status', { token })).json(), { online: true, shutdownAt: null })
+
+    assert.equal((await t.request('/api/power', { method: 'POST', token, body: { action: 'reboot' } })).status, 400)
+    assert.equal((await t.request('/api/power', { method: 'POST', token, body: {} })).status, 400)
+    const off = await (await t.request('/api/power', { method: 'POST', token, body: { action: 'shutdown' } })).json()
+    assert.equal(off.shutdownAt, clock + 60_000)
+    assert.deepEqual(t.calls.power, [['shutdown', 60]], 'une minute pour se raviser')
+    clock += 5_000
+    await t.request('/api/power', { method: 'POST', token, body: { action: 'shutdown' } })
+    assert.deepEqual(t.calls.power, [['shutdown', 60]], 'un second appui ne relance pas le compte à rebours')
+    assert.equal((await (await t.request('/api/status', { token })).json()).shutdownAt, 1_060_000)
+
+    const cancelled = await (await t.request('/api/power', { method: 'POST', token, body: { action: 'cancel' } })).json()
+    assert.equal(cancelled.shutdownAt, null)
+    assert.deepEqual(t.calls.power.at(-1), ['cancel'])
+  } finally {
+    await t.close()
+  }
+})
+
+test('Extinction : un refus de Windows arrive lisible au téléphone, et rien n’est noté comme programmé', async () => {
+  const t = await start({
+    shutdown: async () => {
+      throw new Error("Windows n'a pas accepté l'extinction (code 1190).")
+    }
+  })
+  try {
+    const token = await t.paired()
+    const res = await t.request('/api/power', { method: 'POST', token, body: { action: 'shutdown' } })
+    assert.equal(res.status, 500)
+    assert.match((await res.json()).error, /Windows n'a pas accepté l'extinction/)
+    assert.equal((await (await t.request('/api/status', { token })).json()).shutdownAt, null)
   } finally {
     await t.close()
   }

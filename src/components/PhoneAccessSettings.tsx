@@ -107,7 +107,7 @@ export default function PhoneAccessSettings(): JSX.Element {
           />
         </SettingRow>
         <p className="phone-access__safety">
-          Pour ta sécurité, depuis le téléphone Jaris ne peut ni taper, ni cliquer, ni regarder ton écran, ni éteindre le PC.
+          Pour ta sécurité, depuis le téléphone Jaris ne peut ni taper, ni cliquer, ni regarder ton écran. Le PC ne s'éteint que par le bouton prévu sur la page du téléphone, avec une minute pour annuler.
         </p>
       </SettingGroup>
 

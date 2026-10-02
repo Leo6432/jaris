@@ -55,6 +55,7 @@ import { runQuickSetup } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
 import { PhoneAccessManager } from './services/phoneAccessManager'
 import { PHONE_RESTRICTIONS, phoneStatusFromLog } from './services/phoneAccess'
+import { cancelScheduledShutdown, scheduleShutdown } from './services/systemControl'
 import { getDataRoot } from './services/dataLocation'
 import { resourcesRoot } from './paths'
 import { randomUUID } from 'crypto'
@@ -863,6 +864,15 @@ function getPhoneAccess(): PhoneAccessManager {
       setThinkChoice: async (mode, think) => {
         await saveThinkChoice(mode, think)
         broadcast(IPC_CHANNELS.modelChoiceChanged)
+      },
+      // Étape 218 : extinction demandée par le bouton du téléphone (jamais par la conversation), annulable.
+      shutdown: async (seconds) => {
+        await scheduleShutdown(seconds)
+        broadcast(IPC_CHANNELS.log, `Extinction du PC demandée depuis le téléphone, dans ${seconds} s.`)
+      },
+      cancelShutdown: async () => {
+        await cancelScheduledShutdown()
+        broadcast(IPC_CHANNELS.log, 'Extinction du PC annulée depuis le téléphone.')
       }
     }
   })

@@ -5973,3 +5973,25 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Markdown (listes, citations, titres). `renderMarkdown` (phone/app.js) rend ces éléments en vrais éléments
   HTML, toujours via `textContent`, jamais via du HTML venu du texte. Régression :
   `scripts/test-phone-page-ui.mjs` (aucun symbole Markdown brut à l'écran).
+
+- **État du PC et extinction depuis le téléphone (étape 218, Léo : « mettre sur le téléphone quand le PC est
+  éteint ou pas » + « la possibilité d'éteindre le PC à partir du téléphone »).**
+  - **PC éteint = page injoignable**, puisque c'est le PC qui la sert. Un service worker (`phone/sw.js`)
+    garde une copie des SEULS fichiers de la page, jamais des réponses de `/api/`. PC éteint, la page s'ouvre
+    quand même et affiche « PC éteint ou injoignable » avec un point rouge. PC allumé, les fichiers sont
+    toujours repris du PC d'abord. Une page d'erreur du relais (réponse non 2xx) compte comme « injoignable »,
+    pas comme une nouvelle version. La page ne peut PAS distinguer éteint, en veille ou Jaris fermé, et le
+    message le dit tel quel. Elle interroge `/api/status` toutes les 15 s et au retour sur la page. Une
+    requête qui ne reçoit aucune réponse affiche « Ton PC ne répond pas », plus jamais le « Load failed » brut
+    du navigateur. Le test vérifie vraiment la copie : PC coupé puis page rechargée. Sans service worker, il
+    échoue.
+  - **Extinction : un bouton de la page, jamais la conversation.** `shutdown_pc` reste interdit depuis le
+    téléphone : une phrase ambiguë ou une page web lue par Jaris ne peut donc pas éteindre le PC. Le bouton
+    demande une confirmation, puis programme `shutdown /s /t 60` : une minute pour annuler (`shutdown /a`),
+    avec un compte à rebours visible. Un second appui ne relance pas le compte à rebours, et un refus de
+    Windows arrive lisible. Le refus du modèle au téléphone renvoie vers ce bouton au lieu de dire
+    « impossible ». Le téléphone ne peut pas RALLUMER le PC (rien n'écoute quand il est éteint), et la page le
+    dit.
+  - `sw.js` est ajouté à la vérification d'empaquetage de la CI : un fichier manquant dans `extraResources` ne
+    fait pas échouer electron-builder.
+  Régression : `node --test scripts/test-phone-server.mjs scripts/test-phone-page-ui.mjs`.

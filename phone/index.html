@@ -34,9 +34,14 @@
         <img id="top-orb" class="orb" src="/logo.png" alt="" aria-hidden="true" />
         <div class="topbar__title">
           <span class="topbar__name">Jaris</span>
-          <span id="top-status" class="topbar__status">Connecté à ton PC</span>
+          <span class="topbar__line"><span id="pc-dot" class="pc-dot" aria-hidden="true"></span><span id="top-status" class="topbar__status">Connexion à ton PC…</span></span>
         </div>
+        <button id="power" class="power" type="button" aria-label="Éteindre le PC" title="Éteindre le PC" aria-haspopup="dialog">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 3v8M7.05 6.05a7 7 0 1 0 9.9 0"/></svg>
+        </button>
       </header>
+      <!-- PC éteint ou injoignable : dit clairement, au lieu d'erreurs à chaque action. -->
+      <p id="offline" class="offline" role="status" hidden></p>
 
       <!-- Chat : la même conversation que le Chat de Jaris sur le PC. -->
       <section id="tab-chat" class="tab chat" data-tab="chat">
@@ -157,6 +162,23 @@
         <p id="sheet-think-note" class="sheet__note" hidden></p>
         <div id="sheet-thinks" class="chips" role="radiogroup" aria-label="Réflexion"></div>
         <p id="sheet-error" class="error" role="alert" hidden></p>
+      </div>
+    </div>
+
+    <!-- Extinction du PC : seulement par ce bouton, jamais par la conversation, et annulable une minute. -->
+    <div id="power-sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="power-title" hidden>
+      <div class="sheet__panel">
+        <div class="sheet__head">
+          <h2 id="power-title" class="sheet__title">Éteindre le PC</h2>
+          <button id="power-close" class="viewer__close" type="button" aria-label="Fermer">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg>
+          </button>
+        </div>
+        <p id="power-text" class="sheet__scope">Ton PC s’éteindra dans 1 minute. D’ici là, tu peux encore annuler. Pense à enregistrer ce qui est ouvert dessus.</p>
+        <button id="power-confirm" class="button button--danger" type="button">Éteindre dans 1 minute</button>
+        <button id="power-cancel" class="button" type="button" hidden>Annuler l’extinction</button>
+        <p class="sheet__note">Le téléphone ne peut pas rallumer le PC : il faudra appuyer sur son bouton.</p>
+        <p id="power-error" class="error" role="alert" hidden></p>
       </div>
     </div>
 

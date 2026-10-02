@@ -954,3 +954,74 @@ body {
   color: var(--soft);
   font-size: 14px;
 }
+
+/* État du PC et extinction (étape 218). */
+.topbar__title {
+  flex: 1;
+}
+
+.topbar__line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pc-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.pc-dot--on {
+  background: #3ddc84;
+  box-shadow: 0 0 6px rgba(61, 220, 132, 0.8);
+}
+
+.pc-dot--off {
+  background: var(--danger);
+}
+
+.pc-dot--pending {
+  background: #ffb547;
+  box-shadow: 0 0 6px rgba(255, 181, 71, 0.8);
+}
+
+.power {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--soft);
+  cursor: pointer;
+}
+
+.power:disabled {
+  opacity: 0.4;
+}
+
+.power--pending {
+  color: #ffb547;
+  border-color: rgba(255, 181, 71, 0.6);
+}
+
+.offline {
+  margin: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255, 77, 104, 0.4);
+  background: rgba(255, 77, 104, 0.12);
+  color: #ffb8c2;
+  font-size: 14px;
+}
+
+.button--danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}

@@ -228,7 +228,7 @@ export const CAPABILITIES: CapabilityGroup[] = [
       {
         title: 'Depuis ton téléphone',
         description:
-          'Options → Téléphone : écris à Jaris, parle-lui (il te répond à voix haute), crée des images et des vidéos et retrouve-les, de n’importe où, chiffré, sans appli à installer. Il ne peut alors ni taper, ni cliquer, ni éteindre le PC.'
+          'Options → Téléphone : écris à Jaris, parle-lui (il te répond à voix haute), crée des images et des vidéos et retrouve-les, de n’importe où, chiffré, sans appli à installer. Le téléphone montre si le PC est allumé et peut l’éteindre (avec une minute pour annuler) ; Jaris n’y tape ni ne clique jamais.'
       }
     ]
   }

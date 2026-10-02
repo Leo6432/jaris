@@ -69,6 +69,9 @@ export interface PhoneServerDeps {
   getModelChoice(mode: PhoneModelMode): Promise<ModelChoiceInfo>
   setModelChoice(mode: PhoneModelMode, model: string | null): Promise<void>
   setThinkChoice(mode: PhoneModelMode, think: unknown): Promise<void>
+  /** Programme l'extinction du PC dans `seconds` (annulable d'ici là). */
+  shutdown(seconds: number): Promise<void>
+  cancelShutdown(): Promise<void>
   /** Derniers messages de la conversation active, pour que le téléphone reprenne là où on en est. */
   history(): Promise<ChatMessage[]>
   devices: PhoneDeviceStore
@@ -110,8 +113,13 @@ const PAGE_FILES: Record<string, { file: string; type: string }> = {
   '/manifest.webmanifest': { file: 'manifest.webmanifest', type: 'application/manifest+json' },
   '/icon-192.png': { file: 'icon-192.png', type: 'image/png' },
   '/icon-512.png': { file: 'icon-512.png', type: 'image/png' },
-  '/logo.png': { file: 'logo.png', type: 'image/png' }
+  '/logo.png': { file: 'logo.png', type: 'image/png' },
+  // Garde la page sur le téléphone : PC éteint, elle s'ouvre quand même et peut le dire (étape 218).
+  '/sw.js': { file: 'sw.js', type: 'text/javascript; charset=utf-8' }
 }
+
+/** Délai avant l'extinction demandée depuis le téléphone : le temps de se raviser et d'annuler. */
+export const POWER_OFF_DELAY_S = 60
 
 export const PAIRING_CODE_TTL_MS = 10 * 60_000
 const PAIRING_ATTEMPTS_PER_CODE = 5
@@ -201,6 +209,8 @@ export class PhoneServer {
   private pairAttempts: number[] = []
   private jobs = new Map<string, Job>()
   private busy: Record<Lane, boolean> = { conversation: false, studio: false }
+  /** Heure prévue de l'extinction demandée depuis le téléphone, ou null. */
+  private shutdownAt: number | null = null
   private readonly now: () => number
 
   constructor(private readonly deps: PhoneServerDeps) {
@@ -460,6 +470,33 @@ export class PhoneServer {
         if (!isExpectedWav(wav)) throw new HttpError(400, 'Enregistrement illisible.')
         const job = this.startJob('conversation', (j) => this.talk(j, wav))
         send(res, 202, { jobId: job.id })
+        return
+      }
+      if (req.method === 'GET' && path === '/api/status') {
+        send(res, 200, { online: true, shutdownAt: this.shutdownAt })
+        return
+      }
+      if (req.method === 'POST' && path === '/api/power') {
+        const body = await readJson(req)
+        // Seul un bouton de la page arrive ici, jamais la conversation : une page web lue par Jaris ou une
+        // phrase ambiguë ne peut pas éteindre le PC (shutdown_pc reste interdit depuis le téléphone).
+        try {
+          if (body.action === 'shutdown') {
+            if (this.shutdownAt === null) {
+              await this.deps.shutdown(POWER_OFF_DELAY_S)
+              this.shutdownAt = this.now() + POWER_OFF_DELAY_S * 1000
+            }
+          } else if (body.action === 'cancel') {
+            await this.deps.cancelShutdown()
+            this.shutdownAt = null
+          } else {
+            throw new HttpError(400, 'Action inconnue.')
+          }
+        } catch (err) {
+          if (err instanceof HttpError) throw err
+          throw new HttpError(500, err instanceof Error ? err.message : String(err))
+        }
+        send(res, 200, { online: true, shutdownAt: this.shutdownAt })
         return
       }
       if (req.method === 'GET' && path === '/api/model') {

@@ -79,7 +79,7 @@ async function withPhone(run, overrides = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-phone-ui-'))
   const devices = new PhoneDeviceStore(join(dir, 'devices.json'))
   const models = fakeModelChoices()
-  const received = { messages: [], modes: [], wavBytes: [], spoken: [], images: [], videos: [] }
+  const received = { power: [], messages: [], modes: [], wavBytes: [], spoken: [], images: [], videos: [] }
   const exchanges = []
   const images = [
     { fileName: '2026-09-30T08-00-00-un-phare.png', label: 'un phare', timestamp: Date.parse('2026-09-30T08:00:00Z') },
@@ -135,6 +135,12 @@ async function withPhone(run, overrides = {}) {
     readImageThumbnail: async () => PNG,
     readVideo: async () => Buffer.from('1a45dfa3', 'hex'),
     ...models,
+    shutdown: async (seconds) => {
+      received.power.push(['shutdown', seconds])
+    },
+    cancelShutdown: async () => {
+      received.power.push(['cancel'])
+    },
     ...overrides
   })
   const port = await server.listen()
@@ -493,5 +499,51 @@ test('Chat : la réponse en Markdown s’affiche mise en forme (listes, citation
     assert.doesNotMatch(text, /(^|\s)[>#](\s|$)|^\s*-\s/m, 'aucun symbole Markdown brut à l’écran')
     assert.doesNotMatch(text, /\*\*|`/)
     await shot(page, 'phone-markdown')
+  })
+})
+
+test('PC allumé : point vert ; « Éteindre » demande confirmation, compte à rebours, puis Annuler', options, async () => {
+  await withPhone(async ({ page, server, base, received }) => {
+    await open(page, server, base)
+    await page.waitForFunction(() => document.querySelector('#top-status').textContent === 'PC allumé')
+    assert.match(await page.getAttribute('#pc-dot', 'class'), /pc-dot--on/)
+    await page.click('#power')
+    await page.waitForSelector('#power-sheet:not([hidden])')
+    assert.deepEqual(received.power, [], 'ouvrir le panneau n’éteint rien : il faut confirmer')
+    await shot(page, 'phone-power-confirm')
+    await page.click('#power-confirm')
+    await page.waitForSelector('#power-cancel:not([hidden])')
+    assert.deepEqual(received.power, [['shutdown', 60]])
+    await page.waitForFunction(() => /Extinction du PC dans 0:[0-5]\d/.test(document.querySelector('#top-status').textContent))
+    assert.match(await page.getAttribute('#pc-dot', 'class'), /pc-dot--pending/)
+    await shot(page, 'phone-power-pending')
+    await page.click('#power-cancel')
+    await page.waitForSelector('#power-sheet', { state: 'hidden' })
+    await page.waitForFunction(() => document.querySelector('#top-status').textContent === 'PC allumé')
+    assert.deepEqual(received.power, [['shutdown', 60], ['cancel']])
+  })
+})
+
+test('PC éteint : la page s’ouvre quand même (copie sur le téléphone) et le dit clairement', options, async () => {
+  await withPhone(async ({ page, server, base }) => {
+    await open(page, server, base)
+    // La copie de la page doit être en place (sinon, PC éteint, le téléphone n'aurait qu'une erreur).
+    await page.waitForFunction(() => Boolean(navigator.serviceWorker && navigator.serviceWorker.controller), null, { timeout: 10000 })
+    await page.waitForFunction(() => document.querySelector('#top-status').textContent === 'PC allumé')
+    // Le PC s'éteint : plus rien ne répond à son adresse.
+    await server.close()
+    await page.reload()
+    await page.waitForSelector('#app:not([hidden])')
+    await page.waitForSelector('#offline:not([hidden])')
+    assert.match(await page.textContent('#offline'), /Ton PC ne répond pas : il est éteint/)
+    assert.equal(await page.textContent('#top-status'), 'PC éteint ou injoignable')
+    assert.match(await page.getAttribute('#pc-dot', 'class'), /pc-dot--off/)
+    assert.equal(await page.isDisabled('#power'), true, 'rien à éteindre')
+    await shot(page, 'phone-offline')
+    // Écrire quand même : un message clair, pas « Load failed ».
+    await page.fill('#input', 'tu es là ?')
+    await page.click('#send')
+    await page.waitForSelector('.message--error')
+    assert.match(await page.textContent('.message--error'), /Ton PC ne répond pas/)
   })
 })

@@ -20,6 +20,28 @@ export async function getSystemStatsText(): Promise<string> {
  */
 const SHUTDOWN_COMMAND_DELAY_S = 10
 
+/**
+ * Étape 218 (Léo : « la possibilité d'éteindre le PC à partir du téléphone ») : extinction programmée dans
+ * `seconds`, annulable d'ici là avec cancelScheduledShutdown (`shutdown /a`). Lève une erreur au message
+ * lisible si Windows refuse : le téléphone l'affiche tel quel.
+ */
+export function scheduleShutdown(seconds: number): Promise<void> {
+  return runShutdown(['/s', '/t', String(seconds)], "Windows n'a pas accepté l'extinction")
+}
+
+/** Annule une extinction programmée. Windows répond par une erreur s'il n'y en avait aucune. */
+export function cancelScheduledShutdown(): Promise<void> {
+  return runShutdown(['/a'], "Windows n'a pas pu annuler l'extinction (elle a peut-être déjà commencé)")
+}
+
+function runShutdown(args: string[], failure: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('shutdown', args, { windowsHide: true })
+    proc.on('error', (err) => reject(new Error(`${failure} : ${err.message}`)))
+    proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`${failure} (code ${code}).`))))
+  })
+}
+
 export function shutdownPc(restart: boolean): Promise<string> {
   return new Promise((resolve) => {
     const flag = restart ? '/r' : '/s'
