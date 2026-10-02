@@ -125,7 +125,6 @@ test('expose les Intelligence Index lus directement chez Artificial Analysis san
     'nemotron-3.5-lightning:30b': 12.9,
     'qwen3-vl:8b': 8.2,
     'qwen3-vl:4b': 7.0,
-    'devstral-2:123b': 8.6,
     'qwen3-coder-next': 9.2,
     'qwen3-coder:30b': 9.6,
     'north-mini-code-1.0': 9.9,
@@ -148,8 +147,8 @@ test('expose aussi la vitesse (tokens/s) publiée par Artificial Analysis, absen
   const byModel = new Map(overview.entries.map((entry) => [entry.model, entry.artificialAnalysisSpeed]))
   assert.equal(byModel.get('ministral-3:3b'), 194)
   assert.equal(byModel.get('granite4.2:3b'), 221)
-  // Étape 220 : plus de vitesse publiée pour Devstral 2 (N/A) — retirée plutôt que gardée périmée.
-  assert.equal(byModel.get('devstral-2:123b'), null)
+  // Étape 220 : plus de vitesse publiée pour Devstral Small 2 (N/A) — retirée plutôt que gardée périmée.
+  assert.equal(byModel.get('devstral-small-2:24b'), null)
   // qwen3.5:0.8b a un Intelligence Index connu (6) mais Artificial Analysis affiche "N/A" pour sa vitesse.
   assert.equal(byModel.get('qwen3.5:0.8b'), null, 'aucune vitesse ne doit être devinée quand Artificial Analysis ne la publie pas')
 })

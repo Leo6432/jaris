@@ -174,9 +174,8 @@ const RAM_OFFLOAD_MODELS = new Set([
   'north-mini-code-1.0',
   'qwen2.5-coder:32b',
   'devstral-small-2:24b',
-  // devstral-2:123b et qwen3-coder-next : voir CODE_CANDIDATES plus bas, encore plus indispensable ici
-  // qu'ailleurs (aucun GPU grand public n'a 52-75 Go de VRAM à lui seul).
-  'devstral-2:123b',
+  // qwen3-coder-next : voir CODE_CANDIDATES plus bas, encore plus indispensable ici qu'ailleurs (aucun GPU
+  // grand public n'a 52 Go de VRAM à lui seul). devstral-2:123b retiré (étape 225).
   'qwen3-coder-next',
   'qwen3.5:35b',
   'qwen3.6:35b',
@@ -311,10 +310,8 @@ const VISION_CANDIDATES = [
 // VISION_CANDIDATES/detectVramGb ci-dessus). Testés séparément de MODELS : pas sur l'appel d'outils
 // (codeGenerator.ts n'en utilise jamais, voir CODE_TEST_CASES plus bas) mais sur la génération de code.
 const CODE_CANDIDATES = [
-  // devstral-2:123b et qwen3-coder-next (CODE_CANDIDATES dans hardwareScan.ts) : voir son commentaire
-  // complet pour la vérification des tags/tailles/bugs. Réservés aux très grosses machines (VRAM+RAM,
-  // RAM_OFFLOAD_MODELS plus haut).
-  { model: 'devstral-2:123b', vramGb: 75 },
+  // qwen3-coder-next (CODE_CANDIDATES dans hardwareScan.ts) : voir son commentaire complet pour la
+  // vérification du tag/de la taille. Réservé aux très grosses machines (VRAM+RAM, RAM_OFFLOAD_MODELS plus haut).
   { model: 'qwen3-coder-next', vramGb: 52 },
   { model: 'qwen3.6:35b-a3b', vramGb: 22 },
   // Ligne dédiée code d'Alibaba, DISTINCTE de qwen3.6:35b-a3b malgré une taille/architecture proche (30 Md

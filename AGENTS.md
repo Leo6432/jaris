@@ -6050,3 +6050,8 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   .exe à tort). **Leçon : une image fournie en très grand à un système qui la réduira à quelques pixels doit
   être réduite à l'avance, à chaque taille demandée.** Régression : `node --test scripts/test-app-icon.mjs`.
   Non vérifiable ici : le rendu réel dans la barre des tâches de Léo.
+
+- **devstral-2:123b retiré des candidats Code (Léo, étape 225 : « même un modèle 8b est plus fort que lui »).**
+  Vérifié avant de retirer, pas pris au mot : Artificial Analysis lui donne 8,6, sous granite4.2:8b (11,1)
+  et qwen3.5:9b (11,2), pour 75 Go dense qui ne tourne qu'en débordant massivement sur la RAM. Retiré de
+  CODE_CANDIDATES, LARGE_RAM_OFFLOAD_MODELS, de la table d'intelligence et de benchmark-models.mjs.

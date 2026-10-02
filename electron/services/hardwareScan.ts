@@ -257,10 +257,9 @@ const LARGE_RAM_OFFLOAD_MODELS = new Set([
   'north-mini-code-1.0',
   'qwen2.5-coder:32b',
   'devstral-small-2:24b',
-  // devstral-2:123b et qwen3-coder-next (CODE_CANDIDATES, 75 et 52 Go) : encore plus indispensable ici que
-  // pour les autres candidats Code — aucun GPU grand public n'a assez de VRAM à lui seul pour les atteindre,
-  // seule la RAM système les rend joignables du tout.
-  'devstral-2:123b',
+  // qwen3-coder-next (CODE_CANDIDATES, 52 Go) : encore plus indispensable ici que pour les autres candidats
+  // Code — aucun GPU grand public n'a assez de VRAM à lui seul pour l'atteindre, seule la RAM système le rend
+  // joignable du tout.
   'qwen3-coder-next'
 ])
 
@@ -359,21 +358,15 @@ const VISION_CANDIDATES: ModelCandidate[] = [
 //   confusion avec celui-ci — vérifié directement sur ollama.com/library/qwen3.6/tags : les deux tags
 //   existent bel et bien, séparément. Ajouté en informatif, à comparer aux autres via "Lancer l'analyse".
 const CODE_CANDIDATES: ModelCandidate[] = [
-  // devstral-2:123b (Mistral AI) et qwen3-coder-next (Alibaba) : ajoutés suite à la même recherche externe
-  // que ministral-3/gemma4:31b ci-dessus, réservés aux très grosses machines (VRAM+RAM, LARGE_RAM_OFFLOAD_MODELS
-  // plus bas — aucun GPU grand public n'a 52-75 Go de VRAM à lui seul).
-  // - devstral-2:123b : vérifié sur ollama.com/library/devstral-2:123b (75 Go en Q4_K_M — la page indique
-  //   "125B parameters" alors que le tag dit "123b" ; probablement le nombre de paramètres actifs/publiés
-  //   diffère légèrement du nom commercial, sans lien avec un bug — le tag Ollama exact reste `devstral-2:123b`).
-  //   DENSE, orienté agents de code (SWE-Bench Verified ~72%). Licence Mistral (usage commercial limité pour
-  //   les grandes entreprises, sans effet pour Jaris). Aucun bug Ollama de tool-calling trouvé pour ce modèle
-  //   précis au moment de la recherche — contrairement à Devstral Small 2 (24b), qui a des soucis de
-  //   paramètres d'outils connus dans sa propre famille : garder un œil dessus via "Lancer l'analyse".
+  // qwen3-coder-next (Alibaba) : ajouté suite à la même recherche externe que ministral-3/gemma4:31b
+  // ci-dessus, réservé aux très grosses machines (VRAM+RAM, LARGE_RAM_OFFLOAD_MODELS plus bas — aucun GPU
+  // grand public n'a 52 Go de VRAM à lui seul).
+  // Étape 225 (Léo : « même un modèle 8b est plus fort que lui ») : devstral-2:123b RETIRÉ. Vérifié sur
+  // Artificial Analysis : 8,6, sous granite4.2:8b (11,1) et qwen3.5:9b (11,2), pour 75 Go dense.
   // - qwen3-coder-next : vérifié sur ollama.com/library/qwen3-coder-next (52 Go en q4_K_M, 80 Md total/
   //   3 Md actifs MoE, appel d'outils annoncé "out of the box" pour agents de code). Ne remplace pas
   //   qwen3.6:35b-a3b déjà en tête (pas de gain confirmé sur TOUS les benchmarks de code), plutôt un
   //   complément haut de gamme pour le travail agentique sur de grosses bases de code.
-  { model: 'devstral-2:123b', vramGb: 75 },
   { model: 'qwen3-coder-next', vramGb: 52 },
   { model: 'qwen3.6:35b-a3b', vramGb: 22 },
   { model: 'qwen3-coder:30b', vramGb: 19 },
@@ -887,7 +880,6 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   'nemotron-3.5-lightning:30b': 12.9, // Nemotron 3.5 Lightning
   'qwen3-vl:8b': 8.2, // Qwen3 VL 8B (Reasoning)
   'qwen3-vl:4b': 7.0, // Qwen3 VL 4B (Reasoning)
-  'devstral-2:123b': 8.6, // Devstral 2
   'qwen3-coder-next': 9.2, // Qwen3 Coder Next
   'qwen3-coder:30b': 9.6, // Qwen3 Coder 30B A3B Instruct
   'north-mini-code-1.0': 9.9, // North Mini Code
