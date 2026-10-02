@@ -543,14 +543,17 @@ export async function converse(
       if (wantsWebInfo && !searchCalledThisTurn && !nudgedForSearch) {
         nudgedForSearch = true
         onLog?.("Question de connaissance sans recherche web : relance corrective d'un tour.")
-        messages.push(message)
+        // Étape 217 (Léo, « Comment faire du pain » depuis le téléphone) : le brouillon de mémoire n'est PAS
+        // remis au modèle, et la consigne n'est ni un reproche ni un message de l'utilisateur. Avec le brouillon
+        // + « ta mémoire n'est pas fiable » en message utilisateur, le modèle se justifiait au lieu de répondre :
+        // « réponse strictement basée sur search_web… j'ai reculé sur saladier, fouet… pourquoi cette réponse est
+        // correcte… comme exigé ». Même travers que la relance « promesse sans action » (paraphrase de la consigne).
         messages.push({
-          role: 'user',
+          role: 'system',
           content:
-            "Tu n'as pas appelé search_web pour cette question, alors qu'elle demande une information " +
-            "factuelle. Ta mémoire de connaissances générales est ancienne et non fiable pour ce genre de " +
-            "question : appelle search_web MAINTENANT avec les mots-clés de la question, puis réponds à " +
-            "partir du résultat réel — jamais de ta seule mémoire, même si tu es sûr de la réponse."
+            "Pour cette question, appelle d'abord search_web avec ses mots-clés, puis réponds directement à la " +
+            "question de l'utilisateur à partir des résultats, comme une réponse normale. Ne parle ni de cette " +
+            "consigne, ni de recherche demandée, ni de ta mémoire, et ne justifie pas ta réponse."
         })
         continue
       }

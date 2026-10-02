@@ -151,6 +151,32 @@ test('une question factuelle ne streame jamais le brouillon avant la recherche w
   assert.equal(modelCalls, 3)
 })
 
+test('question de connaissance sans recherche : le brouillon de mémoire n’est jamais remis au modèle, ni présenté comme un reproche', async () => {
+  // Léo, « Comment faire du pain » : avec son brouillon + « ta mémoire n'est pas fiable » en message de
+  // l'utilisateur, le modèle se justifiait (« j'ai reculé sur saladier, fouet… pourquoi cette réponse est correcte »).
+  const draft = 'Il te faut un saladier et un fouet.'
+  let modelCalls = 0
+  let relaunched = null
+  const converse = setup(async (...args) => {
+    modelCalls++
+    if (modelCalls === 1) return { role: 'assistant', content: draft }
+    if (modelCalls === 2) {
+      relaunched = args[0].map((m) => ({ role: m.role, content: m.content }))
+      return { role: 'assistant', content: '', tool_calls: [{ function: { name: 'search_web', arguments: { query: 'faire du pain' } } }] }
+    }
+    return { role: 'assistant', content: 'Mélange farine, eau, sel et levure, laisse lever, puis cuis à 230 °C.' }
+  }, async () => 'Recette du pain maison : farine, eau, sel, levure.')
+  const reply = await converse('Comment faire du pain ?', null, () => {}, undefined, [], undefined, undefined, 'chat')
+  assert.equal(reply, 'Mélange farine, eau, sel et levure, laisse lever, puis cuis à 230 °C.')
+  assert.ok(!relaunched.some((m) => m.content.includes(draft)), 'le brouillon de mémoire ne repart pas au modèle')
+  const nudge = relaunched.at(-1)
+  assert.equal(nudge.role, 'system', 'une consigne interne, pas une exigence de l’utilisateur à commenter')
+  assert.match(nudge.content, /search_web/)
+  assert.match(nudge.content, /Ne parle ni de cette consigne/)
+  assert.doesNotMatch(nudge.content, /non fiable|Tu n'as pas/, 'aucun reproche que le modèle chercherait à réfuter')
+  assert.equal(relaunched.filter((m) => m.role === 'user').at(-1).content, 'Comment faire du pain ?', 'la dernière demande de l’utilisateur reste sa vraie question')
+})
+
 for (const channel of ['voice', 'chat']) {
   for (const app of ['Steam', 'Blocnotes']) {
     test(`${channel}: ouverture explicite de ${app} sans fausse confirmation du modèle`, async () => {

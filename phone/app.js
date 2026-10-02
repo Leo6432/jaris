@@ -140,20 +140,82 @@
 
   // --- Affichage commun ------------------------------------------------------------------------------
 
-  /** Texte de Jaris : sûr (jamais interprété comme du HTML), avec seulement le gras **…** mis en forme. */
+  /**
+   * Mise en forme d'une ligne : **gras**, *italique* et `code`. Tout passe par textContent, jamais par du
+   * HTML : un texte de Jaris (ou d'une page web lue par lui) ne peut rien exécuter dans la page.
+   */
+  function renderInline(element, text) {
+    String(text || '')
+      .split(/(\*\*[^*\n]+\*\*|`[^`\n]+`|\*[^*\s][^*\n]*\*)/)
+      .forEach(function (part) {
+        if (!part) return
+        var tag = /^\*\*[^*\n]+\*\*$/.test(part) ? 'strong' : /^`[^`\n]+`$/.test(part) ? 'code' : /^\*[^*\s][^*\n]*\*$/.test(part) ? 'em' : null
+        if (!tag) return element.appendChild(document.createTextNode(part))
+        var node = document.createElement(tag)
+        node.textContent = tag === 'strong' ? part.slice(2, -2) : part.slice(1, -1)
+        element.appendChild(node)
+      })
+  }
+
+  /** Simple ligne de texte (progression, transcription) : seul le gras est mis en forme. */
   function renderText(element, text) {
     element.textContent = ''
-    String(text || '')
-      .split(/(\*\*[^*\n]+\*\*)/)
-      .forEach(function (part) {
-        if (/^\*\*[^*\n]+\*\*$/.test(part)) {
-          var strong = document.createElement('strong')
-          strong.textContent = part.slice(2, -2)
-          element.appendChild(strong)
-        } else if (part) {
-          element.appendChild(document.createTextNode(part))
+    renderInline(element, text)
+  }
+
+  /**
+   * Étape 217 (Léo : « il met plein de > - ») : les réponses du Chat sont écrites en Markdown, comme sur le
+   * PC. Titres, listes, citations et paragraphes sont rendus ici en vrais éléments, sans aucun HTML venu du
+   * texte.
+   */
+  function renderMarkdown(element, text) {
+    element.textContent = ''
+    var lines = String(text || '').replace(/\r\n?/g, '\n').split('\n')
+    var i = 0
+    while (i < lines.length) {
+      var line = lines[i]
+      if (!line.trim()) {
+        i++
+        continue
+      }
+      if (/^\s*>/.test(line)) {
+        var quoted = []
+        while (i < lines.length && /^\s*>/.test(lines[i])) quoted.push(lines[i++].replace(/^\s*>\s?/, ''))
+        var quote = document.createElement('blockquote')
+        renderMarkdown(quote, quoted.join('\n'))
+        element.appendChild(quote)
+        continue
+      }
+      var heading = line.match(/^\s*(#{1,6})\s+(.*)$/)
+      if (heading) {
+        var h = document.createElement('p')
+        h.className = 'md-heading'
+        renderInline(h, heading[2].replace(/\s*#+\s*$/, ''))
+        element.appendChild(h)
+        i++
+        continue
+      }
+      var listKind = /^\s*[-*•]\s+/.test(line) ? 'ul' : /^\s*\d+[.)]\s+/.test(line) ? 'ol' : null
+      if (listKind) {
+        var pattern = listKind === 'ul' ? /^\s*[-*•]\s+/ : /^\s*\d+[.)]\s+/
+        var list = document.createElement(listKind)
+        while (i < lines.length && pattern.test(lines[i])) {
+          var item = document.createElement('li')
+          renderInline(item, lines[i++].replace(pattern, ''))
+          list.appendChild(item)
         }
+        element.appendChild(list)
+        continue
+      }
+      var paragraph = []
+      while (i < lines.length && lines[i].trim() && !/^\s*(>|#{1,6}\s|[-*•]\s+|\d+[.)]\s+)/.test(lines[i])) paragraph.push(lines[i++])
+      var p = document.createElement('p')
+      paragraph.forEach(function (part, index) {
+        if (index) p.appendChild(document.createElement('br'))
+        renderInline(p, part)
       })
+      element.appendChild(p)
+    }
   }
 
   function setStatus(text) {
@@ -254,7 +316,9 @@
     var item = document.createElement('li')
     item.className = 'message message--' + role + (options.pending ? ' message--pending' : '') + (options.error ? ' message--error' : '')
     var body = document.createElement('div')
-    renderText(body, text)
+    body.className = 'message__body'
+    if (role === 'assistant' && !options.pending && !options.error) renderMarkdown(body, text)
+    else renderText(body, text)
     item.appendChild(body)
     if (options.image && /^data:image\//.test(options.image)) {
       var img = document.createElement('img')
@@ -538,7 +602,7 @@
   function showVoiceExchange(transcript, reply, image) {
     $('voice-last').hidden = false
     $('voice-transcript').textContent = transcript || '…'
-    renderText($('voice-reply'), reply || '')
+    renderMarkdown($('voice-reply'), reply || '')
     var img = $('voice-image')
     if (image && /^data:image\//.test(image)) {
       img.src = image

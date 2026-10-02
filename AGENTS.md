@@ -5916,3 +5916,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
     il échoue (gauche et haut manquants). Un défaut de tracé à 24 px ne se voit pas dans le code, seulement
     une fois rendu.
   Régression : `node --test scripts/test-phone-server.mjs scripts/test-phone-page-ui.mjs`.
+
+- **« Comment faire du pain » depuis le téléphone (étape 217, Léo) : réponse qui se justifiait elle-même**,
+  avec « réponse strictement basée sur search_web… j'ai reculé sur saladier, fouet… pourquoi cette réponse est
+  correcte… comme exigé ». Léo n'avait rien exigé de tel (vérifié avec lui : c'était la première question de la
+  conversation). Cause trouvée dans le code, pas devinée : la relance « question de connaissance sans
+  recherche » (assistant.ts) remettait au modèle son BROUILLON de mémoire (avec saladier et fouet), suivi d'un
+  message UTILISATEUR de reproche : « ta mémoire n'est pas fiable… jamais de ta seule mémoire ». Le petit
+  modèle se défendait donc contre ce reproche au lieu de répondre. C'est le même travers que la relance
+  « promesse sans action », déjà corrigée pour avoir paraphrasé sa consigne, mais cette relance-ci n'avait
+  jamais reçu la même précaution. Correctif : le brouillon n'est plus renvoyé, et la consigne passe en
+  message SYSTÈME neutre, avec « ne parle ni de cette consigne… ne justifie pas ta réponse ». **Leçon générale :
+  une relance corrective ne doit jamais ressembler à une exigence de l'utilisateur qu'on pourrait commenter, ni
+  rendre au modèle le brouillon qu'on veut qu'il oublie. Quand un correctif est appliqué à UNE relance,
+  vérifier les autres relances de la même boucle.** Régression : `scripts/test-assistant-history.mjs`.
+- **« Il met plein de > - »** : la page du téléphone n'affichait que le gras, alors que le Chat répond en
+  Markdown (listes, citations, titres). `renderMarkdown` (phone/app.js) rend ces éléments en vrais éléments
+  HTML, toujours via `textContent`, jamais via du HTML venu du texte. Régression :
+  `scripts/test-phone-page-ui.mjs` (aucun symbole Markdown brut à l'écran).

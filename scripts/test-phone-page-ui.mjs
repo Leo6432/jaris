@@ -99,6 +99,11 @@ async function withPhone(run, overrides = {}) {
       received.modes.push(mode)
       onStatus('Recherche sur le web…')
       await new Promise((r) => setTimeout(r, 300))
+      if (text.includes('pain')) {
+        const reply = '### Le pain maison\n\n> Selon la source *meilleurdchef.com* :\n> - moule à pain,\n> - banneton.\n\n1. Mélange la **farine** et l’eau.\n2. Laisse lever.\n\nCuis à `230 °C`.'
+        exchanges.push({ role: 'user', content: text }, { role: 'assistant', content: reply })
+        return { reply }
+      }
       const reply = text.includes('chat') ? { reply: 'Voici ton **chat**.', image: 'data:image/png;base64,' + PNG.toString('base64') } : { reply: `Réponse à : ${text}` }
       exchanges.push({ role: 'user', content: text }, { role: 'assistant', content: reply.reply })
       return reply
@@ -468,5 +473,25 @@ test('l’icône Chat est un tracé complet, pas une bulle coupée', options, as
       return { left: ink(30, 90), right: ink(210, 90), top: ink(120, 30), bottom: ink(120, 170) }
     })
     assert.deepEqual(edges, { left: true, right: true, top: true, bottom: true })
+  })
+})
+
+test('Chat : la réponse en Markdown s’affiche mise en forme (listes, citation, titre), jamais avec des « > - » bruts', options, async () => {
+  await withPhone(async ({ page, server, base }) => {
+    await open(page, server, base)
+    await page.fill('#input', 'comment faire du pain')
+    await page.click('#send')
+    await page.waitForSelector('.message--assistant:not(.message--pending) blockquote')
+    const last = page.locator('.message--assistant').last()
+    assert.equal(await last.locator('blockquote ul li').count(), 2, 'la liste dans la citation est une vraie liste')
+    assert.equal(await last.locator('ol li').count(), 2)
+    assert.equal(await last.locator('.md-heading').textContent(), 'Le pain maison')
+    assert.equal(await last.locator('strong').textContent(), 'farine')
+    assert.equal(await last.locator('em').textContent(), 'meilleurdchef.com')
+    assert.equal(await last.locator('code').textContent(), '230 °C')
+    const text = await last.textContent()
+    assert.doesNotMatch(text, /(^|\s)[>#](\s|$)|^\s*-\s/m, 'aucun symbole Markdown brut à l’écran')
+    assert.doesNotMatch(text, /\*\*|`/)
+    await shot(page, 'phone-markdown')
   })
 })
