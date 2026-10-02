@@ -851,7 +851,9 @@ const INTELLIGENCE_MMLU_PRO: Record<string, number> = {
  * qwen3.5:9b (14, ni Reasoning 11,2 ni Non-reasoning 13,3), gemma4:31b (19 au lieu de 14,7), et
  * qwen3-vl:8b/4b (score de la variante Instruct, alors que les tags Ollama `qwen3-vl:8b`/`:4b` sont les
  * variantes THINKING — même digest que `8b-thinking`/`4b-thinking` sur ollama.com/library/qwen3-vl/tags).
- * Conséquence assumée, validée par Léo : avec 8 Go de VRAM, Médium passe de qwen3.5:9b à qwen3.5:4b (13,1).
+ * Conséquence réelle, recalculée avec les VRAIS scores d'outils (étape 222) : aucun choix ne change sur les
+ * configurations vérifiées (8/32, 6/16, 12/32, 16/64 Go). La fiabilité d'outils passe AVANT l'intelligence :
+ * à 8 Go, Médium reste granite4.2:8b (17/17), et qwen3.5:4b (15/17) comme qwen3.5:9b (16/17) restent derrière.
  * Sans fiche Artificial Analysis : GLM-4.6V-Flash (la fiche « GLM-4.6V » est le modèle 106B, pas lui),
  * qwen3-vl:2b, qwen2.5-coder:14b.
  */

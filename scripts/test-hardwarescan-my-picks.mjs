@@ -89,7 +89,9 @@ test('une VRAM au-delà du seuil suivant obtient le modèle Médium suivant (gem
   assert.equal(result.models.medium, 'gemma4:12b')
 })
 
-test('étape 220 : à 8 Go, qwen3.5:4b (13,1) bat qwen3.5:9b (11,2), même s’il est plus petit', async () => {
+// Départage par l'intelligence À FIABILITÉ ÉGALE (scores d'outils simulés identiques). Avec les vrais scores,
+// qwen3.5:9b (16/17) et qwen3.5:4b (15/17) ne sont pas à égalité : voir l'étape 222 dans CLAUDE.md.
+test('étape 220 : à fiabilité égale, qwen3.5:4b (13,1) bat qwen3.5:9b (11,2), même s’il est plus petit', async () => {
   const md = ['## Conversation', '| Modèle | Fiabilité |', '| --- | --- |', '| qwen3.5:4b | 6/6 |', '| qwen3.5:9b | 6/6 |'].join('\n')
   const { pickBestModelsFromBenchmark } = setup({ verifiedToolScoresMd: md, vramMib: 8 * 1024 })
   assert.equal((await pickBestModelsFromBenchmark()).models.medium, 'qwen3.5:4b')

@@ -6030,7 +6030,8 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
     pour savoir quelle fiche le décrit, jamais son seul nom.**
   Les scores sont maintenant stockés à UNE décimale, comme dans les données, et affichés « 13,1 »
   (`formatIntelligenceIndex`) : l'arrondi à l'entier créait des égalités artificielles. **Conséquence
-  validée par Léo avant de livrer : avec 8 Go, Médium passe de qwen3.5:9b à qwen3.5:4b** (13,1 contre 11,2).
+  annoncée à Léo avant de livrer — et FAUSSE** : « avec 8 Go, Médium passe de qwen3.5:9b à qwen3.5:4b ». Voir
+  l'étape 222 juste en dessous.
   Les vitesses ont été revérifiées sur la phrase de la fiche du modèle lui-même. Quatre modèles n'ont plus de
   vitesse publiée et elle est retirée : les chiffres présents sur leur page appartiennent aux modèles cités en
   comparaison. **Piège à retenir : une page Artificial Analysis contient les données de beaucoup d'AUTRES
@@ -6051,3 +6052,15 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   télécharge. C'est vrai pour TOUS les modèles de Jaris (Q4 par défaut sur Ollama) : la comparaison entre
   eux reste juste, mais chaque chiffre est un peu optimiste pour la version réellement utilisée. C'est pour
   ça que le choix repose d'abord sur le test d'appel d'outils, fait SUR la version Q4_K_M elle-même.
+
+- **Score de Ling 3.0 Tiny reçu, et une erreur de ma part corrigée (étape 222).** Léo a mesuré Ling 3.0 Tiny
+  (Q4_K_M) avec le bouton remis à l'étape 221 : 16/17, recopié dans verified-tool-scores.md après relecture
+  de ses 4 réponses sans outil. En vérifiant ce que ce score change, j'ai trouvé que ma conclusion de l'étape
+  220 était FAUSSE. J'avais annoncé (et demandé à Léo de valider) « avec 8 Go, Médium passe de qwen3.5:9b à
+  qwen3.5:4b ». Je l'avais déduit d'un test à scores d'outils SIMULÉS identiques, jamais du vrai calcul. Or
+  la fiabilité d'outils passe AVANT l'intelligence, et en vrai, Médium était et reste granite4.2:8b (17/17)
+  à 8 Go. Recalculé avec un script qui charge le vrai hardwareScan.ts et le vrai verified-tool-scores.md
+  (8/32, 6/16, 12/32 et 16/64 Go) : ni la correction des scores, ni Ling (16/17, battu partout par un 17/17
+  qui tient) ne changent un seul choix. **Leçon générale : avant d'annoncer l'effet d'un changement sur les
+  choix de modèles, le CALCULER avec les vraies données des deux côtés (avant/après), jamais le déduire d'un
+  test unitaire qui simule une partie des données.**

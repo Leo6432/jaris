@@ -72,10 +72,16 @@ en anglais) — aucun appel d'outil réussi.
 | glm-4.7-flash:q4_K_M | 17/17 |
 | nemotron-3.5-lightning:30b | 17/17 |
 | hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 12/17 |
+| hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M | 16/17 |
 
 nemotron-3.5-lightning:30b et G9v3-3B : mesurés le 26/09/2026 par le bouton « Tester les modèles sans score »
 (test version 4, même machine), après la mise à jour d'Ollama qui répare les téléchargements depuis Hugging Face.
 G9v3-3B : 12/17 — son ancien 6/6 (ancien test à 6 questions, consignes coupées) était donc bien trop flatteur.
+
+Ling 3.0 Tiny (Q4_K_M, GGUF officiel d'inclusionAI) : mesuré le 02/10/2026 par Léo avec le bouton « Tester les
+modèles sans score » (test version 4), 16/17. Ses 4 réponses sans outil relues : aucune vide, aucun appel d'outil
+écrit en texte, et il n'éteint pas l'ordinateur sur la négation. Une seule est maladroite (« je n'ai pas de
+microphone »), mais elle n'est pas fausse au sens du test.
 
 LFM2.5-1.2B et MiniCPM5-1B (imports Hugging Face, plus dans la liste de Jaris) n'ont pas de score : leurs anciens
 scores venaient de l'ancien test à 6 questions.
