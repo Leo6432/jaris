@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react'
 import type { ModelOverviewEntry, MyModelPicks as MyModelPicksData } from '../../shared/ipc'
 import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge } from './OptionsMenu'
+import { formatIntelligenceIndex } from '../lib/formatIntelligenceIndex'
 
 interface MyModelPicksProps {
   picks: MyModelPicksData
@@ -26,7 +27,7 @@ function formatSpeed(entry: ModelOverviewEntry): string {
 
 /** Libellé collé à la valeur : ce tableau n'a pas d'en-tête, un nombre nu serait incompréhensible (étape 130). */
 function formatIntelligence(entry: ModelOverviewEntry): string {
-  return entry.artificialAnalysisIndex === null ? '—' : `Intelligence ${entry.artificialAnalysisIndex}`
+  return entry.artificialAnalysisIndex === null ? '—' : `Intelligence ${formatIntelligenceIndex(entry.artificialAnalysisIndex)}`
 }
 
 /** "RTX 3070 · 8 Go de VRAM · 32 Go de RAM" — seulement ce qui a vraiment été détecté, jamais inventé. */

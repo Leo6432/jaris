@@ -292,7 +292,7 @@ const VISION_CANDIDATES: ModelCandidate[] = [
   // proposé par ChatGPT (via le comparateur .../models/recommend, inaccessible depuis cet environnement,
   // voir le commentaire au-dessus de ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX). Vérifié directement sur sa
   // fiche ollama.com : "text, image, and video" en entrée, la FAQ confirme explicitement le support de
-  // l'analyse d'image. Score Artificial Analysis (34) largement au-dessus de gemma4:31b (19), le meilleur
+  // l'analyse d'image. Score Artificial Analysis (34) largement au-dessus de gemma4:31b (15), le meilleur
   // candidat Vision jusqu'ici — et déjà téléchargé pour qui l'a comme modèle Puissant, aucun poids
   // supplémentaire. Deux chiffres du même rapport se sont révélés FAUX en les revérifiant nous-mêmes avant
   // d'y toucher (gemma4:31b annoncé à 15 au lieu de 19, qwen3.6:35b-a3b annoncé à 19 au lieu de 18 — la
@@ -840,53 +840,60 @@ const INTELLIGENCE_MMLU_PRO: Record<string, number> = {
  *
  * À fiabilité égale, ce score départage deux modèles exacts couverts ; MMLU-Pro reste le repli quand cette
  * comparaison officielle n'est pas possible.
+ *
+ * **Étape 220 (Léo : « on a pris les scores raisonner ou non raisonner ? … regarde bien tous les scores, ils
+ * doivent être exacts ») : tableau entièrement revérifié le 02/10/2026** sur les DONNÉES BRUTES des fiches
+ * (champ `intelligenceIndex` de l'objet `currentModel` de chaque page, méthodologie v4.3.2), plus jamais sur
+ * un résumé automatique de page (qui s'était déjà trompé pour G9v3). Une décimale, comme dans ces données :
+ * les arrondis à l'entier faisaient des égalités artificielles. Règle, confirmée par Léo : la variante
+ * RAISONNEMENT quand il y en a deux, à son effort le plus élevé publié (Xhigh pour qwen3.8:27b, High pour
+ * gpt-oss:20b) ; le commentaire de chaque ligne donne la fiche exacte. Quatre valeurs étaient fausses :
+ * qwen3.5:9b (14, ni Reasoning 11,2 ni Non-reasoning 13,3), gemma4:31b (19 au lieu de 14,7), et
+ * qwen3-vl:8b/4b (score de la variante Instruct, alors que les tags Ollama `qwen3-vl:8b`/`:4b` sont les
+ * variantes THINKING — même digest que `8b-thinking`/`4b-thinking` sur ollama.com/library/qwen3-vl/tags).
+ * Conséquence assumée, validée par Léo : avec 8 Go de VRAM, Médium passe de qwen3.5:9b à qwen3.5:4b (13,1).
+ * Sans fiche Artificial Analysis : GLM-4.6V-Flash (la fiche « GLM-4.6V » est le modèle 106B, pas lui),
+ * qwen3-vl:2b, qwen2.5-coder:14b.
  */
 const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
-  'qwen3.5:0.8b': 6,
-  'qwen3.5:2b': 7,
-  'qwen3.5:4b': 13,
-  'qwen3.5:9b': 14,
-  'qwen3.5:27b': 23,
-  'qwen3.5:35b': 19,
-  'qwen3.6:27b': 21,
-  'qwen3.6:35b': 18,
-  'qwen3.6:35b-a3b': 18,
-  'qwen3.8:27b': 34,
-  'gpt-oss:20b': 9,
-  'gemma4:12b': 14,
-  'gemma4:26b': 17,
-  'gemma4:31b': 19,
-  'gemma4:e4b': 9,
-  'ministral-3:14b': 6,
-  'ministral-3:3b': 5,
-  'granite4.1:3b': 6,
-  'granite4.2:3b': 9,
-  'ministral-3:8b': 5,
-  'granite4.2:8b': 11,
-  'granite4.1:8b': 7,
-  'mistral-small3.2:24b': 8,
-  'granite4.2:30b': 15,
-  'qwen3:1.7b': 5,
-  'glm-4.7-flash:q4_K_M': 15,
-  // Vérifié sur artificialanalysis.ai/models/nemotron-3-5-lightning (v4.3.2) le 25/09/2026.
-  'nemotron-3.5-lightning:30b': 13,
-  'qwen3-vl:8b': 7,
-  'qwen3-vl:4b': 6,
-  'devstral-2:123b': 9,
-  'qwen3-coder-next': 9,
-  'qwen3-coder:30b': 10,
-  'north-mini-code-1.0': 10,
-  'qwen2.5-coder:32b': 7,
-  'devstral-small-2:24b': 8,
-  'qwen2.5-coder:7b': 6,
-  // Vérifié directement sur artificialanalysis.ai/models/g9v3-3b le 21/09/2026 ("scores 11 on the
-  // Artificial Analysis Intelligence Index, placing it well above average among comparable models
-  // (median: 6)") — pas un résumé de recherche : un premier résumé automatique avait annoncé 16.1, faux,
-  // écarté avant d'entrer ici. Voir FLASH_CANDIDATES pour le contexte complet de cet ajout.
-  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 11,
-  // Vérifié sur artificialanalysis.ai/models/ling-3-0-tiny (v4.3.2) le 02/10/2026 : seule la variante
-  // Reasoning a une fiche (« This page shows the reasoning version of this model »).
-  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 11
+  'qwen3.5:0.8b': 6.1, // Qwen3.5 0.8B (Reasoning)
+  'qwen3.5:2b': 6.9, // Qwen3.5 2B (Reasoning)
+  'qwen3.5:4b': 13.1, // Qwen3.5 4B (Reasoning)
+  'qwen3.5:9b': 11.2, // Qwen3.5 9B (Reasoning)
+  'qwen3.5:27b': 22.9, // Qwen3.5 27B (Reasoning)
+  'qwen3.5:35b': 19.3, // Qwen3.5 35B A3B (Reasoning)
+  'qwen3.6:27b': 21.4, // Qwen3.6 27B (Reasoning)
+  'qwen3.6:35b': 18.2, // Qwen3.6 35B A3B (Reasoning)
+  'qwen3.6:35b-a3b': 18.2, // Qwen3.6 35B A3B (Reasoning)
+  'qwen3.8:27b': 33.7, // Qwen3.8 27B (Xhigh)
+  'gpt-oss:20b': 9.0, // gpt-oss-20b (High)
+  'gemma4:12b': 14.2, // Gemma 4 12B (Reasoning)
+  'gemma4:26b': 16.7, // Gemma 4 26B A4B (Reasoning)
+  'gemma4:31b': 14.7, // Gemma 4 31B (Reasoning)
+  'gemma4:e4b': 8.9, // Gemma 4 E4B (Reasoning)
+  'ministral-3:14b': 6.0, // Ministral 3 14B
+  'ministral-3:3b': 4.8, // Ministral 3 3B
+  'granite4.1:3b': 5.9, // Granite 4.1 3B
+  'granite4.2:3b': 9.1, // Granite 4.2 3B
+  'ministral-3:8b': 5.5, // Ministral 3 8B
+  'granite4.2:8b': 11.1, // Granite 4.2 8B
+  'granite4.1:8b': 6.6, // Granite 4.1 8B
+  'mistral-small3.2:24b': 8.2, // Mistral Small 3.2
+  'granite4.2:30b': 14.8, // Granite 4.2 30B
+  'qwen3:1.7b': 5.2, // Qwen3 1.7B (Reasoning)
+  'glm-4.7-flash:q4_K_M': 14.9, // GLM-4.7-Flash (Reasoning)
+  'nemotron-3.5-lightning:30b': 12.9, // Nemotron 3.5 Lightning
+  'qwen3-vl:8b': 8.2, // Qwen3 VL 8B (Reasoning)
+  'qwen3-vl:4b': 7.0, // Qwen3 VL 4B (Reasoning)
+  'devstral-2:123b': 8.6, // Devstral 2
+  'qwen3-coder-next': 9.2, // Qwen3 Coder Next
+  'qwen3-coder:30b': 9.6, // Qwen3 Coder 30B A3B Instruct
+  'north-mini-code-1.0': 9.9, // North Mini Code
+  'qwen2.5-coder:32b': 6.7, // Qwen2.5 Coder Instruct 32B
+  'devstral-small-2:24b': 7.5, // Devstral Small 2
+  'qwen2.5-coder:7b': 5.8, // Qwen2.5 Coder Instruct 7B
+  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 10.8, // G9v3-3B
+  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 11.1 // Ling 3.0 Tiny
 }
 
 /**
@@ -897,37 +904,38 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
  * de l'utilisateur, et la table de bande passante GPU qu'elle exigeait, ont été retirées avec elle — voir
  * MyModelPicks.tsx pour le pourquoi). Absence ici = Artificial Analysis
  * publie l'Intelligence Index de ce modèle mais pas encore de mesure de vitesse fiable ("N/A" sur sa fiche).
+ *
+ * Étape 220 : relevée le 02/10/2026 en même temps que l'Intelligence Index ci-dessus, sur la phrase de la fiche
+ * du modèle lui-même (« X generates output at N tokens per second »). Ces vitesses bougent avec les
+ * fournisseurs : ministral-3:14b était à 87, il est à 65. mistral-small3.2:24b, devstral-2:123b,
+ * devstral-small-2:24b et gemma4:26b n'ont plus de vitesse publiée (N/A) : retirées. Les chiffres présents
+ * sur leur page appartiennent aux modèles cités en comparaison, pas à eux.
  */
 const ARTIFICIAL_ANALYSIS_SPEED: Record<string, number> = {
-  'qwen3.5:4b': 19,
-  'qwen3.5:9b': 56,
+  'qwen3.5:4b': 22,
+  'qwen3.5:9b': 52,
   'qwen3.5:27b': 75,
   'qwen3.5:35b': 148,
-  'qwen3.6:27b': 60,
-  'qwen3.6:35b': 115,
-  'qwen3.6:35b-a3b': 115,
-  'qwen3.8:27b': 47,
-  'gpt-oss:20b': 168,
-  'gemma4:12b': 114,
+  'qwen3.6:27b': 58,
+  'qwen3.6:35b': 128,
+  'qwen3.6:35b-a3b': 128,
+  'qwen3.8:27b': 46,
+  'gpt-oss:20b': 187,
+  'gemma4:12b': 115,
   'gemma4:31b': 35,
-  'gemma4:e4b': 41,
-  'ministral-3:14b': 87,
-  'ministral-3:3b': 221,
-  'granite4.2:3b': 218,
-  'ministral-3:8b': 87,
-  'granite4.2:8b': 94,
-  'granite4.1:8b': 84,
-  'mistral-small3.2:24b': 146,
-  'granite4.2:30b': 73,
-  'glm-4.7-flash:q4_K_M': 79,
-  'nemotron-3.5-lightning:30b': 264,
-  'qwen3-vl:8b': 109,
-  'devstral-2:123b': 133,
-  'qwen3-coder-next': 111,
-  'qwen3-coder:30b': 87,
-  'north-mini-code-1.0': 100,
-  'devstral-small-2:24b': 131,
-  // Même fiche que son Intelligence Index ci-dessus (58,2 tokens/s), le 02/10/2026.
+  'gemma4:e4b': 69,
+  'ministral-3:14b': 65,
+  'ministral-3:3b': 194,
+  'granite4.2:3b': 221,
+  'ministral-3:8b': 100,
+  'granite4.2:8b': 62,
+  'granite4.2:30b': 77,
+  'glm-4.7-flash:q4_K_M': 61,
+  'nemotron-3.5-lightning:30b': 301,
+  'qwen3-vl:8b': 115,
+  'qwen3-coder-next': 80,
+  'qwen3-coder:30b': 85,
+  'north-mini-code-1.0': 84,
   'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 58
 }
 

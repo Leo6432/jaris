@@ -35,10 +35,10 @@ const e = (model, tool, ai, aiSpeed) => ({
 
 const picks = {
   gpuName: 'NVIDIA GeForce RTX 3070', vramGb: 8, ramGb: 32,
-  flash: e('hf.co/bartowski/ai9stars_G9v3-3B-GGUF', '6/6', 11, null),
-  medium: e('qwen3.5:4b', '6/6', 13, 19),
-  large: e('qwen3.8:27b', '6/6', 34, 47),
-  vision: e('qwen3-vl:4b', '3/3', 6, 109),
+  flash: e('hf.co/bartowski/ai9stars_G9v3-3B-GGUF', '6/6', 10.8, null),
+  medium: e('qwen3.5:4b', '6/6', 13.1, 22),
+  large: e('qwen3.8:27b', '6/6', 33.7, 46),
+  vision: e('qwen3-vl:4b', '3/3', 7, 109),
   // Modèle sans score publié chez Artificial Analysis : doit afficher "—", jamais un chiffre inventé.
   code: e('qwen2.5-coder:14b', '3/3', null, null),
   // Étape 138 : Médium a un meilleur choix pas encore installé (il suffit de retester), Vision un meilleur
@@ -108,10 +108,10 @@ test('chaque rôle affiche son modèle, sa vitesse et son Intelligence (avec lib
       trs.map((tr) => [...tr.querySelectorAll('td')].slice(0, 4).map((td) => td.textContent?.trim()))
     )
     assert.deepEqual(JSON.parse(JSON.stringify(rows)), [
-      ['Faible', 'G9v3-3B', '—', 'Intelligence 11'],
-      ['Moyen', 'qwen3.5:4b', '19 tok/s', 'Intelligence 13'],
-      ['Élevé', 'qwen3.8:27b', '47 tok/s', 'Intelligence 34'],
-      ['Vision', 'qwen3-vl:4b', '109 tok/s', 'Intelligence 6'],
+      ['Faible', 'G9v3-3B', '—', 'Intelligence 10,8'],
+      ['Moyen', 'qwen3.5:4b', '22 tok/s', 'Intelligence 13,1'],
+      ['Élevé', 'qwen3.8:27b', '46 tok/s', 'Intelligence 33,7'],
+      ['Vision', 'qwen3-vl:4b', '109 tok/s', 'Intelligence 7,0'],
       ['Code', 'qwen2.5-coder:14b', '—', '—']
     ])
   })

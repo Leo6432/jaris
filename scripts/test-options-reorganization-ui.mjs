@@ -94,7 +94,7 @@ const overrides = {
     codeModel: 'qwen2.5-coder:7b',
     // Étape 160 : une seule liste de modèles, chacun avec son étiquette (repère affiché seulement).
     entries: [
-      { model: 'ministral-3:3b', vramGb: 3.0, category: 'Rapide', readsImages: true, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', intelligence: null, artificialAnalysisIndex: 5 },
+      { model: 'ministral-3:3b', vramGb: 3.0, category: 'Rapide', readsImages: true, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', intelligence: null, artificialAnalysisIndex: 4.8 },
       { model: 'qwen3:1.7b', vramGb: 2, category: 'Rapide', readsImages: false, usedIn: [], toolCalling: null, intelligence: null, artificialAnalysisIndex: null },
       { model: 'gemma4:31b', vramGb: 20, category: 'Puissant', readsImages: true, usedIn: ['Vision'], toolCalling: null, intelligence: null, artificialAnalysisIndex: null }
     ]
@@ -366,7 +366,7 @@ test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste d
     // ministral-3:3b : utilisé pour deux rôles, VRAM et Intelligence Index officiel (5).
     assert.equal(rows[0][2], 'Oui — Rapide, Médium', `rôles actifs attendus : ${rows[0][2]}`)
     assert.ok(rows[0][3].includes('3'), `VRAM du premier modèle : ${rows[0][3]}`)
-    assert.equal(rows[0][5], '5', `Intelligence Index attendu (5) : ${rows[0][5]}`)
+    assert.equal(rows[0][5], '4,8', `Intelligence Index attendu (4,8, avec sa décimale) : ${rows[0][5]}`)
     // "Vitesse (Artificial Analysis)" : "—" quand Artificial Analysis n'a pas publié de mesure fiable.
     assert.equal(rows[0][6], '—', `Vitesse doit rester "—" sans mesure publiée : ${rows[0][6]}`)
     // qwen3:1.7b : aucun score officiel connu, clairement indiqué sans chiffre inventé.

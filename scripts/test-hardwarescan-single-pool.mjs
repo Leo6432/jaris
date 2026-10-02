@@ -74,7 +74,7 @@ test('Rapide : un modèle nettement plus intelligent et à peine plus lent l’e
   const scores = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 6/6 |', '| granite4.2:3b | 6/6 |', '| qwen3.5:9b | 6/6 |'].join('\n')
   const r = await setup({ vramMib: 8 * 1024, scores }).pickBestModelsFromBenchmark()
   assert.equal(r.models.flash, 'granite4.2:3b', '+4 d’intelligence pour -3 de vitesse : le plus intelligent doit gagner')
-  // qwen3.5:9b (14 d'intelligence) est bien plus lent (56 contre 221) : il ne compte pas comme « rapide ».
+  // qwen3.5:9b (11 d'intelligence) est bien plus lent (56 contre 221) : il ne compte pas comme « rapide ».
   assert.notEqual(r.models.flash, 'qwen3.5:9b')
 })
 

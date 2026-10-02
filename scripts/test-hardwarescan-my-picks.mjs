@@ -66,10 +66,13 @@ function setup({ verifiedToolScoresMd = '', vramMib, ramGb = 32, installed = nul
   return exports
 }
 
-// qwen3.5:4b (3,4 Go) et qwen3.5:9b (6,6 Go) sont tous deux candidats Médium (MEDIUM_CANDIDATES,
-// hardwareScan.ts) : ils deviennent atteignables à 3,4+1=4,4 Go et 6,6+1=7,6 Go de VRAM totale
+// qwen3.5:4b (3,4 Go) et gemma4:12b (7,6 Go) sont tous deux candidats Médium (MEDIUM_CANDIDATES,
+// hardwareScan.ts) : ils deviennent atteignables à 3,4+1=4,4 Go et 7,6+1=8,6 Go de VRAM totale
 // (GPU_RESERVED_GB=1 dans le vrai fichier depuis l'étape 158 : la transcription ne prend plus la carte).
-const VERIFIED_MD = ['## Conversation', '| Modèle | Fiabilité |', '| --- | --- |', '| qwen3.5:4b | 6/6 |', '| qwen3.5:9b | 6/6 |'].join('\n')
+// Étape 220 : la paire était qwen3.5:4b/qwen3.5:9b, mais avec les vrais scores raisonnement d'Artificial
+// Analysis le 9B (11,2) est MOINS bon que le 4B (13,1) — il n'est donc plus « le modèle suivant » ; gemma4:12b
+// (14,2) l'est.
+const VERIFIED_MD = ['## Conversation', '| Modèle | Fiabilité |', '| --- | --- |', '| qwen3.5:4b | 6/6 |', '| gemma4:12b | 6/6 |'].join('\n')
 
 test('deux VRAM TOTALES dans le même intervalle obtiennent garanti le même modèle Médium', async () => {
   const { pickBestModelsFromBenchmark: pick5 } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 5 * 1024 })
@@ -80,10 +83,16 @@ test('deux VRAM TOTALES dans le même intervalle obtiennent garanti le même mod
   assert.equal(result7.models.medium, 'qwen3.5:4b')
 })
 
-test('une VRAM au-delà du seuil suivant obtient le modèle Médium suivant (qwen3.5:9b), dès 8 Go (étape 158)', async () => {
-  const { pickBestModelsFromBenchmark } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 8 * 1024 })
+test('une VRAM au-delà du seuil suivant obtient le modèle Médium suivant (gemma4:12b), dès 9 Go', async () => {
+  const { pickBestModelsFromBenchmark } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 9 * 1024 })
   const result = await pickBestModelsFromBenchmark()
-  assert.equal(result.models.medium, 'qwen3.5:9b')
+  assert.equal(result.models.medium, 'gemma4:12b')
+})
+
+test('étape 220 : à 8 Go, qwen3.5:4b (13,1) bat qwen3.5:9b (11,2), même s’il est plus petit', async () => {
+  const md = ['## Conversation', '| Modèle | Fiabilité |', '| --- | --- |', '| qwen3.5:4b | 6/6 |', '| qwen3.5:9b | 6/6 |'].join('\n')
+  const { pickBestModelsFromBenchmark } = setup({ verifiedToolScoresMd: md, vramMib: 8 * 1024 })
+  assert.equal((await pickBestModelsFromBenchmark()).models.medium, 'qwen3.5:4b')
 })
 
 test('ce qui est affiché (getMyModelPicks) est exactement ce qui est téléchargé (pickBestModelsFromBenchmark)', async () => {
@@ -125,7 +134,7 @@ test('la carte montre le modèle RÉELLEMENT utilisé (profil), et le meilleur �
   const { getMyModelPicks } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 12 * 1024 })
   const picks = await getMyModelPicks({ name: 'Léo', models: { flash: 'qwen3.5:4b', medium: 'qwen3.5:4b', large: 'qwen3.5:4b' } })
   assert.equal(picks.medium.model, 'qwen3.5:4b', 'la ligne Médium doit montrer le modèle utilisé, pas l\'idéal')
-  assert.equal(picks.upgrades.medium?.model, 'qwen3.5:9b', 'le meilleur choix (qwen3.5:9b) doit être signalé à part')
+  assert.equal(picks.upgrades.medium?.model, 'gemma4:12b', 'le meilleur choix (gemma4:12b) doit être signalé à part')
   assert.equal(picks.upgrades.medium?.blockedReason, null, 'pas bloqué : il suffit de retester')
 })
 
@@ -134,7 +143,7 @@ test('un meilleur modèle bloqué au téléchargement est signalé avec sa raiso
   const picks = await getMyModelPicks({
     name: 'Léo',
     models: { flash: 'qwen3.5:4b', medium: 'qwen3.5:4b', large: 'qwen3.5:4b' },
-    blockedModels: { 'qwen3.5:9b': 'bloqué par ta version d\'Ollama' }
+    blockedModels: { 'gemma4:12b': 'bloqué par ta version d\'Ollama' }
   })
   assert.equal(picks.upgrades.medium?.blockedReason, 'bloqué par ta version d\'Ollama')
 })

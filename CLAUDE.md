@@ -6016,3 +6016,23 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   échoue une fois sur trois mérite d'être lu avant d'être relancé ; ici, c'est l'écran qui mentait.**
 - Piège d'environnement : un vrai Ollama lancé sur 127.0.0.1:11434 pendant `npm test` fait échouer
   `test-benchmark-cases.mjs`. Ne jamais garder un Ollama de mesure ouvert pendant la suite de tests.
+
+- **Scores Artificial Analysis entièrement revérifiés (étape 220, Léo : « on a pris les scores raisonner ou
+  non raisonner ? … regarde bien tous les scores, ils doivent être exacts »).** Relevés le 02/10/2026 sur les
+  DONNÉES BRUTES de chaque fiche (champ `intelligenceIndex` de l'objet `currentModel` du HTML), jamais sur
+  le résumé d'un outil de lecture de page. Celui-ci avait déjà inventé un 16,1 pour G9v3, et il annonçait
+  encore deux chiffres contradictoires pour Qwen3.5 9B. **Règle confirmée par Léo : la variante raisonnement
+  quand il y en a deux, à son effort le plus élevé publié.** Quatre valeurs étaient fausses :
+  - qwen3.5:9b : 14 (ce n'était ni la variante Reasoning 11,2 ni la Non-reasoning 13,3) ;
+  - gemma4:31b : 19 au lieu de 14,7 ;
+  - qwen3-vl:8b et :4b : score de la variante Instruct, alors que ces tags Ollama sont les variantes
+    THINKING (même digest que `8b-thinking`/`4b-thinking`). **Leçon : vérifier le DIGEST du tag Ollama
+    pour savoir quelle fiche le décrit, jamais son seul nom.**
+  Les scores sont maintenant stockés à UNE décimale, comme dans les données, et affichés « 13,1 »
+  (`formatIntelligenceIndex`) : l'arrondi à l'entier créait des égalités artificielles. **Conséquence
+  validée par Léo avant de livrer : avec 8 Go, Médium passe de qwen3.5:9b à qwen3.5:4b** (13,1 contre 11,2).
+  Les vitesses ont été revérifiées sur la phrase de la fiche du modèle lui-même. Quatre modèles n'ont plus de
+  vitesse publiée et elle est retirée : les chiffres présents sur leur page appartiennent aux modèles cités en
+  comparaison. **Piège à retenir : une page Artificial Analysis contient les données de beaucoup d'AUTRES
+  modèles (comparaisons). Ne lire que l'objet `currentModel`, ou une phrase qui commence par le nom exact
+  du modèle.**

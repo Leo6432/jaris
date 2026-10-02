@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import type { ModelCategory, ModelOverviewEntry, ModelOverviewResult } from '../../shared/ipc'
 import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge } from './OptionsMenu'
+import { formatIntelligenceIndex } from '../lib/formatIntelligenceIndex'
 
 /**
  * Étape 210 : mêmes mots que le choix du modèle dans le Chat et le Vocal (Faible · Moyen · Élevé). La catégorie
@@ -262,7 +263,7 @@ export default function AllModelsOverview(): JSX.Element {
                                 <td className="options-menu__col-num">
                                   <ReliabilityBadge value={entry.toolCalling} />
                                 </td>
-                                <td className="options-menu__col-num">{entry.artificialAnalysisIndex ?? 'Non publié'}</td>
+                                <td className="options-menu__col-num">{entry.artificialAnalysisIndex === null ? 'Non publié' : formatIntelligenceIndex(entry.artificialAnalysisIndex)}</td>
                                 <td className="options-menu__col-num">{entry.artificialAnalysisSpeed ?? '—'}</td>
                               </tr>
                             ))}

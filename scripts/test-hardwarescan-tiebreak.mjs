@@ -90,46 +90,50 @@ test('à 6/6 ET Intelligence Index EXACTEMENT égaux, repli sur MMLU-Pro puis la
   assert.equal(result.models.large, 'glm-4.7-flash:q4_K_M')
 })
 
-test('expose les Intelligence Index lus directement chez Artificial Analysis sans en inventer (étape 125 : 36/39 modèles couverts)', async () => {
+test('expose les Intelligence Index lus directement chez Artificial Analysis sans en inventer (étape 220 : relevés à une décimale, variante raisonnement)', async () => {
   const { getModelOverview } = setup()
   const overview = await getModelOverview()
   const byModel = new Map(overview.entries.map((entry) => [entry.model, entry.artificialAnalysisIndex]))
+  // Relevés le 02/10/2026 sur les données brutes des fiches (voir ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX).
   const expected = {
-    'qwen3.5:0.8b': 6,
-    'qwen3.5:2b': 7,
-    'qwen3.5:4b': 13,
-    'qwen3.5:9b': 14,
-    'qwen3.5:27b': 23,
-    'qwen3.5:35b': 19,
-    'qwen3.6:27b': 21,
-    'qwen3.6:35b': 18,
-    'qwen3.6:35b-a3b': 18,
-    'qwen3.8:27b': 34,
-    'gpt-oss:20b': 9,
-    'gemma4:e4b': 9,
-    'gemma4:12b': 14,
-    'gemma4:26b': 17,
-    'gemma4:31b': 19,
-    'ministral-3:3b': 5,
-    'ministral-3:14b': 6,
-    'granite4.1:3b': 6,
-    'granite4.2:3b': 9,
-    'ministral-3:8b': 5,
-    'granite4.2:8b': 11,
-    'granite4.1:8b': 7,
-    'mistral-small3.2:24b': 8,
-    'granite4.2:30b': 15,
-    'qwen3:1.7b': 5,
-    'glm-4.7-flash:q4_K_M': 15,
-    'qwen3-vl:8b': 7,
-    'qwen3-vl:4b': 6,
-    'devstral-2:123b': 9,
-    'qwen3-coder-next': 9,
-    'qwen3-coder:30b': 10,
-    'north-mini-code-1.0': 10,
-    'qwen2.5-coder:32b': 7,
-    'devstral-small-2:24b': 8,
-    'qwen2.5-coder:7b': 6
+    'qwen3.5:0.8b': 6.1,
+    'qwen3.5:2b': 6.9,
+    'qwen3.5:4b': 13.1,
+    'qwen3.5:9b': 11.2,
+    'qwen3.5:27b': 22.9,
+    'qwen3.5:35b': 19.3,
+    'qwen3.6:27b': 21.4,
+    'qwen3.6:35b': 18.2,
+    'qwen3.6:35b-a3b': 18.2,
+    'qwen3.8:27b': 33.7,
+    'gpt-oss:20b': 9.0,
+    'gemma4:12b': 14.2,
+    'gemma4:26b': 16.7,
+    'gemma4:31b': 14.7,
+    'gemma4:e4b': 8.9,
+    'ministral-3:14b': 6.0,
+    'ministral-3:3b': 4.8,
+    'granite4.1:3b': 5.9,
+    'granite4.2:3b': 9.1,
+    'ministral-3:8b': 5.5,
+    'granite4.2:8b': 11.1,
+    'granite4.1:8b': 6.6,
+    'mistral-small3.2:24b': 8.2,
+    'granite4.2:30b': 14.8,
+    'qwen3:1.7b': 5.2,
+    'glm-4.7-flash:q4_K_M': 14.9,
+    'nemotron-3.5-lightning:30b': 12.9,
+    'qwen3-vl:8b': 8.2,
+    'qwen3-vl:4b': 7.0,
+    'devstral-2:123b': 8.6,
+    'qwen3-coder-next': 9.2,
+    'qwen3-coder:30b': 9.6,
+    'north-mini-code-1.0': 9.9,
+    'qwen2.5-coder:32b': 6.7,
+    'devstral-small-2:24b': 7.5,
+    'qwen2.5-coder:7b': 5.8,
+    'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 10.8,
+    'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 11.1
   }
 
   for (const [model, score] of Object.entries(expected)) assert.equal(byModel.get(model), score, model)
@@ -142,9 +146,10 @@ test('expose aussi la vitesse (tokens/s) publiée par Artificial Analysis, absen
   const { getModelOverview } = setup()
   const overview = await getModelOverview()
   const byModel = new Map(overview.entries.map((entry) => [entry.model, entry.artificialAnalysisSpeed]))
-  assert.equal(byModel.get('ministral-3:3b'), 221)
-  assert.equal(byModel.get('granite4.2:3b'), 218)
-  assert.equal(byModel.get('devstral-2:123b'), 133)
+  assert.equal(byModel.get('ministral-3:3b'), 194)
+  assert.equal(byModel.get('granite4.2:3b'), 221)
+  // Étape 220 : plus de vitesse publiée pour Devstral 2 (N/A) — retirée plutôt que gardée périmée.
+  assert.equal(byModel.get('devstral-2:123b'), null)
   // qwen3.5:0.8b a un Intelligence Index connu (6) mais Artificial Analysis affiche "N/A" pour sa vitesse.
   assert.equal(byModel.get('qwen3.5:0.8b'), null, 'aucune vitesse ne doit être devinée quand Artificial Analysis ne la publie pas')
 })
