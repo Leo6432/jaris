@@ -6094,3 +6094,16 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Vérifié avant de retirer, pas pris au mot : Artificial Analysis lui donne 8,6, sous granite4.2:8b (11,1)
   et qwen3.5:9b (11,2), pour 75 Go dense qui ne tourne qu'en débordant massivement sur la RAM. Retiré de
   CODE_CANDIDATES, LARGE_RAM_OFFLOAD_MODELS, de la table d'intelligence et de benchmark-models.mjs.
+
+- **MiniCPM5-2B ajouté, et recherche dans « Tous les modèles » (Léo, étape 226).** MiniCPM5-2B vérifié avant
+  l'ajout : GGUF officiel d'OpenBMB (`hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M`, 1,56 Go), architecture `llama`,
+  réellement téléchargé et chargé ici par Ollama 0.35.1 (outils + réflexion annoncés, un outil réellement
+  appelé), 12,5 chez Artificial Analysis (variante Reasoning, aucune vitesse publiée). Candidat Rapide et
+  Médium comme G9v3 ; sans score d'outils, jamais choisi tant que Léo ne l'a pas mesuré. Pour tester Ollama
+  ici sans 1,4 Go de bibliothèques GPU : `ollama-linux-amd64.tar.zst` depuis ollama.com/download, extrait
+  sans `*cuda*`/`*rocm*`/`*vulkan*` (60 Mo), sur un port isolé — jamais 11434 pendant `npm test`.
+  La recherche (`filterModels`, src/lib) ignore majuscules, accents et ponctuation, et cherche dans le nom
+  affiché ET le tag complet. **Piège revécu, déjà noté ici : la règle générale des `input` impose des coins
+  droits en `!important` — tout nouveau champ arrondi doit en être exclu explicitement.** Et les tests
+  navigateur lisent le CSS COMPILÉ (`out/`) : relancer `npm run build` avant eux, sinon ils testent l'ancien
+  style. Régression : `scripts/test-filter-models.mjs`, `scripts/test-options-reorganization-ui.mjs`.

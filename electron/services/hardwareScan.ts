@@ -87,6 +87,13 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   // 14B" et les namespaces communautaires, plus bas dans ce fichier). Rejoint aussi Médium (voir
   // MEDIUM_CANDIDATES), même raisonnement que granite4.2:3b.
   { model: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF', vramGb: 1.9 },
+  // Étape 226, Léo : « et MiniCPM5-2B ». OpenBMB, sorti le 07/09/2026, 2,52 milliards de paramètres, Apache 2.0,
+  // pensé pour l'appel d'outils sur appareil. Vérifié avant de l'ajouter : GGUF OFFICIEL d'OpenBMB (créateur du
+  // modèle), architecture `llama` déjà connue de llama.cpp ; téléchargé et chargé ici par Ollama 0.35.1, qui
+  // annonce `tools` et `thinking` (`/api/show`, 1,56 Go) et a bien appelé un outil sur un essai. Intelligence
+  // Index Artificial Analysis 12,5 (variante Reasoning). Ne gagne pas tout seul : choisi seulement d'après son
+  // score d'appel d'outils (verified-tool-scores.md), que Léo mesure lui-même.
+  { model: 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M', vramGb: 1.6 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
   // Étape 196, Léo : « on peut ajouter K2 Horizon 3.7B ? il est le meilleur sur les benchmarks ». Vérifié le
   // 28/09/2026 et PAS ajouté pour l'instant : le modèle existe bien (IFM/MBZUAI, Apache 2.0, GGUF officiel
@@ -160,6 +167,8 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
   // Candidat "réutilisation" : hf.co/bartowski/ai9stars_G9v3-3B-GGUF (voir FLASH_CANDIDATES pour le détail
   // complet de la vérification) — même raisonnement que granite4.2:3b, déjà candidat dans les deux paliers.
   { model: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF', vramGb: 1.9 },
+  // MiniCPM5-2B : voir FLASH_CANDIDATES, même raisonnement que G9v3.
+  { model: 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M', vramGb: 1.6 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
 ]
 const LARGE_CANDIDATES: ModelCandidate[] = [
@@ -887,7 +896,8 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   'devstral-small-2:24b': 7.5, // Devstral Small 2
   'qwen2.5-coder:7b': 5.8, // Qwen2.5 Coder Instruct 7B
   'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 10.8, // G9v3-3B
-  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 11.1 // Ling 3.0 Tiny
+  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 11.1, // Ling 3.0 Tiny
+  'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 12.5 // MiniCPM5-2B (Reasoning) — 12,46 relevé le 02/10/2026, aucune vitesse publiée
 }
 
 /**

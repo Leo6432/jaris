@@ -994,6 +994,32 @@ body.body--scan::after {
   color: var(--hud-text);
 }
 
+/* Étape 226 : recherche dans « Tous les modèles », même pilule que les pastilles de tri voisines. Exclue de la
+   règle générale des champs (plus bas, avec !important), qui lui imposerait des coins droits. */
+.options-menu__model-search {
+  font-family: var(--hud-font-body);
+  font-size: 0.8rem;
+  flex: 0 1 240px;
+  min-width: 140px;
+  padding: 5px 14px;
+  margin-right: 8px;
+  border-radius: 999px;
+  background: rgba(1, 4, 10, 0.75);
+  border: 1px solid var(--hud-line);
+  color: var(--hud-text);
+  outline: none;
+}
+
+.options-menu__model-search:focus-visible {
+  border-color: rgba(var(--hud-accent-rgb), 0.6);
+  box-shadow: 0 0 0 2px rgba(var(--hud-accent-rgb), 0.2);
+}
+
+.options-menu__model-search-empty {
+  color: var(--hud-text-dim);
+  font-size: 0.85rem;
+}
+
 /* Les imports Hugging Face (hf.co/...) peuvent être très longs et étiraient tout le tableau — tronqués
    avec le nom complet toujours accessible au survol (attribut title natif). */
 .options-menu__model-name {
@@ -3254,7 +3280,7 @@ textarea:not(.composer__input):focus-visible {
    `.chat-widget__input` (barre du widget texte) est exclu pour la même raison que `.composer__input` : la
    PILULE qui l'entoure porte déjà le cadre et les coins arrondis, un second contour carré à l'intérieur
    casserait la forme. */
-input:not(.options-menu__context-slider):not(.chat-widget__input),
+input:not(.options-menu__context-slider):not(.chat-widget__input):not(.options-menu__model-search),
 textarea:not(.composer__input),
 select {
   font-family: var(--hud-font-body);

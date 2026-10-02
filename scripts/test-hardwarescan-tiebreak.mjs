@@ -132,7 +132,8 @@ test('expose les Intelligence Index lus directement chez Artificial Analysis san
     'devstral-small-2:24b': 7.5,
     'qwen2.5-coder:7b': 5.8,
     'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 10.8,
-    'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 11.1
+    'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 11.1,
+    'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 12.5
   }
 
   for (const [model, score] of Object.entries(expected)) assert.equal(byModel.get(model), score, model)

@@ -4,6 +4,7 @@ import type { ModelCategory, ModelOverviewEntry, ModelOverviewResult } from '../
 import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge } from './OptionsMenu'
 import { formatIntelligenceIndex } from '../lib/formatIntelligenceIndex'
+import { filterModels } from '../lib/filterModels'
 
 /**
  * Étape 210 : mêmes mots que le choix du modèle dans le Chat et le Vocal (Faible · Moyen · Élevé). La catégorie
@@ -133,9 +134,30 @@ function SortButton({ sortKey, sort, onSort }: { sortKey: SortKey; sort: SortSta
  * qui ressemble à du texte mort. "Par défaut" ramène à l'ordre d'origine (par VRAM croissante, celui que
  * renvoie déjà getModelOverview) sans avoir à deviner quel sens de tri annule quoi.
  */
-function SortBar({ sort, onSort, onReset }: { sort: SortState; onSort: (key: SortKey) => void; onReset: () => void }): JSX.Element {
+function SortBar({
+  sort,
+  onSort,
+  onReset,
+  query,
+  onQuery
+}: {
+  sort: SortState
+  onSort: (key: SortKey) => void
+  onReset: () => void
+  query: string
+  onQuery: (query: string) => void
+}): JSX.Element {
   return (
     <div className="options-menu__sort-bar">
+      {/* Étape 226 : la recherche se range dans la même barre que les tris, à leur gauche. */}
+      <input
+        type="search"
+        className="options-menu__model-search"
+        placeholder="Rechercher un modèle"
+        aria-label="Rechercher un modèle"
+        value={query}
+        onChange={(event) => onQuery(event.target.value)}
+      />
       <span className="options-menu__sort-bar-label">Trier par</span>
       {SORT_KEYS.map((key) => {
         const active = sort?.key === key
@@ -169,6 +191,7 @@ export default function AllModelsOverview(): JSX.Element {
   const [overview, setOverview] = useState<ModelOverviewResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [sort, setSort] = useState<SortState>(null)
+  const [query, setQuery] = useState('')
 
   const openPage = async (): Promise<void> => {
     setOpen(true)
@@ -188,7 +211,10 @@ export default function AllModelsOverview(): JSX.Element {
     })
   }
 
-  const sortedEntries = useMemo(() => (overview ? sortEntries(overview.entries, sort) : null), [overview, sort])
+  const sortedEntries = useMemo(
+    () => (overview ? sortEntries(filterModels(overview.entries, query), sort) : null),
+    [overview, sort, query]
+  )
 
   return (
     <div className="options-menu__all-models">
@@ -221,10 +247,15 @@ export default function AllModelsOverview(): JSX.Element {
                   </div>
                   {loading && <p className="capacity-scan__status">Chargement...</p>}
 
-                  {sortedEntries && <SortBar sort={sort} onSort={toggleSort} onReset={() => setSort(null)} />}
+                  {overview && (
+                    <SortBar sort={sort} onSort={toggleSort} onReset={() => setSort(null)} query={query} onQuery={setQuery} />
+                  )}
+                  {sortedEntries && sortedEntries.length === 0 && (
+                    <p className="options-menu__model-search-empty">Aucun modèle ne correspond à « {query.trim()} ».</p>
+                  )}
                   {/* Étape 160 : UN seul tableau. Chaque rôle de Jaris cherche dans tous les modèles ; la colonne
                       Catégorie n'est qu'un repère pour lire la liste, jamais un critère de choix. */}
-                  {sortedEntries && (
+                  {sortedEntries && sortedEntries.length > 0 && (
                     <div className="options-menu__model-overview-scroll">
                       <div className="options-menu__model-group">
                         <table className="options-menu__model-overview">

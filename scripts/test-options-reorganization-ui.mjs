@@ -495,6 +495,51 @@ test('cliquer une colonne trie "Tous les modèles" ; une seconde fois inverse le
   })
 })
 
+// Étape 226 (Léo : « ajoute une barre de recherche à côté des filtres dans tous les modèles »).
+test('« Tous les modèles » : la recherche est dans la barre des tris et filtre réellement le tableau', options, async () => {
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Modèles")')
+    await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
+    await page.waitForSelector('.options-page--models .options-menu__model-overview')
+    const models = () =>
+      page.$$eval('.options-page--models tbody tr', (rows) => rows.map((tr) => tr.querySelector('.options-menu__model-name')?.title))
+
+    // À côté des filtres : dans la même barre, sur la même ligne que les pastilles de tri.
+    const layout = await page.$eval('.options-page--models .options-menu__sort-bar', (bar) => {
+      const input = bar.querySelector('.options-menu__model-search')
+      const chip = bar.querySelector('.options-menu__sort-chip')
+      if (!input || !chip) return null
+      const a = input.getBoundingClientRect()
+      const b = chip.getBoundingClientRect()
+      const style = getComputedStyle(input)
+      return { sameRow: Math.abs(a.top + a.height / 2 - (b.top + b.height / 2)) < 6, radius: parseFloat(style.borderTopLeftRadius) }
+    })
+    assert.ok(layout, 'champ de recherche absent de la barre des tris')
+    assert.ok(layout.sameRow, 'la recherche doit être sur la même ligne que les filtres')
+    assert.ok(layout.radius > 8, `pilule attendue, coins droits du style général des champs : ${layout.radius}px`)
+
+    await page.fill('.options-menu__model-search', 'qwen')
+    assert.deepEqual(await models(), ['qwen3:1.7b'])
+    // Ponctuation et majuscules ignorées : « GEMMA 4 » trouve gemma4:31b.
+    await page.fill('.options-menu__model-search', 'GEMMA 4')
+    assert.deepEqual(await models(), ['gemma4:31b'])
+
+    // La recherche se combine avec le tri.
+    await page.fill('.options-menu__model-search', '3')
+    await page.locator('.options-menu__sort-button', { hasText: 'VRAM nécessaire' }).first().click()
+    assert.deepEqual(await models(), ['qwen3:1.7b', 'ministral-3:3b', 'gemma4:31b'])
+
+    // Aucun résultat : une phrase, jamais un tableau vide.
+    await page.fill('.options-menu__model-search', 'introuvable')
+    assert.equal(await page.$('.options-page--models .options-menu__model-overview'), null)
+    const empty = await page.textContent('.options-page--models .options-menu__model-search-empty')
+    assert.match(empty ?? '', /Aucun modèle ne correspond à « introuvable »/)
+    // La barre reste là pour corriger la recherche.
+    await page.fill('.options-menu__model-search', '')
+    assert.equal((await models()).length, 3)
+  })
+})
+
 /** Ligne « Image » du tableau des modèles (étape 174) : son texte, et la ligne d'explication juste dessous. */
 async function imageRow(page, pick) {
   if (pick) await page.evaluate((p) => { window.__imagePick = p }, pick)
