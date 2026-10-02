@@ -1,6 +1,6 @@
 {
   "name": "jaris",
-  "version": "0.23.8",
+  "version": "0.23.9",
   "description": "Jaris - assistant IA personnel vocal, 100% local et gratuit",
   "main": "./out/main/main.js",
   "author": "",
@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "dist": "node scripts/generate-icon.mjs && electron-vite build && electron-builder --win --publish never",
+    "dist": "node scripts/build-icon.mjs && electron-vite build && electron-builder --win --publish never",
     "preview": "electron-vite preview",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",

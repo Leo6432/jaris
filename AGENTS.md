@@ -6039,3 +6039,14 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Jaris lit déjà jusqu'à plusieurs pages (`read_web_page`). Rien n'a été changé : remplacer SearXNG par le
   service d'Ollama irait contre le « 100 % local et confidentiel » de Jaris. À reproposer seulement si Léo
   préfère se passer de Docker en acceptant d'envoyer ses recherches à ollama.com.
+
+- **« le logo de l'application bug » (Léo, étape 224) : fenêtre et barre des tâches montraient un carré
+  bruité.** Cause : `createAppIcon` donnait aux fenêtres le logo recadré en 1008×1008 px, et Windows le
+  réduisait lui-même en 16-32 px avec un rééchantillonnage grossier — les anneaux fins devenaient du bruit.
+  Corrigé en donnant sous Windows le vrai .ico multi-tailles (`scripts/build-icon.mjs`, Lanczos, 16 à 256 px,
+  petites tailles en bitmap 32 bits, 256 en PNG), copié hors de l'asar (`extraResources`) et lu via
+  `resourcesRoot()`. `build/` est ignoré par Git : l'icône est fabriquée par `npm run dist`, jamais commitée —
+  ne pas croire une icône locale de `build/` (la mienne datait d'un vieux test et m'a d'abord fait accuser le
+  .exe à tort). **Leçon : une image fournie en très grand à un système qui la réduira à quelques pixels doit
+  être réduite à l'avance, à chaque taille demandée.** Régression : `node --test scripts/test-app-icon.mjs`.
+  Non vérifiable ici : le rendu réel dans la barre des tâches de Léo.

@@ -72,7 +72,7 @@ jobs:
       - name: Vérifie que le module téléphone est empaqueté
         shell: pwsh
         run: |
-          foreach ($f in @('release\win-unpacked\resources\bin\jaris-tunnel.exe', 'release\win-unpacked\resources\phone\index.html', 'release\win-unpacked\resources\phone\app.js', 'release\win-unpacked\resources\phone\sw.js')) {
+          foreach ($f in @('release\win-unpacked\resources\bin\jaris-tunnel.exe', 'release\win-unpacked\resources\phone\index.html', 'release\win-unpacked\resources\phone\app.js', 'release\win-unpacked\resources\phone\sw.js', 'release\win-unpacked\resources\build\icon.ico')) {
             if (-not (Test-Path $f)) { throw "Absent de l'installeur : $f" }
           }
           Write-Host "Module téléphone présent."

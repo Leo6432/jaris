@@ -52,6 +52,11 @@ extraResources:
     to: bin/jaris-tunnel.exe
   - from: phone
     to: phone
+  # Icône Windows (fenêtres, barre des tâches, zone de notification) : un vrai .ico multi-tailles, hors de
+  # l'archive asar — nativeImage ne lit pas toujours un .ico depuis l'intérieur d'un asar. Même chemin
+  # relatif qu'en dev (build/icon.ico), résolu par resourcesRoot().
+  - from: build/icon.ico
+    to: build/icon.ico
 
 win:
   target: nsis
