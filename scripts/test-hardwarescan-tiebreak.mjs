@@ -125,7 +125,6 @@ test('expose les Intelligence Index lus directement chez Artificial Analysis san
     'nemotron-3.5-lightning:30b': 12.9,
     'qwen3-vl:8b': 8.2,
     'qwen3-vl:4b': 7.0,
-    'qwen3-coder-next': 9.2,
     'qwen3-coder:30b': 9.6,
     'north-mini-code-1.0': 9.9,
     'qwen2.5-coder:32b': 6.7,

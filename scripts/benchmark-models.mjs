@@ -174,9 +174,7 @@ const RAM_OFFLOAD_MODELS = new Set([
   'north-mini-code-1.0',
   'qwen2.5-coder:32b',
   'devstral-small-2:24b',
-  // qwen3-coder-next : voir CODE_CANDIDATES plus bas, encore plus indispensable ici qu'ailleurs (aucun GPU
-  // grand public n'a 52 Go de VRAM à lui seul). devstral-2:123b retiré (étape 225).
-  'qwen3-coder-next',
+  // devstral-2:123b (étape 225) et qwen3-coder-next (étape 227) retirés : moins bons qu'un modèle de 8 Go.
   'qwen3.5:35b',
   'qwen3.6:35b',
   'qwen3.5:27b',
@@ -313,9 +311,6 @@ const VISION_CANDIDATES = [
 // VISION_CANDIDATES/detectVramGb ci-dessus). Testés séparément de MODELS : pas sur l'appel d'outils
 // (codeGenerator.ts n'en utilise jamais, voir CODE_TEST_CASES plus bas) mais sur la génération de code.
 const CODE_CANDIDATES = [
-  // qwen3-coder-next (CODE_CANDIDATES dans hardwareScan.ts) : voir son commentaire complet pour la
-  // vérification du tag/de la taille. Réservé aux très grosses machines (VRAM+RAM, RAM_OFFLOAD_MODELS plus haut).
-  { model: 'qwen3-coder-next', vramGb: 52 },
   { model: 'qwen3.6:35b-a3b', vramGb: 22 },
   // Ligne dédiée code d'Alibaba, DISTINCTE de qwen3.6:35b-a3b malgré une taille/architecture proche (30 Md
   // total / 3,3 Md actifs, MoE, 19 Go) — vérifié directement sur Ollama, les deux tags existent séparément.
@@ -1274,7 +1269,7 @@ async function main() {
       const reason = `trop gros pour ce PC (~${modelWeightGb(m).toFixed(1)} Go, ${budgetFor(m).toFixed(1)} Go disponibles)`
       console.log(`  ${m} ignoré : ${reason}`)
       skipReasons.set(m, reason)
-      // Lu par qui suit la sortie du script : ce modèle ne sera jamais testé ce run-ci.
+      // Lu par le suivi en direct (UnscoredModelsTest.tsx) : ce modèle ne sera jamais testé ce run-ci.
       console.log(`##MODEL_SKIPPED## ${m} ${reason}`)
     }
     console.log('')

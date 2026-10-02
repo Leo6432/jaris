@@ -6068,3 +6068,10 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   droits en `!important` — tout nouveau champ arrondi doit en être exclu explicitement.** Et les tests
   navigateur lisent le CSS COMPILÉ (`out/`) : relancer `npm run build` avant eux, sinon ils testent l'ancien
   style. Régression : `scripts/test-filter-models.mjs`, `scripts/test-options-reorganization-ui.mjs`.
+
+- **Bouton « Tester les modèles sans score » remis pour MiniCPM5-2B, et qwen3-coder-next retiré (Léo, étape
+  227 : « il est nul »).** Bouton restauré par `git revert --no-commit` du commit qui l'avait retiré (v0.23.8),
+  seul conflit dans AllModelsOverview.tsx (la barre de recherche ajoutée depuis) ; notes et version gardées
+  telles quelles. qwen3-coder-next vérifié avant retrait : 9,2 chez Artificial Analysis, deux fois moins que
+  qwen3.6:35b-a3b (18,2) pour 52 Go contre 22. Son score 3/3 sort de verified-tool-scores.md avec une ligne
+  qui explique pourquoi. Après le score de MiniCPM5-2B, le bouton pourra être retiré comme les fois précédentes.

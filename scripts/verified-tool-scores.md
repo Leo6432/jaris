@@ -107,10 +107,10 @@ contrairement aux questions de conversation de ce même run (voir CONVERSATION_T
 
 Même analyse (25/09/2026), qwen2.5-coder:32b remesuré en entier le soir même (3/3 : la mesure précédente,
 2/2, était incomplète). qwen2.5-coder:14b : mesuré le 26/09/2026 (bouton « Tester les modèles sans score »).
+qwen3-coder-next (3/3) retiré des candidats le 02/10/2026 : 9,2 chez Artificial Analysis pour 52 Go.
 
 | Modèle | Fiabilité |
 |---|---|
-| qwen3-coder-next | 3/3 |
 | qwen3.6:35b-a3b | 3/3 |
 | qwen3-coder:30b | 3/3 |
 | north-mini-code-1.0 | 3/3 |

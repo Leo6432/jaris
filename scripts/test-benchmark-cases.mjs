@@ -93,12 +93,15 @@ test('sans outil : une réponse vide ou un appel d’outil écrit en texte compt
   for (const content of passes) assert.equal(isCorrectAnswer(noTool, { toolName: null, toolArgs: null, content }), true, content)
 })
 
-// Étapes 166 puis 172 : plus aucun test de modèles dans l'application, le script n'est plus embarqué.
-test('le script de test n’est plus embarqué dans l’installeur', () => {
+// Étape 168 : le bouton « Tester les modèles sans score » lance le script depuis l'appli installée.
+test('chaque fichier importé par le script de test est bien embarqué dans l’installeur', () => {
+  const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8')
   const builder = readFileSync(new URL('../electron-builder.yml', import.meta.url), 'utf8')
-  assert.doesNotMatch(builder, /- benchmark-models\.mjs/)
-  assert.doesNotMatch(builder, /- benchmark-cases\.mjs/)
-  assert.match(builder, /- verified-tool-scores\.md/, 'les scores, eux, restent indispensables à l’application')
+  const localImports = [...script.matchAll(/from '\.\/([^']+)'/g)].map((m) => m[1])
+  assert.ok(localImports.includes('benchmark-cases.mjs'))
+  for (const file of ['benchmark-models.mjs', 'verified-tool-scores.md', ...localImports]) {
+    assert.match(builder, new RegExp(`- ${file.replace('.', '\\.')}`), `${file} absent de electron-builder.yml`)
+  }
 })
 
 // ---------------------------------------------------------------------------------------------------------

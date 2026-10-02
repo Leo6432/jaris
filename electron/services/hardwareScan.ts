@@ -265,11 +265,7 @@ const LARGE_RAM_OFFLOAD_MODELS = new Set([
   'qwen3-coder:30b',
   'north-mini-code-1.0',
   'qwen2.5-coder:32b',
-  'devstral-small-2:24b',
-  // qwen3-coder-next (CODE_CANDIDATES, 52 Go) : encore plus indispensable ici que pour les autres candidats
-  // Code — aucun GPU grand public n'a assez de VRAM à lui seul pour l'atteindre, seule la RAM système le rend
-  // joignable du tout.
-  'qwen3-coder-next'
+  'devstral-small-2:24b'
 ])
 
 // Le modèle de vision (étape 6) était fixe (qwen3-vl:8b, ~8 Go de VRAM) pour tout le monde : sur une carte
@@ -367,16 +363,10 @@ const VISION_CANDIDATES: ModelCandidate[] = [
 //   confusion avec celui-ci — vérifié directement sur ollama.com/library/qwen3.6/tags : les deux tags
 //   existent bel et bien, séparément. Ajouté en informatif, à comparer aux autres via "Lancer l'analyse".
 const CODE_CANDIDATES: ModelCandidate[] = [
-  // qwen3-coder-next (Alibaba) : ajouté suite à la même recherche externe que ministral-3/gemma4:31b
-  // ci-dessus, réservé aux très grosses machines (VRAM+RAM, LARGE_RAM_OFFLOAD_MODELS plus bas — aucun GPU
-  // grand public n'a 52 Go de VRAM à lui seul).
   // Étape 225 (Léo : « même un modèle 8b est plus fort que lui ») : devstral-2:123b RETIRÉ. Vérifié sur
   // Artificial Analysis : 8,6, sous granite4.2:8b (11,1) et qwen3.5:9b (11,2), pour 75 Go dense.
-  // - qwen3-coder-next : vérifié sur ollama.com/library/qwen3-coder-next (52 Go en q4_K_M, 80 Md total/
-  //   3 Md actifs MoE, appel d'outils annoncé "out of the box" pour agents de code). Ne remplace pas
-  //   qwen3.6:35b-a3b déjà en tête (pas de gain confirmé sur TOUS les benchmarks de code), plutôt un
-  //   complément haut de gamme pour le travail agentique sur de grosses bases de code.
-  { model: 'qwen3-coder-next', vramGb: 52 },
+  // Étape 227 (Léo : « il est nul ») : qwen3-coder-next RETIRÉ pour la même raison. Vérifié : 9,2 chez Artificial
+  // Analysis, deux fois moins que qwen3.6:35b-a3b (18,2) juste en dessous, pour 52 Go contre 22.
   { model: 'qwen3.6:35b-a3b', vramGb: 22 },
   { model: 'qwen3-coder:30b', vramGb: 19 },
   { model: 'north-mini-code-1.0', vramGb: 19 },
@@ -889,7 +879,6 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   'nemotron-3.5-lightning:30b': 12.9, // Nemotron 3.5 Lightning
   'qwen3-vl:8b': 8.2, // Qwen3 VL 8B (Reasoning)
   'qwen3-vl:4b': 7.0, // Qwen3 VL 4B (Reasoning)
-  'qwen3-coder-next': 9.2, // Qwen3 Coder Next
   'qwen3-coder:30b': 9.6, // Qwen3 Coder 30B A3B Instruct
   'north-mini-code-1.0': 9.9, // North Mini Code
   'qwen2.5-coder:32b': 6.7, // Qwen2.5 Coder Instruct 32B
@@ -937,7 +926,6 @@ const ARTIFICIAL_ANALYSIS_SPEED: Record<string, number> = {
   'glm-4.7-flash:q4_K_M': 61,
   'nemotron-3.5-lightning:30b': 301,
   'qwen3-vl:8b': 115,
-  'qwen3-coder-next': 80,
   'qwen3-coder:30b': 85,
   'north-mini-code-1.0': 84,
   'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 58
@@ -995,6 +983,19 @@ export function parseVerifiedToolScores(): Record<VerifiedTier, Map<string, stri
     results[currentTier].set(model, score)
   }
   return results
+}
+
+/**
+ * Modèles de Jaris sans AUCUN score (ni appel d'outils, ni vision, ni code) — ceux que Jaris ne peut jamais
+ * choisir tant qu'ils ne sont pas mesurés. Étape 168 : c'est la liste que teste le bouton « Tester les modèles
+ * sans score » (Tous les modèles), du plus léger au plus lourd.
+ */
+export function getUnscoredModels(): string[] {
+  const scores = parseVerifiedToolScores()
+  return [...ALL_MODELS]
+    .sort((a, b) => a.vramGb - b.vramGb)
+    .filter((c) => !scores.conversation.has(c.model) && !scores.vision.has(c.model) && !scores.code.has(c.model))
+    .map((c) => c.model)
 }
 
 /**
