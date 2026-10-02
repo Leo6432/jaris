@@ -77,15 +77,6 @@ jobs:
           }
           Write-Host "Module téléphone présent."
 
-      # Étape 221 : le bouton « Tester les modèles sans score » lance ces deux fichiers depuis l'appli installée.
-      - name: Vérifie que le test des modèles est empaqueté
-        shell: pwsh
-        run: |
-          foreach ($f in @('release\win-unpacked\resources\scripts\benchmark-models.mjs', 'release\win-unpacked\resources\scripts\benchmark-cases.mjs', 'release\win-unpacked\resources\scripts\verified-tool-scores.md')) {
-            if (-not (Test-Path $f)) { throw "Absent de l'installeur : $f" }
-          }
-          Write-Host "Test des modèles présent."
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

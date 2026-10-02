@@ -6025,3 +6025,17 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   qui tient) ne changent un seul choix. **Leçon générale : avant d'annoncer l'effet d'un changement sur les
   choix de modèles, le CALCULER avec les vraies données des deux côtés (avant/après), jamais le déduire d'un
   test unitaire qui simule une partie des données.**
+
+- **Bouton « Tester les modèles sans score » retiré de nouveau (étape 223, Léo : « enlève le test analyse »)**,
+  une fois Ling 3.0 Tiny mesuré. Retrait identique à celui de l'étape 172 (patch f8d210f réappliqué) : bouton,
+  IPC, `testUnscoredModels`, scripts de test hors de l'installeur, et l'étape de vérification CI ajoutée à
+  l'étape 221. Le script reste un outil de développement. **Schéma déjà vécu deux fois** : Léo veut le bouton
+  quand un nouveau modèle arrive, puis le retire une fois le score obtenu. Pour la prochaine fois : il suffit
+  de réappliquer à l'envers le patch de retrait (`git show f8d210f`) sur les mêmes fichiers.
+- **« Ollama 0.35.1 fait jusqu'à 10 recherches par réponse, à quoi sert Docker Desktop ? »** Vérifié sur
+  docs.ollama.com/capabilities/web-search : la recherche web d'Ollama est un service EN LIGNE d'ollama.com
+  (`https://ollama.com/api/web_search`). Il exige un compte ollama.com et une clé d'API, et chaque question
+  part sur leurs serveurs. SearXNG (dans Docker) tourne sur le PC et interroge les moteurs sans compte, et
+  Jaris lit déjà jusqu'à plusieurs pages (`read_web_page`). Rien n'a été changé : remplacer SearXNG par le
+  service d'Ollama irait contre le « 100 % local et confidentiel » de Jaris. À reproposer seulement si Léo
+  préfère se passer de Docker en acceptant d'envoyer ses recherches à ollama.com.
