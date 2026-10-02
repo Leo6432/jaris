@@ -6036,3 +6036,18 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   comparaison. **Piège à retenir : une page Artificial Analysis contient les données de beaucoup d'AUTRES
   modèles (comparaisons). Ne lire que l'objet `currentModel`, ou une phrase qui commence par le nom exact
   du modèle.**
+
+- **Bouton « Tester les modèles sans score » REMIS (étape 221, Léo : « rajoute le bouton analyse pour tester
+  Ling-3.0-tiny (Q4_K_M) »).** Il avait été retiré à l'étape 172 (« enlève test ») une fois les scores de
+  l'époque recopiés. Il est restauré par l'inverse exact du commit de retrait (f8d210f) : bouton dans « Tous
+  les modèles », IPC, `testUnscoredModels`, et script embarqué dans l'installeur. Mêmes règles qu'avant :
+  il ne teste QUE les modèles sans aucun score (aujourd'hui Ling 3.0 Tiny, puis devstral-2:123b, sauté
+  d'office sur un PC trop petit avec sa raison) et ne choisit rien. Léo envoie le fichier, et le score est
+  recopié à la main dans verified-tool-scores.md. **Rappel : retirer un bouton qui sert à mesurer les
+  NOUVEAUX modèles revient à empêcher tout ajout de modèle d'être un jour choisi.** Si on le retire encore,
+  prévoir d'abord un autre moyen de mesurer.
+- **« On utilise Ling-3.0-tiny (Q4_K_M), ça change pas ? »** Le score Artificial Analysis est mesuré chez
+  les fournisseurs en ligne du modèle (pleine précision ou 8 bits), jamais sur la version Q4_K_M que Jaris
+  télécharge. C'est vrai pour TOUS les modèles de Jaris (Q4 par défaut sur Ollama) : la comparaison entre
+  eux reste juste, mais chaque chiffre est un peu optimiste pour la version réellement utilisée. C'est pour
+  ça que le choix repose d'abord sur le test d'appel d'outils, fait SUR la version Q4_K_M elle-même.

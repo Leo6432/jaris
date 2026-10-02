@@ -94,6 +94,9 @@ declare global {
       setThinkChoice: (mode: ModelChoiceMode, think: ThinkValue | null) => Promise<void>
       setModelChoice: (mode: ModelChoiceMode, model: string | null) => Promise<void>
       runQuickSetup: () => Promise<CapacityScanResult>
+      getUnscoredModels: () => Promise<string[]>
+      testUnscoredModels: () => Promise<{ models: string[]; resultsPath: string }>
+      showUnscoredResults: () => Promise<void>
       onModelBenchmarkLine: (cb: (line: string) => void) => () => void
       getNewModels: () => Promise<string[]>
       acknowledgeNewModels: () => Promise<void>

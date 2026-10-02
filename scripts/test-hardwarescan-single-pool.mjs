@@ -142,3 +142,11 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
   assert.ok(overview.entries.every((e) => ['Rapide', 'Moyen', 'Puissant'].includes(e.category)))
   assert.equal(overview.groups, undefined, 'plus de groupes par palier')
 })
+
+// Étape 168 : la liste que teste le bouton « Tester les modèles sans score ».
+test('modèles sans aucun score : ceux que le bouton de test mesurera, du plus léger au plus lourd', () => {
+  const unscored = [...setup({ vramMib: 8 * 1024 }).getUnscoredModels()]
+  // Étape 171 : G9v3-3B, qwen2.5-coder:14b et Lightning mesurés le 26/09/2026. Étape 221 : Ling 3.0 Tiny (4,8 Go)
+  // ajouté sans score, en premier car le plus léger ; devstral-2:123b (75 Go) reste.
+  assert.deepEqual(unscored, ['hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M', 'devstral-2:123b'])
+})

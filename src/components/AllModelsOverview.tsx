@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import type { ModelCategory, ModelOverviewEntry, ModelOverviewResult } from '../../shared/ipc'
 import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge } from './OptionsMenu'
+import UnscoredModelsTest from './UnscoredModelsTest'
 import { formatIntelligenceIndex } from '../lib/formatIntelligenceIndex'
 
 /**
@@ -29,8 +30,8 @@ const CATEGORY_LABELS: Record<ModelCategory, string> = { Rapide: 'Faible', Moyen
  * colonne de navigation à gauche comme la page Options : un seul contenu, rien à onglet ici.
  *
  * Plus d'analyse complète (retirée à l'étape 166, comme convenu avec Léo) : son analyse du 25/09/2026 est
- * recopiée dans scripts/verified-tool-scores.md, seule source des scores affichés ici. Le bouton de test des
- * modèles sans score (étape 168) a été retiré de la même façon une fois leurs scores recopiés (étape 172).
+ * recopiée dans scripts/verified-tool-scores.md, seule source des scores affichés ici. Seuls les modèles SANS
+ * score peuvent encore être testés (UnscoredModelsTest, étape 168).
  *
  * Colonnes Intelligence/Vitesse (Artificial Analysis) : une VERSION ÉDITABLE directement dans le tableau a
  * existé brièvement (étape 122, système de correction manuelle par Léo, persistée dans un fichier propre à
@@ -221,6 +222,7 @@ export default function AllModelsOverview(): JSX.Element {
                   </div>
                   {loading && <p className="capacity-scan__status">Chargement...</p>}
 
+                  {overview && <UnscoredModelsTest />}
                   {sortedEntries && <SortBar sort={sort} onSort={toggleSort} onReset={() => setSort(null)} />}
                   {/* Étape 160 : UN seul tableau. Chaque rôle de Jaris cherche dans tous les modèles ; la colonne
                       Catégorie n'est qu'un repère pour lire la liste, jamais un critère de choix. */}
