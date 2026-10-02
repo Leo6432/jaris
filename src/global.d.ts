@@ -174,6 +174,7 @@ declare global {
       onPhoneAccessChanged: (cb: (status: PhoneAccessStatus) => void) => () => void
       onChatHistoryChanged: (cb: () => void) => () => void
       onStudioGalleryChanged?: (cb: () => void) => () => void
+      onModelChoiceChanged?: (cb: () => void) => () => void
     }
   }
 }

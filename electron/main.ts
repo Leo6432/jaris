@@ -696,6 +696,59 @@ const openedPhoneLinks = new Set<string>()
 /** Vrai juste après un clic sur « Activer » : seulement là, les pages Tailscale s'ouvrent toutes seules. */
 let phoneLinksAutoOpen = false
 
+/**
+ * Choix du modèle et de la réflexion d'un mode (Chat, Code, Vocal). Partagé par l'écran du PC et par le
+ * téléphone (étape 216) : les deux montrent et enregistrent exactement le même réglage.
+ */
+async function readModelChoice(mode: ModelChoiceMode): Promise<ModelChoiceInfo> {
+  if (!MODEL_CHOICE_MODES.includes(mode)) throw new Error(`Mode inconnu : ${String(mode)}`)
+  const installed = await listInstalledModels().catch(() => null)
+  const profile = await getProfile()
+  const info = buildModelChoiceInfo(profile, mode, installed)
+  // Étape 192 : d'abord le modèle, puis SES vrais choix de réflexion. En Chat/Vocal Auto le modèle change
+  // selon la question : rien à proposer d'exact, l'écran demande de choisir un modèle d'abord.
+  const model = thinkingModelFor(profile, mode, installed, info.autoModel)
+  if (!model) return { ...info, thinking: null }
+  const meta = await getModelThinking(model)
+  return {
+    ...info,
+    thinking: {
+      model,
+      kind: thinkingKind(meta),
+      options: thinkOptions(meta),
+      selected: chosenThink(profile?.thinkChoices?.[mode], model, meta) ?? null
+    }
+  }
+}
+
+async function saveThinkChoice(mode: ModelChoiceMode, think: unknown): Promise<void> {
+  if (!MODEL_CHOICE_MODES.includes(mode)) throw new Error(`Mode inconnu : ${String(mode)}`)
+  const profile = await getProfile()
+  if (!profile) throw new Error('Profil introuvable.')
+  const thinkChoices = { ...profile.thinkChoices }
+  if (think === null) {
+    delete thinkChoices[mode]
+  } else {
+    // La valeur vient de l'écran : revérifiée ICI contre ce que le modèle annonce vraiment.
+    const installed = await listInstalledModels()
+    const model = thinkingModelFor(profile, mode, installed, buildModelChoiceInfo(profile, mode, installed).autoModel)
+    if (!model) throw new Error("Choisis d'abord un modèle : en Auto, il change selon la question.")
+    if (!isAcceptedThink(think, await getModelThinking(model))) throw new Error(`${model} n'accepte pas ce réglage de réflexion.`)
+    thinkChoices[mode] = { model, think }
+  }
+  await saveProfile({ ...profile, thinkChoices })
+}
+
+async function saveModelChoice(mode: ModelChoiceMode, model: string | null): Promise<void> {
+  const profile = await getProfile()
+  if (!profile) throw new Error('Profil introuvable.')
+  const installed = model === null ? [] : await listInstalledModels()
+  // Étape 192 : la réflexion était choisie pour l'ancien modèle ; elle repart en Auto avec le nouveau.
+  const thinkChoices = { ...profile.thinkChoices }
+  delete thinkChoices[mode]
+  await saveProfile(applyModelChoice({ ...profile, thinkChoices }, mode, model, installed))
+}
+
 function tunnelBinaryPath(): string {
   const name = process.platform === 'win32' ? 'jaris-tunnel.exe' : 'jaris-tunnel'
   return app.isPackaged ? join(process.resourcesPath, 'bin', name) : join(__dirname, '../../tunnel/dist', name)
@@ -800,7 +853,17 @@ function getPhoneAccess(): PhoneAccessManager {
         if (image.isEmpty()) throw new Error('Image illisible.')
         return image.resize({ width: 360, quality: 'good' }).toJPEG(78)
       },
-      readVideo: (fileName) => readGeneratedVideo(fileName)
+      readVideo: (fileName) => readGeneratedVideo(fileName),
+      // Même réglage que le sélecteur du PC : changé d'un côté, il l'est aussi de l'autre.
+      getModelChoice: (mode) => readModelChoice(mode),
+      setModelChoice: async (mode, model) => {
+        await saveModelChoice(mode, model)
+        broadcast(IPC_CHANNELS.modelChoiceChanged)
+      },
+      setThinkChoice: async (mode, think) => {
+        await saveThinkChoice(mode, think)
+        broadcast(IPC_CHANNELS.modelChoiceChanged)
+      }
     }
   })
   manager.on('change', (status: PhoneAccessStatus) => {
@@ -1199,52 +1262,9 @@ app.whenReady().then(async () => {
   })
   // Choix d'un rôle par mode (Chat, Code, Vocal). applyModelChoice vérifie que son modèle actuel est
   // réellement installé dans Ollama avant d'enregistrer ce rôle.
-  ipcMain.handle(IPC_CHANNELS.getModelChoice, async (_event, mode: ModelChoiceMode): Promise<ModelChoiceInfo> => {
-    if (!MODEL_CHOICE_MODES.includes(mode)) throw new Error(`Mode inconnu : ${String(mode)}`)
-    const installed = await listInstalledModels().catch(() => null)
-    const profile = await getProfile()
-    const info = buildModelChoiceInfo(profile, mode, installed)
-    // Étape 192 : d'abord le modèle, puis SES vrais choix de réflexion. En Chat/Vocal Auto le modèle change
-    // selon la question : rien à proposer d'exact, l'écran demande de choisir un modèle d'abord.
-    const model = thinkingModelFor(profile, mode, installed, info.autoModel)
-    if (!model) return { ...info, thinking: null }
-    const meta = await getModelThinking(model)
-    return {
-      ...info,
-      thinking: {
-        model,
-        kind: thinkingKind(meta),
-        options: thinkOptions(meta),
-        selected: chosenThink(profile?.thinkChoices?.[mode], model, meta) ?? null
-      }
-    }
-  })
-  ipcMain.handle(IPC_CHANNELS.setThinkChoice, async (_event, mode: ModelChoiceMode, think: unknown): Promise<void> => {
-    if (!MODEL_CHOICE_MODES.includes(mode)) throw new Error(`Mode inconnu : ${String(mode)}`)
-    const profile = await getProfile()
-    if (!profile) throw new Error('Profil introuvable.')
-    const thinkChoices = { ...profile.thinkChoices }
-    if (think === null) {
-      delete thinkChoices[mode]
-    } else {
-      // La valeur vient de l'écran : revérifiée ICI contre ce que le modèle annonce vraiment.
-      const installed = await listInstalledModels()
-      const model = thinkingModelFor(profile, mode, installed, buildModelChoiceInfo(profile, mode, installed).autoModel)
-      if (!model) throw new Error("Choisis d'abord un modèle : en Auto, il change selon la question.")
-      if (!isAcceptedThink(think, await getModelThinking(model))) throw new Error(`${model} n'accepte pas ce réglage de réflexion.`)
-      thinkChoices[mode] = { model, think }
-    }
-    await saveProfile({ ...profile, thinkChoices })
-  })
-  ipcMain.handle(IPC_CHANNELS.setModelChoice, async (_event, mode: ModelChoiceMode, model: string | null): Promise<void> => {
-    const profile = await getProfile()
-    if (!profile) throw new Error('Profil introuvable.')
-    const installed = model === null ? [] : await listInstalledModels()
-    // Étape 192 : la réflexion était choisie pour l'ancien modèle ; elle repart en Auto avec le nouveau.
-    const thinkChoices = { ...profile.thinkChoices }
-    delete thinkChoices[mode]
-    await saveProfile(applyModelChoice({ ...profile, thinkChoices }, mode, model, installed))
-  })
+  ipcMain.handle(IPC_CHANNELS.getModelChoice, (_event, mode: ModelChoiceMode): Promise<ModelChoiceInfo> => readModelChoice(mode))
+  ipcMain.handle(IPC_CHANNELS.setThinkChoice, (_event, mode: ModelChoiceMode, think: unknown): Promise<void> => saveThinkChoice(mode, think))
+  ipcMain.handle(IPC_CHANNELS.setModelChoice, (_event, mode: ModelChoiceMode, model: string | null): Promise<void> => saveModelChoice(mode, model))
   ipcMain.handle(IPC_CHANNELS.runQuickSetup, async (event): Promise<CapacityScanResult> => {
     return runQuickSetup((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))
   })

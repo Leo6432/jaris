@@ -65,26 +65,43 @@
     }
   }
 
-  function api(method, path, body, contentType) {
+  function api(method, path, body, contentType, timeoutMs) {
     var headers = authHeaders()
     if (body !== undefined) headers['Content-Type'] = contentType || 'application/json'
+    var controller = timeoutMs && window.AbortController ? new AbortController() : null
+    var timer = controller
+      ? setTimeout(function () {
+          controller.abort()
+        }, timeoutMs)
+      : null
     return fetch(path, {
       method: method,
       headers: headers,
       body: body === undefined ? undefined : contentType ? body : JSON.stringify(body),
-      cache: 'no-store'
-    }).then(function (res) {
-      return res
-        .json()
-        .catch(function () {
-          return {}
-        })
-        .then(function (data) {
-          checkAuth(res, path)
-          if (!res.ok) throw new Error(data.error || 'Erreur ' + res.status)
-          return data
-        })
+      cache: 'no-store',
+      signal: controller ? controller.signal : undefined
     })
+      .catch(function (err) {
+        if (controller && controller.signal.aborted) throw new Error("L'envoi à ton PC n'a pas abouti à temps : vérifie le réseau, puis réessaie.")
+        throw err
+      })
+      .then(function (res) {
+        clearTimeout(timer)
+        return handleResponse(res, path)
+      })
+  }
+
+  function handleResponse(res, path) {
+    return res
+      .json()
+      .catch(function () {
+        return {}
+      })
+      .then(function (data) {
+        checkAuth(res, path)
+        if (!res.ok) throw new Error(data.error || 'Erreur ' + res.status)
+        return data
+      })
   }
 
   /** Fichier protégé (voix, image, vidéo) : jamais une adresse publique, toujours avec le jeton. */
@@ -223,6 +240,8 @@
     selectTab(readStorage(localStorage, TAB_KEY) || 'chat')
     if (currentTab !== 'chat') loadHistory()
     resumeStudio()
+    loadModel('chat')
+    loadModel('voice')
   }
 
   // --- Chat ------------------------------------------------------------------------------------------
@@ -327,21 +346,31 @@
   }
 
   // --- Vocal -----------------------------------------------------------------------------------------
-  // Le téléphone enregistre dans son propre format (webm ou mp4 selon la marque), puis le décode et le
-  // convertit LUI-MÊME en WAV 16 kHz mono : le PC reçoit toujours le même format simple, celui que sa
-  // transcription locale lit directement. La réponse revient en WAV, lue avec la voix de Jaris.
+  // Étape 216 (Léo, sur iPhone : « ça bloque sur Envoi à ton PC ») : le son du micro est lu DIRECTEMENT,
+  // échantillon par échantillon, puis ramené à 16 kHz et mis en WAV ici. Avant, le téléphone l'enregistrait
+  // dans son format (MediaRecorder), puis le décodait et le convertissait : trois étapes propres à chaque
+  // navigateur, dont une pouvait ne jamais répondre sans rien dire. Désormais chaque étape a une fin visible.
+  // La réponse revient en WAV, lue avec la voix de Jaris.
+
+  var UPLOAD_TIMEOUT_MS = 60000
+  /** Le micro doit envoyer du son à la page dans ce délai, sinon on le dit au lieu d'attendre. */
+  var NO_SOUND_MS = 3000
+  /** Trop court pour contenir une phrase : on ne dérange pas le PC pour rien. */
+  var MIN_SPEECH_MS = 400
 
   var voice = {
     state: 'idle', // idle | listening | working | speaking
-    recorder: null,
+    ctx: null,
     stream: null,
+    nodes: null,
     chunks: [],
-    cancelled: false,
-    meter: null,
-    meterTimer: null,
+    frames: 0,
+    rate: 48000,
+    timer: null,
     startedAt: 0,
     heard: false,
-    silentSince: 0,
+    lastLoudAt: 0,
+    level: 0,
     replyUrl: null
   }
   var silentUrl = null
@@ -353,6 +382,7 @@
     $('voice-state').textContent = text
     $('voice-cancel').hidden = state !== 'listening'
     $('voice-help').hidden = state !== 'idle'
+    $('voice-model').disabled = state !== 'idle'
   }
 
   /**
@@ -367,19 +397,28 @@
     if (played && played.catch) played.catch(function () {})
   }
 
-  function stopMeter() {
-    clearInterval(voice.meterTimer)
-    voice.meterTimer = null
-    if (voice.meter) voice.meter.ctx.close().catch(function () {})
-    voice.meter = null
-  }
-
-  function stopTracks() {
+  /** Coupe le micro et libère tout ce qui écoutait. Sans effet si rien n'écoute. */
+  function releaseMic() {
+    clearInterval(voice.timer)
+    voice.timer = null
+    if (voice.nodes) {
+      voice.nodes.processor.onaudioprocess = null
+      try {
+        voice.nodes.source.disconnect()
+        voice.nodes.processor.disconnect()
+      } catch (e) {
+        // déjà déconnectés
+      }
+    }
+    voice.nodes = null
     if (voice.stream)
       voice.stream.getTracks().forEach(function (t) {
         t.stop()
       })
     voice.stream = null
+    if (voice.ctx) voice.ctx.close().catch(function () {})
+    voice.ctx = null
+    $('voice-orb').style.setProperty('--level', '0')
   }
 
   function startListening() {
@@ -387,97 +426,107 @@
       setVoiceState('idle', 'Jaris répond encore au Chat : attends un instant.')
       return
     }
-    if (!navigator.mediaDevices || !window.MediaRecorder) {
+    var AudioCtx = window.AudioContext || window.webkitAudioContext
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !AudioCtx) {
       setVoiceState('idle', "Ce navigateur ne permet pas d'utiliser le micro.")
       return
     }
     unlockAudio()
-    var AudioCtx = window.AudioContext || window.webkitAudioContext
-    // Créé pendant le toucher : sinon l'iPhone le laisse suspendu et la pause ne serait jamais détectée.
-    var meterCtx = AudioCtx ? new AudioCtx() : null
+    // Créé et relancé PENDANT le toucher : sinon l'iPhone le laisse en pause et aucun son n'arrive.
+    var ctx = new AudioCtx()
+    if (ctx.resume) ctx.resume().catch(function () {})
+    voice.ctx = ctx
     setVoiceState('listening', 'Je t’écoute…')
     navigator.mediaDevices
-      .getUserMedia({ audio: true })
+      .getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } })
       .then(function (stream) {
-        if (voice.state !== 'listening') {
+        if (voice.state !== 'listening' || voice.ctx !== ctx) {
           stream.getTracks().forEach(function (t) {
             t.stop()
           })
-          if (meterCtx) meterCtx.close().catch(function () {})
           return
         }
         voice.stream = stream
         voice.chunks = []
-        voice.cancelled = false
+        voice.frames = 0
+        voice.rate = ctx.sampleRate
         voice.heard = false
-        voice.silentSince = 0
-        var recorder = new MediaRecorder(stream)
-        voice.recorder = recorder
-        recorder.ondataavailable = function (e) {
-          if (e.data && e.data.size) voice.chunks.push(e.data)
+        voice.lastLoudAt = 0
+        var source = ctx.createMediaStreamSource(stream)
+        var processor = ctx.createScriptProcessor(4096, 1, 1)
+        processor.onaudioprocess = function (event) {
+          if (voice.state !== 'listening') return
+          var data = event.inputBuffer.getChannelData(0)
+          voice.chunks.push(new Float32Array(data))
+          voice.frames += data.length
+          var sum = 0
+          for (var i = 0; i < data.length; i++) sum += data[i] * data[i]
+          voice.level = Math.sqrt(sum / data.length)
+          if (voice.level > SPEECH_LEVEL) {
+            voice.heard = true
+            voice.lastLoudAt = Date.now()
+          }
         }
-        recorder.onstop = function () {
-          stopTracks()
-          stopMeter()
-          voice.recorder = null
-          if (voice.cancelled || !voice.chunks.length) return
-          sendTalk(new Blob(voice.chunks, { type: recorder.mimeType }))
-        }
-        recorder.start()
+        source.connect(processor)
+        // Indispensable pour que le navigateur fasse tourner le traitement ; la sortie reste silencieuse.
+        processor.connect(ctx.destination)
+        voice.nodes = { source: source, processor: processor }
         voice.startedAt = Date.now()
-        startMeter(meterCtx, stream)
+        voice.timer = setInterval(watchListening, 150)
       })
       .catch(function () {
-        if (meterCtx) meterCtx.close().catch(function () {})
+        releaseMic()
         setVoiceState('idle', 'Micro refusé : autorise le micro pour cette page dans les réglages du téléphone.')
       })
   }
 
-  /** Mesure le volume pour envoyer tout seul après une pause, comme l'Agent vocal du PC. */
-  function startMeter(ctx, stream) {
-    if (ctx) {
-      try {
-        if (ctx.resume) ctx.resume().catch(function () {})
-        var analyser = ctx.createAnalyser()
-        analyser.fftSize = 1024
-        ctx.createMediaStreamSource(stream).connect(analyser)
-        voice.meter = { ctx: ctx, analyser: analyser, samples: new Float32Array(analyser.fftSize) }
-      } catch (e) {
-        voice.meter = null
-      }
+  /** Volume, pause qui envoie toute seule (comme l'Agent vocal du PC), durée maximale, micro muet. */
+  function watchListening() {
+    var now = Date.now()
+    $('voice-orb').style.setProperty('--level', String(Math.min(1, voice.level * 8)))
+    if (!voice.frames && now - voice.startedAt > NO_SOUND_MS) {
+      releaseMic()
+      setVoiceState('idle', "Le micro n'envoie aucun son à la page. Touche Jaris pour réessayer ; si ça recommence, dis-le-moi.")
+      return
     }
-    voice.meterTimer = setInterval(function () {
-      var now = Date.now()
-      if (now - voice.startedAt >= MAX_RECORD_MS) return stopListening(false)
-      if (!voice.meter) return
-      voice.meter.analyser.getFloatTimeDomainData(voice.meter.samples)
-      var sum = 0
-      for (var i = 0; i < voice.meter.samples.length; i++) sum += voice.meter.samples[i] * voice.meter.samples[i]
-      var level = Math.sqrt(sum / voice.meter.samples.length)
-      $('voice-orb').style.setProperty('--level', String(Math.min(1, level * 8)))
-      if (level > SPEECH_LEVEL) {
-        voice.heard = true
-        voice.silentSince = 0
-      } else if (voice.heard) {
-        if (!voice.silentSince) voice.silentSince = now
-        else if (now - voice.silentSince > SILENCE_MS) stopListening(false)
-      } else if (now - voice.startedAt > NOTHING_HEARD_MS) {
-        stopListening(true)
-        setVoiceState('idle', "Je n'ai rien entendu. Touche Jaris pour réessayer.")
-      }
-    }, 100)
+    if (now - voice.startedAt >= MAX_RECORD_MS) return finishListening(true)
+    if (voice.heard && now - voice.lastLoudAt > SILENCE_MS) return finishListening(true)
+    if (!voice.heard && now - voice.startedAt > NOTHING_HEARD_MS) {
+      releaseMic()
+      setVoiceState('idle', "Je n'ai rien entendu. Touche Jaris pour réessayer.")
+    }
   }
 
-  function stopListening(cancel) {
-    // Tout de suite : sinon le minuteur du volume pourrait rappeler cette fonction avant la fin de l'arrêt.
-    stopMeter()
-    var recording = Boolean(voice.recorder && voice.recorder.state !== 'inactive')
-    voice.cancelled = cancel
-    if (recording) voice.recorder.stop()
-    else stopTracks()
-    // Touché avant même que le micro ait démarré : rien à envoyer, on revient au repos.
-    if (cancel || !recording) setVoiceState('idle', 'Touche Jaris pour parler')
-    else setVoiceState('working', 'Envoi à ton PC…')
+  function finishListening(send) {
+    var chunks = voice.chunks
+    var frames = voice.frames
+    var rate = voice.rate
+    voice.chunks = []
+    releaseMic()
+    if (!send) return setVoiceState('idle', 'Touche Jaris pour parler')
+    if (frames < (rate * MIN_SPEECH_MS) / 1000) return setVoiceState('idle', 'Trop court : touche Jaris, parle, puis fais une pause.')
+    sendTalk(encodeWav(downsampleTo16k(chunks, frames, rate), 16000))
+  }
+
+  /** Le son du micro (souvent 48 kHz) ramené à 16 kHz, en moyennant chaque groupe d'échantillons. */
+  function downsampleTo16k(chunks, frames, rate) {
+    var input = new Float32Array(frames)
+    var offset = 0
+    chunks.forEach(function (chunk) {
+      input.set(chunk, offset)
+      offset += chunk.length
+    })
+    if (rate === 16000) return input
+    var ratio = rate / 16000
+    var output = new Float32Array(Math.floor(frames / ratio))
+    for (var i = 0; i < output.length; i++) {
+      var start = Math.floor(i * ratio)
+      var end = Math.min(frames, Math.floor((i + 1) * ratio))
+      var sum = 0
+      for (var j = start; j < end; j++) sum += input[j]
+      output[i] = end > start ? sum / (end - start) : input[start]
+    }
+    return output
   }
 
   function stopSpeaking() {
@@ -515,15 +564,15 @@
       })
   }
 
-  function sendTalk(blob) {
+  function sendTalk(wav) {
     setConversationBusy(true)
+    setVoiceState('working', 'Envoi à ton PC…')
     $('voice-replay').hidden = true
     showVoiceExchange('…', '', null)
-    toWav16k(blob)
-      .then(function (wav) {
-        return api('POST', '/api/talk', wav, 'audio/wav')
-      })
+    // Un envoi qui ne répond jamais (réseau, tunnel) finit par un message, jamais par une attente sans fin.
+    api('POST', '/api/talk', wav, 'audio/wav', UPLOAD_TIMEOUT_MS)
       .then(function (data) {
+        setVoiceState('working', 'Transcription sur ton PC…')
         pollJob(
           data.jobId,
           function (job) {
@@ -564,32 +613,8 @@
 
   function onVoiceOrb() {
     if (voice.state === 'idle') startListening()
-    else if (voice.state === 'listening') stopListening(false)
+    else if (voice.state === 'listening') finishListening(true)
     else if (voice.state === 'speaking') stopSpeaking()
-  }
-
-  function toWav16k(blob) {
-    var AudioCtx = window.AudioContext || window.webkitAudioContext
-    return blob
-      .arrayBuffer()
-      .then(function (data) {
-        var ctx = new AudioCtx()
-        return new Promise(function (resolve, reject) {
-          ctx.decodeAudioData(data, resolve, reject)
-        }).then(function (decoded) {
-          ctx.close()
-          var length = Math.max(1, Math.ceil(decoded.duration * 16000))
-          var offline = new OfflineAudioContext(1, length, 16000)
-          var source = offline.createBufferSource()
-          source.buffer = decoded
-          source.connect(offline.destination)
-          source.start()
-          return offline.startRendering()
-        })
-      })
-      .then(function (rendered) {
-        return encodeWav(rendered.getChannelData(0), 16000)
-      })
   }
 
   function encodeWav(samples, rate) {
@@ -616,6 +641,157 @@
       view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true)
     }
     return new Blob([buffer], { type: 'audio/wav' })
+  }
+
+  // --- Modèle et réflexion --------------------------------------------------------------------------
+  // Étape 216 (Léo : « on peut pas choisir les modèles, pas comme le PC ») : le même sélecteur que le PC, et le
+  // même réglage — choisi ici, il l'est aussi sur le PC. Chat et Vocal ont chacun le leur, comme sur le PC.
+
+  var modelInfo = { chat: null, voice: null }
+  var sheetMode = null
+
+  function thinkLabelOf(info) {
+    var thinking = info && info.thinking
+    if (!thinking || thinking.selected === null || thinking.selected === undefined) return null
+    var option = (thinking.options || []).filter(function (o) {
+      return o.value === thinking.selected
+    })[0]
+    return option ? option.label : null
+  }
+
+  function modelLabelOf(info) {
+    if (!info || info.selected === null || info.selected === undefined) return 'Auto'
+    var role = (info.roles || []).filter(function (r) {
+      return r.value === info.selected
+    })[0]
+    return role ? role.label : 'Personnalisé'
+  }
+
+  function renderModelChip(mode) {
+    var info = modelInfo[mode]
+    var think = thinkLabelOf(info)
+    $(mode + '-model').querySelector('.model-chip__label').textContent = modelLabelOf(info) + (think ? ' · ' + think : '')
+  }
+
+  function loadModel(mode) {
+    return api('GET', '/api/model?mode=' + mode)
+      .then(function (info) {
+        modelInfo[mode] = info
+        renderModelChip(mode)
+        if (sheetMode === mode) renderSheet()
+      })
+      .catch(function (err) {
+        if (sheetMode === mode) showSheetError(err.message)
+      })
+  }
+
+  function showSheetError(message) {
+    $('sheet-error').hidden = !message
+    $('sheet-error').textContent = message || ''
+  }
+
+  function openSheet(mode) {
+    sheetMode = mode
+    $('sheet-scope').textContent =
+      mode === 'chat' ? 'Pour le Chat : le même réglage que le Chat du PC.' : 'Pour le Vocal : le même réglage que l’Agent vocal du PC.'
+    showSheetError('')
+    $('sheet').hidden = false
+    renderSheet()
+    loadModel(mode)
+  }
+
+  function closeSheet() {
+    sheetMode = null
+    $('sheet').hidden = true
+  }
+
+  function sheetRow(label, hint, selected, disabled, onPick) {
+    var button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'sheet__row' + (selected ? ' sheet__row--active' : '')
+    button.setAttribute('role', 'radio')
+    button.setAttribute('aria-checked', selected ? 'true' : 'false')
+    button.disabled = disabled
+    var text = document.createElement('span')
+    text.className = 'sheet__row-text'
+    var name = document.createElement('span')
+    name.className = 'sheet__row-label'
+    name.textContent = label
+    var small = document.createElement('span')
+    small.className = 'sheet__row-hint'
+    small.textContent = hint
+    text.appendChild(name)
+    text.appendChild(small)
+    button.appendChild(text)
+    var check = document.createElement('span')
+    check.className = 'sheet__check'
+    check.setAttribute('aria-hidden', 'true')
+    button.appendChild(check)
+    button.addEventListener('click', onPick)
+    return button
+  }
+
+  function renderSheet() {
+    var mode = sheetMode
+    var info = modelInfo[mode]
+    var list = $('sheet-models')
+    list.textContent = ''
+    var thinks = $('sheet-thinks')
+    thinks.textContent = ''
+    var note = $('sheet-think-note')
+    if (!info) {
+      note.hidden = false
+      note.textContent = 'Chargement depuis ton PC…'
+      return
+    }
+    var offline = info.installed === null
+    list.appendChild(
+      sheetRow('Auto', 'Jaris choisit le modèle selon la question', info.selected === null, offline, function () {
+        choose('/api/model', { mode: mode, model: null })
+      })
+    )
+    ;(info.roles || []).forEach(function (role) {
+      list.appendChild(
+        sheetRow(role.label, role.model + (role.installed ? '' : ' — pas installé sur le PC'), info.selected === role.value, offline || !role.installed, function () {
+          choose('/api/model', { mode: mode, model: role.value })
+        })
+      )
+    })
+    var thinking = info.thinking
+    note.hidden = false
+    if (offline) note.textContent = 'Ollama ne répond pas sur le PC : impossible de changer de modèle pour l’instant.'
+    else if (!thinking) note.textContent = 'Choisis d’abord un modèle : en Auto, il change selon la question.'
+    else if (thinking.kind === 'none') note.textContent = 'Ce modèle ne réfléchit pas avant de répondre.'
+    else if (thinking.kind === 'unknown') note.textContent = 'Ollama ne dit pas si ce modèle sait réfléchir.'
+    else note.hidden = true
+    if (offline || !thinking || !thinking.options || !thinking.options.length) return
+    var values = [{ value: null, label: 'Auto' }].concat(thinking.options)
+    values.forEach(function (option) {
+      var button = document.createElement('button')
+      button.type = 'button'
+      var selected = option.value === null ? thinking.selected === null || thinking.selected === undefined : option.value === thinking.selected
+      button.className = 'chip' + (selected ? ' chip--active' : '')
+      button.setAttribute('role', 'radio')
+      button.setAttribute('aria-checked', selected ? 'true' : 'false')
+      button.textContent = option.label
+      button.addEventListener('click', function () {
+        choose('/api/think', { mode: mode, think: option.value })
+      })
+      thinks.appendChild(button)
+    })
+  }
+
+  function choose(path, body) {
+    showSheetError('')
+    api('POST', path, body)
+      .then(function (info) {
+        modelInfo[body.mode] = info
+        renderModelChip(body.mode)
+        if (sheetMode === body.mode) renderSheet()
+      })
+      .catch(function (err) {
+        showSheetError(err.message)
+      })
   }
 
   // --- Image et Vidéo --------------------------------------------------------------------------------
@@ -989,7 +1165,7 @@
   })
   $('voice-orb').addEventListener('click', onVoiceOrb)
   $('voice-cancel').addEventListener('click', function () {
-    stopListening(true)
+    finishListening(false)
   })
   $('voice-replay').addEventListener('click', playReply)
   $('voice-audio').addEventListener('ended', function () {
@@ -1008,8 +1184,19 @@
     })
   })
   $('viewer-close').addEventListener('click', closeViewer)
+  ;['chat', 'voice'].forEach(function (mode) {
+    $(mode + '-model').addEventListener('click', function () {
+      openSheet(mode)
+    })
+  })
+  $('sheet-close').addEventListener('click', closeSheet)
+  // Toucher le fond sombre ferme le panneau, comme sur une appli de téléphone.
+  $('sheet').addEventListener('click', function (e) {
+    if (e.target === $('sheet')) closeSheet()
+  })
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && !$('viewer').hidden) closeViewer()
+    if (e.key === 'Escape' && !$('sheet').hidden) closeSheet()
   })
 
   // Le code du QR voyage après « # » : jamais envoyé au serveur dans l'adresse, effacé dès qu'il est lu.

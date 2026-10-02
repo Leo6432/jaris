@@ -15,6 +15,49 @@ import { loadPhoneModules, makeWav } from './phone-test-loader.mjs'
 
 const PAGE_DIR = fileURLToPath(new URL('../phone/', import.meta.url))
 
+/** Faux sélecteur du PC : mêmes règles que main.ts (rôle installé obligatoire, réflexion selon le modèle). */
+function fakeModelChoices() {
+  const state = { chat: { model: null, think: null }, voice: { model: null, think: null } }
+  const calls = []
+  const roles = [
+    { value: 'role:flash', label: 'Faible', model: 'qwen3.5:4b', installed: true },
+    { value: 'role:medium', label: 'Moyen', model: 'qwen3.5:9b', installed: true },
+    { value: 'role:large', label: 'Élevé', model: 'qwen3.8:27b', installed: false }
+  ]
+  const info = (mode) => ({
+    selected: state[mode].model,
+    installed: ['qwen3.5:4b', 'qwen3.5:9b'],
+    autoModel: null,
+    roles,
+    thinking: state[mode].model
+      ? {
+          model: roles.find((r) => r.value === state[mode].model).model,
+          kind: 'levels',
+          options: [
+            { value: false, label: 'Aucune' },
+            { value: 'low', label: 'Faible' },
+            { value: 'high', label: 'Élevé' }
+          ],
+          selected: state[mode].think
+        }
+      : null
+  })
+  return {
+    calls,
+    getModelChoice: async (mode) => info(mode),
+    setModelChoice: async (mode, model) => {
+      calls.push(['model', mode, model])
+      if (model !== null && !roles.find((r) => r.value === model && r.installed)) throw new Error(`Le modèle du rôle ${model} n'est pas installé dans Ollama.`)
+      state[mode] = { model, think: null }
+    },
+    setThinkChoice: async (mode, think) => {
+      calls.push(['think', mode, think])
+      if (!state[mode].model) throw new Error("Choisis d'abord un modèle : en Auto, il change selon la question.")
+      state[mode].think = think
+    }
+  }
+}
+
 const PNG = Buffer.from('89504e470d0a1a0a', 'hex')
 const STUDIO_READY = {
   image: { ready: true, reason: null },
@@ -28,6 +71,7 @@ async function start({ sendMessage, transcribe, history, now, ...overrides } = {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-phone-'))
   const devicesFile = join(dir, 'phone-devices.json')
   const devices = new PhoneDeviceStore(devicesFile)
+  const models = fakeModelChoices()
   const calls = { messages: [], modes: [], transcribed: [], spoken: [], images: [], videos: [], read: [] }
   const server = new PhoneServer({
     devices,
@@ -79,6 +123,7 @@ async function start({ sendMessage, transcribe, history, now, ...overrides } = {
       if (!/^[\w-]+\.webm$/.test(fileName)) throw new Error('Vidéo inconnue.')
       return Buffer.from('1a45dfa3', 'hex')
     },
+    ...models,
     ...overrides
   })
   const port = await server.listen()
@@ -109,6 +154,7 @@ async function start({ sendMessage, transcribe, history, now, ...overrides } = {
     devices,
     devicesFile,
     calls,
+    models,
     request,
     pairWith,
     paired,
@@ -508,6 +554,39 @@ test('requêtes abusives : JSON illisible, texte vide ou géant', async () => {
     assert.equal((await t.request('/api/message', { method: 'POST', token, body: { text: '   ' } })).status, 400)
     assert.equal((await t.request('/api/message', { method: 'POST', token, body: { text: 'a'.repeat(5000) } })).status, 413)
     assert.equal((await t.request('/api/message', { method: 'POST', token, body: { text: 'a'.repeat(70_000) } })).status, 413)
+  } finally {
+    await t.close()
+  }
+})
+
+test('Modèle : le même sélecteur que le PC, pour le Chat et le Vocal seulement ; ses refus arrivent lisibles', async () => {
+  const t = await start()
+  try {
+    assert.equal((await t.request('/api/model?mode=chat')).status, 401)
+    assert.equal((await t.request('/api/model', { method: 'POST', body: { mode: 'chat', model: null } })).status, 401)
+    const token = await t.paired()
+    const info = await (await t.request('/api/model?mode=chat', { token })).json()
+    assert.equal(info.selected, null)
+    assert.deepEqual(info.roles.map((r) => r.label), ['Faible', 'Moyen', 'Élevé'])
+    for (const mode of ['code', '', 'chat2']) {
+      assert.equal((await t.request('/api/model?mode=' + mode, { token })).status, 400, mode)
+      assert.equal((await t.request('/api/model', { method: 'POST', token, body: { mode, model: null } })).status, 400, mode)
+    }
+    assert.equal((await t.request('/api/model', { method: 'POST', token, body: { mode: 'chat', model: 42 } })).status, 400)
+
+    const chosen = await t.request('/api/model', { method: 'POST', token, body: { mode: 'voice', model: 'role:medium' } })
+    assert.equal(chosen.status, 200)
+    assert.equal((await chosen.json()).selected, 'role:medium', 'renvoie l’état à jour')
+    const think = await t.request('/api/think', { method: 'POST', token, body: { mode: 'voice', think: 'high' } })
+    assert.equal((await think.json()).thinking.selected, 'high')
+    const refused = await t.request('/api/model', { method: 'POST', token, body: { mode: 'chat', model: 'role:large' } })
+    assert.equal(refused.status, 400)
+    assert.match((await refused.json()).error, /pas installé dans Ollama/)
+    assert.deepEqual(t.models.calls, [
+      ['model', 'voice', 'role:medium'],
+      ['think', 'voice', 'high'],
+      ['model', 'chat', 'role:large']
+    ])
   } finally {
     await t.close()
   }

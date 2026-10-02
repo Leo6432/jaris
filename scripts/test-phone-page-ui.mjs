@@ -24,6 +24,49 @@ const PAGE_DIR = fileURLToPath(new URL('../phone/', import.meta.url))
 const SHOTS = process.env.PHONE_SHOTS || null
 /** Une vraie petite image (1x1) : la galerie doit vraiment l'afficher, pas seulement créer la balise. */
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkqPn/HwAFAAJ/wlZ9CwAAAABJRU5ErkJggg==', 'base64')
+/** Faux sélecteur du PC : mêmes règles que main.ts (rôle installé obligatoire, réflexion selon le modèle). */
+function fakeModelChoices() {
+  const state = { chat: { model: null, think: null }, voice: { model: null, think: null } }
+  const calls = []
+  const roles = [
+    { value: 'role:flash', label: 'Faible', model: 'qwen3.5:4b', installed: true },
+    { value: 'role:medium', label: 'Moyen', model: 'qwen3.5:9b', installed: true },
+    { value: 'role:large', label: 'Élevé', model: 'qwen3.8:27b', installed: false }
+  ]
+  const info = (mode) => ({
+    selected: state[mode].model,
+    installed: ['qwen3.5:4b', 'qwen3.5:9b'],
+    autoModel: null,
+    roles,
+    thinking: state[mode].model
+      ? {
+          model: roles.find((r) => r.value === state[mode].model).model,
+          kind: 'levels',
+          options: [
+            { value: false, label: 'Aucune' },
+            { value: 'low', label: 'Faible' },
+            { value: 'high', label: 'Élevé' }
+          ],
+          selected: state[mode].think
+        }
+      : null
+  })
+  return {
+    calls,
+    getModelChoice: async (mode) => info(mode),
+    setModelChoice: async (mode, model) => {
+      calls.push(['model', mode, model])
+      if (model !== null && !roles.find((r) => r.value === model && r.installed)) throw new Error(`Le modèle du rôle ${model} n'est pas installé dans Ollama.`)
+      state[mode] = { model, think: null }
+    },
+    setThinkChoice: async (mode, think) => {
+      calls.push(['think', mode, think])
+      if (!state[mode].model) throw new Error("Choisis d'abord un modèle : en Auto, il change selon la question.")
+      state[mode].think = think
+    }
+  }
+}
+
 const READY = {
   image: { ready: true, reason: null },
   video: { ready: true, reason: null, qualities: [{ id: 'q6', label: 'Équilibrée' }, { id: 'q8', label: 'Fidèle' }], durations: [1, 2, 3, 4, 5] }
@@ -35,6 +78,7 @@ async function withPhone(run, overrides = {}) {
   const { PhoneDeviceStore } = load('phoneDevices')
   const dir = mkdtempSync(join(tmpdir(), 'jaris-phone-ui-'))
   const devices = new PhoneDeviceStore(join(dir, 'devices.json'))
+  const models = fakeModelChoices()
   const received = { messages: [], modes: [], wavBytes: [], spoken: [], images: [], videos: [] }
   const exchanges = []
   const images = [
@@ -85,6 +129,7 @@ async function withPhone(run, overrides = {}) {
     readImage: async () => PNG,
     readImageThumbnail: async () => PNG,
     readVideo: async () => Buffer.from('1a45dfa3', 'hex'),
+    ...models,
     ...overrides
   })
   const port = await server.listen()
@@ -98,7 +143,7 @@ async function withPhone(run, overrides = {}) {
     const page = await context.newPage()
     const errors = []
     page.on('pageerror', (err) => errors.push(err.message))
-    await run({ page, server, devices, received, base: `http://127.0.0.1:${port}` })
+    await run({ page, server, devices, received, models, base: `http://127.0.0.1:${port}` })
     assert.deepEqual(errors, [], 'aucune erreur JavaScript dans la page')
   } finally {
     await browser.close()
@@ -361,5 +406,67 @@ test('mise en page téléphone : barre d’onglets en bas, rien ne déborde, cib
     // L'onglet choisi est retrouvé à la réouverture.
     await page.reload()
     await page.waitForSelector('#tab-video:not([hidden])')
+  })
+})
+
+test('Modèle : choisir le modèle puis la réflexion depuis le téléphone, comme sur le PC', options, async () => {
+  await withPhone(async ({ page, server, base, models }) => {
+    await open(page, server, base)
+    await page.waitForFunction(() => document.querySelector('#chat-model .model-chip__label').textContent === 'Auto')
+    await page.click('#chat-model')
+    await page.waitForSelector('#sheet:not([hidden]) .sheet__row')
+    assert.match(await page.textContent('#sheet-scope'), /Chat du PC/)
+    assert.deepEqual(await page.locator('.sheet__row-label').allTextContents(), ['Auto', 'Faible', 'Moyen', 'Élevé'])
+    assert.equal(await page.isDisabled('.sheet__row:has-text("Élevé")'), true, 'un modèle pas installé ne se choisit pas')
+    assert.match(await page.textContent('#sheet-think-note'), /Choisis d’abord un modèle/)
+    await shot(page, 'phone-model-auto')
+
+    await page.click('.sheet__row:has-text("Moyen")')
+    await page.waitForSelector('#sheet-thinks .chip')
+    assert.deepEqual(await page.locator('#sheet-thinks .chip').allTextContents(), ['Auto', 'Aucune', 'Faible', 'Élevé'])
+    await page.click('#sheet-thinks .chip:has-text("Élevé")')
+    await page.waitForFunction(() => document.querySelector('#chat-model .model-chip__label').textContent === 'Moyen · Élevé')
+    await shot(page, 'phone-model-chosen')
+    assert.deepEqual(models.calls, [
+      ['model', 'chat', 'role:medium'],
+      ['think', 'chat', 'high']
+    ])
+    await page.click('#sheet-close')
+    assert.equal(await page.isVisible('#sheet'), false)
+
+    // Le Vocal a son propre réglage, comme l'Agent vocal du PC.
+    await page.click('.tabbar__item[data-target="voice"]')
+    assert.equal(await page.textContent('#voice-model .model-chip__label'), 'Auto')
+    await page.click('#voice-model')
+    await page.waitForSelector('#sheet:not([hidden]) .sheet__row')
+    assert.match(await page.textContent('#sheet-scope'), /Agent vocal du PC/)
+    await page.click('.sheet__row:has-text("Faible")')
+    await page.waitForFunction(() => document.querySelector('#voice-model .model-chip__label').textContent === 'Faible')
+    assert.deepEqual(models.calls.at(-1), ['model', 'voice', 'role:flash'])
+  })
+})
+
+test('l’icône Chat est un tracé complet, pas une bulle coupée', options, async () => {
+  await withPhone(async ({ page, server, base }) => {
+    await open(page, server, base)
+    // Rendue en grand puis lue pixel par pixel : les quatre bords de la bulle doivent être dessinés.
+    const edges = await page.evaluate(async () => {
+      const svg = document.querySelector('.tabbar__item[data-target="chat"] svg').cloneNode(true)
+      svg.setAttribute('width', '240')
+      svg.setAttribute('height', '240')
+      svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+      svg.querySelector('path').setAttribute('fill', '#000')
+      const img = new Image()
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.outerHTML)
+      await img.decode()
+      const canvas = document.createElement('canvas')
+      canvas.width = canvas.height = 240
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0)
+      const ink = (x, y) => ctx.getImageData(x, y, 1, 1).data[3] > 128
+      // Milieu de chaque bord de la bulle (bulle de 2 à 22 sur 2 à 18 dans la grille 24, épaisseur 2).
+      return { left: ink(30, 90), right: ink(210, 90), top: ink(120, 30), bottom: ink(120, 170) }
+    })
+    assert.deepEqual(edges, { left: true, right: true, top: true, bottom: true })
   })
 })

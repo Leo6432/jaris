@@ -82,6 +82,8 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
   useEffect(() => {
     void load()
   }, [load])
+  // Étape 216 : choisi depuis le téléphone, le même réglage s'affiche ici sans rouvrir le mode.
+  useEffect(() => window.jaris.onModelChoiceChanged?.(() => void load()), [load])
 
   // Étape 202 (Léo : « quand on ouvre Jaris on ne peut pas changer de modèle, c'est grisé, je dois aller sur
   // Chat et revenir ») : au lancement, Ollama ne répond pas encore quand ce bouton demande la liste des modèles.

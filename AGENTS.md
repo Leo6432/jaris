@@ -5886,3 +5886,33 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `node --test scripts/test-phone-server.mjs scripts/test-phone-page-ui.mjs` (vrai serveur, vrai
   navigateur au format téléphone, faux micro de Chromium). Vérifiés en réintroduisant le défaut : garde des
   noms de fichiers, éviction des travaux en cours, lecture de la voix.
+
+- **Premier essai réel sur iPhone de l'onglet Vocal (étape 216, Léo, capture à l'appui) : « ça bloque sur
+  Envoi à ton PC », plus « on peut pas choisir les modèles, pas comme le PC » et « l'icône Chat est coupée ».**
+  - **Bloqué sur « Envoi à ton PC… » : cause exacte NON confirmée** (pas d'iPhone ici). Ce qui est sûr en
+    relisant le code : après l'arrêt de l'enregistrement, trois étapes pouvaient ne jamais finir sans rien
+    afficher. `MediaRecorder.onstop` qui ne vient pas, des morceaux vides ignorés par un simple `return`, et
+    une conversion `decodeAudioData`/`OfflineAudioContext` qui ne répond jamais. Dans les trois cas, l'écran
+    restait figé. Le son du micro est maintenant lu directement (`ScriptProcessor` sur l'`AudioContext` créé
+    pendant le toucher), ramené à 16 kHz et mis en WAV dans la page : plus de MediaRecorder ni de décodage.
+    Chaque étape a désormais une fin visible :
+    - micro muet après 3 s → message ;
+    - enregistrement trop court → message ;
+    - envoi sans réponse en 60 s → message ;
+    - puis les étapes du PC.
+    Si ça bloque encore, le message affiché dira OÙ. **Leçon générale : une étape asynchrone qui peut ne
+    jamais répondre doit avoir une issue visible (délai, message), sinon un bug d'un navigateur précis se lit
+    comme « ça ne fait rien ».** Chromium (tests) ne reproduit pas le blocage de l'iPhone : seul l'essai de
+    Léo tranche.
+  - **Modèle et réflexion sur le téléphone** : le même sélecteur que le PC, et le même réglage (Chat et Vocal
+    séparés, comme sur le PC). Les trois handlers IPC du PC sont devenus `readModelChoice`,
+    `saveModelChoice` et `saveThinkChoice` (main.ts), partagés par l'IPC et le téléphone : deux copies de
+    cette logique auraient divergé. Le mode Code est refusé côté téléphone. Les refus du PC (modèle pas
+    installé…) arrivent tels quels. Le sélecteur du PC se recharge quand le téléphone change le réglage
+    (`modelChoiceChanged`).
+  - **Icône Chat coupée** : le tracé SVG commençait en (4,4) mais son dernier arc finissait en (6,4), et le
+    contour intérieur coupait le bord gauche : la bulle n'avait plus de côté gauche. Remplacée par un tracé
+    complet. Le test rend l'icône en grand et vérifie les quatre bords pixel par pixel ; avec l'ancien tracé,
+    il échoue (gauche et haut manquants). Un défaut de tracé à 24 px ne se voit pas dans le code, seulement
+    une fois rendu.
+  Régression : `node --test scripts/test-phone-server.mjs scripts/test-phone-page-ui.mjs`.

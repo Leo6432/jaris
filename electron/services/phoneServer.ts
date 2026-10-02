@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 import type { AddressInfo } from 'net'
-import type { ChatMessage, PhoneDevice } from '../../shared/ipc'
+import type { ChatMessage, ModelChoiceInfo, PhoneDevice } from '../../shared/ipc'
 import type { PhoneDeviceStore } from './phoneDevices'
 
 /**
@@ -22,6 +22,14 @@ export interface PhoneReply {
 export interface PhoneStudio {
   image: { ready: boolean; reason: string | null }
   video: { ready: boolean; reason: string | null; qualities: { id: string; label: string }[]; durations: number[] }
+}
+
+/** Le téléphone ne règle que les modes qu'il utilise : Chat et Vocal (le mode Code n'existe pas sur le téléphone). */
+export type PhoneModelMode = 'chat' | 'voice'
+
+function phoneModelMode(value: unknown): PhoneModelMode {
+  if (value === 'chat' || value === 'voice') return value
+  throw new HttpError(400, 'Mode inconnu.')
 }
 
 export interface PhoneMedia {
@@ -57,6 +65,10 @@ export interface PhoneServerDeps {
   /** Vignette JPEG réduite pour la galerie : quelques dizaines de Ko au lieu d'un PNG de plus d'1 Mo en 4G. */
   readImageThumbnail(fileName: string): Promise<Buffer>
   readVideo(fileName: string): Promise<Buffer>
+  /** Sélecteur de modèle et de réflexion, le même que sur le PC (Chat et Vocal seulement). */
+  getModelChoice(mode: PhoneModelMode): Promise<ModelChoiceInfo>
+  setModelChoice(mode: PhoneModelMode, model: string | null): Promise<void>
+  setThinkChoice(mode: PhoneModelMode, think: unknown): Promise<void>
   /** Derniers messages de la conversation active, pour que le téléphone reprenne là où on en est. */
   history(): Promise<ChatMessage[]>
   devices: PhoneDeviceStore
@@ -448,6 +460,28 @@ export class PhoneServer {
         if (!isExpectedWav(wav)) throw new HttpError(400, 'Enregistrement illisible.')
         const job = this.startJob('conversation', (j) => this.talk(j, wav))
         send(res, 202, { jobId: job.id })
+        return
+      }
+      if (req.method === 'GET' && path === '/api/model') {
+        send(res, 200, await this.deps.getModelChoice(phoneModelMode(url.searchParams.get('mode'))))
+        return
+      }
+      if (req.method === 'POST' && (path === '/api/model' || path === '/api/think')) {
+        const body = await readJson(req)
+        const mode = phoneModelMode(body.mode)
+        try {
+          if (path === '/api/model') {
+            if (body.model !== null && typeof body.model !== 'string') throw new HttpError(400, 'Modèle inconnu.')
+            await this.deps.setModelChoice(mode, body.model as string | null)
+          } else {
+            await this.deps.setThinkChoice(mode, body.think ?? null)
+          }
+        } catch (err) {
+          // Refus du PC (modèle pas installé, réflexion non acceptée) : son message tel quel, lisible.
+          if (err instanceof HttpError) throw err
+          throw new HttpError(400, err instanceof Error ? err.message : String(err))
+        }
+        send(res, 200, await this.deps.getModelChoice(mode))
         return
       }
       if (req.method === 'GET' && path === '/api/studio') {

@@ -884,7 +884,9 @@ export const IPC_CHANNELS = {
   /** main -> renderer : un message envoyé depuis le téléphone a rejoint la conversation active. */
   chatHistoryChanged: 'jaris:chat-history-changed',
   /** Une image ou une vidéo a été créée depuis le téléphone : les galeries du PC se rechargent. */
-  studioGalleryChanged: 'jaris:studio-gallery-changed'
+  studioGalleryChanged: 'jaris:studio-gallery-changed',
+  /** Modèle ou réflexion changé depuis le téléphone : le sélecteur du PC se remet à jour. */
+  modelChoiceChanged: 'jaris:model-choice-changed'
 } as const
 
 /** Un téléphone appairé (étape 214) — le jeton n'en fait jamais partie, il ne quitte pas le téléphone. */

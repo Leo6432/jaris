@@ -41,6 +41,13 @@
       <!-- Chat : la même conversation que le Chat de Jaris sur le PC. -->
       <section id="tab-chat" class="tab chat" data-tab="chat">
         <ol id="messages" class="messages" aria-live="polite"></ol>
+        <div class="chat__tools">
+          <button id="chat-model" class="model-chip" type="button" data-mode="chat" aria-haspopup="dialog">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M12 5a3 3 0 1 0-6 .1 4 4 0 0 0-2.5 5.8 4 4 0 0 0 .6 6.6A4 4 0 1 0 12 18Zm0 0a3 3 0 1 1 6 .1 4 4 0 0 1 2.5 5.8 4 4 0 0 1-.6 6.6A4 4 0 1 1 12 18Zm0 0v13"/></svg>
+          <span class="model-chip__label">Auto</span>
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg>
+        </button>
+        </div>
         <form id="composer" class="composer" autocomplete="off">
           <textarea id="input" class="composer__input" rows="1" placeholder="Écris à Jaris…" aria-label="Message"></textarea>
           <button id="send" class="composer__send" type="submit" aria-label="Envoyer" title="Envoyer">
@@ -57,6 +64,11 @@
         <p id="voice-state" class="voice__state" aria-live="polite">Touche Jaris pour parler</p>
         <p id="voice-help" class="voice__help">Parle, puis fais une pause ou touche encore Jaris : il te répond à voix haute.</p>
         <button id="voice-cancel" class="link" type="button" hidden>Annuler</button>
+        <button id="voice-model" class="model-chip" type="button" data-mode="voice" aria-haspopup="dialog">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M12 5a3 3 0 1 0-6 .1 4 4 0 0 0-2.5 5.8 4 4 0 0 0 .6 6.6A4 4 0 1 0 12 18Zm0 0a3 3 0 1 1 6 .1 4 4 0 0 1 2.5 5.8 4 4 0 0 1-.6 6.6A4 4 0 1 1 12 18Zm0 0v13"/></svg>
+          <span class="model-chip__label">Auto</span>
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg>
+        </button>
         <div id="voice-last" class="voice__last" hidden>
           <p class="voice__line"><span class="voice__who">Toi</span><span id="voice-transcript"></span></p>
           <p class="voice__line"><span class="voice__who">Jaris</span><span id="voice-reply"></span></p>
@@ -111,7 +123,7 @@
 
       <nav class="tabbar" aria-label="Sections">
         <button class="tabbar__item" type="button" data-target="chat">
-          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Zm0 2v11.2L7.2 16H20V6H4Z"/></svg>
+          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2Zm0 14H5.17L4 17.17V4h16v12Z"/></svg>
           <span>Chat</span>
         </button>
         <button class="tabbar__item" type="button" data-target="voice">
@@ -127,6 +139,25 @@
           <span>Vidéo</span>
         </button>
       </nav>
+    </div>
+
+    <!-- Modèle et réflexion : le même réglage que le sélecteur du PC, pour le Chat ou le Vocal. -->
+    <div id="sheet" class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>
+      <div class="sheet__panel">
+        <div class="sheet__head">
+          <h2 id="sheet-title" class="sheet__title">Modèle et réflexion</h2>
+          <button id="sheet-close" class="viewer__close" type="button" aria-label="Fermer">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></svg>
+          </button>
+        </div>
+        <p id="sheet-scope" class="sheet__scope"></p>
+        <h3 class="sheet__label">Modèle</h3>
+        <div id="sheet-models" class="sheet__list" role="radiogroup" aria-label="Modèle"></div>
+        <h3 class="sheet__label">Réflexion</h3>
+        <p id="sheet-think-note" class="sheet__note" hidden></p>
+        <div id="sheet-thinks" class="chips" role="radiogroup" aria-label="Réflexion"></div>
+        <p id="sheet-error" class="error" role="alert" hidden></p>
+      </div>
     </div>
 
     <!-- Visionneuse plein écran d'une image ou d'une vidéo, avec « Enregistrer » sur le téléphone. -->
