@@ -5995,3 +5995,24 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   - `sw.js` est ajouté à la vérification d'empaquetage de la CI : un fichier manquant dans `extraResources` ne
     fait pas échouer electron-builder.
   Régression : `node --test scripts/test-phone-server.mjs scripts/test-phone-page-ui.mjs`.
+
+- **Ling 3.0 Tiny ajouté (étape 219, Léo : « ajoute Ling 3.0 Tiny et Gemma 4 12B »).** Gemma 4 12B était DÉJÀ
+  là (Médium, Vision, 17/17), et il n'y avait rien à refaire. Ling 3.0 Tiny n'est pas dans la bibliothèque
+  officielle d'Ollama, donc import `hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M` (GGUF OFFICIEL du créateur,
+  4,82 Go), jamais le réupload communautaire `maternion/`. Son architecture est NOUVELLE (`bailingmoe3`),
+  comme K2 Horizon, qui avait été refusé faute de prise en charge. Ici, elle est vérifiée par trois FAITS :
+  - la PR llama.cpp #26608 a été fusionnée le 17/08/2026 ;
+  - un signalement Ollama montre le modèle tournant sous 0.33.3 ;
+  - je l'ai téléchargé et chargé moi-même avec Ollama 0.35.0, et `/api/show` annonce `tools` et `thinking`.
+  Score Artificial Analysis 11 et 58 tokens/s : seule la variante Reasoning a une fiche. **Règle confirmée
+  par Léo : quand un modèle a un mode raisonnement et un mode sans, on prend le score Reasoning** (déjà la
+  règle écrite au-dessus de ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX). **Le test d'appel d'outils, c'est Léo
+  qui le fait, comme pour tous les modèles** (il l'a redit quand j'ai commencé à le lancer ici). Ne pas
+  remplir verified-tool-scores.md à sa place : sans score, le modèle est candidat mais jamais choisi.
+- **« Valable encore 11 min » au lieu de 10** (Options → Téléphone) : l'heure de référence était prise AVANT
+  la création du code, et le moindre délai de l'aller-retour faisait arrondir à 11. Le test passait seulement
+  quand le faux pont répondait dans la même milliseconde : un test « instable » de temps en temps cachait un
+  vrai bug. Le faux pont attend maintenant 30 ms, comme le vrai aller-retour. **Leçon générale : un test qui
+  échoue une fois sur trois mérite d'être lu avant d'être relancé ; ici, c'est l'écran qui mentait.**
+- Piège d'environnement : un vrai Ollama lancé sur 127.0.0.1:11434 pendant `npm test` fait échouer
+  `test-benchmark-cases.mjs`. Ne jamais garder un Ollama de mesure ouvert pendant la suite de tests.

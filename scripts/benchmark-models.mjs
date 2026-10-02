@@ -238,6 +238,10 @@ const MODELS = [
   // ci-dessus n'avait jamais été suivi de sa promotion — reste dans cette liste comme tout autre candidat
   // déjà vérifié, sauté au prochain run (voir VERIFIED_MODELS plus bas).
   'hf.co/bartowski/ai9stars_G9v3-3B-GGUF',
+  // Étape 219 (Léo) : Ling 3.0 Tiny, GGUF OFFICIEL d'inclusionAI (créateur du modèle). Architecture
+  // bailingmoe3, chargée par Ollama depuis la 0.33.3 (llama.cpp #26608, fusionnée le 17/08/2026). Voir
+  // MEDIUM_CANDIDATES dans hardwareScan.ts.
+  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M',
   // Ignorés jusqu'ici car trop gros pour la machine de dev (RTX 3070, 8 Go) : maintenant que le script
   // détecte la VRAM disponible et saute automatiquement ce qui ne rentre pas (voir detectVramGb ci-dessous),
   // les garder dans la liste permet aux utilisateurs avec plus de VRAM de vraiment les tester chez eux —
@@ -360,6 +364,7 @@ const MODEL_SIZE_HINTS = {
   'functiongemma:270m': 0.3,
   'hf.co/openbmb/MiniCPM5-1B-GGUF': 0.69,
   'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 1.9,
+  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 4.8,
   'qwen3.5:35b': 24,
   'qwen3.6:35b': 24,
   'qwen3.5:27b': 17,
@@ -403,6 +408,7 @@ const MEDIUM_TIER_MODELS = new Set([
   'qwen3.5:9b',
   'granite4.2:8b',
   'granite4.1:8b',
+  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M',
   'qwen3.5:4b',
   'qwen3.5:2b',
   'granite4.2:3b',

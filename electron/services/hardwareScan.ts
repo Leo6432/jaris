@@ -140,6 +140,19 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
   { model: 'ministral-3:8b', vramGb: 6.0 },
   { model: 'granite4.2:8b', vramGb: 5.3 },
   { model: 'granite4.1:8b', vramGb: 5.3 },
+  // Étape 219, Léo : « tu peux ajouter Ling 3.0 Tiny ». inclusionAI (Ant Group), sorti le 06/08/2026 :
+  // MoE de 7,9 milliards de paramètres dont 1,3 actifs par mot (donc rapide pour sa taille), 256K de contexte,
+  // appel d'outils natif, réflexion activable. Vérifié avant de l'ajouter, pas pris sur parole :
+  // - pas de tag dans la bibliothèque officielle d'Ollama : import `hf.co/` du GGUF OFFICIEL d'inclusionAI
+  //   (créateur du modèle), même mécanisme que G9v3 plus haut — jamais le réupload communautaire
+  //   `maternion/ling-3.0-tiny` ;
+  // - architecture NOUVELLE `bailingmoe3` (attention KDA + MLA) : contrairement à K2 Horizon (FLASH_CANDIDATES),
+  //   llama.cpp la charge depuis github.com/ggml-org/llama.cpp/pull/26608 (fusionnée le 17/08/2026), et
+  //   Ollama aussi (signalement github.com/ollama/ollama/issues/18221 sous 0.33.3). Revérifié pour de vrai :
+  //   téléchargé et chargé par Ollama 0.35.0, qui annonce `tools` et `thinking` (`/api/show`), 4,82 Go ;
+  // - Intelligence Index Artificial Analysis 11 (variante Reasoning, la seule publiée), 58 tokens/s.
+  // Ne gagne pas tout seul : choisi seulement d'après son score d'appel d'outils (verified-tool-scores.md).
+  { model: 'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M', vramGb: 4.8 },
   { model: 'qwen3.5:4b', vramGb: 3.4 },
   { model: 'qwen3.5:2b', vramGb: 2.7 },
   { model: 'granite4.2:3b', vramGb: 2.2 },
@@ -870,7 +883,10 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   // Artificial Analysis Intelligence Index, placing it well above average among comparable models
   // (median: 6)") — pas un résumé de recherche : un premier résumé automatique avait annoncé 16.1, faux,
   // écarté avant d'entrer ici. Voir FLASH_CANDIDATES pour le contexte complet de cet ajout.
-  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 11
+  'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 11,
+  // Vérifié sur artificialanalysis.ai/models/ling-3-0-tiny (v4.3.2) le 02/10/2026 : seule la variante
+  // Reasoning a une fiche (« This page shows the reasoning version of this model »).
+  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 11
 }
 
 /**
@@ -910,7 +926,9 @@ const ARTIFICIAL_ANALYSIS_SPEED: Record<string, number> = {
   'qwen3-coder-next': 111,
   'qwen3-coder:30b': 87,
   'north-mini-code-1.0': 100,
-  'devstral-small-2:24b': 131
+  'devstral-small-2:24b': 131,
+  // Même fiche que son Intelligence Index ci-dessus (58,2 tokens/s), le 02/10/2026.
+  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 58
 }
 
 /**

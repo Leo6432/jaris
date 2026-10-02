@@ -74,8 +74,10 @@ export default function PhoneAccessSettings(): JSX.Element {
   const showPairing = (): void =>
     void run(async () => {
       setDevicesAtPairing(deviceCount)
+      const pairing = await window.jaris.createPhonePairing()
+      // APRÈS la création du code : pris avant, le moindre délai faisait afficher « 11 min » au lieu de 10.
       setNow(Date.now())
-      setPairing(await window.jaris.createPhonePairing())
+      setPairing(pairing)
     })
 
   if (!status) return <div className="options-menu__section" />

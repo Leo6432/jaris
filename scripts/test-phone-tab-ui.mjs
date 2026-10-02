@@ -44,6 +44,8 @@ const overrides = {
   openPhoneAccessLink: async () => { window.__calls.push(['open']) },
   createPhonePairing: async () => {
     window.__calls.push(['pair'])
+    // Comme le vrai aller-retour vers le PC : le code naît un peu APRÈS le clic.
+    await new Promise((r) => setTimeout(r, 30))
     return { code: '12345678', link: 'https://jaris.tail1234.ts.net/#code=12345678', expiresAt: Date.now() + 600000 }
   },
   removePhoneDevice: async (id) => {
