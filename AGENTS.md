@@ -6080,3 +6080,17 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   ses 4 réponses sans outil (« 11:31 du soir » à 11:31 du matin, prétend pouvoir « allumer » la machine). Son
   intelligence 12,5 ne compense pas : l'appel d'outils passe avant, granite4.2:3b (16/17) et ministral-3:3b
   (17/17) restent devant. Plus aucun modèle sans score.
+
+- **Nanbeige4.1-3B et LFM2.5-2.6B ajoutés, et le test d'outils n'est pas stable d'un passage à l'autre (Léo,
+  étape 229).** Les deux vérifiés avant l'ajout : téléchargés et chargés ici par Ollama 0.35.1 (outils +
+  réflexion annoncés), chacun a appelé `set_reminder` correctement. LFM2.5-2.6B : GGUF officiel de Liquid AI.
+  Nanbeige4.1-3B : pas de GGUF du créateur, requantification mradermacher. 8,4 chez Artificial Analysis pour
+  les deux (variante Reasoning). Rangés par VRAM décroissante dans les listes (Nanbeige 2,4 Go avant
+  granite4.2:3b), ordre dont dépend le choix.
+  **Mesure qui compte pour tous les scores du fichier** : granite4.2:3b relancé ici deux fois de suite, mêmes
+  17 questions, même machine : 17/17 puis 15/17 (« Monte le son » → play_pause, « Appuie sur Entrée » → aucun
+  outil) ; Léo avait mesuré 16/17. Chaque question n'est posée qu'une fois, sans température fixée : un écart
+  d'un ou deux points entre deux modèles n'est donc pas significatif. 5 des 15 outils ne sont jamais testés
+  (read_web_page, recall_memory, click_mouse, generate_image, shutdown_pc). Pour relancer un modèle déjà noté :
+  `JARIS_RETEST_ALL=1 JARIS_ONLY_MODELS=<modèle>` ; `OLLAMA_HOST` doit contenir `http://`, et sans carte
+  graphique ici, `JARIS_RAM_SAFETY_MARGIN_GB=2` (sinon budget 0 Go, modèle sauté) — ~1 min 45 par question.

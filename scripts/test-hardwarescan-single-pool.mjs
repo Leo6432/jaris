@@ -147,6 +147,7 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 test('modèles sans aucun score : ceux que le bouton de test mesurera, du plus léger au plus lourd', () => {
   const unscored = [...setup({ vramMib: 8 * 1024 }).getUnscoredModels()]
   // Étape 171 : G9v3-3B, qwen2.5-coder:14b et Lightning mesurés le 26/09/2026. Étape 222 : Ling 3.0 Tiny mesuré
-  // par Léo (16/17). Étape 225 : devstral-2:123b retiré. Étape 228 : MiniCPM5-2B mesuré par Léo (15/17) ; plus aucun.
-  assert.deepEqual(unscored, [])
+  // par Léo (16/17). Étape 225 : devstral-2:123b retiré. Étape 228 : MiniCPM5-2B mesuré par Léo (15/17).
+  // Étape 229 : LFM2.5-2.6B (1,7 Go) et Nanbeige4.1-3B (2,4 Go) ajoutés, du plus léger au plus lourd.
+  assert.deepEqual(unscored, ['hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M', 'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M'])
 })

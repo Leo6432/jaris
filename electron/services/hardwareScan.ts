@@ -68,6 +68,8 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   // (2,2 Go) entre eux — comme granite4.1:3b/4.2:3b en Médium, rejette `think` (voir le filet "sans think"
   // dans chatWithOllama, ollama.ts). Sa fiabilité d'appel d'outils reste à mesurer localement
   // (`npm run benchmark:models`) : ce score externe ne le fait pas gagner tout seul, seulement candidat.
+  // Nanbeige4.1-3B : voir le commentaire de l'étape 229 dans FLASH_CANDIDATES.
+  { model: 'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M', vramGb: 2.4 },
   { model: 'granite4.2:3b', vramGb: 2.2 },
   { model: 'qwen3:1.7b', vramGb: 2 },
   // Étape 132, Léo : "on a bien les meilleur model... regarde bien". Déjà présent dans
@@ -93,6 +95,15 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   // annonce `tools` et `thinking` (`/api/show`, 1,56 Go) et a bien appelé un outil sur un essai. Intelligence
   // Index Artificial Analysis 12,5 (variante Reasoning). Ne gagne pas tout seul : choisi seulement d'après son
   // score d'appel d'outils (verified-tool-scores.md), que Léo mesure lui-même.
+  // Étape 229, Léo : « ajoute Nanbeige4.1-3B et LFM2.5-2.6B ». Vérifiés avant de les ajouter :
+  // - LFM2.5-2.6B (Liquid AI) : GGUF OFFICIEL du créateur, architecture `lfm2` (déjà chargée par Ollama pour
+  //   l'ancien LFM2.5-1.2B), 1,67 Go en Q4_K_M ; 8,4 chez Artificial Analysis (variante Reasoning).
+  // - Nanbeige4.1-3B (Nanbeige) : AUCUN GGUF publié par le créateur — requantification de mradermacher,
+  //   quantifieur reconnu de la communauté llama.cpp (même règle que bartowski pour G9v3) ; architecture
+  //   `llama`, 2,44 Go en Q4_K_M ; 8,4 chez Artificial Analysis (variante Reasoning).
+  // Tous deux sous MiniCPM5-2B (12,5) et granite4.2:3b (9,1) en intelligence ; choisis seulement d'après leur
+  // score d'appel d'outils (verified-tool-scores.md), que Léo mesure lui-même.
+  { model: 'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M', vramGb: 1.7 },
   { model: 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M', vramGb: 1.6 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
   // Étape 196, Léo : « on peut ajouter K2 Horizon 3.7B ? il est le meilleur sur les benchmarks ». Vérifié le
@@ -162,12 +173,15 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
   { model: 'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M', vramGb: 4.8 },
   { model: 'qwen3.5:4b', vramGb: 3.4 },
   { model: 'qwen3.5:2b', vramGb: 2.7 },
+  // Nanbeige4.1-3B : voir le commentaire de l'étape 229 dans FLASH_CANDIDATES.
+  { model: 'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M', vramGb: 2.4 },
   { model: 'granite4.2:3b', vramGb: 2.2 },
   { model: 'granite4.1:3b', vramGb: 2.1 },
   // Candidat "réutilisation" : hf.co/bartowski/ai9stars_G9v3-3B-GGUF (voir FLASH_CANDIDATES pour le détail
   // complet de la vérification) — même raisonnement que granite4.2:3b, déjà candidat dans les deux paliers.
   { model: 'hf.co/bartowski/ai9stars_G9v3-3B-GGUF', vramGb: 1.9 },
-  // MiniCPM5-2B : voir FLASH_CANDIDATES, même raisonnement que G9v3.
+  // LFM2.5-2.6B et MiniCPM5-2B : voir FLASH_CANDIDATES, même raisonnement que G9v3.
+  { model: 'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M', vramGb: 1.7 },
   { model: 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M', vramGb: 1.6 },
   { model: 'qwen3.5:0.8b', vramGb: 1.0 }
 ]
@@ -886,7 +900,9 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   'qwen2.5-coder:7b': 5.8, // Qwen2.5 Coder Instruct 7B
   'hf.co/bartowski/ai9stars_G9v3-3B-GGUF': 10.8, // G9v3-3B
   'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 11.1, // Ling 3.0 Tiny
-  'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 12.5 // MiniCPM5-2B (Reasoning) — 12,46 relevé le 02/10/2026, aucune vitesse publiée
+  'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 12.5, // MiniCPM5-2B (Reasoning) — 12,46 relevé le 02/10/2026, aucune vitesse publiée
+  'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M': 8.4, // Nanbeige4.1-3B (Reasoning) — 8,40 relevé le 03/10/2026
+  'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 8.4 // LFM2.5-2.6B (Reasoning) — 8,39 relevé le 03/10/2026
 }
 
 /**
