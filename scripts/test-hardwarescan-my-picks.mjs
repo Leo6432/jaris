@@ -140,6 +140,15 @@ test('la carte montre le modèle RÉELLEMENT utilisé (profil), et le meilleur �
   assert.equal(picks.upgrades.medium?.blockedReason, null, 'pas bloqué : il suffit de retester')
 })
 
+// 03/10/2026, Léo : « qwen3.8:27b 46 tok/s Intelligence 33,7 — » sur la ligne Code. Un modèle de conversation
+// choisi pour le code n'a pas de score de code : sa ligne doit montrer son score de conversation.
+test('ligne Code : un modèle de conversation affiche son score de conversation, jamais « — »', async () => {
+  const { getMyModelPicks } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 12 * 1024 })
+  const picks = await getMyModelPicks({ name: 'Léo', codeModel: 'qwen3.5:4b' })
+  assert.equal(picks.code.model, 'qwen3.5:4b')
+  assert.equal(picks.code.toolCalling, '6/6')
+})
+
 test('un meilleur modèle bloqué au téléchargement est signalé avec sa raison', async () => {
   const { getMyModelPicks } = setup({ verifiedToolScoresMd: VERIFIED_MD, vramMib: 12 * 1024 })
   const picks = await getMyModelPicks({

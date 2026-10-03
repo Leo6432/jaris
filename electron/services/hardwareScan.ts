@@ -1353,7 +1353,15 @@ export async function getMyModelPicks(profile?: Profile | null): Promise<MyModel
     vision: profile?.visionModel ?? ideal.vision.model,
     code: profile?.codeModel ?? ideal.code.model
   }
-  const tierOf: Record<ModelRole, VerifiedTier> = { flash: 'conversation', medium: 'conversation', large: 'conversation', vision: 'vision', code: 'code' }
+  // Code : même repli que le calcul (`code` dans computeModelPicks) — un modèle de conversation choisi pour le
+  // code n'a jamais passé le test de code, sa ligne affiche alors son score de conversation, jamais « — ».
+  const tierOf: Record<ModelRole, VerifiedTier[]> = {
+    flash: ['conversation'],
+    medium: ['conversation'],
+    large: ['conversation'],
+    vision: ['vision'],
+    code: ['code', 'conversation']
+  }
   const upgrades: MyModelPicks['upgrades'] = {}
   const entries = {} as Record<ModelRole, ModelOverviewEntry>
   for (const role of Object.keys(inUse) as ModelRole[]) {
@@ -1404,13 +1412,13 @@ export async function isUnusedInstalledModel(model: string, profile?: Profile | 
  * pas forcément le gagnant du calcul, mais sa ligne doit afficher ses VRAIS scores, pas ceux de l'idéal. */
 function entryForModel(
   model: string,
-  tier: VerifiedTier,
+  tiers: VerifiedTier[],
   verifiedToolScores: Record<VerifiedTier, Map<string, string>>
 ): ModelOverviewEntry {
   return {
     model,
     vramGb: ALL_MODELS.find((c) => c.model === model)?.vramGb ?? 0,
-    toolCalling: verifiedToolScores[tier].get(model) ?? null,
+    toolCalling: tiers.map((t) => verifiedToolScores[t].get(model)).find(Boolean) ?? null,
     intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
     artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
     artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[model] ?? null

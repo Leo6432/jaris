@@ -6198,3 +6198,11 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   liste complète. Scores corrigés à la main dans verified-tool-scores.md, sans relancer le test.
   **Leçon générale : `replace(/\s+/g, '')` puis `\b` détruit justement la limite de mot qu'on cherche — normaliser
   un texte AVANT un motif doit garder ce que le motif utilise.** Régression : test-benchmark-cases.mjs.
+
+- **Ligne Code de « Mes modèles » à « — » alors que le modèle a un score (03/10/2026, Léo : « qwen3.8:27b 46
+  tok/s Intelligence 33,7 — »)** : le calcul du Code accepte un modèle de conversation (repli `code` puis
+  `conversation`, étape 160), mais `entryForModel` ne lisait que la table du rôle (`code`). Le défaut ne se voyait
+  que quand le modèle du profil n'était plus l'idéal — ici après que qwen3.5:27b (78/78) est passé devant. Les
+  rôles portent maintenant la même liste de tables que le calcul. **Leçon générale : un affichage qui relit un
+  score doit suivre le MÊME repli que le calcul qui a choisi le modèle.** Régression :
+  test-hardwarescan-my-picks.mjs.
