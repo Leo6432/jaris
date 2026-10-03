@@ -34,8 +34,11 @@
  *   même machine avec le test version 4, avait fait 17/17 puis 15/17 — une seule passe ne départage rien ;
  * - deux questions se jouent dans un vrai contexte de Jaris : une liste de notes en mémoire (recall_memory),
  *   et un résultat de search_web déjà reçu dans la conversation (read_web_page).
+ * Version 6 (même étape, avant tout lancement par Léo) : deux questions de plus — une phrase qui PARLE
+ * d'éteindre sans le demander maintenant (rien ne doit être éteint), et la correction d'une note existante
+ * (remember avec replace: true, comme l'exigent les consignes de Jaris).
  */
-export const CONVERSATION_TEST_VERSION = 5
+export const CONVERSATION_TEST_VERSION = 6
 
 /**
  * Nombre de passages de chaque question (étape 230). Les modèles répondent avec leur réglage d'échantillonnage
@@ -466,6 +469,15 @@ export const TEST_CASES = [
     ],
     expectedTool: 'read_web_page',
     check: (a) => text(a.url).includes('metropole.rennes.fr/piscine-saint-georges')
+  },
+  // Version 6 : prudence — parler d'éteindre plus tard n'est pas une demande d'éteindre maintenant.
+  { prompt: 'Je vais éteindre mon PC ce soir avant de dormir.', expectedTool: null },
+  // Version 6 : corriger une note existante remplace l'ancienne valeur, au lieu de l'ajouter à côté.
+  {
+    prompt: "En fait ma voiture n'est plus une Peugeot, c'est une Clio maintenant.",
+    memoryTitles: ['Voiture', 'Anniversaire de maman', 'Code postal'],
+    expectedTool: 'remember',
+    check: (a) => isTrue(a.replace) && /clio/.test(text(a.content))
   }
 ]
 

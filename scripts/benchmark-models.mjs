@@ -93,11 +93,13 @@ function readVerifiedModels() {
     // Étape 230 : un score de conversation d'un AUTRE test (ex. « 16/17 » de la version 4) ne dispense pas du test
     // actuel — le modèle est retesté, pour que tous les scores de conversation soient comparables entre eux.
     if (currentTier === 'conversation' && !cells[1].endsWith(`/${CONVERSATION_TOTAL}`)) continue
+    // Même chose pour la vision : l'ancien test (3 questions, une seule fois) est refait.
+    if (currentTier === 'vision' && !cells[1].endsWith(`/${VISION_TOTAL}`)) continue
     result[currentTier].add(cells[0])
   }
   return result
 }
-const VERIFIED_MODELS = RETEST_ALL ? { conversation: new Set(), vision: new Set(), code: new Set() } : readVerifiedModels()
+// VERIFIED_MODELS : défini plus bas, après VISION_TOTAL dont il dépend (étape 230).
 
 /**
  * Périmètre du run (AnalysisScope côté TS, shared/ipc.ts) : 'all' teste tout comme avant (comportement par
@@ -467,23 +469,6 @@ const LARGE_TIER_MODELS = new Set([
  * (`.conversation`/`.vision`/`.code`) évite qu'un modèle candidat aux deux (ex: qwen3.5:4b, Conversation ET
  * Vision) ne saute son test vision juste parce qu'il a un score conversation, et inversement.
  */
-const SCOPED_MODELS = (
-  SCOPE === 'all' || SCOPE === 'conversation'
-    ? MODELS
-    : SCOPE === 'flash'
-      ? MODELS.filter((m) => FLASH_TIER_MODELS.has(m))
-      : SCOPE === 'medium'
-        ? MODELS.filter((m) => MEDIUM_TIER_MODELS.has(m))
-        : SCOPE === 'large'
-          ? MODELS.filter((m) => LARGE_TIER_MODELS.has(m))
-          : []
-).filter((m) => !VERIFIED_MODELS.conversation.has(m) && inOnlyModels(m))
-const SCOPED_VISION_CANDIDATES = (SCOPE === 'all' || SCOPE === 'vision' ? VISION_CANDIDATES : []).filter(
-  (c) => !VERIFIED_MODELS.vision.has(c.model) && inOnlyModels(c.model)
-)
-const SCOPED_CODE_CANDIDATES = (SCOPE === 'all' || SCOPE === 'code' ? CODE_CANDIDATES : []).filter(
-  (c) => !VERIFIED_MODELS.code.has(c.model) && inOnlyModels(c.model)
-)
 
 async function deleteModelViaApi(model) {
   const res = await fetch(`${OLLAMA_HOST}/api/delete`, {
@@ -560,9 +545,80 @@ function makePngBase64(width, height, fillFn) {
 // Rouge/vert/bleu francs, faciles à nommer sans ambiguïté (pas de teintes intermédiaires prêtant à
 // interprétation) — le but est de vérifier que le modèle voit VRAIMENT l'image, pas de tester sa culture
 // des nuanciers.
+/**
+ * Police bitmap 5×7 (majuscules, chiffres, quelques signes), étape 230 : les questions de vision lisent du TEXTE
+ * à l'écran (message d'erreur, bouton, code), ce que Jaris fait vraiment avec look_at_screen. Dessinée ici, sans
+ * dépendance : ce script tourne dans l'appli installée, où aucune bibliothèque d'image n'est disponible.
+ */
+const FONT_5X7 = {
+  A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
+  B: ['11110', '10001', '10001', '11110', '10001', '10001', '11110'],
+  C: ['01110', '10001', '10000', '10000', '10000', '10001', '01110'],
+  D: ['11110', '10001', '10001', '10001', '10001', '10001', '11110'],
+  E: ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
+  F: ['11111', '10000', '10000', '11110', '10000', '10000', '10000'],
+  G: ['01110', '10001', '10000', '10111', '10001', '10001', '01111'],
+  H: ['10001', '10001', '10001', '11111', '10001', '10001', '10001'],
+  I: ['01110', '00100', '00100', '00100', '00100', '00100', '01110'],
+  J: ['00111', '00010', '00010', '00010', '00010', '10010', '01100'],
+  K: ['10001', '10010', '10100', '11000', '10100', '10010', '10001'],
+  L: ['10000', '10000', '10000', '10000', '10000', '10000', '11111'],
+  M: ['10001', '11011', '10101', '10101', '10001', '10001', '10001'],
+  N: ['10001', '10001', '11001', '10101', '10011', '10001', '10001'],
+  O: ['01110', '10001', '10001', '10001', '10001', '10001', '01110'],
+  P: ['11110', '10001', '10001', '11110', '10000', '10000', '10000'],
+  Q: ['01110', '10001', '10001', '10001', '10101', '10010', '01101'],
+  R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
+  S: ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
+  T: ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
+  U: ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
+  V: ['10001', '10001', '10001', '10001', '10001', '01010', '00100'],
+  W: ['10001', '10001', '10001', '10101', '10101', '10101', '01010'],
+  X: ['10001', '10001', '01010', '00100', '01010', '10001', '10001'],
+  Y: ['10001', '10001', '01010', '00100', '00100', '00100', '00100'],
+  Z: ['11111', '00001', '00010', '00100', '01000', '10000', '11111'],
+  0: ['01110', '10001', '10011', '10101', '11001', '10001', '01110'],
+  1: ['00100', '01100', '00100', '00100', '00100', '00100', '01110'],
+  2: ['01110', '10001', '00001', '00010', '00100', '01000', '11111'],
+  3: ['11111', '00010', '00100', '00010', '00001', '10001', '01110'],
+  4: ['00010', '00110', '01010', '10010', '11111', '00010', '00010'],
+  5: ['11111', '10000', '11110', '00001', '00001', '10001', '01110'],
+  6: ['00110', '01000', '10000', '11110', '10001', '10001', '01110'],
+  7: ['11111', '00001', '00010', '00100', '01000', '01000', '01000'],
+  8: ['01110', '10001', '10001', '01110', '10001', '10001', '01110'],
+  9: ['01110', '10001', '10001', '01111', '00001', '00010', '01100'],
+  ':': ['00000', '01100', '01100', '00000', '01100', '01100', '00000'],
+  '!': ['00100', '00100', '00100', '00100', '00100', '00000', '00100'],
+  ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000']
+}
+
+/** Vrai si le pixel (x, y) tombe sur le texte écrit à partir de (left, top), à l'échelle `scale` (1 point = scale px). */
+function textPixel(text, left, top, scale, x, y) {
+  const col = Math.floor((x - left) / scale)
+  const row = Math.floor((y - top) / scale)
+  if (row < 0 || row >= 7 || col < 0) return false
+  const charIndex = Math.floor(col / 6) // 5 colonnes + 1 d'espace
+  const glyph = FONT_5X7[text[charIndex]]
+  const inGlyph = col % 6
+  return Boolean(glyph && inGlyph < 5 && glyph[row][inGlyph] === '1')
+}
+
+/** Largeur en pixels d'un texte écrit avec textPixel. */
+function textWidth(text, scale) {
+  return (text.length * 6 - 1) * scale
+}
+
+const inRect = (x, y, left, top, width, height) => x >= left && x < left + width && y >= top && y < top + height
+
 const RED = [214, 40, 40]
 const GREEN = [40, 180, 74]
 const BLUE = [42, 92, 214]
+const WHITE = [255, 255, 255]
+const INK = [20, 20, 20]
+const WINDOW = [240, 240, 240]
+const DESKTOP = [60, 110, 140]
+const TITLE_BLUE = [30, 70, 160]
+const BUTTON_GREY = [200, 200, 200]
 
 /**
  * Test du palier Vision (VISION_CANDIDATES ci-dessus) : au lieu du tool-calling testé pour les modèles de
@@ -594,8 +650,73 @@ const VISION_TEST_CASES = [
       }),
     prompt: 'Combien de carrés noirs vois-tu dans cette image ? Réponds uniquement avec le chiffre.',
     check: (answer) => /\b3\b|\btrois\b/.test(answer)
+  },
+  // Étape 230 : lire du texte à l'écran — ce que Jaris fait vraiment avec look_at_screen (« lire un message
+  // d'erreur, décrire une fenêtre ouverte », description de l'outil). Les trois questions ci-dessus ne
+  // vérifiaient que des couleurs et des formes : presque tous les modèles y faisaient 3/3.
+  {
+    // Une fenêtre d'erreur : barre de titre bleue « ERREUR », message, bouton OK.
+    image: () =>
+      makePngBase64(520, 220, (x, y) => {
+        if (inRect(x, y, 20, 20, 480, 40)) return textPixel('ERREUR', 36, 26, 4, x, y) ? WHITE : TITLE_BLUE
+        if (inRect(x, y, 20, 60, 480, 140)) {
+          if (textPixel('FICHIER INTROUVABLE', 34, 90, 4, x, y)) return INK
+          if (inRect(x, y, 380, 150, 100, 36)) return textPixel('OK', 414, 158, 3, x, y) ? WHITE : BUTTON_GREY
+          return WINDOW
+        }
+        return DESKTOP
+      }),
+    prompt: "Quel message d'erreur est affiché à l'écran ? Recopie-le.",
+    check: (answer) => /fichier\s+introuvable/.test(answer)
+  },
+  {
+    // Deux boutons : seul le vert dit VALIDER.
+    image: () =>
+      makePngBase64(440, 140, (x, y) => {
+        if (inRect(x, y, 30, 40, 170, 60)) return textPixel('ANNULER', 30 + (170 - textWidth('ANNULER', 3)) / 2, 60, 3, x, y) ? INK : BUTTON_GREY
+        if (inRect(x, y, 240, 40, 170, 60)) return textPixel('VALIDER', 240 + (170 - textWidth('VALIDER', 3)) / 2, 60, 3, x, y) ? WHITE : GREEN
+        return WINDOW
+      }),
+    prompt: 'Quel mot est écrit sur le bouton vert ? Réponds uniquement avec ce mot.',
+    check: (answer) => /\bvalider\b/.test(answer) && !/annuler/.test(answer)
+  },
+  {
+    image: () => makePngBase64(360, 100, (x, y) => (textPixel('CODE : 4821', 24, 36, 4, x, y) ? INK : WINDOW)),
+    prompt: 'Quel code est affiché ? Réponds uniquement avec le nombre.',
+    check: (answer) => /\b4821\b/.test(answer.replace(/\s+/g, ''))
   }
 ]
+
+/** Étape 230 : chaque question de vision posée 3 fois, comme celles de conversation (même raison : le hasard). */
+const VISION_REPEATS = 3
+const VISION_TOTAL = VISION_TEST_CASES.length * VISION_REPEATS
+
+// Étape 230 : après VISION_TOTAL, que readVerifiedModels utilise (avant, il était lu trop tôt).
+const VERIFIED_MODELS = RETEST_ALL ? { conversation: new Set(), vision: new Set(), code: new Set() } : readVerifiedModels()
+
+const SCOPED_MODELS = (
+  SCOPE === 'all' || SCOPE === 'conversation'
+    ? MODELS
+    : SCOPE === 'flash'
+      ? MODELS.filter((m) => FLASH_TIER_MODELS.has(m))
+      : SCOPE === 'medium'
+        ? MODELS.filter((m) => MEDIUM_TIER_MODELS.has(m))
+        : SCOPE === 'large'
+          ? MODELS.filter((m) => LARGE_TIER_MODELS.has(m))
+          : []
+).filter((m) => !VERIFIED_MODELS.conversation.has(m) && inOnlyModels(m))
+const SCOPED_VISION_CANDIDATES = (SCOPE === 'all' || SCOPE === 'vision' ? VISION_CANDIDATES : []).filter(
+  (c) => !VERIFIED_MODELS.vision.has(c.model) && inOnlyModels(c.model)
+)
+const SCOPED_CODE_CANDIDATES = (SCOPE === 'all' || SCOPE === 'code' ? CODE_CANDIDATES : []).filter(
+  (c) => !VERIFIED_MODELS.code.has(c.model) && inOnlyModels(c.model)
+)
+
+/** Copie EXACTE de VISION_SYSTEM_PROMPT (electron/services/vision.ts), vérifiée par test-benchmark-cases.mjs. */
+const VISION_SYSTEM_PROMPT =
+  "Tu es Jaris, un assistant vocal qui décrit ce qui est affiché à l'écran de l'utilisateur. Réponds en " +
+  'français, de façon concise et naturelle comme à l\'oral, sans émojis, astérisques, listes à puces ni ' +
+  'mise en forme : ta réponse est lue directement à voix haute.'
 
 /**
  * Copié tel quel depuis electron/services/codeGenerator.ts (APP_RULES/GENERATE_SYSTEM_PROMPT/extractHtml/
@@ -1052,11 +1173,17 @@ async function chat(model, testCase) {
  */
 async function chatVision(model, prompt, imageBase64) {
   const start = performance.now()
+  // Étape 230 : mêmes consignes et même fenêtre que look_at_screen (describeImage, vision.ts) — le test les
+  // omettait. VISION_SYSTEM_PROMPT est une copie vérifiée par scripts/test-benchmark-cases.mjs.
   const data = await postChat({
     model,
-    messages: [{ role: 'user', content: prompt, images: [imageBase64] }],
+    messages: [
+      { role: 'system', content: VISION_SYSTEM_PROMPT },
+      { role: 'user', content: prompt, images: [imageBase64] }
+    ],
     stream: false,
-    think: false
+    think: false,
+    options: { num_ctx: CONVERSATION_NUM_CTX }
   })
   const wallMs = performance.now() - start
   const evalCount = data.eval_count ?? 0
@@ -1131,7 +1258,7 @@ function formatConversationDetail(model, perModel, detail) {
   if (!missed.length) lines.push('Aucune question ratée.')
   for (const d of missed) {
     lines.push(
-      `- RATÉ ${d.missed}/${CONVERSATION_REPEATS} « ${d.prompt} » (attendu : ${d.expectedTool ?? 'aucun outil'}) — obtenu : ${d.got.join(' ; ')}`
+      `- RATÉ ${d.missed}/${CONVERSATION_REPEATS} « ${d.prompt} »${d.expectedTool === undefined ? '' : ` (attendu : ${d.expectedTool ?? 'aucun outil'})`} — obtenu : ${d.got.join(' ; ')}`
     )
   }
   const answered = detail.filter((d) => d.answers.length)
@@ -1262,7 +1389,9 @@ async function main() {
         const section = end >= 0 ? after.slice(0, end) : after
         for (const block of section.split(/\n(?=### )/)) {
           const name = block.match(/^### (.+?) — /)?.[1]
-          if (name && existingRows.conversation.has(name)) previousDetails.set(name, `${block.trim()}\n`)
+          const visionName = name?.match(/^(.+) \(vision\)$/)?.[1]
+          const kept = visionName ? existingRows.vision.has(visionName) : name && existingRows.conversation.has(name)
+          if (kept) previousDetails.set(name, `${block.trim()}\n`)
         }
       }
     }
@@ -1276,7 +1405,7 @@ async function main() {
   // nombre de questions) — une ligne de l'ancien test (x/6) est refaite, jamais reprise telle quelle.
   // Étape 164 : vision et code aussi — une mesure INCOMPLÈTE n'est jamais reprise (qwen2.5-coder:32b à « 2/2 » :
   // une des trois générations avait planté, très probablement sur l'ancien délai de 5 minutes de fetch).
-  const questionsPerTier = { conversation: CONVERSATION_TOTAL, vision: VISION_TEST_CASES.length, code: CODE_TEST_CASES.length }
+  const questionsPerTier = { conversation: CONVERSATION_TOTAL, vision: VISION_TOTAL, code: CODE_TEST_CASES.length }
   const madeWithCurrentTest = (tier, row) => row.reliability?.endsWith(`/${questionsPerTier[tier]}`)
   // Étape 164 : une ligne sans AUCUNE réponse (latence « — », toutes les questions en erreur) n'est pas un score :
   // elle est refaite. C'est ce qui bloquait ministral-3:3b, granite4.1:8b et gemma4:26b à 0/17 chez Léo, notés
@@ -1370,7 +1499,7 @@ async function main() {
   const totalPullWeight = missing.reduce((sum, m) => sum + modelWeightGb(m), 0)
   const totalTestWeight =
     toRun.reduce((sum, m) => sum + testWeightOf(m) * CONVERSATION_TOTAL, 0) +
-    visionToRun.reduce((sum, m) => sum + testWeightOf(m) * VISION_TEST_CASES.length, 0) +
+    visionToRun.reduce((sum, m) => sum + testWeightOf(m) * VISION_TOTAL, 0) +
     codeToRun.reduce((sum, m) => sum + testWeightOf(m) * CODE_TEST_CASES.length, 0)
   const totalWeight = totalPullWeight + totalTestWeight || 1
   let weightDone = 0
@@ -1527,7 +1656,7 @@ async function main() {
   const conversationDetails = new Map(previousDetails)
   let testsDone = 0
   const testsTotal =
-    toRun.length * CONVERSATION_TOTAL + visionToRun.length * VISION_TEST_CASES.length + codeToRun.length * CODE_TEST_CASES.length
+    toRun.length * CONVERSATION_TOTAL + visionToRun.length * VISION_TOTAL + codeToRun.length * CODE_TEST_CASES.length
   // Remonté avant les boucles de test (pas défini seulement à l'écriture des résultats comme avant) :
   // utilisée pendant le run, pas seulement à la toute fin.
   const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null)
@@ -1684,9 +1813,11 @@ async function main() {
     console.log(`##MODEL_TESTING## ${model}`)
     const perModel = { model, role: 'vision', latencies: [], speeds: [], correct: 0, total: 0 }
 
-    for (let i = 0; i < VISION_TEST_CASES.length; i++) {
+    // Étape 230 : chaque question posée VISION_REPEATS fois, avec le détail des ratés comme en conversation.
+    const visionDetail = VISION_TEST_CASES.map((c) => ({ prompt: c.prompt, expectedTool: undefined, missed: 0, got: [], answers: [] }))
+    for (let pass = 1; pass <= VISION_REPEATS; pass++) for (let i = 0; i < VISION_TEST_CASES.length; i++) {
       const { prompt, check } = VISION_TEST_CASES[i]
-      process.stdout.write(`  "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}" ... `)
+      process.stdout.write(`  [${pass}/${VISION_REPEATS}] "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}" ... `)
       try {
         const r = await chatVision(model, prompt, visionImages[i])
         perModel.latencies.push(r.wallMs)
@@ -1694,12 +1825,20 @@ async function main() {
         perModel.total++
         const ok = check(r.content.toLowerCase())
         if (ok) perModel.correct++
+        else {
+          visionDetail[i].missed++
+          visionDetail[i].got.push(`« ${oneLine(r.content) || 'réponse vide'} »`)
+        }
         console.log(`${ok ? 'OK' : 'RATÉ'} (réponse: "${r.content.slice(0, 60)}") — ${fmt(r.wallMs, 0)}ms, ${fmt(r.tokPerSec)} tok/s`)
       } catch (err) {
-        // Ollama injoignable : l'analyse s'arrête AVANT d'enregistrer ce modèle (jamais un faux 0/17).
+        // Ollama injoignable : l'analyse s'arrête AVANT d'enregistrer ce modèle (jamais un faux score).
         if (err instanceof OllamaDownError) throw err
         console.log(`ERREUR (${err.message})`)
         errors.push({ model, prompt, message: err.message })
+        // Une question en erreur compte comme ratée : le total reste toujours VISION_TOTAL.
+        perModel.total++
+        visionDetail[i].missed++
+        visionDetail[i].got.push(`erreur : ${err.message}`)
       }
       testsDone++
       console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
@@ -1708,6 +1847,7 @@ async function main() {
     }
 
     results.push(perModel)
+    conversationDetails.set(`${model} (vision)`, formatConversationDetail(`${model} (vision)`, perModel, visionDetail))
     console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
     persistResults()
 

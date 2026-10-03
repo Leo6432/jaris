@@ -1002,11 +1002,14 @@ export function parseVerifiedToolScores(): Record<VerifiedTier, Map<string, stri
 }
 
 /**
- * Nombre de réponses notées par le test de conversation ACTUEL : 24 questions posées 3 fois chacune (étape 230,
+ * Nombre de réponses notées par le test de conversation ACTUEL : 26 questions posées 3 fois chacune (étape 230,
  * CONVERSATION_TOTAL dans scripts/benchmark-cases.mjs — copie vérifiée par scripts/test-benchmark-cases.mjs).
  * Un score de conversation sur un autre total (« 16/17 », version 4) vient d'un ancien test.
  */
-export const CONVERSATION_TEST_TOTAL = 72
+export const CONVERSATION_TEST_TOTAL = 78
+
+/** Pareil pour la vision : 6 questions posées 3 fois (VISION_TOTAL, scripts/benchmark-models.mjs). L'ancien test était sur 3. */
+export const VISION_TEST_TOTAL = 18
 
 const CONVERSATION_ROLE_MODELS = new Set([...FLASH_CANDIDATES, ...MEDIUM_CANDIDATES, ...LARGE_CANDIDATES].map((c) => c.model))
 const VISION_ROLE_MODELS = new Set(VISION_CANDIDATES.map((c) => c.model))
@@ -1015,15 +1018,16 @@ const CODE_ROLE_MODELS = new Set(CODE_CANDIDATES.map((c) => c.model))
 /**
  * Modèles de Jaris à tester, du plus léger au plus lourd : la liste que teste le bouton « Tester les modèles »
  * (Tous les modèles, étape 168). Étape 230 : rôle par rôle — un modèle de conversation sans score du test ACTUEL
- * (y compris un ancien score sur 17), un modèle de vision sans score de vision, un modèle de code sans score de
- * code. Avant, un seul score n'importe où suffisait : gemma4:26b et qwen3.8:27b, candidats Vision, n'avaient
+ * (y compris un ancien score sur 17), un modèle de vision sans score du test de vision ACTUEL (sur 18), un modèle
+ * de code sans score de code. Avant, un seul score n'importe où suffisait : gemma4:26b et qwen3.8:27b, candidats Vision, n'avaient
  * jamais été testés en vision sans que rien ne le signale. En attendant, Jaris garde les anciens scores.
  */
 export function getUnscoredModels(): string[] {
   const scores = parseVerifiedToolScores()
   const needsConversation = (model: string): boolean =>
     CONVERSATION_ROLE_MODELS.has(model) && !scores.conversation.get(model)?.endsWith(`/${CONVERSATION_TEST_TOTAL}`)
-  const needsVision = (model: string): boolean => VISION_ROLE_MODELS.has(model) && !scores.vision.has(model)
+  const needsVision = (model: string): boolean =>
+    VISION_ROLE_MODELS.has(model) && !scores.vision.get(model)?.endsWith(`/${VISION_TEST_TOTAL}`)
   const needsCode = (model: string): boolean => CODE_ROLE_MODELS.has(model) && !scores.code.has(model)
   return [...ALL_MODELS]
     .sort((a, b) => a.vramGb - b.vramGb)

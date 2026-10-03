@@ -152,12 +152,16 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
   )
   assert.equal(conversationModels.size, 30)
   for (const model of conversationModels) assert.ok(unscored.includes(model), `${model} doit repasser le nouveau test`)
-  // Aucun modèle de code ou de vision seul : ils ont tous leur score de code/vision.
-  assert.equal(unscored.length, conversationModels.size)
+  // Étape 230 : le test de vision a changé aussi (6 images × 3, l'ancien était sur 3) — chaque candidat Vision
+  // repasse, y compris ceux qui ne servent qu'à la vision (qwen3-vl, GLM-4.6V, gemma4:31b).
+  const visionModels = new Set([...source.match(/const VISION_CANDIDATES[\s\S]*?\n\]/)[0].matchAll(/model: '([^']+)'/g)].map((x) => x[1]))
+  for (const model of visionModels) assert.ok(unscored.includes(model), `${model} doit repasser le test de vision`)
+  // Aucun modèle de code seul : ils ont tous leur score de code, et ce test-là n'a pas changé.
+  assert.equal(unscored.length, new Set([...conversationModels, ...visionModels]).size)
 })
 
-test('un score de conversation du test actuel (sur 72) dispense du test ; vision et code, rôle par rôle', () => {
-  const lines = ['## Conversation', '', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 70/72 |', '| qwen3:1.7b | 16/17 |']
+test('un score de conversation du test actuel (sur 78) dispense du test ; vision et code, rôle par rôle', () => {
+  const lines = ['## Conversation', '', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 70/78 |', '| qwen3:1.7b | 16/17 |']
   const unscored = [...setup({ vramMib: 8 * 1024, scores: lines.join('\n') }).getUnscoredModels()]
   assert.ok(!unscored.includes('ministral-3:3b'), 'score du test actuel : rien à refaire')
   assert.ok(unscored.includes('qwen3:1.7b'), 'score de l’ancien test : à refaire')
