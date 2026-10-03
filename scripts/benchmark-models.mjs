@@ -682,7 +682,9 @@ const VISION_TEST_CASES = [
   {
     image: () => makePngBase64(360, 100, (x, y) => (textPixel('CODE : 4821', 24, 36, 4, x, y) ? INK : WINDOW)),
     prompt: 'Quel code est affiché ? Réponds uniquement avec le nombre.',
-    check: (answer) => /\b4821\b/.test(answer.replace(/\s+/g, ''))
+    // Corrigé le 03/10/2026 : retirer les espaces collait « est4821 », et \b ne trouvait plus le nombre ;
+    // « Le code affiché est 4821. » et « Quatre huit deux un » étaient comptés faux. Chiffres seuls, ou en lettres.
+    check: (answer) => answer.replace(/\D/g, '').includes('4821') || /quatre[\s-]+(?:mille[\s-]+)?huit[\s-]+(?:cent[\s-]+)?(?:deux[\s-]+un|vingt[\s-]+et[\s-]+un)/i.test(answer)
   }
 ]
 
@@ -1782,6 +1784,8 @@ async function main() {
         errors.push({ model, prompt, message: err.message })
         caseDetail.missed++
         caseDetail.got.push(`erreur : ${err.message}`)
+        // Une erreur figure aussi dans la liste complète : sinon la liste compte moins de réponses que le total.
+        caseDetail.answers.push(`compté faux : erreur : ${err.message}`)
       }
       testsDone++
       console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
@@ -1841,6 +1845,7 @@ async function main() {
         perModel.total++
         visionDetail[i].missed++
         visionDetail[i].got.push(`erreur : ${err.message}`)
+        visionDetail[i].answers.push(`compté faux : erreur : ${err.message}`)
       }
       testsDone++
       console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)

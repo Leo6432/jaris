@@ -17,7 +17,8 @@ import {
   SYSTEM_PROMPT_TEMPLATE,
   buildBenchmarkSystemPrompt,
   buildCaseMessages,
-  isCorrectAnswer
+  isCorrectAnswer,
+  isRealReply
 } from './benchmark-cases.mjs'
 import { systemPromptModule } from './load-system-prompt.mjs'
 
@@ -784,6 +785,31 @@ test('corriger une note : seul remember avec replace et la nouvelle valeur compt
   const soir = TEST_CASES.find((t) => t.prompt.startsWith('Je vais éteindre'))
   assert.equal(isCorrectAnswer(soir, { toolName: 'shutdown_pc', toolArgs: {} }), false, 'parler d’éteindre plus tard n’est pas une demande')
   assert.equal(isCorrectAnswer(soir, { toolName: null, toolArgs: null, content: 'D’accord, bonne soirée !' }), true)
+})
+
+// Vérification du 03/10/2026 : erreurs de notation trouvées en relisant TOUTES les réponses de Léo.
+test('notation corrigée : relire la note avant de la corriger, noter un plan, annonces et outils écrits en texte', () => {
+  const voiture = TEST_CASES.find((t) => t.prompt.startsWith('En fait ma voiture'))
+  assert.equal(isCorrectAnswer(voiture, { toolName: 'recall_memory', toolArgs: { title: 'Voiture' } }), true)
+  assert.equal(isCorrectAnswer(voiture, { toolName: 'recall_memory', toolArgs: { title: 'Code postal' } }), false)
+  const soir = TEST_CASES.find((t) => t.prompt.startsWith('Je vais éteindre'))
+  assert.equal(isCorrectAnswer(soir, { toolName: 'remember', toolArgs: { title: 'Soir', content: 'éteindre le PC' } }), true)
+  const reply = (content) => isCorrectAnswer(soir, { toolName: null, toolArgs: null, content })
+  assert.equal(reply('Je vais mettre mon ordinateur hors ligne maintenant.'), false)
+  assert.equal(reply("J'éteins l'ordinateur."), false)
+  assert.equal(reply('shutdown_pc[ARGS]{}'), false)
+  assert.equal(reply('Très bien, bonne nuit ! Pense à enregistrer ton travail avant.'), true)
+  assert.equal(isRealReply('open_app[ARGS]{"app_name":"Spotify"}'), false)
+  assert.equal(isRealReply('Avec plaisir !'), true)
+})
+
+test('vision : le code 4821 est reconnu en chiffres comme en lettres', () => {
+  const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+  const body = script.match(/textPixel\('CODE : 4821'[\s\S]*?check: (\(answer\) => .*)\n/)?.[1]
+  assert.ok(body)
+  const check = vm.runInNewContext(body)
+  for (const a of ['Le code affiché est 4821.', 'Quatre huit deux un', '4 8 2 1', 'CODE : 4821']) assert.equal(check(a.toLowerCase()), true, a)
+  for (const a of ['4321', 'Le code est 4812.']) assert.equal(check(a.toLowerCase()), false, a)
 })
 
 test('vision de bout en bout : 6 images × 3, les consignes de Jaris, et le détail des réponses fausses', async () => {

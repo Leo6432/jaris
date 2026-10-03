@@ -6146,3 +6146,16 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Vision : le fichier de résultats recopie TOUTES les réponses (« compté juste / compté faux »), pas seulement les
   ratées — la vérification par mots-clés peut se tromper dans les deux sens, Léo corrige alors le score à la main.
   Puis la conversation aussi (même demande) : chaque réponse des 78, avec « compté juste / compté faux ».
+
+- **Relire TOUTES les réponses d'un test avant de recopier ses scores (03/10/2026, test version 6)** : la
+  vérification automatique se trompait dans les deux sens. Faux justes : `shutdown_pc[ARGS]{}` écrit en texte
+  (format d'outil Mistral, ministral-3:14b) et « je vais mettre mon ordinateur hors ligne maintenant »
+  (annonce d'une action non faite). Faux faux : la vision retirait les espaces avant de chercher `\b4821\b`,
+  donc « est4821 » n'avait plus de limite de mot — « Le code affiché est 4821. » comptait faux. Et deux
+  questions jugeaient mal un test à UN seul tour : relire la note « Voiture » avant de la corriger est la
+  première étape demandée par le prompt de Jaris, et noter « éteindre ce soir » en mémoire est sans danger.
+  Corrigé par `alsoAccept`/`replyCheck` par question (benchmark-cases.mjs), le rejet des `[ARGS]`/`[TOOL_CALLS]`
+  dans isRealReply, une vérification du code en chiffres OU en lettres, et les réponses en erreur ajoutées à la
+  liste complète. Scores corrigés à la main dans verified-tool-scores.md, sans relancer le test.
+  **Leçon générale : `replace(/\s+/g, '')` puis `\b` détruit justement la limite de mot qu'on cherche — normaliser
+  un texte AVANT un motif doit garder ce que le motif utilise.** Régression : test-benchmark-cases.mjs.

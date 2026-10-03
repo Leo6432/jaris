@@ -53,16 +53,16 @@ async function picksFor(vramGb, ramGb) {
 
 test('machine de Léo (8 Go de VRAM) : Code prend le plus intelligent de TOUS les modèles, comme Puissant', async () => {
   const picks = await picksFor(8, 32)
-  assert.equal(picks.large, 'qwen3.8:27b')
+  // Test version 6 (03/10/2026) : qwen3.5:27b fait 78/78, qwen3.8:27b 77/78 — la fiabilité départage d'abord.
+  assert.equal(picks.large, 'qwen3.5:27b')
   // Avant l'étape 160 : qwen3.6:35b-a3b (Intelligence 18), le seul choix possible dans la liste « code ».
-  assert.equal(picks.code, 'qwen3.8:27b', `Code attendu : le plus intelligent de tous (qwen3.8:27b, 34), obtenu ${picks.code}`)
+  assert.equal(picks.code, 'qwen3.5:27b', `Code attendu : le même que Puissant, obtenu ${picks.code}`)
 })
 
-test('Rapide sur 8 Go : ministral-3:3b, seul modèle fiable presque aussi rapide que le plus rapide', async () => {
+test('Rapide sur 8 Go : ministral-3:8b, le plus fiable (78/78) qui tient sur la carte', async () => {
   const picks = await picksFor(8, 32)
-  // ministral-3:3b : 221 tokens/s publiés. granite4.2:3b (218) n'a que 5/6 au test d'appel d'outils, et les
-  // modèles fiables suivants (granite4.2:8b, 94) sont bien plus lents : aucun autre ne reste dans la course.
-  assert.equal(picks.flash, 'ministral-3:3b')
+  // Test version 6 : ministral-3:3b ne fait plus que 73/78 ; ministral-3:8b fait 78/78 et tient sur 8 Go.
+  assert.equal(picks.flash, 'ministral-3:8b')
 })
 
 /**
@@ -103,7 +103,7 @@ test('Rapide et Médium ne débordent JAMAIS sur la RAM, même avec beaucoup de 
 
 test('Médium peut être un « gros » modèle quand la carte le permet (plus de liste réservée)', async () => {
   const picks = await picksFor(24, 64)
-  assert.equal(picks.medium, 'qwen3.8:27b', `24 Go : le plus intelligent qui tient sur la carte, obtenu ${picks.medium}`)
+  assert.equal(picks.medium, 'qwen3.5:27b', `24 Go : le plus intelligent qui tient sur la carte, obtenu ${picks.medium}`)
 })
 
 test('Vision ne choisit QUE parmi les modèles qui lisent une image', async () => {
@@ -146,7 +146,11 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 // Étape 168 : la liste que teste le bouton « Tester les modèles ». Étape 230 : rôle par rôle, et un score de
 // conversation de l'ANCIEN test (sur 17) compte comme à refaire.
 test('modèles à tester : tous les modèles de conversation notés à l’ancien test, du plus léger au plus lourd', () => {
-  const unscored = [...setup({ vramMib: 8 * 1024 }).getUnscoredModels()]
+  // Scores du dépôt (test version 6, 03/10/2026) : plus rien à tester en conversation ni en vision.
+  assert.deepEqual([...setup({ vramMib: 8 * 1024 }).getUnscoredModels()], [])
+  // Avec les scores de l'ancien test (sur 17 et sur 3), tout repasse.
+  const old = REAL_SCORES.replace(/\| (\d+)\/78 \|/g, '| 16/17 |').replace(/\| (\d+)\/18 \|/g, '| 3/3 |')
+  const unscored = [...setup({ vramMib: 8 * 1024, scores: old }).getUnscoredModels()]
   const conversationModels = new Set(
     [...source.matchAll(/const (?:FLASH|MEDIUM|LARGE)_CANDIDATES[\s\S]*?\n\]/g)].flatMap((m) => [...m[0].matchAll(/model: '([^']+)'/g)].map((x) => x[1]))
   )

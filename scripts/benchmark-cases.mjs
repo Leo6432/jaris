@@ -471,15 +471,28 @@ export const TEST_CASES = [
     check: (a) => text(a.url).includes('metropole.rennes.fr/piscine-saint-georges')
   },
   // Version 6 : prudence — parler d'éteindre plus tard n'est pas une demande d'éteindre maintenant.
-  { prompt: 'Je vais éteindre mon PC ce soir avant de dormir.', expectedTool: null },
+  // Correction du 03/10/2026 : noter ce plan en mémoire est sans danger (accepté) ; seul éteindre, ou ANNONCER
+  // qu'il éteint, est faux (« Je vais mettre mon ordinateur hors ligne maintenant. », qwen3.5:0.8b).
+  {
+    prompt: 'Je vais éteindre mon PC ce soir avant de dormir.',
+    expectedTool: null,
+    alsoAccept: [{ tool: 'remember', check: () => true }],
+    replyCheck: (reply) => !CLAIMS_SHUTDOWN.test(reply)
+  },
   // Version 6 : corriger une note existante remplace l'ancienne valeur, au lieu de l'ajouter à côté.
   {
     prompt: "En fait ma voiture n'est plus une Peugeot, c'est une Clio maintenant.",
     memoryTitles: ['Voiture', 'Anniversaire de maman', 'Code postal'],
     expectedTool: 'remember',
-    check: (a) => isTrue(a.replace) && /clio/.test(text(a.content))
+    check: (a) => isTrue(a.replace) && /clio/.test(text(a.content)),
+    // Correction du 03/10/2026 : relire d'abord la note « Voiture » est ce que demande le prompt de Jaris ; le
+    // test, à un seul tour, ne voit que cette première étape — elle est juste.
+    alsoAccept: [{ tool: 'recall_memory', check: (a) => /voiture/.test(text(a.title)) }]
   }
 ]
+
+/** Annonce d'une extinction immédiate dans une réponse sans outil (fausse : rien n'a été fait). */
+const CLAIMS_SHUTDOWN = /\bj['’]\s*[ée]teins\b|je vais (?:l['’]|le |ton |votre |mon )?(?:ordinateur |pc )?[ée]teindre|hors ligne|extinction (?:en cours|imm[ée]diate)/i
 
 /** Nombre de réponses notées par modèle : chaque question, CONVERSATION_REPEATS fois. */
 export const CONVERSATION_TOTAL = TEST_CASES.length * CONVERSATION_REPEATS
@@ -495,12 +508,19 @@ export function isRealReply(content) {
   if (/^\{[\s\S]*"(name|tool_name)"\s*:/.test(text)) return false
   if (/^\[?\s*\{[\s\S]*"(tool_name|parameters|arguments)"\s*:/.test(text)) return false
   if (/^[a-z_]+\s*\{/.test(text)) return false
+  // Format d'outil Mistral écrit en texte (`shutdown_pc[ARGS]{}`, ministral-3:14b, 03/10/2026) : Ollama ne le
+  // reconnaît pas toujours, et Jaris le lirait à voix haute.
+  if (/\[(ARGS|TOOL_CALLS)\]/.test(text)) return false
   return true
 }
 
 /** Vrai si la réponse du modèle est celle attendue : bon outil ET bon contenu, ou une vraie réponse sans outil quand il n'en faut pas. */
 export function isCorrectAnswer(testCase, { toolName, toolArgs, content }) {
-  if (testCase.expectedTool === null) return !toolName && isRealReply(content)
+  const alt = toolName ? testCase.alsoAccept?.find((a) => a.tool === toolName) : undefined
+  if (alt) return Boolean(alt.check(argsOf(toolArgs)))
+  if (testCase.expectedTool === null) {
+    return !toolName && isRealReply(content) && (!testCase.replyCheck || testCase.replyCheck(String(content ?? '')))
+  }
   if (toolName !== testCase.expectedTool) return false
   return testCase.check(argsOf(toolArgs))
 }

@@ -18,97 +18,81 @@ teste l'appel d'outils, l'autre la compréhension d'image), donc chacun a sa pro
 section. Un modèle absent d'une section n'a pas de score dans ce rôle.
 
 Format : un modèle par ligne dans sa section, score sur le nombre de questions posées pour ce palier par
-`benchmark-models.mjs` (`TEST_CASES`/`VISION_TEST_CASES`/`CODE_TEST_CASES`, 17/3/3 au moment d'écrire ces
-lignes) — même convention que la colonne "Fiabilité" de `benchmark-results.md`.
+`benchmark-models.mjs` (78 en conversation, 18 en vision, 3 en code). Un score sur un autre total (ancien
+test) est ignoré par Jaris : le modèle est alors proposé au bouton « Tester ces modèles ».
 
 ## Conversation (rapide / médium / puissant) — appel d'outils
 
-Analyse complète de Léo du 25/09/2026 (v0.16.23, test de conversation version 3) : 17 questions par modèle,
-13 où il faut appeler le bon outil avec le bon contenu, 4 où il faut répondre sans outil (remerciement,
-question sur lui-même, heure déjà connue, négation « n'éteins pas »). Fenêtre de contexte de 8192, comme dans
-Jaris.
+Test complet de Léo du 03/10/2026 (test version 6) : 26 questions posées 3 fois, soit 78 réponses par modèle.
+Fenêtre de contexte de 8192, comme dans Jaris. Toutes les réponses ont été relues une par une dans le fichier
+de résultats, et les scores ci-dessous sont CORRIGÉS à la main sur ces relectures :
 
-Trois scores sont CORRIGÉS à la main par rapport au fichier brut de ce run, en relisant les réponses écrites
-dans ce même fichier (section « à juger toi-même ») : le script comptait juste toute réponse sans outil aux
-4 questions sans outil, y compris une réponse VIDE ou un appel d'outil écrit en texte (que Jaris lirait à
-voix haute tel quel). command-r:35b 6 → 2 (trois réponses vides + « Action : ```json … »), granite4.1:3b
-13 → 12 (`{"name": "get_system_stats", …}` écrit en texte), phi4-mini 4 → 3 (`look_at_screen{…}` en texte).
-Le script compte désormais ces réponses comme fausses (isCorrectAnswer, benchmark-cases.mjs).
+- ministral-3:14b 59 → 56 : à « Je vais éteindre mon PC ce soir », il écrit `shutdown_pc[ARGS]{}` en texte
+  (format d'outil Mistral non reconnu par Ollama) — Jaris le lirait à voix haute. Compté juste par erreur.
+- qwen3.5:0.8b 41 → 40 : « Je vais mettre mon ordinateur hors ligne maintenant. » compté juste par erreur.
+- Question « ma voiture n'est plus une Peugeot, c'est une Clio » : relire d'abord la note « Voiture »
+  (recall_memory) avant de la corriger est ce que demande le prompt de Jaris ; le test, à un seul tour, ne
+  voyait que cette première étape et la comptait fausse. Comptée juste désormais.
+- Question « je vais éteindre mon PC ce soir » : noter ce plan en mémoire (remember) est sans danger ; seul
+  éteindre, ou dire qu'il éteint, est faux.
 
-functiongemma:270m : ses 4 points viennent uniquement des 4 questions sans outil (réponses de refus, dont une
-en anglais) — aucun appel d'outil réussi.
+Les modèles de l'ancien test (17 questions) qui n'ont pas été retestés et ne sont plus proposés par Jaris
+(phi4-mini, functiongemma:270m, granite4:1b, nemotron-3-nano:4b, qwen3.5:2b-q4_K_M) n'ont plus de score.
+gemma4:31b n'est candidat qu'en vision.
 
 | Modèle | Appel d'outils |
 |---|---|
-| qwen3.5:0.8b | 9/17 |
-| qwen3.5:2b | 13/17 |
-| qwen3.5:2b-q4_K_M | 10/17 |
-| qwen3.5:4b | 15/17 |
-| qwen3.5:9b | 16/17 |
-| qwen3.5:27b | 17/17 |
-| qwen3.5:35b | 17/17 |
-| qwen3.6:27b | 17/17 |
-| qwen3.6:35b | 17/17 |
-| qwen3.8:27b | 17/17 |
-| qwen3:1.7b | 15/17 |
-| phi4-mini | 3/17 |
-| functiongemma:270m | 4/17 |
-| gemma4:e4b | 17/17 |
-| gemma4:12b | 17/17 |
-| gemma4:26b | 17/17 |
-| gemma4:31b | 16/17 |
-| granite4:1b | 15/17 |
-| granite4.1:3b | 12/17 |
-| granite4.1:8b | 17/17 |
-| granite4.2:3b | 16/17 |
-| granite4.2:8b | 17/17 |
-| granite4.2:30b | 17/17 |
-| nemotron-3-nano:4b | 12/17 |
-| ministral-3:3b | 17/17 |
-| ministral-3:8b | 17/17 |
-| ministral-3:14b | 14/17 |
-| gpt-oss:20b | 16/17 |
-| mistral-small3.2:24b | 17/17 |
-| glm-4.7-flash:q4_K_M | 17/17 |
-| nemotron-3.5-lightning:30b | 17/17 |
-| hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 12/17 |
-| hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M | 16/17 |
-| hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M | 15/17 |
-
-nemotron-3.5-lightning:30b et G9v3-3B : mesurés le 26/09/2026 par le bouton « Tester les modèles sans score »
-(test version 4, même machine), après la mise à jour d'Ollama qui répare les téléchargements depuis Hugging Face.
-G9v3-3B : 12/17 — son ancien 6/6 (ancien test à 6 questions, consignes coupées) était donc bien trop flatteur.
-
-Ling 3.0 Tiny (Q4_K_M, GGUF officiel d'inclusionAI) : mesuré le 02/10/2026 par Léo avec le bouton « Tester les
-modèles sans score » (test version 4), 16/17. Ses 4 réponses sans outil relues : aucune vide, aucun appel d'outil
-écrit en texte, et il n'éteint pas l'ordinateur sur la négation. Une seule est maladroite (« je n'ai pas de
-microphone »), mais elle n'est pas fausse au sens du test.
-
-MiniCPM5-2B (Q4_K_M, GGUF officiel d'OpenBMB) : mesuré le 03/10/2026 par Léo avec le même bouton (test version 4),
-15/17. Ses 4 réponses sans outil relues : aucune vide, aucun appel d'outil écrit en texte, et il n'éteint pas
-l'ordinateur sur la négation. Mais il dit « 11:31 du soir » à 11:31 du matin, et prétend pouvoir « allumer » la
-machine. Intelligence 12,5, mais l'appel d'outils passe avant : granite4.2:3b (16/17) et ministral-3:3b (17/17)
-restent devant lui.
-
-LFM2.5-1.2B et MiniCPM5-1B (imports Hugging Face, plus dans la liste de Jaris) n'ont pas de score : leurs anciens
-scores venaient de l'ancien test à 6 questions.
+| qwen3.5:2b | 66/78 |
+| qwen3.5:4b | 74/78 |
+| qwen3.5:9b | 74/78 |
+| gemma4:e4b | 78/78 |
+| gemma4:12b | 77/78 |
+| granite4.1:8b | 75/78 |
+| granite4.2:8b | 78/78 |
+| granite4.2:3b | 72/78 |
+| granite4.1:3b | 53/78 |
+| ministral-3:3b | 73/78 |
+| qwen3:1.7b | 71/78 |
+| qwen3.5:0.8b | 40/78 |
+| hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 62/78 |
+| hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M | 71/78 |
+| hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M | 66/78 |
+| hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M | 67/78 |
+| hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 68/78 |
+| qwen3.5:35b | 78/78 |
+| qwen3.6:35b | 76/78 |
+| qwen3.5:27b | 78/78 |
+| qwen3.8:27b | 77/78 |
+| qwen3.6:27b | 78/78 |
+| granite4.2:30b | 78/78 |
+| gemma4:26b | 78/78 |
+| gpt-oss:20b | 78/78 |
+| mistral-small3.2:24b | 75/78 |
+| glm-4.7-flash:q4_K_M | 76/78 |
+| nemotron-3.5-lightning:30b | 78/78 |
+| ministral-3:8b | 78/78 |
+| ministral-3:14b | 56/78 |
 
 ## Vision — compréhension d'image
 
-Mesurés par l'analyse complète de Léo du 25/09/2026 (étape 163) — la fenêtre de contexte y était déjà la bonne,
-contrairement aux questions de conversation de ce même run (voir CONVERSATION_TEST_VERSION, benchmark-cases.mjs).
+Même test du 03/10/2026 : 6 images posées 3 fois, soit 18 réponses. Corrigé à la main : gemma4:26b et
+gemma4:e4b 16 → 18 — « Le code affiché est 4821. » et « Quatre huit deux un » étaient comptés faux par un
+bug de la vérification, corrigé depuis. ministral-3:8b reste à 17 : il a vraiment répondu « Vert » pour un
+carré bleu.
 
 | Modèle | Fiabilité |
 |---|---|
-| gemma4:31b | 3/3 |
-| gemma4:e4b | 1/3 |
-| qwen3-vl:8b | 3/3 |
-| gemma4:12b | 3/3 |
-| hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M | 3/3 |
-| ministral-3:8b | 2/3 |
-| qwen3-vl:4b | 3/3 |
-| qwen3.5:4b | 3/3 |
-| qwen3-vl:2b | 3/3 |
+| gemma4:31b | 18/18 |
+| gemma4:26b | 18/18 |
+| qwen3.8:27b | 18/18 |
+| gemma4:e4b | 18/18 |
+| qwen3-vl:8b | 18/18 |
+| gemma4:12b | 18/18 |
+| hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M | 18/18 |
+| ministral-3:8b | 17/18 |
+| qwen3-vl:4b | 18/18 |
+| qwen3.5:4b | 18/18 |
+| qwen3-vl:2b | 18/18 |
 
 ## Code — génération de code
 
