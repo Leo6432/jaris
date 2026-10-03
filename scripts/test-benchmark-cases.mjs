@@ -247,7 +247,10 @@ test('le vrai script : vraies consignes et 15 outils envoyés, 17 questions not�
     // Étape 230 : le détail dit QUELLE question est ratée, combien de fois, et ce que le modèle a fait à la place.
     assert.match(results, /### qwen3:1\.7b — \d+\/\d+\n\n- RATÉ 3\/3 « Rappelle-moi d'appeler le dentiste dans 20 minutes\. » \(attendu : set_reminder\) — obtenu : set_reminder \{"message":"Appeler le dentiste","delay_minutes":1\}/)
     assert.match(results, /### ministral-3:3b — \d+\/\d+\n\nAucune question ratée\./)
-    assert.match(results, /- « Merci, c'est parfait ! »\n  > Je suis Jaris\.\n  > Je suis Jaris\.\n  > Je suis Jaris\./)
+    // Étape 230 : TOUTES les réponses sont recopiées, justes et fausses, avec leur jugement.
+    assert.match(results, /- « Merci, c'est parfait ! »\n  > compté juste : aucun outil : « Je suis Jaris\. »\n  > compté juste : aucun outil : « Je suis Jaris\. »\n  > compté juste : aucun outil : « Je suis Jaris\. »/)
+    assert.match(results, /### ministral-3:3b[\s\S]*?- « Monte le son\. »\n  > compté juste : media_control \{"action":"volume_up"\}/)
+    assert.match(results, /- « Rappelle-moi d'appeler le dentiste dans 20 minutes\. »\n  > compté faux : set_reminder \{"message":"Appeler le dentiste","delay_minutes":1\}/)
   } finally {
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })
@@ -818,6 +821,9 @@ test('vision de bout en bout : 6 images × 3, les consignes de Jaris, et le dét
     const results = readFileSync(resultsPath, 'utf8')
     assert.match(results, /\| qwen3-vl:2b \|[^\n]*\| 15\/18 \|/)
     assert.match(results, /### qwen3-vl:2b \(vision\) — 15\/18\n\n- RATÉ 3\/3 « Quel code est affiché \? Réponds uniquement avec le nombre\. » — obtenu : « 4321 »/)
+    // Toutes les réponses sont recopiées, justes comprises, pour pouvoir corriger un score à la main.
+    assert.match(results, /Toutes les réponses \(à vérifier toi-même\) :\n- « Quelle est la couleur dominante[^»]*»\n  > compté juste : Bleu\n  > compté juste : Bleu\n  > compté juste : Bleu/)
+    assert.match(results, /  > compté faux : 4321/)
   } finally {
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })

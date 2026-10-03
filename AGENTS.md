@@ -6143,3 +6143,6 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   scores, puis compter les questions reçues par modèle et par épreuve. C'est ce qui a montré que gemma4:31b
   (candidat Vision seulement) passait aussi les 78 questions de conversation, pour rien : retiré de MODELS du
   script, et un test vérifie qu'aucun modèle de vision seule n'y revient.
+  Vision : le fichier de résultats recopie TOUTES les réponses (« compté juste / compté faux »), pas seulement les
+  ratées — la vérification par mots-clés peut se tromper dans les deux sens, Léo corrige alors le score à la main.
+  Puis la conversation aussi (même demande) : chaque réponse des 78, avec « compté juste / compté faux ».

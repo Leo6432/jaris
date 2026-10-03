@@ -1263,7 +1263,7 @@ function formatConversationDetail(model, perModel, detail) {
   const answered = detail.filter((d) => d.answers.length)
   if (answered.length) {
     lines.push('')
-    lines.push('Réponses sans outil (à juger toi-même) :')
+    lines.push('Toutes les réponses (à vérifier toi-même) :')
     for (const d of answered) {
       lines.push(`- « ${d.prompt} »`)
       for (const answer of d.answers) lines.push(`  > ${oneLine(answer)}`)
@@ -1767,14 +1767,14 @@ async function main() {
         if (ok) perModel.correct++
         const got = r.toolName ? `${r.toolName} ${JSON.stringify(r.toolArgs ?? {})}` : 'aucun outil'
         console.log(`${ok ? 'OK' : 'RATÉ'} (attendu: ${expectedTool ?? 'aucun outil'}, obtenu: ${got}) — ${fmt(r.wallMs, 0)}ms`)
+        const said = r.toolName ? got : `aucun outil : « ${oneLine(r.content) || 'réponse vide'} »`
         if (!ok) {
           caseDetail.missed++
-          caseDetail.got.push(r.toolName ? got : `aucun outil : « ${oneLine(r.content) || 'réponse vide'} »`)
+          caseDetail.got.push(said)
         }
-        if (!expectedTool) {
-          const answer = r.toolName ? `[outil appelé au lieu de répondre : ${r.toolName}]` : r.content || '[réponse vide]'
-          caseDetail.answers.push(answer)
-        }
+        // Étape 230 (Léo : « je veux que ça note toutes les réponses, fausses et vraies ») : chaque réponse, avec son
+        // jugement, pour pouvoir corriger un score à la main dans les deux sens.
+        caseDetail.answers.push(`${ok ? 'compté juste' : 'compté faux'} : ${said}`)
       } catch (err) {
         // Ollama injoignable : l'analyse s'arrête AVANT d'enregistrer ce modèle (jamais un faux score).
         if (err instanceof OllamaDownError) throw err
@@ -1823,6 +1823,9 @@ async function main() {
         if (r.tokPerSec !== null) perModel.speeds.push(r.tokPerSec)
         perModel.total++
         const ok = check(r.content.toLowerCase())
+        // Étape 230 (Léo : « on sait ce qu'il a répondu, on peut corriger les scores ») : TOUTES les réponses de
+        // vision sont recopiées, justes comprises — la vérification par mots peut se tromper dans les deux sens.
+        visionDetail[i].answers.push(`${ok ? 'compté juste' : 'compté faux'} : ${r.content || 'réponse vide'}`)
         if (ok) perModel.correct++
         else {
           visionDetail[i].missed++
