@@ -758,8 +758,9 @@ test('fermer Jaris arrête le test en cours, et un second lancement est refusé 
 })
 
 test('vision : mêmes consignes que look_at_screen (vision.ts), chaque question 3 fois, du texte à lire', () => {
-  const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8')
-  const vision = readFileSync(new URL('../electron/services/vision.ts', import.meta.url), 'utf8')
+  // Fins de ligne normalisées : la CI Windows récupère les fichiers en CRLF (piège déjà noté dans CLAUDE.md).
+  const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+  const vision = readFileSync(new URL('../electron/services/vision.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   const prompt = (src) => src.match(/const VISION_SYSTEM_PROMPT =\s*([\s\S]*?)\n\n/)?.[1].replace(/\s+/g, ' ')
   assert.ok(prompt(vision))
   assert.equal(prompt(script), prompt(vision), 'copie des consignes de vision périmée')
