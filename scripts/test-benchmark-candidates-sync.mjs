@@ -85,3 +85,11 @@ test('chaque liste de Jaris est dans la BONNE liste du script (conversation, vis
     assert.deepEqual(missing, [], `${name} : jamais testés dans leur épreuve : ${missing.join(', ')}`)
   }
 })
+
+test('le script ne fait passer le test de conversation qu’aux modèles de conversation de Jaris (pas gemma4:31b, vision seule)', () => {
+  const conversation = new Set(['FLASH_CANDIDATES', 'MEDIUM_CANDIDATES', 'LARGE_CANDIDATES'].flatMap((n) => [...candidateList(hardwareScanSource, n)]))
+  const visionOnly = [...candidateList(hardwareScanSource, 'VISION_CANDIDATES')].filter((m) => !conversation.has(m))
+  const scriptModels = stringList(script, 'MODELS')
+  const wasted = visionOnly.filter((m) => scriptModels.has(m))
+  assert.deepEqual(wasted, [], `testés en conversation pour rien : ${wasted.join(', ')}`)
+})

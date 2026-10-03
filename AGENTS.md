@@ -6138,3 +6138,8 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Contrôle réel (un seul passage, aucun score noté) : qwen3-vl:2b lit correctement les 6 images, y compris
   « FICHIER INTROUVABLE », « VALIDER » et « 4821 ». granite4.2:3b corrige bien la note voiture, mais ÉTEINT le PC
   sur « Je vais éteindre mon PC ce soir » : la question n'est pas trop dure, elle attrape un vrai danger.
+  **Dernier contrôle avant lancement, à refaire à chaque changement du test** : simuler le bouton de bout en
+  bout contre un faux Ollama qui répond tout de suite, avec la VRAIE liste `getUnscoredModels()` et les vrais
+  scores, puis compter les questions reçues par modèle et par épreuve. C'est ce qui a montré que gemma4:31b
+  (candidat Vision seulement) passait aussi les 78 questions de conversation, pour rien : retiré de MODELS du
+  script, et un test vérifie qu'aucun modèle de vision seule n'y revient.

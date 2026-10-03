@@ -289,11 +289,10 @@ const MODELS = [
   // vérifié (6/6, verified-tool-scores.md) — ces deux tailles restent à tester pour de vrai, un score pour
   // une taille ne valant pas pour une autre.
   'ministral-3:8b',
-  'ministral-3:14b',
-  // gemma4:31b (étape 162, « on refait l'analyse de tout ») : jusqu'ici seulement candidat Vision, à cause de
-  // bugs Ollama connus sur l'appel d'outils de la famille Gemma 4 (voir VISION_CANDIDATES dans hardwareScan.ts).
-  // Le nouveau test, avec les vrais outils et les vraies consignes de Jaris, dira pour de vrai s'il les évite.
-  'gemma4:31b'
+  'ministral-3:14b'
+  // gemma4:31b retiré de cette liste (étape 230) : il n'est candidat qu'en Vision dans Jaris, et son score de
+  // conversation ne sert à aucun rôle. Le bouton de test lui faisait passer les 78 questions de conversation en
+  // plus de la vision (un modèle dense de 20 Go, une à deux heures sur une carte de 8 Go) pour rien.
   // Les candidats du palier "Code" (qwen2.5-coder:7b/32b, qwen3.6:35b-a3b, qwen3-coder:30b,
   // north-mini-code-1.0, devstral-small-2:24b) NE sont PAS
   // ici : codeGenerator.ts (mode Code) n'appelle JAMAIS chatWithOllama avec des outils (le paramètre `tools`
