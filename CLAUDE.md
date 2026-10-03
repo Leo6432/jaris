@@ -6206,3 +6206,17 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   rôles portent maintenant la même liste de tables que le calcul. **Leçon générale : un affichage qui relit un
   score doit suivre le MÊME repli que le calcul qui a choisi le modèle.** Régression :
   test-hardwarescan-my-picks.mjs.
+
+- **Choix des modèles : fiabilité ET intelligence mises en balance, plus « le meilleur score exact d'abord »
+  (03/10/2026, Léo : « on choisit qwen3.5:35b qui a 78/78 et 19 d'intelligence et pas qwen3.8:27b qui a 77/78 et
+  33 », puis « une vraie analyse, pas un calcul bête qui autorise 1-2 points d'écart »).** Exiger le taux de
+  réussite maximal exact faisait perdre un modèle bien plus intelligent pour UNE réponse sur 78. Une tolérance
+  fixe (« 2 points d'écart = égalité ») a été écrite puis refusée par Léo : elle déplace juste la frontière.
+  Remplacé par une note : intelligence (Artificial Analysis) × réussite^N, soit la chance de réussir N actions de
+  suite multipliée par la qualité des réponses (`TOOL_CHAIN_LENGTH` = 5 en conversation et code, 1 en vision,
+  qui ne fait qu'une lecture par demande). Rapide garde son plancher de vitesse, calculé sur les modèles les plus
+  fiables pour qu'un petit modèle rapide et peu fiable ne relève pas la barre. Sans intelligence publiée pour
+  personne, retour à l'ancienne règle. **Leçon générale : quand deux critères comptent, les combiner dans une
+  formule qui dit ce qu'elle mesure vaut mieux qu'un ordre strict (l'un écrase l'autre) ou qu'un seuil arbitraire
+  (une frontière déplacée).** Régression : test-hardwarescan-single-pool.mjs (1 erreur sur 78 ne fait pas
+  perdre qwen3.8:27b ; 18 erreurs sur 78 le font perdre).

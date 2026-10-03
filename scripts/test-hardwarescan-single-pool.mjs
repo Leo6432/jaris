@@ -53,16 +53,29 @@ async function picksFor(vramGb, ramGb) {
 
 test('machine de Léo (8 Go de VRAM) : Code prend le plus intelligent de TOUS les modèles, comme Puissant', async () => {
   const picks = await picksFor(8, 32)
-  // Test version 6 (03/10/2026) : qwen3.5:27b fait 78/78, qwen3.8:27b 77/78 — la fiabilité départage d'abord.
-  assert.equal(picks.large, 'qwen3.5:27b')
+  // Test version 6 (03/10/2026) : qwen3.8:27b (77/78, Intelligence 33,7) bat qwen3.5:27b (78/78) — une réponse
+  // d'écart sur 78 est une égalité (TOOL_SCORE_TOLERANCE), l'intelligence départage.
+  assert.equal(picks.large, 'qwen3.8:27b')
   // Avant l'étape 160 : qwen3.6:35b-a3b (Intelligence 18), le seul choix possible dans la liste « code ».
-  assert.equal(picks.code, 'qwen3.5:27b', `Code attendu : le même que Puissant, obtenu ${picks.code}`)
+  assert.equal(picks.code, 'qwen3.8:27b', `Code attendu : le même que Puissant, obtenu ${picks.code}`)
 })
 
-test('Rapide sur 8 Go : ministral-3:8b, le plus fiable (78/78) qui tient sur la carte', async () => {
+test('Rapide sur 8 Go : granite4.2:3b, plus intelligent que ministral-3:8b pour une fiabilité proche', async () => {
   const picks = await picksFor(8, 32)
-  // Test version 6 : ministral-3:3b ne fait plus que 73/78 ; ministral-3:8b fait 78/78 et tient sur 8 Go.
-  assert.equal(picks.flash, 'ministral-3:8b')
+  // Note = intelligence × réussite^5 : granite4.2:3b 9,1 × (72/78)^5 = 6,1 contre ministral-3:8b 5,5 × 1 = 5,5.
+  assert.equal(picks.flash, 'granite4.2:3b')
+})
+
+// 03/10/2026, Léo : « une vraie analyse, avec un algorithme qui sait faire un entre-deux entre intelligence et
+// appel d'outils ». Les deux sens comptent : une erreur sur 78 ne doit pas écarter un modèle bien plus
+// intelligent, mais un modèle peu fiable ne doit jamais gagner sur sa seule intelligence.
+test('fiabilité et intelligence en balance : ni le score exact, ni l’intelligence seule', async () => {
+  const md = (rows) => ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', ...rows].join('\n')
+  const pick = async (rows) => (await setup({ vramMib: 24 * 1024, ramGb: 64, scores: md(rows) }).pickBestModelsFromBenchmark()).models.large
+  // 1 erreur sur 78 : qwen3.8:27b (33,7) bat qwen3.5:27b (22,9) parfait.
+  assert.equal(await pick(['| qwen3.5:27b | 78/78 |', '| qwen3.8:27b | 77/78 |']), 'qwen3.8:27b')
+  // 18 erreurs sur 78 : (60/78)^5 = 0,27, sa note tombe à 9 — le modèle parfait gagne.
+  assert.equal(await pick(['| qwen3.5:27b | 78/78 |', '| qwen3.8:27b | 60/78 |']), 'qwen3.5:27b')
 })
 
 /**
@@ -103,7 +116,7 @@ test('Rapide et Médium ne débordent JAMAIS sur la RAM, même avec beaucoup de 
 
 test('Médium peut être un « gros » modèle quand la carte le permet (plus de liste réservée)', async () => {
   const picks = await picksFor(24, 64)
-  assert.equal(picks.medium, 'qwen3.5:27b', `24 Go : le plus intelligent qui tient sur la carte, obtenu ${picks.medium}`)
+  assert.equal(picks.medium, 'qwen3.8:27b', `24 Go : le plus intelligent qui tient sur la carte, obtenu ${picks.medium}`)
 })
 
 test('Vision ne choisit QUE parmi les modèles qui lisent une image', async () => {

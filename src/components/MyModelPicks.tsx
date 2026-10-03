@@ -189,10 +189,11 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
         </div>
       )}
       <p className="capacity-scan__tier-legend">
-        Pour chaque rôle, Jaris cherche dans tous ses modèles, parmi les plus fiables en appel d'outils qui
-        tiennent dans ta machine : Faible prend le plus intelligent parmi les plus rapides, Moyen le plus intelligent qui tient sur ta
-        carte graphique, Élevé et Code le plus intelligent même s'il déborde sur la RAM, Vision le plus
-        intelligent qui lit les images, Image le seul modèle de dessin s'il tient sur ta machine. Vitesse et Intelligence : mesures publiées par Artificial
+        Pour chaque rôle, Jaris met en balance fiabilité et intelligence parmi les modèles qui tiennent dans ta
+        machine : sa note est l'intelligence multipliée par la chance de réussir 5 actions de suite sans erreur.
+        Une erreur sur 78 coûte peu, une erreur sur 10 coûte presque la moitié de la note. Faible prend la
+        meilleure note parmi les plus rapides, Moyen la meilleure qui tient sur ta carte graphique, Élevé et
+        Code la meilleure même si elle déborde sur la RAM, Vision la meilleure parmi ceux qui lisent les images, Image le seul modèle de dessin s'il tient sur ta machine. Vitesse et Intelligence : mesures publiées par Artificial
         Analysis, identiques pour tout le monde — elles comparent les modèles entre eux, pas la vitesse sur ta
         machine.
       </p>

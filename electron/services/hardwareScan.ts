@@ -1011,6 +1011,18 @@ export const CONVERSATION_TEST_TOTAL = 78
 /** Pareil pour la vision : 6 questions posées 3 fois (VISION_TOTAL, scripts/benchmark-models.mjs). L'ancien test était sur 3. */
 export const VISION_TEST_TOTAL = 18
 
+/**
+ * Nombre d'actions d'affilée d'une demande typique, pour mettre en balance fiabilité et intelligence
+ * (03/10/2026, Léo : « on choisit qwen3.5:35b qui a 78/78 et 19 d'intelligence et pas qwen3.8:27b qui a 77/78
+ * et 33 », puis « une vraie analyse, pas un calcul bête qui autorise 1-2 points d'écart »).
+ * Note d'un modèle = intelligence × (taux de réussite aux outils)^N : la chance de réussir N actions de suite
+ * sans erreur, multipliée par la qualité de ce qu'il dit. Une demande de Jaris enchaîne souvent plusieurs
+ * outils (chercher puis lire, ouvrir puis écrire ; jusqu'à 10 tours dans converse()) : avec N = 5, 1 erreur
+ * sur 78 coûte 6 % de la note, 1 erreur sur 10 en coûte 41 %. La vision ne fait qu'une lecture par demande : N = 1.
+ */
+export const TOOL_CHAIN_LENGTH = 5
+const VISION_CHAIN_LENGTH = 1
+
 const CONVERSATION_ROLE_MODELS = new Set([...FLASH_CANDIDATES, ...MEDIUM_CANDIDATES, ...LARGE_CANDIDATES].map((c) => c.model))
 const VISION_ROLE_MODELS = new Set(VISION_CANDIDATES.map((c) => c.model))
 const CODE_ROLE_MODELS = new Set(CODE_CANDIDATES.map((c) => c.model))
@@ -1207,23 +1219,56 @@ function computeModelPicks(
    * intelligence égale, le plus rapide). Un modèle sans vitesse publiée ne peut pas prouver qu'il est rapide :
    * écarté tant qu'au moins un modèle en a une ; si aucun n'en a, retour au plus léger.
    */
-  const fastEnoughThenSmartest = (best: Scored[]): Scored[] => {
-    const speeds = best.map((c) => ARTIFICIAL_ANALYSIS_SPEED[c.model]).filter((v): v is number => v !== undefined)
-    if (!speeds.length) return [...best].sort(fastestFirst)
+  const fastEnoughThenSmartest = (scored: Scored[], chain: number): Scored[] => {
+    // Le plancher de vitesse se calcule sur les modèles les plus fiables (sans quoi un petit modèle très rapide
+    // mais peu fiable relèverait la barre pour tout le monde) ; le classement se fait ensuite sur TOUS ceux qui
+    // le passent, par note (intelligence × fiabilité).
+    const top = Math.max(...scored.map((c) => parseToolScore(c.result.toolCalling)))
+    const reference = scored.filter((c) => parseToolScore(c.result.toolCalling) === top)
+    const speeds = reference.map((c) => ARTIFICIAL_ANALYSIS_SPEED[c.model]).filter((v): v is number => v !== undefined)
+    if (!speeds.length) return [...reference].sort(fastestFirst)
     const floor = Math.max(...speeds) * RAPIDE_MIN_SPEED_RATIO
-    return best
+    return scored
       .filter((c) => (ARTIFICIAL_ANALYSIS_SPEED[c.model] ?? -1) >= floor)
-      .sort((a, b) => smartestFirstOrNull(a, b) ?? fastestFirst(a, b))
+      .sort((a, b) => bestNoteFirstOrNull(a, b, chain) ?? fastestFirst(a, b))
   }
 
-  /** smartestFirst sans son dernier repli (la taille) : `null` quand l'intelligence ne départage pas. */
-  const smartestFirstOrNull = (a: Scored, b: Scored): number | null => {
-    const aIndex = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[a.model]
-    const bIndex = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[b.model]
-    if (aIndex !== undefined && bIndex !== undefined && aIndex !== bIndex) return bIndex - aIndex
-    if (aIndex !== undefined && bIndex === undefined) return -1
-    if (aIndex === undefined && bIndex !== undefined) return 1
+  /**
+   * Note d'un modèle pour un rôle : intelligence × (taux de réussite)^chain (voir TOOL_CHAIN_LENGTH). `null`
+   * sans intelligence publiée — jamais un zéro.
+   */
+  const noteOf = (c: Scored, chain: number): number | null => {
+    const index = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[c.model]
+    if (index === undefined) return null
+    return index * Math.pow(Math.max(0, parseToolScore(c.result.toolCalling)), chain)
+  }
+
+  /** Meilleure note d'abord ; un modèle sans note passe après ; `null` si la note ne départage pas. */
+  const bestNoteFirstOrNull = (a: Scored, b: Scored, chain: number): number | null => {
+    const aNote = noteOf(a, chain)
+    const bNote = noteOf(b, chain)
+    if (aNote !== null && bNote !== null && aNote !== bNote) return bNote - aNote
+    if (aNote !== null && bNote === null) return -1
+    if (aNote === null && bNote !== null) return 1
     return null
+  }
+
+  /**
+   * Médium, Puissant, Vision, Code : la meilleure note parmi TOUS les modèles testés qui tiennent. Sans
+   * intelligence publiée pour personne, retour à l'ancienne règle (la meilleure fiabilité, puis le plus
+   * intelligent selon MMLU-Pro, puis le plus gros).
+   */
+  const bestNote = (scored: Scored[], chain: number): Scored[] => {
+    if (scored.every((c) => noteOf(c, chain) === null)) {
+      const top = Math.max(...scored.map((c) => parseToolScore(c.result.toolCalling)))
+      return scored.filter((c) => parseToolScore(c.result.toolCalling) === top).sort(smartestFirst)
+    }
+    return [...scored].sort((a, b) => {
+      const byNote = bestNoteFirstOrNull(a, b, chain)
+      if (byNote !== null) return byNote
+      const byScore = parseToolScore(b.result.toolCalling) - parseToolScore(a.result.toolCalling)
+      return byScore !== 0 ? byScore : smartestFirst(a, b)
+    })
   }
 
   /**
@@ -1232,13 +1277,15 @@ function computeModelPicks(
    * - `resultOf` : le score de fiabilité qui compte pour ce rôle — critère de validité, jamais départagé ;
    * - `allowRam` : le modèle peut-il déborder sur la RAM (LARGE_RAM_OFFLOAD_MODELS) ? Non pour Rapide et
    *   Médium, qui doivent répondre sans à-coups ;
-   * - `rank` : parmi les plus fiables (même proportion de réussite au test), le classement du rôle.
+   * - `rank` : le classement du rôle sur tous les modèles testés qui tiennent (fiabilité ET intelligence) ;
+   * - `chain` : nombre d'actions d'affilée qui pèse sur la fiabilité (TOOL_CHAIN_LENGTH).
    */
   const pickRole = (
     pool: ModelCandidate[],
     resultOf: (c: ModelCandidate) => LocalBenchmarkEntry | undefined,
     allowRam: boolean,
-    rank: (best: Scored[]) => Scored[]
+    rank: (scored: Scored[], chain: number) => Scored[],
+    chain: number = TOOL_CHAIN_LENGTH
   ): ModelOverviewEntry => {
     // `exclude` (étape 136) : modèles dont le téléchargement vient d'échouer sur CETTE machine (voir
     // runQuickSetup, benchmarkRunner.ts) — retirés AVANT tout calcul, repli ultime compris. Jamais la liste
@@ -1262,14 +1309,12 @@ function computeModelPicks(
       return entryOf(model, candidate?.vramGb ?? 0, candidate ? resultOf(candidate) : undefined)
     }
 
-    // La fiabilité passe toujours en premier : seuls les modèles au meilleur taux de réussite sont classés.
-    const topScore = Math.max(...scored.map((c) => parseToolScore(c.result.toolCalling)))
-    const best = scored.filter((c) => parseToolScore(c.result.toolCalling) === topScore)
-    const winner = rank(best)[0] ?? best[0]
+    // Fiabilité et intelligence mises en balance (TOOL_CHAIN_LENGTH), plus de « meilleur score exact d'abord ».
+    const winner = rank(scored, chain)[0] ?? scored[0]
     return entryOf(winner.model, winner.vramGb, winner.result)
   }
 
-  const smartest = (best: Scored[]): Scored[] => [...best].sort(smartestFirst)
+  const smartest = bestNote
   const conversation = (c: ModelCandidate): LocalBenchmarkEntry | undefined => resultFor(c, 'conversation')
   // Code : le test de code quand le modèle l'a passé, sinon son test de conversation (il suit déjà des
   // consignes précises : c'est ce qui permet à un modèle Puissant, jamais passé par le test de code, d'être
@@ -1288,7 +1333,8 @@ function computeModelPicks(
       ALL_MODELS.filter((c) => READS_IMAGES.has(c.model)),
       (c) => resultFor(c, 'vision'),
       true,
-      smartest
+      smartest,
+      VISION_CHAIN_LENGTH
     ),
     // Code : le plus intelligent de tous, même lent (choix de Léo, étape 160).
     code: pickRole(ALL_MODELS, code, true, smartest)
