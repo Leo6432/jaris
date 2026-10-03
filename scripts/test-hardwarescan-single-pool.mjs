@@ -147,6 +147,6 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 test('modèles sans aucun score : ceux que le bouton de test mesurera, du plus léger au plus lourd', () => {
   const unscored = [...setup({ vramMib: 8 * 1024 }).getUnscoredModels()]
   // Étape 171 : G9v3-3B, qwen2.5-coder:14b et Lightning mesurés le 26/09/2026. Étape 222 : Ling 3.0 Tiny mesuré
-  // par Léo (16/17). Étape 225 : devstral-2:123b retiré. Étape 227 : seul MiniCPM5-2B (ajouté à l'étape 226) reste.
-  assert.deepEqual(unscored, ['hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M'])
+  // par Léo (16/17). Étape 225 : devstral-2:123b retiré. Étape 228 : MiniCPM5-2B mesuré par Léo (15/17) ; plus aucun.
+  assert.deepEqual(unscored, [])
 })

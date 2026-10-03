@@ -6075,3 +6075,8 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   telles quelles. qwen3-coder-next vérifié avant retrait : 9,2 chez Artificial Analysis, deux fois moins que
   qwen3.6:35b-a3b (18,2) pour 52 Go contre 22. Son score 3/3 sort de verified-tool-scores.md avec une ligne
   qui explique pourquoi. Après le score de MiniCPM5-2B, le bouton pourra être retiré comme les fois précédentes.
+
+- **MiniCPM5-2B mesuré par Léo : 15/17 (étape 228).** Recopié dans verified-tool-scores.md avec la relecture de
+  ses 4 réponses sans outil (« 11:31 du soir » à 11:31 du matin, prétend pouvoir « allumer » la machine). Son
+  intelligence 12,5 ne compense pas : l'appel d'outils passe avant, granite4.2:3b (16/17) et ministral-3:3b
+  (17/17) restent devant. Plus aucun modèle sans score.
