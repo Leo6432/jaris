@@ -39,6 +39,27 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   pour recevoir un message — rien n'est hébergé ailleurs, un message envoyé
   pendant que la machine est éteinte reste juste en attente chez Telegram
   jusqu'au redémarrage
+- ⬜ Étape 231 — Canal Discord (demande de Léo, en voyant Hermes Agent de Nous
+  Research joignable depuis les messageries) : pouvoir écrire à Jaris depuis
+  Discord, sur le même principe que l'étape 42 (Telegram) — branché sur le
+  moteur `converse()` existant (`electron/services/assistant.ts`), mêmes
+  outils, même historique et même mémoire qu'en local. Bot créé par
+  l'utilisateur sur le portail développeur de Discord (gratuit, officiel, aucun
+  risque de bannissement contrairement à WhatsApp) ; Jaris s'y connecte lui-même
+  (connexion sortante, comme le « polling » Telegram) : aucun port à ouvrir,
+  aucun serveur public. À prévoir dès la conception :
+  - **N'obéir qu'à l'utilisateur** : seuls les messages privés venant de SON
+    identifiant Discord sont traités, jamais ceux d'un serveur public ou d'un
+    inconnu qui trouverait le bot ;
+  - **Mêmes restrictions que la page téléphone** (étape 214) : pas
+    d'extinction du PC ni de pilotage souris/clavier à distance sans accord
+    explicite, puisque l'utilisateur n'est pas devant l'écran ;
+  - **Pas 100 % local** pour ce canal : les messages passent par les serveurs
+    de Discord avant d'arriver au PC — à dire clairement dans Options ;
+  - Le PC doit être allumé et Jaris lancé ; un message envoyé PC éteint attend
+    chez Discord.
+  iMessage, lui, est impossible depuis Windows seul : Apple ne propose aucune
+  API, il faudrait un Mac allumé en permanence comme relais (BlueBubbles).
 - ⬜ Étape 23 — Site web avec tableau de bord personnel : chaque utilisateur
   peut noter son planning et sa to-do list sur le site, et Jaris peut y
   écrire des informations
