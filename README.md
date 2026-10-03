@@ -39,7 +39,7 @@ Electron + React + TypeScript, aucun appel à une API payante : tout le pipeline
   pour recevoir un message — rien n'est hébergé ailleurs, un message envoyé
   pendant que la machine est éteinte reste juste en attente chez Telegram
   jusqu'au redémarrage
-- ⬜ Étape 231 — Canal Discord (demande de Léo, en voyant Hermes Agent de Nous
+- ⬜ Étape 130 — Canal Discord (demande de Léo, en voyant Hermes Agent de Nous
   Research joignable depuis les messageries) : pouvoir écrire à Jaris depuis
   Discord, sur le même principe que l'étape 42 (Telegram) — branché sur le
   moteur `converse()` existant (`electron/services/assistant.ts`), mêmes
