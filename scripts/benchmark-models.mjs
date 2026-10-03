@@ -27,10 +27,12 @@ import { promisify } from 'util'
 import { deflateSync } from 'zlib'
 import {
   CONVERSATION_NUM_CTX,
+  CONVERSATION_REPEATS,
   CONVERSATION_TEST_VERSION,
+  CONVERSATION_TOTAL,
   TEST_CASES,
   TOOLS,
-  buildBenchmarkSystemPrompt,
+  buildCaseMessages,
   isCorrectAnswer
 } from './benchmark-cases.mjs'
 
@@ -49,7 +51,8 @@ const RESULTS_PATH = process.env.JARIS_RESULTS_PATH?.trim() || join(__dirname, '
  * seraient jamais repassés au nouveau test et les scores ne seraient pas comparables entre eux.
  */
 const RETEST_ALL = process.env.JARIS_RETEST_ALL === '1'
-const VERIFIED_TOOL_SCORES_PATH = join(__dirname, 'verified-tool-scores.md')
+// JARIS_VERIFIED_SCORES_PATH : seulement pour les tests (un faux fichier de scores vérifiés, étape 230).
+const VERIFIED_TOOL_SCORES_PATH = process.env.JARIS_VERIFIED_SCORES_PATH?.trim() || join(__dirname, 'verified-tool-scores.md')
 
 const OLLAMA_HOST = process.env.OLLAMA_HOST?.trim() || 'http://127.0.0.1:11434'
 
@@ -87,6 +90,9 @@ function readVerifiedModels() {
       .map((c) => c.trim())
       .filter(Boolean)
     if (cells.length !== 2) continue
+    // Étape 230 : un score de conversation d'un AUTRE test (ex. « 16/17 » de la version 4) ne dispense pas du test
+    // actuel — le modèle est retesté, pour que tous les scores de conversation soient comparables entre eux.
+    if (currentTier === 'conversation' && !cells[1].endsWith(`/${CONVERSATION_TOTAL}`)) continue
     result[currentTier].add(cells[0])
   }
   return result
@@ -113,6 +119,13 @@ const SCOPE = (process.env.JARIS_ANALYSIS_SCOPE?.trim() || 'all')
  * (voir le commentaire de SCOPE ci-dessus), la reprise doit donc rester un choix explicite.
  */
 const RESUME = process.env.JARIS_RESUME === '1'
+
+/**
+ * Étape 230 : supprimer chaque modèle téléchargé par CE run dès la fin de son dernier test, même quand le disque
+ * a la place de tout garder. Les ~30 modèles de conversation pèsent ~290 Go : sans ça, un re-test complet lancé
+ * depuis Jaris les laisserait tous sur le disque. Un modèle déjà installé avant le run n'est jamais supprimé.
+ */
+const DELETE_AFTER_TEST = process.env.JARIS_DELETE_AFTER_TEST === '1'
 
 /**
  * Étape 168 : bouton « Tester les modèles sans score » (Options → Modèles → Tous les modèles). Jaris transmet
@@ -297,6 +310,10 @@ const VISION_CANDIDATES = [
   // complet là-bas pour pourquoi il n'est QUE en Vision (bugs de tool-calling ouverts sur toute la famille
   // Gemma 4, sans impact sur ce rôle).
   { model: 'gemma4:31b', vramGb: 20 },
+  // Étape 230 : candidats Vision de Jaris (VISION_CANDIDATES, hardwareScan.ts) jamais recopiés ici, donc jamais
+  // testés en vision : le contrôle de synchronisation ne vérifiait que la présence du nom dans le script.
+  { model: 'gemma4:26b', vramGb: 19 },
+  { model: 'qwen3.8:27b', vramGb: 18 },
   // qwen3.5/gemma4:e4b sont nativement multimodaux (déjà dans MEDIUM_CANDIDATES) : testés ici pour savoir
   // si réutiliser le modèle de conversation déjà chargé tient tête à un modèle vision dédié — voir le
   // commentaire complet dans hardwareScan.ts.
@@ -451,7 +468,7 @@ const LARGE_TIER_MODELS = new Set([
  * Vision) ne saute son test vision juste parce qu'il a un score conversation, et inversement.
  */
 const SCOPED_MODELS = (
-  SCOPE === 'all'
+  SCOPE === 'all' || SCOPE === 'conversation'
     ? MODELS
     : SCOPE === 'flash'
       ? MODELS.filter((m) => FLASH_TIER_MODELS.has(m))
@@ -738,7 +755,8 @@ function detectRamGb() {
  * et à l'espace de manœuvre normal du système — même esprit que RAM_SAFETY_MARGIN_GB, mais pour le disque.
  * Dupliquée depuis electron/services/systemResources.ts pour la même raison que detectVramGb ci-dessus.
  */
-const DISK_SAFETY_MARGIN_GB = 5
+// JARIS_DISK_SAFETY_MARGIN_GB : seulement pour les tests (étape 230), qui ne doivent pas dépendre du disque de la machine.
+const DISK_SAFETY_MARGIN_GB = Number(process.env.JARIS_DISK_SAFETY_MARGIN_GB ?? 5)
 
 /**
  * Espace disque libre (Go) sur le disque où Ollama stocke ses modèles — jusqu'ici jamais vérifié : ce script
@@ -979,14 +997,13 @@ async function postChat(body) {
   }
 }
 
-async function chatOnce(model, prompt, withThink) {
+async function chatOnce(model, testCase, withThink) {
   const start = performance.now()
   const body = {
     model,
-    messages: [
-      { role: 'system', content: buildBenchmarkSystemPrompt() },
-      { role: 'user', content: prompt }
-    ],
+    // Étape 230 : consignes (avec notes en mémoire si la question en donne), question, puis ce que Jaris a déjà
+    // fait dans ce tour (ex. search_web et son résultat).
+    messages: buildCaseMessages(testCase),
     tools: TOOLS,
     stream: false,
     // Étape 163 : sans num_ctx, Ollama prenait 4096 et coupait les vraies consignes de Jaris (~4 600 tokens).
@@ -998,14 +1015,14 @@ async function chatOnce(model, prompt, withThink) {
   return { wallMs: performance.now() - start, data }
 }
 
-async function chat(model, prompt) {
+async function chat(model, testCase) {
   let wallMs, data
   try {
-    ;({ wallMs, data } = await chatOnce(model, prompt, true))
+    ;({ wallMs, data } = await chatOnce(model, testCase, true))
   } catch (firstErr) {
     if (firstErr instanceof OllamaDownError) throw firstErr
     try {
-      ;({ wallMs, data } = await chatOnce(model, prompt, false))
+      ;({ wallMs, data } = await chatOnce(model, testCase, false))
     } catch {
       throw firstErr // le premier message d'erreur est généralement le plus informatif (statut HTTP réel)
     }
@@ -1095,6 +1112,41 @@ async function chatCode(model, prompt) {
   }
 }
 
+/** Titre de la section de détail par modèle du fichier de résultats (étape 230), relu à la reprise. */
+const CONVERSATION_DETAIL_HEADING = '## Détail de la conversation, modèle par modèle'
+
+/** Un texte de réponse sur une seule ligne, coupé à `max` caractères : lisible dans le fichier de résultats. */
+function oneLine(text, max = 240) {
+  const flat = String(text ?? '').replace(/\s+/g, ' ').trim()
+  return flat.length > max ? `${flat.slice(0, max)}…` : flat
+}
+
+/**
+ * Bloc « ### modèle » du fichier de résultats (étape 230) : les questions ratées, avec le nombre de passages
+ * ratés et ce que le modèle a fait à la place, puis ses réponses aux questions sans outil.
+ */
+function formatConversationDetail(model, perModel, detail) {
+  const lines = [`### ${model} — ${perModel.correct}/${perModel.total}`, '']
+  const missed = detail.filter((d) => d.missed > 0)
+  if (!missed.length) lines.push('Aucune question ratée.')
+  for (const d of missed) {
+    lines.push(
+      `- RATÉ ${d.missed}/${CONVERSATION_REPEATS} « ${d.prompt} » (attendu : ${d.expectedTool ?? 'aucun outil'}) — obtenu : ${d.got.join(' ; ')}`
+    )
+  }
+  const answered = detail.filter((d) => d.answers.length)
+  if (answered.length) {
+    lines.push('')
+    lines.push('Réponses sans outil (à juger toi-même) :')
+    for (const d of answered) {
+      lines.push(`- « ${d.prompt} »`)
+      for (const answer of d.answers) lines.push(`  > ${oneLine(answer)}`)
+    }
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
 function fmt(n, digits = 1) {
   return n === null || n === undefined || Number.isNaN(n) ? '—' : n.toFixed(digits)
 }
@@ -1175,6 +1227,7 @@ async function main() {
   // séparation, `alreadyDone` sautait aussi À TORT le test de conversation d'un modèle dont seul le test
   // vision avait déjà tourné (et vice versa) : les deux bugs partagent la même cause, corrigés ensemble.
   const existingRows = { conversation: new Map(), vision: new Map(), code: new Map() }
+  const previousDetails = new Map()
   try {
     const previous = readFileSync(RESULTS_PATH, 'utf-8')
     let currentTier = null
@@ -1199,6 +1252,20 @@ async function main() {
     // analyse) ne valent rien pour celle-ci — oubliés, jamais recopiés dans le nouveau fichier.
     const version = previous.match(/Version du test de conversation : (\d+)/)?.[1]
     if (Number(version) !== CONVERSATION_TEST_VERSION) existingRows.conversation.clear()
+    // Étape 230 : le détail par modèle d'un run précédent du MÊME test, gardé pour les modèles qui ne sont pas
+    // retestés ce run-ci (reprise après coupure) — sinon le fichier final perdrait le détail des premiers.
+    else {
+      const start = previous.indexOf(CONVERSATION_DETAIL_HEADING)
+      if (start >= 0) {
+        const after = previous.slice(start + CONVERSATION_DETAIL_HEADING.length)
+        const end = after.search(/\n## /)
+        const section = end >= 0 ? after.slice(0, end) : after
+        for (const block of section.split(/\n(?=### )/)) {
+          const name = block.match(/^### (.+?) — /)?.[1]
+          if (name && existingRows.conversation.has(name)) previousDetails.set(name, `${block.trim()}\n`)
+        }
+      }
+    }
   } catch {
     // Pas de fichier précédent (tout premier run) : rien à conserver, existingRows reste vide.
   }
@@ -1209,7 +1276,7 @@ async function main() {
   // nombre de questions) — une ligne de l'ancien test (x/6) est refaite, jamais reprise telle quelle.
   // Étape 164 : vision et code aussi — une mesure INCOMPLÈTE n'est jamais reprise (qwen2.5-coder:32b à « 2/2 » :
   // une des trois générations avait planté, très probablement sur l'ancien délai de 5 minutes de fetch).
-  const questionsPerTier = { conversation: TEST_CASES.length, vision: VISION_TEST_CASES.length, code: CODE_TEST_CASES.length }
+  const questionsPerTier = { conversation: CONVERSATION_TOTAL, vision: VISION_TEST_CASES.length, code: CODE_TEST_CASES.length }
   const madeWithCurrentTest = (tier, row) => row.reliability?.endsWith(`/${questionsPerTier[tier]}`)
   // Étape 164 : une ligne sans AUCUNE réponse (latence « — », toutes les questions en erreur) n'est pas un score :
   // elle est refaite. C'est ce qui bloquait ministral-3:3b, granite4.1:8b et gemma4:26b à 0/17 chez Léo, notés
@@ -1302,7 +1369,7 @@ async function main() {
   const testWeightOf = (model) => modelWeightGb(model)
   const totalPullWeight = missing.reduce((sum, m) => sum + modelWeightGb(m), 0)
   const totalTestWeight =
-    toRun.reduce((sum, m) => sum + testWeightOf(m) * TEST_CASES.length, 0) +
+    toRun.reduce((sum, m) => sum + testWeightOf(m) * CONVERSATION_TOTAL, 0) +
     visionToRun.reduce((sum, m) => sum + testWeightOf(m) * VISION_TEST_CASES.length, 0) +
     codeToRun.reduce((sum, m) => sum + testWeightOf(m) * CODE_TEST_CASES.length, 0)
   const totalWeight = totalPullWeight + totalTestWeight || 1
@@ -1330,7 +1397,38 @@ async function main() {
   // Ne JAMAIS supprimer, même en mode disque serré, un modèle que l'utilisateur avait DÉJÀ installé avant ce
   // run (`installed` n'est plus modifié après cette capture initiale, voir plus haut) — seuls les modèles que
   // CE run a lui-même téléchargés sont candidats à une suppression anticipée.
-  const initiallyInstalledSet = new Set(installed)
+  // Étape 230 : registre des modèles que le test a téléchargés LUI-MÊME, gardé à côté du fichier de résultats.
+  // Sans lui, un test coupé (Jaris fermé, PC éteint) juste après un téléchargement laissait ce modèle sur le
+  // disque, et la reprise le prenait ensuite pour un modèle installé par Léo : jamais supprimé (jusqu'à 25 Go).
+  const ledgerPath = `${RESULTS_PATH}.telecharges.json`
+  const readLedger = () => {
+    try {
+      return new Set(JSON.parse(readFileSync(ledgerPath, 'utf-8')))
+    } catch {
+      return new Set()
+    }
+  }
+  const downloadedByTest = DELETE_AFTER_TEST ? readLedger() : new Set()
+  const saveLedger = () => {
+    if (DELETE_AFTER_TEST) writeFileSync(ledgerPath, JSON.stringify([...downloadedByTest]), 'utf-8')
+  }
+  const initiallyInstalledSet = new Set(installed.filter((m) => !downloadedByTest.has(m)))
+  // Un modèle téléchargé par un run précédent, dont tous les tests sont déjà faits (repris) : supprimé tout de suite.
+  for (const model of [...downloadedByTest]) {
+    const stillToTest = toRun.includes(model) || visionToRun.includes(model) || codeToRun.includes(model)
+    if (stillToTest) continue
+    if (installed.includes(model)) {
+      try {
+        await deleteModelViaApi(model)
+        console.log(`  ${model} : supprimé (téléchargé par un test précédent, déjà testé)`)
+      } catch (err) {
+        console.log(`  ${model} : échec de la suppression (${err.message}), ignoré`)
+        continue
+      }
+    }
+    downloadedByTest.delete(model)
+  }
+  saveLedger()
 
   // Espace disque serré (étape 162) : un modèle téléchargé par CE run est supprimé dès la fin de son DERNIER
   // test (conversation, puis vision, puis code). L'ancien tri par « champion de palier » n'a plus de sens depuis
@@ -1338,10 +1436,12 @@ async function main() {
   // l'analyse, les modèles qu'il a choisis (« Retester la configuration »).
   const lastPhaseOf = (model) => (codeToRun.includes(model) ? 'code' : visionToRun.includes(model) ? 'vision' : 'conversation')
   async function releaseAfterLastTest(model, phase) {
-    if (!tightDiskMode || initiallyInstalledSet.has(model) || lastPhaseOf(model) !== phase) return
+    if (!(tightDiskMode || DELETE_AFTER_TEST) || initiallyInstalledSet.has(model) || lastPhaseOf(model) !== phase) return
     try {
       await deleteModelViaApi(model)
-      console.log(`  ${model} : supprimé après son test (espace disque limité)`)
+      downloadedByTest.delete(model)
+      saveLedger()
+      console.log(`  ${model} : supprimé après son test${tightDiskMode ? ' (espace disque limité)' : ''}`)
     } catch (err) {
       console.log(`  ${model} : échec de la suppression après test (${err.message}), ignoré`)
     }
@@ -1360,6 +1460,9 @@ async function main() {
   async function runOnePull(model) {
     const weight = modelWeightGb(model)
     console.log(`##PULL_MODEL_PROGRESS## ${model} 0`)
+    // Noté AVANT le téléchargement : coupé en plein milieu, le modèle reste à la charge du test.
+    downloadedByTest.add(model)
+    saveLedger()
     let ok = true
     try {
       await pullModel(model, budgetFor(model), diskCtx, (bucket) => {
@@ -1418,11 +1521,13 @@ async function main() {
   }
 
   const results = []
-  const reasoningAnswers = []
   const errors = []
+  // Détail par modèle (étape 230) : d'abord celui des modèles repris d'un run précédent, remplacé au fur et à
+  // mesure par celui des modèles testés ce run-ci.
+  const conversationDetails = new Map(previousDetails)
   let testsDone = 0
   const testsTotal =
-    toRun.length * TEST_CASES.length + visionToRun.length * VISION_TEST_CASES.length + codeToRun.length * CODE_TEST_CASES.length
+    toRun.length * CONVERSATION_TOTAL + visionToRun.length * VISION_TEST_CASES.length + codeToRun.length * CODE_TEST_CASES.length
   // Remonté avant les boucles de test (pas défini seulement à l'écriture des résultats comme avant) :
   // utilisée pendant le run, pas seulement à la toute fin.
   const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null)
@@ -1476,14 +1581,13 @@ async function main() {
       }
     }
 
+    // Étape 230 : une section par modèle — questions ratées (combien de passages sur CONVERSATION_REPEATS, et ce
+    // qu'il a fait à la place), puis ses réponses aux questions sans outil, à juger soi-même. Les modèles repris
+    // d'un run interrompu (JARIS_RESUME) gardent la section écrite par le run précédent.
     lines.push('')
-    lines.push('## Réponses aux questions de raisonnement (à juger toi-même)')
+    lines.push(CONVERSATION_DETAIL_HEADING)
     lines.push('')
-    for (const { prompt, answer, model } of reasoningAnswers) {
-      lines.push(`**${model}** — « ${prompt} »`)
-      lines.push(`> ${answer}`)
-      lines.push('')
-    }
+    for (const block of conversationDetails.values()) lines.push(block)
 
     if (errors.length) {
       lines.push('## Erreurs')
@@ -1517,29 +1621,39 @@ async function main() {
     console.log(`##MODEL_TESTING## ${model}`)
     const perModel = { model, role: 'conversation', latencies: [], speeds: [], correct: 0, total: 0 }
 
-    for (const testCase of TEST_CASES) {
+    // Étape 230 : détail par question (combien de passages ratés, et ce que le modèle a fait à la place) —
+    // le fichier ne gardait que le total, impossible de savoir CE QUE granite4.2:3b avait raté.
+    const detail = TEST_CASES.map((testCase) => ({ prompt: testCase.prompt, expectedTool: testCase.expectedTool, missed: 0, got: [], answers: [] }))
+    for (let pass = 1; pass <= CONVERSATION_REPEATS; pass++) for (const [caseIndex, testCase] of TEST_CASES.entries()) {
       const { prompt, expectedTool } = testCase
-      process.stdout.write(`  "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}" ... `)
+      const caseDetail = detail[caseIndex]
+      process.stdout.write(`  [${pass}/${CONVERSATION_REPEATS}] "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}" ... `)
       // Étape 162 : chaque question compte, y compris celles où il ne faut AUCUN outil, et un appel n'est
       // réussi que si son contenu l'est aussi (bon délai de rappel, bon nom d'application...).
       perModel.total++
       try {
-        const r = await chat(model, prompt)
+        const r = await chat(model, testCase)
         perModel.latencies.push(r.wallMs)
         if (r.tokPerSec !== null) perModel.speeds.push(r.tokPerSec)
         const ok = isCorrectAnswer(testCase, r)
         if (ok) perModel.correct++
         const got = r.toolName ? `${r.toolName} ${JSON.stringify(r.toolArgs ?? {})}` : 'aucun outil'
         console.log(`${ok ? 'OK' : 'RATÉ'} (attendu: ${expectedTool ?? 'aucun outil'}, obtenu: ${got}) — ${fmt(r.wallMs, 0)}ms`)
+        if (!ok) {
+          caseDetail.missed++
+          caseDetail.got.push(r.toolName ? got : `aucun outil : « ${oneLine(r.content) || 'réponse vide'} »`)
+        }
         if (!expectedTool) {
           const answer = r.toolName ? `[outil appelé au lieu de répondre : ${r.toolName}]` : r.content || '[réponse vide]'
-          reasoningAnswers.push({ model, prompt, answer })
+          caseDetail.answers.push(answer)
         }
       } catch (err) {
-        // Ollama injoignable : l'analyse s'arrête AVANT d'enregistrer ce modèle (jamais un faux 0/17).
+        // Ollama injoignable : l'analyse s'arrête AVANT d'enregistrer ce modèle (jamais un faux score).
         if (err instanceof OllamaDownError) throw err
         console.log(`ERREUR (${err.message})`)
         errors.push({ model, prompt, message: err.message })
+        caseDetail.missed++
+        caseDetail.got.push(`erreur : ${err.message}`)
       }
       testsDone++
       console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
@@ -1548,6 +1662,7 @@ async function main() {
     }
 
     results.push(perModel)
+    conversationDetails.set(model, formatConversationDetail(model, perModel, detail))
     // Lu par le tableau de suivi en direct (OptionsMenu.tsx) : ce modèle a fini tous ses tests, avec ce score.
     console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
     persistResults()

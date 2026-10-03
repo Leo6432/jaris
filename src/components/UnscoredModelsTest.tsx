@@ -71,24 +71,31 @@ export default function UnscoredModelsTest(): JSX.Element | null {
   return (
     <div className="options-menu__unscored">
       <p className="options-menu__unscored-title">
-        Modèles sans score ({models.length}) : {models.map((model) => formatModelName(model)).join(', ')}
+        Modèles à tester ({models.length}) : {models.map((model) => formatModelName(model)).join(', ')}
       </p>
       <p className="options-menu__unscored-text">
-        Jaris ne choisit jamais un modèle sans score. Le test ne concerne que ces modèles, pas les autres.
+        Le test d'outils a changé : les modèles notés avec l'ancien test (sur 17) sont retestés, pour que tous les
+        scores se comparent. En attendant, Jaris garde leurs anciens scores. Un modèle jamais testé n'est jamais
+        choisi.
       </p>
 
       {phase === 'idle' && (
         <button className="options-menu__action" onClick={() => setPhase('confirming')}>
-          Tester les modèles sans score
+          Tester ces modèles
         </button>
       )}
 
       {phase === 'confirming' && (
         <div className="options-menu__unscored-confirm">
           <p>
-            Chaque modèle est téléchargé, testé (17 questions, ou 3 applications pour un modèle de code), puis
-            supprimé. Les gros modèles débordent sur la RAM : compte environ une heure, et ferme les jeux et
-            logiciels lourds pendant le test. Un modèle trop gros pour ton PC est sauté.
+            Chaque modèle est téléchargé, testé (24 questions posées 3 fois chacune, des images pour un modèle de
+            vision, 3 applications pour un modèle de code), puis supprimé — sauf ceux que tu avais déjà. Les gros
+            modèles débordent sur la RAM : compte plusieurs heures, et ferme les jeux et logiciels lourds pendant
+            le test. Un modèle trop gros pour ton PC est sauté.
+          </p>
+          <p>
+            Tu peux l'arrêter à tout moment, même en fermant Jaris : au prochain lancement du test, il reprend
+            après le dernier modèle terminé.
           </p>
           <div className="options-menu__unscored-actions">
             <button className="options-menu__action" onClick={() => void run()}>

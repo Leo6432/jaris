@@ -9,11 +9,14 @@ import vm from 'node:vm'
 import ts from 'typescript'
 import {
   CONVERSATION_NUM_CTX,
+  CONVERSATION_REPEATS,
   CONVERSATION_TEST_VERSION,
+  CONVERSATION_TOTAL,
   TEST_CASES,
   TOOLS,
   SYSTEM_PROMPT_TEMPLATE,
   buildBenchmarkSystemPrompt,
+  buildCaseMessages,
   isCorrectAnswer
 } from './benchmark-cases.mjs'
 import { systemPromptModule } from './load-system-prompt.mjs'
@@ -122,11 +125,22 @@ const PERFECT = {
   'Monte le son': ['media_control', { action: 'volume_up' }],
   'Appuie sur Entrée': ['press_key', { key: 'entrée' }],
   'Combien de mémoire vive': ['get_system_stats', {}],
-  'Va sur YouTube': ['computer_use_task', { goal: 'Va sur YouTube et cherche un tuto de guitare' }]
+  'Va sur YouTube': ['computer_use_task', { goal: 'Va sur YouTube et cherche un tuto de guitare' }],
+  // Étape 230 : les outils ajoutés au test.
+  'Clique à la position': ['click_mouse', { x: 640, y: 360 }],
+  'Fais un clic droit': ['click_mouse', { button: 'right' }],
+  'Dessine-moi un chat': ['generate_image', { prompt: 'a ginger cat sitting on a sofa' }],
+  "Éteins l'ordinateur": ['shutdown_pc', {}],
+  "Redémarre l'ordinateur": ['shutdown_pc', { restart: true }],
+  "C'est quand déjà l'anniversaire": ['recall_memory', { title: 'Anniversaire de maman' }],
+  'Quels sont les horaires de la piscine': ['read_web_page', { url: 'https://metropole.rennes.fr/piscine-saint-georges' }]
 }
 
-function startFakeOllama({ installed, answer, dropChat = () => false }) {
+function startFakeOllama({ installed, answer, dropChat = () => false, pullFails = false }) {
   const requests = []
+  // Étape 230 : téléchargements et suppressions, pour vérifier qu'un modèle téléchargé par le test est supprimé.
+  const pulled = []
+  const deleted = []
   let chatCalls = 0
   const server = createServer((req, res) => {
     // Coupure de connexion (Ollama arrêté ou en train de redémarrer) : la requête meurt sans réponse.
@@ -136,10 +150,28 @@ function startFakeOllama({ installed, answer, dropChat = () => false }) {
     req.on('end', () => {
       res.setHeader('Content-Type', 'application/json')
       if (req.url === '/api/tags') return res.end(JSON.stringify({ models: installed.map((name) => ({ name })) }))
+      if (req.url === '/api/pull' && pullFails) {
+        res.statusCode = 500
+        return res.end(JSON.stringify({ error: 'pull model manifest: file does not exist' }))
+      }
+      if (req.url === '/api/pull') {
+        const name = JSON.parse(body).name
+        pulled.push(name)
+        installed.push(name)
+        return res.end(JSON.stringify({ status: 'success' }) + '\n')
+      }
+      if (req.url === '/api/delete') {
+        const name = JSON.parse(body).name ?? JSON.parse(body).model
+        deleted.push(name)
+        installed.splice(installed.indexOf(name), 1)
+        return res.end('{}')
+      }
       if (req.url === '/api/chat') {
         const json = JSON.parse(body)
         requests.push(json)
-        const prompt = json.messages.at(-1).content
+        // La question est le dernier message de l'utilisateur : après elle peuvent venir un appel d'outil déjà fait
+        // et son résultat (étape 230, read_web_page).
+        const prompt = json.messages.findLast((m) => m.role === 'user').content
         const call = answer(json.model, prompt)
         // 'length' : fenêtre pleine pendant la réflexion, aucune réponse (vrai comportement d'Ollama, étape 159).
         if (call === 'length') return res.end(JSON.stringify({ message: { role: 'assistant', content: '' }, done_reason: 'length', eval_count: 10, eval_duration: 1e8 }))
@@ -150,7 +182,7 @@ function startFakeOllama({ installed, answer, dropChat = () => false }) {
       res.end('{}')
     })
   })
-  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, requests, host: `http://127.0.0.1:${server.address().port}` })))
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, requests, pulled, deleted, host: `http://127.0.0.1:${server.address().port}` })))
 }
 
 function runScript(env) {
@@ -187,7 +219,7 @@ test('le vrai script : vraies consignes et 15 outils envoyés, 17 questions not�
     assert.equal(code, 0, out)
 
     // Ce que les modèles ont reçu : les VRAIES consignes et les 14 VRAIS outils.
-    assert.ok(fake.requests.length >= 3 * TEST_CASES.length)
+    assert.ok(fake.requests.length >= 3 * CONVERSATION_TOTAL)
     for (const r of fake.requests) {
       assert.equal(r.tools.length, 15)
       assert.ok(r.messages[0].content.startsWith('Tu es Jaris, un assistant personnel'))
@@ -198,11 +230,15 @@ test('le vrai script : vraies consignes et 15 outils envoyés, 17 questions not�
 
     const results = readFileSync(resultsPath, 'utf8')
     const scoreOf = (model) => results.match(new RegExp(`\\| ${model.replace(/[.:]/g, '\\$&')} \\|[^\\n]*\\| (\\d+/\\d+) \\|`))?.[1]
-    assert.equal(scoreOf('ministral-3:3b'), `${TEST_CASES.length}/${TEST_CASES.length}`)
-    // Deux rappels au mauvais délai : deux questions ratées, même avec le bon outil.
-    assert.equal(scoreOf('qwen3:1.7b'), `${TEST_CASES.length - 2}/${TEST_CASES.length}`)
-    // Aucun outil jamais : seules les 4 questions « sans outil » sont justes.
-    assert.equal(scoreOf('qwen3.5:0.8b'), `4/${TEST_CASES.length}`)
+    assert.equal(scoreOf('ministral-3:3b'), `${CONVERSATION_TOTAL}/${CONVERSATION_TOTAL}`)
+    // Deux rappels au mauvais délai : deux questions ratées à chaque passage, même avec le bon outil.
+    assert.equal(scoreOf('qwen3:1.7b'), `${CONVERSATION_TOTAL - 2 * CONVERSATION_REPEATS}/${CONVERSATION_TOTAL}`)
+    // Aucun outil jamais : seules les 4 questions « sans outil » sont justes, à chaque passage.
+    assert.equal(scoreOf('qwen3.5:0.8b'), `${4 * CONVERSATION_REPEATS}/${CONVERSATION_TOTAL}`)
+    // Étape 230 : le détail dit QUELLE question est ratée, combien de fois, et ce que le modèle a fait à la place.
+    assert.match(results, /### qwen3:1\.7b — \d+\/\d+\n\n- RATÉ 3\/3 « Rappelle-moi d'appeler le dentiste dans 20 minutes\. » \(attendu : set_reminder\) — obtenu : set_reminder \{"message":"Appeler le dentiste","delay_minutes":1\}/)
+    assert.match(results, /### ministral-3:3b — \d+\/\d+\n\nAucune question ratée\./)
+    assert.match(results, /- « Merci, c'est parfait ! »\n  > Je suis Jaris\.\n  > Je suis Jaris\.\n  > Je suis Jaris\./)
   } finally {
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })
@@ -232,10 +268,10 @@ test('JARIS_ONLY_MODELS : seuls les modèles demandés sont testés, dans leur �
     const tested = new Set(fake.requests.map((r) => r.model))
     assert.deepEqual([...tested].sort(), ['nemotron-3.5-lightning:30b', 'qwen2.5-coder:14b'])
     const lightning = fake.requests.filter((r) => r.model === 'nemotron-3.5-lightning:30b')
-    assert.equal(lightning.length, TEST_CASES.length, 'Lightning passe les 17 questions d’appel d’outils')
+    assert.equal(lightning.length, CONVERSATION_TOTAL, 'Lightning passe chaque question d’appel d’outils, 3 fois')
     assert.ok(fake.requests.filter((r) => r.model === 'qwen2.5-coder:14b').every((r) => !r.tools), 'le modèle de code passe le test de code')
     const results = readFileSync(resultsPath, 'utf8')
-    assert.match(results, /\| nemotron-3\.5-lightning:30b \|[^\n]*\| 17\/17 \|/)
+    assert.match(results, new RegExp(`\\| nemotron-3\\.5-lightning:30b \\|[^\\n]*\\| ${CONVERSATION_TOTAL}/${CONVERSATION_TOTAL} \\|`))
     assert.match(results, /## Code[\s\S]*\| qwen2\.5-coder:14b \|/)
   } finally {
     fake.server.close()
@@ -247,7 +283,7 @@ test('JARIS_ONLY_MODELS : seuls les modèles demandés sont testés, dans leur �
 // de savoir lequel des deux — alors que le vrai message d'Ollama était connu du script.
 test('un modèle sauté donne sa VRAIE raison, dans le suivi en direct et dans le fichier de résultats', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
-  const fake = await startFakeOllama({ installed: [], answer: (_m, p) => perfectAnswer(p) })
+  const fake = await startFakeOllama({ installed: [], answer: (_m, p) => perfectAnswer(p), pullFails: true })
   try {
     const resultsPath = join(dir, 'benchmark-nouveaux-modeles.md')
     const { code, out } = await runScript({
@@ -283,7 +319,7 @@ test('reprise : un modèle déjà passé au NOUVEAU test est sauté, une ligne d
         '## Conversation — appel d’outils',
         '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
         '|---|---|---|---|',
-        `| ministral-3:3b | 100 ms | 50 tok/s | ${TEST_CASES.length}/${TEST_CASES.length} |`,
+        `| ministral-3:3b | 100 ms | 50 tok/s | ${CONVERSATION_TOTAL}/${CONVERSATION_TOTAL} |`,
         '| qwen3:1.7b | 100 ms | 50 tok/s | 6/6 |'
       ].join('\n')
     )
@@ -299,15 +335,29 @@ test('reprise : un modèle déjà passé au NOUVEAU test est sauté, une ligne d
   }
 })
 
-test('sans « tout retester », un modèle déjà vérifié n’est pas retesté ; avec, il l’est', async () => {
+test('sans « tout retester », un score du test ACTUEL dispense du test ; un score de l’ancien test (sur 17) non', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
   const fake = await startFakeOllama({ installed: ['ministral-3:3b', 'qwen3:1.7b', 'qwen3.5:0.8b'], answer: (_m, p) => perfectAnswer(p) })
   try {
-    // ministral-3:3b, qwen3:1.7b et qwen3.5:0.8b sont tous dans verified-tool-scores.md.
-    const plain = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: join(dir, 'a.md') })
+    const verified = join(dir, 'verified.md')
+    writeFileSync(
+      verified,
+      [
+        '## Conversation',
+        '',
+        '| Modèle | Fiabilité |',
+        '|---|---|',
+        `| ministral-3:3b | ${CONVERSATION_TOTAL - 1}/${CONVERSATION_TOTAL} |`,
+        `| qwen3.5:0.8b | ${CONVERSATION_TOTAL}/${CONVERSATION_TOTAL} |`,
+        // Étape 230 : granite4.2:3b, testé à l'ancien test, doit repasser le nouveau.
+        '| qwen3:1.7b | 16/17 |'
+      ].join('\n')
+    )
+    const plain = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: join(dir, 'a.md'), JARIS_VERIFIED_SCORES_PATH: verified })
     assert.equal(plain.code, 0, plain.out)
-    assert.equal(fake.requests.length, 0, 'déjà vérifiés : rien ne doit être retesté sans « tout retester »')
-    const all = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: join(dir, 'b.md'), JARIS_RETEST_ALL: '1' })
+    assert.deepEqual([...new Set(fake.requests.map((r) => r.model))], ['qwen3:1.7b'], 'seul le score de l’ancien test est refait')
+    fake.requests.length = 0
+    const all = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: join(dir, 'b.md'), JARIS_VERIFIED_SCORES_PATH: verified, JARIS_RETEST_ALL: '1' })
     assert.equal(all.code, 0, all.out)
     assert.equal(new Set(fake.requests.map((r) => r.model)).size, 3)
   } finally {
@@ -372,7 +422,7 @@ test('une réponse coupée faute de place compte comme un échec, jamais comme �
     assert.equal(code, 0, out)
     const results = readFileSync(resultsPath, 'utf8')
     // Sans ce garde-fou, les 4 questions « sans outil » auraient été comptées justes : 4/17.
-    assert.match(results, new RegExp(`\\| qwen3\\.5:0\\.8b \\|[^\\n]*\\| 0/${TEST_CASES.length} \\|`))
+    assert.match(results, new RegExp(`\\| qwen3\\.5:0\\.8b \\|[^\\n]*\\| 0/${CONVERSATION_TOTAL} \\|`))
     assert.match(results, /fenêtre de contexte pleine/)
   } finally {
     fake.server.close()
@@ -404,7 +454,7 @@ test('Ollama coupé un instant : l’analyse attend son retour et note le VRAI s
     const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: resultsPath, JARIS_RETEST_ALL: '1' })
     assert.equal(code, 0, out)
     assert.match(out, /Ollama ne répond plus/)
-    assert.match(readFileSync(resultsPath, 'utf8'), new RegExp(`\\| ministral-3:3b \\|[^\\n]*\\| ${TEST_CASES.length}/${TEST_CASES.length} \\|`))
+    assert.match(readFileSync(resultsPath, 'utf8'), new RegExp(`\\| ministral-3:3b \\|[^\\n]*\\| ${CONVERSATION_TOTAL}/${CONVERSATION_TOTAL} \\|`))
   } finally {
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })
@@ -447,8 +497,8 @@ test('reprise : une ligne sans AUCUNE réponse (0/17, latence « — ») est ref
         '',
         '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
         '|---|---|---|---|',
-        `| ministral-3:3b | — ms | — tok/s | 0/${TEST_CASES.length} |`,
-        `| qwen3:1.7b | 900 ms | 85.4 tok/s | ${TEST_CASES.length}/${TEST_CASES.length} |`
+        `| ministral-3:3b | — ms | — tok/s | 0/${CONVERSATION_TOTAL} |`,
+        `| qwen3:1.7b | 900 ms | 85.4 tok/s | ${CONVERSATION_TOTAL}/${CONVERSATION_TOTAL} |`
       ].join('\n')
     )
     const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: resultsPath, JARIS_RETEST_ALL: '1', JARIS_RESUME: '1' })
@@ -502,4 +552,186 @@ test('reprise : une mesure de code INCOMPLÈTE (2/2 au lieu de 3/3) est refaite,
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+// ---------------------------------------------------------------------------------------------------------
+// Étape 230 (Léo : « je veux être sûr à 1000 % avant de lancer au moins 4 h de test »)
+// ---------------------------------------------------------------------------------------------------------
+
+test('chaque outil de Jaris est testé par au moins une question (5 sur 15 ne l’étaient jamais)', () => {
+  const tested = new Set(TEST_CASES.map((c) => c.expectedTool).filter(Boolean))
+  const untested = TOOLS.map((t) => t.function.name).filter((name) => !tested.has(name))
+  assert.deepEqual(untested, [], `outils jamais testés : ${untested.join(', ')}`)
+})
+
+test('chaque question est posée plusieurs fois, et le total suit (24 questions × 3)', () => {
+  assert.ok(CONVERSATION_REPEATS >= 3)
+  assert.equal(CONVERSATION_TOTAL, TEST_CASES.length * CONVERSATION_REPEATS)
+  assert.ok(new Set(TEST_CASES.map((c) => c.prompt)).size === TEST_CASES.length, 'deux questions identiques')
+})
+
+test('Jaris reconnaît les scores du test actuel : même total des deux côtés (hardwareScan.ts)', () => {
+  const source = readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8')
+  assert.equal(Number(source.match(/export const CONVERSATION_TEST_TOTAL = (\d+)/)?.[1]), CONVERSATION_TOTAL)
+})
+
+test('avec des notes en mémoire, les consignes sont EXACTEMENT celles de Jaris (systemPrompt.ts)', () => {
+  const titles = ['Voiture', 'Anniversaire de maman', 'Code postal']
+  const now = new Date(2026, 9, 3, 11, 31)
+  const real = systemPromptModule.buildSystemPrompt(null, titles, 'voice')
+  const date = /Nous sommes le [^]*?, il est \d{2}:\d{2}\. /
+  assert.equal(buildBenchmarkSystemPrompt(now, titles).replace(date, ''), real.replace(date, ''))
+  // Sans notes, toujours la mémoire vide.
+  assert.equal(buildBenchmarkSystemPrompt(now).replace(date, ''), systemPromptModule.buildSystemPrompt(null, [], 'voice').replace(date, ''))
+})
+
+test('lire une page web : la question, PUIS la recherche déjà faite et son résultat, comme dans converse()', () => {
+  const testCase = TEST_CASES.find((c) => c.expectedTool === 'read_web_page')
+  const messages = buildCaseMessages(testCase)
+  assert.deepEqual(messages.map((m) => m.role), ['system', 'user', 'assistant', 'tool'])
+  assert.equal(messages[1].content, testCase.prompt)
+  assert.equal(messages[2].tool_calls[0].function.name, 'search_web')
+  // Même format que webSearch.ts : « 1. titre — extrait (url) ».
+  assert.match(messages[3].content, /^1\. .+ — .+ \(https:\/\/metropole\.rennes\.fr\/piscine-saint-georges\)\n2\. /)
+  assert.ok(!/\d{1,2} ?h/.test(messages[3].content), 'le résultat ne doit PAS contenir l’horaire, sinon lire la page est inutile')
+})
+
+test('les nouvelles questions jugent le fond : bons arguments justes, mauvais arguments faux', () => {
+  const find = (start) => TEST_CASES.find((c) => c.prompt.startsWith(start))
+  const ok = (start, toolName, toolArgs) => isCorrectAnswer(find(start), { toolName, toolArgs, content: '' })
+  assert.equal(ok('Clique à la position', 'click_mouse', { x: 640, y: 360 }), true)
+  assert.equal(ok('Clique à la position', 'click_mouse', { x: '640', y: '360', button: 'left' }), true)
+  assert.equal(ok('Clique à la position', 'click_mouse', { x: 360, y: 640 }), false)
+  assert.equal(ok('Clique à la position', 'click_mouse', {}), false)
+  assert.equal(ok('Fais un clic droit', 'click_mouse', { button: 'right' }), true)
+  assert.equal(ok('Fais un clic droit', 'click_mouse', { button: 'left' }), false)
+  assert.equal(ok('Dessine-moi un chat', 'generate_image', { prompt: 'A ginger cat on a couch' }), true)
+  assert.equal(ok('Dessine-moi un chat', 'generate_image', { prompt: 'a sofa in a living room' }), false)
+  assert.equal(ok('Dessine-moi un chat', 'look_at_screen', { question: 'chat' }), false)
+  assert.equal(ok("Éteins l'ordinateur", 'shutdown_pc', {}), true)
+  assert.equal(ok("Éteins l'ordinateur", 'shutdown_pc', { restart: false }), true)
+  assert.equal(ok("Éteins l'ordinateur", 'shutdown_pc', { restart: true }), false, 'redémarrer n’est pas éteindre')
+  assert.equal(ok("Redémarre l'ordinateur", 'shutdown_pc', { restart: true }), true)
+  assert.equal(ok("Redémarre l'ordinateur", 'shutdown_pc', { restart: 'true' }), true)
+  assert.equal(ok("Redémarre l'ordinateur", 'shutdown_pc', {}), false, 'éteindre n’est pas redémarrer')
+  assert.equal(ok("C'est quand déjà l'anniversaire", 'recall_memory', { title: 'Anniversaire de maman' }), true)
+  assert.equal(ok("C'est quand déjà l'anniversaire", 'recall_memory', { title: 'Voiture' }), false)
+  assert.equal(ok("C'est quand déjà l'anniversaire", 'search_web', { query: 'anniversaire de ma mère' }), false)
+  assert.equal(ok('Quels sont les horaires de la piscine', 'read_web_page', { url: 'https://metropole.rennes.fr/piscine-saint-georges' }), true)
+  assert.equal(ok('Quels sont les horaires de la piscine', 'read_web_page', { url: 'https://www.piscine-rennes.fr/horaires' }), false, 'URL inventée')
+  assert.equal(ok('Quels sont les horaires de la piscine', 'search_web', { query: 'horaires piscine Saint-Georges' }), false)
+})
+
+test('reprise : le détail par question des modèles déjà testés est gardé dans le fichier final', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const fake = await startFakeOllama({ installed: ['ministral-3:3b', 'qwen3:1.7b', 'qwen3.5:0.8b'], answer: (_m, p) => perfectAnswer(p) })
+  try {
+    const resultsPath = join(dir, 'benchmark-results.md')
+    writeFileSync(
+      resultsPath,
+      [
+        `Version du test de conversation : ${CONVERSATION_TEST_VERSION}`,
+        '',
+        '## Conversation',
+        '',
+        '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
+        '|---|---|---|---|',
+        `| ministral-3:3b | 900 ms | 85.4 tok/s | ${CONVERSATION_TOTAL - 1}/${CONVERSATION_TOTAL} |`,
+        '',
+        '## Détail de la conversation, modèle par modèle',
+        '',
+        `### ministral-3:3b — ${CONVERSATION_TOTAL - 1}/${CONVERSATION_TOTAL}`,
+        '',
+        '- RATÉ 1/3 « Monte le son. » (attendu : media_control) — obtenu : media_control {"action":"play_pause"}',
+        ''
+      ].join('\n')
+    )
+    const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: resultsPath, JARIS_RETEST_ALL: '1', JARIS_RESUME: '1' })
+    assert.equal(code, 0, out)
+    assert.ok(!fake.requests.some((r) => r.model === 'ministral-3:3b'), 'déjà fait : pas retesté')
+    const results = readFileSync(resultsPath, 'utf8')
+    assert.match(results, /### ministral-3:3b — 71\/72\n\n- RATÉ 1\/3 « Monte le son\. »/, 'le détail du modèle repris doit rester')
+    assert.match(results, /### qwen3:1\.7b — 72\/72/)
+    assert.equal((results.match(/### ministral-3:3b/g) ?? []).length, 1)
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('un modèle téléchargé pour le test est supprimé après ; un modèle déjà installé, jamais', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  // ministral-3:3b est déjà là (Léo s'en sert) ; qwen3:1.7b est téléchargé par le test.
+  const fake = await startFakeOllama({ installed: ['ministral-3:3b'], answer: (_m, p) => perfectAnswer(p) })
+  try {
+    const { code, out } = await runScript({
+      OLLAMA_HOST: fake.host,
+      JARIS_RESULTS_PATH: join(dir, 'r.md'),
+      JARIS_RETEST_ALL: '1',
+      JARIS_ONLY_MODELS: 'ministral-3:3b,qwen3:1.7b',
+      JARIS_DELETE_AFTER_TEST: '1',
+      JARIS_RAM_SAFETY_MARGIN_GB: '0.1',
+      JARIS_DISK_SAFETY_MARGIN_GB: '0'
+    })
+    assert.equal(code, 0, out)
+    assert.deepEqual(fake.pulled, ['qwen3:1.7b'])
+    assert.ok(fake.requests.some((r) => r.model === 'qwen3:1.7b'), 'testé avant d’être supprimé')
+    assert.deepEqual(fake.deleted, ['qwen3:1.7b'])
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('Jaris lance le test en supprimant les modèles téléchargés pour lui', () => {
+  const runner = readFileSync(new URL('../electron/services/benchmarkRunner.ts', import.meta.url), 'utf8')
+  assert.match(runner, /JARIS_DELETE_AFTER_TEST: '1'/)
+  assert.match(runner, /JARIS_RESUME: '1'/)
+})
+
+test('test coupé après un téléchargement : à la reprise, ce modèle est bien supprimé, jamais pris pour un modèle de Léo', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  // Coupure précédente : qwen3:1.7b téléchargé ET testé, mais pas encore supprimé ; qwen3.5:0.8b téléchargé, pas
+  // encore testé. ministral-3:3b, lui, appartient à Léo.
+  const fake = await startFakeOllama({ installed: ['ministral-3:3b', 'qwen3:1.7b', 'qwen3.5:0.8b'], answer: (_m, p) => perfectAnswer(p) })
+  try {
+    const resultsPath = join(dir, 'r.md')
+    writeFileSync(
+      resultsPath,
+      [
+        `Version du test de conversation : ${CONVERSATION_TEST_VERSION}`,
+        '',
+        '## Conversation',
+        '',
+        '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
+        '|---|---|---|---|',
+        `| qwen3:1.7b | 900 ms | 85.4 tok/s | ${CONVERSATION_TOTAL}/${CONVERSATION_TOTAL} |`
+      ].join('\n')
+    )
+    writeFileSync(`${resultsPath}.telecharges.json`, JSON.stringify(['qwen3:1.7b', 'qwen3.5:0.8b']))
+    const { code, out } = await runScript({
+      OLLAMA_HOST: fake.host,
+      JARIS_RESULTS_PATH: resultsPath,
+      JARIS_RETEST_ALL: '1',
+      JARIS_RESUME: '1',
+      JARIS_DELETE_AFTER_TEST: '1',
+      JARIS_ONLY_MODELS: 'ministral-3:3b,qwen3:1.7b,qwen3.5:0.8b'
+    })
+    assert.equal(code, 0, out)
+    assert.ok(!fake.requests.some((r) => r.model === 'qwen3:1.7b'), 'déjà testé : pas retesté')
+    assert.deepEqual([...fake.deleted].sort(), ['qwen3.5:0.8b', 'qwen3:1.7b'], 'les deux modèles du test sont supprimés, jamais celui de Léo')
+    assert.deepEqual(JSON.parse(readFileSync(`${resultsPath}.telecharges.json`, 'utf8')), [])
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('fermer Jaris arrête le test en cours, et un second lancement est refusé tant qu’il tourne', () => {
+  const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
+  const beforeQuit = main.slice(main.indexOf("app.on('before-quit'"), main.indexOf('})', main.indexOf("app.on('before-quit'")))
+  assert.match(beforeQuit, /stopModelTest\(\)/)
+  const runner = readFileSync(new URL('../electron/services/benchmarkRunner.ts', import.meta.url), 'utf8')
+  assert.match(runner, /if \(runningTest\) return Promise\.reject/)
+  assert.match(runner, /runningTest\?\.kill\(\)/)
 })

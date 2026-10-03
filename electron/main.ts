@@ -51,7 +51,7 @@ import { openApp } from './services/appLauncher'
 import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, getMyModelPicks, getUnscoredModels, isUnusedInstalledModel } from './services/hardwareScan'
 import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
-import { runQuickSetup, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
+import { runQuickSetup, stopModelTest, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
 import { PhoneAccessManager } from './services/phoneAccessManager'
 import { PHONE_RESTRICTIONS, phoneStatusFromLog } from './services/phoneAccess'
@@ -1672,6 +1672,8 @@ app.whenReady().then(async () => {
 // window-all-closed...), avant que les fenêtres ne se ferment : le bon endroit pour arrêter proprement ce
 // que Jaris a lui-même démarré, plutôt qu'un process qui continue de tourner indéfiniment en arrière-plan.
 app.on('before-quit', () => {
+  // Étape 230 : un test de modèles (des heures) ne doit jamais continuer après Jaris : il reprendra au relancement.
+  stopModelTest()
   stopOllamaIfStartedByJaris()
   // Étape 153 : app.quit() (mise à jour, croix, « Quitter ») ne déclenche PAS 'window-all-closed' — seul
   // endroit où les deux programmes Python (écoute, voix) étaient arrêtés. Ils survivaient donc à Jaris, micro

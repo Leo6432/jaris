@@ -6094,3 +6094,31 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   (read_web_page, recall_memory, click_mouse, generate_image, shutdown_pc). Pour relancer un modèle déjà noté :
   `JARIS_RETEST_ALL=1 JARIS_ONLY_MODELS=<modèle>` ; `OLLAMA_HOST` doit contenir `http://`, et sans carte
   graphique ici, `JARIS_RAM_SAFETY_MARGIN_GB=2` (sinon budget 0 Go, modèle sauté) — ~1 min 45 par question.
+
+- **Test d'outils version 5, pour retester tous les modèles (Léo, étape 230 : « je veux être sûr à 1000 % avant
+  de lancer au moins 4 h de test »).** Trois défauts mesurés avant de toucher au test : 5 des 15 outils jamais
+  testés (read_web_page, recall_memory, click_mouse, generate_image, shutdown_pc) ; chaque question posée une
+  seule fois alors que granite4.2:3b fait 17/17 puis 15/17 sur deux passages identiques ; et seul le total
+  enregistré, impossible de savoir quelle question un modèle rate. Corrigé : 24 questions (7 de plus, dont
+  éteindre ET redémarrer, clic à une position ET clic droit), chacune posée 3 fois (72 réponses), avec le
+  réglage d'échantillonnage par défaut du modèle, comme Jaris (jamais de température fixée en conversation).
+  Deux questions se jouent dans un vrai contexte de Jaris : notes en mémoire (consignes identiques à
+  systemPrompt.ts avec des titres, vérifié par test) et un search_web déjà fait dans le tour (question, PUIS
+  appel et résultat au format de webSearch.ts — j'avais d'abord mis le résultat AVANT la question, repéré à la
+  relecture). Le fichier de résultats a une section par modèle : questions ratées (n/3 et ce qu'il a fait à la
+  place) et réponses sans outil, gardée à la reprise.
+  **Pièges trouvés en vérifiant, à garder** :
+  - le contrôle de synchronisation des listes ne vérifiait que la présence du NOM dans le script : gemma4:26b et
+    qwen3.8:27b, candidats Vision, n'étaient que dans la liste de conversation du script — jamais testés en
+    vision. Le test compare maintenant chaque liste à SA liste ;
+  - `cleanupUnselectedModels` (benchmarkRunner.ts) n'existe plus depuis longtemps : hors disque serré, aucun
+    modèle téléchargé par le test n'était supprimé (~290 Go pour un re-test complet), malgré le commentaire qui
+    disait le contraire. `JARIS_DELETE_AFTER_TEST=1` + un registre `<résultats>.telecharges.json` (sinon un
+    modèle téléchargé juste avant une coupure était pris pour un modèle de Léo à la reprise) ;
+  - fermer Jaris n'arrêtait pas le test (un process enfant survit sous Windows) : relancer en faisait tourner
+    deux sur le même fichier. `stopModelTest()` dans before-quit, second lancement refusé ;
+  - un test du faux Ollama dépendait du disque libre de la machine (marge de 5 Go) : réussi puis raté selon
+    l'espace restant. `JARIS_DISK_SAFETY_MARGIN_GB` pour les tests.
+  Un score de conversation sur un autre total que 72 (`CONVERSATION_TEST_TOTAL`, hardwareScan.ts) compte comme
+  à refaire, dans Jaris comme dans le script : le bouton relance les 30 modèles de conversation, avec reprise.
+  En attendant, Jaris garde les anciens scores sur 17 ; ne jamais mélanger les deux une fois les nouveaux reçus.

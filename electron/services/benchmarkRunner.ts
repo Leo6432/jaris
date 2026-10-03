@@ -1,4 +1,4 @@
-import { spawn } from 'child_process'
+import { spawn, type ChildProcess } from 'child_process'
 import { join } from 'path'
 import { config } from '../config'
 import { resourcesRoot } from '../paths'
@@ -174,10 +174,24 @@ export function unscoredResultsPath(): string {
  * installée n'a jamais besoin d'un `node` système. JARIS_RESUME : un PC éteint en route reprend là où il en
  * était au clic suivant. Marge RAM de 12 Go au lieu de 16 : voir RAM_SAFETY_MARGIN_GB dans le script.
  */
+/**
+ * Étape 230 : le test en cours. Un re-test complet dure des heures ; fermer Jaris ne l'arrêtait pas (un process
+ * lancé par Jaris lui survit sous Windows), et le relancer ensuite en faisait tourner DEUX sur le même fichier
+ * de résultats. Gardé ici pour l'arrêter à la fermeture (stopModelTest) et refuser un second lancement.
+ */
+let runningTest: ChildProcess | null = null
+
+/** Arrête le test de modèles en cours, s'il y en a un (fermeture de Jaris). Il reprendra au prochain lancement. */
+export function stopModelTest(): void {
+  runningTest?.kill()
+  runningTest = null
+}
+
 export function testUnscoredModels(onLine: (line: string) => void): Promise<{ models: string[]; resultsPath: string }> {
   const models = getUnscoredModels()
   const resultsPath = unscoredResultsPath()
   if (!models.length) return Promise.resolve({ models, resultsPath })
+  if (runningTest) return Promise.reject(new Error('Un test est déjà en cours : attends sa fin, ou ferme Jaris pour l’arrêter.'))
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, [join(resourcesRoot(), 'scripts', 'benchmark-models.mjs')], {
       windowsHide: true,
@@ -188,12 +202,18 @@ export function testUnscoredModels(onLine: (line: string) => void): Promise<{ mo
         JARIS_ONLY_MODELS: models.join(','),
         JARIS_RESULTS_PATH: resultsPath,
         JARIS_RESUME: '1',
+        // Étape 230 : chaque modèle téléchargé pour le test est supprimé juste après (sinon ~290 Go restent).
+        JARIS_DELETE_AFTER_TEST: '1',
         JARIS_RAM_SAFETY_MARGIN_GB: '12'
       }
     })
+    runningTest = proc
     let buffer = ''
-    const handleChunk = (chunk: Buffer): void => {
-      buffer += chunk.toString()
+    // setEncoding : un caractère accentué coupé entre deux morceaux reste entier (piège déjà rencontré, étape 121).
+    proc.stdout.setEncoding('utf8')
+    proc.stderr.setEncoding('utf8')
+    const handleChunk = (chunk: string): void => {
+      buffer += chunk
       let newlineIndex: number
       while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
         onLine(buffer.slice(0, newlineIndex))
@@ -202,8 +222,12 @@ export function testUnscoredModels(onLine: (line: string) => void): Promise<{ mo
     }
     proc.stdout.on('data', handleChunk)
     proc.stderr.on('data', handleChunk)
-    proc.on('error', (err) => reject(new Error(`Impossible de lancer le test : ${err.message}`)))
+    proc.on('error', (err) => {
+      if (runningTest === proc) runningTest = null
+      reject(new Error(`Impossible de lancer le test : ${err.message}`))
+    })
     proc.on('close', (code) => {
+      if (runningTest === proc) runningTest = null
       if (buffer.trim()) onLine(buffer)
       if (code === 0) resolve({ models, resultsPath })
       else reject(new Error(`Le test s'est arrêté avant la fin (code ${code ?? '?'}). Relance-le : il reprendra là où il en était.`))

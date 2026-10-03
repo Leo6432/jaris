@@ -55,3 +55,33 @@ test('même règle de débordement sur la RAM des deux côtés', () => {
     [...setLiteral(hardwareScanSource, 'LARGE_RAM_OFFLOAD_MODELS')].sort()
   )
 })
+
+/**
+ * Étape 230 : le test ci-dessus ne vérifiait que la présence du NOM quelque part dans le script — gemma4:26b et
+ * qwen3.8:27b, candidats Vision de Jaris, n'étaient que dans la liste de conversation du script et n'avaient donc
+ * jamais passé le test de vision. Chaque liste de Jaris est maintenant comparée à SA liste dans le script.
+ */
+function candidateList(source, name) {
+  const match = new RegExp(`const ${name}(?:: ModelCandidate\\[\\])? = \\[([\\s\\S]*?)\\n\\]`).exec(source)
+  assert.ok(match, `${name} introuvable`)
+  return new Set([...match[1].replace(/\/\/.*$/gm, '').matchAll(/model: '([^']+)'/g)].map((m) => m[1]))
+}
+
+function stringList(source, name) {
+  const match = new RegExp(`const ${name} = \\[([\\s\\S]*?)\\n\\]`).exec(source)
+  assert.ok(match, `${name} introuvable`)
+  return new Set([...match[1].replace(/\/\/.*$/gm, '').matchAll(/'([^']+)'/g)].map((m) => m[1]))
+}
+
+test('chaque liste de Jaris est dans la BONNE liste du script (conversation, vision, code)', () => {
+  const scriptModels = stringList(script, 'MODELS')
+  for (const name of ['FLASH_CANDIDATES', 'MEDIUM_CANDIDATES', 'LARGE_CANDIDATES']) {
+    const missing = [...candidateList(hardwareScanSource, name)].filter((m) => !scriptModels.has(m))
+    assert.deepEqual(missing, [], `${name} : jamais testés en conversation : ${missing.join(', ')}`)
+  }
+  for (const name of ['VISION_CANDIDATES', 'CODE_CANDIDATES']) {
+    const inScript = candidateList(script, name)
+    const missing = [...candidateList(hardwareScanSource, name)].filter((m) => !inScript.has(m))
+    assert.deepEqual(missing, [], `${name} : jamais testés dans leur épreuve : ${missing.join(', ')}`)
+  }
+})

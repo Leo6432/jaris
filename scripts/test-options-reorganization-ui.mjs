@@ -446,7 +446,7 @@ test('mise à jour d’Ollama : pas de second bouton pendant l’installeur, pui
 })
 
 // Étape 168, Léo : « remets le bouton pour Lightning et qwen2.5-coder:14b ».
-test('« Tester les modèles sans score » : nomme les modèles, confirme, puis suit le test modèle par modèle', options, async () => {
+test('« Tester ces modèles » : nomme les modèles, confirme, puis suit le test modèle par modèle', options, async () => {
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Modèles")')
     await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
@@ -456,12 +456,16 @@ test('« Tester les modèles sans score » : nomme les modèles, confirme, puis 
     assert.match(title, /qwen2\.5-coder:14b|Qwen2\.5/i)
 
     // Rien ne démarre avant la confirmation, et Annuler ne lance rien.
-    await page.click('.options-menu__unscored button:has-text("Tester les modèles sans score")')
-    assert.match(await page.textContent('.options-menu__unscored-confirm'), /une heure/)
+    await page.click('.options-menu__unscored button:has-text("Tester ces modèles")')
+    // Étape 230 : la durée réelle (plusieurs heures) et la reprise après coupure sont annoncées AVANT de lancer.
+    const confirm = await page.textContent('.options-menu__unscored-confirm')
+    assert.match(confirm, /plusieurs heures/)
+    assert.match(confirm, /24 questions posées 3 fois/)
+    assert.match(confirm, /reprend/)
     await page.click('.options-menu__unscored button:has-text("Annuler")')
     assert.equal(await page.evaluate(() => window.__testCalls ?? 0), 0)
 
-    await page.click('.options-menu__unscored button:has-text("Tester les modèles sans score")')
+    await page.click('.options-menu__unscored button:has-text("Tester ces modèles")')
     await page.click('.options-menu__unscored button:has-text("Lancer le test")')
     await page.waitForFunction(() => window.__testCalls === 1 && typeof window.__benchLine === 'function')
     await page.evaluate(() => {
@@ -472,13 +476,13 @@ test('« Tester les modèles sans score » : nomme les modèles, confirme, puis 
     const width = await page.$eval('.options-menu__unscored .options-menu__progress-bar-fill', (el) => el.style.width)
     assert.equal(width, '50%')
     await page.evaluate(() => {
-      window.__benchLine('##MODEL_DONE## nemotron-3.5-lightning:30b 16 17')
+      window.__benchLine('##MODEL_DONE## nemotron-3.5-lightning:30b 70 72')
       window.__benchLine('##MODEL_SKIPPED## qwen2.5-coder:14b téléchargement impossible : pull model manifest: file does not exist')
       window.__finishTest()
     })
     await page.waitForSelector('.options-menu__unscored button:has-text("Ouvrir le fichier des résultats")')
     const results = await page.textContent('.options-menu__unscored-results')
-    assert.match(results, /16\/17/)
+    assert.match(results, /70\/72/)
     assert.match(results, /sauté — téléchargement impossible : pull model manifest: file does not exist/)
     // Habillé par le CSS de Jaris (carte), pas du texte nu.
     assert.equal(await page.$eval('.options-menu__unscored', (el) => getComputedStyle(el).borderStyle), 'solid')

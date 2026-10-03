@@ -1002,15 +1002,32 @@ export function parseVerifiedToolScores(): Record<VerifiedTier, Map<string, stri
 }
 
 /**
- * Modèles de Jaris sans AUCUN score (ni appel d'outils, ni vision, ni code) — ceux que Jaris ne peut jamais
- * choisir tant qu'ils ne sont pas mesurés. Étape 168 : c'est la liste que teste le bouton « Tester les modèles
- * sans score » (Tous les modèles), du plus léger au plus lourd.
+ * Nombre de réponses notées par le test de conversation ACTUEL : 24 questions posées 3 fois chacune (étape 230,
+ * CONVERSATION_TOTAL dans scripts/benchmark-cases.mjs — copie vérifiée par scripts/test-benchmark-cases.mjs).
+ * Un score de conversation sur un autre total (« 16/17 », version 4) vient d'un ancien test.
+ */
+export const CONVERSATION_TEST_TOTAL = 72
+
+const CONVERSATION_ROLE_MODELS = new Set([...FLASH_CANDIDATES, ...MEDIUM_CANDIDATES, ...LARGE_CANDIDATES].map((c) => c.model))
+const VISION_ROLE_MODELS = new Set(VISION_CANDIDATES.map((c) => c.model))
+const CODE_ROLE_MODELS = new Set(CODE_CANDIDATES.map((c) => c.model))
+
+/**
+ * Modèles de Jaris à tester, du plus léger au plus lourd : la liste que teste le bouton « Tester les modèles »
+ * (Tous les modèles, étape 168). Étape 230 : rôle par rôle — un modèle de conversation sans score du test ACTUEL
+ * (y compris un ancien score sur 17), un modèle de vision sans score de vision, un modèle de code sans score de
+ * code. Avant, un seul score n'importe où suffisait : gemma4:26b et qwen3.8:27b, candidats Vision, n'avaient
+ * jamais été testés en vision sans que rien ne le signale. En attendant, Jaris garde les anciens scores.
  */
 export function getUnscoredModels(): string[] {
   const scores = parseVerifiedToolScores()
+  const needsConversation = (model: string): boolean =>
+    CONVERSATION_ROLE_MODELS.has(model) && !scores.conversation.get(model)?.endsWith(`/${CONVERSATION_TEST_TOTAL}`)
+  const needsVision = (model: string): boolean => VISION_ROLE_MODELS.has(model) && !scores.vision.has(model)
+  const needsCode = (model: string): boolean => CODE_ROLE_MODELS.has(model) && !scores.code.has(model)
   return [...ALL_MODELS]
     .sort((a, b) => a.vramGb - b.vramGb)
-    .filter((c) => !scores.conversation.has(c.model) && !scores.vision.has(c.model) && !scores.code.has(c.model))
+    .filter((c) => needsConversation(c.model) || needsVision(c.model) || needsCode(c.model))
     .map((c) => c.model)
 }
 
