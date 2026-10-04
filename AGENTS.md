@@ -6369,3 +6369,9 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Et quand une relecture signale UNE occurrence d'un défaut de données, chercher toutes les autres avant de
   corriger. Régression : test-benchmark-scenarios (erreur au 2e appel avec un faux Ollama, modèle figé avec un
   délai de 0,6 s, cohérence des dates), chacun vérifié en réintroduisant le défaut.
+  **Suite (v0.28.3)** : ma correction du test de code ne couvrait que l'erreur ORDINAIRE du navigateur — une panne
+  complète (`BrowserDownError`, qui arrête le test) ou un PC éteint pendant la vérification perdait encore la
+  génération. Elle est maintenant écrite (`code-generation`) AVANT d'ouvrir le navigateur. **Leçon : « écrire avant
+  l'étape qui peut échouer » vaut pour TOUS les chemins de sortie, y compris ceux qui relancent l'erreur sans passer
+  par le code de récupération.** Régression : test-benchmark-cases (navigateur qui marche à la vérification
+  préalable puis ne démarre plus).

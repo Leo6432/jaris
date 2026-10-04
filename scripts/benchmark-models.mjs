@@ -2379,6 +2379,21 @@ async function main() {
         if (r.tokPerSec !== null) perModel.speeds.push(r.tokPerSec)
 
         html = extractHtml(r.content)
+        // Relecture ChatGPT (v0.28.2) : la génération est écrite AVANT d'ouvrir le navigateur. Une panne du navigateur
+        // (qui arrête le test) ou un PC éteint pendant la vérification ne fait plus perdre une génération de
+        // plusieurs minutes, qui ne se refait jamais à l'identique. La ligne « code » complète suit le verdict.
+        trace({
+          type: 'code-generation',
+          model,
+          id: testCase.id,
+          ms: Math.round(r.wallMs),
+          think: r.think,
+          prompt,
+          systemRef: textRef(CODE_GENERATE_SYSTEM_PROMPT),
+          response: r.data.message ?? null,
+          meta: ollamaMeta(r.data),
+          html
+        })
         const issues = html ? validateGeneratedHtml(html) : []
         const reason = html ? await checkInBrowser(testCase, html) : 'pas de code HTML exploitable dans la réponse'
         const ok = reason === null

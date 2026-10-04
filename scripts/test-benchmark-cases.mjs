@@ -878,3 +878,44 @@ test('vision de bout en bout : 10 lectures et 7 visées × 2, les consignes de J
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+// Relecture ChatGPT (v0.28.2) : le HTML généré n'était écrit qu'APRÈS la vérification dans le navigateur. Une panne du
+// navigateur (qui arrête le test) faisait perdre une génération de plusieurs minutes. Il est maintenant écrit avant.
+test(
+  'panne du navigateur en pleine campagne : la génération déjà faite est gardée dans les traces',
+  { skip: BROWSER && process.platform !== 'win32' ? false : 'il faut un navigateur et un shell Unix pour simuler la panne' },
+  async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+    // 1er lancement (vérification préalable du navigateur) : le vrai ; ensuite il ne démarre plus.
+    const wrapper = join(dir, 'navigateur.sh')
+    const counter = join(dir, 'lancements')
+    writeFileSync(
+      wrapper,
+      `#!/bin/sh\nn=$(cat "${counter}" 2>/dev/null || echo 0)\necho $((n+1)) > "${counter}"\n[ "$n" -ge 1 ] && exit 1\nexec "${BROWSER}" "$@"\n`,
+      { mode: 0o755 }
+    )
+    const app = '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><button id="go">Go</button></body></html>'
+    const fake = await startFakeOllama({ installed: ['qwen2.5-coder:7b'], answer: () => ({ content: `\`\`\`html\n${app}\n\`\`\`` }) })
+    try {
+      const resultsPath = join(dir, 'benchmark-results.md')
+      const { code, out } = await runScript({
+        OLLAMA_HOST: fake.host,
+        JARIS_RESULTS_PATH: resultsPath,
+        JARIS_ANALYSIS_SCOPE: 'code',
+        JARIS_ONLY_MODELS: 'qwen2.5-coder:7b',
+        JARIS_BROWSER_PATH: wrapper
+      })
+      assert.equal(code, 1, out)
+      assert.match(out, /Le navigateur ne démarre plus/)
+      const traces = readFileSync(join(dir, 'benchmark-results.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+      const generations = traces.filter((t) => t.type === 'code-generation')
+      assert.equal(generations.length, 1, 'la génération faite avant la panne est écrite')
+      assert.equal(generations[0].html, app)
+      assert.equal(generations[0].model, 'qwen2.5-coder:7b')
+      assert.ok(!traces.some((t) => t.type === 'code'), 'la vérification n’a jamais eu lieu')
+    } finally {
+      fake.server.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+)
