@@ -19,7 +19,7 @@ import {
   searxngComposeDir
 } from './searxngHome'
 import { formatBytes } from '../../shared/formatBytes'
-import type { UpdateProgress } from '../../shared/ipc'
+import type { OllamaVersionStatus, UpdateProgress } from '../../shared/ipc'
 
 const execAsync = promisify(exec)
 
@@ -121,12 +121,11 @@ async function warnIfOllamaOutdated(log: LogFn): Promise<void> {
   }
 }
 
-/** Version locale d'Ollama comparée à la dernière publiée sur GitHub — voir checkOllamaFreshness. */
-export interface OllamaVersionStatus {
-  current: string
-  latest: string
-  outdated: boolean
-}
+/**
+ * Version locale d'Ollama comparée à la dernière publiée sur GitHub — voir checkOllamaFreshness. Le type vient de
+ * shared/ipc.ts (étape 234) : la copie locale qui existait ici avait déjà divergé une fois de l'autre côté.
+ */
+export type { OllamaVersionStatus }
 
 /**
  * Résultat du dernier check, gardé en mémoire pour que l'onglet Modèles (OptionsMenu.tsx) puisse le lire
@@ -218,13 +217,11 @@ async function fetchLatestOllamaVersion(): Promise<string | null> {
  */
 async function checkOllamaFreshness(): Promise<void> {
   try {
-    const response = await fetch(`${config.ollama.host}/api/version`)
-    if (!response.ok) return
-    const data = (await response.json()) as { version?: string }
-    if (!data.version) return
-    const latest = await fetchLatestOllamaVersion()
-    if (!latest) return
-    cachedOllamaVersionStatus = { current: data.version, latest, outdated: isVersionOlder(data.version, latest) }
+    // Étape 234 (bêta) : un résultat est TOUJOURS enregistré, même partiel. Avant, Ollama muet ou GitHub
+    // injoignable ne laissaient rien en cache, et Options affichait « Vérification de la version… » sans fin.
+    const current = await readLocalOllamaVersion()
+    const latest = current ? await fetchLatestOllamaVersion() : null
+    cachedOllamaVersionStatus = { current, latest, outdated: Boolean(current && latest && isVersionOlder(current, latest)) }
     for (const listener of ollamaVersionListeners) listener(cachedOllamaVersionStatus)
   } catch {
     // Best-effort, comme warnIfOllamaOutdated : ne doit jamais empêcher Jaris de démarrer.

@@ -58,7 +58,7 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
               Jaris a regardé ta machine et choisi, pour chaque rôle, le meilleur modèle qui y tient — voici
               ce qu'il va installer.
             </p>
-            {picks === null ? <p className="capacity-scan__status">Détection du matériel...</p> : <MyModelPicks picks={picks} title="Modèles choisis pour ta machine" />}
+            {picks === null ? <p className="capacity-scan__status">Détection du matériel...</p> : <MyModelPicks picks={picks} title="Modèles choisis pour ta machine" beforeInstall />}
             <button onClick={start} disabled={picks === null}>
               Continuer
             </button>
@@ -83,7 +83,7 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
         {result && (
           <>
             <p>
-              Carte détectée : {result.gpuName ?? 'inconnue'}
+              Carte graphique : {result.gpuName ?? 'non détectée'}
               {result.vramGb !== null ? ` (${result.vramGb} Go de VRAM)` : ''}
             </p>
             <ul className="capacity-scan__models">
@@ -91,6 +91,7 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
               <li>Moyen : {formatModelName(result.models.medium)}</li>
               <li>Élevé : {formatModelName(result.models.large)}</li>
               <li>Vision : {formatModelName(result.visionModel)}</li>
+              <li>Code : {formatModelName(result.codeModel)}</li>
               {result.image && <li>Image : {result.image.model ?? 'aucun modèle (pas assez de puissance)'}</li>}
               {result.pilot && (
                 <li>Pilotage d'écran : {result.pilot.model ? PILOT_MODEL_LABEL : 'le modèle Vision (pas assez de puissance pour un modèle dédié)'}</li>
@@ -114,7 +115,7 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
               <div className="capacity-scan__warning">
                 <p>
                   Attention : {result.skippedModels.length > 1 ? 'certains modèles ci-dessus ne sont' : 'un des modèles ci-dessus n\'est'} en
-                  réalité pas installé, Jaris utilisera un repli moins bon en attendant :
+                  réalité pas {result.skippedModels.length > 1 ? 'installés' : 'installé'}, Jaris utilisera un repli moins bon en attendant :
                 </p>
                 <ul>
                   {result.skippedModels.map(({ model, reason }) => (

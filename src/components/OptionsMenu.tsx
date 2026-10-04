@@ -894,7 +894,7 @@ export default function OptionsMenu(): JSX.Element {
                 label="Micro utilisé"
                 description={
                   inputDevices !== null && inputDevices.length === 0
-                    ? 'Aucun micro détecté par PortAudio.'
+                    ? 'Aucun micro détecté : branche-en un, puis redémarre Jaris.'
                     : savingAudioDevice
                       ? 'Changement de micro : redémarrage du pipeline vocal (rechargement des modèles)…'
                       : 'Changer de micro relance l\'écoute : quelques secondes.'
@@ -1220,11 +1220,15 @@ export default function OptionsMenu(): JSX.Element {
               <SettingRow
                 label="Ollama"
                 description={
-                  ollamaVersionStatus
-                    ? ollamaVersionStatus.outdated
-                      ? `Version ${ollamaVersionStatus.current} installée · ${ollamaVersionStatus.latest} disponible. Certains modèles récents peuvent refuser de se télécharger tant qu'il n'est pas à jour.`
-                      : `Version ${ollamaVersionStatus.current} installée · à jour.`
-                    : 'Vérification de la version…'
+                  !ollamaVersionStatus
+                    ? 'Vérification de la version…'
+                    : !ollamaVersionStatus.current
+                      ? "Ollama ne répond pas pour l'instant : Jaris le relance tout seul ; si ça dure, redémarre Jaris."
+                      : ollamaVersionStatus.outdated
+                        ? `Version ${ollamaVersionStatus.current} installée · ${ollamaVersionStatus.latest} disponible. Certains modèles récents peuvent refuser de se télécharger tant qu'il n'est pas à jour.`
+                        : ollamaVersionStatus.latest
+                          ? `Version ${ollamaVersionStatus.current} installée · à jour.`
+                          : `Version ${ollamaVersionStatus.current} installée (impossible de vérifier s'il en existe une plus récente : pas d'accès à internet ?).`
                 }
               >
                 {ollamaVersionStatus?.outdated && !ollamaInstallerPending && (

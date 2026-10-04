@@ -23,7 +23,11 @@ export async function searchWeb(query: string): Promise<string> {
   try {
     response = await fetch(url)
   } catch {
-    throw new Error(`Impossible de joindre SearXNG sur ${config.searxng.host} (le conteneur Docker est-il lancé ? "docker compose up -d")`)
+    // Étape 234 (bêta) : ce message arrive tel quel à l'écran — « docker compose up -d » ne disait rien à Léo.
+    throw new Error(
+      `La recherche web ne répond pas : son service (SearXNG, que Jaris lance avec Docker Desktop) n'est pas démarré. ` +
+        `Jaris le démarre tout seul à l'ouverture ; si ça continue, ouvre Docker Desktop, attends qu'il soit prêt, puis réessaie. (${config.searxng.host})`
+    )
   }
 
   if (!response.ok) {

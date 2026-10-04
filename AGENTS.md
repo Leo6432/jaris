@@ -6288,3 +6288,46 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
      ce que ferait Jaris. **Code** : une 2e valeur par application (une réponse écrite en dur échoue) et les
      boutons-icônes retrouvés (titre SVG, nom dans le code, icône seule à cet endroit).
   Régression : test-benchmark-scenarios, test-benchmark-vision, test-benchmark-code, test-benchmark-cases.
+
+- **Étape 234 — bêta de Jaris par Claude pendant le pilote des tests de modèles (Léo : « tu vas bêta tester
+  jaris et trouve des bugs »).** Méthode, à réutiliser : le VRAI paquet (`electron-builder --linux dir`, dans un
+  dossier À PART de celui qu'utilise un test en cours — reconstruire par-dessus écraserait ses scripts), lancé par
+  Playwright `_electron` sous Xvfb, avec un faux Ollama scripté qui journalise chaque requête et un petit serveur
+  HTTP pour envoyer des commandes à l'appli. Ce que ça a trouvé, et que les tests de composants isolés ne
+  voyaient pas :
+  1. **Une exception dans UN écran vidait TOUTE la fenêtre** (menu compris, seule issue : redémarrer). Cas réel :
+     « Cerveau de Jaris » sans WebGL (pilote, machine virtuelle) — `new ForceGraph3D()` lève « Error creating
+     WebGL context ». La vue 3D est maintenant dans un try/catch avec une LISTE des notes à la place, et chaque
+     écran (Chat, Code, Image, Vidéo, vocal, Options, Cerveau) est entouré d'un `ErrorBoundary` qui affiche
+     l'erreur à SA place, avec « Réessayer » (et « Fermer » pour le Cerveau, plein écran). **Leçon : sans
+     ErrorBoundary, React démonte tout l'arbre à la première erreur de rendu ou d'effet — un écran secondaire
+     peut rendre l'application entière inutilisable.**
+  2. **La fiche d'une note du Cerveau tombait hors de l'écran, même en 3D** : la famille de panneaux à équerres
+     (écrite plus bas dans index.css) remettait `position: relative` sur `.memory-brain__note`, `absolute` à
+     l'origine — à spécificité égale, la dernière règle gagne (même piège que l'étape 95). « 2 notes » pour une
+     seule : le nœud central (l'utilisateur) était compté.
+  3. **Écran d'installation** : un échec s'affichait deux fois (ligne d'état ET liste), et la barre continuait
+     d'animer une fois tout arrêté — ce qui se lit « ça travaille encore ».
+  4. **Le budget de téléchargement des modèles** recommandés au premier lancement ne suivait pas la même formule
+     que le choix des modèles : il pouvait proposer un modèle que le contrôle de faisabilité refusait ensuite
+     (`downloadBudgetGb`, systemResources.ts, partagée). Écran de capacité : lignes « manquant » masquées avant
+     toute installation (rien n'est encore installé, ce n'est pas un défaut), carte graphique « non détectée »
+     au lieu d'un vide, ligne Code ajoutée.
+  5. **Textes qui renvoyaient à rien** : « voir le README » (aucun fichier livré), « pipeline vocal »,
+     « sidecar », « docker compose up -d » (SearXNG), des onglets d'Options qui n'existent plus — un test vérifie
+     maintenant que tout « Options → X » affiché désigne un onglet réel.
+  6. **Chat** : blocs de code affichés avec leurs « ``` » ; l'avertissement « machine chargée » collé d'un espace
+     à la réponse écrite (il cassait un bloc de code placé en tête) — paragraphe à part à l'écrit, espace à voix
+     haute.
+  7. **Rappels** : relancés deux fois au démarrage (deux minuteries, deux annonces) et seulement si la voix
+     démarrait ; un rappel posé depuis le Chat ou le téléphone ne prévenait que par la voix. Un seul
+     `fireReminder` (main.ts) : notification Windows + journal + annonce vocale si elle tourne.
+  8. **Version d'Ollama** : rien n'était enregistré quand Ollama ne répondait pas ou que GitHub était
+     injoignable, donc Options affichait « Vérification de la version… » sans fin — un résultat partiel est
+     maintenant gardé et expliqué ; interface locale dupliquée de `OllamaVersionStatus` (piège déjà noté :
+     grep `interface NomDuType`). **Python** : téléchargement sans délai ni avancement, et un 403 de
+     GitHub (60 lectures/heure sans compte) affiché « HTTP 403 » — message clair, et `downloadToFile` partagé.
+  Régression : test-error-boundary-ui (Chromium lancé avec `--disable-3d-apis`), test-runtime-setup-ui,
+  test-download-budget, test-options-references, test-format-reply, test-reminders, test-python-download,
+  test-assistant-history. Chacun vérifié en réintroduisant le défaut. **Non vérifiable ici** : Image et Vidéo
+  (Windows seulement), la voix (pas de micro), et le rendu WebGL réel sur la machine de Léo.

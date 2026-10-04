@@ -2863,6 +2863,7 @@ h1 {
 .options-menu__ollama-update-actions button,
 .app__new-models button,
 .memory-brain__actions button,
+.error-panel__actions button,
 .code-panel__result-actions button,
 .code-panel__live-stop,
 .workspace__new,
@@ -2902,6 +2903,7 @@ h1 {
 .options-menu__ollama-update-actions button:not(:disabled):hover,
 .app__new-models button:hover,
 .memory-brain__actions button:hover,
+.error-panel__actions button:hover,
 .code-panel__result-actions button:not(:disabled):hover,
 .code-panel__live-stop:not(:disabled):hover,
 .workspace__new:not(:disabled):hover,
@@ -4604,4 +4606,133 @@ a:hover {
 .phone-access__confirm {
   display: inline-flex;
   gap: 8px;
+}
+
+/* Étape 234 (bêta) : blocs et bouts de code dans les réponses du Chat (renderFormattedText). */
+.reply-code-block {
+  margin: 8px 0;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--hud-line);
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: pre;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 0.85em;
+}
+.reply-code-inline {
+  padding: 1px 5px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 0.9em;
+}
+
+/* --- Écran en erreur (étape 234, bêta) ------------------------------------ */
+
+/* Remplace UN écran qui a planté, à sa place : le menu et les autres écrans restent utilisables. */
+.error-panel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  min-width: 0;
+}
+
+/* Le Cerveau couvre tout l'écran : son message d'erreur aussi, sinon il resterait une page vide sans issue. */
+.error-panel--overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: radial-gradient(circle at 50% 30%, var(--hud-panel) 0%, var(--hud-bg) 70%);
+}
+
+.error-panel__card {
+  max-width: 460px;
+  padding: 20px 22px;
+  background: var(--hud-panel-raised);
+  border: 1px solid var(--hud-line);
+}
+
+.error-panel__title {
+  margin: 0 0 10px;
+  font-family: var(--hud-font-display);
+  font-size: 0.95rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--hud-gold);
+}
+
+.error-panel__text {
+  margin: 0 0 8px;
+  color: var(--hud-text-soft);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.error-panel__detail {
+  margin: 0 0 16px;
+  color: var(--hud-text-faint);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.error-panel__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Cerveau sans WebGL : la liste des notes remplace la vue 3D. */
+.memory-brain__fallback {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.memory-brain__fallback-text {
+  max-width: 560px;
+  margin: 0 0 14px;
+  color: var(--hud-text-soft);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.memory-brain__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-width: 560px;
+  background: var(--hud-panel-raised);
+  border: 1px solid var(--hud-line);
+}
+
+.memory-brain__list li + li {
+  border-top: 1px solid var(--hud-line);
+}
+
+.memory-brain__list-item {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  color: var(--hud-text);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.memory-brain__list-item:hover {
+  color: var(--hud-accent-bright);
+  background: rgba(var(--hud-accent-rgb), 0.08);
+}
+
+/* La famille de panneaux (équerres, plus haut) remet `position: relative` sur la fiche de note : écrite APRÈS la
+   règle d'origine, à spécificité égale, elle gagnait — la fiche ouverte d'un clic tombait sous le graphe, hors de
+   l'écran, en 3D comme en liste. Rétablie ici, après la famille. */
+.memory-brain__note {
+  position: absolute;
 }

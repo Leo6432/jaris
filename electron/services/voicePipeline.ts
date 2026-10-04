@@ -7,7 +7,6 @@ import { appendConversationEntry } from './conversationStore'
 import { converse } from './assistant'
 import { clearSessionHistory, getSessionHistory, pushSessionExchange } from './conversationSession'
 import { extractMemoryFromExchange } from './memoryExtractor'
-import { restoreReminders } from './reminders'
 import { getProfile } from './profileStore'
 import { getLiveGpuStatus } from './hardwareScan'
 import { checkGpuTempSafety } from './resourceMonitor'
@@ -166,7 +165,6 @@ export class VoicePipeline extends EventEmitter {
     this.voice.on('micTestDone', (done: MicTestDonePayload) => this.emit('micTestDone', done))
     this.voice.on('wakeTestHeard', (heard: WakeTestHeardPayload) => this.emit('wakeTestHeard', heard))
 
-    await restoreReminders((message) => void this.announceReminder(message))
     await this.voice.start(inputDeviceIndex, wakewordEnabled)
     this.setEmotion('idle')
   }
@@ -325,7 +323,8 @@ export class VoicePipeline extends EventEmitter {
         reply = await converse(
           question,
           profile?.name ?? null,
-          (message) => void this.announceReminder(message),
+          // Passe par main.ts (fireReminder) : notification Windows en plus de la voix, comme depuis le Chat.
+          (message) => this.emit('reminder', message),
           (message) => this.emit('log', message),
           history,
           controller.signal,

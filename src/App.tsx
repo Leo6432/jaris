@@ -3,6 +3,7 @@ import CapacityScan from '@/components/CapacityScan'
 import ChatPanel from '@/components/ChatPanel'
 import ChatWidget from '@/components/ChatWidget'
 import CodePanel from '@/components/CodePanel'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import ImagePanel from '@/components/ImagePanel'
 import VideoPanel from '@/components/VideoPanel'
 import KeepAlive from '@/components/KeepAlive'
@@ -399,7 +400,9 @@ export default function App(): JSX.Element {
             <button className="sidebar__link" onClick={openMemoryBrain}>
               Cerveau de Jaris
             </button>
-            <OptionsMenu />
+            <ErrorBoundary label="Les Options">
+              <OptionsMenu />
+            </ErrorBoundary>
           </div>
         </nav>
 
@@ -419,7 +422,7 @@ export default function App(): JSX.Element {
             <div className="app__new-models">
               <p>
                 Ollama {ollamaVersionStatus.current} installé, la dernière version est{' '}
-                {ollamaVersionStatus.latest}. Ouvre Options → Modèles pour mettre à jour.
+                {ollamaVersionStatus.latest}. Ouvre Options → Général pour mettre à jour.
               </p>
               <button onClick={() => setOllamaPopupDismissed(true)}>Fermer</button>
             </div>
@@ -432,84 +435,100 @@ export default function App(): JSX.Element {
                     été séparé de celui d'Ollama, mais cette phrase était restée sur l'ancien — envoyer
                     quelqu'un sur un onglet où le bouton n'est pas est une autre façon de "ne rien faire". */}
                 Jaris {appVersionStatus.current} installé, la dernière version est{' '}
-                {appVersionStatus.latest}. Ouvre Options → Mise à jour pour l'installer.
+                {appVersionStatus.latest}. Ouvre Options → Général pour l'installer.
               </p>
               <button onClick={() => setAppPopupDismissed(true)}>Fermer</button>
             </div>
           )}
 
           {appMode === 'voice' && (
-            <div className="app app--voice" ref={voiceLayoutRef}>
-              {/* Pas d'audioElRef ici : seul le widget a un <audio> monté, l'orbe de cette fenêtre suit juste
-                  l'émotion sans vibrer avec la voix (évite toute double lecture du son des réponses).
-                  onClick : une des 3 façons d'activer Jaris (Options → Activation, étape 81), avec la même
-                  relecture du profil à la volée que le "+" ci-dessus plutôt qu'un état React à synchroniser.
-                  Orbe en enfant DIRECT de .app (pas dans un conteneur à part) : voir voiceLayoutRef ci-dessus
-                  — orbe et .app__voice-footer forment un seul groupe, centré par le justify-content:center
-                  déjà présent sur .app, qui rétrécit ensemble plutôt que de se répartir aux deux bouts de
-                  l'écran. */}
-              <JarisOrb
-                emotion={emotion}
-                size={orbSize}
-                onClick={() => {
-                  void window.jaris.getProfile().then((profile) => {
-                    if (profile?.activationOrbClickEnabled === false) return
-                    window.jaris.triggerWake()
-                  })
-                }}
-              />
-              {/* Regroupe tout ce qui n'est pas l'orbe : voiceLayoutRef mesure la hauteur de CE bloc (pas
-                  chacun de ses enfants séparément) pour déduire l'espace réellement laissé à l'orbe. */}
-              <div className="app__voice-footer">
-                <div className="app__status">{STATUS_LABEL[emotion]}</div>
-                <div className="app__hint">
-                  Astuce : dis "Jaris", clique sur le cercle, ou appuie sur le + du pavé numérique depuis
-                  n'importe quelle appli, pour activer l'écoute (personnalisable dans Options → Activation)
-                </div>
-
-                {/* Étape 141 : même sélecteur que le Chat et le mode Code — Auto ou un modèle précis pour la voix. */}
-                <div className="app__model-picker">
-                  <ModelEffortPicker mode="voice" />
-                </div>
-
-                {(transcript || reply) && (
-                  <div className="app__conversation">
-                    {transcript && <p className="app__transcript">« {transcript} »</p>}
-                    {reply && <p className="app__reply">{reply}</p>}
+            <ErrorBoundary label="L'Agent vocal">
+              <div className="app app--voice" ref={voiceLayoutRef}>
+                {/* Pas d'audioElRef ici : seul le widget a un <audio> monté, l'orbe de cette fenêtre suit juste
+                    l'émotion sans vibrer avec la voix (évite toute double lecture du son des réponses).
+                    onClick : une des 3 façons d'activer Jaris (Options → Voix, étape 81), avec la même
+                    relecture du profil à la volée que le "+" ci-dessus plutôt qu'un état React à synchroniser.
+                    Orbe en enfant DIRECT de .app (pas dans un conteneur à part) : voir voiceLayoutRef ci-dessus
+                    — orbe et .app__voice-footer forment un seul groupe, centré par le justify-content:center
+                    déjà présent sur .app, qui rétrécit ensemble plutôt que de se répartir aux deux bouts de
+                    l'écran. */}
+                <JarisOrb
+                  emotion={emotion}
+                  size={orbSize}
+                  onClick={() => {
+                    void window.jaris.getProfile().then((profile) => {
+                      if (profile?.activationOrbClickEnabled === false) return
+                      window.jaris.triggerWake()
+                    })
+                  }}
+                />
+                {/* Regroupe tout ce qui n'est pas l'orbe : voiceLayoutRef mesure la hauteur de CE bloc (pas
+                    chacun de ses enfants séparément) pour déduire l'espace réellement laissé à l'orbe. */}
+                <div className="app__voice-footer">
+                  <div className="app__status">{STATUS_LABEL[emotion]}</div>
+                  <div className="app__hint">
+                    Astuce : dis "Jaris", clique sur le cercle, ou appuie sur le + du pavé numérique depuis
+                    n'importe quelle appli, pour activer l'écoute (personnalisable dans Options → Voix)
                   </div>
-                )}
 
-                {setupStatus && !setupStatus.ready && (
-                  <div className="app__setup-warning">
-                    Échec du démarrage du pipeline vocal :
-                    <ul>
-                      {setupStatus.missing.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                    Voir le README pour les étapes d'installation.
+                  {/* Étape 141 : même sélecteur que le Chat et le mode Code — Auto ou un modèle précis pour la voix. */}
+                  <div className="app__model-picker">
+                    <ModelEffortPicker mode="voice" />
                   </div>
-                )}
+
+                  {(transcript || reply) && (
+                    <div className="app__conversation">
+                      {transcript && <p className="app__transcript">« {transcript} »</p>}
+                      {reply && <p className="app__reply">{reply}</p>}
+                    </div>
+                  )}
+
+                  {setupStatus && !setupStatus.ready && (
+                    <div className="app__setup-warning">
+                      {/* Étape 234 (bêta) : « pipeline vocal », « sidecar » et « voir le README » ne disaient rien à
+                          quelqu'un qui n'a jamais vu le code — et aucun fichier d'explication n'est livré avec Jaris. */}
+                      La voix ne fonctionne pas pour l'instant (le Chat, lui, marche) :
+                      <ul>
+                        {setupStatus.missing.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                      Ferme puis relance Jaris : il réessaiera d'installer ce qui manque.
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            </ErrorBoundary>
           )}
 
           {/* Étape 202 : cachés, jamais détruits, en changeant d'onglet — une génération en cours reste visible au retour. */}
           <KeepAlive active={appMode === 'chat'}>
-            <ChatPanel />
+            <ErrorBoundary label="Le Chat">
+              <ChatPanel />
+            </ErrorBoundary>
           </KeepAlive>
           <KeepAlive active={appMode === 'code'}>
-            <CodePanel />
+            <ErrorBoundary label="Le mode Code">
+              <CodePanel />
+            </ErrorBoundary>
           </KeepAlive>
           <KeepAlive active={appMode === 'image'}>
-            <ImagePanel />
+            <ErrorBoundary label="Le mode Image">
+              <ImagePanel />
+            </ErrorBoundary>
           </KeepAlive>
           <KeepAlive active={appMode === 'video'}>
-            <VideoPanel />
+            <ErrorBoundary label="Le mode Vidéo">
+              <VideoPanel />
+            </ErrorBoundary>
           </KeepAlive>
         </main>
 
-        {memoryGraph && <MemoryBrain graph={memoryGraph} onClose={() => setMemoryGraph(null)} />}
+        {memoryGraph && (
+          <ErrorBoundary label="Le Cerveau de Jaris" overlay onClose={() => setMemoryGraph(null)}>
+            <MemoryBrain graph={memoryGraph} onClose={() => setMemoryGraph(null)} />
+          </ErrorBoundary>
+        )}
       </div>
     )
   }

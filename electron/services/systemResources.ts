@@ -91,7 +91,7 @@ export function detectFreeDiskGb(): number | null {
 
 /**
  * Budget "peut tourner du tout" avant de télécharger un modèle : VRAM + RAM combinées (Ollama répartit
- * automatiquement les deux quand un modèle ne tient pas entièrement en VRAM), moins la marge OS. Sert de
+ * automatiquement les deux quand un modèle ne tient pas entièrement en VRAM), moins le minimum pour Windows. Sert de
  * filet de sécurité universel dans pullModelIfMissing (ollama.ts), pour TOUT modèle téléchargé par Jaris —
  * distinct du budget VRAM seule utilisé par pickForBudget (hardwareScan.ts) pour choisir le modèle le plus
  * RAPIDE : un modèle peut très bien être un mauvais choix de vitesse (trop gros pour la VRAM seule) sans
@@ -100,7 +100,21 @@ export function detectFreeDiskGb(): number | null {
  * quelle que soit la vitesse acceptée.
  */
 export async function getDownloadBudgetGb(): Promise<number> {
-  const vramGb = await detectVramGb()
-  const ramGb = detectRamGb()
-  return Math.max(0, (vramGb ?? 0) + ramGb - RESOURCE_SAFETY_MARGIN_GB)
+  return downloadBudgetGb(await detectVramGb(), detectRamGb())
+}
+
+/**
+ * Ce que Windows garde pour lui au strict minimum quand un modèle occupe le reste : la limite de FAISABILITÉ
+ * (le modèle peut-il tourner du tout ?). Étape 234 (bêta de Jaris) : ce filet utilisait jusqu'ici
+ * RESOURCE_SAFETY_MARGIN_GB (16 Go), une marge de CONFORT pensée pour choisir un gros modèle du palier
+ * Puissant — sur un PC sans carte NVIDIA avec 16 Go de mémoire (la plupart des portables), elle donnait un
+ * budget de 0 Go : AUCUN modèle ne pouvait s'installer, pas même celui que Jaris venait de choisir pour cette
+ * machine (« qwen3.5:0.8b nécessite environ 1 Go, au-delà des 0.0 Go disponibles »). Le choix (prudent) reste
+ * dans hardwareScan.ts ; ce filet-ci n'écarte que ce qui ne tournerait jamais.
+ */
+export const FEASIBILITY_MARGIN_GB = 4
+
+/** Budget de faisabilité pour une machine donnée (pur, testé avec le choix des modèles). */
+export function downloadBudgetGb(vramGb: number | null, ramGb: number): number {
+  return Math.max(0, (vramGb ?? 0) + ramGb - FEASIBILITY_MARGIN_GB)
 }

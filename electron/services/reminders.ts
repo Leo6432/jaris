@@ -34,6 +34,10 @@ async function removeReminder(id: string): Promise<void> {
 }
 
 function arm(reminder: Reminder, onFire: ReminderFireHandler): void {
+  // Étape 234 (bêta) : réarmer un rappel déjà armé remplaçait le minuteur dans la liste SANS annuler l'ancien —
+  // les deux sonnaient. C'est ce que faisait chaque redémarrage du moteur vocal (changement de micro...).
+  const previous = timers.get(reminder.id)
+  if (previous) clearTimeout(previous)
   const delayMs = Math.max(0, new Date(reminder.fireAt).getTime() - Date.now())
   const timer = setTimeout(() => {
     timers.delete(reminder.id)

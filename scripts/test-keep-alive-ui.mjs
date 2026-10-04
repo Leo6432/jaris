@@ -150,6 +150,11 @@ test('App.tsx garde Chat, Code et Image en vie au lieu de les détruire', () => 
   const app = readFileSync(join(projectRoot, 'src/App.tsx'), 'utf8')
   for (const panel of ['ChatPanel', 'CodePanel', 'ImagePanel', 'VideoPanel']) {
     assert.doesNotMatch(app, new RegExp(`appMode === '\\w+' && <${panel}`), `${panel} ne doit plus être rendu conditionnellement`)
-    assert.match(app, new RegExp(`<KeepAlive active=\\{appMode === '\\w+'\\}>\\s*<${panel} />`), `${panel} dans KeepAlive`)
+    // Étape 234 : un ErrorBoundary peut s'intercaler (un écran qui plante ne vide plus tout Jaris).
+    assert.match(
+      app,
+      new RegExp(`<KeepAlive active=\\{appMode === '\\w+'\\}>\\s*(?:<ErrorBoundary [^>]*>\\s*)?<${panel} />`),
+      `${panel} dans KeepAlive`
+    )
   }
 })

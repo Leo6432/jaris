@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, nativeImage, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu } from 'electron'
+import { app, dialog, ipcMain, nativeImage, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu, Notification } from 'electron'
 // Étape 143 : EN PREMIER — redirige le dossier interne de Chromium et les données vers le dossier de Jaris
 // (installé sur D, ou déplacé) avant que quoi que ce soit ne calcule un chemin ou ne prenne le verrou d'instance.
 import { cleanupStaleChromiumData, getStorageRoot } from './services/storageRoot'
@@ -53,6 +53,7 @@ import { openApp } from './services/appLauncher'
 import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, getMyModelPicks, getUnscoredModels, isUnusedInstalledModel } from './services/hardwareScan'
 import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
+import { restoreReminders } from './services/reminders'
 import { runQuickSetup, stopModelTest, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
 import { PhoneAccessManager } from './services/phoneAccessManager'
@@ -790,7 +791,7 @@ function getPhoneAccess(): PhoneAccessManager {
       sendMessage: async (text, onStatus, mode) => {
         const message = await chatSession.send(
           text,
-          (reminder) => void pipeline?.announceReminder(reminder),
+          fireReminder,
           (line) => {
             broadcast(IPC_CHANNELS.log, line)
             const status = phoneStatusFromLog(line)
@@ -890,6 +891,17 @@ function getPhoneAccess(): PhoneAccessManager {
   return manager
 }
 
+/**
+ * Un rappel qui sonne (étape 234, bêta). Jusqu'ici il n'était QUE dit à voix haute : voix pas installée, son
+ * coupé ou personne devant les haut-parleurs, et il disparaissait sans laisser de trace. Il s'affiche donc
+ * aussi en notification Windows, puis il est annoncé à la voix si elle marche.
+ */
+function fireReminder(message: string): void {
+  if (Notification.isSupported()) new Notification({ title: 'Rappel de Jaris', body: message }).show()
+  broadcast(IPC_CHANNELS.log, `Rappel : ${message}`)
+  void pipeline?.announceReminder(message)
+}
+
 async function startVoicePipeline(): Promise<void> {
   const log = (message: string): void => broadcast(IPC_CHANNELS.log, message)
   // Étape 143 : range dans le dossier de Jaris ce qui n'y est pas encore, avant de démarrer Ollama et la voix
@@ -925,6 +937,7 @@ async function startVoicePipeline(): Promise<void> {
     }
     broadcast(IPC_CHANNELS.emotion, emotion)
   })
+  pipeline.on('reminder', fireReminder)
   pipeline.on('transcript', (text: string) => broadcast(IPC_CHANNELS.transcript, text))
   pipeline.on('reply', (payload: VoiceReplyPayload) => broadcast(IPC_CHANNELS.reply, payload))
   pipeline.on('log', (message: string) => broadcast(IPC_CHANNELS.log, message))
@@ -1307,7 +1320,7 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.sendChatMessage, (event, prompt: string, imageBase64?: string): Promise<ChatMessage> => {
     return chatSession.send(
       prompt,
-      (message) => void pipeline?.announceReminder(message),
+      fireReminder,
       (message) => broadcast(IPC_CHANNELS.log, message),
       (cue: SoundCue) => broadcast(IPC_CHANNELS.soundCue, cue),
       (delta) => event.sender.send(IPC_CHANNELS.chatStreamToken, delta),
@@ -1677,6 +1690,9 @@ app.whenReady().then(async () => {
   }
 
   watchWidgetPresence()
+  // Les rappels en attente sont réarmés UNE fois, ici — plus à chaque redémarrage du moteur vocal (changement de
+  // micro, mot d'activation...), qui les faisait sonner en double (étape 234).
+  void restoreReminders(fireReminder)
   void startVoicePipeline()
   // Étape 214 : accès téléphone relancé au démarrage s'il était activé (sans ouvrir le navigateur tout seul).
   void getProfile().then((profile) => {

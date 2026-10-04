@@ -50,6 +50,14 @@ export default function RuntimeSetup({ onDone }: { onDone: () => void }): JSX.El
       })
   }, [attempt, onDone])
 
+  const statusText = finished
+    ? "L'installation n'est pas allée jusqu'au bout :"
+    : progress === null
+      ? 'Préparation…'
+      : progress.failed
+        ? "Suite de l'installation…"
+        : progress.message
+
   return (
     <div className="app">
       <div className="runtime-setup">
@@ -60,17 +68,21 @@ export default function RuntimeSetup({ onDone }: { onDone: () => void }): JSX.El
           n'as rien à faire.
         </p>
 
-        <div className="runtime-setup__status">{progress?.message ?? 'Préparation…'}</div>
+        {/* Étape 234 (bêta) : un échec s'affichait DEUX fois (ici et dans la liste en dessous), et la barre
+            continuait d'animer une fois tout arrêté — ce qui se lit comme « ça travaille encore ». */}
+        <div className="runtime-setup__status">{statusText}</div>
 
         {/* Barre remplie seulement quand un pourcentage a un sens (un téléchargement) : pendant une étape
             dont la durée est inconnue, elle reste en animation indéterminée plutôt que d'afficher un
             chiffre inventé qui n'avancerait pas. */}
-        <div className="runtime-setup__bar">
-          <div
-            className={`runtime-setup__bar-fill${progress?.percent === undefined ? ' runtime-setup__bar-fill--pulse' : ''}`}
-            style={progress?.percent === undefined ? undefined : { width: `${Math.round(progress.percent)}%` }}
-          />
-        </div>
+        {!finished && (
+          <div className="runtime-setup__bar">
+            <div
+              className={`runtime-setup__bar-fill${progress?.percent === undefined ? ' runtime-setup__bar-fill--pulse' : ''}`}
+              style={progress?.percent === undefined ? undefined : { width: `${Math.round(progress.percent)}%` }}
+            />
+          </div>
+        )}
 
         {failures.length > 0 && (
           <ul className="runtime-setup__failures">

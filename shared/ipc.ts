@@ -403,8 +403,10 @@ export interface ModelOverviewResult {
  * abouti (ou a échoué, ex: pas de connexion) : jamais affiché comme "à jour" par défaut, juste absent.
  */
 export interface OllamaVersionStatus {
-  current: string
-  latest: string
+  /** `null` : Ollama ne répond pas (étape 234 — avant, l'écran restait sur « Vérification… » pour toujours). */
+  current: string | null
+  /** `null` : dernière version impossible à vérifier (hors ligne, GitHub bloqué ou limite atteinte). */
+  latest: string | null
   outdated: boolean
 }
 

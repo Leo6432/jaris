@@ -11,6 +11,12 @@ interface MyModelPicksProps {
   title?: string
   /** Suppression d'un modèle installé mais inutilisé (Options uniquement ; absent = pas de bouton). */
   onDeleteUnused?: (model: string) => Promise<void>
+  /**
+   * Écran d'installation (étape 234, bêta) : rien n'est encore téléchargé, c'est normal. Sans ce mode, chaque
+   * ligne disait en rouge « Pas installé — clique « Retester la configuration » », un bouton qu'un nouvel
+   * utilisateur ne voit pas, alors que l'installation se fait justement au clic sur « Continuer ».
+   */
+  beforeInstall?: boolean
 }
 
 const ROLES: { key: 'flash' | 'medium' | 'large' | 'vision' | 'code'; label: string }[] = [
@@ -49,11 +55,11 @@ export function formatHardware(picks: MyModelPicksData): string {
  * Analysis, puis taille (pickBestFrom, hardwareScan.ts). Partagée entre l'écran d'accueil (CapacityScan.tsx)
  * et Options → Modèles, comme l'ancienne.
  */
-export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta machine', onDeleteUnused }: MyModelPicksProps): JSX.Element {
+export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta machine', onDeleteUnused, beforeInstall = false }: MyModelPicksProps): JSX.Element {
   const [confirming, setConfirming] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-  const check = picks.installCheck
+  const check = beforeInstall ? undefined : picks.installCheck
   const remove = async (model: string): Promise<void> => {
     if (!onDeleteUnused) return
     setDeleting(model)
@@ -140,7 +146,7 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
                     <td colSpan={4}>Pas assez de puissance pour dessiner : {picks.image.reason}.</td>
                   </tr>
                 ) : (
-                  picks.image.installed === false && (
+                  !beforeInstall && picks.image.installed === false && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
                       <td colSpan={4}>Pas installé sur ce PC pour l'instant — clique « Retester la configuration » (environ 5 Go).</td>
@@ -167,7 +173,7 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
                     <td colSpan={4}>Pas assez de puissance pour la vidéo : {picks.video.reason}.</td>
                   </tr>
                 ) : (
-                  picks.video.installed === false && (
+                  !beforeInstall && picks.video.installed === false && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
                       <td colSpan={4}>Pas installé sur ce PC pour l'instant — télécharge-le depuis le mode Vidéo.</td>
@@ -193,7 +199,7 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
                     <td colSpan={4}>Pas assez de puissance : {picks.pilot.reason}. Le modèle Vision pilote l'écran à sa place.</td>
                   </tr>
                 ) : (
-                  picks.pilot.installed === false && (
+                  !beforeInstall && picks.pilot.installed === false && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
                       <td colSpan={4}>Pas installé sur ce PC pour l'instant — clique « Retester la configuration » (environ 5,5 Go).</td>
@@ -206,7 +212,7 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
         </table>
       </div>
       {/* Étape 140, Léo : "je veut etre sur que les model visbile sont réel et pas un autre model". */}
-      {!check ? (
+      {beforeInstall ? null : !check ? (
         <p className="capacity-scan__install-check">Impossible de vérifier auprès d'Ollama pour l'instant (il ne répond pas).</p>
       ) : (
         <div className="capacity-scan__install-check">

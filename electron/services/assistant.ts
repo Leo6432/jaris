@@ -451,7 +451,10 @@ export async function converse(
   onLog?.(`Modèle ${chosenModel ? 'choisi à la main' : 'choisi'} : ${model} (réflexion : ${typeof think === 'boolean' ? thinkLabel(think) : think})`)
 
   /** Si la machine est surchargée, l'avertissement précède la vraie réponse dans la même phrase parlée. */
-  const withOverloadWarning = (text: string): string => (overloadWarning ? `${overloadWarning} ${text}` : text)
+  // Étape 234 (bêta) : à l'écrit, un paragraphe à part — collé d'un espace, il se mêlait à la réponse et cassait
+  // un bloc de code placé en tête (un « ``` » n'est reconnu qu'en début de ligne). À voix haute, un espace suffit.
+  const withOverloadWarning = (text: string): string =>
+    overloadWarning ? `${overloadWarning}${channel === 'voice' ? ' ' : '\n\n'}${text}` : text
 
   /**
    * Les petits modèles (palier "rapide") appellent bien les outils, mais échouent parfois à formuler une

@@ -6,6 +6,7 @@ import { join } from 'path'
 import { config } from '../config'
 import { pythonScriptsDir } from '../paths'
 import { getStorageRoot } from './storageRoot'
+import { downloadToFile } from './download'
 
 /**
  * Installe et gère le Python de Jaris (étape 16 du roadmap).
@@ -130,8 +131,8 @@ const PYTHON_SERIES = '3.12'
  * les fichiers de compilation dont Jaris n'a aucun usage).
  */
 async function findPythonArchiveUrl(): Promise<string> {
-  const response = await fetch(PYTHON_RELEASES_API, { headers: { Accept: 'application/vnd.github+json' } })
-  if (!response.ok) throw new Error(`liste des versions de Python inaccessible (HTTP ${response.status})`)
+  const response = await fetch(PYTHON_RELEASES_API, { headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(30_000) })
+  if (!response.ok) throw new Error(pythonListError(response.status, response.headers.get('x-ratelimit-remaining')))
   const release = (await response.json()) as { assets?: { name: string; browser_download_url: string }[] }
   const pattern = new RegExp(`^cpython-${PYTHON_SERIES.replace('.', '\\.')}\\.\\d+\\+.*-x86_64-pc-windows-msvc-install_only\\.tar\\.gz$`)
   const asset = release.assets?.find((a) => pattern.test(a.name))
@@ -139,25 +140,19 @@ async function findPythonArchiveUrl(): Promise<string> {
   return asset.browser_download_url
 }
 
-/** Télécharge en signalant l'avancement : l'archive fait quelques dizaines de Mo, c'est déjà une attente. */
-async function download(url: string, onProgress: InstallProgress): Promise<Buffer> {
-  const response = await fetch(url)
-  if (!response.ok || !response.body) throw new Error(`téléchargement impossible (HTTP ${response.status})`)
-  const total = Number(response.headers.get('content-length') ?? 0)
-
-  const reader = response.body.getReader()
-  const chunks: Uint8Array[] = []
-  let received = 0
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    chunks.push(value)
-    received += value.length
-    if (total > 0) {
-      onProgress(`Téléchargement de Python : ${Math.round((received / total) * 100)} %`, (received / total) * 100)
-    }
+/**
+ * Étape 234 (bêta) : GitHub limite cette liste à 60 lectures par heure et par connexion sans compte, et répond
+ * alors 403 — « liste des versions de Python inaccessible (HTTP 403) » ne disait pas quoi faire. Exportée pour
+ * être testée : ce message est affiché tel quel.
+ */
+export function pythonListError(status: number, rateLimitRemaining: string | null): string {
+  if ((status === 403 || status === 429) && rateLimitRemaining === '0') {
+    return "GitHub limite le nombre de téléchargements depuis ta connexion pour l'instant : réessaie dans une heure (ou depuis une autre connexion)"
   }
-  return Buffer.concat(chunks)
+  if (status === 403 || status === 429) {
+    return `GitHub refuse l'accès à la liste des versions de Python (HTTP ${status}) : réessaie plus tard, ou vérifie qu'un pare-feu ne bloque pas github.com`
+  }
+  return `liste des versions de Python inaccessible (HTTP ${status}) : réessaie plus tard`
 }
 
 /**
@@ -192,9 +187,14 @@ export async function installPythonRuntime(onProgress: InstallProgress): Promise
   for (const entry of await readdir(dir)) await rm(join(dir, entry), { recursive: true, force: true })
 
   onProgress('Recherche de la dernière version de Python…', 0)
-  const archive = await download(await findPythonArchiveUrl(), onProgress)
   const archivePath = join(dir, 'python.tar.gz')
-  await writeFile(archivePath, archive)
+  // Étape 234 (bêta) : le téléchargeur commun (download.ts) plutôt qu'une copie sans délai d'inactivité ni
+  // contrôle de taille — un téléchargement bloqué laissait l'écran figé sur « 43 % » pour toujours.
+  await downloadToFile(await findPythonArchiveUrl(), archivePath, {
+    onProgress: ({ percent }) => {
+      if (percent !== null) onProgress(`Téléchargement de Python : ${Math.round(percent)} %`, percent)
+    }
+  })
 
   onProgress('Décompression de Python…')
   // `tar` est fourni avec Windows depuis Windows 10 (build 17063) et sait lire un .tar.gz : évite

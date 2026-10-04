@@ -23,7 +23,7 @@ vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../electron/services
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText, { exports: noteExports, require: name => name === 'util' ? {promisify: () => {}} : {} })
 
-function setup(chat, execute, writeNote = async () => assert.fail('pas de document attendu'), { profile = null, installed = ['test'] } = {}) {
+function setup(chat, execute, writeNote = async () => assert.fail('pas de document attendu'), { profile = null, installed = ['test'], overloadWarning = null } = {}) {
   const config = { ollama: { model: 'test', visionModel: 'vision', numCtx: 8192 } }
   const modules = {
     '../config': { config },
@@ -35,7 +35,7 @@ function setup(chat, execute, writeNote = async () => assert.fail('pas de docume
     './appLauncher': { didAppLaunch: result => result.endsWith('a été lancé.') },
     './hardwareScan': { GPU_TEMP_LIMIT_C: 85 },
     './modelChoice': modelChoiceModule,
-    './resourceMonitor': { checkOverloadWarning: async () => null },
+    './resourceMonitor': { checkOverloadWarning: async () => overloadWarning },
     './tools': { TOOLS: [], createToolExecutor: () => execute }
   }
   const exports = {}
@@ -269,4 +269,17 @@ test('un appel d’outil garde le modèle choisi à la main (pas de bascule vers
   }, async () => 'résultat', undefined, { profile: { models: threeTiers, modelChoices: { chat: 'choisi:9b' } }, installed: installedAll })
   await converse('cherche la météo', null, () => {}, undefined, [], undefined, undefined, 'chat')
   assert.deepEqual(used, ['choisi:9b', 'choisi:9b'])
+})
+
+// Étape 234 (bêta) : collé d'un espace à la réponse écrite, l'avertissement se mêlait au texte et cassait un bloc
+// de code placé en tête (« ``` » n'est reconnu qu'en début de ligne). À voix haute, un espace suffit.
+test('machine chargée : un paragraphe à part à l’écrit, une simple pause à voix haute', async () => {
+  const warning = 'Attention, ta machine est assez chargée en ce moment.'
+  const answer = '```js\nconsole.log(1)\n```'
+  const reply = async (channel) =>
+    setup(async () => ({ role: 'assistant', content: answer }), async () => assert.fail('aucun outil'), undefined, { overloadWarning: warning })(
+      'montre un exemple de code', null, () => {}, undefined, [], undefined, undefined, channel
+    )
+  assert.equal(await reply('chat'), `${warning}\n\n${answer}`)
+  assert.ok((await reply('voice')).startsWith(`${warning} `))
 })
