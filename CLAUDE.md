@@ -6370,3 +6370,9 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   test-download-budget, test-options-references, test-format-reply, test-reminders, test-python-download,
   test-assistant-history. Chacun vérifié en réintroduisant le défaut. **Non vérifiable ici** : Image et Vidéo
   (Windows seulement), la voix (pas de micro), et le rendu WebGL réel sur la machine de Léo.
+  **Deux pièges revécus au premier passage en CI** (aucun installeur publié) : (1) un motif sur plusieurs lignes
+  (`\n`) contre un fichier source lu tel quel — la CI extrait le dépôt sous Windows en CRLF, normaliser
+  `\r\n` AVANT (déjà écrit plus haut, et oublié quand même) ; pour le reproduire ici :
+  `git -c core.autocrlf=true worktree add --detach <dossier> HEAD`, puis `npm test` dedans. (2) Un test de
+  minuterie à 120 ms en temps RÉEL échouait sur une machine chargée (le rappel sonnait avant d'être réarmé) :
+  horloge simulée (`t.mock.timers.enable({ apis: ['setTimeout', 'Date'] })`), jamais une attente réelle courte.

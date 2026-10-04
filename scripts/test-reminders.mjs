@@ -14,7 +14,8 @@ import ts from 'typescript'
  * s'afficher, pas seulement être dit à voix haute.
  */
 const nodeRequire = createRequire(import.meta.url)
-const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
+// CRLF normalisé : la CI extrait le dépôt sous Windows, où les motifs sur plusieurs lignes ne trouvaient plus rien.
+const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 
 function loadReminders(dataRoot) {
   const source = ts.transpileModule(read('electron/services/reminders.ts'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
@@ -26,13 +27,17 @@ function loadReminders(dataRoot) {
 test('un rappel réarmé plusieurs fois ne sonne qu’une fois', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-rappels-'))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
+  // Horloge simulée : avec une vraie, le rappel (120 ms) sonnait parfois AVANT d'être réarmé sur une machine
+  // chargée, et le test échouait sans que le code soit en cause.
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] })
   const reminders = loadReminders(dir)
   const fired = []
   await reminders.scheduleReminder('boire de l’eau', 0.002, (m) => fired.push(`direct ${m}`))
   // Comme un changement de micro, deux fois de suite, avant que le rappel ne sonne.
   await reminders.restoreReminders((m) => fired.push(`réarmé ${m}`))
   await reminders.restoreReminders((m) => fired.push(`réarmé ${m}`))
-  await new Promise((resolve) => setTimeout(resolve, 400))
+  assert.deepEqual(fired, [], 'rien avant l’heure')
+  t.mock.timers.tick(200)
   assert.deepEqual(fired, ['réarmé boire de l’eau'])
 })
 
