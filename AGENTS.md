@@ -6375,3 +6375,32 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   l'étape qui peut échouer » vaut pour TOUS les chemins de sortie, y compris ceux qui relancent l'erreur sans passer
   par le code de récupération.** Régression : test-benchmark-cases (navigateur qui marche à la vérification
   préalable puis ne démarre plus).
+
+- **Étape 236 — répétition générale des tests de modèles sur ce serveur (sans carte graphique), avant la grande
+  campagne de Léo.** Le programme de test lancé pour de vrai, sur de vrais modèles (ministral-3:3b pour les
+  demandes, qwen3-vl:2b pour la vision, qwen2.5-coder:7b pour le code) : chaque verdict relu à la main. 23
+  demandes, 14 cas de vision et 2 applications : AUCUNE erreur de jugement du test. Les ratés étaient de vrais
+  échecs des modèles (date d'anniversaire inventée au lieu de lire la note, correction ajoutée sans `replace`,
+  délai de rappel inventé, `click_element` demandé alors que le message dit explicitement qu'aucun élément n'est
+  disponible…). Raccourcie en cours de route à la demande de Léo (trop lente sur processeur) : demandes non
+  rejouées, vision faite une fois, code sur 2 applications sur 5.
+  Ce qu'elle a apporté :
+  1. **qwen3-vl:2b réfléchit malgré `think: false`** (8 000 à 28 000 caractères de réflexion pour un clic), et
+     une fois jusqu'à remplir toute la fenêtre (8 192 tokens) sans rien répondre. Le verdict « réponse vide » était
+     juste mais muet sur la cause : vision et code disent maintenant « réponse coupée : fenêtre de contexte
+     pleine » (`cutNote`), comme les questions et les demandes le faisaient déjà. C'est aussi ce qui arriverait
+     dans Jaris (même appel) : la campagne mesurera ce temps sur la vraie carte.
+  2. **Journal des gestes du test de code** (Léo : « on ne sait pas s'il l'a vraiment fait ou pas ») : chaque
+     bouton cherché (trouvé par son texte, son nom dans le code ou comme seule icône, cliqué à quel point), chaque
+     saisie, chaque lecture de l'écran, chaque erreur JavaScript, dans l'ordre — dans les traces (`steps`) et
+     dans le détail lisible. Un verdict « juste » se revérifie sans relancer : sur la répétition, le compteur
+     généré lève une erreur (localStorage interdit par l'aperçu, comme dans Jaris) APRÈS avoir mis l'affichage à
+     jour — le journal le montre, et le verdict « juste » est confirmé à la relecture.
+  3. **Engagement pris auprès de Léo** : après sa campagne, il envoie les DEUX fichiers
+     (`benchmark-nouveaux-modeles.md` et `.traces.jsonl`, dossier de données de Jaris) et je vérifie TOUT — chaque
+     réponse, justes comprises, et chaque application, rouverte et testée moi-même — pas seulement les ratés.
+  **Leçon générale : une estimation de durée faite sur un serveur sans carte graphique doit compter les cas
+  lents (plusieurs tours, réflexion cachée), et ne pas lancer d'autres tâches lourdes en parallèle** : annoncer
+  « 1 h 30 » puis « 3-4 h » a coûté la confiance de Léo deux fois de suite.
+  Régression : test-benchmark-code (journal des gestes, vérifié en le retirant), test-benchmark-cases (réponse
+  coupée en lecture et en visée).

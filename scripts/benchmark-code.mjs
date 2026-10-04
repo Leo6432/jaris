@@ -48,8 +48,19 @@ const norm = (text) =>
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
 
+/**
+ * Journal des gestes (Léo, 04/10/2026 : « on ne sait pas s'il l'a vraiment fait ou pas ») : chaque clic (quel bouton,
+ * trouvé comment, où), chaque saisie et chaque lecture de l'écran, dans l'ordre, enregistrés avec le verdict — pour
+ * vérifier après coup ce que le navigateur automatique a VRAIMENT fait, et pas seulement ce qu'il a conclu.
+ */
+const log = (page, entry) => page.journal?.push(entry)
+
 /** Texte visible de la page (comme le lit Léo). */
-const pageText = (page) => page.evaluate('document.body ? document.body.innerText : ""')
+async function pageText(page) {
+  const text = await page.evaluate('document.body ? document.body.innerText : ""')
+  log(page, `lu le texte de la page : « ${String(text).replace(/\s+/g, ' ').trim().slice(0, 2000)} »`)
+  return text
+}
 
 /**
  * Clique le bouton voulu, au milieu du bouton, comme une vraie souris. `within` : texte d'une ligne de liste, pour
@@ -75,17 +86,26 @@ async function clickButton(page, pattern, what, hintPattern, within) {
       if (!box || box === document.body || box.innerText.split('\\n').filter((l) => l.trim()).length > 6) return { missing: true }
       pool = pool.filter((b) => box.contains(b))
     }
-    let button = pool.find((b) => re.test(__j.label(b))) || pool.find((b) => hintRe.test(__j.hint(b)))
+    let by = 'son texte'
+    let button = pool.find((b) => re.test(__j.label(b)))
     if (!button) {
+      by = 'son nom dans le code'
+      button = pool.find((b) => hintRe.test(__j.hint(b)))
+    }
+    if (!button) {
+      by = 'seule icône à cet endroit'
       const icons = pool.filter((b) => __j.iconOnly(b))
       if (icons.length === 1) button = icons[0]
     }
-    if (!button) return { missing: true }
+    if (!button) return { missing: true, seen: pool.map((b) => __j.label(b) || '(icône) ' + __j.hint(b)).slice(0, 20) }
     document.querySelectorAll('[data-jaris-cible]').forEach((e) => e.removeAttribute('data-jaris-cible'))
     button.setAttribute('data-jaris-cible', '')
-    return { found: true }
+    return { found: true, by, label: __j.label(button) || __j.hint(button) }
   })()`)
-  if (target.missing) throw new Fail(`bouton « ${what} » introuvable`)
+  if (target.missing) {
+    log(page, `bouton « ${what} » cherché, introuvable — boutons visibles : ${target.seen.map((l) => `« ${l} »`).join(', ') || 'aucun'}`)
+    throw new Fail(`bouton « ${what} » introuvable`)
+  }
   // Le bouton est-il à l'écran ? Sinon, on fait défiler À LA MOLETTE, comme Léo : une page bloquée
   // (overflow: hidden) ne bouge pas, et son bouton reste hors d'atteinte — exactement le bug vécu dans Jaris.
   const where = () =>
@@ -100,12 +120,19 @@ async function clickButton(page, pattern, what, hintPattern, within) {
       return { x, y, inView, below: y >= innerHeight, reachable: !!hit && (hit === b || b.contains(hit) || hit.contains(b)) }
     })()`)
   let spot = await where()
+  let scrolls = 0
   for (let i = 0; i < 12 && spot && !spot.inView; i++) {
     await page.wheel(500, 340, spot.below ? 400 : -400)
+    scrolls++
     spot = await where()
   }
-  if (!spot || !spot.reachable) throw new Fail(`bouton « ${what} » caché ou recouvert : le clic ne l'atteint pas`)
+  const found = `bouton « ${what} » trouvé par ${target.by} (« ${String(target.label).slice(0, 80)} »)${scrolls ? `, après ${scrolls} tour(s) de molette` : ''}`
+  if (!spot || !spot.reachable) {
+    log(page, `${found}, mais caché ou recouvert : clic impossible`)
+    throw new Fail(`bouton « ${what} » caché ou recouvert : le clic ne l'atteint pas`)
+  }
   await page.click(spot.x, spot.y)
+  log(page, `${found}, cliqué au point (${Math.round(spot.x)}, ${Math.round(spot.y)})`)
 }
 
 /** Tape dans le n-ième champ visible (vidé d'abord), comme au clavier. */
@@ -119,12 +146,25 @@ async function typeInto(page, index, text) {
     input.dispatchEvent(new Event('input', { bubbles: true }))
     return document.activeElement === input
   })()`)
-  if (!ok) throw new Fail(`champ n° ${index + 1} introuvable`)
+  if (!ok) {
+    log(page, `champ n° ${index + 1} introuvable`)
+    throw new Fail(`champ n° ${index + 1} introuvable`)
+  }
   await page.insertText(text)
+  log(page, `tapé « ${text} » dans le champ n° ${index + 1}`)
 }
 
-const numbersShown = (page) => page.evaluate(`(() => { ${HELPERS}; return __j.numbers() })()`)
-const inputCount = (page) => page.evaluate(`(() => { ${HELPERS}; return __j.inputs().length })()`)
+async function numbersShown(page) {
+  const numbers = await page.evaluate(`(() => { ${HELPERS}; return __j.numbers() })()`)
+  log(page, `lu les nombres affichés : ${numbers.length ? numbers.join(', ') : 'aucun'}`)
+  return numbers
+}
+
+async function inputCount(page) {
+  const count = await page.evaluate(`(() => { ${HELPERS}; return __j.inputs().length })()`)
+  log(page, `compté les champs de saisie visibles : ${count}`)
+  return count
+}
 
 export const CODE_TEST_CASES = [
   {
@@ -195,6 +235,7 @@ export const CODE_TEST_CASES = [
       'Un formulaire de contact avec un champ nom, un champ email, un champ message et un bouton « Envoyer » qui affiche un message de confirmation dans la page.',
     async check(page) {
       const fields = await page.evaluate(`(() => { ${HELPERS}; return __j.inputs().map((i) => [i.tagName, i.type, (i.name + ' ' + i.id + ' ' + (i.placeholder || '')).toLowerCase()]) })()`)
+      log(page, `champs trouvés : ${fields.map(([tag, type, hint]) => `${tag.toLowerCase()} ${type} « ${hint.trim()} »`).join(', ') || 'aucun'}`)
       if (fields.length < 3) throw new Fail('il manque des champs (nom, email, message)')
       for (const [index, [tag, type, hint]] of fields.entries()) {
         const value = type === 'email' || /mail/.test(hint) ? 'leo@example.com' : tag === 'TEXTAREA' || /message/.test(hint) ? 'Bonjour, ceci est un essai.' : 'Léo Martin'
@@ -221,8 +262,11 @@ export function withPreviewRules(html) {
  * Ouvre l'application et joue sa vérification. Renvoie `null` si tout marche, sinon la raison. Les erreurs
  * JavaScript de la page sont jointes à la raison, pour comprendre un échec en relisant le fichier.
  */
-export async function checkGeneratedApp(page, testCase, html) {
+export async function checkGeneratedApp(page, testCase, html, journal = null) {
+  // `journal` (facultatif) reçoit chaque geste, dans l'ordre : voir `log` plus haut.
+  page.journal = journal
   await page.loadHtml(withPreviewRules(html))
+  log(page, 'application ouverte avec les règles de l’aperçu de Jaris')
   try {
     await testCase.check(page)
     return null
@@ -230,5 +274,8 @@ export async function checkGeneratedApp(page, testCase, html) {
     if (!(err instanceof Fail) && !/ne répond plus/.test(String(err.message))) throw err
     const jsErrors = page.errors.length ? ` (erreur JavaScript : ${String(page.errors[0]).split('\n')[0].slice(0, 160)})` : ''
     return `${err.message}${jsErrors}`
+  } finally {
+    for (const error of page.errors) log(page, `erreur JavaScript de la page : ${String(error).split('\n')[0].slice(0, 300)}`)
+    page.journal = null
   }
 }

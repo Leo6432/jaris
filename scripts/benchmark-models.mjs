@@ -119,6 +119,16 @@ function textRef(text) {
 const compactMessages = (messages) => messages?.map((m) => (m.role === 'system' ? { role: 'system', ref: textRef(m.content) } : m))
 
 /** Ce qu'Ollama renvoie à côté du message : done_reason, tokens, durées (chargement, lecture, génération). */
+/**
+ * Répétition générale du 04/10/2026 (qwen3-vl:2b) : malgré `think: false`, le modèle a réfléchi jusqu'à remplir sa
+ * fenêtre de contexte (8 192 tokens, 30 min sur processeur), puis n'a rien répondu. Le verdict « réponse vide » était
+ * juste, mais ne disait pas POURQUOI — les questions et les demandes, elles, le disaient déjà. Vision et code aussi.
+ */
+function cutNote(data) {
+  if (data?.done_reason !== 'length') return ''
+  return ` — réponse coupée : fenêtre de contexte pleine (${(data.prompt_eval_count ?? 0) + (data.eval_count ?? 0)} tokens, réflexion comprise)`
+}
+
 function ollamaMeta(data) {
   const { message: _message, ...meta } = data ?? {}
   return meta
@@ -1288,7 +1298,7 @@ const BROWSER_PATH = findBrowser()
  * Étape 232 : ouvre l'application dans un navigateur neuf (une application cassée ne peut pas gêner la suivante)
  * et joue sa vérification. `null` = elle marche.
  */
-async function checkInBrowser(testCase, html) {
+async function checkInBrowser(testCase, html, journal = null) {
   let session
   try {
     session = await openBrowser(BROWSER_PATH)
@@ -1296,7 +1306,7 @@ async function checkInBrowser(testCase, html) {
     throw new BrowserDownError(`Le navigateur ne démarre plus (${err.message}) : le test s'arrête. Relance-le, il reprendra où il en était.`)
   }
   try {
-    return await checkGeneratedApp(session.page, testCase, html)
+    return await checkGeneratedApp(session.page, testCase, html, journal)
   } finally {
     await session.close()
   }
@@ -2288,7 +2298,8 @@ async function main() {
         guard.passed()
         perModel.latencies.push(r.wallMs)
         if (r.tokPerSec != null) perModel.speeds.push(r.tokPerSec)
-        const reason = kind === 'lecture' ? (isCorrectVisionAnswer(c, r.content) ? null : 'réponse fausse') : judgePilotStep(c, r.content, pilotTargets)
+        const verdict = kind === 'lecture' ? (isCorrectVisionAnswer(c, r.content) ? null : 'réponse fausse') : judgePilotStep(c, r.content, pilotTargets)
+        const reason = verdict === null ? null : verdict + cutNote(r.data)
         const ok = reason === null
         trace({
           type: 'vision',
@@ -2308,13 +2319,13 @@ async function main() {
         })
         // Étape 230 (Léo : « on sait ce qu'il a répondu, on peut corriger les scores ») : TOUTES les réponses de
         // vision sont recopiées, justes comprises — la vérification peut se tromper dans les deux sens.
-        visionDetail[d].answers.push(`${ok ? 'compté juste' : `compté faux${kind === 'visée' ? ` (${reason})` : ''}`} : ${r.content || 'réponse vide'}`)
+        visionDetail[d].answers.push(`${ok ? 'compté juste' : `compté faux${kind === 'visée' ? ` (${reason})` : cutNote(r.data)}`} : ${r.content || 'réponse vide'}`)
         if (ok) {
           perModel.correct++
           if (kind === 'visée') pilotOk++
         } else {
           visionDetail[d].missed++
-          visionDetail[d].got.push(kind === 'visée' ? reason : `« ${oneLine(r.content) || 'réponse vide'} »`)
+          visionDetail[d].got.push(kind === 'visée' ? reason : `« ${oneLine(r.content) || 'réponse vide'} »${cutNote(r.data)}`)
         }
         console.log(`${ok ? 'OK' : 'RATÉ'} (réponse: "${r.content.slice(0, 60)}") — ${fmt(r.wallMs, 0)}ms`)
       } catch (err) {
@@ -2371,6 +2382,8 @@ async function main() {
       // même (relecture ChatGPT : ne rien perdre de ce qui ne se régénère pas à l'identique).
       let r = null
       let html = null
+      // Chaque geste du navigateur automatique (clic, saisie, lecture de l'écran), écrit avec le verdict.
+      const steps = []
       try {
         guard.check()
         r = await chatCode(model, prompt)
@@ -2395,7 +2408,8 @@ async function main() {
           html
         })
         const issues = html ? validateGeneratedHtml(html) : []
-        const reason = html ? await checkInBrowser(testCase, html) : 'pas de code HTML exploitable dans la réponse'
+        const verdict = html ? await checkInBrowser(testCase, html, steps) : 'pas de code HTML exploitable dans la réponse'
+        const reason = verdict === null ? null : verdict + cutNote(r.data)
         const ok = reason === null
         if (ok) perModel.correct++
         else {
@@ -2403,7 +2417,8 @@ async function main() {
           codeDetail[index].got.push(reason)
         }
         codeDetail[index].answers.push(
-          `${ok ? 'compté juste' : `compté faux (${reason})`}${issues.length ? ` — relecture du fichier : ${issues.join(' ; ')}` : ''}`
+          `${ok ? 'compté juste' : `compté faux (${reason})`}${issues.length ? ` — relecture du fichier : ${issues.join(' ; ')}` : ''}` +
+            (steps.length ? ` — gestes : ${steps.join(' → ')}` : '')
         )
         // Le HTML entier : pour revérifier l'application plus tard (vérification corrigée) sans la régénérer.
         raw.push({ id: testCase.id, ok, reason, html: html ?? r.content })
@@ -2421,6 +2436,7 @@ async function main() {
           response: r.data.message ?? null,
           meta: ollamaMeta(r.data),
           html,
+          steps,
           previewCsp: PREVIEW_CSP_FOR_TEST
         })
         console.log(`${ok ? 'OK' : `RATÉ (${reason})`} — ${fmt(r.wallMs / 1000)} s, ${fmt(r.tokPerSec)} tok/s`)
@@ -2442,6 +2458,7 @@ async function main() {
           reason: `erreur : ${err.message}`,
           timeout: err instanceof CallTimeoutError,
           skipped: Boolean(err.skipped),
+          steps,
           ...(r ? { ms: Math.round(r.wallMs), think: r.think, prompt, response: r.data.message ?? null, meta: ollamaMeta(r.data), html } : {})
         })
       }

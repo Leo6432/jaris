@@ -154,3 +154,42 @@ test('une application qui boucle à l’infini est arrêtée et comptée fausse,
     await close()
   }
 })
+
+// Léo, 04/10/2026 : « on ne sait pas s'il l'a vraiment fait ou pas » — chaque geste du navigateur automatique est
+// journalisé, dans l'ordre : quel bouton (trouvé comment, cliqué où), quelle saisie, ce que l'écran affichait.
+test('journal des gestes : chaque clic, saisie et lecture est noté, réussite comme échec', options, async () => {
+  const { page: p, close } = await openBrowser(browserPath)
+  try {
+    const journal = []
+    assert.equal(await checkGeneratedApp(p, CODE_TEST_CASES[0], APPS.compteur.good, journal), null)
+    assert.equal(journal[0], 'application ouverte avec les règles de l’aperçu de Jaris')
+    assert.equal(journal.filter((e) => /^bouton « \+1 » trouvé par son texte \(« \+1 »\), cliqué au point \(\d+, \d+\)$/.test(e)).length, 5)
+    assert.ok(journal.some((e) => /^bouton « Remettre à zéro » trouvé par son texte .*cliqué au point/.test(e)))
+    assert.deepEqual(journal.filter((e) => e.startsWith('lu les nombres')), [
+      'lu les nombres affichés : 0',
+      'lu les nombres affichés : 3',
+      'lu les nombres affichés : 0',
+      'lu les nombres affichés : 2'
+    ])
+
+    const icons = []
+    assert.equal(await checkGeneratedApp(p, CODE_TEST_CASES[0], APPS.compteur.goodIcons, icons), null)
+    assert.ok(icons.some((e) => /bouton « \+1 » trouvé par son nom dans le code \(« btn-increment »\)/.test(e)))
+
+    const typed = []
+    assert.equal(await checkGeneratedApp(p, CODE_TEST_CASES[1], APPS.addition.good, typed), null)
+    assert.ok(typed.includes('tapé « 12 » dans le champ n° 1'))
+    assert.ok(typed.some((e) => /^lu le texte de la page : « .*42/.test(e)))
+  } finally {
+    await close()
+  }
+  const { page: q, close: c } = await openBrowser(browserPath)
+  try {
+    const journal = []
+    const missing = page('<div>0</div><button>Plus</button>')
+    assert.match(await checkGeneratedApp(q, CODE_TEST_CASES[0], missing, journal), /bouton « \+1 » introuvable/)
+    assert.equal(journal.at(-1), 'bouton « +1 » cherché, introuvable — boutons visibles : « Plus »')
+  } finally {
+    await c()
+  }
+})

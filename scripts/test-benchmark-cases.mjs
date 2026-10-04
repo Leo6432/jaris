@@ -919,3 +919,33 @@ test(
     }
   }
 )
+
+// Répétition générale du 04/10/2026 : qwen3-vl:2b a réfléchi jusqu'à remplir sa fenêtre de contexte malgré
+// `think: false`, puis n'a rien répondu. Le verdict était juste (« réponse vide ») mais n'en disait pas la cause.
+test('vision : une réponse coupée faute de place le dit, en lecture comme en visée', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const fake = await startFakeOllama({
+    installed: ['qwen3-vl:2b'],
+    answer: (_m, prompt) =>
+      prompt.startsWith("Quelle heure affiche l'horloge") || prompt.startsWith('Objectif : Ouvre le message de Julie.') ? 'length' : { content: '?' }
+  })
+  try {
+    const resultsPath = join(dir, 'r.md')
+    const { code, out } = await runScript({
+      OLLAMA_HOST: fake.host,
+      JARIS_RESULTS_PATH: resultsPath,
+      JARIS_ANALYSIS_SCOPE: 'vision',
+      JARIS_RETEST_ALL: '1',
+      JARIS_ONLY_MODELS: 'qwen3-vl:2b'
+    })
+    assert.equal(code, 0, out)
+    const results = readFileSync(resultsPath, 'utf8')
+    assert.match(results, /- RATÉ 2\/2 « Quelle heure affiche l'horloge[^»]*» — obtenu : « réponse vide » — réponse coupée : fenêtre de contexte pleine/)
+    assert.match(results, /visée ouvrir-notification[^\n]*obtenu : action que Jaris ne peut pas exécuter : « réponse vide » — réponse coupée : fenêtre de contexte pleine/)
+    // Une réponse simplement fausse, elle, ne prétend pas avoir été coupée.
+    assert.doesNotMatch(results, /« Combien d'œufs[^\n]*réponse coupée/)
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
