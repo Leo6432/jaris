@@ -157,6 +157,17 @@ async function installed(opts) {
   return t
 }
 
+test('Mes modèles : le modèle vidéo avec la meilleure qualité possible, sinon aucun avec la raison', () => {
+  const p = (vram, ram) => videoModel.pickVideoModel(vram, ram)
+  // RTX 3070 (8 Go) et 63 Go de RAM : Faible et Moyen possibles, Élevé demande 10 Go de carte.
+  assert.equal(p(8, 63).model, 'FastWan 2.2 TI2V 5B')
+  assert.equal(p(8, 63).qualityLabel, 'Moyen')
+  assert.equal(p(16, 64).qualityLabel, 'Extra')
+  assert.equal(p(8, 16).qualityLabel, 'Faible')
+  assert.equal(p(6, 32).model, null)
+  assert.match(p(6, 32).reason, /trop petite/)
+})
+
 test('qualités (étape 205) : seuls les crans que la machine peut faire tourner, sinon une raison lisible', () => {
   const q = (vram, ram) => [...videoModel.availableVideoQualities(vram, ram).qualities]
   assert.deepEqual(q(8, 32), ['light', 'q6'], 'RTX 3070 + 32 Go : Q8 laisse trop peu de marge sur 8 Go')

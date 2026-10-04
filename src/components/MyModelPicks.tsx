@@ -34,7 +34,8 @@ function formatIntelligence(entry: ModelOverviewEntry): string {
 export function formatHardware(picks: MyModelPicksData): string {
   const parts = [picks.gpuName ?? 'Carte graphique non détectée']
   if (picks.vramGb !== null) parts.push(`${picks.vramGb} Go de VRAM`)
-  parts.push(`${picks.ramGb} Go de RAM`)
+  // Arrondi : la RAM détectée arrive en Go fractionnaires (« 63.161624908447266 Go », capture de Léo).
+  parts.push(`${Math.round(picks.ramGb)} Go de RAM`)
   return parts.join(' · ')
 }
 
@@ -147,6 +148,33 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
                 )}
               </>
             )}
+            {/* 04/10/2026, Léo : « ajoute vidéo et le modèle vidéo ». Comme Image : pas de vitesse ni d'intelligence. */}
+            {picks.video && (
+              <>
+                <tr className="capacity-scan__tier-image capacity-scan__tier-video">
+                  <td className="capacity-scan__tier-slot">Vidéo</td>
+                  <td className="capacity-scan__tier-model">
+                    {picks.video.model ? `${picks.video.model} · qualité ${picks.video.qualityLabel}` : 'Aucun modèle'}
+                  </td>
+                  <td className="capacity-scan__tier-speed">—</td>
+                  <td className="capacity-scan__tier-intelligence">—</td>
+                  <td />
+                </tr>
+                {!picks.video.model ? (
+                  <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
+                    <td />
+                    <td colSpan={4}>Pas assez de puissance pour la vidéo : {picks.video.reason}.</td>
+                  </tr>
+                ) : (
+                  picks.video.installed === false && (
+                    <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
+                      <td />
+                      <td colSpan={4}>Pas installé sur ce PC pour l'instant — télécharge-le depuis le mode Vidéo.</td>
+                    </tr>
+                  )
+                )}
+              </>
+            )}
           </tbody>
         </table>
       </div>
@@ -193,7 +221,7 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
         machine : sa note est l'intelligence multipliée par la chance de réussir 5 actions de suite sans erreur.
         Une erreur sur 78 coûte peu, une erreur sur 10 coûte presque la moitié de la note. Faible prend la
         meilleure note parmi les plus rapides, Moyen la meilleure qui tient sur ta carte graphique, Élevé et
-        Code la meilleure même si elle déborde sur la RAM, Vision la meilleure parmi ceux qui lisent les images, Image le seul modèle de dessin s'il tient sur ta machine. Vitesse et Intelligence : mesures publiées par Artificial
+        Code la meilleure même si elle déborde sur la RAM, Vision la meilleure parmi ceux qui lisent les images, Image le seul modèle de dessin s'il tient sur ta machine, Vidéo le modèle vidéo avec la meilleure qualité que ta machine peut faire tourner. Vitesse et Intelligence : mesures publiées par Artificial
         Analysis, identiques pour tout le monde — elles comparent les modèles entre eux, pas la vitesse sur ta
         machine.
       </p>

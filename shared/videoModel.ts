@@ -101,3 +101,22 @@ export function availableVideoQualities(vramGb: number | null, ramGb: number): V
   if (ramGb < lightest.minRamGb) return { qualities: [], reason: `pas assez de RAM (${Math.round(ramGb)} Go, il en faut ${lightest.ramLabel} ou plus)` }
   return { qualities: VIDEO_QUALITIES.filter((q) => vramGb >= q.minVramGb && ramGb >= q.minRamGb).map((q) => q.id), reason: null }
 }
+
+/** Ligne « Vidéo » de « Mes modèles » : le modèle vidéo et la meilleure qualité que CETTE machine fait tourner. */
+export interface VideoModelPick {
+  /** `null` = la machine n'a pas assez de puissance pour la vidéo. */
+  model: string | null
+  /** Meilleure qualité possible ici (libellé du mode Vidéo : Faible, Moyen, Élevé, Extra). */
+  qualityLabel: string | null
+  quality: VideoQuality | null
+  reason: string | null
+  /** Cette qualité est déjà téléchargée (ajouté par main.ts ; absent = pas encore vérifié). */
+  installed?: boolean
+}
+
+export function pickVideoModel(vramGb: number | null, ramGb: number): VideoModelPick {
+  const pick = availableVideoQualities(vramGb, ramGb)
+  const best = pick.qualities[pick.qualities.length - 1]
+  if (!best) return { model: null, qualityLabel: null, quality: null, reason: pick.reason }
+  return { model: VIDEO_MODEL, qualityLabel: videoQualityLabel(best), quality: best, reason: null }
+}

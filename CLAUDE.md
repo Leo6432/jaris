@@ -6220,3 +6220,10 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   formule qui dit ce qu'elle mesure vaut mieux qu'un ordre strict (l'un écrase l'autre) ou qu'un seuil arbitraire
   (une frontière déplacée).** Régression : test-hardwarescan-single-pool.mjs (1 erreur sur 78 ne fait pas
   perdre qwen3.8:27b ; 18 erreurs sur 78 le font perdre).
+
+- **Ligne « Vidéo » dans « Mes modèles » + RAM arrondie (04/10/2026, Léo : « ajoute vidéo et le modèle vidéo »)** :
+  `pickVideoModel` (shared/videoModel.ts) reprend `availableVideoQualities` et garde la meilleure qualité possible,
+  ajouté au canal `getMyModelPicks` comme l'image. Le modèle vidéo ne s'installe que depuis le mode Vidéo, d'où un
+  message qui y renvoie (pas « Retester la configuration »). La RAM détectée arrive en Go fractionnaires
+  (« 63.161624908447266 Go de RAM » sur la capture de Léo) : arrondie à l'affichage. Régression :
+  test-video-generation.mjs, test-options-reorganization-ui.mjs.

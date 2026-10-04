@@ -15,7 +15,7 @@ import {
   readGeneratedImageDataUrl
 } from './services/imageGenerator'
 import { imageLabelFromFileName } from '../shared/imageGallery'
-import { isVideoQuality, normalizeVideoSeconds, VIDEO_DURATIONS } from '../shared/videoModel'
+import { isVideoQuality, normalizeVideoSeconds, pickVideoModel, VIDEO_DURATIONS } from '../shared/videoModel'
 import {
   deleteGeneratedVideo,
   generateVideo,
@@ -24,6 +24,7 @@ import {
   getVideoStudioStatus,
   removeObsoleteVideoFiles,
   installVideoModel,
+  isVideoQualityInstalled,
   listGeneratedVideos,
   readGeneratedVideo
 } from './services/videoGenerator'
@@ -1260,7 +1261,13 @@ app.whenReady().then(async () => {
     const picks = await getMyModelPicks(await getProfile())
     // Étape 174 : le modèle d'image se décide sur le MÊME matériel détecté que les autres rôles.
     const image = pickImageModel(picks.vramGb, picks.ramGb)
-    return { ...picks, image: image.model ? { ...image, installed: await isImageModelInstalled() } : image }
+    // 04/10/2026, Léo : « ajoute vidéo et le modèle vidéo » — même matériel détecté, meilleure qualité possible ici.
+    const video = pickVideoModel(picks.vramGb, picks.ramGb)
+    return {
+      ...picks,
+      image: image.model ? { ...image, installed: await isImageModelInstalled() } : image,
+      video: video.quality ? { ...video, installed: await isVideoQualityInstalled(video.quality) } : video
+    }
   })
   // Étape 168, remis à l'étape 221 (Léo : « rajoute le bouton analyse pour tester Ling-3.0-tiny ») : test des seuls
   // modèles sans score (voir testUnscoredModels, benchmarkRunner.ts).

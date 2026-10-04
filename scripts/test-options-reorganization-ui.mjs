@@ -87,7 +87,7 @@ const overrides = {
     window.__emitWakeHeard = cb
     return () => {}
   },
-  getMyModelPicks: async () => ({ gpuName: 'RTX 3070', vramGb: 8, ramGb: 32, flash: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, medium: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, large: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, vision: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, code: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 } , upgrades: {}, installCheck: { notInstalled: [], otherInstalled: [] }, image: window.__imagePick ?? { model: 'FLUX.2 klein 4B', reason: null, installed: false } }),
+  getMyModelPicks: async () => ({ gpuName: 'RTX 3070', vramGb: 8, ramGb: window.__ramGb ?? 32, flash: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, medium: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, large: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, vision: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 }, code: { model: "qwen3.5:4b", vramGb: 3.4, usedIn: [], toolCalling: "6/6", intelligence: null, artificialAnalysisIndex: 13, artificialAnalysisSpeed: 19 } , upgrades: {}, installCheck: { notInstalled: [], otherInstalled: [] }, image: window.__imagePick ?? { model: 'FLUX.2 klein 4B', reason: null, installed: false }, video: window.__videoPick ?? { model: 'FastWan 2.2 TI2V 5B', qualityLabel: 'Moyen', quality: 'q6', reason: null, installed: false } }),
   // Étape 168 : test des seuls modèles sans score — le test pilote lui-même les lignes du script et sa fin.
   getUnscoredModels: async () => ['qwen2.5-coder:14b', 'nemotron-3.5-lightning:30b'],
   onModelBenchmarkLine: (cb) => {
@@ -617,6 +617,42 @@ test('Modèles : une ligne « Image » avec le seul modèle d’image quand la m
     const row = await imageRow(page)
     assert.deepEqual(row.cells, ['Image', 'FLUX.2 klein 4B', '—', '—', ''])
     assert.equal(row.note, "Pas installé sur ce PC pour l'instant — clique « Retester la configuration » (environ 5 Go).", 'pas encore installé : dit, avec le même bouton que les autres modèles')
+  })
+})
+
+/** Ligne « Vidéo » (04/10/2026, Léo : « ajoute vidéo et le modèle vidéo »). */
+async function videoRow(page, pick, ramGb) {
+  await page.evaluate(([p, r]) => { if (p) window.__videoPick = p; if (r) window.__ramGb = r }, [pick ?? null, ramGb ?? null])
+  await page.click('.options-menu__tab:has-text("Modèles")')
+  await page.waitForSelector('.capacity-scan__tier-video')
+  return page.evaluate(() => {
+    const row = document.querySelector('.capacity-scan__tier-video')
+    const next = row.nextElementSibling
+    return {
+      cells: [...row.cells].map((c) => c.textContent.trim()),
+      note: next && next.classList.contains('capacity-scan__tier-upgrade') ? next.textContent.trim() : null,
+      afterImage: Boolean(row.previousElementSibling?.closest('tbody') && document.querySelector('.capacity-scan__tier-image') !== row),
+      hardware: document.querySelector('.capacity-scan__tier-hardware')?.textContent ?? ''
+    }
+  })
+}
+
+test('Modèles : une ligne « Vidéo » avec le modèle vidéo et sa meilleure qualité, et la RAM arrondie', options, async () => {
+  await withOptions(async (page) => {
+    const row = await videoRow(page, null, 63.161624908447266)
+    assert.deepEqual(row.cells, ['Vidéo', 'FastWan 2.2 TI2V 5B · qualité Moyen', '—', '—', ''])
+    assert.equal(row.note, "Pas installé sur ce PC pour l'instant — télécharge-le depuis le mode Vidéo.")
+    assert.ok(row.afterImage, 'la ligne Vidéo suit la ligne Image')
+    assert.match(row.hardware, /63 Go de RAM/)
+    assert.doesNotMatch(row.hardware, /63\.16/)
+  })
+})
+
+test('Modèles : vidéo impossible → « Aucun modèle », avec la raison', options, async () => {
+  await withOptions(async (page) => {
+    const row = await videoRow(page, { model: null, qualityLabel: null, quality: null, reason: 'carte graphique trop petite (6 Go de VRAM, il en faut 8 ou plus)' })
+    assert.deepEqual(row.cells.slice(0, 2), ['Vidéo', 'Aucun modèle'])
+    assert.equal(row.note, 'Pas assez de puissance pour la vidéo : carte graphique trop petite (6 Go de VRAM, il en faut 8 ou plus).')
   })
 })
 

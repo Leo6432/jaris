@@ -1,6 +1,7 @@
 import type { ModelThinkingChoice, StoredThinkChoice } from './effort'
 /** Types partagés entre le process principal (electron/) et le renderer (src/). */
 import type { ImageModelPick } from './imageModel'
+import type { VideoModelPick } from './videoModel'
 
 export type JarisEmotion = 'idle' | 'listening' | 'thinking' | 'happy' | 'surprised'
 
@@ -324,6 +325,8 @@ export interface MyModelPicks {
    * ci-dessus : absent seulement dans les appels internes qui n'en ont pas besoin.
    */
   image?: ImageModelPick
+  /** Le modèle vidéo et sa meilleure qualité possible ici (pickVideoModel, shared/videoModel.ts). */
+  video?: VideoModelPick
 }
 
 /**
