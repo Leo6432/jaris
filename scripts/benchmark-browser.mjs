@@ -85,13 +85,24 @@ export async function openBrowser(browserPath) {
   try {
     // Le navigateur écrit son port de débogage dans ce fichier dès qu'il est prêt.
     const portFile = join(profile, 'DevToolsActivePort')
+    // Sous Windows, le fichier reste verrouillé quelques instants pendant qu'Edge l'écrit (EBUSY, vu sur la CI
+    // Windows le 04/10/2026) : une lecture refusée veut seulement dire « pas encore prêt ».
+    const readPortFile = () => {
+      try {
+        return existsSync(portFile) ? readFileSync(portFile, 'utf8') : ''
+      } catch {
+        return ''
+      }
+    }
     const deadline = Date.now() + 30000
-    while (!existsSync(portFile) || !readFileSync(portFile, 'utf8').includes('\n')) {
+    let content = readPortFile()
+    while (!content.includes('\n')) {
       if (exited) throw new Error('le navigateur s’est fermé dès son lancement')
       if (Date.now() > deadline) throw new Error('le navigateur n’a pas démarré en 30 s')
       await sleep(100)
+      content = readPortFile()
     }
-    const port = Number(readFileSync(portFile, 'utf8').split('\n')[0])
+    const port = Number(content.split('\n')[0])
     let pageWs
     for (let i = 0; i < 50 && !pageWs; i++) {
       const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()
