@@ -21,7 +21,7 @@
 import { TOOLS, buildBenchmarkSystemPrompt, isRealReply } from './benchmark-cases.mjs'
 
 /** À augmenter à chaque changement des demandes ou de leurs jugements : un ancien score est alors refait. */
-export const SCENARIO_TEST_VERSION = 2
+export const SCENARIO_TEST_VERSION = 3
 
 /** Même valeur que MAX_TOOL_ROUNDS (assistant.ts), vérifiée par le test. */
 export const MAX_TOOL_ROUNDS = 10
@@ -29,7 +29,12 @@ export const MAX_TOOL_ROUNDS = 10
 /** Même valeur que MAX_HISTORY_MESSAGES (conversationSession.ts), vérifiée par le test. */
 export const MAX_HISTORY_MESSAGES = 12
 
-/** Date fixe : « demain », « dimanche » et l'heure donnée dans les consignes restent les mêmes à chaque passage. */
+/**
+ * Date fixe : « demain », « mardi » et l'heure donnée dans les consignes restent les mêmes à chaque passage. Un
+ * DIMANCHE 4 octobre 2026, 10 h : chaque date écrite dans un résultat simulé doit s'accorder avec elle (relecture
+ * ChatGPT, v0.28.1 : « samedi 4 octobre », « ce samedi », « demain… dimanche 5 » la contredisaient — un modèle
+ * attentif aurait pu être pénalisé pour l'avoir remarqué). Vérifié par test-benchmark-scenarios.
+ */
 export const SCENARIO_NOW = new Date(2026, 9, 4, 10, 0, 0)
 
 /** Graine d'un passage : différente d'un passage et d'une demande à l'autre, et toujours la même pour les rejouer. */
@@ -406,7 +411,7 @@ export function setupFor(scenario, variant) {
  * et pour CHAQUE appel au modèle ce qu'il a reçu (longueur de l'historique envoyé) et rendu (réflexion comprise,
  * avec les compteurs d'Ollama) — de quoi reconstruire chaque requête exacte et rejuger sans relancer.
  */
-export async function runScenario(scenario, chat, { variant = 0 } = {}) {
+export async function runScenario(scenario, chat, { variant = 0, onEvent } = {}) {
   const sim = createSimulator(setupFor(scenario, variant))
   let history = [...(scenario.history ?? [])]
   const calls = []
@@ -434,10 +439,15 @@ export async function runScenario(scenario, chat, { variant = 0 } = {}) {
       for (let round = 0; round < MAX_TOOL_ROUNDS && reply === null; round++) {
         const sent = messages.length
         const callStart = performance.now()
+        // Relecture ChatGPT (v0.28.1) : chaque requête est confiée AVANT l'envoi, puis chaque réponse et chaque
+        // résultat d'outil dès qu'ils arrivent — une demande interrompue (erreur, Jaris fermé, PC éteint) ne perd
+        // plus ce qui s'était passé avant.
+        onEvent?.({ kind: 'requete', turn: turnIndex, round, messages: [...messages] })
         const data = await chat(messages)
         const message = data.message ?? { role: 'assistant', content: '' }
         const { message: _m, ...meta } = data
         modelCalls.push({ turn: turnIndex, round, sent, ms: Math.round(performance.now() - callStart), response: message, meta })
+        onEvent?.({ kind: 'reponse', turn: turnIndex, round, ms: modelCalls.at(-1).ms, response: message, meta })
         if (!message.tool_calls?.length) {
           const content = str(message.content)
           if (data.done_reason === 'length' && !content) {
@@ -471,6 +481,7 @@ export async function runScenario(scenario, chat, { variant = 0 } = {}) {
           const args = argsOf(call.function?.arguments)
           const { result, final, failure } = sim.execute(name, args, turnIndex)
           calls.push({ turn: turnIndex, name, args, result })
+          onEvent?.({ kind: 'outil', turn: turnIndex, round, name, args, result })
           if (failure) {
             reply = finalizeReply(`Échec de l'outil : ${result}`, userText)
             turn.shortCircuit = true
@@ -488,7 +499,15 @@ export async function runScenario(scenario, chat, { variant = 0 } = {}) {
       }
       if (reply === null) throw new ScenarioStop(`plus de ${MAX_TOOL_ROUNDS} allers-retours sans réponse finale`)
     } catch (err) {
-      if (!(err instanceof ScenarioStop)) throw err
+      if (!(err instanceof ScenarioStop)) {
+        // Erreur inattendue (Ollama, délai dépassé…) : ce qui a déjà été joué part avec l'erreur, pour être
+        // enregistré quand même — avant, la trace d'une demande en erreur était vide.
+        turn.messages = messages
+        turn.msReply = Math.round(performance.now() - turnStart)
+        turn.error = err.message
+        err.partial = { calls, turns, modelCalls, variant, wallMs: performance.now() - start, finalState: snapshot(sim.state) }
+        throw err
+      }
       turn.error = err.message
     }
     turn.messages = messages
@@ -720,7 +739,7 @@ export const SCENARIOS = [
     setup: (variant) => ({
       search: (q) =>
         /bitcoin|btc/.test(q)
-          ? `1. Cours du Bitcoin (BTC) en euro — Boursorama — Le Bitcoin cote ${VARIANTS.bitcoin[variant].price} ce samedi à 9 h 58, sur 24 heures. (https://www.boursorama.com/bourse/devises/cours/BTCEUR)`
+          ? `1. Cours du Bitcoin (BTC) en euro — Boursorama — Le Bitcoin cote ${VARIANTS.bitcoin[variant].price} ce dimanche à 9 h 58, sur 24 heures. (https://www.boursorama.com/bourse/devises/cours/BTCEUR)`
           : undefined
     }),
     check: (ctx) => {
@@ -737,7 +756,7 @@ export const SCENARIOS = [
     setup: (variant) => ({
       search: (q) =>
         /rennes/.test(q)
-          ? `1. Météo Rennes demain — Météo-France — Dimanche 5 octobre : ${VARIANTS.meteo[variant].text}. (https://meteofrance.com/previsions-meteo-france/rennes/35000)`
+          ? `1. Météo Rennes demain — Météo-France — Lundi 5 octobre : ${VARIANTS.meteo[variant].text}. (https://meteofrance.com/previsions-meteo-france/rennes/35000)`
           : undefined
     }),
     check: (ctx) => {
@@ -863,21 +882,21 @@ export const SCENARIOS = [
     id: 'cinema-suite',
     family: 'Plusieurs tours',
     repeat: true,
-    turns: ['Cherche les horaires du film Dune au cinéma Gaumont de Rennes.', 'Et pour dimanche ?'],
+    turns: ['Cherche les horaires du film Dune au cinéma Gaumont de Rennes.', 'Et pour mardi ?'],
     setup: {
       search: (q) => {
         if (!/dune|gaumont|cinema/.test(q)) return undefined
-        return /dimanche/.test(q)
-          ? '1. Dune : deuxième partie — Gaumont Rennes — Séances du dimanche 5 octobre : 14 h 10, 17 h 30, 20 h 45. (https://www.cinemaspathegaumont.com/cinemas/gaumont-rennes)'
-          : '1. Dune : deuxième partie — Gaumont Rennes — Séances du samedi 4 octobre : 13 h 50, 16 h 45, 21 h. (https://www.cinemaspathegaumont.com/cinemas/gaumont-rennes)'
+        return /mardi/.test(q)
+          ? '1. Dune : deuxième partie — Gaumont Rennes — Séances du mardi 6 octobre : 14 h 10, 17 h 30, 20 h 45. (https://www.cinemaspathegaumont.com/cinemas/gaumont-rennes)'
+          : '1. Dune : deuxième partie — Gaumont Rennes — Séances du dimanche 4 octobre : 13 h 50, 16 h 45, 21 h. (https://www.cinemaspathegaumont.com/cinemas/gaumont-rennes)'
       }
     },
     check: (ctx) => {
       if (![['13', '50'], ['16', '45'], ['21']].some(([h, m]) => hasTime(ctx.turns[0].reply, h, m))) return 'au 1er tour, les séances trouvées ne sont pas dans la réponse'
-      if (!callsOf(ctx, 'search_web', 1).some((c) => has(c.args.query, /dimanche/) && has(c.args.query, /dune|gaumont|cinema/))) {
-        return 'au 2e tour, pas de recherche pour Dune dimanche (contexte perdu)'
+      if (!callsOf(ctx, 'search_web', 1).some((c) => has(c.args.query, /mardi/) && has(c.args.query, /dune|gaumont|cinema/))) {
+        return 'au 2e tour, pas de recherche pour Dune mardi (contexte perdu)'
       }
-      return [['14', '10'], ['17', '30'], ['20', '45']].some(([h, m]) => hasTime(ctx.turns[1].reply, h, m)) ? null : 'au 2e tour, les séances de dimanche ne sont pas dans la réponse'
+      return [['14', '10'], ['17', '30'], ['20', '45']].some(([h, m]) => hasTime(ctx.turns[1].reply, h, m)) ? null : 'au 2e tour, les séances de mardi ne sont pas dans la réponse'
     }
   },
   {

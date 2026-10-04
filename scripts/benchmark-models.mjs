@@ -949,26 +949,81 @@ const OLLAMA_WAIT_MS = Number(process.env.JARIS_OLLAMA_WAIT_MS) || 3 * 60 * 1000
 const OLLAMA_POLL_MS = Number(process.env.JARIS_OLLAMA_POLL_MS) || 5000
 
 /**
+ * Relecture ChatGPT (v0.28.1) : sans aucun délai, UNE génération bloquée (modèle qui boucle, moteur figé) arrêtait
+ * toute la campagne, sans surveillance, pendant des jours. Délai généreux : 20 minutes par appel, quatre fois le
+ * plus long jamais mesuré chez Léo (qwen2.5-coder:32b, 4 min 30 pour une application entière) — une réponse plus
+ * lente serait de toute façon inutilisable dans Jaris. Un dépassement est un ÉCHEC DU MODÈLE noté à part (« délai
+ * dépassé », `timeout: true` dans les traces), jamais confondu avec une panne d'Ollama (vérifiée juste après).
+ */
+const CALL_TIMEOUT_MS = (Number(process.env.JARIS_CALL_TIMEOUT_MIN) || 20) * 60 * 1000
+const CALL_TIMEOUT_LABEL = CALL_TIMEOUT_MS >= 60_000 ? `${Math.round(CALL_TIMEOUT_MS / 60_000)} min` : `${Math.round(CALL_TIMEOUT_MS / 1000)} s`
+class CallTimeoutError extends Error {}
+
+/**
+ * Trois délais dépassés de suite : le modèle ne répond plus. Ses tests restants dans cette partie sont comptés faux
+ * sans être joués — sinon un modèle figé coûterait 20 minutes par test, soit des heures, au lieu d'une.
+ */
+const MAX_TIMEOUT_STREAK = 3
+function timeoutGuard() {
+  let streak = 0
+  return {
+    /** À appeler avant chaque test : lève l'erreur « non joué » si le modèle est considéré figé. */
+    check() {
+      if (streak >= MAX_TIMEOUT_STREAK) {
+        throw Object.assign(new CallTimeoutError(`non joué : le modèle ne répondait plus (${MAX_TIMEOUT_STREAK} délais dépassés de suite)`), { skipped: true })
+      }
+    },
+    passed() {
+      streak = 0
+    },
+    failed(err) {
+      if (!(err instanceof CallTimeoutError)) streak = 0
+      else if (!err.skipped) streak++
+    }
+  }
+}
+
+/**
  * POST JSON vers Ollama SANS délai maximal. Le `fetch` de Node abandonne une requête après 5 minutes sans en-têtes
  * de réponse (« fetch failed ») ; or, sans streaming, Ollama n'en envoie qu'une fois la réponse entière prête — un
  * gros modèle qui tourne dans la RAM peut réfléchir plus longtemps que ça (qwen2.5-coder:32b : 4 min 30 en
  * moyenne chez Léo). `http.request` n'a aucun délai par défaut. Une erreur de CONNEXION est marquée
  * `ollamaUnreachable`, pour la distinguer d'une vraie réponse d'erreur d'Ollama.
  */
-function postJson(path, body) {
+function postJson(path, body, timeoutMs = 0) {
   const url = new URL(path, OLLAMA_HOST)
   const send = url.protocol === 'https:' ? httpsRequest : httpRequest
   return new Promise((resolve, reject) => {
+    let timer = null
+    // Le délai coupe la requête : Ollama arrête alors la génération de son côté. `timedOut` la distingue d'une
+    // connexion perdue (postChat vérifie ensuite si Ollama, lui, répond encore).
+    const fail = (err) => {
+      clearTimeout(timer)
+      reject(err.timedOut ? err : Object.assign(err, { ollamaUnreachable: true }))
+    }
     const req = send(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } }, (res) => {
       let text = ''
       res.setEncoding('utf8')
       res.on('data', (chunk) => (text += chunk))
-      res.on('end', () => resolve({ status: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, text }))
-      res.on('error', (err) => reject(Object.assign(err, { ollamaUnreachable: true })))
+      res.on('end', () => {
+        clearTimeout(timer)
+        resolve({ status: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, text })
+      })
+      res.on('error', fail)
     })
-    req.on('error', (err) => reject(Object.assign(err, { ollamaUnreachable: true })))
+    req.on('error', fail)
+    if (timeoutMs > 0) timer = setTimeout(() => req.destroy(Object.assign(new Error('délai dépassé'), { timedOut: true })), timeoutMs)
     req.end(JSON.stringify(body))
   })
+}
+
+/** Ollama répond-il encore (indépendamment du modèle en cours) ? */
+async function ollamaAlive() {
+  try {
+    return (await fetch(`${OLLAMA_HOST}/api/version`, { signal: AbortSignal.timeout(15_000) })).ok
+  } catch {
+    return false
+  }
 }
 
 /** Vrai si Ollama répond de nouveau dans les OLLAMA_WAIT_MS. */
@@ -990,10 +1045,18 @@ async function waitForOllama() {
 async function postChat(body) {
   for (let attempt = 0; ; attempt++) {
     try {
-      const res = await postJson('/api/chat', body)
+      const res = await postJson('/api/chat', body, CALL_TIMEOUT_MS)
       if (!res.ok) throw new Error(`${res.status} ${res.text}`)
       return JSON.parse(res.text)
     } catch (err) {
+      if (err.timedOut) {
+        if (await ollamaAlive()) {
+          // Ollama va bien : c'est le modèle. Il est déchargé pour que le test suivant reparte d'un moteur neuf.
+          await postJson('/api/generate', { model: body.model, keep_alive: 0 }, 60_000).catch(() => {})
+          throw new CallTimeoutError(`délai dépassé : aucune réponse du modèle en ${CALL_TIMEOUT_LABEL}`)
+        }
+        err.ollamaUnreachable = true
+      }
       if (!err.ollamaUnreachable) throw err
       console.log(`\n  Ollama ne répond plus (${err.message}) : attente de son retour…`)
       if (attempt >= 3 || !(await waitForOllama())) {
@@ -1030,7 +1093,8 @@ async function chat(model, testCase) {
   try {
     ;({ wallMs, data } = await chatOnce(model, testCase, true))
   } catch (firstErr) {
-    if (firstErr instanceof OllamaDownError) throw firstErr
+    // Un délai dépassé n'est pas retenté sans réflexion : ce serait 20 minutes de plus pour le même test.
+    if (firstErr instanceof OllamaDownError || firstErr instanceof CallTimeoutError) throw firstErr
     think = false
     try {
       ;({ wallMs, data } = await chatOnce(model, testCase, false))
@@ -1079,7 +1143,7 @@ async function chatScenario(model, messages, seed, thinkModes) {
     data.jaris_think = body.think ?? false
     return data
   } catch (firstErr) {
-    if (firstErr instanceof OllamaDownError || !body.think) throw firstErr
+    if (firstErr instanceof OllamaDownError || firstErr instanceof CallTimeoutError || !body.think) throw firstErr
     // Comme chatWithOllama (ollama.ts) : une seconde tentative sans réflexion, quelle que soit l'erreur.
     delete body.think
     try {
@@ -1324,7 +1388,7 @@ async function chatCode(model, prompt) {
   try {
     ;({ wallMs, data } = await chatCodeOnce(model, prompt, true))
   } catch (firstErr) {
-    if (firstErr instanceof OllamaDownError) throw firstErr
+    if (firstErr instanceof OllamaDownError || firstErr instanceof CallTimeoutError) throw firstErr
     think = false
     try {
       ;({ wallMs, data } = await chatCodeOnce(model, prompt, false))
@@ -1972,6 +2036,7 @@ async function main() {
   /** Les 26 questions × 3 (benchmark-cases.mjs) : le premier appel d'outil, question par question. */
   async function runConversationCases(model) {
     const perModel = { model, role: 'conversation', latencies: [], speeds: [], correct: 0, total: 0 }
+    const guard = timeoutGuard()
 
     // Étape 230 : détail par question (combien de passages ratés, et ce que le modèle a fait à la place) —
     // le fichier ne gardait que le total, impossible de savoir CE QUE granite4.2:3b avait raté.
@@ -1984,7 +2049,9 @@ async function main() {
       // réussi que si son contenu l'est aussi (bon délai de rappel, bon nom d'application...).
       perModel.total++
       try {
+        guard.check()
         const r = await chat(model, testCase)
+        guard.passed()
         perModel.latencies.push(r.wallMs)
         if (r.tokPerSec !== null) perModel.speeds.push(r.tokPerSec)
         const ok = isCorrectAnswer(testCase, r)
@@ -2014,12 +2081,14 @@ async function main() {
       } catch (err) {
         // Ollama injoignable : l'analyse s'arrête AVANT d'enregistrer ce modèle (jamais un faux score).
         if (err instanceof OllamaDownError) throw err
+        guard.failed(err)
         console.log(`ERREUR (${err.message})`)
         errors.push({ model, prompt, message: err.message })
         caseDetail.missed++
         caseDetail.got.push(`erreur : ${err.message}`)
         // Une erreur figure aussi dans la liste complète : sinon la liste compte moins de réponses que le total.
         caseDetail.answers.push(`compté faux : erreur : ${err.message}`)
+        trace({ type: 'question', model, pass, index: caseIndex, ok: false, reason: `erreur : ${err.message}`, timeout: err instanceof CallTimeoutError, skipped: Boolean(err.skipped) })
       }
       testsDone++
       console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
@@ -2043,18 +2112,27 @@ async function main() {
    */
   async function runScenarioPhase(model) {
     const perModel = { model, role: 'scenarios', latencies: [], speeds: [], correct: 0, total: 0 }
+    const guard = timeoutGuard()
     const thinkModes = new Set()
     const detail = SCENARIOS.map((sc) => ({ prompt: `${sc.id} — ${sc.turns.join(' → ')}`, expectedTool: undefined, missed: 0, runs: 0, got: [], answers: [] }))
     const raw = []
     const outcomes = []
-    const stats = { promptTokens: [], firstToolMs: [], nudges: 0, truncated: 0, emptyAfterThinking: 0 }
+    const stats = { promptTokens: [], firstToolMs: [], nudges: 0, truncated: 0, emptyAfterThinking: 0, timeouts: 0 }
     for (const { scenario, index, pass, variant } of SCENARIO_RUNS) {
       const seed = scenarioSeed(pass, index)
       process.stdout.write(`  [${pass}/2] demande « ${scenario.id} » ... `)
       perModel.total++
       detail[index].runs++
+      // Relecture ChatGPT (v0.28.1) : chaque requête est écrite AVANT l'envoi, chaque réponse et chaque résultat
+      // d'outil dès qu'ils arrivent. La ligne « demande » complète suit à la fin ; si la demande s'interrompt
+      // (erreur, Jaris fermé, PC éteint), ces lignes gardent tout ce qui s'était passé avant.
+      const where = { model, id: scenario.id, pass, variant, seed }
+      const onEvent = ({ kind, messages, ...event }) =>
+        trace({ type: `demande-${kind}`, ...where, ...event, ...(messages ? { messages: compactMessages(messages) } : {}) })
       try {
-        const run = await runScenario(scenario, (messages) => chatScenario(model, messages, seed, thinkModes), { variant })
+        guard.check()
+        const run = await runScenario(scenario, (messages) => chatScenario(model, messages, seed, thinkModes), { variant, onEvent })
+        guard.passed()
         // Dans le fichier de résultats : de quoi rejuger (appels, réponses), sans les requêtes entières (traces).
         const turns = run.turns.map(({ messages: _messages, ...turn }) => turn)
         raw.push({ id: scenario.id, pass, variant, seed, ok: run.ok, reason: run.reason, ms: Math.round(run.wallMs), turns, calls: run.calls })
@@ -2097,13 +2175,38 @@ async function main() {
         if (!run.ok) console.log(`      ${describeRun(run)}`)
       } catch (err) {
         if (err instanceof OllamaDownError) throw err
+        guard.failed(err)
+        const timeout = err instanceof CallTimeoutError
+        if (timeout && !err.skipped) stats.timeouts++
         console.log(`ERREUR (${err.message})`)
         errors.push({ model, prompt: scenario.turns[0], message: err.message })
         detail[index].missed++
         detail[index].got.push(`erreur : ${err.message}`)
         detail[index].answers.push(`compté faux : erreur : ${err.message}`)
-        raw.push({ id: scenario.id, pass, variant, seed, ok: false, reason: `erreur : ${err.message}`, ms: null, turns: [], calls: [] })
-        trace({ type: 'demande', model, id: scenario.id, family: scenario.family, pass, variant, seed, ok: false, reason: `erreur : ${err.message}` })
+        // Ce qui avait déjà été joué avant l'erreur (runScenario le joint à l'erreur) : avant, tout était perdu.
+        const partial = err.partial
+        const ms = partial ? Math.round(partial.wallMs) : null
+        const turns = partial ? partial.turns.map(({ messages: _messages, ...turn }) => turn) : []
+        const skipped = Boolean(err.skipped)
+        raw.push({ id: scenario.id, pass, variant, seed, ok: false, reason: `erreur : ${err.message}`, timeout, skipped, ms, turns, calls: partial?.calls ?? [] })
+        trace({
+          type: 'demande',
+          ...where,
+          family: scenario.family,
+          ok: false,
+          reason: `erreur : ${err.message}`,
+          timeout,
+          skipped,
+          ...(partial
+            ? {
+                ms,
+                turns: partial.turns.map((turn) => ({ ...turn, messages: compactMessages(turn.messages) })),
+                modelCalls: partial.modelCalls,
+                calls: partial.calls,
+                finalState: partial.finalState
+              }
+            : {})
+        })
         outcomes.push({ id: scenario.id, ok: false })
       }
       testsDone++
@@ -2123,7 +2226,8 @@ async function main() {
       `Réussite moyenne par demande : ${Math.round(100 * demandSuccessRate(outcomes))} % (${SCENARIOS.length} demandes, dont ${REPEATED_SCENARIOS.length} jouées deux fois).`,
       `Relances de Jaris : ${stats.nudges} ; réponses coupées (fenêtre pleine) : ${stats.truncated} ; réponses vides après réflexion : ${stats.emptyAfterThinking} ; ` +
         `tokens envoyés : médiane ${median(stats.promptTokens) ?? '—'}, maximum ${stats.promptTokens.length ? Math.max(...stats.promptTokens) : '—'} sur ${CONVERSATION_NUM_CTX} ; ` +
-        `premier outil : médiane ${median(stats.firstToolMs) === null ? '—' : `${fmt(median(stats.firstToolMs) / 1000)} s`}.`,
+        `premier outil : médiane ${median(stats.firstToolMs) === null ? '—' : `${fmt(median(stats.firstToolMs) / 1000)} s`} ; ` +
+        `délais dépassés (${CALL_TIMEOUT_LABEL} par appel) : ${stats.timeouts}.`,
       '',
       // Une ligne compacte, demande par demande : pour comparer deux modèles sur les MÊMES demandes.
       `Par demande : ${SCENARIOS.map((sc, i) => `${sc.id} ${detail[i].runs - detail[i].missed}/${detail[i].runs}`).join(', ')}.`,
@@ -2163,6 +2267,7 @@ async function main() {
     console.log(`\n=== ${model} (vision) ===`)
     console.log(`##MODEL_TESTING## ${model}`)
     const perModel = { model, role: 'vision', latencies: [], speeds: [], correct: 0, total: 0 }
+    const guard = timeoutGuard()
 
     // Étape 230 : chaque question posée VISION_REPEATS fois, avec le détail des ratés comme en conversation.
     // Étape 233 : puis les cas de visée (une étape de pilotage de l'écran).
@@ -2177,8 +2282,10 @@ async function main() {
       process.stdout.write(`  [${pass}/${VISION_REPEATS}] "${label.slice(0, 40)}${label.length > 40 ? '…' : ''}" ... `)
       perModel.total++
       try {
+        guard.check()
         const image = kind === 'lecture' ? visionImages[i] : pilotImages[i]
         const r = kind === 'lecture' ? await chatVision(model, c.prompt, image) : await chatPilot(model, c, image)
+        guard.passed()
         perModel.latencies.push(r.wallMs)
         if (r.tokPerSec != null) perModel.speeds.push(r.tokPerSec)
         const reason = kind === 'lecture' ? (isCorrectVisionAnswer(c, r.content) ? null : 'réponse fausse') : judgePilotStep(c, r.content, pilotTargets)
@@ -2213,12 +2320,13 @@ async function main() {
       } catch (err) {
         // Ollama injoignable : l'analyse s'arrête AVANT d'enregistrer ce modèle (jamais un faux score).
         if (err instanceof OllamaDownError) throw err
+        guard.failed(err)
         console.log(`ERREUR (${err.message})`)
         errors.push({ model, prompt: label, message: err.message })
         visionDetail[d].missed++
         visionDetail[d].got.push(`erreur : ${err.message}`)
         visionDetail[d].answers.push(`compté faux : erreur : ${err.message}`)
-        trace({ type: 'vision', model, kind, file: c.file, id: c.id ?? null, pass, ok: false, reason: `erreur : ${err.message}` })
+        trace({ type: 'vision', model, kind, file: c.file, id: c.id ?? null, pass, ok: false, reason: `erreur : ${err.message}`, timeout: err instanceof CallTimeoutError, skipped: Boolean(err.skipped) })
       }
       testsDone++
       console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
@@ -2251,6 +2359,7 @@ async function main() {
     console.log(`\n=== ${model} (code) ===`)
     console.log(`##MODEL_TESTING## ${model}`)
     const perModel = { model, role: 'code', latencies: [], speeds: [], correct: 0, total: 0 }
+    const guard = timeoutGuard()
     const codeDetail = CODE_TEST_CASES.map((c) => ({ prompt: `${c.id} — ${c.prompt}`, expectedTool: undefined, missed: 0, got: [], answers: [] }))
     const raw = []
 
@@ -2258,12 +2367,18 @@ async function main() {
       const { prompt } = testCase
       process.stdout.write(`  « ${testCase.id} » ... `)
       perModel.total++
+      // Hors du try : si l'ouverture dans le navigateur plante APRÈS la génération, le code généré est gardé quand
+      // même (relecture ChatGPT : ne rien perdre de ce qui ne se régénère pas à l'identique).
+      let r = null
+      let html = null
       try {
-        const r = await chatCode(model, prompt)
+        guard.check()
+        r = await chatCode(model, prompt)
+        guard.passed()
         perModel.latencies.push(r.wallMs)
         if (r.tokPerSec !== null) perModel.speeds.push(r.tokPerSec)
 
-        const html = extractHtml(r.content)
+        html = extractHtml(r.content)
         const issues = html ? validateGeneratedHtml(html) : []
         const reason = html ? await checkInBrowser(testCase, html) : 'pas de code HTML exploitable dans la réponse'
         const ok = reason === null
@@ -2297,13 +2412,23 @@ async function main() {
       } catch (err) {
         // Ollama injoignable : l'analyse s'arrête AVANT d'enregistrer ce modèle (jamais un faux score).
         if (err instanceof OllamaDownError || err instanceof BrowserDownError) throw err
+        guard.failed(err)
         console.log(`ERREUR (${err.message})`)
         errors.push({ model, prompt, message: err.message })
         codeDetail[index].missed++
         codeDetail[index].got.push(`erreur : ${err.message}`)
         codeDetail[index].answers.push(`compté faux : erreur : ${err.message}`)
-        raw.push({ id: testCase.id, ok: false, reason: `erreur : ${err.message}`, html: null })
-        trace({ type: 'code', model, id: testCase.id, ok: false, reason: `erreur : ${err.message}` })
+        raw.push({ id: testCase.id, ok: false, reason: `erreur : ${err.message}`, html: html ?? r?.content ?? null })
+        trace({
+          type: 'code',
+          model,
+          id: testCase.id,
+          ok: false,
+          reason: `erreur : ${err.message}`,
+          timeout: err instanceof CallTimeoutError,
+          skipped: Boolean(err.skipped),
+          ...(r ? { ms: Math.round(r.wallMs), think: r.think, prompt, response: r.data.message ?? null, meta: ollamaMeta(r.data), html } : {})
+        })
       }
       testsDone++
       console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)

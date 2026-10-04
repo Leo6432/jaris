@@ -14,7 +14,9 @@ import {
   MAX_TOOL_ROUNDS,
   REPEATED_SCENARIOS,
   SCENARIOS,
+  SCENARIO_NOW,
   SCENARIO_RUNS,
+  SCENARIO_TEST_VERSION,
   SCENARIO_TOTAL,
   createSimulator,
   demandSuccessRate,
@@ -267,14 +269,14 @@ const CASES = {
   'cinema-suite': {
     good: [
       calls(['search_web', { query: 'horaires Dune Gaumont Rennes' }]),
-      text('Samedi au Gaumont : 13 h 50, 16 h 45 et 21 h.'),
-      calls(['search_web', { query: 'horaires Dune Gaumont Rennes dimanche' }]),
-      text('Dimanche : 14 h 10, 17 h 30 et 20 h 45.')
+      text('Aujourd’hui au Gaumont : 13 h 50, 16 h 45 et 21 h.'),
+      calls(['search_web', { query: 'horaires Dune Gaumont Rennes mardi' }]),
+      text('Mardi : 14 h 10, 17 h 30 et 20 h 45.')
     ],
     bad: [
       calls(['search_web', { query: 'horaires Dune Gaumont Rennes' }]),
-      text('Samedi au Gaumont : 13 h 50, 16 h 45 et 21 h.'),
-      calls(['search_web', { query: 'horaires dimanche' }]),
+      text('Aujourd’hui au Gaumont : 13 h 50, 16 h 45 et 21 h.'),
+      calls(['search_web', { query: 'horaires mardi' }]),
       text('Je ne trouve pas.')
     ]
   },
@@ -667,7 +669,7 @@ test('aucune phrase de demande n’est prise par un raccourci de Jaris (la répo
  * refuse la réflexion (comme granite/ministral en vrai). Chaque passage est reconnu par sa graine : le compteur
  * d'appels repart de zéro à chaque passage, exactement comme une nouvelle demande.
  */
-function startFakeOllama({ installed, dropAfter = Infinity }) {
+function startFakeOllama({ installed, dropAfter = Infinity, failFrom = null, hang = () => false }) {
   const requests = []
   const counters = new Map()
   let chats = 0
@@ -697,6 +699,13 @@ function startFakeOllama({ installed, dropAfter = Infinity }) {
       const key = `${json.model}|${json.options.seed}`
       const index = counters.get(key) ?? 0
       counters.set(key, index + 1)
+      // Un modèle figé : la requête reste sans réponse (c'est le délai maximal du script qui doit la couper).
+      if (hang(json)) return
+      // Erreur d'Ollama à partir d'un appel donné d'une demande (après une première action réussie).
+      if (failFrom && scenario.id === failFrom.id && json.options.seed === failFrom.seed && index >= failFrom.call) {
+        res.statusCode = 500
+        return res.end(JSON.stringify({ error: 'model runner has unexpectedly stopped' }))
+      }
       // 2e passage (graine ≥ 2000) : les résultats simulés ont changé, la bonne réponse aussi.
       const kind = bad ? 'bad' : json.options.seed >= 2000 && CASES[scenario.id].good1 ? 'good1' : 'good'
       const step = CASES[scenario.id][kind][index]
@@ -743,7 +752,7 @@ test('vrai script : demandes complètes notées, trace, configuration et graines
     const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: resultsPath, JARIS_VERIFIED_SCORES_PATH: verified })
     assert.equal(code, 0, out)
     const results = readFileSync(resultsPath, 'utf8')
-    assert.match(results, /Version du test des demandes complètes : 2/)
+    assert.match(results, new RegExp(`Version du test des demandes complètes : ${SCENARIO_TEST_VERSION}`))
     assert.match(results, /Ollama : 0\.99\.0-test/)
     assert.match(results, new RegExp(`\\| ministral-3:3b \\| [\\d.]+ s \\| [\\d.]+ s \\| ${SCENARIO_TOTAL}/${SCENARIO_TOTAL} \\|`))
     assert.match(results, new RegExp(`\\| qwen3:1\\.7b \\|[^\\n]*\\| 0/${SCENARIO_TOTAL} \\|`))
@@ -836,4 +845,97 @@ test('Ollama qui tombe pendant les demandes : le test s’arrête, aucun faux sc
 
 test('Jaris reconnaît les scores du test actuel de demandes complètes : même total des deux côtés (hardwareScan.ts)', () => {
   assert.equal(Number(read('electron/services/hardwareScan.ts').match(/export const SCENARIO_TEST_TOTAL = (\d+)/)?.[1]), SCENARIO_TOTAL)
+})
+
+// Relecture ChatGPT (v0.28.1) : l'horloge simulée dit « dimanche 4 octobre 2026 », mais des résultats annonçaient
+// « samedi 4 octobre », « ce samedi » ou « demain… dimanche 5 octobre ». Un modèle attentif aurait pu être pénalisé
+// pour avoir relevé la contradiction. Toute date écrite dans une demande doit s'accorder avec l'horloge.
+test('chaque date des résultats simulés s’accorde avec l’horloge du test (dimanche 4 octobre 2026)', () => {
+  // Sans les commentaires : ils citent justement les anciennes erreurs.
+  const source = read('scripts/benchmark-scenarios.mjs')
+    .replace(/\r\n/g, '\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
+  const days = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi']
+  const months = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
+  const today = days[SCENARIO_NOW.getDay()]
+  assert.equal(today, 'dimanche')
+  const wrong = []
+  for (const m of source.matchAll(new RegExp(`\\b(${days.join('|')}) (\\d{1,2}) (${months.join('|')})`, 'gi'))) {
+    const date = new Date(SCENARIO_NOW.getFullYear(), months.indexOf(m[3].toLowerCase()), Number(m[2]))
+    if (days[date.getDay()] !== m[1].toLowerCase()) wrong.push(`« ${m[0]} » (c’est un ${days[date.getDay()]})`)
+  }
+  for (const m of source.matchAll(new RegExp(`\\bce (${days.join('|')})\\b`, 'gi'))) {
+    if (m[1].toLowerCase() !== today) wrong.push(`« ${m[0]} » alors qu’on est ${today}`)
+  }
+  for (const m of source.matchAll(new RegExp(`demain[^'\`\\n]{0,40}?\\b(${days.join('|')})\\b`, 'gi'))) {
+    if (m[1].toLowerCase() !== days[(SCENARIO_NOW.getDay() + 1) % 7]) wrong.push(`« ${m[0]} » alors que demain est ${days[(SCENARIO_NOW.getDay() + 1) % 7]}`)
+  }
+  assert.deepEqual(wrong, [])
+})
+
+// Relecture ChatGPT (v0.28.1) : une demande interrompue par une erreur APRÈS une première action perdait tout — la
+// trace notait des listes vides. Désormais chaque requête est écrite avant l'envoi, chaque réponse et chaque
+// résultat d'outil dès qu'ils arrivent, et la ligne de la demande garde ce qui avait été joué.
+test('erreur d’Ollama au milieu d’une demande : ce qui s’était passé avant est gardé', { timeout: 120000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-scen-'))
+  // spotify-volume, 1er passage (graine 1000) : open_app réussit, puis Ollama tombe en erreur au 2e appel.
+  const fake = await startFakeOllama({ installed: ['ministral-3:3b'], failFrom: { id: 'spotify-volume', seed: 1000, call: 1 } })
+  try {
+    const resultsPath = join(dir, 'resultats.md')
+    const verified = verifiedFile(dir, `| qwen3:1.7b | 1/${SCENARIO_TOTAL} |\n| qwen3.5:0.8b | 1/${SCENARIO_TOTAL} |`)
+    const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: resultsPath, JARIS_VERIFIED_SCORES_PATH: verified })
+    assert.equal(code, 0, out)
+    const traces = readFileSync(join(dir, 'resultats.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+    const mine = traces.filter((t) => t.id === 'spotify-volume' && t.seed === 1000)
+    // Dans l'ordre où ça s'est passé : requête, réponse, la ou les actions, la requête qui échoue, puis la demande.
+    const types = mine.map((t) => t.type)
+    const tools = mine.filter((t) => t.type === 'demande-outil')
+    assert.deepEqual(types, ['demande-requete', 'demande-reponse', ...tools.map(() => 'demande-outil'), 'demande-requete', 'demande'])
+    assert.equal(tools[0].name, 'open_app')
+    assert.equal(tools[0].result, 'Spotify a été lancé.')
+    assert.ok(mine[3 + tools.length - 1].messages.some((m) => m.role === 'tool'), 'la requête qui échoue est écrite, avec les résultats d’outils')
+    const record = mine.at(-1)
+    assert.equal(record.ok, false)
+    assert.match(record.reason, /model runner has unexpectedly stopped/)
+    assert.equal(record.timeout, false)
+    assert.equal(record.calls.length, tools.length, 'les actions déjà faites sont gardées')
+    assert.equal(record.modelCalls.length, 1, 'la réponse déjà reçue est gardée')
+    assert.equal(record.turns[0].messages.at(-1).role, 'tool')
+    // Même chose dans les données brutes du fichier de résultats (de quoi rejuger).
+    const results = readFileSync(resultsPath, 'utf8')
+    const raw = JSON.parse(results.split('\n').find((l) => l.startsWith('- `ministral-3:3b` ')).slice('- `ministral-3:3b` '.length))
+    assert.equal(raw.find((r) => r.id === 'spotify-volume' && r.seed === 1000).calls.length, tools.length)
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('modèle figé : délai maximal par appel, noté à part, et le reste du modèle n’attend pas indéfiniment', { timeout: 120000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-scen-'))
+  const fake = await startFakeOllama({ installed: ['ministral-3:3b'], hang: (json) => json.model === 'ministral-3:3b' })
+  try {
+    const resultsPath = join(dir, 'resultats.md')
+    const verified = verifiedFile(dir, `| qwen3:1.7b | 1/${SCENARIO_TOTAL} |\n| qwen3.5:0.8b | 1/${SCENARIO_TOTAL} |`)
+    // 0,01 min = 0,6 s par appel, au lieu de 20 minutes.
+    const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: resultsPath, JARIS_VERIFIED_SCORES_PATH: verified, JARIS_CALL_TIMEOUT_MIN: '0.01' })
+    assert.equal(code, 0, out)
+    assert.doesNotMatch(out, /Ollama ne répond plus/, 'un modèle figé n’est pas une panne d’Ollama')
+    // Trois délais dépassés, puis plus aucun appel : les autres demandes sont notées « non joué ».
+    assert.equal(fake.requests.filter((r) => r.model === 'ministral-3:3b').length, 3)
+    const traces = readFileSync(join(dir, 'resultats.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+    const runs = traces.filter((t) => t.type === 'demande' && t.model === 'ministral-3:3b')
+    assert.equal(runs.length, SCENARIO_TOTAL)
+    assert.equal(runs.filter((t) => t.timeout && !t.skipped).length, 3)
+    assert.equal(runs.filter((t) => t.skipped).length, SCENARIO_TOTAL - 3)
+    assert.match(runs[0].reason, /délai dépassé : aucune réponse du modèle en 1 s/)
+    assert.match(runs.at(-1).reason, /non joué : le modèle ne répondait plus \(3 délais dépassés de suite\)/)
+    const results = readFileSync(resultsPath, 'utf8')
+    assert.match(results, new RegExp(`### ministral-3:3b \\(demandes\\) — 0/${SCENARIO_TOTAL}`))
+    assert.match(results, /délais dépassés \(1 s par appel\) : 3\./)
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

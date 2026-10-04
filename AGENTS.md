@@ -6340,3 +6340,32 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   (3) `new URL('../', import.meta.url).pathname` comme dossier : « /D:/... » sous Windows, donc « D:\\D:\\... » une
   fois passé à `join` — toujours `fileURLToPath(...)`. Ces trois-là ne se voient PAS sous Linux : seule la CI
   Windows les attrape, d'où l'intérêt de la copie CRLF avant de pousser.
+
+- **Étape 235 — deuxième relecture ChatGPT avant la grande campagne (v0.28.2).** Trois remarques, toutes
+  vérifiées dans le code avant d'y toucher, toutes justes :
+  1. **Une demande en erreur perdait tout ce qui s'était passé avant** : la trace n'était écrite qu'à la fin, et
+     une erreur d'Ollama au 2e appel (après une première action) laissait `turns: []` et `calls: []`.
+     `runScenario` reçoit maintenant `onEvent` : chaque requête est écrite AVANT l'envoi (`demande-requete`),
+     chaque réponse (`demande-reponse`) et chaque résultat d'outil (`demande-outil`) dès qu'ils arrivent ; une
+     erreur inattendue emporte avec elle ce qui a déjà été joué (`err.partial`), gardé dans la trace et dans les
+     données brutes. Même défaut corrigé au passage dans le test de CODE : si l'ouverture dans le navigateur
+     plantait après la génération, le HTML généré était perdu.
+  2. **Des dates contradictoires dans les résultats simulés** : l'horloge dit « dimanche 4 octobre 2026, 10 h »,
+     mais le cinéma annonçait « samedi 4 octobre » puis « dimanche 5 », le Bitcoin « ce samedi », la météo de
+     « demain » un « dimanche 5 octobre ». Un modèle attentif aurait pu être pénalisé pour l'avoir remarqué.
+     ChatGPT n'en avait relevé qu'une : un `grep` de tous les jours et dates du fichier a trouvé les deux
+     autres. Un test vérifie maintenant chaque « <jour> <date> », « ce <jour> » et « demain… <jour> » contre
+     l'horloge (commentaires exclus, ils citent justement les anciennes erreurs). SCENARIO_TEST_VERSION 2 → 3.
+  3. **Aucun délai maximal par appel** (choix volontaire, pour les gros modèles lents) : une
+     génération figée bloquait toute la campagne, sans surveillance, pendant des jours. Délai de 20 minutes par
+     appel (`JARIS_CALL_TIMEOUT_MIN`), quatre fois le plus long jamais mesuré chez Léo. Un dépassement est un
+     échec DU MODÈLE noté à part (`timeout: true`, « délais dépassés » dans le résumé) — Ollama est interrogé
+     juste après : s'il ne répond plus, c'est le chemin « Ollama tombé » habituel (arrêt propre, aucun faux
+     score). Le modèle est déchargé après un dépassement, n'est jamais retenté « sans réflexion » (ce serait 20
+     minutes de plus), et après 3 dépassements de suite ses tests restants de la partie sont notés « non joué »
+     (`skipped: true`) au lieu de coûter 20 minutes chacun.
+  **Leçon générale : pour un test long sans surveillance, tout ce qui peut attendre indéfiniment doit avoir une
+  borne, et tout ce qui ne se reconstruit pas doit être écrit AVANT l'étape qui peut échouer, jamais après.**
+  Et quand une relecture signale UNE occurrence d'un défaut de données, chercher toutes les autres avant de
+  corriger. Régression : test-benchmark-scenarios (erreur au 2e appel avec un faux Ollama, modèle figé avec un
+  délai de 0,6 s, cohérence des dates), chacun vérifié en réintroduisant le défaut.
