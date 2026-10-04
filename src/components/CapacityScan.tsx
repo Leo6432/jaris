@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { CapacityScanResult, MyModelPicks as MyModelPicksData } from '../../shared/ipc'
 import { formatModelName } from '../lib/formatModelName'
 import MyModelPicks from './MyModelPicks'
+import { PILOT_MODEL_LABEL } from '../../shared/pilotModel'
 
 interface CapacityScanProps {
   onDone: () => void
@@ -91,10 +92,18 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
               <li>Élevé : {formatModelName(result.models.large)}</li>
               <li>Vision : {formatModelName(result.visionModel)}</li>
               {result.image && <li>Image : {result.image.model ?? 'aucun modèle (pas assez de puissance)'}</li>}
+              {result.pilot && (
+                <li>Pilotage d'écran : {result.pilot.model ? PILOT_MODEL_LABEL : 'le modèle Vision (pas assez de puissance pour un modèle dédié)'}</li>
+              )}
             </ul>
             {result.image?.error && (
               <div className="capacity-scan__warning">
                 <p>Le modèle d'image n'a pas pu être installé : {result.image.error}</p>
+              </div>
+            )}
+            {result.pilot?.error && (
+              <div className="capacity-scan__warning">
+                <p>Le modèle de pilotage d'écran n'a pas pu être installé : {result.pilot.error}. Le modèle Vision pilote l'écran en attendant.</p>
               </div>
             )}
             <p className="capacity-scan__hint">

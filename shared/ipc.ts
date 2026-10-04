@@ -2,6 +2,7 @@ import type { ModelThinkingChoice, StoredThinkChoice } from './effort'
 /** Types partagés entre le process principal (electron/) et le renderer (src/). */
 import type { ImageModelPick } from './imageModel'
 import type { VideoModelPick } from './videoModel'
+import type { PilotModelPick } from './pilotModel'
 
 export type JarisEmotion = 'idle' | 'listening' | 'thinking' | 'happy' | 'surprised'
 
@@ -83,6 +84,11 @@ export interface Profile {
   models?: ModelTiers
   /** Modèle de vision choisi par le scan de capacité selon la VRAM, vide = OLLAMA_VISION_MODEL de .env. */
   visionModel?: string
+  /**
+   * Étape 231 : modèle de pilotage d'écran (UI-TARS, shared/pilotModel.ts), installé par la configuration quand
+   * la machine a la puissance. Absent = pas de rôle : le modèle de vision pilote l'écran, comme avant.
+   */
+  pilotModel?: string
   /**
    * Tous les modèles candidats (hardwareScan.ts) connus lors du dernier scan de capacité (étape 13/29) :
    * sert à repérer, au lancement suivant, les modèles ajoutés depuis (nouvelle version de Jaris) pour
@@ -287,6 +293,8 @@ export interface CapacityScanResult {
    * le fait tourner mais son installation a échoué (message déjà lisible par Léo).
    */
   image?: ImageModelPick & { error?: string }
+  /** Étape 231 : le modèle de pilotage d'écran, même principe que `image` (absent du rôle si pas assez de puissance). */
+  pilot?: PilotModelPick & { error?: string }
 }
 
 /**
@@ -327,6 +335,8 @@ export interface MyModelPicks {
   image?: ImageModelPick
   /** Le modèle vidéo et sa meilleure qualité possible ici (pickVideoModel, shared/videoModel.ts). */
   video?: VideoModelPick
+  /** Étape 231 : le modèle de pilotage d'écran (pickPilotModel, shared/pilotModel.ts). */
+  pilot?: PilotModelPick
 }
 
 /**

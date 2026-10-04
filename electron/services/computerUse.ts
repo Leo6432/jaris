@@ -2,7 +2,9 @@ import { config } from '../config'
 import { getLiveGpuStatus, pickSafeVisionModel } from './hardwareScan'
 import { listInstalledModels } from './ollama'
 import { hideScanOverlay, showScanOverlay } from './scanOverlay'
-import { clickMouse, pressKey, typeText } from './inputControl'
+import { clickMouse, pressHotkey, pressKey, scrollMouse, typeText } from './inputControl'
+import { getProfile } from './profileStore'
+import { buildUiTarsPrompt, parseUiTarsResponse } from './uiTars'
 import { describeElements, findElementByName, listClickableElements, type ClickableElement } from './uiAutomation'
 import { captureScreenshotBase64 } from './vision'
 
@@ -31,9 +33,14 @@ function toScreenCoord(value: number | undefined, scale: number): number | null 
 const MAX_STEPS = 20
 const STEP_TIMEOUT_MS = 45000
 const MAX_CONSECUTIVE_WAITS = 3
+/**
+ * Étape 231 : le tout premier appel au modèle de pilotage le charge sur la carte graphique (5,5 Go lus sur le
+ * disque) — plus long que les suivants. Le modèle de vision garde STEP_TIMEOUT_MS, comme avant.
+ */
+const PILOT_FIRST_STEP_TIMEOUT_MS = 120000
 
 interface ComputerUseStep {
-  action: 'click_element' | 'click' | 'double_click' | 'right_click' | 'type' | 'key' | 'wait' | 'done' | 'fail'
+  action: 'click_element' | 'click' | 'double_click' | 'right_click' | 'type' | 'key' | 'hotkey' | 'scroll' | 'wait' | 'done' | 'fail'
   x?: number
   y?: number
   /** Nom de l'élément visé pour `click_element` (voir uiAutomation.ts, étape 32). */
@@ -41,6 +48,12 @@ interface ComputerUseStep {
   text?: string
   key?: string
   result?: string
+  /** Étape 231, modèle de pilotage seulement (uiTars.ts) : valider la saisie, combinaison, sens du défilement. */
+  submit?: boolean
+  keys?: string[]
+  direction?: 'up' | 'down' | 'left' | 'right'
+  /** L'action telle qu'écrite par le modèle de pilotage, recopiée dans l'historique qui lui est renvoyé. */
+  raw?: string
 }
 
 const SYSTEM_PROMPT =
@@ -161,6 +174,59 @@ async function nextStep(
 }
 
 /**
+ * Étape 231 : le modèle de pilotage (UI-TARS, shared/pilotModel.ts) s'il est installé sur cette machine, sinon
+ * `null` — le modèle de vision pilote alors exactement comme avant. Vérifié auprès d'Ollama à chaque tâche : un
+ * profil qui le cite alors qu'il a été supprimé à la main ne doit pas faire échouer le pilotage.
+ */
+async function resolvePilotModel(): Promise<string | null> {
+  try {
+    const pilot = (await getProfile())?.pilotModel
+    if (!pilot) return null
+    const installed = await listInstalledModels()
+    return installed.includes(pilot) || installed.includes(`${pilot}:latest`) ? pilot : null
+  } catch {
+    return null
+  }
+}
+
+async function nextPilotStep(
+  goal: string,
+  history: string[],
+  image: { base64: string; width: number; height: number },
+  model: string,
+  timeoutMs: number,
+  signal?: AbortSignal
+): Promise<ComputerUseStep> {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs)
+  let response: Response
+  try {
+    response = await fetch(`${config.ollama.host}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal,
+      body: JSON.stringify({
+        model,
+        // Pas de message système : UI-TARS a été entraîné avec sa consigne dans le message de l'utilisateur.
+        messages: [{ role: 'user', content: buildUiTarsPrompt(goal, history), images: [image.base64] }],
+        stream: false,
+        // Température 0 : la même capture doit donner le même clic, pas un tirage au sort.
+        options: { num_ctx: config.ollama.numCtx, temperature: 0 }
+      })
+    })
+  } catch (err) {
+    return { action: 'fail', result: `Impossible de joindre le modèle de pilotage : ${err instanceof Error ? err.message : String(err)}` }
+  }
+  if (!response.ok) {
+    return { action: 'fail', result: `Le modèle de pilotage a répondu ${response.status} : ${(await response.text()).slice(0, 300)}` }
+  }
+  const content = ((await response.json()) as OllamaChatResponse).message?.content?.trim()
+  if (!content) return { action: 'fail', result: 'Réponse vide du modèle de pilotage.' }
+  const step = parseUiTarsResponse(content, image.width, image.height)
+  if (!step) return { action: 'fail', result: `Le modèle de pilotage a proposé une action inexécutable : ${content.slice(0, 300)}` }
+  return step
+}
+
+/**
  * Exécute un objectif de bout en bout (envoyer un mail, chercher quelque chose sur un site, remplir un
  * formulaire...) en pilotant réellement la souris et le clavier, capture d'écran par capture d'écran.
  * `MAX_STEPS` évite une boucle infinie si le modèle de vision reste bloqué sans jamais renvoyer "done"/"fail".
@@ -175,6 +241,7 @@ export async function computerUseTask(
 
   const history: string[] = []
   let consecutiveWaits = 0
+  const pilotModel = await resolvePilotModel()
   for (let i = 0; i < MAX_STEPS; i++) {
     // Vérifié à chaque itération (nouvelle phrase à la voix qui annule la réflexion en cours, voir
     // voicePipeline.ts) : sans ça, une fois lancée, cette boucle de clics ne pouvait plus jamais être
@@ -191,8 +258,10 @@ export async function computerUseTask(
 
     let image: string
     let scale: number
+    let width: number
+    let height: number
     try {
-      ;({ imageBase64: image, scale } = await captureScreenshotBase64())
+      ;({ imageBase64: image, scale, width, height } = await captureScreenshotBase64())
     } catch (err) {
       throw new Error(`Impossible de capturer l'écran : ${err instanceof Error ? err.message : String(err)}`)
     }
@@ -201,12 +270,16 @@ export async function computerUseTask(
     // modèle vise un NOM (position exacte) plutôt que des pixels devinés sur l'image. Ne lève jamais et
     // renvoie une liste vide si l'arbre d'accessibilité n'est pas exploitable — le pilotage en pixels
     // d'origine reste alors le repli, exactement comme avant.
-    const elements = await listClickableElements()
+    // Le modèle de pilotage vise sur l'image seule (c'est ce pour quoi il a été entraîné) : inutile de lui
+    // lire l'arbre d'accessibilité, ~5 s de PowerShell par étape.
+    const elements = pilotModel ? [] : await listClickableElements()
 
     showScanOverlay()
     let step: ComputerUseStep
     try {
-      step = await nextStep(goal, history, image, elements, visionModel, signal)
+      step = pilotModel
+        ? await nextPilotStep(goal, history, { base64: image, width, height }, pilotModel, i === 0 ? PILOT_FIRST_STEP_TIMEOUT_MS : STEP_TIMEOUT_MS, signal)
+        : await nextStep(goal, history, image, elements, visionModel, signal)
     } finally {
       hideScanOverlay()
     }
@@ -249,27 +322,47 @@ export async function computerUseTask(
         const y = toScreenCoord(step.y, scale)
         const result = await clickMouse(x, y, button)
         if (!result.startsWith(`Clic ${button} effectué`)) throw new Error(result)
-        history.push(`${i + 1}. Clic ${button} à (${x}, ${y})`)
+        history.push(step.raw ? `${i + 1}. ${step.raw}` : `${i + 1}. Clic ${button} à (${x}, ${y})`)
         onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : clic ${button} à (${x}, ${y}).`)
         break
       }
       case 'type': {
         const result = await typeText(step.text ?? '')
         if (result !== 'Texte tapé.') throw new Error(result)
-        history.push(`${i + 1}. Texte tapé : "${step.text ?? ''}"`)
-        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : texte tapé.`)
+        if (step.submit) {
+          const enter = await pressKey('enter')
+          if (enter !== 'Touche "enter" pressée.') throw new Error(enter)
+        }
+        history.push(step.raw ? `${i + 1}. ${step.raw}` : `${i + 1}. Texte tapé : "${step.text ?? ''}"`)
+        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : texte tapé${step.submit ? ' et validé' : ''}.`)
         break
       }
       case 'key': {
         const result = await pressKey(step.key ?? '')
         if (result !== `Touche "${step.key}" pressée.`) throw new Error(result)
-        history.push(`${i + 1}. Touche "${step.key ?? ''}" pressée`)
+        history.push(step.raw ? `${i + 1}. ${step.raw}` : `${i + 1}. Touche "${step.key ?? ''}" pressée`)
         onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : touche "${step.key ?? ''}" pressée.`)
+        break
+      }
+      case 'hotkey': {
+        const keys = step.keys ?? []
+        const result = await pressHotkey(keys)
+        if (result !== `Combinaison "${keys.join('+')}" pressée.`) throw new Error(result)
+        history.push(step.raw ? `${i + 1}. ${step.raw}` : `${i + 1}. Touches ${keys.join('+')}`)
+        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : touches ${keys.join('+')}.`)
+        break
+      }
+      case 'scroll': {
+        const direction = step.direction ?? 'down'
+        const result = await scrollMouse(toScreenCoord(step.x, scale), toScreenCoord(step.y, scale), direction)
+        if (result !== `Défilement ${direction} effectué.`) throw new Error(result)
+        history.push(step.raw ? `${i + 1}. ${step.raw}` : `${i + 1}. Défilement ${direction}`)
+        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : défilement.`)
         break
       }
       case 'wait':
         await new Promise((resolve) => setTimeout(resolve, 1200))
-        history.push(`${i + 1}. Attente (chargement)`)
+        history.push(step.raw ? `${i + 1}. ${step.raw}` : `${i + 1}. Attente (chargement)`)
         onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : attente du chargement de la page…`)
         break
     }

@@ -3,6 +3,7 @@ import { app, dialog, ipcMain, nativeImage, session, shell, BrowserWindow, globa
 // (installé sur D, ou déplacé) avant que quoi que ce soit ne calcule un chemin ou ne prenne le verrou d'instance.
 import { cleanupStaleChromiumData, getStorageRoot } from './services/storageRoot'
 import { pickImageModel } from '../shared/imageModel'
+import { pickPilotModel } from '../shared/pilotModel'
 import {
   deleteGeneratedImage,
   generateImage,
@@ -1263,8 +1264,16 @@ app.whenReady().then(async () => {
     const image = pickImageModel(picks.vramGb, picks.ramGb)
     // 04/10/2026, Léo : « ajoute vidéo et le modèle vidéo » — même matériel détecté, meilleure qualité possible ici.
     const video = pickVideoModel(picks.vramGb, picks.ramGb)
+    // Étape 231 : le modèle de pilotage d'écran, vérifié auprès d'Ollama (absent = installed inconnu).
+    const pilot = pickPilotModel(picks.vramGb)
+    let pilotInstalled: boolean | undefined
+    if (pilot.model) {
+      const name = pilot.model
+      pilotInstalled = await listInstalledModels().then((m) => m.includes(name) || m.includes(`${name}:latest`), () => undefined)
+    }
     return {
       ...picks,
+      pilot: pilot.model ? { ...pilot, installed: pilotInstalled } : pilot,
       image: image.model ? { ...image, installed: await isImageModelInstalled() } : image,
       video: video.quality ? { ...video, installed: await isVideoQualityInstalled(video.quality) } : video
     }

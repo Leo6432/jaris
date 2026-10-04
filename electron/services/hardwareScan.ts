@@ -1417,7 +1417,9 @@ export async function getMyModelPicks(profile?: Profile | null): Promise<MyModel
       upgrades[role] = { model: ideal[role].model, blockedReason: profile?.blockedModels?.[ideal[role].model] ?? null }
     }
   }
-  return { gpuName: name, vramGb, ramGb, ...entries, upgrades, installCheck: await checkInstalled(inUse, Object.values(profile?.modelChoices ?? {})) }
+  // Étape 231 : le modèle de pilotage d'écran est utilisé lui aussi — jamais proposé à la suppression.
+  const alsoUsed = [...Object.values(profile?.modelChoices ?? {}), ...(profile?.pilotModel ? [profile.pilotModel] : [])]
+  return { gpuName: name, vramGb, ramGb, ...entries, upgrades, installCheck: await checkInstalled(inUse, alsoUsed) }
 }
 
 /** Ollama liste un modèle sans tag sous `:latest` : les deux écritures désignent le même modèle. */

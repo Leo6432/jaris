@@ -6227,3 +6227,30 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   message qui y renvoie (pas « Retester la configuration »). La RAM détectée arrive en Go fractionnaires
   (« 63.161624908447266 Go de RAM » sur la capture de Léo) : arrondie à l'affichage. Régression :
   test-video-generation.mjs, test-options-reorganization-ui.mjs.
+
+- **Rôle « Pilotage d'écran » : UI-TARS 1.5 7B (étape 231, Léo : « oui pour nouveau rôle… comme image vidéo le
+  mettre seul, si l'utilisateur n'a pas assez on met pas le rôle et il fait comme maintenant »)**. Choisi sur une
+  MESURE faite ici, pas sur une réputation : fausse fenêtre Windows 1280x720, 4 consignes « clique sur… » — UI-TARS
+  3/4 en plein sur le bouton, qwen3.5:4b (le modèle Vision de Léo) 0/4. Pas de test dans « Tester ces modèles » :
+  un seul modèle, comme Image/Vidéo (`shared/pilotModel.ts`, carte de 8 Go minimum, seuil déduit des tailles
+  réelles 4,7 + 0,9 Go, pas mesuré sur une vraie carte). Installé par « Retester la configuration » ; un échec ne
+  fait jamais échouer le reste, et une carte trop petite = pas de rôle, le modèle Vision pilote comme avant.
+  **UI-TARS a son propre format** (« Thought: … Action: click(start_box='(x,y)') ») : lui imposer le JSON de
+  computerUse.ts gâcherait ce qui le rend bon à viser. `uiTars.ts` reprend sa consigne officielle (réduite aux
+  actions que Jaris exécute) et traduit sa réponse ; son action brute lui revient dans l'historique.
+  **Repère des positions vérifié, pas supposé** : sur une image 1280x1024, le bouton OK centré en (1100, 908) a
+  été visé en (1117, 920) — repère de l'image arrondie à des multiples de 28 (1288x1036), pas une version réduite
+  à 1 Mpx par Ollama (qui aurait donné ~(962, 794)). D'où `smartResize` puis l'échelle de la capture.
+  Ajouts nécessaires à ses actions : défilement (molette) et combinaisons de touches (`pressHotkey`, liste FERMÉE
+  de touches comme KEY_CODES) dans inputControl.ts ; le C# a été compilé ici avec mono pour vérifier sa syntaxe
+  (son exécution reste invérifiable sans Windows). Le modèle de pilotage est compté comme « utilisé » : jamais
+  proposé à la suppression dans « Mes modèles ». **Piège déjà noté, revécu** : ajouter un import à
+  benchmarkRunner.ts a cassé 12 tests dont le faux chargeur ne connaissait pas le nouveau module. **Piège
+  d'environnement** : un test de benchmark échouait sur « 0,0 Go disponibles » — les modèles téléchargés pour
+  l'essai avaient rempli le disque de la session ; supprimer les modèles d'essai avant `npm test`.
+  Observé en vrai et sans conséquence : UI-TARS écrit parfois son raisonnement en chinois (jamais affiché, seule
+  l'action compte). Non corrigé, signalé à Léo : qwen3.5:4b a répondu y=948 sur une image de 720 de haut — il
+  compte peut-être de 0 à 1000 ; ses autres réponses étaient fausses dans les deux repères, donc rien de
+  prouvé. Régression : test-ui-tars.mjs (vraies réponses d'UI-TARS), test-computer-use.mjs (chemin pilotage et
+  repli sur la vision), test-benchmark-runner-cleanup.mjs, test-my-model-picks-ui.mjs.
+  **Non vérifiable ici** : vitesse et justesse sur la vraie carte de Léo, sur de vrais écrans Windows.

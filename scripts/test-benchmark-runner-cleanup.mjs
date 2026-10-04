@@ -98,6 +98,7 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
     }
     if (id === './systemResources') return { detectRamGb: () => ramGb }
     if (id === '../../shared/imageModel') return loadModule('../shared/imageModel.ts', () => ({}))
+    if (id === '../../shared/pilotModel') return loadModule('../shared/pilotModel.ts', () => ({}))
     throw new Error(`module non simulé dans le test : ${id}`)
   })
 
@@ -262,8 +263,41 @@ test('pas assez de puissance : rien n’est téléchargé, « aucun modèle » a
 test('échec du modèle d’image : les autres modèles restent configurés, l’erreur est rapportée telle quelle', async () => {
   const t = setup(IMAGE_PICKED, { models: {} }, new Set(), new Set(), { imageInstallError: 'Pas assez de place sur le disque.' })
   const result = await t.run()
-  assert.deepEqual(t.pulledModels.sort(), ['a', 'b', 'c', 'k', 'v'])
+  // Étape 231 : la carte de 8 Go du test reçoit aussi le modèle de pilotage d'écran.
+  assert.deepEqual(t.pulledModels.sort(), ['a', 'b', 'c', PILOT, 'k', 'v'].sort())
   assert.equal(t.getProfile().capacityScanDone, true)
   assert.equal(result.image.installed, false)
   assert.equal(result.image.error, 'Pas assez de place sur le disque.')
+})
+
+// --- Étape 231 : le modèle de pilotage d'écran, « comme image vidéo », seulement si la carte le fait tourner ---
+
+const PILOT = 'hf.co/mradermacher/UI-TARS-1.5-7B-GGUF:Q4_K_M'
+
+test('carte de 8 Go : le modèle de pilotage est installé et enregistré comme rôle', async () => {
+  const t = setup(IMAGE_PICKED, { models: {} })
+  const result = await t.run()
+  assert.ok(t.pulledModels.includes(PILOT))
+  assert.equal(t.getProfile().pilotModel, PILOT)
+  assert.equal(result.pilot.installed, true)
+})
+
+test('carte trop petite : pas de rôle, rien téléchargé, et un ancien modèle de pilotage est supprimé', async () => {
+  const t = setup(IMAGE_PICKED, { models: {}, pilotModel: PILOT }, new Set(), new Set(), { vramGb: 6 })
+  const result = await t.run()
+  assert.ok(!t.pulledModels.includes(PILOT))
+  assert.equal(t.getProfile().pilotModel, undefined)
+  assert.equal(result.pilot.model, null)
+  assert.ok(t.deletedModels.includes(PILOT))
+  assert.match(t.lines.join('\n'), /Pas de modèle de pilotage d'écran : carte graphique trop petite.*modèle de vision pilote/i)
+})
+
+test('téléchargement raté : le reste est configuré, l’ancien modèle de pilotage est gardé et jamais supprimé', async () => {
+  const t = setup(IMAGE_PICKED, { models: {}, pilotModel: PILOT }, new Set(), new Set(), { pullErrorFor: new Set([PILOT]) })
+  const result = await t.run()
+  assert.equal(t.getProfile().capacityScanDone, true)
+  assert.equal(t.getProfile().pilotModel, PILOT)
+  assert.ok(!t.deletedModels.includes(PILOT))
+  assert.equal(result.pilot.installed, false)
+  assert.match(result.pilot.error, /blocked redirect/)
 })

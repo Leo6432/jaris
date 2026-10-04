@@ -3,6 +3,7 @@ import type { ModelOverviewEntry, MyModelPicks as MyModelPicksData } from '../..
 import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge } from './OptionsMenu'
 import { formatIntelligenceIndex } from '../lib/formatIntelligenceIndex'
+import { PILOT_MODEL_LABEL } from '../../shared/pilotModel'
 
 interface MyModelPicksProps {
   picks: MyModelPicksData
@@ -170,6 +171,32 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
                       <td colSpan={4}>Pas installé sur ce PC pour l'instant — télécharge-le depuis le mode Vidéo.</td>
+                    </tr>
+                  )
+                )}
+              </>
+            )}
+            {/* Étape 231, Léo : « comme image vidéo le mettre seul, si l'utilisateur n'a pas assez on met pas le
+                rôle et il fait comme maintenant ». Un seul modèle ; sans lui, le modèle de vision pilote l'écran. */}
+            {picks.pilot && (
+              <>
+                <tr className="capacity-scan__tier-image capacity-scan__tier-pilot">
+                  <td className="capacity-scan__tier-slot">Pilotage d'écran</td>
+                  <td className="capacity-scan__tier-model">{picks.pilot.model ? PILOT_MODEL_LABEL : 'Aucun modèle'}</td>
+                  <td className="capacity-scan__tier-speed">—</td>
+                  <td className="capacity-scan__tier-intelligence">—</td>
+                  <td />
+                </tr>
+                {!picks.pilot.model ? (
+                  <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
+                    <td />
+                    <td colSpan={4}>Pas assez de puissance : {picks.pilot.reason}. Le modèle Vision pilote l'écran à sa place.</td>
+                  </tr>
+                ) : (
+                  picks.pilot.installed === false && (
+                    <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
+                      <td />
+                      <td colSpan={4}>Pas installé sur ce PC pour l'instant — clique « Retester la configuration » (environ 5,5 Go).</td>
                     </tr>
                   )
                 )}

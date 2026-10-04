@@ -52,6 +52,9 @@ export interface ScreenCapture {
    * large (quasiment tous les écrans modernes). `1` quand l'écran est déjà plus étroit que ce seuil.
    */
   scale: number
+  /** Taille réelle de l'image envoyée (étape 231 : UI-TARS donne ses positions dans un repère dérivé de cette taille). */
+  width: number
+  height: number
 }
 
 /** Capture plein écran en base64 (PNG) — réutilisée par computerUse.ts (étape 34) pour chaque itération de
@@ -68,7 +71,13 @@ export async function captureScreenshotBase64(): Promise<ScreenCapture> {
 
   const source = sources[0]
   if (!source) throw new Error("Impossible de capturer l'écran (aucune source disponible).")
-  return { imageBase64: source.thumbnail.toPNG().toString('base64'), scale: size.width / width }
+  const real = source.thumbnail.getSize()
+  return {
+    imageBase64: source.thumbnail.toPNG().toString('base64'),
+    scale: size.width / width,
+    width: real.width || width,
+    height: real.height || height
+  }
 }
 
 /**

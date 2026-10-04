@@ -19,25 +19,41 @@ const loadUia = vm.runInThisContext(`(function (exports, require, module) {\n${u
 const uia = { exports: {} }
 loadUia(uia.exports, () => ({ spawn: () => {} }), uia)
 
-function setup(steps, inputResult, onFetch, elements = []) {
+const uiTarsSource = ts.transpileModule(readFileSync(new URL('../electron/services/uiTars.ts', import.meta.url), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+}).outputText
+const loadUiTars = vm.runInThisContext(`(function (exports, require, module) {\n${uiTarsSource}\n})`)
+const uiTars = { exports: {} }
+loadUiTars(uiTars.exports, () => ({}), uiTars)
+
+// Étape 231 : `pilot` = profil + modèles installés simulés. Par défaut, aucun modèle de pilotage : le modèle de
+// vision pilote, exactement comme avant — tous les tests historiques ci-dessous passent par ce chemin.
+function setup(steps, inputResult, onFetch, elements = [], pilot = { profile: null, installed: [] }) {
   let captures = 0
   let actions = 0
   let hidden = 0
   const logs = []
   const clicks = []
-  const input = async (...args) => { actions++; clicks.push(args); return inputResult }
+  const input = async (...args) => { actions++; clicks.push(args); return typeof inputResult === 'function' ? inputResult(...args) : inputResult }
+  let uiaReads = 0
+  const bodies = []
   const modules = {
     '../config': { config: { ollama: { host: 'http://test', numCtx: 8192 } } },
     './hardwareScan': { getLiveGpuStatus: async () => ({ freeVramGb: null }) },
-    './ollama': { listInstalledModels: async () => [] },
+    './ollama': { listInstalledModels: async () => pilot.installed },
+    './profileStore': { getProfile: async () => pilot.profile },
+    './uiTars': uiTars.exports,
     './scanOverlay': { showScanOverlay() {}, hideScanOverlay() { hidden++ } },
-    './inputControl': { clickMouse: input, typeText: input, pressKey: input },
+    './inputControl': {
+      clickMouse: (...a) => input('click', ...a), typeText: (...a) => input('type', ...a), pressKey: (...a) => input('key', ...a),
+      pressHotkey: (...a) => input('hotkey', ...a), scrollMouse: (...a) => input('scroll', ...a)
+    },
     './uiAutomation': {
-      listClickableElements: async () => elements,
+      listClickableElements: async () => { uiaReads++; return elements },
       findElementByName: uia.exports.findElementByName,
       describeElements: uia.exports.describeElements
     },
-    './vision': { captureScreenshotBase64: async () => { captures++; return { imageBase64: 'test', scale: 1 } } }
+    './vision': { captureScreenshotBase64: async () => { captures++; return { imageBase64: 'test', scale: pilot.scale ?? 1, width: 1280, height: 720 } } }
   }
   const prompts = []
   const exports = {}
@@ -45,12 +61,15 @@ function setup(steps, inputResult, onFetch, elements = []) {
     exports, Error, AbortSignal, require: name => modules[name], setTimeout: fn => fn(),
     fetch: async (_url, options) => {
       onFetch?.()
-      prompts.push(JSON.parse(options.body).messages[1].content)
-      return { ok: true, json: async () => ({ message: { content: JSON.stringify(steps.shift() ?? { action: 'wait' }) } }) }
+      const body = JSON.parse(options.body)
+      bodies.push(body)
+      prompts.push(body.messages[body.messages.length - 1].content)
+      const next = steps.shift() ?? { action: 'wait' }
+      return { ok: true, json: async () => ({ message: { content: typeof next === 'string' ? next : JSON.stringify(next) } }) }
     }
   })
   return { run: signal => exports.computerUseTask('Cherche un tuto guitare', 'test', line => logs.push(line), signal),
-    state: () => ({ captures, actions, hidden, logs, clicks, prompts }) }
+    state: () => ({ captures, actions, hidden, logs, clicks: clicks.map((c) => c[0] === 'click' ? c.slice(1) : c), calls: clicks, prompts, bodies, uiaReads }) }
 }
 
 for (const step of [{ action: 'move' }, { action: 'click' }, { action: 'click', x: '12', y: 2 }, { action: 'type', text: '' }, { action: 'key', key: 42 }]) {
@@ -142,4 +161,71 @@ test("sans arbre d'accessibilité, le modèle est explicitement renvoyé vers le
   const app = setup([{ action: 'done', result: 'ok' }], '', undefined, [])
   await app.run()
   assert.match(app.state().prompts[0], /aucun élément cliquable.*clics en pixels/s)
+})
+
+// --- Étape 231 : modèle de pilotage d'écran (UI-TARS) quand il est installé ---
+
+const PILOT = 'hf.co/mradermacher/UI-TARS-1.5-7B-GGUF:Q4_K_M'
+const withPilot = { profile: { pilotModel: PILOT }, installed: [PILOT, 'qwen3.5:4b'] }
+const ok = (_kind, ...args) => {
+  if (_kind === 'click') return `Clic ${args[2]} effectué à (${args[0]}, ${args[1]}).`
+  if (_kind === 'type') return 'Texte tapé.'
+  if (_kind === 'key') return `Touche "${args[0]}" pressée.`
+  if (_kind === 'hotkey') return `Combinaison "${args[0].join('+')}" pressée.`
+  if (_kind === 'scroll') return `Défilement ${args[2]} effectué.`
+}
+
+test('pilotage installé : consigne UI-TARS sans message système, clic ramené aux pixels puis à l’écran', async () => {
+  // Vraie réponse obtenue ici d'UI-TARS sur la fausse fenêtre 1280x720 (bouton VALIDER en 700-870 x 420-476).
+  const real = "Thought: Le bouton vert VALIDER confirme l'enregistrement.\nAction: click(start_box='(796,453)')"
+  const app = setup([real, "Thought: c'est fait.\nAction: finished(content='Enregistré')"], ok, undefined, [], { ...withPilot, scale: 1.5 })
+  assert.equal(await app.run(), 'Enregistré')
+  const body = app.state().bodies[0]
+  assert.equal(body.model, PILOT)
+  assert.equal(body.messages.length, 1)
+  assert.equal(body.messages[0].role, 'user')
+  assert.match(body.messages[0].content, /You are a GUI agent[\s\S]*Cherche un tuto guitare/)
+  assert.equal(body.options.temperature, 0)
+  // 796 x 1280/1288 = 791, 453 x 720/728 = 448 ; puis x1,5 pour l'écran réel.
+  assert.deepEqual(app.state().clicks[0], [1187, 672, 'left'])
+  // Le modèle de pilotage vise sur l'image : pas de lecture de l'arbre Windows (5 s de PowerShell par étape).
+  assert.equal(app.state().uiaReads, 0)
+  // Son action, telle qu'il l'a écrite, lui revient dans l'historique au tour suivant.
+  assert.match(app.state().prompts[1], /1\. click\(start_box='\(796,453\)'\)/)
+})
+
+test('pilotage : texte terminé par \\n tapé PUIS validé par Entrée, combinaison et défilement exécutés', async () => {
+  const app = setup([
+    "Thought: je tape.\nAction: type(content='tuto guitare\\n')",
+    "Thought: barre d'adresse.\nAction: hotkey(key='ctrl l')",
+    "Thought: plus bas.\nAction: scroll(start_box='(640,360)', direction='down')",
+    "Thought: fini.\nAction: finished(content='ok')"
+  ], ok, undefined, [], withPilot)
+  assert.equal(await app.run(), 'ok')
+  const calls = app.state().calls
+  assert.deepEqual(calls[0], ['type', 'tuto guitare'])
+  assert.deepEqual(calls[1], ['key', 'enter'])
+  assert.deepEqual(calls[2], ['hotkey', ['ctrl', 'l']])
+  assert.equal(calls[3][0], 'scroll')
+  assert.equal(calls[3][3], 'down')
+})
+
+test('pilotage : une combinaison refusée par Windows fait échouer la tâche avec la vraie raison', async () => {
+  const app = setup(["Thought: x\nAction: hotkey(key='ctrl l')"], 'Échec de la combinaison de touches : accès refusé', undefined, [], withPilot)
+  await assert.rejects(app.run(), /accès refusé/)
+})
+
+test('pilotage : réponse sans action exploitable = échec clair, aucun clic', async () => {
+  const app = setup(['Thought: je ne sais pas.'], ok, undefined, [], withPilot)
+  await assert.rejects(app.run(), /modèle de pilotage a proposé une action inexécutable/)
+  assert.equal(app.state().actions, 0)
+})
+
+test('profil qui cite le modèle de pilotage mais qu’Ollama ne l’a plus : le modèle de vision pilote, comme avant', async () => {
+  const app = setup([{ action: 'click', x: 2, y: 4 }, { action: 'done', result: 'ok' }], ok, undefined, [], { profile: { pilotModel: PILOT }, installed: ['qwen3.5:4b'] })
+  assert.equal(await app.run(), 'ok')
+  assert.equal(app.state().bodies[0].model, 'test')
+  assert.equal(app.state().bodies[0].messages[0].role, 'system')
+  assert.deepEqual(app.state().clicks[0], [2, 4, 'left'])
+  assert.ok(app.state().uiaReads > 0)
 })

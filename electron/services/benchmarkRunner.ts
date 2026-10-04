@@ -10,6 +10,7 @@ import type { CapacityScanResult } from '../../shared/ipc'
 import { installImageModel } from './imageGenerator'
 import { detectRamGb } from './systemResources'
 import { pickImageModel } from '../../shared/imageModel'
+import { pickPilotModel } from '../../shared/pilotModel'
 
 /**
  * Configuration de l'écran d'accueil (CapacityScan.tsx) et de « Retester la configuration » : ne lance JAMAIS
@@ -96,6 +97,24 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
     onLine(`Pas de modèle d'image : ${imagePick.reason}.`)
   }
 
+  // Étape 231, Léo : « comme image vidéo le mettre seul, si l'utilisateur n'a pas assez on met pas le rôle et il
+  // fait comme maintenant ». Le modèle de pilotage d'écran n'est installé que si la carte le fait tourner ; un
+  // échec ne fait jamais échouer le reste de la configuration — le modèle de vision continue alors de piloter.
+  const pilotPick = pickPilotModel(picked.vramGb)
+  let pilot: CapacityScanResult['pilot'] = pilotPick
+  if (pilotPick.model) {
+    try {
+      await pullModelIfMissing(pilotPick.model, onLine)
+      pilot = { ...pilotPick, installed: true }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      onLine(`Modèle de pilotage d'écran non installé (${message}) — le modèle de vision pilote l'écran en attendant.`)
+      pilot = { ...pilotPick, installed: false, error: message }
+    }
+  } else {
+    onLine(`Pas de modèle de pilotage d'écran : ${pilotPick.reason}. Le modèle de vision pilote l'écran, comme avant.`)
+  }
+
   const profile = await getProfile()
   if (profile) {
     // Étape 133, Léo : "pour mon palier on a changer de model comment on fait ça me réinstalle pas les
@@ -122,11 +141,20 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
     // Étape 141 : un modèle choisi à la main dans Chat/Code/Vocal reste en service, jamais supprimé ici.
     for (const chosen of Object.values(profile.modelChoices ?? {})) if (chosen) keep.add(chosen)
     const oldModels = roles.map(([before]) => before).filter((m): m is string => Boolean(m))
+    // Étape 231 : le modèle de pilotage installé ce coup-ci, sinon celui d'avant s'il existe encore un rôle
+    // (téléchargement raté) ; plus de rôle du tout (carte trop petite) = l'ancien est supprimé comme les autres.
+    const pilotModel = pilot.installed ? pilot.model ?? undefined : pilotPick.model ? profile.pilotModel : undefined
+    if (pilotModel) keep.add(pilotModel)
+    if (profile.pilotModel) oldModels.push(profile.pilotModel)
     const toRemove = [...new Set(oldModels)].filter((m) => !keep.has(m))
     for (const model of toRemove) {
       try {
         await deleteModel(model)
-        onLine(`Ancien modèle ${model} supprimé (remplacé par un meilleur choix pour ta configuration).`)
+        onLine(
+          model === profile.pilotModel
+            ? `Ancien modèle de pilotage d'écran ${model} supprimé (ta carte graphique ne le fait plus tourner).`
+            : `Ancien modèle ${model} supprimé (remplacé par un meilleur choix pour ta configuration).`
+        )
       } catch (err) {
         onLine(`Échec de la suppression de l'ancien modèle ${model} : ${err instanceof Error ? err.message : String(err)}`)
       }
@@ -137,6 +165,7 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
       models: picked.models,
       visionModel: picked.visionModel,
       codeModel: picked.codeModel,
+      pilotModel,
       capacityScanDone: true,
       knownModelCandidates: getAllCandidateModelIds(),
       // Étape 138 : mémorisé pour que la carte "Modèles choisis pour ta machine" explique pourquoi le
@@ -154,7 +183,8 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
     ...picked,
     skippedModels: skippedList.length ? skippedList : undefined,
     blockedModels: blockedList.length ? blockedList : undefined,
-    image
+    image,
+    pilot
   }
 }
 

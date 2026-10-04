@@ -47,7 +47,8 @@ const picks = {
     medium: { model: 'qwen3.5:9b', blockedReason: null },
     vision: { model: 'hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M', blockedReason: "bloqué par ta version d'Ollama" }
   },
-  installCheck: '__installCheck' in window ? window.__installCheck : { notInstalled: [], otherInstalled: [] }
+  installCheck: '__installCheck' in window ? window.__installCheck : { notInstalled: [], otherInstalled: [] },
+  pilot: window.__pilot
 }
 window.__deleted = []
 
@@ -72,7 +73,7 @@ function buildPage() {
   return pageHtml
 }
 
-async function withPreview(run, width = 760, installCheck = undefined) {
+async function withPreview(run, width = 760, installCheck = undefined, pilot = undefined) {
   const html = buildPage()
   const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
   try {
@@ -80,7 +81,9 @@ async function withPreview(run, width = 760, installCheck = undefined) {
     await page.setViewportSize({ width, height: 900 })
     // Données de vérification propres à ce test, posées AVANT le script de la page (setContent n'exécute pas
     // les scripts d'initialisation de Playwright).
-    const injected = installCheck === undefined ? '' : `<script>window.__installCheck = ${JSON.stringify(installCheck)}</script>`
+    const injected =
+      (installCheck === undefined ? '' : `<script>window.__installCheck = ${JSON.stringify(installCheck)}</script>`) +
+      (pilot === undefined ? '' : `<script>window.__pilot = ${JSON.stringify(pilot)}</script>`)
     await page.setContent(html.replace('<div id="root"></div>', `${injected}<div id="root"></div>`))
     await page.waitForSelector('.capacity-scan__tier-table')
     await run(page)
@@ -189,4 +192,25 @@ test("Ollama injoignable : la carte le dit au lieu de prétendre que tout est in
     760,
     null
   )
+})
+
+// Étape 231 : rôle « Pilotage d'écran », comme Image/Vidéo — absent si la carte est trop petite.
+test("pilotage d'écran : nom lisible quand la machine le fait tourner, rappel s'il n'est pas installé", options, async () => {
+  const pilot = { model: 'hf.co/mradermacher/UI-TARS-1.5-7B-GGUF:Q4_K_M', reason: null, installed: false }
+  await withPreview(async (page) => {
+    const row = await page.$eval('.capacity-scan__tier-pilot', (el) => el.textContent)
+    assert.match(row, /Pilotage d'écran\s*UI-TARS 1\.5 7B/)
+    assert.doesNotMatch(row, /hf\.co/, "jamais l'identifiant technique à l'écran")
+    const text = await page.$eval('.capacity-scan__tier-table', (el) => el.textContent)
+    assert.match(text, /Pas installé sur ce PC pour l'instant — clique « Retester la configuration » \(environ 5,5 Go\)/)
+  }, 760, undefined, pilot)
+})
+
+test("pilotage d'écran : carte trop petite = aucun modèle, et le modèle Vision pilote à sa place", options, async () => {
+  const pilot = { model: null, reason: 'carte graphique trop petite (6 Go de VRAM, il en faut 8 ou plus)' }
+  await withPreview(async (page) => {
+    assert.match(await page.$eval('.capacity-scan__tier-pilot', (el) => el.textContent), /Aucun modèle/)
+    const text = await page.$eval('.capacity-scan__tier-table', (el) => el.textContent)
+    assert.match(text, /Pas assez de puissance : carte graphique trop petite \(6 Go.*Le modèle Vision pilote l'écran à sa place/)
+  }, 760, undefined, pilot)
 })
