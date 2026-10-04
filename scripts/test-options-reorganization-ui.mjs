@@ -460,7 +460,8 @@ test('« Tester ces modèles » : nomme les modèles, confirme, puis suit le tes
     // Étape 230 : la durée réelle (plusieurs heures) et la reprise après coupure sont annoncées AVANT de lancer.
     const confirm = await page.textContent('.options-menu__unscored-confirm')
     assert.match(confirm, /plusieurs heures/)
-    assert.match(confirm, /26 questions posées 3 fois/)
+    assert.match(confirm, /24 demandes complètes jouées 2 fois/)
+    assert.match(confirm, /Microsoft Edge/)
     assert.match(confirm, /reprend/)
     await page.click('.options-menu__unscored button:has-text("Annuler")')
     assert.equal(await page.evaluate(() => window.__testCalls ?? 0), 0)

@@ -18,6 +18,10 @@ export function createGeneratedAppPreview(html: string): string {
   return `${SCHEME}://${id}/index.html`
 }
 
+/** Règles de l'aperçu, reprises telles quelles par le test de code (scripts/benchmark-browser.mjs, étape 232). */
+export const PREVIEW_CSP =
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; sandbox allow-scripts allow-forms"
+
 export function registerPreviewHandler(): void {
   protocol.handle(SCHEME, (request) => {
     const url = new URL(request.url)
@@ -30,7 +34,10 @@ export function registerPreviewHandler(): void {
         'Cache-Control': 'no-store',
         'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), display-capture=(), clipboard-read=(), clipboard-write=()',
         // Autoriser le JS généré seulement dans cette page sandboxée ; aucune requête réseau ou iframe.
-        'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; sandbox allow-scripts"
+        // allow-forms (étape 232) : sans lui, le navigateur ne déclenche même pas l'évènement « submit » — un
+        // formulaire généré (contact, inscription...) ne réagissait JAMAIS au clic, même avec un code juste.
+        // form-action 'none' bloque toujours tout envoi réel : seul le code de la page voit le formulaire.
+        'Content-Security-Policy': PREVIEW_CSP
       }
     })
   })

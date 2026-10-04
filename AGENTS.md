@@ -6215,3 +6215,44 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   prouvé. Régression : test-ui-tars.mjs (vraies réponses d'UI-TARS), test-computer-use.mjs (chemin pilotage et
   repli sur la vision), test-benchmark-runner-cleanup.mjs, test-my-model-picks-ui.mjs.
   **Non vérifiable ici** : vitesse et justesse sur la vraie carte de Léo, sur de vrais écrans Windows.
+
+- **Tests des modèles refaits pour un DERNIER lancement complet (étape 232, Léo : « je veux que quand je lance le
+  test, tout soit bon… pas qu'à la fin tu me dises qu'il faut rajouter une chose »)**. Trois épreuves nouvelles,
+  vérifiées sur de vrais modèles ICI, avec le programme Jaris construit (son Node, ELECTRON_RUN_AS_NODE, mêmes
+  variables que testUnscoredModels) avant d'être confiées à Léo :
+  1. **Demandes complètes** (scripts/benchmark-scenarios.mjs, 24 demandes × 2 graines = /48) : copie de la boucle
+     de converse() avec des outils SIMULÉS qui gardent un état et renvoient les MÊMES textes que les vrais outils
+     (vérifié par test sur les sources), mêmes courts-circuits, historique entre tours = phrases + réponses
+     finales seulement. Jugé sur l'état final et les réponses, pas sur une séquence imposée ; un appel en trop qui
+     agit sur le PC fait rater. Les 78 questions restent (non-régression), jamais rejouées pour un modèle noté.
+     **Tout est enregistré** (appels, arguments, résultats, réponses entières, graine) : `rejudge` rejuge le
+     fichier si un jugement est corrigé plus tard — jamais besoin de relancer des heures de test pour ça.
+  2. **Vision v2** (benchmark-vision.mjs, 10 vraies captures 1280x720 × 2 = /20) : rendues par Chromium
+     (make-vision-tests.mjs, PNG commités et embarqués). L'ancien test (aplats, gros pixels) : 10 modèles sur 11
+     à 18/18, il ne départageait plus rien.
+  3. **Code v2** (benchmark-code.mjs, 5 applications = /5) : chaque application générée est OUVERTE dans le
+     navigateur de la machine (Edge, installé avec Windows ; Chrome à défaut), piloté en invisible par CDP et le
+     WebSocket de Node (benchmark-browser.mjs, aucune dépendance), avec les règles de l'aperçu de Jaris (même
+     CSP, alertes muettes, localStorage refusé), puis utilisée : vrais clics souris au centre des boutons,
+     défilement À LA MOLETTE (une page bloquée en overflow:hidden ne bouge pas — le bug vécu par Léo). Vérification
+     préalable sur une application connue AVANT tout téléchargement : un souci de navigateur se voit en secondes.
+  **Trois vrais bugs de Jaris trouvés en construisant ces tests**, corrigés : (a) l'aperçu du mode Code n'avait
+  pas `allow-forms` — un formulaire généré ne réagissait JAMAIS au clic, l'évènement submit n'est même pas
+  déclenché (vérifié dans un vrai navigateur : « rien » sans, « Merci ! » avec ; form-action 'none' bloque
+  toujours tout envoi réel) ; (b) chatWithOllama relayait « does not support thinking » au lieu de la vraie erreur
+  quand un modèle sans réflexion (ministral, granite) échouait ensuite pour une autre raison (vu en vrai : appel
+  d'outil mal formé, 500) ; (c) la même chose dans le script de test.
+  **Pièges trouvés en relisant CHAQUE verdict du vrai essai (ministral-3:3b 36/48)**, pas en relisant le code :
+  deux jugements trop larges — une correction « Clio » AJOUTÉE à côté de « Peugeot 208 » sans replace comptait
+  juste ; des titres de vidéos et des nombres de vues inventés après une recherche YouTube comptaient juste. Les
+  11 autres échecs étaient de vraies erreurs du modèle (Entrée jamais pressée, date d'anniversaire inventée,
+  rappel inventé à 30 min au lieu de demander quand, « la musique commence » sans l'avoir lancée, 10 recherches
+  en boucle). **Piège de mon propre test de code** : `scrollIntoView` faisait défiler une page bloquée, ce qu'un
+  humain ne peut pas faire — remplacé par la molette (Input.dispatchMouseEvent mouseWheel). **Piège
+  d'environnement** : Chromium refuse de démarrer en administrateur sous Linux sans --no-sandbox (jamais ajouté
+  sous Windows). **Piège d'empaquetage attrapé par un test existant** : le nouveau module n'était pas dans le
+  filtre extraResources — vérifié ensuite en construisant vraiment l'application (electron-builder --dir).
+  Le choix des modèles par Jaris n'utilise pas encore ces scores : il sera revu avec les résultats de Léo, sans
+  relancer de test (toutes les données nécessaires sont dans le fichier). Régression : test-benchmark-scenarios,
+  test-benchmark-vision, test-benchmark-code (vrai navigateur ; Edge sur la CI Windows), test-ollama-think-fallback,
+  test-generated-preview, test-benchmark-cases.

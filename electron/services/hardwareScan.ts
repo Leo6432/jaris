@@ -958,7 +958,11 @@ export interface LocalBenchmarkEntry {
 }
 
 /** Les trois paliers couverts par scripts/verified-tool-scores.md, voir parseVerifiedToolScores. */
-export type VerifiedTier = 'conversation' | 'vision' | 'code'
+/**
+ * `scenarios` (étape 232) : « Demandes complètes », jouées de bout en bout par scripts/benchmark-scenarios.mjs. Lues
+ * ici pour savoir quels modèles restent à tester ; le choix des modèles ne s'en sert pas encore.
+ */
+export type VerifiedTier = 'conversation' | 'vision' | 'code' | 'scenarios'
 
 /**
  * Relit scripts/verified-tool-scores.md (commité dans le dépôt, voir son en-tête pour le pourquoi) : scores
@@ -973,7 +977,8 @@ export function parseVerifiedToolScores(): Record<VerifiedTier, Map<string, stri
   const results: Record<VerifiedTier, Map<string, string>> = {
     conversation: new Map(),
     vision: new Map(),
-    code: new Map()
+    code: new Map(),
+    scenarios: new Map()
   }
   let raw: string
   try {
@@ -986,7 +991,15 @@ export function parseVerifiedToolScores(): Record<VerifiedTier, Map<string, stri
   for (const line of raw.split('\n')) {
     if (line.startsWith('## ')) {
       const heading = line.slice(3).trim().toLowerCase()
-      currentTier = heading.startsWith('conversation') ? 'conversation' : heading.startsWith('vision') ? 'vision' : heading.startsWith('code') ? 'code' : null
+      currentTier = heading.startsWith('conversation')
+        ? 'conversation'
+        : heading.startsWith('vision')
+          ? 'vision'
+          : heading.startsWith('code')
+            ? 'code'
+            : heading.startsWith('demandes')
+              ? 'scenarios'
+              : null
       continue
     }
     if (!currentTier || !line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
@@ -1008,8 +1021,14 @@ export function parseVerifiedToolScores(): Record<VerifiedTier, Map<string, stri
  */
 export const CONVERSATION_TEST_TOTAL = 78
 
-/** Pareil pour la vision : 6 questions posées 3 fois (VISION_TOTAL, scripts/benchmark-models.mjs). L'ancien test était sur 3. */
-export const VISION_TEST_TOTAL = 18
+/** Vision : 10 vraies captures d'écran posées 2 fois (VISION_TOTAL, scripts/benchmark-vision.mjs, étape 232). Avant : sur 18 puis sur 3. */
+export const VISION_TEST_TOTAL = 20
+
+/** Étape 232 : demandes complètes, 24 demandes jouées 2 fois (SCENARIO_TOTAL, scripts/benchmark-scenarios.mjs). */
+export const SCENARIO_TEST_TOTAL = 48
+
+/** Étape 232 : code, 5 applications générées puis ouvertes et utilisées (CODE_TOTAL, scripts/benchmark-code.mjs). Avant : sur 3. */
+export const CODE_TEST_TOTAL = 5
 
 /**
  * Nombre d'actions d'affilée d'une demande typique, pour mettre en balance fiabilité et intelligence
@@ -1036,11 +1055,14 @@ const CODE_ROLE_MODELS = new Set(CODE_CANDIDATES.map((c) => c.model))
  */
 export function getUnscoredModels(): string[] {
   const scores = parseVerifiedToolScores()
+  // Étape 232 : un modèle de conversation a besoin des DEUX scores — les 78 questions et les demandes complètes.
+  // Le script ne rejoue que l'épreuve qui manque.
   const needsConversation = (model: string): boolean =>
-    CONVERSATION_ROLE_MODELS.has(model) && !scores.conversation.get(model)?.endsWith(`/${CONVERSATION_TEST_TOTAL}`)
+    CONVERSATION_ROLE_MODELS.has(model) &&
+    (!scores.conversation.get(model)?.endsWith(`/${CONVERSATION_TEST_TOTAL}`) || !scores.scenarios.get(model)?.endsWith(`/${SCENARIO_TEST_TOTAL}`))
   const needsVision = (model: string): boolean =>
     VISION_ROLE_MODELS.has(model) && !scores.vision.get(model)?.endsWith(`/${VISION_TEST_TOTAL}`)
-  const needsCode = (model: string): boolean => CODE_ROLE_MODELS.has(model) && !scores.code.has(model)
+  const needsCode = (model: string): boolean => CODE_ROLE_MODELS.has(model) && !scores.code.get(model)?.endsWith(`/${CODE_TEST_TOTAL}`)
   return [...ALL_MODELS]
     .sort((a, b) => a.vramGb - b.vramGb)
     .filter((c) => needsConversation(c.model) || needsVision(c.model) || needsCode(c.model))

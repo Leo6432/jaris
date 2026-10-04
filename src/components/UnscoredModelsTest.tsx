@@ -74,9 +74,10 @@ export default function UnscoredModelsTest(): JSX.Element | null {
         Modèles à tester ({models.length}) : {models.map((model) => formatModelName(model)).join(', ')}
       </p>
       <p className="options-menu__unscored-text">
-        Les tests ont changé : les modèles notés avec l'ancien test (sur 17, ou sur 3 en vision) sont retestés,
-        pour que tous les scores se comparent. En attendant, Jaris garde leurs anciens scores. Un modèle jamais testé n'est jamais
-        choisi.
+        Les tests ont changé : des demandes jouées de bout en bout pour la conversation (la demande est-elle vraiment
+        faite ?), de vraies captures d'écran pour la vision, et des applications réellement ouvertes et cliquées pour
+        le code. Chaque modèle ne repasse que les épreuves qui lui manquent. En attendant, Jaris garde ses choix
+        actuels. Un modèle jamais testé n'est jamais choisi.
       </p>
 
       {phase === 'idle' && (
@@ -88,8 +89,9 @@ export default function UnscoredModelsTest(): JSX.Element | null {
       {phase === 'confirming' && (
         <div className="options-menu__unscored-confirm">
           <p>
-            Chaque modèle est téléchargé, testé (26 questions posées 3 fois chacune, et 6 images posées 3 fois pour
-            un modèle de vision), puis supprimé — sauf ceux que tu avais déjà. Les gros
+            Chaque modèle est téléchargé, testé (24 demandes complètes jouées 2 fois, 10 captures d'écran posées 2
+            fois pour la vision, 5 applications pour le code), puis supprimé — sauf ceux que tu avais déjà. Le test de
+            code utilise Microsoft Edge en arrière-plan, sans rien afficher. Les gros
             modèles débordent sur la RAM : compte plusieurs heures, et ferme les jeux et logiciels lourds pendant
             le test. Un modèle trop gros pour ton PC est sauté.
           </p>

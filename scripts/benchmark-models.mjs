@@ -24,7 +24,6 @@ import { homedir, totalmem } from 'os'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { promisify } from 'util'
-import { deflateSync } from 'zlib'
 import {
   CONVERSATION_NUM_CTX,
   CONVERSATION_REPEATS,
@@ -35,6 +34,10 @@ import {
   buildCaseMessages,
   isCorrectAnswer
 } from './benchmark-cases.mjs'
+import { VISION_REPEATS, VISION_TEST_CASES, VISION_TEST_VERSION, VISION_TOTAL, isCorrectVisionAnswer, loadVisionImage } from './benchmark-vision.mjs'
+import { CODE_TEST_CASES, CODE_TEST_VERSION, CODE_TOTAL, checkGeneratedApp } from './benchmark-code.mjs'
+import { findBrowser, openBrowser } from './benchmark-browser.mjs'
+import { SCENARIOS, SCENARIO_REPEATS, SCENARIO_TEST_VERSION, SCENARIO_TOTAL, runScenario, scenarioSeed } from './benchmark-scenarios.mjs'
 
 const execAsync = promisify(exec)
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -70,7 +73,7 @@ const OLLAMA_HOST = process.env.OLLAMA_HOST?.trim() || 'http://127.0.0.1:11434'
  * qui applique la même correction côté app).
  */
 function readVerifiedModels() {
-  const result = { conversation: new Set(), vision: new Set(), code: new Set() }
+  const result = { conversation: new Set(), vision: new Set(), code: new Set(), scenarios: new Set() }
   let raw
   try {
     raw = readFileSync(VERIFIED_TOOL_SCORES_PATH, 'utf-8')
@@ -81,7 +84,7 @@ function readVerifiedModels() {
   for (const line of raw.split('\n')) {
     if (line.startsWith('## ')) {
       const heading = line.slice(3).trim().toLowerCase()
-      currentTier = heading.startsWith('conversation') ? 'conversation' : heading.startsWith('vision') ? 'vision' : heading.startsWith('code') ? 'code' : null
+      currentTier = tierOfHeading(heading)
       continue
     }
     if (!currentTier || !line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
@@ -90,6 +93,9 @@ function readVerifiedModels() {
       .map((c) => c.trim())
       .filter(Boolean)
     if (cells.length !== 2) continue
+    // Étape 232 : un score de demandes complètes, ou de code, d'une autre version du test est refait.
+    if (currentTier === 'scenarios' && !cells[1].endsWith(`/${SCENARIO_TOTAL}`)) continue
+    if (currentTier === 'code' && !cells[1].endsWith(`/${CODE_TOTAL}`)) continue
     // Étape 230 : un score de conversation d'un AUTRE test (ex. « 16/17 » de la version 4) ne dispense pas du test
     // actuel — le modèle est retesté, pour que tous les scores de conversation soient comparables entre eux.
     if (currentTier === 'conversation' && !cells[1].endsWith(`/${CONVERSATION_TOTAL}`)) continue
@@ -100,6 +106,15 @@ function readVerifiedModels() {
   return result
 }
 // VERIFIED_MODELS : défini plus bas, après VISION_TOTAL dont il dépend (étape 230).
+
+/** Section d'un fichier de scores ou de résultats : « ## Conversation », « ## Vision », « ## Code », « ## Demandes complètes ». */
+function tierOfHeading(heading) {
+  if (heading.startsWith('conversation')) return 'conversation'
+  if (heading.startsWith('vision')) return 'vision'
+  if (heading.startsWith('code')) return 'code'
+  if (heading.startsWith('demandes')) return 'scenarios'
+  return null
+}
 
 /**
  * Périmètre du run (AnalysisScope côté TS, shared/ipc.ts) : 'all' teste tout comme avant (comportement par
@@ -480,222 +495,12 @@ async function deleteModelViaApi(model) {
 
 // TOOLS, les vraies consignes de Jaris et TEST_CASES : voir scripts/benchmark-cases.mjs (étape 162).
 
-/**
- * Encodeur PNG minimal (RGB 8 bits, sans dépendance externe — juste zlib, déjà dans Node) pour générer les
- * images de test de VISION_TEST_CASES ci-dessous à la volée, plutôt que de committer des fichiers image
- * binaires dans le dépôt. Suffisant pour des aplats de couleur simples, pas un encodeur PNG complet.
- */
-const CRC_TABLE = (() => {
-  const table = new Uint32Array(256)
-  for (let n = 0; n < 256; n++) {
-    let c = n
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
-    table[n] = c >>> 0
-  }
-  return table
-})()
-
-function crc32(buf) {
-  let c = 0xffffffff
-  for (const byte of buf) c = CRC_TABLE[(c ^ byte) & 0xff] ^ (c >>> 8)
-  return (c ^ 0xffffffff) >>> 0
-}
-
-function pngChunk(type, data) {
-  const typeBuf = Buffer.from(type, 'ascii')
-  const lenBuf = Buffer.alloc(4)
-  lenBuf.writeUInt32BE(data.length, 0)
-  const crcBuf = Buffer.alloc(4)
-  crcBuf.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0)
-  return Buffer.concat([lenBuf, typeBuf, data, crcBuf])
-}
-
-/** `fillFn(x, y) -> [r, g, b]` pour chaque pixel — assez pour des aplats/zones de couleur, pas besoin de plus. */
-function makePngBase64(width, height, fillFn) {
-  const stride = width * 3
-  const raw = Buffer.alloc((stride + 1) * height)
-  for (let y = 0; y < height; y++) {
-    raw[y * (stride + 1)] = 0 // type de filtre "aucun" pour cette ligne
-    for (let x = 0; x < width; x++) {
-      const [r, g, b] = fillFn(x, y)
-      const i = y * (stride + 1) + 1 + x * 3
-      raw[i] = r
-      raw[i + 1] = g
-      raw[i + 2] = b
-    }
-  }
-
-  const ihdr = Buffer.alloc(13)
-  ihdr.writeUInt32BE(width, 0)
-  ihdr.writeUInt32BE(height, 4)
-  ihdr[8] = 8 // profondeur 8 bits
-  ihdr[9] = 2 // type de couleur : RGB
-  // ihdr[10..12] (compression/filtre/entrelacement) restent à 0, valeurs standard PNG.
-
-  const png = Buffer.concat([
-    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
-    pngChunk('IHDR', ihdr),
-    pngChunk('IDAT', deflateSync(raw)),
-    pngChunk('IEND', Buffer.alloc(0))
-  ])
-  return png.toString('base64')
-}
-
-// Rouge/vert/bleu francs, faciles à nommer sans ambiguïté (pas de teintes intermédiaires prêtant à
-// interprétation) — le but est de vérifier que le modèle voit VRAIMENT l'image, pas de tester sa culture
-// des nuanciers.
-/**
- * Police bitmap 5×7 (majuscules, chiffres, quelques signes), étape 230 : les questions de vision lisent du TEXTE
- * à l'écran (message d'erreur, bouton, code), ce que Jaris fait vraiment avec look_at_screen. Dessinée ici, sans
- * dépendance : ce script tourne dans l'appli installée, où aucune bibliothèque d'image n'est disponible.
- */
-const FONT_5X7 = {
-  A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
-  B: ['11110', '10001', '10001', '11110', '10001', '10001', '11110'],
-  C: ['01110', '10001', '10000', '10000', '10000', '10001', '01110'],
-  D: ['11110', '10001', '10001', '10001', '10001', '10001', '11110'],
-  E: ['11111', '10000', '10000', '11110', '10000', '10000', '11111'],
-  F: ['11111', '10000', '10000', '11110', '10000', '10000', '10000'],
-  G: ['01110', '10001', '10000', '10111', '10001', '10001', '01111'],
-  H: ['10001', '10001', '10001', '11111', '10001', '10001', '10001'],
-  I: ['01110', '00100', '00100', '00100', '00100', '00100', '01110'],
-  J: ['00111', '00010', '00010', '00010', '00010', '10010', '01100'],
-  K: ['10001', '10010', '10100', '11000', '10100', '10010', '10001'],
-  L: ['10000', '10000', '10000', '10000', '10000', '10000', '11111'],
-  M: ['10001', '11011', '10101', '10101', '10001', '10001', '10001'],
-  N: ['10001', '10001', '11001', '10101', '10011', '10001', '10001'],
-  O: ['01110', '10001', '10001', '10001', '10001', '10001', '01110'],
-  P: ['11110', '10001', '10001', '11110', '10000', '10000', '10000'],
-  Q: ['01110', '10001', '10001', '10001', '10101', '10010', '01101'],
-  R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
-  S: ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
-  T: ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
-  U: ['10001', '10001', '10001', '10001', '10001', '10001', '01110'],
-  V: ['10001', '10001', '10001', '10001', '10001', '01010', '00100'],
-  W: ['10001', '10001', '10001', '10101', '10101', '10101', '01010'],
-  X: ['10001', '10001', '01010', '00100', '01010', '10001', '10001'],
-  Y: ['10001', '10001', '01010', '00100', '00100', '00100', '00100'],
-  Z: ['11111', '00001', '00010', '00100', '01000', '10000', '11111'],
-  0: ['01110', '10001', '10011', '10101', '11001', '10001', '01110'],
-  1: ['00100', '01100', '00100', '00100', '00100', '00100', '01110'],
-  2: ['01110', '10001', '00001', '00010', '00100', '01000', '11111'],
-  3: ['11111', '00010', '00100', '00010', '00001', '10001', '01110'],
-  4: ['00010', '00110', '01010', '10010', '11111', '00010', '00010'],
-  5: ['11111', '10000', '11110', '00001', '00001', '10001', '01110'],
-  6: ['00110', '01000', '10000', '11110', '10001', '10001', '01110'],
-  7: ['11111', '00001', '00010', '00100', '01000', '01000', '01000'],
-  8: ['01110', '10001', '10001', '01110', '10001', '10001', '01110'],
-  9: ['01110', '10001', '10001', '01111', '00001', '00010', '01100'],
-  ':': ['00000', '01100', '01100', '00000', '01100', '01100', '00000'],
-  '!': ['00100', '00100', '00100', '00100', '00100', '00000', '00100'],
-  ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000']
-}
-
-/** Vrai si le pixel (x, y) tombe sur le texte écrit à partir de (left, top), à l'échelle `scale` (1 point = scale px). */
-function textPixel(text, left, top, scale, x, y) {
-  const col = Math.floor((x - left) / scale)
-  const row = Math.floor((y - top) / scale)
-  if (row < 0 || row >= 7 || col < 0) return false
-  const charIndex = Math.floor(col / 6) // 5 colonnes + 1 d'espace
-  const glyph = FONT_5X7[text[charIndex]]
-  const inGlyph = col % 6
-  return Boolean(glyph && inGlyph < 5 && glyph[row][inGlyph] === '1')
-}
-
-/** Largeur en pixels d'un texte écrit avec textPixel. */
-function textWidth(text, scale) {
-  return (text.length * 6 - 1) * scale
-}
-
-const inRect = (x, y, left, top, width, height) => x >= left && x < left + width && y >= top && y < top + height
-
-const RED = [214, 40, 40]
-const GREEN = [40, 180, 74]
-const BLUE = [42, 92, 214]
-const WHITE = [255, 255, 255]
-const INK = [20, 20, 20]
-const WINDOW = [240, 240, 240]
-const DESKTOP = [60, 110, 140]
-const TITLE_BLUE = [30, 70, 160]
-const BUTTON_GREY = [200, 200, 200]
-
-/**
- * Test du palier Vision (VISION_CANDIDATES ci-dessus) : au lieu du tool-calling testé pour les modèles de
- * conversation (TEST_CASES), la question qui compte pour la vision est "le modèle voit-il vraiment
- * l'image ?" — des questions à réponse unique et objectivement vérifiable (couleur, comptage), pas un
- * jugement de description ouverte qu'il faudrait noter à la main. `check` reçoit la réponse en minuscules.
- */
-const VISION_TEST_CASES = [
-  {
-    image: () => makePngBase64(96, 96, () => BLUE),
-    prompt: 'Quelle est la couleur dominante de cette image ? Réponds uniquement avec le nom de la couleur, en un seul mot.',
-    check: (answer) => /\bbleu(e)?\b|\bblue\b/.test(answer)
-  },
-  {
-    image: () => makePngBase64(128, 64, (x) => (x < 64 ? RED : GREEN)),
-    prompt: 'Le côté GAUCHE de cette image est-il plutôt rouge ou plutôt vert ? Réponds en un seul mot.',
-    check: (answer) => /\brouge\b|\bred\b/.test(answer) && !/\bvert(e)?\b|\bgreen\b/.test(answer)
-  },
-  {
-    image: () =>
-      makePngBase64(160, 160, (x, y) => {
-        const squares = [
-          [20, 20],
-          [90, 30],
-          [50, 110]
-        ]
-        const inSquare = squares.some(([sx, sy]) => x >= sx && x < sx + 20 && y >= sy && y < sy + 20)
-        return inSquare ? [20, 20, 20] : [245, 245, 245]
-      }),
-    prompt: 'Combien de carrés noirs vois-tu dans cette image ? Réponds uniquement avec le chiffre.',
-    check: (answer) => /\b3\b|\btrois\b/.test(answer)
-  },
-  // Étape 230 : lire du texte à l'écran — ce que Jaris fait vraiment avec look_at_screen (« lire un message
-  // d'erreur, décrire une fenêtre ouverte », description de l'outil). Les trois questions ci-dessus ne
-  // vérifiaient que des couleurs et des formes : presque tous les modèles y faisaient 3/3.
-  {
-    // Une fenêtre d'erreur : barre de titre bleue « ERREUR », message, bouton OK.
-    image: () =>
-      makePngBase64(520, 220, (x, y) => {
-        if (inRect(x, y, 20, 20, 480, 40)) return textPixel('ERREUR', 36, 26, 4, x, y) ? WHITE : TITLE_BLUE
-        if (inRect(x, y, 20, 60, 480, 140)) {
-          if (textPixel('FICHIER INTROUVABLE', 34, 90, 4, x, y)) return INK
-          if (inRect(x, y, 380, 150, 100, 36)) return textPixel('OK', 414, 158, 3, x, y) ? WHITE : BUTTON_GREY
-          return WINDOW
-        }
-        return DESKTOP
-      }),
-    prompt: "Quel message d'erreur est affiché à l'écran ? Recopie-le.",
-    check: (answer) => /fichier\s+introuvable/.test(answer)
-  },
-  {
-    // Deux boutons : seul le vert dit VALIDER.
-    image: () =>
-      makePngBase64(440, 140, (x, y) => {
-        if (inRect(x, y, 30, 40, 170, 60)) return textPixel('ANNULER', 30 + (170 - textWidth('ANNULER', 3)) / 2, 60, 3, x, y) ? INK : BUTTON_GREY
-        if (inRect(x, y, 240, 40, 170, 60)) return textPixel('VALIDER', 240 + (170 - textWidth('VALIDER', 3)) / 2, 60, 3, x, y) ? WHITE : GREEN
-        return WINDOW
-      }),
-    prompt: 'Quel mot est écrit sur le bouton vert ? Réponds uniquement avec ce mot.',
-    check: (answer) => /\bvalider\b/.test(answer) && !/annuler/.test(answer)
-  },
-  {
-    image: () => makePngBase64(360, 100, (x, y) => (textPixel('CODE : 4821', 24, 36, 4, x, y) ? INK : WINDOW)),
-    prompt: 'Quel code est affiché ? Réponds uniquement avec le nombre.',
-    // Corrigé le 03/10/2026 : retirer les espaces collait « est4821 », et \b ne trouvait plus le nombre ;
-    // « Le code affiché est 4821. » et « Quatre huit deux un » étaient comptés faux. Chiffres seuls, ou en lettres.
-    check: (answer) => answer.replace(/\D/g, '').includes('4821') || /quatre[\s-]+(?:mille[\s-]+)?huit[\s-]+(?:cent[\s-]+)?(?:deux[\s-]+un|vingt[\s-]+et[\s-]+un)/i.test(answer)
-  }
-]
-
-/** Étape 230 : chaque question de vision posée 3 fois, comme celles de conversation (même raison : le hasard). */
-const VISION_REPEATS = 3
-const VISION_TOTAL = VISION_TEST_CASES.length * VISION_REPEATS
+// Test de vision : voir scripts/benchmark-vision.mjs (étape 232, vraies captures d'écran).
 
 // Étape 230 : après VISION_TOTAL, que readVerifiedModels utilise (avant, il était lu trop tôt).
-const VERIFIED_MODELS = RETEST_ALL ? { conversation: new Set(), vision: new Set(), code: new Set() } : readVerifiedModels()
+const VERIFIED_MODELS = RETEST_ALL ? { conversation: new Set(), vision: new Set(), code: new Set(), scenarios: new Set() } : readVerifiedModels()
 
-const SCOPED_MODELS = (
+const CONVERSATION_SCOPE = (
   SCOPE === 'all' || SCOPE === 'conversation'
     ? MODELS
     : SCOPE === 'flash'
@@ -705,7 +510,18 @@ const SCOPED_MODELS = (
         : SCOPE === 'large'
           ? MODELS.filter((m) => LARGE_TIER_MODELS.has(m))
           : []
-).filter((m) => !VERIFIED_MODELS.conversation.has(m) && inOnlyModels(m))
+)
+const SCOPED_MODELS = CONVERSATION_SCOPE.filter((m) => !VERIFIED_MODELS.conversation.has(m) && inOnlyModels(m))
+/**
+ * Étape 232 : les mêmes modèles de conversation, pour les demandes complètes (benchmark-scenarios.mjs). Un modèle
+ * déjà noté aux 78 questions n'est PAS réinterrogé dessus : seules ses demandes complètes sont jouées.
+ */
+const SCOPED_SCENARIO_MODELS =
+  process.env.JARIS_SKIP_SCENARIOS === '1' // tests du premier appel seulement (scripts/test-benchmark-cases.mjs)
+    ? []
+    : CONVERSATION_SCOPE.filter((m) => !VERIFIED_MODELS.scenarios.has(m) && inOnlyModels(m))
+/** Une demande complète fait en moyenne ~3 appels au modèle : elle pèse 3 questions dans la barre de progression. */
+const SCENARIO_WEIGHT = 3
 const SCOPED_VISION_CANDIDATES = (SCOPE === 'all' || SCOPE === 'vision' ? VISION_CANDIDATES : []).filter(
   (c) => !VERIFIED_MODELS.vision.has(c.model) && inOnlyModels(c.model)
 )
@@ -832,16 +648,8 @@ function validateGeneratedHtml(html) {
   return issues
 }
 
-/**
- * Test du palier Code : une seule question par cas, à réponse vérifiable MÉCANIQUEMENT (validateGeneratedHtml,
- * pas un jugement humain sur le design) — cohérent avec la philosophie de VISION_TEST_CASES ci-dessus.
- * `correct` = extraction HTML réussie ET zéro problème détecté par validateGeneratedHtml.
- */
-const CODE_TEST_CASES = [
-  'Un compteur avec un bouton "+1" et un bouton "reset" qui remet le compteur à zéro.',
-  'Une todo list : un champ pour ajouter une tâche, un bouton "ajouter", la liste des tâches ajoutées, et un bouton pour supprimer chaque tâche.',
-  'Un formulaire de contact avec un champ nom, un champ email, un champ message, et un bouton "envoyer" qui affiche un message de confirmation.'
-]
+// Test du palier Code : voir scripts/benchmark-code.mjs (étape 232 — l'application est ouverte et utilisée pour de
+// vrai). validateGeneratedHtml ci-dessus reste noté dans le détail, à titre d'information.
 
 async function listInstalledModels() {
   const res = await fetch(`${OLLAMA_HOST}/api/tags`)
@@ -1145,8 +953,9 @@ async function chat(model, testCase) {
     if (firstErr instanceof OllamaDownError) throw firstErr
     try {
       ;({ wallMs, data } = await chatOnce(model, testCase, false))
-    } catch {
-      throw firstErr // le premier message d'erreur est généralement le plus informatif (statut HTTP réel)
+    } catch (secondErr) {
+      // Le premier message est le plus informatif, sauf s'il dit seulement que la réflexion est refusée (étape 232).
+      throw THINK_REFUSED.test(firstErr.message) ? secondErr : firstErr
     }
   }
   const evalCount = data.eval_count ?? 0
@@ -1165,6 +974,115 @@ async function chat(model, testCase) {
     toolArgs: toolCalls[0]?.function?.arguments ?? null,
     content: data.message?.content?.trim() ?? ''
   }
+}
+
+/**
+ * Étape 232 : un appel de la boucle des demandes complètes. Mêmes réglages que les 78 questions (réflexion
+ * « medium », retentée sans réflexion si le modèle la refuse, contexte de Jaris), plus une graine par passage :
+ * un passage se rejoue à l'identique, et deux passages ne tirent pas la même réponse au hasard.
+ * `thinkModes` note ce qui a vraiment servi, pour le fichier de résultats.
+ */
+const THINK_REFUSED = /does not support thinking|thinking is not supported/i
+
+async function chatScenario(model, messages, seed, thinkModes) {
+  const body = { model, messages, tools: TOOLS, stream: false, options: { num_ctx: CONVERSATION_NUM_CTX, seed } }
+  // Un modèle qui a déjà refusé la réflexion n'est plus interrogé avec : une requête de moins par appel.
+  if (!thinkModes.has(THINK_OFF)) body.think = 'medium'
+  try {
+    const data = await postChat(body)
+    thinkModes.add(body.think ? 'medium' : THINK_OFF)
+    return data
+  } catch (firstErr) {
+    if (firstErr instanceof OllamaDownError || !body.think) throw firstErr
+    // Comme chatWithOllama (ollama.ts) : une seconde tentative sans réflexion, quelle que soit l'erreur.
+    delete body.think
+    try {
+      const data = await postChat(body)
+      thinkModes.add(THINK_REFUSED.test(firstErr.message) ? THINK_OFF : 'sans réflexion après une erreur')
+      return data
+    } catch (secondErr) {
+      // Vu le 04/10/2026 (ministral-3:3b) : la réflexion refusée, puis un appel d'outil mal formé refusé par Ollama
+      // (500). La vraie raison est la seconde : c'est elle qui doit figurer dans le fichier.
+      throw THINK_REFUSED.test(firstErr.message) ? secondErr : firstErr
+    }
+  }
+}
+const THINK_OFF = 'désactivée (refusée par le modèle)'
+
+/** Version d'Ollama, écrite avec les résultats : un score appartient à une configuration, pas seulement à un nom. */
+let ollamaVersion = 'inconnue'
+async function readOllamaVersion() {
+  try {
+    const res = await fetch(`${OLLAMA_HOST}/api/version`)
+    if (res.ok) return (await res.json()).version ?? 'inconnue'
+  } catch {
+    // Sans réponse ici, la suite le dira assez tôt.
+  }
+  return 'inconnue'
+}
+
+/** Empreinte exacte et compression du modèle testé (« digest 3233f1432431, Q4_K_M »). */
+async function modelInfo(model) {
+  try {
+    const res = await fetch(`${OLLAMA_HOST}/api/tags`)
+    const entry = ((await res.json()).models ?? []).find((m) => m.name === model || m.name === `${model}:latest`)
+    if (entry) return `digest ${String(entry.digest ?? '?').slice(0, 12)}, ${entry.details?.quantization_level ?? 'compression inconnue'}`
+  } catch {
+    // Pas bloquant : le score reste valable, seule cette ligne d'information manque.
+  }
+  return 'digest inconnu'
+}
+
+/** Une demande jouée, sur une ligne : chaque tour, ses appels d'outils et la réponse finale. */
+function describeRun(run) {
+  return run.turns
+    .map((turn, index) => {
+      const calls = run.calls
+        .filter((c) => c.turn === index)
+        .map((c) => `${c.name} ${JSON.stringify(c.args)} → « ${oneLine(c.result, 120)} »`)
+      const said = turn.error ? `erreur : ${turn.error}` : `« ${oneLine(turn.reply, 300) || 'réponse vide'} »${turn.shortCircuit ? ' (résultat direct de l’outil)' : ''}`
+      return `[${index + 1}] « ${turn.user} » ${calls.length ? `⇒ ${calls.join(' ; ')} ` : ''}⇒ ${said}`
+    })
+    .join(' | ')
+}
+
+/** Le navigateur ne démarre plus : le test de code s'arrête (jamais un faux 0 pour tous les modèles de code). */
+class BrowserDownError extends Error {}
+
+/** Générer une application entière pèse autant qu'une dizaine de questions dans la barre de progression. */
+const CODE_WEIGHT = 10
+
+const BROWSER_PATH = findBrowser()
+
+/**
+ * Étape 232 : ouvre l'application dans un navigateur neuf (une application cassée ne peut pas gêner la suivante)
+ * et joue sa vérification. `null` = elle marche.
+ */
+async function checkInBrowser(testCase, html) {
+  let session
+  try {
+    session = await openBrowser(BROWSER_PATH)
+  } catch (err) {
+    throw new BrowserDownError(`Le navigateur ne démarre plus (${err.message}) : le test s'arrête. Relance-le, il reprendra où il en était.`)
+  }
+  try {
+    return await checkGeneratedApp(session.page, testCase, html)
+  } finally {
+    await session.close()
+  }
+}
+
+/** Une application juste, connue : sert à vérifier que le navigateur marche AVANT de télécharger quoi que ce soit. */
+const PREFLIGHT_APP =
+  '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><div id="n">0</div><button id="p">+1</button>' +
+  '<button id="z">Remettre à zéro</button><script>let n=0;const s=()=>document.getElementById("n").textContent=n;' +
+  'p.onclick=()=>{n++;s()};z.onclick=()=>{n=0;s()}</script></body></html>'
+
+/** Quantile d'une liste de durées (0.5 = médiane, 0.95 = 95e centile), `null` si vide. */
+function quantile(values, q) {
+  if (!values.length) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  return sorted[Math.min(sorted.length - 1, Math.ceil(q * sorted.length) - 1)]
 }
 
 /**
@@ -1227,8 +1145,8 @@ async function chatCode(model, prompt) {
     if (firstErr instanceof OllamaDownError) throw firstErr
     try {
       ;({ wallMs, data } = await chatCodeOnce(model, prompt, false))
-    } catch {
-      throw firstErr
+    } catch (secondErr) {
+      throw THINK_REFUSED.test(firstErr.message) ? secondErr : firstErr
     }
   }
   const evalCount = data.eval_count ?? 0
@@ -1242,6 +1160,14 @@ async function chatCode(model, prompt) {
 
 /** Titre de la section de détail par modèle du fichier de résultats (étape 230), relu à la reprise. */
 const CONVERSATION_DETAIL_HEADING = '## Détail de la conversation, modèle par modèle'
+/**
+ * Étape 232 : tout ce qui s'est passé dans chaque demande complète (appels, arguments, résultats, réponses
+ * entières), une ligne JSON par modèle. Sert à rejuger le fichier si un jugement est corrigé plus tard
+ * (rejudge, benchmark-scenarios.mjs), sans relancer le test.
+ */
+const SCENARIO_RAW_HEADING = '## Données brutes des demandes complètes'
+/** Étape 232 : le HTML entier de chaque application générée, pour la revérifier sans la régénérer. */
+const CODE_RAW_HEADING = '## Données brutes du code'
 
 /** Un texte de réponse sur une seule ligne, coupé à `max` caractères : lisible dans le fichier de résultats. */
 function oneLine(text, max = 240) {
@@ -1253,13 +1179,13 @@ function oneLine(text, max = 240) {
  * Bloc « ### modèle » du fichier de résultats (étape 230) : les questions ratées, avec le nombre de passages
  * ratés et ce que le modèle a fait à la place, puis ses réponses aux questions sans outil.
  */
-function formatConversationDetail(model, perModel, detail) {
-  const lines = [`### ${model} — ${perModel.correct}/${perModel.total}`, '']
+function formatConversationDetail(model, perModel, detail, repeats = CONVERSATION_REPEATS, intro = []) {
+  const lines = [`### ${model} — ${perModel.correct}/${perModel.total}`, '', ...intro]
   const missed = detail.filter((d) => d.missed > 0)
   if (!missed.length) lines.push('Aucune question ratée.')
   for (const d of missed) {
     lines.push(
-      `- RATÉ ${d.missed}/${CONVERSATION_REPEATS} « ${d.prompt} »${d.expectedTool === undefined ? '' : ` (attendu : ${d.expectedTool ?? 'aucun outil'})`} — obtenu : ${d.got.join(' ; ')}`
+      `- RATÉ ${d.missed}/${repeats} « ${d.prompt} »${d.expectedTool === undefined ? '' : ` (attendu : ${d.expectedTool ?? 'aucun outil'})`} — obtenu : ${d.got.join(' ; ')}`
     )
   }
   const answered = detail.filter((d) => d.answers.length)
@@ -1268,7 +1194,7 @@ function formatConversationDetail(model, perModel, detail) {
     lines.push('Toutes les réponses (à vérifier toi-même) :')
     for (const d of answered) {
       lines.push(`- « ${d.prompt} »`)
-      for (const answer of d.answers) lines.push(`  > ${oneLine(answer)}`)
+      for (const answer of d.answers) lines.push(`  > ${oneLine(answer, 1500)}`)
     }
   }
   lines.push('')
@@ -1312,6 +1238,7 @@ async function main() {
       `sur la RAM (RAM_OFFLOAD_MODELS) : ${ramOffloadBudgetGb.toFixed(1)} Go.\n`
   )
 
+  ollamaVersion = await readOllamaVersion()
   let installed
   try {
     installed = await listInstalledModels()
@@ -1354,15 +1281,17 @@ async function main() {
   // vrai score de conversation (sur 6) écrasé par son score vision testé dans le même run. Sans cette
   // séparation, `alreadyDone` sautait aussi À TORT le test de conversation d'un modèle dont seul le test
   // vision avait déjà tourné (et vice versa) : les deux bugs partagent la même cause, corrigés ensemble.
-  const existingRows = { conversation: new Map(), vision: new Map(), code: new Map() }
+  const existingRows = { conversation: new Map(), vision: new Map(), code: new Map(), scenarios: new Map() }
   const previousDetails = new Map()
+  const previousRaw = new Map()
+  const previousCodeRaw = new Map()
   try {
     const previous = readFileSync(RESULTS_PATH, 'utf-8')
     let currentTier = null
     for (const line of previous.split('\n')) {
       if (line.startsWith('## ')) {
         const heading = line.slice(3).trim().toLowerCase()
-        currentTier = heading.startsWith('conversation') ? 'conversation' : heading.startsWith('vision') ? 'vision' : heading.startsWith('code') ? 'code' : null
+        currentTier = tierOfHeading(heading)
         continue
       }
       if (!currentTier || !line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
@@ -1380,9 +1309,15 @@ async function main() {
     // analyse) ne valent rien pour celle-ci — oubliés, jamais recopiés dans le nouveau fichier.
     const version = previous.match(/Version du test de conversation : (\d+)/)?.[1]
     if (Number(version) !== CONVERSATION_TEST_VERSION) existingRows.conversation.clear()
+    // Étape 232 : même règle pour les demandes complètes.
+    const scenarioVersion = previous.match(/Version du test des demandes complètes : (\d+)/)?.[1]
+    if (Number(scenarioVersion) !== SCENARIO_TEST_VERSION) existingRows.scenarios.clear()
+    if (Number(previous.match(/Version du test de vision : (\d+)/)?.[1]) !== VISION_TEST_VERSION) existingRows.vision.clear()
+    if (Number(previous.match(/Version du test de code : (\d+)/)?.[1]) !== CODE_TEST_VERSION) existingRows.code.clear()
     // Étape 230 : le détail par modèle d'un run précédent du MÊME test, gardé pour les modèles qui ne sont pas
-    // retestés ce run-ci (reprise après coupure) — sinon le fichier final perdrait le détail des premiers.
-    else {
+    // retestés ce run-ci (reprise après coupure) — sinon le fichier final perdrait le détail des premiers. Les
+    // lignes d'un autre test viennent d'être oubliées ci-dessus : leur détail ne sera donc pas gardé non plus.
+    {
       const start = previous.indexOf(CONVERSATION_DETAIL_HEADING)
       if (start >= 0) {
         const after = previous.slice(start + CONVERSATION_DETAIL_HEADING.length)
@@ -1391,8 +1326,29 @@ async function main() {
         for (const block of section.split(/\n(?=### )/)) {
           const name = block.match(/^### (.+?) — /)?.[1]
           const visionName = name?.match(/^(.+) \(vision\)$/)?.[1]
-          const kept = visionName ? existingRows.vision.has(visionName) : name && existingRows.conversation.has(name)
+          const scenarioName = name?.match(/^(.+) \(demandes\)$/)?.[1]
+          const codeName = name?.match(/^(.+) \(code\)$/)?.[1]
+          const kept = visionName
+            ? existingRows.vision.has(visionName)
+            : scenarioName
+              ? existingRows.scenarios.has(scenarioName)
+              : codeName
+                ? existingRows.code.has(codeName)
+                : name && existingRows.conversation.has(name)
           if (kept) previousDetails.set(name, `${block.trim()}\n`)
+        }
+      }
+      for (const [heading, tier, target] of [
+        [SCENARIO_RAW_HEADING, 'scenarios', previousRaw],
+        [CODE_RAW_HEADING, 'code', previousCodeRaw]
+      ]) {
+        const start = previous.indexOf(heading)
+        if (start < 0) continue
+        const after = previous.slice(start + heading.length)
+        const end = after.search(/\n## /)
+        for (const line of (end >= 0 ? after.slice(0, end) : after).split('\n')) {
+          const match = line.match(/^- `(.+?)` (\[.*\])$/)
+          if (match && existingRows[tier].has(match[1])) target.set(match[1], match[2])
         }
       }
     }
@@ -1406,7 +1362,7 @@ async function main() {
   // nombre de questions) — une ligne de l'ancien test (x/6) est refaite, jamais reprise telle quelle.
   // Étape 164 : vision et code aussi — une mesure INCOMPLÈTE n'est jamais reprise (qwen2.5-coder:32b à « 2/2 » :
   // une des trois générations avait planté, très probablement sur l'ancien délai de 5 minutes de fetch).
-  const questionsPerTier = { conversation: CONVERSATION_TOTAL, vision: VISION_TOTAL, code: CODE_TEST_CASES.length }
+  const questionsPerTier = { conversation: CONVERSATION_TOTAL, vision: VISION_TOTAL, code: CODE_TOTAL, scenarios: SCENARIO_TOTAL }
   const madeWithCurrentTest = (tier, row) => row.reliability?.endsWith(`/${questionsPerTier[tier]}`)
   // Étape 164 : une ligne sans AUCUNE réponse (latence « — », toutes les questions en erreur) n'est pas un score :
   // elle est refaite. C'est ce qui bloquait ministral-3:3b, granite4.1:8b et gemma4:26b à 0/17 chez Léo, notés
@@ -1421,12 +1377,14 @@ async function main() {
   // distinguer, seulement combien reste à installer au total pour CE run.
   const allInstallable = [
     ...SCOPED_MODELS.filter((m) => !alreadyDone(m, 'conversation')),
+    ...SCOPED_SCENARIO_MODELS.filter((m) => !alreadyDone(m, 'scenarios')),
     ...SCOPED_VISION_CANDIDATES.map((c) => c.model).filter((m) => !alreadyDone(m, 'vision')),
     ...SCOPED_CODE_CANDIDATES.map((c) => c.model).filter((m) => !alreadyDone(m, 'code'))
   ]
   if (RESUME) {
     const resumedCount =
       SCOPED_MODELS.filter((m) => alreadyDone(m, 'conversation')).length +
+      SCOPED_SCENARIO_MODELS.filter((m) => alreadyDone(m, 'scenarios')).length +
       SCOPED_VISION_CANDIDATES.filter((c) => alreadyDone(c.model, 'vision')).length +
       SCOPED_CODE_CANDIDATES.filter((c) => alreadyDone(c.model, 'code')).length
     if (resumedCount) {
@@ -1435,7 +1393,8 @@ async function main() {
       )
     }
   }
-  const missingAll = allInstallable.filter((m) => !installed.includes(m))
+  // Un modèle à la fois en conversation et en demandes complètes ne doit être téléchargé qu'une fois.
+  const missingAll = [...new Set(allInstallable)].filter((m) => !installed.includes(m))
 
   // Repli budgétaire pour chaque modèle manquant : VRAM+RAM combinées (RAM_OFFLOAD_MODELS) ou VRAM/RAM seule
   // sinon, ET l'espace disque libre — deux contraintes INDÉPENDANTES (un modèle peut tenir en RAM une fois
@@ -1479,15 +1438,35 @@ async function main() {
   }
 
   const toRun = SCOPED_MODELS.filter((m) => !alreadyDone(m, 'conversation') && (installed.includes(m) || missing.includes(m)))
+  const scenarioToRun = SCOPED_SCENARIO_MODELS.filter((m) => !alreadyDone(m, 'scenarios') && (installed.includes(m) || missing.includes(m)))
+  // Les deux épreuves de conversation se jouent à la suite pour un même modèle, chargé une seule fois.
+  const conversationPhase = CONVERSATION_SCOPE.filter((m) => toRun.includes(m) || scenarioToRun.includes(m))
   const visionToRun = SCOPED_VISION_CANDIDATES.map((c) => c.model).filter(
     (m) => !alreadyDone(m, 'vision') && (installed.includes(m) || missing.includes(m))
   )
   const codeToRun = SCOPED_CODE_CANDIDATES.map((c) => c.model).filter(
     (m) => !alreadyDone(m, 'code') && (installed.includes(m) || missing.includes(m))
   )
-  if (!toRun.length && !visionToRun.length && !codeToRun.length) {
+  if (!conversationPhase.length && !visionToRun.length && !codeToRun.length) {
     console.log('Aucun des modèles à tester n\'a pu être installé.')
     return
+  }
+
+  // Étape 232 : le test de code a besoin d'un navigateur (Edge, installé avec Windows). Vérifié MAINTENANT, sur une
+  // application connue, avant le moindre téléchargement : un souci de navigateur se voit en quelques secondes,
+  // jamais après des heures de test.
+  if (codeToRun.length) {
+    const reason = !BROWSER_PATH
+      ? 'Microsoft Edge (ou Google Chrome) est introuvable'
+      : await checkInBrowser(CODE_TEST_CASES[0], PREFLIGHT_APP).then(
+          (r) => (r ? `une application de contrôle n'a pas passé la vérification (${r})` : null),
+          (err) => err.message
+        )
+    if (reason) {
+      console.log(`\nTest de code impossible sur ce PC : ${reason}. Rien n'a été téléchargé.`)
+      process.exit(1)
+    }
+    console.log(`Navigateur pour le test de code : ${BROWSER_PATH} — vérifié sur une application de contrôle.\n`)
   }
 
   // Poids total de TOUT le travail de cette analyse (Go à télécharger + poids de test, même unité que
@@ -1500,8 +1479,9 @@ async function main() {
   const totalPullWeight = missing.reduce((sum, m) => sum + modelWeightGb(m), 0)
   const totalTestWeight =
     toRun.reduce((sum, m) => sum + testWeightOf(m) * CONVERSATION_TOTAL, 0) +
+    scenarioToRun.reduce((sum, m) => sum + testWeightOf(m) * SCENARIO_TOTAL * SCENARIO_WEIGHT, 0) +
     visionToRun.reduce((sum, m) => sum + testWeightOf(m) * VISION_TOTAL, 0) +
-    codeToRun.reduce((sum, m) => sum + testWeightOf(m) * CODE_TEST_CASES.length, 0)
+    codeToRun.reduce((sum, m) => sum + testWeightOf(m) * CODE_TEST_CASES.length * CODE_WEIGHT, 0)
   const totalWeight = totalPullWeight + totalTestWeight || 1
   let weightDone = 0
   const emitProgress = () => console.log(`##PROGRESS## ${weightDone.toFixed(2)} ${totalWeight.toFixed(2)}`)
@@ -1545,7 +1525,7 @@ async function main() {
   const initiallyInstalledSet = new Set(installed.filter((m) => !downloadedByTest.has(m)))
   // Un modèle téléchargé par un run précédent, dont tous les tests sont déjà faits (repris) : supprimé tout de suite.
   for (const model of [...downloadedByTest]) {
-    const stillToTest = toRun.includes(model) || visionToRun.includes(model) || codeToRun.includes(model)
+    const stillToTest = conversationPhase.includes(model) || visionToRun.includes(model) || codeToRun.includes(model)
     if (stillToTest) continue
     if (installed.includes(model)) {
       try {
@@ -1655,9 +1635,14 @@ async function main() {
   // Détail par modèle (étape 230) : d'abord celui des modèles repris d'un run précédent, remplacé au fur et à
   // mesure par celui des modèles testés ce run-ci.
   const conversationDetails = new Map(previousDetails)
+  const scenarioRaw = new Map(previousRaw)
+  const codeRaw = new Map(previousCodeRaw)
   let testsDone = 0
   const testsTotal =
-    toRun.length * CONVERSATION_TOTAL + visionToRun.length * VISION_TOTAL + codeToRun.length * CODE_TEST_CASES.length
+    toRun.length * CONVERSATION_TOTAL +
+    scenarioToRun.length * SCENARIO_TOTAL +
+    visionToRun.length * VISION_TOTAL +
+    codeToRun.length * CODE_TOTAL
   // Remonté avant les boucles de test (pas défini seulement à l'écriture des résultats comme avant) :
   // utilisée pendant le run, pas seulement à la toute fin.
   const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null)
@@ -1677,33 +1662,56 @@ async function main() {
     // Conversation ET Vision) écrivait sinon DEUX lignes sous le même nom dans un tableau plat, la seconde
     // écrasant silencieusement la première au moment de la relecture (parseLocalBenchmark, hardwareScan.ts) —
     // repéré directement sur une capture d'écran de Léo montrant le même score "2/3" dans les deux paliers.
-    const byRole = { conversation: [], vision: [], code: [] }
+    const byRole = { conversation: [], vision: [], code: [], scenarios: [] }
     for (const r of results) byRole[r.role].push(r)
 
     const lines = []
     lines.push(`# Résultats du benchmark Jaris — ${new Date().toLocaleString('fr-FR')}`)
     lines.push('')
     lines.push(`Version du test de conversation : ${CONVERSATION_TEST_VERSION}`)
+    lines.push(`Version du test des demandes complètes : ${SCENARIO_TEST_VERSION}`)
+    lines.push(`Version du test de vision : ${VISION_TEST_VERSION}`)
+    lines.push(`Version du test de code : ${CODE_TEST_VERSION}`)
+    lines.push(`Ollama : ${ollamaVersion}`)
     lines.push('')
     lines.push(
-      "Trois épreuves distinctes, une section par palier : appel d'outils (Conversation), compréhension " +
-        "d'image (Vision), génération de HTML valide (Code) — jamais la même mesure sous le même nom de " +
-        'modèle, même pour un modèle candidat à plusieurs paliers à la fois (ex: ministral-3:8b).'
+      "Quatre épreuves distinctes, une section chacune : premier appel d'outil (Conversation), compréhension " +
+        "d'image (Vision), génération de HTML valide (Code) et demandes jouées de bout en bout (Demandes " +
+        'complètes) — jamais la même mesure sous le même nom de modèle.'
     )
     for (const [role, heading] of [
       ['conversation', 'Conversation'],
       ['vision', 'Vision'],
-      ['code', 'Code']
+      ['code', 'Code'],
+      ['scenarios', 'Demandes complètes']
     ]) {
       lines.push('')
       lines.push(`## ${heading}`)
       lines.push('')
-      lines.push('| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |')
+      if (role === 'scenarios') {
+        // Étape 232 : durée d'une demande ENTIÈRE (tous ses appels), médiane et 95e centile — la moyenne
+        // cacherait les demandes très lentes, celles qui donnent l'impression que Jaris est bloqué.
+        lines.push(
+          `${SCENARIOS.length} demandes de bout en bout, jouées ${SCENARIO_REPEATS} fois (graines différentes), outils simulés (benchmark-scenarios.mjs).`
+        )
+        lines.push('')
+        lines.push('| Modèle | Durée médiane | Durée 95 % | Réussite |')
+      } else {
+        lines.push('| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |')
+      }
       lines.push('|---|---|---|---|')
       const testedThisRun = new Set(byRole[role].map((r) => r.model))
       for (const r of byRole[role]) {
         const acc = r.total ? `${r.correct}/${r.total}` : '—'
-        lines.push(`| ${r.model} | ${fmt(avg(r.latencies), 0)} ms | ${fmt(avg(r.speeds))} tok/s | ${acc} |`)
+        if (role === 'scenarios') {
+          const seconds = (q) => {
+            const ms = quantile(r.latencies, q)
+            return ms === null ? '—' : `${fmt(ms / 1000)} s`
+          }
+          lines.push(`| ${r.model} | ${seconds(0.5)} | ${seconds(0.95)} | ${acc} |`)
+        } else {
+          lines.push(`| ${r.model} | ${fmt(avg(r.latencies), 0)} ms | ${fmt(avg(r.speeds))} tok/s | ${acc} |`)
+        }
       }
       for (const [model, row] of existingRows[role]) {
         if (testedThisRun.has(model)) continue
@@ -1718,6 +1726,17 @@ async function main() {
     lines.push(CONVERSATION_DETAIL_HEADING)
     lines.push('')
     for (const block of conversationDetails.values()) lines.push(block)
+
+    for (const [heading, raws] of [
+      [SCENARIO_RAW_HEADING, scenarioRaw],
+      [CODE_RAW_HEADING, codeRaw]
+    ]) {
+      if (!raws.size) continue
+      lines.push(heading)
+      lines.push('')
+      for (const [model, json] of raws) lines.push(`- \`${model}\` ${json}`)
+      lines.push('')
+    }
 
     if (errors.length) {
       lines.push('## Erreurs')
@@ -1741,14 +1760,8 @@ async function main() {
     return lines.join('\n')
   }
 
-  for (const model of toRun) {
-    const ready = await ensureReady(model)
-    if (!ready) {
-      console.log(`##MODEL_SKIPPED## ${model} ${skipReasons.get(model) ?? ''}`.trimEnd())
-      continue
-    }
-    console.log(`\n=== ${model} ===`)
-    console.log(`##MODEL_TESTING## ${model}`)
+  /** Les 26 questions × 3 (benchmark-cases.mjs) : le premier appel d'outil, question par question. */
+  async function runConversationCases(model) {
     const perModel = { model, role: 'conversation', latencies: [], speeds: [], correct: 0, total: 0 }
 
     // Étape 230 : détail par question (combien de passages ratés, et ce que le modèle a fait à la place) —
@@ -1798,13 +1811,81 @@ async function main() {
     // Lu par le tableau de suivi en direct (OptionsMenu.tsx) : ce modèle a fini tous ses tests, avec ce score.
     console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
     persistResults()
+  }
 
+  /**
+   * Étape 232 : les demandes complètes (benchmark-scenarios.mjs), jouées de bout en bout dans une copie de la
+   * boucle de converse(). Chaque passage a sa graine, et la trace complète (appels, résultats, réponses) est
+   * recopiée dans le fichier pour pouvoir juger soi-même — et corriger un jugement, dans les deux sens.
+   */
+  async function runScenarioPhase(model) {
+    const perModel = { model, role: 'scenarios', latencies: [], speeds: [], correct: 0, total: 0 }
+    const thinkModes = new Set()
+    const detail = SCENARIOS.map((sc) => ({ prompt: `${sc.id} — ${sc.turns.join(' → ')}`, expectedTool: undefined, missed: 0, got: [], answers: [] }))
+    const raw = []
+    for (let pass = 1; pass <= SCENARIO_REPEATS; pass++) for (const [index, scenario] of SCENARIOS.entries()) {
+      const seed = scenarioSeed(pass, index)
+      process.stdout.write(`  [${pass}/${SCENARIO_REPEATS}] demande « ${scenario.id} » ... `)
+      perModel.total++
+      try {
+        const run = await runScenario(scenario, (messages) => chatScenario(model, messages, seed, thinkModes))
+        raw.push({ id: scenario.id, pass, seed, ok: run.ok, reason: run.reason, ms: Math.round(run.wallMs), turns: run.turns, calls: run.calls })
+        perModel.latencies.push(run.wallMs)
+        if (run.ok) perModel.correct++
+        else {
+          detail[index].missed++
+          detail[index].got.push(run.reason)
+        }
+        detail[index].answers.push(`${run.ok ? 'compté juste' : `compté faux (${run.reason})`} — graine ${seed} — ${describeRun(run)}`)
+        console.log(`${run.ok ? 'OK' : `RATÉ (${run.reason})`} — ${fmt(run.wallMs / 1000)} s`)
+        // Une demande ratée montre aussi ce qui s'est passé, sans attendre le fichier de fin de modèle.
+        if (!run.ok) console.log(`      ${describeRun(run)}`)
+      } catch (err) {
+        if (err instanceof OllamaDownError) throw err
+        console.log(`ERREUR (${err.message})`)
+        errors.push({ model, prompt: scenario.turns[0], message: err.message })
+        detail[index].missed++
+        detail[index].got.push(`erreur : ${err.message}`)
+        detail[index].answers.push(`compté faux : erreur : ${err.message}`)
+        raw.push({ id: scenario.id, pass, seed, ok: false, reason: `erreur : ${err.message}`, ms: null, turns: [], calls: [] })
+      }
+      testsDone++
+      console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
+      weightDone += testWeightOf(model) * SCENARIO_WEIGHT
+      emitProgress()
+    }
+    results.push(perModel)
+    const info = await modelInfo(model)
+    const intro = [
+      `Configuration : ${info}, réflexion ${[...thinkModes].join(' / ') || '—'}, contexte ${CONVERSATION_NUM_CTX}, ` +
+        `graines passage × 1000 + numéro de la demande, Ollama ${ollamaVersion}.`,
+      '',
+      // Une ligne compacte, demande par demande : pour comparer deux modèles sur les MÊMES demandes.
+      `Par demande : ${SCENARIOS.map((sc, i) => `${sc.id} ${SCENARIO_REPEATS - detail[i].missed}/${SCENARIO_REPEATS}`).join(', ')}.`,
+      ''
+    ]
+    scenarioRaw.set(model, JSON.stringify(raw))
+    conversationDetails.set(`${model} (demandes)`, formatConversationDetail(`${model} (demandes)`, perModel, detail, SCENARIO_REPEATS, intro))
+    console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
+    persistResults()
+  }
+
+  for (const model of conversationPhase) {
+    const ready = await ensureReady(model)
+    if (!ready) {
+      console.log(`##MODEL_SKIPPED## ${model} ${skipReasons.get(model) ?? ''}`.trimEnd())
+      continue
+    }
+    console.log(`\n=== ${model} ===`)
+    console.log(`##MODEL_TESTING## ${model}`)
+    if (toRun.includes(model)) await runConversationCases(model)
+    if (scenarioToRun.includes(model)) await runScenarioPhase(model)
     await releaseAfterLastTest(model, 'conversation')
   }
 
   // Modèles Vision : les images de VISION_TEST_CASES sont générées une seule fois ici (pas à chaque appel
   // modèle), le PNG encodé ne dépend que du test, pas du modèle qui le reçoit.
-  const visionImages = VISION_TEST_CASES.map((c) => c.image())
+  const visionImages = VISION_TEST_CASES.map((c) => loadVisionImage(c))
 
   for (const model of visionToRun) {
     const readyVision = await ensureReady(model)
@@ -1819,14 +1900,14 @@ async function main() {
     // Étape 230 : chaque question posée VISION_REPEATS fois, avec le détail des ratés comme en conversation.
     const visionDetail = VISION_TEST_CASES.map((c) => ({ prompt: c.prompt, expectedTool: undefined, missed: 0, got: [], answers: [] }))
     for (let pass = 1; pass <= VISION_REPEATS; pass++) for (let i = 0; i < VISION_TEST_CASES.length; i++) {
-      const { prompt, check } = VISION_TEST_CASES[i]
+      const { prompt } = VISION_TEST_CASES[i]
       process.stdout.write(`  [${pass}/${VISION_REPEATS}] "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}" ... `)
       try {
         const r = await chatVision(model, prompt, visionImages[i])
         perModel.latencies.push(r.wallMs)
         if (r.tokPerSec !== null) perModel.speeds.push(r.tokPerSec)
         perModel.total++
-        const ok = check(r.content.toLowerCase())
+        const ok = isCorrectVisionAnswer(VISION_TEST_CASES[i], r.content)
         // Étape 230 (Léo : « on sait ce qu'il a répondu, on peut corriger les scores ») : TOUTES les réponses de
         // vision sont recopiées, justes comprises — la vérification par mots peut se tromper dans les deux sens.
         visionDetail[i].answers.push(`${ok ? 'compté juste' : 'compté faux'} : ${r.content || 'réponse vide'}`)
@@ -1854,15 +1935,15 @@ async function main() {
     }
 
     results.push(perModel)
-    conversationDetails.set(`${model} (vision)`, formatConversationDetail(`${model} (vision)`, perModel, visionDetail))
+    conversationDetails.set(`${model} (vision)`, formatConversationDetail(`${model} (vision)`, perModel, visionDetail, VISION_REPEATS))
     console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
     persistResults()
 
     await releaseAfterLastTest(model, 'vision')
   }
 
-  // Modèles Code : une seule passe de génération par cas (pas de critique/réparation, voir la note sur
-  // CODE_TEST_CASES) — "correct" = extraction HTML réussie ET validateGeneratedHtml ne trouve aucun problème.
+  // Modèles Code : une seule passe de génération par cas (pas de critique/réparation) — « juste » = l'application
+  // générée, ouverte dans le navigateur avec les règles de l'aperçu de Jaris, fait vraiment ce qui est demandé.
   for (const model of codeToRun) {
     const readyCode = await ensureReady(model)
     if (!readyCode) {
@@ -1872,35 +1953,52 @@ async function main() {
     console.log(`\n=== ${model} (code) ===`)
     console.log(`##MODEL_TESTING## ${model}`)
     const perModel = { model, role: 'code', latencies: [], speeds: [], correct: 0, total: 0 }
+    const codeDetail = CODE_TEST_CASES.map((c) => ({ prompt: `${c.id} — ${c.prompt}`, expectedTool: undefined, missed: 0, got: [], answers: [] }))
+    const raw = []
 
-    for (const prompt of CODE_TEST_CASES) {
-      process.stdout.write(`  "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}" ... `)
+    for (const [index, testCase] of CODE_TEST_CASES.entries()) {
+      const { prompt } = testCase
+      process.stdout.write(`  « ${testCase.id} » ... `)
+      perModel.total++
       try {
         const r = await chatCode(model, prompt)
         perModel.latencies.push(r.wallMs)
         if (r.tokPerSec !== null) perModel.speeds.push(r.tokPerSec)
-        perModel.total++
 
         const html = extractHtml(r.content)
-        const issues = html ? validateGeneratedHtml(html) : ['pas de code HTML exploitable dans la réponse']
-        const ok = issues.length === 0
+        const issues = html ? validateGeneratedHtml(html) : []
+        const reason = html ? await checkInBrowser(testCase, html) : 'pas de code HTML exploitable dans la réponse'
+        const ok = reason === null
         if (ok) perModel.correct++
-        console.log(
-          `${ok ? 'OK' : 'RATÉ'} (${issues.length} problème(s)${issues.length ? ' : ' + issues[0] : ''}) — ${fmt(r.wallMs, 0)}ms, ${fmt(r.tokPerSec)} tok/s`
+        else {
+          codeDetail[index].missed++
+          codeDetail[index].got.push(reason)
+        }
+        codeDetail[index].answers.push(
+          `${ok ? 'compté juste' : `compté faux (${reason})`}${issues.length ? ` — relecture du fichier : ${issues.join(' ; ')}` : ''}`
         )
+        // Le HTML entier : pour revérifier l'application plus tard (vérification corrigée) sans la régénérer.
+        raw.push({ id: testCase.id, ok, reason, html: html ?? r.content })
+        console.log(`${ok ? 'OK' : `RATÉ (${reason})`} — ${fmt(r.wallMs / 1000)} s, ${fmt(r.tokPerSec)} tok/s`)
       } catch (err) {
-        // Ollama injoignable : l'analyse s'arrête AVANT d'enregistrer ce modèle (jamais un faux 0/17).
-        if (err instanceof OllamaDownError) throw err
+        // Ollama injoignable : l'analyse s'arrête AVANT d'enregistrer ce modèle (jamais un faux score).
+        if (err instanceof OllamaDownError || err instanceof BrowserDownError) throw err
         console.log(`ERREUR (${err.message})`)
         errors.push({ model, prompt, message: err.message })
+        codeDetail[index].missed++
+        codeDetail[index].got.push(`erreur : ${err.message}`)
+        codeDetail[index].answers.push(`compté faux : erreur : ${err.message}`)
+        raw.push({ id: testCase.id, ok: false, reason: `erreur : ${err.message}`, html: null })
       }
       testsDone++
       console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
-      weightDone += testWeightOf(model)
+      weightDone += testWeightOf(model) * CODE_WEIGHT
       emitProgress()
     }
 
     results.push(perModel)
+    conversationDetails.set(`${model} (code)`, formatConversationDetail(`${model} (code)`, perModel, codeDetail, 1))
+    codeRaw.set(model, JSON.stringify(raw))
     console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
     persistResults()
     await releaseAfterLastTest(model, 'code')
@@ -1921,6 +2019,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.log(`\n${err instanceof OllamaDownError ? err.message : `Erreur : ${err.message}`}`)
+  console.log(`\n${err instanceof OllamaDownError || err instanceof BrowserDownError ? err.message : `Erreur : ${err.message}`}`)
   process.exit(1)
 })

@@ -109,3 +109,13 @@ qwen3-coder-next (3/3) retiré des candidats le 02/10/2026 : 9,2 chez Artificial
 | devstral-small-2:24b | 3/3 |
 | qwen2.5-coder:14b | 3/3 |
 | qwen2.5-coder:7b | 3/3 |
+
+## Demandes complètes — de bout en bout
+
+Étape 232 : 24 demandes jouées 2 fois (graines différentes), soit 48 par modèle, dans une copie de la boucle de
+Jaris avec des outils simulés (scripts/benchmark-scenarios.mjs) : actions enchaînées, résultat d'un outil à
+reprendre, plusieurs phrases, information manquante, appels à éviter, phrases dictées, longue conversation. Un
+appel en trop qui agit sur le PC fait rater la demande. Pas encore mesuré : à remplir avec le fichier de Léo.
+
+| Modèle | Réussite |
+|---|---|

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -21,6 +21,9 @@ import {
   isRealReply
 } from './benchmark-cases.mjs'
 import { systemPromptModule } from './load-system-prompt.mjs'
+import { findBrowser } from './benchmark-browser.mjs'
+import { CODE_TOTAL } from './benchmark-code.mjs'
+import { VISION_TOTAL } from './benchmark-vision.mjs'
 
 /**
  * Étape 162, Léo : « est-ce que les tests d'outils sont bien, ou on en rajoute pour faire un bon score fiable,
@@ -193,11 +196,19 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({ server, requests, pulled, deleted, host: `http://127.0.0.1:${server.address().port}` })))
 }
 
+/**
+ * Étape 232 : le test de code ouvre un vrai navigateur. Ici le Chromium de l'environnement ; sur la CI Windows,
+ * le vrai Edge installé avec Windows (le même que chez Léo) — trouvé par findBrowser, comme dans Jaris.
+ */
+const BROWSER = process.env.JARIS_BROWSER_PATH || (existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : findBrowser())
+
 function runScript(env) {
   return new Promise((resolve) => {
     const proc = spawn(process.execPath, [new URL('./benchmark-models.mjs', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')], {
       // Attente d'Ollama raccourcie pour les tests (3 minutes en vrai).
-      env: { ...process.env, JARIS_ANALYSIS_SCOPE: 'flash', JARIS_OLLAMA_WAIT_MS: '400', JARIS_OLLAMA_POLL_MS: '50', ...env }
+      // Étape 232 : ces tests portent sur les 78 questions ; les demandes complètes ont les leurs
+      // (test-benchmark-scenarios.mjs), qui retirent ce réglage.
+      env: { ...process.env, JARIS_ANALYSIS_SCOPE: 'flash', JARIS_OLLAMA_WAIT_MS: '400', JARIS_OLLAMA_POLL_MS: '50', JARIS_SKIP_SCENARIOS: '1', JARIS_BROWSER_PATH: BROWSER ?? '', ...env }
     })
     let out = ''
     proc.stdout.on('data', (c) => (out += c))
@@ -528,10 +539,11 @@ test('reprise : une ligne sans AUCUNE réponse (0/17, latence « — ») est ref
 test('aucune question n’est posée avec fetch (qui abandonne au bout de 5 minutes sans réponse)', () => {
   const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8')
   assert.ok(!/fetch\(`\$\{OLLAMA_HOST\}\/api\/chat`/.test(script), 'les questions doivent passer par postChat (http.request, sans délai)')
-  assert.equal((script.match(/await postChat\(/g) ?? []).length, 3, 'conversation, vision et code passent tous par postChat')
+  // Étape 232 : + les demandes complètes (chatScenario : avec réflexion, puis sans si le modèle la refuse).
+  assert.equal((script.match(/await postChat\(/g) ?? []).length, 5, 'conversation, vision, code et demandes complètes passent tous par postChat')
 })
 
-test('reprise : une mesure de code INCOMPLÈTE (2/2 au lieu de 3/3) est refaite, une complète est gardée', async () => {
+test('reprise : une mesure de code INCOMPLÈTE (3/4, une génération perdue) est refaite, une complète (4/5) est gardée', { skip: BROWSER ? false : 'aucun navigateur ici (le test de code en a besoin)' }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
   const fake = await startFakeOllama({ installed: ['qwen2.5-coder:32b', 'qwen2.5-coder:7b'], answer: () => null })
   try {
@@ -541,13 +553,14 @@ test('reprise : une mesure de code INCOMPLÈTE (2/2 au lieu de 3/3) est refaite,
       resultsPath,
       [
         `Version du test de conversation : ${CONVERSATION_TEST_VERSION}`,
+        'Version du test de code : 2',
         '',
         '## Code',
         '',
         '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
         '|---|---|---|---|',
-        '| qwen2.5-coder:32b | 271491 ms | 3.1 tok/s | 2/2 |',
-        '| qwen2.5-coder:7b | 20745 ms | 50.0 tok/s | 3/3 |'
+        '| qwen2.5-coder:32b | 271491 ms | 3.1 tok/s | 3/4 |',
+        '| qwen2.5-coder:7b | 20745 ms | 50.0 tok/s | 4/5 |'
       ].join('\n')
     )
     const { code, out } = await runScript({
@@ -644,6 +657,7 @@ test('reprise : le détail par question des modèles déjà testés est gardé d
       resultsPath,
       [
         `Version du test de conversation : ${CONVERSATION_TEST_VERSION}`,
+        'Version du test de vision : 2',
         '',
         '## Conversation',
         '',
@@ -655,7 +669,7 @@ test('reprise : le détail par question des modèles déjà testés est gardé d
         '',
         '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
         '|---|---|---|---|',
-        '| qwen3.5:4b | 900 ms | 85.4 tok/s | 17/18 |',
+        '| qwen3.5:4b | 900 ms | 85.4 tok/s | 19/20 |',
         '',
         '## Détail de la conversation, modèle par modèle',
         '',
@@ -663,9 +677,9 @@ test('reprise : le détail par question des modèles déjà testés est gardé d
         '',
         '- RATÉ 1/3 « Monte le son. » (attendu : media_control) — obtenu : media_control {"action":"play_pause"}',
         '',
-        '### qwen3.5:4b (vision) — 17/18',
+        '### qwen3.5:4b (vision) — 19/20',
         '',
-        '- RATÉ 1/3 « Quel code est affiché ? » — obtenu : « 4321 »',
+        '- RATÉ 1/2 « Quelle heure affiche l’horloge ? » — obtenu : « 14 h 47 »',
         ''
       ].join('\n')
     )
@@ -675,8 +689,8 @@ test('reprise : le détail par question des modèles déjà testés est gardé d
     const results = readFileSync(resultsPath, 'utf8')
     assert.match(results, new RegExp(`### ministral-3:3b — ${CONVERSATION_TOTAL - 1}/${CONVERSATION_TOTAL}\\n\\n- RATÉ 1/3 « Monte le son\\. »`), 'le détail du modèle repris doit rester')
     assert.match(results, new RegExp(`### qwen3:1\\.7b — ${CONVERSATION_TOTAL}/${CONVERSATION_TOTAL}`))
-    // Le détail de vision d'un modèle repris reste lui aussi (la ligne vision est sur 18, le test actuel).
-    assert.match(results, /### qwen3\.5:4b \(vision\) — 17\/18\n\n- RATÉ 1\/3 « Quel code est affiché \? »/)
+    // Le détail de vision d'un modèle repris reste lui aussi (la ligne vision est sur 20, le test actuel).
+    assert.match(results, /### qwen3\.5:4b \(vision\) — 19\/20\n\n- RATÉ 1\/2 « Quelle heure affiche l’horloge \? »/)
     assert.equal((results.match(/### ministral-3:3b/g) ?? []).length, 1)
   } finally {
     fake.server.close()
@@ -761,18 +775,16 @@ test('fermer Jaris arrête le test en cours, et un second lancement est refusé 
   assert.match(runner, /runningTest\?\.kill\(\)/)
 })
 
-test('vision : mêmes consignes que look_at_screen (vision.ts), chaque question 3 fois, du texte à lire', () => {
+test('vision : mêmes consignes que look_at_screen (vision.ts), et Jaris reconnaît le total du test actuel', () => {
   // Fins de ligne normalisées : la CI Windows récupère les fichiers en CRLF (piège déjà noté dans CLAUDE.md).
   const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   const vision = readFileSync(new URL('../electron/services/vision.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   const prompt = (src) => src.match(/const VISION_SYSTEM_PROMPT =\s*([\s\S]*?)\n\n/)?.[1].replace(/\s+/g, ' ')
   assert.ok(prompt(vision))
   assert.equal(prompt(script), prompt(vision), 'copie des consignes de vision périmée')
-  assert.match(script, /const VISION_REPEATS = 3/)
   const hardwareScan = readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8')
-  const cases = (script.match(/const VISION_TEST_CASES = \[[\s\S]*?\n\]\n/)?.[0].match(/prompt: /g) ?? []).length
-  assert.equal(Number(hardwareScan.match(/export const VISION_TEST_TOTAL = (\d+)/)?.[1]), cases * 3)
-  for (const text of ['FICHIER INTROUVABLE', 'VALIDER', 'CODE : 4821']) assert.ok(script.includes(`'${text}'`), text)
+  assert.equal(Number(hardwareScan.match(/export const VISION_TEST_TOTAL = (\d+)/)?.[1]), VISION_TOTAL)
+  assert.equal(Number(hardwareScan.match(/export const CODE_TEST_TOTAL = (\d+)/)?.[1]), CODE_TOTAL)
 })
 
 test('corriger une note : seul remember avec replace et la nouvelle valeur compte juste', () => {
@@ -803,25 +815,20 @@ test('notation corrigée : relire la note avant de la corriger, noter un plan, a
   assert.equal(isRealReply('Avec plaisir !'), true)
 })
 
-test('vision : le code 4821 est reconnu en chiffres comme en lettres', () => {
-  const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
-  const body = script.match(/textPixel\('CODE : 4821'[\s\S]*?check: (\(answer\) => .*)\n/)?.[1]
-  assert.ok(body)
-  const check = vm.runInNewContext(body)
-  for (const a of ['Le code affiché est 4821.', 'Quatre huit deux un', '4 8 2 1', 'CODE : 4821']) assert.equal(check(a.toLowerCase()), true, a)
-  for (const a of ['4321', 'Le code est 4812.']) assert.equal(check(a.toLowerCase()), false, a)
-})
-
-test('vision de bout en bout : 6 images × 3, les consignes de Jaris, et le détail des réponses fausses', async () => {
+test('vision de bout en bout : 10 captures × 2, les consignes de Jaris, et le détail des réponses fausses', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
   const VISION_ANSWERS = {
-    'Quelle est la couleur': 'Bleu',
-    'Le côté GAUCHE': 'Rouge',
-    'Combien de carrés': '3',
-    "Quel message d'erreur": 'Le message dit : « Fichier introuvable ».',
-    'Quel mot est écrit': 'VALIDER',
-    // Un modèle qui lit mal un chiffre : faux à chaque passage.
-    'Quel code est affiché': '4321'
+    "Combien d'œufs": '6',
+    "Quel fichier n'a pas": 'Rapport annuel.docx',
+    'Quelle température fait-il': '14 °C',
+    'Quelle application est au premier plan': 'Spotify',
+    'Quel est le prix du clavier': '49,90 €',
+    'Combien de mails non lus': '4',
+    'Quel est le texte du bouton': 'Annuler',
+    // Un modèle qui lit mal l'horloge : faux à chaque passage.
+    "Quelle heure affiche l'horloge": '14 h 47',
+    'Quel est le titre de la première vidéo': 'Apprendre la guitare en 10 minutes – Leçon 1',
+    "Qui vient d'envoyer": 'Julie Martin'
   }
   const fake = await startFakeOllama({
     installed: ['qwen3-vl:2b'],
@@ -837,19 +844,21 @@ test('vision de bout en bout : 6 images × 3, les consignes de Jaris, et le dét
       JARIS_ONLY_MODELS: 'qwen3-vl:2b'
     })
     assert.equal(code, 0, out)
-    assert.equal(fake.requests.length, 18)
+    assert.equal(fake.requests.length, VISION_TOTAL)
     for (const r of fake.requests) {
       assert.equal(r.messages[0].role, 'system')
       assert.ok(r.messages[0].content.startsWith('Tu es Jaris, un assistant vocal qui décrit ce qui est affiché'))
       assert.equal(r.messages[1].images.length, 1)
+      // Une vraie capture PNG (signature PNG en base64), pas une image vide.
+      assert.ok(r.messages[1].images[0].startsWith('iVBORw0KGgo') && r.messages[1].images[0].length > 50000)
       assert.equal(r.think, false)
     }
     const results = readFileSync(resultsPath, 'utf8')
-    assert.match(results, /\| qwen3-vl:2b \|[^\n]*\| 15\/18 \|/)
-    assert.match(results, /### qwen3-vl:2b \(vision\) — 15\/18\n\n- RATÉ 3\/3 « Quel code est affiché \? Réponds uniquement avec le nombre\. » — obtenu : « 4321 »/)
+    assert.match(results, /Version du test de vision : 2/)
+    assert.match(results, /\| qwen3-vl:2b \|[^\n]*\| 18\/20 \|/)
+    assert.match(results, /### qwen3-vl:2b \(vision\) — 18\/20\n\n- RATÉ 2\/2 « Quelle heure affiche l'horloge[^»]*» — obtenu : « 14 h 47 »/)
     // Toutes les réponses sont recopiées, justes comprises, pour pouvoir corriger un score à la main.
-    assert.match(results, /Toutes les réponses \(à vérifier toi-même\) :\n- « Quelle est la couleur dominante[^»]*»\n  > compté juste : Bleu\n  > compté juste : Bleu\n  > compté juste : Bleu/)
-    assert.match(results, /  > compté faux : 4321/)
+    assert.match(results, /- « Combien d'œufs[^»]*»\n  > compté juste : 6\n  > compté juste : 6/)
   } finally {
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })

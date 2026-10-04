@@ -17,7 +17,7 @@ test('sert seulement le HTML enregistré avec une CSP isolée',async()=>{
  const res=request(api.createGeneratedAppPreview(html))
  assert.equal(res.status,200);assert.equal(await res.text(),html)
  const csp=res.headers.get('Content-Security-Policy')
- assert.match(csp,/script-src 'unsafe-inline'/);assert.match(csp,/sandbox allow-scripts/)
+ assert.match(csp,/script-src 'unsafe-inline'/);assert.match(csp,/sandbox allow-scripts allow-forms$/);assert.match(csp,/form-action 'none'/)
  assert.ok(!csp.includes('allow-same-origin'));assert.match(csp,/connect-src 'none'/)
  assert.equal(schemes[0].privileges.bypassCSP,undefined)
 })

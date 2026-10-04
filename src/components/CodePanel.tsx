@@ -261,7 +261,10 @@ export default function CodePanel(): JSX.Element {
               // sans accès à Jaris ni aux fichiers locaux. Conséquence assumée : localStorage y est bloqué
               // (d'où le try/catch imposé dans les consignes de génération), mais il refonctionne dès que le
               // fichier est ouvert normalement dans un navigateur depuis le dossier du projet.
-              <iframe className="code-panel__preview" title="Aperçu de l'application" sandbox="allow-scripts" src={appResult.previewUrl} />
+              // allow-forms (étape 232) : sans lui, un formulaire généré ne réagit jamais au clic (vérifié dans un
+              // vrai navigateur : l'évènement « submit » n'est même pas déclenché). L'envoi réel reste bloqué par
+              // la règle form-action 'none' de l'aperçu (generatedAppPreview.ts).
+              <iframe className="code-panel__preview" title="Aperçu de l'application" sandbox="allow-scripts allow-forms" src={appResult.previewUrl} />
             ) : (
               <pre className="code-panel__code">{appResult.html}</pre>
             )}

@@ -197,11 +197,17 @@ export async function chatWithOllama(
       // Sans `think`, aucun fragment de raisonnement n'arrivera : onThinking est quand même
       // transmis, il ne sera simplement jamais appelé.
       return await requestChat(baseBody, model, signal, onToken, onThinking)
-    } catch {
-      throw firstErr // le premier message d'erreur est généralement le plus informatif
+    } catch (secondErr) {
+      // Le premier message d'erreur est généralement le plus informatif — sauf quand il dit seulement que le
+      // modèle refuse la réflexion (ministral, granite...) : la vraie cause est alors la seconde. Vu le
+      // 04/10/2026 : un appel d'outil mal formé de ministral-3:3b (500) s'affichait « does not support thinking ».
+      throw THINK_REFUSED.test(firstErr instanceof Error ? firstErr.message : String(firstErr)) ? secondErr : firstErr
     }
   }
 }
+
+/** Erreur d'Ollama quand un modèle n'a pas de mode réflexion (le champ `think` est alors refusé). */
+const THINK_REFUSED = /does not support thinking|thinking is not supported/i
 
 interface OllamaTagsResponse {
   models?: Array<{ name: string; size?: number }>

@@ -159,26 +159,41 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
 // Étape 168 : la liste que teste le bouton « Tester les modèles ». Étape 230 : rôle par rôle, et un score de
 // conversation de l'ANCIEN test (sur 17) compte comme à refaire.
 test('modèles à tester : tous les modèles de conversation notés à l’ancien test, du plus léger au plus lourd', () => {
-  // Scores du dépôt (test version 6, 03/10/2026) : plus rien à tester en conversation ni en vision.
-  assert.deepEqual([...setup({ vramMib: 8 * 1024 }).getUnscoredModels()], [])
-  // Avec les scores de l'ancien test (sur 17 et sur 3), tout repasse.
-  const old = REAL_SCORES.replace(/\| (\d+)\/78 \|/g, '| 16/17 |').replace(/\| (\d+)\/18 \|/g, '| 3/3 |')
-  const unscored = [...setup({ vramMib: 8 * 1024, scores: old }).getUnscoredModels()]
   const conversationModels = new Set(
     [...source.matchAll(/const (?:FLASH|MEDIUM|LARGE)_CANDIDATES[\s\S]*?\n\]/g)].flatMap((m) => [...m[0].matchAll(/model: '([^']+)'/g)].map((x) => x[1]))
   )
+  const visionOnly = new Set([...source.match(/const VISION_CANDIDATES[\s\S]*?\n\]/)[0].matchAll(/model: '([^']+)'/g)].map((x) => x[1]))
+  const codeOnly = new Set([...source.match(/const CODE_CANDIDATES[\s\S]*?\n\]/)[0].matchAll(/model: '([^']+)'/g)].map((x) => x[1]))
+  // Scores du dépôt (test version 6, 03/10/2026) : 78 questions faites. Étape 232 : nouvelles épreuves — demandes
+  // complètes (conversation), vraies captures (vision, sur 20) et applications cliquées (code, sur 5) : tout repasse.
+  assert.deepEqual(new Set(setup({ vramMib: 8 * 1024 }).getUnscoredModels()), new Set([...conversationModels, ...visionOnly, ...codeOnly]))
+  // Une fois les trois nouvelles épreuves notées, plus rien à tester.
+  const table = (heading, models, score) => `\n\n## ${heading}\n\n| Modèle | Score |\n|---|---|\n${[...models].map((m) => `| ${m} | ${score} |`).join('\n')}\n`
+  const allNew =
+    REAL_SCORES.replace(/## Vision[\s\S]*$/, '') +
+    table('Vision — compréhension', visionOnly, '17/20') +
+    table('Code — génération', codeOnly, '4/5') +
+    table('Demandes complètes', conversationModels, '40/48')
+  assert.deepEqual([...setup({ vramMib: 8 * 1024, scores: allNew }).getUnscoredModels()], [])
+  // Avec les scores de l'ancien test (sur 17 et sur 3), tout repasse.
+  const old = REAL_SCORES.replace(/\| (\d+)\/78 \|/g, '| 16/17 |').replace(/\| (\d+)\/18 \|/g, '| 3/3 |')
+  const unscored = [...setup({ vramMib: 8 * 1024, scores: old }).getUnscoredModels()]
   assert.equal(conversationModels.size, 30)
   for (const model of conversationModels) assert.ok(unscored.includes(model), `${model} doit repasser le nouveau test`)
   // Étape 230 : le test de vision a changé aussi (6 images × 3, l'ancien était sur 3) — chaque candidat Vision
   // repasse, y compris ceux qui ne servent qu'à la vision (qwen3-vl, GLM-4.6V, gemma4:31b).
   const visionModels = new Set([...source.match(/const VISION_CANDIDATES[\s\S]*?\n\]/)[0].matchAll(/model: '([^']+)'/g)].map((x) => x[1]))
   for (const model of visionModels) assert.ok(unscored.includes(model), `${model} doit repasser le test de vision`)
-  // Aucun modèle de code seul : ils ont tous leur score de code, et ce test-là n'a pas changé.
-  assert.equal(unscored.length, new Set([...conversationModels, ...visionModels]).size)
+  // Étape 232 : le test de code a changé aussi (sur 5) — les modèles de code seuls repassent eux aussi.
+  assert.equal(unscored.length, new Set([...conversationModels, ...visionModels, ...codeOnly]).size)
 })
 
 test('un score de conversation du test actuel (sur 78) dispense du test ; vision et code, rôle par rôle', () => {
-  const lines = ['## Conversation', '', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 70/78 |', '| qwen3:1.7b | 16/17 |']
+  const lines = [
+    '## Conversation', '', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 70/78 |', '| qwen3:1.7b | 16/17 |', '',
+    // Étape 232 : les deux épreuves de conversation comptent.
+    '## Demandes complètes', '', '| Modèle | Réussite |', '|---|---|', '| ministral-3:3b | 40/48 |', '| qwen3:1.7b | 40/48 |'
+  ]
   const unscored = [...setup({ vramMib: 8 * 1024, scores: lines.join('\n') }).getUnscoredModels()]
   assert.ok(!unscored.includes('ministral-3:3b'), 'score du test actuel : rien à refaire')
   assert.ok(unscored.includes('qwen3:1.7b'), 'score de l’ancien test : à refaire')

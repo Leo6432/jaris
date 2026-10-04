@@ -40,6 +40,11 @@ extraResources:
       - verified-tool-scores.md
       - benchmark-models.mjs
       - benchmark-cases.mjs
+      - benchmark-scenarios.mjs
+      - benchmark-vision.mjs
+      - benchmark-code.mjs
+      - benchmark-browser.mjs
+      - vision-tests/*.png
   # Recherche web : la configuration du conteneur SearXNG. Docker Desktop ne s'installe pas en silence,
   # donc la recherche web reste indisponible sur une machine qui ne l'a pas (voir README) — mais sur une
   # machine qui l'a déjà, il ne manquait que ces fichiers pour que ça marche.
