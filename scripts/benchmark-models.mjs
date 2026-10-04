@@ -1334,16 +1334,11 @@ async function chatVision(model, prompt, imageBase64) {
   const start = performance.now()
   // Étape 230 : mêmes consignes et même fenêtre que look_at_screen (describeImage, vision.ts) — le test les
   // omettait. VISION_SYSTEM_PROMPT est une copie vérifiée par scripts/test-benchmark-cases.mjs.
-  const data = await postChat({
-    model,
-    messages: [
-      { role: 'system', content: VISION_SYSTEM_PROMPT },
-      { role: 'user', content: prompt, images: [imageBase64] }
-    ],
-    stream: false,
-    think: false,
-    options: { num_ctx: CONVERSATION_NUM_CTX }
-  })
+  const messages = [
+    { role: 'system', content: VISION_SYSTEM_PROMPT },
+    { role: 'user', content: prompt, images: [imageBase64] }
+  ]
+  const data = await postChat({ model, messages, stream: false, think: false, options: { num_ctx: CONVERSATION_NUM_CTX } })
   const wallMs = performance.now() - start
   const evalCount = data.eval_count ?? 0
   const evalDurationS = (data.eval_duration ?? 0) / 1e9
@@ -1351,7 +1346,8 @@ async function chatVision(model, prompt, imageBase64) {
     wallMs,
     tokPerSec: evalDurationS > 0 ? evalCount / evalDurationS : null,
     content: data.message?.content?.trim() ?? '',
-    data
+    data,
+    messages
   }
 }
 
@@ -1519,7 +1515,11 @@ async function main() {
     numCtx: CONVERSATION_NUM_CTX,
     simulatedNow: SCENARIO_NOW.toString(),
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    options: { scope: SCOPE, resume: RESUME, deleteAfterTest: DELETE_AFTER_TEST, onlyModels: [...ONLY_MODELS] }
+    options: { scope: SCOPE, resume: RESUME, deleteAfterTest: DELETE_AFTER_TEST, onlyModels: [...ONLY_MODELS] },
+    callTimeoutMs: CALL_TIMEOUT_MS,
+    // Les outils EXACTS envoyés aux modèles (questions et demandes), une fois pour toute la campagne : sans eux, une
+    // requête enregistrée ne se relisait qu'en retrouvant le code de cette version.
+    tools: TOOLS
   })
   let installed
   try {
@@ -2313,7 +2313,8 @@ async function main() {
           ms: Math.round(r.wallMs),
           prompt: kind === 'lecture' ? c.prompt : c.goal,
           image: sha(image),
-          messages: kind === 'visée' ? r.messages.map((m) => (m.images ? { ...m, images: [sha(m.images[0])] } : m.role === 'system' ? { role: 'system', ref: textRef(m.content) } : m)) : undefined,
+          // Le message exact, en lecture comme en visée (l'image par son empreinte : c'est un fichier fixe du test).
+          messages: r.messages.map((m) => (m.images ? { ...m, images: [sha(m.images[0])] } : m.role === 'system' ? { role: 'system', ref: textRef(m.content) } : m)),
           response: r.data.message ?? null,
           meta: ollamaMeta(r.data)
         })

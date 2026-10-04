@@ -782,6 +782,8 @@ test('vrai script : demandes complètes notées, trace, configuration et graines
     assert.equal(traces[0].type, 'campagne')
     assert.equal(traces[0].ollama, '0.99.0-test')
     assert.ok(traces[0].harness['benchmark-scenarios.mjs'])
+    assert.deepEqual(traces[0].tools, TOOLS, 'les outils exacts envoyés aux modèles')
+    assert.equal(traces[0].callTimeoutMs, 20 * 60 * 1000)
     const runs = traces.filter((t) => t.type === 'demande' && t.model === 'ministral-3:3b')
     assert.equal(runs.length, SCENARIO_TOTAL)
     const system = traces.find((t) => t.type === 'texte' && t.hash === runs[0].turns[0].messages[0].ref)

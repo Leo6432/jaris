@@ -873,6 +873,17 @@ test('vision de bout en bout : 10 lectures et 7 visées × 2, les consignes de J
     assert.match(results, /Lecture : 18\/20 ; visée \(pilotage de l'écran\) : 12\/14\./)
     // Toutes les réponses sont recopiées, justes comprises, pour pouvoir corriger un score à la main.
     assert.match(results, /- « Combien d'œufs[^»]*»\n  > compté juste : 6\n  > compté juste : 6/)
+    // Fichier brut : le message EXACT de chaque appel, en lecture comme en visée, et la réponse entière.
+    const traces = readFileSync(join(dir, 'r.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+    const vision = traces.filter((t) => t.type === 'vision')
+    assert.equal(vision.length, VISION_TOTAL)
+    for (const t of vision) {
+      assert.equal(t.messages.length, 2, `${t.kind} ${t.file}`)
+      assert.ok(traces.some((x) => x.type === 'texte' && x.hash === t.messages[0].ref), 'consignes écrites une fois, retrouvables')
+      assert.equal(t.messages[1].images[0], t.image, 'l’image par son empreinte')
+      assert.ok(t.response && typeof t.response.content === 'string')
+    }
+    assert.ok(vision.some((t) => t.kind === 'lecture' && t.messages[1].content.startsWith("Combien d'œufs")))
   } finally {
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })

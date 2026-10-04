@@ -6443,3 +6443,9 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   « 1 h 30 » puis « 3-4 h » a coûté la confiance de Léo deux fois de suite.
   Régression : test-benchmark-code (journal des gestes, vérifié en le retirant), test-benchmark-cases (réponse
   coupée en lecture et en visée).
+  **Suite (v0.28.5), en revérifiant partie par partie « est-ce que TOUT est enregistré ? » dans le CODE, pas de
+  mémoire** : deux trous trouvés. La requête exacte des questions de LECTURE en vision n'était pas écrite (seule la
+  question, la visée l'était déjà) ; la liste exacte des OUTILS envoyés aux modèles ne figurait nulle part dans le
+  fichier brut (seule l'empreinte du code permettait de la retrouver). Les deux y sont maintenant. **Leçon : à la
+  question « tout est-il enregistré ? », relire chaque appel au modèle et comparer ce qui est ENVOYÉ à ce qui est
+  ÉCRIT — une réponse de mémoire avait déjà dit « oui » avec ces deux trous.**
