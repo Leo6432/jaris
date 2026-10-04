@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process'
-import { app } from 'electron'
+import { app, powerSaveBlocker } from 'electron'
 import { join } from 'path'
 import { config } from '../config'
 import { resourcesRoot } from '../paths'
@@ -241,6 +241,13 @@ export function testUnscoredModels(onLine: (line: string) => void): Promise<{ mo
       }
     })
     runningTest = proc
+    // Étape 236 : un test de 1,5 à 3 jours sans surveillance. Sans ce blocage, la mise en veille de Windows le
+    // suspendait en pleine génération — au réveil, une requête coupée passe pour un modèle figé ou un Ollama
+    // arrêté. Le PC reste éveillé tant que le test tourne (l'écran, lui, peut s'éteindre), et seulement pendant.
+    const awake = powerSaveBlocker.start('prevent-app-suspension')
+    const release = (): void => {
+      if (powerSaveBlocker.isStarted(awake)) powerSaveBlocker.stop(awake)
+    }
     let buffer = ''
     // setEncoding : un caractère accentué coupé entre deux morceaux reste entier (piège déjà rencontré, étape 121).
     proc.stdout.setEncoding('utf8')
@@ -256,10 +263,12 @@ export function testUnscoredModels(onLine: (line: string) => void): Promise<{ mo
     proc.stdout.on('data', handleChunk)
     proc.stderr.on('data', handleChunk)
     proc.on('error', (err) => {
+      release()
       if (runningTest === proc) runningTest = null
       reject(new Error(`Impossible de lancer le test : ${err.message}`))
     })
     proc.on('close', (code) => {
+      release()
       if (runningTest === proc) runningTest = null
       if (buffer.trim()) onLine(buffer)
       if (code === 0) resolve({ models, resultsPath })

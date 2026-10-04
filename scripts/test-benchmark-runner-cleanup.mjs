@@ -302,3 +302,63 @@ test('téléchargement raté : le reste est configuré, l’ancien modèle de pi
   assert.equal(result.pilot.installed, false)
   assert.match(result.pilot.error, /blocked redirect/)
 })
+
+// Étape 236 : le test de modèles dure 1,5 à 3 jours sans surveillance. Sans blocage, la veille de Windows le
+// suspendait ; au réveil, une requête coupée passait pour un modèle figé ou un Ollama arrêté.
+test('le PC ne se met pas en veille pendant le test de modèles, et seulement pendant', async () => {
+  const { EventEmitter } = await import('node:events')
+  const events = []
+  let started = 0
+  const active = new Set()
+  const powerSaveBlocker = {
+    start: (type) => {
+      events.push(`start ${type}`)
+      active.add(++started)
+      return started
+    },
+    isStarted: (id) => active.has(id),
+    stop: (id) => {
+      events.push('stop')
+      active.delete(id)
+    }
+  }
+  const procs = []
+  const fakeSpawn = () => {
+    const proc = new EventEmitter()
+    proc.stdout = Object.assign(new EventEmitter(), { setEncoding() {} })
+    proc.stderr = Object.assign(new EventEmitter(), { setEncoding() {} })
+    proc.kill = () => proc.emit('close', null)
+    procs.push(proc)
+    return proc
+  }
+  const { testUnscoredModels, stopModelTest } = loadModule('../electron/services/benchmarkRunner.ts', (id) => {
+    if (id === 'child_process') return { spawn: fakeSpawn }
+    if (id === 'path') return { join: (...parts) => parts.join('/') }
+    if (id.endsWith('config')) return { config: { ollama: { host: 'http://127.0.0.1:11434' } } }
+    if (id === './ollama') return { ModelTooLargeError: class extends Error {}, DiskFullError: class extends Error {} }
+    if (id === './hardwareScan') return { getUnscoredModels: () => ['qwen3.5:9b'] }
+    if (id === './profileStore') return {}
+    if (id.endsWith('paths')) return { resourcesRoot: () => '.' }
+    if (id === './dataLocation') return { getDataRoot: () => '/fake/data' }
+    if (id === './imageGenerator') return {}
+    if (id === './systemResources') return {}
+    if (id === 'electron') return { app: { getVersion: () => '0.0.0-test' }, powerSaveBlocker }
+    if (id === '../../shared/imageModel' || id === '../../shared/pilotModel') return {}
+    throw new Error(`module non simulé dans le test : ${id}`)
+  })
+
+  // Test terminé normalement : veille bloquée pendant, rétablie à la fin.
+  const done = testUnscoredModels(() => {})
+  assert.deepEqual(events, ['start prevent-app-suspension'])
+  procs[0].emit('close', 0)
+  await done
+  assert.deepEqual(events, ['start prevent-app-suspension', 'stop'])
+  assert.equal(active.size, 0)
+
+  // Test arrêté (Jaris fermé) : la veille est rétablie aussi.
+  const stopped = testUnscoredModels(() => {}).catch(() => {})
+  stopModelTest()
+  await stopped
+  assert.equal(active.size, 0, 'aucun blocage ne doit survivre au test')
+  assert.equal(events.filter((e) => e === 'stop').length, 2)
+})

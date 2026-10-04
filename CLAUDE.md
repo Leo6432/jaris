@@ -6449,3 +6449,10 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   fichier brut (seule l'empreinte du code permettait de la retrouver). Les deux y sont maintenant. **Leçon : à la
   question « tout est-il enregistré ? », relire chaque appel au modèle et comparer ce qui est ENVOYÉ à ce qui est
   ÉCRIT — une réponse de mémoire avait déjà dit « oui » avec ces deux trous.**
+  **Suite (v0.28.6) : la VEILLE de Windows.** Rien n'empêchait le PC de s'endormir pendant 1,5 à 3 jours sans
+  surveillance : au réveil, une requête coupée en pleine génération passait pour un modèle figé (délai dépassé)
+  ou un Ollama arrêté (arrêt du test). `testUnscoredModels` (benchmarkRunner.ts) tient maintenant
+  `powerSaveBlocker.start('prevent-app-suspension')` (PC éveillé, écran libre de s'éteindre) du lancement jusqu'à
+  la fin du test, y compris quand Jaris l'arrête (`release()` sur 'close' et 'error'). **Leçon : avant un long
+  traitement sans surveillance, se demander ce que fait le SYSTÈME pendant ce temps (veille, mises à jour,
+  redémarrages), pas seulement le programme.** Régression : test-benchmark-runner-cleanup.
