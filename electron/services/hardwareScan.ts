@@ -421,11 +421,23 @@ const CODE_CANDIDATES: ModelCandidate[] = [
  * (Vision) — un fait sur le modèle, pas une catégorie.
  */
 /**
- * Rôle Rapide (étape 161) : part de la vitesse du plus rapide qu'un modèle doit garder pour rester candidat
- * — au plus un quart plus lent. Au-dessus de ce seuil, c'est l'intelligence qui départage (voir
- * fastEnoughThenSmartest dans computeModelPicks).
+ * Rôle Rapide (étape 161) : part de la vitesse de référence qu'un modèle doit garder pour rester candidat — au
+ * plus deux fois plus lent. Au-dessus de ce seuil, c'est l'intelligence qui départage (voir
+ * fastEnoughThenSmartest dans computeModelPicks). 75 % jusqu'au 04/10/2026, abaissé à 50 % par Léo en fixant
+ * les trois réglages ensemble : Rapide 50 %, Médium 20 %, Puissant/Vision/Code sans minimum.
  */
-const RAPIDE_MIN_SPEED_RATIO = 0.75
+const RAPIDE_MIN_SPEED_RATIO = 0.5
+
+/**
+ * Rôle Médium (Léo, 04/10/2026). Même principe que Rapide, bien moins strict : seuls les modèles vraiment lents
+ * (moins d'un cinquième de la vitesse de référence — le plus rapide parmi les meilleurs aux outils, comme Rapide,
+ * choix « A » de Léo) sont écartés. Médium fait TOUTES les actions de Jaris : l'intelligence passe avant. Essayé
+ * à 50 % : sur une carte de 24 Go, Médium passait de qwen3.8:27b (intelligence 34, vitesse 46) à qwen3.5:27b (23,
+ * 75) — un tiers d'intelligence perdue pour le rôle qui agit. Qu'un même modèle serve Médium et Puissant (ou
+ * Rapide et Médium) n'est pas un défaut : c'est le meilleur pour les deux, et rien à recharger en changeant de
+ * rôle. Différence avec Rapide, au choix de Léo : un modèle sans vitesse publiée reste candidat.
+ */
+const MEDIUM_MIN_SPEED_RATIO = 0.2
 
 const ALL_MODELS: ModelCandidate[] = (() => {
   const byModel = new Map<string, ModelCandidate>()
@@ -1259,6 +1271,26 @@ function computeModelPicks(
   }
 
   /**
+   * Médium : le plus intelligent parmi ceux qui gardent au moins MEDIUM_MIN_SPEED_RATIO de la vitesse du plus
+   * rapide (plancher calculé comme pour Rapide). Un modèle sans vitesse publiée n'est PAS écarté. Si le plancher
+   * écartait tout le monde, on retombe sur le classement sans vitesse plutôt que sur rien.
+   */
+  const notTooSlowThenSmartest = (scored: Scored[], chain: number): Scored[] => {
+    const top = Math.max(...scored.map((c) => parseToolScore(c.result.toolCalling)))
+    const speeds = scored
+      .filter((c) => parseToolScore(c.result.toolCalling) === top)
+      .map((c) => ARTIFICIAL_ANALYSIS_SPEED[c.model])
+      .filter((v): v is number => v !== undefined)
+    if (!speeds.length) return bestNote(scored, chain)
+    const floor = Math.max(...speeds) * MEDIUM_MIN_SPEED_RATIO
+    const kept = scored.filter((c) => {
+      const speed = ARTIFICIAL_ANALYSIS_SPEED[c.model]
+      return speed === undefined || speed >= floor
+    })
+    return bestNote(kept.length ? kept : scored, chain)
+  }
+
+  /**
    * Note d'un modèle pour un rôle : intelligence × (taux de réussite)^chain (voir TOOL_CHAIN_LENGTH). `null`
    * sans intelligence publiée — jamais un zéro.
    */
@@ -1349,8 +1381,8 @@ function computeModelPicks(
   return {
     // Rapide : le plus intelligent parmi les quasi aussi rapides que le plus rapide, sur la carte seule.
     flash: pickRole(ALL_MODELS, conversation, false, fastEnoughThenSmartest),
-    // Médium : le plus intelligent qui tient entièrement sur la carte.
-    medium: pickRole(ALL_MODELS, conversation, false, smartest),
+    // Médium : le plus intelligent qui tient entièrement sur la carte, parmi ceux qui ne sont pas trop lents.
+    medium: pickRole(ALL_MODELS, conversation, false, notTooSlowThenSmartest),
     // Puissant : le plus intelligent de tous, même en débordant sur la RAM.
     large: pickRole(ALL_MODELS, conversation, true, smartest),
     // Vision : le plus intelligent parmi ceux qui lisent une image.

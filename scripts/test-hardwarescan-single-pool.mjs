@@ -60,10 +60,11 @@ test('machine de Léo (8 Go de VRAM) : Code prend le plus intelligent de TOUS le
   assert.equal(picks.code, 'qwen3.8:27b', `Code attendu : le même que Puissant, obtenu ${picks.code}`)
 })
 
-test('Rapide sur 8 Go : granite4.2:3b, plus intelligent que ministral-3:8b pour une fiabilité proche', async () => {
+test('Rapide sur 8 Go, seuil de 50 % (Léo, 04/10/2026) : granite4.2:8b entre dans la course et l’emporte', async () => {
   const picks = await picksFor(8, 32)
-  // Note = intelligence × réussite^5 : granite4.2:3b 9,1 × (72/78)^5 = 6,1 contre ministral-3:8b 5,5 × 1 = 5,5.
-  assert.equal(picks.flash, 'granite4.2:3b')
+  // Référence : ministral-3:8b (100), le plus rapide des 78/78. À 75 %, seuls les 3B passaient (granite4.2:3b
+  // gagnait) ; à 50 % (50 et plus), granite4.2:8b (62, intelligence 11,1) passe aussi et a la meilleure note.
+  assert.equal(picks.flash, 'granite4.2:8b')
 })
 
 // 03/10/2026, Léo : « une vraie analyse, avec un algorithme qui sait faire un entre-deux entre intelligence et
@@ -199,4 +200,22 @@ test('un score de conversation du test actuel (sur 78) dispense du test ; vision
   assert.ok(unscored.includes('qwen3:1.7b'), 'score de l’ancien test : à refaire')
   // Sans score de vision, un candidat Vision est à tester même s'il a un score de conversation.
   assert.ok(unscored.includes('qwen3-vl:2b'))
+})
+
+// Léo, 04/10/2026 : Rapide 50 %, Médium 20 %, les autres sans minimum. Référence de vitesse : le plus rapide parmi
+// les meilleurs aux outils (ici granite4.2:3b, 221) ; plancher de Médium : 44.
+test('Médium : les modèles vraiment lents sont écartés (moins de 20 %), Puissant n’a pas de minimum', async () => {
+  const scores = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| granite4.2:3b | 78/78 |', '| qwen3.5:4b | 78/78 |'].join('\n')
+  const r = await setup({ vramMib: 8 * 1024, scores }).pickBestModelsFromBenchmark()
+  // qwen3.5:4b est plus intelligent (13,1 contre 9,1) mais à 22, sous le plancher de 44.
+  assert.equal(r.models.medium, 'granite4.2:3b')
+  assert.equal(r.models.large, 'qwen3.5:4b')
+})
+
+test('Médium : un modèle sans vitesse publiée reste candidat (choix de Léo), contrairement à Rapide', async () => {
+  const scores = ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', '| ministral-3:3b | 78/78 |', '| granite4.1:8b | 78/78 |'].join('\n')
+  const r = await setup({ vramMib: 8 * 1024, scores }).pickBestModelsFromBenchmark()
+  // granite4.1:8b (6,6, aucune vitesse publiée) bat ministral-3:3b (4,8) en Médium, mais ne peut pas être Rapide.
+  assert.equal(r.models.medium, 'granite4.1:8b')
+  assert.equal(r.models.flash, 'ministral-3:3b')
 })
