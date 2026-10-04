@@ -6295,3 +6295,35 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   relancer de test (toutes les données nécessaires sont dans le fichier). Régression : test-benchmark-scenarios,
   test-benchmark-vision, test-benchmark-code (vrai navigateur ; Edge sur la CI Windows), test-ollama-think-fallback,
   test-generated-preview, test-benchmark-cases.
+- **Relecture du protocole par ChatGPT avant le lancement (étape 233)** — faite AVANT que Léo lance, parce que
+  changer le prompt, la boucle ou les résultats simulés oblige à tout relancer, alors que changer le barème non.
+  1. **La boucle du test est maintenant celle de Jaris EN ENTIER, prouvée par un test croisé** : relances
+     correctives (mail, recherche, promesse/nom d'outil), réflexion gardée entre deux appels (canal voix), historique
+     plafonné à 12, réponse nettoyée comme à la voix. Les MÊMES réponses de modèle passent dans le VRAI converse()
+     (assistant.ts chargé avec des outils simulés) et dans la copie : requêtes, réponses et état final doivent être
+     identiques (~110 situations). Vérifié en introduisant 4 écarts : les 4 sont détectés (le plafond d'historique
+     seulement après avoir ajouté une trace qui le dépasse — un test qui n'exerce pas une règle ne la protège pas).
+     **Leçon générale : pour une copie de logique de production, comparer les SORTIES sur des traces partagées,
+     pas relire la copie.** Les relances de Jaris sur-déclenchent parfois (une question finissant par « ? » exige
+     une recherche web même après get_system_stats) : c'est le comportement réel, le test le mesure et le note.
+  2. **Simulateur aligné sur les vrais outils** : format exact des notes (titre, horodatage, insensible à la casse
+     comme Windows), messages d'erreur complets (listes de touches/actions), URL refusées, échec de saisie qui
+     n'interrompt pas, échec qui LÈVE (court-circuit « Échec de l'outil »). **Vrai bug de Jaris trouvé au
+     passage** : `Boolean("false")` vaut vrai — `replace: "false"` effaçait une note, `restart: "false"`
+     redémarrait. Corrigé par `toolFlag` (tools.ts).
+  3. **40 demandes différentes + 8 rejouées** (même coût que 24 × 2), dont : sans outil (merci, blague, heure),
+     échec en cours de route, clarification suivie de la réponse, délai à calculer, résultats qui CHANGENT au 2e
+     passage (prix, météo : on lit, on ne se souvient pas). Réussite moyenne PAR demande d'abord.
+  4. **Tout ce qui ne se reconstruit pas est enregistré** dans `<résultats>.traces.jsonl` (ajouté au fil de
+     l'eau) : requêtes exactes, réponses brutes (réflexion, done_reason, tokens, durées de chargement et de
+     génération), réflexion réellement envoyée, temps jusqu'au 1er outil, état final, configuration /api/show
+     (réglages, niveaux de réflexion, modèle de prompt), part carte graphique/processeur (/api/ps), empreinte
+     du code du test, version de Jaris. Vérifié sur le vrai Ollama : pour un modèle « avec/sans » (qwen3),
+     `think: "medium"` donne exactement la même réponse que `true`.
+  5. **Vision : négations refusées (« ce n'est pas 14 ») et 7 cas de VISÉE** — une vraie étape de
+     computer_use_task (prompt, message et lecture de l'action exportés de computerUse.ts, copies vérifiées) :
+     le clic doit tomber dans l'élément (boîtes mesurées en fabriquant les captures, vision-tests/cibles.json),
+     et « fini » seulement quand c'est fini. Des coordonnées sur 1000 (habitude de certains modèles) ratent : c'est
+     ce que ferait Jaris. **Code** : une 2e valeur par application (une réponse écrite en dur échoue) et les
+     boutons-icônes retrouvés (titre SVG, nom dans le code, icône seule à cet endroit).
+  Régression : test-benchmark-scenarios, test-benchmark-vision, test-benchmark-code, test-benchmark-cases.

@@ -56,7 +56,7 @@ interface ComputerUseStep {
   raw?: string
 }
 
-const SYSTEM_PROMPT =
+export const SYSTEM_PROMPT =
   'Tu es un agent qui contrôle un ordinateur Windows à la souris et au clavier, exactement comme le ferait ' +
   "un humain, à partir de captures d'écran successives. On te donne un objectif et l'historique des actions " +
   'déjà faites. Réponds UNIQUEMENT par un objet JSON décrivant la PROCHAINE action à faire, sans aucun texte ' +
@@ -98,7 +98,7 @@ async function resolveVisionModel(preferred: string): Promise<string> {
 
 /** Extrait le premier objet JSON de la réponse : un petit modèle local entoure parfois sa réponse de texte
     ou de balises ```json malgré la consigne, plutôt que de renvoyer que le JSON demandé. */
-function extractStep(raw: string): ComputerUseStep | null {
+export function extractStep(raw: string): ComputerUseStep | null {
   const match = raw.match(/\{[\s\S]*\}/)
   if (!match) return null
   try {
@@ -117,6 +117,21 @@ function extractStep(raw: string): ComputerUseStep | null {
   }
 }
 
+/**
+ * Le message d'une étape de pilotage par le modèle de vision. Exporté (étape 233) : le test de visée des modèles
+ * (scripts/benchmark-vision.mjs) en garde une copie, vérifiée identique à celle-ci.
+ */
+export function buildStepPrompt(goal: string, history: string[], elements: ClickableElement[]): string {
+  const historyText = history.length ? `Actions déjà faites :\n${history.join('\n')}` : 'Aucune action encore faite.'
+  // Liste vide = fenêtre sans arbre d'accessibilité exploitable (jeu, rendu sur mesure) : on le DIT au modèle
+  // plutôt que de ne rien mettre, sinon il peut croire que la liste a juste été oubliée et attendre au lieu
+  // de repasser au clic en pixels.
+  const elementsText = elements.length
+    ? `Éléments cliquables détectés par Windows (positions exactes, à préférer) :\n${describeElements(elements)}`
+    : "Windows n'expose aucun élément cliquable pour cette fenêtre : utilise les clics en pixels."
+  return `Objectif : ${goal}\n\n${historyText}\n\n${elementsText}\n\nCapture d'écran actuelle jointe. Quelle est la prochaine action ?`
+}
+
 async function nextStep(
   goal: string,
   history: string[],
@@ -126,13 +141,6 @@ async function nextStep(
   signal?: AbortSignal
 ): Promise<ComputerUseStep> {
   const model = await resolveVisionModel(visionModel)
-  const historyText = history.length ? `Actions déjà faites :\n${history.join('\n')}` : 'Aucune action encore faite.'
-  // Liste vide = fenêtre sans arbre d'accessibilité exploitable (jeu, rendu sur mesure) : on le DIT au modèle
-  // plutôt que de ne rien mettre, sinon il peut croire que la liste a juste été oubliée et attendre au lieu
-  // de repasser au clic en pixels.
-  const elementsText = elements.length
-    ? `Éléments cliquables détectés par Windows (positions exactes, à préférer) :\n${describeElements(elements)}`
-    : "Windows n'expose aucun élément cliquable pour cette fenêtre : utilise les clics en pixels."
 
   // Combine le timeout par étape avec le signal d'annulation externe (voir computerUseTask) : sans ça, une
   // annulation demandée pendant que cette requête est en vol (nouvelle phrase à la voix qui coupe la
@@ -149,7 +157,7 @@ async function nextStep(
         model,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: `Objectif : ${goal}\n\n${historyText}\n\n${elementsText}\n\nCapture d'écran actuelle jointe. Quelle est la prochaine action ?`, images: [imageBase64] }
+          { role: 'user', content: buildStepPrompt(goal, history, elements), images: [imageBase64] }
         ],
         stream: false,
         think: false,

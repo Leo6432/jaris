@@ -8,7 +8,7 @@
  * Outil de développement : les PNG produits sont commités dans scripts/vision-tests/ et embarqués dans
  * l'installeur ; ce script n'est jamais lancé chez Léo. Usage : node scripts/make-vision-tests.mjs
  */
-import { mkdirSync } from 'fs'
+import { mkdirSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 
@@ -99,7 +99,7 @@ const SCENES = {
           [true, 'Sophie Leroy', 'Réunion de jeudi'],
           [false, 'SNCF Connect', 'Confirmation de votre billet']
         ]
-          .map(([unread, from, subject]) => `<div style="display:flex;align-items:center;border-bottom:1px solid #eee;height:62px;padding:0 18px;${unread ? 'font-weight:bold;' : 'color:#666;'}"><div style="width:4px;height:40px;background:${unread ? '#0067c0' : 'transparent'};margin-right:14px"></div><div style="width:240px">${from}</div><div>${subject}</div></div>`)
+          .map(([unread, from, subject]) => `<div data-cible="mail-${from.split(' ')[0].toLowerCase()}" style="display:flex;align-items:center;border-bottom:1px solid #eee;height:62px;padding:0 18px;${unread ? 'font-weight:bold;' : 'color:#666;'}"><div style="width:4px;height:40px;background:${unread ? '#0067c0' : 'transparent'};margin-right:14px"></div><div style="width:240px">${from}</div><div>${subject}</div></div>`)
           .join('')}
       </div></div>
     <div class="taskbar"><div class="icon">⊞</div><div class="icon">O</div><div class="spacer"></div><div class="clock">09:15<br>04/10/2026</div></div>`,
@@ -108,7 +108,7 @@ const SCENES = {
       <div class="body" style="font-family:'DejaVu Sans Mono',monospace;color:#999">Idées de cadeaux pour Noël…</div></div>
     <div class="win" style="left:390px;top:250px;width:500px;height:170px"><div class="title">Bloc-notes<span class="ctrl">✕</span></div>
       <div class="body" style="font-size:15px;color:#0a3a8a">Voulez-vous enregistrer les modifications de Sans titre ?</div>
-      <div style="position:absolute;right:16px;bottom:16px;display:flex;gap:8px"><button class="primary">Enregistrer</button><button>Ne pas enregistrer</button><button>Annuler</button></div></div>
+      <div style="position:absolute;right:16px;bottom:16px;display:flex;gap:8px"><button class="primary" data-cible="enregistrer">Enregistrer</button><button data-cible="ne-pas-enregistrer">Ne pas enregistrer</button><button data-cible="annuler">Annuler</button></div></div>
     <div class="taskbar"><div class="icon">⊞</div><div class="icon">N</div><div class="spacer"></div><div class="clock">18:50<br>04/10/2026</div></div>`,
   'horloge': `
     <div class="win" style="left:200px;top:90px;width:700px;height:420px"><div class="title">Explorateur de fichiers<span class="ctrl">— ☐ ✕</span></div>
@@ -116,35 +116,57 @@ const SCENES = {
     <div class="taskbar"><div class="icon">⊞</div><div class="icon">📁</div><div class="spacer"></div><div class="clock">14:37<br>04/10/2026</div></div>`,
   'youtube-resultats': `
     <div class="win" style="left:30px;top:16px;width:1220px;height:650px"><div class="title">tuto guitare - YouTube — Google Chrome<span class="ctrl">— ☐ ✕</span></div>
-      <div style="height:52px;display:flex;align-items:center;gap:16px;padding:0 20px;border-bottom:1px solid #eee"><b style="color:#c00">▶ YouTube</b><div style="flex:1;max-width:520px;border:1px solid #ccc;border-radius:20px;padding:7px 16px">tuto guitare</div></div>
+      <div style="height:52px;display:flex;align-items:center;gap:16px;padding:0 20px;border-bottom:1px solid #eee"><b style="color:#c00">▶ YouTube</b><div data-cible="barre-recherche" style="flex:1;max-width:520px;border:1px solid #ccc;border-radius:20px;padding:7px 16px">tuto guitare</div></div>
       <div class="body">
         ${[
-          ['Apprendre la guitare en 10 minutes – Leçon 1', 'Guitare Facile · 1,2 M de vues'],
-          ['Les 5 accords faciles pour débuter', 'Jean-Luc Guitare · 845 k vues'],
-          ['Gratter la guitare : le rythme de base', 'Studio Six Cordes · 310 k vues']
+          ['Apprendre la guitare en 10 minutes – Leçon 1', 'Guitare Facile · 1,2 M de vues', 'video-lecon-1'],
+          ['Les 5 accords faciles pour débuter', 'Jean-Luc Guitare · 845 k vues', 'video-accords'],
+          ['Gratter la guitare : le rythme de base', 'Studio Six Cordes · 310 k vues', 'video-rythme']
         ]
-          .map(([t, m]) => `<div style="display:flex;gap:16px;margin-bottom:18px"><div style="width:260px;height:146px;background:#333;border-radius:10px"></div><div><div style="font-size:18px;margin-bottom:8px">${t}</div><div style="color:#666;font-size:12px">${m}</div></div></div>`)
+          .map(([t, m, id]) => `<div data-cible="${id}" style="display:flex;gap:16px;margin-bottom:18px"><div style="width:260px;height:146px;background:#333;border-radius:10px"></div><div><div style="font-size:18px;margin-bottom:8px">${t}</div><div style="color:#666;font-size:12px">${m}</div></div></div>`)
           .join('')}
       </div></div>
     <div class="taskbar"><div class="icon">⊞</div><div class="icon">C</div><div class="spacer"></div><div class="clock">20:10<br>04/10/2026</div></div>`,
   'notification-message': `
     <div class="win" style="left:150px;top:80px;width:760px;height:440px"><div class="title">Calculatrice<span class="ctrl">— ☐ ✕</span></div>
       <div class="body" style="font-size:40px;text-align:right;padding-top:40px">1 284</div></div>
-    <div style="position:absolute;right:14px;bottom:60px;width:360px;background:#2b2b2b;color:#fff;border-radius:8px;padding:14px 16px;box-shadow:0 6px 20px rgba(0,0,0,0.4);font-size:13px;line-height:19px">
+    <div data-cible="notification" style="position:absolute;right:14px;bottom:60px;width:360px;background:#2b2b2b;color:#fff;border-radius:8px;padding:14px 16px;box-shadow:0 6px 20px rgba(0,0,0,0.4);font-size:13px;line-height:19px">
       <div style="color:#aaa;font-size:11px;margin-bottom:6px">Messages · maintenant</div>
       <div style="font-weight:bold">Julie Martin</div><div>On se retrouve à 19 h devant le cinéma ?</div></div>
-    <div class="taskbar"><div class="icon">⊞</div><div class="icon">=</div><div class="spacer"></div><div class="clock">18:21<br>04/10/2026</div></div>`
+    <div class="taskbar"><div class="icon">⊞</div><div class="icon">=</div><div class="spacer"></div><div class="clock">18:21<br>04/10/2026</div></div>`,
+  // Étape 233 : YouTube ouvert, rien de cherché — pour vérifier que le modèle ne dit pas « fini » trop tôt.
+  'youtube-accueil': `
+    <div class="win" style="left:30px;top:16px;width:1220px;height:650px"><div class="title">YouTube — Google Chrome<span class="ctrl">— ☐ ✕</span></div>
+      <div style="height:52px;display:flex;align-items:center;gap:16px;padding:0 20px;border-bottom:1px solid #eee"><b style="color:#c00">▶ YouTube</b><div data-cible="barre-recherche" style="flex:1;max-width:520px;border:1px solid #ccc;border-radius:20px;padding:7px 16px;color:#888">Rechercher</div></div>
+      <div class="body" style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px">
+        ${['Recette des crêpes de grand-mère', 'Le résumé du match de samedi', 'Visite de Rennes en 4K', 'Les infos du jour', 'Tuto : réparer un vélo', 'Concert en direct']
+          .map((t) => `<div><div style="height:150px;background:#333;border-radius:10px;margin-bottom:8px"></div><div style="font-size:15px">${t}</div></div>`)
+          .join('')}
+      </div></div>
+    <div class="taskbar"><div class="icon">⊞</div><div class="icon">C</div><div class="spacer"></div><div class="clock">20:05<br>04/10/2026</div></div>`
 }
 
 mkdirSync(outDir, { recursive: true })
 const browser = await chromium.launch()
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } })
+  // Étape 233 : la position exacte des éléments à viser (data-cible), pour juger les clics du test de visée.
+  const targets = {}
   for (const [id, body] of Object.entries(SCENES)) {
     await page.setContent(`<!doctype html><html><head><meta charset="utf-8"><style>${BASE}</style></head><body>${body}</body></html>`)
     await page.screenshot({ path: join(outDir, `${id}.png`) })
+    const boxes = await page.evaluate(() =>
+      Object.fromEntries(
+        [...document.querySelectorAll('[data-cible]')].map((el) => {
+          const r = el.getBoundingClientRect()
+          return [el.dataset.cible, { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }]
+        })
+      )
+    )
+    if (Object.keys(boxes).length) targets[`${id}.png`] = boxes
     console.log(`${id}.png`)
   }
+  writeFileSync(join(outDir, 'cibles.json'), `${JSON.stringify(targets, null, 2)}\n`)
 } finally {
   await browser.close()
 }

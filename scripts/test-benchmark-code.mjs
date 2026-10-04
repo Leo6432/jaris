@@ -20,8 +20,19 @@ const APPS = {
     good: page('<div id="n">0</div><button id="p">+1</button><button id="z">Remettre à zéro</button>', "let n=0;const s=()=>document.getElementById('n').textContent=n;p.onclick=()=>{n++;s()};z.onclick=()=>{n=0;s()}"),
     // Une page longue, mais qui défile : le bouton est atteint à la molette, comme le ferait Léo.
     goodLong: page('<div style="height:1500px">Faites défiler</div><div id="n">0</div><button id="p">+1</button><button id="z">Remettre à zéro</button>', "let n=0;const s=()=>document.getElementById('n').textContent=n;p.onclick=()=>{n++;s()};z.onclick=()=>{n=0;s()}"),
+    // Boutons-icônes (Léo : « si il fait une icône comment on fait ? ») : retrouvés par leur nom dans le code
+    // (id « btn-increment ») et par le titre de leur icône SVG (« Réinitialiser »).
+    goodIcons: page(
+      '<div id="n">0</div><button id="btn-increment"><svg width="16" height="16"><path d="M8 2v12M2 8h12" stroke="black"/></svg></button><button class="btn-reset"><svg width="16" height="16"><title>Réinitialiser</title><circle cx="8" cy="8" r="6" stroke="black" fill="none"/></svg></button>',
+      "let n=0;const s=()=>document.getElementById('n').textContent=n;document.getElementById('btn-increment').onclick=()=>{n++;s()};document.querySelector('.btn-reset').onclick=()=>{n=0;s()}"
+    ),
     bad: [
       ['boutons sans action', page('<div>0</div><button>+1</button><button>Remettre à zéro</button>'), /n’affiche pas 3/],
+      [
+        'la remise à zéro n’efface que l’affichage (le compteur repart de 3)',
+        page('<div id="n">0</div><button id="p">+1</button><button id="z">Remettre à zéro</button>', "let n=0;p.onclick=()=>{n++;document.getElementById('n').textContent=n};z.onclick=()=>{document.getElementById('n').textContent=0}"),
+        /2 clics sur « \+1 », le compteur n’affiche pas 2/
+      ],
       [
         'bouton caché par overflow:hidden (le vrai bug de Léo)',
         page('<div style="height:100vh"></div><div id="n">0</div><button id="p">+1</button><button id="z">Remettre à zéro</button>', "let n=0;p.onclick=()=>{n++;document.getElementById('n').textContent=n}").replace('padding:20px}', 'padding:20px;height:100vh;overflow:hidden}').replace('<head>', '<head><style>html{overflow:hidden;height:100%}</style>'),
@@ -36,16 +47,36 @@ const APPS = {
   },
   addition: {
     good: page('<input id="a" type="number"><input id="b" type="number"><button id="c">Calculer</button><p id="r"></p>', "c.onclick=()=>{r.textContent='Somme : '+(Number(a.value)+Number(b.value))}"),
-    bad: [['texte collé au lieu d’additionner (1230)', page('<input id="a"><input id="b"><button id="c">Calculer</button><p id="r"></p>', "c.onclick=()=>{r.textContent=a.value+b.value}"), /42 ne s’affiche pas/]]
+    // Un seul bouton, une icône « = » sans aucun texte ni nom : c'est forcément lui.
+    goodIcons: page('<input id="a" type="number"><input id="b" type="number"><button>=</button><p id="r"></p>', "document.querySelector('button').onclick=()=>{r.textContent=Number(a.value)+Number(b.value)}"),
+    bad: [
+      ['texte collé au lieu d’additionner (1230)', page('<input id="a"><input id="b"><button id="c">Calculer</button><p id="r"></p>', "c.onclick=()=>{r.textContent=a.value+b.value}"), /42 ne s’affiche pas/],
+      ['somme écrite en dur', page('<input id="a"><input id="b"><button id="c">Calculer</button><p id="r"></p>', "c.onclick=()=>{r.textContent='Somme : 42'}"), /175 ne s’affiche pas/],
+      ['résultat calculé une seule fois', page('<input id="a"><input id="b"><button id="c">Calculer</button><p id="r"></p>', "let done=false;c.onclick=()=>{if(done)return;done=true;r.textContent=Number(a.value)+Number(b.value)}"), /175 ne s’affiche pas/]
+    ]
   },
   convertisseur: {
     good: page('<input id="c" type="number" placeholder="Celsius"><button id="b">Convertir</button><p id="r"></p>', "b.onclick=()=>{r.textContent=(Number(c.value)*9/5+32)+' °F'}"),
-    bad: [['mauvaise formule', page('<input id="c"><button id="b">Convertir</button><p id="r"></p>', "b.onclick=()=>{r.textContent=(Number(c.value)*9/5)+' °F'}"), /212/]]
+    bad: [
+      ['mauvaise formule', page('<input id="c"><button id="b">Convertir</button><p id="r"></p>', "b.onclick=()=>{r.textContent=(Number(c.value)*9/5)+' °F'}"), /212/],
+      ['résultat écrit en dur', page('<input id="c"><button id="b">Convertir</button><p id="r"></p>', "b.onclick=()=>{r.textContent='212 °F'}"), /77/]
+    ]
   },
   'liste-taches': {
     good: page(
       '<input id="t"><button id="a">Ajouter</button><ul id="l"></ul>',
       "a.onclick=()=>{if(!t.value.trim())return;const li=document.createElement('li');const s=document.createElement('span');s.textContent=t.value;const d=document.createElement('button');d.textContent='Supprimer';d.onclick=()=>li.remove();li.append(s,d);l.append(li);t.value=''}"
+    ),
+    // « Ajouter » en icône « + » (id « add »), et dans chaque ligne une icône crayon (classe « btn-edit ») et une
+    // icône poubelle (classe « btn-delete ») : c'est la poubelle de la BONNE ligne qui doit être cliquée.
+    goodIcons: page(
+      '<input id="t"><button id="add">+</button><ul id="l"></ul>',
+      "add.onclick=()=>{const li=document.createElement('li');const s=document.createElement('span');s.textContent=t.value;const e=document.createElement('button');e.className='btn-edit';e.innerHTML='<svg width=\"14\" height=\"14\"><path d=\"M2 12L12 2\" stroke=\"black\"/></svg>';e.onclick=()=>{s.textContent='modifiée'};const d=document.createElement('button');d.className='btn-delete';d.innerHTML='<svg width=\"14\" height=\"14\"><rect x=\"3\" y=\"3\" width=\"8\" height=\"10\" stroke=\"black\" fill=\"none\"/></svg>';d.onclick=()=>li.remove();li.append(s,e,d);l.append(li);t.value=''}"
+    ),
+    // Une seule icône sans texte ni nom dans chaque ligne : c'est elle.
+    goodIcons2: page(
+      '<input id="t"><button id="a">Ajouter</button><ul id="l"></ul>',
+      "a.onclick=()=>{const li=document.createElement('li');const s=document.createElement('span');s.textContent=t.value;const d=document.createElement('button');d.innerHTML='<svg width=\"14\" height=\"14\"><rect x=\"3\" y=\"3\" width=\"8\" height=\"10\" stroke=\"black\" fill=\"none\"/></svg>';d.onclick=()=>li.remove();li.append(s,d);l.append(li);t.value=''}"
     ),
     bad: [
       [
@@ -94,8 +125,9 @@ for (const testCase of CODE_TEST_CASES) {
   test(`« ${testCase.id} » : l’application juste passe, les cassées échouent avec leur raison`, options, async () => {
     const { page: browserPage, close } = await openBrowser(browserPath)
     try {
-      assert.equal(await checkGeneratedApp(browserPage, testCase, APPS[testCase.id].good), null)
-      if (APPS[testCase.id].goodLong) assert.equal(await checkGeneratedApp(browserPage, testCase, APPS[testCase.id].goodLong), null)
+      for (const variant of ['good', 'goodLong', 'goodIcons', 'goodIcons2']) {
+        if (APPS[testCase.id][variant]) assert.equal(await checkGeneratedApp(browserPage, testCase, APPS[testCase.id][variant]), null, variant)
+      }
     } finally {
       await close()
     }

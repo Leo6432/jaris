@@ -22,8 +22,8 @@ import {
 } from './benchmark-cases.mjs'
 import { systemPromptModule } from './load-system-prompt.mjs'
 import { findBrowser } from './benchmark-browser.mjs'
-import { CODE_TOTAL } from './benchmark-code.mjs'
-import { VISION_TOTAL } from './benchmark-vision.mjs'
+import { CODE_TEST_VERSION, CODE_TOTAL } from './benchmark-code.mjs'
+import { VISION_PILOT_CASES, VISION_TEST_VERSION, VISION_TOTAL, loadPilotTargets } from './benchmark-vision.mjs'
 
 /**
  * Étape 162, Léo : « est-ce que les tests d'outils sont bien, ou on en rajoute pour faire un bon score fiable,
@@ -540,7 +540,7 @@ test('aucune question n’est posée avec fetch (qui abandonne au bout de 5 minu
   const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8')
   assert.ok(!/fetch\(`\$\{OLLAMA_HOST\}\/api\/chat`/.test(script), 'les questions doivent passer par postChat (http.request, sans délai)')
   // Étape 232 : + les demandes complètes (chatScenario : avec réflexion, puis sans si le modèle la refuse).
-  assert.equal((script.match(/await postChat\(/g) ?? []).length, 5, 'conversation, vision, code et demandes complètes passent tous par postChat')
+  assert.equal((script.match(/await postChat\(/g) ?? []).length, 6, 'conversation, vision (lecture et visée), code et demandes complètes passent tous par postChat')
 })
 
 test('reprise : une mesure de code INCOMPLÈTE (3/4, une génération perdue) est refaite, une complète (4/5) est gardée', { skip: BROWSER ? false : 'aucun navigateur ici (le test de code en a besoin)' }, async () => {
@@ -553,7 +553,7 @@ test('reprise : une mesure de code INCOMPLÈTE (3/4, une génération perdue) es
       resultsPath,
       [
         `Version du test de conversation : ${CONVERSATION_TEST_VERSION}`,
-        'Version du test de code : 2',
+        `Version du test de code : ${CODE_TEST_VERSION}`,
         '',
         '## Code',
         '',
@@ -657,7 +657,7 @@ test('reprise : le détail par question des modèles déjà testés est gardé d
       resultsPath,
       [
         `Version du test de conversation : ${CONVERSATION_TEST_VERSION}`,
-        'Version du test de vision : 2',
+        `Version du test de vision : ${VISION_TEST_VERSION}`,
         '',
         '## Conversation',
         '',
@@ -669,7 +669,7 @@ test('reprise : le détail par question des modèles déjà testés est gardé d
         '',
         '| Modèle | Latence moyenne | Vitesse moyenne | Fiabilité |',
         '|---|---|---|---|',
-        '| qwen3.5:4b | 900 ms | 85.4 tok/s | 19/20 |',
+        `| qwen3.5:4b | 900 ms | 85.4 tok/s | 19/${VISION_TOTAL} |`,
         '',
         '## Détail de la conversation, modèle par modèle',
         '',
@@ -677,7 +677,7 @@ test('reprise : le détail par question des modèles déjà testés est gardé d
         '',
         '- RATÉ 1/3 « Monte le son. » (attendu : media_control) — obtenu : media_control {"action":"play_pause"}',
         '',
-        '### qwen3.5:4b (vision) — 19/20',
+        `### qwen3.5:4b (vision) — 19/${VISION_TOTAL}`,
         '',
         '- RATÉ 1/2 « Quelle heure affiche l’horloge ? » — obtenu : « 14 h 47 »',
         ''
@@ -689,8 +689,8 @@ test('reprise : le détail par question des modèles déjà testés est gardé d
     const results = readFileSync(resultsPath, 'utf8')
     assert.match(results, new RegExp(`### ministral-3:3b — ${CONVERSATION_TOTAL - 1}/${CONVERSATION_TOTAL}\\n\\n- RATÉ 1/3 « Monte le son\\. »`), 'le détail du modèle repris doit rester')
     assert.match(results, new RegExp(`### qwen3:1\\.7b — ${CONVERSATION_TOTAL}/${CONVERSATION_TOTAL}`))
-    // Le détail de vision d'un modèle repris reste lui aussi (la ligne vision est sur 20, le test actuel).
-    assert.match(results, /### qwen3\.5:4b \(vision\) — 19\/20\n\n- RATÉ 1\/2 « Quelle heure affiche l’horloge \? »/)
+    // Le détail de vision d'un modèle repris reste lui aussi (la ligne vision est sur le total du test actuel).
+    assert.match(results, new RegExp(`### qwen3\\.5:4b \\(vision\\) — 19/${VISION_TOTAL}\\n\\n- RATÉ 1/2 « Quelle heure affiche l’horloge \\? »`))
     assert.equal((results.match(/### ministral-3:3b/g) ?? []).length, 1)
   } finally {
     fake.server.close()
@@ -815,7 +815,7 @@ test('notation corrigée : relire la note avant de la corriger, noter un plan, a
   assert.equal(isRealReply('Avec plaisir !'), true)
 })
 
-test('vision de bout en bout : 10 captures × 2, les consignes de Jaris, et le détail des réponses fausses', async () => {
+test('vision de bout en bout : 10 lectures et 7 visées × 2, les consignes de Jaris, et le détail des réponses fausses', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
   const VISION_ANSWERS = {
     "Combien d'œufs": '6',
@@ -830,9 +830,19 @@ test('vision de bout en bout : 10 captures × 2, les consignes de Jaris, et le d
     'Quel est le titre de la première vidéo': 'Apprendre la guitare en 10 minutes – Leçon 1',
     "Qui vient d'envoyer": 'Julie Martin'
   }
+  // Visée : un clic au centre de la cible, sauf pour « recherche-a-faire » où le modèle dit « fini » trop tôt.
+  const targets = loadPilotTargets()
+  const pilotAnswer = (prompt) => {
+    const testCase = VISION_PILOT_CASES.find((c) => prompt.startsWith(`Objectif : ${c.goal}`) && !prompt.includes('[Button]') === !c.elements)
+    if (!testCase || testCase.expect === 'done' || testCase.id === 'recherche-a-faire') return '{"action":"done","result":"Fait."}'
+    const b = targets[testCase.file][testCase.target]
+    return JSON.stringify({ action: 'click', x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2) })
+  }
   const fake = await startFakeOllama({
     installed: ['qwen3-vl:2b'],
-    answer: (_m, prompt) => ({ content: Object.entries(VISION_ANSWERS).find(([start]) => prompt.startsWith(start))?.[1] ?? '' })
+    answer: (_m, prompt) => ({
+      content: prompt.startsWith('Objectif : ') ? pilotAnswer(prompt) : Object.entries(VISION_ANSWERS).find(([start]) => prompt.startsWith(start))?.[1] ?? ''
+    })
   })
   try {
     const resultsPath = join(dir, 'r.md')
@@ -847,16 +857,20 @@ test('vision de bout en bout : 10 captures × 2, les consignes de Jaris, et le d
     assert.equal(fake.requests.length, VISION_TOTAL)
     for (const r of fake.requests) {
       assert.equal(r.messages[0].role, 'system')
-      assert.ok(r.messages[0].content.startsWith('Tu es Jaris, un assistant vocal qui décrit ce qui est affiché'))
+      const pilot = r.messages[1].content.startsWith('Objectif : ')
+      // Lecture : les consignes de look_at_screen ; visée : celles de computer_use_task.
+      assert.ok(r.messages[0].content.startsWith(pilot ? 'Tu es un agent qui contrôle un ordinateur Windows' : 'Tu es Jaris, un assistant vocal qui décrit ce qui est affiché'))
       assert.equal(r.messages[1].images.length, 1)
       // Une vraie capture PNG (signature PNG en base64), pas une image vide.
       assert.ok(r.messages[1].images[0].startsWith('iVBORw0KGgo') && r.messages[1].images[0].length > 50000)
       assert.equal(r.think, false)
     }
     const results = readFileSync(resultsPath, 'utf8')
-    assert.match(results, /Version du test de vision : 2/)
-    assert.match(results, /\| qwen3-vl:2b \|[^\n]*\| 18\/20 \|/)
-    assert.match(results, /### qwen3-vl:2b \(vision\) — 18\/20\n\n- RATÉ 2\/2 « Quelle heure affiche l'horloge[^»]*» — obtenu : « 14 h 47 »/)
+    assert.match(results, new RegExp(`Version du test de vision : ${VISION_TEST_VERSION}`))
+    assert.match(results, /\| qwen3-vl:2b \|[^\n]*\| 30\/34 \|/)
+    assert.match(results, /### qwen3-vl:2b \(vision\) — 30\/34\n\n- RATÉ 2\/2 « Quelle heure affiche l'horloge[^»]*» — obtenu : « 14 h 47 »/)
+    assert.match(results, /- RATÉ 2\/2 « visée recherche-a-faire — Cherche « tuto guitare » sur YouTube\. » — obtenu : dit que c’est fini alors que rien n’est fait/)
+    assert.match(results, /Lecture : 18\/20 ; visée \(pilotage de l'écran\) : 12\/14\./)
     // Toutes les réponses sont recopiées, justes comprises, pour pouvoir corriger un score à la main.
     assert.match(results, /- « Combien d'œufs[^»]*»\n  > compté juste : 6\n  > compté juste : 6/)
   } finally {

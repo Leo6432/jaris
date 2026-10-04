@@ -1,7 +1,21 @@
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
-import { VISION_TEST_CASES, VISION_TOTAL, isCorrectVisionAnswer, loadVisionImage } from './benchmark-vision.mjs'
+import vm from 'node:vm'
+import ts from 'typescript'
+import {
+  PILOT_SYSTEM_PROMPT,
+  VISION_PILOT_CASES,
+  VISION_TEST_CASES,
+  VISION_TOTAL,
+  buildPilotPrompt,
+  extractPilotStep,
+  findPilotElement,
+  isCorrectVisionAnswer,
+  judgePilotStep,
+  loadPilotTargets,
+  loadVisionImage
+} from './benchmark-vision.mjs'
 
 /**
  * Étape 232 : test de vision version 2 (vraies captures d'écran). Pour chaque image, des réponses qu'un bon modèle
@@ -11,19 +25,19 @@ import { VISION_TEST_CASES, VISION_TOTAL, isCorrectVisionAnswer, loadVisionImage
 const ANSWERS = {
   'bloc-notes-courses.png': {
     good: ['6', 'Six.', 'Il faut acheter 6 œufs.', 'six oeufs'],
-    bad: ['4', '2 bouteilles', 'Je ne sais pas.', '6 ou 4']
+    bad: ['4', '2 bouteilles', 'Je ne sais pas.', '6 ou 4', "Ce n'est pas 6.", 'pas six']
   },
   'erreur-disque.png': {
-    good: ['Rapport annuel.docx', '« Rapport annuel.docx »', 'Le fichier Rapport annuel.docx'],
+    good: ['Rapport annuel.docx', '« Rapport annuel.docx »', 'Le fichier Rapport annuel.docx', "Rapport annuel.docx n'a pas pu être enregistré."],
     bad: ['Le disque D: est plein.', 'Microsoft Word']
   },
   'meteo-villes.png': {
     good: ['14 °C', '14', 'Il fait 14 degrés à Rennes.', 'quatorze degrés'],
-    bad: ['16 °C', '12', '14 ou 16 °C']
+    bad: ['16 °C', '12', '14 ou 16 °C', "Ce n'est pas 14 °C.", 'Non, pas 14.', '12, 14, 16 et 18 °C']
   },
   'premier-plan.png': {
     good: ['Spotify', 'Spotify Premium', "C'est Spotify."],
-    bad: ['Discord', 'Spotify et Discord']
+    bad: ['Discord', 'Spotify et Discord', "Ce n'est pas Spotify."]
   },
   'tableau-prix.png': {
     good: ['49,90 €', '49.90', '49,9 euros', 'Le clavier coûte 49,90 €.'],
@@ -51,9 +65,9 @@ const ANSWERS = {
   }
 }
 
-test('chaque capture a ses réponses justes et fausses, et le total suit (10 captures × 2)', () => {
+test('chaque capture a ses réponses justes et fausses, et le total suit ((10 lectures + 7 visées) × 2)', () => {
   assert.deepEqual(Object.keys(ANSWERS).sort(), VISION_TEST_CASES.map((c) => c.file).sort())
-  assert.equal(VISION_TOTAL, 20)
+  assert.equal(VISION_TOTAL, 34)
 })
 
 for (const testCase of VISION_TEST_CASES) {
@@ -71,11 +85,95 @@ test('les captures existent, en 1280x720 (la taille envoyée par look_at_screen)
     assert.equal(png.readUInt32BE(20), 720, `${testCase.file} : hauteur`)
   }
   const builder = readFileSync(new URL('../electron-builder.yml', import.meta.url), 'utf8')
-  for (const file of ['benchmark-vision.mjs', 'benchmark-code.mjs', 'benchmark-browser.mjs', 'benchmark-scenarios.mjs', 'vision-tests/*.png']) {
+  for (const file of ['benchmark-vision.mjs', 'benchmark-code.mjs', 'benchmark-browser.mjs', 'benchmark-scenarios.mjs', 'vision-tests/*.png', 'vision-tests/*.json']) {
     assert.ok(builder.includes(`- ${file}`), `${file} absent de electron-builder.yml`)
   }
   // Le script qui fabrique les captures produit exactement ces fichiers.
   const maker = readFileSync(new URL('./make-vision-tests.mjs', import.meta.url), 'utf8')
   for (const testCase of VISION_TEST_CASES) assert.ok(maker.includes(`'${testCase.file.replace('.png', '')}'`), testCase.file)
   assert.ok(existsSync(new URL('./vision-tests/', import.meta.url)))
+})
+
+// --- Visée : une étape de computer_use_task ---------------------------------------------------------------------
+
+const box = (file, id) => loadPilotTargets()[file][id]
+const center = (b) => [Math.round(b.x + b.width / 2), Math.round(b.y + b.height / 2)]
+const click = ([x, y]) => JSON.stringify({ action: 'click', x, y })
+
+/** Pour chaque cas : des réponses que Jaris exécuterait correctement, et des réponses fausses typiques. */
+function pilotAnswers(testCase) {
+  if (testCase.expect === 'done') {
+    return {
+      good: ['{"action":"done","result":"La recherche tuto guitare est affichée."}', '```json\n{"action":"done","result":"Fait."}\n```'],
+      bad: [click(center(box('youtube-resultats.png', 'barre-recherche'))), '{"action":"type","text":"tuto guitare"}', 'C’est fait.']
+    }
+  }
+  const target = box(testCase.file, testCase.target)
+  const [cx, cy] = center(target)
+  const good = [click([cx, cy]), `Voici l'action : {"action":"click","x":${target.x + 2},"y":${target.y + 2}}`, JSON.stringify({ action: 'double_click', x: cx, y: cy })]
+  const bad = [
+    click([target.x + target.width + 20, cy]),
+    // Coordonnées sur 1000 (habitude de certains modèles) : Jaris les prend pour des pixels, le clic part ailleurs.
+    click([Math.round((cx / 1280) * 1000), Math.round((cy / 720) * 1000)]),
+    '{"action":"done","result":"Fait."}',
+    '{"action":"click","x":"500","y":300}',
+    JSON.stringify({ action: 'right_click', x: cx, y: cy })
+  ]
+  if (testCase.elements) {
+    good.push(JSON.stringify({ action: 'click_element', name: 'Annuler' }), JSON.stringify({ action: 'click_element', name: 'annuler' }))
+    bad.push(JSON.stringify({ action: 'click_element', name: 'Ne pas enregistrer' }), JSON.stringify({ action: 'click_element', name: 'Quitter' }))
+  }
+  if (testCase.id === 'recherche-a-faire') bad.push('{"action":"type","text":"tuto guitare"}')
+  return { good, bad }
+}
+
+for (const testCase of VISION_PILOT_CASES) {
+  test(`visée « ${testCase.id} » : les bons clics passent, les mauvais (à côté, sur 1000, trop tôt « fini ») échouent`, () => {
+    const targets = loadPilotTargets()
+    const { good, bad } = pilotAnswers(testCase)
+    for (const answer of good) assert.equal(judgePilotStep(testCase, answer, targets), null, answer)
+    for (const answer of bad) assert.ok(judgePilotStep(testCase, answer, targets), `devait échouer : ${answer}`)
+  })
+}
+
+test('les cibles de visée sont de vrais éléments des captures, à des endroits distincts', () => {
+  const targets = loadPilotTargets()
+  for (const testCase of VISION_PILOT_CASES.filter((c) => c.target)) {
+    const b = targets[testCase.file]?.[testCase.target]
+    assert.ok(b && b.width > 10 && b.height > 10 && b.x >= 0 && b.y >= 0 && b.x + b.width <= 1280 && b.y + b.height <= 720, testCase.id)
+  }
+  // Les trois boutons de la boîte « Enregistrer ? » ne se chevauchent pas : viser l'un ne touche jamais l'autre.
+  const [a, n, c] = ['enregistrer', 'ne-pas-enregistrer', 'annuler'].map((id) => targets['boutons-enregistrer.png'][id])
+  assert.ok(a.x + a.width <= n.x && n.x + n.width <= c.x)
+})
+
+/** Charge un fichier TypeScript de Jaris avec des dépendances neutres (seules ses fonctions pures servent ici). */
+function loadTs(path) {
+  const source = ts.transpileModule(readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+  }).outputText
+  const stub = new Proxy(function () {}, { get: (_t, key) => (key === Symbol.toPrimitive ? () => '' : stub), apply: () => stub, construct: () => stub })
+  const module = { exports: {} }
+  const ui = path.includes('computerUse') ? loadTs('electron/services/uiAutomation.ts') : null
+  vm.runInThisContext(`(function (exports, require, module) {\n${source}\n})`)(module.exports, (name) => (name === './uiAutomation' ? ui : stub), module)
+  return module.exports
+}
+
+test('l’étape de pilotage du test est EXACTEMENT celle de Jaris (consignes, message, lecture de l’action)', () => {
+  const real = loadTs('electron/services/computerUse.ts')
+  const ui = loadTs('electron/services/uiAutomation.ts')
+  assert.equal(PILOT_SYSTEM_PROMPT, real.SYSTEM_PROMPT)
+  const elements = [{ name: 'Annuler', type: 'Button', x: 1, y: 1 }, { name: 'Ne pas enregistrer', type: 'Button', x: 2, y: 2 }]
+  for (const testCase of VISION_PILOT_CASES) {
+    assert.equal(buildPilotPrompt(testCase.goal, [], testCase.elements ?? []), real.buildStepPrompt(testCase.goal, [], testCase.elements ?? []))
+  }
+  assert.equal(buildPilotPrompt('x', ['1. Clic'], elements), real.buildStepPrompt('x', ['1. Clic'], elements))
+  const samples = [
+    '{"action":"click","x":10,"y":20}', '```json\n{"action":"done","result":"ok"}\n```', '{"action":"click","x":"10","y":20}', '{"action":"scroll"}',
+    '{"action":"click_element","name":" "}', '{"action":"type","text":"a"}', 'rien', '{"action":"key","key":"entrée"}', '{"action":"done","result":3}'
+  ]
+  for (const raw of samples) assert.deepEqual(extractPilotStep(raw), real.extractStep(raw), raw)
+  for (const name of ['Annuler', 'annuler', 'Ne pas', 'enregistrer', 'Quitter', '']) {
+    assert.equal(findPilotElement(elements, name)?.name ?? null, ui.findElementByName(elements, name)?.name ?? null, name)
+  }
 })

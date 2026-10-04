@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process'
+import { app } from 'electron'
 import { join } from 'path'
 import { config } from '../config'
 import { resourcesRoot } from '../paths'
@@ -234,7 +235,9 @@ export function testUnscoredModels(onLine: (line: string) => void): Promise<{ mo
         JARIS_RESUME: '1',
         // Étape 230 : chaque modèle téléchargé pour le test est supprimé juste après (sinon ~290 Go restent).
         JARIS_DELETE_AFTER_TEST: '1',
-        JARIS_RAM_SAFETY_MARGIN_GB: '12'
+        JARIS_RAM_SAFETY_MARGIN_GB: '12',
+        // Étape 233 : écrite dans les traces, pour savoir quelle version de Jaris a produit chaque score.
+        JARIS_APP_VERSION: app.getVersion()
       }
     })
     runningTest = proc

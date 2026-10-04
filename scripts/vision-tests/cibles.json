@@ -1,0 +1,108 @@
+{
+  "mails-non-lus.png": {
+    "mail-julie": {
+      "x": 101,
+      "y": 63,
+      "width": 998,
+      "height": 62
+    },
+    "mail-banque": {
+      "x": 101,
+      "y": 125,
+      "width": 998,
+      "height": 62
+    },
+    "mail-marc": {
+      "x": 101,
+      "y": 187,
+      "width": 998,
+      "height": 62
+    },
+    "mail-amazon": {
+      "x": 101,
+      "y": 249,
+      "width": 998,
+      "height": 62
+    },
+    "mail-mairie": {
+      "x": 101,
+      "y": 311,
+      "width": 998,
+      "height": 62
+    },
+    "mail-sophie": {
+      "x": 101,
+      "y": 373,
+      "width": 998,
+      "height": 62
+    },
+    "mail-sncf": {
+      "x": 101,
+      "y": 435,
+      "width": 998,
+      "height": 62
+    }
+  },
+  "boutons-enregistrer.png": {
+    "enregistrer": {
+      "x": 528,
+      "y": 374,
+      "width": 102,
+      "height": 29
+    },
+    "ne-pas-enregistrer": {
+      "x": 637,
+      "y": 374,
+      "width": 145,
+      "height": 29
+    },
+    "annuler": {
+      "x": 790,
+      "y": 374,
+      "width": 83,
+      "height": 29
+    }
+  },
+  "youtube-resultats.png": {
+    "barre-recherche": {
+      "x": 139,
+      "y": 59,
+      "width": 520,
+      "height": 32
+    },
+    "video-lecon-1": {
+      "x": 47,
+      "y": 115,
+      "width": 1186,
+      "height": 146
+    },
+    "video-accords": {
+      "x": 47,
+      "y": 279,
+      "width": 1186,
+      "height": 146
+    },
+    "video-rythme": {
+      "x": 47,
+      "y": 443,
+      "width": 1186,
+      "height": 146
+    }
+  },
+  "notification-message.png": {
+    "notification": {
+      "x": 906,
+      "y": 569,
+      "width": 360,
+      "height": 91
+    }
+  },
+  "youtube-accueil.png": {
+    "barre-recherche": {
+      "x": 139,
+      "y": 59,
+      "width": 520,
+      "height": 32
+    }
+  }
+}

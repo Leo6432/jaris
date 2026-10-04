@@ -1021,10 +1021,13 @@ export function parseVerifiedToolScores(): Record<VerifiedTier, Map<string, stri
  */
 export const CONVERSATION_TEST_TOTAL = 78
 
-/** Vision : 10 vraies captures d'écran posées 2 fois (VISION_TOTAL, scripts/benchmark-vision.mjs, étape 232). Avant : sur 18 puis sur 3. */
-export const VISION_TEST_TOTAL = 20
+/**
+ * Vision : 10 questions de lecture et 7 de visée (une étape de pilotage de l'écran), posées 2 fois (VISION_TOTAL,
+ * scripts/benchmark-vision.mjs, étapes 232-233). Avant : sur 20, 18 puis 3.
+ */
+export const VISION_TEST_TOTAL = 34
 
-/** Étape 232 : demandes complètes, 24 demandes jouées 2 fois (SCENARIO_TOTAL, scripts/benchmark-scenarios.mjs). */
+/** Étapes 232-233 : demandes complètes, 40 demandes dont 8 rejouées (SCENARIO_TOTAL, scripts/benchmark-scenarios.mjs). */
 export const SCENARIO_TEST_TOTAL = 48
 
 /** Étape 232 : code, 5 applications générées puis ouvertes et utilisées (CODE_TOTAL, scripts/benchmark-code.mjs). Avant : sur 3. */

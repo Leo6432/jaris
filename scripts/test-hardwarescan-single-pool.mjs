@@ -165,13 +165,13 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
   const visionOnly = new Set([...source.match(/const VISION_CANDIDATES[\s\S]*?\n\]/)[0].matchAll(/model: '([^']+)'/g)].map((x) => x[1]))
   const codeOnly = new Set([...source.match(/const CODE_CANDIDATES[\s\S]*?\n\]/)[0].matchAll(/model: '([^']+)'/g)].map((x) => x[1]))
   // Scores du dépôt (test version 6, 03/10/2026) : 78 questions faites. Étape 232 : nouvelles épreuves — demandes
-  // complètes (conversation), vraies captures (vision, sur 20) et applications cliquées (code, sur 5) : tout repasse.
+  // complètes (conversation), vraies captures (vision, sur 34) et applications cliquées (code, sur 5) : tout repasse.
   assert.deepEqual(new Set(setup({ vramMib: 8 * 1024 }).getUnscoredModels()), new Set([...conversationModels, ...visionOnly, ...codeOnly]))
   // Une fois les trois nouvelles épreuves notées, plus rien à tester.
   const table = (heading, models, score) => `\n\n## ${heading}\n\n| Modèle | Score |\n|---|---|\n${[...models].map((m) => `| ${m} | ${score} |`).join('\n')}\n`
   const allNew =
     REAL_SCORES.replace(/## Vision[\s\S]*$/, '') +
-    table('Vision — compréhension', visionOnly, '17/20') +
+    table('Vision — compréhension', visionOnly, '30/34') +
     table('Code — génération', codeOnly, '4/5') +
     table('Demandes complètes', conversationModels, '40/48')
   assert.deepEqual([...setup({ vramMib: 8 * 1024, scores: allNew }).getUnscoredModels()], [])

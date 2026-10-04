@@ -304,6 +304,15 @@ export const TOOLS: OllamaTool[] = [
 /** Début de la réponse d'une image réussie (court-circuit d'assistant.ts : jamais reformulée par le modèle). */
 export const IMAGE_DONE_REPLY = 'Voilà ton image.'
 
+/**
+ * Un booléen d'outil : `true`, ou le texte "true" que renvoient certains modèles. Étape 233 : `Boolean(x)` faisait
+ * de "false" (un texte non vide) un VRAI — un modèle qui écrivait `replace: "false"` effaçait la note au lieu de la
+ * compléter, et `restart: "false"` redémarrait au lieu d'éteindre. Vu en relisant les outils pour le simulateur.
+ */
+export function toolFlag(value: unknown): boolean {
+  return value === true || (typeof value === 'string' && value.trim().toLowerCase() === 'true')
+}
+
 type ReminderFireHandler = (message: string) => void
 type LogHandler = (message: string) => void
 /** Étape 173 : reçoit chaque image dessinée (le Chat l'affiche, la voix l'ouvre). */
@@ -329,7 +338,7 @@ export function createToolExecutor(
       case 'read_web_page':
         return readWebPage(String(args.url ?? ''))
       case 'remember':
-        return rememberNote(String(args.title ?? ''), String(args.content ?? ''), Boolean(args.replace))
+        return rememberNote(String(args.title ?? ''), String(args.content ?? ''), toolFlag(args.replace))
       case 'recall_memory':
         return recallNote(String(args.title ?? ''))
       case 'computer_use_task':
@@ -353,7 +362,7 @@ export function createToolExecutor(
         return IMAGE_DONE_REPLY
       }
       case 'shutdown_pc':
-        return shutdownPc(Boolean(args.restart))
+        return shutdownPc(toolFlag(args.restart))
       default:
         return `Outil inconnu : ${name}`
     }

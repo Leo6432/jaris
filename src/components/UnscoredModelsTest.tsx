@@ -89,8 +89,9 @@ export default function UnscoredModelsTest(): JSX.Element | null {
       {phase === 'confirming' && (
         <div className="options-menu__unscored-confirm">
           <p>
-            Chaque modèle est téléchargé, testé (24 demandes complètes jouées 2 fois, 10 captures d'écran posées 2
-            fois pour la vision, 5 applications pour le code), puis supprimé — sauf ceux que tu avais déjà. Le test de
+            Chaque modèle est téléchargé, testé (40 demandes complètes, dont 8 rejouées, 17 questions sur des captures
+            d'écran posées 2 fois pour la vision, 5 applications pour le code), puis supprimé — sauf ceux que tu avais
+            déjà. Tout ce qu'il répond est enregistré pour être revérifié ensuite. Le test de
             code utilise Microsoft Edge en arrière-plan, sans rien afficher. Les gros
             modèles débordent sur la RAM : compte plusieurs heures, et ferme les jeux et logiciels lourds pendant
             le test. Un modèle trop gros pour ton PC est sauté.

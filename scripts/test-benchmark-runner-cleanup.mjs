@@ -97,6 +97,7 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
       }
     }
     if (id === './systemResources') return { detectRamGb: () => ramGb }
+    if (id === 'electron') return { app: { getVersion: () => '0.0.0-test' } }
     if (id === '../../shared/imageModel') return loadModule('../shared/imageModel.ts', () => ({}))
     if (id === '../../shared/pilotModel') return loadModule('../shared/pilotModel.ts', () => ({}))
     throw new Error(`module non simulé dans le test : ${id}`)

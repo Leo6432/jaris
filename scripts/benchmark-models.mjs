@@ -19,8 +19,9 @@
 import { exec } from 'child_process'
 import { request as httpRequest } from 'http'
 import { request as httpsRequest } from 'https'
-import { readFileSync, statfsSync, writeFileSync } from 'fs'
-import { homedir, totalmem } from 'os'
+import { createHash } from 'crypto'
+import { appendFileSync, readFileSync, statfsSync, writeFileSync } from 'fs'
+import { arch, cpus, homedir, release, totalmem } from 'os'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import { promisify } from 'util'
@@ -34,10 +35,32 @@ import {
   buildCaseMessages,
   isCorrectAnswer
 } from './benchmark-cases.mjs'
-import { VISION_REPEATS, VISION_TEST_CASES, VISION_TEST_VERSION, VISION_TOTAL, isCorrectVisionAnswer, loadVisionImage } from './benchmark-vision.mjs'
-import { CODE_TEST_CASES, CODE_TEST_VERSION, CODE_TOTAL, checkGeneratedApp } from './benchmark-code.mjs'
+import {
+  PILOT_SYSTEM_PROMPT,
+  VISION_PILOT_CASES,
+  VISION_REPEATS,
+  VISION_TEST_CASES,
+  VISION_TEST_VERSION,
+  VISION_TOTAL,
+  buildPilotPrompt,
+  isCorrectVisionAnswer,
+  judgePilotStep,
+  loadPilotTargets,
+  loadVisionImage
+} from './benchmark-vision.mjs'
+import { CODE_TEST_CASES, CODE_TEST_VERSION, CODE_TOTAL, PREVIEW_CSP_FOR_TEST, checkGeneratedApp } from './benchmark-code.mjs'
 import { findBrowser, openBrowser } from './benchmark-browser.mjs'
-import { SCENARIOS, SCENARIO_REPEATS, SCENARIO_TEST_VERSION, SCENARIO_TOTAL, runScenario, scenarioSeed } from './benchmark-scenarios.mjs'
+import {
+  REPEATED_SCENARIOS,
+  SCENARIOS,
+  SCENARIO_NOW,
+  SCENARIO_RUNS,
+  SCENARIO_TEST_VERSION,
+  SCENARIO_TOTAL,
+  demandSuccessRate,
+  runScenario,
+  scenarioSeed
+} from './benchmark-scenarios.mjs'
 
 const execAsync = promisify(exec)
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -54,6 +77,52 @@ const RESULTS_PATH = process.env.JARIS_RESULTS_PATH?.trim() || join(__dirname, '
  * seraient jamais repassés au nouveau test et les scores ne seraient pas comparables entre eux.
  */
 const RETEST_ALL = process.env.JARIS_RETEST_ALL === '1'
+
+/**
+ * Étape 233 (relecture du protocole par ChatGPT) : tout ce qui NE PEUT PAS se reconstruire après coup, dans un
+ * fichier à côté des résultats, une ligne JSON par événement, ajoutée au fil de l'eau (une coupure ne perd rien
+ * de ce qui est déjà écrit) : requêtes exactes (historique envoyé, réglages, réflexion demandée), réponses brutes
+ * d'Ollama (réflexion, appels, compteurs de tokens, durées de chargement et de génération), état du PC simulé,
+ * graines, configuration complète de chaque modèle (/api/show) et sa répartition carte graphique / processeur
+ * (/api/ps), empreinte du code du test. Changer le barème ou comprendre une lenteur se fait ensuite sans
+ * relancer des jours de test ; changer le prompt ou la boucle, non — d'où ce soin avant le lancement.
+ */
+const TRACES_PATH = `${RESULTS_PATH.replace(/\.md$/i, '')}.traces.jsonl`
+
+function trace(event) {
+  const line = `${JSON.stringify({ at: new Date().toISOString(), ...event })}\n`
+  for (let attempt = 1; ; attempt++) {
+    try {
+      appendFileSync(TRACES_PATH, line, 'utf-8')
+      return
+    } catch (err) {
+      // Un antivirus peut verrouiller le fichier un instant : on réessaie, puis on s'arrête plutôt que de
+      // continuer des heures sans garder les données (la reprise repartira du dernier modèle terminé).
+      if (attempt >= 5) throw new Error(`Impossible d'écrire les traces du test dans ${TRACES_PATH} (${err.message}).`)
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 300)
+    }
+  }
+}
+
+const writtenTexts = new Set()
+/** Un long texte répété (consignes, modèle de prompt d'Ollama) : écrit UNE fois, puis désigné par son empreinte. */
+function textRef(text) {
+  const hash = createHash('sha256').update(text).digest('hex').slice(0, 16)
+  if (!writtenTexts.has(hash)) {
+    writtenTexts.add(hash)
+    trace({ type: 'texte', hash, text })
+  }
+  return hash
+}
+
+/** Le message système d'une requête remplacé par l'empreinte de son texte (écrit une fois dans les traces). */
+const compactMessages = (messages) => messages?.map((m) => (m.role === 'system' ? { role: 'system', ref: textRef(m.content) } : m))
+
+/** Ce qu'Ollama renvoie à côté du message : done_reason, tokens, durées (chargement, lecture, génération). */
+function ollamaMeta(data) {
+  const { message: _message, ...meta } = data ?? {}
+  return meta
+}
 // JARIS_VERIFIED_SCORES_PATH : seulement pour les tests (un faux fichier de scores vérifiés, étape 230).
 const VERIFIED_TOOL_SCORES_PATH = process.env.JARIS_VERIFIED_SCORES_PATH?.trim() || join(__dirname, 'verified-tool-scores.md')
 
@@ -675,6 +744,16 @@ async function detectVramGb() {
   }
 }
 
+/** Nom de la carte graphique NVIDIA (pour les traces), `null` sans carte NVIDIA. */
+async function detectGpuName() {
+  try {
+    const { stdout } = await execAsync('nvidia-smi --query-gpu=name --format=csv,noheader', { windowsHide: true })
+    return stdout.trim().split('\n')[0] || null
+  } catch {
+    return null
+  }
+}
+
 /** RAM totale de la machine (Go) : contrairement à la VRAM, Node sait la lire directement, sans commande externe. */
 function detectRamGb() {
   return totalmem() / 1024 ** 3
@@ -947,10 +1026,12 @@ async function chatOnce(model, testCase, withThink) {
 
 async function chat(model, testCase) {
   let wallMs, data
+  let think = 'medium'
   try {
     ;({ wallMs, data } = await chatOnce(model, testCase, true))
   } catch (firstErr) {
     if (firstErr instanceof OllamaDownError) throw firstErr
+    think = false
     try {
       ;({ wallMs, data } = await chatOnce(model, testCase, false))
     } catch (secondErr) {
@@ -972,7 +1053,9 @@ async function chat(model, testCase) {
     tokPerSec,
     toolName: toolCalls[0]?.function?.name ?? null,
     toolArgs: toolCalls[0]?.function?.arguments ?? null,
-    content: data.message?.content?.trim() ?? ''
+    content: data.message?.content?.trim() ?? '',
+    data,
+    think
   }
 }
 
@@ -991,6 +1074,9 @@ async function chatScenario(model, messages, seed, thinkModes) {
   try {
     const data = await postChat(body)
     thinkModes.add(body.think ? 'medium' : THINK_OFF)
+    // Ce qui a VRAIMENT été envoyé pour cet appel, noté dans les traces (relecture ChatGPT : « medium » écrit dans
+    // un fichier ne prouve pas ce que le modèle a reçu).
+    data.jaris_think = body.think ?? false
     return data
   } catch (firstErr) {
     if (firstErr instanceof OllamaDownError || !body.think) throw firstErr
@@ -999,6 +1085,8 @@ async function chatScenario(model, messages, seed, thinkModes) {
     try {
       const data = await postChat(body)
       thinkModes.add(THINK_REFUSED.test(firstErr.message) ? THINK_OFF : 'sans réflexion après une erreur')
+      data.jaris_think = false
+      data.jaris_first_error = firstErr.message.slice(0, 300)
       return data
     } catch (secondErr) {
       // Vu le 04/10/2026 (ministral-3:3b) : la réflexion refusée, puis un appel d'outil mal formé refusé par Ollama
@@ -1021,16 +1109,94 @@ async function readOllamaVersion() {
   return 'inconnue'
 }
 
-/** Empreinte exacte et compression du modèle testé (« digest 3233f1432431, Q4_K_M »). */
-async function modelInfo(model) {
+/**
+ * Étape 233 : ce que le modèle annonce de lui-même (/api/show) — réflexion possible et ses niveaux, réglages par
+ * défaut (température, top_p, top_k, séquences d'arrêt…), modèle de prompt, taille de contexte native — et son
+ * empreinte exacte. Un score appartient à CETTE configuration, pas seulement à un nom.
+ */
+const snapshots = new Map()
+async function modelSnapshot(model) {
+  if (snapshots.has(model)) return snapshots.get(model)
+  const snapshot = { digest: null, sizeBytes: null, capabilities: null, thinking: null, details: null, parameters: null, template: null, architecture: null, nativeContext: null }
   try {
-    const res = await fetch(`${OLLAMA_HOST}/api/tags`)
-    const entry = ((await res.json()).models ?? []).find((m) => m.name === model || m.name === `${model}:latest`)
-    if (entry) return `digest ${String(entry.digest ?? '?').slice(0, 12)}, ${entry.details?.quantization_level ?? 'compression inconnue'}`
+    const entry = (((await (await fetch(`${OLLAMA_HOST}/api/tags`)).json()).models ?? [])).find((m) => m.name === model || m.name === `${model}:latest`)
+    snapshot.digest = entry?.digest ?? null
+    snapshot.sizeBytes = entry?.size ?? null
   } catch {
-    // Pas bloquant : le score reste valable, seule cette ligne d'information manque.
+    // Pas bloquant : seule cette information manquera.
   }
-  return 'digest inconnu'
+  try {
+    const res = await postJson('/api/show', { model })
+    if (res.ok) {
+      const show = JSON.parse(res.text)
+      snapshot.capabilities = show.capabilities ?? null
+      snapshot.thinking = show.thinking ?? null
+      snapshot.details = show.details ?? null
+      snapshot.parameters = show.parameters ?? null
+      snapshot.template = show.template ? textRef(show.template) : null
+      snapshot.architecture = show.model_info?.['general.architecture'] ?? null
+      snapshot.nativeContext = snapshot.architecture ? (show.model_info?.[`${snapshot.architecture}.context_length`] ?? null) : null
+    }
+  } catch {
+    // Idem.
+  }
+  snapshots.set(model, snapshot)
+  return snapshot
+}
+
+/** Où tourne le modèle une fois chargé (/api/ps) : la part en mémoire de la carte graphique, le reste sur le processeur. */
+async function placement(model) {
+  try {
+    const entry = (((await (await fetch(`${OLLAMA_HOST}/api/ps`)).json()).models ?? [])).find((m) => [m.name, m.model].includes(model) || m.name === `${model}:latest`)
+    if (entry) return { sizeBytes: entry.size ?? null, vramBytes: entry.size_vram ?? null, contextLength: entry.context_length ?? null }
+  } catch {
+    // Pas bloquant.
+  }
+  return null
+}
+
+/** La réflexion telle que le modèle l'annonce : niveaux nommés, avec/sans, ou aucune. */
+function describeThinking(snapshot) {
+  const values = snapshot.thinking?.values
+  if (Array.isArray(values) && values.some((v) => typeof v === 'string')) return `niveaux ${values.filter((v) => typeof v === 'string').join('/')}`
+  if (snapshot.capabilities?.includes('thinking')) return 'avec ou sans'
+  return snapshot.capabilities ? 'aucune' : 'inconnue'
+}
+
+function describePlacement(where) {
+  if (!where?.sizeBytes) return 'répartition carte graphique/processeur inconnue'
+  const share = Math.round((100 * (where.vramBytes ?? 0)) / where.sizeBytes)
+  if (share >= 100) return 'entièrement sur la carte graphique'
+  if (share <= 0) return 'entièrement sur le processeur'
+  return `${share} % sur la carte graphique, le reste sur le processeur`
+}
+
+/**
+ * À la fin de chaque épreuve d'un modèle (encore chargé) : sa configuration complète dans les traces, et une ligne
+ * lisible pour le fichier de résultats.
+ */
+async function recordModelConfig(model, phase, extra = {}) {
+  const snapshot = await modelSnapshot(model)
+  const where = await placement(model)
+  trace({ type: 'modèle', model, phase, ...snapshot, placement: where, ...extra })
+  return (
+    `${snapshot.digest ? `digest ${snapshot.digest.slice(0, 12)}` : 'digest inconnu'}, ${snapshot.details?.quantization_level ?? 'compression inconnue'}, ` +
+    `réflexion annoncée par le modèle : ${describeThinking(snapshot)}, ${describePlacement(where)}`
+  )
+}
+
+/** Empreinte des fichiers du test : identifie exactement le code qui a produit un score. */
+function harnessFingerprint() {
+  const files = ['benchmark-models.mjs', 'benchmark-cases.mjs', 'benchmark-scenarios.mjs', 'benchmark-vision.mjs', 'benchmark-code.mjs', 'benchmark-browser.mjs']
+  return Object.fromEntries(
+    files.map((file) => {
+      try {
+        return [file, createHash('sha256').update(readFileSync(join(__dirname, file))).digest('hex').slice(0, 16)]
+      } catch {
+        return [file, null]
+      }
+    })
+  )
 }
 
 /** Une demande jouée, sur une ligne : chaque tour, ses appels d'outils et la réponse finale. */
@@ -1110,8 +1276,23 @@ async function chatVision(model, prompt, imageBase64) {
   return {
     wallMs,
     tokPerSec: evalDurationS > 0 ? evalCount / evalDurationS : null,
-    content: data.message?.content?.trim() ?? ''
+    content: data.message?.content?.trim() ?? '',
+    data
   }
+}
+
+/**
+ * Étape 233 : une étape de computer_use_task telle que nextStep (computerUse.ts) l'envoie au modèle de vision —
+ * mêmes consignes, même message, `think: false`, même fenêtre de contexte. La toute première étape d'une tâche.
+ */
+async function chatPilot(model, testCase, imageBase64) {
+  const start = performance.now()
+  const messages = [
+    { role: 'system', content: PILOT_SYSTEM_PROMPT },
+    { role: 'user', content: buildPilotPrompt(testCase.goal, [], testCase.elements ?? []), images: [imageBase64] }
+  ]
+  const data = await postChat({ model, messages, stream: false, think: false, options: { num_ctx: CONVERSATION_NUM_CTX } })
+  return { wallMs: performance.now() - start, content: data.message?.content?.trim() ?? '', data, messages }
 }
 
 /**
@@ -1139,10 +1320,12 @@ async function chatCodeOnce(model, prompt, withThink) {
 
 async function chatCode(model, prompt) {
   let wallMs, data
+  let think = 'high'
   try {
     ;({ wallMs, data } = await chatCodeOnce(model, prompt, true))
   } catch (firstErr) {
     if (firstErr instanceof OllamaDownError) throw firstErr
+    think = false
     try {
       ;({ wallMs, data } = await chatCodeOnce(model, prompt, false))
     } catch (secondErr) {
@@ -1154,7 +1337,9 @@ async function chatCode(model, prompt) {
   return {
     wallMs,
     tokPerSec: evalDurationS > 0 ? evalCount / evalDurationS : null,
-    content: data.message?.content?.trim() ?? ''
+    content: data.message?.content?.trim() ?? '',
+    data,
+    think
   }
 }
 
@@ -1179,13 +1364,13 @@ function oneLine(text, max = 240) {
  * Bloc « ### modèle » du fichier de résultats (étape 230) : les questions ratées, avec le nombre de passages
  * ratés et ce que le modèle a fait à la place, puis ses réponses aux questions sans outil.
  */
-function formatConversationDetail(model, perModel, detail, repeats = CONVERSATION_REPEATS, intro = []) {
+function formatConversationDetail(model, perModel, detail, repeats = CONVERSATION_REPEATS, intro = [], outro = []) {
   const lines = [`### ${model} — ${perModel.correct}/${perModel.total}`, '', ...intro]
   const missed = detail.filter((d) => d.missed > 0)
   if (!missed.length) lines.push('Aucune question ratée.')
   for (const d of missed) {
     lines.push(
-      `- RATÉ ${d.missed}/${repeats} « ${d.prompt} »${d.expectedTool === undefined ? '' : ` (attendu : ${d.expectedTool ?? 'aucun outil'})`} — obtenu : ${d.got.join(' ; ')}`
+      `- RATÉ ${d.missed}/${d.runs ?? repeats} « ${d.prompt} »${d.expectedTool === undefined ? '' : ` (attendu : ${d.expectedTool ?? 'aucun outil'})`} — obtenu : ${d.got.join(' ; ')}`
     )
   }
   const answered = detail.filter((d) => d.answers.length)
@@ -1197,6 +1382,7 @@ function formatConversationDetail(model, perModel, detail, repeats = CONVERSATIO
       for (const answer of d.answers) lines.push(`  > ${oneLine(answer, 1500)}`)
     }
   }
+  if (outro.length) lines.push('', ...outro)
   lines.push('')
   return lines.join('\n')
 }
@@ -1239,6 +1425,28 @@ async function main() {
   )
 
   ollamaVersion = await readOllamaVersion()
+  // Étape 233 : la configuration de toute la campagne, en tête des traces.
+  trace({
+    type: 'campagne',
+    ollama: ollamaVersion,
+    jaris: process.env.JARIS_APP_VERSION ?? null,
+    versions: { conversation: CONVERSATION_TEST_VERSION, demandes: SCENARIO_TEST_VERSION, vision: VISION_TEST_VERSION, code: CODE_TEST_VERSION },
+    harness: harnessFingerprint(),
+    machine: {
+      platform: process.platform,
+      release: release(),
+      arch: arch(),
+      cpu: cpus()[0]?.model ?? null,
+      cpuCount: cpus().length,
+      ramGb: Number(ramGb.toFixed(1)),
+      vramGb: vramGb === null ? null : Number(vramGb.toFixed(1)),
+      gpu: await detectGpuName()
+    },
+    numCtx: CONVERSATION_NUM_CTX,
+    simulatedNow: SCENARIO_NOW.toString(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    options: { scope: SCOPE, resume: RESUME, deleteAfterTest: DELETE_AFTER_TEST, onlyModels: [...ONLY_MODELS] }
+  })
   let installed
   try {
     installed = await listInstalledModels()
@@ -1692,7 +1900,8 @@ async function main() {
         // Étape 232 : durée d'une demande ENTIÈRE (tous ses appels), médiane et 95e centile — la moyenne
         // cacherait les demandes très lentes, celles qui donnent l'impression que Jaris est bloqué.
         lines.push(
-          `${SCENARIOS.length} demandes de bout en bout, jouées ${SCENARIO_REPEATS} fois (graines différentes), outils simulés (benchmark-scenarios.mjs).`
+          `${SCENARIOS.length} demandes de bout en bout dans la boucle de Jaris (relances comprises), dont ${REPEATED_SCENARIOS.length} rejouées une 2e fois ` +
+            `(autre graine, résultats différents) : ${SCENARIO_TOTAL} passages, outils simulés (benchmark-scenarios.mjs). Réussite moyenne par demande dans le détail.`
         )
         lines.push('')
         lines.push('| Modèle | Durée médiane | Durée 95 % | Réussite |')
@@ -1779,6 +1988,18 @@ async function main() {
         perModel.latencies.push(r.wallMs)
         if (r.tokPerSec !== null) perModel.speeds.push(r.tokPerSec)
         const ok = isCorrectAnswer(testCase, r)
+        trace({
+          type: 'question',
+          model,
+          pass,
+          index: caseIndex,
+          ok,
+          ms: Math.round(r.wallMs),
+          think: r.think,
+          messages: compactMessages(buildCaseMessages(testCase)),
+          response: r.data.message ?? null,
+          meta: ollamaMeta(r.data)
+        })
         if (ok) perModel.correct++
         const got = r.toolName ? `${r.toolName} ${JSON.stringify(r.toolArgs ?? {})}` : 'aucun outil'
         console.log(`${ok ? 'OK' : 'RATÉ'} (attendu: ${expectedTool ?? 'aucun outil'}, obtenu: ${got}) — ${fmt(r.wallMs, 0)}ms`)
@@ -1807,36 +2028,70 @@ async function main() {
     }
 
     results.push(perModel)
-    conversationDetails.set(model, formatConversationDetail(model, perModel, detail))
+    const config = await recordModelConfig(model, 'questions')
+    conversationDetails.set(model, formatConversationDetail(model, perModel, detail, CONVERSATION_REPEATS, [], [`Configuration : ${config}.`]))
     // Lu par le tableau de suivi en direct (OptionsMenu.tsx) : ce modèle a fini tous ses tests, avec ce score.
     console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
     persistResults()
   }
 
   /**
-   * Étape 232 : les demandes complètes (benchmark-scenarios.mjs), jouées de bout en bout dans une copie de la
-   * boucle de converse(). Chaque passage a sa graine, et la trace complète (appels, résultats, réponses) est
-   * recopiée dans le fichier pour pouvoir juger soi-même — et corriger un jugement, dans les deux sens.
+   * Étape 232, puis 233 : les demandes complètes (benchmark-scenarios.mjs), jouées de bout en bout dans une copie
+   * vérifiée de la boucle de converse() — 40 demandes différentes, puis 8 rejouées avec une autre graine et des
+   * résultats différents. Chaque passage a sa graine ; la trace lisible va dans le fichier de résultats, la trace
+   * COMPLÈTE (requêtes exactes, réflexion, tokens, durées) dans le fichier de traces.
    */
   async function runScenarioPhase(model) {
     const perModel = { model, role: 'scenarios', latencies: [], speeds: [], correct: 0, total: 0 }
     const thinkModes = new Set()
-    const detail = SCENARIOS.map((sc) => ({ prompt: `${sc.id} — ${sc.turns.join(' → ')}`, expectedTool: undefined, missed: 0, got: [], answers: [] }))
+    const detail = SCENARIOS.map((sc) => ({ prompt: `${sc.id} — ${sc.turns.join(' → ')}`, expectedTool: undefined, missed: 0, runs: 0, got: [], answers: [] }))
     const raw = []
-    for (let pass = 1; pass <= SCENARIO_REPEATS; pass++) for (const [index, scenario] of SCENARIOS.entries()) {
+    const outcomes = []
+    const stats = { promptTokens: [], firstToolMs: [], nudges: 0, truncated: 0, emptyAfterThinking: 0 }
+    for (const { scenario, index, pass, variant } of SCENARIO_RUNS) {
       const seed = scenarioSeed(pass, index)
-      process.stdout.write(`  [${pass}/${SCENARIO_REPEATS}] demande « ${scenario.id} » ... `)
+      process.stdout.write(`  [${pass}/2] demande « ${scenario.id} » ... `)
       perModel.total++
+      detail[index].runs++
       try {
-        const run = await runScenario(scenario, (messages) => chatScenario(model, messages, seed, thinkModes))
-        raw.push({ id: scenario.id, pass, seed, ok: run.ok, reason: run.reason, ms: Math.round(run.wallMs), turns: run.turns, calls: run.calls })
+        const run = await runScenario(scenario, (messages) => chatScenario(model, messages, seed, thinkModes), { variant })
+        // Dans le fichier de résultats : de quoi rejuger (appels, réponses), sans les requêtes entières (traces).
+        const turns = run.turns.map(({ messages: _messages, ...turn }) => turn)
+        raw.push({ id: scenario.id, pass, variant, seed, ok: run.ok, reason: run.reason, ms: Math.round(run.wallMs), turns, calls: run.calls })
+        trace({
+          type: 'demande',
+          model,
+          id: scenario.id,
+          family: scenario.family,
+          pass,
+          variant,
+          seed,
+          ok: run.ok,
+          reason: run.reason,
+          ms: Math.round(run.wallMs),
+          turns: run.turns.map((turn) => ({ ...turn, messages: compactMessages(turn.messages) })),
+          modelCalls: run.modelCalls,
+          calls: run.calls,
+          finalState: run.finalState
+        })
+        for (const call of run.modelCalls) {
+          if (call.meta.prompt_eval_count) stats.promptTokens.push(call.meta.prompt_eval_count)
+          if (call.meta.done_reason === 'length') stats.truncated++
+          if (!call.response?.content && !call.response?.tool_calls?.length && call.response?.thinking) stats.emptyAfterThinking++
+        }
+        for (const turn of run.turns) {
+          stats.nudges += turn.nudges.length
+          if (turn.msFirstTool !== null) stats.firstToolMs.push(turn.msFirstTool)
+        }
+        outcomes.push({ id: scenario.id, ok: run.ok })
         perModel.latencies.push(run.wallMs)
         if (run.ok) perModel.correct++
         else {
           detail[index].missed++
           detail[index].got.push(run.reason)
         }
-        detail[index].answers.push(`${run.ok ? 'compté juste' : `compté faux (${run.reason})`} — graine ${seed} — ${describeRun(run)}`)
+        const nudgeNote = run.turns.some((t) => t.nudges.length) ? ` — relancé par Jaris : ${run.turns.flatMap((t) => t.nudges).join(', ')}` : ''
+        detail[index].answers.push(`${run.ok ? 'compté juste' : `compté faux (${run.reason})`} — graine ${seed}${variant ? ', variante 2' : ''}${nudgeNote} — ${describeRun(run)}`)
         console.log(`${run.ok ? 'OK' : `RATÉ (${run.reason})`} — ${fmt(run.wallMs / 1000)} s`)
         // Une demande ratée montre aussi ce qui s'est passé, sans attendre le fichier de fin de modèle.
         if (!run.ok) console.log(`      ${describeRun(run)}`)
@@ -1847,7 +2102,9 @@ async function main() {
         detail[index].missed++
         detail[index].got.push(`erreur : ${err.message}`)
         detail[index].answers.push(`compté faux : erreur : ${err.message}`)
-        raw.push({ id: scenario.id, pass, seed, ok: false, reason: `erreur : ${err.message}`, ms: null, turns: [], calls: [] })
+        raw.push({ id: scenario.id, pass, variant, seed, ok: false, reason: `erreur : ${err.message}`, ms: null, turns: [], calls: [] })
+        trace({ type: 'demande', model, id: scenario.id, family: scenario.family, pass, variant, seed, ok: false, reason: `erreur : ${err.message}` })
+        outcomes.push({ id: scenario.id, ok: false })
       }
       testsDone++
       console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
@@ -1855,17 +2112,25 @@ async function main() {
       emitProgress()
     }
     results.push(perModel)
-    const info = await modelInfo(model)
+    const config = await recordModelConfig(model, 'demandes', { thinkSent: [...thinkModes] })
+    const median = (values) => quantile(values, 0.5)
     const intro = [
-      `Configuration : ${info}, réflexion ${[...thinkModes].join(' / ') || '—'}, contexte ${CONVERSATION_NUM_CTX}, ` +
+      `Configuration : ${config}, réflexion envoyée ${[...thinkModes].join(' / ') || '—'}, contexte ${CONVERSATION_NUM_CTX}, ` +
         `graines passage × 1000 + numéro de la demande, Ollama ${ollamaVersion}.`,
       '',
+      // Relecture ChatGPT : la moyenne de chaque demande d'abord, puis celle des demandes — une demande jouée deux
+      // fois ne compte pas double.
+      `Réussite moyenne par demande : ${Math.round(100 * demandSuccessRate(outcomes))} % (${SCENARIOS.length} demandes, dont ${REPEATED_SCENARIOS.length} jouées deux fois).`,
+      `Relances de Jaris : ${stats.nudges} ; réponses coupées (fenêtre pleine) : ${stats.truncated} ; réponses vides après réflexion : ${stats.emptyAfterThinking} ; ` +
+        `tokens envoyés : médiane ${median(stats.promptTokens) ?? '—'}, maximum ${stats.promptTokens.length ? Math.max(...stats.promptTokens) : '—'} sur ${CONVERSATION_NUM_CTX} ; ` +
+        `premier outil : médiane ${median(stats.firstToolMs) === null ? '—' : `${fmt(median(stats.firstToolMs) / 1000)} s`}.`,
+      '',
       // Une ligne compacte, demande par demande : pour comparer deux modèles sur les MÊMES demandes.
-      `Par demande : ${SCENARIOS.map((sc, i) => `${sc.id} ${SCENARIO_REPEATS - detail[i].missed}/${SCENARIO_REPEATS}`).join(', ')}.`,
+      `Par demande : ${SCENARIOS.map((sc, i) => `${sc.id} ${detail[i].runs - detail[i].missed}/${detail[i].runs}`).join(', ')}.`,
       ''
     ]
     scenarioRaw.set(model, JSON.stringify(raw))
-    conversationDetails.set(`${model} (demandes)`, formatConversationDetail(`${model} (demandes)`, perModel, detail, SCENARIO_REPEATS, intro))
+    conversationDetails.set(`${model} (demandes)`, formatConversationDetail(`${model} (demandes)`, perModel, detail, 1, intro))
     console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
     persistResults()
   }
@@ -1883,9 +2148,11 @@ async function main() {
     await releaseAfterLastTest(model, 'conversation')
   }
 
-  // Modèles Vision : les images de VISION_TEST_CASES sont générées une seule fois ici (pas à chaque appel
-  // modèle), le PNG encodé ne dépend que du test, pas du modèle qui le reçoit.
+  // Modèles Vision : les images sont lues une seule fois ici, elles ne dépendent que du test.
   const visionImages = VISION_TEST_CASES.map((c) => loadVisionImage(c))
+  const pilotImages = VISION_PILOT_CASES.map((c) => loadVisionImage(c))
+  const pilotTargets = loadPilotTargets()
+  const sha = (base64) => createHash('sha256').update(base64).digest('hex').slice(0, 16)
 
   for (const model of visionToRun) {
     const readyVision = await ensureReady(model)
@@ -1898,35 +2165,60 @@ async function main() {
     const perModel = { model, role: 'vision', latencies: [], speeds: [], correct: 0, total: 0 }
 
     // Étape 230 : chaque question posée VISION_REPEATS fois, avec le détail des ratés comme en conversation.
-    const visionDetail = VISION_TEST_CASES.map((c) => ({ prompt: c.prompt, expectedTool: undefined, missed: 0, got: [], answers: [] }))
-    for (let pass = 1; pass <= VISION_REPEATS; pass++) for (let i = 0; i < VISION_TEST_CASES.length; i++) {
-      const { prompt } = VISION_TEST_CASES[i]
-      process.stdout.write(`  [${pass}/${VISION_REPEATS}] "${prompt.slice(0, 40)}${prompt.length > 40 ? '…' : ''}" ... `)
+    // Étape 233 : puis les cas de visée (une étape de pilotage de l'écran).
+    const visionDetail = [
+      ...VISION_TEST_CASES.map((c) => ({ prompt: c.prompt, expectedTool: undefined, missed: 0, got: [], answers: [] })),
+      ...VISION_PILOT_CASES.map((c) => ({ prompt: `visée ${c.id} — ${c.goal}`, expectedTool: undefined, missed: 0, got: [], answers: [] }))
+    ]
+    const cases = [...VISION_TEST_CASES.map((c, i) => ({ kind: 'lecture', c, i })), ...VISION_PILOT_CASES.map((c, i) => ({ kind: 'visée', c, i }))]
+    let pilotOk = 0
+    for (let pass = 1; pass <= VISION_REPEATS; pass++) for (const [d, { kind, c, i }] of cases.entries()) {
+      const label = kind === 'lecture' ? c.prompt : `visée : ${c.goal}`
+      process.stdout.write(`  [${pass}/${VISION_REPEATS}] "${label.slice(0, 40)}${label.length > 40 ? '…' : ''}" ... `)
+      perModel.total++
       try {
-        const r = await chatVision(model, prompt, visionImages[i])
+        const image = kind === 'lecture' ? visionImages[i] : pilotImages[i]
+        const r = kind === 'lecture' ? await chatVision(model, c.prompt, image) : await chatPilot(model, c, image)
         perModel.latencies.push(r.wallMs)
-        if (r.tokPerSec !== null) perModel.speeds.push(r.tokPerSec)
-        perModel.total++
-        const ok = isCorrectVisionAnswer(VISION_TEST_CASES[i], r.content)
+        if (r.tokPerSec != null) perModel.speeds.push(r.tokPerSec)
+        const reason = kind === 'lecture' ? (isCorrectVisionAnswer(c, r.content) ? null : 'réponse fausse') : judgePilotStep(c, r.content, pilotTargets)
+        const ok = reason === null
+        trace({
+          type: 'vision',
+          model,
+          kind,
+          file: c.file,
+          id: c.id ?? null,
+          pass,
+          ok,
+          reason,
+          ms: Math.round(r.wallMs),
+          prompt: kind === 'lecture' ? c.prompt : c.goal,
+          image: sha(image),
+          messages: kind === 'visée' ? r.messages.map((m) => (m.images ? { ...m, images: [sha(m.images[0])] } : m.role === 'system' ? { role: 'system', ref: textRef(m.content) } : m)) : undefined,
+          response: r.data.message ?? null,
+          meta: ollamaMeta(r.data)
+        })
         // Étape 230 (Léo : « on sait ce qu'il a répondu, on peut corriger les scores ») : TOUTES les réponses de
-        // vision sont recopiées, justes comprises — la vérification par mots peut se tromper dans les deux sens.
-        visionDetail[i].answers.push(`${ok ? 'compté juste' : 'compté faux'} : ${r.content || 'réponse vide'}`)
-        if (ok) perModel.correct++
-        else {
-          visionDetail[i].missed++
-          visionDetail[i].got.push(`« ${oneLine(r.content) || 'réponse vide'} »`)
+        // vision sont recopiées, justes comprises — la vérification peut se tromper dans les deux sens.
+        visionDetail[d].answers.push(`${ok ? 'compté juste' : `compté faux${kind === 'visée' ? ` (${reason})` : ''}`} : ${r.content || 'réponse vide'}`)
+        if (ok) {
+          perModel.correct++
+          if (kind === 'visée') pilotOk++
+        } else {
+          visionDetail[d].missed++
+          visionDetail[d].got.push(kind === 'visée' ? reason : `« ${oneLine(r.content) || 'réponse vide'} »`)
         }
-        console.log(`${ok ? 'OK' : 'RATÉ'} (réponse: "${r.content.slice(0, 60)}") — ${fmt(r.wallMs, 0)}ms, ${fmt(r.tokPerSec)} tok/s`)
+        console.log(`${ok ? 'OK' : 'RATÉ'} (réponse: "${r.content.slice(0, 60)}") — ${fmt(r.wallMs, 0)}ms`)
       } catch (err) {
         // Ollama injoignable : l'analyse s'arrête AVANT d'enregistrer ce modèle (jamais un faux score).
         if (err instanceof OllamaDownError) throw err
         console.log(`ERREUR (${err.message})`)
-        errors.push({ model, prompt, message: err.message })
-        // Une question en erreur compte comme ratée : le total reste toujours VISION_TOTAL.
-        perModel.total++
-        visionDetail[i].missed++
-        visionDetail[i].got.push(`erreur : ${err.message}`)
-        visionDetail[i].answers.push(`compté faux : erreur : ${err.message}`)
+        errors.push({ model, prompt: label, message: err.message })
+        visionDetail[d].missed++
+        visionDetail[d].got.push(`erreur : ${err.message}`)
+        visionDetail[d].answers.push(`compté faux : erreur : ${err.message}`)
+        trace({ type: 'vision', model, kind, file: c.file, id: c.id ?? null, pass, ok: false, reason: `erreur : ${err.message}` })
       }
       testsDone++
       console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
@@ -1935,7 +2227,13 @@ async function main() {
     }
 
     results.push(perModel)
-    conversationDetails.set(`${model} (vision)`, formatConversationDetail(`${model} (vision)`, perModel, visionDetail, VISION_REPEATS))
+    const config = await recordModelConfig(model, 'vision')
+    const intro = [
+      `Configuration : ${config}, réflexion désactivée (comme look_at_screen et computer_use_task), contexte ${CONVERSATION_NUM_CTX}.`,
+      `Lecture : ${perModel.correct - pilotOk}/${VISION_TEST_CASES.length * VISION_REPEATS} ; visée (pilotage de l'écran) : ${pilotOk}/${VISION_PILOT_CASES.length * VISION_REPEATS}.`,
+      ''
+    ]
+    conversationDetails.set(`${model} (vision)`, formatConversationDetail(`${model} (vision)`, perModel, visionDetail, VISION_REPEATS, [], intro.filter(Boolean)))
     console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
     persistResults()
 
@@ -1979,6 +2277,22 @@ async function main() {
         )
         // Le HTML entier : pour revérifier l'application plus tard (vérification corrigée) sans la régénérer.
         raw.push({ id: testCase.id, ok, reason, html: html ?? r.content })
+        trace({
+          type: 'code',
+          model,
+          id: testCase.id,
+          ok,
+          reason,
+          issues,
+          ms: Math.round(r.wallMs),
+          think: r.think,
+          prompt,
+          systemRef: textRef(CODE_GENERATE_SYSTEM_PROMPT),
+          response: r.data.message ?? null,
+          meta: ollamaMeta(r.data),
+          html,
+          previewCsp: PREVIEW_CSP_FOR_TEST
+        })
         console.log(`${ok ? 'OK' : `RATÉ (${reason})`} — ${fmt(r.wallMs / 1000)} s, ${fmt(r.tokPerSec)} tok/s`)
       } catch (err) {
         // Ollama injoignable : l'analyse s'arrête AVANT d'enregistrer ce modèle (jamais un faux score).
@@ -1989,6 +2303,7 @@ async function main() {
         codeDetail[index].got.push(`erreur : ${err.message}`)
         codeDetail[index].answers.push(`compté faux : erreur : ${err.message}`)
         raw.push({ id: testCase.id, ok: false, reason: `erreur : ${err.message}`, html: null })
+        trace({ type: 'code', model, id: testCase.id, ok: false, reason: `erreur : ${err.message}` })
       }
       testsDone++
       console.log(`##TEST_PROGRESS## ${testsDone} ${testsTotal}`)
@@ -1997,7 +2312,8 @@ async function main() {
     }
 
     results.push(perModel)
-    conversationDetails.set(`${model} (code)`, formatConversationDetail(`${model} (code)`, perModel, codeDetail, 1))
+    const config = await recordModelConfig(model, 'code')
+    conversationDetails.set(`${model} (code)`, formatConversationDetail(`${model} (code)`, perModel, codeDetail, 1, [], [`Configuration : ${config}, réflexion « high » (comme le mode Code), contexte 16384.`]))
     codeRaw.set(model, JSON.stringify(raw))
     console.log(`##MODEL_DONE## ${model} ${perModel.correct} ${perModel.total}`)
     persistResults()

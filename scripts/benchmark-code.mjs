@@ -18,7 +18,7 @@ export const PREVIEW_CSP_FOR_TEST =
   "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
 
 /** Augmenté à chaque changement des demandes ou des vérifications : un score d'une autre version est refait. */
-export const CODE_TEST_VERSION = 2
+export const CODE_TEST_VERSION = 3
 
 /** Une vérification ratée, avec la raison lisible écrite dans le fichier de résultats. */
 class Fail extends Error {}
@@ -27,7 +27,13 @@ class Fail extends Error {}
 const HELPERS = `window.__j = {
   visible(el) { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && s.opacity !== '0' },
   buttons() { return [...document.querySelectorAll('button, input[type=button], input[type=submit], [role=button], a, [onclick]')].filter((b) => this.visible(b)) },
-  label(el) { return ((el.innerText || el.value || '') + ' ' + (el.getAttribute('aria-label') || '') + ' ' + (el.title || '')).trim() },
+  label(el) {
+    const svgTitles = [...el.querySelectorAll('title')].map((t) => t.textContent).join(' ')
+    const labelledBy = (el.getAttribute('aria-labelledby') || '').split(/\\s+/).map((id) => document.getElementById(id)?.textContent || '').join(' ')
+    return [el.innerText || el.value || '', el.getAttribute('aria-label') || '', el.title || '', svgTitles, labelledBy].join(' ').trim()
+  },
+  hint(el) { return [el.id, el.getAttribute('class'), el.getAttribute('name'), el.getAttribute('data-action')].filter(Boolean).join(' ') },
+  iconOnly(el) { return !/[\\p{L}\\p{N}]/u.test(this.label(el)) },
   inputs() { return [...document.querySelectorAll('input:not([type=button]):not([type=submit]):not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=reset]), textarea')].filter((i) => this.visible(i)) },
   numbers() {
     const leaves = [...document.querySelectorAll('body *')].filter((e) => e.children.length === 0 && !/^(BUTTON|SCRIPT|STYLE|OPTION)$/.test(e.tagName) && this.visible(e))
@@ -46,23 +52,34 @@ const norm = (text) =>
 const pageText = (page) => page.evaluate('document.body ? document.body.innerText : ""')
 
 /**
- * Clique le bouton dont le texte correspond, au milieu du bouton, comme une vraie souris. `within` : texte d'une
- * ligne de liste, pour viser le bouton de CETTE ligne (supprimer une tâche précise).
+ * Clique le bouton voulu, au milieu du bouton, comme une vraie souris. `within` : texte d'une ligne de liste, pour
+ * viser le bouton de CETTE ligne (supprimer une tâche précise).
+ *
+ * Trouver le bouton comme le ferait Léo, qui voit aussi les icônes (Léo, 04/10/2026 : « si il fait une icône
+ * comment on fait ? ») — dans cet ordre :
+ * 1. son texte, son libellé d'accessibilité, son infobulle ou le titre de son icône SVG (`pattern`) ;
+ * 2. sinon son nom dans le code — id, classe… — en français ou en anglais (`hintPattern` : « btn-delete ») ;
+ * 3. sinon, s'il n'y a qu'UN seul bouton sans aucun texte à cet endroit (une icône seule), c'est lui.
  */
-async function clickButton(page, pattern, what, within) {
+async function clickButton(page, pattern, what, hintPattern, within) {
   const target = await page.evaluate(`(() => {
     ${HELPERS}
-    const re = new RegExp(${JSON.stringify(pattern)}, 'i')
+    const re = new RegExp(${JSON.stringify(pattern)}, 'iu')
+    const hintRe = new RegExp(${JSON.stringify(hintPattern)}, 'i')
     let pool = __j.buttons()
     const within = ${JSON.stringify(within ?? null)}
     if (within) {
       const leaf = [...document.querySelectorAll('body *')].find((e) => e.children.length === 0 && e.textContent.includes(within))
       let box = leaf
-      while (box && !__j.buttons().some((b) => box.contains(b) && re.test(__j.label(b)))) box = box.parentElement
+      while (box && !__j.buttons().some((b) => box.contains(b))) box = box.parentElement
       if (!box || box === document.body || box.innerText.split('\\n').filter((l) => l.trim()).length > 6) return { missing: true }
       pool = pool.filter((b) => box.contains(b))
     }
-    const button = pool.find((b) => re.test(__j.label(b)))
+    let button = pool.find((b) => re.test(__j.label(b))) || pool.find((b) => hintRe.test(__j.hint(b)))
+    if (!button) {
+      const icons = pool.filter((b) => __j.iconOnly(b))
+      if (icons.length === 1) button = icons[0]
+    }
     if (!button) return { missing: true }
     document.querySelectorAll('[data-jaris-cible]').forEach((e) => e.removeAttribute('data-jaris-cible'))
     button.setAttribute('data-jaris-cible', '')
@@ -115,11 +132,15 @@ export const CODE_TEST_CASES = [
     prompt: 'Un compteur qui affiche 0 au départ, avec un bouton « +1 » et un bouton « Remettre à zéro ».',
     async check(page) {
       if (!(await numbersShown(page)).includes(0)) throw new Fail('le compteur n’affiche pas 0 au départ')
-      for (let i = 0; i < 3; i++) await clickButton(page, '\\+\\s*1', '+1')
+      for (let i = 0; i < 3; i++) await clickButton(page, '\\+\\s*1', '+1', 'incr|plus|\\binc|add')
       if (!(await numbersShown(page)).includes(3)) throw new Fail('après 3 clics sur « +1 », le compteur n’affiche pas 3')
-      await clickButton(page, 'z[ée]ro|r[ée]initialis|reset|remettre', 'Remettre à zéro')
+      await clickButton(page, 'z[ée]ro|r[ée]initialis|reset|remettre', 'Remettre à zéro', 'reset|zero|clear|raz')
       const after = await numbersShown(page)
       if (!after.includes(0) || after.includes(3)) throw new Fail('après « Remettre à zéro », le compteur n’affiche pas 0')
+      // Le compteur repart bien de zéro : 2 clics donnent 2 (pas 5, ni un affichage figé).
+      for (let i = 0; i < 2; i++) await clickButton(page, '\\+\\s*1', '+1', 'incr|plus|\\binc|add')
+      const again = await numbersShown(page)
+      if (!again.includes(2) || again.includes(5)) throw new Fail('après la remise à zéro puis 2 clics sur « +1 », le compteur n’affiche pas 2')
     }
   },
   {
@@ -129,8 +150,13 @@ export const CODE_TEST_CASES = [
       if ((await inputCount(page)) < 2) throw new Fail('il n’y a pas deux champs pour les nombres')
       await typeInto(page, 0, '12')
       await typeInto(page, 1, '30')
-      await clickButton(page, 'calcul', 'Calculer')
+      await clickButton(page, 'calcul', 'Calculer', 'calc|sum|somme|compute|add')
       if (!/\b42\b/.test(await pageText(page))) throw new Fail('12 + 30 : la somme 42 ne s’affiche pas')
+      // Deuxième calcul avec d'autres nombres : une somme écrite en dur, ou un résultat qui ne se met pas à jour, échoue.
+      await typeInto(page, 0, '250')
+      await typeInto(page, 1, '-75')
+      await clickButton(page, 'calcul', 'Calculer', 'calc|sum|somme|compute|add')
+      if (!/(^|[^\d-])175\b/.test(await pageText(page))) throw new Fail('250 + (−75) : la somme 175 ne s’affiche pas')
     }
   },
   {
@@ -139,8 +165,11 @@ export const CODE_TEST_CASES = [
       'Un convertisseur de degrés Celsius en Fahrenheit : un champ pour la température en Celsius, un bouton « Convertir », et le résultat en Fahrenheit affiché dans la page.',
     async check(page) {
       await typeInto(page, 0, '100')
-      await clickButton(page, 'convert', 'Convertir')
+      await clickButton(page, 'convert', 'Convertir', 'conv')
       if (!/\b212\b/.test(await pageText(page))) throw new Fail('100 °C : le résultat 212 °F ne s’affiche pas')
+      await typeInto(page, 0, '25')
+      await clickButton(page, 'convert', 'Convertir', 'conv')
+      if (!/\b77\b/.test(await pageText(page))) throw new Fail('25 °C : le résultat 77 °F ne s’affiche pas')
     }
   },
   {
@@ -149,12 +178,12 @@ export const CODE_TEST_CASES = [
       'Une liste de tâches : un champ de texte, un bouton « Ajouter » qui ajoute la tâche à la liste, et un bouton « Supprimer » à côté de chaque tâche.',
     async check(page) {
       await typeInto(page, 0, 'Acheter du pain')
-      await clickButton(page, 'ajout', 'Ajouter')
+      await clickButton(page, 'ajout', 'Ajouter', 'add|ajout|submit')
       await typeInto(page, 0, 'Appeler Marc')
-      await clickButton(page, 'ajout', 'Ajouter')
+      await clickButton(page, 'ajout', 'Ajouter', 'add|ajout|submit')
       const text = await pageText(page)
       if (!text.includes('Acheter du pain') || !text.includes('Appeler Marc')) throw new Fail('les deux tâches ajoutées ne s’affichent pas')
-      await clickButton(page, 'supprim|effacer|retirer|×|✕|✖|🗑|^\\s*x\\s*$', 'Supprimer', 'Acheter du pain')
+      await clickButton(page, 'supprim|effacer|retirer|×|✕|✖|🗑|^\\s*x\\s*$', 'Supprimer', 'delete|remove|suppr|trash|\\bdel\\b|poubelle', 'Acheter du pain')
       const after = await pageText(page)
       if (after.includes('Acheter du pain')) throw new Fail('la tâche supprimée est toujours affichée')
       if (!after.includes('Appeler Marc')) throw new Fail('supprimer une tâche a aussi fait disparaître l’autre')
@@ -173,7 +202,7 @@ export const CODE_TEST_CASES = [
       }
       const confirmation = /merci|confirm|bien ete|envoye(e|s)?\b|recu\b|succes/
       const before = norm(await pageText(page))
-      await clickButton(page, 'envoy', 'Envoyer')
+      await clickButton(page, 'envoy', 'Envoyer', 'send|submit|envoy')
       const after = norm(await pageText(page))
       if (!confirmation.test(after) || (confirmation.test(before) && after === before)) throw new Fail('aucun message de confirmation après « Envoyer »')
     }
