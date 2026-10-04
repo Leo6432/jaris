@@ -6376,3 +6376,6 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `git -c core.autocrlf=true worktree add --detach <dossier> HEAD`, puis `npm test` dedans. (2) Un test de
   minuterie à 120 ms en temps RÉEL échouait sur une machine chargée (le rappel sonnait avant d'être réarmé) :
   horloge simulée (`t.mock.timers.enable({ apis: ['setTimeout', 'Date'] })`), jamais une attente réelle courte.
+  (3) `new URL('../', import.meta.url).pathname` comme dossier : « /D:/... » sous Windows, donc « D:\\D:\\... » une
+  fois passé à `join` — toujours `fileURLToPath(...)`. Ces trois-là ne se voient PAS sous Linux : seule la CI
+  Windows les attrape, d'où l'intérêt de la copie CRLF avant de pousser.

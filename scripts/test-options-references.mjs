@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
 /**
@@ -9,7 +10,8 @@ import test from 'node:test'
  * « Modèles » alors qu'elle est dans Général. Envoyer quelqu'un vers un onglet qui n'existe pas, c'est le laisser
  * chercher sans fin. Ce test relit tout le texte affiché (hors commentaires) et vérifie chaque « Options → X ».
  */
-const root = new URL('../', import.meta.url).pathname
+// fileURLToPath, pas `.pathname` : sous Windows (la CI), `.pathname` donne « /D:/... » et le chemin devient « D:\\D:\\... ».
+const root = fileURLToPath(new URL('../', import.meta.url))
 const files = (dir) =>
   readdirSync(join(root, dir)).flatMap((name) => {
     const path = join(dir, name)
