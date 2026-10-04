@@ -594,7 +594,7 @@ const VARIANTS = {
     { price: '58 912,30 €', pattern: /58[\s  .]?91[23]/ }
   ],
   meteo: [
-    { text: 'pluie faible le matin, éclaircies l’après-midi, 9 °C au lever du jour, 16 °C l’après-midi', weather: /pluie|pluvieux|averse/, temp: /\b16\b/ },
+    { text: 'pluie faible le matin, éclaircies l’après-midi, 9 °C au lever du jour, 16 °C l’après-midi', weather: /pluie|pluv|pleu|averse/, temp: /\b16\b/ },
     { text: 'orages l’après-midi après une matinée ensoleillée, 12 °C au lever du jour, 23 °C l’après-midi', weather: /orage/, temp: /\b23\b/ }
   ],
   gazole: [
@@ -647,8 +647,13 @@ export const SCENARIOS = [
     id: 'youtube-guitare',
     family: 'Actions enchaînées',
     turns: ['Va sur YouTube et cherche un tuto de guitare pour débutant.'],
-    setup: { computerUse: () => 'Recherche lancée sur YouTube : la page des résultats est affichée.' },
-    allow: ['computer_use_task', 'open_app'],
+    // Campagne de Léo (qwen3.5:9b) : la recherche faite, PUIS l'écran regardé pour décrire les résultats — c'est ce
+    // que Jaris ferait de mieux, et le test le comptait faux (look_at_screen non prévu, écran simulé incohérent).
+    setup: {
+      computerUse: () => 'Recherche lancée sur YouTube : la page des résultats est affichée.',
+      screen: 'Je vois YouTube, avec les résultats de recherche pour « tuto guitare débutant » : une liste de vidéos de cours de guitare.'
+    },
+    allow: ['computer_use_task', 'open_app', 'look_at_screen'],
     check: (ctx) => {
       if (!ctx.state.computerTasks.some((t) => has(t.goal, /youtube/) && has(t.goal, /guitar/))) return 'aucune tâche à l’écran pour YouTube + guitare'
       // Vu le 04/10/2026 (ministral-3:3b) : des titres de vidéos et des nombres de vues inventés, jamais vus.
