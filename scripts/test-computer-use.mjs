@@ -130,15 +130,15 @@ test('click_element clique à la position donnée par Windows, pas à des pixels
 
 test('un élément introuvable ne fait PAS échouer la tâche : le clic en pixels reste possible', async () => {
   const app = setup(
-    [{ action: 'click_element', name: 'Envoyer' }, { action: 'click', x: 12, y: 34 }, { action: 'done', result: 'Fait' }],
+    [{ action: 'click_element', name: 'Envoyer' }, { action: 'click', x: 500, y: 500 }, { action: 'done', result: 'Fait' }],
     'Clic left effectué à (12, 34).',
     undefined,
     ELEMENTS
   )
   assert.equal(await app.run(), 'Fait')
-  // Aucun clic pour l'élément manquant, puis le clic en pixels du tour suivant.
+  // Aucun clic pour l'élément manquant, puis le clic par position du tour suivant (milieu de l'image 1280 × 720).
   assert.equal(app.state().clicks.length, 1)
-  assert.deepEqual(app.state().clicks[0], [12, 34, 'left'])
+  assert.deepEqual(app.state().clicks[0], [640, 360, 'left'])
   assert.ok(app.state().logs.some(line => /introuvable/.test(line)))
   // L'échec est visible dans l'historique envoyé au modèle, sinon il retenterait le même nom.
   assert.match(app.state().prompts[1], /Élément "Envoyer" introuvable/)
@@ -160,7 +160,7 @@ test('la liste des éléments est bien transmise au modèle', async () => {
 test("sans arbre d'accessibilité, le modèle est explicitement renvoyé vers le clic en pixels", async () => {
   const app = setup([{ action: 'done', result: 'ok' }], '', undefined, [])
   await app.run()
-  assert.match(app.state().prompts[0], /aucun élément cliquable.*clics en pixels/s)
+  assert.match(app.state().prompts[0], /aucun élément cliquable.*clics par position \(x\/y de 0 à 1000\)/s)
 })
 
 // --- Étape 231 : modèle de pilotage d'écran (UI-TARS) quand il est installé ---
@@ -222,10 +222,29 @@ test('pilotage : réponse sans action exploitable = échec clair, aucun clic', a
 })
 
 test('profil qui cite le modèle de pilotage mais qu’Ollama ne l’a plus : le modèle de vision pilote, comme avant', async () => {
-  const app = setup([{ action: 'click', x: 2, y: 4 }, { action: 'done', result: 'ok' }], ok, undefined, [], { profile: { pilotModel: PILOT }, installed: ['qwen3.5:4b'] })
+  const app = setup([{ action: 'click', x: 250, y: 500 }, { action: 'done', result: 'ok' }], ok, undefined, [], { profile: { pilotModel: PILOT }, installed: ['qwen3.5:4b'] })
   assert.equal(await app.run(), 'ok')
   assert.equal(app.state().bodies[0].model, 'test')
   assert.equal(app.state().bodies[0].messages[0].role, 'system')
-  assert.deepEqual(app.state().clicks[0], [2, 4, 'left'])
+  assert.deepEqual(app.state().clicks[0], [320, 360, 'left'])
   assert.ok(app.state().uiaReads > 0)
+})
+
+// Campagne de Léo (05/10/2026) : les modèles de vision visent sur 0–1000 (qwen3.8:27b : 9 clics justes sur 10 lus
+// ainsi, 3 sur 10 lus en pixels). Leur position est ramenée à l'image, puis à l'écran réel (facteur d'échelle).
+test('modèle de vision : position sur 0–1000 ramenée à l’image puis à l’écran ; au-delà de 1000, des pixels', async () => {
+  const app = setup(
+    [{ action: 'click', x: 1000, y: 1000 }, { action: 'click', x: 250, y: 100 }, { action: 'click', x: 1100, y: 300 }, { action: 'done', result: 'ok' }],
+    ok,
+    undefined,
+    [],
+    { scale: 1.5 }
+  )
+  assert.equal(await app.run(), 'ok')
+  // (1000, 1000) = coin bas droit de l'image 1280 × 720, × 1,5 pour l'écran réel 1920 × 1080.
+  assert.deepEqual(app.state().clicks[0], [1920, 1080, 'left'])
+  assert.deepEqual(app.state().clicks[1], [480, 108, 'left'])
+  // x = 1100 : forcément un pixel de l'image (repli pour un modèle qui ignore la consigne).
+  assert.deepEqual(app.state().clicks[2], [1650, 450, 'left'])
+  assert.match(app.state().bodies[0].messages[0].content, /échelle de 0 à 1000/)
 })

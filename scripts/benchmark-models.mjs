@@ -1786,7 +1786,11 @@ async function main() {
     callTimeoutMs = REPLAY_CALL_TIMEOUT_MS
     try {
       for (const model of [...new Set(todo.map((r) => r.model))]) {
-        const downloadedHere = !installed.includes(model)
+        const records = todo.filter((r) => r.model === model)
+        // Une application déjà écrite dont seule la VÉRIFICATION a planté se revérifie sans le modèle : le
+        // retélécharger (20 Go pour qwen2.5-coder:32b) ne servait à rien (constaté au rejeu du 05/10/2026).
+        const needsModel = records.some((r) => !(r.type === 'code' && r.html && !r.timeout))
+        const downloadedHere = needsModel && !installed.includes(model)
         if (downloadedHere) {
           try {
             await pullModel(model, budgetFor(model), { reservedGb: 0 }, () => {})
@@ -1796,18 +1800,24 @@ async function main() {
           }
         }
         console.log(`\n=== ${model} (tests rejoués) ===`)
+        // Suivi en direct de Jaris (UnscoredModelsTest.tsx) : sans ces lignes, l'écran restait figé pendant tout le
+        // rejeu alors que le test avançait (Léo, 05/10/2026 : « ça met fini » pour un seul modèle sur huit).
+        console.log(`##MODEL_TESTING## ${model}`)
         const thinkModes = new Set()
         // Garde-fou : un modèle qui ne répond toujours pas en 2 h, 3 fois de suite, est vraiment bloqué — sans ça, ses
         // dizaines de cas « non joués » coûteraient 2 h chacun. Ses cas restants gardent leur ligne « délai dépassé ».
         let streak = 0
-        for (const record of todo.filter((r) => r.model === model)) {
+        let replayed = 0
+        for (const record of records) {
           if (streak >= MAX_TIMEOUT_STREAK) {
             console.log(`  ${record.type} « ${record.id ?? record.file} » non rejoué : ${MAX_TIMEOUT_STREAK} délais de suite au rejeu.`)
             continue
           }
           const timedOut = await replayOne(record, thinkModes)
           streak = timedOut ? streak + 1 : 0
+          replayed++
         }
+        console.log(`##REPLAY_DONE## ${model} ${replayed}`)
         if (downloadedHere && DELETE_AFTER_TEST) await deleteModelViaApi(model).catch(() => {})
       }
     } finally {

@@ -165,9 +165,12 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
   )
   const visionOnly = new Set([...source.match(/const VISION_CANDIDATES[\s\S]*?\n\]/)[0].matchAll(/model: '([^']+)'/g)].map((x) => x[1]))
   const codeOnly = new Set([...source.match(/const CODE_CANDIDATES[\s\S]*?\n\]/)[0].matchAll(/model: '([^']+)'/g)].map((x) => x[1]))
-  // Scores du dépôt (test version 6, 03/10/2026) : 78 questions faites. Étape 232 : nouvelles épreuves — demandes
-  // complètes (conversation), vraies captures (vision, sur 34) et applications cliquées (code, sur 5) : tout repasse.
-  assert.deepEqual(new Set(setup({ vramMib: 8 * 1024 }).getUnscoredModels()), new Set([...conversationModels, ...visionOnly, ...codeOnly]))
+  // Scores du dépôt après la campagne de Léo (05/10/2026) : demandes complètes et code notés ; seule la vision
+  // repasse (test de vision version 4 : visée sur une échelle de 0 à 1000).
+  assert.deepEqual(new Set(setup({ vramMib: 8 * 1024 }).getUnscoredModels()), visionOnly)
+  // Sans ces deux nouvelles épreuves, tout repasse.
+  const before = REAL_SCORES.replace(/## Code[\s\S]*$/, '')
+  assert.deepEqual(new Set(setup({ vramMib: 8 * 1024, scores: before }).getUnscoredModels()), new Set([...conversationModels, ...visionOnly, ...codeOnly]))
   // Une fois les trois nouvelles épreuves notées, plus rien à tester.
   const table = (heading, models, score) => `\n\n## ${heading}\n\n| Modèle | Score |\n|---|---|\n${[...models].map((m) => `| ${m} | ${score} |`).join('\n')}\n`
   const allNew =
@@ -177,7 +180,7 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
     table('Demandes complètes', conversationModels, '40/48')
   assert.deepEqual([...setup({ vramMib: 8 * 1024, scores: allNew }).getUnscoredModels()], [])
   // Avec les scores de l'ancien test (sur 17 et sur 3), tout repasse.
-  const old = REAL_SCORES.replace(/\| (\d+)\/78 \|/g, '| 16/17 |').replace(/\| (\d+)\/18 \|/g, '| 3/3 |')
+  const old = before.replace(/\| (\d+)\/78 \|/g, '| 16/17 |').replace(/\| (\d+)\/18 \|/g, '| 3/3 |')
   const unscored = [...setup({ vramMib: 8 * 1024, scores: old }).getUnscoredModels()]
   assert.equal(conversationModels.size, 30)
   for (const model of conversationModels) assert.ok(unscored.includes(model), `${model} doit repasser le nouveau test`)
@@ -224,7 +227,8 @@ test('Médium : un modèle sans vitesse publiée reste candidat (choix de Léo),
 // bouton ne propose que ce qui reste à faire d'après le fichier brut — pas les 42 modèles dont les scores ne sont
 // pas encore recopiés.
 test('modèles à tester après une campagne : seulement les sautés, les délais dépassés et les plantages pas encore rejoués', () => {
-  const scan = setup({ vramMib: 8 * 1024 })
+  // Scores d'avant la campagne : ni demandes complètes ni code notés, c'est le fichier brut qui décide.
+  const scan = setup({ vramMib: 8 * 1024, scores: REAL_SCORES.replace(/## Code[\s\S]*$/, '') })
   const versions = { conversation: 6, demandes: scan.SCENARIO_TEST_VERSION, vision: scan.VISION_TEST_VERSION, code: scan.CODE_TEST_VERSION }
   const lines = [{ type: 'campagne', versions }]
   const demandes = (model, bad = {}) => {

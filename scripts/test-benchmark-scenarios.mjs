@@ -1021,3 +1021,43 @@ test('LOOKUP_TOOLS : la copie du test est identique à celle de Jaris (assistant
   const real = read('electron/services/assistant.ts').match(/export const LOOKUP_TOOLS = new Set\((\[[^\]]*\])\)/)?.[1]
   assert.deepEqual(JSON.parse(real.replace(/'/g, '"')), [...LOOKUP_TOOLS])
 })
+
+// Vérification complète de la campagne de Léo (05/10/2026) : chaque jugement corrigé, avec la VRAIE réponse du modèle
+// qui l'a révélé. Les « fausses » réponses voisines restent fausses : la correction ne rend pas le jugement laxiste.
+test('jugements corrigés après la campagne : les vraies réponses justes passent, leurs voisines fausses non', async () => {
+  const byId = (id) => SCENARIOS.find((s) => s.id === id)
+  const play = async (id, steps, variant = 0) => (await runScenario(byId(id), scripted(steps), { variant })).ok
+  const piscine = (reply) => [
+    { calls: [['search_web', { query: 'horaires piscine Saint-Georges Rennes samedi' }]] },
+    { calls: [['read_web_page', { url: 'https://metropole.rennes.fr/piscine-saint-georges' }]] },
+    { text: reply }
+  ]
+  assert.equal(await play('piscine-page', piscine('La piscine Saint-Georges à Rennes est ouverte le samedi de 10h à 17h30.')), true, 'qwen3.8:27b')
+  assert.equal(await play('piscine-page', piscine('Le samedi, elle est ouverte de 10 heures à 17 heures et 30.')), true, 'gemma4:e4b')
+  assert.equal(await play('piscine-page', piscine('Le samedi, elle est ouverte de 10h à 17h.')), false, 'fermeture fausse')
+  assert.equal(await play('piscine-page', piscine('Le samedi, elle est ouverte de 12h à 17h30.')), false, 'ouverture fausse')
+  const prix = (variant, reply) => play('prix-gazole', [{ calls: [['search_web', { query: 'prix gazole Leclerc Plélan-le-Grand' }]] }, { text: reply }], variant)
+  assert.equal(await prix(0, 'Le gazole coûte 1,69 € le litre à la station Leclerc.'), true, 'ministral-3:14b, arrondi au centime')
+  assert.equal(await prix(0, 'Le gazole coûte 1 689 € par litre.'), false, 'lu « mille six cent quatre-vingt-neuf euros »')
+  assert.equal(await prix(0, 'Le gazole coûte 1,70 € le litre.'), false)
+  const btc = (variant, reply) => play('bitcoin', [{ calls: [['search_web', { query: 'cours bitcoin euro' }]] }, { text: reply }], variant)
+  assert.equal(await btc(0, 'Le Bitcoin se situe actuellement à environ 61 200 € (Boursorama).'), true, 'granite4.1:3b, arrondi à la centaine')
+  assert.equal(await btc(1, 'Un Bitcoin vaut environ 58 900 euros.'), true)
+  assert.equal(await btc(0, 'Un Bitcoin vaut environ 60 000 €.'), false, 'trop arrondi')
+  const recette = (reply) => [{ calls: [['search_web', { query: 'recette végétarienne rapide' }]] }, { text: reply }]
+  assert.equal(await play('contexte-long', recette("Un curry de lentilles corail au lait de coco : 100 % végétalien (pas de lait de viande ou d'oeuf).")), true, 'Nanbeige')
+  assert.equal(await play('contexte-long', recette('Je te propose un poulet rôti au citron, ou un curry de lentilles.')), false)
+  const youtube = (reply, look = false) => [
+    { calls: [['computer_use_task', { goal: 'Va sur YouTube et cherche un tuto de guitare pour débutant' }]] },
+    ...(look ? [{ calls: [['look_at_screen', { question: 'Quels résultats ?' }]] }] : [{ text: reply }])
+  ]
+  assert.equal(await play('youtube-guitare', youtube('Voici quelques résultats pertinents : "Guitare pour débutants - Tutoriel complet" - Guitar Tricks.')), false, 'Nanbeige, titres inventés')
+  assert.equal(await play('youtube-guitare', youtube('Voici quelques suggestions (chaîne Guitare pour les Nuls).')), false, 'ministral-3:8b')
+  assert.equal(await play('youtube-guitare', youtube('La page des résultats s’affiche. Si vous avez un titre ou un thème en tête, dites-le-moi.')), true, 'granite4.1:3b')
+  assert.equal(await play('youtube-guitare', youtube('', true)), true, 'regarder l’écran pour décrire les résultats')
+  assert.equal(await play('blague', [{ text: 'Il fait 10h00 dimanche 4 octobre. Tu veux une blague ? Je peux en faire, mec. Pose-moi une question.' }]), false, 'ai9stars')
+  assert.equal(await play('blague', [{ text: "Quel est le comble pour un électricien ? De ne pas être au courant." }]), true)
+  const soeur = (reply) => [{ calls: [['recall_memory', { title: 'Sœur' }]] }, { text: reply }]
+  assert.equal(await play('soeur-inconnue', soeur('Je ne me souviens pas de ce prénom dans mes notes actuelles. Dis-le-moi et je le retiendrai.')), true, 'MiniCPM5-2B')
+  assert.equal(await play('soeur-inconnue', soeur('Ta sœur s’appelle Julie.')), false)
+})

@@ -12,7 +12,7 @@ import { formatModelName } from '../lib/formatModelName'
  * L'ancien tableau listait les ~40 modèles « En attente », ce qui faisait croire à Léo que tout allait être
  * retéléchargé.
  */
-type Row = { model: string; status: 'done' | 'skipped'; correct?: number; total?: number; reason?: string }
+type Row = { model: string; status: 'done' | 'skipped' | 'replayed'; correct?: number; total?: number; reason?: string }
 type Phase = 'idle' | 'confirming' | 'running' | 'done' | 'error'
 
 export default function UnscoredModelsTest(): JSX.Element | null {
@@ -41,6 +41,9 @@ export default function UnscoredModelsTest(): JSX.Element | null {
         setCurrent(`Test de ${formatModelName(args[0])}…`)
       } else if (marker === '##MODEL_DONE##') {
         upsert({ model: args[0], status: 'done', correct: Number(args[1]), total: Number(args[2]) })
+      } else if (marker === '##REPLAY_DONE##') {
+        // Cas refaits (délai dépassé, plantage) : un nombre de cas, pas un score.
+        upsert({ model: args[0], status: 'replayed', total: Number(args[1]) })
       } else if (marker === '##MODEL_SKIPPED##') {
         // Étape 169 : la vraie raison, jamais un « trop gros ou téléchargement impossible » générique.
         upsert({ model: args[0], status: 'skipped', reason: args.slice(1).join(' ') || undefined })
@@ -124,7 +127,11 @@ export default function UnscoredModelsTest(): JSX.Element | null {
               {rows.map((row) => (
                 <li key={row.model}>
                   {formatModelName(row.model)} :{' '}
-                  {row.status === 'done' ? `${row.correct}/${row.total}` : `sauté — ${row.reason ?? 'raison inconnue'}`}
+                  {row.status === 'done'
+                    ? `${row.correct}/${row.total}`
+                    : row.status === 'replayed'
+                      ? `${row.total} cas refait${(row.total ?? 0) > 1 ? 's' : ''}`
+                      : `sauté — ${row.reason ?? 'raison inconnue'}`}
                 </li>
               ))}
             </ul>

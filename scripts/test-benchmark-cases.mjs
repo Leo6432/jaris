@@ -844,7 +844,8 @@ test('vision de bout en bout : 10 lectures et 7 visées × 2, les consignes de J
     const testCase = VISION_PILOT_CASES.find((c) => prompt.startsWith(`Objectif : ${c.goal}`) && !prompt.includes('[Button]') === !c.elements)
     if (!testCase || testCase.expect === 'done' || testCase.id === 'recherche-a-faire') return '{"action":"done","result":"Fait."}'
     const b = targets[testCase.file][testCase.target]
-    return JSON.stringify({ action: 'click', x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2) })
+    // Positions sur 0–1000 (consigne de Jaris depuis la campagne du 05/10/2026), pour une capture de 1280 × 720.
+    return JSON.stringify({ action: 'click', x: Math.round(((b.x + b.width / 2) / 1280) * 1000), y: Math.round(((b.y + b.height / 2) / 720) * 1000) })
   }
   const fake = await startFakeOllama({
     installed: ['qwen3-vl:2b'],
@@ -922,7 +923,9 @@ test(
         JARIS_RESULTS_PATH: resultsPath,
         JARIS_ANALYSIS_SCOPE: 'code',
         JARIS_ONLY_MODELS: 'qwen2.5-coder:7b',
-        JARIS_BROWSER_PATH: wrapper
+        JARIS_BROWSER_PATH: wrapper,
+        // Le modèle a un score de code depuis la campagne du 05/10/2026 : on le reteste quand même.
+        JARIS_RETEST_ALL: '1'
       })
       assert.equal(code, 1, out)
       assert.match(out, /Le navigateur ne démarre plus/)
@@ -1046,11 +1049,16 @@ test('rejeu : un code dont seule la vérification a planté est revérifié tel 
   const tracesPath = join(dir, 'r.traces.jsonl')
   // La ligne telle que la campagne l'a écrite : application écrite, vérification plantée.
   appendFileSync(tracesPath, JSON.stringify({ type: 'code', model: 'qwen2.5-coder:7b', id: 'liste-taches', ok: false, reason: "erreur : Cannot read properties of undefined (reading 'map')", timeout: false, skipped: false, steps: [], ms: 1234, html }) + '\n')
-  const second = await startFakeOllama({ installed: ['qwen2.5-coder:7b'], answer: () => ({ content: '' }) })
+  // Le modèle n'est plus installé (supprimé après le test) : il ne doit PAS être retéléchargé pour revérifier.
+  const second = await startFakeOllama({ installed: [], answer: () => ({ content: '' }) })
   try {
     const { code, out } = await runScript(env(second.host))
     assert.equal(code, 0, out)
     assert.equal(second.requests.length, 0, 'aucune nouvelle génération')
+    assert.deepEqual(second.pulled, [], 'aucun téléchargement pour revérifier un code déjà écrit')
+    // Suivi en direct de Jaris : le rejeu se voit (avant, l'écran restait figé).
+    assert.match(out, /##MODEL_TESTING## qwen2\.5-coder:7b/)
+    assert.match(out, /##REPLAY_DONE## qwen2\.5-coder:7b 1/)
     const row = readFileSync(tracesPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).at(-1)
     assert.equal(row.type, 'code')
     assert.ok(row.replay && row.recheck)

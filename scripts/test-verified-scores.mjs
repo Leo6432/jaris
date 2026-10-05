@@ -29,9 +29,18 @@ test('conversation : tous les scores viennent du test sur 78 réponses (test ver
   for (const [model, score] of conversation) assert.match(score, /^\d+\/78$/, `${model} : ${score}`)
 })
 
-test('vision sur 18 et code sur 3 (une mesure incomplète ne doit pas être recopiée)', () => {
+test('vision sur 18 (re-mesure en cours) et code sur 5 (une mesure incomplète ne doit pas être recopiée)', () => {
   for (const [model, score] of rows(section('Vision'))) assert.match(score, /^\d+\/18$/, `Vision ${model} : ${score}`)
-  for (const [model, score] of rows(section('Code'))) assert.match(score, /^\d\/3$/, `Code ${model} : ${score}`)
+  // Campagne de Léo du 04-05/10/2026 : 5 applications par modèle (test de code version 3), les 7 candidats notés.
+  const code = rows(section('Code'))
+  assert.equal(code.length, 7)
+  for (const [model, score] of code) assert.match(score, /^\d\/5$/, `Code ${model} : ${score}`)
+})
+
+test('demandes complètes : les 30 modèles de conversation, chacun sur 48', () => {
+  const demandes = rows(section('Demandes'))
+  assert.equal(demandes.length, 30)
+  for (const [model, score] of demandes) assert.match(score, /^\d+\/48$/, `Demandes ${model} : ${score}`)
 })
 
 test('l’application ne lit plus aucun fichier de résultats local', () => {

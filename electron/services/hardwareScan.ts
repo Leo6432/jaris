@@ -1047,7 +1047,7 @@ export const CODE_TEST_TOTAL = 5
 
 /** Versions des tests en cours (copies de SCENARIO/VISION/CODE_TEST_VERSION des scripts, vérifiées par test). */
 export const SCENARIO_TEST_VERSION = 3
-export const VISION_TEST_VERSION = 3
+export const VISION_TEST_VERSION = 4
 export const CODE_TEST_VERSION = 3
 
 /** Modèles qui ont TOUT fait, sans cas encore à refaire, dans le fichier brut d'une campagne (rôle par rôle). */

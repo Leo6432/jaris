@@ -21,6 +21,20 @@ function toScreenCoord(value: number | undefined, scale: number): number | null 
 }
 
 /**
+ * Vérification de la campagne de tests de Léo (05/10/2026) : la consigne demandait des pixels, mais les modèles de
+ * vision (Qwen3-VL, Qwen3.5, Gemma 4 26B/31B, GLM-4.6V…) répondaient quand même sur une échelle de 0 à 1000 — leur
+ * convention d'entraînement. Lus comme des pixels, leurs clics tombaient à côté : qwen3.8:27b visait juste 9 fois
+ * sur 10 lu en 0–1000, 3 fois sur 10 lu en pixels. La consigne demande donc maintenant cette échelle, ramenée ici
+ * aux pixels de l'image envoyée. Une valeur au-delà de 1000 ne peut être qu'un pixel : un modèle qui répond
+ * quand même en pixels reste compris.
+ */
+export function fromThousandths(x: number | undefined, y: number | undefined, width: number, height: number): { x?: number; y?: number } {
+  if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) return { x, y }
+  if (x > 1000 || y > 1000) return { x, y }
+  return { x: (x / 1000) * width, y: (y / 1000) * height }
+}
+
+/**
  * Agent "computer use" (étape 34, remplace l'ancien pilotage Chrome dédié par CDP/Playwright et l'envoi de
  * mail par API Gmail) : Jaris n'a plus de fenêtre séparée ni de compte à connecter — il regarde une vraie
  * capture d'écran, décide de la prochaine action de souris/clavier comme le ferait une personne, l'exécute,
@@ -63,8 +77,8 @@ export const SYSTEM_PROMPT =
   'autour, sans balises de code : ' +
   '{"action":"click_element","name":"<nom EXACT d\'un élément de la liste fournie>"} — À PRÉFÉRER dès que ' +
   "la cible figure dans la liste des éléments cliquables détectés par Windows : leur position est donnée par " +
-  "le système, donc exacte, alors qu'un clic en pixels n'est qu'une estimation faite sur l'image. " +
-  '{"action":"click","x":<pixel>,"y":<pixel>} ou "double_click"/"right_click" pareil — à utiliser seulement ' +
+  "le système, donc exacte, alors qu'un clic par position n'est qu'une estimation faite sur l'image. " +
+  '{"action":"click","x":<0 à 1000>,"y":<0 à 1000>} ou "double_click"/"right_click" pareil — à utiliser seulement ' +
   "quand la cible n'est PAS dans cette liste (jeu, interface dessinée sur mesure, liste vide). " +
   '{"action":"type","text":"<texte à taper au clavier>"} (tape à l\'endroit du dernier clic, clique d\'abord ' +
   'sur le bon champ si besoin), ' +
@@ -80,7 +94,8 @@ export const SYSTEM_PROMPT =
   "vérifie mentalement chaque verbe d'action qu'il contient un par un. " +
   '{"action":"fail","result":"<pourquoi c\'est bloqué>"} si un élément reste introuvable après plusieurs ' +
   "essais ou qu'une page d'erreur/de connexion bloque la suite — jamais boucler indéfiniment sur le même " +
-  'échec. x/y sont des pixels, origine en haut à gauche de l\'image fournie. Une seule action par réponse.'
+  'échec. x/y sont des positions sur une échelle de 0 à 1000 : x=0 bord gauche et x=1000 bord droit de ' +
+  "l'image, y=0 bord haut et y=1000 bord bas. Une seule action par réponse."
 
 interface OllamaChatResponse {
   message?: { content?: string }
@@ -128,14 +143,14 @@ export function buildStepPrompt(goal: string, history: string[], elements: Click
   // de repasser au clic en pixels.
   const elementsText = elements.length
     ? `Éléments cliquables détectés par Windows (positions exactes, à préférer) :\n${describeElements(elements)}`
-    : "Windows n'expose aucun élément cliquable pour cette fenêtre : utilise les clics en pixels."
+    : "Windows n'expose aucun élément cliquable pour cette fenêtre : utilise les clics par position (x/y de 0 à 1000)."
   return `Objectif : ${goal}\n\n${historyText}\n\n${elementsText}\n\nCapture d'écran actuelle jointe. Quelle est la prochaine action ?`
 }
 
 async function nextStep(
   goal: string,
   history: string[],
-  imageBase64: string,
+  image: { base64: string; width: number; height: number },
   elements: ClickableElement[],
   visionModel: string,
   signal?: AbortSignal
@@ -157,7 +172,7 @@ async function nextStep(
         model,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: buildStepPrompt(goal, history, elements), images: [imageBase64] }
+          { role: 'user', content: buildStepPrompt(goal, history, elements), images: [image.base64] }
         ],
         stream: false,
         think: false,
@@ -178,7 +193,8 @@ async function nextStep(
 
   const step = extractStep(content)
   if (!step) return { action: 'fail', result: `Le modèle de vision ${model} a proposé une action inexécutable : ${content.slice(0, 300)}` }
-  return step
+  // Positions sur 0–1000 ramenées aux pixels de l'image ; toScreenCoord les porte ensuite à l'écran réel.
+  return { ...step, ...fromThousandths(step.x, step.y, image.width, image.height) }
 }
 
 /**
@@ -287,7 +303,7 @@ export async function computerUseTask(
     try {
       step = pilotModel
         ? await nextPilotStep(goal, history, { base64: image, width, height }, pilotModel, i === 0 ? PILOT_FIRST_STEP_TIMEOUT_MS : STEP_TIMEOUT_MS, signal)
-        : await nextStep(goal, history, image, elements, visionModel, signal)
+        : await nextStep(goal, history, { base64: image, width, height }, elements, visionModel, signal)
     } finally {
       hideScanOverlay()
     }
@@ -312,7 +328,7 @@ export async function computerUseTask(
           // l'étape 32 (élément absent de l'arbre d'accessibilité, ou interface qui a bougé depuis la
           // capture). On le note dans l'historique pour que le modèle le VOIE et repasse au clic en pixels
           // au tour suivant, plutôt que d'abandonner toute la tâche pour un nom mal repris.
-          history.push(`${i + 1}. Élément "${wanted}" introuvable dans la liste Windows — reste le clic en pixels`)
+          history.push(`${i + 1}. Élément "${wanted}" introuvable dans la liste Windows — reste le clic par position (x/y de 0 à 1000)`)
           onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : élément "${wanted}" introuvable, je repasse en clic direct.`)
           break
         }

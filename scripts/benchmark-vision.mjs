@@ -21,7 +21,7 @@ import { fileURLToPath } from 'url'
 const IMAGES_DIR = join(dirname(fileURLToPath(import.meta.url)), 'vision-tests')
 
 /** Augmenté à chaque changement des images ou des jugements : un score d'une autre version est refait. */
-export const VISION_TEST_VERSION = 3
+export const VISION_TEST_VERSION = 4
 
 /** Chaque image posée 2 fois : de nouvelles images valent mieux que la même répétée. */
 export const VISION_REPEATS = 2
@@ -65,7 +65,10 @@ export const VISION_TEST_CASES = [
   {
     file: 'tableau-prix.png',
     prompt: 'Quel est le prix du clavier dans ce tableau ? Réponds uniquement avec le prix.',
-    value: /\b49[,.]9/,
+    // Vérification de la campagne (05/10/2026) : « Quarante-neuf euros quatre-vingt-dix centimes » (gemma4:e4b) est
+    // juste — les consignes de vision de Jaris demandent une réponse « comme à l'oral », et les lettres étaient
+    // déjà acceptées pour les autres questions. Seuls les chiffres l'étaient ici.
+    value: /\b49[,.]9|quarante[- ]neuf (euros? (et )?)?(virgule )?(quatre[- ]vingt[- ]dix|neuf)\b/,
     others: /\b(19|39|59)[,.]9|\b189\b/
   },
   {
@@ -129,8 +132,8 @@ export const PILOT_SYSTEM_PROMPT =
   'autour, sans balises de code : ' +
   '{"action":"click_element","name":"<nom EXACT d\'un élément de la liste fournie>"} — À PRÉFÉRER dès que ' +
   "la cible figure dans la liste des éléments cliquables détectés par Windows : leur position est donnée par " +
-  "le système, donc exacte, alors qu'un clic en pixels n'est qu'une estimation faite sur l'image. " +
-  '{"action":"click","x":<pixel>,"y":<pixel>} ou "double_click"/"right_click" pareil — à utiliser seulement ' +
+  "le système, donc exacte, alors qu'un clic par position n'est qu'une estimation faite sur l'image. " +
+  '{"action":"click","x":<0 à 1000>,"y":<0 à 1000>} ou "double_click"/"right_click" pareil — à utiliser seulement ' +
   "quand la cible n'est PAS dans cette liste (jeu, interface dessinée sur mesure, liste vide). " +
   '{"action":"type","text":"<texte à taper au clavier>"} (tape à l\'endroit du dernier clic, clique d\'abord ' +
   'sur le bon champ si besoin), ' +
@@ -146,7 +149,8 @@ export const PILOT_SYSTEM_PROMPT =
   "vérifie mentalement chaque verbe d'action qu'il contient un par un. " +
   '{"action":"fail","result":"<pourquoi c\'est bloqué>"} si un élément reste introuvable après plusieurs ' +
   "essais ou qu'une page d'erreur/de connexion bloque la suite — jamais boucler indéfiniment sur le même " +
-  'échec. x/y sont des pixels, origine en haut à gauche de l\'image fournie. Une seule action par réponse.'
+  'échec. x/y sont des positions sur une échelle de 0 à 1000 : x=0 bord gauche et x=1000 bord droit de ' +
+  "l'image, y=0 bord haut et y=1000 bord bas. Une seule action par réponse."
 
 /** describeElements (uiAutomation.ts). */
 function describeElements(elements) {
@@ -159,7 +163,7 @@ export function buildPilotPrompt(goal, history, elements) {
   const historyText = history.length ? `Actions déjà faites :\n${history.join('\n')}` : 'Aucune action encore faite.'
   const elementsText = elements.length
     ? `Éléments cliquables détectés par Windows (positions exactes, à préférer) :\n${describeElements(elements)}`
-    : "Windows n'expose aucun élément cliquable pour cette fenêtre : utilise les clics en pixels."
+    : "Windows n'expose aucun élément cliquable pour cette fenêtre : utilise les clics par position (x/y de 0 à 1000)."
   return `Objectif : ${goal}\n\n${historyText}\n\n${elementsText}\n\nCapture d'écran actuelle jointe. Quelle est la prochaine action ?`
 }
 
@@ -230,12 +234,16 @@ export function loadPilotTargets() {
   return JSON.parse(readFileSync(join(IMAGES_DIR, 'cibles.json'), 'utf8'))
 }
 
+/** Taille des captures de visée (vision-tests/*.png) : celle de l'image que Jaris envoie au modèle. */
+const PILOT_IMAGE_WIDTH = 1280
+const PILOT_IMAGE_HEIGHT = 720
+
 /** Marge autour d'une boîte : un clic sur le bord d'un bouton reste un clic sur le bouton. */
 const AIM_MARGIN = 4
 
 /**
  * Juge une étape de pilotage. `targets` : cibles.json. Renvoie `null` si l'action est la bonne, sinon la raison.
- * Coordonnées en pixels de l'image envoyée (1280 de large : le facteur d'échelle de Jaris vaut alors 1).
+ * Positions sur 0–1000 (consigne de Jaris depuis la campagne du 05/10/2026), ramenées aux pixels de l'image (1280 × 720).
  */
 export function judgePilotStep(testCase, raw, targets) {
   const step = extractPilotStep(String(raw ?? ''))
@@ -250,6 +258,8 @@ export function judgePilotStep(testCase, raw, targets) {
     return element.target === testCase.target ? null : `clic sur « ${element.name} » au lieu de la cible`
   }
   if (step.action === 'click' || step.action === 'double_click') {
+    // fromThousandths (computerUse.ts) : positions 0–1000 ramenées aux pixels de l'image (1280 × 720).
+    if (!(step.x > 1000 || step.y > 1000)) Object.assign(step, { x: Math.round((step.x / 1000) * PILOT_IMAGE_WIDTH), y: Math.round((step.y / 1000) * PILOT_IMAGE_HEIGHT) })
     const inside =
       step.x >= box.x - AIM_MARGIN && step.x <= box.x + box.width + AIM_MARGIN && step.y >= box.y - AIM_MARGIN && step.y <= box.y + box.height + AIM_MARGIN
     return inside ? null : `clic à (${step.x}, ${step.y}), hors de la cible (${box.x}–${box.x + box.width}, ${box.y}–${box.y + box.height})`

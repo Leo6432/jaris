@@ -110,15 +110,23 @@ function pilotAnswers(testCase) {
   }
   const target = box(testCase.file, testCase.target)
   const [cx, cy] = center(target)
-  const good = [click([cx, cy]), `Voici l'action : {"action":"click","x":${target.x + 2},"y":${target.y + 2}}`, JSON.stringify({ action: 'double_click', x: cx, y: cy })]
+  // Consigne de Jaris depuis la campagne du 05/10/2026 : positions sur 0–1000, la convention des modèles de vision.
+  const k = ([x, y]) => [Math.round((x / 1280) * 1000), Math.round((y / 720) * 1000)]
+  const good = [
+    click(k([cx, cy])),
+    `Voici l'action : {"action":"click","x":${k([target.x + 3, target.y + 3]).join(',"y":')}}`,
+    JSON.stringify({ action: 'double_click', x: k([cx, cy])[0], y: k([cx, cy])[1] })
+  ]
+  // Une valeur au-delà de 1000 ne peut être qu'un pixel : un modèle qui répond quand même en pixels reste compris.
+  if (cx > 1000) good.push(click([cx, cy]))
   const bad = [
-    click([target.x + target.width + 20, cy]),
-    // Coordonnées sur 1000 (habitude de certains modèles) : Jaris les prend pour des pixels, le clic part ailleurs.
-    click([Math.round((cx / 1280) * 1000), Math.round((cy / 720) * 1000)]),
+    click(k([target.x + target.width + 20, cy])),
     '{"action":"done","result":"Fait."}',
     '{"action":"click","x":"500","y":300}',
-    JSON.stringify({ action: 'right_click', x: cx, y: cy })
+    JSON.stringify({ action: 'right_click', x: k([cx, cy])[0], y: k([cx, cy])[1] })
   ]
+  // En pixels SOUS 1000 : indiscernable de l'échelle 0–1000, donc lu comme tel — le clic part ailleurs.
+  if (cx <= 1000 && cy <= 1000) bad.push(click([cx, cy]))
   if (testCase.elements) {
     good.push(JSON.stringify({ action: 'click_element', name: 'Annuler' }), JSON.stringify({ action: 'click_element', name: 'annuler' }))
     bad.push(JSON.stringify({ action: 'click_element', name: 'Ne pas enregistrer' }), JSON.stringify({ action: 'click_element', name: 'Quitter' }))
@@ -128,7 +136,7 @@ function pilotAnswers(testCase) {
 }
 
 for (const testCase of VISION_PILOT_CASES) {
-  test(`visée « ${testCase.id} » : les bons clics passent, les mauvais (à côté, sur 1000, trop tôt « fini ») échouent`, () => {
+  test(`visée « ${testCase.id} » : les bons clics (sur 0–1000) passent, les mauvais (à côté, en pixels, trop tôt « fini ») échouent`, () => {
     const targets = loadPilotTargets()
     const { good, bad } = pilotAnswers(testCase)
     for (const answer of good) assert.equal(judgePilotStep(testCase, answer, targets), null, answer)

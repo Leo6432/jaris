@@ -6480,3 +6480,37 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
      **Piège rencontré, déjà connu** : un nouvel import (`fs`, `campaignCompletion`) dans benchmarkRunner.ts
      cassait les faux modules de test-benchmark-runner-cleanup — tous les tests du fichier tombaient sur « module
      non simulé ».
+
+- **Étape 238 — vérification complète de la campagne de Léo, scores écrits, et un vrai bug de Jaris trouvé (v0.28.8).**
+  1. **Demandes complètes : rejouées « à blanc »** (scripts de vérification hors dépôt) : chaque demande repasse
+     dans le simulateur ACTUEL avec les réponses EXACTES enregistrées du modèle. 0 différence de messages sur
+     1 440 : le simulateur reproduit fidèlement la campagne. **Leçon : quand toutes les réponses d'un modèle sont
+     enregistrées, une correction de jugement ou de boucle se vérifie sur la campagne entière sans rien relancer —
+     et la même méthode prouve en passant que le simulateur n'a pas dérivé.**
+  2. **Jugements trop stricts ou trop laxistes, trouvés en lisant les réponses et pas en relisant le code** :
+     `\b10\b` refusait « 10h » (pas de frontière de mot entre 0 et h) — 5 horaires de piscine justes comptés
+     faux ; « 1,69 € » et « environ 61 200 € » (arrondis) refusés ; « pas de lait de viande » lu comme une viande
+     proposée ; « je ne me souviens pas » non reconnu comme un aveu ; et dans l'autre sens, des titres YouTube
+     inventés (« Voici quelques résultats… chaîne… ») et une non-blague comptés justes. En vision, un prix écrit
+     en lettres refusé alors que les consignes de Jaris demandent une réponse « comme à l'oral ». **Leçon : relire
+     aussi les réponses comptées JUSTES — un jugement laxiste ne se voit jamais dans la liste des ratés.**
+  3. **VRAI BUG DE JARIS : les clics du pilotage d'écran tombaient à côté.** La consigne demandait des pixels,
+     mais les modèles de vision (Qwen3-VL, Qwen3.5, Gemma 4 26B/31B, GLM-4.6V) répondent sur une échelle 0–1000
+     — leur convention d'entraînement, plus forte que la consigne. Repéré parce que presque TOUS les modèles
+     cliquaient au même endroit faux avec le même décalage : relus en 0–1000, qwen3.8:27b passe de 3 à 9 clics
+     justes sur 10, gemma4:26b de 3 à 10. Corrigé dans computerUse.ts (`fromThousandths`) : consigne en 0–1000,
+     ramenée aux pixels de l'image puis à l'écran ; une valeur au-delà de 1000 reste lue en pixels. **Leçon : une
+     erreur commise IDENTIQUEMENT par des modèles différents vient presque toujours de nous, pas d'eux.** La visée
+     doit être remesurée (test de vision version 4) : seuls les 11 modèles de vision repassent.
+  4. **Ce qui n'a PAS été changé, en connaissance de cause** : « regarde l'écran » en pleine tâche arrête le tour
+     dans Jaris (62 demandes comptées fausses, 2-3 par modèle, donc sans effet sur le classement) — défaut de
+     conception de Jaris, pas du test ; l'écran simulé ne montre pas l'application ouverte (sans effet sur les
+     verdicts). Deux applications de code restent fausses à raison (tâches gardées dans le stockage du navigateur,
+     interdit dans l'aperçu : la liste reste vide).
+  5. **Scores écrits** (verified-tool-scores.md) : demandes complètes des 30 modèles, code des 7 sur 5. Le choix des
+     modèles ne change pas sur la machine de Léo. Au rejeu : plus de retéléchargement pour revérifier un code déjà
+     écrit, et chaque modèle rejoué s'affiche dans le suivi (« N cas refaits », jamais présenté comme un score).
+     **Piège revécu** : écrire de vrais scores casse les tests qui lisaient le fichier réel en supposant « rien de
+     noté » — leur donner explicitement les scores d'avant au lieu de compter sur l'état du dépôt.
+  Régression : test-benchmark-scenarios, test-benchmark-vision, test-computer-use, test-benchmark-cases,
+  test-unscored-models-ui, test-verified-scores (chacun vérifié en retirant la correction qu'il protège).

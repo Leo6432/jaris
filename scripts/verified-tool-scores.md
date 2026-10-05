@@ -96,26 +96,64 @@ carré bleu.
 
 ## Code — génération de code
 
-Même analyse (25/09/2026), qwen2.5-coder:32b remesuré en entier le soir même (3/3 : la mesure précédente,
-2/2, était incomplète). qwen2.5-coder:14b : mesuré le 26/09/2026 (bouton « Tester les modèles sans score »).
-qwen3-coder-next (3/3) retiré des candidats le 02/10/2026 : 9,2 chez Artificial Analysis pour 52 Go.
+Campagne de Léo du 04-05/10/2026 (test de code version 3) : 5 applications générées par modèle, chacune ouverte
+dans un vrai navigateur avec les règles de l’aperçu de Jaris et utilisée comme le ferait Léo (clics, saisie,
+lecture de l’écran). Toutes revérifiées après la campagne : la liste de tâches de qwen2.5-coder:14b et 32b avait
+fait planter la VÉRIFICATION (bug du test, corrigé) et passe juste ; qwen3.6:35b-a3b et north-mini-code-1.0 la
+ratent vraiment (tâches gardées dans le stockage du navigateur, interdit dans l’aperçu : la liste reste vide).
 
 | Modèle | Fiabilité |
 |---|---|
-| qwen3.6:35b-a3b | 3/3 |
-| qwen3-coder:30b | 3/3 |
-| north-mini-code-1.0 | 3/3 |
-| qwen2.5-coder:32b | 3/3 |
-| devstral-small-2:24b | 3/3 |
-| qwen2.5-coder:14b | 3/3 |
-| qwen2.5-coder:7b | 3/3 |
+| qwen3.6:35b-a3b | 4/5 |
+| qwen3-coder:30b | 5/5 |
+| north-mini-code-1.0 | 4/5 |
+| qwen2.5-coder:32b | 5/5 |
+| devstral-small-2:24b | 5/5 |
+| qwen2.5-coder:14b | 5/5 |
+| qwen2.5-coder:7b | 5/5 |
 
 ## Demandes complètes — de bout en bout
 
 Étape 232 : 24 demandes jouées 2 fois (graines différentes), soit 48 par modèle, dans une copie de la boucle de
 Jaris avec des outils simulés (scripts/benchmark-scenarios.mjs) : actions enchaînées, résultat d'un outil à
 reprendre, plusieurs phrases, information manquante, appels à éviter, phrases dictées, longue conversation. Un
-appel en trop qui agit sur le PC fait rater la demande. Pas encore mesuré : à remplir avec le fichier de Léo.
+appel en trop qui agit sur le PC fait rater la demande.
+
+Campagne de Léo du 04-05/10/2026, chaque réponse vérifiée ensuite : les 1 440 demandes rejouées à blanc avec les
+réponses EXACTES des modèles dans le simulateur corrigé (aucune différence de messages), jugements corrigés (météo
+« il pleut », regard sur l'écran après YouTube, horaires « 10h », prix et cours arrondis, recette végétalienne,
+titres YouTube inventés, blague absente, « je ne me souviens pas »), et la recherche internet relancée à tort après
+une réponse tirée de la mémoire retirée (comme dans Jaris).
 
 | Modèle | Réussite |
 |---|---|
+| gemma4:12b | 46/48 |
+| gemma4:26b | 46/48 |
+| granite4.2:8b | 46/48 |
+| qwen3.5:27b | 46/48 |
+| granite4.2:30b | 45/48 |
+| qwen3.5:9b | 45/48 |
+| qwen3.6:27b | 45/48 |
+| qwen3.8:27b | 45/48 |
+| gemma4:e4b | 44/48 |
+| gpt-oss:20b | 44/48 |
+| granite4.2:3b | 44/48 |
+| nemotron-3.5-lightning:30b | 44/48 |
+| qwen3.5:35b | 44/48 |
+| glm-4.7-flash:q4_K_M | 42/48 |
+| granite4.1:8b | 42/48 |
+| mistral-small3.2:24b | 42/48 |
+| qwen3.6:35b | 42/48 |
+| hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 40/48 |
+| qwen3.5:4b | 40/48 |
+| hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M | 38/48 |
+| ministral-3:8b | 37/48 |
+| hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M | 35/48 |
+| ministral-3:3b | 34/48 |
+| qwen3.5:2b | 34/48 |
+| ministral-3:14b | 33/48 |
+| qwen3:1.7b | 31/48 |
+| hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 28/48 |
+| hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M | 28/48 |
+| granite4.1:3b | 25/48 |
+| qwen3.5:0.8b | 13/48 |

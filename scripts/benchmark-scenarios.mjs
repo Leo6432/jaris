@@ -586,7 +586,7 @@ const MEAT = /\b(poulet|boeuf|porc|jambon|lardons?|saumon|thon|viande|dinde|veau
 /** La réponse dit que quelque chose n'a PAS marché (pour un échec en cours de route). */
 const ADMITS_FAILURE = /pas pu|n a pas pu|echec|echoue|impossible|n a pas fonctionne|ne fonctionne pas|erreur|probleme|pas reussi|n ai pas reussi|pas ete|bloque/
 /** La réponse dit qu'elle ne sait pas (au lieu d'inventer). */
-const ADMITS_UNKNOWN = /ne (le |la |l )?(sais|connais|trouve|retrouve)|n ai (pas|aucune?)|pas (de|d) (note|info|information|trace)|aucune (note|info|information|trace)|je l ignore|pas en memoire|pas dans (ma|mes) (memoire|notes)|ne figure pas|pas enregistre/
+const ADMITS_UNKNOWN = /ne (le |la |l )?(sais|connais|trouve|retrouve)|ne me (souviens|rappelle) pas|n ai (pas|aucune?)|pas (de|d) (note|info|information|trace)|aucune (note|info|information|trace)|je l ignore|pas en memoire|pas dans (ma|mes) (memoire|notes)|ne figure pas|pas enregistre/
 
 // ---------------------------------------------------------------------------------------------------------------
 // Les demandes
@@ -594,15 +594,18 @@ const ADMITS_UNKNOWN = /ne (le |la |l )?(sais|connais|trouve|retrouve)|n ai (pas
 /** Résultats d'une recherche de prix qui CHANGENT d'un passage à l'autre : le modèle doit lire, pas se souvenir. */
 const VARIANTS = {
   bitcoin: [
-    { price: '61 234,50 €', pattern: /61[\s  .]?23[45]/ },
-    { price: '58 912,30 €', pattern: /58[\s  .]?91[23]/ }
+    // Un cours arrondi à la centaine (« environ 61 200 € ») est ce que dirait n'importe qui : compté juste.
+    { price: '61 234,50 €', pattern: /61[\s  .]?2\d\d\b/ },
+    { price: '58 912,30 €', pattern: /58[\s  .]?9\d\d\b/ }
   ],
   meteo: [
     { text: 'pluie faible le matin, éclaircies l’après-midi, 9 °C au lever du jour, 16 °C l’après-midi', weather: /pluie|pluv|pleu|averse/, temp: /\b16\b/ },
     { text: 'orages l’après-midi après une matinée ensoleillée, 12 °C au lever du jour, 23 °C l’après-midi', weather: /orage/, temp: /\b23\b/ }
   ],
   gazole: [
-    { price: '1,689 €', pattern: /1[,.]68[89]|1 euro 6[89]/ },
+    // « 1,69 € » (arrondi au centime) est juste, comme « 1,74 € » l'était déjà pour l'autre variante. « 1 689 € »
+    // reste faux : la synthèse vocale le lit « mille six cent quatre-vingt-neuf euros ».
+    { price: '1,689 €', pattern: /1[,.]68[89]|1[,.]69\b|1 euro 6[89]/ },
     { price: '1,742 €', pattern: /1[,.]74[12]?|1 euro 74/ }
   ]
 }
@@ -661,7 +664,10 @@ export const SCENARIOS = [
     check: (ctx) => {
       if (!ctx.state.computerTasks.some((t) => has(t.goal, /youtube/) && has(t.goal, /guitar/))) return 'aucune tâche à l’écran pour YouTube + guitare'
       // Vu le 04/10/2026 (ministral-3:3b) : des titres de vidéos et des nombres de vues inventés, jamais vus.
-      return /\bvues\b|intitule|premier resultat|abonnes/.test(replyOf(ctx)) ? 'décrit des résultats qu’il n’a jamais vus (inventés)' : null
+      // Vérification de la campagne (05/10/2026) : « Voici quelques résultats… "Guitare pour débutants" — chaîne… »
+      // passait (Nanbeige, ministral-3:3b et 8b) — des titres inventés sans avoir regardé l'écran.
+      if (callsOf(ctx, 'look_at_screen').length) return null
+      return /\bvues\b|intitule|premier resultat|abonnes|\bchaine\b|\bduree\b|voici (?:les|quelques)\b/.test(replyOf(ctx)) ? 'décrit des résultats qu’il n’a jamais vus (inventés)' : null
     }
   },
   {
@@ -811,7 +817,9 @@ export const SCENARIOS = [
     check: (ctx) => {
       if (!ctx.state.pagesRead.some((p) => p.url.includes('metropole.rennes.fr/piscine-saint-georges'))) return 'la page de la piscine n’a jamais été lue'
       const reply = replyOf(ctx)
-      return /\b10\b/.test(reply) && /17/.test(reply) ? null : 'les horaires du samedi (10 h – 17 h 30) ne sont pas dans la réponse'
+      // Vérification de la campagne (05/10/2026) : « \b10\b » refusait « 10h » (aucune frontière de mot entre 0 et h) —
+      // cinq réponses justes (« ouverte le samedi de 10h à 17h30 ») étaient comptées fausses.
+      return hasTime(reply, 10) && hasTime(reply, 17, '(?:et\\s*)?30') ? null : 'les horaires du samedi (10 h – 17 h 30) ne sont pas dans la réponse'
     }
   },
   {
@@ -1015,7 +1023,8 @@ export const SCENARIOS = [
     family: 'Sans outil',
     noTools: true,
     turns: ['Raconte-moi une petite blague.'],
-    check: (ctx) => (ctx.turns[0].reply.length >= 25 ? null : 'aucune blague racontée')
+    // « Tu veux une blague ? Je peux en faire, mec. Pose-moi une question… » (ai9stars) n'en raconte aucune.
+    check: (ctx) => (ctx.turns[0].reply.length >= 25 && !has(ctx.turns[0].reply, /tu veux une blague|veux tu une blague|je peux en (faire|raconter)|pose moi/) ? null : 'aucune blague racontée')
   },
   {
     id: 'heure',
@@ -1158,7 +1167,9 @@ export const SCENARIOS = [
     },
     check: (ctx) => {
       const reply = replyOf(ctx)
-      if (MEAT.test(reply.replace(/sans (viande|poulet|poisson)/g, ''))) return 'propose de la viande ou du poisson à un végétarien'
+      // « pas de lait de viande ou d'oeuf » (Nanbeige, recette 100 % végétalienne) n'est pas une viande proposée.
+      const withoutNegations = reply.replace(/\b(?:sans|pas de|ni|aucune?)\s+(?:\S+\s+){0,3}?(?:viande|poulet|poisson)\b/g, '')
+      if (MEAT.test(withoutNegations)) return 'propose de la viande ou du poisson à un végétarien'
       return reply.length > 20 ? null : 'aucune recette proposée'
     }
   }
