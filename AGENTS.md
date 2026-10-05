@@ -6525,3 +6525,22 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   **Piège de test revécu** : `assert.deepEqual(x, [])` sur un tableau créé dans un `vm.runInNewContext` échoue
   (« same structure but not reference-equal ») — comparer la longueur. Régression : test-benchmark-vision (horloge),
   test-verified-scores (vision sur 34, 11 modèles).
+
+- **Étape 240 — relecture une à une des ~900 réponses comptées JUSTES aux demandes complètes (v0.28.10).** Léo a
+  demandé si tout avait vraiment été vérifié : seules les réponses FAUSSES l'avaient été en détail. Relire les justes
+  a trouvé 26 réponses comptées justes à tort, toutes dans des juges trop larges qui ne testaient qu'un mot-clé :
+  « 47 » passait pour « 47 Go » (au lieu de 47 %), « guitar » pour un chat ASSIS sur une guitare, « 14 mars » pour
+  « TON anniversaire est le 14 mars », la présence de farine/œufs/lait pour une recette inventée SANS recherche ou
+  avec 5 litres de lait, le bon prix du gazole même attribué au SP95, la bonne météo même précédée de « il n'y a pas
+  de prévision pour demain ». Aussi : note retenue sans titre (Jaris la range sous « note », introuvable ensuite),
+  « Citroën Clio » mémorisée, délai de rappel inventé au lieu de demander quand, « ne l'éteins pas » sans réponse
+  claire, une réponse entière en anglais et une avec des caractères chinois (nouvelle règle commune : la réponse
+  lue à voix haute doit être en français). Chaque juge resserré a été vérifié sur TOUTES les réponses : un cas trop
+  strict trouvé et corrigé avant de livrer (« par exemple, dans 30 minutes ? » proposé dans une question n'est pas
+  un délai inventé). Les 11 meilleurs modèles ne perdent rien ; le choix des modèles sur la machine de Léo ne
+  change pas. **Leçon : un juge qui cherche un mot-clé dans la réponse laisse passer toute phrase qui CONTIENT ce
+  mot en disant autre chose — relire aussi les réponses comptées justes, pas seulement les fausses, avant de
+  déclarer des scores vérifiés.** Petites erreurs secondaires laissées justes, en connaissance de cause (la
+  réponse à la question reste bonne) : mauvais jour de la semaine à côté de la bonne date, « mesuré hier soir »,
+  nom d'outil prononcé dans une réponse. Régression : test-benchmark-scenarios (« relecture des réponses comptées
+  justes », chaque vraie réponse fautive ET une voisine correcte).

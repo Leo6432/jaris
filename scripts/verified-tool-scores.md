@@ -125,6 +125,14 @@ réponses EXACTES des modèles dans le simulateur corrigé (aucune différence d
 titres YouTube inventés, blague absente, « je ne me souviens pas »), et la recherche internet relancée à tort après
 une réponse tirée de la mémoire retirée (comme dans Jaris).
 
+Relecture du 05/10/2026 : les quelque 900 réponses comptées justes relues une à une. 26 l'étaient à tort et sont
+désormais fausses (scores ci-dessous) : chat assis SUR la guitare au lieu d'en jouer, « pas de prévision pour
+demain », prix du gazole attribué au SP95, « 47 Go » ou une taille de RAM inventée au lieu de « 47 % », « oui, elle
+chauffe trop », « TON anniversaire » ou un délai faux jusqu'à celui de maman, note sans titre introuvable, « Citroën
+Clio », « code pas trouvé dans la mémoire », 5 litres de lait, recette inventée sans recherche, délai de rappel
+inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en anglais ou avec des caractères chinois. Les
+11 meilleurs modèles n'ont perdu aucun point.
+
 | Modèle | Réussite |
 |---|---|
 | gemma4:12b | 46/48 |
@@ -135,25 +143,25 @@ une réponse tirée de la mémoire retirée (comme dans Jaris).
 | qwen3.5:9b | 45/48 |
 | qwen3.6:27b | 45/48 |
 | qwen3.8:27b | 45/48 |
-| gemma4:e4b | 44/48 |
-| gpt-oss:20b | 44/48 |
 | granite4.2:3b | 44/48 |
 | nemotron-3.5-lightning:30b | 44/48 |
 | qwen3.5:35b | 44/48 |
+| gemma4:e4b | 43/48 |
 | glm-4.7-flash:q4_K_M | 42/48 |
+| gpt-oss:20b | 42/48 |
 | granite4.1:8b | 42/48 |
-| mistral-small3.2:24b | 42/48 |
 | qwen3.6:35b | 42/48 |
+| mistral-small3.2:24b | 41/48 |
 | hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 40/48 |
-| qwen3.5:4b | 40/48 |
-| hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M | 38/48 |
-| ministral-3:8b | 37/48 |
+| qwen3.5:4b | 38/48 |
+| hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M | 36/48 |
+| ministral-3:8b | 36/48 |
 | hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M | 35/48 |
-| ministral-3:3b | 34/48 |
-| qwen3.5:2b | 34/48 |
-| ministral-3:14b | 33/48 |
-| qwen3:1.7b | 31/48 |
-| hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 28/48 |
-| hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M | 28/48 |
+| ministral-3:3b | 33/48 |
+| ministral-3:14b | 31/48 |
+| qwen3.5:2b | 30/48 |
+| qwen3:1.7b | 28/48 |
+| hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 26/48 |
+| hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M | 26/48 |
 | granite4.1:3b | 25/48 |
-| qwen3.5:0.8b | 13/48 |
+| qwen3.5:0.8b | 10/48 |

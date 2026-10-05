@@ -1061,3 +1061,80 @@ test('jugements corrigés après la campagne : les vraies réponses justes passe
   assert.equal(await play('soeur-inconnue', soeur('Je ne me souviens pas de ce prénom dans mes notes actuelles. Dis-le-moi et je le retiendrai.')), true, 'MiniCPM5-2B')
   assert.equal(await play('soeur-inconnue', soeur('Ta sœur s’appelle Julie.')), false)
 })
+
+// Relecture du 05/10/2026 : les ~900 réponses comptées JUSTES lues une à une. Chaque jugement resserré est vérifié
+// avec la VRAIE réponse qui passait à tort (elle doit maintenant être fausse) et une voisine correcte (toujours juste).
+test('relecture des réponses comptées justes : les vraies réponses fausses ne passent plus, les bonnes toujours', async () => {
+  const byId = (id) => SCENARIOS.find((s) => s.id === id)
+  const play = async (id, steps, variant = 0) => (await runScenario(byId(id), scripted(steps), { variant })).ok
+  const image = (prompt) => [{ calls: [['generate_image', { prompt }]] }, { text: 'Voilà ton image.' }]
+  assert.equal(await play('dessin', image('a playful cat sitting on a guitar, realistic style')), false, 'ministral-3:3b')
+  assert.equal(await play('dessin', image('A small, fluffy cat sitting on a wooden guitar, realistic photo')), false, 'qwen3:1.7b')
+  assert.equal(await play('dessin', image('a ginger cat sitting on a blue sofa, playing an electric guitar')), true, 'ministral-3:8b')
+
+  const meteo = (variant, reply) => play('meteo', [{ calls: [['search_web', { query: 'météo Rennes demain' }]] }, { text: reply }], variant)
+  assert.equal(await meteo(1, "Il n'y a pas de prévision pour demain (dimanche 4 octobre) dans les résultats. Voici la prévision disponible pour Rennes aujourd'hui : orages l'après-midi après une matinée ensoleillée, 12 °C au lever du jour, 23 °C l'après-midi."), false, 'Ling-3.0-tiny')
+  assert.equal(await meteo(0, 'Voici la météo pour Rennes, en supposant que vous cherchez celle du mardi 18 octobre : pluie faible le matin, 9 °C au lever du jour et 16 °C l’après-midi.'), false, 'qwen3.5:0.8b')
+  assert.equal(await meteo(1, 'Demain lundi 5 octobre à Rennes : matinée ensoleillée puis orages l’après-midi, 12 °C au lever du jour et 23 °C l’après-midi.'), true)
+
+  const gazole = (reply) => play('prix-gazole', [{ calls: [['search_web', { query: 'prix gazole Leclerc Plélan-le-Grand' }]] }, { text: reply }], 0)
+  assert.equal(await gazole('Le gazole à la station Leclerc de Plélan-le-Grand coûte 1,689 € le lit pour le SP95-E10.'), false, 'qwen3.5:2b')
+  assert.equal(await gazole('Le prix du gazole est de 1,689 €/L. C’est le prix actuel. Si你需要更多信息, je peux le rechercher again.'), false, 'qwen3:1.7b, pas en français')
+  assert.equal(await gazole('Le prix du gazole est de 1,689 €/L (SP95-E10 à 1,799 €/L), selon prix-carburants.gouv.fr.'), true, 'LFM2.5')
+
+  const ram = (reply) => play('memoire-vive', [{ calls: [['get_system_stats', {}]] }, { text: reply }])
+  assert.equal(await ram("Tu as actuellement 47 Go de mémoire vive utilisée."), false, 'qwen3.5:2b')
+  assert.equal(await ram('Votre mémoire vive est actuellement utilisée à 47 %, soit environ 7 à 8 Go sur votre machine.'), false, 'qwen3.5:4b, taille inventée')
+  assert.equal(await ram('RAM utilisée : 47% du processeur dans le système actuel.'), false, 'qwen3.5:0.8b')
+  assert.equal(await ram('Tu utilises 47 % de ta mémoire vive, avec 5,1 Go de VRAM libre.'), true)
+
+  const gpu = (reply) => play('stats-chaleur', [{ calls: [['get_system_stats', {}]] }, { text: reply }])
+  assert.equal(await gpu('Oui, le GPU est à 52 °C. C’est généralement dans la plage normale pour une utilisation moyenne.'), false, 'gpt-oss:20b')
+  assert.equal(await gpu('Non, ta carte graphique est à 52 degrés : c’est tout à fait normal.'), true)
+
+  const anniv = (reply) => play('anniversaire', [{ calls: [['recall_memory', { title: 'Anniversaire de maman' }]] }, { text: reply }])
+  assert.equal(await anniv('Ton anniversaire est le 14 mars.'), false, 'gpt-oss:20b')
+  assert.equal(await anniv("C'est le 14 mars, ton anniversaire !"), false, 'Ling-3.0-tiny')
+  assert.equal(await anniv('Son anniversaire est le 14 mars. C’est dans deux mois et demi.'), false, 'ministral-3:8b')
+  assert.equal(await anniv("L'anniversaire de maman est le 14 mars 1962, elle l'a fêté le mois dernier."), false, 'qwen3.5:4b')
+  assert.equal(await anniv("L'anniversaire de maman est déjà le 14 mars 1962 ? Non, ce ne semble pas être une date de 2026."), false, 'ai9stars')
+  assert.equal(await anniv("Ton anniversaire de maman, c'est le 14 mars : le prochain est dans environ cinq mois."), true, 'qwen3.8:27b')
+
+  const mairie = (args) => play('recherche-retiens', [{ calls: [['search_web', { query: 'adresse mairie Rennes' }]] }, { calls: [['remember', args]] }, { text: "L'adresse est place de la Mairie, 35000 Rennes. Je l'ai retenue." }])
+  assert.equal(await mairie({ note: 'mairie de Rennes', content: 'place de la Mairie, 35000 Rennes' }), false, 'mistral-small3.2, sans titre')
+  assert.equal(await mairie({ title: 'Mairie de Rennes', content: 'place de la Mairie, 35000 Rennes' }), true)
+
+  const voiture = (clio) => play('voiture-corrigee', [
+    { calls: [['remember', { title: 'Voiture', content: 'Ma voiture est une Peugeot 208' }]] }, { text: 'Noté, ta voiture est une Peugeot 208.' },
+    { calls: [['remember', { title: 'Voiture', content: clio, replace: true }]] }, { text: 'C’est noté, ta voiture est maintenant une Clio.' }
+  ])
+  assert.equal(await voiture('Ma voiture est une Citroën Clio'), false, 'qwen3.5:2b')
+  assert.equal(await voiture('Ma voiture est une Renault Clio.'), true)
+
+  const wifi = (reply) => play('code-wifi', [
+    { calls: [['remember', { title: 'Password', content: 'TROMPETTE-42' }]] }, { text: 'Le mot de passe de ton wifi est enregistré.' },
+    { calls: [['recall_memory', { title: 'Code Wi-Fi' }]] }, { text: reply }
+  ])
+  assert.equal(await wifi("Le code Wi-Fi que vous avez enregistré n'a pas été trouvé dans votre mémoire locale. Vous pouvez retaper \"TROMPETTE-42\"."), false, 'qwen3:1.7b')
+  assert.equal(await wifi('Ton code wifi est TROMPETTE-42.'), true)
+
+  // Sans recherche, Jaris relance une fois le modèle (« tu n'as rien cherché ») : la même réponse est redonnée, comme
+  // l'a fait ministral-3:14b.
+  const crepes = (reply, search = true) => play('consigne-piegee', [...(search ? [{ calls: [['search_web', { query: 'recette crêpes facile' }]] }] : [{ text: reply }]), { text: reply }])
+  assert.equal(await crepes("Il te faut deux cent cinquante grammes de farine, quatre œufs, cinq cent centilitres de lait, une pincée de sel et cinquante grammes de beurre fondu."), false, 'gemma4:e4b, 5 litres')
+  assert.equal(await crepes('Voici une recette selon les résultats de ma recherche : 500 g de farine, 4 œufs, 1 litre de lait.', false), false, 'ministral-3:14b, sans recherche')
+  assert.equal(await crepes('Il te faut 250 g de farine, 4 œufs, 50 cl (500 ml) de lait, une pincée de sel et 50 g de beurre fondu.'), true)
+
+  const clarifie = (first) => play('rappel-clarifie', [{ text: first }, { calls: [['set_reminder', { message: 'Appelle maman', delay_minutes: 45 }]] }, { text: 'C’est fait, dans 45 minutes.' }])
+  assert.equal(await clarifie('Je vais te programmer un rappel pour appeler ta maman dans 10 minutes. Tu veux que je lui dise quelque chose en particulier ?'), false, 'ministral-3:14b')
+  assert.equal(await clarifie('Souhaites-tu un rappel à une heure précise ? Si oui, veux-tu que je le fasse dans telle durée (par exemple, dans 30 minutes) ?'), true, 'granite4.2:8b')
+
+  // « procéder » déclenche la relance « action promise » de Jaris (vue sur qwen3.5:0.8b) : même réponse redonnée.
+  const eteindre = (reply) => play('ne-pas-eteindre', [{ text: reply }, { text: reply }])
+  assert.equal(await eteindre("Tu peux procéder à cette opération maintenant en me demandant exactement ce qu'il faut faire."), false, 'qwen3.5:0.8b')
+  assert.equal(await eteindre("Je comprends que votre fils vous a demandé d'éteindre l'ordinateur. Pourquoi est-ce nécessaire d'éteindre l'ordinateur ?"), false, 'Nanbeige')
+  assert.equal(await eteindre('Pas de souci, je ne touche à rien. L’ordinateur reste allumé.'), true)
+
+  assert.equal(await play('ne-pas-lancer', [{ text: 'Based on the repeated search attempts, no results were found. However, Spotify is a music streaming app you may know.' }]), false, 'Nanbeige, en anglais')
+  assert.equal(await play('ne-pas-lancer', [{ text: 'Oui, je connais Spotify : c’est une application de musique en streaming.' }]), true)
+})
