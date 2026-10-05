@@ -1282,7 +1282,22 @@ function computeModelPicks(
     artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[model] ?? null
   })
 
-  type Scored = { model: string; vramGb: number; result: LocalBenchmarkEntry }
+  /**
+   * `demands` (étape 241) : taux de réussite aux demandes complètes (sur SCENARIO_TEST_TOTAL), pour les rôles de
+   * conversation seulement. Absent pour Vision et Code, dont le test mesure autre chose.
+   */
+  type Scored = { model: string; vramGb: number; result: LocalBenchmarkEntry; demands?: number }
+
+  /**
+   * Étape 241, Léo (« oui » à faire compter les demandes complètes, « tu les fusionnes ? ») : réussite aux
+   * demandes complètes du test ACTUEL, `null` sans score sur ce total. Un score d'un ancien test ne compte pas.
+   */
+  const demandRate = (model: string): number | null => {
+    const score = verifiedToolScores.scenarios.get(model)
+    if (!score?.endsWith(`/${SCENARIO_TEST_TOTAL}`)) return null
+    const rate = parseToolScore(score)
+    return rate >= 0 ? rate : null
+  }
 
   /**
    * Le plus intelligent d'abord, à fiabilité égale : Intelligence Index d'Artificial Analysis quand les DEUX
@@ -1355,13 +1370,17 @@ function computeModelPicks(
   }
 
   /**
-   * Note d'un modèle pour un rôle : intelligence × (taux de réussite)^chain (voir TOOL_CHAIN_LENGTH). `null`
-   * sans intelligence publiée — jamais un zéro.
+   * Note d'un modèle pour un rôle : intelligence × (taux de réussite)^chain (voir TOOL_CHAIN_LENGTH), puis, pour
+   * les rôles de conversation, × le taux de réussite aux demandes complètes (étape 241). Les deux tests sont
+   * MULTIPLIÉS et non remplacés l'un par l'autre : les 78 questions mesurent chaque appel d'outil isolé, les
+   * 48 demandes la tâche entière — un modèle doit être bon aux deux. Remplacer la fiabilité par les seules
+   * demandes (sans la puissance 5) a été mesuré avant d'être écarté : sur 4 Go de VRAM, MiniCPM5-2B (35/48)
+   * battait granite4.2:3b (44/48) sur sa seule intelligence. `null` sans intelligence publiée — jamais un zéro.
    */
   const noteOf = (c: Scored, chain: number): number | null => {
     const index = ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[c.model]
     if (index === undefined) return null
-    return index * Math.pow(Math.max(0, parseToolScore(c.result.toolCalling)), chain)
+    return index * Math.pow(Math.max(0, parseToolScore(c.result.toolCalling)), chain) * (c.demands ?? 1)
   }
 
   /** Meilleure note d'abord ; un modèle sans note passe après ; `null` si la note ne départage pas. */
@@ -1399,14 +1418,18 @@ function computeModelPicks(
    * - `allowRam` : le modèle peut-il déborder sur la RAM (LARGE_RAM_OFFLOAD_MODELS) ? Non pour Rapide et
    *   Médium, qui doivent répondre sans à-coups ;
    * - `rank` : le classement du rôle sur tous les modèles testés qui tiennent (fiabilité ET intelligence) ;
-   * - `chain` : nombre d'actions d'affilée qui pèse sur la fiabilité (TOOL_CHAIN_LENGTH).
+   * - `chain` : nombre d'actions d'affilée qui pèse sur la fiabilité (TOOL_CHAIN_LENGTH) ;
+   * - `withDemands` : la note tient aussi compte des demandes complètes (rôles de conversation, étape 241). Un
+   *   modèle pas encore passé aux demandes complètes est estimé par son taux aux 78 questions : jamais ×1, qui
+   *   l'avantagerait sur les modèles testés.
    */
   const pickRole = (
     pool: ModelCandidate[],
     resultOf: (c: ModelCandidate) => LocalBenchmarkEntry | undefined,
     allowRam: boolean,
     rank: (scored: Scored[], chain: number) => Scored[],
-    chain: number = TOOL_CHAIN_LENGTH
+    chain: number = TOOL_CHAIN_LENGTH,
+    withDemands = false
   ): ModelOverviewEntry => {
     // `exclude` (étape 136) : modèles dont le téléchargement vient d'échouer sur CETTE machine (voir
     // runQuickSetup, benchmarkRunner.ts) — retirés AVANT tout calcul, repli ultime compris. Jamais la liste
@@ -1418,6 +1441,7 @@ function computeModelPicks(
       .filter((c) => c.vramGb <= budgetOf(c))
       .map((c) => ({ model: c.model, vramGb: c.vramGb, result: resultOf(c) }))
       .filter((c): c is Scored => c.result?.toolCalling != null)
+      .map((c) => (withDemands ? { ...c, demands: demandRate(c.model) ?? Math.max(0, parseToolScore(c.result.toolCalling)) } : c))
 
     // Repli : aucun modèle testé ne tient (ex. pas de carte graphique du tout). Le plus gros modèle qui tient,
     // sinon le plus petit — parmi ceux qui ont un score pour ce rôle quand il y en a, pour ne jamais tomber
@@ -1444,11 +1468,11 @@ function computeModelPicks(
 
   return {
     // Rapide : le plus intelligent parmi les quasi aussi rapides que le plus rapide, sur la carte seule.
-    flash: pickRole(ALL_MODELS, conversation, false, fastEnoughThenSmartest),
+    flash: pickRole(ALL_MODELS, conversation, false, fastEnoughThenSmartest, TOOL_CHAIN_LENGTH, true),
     // Médium : le plus intelligent qui tient entièrement sur la carte, parmi ceux qui ne sont pas trop lents.
-    medium: pickRole(ALL_MODELS, conversation, false, notTooSlowThenSmartest),
+    medium: pickRole(ALL_MODELS, conversation, false, notTooSlowThenSmartest, TOOL_CHAIN_LENGTH, true),
     // Puissant : le plus intelligent de tous, même en débordant sur la RAM.
-    large: pickRole(ALL_MODELS, conversation, true, smartest),
+    large: pickRole(ALL_MODELS, conversation, true, smartest, TOOL_CHAIN_LENGTH, true),
     // Vision : le plus intelligent parmi ceux qui lisent une image.
     vision: pickRole(
       ALL_MODELS.filter((c) => READS_IMAGES.has(c.model)),

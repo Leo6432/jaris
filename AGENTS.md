@@ -6544,3 +6544,15 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   réponse à la question reste bonne) : mauvais jour de la semaine à côté de la bonne date, « mesuré hier soir »,
   nom d'outil prononcé dans une réponse. Régression : test-benchmark-scenarios (« relecture des réponses comptées
   justes », chaque vraie réponse fautive ET une voisine correcte).
+
+- **Étape 241 — les demandes complètes comptent dans le choix des modèles (v0.28.11).** Léo : « oui », puis « tu
+  les fusionnes ? ». Les deux tests sont MULTIPLIÉS dans la note des rôles Rapide/Médium/Puissant : intelligence ×
+  (réussite aux 78 questions)^5 × (réussite aux 48 demandes). Les 78 questions mesurent chaque appel d'outil isolé,
+  les demandes la tâche entière : un modèle doit être bon aux deux. **Mesuré avant de choisir, sur 8
+  configurations (0 à 24 Go de VRAM, 16 à 64 Go de RAM)** : multiplier ne change aucun choix aujourd'hui (garde-fou
+  pour les modèles futurs) ; REMPLACER la fiabilité par les seules demandes (sans puissance) choisissait
+  MiniCPM5-2B (35/48) au lieu de granite4.2:3b (44/48) sur 4 Go, sur sa seule intelligence — écarté. Vision et Code
+  ne regardent pas les demandes (elles mesurent autre chose). Un modèle sans score de demandes du test ACTUEL est
+  estimé par son taux aux 78 questions, jamais compté parfait (sinon un modèle non testé passerait devant les
+  modèles testés). Choix sur la machine de Léo inchangés. Régression : test-hardwarescan-single-pool (« demandes
+  complètes : multipliées… », vérifié en retirant le facteur puis l'estimation : le test échoue les deux fois).

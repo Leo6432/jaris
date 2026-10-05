@@ -79,6 +79,29 @@ test('fiabilité et intelligence en balance : ni le score exact, ni l’intellig
   assert.equal(await pick(['| qwen3.5:27b | 78/78 |', '| qwen3.8:27b | 60/78 |']), 'qwen3.5:27b')
 })
 
+// Étape 241, Léo : faire compter les demandes complètes dans le choix (« tu les fusionnes ? »). Les deux tests sont
+// multipliés : un modèle parfait aux 78 questions mais qui rate les vraies demandes perd sa place.
+test('demandes complètes : multipliées à la note des rôles de conversation, jamais à Vision ni Code', async () => {
+  const md = (conversation, demands = []) =>
+    ['## Conversation', '| Modèle | Fiabilité |', '|---|---|', ...conversation, '## Demandes complètes', '| Modèle | Réussite |', '|---|---|', ...demands].join('\n')
+  const picks = async (scores) => {
+    const r = await setup({ vramMib: 24 * 1024, ramGb: 64, scores }).pickBestModelsFromBenchmark()
+    return { large: r.models.large, code: r.codeModel }
+  }
+  const both = ['| qwen3.5:27b | 78/78 |', '| qwen3.8:27b | 78/78 |']
+  // Sans demandes complètes : le plus intelligent (qwen3.8:27b, 33,7 contre 22,9).
+  assert.equal((await picks(md(both))).large, 'qwen3.8:27b')
+  // qwen3.8:27b ne réussit que 10 demandes sur 48 : 33,7 × 0,21 = 7,0 contre 22,9 × 46/48 = 21,9.
+  const failing = await picks(md(both, ['| qwen3.5:27b | 46/48 |', '| qwen3.8:27b | 10/48 |']))
+  assert.equal(failing.large, 'qwen3.5:27b')
+  assert.equal(failing.code, 'qwen3.8:27b', 'le rôle Code ne regarde pas les demandes complètes')
+  // Un score d'un ANCIEN test de demandes (autre total) ne compte pas.
+  assert.equal((await picks(md(both, ['| qwen3.5:27b | 46/48 |', '| qwen3.8:27b | 10/40 |']))).large, 'qwen3.8:27b')
+  // Sans score de demandes, un modèle est estimé par son taux aux 78 questions, jamais compté parfait : 60/78 →
+  // 33,7 × 0,27 × 0,77 = 7,0, battu par 22,9 × 17/48 = 8,1 (avec un ×1, il aurait gagné : 9,1).
+  assert.equal((await picks(md(['| qwen3.5:27b | 78/78 |', '| qwen3.8:27b | 60/78 |'], ['| qwen3.5:27b | 17/48 |']))).large, 'qwen3.5:27b')
+})
+
 /**
  * Étape 161, Léo : « il ne faut pas le plus rapide sans regarder l'intelligence, par exemple un modèle qui a
  * 5 points d'intelligence en plus mais ne perd que 3 points de vitesse ». Exactement le cas de granite4.2:3b

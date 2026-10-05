@@ -119,6 +119,10 @@ Jaris avec des outils simulés (scripts/benchmark-scenarios.mjs) : actions encha
 reprendre, plusieurs phrases, information manquante, appels à éviter, phrases dictées, longue conversation. Un
 appel en trop qui agit sur le PC fait rater la demande.
 
+Depuis l'étape 241, ce score compte dans le choix des modèles Rapide, Médium et Puissant : il MULTIPLIE la note
+(intelligence × fiabilité aux 78 questions puissance 5 × réussite aux demandes). Il ne compte pas pour Vision ni
+Code.
+
 Campagne de Léo du 04-05/10/2026, chaque réponse vérifiée ensuite : les 1 440 demandes rejouées à blanc avec les
 réponses EXACTES des modèles dans le simulateur corrigé (aucune différence de messages), jugements corrigés (météo
 « il pleut », regard sur l'écran après YouTube, horaires « 10h », prix et cours arrondis, recette végétalienne,
