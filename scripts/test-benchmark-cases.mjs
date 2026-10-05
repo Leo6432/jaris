@@ -327,6 +327,11 @@ test('un modèle sauté donne sa VRAIE raison, dans le suivi en direct et dans l
     assert.ok(skipped, out)
     assert.match(skipped, /téléchargement impossible : .+/, 'la raison doit suivre le nom du modèle')
     assert.match(readFileSync(resultsPath, 'utf8'), /## Modèles non testés[\s\S]*MiniCPM5-1B-GGUF\*\* : téléchargement impossible/)
+    // Aussi dans le fichier brut (GLM-4.6V-Flash sauté pendant la campagne de Léo sans y laisser de ligne).
+    const traces = readFileSync(join(dir, 'benchmark-nouveaux-modeles.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+    const row = traces.find((t) => t.type === 'modèle-sauté' && t.model === 'hf.co/openbmb/MiniCPM5-1B-GGUF')
+    assert.ok(row, 'modèle sauté absent du fichier brut')
+    assert.match(row.reason, /téléchargement impossible : .+/)
   } finally {
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })

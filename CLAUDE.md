@@ -6486,3 +6486,9 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
      répondait pas à `/api/version`, que le script consulte après un délai pour distinguer « modèle figé » de
      « Ollama arrêté » — sans lui, tout délai y passait pour une panne d'Ollama. Régression : test-benchmark-scenarios
      et test-benchmark-cases (vérifiés en coupant le rejeu, le garde-fou, puis en rejouant aussi les ratés).
+  5. **Un modèle sauté n'était noté nulle part dans le fichier brut** : GLM-4.6V-Flash (vision) n'a laissé AUCUNE
+     ligne pendant la campagne de Léo — sa raison n'existait que dans le fichier de résultats et dans le suivi en
+     direct. Chaque modèle sauté écrit maintenant une ligne `modèle-sauté` (phase, raison). Sans score, il est de
+     toute façon retenté au lancement suivant (Léo : « aucun modèle ne doit passer à cause d'un petit bug »).
+     **Leçon : « tout est dans le fichier brut » se vérifie aussi pour ce qui N'A PAS eu lieu** — un cas sauté est
+     une donnée, pas une absence de donnée. Régression : test-benchmark-cases (vérifié en retirant la ligne).

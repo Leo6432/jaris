@@ -1712,6 +1712,14 @@ async function main() {
   // résultats — Léo voyait seulement « sauté (trop gros ou téléchargement impossible) » pour G9v3-3B, un modèle de
   // 1,9 Go qui ne pouvait évidemment pas être trop gros, sans aucun moyen de savoir ce qui avait échoué.
   const skipReasons = new Map()
+  // Léo, 05/10/2026 : « aucun modèle ne doit passer à cause d'un petit bug ». Un modèle sauté est noté AUSSI dans le
+  // fichier brut, avec sa raison : GLM-4.6V-Flash a été sauté en vision pendant la campagne sans y laisser la moindre
+  // ligne. Sans score, il est de toute façon retenté au lancement suivant.
+  const reportSkip = (model, phase) => {
+    const reason = skipReasons.get(model) ?? 'raison inconnue'
+    console.log(`##MODEL_SKIPPED## ${model} ${reason}`)
+    trace({ type: 'modèle-sauté', model, phase, reason })
+  }
   if (tooLargeUpfront.length) {
     console.log(`${tooLargeUpfront.length} modèle(s) ignoré(s) d'emblée (trop gros pour cette machine) :`)
     for (const m of tooLargeUpfront) {
@@ -1719,7 +1727,7 @@ async function main() {
       console.log(`  ${m} ignoré : ${reason}`)
       skipReasons.set(m, reason)
       // Lu par le suivi en direct (UnscoredModelsTest.tsx) : ce modèle ne sera jamais testé ce run-ci.
-      console.log(`##MODEL_SKIPPED## ${m} ${reason}`)
+      reportSkip(m, 'avant le test')
     }
     console.log('')
   }
@@ -2452,7 +2460,7 @@ async function main() {
   for (const model of conversationPhase) {
     const ready = await ensureReady(model)
     if (!ready) {
-      console.log(`##MODEL_SKIPPED## ${model} ${skipReasons.get(model) ?? ''}`.trimEnd())
+      reportSkip(model, 'conversation')
       continue
     }
     console.log(`\n=== ${model} ===`)
@@ -2471,7 +2479,7 @@ async function main() {
   for (const model of visionToRun) {
     const readyVision = await ensureReady(model)
     if (!readyVision) {
-      console.log(`##MODEL_SKIPPED## ${model} ${skipReasons.get(model) ?? ''}`.trimEnd())
+      reportSkip(model, 'vision')
       continue
     }
     console.log(`\n=== ${model} (vision) ===`)
@@ -2565,7 +2573,7 @@ async function main() {
   for (const model of codeToRun) {
     const readyCode = await ensureReady(model)
     if (!readyCode) {
-      console.log(`##MODEL_SKIPPED## ${model} ${skipReasons.get(model) ?? ''}`.trimEnd())
+      reportSkip(model, 'code')
       continue
     }
     console.log(`\n=== ${model} (code) ===`)
