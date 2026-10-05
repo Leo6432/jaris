@@ -971,7 +971,7 @@ test('reprise : seules les demandes arrêtées par le délai sont rejouées, à 
     try {
       const { code, out } = await runScript({ OLLAMA_HOST: second.host, JARIS_RESULTS_PATH: resultsPath, JARIS_VERIFIED_SCORES_PATH: verified, JARIS_RESUME: '1' })
       assert.equal(code, 0, out)
-      assert.match(out, new RegExp(`${stopped.length} demande\\(s\\) arrêtée\\(s\\) par le délai maximal : rejouées à l'identique, délai porté à 120 min`))
+      assert.match(out, new RegExp(`${stopped.length} test\\(s\\) arrêté\\(s\\) par le délai maximal : rejoués à l'identique, délai porté à 120 min`))
       assert.doesNotMatch(out, /Aucun des modèles à tester n'a pu être installé/)
       assert.ok(!second.requests.some((r) => r.model === 'qwen3:1.7b'), 'une mauvaise réponse n’est jamais rejouée')
       assert.ok(second.requests.every((r) => r.messages.some((m) => m.role === 'user' && frozen.includes(m.content))), 'seules les demandes arrêtées')

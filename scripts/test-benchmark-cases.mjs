@@ -22,7 +22,7 @@ import {
 } from './benchmark-cases.mjs'
 import { systemPromptModule } from './load-system-prompt.mjs'
 import { findBrowser } from './benchmark-browser.mjs'
-import { CODE_TEST_VERSION, CODE_TOTAL } from './benchmark-code.mjs'
+import { CODE_TEST_CASES, CODE_TEST_VERSION, CODE_TOTAL } from './benchmark-code.mjs'
 import { VISION_PILOT_CASES, VISION_TEST_VERSION, VISION_TOTAL, loadPilotTargets } from './benchmark-vision.mjs'
 
 /**
@@ -141,7 +141,7 @@ const PERFECT = {
   "En fait ma voiture n'est plus": ['remember', { title: 'Voiture', content: 'Renault Clio', replace: true }]
 }
 
-function startFakeOllama({ installed, answer, dropChat = () => false, pullFails = false }) {
+function startFakeOllama({ installed, answer, dropChat = () => false, pullFails = false, hang = () => false }) {
   const requests = []
   // Étape 230 : téléchargements et suppressions, pour vérifier qu'un modèle téléchargé par le test est supprimé.
   const pulled = []
@@ -154,6 +154,7 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
     req.on('data', (chunk) => (body += chunk))
     req.on('end', () => {
       res.setHeader('Content-Type', 'application/json')
+      if (req.url === '/api/version') return res.end(JSON.stringify({ version: '0.99.0-test' }))
       if (req.url === '/api/tags') return res.end(JSON.stringify({ models: installed.map((name) => ({ name })) }))
       if (req.url === '/api/pull' && pullFails) {
         res.statusCode = 500
@@ -177,6 +178,8 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
         // La question est le dernier message de l'utilisateur : après elle peuvent venir un appel d'outil déjà fait
         // et son résultat (étape 230, read_web_page).
         const prompt = json.messages.findLast((m) => m.role === 'user').content
+        // Un modèle figé : aucune réponse (c'est le délai maximal du script qui doit couper la requête).
+        if (hang(json.model, prompt)) return
         const call = answer(json.model, prompt)
         // 'length' : fenêtre pleine pendant la réflexion, aucune réponse (vrai comportement d'Ollama, étape 159).
         if (call === 'length') return res.end(JSON.stringify({ message: { role: 'assistant', content: '' }, done_reason: 'length', eval_count: 10, eval_duration: 1e8 }))
@@ -933,6 +936,85 @@ test(
 
 // Répétition générale du 04/10/2026 : qwen3-vl:2b a réfléchi jusqu'à remplir sa fenêtre de contexte malgré
 // `think: false`, puis n'a rien répondu. Le verdict était juste (« réponse vide ») mais n'en disait pas la cause.
+// Léo, 05/10/2026 : « bon c'est bon, faux c'est faux, et dès qu'il n'a pas eu le temps, on refait ». Vision et code
+// aussi : seuls les cas arrêtés par le délai sont rejoués, jamais une réponse fausse. Jaris lance toujours le test en
+// reprise : le rejeu se fait dès la fin du même test, puis à chaque nouveau lancement tant qu'il reste un délai.
+test('rejeu : en vision et en code, seuls les cas arrêtés par le délai sont rejoués (et 3 délais de suite l’arrêtent)', { timeout: 240000, skip: BROWSER ? false : 'aucun navigateur ici (le test de code en a besoin)' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const codePrompt = CODE_TEST_CASES[0].prompt
+  const FROZEN = ["Combien d'œufs", "Quel fichier n'a pas"]
+  // Les deux questions figées ont une bonne réponse ; l'horloge est toujours fausse ; tout le reste est vide (faux).
+  const answer = (_m, prompt) => ({
+    content: prompt.startsWith("Combien d'œufs") ? '6' : prompt.startsWith("Quel fichier n'a pas") ? 'Rapport annuel.docx' : prompt.startsWith("Quelle heure affiche") ? '14 h 47' : ''
+  })
+  const frozen = (model, prompt) =>
+    (model === 'qwen3-vl:2b' && FROZEN.some((start) => prompt.startsWith(start))) || (model === 'qwen2.5-coder:7b' && prompt.includes(codePrompt))
+  const env = (host) => ({
+    OLLAMA_HOST: host,
+    JARIS_RESULTS_PATH: join(dir, 'r.md'),
+    JARIS_ANALYSIS_SCOPE: 'all',
+    JARIS_RETEST_ALL: '1',
+    JARIS_RESUME: '1',
+    JARIS_ONLY_MODELS: 'qwen3-vl:2b,qwen2.5-coder:7b',
+    // 0,01 min = 0,6 s au lieu de 20 min (test) et de 120 min (rejeu).
+    JARIS_CALL_TIMEOUT_MIN: '0.01',
+    JARIS_REPLAY_TIMEOUT_MIN: '0.01'
+  })
+  const tracesPath = join(dir, 'r.traces.jsonl')
+  const readTraces = () => readFileSync(tracesPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+  const userPrompt = (r) => r.messages.findLast((m) => m.role === 'user').content
+  const first = await startFakeOllama({ installed: ['qwen3-vl:2b', 'qwen2.5-coder:7b'], answer, hang: frozen })
+  try {
+    // 1er lancement : le modèle reste figé, même pendant le rejeu de fin de test.
+    const run1 = await runScript(env(first.host))
+    assert.equal(run1.code, 0, run1.out)
+    first.server.close()
+    const traces1 = readTraces()
+    const stopped = traces1.filter((t) => (t.type === 'vision' || t.type === 'code') && t.timeout && !t.replay)
+    assert.equal(stopped.filter((t) => t.type === 'vision').length, 4, '2 questions figées × 2 passages')
+    assert.equal(stopped.filter((t) => t.type === 'code').length, 1)
+    assert.ok(traces1.some((t) => t.type === 'vision' && !t.ok && !t.timeout), 'des réponses fausses existent')
+    assert.match(run1.out, /5 test\(s\) arrêté\(s\) par le délai maximal/)
+    // Garde-fou : 3 délais de suite au rejeu, le 4e cas du même modèle n'est pas tenté (2 h chacun en vrai).
+    assert.equal(traces1.filter((t) => t.type === 'vision' && t.replay).length, 3)
+    assert.match(run1.out, /non rejoué : 3 délais de suite au rejeu/)
+    assert.equal(traces1.filter((t) => t.type === 'code' && t.replay).length, 1, 'un autre modèle repart de zéro')
+
+    // 2e lancement : le modèle répond. Seuls les 5 cas encore en délai sont rejoués.
+    const second = await startFakeOllama({ installed: ['qwen3-vl:2b', 'qwen2.5-coder:7b'], answer })
+    try {
+      const { code, out } = await runScript(env(second.host))
+      assert.equal(code, 0, out)
+      assert.match(out, /5 test\(s\) arrêté\(s\) par le délai maximal/)
+      assert.equal(second.requests.length, 5, out)
+      assert.ok(second.requests.every((r) => frozen(r.model, userPrompt(r))), 'jamais l’horloge (fausse) ni les réponses vides')
+      const replayed = readTraces().slice(traces1.length).filter((t) => t.type === 'vision' || t.type === 'code')
+      assert.equal(replayed.length, 5)
+      assert.ok(replayed.every((t) => t.replay && !t.timeout))
+      const vision = replayed.filter((t) => t.type === 'vision')
+      assert.ok(vision.every((t) => t.ok && t.kind === 'lecture'), JSON.stringify(vision))
+      assert.deepEqual(vision.map((t) => `${t.file}|${t.pass}`).sort(), stopped.filter((t) => t.type === 'vision').map((t) => `${t.file}|${t.pass}`).sort())
+      const codeRow = replayed.find((t) => t.type === 'code')
+      assert.equal(codeRow.id, CODE_TEST_CASES[0].id)
+      assert.equal(codeRow.ok, false, 'rejoué et jugé normalement (ici : pas de HTML)')
+    } finally {
+      second.server.close()
+    }
+    // 3e lancement : plus aucun délai, plus rien à rejouer.
+    const third = await startFakeOllama({ installed: ['qwen3-vl:2b', 'qwen2.5-coder:7b'], answer })
+    try {
+      const { code, out } = await runScript(env(third.host))
+      assert.equal(code, 0, out)
+      assert.equal(third.requests.length, 0, out)
+    } finally {
+      third.server.close()
+    }
+  } finally {
+    first.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('vision : une réponse coupée faute de place le dit, en lecture comme en visée', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
   const fake = await startFakeOllama({

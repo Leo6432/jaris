@@ -6473,12 +6473,16 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
      vitesse publiée est exclu de Rapide mais reste candidat en Médium. **Piège évité de justesse** : monter
      Médium pour qu'il diffère de Puissant le rendait identique à Rapide — Léo l'a relevé ; vérifier les TROIS
      rôles ensemble après tout changement de seuil, pas seulement celui qu'on vise.
-  4. **Rejeu des délais dépassés** (Léo : « refaire à la fin les tests qui n'ont pas marché »). Seulement les
-     demandes arrêtées par le délai (ou « non jouées » après 3 délais) — une panne de TEMPS. Jamais une mauvaise
-     réponse : la rejouer jusqu'à ce qu'elle passe fausserait le score. `replayTimedOutDemands`
-     (benchmark-models.mjs) se lance seul à la reprise : même graine, même variante, délai porté à 120 min ;
-     nouvelle ligne `demande` avec `replay: true` dans le fichier brut (le tableau .md n'est PAS recalculé — le
-     score final se fait sur le fichier brut). **Piège du test** : un modèle qui n'a répondu à RIEN est déjà
-     retesté en entier à la reprise (ligne « — »), donc un faux modèle entièrement figé ne testait pas le rejeu ;
-     seules deux demandes sont figées. Régression : test-benchmark-scenarios (vérifié en coupant le rejeu, puis
-     en rejouant aussi les ratés : le test échoue dans les deux cas).
+  4. **Rejeu des délais dépassés** (Léo : « bon c'est bon, faux c'est faux, et dès qu'il n'a pas eu le temps, on
+     refait… on teste tout »). Seulement les cas arrêtés par le délai (ou « non joués » après 3 délais) — demandes,
+     vision ET code : une panne de TEMPS. Jamais une mauvaise réponse, ni un appel d'outil mal formé : les rejouer
+     jusqu'à ce qu'ils passent fausserait le score. `replayTimedOut` (benchmark-models.mjs) : même graine, même
+     variante, même image, délai porté à 120 min ; nouvelle ligne `replay: true` dans le fichier brut (le tableau .md
+     n'est PAS recalculé — le score final se fait sur le fichier brut). Jaris lance toujours le test en reprise : le
+     rejeu se fait donc à la FIN du même test, puis à chaque nouveau clic tant qu'un cas reste en délai. Garde-fou :
+     3 délais de suite au rejeu arrêtent ce modèle (ses dizaines de cas « non joués » coûteraient sinon 2 h chacun).
+     **Pièges des tests** : un modèle qui n'a répondu à RIEN est déjà retesté en entier à la reprise (ligne « — »),
+     donc un faux modèle entièrement figé ne testait pas le rejeu ; et le faux Ollama de test-benchmark-cases ne
+     répondait pas à `/api/version`, que le script consulte après un délai pour distinguer « modèle figé » de
+     « Ollama arrêté » — sans lui, tout délai y passait pour une panne d'Ollama. Régression : test-benchmark-scenarios
+     et test-benchmark-cases (vérifiés en coupant le rejeu, le garde-fou, puis en rejouant aussi les ratés).
