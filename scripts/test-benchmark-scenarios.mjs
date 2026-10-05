@@ -24,6 +24,8 @@ import {
   directSocialReply,
   findLeakedToolName,
   hasUnnegatedMailIntent,
+  isScreenQuestion,
+  lookStoppedTask,
   looksLikeKnowledgeQuestion,
   normalizeAssistantText,
   promiseWithoutAction,
@@ -150,6 +152,14 @@ const CASES = {
     ],
     bad: [calls(['open_app', { app_name: 'Discord' }]), calls(['type_text', { text: 'Je serai en retard ce soir.' }]), text("C'est fait, j'ai écrit que tu seras en retard.")],
     alsoGood: [
+      // Étape 242 : l'écriture échoue, le modèle regarde l'écran (le champ est resté vide) PUIS le dit. Avant, Jaris
+      // s'arrêtait sur la description de l'écran (31 demandes de la campagne de Léo).
+      [
+        calls(['open_app', { app_name: 'Discord' }]),
+        calls(['type_text', { text: 'Je serai en retard ce soir.' }]),
+        calls(['look_at_screen', { question: 'Le message est-il écrit dans Discord ?' }]),
+        text("Discord est ouvert, mais le champ de message est resté vide : je n'ai pas pu écrire ton message.")
+      ],
       [
         calls(['open_app', { app_name: 'Discord' }]),
         calls(['type_text', { text: 'Je serai en retard ce soir.' }]),
@@ -438,6 +448,13 @@ test('passages : 40 demandes différentes, puis 8 rejouées avec une autre grain
  * « échoue » lève une erreur, comme le vrai), un faux Ollama scripté, et le vrai systemPrompt.ts, effort.ts,
  * notepad.ts et appLauncher.ts.
  */
+/** hardwareScan.ts réel, dépendances neutralisées (seules ses fonctions pures servent ici). */
+let hardwareScanModule
+function realHardwareScan() {
+  hardwareScanModule ??= loadTs('electron/services/hardwareScan.ts')
+  return hardwareScanModule
+}
+
 function loadRealConverse() {
   const current = {}
   const effort = loadTs('shared/effort.ts')
@@ -471,7 +488,8 @@ function loadRealConverse() {
       }
     },
     './appLauncher': loadTs('electron/services/appLauncher.ts'),
-    './hardwareScan': { GPU_TEMP_LIMIT_C: 90, pickSafeModel: (_free, _installed, model) => model },
+    // isScreenQuestion : la VRAIE (hardwareScan.ts), pour que ce test croisé vérifie aussi sa copie du simulateur.
+    './hardwareScan': { GPU_TEMP_LIMIT_C: 90, pickSafeModel: (_free, _installed, model) => model, isScreenQuestion: realHardwareScan().isScreenQuestion },
     './resourceMonitor': { checkOverloadWarning: async () => null },
     './systemPrompt': systemPromptModule
   }
@@ -589,6 +607,10 @@ test('les copies de assistant.ts dans le test sont identiques à l’original (s
     'Laisse-moi faire.', 'Je m’en occupe tout de suite, voici la réponse complète à ta question sur le pain.', 'Dis-moi la météo',
     'Trouve trois boulangeries et envoie-leur un mail', 'Mon nom est Léo ?', 'Retiens que je suis végétarien.', "C'est quoi le Bitcoin ?"
   ]
+  const scan = realHardwareScan()
+  for (const phrase of [...phrases, "Qu'est-ce qu'il y a sur mon écran ?", 'Tu vois quoi là ?', 'Que vois-tu ?', 'Regarde la météo', 'Lis mes écrans']) {
+    assert.equal(isScreenQuestion(phrase), scan.isScreenQuestion(phrase), phrase)
+  }
   for (const phrase of phrases) {
     assert.equal(directSocialReply(phrase), real.directSocialReply(phrase), phrase)
     assert.equal(looksLikeKnowledgeQuestion(phrase), real.looksLikeKnowledgeQuestion(phrase), phrase)
@@ -980,7 +1002,7 @@ test('reprise : seules les demandes arrêtées par le délai ou plantées sont r
     try {
       const { code, out } = await runScript({ OLLAMA_HOST: second.host, JARIS_RESULTS_PATH: resultsPath, JARIS_VERIFIED_SCORES_PATH: verified, JARIS_RESUME: '1' })
       assert.equal(code, 0, out)
-      assert.match(out, new RegExp(`${stopped.length + 1} test\\(s\\) arrêté\\(s\\) par le délai maximal ou par une erreur : rejoués à l'identique, délai porté à 120 min`))
+      assert.match(out, new RegExp(`${stopped.length + 1} test\\(s\\) arrêté\\(s\\) par le délai maximal, par une erreur, ou à refaire : rejoués à l'identique, délai porté à 120 min`))
       assert.doesNotMatch(out, /Aucun des modèles à tester n'a pu être installé/)
       assert.ok(!second.requests.some((r) => r.model === 'qwen3:1.7b'), 'une mauvaise réponse n’est jamais rejouée')
       assert.ok(second.requests.every((r) => frozen.includes(userOf(r)) || userOf(r) === spotify), 'seules les demandes arrêtées ou plantées')
@@ -1054,7 +1076,8 @@ test('jugements corrigés après la campagne : les vraies réponses justes passe
   assert.equal(await play('youtube-guitare', youtube('Voici quelques résultats pertinents : "Guitare pour débutants - Tutoriel complet" - Guitar Tricks.')), false, 'Nanbeige, titres inventés')
   assert.equal(await play('youtube-guitare', youtube('Voici quelques suggestions (chaîne Guitare pour les Nuls).')), false, 'ministral-3:8b')
   assert.equal(await play('youtube-guitare', youtube('La page des résultats s’affiche. Si vous avez un titre ou un thème en tête, dites-le-moi.')), true, 'granite4.1:3b')
-  assert.equal(await play('youtube-guitare', youtube('', true)), true, 'regarder l’écran pour décrire les résultats')
+  // Étape 242 : regarder l'écran en pleine tâche ne clôt plus la demande, le modèle décrit ensuite ce qu'il a vu.
+  assert.equal(await play('youtube-guitare', [...youtube('', true), { text: 'Les résultats s’affichent : une liste de vidéos de cours de guitare pour débutants.' }]), true, 'regarder l’écran pour décrire les résultats')
   assert.equal(await play('blague', [{ text: 'Il fait 10h00 dimanche 4 octobre. Tu veux une blague ? Je peux en faire, mec. Pose-moi une question.' }]), false, 'ai9stars')
   assert.equal(await play('blague', [{ text: "Quel est le comble pour un électricien ? De ne pas être au courant." }]), true)
   const soeur = (reply) => [{ calls: [['recall_memory', { title: 'Sœur' }]] }, { text: reply }]
@@ -1137,4 +1160,46 @@ test('relecture des réponses comptées justes : les vraies réponses fausses ne
 
   assert.equal(await play('ne-pas-lancer', [{ text: 'Based on the repeated search attempts, no results were found. However, Spotify is a music streaming app you may know.' }]), false, 'Nanbeige, en anglais')
   assert.equal(await play('ne-pas-lancer', [{ text: 'Oui, je connais Spotify : c’est une application de musique en streaming.' }]), true)
+})
+
+// Étape 242 : « regarder l'écran » ne clôt la demande que quand c'est la question posée, en tout premier outil.
+test('regarder l’écran en pleine tâche rend la main au modèle ; seule une question sur l’écran s’arrête dessus', async () => {
+  const byId = (id) => SCENARIOS.find((s) => s.id === id)
+  // Question sur l'écran : la description EST la réponse (le modèle n'est pas rappelé).
+  const screen = await runScenario(byId('regarde-ecran'), scripted([calls(['look_at_screen', { question: 'Que vois-tu ?' }])]))
+  assert.equal(screen.turns[0].shortCircuit, true)
+  assert.equal(screen.ok, true, screen.reason)
+  // En pleine tâche : l'écran simulé montre Discord, champ vide après l'échec de l'écriture, et le modèle conclut.
+  const seen = []
+  const chat = scripted(
+    [
+      calls(['open_app', { app_name: 'Discord' }]),
+      calls(['type_text', { text: 'Je serai en retard ce soir.' }]),
+      calls(['look_at_screen', { question: 'Le message est-il écrit ?' }]),
+      text("Je n'ai pas pu écrire ton message : le champ de Discord est resté vide.")
+    ],
+    seen
+  )
+  const task = await runScenario(byId('echec-partiel'), chat)
+  assert.equal(chat.used(), 4, 'le modèle est rappelé après le regard')
+  assert.equal(task.turns[0].shortCircuit, false)
+  assert.match(task.calls.find((c) => c.name === 'look_at_screen').result, /Discord.*champ de saisie vide/)
+  assert.equal(task.ok, true, task.reason)
+  // Une question de météo ne s'éclaire pas en regardant l'écran : toujours un appel non prévu.
+  // (Jaris relance une fois « cherche sur internet » : même réponse redonnée.)
+  const meteo = await runScenario(byId('meteo'), scripted([calls(['look_at_screen', { question: 'Quel temps ?' }]), text('Je ne sais pas.'), text('Je ne sais pas.')]))
+  assert.match(meteo.reason, /appel non prévu : look_at_screen/)
+  // Les demandes jouées avant le correctif et arrêtées par un regard en pleine tâche sont à refaire ; pas les autres.
+  const row = (prompt, names, shortCircuit = true) => ({ turns: [{ user: prompt, shortCircuit }], calls: names.map((name) => ({ turn: 0, name })) })
+  const cases = [
+    [row('Ouvre Discord puis écris que je serai en retard ce soir.', ['open_app', 'type_text', 'look_at_screen']), true],
+    [row('Écris bonjour et appuie sur Entrée.', ['look_at_screen']), true],
+    [row("Qu'est-ce qu'il y a sur mon écran en ce moment ?", ['look_at_screen']), false],
+    [row('Ouvre Discord puis écris que je serai en retard ce soir.', ['open_app', 'type_text', 'look_at_screen'], false), false],
+    [row('Lance Fortnite.', ['open_app']), false]
+  ]
+  for (const [r, expected] of cases) {
+    assert.equal(lookStoppedTask(r), expected, JSON.stringify(r))
+    assert.equal(realHardwareScan().lookStoppedTask(r), expected, `copie de Jaris : ${JSON.stringify(r)}`)
+  }
 })

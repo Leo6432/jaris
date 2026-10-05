@@ -1050,6 +1050,34 @@ export const SCENARIO_TEST_VERSION = 3
 export const VISION_TEST_VERSION = 4
 export const CODE_TEST_VERSION = 3
 
+/**
+ * Étape 242 : la demande porte-t-elle sur l'écran lui-même (« qu'est-ce qu'il y a sur mon écran ? », « tu vois
+ * quoi ? ») ? Seule une telle demande s'arrête sur la description de l'écran (court-circuit de look_at_screen,
+ * assistant.ts) ; regarder l'écran EN PLEINE TÂCHE (« ouvre Discord et écris… ») rend la main au modèle pour
+ * finir. Ici plutôt que dans assistant.ts pour servir aussi à campaignCompletion ci-dessous. Copie dans
+ * scripts/benchmark-scenarios.mjs, vérifiée identique par test.
+ */
+export function isScreenQuestion(prompt: string): boolean {
+  const text = prompt.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  return /\becrans?\b|\btu vois\b|\bvois[- ]tu\b|\bce que tu vois\b/.test(text)
+}
+
+/**
+ * Étape 242 : une demande jouée AVANT le correctif, où « regarder l'écran » en pleine tâche avait arrêté Jaris
+ * (un tour court-circuité par look_at_screen, alors que ce n'était ni le premier outil du tour ni une question sur
+ * l'écran). Avec Jaris corrigé, le modèle aurait continué : la demande est à refaire. Une demande jouée après le
+ * correctif ne peut plus avoir cette forme, donc elle n'est jamais refaite deux fois.
+ */
+export function lookStoppedTask(row: { calls?: unknown; turns?: unknown }): boolean {
+  const calls = Array.isArray(row.calls) ? (row.calls as Array<{ turn?: number; name?: string }>) : []
+  const turns = Array.isArray(row.turns) ? (row.turns as Array<{ user?: string; shortCircuit?: boolean }>) : []
+  return turns.some((turn, index) => {
+    const ofTurn = calls.filter((c) => c.turn === index)
+    if (!turn?.shortCircuit || ofTurn.at(-1)?.name !== 'look_at_screen') return false
+    return ofTurn.length > 1 || !isScreenQuestion(String(turn.user ?? ''))
+  })
+}
+
 /** Modèles qui ont TOUT fait, sans cas encore à refaire, dans le fichier brut d'une campagne (rôle par rôle). */
 export interface CampaignCompletion {
   scenarios: Set<string>
@@ -1080,7 +1108,7 @@ export function campaignCompletion(tracesText: string): CampaignCompletion {
       continue
     }
     const model = String(row.model)
-    const pending = Boolean(row.timeout) || (/^erreur/.test(String(row.reason ?? '')) && !row.replay)
+    const pending = Boolean(row.timeout) || (/^erreur/.test(String(row.reason ?? '')) && !row.replay) || (row.type === 'demande' && lookStoppedTask(row))
     if (row.type === 'demande' && versions?.demandes === SCENARIO_TEST_VERSION) {
       latest.set(`scenarios|${model}|${row.id}|${row.pass}`, { role: 'scenarios', model, pending })
     } else if (row.type === 'vision' && versions?.vision === VISION_TEST_VERSION) {

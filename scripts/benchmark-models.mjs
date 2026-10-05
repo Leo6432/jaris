@@ -58,6 +58,7 @@ import {
   SCENARIO_TEST_VERSION,
   SCENARIO_TOTAL,
   demandSuccessRate,
+  lookStoppedTask,
   runScenario,
   scenarioSeed
 } from './benchmark-scenarios.mjs'
@@ -1779,9 +1780,14 @@ async function main() {
     // tombé…), pas seulement un délai dépassé. Une seule fois : s'il replante au rejeu, à l'identique, c'est bien le
     // modèle, et son erreur reste comptée fausse. Un délai dépassé, lui, est retenté à chaque lancement.
     const crashed = (r) => /^erreur/.test(r.reason ?? '') && !r.replay
-    const todo = [...latest.values()].filter((r) => (r.timeout || crashed(r)) && inScope(r))
+    // Étape 242 : une demande où « regarder l'écran » en pleine tâche avait arrêté Jaris (avant le correctif) est
+    // refaite aussi : avec Jaris corrigé, le modèle aurait continué. Une fois refaite, elle n'a plus cette forme.
+    const lookStopped = (r) => r.type === 'demande' && lookStoppedTask(r)
+    const todo = [...latest.values()].filter((r) => (r.timeout || crashed(r) || lookStopped(r)) && inScope(r))
     if (!todo.length) return 0
-    console.log(`\n${todo.length} test(s) arrêté(s) par le délai maximal ou par une erreur : rejoués à l'identique, délai porté à ${Math.round(REPLAY_CALL_TIMEOUT_MS / 60_000)} min.`)
+    const looks = todo.filter(lookStopped).length
+    if (looks) console.log(`\n${looks} demande(s) arrêtée(s) par « regarder l'écran » en pleine tâche (avant le correctif de Jaris) : refaites.`)
+    console.log(`\n${todo.length} test(s) arrêté(s) par le délai maximal, par une erreur, ou à refaire : rejoués à l'identique, délai porté à ${Math.round(REPLAY_CALL_TIMEOUT_MS / 60_000)} min.`)
     console.log('Leur nouveau résultat est écrit dans le fichier brut (traces) ; le tableau de résultats, lui, n\'est pas recalculé.')
     callTimeoutMs = REPLAY_CALL_TIMEOUT_MS
     try {

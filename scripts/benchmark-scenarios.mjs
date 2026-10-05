@@ -79,6 +79,23 @@ const INFO_SEEKING_IMPERATIVE = /^(trouve|trouve[- ]moi|cherche|cherche[- ]moi|r
 const NOT_A_KNOWLEDGE_QUESTION =
   /\b(quelle heure|quel jour|quelle date|tu t['’]appelles|ton nom|comment tu vas|comment ça va|qui es-tu|je m['’]appelle|mon nom|retiens|retenir|souviens|rappelle-toi|n['’]oublie pas|mémorise)\b/i
 
+/** Copie de isScreenQuestion (hardwareScan.ts, étape 242) : seule une question sur l'écran s'arrête sur sa description. */
+export function isScreenQuestion(prompt) {
+  const text = prompt.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  return /\becrans?\b|\btu vois\b|\bvois[- ]tu\b|\bce que tu vois\b/.test(text)
+}
+
+/** Copie de lookStoppedTask (hardwareScan.ts) : demande jouée avant l'étape 242, arrêtée par un regard en pleine tâche. */
+export function lookStoppedTask(row) {
+  const calls = Array.isArray(row.calls) ? row.calls : []
+  const turns = Array.isArray(row.turns) ? row.turns : []
+  return turns.some((turn, index) => {
+    const ofTurn = calls.filter((c) => c.turn === index)
+    if (!turn?.shortCircuit || ofTurn.at(-1)?.name !== 'look_at_screen') return false
+    return ofTurn.length > 1 || !isScreenQuestion(String(turn.user ?? ''))
+  })
+}
+
 export function looksLikeKnowledgeQuestion(prompt) {
   const trimmed = prompt.trim()
   if (!trimmed || NOT_A_KNOWLEDGE_QUESTION.test(trimmed) || SOCIAL_CHECK_IN.test(trimmed)) return false
@@ -291,13 +308,20 @@ export function createSimulator(setup = {}) {
         const app = findApp(apps, wanted)
         if (!app) return { result: `Je n'ai trouvé aucune application nommée "${wanted}" installée sur cette machine.`, final: true }
         state.opened.push({ app: app.name, turn })
+        state.screen = `Je vois la fenêtre de ${app.name} ouverte au premier plan.`
         return { result: `${app.name} a été lancé.` }
       }
       case 'type_text': {
         const text = str(args.text)
         if (!text.trim()) return { result: 'Aucun texte à taper.' }
-        if (setup.typingFails) return { result: `Échec de la saisie du texte : ${setup.typingFails}` }
-        state.typed.push({ text, into: state.opened.at(-1)?.app ?? null, turn })
+        const into = state.opened.at(-1)?.app ?? null
+        if (setup.typingFails) {
+          // Étape 242 : un regard sur l'écran après l'échec montre le champ resté vide, comme sur un vrai PC.
+          if (into) state.screen = `Je vois la fenêtre de ${into} ouverte au premier plan, avec son champ de saisie vide.`
+          return { result: `Échec de la saisie du texte : ${setup.typingFails}` }
+        }
+        state.typed.push({ text, into, turn })
+        if (into) state.screen = `Je vois la fenêtre de ${into} ouverte au premier plan, avec « ${text} » écrit dans le champ de saisie.`
         return { result: 'Texte tapé.' }
       }
       case 'press_key': {
@@ -323,7 +347,9 @@ export function createSimulator(setup = {}) {
       }
       case 'look_at_screen':
         state.screenLooks++
-        return { result: setup.screen ?? "Je vois le bureau de Windows, avec la fenêtre de Google Chrome ouverte sur la page d'accueil de Google.", final: true }
+        // Étape 242 : l'écran simulé montre ce que les actions précédentes y ont mis (application ouverte, texte
+        // écrit, tâche à l'écran) — avant, il montrait toujours Chrome, même juste après « Discord a été lancé ».
+        return { result: setup.screen ?? state.screen ?? "Je vois le bureau de Windows, avec la fenêtre de Google Chrome ouverte sur la page d'accueil de Google." }
       case 'search_web': {
         const query = str(args.query)
         state.searches.push({ query, turn })
@@ -370,6 +396,7 @@ export function createSimulator(setup = {}) {
           return { result: outcome.fail, failure: true }
         }
         state.computerTasks.push({ goal, turn })
+        state.screen = `Je vois l’écran à la fin de la tâche « ${goal} » : elle est terminée.`
         return { result: outcome ?? 'Objectif accompli à l’écran.' }
       }
       case 'get_system_stats':
@@ -493,7 +520,10 @@ export async function runScenario(scenario, chat, { variant = 0, onEvent } = {})
           if (name === 'computer_use_task') computerUseCalled = true
           // Copie de LOOKUP_TOOLS (assistant.ts) : lire la mémoire ou l'état du PC compte comme vérifier.
           if (LOOKUP_TOOLS.has(name)) searchCalled = true
-          if (final) {
+          // Copie de l'étape 242 (assistant.ts) : regarder l'écran ne clôt la demande que si c'est la question posée,
+          // en tout premier outil ; en pleine tâche, le résultat repart au modèle.
+          const screenAnswer = name === 'look_at_screen' && calls.filter((c) => c.turn === turnIndex).length === 1 && isScreenQuestion(userText)
+          if (final || screenAnswer) {
             reply = finalizeReply(result, userText)
             turn.shortCircuit = true
             break
@@ -546,6 +576,8 @@ export function rejudge(scenario, record) {
 
 /** Outils sans effet sur le PC : toujours permis (relire, chercher, noter). Tous les autres doivent être prévus. */
 const HARMLESS_TOOLS = new Set(['search_web', 'read_web_page', 'remember', 'recall_memory'])
+/** Outils qui agissent sur ce qui est affiché : après eux, regarder l'écran pour vérifier est permis (étape 242). */
+const SCREEN_ACTIONS = new Set(['open_app', 'type_text', 'press_key', 'click_mouse', 'computer_use_task', 'media_control'])
 
 /**
  * Règles communes, puis le jugement propre à la demande. Un appel non prévu (outil inconnu, ou outil qui agit sur
@@ -567,7 +599,10 @@ export function judge(scenario, ctx) {
   for (const call of ctx.calls) {
     if (!TOOL_NAMES.has(call.name)) return { ok: false, reason: `outil inexistant appelé : ${call.name}` }
     if (scenario.noTools) return { ok: false, reason: `outil appelé sans aucune raison : ${call.name} ${JSON.stringify(call.args)}` }
-    if (!HARMLESS_TOOLS.has(call.name) && !allowed.has(call.name)) return { ok: false, reason: `appel non prévu : ${call.name} ${JSON.stringify(call.args)}` }
+    // Étape 242 : regarder l'écran pour vérifier une action À L'ÉCRAN (application ouverte, texte écrit) est
+    // légitime ; pour une question de météo ou de mémoire, il n'y a rien à y voir.
+    const looksToCheck = call.name === 'look_at_screen' && [...allowed].some((t) => SCREEN_ACTIONS.has(t))
+    if (!HARMLESS_TOOLS.has(call.name) && !allowed.has(call.name) && !looksToCheck) return { ok: false, reason: `appel non prévu : ${call.name} ${JSON.stringify(call.args)}` }
   }
   const reason = scenario.check(ctx)
   return reason ? { ok: false, reason } : { ok: true, reason: null }

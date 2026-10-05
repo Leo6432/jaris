@@ -7,7 +7,7 @@ import { listMemoryTitles } from './memoryStore'
 import { getProfile } from './profileStore'
 import { TOOLS, createToolExecutor, type ImageHandler } from './tools'
 import { didAppLaunch } from './appLauncher'
-import { GPU_TEMP_LIMIT_C, pickSafeModel, type LiveGpuStatus } from './hardwareScan'
+import { GPU_TEMP_LIMIT_C, isScreenQuestion, pickSafeModel, type LiveGpuStatus } from './hardwareScan'
 import { checkOverloadWarning } from './resourceMonitor'
 import type { SoundCue } from '../../shared/ipc'
 import { buildSystemPrompt, type ConverseChannel } from './systemPrompt'
@@ -512,6 +512,8 @@ export async function converse(
   // fois relancerait sans arrêt sur une intention d'un tour précédent déjà traité.
   const wantsWebInfo = looksLikeKnowledgeQuestion(prompt)
   let computerUseCalled = false
+  // Outils lancés dans CETTE demande : « regarder l'écran » ne clôt la demande que s'il est le tout premier (étape 242).
+  let toolsRunThisTurn = 0
   let searchCalledThisTurn = false
   let nudgedForEmail = false
   let nudgedForSearch = false
@@ -627,6 +629,7 @@ export async function converse(
 
       let result: string
       let toolFailed = false
+      toolsRunThisTurn++
       try {
         result = await executeTool(call.function.name, call.function.arguments)
       } catch (err) {
@@ -671,7 +674,11 @@ export async function converse(
       // modèle de conversation : les deux ne tiennent pas en même temps sur
       // une carte 8 Go, donc repasser par qwen3.5 pour reformuler forcerait un
       // rechargement complet. Le modèle de vision répond déjà comme Jaris.
-      if (call.function.name === 'look_at_screen') {
+      // Étape 242 (campagne de Léo, 67 demandes) : seulement quand on lui demande l'écran lui-même, en premier
+      // outil. En pleine tâche (« ouvre Discord et écris… » : l'écriture échoue, le modèle regarde pour
+      // comprendre), s'arrêter là répondait par une description de l'écran sans jamais finir la tâche ni dire
+      // que l'écriture avait échoué : le résultat repart au modèle, comme celui de n'importe quel outil.
+      if (call.function.name === 'look_at_screen' && toolsRunThisTurn === 1 && isScreenQuestion(prompt)) {
         return finalize(result)
       }
 

@@ -270,6 +270,17 @@ test('modèles à tester après une campagne : seulement les sautés, les délai
   // Plantage déjà rejoué une fois : la ligne de rejeu, qui a replanté, est la dernière — rien de plus à faire.
   lines.push({ type: 'demande', model: 'qwen3.5:35b', id: 'd0', pass: 1, ok: false, reason: 'erreur : 500 XML', replay: true })
   demandes('qwen3:1.7b', { ok: false, reason: 'faux : appel non prévu' })
+  // Étape 242 : « regarder l'écran » en pleine tâche avait arrêté Jaris (avant le correctif) — à refaire. Le même
+  // regard dans une demande refaite après le correctif (pas de court-circuit) ne l'est plus.
+  const looked = (shortCircuit) => ({
+    ok: false,
+    reason: 'faux : appel non prévu : look_at_screen',
+    turns: [{ user: 'Ouvre Discord puis écris que je serai en retard ce soir.', shortCircuit }],
+    calls: [{ turn: 0, name: 'open_app' }, { turn: 0, name: 'type_text' }, { turn: 0, name: 'look_at_screen' }]
+  })
+  demandes('qwen3.6:27b', looked(true))
+  demandes('qwen3.5:27b', looked(true))
+  lines.push({ type: 'demande', model: 'qwen3.5:27b', id: 'd0', pass: 1, replay: true, ...looked(false), ok: true, reason: null })
   vision('gemma4:31b')
   code('qwen3-coder:30b')
   code('qwen2.5-coder:14b', { ok: false, reason: "erreur : Cannot read properties of undefined (reading 'map')" })
@@ -277,12 +288,12 @@ test('modèles à tester après une campagne : seulement les sautés, les délai
   lines.push({ type: 'campagne', versions: { ...versions, code: 999 } })
   code('qwen2.5-coder:7b')
   const done = scan.campaignCompletion(lines.map((l) => JSON.stringify(l)).join('\n'))
-  assert.deepEqual([...done.scenarios].sort(), ['granite4.2:8b', 'qwen3.5:35b', 'qwen3:1.7b'])
+  assert.deepEqual([...done.scenarios].sort(), ['granite4.2:8b', 'qwen3.5:27b', 'qwen3.5:35b', 'qwen3:1.7b'])
   assert.deepEqual([...done.vision].sort(), ['gemma4:31b', 'ministral-3:8b'])
   assert.deepEqual([...done.code].sort(), ['qwen3-coder:30b'])
   const toTest = scan.getUnscoredModels(done)
-  for (const model of ['granite4.2:30b', 'ministral-3:8b', 'qwen2.5-coder:14b', 'qwen2.5-coder:7b']) assert.ok(toTest.includes(model), `${model} reste à faire`)
-  for (const model of ['granite4.2:8b', 'qwen3.5:35b', 'qwen3:1.7b', 'gemma4:31b', 'qwen3-coder:30b']) assert.ok(!toTest.includes(model), `${model} est fini`)
+  for (const model of ['granite4.2:30b', 'ministral-3:8b', 'qwen2.5-coder:14b', 'qwen2.5-coder:7b', 'qwen3.6:27b']) assert.ok(toTest.includes(model), `${model} reste à faire`)
+  for (const model of ['granite4.2:8b', 'qwen3.5:35b', 'qwen3:1.7b', 'gemma4:31b', 'qwen3-coder:30b', 'qwen3.5:27b']) assert.ok(!toTest.includes(model), `${model} est fini`)
 })
 
 test('les versions de test connues de Jaris sont celles des scripts', async () => {

@@ -6556,3 +6556,31 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   estimé par son taux aux 78 questions, jamais compté parfait (sinon un modèle non testé passerait devant les
   modèles testés). Choix sur la machine de Léo inchangés. Régression : test-hardwarescan-single-pool (« demandes
   complètes : multipliées… », vérifié en retirant le facteur puis l'estimation : le test échoue les deux fois).
+
+- **Étape 242 — « regarder l'écran » en pleine tâche n'arrête plus Jaris, et relecture des réponses justes de vision
+  (v0.28.12).** Deux points laissés ouverts à l'étape 240, faits à la demande de Léo (« fait le 1 et 2 »).
+  1. **Le court-circuit de look_at_screen arrêtait les tâches.** assistant.ts renvoyait TOUJOURS la description de
+     l'écran comme réponse finale (pour éviter de recharger le modèle de conversation après la vision). En pleine
+     tâche, c'était faux : 67 demandes de la campagne de Léo, dont 31 fois « ouvre Discord et écris… » — l'écriture
+     échoue, le modèle regarde l'écran pour comprendre, et Jaris répondait par la description de l'écran sans jamais
+     dire que l'écriture avait échoué. Désormais, le court-circuit ne vaut que si la demande porte sur l'écran
+     (`isScreenQuestion`, hardwareScan.ts) ET que c'est le tout premier outil de la demande ; sinon le résultat
+     repart au modèle, comme n'importe quel outil. Le simulateur suit (copie vérifiée par le test croisé avec le
+     VRAI converse(), qui échoue si on remet l'ancien court-circuit), et son écran simulé montre enfin ce que les
+     actions y ont mis (application ouverte, texte écrit, champ resté vide après un échec) — avant, toujours
+     Chrome, même juste après « Discord a été lancé ». Regarder l'écran pour vérifier une action À L'ÉCRAN est
+     permis dans le jugement ; pour une question de météo ou de mémoire, il reste un appel non prévu.
+     **Pas de rejugement possible à blanc** : les réponses du modèle APRÈS le regard n'ont jamais existé. Les 67
+     demandes (22 modèles) sont donc marquées « à refaire » (`lookStoppedTask`, même règle dans Jaris et dans le
+     script) et proposées par le bouton « Tester les modèles » ; une demande refaite après le correctif ne peut plus
+     avoir cette forme, elle n'est donc jamais refaite deux fois. Rejeu à blanc des 1 373 autres : aucune
+     différence. Les scores des demandes restent ceux d'avant tant que Léo n'a pas refait ces 67 demandes.
+  2. **Vision : les 207 réponses de lecture comptées justes sont toutes bonnes.** Côté clics, chaque clic juste a
+     été DESSINÉ sur sa vraie capture (pas seulement recalculé) : 5 tombaient 1 à 3 px AU-DESSUS de la barre de
+     recherche YouTube et ne passaient que grâce à une marge de 4 px autour des cibles. Les boîtes viennent du rendu
+     même de la capture et leur bord fait déjà partie de l'élément : marge retirée (gemma4:31b 31→29, gemma4:26b
+     32→30, gemma4:12b 25→24 ; le choix Vision reste qwen3.8:27b partout). **Leçon : une tolérance « pour être
+     gentil » sur un critère précis transforme des ratés en réussites — vérifier visuellement les cas qui ne passent
+     QUE grâce à elle avant de la garder.**
+  Régression : test-benchmark-scenarios (regard en pleine tâche, test croisé), test-hardwarescan-single-pool
+  (demandes à refaire), test-benchmark-vision (clic juste à côté de la cible = faux, sur son bord = juste).

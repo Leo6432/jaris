@@ -239,8 +239,12 @@ export function loadPilotTargets() {
 const PILOT_IMAGE_WIDTH = 1280
 const PILOT_IMAGE_HEIGHT = 720
 
-/** Marge autour d'une boîte : un clic sur le bord d'un bouton reste un clic sur le bouton. */
-const AIM_MARGIN = 4
+/**
+ * Marge autour d'une boîte : AUCUNE depuis la relecture du 05/10/2026. Les boîtes sont mesurées sur le rendu
+ * même de la capture (cibles.json) et leur bord fait déjà partie de l'élément ; une marge de 4 px comptait justes
+ * 5 clics tombés 1 à 3 px AU-DESSUS de la barre de recherche YouTube, qui sur un vrai écran ne la touchent pas.
+ */
+const AIM_MARGIN = 0
 
 /**
  * Juge une étape de pilotage. `targets` : cibles.json. Renvoie `null` si l'action est la bonne, sinon la raison.

@@ -193,3 +193,18 @@ test('horloge : « 14 37 » est juste, « 15 heures 37 » ou « 114 37 » non', 
   for (const answer of ['14 37', '14:37', '14h37', 'Il est 14 heures 37.', 'Quatorze heures trente-sept']) assert.ok(isCorrectVisionAnswer(clock, answer), answer)
   for (const answer of ['15 heures 37', 'Treize quarante trois', '114 37', '14 h 47']) assert.ok(!isCorrectVisionAnswer(clock, answer), answer)
 })
+
+// Relecture du 05/10/2026 : plus de marge autour des cibles. gemma4:31b, gemma4:26b et gemma4:12b cliquaient 1 à
+// 3 px AU-DESSUS de la barre de recherche (y = 80 sur 1000, soit 58 px ; la barre commence à 59 px) : compté juste
+// grâce à une marge de 4 px, alors que sur un vrai écran le clic ne la touche pas. Le bord lui-même reste juste.
+test('visée : un clic juste à côté de la cible est faux, un clic sur son bord est juste', () => {
+  const targets = loadPilotTargets()
+  const search = VISION_PILOT_CASES.find((c) => c.id === 'recherche-a-faire')
+  const box = targets[search.file][search.target]
+  assert.ok(judgePilotStep(search, '{"action":"click","x":318,"y":80}', targets), 'gemma4:31b : 58 px, au-dessus de la barre')
+  assert.ok(judgePilotStep(search, '{"action":"click","x":313,"y":78}', targets), 'gemma4:12b : 56 px')
+  // 82 sur 1000 = 59 px, exactement le bord haut de la barre.
+  assert.equal(Math.round((82 / 1000) * 720), box.y)
+  assert.equal(judgePilotStep(search, '{"action":"click","x":400,"y":82}', targets), null, 'sur le bord haut')
+  assert.equal(judgePilotStep(search, '{"action":"click","x":318,"y":104}', targets), null, 'au milieu de la barre')
+})

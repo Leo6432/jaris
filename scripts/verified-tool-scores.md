@@ -78,16 +78,19 @@ gemma4:31b n'est candidat qu'en vision.
 Test de vision version 4, mesuré par Léo le 05/10/2026 (Jaris 0.28.8) : 10 questions de lecture et 7 visées (une
 étape de pilotage de l'écran), posées 2 fois, soit 34 réponses. La visée est notée sur l'échelle 0–1000 que les
 modèles utilisent (consigne de Jaris depuis 0.28.8) : lus en pixels, leurs clics tombaient à côté. Chaque réponse
-fausse a été relue ; « 14 37 » pour l'horloge (qwen3.5:4b) était juste et est compté juste.
+fausse a été relue ; « 14 37 » pour l'horloge (qwen3.5:4b) était juste et est compté juste. Relecture des réponses
+justes (05/10/2026) : les 207 lectures sont bonnes ; 5 clics comptés justes grâce à une marge de 4 px tombaient 1 à
+3 px AU-DESSUS de la barre de recherche YouTube (gemma4:31b ×2, gemma4:26b ×2, gemma4:12b) — comptés faux, la
+marge est retirée.
 
 | Modèle | Fiabilité |
 |---|---|
-| gemma4:31b | 31/34 |
-| gemma4:26b | 32/34 |
+| gemma4:31b | 29/34 |
+| gemma4:26b | 30/34 |
 | qwen3.8:27b | 34/34 |
 | gemma4:e4b | 17/34 |
 | qwen3-vl:8b | 29/34 |
-| gemma4:12b | 25/34 |
+| gemma4:12b | 24/34 |
 | hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M | 27/34 |
 | ministral-3:8b | 23/34 |
 | qwen3-vl:4b | 30/34 |
@@ -118,6 +121,10 @@ ratent vraiment (tâches gardées dans le stockage du navigateur, interdit dans 
 Jaris avec des outils simulés (scripts/benchmark-scenarios.mjs) : actions enchaînées, résultat d'un outil à
 reprendre, plusieurs phrases, information manquante, appels à éviter, phrases dictées, longue conversation. Un
 appel en trop qui agit sur le PC fait rater la demande.
+
+En attente (étape 242) : 67 demandes de 22 modèles ont été jouées avec l'ancien Jaris, qui s'arrêtait dès qu'un
+modèle regardait l'écran en pleine tâche. Elles sont proposées par le bouton « Tester les modèles » ; les scores
+ci-dessous seront mis à jour une fois refaites.
 
 Depuis l'étape 241, ce score compte dans le choix des modèles Rapide, Médium et Puissant : il MULTIPLIE la note
 (intelligence × fiabilité aux 78 questions puissance 5 × réussite aux demandes). Il ne compte pas pour Vision ni
