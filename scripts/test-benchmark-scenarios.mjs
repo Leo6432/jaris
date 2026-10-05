@@ -14,6 +14,7 @@ import {
   MAX_TOOL_ROUNDS,
   REPEATED_SCENARIOS,
   SCENARIOS,
+  LOOKUP_TOOLS,
   SCENARIO_NOW,
   SCENARIO_RUNS,
   SCENARIO_TEST_VERSION,
@@ -197,16 +198,16 @@ const CASES = {
     bad: [calls(['search_web', { query: 'horaires piscine Saint-Georges Rennes' }]), text('Les horaires sont sur le site de Rennes Métropole.')]
   },
   'memoire-vive': {
-    // Question de connaissance : après l'état de la machine, Jaris exige aussi une recherche web (relance).
-    good: [calls(['get_system_stats', {}]), text('Ta mémoire vive est utilisée à 47 %.'), calls(['search_web', { query: 'mémoire vive utilisée' }]), text('Ta mémoire vive est utilisée à 47 %.')],
+    // Campagne de Léo : après l'état de la machine, Jaris ne relance PLUS vers une recherche web (LOOKUP_TOOLS).
+    good: [calls(['get_system_stats', {}]), text('Ta mémoire vive est utilisée à 47 %.')],
     bad: [text('Ta mémoire vive est utilisée à environ 50 %.'), text('Ta mémoire vive est utilisée à environ 50 %.')]
   },
   'stats-chaleur': {
-    good: [calls(['get_system_stats', {}]), text('Ton GPU est à 52 degrés, c’est normal.'), text('Ton GPU est à 52 degrés, c’est normal.')],
+    good: [calls(['get_system_stats', {}]), text('Ton GPU est à 52 degrés, c’est normal.')],
     bad: [text('Non, elle ne chauffe pas trop.'), text('Non, elle ne chauffe pas trop.')]
   },
   anniversaire: {
-    good: [calls(['recall_memory', { title: 'Anniversaire de maman' }]), text("L'anniversaire de ta mère est le 14 mars."), text("L'anniversaire de ta mère est le 14 mars.")],
+    good: [calls(['recall_memory', { title: 'Anniversaire de maman' }]), text("L'anniversaire de ta mère est le 14 mars.")],
     bad: [text("Je ne connais pas la date d'anniversaire de ta mère."), text("Je ne connais pas la date d'anniversaire de ta mère.")]
   },
   'recherche-retiens': {
@@ -308,7 +309,7 @@ const CASES = {
     bad: [calls(['search_web', { query: 'téléphone boulangerie Le Fournil Plélan-le-Grand' }]), text('Leur numéro est le 02 99 06 12 34.')]
   },
   'soeur-inconnue': {
-    good: [calls(['recall_memory', { title: 'sœur' }]), text("Je n'ai aucune note sur ta sœur."), text("Je ne connais pas le prénom de ta sœur, tu ne me l'as jamais dit.")],
+    good: [calls(['recall_memory', { title: 'sœur' }]), text("Je ne connais pas le prénom de ta sœur, tu ne me l'as jamais dit.")],
     bad: [text('Ta sœur s’appelle Julie.'), text('Ta sœur s’appelle Julie.')]
   },
   'ne-pas-eteindre': {
@@ -940,4 +941,9 @@ test('modèle figé : délai maximal par appel, noté à part, et le reste du mo
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+test('LOOKUP_TOOLS : la copie du test est identique à celle de Jaris (assistant.ts)', () => {
+  const real = read('electron/services/assistant.ts').match(/export const LOOKUP_TOOLS = new Set\((\[[^\]]*\])\)/)?.[1]
+  assert.deepEqual(JSON.parse(real.replace(/'/g, '"')), [...LOOKUP_TOOLS])
 })

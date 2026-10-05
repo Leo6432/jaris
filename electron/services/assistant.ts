@@ -127,6 +127,12 @@ export function looksLikeKnowledgeQuestion(prompt: string): boolean {
   return QUESTION_START_WORDS.test(trimmed) || INFO_SEEKING_IMPERATIVE.test(trimmed) || trimmed.endsWith('?')
 }
 
+/**
+ * Outils qui vont chercher une information réelle (internet, page web, mémoire, état du PC) : après l'un d'eux, une
+ * réponse n'est pas « de mémoire du modèle », la relance vers search_web n'a pas lieu d'être.
+ */
+export const LOOKUP_TOOLS = new Set(['search_web', 'read_web_page', 'recall_memory', 'get_system_stats'])
+
 /** Choisit le palier de complexité le plus adapté à la question, sans appel LLM supplémentaire (juste des mots-clés). */
 function pickTier(prompt: string): Tier {
   const lower = prompt.toLowerCase()
@@ -642,7 +648,11 @@ export async function converse(
       }
 
       if (call.function.name === 'computer_use_task') computerUseCalled = true
-      if (call.function.name === 'search_web') searchCalledThisTurn = true
+      // Campagne de tests de Léo (04/10/2026) : la relance « cherche sur internet » partait aussi après une
+      // réponse tirée de la mémoire ou de l'état du PC — 91 demandes sur 1 083 (« c'est quand l'anniversaire de
+      // ma mère ? », « combien de RAM j'utilise ? »…), toujours plus lentes, et 11 fois une bonne réponse
+      // (« le 14 mars ») remplacée par « aucun résultat sur internet ». Consulter une source compte comme vérifier.
+      if (LOOKUP_TOOLS.has(call.function.name)) searchCalledThisTurn = true
 
       // Constaté en usage réel (Léo : « même quand je dit ouvre l'application youtube ou bloc note il dit
       // c'est lancé mais il lance pas ») : quand open_app échoue (aucune application de ce nom installée,

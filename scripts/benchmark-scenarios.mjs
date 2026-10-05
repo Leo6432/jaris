@@ -24,6 +24,9 @@ import { TOOLS, buildBenchmarkSystemPrompt, isRealReply } from './benchmark-case
 export const SCENARIO_TEST_VERSION = 3
 
 /** Même valeur que MAX_TOOL_ROUNDS (assistant.ts), vérifiée par le test. */
+/** Copie de LOOKUP_TOOLS (assistant.ts), vérifiée par le test : après l'un d'eux, pas de relance vers search_web. */
+export const LOOKUP_TOOLS = new Set(['search_web', 'read_web_page', 'recall_memory', 'get_system_stats'])
+
 export const MAX_TOOL_ROUNDS = 10
 
 /** Même valeur que MAX_HISTORY_MESSAGES (conversationSession.ts), vérifiée par le test. */
@@ -488,7 +491,8 @@ export async function runScenario(scenario, chat, { variant = 0, onEvent } = {})
             break
           }
           if (name === 'computer_use_task') computerUseCalled = true
-          if (name === 'search_web') searchCalled = true
+          // Copie de LOOKUP_TOOLS (assistant.ts) : lire la mémoire ou l'état du PC compte comme vérifier.
+          if (LOOKUP_TOOLS.has(name)) searchCalled = true
           if (final) {
             reply = finalizeReply(result, userText)
             turn.shortCircuit = true

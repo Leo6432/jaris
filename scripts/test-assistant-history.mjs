@@ -283,3 +283,20 @@ test('machine chargée : un paragraphe à part à l’écrit, une simple pause �
   assert.equal(await reply('chat'), `${warning}\n\n${answer}`)
   assert.ok((await reply('voice')).startsWith(`${warning} `))
 })
+
+// Campagne de Léo (04/10/2026) : après avoir lu la mémoire, Jaris relançait quand même vers une recherche web, et
+// une bonne réponse (« le 14 mars ») devenait « aucun résultat sur internet ». Lire la mémoire ou l'état du PC
+// compte comme vérifier : plus de relance.
+for (const tool of ['recall_memory', 'get_system_stats']) {
+  test(`question de connaissance : aucune relance vers internet après ${tool}`, async () => {
+    let modelCalls = 0
+    const converse = setup(async (messages) => {
+      modelCalls++
+      assert.ok(!messages.some((m) => m.role === 'system' && /appelle d'abord search_web/.test(m.content)), 'aucune relance')
+      if (messages.at(-1).role === 'tool') return { role: 'assistant', content: "C'est le 14 mars." }
+      return { role: 'assistant', content: '', tool_calls: [{ function: { name: tool, arguments: { title: 'Anniversaire de maman' } } }] }
+    }, async () => 'Maman est née le 14 mars 1962.')
+    assert.equal(await converse("C'est quand déjà l'anniversaire de ma mère ?", null, () => {}), "C'est le 14 mars.")
+    assert.equal(modelCalls, 2)
+  })
+}
