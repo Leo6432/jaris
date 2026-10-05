@@ -29,8 +29,11 @@ test('conversation : tous les scores viennent du test sur 78 réponses (test ver
   for (const [model, score] of conversation) assert.match(score, /^\d+\/78$/, `${model} : ${score}`)
 })
 
-test('vision sur 18 (re-mesure en cours) et code sur 5 (une mesure incomplète ne doit pas être recopiée)', () => {
-  for (const [model, score] of rows(section('Vision'))) assert.match(score, /^\d+\/18$/, `Vision ${model} : ${score}`)
+test('vision sur 34 et code sur 5 (une mesure incomplète ne doit pas être recopiée)', () => {
+  // Test de vision version 4 (05/10/2026) : les 11 candidats, chacun sur 34.
+  const vision = rows(section('Vision'))
+  assert.equal(vision.length, 11)
+  for (const [model, score] of vision) assert.match(score, /^\d+\/34$/, `Vision ${model} : ${score}`)
   // Campagne de Léo du 04-05/10/2026 : 5 applications par modèle (test de code version 3), les 7 candidats notés.
   const code = rows(section('Code'))
   assert.equal(code.length, 7)

@@ -185,3 +185,11 @@ test('l’étape de pilotage du test est EXACTEMENT celle de Jaris (consignes, m
     assert.equal(findPilotElement(elements, name)?.name ?? null, ui.findElementByName(elements, name)?.name ?? null, name)
   }
 })
+
+// Test de vision v4 (05/10/2026) : « 14 37 » (qwen3.5:4b) est la bonne heure, juste sans « h » ; une autre heure
+// ou un nombre qui ne fait que contenir 14 reste faux.
+test('horloge : « 14 37 » est juste, « 15 heures 37 » ou « 114 37 » non', () => {
+  const clock = VISION_TEST_CASES.find((c) => c.file === 'horloge.png')
+  for (const answer of ['14 37', '14:37', '14h37', 'Il est 14 heures 37.', 'Quatorze heures trente-sept']) assert.ok(isCorrectVisionAnswer(clock, answer), answer)
+  for (const answer of ['15 heures 37', 'Treize quarante trois', '114 37', '14 h 47']) assert.ok(!isCorrectVisionAnswer(clock, answer), answer)
+})

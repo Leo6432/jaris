@@ -75,24 +75,24 @@ gemma4:31b n'est candidat qu'en vision.
 
 ## Vision — compréhension d'image
 
-Même test du 03/10/2026 : 6 images posées 3 fois, soit 18 réponses. Corrigé à la main : gemma4:26b et
-gemma4:e4b 16 → 18 — « Le code affiché est 4821. » et « Quatre huit deux un » étaient comptés faux par un
-bug de la vérification, corrigé depuis. ministral-3:8b reste à 17 : il a vraiment répondu « Vert » pour un
-carré bleu.
+Test de vision version 4, mesuré par Léo le 05/10/2026 (Jaris 0.28.8) : 10 questions de lecture et 7 visées (une
+étape de pilotage de l'écran), posées 2 fois, soit 34 réponses. La visée est notée sur l'échelle 0–1000 que les
+modèles utilisent (consigne de Jaris depuis 0.28.8) : lus en pixels, leurs clics tombaient à côté. Chaque réponse
+fausse a été relue ; « 14 37 » pour l'horloge (qwen3.5:4b) était juste et est compté juste.
 
 | Modèle | Fiabilité |
 |---|---|
-| gemma4:31b | 18/18 |
-| gemma4:26b | 18/18 |
-| qwen3.8:27b | 18/18 |
-| gemma4:e4b | 18/18 |
-| qwen3-vl:8b | 18/18 |
-| gemma4:12b | 18/18 |
-| hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M | 18/18 |
-| ministral-3:8b | 17/18 |
-| qwen3-vl:4b | 18/18 |
-| qwen3.5:4b | 18/18 |
-| qwen3-vl:2b | 18/18 |
+| gemma4:31b | 31/34 |
+| gemma4:26b | 32/34 |
+| qwen3.8:27b | 34/34 |
+| gemma4:e4b | 17/34 |
+| qwen3-vl:8b | 29/34 |
+| gemma4:12b | 25/34 |
+| hf.co/ggml-org/GLM-4.6V-Flash-GGUF:Q4_K_M | 27/34 |
+| ministral-3:8b | 23/34 |
+| qwen3-vl:4b | 30/34 |
+| qwen3.5:4b | 28/34 |
+| qwen3-vl:2b | 21/34 |
 
 ## Code — génération de code
 

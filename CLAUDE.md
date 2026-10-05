@@ -6553,3 +6553,14 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
      noté » — leur donner explicitement les scores d'avant au lieu de compter sur l'état du dépôt.
   Régression : test-benchmark-scenarios, test-benchmark-vision, test-computer-use, test-benchmark-cases,
   test-unscored-models-ui, test-verified-scores (chacun vérifié en retirant la correction qu'il protège).
+
+- **Étape 239 — remesure de la vision après le correctif 0–1000 (v0.28.9) : le correctif est confirmé en usage réel.**
+  Test de vision version 4 lancé par Léo avec Jaris 0.28.8 : 374 réponses, aucune erreur, aucun modèle sauté. La
+  visée bondit pour les modèles qui visaient en 0–1000 : qwen3.8:27b 7/14 → 14/14, gemma4:26b 5 → 12, gemma4:31b
+  5 → 11, qwen3-vl:4b 5 → 11, qwen3.5:4b 3 → 9. Les modèles déjà imprécis le restent (gemma4:e4b 2, qwen3-vl:2b 3)
+  — la preuve que la conversion ne « donne » pas des points, elle lit juste correctement ce que le modèle vise.
+  Chaque réponse fausse relue : une seule mal jugée (« 14 37 » pour 14:37, la bonne heure sans « h »), corrigée.
+  Scores de vision écrits (sur 34) ; le choix des modèles ne change pas sur la machine de Léo (qwen3.8:27b, 34/34).
+  **Piège de test revécu** : `assert.deepEqual(x, [])` sur un tableau créé dans un `vm.runInNewContext` échoue
+  (« same structure but not reference-equal ») — comparer la longueur. Régression : test-benchmark-vision (horloge),
+  test-verified-scores (vision sur 34, 11 modèles).

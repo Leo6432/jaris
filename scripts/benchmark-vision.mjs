@@ -87,7 +87,8 @@ export const VISION_TEST_CASES = [
   {
     file: 'horloge.png',
     prompt: "Quelle heure affiche l'horloge en bas à droite de l'écran ? Réponds uniquement avec l'heure.",
-    value: /\b14\s*(?:h|:|heures?)\s*37\b|quatorze heures? trente-sept/
+    // « 14 37 » (qwen3.5:4b, test de vision v4) est la bonne heure, juste sans « h » : comptée juste.
+    value: /\b14\s*(?:h|:|heures?)?\s*37\b|quatorze heures? trente-sept/
   },
   {
     file: 'youtube-resultats.png',
