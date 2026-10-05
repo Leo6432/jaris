@@ -20,7 +20,7 @@ import { exec } from 'child_process'
 import { request as httpRequest } from 'http'
 import { request as httpsRequest } from 'https'
 import { createHash } from 'crypto'
-import { appendFileSync, readFileSync, statfsSync, writeFileSync } from 'fs'
+import { appendFileSync, existsSync, readFileSync, statfsSync, writeFileSync } from 'fs'
 import { arch, cpus, homedir, release, totalmem } from 'os'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
@@ -967,6 +967,11 @@ const OLLAMA_POLL_MS = Number(process.env.JARIS_OLLAMA_POLL_MS) || 5000
  */
 const CALL_TIMEOUT_MS = (Number(process.env.JARIS_CALL_TIMEOUT_MIN) || 20) * 60 * 1000
 const CALL_TIMEOUT_LABEL = CALL_TIMEOUT_MS >= 60_000 ? `${Math.round(CALL_TIMEOUT_MS / 60_000)} min` : `${Math.round(CALL_TIMEOUT_MS / 1000)} s`
+/** Délai des demandes REJOUÉES après un dépassement (voir replayTimedOutDemands) : bien plus large, jamais infini. */
+const REPLAY_CALL_TIMEOUT_MS = (Number(process.env.JARIS_REPLAY_TIMEOUT_MIN) || 120) * 60 * 1000
+/** Délai en vigueur : CALL_TIMEOUT_MS pendant la campagne, REPLAY_CALL_TIMEOUT_MS pendant les demandes rejouées. */
+let callTimeoutMs = CALL_TIMEOUT_MS
+const timeoutLabel = () => (callTimeoutMs >= 60_000 ? `${Math.round(callTimeoutMs / 60_000)} min` : `${Math.round(callTimeoutMs / 1000)} s`)
 class CallTimeoutError extends Error {}
 
 /**
@@ -1055,7 +1060,7 @@ async function waitForOllama() {
 async function postChat(body) {
   for (let attempt = 0; ; attempt++) {
     try {
-      const res = await postJson('/api/chat', body, CALL_TIMEOUT_MS)
+      const res = await postJson('/api/chat', body, callTimeoutMs)
       if (!res.ok) throw new Error(`${res.status} ${res.text}`)
       return JSON.parse(res.text)
     } catch (err) {
@@ -1063,7 +1068,7 @@ async function postChat(body) {
         if (await ollamaAlive()) {
           // Ollama va bien : c'est le modèle. Il est déchargé pour que le test suivant reparte d'un moteur neuf.
           await postJson('/api/generate', { model: body.model, keep_alive: 0 }, 60_000).catch(() => {})
-          throw new CallTimeoutError(`délai dépassé : aucune réponse du modèle en ${CALL_TIMEOUT_LABEL}`)
+          throw new CallTimeoutError(`délai dépassé : aucune réponse du modèle en ${timeoutLabel()}`)
         }
         err.ollamaUnreachable = true
       }
@@ -1729,8 +1734,95 @@ async function main() {
   const codeToRun = SCOPED_CODE_CANDIDATES.map((c) => c.model).filter(
     (m) => !alreadyDone(m, 'code') && (installed.includes(m) || missing.includes(m))
   )
+  /**
+   * Léo, 05/10/2026 : « à la fin, refaire les tests qui n'ont pas marché ». Seulement les demandes arrêtées par le
+   * délai maximal (ou non jouées après 3 délais de suite) : une panne de TEMPS, pas une mauvaise réponse — rejouer
+   * une demande ratée jusqu'à ce qu'elle passe fausserait le score. Rejouées à l'identique (même graine, même
+   * variante), avec un délai porté à REPLAY_CALL_TIMEOUT_MS ; leur nouvelle ligne « demande » (`replay: true`) dans
+   * les traces remplace l'ancienne pour le score. Se lance toute seule à la reprise (JARIS_RESUME), donc d'un simple
+   * nouveau clic sur le test dans Jaris une fois la campagne finie.
+   */
+  async function replayTimedOutDemands() {
+    if (!RESUME || !existsSync(TRACES_PATH)) return 0
+    const latest = new Map()
+    let versions = null
+    for (const line of readFileSync(TRACES_PATH, 'utf8').split('\n')) {
+      if (!line.trim()) continue
+      let row
+      try {
+        row = JSON.parse(line)
+      } catch {
+        continue
+      }
+      if (row.type === 'campagne') versions = row.versions
+      if (row.type === 'demande' && versions?.demandes === SCENARIO_TEST_VERSION) latest.set(`${row.model}|${row.id}|${row.pass}`, row)
+    }
+    const todo = [...latest.values()].filter((r) => r.timeout && SCOPED_SCENARIO_MODELS.includes(r.model))
+    if (!todo.length) return 0
+    console.log(`\n${todo.length} demande(s) arrêtée(s) par le délai maximal : rejouées à l'identique, délai porté à ${Math.round(REPLAY_CALL_TIMEOUT_MS / 60_000)} min.`)
+    console.log('Leur nouveau résultat est écrit dans le fichier brut (traces) ; le tableau de résultats, lui, n\'est pas recalculé.')
+    callTimeoutMs = REPLAY_CALL_TIMEOUT_MS
+    const models = [...new Set(todo.map((r) => r.model))]
+    for (const model of models) {
+      const downloadedHere = !installed.includes(model)
+      if (downloadedHere) {
+        try {
+          await pullModel(model, budgetFor(model), { reservedGb: 0 }, () => {})
+        } catch (err) {
+          console.log(`  ${model} : téléchargement impossible (${err.message}), ses demandes ne sont pas rejouées.`)
+          continue
+        }
+      }
+      console.log(`\n=== ${model} (demandes rejouées) ===`)
+      const thinkModes = new Set()
+      for (const record of todo.filter((r) => r.model === model)) {
+        const scenario = SCENARIOS.find((sc) => sc.id === record.id)
+        if (!scenario) continue
+        const where = { model, id: record.id, pass: record.pass, variant: record.variant, seed: record.seed, replay: true }
+        const onEvent = ({ kind, messages, ...event }) =>
+          trace({ type: `demande-${kind}`, ...where, ...event, ...(messages ? { messages: compactMessages(messages) } : {}) })
+        process.stdout.write(`  [${record.pass}/2] demande « ${record.id} » (rejouée) ... `)
+        try {
+          const run = await runScenario(scenario, (messages) => chatScenario(model, messages, record.seed, thinkModes), { variant: record.variant, onEvent })
+          trace({
+            type: 'demande',
+            ...where,
+            family: scenario.family,
+            ok: run.ok,
+            reason: run.reason,
+            ms: Math.round(run.wallMs),
+            turns: run.turns.map((turn) => ({ ...turn, messages: compactMessages(turn.messages) })),
+            modelCalls: run.modelCalls,
+            calls: run.calls,
+            finalState: run.finalState
+          })
+          console.log(`${run.ok ? 'OK' : `RATÉ (${run.reason})`} — ${fmt(run.wallMs / 1000)} s`)
+        } catch (err) {
+          if (err instanceof OllamaDownError) throw err
+          const partial = err.partial
+          trace({
+            type: 'demande',
+            ...where,
+            family: scenario.family,
+            ok: false,
+            reason: `erreur : ${err.message}`,
+            timeout: err instanceof CallTimeoutError,
+            ...(partial
+              ? { ms: Math.round(partial.wallMs), turns: partial.turns.map((turn) => ({ ...turn, messages: compactMessages(turn.messages) })), modelCalls: partial.modelCalls, calls: partial.calls, finalState: partial.finalState }
+              : {})
+          })
+          console.log(`ERREUR (${err.message})`)
+        }
+      }
+      if (downloadedHere && DELETE_AFTER_TEST) await deleteModelViaApi(model).catch(() => {})
+    }
+    callTimeoutMs = CALL_TIMEOUT_MS
+    return todo.length
+  }
+
   if (!conversationPhase.length && !visionToRun.length && !codeToRun.length) {
-    console.log('Aucun des modèles à tester n\'a pu être installé.')
+    const replayed = await replayTimedOutDemands()
+    console.log(replayed ? 'Demandes rejouées : rien d\'autre à tester.' : 'Aucun des modèles à tester n\'a pu être installé.')
     return
   }
 
@@ -2487,6 +2579,7 @@ async function main() {
   // par un palier différent de SCOPE, ou déjà repris via JARIS_RESUME, y sont toujours — persistResults() les
   // garde tels quels (voir testedThisRun dans sa propre définition). Dernier appel du run, mais chaque modèle
   // a déjà été persisté individuellement au fil des boucles ci-dessus (voir persistResults()).
+  await replayTimedOutDemands()
   const report = persistResults()
   console.log(`\n\n${report}`)
   console.log(`\n(Résultats aussi sauvegardés dans ${RESULTS_PATH})`)

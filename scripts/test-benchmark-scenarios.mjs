@@ -943,6 +943,69 @@ test('modèle figé : délai maximal par appel, noté à part, et le reste du mo
   }
 })
 
+// Léo, 05/10/2026 : « refaire à la fin les tests qui n'ont pas marché ». Seuls les délais dépassés sont rejoués
+// (une panne de temps) — jamais une mauvaise réponse, qu'on finirait sinon par faire passer à force de relancer.
+test('reprise : seules les demandes arrêtées par le délai sont rejouées, à l’identique', { timeout: 180000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-scen-'))
+  // Seules « bitcoin » et « meteo » restent figées (comme granite chez Léo : quelques délais, le reste répondu). Un
+  // modèle qui n'a répondu à RIEN est déjà retesté en entier à la reprise : ce n'est pas le cas visé ici.
+  const frozen = SCENARIOS.filter((sc) => ['bitcoin', 'meteo'].includes(sc.id)).map((sc) => sc.turns[0])
+  const first = await startFakeOllama({
+    installed: ['ministral-3:3b', 'qwen3:1.7b'],
+    hang: (json) => json.model === 'ministral-3:3b' && json.messages.some((m) => m.role === 'user' && frozen.includes(m.content))
+  })
+  try {
+    const resultsPath = join(dir, 'resultats.md')
+    const verified = verifiedFile(dir, `| qwen3.5:0.8b | 1/${SCENARIO_TOTAL} |`)
+    const run1 = await runScript({ OLLAMA_HOST: first.host, JARIS_RESULTS_PATH: resultsPath, JARIS_VERIFIED_SCORES_PATH: verified, JARIS_CALL_TIMEOUT_MIN: '0.01' })
+    assert.equal(run1.code, 0, run1.out)
+    first.server.close()
+    const tracesPath = join(dir, 'resultats.traces.jsonl')
+    const before = readFileSync(tracesPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((t) => t.type === 'demande')
+    const stopped = before.filter((t) => t.model === 'ministral-3:3b' && t.timeout)
+    assert.deepEqual([...new Set(stopped.map((t) => t.id))].sort(), ['bitcoin', 'meteo'])
+    assert.ok(stopped.length >= 2)
+    assert.ok(before.some((t) => t.model === 'qwen3:1.7b' && !t.ok && !t.timeout), 'des ratés ordinaires existent')
+
+    const second = await startFakeOllama({ installed: ['ministral-3:3b', 'qwen3:1.7b'] })
+    try {
+      const { code, out } = await runScript({ OLLAMA_HOST: second.host, JARIS_RESULTS_PATH: resultsPath, JARIS_VERIFIED_SCORES_PATH: verified, JARIS_RESUME: '1' })
+      assert.equal(code, 0, out)
+      assert.match(out, new RegExp(`${stopped.length} demande\\(s\\) arrêtée\\(s\\) par le délai maximal : rejouées à l'identique, délai porté à 120 min`))
+      assert.doesNotMatch(out, /Aucun des modèles à tester n'a pu être installé/)
+      assert.ok(!second.requests.some((r) => r.model === 'qwen3:1.7b'), 'une mauvaise réponse n’est jamais rejouée')
+      assert.ok(second.requests.every((r) => r.messages.some((m) => m.role === 'user' && frozen.includes(m.content))), 'seules les demandes arrêtées')
+      // Mêmes graines qu'au premier passage : la même demande, pas une nouvelle chance tirée au hasard.
+      const seeds = new Set(second.requests.map((r) => r.options.seed))
+      assert.deepEqual([...seeds].sort(), stopped.map((t) => t.seed).sort())
+      const after = readFileSync(tracesPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+      const replayed = after.filter((t) => t.type === 'demande' && t.replay)
+      assert.equal(replayed.length, stopped.length)
+      for (const row of replayed) {
+        const old = stopped.find((t) => t.id === row.id && t.pass === row.pass)
+        assert.equal(row.seed, old.seed)
+        assert.equal(row.variant, old.variant)
+        assert.equal(row.ok, true, `${row.id} ${row.pass} : ${row.reason}`)
+      }
+      assert.ok(after.some((t) => t.type === 'demande-requete' && t.replay), 'requêtes rejouées tracées aussi')
+    } finally {
+      second.server.close()
+    }
+    // Troisième lancement : plus rien d'arrêté par le délai, donc plus rien à rejouer.
+    const third = await startFakeOllama({ installed: ['ministral-3:3b', 'qwen3:1.7b'] })
+    try {
+      const { code, out } = await runScript({ OLLAMA_HOST: third.host, JARIS_RESULTS_PATH: resultsPath, JARIS_VERIFIED_SCORES_PATH: verified, JARIS_RESUME: '1' })
+      assert.equal(code, 0, out)
+      assert.equal(third.requests.length, 0, out)
+    } finally {
+      third.server.close()
+    }
+  } finally {
+    first.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('LOOKUP_TOOLS : la copie du test est identique à celle de Jaris (assistant.ts)', () => {
   const real = read('electron/services/assistant.ts').match(/export const LOOKUP_TOOLS = new Set\((\[[^\]]*\])\)/)?.[1]
   assert.deepEqual(JSON.parse(real.replace(/'/g, '"')), [...LOOKUP_TOOLS])

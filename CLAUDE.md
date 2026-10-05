@@ -6456,3 +6456,29 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   la fin du test, y compris quand Jaris l'arrête (`release()` sur 'close' et 'error'). **Leçon : avant un long
   traitement sans surveillance, se demander ce que fait le SYSTÈME pendant ce temps (veille, mises à jour,
   redémarrages), pas seulement le programme.** Régression : test-benchmark-runner-cleanup.
+
+- **Étape 237 — pendant la grande campagne de Léo (fichier brut relu au fil de l'eau), quatre changements gardés
+  EN LOCAL jusqu'à la fin** : publier une version pendant le test aurait proposé une mise à jour à Léo, donc
+  l'aurait invité à interrompre 1,5 à 3 jours de mesures.
+  1. **Deux jugements trop stricts** (benchmark-scenarios.mjs, rejugés sur le fichier brut sans rien relancer) :
+     la météo « pluie faible » refusait « il pleut » (motif élargi à pleu/pluv/averse) ; « YouTube + guitare »
+     comptait faux un modèle qui regardait l'écran pour vérifier (look_at_screen ajouté aux appels permis).
+  2. **Vrai bug de Jaris trouvé dans ces réponses** (assistant.ts) : après une réponse tirée de la MÉMOIRE
+     (recall_memory) ou de l'état du PC (get_system_stats), la relance « cherche sur internet » se déclenchait
+     quand même — seule une recherche web comptait comme « déjà cherché ». Liste commune `LOOKUP_TOOLS`, copiée
+     dans le simulateur et vérifiée identique par un test. À la vérification finale, les demandes touchées
+     (memoire-vive, stats-chaleur, anniversaire, soeur-inconnue...) sont rejugées sur la réponse d'AVANT la relance.
+  3. **Seuils de vitesse décidés par Léo** (hardwareScan.ts) : Rapide 50 %, Médium 20 %, Puissant/Vision/Code
+     sans minimum, de la vitesse Artificial Analysis du plus rapide parmi les meilleurs aux outils. Un modèle sans
+     vitesse publiée est exclu de Rapide mais reste candidat en Médium. **Piège évité de justesse** : monter
+     Médium pour qu'il diffère de Puissant le rendait identique à Rapide — Léo l'a relevé ; vérifier les TROIS
+     rôles ensemble après tout changement de seuil, pas seulement celui qu'on vise.
+  4. **Rejeu des délais dépassés** (Léo : « refaire à la fin les tests qui n'ont pas marché »). Seulement les
+     demandes arrêtées par le délai (ou « non jouées » après 3 délais) — une panne de TEMPS. Jamais une mauvaise
+     réponse : la rejouer jusqu'à ce qu'elle passe fausserait le score. `replayTimedOutDemands`
+     (benchmark-models.mjs) se lance seul à la reprise : même graine, même variante, délai porté à 120 min ;
+     nouvelle ligne `demande` avec `replay: true` dans le fichier brut (le tableau .md n'est PAS recalculé — le
+     score final se fait sur le fichier brut). **Piège du test** : un modèle qui n'a répondu à RIEN est déjà
+     retesté en entier à la reprise (ligne « — »), donc un faux modèle entièrement figé ne testait pas le rejeu ;
+     seules deux demandes sont figées. Régression : test-benchmark-scenarios (vérifié en coupant le rejeu, puis
+     en rejouant aussi les ratés : le test échoue dans les deux cas).
