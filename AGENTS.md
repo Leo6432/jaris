@@ -6584,3 +6584,19 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
      QUE grâce à elle avant de la garder.**
   Régression : test-benchmark-scenarios (regard en pleine tâche, test croisé), test-hardwarescan-single-pool
   (demandes à refaire), test-benchmark-vision (clic juste à côté de la cible = faux, sur son bord = juste).
+
+- **Étape 243 — le score des demandes complètes est affiché (v0.28.13).** Léo : « il y a seulement les questions
+  visibles le score et pas le score de demandes » (puis, après avoir hésité à additionner les deux : « non en
+  fait continue, ajoute un autre score »). Depuis l'étape 241 ce score compte dans le choix, mais aucun écran ne le
+  montrait. Ajouté `demands` à ModelOverviewEntry (lu dans verified-tool-scores.md, seulement sur le total du test
+  actuel) et affiché : (1) dans « Modèles utilisés sur ta machine », deux badges NOMMÉS pour Faible/Moyen/Élevé
+  (« Questions 77/78 », « Demandes 45/48 ») — jamais deux nombres nus côte à côte, indiscernables ; Vision et Code
+  gardent leur seul score, nommé d'après son total (« Images 30/34 », « Code 5/5 »), car les demandes ne comptent
+  pas dans leur choix ; (2) dans « Tous les modèles », une colonne « Demandes complètes » triable. **Piège attrapé
+  par une MESURE, pas à l'œil** : deux badges sur une ligne qui ne passe jamais à la ligne (`white-space: nowrap` de
+  la table) faisaient déborder la carte à 420 px (515 px de tableau pour 378 px de carte) ; laisser passer à la ligne
+  sans condition empilait les deux badges même en grand, parce que la colonne du modèle (`width: 100%`) prend toute
+  la place restante. Corrigé par une requête de conteneur (`@container`, carte de moins de 540 px) : côte à côte
+  quand il y a la place, l'un sous l'autre sinon. Le test vérifie les deux (même ligne en grand, aucun débordement
+  à 420 et 480 px) et échoue bien sans la règle. Régression : test-my-model-picks-ui, test-options-reorganization-ui,
+  test-hardwarescan-single-pool.

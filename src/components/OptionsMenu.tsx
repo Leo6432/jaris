@@ -160,15 +160,29 @@ function dedupeAudioOutputs(devices: MediaDeviceInfo[]): MediaDeviceInfo[] {
  * de lire chaque cellule. "—" (jamais testé) reste un texte neutre, pas un badge. Exporté : réutilisé par
  * MyModelPicks.tsx (modèles choisis pour ta machine) et AllModelsOverview.tsx, pas seulement ici.
  */
-export function ReliabilityBadge({ value }: { value: string | null }): JSX.Element {
-  if (!value) return <span className="options-menu__badge options-menu__badge--none">—</span>
+/**
+ * `label` (étape 243) : le nom du test devant le score (« Questions 77/78 », « Demandes 45/48 ») — deux scores
+ * côte à côte sans leur nom seraient impossibles à distinguer.
+ */
+export function ReliabilityBadge({ value, label }: { value: string | null; label?: string }): JSX.Element {
+  const prefix = label ? `${label} ` : ''
+  if (!value) return <span className="options-menu__badge options-menu__badge--none">{prefix}—</span>
   const match = /^(\d+)\/(\d+)$/.exec(value)
-  if (!match) return <span className="options-menu__badge options-menu__badge--none">{value}</span>
+  if (!match) return <span className="options-menu__badge options-menu__badge--none">{prefix}{value}</span>
   const [, correctStr, totalStr] = match
   const correct = Number(correctStr)
   const total = Number(totalStr)
   const level = total === 0 ? 'none' : correct === total ? 'good' : correct === 0 ? 'bad' : 'mid'
-  return <span className={`options-menu__badge options-menu__badge--${level}`}>{value}</span>
+  return <span className={`options-menu__badge options-menu__badge--${level}`}>{prefix}{value}</span>
+}
+
+/**
+ * Nom du test d'après le total du score (étape 243) : un rôle peut afficher le test de conversation, de vision ou
+ * de code (le rôle Code retombe sur la conversation quand le modèle n'a pas passé le test de code).
+ */
+export function scoreTestLabel(value: string | null): string | undefined {
+  const total = value?.split('/')[1]
+  return total === '78' ? 'Questions' : total === '48' ? 'Demandes' : total === '34' ? 'Images' : total === '5' ? 'Code' : undefined
 }
 
 

@@ -178,6 +178,16 @@ test('« Tous les modèles » : chaque modèle une seule fois, avec son étiquet
   assert.equal(new Set(models).size, models.length)
   assert.ok(overview.entries.every((e) => ['Rapide', 'Moyen', 'Puissant'].includes(e.category)))
   assert.equal(overview.groups, undefined, 'plus de groupes par palier')
+  // Étape 243 : le score des demandes complètes est affiché à côté de celui des questions (lu dans le vrai fichier).
+  const byModel = new Map(overview.entries.map((e) => [e.model, e]))
+  const real = (model) => REAL_SCORES.slice(REAL_SCORES.indexOf('## Demandes')).match(new RegExp(`\\| ${model.replace(/[.:]/g, '\\$&')} \\| (\\d+/48) \\|`))?.[1]
+  assert.equal(byModel.get('granite4.2:8b').demands, real('granite4.2:8b'))
+  assert.match(byModel.get('granite4.2:8b').demands, /^\d+\/48$/)
+  assert.equal(byModel.get('qwen3-vl:4b').demands, null, 'modèle de vision seul : pas de demandes')
+  // La carte « Modèles utilisés sur ta machine » aussi, que le modèle soit le choix idéal ou celui du profil.
+  const scan = setup({ vramMib: 8 * 1024 })
+  assert.equal((await scan.getMyModelPicks()).large.demands, real((await scan.getMyModelPicks()).large.model))
+  assert.equal((await scan.getMyModelPicks({ models: { large: 'qwen3.5:27b' } })).large.demands, real('qwen3.5:27b'))
 })
 
 // Étape 168 : la liste que teste le bouton « Tester les modèles ». Étape 230 : rôle par rôle, et un score de

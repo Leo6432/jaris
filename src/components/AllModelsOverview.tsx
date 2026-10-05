@@ -54,7 +54,7 @@ const CATEGORY_LABELS: Record<ModelCategory, string> = { Rapide: 'Faible', Moyen
  * "Intelligence" ferait remonter en tête tous les modèles jamais évalués par Artificial Analysis, l'inverse
  * de ce qu'on cherche à voir.
  */
-type SortKey = 'vramGb' | 'toolCalling' | 'artificialAnalysisIndex' | 'artificialAnalysisSpeed'
+type SortKey = 'vramGb' | 'toolCalling' | 'demands' | 'artificialAnalysisIndex' | 'artificialAnalysisSpeed'
 type SortState = { key: SortKey; dir: 'asc' | 'desc' } | null
 
 /** Sens de lecture "utile" au premier clic sur chaque colonne : VRAM du plus léger au plus lourd, les 3
@@ -62,6 +62,7 @@ type SortState = { key: SortKey; dir: 'asc' | 'desc' } | null
 const DEFAULT_SORT_DIR: Record<SortKey, 'asc' | 'desc'> = {
   vramGb: 'asc',
   toolCalling: 'desc',
+  demands: 'desc',
   artificialAnalysisIndex: 'desc',
   artificialAnalysisSpeed: 'desc'
 }
@@ -69,6 +70,7 @@ const DEFAULT_SORT_DIR: Record<SortKey, 'asc' | 'desc'> = {
 const SORT_LABELS: Record<SortKey, string> = {
   vramGb: 'VRAM nécessaire',
   toolCalling: "Appel d'outils",
+  demands: 'Demandes complètes',
   artificialAnalysisIndex: 'Intelligence (Artificial Analysis)',
   artificialAnalysisSpeed: 'Vitesse (Artificial Analysis)'
 }
@@ -78,11 +80,12 @@ const SORT_LABELS: Record<SortKey, string> = {
 const SORT_CHIP_LABELS: Record<SortKey, string> = {
   vramGb: 'VRAM',
   toolCalling: "Appel d'outils",
+  demands: 'Demandes',
   artificialAnalysisIndex: 'Intelligence',
   artificialAnalysisSpeed: 'Vitesse'
 }
 
-const SORT_KEYS: SortKey[] = ['vramGb', 'toolCalling', 'artificialAnalysisIndex', 'artificialAnalysisSpeed']
+const SORT_KEYS: SortKey[] = ['vramGb', 'toolCalling', 'demands', 'artificialAnalysisIndex', 'artificialAnalysisSpeed']
 
 /**
  * "6/6" -> 1, "2/3" -> 0,67, absent ou illisible -> null (toujours en fin de tri, jamais confondu avec un vrai
@@ -98,6 +101,7 @@ function toolScoreValue(toolCalling: string | null): number | null {
 
 function sortValue(entry: ModelOverviewEntry, key: SortKey): number | null {
   if (key === 'toolCalling') return toolScoreValue(entry.toolCalling)
+  if (key === 'demands') return toolScoreValue(entry.demands ?? null)
   return entry[key]
 }
 
@@ -272,6 +276,10 @@ export default function AllModelsOverview(): JSX.Element {
                               <th className="options-menu__col-num">
                                 <SortButton sortKey="toolCalling" sort={sort} onSort={toggleSort} />
                               </th>
+                              {/* Étape 243 : les 48 vraies demandes de bout en bout, à côté des questions isolées. */}
+                              <th className="options-menu__col-num" title="Vraies demandes réussies de bout en bout, sur 48">
+                                <SortButton sortKey="demands" sort={sort} onSort={toggleSort} />
+                              </th>
                               {/* Intelligence Index lu directement chez Artificial Analysis. */}
                               <th className="options-menu__col-num" title="Artificial Analysis Intelligence Index v4.3.2">
                                 <SortButton sortKey="artificialAnalysisIndex" sort={sort} onSort={toggleSort} />
@@ -295,6 +303,9 @@ export default function AllModelsOverview(): JSX.Element {
                                 <td className="options-menu__col-num">{entry.vramGb} Go</td>
                                 <td className="options-menu__col-num">
                                   <ReliabilityBadge value={entry.toolCalling} />
+                                </td>
+                                <td className="options-menu__col-num">
+                                  <ReliabilityBadge value={entry.demands ?? null} />
                                 </td>
                                 <td className="options-menu__col-num">{entry.artificialAnalysisIndex === null ? 'Non publié' : formatIntelligenceIndex(entry.artificialAnalysisIndex)}</td>
                                 <td className="options-menu__col-num">{entry.artificialAnalysisSpeed ?? '—'}</td>

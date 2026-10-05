@@ -1225,6 +1225,7 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
       readsImages: READS_IMAGES.has(c.model),
       usedIn: usageByModel.get(c.model) ?? [],
       ...scoreOf(c.model),
+      demands: currentDemandScore(verifiedToolScores, c.model),
       intelligence: INTELLIGENCE_MMLU_PRO[c.model] ?? null,
       artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[c.model] ?? null,
       artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[c.model] ?? null
@@ -1238,6 +1239,12 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
  * monde) — `undefined` si rien de connu du tout (jamais de chiffre inventé).
  * Utilisé par computeModelPicks (pickBestFrom l'utilise pour départager les candidats).
  */
+/** Score de demandes complètes affiché (« 46/48 »), seulement sur le total du test actuel ; `null` sinon (étape 243). */
+function currentDemandScore(verifiedToolScores: Record<VerifiedTier, Map<string, string>>, model: string): string | null {
+  const score = verifiedToolScores.scenarios.get(model)
+  return score?.endsWith(`/${SCENARIO_TEST_TOTAL}`) ? score : null
+}
+
 function resolveBenchmarkResult(
   candidate: ModelCandidate,
   tier: VerifiedTier,
@@ -1305,6 +1312,7 @@ function computeModelPicks(
     model,
     vramGb: vramGbOfModel,
     toolCalling: result?.toolCalling ?? null,
+    demands: currentDemandScore(verifiedToolScores, model),
     intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
     artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
     artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[model] ?? null
@@ -1640,6 +1648,7 @@ function entryForModel(
     model,
     vramGb: ALL_MODELS.find((c) => c.model === model)?.vramGb ?? 0,
     toolCalling: tiers.map((t) => verifiedToolScores[t].get(model)).find(Boolean) ?? null,
+    demands: currentDemandScore(verifiedToolScores, model),
     intelligence: INTELLIGENCE_MMLU_PRO[model] ?? null,
     artificialAnalysisIndex: ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX[model] ?? null,
     artificialAnalysisSpeed: ARTIFICIAL_ANALYSIS_SPEED[model] ?? null

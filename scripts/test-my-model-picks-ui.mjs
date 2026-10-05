@@ -28,19 +28,19 @@ const ENTRY = `
 import { createRoot } from 'react-dom/client'
 import MyModelPicks from './src/components/MyModelPicks'
 
-const e = (model, tool, ai, aiSpeed) => ({
+const e = (model, tool, ai, aiSpeed, demands = null) => ({
   model, vramGb: 8, usedIn: [],
-  toolCalling: tool, intelligence: null, artificialAnalysisIndex: ai, artificialAnalysisSpeed: aiSpeed
+  toolCalling: tool, demands, intelligence: null, artificialAnalysisIndex: ai, artificialAnalysisSpeed: aiSpeed
 })
 
 const picks = {
   gpuName: 'NVIDIA GeForce RTX 3070', vramGb: 8, ramGb: 32,
-  flash: e('hf.co/bartowski/ai9stars_G9v3-3B-GGUF', '6/6', 10.8, null),
-  medium: e('qwen3.5:4b', '6/6', 13.1, 22),
-  large: e('qwen3.8:27b', '6/6', 33.7, 46),
-  vision: e('qwen3-vl:4b', '3/3', 7, 109),
+  flash: e('hf.co/bartowski/ai9stars_G9v3-3B-GGUF', '62/78', 10.8, null, '26/48'),
+  medium: e('qwen3.5:4b', '74/78', 13.1, 22, '38/48'),
+  large: e('qwen3.8:27b', '77/78', 33.7, 46, '45/48'),
+  vision: e('qwen3-vl:4b', '30/34', 7, 109, '40/48'),
   // Modèle sans score publié chez Artificial Analysis : doit afficher "—", jamais un chiffre inventé.
-  code: e('qwen2.5-coder:14b', '3/3', null, null),
+  code: e('qwen2.5-coder:14b', '5/5', null, null),
   // Étape 138 : Médium a un meilleur choix pas encore installé (il suffit de retester), Vision un meilleur
   // choix BLOQUÉ au téléchargement.
   upgrades: {
@@ -213,4 +213,31 @@ test("pilotage d'écran : carte trop petite = aucun modèle, et le modèle Visio
     const text = await page.$eval('.capacity-scan__tier-table', (el) => el.textContent)
     assert.match(text, /Pas assez de puissance : carte graphique trop petite \(6 Go.*Le modèle Vision pilote l'écran à sa place/)
   }, 760, undefined, pilot)
+})
+
+// Étape 243, Léo : « il y a seulement les questions visibles le score et pas le score de demandes ».
+test('Faible, Moyen et Élevé montrent les deux scores, chacun avec son nom ; Vision et Code seulement le leur', options, async () => {
+  await withPreview(async (page) => {
+    const scores = await page.$$eval('.capacity-scan__tier-scores', (tds) => tds.map((td) => [...td.querySelectorAll('.options-menu__badge')].map((b) => b.textContent?.trim())))
+    assert.deepEqual(JSON.parse(JSON.stringify(scores.slice(0, 5))), [
+      ['Questions 62/78', 'Demandes 26/48'],
+      ['Questions 74/78', 'Demandes 38/48'],
+      ['Questions 77/78', 'Demandes 45/48'],
+      // Vision : les demandes ne comptent pas dans son choix — jamais affichées, même si le modèle en a un score.
+      ['Images 30/34'],
+      ['Code 5/5']
+    ])
+    const legend = await page.$eval('.capacity-scan__tier-legend', (el) => el.textContent ?? '')
+    assert.match(legend, /Demandes/)
+    // En largeur normale, les deux scores tiennent côte à côte, sur la même ligne.
+    const tops = await page.$$eval('.capacity-scan__tier-scores', (tds) => [...tds[0].querySelectorAll('.options-menu__badge')].map((b) => Math.round(b.getBoundingClientRect().top)))
+    assert.equal(tops[0], tops[1])
+  })
+  // Fenêtre la plus étroite permise par Jaris (480 px, main.ts) : les scores passent l'un sous l'autre, rien n'est coupé.
+  for (const width of [420, 480]) {
+    await withPreview(async (page) => {
+      const [card, table] = await page.evaluate(() => [document.querySelector('.capacity-scan__tier').clientWidth, document.querySelector('.capacity-scan__tier-table').scrollWidth])
+      assert.ok(table <= card, `à ${width} px, le tableau (${table} px) dépasse de la carte (${card} px)`)
+    }, width)
+  }
 })

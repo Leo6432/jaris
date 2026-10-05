@@ -1749,6 +1749,27 @@ body.body--scan::after {
   color: var(--hud-text-faint);
 }
 
+/* Étape 243 : deux scores nommés côte à côte (« Questions 77/78 », « Demandes 45/48 »), qui passent à la ligne
+   proprement en fenêtre étroite plutôt que de déborder (la cellule peut passer à la ligne ENTRE les deux, jamais
+   au milieu d'un score). */
+/* Côte à côte quand la carte a la place ; l'un sous l'autre seulement quand elle est étroite (la colonne du modèle
+   prend sinon toute la place restante et forcerait les deux scores l'un sous l'autre même en grand). */
+.capacity-scan__tiers {
+  container-type: inline-size;
+}
+
+@container (max-width: 540px) {
+  .capacity-scan__tier-table td.capacity-scan__tier-scores,
+  .capacity-scan__tier-table td.capacity-scan__tier-intelligence {
+    white-space: normal;
+  }
+}
+
+.capacity-scan__tier-scores .options-menu__badge {
+  margin: 2px 6px 2px 0;
+  white-space: nowrap;
+}
+
 /* Étape 140 : vérification auprès d'Ollama (ce qui est VRAIMENT installé) sous la carte. */
 .capacity-scan__tier-missing td,
 p.capacity-scan__tier-missing {

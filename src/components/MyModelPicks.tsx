@@ -1,7 +1,7 @@
 import { Fragment, useState } from 'react'
 import type { ModelOverviewEntry, MyModelPicks as MyModelPicksData } from '../../shared/ipc'
 import { formatModelName } from '../lib/formatModelName'
-import { ReliabilityBadge } from './OptionsMenu'
+import { ReliabilityBadge, scoreTestLabel } from './OptionsMenu'
 import { formatIntelligenceIndex } from '../lib/formatIntelligenceIndex'
 import { PILOT_MODEL_LABEL } from '../../shared/pilotModel'
 
@@ -18,6 +18,9 @@ interface MyModelPicksProps {
    */
   beforeInstall?: boolean
 }
+
+/** Rôles dont le choix tient compte des demandes complètes (étape 241). */
+const CONVERSATION_ROLES = new Set(['flash', 'medium', 'large'])
 
 const ROLES: { key: 'flash' | 'medium' | 'large' | 'vision' | 'code'; label: string }[] = [
   { key: 'flash', label: 'Faible' },
@@ -102,8 +105,11 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
                     <td className="capacity-scan__tier-intelligence" title="Artificial Analysis Intelligence Index v4.3.2">
                       {formatIntelligence(entry)}
                     </td>
-                    <td>
-                      <ReliabilityBadge value={entry.toolCalling} />
+                    {/* Étape 243, Léo : « il y a seulement les questions visibles et pas le score de demandes ». Les
+                        demandes comptent pour Faible, Moyen et Élevé seulement : elles ne s'affichent que là. */}
+                    <td className="capacity-scan__tier-scores">
+                      <ReliabilityBadge value={entry.toolCalling} label={scoreTestLabel(entry.toolCalling)} />
+                      {CONVERSATION_ROLES.has(key) && <ReliabilityBadge value={entry.demands ?? null} label="Demandes" />}
                     </td>
                   </tr>
                   {/* Étape 138 : la ligne ci-dessus est le modèle RÉELLEMENT utilisé. Quand le meilleur choix
@@ -251,8 +257,9 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
       )}
       <p className="capacity-scan__tier-legend">
         Pour chaque rôle, Jaris met en balance fiabilité et intelligence parmi les modèles qui tiennent dans ta
-        machine : sa note est l'intelligence multipliée par la chance de réussir 5 actions de suite sans erreur.
-        Une erreur sur 78 coûte peu, une erreur sur 10 coûte presque la moitié de la note. Faible prend la
+        machine : sa note est l'intelligence multipliée par la chance de réussir 5 actions de suite sans erreur
+        (Questions), puis, pour Faible, Moyen et Élevé, par la part de vraies demandes réussies de bout en bout
+        (Demandes). Une erreur sur 78 coûte peu, une erreur sur 10 coûte presque la moitié de la note. Faible prend la
         meilleure note parmi les plus rapides, Moyen la meilleure qui tient sur ta carte graphique, Élevé et
         Code la meilleure même si elle déborde sur la RAM, Vision la meilleure parmi ceux qui lisent les images, Image le seul modèle de dessin s'il tient sur ta machine, Vidéo le modèle vidéo avec la meilleure qualité que ta machine peut faire tourner. Vitesse et Intelligence : mesures publiées par Artificial
         Analysis, identiques pour tout le monde — elles comparent les modèles entre eux, pas la vitesse sur ta

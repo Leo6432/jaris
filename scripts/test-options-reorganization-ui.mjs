@@ -103,7 +103,7 @@ const overrides = {
     codeModel: 'qwen2.5-coder:7b',
     // Étape 160 : une seule liste de modèles, chacun avec son étiquette (repère affiché seulement).
     entries: [
-      { model: 'ministral-3:3b', vramGb: 3.0, category: 'Rapide', readsImages: true, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', intelligence: null, artificialAnalysisIndex: 4.8 },
+      { model: 'ministral-3:3b', vramGb: 3.0, category: 'Rapide', readsImages: true, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', demands: '33/48', intelligence: null, artificialAnalysisIndex: 4.8 },
       { model: 'qwen3:1.7b', vramGb: 2, category: 'Rapide', readsImages: false, usedIn: [], toolCalling: null, intelligence: null, artificialAnalysisIndex: null },
       { model: 'gemma4:31b', vramGb: 20, category: 'Puissant', readsImages: true, usedIn: ['Vision'], toolCalling: null, intelligence: null, artificialAnalysisIndex: null }
     ]
@@ -375,12 +375,15 @@ test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste d
     // ministral-3:3b : utilisé pour deux rôles, VRAM et Intelligence Index officiel (5).
     assert.equal(rows[0][2], 'Oui — Rapide, Médium', `rôles actifs attendus : ${rows[0][2]}`)
     assert.ok(rows[0][3].includes('3'), `VRAM du premier modèle : ${rows[0][3]}`)
-    assert.equal(rows[0][5], '4,8', `Intelligence Index attendu (4,8, avec sa décimale) : ${rows[0][5]}`)
+    // Étape 243 : la colonne des demandes complètes, à côté de l'appel d'outils ; « — » sans score.
+    assert.equal(rows[0][5], '33/48', `score de demandes attendu : ${rows[0][5]}`)
+    assert.equal(rows[1][5], '—', `pas de score de demandes : ${rows[1][5]}`)
+    assert.equal(rows[0][6], '4,8', `Intelligence Index attendu (4,8, avec sa décimale) : ${rows[0][6]}`)
     // "Vitesse (Artificial Analysis)" : "—" quand Artificial Analysis n'a pas publié de mesure fiable.
-    assert.equal(rows[0][6], '—', `Vitesse doit rester "—" sans mesure publiée : ${rows[0][6]}`)
+    assert.equal(rows[0][7], '—', `Vitesse doit rester "—" sans mesure publiée : ${rows[0][7]}`)
     // qwen3:1.7b : aucun score officiel connu, clairement indiqué sans chiffre inventé.
     assert.equal(rows[1][2], 'Non', `le modèle non retenu doit être indiqué : ${rows[1][2]}`)
-    assert.equal(rows[1][5], 'Non publié', `absence de score officiel attendue : ${rows[1][5]}`)
+    assert.equal(rows[1][6], 'Non publié', `absence de score officiel attendue : ${rows[1][6]}`)
 
     // "Fermer" revient sur la page Options, toujours sur l'onglet Modèles — elle n'a jamais été fermée.
     await page.click('.options-page--models .options-page__close')
@@ -495,14 +498,14 @@ test('« Tester ces modèles » : nomme les modèles, confirme, puis suit le tes
 // rien ne le SIGNALAIT : un titre cliquable avait exactement la même police, la même couleur et la même
 // taille qu'un titre normal. Ce test vérifie la COMMANDE VISIBLE, pas seulement le mécanisme — c'est
 // précisément la distinction qui manquait pour attraper le problème avant livraison.
-test('une barre "Trier par" VISIBLE propose les 4 critères, sans avoir à deviner que les titres sont cliquables', options, async () => {
+test('une barre "Trier par" VISIBLE propose les 5 critères, sans avoir à deviner que les titres sont cliquables', options, async () => {
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Modèles")')
     await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
     await page.waitForSelector('.options-page--models .options-menu__model-overview')
 
     const chips = await page.$$eval('.options-page--models .options-menu__sort-chip', (els) => els.map((el) => el.textContent?.trim()))
-    assert.deepEqual(chips, ['VRAM', "Appel d'outils", 'Intelligence', 'Vitesse', 'Par défaut'], `pastilles de tri attendues : ${chips.join(', ')}`)
+    assert.deepEqual(chips, ['VRAM', "Appel d'outils", 'Demandes', 'Intelligence', 'Vitesse', 'Par défaut'], `pastilles de tri attendues : ${chips.join(', ')}`)
 
     // Réellement habillées par le CSS de Jaris (famille des onglets), pas laissées au style par défaut du
     // navigateur — même piège que le bouton resté gris d'une étape précédente, vérifié par MESURE.
@@ -549,6 +552,13 @@ test('cliquer une colonne trie "Tous les modèles" ; une seconde fois inverse le
     await page.locator('.options-menu__sort-button', { hasText: "Appel d'outils" }).first().click()
     const byTools = await models()
     assert.equal(byTools[0], 'ministral-3:3b', 'le seul modèle testé doit passer en tête')
+
+    // Étape 243 : « Demandes complètes » se trie pareil, un modèle sans score de demandes en dernier (en partant
+    // d'un tri par VRAM croissante, qui met qwen3:1.7b en tête).
+    await page.locator('.options-menu__sort-button', { hasText: 'VRAM nécessaire' }).first().click()
+    assert.equal((await models())[0], 'qwen3:1.7b')
+    await page.locator('.options-menu__sort-button', { hasText: 'Demandes complètes' }).first().click()
+    assert.equal((await models())[0], 'ministral-3:3b', 'le seul modèle avec un score de demandes doit passer en tête')
   })
 })
 

@@ -359,6 +359,12 @@ export interface ModelOverviewEntry {
   /** Le modèle lit les images (seuls ceux-là peuvent tenir le rôle Vision). */
   readsImages?: boolean
   toolCalling: string | null
+  /**
+   * Étape 243, Léo (« il y a seulement les questions visibles le score et pas le score de demandes ») : réussite
+   * aux demandes complètes (« 46/48 »), lue dans verified-tool-scores.md, seulement sur le total du test ACTUEL.
+   * Compte dans le choix de Faible, Moyen et Élevé (étape 241), jamais de Vision ni de Code. `null` sans score.
+   */
+  demands?: string | null
   intelligence: number | null
   /**
    * Intelligence Index publié directement par Artificial Analysis — voir
