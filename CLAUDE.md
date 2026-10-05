@@ -6499,3 +6499,23 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
      (sinon on la relancerait à l'infini). Les réponses vides ou coupées (fenêtre pleine pendant la réflexion) ne
      sont PAS des plantages : le modèle a répondu, mal, exactement comme il le ferait dans Jaris. Régression :
      test-benchmark-scenarios (vérifié en ne rejouant pas les plantages, puis en les rejouant sans fin).
+  7. **La VÉRIFICATION d'une application pouvait planter, et passer pour une erreur du modèle** (fin de campagne) :
+     « Cannot read properties of undefined (reading 'map') » sur la liste de tâches de qwen2.5-coder:14b et 32b.
+     Le bouton « Supprimer » d'une ligne précise se cherchait à partir d'une FEUILLE contenant le texte de la
+     tâche ; « <li>Acheter du pain<button>Supprimer</button></li> » (texte posé à côté du bouton, sans balise à
+     lui) n'a aucune feuille de ce genre, et le cas « ligne introuvable » renvoyait un objet sans `seen`, lu ensuite
+     sans garde. Corrigé (élément le plus profond qui contient le texte, `seen` toujours renvoyé). Les 35
+     applications de la campagne revérifiées avec le test corrigé : seules ces deux-là changent, et passent justes.
+     Au rejeu, un code dont SEULE la vérification a planté est revérifié tel quel (`recheck: true`) : le regénérer
+     donnerait une autre application, ce ne serait plus le même test. **Leçon : une exception levée par le code de
+     VÉRIFICATION doit se distinguer d'une erreur du modèle — sinon un bug du test se compte comme une faute du
+     modèle.** Régression : test-benchmark-code (ligne sans balise, vérifiée en remettant l'ancienne recherche) et
+     test-benchmark-cases (revérification sans regénération).
+  8. **Le bouton « Tester les modèles » proposait les 42 modèles** après la campagne : il ne lisait que
+     verified-tool-scores.md, pas encore mis à jour. `campaignCompletion` (hardwareScan.ts) lit le fichier brut
+     de la campagne avec la même règle que le rejeu du script (dernière ligne de chaque cas ; délai dépassé, ou
+     plantage pas encore rejoué = à refaire) : sur le vrai fichier de Léo, le bouton propose exactement les 8
+     modèles à reprendre. Versions des tests recopiées côté Jaris, vérifiées identiques aux scripts par un test.
+     **Piège rencontré, déjà connu** : un nouvel import (`fs`, `campaignCompletion`) dans benchmarkRunner.ts
+     cassait les faux modules de test-benchmark-runner-cleanup — tous les tests du fichier tombaient sur « module
+     non simulé ».

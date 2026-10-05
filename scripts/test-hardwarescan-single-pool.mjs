@@ -219,3 +219,52 @@ test('Médium : un modèle sans vitesse publiée reste candidat (choix de Léo),
   assert.equal(r.models.medium, 'granite4.1:8b')
   assert.equal(r.models.flash, 'ministral-3:3b')
 })
+
+// Léo, 05/10/2026 : « fais-moi le bouton test, pour que je teste les derniers modèles ». Après une campagne, le
+// bouton ne propose que ce qui reste à faire d'après le fichier brut — pas les 42 modèles dont les scores ne sont
+// pas encore recopiés.
+test('modèles à tester après une campagne : seulement les sautés, les délais dépassés et les plantages pas encore rejoués', () => {
+  const scan = setup({ vramMib: 8 * 1024 })
+  const versions = { conversation: 6, demandes: scan.SCENARIO_TEST_VERSION, vision: scan.VISION_TEST_VERSION, code: scan.CODE_TEST_VERSION }
+  const lines = [{ type: 'campagne', versions }]
+  const demandes = (model, bad = {}) => {
+    for (let i = 0; i < scan.SCENARIO_TEST_TOTAL; i++) lines.push({ type: 'demande', model, id: `d${i % 40}`, pass: i < 40 ? 1 : 2, ok: true, reason: null, ...(i === 0 ? bad : {}) })
+  }
+  const vision = (model, bad = {}) => {
+    for (let i = 0; i < scan.VISION_TEST_TOTAL; i++) lines.push({ type: 'vision', model, kind: 'lecture', file: `f${i % 17}.png`, id: null, pass: i < 17 ? 1 : 2, ok: true, ...(i === 0 ? bad : {}) })
+  }
+  const code = (model, bad = {}) => {
+    for (let i = 0; i < scan.CODE_TEST_TOTAL; i++) lines.push({ type: 'code', model, id: `c${i}`, ok: true, ...(i === 0 ? bad : {}) })
+  }
+  demandes('granite4.2:8b')
+  demandes('granite4.2:30b', { ok: false, reason: 'erreur : délai dépassé', timeout: true })
+  demandes('ministral-3:8b', { ok: false, reason: 'erreur : 500 invalid character' })
+  vision('ministral-3:8b')
+  demandes('qwen3.5:35b', { ok: false, reason: 'erreur : 500 XML' })
+  // Plantage déjà rejoué une fois : la ligne de rejeu, qui a replanté, est la dernière — rien de plus à faire.
+  lines.push({ type: 'demande', model: 'qwen3.5:35b', id: 'd0', pass: 1, ok: false, reason: 'erreur : 500 XML', replay: true })
+  demandes('qwen3:1.7b', { ok: false, reason: 'faux : appel non prévu' })
+  vision('gemma4:31b')
+  code('qwen3-coder:30b')
+  code('qwen2.5-coder:14b', { ok: false, reason: "erreur : Cannot read properties of undefined (reading 'map')" })
+  // Une campagne d'une AUTRE version du test ne compte pas.
+  lines.push({ type: 'campagne', versions: { ...versions, code: 999 } })
+  code('qwen2.5-coder:7b')
+  const done = scan.campaignCompletion(lines.map((l) => JSON.stringify(l)).join('\n'))
+  assert.deepEqual([...done.scenarios].sort(), ['granite4.2:8b', 'qwen3.5:35b', 'qwen3:1.7b'])
+  assert.deepEqual([...done.vision].sort(), ['gemma4:31b', 'ministral-3:8b'])
+  assert.deepEqual([...done.code].sort(), ['qwen3-coder:30b'])
+  const toTest = scan.getUnscoredModels(done)
+  for (const model of ['granite4.2:30b', 'ministral-3:8b', 'qwen2.5-coder:14b', 'qwen2.5-coder:7b']) assert.ok(toTest.includes(model), `${model} reste à faire`)
+  for (const model of ['granite4.2:8b', 'qwen3.5:35b', 'qwen3:1.7b', 'gemma4:31b', 'qwen3-coder:30b']) assert.ok(!toTest.includes(model), `${model} est fini`)
+})
+
+test('les versions de test connues de Jaris sont celles des scripts', async () => {
+  const scan = setup({ vramMib: 8 * 1024 })
+  const scenarios = readFileSync(new URL('./benchmark-scenarios.mjs', import.meta.url), 'utf8')
+  const vision = readFileSync(new URL('./benchmark-vision.mjs', import.meta.url), 'utf8')
+  const code = readFileSync(new URL('./benchmark-code.mjs', import.meta.url), 'utf8')
+  assert.equal(Number(scenarios.match(/export const SCENARIO_TEST_VERSION = (\d+)/)[1]), scan.SCENARIO_TEST_VERSION)
+  assert.equal(Number(vision.match(/export const VISION_TEST_VERSION = (\d+)/)[1]), scan.VISION_TEST_VERSION)
+  assert.equal(Number(code.match(/export const CODE_TEST_VERSION = (\d+)/)[1]), scan.CODE_TEST_VERSION)
+})

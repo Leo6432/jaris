@@ -50,11 +50,11 @@ import { chosenThink, isAcceptedThink, thinkOptions, thinkingKind } from '../sha
 import { getStorageStatus, programMoveCommandLine, reconcileStorage, relocateEverything } from './services/relocation'
 import { DOCKER_APP_SUBDIR, findDockerInstallDir } from './services/dockerLocation'
 import { openApp } from './services/appLauncher'
-import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, getMyModelPicks, getUnscoredModels, isUnusedInstalledModel } from './services/hardwareScan'
+import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, getMyModelPicks, isUnusedInstalledModel } from './services/hardwareScan'
 import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { restoreReminders } from './services/reminders'
-import { runQuickSetup, stopModelTest, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
+import { getModelsToTest, runQuickSetup, stopModelTest, testUnscoredModels, unscoredResultsPath } from './services/benchmarkRunner'
 import { chatSession } from './services/chatSession'
 import { PhoneAccessManager } from './services/phoneAccessManager'
 import { PHONE_RESTRICTIONS, phoneStatusFromLog } from './services/phoneAccess'
@@ -1293,7 +1293,7 @@ app.whenReady().then(async () => {
   })
   // Étape 168, remis à l'étape 221 (Léo : « rajoute le bouton analyse pour tester Ling-3.0-tiny ») : test des seuls
   // modèles sans score (voir testUnscoredModels, benchmarkRunner.ts).
-  ipcMain.handle(IPC_CHANNELS.getUnscoredModels, () => getUnscoredModels())
+  ipcMain.handle(IPC_CHANNELS.getUnscoredModels, () => getModelsToTest())
   ipcMain.handle(IPC_CHANNELS.testUnscoredModels, (event) =>
     testUnscoredModels((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))
   )

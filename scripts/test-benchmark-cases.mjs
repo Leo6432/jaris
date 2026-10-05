@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -1016,6 +1016,49 @@ test('rejeu : en vision et en code, seuls les cas arrêtés par le délai sont r
     }
   } finally {
     first.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// Campagne de Léo, 05/10/2026 : la VÉRIFICATION a planté (bug du test) sur deux applications pourtant justes. Au
+// rejeu, c'est le code DÉJÀ écrit qui est revérifié — en régénérer un autre ne serait plus le même test.
+test('rejeu : un code dont seule la vérification a planté est revérifié tel quel, sans regénération', { timeout: 240000, skip: BROWSER ? false : 'aucun navigateur ici (le test de code en a besoin)' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const env = (host) => ({
+    OLLAMA_HOST: host,
+    JARIS_RESULTS_PATH: join(dir, 'r.md'),
+    JARIS_ANALYSIS_SCOPE: 'code',
+    JARIS_RETEST_ALL: '1',
+    JARIS_RESUME: '1',
+    JARIS_ONLY_MODELS: 'qwen2.5-coder:7b'
+  })
+  const html =
+    '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><input id="t"><button id="a">Ajouter</button><ul id="l"></ul><script>' +
+    "a.onclick=()=>{const li=document.createElement('li');li.textContent=t.value;const d=document.createElement('button');d.textContent='Supprimer';d.onclick=()=>li.remove();li.appendChild(d);l.appendChild(li);t.value=''}" +
+    '</script></body></html>'
+  const first = await startFakeOllama({ installed: ['qwen2.5-coder:7b'], answer: () => ({ content: '' }) })
+  try {
+    const run1 = await runScript(env(first.host))
+    assert.equal(run1.code, 0, run1.out)
+  } finally {
+    first.server.close()
+  }
+  const tracesPath = join(dir, 'r.traces.jsonl')
+  // La ligne telle que la campagne l'a écrite : application écrite, vérification plantée.
+  appendFileSync(tracesPath, JSON.stringify({ type: 'code', model: 'qwen2.5-coder:7b', id: 'liste-taches', ok: false, reason: "erreur : Cannot read properties of undefined (reading 'map')", timeout: false, skipped: false, steps: [], ms: 1234, html }) + '\n')
+  const second = await startFakeOllama({ installed: ['qwen2.5-coder:7b'], answer: () => ({ content: '' }) })
+  try {
+    const { code, out } = await runScript(env(second.host))
+    assert.equal(code, 0, out)
+    assert.equal(second.requests.length, 0, 'aucune nouvelle génération')
+    const row = readFileSync(tracesPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).at(-1)
+    assert.equal(row.type, 'code')
+    assert.ok(row.replay && row.recheck)
+    assert.equal(row.ok, true, row.reason)
+    assert.equal(row.html, html, 'le même code')
+    assert.ok(row.steps.some((s) => /bouton « Supprimer » trouvé/.test(s)), row.steps.join(' / '))
+  } finally {
+    second.server.close()
     rmSync(dir, { recursive: true, force: true })
   }
 })

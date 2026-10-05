@@ -1895,6 +1895,25 @@ async function main() {
     }
     const testCase = CODE_TEST_CASES.find((c) => c.id === record.id)
     if (!testCase) return false
+    // Le modèle avait bien écrit son application, c'est la VÉRIFICATION qui a planté (bug du test, ex. « reading
+    // 'map' » sur une ligne de liste sans balise, campagne de Léo du 05/10/2026) : on revérifie CE code-là. Le
+    // regénérer donnerait une autre application — ce ne serait plus le même test.
+    if (record.html && !record.timeout) {
+      process.stdout.write(`  code « ${testCase.id} » (revérifié, même code) ... `)
+      const steps = []
+      const { type: _type, ok: _ok, reason: _reason, steps: _steps, ...kept } = record
+      try {
+        const verdict = await checkInBrowser(testCase, record.html, steps)
+        const reason = verdict === null ? null : verdict
+        trace({ ...kept, type: 'code', ok: reason === null, reason, issues: validateGeneratedHtml(record.html), steps, previewCsp: PREVIEW_CSP_FOR_TEST, replay: true, recheck: true })
+        console.log(reason === null ? 'OK' : `RATÉ (${reason})`)
+      } catch (err) {
+        if (err instanceof BrowserDownError) throw err
+        trace({ ...kept, type: 'code', ok: false, reason: `erreur : ${err.message}`, steps, replay: true, recheck: true })
+        console.log(`ERREUR (${err.message})`)
+      }
+      return false
+    }
     process.stdout.write(`  code « ${testCase.id} » (rejoué) ... `)
     const steps = []
     let r = null

@@ -1,11 +1,12 @@
 import { spawn, type ChildProcess } from 'child_process'
+import { readFileSync } from 'fs'
 import { app, powerSaveBlocker } from 'electron'
 import { join } from 'path'
 import { config } from '../config'
 import { resourcesRoot } from '../paths'
 import { getDataRoot } from './dataLocation'
 import { deleteModel, pullModelIfMissing, ModelTooLargeError, DiskFullError } from './ollama'
-import { getAllCandidateModelIds, getUnscoredModels, pickBestModelsFromBenchmark } from './hardwareScan'
+import { campaignCompletion, getAllCandidateModelIds, getUnscoredModels, pickBestModelsFromBenchmark } from './hardwareScan'
 import { getProfile, saveProfile } from './profileStore'
 import type { CapacityScanResult } from '../../shared/ipc'
 import { installImageModel } from './imageGenerator'
@@ -195,6 +196,21 @@ export function unscoredResultsPath(): string {
 }
 
 /**
+ * Les modèles que le bouton doit encore tester : sans score dans verified-tool-scores.md ET pas encore tout faits
+ * dans le fichier brut de la campagne en cours (même nom que le script : <résultats>.traces.jsonl). Sans ce fichier
+ * (aucune campagne), ce sont simplement les modèles sans score.
+ */
+export function getModelsToTest(): string[] {
+  let traces = ''
+  try {
+    traces = readFileSync(unscoredResultsPath().replace(/\.md$/i, '.traces.jsonl'), 'utf8')
+  } catch {
+    // Pas encore de campagne.
+  }
+  return getUnscoredModels(campaignCompletion(traces))
+}
+
+/**
  * Étape 168 (Léo : « remets le bouton pour Lightning et qwen2.5-coder:14b ») : teste UNIQUEMENT les modèles de
  * Jaris qui n'ont encore aucun score (getUnscoredModels), avec le script de test habituel. Contrairement à
  * l'ancienne analyse complète (retirée à l'étape 166), rien n'est choisi ni installé à la fin : les scores
@@ -219,7 +235,7 @@ export function stopModelTest(): void {
 }
 
 export function testUnscoredModels(onLine: (line: string) => void): Promise<{ models: string[]; resultsPath: string }> {
-  const models = getUnscoredModels()
+  const models = getModelsToTest()
   const resultsPath = unscoredResultsPath()
   if (!models.length) return Promise.resolve({ models, resultsPath })
   if (runningTest) return Promise.reject(new Error('Un test est déjà en cours : attends sa fin, ou ferme Jaris pour l’arrêter.'))

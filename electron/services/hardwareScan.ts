@@ -1045,6 +1045,67 @@ export const SCENARIO_TEST_TOTAL = 48
 /** Étape 232 : code, 5 applications générées puis ouvertes et utilisées (CODE_TOTAL, scripts/benchmark-code.mjs). Avant : sur 3. */
 export const CODE_TEST_TOTAL = 5
 
+/** Versions des tests en cours (copies de SCENARIO/VISION/CODE_TEST_VERSION des scripts, vérifiées par test). */
+export const SCENARIO_TEST_VERSION = 3
+export const VISION_TEST_VERSION = 3
+export const CODE_TEST_VERSION = 3
+
+/** Modèles qui ont TOUT fait, sans cas encore à refaire, dans le fichier brut d'une campagne (rôle par rôle). */
+export interface CampaignCompletion {
+  scenarios: Set<string>
+  vision: Set<string>
+  code: Set<string>
+}
+
+/**
+ * Léo, 05/10/2026 (« fais-moi le bouton test, pour que je teste les derniers modèles ») : après une campagne, le
+ * bouton ne doit proposer QUE ce qui reste à faire — un modèle sauté, ou un cas arrêté par le délai ou planté —,
+ * pas les 42 modèles dont les scores ne sont pas encore recopiés dans verified-tool-scores.md. Même règle que le
+ * rejeu du script (replayTimedOut, benchmark-models.mjs) : la DERNIÈRE ligne de chaque cas compte ; un délai
+ * dépassé reste à refaire, un plantage aussi tant qu'il n'a pas été rejoué une fois.
+ */
+export function campaignCompletion(tracesText: string): CampaignCompletion {
+  const latest = new Map<string, { role: keyof CampaignCompletion; model: string; pending: boolean }>()
+  let versions: Record<string, number> | null = null
+  for (const line of tracesText.split('\n')) {
+    if (!line.trim()) continue
+    let row: Record<string, unknown>
+    try {
+      row = JSON.parse(line)
+    } catch {
+      continue
+    }
+    if (row.type === 'campagne') {
+      versions = (row.versions as Record<string, number> | undefined) ?? null
+      continue
+    }
+    const model = String(row.model)
+    const pending = Boolean(row.timeout) || (/^erreur/.test(String(row.reason ?? '')) && !row.replay)
+    if (row.type === 'demande' && versions?.demandes === SCENARIO_TEST_VERSION) {
+      latest.set(`scenarios|${model}|${row.id}|${row.pass}`, { role: 'scenarios', model, pending })
+    } else if (row.type === 'vision' && versions?.vision === VISION_TEST_VERSION) {
+      latest.set(`vision|${model}|${row.kind}|${row.file}|${row.id}|${row.pass}`, { role: 'vision', model, pending })
+    } else if (row.type === 'code' && versions?.code === CODE_TEST_VERSION) {
+      latest.set(`code|${model}|${row.id}`, { role: 'code', model, pending })
+    }
+  }
+  const totals: Record<keyof CampaignCompletion, number> = { scenarios: SCENARIO_TEST_TOTAL, vision: VISION_TEST_TOTAL, code: CODE_TEST_TOTAL }
+  const counts = new Map<string, { cases: number; pending: boolean }>()
+  for (const { role, model, pending } of latest.values()) {
+    const key = `${role}|${model}`
+    const entry = counts.get(key) ?? { cases: 0, pending: false }
+    entry.cases++
+    entry.pending ||= pending
+    counts.set(key, entry)
+  }
+  const done: CampaignCompletion = { scenarios: new Set(), vision: new Set(), code: new Set() }
+  for (const [key, { cases, pending }] of counts) {
+    const [role, ...rest] = key.split('|') as [keyof CampaignCompletion, ...string[]]
+    if (cases === totals[role] && !pending) done[role].add(rest.join('|'))
+  }
+  return done
+}
+
 /**
  * Nombre d'actions d'affilée d'une demande typique, pour mettre en balance fiabilité et intelligence
  * (03/10/2026, Léo : « on choisit qwen3.5:35b qui a 78/78 et 19 d'intelligence et pas qwen3.8:27b qui a 77/78
@@ -1068,16 +1129,19 @@ const CODE_ROLE_MODELS = new Set(CODE_CANDIDATES.map((c) => c.model))
  * de code sans score de code. Avant, un seul score n'importe où suffisait : gemma4:26b et qwen3.8:27b, candidats Vision, n'avaient
  * jamais été testés en vision sans que rien ne le signale. En attendant, Jaris garde les anciens scores.
  */
-export function getUnscoredModels(): string[] {
+export function getUnscoredModels(campaign: CampaignCompletion = { scenarios: new Set(), vision: new Set(), code: new Set() }): string[] {
   const scores = parseVerifiedToolScores()
   // Étape 232 : un modèle de conversation a besoin des DEUX scores — les 78 questions et les demandes complètes.
-  // Le script ne rejoue que l'épreuve qui manque.
+  // Le script ne rejoue que l'épreuve qui manque. Une épreuve déjà TOUT faite dans la campagne en cours (fichier
+  // brut, pas encore recopié dans verified-tool-scores.md) n'est plus à faire non plus.
   const needsConversation = (model: string): boolean =>
     CONVERSATION_ROLE_MODELS.has(model) &&
-    (!scores.conversation.get(model)?.endsWith(`/${CONVERSATION_TEST_TOTAL}`) || !scores.scenarios.get(model)?.endsWith(`/${SCENARIO_TEST_TOTAL}`))
+    (!scores.conversation.get(model)?.endsWith(`/${CONVERSATION_TEST_TOTAL}`) ||
+      (!scores.scenarios.get(model)?.endsWith(`/${SCENARIO_TEST_TOTAL}`) && !campaign.scenarios.has(model)))
   const needsVision = (model: string): boolean =>
-    VISION_ROLE_MODELS.has(model) && !scores.vision.get(model)?.endsWith(`/${VISION_TEST_TOTAL}`)
-  const needsCode = (model: string): boolean => CODE_ROLE_MODELS.has(model) && !scores.code.get(model)?.endsWith(`/${CODE_TEST_TOTAL}`)
+    VISION_ROLE_MODELS.has(model) && !scores.vision.get(model)?.endsWith(`/${VISION_TEST_TOTAL}`) && !campaign.vision.has(model)
+  const needsCode = (model: string): boolean =>
+    CODE_ROLE_MODELS.has(model) && !scores.code.get(model)?.endsWith(`/${CODE_TEST_TOTAL}`) && !campaign.code.has(model)
   return [...ALL_MODELS]
     .sort((a, b) => a.vramGb - b.vramGb)
     .filter((c) => needsConversation(c.model) || needsVision(c.model) || needsCode(c.model))

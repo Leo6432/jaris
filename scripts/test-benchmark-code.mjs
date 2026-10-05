@@ -73,6 +73,12 @@ const APPS = {
       '<input id="t"><button id="add">+</button><ul id="l"></ul>',
       "add.onclick=()=>{const li=document.createElement('li');const s=document.createElement('span');s.textContent=t.value;const e=document.createElement('button');e.className='btn-edit';e.innerHTML='<svg width=\"14\" height=\"14\"><path d=\"M2 12L12 2\" stroke=\"black\"/></svg>';e.onclick=()=>{s.textContent='modifiée'};const d=document.createElement('button');d.className='btn-delete';d.innerHTML='<svg width=\"14\" height=\"14\"><rect x=\"3\" y=\"3\" width=\"8\" height=\"10\" stroke=\"black\" fill=\"none\"/></svg>';d.onclick=()=>li.remove();li.append(s,e,d);l.append(li);t.value=''}"
     ),
+    // Le texte de la tâche posé directement dans la ligne, à côté du bouton, sans balise à lui : la vérification
+    // plantait (« reading 'map' ») sur les applications de qwen2.5-coder:14b et 32b, pourtant justes.
+    goodBareText: page(
+      '<input id="t"><button id="a">Ajouter</button><ul id="l"></ul>',
+      "a.onclick=()=>{const li=document.createElement('li');li.textContent=t.value;const d=document.createElement('button');d.textContent='Supprimer';d.onclick=()=>li.remove();li.appendChild(d);l.appendChild(li);t.value=''}"
+    ),
     // Une seule icône sans texte ni nom dans chaque ligne : c'est elle.
     goodIcons2: page(
       '<input id="t"><button id="a">Ajouter</button><ul id="l"></ul>',
@@ -125,7 +131,7 @@ for (const testCase of CODE_TEST_CASES) {
   test(`« ${testCase.id} » : l’application juste passe, les cassées échouent avec leur raison`, options, async () => {
     const { page: browserPage, close } = await openBrowser(browserPath)
     try {
-      for (const variant of ['good', 'goodLong', 'goodIcons', 'goodIcons2']) {
+      for (const variant of ['good', 'goodLong', 'goodIcons', 'goodIcons2', 'goodBareText']) {
         if (APPS[testCase.id][variant]) assert.equal(await checkGeneratedApp(browserPage, testCase, APPS[testCase.id][variant]), null, variant)
       }
     } finally {

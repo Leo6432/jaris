@@ -80,10 +80,15 @@ async function clickButton(page, pattern, what, hintPattern, within) {
     let pool = __j.buttons()
     const within = ${JSON.stringify(within ?? null)}
     if (within) {
-      const leaf = [...document.querySelectorAll('body *')].find((e) => e.children.length === 0 && e.textContent.includes(within))
+      // L'élément le plus profond qui contient le texte — pas seulement une feuille : « <li>Acheter du pain<button>
+      // Supprimer</button></li> » (texte posé à côté du bouton, sans balise à lui) est une ligne parfaitement valide,
+      // que la recherche d'une feuille ne trouvait pas (qwen2.5-coder:14b/32b, campagne de Léo du 05/10/2026).
+      const holders = [...document.querySelectorAll('body *')].filter((e) => !/^(SCRIPT|STYLE|TEMPLATE)$/.test(e.tagName) && e.textContent.includes(within))
+      const leaf = holders.find((e) => !holders.some((o) => o !== e && e.contains(o)))
       let box = leaf
       while (box && !__j.buttons().some((b) => box.contains(b))) box = box.parentElement
-      if (!box || box === document.body || box.innerText.split('\\n').filter((l) => l.trim()).length > 6) return { missing: true }
+      if (!box || box === document.body || box.innerText.split('\\n').filter((l) => l.trim()).length > 6)
+        return { missing: true, seen: __j.buttons().map((b) => __j.label(b) || '(icône) ' + __j.hint(b)).slice(0, 20) }
       pool = pool.filter((b) => box.contains(b))
     }
     let by = 'son texte'
@@ -103,7 +108,7 @@ async function clickButton(page, pattern, what, hintPattern, within) {
     return { found: true, by, label: __j.label(button) || __j.hint(button) }
   })()`)
   if (target.missing) {
-    log(page, `bouton « ${what} » cherché, introuvable — boutons visibles : ${target.seen.map((l) => `« ${l} »`).join(', ') || 'aucun'}`)
+    log(page, `bouton « ${what} » cherché, introuvable — boutons visibles : ${(target.seen ?? []).map((l) => `« ${l} »`).join(', ') || 'aucun'}`)
     throw new Fail(`bouton « ${what} » introuvable`)
   }
   // Le bouton est-il à l'écran ? Sinon, on fait défiler À LA MOLETTE, comme Léo : une page bloquée

@@ -80,6 +80,7 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
 
   const { runQuickSetup } = loadModule('../electron/services/benchmarkRunner.ts', (id) => {
     if (id === 'child_process') return { spawn: () => { throw new Error('spawn ne doit jamais être appelé par runQuickSetup') } }
+    if (id === 'fs') return { readFileSync: () => { throw new Error('ENOENT') } }
     if (id === 'path') return { join: (...parts) => parts.join('/') }
     if (id.endsWith('config')) return { config: {} }
     if (id === './ollama') return ollamaModule
@@ -336,7 +337,8 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
     if (id === 'path') return { join: (...parts) => parts.join('/') }
     if (id.endsWith('config')) return { config: { ollama: { host: 'http://127.0.0.1:11434' } } }
     if (id === './ollama') return { ModelTooLargeError: class extends Error {}, DiskFullError: class extends Error {} }
-    if (id === './hardwareScan') return { getUnscoredModels: () => ['qwen3.5:9b'] }
+    if (id === './hardwareScan') return { getUnscoredModels: () => ['qwen3.5:9b'], campaignCompletion: () => ({ scenarios: new Set(), vision: new Set(), code: new Set() }) }
+    if (id === 'fs') return { readFileSync: () => { throw new Error('ENOENT') } }
     if (id === './profileStore') return {}
     if (id.endsWith('paths')) return { resourcesRoot: () => '.' }
     if (id === './dataLocation') return { getDataRoot: () => '/fake/data' }
