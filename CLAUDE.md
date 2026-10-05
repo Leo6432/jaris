@@ -6492,3 +6492,10 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
      toute façon retenté au lancement suivant (Léo : « aucun modèle ne doit passer à cause d'un petit bug »).
      **Leçon : « tout est dans le fichier brut » se vérifie aussi pour ce qui N'A PAS eu lieu** — un cas sauté est
      une donnée, pas une absence de donnée. Régression : test-benchmark-cases (vérifié en retirant la ligne).
+  6. **Les cas PLANTÉS sont rejoués aussi** (Léo, devant le tableau des modèles : « on va retester »). Une ligne
+     « erreur : … » qui n'est pas un délai (appel d'outil qu'Ollama ne sait pas lire — XML mal fermé chez
+     qwen3.5:0.8b/35b, échappement `\'` invalide chez ministral-3:8b/14b —, moteur tombé…) est rejouée UNE fois, à
+     l'identique. Si elle replante au rejeu, c'est bien le modèle : elle reste comptée fausse et n'est plus retentée
+     (sinon on la relancerait à l'infini). Les réponses vides ou coupées (fenêtre pleine pendant la réflexion) ne
+     sont PAS des plantages : le modèle a répondu, mal, exactement comme il le ferait dans Jaris. Régression :
+     test-benchmark-scenarios (vérifié en ne rejouant pas les plantages, puis en les rejouant sans fin).

@@ -1775,9 +1775,13 @@ async function main() {
         : row.type === 'vision'
           ? SCOPED_VISION_CANDIDATES.some((c) => c.model === row.model)
           : SCOPED_CODE_CANDIDATES.some((c) => c.model === row.model)
-    const todo = [...latest.values()].filter((r) => r.timeout && inScope(r))
+    // Léo, 05/10/2026 : on refait aussi un cas qui a PLANTÉ (« erreur : … » : appel d'outil illisible pour Ollama, moteur
+    // tombé…), pas seulement un délai dépassé. Une seule fois : s'il replante au rejeu, à l'identique, c'est bien le
+    // modèle, et son erreur reste comptée fausse. Un délai dépassé, lui, est retenté à chaque lancement.
+    const crashed = (r) => /^erreur/.test(r.reason ?? '') && !r.replay
+    const todo = [...latest.values()].filter((r) => (r.timeout || crashed(r)) && inScope(r))
     if (!todo.length) return 0
-    console.log(`\n${todo.length} test(s) arrêté(s) par le délai maximal : rejoués à l'identique, délai porté à ${Math.round(REPLAY_CALL_TIMEOUT_MS / 60_000)} min.`)
+    console.log(`\n${todo.length} test(s) arrêté(s) par le délai maximal ou par une erreur : rejoués à l'identique, délai porté à ${Math.round(REPLAY_CALL_TIMEOUT_MS / 60_000)} min.`)
     console.log('Leur nouveau résultat est écrit dans le fichier brut (traces) ; le tableau de résultats, lui, n\'est pas recalculé.')
     callTimeoutMs = REPLAY_CALL_TIMEOUT_MS
     try {

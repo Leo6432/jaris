@@ -703,7 +703,7 @@ function startFakeOllama({ installed, dropAfter = Infinity, failFrom = null, han
       // Un modèle figé : la requête reste sans réponse (c'est le délai maximal du script qui doit la couper).
       if (hang(json)) return
       // Erreur d'Ollama à partir d'un appel donné d'une demande (après une première action réussie).
-      if (failFrom && scenario.id === failFrom.id && json.options.seed === failFrom.seed && index >= failFrom.call) {
+      if (failFrom && (!failFrom.model || json.model === failFrom.model) && scenario.id === failFrom.id && json.options.seed === failFrom.seed && index >= failFrom.call) {
         res.statusCode = 500
         return res.end(JSON.stringify({ error: 'model runner has unexpectedly stopped' }))
       }
@@ -943,15 +943,21 @@ test('modèle figé : délai maximal par appel, noté à part, et le reste du mo
   }
 })
 
-// Léo, 05/10/2026 : « refaire à la fin les tests qui n'ont pas marché ». Seuls les délais dépassés sont rejoués
-// (une panne de temps) — jamais une mauvaise réponse, qu'on finirait sinon par faire passer à force de relancer.
-test('reprise : seules les demandes arrêtées par le délai sont rejouées, à l’identique', { timeout: 180000 }, async () => {
+// Léo, 05/10/2026 : « refaire à la fin les tests qui n'ont pas marché ». Rejoués : les délais dépassés (une panne de
+// temps) et les cas qui ont PLANTÉ (une seule fois). Jamais une mauvaise réponse, qu'on finirait sinon par faire passer
+// à force de relancer.
+test('reprise : seules les demandes arrêtées par le délai ou plantées sont rejouées, à l’identique', { timeout: 180000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-scen-'))
   // Seules « bitcoin » et « meteo » restent figées (comme granite chez Léo : quelques délais, le reste répondu). Un
   // modèle qui n'a répondu à RIEN est déjà retesté en entier à la reprise : ce n'est pas le cas visé ici.
   const frozen = SCENARIOS.filter((sc) => ['bitcoin', 'meteo'].includes(sc.id)).map((sc) => sc.turns[0])
+  const spotify = SCENARIOS.find((sc) => sc.id === 'spotify-volume').turns[0]
+  // « spotify-volume » (1er passage) plante après une première action, comme un appel d'outil illisible pour Ollama.
+  const crash = { model: 'ministral-3:3b', id: 'spotify-volume', seed: 1000, call: 1 }
+  const userOf = (r) => r.messages.find((m) => m.role === 'user').content
   const first = await startFakeOllama({
     installed: ['ministral-3:3b', 'qwen3:1.7b'],
+    failFrom: crash,
     hang: (json) => json.model === 'ministral-3:3b' && json.messages.some((m) => m.role === 'user' && frozen.includes(m.content))
   })
   try {
@@ -961,37 +967,42 @@ test('reprise : seules les demandes arrêtées par le délai sont rejouées, à 
     assert.equal(run1.code, 0, run1.out)
     first.server.close()
     const tracesPath = join(dir, 'resultats.traces.jsonl')
-    const before = readFileSync(tracesPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((t) => t.type === 'demande')
+    const readRuns = () => readFileSync(tracesPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((t) => t.type === 'demande')
+    const before = readRuns()
     const stopped = before.filter((t) => t.model === 'ministral-3:3b' && t.timeout)
     assert.deepEqual([...new Set(stopped.map((t) => t.id))].sort(), ['bitcoin', 'meteo'])
-    assert.ok(stopped.length >= 2)
+    const crashed = before.filter((t) => t.model === 'ministral-3:3b' && !t.timeout && /^erreur/.test(t.reason))
+    assert.deepEqual(crashed.map((t) => `${t.id}|${t.seed}`), ['spotify-volume|1000'])
     assert.ok(before.some((t) => t.model === 'qwen3:1.7b' && !t.ok && !t.timeout), 'des ratés ordinaires existent')
 
-    const second = await startFakeOllama({ installed: ['ministral-3:3b', 'qwen3:1.7b'] })
+    // 2e lancement : le modèle répond, mais « spotify-volume » plante encore.
+    const second = await startFakeOllama({ installed: ['ministral-3:3b', 'qwen3:1.7b'], failFrom: crash })
     try {
       const { code, out } = await runScript({ OLLAMA_HOST: second.host, JARIS_RESULTS_PATH: resultsPath, JARIS_VERIFIED_SCORES_PATH: verified, JARIS_RESUME: '1' })
       assert.equal(code, 0, out)
-      assert.match(out, new RegExp(`${stopped.length} test\\(s\\) arrêté\\(s\\) par le délai maximal : rejoués à l'identique, délai porté à 120 min`))
+      assert.match(out, new RegExp(`${stopped.length + 1} test\\(s\\) arrêté\\(s\\) par le délai maximal ou par une erreur : rejoués à l'identique, délai porté à 120 min`))
       assert.doesNotMatch(out, /Aucun des modèles à tester n'a pu être installé/)
       assert.ok(!second.requests.some((r) => r.model === 'qwen3:1.7b'), 'une mauvaise réponse n’est jamais rejouée')
-      assert.ok(second.requests.every((r) => r.messages.some((m) => m.role === 'user' && frozen.includes(m.content))), 'seules les demandes arrêtées')
+      assert.ok(second.requests.every((r) => frozen.includes(userOf(r)) || userOf(r) === spotify), 'seules les demandes arrêtées ou plantées')
       // Mêmes graines qu'au premier passage : la même demande, pas une nouvelle chance tirée au hasard.
       const seeds = new Set(second.requests.map((r) => r.options.seed))
-      assert.deepEqual([...seeds].sort(), stopped.map((t) => t.seed).sort())
-      const after = readFileSync(tracesPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l))
-      const replayed = after.filter((t) => t.type === 'demande' && t.replay)
-      assert.equal(replayed.length, stopped.length)
+      assert.deepEqual([...seeds].sort(), [...stopped, ...crashed].map((t) => t.seed).sort())
+      const replayed = readRuns().filter((t) => t.replay)
+      assert.equal(replayed.length, stopped.length + 1)
       for (const row of replayed) {
-        const old = stopped.find((t) => t.id === row.id && t.pass === row.pass)
+        const old = [...stopped, ...crashed].find((t) => t.id === row.id && t.pass === row.pass)
         assert.equal(row.seed, old.seed)
         assert.equal(row.variant, old.variant)
-        assert.equal(row.ok, true, `${row.id} ${row.pass} : ${row.reason}`)
+        if (row.id === 'spotify-volume') assert.match(row.reason, /^erreur/, 'replanté au rejeu')
+        else assert.equal(row.ok, true, `${row.id} ${row.pass} : ${row.reason}`)
       }
+      const after = readFileSync(tracesPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l))
       assert.ok(after.some((t) => t.type === 'demande-requete' && t.replay), 'requêtes rejouées tracées aussi')
     } finally {
       second.server.close()
     }
-    // Troisième lancement : plus rien d'arrêté par le délai, donc plus rien à rejouer.
+    // 3e lancement : plus aucun délai ; « spotify-volume » a replanté au rejeu, à l'identique — c'est bien le modèle,
+    // on ne le rejoue pas une 3e fois.
     const third = await startFakeOllama({ installed: ['ministral-3:3b', 'qwen3:1.7b'] })
     try {
       const { code, out } = await runScript({ OLLAMA_HOST: third.host, JARIS_RESULTS_PATH: resultsPath, JARIS_VERIFIED_SCORES_PATH: verified, JARIS_RESUME: '1' })
