@@ -1195,6 +1195,48 @@ test('relecture des 67 demandes refaites (étape 246) : titres YouTube inventés
   assert.equal(await discord([typed, { text: 'C’est fait, le message est écrit dans Discord.' }]), false, 'fausse réussite')
 })
 
+test('relecture des réponses comptées fausses (étape 247) : les vraies bonnes réponses passent, leurs voisines fausses non', async () => {
+  const byId = (id) => SCENARIOS.find((s) => s.id === id)
+  const play = async (id, steps, variant = 0) => (await runScenario(byId(id), scripted(steps), { variant })).ok
+
+  // Spotify lancé par le pilotage d'écran : la musique démarre vraiment.
+  const spotify = (steps) => play('dictee-spotify', [...steps, { text: 'Spotify est ouvert et la musique est lancée.' }])
+  assert.equal(await spotify([{ calls: [['open_app', { app_name: 'Spotify' }]] }, { calls: [['computer_use_task', { goal: 'Sur Spotify, lance une playlist au hasard' }]] }]), true, 'qwen3.6:27b')
+  assert.equal(await spotify([{ calls: [['computer_use_task', { goal: "Ouvrir l'application Spotify et lancer la lecture de la musique." }]] }]), true, 'gemma4:26b')
+  assert.equal(await spotify([{ calls: [['open_app', { app_name: 'Spotify' }]] }]), false, 'ouvert sans jamais lancer la musique')
+  assert.equal(await spotify([{ calls: [['computer_use_task', { goal: 'Ouvre YouTube' }]] }]), false, 'tâche sans rapport avec Spotify')
+
+  // Lire l'état du PC ne change rien : un appel en trop sans effet, comme une recherche.
+  const bitcoin = (extra) => play('bitcoin', [{ calls: [['search_web', { query: 'cours bitcoin euro' }]] }, ...extra, { text: 'Le Bitcoin cote 58 912,30 € sur Boursorama.' }], 1)
+  assert.equal(await bitcoin([{ calls: [['get_system_stats', {}]] }]), true, 'qwen3.5:0.8b')
+  assert.equal(await bitcoin([{ calls: [['look_at_screen', { question: 'cours ?' }]] }]), false, 'regarder l’écran reste hors sujet ici')
+
+  // Une note qui corrige elle-même la Peugeot.
+  const voiture = (content) =>
+    play('voiture-corrigee', [
+      { calls: [['remember', { title: 'Ma voiture', content: 'Ma voiture est une Peugeot 208.' }]] },
+      { text: 'Noté.' },
+      { calls: [['remember', { title: 'Ma voiture', content, replace: true }]] },
+      { text: 'Corrigé.' }
+    ])
+  assert.equal(await voiture("Ma voiture est une Clio, pas Peugeot 208 comme je l'avais dit précédemment."), true, 'qwen3.5:2b')
+  assert.equal(await voiture('Ma voiture est une Peugeot 208 et une Clio.'), false, 'les deux comme si de rien n’était')
+
+  // « Sans cette adresse, je ne peux pas envoyer » dit ce qui manque ; « je ne peux pas envoyer de mail » seul, non.
+  const paul = (first) =>
+    play('mail-clarifie', [
+      { calls: [['search_web', { query: 'adresse mail Paul' }]] },
+      { text: first },
+      // Mail demandé sans envoi : Jaris relance une fois, le modèle redemande l'adresse.
+      { text: first },
+      { calls: [['computer_use_task', { goal: 'Envoie un mail à paul.morel@example.fr : je serai en retard ce soir' }]] },
+      { text: 'Le mail est envoyé.' }
+    ])
+  assert.equal(await paul("Je n'ai pas trouvé son adresse. Peux-tu me la donner ? Sans cette adresse, je ne peux pas envoyer le mail."), true, 'ministral-3:14b')
+  assert.equal(await paul('Je ne peux pas envoyer le mail sans cette adresse. Peux-tu me la donner ?'), true, 'ministral-3:8b')
+  assert.equal(await paul("Désolé, je ne peux pas envoyer de mail. Tu as son adresse ?"), false, 'prétend ne jamais pouvoir envoyer de mail')
+})
+
 test('regarder l’écran en pleine tâche rend la main au modèle ; seule une question sur l’écran s’arrête dessus', async () => {
   const byId = (id) => SCENARIOS.find((s) => s.id === id)
   // Question sur l'écran : la description EST la réponse (le modèle n'est pas rappelé).

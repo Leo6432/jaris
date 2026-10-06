@@ -6689,3 +6689,22 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   relire les réponses refaites, pas seulement leur score.** Choix de modèles inchangés à toutes les tailles de
   carte (4 à 32 Go). Régression : test « relecture des 67 demandes refaites (étape 246) », chaque correctif vérifié
   en le retirant seul.
+
+- **Étape 247, les 266 réponses comptées FAUSSES relues une par une (Léo : « tu me dis j'ai pas relu une par une,
+  bah fais-le »).** Les justes avaient été relues aux étapes 241 et 246, pas les fausses : un juge trop SÉVÈRE ne se
+  voit qu'en relisant ce qu'il refuse. Méthode : trier d'abord les échecs mécaniques (33 boucles de 10 allers-retours,
+  20 réponses vides, 3 erreurs d'Ollama rejouées une fois, 5 réponses pas en français) — vérifiés en bloc mais
+  vérifiés quand même (la recette « pas en français » d'ai9stars contenait bien « sur la表单 ») — puis lire les 205
+  autres demande par demande, juge sous les yeux. 4 erreurs de juge, 10 réponses rendues justes : musique Spotify
+  lancée par le pilotage d'écran (absent de `allow`, 6 modèles) ; « sans cette adresse, je ne peux pas envoyer le
+  mail » lu comme un refus — la règle ne regarde plus que la phrase qui refuse SANS parler de l'adresse (2) ; « une
+  Clio, pas Peugeot 208 comme je l'avais dit précédemment » — « précédemment » ne contient pas « précédent » (1) ;
+  `get_system_stats` (lecture seule, instantanée) compté comme une action en trop, désormais parmi les outils sans
+  effet ; `look_at_screen` reste exclu hors des demandes à l'écran (étape 242, il charge le modèle de vision) (1).
+  **Leçon : un mot-clé de refus (« ne peux pas envoyer ») ou de date (« précédent ») teste un mot, pas un sens —
+  relire la phrase entière autour avant d'en faire une règle.** Gardés faux après réflexion, et pourquoi : « 1 742 € »
+  pour 1,742 € (lu à voix haute « mille sept cent… ») ; remplir l'adresse via le carnet d'adresses au 1er tour puis
+  renvoyer le mail au 2e (destinataire jamais vérifié, mail en double). Choix de modèles inchangés de 4 à 32 Go.
+  Régression : test « relecture des réponses comptées fausses (étape 247) », chaque correctif vérifié en le retirant
+  seul ; et piège rencontré en l'écrivant : une demande de mail sans envoi déclenche la relance de Jaris — le script
+  du test doit prévoir la seconde réponse, sinon il consomme le mauvais pas et passe ou échoue par hasard.

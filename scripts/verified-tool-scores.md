@@ -130,6 +130,12 @@ avoir regardé l'écran (comptés justes), clic dans Discord pour réessayer d'�
 à écrire le message » non reconnu comme un aveu d'échec, et « dans quelle conversation veux-tu que j'écrive ? »
 compté comme une fausse réussite alors que la demande ne dit pas à qui écrire.
 
+Étape 247 : les 266 réponses comptées FAUSSES relues une par une à leur tour (les justes l'avaient été aux étapes
+241 et 246). 4 erreurs de jugement, 10 réponses rendues justes : musique Spotify lancée par le pilotage d'écran
+(6 modèles), « sans cette adresse, je ne peux pas envoyer le mail » lu comme un refus (2), une note « une Clio, pas
+Peugeot 208 comme je l'avais dit précédemment » prise pour une note périmée (1), et une simple lecture de l'état du
+PC (sans effet) comptée comme une action en trop (1). Les 256 autres sont bien fausses.
+
 Depuis l'étape 241, ce score compte dans le choix des modèles Rapide, Médium et Puissant : il MULTIPLIE la note
 (intelligence × fiabilité aux 78 questions puissance 5 × réussite aux demandes). Il ne compte pas pour Vision ni
 Code.
@@ -151,32 +157,32 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | Modèle | Réussite |
 |---|---|
 | qwen3.5:27b | 48/48 |
+| qwen3.6:27b | 48/48 |
+| gemma4:26b | 47/48 |
+| granite4.2:30b | 47/48 |
 | granite4.2:8b | 47/48 |
-| qwen3.6:27b | 47/48 |
+| nemotron-3.5-lightning:30b | 47/48 |
 | qwen3.8:27b | 47/48 |
 | gemma4:12b | 46/48 |
-| gemma4:26b | 46/48 |
-| granite4.2:30b | 46/48 |
-| nemotron-3.5-lightning:30b | 46/48 |
 | qwen3.5:9b | 46/48 |
 | glm-4.7-flash:q4_K_M | 45/48 |
 | qwen3.5:35b | 45/48 |
 | granite4.2:3b | 44/48 |
 | gemma4:e4b | 43/48 |
+| gpt-oss:20b | 43/48 |
 | granite4.1:8b | 43/48 |
-| gpt-oss:20b | 42/48 |
-| hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 42/48 |
+| hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 43/48 |
 | qwen3.5:4b | 42/48 |
 | qwen3.6:35b | 42/48 |
 | mistral-small3.2:24b | 41/48 |
-| ministral-3:8b | 38/48 |
+| ministral-3:8b | 39/48 |
 | hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M | 37/48 |
 | hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M | 36/48 |
+| ministral-3:14b | 34/48 |
 | ministral-3:3b | 34/48 |
-| ministral-3:14b | 33/48 |
-| qwen3.5:2b | 31/48 |
+| qwen3.5:2b | 32/48 |
 | qwen3:1.7b | 28/48 |
 | hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 26/48 |
 | hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M | 26/48 |
 | granite4.1:3b | 25/48 |
-| qwen3.5:0.8b | 12/48 |
+| qwen3.5:0.8b | 13/48 |

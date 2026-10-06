@@ -574,8 +574,13 @@ export function rejudge(scenario, record) {
   return judge(scenario, { state: sim.state, calls: record.calls, turns: record.turns, variant })
 }
 
-/** Outils sans effet sur le PC : toujours permis (relire, chercher, noter). Tous les autres doivent être prévus. */
-const HARMLESS_TOOLS = new Set(['search_web', 'read_web_page', 'remember', 'recall_memory'])
+/**
+ * Outils sans effet sur le PC : toujours permis (relire, chercher, noter). Tous les autres doivent être prévus.
+ * Étape 247 (relecture des réponses comptées fausses) : lire l'état du PC (get_system_stats) ne change rien et prend
+ * un instant, comme une recherche — il faisait rater « combien vaut un Bitcoin ? » malgré le bon cours. Regarder
+ * l'écran, lui, reste réservé aux demandes qui agissent à l'écran (étape 242) : il charge le modèle de vision.
+ */
+const HARMLESS_TOOLS = new Set(['search_web', 'read_web_page', 'remember', 'recall_memory', 'get_system_stats'])
 /** Outils qui agissent sur ce qui est affiché : après eux, regarder l'écran pour vérifier est permis (étape 242). */
 const SCREEN_ACTIONS = new Set(['open_app', 'type_text', 'press_key', 'click_mouse', 'computer_use_task', 'media_control'])
 
@@ -995,7 +1000,9 @@ export const SCENARIOS = [
       // Une note qui dit encore « Peugeot » contredit la correction — même quand « Clio » y a été AJOUTÉ à la suite
       // (vu le 04/10/2026, ministral-3:3b) : c'est précisément pour ça que remember a `replace`. Seule exception :
       // la note dit elle-même que la Peugeot, c'est fini.
-      const stale = notes.find((n) => n.includes('peugeot') && !/plus une peugeot|n est plus|ancien|avant|remplace|precedent/.test(n))
+      // Étape 247 : « Ma voiture est une Clio, pas Peugeot 208 comme je l'avais dit précédemment » (qwen3.5:2b) est une
+      // vraie correction — « pas Peugeot » et « précédemment » n'étaient pas reconnus.
+      const stale = notes.find((n) => n.includes('peugeot') && !/plus une peugeot|pas (?:une )?peugeot|n est plus|ancien|avant|remplace|preceden/.test(n))
       if (stale) return 'une note dit encore « Peugeot » comme si rien n’avait changé (correction ajoutée à côté au lieu de la remplacer)'
       // Relecture du 05/10/2026 : « Ma voiture est une Citroën Clio » était compté juste — une Clio est une Renault,
       // et la marque inventée reste ensuite dans la mémoire.
@@ -1064,7 +1071,12 @@ export const SCENARIOS = [
     check: (ctx) => {
       if (callsOf(ctx, 'computer_use_task', 0).length) return 'mail envoyé au 1er tour sans adresse (inventée)'
       const first = replyOf(ctx, 0)
-      if (/ne peux pas envoyer|pas acces|pas d acces|impossible d envoyer/.test(first)) return 'prétend ne pas pouvoir envoyer de mail (faux : il manque juste l’adresse)'
+      // Étape 247 : « Sans cette adresse, je ne peux pas envoyer le mail » (ministral-3:8b et 14b) dit exactement ce qui
+      // manque — seule la phrase qui refuse SANS parler de l'adresse prétend une incapacité.
+      const refuses = String(ctx.turns[0].reply ?? '')
+        .split(/(?<=[.!?])\s+/)
+        .some((sentence) => /ne peux pas envoyer|pas acces|pas d acces|impossible d envoyer/.test(norm(sentence)) && !/\bsans\b|adresse/.test(norm(sentence)))
+      if (refuses) return 'prétend ne pas pouvoir envoyer de mail (faux : il manque juste l’adresse)'
       if (!ctx.turns[0].reply.includes('?') && !/adresse/.test(first)) return 'ne demande pas l’adresse de Paul'
       return callsOf(ctx, 'computer_use_task', 1).some((c) => norm(c.args.goal).includes('paul.morel@example.fr') && has(c.args.goal, /retard/))
         ? null
@@ -1182,10 +1194,14 @@ export const SCENARIOS = [
     id: 'dictee-spotify',
     family: 'Phrase dictée',
     turns: ['ouvre spoti fi et met de la musique'],
-    allow: ['open_app', 'media_control'],
+    // Étape 247 : lancer la musique par le pilotage d'écran (« sur Spotify, lance une playlist ») la lance vraiment —
+    // plus lent que la touche lecture, mais juste. Compté faux jusqu'ici pour 6 modèles.
+    allow: ['open_app', 'media_control', 'computer_use_task'],
     check: (ctx) => {
-      if (!ctx.state.opened.some((o) => o.app === 'Spotify')) return 'Spotify jamais ouvert (« spoti fi » non corrigé)'
-      return ctx.state.media.some((m) => m.action === 'play_pause') ? null : 'musique jamais lancée'
+      const spotifyTasks = ctx.state.computerTasks.filter((t) => has(t.goal, /spotify/))
+      if (!ctx.state.opened.some((o) => o.app === 'Spotify') && !spotifyTasks.length) return 'Spotify jamais ouvert (« spoti fi » non corrigé)'
+      if (ctx.state.media.some((m) => m.action === 'play_pause')) return null
+      return spotifyTasks.some((t) => has(t.goal, /musique|lecture|playlist|chanson|\bplay|\bjoue|\blance/)) ? null : 'musique jamais lancée'
     }
   },
   {
