@@ -6833,3 +6833,18 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   (baisser la réflexion de la voix changerait la fiabilité des appels d'outils mesurée par les tests de modèles —
   à décider avec Léo, mesures à l'appui, pas en passant). Régression : `node --test scripts/test-voice-activity.mjs
   scripts/test-assistant-history.mjs`.
+- **Étape 253, « dès qu'il y a un peu de conversation en historique, il se focalise sur les anciennes : il me parle
+  de la recette de tiramisu quand je lui demande de cliquer sur la vidéo » (Léo).** Le journal donnait l'écart : la
+  recette datait de 18 h, la vidéo de 21 h 34. Cause lue dans le code, pas devinée : `conversationSession.ts`
+  envoyait au modèle les 6 derniers échanges QUEL QUE SOIT leur âge — et les rechargeait du disque au démarrage
+  (choix de l'étape 47, pensé pour la continuité) ; un petit modèle local s'accroche à ce qu'il voit. Corrigé dans
+  le code plutôt que par une consigne (leçon déjà notée : une consigne « ne fais pas X » ne tient pas face à un
+  petit modèle) : **à la voix, seuls les échanges des 10 dernières minutes partent au modèle**
+  (`VOICE_CONTEXT_MAX_AGE_MS`), chaque échange gardant désormais son heure. Une suite rapprochée garde donc son
+  contexte (« et demain ? » après la météo), une demande faite des heures plus tard repart propre. Rien n'est
+  effacé : le disque, l'écran et l'historique des Options restent identiques. **Le Chat n'est pas concerné, à
+  dessein** : son fil est affiché, l'utilisateur voit ce qu'il continue (même logique que ChatGPT/Claude). Piège
+  rencontré en écrivant le test : ajouter un échange AVANT la première lecture le faisait écraser par le
+  chargement du disque — sans effet en vrai (chaque tour lit l'historique avant d'en ajouter un), mais le test
+  doit reproduire cet ordre. Régression : `node --test scripts/test-voice-context-age.mjs` (vérifié en retirant le
+  filtre : 2 tests échouent).

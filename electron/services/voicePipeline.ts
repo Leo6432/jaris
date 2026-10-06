@@ -5,7 +5,7 @@ import { VoiceClient, listeningUnavailableReason } from './voiceClient'
 import { synthesizeSpeech } from './tts'
 import { appendConversationEntry } from './conversationStore'
 import { converse } from './assistant'
-import { clearSessionHistory, getSessionHistory, pushSessionExchange } from './conversationSession'
+import { VOICE_CONTEXT_MAX_AGE_MS, clearSessionHistory, getSessionHistory, pushSessionExchange } from './conversationSession'
 import { extractMemoryFromExchange } from './memoryExtractor'
 import { getProfile } from './profileStore'
 import { getLiveGpuStatus } from './hardwareScan'
@@ -331,7 +331,8 @@ export class VoicePipeline extends EventEmitter {
         // Étape 47 : session partagée avec le mode Chat (conversationSession.ts), relue à chaque tour plutôt
         // que gardée dans une copie locale — un échange écrit dans l'autre canal juste avant est donc déjà
         // visible ici, sans avoir à redémarrer Jaris ni changer d'onglet dans un ordre précis.
-        const history = await getSessionHistory()
+        // Étape 253 : à la voix, seuls les échanges récents (VOICE_CONTEXT_MAX_AGE_MS) — pas la recette d'il y a 3 h.
+        const history = await getSessionHistory({ maxAgeMs: VOICE_CONTEXT_MAX_AGE_MS })
         reply = await converse(
           question,
           profile?.name ?? null,
