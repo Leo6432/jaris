@@ -6630,3 +6630,23 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `node --test scripts/test-request-journal.mjs` (vraie boucle converse, vrai fichier ; chaque
   assertion vérifiée en réintroduisant son défaut). **Non vérifié ici** : les vraies durées sur le PC de Léo —
   c'est justement ce que ce journal doit apporter.
+
+- **Étape 246, les 67 demandes refaites par Léo (06/10/2026), vérifiées avant d'écrire les scores.** Trois
+  constats AVANT de juger quoi que ce soit : (1) le `.md` envoyé était identique octet pour octet à celui de la
+  veille — normal, le rejeu n'écrit QUE dans les traces (« le tableau de résultats n'est pas recalculé ») ; ne pas
+  conclure à un mauvais fichier ; (2) traces coupées en deux par Léo (> 30 Mo) : recollées, et le début vérifié
+  identique au fichier de la veille, ligne pour ligne ; (3) empreinte du code de test = celle de la v0.28.14
+  (`harness` de la ligne `campagne`) — attention, elle est calculée sur le fichier Windows en CRLF : recalculer
+  avec des fins de ligne CRLF avant de croire à un code différent. 67 lignes `replay`, aucun délai, aucun
+  plantage, aucune n'a plus la forme « arrêtée par le regard ». **Les anciennes lignes portent le jugement de
+  l'époque** (`ok`) : les scores se calculent en rejouant les 1 440 réponses dans le simulateur ACTUEL, jamais en
+  lisant `ok`. Lecture des 67 réponses une à une : 4 erreurs de JUGE, toutes nées du correctif de l'étape 242
+  (le modèle continue désormais après avoir regardé l'écran, cas jamais vus avant) : titres YouTube inventés
+  APRÈS avoir regardé l'écran (« le regard a eu lieu » suffisait au juge) ; clic dans Discord pour réessayer
+  d'écrire compté faux (absent de `allow`) ; « je n'arrive pas à écrire » non reconnu ; « dans quelle conversation
+  veux-tu que j'écrive ? » compté fausse réussite alors que la demande ne dit pas à qui. Ma première règle YouTube
+  (le mot « titre ») attrapait « si vous avez un titre en tête ? » : vu en relisant CHAQUE verdict changé, pas en
+  comptant. **Leçon : un correctif de comportement de Jaris crée des réponses que les juges n'ont jamais vues —
+  relire les réponses refaites, pas seulement leur score.** Choix de modèles inchangés à toutes les tailles de
+  carte (4 à 32 Go). Régression : test « relecture des 67 demandes refaites (étape 246) », chaque correctif vérifié
+  en le retirant seul.

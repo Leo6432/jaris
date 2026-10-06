@@ -122,9 +122,13 @@ Jaris avec des outils simulés (scripts/benchmark-scenarios.mjs) : actions encha
 reprendre, plusieurs phrases, information manquante, appels à éviter, phrases dictées, longue conversation. Un
 appel en trop qui agit sur le PC fait rater la demande.
 
-En attente (étape 242) : 67 demandes de 22 modèles ont été jouées avec l'ancien Jaris, qui s'arrêtait dès qu'un
-modèle regardait l'écran en pleine tâche. Elles sont proposées par le bouton « Tester les modèles » ; les scores
-ci-dessous seront mis à jour une fois refaites.
+Étapes 242 puis 246 : 67 demandes de 22 modèles avaient été jouées avec l'ancien Jaris, qui s'arrêtait dès qu'un
+modèle regardait l'écran en pleine tâche. Léo les a refaites le 06/10/2026 avec Jaris 0.28.14 (même code de test,
+empreinte vérifiée) : plus aucune demande en attente, ni délai dépassé, ni plantage. Les 67 réponses relues une à
+une ont montré 4 erreurs de jugement, corrigées puis appliquées aux 1 440 réponses : titres YouTube inventés après
+avoir regardé l'écran (comptés justes), clic dans Discord pour réessayer d'écrire (compté faux), « je n'arrive pas
+à écrire le message » non reconnu comme un aveu d'échec, et « dans quelle conversation veux-tu que j'écrive ? »
+compté comme une fausse réussite alors que la demande ne dit pas à qui écrire.
 
 Depuis l'étape 241, ce score compte dans le choix des modèles Rapide, Médium et Puissant : il MULTIPLIE la note
 (intelligence × fiabilité aux 78 questions puissance 5 × réussite aux demandes). Il ne compte pas pour Vision ni
@@ -146,33 +150,33 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 
 | Modèle | Réussite |
 |---|---|
+| qwen3.5:27b | 48/48 |
+| granite4.2:8b | 47/48 |
+| qwen3.6:27b | 47/48 |
+| qwen3.8:27b | 47/48 |
 | gemma4:12b | 46/48 |
 | gemma4:26b | 46/48 |
-| granite4.2:8b | 46/48 |
-| qwen3.5:27b | 46/48 |
-| granite4.2:30b | 45/48 |
-| qwen3.5:9b | 45/48 |
-| qwen3.6:27b | 45/48 |
-| qwen3.8:27b | 45/48 |
+| granite4.2:30b | 46/48 |
+| nemotron-3.5-lightning:30b | 46/48 |
+| qwen3.5:9b | 46/48 |
+| glm-4.7-flash:q4_K_M | 45/48 |
+| qwen3.5:35b | 45/48 |
 | granite4.2:3b | 44/48 |
-| nemotron-3.5-lightning:30b | 44/48 |
-| qwen3.5:35b | 44/48 |
 | gemma4:e4b | 43/48 |
-| glm-4.7-flash:q4_K_M | 42/48 |
+| granite4.1:8b | 43/48 |
 | gpt-oss:20b | 42/48 |
-| granite4.1:8b | 42/48 |
+| hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 42/48 |
+| qwen3.5:4b | 42/48 |
 | qwen3.6:35b | 42/48 |
 | mistral-small3.2:24b | 41/48 |
-| hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 40/48 |
-| qwen3.5:4b | 38/48 |
+| ministral-3:8b | 38/48 |
+| hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M | 37/48 |
 | hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M | 36/48 |
-| ministral-3:8b | 36/48 |
-| hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M | 35/48 |
-| ministral-3:3b | 33/48 |
-| ministral-3:14b | 31/48 |
-| qwen3.5:2b | 30/48 |
+| ministral-3:3b | 34/48 |
+| ministral-3:14b | 33/48 |
+| qwen3.5:2b | 31/48 |
 | qwen3:1.7b | 28/48 |
 | hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 26/48 |
 | hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M | 26/48 |
 | granite4.1:3b | 25/48 |
-| qwen3.5:0.8b | 10/48 |
+| qwen3.5:0.8b | 12/48 |
