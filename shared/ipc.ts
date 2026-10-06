@@ -696,6 +696,16 @@ export const IPC_CHANNELS = {
   openConversationHistoryFile: 'jaris:open-conversation-history-file',
   /** renderer -> main : ouvre le journal des demandes (étape 245), ou le montre dans son dossier pour l'envoyer. */
   openRequestJournal: 'jaris:open-request-journal',
+  /** Étape 249, duel des pilotes d'écran : renderer -> main, capture du vrai écran (Jaris se cache 5 s). */
+  pilotDuelCapture: 'jaris:pilot-duel-capture',
+  /** renderer -> main : oublie les captures déjà prises. */
+  pilotDuelReset: 'jaris:pilot-duel-reset',
+  /** renderer -> main : lance le duel sur les captures prises. */
+  pilotDuelRun: 'jaris:pilot-duel-run',
+  /** main -> renderer : où en est le duel (une ligne lisible). */
+  pilotDuelProgress: 'jaris:pilot-duel-progress',
+  /** renderer -> main : ouvre le rapport du duel. */
+  pilotDuelOpenReport: 'jaris:pilot-duel-open-report',
   /** renderer <-> main : liste tous les modèles candidats (tous paliers + vision) avec leurs métriques, pour l'onglet Modèles. */
   getModelOverview: 'jaris:get-model-overview',
   getOllamaVersionStatus: 'jaris:get-ollama-version-status',
@@ -950,4 +960,27 @@ export interface PhonePairing {
   code: string
   link: string
   expiresAt: number
+}
+
+/** Étape 249 : après une capture du vrai écran pour le duel des pilotes. */
+export interface PilotDuelCaptureInfo {
+  captures: number
+  /** Boutons retenus comme cibles sur toutes les captures. */
+  targets: number
+}
+
+/** Étape 249 : le score d'un pilote au duel (tirs justes au 1er regard, puis avec le zoom). */
+export interface PilotDuelScore {
+  label: string
+  hits: number
+  zoomHits: number
+  total: number
+  /** Temps moyen par cible, en secondes (1er regard + zoom). */
+  secondsPerTarget: number
+  error?: string
+}
+
+export interface PilotDuelOutcome {
+  scores: PilotDuelScore[]
+  reportPath: string
 }

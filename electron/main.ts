@@ -82,6 +82,7 @@ import {
   setActiveConversation
 } from './services/conversationStore'
 import { appendJournal, getJournalPath } from './services/requestJournal'
+import { addDuelCapture, pilotDuelReportPath, resetDuelCaptures, runPilotDuel } from './services/pilotDuelSession'
 import { getProfile, saveProfile } from './services/profileStore'
 import {
   getLaunchAtStartup,
@@ -1051,6 +1052,30 @@ app.whenReady().then(async () => {
     await appendJournal([])
     if (reveal) shell.showItemInFolder(getJournalPath())
     else await shell.openPath(getJournalPath())
+  })
+  // Étape 249, duel des pilotes d'écran : Jaris se cache le temps de photographier TON écran (sinon c'est sa
+  // propre fenêtre que les pilotes viseraient), puis revient. `optionsOpen` est vrai pendant ce temps (le duel se
+  // lance depuis les Options) : la perte de focus ne le replie donc pas en widget.
+  ipcMain.handle(IPC_CHANNELS.pilotDuelCapture, async () => {
+    const win = fullWindow
+    const widgetShown = !!widgetWindow && !widgetWindow.isDestroyed() && widgetWindow.isVisible()
+    win?.hide()
+    if (widgetShown) widgetWindow?.hide()
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 5000))
+      return await addDuelCapture()
+    } finally {
+      if (win && !win.isDestroyed()) {
+        win.show()
+        win.focus()
+      }
+      if (widgetShown && widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.showInactive()
+    }
+  })
+  ipcMain.handle(IPC_CHANNELS.pilotDuelReset, () => resetDuelCaptures())
+  ipcMain.handle(IPC_CHANNELS.pilotDuelRun, () => runPilotDuel((message) => broadcast(IPC_CHANNELS.pilotDuelProgress, message)))
+  ipcMain.handle(IPC_CHANNELS.pilotDuelOpenReport, async () => {
+    await shell.openPath(pilotDuelReportPath())
   })
   ipcMain.handle(IPC_CHANNELS.previewVoice, async (_event, voice: string) => {
     const audio = await previewVoice(voice)

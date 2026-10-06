@@ -54,6 +54,22 @@ const overrides = {
   // Étape 165 : imite l'entrée de démarrage de Windows, relue après chaque bascule.
   getLaunchAtStartup: async () => ({ supported: true, enabled: Boolean(window.__launchAtStartup), blockedByWindows: false }),
   // Étape 245 : retient chaque ouverture du journal des demandes (false = ouvrir, true = montrer le fichier).
+  // Étape 249 : duel des pilotes d'écran.
+  pilotDuelCapture: async () => {
+    window.__duelCaptures = (window.__duelCaptures ?? 0) + 1
+    return { captures: window.__duelCaptures, targets: window.__duelCaptures * 9 }
+  },
+  pilotDuelReset: async () => ((window.__duelCaptures = 0), { captures: 0, targets: 0 }),
+  pilotDuelRun: async () => ({
+    reportPath: 'C:/x/resultat-duel-pilotes.md',
+    scores: [
+      { label: 'UI-TARS 1.5 7B', hits: 7, zoomHits: 10, total: 18, secondsPerTarget: 6 },
+      { label: 'MAI-UI 8B', hits: 13, zoomHits: 16, total: 18, secondsPerTarget: 9 }
+    ]
+  }),
+  pilotDuelOpenReport: async () => {
+    window.__duelReportOpened = true
+  },
   openRequestJournal: async (reveal) => {
     window.__journalOpens = [...(window.__journalOpens ?? []), reveal]
   },
@@ -252,6 +268,38 @@ test('Général : les deux boutons du journal des demandes ouvrent le fichier, p
   })
 })
 
+test('Modèles : duel des pilotes — rien à lancer sans capture, puis captures, duel et résultat affichés', options, async () => {
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Modèles")')
+    const run = page.locator('button:has-text("Lancer le duel")')
+    await run.waitFor()
+    assert.equal(await run.isDisabled(), true, 'sans capture, rien à comparer')
+    await page.click('button:has-text("Capturer mon écran")')
+    await page.waitForSelector('text=1 capture(s), 9 bouton(s) à viser.')
+    await page.click('button:has-text("Capturer mon écran")')
+    await page.waitForSelector('text=2 capture(s), 18 bouton(s) à viser.')
+    assert.equal(await run.isDisabled(), false)
+    await run.click()
+    await page.waitForSelector('.pilot-duel__table')
+    const rows = await page.$$eval('.pilot-duel__table tbody tr', (trs) => trs.map((tr) => [...tr.children].map((td) => td.textContent)))
+    assert.deepEqual(rows, [
+      ['UI-TARS 1.5 7B', '7/18', '10/18', '6 s'],
+      ['MAI-UI 8B', '13/18', '16/18', '9 s']
+    ])
+    await page.click('button:has-text("Ouvrir le détail")')
+    await page.waitForFunction(() => window.__duelReportOpened === true)
+    // Habillés comme les autres boutons d'Options, et le tableau a bien son style (pas celui du navigateur).
+    const classes = await page.$$eval('.options-menu__group button', (bs) =>
+      bs.filter((b) => /Capturer|Recommencer|Lancer le duel|Ouvrir le détail/.test(b.textContent)).map((b) => b.className)
+    )
+    assert.ok(classes.length === 4 && classes.every((c) => c.includes('options-menu__action')), JSON.stringify(classes))
+    assert.equal(await page.$eval('.pilot-duel__table', (t) => getComputedStyle(t).borderCollapse), 'collapse')
+    await page.click('button:has-text("Recommencer")')
+    await page.waitForSelector('text=Aucune capture pour l’instant.')
+    assert.equal(await page.$('.pilot-duel__table'), null, 'le résultat d’avant disparaît avec les captures')
+  })
+})
+
 test('Général : l’interrupteur « Ouvrir Jaris au démarrage de Windows » s’active puis se désactive', options, async () => {
   await withOptions(async (page) => {
     await page.click('.options-menu__tab:has-text("Général")')
@@ -274,7 +322,7 @@ test('Modèles regroupe VRAIMENT mémoire et matériel, sans fichiers/moteur loc
     const titles = await page.$$eval('.options-page__content .options-menu__section-title', (els) => els.map((el) => el.textContent))
     // Titres alignés sur la copie exacte de la maquette (étape 119) : "Mémoire de conversation" et "Ce que
     // ta machine fait tourner" au lieu de "Longueur de mémoire"/"Les paliers de configuration".
-    assert.deepEqual(titles, ['Mémoire de conversation', 'Ce que ta machine fait tourner'])
+    assert.deepEqual(titles, ['Mémoire de conversation', 'Ce que ta machine fait tourner', "Duel des pilotes d'écran"])
     const content = await page.textContent('.options-page__content')
     assert.ok(!content.includes('Dossier de Jaris'), 'le dossier de Jaris ne doit pas être dans Modèles')
     assert.ok(!(await page.$('.options-menu__models-location-list')), 'la liste des emplacements ne doit plus être dans Modèles')

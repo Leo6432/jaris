@@ -6729,3 +6729,31 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   les autres demandes**, et le pilotage d'écran qui vise mal — à traiter séparément, avec le journal. Régression :
   `node --test scripts/test-browser-search.mjs` (phrases de Léo, refus des autres, adresse encodée, registre FR/EN,
   repli annoncé, voix + Chat sans appel au modèle, refus depuis le téléphone ; chaque garde vérifiée en la retirant).
+
+- **Étape 249, duel des pilotes d'écran sur le VRAI écran (Léo : « on le teste contre l'autre en vraie
+  situation »).** UI-TARS 1.5 7B (pilote actuel, ScreenSpot-Pro 49,6 %) contre MAI-UI 8B (Alibaba, Apache 2.0,
+  73,5 % selon ses auteurs). Options → Modèles → « Duel des pilotes d'écran » : Jaris se cache 5 s, photographie
+  l'écran, et Windows (UI Automation) donne la VRAIE position de chaque bouton — la vérité, pas un modèle ; chaque
+  pilote vise chaque bouton avec SA consigne officielle (UI-TARS : celle du vrai pilotage ; MAI-UI : sa consigne
+  de visée), avec et sans zoom (2e regard sur la moitié de l'écran autour du 1er point, appliqué aux deux pour être
+  juste). **Aucun clic réel.** Rapport : `duel-pilotes/resultat-duel-pilotes.md` du dossier de données.
+  **Faits vérifiés AVANT d'écrire le code, sur la source et pour de vrai** : (1) le mode « pilote complet » de
+  MAI-UI est fait pour ANDROID (action `mobile_use`, boutons retour/accueil, applis Android — `src/prompt.py` de
+  son dépôt) : sur Windows, son point fort est la VISÉE, d'où un duel de visée et pas un remplacement direct ;
+  (2) le GGUF « winterSAT » n'a PAS de fichier de vision (mmproj) — celui de mradermacher l'a, même éditeur que
+  le UI-TARS déjà utilisé, et Ollama 0.35.1 (installé ici, CPU) le charge bien (architecture qwen3vl + projecteur) ;
+  (3) **coordonnées sur 0–999** (SCALE_FACTOR de son code) et non en pixels, comme le laissait croire son script
+  d'évaluation — tranché sur une page de test aux positions connues. Essai du VRAI code du duel ici avec le vrai
+  modèle : MAI-UI 7/10 au 1er regard, **10/10 avec le zoom** (les 3 ratés : boutons de 28 px, toujours visés un peu
+  trop bas). **Piège de repère évité par construction** : capture ET rectangles pris par LE MÊME processus
+  PowerShell, déclaré DPI-aware avant tout — Electron capture en pixels logiques, UI Automation en pixels réels :
+  mélangés, chaque cible serait décalée de 25 à 50 % sur un écran à 125-150 %, sans que rien ne le signale. Le CI
+  Windows exécute vraiment la capture (image écrite, liste lisible) et vérifie la syntaxe PowerShell — rien de
+  plus n'est vérifiable sans le PC de Léo. **Pièges de session** : `pkill -f "motif"` tue aussi la commande
+  shell qui CONTIENT ce motif (deux essais arrêtés par erreur) — tuer par PID ou `pgrep -x` ; et un test du dépôt
+  (« un modèle sauté donne sa VRAIE raison ») échoue si le disque de l'environnement a moins de 5 Go libres
+  (marge de sécurité de téléchargement) : vérifié sur HEAD propre, c'était le modèle de 6 Go téléchargé pour
+  l'essai, pas le code. **Décision du pilote : APRÈS le duel de Léo**, jamais sur les chiffres des auteurs ni sur
+  ma page de test. Régression : `node --test scripts/test-pilot-duel.mjs` (cibles, consignes, échelle 0–999,
+  repère UI-TARS, zoom reconverti, pilote injoignable, rapport ; chaque garde vérifiée en la retirant) et le test
+  de l'onglet Modèles (`test-options-reorganization-ui.mjs`).
