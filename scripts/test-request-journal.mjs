@@ -54,6 +54,7 @@ function converseWith(journal, chat, execute) {
     './modelChoice': modelChoiceModule,
     './resourceMonitor': { checkOverloadWarning: async () => null },
     './requestJournal': journal,
+    './browserSearch': { directBrowserSearch: () => undefined, openBrowserSearch: async () => assert.fail('navigateur ouvert à tort') },
     './tools': { TOOLS: [], createToolExecutor: (_fire, _vision, onLog) => (name, args) => execute(name, args, onLog) }
   }).converse
 }

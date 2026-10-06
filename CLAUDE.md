@@ -6708,3 +6708,24 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : test « relecture des réponses comptées fausses (étape 247) », chaque correctif vérifié en le retirant
   seul ; et piège rencontré en l'écrivant : une demande de mail sans envoi déclenche la relance de Jaris — le script
   du test doit prévoir la seconde réponse, sinon il consomme le mauvais pas et passe ou échoue par hasard.
+
+- **Étape 248, Firefox : le journal des demandes a tranché (« il ouvre les fichiers, il clique sur Google, il arrive
+  vraiment pas »).** Deux causes MESURÉES, aucune devinée : (1) la réflexion de granite4.2:8b — 2 min 06 s et 13 741
+  caractères de réflexion avant de simplement décider `open_app` (les « 2 minutes » de Léo), encore 40 à 60 s par
+  décision ensuite ; (2) le pilotage d'écran — clic en (96, 1302) dans la barre des tâches, texte tapé au mauvais
+  endroit puis « c'est fait » ; avec qwen3.8:27b, clic sur la croix en (2340, 58) puis « mauvais navigateur, j'ai
+  fermé Firefox et ouvert Chrome ». Changer de modèle ou de navigateur par défaut (essayé par Léo) ne pouvait rien
+  régler. Correctif : `browserSearch.ts` — « ouvre <Firefox|Chrome|Edge|le navigateur|Google|YouTube> et cherche X »
+  ouvre DIRECTEMENT la page de résultats (Google, ou YouTube), sans modèle ni pilotage. Le navigateur nommé est trouvé
+  dans « App Paths » du registre (HKCU puis HKLM, `reg query` sans aucune donnée de l'utilisateur) et reçoit
+  l'adresse en ARGUMENT (`spawn`, jamais de shell) ; sinon le navigateur par défaut (`shell.openExternal`), en le
+  DISANT. Recherche encodée par `encodeURIComponent` (test avec « & " | # \ »). Réponse honnête : « envoyée à
+  Firefox », jamais « affichée » (même limite que open_app). Laissé au modèle : questions (« cherche sur internet
+  qui est… » doit être répondu, pas ouvert), simple ouverture, suite d'actions (« … puis lance la première vidéo »).
+  **Conséquence pour les tests de modèles** : « Va sur YouTube et cherche un tuto… » (demande youtube-guitare) est
+  désormais prise par ce raccourci dans le vrai Jaris ; la demande reste dans la campagne (scores déjà mesurés, elle
+  mesure la délégation au pilotage pour les formulations hors raccourci), et le test des raccourcis l'affirme
+  explicitement au lieu de l'ignorer. **Non résolu ici et dit à Léo : la lenteur de réflexion du modèle pour TOUTES
+  les autres demandes**, et le pilotage d'écran qui vise mal — à traiter séparément, avec le journal. Régression :
+  `node --test scripts/test-browser-search.mjs` (phrases de Léo, refus des autres, adresse encodée, registre FR/EN,
+  repli annoncé, voix + Chat sans appel au modèle, refus depuis le téléphone ; chaque garde vérifiée en la retirant).

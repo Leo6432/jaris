@@ -36,6 +36,8 @@ function setup(chat, execute, writeNote = async () => assert.fail('pas de docume
     './hardwareScan': { GPU_TEMP_LIMIT_C: 85 },
     './modelChoice': modelChoiceModule,
     // Journal des demandes (étape 245) : rien n'est écrit sur le disque pendant les tests.
+    // Recherche ouverte dans le navigateur (étape 248) : jamais déclenchée par les phrases de ces tests.
+    './browserSearch': { directBrowserSearch: () => undefined, openBrowserSearch: async () => assert.fail('navigateur ouvert à tort') },
     './requestJournal': { startJournalEntry: () => ({ line() {}, timed() {}, end: async () => {} }), describeModelCall: () => '' },
     './resourceMonitor': { checkOverloadWarning: async () => overloadWarning },
     './tools': { TOOLS: [], createToolExecutor: () => execute }

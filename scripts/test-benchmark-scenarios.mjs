@@ -488,6 +488,9 @@ function loadRealConverse() {
       }
     },
     './appLauncher': loadTs('electron/services/appLauncher.ts'),
+    // Étape 248 : la recherche directe dans le navigateur prend « Va sur YouTube et cherche… » avant le modèle. Ce test
+    // croisé compare la BOUCLE du modèle à sa copie : le raccourci est vérifié à part (test des raccourcis ci-dessous).
+    './browserSearch': { directBrowserSearch: () => undefined, openBrowserSearch: async () => assert.fail('navigateur ouvert à tort') },
     // isScreenQuestion : la VRAIE (hardwareScan.ts), pour que ce test croisé vérifie aussi sa copie du simulateur.
     './hardwareScan': { GPU_TEMP_LIMIT_C: 90, pickSafeModel: (_free, _installed, model) => model, isScreenQuestion: realHardwareScan().isScreenQuestion },
     './resourceMonitor': { checkOverloadWarning: async () => null },
@@ -672,6 +675,11 @@ test('les résultats simulés sont les MÊMES textes que les vrais outils de Jar
 test('aucune phrase de demande n’est prise par un raccourci de Jaris (la réponse viendrait du code, pas du modèle)', () => {
   const { directAppRequest } = loadTs('electron/services/assistant.ts')
   const { requestedNotepadText } = loadTs('electron/services/notepad.ts')
+  const { directBrowserSearch } = loadTs('electron/services/browserSearch.ts')
+  // Étape 248 : « Va sur YouTube et cherche un tuto… » est désormais ouvert directement dans le navigateur par Jaris,
+  // sans passer par le modèle. La demande reste dans le test (scores déjà mesurés) : elle mesure la délégation au
+  // pilotage d'écran par le modèle, utile pour toutes les formulations que le raccourci ne prend pas.
+  const BYPASSED = new Set(['youtube-guitare'])
   // Le chargement fonctionne vraiment : ces trois phrases sont bien prises par un raccourci.
   assert.equal(directAppRequest('Ouvre Spotify.'), 'Spotify')
   assert.ok(directSocialReply('salut'))
@@ -681,6 +689,8 @@ test('aucune phrase de demande n’est prise par un raccourci de Jaris (la répo
       assert.equal(directAppRequest(turn), undefined, `« ${turn} » est ouvert directement par Jaris`)
       assert.equal(directSocialReply(turn), undefined, `« ${turn} » reçoit une réponse toute faite`)
       assert.equal(requestedNotepadText(turn), undefined, `« ${turn} » passe par le Bloc-notes direct`)
+      if (BYPASSED.has(scenario.id)) assert.ok(directBrowserSearch(turn), `« ${turn} » devrait être ouvert dans le navigateur`)
+      else assert.equal(directBrowserSearch(turn), undefined, `« ${turn} » est ouvert directement dans le navigateur`)
     }
   }
 })

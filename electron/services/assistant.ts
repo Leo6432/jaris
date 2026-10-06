@@ -12,6 +12,7 @@ import { checkOverloadWarning } from './resourceMonitor'
 import type { SoundCue } from '../../shared/ipc'
 import { buildSystemPrompt, type ConverseChannel } from './systemPrompt'
 import { describeModelCall, startJournalEntry, type JournalEntry } from './requestJournal'
+import { directBrowserSearch, openBrowserSearch } from './browserSearch'
 
 /**
  * Design sonore (étape 31) : seuls les outils qui correspondent à une action PHYSIQUE/perceptible ont un
@@ -407,6 +408,16 @@ async function conversation(
     } catch (err) {
       return `Impossible de confirmer l’ouverture du document : ${err instanceof Error ? err.message : String(err)}`
     }
+  }
+
+  // Étape 248 : « ouvre Firefox et cherche X » — la page de résultats ouverte directement, sans réflexion du modèle ni
+  // pilotage d'écran (journal de Léo : 2 min de réflexion, puis des clics dans la barre des tâches).
+  const browserSearch = directBrowserSearch(prompt)
+  if (browserSearch) {
+    if (!isToolAllowed('open_app')) return restrictions?.refusal ?? 'Action indisponible ici.'
+    if (signal?.aborted) return 'Recherche annulée.'
+    onLog?.(`Recherche ouverte directement dans le navigateur : « ${browserSearch.query} »${browserSearch.browser ? ` (${browserSearch.browser.name})` : ''}.`)
+    return openBrowserSearch(browserSearch)
   }
 
   const requestedApp = directAppRequest(prompt)
