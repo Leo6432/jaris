@@ -22,7 +22,7 @@ function load(path, modules = {}) {
 const uiTars = load('electron/services/uiTars.ts')
 const duel = load('electron/services/pilotDuel.ts', { './uiTars': uiTars })
 const captureModule = load('electron/services/pilotDuelCapture.ts', { './pilotDuel': duel })
-const { pickTargets, instructionFor, parseMaiUiPoint, parseUiTarsPoint, zoomRect, hits, runDuel, formatDuelReport } = duel
+const { pickTargets, instructionFor, parseMaiUiPoint, parseUiTarsPoint, zoomRect, hits, runDuel, formatDuelReport, cleanName, uiTarsGroundingPrompt } = duel
 
 const el = (name, x, y, w = 40, h = 20, type = 'Button') => ({ name, type, x, y, w, h })
 
@@ -70,6 +70,42 @@ test('MAI-UI : coordonnées sur 0–999 (vérifié avec le vrai modèle), derni�
   assert.equal(parseMaiUiPoint('je ne sais pas'), null)
 })
 
+test('barre des tâches : noms tels qu’affichés, et au plus 2 cibles — le reste vient de la fenêtre (1er duel de Léo)', () => {
+  assert.equal(cleanName('Discord - 1 fenêtre en cours d’exécution épinglé'), 'Discord')
+  assert.equal(cleanName("Firefox - 2 fenêtres en cours d'exécution"), 'Firefox')
+  assert.equal(cleanName('Explorateur de fichiers épinglé'), 'Explorateur de fichiers')
+  assert.equal(cleanName('Horloge 20:01\n06/10/2026'), 'Horloge 20:01')
+  assert.equal(cleanName('Ajouter un ami'), 'Ajouter un ami', 'un nom ordinaire reste intact')
+  const bar = (name, x) => ({ ...el(name, x, 1392, 44, 48), zone: 'taskbar' })
+  const win = (name, y) => ({ ...el(name, 300, y, 120, 30), zone: 'window' })
+  const capture = {
+    png: 'c.png',
+    width: 2560,
+    height: 1440,
+    elements: [bar('Discord - 1 fenêtre en cours d’exécution épinglé', 1400), bar('Todoist épinglé', 1450), bar('Scanneur épinglé', 1500), bar('Microsoft Edge épinglé', 1550), win('Ajouter un ami', 100), win('Messages privés', 200), win('Boutique', 300)]
+  }
+  const picked = pickTargets(capture)
+  assert.equal(picked.filter((e) => e.zone === 'taskbar').length, 2)
+  assert.deepEqual(picked.filter((e) => e.zone === 'window').map((e) => e.name), ['Ajouter un ami', 'Messages privés', 'Boutique'])
+  assert.ok(picked.some((e) => e.name === 'Discord'), 'la consigne utilise le nom NETTOYÉ')
+  // « Discord » dans la fenêtre ET dans la barre des tâches : homonymes une fois nettoyés, donc écartés tous les deux.
+  const twice = { ...capture, elements: [...capture.elements, win('Discord', 400)] }
+  assert.ok(!pickTargets(twice).some((e) => e.name === 'Discord'))
+})
+
+test('UI-TARS reçoit sa consigne officielle de VISÉE, pas celle de navigation (il répondait en chinois ou « finished »)', () => {
+  const prompt = uiTarsGroundingPrompt('Click on the "Ajouter un ami" button')
+  assert.match(prompt, /## Action Space\nclick\(start_box=/)
+  assert.ok(prompt.endsWith('## User Instruction\nClick on the "Ajouter un ami" button'))
+  assert.ok(!/Thought|finished|scroll|Chinese|language/i.test(prompt), 'une seule action possible : viser')
+  // L'autre forme officielle, « point », est lue au même endroit que start_box.
+  const a = parseUiTarsPoint("Action: click(point='<point>644 364</point>')", 1280, 720)
+  const b = parseUiTarsPoint("click(start_box='<|box_start|>(644,364)<|box_end|>')", 1280, 720)
+  assert.deepEqual(a, b)
+  assert.ok(Math.abs(a.fx - 0.5) < 0.002 && Math.abs(a.fy - 0.5) < 0.002)
+  assert.deepEqual(parseUiTarsPoint("Action: click(point='<point>644 364</point>'')", 1280, 720), a, "coquille du prompt officiel (\'\') tolérée")
+})
+
 test('UI-TARS : lu exactement comme dans le vrai pilotage (repère smart_resize de l’image envoyée)', () => {
   // Image 1280x720 -> UI-TARS voit 1288x728 : le point (644, 364) de son repère est le centre de l'image.
   const p = parseUiTarsPoint("Thought: je clique sur la barre.\nAction: click(start_box='<|box_start|>(644,364)<|box_end|>')", 1280, 720)
@@ -101,7 +137,7 @@ function fakeWorld(capture, { maiError = [0, 0], tarsError = [0, 0] } = {}) {
     const r = JSON.parse(user.images[0])
     const target = capture.elements.find((e) => e.name === name)
     const zoomed = r.w < capture.width
-    calls.push({ model, name, zoomed, system: messages[0].role === 'system' })
+    calls.push({ model, name, zoomed, system: messages[0].role === 'system', content: user.content })
     if (model === 'mai') {
       const [ex, ey] = zoomed ? [0, 0] : maiError
       const fx = (target.x + target.w / 2 + ex - r.x) / r.w
@@ -144,6 +180,7 @@ test('duel complet : zoom bien reconverti, consignes officielles, et un pilote q
   // Chaque pilote reçoit SA consigne officielle : MAI-UI un message système de visée, UI-TARS celle du vrai pilotage.
   assert.ok(calls.filter((c) => c.model === 'mai').every((c) => c.system))
   assert.ok(calls.filter((c) => c.model === 'tars').every((c) => !c.system))
+  assert.ok(calls.filter((c) => c.model === 'tars').every((c) => c.content === uiTarsGroundingPrompt(`Click on the "${c.name}" ${c.name === 'Rechercher' ? 'text field' : c.name === 'Shorts' ? 'link' : 'button'}`)), 'UI-TARS vise avec SA consigne de visée')
   // Un pilote entier, puis l'autre : un seul chargement de modèle chacun.
   const order = calls.map((c) => c.model)
   assert.equal(order.lastIndexOf('tars') < order.indexOf('mai'), true)
@@ -181,10 +218,23 @@ test('capture Windows : un seul processus sensible au DPI, rien d’interpolé, 
   assert.ok(script.indexOf('SetProcessDPIAware()') < script.indexOf('PrimaryScreen.Bounds'), 'DPI déclaré AVANT de lire la taille de l’écran')
   assert.ok(script.indexOf('CopyFromScreen') < script.indexOf('BoundingRectangle'), 'capture et positions dans le même processus')
   assert.match(script, /\$env:JARIS_DUEL_PNG/)
+  // 1er duel de Léo : GetForegroundWindow renvoyait Jaris (caché) -> 14 cibles sur 30 absentes de la photo.
+  assert.ok(!/GetForegroundWindow/.test(script), 'la fenêtre visée ne vient plus de « la fenêtre active »')
+  assert.match(script, /\$env:JARIS_PID/)
+  assert.match(script, /\$p -ne \$jarisPid/, 'les fenêtres de Jaris sont écartées')
+  assert.match(script, /DwmGetWindowAttribute\(\$h, 14/, 'les fenêtres masquées par Windows (cloaked) aussi')
+  assert.ok(script.indexOf('CopyFromScreen') < script.indexOf('[Jaris.Duel]::GetTopWindow'), 'la fenêtre est choisie sur l’écran photographié')
+  assert.match(script, /zone = \$z\.zone/)
   assert.ok(!/\$\{/.test(script), 'aucune valeur interpolée dans le script')
   const one = captureModule.parseCaptureOutput('{"width":2560,"height":1440,"elements":{"name":"Démarrer","type":"Button","x":1,"y":2,"w":3,"h":4}}', 'c.png')
   assert.equal(one.elements.length, 1)
   assert.equal(one.elements[0].name, 'Démarrer')
+  assert.equal(one.window, undefined)
+  const titled = captureModule.parseCaptureOutput('{"width":2560,"height":1440,"window":" Discord ","elements":[]}', 'c.png')
+  assert.equal(titled.window, 'Discord')
+  const report = formatDuelReport([], [{ ...titled, elements: [{ name: 'Ajouter un ami', type: 'Button', zone: 'window', x: 10, y: 10, w: 100, h: 30 }] }, one], new Date())
+  assert.match(report, /Capture 1 : fenêtre « Discord », 1 cible\(s\)/)
+  assert.match(report, /Capture 2 : aucune fenêtre reconnue/)
   assert.equal(captureModule.parseCaptureOutput('pas du json', 'c.png'), null)
   assert.equal(captureModule.parseCaptureOutput('{"width":0,"height":1440,"elements":[]}', 'c.png'), null)
 })

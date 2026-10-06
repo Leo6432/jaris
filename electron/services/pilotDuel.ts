@@ -1,4 +1,4 @@
-import { buildUiTarsPrompt, parseUiTarsResponse } from './uiTars'
+import { parseUiTarsResponse } from './uiTars'
 
 /**
  * Étape 249 — duel des pilotes d'écran sur le VRAI écran de Léo (« ok on le teste contre l'autre en vraie
@@ -21,6 +21,8 @@ export const MAI_UI_LABEL = 'MAI-UI 8B'
 export interface DuelElement {
   name: string
   type: string
+  /** 'window' : la fenêtre au premier plan ; 'taskbar' : la barre des tâches. */
+  zone?: 'window' | 'taskbar'
   x: number
   y: number
   w: number
@@ -32,6 +34,8 @@ export interface DuelCapture {
   png: string
   width: number
   height: number
+  /** Titre de la fenêtre photographiée, pour que le rapport dise ce qui a vraiment été testé. */
+  window?: string
   elements: DuelElement[]
 }
 
@@ -43,20 +47,37 @@ export interface DuelContender {
   kind: PilotKind
 }
 
+/**
+ * Nom tel qu'il est AFFICHÉ à l'écran. Windows ajoute aux boutons de la barre des tâches des mots que personne ne
+ * voit (« épinglé », « - 1 fenêtre en cours d'exécution ») ou une 2e ligne (« Horloge 20:01\n6/10/2026 ») : demander
+ * au pilote de viser « Discord - 1 fenêtre en cours d'exécution épinglé » le pénalisait sur un texte invisible
+ * (1er duel de Léo, 06/10/2026).
+ */
+export function cleanName(name: string): string {
+  return (name.split(/\r?\n/)[0] ?? '')
+    .replace(/\s+-\s+\d+\s+fen[êe]tres?\s+en\s+cours\s+d.ex[ée]cution/gi, '')
+    .replace(/\s+[ée]pingl[ée]e?s?\s*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Au plus 2 cibles dans la barre des tâches par capture : le duel porte sur les fenêtres que Léo utilise. */
+export const MAX_TASKBAR_TARGETS = 2
+
 /** Les cibles retenues d'une capture : nommées, visibles, ni minuscules ni immenses, et sans homonyme (ambigu). */
 export function pickTargets(capture: DuelCapture, max = 10): DuelElement[] {
   const area = capture.width * capture.height
+  const elements = capture.elements.map((el) => ({ ...el, name: cleanName(el.name) }))
   const names = new Map<string, number>()
-  for (const el of capture.elements) {
-    const key = el.name.trim().toLowerCase()
+  for (const el of elements) {
+    const key = el.name.toLowerCase()
     names.set(key, (names.get(key) ?? 0) + 1)
   }
-  const usable = capture.elements.filter((el) => {
-    const name = el.name.trim()
+  const usable = elements.filter((el) => {
     return (
-      name.length >= 2 &&
-      name.length <= 60 &&
-      names.get(name.toLowerCase()) === 1 &&
+      el.name.length >= 2 &&
+      el.name.length <= 60 &&
+      names.get(el.name.toLowerCase()) === 1 &&
       el.w >= 8 &&
       el.h >= 8 &&
       el.w * el.h <= area * 0.2 &&
@@ -66,10 +87,12 @@ export function pickTargets(capture: DuelCapture, max = 10): DuelElement[] {
       el.y + el.h <= capture.height
     )
   })
-  if (usable.length <= max) return usable
-  // Répartis sur toute la liste (barre des tâches comprise), dans un ordre fixe : le même écran donne le même duel.
-  const step = usable.length / max
-  return Array.from({ length: max }, (_, i) => usable[Math.floor(i * step)])
+  // Répartis sur toute la liste, dans un ordre fixe : le même écran donne le même duel.
+  const spread = (list: DuelElement[], n: number): DuelElement[] =>
+    list.length <= n ? list : Array.from({ length: n }, (_, i) => list[Math.floor((i * list.length) / n)])
+  const taskbar = spread(usable.filter((el) => el.zone === 'taskbar'), MAX_TASKBAR_TARGETS)
+  const window = spread(usable.filter((el) => el.zone !== 'taskbar'), Math.max(0, max - taskbar.length))
+  return [...window, ...taskbar]
 }
 
 const TYPE_WORDS: Record<string, string> = {
@@ -119,9 +142,39 @@ export function parseMaiUiPoint(content: string): { fx: number; fy: number } | n
   return { fx: x / 999, fy: y / 999 }
 }
 
-/** Point visé par UI-TARS avec la consigne qu'il reçoit dans le vrai pilotage de Jaris, en fraction de l'image. */
+/**
+ * Consigne de visée d'UI-TARS : la forme « grounding » de son dépôt officiel (bytedance/UI-TARS, prompt.py), une
+ * seule action et pas de « Thought ». Au 1er duel, il recevait la consigne de NAVIGATION du vrai pilotage : il
+ * réfléchissait en chinois, répondait « finished » (« je ne trouve pas ce bouton ») ou faisait défiler au lieu de
+ * viser — il perdait sur la consigne, pas sur la visée. Même traitement que MAI-UI, qui a la sienne.
+ * L'action est écrite avec `start_box`, la forme de son entraînement en 1.5 (celle que comprend parseUiTarsResponse).
+ */
+export function uiTarsGroundingPrompt(instruction: string): string {
+  return `You are a GUI agent. You are given a task and your action history, with screenshots. You need to perform the next action to complete the task.
+
+## Output Format
+
+Action: ...
+
+
+## Action Space
+click(start_box='<|box_start|>(x1,y1)<|box_end|>')
+
+## User Instruction
+${instruction}`
+}
+
+/**
+ * Point visé par UI-TARS, en fraction de l'image. Accepte aussi la forme `point='<point>x y</point>'` de la consigne
+ * officielle la plus récente : un bon tir écrit dans l'autre forme ne doit pas compter comme « illisible ».
+ */
 export function parseUiTarsPoint(content: string, width: number, height: number): { fx: number; fy: number } | null {
-  const step = parseUiTarsResponse(content, width, height)
+  const normalized = content.replace(
+    /point\s*=\s*(['"])\s*<point>\s*(-?\d+(?:\.\d+)?)[\s,]+(-?\d+(?:\.\d+)?)\s*<\/point>\s*\1+/g,
+    "start_box='($2,$3)'"
+  )
+  const withAction = /Action:/.test(normalized) ? normalized : `Action: ${normalized.trim()}`
+  const step = parseUiTarsResponse(withAction, width, height)
   if (!step || step.x === undefined || step.y === undefined || !/click/.test(step.action)) return null
   return { fx: step.x / width, fy: step.y / height }
 }
@@ -190,7 +243,7 @@ async function aim(contender: DuelContender, image: DuelImage, instruction: stri
           { role: 'system', content: MAI_UI_GROUNDING_PROMPT },
           { role: 'user', content: `${instruction}\n`, images: [image.base64] }
         ])
-      : await deps.chat(contender.model, [{ role: 'user', content: buildUiTarsPrompt(instruction, []), images: [image.base64] }])
+      : await deps.chat(contender.model, [{ role: 'user', content: uiTarsGroundingPrompt(instruction), images: [image.base64] }])
   const point = contender.kind === 'mai-ui' ? parseMaiUiPoint(raw) : parseUiTarsPoint(raw, image.width, image.height)
   return { point, raw }
 }
@@ -266,6 +319,8 @@ export function formatDuelReport(results: DuelResult[], captures: DuelCapture[],
     `# Duel des pilotes d'écran — ${date.toLocaleString('fr-FR')}`,
     '',
     `${captures.length} capture(s) de ton vrai écran ; la position de chaque bouton vient de Windows (UI Automation). Aucun clic n'a été fait.`,
+    '',
+    ...captures.map((c, i) => `- Capture ${i + 1} : ${c.window ? `fenêtre « ${c.window.replace(/\|/g, '/')} »` : 'aucune fenêtre reconnue (barre des tâches seulement)'}, ${pickTargets(c).length} cible(s).`),
     '',
     '| Pilote | 1er regard | Avec zoom | Temps moyen par cible |',
     '|---|---|---|---|'

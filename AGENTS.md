@@ -6718,3 +6718,30 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   ma page de test. Régression : `node --test scripts/test-pilot-duel.mjs` (cibles, consignes, échelle 0–999,
   repère UI-TARS, zoom reconverti, pilote injoignable, rapport ; chaque garde vérifiée en la retirant) et le test
   de l'onglet Modèles (`test-options-reorganization-ui.mjs`).
+- **Étape 250, le 1er duel de Léo était FAUSSÉ — corrigé avant toute décision (UI-TARS 0/30, MAI-UI 4/30 puis
+  6/30 avec zoom).** Relu cible par cible avant de conclure quoi que ce soit : **14 cibles sur 30 étaient des
+  boutons de Jaris lui-même** (« AGENT VOCAL », « NOUVELLE VIDÉO », « CAPTURE DANS 5 S… »), absents de la photo
+  puisque Jaris s'était caché — `GetForegroundWindow` renvoyait encore sa fenêtre cachée comme « fenêtre active ».
+  La fenêtre Discord de Léo n'a jamais été visée. Sur les 16 cibles valides : MAI-UI 4/16 puis 6/16, UI-TARS 0/16.
+  **Trois corrections, chacune pour une cause lue dans le rapport, pas devinée** : (1) la fenêtre visée est la
+  fenêtre VISIBLE la plus haute dans l'ordre Z qui n'appartient PAS au processus de Jaris (`JARIS_PID`), n'est ni
+  réduite, ni masquée par Windows (« cloaked », DWM 14), ni transparente aux clics/d'outil, ni sans titre, ni
+  minuscule, ni le bureau/la barre des tâches — et son titre est écrit dans le rapport et affiché dans l'écran du
+  duel, pour que Léo voie tout de suite si c'est la bonne ; une capture sans AUCUN bouton dans la fenêtre est
+  refusée avec un message clair (une capture « barre des tâches seulement » ne teste pas ce qu'il utilise).
+  Chromium (Discord, Chrome, Edge…) ne construit son arbre d'accessibilité qu'au 1er client qui le demande : si
+  la 1re lecture rend moins de 5 éléments, on relit une fois après 1,5 s. (2) Les noms de la barre des tâches
+  contiennent des mots INVISIBLES à l'écran (« épinglé », « - 1 fenêtre en cours d'exécution », 2e ligne de
+  l'horloge) : nettoyés (`cleanName`) avant de servir de consigne, et au plus 2 cibles de barre des tâches par
+  capture. (3) UI-TARS recevait la consigne de NAVIGATION du vrai pilotage : il « réfléchissait » en chinois,
+  répondait `finished` (« bouton introuvable ») ou faisait défiler — il perdait sur la consigne, pas sur la visée.
+  Il reçoit maintenant la consigne de VISÉE de son dépôt officiel (une seule action, `click`, sans « Thought »),
+  comme MAI-UI a la sienne ; la forme `point='<point>x y</point>'` de la version la plus récente de cette
+  consigne est lue au même titre que `start_box`. **Leçon générale : avant de tirer une conclusion d'un banc
+  d'essai, relire les cibles une par une — un score de 0/30 dit autant « le test est cassé » que « le modèle est
+  mauvais », et ici c'était d'abord le test.** Non vérifiable ici : que la fenêtre choisie soit bien la bonne sur
+  le PC de Léo (le CI Windows n'a pas de fenêtre ouverte) — c'est justement pour ça que son titre s'affiche.
+  Régression : `node --test scripts/test-pilot-duel.mjs` (noms nettoyés, 2 cibles de barre des tâches au plus,
+  homonymes écartés après nettoyage, consigne de visée d'UI-TARS réellement envoyée, les deux formes de point,
+  fenêtre choisie hors Jaris, titre dans le rapport ; chaque garde vérifiée en la retirant) et
+  `test-options-reorganization-ui.mjs` (titre de la fenêtre affiché).

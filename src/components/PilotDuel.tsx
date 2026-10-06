@@ -54,7 +54,11 @@ export function PilotDuel(): JSX.Element {
       title="Duel des pilotes d'écran"
       description="Compare le pilote actuel (UI-TARS) à MAI-UI 8B sur TON écran, sans aucun clic. Ouvre une fenêtre que tu utilises (Firefox, Discord, l'Explorateur…) puis clique sur « Capturer mon écran » : Jaris se cache 5 secondes, photographie l'écran et revient. Windows donne la vraie position de chaque bouton, et chaque pilote doit la viser. Prends 2 ou 3 captures de fenêtres différentes avant de lancer le duel."
     >
-      <SettingRow label="Captures" description={info.captures ? `${info.captures} capture(s), ${info.targets} bouton(s) à viser.` : 'Aucune capture pour l’instant.'}>
+      <SettingRow label="Captures" description={
+          info.captures
+            ? `${info.captures} capture(s), ${info.targets} bouton(s) à viser.${info.lastWindow ? ` Dernière fenêtre : « ${info.lastWindow} ».` : ''}`
+            : 'Aucune capture pour l’instant.'
+        }>
         <button className="options-menu__action" onClick={() => void capture()} disabled={capturing || running}>
           {capturing ? 'Capture dans 5 s…' : 'Capturer mon écran'}
         </button>

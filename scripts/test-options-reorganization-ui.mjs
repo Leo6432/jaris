@@ -57,7 +57,7 @@ const overrides = {
   // Étape 249 : duel des pilotes d'écran.
   pilotDuelCapture: async () => {
     window.__duelCaptures = (window.__duelCaptures ?? 0) + 1
-    return { captures: window.__duelCaptures, targets: window.__duelCaptures * 9 }
+    return { captures: window.__duelCaptures, targets: window.__duelCaptures * 9, lastWindow: window.__duelCaptures === 2 ? 'Discord' : undefined }
   },
   pilotDuelReset: async () => ((window.__duelCaptures = 0), { captures: 0, targets: 0 }),
   pilotDuelRun: async () => ({
@@ -277,7 +277,7 @@ test('Modèles : duel des pilotes — rien à lancer sans capture, puis captures
     await page.click('button:has-text("Capturer mon écran")')
     await page.waitForSelector('text=1 capture(s), 9 bouton(s) à viser.')
     await page.click('button:has-text("Capturer mon écran")')
-    await page.waitForSelector('text=2 capture(s), 18 bouton(s) à viser.')
+    await page.waitForSelector('text=2 capture(s), 18 bouton(s) à viser. Dernière fenêtre : « Discord ».')
     assert.equal(await run.isDisabled(), false)
     await run.click()
     await page.waitForSelector('.pilot-duel__table')

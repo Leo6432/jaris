@@ -967,6 +967,8 @@ export interface PilotDuelCaptureInfo {
   captures: number
   /** Boutons retenus comme cibles sur toutes les captures. */
   targets: number
+  /** Titre de la fenêtre de la dernière capture : Léo voit tout de suite si c'est bien celle qu'il voulait. */
+  lastWindow?: string
 }
 
 /** Étape 249 : le score d'un pilote au duel (tirs justes au 1er regard, puis avec le zoom). */

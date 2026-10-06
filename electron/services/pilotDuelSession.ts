@@ -26,8 +26,11 @@ export function pilotDuelReportPath(): string {
 
 export async function addDuelCapture(): Promise<PilotDuelCaptureInfo> {
   const capture = await captureScreenWithElements(join(pilotDuelDir(), `capture-${captures.length + 1}.png`))
-  if (!pickTargets(capture).length) {
-    throw new Error("Aucun bouton exploitable dans cette fenêtre (Windows n'en donne pas la liste) : essaie avec une autre fenêtre, par exemple Firefox ou l'Explorateur de fichiers.")
+  // Au moins un bouton DANS la fenêtre : une capture qui ne garde que la barre des tâches ne teste pas ce que Léo
+  // utilise (capture 1 de son 1er duel : la fenêtre Discord n'avait donné aucune cible).
+  if (!pickTargets(capture).some((el) => el.zone !== 'taskbar')) {
+    const where = capture.window ? `la fenêtre « ${capture.window} »` : 'la fenêtre au premier plan'
+    throw new Error(`Windows n'a donné aucun bouton de ${where} : essaie avec une autre fenêtre, par exemple Firefox ou l'Explorateur de fichiers.`)
   }
   captures.push(capture)
   return duelInfo()
@@ -39,7 +42,7 @@ export function resetDuelCaptures(): PilotDuelCaptureInfo {
 }
 
 function duelInfo(): PilotDuelCaptureInfo {
-  return { captures: captures.length, targets: captures.reduce((n, c) => n + pickTargets(c).length, 0) }
+  return { captures: captures.length, targets: captures.reduce((n, c) => n + pickTargets(c).length, 0), lastWindow: captures.at(-1)?.window }
 }
 
 /** 3 minutes par réponse : un premier chargement de modèle sur une carte de 8 Go peut en prendre une bonne partie. */
