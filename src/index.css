@@ -1388,6 +1388,14 @@ body.body--scan::after {
   font-weight: 500;
 }
 
+/* Étape 252 : ce que Jaris fait pendant une demande vocale — discret, sous la phrase entendue, le compteur avance. */
+.app__activity {
+  margin: 0;
+  color: var(--hud-text-faint);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .memory-brain {
   position: fixed;
   inset: 0;

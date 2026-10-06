@@ -6814,3 +6814,22 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   réponse illisible et viseur injoignable, annulation sans clic, clic par le nom sans viseur, profil UI-TARS
   sans viseur et consigne intacte, déchargement après visée ; chaque garde vérifiée en la retirant),
   `test-benchmark-runner-cleanup.mjs` (UI-TARS remplacé et supprimé) et `test-my-model-picks-ui.mjs`.
+- **Étape 252, « j'ai attendu 1 min sans rien, il doit soit nous dire ce qu'il fait, soit il bug » (Léo, à la
+  voix : « Clique sur la première vidéo de la page »).** Le journal des demandes a tranché en une ligne, sans
+  hypothèse : seule « Modèle choisi : granite4.2:8b (réflexion : medium) » était écrite — **le pilotage, et donc
+  MAI-UI, n'avait même pas commencé**. Les entrées précédentes du même journal montraient le modèle de conversation
+  réfléchir 40 s à 2 min 18 s (jusqu'à 13 741 caractères de réflexion) avant de simplement choisir un outil. Deux
+  défauts distincts, corrigés séparément : (1) **attendre la réflexion pour une action évidente** — une phrase qui
+  COMMENCE par « clique/clic/double-clique sur|dans… » part directement au pilotage, la phrase entière servant
+  d'objectif (`directScreenTask`, assistant.ts, même principe que `directAppRequest` et `directBrowserSearch`) ;
+  « sur/dans » doit suivre le verbe, donc « ne clique pas… », « clique pas sur… », « comment cliquer… » restent à la
+  conversation (testé, et chaque garde vérifiée en la retirant). (2) **rien à l'écran en voix pendant ce temps** :
+  une ligne sous la phrase entendue (écran vocal ET widget) dit ce que Jaris fait — « Je réfléchis… 45 s »,
+  « Étape 2 : je vise the "Play" button… » — avec un compteur qui avance chaque seconde, la seule preuve qu'il
+  n'est pas figé. Les lignes techniques du journal sont traduites en phrases courtes (`shared/voiceActivity.ts`,
+  pur et testé) ; rien n'est lu à voix haute, conformément au choix déjà noté (raconter chaque étape serait
+  pénible). La ligne est effacée dans le `finally` de la demande : une erreur ou une annulation ne peut pas la
+  laisser affichée. **Non corrigé, volontairement** : la longueur de réflexion du modèle pour les AUTRES demandes
+  (baisser la réflexion de la voix changerait la fiabilité des appels d'outils mesurée par les tests de modèles —
+  à décider avec Léo, mesures à l'appui, pas en passant). Régression : `node --test scripts/test-voice-activity.mjs
+  scripts/test-assistant-history.mjs`.

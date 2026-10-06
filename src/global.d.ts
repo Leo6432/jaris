@@ -51,6 +51,7 @@ declare global {
     jaris: {
       onEmotion: (cb: (emotion: JarisEmotion) => void) => () => void
       onTranscript: (cb: (text: string) => void) => () => void
+      onVoiceActivity: (cb: (text: string | null) => void) => () => void
       onReply: (cb: (payload: VoiceReplyPayload) => void) => () => void
       onLog: (cb: (message: string) => void) => () => void
       onChatStreamToken: (cb: (delta: string) => void) => () => void

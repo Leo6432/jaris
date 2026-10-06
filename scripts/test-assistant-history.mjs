@@ -207,6 +207,34 @@ for (const prompt of ['N’ouvre pas Steam', 'Comment ouvre-t-on Steam ?', 'Ouvr
   })
 }
 
+// Étape 252 : journal de Léo — « Clique sur la première vidéo de la page » attendait 1 min la réflexion du modèle
+// avant même de commencer le pilotage. Une action à l'écran explicite part directement au pilotage.
+for (const channel of ['voice', 'chat']) {
+  test(`${channel}: « clique sur… » part directement au pilotage, sans réflexion du modèle`, async () => {
+    const logs = []
+    let calls = 0
+    const converse = setup(async () => assert.fail('aucun appel modèle'), async (name, args) => {
+      calls++
+      assert.equal(name, 'computer_use_task')
+      assert.equal(args.goal, 'Clique sur la première vidéo de la page.')
+      return 'La vidéo est lancée.'
+    })
+    assert.equal(await converse('  Clique sur la première   vidéo de la page.', null, () => {}, (m) => logs.push(m), [], undefined, undefined, channel), 'La vidéo est lancée.')
+    assert.equal(calls, 1)
+    assert.ok(logs.some((l) => /pilotage direct/.test(l)), 'la raison est écrite dans le journal')
+  })
+}
+test('« clique sur… » : un échec du pilotage est transmis tel quel', async () => {
+  const converse = setup(async () => assert.fail('aucun appel modèle'), async () => { throw new Error('Je me suis arrêté après 20 étapes') })
+  assert.equal(await converse('clique sur le bouton Jouer', null, () => {}), "Échec de l'outil : Je me suis arrêté après 20 étapes")
+})
+for (const prompt of ['Ne clique pas sur la vidéo', 'Clique pas sur la pub', 'Comment cliquer sur un lien ?', 'Où dois-je cliquer sur la page ?', 'Clique']) {
+  test(`pas de pilotage direct pour : ${prompt}`, async () => {
+    const converse = setup(async () => ({ role: 'assistant', content: 'Analyse normale' }), async () => assert.fail('pas de pilotage direct'))
+    assert.equal(await converse(prompt, null, () => {}), 'Analyse normale')
+  })
+}
+
 for (const channel of ['voice', 'chat']) {
   test(`${channel}: ouvrir Bloc-notes et écrire exécute réellement le service`, async () => {
     let calls = 0

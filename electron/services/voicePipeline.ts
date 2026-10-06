@@ -14,6 +14,7 @@ import { CORRECTION_SCHEMA, correctTranscript } from './transcriptCorrector'
 import { structuredChat } from './ollama'
 import { config } from '../config'
 import { appendJournal, formatElapsed } from './requestJournal'
+import { THINKING_ACTIVITY, activityFromLog, formatActivity } from '../../shared/voiceActivity'
 
 /** Retour à idle après une erreur (pas d'audio en cours, donc pas besoin d'attendre une fin de lecture). */
 const ERROR_IDLE_DELAY_MS = 2500
@@ -115,6 +116,8 @@ export class VoicePipeline extends EventEmitter {
   private busy = false
   private pendingAdditions: string[] = []
   private abortController: AbortController | null = null
+  /** Étape 252 : ce que Jaris fait pendant qu'il réfléchit, affiché sous la phrase entendue (voiceActivity.ts). */
+  private activity: { text: string; since: number; timer: ReturnType<typeof setInterval> } | null = null
   /**
    * true tant que la fenêtre de réglages est sur l'onglet Chat ou Code (voir setListeningSuspended, appelé
    * depuis main.ts sur IPC_CHANNELS.setActiveMode) : le sidecar Python continue d'écouter en continu (le
@@ -292,6 +295,7 @@ export class VoicePipeline extends EventEmitter {
 
       const controller = new AbortController()
       this.abortController = controller
+      this.startActivity()
 
       let reply = ''
       let aborted = false
@@ -333,7 +337,10 @@ export class VoicePipeline extends EventEmitter {
           profile?.name ?? null,
           // Passe par main.ts (fireReminder) : notification Windows en plus de la voix, comme depuis le Chat.
           (message) => this.emit('reminder', message),
-          (message) => this.emit('log', message),
+          (message) => {
+            this.emit('log', message)
+            this.noteActivity(message)
+          },
           history,
           controller.signal,
           live,
@@ -361,6 +368,7 @@ export class VoicePipeline extends EventEmitter {
         }
       } finally {
         if (this.abortController === controller) this.abortController = null
+        this.stopActivity()
       }
 
       // Une phrase est arrivée pendant la réflexion (annulation ci-dessus) ou pile au moment où la réponse
@@ -395,6 +403,32 @@ export class VoicePipeline extends EventEmitter {
       this.emit('log', `Phrase captée trop tard pour être fusionnée (réponse déjà donnée), nouvel échange : « ${queued} »`)
       void this.runTranscript(queued)
     }
+  }
+
+  /** Affiche « Je réfléchis… 0 s », puis réaffiche chaque seconde : le compteur prouve que Jaris n'est pas figé. */
+  private startActivity(): void {
+    this.stopActivity()
+    const since = Date.now()
+    const timer = setInterval(() => {
+      if (this.activity) this.emit('activity', formatActivity(this.activity.text, Date.now() - this.activity.since))
+    }, 1000)
+    this.activity = { text: THINKING_ACTIVITY, since, timer }
+    this.emit('activity', formatActivity(THINKING_ACTIVITY, 0))
+  }
+
+  /** Une ligne du journal qui dit quelque chose de neuf (outil, étape du pilotage) remplace l'activité affichée. */
+  private noteActivity(line: string): void {
+    const text = activityFromLog(line)
+    if (!text || !this.activity) return
+    this.activity.text = text
+    this.emit('activity', formatActivity(text, Date.now() - this.activity.since))
+  }
+
+  private stopActivity(): void {
+    if (!this.activity) return
+    clearInterval(this.activity.timer)
+    this.activity = null
+    this.emit('activity', null)
   }
 
   private async speak(reply: string, transcript = '', image?: string): Promise<void> {

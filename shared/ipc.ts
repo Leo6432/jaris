@@ -666,6 +666,8 @@ export interface GeneratedAppSummary {
 export const IPC_CHANNELS = {
   emotion: 'jaris:emotion',
   transcript: 'jaris:transcript',
+  /** main -> renderer, étape 252 : ce que Jaris fait pendant une demande vocale (« Je réfléchis… 12 s »), `null` à la fin. */
+  voiceActivity: 'jaris:voice-activity',
   reply: 'jaris:reply',
   log: 'jaris:log',
   setupStatus: 'jaris:setup-status',

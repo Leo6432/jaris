@@ -940,6 +940,7 @@ async function startVoicePipeline(): Promise<void> {
   })
   pipeline.on('reminder', fireReminder)
   pipeline.on('transcript', (text: string) => broadcast(IPC_CHANNELS.transcript, text))
+  pipeline.on('activity', (text: string | null) => broadcast(IPC_CHANNELS.voiceActivity, text))
   pipeline.on('reply', (payload: VoiceReplyPayload) => broadcast(IPC_CHANNELS.reply, payload))
   pipeline.on('log', (message: string) => broadcast(IPC_CHANNELS.log, message))
   pipeline.on('soundCue', (cue: SoundCue) => broadcast(IPC_CHANNELS.soundCue, cue))

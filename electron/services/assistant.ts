@@ -36,6 +36,19 @@ export function directAppRequest(prompt: string): string | undefined {
   return name
 }
 
+/**
+ * Étape 252 : « clique sur la première vidéo » — une action à l'écran, explicite, qui ne peut aller qu'au pilotage.
+ * Journal de Léo (06/10/2026) : le modèle de conversation réfléchissait 40 s à 2 min avant de choisir l'outil, sans
+ * rien montrer ; il a abandonné au bout d'une minute, le pilotage n'ayant même pas commencé. La phrase entière
+ * devient l'objectif du pilotage. Elle doit COMMENCER par le verbe : « ne clique pas… » ne peut pas correspondre.
+ */
+export function directScreenTask(prompt: string): string | undefined {
+  const text = prompt.trim().replace(/\s+/g, ' ')
+  // « sur » ou « dans » doit suivre directement le verbe : « clique pas sur… » ne correspond donc pas non plus.
+  if (!/^(?:double[- ]?)?(?:clique|cliques|clic|cliquer)\s+(?:sur|dans)\s+\S/iu.test(text) || text.length > 200) return undefined
+  return text
+}
+
 interface ModelTiers {
   flash: string
   medium: string
@@ -418,6 +431,18 @@ async function conversation(
     if (signal?.aborted) return 'Recherche annulée.'
     onLog?.(`Recherche ouverte directement dans le navigateur : « ${browserSearch.query} »${browserSearch.browser ? ` (${browserSearch.browser.name})` : ''}.`)
     return openBrowserSearch(browserSearch)
+  }
+
+  const screenTask = directScreenTask(prompt)
+  if (screenTask && isToolAllowed('computer_use_task')) {
+    if (signal?.aborted) return 'Tâche annulée.'
+    onLog?.(`Action à l'écran demandée : pilotage direct, sans réflexion préalable du modèle.`)
+    onSoundCue?.('scan')
+    try {
+      return await executeTool('computer_use_task', { goal: screenTask })
+    } catch (err) {
+      return `Échec de l'outil : ${err instanceof Error ? err.message : String(err)}`
+    }
   }
 
   const requestedApp = directAppRequest(prompt)

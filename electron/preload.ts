@@ -55,6 +55,7 @@ function subscribe<T>(channel: string, callback: (payload: T) => void): () => vo
 const api = {
   onEmotion: (cb: (emotion: JarisEmotion) => void) => subscribe(IPC_CHANNELS.emotion, cb),
   onTranscript: (cb: (text: string) => void) => subscribe(IPC_CHANNELS.transcript, cb),
+  onVoiceActivity: (cb: (text: string | null) => void) => subscribe(IPC_CHANNELS.voiceActivity, cb),
   onReply: (cb: (payload: VoiceReplyPayload) => void) => subscribe(IPC_CHANNELS.reply, cb),
   onLog: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.log, cb),
   onChatStreamToken: (cb: (delta: string) => void) => subscribe(IPC_CHANNELS.chatStreamToken, cb),

@@ -110,6 +110,8 @@ export default function App(): JSX.Element {
   const [nameInput, setNameInput] = useState('')
   const [memoryGraph, setMemoryGraph] = useState<MemoryGraph | null>(null)
   const [newModels, setNewModels] = useState<string[]>([])
+  // Étape 252 : ce que Jaris fait pendant une demande vocale (« Je réfléchis… 12 s »), `null` hors demande.
+  const [voiceActivity, setVoiceActivity] = useState<string | null>(null)
   const [appMode, setAppMode] = useState<AppMode>('voice')
   const [ollamaVersionStatus, setOllamaVersionStatus] = useState<OllamaVersionStatus | null>(null)
   const [ollamaPopupDismissed, setOllamaPopupDismissed] = useState(false)
@@ -173,6 +175,7 @@ export default function App(): JSX.Element {
     const unsubscribers = [
       window.jaris.onEmotion(setEmotion),
       window.jaris.onTranscript(setTranscript),
+      window.jaris.onVoiceActivity(setVoiceActivity),
       window.jaris.onSetupStatus(setSetupStatus),
       // Seul le widget a un <audio> monté (voir plus bas) : en mode réglages, audioRef.current reste
       // null et cet appel ne fait rien — pas de double lecture de la voix si les deux fenêtres existent.
@@ -479,6 +482,7 @@ export default function App(): JSX.Element {
                   {(transcript || reply) && (
                     <div className="app__conversation">
                       {transcript && <p className="app__transcript">« {transcript} »</p>}
+                      {voiceActivity && <p className="app__activity">{voiceActivity}</p>}
                       {reply && <p className="app__reply">{reply}</p>}
                     </div>
                   )}
@@ -569,6 +573,7 @@ export default function App(): JSX.Element {
         {(transcript || reply) && (
           <div className="app__conversation app__conversation--widget">
             {transcript && <p className="app__transcript">« {transcript} »</p>}
+            {voiceActivity && <p className="app__activity">{voiceActivity}</p>}
             {reply && <p className="app__reply">{reply}</p>}
           </div>
         )}
