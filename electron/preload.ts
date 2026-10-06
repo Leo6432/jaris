@@ -73,6 +73,7 @@ const api = {
   getConversationHistory: (): Promise<ConversationEntry[]> => ipcRenderer.invoke(IPC_CHANNELS.getConversationHistory),
   clearConversationHistory: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.clearConversationHistory),
   openConversationHistoryFile: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openConversationHistoryFile),
+  openRequestJournal: (reveal: boolean): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openRequestJournal, reveal),
   getModelOverview: (): Promise<ModelOverviewResult> => ipcRenderer.invoke(IPC_CHANNELS.getModelOverview),
   getContextLengthOptions: (): Promise<ContextLengthOptions> => ipcRenderer.invoke(IPC_CHANNELS.getContextLengthOptions),
   setContextLength: (contextLength: number | undefined): Promise<void> =>

@@ -6651,3 +6651,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   parce que leurs données n'avaient AUCUN score recopié — l'état réel de Léo (scores déjà écrits) n'était jamais
   testé. Un test de « ce qui reste à faire » doit partir de l'état réel, pas d'un état vierge.** Régression :
   test-benchmark-scenarios (vrai script, score déjà recopié), test-hardwarescan-single-pool (vrai fichier de scores).
+
+- **Étape 245, journal des demandes (Léo : « ouvre Firefox et cherche une recette de tiramisu » à la voix → ~2 min
+  avant Firefox, puis plus rien de visible).** Avant tout correctif, MESURER sur sa machine plutôt qu'une 4e
+  hypothèse (leçon SearXNG) : `requestJournal.ts` écrit `journal-demandes.txt` dans le dossier de données (suit un
+  « Déplacer », OWNED_ENTRIES). Chaque demande voix/Chat/téléphone : en-tête, chaque ligne déjà envoyée à `onLog`
+  (outils et étapes du pilotage compris) avec le temps écoulé, et pour CHAQUE appel au modèle ce qu'Ollama dit
+  lui-même (chargement du modèle, lecture, écriture, caractères de réflexion), plus la fin (réponse/erreur/annulée).
+  À la voix, la durée de correction de la transcription est notée juste avant. Options → Général → « Journal des
+  demandes » : ouvrir le fichier, ou le montrer pour l'envoyer. Choix : `converse()` devient une enveloppe autour de
+  `conversation(journal, …)` (une seule entrée, tous les `return` couverts sans en toucher un seul) ; les mesures
+  passent par un callback `onMetrics` de `chatWithOllama` — jamais un champ ajouté au message, qui repartirait
+  dans l'historique envoyé à Ollama. Le journal n'échoue jamais (écriture en file + catch) et se coupe à une demande
+  ENTIÈRE au-delà de 512 Ko. Les mesures du modèle ne vont QUE dans le fichier, l'écran reste identique.
+  **Piège revécu, déjà noté ici** : le nouvel import dans assistant.ts a fait échouer ~40 tests dont les faux ponts
+  ne connaissaient pas `./requestJournal` — penser au `grep` des faux ponts AVANT de lancer la suite.
+  Régression : `node --test scripts/test-request-journal.mjs` (vraie boucle converse, vrai fichier ; chaque
+  assertion vérifiée en réintroduisant son défaut). **Non vérifié ici** : les vraies durées sur le PC de Léo —
+  c'est justement ce que ce journal doit apporter.

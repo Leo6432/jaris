@@ -35,6 +35,8 @@ function setup(chat, execute, writeNote = async () => assert.fail('pas de docume
     './appLauncher': { didAppLaunch: result => result.endsWith('a été lancé.') },
     './hardwareScan': { GPU_TEMP_LIMIT_C: 85 },
     './modelChoice': modelChoiceModule,
+    // Journal des demandes (étape 245) : rien n'est écrit sur le disque pendant les tests.
+    './requestJournal': { startJournalEntry: () => ({ line() {}, timed() {}, end: async () => {} }), describeModelCall: () => '' },
     './resourceMonitor': { checkOverloadWarning: async () => overloadWarning },
     './tools': { TOOLS: [], createToolExecutor: () => execute }
   }

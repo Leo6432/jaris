@@ -13,6 +13,7 @@ import { checkGpuTempSafety } from './resourceMonitor'
 import { CORRECTION_SCHEMA, correctTranscript } from './transcriptCorrector'
 import { structuredChat } from './ollama'
 import { config } from '../config'
+import { appendJournal, formatElapsed } from './requestJournal'
 
 /** Retour à idle après une erreur (pas d'audio en cours, donc pas besoin d'attendre une fin de lecture). */
 const ERROR_IDLE_DELAY_MS = 2500
@@ -302,6 +303,7 @@ export class VoicePipeline extends EventEmitter {
         const profile = await getProfile()
         if (profile?.voiceCorrectionEnabled !== false) {
           const model = profile?.models?.flash ?? config.ollama.model
+          const correctionStart = Date.now()
           const corrected = await correctTranscript(
             combined,
             (system, user, signal) =>
@@ -309,6 +311,12 @@ export class VoicePipeline extends EventEmitter {
             profile?.name ?? null,
             controller.signal
           )
+          // Étape 245 : écrit juste avant l'entrée de la demande dans le journal, pour compter ce temps-là aussi.
+          void appendJournal([
+            '',
+            `Voix — correction de la transcription par ${model} : ${formatElapsed(Date.now() - correctionStart)}` +
+              (corrected.changed ? ` (« ${combined} » → « ${corrected.text} »)` : ' (rien à corriger)')
+          ])
           if (corrected.changed) {
             question = corrected.text
             // L'écran montre la phrase corrigée, comme la dictée d'Apple remplace le mot mal compris.

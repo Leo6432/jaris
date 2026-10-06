@@ -53,6 +53,10 @@ const overrides = {
   getAppVersion: async () => '0.13.0',
   // Étape 165 : imite l'entrée de démarrage de Windows, relue après chaque bascule.
   getLaunchAtStartup: async () => ({ supported: true, enabled: Boolean(window.__launchAtStartup), blockedByWindows: false }),
+  // Étape 245 : retient chaque ouverture du journal des demandes (false = ouvrir, true = montrer le fichier).
+  openRequestJournal: async (reveal) => {
+    window.__journalOpens = [...(window.__journalOpens ?? []), reveal]
+  },
   setLaunchAtStartup: async (enabled) => {
     window.__launchAtStartup = enabled
     return { supported: true, enabled, blockedByWindows: false }
@@ -223,11 +227,28 @@ test('Général regroupe VRAIMENT mise à jour, fichiers/moteur local et histori
     // (maquette "Options Jaris.dc.html"), remis ici à l'étape 122 sur demande explicite de Léo ("deplace
     // Fichiers et moteur local avec dossier etc... dans général") — voir le test "Modèles regroupe..."
     // ci-dessous, qui vérifie qu'il a bien disparu de Modèles plutôt que d'avoir simplement été dupliqué.
-    assert.deepEqual(titles, ['Démarrage', 'Mise à jour', 'Fichiers et moteur local', 'Historique des conversations'])
+    assert.deepEqual(titles, ['Démarrage', 'Mise à jour', 'Fichiers et moteur local', 'Historique des conversations', 'Journal des demandes'])
     const content = await page.textContent('.options-page__content')
     assert.ok(content.includes('Rechercher une mise à jour'), 'la section mise à jour doit être présente')
     assert.ok(content.includes('Dossier de Jaris'), 'le déplacement du dossier de Jaris doit être présent')
     assert.ok(await page.$('.options-menu__models-location-list'), 'la liste des emplacements doit être présente')
+  })
+})
+
+test('Général : les deux boutons du journal des demandes ouvrent le fichier, puis le montrent dans son dossier', options, async () => {
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Général")')
+    await page.click('button:has-text("Ouvrir le journal")')
+    await page.click('button:has-text("Montrer le fichier")')
+    await page.waitForFunction(() => window.__journalOpens?.length === 2)
+    assert.deepEqual(await page.evaluate(() => window.__journalOpens), [false, true])
+    // Habillés comme les autres boutons d'Options (leçon du bouton resté gris, étape 97) : jamais le style du navigateur.
+    const styled = await page.$$eval('button', (buttons) =>
+      buttons
+        .filter((b) => b.textContent === 'Ouvrir le journal' || b.textContent === 'Montrer le fichier')
+        .map((b) => getComputedStyle(b).color !== 'rgb(0, 0, 0)' && b.classList.contains('options-menu__action'))
+    )
+    assert.deepEqual(styled, [true, true])
   })
 })
 

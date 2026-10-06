@@ -1,7 +1,7 @@
 import { resolveChosenModel } from './modelChoice'
 import { requestedNotepadText, openNotepadText } from './notepad'
 import { config } from '../config'
-import { chatWithOllama, getModelThinking, listInstalledModels, type OllamaMessage, type ThinkLevel } from './ollama'
+import { chatWithOllama, getModelThinking, listInstalledModels, type ChatMetrics, type OllamaMessage, type ThinkLevel } from './ollama'
 import { chosenThink, thinkLabel, type ThinkValue } from '../../shared/effort'
 import { listMemoryTitles } from './memoryStore'
 import { getProfile } from './profileStore'
@@ -11,6 +11,7 @@ import { GPU_TEMP_LIMIT_C, isScreenQuestion, pickSafeModel, type LiveGpuStatus }
 import { checkOverloadWarning } from './resourceMonitor'
 import type { SoundCue } from '../../shared/ipc'
 import { buildSystemPrompt, type ConverseChannel } from './systemPrompt'
+import { describeModelCall, startJournalEntry, type JournalEntry } from './requestJournal'
 
 /**
  * Design sonore (étape 31) : seuls les outils qui correspondent à une action PHYSIQUE/perceptible ont un
@@ -329,7 +330,31 @@ export function findLeakedToolName(text: string, toolNames: readonly string[] = 
  * l'utilisateur devenait alors une phrase isolée sans contexte, que Jaris ne savait pas rattacher à la
  * demande d'envoi de mail en cours.
  */
-export async function converse(
+export async function converse(...args: ConverseArgs): Promise<string> {
+  const forwarded = [...args] as ConverseArgs
+  const [prompt, , , onLog, , signal, , channel = 'voice', , , , restrictions] = args
+  // Étape 245 : chaque étape annoncée à l'écran (onLog, outils compris) est aussi écrite dans le journal des
+  // demandes, avec le temps écoulé — pour savoir où passent les minutes sur la machine de Léo.
+  const journal = startJournalEntry(restrictions ? 'téléphone' : channel, prompt)
+  forwarded[3] = (message: string) => {
+    journal.line(message)
+    onLog?.(message)
+  }
+  try {
+    const reply = await conversation(journal, ...forwarded)
+    void journal.end(`réponse donnée — ${reply}`)
+    return reply
+  } catch (err) {
+    void journal.end(signal?.aborted ? 'annulée (nouvelle phrase ou arrêt)' : `erreur — ${err instanceof Error ? err.message : String(err)}`)
+    throw err
+  }
+}
+
+type Tail<T extends unknown[]> = T extends [unknown, ...infer Rest] ? Rest : never
+type ConverseArgs = Tail<Parameters<typeof conversation>>
+
+async function conversation(
+  journal: JournalEntry,
   prompt: string,
   userName: string | null,
   onReminderFire: (message: string) => void,
@@ -526,6 +551,8 @@ export async function converse(
   const holdKnowledgeStream = wantsWebInfo && Boolean(onToken)
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    const askedAt = Date.now()
+    let metrics: ChatMetrics | undefined
     const message = await chatWithOllama(
       messages,
       tools,
@@ -533,8 +560,11 @@ export async function converse(
       think,
       signal,
       numCtx,
-      holdKnowledgeStream ? () => {} : onToken
+      holdKnowledgeStream ? () => {} : onToken,
+      undefined,
+      (measured) => (metrics = measured)
     )
+    journal.timed(describeModelCall(model, message, metrics), askedAt)
     if (!message.tool_calls?.length) {
       if (wantsEmailSent && !computerUseCalled && !nudgedForEmail) {
         nudgedForEmail = true

@@ -33,6 +33,37 @@ interface OllamaChatResponse {
   message?: OllamaMessage
   /** Présent sur le dernier fragment : "stop" (fin normale) ou "length" (fenêtre de contexte pleine). */
   done_reason?: string
+  // Mesures d'Ollama, en nanosecondes, présentes sur la réponse finale (documentées par /api/chat).
+  load_duration?: number
+  prompt_eval_count?: number
+  prompt_eval_duration?: number
+  eval_count?: number
+  eval_duration?: number
+}
+
+/**
+ * Étape 245 : où est passé le temps d'un appel, d'après Ollama lui-même — chargement du modèle en mémoire,
+ * lecture de la conversation, écriture (réflexion comprise). En millisecondes. Sert au journal des demandes.
+ */
+export interface ChatMetrics {
+  loadMs?: number
+  promptTokens?: number
+  promptMs?: number
+  outputTokens?: number
+  outputMs?: number
+  thinkingChars: number
+}
+
+function metricsOf(data: OllamaChatResponse, thinkingChars: number): ChatMetrics {
+  const ms = (ns?: number): number | undefined => (typeof ns === 'number' ? Math.round(ns / 1e6) : undefined)
+  return {
+    loadMs: ms(data.load_duration),
+    promptTokens: data.prompt_eval_count,
+    promptMs: ms(data.prompt_eval_duration),
+    outputTokens: data.eval_count,
+    outputMs: ms(data.eval_duration),
+    thinkingChars
+  }
 }
 
 /**
@@ -71,7 +102,8 @@ async function requestChat(
   model: string,
   signal?: AbortSignal,
   onToken?: (delta: string) => void,
-  onThinking?: (delta: string) => void
+  onThinking?: (delta: string) => void,
+  onMetrics?: (metrics: ChatMetrics) => void
 ): Promise<OllamaMessage> {
   const streaming = Boolean(onToken || onThinking)
   const numCtx = (body.options as { num_ctx?: number } | undefined)?.num_ctx ?? config.ollama.numCtx
@@ -98,6 +130,7 @@ async function requestChat(
       throw new ContextFullError(model, numCtx)
     }
     if (!data.message) throw new Error(`Réponse vide d'Ollama (modèle '${model}' bien installé ?)`)
+    onMetrics?.(metricsOf(data, data.message.thinking?.length ?? 0))
     return data.message
   }
 
@@ -109,6 +142,8 @@ async function requestChat(
   let toolCalls: OllamaToolCall[] | undefined
   let role: OllamaMessage['role'] = 'assistant'
   let doneReason: string | undefined
+  let thinkingChars = 0
+  let finalChunk: OllamaChatResponse | undefined
 
   for (;;) {
     const { done, value } = await reader.read()
@@ -133,10 +168,14 @@ async function requestChat(
       }
       // Jamais accumulé dans la réponse rendue : sert uniquement de signe de vie pendant la réflexion
       // (mode Code, étape 99), où plusieurs minutes peuvent s'écouler avant le premier caractère de code.
-      if (chunk.message?.thinking) onThinking?.(chunk.message.thinking)
+      if (chunk.message?.thinking) {
+        thinkingChars += chunk.message.thinking.length
+        onThinking?.(chunk.message.thinking)
+      }
       if (chunk.message?.tool_calls?.length) toolCalls = chunk.message.tool_calls
       if (chunk.message?.role) role = chunk.message.role
       if (chunk.done_reason) doneReason = chunk.done_reason
+      if (chunk.eval_count !== undefined || chunk.load_duration !== undefined) finalChunk = chunk
     }
   }
 
@@ -144,6 +183,7 @@ async function requestChat(
     if (doneReason === 'length') throw new ContextFullError(model, numCtx)
     throw new Error(`Réponse vide d'Ollama (modèle '${model}' bien installé ?)`)
   }
+  if (finalChunk) onMetrics?.(metricsOf(finalChunk, thinkingChars))
   return { role, content, tool_calls: toolCalls }
 }
 
@@ -177,14 +217,16 @@ export async function chatWithOllama(
    * Fragments du raisonnement caché (étape 99), uniquement consommés comme signe de vie par le mode Code —
    * jamais affichés. Fournir ce callback suffit à passer l'appel en streaming, même sans `onToken`.
    */
-  onThinking?: (delta: string) => void
+  onThinking?: (delta: string) => void,
+  /** Étape 245 : mesures d'Ollama pour cet appel (journal des demandes). */
+  onMetrics?: (metrics: ChatMetrics) => void
 ): Promise<OllamaMessage> {
   const baseBody = { model, messages, tools, options: { num_ctx: numCtx } }
   try {
     // Le raisonnement caché aide nettement à décider d'appeler un outil plutôt que de "raconter" une
     // action sans l'exécuter ; le niveau (low/medium/high) vient du palier de complexité choisi pour la
     // question (voir assistant.ts), pas d'une valeur fixe.
-    return await requestChat({ ...baseBody, think }, model, signal, onToken, onThinking)
+    return await requestChat({ ...baseBody, think }, model, signal, onToken, onThinking, onMetrics)
   } catch (firstErr) {
     // Une requête annulée (l'utilisateur a ajouté une précision pendant la réflexion, voir voicePipeline.ts)
     // ne doit jamais déclencher le second essai sans `think` : ce serait un appel Ollama inutile pour une
@@ -196,7 +238,7 @@ export async function chatWithOllama(
     try {
       // Sans `think`, aucun fragment de raisonnement n'arrivera : onThinking est quand même
       // transmis, il ne sera simplement jamais appelé.
-      return await requestChat(baseBody, model, signal, onToken, onThinking)
+      return await requestChat(baseBody, model, signal, onToken, onThinking, onMetrics)
     } catch (secondErr) {
       // Le premier message d'erreur est généralement le plus informatif — sauf quand il dit seulement que le
       // modèle refuse la réflexion (ministral, granite...) : la vraie cause est alors la seconde. Vu le

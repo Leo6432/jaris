@@ -69,6 +69,7 @@ declare global {
       getConversationHistory: () => Promise<ConversationEntry[]>
       clearConversationHistory: () => Promise<void>
       openConversationHistoryFile: () => Promise<void>
+      openRequestJournal: (reveal: boolean) => Promise<void>
       getModelOverview: () => Promise<ModelOverviewResult>
       getContextLengthOptions: () => Promise<ContextLengthOptions>
       setContextLength: (contextLength: number | undefined) => Promise<void>

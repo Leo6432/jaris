@@ -38,7 +38,7 @@ export const AUTO_ROOT_NAME = 'Jaris-data'
  * Chromium qui partageaient autrefois le même dossier. `generated-videos` reste après le retrait du Montage
  * (étape 200) : ce sont les vidéos de Léo, elles suivent ses données comme avant.
  */
-export const OWNED_ENTRIES = ['conversations', 'conversation-history.json', 'profile.json', 'memory', 'generated-apps', 'generated-images', 'generated-videos', 'reminders.json']
+export const OWNED_ENTRIES = ['conversations', 'conversation-history.json', 'profile.json', 'memory', 'generated-apps', 'generated-images', 'generated-videos', 'reminders.json', 'journal-demandes.txt']
 
 interface StorageMarker {
   root?: unknown

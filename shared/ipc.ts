@@ -694,6 +694,8 @@ export const IPC_CHANNELS = {
   clearConversationHistory: 'jaris:clear-conversation-history',
   /** renderer -> main : révèle le fichier conversation-history.json dans l'explorateur de fichiers. */
   openConversationHistoryFile: 'jaris:open-conversation-history-file',
+  /** renderer -> main : ouvre le journal des demandes (étape 245), ou le montre dans son dossier pour l'envoyer. */
+  openRequestJournal: 'jaris:open-request-journal',
   /** renderer <-> main : liste tous les modèles candidats (tous paliers + vision) avec leurs métriques, pour l'onglet Modèles. */
   getModelOverview: 'jaris:get-model-overview',
   getOllamaVersionStatus: 'jaris:get-ollama-version-status',

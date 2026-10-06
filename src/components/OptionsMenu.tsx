@@ -1336,6 +1336,20 @@ export default function OptionsMenu(): JSX.Element {
                 </SettingRow>
               )}
             </SettingGroup>
+
+            <SettingGroup title="Journal des demandes">
+              <SettingRow
+                label="Journal des demandes"
+                description="Pour chaque demande, à la voix ou dans le Chat, Jaris note les étapes et le temps que chacune a pris. Utile pour comprendre une demande qui traîne : tu peux m'envoyer ce fichier."
+              >
+                <button className="options-menu__action" onClick={() => void window.jaris.openRequestJournal(false)}>
+                  Ouvrir le journal
+                </button>
+                <button className="options-menu__action" onClick={() => void window.jaris.openRequestJournal(true)}>
+                  Montrer le fichier
+                </button>
+              </SettingRow>
+            </SettingGroup>
           </div>
         )}
 

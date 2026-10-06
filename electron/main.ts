@@ -81,6 +81,7 @@ import {
   listConversations,
   setActiveConversation
 } from './services/conversationStore'
+import { appendJournal, getJournalPath } from './services/requestJournal'
 import { getProfile, saveProfile } from './services/profileStore'
 import {
   getLaunchAtStartup,
@@ -1044,6 +1045,12 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.openConversationHistoryFile, async () => {
     await ensureConversationHistoryFile()
     shell.showItemInFolder(getConversationHistoryPath())
+  })
+  ipcMain.handle(IPC_CHANNELS.openRequestJournal, async (_event, reveal: boolean) => {
+    // Le fichier n'existe qu'après une première demande : on le crée vide pour que le bouton ouvre toujours quelque chose.
+    await appendJournal([])
+    if (reveal) shell.showItemInFolder(getJournalPath())
+    else await shell.openPath(getJournalPath())
   })
   ipcMain.handle(IPC_CHANNELS.previewVoice, async (_event, voice: string) => {
     const audio = await previewVoice(voice)
