@@ -4757,35 +4757,3 @@ a:hover {
 .memory-brain__note {
   position: absolute;
 }
-
-/* Étape 249 : résultat du duel des pilotes d'écran — même écriture que le tableau des modèles. */
-.pilot-duel__result {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  padding-top: 6px;
-}
-
-.pilot-duel__table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.82rem;
-  color: var(--hud-text-soft);
-}
-
-.pilot-duel__table th {
-  text-align: left;
-  font-weight: 600;
-  color: var(--hud-text-faint);
-  padding: 4px 10px 4px 0;
-  border-bottom: 1px solid var(--hud-line);
-}
-
-.pilot-duel__table td {
-  padding: 4px 10px 4px 0;
-}
-
-.pilot-duel__table td:first-child {
-  color: var(--hud-text);
-}

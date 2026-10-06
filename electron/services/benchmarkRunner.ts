@@ -12,7 +12,7 @@ import type { CapacityScanResult } from '../../shared/ipc'
 import { installImageModel } from './imageGenerator'
 import { detectRamGb } from './systemResources'
 import { pickImageModel } from '../../shared/imageModel'
-import { pickPilotModel } from '../../shared/pilotModel'
+import { PILOT_MODEL_LABEL, pickPilotModel } from '../../shared/pilotModel'
 
 /**
  * Configuration de l'écran d'accueil (CapacityScan.tsx) et de « Retester la configuration » : ne lance JAMAIS
@@ -154,7 +154,9 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
         await deleteModel(model)
         onLine(
           model === profile.pilotModel
-            ? `Ancien modèle de pilotage d'écran ${model} supprimé (ta carte graphique ne le fait plus tourner).`
+            ? pilotModel
+              ? `Ancien modèle de pilotage d'écran ${model} supprimé (remplacé par ${PILOT_MODEL_LABEL}).`
+              : `Ancien modèle de pilotage d'écran ${model} supprimé (ta carte graphique ne le fait plus tourner).`
             : `Ancien modèle ${model} supprimé (remplacé par un meilleur choix pour ta configuration).`
         )
       } catch (err) {

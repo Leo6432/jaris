@@ -274,7 +274,17 @@ test('échec du modèle d’image : les autres modèles restent configurés, l�
 
 // --- Étape 231 : le modèle de pilotage d'écran, « comme image vidéo », seulement si la carte le fait tourner ---
 
-const PILOT = 'hf.co/mradermacher/UI-TARS-1.5-7B-GGUF:Q4_K_M'
+const PILOT = 'hf.co/mradermacher/MAI-UI-8B-GGUF:Q4_K_M'
+const OLD_PILOT = 'hf.co/mradermacher/UI-TARS-1.5-7B-GGUF:Q4_K_M'
+
+test('étape 251 : un PC qui avait UI-TARS reçoit MAI-UI, et UI-TARS est supprimé avec la bonne raison', async () => {
+  const t = setup(IMAGE_PICKED, { models: {}, pilotModel: OLD_PILOT })
+  await t.run()
+  assert.ok(t.pulledModels.includes(PILOT))
+  assert.equal(t.getProfile().pilotModel, PILOT)
+  assert.ok(t.deletedModels.includes(OLD_PILOT))
+  assert.match(t.lines.join('\n'), /Ancien modèle de pilotage d'écran hf\.co\/mradermacher\/UI-TARS-1\.5-7B-GGUF:Q4_K_M supprimé \(remplacé par MAI-UI 8B\)/)
+})
 
 test('carte de 8 Go : le modèle de pilotage est installé et enregistré comme rôle', async () => {
   const t = setup(IMAGE_PICKED, { models: {} })

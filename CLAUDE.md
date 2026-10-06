@@ -6784,3 +6784,33 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   homonymes écartés après nettoyage, consigne de visée d'UI-TARS réellement envoyée, les deux formes de point,
   fenêtre choisie hors Jaris, titre dans le rapport ; chaque garde vérifiée en la retirant) et
   `test-options-reorganization-ui.mjs` (titre de la fenêtre affiché).
+- **Étape 251, UI-TARS retiré, MAI-UI 8B devient le viseur du pilotage d'écran (Léo : « oui, on enlève
+  UI-TARS »).** Décidé sur le 2e duel de Léo, le valide (06/10/2026, ses vraies fenêtres : Explorateur, YouTube,
+  Firefox, Discord ; vérité donnée par Windows, aucun clic) : 1er regard 14/40 contre 13/40, **avec zoom 30/40
+  contre 22/40**, mais 28 s par bouton contre 7. Au 1er regard ils se valent ; la différence vient de la FORME de
+  leurs erreurs — MAI-UI rate juste à côté (le zoom le rattrape), UI-TARS part souvent à l'autre bout de
+  l'écran. **Nouvelle répartition des rôles** (computerUse.ts) : MAI-UI ne sait PILOTER que sous Android (son
+  dépôt), il ne fait donc que VISER. Le modèle de vision décide toujours de l'action, avec la liste Windows des
+  éléments (un clic par le nom reste exact et ne sollicite pas le viseur) ; pour un clic par position, il décrit
+  sa cible (`target`, en anglais comme au duel) et MAI-UI la vise avec son zoom, sur UNE capture pleine
+  résolution (`captureScreenForPilot`, vision.ts) dont la version réduite part au modèle de vision — deux
+  captures prises à des instants différents ne montreraient pas forcément le même écran. **Le viseur est une
+  précision en plus, jamais une condition** : réponse illisible, Ollama injoignable ou délai dépassé, la
+  position estimée par le modèle de vision sert de secours et la raison est écrite dans l'historique ; seule une
+  annulation arrête tout, sans clic. `SYSTEM_PROMPT` est resté identique (sa copie sert au test des modèles de
+  vision) : la règle `target` ne s'ajoute que si le viseur est installé. **Piège évité en lisant le code
+  voisin** : le modèle de vision choisit sa taille selon la mémoire vidéo LIBRE (`resolveVisionModel`) — avec
+  MAI-UI encore chargé (6 Go), il serait passé sur un modèle plus petit à l'étape suivante ; le viseur est donc
+  déchargé (`keep_alive: 0`) après chaque visée. **Migration** : un profil qui cite encore UI-TARS n'a PAS de
+  viseur (UI-TARS ne comprend pas la consigne de MAI-UI), une bannière « MAI-UI 8B (pilotage d'écran) » invite à
+  « Retester la configuration », qui installe MAI-UI et supprime UI-TARS avec la bonne raison. Taille vérifiée
+  sur le dépôt Hugging Face (modèle 5,0 Go + lecteur d'images 1,2 Go) : seuil de 8 Go inchangé, le duel a tourné
+  sur la carte de 8 Go de Léo. Retirés : uiTars.ts, le duel (écran, IPC, capture, rapport — son travail est
+  fait), et le défilement/les combinaisons de touches ajoutés pour UI-TARS seul (inputControl.ts redevient
+  identique à avant l'étape 231, vérifié par diff). **Non vérifié ici** : une tâche ENTIÈRE pilotée par MAI-UI
+  sur le PC de Léo (le duel ne mesure que la visée), ni le temps total d'une tâche avec les changements de
+  modèle sur une carte de 8 Go. Régression : `node --test scripts/test-mai-ui.mjs scripts/test-computer-use.mjs`
+  (zoom reconverti à travers la vraie boucle, 1er regard volontairement faux corrigé par le zoom, secours sur
+  réponse illisible et viseur injoignable, annulation sans clic, clic par le nom sans viseur, profil UI-TARS
+  sans viseur et consigne intacte, déchargement après visée ; chaque garde vérifiée en la retirant),
+  `test-benchmark-runner-cleanup.mjs` (UI-TARS remplacé et supprimé) et `test-my-model-picks-ui.mjs`.

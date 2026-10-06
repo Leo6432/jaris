@@ -19,12 +19,32 @@ const loadUia = vm.runInThisContext(`(function (exports, require, module) {\n${u
 const uia = { exports: {} }
 loadUia(uia.exports, () => ({ spawn: () => {} }), uia)
 
-const uiTarsSource = ts.transpileModule(readFileSync(new URL('../electron/services/uiTars.ts', import.meta.url), 'utf8'), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
-}).outputText
-const loadUiTars = vm.runInThisContext(`(function (exports, require, module) {\n${uiTarsSource}\n})`)
-const uiTars = { exports: {} }
-loadUiTars(uiTars.exports, () => ({}), uiTars)
+// Étape 251 : le viseur (maiUi.ts) et le choix du rôle (shared/pilotModel.ts) sont les VRAIS modules : seul
+// l'appel au modèle est simulé, pour tester la vraie conversion recadrage -> écran à travers la vraie boucle.
+function loadReal(path) {
+  const code = ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+  }).outputText
+  const module = { exports: {} }
+  vm.runInThisContext(`(function (exports, require, module) {\n${code}\n})`)(module.exports, () => ({}), module)
+  return module.exports
+}
+const maiUi = loadReal('../electron/services/maiUi.ts')
+const pilotModel = loadReal('../shared/pilotModel.ts')
+
+/**
+ * Fausse capture à pleine résolution (2560 x 1440) : chaque vue (entière ou recadrée) garde dans son « image »
+ * le rectangle d'écran qu'elle montre, pour que le faux viseur vise comme s'il voyait vraiment l'écran.
+ */
+function fakeFull(width = 2560, height = 1440) {
+  const view = (rect, w, h) => ({
+    getSize: () => ({ width: w, height: h }),
+    crop: (r) => view({ x: rect.x + r.x, y: rect.y + r.y, w: r.width, h: r.height }, r.width, r.height),
+    resize: ({ width: nw }) => view(rect, nw, Math.round((h * nw) / w)),
+    toPNG: () => ({ toString: () => JSON.stringify(rect) })
+  })
+  return view({ x: 0, y: 0, w: width, h: height }, width, height)
+}
 
 // Étape 231 : `pilot` = profil + modèles installés simulés. Par défaut, aucun modèle de pilotage : le modèle de
 // vision pilote, exactement comme avant — tous les tests historiques ci-dessous passent par ce chemin.
@@ -42,34 +62,50 @@ function setup(steps, inputResult, onFetch, elements = [], pilot = { profile: nu
     './hardwareScan': { getLiveGpuStatus: async () => ({ freeVramGb: null }) },
     './ollama': { listInstalledModels: async () => pilot.installed },
     './profileStore': { getProfile: async () => pilot.profile },
-    './uiTars': uiTars.exports,
+    './maiUi': maiUi,
+    '../../shared/pilotModel': pilotModel,
     './scanOverlay': { showScanOverlay() {}, hideScanOverlay() { hidden++ } },
     './inputControl': {
-      clickMouse: (...a) => input('click', ...a), typeText: (...a) => input('type', ...a), pressKey: (...a) => input('key', ...a),
-      pressHotkey: (...a) => input('hotkey', ...a), scrollMouse: (...a) => input('scroll', ...a)
+      clickMouse: (...a) => input('click', ...a), typeText: (...a) => input('type', ...a), pressKey: (...a) => input('key', ...a)
     },
     './uiAutomation': {
       listClickableElements: async () => { uiaReads++; return elements },
       findElementByName: uia.exports.findElementByName,
       describeElements: uia.exports.describeElements
     },
-    './vision': { captureScreenshotBase64: async () => { captures++; return { imageBase64: 'test', scale: pilot.scale ?? 1, width: 1280, height: 720 } } }
+    './vision': {
+      MAX_SCREENSHOT_WIDTH: 1280,
+      captureScreenshotBase64: async () => { captures++; return { imageBase64: 'test', scale: pilot.scale ?? 1, width: 1280, height: 720 } },
+      captureScreenForPilot: async () => { captures++; fullCaptures++; return { imageBase64: 'test', scale: pilot.scale ?? 1, width: 1280, height: 720, full: fakeFull() } }
+    }
   }
+  let fullCaptures = 0
+  const aims = []
+  const unloads = []
   const prompts = []
   const exports = {}
   vm.runInNewContext(source, {
     exports, Error, AbortSignal, require: name => modules[name], setTimeout: fn => fn(),
-    fetch: async (_url, options) => {
-      onFetch?.()
+    fetch: async (url, options) => {
       const body = JSON.parse(options.body)
+      if (url.endsWith('/api/generate')) {
+        unloads.push(body)
+        return { ok: true, json: async () => ({}) }
+      }
+      if (pilot.aim && body.model === pilotModel.PILOT_MODEL) {
+        aims.push(body)
+        pilot.onAim?.()
+        return pilot.aim(body)
+      }
+      onFetch?.()
       bodies.push(body)
       prompts.push(body.messages[body.messages.length - 1].content)
       const next = steps.shift() ?? { action: 'wait' }
       return { ok: true, json: async () => ({ message: { content: typeof next === 'string' ? next : JSON.stringify(next) } }) }
     }
   })
-  return { run: signal => exports.computerUseTask('Cherche un tuto guitare', 'test', line => logs.push(line), signal),
-    state: () => ({ captures, actions, hidden, logs, clicks: clicks.map((c) => c[0] === 'click' ? c.slice(1) : c), calls: clicks, prompts, bodies, uiaReads }) }
+  return { exports, run: signal => exports.computerUseTask('Cherche un tuto guitare', 'test', line => logs.push(line), signal),
+    state: () => ({ captures, fullCaptures, actions, hidden, logs, clicks: clicks.map((c) => c[0] === 'click' ? c.slice(1) : c), calls: clicks, prompts, bodies, uiaReads, aims, unloads }) }
 }
 
 for (const step of [{ action: 'move' }, { action: 'click' }, { action: 'click', x: '12', y: 2 }, { action: 'type', text: '' }, { action: 'key', key: 42 }]) {
@@ -163,71 +199,116 @@ test("sans arbre d'accessibilité, le modèle est explicitement renvoyé vers le
   assert.match(app.state().prompts[0], /aucun élément cliquable.*clics par position \(x\/y de 0 à 1000\)/s)
 })
 
-// --- Étape 231 : modèle de pilotage d'écran (UI-TARS) quand il est installé ---
+// --- Étape 251 : le viseur MAI-UI vise ce que le modèle de vision a décidé de cliquer ---
 
-const PILOT = 'hf.co/mradermacher/UI-TARS-1.5-7B-GGUF:Q4_K_M'
-const withPilot = { profile: { pilotModel: PILOT }, installed: [PILOT, 'qwen3.5:4b'] }
+const PILOT = pilotModel.PILOT_MODEL
 const ok = (_kind, ...args) => {
   if (_kind === 'click') return `Clic ${args[2]} effectué à (${args[0]}, ${args[1]}).`
   if (_kind === 'type') return 'Texte tapé.'
   if (_kind === 'key') return `Touche "${args[0]}" pressée.`
-  if (_kind === 'hotkey') return `Combinaison "${args[0].join('+')}" pressée.`
-  if (_kind === 'scroll') return `Défilement ${args[2]} effectué.`
 }
+/** Le vrai bouton « Rechercher », en pixels de la capture pleine résolution (2560 x 1440). */
+const TRUTH = { 'the "Rechercher" button': [2000, 300] }
+/** Faux MAI-UI : vise le vrai bouton dans la vue qu'il reçoit, avec une erreur en pixels au 1er regard seulement. */
+function fakeMaiUi({ firstError = [0, 0], answer } = {}) {
+  return (body) => {
+    const user = body.messages.at(-1)
+    const target = user.content.replace(/^Click on /, '').trim()
+    const view = JSON.parse(user.images[0])
+    const zoomed = view.w < 2560
+    const [tx, ty] = TRUTH[target]
+    const [ex, ey] = zoomed ? [0, 0] : firstError
+    const fx = (tx + ex - view.x) / view.w
+    const fy = (ty + ey - view.y) / view.h
+    const content = answer ?? `<grounding_think>ok</grounding_think><answer>{"coordinate":[${Math.round(fx * 999)},${Math.round(fy * 999)}]}</answer>`
+    return { ok: true, json: async () => ({ message: { content } }) }
+  }
+}
+const withPilot = (extra = {}) => ({ profile: { pilotModel: PILOT }, installed: [PILOT, 'qwen3.5:4b'], scale: 2, ...extra })
+const CLICK = { action: 'click', x: 700, y: 180, target: 'the "Rechercher" button' }
 
-test('pilotage installé : consigne UI-TARS sans message système, clic ramené aux pixels puis à l’écran', async () => {
-  // Vraie réponse obtenue ici d'UI-TARS sur la fausse fenêtre 1280x720 (bouton VALIDER en 700-870 x 420-476).
-  const real = "Thought: Le bouton vert VALIDER confirme l'enregistrement.\nAction: click(start_box='(796,453)')"
-  const app = setup([real, "Thought: c'est fait.\nAction: finished(content='Enregistré')"], ok, undefined, [], { ...withPilot, scale: 1.5 })
-  assert.equal(await app.run(), 'Enregistré')
-  const body = app.state().bodies[0]
-  assert.equal(body.model, PILOT)
-  assert.equal(body.messages.length, 1)
-  assert.equal(body.messages[0].role, 'user')
-  assert.match(body.messages[0].content, /You are a GUI agent[\s\S]*Cherche un tuto guitare/)
-  assert.equal(body.options.temperature, 0)
-  // 796 x 1280/1288 = 791, 453 x 720/728 = 448 ; puis x1,5 pour l'écran réel.
-  assert.deepEqual(app.state().clicks[0], [1187, 672, 'left'])
-  // Le modèle de pilotage vise sur l'image : pas de lecture de l'arbre Windows (5 s de PowerShell par étape).
-  assert.equal(app.state().uiaReads, 0)
-  // Son action, telle qu'il l'a écrite, lui revient dans l'historique au tour suivant.
-  assert.match(app.state().prompts[1], /1\. click\(start_box='\(796,453\)'\)/)
-})
-
-test('pilotage : texte terminé par \\n tapé PUIS validé par Entrée, combinaison et défilement exécutés', async () => {
-  const app = setup([
-    "Thought: je tape.\nAction: type(content='tuto guitare\\n')",
-    "Thought: barre d'adresse.\nAction: hotkey(key='ctrl l')",
-    "Thought: plus bas.\nAction: scroll(start_box='(640,360)', direction='down')",
-    "Thought: fini.\nAction: finished(content='ok')"
-  ], ok, undefined, [], withPilot)
+test('viseur installé : le modèle de vision décide, MAI-UI vise avec son zoom, et le clic tombe sur le vrai bouton', async () => {
+  // 1er regard 90 px à côté (il raterait le bouton), corrigé par le zoom.
+  const app = setup([CLICK, { action: 'done', result: 'ok' }], ok, undefined, ELEMENTS, withPilot({ aim: fakeMaiUi({ firstError: [90, 40] }) }))
   assert.equal(await app.run(), 'ok')
-  const calls = app.state().calls
-  assert.deepEqual(calls[0], ['type', 'tuto guitare'])
-  assert.deepEqual(calls[1], ['key', 'enter'])
-  assert.deepEqual(calls[2], ['hotkey', ['ctrl', 'l']])
-  assert.equal(calls[3][0], 'scroll')
-  assert.equal(calls[3][3], 'down')
+  const { aims, clicks, bodies, uiaReads, unloads, prompts } = app.state()
+  // Le modèle de vision reçoit la règle « target » en plus de sa consigne habituelle, et la liste Windows.
+  assert.match(bodies[0].messages[0].content, /"target"/)
+  assert.equal(bodies[0].messages[0].content, `${app.exports.SYSTEM_PROMPT}\n\n${app.exports.PILOT_TARGET_RULE}`)
+  assert.ok(uiaReads > 0, 'un clic par le nom reste possible et exact')
+  // Deux regards : toute l'image, puis la moitié de l'écran autour du 1er point ; consigne officielle, température 0.
+  assert.equal(aims.length, 2)
+  assert.equal(aims[0].messages[0].content, maiUi.MAI_UI_GROUNDING_PROMPT)
+  assert.equal(aims[0].messages[1].content, 'Click on the "Rechercher" button\n')
+  assert.equal(aims[0].options.temperature, 0)
+  assert.equal(JSON.parse(aims[1].messages[1].images[0]).w, 1280, 'le 2e regard est recadré')
+  // Pixels de l'image (1280 x 720) x 2 = l'écran : le vrai bouton (2000, 300), à l'arrondi de l'échelle 0–999 près.
+  assert.ok(Math.abs(clicks[0][0] - 2000) <= 2 && Math.abs(clicks[0][1] - 300) <= 2, JSON.stringify(clicks[0]))
+  // La carte est libérée pour le modèle de vision, et l'historique dit qui a visé.
+  assert.deepEqual(unloads.map((u) => [u.model, u.keep_alive]), [[PILOT, 0]])
+  assert.match(prompts[1], /Clic left sur the "Rechercher" button à \(\d+, \d+\) \(visé par MAI-UI\)/)
 })
 
-test('pilotage : une combinaison refusée par Windows fait échouer la tâche avec la vraie raison', async () => {
-  const app = setup(["Thought: x\nAction: hotkey(key='ctrl l')"], 'Échec de la combinaison de touches : accès refusé', undefined, [], withPilot)
-  await assert.rejects(app.run(), /accès refusé/)
+test('viseur : sans le zoom, le même 1er regard aurait raté — le test mord vraiment', async () => {
+  const app = setup([CLICK, { action: 'done', result: 'ok' }], ok, undefined, [], withPilot({ aim: fakeMaiUi({ firstError: [90, 40] }) }))
+  await app.run()
+  const first = JSON.parse(app.state().aims[1].messages[1].images[0])
+  // Le recadrage est centré sur le 1er point (2090, 340), pas sur le bon : c'est bien le 2e regard qui corrige.
+  assert.deepEqual([first.x, first.y], [1280, 0])
 })
 
-test('pilotage : réponse sans action exploitable = échec clair, aucun clic', async () => {
-  const app = setup(['Thought: je ne sais pas.'], ok, undefined, [], withPilot)
-  await assert.rejects(app.run(), /modèle de pilotage a proposé une action inexécutable/)
+test('viseur illisible : la position estimée par le modèle de vision sert de secours, la tâche continue', async () => {
+  const app = setup([CLICK, { action: 'done', result: 'ok' }], ok, undefined, [], withPilot({ aim: fakeMaiUi({ answer: 'je ne vois pas' }) }))
+  assert.equal(await app.run(), 'ok')
+  // (700, 180) sur 0–1000 de l'image 1280 x 720 = (896, 129.6), x 2 pour l'écran.
+  assert.deepEqual(app.state().clicks[0], [1792, 259, 'left'])
+  assert.equal(app.state().aims.length, 1, 'pas de zoom sans 1er point')
+  assert.match(app.state().prompts[1], /viseur sans réponse lisible : position estimée/)
+})
+
+test('viseur injoignable : la vraie raison est notée, la position estimée sert de secours', async () => {
+  const down = () => ({ ok: false, status: 500, text: async () => 'model runner has unexpectedly stopped' })
+  const app = setup([CLICK, { action: 'done', result: 'ok' }], ok, undefined, [], withPilot({ aim: down }))
+  assert.equal(await app.run(), 'ok')
+  assert.deepEqual(app.state().clicks[0], [1792, 259, 'left'])
+  assert.match(app.state().prompts[1], /viseur indisponible : le viseur a répondu 500 : model runner has unexpectedly stopped/)
+})
+
+test('viseur : une annulation pendant la visée empêche tout clic', async () => {
+  const controller = new AbortController()
+  const app = setup([CLICK], ok, undefined, [], withPilot({ aim: fakeMaiUi(), onAim: () => controller.abort() }))
+  assert.match(await app.run(controller.signal), /interrompue/)
   assert.equal(app.state().actions, 0)
 })
 
-test('profil qui cite le modèle de pilotage mais qu’Ollama ne l’a plus : le modèle de vision pilote, comme avant', async () => {
-  const app = setup([{ action: 'click', x: 250, y: 500 }, { action: 'done', result: 'ok' }], ok, undefined, [], { profile: { pilotModel: PILOT }, installed: ['qwen3.5:4b'] })
+test('viseur : un clic par le nom (Windows) et un clic sans cible décrite ne le sollicitent pas', async () => {
+  const app = setup(
+    [{ action: 'click_element', name: 'Rechercher' }, { action: 'click', x: 500, y: 500 }, { action: 'done', result: 'ok' }],
+    ok,
+    undefined,
+    ELEMENTS,
+    withPilot({ aim: fakeMaiUi() })
+  )
   assert.equal(await app.run(), 'ok')
+  assert.equal(app.state().aims.length, 0)
+  assert.deepEqual(app.state().clicks, [[300, 120, 'left'], [1280, 720, 'left']])
+})
+
+test('profil qui cite encore UI-TARS : pas de viseur, consigne habituelle intacte, comme sans rôle', async () => {
+  const old = 'hf.co/mradermacher/UI-TARS-1.5-7B-GGUF:Q4_K_M'
+  const app = setup([CLICK, { action: 'done', result: 'ok' }], ok, undefined, [], { profile: { pilotModel: old }, installed: [old, 'qwen3.5:4b'], aim: fakeMaiUi() })
+  assert.equal(await app.run(), 'ok')
+  assert.equal(app.state().aims.length, 0)
+  assert.equal(app.state().fullCaptures, 0)
+  assert.equal(app.state().bodies[0].messages[0].content, app.exports.SYSTEM_PROMPT, 'copie vérifiée par le test des modèles de vision')
+  assert.deepEqual(app.state().clicks[0], [896, 130, 'left'])
+})
+
+test('profil qui cite MAI-UI mais qu’Ollama ne l’a plus : le modèle de vision vise lui-même', async () => {
+  const app = setup([CLICK, { action: 'done', result: 'ok' }], ok, undefined, [], { profile: { pilotModel: PILOT }, installed: ['qwen3.5:4b'], aim: fakeMaiUi() })
+  assert.equal(await app.run(), 'ok')
+  assert.equal(app.state().aims.length, 0)
   assert.equal(app.state().bodies[0].model, 'test')
-  assert.equal(app.state().bodies[0].messages[0].role, 'system')
-  assert.deepEqual(app.state().clicks[0], [320, 360, 'left'])
-  assert.ok(app.state().uiaReads > 0)
 })
 
 // Campagne de Léo (05/10/2026) : les modèles de vision visent sur 0–1000 (qwen3.8:27b : 9 clics justes sur 10 lus

@@ -17,7 +17,6 @@ import type {
 import { CAPABILITIES } from '../../shared/capabilities'
 import AllModelsOverview from './AllModelsOverview'
 import AppUpdateProgress from './AppUpdateProgress'
-import { PilotDuel } from './PilotDuel'
 import { SettingGroup, SettingRow, Toggle } from './SettingsLayout'
 import PhoneAccessSettings from './PhoneAccessSettings'
 import MyModelPicks from './MyModelPicks'
@@ -1148,9 +1147,6 @@ export default function OptionsMenu(): JSX.Element {
                 </SettingRow>
               )}
             </SettingGroup>
-
-            {/* Étape 249 : UI-TARS contre MAI-UI 8B, sur le vrai écran de Léo, sans aucun clic. */}
-            <PilotDuel />
           </div>
         )}
 

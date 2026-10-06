@@ -196,13 +196,13 @@ test("Ollama injoignable : la carte le dit au lieu de prétendre que tout est in
 
 // Étape 231 : rôle « Pilotage d'écran », comme Image/Vidéo — absent si la carte est trop petite.
 test("pilotage d'écran : nom lisible quand la machine le fait tourner, rappel s'il n'est pas installé", options, async () => {
-  const pilot = { model: 'hf.co/mradermacher/UI-TARS-1.5-7B-GGUF:Q4_K_M', reason: null, installed: false }
+  const pilot = { model: 'hf.co/mradermacher/MAI-UI-8B-GGUF:Q4_K_M', reason: null, installed: false }
   await withPreview(async (page) => {
     const row = await page.$eval('.capacity-scan__tier-pilot', (el) => el.textContent)
-    assert.match(row, /Pilotage d'écran\s*UI-TARS 1\.5 7B/)
+    assert.match(row, /Pilotage d'écran\s*MAI-UI 8B/)
     assert.doesNotMatch(row, /hf\.co/, "jamais l'identifiant technique à l'écran")
     const text = await page.$eval('.capacity-scan__tier-table', (el) => el.textContent)
-    assert.match(text, /Pas installé sur ce PC pour l'instant — clique « Retester la configuration » \(environ 5,5 Go\)/)
+    assert.match(text, /Pas installé sur ce PC pour l'instant — clique « Retester la configuration » \(environ 6 Go\)/)
   }, 760, undefined, pilot)
 })
 

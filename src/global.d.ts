@@ -41,9 +41,7 @@ import type {
   UpdateProgress,
   VoiceReplyPayload,
   VoiceSetupStatusPayload,
-  WidgetMode,
-  PilotDuelCaptureInfo,
-  PilotDuelOutcome
+  WidgetMode
 } from '../shared/ipc'
 
 export {}
@@ -72,11 +70,6 @@ declare global {
       clearConversationHistory: () => Promise<void>
       openConversationHistoryFile: () => Promise<void>
       openRequestJournal: (reveal: boolean) => Promise<void>
-      pilotDuelCapture: () => Promise<PilotDuelCaptureInfo>
-      pilotDuelReset: () => Promise<PilotDuelCaptureInfo>
-      pilotDuelRun: () => Promise<PilotDuelOutcome>
-      pilotDuelOpenReport: () => Promise<void>
-      onPilotDuelProgress: (callback: (message: string) => void) => () => void
       getModelOverview: () => Promise<ModelOverviewResult>
       getContextLengthOptions: () => Promise<ContextLengthOptions>
       setContextLength: (contextLength: number | undefined) => Promise<void>

@@ -85,7 +85,7 @@ export interface Profile {
   /** Modèle de vision choisi par le scan de capacité selon la VRAM, vide = OLLAMA_VISION_MODEL de .env. */
   visionModel?: string
   /**
-   * Étape 231 : modèle de pilotage d'écran (UI-TARS, shared/pilotModel.ts), installé par la configuration quand
+   * Étape 231 : modèle de pilotage d'écran (MAI-UI depuis l'étape 251, shared/pilotModel.ts), installé par la configuration quand
    * la machine a la puissance. Absent = pas de rôle : le modèle de vision pilote l'écran, comme avant.
    */
   pilotModel?: string
@@ -696,16 +696,6 @@ export const IPC_CHANNELS = {
   openConversationHistoryFile: 'jaris:open-conversation-history-file',
   /** renderer -> main : ouvre le journal des demandes (étape 245), ou le montre dans son dossier pour l'envoyer. */
   openRequestJournal: 'jaris:open-request-journal',
-  /** Étape 249, duel des pilotes d'écran : renderer -> main, capture du vrai écran (Jaris se cache 5 s). */
-  pilotDuelCapture: 'jaris:pilot-duel-capture',
-  /** renderer -> main : oublie les captures déjà prises. */
-  pilotDuelReset: 'jaris:pilot-duel-reset',
-  /** renderer -> main : lance le duel sur les captures prises. */
-  pilotDuelRun: 'jaris:pilot-duel-run',
-  /** main -> renderer : où en est le duel (une ligne lisible). */
-  pilotDuelProgress: 'jaris:pilot-duel-progress',
-  /** renderer -> main : ouvre le rapport du duel. */
-  pilotDuelOpenReport: 'jaris:pilot-duel-open-report',
   /** renderer <-> main : liste tous les modèles candidats (tous paliers + vision) avec leurs métriques, pour l'onglet Modèles. */
   getModelOverview: 'jaris:get-model-overview',
   getOllamaVersionStatus: 'jaris:get-ollama-version-status',
@@ -960,29 +950,4 @@ export interface PhonePairing {
   code: string
   link: string
   expiresAt: number
-}
-
-/** Étape 249 : après une capture du vrai écran pour le duel des pilotes. */
-export interface PilotDuelCaptureInfo {
-  captures: number
-  /** Boutons retenus comme cibles sur toutes les captures. */
-  targets: number
-  /** Titre de la fenêtre de la dernière capture : Léo voit tout de suite si c'est bien celle qu'il voulait. */
-  lastWindow?: string
-}
-
-/** Étape 249 : le score d'un pilote au duel (tirs justes au 1er regard, puis avec le zoom). */
-export interface PilotDuelScore {
-  label: string
-  hits: number
-  zoomHits: number
-  total: number
-  /** Temps moyen par cible, en secondes (1er regard + zoom). */
-  secondsPerTarget: number
-  error?: string
-}
-
-export interface PilotDuelOutcome {
-  scores: PilotDuelScore[]
-  reportPath: string
 }

@@ -1,4 +1,4 @@
-import { desktopCapturer, screen } from 'electron'
+import { desktopCapturer, screen, type NativeImage } from 'electron'
 import { config } from '../config'
 import { hideScanOverlay, showScanOverlay } from './scanOverlay'
 import { getLiveGpuStatus, pickSafeVisionModel } from './hardwareScan'
@@ -40,7 +40,7 @@ export const IMAGE_FOR_CODE_SYSTEM_PROMPT =
 // Une capture plein écran/HiDPI (ex: 4K) ralentit énormément l'encodage et
 // l'analyse par le modèle de vision pour peu de gain : une résolution plus
 // modeste suffit largement à lire du texte ou décrire une fenêtre.
-const MAX_SCREENSHOT_WIDTH = 1280
+export const MAX_SCREENSHOT_WIDTH = 1280
 
 export interface ScreenCapture {
   imageBase64: string
@@ -52,7 +52,7 @@ export interface ScreenCapture {
    * large (quasiment tous les écrans modernes). `1` quand l'écran est déjà plus étroit que ce seuil.
    */
   scale: number
-  /** Taille réelle de l'image envoyée (étape 231 : UI-TARS donne ses positions dans un repère dérivé de cette taille). */
+  /** Taille réelle de l'image envoyée. */
   width: number
   height: number
 }
@@ -78,6 +78,30 @@ export async function captureScreenshotBase64(): Promise<ScreenCapture> {
     width: real.width || width,
     height: real.height || height
   }
+}
+
+export interface PilotScreenCapture extends ScreenCapture {
+  /** La même capture à pleine résolution : le viseur (MAI-UI, étape 251) y recadre son 2e regard (zoom). */
+  full: NativeImage
+}
+
+/**
+ * Étape 251 : une seule capture à pleine résolution, réduite à MAX_SCREENSHOT_WIDTH pour le modèle de vision. Le
+ * zoom du viseur recadre la MÊME image : deux captures prises à des instants différents ne montreraient pas
+ * forcément le même écran (une page qui charge, un menu qui s'ouvre).
+ */
+export async function captureScreenForPilot(): Promise<PilotScreenCapture> {
+  const display = screen.getPrimaryDisplay()
+  const sources = await desktopCapturer.getSources({
+    types: ['screen'],
+    thumbnailSize: { width: Math.round(display.size.width * display.scaleFactor), height: Math.round(display.size.height * display.scaleFactor) }
+  })
+  const source = sources[0]
+  if (!source) throw new Error("Impossible de capturer l'écran (aucune source disponible).")
+  const full = source.thumbnail
+  const small = full.getSize().width > MAX_SCREENSHOT_WIDTH ? full.resize({ width: MAX_SCREENSHOT_WIDTH, quality: 'best' }) : full
+  const { width, height } = small.getSize()
+  return { imageBase64: small.toPNG().toString('base64'), scale: display.size.width / width, width, height, full }
 }
 
 /**

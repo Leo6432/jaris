@@ -2,11 +2,13 @@ import { config } from '../config'
 import { getLiveGpuStatus, pickSafeVisionModel } from './hardwareScan'
 import { listInstalledModels } from './ollama'
 import { hideScanOverlay, showScanOverlay } from './scanOverlay'
-import { clickMouse, pressHotkey, pressKey, scrollMouse, typeText } from './inputControl'
+import type { NativeImage } from 'electron'
+import { clickMouse, pressKey, typeText } from './inputControl'
+import { aimWithMaiUi, type MaiUiDeps } from './maiUi'
 import { getProfile } from './profileStore'
-import { buildUiTarsPrompt, parseUiTarsResponse } from './uiTars'
+import { PILOT_MODEL } from '../../shared/pilotModel'
 import { describeElements, findElementByName, listClickableElements, type ClickableElement } from './uiAutomation'
-import { captureScreenshotBase64 } from './vision'
+import { MAX_SCREENSHOT_WIDTH, captureScreenForPilot, captureScreenshotBase64 } from './vision'
 
 /**
  * Convertit une coordonnée renvoyée par le modèle de vision (repérée sur l'image réduite à
@@ -48,26 +50,24 @@ const MAX_STEPS = 20
 const STEP_TIMEOUT_MS = 45000
 const MAX_CONSECUTIVE_WAITS = 3
 /**
- * Étape 231 : le tout premier appel au modèle de pilotage le charge sur la carte graphique (5,5 Go lus sur le
- * disque) — plus long que les suivants. Le modèle de vision garde STEP_TIMEOUT_MS, comme avant.
+ * Étape 231 : le tout premier appel au viseur le charge sur la carte graphique (6 Go lus sur le disque) — plus
+ * long que les suivants. Le modèle de vision garde STEP_TIMEOUT_MS, comme avant.
  */
 const PILOT_FIRST_STEP_TIMEOUT_MS = 120000
+/** Même contexte qu'au duel, où le viseur a été mesuré : une image et une consigne courte n'en demandent pas plus. */
+const PILOT_NUM_CTX = 8192
 
 interface ComputerUseStep {
-  action: 'click_element' | 'click' | 'double_click' | 'right_click' | 'type' | 'key' | 'hotkey' | 'scroll' | 'wait' | 'done' | 'fail'
+  action: 'click_element' | 'click' | 'double_click' | 'right_click' | 'type' | 'key' | 'wait' | 'done' | 'fail'
   x?: number
   y?: number
   /** Nom de l'élément visé pour `click_element` (voir uiAutomation.ts, étape 32). */
   name?: string
+  /** Étape 251 : l'élément visé par un clic par position, décrit pour le viseur (MAI-UI). */
+  target?: string
   text?: string
   key?: string
   result?: string
-  /** Étape 231, modèle de pilotage seulement (uiTars.ts) : valider la saisie, combinaison, sens du défilement. */
-  submit?: boolean
-  keys?: string[]
-  direction?: 'up' | 'down' | 'left' | 'right'
-  /** L'action telle qu'écrite par le modèle de pilotage, recopiée dans l'historique qui lui est renvoyé. */
-  raw?: string
 }
 
 export const SYSTEM_PROMPT =
@@ -96,6 +96,17 @@ export const SYSTEM_PROMPT =
   "essais ou qu'une page d'erreur/de connexion bloque la suite — jamais boucler indéfiniment sur le même " +
   'échec. x/y sont des positions sur une échelle de 0 à 1000 : x=0 bord gauche et x=1000 bord droit de ' +
   "l'image, y=0 bord haut et y=1000 bord bas. Une seule action par réponse."
+
+/**
+ * Étape 251 : ajouté à SYSTEM_PROMPT seulement quand le viseur (MAI-UI) est installé — SYSTEM_PROMPT lui-même reste
+ * identique, sa copie sert au test des modèles de vision (scripts/benchmark-vision.mjs). La description est
+ * demandée en anglais, comme la consigne du duel où le viseur a été mesuré (« Click on the "Rechercher" button »),
+ * le texte affiché à l'écran restant tel quel entre guillemets.
+ */
+export const PILOT_TARGET_RULE =
+  'Pour click, double_click et right_click, ajoute aussi "target":"<l\'élément visé décrit en anglais en quelques ' +
+  'mots, avec son texte exact entre guillemets s\'il en a un, par exemple : the \\"Rechercher\\" button>" : un modèle ' +
+  'spécialisé dans la visée s\'en sert pour cliquer précisément, ta position x/y ne sert que de secours.'
 
 interface OllamaChatResponse {
   message?: { content?: string }
@@ -126,6 +137,7 @@ export function extractStep(raw: string): ComputerUseStep | null {
     if (parsed.action === 'type' && !(typeof parsed.text === 'string' && parsed.text.trim())) return null
     if (parsed.action === 'key' && !(typeof parsed.key === 'string' && parsed.key.trim())) return null
     if (parsed.result !== undefined && typeof parsed.result !== 'string') return null
+    if (parsed.target !== undefined && typeof parsed.target !== 'string') return null
     return parsed as ComputerUseStep
   } catch {
     return null
@@ -153,7 +165,8 @@ async function nextStep(
   image: { base64: string; width: number; height: number },
   elements: ClickableElement[],
   visionModel: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  withPilot = false
 ): Promise<ComputerUseStep> {
   const model = await resolveVisionModel(visionModel)
 
@@ -171,7 +184,7 @@ async function nextStep(
       body: JSON.stringify({
         model,
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: withPilot ? `${SYSTEM_PROMPT}\n\n${PILOT_TARGET_RULE}` : SYSTEM_PROMPT },
           { role: 'user', content: buildStepPrompt(goal, history, elements), images: [image.base64] }
         ],
         stream: false,
@@ -198,14 +211,16 @@ async function nextStep(
 }
 
 /**
- * Étape 231 : le modèle de pilotage (UI-TARS, shared/pilotModel.ts) s'il est installé sur cette machine, sinon
- * `null` — le modèle de vision pilote alors exactement comme avant. Vérifié auprès d'Ollama à chaque tâche : un
- * profil qui le cite alors qu'il a été supprimé à la main ne doit pas faire échouer le pilotage.
+ * Étape 231 : le viseur (MAI-UI depuis l'étape 251, shared/pilotModel.ts) s'il est installé sur cette machine,
+ * sinon `null` — le modèle de vision vise alors lui-même, comme avant. Vérifié auprès d'Ollama à chaque tâche : un
+ * profil qui le cite alors qu'il a été supprimé à la main ne doit pas faire échouer le pilotage. Un profil qui cite
+ * encore l'ANCIEN modèle (UI-TARS, avant l'étape 251) n'a pas de viseur tant que la configuration n'a pas été
+ * retestée : UI-TARS ne comprend pas la consigne de visée de MAI-UI.
  */
 async function resolvePilotModel(): Promise<string | null> {
   try {
     const pilot = (await getProfile())?.pilotModel
-    if (!pilot) return null
+    if (pilot !== PILOT_MODEL) return null
     const installed = await listInstalledModels()
     return installed.includes(pilot) || installed.includes(`${pilot}:latest`) ? pilot : null
   } catch {
@@ -213,41 +228,57 @@ async function resolvePilotModel(): Promise<string | null> {
   }
 }
 
-async function nextPilotStep(
-  goal: string,
-  history: string[],
-  image: { base64: string; width: number; height: number },
+/** Un appel au viseur (MAI-UI), température 0 : la même capture doit donner le même clic, pas un tirage au sort. */
+async function callPilot(
   model: string,
+  messages: Array<{ role: 'system' | 'user'; content: string; images?: string[] }>,
   timeoutMs: number,
   signal?: AbortSignal
-): Promise<ComputerUseStep> {
+): Promise<string> {
   const timeoutSignal = AbortSignal.timeout(timeoutMs)
-  let response: Response
+  const response = await fetch(`${config.ollama.host}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal: signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal,
+    body: JSON.stringify({ model, messages, stream: false, options: { num_ctx: PILOT_NUM_CTX, temperature: 0 } })
+  })
+  if (!response.ok) throw new Error(`le viseur a répondu ${response.status} : ${(await response.text()).slice(0, 200)}`)
+  const content = ((await response.json()) as OllamaChatResponse).message?.content?.trim()
+  if (!content) throw new Error('réponse vide du viseur')
+  return content
+}
+
+/**
+ * Libère la carte graphique après la visée : le modèle de vision choisit sa taille selon la mémoire vidéo LIBRE
+ * (resolveVisionModel) — avec le viseur encore chargé (6 Go), il se rabattrait sur un plus petit modèle à
+ * l'étape suivante. Sans conséquence si ça échoue : Ollama finit par le décharger tout seul.
+ */
+async function unloadPilot(model: string): Promise<void> {
   try {
-    response = await fetch(`${config.ollama.host}/api/chat`, {
+    await fetch(`${config.ollama.host}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      signal: signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal,
-      body: JSON.stringify({
-        model,
-        // Pas de message système : UI-TARS a été entraîné avec sa consigne dans le message de l'utilisateur.
-        messages: [{ role: 'user', content: buildUiTarsPrompt(goal, history), images: [image.base64] }],
-        stream: false,
-        // Température 0 : la même capture doit donner le même clic, pas un tirage au sort.
-        options: { num_ctx: config.ollama.numCtx, temperature: 0 }
-      })
+      body: JSON.stringify({ model, keep_alive: 0 }),
+      signal: AbortSignal.timeout(10000)
     })
-  } catch (err) {
-    return { action: 'fail', result: `Impossible de joindre le modèle de pilotage : ${err instanceof Error ? err.message : String(err)}` }
+  } catch {
+    // Rien à faire : voir plus haut.
   }
-  if (!response.ok) {
-    return { action: 'fail', result: `Le modèle de pilotage a répondu ${response.status} : ${(await response.text()).slice(0, 300)}` }
+}
+
+/** La capture à pleine résolution, vue par le viseur : entière ou recadrée, réduite à la largeur habituelle. */
+function pilotView(full: NativeImage): Pick<MaiUiDeps, 'width' | 'height' | 'view'> {
+  const { width, height } = full.getSize()
+  return {
+    width,
+    height,
+    view: async (rect) => {
+      let image = rect ? full.crop({ x: rect.x, y: rect.y, width: rect.w, height: rect.h }) : full
+      if (image.getSize().width > MAX_SCREENSHOT_WIDTH) image = image.resize({ width: MAX_SCREENSHOT_WIDTH, quality: 'best' })
+      const size = image.getSize()
+      return { base64: image.toPNG().toString('base64'), width: size.width, height: size.height }
+    }
   }
-  const content = ((await response.json()) as OllamaChatResponse).message?.content?.trim()
-  if (!content) return { action: 'fail', result: 'Réponse vide du modèle de pilotage.' }
-  const step = parseUiTarsResponse(content, image.width, image.height)
-  if (!step) return { action: 'fail', result: `Le modèle de pilotage a proposé une action inexécutable : ${content.slice(0, 300)}` }
-  return step
 }
 
 /**
@@ -266,6 +297,7 @@ export async function computerUseTask(
   const history: string[] = []
   let consecutiveWaits = 0
   const pilotModel = await resolvePilotModel()
+  let pilotWarm = false
   for (let i = 0; i < MAX_STEPS; i++) {
     // Vérifié à chaque itération (nouvelle phrase à la voix qui annule la réflexion en cours, voir
     // voicePipeline.ts) : sans ça, une fois lancée, cette boucle de clics ne pouvait plus jamais être
@@ -284,8 +316,10 @@ export async function computerUseTask(
     let scale: number
     let width: number
     let height: number
+    let full: NativeImage | null = null
     try {
-      ;({ imageBase64: image, scale, width, height } = await captureScreenshotBase64())
+      if (pilotModel) ({ imageBase64: image, scale, width, height, full } = await captureScreenForPilot())
+      else ({ imageBase64: image, scale, width, height } = await captureScreenshotBase64())
     } catch (err) {
       throw new Error(`Impossible de capturer l'écran : ${err instanceof Error ? err.message : String(err)}`)
     }
@@ -294,16 +328,13 @@ export async function computerUseTask(
     // modèle vise un NOM (position exacte) plutôt que des pixels devinés sur l'image. Ne lève jamais et
     // renvoie une liste vide si l'arbre d'accessibilité n'est pas exploitable — le pilotage en pixels
     // d'origine reste alors le repli, exactement comme avant.
-    // Le modèle de pilotage vise sur l'image seule (c'est ce pour quoi il a été entraîné) : inutile de lui
-    // lire l'arbre d'accessibilité, ~5 s de PowerShell par étape.
-    const elements = pilotModel ? [] : await listClickableElements()
+    // Étape 251 : lu aussi quand le viseur est installé — un clic par le nom reste exact, et sans aucune visée.
+    const elements = await listClickableElements()
 
     showScanOverlay()
     let step: ComputerUseStep
     try {
-      step = pilotModel
-        ? await nextPilotStep(goal, history, { base64: image, width, height }, pilotModel, i === 0 ? PILOT_FIRST_STEP_TIMEOUT_MS : STEP_TIMEOUT_MS, signal)
-        : await nextStep(goal, history, { base64: image, width, height }, elements, visionModel, signal)
+      step = await nextStep(goal, history, { base64: image, width, height }, elements, visionModel, signal, pilotModel !== null)
     } finally {
       hideScanOverlay()
     }
@@ -342,51 +373,61 @@ export async function computerUseTask(
       case 'double_click':
       case 'right_click': {
         const button = step.action === 'double_click' ? 'double' : step.action === 'right_click' ? 'right' : 'left'
-        const x = toScreenCoord(step.x, scale)
-        const y = toScreenCoord(step.y, scale)
+        let px = step.x
+        let py = step.y
+        let aimed = ''
+        const target = step.target?.trim()
+        // Étape 251 : le modèle de vision a décidé QUOI cliquer ; le viseur (MAI-UI) trouve OÙ, avec son zoom.
+        if (pilotModel && full && target) {
+          onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : je vise précisément ${target}…`)
+          showScanOverlay()
+          try {
+            const timeout = pilotWarm ? STEP_TIMEOUT_MS : PILOT_FIRST_STEP_TIMEOUT_MS
+            const aim = await aimWithMaiUi(target, { ...pilotView(full), chat: (messages) => callPilot(pilotModel, messages, timeout, signal) })
+            pilotWarm = true
+            if (aim) {
+              px = aim.fx * width
+              py = aim.fy * height
+              aimed = ' (visé par MAI-UI)'
+            } else {
+              aimed = ' (viseur sans réponse lisible : position estimée)'
+            }
+          } catch (err) {
+            if (signal?.aborted) return "Tâche interrompue avant d'être terminée."
+            // Le viseur est une précision en plus, pas une condition : sans lui, la position estimée reste le secours.
+            aimed = ` (viseur indisponible : ${err instanceof Error ? err.message : String(err)} ; position estimée)`
+          } finally {
+            hideScanOverlay()
+            void unloadPilot(pilotModel)
+          }
+          if (signal?.aborted) return "Tâche interrompue avant d'être terminée."
+        }
+        const x = toScreenCoord(px, scale)
+        const y = toScreenCoord(py, scale)
         const result = await clickMouse(x, y, button)
         if (!result.startsWith(`Clic ${button} effectué`)) throw new Error(result)
-        history.push(step.raw ? `${i + 1}. ${step.raw}` : `${i + 1}. Clic ${button} à (${x}, ${y})`)
-        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : clic ${button} à (${x}, ${y}).`)
+        const what = target ? ` sur ${target}` : ''
+        history.push(`${i + 1}. Clic ${button}${what} à (${x}, ${y})${aimed}`)
+        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : clic ${button}${what} à (${x}, ${y})${aimed}.`)
         break
       }
       case 'type': {
         const result = await typeText(step.text ?? '')
         if (result !== 'Texte tapé.') throw new Error(result)
-        if (step.submit) {
-          const enter = await pressKey('enter')
-          if (enter !== 'Touche "enter" pressée.') throw new Error(enter)
-        }
-        history.push(step.raw ? `${i + 1}. ${step.raw}` : `${i + 1}. Texte tapé : "${step.text ?? ''}"`)
-        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : texte tapé${step.submit ? ' et validé' : ''}.`)
+        history.push(`${i + 1}. Texte tapé : "${step.text ?? ''}"`)
+        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : texte tapé.`)
         break
       }
       case 'key': {
         const result = await pressKey(step.key ?? '')
         if (result !== `Touche "${step.key}" pressée.`) throw new Error(result)
-        history.push(step.raw ? `${i + 1}. ${step.raw}` : `${i + 1}. Touche "${step.key ?? ''}" pressée`)
+        history.push(`${i + 1}. Touche "${step.key ?? ''}" pressée`)
         onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : touche "${step.key ?? ''}" pressée.`)
-        break
-      }
-      case 'hotkey': {
-        const keys = step.keys ?? []
-        const result = await pressHotkey(keys)
-        if (result !== `Combinaison "${keys.join('+')}" pressée.`) throw new Error(result)
-        history.push(step.raw ? `${i + 1}. ${step.raw}` : `${i + 1}. Touches ${keys.join('+')}`)
-        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : touches ${keys.join('+')}.`)
-        break
-      }
-      case 'scroll': {
-        const direction = step.direction ?? 'down'
-        const result = await scrollMouse(toScreenCoord(step.x, scale), toScreenCoord(step.y, scale), direction)
-        if (result !== `Défilement ${direction} effectué.`) throw new Error(result)
-        history.push(step.raw ? `${i + 1}. ${step.raw}` : `${i + 1}. Défilement ${direction}`)
-        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : défilement.`)
         break
       }
       case 'wait':
         await new Promise((resolve) => setTimeout(resolve, 1200))
-        history.push(step.raw ? `${i + 1}. ${step.raw}` : `${i + 1}. Attente (chargement)`)
+        history.push(`${i + 1}. Attente (chargement)`)
         onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : attente du chargement de la page…`)
         break
     }

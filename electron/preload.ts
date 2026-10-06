@@ -43,9 +43,7 @@ import {
   type UpdateProgress,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload,
-  type WidgetMode,
-  type PilotDuelCaptureInfo,
-  type PilotDuelOutcome
+  type WidgetMode
 } from '../shared/ipc'
 
 function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
@@ -76,15 +74,6 @@ const api = {
   clearConversationHistory: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.clearConversationHistory),
   openConversationHistoryFile: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openConversationHistoryFile),
   openRequestJournal: (reveal: boolean): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openRequestJournal, reveal),
-  pilotDuelCapture: (): Promise<PilotDuelCaptureInfo> => ipcRenderer.invoke(IPC_CHANNELS.pilotDuelCapture),
-  pilotDuelReset: (): Promise<PilotDuelCaptureInfo> => ipcRenderer.invoke(IPC_CHANNELS.pilotDuelReset),
-  pilotDuelRun: (): Promise<PilotDuelOutcome> => ipcRenderer.invoke(IPC_CHANNELS.pilotDuelRun),
-  pilotDuelOpenReport: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.pilotDuelOpenReport),
-  onPilotDuelProgress: (callback: (message: string) => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, message: string): void => callback(message)
-    ipcRenderer.on(IPC_CHANNELS.pilotDuelProgress, listener)
-    return () => ipcRenderer.removeListener(IPC_CHANNELS.pilotDuelProgress, listener)
-  },
   getModelOverview: (): Promise<ModelOverviewResult> => ipcRenderer.invoke(IPC_CHANNELS.getModelOverview),
   getContextLengthOptions: (): Promise<ContextLengthOptions> => ipcRenderer.invoke(IPC_CHANNELS.getContextLengthOptions),
   setContextLength: (contextLength: number | undefined): Promise<void> =>

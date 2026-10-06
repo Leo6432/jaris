@@ -208,7 +208,7 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
                   !beforeInstall && picks.pilot.installed === false && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
-                      <td colSpan={4}>Pas installé sur ce PC pour l'instant — clique « Retester la configuration » (environ 5,5 Go).</td>
+                      <td colSpan={4}>Pas installé sur ce PC pour l'instant — clique « Retester la configuration » (environ 6 Go).</td>
                     </tr>
                   )
                 )}
