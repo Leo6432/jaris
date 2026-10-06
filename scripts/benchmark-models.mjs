@@ -1770,9 +1770,11 @@ async function main() {
       else if (row.type === 'vision' && versions?.vision === VISION_TEST_VERSION) latest.set(`vision|${row.model}|${row.kind}|${row.file}|${row.id}|${row.pass}`, row)
       else if (row.type === 'code' && versions?.code === CODE_TEST_VERSION) latest.set(`code|${row.model}|${row.id}`, row)
     }
+    // Étape 244 : un cas à refaire l'est même quand le score du modèle est déjà recopié dans verified-tool-scores.md
+    // (sinon les 67 demandes de l'étape 242 n'étaient jamais rejouées : leurs modèles avaient déjà un score sur 48).
     const inScope = (row) =>
       row.type === 'demande'
-        ? SCOPED_SCENARIO_MODELS.includes(row.model)
+        ? CONVERSATION_SCOPE.includes(row.model) && inOnlyModels(row.model)
         : row.type === 'vision'
           ? SCOPED_VISION_CANDIDATES.some((c) => c.model === row.model)
           : SCOPED_CODE_CANDIDATES.some((c) => c.model === row.model)

@@ -6639,3 +6639,15 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   quand il y a la place, l'un sous l'autre sinon. Le test vérifie les deux (même ligne en grand, aucun débordement
   à 420 et 480 px) et échoue bien sans la règle. Régression : test-my-model-picks-ui, test-options-reorganization-ui,
   test-hardwarescan-single-pool.
+
+- **Étape 244 — le bouton « Tester les modèles » ne proposait pas les 67 demandes à refaire (v0.28.14).** Léo : « je
+  vois pas tester les modèles avec la dernière version ». Le marquage « à refaire » de l'étape 242 était correct,
+  mais deux filtres plus anciens l'écrasaient : côté Jaris, `getUnscoredModels` considérait fini tout modèle dont le
+  score sur 48 est déjà recopié dans verified-tool-scores.md ; côté script, le rejeu ne regardait que les modèles
+  SANS score recopié (`SCOPED_SCENARIO_MODELS`). Les 22 modèles concernés avaient tous un score recopié : ni proposés,
+  ni rejoués. Corrigé des deux côtés : `campaignCompletion` renvoie aussi les modèles qui ont un cas à refaire
+  (`todo`), proposés même avec un score recopié, et le rejeu prend tout modèle de conversation demandé. Vérifié
+  avec le VRAI fichier de campagne de Léo : exactement les 22 modèles. **Leçon : mes tests de l'étape 242 passaient
+  parce que leurs données n'avaient AUCUN score recopié — l'état réel de Léo (scores déjà écrits) n'était jamais
+  testé. Un test de « ce qui reste à faire » doit partir de l'état réel, pas d'un état vierge.** Régression :
+  test-benchmark-scenarios (vrai script, score déjà recopié), test-hardwarescan-single-pool (vrai fichier de scores).

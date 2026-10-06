@@ -1203,3 +1203,38 @@ test('regarder l’écran en pleine tâche rend la main au modèle ; seule une q
     assert.equal(realHardwareScan().lookStoppedTask(r), expected, `copie de Jaris : ${JSON.stringify(r)}`)
   }
 })
+
+// Étape 244, Léo : « je vois pas tester les modèles avec la dernière version ». Une demande arrêtée par l'ancien regard
+// sur l'écran doit être refaite MÊME quand le score du modèle est déjà recopié dans verified-tool-scores.md.
+test('vrai script : une demande arrêtée par l’ancien regard sur l’écran est refaite, même avec un score déjà recopié', { timeout: 120000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-scen-'))
+  const fake = await startFakeOllama({ installed: ['ministral-3:3b'] })
+  try {
+    const resultsPath = join(dir, 'resultats.md')
+    const tracesPath = join(dir, 'resultats.traces.jsonl')
+    const lines = [{ type: 'campagne', versions: { conversation: 6, demandes: SCENARIO_TEST_VERSION, vision: 0, code: 0 } }]
+    for (const run of SCENARIO_RUNS) {
+      const looked = run.scenario.id === 'echec-partiel' && run.pass === 1
+      lines.push({
+        type: 'demande', model: 'ministral-3:3b', id: run.scenario.id, family: run.scenario.family, pass: run.pass,
+        variant: run.variant, seed: scenarioSeed(run.pass, run.index), ok: !looked, reason: looked ? 'appel non prévu : look_at_screen' : null,
+        turns: run.scenario.turns.map((user) => ({ user, shortCircuit: looked })),
+        calls: looked ? ['open_app', 'type_text', 'look_at_screen'].map((name) => ({ turn: 0, name, args: {} })) : []
+      })
+    }
+    writeFileSync(tracesPath, lines.map((l) => JSON.stringify(l)).join('\n') + '\n')
+    const verified = verifiedFile(dir, `| ministral-3:3b | 47/${SCENARIO_TOTAL} |`)
+    const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: resultsPath, JARIS_VERIFIED_SCORES_PATH: verified, JARIS_RESUME: '1', JARIS_ONLY_MODELS: 'ministral-3:3b' })
+    assert.equal(code, 0, out)
+    assert.match(out, /1 demande\(s\) arrêtée\(s\) par « regarder l'écran » en pleine tâche/)
+    const echec = SCENARIOS.find((s) => s.id === 'echec-partiel').turns[0]
+    assert.ok(fake.requests.length > 0 && fake.requests.every((r) => r.messages.some((m) => m.role === 'user' && m.content === echec)), 'seule la demande arrêtée est rejouée')
+    const replayed = readFileSync(tracesPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((t) => t.type === 'demande' && t.replay)
+    assert.equal(replayed.length, 1)
+    assert.equal(replayed[0].id, 'echec-partiel')
+    assert.equal(lookStoppedTask(replayed[0]), false, 'refaite, elle ne sera plus proposée')
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

@@ -315,3 +315,23 @@ test('les versions de test connues de Jaris sont celles des scripts', async () =
   assert.equal(Number(vision.match(/export const VISION_TEST_VERSION = (\d+)/)[1]), scan.VISION_TEST_VERSION)
   assert.equal(Number(code.match(/export const CODE_TEST_VERSION = (\d+)/)[1]), scan.CODE_TEST_VERSION)
 })
+
+// Étape 244, Léo : « je vois pas tester les modèles avec la dernière version ». Les modèles des demandes arrêtées par
+// l'ancien regard sur l'écran avaient déjà un score sur 48 recopié : le bouton ne les proposait pas.
+test('modèles à tester : un cas à refaire compte même quand le score est déjà recopié (vrai fichier de scores)', () => {
+  const scan = setup({ vramMib: 8 * 1024 })
+  const lines = [{ type: 'campagne', versions: { conversation: 6, demandes: scan.SCENARIO_TEST_VERSION, vision: scan.VISION_TEST_VERSION, code: scan.CODE_TEST_VERSION } }]
+  for (let i = 0; i < scan.SCENARIO_TEST_TOTAL; i++) {
+    const looked = i === 0
+    lines.push({
+      type: 'demande', model: 'granite4.2:8b', id: `d${i % 40}`, pass: i < 40 ? 1 : 2, ok: !looked,
+      turns: [{ user: 'Ouvre Discord puis écris que je serai en retard ce soir.', shortCircuit: looked }],
+      calls: looked ? [{ turn: 0, name: 'open_app' }, { turn: 0, name: 'type_text' }, { turn: 0, name: 'look_at_screen' }] : []
+    })
+  }
+  const campaign = scan.campaignCompletion(lines.map((l) => JSON.stringify(l)).join('\n'))
+  assert.ok(REAL_SCORES.includes('| granite4.2:8b |'), 'granite4.2:8b a déjà ses scores recopiés')
+  const toTest = scan.getUnscoredModels(campaign)
+  assert.ok(toTest.includes('granite4.2:8b'), 'le cas à refaire doit le faire proposer')
+  assert.ok(!toTest.includes('gemma4:12b'), 'un modèle sans rien à refaire reste fini')
+})
