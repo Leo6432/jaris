@@ -101,7 +101,8 @@ test('le script Python émet exactement les évènements que Jaris lit, et écri
 
 test('environnement du duel : figé, à part de la voix, diffusers à un commit précis, torch hors de la liste', () => {
   const req = readFileSync(new URL('../python/video-duel-requirements.txt', import.meta.url), 'utf8')
-  const lines = req.split('\n').filter((l) => l.trim() && !l.startsWith('#'))
+  // CRLF sur la CI Windows (git autocrlf) : normalisé avant de lire ligne par ligne.
+  const lines = req.split(/\r?\n/).filter((l) => l.trim() && !l.startsWith('#'))
   assert.match(lines[0], /^diffusers @ https:\/\/github\.com\/huggingface\/diffusers\/archive\/[0-9a-f]{40}\.zip$/)
   for (const line of lines.slice(1)) assert.match(line, /^[A-Za-z0-9_.-]+==[\w.+-]+$/, line)
   assert.ok(!lines.some((l) => /^torch(vision)?==/i.test(l)), 'torch vient de l’index CUDA, jamais de cette liste')

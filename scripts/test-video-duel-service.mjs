@@ -8,6 +8,7 @@ import * as readline from 'node:readline'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { PassThrough } from 'node:stream'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
@@ -30,7 +31,8 @@ function loadPure(file) {
 const videoModel = loadPure('shared/videoModel.ts')
 const formatBytes = loadPure('shared/formatBytes.ts')
 const duelShared = loadPure('shared/videoDuel.ts')
-const pythonDir = new URL('../python', import.meta.url).pathname
+// fileURLToPath, jamais .pathname : sous Windows, .pathname donne « /D:/… » (vu en CI : « D:\\D:\\… »).
+const pythonDir = fileURLToPath(new URL('../python', import.meta.url))
 
 /** Un faux processus : ses lignes de sortie, puis son code de fin. */
 function fakeProcess(lines, code, onKill) {
