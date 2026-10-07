@@ -7,8 +7,11 @@ import { clickMouse, pressKey, typeText } from './inputControl'
 import { aimWithMaiUi, type MaiUiDeps } from './maiUi'
 import { getProfile } from './profileStore'
 import { PILOT_MODEL } from '../../shared/pilotModel'
-import { describeElements, findElementByName, listClickableElements, type ClickableElement } from './uiAutomation'
-import { MAX_SCREENSHOT_WIDTH, captureScreenForPilot, captureScreenshotBase64 } from './vision'
+import { capturePilotScreen, type PilotCapture } from './markedCapture'
+import { withJarisSetAside } from './pilotWindows'
+import { markCenter, type ScreenMark } from './screenMarks'
+import { describeElements, findElementByName, type ClickableElement } from './uiAutomation'
+import { MAX_SCREENSHOT_WIDTH } from './vision'
 
 /**
  * Convertit une coordonnée renvoyée par le modèle de vision (repérée sur l'image réduite à
@@ -64,11 +67,14 @@ const IDLE_TIMEOUT_MS = 45_000
 const PILOT_NUM_CTX = 8192
 
 interface ComputerUseStep {
-  action: 'click_element' | 'click' | 'double_click' | 'right_click' | 'type' | 'key' | 'wait' | 'done' | 'fail'
+  /** `look` : réponse du planificateur sans image (étape 256) — « la liste ne suffit pas, regarde l'écran ». */
+  action: 'click_element' | 'click' | 'double_click' | 'right_click' | 'type' | 'key' | 'wait' | 'done' | 'fail' | 'look'
   x?: number
   y?: number
   /** Nom de l'élément visé pour `click_element` (voir uiAutomation.ts, étape 32). */
   name?: string
+  /** Étape 256 : numéro de l'élément visé pour `click_element`, tel qu'il est dessiné sur la capture. */
+  id?: number
   /** Étape 251 : l'élément visé par un clic par position, décrit pour le viseur (MAI-UI). */
   target?: string
   text?: string
@@ -113,6 +119,56 @@ export const PILOT_TARGET_RULE =
   'Pour click, double_click et right_click, ajoute aussi "target":"<l\'élément visé décrit en anglais en quelques ' +
   'mots, avec son texte exact entre guillemets s\'il en a un, par exemple : the \\"Rechercher\\" button>" : un modèle ' +
   'spécialisé dans la visée s\'en sert pour cliquer précisément, ta position x/y ne sert que de secours.'
+
+/**
+ * Étape 256 (Set-of-Marks) : ajouté à SYSTEM_PROMPT quand des éléments sont numérotés sur la capture — SYSTEM_PROMPT
+ * lui-même reste identique, sa copie sert au test des modèles de vision (scripts/benchmark-vision.mjs).
+ */
+export const MARKS_RULE =
+  'Les éléments de la liste sont encadrés et numérotés sur la capture : pour cliquer l\'un d\'eux, réponds ' +
+  '{"action":"click_element","id":<son numéro>} — c\'est le clic le plus sûr, sa position vient de Windows.'
+
+/**
+ * Étape 256 — planifier sans image. Quand Windows donne une liste fournie des boutons de la fenêtre (navigateur,
+ * Discord, Explorateur…), le modèle de conversation rapide (palier Médium) choisit l'action d'après cette liste,
+ * sans capture : quelques secondes au lieu d'une minute pour un gros modèle de vision, qui reste le recours dès que
+ * la liste ne suffit pas (`look`). Même méthode que le mode « ax » d'Hermes Agent (tools/computer_use).
+ */
+export const TEXT_PLANNER_PROMPT =
+  'Tu pilotes un ordinateur Windows à la souris et au clavier pour atteindre un objectif, SANS voir l\'écran : à ' +
+  "chaque tour on te donne l'objectif, les actions déjà faites, le titre de la fenêtre au premier plan et la liste " +
+  'numérotée de ses éléments cliquables, telle que Windows la donne (numéro, type, nom). Réponds UNIQUEMENT par un ' +
+  'objet JSON décrivant la PROCHAINE action : ' +
+  '{"action":"click_element","id":<numéro d\'un élément de la liste>}, ' +
+  '{"action":"type","text":"<texte à taper au clavier>"} (tape là où se trouve le curseur : clique d\'abord sur le ' +
+  'bon champ), ' +
+  '{"action":"key","key":"<entrée|tab|échap|espace|retour arrière|suppr|haut|bas|gauche|droite|début|fin>"}, ' +
+  '{"action":"wait"} (la page est en train de charger), ' +
+  '{"action":"done","result":"<résumé bref de ce qui a été accompli>"} UNIQUEMENT quand CHAQUE partie de ' +
+  "l'objectif est faite — pour \"ouvre YouTube et cherche un tuto guitare\", il faut avoir cliqué sur la barre de " +
+  'recherche, tapé la requête ET lancé la recherche ; relis chaque verbe de l\'objectif avant de répondre "done". ' +
+  '{"action":"fail","result":"<pourquoi c\'est bloqué>"}, ' +
+  '{"action":"look"} dès que la liste ne suffit pas pour décider : l\'élément voulu n\'y figure pas, ou il faut VOIR ' +
+  "l'écran (une image, une vidéo, une couleur, une position, vérifier un résultat). Ne devine jamais un numéro : " +
+  'dans le doute, réponds look. Une seule action par réponse.'
+
+/** Forme imposée à la réponse (sortie structurée d'Ollama) : un petit modèle ne peut pas écrire autre chose. */
+export const TEXT_STEP_FORMAT = {
+  type: 'object',
+  properties: {
+    action: { type: 'string', enum: ['click_element', 'type', 'key', 'wait', 'done', 'fail', 'look'] },
+    id: { type: 'integer' },
+    text: { type: 'string' },
+    key: { type: 'string' },
+    result: { type: 'string' }
+  },
+  required: ['action']
+}
+
+/** Sous ce nombre de boutons, la liste décrit trop peu la fenêtre pour décider sans la voir. */
+export const MIN_MARKS_FOR_TEXT = 5
+/** Deux « regarde l'écran » dans une tâche : la liste ne suffit pas ici, on ne la propose plus jusqu'à la fin. */
+const MAX_TEXT_LOOKS = 2
 
 interface OllamaChatResponse {
   message?: { content?: string }
@@ -194,7 +250,13 @@ export function extractStep(raw: string): ComputerUseStep | null {
   try {
     const parsed = JSON.parse(match[0]) as Partial<ComputerUseStep>
     if (!['click_element', 'click', 'double_click', 'right_click', 'type', 'key', 'wait', 'done', 'fail'].includes(parsed.action ?? '')) return null
-    if (parsed.action === 'click_element' && !(typeof parsed.name === 'string' && parsed.name.trim())) return null
+    if (parsed.action === 'click_element') {
+      // Étape 256 : par son numéro sur la capture (Set-of-Marks), ou par son nom comme avant.
+      const id = typeof parsed.id === 'string' && /^\d+$/.test(parsed.id) ? Number(parsed.id) : parsed.id
+      if (typeof id === 'number' && Number.isInteger(id) && id > 0) parsed.id = id
+      else if (!(typeof parsed.name === 'string' && parsed.name.trim())) return null
+      else delete parsed.id
+    }
     if (['click', 'double_click', 'right_click'].includes(parsed.action ?? '') &&
       !(typeof parsed.x === 'number' && Number.isFinite(parsed.x) && parsed.x >= 0 &&
         typeof parsed.y === 'number' && Number.isFinite(parsed.y) && parsed.y >= 0)) return null
@@ -217,17 +279,56 @@ export function buildStepPrompt(goal: string, history: string[], elements: Click
   // Liste vide = fenêtre sans arbre d'accessibilité exploitable (jeu, rendu sur mesure) : on le DIT au modèle
   // plutôt que de ne rien mettre, sinon il peut croire que la liste a juste été oubliée et attendre au lieu
   // de repasser au clic en pixels.
-  const elementsText = elements.length
-    ? `Éléments cliquables détectés par Windows (positions exactes, à préférer) :\n${describeElements(elements)}`
-    : "Windows n'expose aucun élément cliquable pour cette fenêtre : utilise les clics par position (x/y de 0 à 1000)."
+  const marked = elements.some((element) => element.id !== undefined)
+  const elementsText = !elements.length
+    ? "Windows n'expose aucun élément cliquable pour cette fenêtre : utilise les clics par position (x/y de 0 à 1000)."
+    : marked
+      ? `Éléments cliquables détectés par Windows, encadrés et numérotés sur la capture (positions exactes, à préférer) :\n${describeElements(elements)}`
+      : `Éléments cliquables détectés par Windows (positions exactes, à préférer) :\n${describeElements(elements)}`
   return `Objectif : ${goal}\n\n${historyText}\n\n${elementsText}\n\nCapture d'écran actuelle jointe. Quelle est la prochaine action ?`
+}
+
+/** Le message d'une étape planifiée sans image (étape 256) : la liste numérotée tient lieu de capture. */
+export function buildTextStepPrompt(goal: string, history: string[], window: string | undefined, marks: ClickableElement[]): string {
+  const historyText = history.length ? `Actions déjà faites :\n${history.join('\n')}` : 'Aucune action encore faite.'
+  const windowText = window ? `Fenêtre au premier plan : « ${window} »` : 'Fenêtre au premier plan : sans titre connu'
+  return `Objectif : ${goal}\n\n${historyText}\n\n${windowText}\n\nÉléments cliquables (numéro. [type] nom) :\n${describeElements(marks)}\n\nQuelle est la prochaine action ?`
+}
+
+/**
+ * La réponse du planificateur sans image, ou `null` si elle n'est pas exécutable — dont un numéro qui n'est pas
+ * dans la liste : c'est le modèle de vision qui prend alors l'étape, jamais un clic au hasard.
+ */
+export function extractTextStep(raw: string, marks: Array<{ id: number }>): ComputerUseStep | null {
+  const match = raw.match(/\{[\s\S]*\}/)
+  if (!match) return null
+  try {
+    const parsed = JSON.parse(match[0]) as Partial<ComputerUseStep>
+    switch (parsed.action) {
+      case 'click_element':
+        return typeof parsed.id === 'number' && marks.some((m) => m.id === parsed.id) ? { action: 'click_element', id: parsed.id } : null
+      case 'type':
+        return typeof parsed.text === 'string' && parsed.text.trim() ? { action: 'type', text: parsed.text } : null
+      case 'key':
+        return typeof parsed.key === 'string' && parsed.key.trim() ? { action: 'key', key: parsed.key } : null
+      case 'wait':
+      case 'look':
+        return { action: parsed.action }
+      case 'done':
+      case 'fail':
+        return { action: parsed.action, result: typeof parsed.result === 'string' ? parsed.result : undefined }
+      default:
+        return null
+    }
+  } catch {
+    return null
+  }
 }
 
 async function nextStep(
   goal: string,
   history: string[],
-  image: { base64: string; width: number; height: number },
-  elements: ClickableElement[],
+  capture: PilotCapture,
   visionModel: string,
   signal?: AbortSignal,
   withPilot = false
@@ -242,8 +343,8 @@ async function nextStep(
       {
         model,
         messages: [
-          { role: 'system', content: withPilot ? `${SYSTEM_PROMPT}\n\n${PILOT_TARGET_RULE}` : SYSTEM_PROMPT },
-          { role: 'user', content: buildStepPrompt(goal, history, elements), images: [image.base64] }
+          { role: 'system', content: [SYSTEM_PROMPT, capture.marks.length ? MARKS_RULE : '', withPilot ? PILOT_TARGET_RULE : ''].filter(Boolean).join('\n\n') },
+          { role: 'user', content: buildStepPrompt(goal, history, capture.marks), images: [capture.imageBase64] }
         ],
         think: false,
         options: { num_ctx: config.ollama.numCtx }
@@ -258,7 +359,54 @@ async function nextStep(
   const step = extractStep(content)
   if (!step) return { action: 'fail', result: `Le modèle de vision ${model} a proposé une action inexécutable : ${content.slice(0, 300)}` }
   // Positions sur 0–1000 ramenées aux pixels de l'image ; toScreenCoord les porte ensuite à l'écran réel.
-  return { ...step, ...fromThousandths(step.x, step.y, image.width, image.height) }
+  return { ...step, ...fromThousandths(step.x, step.y, capture.width, capture.height) }
+}
+
+/**
+ * Une étape planifiée sans image (étape 256). `error` : le modèle n'a pas pu répondre (on ne le resollicite plus
+ * pour cette tâche) ; `step: null` : réponse inexécutable, l'étape revient au modèle de vision.
+ */
+async function nextTextStep(
+  goal: string,
+  history: string[],
+  capture: PilotCapture,
+  model: string,
+  signal?: AbortSignal
+): Promise<{ step: ComputerUseStep | null; error?: string }> {
+  let content: string
+  try {
+    content = await streamOllamaChat(
+      {
+        model,
+        messages: [
+          { role: 'system', content: TEXT_PLANNER_PROMPT },
+          { role: 'user', content: buildTextStepPrompt(goal, history, capture.window, capture.marks) }
+        ],
+        think: false,
+        format: TEXT_STEP_FORMAT,
+        options: { num_ctx: config.ollama.numCtx, temperature: 0 }
+      },
+      signal
+    )
+  } catch (err) {
+    return { step: null, error: err instanceof Error ? err.message : String(err) }
+  }
+  return { step: extractTextStep(content, capture.marks) }
+}
+
+/**
+ * Étape 256 : le modèle qui planifie sans image — le palier Médium du profil, souvent déjà chargé pour la conversation
+ * qui a lancé la tâche. `null` (pas de profil, modèle supprimé) : chaque étape passe par le modèle de vision.
+ */
+async function resolveTextPlannerModel(): Promise<string | null> {
+  try {
+    const medium = (await getProfile())?.models?.medium
+    if (!medium) return null
+    const installed = await listInstalledModels()
+    return installed.includes(medium) || installed.includes(`${medium}:latest`) ? medium : null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -327,6 +475,7 @@ function pilotView(full: NativeImage): Pick<MaiUiDeps, 'width' | 'height' | 'vie
  * Exécute un objectif de bout en bout (envoyer un mail, chercher quelque chose sur un site, remplir un
  * formulaire...) en pilotant réellement la souris et le clavier, capture d'écran par capture d'écran.
  * `MAX_STEPS` évite une boucle infinie si le modèle de vision reste bloqué sans jamais renvoyer "done"/"fail".
+ * Étape 256 : la fenêtre de Jaris s'écarte le temps de la tâche (pilotWindows.ts), sinon c'est elle qu'on piloterait.
  */
 export async function computerUseTask(
   goal: string,
@@ -335,10 +484,21 @@ export async function computerUseTask(
   signal?: AbortSignal
 ): Promise<string> {
   if (!goal.trim()) return "Dis-moi ce qu'il faut faire à l'écran."
+  return withJarisSetAside(() => runComputerUseTask(goal, visionModel, onProgress, signal))
+}
 
+async function runComputerUseTask(
+  goal: string,
+  visionModel: string,
+  onProgress?: (message: string) => void,
+  signal?: AbortSignal
+): Promise<string> {
   const history: string[] = []
   let consecutiveWaits = 0
-  const pilotModel = await resolvePilotModel()
+  const [pilotModel, plannerModel] = await Promise.all([resolvePilotModel(), resolveTextPlannerModel()])
+  let textPlanning = plannerModel !== null
+  let textLooks = 0
+  let fallbackNoted = false
   for (let i = 0; i < MAX_STEPS; i++) {
     // Vérifié à chaque itération (nouvelle phrase à la voix qui annule la réflexion en cours, voir
     // voicePipeline.ts) : sans ça, une fois lancée, cette boucle de clics ne pouvait plus jamais être
@@ -353,29 +513,39 @@ export async function computerUseTask(
     // affiche cette ligne en direct pendant que ça tourne.
     onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : je regarde l'écran…`)
 
-    let image: string
-    let scale: number
-    let width: number
-    let height: number
-    let full: NativeImage | null = null
+    // Étape 256 : la capture porte les boutons de la fenêtre visée, numérotés (Set-of-Marks). Sans réponse de
+    // Windows, la capture d'avant, sans numéros : le pilotage par position reste possible.
+    let capture: PilotCapture
     try {
-      if (pilotModel) ({ imageBase64: image, scale, width, height, full } = await captureScreenForPilot())
-      else ({ imageBase64: image, scale, width, height } = await captureScreenshotBase64())
+      capture = await capturePilotScreen((reason) => {
+        if (!fallbackNoted) onProgress?.(`Boutons numérotés indisponibles (${reason}) : je pilote d'après l'image seule.`)
+        fallbackNoted = true
+      })
     } catch (err) {
       throw new Error(`Impossible de capturer l'écran : ${err instanceof Error ? err.message : String(err)}`)
     }
 
-    // Étape 32 : ce que Windows lui-même sait des éléments cliquables de la fenêtre active, pour que le
-    // modèle vise un NOM (position exacte) plutôt que des pixels devinés sur l'image. Ne lève jamais et
-    // renvoie une liste vide si l'arbre d'accessibilité n'est pas exploitable — le pilotage en pixels
-    // d'origine reste alors le repli, exactement comme avant.
-    // Étape 251 : lu aussi quand le viseur est installé — un clic par le nom reste exact, et sans aucune visée.
-    const elements = await listClickableElements()
-
     showScanOverlay()
-    let step: ComputerUseStep
+    let step: ComputerUseStep | null = null
     try {
-      step = await nextStep(goal, history, { base64: image, width, height }, elements, visionModel, signal, pilotModel !== null)
+      // Étape 256 : d'abord le modèle rapide, d'après la seule liste des boutons ; le modèle de vision si elle ne
+      // suffit pas. Rien de fait encore et déjà « fini » ? Sans image, ce serait une supposition : la vision vérifie.
+      if (textPlanning && plannerModel && capture.marks.length >= MIN_MARKS_FOR_TEXT) {
+        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : je lis les boutons de la fenêtre…`)
+        const planned = await nextTextStep(goal, history, capture, plannerModel, signal)
+        if (planned.error) {
+          if (signal?.aborted) return "Tâche interrompue avant d'être terminée."
+          textPlanning = false
+          onProgress?.(`Lecture des boutons par ${plannerModel} impossible (${planned.error}) : je continue avec l'image.`)
+        } else if (!planned.step || planned.step.action === 'look') {
+          if (++textLooks >= MAX_TEXT_LOOKS) textPlanning = false
+        } else if (!(planned.step.action === 'done' && history.length === 0)) {
+          step = planned.step
+        }
+        if (!step) onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : je regarde l'écran de plus près…`)
+      }
+      if (signal?.aborted) return "Tâche interrompue avant d'être terminée."
+      if (!step) step = await nextStep(goal, history, capture, visionModel, signal, pilotModel !== null)
     } finally {
       hideScanOverlay()
     }
@@ -393,18 +563,21 @@ export async function computerUseTask(
 
     switch (step.action) {
       case 'click_element': {
-        const wanted = step.name ?? ''
-        const target = findElementByName(elements, wanted)
+        // Étape 256 : par son numéro sur la capture ; par son nom pour un modèle qui reprend l'ancienne forme.
+        const label = step.id !== undefined ? `n°${step.id}` : `"${step.name ?? ''}"`
+        const target: ScreenMark | null =
+          step.id !== undefined ? capture.marks.find((mark) => mark.id === step.id) ?? null : findElementByName(capture.marks, step.name ?? '')
         if (!target) {
           // PAS une erreur fatale, contrairement aux autres actions : c'est le cas de repli prévu par
           // l'étape 32 (élément absent de l'arbre d'accessibilité, ou interface qui a bougé depuis la
           // capture). On le note dans l'historique pour que le modèle le VOIE et repasse au clic en pixels
           // au tour suivant, plutôt que d'abandonner toute la tâche pour un nom mal repris.
-          history.push(`${i + 1}. Élément "${wanted}" introuvable dans la liste Windows — reste le clic par position (x/y de 0 à 1000)`)
-          onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : élément "${wanted}" introuvable, je repasse en clic direct.`)
+          history.push(`${i + 1}. Élément ${label} introuvable dans la liste Windows — reste le clic par position (x/y de 0 à 1000)`)
+          onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : élément ${label} introuvable, je repasse en clic direct.`)
           break
         }
-        const result = await clickMouse(target.x, target.y, 'left')
+        const { x, y } = markCenter(target)
+        const result = await clickMouse(x, y, 'left', capture.physical)
         if (!result.startsWith('Clic left effectué')) throw new Error(result)
         history.push(`${i + 1}. Clic sur "${target.name}" (${target.type}, position donnée par Windows)`)
         onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : clic sur "${target.name}".`)
@@ -419,14 +592,14 @@ export async function computerUseTask(
         let aimed = ''
         const target = step.target?.trim()
         // Étape 251 : le modèle de vision a décidé QUOI cliquer ; le viseur (MAI-UI) trouve OÙ, avec son zoom.
-        if (pilotModel && full && target) {
+        if (pilotModel && target) {
           onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : je vise précisément ${target}…`)
           showScanOverlay()
           try {
-            const aim = await aimWithMaiUi(target, { ...pilotView(full), chat: (messages) => callPilot(pilotModel, messages, signal) })
+            const aim = await aimWithMaiUi(target, { ...pilotView(capture.full), chat: (messages) => callPilot(pilotModel, messages, signal) })
             if (aim) {
-              px = aim.fx * width
-              py = aim.fy * height
+              px = aim.fx * capture.width
+              py = aim.fy * capture.height
               aimed = ' (visé par MAI-UI)'
             } else {
               aimed = ' (viseur sans réponse lisible : position estimée)'
@@ -441,9 +614,9 @@ export async function computerUseTask(
           }
           if (signal?.aborted) return "Tâche interrompue avant d'être terminée."
         }
-        const x = toScreenCoord(px, scale)
-        const y = toScreenCoord(py, scale)
-        const result = await clickMouse(x, y, button)
+        const x = toScreenCoord(px, capture.scale)
+        const y = toScreenCoord(py, capture.scale)
+        const result = await clickMouse(x, y, button, capture.physical)
         if (!result.startsWith(`Clic ${button} effectué`)) throw new Error(result)
         const what = target ? ` sur ${target}` : ''
         history.push(`${i + 1}. Clic ${button}${what} à (${x}, ${y})${aimed}`)

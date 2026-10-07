@@ -16,6 +16,8 @@ import {
   TOOLS,
   SYSTEM_PROMPT_TEMPLATE,
   buildBenchmarkSystemPrompt,
+  benchmarkDateTimeNote,
+  withoutDateTimeNote,
   buildCaseMessages,
   isCorrectAnswer,
   isRealReply
@@ -48,13 +50,33 @@ test('les outils du test sont EXACTEMENT ceux de Jaris (tools.ts) — régénér
 })
 
 test('les consignes du test sont EXACTEMENT celles de Jaris (systemPrompt.ts, canal voix)', () => {
-  const real = systemPromptModule.buildSystemPrompt(null, [], 'voice')
-  const now = new Date()
-  // Même phrase de date des deux côtés : seule elle change d'un appel à l'autre.
-  const realWithoutDate = real.replace(/Nous sommes le [^]*?, il est \d{2}:\d{2}\. /, '{{DATE_HEURE}}')
-  assert.equal(SYSTEM_PROMPT_TEMPLATE, realWithoutDate)
-  assert.match(buildBenchmarkSystemPrompt(now), /Nous sommes le .+, il est \d{2}:\d{2}\. /)
-  assert.ok(!buildBenchmarkSystemPrompt(now).includes('{{DATE_HEURE}}'))
+  assert.equal(SYSTEM_PROMPT_TEMPLATE, systemPromptModule.buildSystemPrompt(null, [], 'voice'))
+  assert.equal(buildBenchmarkSystemPrompt(), SYSTEM_PROMPT_TEMPLATE)
+})
+
+test('la date de la question est EXACTEMENT celle que Jaris met devant la demande (dateTimeNote)', () => {
+  for (const now of [new Date(2026, 9, 7, 9, 5), new Date(2027, 0, 1, 23, 59)]) {
+    assert.equal(benchmarkDateTimeNote(now), systemPromptModule.dateTimeNote(now))
+  }
+  assert.equal(benchmarkDateTimeNote(new Date(2026, 9, 7, 14, 30)), '(Nous sommes le mercredi 7 octobre 2026, il est 14:30.)')
+})
+
+test('cache d’Ollama : les consignes ne changent pas d’une demande à l’autre (étape 256)', () => {
+  // La date à la minute près en tête des consignes forçait Ollama à relire ~5 000 mots à chaque demande.
+  const morning = systemPromptModule.buildSystemPrompt('Léo', ['Voiture'], 'voice')
+  const RealDate = Date
+  const later = new RealDate(RealDate.now() + 26 * 3600 * 1000 + 7 * 60 * 1000)
+  globalThis.Date = class extends RealDate {
+    constructor(...args) { super(...(args.length ? args : [later.getTime()])) }
+    static now() { return later.getTime() }
+  }
+  try {
+    assert.equal(systemPromptModule.buildSystemPrompt('Léo', ['Voiture'], 'voice'), morning, 'rien dans les consignes ne dépend de l’heure')
+  } finally {
+    globalThis.Date = RealDate
+  }
+  assert.doesNotMatch(morning, /Nous sommes le|il est \d{2}:\d{2}/)
+  assert.match(morning, /commence par la date et l'heure actuelles entre parenthèses/)
 })
 
 test('chaque question attend un outil qui existe vraiment (ou aucun outil)', () => {
@@ -177,7 +199,7 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
         requests.push(json)
         // La question est le dernier message de l'utilisateur : après elle peuvent venir un appel d'outil déjà fait
         // et son résultat (étape 230, read_web_page).
-        const prompt = json.messages.findLast((m) => m.role === 'user').content
+        const prompt = withoutDateTimeNote(json.messages.findLast((m) => m.role === 'user').content)
         // Un modèle figé : aucune réponse (c'est le délai maximal du script qui doit couper la requête).
         if (hang(json.model, prompt)) return
         const call = answer(json.model, prompt)
@@ -611,19 +633,17 @@ test('Jaris reconnaît les scores du test actuel : même total des deux côtés 
 
 test('avec des notes en mémoire, les consignes sont EXACTEMENT celles de Jaris (systemPrompt.ts)', () => {
   const titles = ['Voiture', 'Anniversaire de maman', 'Code postal']
-  const now = new Date(2026, 9, 3, 11, 31)
-  const real = systemPromptModule.buildSystemPrompt(null, titles, 'voice')
-  const date = /Nous sommes le [^]*?, il est \d{2}:\d{2}\. /
-  assert.equal(buildBenchmarkSystemPrompt(now, titles).replace(date, ''), real.replace(date, ''))
+  assert.equal(buildBenchmarkSystemPrompt(titles), systemPromptModule.buildSystemPrompt(null, titles, 'voice'))
   // Sans notes, toujours la mémoire vide.
-  assert.equal(buildBenchmarkSystemPrompt(now).replace(date, ''), systemPromptModule.buildSystemPrompt(null, [], 'voice').replace(date, ''))
+  assert.equal(buildBenchmarkSystemPrompt(), systemPromptModule.buildSystemPrompt(null, [], 'voice'))
 })
 
 test('lire une page web : la question, PUIS la recherche déjà faite et son résultat, comme dans converse()', () => {
   const testCase = TEST_CASES.find((c) => c.expectedTool === 'read_web_page')
-  const messages = buildCaseMessages(testCase)
+  const now = new Date(2026, 9, 3, 11, 31)
+  const messages = buildCaseMessages(testCase, now)
   assert.deepEqual(messages.map((m) => m.role), ['system', 'user', 'assistant', 'tool'])
-  assert.equal(messages[1].content, testCase.prompt)
+  assert.equal(messages[1].content, `${systemPromptModule.dateTimeNote(now)} ${testCase.prompt}`)
   assert.equal(messages[2].tool_calls[0].function.name, 'search_web')
   // Même format que webSearch.ts : « 1. titre — extrait (url) ».
   assert.match(messages[3].content, /^1\. .+ — .+ \(https:\/\/metropole\.rennes\.fr\/piscine-saint-georges\)\n2\. /)
@@ -970,7 +990,7 @@ test('rejeu : en vision et en code, seuls les cas arrêtés par le délai sont r
   })
   const tracesPath = join(dir, 'r.traces.jsonl')
   const readTraces = () => readFileSync(tracesPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l))
-  const userPrompt = (r) => r.messages.findLast((m) => m.role === 'user').content
+  const userPrompt = (r) => withoutDateTimeNote(r.messages.findLast((m) => m.role === 'user').content)
   const first = await startFakeOllama({ installed: ['qwen3-vl:2b', 'qwen2.5-coder:7b'], answer, hang: frozen })
   try {
     // 1er lancement : le modèle reste figé, même pendant le rejeu de fin de test.

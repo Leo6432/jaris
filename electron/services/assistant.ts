@@ -10,7 +10,7 @@ import { didAppLaunch } from './appLauncher'
 import { GPU_TEMP_LIMIT_C, isScreenQuestion, pickSafeModel, type LiveGpuStatus } from './hardwareScan'
 import { checkOverloadWarning } from './resourceMonitor'
 import type { SoundCue } from '../../shared/ipc'
-import { buildSystemPrompt, type ConverseChannel } from './systemPrompt'
+import { buildSystemPrompt, dateTimeNote, type ConverseChannel } from './systemPrompt'
 import { describeModelCall, startJournalEntry, type JournalEntry } from './requestJournal'
 import { directBrowserSearch, openBrowserSearch } from './browserSearch'
 
@@ -560,7 +560,9 @@ async function conversation(
         !isHallucinatedThinkReply(message, history[index - 1]) &&
         !(message.role === 'user' && isHallucinatedThinkReply(history[index + 1], message))
     }),
-    { role: 'user', content: prompt }
+    // La date ici et non dans les consignes : elles restent identiques d'une demande à l'autre, et Ollama n'a pas
+    // à les relire (voir dateTimeNote). L'historique garde la question seule, sans la date.
+    { role: 'user', content: `${dateTimeNote()} ${prompt}` }
   ]
 
   // Un petit modèle local abandonne parfois en cours de route sur une tâche à plusieurs étapes : il

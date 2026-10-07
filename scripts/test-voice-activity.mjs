@@ -37,6 +37,11 @@ test('les vraies lignes du journal de Léo deviennent des phrases courtes, sans 
   assert.equal(activityFromLog('Étape 2/20 : texte tapé.'), "Étape 2 : j'écris le texte")
   assert.equal(activityFromLog('Étape 4/20 : attente du chargement de la page…'), "Étape 4 : j'attends que la page charge")
   assert.equal(activityFromLog("Résultat de l'outil : Firefox a été lancé."), 'Je prépare la réponse')
+  // Étape 256 : l'étape lue sans image, le retour à l'image, un numéro absent de la liste, le repli sans numéros.
+  assert.equal(activityFromLog('Étape 1/20 : je lis les boutons de la fenêtre…'), 'Étape 1 : je lis les boutons')
+  assert.equal(activityFromLog("Étape 1/20 : je regarde l'écran de plus près…"), "Étape 1 : je regarde l'écran")
+  assert.equal(activityFromLog('Étape 3/20 : élément n°42 introuvable, je repasse en clic direct.'), 'Étape 3 : je cherche autrement')
+  assert.equal(activityFromLog("Boutons numérotés indisponibles (code de sortie 1) : je pilote d'après l'image seule."), null)
   // Les lignes techniques ne changent pas ce qui est affiché.
   assert.equal(activityFromLog('Modèle choisi : granite4.2:8b (réflexion : medium)'), null)
   assert.equal(activityFromLog('VRAM libre actuelle : 3 Go'), null)

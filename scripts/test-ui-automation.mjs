@@ -5,10 +5,9 @@ import vm from 'node:vm'
 import ts from 'typescript'
 
 /**
- * Étape 32 (uiAutomation.ts) : le script PowerShell lui-même n'est PAS testable ici (aucun Windows ni
- * PowerShell dans l'environnement de développement) — d'où le choix d'implémentation de garder hors de
- * PowerShell tout ce qui manipule une donnée venant du modèle. Ce fichier teste donc exactement ces
- * parties-là : la lecture de ce que le script renvoie, et la recherche de l'élément visé par son nom.
+ * Étape 32 (uiAutomation.ts) : la recherche de l'élément visé par son nom et la mise en forme de la liste, en
+ * TypeScript pur. Étape 256 : la lecture de l'écran (script PowerShell) a déménagé dans screenMarks.ts, testé à
+ * part (scripts/test-screen-marks.mjs, dont le piège « un seul élément = un objet » de ConvertTo-Json).
  */
 const source = ts.transpileModule(readFileSync(new URL('../electron/services/uiAutomation.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
@@ -20,41 +19,10 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/uiA
 // ne rencontrent donc jamais ce piège.
 const load = vm.runInThisContext(`(function (exports, require, module) {\n${source}\n})`)
 const loaded = { exports: {} }
-load(loaded.exports, () => ({ spawn: () => {} }), loaded)
-const { parseElements, findElementByName, describeElements } = loaded.exports
+load(loaded.exports, () => ({}), loaded)
+const { findElementByName, describeElements } = loaded.exports
 
 const element = (name, extra = {}) => ({ name, type: 'Button', x: 10, y: 20, ...extra })
-
-test('un seul élément ressort en objet (ConvertTo-Json 5.1 sans -AsArray) et doit quand même être lu', () => {
-  const parsed = parseElements('{"name":"Rechercher","type":"Button","x":40,"y":12}')
-  assert.deepEqual(parsed, [{ name: 'Rechercher', type: 'Button', x: 40, y: 12 }])
-})
-
-test('une vraie liste est lue telle quelle', () => {
-  const parsed = parseElements('[{"name":"A","type":"Button","x":1,"y":2},{"name":"B","type":"Hyperlink","x":3,"y":4}]')
-  assert.equal(parsed.length, 2)
-  assert.equal(parsed[1].type, 'Hyperlink')
-})
-
-for (const [label, stdout] of [
-  ['sortie vide (fenêtre sans élément)', '   '],
-  ['sortie non JSON (erreur PowerShell)', 'Add-Type : impossible de charger'],
-  ['tableau vide', '[]']
-]) {
-  test(`repli sur une liste vide : ${label}`, () => {
-    assert.deepEqual(parseElements(stdout), [])
-  })
-}
-
-test('les entrées incomplètes sont écartées, pas la liste entière', () => {
-  const parsed = parseElements(JSON.stringify([
-    { name: 'Bon', type: 'Button', x: 5, y: 6 },
-    { name: '', type: 'Button', x: 1, y: 2 },
-    { name: 'Sans position', type: 'Button' },
-    { name: 'X non fini', type: 'Button', x: null, y: 2 }
-  ]))
-  assert.deepEqual(parsed.map((item) => item.name), ['Bon'])
-})
 
 test('une correspondance EXACTE gagne sur un simple préfixe placé plus haut', () => {
   const elements = [element("Fermer l'onglet"), element('Fermer')]
@@ -88,4 +56,14 @@ test('la description envoyée au modèle reste courte et typée', () => {
   const described = describeElements([element('Rechercher'), element(long, { type: 'Edit' })])
   assert.match(described, /^- \[Button\] Rechercher$/m)
   assert.match(described, /^- \[Edit\] x{80}$/m)
+})
+
+test('étape 256 : un élément numéroté sur la capture porte son numéro en tête de ligne', () => {
+  const described = describeElements([element('Rechercher', { id: 1, type: 'Edit' }), element('Se connecter', { id: 12 })])
+  assert.equal(described, '1. [Edit] Rechercher\n12. [Button] Se connecter')
+})
+
+test('étape 256 : plus aucune lecture de « la fenêtre active » (c’était Jaris lui-même quand Léo lui parlait)', () => {
+  const real = readFileSync(new URL('../electron/services/uiAutomation.ts', import.meta.url), 'utf8')
+  assert.ok(!/GetForegroundWindow\(|listClickableElements/.test(real))
 })

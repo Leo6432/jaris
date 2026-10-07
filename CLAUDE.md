@@ -6891,3 +6891,54 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   scripts/test-computer-use.mjs scripts/test-assistant-history.mjs` (minuteries pilotées : 3 min avant le premier
   morceau et plus 45 s, abandon après 45 s de silence seulement une fois la réponse commencée ; chaque garde
   vérifiée en la retirant).
+
+- **Étape 256, pilotage d'écran et vitesse, après lecture du code d'Hermes Agent (Léo : « fait le 1 / 2 / 3 / 4 »).**
+  1. **La liste des boutons venait de la fenêtre ACTIVE (`GetForegroundWindow`)** : quand Léo parlait depuis la
+     fenêtre de Jaris, c'étaient les boutons de Jaris qui étaient listés, et la capture montrait Jaris par-dessus la
+     page visée. Le duel des pilotes (étape 249) avait déjà corrigé ce choix de fenêtre, mais SEULEMENT dans son
+     propre script : le vrai pilotage gardait l'ancien. **Leçon : un correctif fait dans un outil de mesure à côté
+     ne corrige pas le chemin réel — reporter le correctif là où le bug vit vraiment.** La capture
+     (`screenMarks.ts`/`markedCapture.ts`) prend maintenant la fenêtre visible la plus haute qui n'est pas Jaris
+     (ordre Z, mêmes filtres que le duel, éprouvés chez Léo). Et Jaris s'écarte pendant la tâche
+     (`pilotWindows.ts`, gestes fournis par main.ts) : la grande fenêtre se replie comme quand on clique ailleurs
+     et NE revient PAS seule (elle couvrirait le résultat demandé) ; le widget reste affiché mais
+     `setContentProtection` (invisible aux captures, comme l'animation de scan) et `setIgnoreMouseEvents`
+     (transparent aux clics) le temps de la tâche.
+  2. **Boutons numérotés sur la capture (Set-of-Marks, méthode d'Hermes)** : chaque élément que Windows connaît est
+     encadré et numéroté sur l'image ; le modèle répond `{"action":"click_element","id":12}` et Jaris clique au
+     centre du rectangle donné par Windows. Capture ET rectangles pris par LE MÊME processus PowerShell déclaré
+     sensible au DPI (pixels réels), et le clic fait dans ce même repère (`clickMouse(..., physicalPixels)`,
+     `SetProcessDPIAware` avant `SetCursorPos`). **Piège évité en lisant la doc, pas en testant (pas de Windows
+     ici)** : UI Automation donne des pixels réels, l'ancien lecteur et l'ancien clic tournaient dans des processus
+     non sensibles au DPI — sur un écran à 125 %, repères différents. Les numéros sont dessinés en TypeScript pur
+     sur l'image brute (`drawMarks`, police de chiffres 3x5 intégrée) sur l'image RÉDUITE envoyée au modèle, pas
+     sur la pleine résolution : dessinés en grand puis réduits, ils devenaient illisibles. Le viseur (MAI-UI) garde
+     l'image PROPRE. Sans réponse de Windows, retour à la capture d'Electron d'avant, sans numéros (dit une fois
+     dans le journal). Une ligne et le lien qu'elle contient (même rectangle) n'ont qu'un numéro. `SYSTEM_PROMPT`
+     reste identique à sa copie du test de vision : la règle « clique par numéro » (`MARKS_RULE`) s'y ajoute
+     seulement quand il y a des numéros, comme `PILOT_TARGET_RULE`. **Limite à dire à Léo** : le test des modèles
+     de vision n'a pas été refait avec des captures numérotées.
+  3. **Planifier sans image** (mode « ax » d'Hermes) : avec au moins 5 boutons listés, le modèle Médium du profil
+     (souvent déjà chargé) choisit l'action d'après la liste numérotée et le titre de la fenêtre, réponse imposée
+     en JSON (`format`), sans capture — le modèle de vision ne sert que s'il répond `look`, invente un numéro, ou
+     dit « fini » alors que rien n'a été fait (sans image ce serait une supposition). Deux `look` ou une erreur du
+     modèle rapide : on ne le resollicite plus pour cette tâche (éviter de recharger deux modèles à chaque étape).
+  4. **La date à la minute près était au DÉBUT des consignes** : Ollama ne réutilise ce qu'il a déjà lu que si le
+     début du texte envoyé est identique, donc il relisait ~4 300 tokens de consignes et d'outils à CHAQUE demande.
+     Mesuré ici avec Ollama sur les vraies consignes et les vrais outils : 18,8 s → 0,8 s (qwen3:0.6b, attention
+     classique) et 18,7 s → 5,5 s (qwen3.5:0.8b, modèle hybride : gain partiel, son état ne se reprend pas à
+     n'importe quel point). La date est maintenant devant la question (`dateTimeNote`, « (Nous sommes le …) »),
+     jamais dans l'historique, et les consignes disent au modèle de n'en parler que si on le lui demande. **Leçon :
+     tout ce qui change d'une demande à l'autre va à la FIN de ce qu'on envoie au modèle, jamais au début** — un
+     test vérifie que les consignes ne dépendent plus de l'heure. Copie du banc de test suivie (benchmark-cases,
+     scénarios) ; **piège retrouvé dans mes propres tests** : les faux Ollama reconnaissaient chaque demande à son
+     texte EXACT — la date en tête les a fait chercher un scénario inexistant, planter dans le gestionnaire de
+     requête et laisser `node --test` bloqué sans message. `withoutDateTimeNote` les rend indépendants de la date.
+     **Prudence** : les scores des modèles ont été mesurés avec la date dans les consignes ; le changement est
+     petit (la même phrase, déplacée) mais pas remesuré.
+  **Rien de ceci n'est vérifié en usage réel** (pas de Windows ici) : le choix de fenêtre et la capture sont repris
+  d'un script qui a tourné chez Léo, mais les numéros dessinés, le clic sensible au DPI, `setContentProtection` sur
+  le widget et la planification sans image ne le sont que par les tests et un rendu sur une vraie page dense.
+  Régression : `node --test scripts/test-screen-marks.mjs scripts/test-computer-use.mjs scripts/test-pilot-windows.mjs
+  scripts/test-ui-automation.mjs scripts/test-benchmark-vision.mjs scripts/test-benchmark-cases.mjs
+  scripts/test-assistant-history.mjs scripts/test-voice-activity.mjs` (chaque nouvelle garde vérifiée en la retirant).

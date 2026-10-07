@@ -84,6 +84,7 @@ import {
 } from './services/conversationStore'
 import { appendJournal, getJournalPath } from './services/requestJournal'
 import { getProfile, saveProfile } from './services/profileStore'
+import { setPilotWindowHooks } from './services/pilotWindows'
 import {
   getLaunchAtStartup,
   LOGIN_REVEAL_GRACE_MS,
@@ -654,6 +655,8 @@ function showWidgetWindow(forceExpanded = false): void {
   widgetWindow.setAlwaysOnTop(true, 'floating')
   // Étape 177 : une image neuve tout de suite, pour ne jamais réafficher une fenêtre transparente vide.
   widgetWindow.webContents.invalidate()
+  // Étape 256 : un widget créé ou réaffiché pendant un pilotage reste hors de la vue et des clics du pilote.
+  if (pilotTasks > 0) applyPilotWidgetGuard()
 }
 
 /** La touche + ouvre la forme du mode actif : barre écrite en Chat, écoute visible en Agent vocal. */
@@ -681,6 +684,43 @@ function collapseChatWidget(): void {
   chatWidgetHeight = null
   widgetWindow.webContents.send(IPC_CHANNELS.widgetMode, displayedWidgetMode)
   positionWidgetWindow(widgetWindow, false, true)
+}
+
+/**
+ * Étape 256 — les gestes de pilotWindows.ts : écarter Jaris pendant qu'il pilote l'écran. La grande fenêtre se
+ * replie exactement comme quand on clique ailleurs (en widget, ou réduite s'il n'y a pas de widget à montrer) ; elle
+ * ne revient pas d'elle-même à la fin, sinon elle recouvrirait le résultat que Léo vient de demander. Le widget
+ * reste affiché, mais invisible aux captures (même protection que l'animation de scan, scanOverlay.ts) et
+ * transparent aux clics : le pilote ne doit ni le voir ni cliquer dessus.
+ */
+let pilotTasks = 0
+
+function applyPilotWidgetGuard(): void {
+  if (!widgetWindow || widgetWindow.isDestroyed()) return
+  widgetWindow.setContentProtection(pilotTasks > 0)
+  widgetWindow.setIgnoreMouseEvents(pilotTasks > 0)
+}
+
+async function setJarisAsideForPilot(): Promise<void> {
+  pilotTasks++
+  const shown = !!fullWindow && !fullWindow.isDestroyed() && fullWindow.isVisible() && !fullWindow.isMinimized()
+  if (shown && fullWindow) {
+    if (onboardingDone && hasWidgetToShow()) {
+      fullWindow.hide()
+      showWidgetWindow()
+      applyListeningForActiveMode()
+    } else {
+      fullWindow.minimize()
+    }
+  }
+  applyPilotWidgetGuard()
+  // Le temps que Windows retire vraiment la fenêtre de l'écran avant la première capture.
+  if (shown) await new Promise((resolve) => setTimeout(resolve, 400))
+}
+
+function bringJarisBackAfterPilot(): void {
+  pilotTasks = Math.max(0, pilotTasks - 1)
+  applyPilotWidgetGuard()
 }
 
 /** Envoie un évènement du pipeline vocal à toutes les fenêtres actuellement ouvertes (réglages et/ou widget). */
@@ -981,6 +1021,7 @@ app.whenReady().then(async () => {
   // déjà perdu la course au verrou continuerait quand même à créer sa fenêtre, démarrer Ollama, etc. avant
   // de se fermer — exactement le flash visible à corriger ici.
   if (!gotSingleInstanceLock) return
+  setPilotWindowHooks({ begin: setJarisAsideForPilot, end: bringJarisBackAfterPilot })
   void cleanupStaleChromiumData()
   // Étape 200 : le Montage a été retiré ; son paquet Remotion (environ 600 Mo) ne sert plus à rien.
   void removeLeftoverMontage()

@@ -156,15 +156,20 @@ export const PILOT_SYSTEM_PROMPT =
 /** describeElements (uiAutomation.ts). */
 function describeElements(elements) {
   if (!elements.length) return ''
-  return elements.map((element) => `- [${element.type}] ${element.name.slice(0, 80)}`).join('\n')
+  return elements
+    .map((element) => `${element.id === undefined ? '-' : `${element.id}.`} [${element.type}] ${element.name.slice(0, 80)}`)
+    .join('\n')
 }
 
 /** buildStepPrompt (computerUse.ts) : le message d'une étape, ici la toute première (aucune action faite). */
 export function buildPilotPrompt(goal, history, elements) {
   const historyText = history.length ? `Actions déjà faites :\n${history.join('\n')}` : 'Aucune action encore faite.'
-  const elementsText = elements.length
-    ? `Éléments cliquables détectés par Windows (positions exactes, à préférer) :\n${describeElements(elements)}`
-    : "Windows n'expose aucun élément cliquable pour cette fenêtre : utilise les clics par position (x/y de 0 à 1000)."
+  const marked = elements.some((element) => element.id !== undefined)
+  const elementsText = !elements.length
+    ? "Windows n'expose aucun élément cliquable pour cette fenêtre : utilise les clics par position (x/y de 0 à 1000)."
+    : marked
+      ? `Éléments cliquables détectés par Windows, encadrés et numérotés sur la capture (positions exactes, à préférer) :\n${describeElements(elements)}`
+      : `Éléments cliquables détectés par Windows (positions exactes, à préférer) :\n${describeElements(elements)}`
   return `Objectif : ${goal}\n\n${historyText}\n\n${elementsText}\n\nCapture d'écran actuelle jointe. Quelle est la prochaine action ?`
 }
 
@@ -175,7 +180,13 @@ export function extractPilotStep(raw) {
   try {
     const parsed = JSON.parse(match[0])
     if (!['click_element', 'click', 'double_click', 'right_click', 'type', 'key', 'wait', 'done', 'fail'].includes(parsed.action ?? '')) return null
-    if (parsed.action === 'click_element' && !(typeof parsed.name === 'string' && parsed.name.trim())) return null
+    if (parsed.action === 'click_element') {
+      // Étape 256 : par son numéro sur la capture (Set-of-Marks), ou par son nom comme avant.
+      const id = typeof parsed.id === 'string' && /^\d+$/.test(parsed.id) ? Number(parsed.id) : parsed.id
+      if (typeof id === 'number' && Number.isInteger(id) && id > 0) parsed.id = id
+      else if (!(typeof parsed.name === 'string' && parsed.name.trim())) return null
+      else delete parsed.id
+    }
     if (['click', 'double_click', 'right_click'].includes(parsed.action ?? '') &&
       !(typeof parsed.x === 'number' && Number.isFinite(parsed.x) && parsed.x >= 0 &&
         typeof parsed.y === 'number' && Number.isFinite(parsed.y) && parsed.y >= 0)) return null

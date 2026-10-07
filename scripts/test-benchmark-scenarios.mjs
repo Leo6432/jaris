@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
-import { TOOLS } from './benchmark-cases.mjs'
+import { TOOLS, withoutDateTimeNote } from './benchmark-cases.mjs'
 import {
   FALLBACK_REPLY,
   MAX_HISTORY_MESSAGES,
@@ -519,9 +519,9 @@ function loadRealConverse() {
   }
 }
 
-/** La date du prompt système change à chaque appel du vrai Jaris : seule elle est retirée avant comparaison. */
+/** La date devant la demande change à chaque appel du vrai Jaris : seule elle est retirée avant comparaison. */
 const withoutDate = (messages) =>
-  messages.map((m) => (m.role === 'system' && m.content.startsWith('Tu es Jaris') ? { ...m, content: m.content.replace(/Nous sommes le [^]*?, il est \d{2}:\d{2}\. /, '') } : m))
+  messages.map((m) => (m.role === 'user' ? { ...m, content: withoutDateTimeNote(m.content) } : m))
 
 /** Situations de boucle à couvrir en plus des demandes (relecture ChatGPT : « compare sur quelques traces préparées »). */
 const FAILING_TASK = {
@@ -727,7 +727,7 @@ function startFakeOllama({ installed, dropAfter = Infinity, failFrom = null, han
         res.statusCode = 400
         return res.end(JSON.stringify({ error: `"${json.model}" does not support thinking` }))
       }
-      const users = json.messages.filter((m) => m.role === 'user').map((m) => m.content)
+      const users = json.messages.filter((m) => m.role === 'user').map((m) => withoutDateTimeNote(m.content))
       const scenario = SCENARIOS.find((s) => users.includes(s.turns[0]))
       const key = `${json.model}|${json.options.seed}`
       const index = counters.get(key) ?? 0
@@ -791,7 +791,7 @@ test('vrai script : demandes complètes notées, trace, configuration et graines
     assert.match(results, new RegExp(`\\| qwen3:1\\.7b \\|[^\\n]*\\| 0/${SCENARIO_TOTAL} \\|`))
     assert.ok(!fake.requests.some((r) => r.model === 'qwen3.5:0.8b'), 'un modèle déjà noté au test actuel n’est jamais rejoué')
     // Aucune des 78 questions n'est reposée : seuls des messages de demandes complètes arrivent.
-    assert.ok(fake.requests.every((r) => SCENARIOS.some((s) => r.messages.some((m) => m.role === 'user' && m.content === s.turns[0]))))
+    assert.ok(fake.requests.every((r) => SCENARIOS.some((s) => r.messages.some((m) => m.role === 'user' && withoutDateTimeNote(m.content) === s.turns[0]))))
     // Détail lisible : configuration, ratés avec leur raison, et chaque passage avec sa graine et sa trace.
     assert.match(results, /### ministral-3:3b \(demandes\) — 48\/48\n\nConfiguration : digest abcdef123456, [^\n]*réflexion envoyée medium, contexte 8192/)
     assert.match(results, /### qwen3:1\.7b \(demandes\) — 0\/48\n\nConfiguration : [^\n]*réflexion envoyée désactivée \(refusée par le modèle\)/)
@@ -986,11 +986,11 @@ test('reprise : seules les demandes arrêtées par le délai ou plantées sont r
   const spotify = SCENARIOS.find((sc) => sc.id === 'spotify-volume').turns[0]
   // « spotify-volume » (1er passage) plante après une première action, comme un appel d'outil illisible pour Ollama.
   const crash = { model: 'ministral-3:3b', id: 'spotify-volume', seed: 1000, call: 1 }
-  const userOf = (r) => r.messages.find((m) => m.role === 'user').content
+  const userOf = (r) => withoutDateTimeNote(r.messages.find((m) => m.role === 'user').content)
   const first = await startFakeOllama({
     installed: ['ministral-3:3b', 'qwen3:1.7b'],
     failFrom: crash,
-    hang: (json) => json.model === 'ministral-3:3b' && json.messages.some((m) => m.role === 'user' && frozen.includes(m.content))
+    hang: (json) => json.model === 'ministral-3:3b' && json.messages.some((m) => m.role === 'user' && frozen.includes(withoutDateTimeNote(m.content)))
   })
   try {
     const resultsPath = join(dir, 'resultats.md')
@@ -1312,7 +1312,7 @@ test('vrai script : une demande arrêtée par l’ancien regard sur l’écran e
     assert.equal(code, 0, out)
     assert.match(out, /1 demande\(s\) arrêtée\(s\) par « regarder l'écran » en pleine tâche/)
     const echec = SCENARIOS.find((s) => s.id === 'echec-partiel').turns[0]
-    assert.ok(fake.requests.length > 0 && fake.requests.every((r) => r.messages.some((m) => m.role === 'user' && m.content === echec)), 'seule la demande arrêtée est rejouée')
+    assert.ok(fake.requests.length > 0 && fake.requests.every((r) => r.messages.some((m) => m.role === 'user' && withoutDateTimeNote(m.content) === echec)), 'seule la demande arrêtée est rejouée')
     const replayed = readFileSync(tracesPath, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((t) => t.type === 'demande' && t.replay)
     assert.equal(replayed.length, 1)
     assert.equal(replayed[0].id, 'echec-partiel')

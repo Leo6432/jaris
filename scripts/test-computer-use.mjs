@@ -17,7 +17,7 @@ const uiaSource = ts.transpileModule(readFileSync(new URL('../electron/services/
 }).outputText
 const loadUia = vm.runInThisContext(`(function (exports, require, module) {\n${uiaSource}\n})`)
 const uia = { exports: {} }
-loadUia(uia.exports, () => ({ spawn: () => {} }), uia)
+loadUia(uia.exports, () => ({}), uia)
 
 // Étape 251 : le viseur (maiUi.ts) et le choix du rôle (shared/pilotModel.ts) sont les VRAIS modules : seul
 // l'appel au modèle est simulé, pour tester la vraie conversion recadrage -> écran à travers la vraie boucle.
@@ -31,6 +31,8 @@ function loadReal(path) {
 }
 const maiUi = loadReal('../electron/services/maiUi.ts')
 const pilotModel = loadReal('../shared/pilotModel.ts')
+// Étape 256 : le centre des éléments numérotés est calculé par le vrai module.
+const screenMarks = loadReal('../electron/services/screenMarks.ts')
 
 /**
  * Fausse capture à pleine résolution (2560 x 1440) : chaque vue (entière ou recadrée) garde dans son « image »
@@ -55,8 +57,15 @@ function streamed(content) {
 
 // Étape 231 : `pilot` = profil + modèles installés simulés. Par défaut, aucun modèle de pilotage : le modèle de
 // vision pilote, exactement comme avant — tous les tests historiques ci-dessous passent par ce chemin.
+/**
+ * `pilot.textSteps` (étape 256) : réponses du modèle rapide qui planifie sans image (profil `models.medium`) ;
+ * `pilot.physical` : capture sensible au DPI (clics en pixels réels).
+ */
 function setup(steps, inputResult, onFetch, elements = [], pilot = { profile: null, installed: [] }) {
   let captures = 0
+  let asides = 0
+  let backs = 0
+  const textBodies = []
   let actions = 0
   let hidden = 0
   const logs = []
@@ -75,18 +84,23 @@ function setup(steps, inputResult, onFetch, elements = [], pilot = { profile: nu
     './inputControl': {
       clickMouse: (...a) => input('click', ...a), typeText: (...a) => input('type', ...a), pressKey: (...a) => input('key', ...a)
     },
-    './uiAutomation': {
-      listClickableElements: async () => { uiaReads++; return elements },
-      findElementByName: uia.exports.findElementByName,
-      describeElements: uia.exports.describeElements
+    './uiAutomation': uia.exports,
+    './screenMarks': screenMarks,
+    './pilotWindows': {
+      withJarisSetAside: async (task) => {
+        asides++
+        try { return await task() } finally { backs++ }
+      }
     },
-    './vision': {
-      MAX_SCREENSHOT_WIDTH: 1280,
-      captureScreenshotBase64: async () => { captures++; return { imageBase64: 'test', scale: pilot.scale ?? 1, width: 1280, height: 720 } },
-      captureScreenForPilot: async () => { captures++; fullCaptures++; return { imageBase64: 'test', scale: pilot.scale ?? 1, width: 1280, height: 720, full: fakeFull() } }
-    }
+    './markedCapture': {
+      capturePilotScreen: async () => {
+        captures++
+        uiaReads++
+        return { imageBase64: 'test', scale: pilot.scale ?? 1, width: 1280, height: 720, full: fakeFull(), marks: elements, physical: pilot.physical ?? false, window: 'YouTube - Firefox' }
+      }
+    },
+    './vision': { MAX_SCREENSHOT_WIDTH: 1280 }
   }
-  let fullCaptures = 0
   const aims = []
   const unloads = []
   const prompts = []
@@ -101,6 +115,13 @@ function setup(steps, inputResult, onFetch, elements = [], pilot = { profile: nu
         unloads.push(body)
         return { ok: true, json: async () => ({}) }
       }
+      if (body.model === pilot.profile?.models?.medium) {
+        textBodies.push(body)
+        pilot.onText?.()
+        if (pilot.textError) return { ok: false, status: 500, text: async () => pilot.textError }
+        const next = pilot.textSteps?.shift() ?? { action: 'look' }
+        return streamed(typeof next === 'string' ? next : JSON.stringify(next))
+      }
       if (pilot.aim && body.model === pilotModel.PILOT_MODEL) {
         aims.push(body)
         pilot.onAim?.()
@@ -114,7 +135,10 @@ function setup(steps, inputResult, onFetch, elements = [], pilot = { profile: nu
     }
   })
   return { exports, run: signal => exports.computerUseTask('Cherche un tuto guitare', 'test', line => logs.push(line), signal),
-    state: () => ({ captures, fullCaptures, actions, hidden, logs, clicks: clicks.map((c) => c[0] === 'click' ? c.slice(1) : c), calls: clicks, prompts, bodies, uiaReads, aims, unloads }) }
+    state: () => ({
+      captures, actions, hidden, logs, clicks: clicks.map((c) => c[0] === 'click' ? c.slice(1, 4) : c), calls: clicks, prompts, bodies, uiaReads, aims, unloads,
+      physical: clicks.filter((c) => c[0] === 'click').map((c) => c[4]), textBodies, asides, backs
+    }) }
 }
 
 for (const step of [{ action: 'move' }, { action: 'click' }, { action: 'click', x: '12', y: 2 }, { action: 'type', text: '' }, { action: 'key', key: 42 }]) {
@@ -157,9 +181,10 @@ test('une annulation pendant la vision empêche le clic tardif', async () => {
 
 // --- Étape 32 : clics par élément d'accessibilité plutôt qu'en pixels devinés ---
 
+// Étape 256 : des éléments numérotés, avec le rectangle donné par Windows — le clic vise son centre.
 const ELEMENTS = [
-  { name: 'Rechercher', type: 'Edit', x: 300, y: 120 },
-  { name: 'Se connecter', type: 'Button', x: 640, y: 40 }
+  { id: 1, name: 'Rechercher', type: 'Edit', x: 250, y: 100, w: 100, h: 40 },
+  { id: 2, name: 'Se connecter', type: 'Button', x: 600, y: 25, w: 80, h: 30 }
 ]
 
 test('click_element clique à la position donnée par Windows, pas à des pixels devinés', async () => {
@@ -195,17 +220,179 @@ test('click_element sans nom est refusé comme action inexécutable', async () =
   assert.equal(app.state().actions, 0)
 })
 
-test('la liste des éléments est bien transmise au modèle', async () => {
+test('la liste des éléments est bien transmise au modèle, avec les numéros dessinés sur la capture', async () => {
   const app = setup([{ action: 'done', result: 'ok' }], '', undefined, ELEMENTS)
   await app.run()
-  assert.match(app.state().prompts[0], /- \[Edit\] Rechercher/)
-  assert.match(app.state().prompts[0], /- \[Button\] Se connecter/)
+  assert.match(app.state().prompts[0], /encadrés et numérotés sur la capture/)
+  assert.match(app.state().prompts[0], /^1\. \[Edit\] Rechercher$/m)
+  assert.match(app.state().prompts[0], /^2\. \[Button\] Se connecter$/m)
+  // La règle « clique par numéro » s'ajoute aux consignes, qui restent identiques à leur copie de test.
+  assert.equal(app.state().bodies[0].messages[0].content, `${app.exports.SYSTEM_PROMPT}\n\n${app.exports.MARKS_RULE}`)
 })
 
 test("sans arbre d'accessibilité, le modèle est explicitement renvoyé vers le clic en pixels", async () => {
   const app = setup([{ action: 'done', result: 'ok' }], '', undefined, [])
   await app.run()
   assert.match(app.state().prompts[0], /aucun élément cliquable.*clics par position \(x\/y de 0 à 1000\)/s)
+})
+
+// --- Étape 256 : éléments numérotés sur la capture (Set-of-Marks) ---
+
+/** Le module tourne dans un autre realm (vm.runInNewContext) : ses objets se comparent par leur contenu. */
+const plain = (value) => (value === null ? null : JSON.parse(JSON.stringify(value)))
+
+test('click_element par numéro : clic au centre du rectangle de Windows, dans le repère de la capture', async () => {
+  const app = setup(
+    [{ action: 'click_element', id: 2 }, { action: 'done', result: 'Connexion ouverte' }],
+    'Clic left effectué à (640, 40).',
+    undefined,
+    ELEMENTS,
+    { profile: null, installed: [], physical: true }
+  )
+  assert.equal(await app.run(), 'Connexion ouverte')
+  assert.deepEqual(app.state().clicks[0], [640, 40, 'left'])
+  assert.deepEqual(app.state().physical, [true], 'capture sensible au DPI : clic en pixels réels')
+  assert.match(app.state().prompts[1], /Clic sur "Se connecter" \(Button, position donnée par Windows\)/)
+})
+
+test('numéro absent de la liste : rien n’est cliqué, l’historique le dit, la tâche continue', async () => {
+  const app = setup([{ action: 'click_element', id: 9 }, { action: 'done', result: 'Fait' }], ok, undefined, ELEMENTS)
+  assert.equal(await app.run(), 'Fait')
+  assert.equal(app.state().actions, 0)
+  assert.match(app.state().prompts[1], /Élément n°9 introuvable/)
+})
+
+test('numéro écrit en texte ("12") accepté ; zéro, négatif ou décimal refusés', () => {
+  const app = setup([])
+  assert.deepEqual(plain(app.exports.extractStep('{"action":"click_element","id":"2"}')), { action: 'click_element', id: 2 })
+  for (const raw of ['{"action":"click_element","id":0}', '{"action":"click_element","id":-3}', '{"action":"click_element","id":1.5}']) {
+    assert.equal(app.exports.extractStep(raw), null, raw)
+  }
+  // L'ancienne forme (par le nom) reste comprise.
+  assert.deepEqual(plain(app.exports.extractStep('{"action":"click_element","name":"OK"}')), { action: 'click_element', name: 'OK' })
+})
+
+test('capture sensible au DPI : un clic par position est fait en pixels réels lui aussi', async () => {
+  const app = setup([{ action: 'click', x: 500, y: 500 }, { action: 'done', result: 'ok' }], ok, undefined, [], { profile: null, installed: [], physical: true, scale: 1.5 })
+  assert.equal(await app.run(), 'ok')
+  assert.deepEqual(app.state().clicks[0], [960, 540, 'left'])
+  assert.deepEqual(app.state().physical, [true])
+})
+
+test('Jaris est écarté pendant toute la tâche, et revient même quand elle échoue', async () => {
+  const done = setup([{ action: 'done', result: 'ok' }])
+  await done.run()
+  assert.deepEqual([done.state().asides, done.state().backs], [1, 1])
+  const failed = setup([{ action: 'fail', result: 'Page de connexion' }])
+  await assert.rejects(failed.run(), /Page de connexion/)
+  assert.deepEqual([failed.state().asides, failed.state().backs], [1, 1])
+})
+
+// --- Étape 256 : planifier sans image quand Windows donne une liste fournie ---
+
+const MEDIUM = 'granite4.2:8b'
+const PAGE = [
+  ...ELEMENTS,
+  { id: 3, name: 'Accueil', type: 'Hyperlink', x: 10, y: 80, w: 100, h: 30 },
+  { id: 4, name: 'Shorts', type: 'Hyperlink', x: 10, y: 120, w: 100, h: 30 },
+  { id: 5, name: 'Tuto guitare débutant', type: 'Hyperlink', x: 300, y: 300, w: 400, h: 60 }
+]
+const planner = (textSteps, extra = {}) => ({ profile: { models: { medium: MEDIUM } }, installed: [MEDIUM], textSteps, ...extra })
+
+test('liste fournie : le modèle rapide pilote sans image — aucun appel au modèle de vision', async () => {
+  const app = setup([], ok, undefined, PAGE, planner([
+    { action: 'click_element', id: 1 }, { action: 'type', text: 'tuto guitare' }, { action: 'key', key: 'entrée' }, { action: 'done', result: 'Recherche lancée' }
+  ]))
+  assert.equal(await app.run(), 'Recherche lancée')
+  const { bodies, textBodies, calls, logs } = app.state()
+  assert.equal(bodies.length, 0, 'pas une seule capture envoyée au modèle de vision')
+  assert.deepEqual(calls.map((c) => c[0]), ['click', 'type', 'key'])
+  assert.deepEqual(app.state().clicks[0], [300, 120, 'left'])
+  // Sans image, liste numérotée + titre de la fenêtre, consigne propre, réponse forcée en JSON, température 0.
+  const first = textBodies[0]
+  assert.equal(first.model, MEDIUM)
+  assert.ok(first.messages.every((m) => !m.images))
+  assert.equal(first.messages[0].content, app.exports.TEXT_PLANNER_PROMPT)
+  assert.match(first.messages[1].content, /Fenêtre au premier plan : « YouTube - Firefox »/)
+  assert.match(first.messages[1].content, /^5\. \[Hyperlink\] Tuto guitare débutant$/m)
+  assert.deepEqual(first.format, plain(app.exports.TEXT_STEP_FORMAT))
+  assert.equal(first.think, false)
+  assert.equal(first.options.temperature, 0)
+  assert.match(textBodies[3].messages[1].content, /Texte tapé : "tuto guitare"/)
+  assert.ok(logs.some((l) => /je lis les boutons de la fenêtre/.test(l)))
+})
+
+test('« look » : l’étape passe au modèle de vision, sur la même capture', async () => {
+  const app = setup([{ action: 'click_element', id: 5 }, { action: 'done', result: 'ok' }], ok, undefined, PAGE, planner([{ action: 'look' }, { action: 'done', result: 'ok' }]))
+  assert.equal(await app.run(), 'ok')
+  const { bodies, textBodies, captures } = app.state()
+  assert.equal(bodies.length, 1)
+  assert.equal(textBodies.length, 2)
+  // Une seule capture pour l'étape 1 (texte puis vision), une pour l'étape 2.
+  assert.equal(captures, 2)
+  assert.ok(app.state().logs.some((l) => /je regarde l'écran de plus près/.test(l)))
+})
+
+test('deux « look » : la liste ne suffit pas ici, le modèle rapide n’est plus sollicité', async () => {
+  const app = setup(
+    [{ action: 'wait' }, { action: 'click_element', id: 5 }, { action: 'click_element', id: 2 }, { action: 'done', result: 'ok' }],
+    ok, undefined, PAGE, planner([{ action: 'look' }, { action: 'look' }, { action: 'done', result: 'jamais lu' }])
+  )
+  assert.equal(await app.run(), 'ok')
+  assert.equal(app.state().textBodies.length, 2)
+  assert.equal(app.state().bodies.length, 4)
+})
+
+test('« fini » alors que rien n’a été fait : sans image ce serait une supposition, la vision vérifie', async () => {
+  const app = setup([{ action: 'click_element', id: 1 }, { action: 'done', result: 'vu' }], ok, undefined, PAGE, planner([{ action: 'done', result: 'déjà fait' }, { action: 'look' }]))
+  assert.equal(await app.run(), 'vu')
+  assert.equal(app.state().bodies.length, 2)
+})
+
+test('numéro inventé par le modèle rapide : jamais cliqué, la vision reprend l’étape', async () => {
+  const app = setup([{ action: 'done', result: 'ok' }], ok, undefined, PAGE, planner([{ action: 'click_element', id: 42 }]))
+  assert.equal(await app.run(), 'ok')
+  assert.equal(app.state().actions, 0)
+  assert.equal(app.state().bodies.length, 1)
+})
+
+test('modèle rapide en erreur : la vraie raison est notée, il n’est plus resollicité', async () => {
+  const app = setup([{ action: 'wait' }, { action: 'done', result: 'ok' }], ok, undefined, PAGE, planner([], { textError: 'model not found' }))
+  assert.equal(await app.run(), 'ok')
+  assert.equal(app.state().textBodies.length, 1)
+  assert.ok(app.state().logs.some((l) => /Lecture des boutons par granite4\.2:8b impossible \(Ollama a répondu 500 : model not found\)/.test(l)))
+})
+
+test('peu de boutons (moins de 5), modèle rapide absent du profil ou désinstallé : vision directement', async () => {
+  for (const [elements, pilot] of [
+    [ELEMENTS, planner([{ action: 'done', result: 'x' }])],
+    [PAGE, { profile: null, installed: [] }],
+    [PAGE, { ...planner([{ action: 'done', result: 'x' }]), installed: [] }]
+  ]) {
+    const app = setup([{ action: 'done', result: 'ok' }], ok, undefined, elements, pilot)
+    assert.equal(await app.run(), 'ok')
+    assert.equal(app.state().textBodies.length, 0)
+  }
+})
+
+test('annulation pendant la lecture des boutons : aucun clic', async () => {
+  const controller = new AbortController()
+  const app = setup([], ok, undefined, PAGE, planner([{ action: 'click_element', id: 1 }], { onText: () => controller.abort() }))
+  assert.match(await app.run(controller.signal), /interrompue/)
+  assert.equal(app.state().actions, 0)
+})
+
+test('réponse du modèle rapide : seules les actions exécutables passent', () => {
+  const app = setup([])
+  const marks = [{ id: 1 }, { id: 2 }]
+  const read = (raw) => plain(app.exports.extractTextStep(raw, marks))
+  assert.deepEqual(read('{"action":"click_element","id":2}'), { action: 'click_element', id: 2 })
+  assert.deepEqual(read('```json\n{"action":"key","key":"entrée"}\n```'), { action: 'key', key: 'entrée' })
+  assert.deepEqual(read('{"action":"look"}'), { action: 'look' })
+  assert.deepEqual(read('{"action":"done","result":"ok"}'), { action: 'done', result: 'ok' })
+  for (const raw of ['{"action":"click_element","id":3}', '{"action":"click","x":1,"y":2}', '{"action":"type","text":" "}', 'rien', '{"action":"scroll"}']) {
+    assert.equal(read(raw), null, raw)
+  }
 })
 
 // --- Étape 251 : le viseur MAI-UI vise ce que le modèle de vision a décidé de cliquer ---
@@ -241,10 +428,10 @@ test('viseur installé : le modèle de vision décide, MAI-UI vise avec son zoom
   const app = setup([CLICK, { action: 'done', result: 'ok' }], ok, undefined, ELEMENTS, withPilot({ aim: fakeMaiUi({ firstError: [90, 40] }) }))
   assert.equal(await app.run(), 'ok')
   const { aims, clicks, bodies, uiaReads, unloads, prompts } = app.state()
-  // Le modèle de vision reçoit la règle « target » en plus de sa consigne habituelle, et la liste Windows.
+  // Le modèle de vision reçoit les règles « numéro » et « target » en plus de sa consigne habituelle, et la liste Windows.
   assert.match(bodies[0].messages[0].content, /"target"/)
-  assert.equal(bodies[0].messages[0].content, `${app.exports.SYSTEM_PROMPT}\n\n${app.exports.PILOT_TARGET_RULE}`)
-  assert.ok(uiaReads > 0, 'un clic par le nom reste possible et exact')
+  assert.equal(bodies[0].messages[0].content, `${app.exports.SYSTEM_PROMPT}\n\n${app.exports.MARKS_RULE}\n\n${app.exports.PILOT_TARGET_RULE}`)
+  assert.ok(uiaReads > 0, 'un clic par numéro reste possible et exact')
   // Deux regards : toute l'image, puis la moitié de l'écran autour du 1er point ; consigne officielle, température 0.
   assert.equal(aims.length, 2)
   assert.equal(aims[0].messages[0].content, maiUi.MAI_UI_GROUNDING_PROMPT)
@@ -308,7 +495,6 @@ test('profil qui cite encore UI-TARS : pas de viseur, consigne habituelle intact
   const app = setup([CLICK, { action: 'done', result: 'ok' }], ok, undefined, [], { profile: { pilotModel: old }, installed: [old, 'qwen3.5:4b'], aim: fakeMaiUi() })
   assert.equal(await app.run(), 'ok')
   assert.equal(app.state().aims.length, 0)
-  assert.equal(app.state().fullCaptures, 0)
   assert.equal(app.state().bodies[0].messages[0].content, app.exports.SYSTEM_PROMPT, 'copie vérifiée par le test des modèles de vision')
   assert.deepEqual(app.state().clicks[0], [896, 130, 'left'])
 })

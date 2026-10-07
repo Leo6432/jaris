@@ -20,6 +20,14 @@ public static class JarisInput
     [DllImport("user32.dll")]
     private static extern bool SetCursorPos(int X, int Y);
 
+    [DllImport("user32.dll")]
+    private static extern bool SetProcessDPIAware();
+
+    public static void DpiAware()
+    {
+        SetProcessDPIAware();
+    }
+
     private const int INPUT_MOUSE = 0;
     private const int INPUT_KEYBOARD = 1;
     private const uint KEYEVENTF_UNICODE = 0x0004;
@@ -213,8 +221,13 @@ export async function mediaKey(action: string): Promise<string> {
   return error ? `Échec de l'action multimédia : ${error}` : `Action "${action}" effectuée.`
 }
 
-/** Clique à une position écran donnée (pixels), ou à la position actuelle du curseur si non précisée. */
-export async function clickMouse(x: number | null, y: number | null, button: string): Promise<string> {
+/**
+ * Clique à une position écran donnée (pixels), ou à la position actuelle du curseur si non précisée.
+ * `physicalPixels` (étape 256) : la position vient d'une capture sensible au DPI (screenMarks.ts), en pixels RÉELS.
+ * Le processus qui clique doit alors l'être aussi, sinon Windows remet la position à l'échelle (×1,25 sur un écran
+ * à 125 %) et le clic part à côté. Sans ce drapeau, rien ne change : pixels logiques, comme avant.
+ */
+export async function clickMouse(x: number | null, y: number | null, button: string, physicalPixels = false): Promise<string> {
   const safeButton = (['left', 'right', 'double'] as const).includes(button as 'left' | 'right' | 'double')
     ? button
     : 'left'
@@ -222,6 +235,7 @@ export async function clickMouse(x: number | null, y: number | null, button: str
   const px = hasPos ? Math.round(x as number) : 0
   const py = hasPos ? Math.round(y as number) : 0
 
-  const error = await runPowerShell(`[JarisInput]::Click(${px}, ${py}, $${hasPos ? 'true' : 'false'}, "${safeButton}")`)
+  const dpi = physicalPixels && hasPos ? '[JarisInput]::DpiAware()\n' : ''
+  const error = await runPowerShell(`${dpi}[JarisInput]::Click(${px}, ${py}, $${hasPos ? 'true' : 'false'}, "${safeButton}")`)
   return error ? `Échec du clic : ${error}` : `Clic ${safeButton} effectué${hasPos ? ` à (${px}, ${py})` : ''}.`
 }

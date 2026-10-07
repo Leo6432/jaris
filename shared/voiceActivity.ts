@@ -27,6 +27,8 @@ function stepActivity(step: string, detail: string): string | null {
   const aim = d.match(/^je vise précisément (.+)$/iu)
   if (aim) return `Étape ${step} : je vise ${aim[1]}`
   if (/^je regarde l'écran/iu.test(d)) return `Étape ${step} : je regarde l'écran`
+  // Étape 256 : l'étape planifiée sans image, d'après la liste des boutons que Windows donne.
+  if (/^je lis les boutons/iu.test(d)) return `Étape ${step} : je lis les boutons`
   const named = d.match(/^clic sur "(.+?)"/iu)
   if (named) return `Étape ${step} : je clique sur « ${named[1]} »`
   const target = d.match(/^clic \w+ sur (.+?) à \(/iu)

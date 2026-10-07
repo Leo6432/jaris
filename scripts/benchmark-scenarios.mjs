@@ -18,7 +18,7 @@
  * Seuls les raccourcis de Jaris (« ouvre X » seul, Bloc-notes, « salut ») ne sont pas joués : la réponse y
  * viendrait du code, pas du modèle — aucune demande ci-dessous n'y passe (vérifié par le test).
  */
-import { TOOLS, buildBenchmarkSystemPrompt, isRealReply } from './benchmark-cases.mjs'
+import { TOOLS, buildBenchmarkSystemPrompt, isRealReply, withDateTimeNote } from './benchmark-cases.mjs'
 
 /** À augmenter à chaque changement des demandes ou de leurs jugements : un ancien score est alors refait. */
 export const SCENARIO_TEST_VERSION = 3
@@ -455,9 +455,9 @@ export async function runScenario(scenario, chat, { variant = 0, onEvent } = {})
     turns.push(turn)
     history = history.slice(-MAX_HISTORY_MESSAGES)
     const messages = [
-      { role: 'system', content: buildBenchmarkSystemPrompt(SCENARIO_NOW, sim.noteTitles()) },
+      { role: 'system', content: buildBenchmarkSystemPrompt(sim.noteTitles()) },
       ...filterHistory(history),
-      { role: 'user', content: userText }
+      { role: 'user', content: withDateTimeNote(userText, SCENARIO_NOW) }
     ]
     const wantsEmailSent = hasUnnegatedMailIntent(userText)
     const wantsWebInfo = looksLikeKnowledgeQuestion(userText)

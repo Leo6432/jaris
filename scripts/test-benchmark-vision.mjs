@@ -176,9 +176,13 @@ test('l’étape de pilotage du test est EXACTEMENT celle de Jaris (consignes, m
     assert.equal(buildPilotPrompt(testCase.goal, [], testCase.elements ?? []), real.buildStepPrompt(testCase.goal, [], testCase.elements ?? []))
   }
   assert.equal(buildPilotPrompt('x', ['1. Clic'], elements), real.buildStepPrompt('x', ['1. Clic'], elements))
+  // Étape 256 : éléments numérotés sur la capture (Set-of-Marks).
+  const marked = elements.map((element, index) => ({ ...element, id: index + 1 }))
+  assert.equal(buildPilotPrompt('x', [], marked), real.buildStepPrompt('x', [], marked))
   const samples = [
     '{"action":"click","x":10,"y":20}', '```json\n{"action":"done","result":"ok"}\n```', '{"action":"click","x":"10","y":20}', '{"action":"scroll"}',
-    '{"action":"click_element","name":" "}', '{"action":"type","text":"a"}', 'rien', '{"action":"key","key":"entrée"}', '{"action":"done","result":3}'
+    '{"action":"click_element","name":" "}', '{"action":"type","text":"a"}', 'rien', '{"action":"key","key":"entrée"}', '{"action":"done","result":3}',
+    '{"action":"click_element","id":4}', '{"action":"click_element","id":"12"}', '{"action":"click_element","id":0}', '{"action":"click_element","id":2,"name":"OK"}'
   ]
   for (const raw of samples) assert.deepEqual(extractPilotStep(raw), real.extractStep(raw), raw)
   for (const name of ['Annuler', 'annuler', 'Ne pas', 'enregistrer', 'Quitter', '']) {

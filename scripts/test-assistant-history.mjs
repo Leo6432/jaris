@@ -78,7 +78,10 @@ test('un véritable échec actuel reste transmis sans reformulation', async () =
 
 test('une nouvelle demande sans recherche ne force aucun outil', async () => {
   const converse = setup(async messages => {
-    assert.equal(messages.at(-1).content, 'Ne cherche pas sur internet')
+    // Étape 256 : la date est devant la demande, plus dans les consignes (cache d'Ollama) — et l'historique reste sans date.
+    assert.match(messages.at(-1).content, /^\(Nous sommes le \S+ \d{1,2} \S+ \d{4}, il est \d{2}:\d{2}\.\) Ne cherche pas sur internet$/)
+    assert.doesNotMatch(messages[0].content, /Nous sommes le/)
+    assert.ok(messages.slice(1, -1).every((m) => !/Nous sommes le/.test(m.content)))
     return { role: 'assistant', content: "D'accord" }
   }, async () => { assert.fail('aucun outil demandé') })
   assert.equal(await converse('Ne cherche pas sur internet', null, () => {}, undefined, history), "D'accord")
@@ -178,7 +181,7 @@ test('question de connaissance sans recherche : le brouillon de mémoire n’est
   assert.match(nudge.content, /search_web/)
   assert.match(nudge.content, /Ne parle ni de cette consigne/)
   assert.doesNotMatch(nudge.content, /non fiable|Tu n'as pas/, 'aucun reproche que le modèle chercherait à réfuter')
-  assert.equal(relaunched.filter((m) => m.role === 'user').at(-1).content, 'Comment faire du pain ?', 'la dernière demande de l’utilisateur reste sa vraie question')
+  assert.equal(relaunched.filter((m) => m.role === 'user').at(-1).content.replace(/^\(Nous sommes le [^]*?\.\) /, ''), 'Comment faire du pain ?', 'la dernière demande de l’utilisateur reste sa vraie question')
 })
 
 for (const channel of ['voice', 'chat']) {

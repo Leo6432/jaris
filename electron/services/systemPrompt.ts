@@ -8,13 +8,22 @@
 
 export type ConverseChannel = 'voice' | 'chat'
 
+/**
+ * Étape 256 — la date et l'heure, placées au DÉBUT du message de l'utilisateur et non plus dans les consignes.
+ * Ollama garde en mémoire les consignes déjà lues tant que le début du texte envoyé ne change pas : la date à la
+ * minute près, écrite tout en haut des consignes, changeait ce début à chaque demande et forçait à relire les
+ * ~5 000 mots de consignes et d'outils à chaque fois. Mesuré avec Ollama (consignes et outils réels de Jaris) :
+ * relecture 18,8 s → 0,8 s sur un modèle classique, 18,7 s → 5,3 s sur un modèle hybride comme qwen3.5.
+ * Les consignes ne doivent donc plus rien contenir qui change d'une demande à l'autre.
+ */
+export function dateTimeNote(now: Date = new Date()): string {
+  return `(Nous sommes le ${now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}, il est ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}.)`
+}
+
 export function buildSystemPrompt(userName: string | null, memoryTitles: string[], channel: ConverseChannel): string {
   const addressing = userName
     ? `L'utilisateur s'appelle ${userName} : appelle-le par son prénom de temps en temps, sans exagérer. `
     : ''
-
-  const now = new Date()
-  const dateTime = `Nous sommes le ${now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}, il est ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}. `
 
   const memory = memoryTitles.length
     ? `Tu as une mémoire locale sous forme de notes markdown liées entre elles (comme Obsidian). Notes déjà ` +
@@ -49,7 +58,8 @@ export function buildSystemPrompt(userName: string | null, memoryTitles: string[
     "Tu es Jaris, un assistant personnel qui tourne entièrement en local sur l'ordinateur de " +
     "l'utilisateur. " +
     style +
-    dateTime +
+    "Chaque demande de l'utilisateur commence par la date et l'heure actuelles entre parenthèses : c'est une " +
+    "indication pour toi, n'en parle que si la demande s'y rapporte. " +
     addressing +
     memory +
     memoryRule +
@@ -85,7 +95,7 @@ export function buildSystemPrompt(userName: string | null, memoryTitles: string[
     "mémoire à une question factuelle, même si tu es sûr de la réponse : ta certitude ne vaut rien face à " +
     "une info potentiellement périmée ou fausse. Seules les questions sur TOI-MÊME (ton fonctionnement, tes " +
     "réglages), sur une info déjà connue de cette conversation ou de la mémoire locale de l'utilisateur, ou " +
-    "sur la date/l'heure actuelle (déjà données plus haut), n'ont pas besoin de recherche. " +
+    "sur la date/l'heure actuelle (données au début de la demande), n'ont pas besoin de recherche. " +
     'Exemple concret : pour "trouve trois boulangeries et envoie-leur ' +
     'un mail", tu dois appeler search_web pour trouver de vraies boulangeries avec de vraies adresses mail, ' +
     "PUIS appeler computer_use_task pour envoyer le mail à chacune (un objectif par destinataire) — jamais " +
