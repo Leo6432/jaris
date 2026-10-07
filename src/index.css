@@ -4765,3 +4765,96 @@ a:hover {
 .memory-brain__note {
   position: absolute;
 }
+
+/* Étape 257 — duel vidéo (Options → Général → Développeur) : deux vidéos côte à côte, A et B. */
+.video-duel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 0 8px;
+}
+.video-duel__prompt {
+  border: 1px solid var(--hud-line);
+  background: var(--hud-panel-raised);
+  border-radius: 10px;
+  padding: 12px;
+}
+.video-duel__title {
+  font-family: var(--hud-font-display);
+  font-weight: 600;
+  color: var(--hud-text);
+}
+.video-duel__text {
+  margin: 4px 0 10px;
+  font-size: 0.78rem;
+  color: var(--hud-text-dim);
+}
+.video-duel__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (max-width: 720px) {
+  .video-duel__pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.video-duel__side {
+  margin: 0;
+  border: 1px solid var(--hud-line);
+  border-radius: 8px;
+  padding: 6px;
+  min-width: 0;
+}
+.video-duel__side--chosen {
+  border-color: var(--hud-ok);
+  box-shadow: 0 0 10px rgba(var(--hud-ok-rgb), 0.3);
+}
+.video-duel__letter {
+  font-size: 0.8rem;
+  color: var(--hud-text-soft);
+  margin-bottom: 6px;
+}
+.video-duel__reveal {
+  color: var(--hud-text-dim);
+}
+.video-duel__video {
+  display: block;
+  width: 100%;
+  border-radius: 6px;
+  background: #000;
+}
+.video-duel__missing {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 832 / 480;
+  font-size: 0.78rem;
+  color: var(--hud-text-faint);
+  border: 1px dashed var(--hud-line);
+  border-radius: 6px;
+}
+.video-duel__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+/* Plus spécifique que la famille de boutons ET que son survol (:not(:disabled):hover) : sinon le bouton cliqué,
+   encore survolé, garde l'aspect normal (piège du bouton resté gris, étape 97). */
+.options-menu__action.video-duel__choice--active,
+.options-menu__action.video-duel__choice--active:not(:disabled):hover {
+  border-color: var(--hud-ok);
+  color: var(--hud-ok);
+  background: rgba(var(--hud-ok-rgb), 0.12);
+}
+.video-duel__log {
+  margin-top: 8px;
+}
+.video-duel__error {
+  color: var(--hud-danger-soft);
+}
+.video-duel__summary {
+  font-size: 0.85rem;
+  color: var(--hud-text);
+  margin: 0;
+}

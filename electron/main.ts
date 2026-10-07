@@ -29,10 +29,12 @@ import {
   listGeneratedVideos,
   readGeneratedVideo
 } from './services/videoGenerator'
+import { cancelVideoDuel, deleteVideoDuelFiles, duelOutputDir, getVideoDuelStatus, readDuelVideo, runVideoDuel, setDuelChoice } from './services/videoDuel'
+import { isDuelChoice, isDuelPromptId, type VideoDuelResults, type VideoDuelStatus } from '../shared/videoDuel'
 import { removeLeftoverMontage } from './services/legacyCleanup'
 import { spawn } from 'child_process'
 import { basename, extname, join } from 'path'
-import { copyFile, readFile, rm, writeFile } from 'fs/promises'
+import { copyFile, mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { decodePngDataUrl, defaultImageFileName, withPngExtension } from './services/imageSave'
 import {
   ensureOllamaRunning,
@@ -1595,6 +1597,24 @@ app.whenReady().then(async () => {
     }
   )
   ipcMain.on(IPC_CHANNELS.cancelStudioVideo, () => videoStudioAbort?.abort())
+  // Étape 257 : duel vidéo (outil de développement). Seuls des NOMS de vidéos voyagent, revérifiés (readDuelVideo).
+  ipcMain.handle(IPC_CHANNELS.getVideoDuelStatus, (): Promise<VideoDuelStatus> => getVideoDuelStatus())
+  ipcMain.handle(IPC_CHANNELS.runVideoDuel, (event): Promise<VideoDuelResults> =>
+    runVideoDuel((message) => {
+      if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.videoDuelLog, message)
+    })
+  )
+  ipcMain.on(IPC_CHANNELS.cancelVideoDuel, () => cancelVideoDuel())
+  ipcMain.handle(IPC_CHANNELS.readDuelVideo, (_event, file: string): Promise<Buffer> => readDuelVideo(String(file)))
+  ipcMain.handle(IPC_CHANNELS.setVideoDuelChoice, (_event, prompt: unknown, choice: unknown) => {
+    if (!isDuelPromptId(prompt) || !isDuelChoice(choice)) throw new Error('Choix du duel inconnu.')
+    return setDuelChoice(prompt, choice)
+  })
+  ipcMain.handle(IPC_CHANNELS.deleteVideoDuelFiles, () => deleteVideoDuelFiles())
+  ipcMain.handle(IPC_CHANNELS.openVideoDuelFolder, async () => {
+    await mkdir(duelOutputDir(), { recursive: true })
+    await shell.openPath(duelOutputDir())
+  })
   ipcMain.handle(IPC_CHANNELS.listGeneratedVideos, (): Promise<GeneratedVideoSummary[]> => listGeneratedVideos())
   ipcMain.handle(IPC_CHANNELS.readGeneratedVideo, (_event, fileName: string): Promise<Buffer> => readGeneratedVideo(String(fileName)))
   ipcMain.handle(IPC_CHANNELS.deleteGeneratedVideo, (_event, fileName: string) => deleteGeneratedVideo(String(fileName)))

@@ -1,5 +1,6 @@
 import type { ThinkValue } from '../shared/effort'
 import type { VideoQuality } from '../shared/videoModel'
+import type { DuelChoice, DuelPromptId, VideoDuelResults, VideoDuelStatus } from '../shared/videoDuel'
 import type {
   AppMode,
   AppVersionStatus,
@@ -138,6 +139,14 @@ declare global {
       deleteGeneratedVideo: (fileName: string) => Promise<void>
       saveGeneratedVideo: (fileName: string) => Promise<SaveImageResult>
       openGeneratedVideos: (fileName?: string) => Promise<void>
+      getVideoDuelStatus: () => Promise<VideoDuelStatus>
+      runVideoDuel: () => Promise<VideoDuelResults>
+      cancelVideoDuel: () => void
+      onVideoDuelLog: (cb: (message: string) => void) => () => void
+      readDuelVideo: (file: string) => Promise<Uint8Array>
+      setVideoDuelChoice: (prompt: DuelPromptId, choice: DuelChoice) => Promise<VideoDuelResults | null>
+      deleteVideoDuelFiles: () => Promise<void>
+      openVideoDuelFolder: () => Promise<void>
       generateApp: (description: string, currentHtml?: string, imageBase64?: string) => Promise<GeneratedApp>
       onCodeGenStatus: (cb: (message: string) => void) => () => void
       // Étape 99 : avancement en direct pendant une génération (l'étape en cours, les caractères déjà

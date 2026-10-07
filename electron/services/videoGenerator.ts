@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'fs/promises'
-import { join } from 'path'
+import { basename, dirname, join } from 'path'
 import { getDataRoot } from './dataLocation'
 import { unloadOllamaModels } from './ollama'
 import { detectGpu } from './hardwareScan'
@@ -329,7 +329,9 @@ export async function generateVideo(
   signal?: AbortSignal,
   initImage?: { bytes: Uint8Array; extension: 'png' | 'jpg' },
   seconds: VideoSeconds = DEFAULT_VIDEO_SECONDS,
-  quality: VideoQuality = 'q6'
+  quality: VideoQuality = 'q6',
+  /** Étape 257 (duel vidéo) : graine fixe et fichier imposé, pour comparer deux modèles sur la même demande. */
+  options: { seed?: number; output?: string } = {}
 ): Promise<GeneratedVideoFile> {
   if (process.platform !== 'win32') throw new Error("La création de vidéos n'est disponible que sur Windows pour l'instant.")
   const text = cleanPrompt(prompt)
@@ -348,9 +350,9 @@ export async function generateVideo(
     const unloaded = await unloadOllamaModels()
     if (unloaded.length) onLog(`Carte graphique libérée pour la vidéo (${unloaded.join(', ')} déchargé).`)
 
-    const dir = generatedVideosDir()
+    const dir = options.output ? dirname(options.output) : generatedVideosDir()
     await mkdir(dir, { recursive: true })
-    const fileName = mediaFileName(text, new Date(), 'webm', 'video')
+    const fileName = options.output ? basename(options.output) : mediaFileName(text, new Date(), 'webm', 'video')
     const output = join(dir, fileName)
     if (initImage) {
       // Fichier temporaire à côté de la vidéo, effacé à la fin quoi qu'il arrive (finally ci-dessous).
@@ -364,7 +366,7 @@ export async function generateVideo(
         models: modelPaths(quality),
         prompt: text,
         output,
-        seed: Math.floor(Math.random() * 2 ** 31),
+        seed: options.seed ?? Math.floor(Math.random() * 2 ** 31),
         seconds: normalizeVideoSeconds(seconds),
         initImage: initPath
       }),

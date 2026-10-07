@@ -6903,3 +6903,38 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `node --test scripts/test-screen-marks.mjs scripts/test-computer-use.mjs scripts/test-pilot-windows.mjs
   scripts/test-ui-automation.mjs scripts/test-benchmark-vision.mjs scripts/test-benchmark-cases.mjs
   scripts/test-assistant-history.mjs scripts/test-voice-activity.mjs` (chaque nouvelle garde vérifiée en la retirant).
+
+- **Étape 257, duel vidéo FastWan contre Kandinsky 6.0 Video Lite (Options → Général → Développeur).** Léo voulait
+  savoir s'il existe mieux que FastWan 2.2 5B ; ChatGPT citait deux modèles que j'avais ratés. Vérifiés à la source :
+  SANA-Video 2.0 5B est sous licence NON COMMERCIALE (CC BY-NC-ND 4.0, lu dans son papier) — inutilisable dans un
+  Jaris vendu, ce que ChatGPT n'avait pas vu ; Kandinsky 6.0 Video Lite 3B (MIT, avec le son) n'a AUCUN chiffre publié
+  pour sa version Lite. **Leçon : un modèle « plus petit » en paramètres n'est pas forcément plus léger à faire
+  tourner** — Kandinsky 6 Lite (3B) compresse l'image 8 fois là où le décodeur de Wan 2.2 la compresse 16 fois : ~4
+  fois plus de points à calculer à chaque étape, et 10 étapes contre 3. Et son lecteur de description (Qwen2.5-VL 7B,
+  16,6 Go) pèse plus que le modèle vidéo lui-même. Comparer la taille annoncée ne suffit jamais : regarder aussi le
+  décodeur, le nombre d'étapes et le lecteur de texte.
+  Léo a préféré juger lui-même, chez lui : un bouton lance les mêmes 3 descriptions (humain, paysage, chat ; 2 s ;
+  832×480 ; graine 42) avec les deux modèles, chronomètre chaque vidéo et enregistre son choix. **Jugement à
+  l'aveugle** : vidéo A / vidéo B dans un ordre tiré au hasard, nom et temps révélés seulement après le choix — la
+  vitesse de FastWan et les noms influenceraient sinon le regard. FastWan passe par le VRAI chemin de Jaris
+  (generateVideo, même moteur, meilleure qualité déjà téléchargée) ; Kandinsky par python/video_duel.py dans un
+  environnement Python À PART (torch 2.14.1 cu126 + diffusers de développement figé à un commit, ensemble résolu par
+  pip une fois et figé dans video-duel-requirements.txt) : la voix n'utilise plus PyTorch, lui imposer ces versions
+  risquait de la casser. Le lecteur de description reste sur le processeur (16,6 Go ne tiennent pas dans 8 Go), le
+  modèle vidéo va sur la carte, et repart couche par couche si la mémoire vidéo déborde.
+  **Vérifié ici pour de vrai, pas seulement par les tests** : script lancé de bout en bout sur le processeur
+  (lecture des 3 descriptions, puis 3 mini-vidéos 224×128 avec le son ; fichiers H.264 + AAC 44,1 kHz relus) ; ma
+  lecture des descriptions SANS remplissage (6 fois moins de jetons) comparée au pipeline officiel : similarité
+  0,99993, écarts d'arrondi seulement ; le simple tokenizer donne les mêmes jetons que le « processeur » Qwen, qui
+  exigeait torchvision. **Non vérifiable ici** : le passage sur une vraie carte NVIDIA (PyTorch CUDA, 8 Go, repli
+  couche par couche) et l'installation sous Windows — c'est le premier essai de Léo qui le dira, et le duel enregistre
+  la mémoire vidéo réellement utilisée et le mode de passage pour le savoir.
+  Pièges rencontrés en route : un téléchargement lancé en arrière-plan avec `( … &)` s'est arrêté sans message après
+  4 Go (25 minutes perdues) — les tâches longues se lancent avec `setsid nohup … < /dev/null & disown` ; `pkill -f`
+  sur un motif présent dans la ligne de commande du shell lui-même tue ce shell — viser un numéro de processus.
+  Le style « choisi » du bouton était écrasé par la règle de survol de la famille de boutons (plus spécifique) : même
+  famille que le bouton resté gris de l'étape 97, attrapé par une mesure du style calculé, pas en relisant.
+  Régression : `node --test scripts/test-video-duel.mjs scripts/test-video-duel-service.mjs scripts/test-video-duel-ui.mjs`
+  (lignes RÉELLES du script, noms de fichiers sans chemin possible, enchaînement complet sur un vrai dossier,
+  préparation une seule fois, carte graphique rendue même en cas d'échec, arrêt, aveugle avant le choix ; chaque garde
+  vérifiée en la retirant).

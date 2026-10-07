@@ -28,6 +28,7 @@ extraResources:
     filter:
       - '**/*.py'
       - requirements.txt
+      - video-duel-requirements.txt
   # Scores de fiabilité des modèles, lus à l'exécution pour choisir quel modèle installer sur cette
   # machine (voir parseVerifiedToolScores, hardwareScan.ts). Sans ce fichier, plus aucun candidat n'a de
   # score connu : le choix retombe sur "le plus gros modèle qui tient en VRAM", sans considération de sa
