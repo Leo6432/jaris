@@ -6809,3 +6809,28 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   chargement du disque — sans effet en vrai (chaque tour lit l'historique avant d'en ajouter un), mais le test
   doit reproduire cet ordre. Régression : `node --test scripts/test-voice-context-age.mjs` (vérifié en retirant le
   filtre : 2 tests échouent).
+- **Étape 254, « tous les modèles ne sont pas installés sauf vidéo et image », même après « Retester » et un
+  redémarrage (Léo).** Diagnostic par trois commandes en lecture seule envoyées à Léo, jamais deviné : `ollama
+  list` VIDE ; ses modèles bien présents (36,3 Go) dans D:\jaris\ollama-models, derrière la jonction
+  %USERPROFILE%\.ollama\models que Jaris pose ; mais la variable Windows **OLLAMA_MODELS = D:\ollama-models**. Ollama
+  obéit à cette variable AVANT l'emplacement habituel : il lisait un autre dossier, et les modèles retéléchargés par
+  « Retester » y atterrissaient aussi, invisibles. Jaris n'écrit jamais cette variable (vérifié par grep) : c'est le
+  réglage « emplacement des modèles » de l'appli Ollama qui l'écrit. **Leçon générale : une jonction ne protège que
+  les logiciels qui passent par l'emplacement habituel — une variable d'environnement qui désigne un autre dossier
+  l'emporte silencieusement. Avant de conclure qu'un modèle « n'existe pas », regarder ce qu'Ollama LUI-MÊME voit
+  (`ollama list`) et où il le cherche.** Corrigé au démarrage, avant de lancer Ollama
+  (`alignOllamaModelsVariable`, ollamaModelsVariable.ts) : si la variable désigne un dossier qui contient MOINS de
+  modèles (un fichier de manifeste par modèle) que celui de Jaris, elle est remise sur le dossier de Jaris, la
+  variable du processus Jaris suit (le Ollama qu'il démarre en hérite), et Ollama est relancé — il ne relit ses
+  variables qu'au démarrage. Jamais l'inverse : un dossier choisi et au moins aussi rempli est un choix de
+  l'utilisateur. Variable posée pour toute la machine : prévenir seulement (droits administrateur). Rien n'est
+  déplacé ni effacé. Même sans correction, Jaris réaligne sa propre copie de la variable sur Windows : corrigée à la
+  main pendant qu'il tournait, il aurait sinon lancé Ollama avec l'ancienne valeur. Écriture par PowerShell, la
+  valeur passant par une variable d'environnement, jamais dans le script. Piège dans mon test, attrapé en vérifiant
+  qu'il mordait : le cas « même dossier, casse différente » passait AUSSI avec une comparaison stricte, parce que
+  les deux dossiers comptaient 0 modèle — il faut que le mauvais choix change le résultat pour que le test prouve
+  quelque chose. **Non vérifiable ici** : que l'appli Ollama ne réécrive pas sa variable à son lancement depuis
+  ses propres réglages ; si c'était le cas, Jaris la recorrigerait à chaque démarrage et le dirait dans le journal.
+  Régression : `node --test scripts/test-ollama-models-variable.mjs` (la machine de Léo, même dossier via casse/
+  jonction, dossier choisi mieux rempli, variable machine, écriture refusée, vrai dossier de manifestes, ordre au
+  démarrage ; lecture réelle de la variable sur la CI Windows).

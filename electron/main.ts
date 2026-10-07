@@ -48,6 +48,7 @@ import { deleteModel, getModelThinking, listInstalledModels } from './services/o
 import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES, resolveChosenModel } from './services/modelChoice'
 import { chosenThink, isAcceptedThink, thinkOptions, thinkingKind } from '../shared/effort'
 import { getStorageStatus, programMoveCommandLine, reconcileStorage, relocateEverything } from './services/relocation'
+import { alignOllamaModelsVariable } from './services/ollamaModelsVariable'
 import { DOCKER_APP_SUBDIR, findDockerInstallDir } from './services/dockerLocation'
 import { openApp } from './services/appLauncher'
 import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, getMyModelPicks, isUnusedInstalledModel } from './services/hardwareScan'
@@ -908,6 +909,8 @@ async function startVoicePipeline(): Promise<void> {
   // Étape 143 : range dans le dossier de Jaris ce qui n'y est pas encore, avant de démarrer Ollama et la voix
   // (leurs fichiers seraient sinon ouverts, donc impossibles à déplacer).
   await reconcileStorage(log, stopOllamaCompletely)
+  // Étape 254 : une variable OLLAMA_MODELS qui désigne un autre dossier rend tous les modèles invisibles.
+  await alignOllamaModelsVariable(log, stopOllamaCompletely)
   void ensureOllamaRunning(log)
   void ensureSearxngRunning(log)
 
