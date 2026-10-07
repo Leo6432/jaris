@@ -18,7 +18,7 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/leg
 }).outputText
 const module = { exports: {} }
 vm.runInThisContext(`(function (exports, require, module, process) { ${source} })`)(module.exports, require, module, process)
-const { removeLeftoverMontage, leftoverMontageDir } = module.exports
+const { removeLeftoverMontage, leftoverMontageDir, removeLeftoverVideoDuel } = module.exports
 
 function sandbox() {
   const root = mkdtempSync(join(tmpdir(), 'jaris-legacy-'))
@@ -79,6 +79,28 @@ test('rien d’installé : aucune erreur', async () => {
   const { root, done } = sandbox()
   try {
     assert.equal(await removeLeftoverMontage(leftoverMontageDir(join(root, 'Local'))), false)
+  } finally {
+    done()
+  }
+})
+
+test('duel vidéo retiré (étape 258) : Python et Kandinsky effacés, les vidéos et le choix de Léo restent', async () => {
+  const { root, done } = sandbox()
+  try {
+    const duel = join(root, 'moteur', 'video-duel')
+    for (const part of ['python/Lib', 'kandinsky6-lite/transformer', '.temp']) mkdirSync(join(duel, part), { recursive: true })
+    writeFileSync(join(duel, 'kandinsky6-lite', 'transformer', 'poids.safetensors'), 'x')
+    mkdirSync(join(duel, 'resultats'), { recursive: true })
+    writeFileSync(join(duel, 'resultats', 'resultats.json'), '{}')
+    writeFileSync(join(duel, 'resultats', 'fastwan-chat.webm'), 'video')
+    assert.equal(await removeLeftoverVideoDuel(duel), true)
+    for (const part of ['python', 'kandinsky6-lite', '.temp']) assert.equal(existsSync(join(duel, part)), false, part)
+    assert.equal(existsSync(join(duel, 'resultats', 'resultats.json')), true)
+    assert.equal(existsSync(join(duel, 'resultats', 'fastwan-chat.webm')), true)
+    // Deuxième démarrage : plus rien à effacer, aucune erreur.
+    assert.equal(await removeLeftoverVideoDuel(duel), false)
+    // Duel jamais lancé : rien ne se passe.
+    assert.equal(await removeLeftoverVideoDuel(join(root, 'absent')), false)
   } finally {
     done()
   }

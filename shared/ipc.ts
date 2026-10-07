@@ -761,15 +761,6 @@ export const IPC_CHANNELS = {
   deleteGeneratedVideo: 'jaris:delete-generated-video',
   saveGeneratedVideo: 'jaris:save-generated-video',
   openGeneratedVideos: 'jaris:open-generated-videos',
-  // Étape 257 : duel vidéo (outil de développement, Options → Général).
-  getVideoDuelStatus: 'jaris:get-video-duel-status',
-  runVideoDuel: 'jaris:run-video-duel',
-  cancelVideoDuel: 'jaris:cancel-video-duel',
-  videoDuelLog: 'jaris:video-duel-log',
-  readDuelVideo: 'jaris:read-duel-video',
-  setVideoDuelChoice: 'jaris:set-video-duel-choice',
-  deleteVideoDuelFiles: 'jaris:delete-video-duel-files',
-  openVideoDuelFolder: 'jaris:open-video-duel-folder',
   /** renderer <-> main : récupère les messages du mode Chat, amorcés depuis conversation-history.json au
    * premier appel après un lancement (voir ChatSession.ensureLoaded) — plus seulement ceux de la session en cours. */
   getChatHistory: 'jaris:get-chat-history',

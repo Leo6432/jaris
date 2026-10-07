@@ -17,7 +17,6 @@ import type {
 import { CAPABILITIES } from '../../shared/capabilities'
 import AllModelsOverview from './AllModelsOverview'
 import AppUpdateProgress from './AppUpdateProgress'
-import { VideoDuelSettings } from './VideoDuelSettings'
 import { SettingGroup, SettingRow, Toggle } from './SettingsLayout'
 import PhoneAccessSettings from './PhoneAccessSettings'
 import MyModelPicks from './MyModelPicks'
@@ -1351,8 +1350,6 @@ export default function OptionsMenu(): JSX.Element {
                 </button>
               </SettingRow>
             </SettingGroup>
-
-            <VideoDuelSettings />
           </div>
         )}
 

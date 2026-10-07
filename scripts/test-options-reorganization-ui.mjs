@@ -227,7 +227,7 @@ test('Général regroupe VRAIMENT mise à jour, fichiers/moteur local et histori
     // (maquette "Options Jaris.dc.html"), remis ici à l'étape 122 sur demande explicite de Léo ("deplace
     // Fichiers et moteur local avec dossier etc... dans général") — voir le test "Modèles regroupe..."
     // ci-dessous, qui vérifie qu'il a bien disparu de Modèles plutôt que d'avoir simplement été dupliqué.
-    assert.deepEqual(titles, ['Démarrage', 'Mise à jour', 'Fichiers et moteur local', 'Historique des conversations', 'Journal des demandes', 'Développeur'])
+    assert.deepEqual(titles, ['Démarrage', 'Mise à jour', 'Fichiers et moteur local', 'Historique des conversations', 'Journal des demandes'])
     const content = await page.textContent('.options-page__content')
     assert.ok(content.includes('Rechercher une mise à jour'), 'la section mise à jour doit être présente')
     assert.ok(content.includes('Dossier de Jaris'), 'le déplacement du dossier de Jaris doit être présent')

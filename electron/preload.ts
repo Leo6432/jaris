@@ -1,6 +1,5 @@
 import type { ThinkValue } from '../shared/effort'
 import type { VideoQuality } from '../shared/videoModel'
-import type { DuelChoice, DuelPromptId, VideoDuelResults, VideoDuelStatus } from '../shared/videoDuel'
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC_CHANNELS,
@@ -152,15 +151,6 @@ const api = {
   deleteGeneratedVideo: (fileName: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.deleteGeneratedVideo, fileName),
   saveGeneratedVideo: (fileName: string): Promise<SaveImageResult> => ipcRenderer.invoke(IPC_CHANNELS.saveGeneratedVideo, fileName),
   openGeneratedVideos: (fileName?: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openGeneratedVideos, fileName),
-  getVideoDuelStatus: (): Promise<VideoDuelStatus> => ipcRenderer.invoke(IPC_CHANNELS.getVideoDuelStatus),
-  runVideoDuel: (): Promise<VideoDuelResults> => ipcRenderer.invoke(IPC_CHANNELS.runVideoDuel),
-  cancelVideoDuel: (): void => ipcRenderer.send(IPC_CHANNELS.cancelVideoDuel),
-  onVideoDuelLog: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.videoDuelLog, cb),
-  readDuelVideo: (file: string): Promise<Uint8Array> => ipcRenderer.invoke(IPC_CHANNELS.readDuelVideo, file),
-  setVideoDuelChoice: (prompt: DuelPromptId, choice: DuelChoice): Promise<VideoDuelResults | null> =>
-    ipcRenderer.invoke(IPC_CHANNELS.setVideoDuelChoice, prompt, choice),
-  deleteVideoDuelFiles: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.deleteVideoDuelFiles),
-  openVideoDuelFolder: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openVideoDuelFolder),
   generateApp: (description: string, currentHtml?: string, imageBase64?: string): Promise<GeneratedApp> =>
     ipcRenderer.invoke(IPC_CHANNELS.generateApp, description, currentHtml, imageBase64),
   onCodeGenStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.codeGenStatus, cb),

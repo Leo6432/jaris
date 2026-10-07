@@ -10,6 +10,7 @@ import {
   generatedImagePath,
   generatedImagesDir,
   getImageStudioStatus,
+  imageEngineRoot,
   installImageModel,
   isImageModelInstalled,
   listGeneratedImages,
@@ -29,12 +30,10 @@ import {
   listGeneratedVideos,
   readGeneratedVideo
 } from './services/videoGenerator'
-import { cancelVideoDuel, deleteVideoDuelFiles, duelOutputDir, getVideoDuelStatus, readDuelVideo, runVideoDuel, setDuelChoice } from './services/videoDuel'
-import { isDuelChoice, isDuelPromptId, type VideoDuelResults, type VideoDuelStatus } from '../shared/videoDuel'
-import { removeLeftoverMontage } from './services/legacyCleanup'
+import { removeLeftoverMontage, removeLeftoverVideoDuel } from './services/legacyCleanup'
 import { spawn } from 'child_process'
 import { basename, extname, join } from 'path'
-import { copyFile, mkdir, readFile, rm, writeFile } from 'fs/promises'
+import { copyFile, readFile, rm, writeFile } from 'fs/promises'
 import { decodePngDataUrl, defaultImageFileName, withPngExtension } from './services/imageSave'
 import {
   ensureOllamaRunning,
@@ -1029,6 +1028,8 @@ app.whenReady().then(async () => {
   void removeLeftoverMontage()
   // Étape 206 : les fichiers du Wan 2.2 de base, remplacé par FastWan, ne servent plus (jusqu'à ~15 Go).
   void removeObsoleteVideoFiles().catch(() => {})
+  // Étape 258 : le duel vidéo est retiré ; son Python et Kandinsky (~31 Go) ne servent plus, ses vidéos restent.
+  void removeLeftoverVideoDuel(join(imageEngineRoot(), 'video-duel'))
   registerPreviewHandler()
 
   // Autorise silencieusement l'accès micro pour les fenêtres de Jaris (enumerateDevices() ne révèle les
@@ -1597,24 +1598,6 @@ app.whenReady().then(async () => {
     }
   )
   ipcMain.on(IPC_CHANNELS.cancelStudioVideo, () => videoStudioAbort?.abort())
-  // Étape 257 : duel vidéo (outil de développement). Seuls des NOMS de vidéos voyagent, revérifiés (readDuelVideo).
-  ipcMain.handle(IPC_CHANNELS.getVideoDuelStatus, (): Promise<VideoDuelStatus> => getVideoDuelStatus())
-  ipcMain.handle(IPC_CHANNELS.runVideoDuel, (event): Promise<VideoDuelResults> =>
-    runVideoDuel((message) => {
-      if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.videoDuelLog, message)
-    })
-  )
-  ipcMain.on(IPC_CHANNELS.cancelVideoDuel, () => cancelVideoDuel())
-  ipcMain.handle(IPC_CHANNELS.readDuelVideo, (_event, file: string): Promise<Buffer> => readDuelVideo(String(file)))
-  ipcMain.handle(IPC_CHANNELS.setVideoDuelChoice, (_event, prompt: unknown, choice: unknown) => {
-    if (!isDuelPromptId(prompt) || !isDuelChoice(choice)) throw new Error('Choix du duel inconnu.')
-    return setDuelChoice(prompt, choice)
-  })
-  ipcMain.handle(IPC_CHANNELS.deleteVideoDuelFiles, () => deleteVideoDuelFiles())
-  ipcMain.handle(IPC_CHANNELS.openVideoDuelFolder, async () => {
-    await mkdir(duelOutputDir(), { recursive: true })
-    await shell.openPath(duelOutputDir())
-  })
   ipcMain.handle(IPC_CHANNELS.listGeneratedVideos, (): Promise<GeneratedVideoSummary[]> => listGeneratedVideos())
   ipcMain.handle(IPC_CHANNELS.readGeneratedVideo, (_event, fileName: string): Promise<Buffer> => readGeneratedVideo(String(fileName)))
   ipcMain.handle(IPC_CHANNELS.deleteGeneratedVideo, (_event, fileName: string) => deleteGeneratedVideo(String(fileName)))

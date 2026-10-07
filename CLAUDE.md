@@ -6977,3 +6977,20 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   (lignes RÉELLES du script, noms de fichiers sans chemin possible, enchaînement complet sur un vrai dossier,
   préparation une seule fois, carte graphique rendue même en cas d'échec, arrêt, aveugle avant le choix ; chaque garde
   vérifiée en la retirant).
+
+- **Étape 258, duel vidéo RETIRÉ après le verdict de Léo : « FastWan 2.2 5B est mieux, il fait pareil que l'autre pour
+  20 fois plus rapide ».** Le duel de l'étape 257 a rempli son rôle : un jugement de rendu tranché par Léo lui-même,
+  chez lui, sur sa carte — pas par des chiffres. FastWan 2.2 TI2V 5B reste le modèle vidéo de Jaris (publié sur
+  Hugging Face le 2 août 2025, d'après la date du premier commit de FastVideo/FastWan2.2-TI2V-5B-FullAttn-Diffusers).
+  Code retiré par `git revert` des deux commits du duel (isolés et les plus récents, même méthode que Kokoro à
+  l'étape 75), mais les notes et la version sont gardées : même convention que KDE Connect et Mobile connecté — le
+  CODE part, l'HISTORIQUE reste (la leçon « un modèle plus petit en paramètres n'est pas forcément plus léger », le
+  jugement à l'aveugle, le lancement des tâches longues avec `setsid nohup`).
+  **Retirer le bouton ne libère pas le disque** : le duel avait téléchargé ~31 Go chez Léo (environnement Python +
+  Kandinsky), et le bouton « Effacer les fichiers » partait avec le reste. `removeLeftoverVideoDuel`
+  (legacyCleanup.ts, même endroit que le paquet du Montage retiré à l'étape 200) efface ces parties lourdes une fois
+  au démarrage ; le dossier `resultats` (ses 6 vidéos et ses choix, quelques Mo) est gardé, ce sont ses données.
+  **Leçon générale, déjà vraie pour le Montage : retirer une fonctionnalité qui a téléchargé quelque chose ne
+  s'arrête pas au code — penser aux fichiers qu'elle a déjà posés sur la machine de l'utilisateur.**
+  Régression : `node --test scripts/test-legacy-cleanup.mjs` (parties lourdes effacées, vidéos et choix gardés,
+  deuxième démarrage et duel jamais lancé sans erreur).

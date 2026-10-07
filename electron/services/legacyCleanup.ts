@@ -33,3 +33,26 @@ export async function removeLeftoverMontage(dir = leftoverMontageDir()): Promise
     return false
   }
 }
+
+/**
+ * Étape 258 (Léo, après son duel : « FastWan fait pareil pour 20 fois plus rapide, enlève le duel ») : le duel
+ * vidéo est retiré. Son environnement Python et le modèle Kandinsky (~31 Go, dans `<moteur image>\video-duel`)
+ * sont effacés une fois, au démarrage — exactement ce que faisait son bouton « Effacer les fichiers ».
+ * Le dossier `resultats` (les 6 vidéos du duel et le choix de Léo, quelques Mo) est gardé : ce sont ses données.
+ */
+export const RETIRED_VIDEO_DUEL_PARTS = ['python', 'kandinsky6-lite', '.temp'] as const
+
+export async function removeLeftoverVideoDuel(duelDir: string): Promise<boolean> {
+  let removed = false
+  for (const part of RETIRED_VIDEO_DUEL_PARTS) {
+    const dir = join(duelDir, part)
+    try {
+      await lstat(dir)
+      await rm(dir, { recursive: true, force: true })
+      removed = true
+    } catch {
+      // Absent (duel jamais lancé), ou verrouillé : on réessaiera au prochain démarrage.
+    }
+  }
+  return removed
+}
