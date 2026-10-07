@@ -6994,3 +6994,28 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   s'arrête pas au code — penser aux fichiers qu'elle a déjà posés sur la machine de l'utilisateur.**
   Régression : `node --test scripts/test-legacy-cleanup.mjs` (parties lourdes effacées, vidéos et choix gardés,
   deuxième démarrage et duel jamais lancé sans erreur).
+
+- **Étape 259, « calcule 7 plus 5 » sur la Calculatrice : le pilote cliquait « 1 » en boucle jusqu'à la 20e étape
+  (Léo, usage réel, v0.28.28).** Reproduit ici AVANT de corriger, avec le vrai code du pilote (consigne, message,
+  lecture de la réponse) et un vrai modèle moyen (granite4.2:8b), sur la liste RÉELLE des boutons de la Calculatrice
+  française (noms tirés de microsoft/calculator, Resources.resw fr-FR) : il cliquait « Deux » puis « Sept » huit fois
+  de suite. Deux causes distinctes :
+  1. **Windows nomme les touches en toutes lettres** (« Sept », « Plus », « Est égal à »). Le modèle devait traduire
+     7 en « Sept » PUIS reprendre le numéro de la liste — deux nombres qui se mélangent (le chiffre voulu et le
+     numéro de l'élément). Corrigé en écrivant le symbole à côté du nom (`keySymbol`, uiAutomation.ts :
+     « 21. [Button] Sept « 7 » »), pour un nom ENTIER seulement (« Un article » reste tel quel). Mesuré sur la même
+     simulation : 7, +, 5, = puis « fini » du premier coup.
+  2. **Sans image, le planificateur ne voit pas l'effet d'un clic** (l'affichage de la Calculatrice n'est pas un
+     bouton, donc absent de la liste) : il peut reprendre indéfiniment le même bouton. Au 3e clic identique
+     d'affilée (`MAX_SAME_TEXT_CLICKS`), la vision reprend la main pour le reste de la tâche : elle, voit le
+     résultat. Un 3e clic voulu (« tape 111 ») coûte seulement le passage à la vision, jamais un mauvais clic.
+  **Non corrigé, à dessein** : donner au planificateur le texte affiché par la fenêtre (« L'affichage est 12 »)
+  l'aide à conclure (mesuré dans la simulation), mais demande de modifier le script PowerShell de capture, que rien
+  ne peut exécuter ici — pas un 3e changement non vérifiable en même temps. Mesuré aussi : sur « 9 fois 3 », le
+  modèle moyen se trompe encore parfois de touche ; le garde-fou en limite l'effet, il ne rend pas le modèle plus
+  juste. Les 2 minutes avant l'ouverture de la Calculatrice ne sont pas expliquées : pas de journal de sa machine.
+  **Leçon générale : quand un modèle doit choisir un NUMÉRO dans une liste dont les éléments représentent eux-mêmes
+  des nombres, écrire la valeur à côté du nom — sinon il confond le numéro de la ligne et le nombre voulu.**
+  Régression : `node --test scripts/test-ui-automation.mjs scripts/test-computer-use.mjs` (noms réels français et
+  anglais, nom partiel ignoré ; 3 clics identiques -> vision, clics non consécutifs -> rien ; le garde-fou retiré ou
+  mal compté fait échouer les tests).

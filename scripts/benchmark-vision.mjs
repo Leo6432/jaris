@@ -153,11 +153,24 @@ export const PILOT_SYSTEM_PROMPT =
   'échec. x/y sont des positions sur une échelle de 0 à 1000 : x=0 bord gauche et x=1000 bord droit de ' +
   "l'image, y=0 bord haut et y=1000 bord bas. Une seule action par réponse."
 
-/** describeElements (uiAutomation.ts). */
+/** keySymbol + describeElements (uiAutomation.ts, étape 259 : symbole des touches de calcul). */
+const KEY_SYMBOLS = {
+  zero: '0', un: '1', deux: '2', trois: '3', quatre: '4', cinq: '5', six: '6', sept: '7', huit: '8', neuf: '9',
+  one: '1', two: '2', three: '3', four: '4', five: '5', seven: '7', eight: '8', nine: '9',
+  plus: '+', moins: '-', minus: '-', 'multiplier par': '×', 'multiply by': '×', 'diviser par': '÷', 'divide by': '÷',
+  'est egal a': '=', egal: '=', equals: '=', 'separateur decimal': ',', 'decimal separator': '.'
+}
+function keySymbol(name) {
+  const key = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+  return KEY_SYMBOLS[key] ?? null
+}
 function describeElements(elements) {
   if (!elements.length) return ''
   return elements
-    .map((element) => `${element.id === undefined ? '-' : `${element.id}.`} [${element.type}] ${element.name.slice(0, 80)}`)
+    .map((element) => {
+      const symbol = keySymbol(element.name)
+      return `${element.id === undefined ? '-' : `${element.id}.`} [${element.type}] ${element.name.slice(0, 80)}${symbol ? ` « ${symbol} »` : ''}`
+    })
     .join('\n')
 }
 

@@ -169,6 +169,12 @@ export const TEXT_STEP_FORMAT = {
 export const MIN_MARKS_FOR_TEXT = 5
 /** Deux « regarde l'écran » dans une tâche : la liste ne suffit pas ici, on ne la propose plus jusqu'à la fin. */
 const MAX_TEXT_LOOKS = 2
+/**
+ * Étape 259 : sans voir l'écran, le planificateur ne voit pas qu'un clic n'a pas l'effet voulu, et peut reprendre
+ * indéfiniment le même bouton (reproduit sur la Calculatrice : « Sept » huit fois de suite). Au 3e clic identique
+ * d'affilée, la vision reprend la main : elle, voit le résultat affiché.
+ */
+export const MAX_SAME_TEXT_CLICKS = 3
 
 interface OllamaChatResponse {
   message?: { content?: string }
@@ -499,6 +505,8 @@ async function runComputerUseTask(
   let textPlanning = plannerModel !== null
   let textLooks = 0
   let fallbackNoted = false
+  let lastTextClick: number | undefined
+  let sameTextClicks = 0
   for (let i = 0; i < MAX_STEPS; i++) {
     // Vérifié à chaque itération (nouvelle phrase à la voix qui annule la réflexion en cours, voir
     // voicePipeline.ts) : sans ça, une fois lancée, cette boucle de clics ne pouvait plus jamais être
@@ -527,6 +535,7 @@ async function runComputerUseTask(
 
     showScanOverlay()
     let step: ComputerUseStep | null = null
+    let fromText = false
     try {
       // Étape 256 : d'abord le modèle rapide, d'après la seule liste des boutons ; le modèle de vision si elle ne
       // suffit pas. Rien de fait encore et déjà « fini » ? Sans image, ce serait une supposition : la vision vérifie.
@@ -541,6 +550,7 @@ async function runComputerUseTask(
           if (++textLooks >= MAX_TEXT_LOOKS) textPlanning = false
         } else if (!(planned.step.action === 'done' && history.length === 0)) {
           step = planned.step
+          fromText = true
         }
         if (!step) onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : je regarde l'écran de plus près…`)
       }
@@ -581,6 +591,12 @@ async function runComputerUseTask(
         if (!result.startsWith('Clic left effectué')) throw new Error(result)
         history.push(`${i + 1}. Clic sur "${target.name}" (${target.type}, position donnée par Windows)`)
         onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : clic sur "${target.name}".`)
+        sameTextClicks = fromText && step.id !== undefined && step.id === lastTextClick ? sameTextClicks + 1 : 1
+        lastTextClick = fromText ? step.id : undefined
+        if (fromText && sameTextClicks >= MAX_SAME_TEXT_CLICKS) {
+          textPlanning = false
+          onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : même bouton ${MAX_SAME_TEXT_CLICKS} fois de suite, je regarde l'écran pour vérifier.`)
+        }
         break
       }
       case 'click':

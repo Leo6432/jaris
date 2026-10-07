@@ -20,7 +20,7 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/uiA
 const load = vm.runInThisContext(`(function (exports, require, module) {\n${source}\n})`)
 const loaded = { exports: {} }
 load(loaded.exports, () => ({}), loaded)
-const { findElementByName, describeElements } = loaded.exports
+const { findElementByName, describeElements, keySymbol } = loaded.exports
 
 const element = (name, extra = {}) => ({ name, type: 'Button', x: 10, y: 20, ...extra })
 
@@ -66,4 +66,20 @@ test('étape 256 : un élément numéroté sur la capture porte son numéro en t
 test('étape 256 : plus aucune lecture de « la fenêtre active » (c’était Jaris lui-même quand Léo lui parlait)', () => {
   const real = readFileSync(new URL('../electron/services/uiAutomation.ts', import.meta.url), 'utf8')
   assert.ok(!/GetForegroundWindow\(|listClickableElements/.test(real))
+})
+
+test('étape 259 : les touches de la Calculatrice (noms Windows en toutes lettres) portent leur symbole', () => {
+  // Noms RÉELS de la Calculatrice française (microsoft/calculator, Resources.resw fr-FR) et anglaise.
+  const described = describeElements([
+    element('Sept', { id: 21 }), element('Plus', { id: 32 }), element('Cinq', { id: 26 }), element('Est égal à', { id: 36 }),
+    element('Multiplier par', { id: 24 }), element('Zéro', { id: 34 }), element('Seven', { id: 40 }), element('Equals', { id: 41 })
+  ])
+  assert.equal(
+    described,
+    '21. [Button] Sept « 7 »\n32. [Button] Plus « + »\n26. [Button] Cinq « 5 »\n36. [Button] Est égal à « = »\n' +
+      '24. [Button] Multiplier par « × »\n34. [Button] Zéro « 0 »\n40. [Button] Seven « 7 »\n41. [Button] Equals « = »'
+  )
+  // Seul un nom ENTIER est reconnu : un lien « Un article » ou « Plus de vidéos » reste tel quel.
+  for (const name of ['Un article', 'Plus de vidéos', 'Rechercher', 'Effacer']) assert.equal(keySymbol(name), null, name)
+  assert.equal(keySymbol('  un '), '1')
 })

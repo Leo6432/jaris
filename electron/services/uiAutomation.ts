@@ -56,12 +56,34 @@ export function findElementByName<T extends ClickableElement>(elements: T[], tar
 }
 
 /**
+ * Étape 259 : Windows nomme les touches d'un pavé numérique en TOUTES LETTRES (« Sept », « Plus », « Est égal à »
+ * dans la Calculatrice française, « Seven »/« Equals » en anglais). Pour « calcule 7 plus 5 », un modèle moyen
+ * devait traduire 7 en « Sept » PUIS reprendre le numéro de la liste — et confondait les deux : reproduit avec
+ * granite4.2:8b, il cliquait « Deux » puis « Sept » à l'infini. Le symbole écrit à côté du nom supprime la traduction.
+ * Seul un nom ENTIER est reconnu : « Un article » reste tel quel.
+ */
+const KEY_SYMBOLS: Record<string, string> = {
+  zero: '0', un: '1', deux: '2', trois: '3', quatre: '4', cinq: '5', six: '6', sept: '7', huit: '8', neuf: '9',
+  one: '1', two: '2', three: '3', four: '4', five: '5', seven: '7', eight: '8', nine: '9',
+  plus: '+', moins: '-', minus: '-', 'multiplier par': '×', 'multiply by': '×', 'diviser par': '÷', 'divide by': '÷',
+  'est egal a': '=', egal: '=', equals: '=', 'separateur decimal': ',', 'decimal separator': '.'
+}
+
+export function keySymbol(name: string): string | null {
+  return KEY_SYMBOLS[normalize(name)] ?? null
+}
+
+/**
  * Rend la liste lisible pour le modèle, en gardant les lignes courtes (budget de contexte). Un élément numéroté sur
- * la capture (étape 256) porte son numéro en tête : « 12. [Button] Rechercher ».
+ * la capture (étape 256) porte son numéro en tête : « 12. [Button] Rechercher » ; une touche de calcul, son
+ * symbole : « 21. [Button] Sept « 7 » ».
  */
 export function describeElements(elements: ClickableElement[]): string {
   if (!elements.length) return ''
   return elements
-    .map((element) => `${element.id === undefined ? '-' : `${element.id}.`} [${element.type}] ${element.name.slice(0, 80)}`)
+    .map((element) => {
+      const symbol = keySymbol(element.name)
+      return `${element.id === undefined ? '-' : `${element.id}.`} [${element.type}] ${element.name.slice(0, 80)}${symbol ? ` « ${symbol} »` : ''}`
+    })
     .join('\n')
 }

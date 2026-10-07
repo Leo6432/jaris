@@ -349,6 +349,26 @@ test('« fini » alors que rien n’a été fait : sans image ce serait une supp
   assert.equal(app.state().bodies.length, 2)
 })
 
+test('étape 259 : le modèle rapide reclique 3 fois le même bouton : la vision reprend, elle voit le résultat', async () => {
+  // Reproduit avec granite4.2:8b sur la Calculatrice : « Sept » cliqué en boucle jusqu'à la 20e étape.
+  const app = setup([{ action: 'done', result: '12 affiché' }], ok, undefined, PAGE, planner([
+    { action: 'click_element', id: 5 }, { action: 'click_element', id: 5 }, { action: 'click_element', id: 5 }, { action: 'click_element', id: 5 }
+  ]))
+  assert.equal(await app.run(), '12 affiché')
+  assert.equal(app.state().textBodies.length, 3, 'plus aucun appel au modèle rapide après le 3e clic identique')
+  assert.equal(app.state().bodies.length, 1)
+  assert.ok(app.state().logs.some((l) => /même bouton 3 fois de suite, je regarde l'écran/.test(l)))
+})
+
+test('étape 259 : des clics différents, ou le même bouton non consécutif, ne déclenchent rien', async () => {
+  const app = setup([], ok, undefined, PAGE, planner([
+    { action: 'click_element', id: 5 }, { action: 'click_element', id: 5 }, { action: 'click_element', id: 4 },
+    { action: 'click_element', id: 5 }, { action: 'click_element', id: 5 }, { action: 'done', result: 'ok' }
+  ]))
+  assert.equal(await app.run(), 'ok')
+  assert.equal(app.state().bodies.length, 0)
+})
+
 test('numéro inventé par le modèle rapide : jamais cliqué, la vision reprend l’étape', async () => {
   const app = setup([{ action: 'done', result: 'ok' }], ok, undefined, PAGE, planner([{ action: 'click_element', id: 42 }]))
   assert.equal(await app.run(), 'ok')
