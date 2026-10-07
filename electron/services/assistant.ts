@@ -45,7 +45,9 @@ export function directAppRequest(prompt: string): string | undefined {
 export function directScreenTask(prompt: string): string | undefined {
   const text = prompt.trim().replace(/\s+/g, ' ')
   // « sur » ou « dans » doit suivre directement le verbe : « clique pas sur… » ne correspond donc pas non plus.
-  if (!/^(?:double[- ]?)?(?:clique|cliques|clic|cliquer)\s+(?:sur|dans)\s+\S/iu.test(text) || text.length > 200) return undefined
+  // Étape 255 : un lieu peut précéder, séparé par une virgule — « Sur YouTube, clique sur la barre de recherche… »
+  // (phrase réelle de Léo, qui passait sinon par 1 min de réflexion du modèle de conversation).
+  if (!/^(?:(?:sur|dans)\s+[^,]{1,40},\s*)?(?:double[- ]?)?(?:clique|cliques|clic|cliquer)\s+(?:sur|dans)\s+\S/iu.test(text) || text.length > 200) return undefined
   return text
 }
 

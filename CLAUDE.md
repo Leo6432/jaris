@@ -6873,3 +6873,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `node --test scripts/test-ollama-models-variable.mjs` (la machine de Léo, même dossier via casse/
   jonction, dossier choisi mieux rempli, variable machine, écriture refusée, vrai dossier de manifestes, ordre au
   démarrage ; lecture réelle de la variable sur la CI Windows).
+- **Étape 255, « Échec de l'outil : Impossible de joindre le modèle de vision : The operation was aborted due to
+  timeout » (Léo : « Sur YouTube, clique sur la barre de recherche… »).** Son modèle de vision est qwen3.8:27b
+  (17 Go, sur une carte de 8 Go, donc en partie en mémoire vive) : le charger puis lire une capture d'écran dépassait
+  la limite FIXE de 45 s de chaque étape du pilotage — le modèle travaillait, il n'était pas bloqué. **Même leçon que
+  l'étape 98, appliquée cette fois aux appels de modèle** : une durée qui dépend de la machine se surveille par
+  l'INACTIVITÉ, jamais par une durée totale. Le modèle de vision et le viseur répondent maintenant en continu
+  (`streamOllamaChat`, computerUse.ts) : jusqu'à 3 min pour le PREMIER morceau (chargement + lecture de l'image),
+  puis abandon seulement après 45 s sans le moindre morceau — tout morceau compte, même la réflexion cachée. Le
+  message d'échec dit en français ce qui s'est passé (« il n'a rien répondu en 3 min », « il s'est arrêté de
+  répondre pendant 45 s ») au lieu de l'anglais brut de Node. Le compteur de l'écran vocal (étape 252) montre
+  l'attente en direct. Au passage, la phrase réelle de Léo commençait par un lieu (« Sur YouTube, clique… ») et
+  ratait le raccourci de l'étape 252 : un lieu suivi d'une virgule est maintenant accepté devant le verbe (« Sur
+  YouTube, ne clique pas… » reste à la conversation). **Non corrigé, à signaler à Léo** : avec un modèle de vision
+  de 27 milliards de paramètres sur 8 Go, chaque étape du pilotage restera lente (une à plusieurs minutes, model
+  swap avec MAI-UI compris) — c'est le choix de modèle, pas un bug. Régression : `node --test
+  scripts/test-computer-use.mjs scripts/test-assistant-history.mjs` (minuteries pilotées : 3 min avant le premier
+  morceau et plus 45 s, abandon après 45 s de silence seulement une fois la réponse commencée ; chaque garde
+  vérifiée en la retirant).

@@ -47,13 +47,19 @@ export function fromThousandths(x: number | undefined, y: number | undefined, wi
  */
 
 const MAX_STEPS = 20
-const STEP_TIMEOUT_MS = 45000
 const MAX_CONSECUTIVE_WAITS = 3
 /**
- * Étape 231 : le tout premier appel au viseur le charge sur la carte graphique (6 Go lus sur le disque) — plus
- * long que les suivants. Le modèle de vision garde STEP_TIMEOUT_MS, comme avant.
+ * Étape 255 — Léo : « Échec de l'outil : Impossible de joindre le modèle de vision : The operation was aborted due
+ * to timeout ». Son modèle de vision est qwen3.8:27b (17 Go) sur une carte de 8 Go : le charger, en partie en
+ * mémoire vive, puis lire la capture dépassait la limite FIXE de 45 s par étape — alors que le modèle travaillait.
+ * Même leçon que l'étape 98 pour les téléchargements : une durée qui dépend de la machine se surveille par
+ * l'INACTIVITÉ, jamais par une durée totale. Les réponses arrivent en continu (stream) : on attend le premier
+ * morceau jusqu'à FIRST_CHUNK_TIMEOUT_MS (chargement du modèle + lecture de l'image, une seule fois par appel),
+ * puis on n'abandonne que si plus rien n'arrive pendant IDLE_TIMEOUT_MS. Le compteur de l'écran vocal (étape 252)
+ * montre pendant ce temps que Jaris attend, il n'est pas figé.
  */
-const PILOT_FIRST_STEP_TIMEOUT_MS = 120000
+const FIRST_CHUNK_TIMEOUT_MS = 180_000
+const IDLE_TIMEOUT_MS = 45_000
 /** Même contexte qu'au duel, où le viseur a été mesuré : une image et une consigne courte n'en demandent pas plus. */
 const PILOT_NUM_CTX = 8192
 
@@ -110,6 +116,64 @@ export const PILOT_TARGET_RULE =
 
 interface OllamaChatResponse {
   message?: { content?: string }
+}
+
+/**
+ * Un appel à Ollama en continu : renvoie le texte complet, ou lève une erreur en français qui dit ce qui s'est
+ * passé (rien reçu du tout, ou réponse interrompue). Une annulation demandée (`signal`) remonte telle quelle.
+ */
+export async function streamOllamaChat(body: Record<string, unknown>, signal?: AbortSignal): Promise<string> {
+  const controller = new AbortController()
+  let silence: 'first' | 'idle' | null = null
+  const arm = (kind: 'first' | 'idle', ms: number): ReturnType<typeof setTimeout> =>
+    setTimeout(() => {
+      silence = kind
+      controller.abort()
+    }, ms)
+  let timer = arm('first', FIRST_CHUNK_TIMEOUT_MS)
+  const onAbort = (): void => controller.abort()
+  if (signal?.aborted) controller.abort()
+  signal?.addEventListener('abort', onAbort)
+  try {
+    const response = await fetch(`${config.ollama.host}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({ ...body, stream: true })
+    })
+    if (!response.ok) throw new Error(`Ollama a répondu ${response.status} : ${(await response.text()).slice(0, 300)}`)
+    if (!response.body) throw new Error('Ollama a répondu sans contenu.')
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let content = ''
+    const take = (line: string): void => {
+      if (!line.trim()) return
+      const chunk = JSON.parse(line) as OllamaChatResponse & { error?: string }
+      if (chunk.error) throw new Error(chunk.error)
+      content += chunk.message?.content ?? ''
+    }
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      // Tout morceau compte comme un signe de vie, même la réflexion cachée d'un modèle qui pense avant d'écrire.
+      clearTimeout(timer)
+      timer = arm('idle', IDLE_TIMEOUT_MS)
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+      lines.forEach(take)
+    }
+    take(buffer + decoder.decode())
+    return content.trim()
+  } catch (err) {
+    if (silence === 'first') throw new Error(`il n'a rien répondu en ${Math.round(FIRST_CHUNK_TIMEOUT_MS / 60000)} min (chargement ou lecture de l'image trop long sur cette machine)`)
+    if (silence === 'idle') throw new Error(`il s'est arrêté de répondre pendant ${IDLE_TIMEOUT_MS / 1000} s`)
+    throw err
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', onAbort)
+  }
 }
 
 async function resolveVisionModel(preferred: string): Promise<string> {
@@ -170,38 +234,25 @@ async function nextStep(
 ): Promise<ComputerUseStep> {
   const model = await resolveVisionModel(visionModel)
 
-  // Combine le timeout par étape avec le signal d'annulation externe (voir computerUseTask) : sans ça, une
-  // annulation demandée pendant que cette requête est en vol (nouvelle phrase à la voix qui coupe la
-  // réflexion en cours, voir voicePipeline.ts) n'atteignait jamais la boucle de clics — seul l'appel Ollama
-  // de la conversation "normale" pouvait être annulé jusqu'ici, jamais computer_use_task une fois lancé.
-  const timeoutSignal = AbortSignal.timeout(STEP_TIMEOUT_MS)
-  let response: Response
+  // Étape 255 : plus de limite fixe — voir streamOllamaChat (inactivité, pas durée totale). Le signal d'annulation
+  // (nouvelle phrase à la voix) reste transmis : une tâche lancée peut toujours être interrompue.
+  let content: string
   try {
-    response = await fetch(`${config.ollama.host}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal,
-      body: JSON.stringify({
+    content = await streamOllamaChat(
+      {
         model,
         messages: [
           { role: 'system', content: withPilot ? `${SYSTEM_PROMPT}\n\n${PILOT_TARGET_RULE}` : SYSTEM_PROMPT },
           { role: 'user', content: buildStepPrompt(goal, history, elements), images: [image.base64] }
         ],
-        stream: false,
         think: false,
         options: { num_ctx: config.ollama.numCtx }
-      })
-    })
+      },
+      signal
+    )
   } catch (err) {
-    return { action: 'fail', result: `Impossible de joindre le modèle de vision : ${err instanceof Error ? err.message : String(err)}` }
+    return { action: 'fail', result: `Le modèle de vision ${model} n'a pas pu regarder l'écran : ${err instanceof Error ? err.message : String(err)}` }
   }
-
-  if (!response.ok) {
-    return { action: 'fail', result: `Le modèle de vision ${model} a répondu ${response.status} : ${(await response.text()).slice(0, 300)}` }
-  }
-
-  const data = (await response.json()) as OllamaChatResponse
-  const content = data.message?.content?.trim()
   if (!content) return { action: 'fail', result: 'Réponse vide du modèle de vision.' }
 
   const step = extractStep(content)
@@ -232,18 +283,9 @@ async function resolvePilotModel(): Promise<string | null> {
 async function callPilot(
   model: string,
   messages: Array<{ role: 'system' | 'user'; content: string; images?: string[] }>,
-  timeoutMs: number,
   signal?: AbortSignal
 ): Promise<string> {
-  const timeoutSignal = AbortSignal.timeout(timeoutMs)
-  const response = await fetch(`${config.ollama.host}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    signal: signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal,
-    body: JSON.stringify({ model, messages, stream: false, options: { num_ctx: PILOT_NUM_CTX, temperature: 0 } })
-  })
-  if (!response.ok) throw new Error(`le viseur a répondu ${response.status} : ${(await response.text()).slice(0, 200)}`)
-  const content = ((await response.json()) as OllamaChatResponse).message?.content?.trim()
+  const content = await streamOllamaChat({ model, messages, options: { num_ctx: PILOT_NUM_CTX, temperature: 0 } }, signal)
   if (!content) throw new Error('réponse vide du viseur')
   return content
 }
@@ -297,7 +339,6 @@ export async function computerUseTask(
   const history: string[] = []
   let consecutiveWaits = 0
   const pilotModel = await resolvePilotModel()
-  let pilotWarm = false
   for (let i = 0; i < MAX_STEPS; i++) {
     // Vérifié à chaque itération (nouvelle phrase à la voix qui annule la réflexion en cours, voir
     // voicePipeline.ts) : sans ça, une fois lancée, cette boucle de clics ne pouvait plus jamais être
@@ -305,7 +346,7 @@ export async function computerUseTask(
     // conversation.
     if (signal?.aborted) return "Tâche interrompue avant d'être terminée."
 
-    // Chaque itération (capture + appel au modèle de vision) peut prendre jusqu'à 45s (STEP_TIMEOUT_MS) sur
+    // Chaque itération (capture + appel au modèle de vision) peut prendre plusieurs minutes (voir streamOllamaChat) sur
     // une machine chargée ou sans GPU — sans un signe de vie régulier, ça ressemble à un plantage silencieux
     // plutôt qu'à une réflexion lente (constaté en usage réel : Léo pensait Jaris bloqué après plusieurs
     // minutes sans aucune action visible). Le fil de discussion (ChatPanel.tsx, via window.jaris.onLog)
@@ -382,9 +423,7 @@ export async function computerUseTask(
           onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : je vise précisément ${target}…`)
           showScanOverlay()
           try {
-            const timeout = pilotWarm ? STEP_TIMEOUT_MS : PILOT_FIRST_STEP_TIMEOUT_MS
-            const aim = await aimWithMaiUi(target, { ...pilotView(full), chat: (messages) => callPilot(pilotModel, messages, timeout, signal) })
-            pilotWarm = true
+            const aim = await aimWithMaiUi(target, { ...pilotView(full), chat: (messages) => callPilot(pilotModel, messages, signal) })
             if (aim) {
               px = aim.fx * width
               py = aim.fy * height

@@ -46,6 +46,13 @@ function fakeFull(width = 2560, height = 1440) {
   return view({ x: 0, y: 0, w: width, h: height }, width, height)
 }
 
+/** Réponse d'Ollama en continu (étape 255) : une ligne JSON par morceau, le texte coupé en deux morceaux. */
+function streamed(content) {
+  const half = Math.floor(content.length / 2)
+  const lines = [content.slice(0, half), content.slice(half)].map((part) => JSON.stringify({ message: { content: part }, done: false }))
+  return new Response(lines.join('\n') + '\n' + JSON.stringify({ done: true }))
+}
+
 // Étape 231 : `pilot` = profil + modèles installés simulés. Par défaut, aucun modèle de pilotage : le modèle de
 // vision pilote, exactement comme avant — tous les tests historiques ci-dessous passent par ce chemin.
 function setup(steps, inputResult, onFetch, elements = [], pilot = { profile: null, installed: [] }) {
@@ -85,7 +92,9 @@ function setup(steps, inputResult, onFetch, elements = [], pilot = { profile: nu
   const prompts = []
   const exports = {}
   vm.runInNewContext(source, {
-    exports, Error, AbortSignal, require: name => modules[name], setTimeout: fn => fn(),
+    exports, Error, AbortSignal, AbortController, TextDecoder, require: name => modules[name],
+    // L'attente « wait » (1,2 s) passe tout de suite ; les délais d'inactivité (minutes) ne se déclenchent jamais ici.
+    setTimeout: (fn, ms) => (ms <= 2000 ? fn() : 0), clearTimeout: () => {},
     fetch: async (url, options) => {
       const body = JSON.parse(options.body)
       if (url.endsWith('/api/generate')) {
@@ -101,7 +110,7 @@ function setup(steps, inputResult, onFetch, elements = [], pilot = { profile: nu
       bodies.push(body)
       prompts.push(body.messages[body.messages.length - 1].content)
       const next = steps.shift() ?? { action: 'wait' }
-      return { ok: true, json: async () => ({ message: { content: typeof next === 'string' ? next : JSON.stringify(next) } }) }
+      return streamed(typeof next === 'string' ? next : JSON.stringify(next))
     }
   })
   return { exports, run: signal => exports.computerUseTask('Cherche un tuto guitare', 'test', line => logs.push(line), signal),
@@ -221,7 +230,7 @@ function fakeMaiUi({ firstError = [0, 0], answer } = {}) {
     const fx = (tx + ex - view.x) / view.w
     const fy = (ty + ey - view.y) / view.h
     const content = answer ?? `<grounding_think>ok</grounding_think><answer>{"coordinate":[${Math.round(fx * 999)},${Math.round(fy * 999)}]}</answer>`
-    return { ok: true, json: async () => ({ message: { content } }) }
+    return streamed(content)
   }
 }
 const withPilot = (extra = {}) => ({ profile: { pilotModel: PILOT }, installed: [PILOT, 'qwen3.5:4b'], scale: 2, ...extra })
@@ -271,7 +280,7 @@ test('viseur injoignable : la vraie raison est notée, la position estimée sert
   const app = setup([CLICK, { action: 'done', result: 'ok' }], ok, undefined, [], withPilot({ aim: down }))
   assert.equal(await app.run(), 'ok')
   assert.deepEqual(app.state().clicks[0], [1792, 259, 'left'])
-  assert.match(app.state().prompts[1], /viseur indisponible : le viseur a répondu 500 : model runner has unexpectedly stopped/)
+  assert.match(app.state().prompts[1], /viseur indisponible : Ollama a répondu 500 : model runner has unexpectedly stopped/)
 })
 
 test('viseur : une annulation pendant la visée empêche tout clic', async () => {
@@ -328,4 +337,60 @@ test('modèle de vision : position sur 0–1000 ramenée à l’image puis à l�
   // x = 1100 : forcément un pixel de l'image (repli pour un modèle qui ignore la consigne).
   assert.deepEqual(app.state().clicks[2], [1650, 450, 'left'])
   assert.match(app.state().bodies[0].messages[0].content, /échelle de 0 à 1000/)
+})
+
+// --- Étape 255 : plus de limite fixe de 45 s — on attend tant que le modèle donne signe de vie ---
+
+/** Le module avec des minuteries pilotées par le test, et un faux Ollama qui ne répond qu'au signal d'arrêt. */
+function silentOllama({ firstChunk = false } = {}) {
+  const timers = []
+  const exports = {}
+  const modules = {
+    '../config': { config: { ollama: { host: 'http://test', numCtx: 8192 } } },
+    './hardwareScan': {}, './ollama': {}, './profileStore': {}, './scanOverlay': {}, './inputControl': {},
+    './maiUi': maiUi, '../../shared/pilotModel': pilotModel, './uiAutomation': {}, './vision': {}
+  }
+  vm.runInNewContext(source, {
+    exports, Error, AbortSignal, AbortController, TextDecoder, require: (name) => modules[name],
+    setTimeout: (fn, ms) => (timers.push({ fn, ms }), timers.length), clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].fn = null },
+    fetch: async (_url, options) => {
+      const aborted = new Promise((_, reject) => options.signal.addEventListener('abort', () => reject(new Error('aborted'))))
+      if (!firstChunk) return aborted
+      let sent = false
+      return new Response(new ReadableStream({
+        async pull(controller) {
+          if (!sent) {
+            sent = true
+            controller.enqueue(new TextEncoder().encode(JSON.stringify({ message: { content: '{"action":' } }) + '\n'))
+            return
+          }
+          await aborted.catch((err) => controller.error(err))
+        }
+      }))
+    }
+  })
+  const fire = (ms) => {
+    const timer = [...timers].reverse().find((t) => t.ms === ms && t.fn)
+    assert.ok(timer, `aucune minuterie de ${ms} ms en attente`)
+    timer.fn()
+  }
+  return { exports, timers, fire }
+}
+
+test('rien reçu : on attend 3 min (chargement d’un gros modèle), puis une raison claire en français', async () => {
+  const o = silentOllama()
+  const call = o.exports.streamOllamaChat({ model: 'qwen3.8:27b' })
+  await new Promise((r) => setImmediate(r))
+  assert.deepEqual(o.timers.map((t) => t.ms), [180000], 'plus de limite de 45 s avant le premier morceau')
+  o.fire(180000)
+  await assert.rejects(call, /il n'a rien répondu en 3 min \(chargement ou lecture de l'image trop long sur cette machine\)/)
+})
+
+test('le modèle répond puis se tait : abandon après 45 s de silence, pas avant', async () => {
+  const o = silentOllama({ firstChunk: true })
+  const call = o.exports.streamOllamaChat({ model: 'qwen3.8:27b' })
+  for (let i = 0; i < 5 && !o.timers.some((t) => t.ms === 45000); i++) await new Promise((r) => setImmediate(r))
+  assert.ok(o.timers.some((t) => t.ms === 45000), 'le délai d’inactivité est armé après le premier morceau')
+  o.fire(45000)
+  await assert.rejects(call, /il s'est arrêté de répondre pendant 45 s/)
 })

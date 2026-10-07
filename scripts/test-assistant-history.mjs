@@ -224,11 +224,18 @@ for (const channel of ['voice', 'chat']) {
     assert.ok(logs.some((l) => /pilotage direct/.test(l)), 'la raison est écrite dans le journal')
   })
 }
+test('« Sur YouTube, clique sur… » (phrase réelle de Léo) part aussi directement au pilotage', async () => {
+  const prompt = 'Sur YouTube, clique sur la barre de recherche et écris tuto guitare et lance la recherche.'
+  let goal = null
+  const converse = setup(async () => assert.fail('aucun appel modèle'), async (name, args) => { goal = args.goal; return 'Recherche lancée.' })
+  assert.equal(await converse(prompt, null, () => {}), 'Recherche lancée.')
+  assert.equal(goal, prompt)
+})
 test('« clique sur… » : un échec du pilotage est transmis tel quel', async () => {
   const converse = setup(async () => assert.fail('aucun appel modèle'), async () => { throw new Error('Je me suis arrêté après 20 étapes') })
   assert.equal(await converse('clique sur le bouton Jouer', null, () => {}), "Échec de l'outil : Je me suis arrêté après 20 étapes")
 })
-for (const prompt of ['Ne clique pas sur la vidéo', 'Clique pas sur la pub', 'Comment cliquer sur un lien ?', 'Où dois-je cliquer sur la page ?', 'Clique']) {
+for (const prompt of ['Ne clique pas sur la vidéo', 'Clique pas sur la pub', 'Comment cliquer sur un lien ?', 'Où dois-je cliquer sur la page ?', 'Clique', 'Sur YouTube, ne clique pas sur la pub', 'Sur YouTube, comment cliquer sur un lien ?']) {
   test(`pas de pilotage direct pour : ${prompt}`, async () => {
     const converse = setup(async () => ({ role: 'assistant', content: 'Analyse normale' }), async () => assert.fail('pas de pilotage direct'))
     assert.equal(await converse(prompt, null, () => {}), 'Analyse normale')
