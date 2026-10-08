@@ -368,3 +368,24 @@ test('une vraie demande d’envoi garde sa relance vers le pilote', async () => 
   await converse('Envoie un mail à paul.morel@example.fr pour lui dire que je serai en retard', null, () => {}, undefined, [], undefined, undefined, 'chat')
   assert.ok(seen.some((c) => /n'as pas encore appelé computer_use_task/.test(c)))
 })
+
+
+// Étape 262 : un mail RÉDIGÉ peut finir par « Je vais… » sans que ce soit une action de Jaris (vérifié avec le vrai
+// détecteur) — la relance « promesse sans action » faisait répondre une justification à la place du mail.
+const DRAFT = 'Bonjour,\n\nVotre commande est partie hier, numéro de suivi FR4589221. Je vais personnellement suivre son acheminement.\n\nCordialement,\nMarc'
+for (const channel of ['chat', 'voice']) {
+  test(`${channel} : un mail rédigé qui contient « je vais… » est rendu tel quel, sans relance`, async () => {
+    let calls = 0
+    const converse = setup(async () => { calls++; return { role: 'assistant', content: DRAFT } }, async () => assert.fail('aucun outil attendu'))
+    const reply = await converse('Aide moi a repondre a ce client mecontent, voici son message : « toujours rien recu »', null, () => {}, undefined, [], undefined, undefined, channel)
+    assert.match(reply, /FR4589221/)
+    assert.equal(calls, 1)
+  })
+}
+
+test('une vraie action annoncée sans outil garde sa relance', async () => {
+  let calls = 0
+  const converse = setup(async () => { calls++; return { role: 'assistant', content: 'Je vais monter le volume.' } }, async () => 'ok')
+  await converse('Mets le volume plus fort', null, () => {}, undefined, [], undefined, undefined, 'chat')
+  assert.equal(calls, 2)
+})

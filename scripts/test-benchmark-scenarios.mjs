@@ -24,6 +24,7 @@ import {
   directSocialReply,
   findLeakedToolName,
   hasUnnegatedMailIntent,
+  isWritingRequest,
   isScreenQuestion,
   lookStoppedTask,
   looksLikeKnowledgeQuestion,
@@ -1326,4 +1327,24 @@ test('vrai script : une demande arrêtée par l’ancien regard sur l’écran e
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+
+test('étape 262 : demande de RÉDACTION reconnue sur la consigne seule, sans confondre une action', () => {
+  for (const yes of [
+    "Reformule ce mail pour qu'il soit professionnel : Bonjour, je vais vous relancer",
+    'Aide moi a repondre a ce client mecontent, voici son message : « Ca fait 3 semaines »',
+    "Rends ce mail plus poli et plus clair, c'est pour ma responsable : salut Sophie",
+    'Écris un mail à Paul pour lui dire que je serai en retard',
+    'Réponds à ce message de ma cliente : bonjour',
+    'Peux-tu corriger ce texte : je vais au marché',
+    'Traduis en anglais : je vais bien'
+  ]) assert.equal(isWritingRequest(yes), true, yes)
+  for (const no of [
+    'Écris bonjour dans le bloc-notes',
+    'Ouvre YouTube et cherche un tuto guitare',
+    'Rends-moi le volume normal',
+    'Envoie un mail à Paul',
+    'Je vais au marché : écris un mail à Paul'
+  ]) assert.equal(isWritingRequest(no), false, no)
 })

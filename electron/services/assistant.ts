@@ -84,6 +84,21 @@ const SEND_MAIL_VERBS = /\b(envoi|envoie|envoies|envoyer|envoyez|expédie|expéd
 const NEGATION_WORDS = /\b(ne|n['e]|pas|jamais|surtout pas|évite|éviter|aucun|sans)\b/i
 
 /**
+ * Étape 262 : la demande est-elle de RÉDIGER un texte (reformuler, corriger, répondre à un client…) ? Le texte rédigé
+ * peut alors contenir lui-même « je vais… » — « Je vais personnellement suivre son acheminement. Cordialement, Marc » —
+ * que le filet « promesse sans action » prenait pour une action annoncée et non faite (vérifié avec le vrai détecteur) :
+ * la relance faisait répondre au modèle une justification à la place du mail. Seule la CONSIGNE est lue (avant « : »,
+ * « « » ou un retour à la ligne), sans accents ni majuscules : « Aide moi a repondre a ce client » compte aussi.
+ */
+const WRITING_REQUEST =
+  /^\s*(?:(?:peux|pourrais|pourrait|peut)[- ]tu |tu peux |stp |s'il te plait )?(?:reformule|reecris|redige|corrige|traduis|ameliore|rends(?:[- ]moi)? (?:ce|cet|cette|mon|ma|mes|le|la|les|son|sa) (?:mail|e-?mail|message|texte|lettre|courrier|phrase|paragraphe|reponse)\b|resume|aide[- ]moi a (?:repondre|ecrire|rediger|reformuler|formuler)|reponds? a (?:ce|cet|cette|mon|ma|mes|son|sa|ses|un|une)\b|ecris(?:[- ]moi)? (?:un|une|le|la|mon|ma|ce|cette)\s+(?:mail|e-?mail|message|lettre|courrier|reponse|texte|sms|post|discours|invitation|annonce|compte rendu|resume|cv|lettre de motivation)\b)/
+
+function isWritingRequest(prompt: string): boolean {
+  const instruction = prompt.split(/[:«\n]/)[0].normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  return WRITING_REQUEST.test(instruction)
+}
+
+/**
  * true si la phrase mentionne un envoi de mail SANS négation à proximité immédiate ("envoie un mail" oui,
  * "n'envoie pas de mail"/"jamais de mail" non) — sert uniquement à décider s'il faut relancer le modèle vers
  * computer_use_task (voir wantsEmailSent plus bas), jamais une vraie analyse grammaticale : une simple
@@ -576,6 +591,7 @@ async function conversation(
   // déjà traitée) plutôt que sur TOOL_SIGNAL_WORDS (pensé pour choisir un palier, pas pour ça).
   // Sans computer_use_task (téléphone), relancer vers lui pousserait le modèle vers un outil absent.
   const wantsEmailSent = isToolAllowed('computer_use_task') && hasUnnegatedMailIntent(prompt)
+  const writingRequest = isWritingRequest(prompt)
   // Contrairement à wantsEmailSent (recalculé sur la seule phrase actuelle, jamais l'historique), cette
   // relance n'a de sens que pour la question posée à CE tour : sinon une conversation qui a déjà cherché une
   // fois relancerait sans arrêt sur une intention d'un tour précédent déjà traité.
@@ -643,7 +659,8 @@ async function conversation(
         continue
       }
       const leakedTool = !toolCalledThisTurn && !nudgedForNoAction ? findLeakedToolName(message.content) : undefined
-      if (!toolCalledThisTurn && !nudgedForNoAction && (PROMISE_WITHOUT_ACTION(message.content) || leakedTool)) {
+      // Un texte rédigé à la demande (étape 262) peut contenir « je vais… » sans que ce soit une action de Jaris.
+      if (!toolCalledThisTurn && !nudgedForNoAction && ((!writingRequest && PROMISE_WITHOUT_ACTION(message.content)) || leakedTool)) {
         nudgedForNoAction = true
         onLog?.(
           leakedTool

@@ -66,6 +66,21 @@ export function directSocialReply(prompt) {
 const SEND_MAIL_VERBS = /\b(envoi|envoie|envoies|envoyer|envoyez|expédie|expédier)\b/i
 const NEGATION_WORDS = /\b(ne|n['e]|pas|jamais|surtout pas|évite|éviter|aucun|sans)\b/i
 
+/**
+ * Étape 262 : la demande est-elle de RÉDIGER un texte (reformuler, corriger, répondre à un client…) ? Le texte rédigé
+ * peut alors contenir lui-même « je vais… » — « Je vais personnellement suivre son acheminement. Cordialement, Marc » —
+ * que le filet « promesse sans action » prenait pour une action annoncée et non faite (vérifié avec le vrai détecteur) :
+ * la relance faisait répondre au modèle une justification à la place du mail. Seule la CONSIGNE est lue (avant « : »,
+ * « « » ou un retour à la ligne), sans accents ni majuscules : « Aide moi a repondre a ce client » compte aussi.
+ */
+const WRITING_REQUEST =
+  /^\s*(?:(?:peux|pourrais|pourrait|peut)[- ]tu |tu peux |stp |s'il te plait )?(?:reformule|reecris|redige|corrige|traduis|ameliore|rends(?:[- ]moi)? (?:ce|cet|cette|mon|ma|mes|le|la|les|son|sa) (?:mail|e-?mail|message|texte|lettre|courrier|phrase|paragraphe|reponse)\b|resume|aide[- ]moi a (?:repondre|ecrire|rediger|reformuler|formuler)|reponds? a (?:ce|cet|cette|mon|ma|mes|son|sa|ses|un|une)\b|ecris(?:[- ]moi)? (?:un|une|le|la|mon|ma|ce|cette)\s+(?:mail|e-?mail|message|lettre|courrier|reponse|texte|sms|post|discours|invitation|annonce|compte rendu|resume|cv|lettre de motivation)\b)/
+
+export function isWritingRequest(prompt) {
+  const instruction = prompt.split(/[:«\n]/)[0].normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  return WRITING_REQUEST.test(instruction)
+}
+
 export function hasUnnegatedMailIntent(prompt) {
   // Seule la CONSIGNE compte, pas le texte collé après « : » ou « « » : « Reformule ce mail : … merci de m'envoyer le
   // devis » ne demande aucun envoi (étape 261, mesuré : la relance renvoyait le modèle vers l'envoi par le pilote).
@@ -464,6 +479,7 @@ export async function runScenario(scenario, chat, { variant = 0, onEvent } = {})
       { role: 'user', content: withDateTimeNote(userText, SCENARIO_NOW) }
     ]
     const wantsEmailSent = hasUnnegatedMailIntent(userText)
+    const writingRequest = isWritingRequest(userText)
     const wantsWebInfo = looksLikeKnowledgeQuestion(userText)
     let computerUseCalled = false
     let searchCalled = false
@@ -498,7 +514,7 @@ export async function runScenario(scenario, chat, { variant = 0, onEvent } = {})
             continue
           }
           const leaked = !toolCalled && !turn.nudges.includes('action') ? findLeakedToolName(content) : undefined
-          if (!toolCalled && !turn.nudges.includes('action') && (promiseWithoutAction(content) || leaked)) {
+          if (!toolCalled && !turn.nudges.includes('action') && ((!writingRequest && promiseWithoutAction(content)) || leaked)) {
             turn.nudges.push('action')
             messages.push(message, { role: 'user', content: NUDGE_NO_ACTION })
             continue

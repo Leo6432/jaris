@@ -7016,3 +7016,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   contenu que l'utilisateur colle à traiter.**
   Régression : `node --test scripts/test-assistant-history.mjs scripts/test-benchmark-scenarios.mjs` (réécriture sans
   relance, voix et écrit ; vraie demande d'envoi relancée ; le test échoue si la consigne n'est plus isolée).
+
+- **Étape 262, un mail RÉDIGÉ qui contient « je vais… » pris pour une promesse d'action non tenue.** Vu en mesurant les
+  mails de la démo (granite4.2:8b, sans réflexion cachée) : la relance « promesse sans action » est partie sur la
+  réponse au client mécontent, et la réponse finale a commencé par « Je n'ai pas décrit d'action… » avant le mail.
+  Vérifié ensuite avec le vrai `PROMISE_WITHOUT_ACTION` : « … Je vais personnellement suivre son acheminement.
+  Cordialement, Marc » déclenche bien (la formule de politesse fait moins de 5 mots, donc la phrase passe pour une
+  promesse sèche). Corrigé par `isWritingRequest` : une CONSIGNE de rédaction (reformule, rédige, corrige, traduis,
+  rends ce mail…, aide-moi à répondre, réponds à ce…, écris un mail/message/lettre…) — lue avant « : », « « » ou un
+  retour à la ligne, sans accents — coupe ce filet-là seulement ; le filet « nom d'outil cité » et la relance d'envoi
+  de mail restent actifs. « Écris bonjour dans le bloc-notes » n'est PAS une rédaction (action, filet gardé). Copie du
+  simulateur (benchmark-scenarios.mjs) alignée. **Mesuré au passage, à ne pas refaire : couper la réflexion cachée pour
+  aller plus vite sur les mails dégrade nettement le résultat** (raisonnement écrit dans la réponse, outil de mémoire
+  appelé sans raison, tu/vous mélangés, faits inventés) — la vitesse doit venir d'ailleurs.
+  **Leçon générale : un filet qui lit le texte du modèle pour y deviner une action doit savoir quand ce texte est un
+  CONTENU demandé (un mail, une lettre) plutôt que la parole de Jaris — sinon il juge les phrases du mail comme si
+  Jaris les disait.**
+  Régression : `node --test scripts/test-assistant-history.mjs scripts/test-benchmark-scenarios.mjs` (mail rédigé rendu
+  tel quel, voix et écrit ; vraie action annoncée relancée ; rédaction reconnue sur 7 phrases, 5 actions écartées).
