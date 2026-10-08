@@ -115,14 +115,16 @@ function pilotAnswers(testCase) {
   const good = [
     click(k([cx, cy])),
     `Voici l'action : {"action":"click","x":${k([target.x + 3, target.y + 3]).join(',"y":')}}`,
-    JSON.stringify({ action: 'double_click', x: k([cx, cy])[0], y: k([cx, cy])[1] })
+    JSON.stringify({ action: 'double_click', x: k([cx, cy])[0], y: k([cx, cy])[1] }),
+    // Étape 260 : nombres entre guillemets, comme qwen3.8:27b chez Léo — lus comme des nombres par Jaris.
+    JSON.stringify({ action: 'click', x: String(k([cx, cy])[0]), y: String(k([cx, cy])[1]) })
   ]
   // Une valeur au-delà de 1000 ne peut être qu'un pixel : un modèle qui répond quand même en pixels reste compris.
   if (cx > 1000) good.push(click([cx, cy]))
   const bad = [
     click(k([target.x + target.width + 20, cy])),
     '{"action":"done","result":"Fait."}',
-    '{"action":"click","x":"500","y":300}',
+    '{"action":"click","x":"cinq cents","y":300}',
     JSON.stringify({ action: 'right_click', x: k([cx, cy])[0], y: k([cx, cy])[1] })
   ]
   // En pixels SOUS 1000 : indiscernable de l'échelle 0–1000, donc lu comme tel — le clic part ailleurs.
@@ -182,7 +184,9 @@ test('l’étape de pilotage du test est EXACTEMENT celle de Jaris (consignes, m
   const samples = [
     '{"action":"click","x":10,"y":20}', '```json\n{"action":"done","result":"ok"}\n```', '{"action":"click","x":"10","y":20}', '{"action":"scroll"}',
     '{"action":"click_element","name":" "}', '{"action":"type","text":"a"}', 'rien', '{"action":"key","key":"entrée"}', '{"action":"done","result":3}',
-    '{"action":"click_element","id":4}', '{"action":"click_element","id":"12"}', '{"action":"click_element","id":0}', '{"action":"click_element","id":2,"name":"OK"}'
+    '{"action":"click_element","id":4}', '{"action":"click_element","id":"12"}', '{"action":"click_element","id":0}', '{"action":"click_element","id":2,"name":"OK"}',
+    // Étape 260.
+    '{"action":"click","x":"douze","y":2}', '{"action":"click","x":"396","y":"973"}', '{"action":"open_app","app":"Calculatrice"}', '{"action":"open_app","app":" "}'
   ]
   for (const raw of samples) assert.deepEqual(extractPilotStep(raw), real.extractStep(raw), raw)
   for (const name of ['Annuler', 'annuler', 'Ne pas', 'enregistrer', 'Quitter', '']) {

@@ -192,7 +192,7 @@ export function extractPilotStep(raw) {
   if (!match) return null
   try {
     const parsed = JSON.parse(match[0])
-    if (!['click_element', 'click', 'double_click', 'right_click', 'type', 'key', 'wait', 'done', 'fail'].includes(parsed.action ?? '')) return null
+    if (!['click_element', 'click', 'double_click', 'right_click', 'type', 'key', 'wait', 'done', 'fail', 'open_app'].includes(parsed.action ?? '')) return null
     if (parsed.action === 'click_element') {
       // Étape 256 : par son numéro sur la capture (Set-of-Marks), ou par son nom comme avant.
       const id = typeof parsed.id === 'string' && /^\d+$/.test(parsed.id) ? Number(parsed.id) : parsed.id
@@ -200,6 +200,11 @@ export function extractPilotStep(raw) {
       else if (!(typeof parsed.name === 'string' && parsed.name.trim())) return null
       else delete parsed.id
     }
+    // Étape 260 : des nombres entre guillemets (« "396" ») sont lus comme des nombres.
+    for (const axis of ['x', 'y']) {
+      if (typeof parsed[axis] === 'string' && /^\d+(\.\d+)?$/.test(parsed[axis].trim())) parsed[axis] = Number(parsed[axis])
+    }
+    if (parsed.action === 'open_app' && !(typeof parsed.app === 'string' && parsed.app.trim())) return null
     if (['click', 'double_click', 'right_click'].includes(parsed.action ?? '') &&
       !(typeof parsed.x === 'number' && Number.isFinite(parsed.x) && parsed.x >= 0 &&
         typeof parsed.y === 'number' && Number.isFinite(parsed.y) && parsed.y >= 0)) return null

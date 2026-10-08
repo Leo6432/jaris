@@ -99,9 +99,15 @@ function setup(steps, inputResult, onFetch, elements = [], pilot = { profile: nu
         return { imageBase64: 'test', scale: pilot.scale ?? 1, width: 1280, height: 720, full: fakeFull(), marks: elements, physical: pilot.physical ?? false, window: 'YouTube - Firefox' }
       }
     },
-    './vision': { MAX_SCREENSHOT_WIDTH: 1280 }
+    './vision': { MAX_SCREENSHOT_WIDTH: 1280 },
+    // Étape 260 : l'ouverture d'une application par Windows, simulée (le vrai openApp passe par PowerShell).
+    './appLauncher': {
+      didAppLaunch: (result) => result.endsWith('a été lancé.'),
+      openApp: async (name) => { opened.push(name); return pilot.openResult ?? `${name} a été lancé.` }
+    }
   }
   const aims = []
+  const opened = []
   const unloads = []
   const prompts = []
   const exports = {}
@@ -137,11 +143,11 @@ function setup(steps, inputResult, onFetch, elements = [], pilot = { profile: nu
   return { exports, run: signal => exports.computerUseTask('Cherche un tuto guitare', 'test', line => logs.push(line), signal),
     state: () => ({
       captures, actions, hidden, logs, clicks: clicks.map((c) => c[0] === 'click' ? c.slice(1, 4) : c), calls: clicks, prompts, bodies, uiaReads, aims, unloads,
-      physical: clicks.filter((c) => c[0] === 'click').map((c) => c[4]), textBodies, asides, backs
+      physical: clicks.filter((c) => c[0] === 'click').map((c) => c[4]), textBodies, asides, backs, opened
     }) }
 }
 
-for (const step of [{ action: 'move' }, { action: 'click' }, { action: 'click', x: '12', y: 2 }, { action: 'type', text: '' }, { action: 'key', key: 42 }]) {
+for (const step of [{ action: 'move' }, { action: 'click' }, { action: 'click', x: 'douze', y: 2 }, { action: 'click', x: '12px', y: 2 }, { action: 'open_app', app: ' ' }, { action: 'type', text: '' }, { action: 'key', key: 42 }]) {
   test(`action invalide arrêtée sans scan supplémentaire : ${JSON.stringify(step)}`, async () => {
     const app = setup([step])
     await assert.rejects(app.run(), /action inexécutable/)
@@ -227,7 +233,7 @@ test('la liste des éléments est bien transmise au modèle, avec les numéros d
   assert.match(app.state().prompts[0], /^1\. \[Edit\] Rechercher$/m)
   assert.match(app.state().prompts[0], /^2\. \[Button\] Se connecter$/m)
   // La règle « clique par numéro » s'ajoute aux consignes, qui restent identiques à leur copie de test.
-  assert.equal(app.state().bodies[0].messages[0].content, `${app.exports.SYSTEM_PROMPT}\n\n${app.exports.MARKS_RULE}`)
+  assert.equal(app.state().bodies[0].messages[0].content, `${app.exports.SYSTEM_PROMPT}\n\n${app.exports.OPEN_APP_RULE}\n\n${app.exports.MARKS_RULE}`)
 })
 
 test("sans arbre d'accessibilité, le modèle est explicitement renvoyé vers le clic en pixels", async () => {
@@ -450,7 +456,7 @@ test('viseur installé : le modèle de vision décide, MAI-UI vise avec son zoom
   const { aims, clicks, bodies, uiaReads, unloads, prompts } = app.state()
   // Le modèle de vision reçoit les règles « numéro » et « target » en plus de sa consigne habituelle, et la liste Windows.
   assert.match(bodies[0].messages[0].content, /"target"/)
-  assert.equal(bodies[0].messages[0].content, `${app.exports.SYSTEM_PROMPT}\n\n${app.exports.MARKS_RULE}\n\n${app.exports.PILOT_TARGET_RULE}`)
+  assert.equal(bodies[0].messages[0].content, `${app.exports.SYSTEM_PROMPT}\n\n${app.exports.OPEN_APP_RULE}\n\n${app.exports.MARKS_RULE}\n\n${app.exports.PILOT_TARGET_RULE}`)
   assert.ok(uiaReads > 0, 'un clic par numéro reste possible et exact')
   // Deux regards : toute l'image, puis la moitié de l'écran autour du 1er point ; consigne officielle, température 0.
   assert.equal(aims.length, 2)
@@ -515,7 +521,7 @@ test('profil qui cite encore UI-TARS : pas de viseur, consigne habituelle intact
   const app = setup([CLICK, { action: 'done', result: 'ok' }], ok, undefined, [], { profile: { pilotModel: old }, installed: [old, 'qwen3.5:4b'], aim: fakeMaiUi() })
   assert.equal(await app.run(), 'ok')
   assert.equal(app.state().aims.length, 0)
-  assert.equal(app.state().bodies[0].messages[0].content, app.exports.SYSTEM_PROMPT, 'copie vérifiée par le test des modèles de vision')
+  assert.equal(app.state().bodies[0].messages[0].content, `${app.exports.SYSTEM_PROMPT}\n\n${app.exports.OPEN_APP_RULE}`, 'copie vérifiée par le test des modèles de vision, plus la règle d’ouverture')
   assert.deepEqual(app.state().clicks[0], [896, 130, 'left'])
 })
 
@@ -599,4 +605,44 @@ test('le modèle répond puis se tait : abandon après 45 s de silence, pas avan
   assert.ok(o.timers.some((t) => t.ms === 45000), 'le délai d’inactivité est armé après le premier morceau')
   o.fire(45000)
   await assert.rejects(call, /il s'est arrêté de répondre pendant 45 s/)
+})
+
+
+// --- Étape 260 : coordonnées entre guillemets, et ouverture d'application par Windows ---
+
+test('étape 260 : la réponse RÉELLE de qwen3.8:27b chez Léo (x/y entre guillemets) est exécutée, plus refusée', async () => {
+  const real = '{"action":"click","x":"396","y":"973","target":"the Windows Start/Search bar labeled \\"Rechercher\\" in the taskbar"}'
+  const app = setup([real, { action: 'done', result: 'ok' }], 'Clic left effectué.')
+  assert.equal(await app.run(), 'ok')
+  // 396 et 973 sur 1000, ramenés à la capture de 1280 x 720.
+  assert.deepEqual(app.state().clicks[0], [507, 701, 'left'])
+  const step = app.exports.extractStep(real)
+  assert.equal(step.x, 396)
+  assert.equal(step.y, 973)
+})
+
+test('étape 260 : le modèle de vision ouvre une application par Windows, en une étape, puis continue', async () => {
+  const app = setup([{ action: 'open_app', app: 'Calculatrice' }, { action: 'done', result: '12 affiché' }], 'x')
+  assert.equal(await app.run(), '12 affiché')
+  assert.deepEqual([...app.state().opened], ['Calculatrice'])
+  assert.equal(app.state().actions, 0, 'aucun clic ni frappe pour ouvrir')
+  assert.match(app.state().prompts[1], /Application ouverte par Windows : Calculatrice a été lancé\./)
+  // La règle est donnée au modèle de vision, à côté des consignes inchangées (copie du test des modèles de vision).
+  assert.ok(app.state().bodies[0].messages[0].content.includes(app.exports.OPEN_APP_RULE))
+  assert.ok(app.state().bodies[0].messages[0].content.startsWith(app.exports.SYSTEM_PROMPT))
+})
+
+test('étape 260 : le modèle rapide peut aussi ouvrir une application, sans image', async () => {
+  const app = setup([], 'x', undefined, PAGE, planner([{ action: 'open_app', app: 'Calculatrice' }, { action: 'done', result: 'ok' }]))
+  assert.equal(await app.run(), 'ok')
+  assert.deepEqual([...app.state().opened], ['Calculatrice'])
+  assert.equal(app.state().bodies.length, 0)
+  assert.match(app.state().textBodies[0].messages[0].content, /"action":"open_app"/)
+})
+
+test('étape 260 : application introuvable = pas un échec de la tâche, le modèle le voit et passe par le menu Démarrer', async () => {
+  const app = setup([{ action: 'open_app', app: 'Calculette' }, { action: 'done', result: 'ok' }], 'x', undefined, [],
+    { profile: null, installed: [], openResult: 'Je n\'ai trouvé aucune application nommée "Calculette" installée sur cette machine.' })
+  assert.equal(await app.run(), 'ok')
+  assert.match(app.state().prompts[1], /Ouverture de "Calculette" impossible : Je n'ai trouvé aucune application nommée "Calculette".* reste le menu Démarrer/)
 })

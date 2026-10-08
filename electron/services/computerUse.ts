@@ -4,6 +4,7 @@ import { listInstalledModels } from './ollama'
 import { hideScanOverlay, showScanOverlay } from './scanOverlay'
 import type { NativeImage } from 'electron'
 import { clickMouse, pressKey, typeText } from './inputControl'
+import { didAppLaunch, openApp } from './appLauncher'
 import { aimWithMaiUi, type MaiUiDeps } from './maiUi'
 import { getProfile } from './profileStore'
 import { PILOT_MODEL } from '../../shared/pilotModel'
@@ -68,7 +69,7 @@ const PILOT_NUM_CTX = 8192
 
 interface ComputerUseStep {
   /** `look` : réponse du planificateur sans image (étape 256) — « la liste ne suffit pas, regarde l'écran ». */
-  action: 'click_element' | 'click' | 'double_click' | 'right_click' | 'type' | 'key' | 'wait' | 'done' | 'fail' | 'look'
+  action: 'click_element' | 'click' | 'double_click' | 'right_click' | 'type' | 'key' | 'wait' | 'done' | 'fail' | 'look' | 'open_app'
   x?: number
   y?: number
   /** Nom de l'élément visé pour `click_element` (voir uiAutomation.ts, étape 32). */
@@ -80,6 +81,8 @@ interface ComputerUseStep {
   text?: string
   key?: string
   result?: string
+  /** Étape 260 : l'application à ouvrir par Windows (`open_app`), comme l'outil open_app de la conversation. */
+  app?: string
 }
 
 export const SYSTEM_PROMPT =
@@ -124,6 +127,17 @@ export const PILOT_TARGET_RULE =
  * Étape 256 (Set-of-Marks) : ajouté à SYSTEM_PROMPT quand des éléments sont numérotés sur la capture — SYSTEM_PROMPT
  * lui-même reste identique, sa copie sert au test des modèles de vision (scripts/benchmark-vision.mjs).
  */
+/**
+ * Étape 260 — ouvrir une application par Windows, en une étape. Sans elle, le modèle de vision ouvrait la Calculatrice
+ * en cliquant la recherche de la barre des tâches, tapant son nom, validant… une capture par geste, soit environ une
+ * minute chacune avec un gros modèle de vision partiellement en mémoire vive (Léo, usage réel). Ajouté à part comme
+ * MARKS_RULE : SYSTEM_PROMPT reste la copie exacte de celle du test des modèles de vision.
+ */
+export const OPEN_APP_RULE =
+  'Pour ouvrir une application installée (Calculatrice, Bloc-notes, un navigateur, Discord…), réponds ' +
+  '{"action":"open_app","app":"<nom de l\'application>"} : Windows l\'ouvre directement, sans passer par le menu ' +
+  'Démarrer ni la barre de recherche.'
+
 export const MARKS_RULE =
   'Les éléments de la liste sont encadrés et numérotés sur la capture : pour cliquer l\'un d\'eux, réponds ' +
   '{"action":"click_element","id":<son numéro>} — c\'est le clic le plus sûr, sa position vient de Windows.'
@@ -140,6 +154,8 @@ export const TEXT_PLANNER_PROMPT =
   'numérotée de ses éléments cliquables, telle que Windows la donne (numéro, type, nom). Réponds UNIQUEMENT par un ' +
   'objet JSON décrivant la PROCHAINE action : ' +
   '{"action":"click_element","id":<numéro d\'un élément de la liste>}, ' +
+  '{"action":"open_app","app":"<nom de l\'application>"} (Windows ouvre directement une application installée : ' +
+  'Calculatrice, Bloc-notes, un navigateur… à préférer au menu Démarrer), ' +
   '{"action":"type","text":"<texte à taper au clavier>"} (tape là où se trouve le curseur : clique d\'abord sur le ' +
   'bon champ), ' +
   '{"action":"key","key":"<entrée|tab|échap|espace|retour arrière|suppr|haut|bas|gauche|droite|début|fin>"}, ' +
@@ -156,8 +172,9 @@ export const TEXT_PLANNER_PROMPT =
 export const TEXT_STEP_FORMAT = {
   type: 'object',
   properties: {
-    action: { type: 'string', enum: ['click_element', 'type', 'key', 'wait', 'done', 'fail', 'look'] },
+    action: { type: 'string', enum: ['click_element', 'open_app', 'type', 'key', 'wait', 'done', 'fail', 'look'] },
     id: { type: 'integer' },
+    app: { type: 'string' },
     text: { type: 'string' },
     key: { type: 'string' },
     result: { type: 'string' }
@@ -255,7 +272,7 @@ export function extractStep(raw: string): ComputerUseStep | null {
   if (!match) return null
   try {
     const parsed = JSON.parse(match[0]) as Partial<ComputerUseStep>
-    if (!['click_element', 'click', 'double_click', 'right_click', 'type', 'key', 'wait', 'done', 'fail'].includes(parsed.action ?? '')) return null
+    if (!['click_element', 'click', 'double_click', 'right_click', 'type', 'key', 'wait', 'done', 'fail', 'open_app'].includes(parsed.action ?? '')) return null
     if (parsed.action === 'click_element') {
       // Étape 256 : par son numéro sur la capture (Set-of-Marks), ou par son nom comme avant.
       const id = typeof parsed.id === 'string' && /^\d+$/.test(parsed.id) ? Number(parsed.id) : parsed.id
@@ -263,6 +280,13 @@ export function extractStep(raw: string): ComputerUseStep | null {
       else if (!(typeof parsed.name === 'string' && parsed.name.trim())) return null
       else delete parsed.id
     }
+    // Étape 260 : qwen3.8:27b a écrit chez Léo {"x":"396","y":"973"} — des nombres entre guillemets, sans ambiguïté.
+    // Refuser ce clic faisait échouer toute la tâche après une minute d'analyse ; « 12px » ou « douze » restent refusés.
+    for (const axis of ['x', 'y'] as const) {
+      const value: unknown = parsed[axis]
+      if (typeof value === 'string' && /^\d+(\.\d+)?$/.test(value.trim())) parsed[axis] = Number(value)
+    }
+    if (parsed.action === 'open_app' && !(typeof parsed.app === 'string' && parsed.app.trim())) return null
     if (['click', 'double_click', 'right_click'].includes(parsed.action ?? '') &&
       !(typeof parsed.x === 'number' && Number.isFinite(parsed.x) && parsed.x >= 0 &&
         typeof parsed.y === 'number' && Number.isFinite(parsed.y) && parsed.y >= 0)) return null
@@ -313,6 +337,8 @@ export function extractTextStep(raw: string, marks: Array<{ id: number }>): Comp
     switch (parsed.action) {
       case 'click_element':
         return typeof parsed.id === 'number' && marks.some((m) => m.id === parsed.id) ? { action: 'click_element', id: parsed.id } : null
+      case 'open_app':
+        return typeof parsed.app === 'string' && parsed.app.trim() ? { action: 'open_app', app: parsed.app.trim() } : null
       case 'type':
         return typeof parsed.text === 'string' && parsed.text.trim() ? { action: 'type', text: parsed.text } : null
       case 'key':
@@ -349,7 +375,7 @@ async function nextStep(
       {
         model,
         messages: [
-          { role: 'system', content: [SYSTEM_PROMPT, capture.marks.length ? MARKS_RULE : '', withPilot ? PILOT_TARGET_RULE : ''].filter(Boolean).join('\n\n') },
+          { role: 'system', content: [SYSTEM_PROMPT, OPEN_APP_RULE, capture.marks.length ? MARKS_RULE : '', withPilot ? PILOT_TARGET_RULE : ''].filter(Boolean).join('\n\n') },
           { role: 'user', content: buildStepPrompt(goal, history, capture.marks), images: [capture.imageBase64] }
         ],
         think: false,
@@ -651,6 +677,22 @@ async function runComputerUseTask(
         if (result !== `Touche "${step.key}" pressée.`) throw new Error(result)
         history.push(`${i + 1}. Touche "${step.key ?? ''}" pressée`)
         onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : touche "${step.key ?? ''}" pressée.`)
+        break
+      }
+      case 'open_app': {
+        const app = step.app ?? ''
+        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : j'ouvre ${app}…`)
+        const result = await openApp(app)
+        if (didAppLaunch(result)) {
+          // Le temps que la fenêtre apparaisse : la capture suivante doit la montrer au premier plan.
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+          history.push(`${i + 1}. Application ouverte par Windows : ${result}`)
+          onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : ${result}`)
+        } else {
+          // Pas fatal, comme un élément introuvable : le modèle le voit et peut passer par le menu Démarrer.
+          history.push(`${i + 1}. Ouverture de "${app}" impossible : ${result} — reste le menu Démarrer`)
+          onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : ${result}`)
+        }
         break
       }
       case 'wait':

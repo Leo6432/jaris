@@ -7019,3 +7019,24 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `node --test scripts/test-ui-automation.mjs scripts/test-computer-use.mjs` (noms réels français et
   anglais, nom partiel ignoré ; 3 clics identiques -> vision, clics non consécutifs -> rien ; le garde-fou retiré ou
   mal compté fait échouer les tests).
+
+- **Étape 260, deuxième essai de Léo sur la Calculatrice (v0.28.29) : une minute à regarder l'écran, puis « action
+  inexécutable » sans rien ouvrir.** Le message d'erreur contenait la réponse exacte du modèle de vision
+  (qwen3.8:27b) : `{"action":"click","x":"396","y":"973","target":"…Rechercher… in the taskbar"}`. Deux causes :
+  1. **Des nombres écrits entre guillemets** (`"396"`). `extractStep` exigeait le type nombre et rejetait toute la
+     tâche après une minute d'analyse. Un test de l'étape 32 refusait même exprès `"x":"12"` : ce choix strict ne
+     protégeait de rien (une chaîne de chiffres n'a qu'un sens) et a coûté la tâche entière en usage réel. Les chaînes
+     de chiffres sont lues comme des nombres ; « 12px » ou « douze » restent refusés. Copie du test des modèles de
+     vision (benchmark-vision.mjs) alignée — un exemple de « mauvaise » réponse y supposait l'ancien refus.
+  2. **Ouvrir une application coûtait une capture par geste** : le modèle de vision passait par la recherche de la
+     barre des tâches (clic, frappe, Entrée, vérification), soit environ une minute chacun avec un gros modèle de
+     vision en partie en mémoire vive. Nouvelle action du pilote `open_app` (vision ET planificateur sans image) :
+     Windows ouvre l'application en une étape, par le même `openApp` que l'outil de la conversation. Un nom introuvable
+     n'est pas fatal (noté dans l'historique, le modèle peut repasser par le menu Démarrer). Règle ajoutée À PART
+     (`OPEN_APP_RULE`, comme `MARKS_RULE`) : SYSTEM_PROMPT reste la copie exacte de celle du test des modèles de vision.
+  **Leçon générale : une validation stricte d'une sortie de modèle doit refuser ce qui est AMBIGU, pas ce qui est
+  seulement mal typé — refuser `"396"` ne protège de rien et transforme une petite imprécision en échec complet.**
+  **Non vérifié ici** : le comportement réel de qwen3.8:27b avec la nouvelle action (trop gros pour cette machine) —
+  vérifié par les tests sur ses réponses réelles, à confirmer par Léo en usage réel.
+  Régression : `node --test scripts/test-computer-use.mjs scripts/test-benchmark-vision.mjs` (la réponse réelle de
+  Léo exécutée au bon endroit ; ouverture par la vision et par le planificateur ; application introuvable non fatale).
