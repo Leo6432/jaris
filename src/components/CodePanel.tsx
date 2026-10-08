@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Composer from '@/components/Composer'
+import EmptyState from '@/components/EmptyState'
 import Workspace from '@/components/Workspace'
 import { formatCodeGenProgress, formatDuration } from '@/lib/formatCodeGenProgress'
 import { formatRecentDate } from '@/lib/formatRecentDate'
@@ -191,6 +192,7 @@ export default function CodePanel(): JSX.Element {
   return (
     <Workspace
       newLabel="Nouvelle application"
+      label="Code"
       onNew={startOver}
       items={recentApps.map((recent) => ({
         id: recent.path,
@@ -207,10 +209,12 @@ export default function CodePanel(): JSX.Element {
             (étape 97), il ne reste donc ici que la phrase qui dit à quoi sert ce mode — sans elle, l'écran
             serait entièrement vide avant la première génération. */}
         {!appResult && !generating && (
-          <p className="code-panel__intro">
-            Décris une application en français : Jaris l'écrit entièrement sur ta machine, puis la lance
-            juste ici. Tu peux aussi joindre une capture ou une maquette à reproduire.
-          </p>
+          <EmptyState
+            title="Quelle application veux-tu créer ?"
+            description="Décris-la simplement : Jaris l'écrit entièrement sur ta machine, puis la lance juste ici. Tu peux aussi joindre une capture ou une maquette à reproduire."
+            suggestions={['Un minuteur Pomodoro', 'Une liste de courses', 'Un convertisseur de devises']}
+            onSuggestion={setDescription}
+          />
         )}
 
         {appResult && appResult.issues.length > 0 && (

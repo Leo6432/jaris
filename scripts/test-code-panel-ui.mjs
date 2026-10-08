@@ -114,6 +114,7 @@ function buildPage() {
         '--bundle',
         '--format=iife',
         '--loader:.tsx=tsx',
+        '--loader:.png=dataurl',
         '--jsx=automatic',
         `--alias:@=${join(projectRoot, 'src')}`,
         `--outfile=${bundlePath}`
@@ -317,11 +318,12 @@ test('le bouton "Arrêter" arrête vraiment, et ne laisse pas une erreur rouge',
     // gris, étape 97) : on mesure le style RÉELLEMENT calculé.
     const style = await page.evaluate(() => {
       const css = getComputedStyle(document.querySelector('.code-panel__live-stop'))
-      return { image: css.backgroundImage, clip: css.clipPath, transform: css.textTransform }
+      return { radius: css.borderTopLeftRadius, font: css.fontFamily, transform: css.textTransform }
     })
-    assert.match(style.image, /linear-gradient/, 'le bouton Arrêter est resté au style par défaut du navigateur')
-    assert.match(style.clip, /polygon/)
-    assert.equal(style.transform, 'uppercase')
+    // Refonte « design sobre » : la famille de boutons est une pilule en Geist, sans capitales.
+    assert.equal(style.radius, '999px', 'le bouton Arrêter est resté au style par défaut du navigateur')
+    assert.match(style.font, /Geist/)
+    assert.equal(style.transform, 'none')
 
     await page.click('.code-panel__live-stop')
     assert.equal(await page.evaluate(() => window.__cancelled), true)

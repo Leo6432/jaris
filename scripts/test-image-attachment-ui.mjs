@@ -105,6 +105,7 @@ function buildPage(component) {
         '--bundle',
         '--format=iife',
         '--loader:.tsx=tsx',
+        '--loader:.png=dataurl',
         '--jsx=automatic',
         // Le projet importe via l'alias "@/..." (vite.config/tsconfig) : esbuild ne le connaît pas seul.
         `--alias:@=${join(projectRoot, 'src')}`,

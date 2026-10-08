@@ -15,25 +15,68 @@ import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import { useJarisStore, type JarisEmotion } from '@/store/useJarisStore'
 import type { AppVersionStatus, MemoryGraph, OllamaVersionStatus, WidgetMode } from '../shared/ipc'
 import ModelEffortPicker from '@/components/ModelEffortPicker'
+import { ShellSlotsContext, VoiceLaunchContext } from '@/lib/shellContext'
+import logo64 from '@/assets/jaris-logo-64.png'
+import logo160 from '@/assets/jaris-logo-160.png'
 
 const STATUS_LABEL: Record<JarisEmotion, string> = {
-  idle: 'Jaris dort...',
-  listening: "Jaris t'écoute",
-  thinking: 'Jaris réfléchit...',
-  happy: 'Tâche accomplie',
+  idle: 'Parle à Jaris',
+  listening: "Jaris t'écoute…",
+  thinking: 'Jaris réfléchit…',
+  happy: 'Jaris répond',
   surprised: 'Oups !'
 }
 
 /** Les modes de la colonne latérale permanente (étape 30 ; Image à la place du Montage depuis l'étape 200). */
 type AppMode = 'voice' | 'chat' | 'code' | 'image' | 'video'
 
-const MODES: Array<{ id: AppMode; label: string; hint: string }> = [
-  { id: 'voice', label: 'Agent vocal', hint: 'Parler à Jaris' },
-  { id: 'chat', label: 'Chat', hint: 'Écrire à Jaris' },
-  { id: 'code', label: 'Code', hint: 'Générer une application' },
-  { id: 'image', label: 'Image', hint: 'Créer une image' },
-  { id: 'video', label: 'Vidéo', hint: 'Créer une vidéo' }
+/** Refonte « design sobre » (maquette Jaris.dc.html) : une icône au trait par mode, comme la barre de ChatGPT. */
+const MODES: Array<{ id: AppMode; label: string; icon: string }> = [
+  { id: 'voice', label: 'Agent vocal', icon: 'M9 3h6v12H9zM5 11a7 7 0 0 0 14 0M12 18v3' },
+  { id: 'chat', label: 'Chat', icon: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z' },
+  { id: 'code', label: 'Code', icon: 'M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16' },
+  { id: 'image', label: 'Image', icon: 'M4 5h16v14H4zM4 16l5-5 4 4 2-2 5 5M15.5 9.5h.01' },
+  { id: 'video', label: 'Vidéo', icon: 'M3 6h13v12H3zM16 10l5-3v10l-5-3' }
 ]
+
+function LineIcon({ d }: { d: string }): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  )
+}
+
+function SidebarToggleIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="3" />
+      <path d="M9 4v16" />
+    </svg>
+  )
+}
+
+/** Ce qu'affiche le gros bouton de l'Agent vocal selon l'état : le logo au repos, des barres qui bougent
+ *  quand Jaris écoute ou parle, trois points quand il réfléchit (maquette Jaris.dc.html). */
+function VoiceVisual({ emotion }: { emotion: JarisEmotion }): JSX.Element {
+  if (emotion === 'idle' || emotion === 'surprised') return <img className="voice-screen__logo" src={logo160} alt="" />
+  if (emotion === 'thinking') {
+    return (
+      <span className="voice-screen__dots" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </span>
+    )
+  }
+  return (
+    <span className="voice-screen__bars" aria-hidden="true">
+      {[0, 1, 2, 3, 4].map((i) => (
+        <span key={i} />
+      ))}
+    </span>
+  )
+}
 
 /**
  * Deux fenêtres partagent ce même bundle : le widget flottant, toujours là en haut au centre de l'écran
@@ -61,48 +104,6 @@ export default function App(): JSX.Element {
   const audioRef = useRef<HTMLAudioElement>(null)
   const audioUrlRef = useRef<string | null>(null)
 
-  // Taille de l'orbe de l'écran Agent vocal (défaut 320px, comme avant) : Léo a signalé que réduire la
-  // fenêtre pendant/après une demande transforme le cercle en une simple ligne orange ondulée — l'orbe
-  // restait à 320px fixe et se faisait ROGNER par `.app-main` (overflow: hidden) dès que la fenêtre devenait
-  // plus petite que lui, ne laissant visible qu'une fine bande horizontale au milieu de l'anneau irrégulier.
-  // **Premier correctif (v0.5.5) insuffisant, remplacé ici** : `.app__orb-stage` prenait, via `flex: 1`,
-  // TOUT l'espace restant dans `.app--voice` — ce qui poussait le statut/l'astuce tout en bas de l'écran sur
-  // une fenêtre normale/grande (signalé par Léo : "pourquoi le texte est tout en bas"), alors qu'avant ce
-  // premier correctif l'orbe et le texte formaient un seul groupe CENTRÉ ensemble. Corrigé en mesurant
-  // directement la hauteur du bloc statut/astuce/conversation (`.app__voice-footer` ci-dessous, via
-  // `getBoundingClientRect` sur le nœud trouvé dans le conteneur observé) plutôt que de lui laisser du
-  // flex-grow décider : la taille de l'orbe est déduite de "hauteur totale du conteneur moins hauteur du
-  // footer", sans jamais toucher à `justify-content: center` sur `.app` — l'orbe et le footer redeviennent un
-  // groupe centré comme à l'origine, qui rétrécit ENSEMBLE si besoin plutôt que de se répartir aux deux bouts
-  // de l'écran. Un seul `ResizeObserver` observe À LA FOIS le conteneur (redimensionnement de la fenêtre) ET
-  // le footer (apparition du transcript/de la réponse, qui change sa hauteur sans changer celle de la
-  // fenêtre) — measure() relit toujours les deux tailles fraîches via le DOM plutôt que de se fier à
-  // `entry.contentRect`, donc peu importe lequel des deux déclenche le rappel. Rétrécit jusqu'à
-  // MINIMAL_SIZE_THRESHOLD (JarisOrb.tsx), où le rendu simplifié du widget replié prend le relais plutôt que
-  // de continuer à rogner un anneau détaillé.
-  const [orbSize, setOrbSize] = useState(320)
-  const orbResizeObserverRef = useRef<ResizeObserver | null>(null)
-  const voiceLayoutRef = useCallback((el: HTMLDivElement | null) => {
-    orbResizeObserverRef.current?.disconnect()
-    orbResizeObserverRef.current = null
-    if (!el) return
-    const ORB_MAX = 320
-    const ORB_MIN = 24
-    const MARGIN = 24
-    const update = (): void => {
-      const footer = el.querySelector<HTMLElement>('.app__voice-footer')
-      const footerHeight = footer?.getBoundingClientRect().height ?? 0
-      const available = Math.min(el.clientWidth, el.clientHeight - footerHeight) - MARGIN
-      setOrbSize(Math.max(ORB_MIN, Math.min(ORB_MAX, available)))
-    }
-    update()
-    const observer = new ResizeObserver(update)
-    observer.observe(el)
-    const footer = el.querySelector<HTMLElement>('.app__voice-footer')
-    if (footer) observer.observe(footer)
-    orbResizeObserverRef.current = observer
-  }, [])
-
   // undefined = pas encore chargé, null = pas de profil (premier lancement)
   const [profileName, setProfileName] = useState<string | null | undefined>(undefined)
   const [capacityScanDone, setCapacityScanDone] = useState<boolean | undefined>(undefined)
@@ -117,6 +118,32 @@ export default function App(): JSX.Element {
   const [ollamaPopupDismissed, setOllamaPopupDismissed] = useState(false)
   const [appVersionStatus, setAppVersionStatus] = useState<AppVersionStatus | null>(null)
   const [appPopupDismissed, setAppPopupDismissed] = useState(false)
+  // Refonte « design sobre » : barre latérale repliable (bouton en haut à droite de la barre, ou en haut à
+  // gauche de l'écran une fois repliée), et emplacements qu'elle prête à l'écran affiché (shellContext.ts).
+  const [sideOpen, setSideOpen] = useState(
+    () => !(typeof window !== 'undefined' && window.matchMedia?.('(max-width: 700px)').matches)
+  )
+  const [newSlot, setNewSlot] = useState<HTMLElement | null>(null)
+  const [recentsSlot, setRecentsSlot] = useState<HTMLElement | null>(null)
+  const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null)
+  const [appVersion, setAppVersion] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (MODE !== 'full') return
+    void window.jaris.getAppVersion().then(setAppVersion).catch(() => {})
+  }, [])
+
+  /**
+   * Micro de la barre de saisie : passe sur l'Agent vocal PUIS déclenche l'écoute. Le changement de mode est
+   * envoyé au main tout de suite (pas seulement par l'effet plus haut, qui ne tourne qu'après le rendu) :
+   * hors de l'Agent vocal, l'écoute est suspendue côté main, et l'ordre des messages IPC garantit qu'elle
+   * est rétablie avant que le réveil n'arrive.
+   */
+  const launchVoice = useCallback((): void => {
+    window.jaris.setActiveMode('voice')
+    setAppMode('voice')
+    window.jaris.triggerWake()
+  }, [])
 
   const openMemoryBrain = (): void => {
     void window.jaris.getMemoryGraph().then(setMemoryGraph)
@@ -347,15 +374,19 @@ export default function App(): JSX.Element {
       return (
         <div className="app">
           <form className="app__onboarding" onSubmit={handleOnboardingSubmit}>
-            <h1>Bonjour !</h1>
-            <p>Comment dois-je t'appeler ?</p>
+            <img className="app__onboarding-logo" src={logo160} alt="Jaris" />
+            <h1>Bienvenue sur Jaris</h1>
+            <p>
+              Ton assistant personnel, 100 % local. Rien ne quitte ton ordinateur, et c'est gratuit. Comment
+              dois-je t'appeler ?
+            </p>
             <input
               autoFocus
               value={nameInput}
               onChange={(event) => setNameInput(event.target.value)}
               placeholder="Ton prénom"
             />
-            <button type="submit">Valider</button>
+            <button type="submit">Commencer</button>
           </form>
         </div>
       )
@@ -382,34 +413,80 @@ export default function App(): JSX.Element {
     }
 
     return (
+      <ShellSlotsContext.Provider value={{ newSlot, recentsSlot, titleSlot }}>
+      <VoiceLaunchContext.Provider value={launchVoice}>
       <div className="app-shell">
-        <nav className="sidebar">
-          <div className="sidebar__brand">JARIS</div>
-
-          <div className="sidebar__modes">
-            {MODES.map(({ id, label, hint }) => (
+        {sideOpen && (
+          <nav className="sidebar">
+            <div className="sidebar__head">
+              <img className="sidebar__logo" src={logo64} alt="" />
+              <span className="sidebar__brand">Jaris</span>
               <button
-                key={id}
-                className={`sidebar__mode${appMode === id ? ' sidebar__mode--active' : ''}`}
-                onClick={() => setAppMode(id)}
+                className="sidebar__icon-button"
+                onClick={() => setSideOpen(false)}
+                title="Fermer la barre latérale"
+                aria-label="Fermer la barre latérale"
               >
-                <span className="sidebar__mode-label">{label}</span>
-                <span className="sidebar__mode-hint">{hint}</span>
+                <SidebarToggleIcon />
               </button>
-            ))}
-          </div>
+            </div>
 
-          <div className="sidebar__footer">
-            <button className="sidebar__link" onClick={openMemoryBrain}>
-              Cerveau de Jaris
-            </button>
-            <ErrorBoundary label="Les Options">
-              <OptionsMenu />
-            </ErrorBoundary>
-          </div>
-        </nav>
+            {/* Bouton « Nouvelle conversation / application / image / vidéo » de l'écran affiché (portail). */}
+            <div className="sidebar__new" ref={setNewSlot} />
+
+            <div className="sidebar__modes">
+              {MODES.map(({ id, label, icon }) => (
+                <button
+                  key={id}
+                  className={`sidebar__mode${appMode === id ? ' sidebar__mode--active' : ''}`}
+                  onClick={() => setAppMode(id)}
+                >
+                  <LineIcon d={icon} />
+                  <span className="sidebar__mode-label">{label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* « Récents » de l'écran affiché : conversations, applications, images ou vidéos (portail). */}
+            <div className="sidebar__recents" ref={setRecentsSlot} />
+
+            <div className="sidebar__footer">
+              <button className="sidebar__link" onClick={openMemoryBrain}>
+                <LineIcon d="M9.5 3a3.5 3.5 0 0 0-3.4 4.4A3.5 3.5 0 0 0 5 13.6 3.5 3.5 0 0 0 9.5 21H12V3H9.5ZM14.5 3a3.5 3.5 0 0 1 3.4 4.4 3.5 3.5 0 0 1 1.1 6.2 3.5 3.5 0 0 1-4.5 7.4H12V3h2.5Z" />
+                Cerveau de Jaris
+              </button>
+              <ErrorBoundary label="Les Options">
+                <OptionsMenu />
+              </ErrorBoundary>
+              <div className="sidebar__status">
+                <span className="sidebar__status-dot" />
+                Local{appVersion ? ` · v${appVersion}` : ''}
+              </div>
+            </div>
+          </nav>
+        )}
 
         <main className="app-main">
+          <header className="app-header">
+            {!sideOpen && (
+              <button
+                className="sidebar__icon-button"
+                onClick={() => setSideOpen(true)}
+                title="Ouvrir la barre latérale"
+                aria-label="Ouvrir la barre latérale"
+              >
+                <SidebarToggleIcon />
+              </button>
+            )}
+            {/* L'écran affiché y écrit son titre (conversation ouverte...) par portail ; vide (Agent vocal,
+                écran d'installation), le nom du mode s'affiche à la place (data-label, voir index.css). */}
+            <span
+              className="app-header__title"
+              ref={setTitleSlot}
+              data-label={MODES.find((mode) => mode.id === appMode)?.label}
+            />
+          </header>
+
           {newModels.length > 0 && (
             <div className="app__new-models">
               <p>
@@ -445,47 +522,49 @@ export default function App(): JSX.Element {
           )}
 
           {appMode === 'voice' && (
+            // Refonte « design sobre » : plus d'orbe façon réacteur, un grand bouton rond calme (logo au repos,
+            // barres quand Jaris écoute ou parle, points quand il réfléchit). Cliquer dessus reste une des 3
+            // façons d'activer Jaris (Options → Voix, étape 81), avec la même relecture du profil à la volée
+            // que le "+" ci-dessus plutôt qu'un état React à synchroniser.
             <ErrorBoundary label="L'Agent vocal">
-              <div className="app app--voice" ref={voiceLayoutRef}>
-                {/* Pas d'audioElRef ici : seul le widget a un <audio> monté, l'orbe de cette fenêtre suit juste
-                    l'émotion sans vibrer avec la voix (évite toute double lecture du son des réponses).
-                    onClick : une des 3 façons d'activer Jaris (Options → Voix, étape 81), avec la même
-                    relecture du profil à la volée que le "+" ci-dessus plutôt qu'un état React à synchroniser.
-                    Orbe en enfant DIRECT de .app (pas dans un conteneur à part) : voir voiceLayoutRef ci-dessus
-                    — orbe et .app__voice-footer forment un seul groupe, centré par le justify-content:center
-                    déjà présent sur .app, qui rétrécit ensemble plutôt que de se répartir aux deux bouts de
-                    l'écran. */}
-                <JarisOrb
-                  emotion={emotion}
-                  size={orbSize}
+              <div className="app app--voice voice-screen" data-emotion={emotion}>
+                <button
+                  type="button"
+                  className="voice-screen__button"
+                  aria-label="Activer l'écoute"
                   onClick={() => {
                     void window.jaris.getProfile().then((profile) => {
                       if (profile?.activationOrbClickEnabled === false) return
                       window.jaris.triggerWake()
                     })
                   }}
-                />
-                {/* Regroupe tout ce qui n'est pas l'orbe : voiceLayoutRef mesure la hauteur de CE bloc (pas
-                    chacun de ses enfants séparément) pour déduire l'espace réellement laissé à l'orbe. */}
+                >
+                  <VoiceVisual emotion={emotion} />
+                </button>
                 <div className="app__voice-footer">
-                  <div className="app__status">{STATUS_LABEL[emotion]}</div>
+                  <h1 className="app__status">{STATUS_LABEL[emotion]}</h1>
                   <div className="app__hint">
-                    Astuce : dis "Jaris", clique sur le cercle, ou appuie sur le + du pavé numérique depuis
-                    n'importe quelle appli, pour activer l'écoute (personnalisable dans Options → Voix)
+                    Dis « Jaris », clique sur le bouton, ou appuie sur + du pavé numérique depuis n'importe
+                    quelle appli (personnalisable dans Options → Voix).
                   </div>
+
+                  {(transcript || reply) && (
+                    <div className="app__conversation">
+                      {transcript && <p className="app__transcript">{transcript}</p>}
+                      {voiceActivity && <p className="app__activity">{voiceActivity}</p>}
+                      {reply && (
+                        <div className="app__reply">
+                          <img className="chat-panel__avatar" src={logo64} alt="" />
+                          <p>{reply}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Étape 141 : même sélecteur que le Chat et le mode Code — Auto ou un modèle précis pour la voix. */}
                   <div className="app__model-picker">
                     <ModelEffortPicker mode="voice" />
                   </div>
-
-                  {(transcript || reply) && (
-                    <div className="app__conversation">
-                      {transcript && <p className="app__transcript">« {transcript} »</p>}
-                      {voiceActivity && <p className="app__activity">{voiceActivity}</p>}
-                      {reply && <p className="app__reply">{reply}</p>}
-                    </div>
-                  )}
 
                   {setupStatus && !setupStatus.ready && (
                     <div className="app__setup-warning">
@@ -534,6 +613,8 @@ export default function App(): JSX.Element {
           </ErrorBoundary>
         )}
       </div>
+      </VoiceLaunchContext.Provider>
+      </ShellSlotsContext.Provider>
     )
   }
 

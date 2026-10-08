@@ -41,7 +41,7 @@ function buildPage() {
   const bundlePath = join(outDir, 'bundle.js')
   writeFileSync(entryPath, ENTRY)
   try {
-    buildSync({ entryPoints: [entryPath], bundle: true, format: 'iife', jsx: 'automatic', alias: { '@': join(projectRoot, 'src') }, outfile: bundlePath, logLevel: 'error' })
+    buildSync({ entryPoints: [entryPath], bundle: true, format: 'iife', jsx: 'automatic', alias: { '@': join(projectRoot, 'src') }, loader: { '.png': 'dataurl' }, outfile: bundlePath, logLevel: 'error' })
   } finally {
     rmSync(entryPath, { force: true })
   }

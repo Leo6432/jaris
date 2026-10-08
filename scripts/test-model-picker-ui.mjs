@@ -105,6 +105,7 @@ function buildPage() {
         '--bundle',
         '--format=iife',
         '--loader:.tsx=tsx',
+        '--loader:.png=dataurl',
         '--jsx=automatic',
         `--alias:@=${join(projectRoot, 'src')}`,
         `--outfile=${bundlePath}`
@@ -337,7 +338,8 @@ test('la barre est habillée par le CSS de Jaris et se REMPLIT jusqu’au cran c
     }
     await page.waitForFunction(() => getComputedStyle(document.querySelector('#root .effort-picker__step--active')).backgroundColor === 'rgb(255, 255, 255)')
     const fillImage = await page.$eval('#root .effort-picker__slider', (el) => getComputedStyle(el, '::before').backgroundImage)
-    assert.match(fillImage, /rgb\(61, 220, 255\)/, 'le remplissage est le cyan de Jaris, pas le bleu de ChatGPT (étape 199)')
+    // Refonte « design sobre » : l'accent de Jaris est le gris clair du texte (variante Graphite), plus le cyan.
+    assert.match(fillImage, /rgb\(236, 236, 237\)/, 'le remplissage reprend l’accent de Jaris, pas le bleu de ChatGPT (étape 199)')
   })
 })
 

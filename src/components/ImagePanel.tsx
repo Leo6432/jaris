@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Composer from '@/components/Composer'
+import EmptyState from '@/components/EmptyState'
 import Workspace from '@/components/Workspace'
 import { formatDuration } from '@/lib/formatCodeGenProgress'
 import { formatRecentDate } from '@/lib/formatRecentDate'
@@ -220,6 +221,7 @@ export default function ImagePanel(): JSX.Element {
   return (
     <Workspace
       newLabel="Nouvelle image"
+      label="Image"
       onNew={startOver}
       items={images.map((image) => ({ id: image.fileName, title: image.label, meta: formatRecentDate(image.timestamp) }))}
       activeId={selected?.fileName ?? null}
@@ -230,10 +232,12 @@ export default function ImagePanel(): JSX.Element {
       <div className="code-panel image-panel">
         {!selected && !generating && (
           <div className="image-panel__home">
-            <p className="code-panel__intro">
-              Décris l'image à créer : le sujet, le style, les couleurs (ex : « un chat astronaute sur la Lune, style
-              aquarelle, tons bleus »).
-            </p>
+            <EmptyState
+              title="Qu'est-ce qu'on dessine ?"
+              description="Décris l'image à créer : le sujet, le style, les couleurs. Les images sont générées sur ton ordinateur, sans limite."
+              suggestions={['Un phare au crépuscule, aquarelle', 'Un chat astronaute, style affiche', 'Une cuisine scandinave lumineuse']}
+              onSuggestion={setPrompt}
+            />
             {gallery.length > 0 && (
               <ul className="image-panel__gallery" aria-label="Dernières images">
                 {gallery.map((image) => (

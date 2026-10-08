@@ -72,7 +72,7 @@ function buildPage() {
   const bundlePath = join(outDir, 'bundle.js')
   writeFileSync(entryPath, ENTRY)
   try {
-    buildSync({ entryPoints: [entryPath], bundle: true, format: 'iife', jsx: 'automatic', alias: { '@': join(projectRoot, 'src') }, outfile: bundlePath })
+    buildSync({ entryPoints: [entryPath], bundle: true, format: 'iife', jsx: 'automatic', alias: { '@': join(projectRoot, 'src') }, loader: { '.png': 'dataurl' }, outfile: bundlePath })
   } finally {
     rmSync(entryPath, { force: true })
   }
@@ -150,8 +150,8 @@ test('ouvrir une image : Enregistrer (habillé par le CSS) et Ouvrir le dossier 
     await page.waitForSelector('.image-panel__thumb img')
     await page.click('.image-panel__thumb >> nth=0')
     await page.waitForSelector('.image-panel__image')
-    const save = await page.$eval('.image-panel__save', (el) => getComputedStyle(el).clipPath)
-    assert.match(save, /polygon/, 'bouton de la famille de Jaris')
+    const save = await page.$eval('.image-panel__save', (el) => getComputedStyle(el).borderTopLeftRadius)
+    assert.equal(save, '999px', 'bouton de la famille de Jaris (pilule du design sobre)')
     await page.click('.image-panel__save')
     await page.waitForFunction(() => /Enregistrée/.test(document.querySelector('.image-panel__save').textContent))
     await page.click('text=Ouvrir le dossier')

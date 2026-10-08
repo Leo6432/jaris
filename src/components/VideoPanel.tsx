@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Composer from '@/components/Composer'
+import EmptyState from '@/components/EmptyState'
 import Workspace from '@/components/Workspace'
 import { formatDuration } from '@/lib/formatCodeGenProgress'
 import { formatRecentDate } from '@/lib/formatRecentDate'
@@ -332,6 +333,7 @@ export default function VideoPanel(): JSX.Element {
   return (
     <Workspace
       newLabel="Nouvelle vidéo"
+      label="Vidéo"
       onNew={startOver}
       items={videos.map((video) => ({ id: video.fileName, title: video.label, meta: formatRecentDate(video.timestamp) }))}
       activeId={selected?.fileName ?? null}
@@ -342,10 +344,12 @@ export default function VideoPanel(): JSX.Element {
       <div className="code-panel image-panel video-panel">
         {!selected && !generating && (
           <div className="image-panel__home">
-            <p className="code-panel__intro">
-              Décris la scène : ce qui bouge, le décor, la lumière (ex : « un chat roux marche dans la neige au
-              coucher du soleil, caméra qui le suit »). Pour animer une image, joins-la avec le « + » du champ.
-            </p>
+            <EmptyState
+              title="Quelle vidéo veux-tu créer ?"
+              description="Décris la scène : ce qui bouge, le décor, la lumière. Pour animer une image, joins-la avec le « + » du champ."
+              suggestions={['Des vagues sur une plage au ralenti', 'Un renard qui court dans la neige', 'Une ville la nuit en accéléré']}
+              onSuggestion={setPrompt}
+            />
             {gallery.length > 0 && (
               <ul className="image-panel__gallery video-panel__gallery" aria-label="Dernières vidéos">
                 {gallery.map((video) => (

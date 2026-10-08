@@ -151,6 +151,7 @@ function buildPage() {
         '--bundle',
         '--format=iife',
         '--loader:.tsx=tsx',
+        '--loader:.png=dataurl',
         '--jsx=automatic',
         `--alias:@=${join(projectRoot, 'src')}`,
         `--outfile=${bundlePath}`
@@ -194,14 +195,18 @@ test('les conversations sont listées en colonne, la conversation ouverte est si
     assert.equal(await page.locator('.workspace__item--active').count(), 1)
     assert.equal(await page.textContent('.workspace__item--active .workspace__item-title'), 'parle moi des chats')
 
-    // Le bouton de création est bien rendu dans le style de l'application, pas en gris (défaut signalé par
-    // Léo en v0.8.0 : la classe manquait dans la famille de boutons partagée, le bouton restait blanc).
+    // Le bouton de création est bien rendu dans le style de l'application (défaut signalé par Léo en v0.8.0 :
+    // la classe manquait, le bouton restait au style du navigateur). Depuis la refonte « design sobre », c'est
+    // une rangée de la barre latérale façon ChatGPT : Geist, 40px de haut, coins arrondis, sans cadre.
     const style = await page.evaluate(() => {
       const s = getComputedStyle(document.querySelector('.workspace__new'))
-      return { color: s.color, hasBackground: s.backgroundImage !== 'none' }
+      return { color: s.color, font: s.fontFamily, height: s.height, radius: s.borderTopLeftRadius, border: s.borderTopStyle }
     })
-    assert.equal(style.hasBackground, true, 'le bouton "Nouvelle conversation" est resté sans fond')
-    assert.notEqual(style.color, 'rgb(255, 255, 255)', 'le bouton est resté au style par défaut du navigateur')
+    assert.match(style.font, /Geist/, 'le bouton est resté à la police par défaut du navigateur')
+    assert.equal(style.height, '40px')
+    assert.equal(style.radius, '10px')
+    assert.equal(style.border, 'none', 'le bouton a gardé le cadre par défaut du navigateur')
+    assert.notEqual(style.color, 'rgb(0, 0, 0)', 'le bouton est resté au style par défaut du navigateur')
   })
 })
 

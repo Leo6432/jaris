@@ -1,58 +1,58 @@
 /* ==========================================================================
-   Jaris — thème "HUD" (interface technique façon cockpit / réacteur ARC)
+   Jaris — design sobre (maquette Claude Design « Jaris.dc.html », variante Graphite)
    --------------------------------------------------------------------------
-   Un seul jeu de tokens ici, utilisé partout ailleurs dans ce fichier : changer
-   l'accent ou le fond se fait à un seul endroit, jamais en repassant sur des
-   centaines de couleurs écrites en dur (ce qui était le cas avant).
-
-   Deux polices seulement, embarquées dans le bundle (voir src/main.tsx, jamais
-   Google Fonts : Jaris doit marcher hors ligne) :
-   - Rajdhani, condensée et anguleuse, pour tout ce qui est étiquette/titre/bouton
-     — c'est elle qui donne le ton "instrument de bord".
-   - Barlow, plus neutre et lisible, pour le texte courant et les réponses de
-     Jaris, qui peuvent être longues : une police d'affichage sur des paragraphes
-     entiers fatiguerait à la lecture.
-   Le monospace reste celui de Windows (Consolas/Cascadia, toujours présent) :
-   utilisé uniquement pour des identifiants techniques et des chiffres alignés.
+   Fini le thème HUD/science-fiction : une interface d'assistant IA classique façon ChatGPT —
+   fond gris anthracite, barre latérale plus sombre, coins arrondis, Geist partout, aucune lueur.
+   Un seul jeu de tokens (:root ci-dessous), utilisé partout ailleurs dans ce fichier.
+   Polices embarquées dans le bundle (src/main.tsx), jamais Google Fonts : Jaris doit marcher hors ligne.
    ========================================================================== */
 :root {
   color-scheme: dark;
 
-  /* Fonds : presque noir, très légèrement bleuté (un noir pur écrase les lueurs). */
-  --hud-bg: #01040a;
-  --hud-panel: #061019;
-  --hud-panel-raised: rgba(12, 28, 44, 0.55);
+  /* Refonte « design sobre » (maquette Jaris.dc.html, variante Graphite) : les noms --hud-* sont gardés
+     pour ne pas réécrire les centaines de règles qui les utilisent, seules leurs valeurs changent. */
+  --hud-bg: #1c1c1e;
+  --hud-panel: #262629;
+  --hud-panel-raised: #262629;
 
   /* Texte, du plus lisible au plus discret. */
-  --hud-text: #e6f7ff;
-  --hud-text-soft: #a9cfe8;
-  --hud-text-dim: #7fb0d4;
-  --hud-text-faint: #4f7391;
+  --hud-text: #ececed;
+  --hud-text-soft: #c9c9ce;
+  --hud-text-dim: #a3a3aa;
+  --hud-text-faint: #75757d;
 
-  /* Accent principal : le cyan du réacteur. --bright sert aux survols/lueurs. */
-  --hud-accent: #3ddcff;
-  --hud-accent-bright: #9ff2ff;
-  --hud-accent-deep: #1f6fff;
-  --hud-accent-rgb: 61, 220, 255;
+  /* Accent : le texte clair lui-même (boutons pleins clairs sur fond sombre, comme ChatGPT). */
+  --hud-accent: #ececed;
+  --hud-accent-bright: #ffffff;
+  --hud-accent-deep: #a3a3aa;
+  --hud-accent-rgb: 236, 236, 237;
 
-  /* Couleurs de sens (jamais décoratives) : or = attention, vert = OK, rouge = échec. */
-  --hud-gold: #ffb020;
-  --hud-ok: #31ffb0;
-  --hud-ok-rgb: 49, 255, 176;
-  --hud-danger: #ff4d68;
-  --hud-danger-soft: #ffb8c2;
+  /* Couleurs de sens (jamais décoratives) : ambre = attention, vert = OK, rouge = échec. */
+  --hud-gold: #e8a33d;
+  --hud-ok: #3fb27f;
+  --hud-ok-rgb: 63, 178, 127;
+  --hud-danger: #e5484d;
+  --hud-danger-soft: #f2a5a7;
 
-  /* Traits : le HUD est fait de hairlines, pas de gros contours. */
-  --hud-line: rgba(var(--hud-accent-rgb), 0.22);
-  --hud-line-strong: rgba(var(--hud-accent-rgb), 0.5);
-  --hud-glow: 0 0 12px rgba(var(--hud-accent-rgb), 0.35);
+  --hud-line: #34343a;
+  --hud-line-strong: #46464e;
+  --hud-glow: none;
 
-  --hud-font-display: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
-  --hud-font-body: 'Barlow', 'Segoe UI', system-ui, sans-serif;
-  --hud-font-mono: 'Cascadia Mono', Consolas, ui-monospace, monospace;
+  /* Surfaces propres au nouveau design. */
+  --jv-side: #151517;
+  --jv-hover: #2e2e33;
+  --jv-bubble: #2c2c30;
+  --jv-code: #141416;
+  --jv-accent-ink: #151517;
+
+  --hud-font-display: 'Geist Sans', 'Segoe UI', system-ui, sans-serif;
+  --hud-font-body: 'Geist Sans', 'Segoe UI', system-ui, sans-serif;
+  --hud-font-mono: 'Geist Mono', 'Cascadia Mono', Consolas, ui-monospace, monospace;
 
   font-family: var(--hud-font-body);
+  font-size: 15px;
   font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
 }
 
 * {
@@ -66,65 +66,10 @@ body,
   margin: 0;
 }
 
-/*
- * Le fond n'est pas un simple dégradé : trois couches superposées (grille
- * technique, halo du réacteur, vignette) qui donnent la profondeur d'un écran
- * de cockpit. Tout est en CSS pur — aucune image à charger, donc rien qui
- * puisse manquer hors ligne, et zéro coût de rendu continu (pas d'animation
- * sur ces couches-là, seule la ligne de balayage plus bas bouge).
- */
 body {
-  background:
-    linear-gradient(rgba(var(--hud-accent-rgb), 0.045) 1px, transparent 1px) 0 0 / 100% 44px,
-    linear-gradient(90deg, rgba(var(--hud-accent-rgb), 0.045) 1px, transparent 1px) 0 0 / 44px 100%,
-    radial-gradient(circle at 50% 26%, rgba(var(--hud-accent-rgb), 0.13) 0%, transparent 58%),
-    radial-gradient(circle at 50% 30%, var(--hud-panel) 0%, var(--hud-bg) 72%);
+  background: var(--hud-bg);
   color: var(--hud-text);
   overflow: hidden;
-}
-
-/*
- * Ligne de balayage : une seule barre lumineuse qui descend lentement, comme un
- * radar qui rafraîchit l'écran. Volontairement très lente (9 s) et très peu
- * contrastée — l'effet doit se remarquer du coin de l'œil, jamais distraire
- * pendant qu'on lit une réponse. `pointer-events: none` : purement décoratif,
- * ne doit jamais intercepter un clic.
- */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgba(var(--hud-accent-rgb), 0.055) 48%,
-    rgba(var(--hud-accent-rgb), 0.09) 50%,
-    rgba(var(--hud-accent-rgb), 0.055) 52%,
-    transparent 100%
-  );
-  background-size: 100% 240px;
-  background-repeat: no-repeat;
-  animation: hud-sweep 9s linear infinite;
-}
-
-@keyframes hud-sweep {
-  from {
-    background-position: 0 -240px;
-  }
-  to {
-    background-position: 0 100vh;
-  }
-}
-
-/* Respecte le réglage système "réduire les animations" : la ligne de balayage et
-   les pulsations disparaissent, le reste de l'interface est identique. */
-@media (prefers-reduced-motion: reduce) {
-  body::after {
-    animation: none;
-    opacity: 0.4;
-  }
 }
 
 /* Widget flottant (étape 19) : fenêtre Electron transparente, donc pas de fond du tout ici — grille et
@@ -138,11 +83,6 @@ body.body--widget {
 html.body--scan,
 body.body--scan {
   background: transparent;
-}
-
-body.body--widget::after,
-body.body--scan::after {
-  display: none;
 }
 
 .screen-scan {
@@ -181,13 +121,12 @@ body.body--scan::after {
   flex-direction: column;
   gap: 24px;
   padding: 20px 14px;
-  border-right: 1px solid rgba(122, 176, 214, 0.18);
-  background: rgba(1, 4, 10, 0.5);
+  border-right: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(21, 21, 23, 0.5);
 }
 
 .sidebar__brand {
   font-size: 0.85rem;
-  letter-spacing: 0.32em;
   color: var(--hud-accent);
   padding-left: 8px;
 }
@@ -214,12 +153,12 @@ body.body--scan::after {
 }
 
 .sidebar__mode:hover {
-  background: rgba(122, 176, 214, 0.07);
+  background: rgba(255, 255, 255, 0.035);
   color: var(--hud-text);
 }
 
 .sidebar__mode--active {
-  background: rgba(61, 220, 255, 0.1);
+  background: rgba(var(--hud-accent-rgb), 0.06);
   border-left-color: var(--hud-accent);
   color: var(--hud-text);
 }
@@ -244,7 +183,7 @@ body.body--scan::after {
 
 .sidebar__link {
   background: transparent;
-  border: 1px solid rgba(122, 176, 214, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.175);
   color: var(--hud-text-dim);
   padding: 6px 16px;
   border-radius: 999px;
@@ -297,7 +236,7 @@ body.body--scan::after {
 
 .options-menu__trigger {
   background: transparent;
-  border: 1px solid rgba(122, 176, 214, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.175);
   color: var(--hud-text-dim);
   padding: 6px 16px;
   border-radius: 999px;
@@ -327,12 +266,12 @@ body.body--scan::after {
   justify-content: space-between;
   gap: 16px;
   padding: 14px 20px;
-  border-bottom: 1px solid rgba(122, 176, 214, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .options-page__close {
   background: transparent;
-  border: 1px solid rgba(122, 176, 214, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.175);
   color: var(--hud-text-dim);
   padding: 6px 14px;
   border-radius: 999px;
@@ -378,7 +317,7 @@ body.body--scan::after {
 .options-menu__tabs {
   display: flex;
   gap: 6px;
-  background: rgba(122, 176, 214, 0.08);
+  background: rgba(255, 255, 255, 0.04);
   border-radius: 999px;
   padding: 3px;
 }
@@ -399,7 +338,7 @@ body.body--scan::after {
 }
 
 .options-menu__tab--active {
-  background: rgba(61, 220, 255, 0.15);
+  background: rgba(var(--hud-accent-rgb), 0.09);
   color: var(--hud-text);
 }
 
@@ -411,8 +350,6 @@ body.body--scan::after {
 
 .options-menu__section-title {
   font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--hud-text-faint);
 }
 
@@ -458,7 +395,7 @@ body.body--scan::after {
   justify-content: space-between;
   gap: 20px;
   padding: 14px 0;
-  border-bottom: 1px solid rgba(122, 176, 214, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .options-menu__group-rows > .options-menu__row:last-child {
@@ -521,9 +458,9 @@ body.body--scan::after {
   height: 22px;
   padding: 0;
   border: 1px solid var(--hud-line-strong);
-  background: rgba(1, 4, 10, 0.6);
+  background: rgba(21, 21, 23, 0.6);
   cursor: pointer;
-  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  clip-path: none;
   transition:
     background 0.15s ease,
     border-color 0.15s ease;
@@ -554,7 +491,7 @@ body.body--scan::after {
 .options-menu__switch--on .options-menu__switch-knob {
   left: 25px;
   background: var(--hud-accent);
-  box-shadow: 0 0 8px rgba(var(--hud-accent-rgb), 0.7);
+  box-shadow: none;
 }
 
 .options-menu__select {
@@ -662,8 +599,6 @@ body.body--scan::after {
   font-family: var(--hud-font-display);
   font-size: 0.62rem;
   font-weight: 600;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
   color: var(--hud-text-faint);
 }
 
@@ -696,8 +631,8 @@ body.body--scan::after {
 }
 
 .options-menu__action {
-  background: rgba(61, 220, 255, 0.12);
-  border: 1px solid rgba(61, 220, 255, 0.4);
+  background: rgba(var(--hud-accent-rgb), 0.072);
+  border: 1px solid rgba(var(--hud-accent-rgb), 0.24);
   color: var(--hud-text);
   padding: 6px 14px;
   border-radius: 999px;
@@ -750,7 +685,7 @@ body.body--scan::after {
   position: fixed;
   inset: 0;
   z-index: 30;
-  background: rgba(1, 3, 8, 0.7);
+  background: rgba(21, 21, 23, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -759,7 +694,7 @@ body.body--scan::after {
 
 .options-menu__scope-dialog {
   background: var(--hud-panel);
-  border: 1px solid rgba(122, 176, 214, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.125);
   border-radius: 14px;
   padding: 22px 24px;
   max-width: 380px;
@@ -786,8 +721,8 @@ body.body--scan::after {
 }
 
 .options-menu__scope-dialog-options button {
-  background: rgba(61, 220, 255, 0.1);
-  border: 1px solid rgba(61, 220, 255, 0.3);
+  background: rgba(var(--hud-accent-rgb), 0.06);
+  border: 1px solid rgba(var(--hud-accent-rgb), 0.18);
   color: var(--hud-text);
   padding: 9px 10px;
   border-radius: 8px;
@@ -797,17 +732,17 @@ body.body--scan::after {
 
 .options-menu__scope-dialog-options button:hover {
   border-color: var(--hud-accent);
-  background: rgba(61, 220, 255, 0.18);
+  background: rgba(var(--hud-accent-rgb), 0.108);
 }
 
 .options-menu__scope-dialog-options button.options-menu__scope-dialog-all {
   grid-column: 1 / -1;
-  background: rgba(61, 220, 255, 0.18);
+  background: rgba(var(--hud-accent-rgb), 0.108);
 }
 
 .options-menu__scope-dialog-cancel {
   background: transparent;
-  border: 1px solid rgba(122, 176, 214, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.175);
   color: var(--hud-text-dim);
   padding: 7px 16px;
   border-radius: 999px;
@@ -829,7 +764,7 @@ body.body--scan::after {
 .options-menu__progress-bar {
   height: 6px;
   border-radius: 999px;
-  background: rgba(122, 176, 214, 0.15);
+  background: rgba(255, 255, 255, 0.075);
   overflow: hidden;
 }
 
@@ -911,8 +846,8 @@ body.body--scan::after {
 /* Chaque palier dans sa propre carte : plus facile à distinguer d'un seul coup d'œil que 5 tableaux qui
    s'enchaînent sans séparation visuelle. */
 .options-menu__model-group {
-  background: rgba(122, 176, 214, 0.04);
-  border: 1px solid rgba(122, 176, 214, 0.12);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 10px;
   padding: 10px 12px;
 }
@@ -925,8 +860,6 @@ body.body--scan::after {
   color: var(--hud-text-dim);
   font-size: 0.72rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   margin-bottom: 6px;
 }
 
@@ -940,15 +873,13 @@ body.body--scan::after {
 .options-menu__model-overview td {
   padding: 6px 10px;
   text-align: left;
-  border-bottom: 1px solid rgba(122, 176, 214, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .options-menu__model-overview th {
   color: var(--hud-text-dim);
   font-weight: 500;
   font-size: 0.66rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .options-menu__model-overview td {
@@ -1014,8 +945,6 @@ body.body--scan::after {
 .options-menu__sort-bar-label {
   font-family: var(--hud-font-display);
   font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
   color: var(--hud-text-faint);
   margin-right: 2px;
 }
@@ -1023,7 +952,6 @@ body.body--scan::after {
 .options-menu__sort-chip {
   font-family: var(--hud-font-display);
   font-size: 0.72rem;
-  letter-spacing: 0.06em;
   background: transparent;
   border: 1px solid var(--hud-line);
   color: var(--hud-text-dim);
@@ -1052,7 +980,7 @@ body.body--scan::after {
   padding: 5px 14px;
   margin-right: 8px;
   border-radius: 999px;
-  background: rgba(1, 4, 10, 0.75);
+  background: rgba(21, 21, 23, 0.75);
   border: 1px solid var(--hud-line);
   color: var(--hud-text);
   outline: none;
@@ -1060,7 +988,7 @@ body.body--scan::after {
 
 .options-menu__model-search:focus-visible {
   border-color: rgba(var(--hud-accent-rgb), 0.6);
-  box-shadow: 0 0 0 2px rgba(var(--hud-accent-rgb), 0.2);
+  box-shadow: none;
 }
 
 .options-menu__model-search-empty {
@@ -1114,7 +1042,7 @@ body.body--scan::after {
   height: 6px;
   margin: 10px 0 6px;
   border-radius: 999px;
-  background: rgba(122, 176, 214, 0.15);
+  background: rgba(255, 255, 255, 0.075);
   cursor: pointer;
 }
 
@@ -1125,7 +1053,7 @@ body.body--scan::after {
   height: 16px;
   border-radius: 50%;
   background: var(--hud-accent);
-  box-shadow: var(--hud-glow);
+  box-shadow: none;
   cursor: pointer;
 }
 
@@ -1135,14 +1063,14 @@ body.body--scan::after {
   border: none;
   border-radius: 50%;
   background: var(--hud-accent);
-  box-shadow: var(--hud-glow);
+  box-shadow: none;
   cursor: pointer;
 }
 
 .options-menu__context-slider::-moz-range-track {
   height: 6px;
   border-radius: 999px;
-  background: rgba(122, 176, 214, 0.15);
+  background: rgba(255, 255, 255, 0.075);
 }
 
 .options-menu__context-slider-ticks {
@@ -1174,7 +1102,7 @@ body.body--scan::after {
 }
 
 .options-menu__history-entry {
-  border: 1px solid rgba(122, 176, 214, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
   padding: 10px 14px;
   display: flex;
@@ -1311,7 +1239,7 @@ body.body--scan::after {
 
 .options-menu__dot--active {
   background: var(--hud-accent);
-  box-shadow: 0 0 8px rgba(var(--hud-accent-rgb), 0.7);
+  box-shadow: none;
 }
 
 /* Rangée de barres façon Discord (fenêtre glissante des derniers niveaux sonores, voir micLevels dans
@@ -1325,7 +1253,7 @@ body.body--scan::after {
   height: 44px;
   padding: 0 4px;
   border-radius: 8px;
-  background: rgba(6, 16, 25, 0.5);
+  background: rgba(21, 21, 23, 0.5);
 }
 
 .options-menu__mic-bar {
@@ -1357,8 +1285,6 @@ body.body--scan::after {
 
 .app__status {
   font-size: 0.95rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--hud-text-dim);
   min-height: 1.4em;
 }
@@ -1412,7 +1338,7 @@ body.body--scan::after {
   padding: 14px 20px;
   font-size: 0.85rem;
   color: var(--hud-text-soft);
-  border-bottom: 1px solid rgba(122, 176, 214, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .memory-brain__actions {
@@ -1422,7 +1348,7 @@ body.body--scan::after {
 
 .memory-brain__actions button {
   background: transparent;
-  border: 1px solid rgba(122, 176, 214, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.175);
   color: var(--hud-text-dim);
   padding: 6px 14px;
   border-radius: 999px;
@@ -1456,8 +1382,8 @@ body.body--scan::after {
   right: 20px;
   bottom: 20px;
   width: min(360px, 80vw);
-  background: rgba(1, 4, 10, 0.92);
-  border: 1px solid rgba(122, 176, 214, 0.3);
+  background: rgba(21, 21, 23, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -1472,7 +1398,7 @@ body.body--scan::after {
   font-size: 0.85rem;
   font-weight: 500;
   color: var(--hud-text);
-  border-bottom: 1px solid rgba(122, 176, 214, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .memory-brain__note-header button {
@@ -1508,8 +1434,8 @@ body.body--scan::after {
   text-align: center;
   font-size: 0.8rem;
   color: var(--hud-accent-bright);
-  background: rgba(61, 220, 255, 0.08);
-  border: 1px solid rgba(61, 220, 255, 0.3);
+  background: rgba(var(--hud-accent-rgb), 0.048);
+  border: 1px solid rgba(var(--hud-accent-rgb), 0.18);
   border-radius: 12px;
   padding: 10px 16px;
   display: flex;
@@ -1520,7 +1446,7 @@ body.body--scan::after {
 
 .app__new-models button {
   background: transparent;
-  border: 1px solid rgba(61, 220, 255, 0.35);
+  border: 1px solid rgba(var(--hud-accent-rgb), 0.21);
   color: var(--hud-accent-bright);
   padding: 4px 14px;
   border-radius: 999px;
@@ -1572,7 +1498,7 @@ body.body--scan::after {
 .app__onboarding input {
   width: 100%;
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(122, 176, 214, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.175);
   color: var(--hud-text);
   padding: 10px 14px;
   border-radius: 999px;
@@ -1586,7 +1512,7 @@ body.body--scan::after {
 }
 
 .app__onboarding button {
-  background: rgba(61, 220, 255, 0.18);
+  background: rgba(var(--hud-accent-rgb), 0.108);
   border: 1px solid var(--hud-accent);
   color: var(--hud-text);
   padding: 8px 20px;
@@ -1602,7 +1528,7 @@ body.body--scan::after {
 
 .app__onboarding button.app__onboarding-secondary {
   background: transparent;
-  border: 1px solid rgba(122, 176, 214, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.175);
   color: var(--hud-text-dim);
 }
 
@@ -1619,7 +1545,7 @@ body.body--scan::after {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  border: 3px solid rgba(61, 220, 255, 0.15);
+  border: 3px solid rgba(var(--hud-accent-rgb), 0.09);
   border-top-color: var(--hud-accent);
   animation: capacity-scan-spin 0.9s linear infinite;
   margin: 8px 0;
@@ -1682,14 +1608,14 @@ body.body--scan::after {
 
 .capacity-scan__tier {
   text-align: left;
-  background: rgba(122, 176, 214, 0.06);
-  border: 1px solid rgba(122, 176, 214, 0.2);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 14px;
   padding: 10px 16px;
 }
 
 .capacity-scan__tier--current {
-  background: rgba(61, 220, 255, 0.1);
+  background: rgba(var(--hud-accent-rgb), 0.06);
   border-color: var(--hud-accent);
 }
 
@@ -1921,7 +1847,7 @@ p.capacity-scan__tier-missing {
   background: var(--hud-panel-raised);
   border: 1px solid var(--hud-line);
   border-radius: 999px;
-  box-shadow: var(--hud-glow);
+  box-shadow: none;
 }
 
 /* --- Widget TEXTE (quitter Jaris depuis le mode Chat) ---
@@ -1947,10 +1873,10 @@ p.capacity-scan__tier-missing {
   height: 40px;
   padding: 0;
   color: var(--hud-accent-bright);
-  background: rgba(6, 16, 25, 0.92);
+  background: rgba(21, 21, 23, 0.92);
   border: 1px solid var(--hud-line);
   border-radius: 999px;
-  box-shadow: var(--hud-glow);
+  box-shadow: none;
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
@@ -1960,10 +1886,10 @@ p.capacity-scan__tier-missing {
   align-items: center;
   gap: 6px;
   padding: 4px 6px 4px 14px;
-  background: rgba(6, 16, 25, 0.92);
+  background: rgba(21, 21, 23, 0.92);
   border: 1px solid var(--hud-line);
   border-radius: 999px;
-  box-shadow: var(--hud-glow);
+  box-shadow: none;
   /* `.app--widget` met TOUTE la fenêtre en zone de déplacement (`-webkit-app-region: drag`) pour qu'on
      puisse attraper le widget : sans cette exception, un champ de saisie posé dedans serait impossible à
      cliquer ET impossible à remplir — Chromium donne le geste à la fenêtre avant le champ. Piège de la
@@ -1984,7 +1910,6 @@ p.capacity-scan__tier-missing {
   background: transparent;
   border: none;
   outline: none;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
 }
 
 .chat-widget__input::placeholder {
@@ -2028,10 +1953,10 @@ p.capacity-scan__tier-missing {
   /* Le widget flotte au-dessus de n'importe quelle application : à 55 % d'opacité, un fond clair ou très
      détaillé traversait le panneau et réduisait fortement la lisibilité. Le fond reste légèrement translucide
      pour conserver l'effet HUD, mais suffisamment sombre et opaque pour que la réponse soit toujours nette. */
-  background: rgba(6, 16, 25, 0.94);
+  background: rgba(21, 21, 23, 0.94);
   border: 1px solid var(--hud-line);
   border-radius: 14px;
-  box-shadow: var(--hud-glow);
+  box-shadow: none;
   max-height: 300px;
   overflow-y: auto;
   -webkit-app-region: no-drag;
@@ -2072,10 +1997,7 @@ p.capacity-scan__tier-missing {
 
 .app__status--widget {
   font-size: 0.7rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--hud-text-soft);
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
 }
 
 .app__conversation--widget {
@@ -2089,7 +2011,6 @@ p.capacity-scan__tier-missing {
   font-size: 0.75rem;
   line-height: 1.4;
   overflow-wrap: anywhere;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
 }
 
 /* --- Mode Chat (étape 30) --- */
@@ -2141,15 +2062,15 @@ p.capacity-scan__tier-missing {
 
 .chat-panel__message--user {
   align-self: flex-end;
-  background: rgba(61, 220, 255, 0.13);
-  border: 1px solid rgba(61, 220, 255, 0.25);
+  background: rgba(var(--hud-accent-rgb), 0.078);
+  border: 1px solid rgba(var(--hud-accent-rgb), 0.15);
   color: var(--hud-text);
 }
 
 .chat-panel__message--assistant {
   align-self: flex-start;
-  background: rgba(122, 176, 214, 0.08);
-  border: 1px solid rgba(122, 176, 214, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--hud-text);
 }
 
@@ -2192,7 +2113,7 @@ p.capacity-scan__tier-missing {
 /* La carte entière s'allume quand le champ a le focus : le contour ne saute plus d'un élément à l'autre. */
 .composer:focus-within {
   border-color: var(--hud-line-strong);
-  box-shadow: var(--hud-glow);
+  box-shadow: none;
 }
 
 .composer--busy {
@@ -2242,7 +2163,7 @@ p.capacity-scan__tier-missing {
   padding: 6px 8px;
   border: 1px solid var(--hud-line);
   border-radius: 12px;
-  background: rgba(1, 4, 10, 0.5);
+  background: rgba(21, 21, 23, 0.5);
 }
 
 .composer__attachment img {
@@ -2318,7 +2239,7 @@ p.capacity-scan__tier-missing {
   padding: 0;
   border: 1px solid var(--hud-line);
   border-radius: 8px;
-  background: rgba(6, 16, 25, 0.78);
+  background: rgba(21, 21, 23, 0.78);
   color: var(--hud-text);
   font-size: 0.95rem;
   cursor: pointer;
@@ -2356,7 +2277,7 @@ p.capacity-scan__tier-missing {
   gap: 10px;
   padding: 16px 12px;
   border-right: 1px solid var(--hud-line);
-  background: rgba(1, 4, 10, 0.35);
+  background: rgba(21, 21, 23, 0.35);
 }
 
 .workspace__new {
@@ -2423,7 +2344,7 @@ p.capacity-scan__tier-missing {
    couleur ne saute pas aux yeux. */
 .workspace__item--active {
   color: var(--hud-accent-bright);
-  box-shadow: inset 2px 0 0 var(--hud-accent);
+  box-shadow: none;
 }
 
 .workspace__item-title {
@@ -2570,7 +2491,7 @@ p.capacity-scan__tier-missing {
   padding: 10px 12px;
   background: rgba(var(--hud-accent-rgb), 0.08);
   border: 1px solid var(--hud-line-strong);
-  box-shadow: var(--hud-glow);
+  box-shadow: none;
 }
 
 .code-panel__live-text {
@@ -2601,7 +2522,7 @@ p.capacity-scan__tier-missing {
   color: var(--hud-ok);
   border-color: rgba(var(--hud-ok-rgb), 0.45);
   background: rgba(var(--hud-ok-rgb), 0.08);
-  box-shadow: 0 0 12px rgba(var(--hud-ok-rgb), 0.25);
+  box-shadow: none;
 }
 
 /* Un arrêt demandé n'est ni un succès ni une panne : même bandeau, au même endroit, mais en neutre.
@@ -2609,7 +2530,7 @@ p.capacity-scan__tier-missing {
 .code-panel__done--stopped {
   color: var(--hud-text-dim);
   border-color: var(--hud-line);
-  background: rgba(122, 176, 214, 0.06);
+  background: rgba(255, 255, 255, 0.03);
   box-shadow: none;
 }
 
@@ -2618,8 +2539,8 @@ p.capacity-scan__tier-missing {
   padding: 10px 12px;
   max-height: 110px;
   overflow-y: auto;
-  background: rgba(1, 4, 10, 0.6);
-  border: 1px solid rgba(122, 176, 214, 0.2);
+  background: rgba(21, 21, 23, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   font-family: inherit;
   font-size: 0.68rem;
@@ -2655,7 +2576,7 @@ p.capacity-scan__tier-missing {
 .code-panel__view-tabs {
   display: flex;
   gap: 6px;
-  background: rgba(122, 176, 214, 0.08);
+  background: rgba(255, 255, 255, 0.04);
   border-radius: 999px;
   padding: 3px;
 }
@@ -2672,7 +2593,7 @@ p.capacity-scan__tier-missing {
 }
 
 .code-panel__view-tab--active {
-  background: rgba(61, 220, 255, 0.15);
+  background: rgba(var(--hud-accent-rgb), 0.09);
   color: var(--hud-text);
 }
 
@@ -2682,7 +2603,7 @@ p.capacity-scan__tier-missing {
   flex: 1;
   min-height: 0;
   width: 100%;
-  border: 1px solid rgba(122, 176, 214, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
   background: #ffffff;
 }
@@ -2693,8 +2614,8 @@ p.capacity-scan__tier-missing {
   overflow: auto;
   margin: 0;
   padding: 12px 14px;
-  background: rgba(1, 4, 10, 0.6);
-  border: 1px solid rgba(122, 176, 214, 0.2);
+  background: rgba(21, 21, 23, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
   font-size: 0.7rem;
   line-height: 1.55;
@@ -2763,7 +2684,7 @@ p.capacity-scan__tier-missing {
   width: 100%;
   height: 6px;
   border-radius: 999px;
-  background: rgba(122, 176, 214, 0.2);
+  background: rgba(255, 255, 255, 0.1);
   overflow: hidden;
 }
 
@@ -2801,7 +2722,7 @@ p.capacity-scan__tier-missing {
 }
 
 .runtime-setup__actions button {
-  background: rgba(61, 220, 255, 0.18);
+  background: rgba(var(--hud-accent-rgb), 0.108);
   border: 1px solid var(--hud-accent);
   color: var(--hud-text);
   padding: 8px 18px;
@@ -2812,755 +2733,8 @@ p.capacity-scan__tier-missing {
 
 .runtime-setup__actions .runtime-setup__skip {
   background: transparent;
-  border-color: rgba(122, 176, 214, 0.35);
+  border-color: rgba(255, 255, 255, 0.175);
   color: var(--hud-text-soft);
-}
-
-/* ==========================================================================
-   COUCHE HUD
-   --------------------------------------------------------------------------
-   Volontairement en fin de fichier : ces règles réhabillent les mêmes classes
-   que celles définies plus haut (mise en page inchangée, seul l'aspect change),
-   et étant les dernières à spécificité égale, ce sont elles qui gagnent. Garder
-   la mise en page d'origine intacte plus haut évite de recalculer des dizaines
-   de flex/grid déjà éprouvés juste pour changer un look.
-
-   Trois motifs reviennent partout, et un seul suffit à faire lire "instrument"
-   plutôt que "site web" :
-   1. les coins coupés en diagonale (clip-path) à la place des coins arrondis,
-   2. les équerres lumineuses dans les angles des panneaux,
-   3. les étiquettes en capitales très espacées, dans la police d'affichage.
-   ========================================================================== */
-
-/* --- Typographie ---------------------------------------------------------- */
-
-h1,
-h2,
-h3,
-.sidebar__brand,
-.sidebar__mode-label,
-.options-menu__section-title,
-.options-menu__model-group-title,
-.options-menu__tab,
-.capacity-scan__tier-label,
-.code-panel__view-tab,
-.app__status {
-  font-family: var(--hud-font-display);
-}
-
-h1 {
-  font-weight: 600;
-  letter-spacing: 0.04em;
-}
-
-/* Toutes les étiquettes de section : capitales espacées + un trait qui part vers
-   la droite, comme les intitulés de zone sur un tableau de bord. */
-.options-menu__section-title,
-.options-menu__model-group-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.24em;
-  color: var(--hud-accent);
-  text-transform: uppercase;
-}
-
-.options-menu__section-title::after,
-.options-menu__model-group-title::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, var(--hud-line-strong), transparent);
-}
-
-/* --- Boutons -------------------------------------------------------------- */
-
-/*
- * Un seul aspect pour tous les boutons d'action, quelle que soit la classe
- * d'origine (elles étaient toutes légèrement différentes) : coins coupés en bas
- * à droite / haut à gauche, fond très sombre, liseré cyan qui s'allume au
- * survol. Le `clip-path` fait tout le travail — pas d'image, pas de bordure
- * biseautée bricolée.
- */
-.options-menu__action,
-.options-menu__trigger,
-.options-page__close,
-.sidebar__link,
-.options-menu__scope-dialog-cancel,
-.options-menu__ollama-update-actions button,
-.app__new-models button,
-.memory-brain__actions button,
-.error-panel__actions button,
-.code-panel__result-actions button,
-.code-panel__live-stop,
-.workspace__new,
-.workspace__confirm-yes,
-.workspace__confirm-no,
-.chat-widget__action,
-.capacity-scan button,
-.runtime-setup__actions button,
-.image-install__button,
-.quality-picker__download,
-.app__onboarding button {
-  position: relative;
-  font-family: var(--hud-font-display);
-  font-size: 0.82rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--hud-accent);
-  background: linear-gradient(180deg, rgba(var(--hud-accent-rgb), 0.14), rgba(var(--hud-accent-rgb), 0.05));
-  border: 1px solid var(--hud-line-strong);
-  border-radius: 0;
-  padding: 9px 20px;
-  cursor: pointer;
-  transition:
-    color 0.15s ease,
-    border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    background 0.15s ease;
-  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
-}
-
-.options-menu__action:not(:disabled):hover,
-.options-menu__trigger:hover,
-.options-page__close:hover,
-.sidebar__link:hover,
-.options-menu__scope-dialog-cancel:hover,
-.options-menu__ollama-update-actions button:not(:disabled):hover,
-.app__new-models button:hover,
-.memory-brain__actions button:hover,
-.error-panel__actions button:hover,
-.code-panel__result-actions button:not(:disabled):hover,
-.code-panel__live-stop:not(:disabled):hover,
-.workspace__new:not(:disabled):hover,
-.workspace__confirm-yes:not(:disabled):hover,
-.workspace__confirm-no:not(:disabled):hover,
-.chat-widget__action:not(:disabled):hover,
-.capacity-scan button:not(:disabled):hover,
-.runtime-setup__actions button:not(:disabled):hover,
-.image-install__button:not(:disabled):hover,
-.quality-picker__download:hover,
-.app__onboarding button:hover {
-  color: var(--hud-accent-bright);
-  border-color: var(--hud-accent);
-  background: linear-gradient(180deg, rgba(var(--hud-accent-rgb), 0.26), rgba(var(--hud-accent-rgb), 0.1));
-  box-shadow: var(--hud-glow);
-}
-
-/* Le clavier doit voir où il est au moins aussi bien que la souris : le contour
-   natif disparaîtrait sous le clip-path, remplacé par une lueur nette. */
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:not(.composer__input):focus-visible {
-  outline: none;
-  border-color: var(--hud-accent-bright) !important;
-  box-shadow:
-    0 0 0 1px var(--hud-accent-bright),
-    0 0 16px rgba(var(--hud-accent-rgb), 0.5);
-}
-
-/* Le champ du widget est déjà contenu dans une pilule qui porte son propre halo arrondi. La règle globale
-   ci-dessus dessinait par-dessus une seconde lueur rectangulaire dès que + lui donnait le focus — visible
-   autour du texte quand la souris entrait dans le widget. Garder le focus clavier, mais laisser la pilule
-   être l'unique contour lumineux. */
-.chat-widget__input:focus-visible {
-  outline: none;
-  border-color: transparent !important;
-  box-shadow: none !important;
-}
-
-/*
- * Boutons de la MÊME famille (coins coupés, Rajdhani) mais en plus petit : actions secondaires posées à
- * côté du sujet de l'écran (l'aperçu de l'application, la ligne à supprimer), qui ne doivent pas lui faire
- * concurrence. Placé APRÈS la famille : ces règles ont exactement la même spécificité qu'elle, donc à cet
- * endroit seulement elles gagnent — écrites plus haut (dans la section du mode Code), elles étaient
- * silencieusement écrasées et n'avaient aucun effet.
- */
-.code-panel__result-actions button,
-.code-panel__live-stop,
-.workspace__new,
-.workspace__confirm-yes,
-.workspace__confirm-no,
-.chat-widget__action {
-  font-size: 0.7rem;
-  letter-spacing: 0.1em;
-  padding: 6px 12px;
-  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
-}
-
-/* "NOUVELLE CONVERSATION" (21 caractères en majuscules) passait sur deux lignes dans la colonne de 240px :
-   l'interlettrage de la famille, pensé pour des boutons courts, coûte ici une ligne entière. Mesuré à
-   40px de haut avant, 27px après — la même hauteur que "Nouvelle application". Placé APRÈS la famille,
-   sinon la règle serait écrasée à spécificité égale (piège de l'étape 95). */
-.workspace__new {
-  letter-spacing: 0.05em;
-}
-
-.options-menu__action--danger,
-.workspace__confirm-yes,
-.options-menu__action--danger:not(:disabled):hover,
-.workspace__confirm-yes:not(:disabled):hover {
-  color: var(--hud-danger);
-  border-color: rgba(255, 77, 104, 0.55);
-  background: linear-gradient(180deg, rgba(255, 77, 104, 0.16), rgba(255, 77, 104, 0.05));
-  box-shadow: none;
-}
-
-/* --- Panneaux et équerres ------------------------------------------------- */
-
-/*
- * Les équerres d'angle : deux pseudo-éléments qui ne dessinent que deux côtés de
- * bordure chacun, en haut à gauche et en bas à droite. C'est le détail le plus
- * "cockpit" de tout le thème, et il ne coûte rien — aucun élément supplémentaire
- * dans le DOM, donc applicable à des composants qu'on ne touche pas côté React.
- */
-.options-menu__group,
-.options-menu__model-group,
-.capacity-scan__tier,
-.options-menu__scope-dialog,
-.app__new-models,
-.app__conversation:not(.app__conversation--widget),
-.chat-panel__message,
-.code-panel__result,
-.memory-brain__note {
-  position: relative;
-  border-radius: 0 !important;
-  background: var(--hud-panel-raised);
-  border: 1px solid var(--hud-line);
-  backdrop-filter: blur(6px);
-}
-
-/* `.options-menu__group` (les cartes de réglages, ex "Son", "Micro et haut-parleur"...) a rejoint les
-   équerres à l'étape 119 : la maquette "Options Jaris.dc.html" en met sur CHAQUE panneau de la page Options,
-   pas seulement sur les cartes matérielles/messages/résultats déjà équipées — sans elles, ces cartes étaient
-   la seule famille de panneaux "plats" (juste bordure + fond) au milieu d'un thème où l'équerre d'angle est
-   justement le motif qui fait lire "instrument" plutôt que "site web" (voir le commentaire de tête de
-   section, plus haut dans ce fichier). */
-.options-menu__group::before,
-.options-menu__model-group::before,
-.capacity-scan__tier::before,
-.options-menu__scope-dialog::before,
-.app__new-models::before,
-.chat-panel__message::before,
-.code-panel__result::before,
-.memory-brain__note::before {
-  content: '';
-  position: absolute;
-  top: -1px;
-  left: -1px;
-  width: 14px;
-  height: 14px;
-  border-top: 2px solid var(--hud-accent);
-  border-left: 2px solid var(--hud-accent);
-  pointer-events: none;
-}
-
-.options-menu__group::after,
-.options-menu__model-group::after,
-.capacity-scan__tier::after,
-.options-menu__scope-dialog::after,
-.app__new-models::after,
-.chat-panel__message::after,
-.code-panel__result::after,
-.memory-brain__note::after {
-  content: '';
-  position: absolute;
-  right: -1px;
-  bottom: -1px;
-  width: 14px;
-  height: 14px;
-  border-right: 2px solid var(--hud-accent);
-  border-bottom: 2px solid var(--hud-accent);
-  pointer-events: none;
-}
-
-/* Le palier correspondant à la machine : équerres dorées au lieu de cyan, plus une
-   lueur — c'est l'information la plus importante de cet écran, elle doit sauter
-   aux yeux sans avoir à lire les libellés. */
-.capacity-scan__tier--current {
-  border-color: rgba(255, 176, 32, 0.5);
-  box-shadow: 0 0 24px rgba(255, 176, 32, 0.12);
-}
-
-.capacity-scan__tier--current::before,
-.capacity-scan__tier--current::after {
-  border-color: var(--hud-gold);
-}
-
-/* --- Colonne latérale ----------------------------------------------------- */
-
-.sidebar {
-  background: linear-gradient(180deg, rgba(6, 16, 25, 0.92), rgba(1, 4, 10, 0.92));
-  border-right: 1px solid var(--hud-line);
-  backdrop-filter: blur(8px);
-}
-
-/* Le nom de l'appli traité comme la plaque d'un appareil : lettres très espacées,
-   lueur cyan, et un trait plein dessous qui court sur toute la largeur. */
-.sidebar__brand {
-  font-size: 1.15rem;
-  font-weight: 700;
-  letter-spacing: 0.42em;
-  color: var(--hud-accent);
-  text-shadow: 0 0 18px rgba(var(--hud-accent-rgb), 0.55);
-  padding: 4px 0 14px 8px;
-  border-bottom: 1px solid var(--hud-line);
-}
-
-.sidebar__mode {
-  position: relative;
-  border-left: none;
-  border-radius: 0;
-  padding: 11px 14px;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-}
-
-/* Le trait vertical d'état est dessiné en ::before plutôt qu'en border-left : il
-   peut ainsi s'allonger/s'illuminer à l'activation sans décaler le texte d'un
-   pixel, ce qui se voyait à chaque changement de mode. */
-.sidebar__mode::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 2px;
-  height: 12px;
-  background: var(--hud-text-faint);
-  transition:
-    height 0.2s ease,
-    background 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.sidebar__mode:hover::before {
-  height: 60%;
-  background: var(--hud-text-dim);
-}
-
-.sidebar__mode--active {
-  background: linear-gradient(90deg, rgba(var(--hud-accent-rgb), 0.16), transparent);
-  color: var(--hud-text);
-}
-
-.sidebar__mode--active::before {
-  height: 100%;
-  background: var(--hud-accent);
-  box-shadow: 0 0 12px rgba(var(--hud-accent-rgb), 0.8);
-}
-
-.sidebar__mode-label {
-  font-size: 0.95rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.sidebar__mode-hint {
-  font-size: 0.7rem;
-  letter-spacing: 0.02em;
-}
-
-/* --- Écran vocal : l'orbe et son statut ----------------------------------- */
-
-/*
- * Deux anneaux concentriques autour de l'orbe, dessinés en CSS (l'orbe lui-même
- * reste un canvas, voir JarisOrb.tsx) : un cercle fin fixe et un arc en rotation
- * lente. C'est ce qui transforme "une sphère au milieu d'une page" en "cible
- * d'un viseur". `inset` négatif : les anneaux débordent volontairement de la
- * boîte de l'orbe.
- */
-.app--voice .jaris-orb {
-  position: relative;
-}
-
-.app--voice .jaris-orb::before,
-.app--voice .jaris-orb::after {
-  content: '';
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-.app--voice .jaris-orb::before {
-  inset: -26px;
-  border: 1px solid rgba(var(--hud-accent-rgb), 0.18);
-}
-
-.app--voice .jaris-orb::after {
-  inset: -44px;
-  border: 1px dashed rgba(var(--hud-accent-rgb), 0.28);
-  border-bottom-color: transparent;
-  border-left-color: transparent;
-  animation: hud-ring-spin 14s linear infinite;
-}
-
-@keyframes hud-ring-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .app--voice .jaris-orb::after {
-    animation: none;
-  }
-}
-
-/* Le statut ("Jaris t'écoute"...) devient l'indicateur principal de l'écran :
-   capitales espacées, précédé d'un point qui bat au rythme de l'état. */
-.app__status {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 1.05rem;
-  font-weight: 600;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: var(--hud-accent);
-  text-shadow: 0 0 16px rgba(var(--hud-accent-rgb), 0.4);
-}
-
-.app__status::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--hud-accent);
-  box-shadow: 0 0 10px var(--hud-accent);
-  animation: hud-pulse 2.4s ease-in-out infinite;
-}
-
-@keyframes hud-pulse {
-  0%,
-  100% {
-    opacity: 0.35;
-    transform: scale(0.85);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.15);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .app__status::before {
-    animation: none;
-    opacity: 1;
-  }
-}
-
-.app__hint {
-  font-family: var(--hud-font-display);
-  letter-spacing: 0.08em;
-  color: var(--hud-text-faint);
-  max-width: 46ch;
-  text-align: center;
-}
-
-/* Transcription et réponse : la question de l'utilisateur en cyan discret, la
-   réponse de Jaris en blanc lisible — la hiérarchie doit se lire sans étiquette. */
-.app__transcript {
-  font-family: var(--hud-font-display);
-  letter-spacing: 0.06em;
-  color: var(--hud-accent);
-}
-
-.app__reply {
-  font-family: var(--hud-font-body);
-  color: var(--hud-text);
-}
-
-/* --- Onglets (Options, mode Code) ----------------------------------------- */
-
-.options-menu__tabs,
-.code-panel__view-tabs {
-  border-radius: 0;
-  background: rgba(1, 4, 10, 0.6);
-  border: 1px solid var(--hud-line);
-  padding: 0;
-  gap: 0;
-}
-
-.options-menu__tab,
-.code-panel__view-tab {
-  border-radius: 0;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  padding: 9px 14px;
-  border-bottom: 2px solid transparent;
-  transition:
-    color 0.15s ease,
-    background 0.15s ease,
-    border-color 0.15s ease;
-}
-
-.options-menu__tab--active,
-.code-panel__view-tab--active {
-  background: rgba(var(--hud-accent-rgb), 0.12);
-  border-bottom-color: var(--hud-accent);
-  color: var(--hud-accent-bright);
-}
-
-/* --- En-têtes de page ----------------------------------------------------- */
-
-.memory-brain {
-  background:
-    radial-gradient(circle at 50% 0%, rgba(var(--hud-accent-rgb), 0.1) 0%, transparent 55%),
-    linear-gradient(180deg, var(--hud-panel) 0%, var(--hud-bg) 70%);
-}
-
-/* Le fond d'Options reprend exactement celui de la page d'accueil (voir `body` en haut du fichier) : cette
-   page recouvre tout l'écran par-dessus body (position: fixed, z-index: 20), donc son propre dégradé plus
-   plat remplaçait complètement la grille/halo du fond principal — Options avait l'air d'un écran différent
-   plutôt que d'un simple panneau ouvert par-dessus l'accueil. */
-.options-page {
-  background:
-    linear-gradient(rgba(var(--hud-accent-rgb), 0.045) 1px, transparent 1px) 0 0 / 100% 44px,
-    linear-gradient(90deg, rgba(var(--hud-accent-rgb), 0.045) 1px, transparent 1px) 0 0 / 44px 100%,
-    radial-gradient(circle at 50% 26%, rgba(var(--hud-accent-rgb), 0.13) 0%, transparent 58%),
-    radial-gradient(circle at 50% 30%, var(--hud-panel) 0%, var(--hud-bg) 72%);
-}
-
-.options-page__header,
-.memory-brain__header {
-  border-bottom: 1px solid var(--hud-line);
-  background: rgba(1, 4, 10, 0.5);
-}
-
-.options-page__header h2,
-.memory-brain__header h2,
-.options-page__header > span:first-child {
-  font-family: var(--hud-font-display);
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--hud-accent);
-}
-
-/* --- Champs de saisie ----------------------------------------------------- */
-
-/* `.composer__input` est exclu : dans le composeur (étape 92), c'est la CARTE qui porte le cadre et la
-   lueur de focus, pas le champ lui-même — sans cette exception, ce `!important` redessinerait un second
-   contour à l'intérieur de la carte (constaté sur la capture avant/après).
-   `.options-menu__context-slider` (curseur de longueur de contexte) est exclu pour la même raison : c'est
-   un `<input type="range">`, pas un champ de texte — sans cette exception, le `!important` de cette règle
-   écrase le style DÉDIÉ du curseur (fond de piste, coins arrondis) et dessine par-dessus un cadre de champ
-   de texte classique, attrapé par une vraie mesure de style calculé avant de livrer (même piège que le
-   bouton "Nouvelle conversation" resté gris, étape 97 : compter les occurrences ne suffit jamais, seule une
-   mesure du style RÉELLEMENT appliqué le prouve).
-   `.chat-widget__input` (barre du widget texte) est exclu pour la même raison que `.composer__input` : la
-   PILULE qui l'entoure porte déjà le cadre et les coins arrondis, un second contour carré à l'intérieur
-   casserait la forme. */
-input:not(.options-menu__context-slider):not(.chat-widget__input):not(.options-menu__model-search),
-textarea:not(.composer__input),
-select {
-  font-family: var(--hud-font-body);
-  border-radius: 0 !important;
-  background: rgba(1, 4, 10, 0.75) !important;
-  border: 1px solid var(--hud-line) !important;
-  color: var(--hud-text) !important;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: var(--hud-text-faint);
-}
-
-
-/* --- Barres de progression ------------------------------------------------ */
-
-.options-menu__progress-bar,
-.runtime-setup__bar {
-  border-radius: 0;
-  border: 1px solid var(--hud-line);
-  background: rgba(1, 4, 10, 0.8);
-}
-
-.options-menu__progress-bar-fill,
-.runtime-setup__bar-fill {
-  border-radius: 0;
-  background: linear-gradient(90deg, var(--hud-accent-deep), var(--hud-accent));
-  box-shadow: 0 0 14px rgba(var(--hud-accent-rgb), 0.6);
-}
-
-/* --- Badges et pastilles -------------------------------------------------- */
-
-.options-menu__badge {
-  border-radius: 0;
-  font-family: var(--hud-font-mono);
-  font-size: 0.66rem;
-  letter-spacing: 0.06em;
-  padding: 2px 8px;
-  border: 1px solid currentColor;
-  background: transparent;
-}
-
-.options-menu__badge--good {
-  color: var(--hud-ok);
-}
-
-.options-menu__badge--mid {
-  color: var(--hud-gold);
-}
-
-.options-menu__badge--bad {
-  color: var(--hud-danger);
-}
-
-.options-menu__badge--none {
-  color: var(--hud-text-faint);
-  border-color: var(--hud-text-faint);
-}
-
-/* --- Données techniques en monospace -------------------------------------- */
-
-.options-menu__model-name,
-.capacity-scan__tier-model,
-.options-menu__models-location-list,
-.options-menu__col-num,
-.capacity-scan__tier-speed,
-code {
-  font-family: var(--hud-font-mono);
-  font-variant-numeric: tabular-nums;
-}
-
-/* --- Bandeaux d'alerte ---------------------------------------------------- */
-
-.app__new-models,
-.options-menu__ollama-warning,
-.app__setup-warning {
-  border-radius: 0;
-  border-left: 3px solid var(--hud-gold);
-}
-
-.app__setup-warning,
-.options-menu__error,
-.chat-panel__error,
-.code-panel__error {
-  font-family: var(--hud-font-display);
-  letter-spacing: 0.06em;
-}
-
-/* --- Tableaux ------------------------------------------------------------- */
-
-.options-menu__model-overview th,
-.capacity-scan__tier-slot {
-  font-family: var(--hud-font-display);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--hud-accent);
-}
-
-/* --- Barres de défilement ------------------------------------------------- */
-
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(1, 4, 10, 0.6);
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(var(--hud-accent-rgb), 0.28);
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(var(--hud-accent-rgb), 0.5);
-  background-clip: content-box;
-}
-
-/* --- Corrections repérées à la relecture visuelle -------------------------- */
-
-/* Les intitulés longs ("Micro & Haut-parleur", "Mise à jour") passaient sur deux
-   lignes et faisaient grandir toute la barre d'onglets, qui devenait deux fois
-   plus haute que les autres. */
-.options-menu__tab {
-  white-space: nowrap;
-  padding: 9px 12px;
-  font-size: 0.74rem;
-  letter-spacing: 0.08em;
-}
-
-/* Avec le texte non coupé ci-dessus, les 7 onglets ("Micro & Haut-parleur" et
-   "Mise à jour" compris) ne pouvaient plus rétrécir : la rangée débordait du
-   panneau au lieu de tenir sur une ligne, et le bouton fermer ou un onglet
-   poussé hors du cadre devenait injoignable au clic. `flex-wrap` la laisse
-   passer sur une deuxième ligne au lieu de déborder ; `flex: 0 1 auto` évite
-   que les onglets restants s'étirent pour combler la ligne une fois repliés. */
-.options-menu__tabs {
-  flex-wrap: wrap;
-  row-gap: 4px;
-}
-
-.options-menu__tab {
-  flex: 0 1 auto;
-}
-
-/* Les liens gardaient le bleu/violet souligné par défaut du navigateur, seule
-   chose de l'interface à ne pas suivre le thème. */
-a {
-  color: var(--hud-accent);
-  text-decoration: none;
-  border-bottom: 1px solid var(--hud-line-strong);
-  transition:
-    color 0.15s ease,
-    border-color 0.15s ease;
-}
-
-a:hover {
-  color: var(--hud-accent-bright);
-  border-bottom-color: var(--hud-accent-bright);
-}
-
-/* Bandeaux d'alerte : texte à gauche et bouton dans le flux, au lieu de tout
-   centrer — un paragraphe centré sur plusieurs lignes se lit mal, et le bouton
-   perdu au milieu ne ressemblait pas à une action. */
-.app__new-models {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  text-align: left;
-  padding: 12px 18px;
-}
-
-.app__new-models p {
-  margin: 0;
-  flex: 1;
-}
-
-.app__new-models button {
-  flex-shrink: 0;
-}
-
-/* L'astuce sous l'orbe repasse en police de texte : en Rajdhani, très espacée et
-   en petit corps, elle demandait un effort de lecture pour une phrase qu'on lit
-   justement une seule fois, au début. */
-.app__hint {
-  font-family: var(--hud-font-body);
-  letter-spacing: 0.01em;
-  line-height: 1.6;
-}
-
-/* Transcription centrée mais lisible : la mise en avant vient de la couleur, pas
-   d'un espacement de lettres qui rendrait une phrase entière difficile à suivre. */
-.app__transcript {
-  letter-spacing: 0.02em;
 }
 
 /* Page Options indépendante : le portail la rend sœur de l'application plutôt qu'enfant de la barre
@@ -3591,8 +2765,6 @@ a:hover {
   font-family: var(--hud-font-display);
   font-size: 0.7rem;
   font-weight: 600;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
   color: var(--hud-text-faint);
 }
 
@@ -3623,7 +2795,7 @@ a:hover {
   min-height: 0;
   padding: 28px 16px;
   border-right: 1px solid var(--hud-line);
-  background: rgba(1, 4, 10, 0.5);
+  background: rgba(21, 21, 23, 0.5);
 }
 
 .options-page__navigation-label {
@@ -3893,16 +3065,12 @@ a:hover {
   margin: 0;
   font-family: var(--hud-font-display);
   font-size: 1.5rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--hud-text);
 }
 
 .image-install__eyebrow {
   font-family: var(--hud-font-display);
   font-size: 0.7rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
   color: var(--hud-accent);
 }
 
@@ -3949,7 +3117,7 @@ a:hover {
 
 .image-panel__thumb:hover {
   border-color: var(--hud-accent);
-  box-shadow: 0 0 12px rgba(var(--hud-accent-rgb), 0.3);
+  box-shadow: none;
 }
 
 .image-panel__thumb img {
@@ -4201,14 +3369,14 @@ a:hover {
   border: none;
   border-radius: 999px;
   background: var(--hud-accent);
-  color: #02121c;
+  color: #151517;
   cursor: pointer;
   transition: background 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
 
 .composer__send:not(:disabled):hover {
   background: var(--hud-accent-bright);
-  box-shadow: var(--hud-glow);
+  box-shadow: none;
 }
 
 .composer__send:disabled {
@@ -4223,8 +3391,8 @@ a:hover {
 .composer__spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(2, 18, 28, 0.3);
-  border-top-color: #02121c;
+  border: 2px solid rgba(21, 21, 23, 0.3);
+  border-top-color: #151517;
   border-radius: 999px;
   animation: composer-spin 0.8s linear infinite;
 }
@@ -4404,7 +3572,7 @@ a:hover {
 
 .effort-picker__slider:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--hud-accent-bright);
+  box-shadow: none;
 }
 
 /* Du bord gauche jusqu'au bord droit du disque choisi : 2px de marge + un disque de 26px, plus la fraction
@@ -4420,7 +3588,7 @@ a:hover {
   /* Étape 199 (Léo : « c'est pas la couleur de Jaris, tu as mis la couleur exacte de GPT ») : le cyan de Jaris,
      en dégradé avec son halo, comme l'orbe et les boutons — plus le bleu de ChatGPT. */
   background: linear-gradient(90deg, rgba(var(--hud-accent-rgb), 0.35), var(--hud-accent));
-  box-shadow: 0 0 12px rgba(var(--hud-accent-rgb), 0.35);
+  box-shadow: none;
   transition: width 0.18s ease;
 }
 
@@ -4450,7 +3618,7 @@ a:hover {
 .effort-picker__step--active:not(:disabled):hover {
   background: #ffffff;
   /* Un liseré de la couleur du fond détache le disque blanc du cyan, sinon les deux clairs se confondent. */
-  box-shadow: 0 0 0 2px var(--hud-bg), 0 0 10px rgba(var(--hud-accent-rgb), 0.6);
+  box-shadow: none;
 }
 
 .effort-picker__step:disabled {
@@ -4496,7 +3664,7 @@ a:hover {
   color: var(--hud-accent-bright);
   background: rgba(var(--hud-accent-rgb), 0.16);
   border-color: var(--hud-accent);
-  box-shadow: 0 0 10px rgba(var(--hud-accent-rgb), 0.35);
+  box-shadow: none;
 }
 
 .effort-picker__list {
@@ -4621,7 +3789,6 @@ a:hover {
   margin-top: 6px;
   font-family: var(--hud-font-mono);
   font-size: 1.8rem;
-  letter-spacing: 0.12em;
   color: var(--hud-text);
 }
 
@@ -4688,8 +3855,6 @@ a:hover {
   margin: 0 0 10px;
   font-family: var(--hud-font-display);
   font-size: 0.95rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--hud-gold);
 }
 
@@ -4764,4 +3929,1411 @@ a:hover {
    l'écran, en 3D comme en liste. Rétablie ici, après la famille. */
 .memory-brain__note {
   position: absolute;
+}
+
+/* ==========================================================================
+   COUCHE « DESIGN SOBRE » (maquette Claude Design Jaris.dc.html, variante Graphite)
+   --------------------------------------------------------------------------
+   Remplace l'ancienne couche HUD (coins coupés, équerres lumineuses, capitales espacées, lueurs cyan).
+   Volontairement en fin de fichier : ces règles réhabillent les classes définies plus haut, et étant les
+   dernières à spécificité égale, ce sont elles qui gagnent. Repères de la maquette : barre latérale 264px
+   plus sombre, rangées de 40px arrondies à 10px, cartes arrondies à 16px, boutons pilules, aucune lueur.
+   ========================================================================== */
+
+/* --- Typographie ---------------------------------------------------------- */
+
+h1,
+h2,
+h3 {
+  font-family: var(--hud-font-body);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+code,
+pre,
+.options-menu__model-name,
+.capacity-scan__tier-model,
+.options-menu__models-location-list,
+.options-menu__col-num,
+.capacity-scan__tier-speed {
+  font-family: var(--hud-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+a:hover {
+  opacity: 0.75;
+}
+
+/* --- Boutons -------------------------------------------------------------- */
+
+/* Un seul aspect pour tous les boutons d'action secondaires : pilule à liseré fin, fond transparent,
+   survol gris — le bouton « Plus tard » de la maquette. */
+.options-menu__action,
+.options-page__close,
+.options-menu__scope-dialog-cancel,
+.options-menu__ollama-update-actions button,
+.app__new-models button,
+.memory-brain__actions button,
+.error-panel__actions button,
+.code-panel__result-actions button,
+.code-panel__live-stop,
+.workspace__confirm-yes,
+.workspace__confirm-no,
+.chat-widget__action,
+.capacity-scan button,
+.runtime-setup__actions button,
+.image-install__button,
+.quality-picker__download {
+  position: relative;
+  font-family: var(--hud-font-body);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--hud-text);
+  background: transparent;
+  border: 1px solid var(--hud-line);
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.options-menu__action:not(:disabled):hover,
+.options-page__close:hover,
+.options-menu__scope-dialog-cancel:hover,
+.options-menu__ollama-update-actions button:not(:disabled):hover,
+.app__new-models button:hover,
+.memory-brain__actions button:hover,
+.error-panel__actions button:hover,
+.code-panel__result-actions button:not(:disabled):hover,
+.code-panel__live-stop:not(:disabled):hover,
+.workspace__confirm-yes:not(:disabled):hover,
+.workspace__confirm-no:not(:disabled):hover,
+.chat-widget__action:not(:disabled):hover,
+.capacity-scan button:not(:disabled):hover,
+.runtime-setup__actions button:not(:disabled):hover,
+.image-install__button:not(:disabled):hover,
+.quality-picker__download:hover {
+  background: var(--jv-hover);
+  border-color: var(--hud-line-strong);
+}
+
+/* Action principale d'un écran (installer, commencer, lancer) : pilule pleine claire, comme le bouton
+   « Commencer » de la maquette. */
+.capacity-scan button:not(.capacity-scan__secondary),
+.runtime-setup__actions button:first-child,
+.image-install__button,
+.app__onboarding button {
+  color: var(--jv-accent-ink);
+  background: var(--hud-accent);
+  border-color: transparent;
+}
+
+.capacity-scan button:not(.capacity-scan__secondary):not(:disabled):hover,
+.runtime-setup__actions button:first-child:not(:disabled):hover,
+.image-install__button:not(:disabled):hover {
+  color: var(--jv-accent-ink);
+  background: var(--hud-accent);
+  opacity: 0.88;
+}
+
+/* Actions compactes posées à côté du sujet (aperçu, ligne à supprimer) : même famille, plus petites. */
+.code-panel__result-actions button,
+.code-panel__live-stop,
+.workspace__confirm-yes,
+.workspace__confirm-no,
+.chat-widget__action {
+  font-size: 0.8rem;
+  padding: 5px 12px;
+}
+
+.options-menu__action--danger,
+.workspace__confirm-yes,
+.options-menu__action--danger:not(:disabled):hover,
+.workspace__confirm-yes:not(:disabled):hover {
+  color: var(--hud-danger);
+  border-color: var(--hud-line);
+}
+
+button:disabled {
+  cursor: default;
+}
+
+/* Le clavier doit voir où il est : un anneau net, sans lueur. */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:not(.composer__input):focus-visible {
+  outline: 2px solid var(--hud-line-strong);
+  outline-offset: 2px;
+}
+
+.chat-widget__input:focus-visible {
+  outline: none;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* --- Cartes --------------------------------------------------------------- */
+
+.options-menu__group,
+.options-menu__model-group,
+.capacity-scan__tier,
+.options-menu__scope-dialog,
+.app__new-models,
+.code-panel__result,
+.memory-brain__note {
+  border-radius: 16px;
+  background: var(--hud-panel);
+  border: 1px solid var(--hud-line);
+}
+
+.capacity-scan__tier--current {
+  border-color: var(--hud-text-dim);
+}
+
+/* --- Champs de saisie ----------------------------------------------------- */
+
+input:not(.options-menu__context-slider):not(.chat-widget__input):not(.options-menu__model-search):not([type='checkbox']):not([type='radio']),
+textarea:not(.composer__input),
+select {
+  font-family: var(--hud-font-body);
+  border-radius: 10px !important;
+  background: var(--hud-panel) !important;
+  border: 1px solid var(--hud-line) !important;
+  color: var(--hud-text) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--hud-text-faint);
+}
+
+/* --- Barres de progression ------------------------------------------------ */
+
+.options-menu__progress-bar,
+.runtime-setup__bar {
+  border-radius: 999px;
+  border: none;
+  background: var(--jv-hover);
+}
+
+.options-menu__progress-bar-fill,
+.runtime-setup__bar-fill {
+  border-radius: 999px;
+  background: var(--hud-accent);
+}
+
+/* --- Badges --------------------------------------------------------------- */
+
+.options-menu__badge {
+  border-radius: 999px;
+  font-family: var(--hud-font-body);
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  border: none;
+  background: var(--jv-hover);
+}
+
+.options-menu__badge--good {
+  color: var(--hud-ok);
+}
+
+.options-menu__badge--mid {
+  color: var(--hud-gold);
+}
+
+.options-menu__badge--bad {
+  color: var(--hud-danger);
+}
+
+.options-menu__badge--none {
+  color: var(--hud-text-faint);
+}
+
+.options-menu__section-title,
+.options-menu__model-group-title {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--hud-text-faint);
+}
+
+/* --- Bandeaux d'alerte ---------------------------------------------------- */
+
+.app__new-models {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  text-align: left;
+  margin: 0 24px 12px;
+  padding: 12px 16px;
+  font-size: 0.875rem;
+  color: var(--hud-text-dim);
+}
+
+.app__new-models p {
+  margin: 0;
+  flex: 1;
+}
+
+.app__new-models button {
+  flex-shrink: 0;
+}
+
+/* --- Barres de défilement ------------------------------------------------- */
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--hud-line);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--hud-line-strong);
+  background-clip: content-box;
+}
+
+/* --- Coque : barre latérale + zone principale ----------------------------- */
+
+.app-shell {
+  display: flex;
+  height: 100%;
+  background: var(--hud-bg);
+}
+
+.sidebar {
+  width: 264px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 10px;
+  background: var(--jv-side);
+  border-right: none;
+}
+
+.sidebar__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 14px;
+}
+
+.sidebar__logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+.sidebar__brand {
+  flex: 1;
+  padding: 0;
+  border: none;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--hud-text);
+}
+
+.sidebar__icon-button {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--hud-text-dim);
+  cursor: pointer;
+}
+
+.sidebar__icon-button:hover {
+  background: var(--jv-hover);
+}
+
+/* Toutes les rangées de la barre ont la même forme : 40px, icône + libellé, coins de 10px. */
+.workspace__new,
+.sidebar__mode,
+.sidebar__link,
+.options-menu__trigger {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+  font-family: var(--hud-font-body);
+  font-size: 14px;
+  font-weight: 400;
+  text-align: left;
+  color: var(--hud-text);
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.workspace__new:hover,
+.sidebar__mode:hover,
+.sidebar__link:hover,
+.options-menu__trigger:hover {
+  background: var(--jv-hover);
+  color: var(--hud-text);
+  border-color: transparent;
+}
+
+.sidebar__mode::before {
+  display: none;
+}
+
+.sidebar__mode--active {
+  background: var(--jv-hover);
+}
+
+.sidebar__mode-label {
+  font-size: 14px;
+}
+
+.sidebar__new:empty {
+  display: none;
+}
+
+.sidebar__modes {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 0 14px;
+}
+
+.sidebar__recents {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar__footer {
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hud-line);
+}
+
+.sidebar__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px 2px;
+  font-size: 12px;
+  color: var(--hud-text-faint);
+}
+
+.sidebar__status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--hud-ok);
+}
+
+.app-main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--hud-bg);
+}
+
+.app-header {
+  height: 56px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+}
+
+.app-header__title:empty::before {
+  content: attr(data-label);
+}
+
+.app-header__title {
+  min-width: 0;
+  padding-left: 4px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--hud-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- « Récents » : la liste de l'écran affiché, dans la barre latérale ------ */
+
+.workspace {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.workspace__main {
+  padding-left: 0;
+}
+
+.workspace__rail {
+  width: auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.workspace__rail-label {
+  padding: 0 10px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--hud-text-faint);
+}
+
+.workspace__empty {
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 13px;
+  color: var(--hud-text-faint);
+}
+
+.workspace__list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: none;
+}
+
+.workspace__list li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border: none;
+  border-radius: 10px;
+}
+
+.workspace__list li:hover {
+  background: var(--jv-hover);
+}
+
+.workspace__item {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 0 10px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  color: var(--hud-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.workspace__item:hover {
+  background: transparent;
+}
+
+.workspace__list li:has(.workspace__item--active) {
+  background: var(--jv-hover);
+}
+
+.workspace__item--active {
+  border-left: none;
+  background: transparent;
+}
+
+.sidebar .workspace__item-meta {
+  display: none;
+}
+
+.workspace--inline .workspace__item {
+  height: auto;
+  min-height: 36px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 10px;
+}
+
+.workspace__item-title {
+  font-family: var(--hud-font-body);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--hud-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workspace__delete {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  margin-right: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--hud-text-faint);
+  opacity: 0;
+  cursor: pointer;
+}
+
+.workspace__list li:hover .workspace__delete,
+.workspace__delete:focus-visible {
+  opacity: 1;
+}
+
+.workspace__delete:hover {
+  color: var(--hud-danger);
+}
+
+.workspace__confirm {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--hud-text-dim);
+}
+
+.workspace__confirm span {
+  width: 100%;
+}
+
+/* Liste affichée dans l'écran lui-même quand aucune barre latérale ne l'accueille (Workspace.tsx). */
+.workspace__side {
+  width: 240px;
+  flex-shrink: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--jv-side);
+}
+
+/* --- Écran vide d'un mode ------------------------------------------------- */
+
+.empty-state {
+  margin: auto 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 24px 0 40px;
+  text-align: center;
+}
+
+.empty-state__logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+}
+
+.empty-state__title {
+  margin: 6px 0 0;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--hud-text);
+}
+
+.empty-state__description {
+  margin: 0;
+  max-width: 460px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--hud-text-dim);
+  text-wrap: pretty;
+}
+
+.empty-state__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.empty-state__suggestion {
+  height: 38px;
+  padding: 0 14px;
+  font-family: var(--hud-font-body);
+  font-size: 14px;
+  color: var(--hud-text);
+  background: transparent;
+  border: 1px solid var(--hud-line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.empty-state__suggestion:hover {
+  background: var(--jv-hover);
+}
+
+/* --- Chat ----------------------------------------------------------------- */
+
+.chat-panel {
+  max-width: none;
+  padding: 0;
+  gap: 8px;
+}
+
+.chat-panel__thread {
+  padding: 16px max(24px, calc((100% - 760px) / 2)) 32px;
+  gap: 28px;
+}
+
+.chat-panel__message {
+  display: flex;
+  gap: 14px;
+  max-width: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.chat-panel__body {
+  flex: 1;
+  min-width: 0;
+  padding-top: 3px;
+  /* Bloc, pas flex : le texte mis en forme (formatReply.tsx) mélange du texte brut, du gras et du code en
+     ligne — en flex, chaque morceau devenait sa propre ligne. */
+  white-space: pre-wrap;
+}
+
+.chat-panel__body > img,
+.chat-panel__body > figure {
+  display: block;
+  width: fit-content;
+  margin: 0 0 10px;
+}
+
+.chat-panel__avatar {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  margin-top: 1px;
+}
+
+/* La bulle de l'utilisateur : à droite, gris doux, très arrondie (comme ChatGPT). */
+.chat-panel__message--user {
+  align-self: flex-end;
+  max-width: 80%;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 20px;
+  background: var(--jv-bubble);
+  line-height: 1.55;
+}
+
+.chat-panel__message--user .chat-panel__body {
+  padding-top: 0;
+}
+
+.chat-panel__message--assistant,
+.chat-panel__message--pending {
+  align-self: stretch;
+  border: none;
+  background: transparent;
+  color: var(--hud-text);
+  font-style: normal;
+}
+
+.chat-panel__message--pending .chat-panel__body {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  min-height: 24px;
+}
+
+.chat-panel__progress {
+  font-size: 14px;
+  color: var(--hud-text-dim);
+}
+
+.chat-panel__typing {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  height: 24px;
+}
+
+.chat-panel__typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--hud-text-dim);
+  animation: jv-dot 1.2s infinite ease-in-out;
+}
+
+.chat-panel__typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.chat-panel__typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes jv-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+@keyframes jv-bar {
+  0%,
+  100% {
+    transform: scaleY(0.25);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.chat-panel__error,
+.code-panel__error {
+  font-family: var(--hud-font-body);
+  font-size: 13px;
+  color: var(--hud-gold);
+}
+
+.chat-panel__error {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.chat-panel > .composer {
+  width: calc(100% - 48px);
+  max-width: 760px;
+  margin: 0 auto 18px;
+}
+
+.chat-panel pre,
+.code-panel__code {
+  border: 1px solid var(--hud-line);
+  border-radius: 14px;
+  background: var(--jv-code);
+}
+
+/* --- Barre de saisie (Composer) ------------------------------------------- */
+
+.composer {
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--hud-line);
+  border-radius: 26px;
+  background: var(--hud-panel);
+}
+
+.composer:focus-within {
+  border-color: var(--hud-line-strong);
+}
+
+.composer__input {
+  padding: 8px 10px 4px;
+  min-height: 44px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.composer__plus {
+  width: 36px;
+  height: 36px;
+  color: var(--hud-text-dim);
+  border-color: var(--hud-line);
+}
+
+.composer__plus:not(:disabled):hover,
+.composer__plus--open {
+  color: var(--hud-text);
+  border-color: var(--hud-line);
+  background: var(--jv-hover);
+}
+
+.composer__menu,
+.effort-picker__panel {
+  background: var(--hud-panel);
+  border: 1px solid var(--hud-line);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.composer__menu-item:hover,
+.effort-picker__option:not(:disabled):hover {
+  background: var(--jv-hover);
+}
+
+.composer__menu-icon {
+  color: var(--hud-text-dim);
+}
+
+.composer__mic {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--hud-text);
+  cursor: pointer;
+}
+
+.composer__mic:hover {
+  background: var(--jv-hover);
+}
+
+.composer__send {
+  background: var(--hud-accent);
+  color: var(--jv-accent-ink);
+}
+
+.composer__send:disabled {
+  opacity: 0.3;
+}
+
+.composer__attachment {
+  border-radius: 12px;
+  background: var(--jv-hover);
+  border: none;
+}
+
+.effort-picker__trigger {
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--hud-text-dim);
+  font-family: var(--hud-font-body);
+  font-size: 14px;
+}
+
+.effort-picker__trigger:not(:disabled):hover,
+.effort-picker__trigger--open {
+  background: var(--jv-hover);
+  color: var(--hud-text);
+}
+
+/* --- Code, Image, Vidéo --------------------------------------------------- */
+
+.code-panel {
+  padding: 0 24px 18px;
+}
+
+.code-panel > .composer {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.image-panel__home {
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-panel__thumb {
+  border-radius: 12px;
+  border: 1px solid var(--hud-line);
+  overflow: hidden;
+}
+
+.code-panel__view-tabs {
+  border-radius: 10px;
+  background: var(--jv-hover);
+  border: none;
+  padding: 3px;
+  gap: 2px;
+}
+
+.code-panel__view-tab {
+  border-radius: 8px;
+  border: none;
+  font-family: var(--hud-font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--hud-text-dim);
+}
+
+.code-panel__view-tab--active {
+  background: var(--hud-panel);
+  color: var(--hud-text);
+}
+
+.code-panel__live {
+  border-radius: 16px;
+  border: 1px solid var(--hud-line);
+  background: var(--hud-panel);
+}
+
+.image-install__card {
+  border-radius: 16px;
+  background: var(--hud-panel);
+}
+
+.image-install__card h2 {
+  font-family: var(--hud-font-body);
+  font-size: 22px;
+  color: var(--hud-text);
+}
+
+.image-install__eyebrow {
+  font-family: var(--hud-font-body);
+  font-size: 12px;
+  color: var(--hud-text-faint);
+}
+
+/* --- Agent vocal ---------------------------------------------------------- */
+
+.voice-screen {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  overflow-y: auto;
+  justify-content: center;
+  gap: 24px;
+  padding: 16px 24px 32px;
+}
+
+.voice-screen__button {
+  width: 160px;
+  height: 160px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--hud-line);
+  background: var(--hud-panel);
+  color: var(--hud-text);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.voice-screen__button:hover {
+  background: var(--jv-hover);
+}
+
+.voice-screen[data-emotion='listening'] .voice-screen__button,
+.voice-screen[data-emotion='happy'] .voice-screen__button {
+  border-color: var(--hud-line-strong);
+}
+
+.voice-screen__logo {
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+}
+
+.voice-screen__bars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 56px;
+}
+
+.voice-screen__bars span {
+  width: 6px;
+  height: 52px;
+  border-radius: 3px;
+  background: var(--hud-accent);
+  animation: jv-bar 0.7s infinite ease-in-out;
+}
+
+.voice-screen__bars span:nth-child(2) {
+  animation-duration: 0.88s;
+  animation-delay: 0.09s;
+}
+
+.voice-screen__bars span:nth-child(3) {
+  animation-duration: 1.06s;
+  animation-delay: 0.18s;
+}
+
+.voice-screen__bars span:nth-child(4) {
+  animation-delay: 0.27s;
+}
+
+.voice-screen__bars span:nth-child(5) {
+  animation-duration: 0.88s;
+  animation-delay: 0.36s;
+}
+
+.voice-screen__dots {
+  display: flex;
+  gap: 8px;
+}
+
+.voice-screen__dots span {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--hud-text-dim);
+  animation: jv-dot 1.2s infinite ease-in-out;
+}
+
+.voice-screen__dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.voice-screen__dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-screen__bars span,
+  .voice-screen__dots span,
+  .chat-panel__typing span {
+    animation: none;
+  }
+}
+
+.app__voice-footer {
+  gap: 14px;
+  width: 100%;
+  max-width: 560px;
+}
+
+.app__status {
+  display: block;
+  margin: 0;
+  font-family: var(--hud-font-body);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--hud-text);
+}
+
+.app__status::before {
+  display: none;
+}
+
+.app__hint {
+  max-width: 440px;
+  font-family: var(--hud-font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--hud-text-dim);
+  text-align: center;
+  text-wrap: pretty;
+}
+
+.app__conversation:not(.app__conversation--widget) {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+}
+
+.app__conversation:not(.app__conversation--widget) .app__transcript {
+  align-self: flex-end;
+  max-width: 80%;
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: 20px;
+  background: var(--jv-bubble);
+  color: var(--hud-text);
+  font-family: var(--hud-font-body);
+  line-height: 1.55;
+}
+
+.app__conversation:not(.app__conversation--widget) .app__reply {
+  display: flex;
+  gap: 14px;
+  margin: 0;
+  color: var(--hud-text);
+  font-family: var(--hud-font-body);
+  line-height: 1.65;
+}
+
+.app__conversation:not(.app__conversation--widget) .app__reply p {
+  margin: 0;
+  padding-top: 3px;
+}
+
+.app__activity {
+  margin: 0;
+  font-size: 13px;
+  color: var(--hud-text-faint);
+}
+
+.app__setup-warning {
+  border-radius: 16px;
+  border: 1px solid var(--hud-line);
+  background: var(--hud-panel);
+  font-family: var(--hud-font-body);
+  font-size: 14px;
+  color: var(--hud-text-dim);
+}
+
+/* --- Accueil (prénom), installation, test de la machine ------------------- */
+
+.app__onboarding {
+  max-width: 440px;
+  align-items: center;
+  gap: 18px;
+  text-align: center;
+  padding: 32px;
+  background: transparent;
+  border: none;
+}
+
+.app__onboarding-logo {
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+}
+
+.app__onboarding h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--hud-text);
+}
+
+.app__onboarding p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--hud-text-dim);
+}
+
+.app__onboarding input {
+  width: 100%;
+  height: 46px;
+  padding: 0 16px;
+  font-size: 15px;
+  text-align: center;
+  border-radius: 999px !important;
+}
+
+.app__onboarding button {
+  height: 44px;
+  padding: 0 24px;
+  font-family: var(--hud-font-body);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--jv-accent-ink);
+  background: var(--hud-accent);
+  border: none;
+  border-radius: 999px;
+}
+
+.app__onboarding button:hover {
+  opacity: 0.88;
+  color: var(--jv-accent-ink);
+  background: var(--hud-accent);
+}
+
+.runtime-setup,
+.capacity-scan {
+  font-family: var(--hud-font-body);
+}
+
+.runtime-setup h1,
+.capacity-scan h1,
+.runtime-setup h2,
+.capacity-scan h2 {
+  color: var(--hud-text);
+  letter-spacing: -0.02em;
+}
+
+/* --- Page Options --------------------------------------------------------- */
+
+.options-page {
+  background: var(--hud-bg);
+}
+
+.options-page__header,
+.memory-brain__header {
+  border-bottom: 1px solid var(--hud-line);
+  background: var(--hud-bg);
+}
+
+.options-page__header h2,
+.memory-brain__header h2 {
+  font-family: var(--hud-font-body);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--hud-text);
+}
+
+.options-page__eyebrow,
+.options-page__navigation-label {
+  font-family: var(--hud-font-body);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--hud-text-faint);
+}
+
+.options-page__navigation {
+  background: var(--jv-side);
+  border-right: none;
+}
+
+.options-page .options-menu__tab {
+  height: 38px;
+  padding: 0 12px;
+  font-family: var(--hud-font-body);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--hud-text);
+  border: none;
+  border-radius: 10px;
+}
+
+.options-page .options-menu__tab:hover {
+  background: var(--jv-hover);
+}
+
+.options-page .options-menu__tab--active {
+  background: var(--jv-hover);
+  border: none;
+  color: var(--hud-text);
+}
+
+.options-page__tab-header h3 {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.options-page__tab-header p {
+  font-size: 14px;
+  color: var(--hud-text-dim);
+}
+
+.options-menu__group-rows {
+  border-radius: 16px;
+}
+
+.options-menu__switch {
+  width: 40px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: var(--hud-line);
+  clip-path: none;
+}
+
+.options-menu__switch--on {
+  background: var(--hud-ok);
+}
+
+.options-menu__switch-knob {
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  clip-path: none;
+  box-shadow: none;
+}
+
+.options-menu__switch--on .options-menu__switch-knob {
+  left: 19px;
+  transform: none;
+}
+
+.memory-brain {
+  background: var(--hud-bg);
+}
+
+/* --- Widget texte (quitter Jaris depuis le Chat) -------------------------- */
+
+/* Même pilule qu'avant (la fenêtre native est dimensionnée pour elle, main.ts), seulement aux couleurs du
+   nouveau design : surface gris anthracite, envoi en rond clair. */
+.chat-widget__bar,
+.chat-widget__idle {
+  background: var(--hud-panel);
+  border-color: var(--hud-line);
+  color: var(--hud-text);
+}
+
+.chat-widget__send {
+  background: var(--hud-accent);
+  color: var(--jv-accent-ink);
+}
+
+.chat-widget__answer {
+  background: var(--hud-panel);
+  border-color: var(--hud-line);
 }

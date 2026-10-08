@@ -2,17 +2,14 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 // Polices embarquées dans le bundle (paquets @fontsource), jamais chargées depuis Google Fonts : Jaris doit
 // rester utilisable hors ligne à 100%, une police téléchargée à l'exécution casserait ça au premier
-// démarrage sans internet. Rajdhani (titres/étiquettes) donne le côté "interface technique", Barlow assure
-// la lisibilité du texte courant — voir les tokens --hud-font-* dans index.css.
-// Sous-ensemble latin uniquement : ces deux familles embarquent aussi le devanagari (~500 Ko de glyphes
-// qu'une interface en français n'affichera jamais), que l'import générique aurait copié dans le bundle.
-import '@fontsource/rajdhani/latin-400.css'
-import '@fontsource/rajdhani/latin-500.css'
-import '@fontsource/rajdhani/latin-600.css'
-import '@fontsource/rajdhani/latin-700.css'
-import '@fontsource/barlow/latin-400.css'
-import '@fontsource/barlow/latin-500.css'
-import '@fontsource/barlow/latin-600.css'
+// démarrage sans internet. Refonte « design sobre » (maquette Jaris.dc.html) : Geist pour tout le texte,
+// Geist Mono pour le code et les données techniques — fini Rajdhani/Barlow et le look cockpit.
+// Sous-ensemble latin uniquement : une interface en français n'affichera jamais les autres alphabets.
+import '@fontsource/geist-sans/latin-400.css'
+import '@fontsource/geist-sans/latin-500.css'
+import '@fontsource/geist-sans/latin-600.css'
+import '@fontsource/geist-mono/latin-400.css'
+import '@fontsource/geist-mono/latin-500.css'
 import App from './App'
 import ScreenScan from './components/ScreenScan'
 import './index.css'

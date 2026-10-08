@@ -55,6 +55,7 @@ function buildPage() {
         '--bundle',
         '--format=iife',
         '--loader:.tsx=tsx',
+        '--loader:.png=dataurl',
         '--jsx=automatic',
         `--alias:@=${join(projectRoot, 'src')}`,
         `--outfile=${bundlePath}`
@@ -132,10 +133,11 @@ test("la barre est bien habillée par le CSS de Jaris, pas laissée au style par
     const style = await page.evaluate(() => {
       const fill = getComputedStyle(document.querySelector('.options-menu__progress-bar-fill'))
       const bar = getComputedStyle(document.querySelector('.options-menu__progress-bar'))
-      return { fillImage: fill.backgroundImage, barBorder: bar.borderTopWidth, barBackground: bar.backgroundColor }
+      return { fillColor: fill.backgroundColor, fillRadius: fill.borderTopLeftRadius, barBackground: bar.backgroundColor }
     })
-    assert.match(style.fillImage, /linear-gradient/, 'le remplissage n\'a pas le dégradé HUD')
-    assert.notEqual(style.barBorder, '0px')
+    // Refonte « design sobre » : une piste grise arrondie, remplie de l'accent clair de Jaris.
+    assert.equal(style.fillColor, 'rgb(236, 236, 237)', 'le remplissage n\'a pas la couleur d\'accent de Jaris')
+    assert.equal(style.fillRadius, '999px')
     assert.notEqual(style.barBackground, 'rgba(0, 0, 0, 0)')
   })
 })

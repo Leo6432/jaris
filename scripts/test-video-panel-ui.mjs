@@ -82,7 +82,7 @@ function buildPage() {
   const bundlePath = join(outDir, 'bundle.js')
   writeFileSync(entryPath, ENTRY)
   try {
-    buildSync({ entryPoints: [entryPath], bundle: true, format: 'iife', jsx: 'automatic', alias: { '@': join(projectRoot, 'src') }, outfile: bundlePath })
+    buildSync({ entryPoints: [entryPath], bundle: true, format: 'iife', jsx: 'automatic', alias: { '@': join(projectRoot, 'src') }, loader: { '.png': 'dataurl' }, outfile: bundlePath })
   } finally {
     rmSync(entryPath, { force: true })
   }
@@ -234,9 +234,9 @@ test('qualité (étape 205) : barre limitée à la machine, une qualité absente
     await page.click('.quality-picker .effort-picker__step >> nth=1')
     assert.match(await page.textContent('.quality-picker .effort-picker__current'), /Qualité Q8/)
     // Le bouton de téléchargement est habillé par la famille « Installer », pas laissé au style du navigateur.
-    const button = await page.$eval('.quality-picker__download', (el) => ({ text: el.textContent, font: getComputedStyle(el).textTransform, color: getComputedStyle(el).color }))
+    const button = await page.$eval('.quality-picker__download', (el) => ({ text: el.textContent, radius: getComputedStyle(el).borderTopLeftRadius, color: getComputedStyle(el).color }))
     assert.match(button.text, /Télécharger \(11,5 Go\)/)
-    assert.equal(button.font, 'uppercase')
+    assert.equal(button.radius, '999px', 'pilule de la famille de boutons (design sobre)')
     assert.notEqual(button.color, 'rgb(0, 0, 0)')
 
     // Envoyer avec une qualité pas encore téléchargée : message clair, aucune génération lancée.

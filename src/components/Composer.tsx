@@ -5,6 +5,7 @@ import {
   pickedFileToImageAttachment,
   type ImageAttachment
 } from '@/lib/imageAttachment'
+import { useVoiceLaunch } from '@/lib/shellContext'
 
 /**
  * Champ de saisie commun au Chat et au mode Code (étape 92).
@@ -71,6 +72,15 @@ function SendIcon(): JSX.Element {
   )
 }
 
+function MicIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <rect x="9" y="3" width="6" height="12" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+    </svg>
+  )
+}
+
 function AttachIcon(): JSX.Element {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
@@ -99,6 +109,8 @@ export default function Composer({
   addItems = []
 }: ComposerProps): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false)
+  /** Refonte « design sobre » : le micro de la barre, qui ouvre l'Agent vocal et lance l'écoute. */
+  const launchVoice = useVoiceLaunch()
   const menuRef = useRef<HTMLDivElement>(null)
 
   // Le menu « + » se ferme au clic en dehors ou sur Échap, comme celui de ChatGPT.
@@ -261,6 +273,18 @@ export default function Composer({
         <span className="composer__spacer" />
 
         {extraActions}
+
+        {launchVoice && (
+          <button
+            type="button"
+            className="composer__mic"
+            onClick={launchVoice}
+            title="Parler à Jaris"
+            aria-label="Parler à Jaris"
+          >
+            <MicIcon />
+          </button>
+        )}
 
         <button
           type="button"

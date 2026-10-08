@@ -94,7 +94,7 @@ function buildPage() {
 
   writeFileSync(entryPath, ENTRY)
   try {
-    buildSync({ entryPoints: [entryPath], bundle: true, format: 'iife', jsx: 'automatic', alias: { '@': join(projectRoot, 'src') }, outfile: bundlePath })
+    buildSync({ entryPoints: [entryPath], bundle: true, format: 'iife', jsx: 'automatic', alias: { '@': join(projectRoot, 'src') }, loader: { '.png': 'dataurl' }, outfile: bundlePath })
   } finally {
     rmSync(entryPath, { force: true })
   }
@@ -354,14 +354,15 @@ test('les boutons du widget sont habillés par le CSS de Jaris, pas laissés au 
     const styles = await page.$$eval('.chat-widget__actions button', (els) =>
       els.map((el) => {
         const computed = getComputedStyle(el)
-        return { font: computed.fontFamily, background: computed.backgroundImage, clip: computed.clipPath }
+        return { font: computed.fontFamily, radius: computed.borderTopLeftRadius, border: computed.borderTopStyle }
       })
     )
     assert.equal(styles.length, 1, 'seul le bouton Ouvrir le Chat doit être présent')
     for (const style of styles) {
-      assert.match(style.font, /Rajdhani/, 'bouton laissé à la police par défaut du navigateur')
-      assert.match(style.background, /gradient/, 'bouton sans le fond de la famille HUD')
-      assert.match(style.clip, /polygon/, 'bouton sans les coins coupés de la famille HUD')
+      // Refonte « design sobre » : pilule à liseré fin en Geist (plus de coins coupés ni de Rajdhani).
+      assert.match(style.font, /Geist/, 'bouton laissé à la police par défaut du navigateur')
+      assert.equal(style.radius, '999px', 'bouton sans la forme pilule de la famille de Jaris')
+      assert.equal(style.border, 'solid', 'bouton sans le liseré de la famille de Jaris')
     }
   })
 })

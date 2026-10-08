@@ -136,7 +136,7 @@ function buildPage() {
 
   writeFileSync(entryPath, ENTRY)
   try {
-    buildSync({ entryPoints: [entryPath], bundle: true, format: 'iife', jsx: 'automatic', alias: { '@': join(projectRoot, 'src') }, outfile: bundlePath })
+    buildSync({ entryPoints: [entryPath], bundle: true, format: 'iife', jsx: 'automatic', alias: { '@': join(projectRoot, 'src') }, loader: { '.png': 'dataurl' }, outfile: bundlePath })
   } finally {
     rmSync(entryPath, { force: true })
   }
@@ -419,10 +419,12 @@ test('le bouton "Tous les modèles" est réellement habillé par le CSS de Jaris
     await page.waitForSelector('.options-menu__all-models')
     const style = await page.$eval('.options-menu__all-models button', (el) => {
       const s = getComputedStyle(el)
-      return { background: s.backgroundImage, clip: s.clipPath }
+      return { radius: s.borderTopLeftRadius, border: s.borderTopStyle, font: s.fontFamily }
     })
-    assert.match(style.background, /gradient/, 'bouton sans le fond de la famille HUD')
-    assert.match(style.clip, /polygon/, 'bouton sans les coins coupés de la famille HUD')
+    // Refonte « design sobre » : la famille de boutons est une pilule à liseré fin, en Geist.
+    assert.equal(style.radius, '999px', 'bouton sans la forme pilule de la famille de Jaris')
+    assert.equal(style.border, 'solid', 'bouton sans le liseré de la famille de Jaris')
+    assert.match(style.font, /Geist/)
   })
 })
 

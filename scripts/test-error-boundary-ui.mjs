@@ -80,6 +80,7 @@ function buildPage() {
       format: 'iife',
       jsx: 'automatic',
       alias: { '@': join(projectRoot, 'src') },
+      loader: { '.png': 'dataurl' },
       outfile: bundlePath,
       logLevel: 'error'
     })
@@ -153,9 +154,9 @@ test('un écran qui plante affiche son message à sa place, sans vider le reste'
     // Les boutons rejoignent la famille partagée (pas le style par défaut du navigateur).
     const style = await page.$eval('.error-panel__actions button', (el) => {
       const s = getComputedStyle(el)
-      return { clip: s.clipPath, color: s.color }
+      return { radius: s.borderTopLeftRadius, color: s.color }
     })
-    assert.match(style.clip, /polygon/)
+    assert.equal(style.radius, '999px')
     assert.notEqual(style.color, 'rgb(0, 0, 0)')
 
     // « Réessayer » remonte l'écran une fois la cause disparue.
@@ -170,6 +171,6 @@ test('App.tsx protège chaque écran (et le Cerveau peut toujours être fermé)'
   for (const panel of ['ChatPanel', 'CodePanel', 'ImagePanel', 'VideoPanel', 'OptionsMenu']) {
     assert.match(app, new RegExp(`<ErrorBoundary [^>]*>\\s*<${panel} />`), `${panel} protégé`)
   }
-  assert.match(app, /<ErrorBoundary label="L'Agent vocal">\s*<div className="app app--voice"/)
+  assert.match(app, /<ErrorBoundary label="L'Agent vocal">\s*<div className="app app--voice[^"]*"/)
   assert.match(app, /<ErrorBoundary [^>]*overlay onClose=\{[^}]+\}>\s*<MemoryBrain /)
 })

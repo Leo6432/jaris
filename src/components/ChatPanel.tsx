@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import Composer from '@/components/Composer'
+import EmptyState from '@/components/EmptyState'
+import logo from '@/assets/jaris-logo-64.png'
 import Workspace from '@/components/Workspace'
 import { formatRecentDate } from '@/lib/formatRecentDate'
 import { renderFormattedText } from '@/lib/formatReply'
@@ -108,14 +110,17 @@ export default function ChatPanel(): JSX.Element {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, sending, streamingReply])
 
-  const send = async (): Promise<void> => {
-    const prompt = input.trim()
-    const image = attachment
+  /** `text` : une suggestion de l'écran vide, envoyée telle quelle sans passer par le champ. */
+  const send = async (text?: string): Promise<void> => {
+    const prompt = (text ?? input).trim()
+    const image = text === undefined ? attachment : null
     if ((!prompt && !image) || sending) return
 
     setError(null)
-    setInput('')
-    setAttachment(null)
+    if (text === undefined) {
+      setInput('')
+      setAttachment(null)
+    }
     setSending(true)
     setProgress(null)
     setStreamingReply('')
@@ -144,6 +149,7 @@ export default function ChatPanel(): JSX.Element {
   return (
     <Workspace
       newLabel="Nouvelle conversation"
+      label="Chat"
       onNew={() => void applyConversationChange(window.jaris.createConversation())}
       items={(conversations?.conversations ?? []).map((conversation) => ({
         id: conversation.id,
@@ -158,14 +164,18 @@ export default function ChatPanel(): JSX.Element {
       <div className="chat-panel">
         <div className="chat-panel__thread" ref={threadRef}>
           {messages.length === 0 && !sending && (
-            <p className="chat-panel__empty">
-              Écris à Jaris comme tu lui parles. Il a exactement les mêmes outils qu'à la voix : ouvrir une
-              application, chercher sur le web, regarder ton écran, retenir une information, envoyer un mail, dessiner une image.
-            </p>
+            <EmptyState
+              title="Que puis-je faire pour toi ?"
+              description="Écris à Jaris comme tu lui parles. Il a les mêmes outils qu'à la voix : ouvrir une application, chercher sur le web, regarder ton écran, retenir une information, envoyer un mail, dessiner une image."
+              suggestions={['Résume mes mails non lus', 'Quel temps demain à Lyon ?', 'Ouvre Spotify et mets du jazz']}
+              onSuggestion={(text) => void send(text)}
+            />
           )}
 
           {messages.map((message, index) => (
             <div key={index} className={`chat-panel__message chat-panel__message--${message.role}`}>
+              {message.role === 'assistant' && <img className="chat-panel__avatar" src={logo} alt="" />}
+              <div className="chat-panel__body">
               {message.image && message.role === 'user' && (
                 <img className="chat-panel__message-image" src={message.image} alt="Image envoyée à Jaris" />
               )}
@@ -190,12 +200,27 @@ export default function ChatPanel(): JSX.Element {
                   </button>
                 </figure>
               )}
+              </div>
             </div>
           ))}
 
           {sending && (
             <div className={`chat-panel__message chat-panel__message--${streamingReply ? 'assistant' : 'pending'}`}>
-              {streamingReply ? renderFormattedText(streamingReply) : (progress ?? 'Jaris réfléchit…')}
+              <img className="chat-panel__avatar" src={logo} alt="" />
+              <div className="chat-panel__body">
+                {streamingReply ? (
+                  renderFormattedText(streamingReply)
+                ) : (
+                  <>
+                    <span className="chat-panel__typing" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </span>
+                    <span className="chat-panel__progress">{progress ?? 'Jaris réfléchit…'}</span>
+                  </>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -206,7 +231,7 @@ export default function ChatPanel(): JSX.Element {
           value={input}
           onChange={setInput}
           onSubmit={() => void send()}
-          placeholder="Écris ton message…"
+          placeholder="Écris à Jaris…"
           submitLabel="Envoyer"
           busyLabel="Envoi…"
           busy={sending}
