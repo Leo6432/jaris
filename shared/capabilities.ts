@@ -86,7 +86,7 @@ export const CAPABILITIES: CapabilityGroup[] = [
       },
       {
         title: 'Faire une tâche complète tout seul',
-        description: 'Plusieurs actions à la suite, en pilotant la souris et le clavier. Plus lent : Jaris te prévient avant de s\'y mettre.',
+        description: 'Plusieurs actions à la suite dans une appli ou un site, en arrière-plan quand l\'appli le permet : tu continues à te servir de ton PC. Plus lent : Jaris te prévient avant de s\'y mettre.',
         example: 'ouvre YouTube et cherche un tuto guitare',
         toolNames: ['computer_use_task']
       },

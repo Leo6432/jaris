@@ -7034,3 +7034,34 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Jaris les disait.**
   Régression : `node --test scripts/test-assistant-history.mjs scripts/test-benchmark-scenarios.mjs` (mail rédigé rendu
   tel quel, voix et écrit ; vraie action annoncée relancée ; rédaction reconnue sur 7 phrases, 5 actions écartées).
+
+- **Étape 263 (v0.29.0), pilotage en ARRIÈRE-PLAN (Léo : « on ne peut pas faire autre chose à côté, il faut être dans
+  la calculatrice et attendre qu'il clique »).** Le pilote agissait avec la vraie souris et le vrai clavier, fenêtre
+  devant : Léo ne pouvait plus se servir de son PC pendant une tâche. Désormais, sous Windows :
+  - la fenêtre visée est **gardée d'une étape à l'autre** (poignée Windows) et **capturée seule** (PrintWindow, même
+    cachée derrière celle de Léo) ; Jaris ne se replie plus et n'affiche plus l'animation plein écran ;
+  - les clics par numéro passent par **l'accessibilité de Windows** (Invoke, Toggle, Select, ExpandCollapse) et le
+    texte par **ValuePattern** dans le champ choisi juste avant (`backgroundControl.ts`) — aucune souris, aucun clavier ;
+  - ce qui ne peut pas se faire ainsi (clic par position, touche, élément sans geste) **emprunte la souris un instant** :
+    la fenêtre passe devant (AttachThreadInput, sans simuler Alt qui ouvrirait le menu de certaines applis), le geste
+    est fait, puis la fenêtre de Léo revient. Si Windows refuse de la mettre devant, **rien n'est cliqué** (le clic
+    tomberait chez Léo) et le pilotage d'avant reprend, annoncé ;
+  - un délai dépassé sur Invoke (un bouton qui ouvre une fenêtre modale bloque l'appel) n'est **jamais recliqué** à la
+    souris : l'action a peut-être eu lieu ;
+  - après l'ouverture d'une application, Jaris suit la **nouvelle** fenêtre (liste des fenêtres prise juste avant),
+    jamais celle où Léo travaille ; une **boîte de dialogue** de la fenêtre gardée (GW_ENABLEDPOPUP) est capturée et
+    pilotée à sa place ; si la fenêtre gardée **se ferme**, Jaris ne pioche jamais une autre fenêtre en silence : il
+    reprend l'écran, en le disant.
+  Sans capture de fenêtre possible (hors Windows, ou PrintWindow refusé), le pilotage d'avant, inchangé.
+  **Vérifié ici** : 60 tests de la vraie boucle (dont 11 nouveaux : 7 + 5 sur la Calculatrice sans un clic de souris,
+  champ + texte, emprunt et restitution, refus de premier plan, délai, touche, repère de la fenêtre, nouvelle fenêtre,
+  dialogue, fenêtre fermée), chaque garde-fou vérifié en le retirant ; les 4 scripts passés au **vrai parseur de
+  PowerShell** (pwsh 7.4 ici, `powershell` 5.1 sur la CI Windows : `scripts/test-background-control.mjs`) et leurs blocs
+  C# compilés. **Non vérifiable ici** : le comportement réel des applis de Léo (accessibilité exposée ou non, PrintWindow
+  sur chaque appli) — c'est son usage réel qui le dira.
+  **Leçons générales** : (1) PowerShell s'installe sous Linux (archive officielle) et son parseur
+  (`[System.Management.Automation.Language.Parser]::ParseFile`) vérifie un script sans l'exécuter — une faute de syntaxe
+  dans une chaîne TypeScript ne se voyait jusqu'ici que chez Léo ; (2) un accent grave (backtick) dans un commentaire
+  PowerShell placé dans un gabarit JavaScript ferme le gabarit : le typecheck l'attrape, la relecture non ; (3) quand une
+  automatisation garde une cible, elle doit savoir que la cible a DISPARU plutôt que d'en prendre une autre « au plus
+  proche » — en arrière-plan, la plus proche est souvent la fenêtre de l'utilisateur.

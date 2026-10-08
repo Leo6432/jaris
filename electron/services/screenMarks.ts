@@ -24,6 +24,8 @@ export interface ScreenElement {
   y: number
   w: number
   h: number
+  /** Étape 263 : identifiant de Windows (RuntimeId), pour retrouver l'élément et agir dessus sans la souris. */
+  rid?: string
 }
 
 /** Un élément retenu, avec le numéro dessiné sur la capture. */
@@ -37,6 +39,16 @@ export interface MarksCaptureOutput {
   /** Titre de la fenêtre visée (absent si aucune fenêtre ne convient : bureau seul, tout réduit). */
   window?: string
   elements: ScreenElement[]
+  /** Étape 263 : poignée de la fenêtre capturée (nombre en texte) — une boîte de dialogue de la fenêtre gardée, s'il y en a une. */
+  hwnd?: string
+  /** Étape 263 : la fenêtre principale dont elle dépend : c'est elle qu'on garde d'une étape à l'autre. */
+  root?: string
+  /** Étape 263 : la fenêtre gardée demandée, renvoyée seulement si elle existe encore. */
+  target?: string
+  /** Étape 263 : rectangle de cette fenêtre à l'écran, en pixels réels. */
+  rect?: { x: number; y: number; w: number; h: number }
+  /** Étape 263 : `window` = l'image est la fenêtre seule (même cachée derrière d'autres), `screen` = l'écran entier. */
+  capture?: 'window' | 'screen'
 }
 
 /** Au-delà, les numéros couvrent la page et noient le modèle ; la liste garde les premiers dans l'ordre de Windows. */
@@ -74,6 +86,10 @@ Add-Type -Namespace Jaris -Name Marks -MemberDefinition @'
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hwnd, System.Text.StringBuilder text, int max);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr hwnd, System.Text.StringBuilder text, int max);
 [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out int value, int size);
+[DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hwnd);
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int cmd);
+[DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdc, uint flags);
+[DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
 '@
 [void][Jaris.Marks]::SetProcessDPIAware()
 Add-Type -AssemblyName System.Windows.Forms
@@ -88,7 +104,31 @@ $jarisPid = [uint32]$env:JARIS_PID
 $win = [IntPtr]::Zero
 $title = ''
 $rect = New-Object Jaris.Marks+RECT
-$h = [Jaris.Marks]::GetTopWindow([IntPtr]::Zero)
+# Étape 263 : la fenêtre gardée d'une étape à l'autre (pilotage en arrière-plan), si elle existe encore ; sinon les
+# fenêtres à écarter (celles qui existaient avant d'ouvrir une application : on cherche la NOUVELLE).
+$exclude = @()
+if ($env:JARIS_EXCLUDE_HWNDS) { $exclude = @($env:JARIS_EXCLUDE_HWNDS -split ',' | Where-Object { $_ -match '^[0-9]+$' }) }
+# « target » : la fenêtre gardée, renvoyée seulement si elle existe encore (sinon Jaris le saura et ne piochera pas une
+# autre fenêtre en silence, peut-être celle de Léo).
+$requested = ''
+if ($env:JARIS_TARGET_HWND -match '^[0-9]+$') {
+  $t = [IntPtr][int64]$env:JARIS_TARGET_HWND
+  if ([Jaris.Marks]::IsWindow($t) -and [Jaris.Marks]::IsWindowVisible($t)) {
+    $requested = [string]$t.ToInt64()
+    # Réduite, elle ne se dessine pas : on la rouvre sans la mettre au premier plan (SW_SHOWNOACTIVATE).
+    if ([Jaris.Marks]::IsIconic($t)) { [void][Jaris.Marks]::ShowWindow($t, 4); Start-Sleep -Milliseconds 300 }
+    # Une boîte de dialogue ouverte par cette fenêtre (Enregistrer sous, confirmation) est une fenêtre à part :
+    # c'est elle qu'on regarde tant qu'elle est là (GW_ENABLEDPOPUP).
+    $popup = [Jaris.Marks]::GetWindow($t, 6)
+    if ($popup -ne [IntPtr]::Zero -and $popup -ne $t -and [Jaris.Marks]::IsWindowVisible($popup)) { $t = $popup }
+    $txt = New-Object System.Text.StringBuilder 512
+    [void][Jaris.Marks]::GetWindowText($t, $txt, 512)
+    [void][Jaris.Marks]::GetWindowRect($t, [ref]$rect)
+    $win = $t; $title = $txt.ToString()
+  }
+}
+$h = [IntPtr]::Zero
+if ($win -eq [IntPtr]::Zero) { $h = [Jaris.Marks]::GetTopWindow([IntPtr]::Zero) }
 while ($h -ne [IntPtr]::Zero) {
   if ([Jaris.Marks]::IsWindowVisible($h) -and -not [Jaris.Marks]::IsIconic($h)) {
     $p = [uint32]0
@@ -104,7 +144,8 @@ while ($h -ne [IntPtr]::Zero) {
     [void][Jaris.Marks]::GetWindowRect($h, [ref]$r)
     $ok = ($p -ne $jarisPid) -and ($cloaked -eq 0) -and (($ex -band 0xA0) -eq 0) -and ($txt.Length -gt 0) -and
       (($r.Right - $r.Left) -ge 300) -and (($r.Bottom - $r.Top) -ge 200) -and
-      (@('Progman', 'WorkerW', 'Shell_TrayWnd', 'Shell_SecondaryTrayWnd') -notcontains $cls.ToString())
+      (@('Progman', 'WorkerW', 'Shell_TrayWnd', 'Shell_SecondaryTrayWnd') -notcontains $cls.ToString()) -and
+      ($exclude -notcontains ([string]$h.ToInt64()))
     if ($ok) { $win = $h; $title = $txt.ToString(); $rect = $r; break }
   }
   $h = [Jaris.Marks]::GetWindow($h, 2)
@@ -151,6 +192,7 @@ if ($win -ne [IntPtr]::Zero) {
           name = $name.Trim()
           type = ($element.Current.ControlType.ProgrammaticName -replace '^ControlType\\.', '')
           x = [int]($er.X - $b.X); y = [int]($er.Y - $b.Y); w = [int]$er.Width; h = [int]$er.Height
+          rid = ($element.GetRuntimeId() -join '.')
         })
       } catch { continue }
     }
@@ -158,13 +200,43 @@ if ($win -ne [IntPtr]::Zero) {
 }
 
 # Capture APRÈS la lecture des éléments : le délai de relecture de Chromium ne la rend pas plus ancienne qu'eux.
-$bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
-$g = [System.Drawing.Graphics]::FromImage($bmp)
-$g.CopyFromScreen($b.X, $b.Y, 0, 0, $bmp.Size)
+# Étape 263 : en arrière-plan, la fenêtre SEULE, même cachée par d'autres (PrintWindow, PW_RENDERFULLCONTENT pour
+# Chromium et les applis modernes) ; si Windows refuse, l'écran entier comme avant, et Jaris le saura (capture).
+$mode = 'screen'
+$rw = $rect.Right - $rect.Left
+$rh = $rect.Bottom - $rect.Top
+$bmp = $null
+if ($env:JARIS_CAPTURE -eq 'window' -and $win -ne [IntPtr]::Zero -and $rw -gt 0 -and $rh -gt 0) {
+  $bmp = New-Object System.Drawing.Bitmap $rw, $rh
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $hdc = $g.GetHdc()
+  $printed = [Jaris.Marks]::PrintWindow($win, $hdc, 2)
+  $g.ReleaseHdc($hdc); $g.Dispose()
+  if ($printed) { $mode = 'window' } else { $bmp.Dispose(); $bmp = $null }
+}
+if ($bmp -eq $null) {
+  $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $g.CopyFromScreen($b.X, $b.Y, 0, 0, $bmp.Size)
+  $g.Dispose()
+}
 $bmp.Save($env:JARIS_MARKS_PNG, [System.Drawing.Imaging.ImageFormat]::Png)
-$g.Dispose(); $bmp.Dispose()
+$bmp.Dispose()
 
-Write-Output (@{ width = $b.Width; height = $b.Height; window = $title; elements = @($out) } | ConvertTo-Json -Compress -Depth 4)
+$hwndText = ''
+$rootText = ''
+if ($win -ne [IntPtr]::Zero) {
+  $hwndText = [string]$win.ToInt64()
+  # La fenêtre principale dont dépend la fenêtre capturée (elle-même si ce n'est pas une boîte de dialogue).
+  $root = [Jaris.Marks]::GetAncestor($win, 3)
+  if ($root -eq [IntPtr]::Zero) { $root = $win }
+  $rootText = [string]$root.ToInt64()
+}
+Write-Output (@{
+  width = $b.Width; height = $b.Height; window = $title; elements = @($out); hwnd = $hwndText; capture = $mode
+  root = $rootText; target = $requested
+  rect = @{ x = [int]($rect.Left - $b.X); y = [int]($rect.Top - $b.Y); w = [int]$rw; h = [int]$rh }
+} | ConvertTo-Json -Compress -Depth 4)
 `
 
 function isElement(value: unknown): value is ScreenElement {
@@ -183,7 +255,7 @@ function isElement(value: unknown): value is ScreenElement {
  * objet et non en tableau (piège de l'étape 32) — sans ce garde, une fenêtre avec un seul bouton perdrait ce bouton.
  */
 export function parseMarksCaptureOutput(stdout: string): MarksCaptureOutput | null {
-  let data: { width?: unknown; height?: unknown; window?: unknown; elements?: unknown }
+  let data: { width?: unknown; height?: unknown; window?: unknown; elements?: unknown; hwnd?: unknown; rect?: unknown; capture?: unknown; root?: unknown; target?: unknown }
   try {
     data = JSON.parse(stdout.trim())
   } catch {
@@ -192,7 +264,34 @@ export function parseMarksCaptureOutput(stdout: string): MarksCaptureOutput | nu
   if (!data || typeof data.width !== 'number' || typeof data.height !== 'number' || data.width <= 0 || data.height <= 0) return null
   const list = Array.isArray(data.elements) ? data.elements : data.elements ? [data.elements] : []
   const window = typeof data.window === 'string' && data.window.trim() ? data.window.trim() : undefined
-  return { width: data.width, height: data.height, window, elements: list.filter(isElement) }
+  const elements = list.filter(isElement).map((e) => {
+    const rid = (e as { rid?: unknown }).rid
+    return typeof rid === 'string' && /^-?\d+(\.-?\d+)*$/.test(rid) ? e : { name: e.name, type: e.type, x: e.x, y: e.y, w: e.w, h: e.h }
+  })
+  const out: MarksCaptureOutput = { width: data.width, height: data.height, window, elements }
+  // Étape 263 : fenêtre visée, son rectangle, et ce que montre l'image. Un champ absent ou abîmé = comme avant.
+  const handle = (value: unknown): string | undefined => {
+    const text = typeof value === 'number' ? String(value) : value
+    return typeof text === 'string' && /^[1-9]\d*$/.test(text) ? text : undefined
+  }
+  out.hwnd = handle(data.hwnd)
+  if (!out.hwnd) delete out.hwnd
+  const root = handle(data.root)
+  if (root && out.hwnd) out.root = root
+  const target = handle(data.target)
+  if (target) out.target = target
+  const r = data.rect as { x?: unknown; y?: unknown; w?: unknown; h?: unknown } | null | undefined
+  if (r && [r.x, r.y, r.w, r.h].every((n) => typeof n === 'number' && Number.isFinite(n)) && (r.w as number) > 0 && (r.h as number) > 0) {
+    out.rect = { x: r.x as number, y: r.y as number, w: r.w as number, h: r.h as number }
+  }
+  if (data.capture === 'window' && out.hwnd && out.rect) out.capture = 'window'
+  else if (data.capture === 'screen') out.capture = 'screen'
+  return out
+}
+
+/** Étape 263 : déplace des éléments (repère de l'écran <-> repère de l'image de la fenêtre). */
+export function offsetElements<T extends ScreenElement>(elements: T[], dx: number, dy: number): T[] {
+  return elements.map((e) => ({ ...e, x: e.x + dx, y: e.y + dy }))
 }
 
 /** Part de recouvrement de deux rectangles (intersection / union). */

@@ -5,11 +5,12 @@ import { hideScanOverlay, showScanOverlay } from './scanOverlay'
 import type { NativeImage } from 'electron'
 import { clickMouse, pressKey, typeText } from './inputControl'
 import { didAppLaunch, openApp } from './appLauncher'
+import { FIELD_TYPES, focusWindow, listTopWindows, runBackgroundAction } from './backgroundControl'
 import { aimWithMaiUi, type MaiUiDeps } from './maiUi'
 import { getProfile } from './profileStore'
 import { PILOT_MODEL } from '../../shared/pilotModel'
-import { capturePilotScreen, type PilotCapture } from './markedCapture'
-import { withJarisSetAside } from './pilotWindows'
+import { canCaptureWindow, capturePilotScreen, type PilotCapture } from './markedCapture'
+import { withPilotWindows, type PilotWindows } from './pilotWindows'
 import { markCenter, type ScreenMark } from './screenMarks'
 import { describeElements, findElementByName, type ClickableElement } from './uiAutomation'
 import { MAX_SCREENSHOT_WIDTH } from './vision'
@@ -137,6 +138,17 @@ export const OPEN_APP_RULE =
   'Pour ouvrir une application installée (Calculatrice, Bloc-notes, un navigateur, Discord…), réponds ' +
   '{"action":"open_app","app":"<nom de l\'application>"} : Windows l\'ouvre directement, sans passer par le menu ' +
   'Démarrer ni la barre de recherche.'
+
+/**
+ * Étape 263 — pilotage en arrière-plan : ajouté aux deux consignes (vision et modèle rapide) quand la fenêtre est
+ * suivie sans la souris de Léo. Un clic par numéro se fait sans y toucher ; un clic par position ou une touche oblige
+ * à l'emprunter un instant, d'où la préférence pour le bouton de recherche plutôt que la touche Entrée.
+ */
+export const BACKGROUND_RULE =
+  'Tu pilotes cette fenêtre EN ARRIÈRE-PLAN, pendant que l\'utilisateur continue de se servir de son ordinateur : ' +
+  'clique les éléments par leur numéro (click_element) ; pour écrire, choisis d\'abord le champ (click_element sur ' +
+  'lui) puis réponds type ; pour lancer une recherche ou valider, préfère le bouton (loupe, Rechercher, Envoyer, OK) à ' +
+  'la touche Entrée. Un clic par position ou une touche oblige à emprunter un instant la souris de l\'utilisateur.'
 
 export const MARKS_RULE =
   'Les éléments de la liste sont encadrés et numérotés sur la capture : pour cliquer l\'un d\'eux, réponds ' +
@@ -375,7 +387,12 @@ async function nextStep(
       {
         model,
         messages: [
-          { role: 'system', content: [SYSTEM_PROMPT, OPEN_APP_RULE, capture.marks.length ? MARKS_RULE : '', withPilot ? PILOT_TARGET_RULE : ''].filter(Boolean).join('\n\n') },
+          {
+            role: 'system',
+            content: [SYSTEM_PROMPT, OPEN_APP_RULE, capture.marks.length ? MARKS_RULE : '', withPilot ? PILOT_TARGET_RULE : '', capture.windowOnly ? BACKGROUND_RULE : '']
+              .filter(Boolean)
+              .join('\n\n')
+          },
           { role: 'user', content: buildStepPrompt(goal, history, capture.marks), images: [capture.imageBase64] }
         ],
         think: false,
@@ -411,7 +428,7 @@ async function nextTextStep(
       {
         model,
         messages: [
-          { role: 'system', content: TEXT_PLANNER_PROMPT },
+          { role: 'system', content: capture.windowOnly ? `${TEXT_PLANNER_PROMPT}\n\n${BACKGROUND_RULE}` : TEXT_PLANNER_PROMPT },
           { role: 'user', content: buildTextStepPrompt(goal, history, capture.window, capture.marks) }
         ],
         think: false,
@@ -516,12 +533,16 @@ export async function computerUseTask(
   signal?: AbortSignal
 ): Promise<string> {
   if (!goal.trim()) return "Dis-moi ce qu'il faut faire à l'écran."
-  return withJarisSetAside(() => runComputerUseTask(goal, visionModel, onProgress, signal))
+  return withPilotWindows((windows) => runComputerUseTask(goal, visionModel, windows, onProgress, signal))
 }
+
+/** Étape 263 : un tour de capture sans action au-delà duquel on renonce à attendre la fenêtre d'une application ouverte. */
+const NEW_WINDOW_ATTEMPTS = 3
 
 async function runComputerUseTask(
   goal: string,
   visionModel: string,
+  windows: PilotWindows,
   onProgress?: (message: string) => void,
   signal?: AbortSignal
 ): Promise<string> {
@@ -533,6 +554,52 @@ async function runComputerUseTask(
   let fallbackNoted = false
   let lastTextClick: number | undefined
   let sameTextClicks = 0
+  // Étape 263 — pilotage en arrière-plan. `background` tant que Windows sait capturer la fenêtre visée seule ; sinon
+  // le pilotage d'avant (`foreground` : Jaris s'écarte et prend l'écran), annoncé, jusqu'à la fin de la tâche.
+  let mode: 'background' | 'foreground' | undefined
+  /** La fenêtre principale gardée d'une étape à l'autre (changée seulement après l'ouverture d'une application). */
+  let lockedHwnd: string | undefined
+  /** La fenêtre capturée à cette étape, où agir : la gardée, ou la boîte de dialogue qu'elle a ouverte. */
+  let targetHwnd: string | undefined
+  let excludeAfterOpen: string[] | undefined
+  /** Le champ choisi (arrière-plan) : le prochain texte y est déposé directement, sans clavier. */
+  let field: ScreenMark | undefined
+  let borrowNoted = false
+  const goForeground = async (reason: string): Promise<void> => {
+    mode = 'foreground'
+    field = undefined
+    onProgress?.(`${reason} : je prends la main sur l'écran jusqu'à la fin de la tâche.`)
+    await windows.setAside()
+  }
+  /**
+   * Un geste qui demande la vraie souris ou le vrai clavier : la fenêtre passe devant le temps du geste, puis la
+   * fenêtre de Léo revient. `false` si Windows a refusé de la mettre devant — RIEN n'est alors fait, le clic serait
+   * tombé sur la fenêtre de Léo.
+   */
+  const borrow = async (gesture: () => Promise<void>): Promise<boolean> => {
+    if (!borrowNoted) {
+      onProgress?.("Cette étape a besoin de la souris ou du clavier : je les emprunte un instant, puis je te rends la main.")
+      borrowNoted = true
+    }
+    windows.guard(true)
+    try {
+      const focus = await focusWindow(targetHwnd ?? '')
+      if (!focus.ok) return false
+      try {
+        await gesture()
+      } finally {
+        if (focus.previous && focus.previous !== targetHwnd) await focusWindow(focus.previous)
+      }
+      return true
+    } finally {
+      windows.guard(false)
+    }
+  }
+  if (!canCaptureWindow()) {
+    // Hors Windows : le pilotage d'avant d'emblée, Jaris écarté avant la toute première capture.
+    mode = 'foreground'
+    await windows.setAside()
+  }
   for (let i = 0; i < MAX_STEPS; i++) {
     // Vérifié à chaque itération (nouvelle phrase à la voix qui annule la réflexion en cours, voir
     // voicePipeline.ts) : sans ça, une fois lancée, cette boucle de clics ne pouvait plus jamais être
@@ -549,17 +616,50 @@ async function runComputerUseTask(
 
     // Étape 256 : la capture porte les boutons de la fenêtre visée, numérotés (Set-of-Marks). Sans réponse de
     // Windows, la capture d'avant, sans numéros : le pilotage par position reste possible.
+    const onCaptureFallback = (reason: string): void => {
+      if (!fallbackNoted) onProgress?.(`Boutons numérotés indisponibles (${reason}) : je pilote d'après l'image seule.`)
+      fallbackNoted = true
+    }
     let capture: PilotCapture
     try {
-      capture = await capturePilotScreen((reason) => {
-        if (!fallbackNoted) onProgress?.(`Boutons numérotés indisponibles (${reason}) : je pilote d'après l'image seule.`)
-        fallbackNoted = true
-      })
+      if (mode === 'foreground') {
+        capture = await capturePilotScreen(onCaptureFallback)
+      } else {
+        // Étape 263 : la fenêtre gardée par la tâche, capturée seule. Juste après une ouverture d'application, on attend
+        // sa NOUVELLE fenêtre (les anciennes sont écartées) quelques secondes, puis on prend la plus haute.
+        capture = await capturePilotScreen(onCaptureFallback, { hwnd: lockedHwnd, exclude: excludeAfterOpen, windowOnly: true })
+        for (let attempt = 1; excludeAfterOpen && !capture.hwnd && attempt < NEW_WINDOW_ATTEMPTS; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+          capture = await capturePilotScreen(onCaptureFallback, { exclude: excludeAfterOpen, windowOnly: true })
+        }
+        if (excludeAfterOpen && !capture.hwnd) capture = await capturePilotScreen(onCaptureFallback, { windowOnly: true })
+        excludeAfterOpen = undefined
+        if (lockedHwnd && capture.target !== lockedHwnd) {
+          // La fenêtre gardée a disparu (fermée) : on ne pioche JAMAIS une autre fenêtre en silence — en arrière-plan,
+          // ce pourrait être celle où Léo travaille. Le pilotage d'avant, annoncé, sur l'écran.
+          lockedHwnd = undefined
+          await goForeground("La fenêtre que je pilotais s'est fermée")
+          capture = await capturePilotScreen(onCaptureFallback)
+        } else if (capture.windowOnly && capture.hwnd) {
+          if (mode === undefined) onProgress?.("Je travaille en arrière-plan : tu peux continuer à te servir de ton ordinateur.")
+          mode = 'background'
+          if (targetHwnd !== capture.hwnd) field = undefined
+          targetHwnd = capture.hwnd
+          lockedHwnd ??= capture.root ?? capture.hwnd
+        } else {
+          // Fenêtre introuvable ou impossible à capturer seule : le pilotage d'avant, sur l'écran, Jaris écarté.
+          await goForeground(mode === undefined ? 'Cette fenêtre ne peut pas être suivie en arrière-plan' : 'La fenêtre suivie ne répond plus')
+          capture = await capturePilotScreen(onCaptureFallback)
+        }
+      }
     } catch (err) {
       throw new Error(`Impossible de capturer l'écran : ${err instanceof Error ? err.message : String(err)}`)
     }
+    const origin = capture.origin ?? { x: 0, y: 0 }
+    const background = mode === 'background'
 
-    showScanOverlay()
+    // En arrière-plan, Léo continue à travailler : pas d'animation plein écran par-dessus son travail.
+    if (!background) showScanOverlay()
     let step: ComputerUseStep | null = null
     let fromText = false
     try {
@@ -612,11 +712,40 @@ async function runComputerUseTask(
           onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : élément ${label} introuvable, je repasse en clic direct.`)
           break
         }
-        const { x, y } = markCenter(target)
-        const result = await clickMouse(x, y, 'left', capture.physical)
-        if (!result.startsWith('Clic left effectué')) throw new Error(result)
-        history.push(`${i + 1}. Clic sur "${target.name}" (${target.type}, position donnée par Windows)`)
-        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : clic sur "${target.name}".`)
+        if (background && FIELD_TYPES.has(target.type)) {
+          // Étape 263 : choisir un champ ne déclenche rien ; le prochain texte y sera déposé directement.
+          field = target
+          history.push(`${i + 1}. Champ "${target.name}" choisi : le prochain texte y sera écrit directement`)
+          onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : champ "${target.name}" choisi.`)
+        } else if (background) {
+          // Étape 263 : le geste de l'élément, sans la souris ; sinon la souris empruntée le temps du clic.
+          field = undefined
+          const done = await runBackgroundAction({
+            hwnd: targetHwnd ?? '', rid: target.rid, name: target.name, type: target.type, x: target.x, y: target.y, w: target.w, h: target.h, action: 'invoke'
+          })
+          let how: string
+          if (done.ok) how = 'sans la souris'
+          else if (done.maybeDone) how = `envoyé, sans confirmation de Windows : ${done.reason}`
+          else {
+            const { x, y } = markCenter(target)
+            let result = ''
+            if (!(await borrow(async () => { result = await clickMouse(x, y, 'left', capture.physical) }))) {
+              await goForeground('La fenêtre suivie refuse de passer devant')
+              history.push(`${i + 1}. Clic sur "${target.name}" pas encore fait : la fenêtre ne passait pas devant`)
+              break
+            }
+            if (!result.startsWith('Clic left effectué')) throw new Error(result)
+            how = `souris empruntée un instant : ${done.reason}`
+          }
+          history.push(`${i + 1}. Clic sur "${target.name}" (${target.type}, ${how})`)
+          onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : clic sur "${target.name}".`)
+        } else {
+          const { x, y } = markCenter(target)
+          const result = await clickMouse(x, y, 'left', capture.physical)
+          if (!result.startsWith('Clic left effectué')) throw new Error(result)
+          history.push(`${i + 1}. Clic sur "${target.name}" (${target.type}, position donnée par Windows)`)
+          onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : clic sur "${target.name}".`)
+        }
         sameTextClicks = fromText && step.id !== undefined && step.id === lastTextClick ? sameTextClicks + 1 : 1
         lastTextClick = fromText ? step.id : undefined
         if (fromText && sameTextClicks >= MAX_SAME_TEXT_CLICKS) {
@@ -636,7 +765,7 @@ async function runComputerUseTask(
         // Étape 251 : le modèle de vision a décidé QUOI cliquer ; le viseur (MAI-UI) trouve OÙ, avec son zoom.
         if (pilotModel && target) {
           onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : je vise précisément ${target}…`)
-          showScanOverlay()
+          if (!background) showScanOverlay()
           try {
             const aim = await aimWithMaiUi(target, { ...pilotView(capture.full), chat: (messages) => callPilot(pilotModel, messages, signal) })
             if (aim) {
@@ -656,34 +785,115 @@ async function runComputerUseTask(
           }
           if (signal?.aborted) return "Tâche interrompue avant d'être terminée."
         }
-        const x = toScreenCoord(px, capture.scale)
-        const y = toScreenCoord(py, capture.scale)
-        const result = await clickMouse(x, y, button, capture.physical)
-        if (!result.startsWith(`Clic ${button} effectué`)) throw new Error(result)
+        // Étape 263 : une image de la fenêtre seule commence à son coin, pas à celui de l'écran.
+        const sx = toScreenCoord(px, capture.scale)
+        const sy = toScreenCoord(py, capture.scale)
+        const x = sx === null ? null : sx + origin.x
+        const y = sy === null ? null : sy + origin.y
         const what = target ? ` sur ${target}` : ''
+        let result = ''
+        if (background) {
+          // Un clic par position demande la vraie souris : empruntée le temps du clic, fenêtre devant.
+          if (!(await borrow(async () => { result = await clickMouse(x, y, button, capture.physical) }))) {
+            await goForeground('La fenêtre suivie refuse de passer devant')
+            history.push(`${i + 1}. Clic ${button}${what} pas encore fait : la fenêtre ne passait pas devant`)
+            break
+          }
+          aimed += ' (souris empruntée un instant)'
+        } else {
+          result = await clickMouse(x, y, button, capture.physical)
+        }
+        if (!result.startsWith(`Clic ${button} effectué`)) throw new Error(result)
         history.push(`${i + 1}. Clic ${button}${what} à (${x}, ${y})${aimed}`)
         onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : clic ${button}${what} à (${x}, ${y})${aimed}.`)
         break
       }
       case 'type': {
-        const result = await typeText(step.text ?? '')
+        const text = step.text ?? ''
+        if (!background) {
+          const result = await typeText(text)
+          if (result !== 'Texte tapé.') throw new Error(result)
+          history.push(`${i + 1}. Texte tapé : "${text}"`)
+          onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : texte tapé.`)
+          break
+        }
+        // Étape 263 : dans le champ choisi, sans clavier ; sinon le clavier emprunté, après un clic dans le champ.
+        const chosen = field
+        if (chosen) {
+          const done = await runBackgroundAction({
+            hwnd: targetHwnd ?? '', rid: chosen.rid, name: chosen.name, type: chosen.type, x: chosen.x, y: chosen.y, w: chosen.w, h: chosen.h, action: 'setValue', text
+          })
+          if (done.ok || done.maybeDone) {
+            history.push(`${i + 1}. Texte écrit dans "${chosen.name}" (sans le clavier) : "${text}"`)
+            onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : texte écrit.`)
+            break
+          }
+        }
+        let result = ''
+        const typed = await borrow(async () => {
+          if (chosen) {
+            const center = markCenter(chosen)
+            const click = await clickMouse(center.x, center.y, 'left', capture.physical)
+            if (!click.startsWith('Clic left effectué')) {
+              result = click
+              return
+            }
+          }
+          result = await typeText(text)
+        })
+        if (!typed) {
+          await goForeground('La fenêtre suivie refuse de passer devant')
+          history.push(`${i + 1}. Texte "${text}" pas encore tapé : la fenêtre ne passait pas devant`)
+          break
+        }
         if (result !== 'Texte tapé.') throw new Error(result)
-        history.push(`${i + 1}. Texte tapé : "${step.text ?? ''}"`)
+        history.push(`${i + 1}. Texte tapé : "${text}" (clavier emprunté un instant)`)
         onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : texte tapé.`)
         break
       }
       case 'key': {
-        const result = await pressKey(step.key ?? '')
+        const key = step.key ?? ''
+        let result = ''
+        if (background) {
+          // Étape 263 : une touche demande le vrai clavier ; le champ choisi reprend d'abord la main.
+          const chosen = field
+          const pressed = await borrow(async () => {
+            if (chosen) {
+              const center = markCenter(chosen)
+              const click = await clickMouse(center.x, center.y, 'left', capture.physical)
+              if (!click.startsWith('Clic left effectué')) {
+                result = click
+                return
+              }
+            }
+            result = await pressKey(key)
+          })
+          if (!pressed) {
+            await goForeground('La fenêtre suivie refuse de passer devant')
+            history.push(`${i + 1}. Touche "${key}" pas encore pressée : la fenêtre ne passait pas devant`)
+            break
+          }
+        } else {
+          result = await pressKey(key)
+        }
         if (result !== `Touche "${step.key}" pressée.`) throw new Error(result)
-        history.push(`${i + 1}. Touche "${step.key ?? ''}" pressée`)
-        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : touche "${step.key ?? ''}" pressée.`)
+        history.push(`${i + 1}. Touche "${key}" pressée${background ? ' (clavier emprunté un instant)' : ''}`)
+        onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : touche "${key}" pressée.`)
         break
       }
       case 'open_app': {
         const app = step.app ?? ''
         onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : j'ouvre ${app}…`)
+        // Étape 263 : en arrière-plan, la liste des fenêtres d'AVANT, pour suivre ensuite la nouvelle et non celle de Léo.
+        const before = background ? await listTopWindows() : []
         const result = await openApp(app)
         if (didAppLaunch(result)) {
+          if (background) {
+            excludeAfterOpen = before.length ? before : undefined
+            lockedHwnd = undefined
+            targetHwnd = undefined
+            field = undefined
+          }
           // Le temps que la fenêtre apparaisse : la capture suivante doit la montrer au premier plan.
           await new Promise((resolve) => setTimeout(resolve, 2000))
           history.push(`${i + 1}. Application ouverte par Windows : ${result}`)

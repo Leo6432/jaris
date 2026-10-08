@@ -657,7 +657,7 @@ function showWidgetWindow(forceExpanded = false): void {
   // Étape 177 : une image neuve tout de suite, pour ne jamais réafficher une fenêtre transparente vide.
   widgetWindow.webContents.invalidate()
   // Étape 256 : un widget créé ou réaffiché pendant un pilotage reste hors de la vue et des clics du pilote.
-  if (pilotTasks > 0) applyPilotWidgetGuard()
+  if (pilotTasks > 0 || pilotBorrowing) applyPilotWidgetGuard()
 }
 
 /** La touche + ouvre la forme du mode actif : barre écrite en Chat, écoute visible en Agent vocal. */
@@ -695,11 +695,19 @@ function collapseChatWidget(): void {
  * transparent aux clics : le pilote ne doit ni le voir ni cliquer dessus.
  */
 let pilotTasks = 0
+/** Étape 263 : un geste emprunté à Léo pendant un pilotage en arrière-plan (le widget ne doit pas intercepter le clic). */
+let pilotBorrowing = false
 
 function applyPilotWidgetGuard(): void {
   if (!widgetWindow || widgetWindow.isDestroyed()) return
-  widgetWindow.setContentProtection(pilotTasks > 0)
-  widgetWindow.setIgnoreMouseEvents(pilotTasks > 0)
+  const guarded = pilotTasks > 0 || pilotBorrowing
+  widgetWindow.setContentProtection(guarded)
+  widgetWindow.setIgnoreMouseEvents(guarded)
+}
+
+function setPilotBorrowGuard(on: boolean): void {
+  pilotBorrowing = on
+  applyPilotWidgetGuard()
 }
 
 async function setJarisAsideForPilot(): Promise<void> {
@@ -1022,7 +1030,7 @@ app.whenReady().then(async () => {
   // déjà perdu la course au verrou continuerait quand même à créer sa fenêtre, démarrer Ollama, etc. avant
   // de se fermer — exactement le flash visible à corriger ici.
   if (!gotSingleInstanceLock) return
-  setPilotWindowHooks({ begin: setJarisAsideForPilot, end: bringJarisBackAfterPilot })
+  setPilotWindowHooks({ begin: setJarisAsideForPilot, end: bringJarisBackAfterPilot, guard: setPilotBorrowGuard })
   void cleanupStaleChromiumData()
   // Étape 200 : le Montage a été retiré ; son paquet Remotion (environ 600 Mo) ne sert plus à rien.
   void removeLeftoverMontage()

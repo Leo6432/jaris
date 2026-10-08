@@ -33,6 +33,8 @@ const maiUi = loadReal('../electron/services/maiUi.ts')
 const pilotModel = loadReal('../shared/pilotModel.ts')
 // Étape 256 : le centre des éléments numérotés est calculé par le vrai module.
 const screenMarks = loadReal('../electron/services/screenMarks.ts')
+// Étape 263 : les types de champs du vrai module (ses appels à Windows, eux, sont simulés plus bas).
+const backgroundControl = loadReal('../electron/services/backgroundControl.ts')
 
 /**
  * Fausse capture à pleine résolution (2560 x 1440) : chaque vue (entière ou recadrée) garde dans son « image »
@@ -65,6 +67,12 @@ function setup(steps, inputResult, onFetch, elements = [], pilot = { profile: nu
   let captures = 0
   let asides = 0
   let backs = 0
+  let shown = 0
+  const captureOptions = []
+  const bgActions = []
+  const focuses = []
+  const guards = []
+  const listed = []
   const textBodies = []
   let actions = 0
   let hidden = 0
@@ -80,24 +88,38 @@ function setup(steps, inputResult, onFetch, elements = [], pilot = { profile: nu
     './profileStore': { getProfile: async () => pilot.profile },
     './maiUi': maiUi,
     '../../shared/pilotModel': pilotModel,
-    './scanOverlay': { showScanOverlay() {}, hideScanOverlay() { hidden++ } },
+    './scanOverlay': { showScanOverlay() { shown++ }, hideScanOverlay() { hidden++ } },
     './inputControl': {
       clickMouse: (...a) => input('click', ...a), typeText: (...a) => input('type', ...a), pressKey: (...a) => input('key', ...a)
     },
     './uiAutomation': uia.exports,
     './screenMarks': screenMarks,
     './pilotWindows': {
-      withJarisSetAside: async (task) => {
-        asides++
-        try { return await task() } finally { backs++ }
+      withPilotWindows: async (task) => {
+        let begun = false
+        const windows = { setAside: async () => { if (!begun) { begun = true; asides++ } }, guard: (on) => guards.push(on) }
+        try { return await task(windows) } finally { if (begun) backs++ }
       }
     },
     './markedCapture': {
-      capturePilotScreen: async () => {
+      // Étape 263 : `pilot.background` simule Windows (fenêtre capturée seule) ; sinon le pilotage d'avant, d'emblée.
+      canCaptureWindow: () => !!pilot.background,
+      capturePilotScreen: async (_onFallback, options = {}) => {
         captures++
         uiaReads++
-        return { imageBase64: 'test', scale: pilot.scale ?? 1, width: 1280, height: 720, full: fakeFull(), marks: elements, physical: pilot.physical ?? false, window: 'YouTube - Firefox' }
+        captureOptions.push(options)
+        const base = { imageBase64: 'test', scale: pilot.scale ?? 1, width: 1280, height: 720, full: fakeFull(), marks: elements, physical: pilot.physical ?? false, window: 'YouTube - Firefox' }
+        if (!pilot.background || !options.windowOnly) return base
+        const extra = pilot.capture?.(options, captures) ?? {}
+        // La fenêtre gardée existe encore (`target`), sauf si le test en décide autrement.
+        return { ...base, physical: true, hwnd: '100', root: '100', target: options.hwnd, windowOnly: true, origin: pilot.origin ?? { x: 0, y: 0 }, ...extra }
       }
+    },
+    './backgroundControl': {
+      FIELD_TYPES: backgroundControl.FIELD_TYPES,
+      runBackgroundAction: async (req) => { bgActions.push(req); return pilot.bgResult?.(req) ?? { ok: true, how: 'invoke' } },
+      focusWindow: async (hwnd) => { focuses.push(hwnd); return pilot.focus?.(hwnd) ?? { ok: true, previous: '999' } },
+      listTopWindows: async () => { listed.push(true); return pilot.windowsBefore ?? ['999', '100'] }
     },
     './vision': { MAX_SCREENSHOT_WIDTH: 1280 },
     // Étape 260 : l'ouverture d'une application par Windows, simulée (le vrai openApp passe par PowerShell).
@@ -143,7 +165,8 @@ function setup(steps, inputResult, onFetch, elements = [], pilot = { profile: nu
   return { exports, run: signal => exports.computerUseTask('Cherche un tuto guitare', 'test', line => logs.push(line), signal),
     state: () => ({
       captures, actions, hidden, logs, clicks: clicks.map((c) => c[0] === 'click' ? c.slice(1, 4) : c), calls: clicks, prompts, bodies, uiaReads, aims, unloads,
-      physical: clicks.filter((c) => c[0] === 'click').map((c) => c[4]), textBodies, asides, backs, opened
+      physical: clicks.filter((c) => c[0] === 'click').map((c) => c[4]), textBodies, asides, backs, opened,
+      shown, captureOptions, bgActions, focuses, guards, listed
     }) }
 }
 
@@ -645,4 +668,151 @@ test('étape 260 : application introuvable = pas un échec de la tâche, le mod�
     { profile: null, installed: [], openResult: 'Je n\'ai trouvé aucune application nommée "Calculette" installée sur cette machine.' })
   assert.equal(await app.run(), 'ok')
   assert.match(app.state().prompts[1], /Ouverture de "Calculette" impossible : Je n'ai trouvé aucune application nommée "Calculette".* reste le menu Démarrer/)
+})
+
+// --- Étape 263 : pilotage en arrière-plan (Léo : « on ne peut pas faire autre chose à côté ») ---
+
+const box = (id, name, type, x) => ({ id, name, type, x, y: 300, w: 60, h: 40, rid: `42.${id}` })
+// Noms RÉELS de la Calculatrice française (microsoft/calculator, Resources.resw fr-FR).
+const CALC = [box(1, 'Sept', 'Button', 10), box(2, 'Plus', 'Button', 80), box(3, 'Cinq', 'Button', 150), box(4, 'Est égal à', 'Button', 220), box(5, 'Effacer', 'Button', 290)]
+const BG = (textSteps, extra = {}) => ({ ...planner(textSteps), background: true, ...extra })
+
+test('étape 263 : 7 + 5 sur la Calculatrice SANS la souris ni le clavier de Léo, Jaris reste où il est', async () => {
+  const app = setup([], 'x', undefined, CALC, BG([
+    { action: 'click_element', id: 1 }, { action: 'click_element', id: 2 }, { action: 'click_element', id: 3 }, { action: 'click_element', id: 4 },
+    { action: 'done', result: '12' }
+  ]))
+  assert.equal(await app.run(), '12')
+  const st = app.state()
+  assert.equal(st.actions, 0, 'aucun clic de souris, aucune frappe')
+  assert.deepEqual(st.bgActions.map((a) => [a.name, a.action, a.hwnd, a.rid]), [
+    ['Sept', 'invoke', '100', '42.1'], ['Plus', 'invoke', '100', '42.2'], ['Cinq', 'invoke', '100', '42.3'], ['Est égal à', 'invoke', '100', '42.4']
+  ])
+  assert.equal(st.asides, 0, 'la grande fenêtre de Jaris ne se replie pas')
+  assert.equal(st.shown, 0, 'pas d’animation plein écran par-dessus le travail de Léo')
+  assert.deepEqual([...st.focuses], [], 'aucune fenêtre ramenée devant')
+  // La fenêtre est gardée d'une étape à l'autre, capturée seule.
+  assert.ok(st.captureOptions.every((o) => o.windowOnly))
+  assert.equal(st.captureOptions[0].hwnd, undefined)
+  assert.ok(st.captureOptions.slice(1).every((o) => o.hwnd === '100'))
+  assert.ok(st.logs.some((l) => /en arrière-plan : tu peux continuer/.test(l)))
+  assert.match(st.textBodies[0].messages[0].content, /EN ARRIÈRE-PLAN/)
+  assert.match(st.textBodies[1].messages[1].content, /Clic sur "Sept" \(Button, sans la souris\)/)
+})
+
+const FORM = [box(1, 'Rechercher', 'Edit', 10), box(2, 'Lancer la recherche', 'Button', 300), ...CALC.slice(0, 3).map((m, i) => ({ ...m, id: i + 3 }))]
+
+test('étape 263 : choisir un champ puis écrire = le texte déposé dans le champ, sans clavier', async () => {
+  const app = setup([], 'x', undefined, FORM, BG([
+    { action: 'click_element', id: 1 }, { action: 'type', text: 'tuto guitare' }, { action: 'click_element', id: 2 }, { action: 'done', result: 'ok' }
+  ]))
+  assert.equal(await app.run(), 'ok')
+  const st = app.state()
+  assert.equal(st.actions, 0)
+  assert.deepEqual(st.bgActions.map((a) => [a.name, a.action, a.text]), [['Rechercher', 'setValue', 'tuto guitare'], ['Lancer la recherche', 'invoke', undefined]])
+  assert.match(st.textBodies[2].messages[1].content, /Texte écrit dans "Rechercher" \(sans le clavier\) : "tuto guitare"/)
+})
+
+test('étape 263 : élément sans geste possible = souris EMPRUNTÉE : fenêtre devant, clic, fenêtre de Léo rendue', async () => {
+  const app = setup([], 'Clic left effectué.', undefined, CALC, BG([{ action: 'click_element', id: 1 }, { action: 'done', result: 'ok' }], {
+    bgResult: () => ({ ok: false, reason: 'cet élément ne se déclenche pas sans la souris' })
+  }))
+  assert.equal(await app.run(), 'ok')
+  const st = app.state()
+  assert.deepEqual([...st.focuses], ['100', '999'], 'la fenêtre visée passe devant, puis celle de Léo revient')
+  assert.deepEqual(st.clicks[0], [40, 320, 'left'])
+  assert.deepEqual([...st.guards], [true, false], 'le widget ne gêne pas le clic, puis redevient cliquable')
+  assert.equal(st.asides, 0)
+  assert.ok(st.logs.some((l) => /je les emprunte un instant, puis je te rends la main/.test(l)))
+  assert.match(st.textBodies[1].messages[1].content, /souris empruntée un instant : cet élément ne se déclenche pas sans la souris/)
+})
+
+test('étape 263 : fenêtre qui refuse de passer devant = AUCUN clic (il tomberait chez Léo), reprise de l’écran annoncée', async () => {
+  const app = setup([{ action: 'done', result: 'vu' }], 'Clic left effectué.', undefined, CALC, BG([{ action: 'click_element', id: 1 }], {
+    bgResult: () => ({ ok: false, reason: 'non' }),
+    focus: () => ({ ok: false })
+  }))
+  assert.equal(await app.run(), 'vu')
+  const st = app.state()
+  assert.equal(st.actions, 0, 'pas un seul clic')
+  assert.equal(st.asides, 1, 'Jaris s’écarte pour reprendre l’écran')
+  assert.ok(st.logs.some((l) => /refuse de passer devant : je prends la main sur l'écran/.test(l)))
+  assert.match(st.prompts[0], /Clic sur "Sept" pas encore fait/)
+})
+
+test('étape 263 : délai dépassé (bouton qui ouvre une fenêtre) = jamais recliqué à la souris', async () => {
+  const app = setup([], 'x', undefined, CALC, BG([{ action: 'click_element', id: 1 }, { action: 'done', result: 'ok' }], {
+    bgResult: () => ({ ok: false, maybeDone: true, reason: 'pas de réponse de Windows en 20 s' })
+  }))
+  assert.equal(await app.run(), 'ok')
+  assert.equal(app.state().actions, 0)
+  assert.deepEqual([...app.state().focuses], [])
+  assert.match(app.state().textBodies[1].messages[1].content, /envoyé, sans confirmation de Windows/)
+})
+
+test('étape 263 : une touche (Entrée) emprunte le clavier, après avoir redonné la main au champ choisi', async () => {
+  const app = setup([], (kind) => (kind === 'click' ? 'Clic left effectué.' : 'Touche "entrée" pressée.'), undefined, FORM, BG([
+    { action: 'click_element', id: 1 }, { action: 'key', key: 'entrée' }, { action: 'done', result: 'ok' }
+  ]))
+  assert.equal(await app.run(), 'ok')
+  const st = app.state()
+  assert.deepEqual(st.calls.map((c) => c[0]), ['click', 'key'])
+  assert.deepEqual(st.clicks[0], [40, 320, 'left'])
+  assert.deepEqual([...st.focuses], ['100', '999'])
+})
+
+test('étape 263 : clic par position sur l’image de la fenêtre = position ramenée à l’écran (coin de la fenêtre)', async () => {
+  const app = setup([{ action: 'click', x: 500, y: 500 }, { action: 'done', result: 'ok' }], 'Clic left effectué.', undefined, [], {
+    background: true, profile: null, installed: [], origin: { x: 300, y: 200 }
+  })
+  assert.equal(await app.run(), 'ok')
+  // 500/1000 de 1280 x 720 = (640, 360), + coin de la fenêtre (300, 200).
+  assert.deepEqual(app.state().clicks[0], [940, 560, 'left'])
+  assert.deepEqual([...app.state().focuses], ['100', '999'])
+  assert.ok(app.state().bodies[0].messages[0].content.endsWith(app.exports.BACKGROUND_RULE))
+})
+
+test('étape 263 : après l’ouverture d’une application, Jaris suit la NOUVELLE fenêtre, jamais celle de Léo', async () => {
+  const app = setup([], 'x', undefined, CALC, BG([{ action: 'open_app', app: 'Calculatrice' }, { action: 'click_element', id: 1 }, { action: 'done', result: 'ok' }], {
+    windowsBefore: ['999', '100'],
+    capture: (options) => (options.exclude ? { hwnd: '300', root: '300', window: 'Calculatrice' } : options.hwnd ? { hwnd: options.hwnd, root: options.hwnd } : {})
+  }))
+  assert.equal(await app.run(), 'ok')
+  const st = app.state()
+  assert.equal(st.listed.length, 1, 'liste des fenêtres prise AVANT l’ouverture')
+  assert.deepEqual([...st.captureOptions[1].exclude], ['999', '100'])
+  assert.equal(st.captureOptions[1].hwnd, undefined)
+  assert.equal(st.bgActions[0].hwnd, '300', 'le clic vise la Calculatrice, pas la fenêtre de Léo')
+  assert.equal(st.captureOptions[2].hwnd, '300')
+})
+
+test('étape 263 : sous Windows mais fenêtre impossible à capturer seule = pilotage d’avant, annoncé', async () => {
+  const app = setup([{ action: 'done', result: 'ok' }], 'x', undefined, [], { background: true, profile: null, installed: [], capture: () => ({ windowOnly: false }) })
+  assert.equal(await app.run(), 'ok')
+  const st = app.state()
+  assert.equal(st.asides, 1)
+  assert.equal(st.captures, 2, 'nouvelle capture une fois Jaris écarté')
+  assert.ok(st.logs.some((l) => /ne peut pas être suivie en arrière-plan : je prends la main/.test(l)))
+  assert.ok(!st.bodies[0].messages[0].content.includes(app.exports.BACKGROUND_RULE))
+})
+
+test('étape 263 : boîte de dialogue de la fenêtre gardée (Enregistrer sous) = on agit DEDANS, la fenêtre principale reste gardée', async () => {
+  const app = setup([], 'x', undefined, CALC, BG([{ action: 'click_element', id: 1 }, { action: 'click_element', id: 2 }, { action: 'done', result: 'ok' }], {
+    capture: (options, n) => (n === 2 ? { hwnd: '777', root: '100' } : {})
+  }))
+  assert.equal(await app.run(), 'ok')
+  const st = app.state()
+  assert.deepEqual(st.bgActions.map((a) => a.hwnd), ['100', '777'], 'le 2e clic vise la boîte de dialogue')
+  assert.deepEqual(st.captureOptions.map((o) => o.hwnd), [undefined, '100', '100'], 'toujours la fenêtre principale demandée')
+})
+
+test('étape 263 : fenêtre gardée FERMÉE = jamais une autre fenêtre en silence ; reprise de l’écran annoncée', async () => {
+  const app = setup([{ action: 'done', result: 'fermée' }], 'x', undefined, CALC, BG([{ action: 'click_element', id: 5 }], {
+    capture: (options, n) => (n === 2 ? { target: undefined, hwnd: '555', root: '555' } : {})
+  }))
+  assert.equal(await app.run(), 'fermée')
+  const st = app.state()
+  assert.equal(st.bgActions.length, 1, 'aucune action dans la fenêtre 555')
+  assert.equal(st.asides, 1)
+  assert.ok(st.logs.some((l) => /La fenêtre que je pilotais s'est fermée : je prends la main sur l'écran/.test(l)))
 })
