@@ -79,7 +79,8 @@ const TOOL_SIGNAL_WORDS = [
 ]
 const COMPLEX_SIGNAL_WORDS = ['pourquoi', 'explique', 'explique-moi', 'compare', 'analyse', 'différence', 'avantages', 'inconvénients', 'résume', 'détaille']
 
-const MAIL_KEYWORDS = /\b(envoi|envoie|envoyer|mail|email|courriel)\b/i
+// Étape 261 : un VERBE d'envoi, plus le seul mot « mail » — « Reformule ce mail : … » n'est pas une demande d'envoi.
+const SEND_MAIL_VERBS = /\b(envoi|envoie|envoies|envoyer|envoyez|expédie|expédier)\b/i
 const NEGATION_WORDS = /\b(ne|n['e]|pas|jamais|surtout pas|évite|éviter|aucun|sans)\b/i
 
 /**
@@ -90,11 +91,14 @@ const NEGATION_WORDS = /\b(ne|n['e]|pas|jamais|surtout pas|évite|éviter|aucun|
  * ("n'envoie") qu'après ("envoie... pas") le verbe.
  */
 function hasUnnegatedMailIntent(prompt: string): boolean {
-  const match = MAIL_KEYWORDS.exec(prompt)
+  // Seule la CONSIGNE compte, pas le texte collé après « : » ou « « » : « Reformule ce mail : … merci de m'envoyer le
+  // devis » ne demande aucun envoi (étape 261, mesuré : la relance renvoyait le modèle vers l'envoi par le pilote).
+  const instruction = prompt.split(/[:«\n]/)[0]
+  const match = SEND_MAIL_VERBS.exec(instruction)
   if (!match) return false
   const windowStart = Math.max(0, match.index - 20)
-  const windowEnd = Math.min(prompt.length, match.index + match[0].length + 20)
-  return !NEGATION_WORDS.test(prompt.slice(windowStart, windowEnd))
+  const windowEnd = Math.min(instruction.length, match.index + match[0].length + 20)
+  return !NEGATION_WORDS.test(instruction.slice(windowStart, windowEnd))
 }
 
 // Léo : "fait en sorte qu'il regarde tout le temps sur le web ... il ne doit pas répondre depuis sa base de

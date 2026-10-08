@@ -62,15 +62,19 @@ export function directSocialReply(prompt) {
   return undefined
 }
 
-const MAIL_KEYWORDS = /\b(envoi|envoie|envoyer|mail|email|courriel)\b/i
+// Étape 261 : un VERBE d'envoi, plus le seul mot « mail » — « Reformule ce mail : … » n'est pas une demande d'envoi.
+const SEND_MAIL_VERBS = /\b(envoi|envoie|envoies|envoyer|envoyez|expédie|expédier)\b/i
 const NEGATION_WORDS = /\b(ne|n['e]|pas|jamais|surtout pas|évite|éviter|aucun|sans)\b/i
 
 export function hasUnnegatedMailIntent(prompt) {
-  const match = MAIL_KEYWORDS.exec(prompt)
+  // Seule la CONSIGNE compte, pas le texte collé après « : » ou « « » : « Reformule ce mail : … merci de m'envoyer le
+  // devis » ne demande aucun envoi (étape 261, mesuré : la relance renvoyait le modèle vers l'envoi par le pilote).
+  const instruction = prompt.split(/[:«\n]/)[0]
+  const match = SEND_MAIL_VERBS.exec(instruction)
   if (!match) return false
   const windowStart = Math.max(0, match.index - 20)
-  const windowEnd = Math.min(prompt.length, match.index + match[0].length + 20)
-  return !NEGATION_WORDS.test(prompt.slice(windowStart, windowEnd))
+  const windowEnd = Math.min(instruction.length, match.index + match[0].length + 20)
+  return !NEGATION_WORDS.test(instruction.slice(windowStart, windowEnd))
 }
 
 const QUESTION_START_WORDS =

@@ -624,6 +624,11 @@ test('les copies de assistant.ts dans le test sont identiques à l’original (s
   // hasUnnegatedMailIntent n'est pas exportée par assistant.ts : son effet (la relance « mail ») est comparé par le test croisé.
   assert.equal(hasUnnegatedMailIntent("N'envoie pas de mail"), false)
   assert.equal(hasUnnegatedMailIntent('Envoie un mail à Paul'), true)
+  // Étape 261 : réécrire un mail n'est pas l'envoyer ; seul un verbe d'envoi DANS LA CONSIGNE compte.
+  assert.equal(hasUnnegatedMailIntent("Reformule ce mail pour qu'il soit professionnel : Bonjour, merci de m'envoyer le devis"), false)
+  assert.equal(hasUnnegatedMailIntent('Rends ce mail plus poli, c’est pour ma responsable : salut Sophie'), false)
+  assert.equal(hasUnnegatedMailIntent('Reformule ce mail et envoie-le à paul@example.fr : salut'), true)
+  assert.equal(hasUnnegatedMailIntent('envoie un mail a jean point dupont arobase gmail point com pour lui dire que la reunion est a 14:30'), true)
   assert.ok(read('electron/services/assistant.ts').includes(`const MAX_TOOL_ROUNDS = ${MAX_TOOL_ROUNDS}`))
   assert.ok(read('electron/services/conversationSession.ts').includes(`const MAX_HISTORY_MESSAGES = ${MAX_HISTORY_MESSAGES}`))
   assert.ok(read('electron/services/assistant.ts').includes(`const fallback = ${JSON.stringify(FALLBACK_REPLY)}`))

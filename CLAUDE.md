@@ -7040,3 +7040,18 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   vérifié par les tests sur ses réponses réelles, à confirmer par Léo en usage réel.
   Régression : `node --test scripts/test-computer-use.mjs scripts/test-benchmark-vision.mjs` (la réponse réelle de
   Léo exécutée au bon endroit ; ouverture par la vision et par le planificateur ; application introuvable non fatale).
+
+- **Étape 261, « Reformule ce mail : … » pris pour une demande d'ENVOI.** Trouvé en préparant la démo comparée à
+  Claude demandée par Léo (le cas d'usage qui revient partout dans l'étude MiroFish). Mesuré sur le VRAI `converse()` :
+  le modèle répond le mail réécrit, puis `hasUnnegatedMailIntent` — déclenché par le seul mot « mail » — relance le
+  modèle (« tu n'as pas encore appelé computer_use_task alors qu'un envoi de mail était demandé ») ; la réponse
+  affichée devient celle d'après la relance (une demande d'adresse, voire un pilotage pour envoyer), pas le mail
+  reformulé. Corrigé en exigeant un VERBE d'envoi (envoie, envoyer, expédier…) dans la CONSIGNE seulement — le texte
+  avant le premier « : », « « » ou retour à la ligne : un mail collé qui contient « merci de m'envoyer le devis » ne
+  doit pas compter. « Reformule ce mail et envoie-le à paul@… : … » garde sa relance. Même correction dans la copie du
+  simulateur (benchmark-scenarios.mjs, comparée par le test croisé).
+  **Leçon générale, déjà vue avec les négations : un mot-clé d'objet (« mail ») ne dit pas l'action voulue ; pour
+  détecter une intention d'agir, chercher le VERBE de l'action, et seulement dans la consigne, jamais dans le
+  contenu que l'utilisateur colle à traiter.**
+  Régression : `node --test scripts/test-assistant-history.mjs scripts/test-benchmark-scenarios.mjs` (réécriture sans
+  relance, voix et écrit ; vraie demande d'envoi relancée ; le test échoue si la consigne n'est plus isolée).

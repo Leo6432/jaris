@@ -342,3 +342,29 @@ for (const tool of ['recall_memory', 'get_system_stats']) {
     assert.equal(modelCalls, 2)
   })
 }
+
+
+// Étape 261 (démo mail de Léo) : « Reformule ce mail : … » était pris pour une demande d'ENVOI — après le mail réécrit,
+// Jaris relançait le modèle vers l'envoi par le pilote, et la réponse affichée était celle d'après cette relance.
+for (const channel of ['chat', 'voice']) {
+  test(`${channel} : réécrire un mail n'est pas l'envoyer — le mail reformulé est la réponse, sans relance`, async () => {
+    const seen = []
+    const converse = setup(async (messages) => {
+      seen.push(messages.at(-1).content)
+      return { role: 'assistant', content: 'Bonjour, sauf erreur de notre part, la facture n°2024-118 reste impayée.' }
+    }, async () => assert.fail('aucun outil attendu'))
+    const reply = await converse("Reformule ce mail pour qu'il soit professionnel : Bonjour, la facture n°2024-118 devait etre payer, merci de m'envoyer le reglement", null, () => {}, undefined, [], undefined, undefined, channel)
+    assert.equal(reply, 'Bonjour, sauf erreur de notre part, la facture n°2024-118 reste impayée.')
+    assert.equal(seen.length, 1, 'aucune relance vers un envoi')
+  })
+}
+
+test('une vraie demande d’envoi garde sa relance vers le pilote', async () => {
+  const seen = []
+  const converse = setup(async (messages) => {
+    seen.push(messages.at(-1).content)
+    return { role: 'assistant', content: 'Voici le mail.' }
+  }, async () => 'ok')
+  await converse('Envoie un mail à paul.morel@example.fr pour lui dire que je serai en retard', null, () => {}, undefined, [], undefined, undefined, 'chat')
+  assert.ok(seen.some((c) => /n'as pas encore appelé computer_use_task/.test(c)))
+})
