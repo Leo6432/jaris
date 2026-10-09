@@ -156,7 +156,7 @@ test('le champ du Chat : texte en haut, « + » à gauche, modèle/effort puis e
     assert.ok(send.x + send.w > input.x + input.w - 30, 'envoi tout à droite')
     const sendStyle = await page.$eval('#root .composer__send', (el) => ({ radius: getComputedStyle(el).borderRadius, clip: getComputedStyle(el).clipPath, bg: getComputedStyle(el).backgroundColor }))
     assert.equal(sendStyle.clip, 'none', 'plus de coins coupés : un bouton rond')
-    assert.equal(sendStyle.radius, '9999px', `envoi rond comme ChatGPT (rayon ${sendStyle.radius})`)
+    assert.ok(['50%', '9999px'].includes(sendStyle.radius), `envoi rond comme ChatGPT (rayon ${sendStyle.radius})`)
     assert.notEqual(sendStyle.bg, 'rgba(0, 0, 0, 0)', 'envoi rempli')
     assert.equal((await page.textContent('#root .effort-picker__trigger')).trim(), 'Auto', 'rien sur la réflexion tant qu’aucun modèle n’est choisi')
   })

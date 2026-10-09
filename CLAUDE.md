@@ -7158,3 +7158,14 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   valeurs. Régression ajoutée dans `scripts/test-window-chrome-ui.mjs` : aucune couleur vive dans la fenêtre, en
   clair comme en sombre (seuls le logo et le point vert « Local » sont permis) — vérifié en remettant un accent
   violet : le test échoue. **Non vérifié ici** : le rendu sur la vraie machine de Léo.
+  **Travail en parallèle avec Codex sur la même branche** : pendant ce temps, Codex (OpenAI) a poussé sa propre
+  réponse à la même demande — le rail et la colonne réunis en UNE barre latérale à libellés, façon ChatGPT — et
+  mon envoi a été refusé (« non fast-forward »). Jamais de `--force` sur le travail d'un autre agent : fusion
+  (`git merge`), sa disposition gardée (barre latérale `app-sidebar`), mes couleurs neutres par-dessus, et mes
+  règles devenues sans objet (rail à icônes seules, ancienne colonne `.panel`) retirées. **Piège de la fusion** :
+  les deux versions AJOUTAIENT un bloc en fin de `index.css`, et Git a entrelacé les deux blocs ligne à ligne en
+  croyant aligner des lignes communes (`/* ====`, lignes vides) — résultat illisible. Reconstruit à la main :
+  ma version + le bloc ajouté par Codex, recopié tel quel (vérifié : sa version = l'ancêtre commun + un ajout en
+  fin de fichier, rien d'autre). Le banc de captures a ensuite trouvé un défaut dans le résultat : à 600 px de
+  haut, la liste de conversations de la nouvelle barre était coupée à zéro, sans défilement — la barre latérale
+  ouverte défile désormais en entier, avec Cerveau/Widget/Options collés en bas.

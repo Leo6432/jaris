@@ -27,7 +27,7 @@ const STATUS_LABEL: Record<JarisEmotion, string> = {
   surprised: 'Oups !'
 }
 
-/** Les modes de la colonne latérale permanente (étape 30 ; Image à la place du Montage depuis l'étape 200). */
+/** Les modes de la barre latérale permanente (étape 30 ; Image à la place du Montage depuis l'étape 200). */
 type AppMode = 'voice' | 'chat' | 'code' | 'image' | 'video'
 
 /**
@@ -79,11 +79,7 @@ function PanelToggleIcon(): JSX.Element {
   )
 }
 
-/**
- * Un bouton du rail. Étape 266 (style ChatGPT) : l'icône seule, comme le rail de l'appli ChatGPT — le libellé
- * reste dans la page (lecteurs d'écran, infobulle) mais n'est plus affiché sous l'icône, une disposition qui
- * faisait « application Windows ».
- */
+/** Une entrée de navigation : icône et libellé, avec un état actif discret. */
 function RailButton({ label, icon, active, onClick, title }: {
   label: string
   icon: string
@@ -509,9 +505,8 @@ export default function App(): JSX.Element {
     }
 
     const currentMode = MODES.find((mode) => mode.id === appMode) ?? MODES[0]
-    // Colonne de liste : seulement pour les écrans qui ont quelque chose à lister. Toujours montée (cachée
-    // sinon) : ses emplacements doivent exister pour que les écrans y rendent leur liste par portail, sans
-    // retomber sur leur colonne autonome (Workspace.tsx) dès qu'elle est repliée.
+    // La section récente n'est visible que pour les écrans qui ont quelque chose à lister. Son conteneur
+    // reste monté quand la barre se replie afin que Workspace conserve ses emplacements de portail.
     // Un écran du rail qui n'est pas un mode (Options, Cerveau) remplace le contenu sans changer le mode réel.
     const screenShown = optionsShown || !!memoryGraph
     const hasPanel = !screenShown && !!currentMode.panel
@@ -528,58 +523,70 @@ export default function App(): JSX.Element {
         {chrome?.titleBar && <TitleBar />}
 
         <div className="app-shell__body">
-          <nav className="rail" aria-label="Modes de Jaris">
-            {MODES.map(({ id, label, title, icon }) => (
-              <RailButton
-                key={id}
-                label={label}
-                title={title}
-                icon={icon}
-                active={!screenShown && appMode === id}
-                onClick={() => selectMode(id)}
-              />
-            ))}
-            <span className="rail__spacer" />
-            <RailButton label="Cerveau" title="Cerveau de Jaris" icon={ICON_BRAIN} active={!!memoryGraph} onClick={openMemoryBrain} />
-            <RailButton
-              label="Widget"
-              title="Réduire en widget"
-              icon={ICON_WIDGET}
-              active={false}
-              onClick={() => window.jaris.minimizeToWidget?.()}
-            />
-            <RailButton
-              label="Options"
-              icon={ICON_OPTIONS}
-              active={optionsShown}
-              onClick={() => {
-                setMemoryGraph(null)
-                setOptionsShown(true)
-              }}
-            />
-          </nav>
+          <aside className={`app-sidebar${hasPanel && panelOpen ? ' app-sidebar--expanded' : ''}`}>
+            <nav className="app-sidebar__nav" aria-label="Modes de Jaris">
+              <div className="app-sidebar__brand">
+                <img src={logo64} alt="" />
+                <span>Jaris</span>
+              </div>
+              {MODES.map(({ id, label, title, icon }) => (
+                <RailButton
+                  key={id}
+                  label={label}
+                  title={title}
+                  icon={icon}
+                  active={!screenShown && appMode === id}
+                  onClick={() => selectMode(id)}
+                />
+              ))}
+            </nav>
 
-          <aside className="panel" hidden={!hasPanel || !panelOpen}>
-            <div className="panel__head">
-              <span className="panel__title">{currentMode.panel}</span>
-              <button
-                className="panel__icon-button"
-                onClick={() => setPanelOpen(false)}
-                title="Masquer la liste"
-                aria-label="Masquer la liste"
-              >
-                <PanelToggleIcon />
-              </button>
-            </div>
-            {/* Bouton « Nouvelle conversation / application / image / vidéo » de l'écran affiché (portail) : une
-                ligne à part entière sous le titre, comme « Nouveau chat » dans ChatGPT (étape 266). */}
-            <div className="panel__new" ref={setNewSlot} />
-            {/* Liste de l'écran affiché : conversations, applications, images ou vidéos (portail). */}
-            <div className="panel__list" ref={setRecentsSlot} />
-            <div className="panel__status">
-              <span className="panel__status-dot" />
-              Local{appVersion ? ` · v${appVersion}` : ''}
-            </div>
+            <section
+              className="app-sidebar__workspace"
+              aria-label={currentMode.panel ?? 'Éléments récents'}
+              hidden={!hasPanel || !panelOpen}
+            >
+              <div className="panel__head">
+                <span className="panel__title">{currentMode.panel}</span>
+                <button
+                  className="panel__icon-button"
+                  onClick={() => setPanelOpen(false)}
+                  title="Réduire la barre latérale"
+                  aria-label="Réduire la barre latérale"
+                >
+                  <PanelToggleIcon />
+                </button>
+              </div>
+              {/* Action de création de l'écran courant, fournie par Workspace : une ligne à part entière sous le
+                  titre, comme « Nouveau chat » dans ChatGPT (étape 266). */}
+              <div className="panel__new" ref={setNewSlot} />
+              {/* Liste de l'écran affiché : conversations, projets, images ou vidéos. */}
+              <div className="panel__list" ref={setRecentsSlot} />
+              <div className="panel__status">
+                <span className="panel__status-dot" />
+                Local{appVersion ? ` · v${appVersion}` : ''}
+              </div>
+            </section>
+
+            <nav className="app-sidebar__utilities" aria-label="Outils de Jaris">
+              <RailButton label="Cerveau" title="Cerveau de Jaris" icon={ICON_BRAIN} active={!!memoryGraph} onClick={openMemoryBrain} />
+              <RailButton
+                label="Widget"
+                title="Réduire en widget"
+                icon={ICON_WIDGET}
+                active={false}
+                onClick={() => window.jaris.minimizeToWidget?.()}
+              />
+              <RailButton
+                label="Options"
+                icon={ICON_OPTIONS}
+                active={optionsShown}
+                onClick={() => {
+                  setMemoryGraph(null)
+                  setOptionsShown(true)
+                }}
+              />
+            </nav>
           </aside>
 
           <main className="app-main">

@@ -165,12 +165,12 @@ test('fenêtre étroite : la liste se pose par-dessus au lieu d’écraser la co
       await page.waitForSelector('.rail__item')
       await page.click('.rail__item:has-text("Chat")')
       await page.click('.app-header .panel__icon-button')
-      await page.waitForSelector('.panel:not([hidden]) .workspace__item')
+      await page.waitForSelector('.app-sidebar__workspace:not([hidden]) .workspace__item')
       const mainWidth = await page.evaluate(() => document.querySelector('.app-main').getBoundingClientRect().width)
       assert.ok(mainWidth > 380, `zone principale écrasée à ${Math.round(mainWidth)} px`)
-      await page.click('.panel .workspace__item:has-text("Recette")')
+      await page.click('.app-sidebar__workspace .workspace__item:has-text("Recette")')
       await page.waitForTimeout(200)
-      assert.equal(await page.isVisible('.panel'), false, 'la liste reste ouverte par-dessus la conversation choisie')
+      assert.equal(await page.locator('.app-sidebar--expanded').count(), 0, 'la liste reste ouverte par-dessus la conversation choisie')
     },
     { width: 480, height: 600 }
   )
