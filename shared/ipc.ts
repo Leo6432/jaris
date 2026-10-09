@@ -216,10 +216,12 @@ export interface WebSource {
  * Étape 273 (Léo : « quand il recherche sur le web, tu peux pas faire comme Claude, une petite flèche pour voir
  * ce qu'il recherche ? ») : ce que Jaris a fait sur le web pendant une réponse — chaque recherche avec ses
  * résultats, chaque page lue —, montré dans un bloc dépliable au-dessus de la réponse du Chat.
+ * Étape 274 : `pending` — signalée dès son DÉBUT (la question cherchée s'affiche tout de suite), puis une seconde
+ * fois, terminée, avec ses résultats. Seule la version terminée est gardée avec la réponse.
  */
 export type WebActivity =
-  | { kind: 'search'; query: string; results: WebSource[]; failed?: boolean }
-  | { kind: 'read'; url: string; failed?: boolean }
+  | { kind: 'search'; query: string; results: WebSource[]; failed?: boolean; pending?: boolean }
+  | { kind: 'read'; url: string; failed?: boolean; pending?: boolean }
 
 export interface ConversationEntry {
   id: string

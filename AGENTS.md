@@ -7296,3 +7296,22 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `scripts/test-chat-conversations-ui.mjs` (replié par défaut, au-dessus de la réponse, dépliable, liens non
   soulignés qui s'ouvrent dans le navigateur, version en direct) et `scripts/test-window-chrome-ui.mjs` (plus
   de bouton Widget). Chacun vérifié en réintroduisant son défaut.
+
+- **Étape 274 (v0.32.8), bloc des recherches web pendant la réponse (Léo : « il est mal fait », capture : le bloc
+  posé à CÔTÉ de « Recherche sur internet… », écrasé sur trois lignes à droite).** Trois défauts :
+  1. **Mise en page** : la règle `display: flex; flex-direction: row` qui aligne « … Jaris réfléchit » était
+     posée sur TOUT le corps du message en cours ; le bloc ajouté à l'étape 273 y est devenu un élément de la
+     rangée, à côté de l'indicateur. La rangée est maintenant un élément à part (`.chat-panel__thinking`), le
+     bloc au-dessus. **Leçon générale (même famille que l'étape 101) : ajouter un élément dans un conteneur
+     existant hérite de SA mise en page — vérifier comment le parent dispose ses enfants avant d'y glisser un
+     nouvel élément, surtout un état transitoire qu'on ne voit qu'en usage réel (ici : pendant une recherche).**
+     Mes captures de l'étape 273 ne montraient que la réponse terminée, jamais l'état « en cours ».
+  2. **Doublon** : le bloc disait la recherche, l'indicateur aussi (« Recherche sur internet… »). Pendant une
+     recherche, seul le bloc reste ; une fois terminée, l'indicateur revient en dessous (« Jaris réfléchit… »).
+  3. **Trop tard** : la recherche n'était signalée qu'avec ses résultats. Elle l'est maintenant dès son début
+     (`pending`, la question seule), puis terminée ; la version terminée REMPLACE celle en cours
+     (`mergeWebActivity`) au lieu de s'ajouter à côté, et seule elle est gardée avec la réponse.
+  Régression : `scripts/test-chat-conversations-ui.mjs` (bloc AU-DESSUS de l'indicateur, texte sur une ligne,
+  pas d'indicateur pendant la recherche, une seule recherche après sa fin), `scripts/test-web-activity.mjs`
+  (fusion en cours → terminée, signalement au début puis à la fin), `scripts/test-chat-session-restore.mjs`.
+  Vérifié en remettant l'ancienne règle CSS et l'indicateur pendant la recherche : le test échoue bien.

@@ -167,7 +167,7 @@ class ChatSession {
     // Étape 273 : gardé avec la réponse (affichage et historique), et relayé en direct.
     const web: WebActivity[] = []
     const relayWeb = (activity: WebActivity): void => {
-      web.push(activity)
+      if (!activity.pending) web.push(activity)
       onWebActivity?.(activity)
     }
     try {

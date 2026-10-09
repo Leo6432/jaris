@@ -39,6 +39,7 @@ function setup(pastEntries) {
         }
         // Étape 273 : rest[11] = onWebActivity, appelé par l'outil search_web.
         if (prompt.startsWith('météo')) {
+          rest[11]?.({ kind: 'search', query: 'météo Rennes', results: [], pending: true })
           rest[11]?.({ kind: 'search', query: 'météo Rennes', results: [{ title: 'Météo Rennes', url: 'https://meteofrance.com/rennes' }] })
           return 'Il fera 17 °C.'
         }
@@ -240,7 +241,8 @@ test('recherches web (étape 273) : jointes à la réponse, relayées en direct,
   const live = []
   const reply = await chatSession.send('météo demain', () => {}, () => {}, undefined, undefined, undefined, undefined, 'chat', (a) => live.push(a))
   const expected = [{ kind: 'search', query: 'météo Rennes', results: [{ title: 'Météo Rennes', url: 'https://meteofrance.com/rennes' }] }]
-  assert.equal(JSON.stringify(live), JSON.stringify(expected), 'pas relayé en direct')
+  // En direct : le début (en cours) puis la fin ; avec la réponse : seulement la version terminée.
+  assert.equal(JSON.stringify(live), JSON.stringify([{ kind: 'search', query: 'météo Rennes', results: [], pending: true }, ...expected]), 'pas relayé en direct')
   assert.equal(JSON.stringify(reply.web), JSON.stringify(expected), 'pas joint à la réponse')
   assert.equal(JSON.stringify(appended[0].web), JSON.stringify(expected), 'pas enregistré')
 

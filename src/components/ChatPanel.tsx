@@ -11,6 +11,7 @@ import type { ImageAttachment } from '@/lib/imageAttachment'
 import type { ChatMessage, ConversationList, WebActivity } from '../../shared/ipc'
 import ModelEffortPicker from './ModelEffortPicker'
 import WebActivityBlock from './WebActivityBlock'
+import { mergeWebActivity } from '@/lib/webActivity'
 import { DownloadIcon } from './icons'
 
 /**
@@ -107,14 +108,18 @@ export default function ChatPanel(): JSX.Element {
     return window.jaris.onChatStreamToken((delta) => setStreamingReply((prev) => prev + delta))
   }, [])
   useEffect(() => {
-    return window.jaris.onChatWebActivity((activity) => setLiveWeb((prev) => [...prev, activity]))
+    return window.jaris.onChatWebActivity((activity) => {
+      setLiveWeb((prev) => mergeWebActivity(prev, activity))
+      // Étape 274 : recherche terminée — « Recherche sur internet… » n'est plus vrai, Jaris lit les résultats.
+      if (!activity.pending) setProgress(null)
+    })
   }, [])
 
   // Toujours coller au dernier message : pendant que Jaris réfléchit, l'indicateur en bas doit rester
-  // visible sans avoir à faire défiler à la main.
+  // visible sans avoir à faire défiler à la main. Une recherche web qui commence ou se termine aussi (étape 274).
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messages, sending, streamingReply])
+  }, [messages, sending, streamingReply, liveWeb])
 
   /** `text` : une suggestion de l'écran vide, envoyée telle quelle sans passer par le champ. */
   const send = async (text?: string): Promise<void> => {
@@ -220,18 +225,23 @@ export default function ChatPanel(): JSX.Element {
             <div className={`chat-panel__message chat-panel__message--${streamingReply ? 'assistant' : 'pending'}`}>
               <img className="chat-panel__avatar" src={logo} alt="" />
               <div className="chat-panel__body">
-                <WebActivityBlock items={liveWeb} running />
+                {/* Étape 274 (Léo : « il est mal fait », capture du bloc collé à côté de « Recherche sur internet… ») :
+                    le bloc au-dessus, l'indicateur en dessous ; et pas d'indicateur pendant qu'une recherche est en
+                    cours, le bloc dit déjà ce qui est cherché. */}
+                <WebActivityBlock items={liveWeb} />
                 {streamingReply ? (
                   renderFormattedText(streamingReply)
                 ) : (
-                  <>
-                    <span className="chat-panel__typing" aria-hidden="true">
-                      <span />
-                      <span />
-                      <span />
-                    </span>
-                    <span className="chat-panel__progress">{progress ?? 'Jaris réfléchit…'}</span>
-                  </>
+                  !liveWeb[liveWeb.length - 1]?.pending && (
+                    <div className="chat-panel__thinking">
+                      <span className="chat-panel__typing" aria-hidden="true">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                      <span className="chat-panel__progress">{progress ?? 'Jaris réfléchit…'}</span>
+                    </div>
+                  )
                 )}
               </div>
             </div>

@@ -4542,7 +4542,13 @@ textarea::placeholder {
   font-style: normal;
 }
 
+/* Étape 274 : la rangée « … Jaris réfléchit » est un élément à part. Posée sur tout le corps du message, elle
+   alignait aussi le bloc des recherches web à CÔTÉ d'elle, et le texte s'écrasait sur trois lignes à droite. */
 .chat-panel__message--pending .chat-panel__body {
+  min-height: 24px;
+}
+
+.chat-panel__thinking {
   display: flex;
   flex-direction: row;
   align-items: center;

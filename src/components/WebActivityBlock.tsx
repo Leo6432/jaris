@@ -57,14 +57,16 @@ function Source({ url, title }: { url: string; title: string }): JSX.Element {
  * Étape 273, façon Claude : une ligne repliée (« A cherché sur le web ») avec une petite flèche ; dépliée, chaque
  * recherche avec ses résultats, et chaque page lue. Repliée par défaut : la réponse reste la première chose lue.
  */
-export default function WebActivityBlock({ items, running = false }: { items: WebActivity[]; running?: boolean }): JSX.Element | null {
+export default function WebActivityBlock({ items }: { items: WebActivity[] }): JSX.Element | null {
   const [open, setOpen] = useState(false)
   if (items.length === 0) return null
+  // Étape 274 : la ligne « respire » tant que la dernière recherche (ou page) est en cours.
+  const running = !!items[items.length - 1].pending
   return (
     <div className={`web-activity${running ? ' web-activity--running' : ''}`}>
       <button type="button" className="web-activity__toggle" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
         <SearchIcon />
-        <span className="web-activity__label">{webActivityLabel(items, running)}</span>
+        <span className="web-activity__label">{webActivityLabel(items)}</span>
         <Chevron open={open} />
       </button>
       {open && (
@@ -76,7 +78,13 @@ export default function WebActivityBlock({ items, running = false }: { items: We
                   <SearchIcon />
                   <span className="web-activity__query">{item.query}</span>
                   <span className="web-activity__count">
-                    {item.failed ? 'échec' : item.results.length === 0 ? 'aucun résultat' : `${item.results.length} résultat${item.results.length > 1 ? 's' : ''}`}
+                    {item.pending
+                      ? 'en cours…'
+                      : item.failed
+                        ? 'échec'
+                        : item.results.length === 0
+                          ? 'aucun résultat'
+                          : `${item.results.length} résultat${item.results.length > 1 ? 's' : ''}`}
                   </span>
                 </div>
                 {item.results.length > 0 && (
@@ -92,7 +100,7 @@ export default function WebActivityBlock({ items, running = false }: { items: We
                 <div className="web-activity__step-head">
                   <PageIcon />
                   <span className="web-activity__query">Page lue</span>
-                  {item.failed && <span className="web-activity__count">échec</span>}
+                  {(item.pending || item.failed) && <span className="web-activity__count">{item.pending ? 'en cours…' : 'échec'}</span>}
                 </div>
                 <div className="web-activity__sources">
                   <Source url={item.url} title={pageAddress(item.url)} />

@@ -393,15 +393,34 @@ test('recherches web façon Claude (étape 273) : une ligne repliée avec sa fl�
   })
 })
 
-test('recherche web en direct : pendant la réponse, le bloc dit ce qui est cherché', options, async () => {
+test('recherche web en direct : le bloc AU-DESSUS de l’indicateur, et ce qui est cherché dès le début', options, async () => {
+  // Étape 274 (Léo : « il est mal fait », capture) : le bloc était posé à CÔTÉ de « Recherche sur internet… », qui
+  // s'écrasait sur trois lignes à droite et répétait la même chose.
   await withPage(async (page) => {
     await page.fill('.composer__input', 'longue histoire sur Rennes')
     await page.click('.composer__send')
     await page.waitForSelector('.composer__send--stop')
-    await page.evaluate(() => window.__web({ kind: 'search', query: 'histoire de Rennes', results: [] }))
-    const live = page.locator('.web-activity--running .web-activity__toggle')
+    // Début de la recherche : le bloc dit ce qui est cherché, sans indicateur qui le répète.
+    await page.evaluate(() => window.__web({ kind: 'search', query: 'histoire de Rennes', results: [], pending: true }))
+    const live = page.locator('.chat-panel__message--pending .web-activity--running .web-activity__toggle')
     await live.waitFor()
     assert.match(await live.textContent(), /Recherche : « histoire de Rennes »/)
+    assert.equal(await page.locator('.chat-panel__thinking').count(), 0, 'l’indicateur répète la recherche en cours')
+    // Fin de la recherche : résumé, puis l'indicateur EN DESSOUS du bloc, sur une ligne.
+    await page.evaluate(() => window.__web({ kind: 'search', query: 'histoire de Rennes', results: [{ title: 'Rennes', url: 'https://rennes.fr' }] }))
+    await page.waitForSelector('.chat-panel__thinking')
+    assert.equal(await page.locator('.chat-panel__message--pending .web-activity__toggle').count(), 1, 'deux blocs dans la réponse en cours')
+    await page.locator('.chat-panel__message--pending .web-activity__toggle').click()
+    assert.equal(await page.locator('.chat-panel__message--pending .web-activity__step').count(), 1, 'la recherche terminée s’est ajoutée à côté de celle en cours')
+    assert.match(await page.textContent('.chat-panel__message--pending .web-activity__toggle'), /A cherché sur le web/)
+    const layout = await page.evaluate(() => {
+      const block = document.querySelector('.chat-panel__message--pending .web-activity').getBoundingClientRect()
+      const row = document.querySelector('.chat-panel__thinking').getBoundingClientRect()
+      const text = document.querySelector('.chat-panel__progress').getBoundingClientRect()
+      return { below: row.top >= block.bottom - 1, oneLine: text.height < 30 }
+    })
+    assert.ok(layout.below, 'l’indicateur n’est pas sous le bloc')
+    assert.ok(layout.oneLine, 'le texte de l’indicateur est écrasé sur plusieurs lignes')
     await page.click('.composer__send--stop')
     await page.waitForSelector('.chat-panel__stopped')
     assert.equal(await page.locator('.web-activity--running').count(), 0, 'le bloc « en direct » reste après la réponse')

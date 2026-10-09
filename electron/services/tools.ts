@@ -339,8 +339,11 @@ export function createToolExecutor(
         return lookAtScreen(String(args.question ?? ''), visionModel)
       // Étape 273 : chaque recherche et chaque page lue sont aussi signalées au Chat (bloc dépliable), en
       // échec compris — une recherche qui n'a rien donné doit se voir autant qu'une recherche réussie.
+      // Étape 274 : une première fois dès le début (`pending`), pour que la question cherchée s'affiche tout de
+      // suite plutôt qu'après les résultats.
       case 'search_web': {
         const query = String(args.query ?? '')
+        onWebActivity?.({ kind: 'search', query, results: [], pending: true })
         try {
           const { text, sources } = await searchWebDetailed(query)
           onWebActivity?.({ kind: 'search', query, results: sources })
@@ -352,6 +355,7 @@ export function createToolExecutor(
       }
       case 'read_web_page': {
         const url = String(args.url ?? '')
+        onWebActivity?.({ kind: 'read', url, pending: true })
         try {
           const text = await readWebPage(url)
           // Une adresse refusée (pas http/https) revient en texte, pas en erreur : comptée comme un échec.

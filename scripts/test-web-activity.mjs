@@ -19,21 +19,32 @@ function load(path, modules = {}) {
   return exports
 }
 
-const { webActivityLabel, sourceDomain, isWebLink, pageAddress } = load('../src/lib/webActivity.ts')
+const { webActivityLabel, mergeWebActivity, sourceDomain, isWebLink, pageAddress } = load('../src/lib/webActivity.ts')
 
 const search = (query, n = 2) => ({ kind: 'search', query, results: Array.from({ length: n }, (_, i) => ({ title: `R${i}`, url: `https://ex${i}.fr/` })) })
 
 test('libellé replié : ce qui a été fait, au singulier comme au pluriel', () => {
-  assert.equal(webActivityLabel([search('météo')], false), 'A cherché sur le web')
-  assert.equal(webActivityLabel([search('a'), search('b')], false), 'A fait 2 recherches sur le web')
-  assert.equal(webActivityLabel([search('a'), search('b'), { kind: 'read', url: 'https://x.fr' }], false), 'A fait 2 recherches sur le web et lu 1 page')
-  assert.equal(webActivityLabel([{ kind: 'read', url: 'https://x.fr' }, { kind: 'read', url: 'https://y.fr' }], false), 'A lu 2 pages')
+  assert.equal(webActivityLabel([search('météo')]), 'A cherché sur le web')
+  assert.equal(webActivityLabel([search('a'), search('b')]), 'A fait 2 recherches sur le web')
+  assert.equal(webActivityLabel([search('a'), search('b'), { kind: 'read', url: 'https://x.fr' }]), 'A fait 2 recherches sur le web et lu 1 page')
+  assert.equal(webActivityLabel([{ kind: 'read', url: 'https://x.fr' }, { kind: 'read', url: 'https://y.fr' }]), 'A lu 2 pages')
 })
 
-test('libellé pendant la réponse : la dernière recherche ou page en cours', () => {
-  assert.equal(webActivityLabel([], true), 'Recherche sur le web…')
-  assert.equal(webActivityLabel([search('a'), search('prix du pain')], true), 'Recherche : « prix du pain »')
-  assert.equal(webActivityLabel([{ kind: 'read', url: 'https://www.meteofrance.com/rennes' }], true), 'Lecture de meteofrance.com')
+test('libellé pendant une recherche en cours (étape 274) : ce qui est cherché, dès le début', () => {
+  assert.equal(webActivityLabel([search('a'), { kind: 'search', query: 'prix du pain', results: [], pending: true }]), 'Recherche : « prix du pain »')
+  assert.equal(webActivityLabel([{ kind: 'read', url: 'https://www.meteofrance.com/rennes', pending: true }]), 'Lecture de meteofrance.com')
+})
+
+test('une recherche terminée REMPLACE sa version en cours, au lieu de s’ajouter à côté (étape 274)', () => {
+  const pending = { kind: 'search', query: 'prix du pain', results: [], pending: true }
+  const done = { kind: 'search', query: 'prix du pain', results: [{ title: 'T', url: 'https://t.fr' }] }
+  const first = search('météo')
+  assert.equal(JSON.stringify(mergeWebActivity(mergeWebActivity([first], pending), done)), JSON.stringify([first, done]))
+  // Une autre recherche, elle, s'ajoute.
+  assert.equal(mergeWebActivity([first], done).length, 2)
+  // Une page lue remplace sa propre lecture en cours, pas une recherche.
+  const reading = { kind: 'read', url: 'https://t.fr', pending: true }
+  assert.equal(JSON.stringify(mergeWebActivity([pending, reading], { kind: 'read', url: 'https://t.fr' })), JSON.stringify([pending, { kind: 'read', url: 'https://t.fr' }]))
 })
 
 test('adresses : le site seul, seules les adresses web deviennent des liens', () => {
@@ -88,9 +99,14 @@ test('l’outil signale chaque recherche et page lue au Chat, échecs compris', 
   assert.equal(
     JSON.stringify(seen),
     JSON.stringify([
+      // Étape 274 : chacune signalée dès son début, puis terminée.
+      { kind: 'search', query: 'météo', results: [], pending: true },
       { kind: 'search', query: 'météo', results: [{ title: 'T', url: 'https://t.fr' }] },
+      { kind: 'search', query: 'panne', results: [], pending: true },
       { kind: 'search', query: 'panne', results: [], failed: true },
+      { kind: 'read', url: 'https://t.fr/page', pending: true },
       { kind: 'read', url: 'https://t.fr/page' },
+      { kind: 'read', url: 'ftp://t.fr', pending: true },
       { kind: 'read', url: 'ftp://t.fr', failed: true }
     ])
   )
