@@ -32,12 +32,12 @@ type AppMode = 'voice' | 'chat' | 'code' | 'image' | 'video'
 
 /**
  * Design v2 (maquette « Jaris v2.dc.html », style Windows 11) : un rail d'icônes à gauche, libellé court sous
- * chaque icône, dans cet ordre. `label` est le nom affiché dans le rail, `title` celui de l'en-tête, `panel` le
+ * chaque icône, dans cet ordre — l'Agent vocal en premier depuis l'étape 270 (Léo : « c'est le premier »). `label` est le nom affiché dans le rail, `title` celui de l'en-tête, `panel` le
  * titre de la colonne de liste à côté du rail (absente en Vocal : rien à lister).
  */
 const MODES: Array<{ id: AppMode; label: string; title: string; panel?: string; icon: string }> = [
-  { id: 'chat', label: 'Chat', title: 'Chat', panel: 'Conversations', icon: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z' },
   { id: 'voice', label: 'Vocal', title: 'Agent vocal', icon: 'M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0zM5 11a7 7 0 0 0 14 0M12 18v3' },
+  { id: 'chat', label: 'Chat', title: 'Chat', panel: 'Conversations', icon: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z' },
   { id: 'code', label: 'Code', title: 'Code', panel: 'Projets', icon: 'M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16' },
   { id: 'image', label: 'Image', title: 'Image', panel: 'Images', icon: 'M4 5h16v14H4zM4 16l5-5 4 4 2-2 5 5M15.5 9.5h.01' },
   { id: 'video', label: 'Vidéo', title: 'Vidéo', panel: 'Vidéos', icon: 'M3 6h13v12H3zM16 10l5-3v10l-5-3' }
@@ -162,29 +162,20 @@ export default function App(): JSX.Element {
   const [recentsSlot, setRecentsSlot] = useState<HTMLElement | null>(null)
 
   // Étape 265 : sur une fenêtre étroite, la liste se pose PAR-DESSUS le contenu (index.css) au lieu de
-  // l'écraser à 160 px de large ; choisir une conversation la referme donc, comme un menu. Écouté sur le DOM :
-  // la liste y arrive par portail, et les clics d'un portail ne remontent pas par cet arbre-ci dans React.
-  // Étape 269 : la colonne peut montrer la liste d'un écran qui n'est pas affiché (les conversations depuis
-  // l'Agent vocal, Options ou le Cerveau) — choisir un élément, ou en créer un, ouvre alors cet écran, sinon
-  // le clic ne changerait rien de visible.
-  const listModeRef = useRef<AppMode>('chat')
+  // l'écraser à 160 px de large ; choisir une conversation (ou une section d'Options) la referme donc, comme un
+  // menu. Écouté sur le DOM : la liste y arrive par portail, et les clics d'un portail ne remontent pas par cet
+  // arbre-ci dans React.
   useEffect(() => {
-    const slots = [recentsSlot, newSlot].filter((slot): slot is HTMLElement => !!slot)
-    if (slots.length === 0) return
+    if (!recentsSlot) return
     const onClick = (event: MouseEvent): void => {
       const target = event.target as HTMLElement | null
-      if (target?.closest('.workspace__item, .workspace__new')) {
-        setAppMode(listModeRef.current)
-        setOptionsShown(false)
-        setMemoryGraph(null)
-      } else if (!target?.closest('.options-menu__tab')) {
-        return
+      if (target?.closest('.workspace__item, .options-menu__tab') && window.matchMedia?.('(max-width: 700px)').matches) {
+        setPanelOpen(false)
       }
-      if (window.matchMedia?.('(max-width: 700px)').matches) setPanelOpen(false)
     }
-    slots.forEach((slot) => slot.addEventListener('click', onClick))
-    return () => slots.forEach((slot) => slot.removeEventListener('click', onClick))
-  }, [recentsSlot, newSlot])
+    recentsSlot.addEventListener('click', onClick)
+    return () => recentsSlot.removeEventListener('click', onClick)
+  }, [recentsSlot])
   const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null)
   const [appVersion, setAppVersion] = useState<string | null>(null)
 
@@ -531,13 +522,11 @@ export default function App(): JSX.Element {
     // reste monté quand la barre se replie afin que Workspace conserve ses emplacements de portail.
     // Un écran du rail qui n'est pas un mode (Options, Cerveau) remplace le contenu sans changer le mode réel.
     const screenShown = optionsShown || !!memoryGraph
-    // Étape 269 : la liste montrée dans la colonne — celle de l'écran courant, ou celle du Chat pour l'Agent
-    // vocal, qui continue la conversation active (étape 96). Options et Cerveau ne changent pas `appMode` :
-    // ils gardent la liste de l'écran d'où l'on vient.
-    // Options, lui, y met ses propres sections (comme les Paramètres de Codex) : aucun écran n'y met sa liste.
-    const listMode: AppMode | null = optionsShown ? null : currentMode.panel ? appMode : 'chat'
-    const listTitle = optionsShown ? 'Options' : (MODES.find((mode) => mode.id === listMode) ?? MODES[0]).panel
-    listModeRef.current = listMode ?? appMode
+    // La colonne de liste ne montre que la liste de l'écran affiché, ou les sections d'Options. Étape 270 (Léo :
+    // « pourquoi j'ai une conversation dans le mode vocal, faut pas ça à gauche ») : sans liste à lui (Agent
+    // vocal, Cerveau), l'écran n'a pas de colonne — la barre d'icônes, elle, ne bouge pas.
+    const listTitle = optionsShown ? 'Options' : memoryGraph ? undefined : currentMode.panel
+    const hasList = !!listTitle
     const selectMode = (id: AppMode): void => {
       setAppMode(id)
       setOptionsShown(false)
@@ -592,7 +581,7 @@ export default function App(): JSX.Element {
           </nav>
 
           {/* Toujours montée, même repliée : Workspace y garde ses emplacements de portail. */}
-          <aside className="app-sidebar" aria-label={listTitle} hidden={!panelOpen}>
+          <aside className="app-sidebar" aria-label={listTitle} hidden={!panelOpen || !hasList}>
             <div className="app-sidebar__head">
               <span className="app-sidebar__title">{listTitle}</span>
               <button
@@ -616,7 +605,7 @@ export default function App(): JSX.Element {
 
           <main className="app-main">
             <header className="app-header">
-              {!panelOpen && (
+              {!panelOpen && hasList && (
                 <button
                   className="panel__icon-button"
                   onClick={() => setPanelOpen(true)}
@@ -743,22 +732,22 @@ export default function App(): JSX.Element {
             )}
 
             {/* Étape 202 : cachés, jamais détruits, en changeant d'onglet — une génération en cours reste visible au retour. */}
-            <KeepAlive active={!screenShown && appMode === 'chat'} ownsSidebar={listMode === 'chat'}>
+            <KeepAlive active={!screenShown && appMode === 'chat'}>
               <ErrorBoundary label="Le Chat">
                 <ChatPanel />
               </ErrorBoundary>
             </KeepAlive>
-            <KeepAlive active={!screenShown && appMode === 'code'} ownsSidebar={listMode === 'code'}>
+            <KeepAlive active={!screenShown && appMode === 'code'}>
               <ErrorBoundary label="Le mode Code">
                 <CodePanel />
               </ErrorBoundary>
             </KeepAlive>
-            <KeepAlive active={!screenShown && appMode === 'image'} ownsSidebar={listMode === 'image'}>
+            <KeepAlive active={!screenShown && appMode === 'image'}>
               <ErrorBoundary label="Le mode Image">
                 <ImagePanel />
               </ErrorBoundary>
             </KeepAlive>
-            <KeepAlive active={!screenShown && appMode === 'video'} ownsSidebar={listMode === 'video'}>
+            <KeepAlive active={!screenShown && appMode === 'video'}>
               <ErrorBoundary label="Le mode Vidéo">
                 <VideoPanel />
               </ErrorBoundary>

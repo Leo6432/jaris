@@ -46,7 +46,6 @@ const known = {
   getNewModels: async () => [],
   getAppVersion: async () => '0.0.0',
   listConversations: async () => ({ conversations: conv, activeId: 'b' }),
-  selectConversation: async (id) => ({ conversations: conv, activeId: id }),
   getChatHistory: async () => [{ role: 'user', content: 'Bonjour' }, { role: 'assistant', content: 'Bonjour Léo !' }],
   getGeneratedApps: async () => [{ path: '/a', label: 'Minuteur de cuisine', timestamp: Date.now() }],
   listGeneratedImages: async () => [],
@@ -244,55 +243,49 @@ test('style ChatGPT : aucune couleur vive dans la fenêtre (plus de violet ni de
   }
 })
 
-test('façon Codex : la barre d’icônes et la liste sont deux colonnes, identiques sur TOUS les écrans', options, async () => {
+test('façon Codex : la barre d’icônes et la liste sont deux colonnes ; pas de liste en Vocal ni dans le Cerveau', options, async () => {
   // Étape 269 (Léo, capture de Codex : « fais comme ça, ne mets pas les conversations dans la même barre ») :
-  // les modes en icônes dans une colonne fixe, la liste (conversations…) dans une colonne à part, à côté. Et
-  // rien ne change de forme en passant d'un écran à l'autre (étape 268 : la barre se repliait sur Vocal).
+  // les modes en icônes dans une colonne fixe, la liste (conversations…) dans une colonne à part, à côté.
+  // Étape 270 (Léo : « pourquoi j'ai une conversation dans le mode vocal, faut pas ça à gauche », « mets l'icône
+  // vocal tout en haut, c'est le premier ») : un écran sans liste à lui n'a pas de colonne de liste.
   await withPage(async (page) => {
     await page.waitForSelector('.rail__item')
     const rail0 = await page.locator('.app-rail').boundingBox()
-    const list0 = await page.locator('.app-sidebar').boundingBox()
     assert.ok(rail0.width <= 64, `barre d’icônes trop large : ${rail0.width}px`)
     assert.equal(await page.locator('.app-rail .rail__item').count(), 8, 'les 5 modes et les 3 outils sont dans la barre d’icônes')
+    assert.equal(await page.locator('.app-rail .rail__item').first().getAttribute('title'), 'Agent vocal', 'Vocal n’est pas en premier')
     assert.equal(await page.locator('.app-rail .workspace__item').count(), 0, 'des conversations sont dans la barre d’icônes')
-    for (const label of ['Chat', 'Vocal', 'Code', 'Image', 'Options', 'Cerveau', 'Chat']) {
+    await page.click('.rail__item:has-text("Chat")')
+    const list0 = await page.locator('.app-sidebar').boundingBox()
+    assert.ok(list0, 'pas de liste dans le Chat')
+    for (const [label, listed] of [['Vocal', false], ['Chat', true], ['Code', true], ['Image', true], ['Options', true], ['Cerveau', false], ['Vocal', false], ['Chat', true]]) {
       await page.click(`.rail__item:has-text("${label}")`)
       await page.waitForTimeout(250)
       assert.deepEqual(await page.locator('.app-rail').boundingBox(), rail0, `barre d’icônes changée sur l’écran ${label}`)
-      const list = await page.locator('.app-sidebar').boundingBox()
-      assert.ok(list, `liste repliée toute seule sur l’écran ${label}`)
-      assert.deepEqual([list.x, list.width], [list0.x, list0.width], `liste déplacée ou redimensionnée sur l’écran ${label}`)
+      if (listed) {
+        const list = await page.locator('.app-sidebar').boundingBox()
+        assert.ok(list, `liste repliée toute seule sur l’écran ${label}`)
+        assert.deepEqual([list.x, list.width], [list0.x, list0.width], `liste déplacée ou redimensionnée sur l’écran ${label}`)
+      } else {
+        assert.equal(await page.isVisible('.app-sidebar'), false, `une liste s’affiche à gauche sur l’écran ${label}`)
+        // Et aucun bouton pour « afficher la liste » d'un écran qui n'en a pas.
+        assert.equal(await page.locator('.app-header .panel__icon-button').count(), 0, `bouton de liste sur l’écran ${label}`)
+      }
     }
-    // L'Agent vocal continue la conversation active : la colonne montre les conversations, pas un vide.
-    await page.click('.rail__item:has-text("Vocal")')
-    assert.equal((await page.textContent('.app-sidebar__title')).trim(), 'Conversations')
-    assert.ok((await page.locator('.app-sidebar .workspace__item').count()) >= 2)
-    // Options y met ses sections, au lieu d'une seconde colonne dans la page qui écrasait les réglages.
+    // Options met ses sections dans la colonne, au lieu d'une seconde colonne dans la page qui écrasait les réglages.
     await page.click('.rail__item:has-text("Options")')
     assert.equal((await page.textContent('.app-sidebar__title')).trim(), 'Options')
     assert.equal(await page.locator('.app-sidebar .options-menu__tab').count(), 5)
     assert.equal(await page.locator('.options-page .options-page__navigation').count(), 0, 'les sections sont aussi dans la page')
     await page.click('.app-sidebar .options-menu__tab:has-text("Modèles")')
     assert.match(await page.textContent('.options-page__tab-header h3'), /Modèles/)
-    // C'est Léo qui replie la liste, depuis n'importe quel écran ; la barre d'icônes, elle, ne bouge pas.
-    await page.click('.rail__item:has-text("Vocal")')
+    // C'est Léo qui replie la liste ; la barre d'icônes, elle, ne bouge pas.
+    await page.click('.rail__item:has-text("Chat")')
     await page.click('.app-sidebar__collapse')
     assert.equal(await page.isVisible('.app-sidebar'), false)
     assert.deepEqual(await page.locator('.app-rail').boundingBox(), rail0)
     await page.click('.app-header .panel__icon-button')
     assert.equal(await page.isVisible('.app-sidebar'), true)
-  })
-})
-
-test('depuis l’Agent vocal, choisir une conversation de la liste l’ouvre dans le Chat', options, async () => {
-  // Sinon le clic surlignerait la ligne sans rien changer de visible.
-  await withPage(async (page) => {
-    await page.waitForSelector('.rail__item')
-    await page.click('.rail__item:has-text("Vocal")')
-    await page.click('.app-sidebar .workspace__item:has-text("Recette")')
-    await page.waitForSelector('.chat-panel', { state: 'visible' })
-    assert.match(await page.textContent('.app-header__title'), /Recette/)
-    assert.equal(await page.locator('.rail__item--active').getAttribute('title'), 'Chat')
   })
 })
 

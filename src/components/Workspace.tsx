@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { DeleteIcon } from '@/components/icons'
-import { useScreenActive, useShellSlots, useSidebarOwner } from '@/lib/shellContext'
+import { useScreenActive, useShellSlots } from '@/lib/shellContext'
 
 /**
  * Liste d'éléments + zone de travail, façon Claude/ChatGPT (étape 97, demande de Léo : "les conversation
@@ -63,9 +63,6 @@ export default function Workspace({
 }: WorkspaceProps): JSX.Element {
   const { newSlot, recentsSlot, titleSlot } = useShellSlots()
   const active = useScreenActive()
-  // La liste va dans la colonne quand cet écran en est le propriétaire, même caché (étape 269) ; le titre de
-  // l'en-tête, lui, seulement quand l'écran est affiché.
-  const ownsSidebar = useSidebarOwner()
   /** Élément dont la ligne demande confirmation avant suppression (une seule à la fois). */
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const activeItem = items.find((item) => item.id === activeId)
@@ -147,8 +144,8 @@ export default function Workspace({
         </div>
       ) : (
         <>
-          {ownsSidebar && createPortal(newButton, newSlot)}
-          {ownsSidebar && createPortal(recents, recentsSlot)}
+          {active && createPortal(newButton, newSlot)}
+          {active && createPortal(recents, recentsSlot)}
         </>
       )}
       {active && titleSlot && createPortal(activeItem?.title ?? label, titleSlot)}

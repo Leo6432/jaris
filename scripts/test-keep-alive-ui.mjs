@@ -153,8 +153,7 @@ test('App.tsx garde Chat, Code et Image en vie au lieu de les détruire', () => 
     // Étape 234 : un ErrorBoundary peut s'intercaler (un écran qui plante ne vide plus tout Jaris).
     assert.match(
       app,
-      // Étape 269 : `ownsSidebar` peut suivre (la liste de cet écran montrée dans la colonne).
-      new RegExp(`<KeepAlive active=\\{(?:!(?:optionsShown|screenShown) && )?appMode === '\\w+'\\}(?: ownsSidebar=\\{[^}]+\\})?>\\s*(?:<ErrorBoundary [^>]*>\\s*)?<${panel} />`),
+      new RegExp(`<KeepAlive active=\\{(?:!(?:optionsShown|screenShown) && )?appMode === '\\w+'\\}>\\s*(?:<ErrorBoundary [^>]*>\\s*)?<${panel} />`),
       `${panel} dans KeepAlive`
     )
   }

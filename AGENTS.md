@@ -7196,3 +7196,19 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Options n'a plus de seconde colonne de sections ; repli et réouverture ; une conversation choisie depuis Vocal
   s'ouvre dans le Chat). Vérifiés en réintroduisant les défauts (colonne vide en Vocal, clic sans effet, colonne
   masquée sur Options).
+
+- **Étape 270 (v0.32.4), pas de liste à gauche en Vocal, et Vocal en tête de la barre d'icônes (Léo : « pourquoi
+  j'ai une conversation dans le mode vocal, faut pas ça à gauche » ; « mets l'icône vocal tout en haut, c'est le
+  premier »).** Annule les décisions 1 et 2 de l'étape 269 : j'avais fait montrer les conversations du Chat à
+  l'Agent vocal pour que la colonne de liste ne change jamais de forme (la plainte de l'étape 268). Mais cette
+  plainte visait la barre qui perdait ses NOMS en se repliant, pas la liste : depuis que les modes sont une
+  barre d'icônes qui ne bouge jamais, un écran sans liste à lui (Agent vocal, Cerveau) n'a simplement pas de
+  colonne de liste, ni de bouton pour l'afficher. **Leçon générale : avant d'étendre un correctif à un cas
+  voisin, revérifier ce que la plainte d'origine visait vraiment — ici les noms des modes qui disparaissaient,
+  pas la liste elle-même ; deux plaintes proches ne demandent pas forcément la même règle.** Le mécanisme ajouté
+  pour ça (`ownsSidebar` dans KeepAlive, `SidebarOwnerContext`, ouverture de l'écran au clic sur un élément
+  d'une liste d'un autre écran) n'a plus d'usage : retiré, pas laissé en code mort. Options garde ses sections
+  dans la colonne. Ordre de la barre : Vocal, Chat, Code, Image, Vidéo.
+  Régression : `scripts/test-window-chrome-ui.mjs` (Vocal en premier ; aucune liste ni bouton de liste en Vocal
+  et dans le Cerveau ; la liste garde sa place sur Chat, Code, Image et Options), vérifié en remettant la liste
+  en Vocal puis Vocal en second.
