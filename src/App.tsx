@@ -544,8 +544,8 @@ export default function App(): JSX.Element {
                 <div className="app__voice-footer">
                   <h1 className="app__status">{STATUS_LABEL[emotion]}</h1>
                   <div className="app__hint">
-                    Dis « Jaris », clique sur le bouton, ou appuie sur + du pavé numérique depuis n'importe
-                    quelle appli (personnalisable dans Options → Voix).
+                    Dis « Jaris », clique sur le bouton ou appuie sur + du pavé numérique, depuis n'importe
+                    quelle appli.
                   </div>
 
                   {(transcript || reply) && (

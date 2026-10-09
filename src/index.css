@@ -5337,3 +5337,28 @@ textarea::placeholder {
   background: var(--hud-panel);
   border-color: var(--hud-line);
 }
+
+/* --- Revue design (v0.30.1) ------------------------------------------------ */
+
+/* Sélecteur de modèle de la barre : discret comme dans la maquette, pas en gras. */
+.effort-picker__model {
+  font-weight: 400;
+  color: inherit;
+}
+
+/* Options : le titre du groupe AU-DESSUS de sa carte (maquette Jaris.dc.html), seule la liste des
+   réglages est une carte — avant, titre et réglages partageaient le même cadre. */
+.options-page .options-menu__group {
+  gap: 8px;
+  padding: 16px 0 0;
+  border: none;
+  background: transparent;
+}
+
+.options-page .options-menu__group-rows {
+  /* De l'air en haut et en bas de la carte (demande de Léo, voir .options-menu__group plus haut). */
+  padding: 4px 18px 18px;
+  border: 1px solid var(--hud-line);
+  border-radius: 16px;
+  background: var(--hud-panel);
+}
