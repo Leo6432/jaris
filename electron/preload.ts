@@ -114,6 +114,7 @@ const api = {
   // sans le préfixe "data:image/...;base64,". Traitée par le modèle de VISION, pas par celui de conversation.
   sendChatMessage: (prompt: string, imageBase64?: string): Promise<ChatMessage> =>
     ipcRenderer.invoke(IPC_CHANNELS.sendChatMessage, prompt, imageBase64),
+  cancelChat: (): void => ipcRenderer.send(IPC_CHANNELS.cancelChat),
   getChatHistory: (): Promise<ChatMessage[]> => ipcRenderer.invoke(IPC_CHANNELS.getChatHistory),
   // Conversations du Chat (étape 96) : les trois canaux qui modifient la liste la renvoient à jour, pour
   // éviter un second aller-retour juste pour la relire.

@@ -201,6 +201,9 @@ test('lecteur : la vidéo prend toute la place à ses proportions, sans cadre au
       clearInterval(timer)
       window.__realVideo = new Uint8Array(await new Blob(chunks).arrayBuffer())
     })
+    // Fenêtre large et basse, comme l'écran de Léo : la vidéo y est plus étroite que la zone, et c'est là que
+    // les boutons se retrouvaient loin d'elle.
+    await page.setViewportSize({ width: 1700, height: 720 })
     await page.click('.video-panel__thumb')
     await page.waitForFunction(() => document.querySelector('video.video-panel__video')?.videoWidth > 0)
     await page.waitForTimeout(100)
@@ -208,13 +211,20 @@ test('lecteur : la vidéo prend toute la place à ses proportions, sans cadre au
       const v = document.querySelector('video.video-panel__video').getBoundingClientRect()
       const stage = document.querySelector('.image-panel__stage').getBoundingClientRect()
       const frame = getComputedStyle(document.querySelector('.image-panel__result'))
-      return { w: v.width, h: v.height, stageW: stage.width, stageH: stage.height, inside: v.left >= stage.left - 1 && v.right <= stage.right + 1 && v.top >= stage.top - 1 && v.bottom <= stage.bottom + 1, frameBorder: frame.borderTopWidth, frameBg: frame.backgroundColor }
+      const actions = document.querySelector('.image-panel__actions').getBoundingClientRect()
+      return { figureH: v.bottom - actions.top, offCenter: Math.abs((v.left + v.right) / 2 - (stage.left + stage.right) / 2), actionsRightGap: Math.abs(actions.right - v.right), actionsAbove: v.top - actions.bottom, w: v.width, h: v.height, stageW: stage.width, stageH: stage.height, inside: v.left >= stage.left - 1 && v.right <= stage.right + 1 && v.top >= stage.top - 1 && v.bottom <= stage.bottom + 1, frameBorder: frame.borderTopWidth, frameBg: frame.backgroundColor }
     })
     assert.ok(m.w > 320 * 1.5, `vidéo restée petite : ${Math.round(m.w)} px de large`)
     assert.ok(Math.abs(m.w / m.h - 16 / 9) < 0.03, `proportions déformées : ${Math.round(m.w)}x${Math.round(m.h)}`)
     assert.ok(m.inside, 'la vidéo dépasse de sa place')
-    assert.ok(m.w >= m.stageW - 2 || m.h >= m.stageH - 2, 'la vidéo ne remplit ni la largeur ni la hauteur disponibles')
+    // La hauteur disponible comprend la rangée de boutons au-dessus de la vidéo (étape 272).
+    assert.ok(m.w >= m.stageW - 2 || m.figureH >= m.stageH - 2, 'la vidéo ne remplit ni la largeur ni la hauteur disponibles')
     assert.equal(m.frameBorder, '0px', 'cadre autour de la vidéo')
+    // Étape 272 (« pourquoi les boutons sont aussi écartés de la vidéo ») : collés à son coin haut-droit.
+    assert.ok(m.w < m.stageW - 100, `cas non couvert : la vidéo remplit déjà toute la largeur (${Math.round(m.w)}/${Math.round(m.stageW)})`)
+    assert.ok(m.offCenter < 2, `vidéo décentrée de ${Math.round(m.offCenter)} px`)
+    assert.ok(m.actionsRightGap < 2, `boutons décalés de ${Math.round(m.actionsRightGap)} px du bord de la vidéo`)
+    assert.ok(m.actionsAbove >= 0 && m.actionsAbove < 16, `boutons à ${Math.round(m.actionsAbove)} px au-dessus de la vidéo`)
     assert.match(m.frameBg, /rgba\(0, 0, 0, 0\)|transparent/, 'fond de cadre autour de la vidéo')
   })
 })

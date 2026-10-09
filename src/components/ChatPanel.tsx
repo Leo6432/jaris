@@ -180,6 +180,9 @@ export default function ChatPanel(): JSX.Element {
                 <img className="chat-panel__message-image" src={message.image} alt="Image envoyée à Jaris" />
               )}
               {renderFormattedText(message.content)}
+              {/* Étape 272 : réponse coupée par « Arrêter » — dit discrètement, pour qu'une phrase tronquée ne
+                  passe pas pour une réponse complète. */}
+              {message.stopped && message.content !== 'Réponse arrêtée.' && <p className="chat-panel__stopped">Réponse arrêtée.</p>}
               {/* Étape 173 : image dessinée par Jaris, sous sa réponse et en grand. */}
               {message.image && message.role === 'assistant' && (
                 <figure className="chat-panel__generated">
@@ -235,6 +238,7 @@ export default function ChatPanel(): JSX.Element {
           submitLabel="Envoyer"
           busyLabel="Envoi…"
           busy={sending}
+          onStop={() => window.jaris.cancelChat()}
           extraActions={<ModelEffortPicker mode="chat" disabled={sending} />}
           attachment={attachment}
           onAttachmentChange={setAttachment}

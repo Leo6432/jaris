@@ -263,28 +263,28 @@ export default function ImagePanel(): JSX.Element {
 
         {selected && (
           <div className="code-panel__result image-panel__result">
-            {/* Étape 271 : même lecteur que la vidéo — plus de titre répété (l'en-tête le donne), les actions
-                seules au-dessus, l'image à toute la place disponible. */}
-            <div className="code-panel__result-bar">
-              <div className="code-panel__result-actions">
-                <button className="image-panel__save" onClick={() => void save()} disabled={!selectedUrl} title="Enregistrer l'image où tu veux">
-                  <DownloadIcon /> {saved ? 'Enregistrée' : 'Enregistrer'}
-                </button>
-                <button onClick={() => void window.jaris.openGeneratedImages(selected.fileName)} title="Montrer l'image dans son dossier">
-                  Ouvrir le dossier
-                </button>
-              </div>
-            </div>
+            {/* Étape 271 : même lecteur que la vidéo — plus de titre répété (l'en-tête le donne), l'image à toute
+                la place disponible ; étape 272 : les actions collées à son coin haut-droit. */}
             <div className="image-panel__stage">
-              {selectedUrl && (
-                <img
-                  className="image-panel__image"
-                  src={selectedUrl}
-                  alt={selected.label}
-                  style={mediaRatioStyle(ratio)}
-                  onLoad={(e) => setRatio(mediaRatio(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight))}
-                />
-              )}
+              <figure className="image-panel__figure">
+                <div className="code-panel__result-actions image-panel__actions">
+                  <button className="image-panel__save" onClick={() => void save()} disabled={!selectedUrl} title="Enregistrer l'image où tu veux">
+                    <DownloadIcon /> {saved ? 'Enregistrée' : 'Enregistrer'}
+                  </button>
+                  <button onClick={() => void window.jaris.openGeneratedImages(selected.fileName)} title="Montrer l'image dans son dossier">
+                    Ouvrir le dossier
+                  </button>
+                </div>
+                {selectedUrl && (
+                  <img
+                    className="image-panel__image"
+                    src={selectedUrl}
+                    alt={selected.label}
+                    style={mediaRatioStyle(ratio)}
+                    onLoad={(e) => setRatio(mediaRatio(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight))}
+                  />
+                )}
+              </figure>
             </div>
           </div>
         )}
@@ -326,6 +326,7 @@ export default function ImagePanel(): JSX.Element {
           submitLabel="Créer l'image"
           busyLabel="Dessin…"
           busy={generating}
+          onStop={stop}
           attachment={null}
           onAttachmentChange={() => {}}
           onError={setError}

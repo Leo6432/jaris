@@ -1431,6 +1431,7 @@ app.whenReady().then(async () => {
       imageBase64
     )
   })
+  ipcMain.on(IPC_CHANNELS.cancelChat, () => chatSession.cancel())
   ipcMain.handle(IPC_CHANNELS.getChatHistory, (): Promise<ChatMessage[]> => chatSession.getVisibleMessages())
 
   // Téléphone (étape 214) : Options → Téléphone.

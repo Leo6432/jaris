@@ -42,6 +42,11 @@ interface ComposerProps {
   /** Libellé pendant le traitement (génération/réponse en cours). */
   busyLabel: string
   busy: boolean
+  /**
+   * Étape 272 (Léo : « pouvoir interrompre l'IA comme sur ChatGPT ») : fourni, le bouton d'envoi devient
+   * « Arrêter » (un carré) tant que `busy` — au même endroit, là où l'œil vient de cliquer.
+   */
+  onStop?: () => void
   attachment: ImageAttachment | null
   onAttachmentChange: (attachment: ImageAttachment | null) => void
   onError: (message: string) => void
@@ -68,6 +73,15 @@ function SendIcon(): JSX.Element {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M12 19V5M6 11l6-6 6 6" />
+    </svg>
+  )
+}
+
+/** Le carré plein du bouton « Arrêter », comme celui de ChatGPT. */
+function StopIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <rect x="5" y="5" width="14" height="14" rx="2.5" fill="currentColor" />
     </svg>
   )
 }
@@ -99,6 +113,7 @@ export default function Composer({
   submitLabel,
   busyLabel,
   busy,
+  onStop,
   attachment,
   onAttachmentChange,
   onError,
@@ -286,16 +301,22 @@ export default function Composer({
           </button>
         )}
 
-        <button
-          type="button"
-          className={`composer__send${busy ? ' composer__send--busy' : ''}`}
-          onClick={onSubmit}
-          disabled={!canSubmit}
-          title={busy ? busyLabel : submitLabel}
-          aria-label={busy ? busyLabel : submitLabel}
-        >
-          {busy ? <span className="composer__spinner" aria-hidden="true" /> : <SendIcon />}
-        </button>
+        {busy && onStop ? (
+          <button type="button" className="composer__send composer__send--stop" onClick={onStop} title="Arrêter" aria-label="Arrêter">
+            <StopIcon />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={`composer__send${busy ? ' composer__send--busy' : ''}`}
+            onClick={onSubmit}
+            disabled={!canSubmit}
+            title={busy ? busyLabel : submitLabel}
+            aria-label={busy ? busyLabel : submitLabel}
+          >
+            {busy ? <span className="composer__spinner" aria-hidden="true" /> : <SendIcon />}
+          </button>
+        )}
       </div>
     </div>
   )

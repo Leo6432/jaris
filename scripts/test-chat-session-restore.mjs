@@ -19,12 +19,24 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/cha
 
 function setup(pastEntries) {
   const appended = []
-  const calls = { converse: 0, vision: [] }
+  const calls = { converse: 0, vision: [], exchanges: [] }
   const modules = {
     './assistant': {
       converse: async (prompt, ...rest) => {
         calls.converse += 1
         // Étape 173 : dernier argument = onImage, appelé quand generate_image a dessiné une image.
+        // Étape 272 : une réponse longue, que le bouton « Arrêter » interrompt après un premier morceau.
+        // rest[4] = signal, rest[7] = onToken (voir la signature de converse()).
+        if (prompt.startsWith('longue')) {
+          rest[7]?.('Bonjour, voici le début ')
+          return new Promise((_resolve, reject) => {
+            rest[4].addEventListener('abort', () => reject(Object.assign(new Error('This operation was aborted'), { name: 'AbortError' })))
+          })
+        }
+        // Certains outils RÉPONDENT au lieu d'échouer quand on les arrête (« Recherche annulée. », assistant.ts).
+        if (prompt.startsWith('cherche')) {
+          return new Promise((resolve) => rest[4].addEventListener('abort', () => resolve('Recherche annulée.')))
+        }
         if (prompt.startsWith('dessine')) {
           rest[9]({ path: '/donnees/generated-images/chat.png', fileName: 'chat.png' })
           return 'Voilà ton image.'
@@ -49,7 +61,7 @@ function setup(pastEntries) {
     './conversationSession': {
       clearSessionHistory: () => {},
       getSessionHistory: async () => [],
-      pushSessionExchange: () => {}
+      pushSessionExchange: (prompt, reply) => { calls.exchanges.push([prompt, reply]) }
     },
     './memoryExtractor': { extractMemoryFromExchange: async () => {} },
     './hardwareScan': { getLiveGpuStatus: async () => ({ freeVramGb: null, tempC: null }) },
@@ -63,6 +75,8 @@ function setup(pastEntries) {
   vm.runInNewContext(source, {
     exports,
     module: { exports },
+    // Étape 272 : le bouton « Arrêter » utilise AbortController, global de Node absent d'un contexte vm neuf.
+    AbortController,
     require: (name) => modules[name] ?? nodeRequire(name)
   })
   return { chatSession: exports.chatSession, appended, calls }
@@ -181,4 +195,37 @@ test('image dessinée : réaffichée après un redémarrage, et absente sans err
   assert.equal(messages[1].image, 'data:image/png;base64,UE5H')
   assert.equal(messages[3].image, undefined)
   assert.equal(messages[0].image, undefined, 'jamais sur le message de l’utilisateur')
+})
+
+// Bornés à 5 s : un arrêt qui ne marche plus ferait sinon attendre la réponse indéfiniment.
+test('« Arrêter » (étape 272) : la réponse s’interrompt, le début déjà écrit est gardé, sans erreur', { timeout: 5000 }, async () => {
+  const { chatSession, appended, calls } = setup([])
+  const cues = []
+  const tokens = []
+  const pending = chatSession.send('longue histoire', () => {}, () => {}, (cue) => cues.push(cue), (t) => tokens.push(t))
+  await new Promise((r) => setTimeout(r, 20))
+  chatSession.cancel()
+  const reply = await pending
+  assert.equal(JSON.stringify(reply), JSON.stringify({ role: 'assistant', content: 'Bonjour, voici le début', stopped: true }))
+  assert.equal(tokens.join(''), 'Bonjour, voici le début ', 'le texte en direct n’arrive plus à l’écran')
+  assert.ok(!cues.includes('error'), 'son d’erreur pour un arrêt voulu')
+  // Le début rejoint l'historique comme un échange normal : le modèle le voit au tour suivant.
+  assert.equal(JSON.stringify(calls.exchanges), JSON.stringify([['longue histoire', 'Bonjour, voici le début']]))
+  assert.equal(appended.length, 1)
+  assert.equal(appended[0].reply, 'Bonjour, voici le début')
+})
+
+test('« Arrêter » avant tout texte : « Réponse arrêtée. », et rien d’enregistré', { timeout: 5000 }, async () => {
+  const { chatSession, appended, calls } = setup([])
+  const pending = chatSession.send('cherche le prix du pain', () => {}, () => {})
+  await new Promise((r) => setTimeout(r, 20))
+  chatSession.cancel()
+  const reply = await pending
+  // L'outil a « répondu » (Recherche annulée.) : c'est quand même un arrêt, pas une réponse à afficher.
+  assert.equal(JSON.stringify(reply), JSON.stringify({ role: 'assistant', content: 'Réponse arrêtée.', stopped: true }))
+  assert.equal(calls.exchanges.length, 0)
+  assert.equal(appended.length, 0)
+  // Le message suivant repart normalement (plus rien d'arrêté en mémoire).
+  const next = await chatSession.send('bonjour', () => {}, () => {})
+  assert.equal(next.content, 'réponse test')
 })

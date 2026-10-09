@@ -7277,3 +7277,33 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   dépasser, sans cadre ; `scripts/test-image-panel-ui.mjs` idem pour l'image. Vérifiés en remettant l'ancienne
   règle et en retirant l'agrandissement. **Piège rencontré : ces tests lisent le CSS COMPILÉ (`out/renderer`) —
   après une modification d'index.css, `npm run build` avant de les lancer, sinon ils testent l'ancien style.**
+
+- **Étape 272 (v0.32.6), « Arrêter » comme ChatGPT, et boutons collés à la vidéo (Léo : « pouvoir interrompre
+  l'IA comme sur ChatGPT », capture du bouton carré ; « pourquoi les boutons Enregistrer et Ouvrir le dossier sont
+  aussi écartés de la vidéo »).**
+  1. **Arrêter** : pendant une réponse, le bouton d'envoi devient un bouton « Arrêter » (rond plein, carré au
+     centre), au même endroit — dans le Chat ET en Code, Image et Vidéo (prop `onStop` du Composer ; ces trois
+     écrans avaient déjà un « Arrêter » dans leur bandeau, le Chat n'avait RIEN). Côté Chat, le signal
+     d'annulation existait déjà dans `converse()` (la voix s'en sert pour une nouvelle phrase) : chatSession.ts lui
+     passait juste `undefined`. Il lui passe maintenant un AbortController par réponse, que `cancelChat` (IPC)
+     interrompt. Comme ChatGPT, le texte déjà écrit est GARDÉ, suivi d'une petite mention « Réponse arrêtée. »,
+     sans son ni message d'erreur ; il rejoint l'historique comme un échange normal (le modèle le voit au tour
+     suivant) — rien d'écrit, rien n'est enregistré. **Piège évité : certains outils ne lèvent pas d'erreur quand
+     on les arrête, ils RÉPONDENT (« Recherche annulée. », assistant.ts) ; l'arrêt est donc détecté par le signal
+     lui-même (`signal.aborted`), jamais par le type d'erreur ni par le texte reçu.** Les réponses venues du
+     téléphone ne sont pas concernées (leur propre écran). Non vérifié en usage réel : la vitesse à laquelle Ollama
+     s'arrête vraiment sur la machine de Léo.
+  2. **Boutons du lecteur** : à l'étape 271 ils étaient alignés sur le bord de la ZONE, pas de la vidéo — loin
+     d'elle dès qu'elle est plus étroite que la zone (écran large, vidéo limitée par la hauteur). Ils sont
+     maintenant dans une `figure` qui fait la largeur du média, collés à son coin haut-droit. La rangée a une
+     hauteur fixe (32 px) pour que le calcul de taille du média (`100cqh - 40px`) soit exact.
+     **Leçon générale, apprise en vérifiant que le test mordait : un test de mise en page ne voit un défaut que
+     dans le cas où il se produit.** Dans la fenêtre de test d'origine, la vidéo remplissait toute la largeur :
+     boutons au bord de la zone ou au bord de la vidéo, c'était pareil, et le test passait avec le défaut remis.
+     Il mesure maintenant dans une fenêtre large et basse (la vidéo y est plus étroite que la zone), et échoue si
+     ce cas n'est plus atteint.
+  Régression : `scripts/test-chat-session-restore.mjs` (arrêt avec début gardé et enregistré ; arrêt avant tout
+  texte, outil qui « répond » à l'arrêt ; bornés à 5 s), `scripts/test-chat-conversations-ui.mjs` (bouton
+  « Arrêter » actif et habillé par le CSS, cancelChat appelé, début gardé, retour à « Envoyer »),
+  `scripts/test-video-panel-ui.mjs` (vidéo centrée, boutons collés à son bord). Chacun vérifié en réintroduisant
+  son défaut ; `AbortController` a dû être fourni au contexte `vm.runInNewContext` du test (piège déjà noté ici).

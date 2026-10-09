@@ -6719,12 +6719,28 @@ select {
   background: transparent;
 }
 
-.image-panel__result .code-panel__result-bar {
-  justify-content: flex-end;
-}
-
 .image-panel__stage {
   container-type: size;
+}
+
+/* Étape 272 (Léo : « pourquoi les boutons sont aussi écartés de la vidéo ») : la figure fait la largeur du
+   média (centrée dans la zone), et les actions s'alignent sur son bord droit, juste au-dessus. Elles étaient au
+   bord de la zone entière, loin d'une vidéo plus étroite que celle-ci. */
+.image-panel__figure {
+  display: flex;
+  max-width: 100%;
+  max-height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  margin: 0;
+}
+
+.image-panel__actions {
+  height: 32px;
+  flex: 0 0 32px;
+  align-items: center;
 }
 
 .image-panel__image {
@@ -6732,10 +6748,19 @@ select {
   border-radius: 14px;
 }
 
+/* 40 px : la rangée d'actions au-dessus (32 px, hauteur fixée) et l'écart (8 px) — la vidéo et ses boutons
+   tiennent ensemble dans la zone, sans espace perdu. */
 .image-panel__image[style*='--media-ratio'] {
-  width: min(100cqw, calc(100cqh * var(--media-ratio)));
+  width: min(100cqw, calc((100cqh - 40px) * var(--media-ratio)));
   height: auto;
   max-width: none;
   max-height: none;
   aspect-ratio: var(--media-ratio);
+}
+
+/* Étape 272 : réponse du Chat coupée par « Arrêter » — dit discrètement sous le texte déjà écrit. */
+.chat-panel__stopped {
+  margin: 6px 0 0;
+  color: var(--hud-text-faint);
+  font-size: 12px;
 }

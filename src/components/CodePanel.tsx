@@ -339,6 +339,7 @@ export default function CodePanel(): JSX.Element {
           submitLabel={appResult ? 'Modifier' : "Générer l'application"}
           busyLabel="Génération…"
           busy={generating}
+          onStop={stop}
           extraActions={<ModelEffortPicker mode="code" disabled={generating} />}
           attachment={attachment}
           onAttachmentChange={setAttachment}

@@ -127,7 +127,17 @@ window.jaris = {
     window.__saved = (window.__saved ?? []).concat(dataUrl)
     return Promise.resolve(window.__saveResult ?? { saved: true })
   },
-  sendChatMessage: () => Promise.resolve({ role: 'assistant', content: 'ok' })
+  // Étape 272 : « longue » ne répond qu'une fois « Arrêter » cliqué, comme une vraie réponse interrompue.
+  sendChatMessage: (prompt) => {
+    if (!prompt.startsWith('longue')) return Promise.resolve({ role: 'assistant', content: 'ok' })
+    return new Promise((resolve) => {
+      window.__stopChat = () => resolve({ role: 'assistant', content: 'Bonjour, voici le début', stopped: true })
+    })
+  },
+  cancelChat: () => {
+    window.__calls.push(['cancel'])
+    window.__stopChat?.()
+  }
 }
 
 createRoot(document.getElementById('root')).render(<Panel />)
@@ -313,5 +323,31 @@ test('image dessinée : l’icône « Télécharger » envoie l’image à enreg
       return { inside: btn.left >= img.left && btn.right <= img.right && btn.top >= img.top && btn.bottom <= img.bottom }
     })
     assert.ok(box.inside, 'le bouton doit être posé sur l’image')
+  })
+})
+
+test('« Arrêter » comme ChatGPT (étape 272) : le bouton d’envoi devient un carré qui interrompt la réponse', options, async () => {
+  await withPage(async (page) => {
+    await page.fill('.composer__input', 'longue histoire, s’il te plaît')
+    await page.click('.composer__send')
+    // Pendant la réponse : le même bouton, actif, devenu « Arrêter ».
+    await page.waitForSelector('.composer__send--stop')
+    const stop = page.locator('.composer__send--stop')
+    assert.equal(await stop.getAttribute('aria-label'), 'Arrêter')
+    assert.equal(await stop.isEnabled(), true, 'bouton Arrêter désactivé')
+    const look = await stop.evaluate((el) => {
+      const cs = getComputedStyle(el)
+      return { radius: cs.borderTopLeftRadius, bg: cs.backgroundColor, w: el.getBoundingClientRect().width }
+    })
+    assert.ok(look.w >= 30, `bouton Arrêter trop petit : ${look.w}px`)
+    assert.notEqual(look.bg, 'rgba(0, 0, 0, 0)', 'bouton Arrêter sans fond (style du navigateur)')
+    await stop.click()
+    assert.ok((await page.evaluate(() => window.__calls)).some((c) => Array.isArray(c) && c[0] === 'cancel'), 'cancelChat jamais appelé')
+    // Le début déjà écrit reste, signalé comme coupé ; le bouton redevient « Envoyer ».
+    await page.waitForSelector('.chat-panel__stopped')
+    assert.match(await page.textContent('.chat-panel__message--assistant:last-of-type'), /Bonjour, voici le début/)
+    assert.equal(await page.locator('.composer__send--stop').count(), 0)
+    assert.equal(await page.locator('.composer__send').getAttribute('aria-label'), 'Envoyer')
+    assert.equal(await page.locator('.code-panel__error, .chat-panel__error').count(), 0, 'erreur affichée pour un arrêt voulu')
   })
 })

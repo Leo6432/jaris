@@ -487,6 +487,8 @@ export interface ChatMessage {
    * sans la vignette.
    */
   image?: string
+  /** Étape 272 : réponse interrompue par le bouton « Arrêter » — le début déjà écrit est gardé tel quel. */
+  stopped?: boolean
 }
 
 /**
@@ -736,6 +738,8 @@ export const IPC_CHANNELS = {
   runQuickSetup: 'jaris:run-quick-setup',
   /** renderer <-> main : envoie un message écrit à Jaris (mode Chat, étape 30) et renvoie sa réponse. */
   sendChatMessage: 'jaris:send-chat-message',
+  /** Étape 272 : bouton « Arrêter » du Chat, comme ChatGPT. */
+  cancelChat: 'jaris:cancel-chat',
   /** main -> renderer : un fragment de la réponse en cours de génération (étape 48), affiché au fil de
    * l'eau dans ChatPanel.tsx plutôt que d'attendre la réponse complète de sendChatMessage. */
   chatStreamToken: 'jaris:chat-stream-token',

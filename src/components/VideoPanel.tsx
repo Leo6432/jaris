@@ -392,31 +392,31 @@ export default function VideoPanel(): JSX.Element {
         {selected && (
           <div className="code-panel__result image-panel__result">
             {/* Étape 271 (Léo : « c'est mal présenté les vidéos ») : plus de titre ici, l'en-tête de la fenêtre le
-                donne déjà ; les actions seules, au-dessus de la vidéo. */}
-            <div className="code-panel__result-bar">
-              <div className="code-panel__result-actions">
-                <button className="image-panel__save" onClick={() => void save()} title="Enregistrer la vidéo où tu veux">
-                  <DownloadIcon /> {saved ? 'Enregistrée' : 'Enregistrer'}
-                </button>
-                <button onClick={() => void window.jaris.openGeneratedVideos(selected.fileName)} title="Montrer la vidéo dans son dossier">
-                  Ouvrir le dossier
-                </button>
-              </div>
-            </div>
-            {/* La vidéo prend toute la place disponible à ses proportions (voir mediaRatioStyle) : elle restait à sa
-                taille d'origine, 832 px de large, au milieu d'un grand cadre vide. */}
+                donne déjà ; la vidéo prend toute la place disponible à ses proportions (voir mediaRatioStyle).
+                Étape 272 (« pourquoi les boutons sont aussi écartés de la vidéo ») : les actions sont collées au
+                coin haut-droit de la vidéo elle-même (la figure fait sa largeur), plus au bord de la zone. */}
             <div className="image-panel__stage">
-              {videoUrl && (
-                <video
-                  className="image-panel__image video-panel__video"
-                  src={videoUrl}
-                  controls
-                  autoPlay
-                  loop
-                  style={mediaRatioStyle(ratio)}
-                  onLoadedMetadata={(e) => setRatio(mediaRatio(e.currentTarget.videoWidth, e.currentTarget.videoHeight))}
-                />
-              )}
+              <figure className="image-panel__figure">
+                <div className="code-panel__result-actions image-panel__actions">
+                  <button className="image-panel__save" onClick={() => void save()} title="Enregistrer la vidéo où tu veux">
+                    <DownloadIcon /> {saved ? 'Enregistrée' : 'Enregistrer'}
+                  </button>
+                  <button onClick={() => void window.jaris.openGeneratedVideos(selected.fileName)} title="Montrer la vidéo dans son dossier">
+                    Ouvrir le dossier
+                  </button>
+                </div>
+                {videoUrl && (
+                  <video
+                    className="image-panel__image video-panel__video"
+                    src={videoUrl}
+                    controls
+                    autoPlay
+                    loop
+                    style={mediaRatioStyle(ratio)}
+                    onLoadedMetadata={(e) => setRatio(mediaRatio(e.currentTarget.videoWidth, e.currentTarget.videoHeight))}
+                  />
+                )}
+              </figure>
             </div>
           </div>
         )}
@@ -474,6 +474,7 @@ export default function VideoPanel(): JSX.Element {
           onError={setError}
           rows={2}
           busy={generating || installing}
+          onStop={generating ? stop : undefined}
           extraActions={
             <>
               {current && (

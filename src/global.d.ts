@@ -106,6 +106,7 @@ declare global {
       // imageBase64 (étape 91) : image déjà réduite et encodée par src/lib/imageAttachment.ts, sans le
       // préfixe "data:...;base64,". Lue par le modèle de vision, jamais par celui de conversation/de code.
       sendChatMessage: (prompt: string, imageBase64?: string) => Promise<ChatMessage>
+      cancelChat: () => void
       getChatHistory: () => Promise<ChatMessage[]>
       listConversations: () => Promise<ConversationList>
       createConversation: () => Promise<ConversationList>

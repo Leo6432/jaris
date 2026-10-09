@@ -33,6 +33,16 @@ const MAX_VISIBLE_MESSAGES = 200
 class ChatSession {
   private visible: ChatMessage[] = []
   private loaded = false
+  /**
+   * Étape 272 (Léo : « pouvoir interrompre l'IA comme sur ChatGPT ») : les réponses du Chat en cours, que le
+   * bouton « Arrêter » interrompt. Pas celles venues du téléphone (`restrictions`), qui ont leur propre écran.
+   */
+  private running = new Set<AbortController>()
+
+  /** Arrête les réponses du Chat en cours ; le texte déjà écrit est gardé (voir send()). */
+  cancel(): void {
+    for (const controller of this.running) controller.abort()
+  }
 
   /**
    * Amorcé depuis la conversation ACTIVE (voix ET chat, voir étape 47) au premier appel seulement : repéré
@@ -138,6 +148,14 @@ class ChatSession {
     let reply: string
     // Étape 173 : image dessinée pendant ce tour (generate_image), affichée sous la réponse et gardée sur le disque.
     let generated: GeneratedImage | null = null
+    const controller = new AbortController()
+    if (!restrictions) this.running.add(controller)
+    // Ce qui s'est déjà affiché : gardé si Léo arrête la réponse en route, comme ChatGPT.
+    let streamed = ''
+    const relayToken = (delta: string): void => {
+      streamed += delta
+      onToken?.(delta)
+    }
     try {
       const profile = await getProfile()
       // Étape 47 : session partagée avec le pipeline vocal (conversationSession.ts), relue à chaque envoi —
@@ -151,10 +169,10 @@ class ChatSession {
             onReminderFire,
             onLog,
             history,
-            undefined,
+            controller.signal,
             live,
             channel,
-            onToken,
+            relayToken,
             onSoundCue,
             (image) => {
               generated = image
@@ -162,7 +180,11 @@ class ChatSession {
             restrictions
           )
       if (gpuStatus.action === 'warn') reply = `${gpuStatus.message}\n\n${reply}`
+      // La lecture d'une image ne s'interrompt pas en route : sa réponse arrivée après « Arrêter » est écartée.
+      if (controller.signal.aborted) return this.stopped(prompt, streamed)
     } catch (err) {
+      if (controller.signal.aborted) return this.stopped(prompt, streamed)
+      this.running.delete(controller)
       const detail = err instanceof Error ? err.message : String(err)
       onLog(`Erreur Ollama (chat) : ${detail}`)
       onSoundCue?.('error')
@@ -175,6 +197,7 @@ class ChatSession {
       })
     }
 
+    this.running.delete(controller)
     onSoundCue?.('success')
     pushSessionExchange(prompt, reply)
 
@@ -192,6 +215,21 @@ class ChatSession {
 
     const imageUrl = image ? await readGeneratedImageDataUrl(image.fileName) : null
     return this.pushVisible({ role: 'assistant', content: reply, ...(imageUrl ? { image: imageUrl } : {}) })
+  }
+
+  /**
+   * Réponse arrêtée par Léo : ni son d'erreur ni message rouge, c'est lui qui l'a voulu. Le début déjà affiché
+   * reste, et rejoint l'historique comme un échange normal (le modèle le voit au tour suivant) ; rien d'affiché,
+   * l'échange n'est pas enregistré — une réponse vide ne ferait que brouiller le contexte.
+   */
+  private async stopped(prompt: string, streamed: string): Promise<ChatMessage> {
+    for (const running of this.running) if (running.signal.aborted) this.running.delete(running)
+    const partial = streamed.trim()
+    if (partial) {
+      pushSessionExchange(prompt, partial)
+      await appendConversationEntry({ id: randomUUID(), timestamp: new Date().toISOString(), transcript: prompt, reply: partial })
+    }
+    return this.pushVisible({ role: 'assistant', content: partial || 'Réponse arrêtée.', stopped: true })
   }
 
   private pushVisible(message: ChatMessage): ChatMessage {
