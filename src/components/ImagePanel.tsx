@@ -4,6 +4,7 @@ import EmptyState from '@/components/EmptyState'
 import Workspace from '@/components/Workspace'
 import { formatDuration } from '@/lib/formatCodeGenProgress'
 import { formatRecentDate } from '@/lib/formatRecentDate'
+import { mediaRatio, mediaRatioStyle } from '@/lib/mediaRatio'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import { imageStepFromLog } from '../../shared/imageGallery'
 import type { GeneratedImageSummary, ImageStudioStatus } from '../../shared/ipc'
@@ -28,6 +29,9 @@ export default function ImagePanel(): JSX.Element {
   const [images, setImages] = useState<GeneratedImageSummary[]>([])
   const [selected, setSelected] = useState<GeneratedImageSummary | null>(null)
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null)
+  const [ratio, setRatio] = useState<number | null>(null)
+  // Proportions de l'image affichée (étape 271) : remises à zéro à chaque nouvelle image.
+  useEffect(() => setRatio(null), [selectedUrl])
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -259,8 +263,9 @@ export default function ImagePanel(): JSX.Element {
 
         {selected && (
           <div className="code-panel__result image-panel__result">
+            {/* Étape 271 : même lecteur que la vidéo — plus de titre répété (l'en-tête le donne), les actions
+                seules au-dessus, l'image à toute la place disponible. */}
             <div className="code-panel__result-bar">
-              <span className="image-panel__title">{selected.label}</span>
               <div className="code-panel__result-actions">
                 <button className="image-panel__save" onClick={() => void save()} disabled={!selectedUrl} title="Enregistrer l'image où tu veux">
                   <DownloadIcon /> {saved ? 'Enregistrée' : 'Enregistrer'}
@@ -270,7 +275,17 @@ export default function ImagePanel(): JSX.Element {
                 </button>
               </div>
             </div>
-            <div className="image-panel__stage">{selectedUrl && <img className="image-panel__image" src={selectedUrl} alt={selected.label} />}</div>
+            <div className="image-panel__stage">
+              {selectedUrl && (
+                <img
+                  className="image-panel__image"
+                  src={selectedUrl}
+                  alt={selected.label}
+                  style={mediaRatioStyle(ratio)}
+                  onLoad={(e) => setRatio(mediaRatio(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight))}
+                />
+              )}
+            </div>
           </div>
         )}
 

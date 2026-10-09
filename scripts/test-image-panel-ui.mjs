@@ -151,10 +151,14 @@ test('dessiner : avancement avec barre, puis l’image s’affiche et rejoint la
     await page.evaluate(() => window.__finishGen())
     await page.waitForSelector('.image-panel__image')
     assert.match(await page.textContent('.code-panel__done'), /ton image est prête/)
-    assert.match(await page.textContent('.image-panel__title'), /Un phare/)
+    // Étape 271 : plus de titre répété au-dessus de l'image (l'en-tête de la fenêtre le donne).
+    assert.match(await page.textContent('.workspace__item--active'), /Un phare/)
+    assert.equal(await page.locator('.image-panel__title').count(), 0)
     assert.match(await page.textContent('.workspace__rail'), /Un phare/)
     const image = await page.$eval('.image-panel__image', (el) => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height, fit: getComputedStyle(el).objectFit } })
     assert.equal(image.fit, 'contain', 'image entière, jamais rognée')
+    // Étape 271 : agrandie à toute la place disponible (l'image de test fait 1 px), sans être déformée.
+    assert.ok(image.w > 200 && Math.abs(image.w - image.h) < 2, `image affichée en ${Math.round(image.w)}x${Math.round(image.h)}`)
   })
 })
 

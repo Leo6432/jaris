@@ -7251,3 +7251,29 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `scripts/test-window-chrome-ui.mjs` (Vocal en premier ; aucune liste ni bouton de liste en Vocal
   et dans le Cerveau ; la liste garde sa place sur Chat, Code, Image et Options), vérifié en remettant la liste
   en Vocal puis Vocal en second.
+
+- **Étape 271 (v0.32.5), lecteur vidéo : plein écran bloqué et vidéo minuscule dans un grand cadre (Léo : « c'est
+  mal présenté les vidéos, et on ne peut pas cliquer sur agrandir »).** Deux défauts sans rapport :
+  1. **Plein écran : refusé par Jaris lui-même.** `session.setPermissionRequestHandler` (main.ts) n'accordait que
+     `media` (le micro) et refusait TOUT le reste — y compris `fullscreen`, par lequel Electron fait passer le
+     bouton plein écran du lecteur vidéo. Le clic ne faisait rien, sans la moindre erreur. **Cause trouvée en
+     reproduisant avec le vrai Electron (binaire téléchargé, écran virtuel Xvfb), pas en devinant** : une
+     fenêtre aux mêmes options que Jaris passe en plein écran ; la même avec la règle de Jaris, non (la
+     permission demandée s'affiche : `fullscreen`) ; avec `fullscreen` autorisé, oui. La barre de titre
+     personnalisée (titleBarOverlay), premier suspect, était innocente. La règle vit maintenant dans
+     `electron/services/permissions.ts` (`isPermissionAllowed`), testable sans Electron. **Leçon générale : un
+     gestionnaire de permissions qui refuse « tout sauf X » refuse aussi des fonctions qu'on ne range pas
+     d'instinct parmi les permissions (plein écran, presse-papiers…) — quand un bouton natif de Chromium ne fait
+     rien dans Electron, regarder ce gestionnaire en premier.** Non vérifiable ici : le comportement exact sous
+     Windows (l'essai a tourné sous Linux).
+  2. **Présentation** : la vidéo restait à sa taille d'origine (832 px) au milieu d'un grand cadre vide, sous un
+     titre déjà donné par l'en-tête. `max-width`/`max-height: 100%` ne font que RÉDUIRE, jamais agrandir. Les
+     proportions réelles, lues au chargement (`mediaRatio`, src/lib/mediaRatio.ts), passent au CSS
+     (`--media-ratio`) qui calcule la plus grande taille qui tient dans la zone (`container-type: size` +
+     `min(100cqw, 100cqh × ratio)`). Plus de cadre ni de titre répété : les actions seules au-dessus, à droite.
+     Même lecteur pour les images (mêmes classes).
+  Régression : `scripts/test-permissions.mjs` ; `scripts/test-video-panel-ui.mjs` lit une VRAIE petite vidéo
+  (320x180, fabriquée dans la page par MediaRecorder) et vérifie qu'elle est agrandie, à ses proportions, sans
+  dépasser, sans cadre ; `scripts/test-image-panel-ui.mjs` idem pour l'image. Vérifiés en remettant l'ancienne
+  règle et en retirant l'agrandissement. **Piège rencontré : ces tests lisent le CSS COMPILÉ (`out/renderer`) —
+  après une modification d'index.css, `npm run build` avant de les lancer, sinon ils testent l'ancien style.**

@@ -4,6 +4,7 @@ import EmptyState from '@/components/EmptyState'
 import Workspace from '@/components/Workspace'
 import { formatDuration } from '@/lib/formatCodeGenProgress'
 import { formatRecentDate } from '@/lib/formatRecentDate'
+import { mediaRatio, mediaRatioStyle } from '@/lib/mediaRatio'
 import type { ImageAttachment } from '@/lib/imageAttachment'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import { imageStepFromLog } from '../../shared/imageGallery'
@@ -69,6 +70,7 @@ export default function VideoPanel(): JSX.Element {
   const [videos, setVideos] = useState<GeneratedVideoSummary[]>([])
   const [selected, setSelected] = useState<GeneratedVideoSummary | null>(null)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
+  const [ratio, setRatio] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [lastOutcome, setLastOutcome] = useState<{ kind: 'done' | 'stopped'; durationMs: number } | null>(null)
@@ -112,6 +114,7 @@ export default function VideoPanel(): JSX.Element {
   // La vidéo arrive en octets par l'IPC puis devient une adresse blob: locale, libérée à chaque changement.
   useEffect(() => {
     setVideoUrl(null)
+    setRatio(null)
     if (!selected) return
     let url: string | null = null
     let cancelled = false
@@ -388,8 +391,9 @@ export default function VideoPanel(): JSX.Element {
 
         {selected && (
           <div className="code-panel__result image-panel__result">
+            {/* Étape 271 (Léo : « c'est mal présenté les vidéos ») : plus de titre ici, l'en-tête de la fenêtre le
+                donne déjà ; les actions seules, au-dessus de la vidéo. */}
             <div className="code-panel__result-bar">
-              <span className="image-panel__title">{selected.label}</span>
               <div className="code-panel__result-actions">
                 <button className="image-panel__save" onClick={() => void save()} title="Enregistrer la vidéo où tu veux">
                   <DownloadIcon /> {saved ? 'Enregistrée' : 'Enregistrer'}
@@ -399,8 +403,20 @@ export default function VideoPanel(): JSX.Element {
                 </button>
               </div>
             </div>
+            {/* La vidéo prend toute la place disponible à ses proportions (voir mediaRatioStyle) : elle restait à sa
+                taille d'origine, 832 px de large, au milieu d'un grand cadre vide. */}
             <div className="image-panel__stage">
-              {videoUrl && <video className="image-panel__image video-panel__video" src={videoUrl} controls autoPlay loop />}
+              {videoUrl && (
+                <video
+                  className="image-panel__image video-panel__video"
+                  src={videoUrl}
+                  controls
+                  autoPlay
+                  loop
+                  style={mediaRatioStyle(ratio)}
+                  onLoadedMetadata={(e) => setRatio(mediaRatio(e.currentTarget.videoWidth, e.currentTarget.videoHeight))}
+                />
+              )}
             </div>
           </div>
         )}

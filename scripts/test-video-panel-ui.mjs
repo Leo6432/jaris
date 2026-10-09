@@ -62,7 +62,7 @@ window.jaris = {
   },
   cancelStudioVideo: () => { window.__calls.push('cancel'); window.__failGen('Vidéo annulée.') },
   listGeneratedVideos: async () => window.__videos,
-  readGeneratedVideo: async (fileName) => { window.__calls.push(['read', fileName]); return new Uint8Array([26, 69, 223, 163]) },
+  readGeneratedVideo: async (fileName) => { window.__calls.push(['read', fileName]); return window.__realVideo || new Uint8Array([26, 69, 223, 163]) },
   deleteGeneratedVideo: async (fileName) => { window.__calls.push(['delete', fileName]); window.__videos = window.__videos.filter((v) => v.fileName !== fileName) },
   openGeneratedVideos: async (fileName) => { window.__calls.push(['open', fileName]) },
   saveGeneratedVideo: async (fileName) => { window.__calls.push(['save', fileName]); return { saved: true } },
@@ -140,7 +140,10 @@ test('accueil (étape 213) : les dernières vidéos en vignettes, comme les imag
     const first = await page.evaluate(() => window.__videos[0])
     await page.click('.video-panel__thumb')
     await page.waitForSelector('.image-panel__result')
-    assert.equal(await page.textContent('.image-panel__title'), first.label, 'le clic ouvre cette vidéo')
+    // Étape 271 : le titre n'est plus répété au-dessus de la vidéo (l'en-tête de la fenêtre le donne) ;
+    // la vidéo ouverte est la ligne active de la liste.
+    assert.equal((await page.textContent('.workspace__item--active .workspace__item-title')).trim(), first.label, 'le clic ouvre cette vidéo')
+    assert.equal(await page.locator('.image-panel__title').count(), 0, 'titre répété au-dessus de la vidéo')
 
     await page.click('.workspace__new')
     await page.waitForSelector('.video-panel__thumb')
@@ -173,6 +176,46 @@ test('créer : avancement avec barre, puis la vidéo se lit et rejoint la liste'
     await page.click('.image-panel__save')
     await page.waitForFunction(() => /Enregistrée/.test(document.querySelector('.image-panel__save').textContent))
     assert.ok((await page.evaluate(() => window.__calls)).some((c) => Array.isArray(c) && c[0] === 'save' && c[1] === '2026-09-28T18-00-00-un-chat.webm'))
+  })
+})
+
+test('lecteur : la vidéo prend toute la place à ses proportions, sans cadre autour', options, async () => {
+  // Étape 271 (Léo : « c'est mal présenté les vidéos ») : elle restait à sa taille d'origine au milieu d'un grand
+  // cadre vide. Une vraie petite vidéo (320x180, fabriquée ici) est lue pour mesurer sa taille affichée.
+  await withPage(async (page) => {
+    await page.waitForSelector('.video-panel__thumb')
+    await page.evaluate(async () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = 320
+      canvas.height = 180
+      const g = canvas.getContext('2d')
+      const timer = setInterval(() => { g.fillStyle = `hsl(${Math.random() * 360} 60% 50%)`; g.fillRect(0, 0, 320, 180) }, 50)
+      const recorder = new MediaRecorder(canvas.captureStream(15), { mimeType: 'video/webm' })
+      const chunks = []
+      recorder.ondataavailable = (e) => chunks.push(e.data)
+      const stopped = new Promise((r) => (recorder.onstop = r))
+      recorder.start()
+      await new Promise((r) => setTimeout(r, 800))
+      recorder.stop()
+      await stopped
+      clearInterval(timer)
+      window.__realVideo = new Uint8Array(await new Blob(chunks).arrayBuffer())
+    })
+    await page.click('.video-panel__thumb')
+    await page.waitForFunction(() => document.querySelector('video.video-panel__video')?.videoWidth > 0)
+    await page.waitForTimeout(100)
+    const m = await page.evaluate(() => {
+      const v = document.querySelector('video.video-panel__video').getBoundingClientRect()
+      const stage = document.querySelector('.image-panel__stage').getBoundingClientRect()
+      const frame = getComputedStyle(document.querySelector('.image-panel__result'))
+      return { w: v.width, h: v.height, stageW: stage.width, stageH: stage.height, inside: v.left >= stage.left - 1 && v.right <= stage.right + 1 && v.top >= stage.top - 1 && v.bottom <= stage.bottom + 1, frameBorder: frame.borderTopWidth, frameBg: frame.backgroundColor }
+    })
+    assert.ok(m.w > 320 * 1.5, `vidéo restée petite : ${Math.round(m.w)} px de large`)
+    assert.ok(Math.abs(m.w / m.h - 16 / 9) < 0.03, `proportions déformées : ${Math.round(m.w)}x${Math.round(m.h)}`)
+    assert.ok(m.inside, 'la vidéo dépasse de sa place')
+    assert.ok(m.w >= m.stageW - 2 || m.h >= m.stageH - 2, 'la vidéo ne remplit ni la largeur ni la hauteur disponibles')
+    assert.equal(m.frameBorder, '0px', 'cadre autour de la vidéo')
+    assert.match(m.frameBg, /rgba\(0, 0, 0, 0\)|transparent/, 'fond de cadre autour de la vidéo')
   })
 })
 

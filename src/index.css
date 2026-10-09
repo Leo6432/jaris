@@ -6704,3 +6704,38 @@ select {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
 }
+
+/* ==========================================================================
+   Étape 271 : lecteur d'image et de vidéo (Léo : « c'est mal présenté les vidéos »)
+   La vidéo restait à sa taille d'origine (832 px) au milieu d'un grand cadre vide, sous un titre déjà donné par
+   l'en-tête. Plus de cadre : les actions au-dessus, à droite, et le média le plus grand possible à ses
+   proportions (--media-ratio, src/lib/mediaRatio.ts), coins arrondis comme les vignettes.
+   ========================================================================== */
+.image-panel__result {
+  gap: 8px;
+  padding: 4px 24px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.image-panel__result .code-panel__result-bar {
+  justify-content: flex-end;
+}
+
+.image-panel__stage {
+  container-type: size;
+}
+
+.image-panel__image {
+  border: 0;
+  border-radius: 14px;
+}
+
+.image-panel__image[style*='--media-ratio'] {
+  width: min(100cqw, calc(100cqh * var(--media-ratio)));
+  height: auto;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: var(--media-ratio);
+}

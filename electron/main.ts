@@ -93,6 +93,7 @@ import {
   wasLaunchedAtLogin
 } from './services/launchAtStartup'
 import { checkAppFreshness, checkForUpdate, getAppVersionStatus, getInstalledVersion, updateApp } from './services/appUpdater'
+import { isPermissionAllowed } from './services/permissions'
 import {
   IPC_CHANNELS,
   IMAGE_TYPES_BY_EXTENSION,
@@ -1068,12 +1069,10 @@ app.whenReady().then(async () => {
   void removeLeftoverVideoDuel(join(imageEngineRoot(), 'video-duel'))
   registerPreviewHandler()
 
-  // Autorise silencieusement l'accès micro pour les fenêtres de Jaris (enumerateDevices() ne révèle les
-  // vrais noms de périphériques audio qu'après une permission media accordée, voir Options → Voix) : sans
-  // ce handler, Chromium afficherait une popup de permission native, déroutante dans une appli de bureau
-  // qui n'a jamais utilisé getUserMedia() jusqu'ici (le micro est capturé côté Python, pas par le renderer).
+  // Accorde sans demander le micro (noms des périphériques, Options → Voix) et le plein écran (lecteur vidéo) ;
+  // refuse tout le reste. Détail et raisons : services/permissions.ts.
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    callback(permission === 'media')
+    callback(isPermissionAllowed(permission))
   })
 
   // Un seul check par lancement (comme checkOllamaFreshness) : la version installée ne change pas pendant
