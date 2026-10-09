@@ -174,7 +174,6 @@ const api = {
   setActiveMode: (mode: AppMode): void => ipcRenderer.send(IPC_CHANNELS.setActiveMode, mode),
   setOptionsOpen: (open: boolean): void => ipcRenderer.send(IPC_CHANNELS.setOptionsOpen, open),
   getWindowChrome: (): Promise<WindowChrome> => ipcRenderer.invoke(IPC_CHANNELS.getWindowChrome),
-  onWindowChrome: (cb: (chrome: WindowChrome) => void) => subscribe(IPC_CHANNELS.windowChrome, cb),
   minimizeToWidget: (): void => ipcRenderer.send(IPC_CHANNELS.minimizeToWidget),
   getLaunchAtStartup: (): Promise<LaunchAtStartupStatus> => ipcRenderer.invoke(IPC_CHANNELS.getLaunchAtStartup),
   setLaunchAtStartup: (enabled: boolean): Promise<LaunchAtStartupStatus> =>

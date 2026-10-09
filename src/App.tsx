@@ -79,7 +79,11 @@ function PanelToggleIcon(): JSX.Element {
   )
 }
 
-/** Un bouton du rail : icône au-dessus, libellé court dessous, petite barre d'accent à gauche quand actif. */
+/**
+ * Un bouton du rail. Étape 266 (style ChatGPT) : l'icône seule, comme le rail de l'appli ChatGPT — le libellé
+ * reste dans la page (lecteurs d'écran, infobulle) mais n'est plus affiché sous l'icône, une disposition qui
+ * faisait « application Windows ».
+ */
 function RailButton({ label, icon, active, onClick, title }: {
   label: string
   icon: string
@@ -166,7 +170,7 @@ export default function App(): JSX.Element {
   )
   // Options est un écran du rail, pas un mode : le mode réel (écoute, widget) reste celui d'avant.
   const [optionsShown, setOptionsShown] = useState(false)
-  // Habillage Windows 11 (barre de titre, Mica, accent) — rien tant que le main n'a pas répondu (et jamais
+  // Barre de titre dessinée par Jaris — rien tant que le main n'a pas répondu (et jamais
   // hors Windows, où la fenêtre garde sa barre de titre native).
   const [chrome, setChrome] = useState<WindowChrome | null>(null)
   const [newSlot, setNewSlot] = useState<HTMLElement | null>(null)
@@ -195,26 +199,7 @@ export default function App(): JSX.Element {
   useEffect(() => {
     if (MODE !== 'full' || !window.jaris.getWindowChrome) return
     void window.jaris.getWindowChrome().then(setChrome).catch(() => {})
-    return window.jaris.onWindowChrome?.(setChrome)
   }, [])
-
-  // Couleur d'accent de Windows : remplace l'accent par défaut (bleu Windows) dans toute la page. Mica : la
-  // page doit rester transparente pour laisser voir l'effet derrière la colonne et le rail.
-  useEffect(() => {
-    if (MODE !== 'full') return
-    const root = document.documentElement
-    const rgb = chrome?.accent?.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i)
-    if (chrome?.accent && rgb) {
-      root.style.setProperty('--jv-accent', chrome.accent)
-      // Certaines règles plus anciennes veulent l'accent en composantes (rgba(var(--hud-accent-rgb), a)).
-      root.style.setProperty('--hud-accent-rgb', rgb.slice(1).map((hex) => parseInt(hex, 16)).join(', '))
-    } else {
-      root.style.removeProperty('--jv-accent')
-      root.style.removeProperty('--hud-accent-rgb')
-    }
-    root.classList.toggle('body--mica', !!chrome?.mica)
-    document.body.classList.toggle('body--mica', !!chrome?.mica)
-  }, [chrome])
 
   /**
    * Micro de la barre de saisie : passe sur l'Agent vocal PUIS déclenche l'écoute. Le changement de mode est
@@ -577,8 +562,6 @@ export default function App(): JSX.Element {
           <aside className="panel" hidden={!hasPanel || !panelOpen}>
             <div className="panel__head">
               <span className="panel__title">{currentMode.panel}</span>
-              {/* Bouton « Nouvelle conversation / application / image / vidéo » de l'écran affiché (portail). */}
-              <div className="panel__new" ref={setNewSlot} />
               <button
                 className="panel__icon-button"
                 onClick={() => setPanelOpen(false)}
@@ -588,6 +571,9 @@ export default function App(): JSX.Element {
                 <PanelToggleIcon />
               </button>
             </div>
+            {/* Bouton « Nouvelle conversation / application / image / vidéo » de l'écran affiché (portail) : une
+                ligne à part entière sous le titre, comme « Nouveau chat » dans ChatGPT (étape 266). */}
+            <div className="panel__new" ref={setNewSlot} />
             {/* Liste de l'écran affiché : conversations, applications, images ou vidéos (portail). */}
             <div className="panel__list" ref={setRecentsSlot} />
             <div className="panel__status">

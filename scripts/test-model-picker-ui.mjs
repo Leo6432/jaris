@@ -156,7 +156,7 @@ test('le champ du Chat : texte en haut, « + » à gauche, modèle/effort puis e
     assert.ok(send.x + send.w > input.x + input.w - 30, 'envoi tout à droite')
     const sendStyle = await page.$eval('#root .composer__send', (el) => ({ radius: getComputedStyle(el).borderRadius, clip: getComputedStyle(el).clipPath, bg: getComputedStyle(el).backgroundColor }))
     assert.equal(sendStyle.clip, 'none', 'plus de coins coupés : un bouton rond')
-    assert.equal(sendStyle.radius, '6px', `envoi carré aux coins Windows 11 (rayon ${sendStyle.radius})`)
+    assert.equal(sendStyle.radius, '9999px', `envoi rond comme ChatGPT (rayon ${sendStyle.radius})`)
     assert.notEqual(sendStyle.bg, 'rgba(0, 0, 0, 0)', 'envoi rempli')
     assert.equal((await page.textContent('#root .effort-picker__trigger')).trim(), 'Auto', 'rien sur la réflexion tant qu’aucun modèle n’est choisi')
   })
@@ -338,8 +338,10 @@ test('la barre est habillée par le CSS de Jaris et se REMPLIT jusqu’au cran c
     }
     await page.waitForFunction(() => getComputedStyle(document.querySelector('#root .effort-picker__step--active')).backgroundColor === 'rgb(255, 255, 255)')
     const fillImage = await page.$eval('#root .effort-picker__slider', (el) => getComputedStyle(el, '::before').backgroundImage)
-    // Refonte « design sobre » : l'accent de Jaris est le gris clair du texte (variante Graphite), plus le cyan.
-    assert.match(fillImage, /rgb\(0, 120, 212\)/, 'le remplissage reprend l’accent de Jaris (bleu Windows par défaut, design v2)')
+    // Style ChatGPT (étape 266) : l'accent de Jaris est la couleur du texte (presque noir en clair, presque
+    // blanc en sombre) — plus jamais le bleu ni le violet repris de Windows.
+    assert.match(fillImage, /rgb\((13, 13, 13|236, 236, 236)\)/, 'le remplissage reprend l’accent neutre de Jaris')
+    assert.doesNotMatch(fillImage, /rgb\(0, 120, 212\)/, 'plus de bleu Windows')
   })
 })
 

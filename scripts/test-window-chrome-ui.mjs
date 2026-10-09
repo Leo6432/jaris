@@ -41,7 +41,7 @@ const known = {
   getProfile: async () => (flags.noProfile ? null : { name: 'Léo', capacityScanDone: !flags.scan, models: {} }),
   getRuntimeSetupStatus: async () => (flags.runtime ? { ready: false, missing: ['Python'] } : { ready: true, missing: [] }),
   getSetupStatus: async () => ({ ready: true, missing: [] }),
-  getWindowChrome: async () => ({ titleBar: true, mica: false, accent: '#0078d4' }),
+  getWindowChrome: async () => ({ titleBar: true }),
   getWidgetMode: async () => 'voice',
   getNewModels: async () => [],
   getAppVersion: async () => '0.0.0',
@@ -199,6 +199,44 @@ test('aucun texte sous 12 px (minimum de Windows 11) dans le Chat, l’Agent voc
     }
     assert.deepEqual(tiny, [])
   })
+})
+
+test('style ChatGPT : aucune couleur vive dans la fenêtre (plus de violet ni de bleu repris de Windows)', options, async () => {
+  // Étape 266 (Léo : « ça fait trop application Windows avec la couleur violet ») : Jaris recopiait la couleur
+  // d'accent de Windows — violette chez Léo — dans le rail, les boutons, la barre de saisie. Tout ce qui
+  // habille la fenêtre doit maintenant être gris. Seules exceptions voulues : le logo (une image) et le
+  // point vert « Local » de la colonne, qui veut dire « ça marche ».
+  for (const scheme of ['dark', 'light']) {
+    await withPage(async (page) => {
+      await page.emulateMedia({ colorScheme: scheme })
+      await page.waitForSelector('.rail__item')
+      const colored = []
+      for (const label of ['Chat', 'Vocal', 'Options']) {
+        await page.click(`.rail__item:has-text("${label}")`)
+        await page.waitForTimeout(300)
+        colored.push(...(await page.evaluate(() => {
+          const out = []
+          const vivid = (c) => {
+            const m = c.match(/rgba?\(([^)]+)\)/)
+            if (!m) return false
+            const [r, g, b, a = 1] = m[1].split(/[ ,/]+/).filter(Boolean).map(Number)
+            return a > 0.05 && Math.max(r, g, b) - Math.min(r, g, b) > 24
+          }
+          for (const el of document.querySelectorAll('.app-shell *')) {
+            if (el.closest('.panel__status-dot, svg, img, canvas, .options-menu__voice-picker')) continue
+            const r = el.getBoundingClientRect()
+            if (r.width < 1 || r.height < 1) continue
+            const cs = getComputedStyle(el)
+            for (const prop of ['backgroundColor', 'color', 'borderTopColor']) {
+              if (vivid(cs[prop])) out.push(`${el.className} ${prop} ${cs[prop]}`)
+            }
+          }
+          return out
+        })).map((c) => `${label} : ${c}`))
+      }
+      assert.deepEqual([...new Set(colored)], [], `thème ${scheme}`)
+    })
+  }
 })
 
 test.after(() => {

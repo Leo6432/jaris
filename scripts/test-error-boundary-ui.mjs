@@ -159,7 +159,7 @@ test('un écran qui plante affiche son message à sa place, sans vider le reste'
       const s = getComputedStyle(el)
       return { radius: s.borderTopLeftRadius, color: s.color }
     })
-    assert.equal(style.radius, '6px')
+    assert.equal(style.radius, '9999px')
     assert.notEqual(style.color, 'rgb(0, 0, 0)')
 
     // « Réessayer » remonte l'écran une fois la cause disparue.

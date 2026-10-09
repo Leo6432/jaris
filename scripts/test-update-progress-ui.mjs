@@ -135,9 +135,10 @@ test("la barre est bien habillée par le CSS de Jaris, pas laissée au style par
       const bar = getComputedStyle(document.querySelector('.options-menu__progress-bar'))
       return { fillColor: fill.backgroundColor, fillRadius: fill.borderTopLeftRadius, barBackground: bar.backgroundColor }
     })
-    // Refonte « design sobre » : une piste grise arrondie, remplie de l'accent clair de Jaris.
-    assert.equal(style.fillColor, 'rgb(0, 120, 212)', 'le remplissage n\'a pas la couleur d\'accent de Jaris')
-    assert.equal(style.fillRadius, '2px')
+    // Style ChatGPT (étape 266) : une piste grise arrondie, remplie de l'accent neutre de Jaris (la couleur du
+    // texte : presque noir en clair, presque blanc en sombre), jamais l'accent de Windows.
+    assert.ok(['rgb(13, 13, 13)', 'rgb(236, 236, 236)'].includes(style.fillColor), `remplissage : ${style.fillColor}`)
+    assert.equal(style.fillRadius, '9999px')
     assert.notEqual(style.barBackground, 'rgba(0, 0, 0, 0)')
   })
 })

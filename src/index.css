@@ -9,27 +9,28 @@
 :root {
   color-scheme: dark;
 
-  /* Design v2 (maquette « Jaris v2.dc.html », style Windows 11) : les noms --hud-* sont gardés pour ne pas
-     réécrire les centaines de règles qui les utilisent, seules leurs valeurs changent. Thème sombre ici, thème
-     clair juste en dessous : Jaris suit le réglage de Windows (prefers-color-scheme). */
-  --hud-bg: #272727;
-  --hud-panel: #2d2d2d;
-  --hud-panel-raised: #2d2d2d;
+  /* Style ChatGPT (étape 266, Léo : « ça fait trop application Windows avec la couleur violet ») : des gris
+     neutres, AUCUNE couleur d'accent — les boutons pleins sont blancs sur fond sombre, noirs sur fond clair,
+     comme ChatGPT. Les noms --hud-* sont gardés pour ne pas réécrire les centaines de règles qui les
+     utilisent ; seules leurs valeurs changent. Thème sombre ici, clair juste en dessous (suit Windows). */
+  --hud-bg: #212121;
+  --hud-panel: #2a2a2a;
+  --hud-panel-raised: #303030;
 
   /* Texte, du plus lisible au plus discret. */
-  --hud-text: #ffffff;
-  --hud-text-soft: #e4e4e4;
-  --hud-text-dim: #c8c8c8;
-  --hud-text-faint: #9d9d9d;
+  --hud-text: #ececec;
+  --hud-text-soft: #e3e3e3;
+  --hud-text-dim: #b4b4b4;
+  --hud-text-faint: #9b9b9b;
 
-  /* Accent : la couleur d'accent de Windows (--jv-accent, posée par App.tsx), bleu Windows par défaut. */
-  --jv-accent: #0078d4;
+  /* « Accent » : la couleur du texte elle-même. Plus jamais celle de Windows (violette chez Léo). */
+  --jv-accent: #ececec;
   --hud-accent: var(--jv-accent);
-  --hud-accent-bright: color-mix(in oklch, var(--jv-accent) 60%, white);
-  --hud-accent-deep: color-mix(in oklch, var(--jv-accent) 70%, black);
-  --hud-accent-rgb: 0, 120, 212;
-  /* Accent lisible comme TEXTE (liens) : éclairci sur fond sombre. */
-  --jv-accent-text: color-mix(in oklch, var(--jv-accent) 55%, white);
+  --hud-accent-bright: #ffffff;
+  --hud-accent-deep: #d4d4d4;
+  --hud-accent-rgb: 236, 236, 236;
+  /* Liens et phrases d'exemple : le texte normal, soulignés là où ce sont des liens. */
+  --jv-accent-text: var(--hud-text);
 
   /* Couleurs de sens (jamais décoratives) : ambre = attention, vert = OK, rouge = échec. */
   --hud-gold: #e8a33d;
@@ -38,25 +39,31 @@
   --hud-danger: #e5484d;
   --hud-danger-soft: #f2a5a7;
 
-  --hud-line: rgba(255, 255, 255, 0.08);
+  --hud-line: rgba(255, 255, 255, 0.1);
   --hud-line-strong: rgba(255, 255, 255, 0.16);
   --hud-glow: none;
 
   /* Encre des anciens voiles « blanc translucide » : blanc en sombre, noir en clair. */
   --jv-ink-rgb: 255, 255, 255;
 
-  /* Surfaces propres au design. --jv-side : le cadre de la fenêtre (rail, colonne) quand Mica est absent. */
-  --jv-side: #202020;
-  --jv-mica: rgba(32, 32, 32, 0.8);
+  /* Surfaces propres au design. --jv-side : la barre latérale et la barre de titre, un cran plus sombres
+     que la zone principale (comme ChatGPT). */
+  --jv-side: #181818;
   --jv-hover: rgba(255, 255, 255, 0.06);
-  --jv-bubble: #363636;
-  --jv-code: #1e1e1e;
-  --jv-accent-ink: #ffffff;
+  --jv-hover-strong: rgba(255, 255, 255, 0.1);
+  --jv-bubble: #303030;
+  --jv-code: #171717;
+  --jv-accent-ink: #0d0d0d;
   --jv-frame: rgba(255, 255, 255, 0.1);
+  /* Champ de saisie : gris plein en sombre ; blanc posé sur un trait et une ombre en clair. */
+  --jv-composer: #303030;
+  --jv-composer-border: transparent;
+  --jv-composer-shadow: none;
 
-  --hud-font-display: 'Segoe UI Variable Text', 'Segoe UI', 'Geist Sans', system-ui, sans-serif;
-  --hud-font-body: 'Segoe UI Variable Text', 'Segoe UI', 'Geist Sans', system-ui, sans-serif;
-  --hud-font-mono: 'Cascadia Code', 'Cascadia Mono', Consolas, 'Geist Mono', ui-monospace, monospace;
+  /* Geist (embarquée, src/main.tsx) avant Segoe UI : une police d'appli moderne, pas celle de Windows. */
+  --hud-font-display: 'Geist Sans', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --hud-font-body: 'Geist Sans', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --hud-font-mono: 'Geist Mono', 'Cascadia Code', Consolas, ui-monospace, monospace;
 
   font-family: var(--hud-font-body);
   font-size: 14px;
@@ -69,28 +76,35 @@
   :root {
     color-scheme: light;
 
-    --hud-bg: #fbfbfb;
+    --hud-bg: #ffffff;
     --hud-panel: #ffffff;
-    --hud-panel-raised: #ffffff;
+    --hud-panel-raised: #f4f4f4;
 
-    --hud-text: #1b1b1b;
-    --hud-text-soft: #333333;
+    --hud-text: #0d0d0d;
+    --hud-text-soft: #2f2f2f;
     --hud-text-dim: #5d5d5d;
     --hud-text-faint: #6b6b6b;
 
-    --jv-accent-text: var(--jv-accent);
+    --jv-accent: #0d0d0d;
+    --hud-accent-bright: #000000;
+    --hud-accent-deep: #2f2f2f;
+    --hud-accent-rgb: 13, 13, 13;
 
-    --hud-line: rgba(0, 0, 0, 0.08);
+    --hud-line: rgba(0, 0, 0, 0.1);
     --hud-line-strong: rgba(0, 0, 0, 0.16);
 
     --jv-ink-rgb: 0, 0, 0;
 
-    --jv-side: #f3f3f3;
-    --jv-mica: rgba(243, 243, 243, 0.8);
+    --jv-side: #f9f9f9;
     --jv-hover: rgba(0, 0, 0, 0.05);
-    --jv-bubble: #efefef;
-    --jv-code: #f5f5f5;
+    --jv-hover-strong: rgba(0, 0, 0, 0.08);
+    --jv-bubble: #f4f4f4;
+    --jv-code: #f7f7f7;
+    --jv-accent-ink: #ffffff;
     --jv-frame: rgba(0, 0, 0, 0.1);
+    --jv-composer: #ffffff;
+    --jv-composer-border: rgba(0, 0, 0, 0.1);
+    --jv-composer-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
   }
 }
 
@@ -5209,19 +5223,9 @@ body {
   background: var(--jv-side);
 }
 
-/* Mica (Windows 11 22H2+) : la page reste transparente, l'effet de Windows fait le fond. */
-html.body--mica,
-body.body--mica {
-  background: transparent;
-}
-
 .app-shell {
   flex-direction: column;
   background: var(--jv-side);
-}
-
-.body--mica .app-shell {
-  background: transparent;
 }
 
 .app-shell__body {
@@ -5986,4 +5990,399 @@ select {
 /* L'introduction de « Ce que Jaris sait faire » se lit comme le sous-titre des autres pages (14 px). */
 .options-menu__capability-intro {
   font-size: 14px;
+}
+
+/* ==========================================================================
+   Style ChatGPT (étape 266, Léo : « ça fait trop application Windows avec la couleur violet, fais une
+   vraie application stylée ChatGPT »)
+   --------------------------------------------------------------------------
+   Ce qui faisait « Windows » : l'accent violet repris de Windows, le fond Mica, les libellés sous les
+   icônes du rail, la barre d'accent à gauche de l'élément actif, la zone principale posée comme un
+   calque à coins arrondis, les coins carrés à 4-6 px. Remplacé par le vocabulaire de ChatGPT : gris
+   neutres, rail d'icônes seules, lignes arrondies, champ de saisie très arrondi, boutons en pilule,
+   cartes de réglages plus arrondies. Écrit en dernier : l'ordre décide.
+   ========================================================================== */
+
+/* --- Fenêtre : une barre latérale un cran plus sombre, la zone principale sans cadre --------------- */
+.app-main {
+  border: none;
+  border-radius: 0;
+}
+
+.titlebar__name {
+  font-weight: 500;
+  color: var(--hud-text-dim);
+}
+
+/* --- Rail : icônes seules dans des carrés arrondis, sans barre colorée ---------------------------- */
+.rail {
+  width: 60px;
+  gap: 4px;
+  padding: 6px 0 12px;
+}
+
+.rail__item {
+  width: 40px;
+  height: 40px;
+  gap: 0;
+  border-radius: 10px;
+  color: var(--hud-text-dim);
+}
+
+.rail__item::before {
+  content: none;
+}
+
+.rail__item:hover {
+  background: var(--jv-hover);
+  color: var(--hud-text);
+}
+
+.rail__item--active,
+.rail__item--active:hover {
+  background: var(--jv-hover-strong);
+  color: var(--hud-text);
+}
+
+.rail__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* --- Colonne de liste : titre, « Nouvelle … » en ligne, puis la liste ---------------------------- */
+.panel {
+  width: 260px;
+  padding: 4px 8px 12px 4px;
+}
+
+.panel__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--hud-text);
+}
+
+.panel__new {
+  padding: 2px 0 10px;
+}
+
+.panel__new .workspace__new {
+  width: 100%;
+  height: 38px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--hud-text);
+  font-size: 14px;
+}
+
+.panel__new .workspace__new:hover {
+  background: var(--jv-hover);
+}
+
+.panel__new .workspace__new-label {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+}
+
+.panel .workspace__item {
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
+}
+
+.panel .workspace__list li {
+  border-radius: 10px;
+}
+
+.panel .workspace__item:hover,
+.panel .workspace__list li:hover {
+  background: var(--jv-hover);
+}
+
+.panel .workspace__item--active,
+.panel .workspace__item--active:hover {
+  background: var(--jv-hover-strong);
+  color: var(--hud-text);
+}
+
+.panel__icon-button {
+  border-radius: 10px;
+}
+
+.panel__status {
+  color: var(--hud-text-faint);
+}
+
+/* --- Boutons : pilules ; le bouton principal plein, blanc sur sombre, noir sur clair ------------- */
+.options-menu__action,
+.options-page__close,
+.options-menu__scope-dialog-cancel,
+.options-menu__ollama-update-actions button,
+.app__new-models button,
+.memory-brain__actions button,
+.error-panel__actions button,
+.code-panel__result-actions button,
+.code-panel__live-stop,
+.workspace__confirm-yes,
+.workspace__confirm-no,
+.chat-widget__action,
+.capacity-scan button,
+.runtime-setup__actions button,
+.image-install__button,
+.quality-picker__download,
+.app__onboarding button,
+.voice-screen__talk,
+.empty-state__suggestion {
+  border-radius: 9999px;
+}
+
+.options-menu__action,
+.options-menu__ollama-update-actions button,
+.app__new-models button,
+.memory-brain__actions button,
+.error-panel__actions button,
+.code-panel__result-actions button,
+.workspace__confirm-no {
+  background: transparent;
+  border: 1px solid var(--hud-line-strong);
+  color: var(--hud-text);
+}
+
+.options-menu__action:hover,
+.options-menu__ollama-update-actions button:hover,
+.app__new-models button:hover,
+.memory-brain__actions button:hover,
+.error-panel__actions button:hover,
+.code-panel__result-actions button:hover,
+.workspace__confirm-no:hover {
+  background: var(--jv-hover);
+  border-color: var(--hud-line-strong);
+}
+
+/* Suggestions de l'écran d'accueil : des pastilles posées sur un trait, comme celles de ChatGPT. */
+.empty-state__suggestion {
+  height: 36px;
+  padding: 0 16px;
+  background: transparent;
+  border: 1px solid var(--hud-line-strong);
+  color: var(--hud-text-dim);
+}
+
+.empty-state__suggestion:hover {
+  background: var(--jv-hover);
+  color: var(--hud-text);
+}
+
+/* --- Cartes, champs, barres : coins plus doux ------------------------------------------------------ */
+.options-menu__group,
+.options-menu__model-group,
+.capacity-scan__tier,
+.options-menu__scope-dialog,
+.app__new-models,
+.code-panel__result,
+.memory-brain__note,
+.image-install__card,
+.code-panel__live,
+.app__setup-warning {
+  border-radius: 16px;
+}
+
+input:not(.options-menu__context-slider):not(.chat-widget__input):not(.options-menu__model-search):not([type='checkbox']):not([type='radio']),
+textarea:not(.composer__input),
+select {
+  border-radius: 10px !important;
+}
+
+.options-menu__progress-bar,
+.runtime-setup__bar,
+.options-menu__progress-bar-fill,
+.runtime-setup__bar-fill {
+  border-radius: 9999px;
+}
+
+.options-page a,
+.chat-panel__body a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* --- Chat : la bulle pour Léo, du texte simple pour Jaris ----------------------------------------- */
+.chat-panel__message--user {
+  border-radius: 22px;
+  background: var(--jv-bubble);
+}
+
+.chat-panel__avatar {
+  display: none;
+}
+
+/* --- Champ de saisie : un grand rectangle très arrondi, envoi rond et plein ----------------------- */
+.composer {
+  padding: 8px 10px 8px 14px;
+  border: 1px solid var(--jv-composer-border);
+  border-radius: 28px;
+  background: var(--jv-composer);
+  box-shadow: var(--jv-composer-shadow);
+}
+
+.composer:focus-within {
+  border-color: var(--jv-composer-border);
+  box-shadow: var(--jv-composer-shadow);
+}
+
+.composer__input {
+  font-size: 15px;
+}
+
+.composer__plus,
+.composer__mic,
+.composer__send {
+  width: 36px;
+  height: 36px;
+  border-radius: 9999px;
+}
+
+.composer__plus:not(:disabled):hover,
+.composer__mic:not(:disabled):hover,
+.composer__plus--open {
+  background: var(--jv-hover-strong);
+  color: var(--hud-text);
+}
+
+.composer__send:disabled {
+  opacity: 0.3;
+}
+
+.composer__menu,
+.effort-picker__panel {
+  border: 1px solid var(--hud-line);
+  border-radius: 16px;
+  background: var(--jv-composer);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+
+.composer__menu-item,
+.effort-picker__option {
+  border-radius: 10px;
+}
+
+.effort-picker__trigger {
+  border-radius: 9999px;
+}
+
+/* --- Agent vocal : des anneaux blancs (noirs en clair), plus aucune couleur de Windows ------------- */
+.voice-screen__button::before {
+  background: var(--hud-panel-raised);
+  border: none;
+}
+
+/* --- Options : onglets arrondis sans barre colorée, réglages séparés par un trait fin -------------- */
+.options-page .options-menu__tab {
+  border-radius: 10px;
+}
+
+.options-page .options-menu__tab::before {
+  content: none;
+}
+
+.options-page .options-menu__tab--active,
+.options-page .options-menu__tab--active:hover {
+  background: var(--jv-hover-strong);
+  color: var(--hud-text);
+}
+
+/* Les cartes restent (de l'air en haut et en bas, demandé par Léo à l'étape 116), arrondies et sans contour
+   marqué, comme les blocs de réglages de ChatGPT. */
+.options-page .options-menu__group-rows {
+  border: 1px solid var(--hud-line);
+  border-radius: 16px;
+  background: var(--hud-panel);
+}
+
+.options-page .options-menu__row {
+  border-bottom: 1px solid var(--hud-line);
+}
+
+.options-page .options-menu__group-rows > .options-menu__row:last-child {
+  border-bottom: none;
+}
+
+.options-page__tab-header h3 {
+  font-weight: 600;
+}
+
+/* Interrupteur : gris éteint, plein (blanc en sombre, noir en clair) allumé, pastille ronde. */
+.options-menu__switch {
+  width: 38px;
+  height: 22px;
+  border: none;
+  border-radius: 9999px;
+  background: var(--hud-line-strong);
+}
+
+.options-menu__switch--on {
+  background: var(--hud-accent);
+}
+
+.options-menu__switch-knob {
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.options-menu__switch--on .options-menu__switch-knob {
+  left: 19px;
+  background: var(--jv-accent-ink);
+}
+
+/* Ligne active de la liste : surlignée sur toute sa largeur (corbeille comprise), pas seulement le titre. */
+.panel .workspace__list li:has(.workspace__item--active) {
+  background: var(--jv-hover-strong);
+}
+
+.panel .workspace__item--active,
+.panel .workspace__item--active:hover {
+  background: transparent;
+}
+
+/* Écran d'accueil du Chat et du mode Code : la question et le champ de saisie ensemble au milieu de
+   l'écran, comme une nouvelle discussion ChatGPT ; dès le premier message, le champ redescend en bas.
+   Seulement sur une fenêtre assez haute : à 600 px, le bloc centré poussait le champ hors de l'écran. */
+@media (min-height: 700px) {
+  .chat-panel:has(.empty-state),
+  .code-panel:has(> .empty-state) {
+    justify-content: safe center;
+  }
+
+  .chat-panel:has(.empty-state) .chat-panel__thread {
+    flex: none;
+    padding-bottom: 8px;
+  }
+
+  .code-panel > .empty-state {
+    margin: 0;
+    padding-bottom: 8px;
+  }
+}
+
+/* Petite fenêtre : l'accueil du mode Code (logo, question, suggestions) rétrécit et défile plutôt que de
+   pousser le champ de saisie hors de l'écran. */
+.code-panel > .empty-state {
+  flex-shrink: 1;
+  min-height: 0;
+  overflow-y: auto;
 }

@@ -7135,3 +7135,26 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   barre de titre au premier lancement, liste par-dessus en fenêtre étroite, aucun texte sous 12 px) ; chaque
   assertion vérifiée en remettant son défaut. **Non vérifié ici** : le rendu sur la vraie machine de Léo (Mica,
   vrais boutons de Windows, police réelle).
+
+- **Étape 266 (v0.32.0), style ChatGPT à la place du style Windows 11 (Léo : « ça fait trop application Windows
+  avec la couleur violet, fais une vraie application stylée ChatGPT »).** Le violet venait de Jaris lui-même : le
+  design v2 recopiait la couleur d'accent de Windows (`systemPreferences.getAccentColor`), violette chez Léo, dans
+  le rail, la barre de saisie, les interrupteurs, les barres de progression. Mesuré sur sa capture : le reste de la
+  teinte venait du fond Mica, qui laisse deviner le fond d'écran. Retirés tous les deux (main.ts, `WindowChrome`
+  réduit à `titleBar`, canal `windowChrome` supprimé) : des gris neutres identiques sur toutes les machines, et
+  « l'accent » devient la couleur du texte (boutons pleins blancs en sombre, noirs en clair, comme ChatGPT).
+  Ce qui faisait aussi « Windows », remplacé par le vocabulaire de ChatGPT : libellés sous les icônes du rail
+  (icônes seules, libellé gardé pour l'infobulle et les lecteurs d'écran), barre colorée à gauche de l'élément
+  actif (fond gris à la place), zone principale posée comme un calque à coins arrondis (plus de cadre), coins à
+  4-6 px (pilules pour les boutons, 28 px pour la barre de saisie, 10 px pour les lignes), police Segoe UI (Geist,
+  déjà embarquée, passe devant), « Nouvelle conversation » en ligne sous le titre de la colonne, et la question
+  d'accueil + la barre de saisie centrées ensemble sur une conversation vide (seulement si la fenêtre fait au moins
+  700 px de haut : à 600 px, le bloc centré poussait la barre hors de l'écran — trouvé par le banc de captures).
+  **Les cartes des Options sont gardées**, simplement plus arrondies : j'avais commencé à les remplacer par des
+  lignes nues « comme ChatGPT », et `test-options-reorganization-ui.mjs` l'a refusé — l'air en haut et en bas des
+  cartes est une demande explicite de Léo (étape 116). Une nouvelle demande de style n'efface pas les demandes
+  précises déjà faites : les tests qui les gardent sont là pour le rappeler.
+  Neuf tests vérifiaient les valeurs exactes du design v2 (coins de 6 px, bleu Windows) : mis à jour aux nouvelles
+  valeurs. Régression ajoutée dans `scripts/test-window-chrome-ui.mjs` : aucune couleur vive dans la fenêtre, en
+  clair comme en sombre (seuls le logo et le point vert « Local » sont permis) — vérifié en remettant un accent
+  violet : le test échoue. **Non vérifié ici** : le rendu sur la vraie machine de Léo.

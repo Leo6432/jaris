@@ -361,7 +361,7 @@ test('les boutons du widget sont habillés par le CSS de Jaris, pas laissés au 
     for (const style of styles) {
       // Refonte « design sobre » : pilule à liseré fin en Geist (plus de coins coupés ni de Rajdhani).
       assert.match(style.font, /Geist/, 'bouton laissé à la police par défaut du navigateur')
-      assert.equal(style.radius, '6px', 'bouton sans les coins Windows 11 de la famille de Jaris')
+      assert.equal(style.radius, '9999px', 'bouton sans la pilule de la famille de Jaris (style ChatGPT, étape 266)')
       assert.equal(style.border, 'solid', 'bouton sans le liseré de la famille de Jaris')
     }
   })

@@ -236,7 +236,7 @@ test('qualité (étape 205) : barre limitée à la machine, une qualité absente
     // Le bouton de téléchargement est habillé par la famille « Installer », pas laissé au style du navigateur.
     const button = await page.$eval('.quality-picker__download', (el) => ({ text: el.textContent, radius: getComputedStyle(el).borderTopLeftRadius, color: getComputedStyle(el).color }))
     assert.match(button.text, /Télécharger \(11,5 Go\)/)
-    assert.equal(button.radius, '6px', 'coins Windows 11 de la famille de boutons (design v2)')
+    assert.equal(button.radius, '9999px', 'pilule de la famille de boutons (style ChatGPT, étape 266)')
     assert.notEqual(button.color, 'rgb(0, 0, 0)')
 
     // Envoyer avec une qualité pas encore téléchargée : message clair, aucune génération lancée.

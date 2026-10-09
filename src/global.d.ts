@@ -160,7 +160,6 @@ declare global {
       setActiveMode: (mode: AppMode) => void
       setOptionsOpen: (open: boolean) => void
       getWindowChrome: () => Promise<WindowChrome>
-      onWindowChrome: (cb: (chrome: WindowChrome) => void) => () => void
       minimizeToWidget: () => void
       getLaunchAtStartup: () => Promise<LaunchAtStartupStatus>
       setLaunchAtStartup: (enabled: boolean) => Promise<LaunchAtStartupStatus>

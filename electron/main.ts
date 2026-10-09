@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, nativeImage, nativeTheme, session, shell, systemPreferences, BrowserWindow, globalShortcut, screen, Tray, Menu, Notification } from 'electron'
+import { app, dialog, ipcMain, nativeImage, nativeTheme, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu, Notification } from 'electron'
 // Étape 143 : EN PREMIER — redirige le dossier interne de Chromium et les données vers le dossier de Jaris
 // (installé sur D, ou déplacé) avant que quoi que ce soit ne calcule un chemin ou ne prenne le verrou d'instance.
 import { cleanupStaleChromiumData, getStorageRoot } from './services/storageRoot'
@@ -64,7 +64,7 @@ import { cancelScheduledShutdown, scheduleShutdown } from './services/systemCont
 import { getDataRoot } from './services/dataLocation'
 import { resourcesRoot } from './paths'
 import { randomUUID } from 'crypto'
-import { release, tmpdir } from 'os'
+import { tmpdir } from 'os'
 import { deleteGeneratedApp, generateApp, getGeneratedAppsDir, listGeneratedApps, loadGeneratedApp } from './services/codeGenerator'
 import { createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
 import { previewVoice, synthesizeSpeech } from './services/tts'
@@ -353,29 +353,13 @@ function loadRenderer(win: BrowserWindow, mode: 'full' | 'widget'): void {
 const TITLE_BAR_HEIGHT = 40
 
 /**
- * Mica (fond translucide qui laisse deviner le bureau, comme les applis Windows 11) : seulement à partir de
- * Windows 11 22H2 (build 22621), où `backgroundMaterial` est pris en charge. Avant, la fenêtre garde un fond
- * plein — un fond transparent sans Mica derrière laisserait voir du noir.
+ * Étape 266 (Léo : « ça fait trop application Windows avec la couleur violet, fais une vraie application
+ * stylée ChatGPT ») : plus d'effet Mica (le fond de bureau teintait la fenêtre) ni de couleur d'accent de
+ * Windows (la sienne est violette) — des gris neutres, les mêmes sur toutes les machines. Seule la barre de
+ * titre dessinée par Jaris reste, avec les vrais boutons de Windows par-dessus.
  */
-function micaSupported(): boolean {
-  if (process.platform !== 'win32') return false
-  const build = Number(release().split('.')[2])
-  return Number.isFinite(build) && build >= 22621
-}
-
-/** Couleur d'accent de Windows (« 0078d4ff » côté Electron) au format CSS, `null` si illisible. */
-function windowsAccent(): string | null {
-  if (process.platform !== 'win32') return null
-  try {
-    const raw = systemPreferences.getAccentColor()
-    return /^[0-9a-f]{6}/i.test(raw) ? `#${raw.slice(0, 6)}` : null
-  } catch {
-    return null
-  }
-}
-
 function windowChrome(): WindowChrome {
-  return { titleBar: process.platform === 'win32', mica: micaSupported(), accent: windowsAccent() }
+  return { titleBar: process.platform === 'win32' }
 }
 
 /** Couleur des symboles réduire/agrandir/fermer : elle suit le thème clair ou sombre de Windows. */
@@ -400,8 +384,8 @@ function createFullWindow(showWhenReady = true): BrowserWindow {
     // Design v2 (style Windows 11) : barre de titre native cachée, mais les vrais boutons de Windows gardés
     // par-dessus (titleBarOverlay) — Jaris dessine le reste de la barre (logo, nom, zone de déplacement).
     ...(chrome.titleBar ? { titleBarStyle: 'hidden' as const, titleBarOverlay: titleBarOverlay() } : {}),
-    ...(chrome.mica ? { backgroundMaterial: 'mica' as const } : {}),
-    backgroundColor: chrome.mica ? '#00000000' : nativeTheme.shouldUseDarkColors ? '#202020' : '#f3f3f3',
+    // Le fond de la barre latérale (index.css, --jv-side) : rien ne clignote d'une autre couleur au démarrage.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#181818' : '#f9f9f9',
     webPreferences: {
       preload: join(__dirname, '../preload/preload.mjs'),
       sandbox: false
@@ -1223,15 +1207,12 @@ app.whenReady().then(async () => {
   // Bouton « Widget » du rail (design v2) : exactement comme le bouton réduire de Windows — le handler
   // 'minimize' de la fenêtre principale décide s'il y a un widget à montrer pour le mode affiché.
   ipcMain.on(IPC_CHANNELS.minimizeToWidget, () => fullWindow?.minimize())
-  // Thème ou couleur d'accent changés dans Windows pendant que Jaris tourne : la page suit déjà le thème
-  // toute seule (prefers-color-scheme), mais les symboles de la barre de titre et l'accent viennent d'ici.
-  const refreshChrome = (): void => {
-    if (!fullWindow || fullWindow.isDestroyed()) return
-    if (process.platform === 'win32') fullWindow.setTitleBarOverlay(titleBarOverlay())
-    fullWindow.webContents.send(IPC_CHANNELS.windowChrome, windowChrome())
-  }
-  nativeTheme.on('updated', refreshChrome)
-  if (process.platform === 'win32') systemPreferences.on('accent-color-changed', refreshChrome)
+  // Thème clair/sombre changé dans Windows pendant que Jaris tourne : la page suit toute seule
+  // (prefers-color-scheme), mais les symboles des boutons de la barre de titre viennent d'ici.
+  nativeTheme.on('updated', () => {
+    if (!fullWindow || fullWindow.isDestroyed() || process.platform !== 'win32') return
+    fullWindow.setTitleBarOverlay(titleBarOverlay())
+  })
   ipcMain.handle(IPC_CHANNELS.getModelOverview, async () => getModelOverview(await getProfile()))
   // Étape suivante (Léo : "jaris voit les model et regarde la vram et propose une barre... personnalisé à
   // chacun pour que le dernier ne dépasse pas la vram") : le modèle de référence est celui du palier
