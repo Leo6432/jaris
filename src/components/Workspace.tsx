@@ -68,9 +68,11 @@ export default function Workspace({
   const activeItem = items.find((item) => item.id === activeId)
 
   const newButton = (
-    <button className="workspace__new" onClick={onNew}>
+    // Design v2 : dans la colonne de la coque, seul le crayon est visible (le libellé reste en bulle et pour
+    // les lecteurs d'écran) ; dans la colonne autonome, le libellé s'affiche à côté.
+    <button className="workspace__new" onClick={onNew} title={newLabel}>
       <NewIcon />
-      {newLabel}
+      <span className="workspace__new-label">{newLabel}</span>
     </button>
   )
 

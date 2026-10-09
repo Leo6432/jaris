@@ -9,23 +9,27 @@
 :root {
   color-scheme: dark;
 
-  /* Refonte « design sobre » (maquette Jaris.dc.html, variante Graphite) : les noms --hud-* sont gardés
-     pour ne pas réécrire les centaines de règles qui les utilisent, seules leurs valeurs changent. */
-  --hud-bg: #1c1c1e;
-  --hud-panel: #262629;
-  --hud-panel-raised: #262629;
+  /* Design v2 (maquette « Jaris v2.dc.html », style Windows 11) : les noms --hud-* sont gardés pour ne pas
+     réécrire les centaines de règles qui les utilisent, seules leurs valeurs changent. Thème sombre ici, thème
+     clair juste en dessous : Jaris suit le réglage de Windows (prefers-color-scheme). */
+  --hud-bg: #272727;
+  --hud-panel: #2d2d2d;
+  --hud-panel-raised: #2d2d2d;
 
   /* Texte, du plus lisible au plus discret. */
-  --hud-text: #ececed;
-  --hud-text-soft: #c9c9ce;
-  --hud-text-dim: #a3a3aa;
-  --hud-text-faint: #75757d;
+  --hud-text: #ffffff;
+  --hud-text-soft: #e4e4e4;
+  --hud-text-dim: #c8c8c8;
+  --hud-text-faint: #9d9d9d;
 
-  /* Accent : le texte clair lui-même (boutons pleins clairs sur fond sombre, comme ChatGPT). */
-  --hud-accent: #ececed;
-  --hud-accent-bright: #ffffff;
-  --hud-accent-deep: #a3a3aa;
-  --hud-accent-rgb: 236, 236, 237;
+  /* Accent : la couleur d'accent de Windows (--jv-accent, posée par App.tsx), bleu Windows par défaut. */
+  --jv-accent: #0078d4;
+  --hud-accent: var(--jv-accent);
+  --hud-accent-bright: color-mix(in oklch, var(--jv-accent) 60%, white);
+  --hud-accent-deep: color-mix(in oklch, var(--jv-accent) 70%, black);
+  --hud-accent-rgb: 0, 120, 212;
+  /* Accent lisible comme TEXTE (liens) : éclairci sur fond sombre. */
+  --jv-accent-text: color-mix(in oklch, var(--jv-accent) 55%, white);
 
   /* Couleurs de sens (jamais décoratives) : ambre = attention, vert = OK, rouge = échec. */
   --hud-gold: #e8a33d;
@@ -34,25 +38,60 @@
   --hud-danger: #e5484d;
   --hud-danger-soft: #f2a5a7;
 
-  --hud-line: #34343a;
-  --hud-line-strong: #46464e;
+  --hud-line: rgba(255, 255, 255, 0.08);
+  --hud-line-strong: rgba(255, 255, 255, 0.16);
   --hud-glow: none;
 
-  /* Surfaces propres au nouveau design. */
-  --jv-side: #151517;
-  --jv-hover: #2e2e33;
-  --jv-bubble: #2c2c30;
-  --jv-code: #141416;
-  --jv-accent-ink: #151517;
+  /* Encre des anciens voiles « blanc translucide » : blanc en sombre, noir en clair. */
+  --jv-ink-rgb: 255, 255, 255;
 
-  --hud-font-display: 'Geist Sans', 'Segoe UI', system-ui, sans-serif;
-  --hud-font-body: 'Geist Sans', 'Segoe UI', system-ui, sans-serif;
-  --hud-font-mono: 'Geist Mono', 'Cascadia Mono', Consolas, ui-monospace, monospace;
+  /* Surfaces propres au design. --jv-side : le cadre de la fenêtre (rail, colonne) quand Mica est absent. */
+  --jv-side: #202020;
+  --jv-mica: rgba(32, 32, 32, 0.8);
+  --jv-hover: rgba(255, 255, 255, 0.06);
+  --jv-bubble: #363636;
+  --jv-code: #1e1e1e;
+  --jv-accent-ink: #ffffff;
+  --jv-frame: rgba(255, 255, 255, 0.1);
+
+  --hud-font-display: 'Segoe UI Variable Text', 'Segoe UI', 'Geist Sans', system-ui, sans-serif;
+  --hud-font-body: 'Segoe UI Variable Text', 'Segoe UI', 'Geist Sans', system-ui, sans-serif;
+  --hud-font-mono: 'Cascadia Code', 'Cascadia Mono', Consolas, 'Geist Mono', ui-monospace, monospace;
 
   font-family: var(--hud-font-body);
-  font-size: 15px;
+  font-size: 14px;
   font-synthesis-weight: none;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Thème clair de Windows. */
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+
+    --hud-bg: #fbfbfb;
+    --hud-panel: #ffffff;
+    --hud-panel-raised: #ffffff;
+
+    --hud-text: #1b1b1b;
+    --hud-text-soft: #333333;
+    --hud-text-dim: #5d5d5d;
+    --hud-text-faint: #868686;
+
+    --jv-accent-text: var(--jv-accent);
+
+    --hud-line: rgba(0, 0, 0, 0.08);
+    --hud-line-strong: rgba(0, 0, 0, 0.16);
+
+    --jv-ink-rgb: 0, 0, 0;
+
+    --jv-side: #f3f3f3;
+    --jv-mica: rgba(243, 243, 243, 0.8);
+    --jv-hover: rgba(0, 0, 0, 0.05);
+    --jv-bubble: #efefef;
+    --jv-code: #f5f5f5;
+    --jv-frame: rgba(0, 0, 0, 0.1);
+  }
 }
 
 * {
@@ -114,89 +153,6 @@ body.body--scan {
   height: 100%;
 }
 
-.sidebar {
-  width: 200px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  padding: 20px 14px;
-  border-right: 1px solid rgba(255, 255, 255, 0.09);
-  background: rgba(21, 21, 23, 0.5);
-}
-
-.sidebar__brand {
-  font-size: 0.85rem;
-  color: var(--hud-accent);
-  padding-left: 8px;
-}
-
-.sidebar__modes {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.sidebar__mode {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  text-align: left;
-  background: transparent;
-  border: none;
-  border-left: 2px solid transparent;
-  color: var(--hud-text-dim);
-  padding: 9px 12px;
-  border-radius: 0 8px 8px 0;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.sidebar__mode:hover {
-  background: rgba(255, 255, 255, 0.035);
-  color: var(--hud-text);
-}
-
-.sidebar__mode--active {
-  background: rgba(var(--hud-accent-rgb), 0.06);
-  border-left-color: var(--hud-accent);
-  color: var(--hud-text);
-}
-
-.sidebar__mode-label {
-  font-size: 0.88rem;
-}
-
-.sidebar__mode-hint {
-  font-size: 0.68rem;
-  color: var(--hud-text-faint);
-}
-
-/* Repoussé en bas de la colonne : les réglages ne sont pas au même niveau que les 3 modes. */
-.sidebar__footer {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.sidebar__link {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.175);
-  color: var(--hud-text-dim);
-  padding: 6px 16px;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.sidebar__link:hover {
-  border-color: var(--hud-accent);
-  color: var(--hud-text);
-}
-
 .app-main {
   position: relative;
   flex: 1;
@@ -236,7 +192,7 @@ body.body--scan {
 
 .options-menu__trigger {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.175);
+  border: 1px solid rgba(var(--jv-ink-rgb), 0.175);
   color: var(--hud-text-dim);
   padding: 6px 16px;
   border-radius: 999px;
@@ -266,12 +222,12 @@ body.body--scan {
   justify-content: space-between;
   gap: 16px;
   padding: 14px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(var(--jv-ink-rgb), 0.1);
 }
 
 .options-page__close {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.175);
+  border: 1px solid rgba(var(--jv-ink-rgb), 0.175);
   color: var(--hud-text-dim);
   padding: 6px 14px;
   border-radius: 999px;
@@ -317,7 +273,7 @@ body.body--scan {
 .options-menu__tabs {
   display: flex;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--jv-ink-rgb), 0.04);
   border-radius: 999px;
   padding: 3px;
 }
@@ -395,7 +351,7 @@ body.body--scan {
   justify-content: space-between;
   gap: 20px;
   padding: 14px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(var(--jv-ink-rgb), 0.06);
 }
 
 .options-menu__group-rows > .options-menu__row:last-child {
@@ -694,7 +650,7 @@ body.body--scan {
 
 .options-menu__scope-dialog {
   background: var(--hud-panel);
-  border: 1px solid rgba(255, 255, 255, 0.125);
+  border: 1px solid rgba(var(--jv-ink-rgb), 0.125);
   border-radius: 14px;
   padding: 22px 24px;
   max-width: 380px;
@@ -742,7 +698,7 @@ body.body--scan {
 
 .options-menu__scope-dialog-cancel {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.175);
+  border: 1px solid rgba(var(--jv-ink-rgb), 0.175);
   color: var(--hud-text-dim);
   padding: 7px 16px;
   border-radius: 999px;
@@ -764,7 +720,7 @@ body.body--scan {
 .options-menu__progress-bar {
   height: 6px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.075);
+  background: rgba(var(--jv-ink-rgb), 0.075);
   overflow: hidden;
 }
 
@@ -846,8 +802,8 @@ body.body--scan {
 /* Chaque palier dans sa propre carte : plus facile à distinguer d'un seul coup d'œil que 5 tableaux qui
    s'enchaînent sans séparation visuelle. */
 .options-menu__model-group {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(var(--jv-ink-rgb), 0.02);
+  border: 1px solid rgba(var(--jv-ink-rgb), 0.06);
   border-radius: 10px;
   padding: 10px 12px;
 }
@@ -873,7 +829,7 @@ body.body--scan {
 .options-menu__model-overview td {
   padding: 6px 10px;
   text-align: left;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(var(--jv-ink-rgb), 0.06);
 }
 
 .options-menu__model-overview th {
@@ -1042,7 +998,7 @@ body.body--scan {
   height: 6px;
   margin: 10px 0 6px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.075);
+  background: rgba(var(--jv-ink-rgb), 0.075);
   cursor: pointer;
 }
 
@@ -1070,7 +1026,7 @@ body.body--scan {
 .options-menu__context-slider::-moz-range-track {
   height: 6px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.075);
+  background: rgba(var(--jv-ink-rgb), 0.075);
 }
 
 .options-menu__context-slider-ticks {
@@ -1102,7 +1058,7 @@ body.body--scan {
 }
 
 .options-menu__history-entry {
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(var(--jv-ink-rgb), 0.1);
   border-radius: 10px;
   padding: 10px 14px;
   display: flex;
@@ -1338,7 +1294,7 @@ body.body--scan {
   padding: 14px 20px;
   font-size: 0.85rem;
   color: var(--hud-text-soft);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(var(--jv-ink-rgb), 0.1);
 }
 
 .memory-brain__actions {
@@ -1348,7 +1304,7 @@ body.body--scan {
 
 .memory-brain__actions button {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.175);
+  border: 1px solid rgba(var(--jv-ink-rgb), 0.175);
   color: var(--hud-text-dim);
   padding: 6px 14px;
   border-radius: 999px;
@@ -1383,7 +1339,7 @@ body.body--scan {
   bottom: 20px;
   width: min(360px, 80vw);
   background: rgba(21, 21, 23, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(var(--jv-ink-rgb), 0.15);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -1398,7 +1354,7 @@ body.body--scan {
   font-size: 0.85rem;
   font-weight: 500;
   color: var(--hud-text);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(var(--jv-ink-rgb), 0.1);
 }
 
 .memory-brain__note-header button {
@@ -1497,8 +1453,8 @@ body.body--scan {
 
 .app__onboarding input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.175);
+  background: rgba(var(--jv-ink-rgb), 0.06);
+  border: 1px solid rgba(var(--jv-ink-rgb), 0.175);
   color: var(--hud-text);
   padding: 10px 14px;
   border-radius: 999px;
@@ -1528,7 +1484,7 @@ body.body--scan {
 
 .app__onboarding button.app__onboarding-secondary {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.175);
+  border: 1px solid rgba(var(--jv-ink-rgb), 0.175);
   color: var(--hud-text-dim);
 }
 
@@ -1608,8 +1564,8 @@ body.body--scan {
 
 .capacity-scan__tier {
   text-align: left;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(var(--jv-ink-rgb), 0.03);
+  border: 1px solid rgba(var(--jv-ink-rgb), 0.1);
   border-radius: 14px;
   padding: 10px 16px;
 }
@@ -2069,8 +2025,8 @@ p.capacity-scan__tier-missing {
 
 .chat-panel__message--assistant {
   align-self: flex-start;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(var(--jv-ink-rgb), 0.04);
+  border: 1px solid rgba(var(--jv-ink-rgb), 0.1);
   color: var(--hud-text);
 }
 
@@ -2530,7 +2486,7 @@ p.capacity-scan__tier-missing {
 .code-panel__done--stopped {
   color: var(--hud-text-dim);
   border-color: var(--hud-line);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(var(--jv-ink-rgb), 0.03);
   box-shadow: none;
 }
 
@@ -2540,7 +2496,7 @@ p.capacity-scan__tier-missing {
   max-height: 110px;
   overflow-y: auto;
   background: rgba(21, 21, 23, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(var(--jv-ink-rgb), 0.1);
   border-radius: 8px;
   font-family: inherit;
   font-size: 0.68rem;
@@ -2576,7 +2532,7 @@ p.capacity-scan__tier-missing {
 .code-panel__view-tabs {
   display: flex;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--jv-ink-rgb), 0.04);
   border-radius: 999px;
   padding: 3px;
 }
@@ -2603,7 +2559,7 @@ p.capacity-scan__tier-missing {
   flex: 1;
   min-height: 0;
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(var(--jv-ink-rgb), 0.1);
   border-radius: 10px;
   background: #ffffff;
 }
@@ -2615,7 +2571,7 @@ p.capacity-scan__tier-missing {
   margin: 0;
   padding: 12px 14px;
   background: rgba(21, 21, 23, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(var(--jv-ink-rgb), 0.1);
   border-radius: 10px;
   font-size: 0.7rem;
   line-height: 1.55;
@@ -2684,7 +2640,7 @@ p.capacity-scan__tier-missing {
   width: 100%;
   height: 6px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(var(--jv-ink-rgb), 0.1);
   overflow: hidden;
 }
 
@@ -2733,7 +2689,7 @@ p.capacity-scan__tier-missing {
 
 .runtime-setup__actions .runtime-setup__skip {
   background: transparent;
-  border-color: rgba(255, 255, 255, 0.175);
+  border-color: rgba(var(--jv-ink-rgb), 0.175);
   color: var(--hud-text-soft);
 }
 
@@ -3567,7 +3523,7 @@ p.capacity-scan__tier-missing {
   height: 30px;
   padding: 0 2px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(var(--jv-ink-rgb), 0.07);
 }
 
 .effort-picker__slider:focus-visible {
@@ -3600,18 +3556,18 @@ p.capacity-scan__tier-missing {
   padding: 0;
   border: none;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0 2px, transparent 2.5px);
+  background: radial-gradient(circle, rgba(var(--jv-ink-rgb), 0.28) 0 2px, transparent 2.5px);
   cursor: pointer;
   transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
 .effort-picker__step:not(:disabled):hover {
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.7) 0 3px, transparent 3.5px);
+  background: radial-gradient(circle, rgba(var(--jv-ink-rgb), 0.7) 0 3px, transparent 3.5px);
 }
 
 .effort-picker__step--filled,
 .effort-picker__step--filled:not(:disabled):hover {
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.6) 0 2px, transparent 2.5px);
+  background: radial-gradient(circle, rgba(var(--jv-ink-rgb), 0.6) 0 2px, transparent 2.5px);
 }
 
 .effort-picker__step--active,
@@ -4221,63 +4177,8 @@ textarea::placeholder {
   background: var(--hud-bg);
 }
 
-.sidebar {
-  width: 264px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  padding: 10px;
-  background: var(--jv-side);
-  border-right: none;
-}
-
-.sidebar__head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 6px 14px;
-}
-
-.sidebar__logo {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-}
-
-.sidebar__brand {
-  flex: 1;
-  padding: 0;
-  border: none;
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--hud-text);
-}
-
-.sidebar__icon-button {
-  width: 34px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 8px;
-  color: var(--hud-text-dim);
-  cursor: pointer;
-}
-
-.sidebar__icon-button:hover {
-  background: var(--jv-hover);
-}
-
-/* Toutes les rangées de la barre ont la même forme : 40px, icône + libellé, coins de 10px. */
+/* Bouton « Nouveau… » et ancien déclencheur des Options : 40px, icône + libellé. */
 .workspace__new,
-.sidebar__mode,
-.sidebar__link,
 .options-menu__trigger {
   display: flex;
   flex-direction: row;
@@ -4299,68 +4200,10 @@ textarea::placeholder {
 }
 
 .workspace__new:hover,
-.sidebar__mode:hover,
-.sidebar__link:hover,
 .options-menu__trigger:hover {
   background: var(--jv-hover);
   color: var(--hud-text);
   border-color: transparent;
-}
-
-.sidebar__mode::before {
-  display: none;
-}
-
-.sidebar__mode--active {
-  background: var(--jv-hover);
-}
-
-.sidebar__mode-label {
-  font-size: 14px;
-}
-
-.sidebar__new:empty {
-  display: none;
-}
-
-.sidebar__modes {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 4px 0 14px;
-}
-
-.sidebar__recents {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.sidebar__footer {
-  margin-top: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 1px;
-  padding-top: 10px;
-  border-top: 1px solid var(--hud-line);
-}
-
-.sidebar__status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px 2px;
-  font-size: 12px;
-  color: var(--hud-text-faint);
-}
-
-.sidebar__status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--hud-ok);
 }
 
 .app-main {
@@ -4487,10 +4330,6 @@ textarea::placeholder {
 .workspace__item--active {
   border-left: none;
   background: transparent;
-}
-
-.sidebar .workspace__item-meta {
-  display: none;
 }
 
 .workspace--inline .workspace__item {
@@ -5361,4 +5200,673 @@ textarea::placeholder {
   border: 1px solid var(--hud-line);
   border-radius: 16px;
   background: var(--hud-panel);
+}
+
+/* ==========================================================================
+   Design v2 — style Windows 11 (maquette Claude Design « Jaris v2.dc.html »)
+   --------------------------------------------------------------------------
+   Rail d'icônes à gauche (Chat, Vocal, Code, Image, Vidéo ; Cerveau, Widget, Options en bas), colonne de
+   liste à côté (Conversations, Projets, Images, Vidéos), zone principale posée comme un calque aux coins
+   arrondis. Fenêtre façon Windows 11 : barre de titre de 40px, fond Mica, Segoe UI, couleur d'accent et
+   thème clair/sombre de Windows. Écrit APRÈS tout le reste : à spécificité égale, c'est l'ordre qui décide.
+   ========================================================================== */
+
+/* --- Fenêtre ------------------------------------------------------------- */
+
+body {
+  background: var(--jv-side);
+}
+
+/* Mica (Windows 11 22H2+) : la page reste transparente, l'effet de Windows fait le fond. */
+html.body--mica,
+body.body--mica {
+  background: transparent;
+}
+
+.app-shell {
+  flex-direction: column;
+  background: var(--jv-side);
+}
+
+.body--mica .app-shell {
+  background: transparent;
+}
+
+.app-shell__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* Barre de titre : zone de déplacement de la fenêtre. Les boutons réduire/agrandir/fermer sont ceux de
+   Windows, posés par-dessus à droite (titleBarOverlay, main.ts) — rien à dessiner de ce côté. */
+.titlebar {
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 16px;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.titlebar__logo {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+.titlebar__name {
+  font-size: 12px;
+  color: var(--hud-text-dim);
+}
+
+/* --- Rail d'icônes -------------------------------------------------------- */
+
+.rail {
+  width: 68px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 0 10px;
+}
+
+.app-shell:not(.app-shell--titlebar) .rail {
+  padding-top: 10px;
+}
+
+.rail__item {
+  position: relative;
+  width: 58px;
+  height: 54px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0;
+  font-family: var(--hud-font-body);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--hud-text-dim);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+/* Petite barre d'accent à gauche de l'élément actif, comme dans Windows 11. */
+.rail__item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  border-radius: 2px;
+  background: var(--hud-accent);
+  transform: translateY(-50%);
+  transition: height 0.15s ease;
+}
+
+.rail__item:hover,
+.rail__item--active {
+  background: var(--jv-hover);
+  color: var(--hud-text);
+}
+
+.rail__item--active::before {
+  height: 18px;
+}
+
+.rail__label {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.rail__spacer {
+  flex: 1;
+}
+
+/* --- Colonne de liste (Conversations, Projets, Images, Vidéos) ------------- */
+
+.panel {
+  width: 248px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 8px 10px 2px;
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+.panel__head {
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px 0 10px;
+}
+
+.panel__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.panel__new:empty {
+  display: none;
+}
+
+.panel__icon-button,
+.panel__new .workspace__new {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--hud-text);
+  cursor: pointer;
+}
+
+.panel__icon-button:hover,
+.panel__new .workspace__new:hover {
+  background: var(--jv-hover);
+}
+
+.panel__new .workspace__new svg {
+  width: 17px;
+  height: 17px;
+}
+
+.panel__new .workspace__new-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.panel__list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: 4px;
+}
+
+.panel .workspace__rail-label {
+  display: none;
+}
+
+.panel .workspace__empty {
+  padding: 8px 12px;
+}
+
+.panel .workspace__list {
+  gap: 2px;
+}
+
+.panel .workspace__list li,
+.panel .workspace__item {
+  border-radius: 6px;
+}
+
+.panel .workspace__item {
+  height: 36px;
+  padding: 0 12px;
+}
+
+.panel__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 0;
+  font-size: 12px;
+  color: var(--hud-text-faint);
+}
+
+.panel__status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--hud-ok);
+}
+
+/* Colonne autonome (écran rendu hors de la coque) : mêmes formes. */
+.workspace__side {
+  background: var(--jv-side);
+}
+
+.workspace__new {
+  height: 36px;
+  border-radius: 6px;
+}
+
+/* --- Zone principale : un calque aux coins arrondis posé sur le cadre ----- */
+
+.app-main {
+  background: var(--hud-bg);
+  border-top: 1px solid var(--hud-line);
+  border-left: 1px solid var(--hud-line);
+  border-top-left-radius: 8px;
+}
+
+.app-header {
+  height: 48px;
+  padding: 0 12px;
+}
+
+.app-header__title {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* --- Boutons, cartes, champs : coins Windows 11 ---------------------------- */
+
+.options-menu__action,
+.options-page__close,
+.options-menu__scope-dialog-cancel,
+.options-menu__ollama-update-actions button,
+.app__new-models button,
+.memory-brain__actions button,
+.error-panel__actions button,
+.code-panel__result-actions button,
+.code-panel__live-stop,
+.workspace__confirm-yes,
+.workspace__confirm-no,
+.chat-widget__action,
+.capacity-scan button,
+.runtime-setup__actions button,
+.image-install__button,
+.quality-picker__download,
+.app__onboarding button {
+  border-radius: 6px;
+  background: var(--hud-panel);
+}
+
+.capacity-scan button:not(.capacity-scan__secondary),
+.runtime-setup__actions button:first-child,
+.image-install__button,
+.app__onboarding button {
+  color: var(--jv-accent-ink);
+  background: var(--hud-accent);
+  border-color: transparent;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:not(.composer__input):focus-visible {
+  outline: 2px solid var(--hud-accent);
+  outline-offset: 2px;
+}
+
+.options-menu__group,
+.options-menu__model-group,
+.capacity-scan__tier,
+.options-menu__scope-dialog,
+.app__new-models,
+.code-panel__result,
+.memory-brain__note,
+.image-install__card,
+.code-panel__live,
+.app__setup-warning {
+  border-radius: 8px;
+}
+
+input:not(.options-menu__context-slider):not(.chat-widget__input):not(.options-menu__model-search):not([type='checkbox']):not([type='radio']),
+textarea:not(.composer__input),
+select {
+  border-radius: 4px !important;
+}
+
+.options-menu__progress-bar,
+.runtime-setup__bar,
+.options-menu__progress-bar-fill,
+.runtime-setup__bar-fill {
+  border-radius: 2px;
+}
+
+.options-page a,
+.chat-panel__body a {
+  color: var(--jv-accent-text);
+}
+
+/* --- Écrans vides, Chat, blocs de code ------------------------------------ */
+
+.empty-state__title {
+  font-size: 26px;
+}
+
+.empty-state__description {
+  font-size: 14px;
+}
+
+.empty-state__suggestion {
+  height: 34px;
+  background: var(--hud-panel);
+  border-radius: 6px;
+}
+
+.chat-panel__message {
+  font-size: 14px;
+}
+
+.chat-panel__message--user {
+  padding: 9px 14px;
+  border-radius: 18px;
+}
+
+.chat-panel__avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+}
+
+.chat-panel pre,
+.code-panel__code,
+.image-panel__thumb {
+  border-radius: 8px;
+}
+
+/* --- Barre de saisie : champ Windows 11, trait d'accent en bas au focus ----- */
+
+.composer {
+  padding: 6px;
+  border: 1px solid var(--hud-line);
+  border-bottom: 2px solid var(--hud-line);
+  border-radius: 8px;
+  background: var(--hud-panel);
+}
+
+.composer:focus-within {
+  border-color: var(--hud-line);
+  border-bottom-color: var(--hud-accent);
+}
+
+.composer__input {
+  font-size: 14px;
+}
+
+.composer__plus,
+.composer__mic,
+.composer__send {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+}
+
+.composer__plus {
+  border: none;
+}
+
+.composer__send {
+  background: var(--hud-accent);
+  color: var(--jv-accent-ink);
+}
+
+.composer__send:disabled {
+  opacity: 0.35;
+}
+
+.composer__menu,
+.effort-picker__panel {
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.composer__menu-item,
+.effort-picker__option {
+  border-radius: 4px;
+}
+
+.effort-picker__trigger {
+  border-radius: 6px;
+}
+
+/* --- Agent vocal ---------------------------------------------------------- */
+
+.voice-screen {
+  gap: 22px;
+}
+
+/* Le bouton fait 160px, le cercle visible 120px au centre : la place autour sert aux anneaux. */
+.voice-screen__button {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  border: none;
+  background: transparent;
+}
+
+.voice-screen__button::before {
+  content: '';
+  position: absolute;
+  inset: 20px;
+  border-radius: 50%;
+  background: var(--hud-panel);
+  border: 1px solid var(--hud-line);
+  transition: background 0.15s ease;
+}
+
+.voice-screen__button:hover {
+  background: transparent;
+}
+
+.voice-screen__button:hover::before {
+  background: color-mix(in srgb, var(--hud-panel) 92%, var(--hud-text));
+}
+
+.voice-screen__logo {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: 22px;
+  transition: opacity 0.3s ease;
+}
+
+.voice-screen[data-emotion='thinking'] .voice-screen__logo {
+  opacity: 0.6;
+}
+
+.voice-screen__ring {
+  position: absolute;
+  inset: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--hud-accent);
+  animation: jv-ring 2s infinite ease-out;
+  pointer-events: none;
+}
+
+.voice-screen__ring--late {
+  animation-delay: 1s;
+}
+
+@keyframes jv-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-screen__ring {
+    animation: none;
+    opacity: 0.4;
+  }
+}
+
+.app__voice-footer {
+  gap: 14px;
+  max-width: 520px;
+}
+
+.app__status {
+  font-size: 22px;
+  letter-spacing: 0;
+}
+
+.app__hint {
+  max-width: 420px;
+  font-size: 14px;
+}
+
+.app__hint:empty {
+  display: none;
+}
+
+.app__hint--small {
+  font-size: 12px;
+  color: var(--hud-text-faint);
+}
+
+/* L'échange en cours dans une carte : ce que Léo a dit (discret), puis la réponse de Jaris. */
+.app__conversation:not(.app__conversation--widget) {
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--hud-panel);
+  border: 1px solid var(--hud-line);
+  border-radius: 8px;
+  line-height: 1.5;
+}
+
+.app__conversation:not(.app__conversation--widget) .app__transcript {
+  align-self: stretch;
+  max-width: none;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--hud-text-dim);
+}
+
+.app__conversation:not(.app__conversation--widget) .app__reply {
+  display: block;
+  line-height: 1.5;
+}
+
+.voice-screen__talk {
+  height: 40px;
+  padding: 0 22px;
+  font-family: var(--hud-font-body);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--jv-accent-ink);
+  background: var(--hud-accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.voice-screen__talk:hover {
+  opacity: 0.9;
+}
+
+/* --- Options : un écran du rail, façon Paramètres de Windows 11 ------------ */
+
+.options-page--embedded {
+  position: static;
+  z-index: auto;
+  flex: 1;
+  min-height: 0;
+  background: transparent;
+}
+
+.options-page--embedded .options-page__header {
+  display: none;
+}
+
+.options-page--embedded .options-page__navigation {
+  padding: 4px 12px 24px 24px;
+  background: transparent;
+  border-right: none;
+}
+
+.options-page .options-menu__tabs {
+  gap: 2px;
+}
+
+.options-page .options-menu__tab {
+  position: relative;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 6px;
+}
+
+.options-page .options-menu__tab::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  border-radius: 2px;
+  background: var(--hud-accent);
+  transform: translateY(-50%);
+  transition: height 0.15s ease;
+}
+
+.options-page .options-menu__tab--active::before {
+  height: 16px;
+}
+
+.options-page__tab-header h3 {
+  font-size: 24px;
+}
+
+.options-page .options-menu__group-rows {
+  border-radius: 8px;
+}
+
+/* Interrupteur Windows 11 : contour gris éteint, plein couleur d'accent allumé. */
+.options-menu__switch {
+  width: 40px;
+  height: 20px;
+  border: 1px solid var(--hud-text-dim);
+  border-radius: 10px;
+  background: transparent;
+}
+
+.options-menu__switch--on {
+  border-color: var(--hud-accent);
+  background: var(--hud-accent);
+}
+
+.options-menu__switch-knob {
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  background: var(--hud-text-dim);
+  transition: left 0.15s ease;
+}
+
+.options-menu__switch--on .options-menu__switch-knob {
+  left: 23px;
+  background: #ffffff;
+}
+
+/* Intertitres de « Ce que Jaris sait faire » : un cran au-dessus du texte de base (14px en v2). */
+.options-menu__capability-group-title {
+  font-size: 16px;
 }

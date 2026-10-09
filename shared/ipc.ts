@@ -21,6 +21,19 @@ export type AppMode = 'voice' | 'chat' | 'code' | 'image' | 'video'
 export type WidgetMode = 'voice' | 'chat-idle' | 'chat'
 
 /**
+ * Habillage Windows 11 de la fenêtre principale (design v2, maquette « Jaris v2.dc.html ») : barre de titre
+ * dessinée par Jaris avec les vrais boutons de Windows par-dessus, fond Mica, couleur d'accent de Windows.
+ */
+export interface WindowChrome {
+  /** Vrai sous Windows : la barre de titre native est cachée, Jaris dessine la sienne (40px). */
+  titleBar: boolean
+  /** Vrai si l'effet Mica est actif (Windows 11 22H2 et plus) : le fond de la page doit rester transparent. */
+  mica: boolean
+  /** Couleur d'accent choisie dans Windows (#rrggbb), `null` si elle n'est pas lisible. */
+  accent: string | null
+}
+
+/**
  * Identifiants des sons courts du design sonore de Jaris (étape 31) — synthétisés à la volée côté renderer
  * (voir src/lib/soundDesign.ts, Web Audio API), jamais de vrais fichiers audio embarqués : reste léger et ne
  * dépend d'aucun asset à maintenir. 'listening'/'thinking'/'success'/'error' suivent les mêmes transitions
@@ -889,6 +902,12 @@ export const IPC_CHANNELS = {
    * dialogue natif (`dialogOpen`) ou une fermeture volontaire (`quitting`).
    */
   setOptionsOpen: 'jaris:set-options-open',
+  /** renderer <-> main : habillage Windows 11 de la fenêtre principale (WindowChrome). */
+  getWindowChrome: 'jaris:get-window-chrome',
+  /** main -> renderer : l'habillage a changé (couleur d'accent modifiée dans Windows). */
+  windowChrome: 'jaris:window-chrome',
+  /** renderer -> main : bouton « Widget » du rail — réduit la fenêtre, le widget prend le relais. */
+  minimizeToWidget: 'jaris:minimize-to-widget',
   /** main -> renderer : un son court à jouer (design sonore, étape 31) — voir SoundCue plus haut. */
   soundCue: 'jaris:sound-cue',
   /**

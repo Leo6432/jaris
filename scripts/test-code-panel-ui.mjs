@@ -321,7 +321,7 @@ test('le bouton "Arrêter" arrête vraiment, et ne laisse pas une erreur rouge',
       return { radius: css.borderTopLeftRadius, font: css.fontFamily, transform: css.textTransform }
     })
     // Refonte « design sobre » : la famille de boutons est une pilule en Geist, sans capitales.
-    assert.equal(style.radius, '999px', 'le bouton Arrêter est resté au style par défaut du navigateur')
+    assert.equal(style.radius, '6px', 'le bouton Arrêter est resté au style par défaut du navigateur')
     assert.match(style.font, /Geist/)
     assert.equal(style.transform, 'none')
 

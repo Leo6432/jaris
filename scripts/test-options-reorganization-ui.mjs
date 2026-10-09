@@ -422,7 +422,7 @@ test('le bouton "Tous les modèles" est réellement habillé par le CSS de Jaris
       return { radius: s.borderTopLeftRadius, border: s.borderTopStyle, font: s.fontFamily }
     })
     // Refonte « design sobre » : la famille de boutons est une pilule à liseré fin, en Geist.
-    assert.equal(style.radius, '999px', 'bouton sans la forme pilule de la famille de Jaris')
+    assert.equal(style.radius, '6px', 'bouton sans les coins Windows 11 de la famille de Jaris')
     assert.equal(style.border, 'solid', 'bouton sans le liseré de la famille de Jaris')
     assert.match(style.font, /Geist/)
   })

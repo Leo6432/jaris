@@ -197,14 +197,14 @@ test('les conversations sont listées en colonne, la conversation ouverte est si
 
     // Le bouton de création est bien rendu dans le style de l'application (défaut signalé par Léo en v0.8.0 :
     // la classe manquait, le bouton restait au style du navigateur). Depuis la refonte « design sobre », c'est
-    // une rangée de la barre latérale façon ChatGPT : Geist, 40px de haut, coins arrondis, sans cadre.
+    // une rangée de la barre latérale ; design v2 (Windows 11) : 36px de haut, coins de 6px, sans cadre.
     const style = await page.evaluate(() => {
       const s = getComputedStyle(document.querySelector('.workspace__new'))
       return { color: s.color, font: s.fontFamily, height: s.height, radius: s.borderTopLeftRadius, border: s.borderTopStyle }
     })
     assert.match(style.font, /Geist/, 'le bouton est resté à la police par défaut du navigateur')
-    assert.equal(style.height, '40px')
-    assert.equal(style.radius, '10px')
+    assert.equal(style.height, '36px')
+    assert.equal(style.radius, '6px')
     assert.equal(style.border, 'none', 'le bouton a gardé le cadre par défaut du navigateur')
     assert.notEqual(style.color, 'rgb(0, 0, 0)', 'le bouton est resté au style par défaut du navigateur')
   })

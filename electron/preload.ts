@@ -43,7 +43,8 @@ import {
   type UpdateProgress,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload,
-  type WidgetMode
+  type WidgetMode,
+  type WindowChrome
 } from '../shared/ipc'
 
 function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
@@ -172,6 +173,9 @@ const api = {
   onWakeTestHeard: (cb: (payload: WakeTestHeardPayload) => void) => subscribe(IPC_CHANNELS.wakeTestHeard, cb),
   setActiveMode: (mode: AppMode): void => ipcRenderer.send(IPC_CHANNELS.setActiveMode, mode),
   setOptionsOpen: (open: boolean): void => ipcRenderer.send(IPC_CHANNELS.setOptionsOpen, open),
+  getWindowChrome: (): Promise<WindowChrome> => ipcRenderer.invoke(IPC_CHANNELS.getWindowChrome),
+  onWindowChrome: (cb: (chrome: WindowChrome) => void) => subscribe(IPC_CHANNELS.windowChrome, cb),
+  minimizeToWidget: (): void => ipcRenderer.send(IPC_CHANNELS.minimizeToWidget),
   getLaunchAtStartup: (): Promise<LaunchAtStartupStatus> => ipcRenderer.invoke(IPC_CHANNELS.getLaunchAtStartup),
   setLaunchAtStartup: (enabled: boolean): Promise<LaunchAtStartupStatus> =>
     ipcRenderer.invoke(IPC_CHANNELS.setLaunchAtStartup, enabled),

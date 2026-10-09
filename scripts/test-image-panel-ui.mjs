@@ -151,7 +151,7 @@ test('ouvrir une image : Enregistrer (habillé par le CSS) et Ouvrir le dossier 
     await page.click('.image-panel__thumb >> nth=0')
     await page.waitForSelector('.image-panel__image')
     const save = await page.$eval('.image-panel__save', (el) => getComputedStyle(el).borderTopLeftRadius)
-    assert.equal(save, '999px', 'bouton de la famille de Jaris (pilule du design sobre)')
+    assert.equal(save, '6px', 'bouton de la famille de Jaris (coins Windows 11 du design v2)')
     await page.click('.image-panel__save')
     await page.waitForFunction(() => /Enregistrée/.test(document.querySelector('.image-panel__save').textContent))
     await page.click('text=Ouvrir le dossier')

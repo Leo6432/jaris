@@ -13,7 +13,7 @@ import MemoryBrain from '@/components/MemoryBrain'
 import OptionsMenu from '@/components/OptionsMenu'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import { useJarisStore, type JarisEmotion } from '@/store/useJarisStore'
-import type { AppVersionStatus, MemoryGraph, OllamaVersionStatus, WidgetMode } from '../shared/ipc'
+import type { AppVersionStatus, MemoryGraph, OllamaVersionStatus, WidgetMode, WindowChrome } from '../shared/ipc'
 import ModelEffortPicker from '@/components/ModelEffortPicker'
 import { ShellSlotsContext, VoiceLaunchContext } from '@/lib/shellContext'
 import logo64 from '@/assets/jaris-logo-64.png'
@@ -30,51 +30,79 @@ const STATUS_LABEL: Record<JarisEmotion, string> = {
 /** Les modes de la colonne latérale permanente (étape 30 ; Image à la place du Montage depuis l'étape 200). */
 type AppMode = 'voice' | 'chat' | 'code' | 'image' | 'video'
 
-/** Refonte « design sobre » (maquette Jaris.dc.html) : une icône au trait par mode, comme la barre de ChatGPT. */
-const MODES: Array<{ id: AppMode; label: string; icon: string }> = [
-  { id: 'voice', label: 'Agent vocal', icon: 'M9 3h6v12H9zM5 11a7 7 0 0 0 14 0M12 18v3' },
-  { id: 'chat', label: 'Chat', icon: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z' },
-  { id: 'code', label: 'Code', icon: 'M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16' },
-  { id: 'image', label: 'Image', icon: 'M4 5h16v14H4zM4 16l5-5 4 4 2-2 5 5M15.5 9.5h.01' },
-  { id: 'video', label: 'Vidéo', icon: 'M3 6h13v12H3zM16 10l5-3v10l-5-3' }
+/**
+ * Design v2 (maquette « Jaris v2.dc.html », style Windows 11) : un rail d'icônes à gauche, libellé court sous
+ * chaque icône, dans cet ordre. `label` est le nom affiché dans le rail, `title` celui de l'en-tête, `panel` le
+ * titre de la colonne de liste à côté du rail (absente en Vocal : rien à lister).
+ */
+const MODES: Array<{ id: AppMode; label: string; title: string; panel?: string; icon: string }> = [
+  { id: 'chat', label: 'Chat', title: 'Chat', panel: 'Conversations', icon: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z' },
+  { id: 'voice', label: 'Vocal', title: 'Agent vocal', icon: 'M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0zM5 11a7 7 0 0 0 14 0M12 18v3' },
+  { id: 'code', label: 'Code', title: 'Code', panel: 'Projets', icon: 'M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16' },
+  { id: 'image', label: 'Image', title: 'Image', panel: 'Images', icon: 'M4 5h16v14H4zM4 16l5-5 4 4 2-2 5 5M15.5 9.5h.01' },
+  { id: 'video', label: 'Vidéo', title: 'Vidéo', panel: 'Vidéos', icon: 'M3 6h13v12H3zM16 10l5-3v10l-5-3' }
 ]
 
-function LineIcon({ d }: { d: string }): JSX.Element {
+const ICON_BRAIN =
+  'M9.5 3a3.5 3.5 0 0 0-3.4 4.4A3.5 3.5 0 0 0 5 13.6 3.5 3.5 0 0 0 9.5 21H12V3H9.5ZM14.5 3a3.5 3.5 0 0 1 3.4 4.4 3.5 3.5 0 0 1 1.1 6.2 3.5 3.5 0 0 1-4.5 7.4H12V3h2.5Z'
+const ICON_WIDGET = 'M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3zM12 12h6v6h-6z'
+const ICON_OPTIONS =
+  'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1'
+
+function LineIcon({ d, size = 18 }: { d: string; size?: number }): JSX.Element {
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d={d} />
     </svg>
   )
 }
 
-function SidebarToggleIcon(): JSX.Element {
+function PanelToggleIcon(): JSX.Element {
   return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
       <rect x="3" y="4" width="18" height="16" rx="3" />
       <path d="M9 4v16" />
     </svg>
   )
 }
 
+/** Un bouton du rail : icône au-dessus, libellé court dessous, petite barre d'accent à gauche quand actif. */
+function RailButton({ label, icon, active, onClick, title }: {
+  label: string
+  icon: string
+  active: boolean
+  onClick: () => void
+  title?: string
+}): JSX.Element {
+  return (
+    <button
+      className={`rail__item${active ? ' rail__item--active' : ''}`}
+      onClick={onClick}
+      title={title ?? label}
+      aria-current={active ? 'page' : undefined}
+    >
+      <LineIcon d={icon} size={20} />
+      <span className="rail__label">{label}</span>
+    </button>
+  )
+}
+
 /** Ce qu'affiche le gros bouton de l'Agent vocal selon l'état : le logo au repos, des barres qui bougent
  *  quand Jaris écoute ou parle, trois points quand il réfléchit (maquette Jaris.dc.html). */
 function VoiceVisual({ emotion }: { emotion: JarisEmotion }): JSX.Element {
-  if (emotion === 'idle' || emotion === 'surprised') return <img className="voice-screen__logo" src={logo160} alt="" />
-  if (emotion === 'thinking') {
-    return (
-      <span className="voice-screen__dots" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </span>
-    )
-  }
+  // Design v2 : le logo reste toujours au centre (estompé pendant la réflexion), et deux anneaux couleur
+  // d'accent s'élargissent autour quand Jaris écoute ou parle.
+  const ringing = emotion === 'listening' || emotion === 'happy'
   return (
-    <span className="voice-screen__bars" aria-hidden="true">
-      {[0, 1, 2, 3, 4].map((i) => (
-        <span key={i} />
-      ))}
-    </span>
+    <>
+      {ringing && (
+        <>
+          <span className="voice-screen__ring" aria-hidden="true" />
+          <span className="voice-screen__ring voice-screen__ring--late" aria-hidden="true" />
+        </>
+      )}
+      <img className="voice-screen__logo" src={logo160} alt="" />
+    </>
   )
 }
 
@@ -118,11 +146,16 @@ export default function App(): JSX.Element {
   const [ollamaPopupDismissed, setOllamaPopupDismissed] = useState(false)
   const [appVersionStatus, setAppVersionStatus] = useState<AppVersionStatus | null>(null)
   const [appPopupDismissed, setAppPopupDismissed] = useState(false)
-  // Refonte « design sobre » : barre latérale repliable (bouton en haut à droite de la barre, ou en haut à
-  // gauche de l'écran une fois repliée), et emplacements qu'elle prête à l'écran affiché (shellContext.ts).
-  const [sideOpen, setSideOpen] = useState(
+  // Design v2 : colonne de liste repliable (bouton en haut de la colonne, ou en haut à gauche de l'écran une
+  // fois repliée), et emplacements qu'elle prête à l'écran affiché (shellContext.ts).
+  const [panelOpen, setPanelOpen] = useState(
     () => !(typeof window !== 'undefined' && window.matchMedia?.('(max-width: 700px)').matches)
   )
+  // Options est un écran du rail, pas un mode : le mode réel (écoute, widget) reste celui d'avant.
+  const [optionsShown, setOptionsShown] = useState(false)
+  // Habillage Windows 11 (barre de titre, Mica, accent) — rien tant que le main n'a pas répondu (et jamais
+  // hors Windows, où la fenêtre garde sa barre de titre native).
+  const [chrome, setChrome] = useState<WindowChrome | null>(null)
   const [newSlot, setNewSlot] = useState<HTMLElement | null>(null)
   const [recentsSlot, setRecentsSlot] = useState<HTMLElement | null>(null)
   const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null)
@@ -133,6 +166,30 @@ export default function App(): JSX.Element {
     void window.jaris.getAppVersion().then(setAppVersion).catch(() => {})
   }, [])
 
+  useEffect(() => {
+    if (MODE !== 'full' || !window.jaris.getWindowChrome) return
+    void window.jaris.getWindowChrome().then(setChrome).catch(() => {})
+    return window.jaris.onWindowChrome?.(setChrome)
+  }, [])
+
+  // Couleur d'accent de Windows : remplace l'accent par défaut (bleu Windows) dans toute la page. Mica : la
+  // page doit rester transparente pour laisser voir l'effet derrière la colonne et le rail.
+  useEffect(() => {
+    if (MODE !== 'full') return
+    const root = document.documentElement
+    const rgb = chrome?.accent?.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i)
+    if (chrome?.accent && rgb) {
+      root.style.setProperty('--jv-accent', chrome.accent)
+      // Certaines règles plus anciennes veulent l'accent en composantes (rgba(var(--hud-accent-rgb), a)).
+      root.style.setProperty('--hud-accent-rgb', rgb.slice(1).map((hex) => parseInt(hex, 16)).join(', '))
+    } else {
+      root.style.removeProperty('--jv-accent')
+      root.style.removeProperty('--hud-accent-rgb')
+    }
+    root.classList.toggle('body--mica', !!chrome?.mica)
+    document.body.classList.toggle('body--mica', !!chrome?.mica)
+  }, [chrome])
+
   /**
    * Micro de la barre de saisie : passe sur l'Agent vocal PUIS déclenche l'écoute. Le changement de mode est
    * envoyé au main tout de suite (pas seulement par l'effet plus haut, qui ne tourne qu'après le rendu) :
@@ -142,8 +199,18 @@ export default function App(): JSX.Element {
   const launchVoice = useCallback((): void => {
     window.jaris.setActiveMode('voice')
     setAppMode('voice')
+    setOptionsShown(false)
     window.jaris.triggerWake()
   }, [])
+
+  /** Bouton « Parler à Jaris » et clic sur le logo de l'Agent vocal : une des 3 façons d'activer Jaris
+   *  (Options → Voix, étape 81), relue à la volée comme le « + » plus bas. */
+  const wakeFromClick = (): void => {
+    void window.jaris.getProfile().then((profile) => {
+      if (profile?.activationOrbClickEnabled === false) return
+      window.jaris.triggerWake()
+    })
+  }
 
   const openMemoryBrain = (): void => {
     void window.jaris.getMemoryGraph().then(setMemoryGraph)
@@ -412,200 +479,217 @@ export default function App(): JSX.Element {
       )
     }
 
+    const currentMode = MODES.find((mode) => mode.id === appMode) ?? MODES[0]
+    // Colonne de liste : seulement pour les écrans qui ont quelque chose à lister. Toujours montée (cachée
+    // sinon) : ses emplacements doivent exister pour que les écrans y rendent leur liste par portail, sans
+    // retomber sur leur colonne autonome (Workspace.tsx) dès qu'elle est repliée.
+    const hasPanel = !optionsShown && !!currentMode.panel
+    const selectMode = (id: AppMode): void => {
+      setAppMode(id)
+      setOptionsShown(false)
+    }
+
     return (
       <ShellSlotsContext.Provider value={{ newSlot, recentsSlot, titleSlot }}>
       <VoiceLaunchContext.Provider value={launchVoice}>
-      <div className="app-shell">
-        {sideOpen && (
-          <nav className="sidebar">
-            <div className="sidebar__head">
-              <img className="sidebar__logo" src={logo64} alt="" />
-              <span className="sidebar__brand">Jaris</span>
-              <button
-                className="sidebar__icon-button"
-                onClick={() => setSideOpen(false)}
-                title="Fermer la barre latérale"
-                aria-label="Fermer la barre latérale"
-              >
-                <SidebarToggleIcon />
-              </button>
-            </div>
-
-            {/* Bouton « Nouvelle conversation / application / image / vidéo » de l'écran affiché (portail). */}
-            <div className="sidebar__new" ref={setNewSlot} />
-
-            <div className="sidebar__modes">
-              {MODES.map(({ id, label, icon }) => (
-                <button
-                  key={id}
-                  className={`sidebar__mode${appMode === id ? ' sidebar__mode--active' : ''}`}
-                  onClick={() => setAppMode(id)}
-                >
-                  <LineIcon d={icon} />
-                  <span className="sidebar__mode-label">{label}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* « Récents » de l'écran affiché : conversations, applications, images ou vidéos (portail). */}
-            <div className="sidebar__recents" ref={setRecentsSlot} />
-
-            <div className="sidebar__footer">
-              <button className="sidebar__link" onClick={openMemoryBrain}>
-                <LineIcon d="M9.5 3a3.5 3.5 0 0 0-3.4 4.4A3.5 3.5 0 0 0 5 13.6 3.5 3.5 0 0 0 9.5 21H12V3H9.5ZM14.5 3a3.5 3.5 0 0 1 3.4 4.4 3.5 3.5 0 0 1 1.1 6.2 3.5 3.5 0 0 1-4.5 7.4H12V3h2.5Z" />
-                Cerveau de Jaris
-              </button>
-              <ErrorBoundary label="Les Options">
-                <OptionsMenu />
-              </ErrorBoundary>
-              <div className="sidebar__status">
-                <span className="sidebar__status-dot" />
-                Local{appVersion ? ` · v${appVersion}` : ''}
-              </div>
-            </div>
-          </nav>
+      <div className={`app-shell${chrome?.titleBar ? ' app-shell--titlebar' : ''}`}>
+        {chrome?.titleBar && (
+          // Barre de titre façon Windows 11 : zone de déplacement de la fenêtre ; les boutons réduire/agrandir/
+          // fermer sont les vrais de Windows, posés par-dessus à droite (titleBarOverlay, main.ts).
+          <div className="titlebar">
+            <img className="titlebar__logo" src={logo64} alt="" />
+            <span className="titlebar__name">Jaris</span>
+          </div>
         )}
 
-        <main className="app-main">
-          <header className="app-header">
-            {!sideOpen && (
-              <button
-                className="sidebar__icon-button"
-                onClick={() => setSideOpen(true)}
-                title="Ouvrir la barre latérale"
-                aria-label="Ouvrir la barre latérale"
-              >
-                <SidebarToggleIcon />
-              </button>
-            )}
-            {/* L'écran affiché y écrit son titre (conversation ouverte...) par portail ; vide (Agent vocal,
-                écran d'installation), le nom du mode s'affiche à la place (data-label, voir index.css). */}
-            <span
-              className="app-header__title"
-              ref={setTitleSlot}
-              data-label={MODES.find((mode) => mode.id === appMode)?.label}
+        <div className="app-shell__body">
+          <nav className="rail" aria-label="Modes de Jaris">
+            {MODES.map(({ id, label, title, icon }) => (
+              <RailButton
+                key={id}
+                label={label}
+                title={title}
+                icon={icon}
+                active={!optionsShown && appMode === id}
+                onClick={() => selectMode(id)}
+              />
+            ))}
+            <span className="rail__spacer" />
+            <RailButton label="Cerveau" title="Cerveau de Jaris" icon={ICON_BRAIN} active={!!memoryGraph} onClick={openMemoryBrain} />
+            <RailButton
+              label="Widget"
+              title="Réduire en widget"
+              icon={ICON_WIDGET}
+              active={false}
+              onClick={() => window.jaris.minimizeToWidget?.()}
             />
-          </header>
+            <RailButton label="Options" icon={ICON_OPTIONS} active={optionsShown} onClick={() => setOptionsShown(true)} />
+          </nav>
 
-          {newModels.length > 0 && (
-            <div className="app__new-models">
-              <p>
-                {newModels.length === 1 ? 'Nouveau modèle disponible : ' : `${newModels.length} nouveaux modèles disponibles : `}
-                <strong>{newModels.join(', ')}</strong>. Ouvre Options → Modèles puis « Retester la
-                configuration » pour voir s'ils conviennent mieux à ta config.
-              </p>
-              <button onClick={dismissNewModels}>Fermer</button>
+          <aside className="panel" hidden={!hasPanel || !panelOpen}>
+            <div className="panel__head">
+              <span className="panel__title">{currentMode.panel}</span>
+              {/* Bouton « Nouvelle conversation / application / image / vidéo » de l'écran affiché (portail). */}
+              <div className="panel__new" ref={setNewSlot} />
+              <button
+                className="panel__icon-button"
+                onClick={() => setPanelOpen(false)}
+                title="Masquer la liste"
+                aria-label="Masquer la liste"
+              >
+                <PanelToggleIcon />
+              </button>
             </div>
-          )}
-
-          {ollamaVersionStatus?.outdated && !ollamaPopupDismissed && (
-            <div className="app__new-models">
-              <p>
-                Ollama {ollamaVersionStatus.current} installé, la dernière version est{' '}
-                {ollamaVersionStatus.latest}. Ouvre Options → Général pour mettre à jour.
-              </p>
-              <button onClick={() => setOllamaPopupDismissed(true)}>Fermer</button>
+            {/* Liste de l'écran affiché : conversations, applications, images ou vidéos (portail). */}
+            <div className="panel__list" ref={setRecentsSlot} />
+            <div className="panel__status">
+              <span className="panel__status-dot" />
+              Local{appVersion ? ` · v${appVersion}` : ''}
             </div>
-          )}
+          </aside>
 
-          {appVersionStatus?.outdated && !appPopupDismissed && (
-            <div className="app__new-models">
-              <p>
-                {/* Onglet "Mise à jour", pas "Modèles" : celui de Jaris a son propre onglet depuis qu'il a
-                    été séparé de celui d'Ollama, mais cette phrase était restée sur l'ancien — envoyer
-                    quelqu'un sur un onglet où le bouton n'est pas est une autre façon de "ne rien faire". */}
-                Jaris {appVersionStatus.current} installé, la dernière version est{' '}
-                {appVersionStatus.latest}. Ouvre Options → Général pour l'installer.
-              </p>
-              <button onClick={() => setAppPopupDismissed(true)}>Fermer</button>
-            </div>
-          )}
-
-          {appMode === 'voice' && (
-            // Refonte « design sobre » : plus d'orbe façon réacteur, un grand bouton rond calme (logo au repos,
-            // barres quand Jaris écoute ou parle, points quand il réfléchit). Cliquer dessus reste une des 3
-            // façons d'activer Jaris (Options → Voix, étape 81), avec la même relecture du profil à la volée
-            // que le "+" ci-dessus plutôt qu'un état React à synchroniser.
-            <ErrorBoundary label="L'Agent vocal">
-              <div className="app app--voice voice-screen" data-emotion={emotion}>
+          <main className="app-main">
+            <header className="app-header">
+              {hasPanel && !panelOpen && (
                 <button
-                  type="button"
-                  className="voice-screen__button"
-                  aria-label="Activer l'écoute"
-                  onClick={() => {
-                    void window.jaris.getProfile().then((profile) => {
-                      if (profile?.activationOrbClickEnabled === false) return
-                      window.jaris.triggerWake()
-                    })
-                  }}
+                  className="panel__icon-button"
+                  onClick={() => setPanelOpen(true)}
+                  title="Afficher la liste"
+                  aria-label="Afficher la liste"
                 >
-                  <VoiceVisual emotion={emotion} />
+                  <PanelToggleIcon />
                 </button>
-                <div className="app__voice-footer">
-                  <h1 className="app__status">{STATUS_LABEL[emotion]}</h1>
-                  <div className="app__hint">
-                    Dis « Jaris », clique sur le bouton ou appuie sur + du pavé numérique, depuis n'importe
-                    quelle appli.
-                  </div>
+              )}
+              {/* L'écran affiché y écrit son titre (conversation ouverte...) par portail ; vide (Agent vocal,
+                  Options, écran d'installation), le nom de l'écran s'affiche à la place (data-label, index.css). */}
+              <span
+                className="app-header__title"
+                ref={optionsShown ? undefined : setTitleSlot}
+                data-label={optionsShown ? 'Options' : currentMode.title}
+              />
+            </header>
 
-                  {(transcript || reply) && (
-                    <div className="app__conversation">
-                      {transcript && <p className="app__transcript">{transcript}</p>}
-                      {voiceActivity && <p className="app__activity">{voiceActivity}</p>}
-                      {reply && (
-                        <div className="app__reply">
-                          <img className="chat-panel__avatar" src={logo64} alt="" />
-                          <p>{reply}</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Étape 141 : même sélecteur que le Chat et le mode Code — Auto ou un modèle précis pour la voix. */}
-                  <div className="app__model-picker">
-                    <ModelEffortPicker mode="voice" />
-                  </div>
-
-                  {setupStatus && !setupStatus.ready && (
-                    <div className="app__setup-warning">
-                      {/* Étape 234 (bêta) : « pipeline vocal », « sidecar » et « voir le README » ne disaient rien à
-                          quelqu'un qui n'a jamais vu le code — et aucun fichier d'explication n'est livré avec Jaris. */}
-                      La voix ne fonctionne pas pour l'instant (le Chat, lui, marche) :
-                      <ul>
-                        {setupStatus.missing.map((item) => (
-                          <li key={item}>{item}</li>
-                        ))}
-                      </ul>
-                      Ferme puis relance Jaris : il réessaiera d'installer ce qui manque.
-                    </div>
-                  )}
-                </div>
+            {newModels.length > 0 && (
+              <div className="app__new-models">
+                <p>
+                  {newModels.length === 1 ? 'Nouveau modèle disponible : ' : `${newModels.length} nouveaux modèles disponibles : `}
+                  <strong>{newModels.join(', ')}</strong>. Ouvre Options → Modèles puis « Retester la
+                  configuration » pour voir s'ils conviennent mieux à ta config.
+                </p>
+                <button onClick={dismissNewModels}>Fermer</button>
               </div>
-            </ErrorBoundary>
-          )}
+            )}
 
-          {/* Étape 202 : cachés, jamais détruits, en changeant d'onglet — une génération en cours reste visible au retour. */}
-          <KeepAlive active={appMode === 'chat'}>
-            <ErrorBoundary label="Le Chat">
-              <ChatPanel />
-            </ErrorBoundary>
-          </KeepAlive>
-          <KeepAlive active={appMode === 'code'}>
-            <ErrorBoundary label="Le mode Code">
-              <CodePanel />
-            </ErrorBoundary>
-          </KeepAlive>
-          <KeepAlive active={appMode === 'image'}>
-            <ErrorBoundary label="Le mode Image">
-              <ImagePanel />
-            </ErrorBoundary>
-          </KeepAlive>
-          <KeepAlive active={appMode === 'video'}>
-            <ErrorBoundary label="Le mode Vidéo">
-              <VideoPanel />
-            </ErrorBoundary>
-          </KeepAlive>
-        </main>
+            {ollamaVersionStatus?.outdated && !ollamaPopupDismissed && (
+              <div className="app__new-models">
+                <p>
+                  Ollama {ollamaVersionStatus.current} installé, la dernière version est{' '}
+                  {ollamaVersionStatus.latest}. Ouvre Options → Général pour mettre à jour.
+                </p>
+                <button onClick={() => setOllamaPopupDismissed(true)}>Fermer</button>
+              </div>
+            )}
+
+            {appVersionStatus?.outdated && !appPopupDismissed && (
+              <div className="app__new-models">
+                <p>
+                  {/* Onglet "Mise à jour", pas "Modèles" : celui de Jaris a son propre onglet depuis qu'il a
+                      été séparé de celui d'Ollama, mais cette phrase était restée sur l'ancien — envoyer
+                      quelqu'un sur un onglet où le bouton n'est pas est une autre façon de "ne rien faire". */}
+                  Jaris {appVersionStatus.current} installé, la dernière version est{' '}
+                  {appVersionStatus.latest}. Ouvre Options → Général pour l'installer.
+                </p>
+                <button onClick={() => setAppPopupDismissed(true)}>Fermer</button>
+              </div>
+            )}
+
+            {optionsShown && (
+              <ErrorBoundary label="Les Options">
+                <OptionsMenu embedded />
+              </ErrorBoundary>
+            )}
+
+            {!optionsShown && appMode === 'voice' && (
+              // Design v2 : le logo au centre d'un cercle, des anneaux couleur d'accent quand Jaris écoute ou
+              // parle, l'échange en cours dans une carte, et un bouton « Parler à Jaris » bien visible.
+              <ErrorBoundary label="L'Agent vocal">
+                <div className="app app--voice voice-screen" data-emotion={emotion}>
+                  <button
+                    type="button"
+                    className="voice-screen__button"
+                    aria-label="Activer l'écoute"
+                    onClick={wakeFromClick}
+                  >
+                    <VoiceVisual emotion={emotion} />
+                  </button>
+                  <div className="app__voice-footer">
+                    <h1 className="app__status">{STATUS_LABEL[emotion]}</h1>
+                    {emotion === 'idle' && <div className="app__hint">Jaris répond à voix haute.</div>}
+
+                    {(transcript || reply || voiceActivity) && (
+                      <div className="app__conversation">
+                        {transcript && <p className="app__transcript">Toi : « {transcript} »</p>}
+                        {voiceActivity && <p className="app__activity">{voiceActivity}</p>}
+                        {reply && <p className="app__reply">Jaris : {reply}</p>}
+                      </div>
+                    )}
+
+                    {emotion === 'idle' && (
+                      <button type="button" className="voice-screen__talk" onClick={wakeFromClick}>
+                        Parler à Jaris
+                      </button>
+                    )}
+
+                    <div className="app__hint app__hint--small">
+                      Ou dis « Jaris », ou appuie sur + du pavé numérique, depuis n'importe quelle appli.
+                    </div>
+
+                    {/* Étape 141 : même sélecteur que le Chat et le mode Code — Auto ou un modèle précis pour la voix. */}
+                    <div className="app__model-picker">
+                      <ModelEffortPicker mode="voice" />
+                    </div>
+
+                    {setupStatus && !setupStatus.ready && (
+                      <div className="app__setup-warning">
+                        {/* Étape 234 (bêta) : « pipeline vocal », « sidecar » et « voir le README » ne disaient rien à
+                            quelqu'un qui n'a jamais vu le code — et aucun fichier d'explication n'est livré avec Jaris. */}
+                        La voix ne fonctionne pas pour l'instant (le Chat, lui, marche) :
+                        <ul>
+                          {setupStatus.missing.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                        Ferme puis relance Jaris : il réessaiera d'installer ce qui manque.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </ErrorBoundary>
+            )}
+
+            {/* Étape 202 : cachés, jamais détruits, en changeant d'onglet — une génération en cours reste visible au retour. */}
+            <KeepAlive active={!optionsShown && appMode === 'chat'}>
+              <ErrorBoundary label="Le Chat">
+                <ChatPanel />
+              </ErrorBoundary>
+            </KeepAlive>
+            <KeepAlive active={!optionsShown && appMode === 'code'}>
+              <ErrorBoundary label="Le mode Code">
+                <CodePanel />
+              </ErrorBoundary>
+            </KeepAlive>
+            <KeepAlive active={!optionsShown && appMode === 'image'}>
+              <ErrorBoundary label="Le mode Image">
+                <ImagePanel />
+              </ErrorBoundary>
+            </KeepAlive>
+            <KeepAlive active={!optionsShown && appMode === 'video'}>
+              <ErrorBoundary label="Le mode Vidéo">
+                <VideoPanel />
+              </ErrorBoundary>
+            </KeepAlive>
+          </main>
+        </div>
 
         {memoryGraph && (
           <ErrorBoundary label="Le Cerveau de Jaris" overlay onClose={() => setMemoryGraph(null)}>

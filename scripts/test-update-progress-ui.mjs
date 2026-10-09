@@ -136,8 +136,8 @@ test("la barre est bien habillée par le CSS de Jaris, pas laissée au style par
       return { fillColor: fill.backgroundColor, fillRadius: fill.borderTopLeftRadius, barBackground: bar.backgroundColor }
     })
     // Refonte « design sobre » : une piste grise arrondie, remplie de l'accent clair de Jaris.
-    assert.equal(style.fillColor, 'rgb(236, 236, 237)', 'le remplissage n\'a pas la couleur d\'accent de Jaris')
-    assert.equal(style.fillRadius, '999px')
+    assert.equal(style.fillColor, 'rgb(0, 120, 212)', 'le remplissage n\'a pas la couleur d\'accent de Jaris')
+    assert.equal(style.fillRadius, '2px')
     assert.notEqual(style.barBackground, 'rgba(0, 0, 0, 0)')
   })
 })

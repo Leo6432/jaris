@@ -186,8 +186,18 @@ export function scoreTestLabel(value: string | null): string | undefined {
 }
 
 
-export default function OptionsMenu(): JSX.Element {
-  const [open, setOpen] = useState(false)
+interface OptionsMenuProps {
+  /**
+   * Design v2 (maquette « Jaris v2.dc.html ») : Options est un écran du rail de gauche, affiché dans la zone
+   * principale à côté du rail — plus de bouton d'ouverture ni de page plein écran avec « Fermer ». Sans cette
+   * option (tests, ancien usage), le composant garde son bouton et sa page plein écran.
+   */
+  embedded?: boolean
+}
+
+export default function OptionsMenu({ embedded = false }: OptionsMenuProps = {}): JSX.Element {
+  const [openState, setOpen] = useState(false)
+  const open = embedded || openState
   const [tab, setTab] = useState<Tab>('voix')
   const [error, setError] = useState<string | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -265,6 +275,18 @@ export default function OptionsMenu(): JSX.Element {
     window.jaris.setOptionsOpen(open)
     return () => window.jaris.setOptionsOpen(false)
   }, [open])
+
+  // Design v2 : quitter l'écran Options par le rail démonte ce composant sans passer par « Fermer ». Un test
+  // micro ou du mot « Jaris » tourne côté sidecar, indépendamment de cette page : il faut l'arrêter ici aussi.
+  const voiceTestsRef = useRef({ mic: false, wake: false })
+  voiceTestsRef.current = { mic: micTesting, wake: wakeTesting }
+  useEffect(
+    () => () => {
+      if (voiceTestsRef.current.mic) window.jaris.stopTestMicrophone()
+      if (voiceTestsRef.current.wake) window.jaris.stopTestWakeWord()
+    },
+    []
+  )
 
   // Chargé seulement à l'ouverture de l'onglet (pas au montage comme les autres réglages ci-dessus) :
   // l'historique peut contenir jusqu'à 300 échanges, pas la peine de le lire à chaque ouverture du menu
@@ -746,8 +768,13 @@ export default function OptionsMenu(): JSX.Element {
     )
   }
 
-  return createPortal(
-    <div className="options-page" role="dialog" aria-modal="true" aria-label="Options de Jaris">
+  const page = (
+    <div
+      className={`options-page${embedded ? ' options-page--embedded' : ''}`}
+      role={embedded ? undefined : 'dialog'}
+      aria-modal={embedded ? undefined : true}
+      aria-label="Options de Jaris"
+    >
       <header className="options-page__header">
         <div>
           <span className="options-page__eyebrow">Jaris</span>
@@ -1362,7 +1389,8 @@ export default function OptionsMenu(): JSX.Element {
           </div>
         </main>
       </div>
-    </div>,
-    document.body
+    </div>
   )
+
+  return embedded ? page : createPortal(page, document.body)
 }

@@ -41,7 +41,8 @@ import type {
   UpdateProgress,
   VoiceReplyPayload,
   VoiceSetupStatusPayload,
-  WidgetMode
+  WidgetMode,
+  WindowChrome
 } from '../shared/ipc'
 
 export {}
@@ -158,6 +159,9 @@ declare global {
       onWakeTestHeard: (cb: (payload: WakeTestHeardPayload) => void) => () => void
       setActiveMode: (mode: AppMode) => void
       setOptionsOpen: (open: boolean) => void
+      getWindowChrome: () => Promise<WindowChrome>
+      onWindowChrome: (cb: (chrome: WindowChrome) => void) => () => void
+      minimizeToWidget: () => void
       getLaunchAtStartup: () => Promise<LaunchAtStartupStatus>
       setLaunchAtStartup: (enabled: boolean) => Promise<LaunchAtStartupStatus>
       getWidgetMode: () => Promise<WidgetMode>

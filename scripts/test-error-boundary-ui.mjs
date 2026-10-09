@@ -156,7 +156,7 @@ test('un écran qui plante affiche son message à sa place, sans vider le reste'
       const s = getComputedStyle(el)
       return { radius: s.borderTopLeftRadius, color: s.color }
     })
-    assert.equal(style.radius, '999px')
+    assert.equal(style.radius, '6px')
     assert.notEqual(style.color, 'rgb(0, 0, 0)')
 
     // « Réessayer » remonte l'écran une fois la cause disparue.
@@ -169,7 +169,7 @@ test('un écran qui plante affiche son message à sa place, sans vider le reste'
 test('App.tsx protège chaque écran (et le Cerveau peut toujours être fermé)', () => {
   const app = readFileSync(join(projectRoot, 'src/App.tsx'), 'utf8')
   for (const panel of ['ChatPanel', 'CodePanel', 'ImagePanel', 'VideoPanel', 'OptionsMenu']) {
-    assert.match(app, new RegExp(`<ErrorBoundary [^>]*>\\s*<${panel} />`), `${panel} protégé`)
+    assert.match(app, new RegExp(`<ErrorBoundary [^>]*>\\s*<${panel}(?: embedded)? />`), `${panel} protégé`)
   }
   assert.match(app, /<ErrorBoundary label="L'Agent vocal">\s*<div className="app app--voice[^"]*"/)
   assert.match(app, /<ErrorBoundary [^>]*overlay onClose=\{[^}]+\}>\s*<MemoryBrain /)
