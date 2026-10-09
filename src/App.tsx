@@ -164,15 +164,27 @@ export default function App(): JSX.Element {
   // Étape 265 : sur une fenêtre étroite, la liste se pose PAR-DESSUS le contenu (index.css) au lieu de
   // l'écraser à 160 px de large ; choisir une conversation la referme donc, comme un menu. Écouté sur le DOM :
   // la liste y arrive par portail, et les clics d'un portail ne remontent pas par cet arbre-ci dans React.
+  // Étape 269 : la colonne peut montrer la liste d'un écran qui n'est pas affiché (les conversations depuis
+  // l'Agent vocal, Options ou le Cerveau) — choisir un élément, ou en créer un, ouvre alors cet écran, sinon
+  // le clic ne changerait rien de visible.
+  const listModeRef = useRef<AppMode>('chat')
   useEffect(() => {
-    if (!recentsSlot) return
+    const slots = [recentsSlot, newSlot].filter((slot): slot is HTMLElement => !!slot)
+    if (slots.length === 0) return
     const onClick = (event: MouseEvent): void => {
       const target = event.target as HTMLElement | null
-      if (target?.closest('.workspace__item') && window.matchMedia?.('(max-width: 700px)').matches) setPanelOpen(false)
+      if (target?.closest('.workspace__item, .workspace__new')) {
+        setAppMode(listModeRef.current)
+        setOptionsShown(false)
+        setMemoryGraph(null)
+      } else if (!target?.closest('.options-menu__tab')) {
+        return
+      }
+      if (window.matchMedia?.('(max-width: 700px)').matches) setPanelOpen(false)
     }
-    recentsSlot.addEventListener('click', onClick)
-    return () => recentsSlot.removeEventListener('click', onClick)
-  }, [recentsSlot])
+    slots.forEach((slot) => slot.addEventListener('click', onClick))
+    return () => slots.forEach((slot) => slot.removeEventListener('click', onClick))
+  }, [recentsSlot, newSlot])
   const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null)
   const [appVersion, setAppVersion] = useState<string | null>(null)
 
@@ -519,7 +531,13 @@ export default function App(): JSX.Element {
     // reste monté quand la barre se replie afin que Workspace conserve ses emplacements de portail.
     // Un écran du rail qui n'est pas un mode (Options, Cerveau) remplace le contenu sans changer le mode réel.
     const screenShown = optionsShown || !!memoryGraph
-    const hasPanel = !screenShown && !!currentMode.panel
+    // Étape 269 : la liste montrée dans la colonne — celle de l'écran courant, ou celle du Chat pour l'Agent
+    // vocal, qui continue la conversation active (étape 96). Options et Cerveau ne changent pas `appMode` :
+    // ils gardent la liste de l'écran d'où l'on vient.
+    // Options, lui, y met ses propres sections (comme les Paramètres de Codex) : aucun écran n'y met sa liste.
+    const listMode: AppMode | null = optionsShown ? null : currentMode.panel ? appMode : 'chat'
+    const listTitle = optionsShown ? 'Options' : (MODES.find((mode) => mode.id === listMode) ?? MODES[0]).panel
+    listModeRef.current = listMode ?? appMode
     const selectMode = (id: AppMode): void => {
       setAppMode(id)
       setOptionsShown(false)
@@ -534,26 +552,12 @@ export default function App(): JSX.Element {
         {chrome?.titleBar && <TitleBar />}
 
         <div className="app-shell__body">
-          {/* Étape 268 (Léo : « quand je clique sur Code ça reste pareil, mais sur Vocal ça met directement
-              l'icône et ça enlève le texte ») : la barre ne se repliait d'elle-même que sur les écrans sans liste
-              (Vocal, Options, Cerveau). Elle reste maintenant comme Léo l'a laissée, sur tous les écrans ; seule
-              la liste (conversations, projets…) dépend de l'écran. */}
-          <aside className={`app-sidebar${panelOpen ? ' app-sidebar--expanded' : ''}`}>
-            <nav className="app-sidebar__nav" aria-label="Modes de Jaris">
-              <div className="app-sidebar__brand">
-                <img src={logo64} alt="" />
-                <span>Jaris</span>
-                {/* Replier la barre : à côté du nom, valable sur tous les écrans (il était dans la liste, absente
-                    en Vocal). */}
-                <button
-                  className="panel__icon-button app-sidebar__collapse"
-                  onClick={() => setPanelOpen(false)}
-                  title="Réduire la barre latérale"
-                  aria-label="Réduire la barre latérale"
-                >
-                  <PanelToggleIcon />
-                </button>
-              </div>
+          {/* Étape 269 (Léo, capture de Codex : « fais comme ça, ne mets pas les conversations dans la même
+              barre ») : deux colonnes. La barre d'icônes (modes en haut, outils en bas) ne change jamais ; la
+              colonne de liste à côté se replie à la demande et garde la même place sur tous les écrans. */}
+          <nav className="app-rail" aria-label="Modes de Jaris">
+            <img className="app-rail__logo" src={logo64} alt="Jaris" />
+            <div className="app-rail__group">
               {MODES.map(({ id, label, title, icon }) => (
                 <RailButton
                   key={id}
@@ -564,28 +568,8 @@ export default function App(): JSX.Element {
                   onClick={() => selectMode(id)}
                 />
               ))}
-            </nav>
-
-            <section
-              className="app-sidebar__workspace"
-              aria-label={currentMode.panel ?? 'Éléments récents'}
-              hidden={!hasPanel || !panelOpen}
-            >
-              <div className="panel__head">
-                <span className="panel__title">{currentMode.panel}</span>
-              </div>
-              {/* Action de création de l'écran courant, fournie par Workspace : une ligne à part entière sous le
-                  titre, comme « Nouveau chat » dans ChatGPT (étape 266). */}
-              <div className="panel__new" ref={setNewSlot} />
-              {/* Liste de l'écran affiché : conversations, projets, images ou vidéos. */}
-              <div className="panel__list" ref={setRecentsSlot} />
-              <div className="panel__status">
-                <span className="panel__status-dot" />
-                Local{appVersion ? ` · v${appVersion}` : ''}
-              </div>
-            </section>
-
-            <nav className="app-sidebar__utilities" aria-label="Outils de Jaris">
+            </div>
+            <div className="app-rail__group app-rail__group--end">
               <RailButton label="Cerveau" title="Cerveau de Jaris" icon={ICON_BRAIN} active={!!memoryGraph} onClick={openMemoryBrain} />
               <RailButton
                 label="Widget"
@@ -604,7 +588,30 @@ export default function App(): JSX.Element {
                   closeSidebarIfNarrow()
                 }}
               />
-            </nav>
+            </div>
+          </nav>
+
+          {/* Toujours montée, même repliée : Workspace y garde ses emplacements de portail. */}
+          <aside className="app-sidebar" aria-label={listTitle} hidden={!panelOpen}>
+            <div className="app-sidebar__head">
+              <span className="app-sidebar__title">{listTitle}</span>
+              <button
+                className="panel__icon-button app-sidebar__collapse"
+                onClick={() => setPanelOpen(false)}
+                title="Réduire la liste"
+                aria-label="Réduire la liste"
+              >
+                <PanelToggleIcon />
+              </button>
+            </div>
+            {/* Action de création de l'écran de la liste, fournie par Workspace (« Nouvelle conversation »…). */}
+            <div className="panel__new" ref={setNewSlot} />
+            {/* Liste de cet écran : conversations, projets, images ou vidéos. */}
+            <div className="panel__list" ref={setRecentsSlot} />
+            <div className="panel__status">
+              <span className="panel__status-dot" />
+              Local{appVersion ? ` · v${appVersion}` : ''}
+            </div>
           </aside>
 
           <main className="app-main">
@@ -613,8 +620,8 @@ export default function App(): JSX.Element {
                 <button
                   className="panel__icon-button"
                   onClick={() => setPanelOpen(true)}
-                  title="Afficher la barre latérale"
-                  aria-label="Afficher la barre latérale"
+                  title="Afficher la liste"
+                  aria-label="Afficher la liste"
                 >
                   <PanelToggleIcon />
                 </button>
@@ -664,7 +671,7 @@ export default function App(): JSX.Element {
 
             {optionsShown && (
               <ErrorBoundary label="Les Options">
-                <OptionsMenu embedded />
+                <OptionsMenu embedded navSlot={panelOpen ? recentsSlot : null} />
               </ErrorBoundary>
             )}
 
@@ -736,22 +743,22 @@ export default function App(): JSX.Element {
             )}
 
             {/* Étape 202 : cachés, jamais détruits, en changeant d'onglet — une génération en cours reste visible au retour. */}
-            <KeepAlive active={!screenShown && appMode === 'chat'}>
+            <KeepAlive active={!screenShown && appMode === 'chat'} ownsSidebar={listMode === 'chat'}>
               <ErrorBoundary label="Le Chat">
                 <ChatPanel />
               </ErrorBoundary>
             </KeepAlive>
-            <KeepAlive active={!screenShown && appMode === 'code'}>
+            <KeepAlive active={!screenShown && appMode === 'code'} ownsSidebar={listMode === 'code'}>
               <ErrorBoundary label="Le mode Code">
                 <CodePanel />
               </ErrorBoundary>
             </KeepAlive>
-            <KeepAlive active={!screenShown && appMode === 'image'}>
+            <KeepAlive active={!screenShown && appMode === 'image'} ownsSidebar={listMode === 'image'}>
               <ErrorBoundary label="Le mode Image">
                 <ImagePanel />
               </ErrorBoundary>
             </KeepAlive>
-            <KeepAlive active={!screenShown && appMode === 'video'}>
+            <KeepAlive active={!screenShown && appMode === 'video'} ownsSidebar={listMode === 'video'}>
               <ErrorBoundary label="Le mode Vidéo">
                 <VideoPanel />
               </ErrorBoundary>

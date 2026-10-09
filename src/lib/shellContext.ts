@@ -29,6 +29,16 @@ export const ScreenActiveContext = createContext(true)
 export const useScreenActive = (): boolean => useContext(ScreenActiveContext)
 
 /**
+ * Étape 269 (façon Codex) : vrai si la colonne de liste, à côté de la barre d'icônes, montre la liste de cet
+ * écran. Le plus souvent c'est l'écran affiché, mais pas toujours : l'Agent vocal n'a pas de liste à lui et
+ * continue la conversation active du Chat, il montre donc celle du Chat ; Options et Cerveau gardent la liste
+ * de l'écran d'où l'on vient. La colonne ne change ainsi jamais de forme en passant d'un écran à l'autre.
+ */
+export const SidebarOwnerContext = createContext(true)
+
+export const useSidebarOwner = (): boolean => useContext(SidebarOwnerContext)
+
+/**
  * Bouton micro de la barre de saisie (maquette : « Agent vocal intégré au chat ») : bascule sur l'écran
  * Agent vocal et lance l'écoute. `null` hors de la fenêtre principale — le bouton n'est alors pas affiché.
  */

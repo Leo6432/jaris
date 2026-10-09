@@ -193,9 +193,15 @@ interface OptionsMenuProps {
    * option (tests, ancien usage), le composant garde son bouton et sa page plein écran.
    */
   embedded?: boolean
+  /**
+   * Étape 269 (façon Codex) : emplacement de la colonne de liste, à côté de la barre d'icônes. Fourni, les
+   * sections d'Options s'y affichent à la place d'une seconde colonne dans la page ; absent (liste repliée,
+   * Options hors de la coque), elles restent dans la page.
+   */
+  navSlot?: HTMLElement | null
 }
 
-export default function OptionsMenu({ embedded = false }: OptionsMenuProps = {}): JSX.Element {
+export default function OptionsMenu({ embedded = false, navSlot = null }: OptionsMenuProps = {}): JSX.Element {
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
   const [tab, setTab] = useState<Tab>('voix')
@@ -768,6 +774,35 @@ export default function OptionsMenu({ embedded = false }: OptionsMenuProps = {})
     )
   }
 
+  const navigation = (
+    <aside className="options-page__navigation" aria-label="Sections des options">
+      {/* Deux catégories distinctes, à la demande de Léo (étape 111) : "Ce que Jaris sait faire" n'est
+          pas un réglage — on n'y change rien, on y découvre. Le laisser en tête de "Réglages" le faisait
+          passer pour un panneau de configuration de plus. */}
+      <span className="options-page__navigation-label">Découvrir</span>
+      <nav className="options-menu__tabs">
+        <button className={`options-menu__tab${tab === 'capacites' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('capacites')}>
+          Ce que Jaris sait faire
+        </button>
+      </nav>
+      <span className="options-page__navigation-label options-page__navigation-label--next">Réglages</span>
+      <nav className="options-menu__tabs">
+        <button className={`options-menu__tab${tab === 'voix' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('voix')}>
+          Voix
+        </button>
+        <button className={`options-menu__tab${tab === 'modeles' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('modeles')}>
+          Modèles
+        </button>
+        <button className={`options-menu__tab${tab === 'telephone' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('telephone')}>
+          Téléphone
+        </button>
+        <button className={`options-menu__tab${tab === 'general' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('general')}>
+          Général
+        </button>
+      </nav>
+    </aside>
+  )
+
   const page = (
     <div
       className={`options-page${embedded ? ' options-page--embedded' : ''}`}
@@ -801,33 +836,9 @@ export default function OptionsMenu({ embedded = false }: OptionsMenuProps = {})
         </button>
       </header>
 
-      <div className="options-page__body">
-        <aside className="options-page__navigation" aria-label="Sections des options">
-          {/* Deux catégories distinctes, à la demande de Léo (étape 111) : "Ce que Jaris sait faire" n'est
-              pas un réglage — on n'y change rien, on y découvre. Le laisser en tête de "Réglages" le faisait
-              passer pour un panneau de configuration de plus. */}
-          <span className="options-page__navigation-label">Découvrir</span>
-          <nav className="options-menu__tabs">
-            <button className={`options-menu__tab${tab === 'capacites' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('capacites')}>
-              Ce que Jaris sait faire
-            </button>
-          </nav>
-          <span className="options-page__navigation-label options-page__navigation-label--next">Réglages</span>
-          <nav className="options-menu__tabs">
-            <button className={`options-menu__tab${tab === 'voix' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('voix')}>
-              Voix
-            </button>
-            <button className={`options-menu__tab${tab === 'modeles' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('modeles')}>
-              Modèles
-            </button>
-            <button className={`options-menu__tab${tab === 'telephone' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('telephone')}>
-              Téléphone
-            </button>
-            <button className={`options-menu__tab${tab === 'general' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('general')}>
-              Général
-            </button>
-          </nav>
-        </aside>
+      <div className={`options-page__body${navSlot ? ' options-page__body--single' : ''}`}>
+        {!navSlot && navigation}
+        {navSlot && createPortal(navigation, navSlot)}
 
         <main className="options-page__workspace">
           <div className="options-page__content">

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ScreenActiveContext } from '@/lib/shellContext'
+import { ScreenActiveContext, SidebarOwnerContext } from '@/lib/shellContext'
 
 /**
  * Étape 202 (Léo : « si je fais un prompt à Code, je pars dans Chat ou Vocal et je reviens dans Code, c'est
@@ -14,14 +14,24 @@ import { ScreenActiveContext } from '@/lib/shellContext'
  *
  * Refonte « design sobre » : l'état actif est aussi transmis par contexte, pour que seul l'écran affiché
  * remplisse la section « Récents » de la barre latérale (voir shellContext.ts, Workspace.tsx).
+ *
+ * Étape 269 : `ownsSidebar` sépare « écran affiché » et « liste montrée dans la colonne » (l'Agent vocal montre
+ * les conversations du Chat). Un écran dont la liste est montrée est donc monté même caché — sinon, Jaris
+ * s'ouvrant sur l'Agent vocal, la colonne resterait vide tant que le Chat n'a jamais été ouvert.
  */
-export default function KeepAlive({ active, children }: { active: boolean; children: React.ReactNode }): JSX.Element | null {
-  const [visited, setVisited] = useState(active)
-  if (active && !visited) setVisited(true)
-  if (!visited && !active) return null
+export default function KeepAlive({ active, ownsSidebar = active, children }: {
+  active: boolean
+  ownsSidebar?: boolean
+  children: React.ReactNode
+}): JSX.Element | null {
+  const [visited, setVisited] = useState(active || ownsSidebar)
+  if ((active || ownsSidebar) && !visited) setVisited(true)
+  if (!visited && !active && !ownsSidebar) return null
   return (
     <div className="keep-alive" style={{ display: active ? 'contents' : 'none' }} aria-hidden={!active}>
-      <ScreenActiveContext.Provider value={active}>{children}</ScreenActiveContext.Provider>
+      <ScreenActiveContext.Provider value={active}>
+        <SidebarOwnerContext.Provider value={ownsSidebar}>{children}</SidebarOwnerContext.Provider>
+      </ScreenActiveContext.Provider>
     </div>
   )
 }

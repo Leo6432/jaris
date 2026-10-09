@@ -172,7 +172,7 @@ test('un écran qui plante affiche son message à sa place, sans vider le reste'
 test('App.tsx protège chaque écran (et on peut toujours quitter le Cerveau)', () => {
   const app = readFileSync(join(projectRoot, 'src/App.tsx'), 'utf8')
   for (const panel of ['ChatPanel', 'CodePanel', 'ImagePanel', 'VideoPanel', 'OptionsMenu']) {
-    assert.match(app, new RegExp(`<ErrorBoundary [^>]*>\\s*<${panel}(?: embedded)? />`), `${panel} protégé`)
+    assert.match(app, new RegExp(`<ErrorBoundary [^>]*>\\s*<${panel}(?: embedded)?(?: navSlot=\\{[^}]+\\})? />`), `${panel} protégé`)
   }
   assert.match(app, /<ErrorBoundary label="L'Agent vocal">\s*<div className="app app--voice[^"]*"/)
   // Étape 265 : le Cerveau est un écran de la zone principale (plus un calque, qui passait sous les boutons

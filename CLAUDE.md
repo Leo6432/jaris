@@ -7205,3 +7205,33 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `scripts/test-window-chrome-ui.mjs` (la barre reste ouverte, noms compris, sur Chat, Vocal, Code,
   Options et Cerveau ; se replie et se rouvre) et `scripts/test-image-panel-ui.mjs` (une seule rangée titrée,
   juste sous les suggestions, centrée). Les deux vérifiés en réintroduisant le défaut.
+
+- **Étape 269 (v0.32.3), barre d'icônes et liste en deux colonnes, façon Codex (Léo, capture de Codex : « fais
+  comme ça, ne mets pas les conversations dans la même barre »).** Les modes (Chat, Vocal, Code, Image, Vidéo) et
+  les outils (Cerveau, Widget, Options) sont maintenant une colonne d'icônes fixe (`.app-rail`, 56 px, le nom en
+  bulle et pour les lecteurs d'écran) ; la liste (« Nouvelle conversation », « Récents ») est une colonne à part
+  à côté (`.app-sidebar`, 260 px, coin arrondi), repliable. Trois décisions :
+  1. **La colonne de liste ne change jamais de forme d'un écran à l'autre** (suite directe de l'étape 268). Un
+     écran sans liste à lui y montre celle qui a un sens : l'Agent vocal montre les conversations du Chat (la voix
+     continue la conversation active, étape 96), le Cerveau garde celle de l'écran d'où l'on vient. Pour ça,
+     « écran affiché » et « liste montrée » sont deux notions séparées : `KeepAlive` reçoit `ownsSidebar`
+     (contexte `SidebarOwnerContext`), Workspace met sa liste dans la colonne quand il en est propriétaire, même
+     caché, et son titre dans l'en-tête seulement quand il est affiché. Un écran propriétaire est monté même s'il
+     n'a jamais été ouvert — sinon, Jaris s'ouvrant sur l'Agent vocal, la colonne serait restée vide.
+  2. **Choisir un élément d'une liste montrée depuis un autre écran ouvre cet écran** (clic sur une conversation
+     depuis Vocal → le Chat, sur cette conversation) ; sinon le clic surlignerait la ligne sans rien changer de
+     visible.
+  3. **Options met ses sections dans la colonne**, comme les Paramètres de Codex : avec la liste des
+     conversations à côté de sa propre colonne de sections, les réglages étaient écrasés sur une fenêtre de
+     1000 px. `OptionsMenu` reçoit `navSlot` et y envoie ses sections par portail quand la colonne est ouverte ;
+     repliée (ou fenêtre étroite), elles reviennent dans la page.
+  **Piège évité en remplaçant au lieu d'empiler** : les anciennes règles de la barre unique ciblaient
+  `.app-sidebar:not(.app-sidebar--expanded)` ; la classe `--expanded` disparaissant, elles se seraient
+  appliquées à la nouvelle colonne (alignement centré, noms cachés, boutons de 48 px). Elles sont supprimées,
+  pas surchargées. **Leçon générale : quand une classe d'état disparaît, chercher les règles en `:not(.classe)` —
+  elles s'appliquent alors partout, sans la moindre erreur.**
+  Régression : `scripts/test-window-chrome-ui.mjs` (deux colonnes ; la barre d'icônes et la liste gardent
+  exactement la même place sur Chat, Vocal, Code, Image, Options et Cerveau ; Vocal montre les conversations ;
+  Options n'a plus de seconde colonne de sections ; repli et réouverture ; une conversation choisie depuis Vocal
+  s'ouvre dans le Chat). Vérifiés en réintroduisant les défauts (colonne vide en Vocal, clic sans effet, colonne
+  masquée sur Options).

@@ -5757,12 +5757,12 @@ select {
 
 /* Listes de la colonne (conversations, projets, images, vidéos) : le titre seul, sur une ligne, comme
    ChatGPT — la date était coincée à droite du titre, cassée sur deux lignes en 9,5 px. */
-.app-sidebar__workspace .workspace__item {
+.app-sidebar .workspace__item {
   flex-direction: row;
   align-items: center;
 }
 
-.app-sidebar__workspace .workspace__item-meta {
+.app-sidebar .workspace__item-meta {
   display: none;
 }
 
@@ -6059,12 +6059,12 @@ select {
 }
 
 /* Ligne active de la liste : surlignée sur toute sa largeur (corbeille comprise), pas seulement le titre. */
-.app-sidebar__workspace .workspace__list li:has(.workspace__item--active) {
+.app-sidebar .workspace__list li:has(.workspace__item--active) {
   background: var(--jv-hover-strong);
 }
 
-.app-sidebar__workspace .workspace__item--active,
-.app-sidebar__workspace .workspace__item--active:hover {
+.app-sidebar .workspace__item--active,
+.app-sidebar .workspace__item--active:hover {
   background: transparent;
 }
 
@@ -6107,6 +6107,7 @@ select {
   --hud-panel: #2f2f2f;
   --hud-panel-raised: #2f2f2f;
   --jv-side: #171717;
+  --jv-rail: #1e1e1e;
   --jv-mica: rgba(23, 23, 23, 0.9);
   --jv-hover: rgba(255, 255, 255, 0.07);
   --jv-bubble: #2f2f2f;
@@ -6119,6 +6120,7 @@ select {
     --hud-panel: #f4f4f4;
     --hud-panel-raised: #f4f4f4;
     --jv-side: #f9f9f9;
+    --jv-rail: #f0f0f0;
     --jv-mica: rgba(249, 249, 249, 0.92);
     --jv-hover: rgba(0, 0, 0, 0.06);
     --jv-bubble: #f4f4f4;
@@ -6129,111 +6131,159 @@ select {
 .app-shell__body {
   position: relative;
   min-height: 0;
-  background: var(--jv-side);
+  background: var(--jv-rail);
 }
 
-.app-sidebar {
-  z-index: 2;
+/* --- Barre d'icônes (étape 269, façon Codex) : les modes en haut, les outils en bas ; icônes seules,
+       le nom en bulle et pour les lecteurs d'écran. Elle ne change jamais, quel que soit l'écran. --- */
+.app-rail {
+  z-index: 3;
   display: flex;
-  width: 68px;
-  height: 100%;
-  flex: 0 0 68px;
+  width: 56px;
+  flex: 0 0 56px;
   flex-direction: column;
-  gap: 10px;
-  padding: 10px 8px;
-  overflow: hidden;
-  background: var(--jv-side);
-  transition: width 160ms ease, flex-basis 160ms ease;
-}
-
-.app-sidebar--expanded {
-  width: 260px;
-  flex-basis: 260px;
-  padding: 10px 12px;
-  border-right: 1px solid var(--hud-line);
-}
-
-.app-sidebar__nav,
-.app-sidebar__utilities {
-  display: flex;
-  flex: 0 0 auto;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.app-sidebar__brand {
-  display: flex;
-  height: 42px;
-  flex: 0 0 42px;
   align-items: center;
-  gap: 10px;
-  padding: 0 10px 4px;
-  color: var(--hud-text);
-  font-size: 15px;
-  font-weight: 600;
+  gap: 4px;
+  padding: 10px 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+  background: var(--jv-rail);
 }
 
-.app-sidebar__brand img {
-  width: 25px;
-  height: 25px;
-  flex: 0 0 25px;
+.app-rail__logo {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  margin: 4px 0 10px;
   border-radius: 7px;
 }
 
-.app-sidebar__workspace {
+.app-rail__group {
   display: flex;
-  min-width: 0;
-  min-height: 0;
-  flex: 1 1 auto;
   flex-direction: column;
-  margin-top: 10px;
-  padding: 12px 0 0;
-  border-top: 1px solid var(--hud-line);
+  align-items: center;
+  gap: 4px;
 }
 
-.app-sidebar__workspace[hidden] {
+.app-rail__group--end {
+  margin-top: auto;
+  padding-top: 10px;
+}
+
+.app-rail .rail__item {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  flex-direction: row;
+  gap: 0;
+  padding: 0;
+  border-radius: 10px;
+  color: var(--hud-text-dim);
+}
+
+.app-rail .rail__item::before {
   display: none;
 }
 
-.app-sidebar__workspace .panel__head {
-  height: 38px;
-  gap: 4px;
-  padding: 0 4px 0 8px;
-}
-
-.app-sidebar__workspace .panel__title {
-  color: var(--hud-text-faint);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.app-sidebar__workspace .panel__icon-button {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  color: var(--hud-text-faint);
-}
-
-.app-sidebar__workspace .panel__icon-button:hover,
-.app-sidebar__workspace .panel__new .workspace__new:hover {
+.app-rail .rail__item:hover {
+  color: var(--hud-text);
   background: var(--jv-hover);
 }
 
-.app-sidebar__workspace .panel__new .workspace__new {
-  position: static;
-  width: auto;
-  height: 32px;
-  gap: 7px;
-  padding: 0 8px;
-  border: 1px solid var(--hud-line);
-  border-radius: 8px;
-  color: var(--hud-text-dim);
-  background: transparent;
-  font-family: var(--hud-font-body);
-  font-size: 12px;
+.app-rail .rail__item--active,
+.app-rail .rail__item--active:hover {
+  color: var(--hud-text);
+  background: var(--jv-hover-strong);
 }
 
-.app-sidebar__workspace .panel__new .workspace__new-label {
+.app-rail .rail__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* --- Colonne de liste (étape 269) : posée à côté de la barre d'icônes comme une feuille au coin arrondi,
+       titre de la liste, « Nouvelle conversation », puis « Récents ». Même place sur tous les écrans. --- */
+.app-sidebar {
+  z-index: 2;
+  display: flex;
+  width: 260px;
+  min-height: 0;
+  flex: 0 0 260px;
+  flex-direction: column;
+  padding: 8px 10px 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-top: 1px solid var(--hud-line);
+  border-left: 1px solid var(--hud-line);
+  border-top-left-radius: 12px;
+  background: var(--jv-side);
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-width: thin;
+}
+
+.app-sidebar[hidden] {
+  display: none;
+}
+
+.app-sidebar__head {
+  display: flex;
+  height: 40px;
+  flex: 0 0 40px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 0 0 10px;
+}
+
+.app-sidebar__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--hud-text);
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-sidebar .panel__icon-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--hud-text-faint);
+}
+
+.app-sidebar .panel__icon-button:hover,
+.app-sidebar .panel__new .workspace__new:hover {
+  color: var(--hud-text);
+  background: var(--jv-hover);
+}
+
+/* « Nouvelle conversation » : une ligne de la liste, icône et texte, comme « Nouveau chat » chez Codex. */
+.app-sidebar .panel__new {
+  margin-top: 4px;
+}
+
+.app-sidebar .panel__new .workspace__new {
+  position: static;
+  width: 100%;
+  height: 36px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--hud-text);
+  background: transparent;
+  font-family: var(--hud-font-body);
+  font-size: 13px;
+}
+
+.app-sidebar .panel__new .workspace__new-label {
   position: static;
   width: auto;
   height: auto;
@@ -6242,128 +6292,69 @@ select {
   white-space: nowrap;
 }
 
-.app-sidebar__workspace .panel__list {
+.app-sidebar .panel__list {
   min-height: 0;
-  padding: 0 2px;
-  overflow: hidden;
+  flex: 1 0 auto;
+  padding: 0;
 }
 
-.app-sidebar__workspace .workspace__rail {
+.app-sidebar .workspace__rail {
   min-height: 0;
 }
 
-.app-sidebar__workspace .workspace__rail-label {
-  padding: 8px 8px 5px;
+.app-sidebar .workspace__rail-label {
+  display: block;
+  padding: 16px 10px 6px;
   color: var(--hud-text-faint);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
 }
 
-.app-sidebar__workspace .workspace__empty {
-  padding: 6px 8px;
+.app-sidebar .workspace__empty {
+  padding: 6px 10px;
   font-size: 12px;
 }
 
-.app-sidebar__workspace .workspace__list {
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
-  scrollbar-width: thin;
-}
-
-.app-sidebar__workspace .workspace__list li,
-.app-sidebar__workspace .workspace__item {
+.app-sidebar .workspace__list li,
+.app-sidebar .workspace__item {
   border-radius: 8px;
 }
 
-.app-sidebar__workspace .workspace__item {
+.app-sidebar .workspace__item {
   height: 36px;
-  padding: 0 9px;
+  padding: 0 10px;
 }
 
-.app-sidebar__workspace .workspace__item-title {
-  font-size: 12px;
+.app-sidebar .workspace__item-title {
+  font-size: 13px;
 }
 
-.app-sidebar__workspace .workspace__list li:has(.workspace__item--active),
-.app-sidebar__workspace .workspace__list li:hover {
+.app-sidebar .workspace__list li:hover {
   background: var(--jv-hover);
 }
 
-.app-sidebar__workspace .workspace__delete {
+.app-sidebar .workspace__delete {
   width: 28px;
   height: 28px;
   margin-right: 3px;
 }
 
-.app-sidebar__workspace .panel__status {
+/* « Local · version » reste collé en bas quand la liste défile. */
+.app-sidebar .panel__status {
+  position: sticky;
+  bottom: -10px;
   flex: 0 0 auto;
-  padding: 10px 8px 1px;
+  margin: 8px -10px -10px;
+  padding: 10px 20px;
   border-top: 1px solid var(--hud-line);
-  font-size: 11px;
+  background: var(--jv-side);
+  font-size: 12px;
 }
 
-.app-sidebar__utilities {
-  margin-top: auto;
-  padding-top: 8px;
+/* Liste repliée : c'est la zone principale qui prend le coin arrondi, contre la barre d'icônes. */
+.app-sidebar[hidden] + .app-main {
   border-top: 1px solid var(--hud-line);
-}
-
-.app-sidebar .rail__item {
-  width: 100%;
-  height: 40px;
-  flex-direction: row;
-  justify-content: flex-start;
-  gap: 12px;
-  padding: 0 10px;
-  border-radius: 8px;
-  color: var(--hud-text-dim);
-  text-align: left;
-}
-
-.app-sidebar .rail__item::before {
-  display: none;
-}
-
-.app-sidebar .rail__item:hover,
-.app-sidebar .rail__item--active,
-.app-sidebar .rail__item--active:hover {
-  color: var(--hud-text);
-  background: var(--jv-hover);
-}
-
-.app-sidebar .rail__label {
-  font-size: 13px;
-  line-height: 1.2;
-}
-
-.app-sidebar:not(.app-sidebar--expanded) {
-  align-items: center;
-}
-
-.app-sidebar:not(.app-sidebar--expanded) .app-sidebar__brand {
-  justify-content: center;
-  padding: 0 0 4px;
-}
-
-.app-sidebar:not(.app-sidebar--expanded) .app-sidebar__brand span,
-.app-sidebar:not(.app-sidebar--expanded) .rail__label {
-  display: none;
-}
-
-.app-sidebar:not(.app-sidebar--expanded) .rail__item {
-  width: 48px;
-  height: 48px;
-  justify-content: center;
-  padding: 0;
-}
-
-.app-sidebar:not(.app-sidebar--expanded) .app-sidebar__nav,
-.app-sidebar:not(.app-sidebar--expanded) .app-sidebar__utilities {
-  align-items: center;
-  width: 100%;
-}
-
-.app-sidebar--expanded .app-sidebar__utilities .rail__item {
-  height: 36px;
+  border-top-left-radius: 12px;
 }
 
 .app-header {
@@ -6452,50 +6443,22 @@ select {
   background: var(--hud-panel);
 }
 
-.titlebar {
-  background: var(--jv-side);
+/* La barre de titre prend la couleur de la barre d'icônes : les deux encadrent la feuille, comme chez Codex. */
+.titlebar,
+.app-shell {
+  background: var(--jv-rail);
 }
 
+/* Fenêtre étroite : la barre d'icônes reste, la liste ouverte passe PAR-DESSUS le contenu (comme un menu,
+   refermée dès qu'on choisit un écran ou un élément — App.tsx) au lieu de l'écraser. */
 @media (max-width: 700px) {
-  .app-sidebar--expanded {
+  .app-sidebar {
     position: absolute;
-    inset: 0 auto 0 0;
+    inset: 0 auto 0 56px;
     z-index: 20;
+    width: min(280px, calc(100% - 56px));
     box-shadow: 8px 0 28px rgba(0, 0, 0, 0.24);
   }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .app-sidebar {
-    transition: none;
-  }
-}
-
-/* La barre latérale ouverte défile en entier, comme celle de ChatGPT : sur une fenêtre peu haute, la liste
-   (conversations, projets…) était coupée à zéro et disparaissait sous « Local » et les outils, sans aucun
-   moyen de la faire défiler. Les outils (Cerveau, Widget, Options) restent collés en bas, toujours visibles. */
-.app-sidebar--expanded {
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-
-.app-sidebar--expanded .app-sidebar__workspace,
-.app-sidebar--expanded .app-sidebar__workspace .panel__list {
-  flex: 1 0 auto;
-}
-
-.app-sidebar--expanded .app-sidebar__utilities {
-  position: sticky;
-  bottom: -10px;
-  margin-bottom: -10px;
-  padding-bottom: 10px;
-  background: var(--jv-side);
-}
-
-/* « Récents » et « Local · version » : 12 px, le minimum gardé partout depuis l'étape 265 (ils étaient à 11). */
-.app-sidebar__workspace .workspace__rail-label,
-.app-sidebar__workspace .panel__status {
-  font-size: 12px;
 }
 
 /* ==========================================================================
@@ -6682,11 +6645,62 @@ select {
   }
 }
 
-/* Barre latérale : le bouton pour la replier, à droite du nom ; caché quand elle est déjà repliée. */
-.app-sidebar__collapse {
-  margin-left: auto;
+
+/* Étape 269 : les sections d'Options dans la colonne de liste, comme celles des Paramètres de Codex —
+   plus de seconde colonne de sections dans la page, qui écrasait les réglages sur une fenêtre moyenne. */
+.app-sidebar .options-page__navigation {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
-.app-sidebar:not(.app-sidebar--expanded) .app-sidebar__collapse {
-  display: none;
+/* `margin: 0` contre la marge des intitulés dans la page (12 px de côté, 22 px au-dessus du second) :
+   alignés sur les lignes et sur « Récents » des autres listes. */
+.app-sidebar .options-page__navigation-label {
+  margin: 0;
+  padding: 16px 10px 6px;
+  font-family: var(--hud-font-body);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--hud-text-faint);
+}
+
+.app-sidebar .options-menu__tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.app-sidebar .options-menu__tab {
+  flex: 0 0 auto;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--hud-text);
+  background: transparent;
+  font-family: var(--hud-font-body);
+  font-size: 13px;
+  text-align: left;
+}
+
+.app-sidebar .options-menu__tab:hover {
+  background: var(--jv-hover);
+}
+
+.app-sidebar .options-menu__tab--active,
+.app-sidebar .options-menu__tab--active:hover {
+  background: var(--jv-hover-strong);
+}
+
+/* Sections parties dans la colonne de liste : la page n'a plus qu'une colonne, sans rangée vide au-dessus
+   (la règle des fenêtres étroites en ajoutait une pour la barre de sections). Écrit après les deux. */
+.options-page__body--single {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }

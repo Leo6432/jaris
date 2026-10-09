@@ -46,6 +46,7 @@ const known = {
   getNewModels: async () => [],
   getAppVersion: async () => '0.0.0',
   listConversations: async () => ({ conversations: conv, activeId: 'b' }),
+  selectConversation: async (id) => ({ conversations: conv, activeId: id }),
   getChatHistory: async () => [{ role: 'user', content: 'Bonjour' }, { role: 'assistant', content: 'Bonjour Léo !' }],
   getGeneratedApps: async () => [{ path: '/a', label: 'Minuteur de cuisine', timestamp: Date.now() }],
   listGeneratedImages: async () => [],
@@ -165,12 +166,16 @@ test('fenêtre étroite : la liste se pose par-dessus au lieu d’écraser la co
       await page.waitForSelector('.rail__item')
       await page.click('.rail__item:has-text("Chat")')
       await page.click('.app-header .panel__icon-button')
-      await page.waitForSelector('.app-sidebar__workspace:not([hidden]) .workspace__item')
+      await page.waitForSelector('.app-sidebar:not([hidden]) .workspace__item')
       const mainWidth = await page.evaluate(() => document.querySelector('.app-main').getBoundingClientRect().width)
       assert.ok(mainWidth > 380, `zone principale écrasée à ${Math.round(mainWidth)} px`)
-      await page.click('.app-sidebar__workspace .workspace__item:has-text("Recette")')
+      // La barre d'icônes reste à gauche, la liste se pose à côté d'elle, pas dessus.
+      const rail = await page.locator('.app-rail').boundingBox()
+      const list = await page.locator('.app-sidebar').boundingBox()
+      assert.ok(list.x >= rail.x + rail.width - 1, 'la liste recouvre la barre d’icônes')
+      await page.click('.app-sidebar .workspace__item:has-text("Recette")')
       await page.waitForTimeout(200)
-      assert.equal(await page.locator('.app-sidebar--expanded').count(), 0, 'la liste reste ouverte par-dessus la conversation choisie')
+      assert.equal(await page.isVisible('.app-sidebar'), false, 'la liste reste ouverte par-dessus la conversation choisie')
     },
     { width: 480, height: 600 }
   )
@@ -239,23 +244,55 @@ test('style ChatGPT : aucune couleur vive dans la fenêtre (plus de violet ni de
   }
 })
 
-test('la barre latérale reste ouverte, noms compris, sur TOUS les écrans (Vocal, Options et Cerveau aussi)', options, async () => {
-  // Étape 268 (Léo : « quand je clique sur Code ça reste pareil, mais sur Vocal ça met directement l'icône et
-  // ça enlève le texte ») : elle se repliait d'elle-même sur les écrans sans liste.
+test('façon Codex : la barre d’icônes et la liste sont deux colonnes, identiques sur TOUS les écrans', options, async () => {
+  // Étape 269 (Léo, capture de Codex : « fais comme ça, ne mets pas les conversations dans la même barre ») :
+  // les modes en icônes dans une colonne fixe, la liste (conversations…) dans une colonne à part, à côté. Et
+  // rien ne change de forme en passant d'un écran à l'autre (étape 268 : la barre se repliait sur Vocal).
   await withPage(async (page) => {
     await page.waitForSelector('.rail__item')
-    for (const label of ['Chat', 'Vocal', 'Code', 'Options', 'Cerveau', 'Chat']) {
+    const rail0 = await page.locator('.app-rail').boundingBox()
+    const list0 = await page.locator('.app-sidebar').boundingBox()
+    assert.ok(rail0.width <= 64, `barre d’icônes trop large : ${rail0.width}px`)
+    assert.equal(await page.locator('.app-rail .rail__item').count(), 8, 'les 5 modes et les 3 outils sont dans la barre d’icônes')
+    assert.equal(await page.locator('.app-rail .workspace__item').count(), 0, 'des conversations sont dans la barre d’icônes')
+    for (const label of ['Chat', 'Vocal', 'Code', 'Image', 'Options', 'Cerveau', 'Chat']) {
       await page.click(`.rail__item:has-text("${label}")`)
       await page.waitForTimeout(250)
-      assert.equal(await page.locator('.app-sidebar--expanded').count(), 1, `barre repliée sur l’écran ${label}`)
-      assert.equal(await page.isVisible('.rail__item:has-text("Vocal") .rail__label'), true, `noms cachés sur l’écran ${label}`)
+      assert.deepEqual(await page.locator('.app-rail').boundingBox(), rail0, `barre d’icônes changée sur l’écran ${label}`)
+      const list = await page.locator('.app-sidebar').boundingBox()
+      assert.ok(list, `liste repliée toute seule sur l’écran ${label}`)
+      assert.deepEqual([list.x, list.width], [list0.x, list0.width], `liste déplacée ou redimensionnée sur l’écran ${label}`)
     }
-    // Et c'est Léo qui la replie, depuis n'importe quel écran (le bouton était dans la liste, absente en Vocal).
+    // L'Agent vocal continue la conversation active : la colonne montre les conversations, pas un vide.
+    await page.click('.rail__item:has-text("Vocal")')
+    assert.equal((await page.textContent('.app-sidebar__title')).trim(), 'Conversations')
+    assert.ok((await page.locator('.app-sidebar .workspace__item').count()) >= 2)
+    // Options y met ses sections, au lieu d'une seconde colonne dans la page qui écrasait les réglages.
+    await page.click('.rail__item:has-text("Options")')
+    assert.equal((await page.textContent('.app-sidebar__title')).trim(), 'Options')
+    assert.equal(await page.locator('.app-sidebar .options-menu__tab').count(), 5)
+    assert.equal(await page.locator('.options-page .options-page__navigation').count(), 0, 'les sections sont aussi dans la page')
+    await page.click('.app-sidebar .options-menu__tab:has-text("Modèles")')
+    assert.match(await page.textContent('.options-page__tab-header h3'), /Modèles/)
+    // C'est Léo qui replie la liste, depuis n'importe quel écran ; la barre d'icônes, elle, ne bouge pas.
     await page.click('.rail__item:has-text("Vocal")')
     await page.click('.app-sidebar__collapse')
-    assert.equal(await page.locator('.app-sidebar--expanded').count(), 0)
+    assert.equal(await page.isVisible('.app-sidebar'), false)
+    assert.deepEqual(await page.locator('.app-rail').boundingBox(), rail0)
     await page.click('.app-header .panel__icon-button')
-    assert.equal(await page.locator('.app-sidebar--expanded').count(), 1)
+    assert.equal(await page.isVisible('.app-sidebar'), true)
+  })
+})
+
+test('depuis l’Agent vocal, choisir une conversation de la liste l’ouvre dans le Chat', options, async () => {
+  // Sinon le clic surlignerait la ligne sans rien changer de visible.
+  await withPage(async (page) => {
+    await page.waitForSelector('.rail__item')
+    await page.click('.rail__item:has-text("Vocal")')
+    await page.click('.app-sidebar .workspace__item:has-text("Recette")')
+    await page.waitForSelector('.chat-panel', { state: 'visible' })
+    assert.match(await page.textContent('.app-header__title'), /Recette/)
+    assert.equal(await page.locator('.rail__item--active').getAttribute('title'), 'Chat')
   })
 })
 
