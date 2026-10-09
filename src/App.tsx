@@ -45,7 +45,6 @@ const MODES: Array<{ id: AppMode; label: string; title: string; panel?: string; 
 
 const ICON_BRAIN =
   'M9.5 3a3.5 3.5 0 0 0-3.4 4.4A3.5 3.5 0 0 0 5 13.6 3.5 3.5 0 0 0 9.5 21H12V3H9.5ZM14.5 3a3.5 3.5 0 0 1 3.4 4.4 3.5 3.5 0 0 1 1.1 6.2 3.5 3.5 0 0 1-4.5 7.4H12V3h2.5Z'
-const ICON_WIDGET = 'M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3zM12 12h6v6h-6z'
 const ICON_OPTIONS =
   'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1'
 
@@ -560,13 +559,6 @@ export default function App(): JSX.Element {
             </div>
             <div className="app-rail__group app-rail__group--end">
               <RailButton label="Cerveau" title="Cerveau de Jaris" icon={ICON_BRAIN} active={!!memoryGraph} onClick={openMemoryBrain} />
-              <RailButton
-                label="Widget"
-                title="Réduire en widget"
-                icon={ICON_WIDGET}
-                active={false}
-                onClick={() => window.jaris.minimizeToWidget?.()}
-              />
               <RailButton
                 label="Options"
                 icon={ICON_OPTIONS}

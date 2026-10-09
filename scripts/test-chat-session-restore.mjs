@@ -37,6 +37,11 @@ function setup(pastEntries) {
         if (prompt.startsWith('cherche')) {
           return new Promise((resolve) => rest[4].addEventListener('abort', () => resolve('Recherche annulée.')))
         }
+        // Étape 273 : rest[11] = onWebActivity, appelé par l'outil search_web.
+        if (prompt.startsWith('météo')) {
+          rest[11]?.({ kind: 'search', query: 'météo Rennes', results: [{ title: 'Météo Rennes', url: 'https://meteofrance.com/rennes' }] })
+          return 'Il fera 17 °C.'
+        }
         if (prompt.startsWith('dessine')) {
           rest[9]({ path: '/donnees/generated-images/chat.png', fileName: 'chat.png' })
           return 'Voilà ton image.'
@@ -228,4 +233,22 @@ test('« Arrêter » avant tout texte : « Réponse arrêtée. », et rien d’e
   // Le message suivant repart normalement (plus rien d'arrêté en mémoire).
   const next = await chatSession.send('bonjour', () => {}, () => {})
   assert.equal(next.content, 'réponse test')
+})
+
+test('recherches web (étape 273) : jointes à la réponse, relayées en direct, enregistrées et réaffichées', async () => {
+  const { chatSession, appended } = setup([])
+  const live = []
+  const reply = await chatSession.send('météo demain', () => {}, () => {}, undefined, undefined, undefined, undefined, 'chat', (a) => live.push(a))
+  const expected = [{ kind: 'search', query: 'météo Rennes', results: [{ title: 'Météo Rennes', url: 'https://meteofrance.com/rennes' }] }]
+  assert.equal(JSON.stringify(live), JSON.stringify(expected), 'pas relayé en direct')
+  assert.equal(JSON.stringify(reply.web), JSON.stringify(expected), 'pas joint à la réponse')
+  assert.equal(JSON.stringify(appended[0].web), JSON.stringify(expected), 'pas enregistré')
+
+  // Après un redémarrage, le bloc revient avec la réponse.
+  const restarted = setup([{ id: '1', timestamp: 't', transcript: 'météo demain', reply: 'Il fera 17 °C.', web: expected }])
+  const messages = await restarted.chatSession.getVisibleMessages()
+  assert.equal(JSON.stringify(messages[1].web), JSON.stringify(expected))
+  // Une réponse sans recherche n'a pas de bloc (pas de « web: [] » qui afficherait un bloc vide).
+  const plain = await chatSession.send('bonjour', () => {}, () => {})
+  assert.equal('web' in plain, false)
 })

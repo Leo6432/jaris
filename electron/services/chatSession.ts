@@ -9,7 +9,7 @@ import { getLiveGpuStatus } from './hardwareScan'
 import { getProfile } from './profileStore'
 import { checkGpuTempSafety } from './resourceMonitor'
 import { readGeneratedImageDataUrl, type GeneratedImage } from './imageGenerator'
-import type { ChatMessage, SoundCue } from '../../shared/ipc'
+import type { ChatMessage, SoundCue, WebActivity } from '../../shared/ipc'
 
 /**
  * Nombre de messages gardés pour l'AFFICHAGE du fil de discussion, bien plus large que la fenêtre envoyée
@@ -61,7 +61,13 @@ class ChatSession {
     const images = await Promise.all(pastEntries.map((entry) => (entry.image ? readGeneratedImageDataUrl(entry.image) : null)))
     this.visible = pastEntries.flatMap((entry, i): ChatMessage[] => [
       { role: 'user', content: entry.transcript },
-      { role: 'assistant', content: entry.reply, ...(images[i] ? { image: images[i] as string } : {}) }
+      {
+        role: 'assistant',
+        content: entry.reply,
+        ...(images[i] ? { image: images[i] as string } : {}),
+        // Étape 273 : le bloc « A cherché sur le web » revient après un redémarrage.
+        ...(entry.web?.length ? { web: entry.web } : {})
+      }
     ])
   }
 
@@ -127,7 +133,9 @@ class ChatSession {
     // Étape 214 : message venu du téléphone (voir phoneAccess.ts), dans la MÊME conversation que le Chat.
     restrictions?: ConverseRestrictions,
     // Onglet Vocal du téléphone : réponse courte, sans liste ni gras, puisqu'elle sera lue à voix haute.
-    channel: 'chat' | 'voice' = 'chat'
+    channel: 'chat' | 'voice' = 'chat',
+    // Étape 273 : chaque recherche web ou page lue, dès qu'elle a lieu (bloc dépliable affiché en direct).
+    onWebActivity?: (activity: WebActivity) => void
   ): Promise<ChatMessage> {
     // Sans ça, un message envoyé avant que le premier getVisibleMessages() (appelé au montage de
     // ChatPanel.tsx) ait fini de charger l'historique pourrait écraser la restauration en cours.
@@ -156,6 +164,12 @@ class ChatSession {
       streamed += delta
       onToken?.(delta)
     }
+    // Étape 273 : gardé avec la réponse (affichage et historique), et relayé en direct.
+    const web: WebActivity[] = []
+    const relayWeb = (activity: WebActivity): void => {
+      web.push(activity)
+      onWebActivity?.(activity)
+    }
     try {
       const profile = await getProfile()
       // Étape 47 : session partagée avec le pipeline vocal (conversationSession.ts), relue à chaque envoi —
@@ -177,13 +191,14 @@ class ChatSession {
             (image) => {
               generated = image
             },
-            restrictions
+            restrictions,
+            relayWeb
           )
       if (gpuStatus.action === 'warn') reply = `${gpuStatus.message}\n\n${reply}`
       // La lecture d'une image ne s'interrompt pas en route : sa réponse arrivée après « Arrêter » est écartée.
-      if (controller.signal.aborted) return this.stopped(prompt, streamed)
+      if (controller.signal.aborted) return this.stopped(prompt, streamed, web)
     } catch (err) {
-      if (controller.signal.aborted) return this.stopped(prompt, streamed)
+      if (controller.signal.aborted) return this.stopped(prompt, streamed, web)
       this.running.delete(controller)
       const detail = err instanceof Error ? err.message : String(err)
       onLog(`Erreur Ollama (chat) : ${detail}`)
@@ -193,7 +208,8 @@ class ChatSession {
       // logique que pour un outil qui échoue (voir assistant.ts) : ne jamais cacher la vraie cause.
       return this.pushVisible({
         role: 'assistant',
-        content: `Je n'arrive pas à réfléchir pour le moment : ${detail}`
+        content: `Je n'arrive pas à réfléchir pour le moment : ${detail}`,
+        ...(web.length ? { web } : {})
       })
     }
 
@@ -210,11 +226,12 @@ class ChatSession {
       timestamp: new Date().toISOString(),
       transcript: prompt,
       reply,
-      ...(image ? { image: image.fileName } : {})
+      ...(image ? { image: image.fileName } : {}),
+      ...(web.length ? { web } : {})
     })
 
     const imageUrl = image ? await readGeneratedImageDataUrl(image.fileName) : null
-    return this.pushVisible({ role: 'assistant', content: reply, ...(imageUrl ? { image: imageUrl } : {}) })
+    return this.pushVisible({ role: 'assistant', content: reply, ...(imageUrl ? { image: imageUrl } : {}), ...(web.length ? { web } : {}) })
   }
 
   /**
@@ -222,14 +239,20 @@ class ChatSession {
    * reste, et rejoint l'historique comme un échange normal (le modèle le voit au tour suivant) ; rien d'affiché,
    * l'échange n'est pas enregistré — une réponse vide ne ferait que brouiller le contexte.
    */
-  private async stopped(prompt: string, streamed: string): Promise<ChatMessage> {
+  private async stopped(prompt: string, streamed: string, web: WebActivity[] = []): Promise<ChatMessage> {
     for (const running of this.running) if (running.signal.aborted) this.running.delete(running)
     const partial = streamed.trim()
     if (partial) {
       pushSessionExchange(prompt, partial)
-      await appendConversationEntry({ id: randomUUID(), timestamp: new Date().toISOString(), transcript: prompt, reply: partial })
+      await appendConversationEntry({
+        id: randomUUID(),
+        timestamp: new Date().toISOString(),
+        transcript: prompt,
+        reply: partial,
+        ...(web.length ? { web } : {})
+      })
     }
-    return this.pushVisible({ role: 'assistant', content: partial || 'Réponse arrêtée.', stopped: true })
+    return this.pushVisible({ role: 'assistant', content: partial || 'Réponse arrêtée.', stopped: true, ...(web.length ? { web } : {}) })
   }
 
   private pushVisible(message: ChatMessage): ChatMessage {

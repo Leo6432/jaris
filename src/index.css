@@ -6764,3 +6764,146 @@ select {
   color: var(--hud-text-faint);
   font-size: 12px;
 }
+
+/* ==========================================================================
+   Étape 273 : recherches web dépliables au-dessus d'une réponse du Chat, façon Claude (Léo : « une petite flèche
+   pour voir ce qu'il recherche »). Discret : la réponse reste la première chose lue.
+   ========================================================================== */
+.web-activity {
+  margin: 0 0 10px;
+}
+
+.web-activity__toggle {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 8px 4px 6px;
+  margin-left: -6px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--hud-text-dim);
+  background: transparent;
+  font-family: var(--hud-font-body);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.web-activity__toggle:hover {
+  color: var(--hud-text);
+  background: var(--jv-hover);
+}
+
+.web-activity__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-activity__chevron {
+  flex: 0 0 auto;
+  transition: transform 160ms ease;
+}
+
+.web-activity__chevron--open {
+  transform: rotate(90deg);
+}
+
+/* Pendant la recherche : la ligne respire doucement, comme « Jaris réfléchit… ». */
+.web-activity--running .web-activity__label {
+  animation: web-activity-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes web-activity-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.web-activity__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 6px 0 4px 7px;
+  padding: 2px 0 2px 14px;
+  border-left: 1px solid var(--hud-line);
+  list-style: none;
+}
+
+.web-activity__step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--hud-text-dim);
+  font-size: 13px;
+}
+
+.web-activity__query {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--hud-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-activity__count {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--hud-text-faint);
+  font-size: 12px;
+}
+
+.web-activity__sources {
+  display: flex;
+  flex-direction: column;
+  margin: 4px 0 0 15px;
+}
+
+.web-activity__source {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--hud-text-dim);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+/* « .chat-panel__body a » (liens d'une réponse, soulignés et colorés) a sinon le dessus : classe + balise bat
+   une classe seule, même écrite plus bas. D'où la même forme ici, plus la classe du lien. */
+.chat-panel__body a.web-activity__source {
+  color: var(--hud-text-dim);
+  text-decoration: none;
+}
+
+.chat-panel__body a.web-activity__source:hover {
+  color: var(--hud-text);
+  background: var(--jv-hover);
+}
+
+.web-activity__source-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-activity__source-domain {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--hud-text-faint);
+  font-size: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .web-activity__chevron {
+    transition: none;
+  }
+
+  .web-activity--running .web-activity__label {
+    animation: none;
+  }
+}

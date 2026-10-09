@@ -8,8 +8,9 @@ import { formatRecentDate } from '@/lib/formatRecentDate'
 import { renderFormattedText } from '@/lib/formatReply'
 import { formatChatProgress } from '@/lib/formatChatProgress'
 import type { ImageAttachment } from '@/lib/imageAttachment'
-import type { ChatMessage, ConversationList } from '../../shared/ipc'
+import type { ChatMessage, ConversationList, WebActivity } from '../../shared/ipc'
 import ModelEffortPicker from './ModelEffortPicker'
+import WebActivityBlock from './WebActivityBlock'
 import { DownloadIcon } from './icons'
 
 /**
@@ -26,6 +27,8 @@ export default function ChatPanel(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState<string | null>(null)
   const [streamingReply, setStreamingReply] = useState('')
+  // Étape 273 : recherches web et pages lues pendant la réponse en cours (bloc dépliable, comme Claude).
+  const [liveWeb, setLiveWeb] = useState<WebActivity[]>([])
   const [attachment, setAttachment] = useState<ImageAttachment | null>(null)
   /** Conversations (étape 96) : la liste complète et laquelle est active — affichées par Workspace. */
   const [conversations, setConversations] = useState<ConversationList | null>(null)
@@ -103,6 +106,9 @@ export default function ChatPanel(): JSX.Element {
   useEffect(() => {
     return window.jaris.onChatStreamToken((delta) => setStreamingReply((prev) => prev + delta))
   }, [])
+  useEffect(() => {
+    return window.jaris.onChatWebActivity((activity) => setLiveWeb((prev) => [...prev, activity]))
+  }, [])
 
   // Toujours coller au dernier message : pendant que Jaris réfléchit, l'indicateur en bas doit rester
   // visible sans avoir à faire défiler à la main.
@@ -124,6 +130,7 @@ export default function ChatPanel(): JSX.Element {
     setSending(true)
     setProgress(null)
     setStreamingReply('')
+    setLiveWeb([])
     // Étape 31 : joué directement ici (pas via IPC main -> renderer comme les autres cues, voir App.tsx)
     // puisque l'action vient de CETTE fenêtre — inutile d'attendre un aller-retour pour un son immédiat.
     void playSoundCueIfEnabled('send')
@@ -143,6 +150,7 @@ export default function ChatPanel(): JSX.Element {
       setSending(false)
       setProgress(null)
       setStreamingReply('')
+      setLiveWeb([])
     }
   }
 
@@ -176,6 +184,7 @@ export default function ChatPanel(): JSX.Element {
             <div key={index} className={`chat-panel__message chat-panel__message--${message.role}`}>
               {message.role === 'assistant' && <img className="chat-panel__avatar" src={logo} alt="" />}
               <div className="chat-panel__body">
+              {message.web && <WebActivityBlock items={message.web} />}
               {message.image && message.role === 'user' && (
                 <img className="chat-panel__message-image" src={message.image} alt="Image envoyée à Jaris" />
               )}
@@ -211,6 +220,7 @@ export default function ChatPanel(): JSX.Element {
             <div className={`chat-panel__message chat-panel__message--${streamingReply ? 'assistant' : 'pending'}`}>
               <img className="chat-panel__avatar" src={logo} alt="" />
               <div className="chat-panel__body">
+                <WebActivityBlock items={liveWeb} running />
                 {streamingReply ? (
                   renderFormattedText(streamingReply)
                 ) : (

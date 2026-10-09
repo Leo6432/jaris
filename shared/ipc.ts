@@ -206,6 +206,21 @@ export interface MemoryGraph {
 }
 
 /** Un échange voix (question/réponse) journalisé sur le disque, pour l'onglet "Historique" du menu Options. */
+/** Une page trouvée par une recherche web (titre et adresse, rien de plus). */
+export interface WebSource {
+  title: string
+  url: string
+}
+
+/**
+ * Étape 273 (Léo : « quand il recherche sur le web, tu peux pas faire comme Claude, une petite flèche pour voir
+ * ce qu'il recherche ? ») : ce que Jaris a fait sur le web pendant une réponse — chaque recherche avec ses
+ * résultats, chaque page lue —, montré dans un bloc dépliable au-dessus de la réponse du Chat.
+ */
+export type WebActivity =
+  | { kind: 'search'; query: string; results: WebSource[]; failed?: boolean }
+  | { kind: 'read'; url: string; failed?: boolean }
+
 export interface ConversationEntry {
   id: string
   timestamp: string
@@ -216,6 +231,8 @@ export interface ConversationEntry {
    * elle-même — le Chat la relit sur le disque pour la réafficher après un redémarrage.
    */
   image?: string
+  /** Étape 273 : recherches et pages lues pendant cette réponse, réaffichées après un redémarrage. */
+  web?: WebActivity[]
 }
 
 /**
@@ -489,6 +506,8 @@ export interface ChatMessage {
   image?: string
   /** Étape 272 : réponse interrompue par le bouton « Arrêter » — le début déjà écrit est gardé tel quel. */
   stopped?: boolean
+  /** Étape 273 : recherches web et pages lues pour cette réponse (bloc dépliable au-dessus d'elle). */
+  web?: WebActivity[]
 }
 
 /**
@@ -740,6 +759,8 @@ export const IPC_CHANNELS = {
   sendChatMessage: 'jaris:send-chat-message',
   /** Étape 272 : bouton « Arrêter » du Chat, comme ChatGPT. */
   cancelChat: 'jaris:cancel-chat',
+  /** main -> renderer, étape 273 : une recherche web ou une page lue pendant la réponse en cours (WebActivity). */
+  chatWebActivity: 'jaris:chat-web-activity',
   /** main -> renderer : un fragment de la réponse en cours de génération (étape 48), affiché au fil de
    * l'eau dans ChatPanel.tsx plutôt que d'attendre la réponse complète de sendChatMessage. */
   chatStreamToken: 'jaris:chat-stream-token',
@@ -904,8 +925,6 @@ export const IPC_CHANNELS = {
   setOptionsOpen: 'jaris:set-options-open',
   /** renderer <-> main : habillage Windows 11 de la fenêtre principale (WindowChrome). */
   getWindowChrome: 'jaris:get-window-chrome',
-  /** renderer -> main : bouton « Widget » du rail — réduit la fenêtre, le widget prend le relais. */
-  minimizeToWidget: 'jaris:minimize-to-widget',
   /** main -> renderer : un son court à jouer (design sonore, étape 31) — voir SoundCue plus haut. */
   soundCue: 'jaris:sound-cue',
   /**

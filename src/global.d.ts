@@ -9,6 +9,7 @@ import type {
   AudioInputDevice,
   CapacityScanResult,
   ChatMessage,
+  WebActivity,
   ContextLengthOptions,
   ConversationEntry,
   ConversationList,
@@ -56,6 +57,7 @@ declare global {
       onReply: (cb: (payload: VoiceReplyPayload) => void) => () => void
       onLog: (cb: (message: string) => void) => () => void
       onChatStreamToken: (cb: (delta: string) => void) => () => void
+      onChatWebActivity: (cb: (activity: WebActivity) => void) => () => void
       onSetupStatus: (cb: (status: VoiceSetupStatusPayload) => void) => () => void
       getSetupStatus: () => Promise<VoiceSetupStatusPayload>
       triggerWake: () => void
@@ -161,7 +163,6 @@ declare global {
       setActiveMode: (mode: AppMode) => void
       setOptionsOpen: (open: boolean) => void
       getWindowChrome: () => Promise<WindowChrome>
-      minimizeToWidget: () => void
       getLaunchAtStartup: () => Promise<LaunchAtStartupStatus>
       setLaunchAtStartup: (enabled: boolean) => Promise<LaunchAtStartupStatus>
       getWidgetMode: () => Promise<WidgetMode>

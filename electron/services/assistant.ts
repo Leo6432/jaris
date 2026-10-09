@@ -5,7 +5,7 @@ import { chatWithOllama, getModelThinking, listInstalledModels, type ChatMetrics
 import { chosenThink, thinkLabel, type ThinkValue } from '../../shared/effort'
 import { listMemoryTitles } from './memoryStore'
 import { getProfile } from './profileStore'
-import { TOOLS, createToolExecutor, type ImageHandler } from './tools'
+import { TOOLS, createToolExecutor, type ImageHandler, type WebActivityHandler } from './tools'
 import { didAppLaunch } from './appLauncher'
 import { GPU_TEMP_LIMIT_C, isScreenQuestion, pickSafeModel, type LiveGpuStatus } from './hardwareScan'
 import { checkOverloadWarning } from './resourceMonitor'
@@ -412,7 +412,9 @@ async function conversation(
   // Étape 173 : reçoit l'image dessinée par generate_image (voir ImageHandler, tools.ts).
   onImage?: ImageHandler,
   // Étape 214 : message venu du téléphone — seuls certains outils existent pour ce tour (voir phoneAccess.ts).
-  restrictions?: ConverseRestrictions
+  restrictions?: ConverseRestrictions,
+  // Étape 273, chat uniquement : chaque recherche web et page lue, pour le bloc dépliable au-dessus de la réponse.
+  onWebActivity?: WebActivityHandler
 ): Promise<string> {
   const socialReply = directSocialReply(prompt)
   if (socialReply) {
@@ -422,7 +424,7 @@ async function conversation(
 
   const memoryTitles = await listMemoryTitles()
   const profile = await getProfile()
-  const runTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel, onLog, signal, onImage)
+  const runTool = createToolExecutor(onReminderFire, profile?.visionModel ?? config.ollama.visionModel, onLog, signal, onImage, onWebActivity)
   const isToolAllowed = (name: string): boolean => !restrictions || restrictions.allowedTools.has(name)
   // Deux barrières plutôt qu'une : les outils interdits ne sont même pas présentés au modèle (plus bas), ET
   // l'exécution les refuse quand même — un modèle peut inventer un appel à un outil qu'on ne lui a pas donné.

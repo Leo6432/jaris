@@ -102,6 +102,7 @@ import {
   type AudioInputDevice,
   type CapacityScanResult,
   type ChatMessage,
+  type WebActivity,
   type PhoneAccessStatus,
   type PhonePairing,
   type ConversationList,
@@ -1203,9 +1204,6 @@ app.whenReady().then(async () => {
     applyListeningForActiveMode()
   })
   ipcMain.handle(IPC_CHANNELS.getWindowChrome, () => windowChrome())
-  // Bouton « Widget » du rail (design v2) : exactement comme le bouton réduire de Windows — le handler
-  // 'minimize' de la fenêtre principale décide s'il y a un widget à montrer pour le mode affiché.
-  ipcMain.on(IPC_CHANNELS.minimizeToWidget, () => fullWindow?.minimize())
   // Thème clair/sombre changé dans Windows pendant que Jaris tourne : la page suit toute seule
   // (prefers-color-scheme), mais les symboles des boutons de la barre de titre viennent d'ici.
   nativeTheme.on('updated', () => {
@@ -1428,7 +1426,10 @@ app.whenReady().then(async () => {
       (message) => broadcast(IPC_CHANNELS.log, message),
       (cue: SoundCue) => broadcast(IPC_CHANNELS.soundCue, cue),
       (delta) => event.sender.send(IPC_CHANNELS.chatStreamToken, delta),
-      imageBase64
+      imageBase64,
+      undefined,
+      'chat',
+      (activity: WebActivity) => event.sender.send(IPC_CHANNELS.chatWebActivity, activity)
     )
   })
   ipcMain.on(IPC_CHANNELS.cancelChat, () => chatSession.cancel())

@@ -1,5 +1,6 @@
 import { config } from '../config'
 import { readSearxngContainerSettings } from './dependencyServices'
+import type { WebSource } from '../../shared/ipc'
 
 interface SearxngResult {
   title: string
@@ -13,8 +14,12 @@ interface SearxngResponse {
 
 const MAX_RESULTS = 5
 
-/** Interroge l'instance SearXNG locale et renvoie un résumé texte des meilleurs résultats. */
-export async function searchWeb(query: string): Promise<string> {
+/**
+ * Interroge l'instance SearXNG locale : un résumé texte des meilleurs résultats pour le modèle, et depuis
+ * l'étape 273 les pages trouvées (titre, adresse) pour les montrer à Léo dans le Chat. Seules les adresses
+ * http(s) sont gardées : le Chat en fait des liens cliquables.
+ */
+export async function searchWebDetailed(query: string): Promise<{ text: string; sources: WebSource[] }> {
   const url = new URL('/search', config.searxng.host)
   url.searchParams.set('q', query)
   url.searchParams.set('format', 'json')
@@ -68,7 +73,10 @@ export async function searchWeb(query: string): Promise<string> {
 
   const data = (await response.json()) as SearxngResponse
   const results = (data.results ?? []).slice(0, MAX_RESULTS)
-  if (!results.length) return `Aucun résultat trouvé pour "${query}".`
+  if (!results.length) return { text: `Aucun résultat trouvé pour "${query}".`, sources: [] }
 
-  return results.map((r, i) => `${i + 1}. ${r.title} — ${r.content ?? ''} (${r.url})`).join('\n')
+  return {
+    text: results.map((r, i) => `${i + 1}. ${r.title} — ${r.content ?? ''} (${r.url})`).join('\n'),
+    sources: results.filter((r) => /^https?:\/\//i.test(r.url)).map((r) => ({ title: r.title || r.url, url: r.url }))
+  }
 }

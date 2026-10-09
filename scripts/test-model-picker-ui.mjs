@@ -54,6 +54,7 @@ window.jaris = {
   deleteConversation: () => Promise.resolve({ activeId: 'a', conversations: [] }),
   onLog: () => () => {},
   onChatStreamToken: () => () => {},
+  onChatWebActivity: () => () => {},
   getProfile: () => Promise.resolve({ soundEffectsEnabled: false }),
   pickImageFile: () => Promise.resolve(null),
   sendChatMessage: () => Promise.resolve({ role: 'assistant', content: 'ok' }),

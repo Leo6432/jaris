@@ -3,6 +3,7 @@ import type { VideoQuality } from '../shared/videoModel'
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC_CHANNELS,
+  type WebActivity,
   type AppMode,
   type AppVersionStatus,
   type LaunchAtStartupStatus,
@@ -60,6 +61,7 @@ const api = {
   onReply: (cb: (payload: VoiceReplyPayload) => void) => subscribe(IPC_CHANNELS.reply, cb),
   onLog: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.log, cb),
   onChatStreamToken: (cb: (delta: string) => void) => subscribe(IPC_CHANNELS.chatStreamToken, cb),
+  onChatWebActivity: (cb: (activity: WebActivity) => void) => subscribe(IPC_CHANNELS.chatWebActivity, cb),
   onSetupStatus: (cb: (status: VoiceSetupStatusPayload) => void) => subscribe(IPC_CHANNELS.setupStatus, cb),
   getSetupStatus: (): Promise<VoiceSetupStatusPayload> => ipcRenderer.invoke(IPC_CHANNELS.setupStatus),
   triggerWake: (): void => ipcRenderer.send(IPC_CHANNELS.triggerWake),
@@ -175,7 +177,6 @@ const api = {
   setActiveMode: (mode: AppMode): void => ipcRenderer.send(IPC_CHANNELS.setActiveMode, mode),
   setOptionsOpen: (open: boolean): void => ipcRenderer.send(IPC_CHANNELS.setOptionsOpen, open),
   getWindowChrome: (): Promise<WindowChrome> => ipcRenderer.invoke(IPC_CHANNELS.getWindowChrome),
-  minimizeToWidget: (): void => ipcRenderer.send(IPC_CHANNELS.minimizeToWidget),
   getLaunchAtStartup: (): Promise<LaunchAtStartupStatus> => ipcRenderer.invoke(IPC_CHANNELS.getLaunchAtStartup),
   setLaunchAtStartup: (enabled: boolean): Promise<LaunchAtStartupStatus> =>
     ipcRenderer.invoke(IPC_CHANNELS.setLaunchAtStartup, enabled),

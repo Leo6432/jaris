@@ -4,11 +4,12 @@ import { computerUseTask } from './computerUse'
 import { rememberNote, recallNote } from './memoryStore'
 import { scheduleReminder } from './reminders'
 import { lookAtScreen } from './vision'
-import { searchWeb } from './webSearch'
+import { searchWebDetailed } from './webSearch'
 import { readWebPage } from './webPage'
 import { clickMouse, mediaKey, pressKey, typeText } from './inputControl'
 import { getSystemStatsText, shutdownPc } from './systemControl'
 import { generateImage, type GeneratedImage } from './imageGenerator'
+import type { WebActivity } from '../../shared/ipc'
 
 export const TOOLS: OllamaTool[] = [
   {
@@ -317,13 +318,16 @@ type ReminderFireHandler = (message: string) => void
 type LogHandler = (message: string) => void
 /** Étape 173 : reçoit chaque image dessinée (le Chat l'affiche, la voix l'ouvre). */
 export type ImageHandler = (image: GeneratedImage) => void
+/** Étape 273 : une recherche web ou une page lue, pour le bloc « A cherché sur le web » du Chat. */
+export type WebActivityHandler = (activity: WebActivity) => void
 
 export function createToolExecutor(
   onReminderFire: ReminderFireHandler,
   visionModel: string,
   onLog?: LogHandler,
   signal?: AbortSignal,
-  onImage?: ImageHandler
+  onImage?: ImageHandler,
+  onWebActivity?: WebActivityHandler
 ) {
   return async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
     switch (name) {
@@ -333,10 +337,31 @@ export function createToolExecutor(
         return scheduleReminder(String(args.message ?? ''), Number(args.delay_minutes ?? 0), onReminderFire)
       case 'look_at_screen':
         return lookAtScreen(String(args.question ?? ''), visionModel)
-      case 'search_web':
-        return searchWeb(String(args.query ?? ''))
-      case 'read_web_page':
-        return readWebPage(String(args.url ?? ''))
+      // Étape 273 : chaque recherche et chaque page lue sont aussi signalées au Chat (bloc dépliable), en
+      // échec compris — une recherche qui n'a rien donné doit se voir autant qu'une recherche réussie.
+      case 'search_web': {
+        const query = String(args.query ?? '')
+        try {
+          const { text, sources } = await searchWebDetailed(query)
+          onWebActivity?.({ kind: 'search', query, results: sources })
+          return text
+        } catch (err) {
+          onWebActivity?.({ kind: 'search', query, results: [], failed: true })
+          throw err
+        }
+      }
+      case 'read_web_page': {
+        const url = String(args.url ?? '')
+        try {
+          const text = await readWebPage(url)
+          // Une adresse refusée (pas http/https) revient en texte, pas en erreur : comptée comme un échec.
+          onWebActivity?.({ kind: 'read', url, ...(/^https?:\/\//i.test(url) ? {} : { failed: true }) })
+          return text
+        } catch (err) {
+          onWebActivity?.({ kind: 'read', url, failed: true })
+          throw err
+        }
+      }
       case 'remember':
         return rememberNote(String(args.title ?? ''), String(args.content ?? ''), toolFlag(args.replace))
       case 'recall_memory':

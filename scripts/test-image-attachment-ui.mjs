@@ -48,6 +48,7 @@ window.jaris = {
   listConversations: () => Promise.resolve({ activeId: 'c1', conversations: [{ id: 'c1', title: 'Conversation', createdAt: '', updatedAt: '', messageCount: 0 }] }),
   onLog: () => () => {},
   onChatStreamToken: () => () => {},
+  onChatWebActivity: () => () => {},
   onCodeGenStatus: () => () => {},
   // Étape 99 : CodePanel s'abonne à l'avancement au montage. Un canal manquant ne donne aucune erreur
   // lisible — l'effet React plante, le composant ne se monte jamais, et le test expire au bout de 30 s

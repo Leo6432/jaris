@@ -77,7 +77,12 @@ import Panel from './src/components/ChatPanel'
 const THREADS = {
   a: [
     { role: 'user', content: 'parle moi des chats' },
-    { role: 'assistant', content: 'Les chats dorment beaucoup.' },
+    // Étape 273 : réponse précédée d'une recherche web (bloc dépliable).
+    {
+      role: 'assistant',
+      content: 'Les chats dorment beaucoup.',
+      web: [{ kind: 'search', query: 'combien de temps dort un chat', results: [{ title: 'Le sommeil du chat', url: 'https://www.exemple-chats.fr/sommeil' }] }]
+    },
     { role: 'user', content: 'dessine-moi un chat' },
     // Étape 173 : image dessinée par Jaris (PNG 8x8 réel), renvoyée par le main sur le message assistant.
     { role: 'assistant', content: 'Voilà ton image.', image: 'data:image/png;base64,${TEST_PNG.toString('base64')}' }
@@ -118,6 +123,11 @@ window.jaris = {
   },
   onLog: () => () => {},
   onChatStreamToken: () => () => {},
+  // Étape 273 : le test envoie lui-même les recherches web « en direct » (window.__web).
+  onChatWebActivity: (cb) => {
+    window.__web = cb
+    return () => {}
+  },
   getProfile: () => Promise.resolve({ soundEffectsEnabled: false }),
   getModelChoice: () => Promise.resolve({ selected: null, installed: [], autoModel: null }),
   setModelChoice: () => Promise.resolve(),
@@ -349,5 +359,51 @@ test('« Arrêter » comme ChatGPT (étape 272) : le bouton d’envoi devient un
     assert.equal(await page.locator('.composer__send--stop').count(), 0)
     assert.equal(await page.locator('.composer__send').getAttribute('aria-label'), 'Envoyer')
     assert.equal(await page.locator('.code-panel__error, .chat-panel__error').count(), 0, 'erreur affichée pour un arrêt voulu')
+  })
+})
+
+test('recherches web façon Claude (étape 273) : une ligne repliée avec sa flèche, dépliée elle montre la recherche et les pages', options, async () => {
+  await withPage(async (page) => {
+    const toggle = page.locator('.web-activity__toggle')
+    await toggle.waitFor()
+    assert.match(await toggle.textContent(), /A cherché sur le web/)
+    assert.equal(await toggle.getAttribute('aria-expanded'), 'false')
+    assert.equal(await page.locator('.web-activity__source').count(), 0, 'repliée par défaut : la réponse reste la première chose lue')
+    // Le bloc est AU-DESSUS de la réponse.
+    const order = await page.evaluate(() => {
+      const block = document.querySelector('.web-activity').getBoundingClientRect()
+      // Le texte de la réponse, où qu'il soit rendu : son nœud texte, mesuré par une plage.
+      const walker = document.createTreeWalker(document.querySelector('.web-activity').closest('.chat-panel__body'), NodeFilter.SHOW_TEXT)
+      let node = walker.nextNode()
+      while (node && !/dorment/.test(node.textContent)) node = walker.nextNode()
+      const range = document.createRange()
+      range.selectNodeContents(node)
+      return block.bottom <= range.getBoundingClientRect().top + 1
+    })
+    assert.ok(order, 'le bloc n’est pas au-dessus de la réponse')
+
+    await toggle.click()
+    assert.equal(await toggle.getAttribute('aria-expanded'), 'true')
+    assert.match(await page.textContent('.web-activity__steps'), /combien de temps dort un chat/)
+    const link = page.locator('a.web-activity__source')
+    assert.equal(await link.getAttribute('href'), 'https://www.exemple-chats.fr/sommeil')
+    assert.equal(await link.getAttribute('target'), '_blank', 'le lien doit s’ouvrir dans le navigateur')
+    assert.match(await link.textContent(), /Le sommeil du chat.*exemple-chats\.fr/)
+    assert.equal(await link.evaluate((el) => getComputedStyle(el).textDecorationLine), 'none', 'liens soulignés (style des liens d’une réponse)')
+  })
+})
+
+test('recherche web en direct : pendant la réponse, le bloc dit ce qui est cherché', options, async () => {
+  await withPage(async (page) => {
+    await page.fill('.composer__input', 'longue histoire sur Rennes')
+    await page.click('.composer__send')
+    await page.waitForSelector('.composer__send--stop')
+    await page.evaluate(() => window.__web({ kind: 'search', query: 'histoire de Rennes', results: [] }))
+    const live = page.locator('.web-activity--running .web-activity__toggle')
+    await live.waitFor()
+    assert.match(await live.textContent(), /Recherche : « histoire de Rennes »/)
+    await page.click('.composer__send--stop')
+    await page.waitForSelector('.chat-panel__stopped')
+    assert.equal(await page.locator('.web-activity--running').count(), 0, 'le bloc « en direct » reste après la réponse')
   })
 })

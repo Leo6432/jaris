@@ -7268,3 +7268,31 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   « Arrêter » actif et habillé par le CSS, cancelChat appelé, début gardé, retour à « Envoyer »),
   `scripts/test-video-panel-ui.mjs` (vidéo centrée, boutons collés à son bord). Chacun vérifié en réintroduisant
   son défaut ; `AbortController` a dû être fourni au contexte `vm.runInNewContext` du test (piège déjà noté ici).
+
+- **Étape 273 (v0.32.7), bouton Widget retiré et recherches web dépliables façon Claude (Léo : « enlève le bouton
+  widget en bas à gauche » ; « quand il recherche sur le web, tu peux pas faire comme Claude, une petite flèche
+  pour voir ce qu'il recherche ? »).**
+  1. **Widget** : le bouton du bas de la barre d'icônes est retiré, ainsi que son canal IPC `minimizeToWidget`
+     (il n'avait pas d'autre utilisateur, vérifié par grep) — réduire la fenêtre replie toujours Jaris en widget.
+  2. **Recherches web** : au-dessus d'une réponse du Chat, une ligne repliée (« A cherché sur le web », « A fait 2
+     recherches sur le web et lu 1 page ») avec une petite flèche ; dépliée, chaque recherche, son nombre de
+     résultats et les pages trouvées (titre + site, cliquables, ouvertes dans le navigateur de Windows), et
+     chaque page lue. Pendant la réponse, la même ligne dit en direct ce qui est cherché (« Recherche : « … » »).
+     Repliée par défaut : la réponse reste la première chose lue. Les recherches sont signalées par l'outil
+     lui-même (`createToolExecutor`, nouveau rappel `onWebActivity`), le SEUL endroit par où passent toutes les
+     recherches — échecs compris, une recherche ratée doit se voir autant qu'une recherche réussie. Elles sont
+     jointes à la réponse, enregistrées avec l'échange (`ConversationEntry.web`) et reviennent après un
+     redémarrage. Seules les adresses http(s) deviennent des liens (`javascript:`, `file:` restent du texte).
+     Le canal vocal n'a pas de bloc (rien à déplier à l'oral).
+  **Piège CSS retrouvé (déjà noté aux étapes 95/117) : la règle des liens d'une réponse, `.chat-panel__body a`
+  (classe + balise), battait `.web-activity__source` (classe seule) bien qu'écrite plus haut — les liens du bloc
+  sortaient soulignés et colorés. Corrigé en reprenant la même forme (`.chat-panel__body a.web-activity__source`),
+  et vérifié par le style calculé dans le test, pas à l'œil.**
+  **Piège déjà noté (étape 96), appliqué d'avance cette fois : le Chat s'abonne à un nouveau canal au montage
+  (`onChatWebActivity`) ; les trois faux ponts de tests qui fournissent `onChatStreamToken` ont reçu le nouveau
+  canal AVANT de lancer la suite, sinon le composant ne se monte plus et les tests expirent sans message.**
+  Régression : `scripts/test-web-activity.mjs` (libellés, pages gardées par la recherche, signalement par l'outil
+  succès ET échec), `scripts/test-chat-session-restore.mjs` (joint, relayé, enregistré, réaffiché),
+  `scripts/test-chat-conversations-ui.mjs` (replié par défaut, au-dessus de la réponse, dépliable, liens non
+  soulignés qui s'ouvrent dans le navigateur, version en direct) et `scripts/test-window-chrome-ui.mjs` (plus
+  de bouton Widget). Chacun vérifié en réintroduisant son défaut.
