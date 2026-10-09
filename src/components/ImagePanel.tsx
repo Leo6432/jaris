@@ -239,15 +239,20 @@ export default function ImagePanel(): JSX.Element {
               onSuggestion={setPrompt}
             />
             {gallery.length > 0 && (
-              <ul className="image-panel__gallery" aria-label="Dernières images">
-                {gallery.map((image) => (
-                  <li key={image.fileName}>
-                    <button className="image-panel__thumb" onClick={() => open(image.fileName)} title={image.label}>
-                      {thumbnails[image.fileName] ? <img src={thumbnails[image.fileName]} alt={image.label} /> : <span className="image-panel__thumb-empty" />}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              // Étape 268 : une section titrée, centrée à la largeur du champ de saisie, juste sous les
+              // suggestions (elle était repoussée en bas de l'écran et collée à gauche).
+              <section className="image-panel__recent">
+                <h2 className="image-panel__recent-title">Tes dernières images</h2>
+                <ul className="image-panel__gallery" aria-label="Dernières images">
+                  {gallery.map((image) => (
+                    <li key={image.fileName}>
+                      <button className="image-panel__thumb" onClick={() => open(image.fileName)} title={image.label}>
+                        {thumbnails[image.fileName] ? <img src={thumbnails[image.fileName]} alt={image.label} /> : <span className="image-panel__thumb-empty" />}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             )}
           </div>
         )}

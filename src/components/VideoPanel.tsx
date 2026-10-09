@@ -351,33 +351,37 @@ export default function VideoPanel(): JSX.Element {
               onSuggestion={setPrompt}
             />
             {gallery.length > 0 && (
-              <ul className="image-panel__gallery video-panel__gallery" aria-label="Dernières vidéos">
-                {gallery.map((video) => (
-                  <li key={video.fileName}>
-                    <button className="image-panel__thumb video-panel__thumb" onClick={() => open(video.fileName)} title={video.label}>
-                      {thumbnails[video.fileName] ? (
-                        // Première image affichée à l'arrêt, lecture au survol : on voit ce qui bouge sans tout lancer.
-                        <video
-                          src={thumbnails[video.fileName]}
-                          muted
-                          loop
-                          playsInline
-                          preload="auto"
-                          aria-label={video.label}
-                          onMouseEnter={(e) => void e.currentTarget.play().catch(() => undefined)}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.pause()
-                            e.currentTarget.currentTime = 0
-                          }}
-                        />
-                      ) : (
-                        <span className="image-panel__thumb-empty" />
-                      )}
-                      <span className="video-panel__thumb-play" aria-hidden="true" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              // Étape 268 : même section que le mode Image (titrée, centrée, juste sous les suggestions).
+              <section className="image-panel__recent">
+                <h2 className="image-panel__recent-title">Tes dernières vidéos</h2>
+                <ul className="image-panel__gallery video-panel__gallery" aria-label="Dernières vidéos">
+                  {gallery.map((video) => (
+                    <li key={video.fileName}>
+                      <button className="image-panel__thumb video-panel__thumb" onClick={() => open(video.fileName)} title={video.label}>
+                        {thumbnails[video.fileName] ? (
+                          // Première image affichée à l'arrêt, lecture au survol : on voit ce qui bouge sans tout lancer.
+                          <video
+                            src={thumbnails[video.fileName]}
+                            muted
+                            loop
+                            playsInline
+                            preload="auto"
+                            aria-label={video.label}
+                            onMouseEnter={(e) => void e.currentTarget.play().catch(() => undefined)}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.pause()
+                              e.currentTarget.currentTime = 0
+                            }}
+                          />
+                        ) : (
+                          <span className="image-panel__thumb-empty" />
+                        )}
+                        <span className="video-panel__thumb-play" aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             )}
           </div>
         )}

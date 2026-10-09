@@ -7184,3 +7184,24 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   dans cet environnement (ni installé, ni proposé à l'ajout) : utilisé à la place « apple-design ».
   Régression : `scripts/test-window-chrome-ui.mjs`, l'Agent vocal affiche l'orbe (canvas `.jaris-orb`), sans cadre
   rond autour, et à au moins 200 px sur une fenêtre normale.
+
+- **Étape 268 (v0.32.2), galeries Image/Vidéo et barre latérale (Léo : « c'est mal fait les vidéos créées et
+  images » ; « quand je clique sur Code ça reste pareil, mais sur Vocal ça met directement l'icône et ça enlève le
+  texte »).** Deux défauts, constatés sur captures du vrai rendu avant correction :
+  1. **Galeries** : la grille des créations récentes était posée sous l'état vide, dont les marges automatiques
+     (centrage vertical) la repoussaient tout en bas de l'écran, alignée à gauche, avec une dernière rangée
+     incomplète (un ou deux éléments orphelins). Elle devient une section titrée (« Tes dernières images » /
+     « Tes dernières vidéos »), centrée sur la même largeur que les suggestions, juste en dessous, sur UNE seule
+     rangée (4 images ou 3 vidéos, moins en fenêtre étroite) : un aperçu des dernières créations, pas un
+     explorateur de fichiers. **Leçon générale : un élément ajouté sous un bloc centré par `margin: auto` hérite
+     de tout l'espace restant au-dessus de lui — le centrer avec lui, pas le laisser en dessous.**
+  2. **Barre latérale** : elle n'était dépliée que si l'écran avait une liste (`hasPanel && panelOpen`), donc elle
+     se repliait toute seule en icônes sur Vocal, Options et Cerveau. Elle reste maintenant comme Léo l'a laissée
+     sur tous les écrans ; seule la liste (conversations, projets…) dépend de l'écran. Le bouton « Réduire » a
+     quitté l'en-tête de la liste (absente en Vocal, donc inatteignable) pour la ligne du nom « Jaris ». En
+     fenêtre étroite, la barre ouverte recouvre le contenu : choisir un écran la referme, comme un menu.
+     **Leçon générale : un état choisi par l'utilisateur (barre ouverte/fermée) ne doit pas être recalculé par
+     l'écran affiché — sinon naviguer donne l'impression que l'application change de mise en page toute seule.**
+  Régression : `scripts/test-window-chrome-ui.mjs` (la barre reste ouverte, noms compris, sur Chat, Vocal, Code,
+  Options et Cerveau ; se replie et se rouvre) et `scripts/test-image-panel-ui.mjs` (une seule rangée titrée,
+  juste sous les suggestions, centrée). Les deux vérifiés en réintroduisant le défaut.

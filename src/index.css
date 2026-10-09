@@ -6608,3 +6608,85 @@ select {
   font-size: 12px;
   color: var(--hud-text-faint);
 }
+
+/* ==========================================================================
+   Modes Image et Vidéo : les créations récentes (étape 268, Léo : « c'est mal fait les vidéos créées et
+   images »). La galerie était repoussée tout en bas de l'écran (marges automatiques de l'accueil), collée à
+   gauche sur toute la largeur, avec une image orpheline sur la dernière ligne. Elle forme maintenant une
+   section titrée, juste sous les suggestions, centrée à la largeur du champ de saisie, en colonnes fixes.
+   ========================================================================== */
+.image-panel__home > .empty-state {
+  margin: 0;
+  padding-bottom: 8px;
+}
+
+.image-panel__recent {
+  width: 100%;
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.image-panel__recent-title {
+  margin: 0;
+  padding: 0 2px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--hud-text-dim);
+}
+
+.image-panel__recent .image-panel__gallery {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.image-panel__recent .video-panel__gallery {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.image-panel__recent .image-panel__thumb {
+  border-radius: 14px;
+  border: 1px solid var(--hud-line);
+  transition: transform 0.15s ease-out, border-color 0.15s ease;
+}
+
+.image-panel__recent .image-panel__thumb:hover {
+  border-color: var(--hud-line-strong);
+  box-shadow: none;
+}
+
+.image-panel__recent .image-panel__thumb:active {
+  transform: scale(0.98);
+}
+
+/* Une seule rangée, toujours pleine : la liste complète est déjà dans la barre latérale (« Récents »). Deux
+   rangées passaient sous le champ de saisie sur une fenêtre de taille normale, avec une orpheline au bout. */
+.image-panel__recent .image-panel__gallery li:nth-child(n + 5),
+.image-panel__recent .video-panel__gallery li:nth-child(n + 4) {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .image-panel__recent .image-panel__gallery {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .image-panel__recent .video-panel__gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .image-panel__recent .image-panel__gallery li:nth-child(n + 4),
+  .image-panel__recent .video-panel__gallery li:nth-child(n + 3) {
+    display: none;
+  }
+}
+
+/* Barre latérale : le bouton pour la replier, à droite du nom ; caché quand elle est déjà repliée. */
+.app-sidebar__collapse {
+  margin-left: auto;
+}
+
+.app-sidebar:not(.app-sidebar--expanded) .app-sidebar__collapse {
+  display: none;
+}

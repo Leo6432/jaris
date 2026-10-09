@@ -228,7 +228,14 @@ export default function App(): JSX.Element {
     void window.jaris.getMemoryGraph().then((graph) => {
       setOptionsShown(false)
       setMemoryGraph(graph)
+      closeSidebarIfNarrow()
     })
+  }
+
+  // Fenêtre étroite : la barre ouverte passe par-dessus le contenu (index.css) ; choisir un écran la referme,
+  // comme un menu, sinon l'écran choisi resterait caché dessous.
+  const closeSidebarIfNarrow = (): void => {
+    if (window.matchMedia?.('(max-width: 700px)').matches) setPanelOpen(false)
   }
 
   // Suspend la réaction à la voix tant que l'onglet Chat ou Code est actif (à la demande explicite de
@@ -517,6 +524,7 @@ export default function App(): JSX.Element {
       setAppMode(id)
       setOptionsShown(false)
       setMemoryGraph(null)
+      closeSidebarIfNarrow()
     }
 
     return (
@@ -526,11 +534,25 @@ export default function App(): JSX.Element {
         {chrome?.titleBar && <TitleBar />}
 
         <div className="app-shell__body">
-          <aside className={`app-sidebar${hasPanel && panelOpen ? ' app-sidebar--expanded' : ''}`}>
+          {/* Étape 268 (Léo : « quand je clique sur Code ça reste pareil, mais sur Vocal ça met directement
+              l'icône et ça enlève le texte ») : la barre ne se repliait d'elle-même que sur les écrans sans liste
+              (Vocal, Options, Cerveau). Elle reste maintenant comme Léo l'a laissée, sur tous les écrans ; seule
+              la liste (conversations, projets…) dépend de l'écran. */}
+          <aside className={`app-sidebar${panelOpen ? ' app-sidebar--expanded' : ''}`}>
             <nav className="app-sidebar__nav" aria-label="Modes de Jaris">
               <div className="app-sidebar__brand">
                 <img src={logo64} alt="" />
                 <span>Jaris</span>
+                {/* Replier la barre : à côté du nom, valable sur tous les écrans (il était dans la liste, absente
+                    en Vocal). */}
+                <button
+                  className="panel__icon-button app-sidebar__collapse"
+                  onClick={() => setPanelOpen(false)}
+                  title="Réduire la barre latérale"
+                  aria-label="Réduire la barre latérale"
+                >
+                  <PanelToggleIcon />
+                </button>
               </div>
               {MODES.map(({ id, label, title, icon }) => (
                 <RailButton
@@ -551,14 +573,6 @@ export default function App(): JSX.Element {
             >
               <div className="panel__head">
                 <span className="panel__title">{currentMode.panel}</span>
-                <button
-                  className="panel__icon-button"
-                  onClick={() => setPanelOpen(false)}
-                  title="Réduire la barre latérale"
-                  aria-label="Réduire la barre latérale"
-                >
-                  <PanelToggleIcon />
-                </button>
               </div>
               {/* Action de création de l'écran courant, fournie par Workspace : une ligne à part entière sous le
                   titre, comme « Nouveau chat » dans ChatGPT (étape 266). */}
@@ -587,6 +601,7 @@ export default function App(): JSX.Element {
                 onClick={() => {
                   setMemoryGraph(null)
                   setOptionsShown(true)
+                  closeSidebarIfNarrow()
                 }}
               />
             </nav>
@@ -594,12 +609,12 @@ export default function App(): JSX.Element {
 
           <main className="app-main">
             <header className="app-header">
-              {hasPanel && !panelOpen && (
+              {!panelOpen && (
                 <button
                   className="panel__icon-button"
                   onClick={() => setPanelOpen(true)}
-                  title="Afficher la liste"
-                  aria-label="Afficher la liste"
+                  title="Afficher la barre latérale"
+                  aria-label="Afficher la barre latérale"
                 >
                   <PanelToggleIcon />
                 </button>

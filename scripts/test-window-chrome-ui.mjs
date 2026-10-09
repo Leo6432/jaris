@@ -239,6 +239,26 @@ test('style ChatGPT : aucune couleur vive dans la fenêtre (plus de violet ni de
   }
 })
 
+test('la barre latérale reste ouverte, noms compris, sur TOUS les écrans (Vocal, Options et Cerveau aussi)', options, async () => {
+  // Étape 268 (Léo : « quand je clique sur Code ça reste pareil, mais sur Vocal ça met directement l'icône et
+  // ça enlève le texte ») : elle se repliait d'elle-même sur les écrans sans liste.
+  await withPage(async (page) => {
+    await page.waitForSelector('.rail__item')
+    for (const label of ['Chat', 'Vocal', 'Code', 'Options', 'Cerveau', 'Chat']) {
+      await page.click(`.rail__item:has-text("${label}")`)
+      await page.waitForTimeout(250)
+      assert.equal(await page.locator('.app-sidebar--expanded').count(), 1, `barre repliée sur l’écran ${label}`)
+      assert.equal(await page.isVisible('.rail__item:has-text("Vocal") .rail__label'), true, `noms cachés sur l’écran ${label}`)
+    }
+    // Et c'est Léo qui la replie, depuis n'importe quel écran (le bouton était dans la liste, absente en Vocal).
+    await page.click('.rail__item:has-text("Vocal")')
+    await page.click('.app-sidebar__collapse')
+    assert.equal(await page.locator('.app-sidebar--expanded').count(), 0)
+    await page.click('.app-header .panel__icon-button')
+    assert.equal(await page.locator('.app-sidebar--expanded').count(), 1)
+  })
+})
+
 test("Agent vocal : l'orbe animé du logo de Jaris, seul, sans rond ni bouton autour", options, async () => {
   // Étape 267 (Léo : « utilise l'orbe classique, pourquoi changer avec un cercle, l'orbe du logo de
   // l'application ») : ni le logo posé dans un bouton rond à anneaux (design v2), ni une autre sphère.
