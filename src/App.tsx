@@ -100,22 +100,11 @@ function RailButton({ label, icon, active, onClick, title }: {
   )
 }
 
-/** Ce qu'affiche le gros bouton de l'Agent vocal selon l'état : le logo au repos, des barres qui bougent
- *  quand Jaris écoute ou parle, trois points quand il réfléchit (maquette Jaris.dc.html). */
-function VoiceVisual({ emotion }: { emotion: JarisEmotion }): JSX.Element {
-  // Design v2 : le logo reste toujours au centre (estompé pendant la réflexion), et deux anneaux couleur
-  // d'accent s'élargissent autour quand Jaris écoute ou parle.
-  const ringing = emotion === 'listening' || emotion === 'happy'
+function MicIcon(): JSX.Element {
   return (
-    <>
-      {ringing && (
-        <>
-          <span className="voice-screen__ring" aria-hidden="true" />
-          <span className="voice-screen__ring voice-screen__ring--late" aria-hidden="true" />
-        </>
-      )}
-      <img className="voice-screen__logo" src={logo160} alt="" />
-    </>
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0zM5 11a7 7 0 0 0 14 0M12 18v3" />
+    </svg>
   )
 }
 
@@ -218,6 +207,20 @@ export default function App(): JSX.Element {
       window.jaris.triggerWake()
     })
   }
+
+  // Taille de l'orbe de l'Agent vocal : grande, mais toujours avec la place pour le texte et les commandes
+  // en dessous, sur une petite fenêtre comme sur un grand écran (le canvas de l'orbe a une taille en pixels).
+  const [voiceOrbSize, setVoiceOrbSize] = useState(240)
+  useEffect(() => {
+    if (MODE !== 'full') return
+    const update = (): void =>
+      setVoiceOrbSize(
+        Math.round(Math.max(140, Math.min(340, window.innerHeight * (window.innerHeight < 700 ? 0.3 : 0.42), (window.innerWidth - 140) * 0.6)))
+      )
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
 
   // Le Cerveau s'affiche dans la zone principale, comme Options (étape 265) : en calque plein écran, il passait
   // sous les boutons réduire/agrandir/fermer de Windows, qui recouvraient « Ouvrir le dossier » et « Fermer ».
@@ -657,43 +660,46 @@ export default function App(): JSX.Element {
             )}
 
             {!screenShown && appMode === 'voice' && (
-              // Design v2 : le logo au centre d'un cercle, des anneaux couleur d'accent quand Jaris écoute ou
-              // parle, l'échange en cours dans une carte, et un bouton « Parler à Jaris » bien visible.
+              // Étape 267, façon mode voix de ChatGPT : la sphère et ce qui se dit au centre, comme des
+              // sous-titres (plus de carte), les commandes en bas de l'écran.
               <ErrorBoundary label="L'Agent vocal">
                 <div className="app app--voice voice-screen" data-emotion={emotion}>
-                  <button
-                    type="button"
-                    className="voice-screen__button"
-                    aria-label="Activer l'écoute"
-                    onClick={wakeFromClick}
-                  >
-                    <VoiceVisual emotion={emotion} />
-                  </button>
-                  <div className="app__voice-footer">
-                    <h1 className="app__status">{STATUS_LABEL[emotion]}</h1>
-                    {emotion === 'idle' && <div className="app__hint">Jaris répond à voix haute.</div>}
+                  <div className="voice-screen__stage">
+                    {/* Étape 267 (Léo : « utilise l'orbe classique, celui du logo de l'application ») : l'orbe
+                        animé de Jaris en grand, seul, sans rond ni bouton autour — le clic dessus réveille Jaris,
+                        le bouton « Parler à Jaris » en bas reste le chemin au clavier. */}
+                    <JarisOrb emotion={emotion} size={voiceOrbSize} onClick={wakeFromClick} />
+                    {/* Au repos, une question plutôt que « Parle à Jaris » : le bouton juste en dessous le dit déjà. */}
+                    <h1 className="app__status">{emotion === 'idle' ? 'Que puis-je faire pour toi ?' : STATUS_LABEL[emotion]}</h1>
 
                     {(transcript || reply || voiceActivity) && (
                       <div className="app__conversation">
-                        {transcript && <p className="app__transcript">Toi : « {transcript} »</p>}
+                        {transcript && <p className="app__transcript">« {transcript} »</p>}
                         {voiceActivity && <p className="app__activity">{voiceActivity}</p>}
-                        {reply && <p className="app__reply">Jaris : {reply}</p>}
+                        {reply && <p className="app__reply">{reply}</p>}
                       </div>
                     )}
+                  </div>
 
-                    {emotion === 'idle' && (
-                      <button type="button" className="voice-screen__talk" onClick={wakeFromClick}>
-                        Parler à Jaris
+                  <div className="app__voice-footer">
+                    <div className="voice-screen__controls">
+                      {/* Étape 141 : même sélecteur que le Chat et le mode Code — Auto ou un modèle précis pour la voix. */}
+                      <div className="app__model-picker">
+                        <ModelEffortPicker mode="voice" />
+                      </div>
+                      <button
+                        type="button"
+                        className="voice-screen__talk"
+                        onClick={wakeFromClick}
+                        disabled={emotion !== 'idle'}
+                      >
+                        <MicIcon />
+                        {emotion === 'idle' ? 'Parler à Jaris' : emotion === 'listening' ? 'Je t’écoute…' : 'Un instant…'}
                       </button>
-                    )}
+                    </div>
 
                     <div className="app__hint app__hint--small">
                       Ou dis « Jaris », ou appuie sur + du pavé numérique, depuis n'importe quelle appli.
-                    </div>
-
-                    {/* Étape 141 : même sélecteur que le Chat et le mode Code — Auto ou un modèle précis pour la voix. */}
-                    <div className="app__model-picker">
-                      <ModelEffortPicker mode="voice" />
                     </div>
 
                     {setupStatus && !setupStatus.ready && (

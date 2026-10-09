@@ -239,6 +239,19 @@ test('style ChatGPT : aucune couleur vive dans la fenêtre (plus de violet ni de
   }
 })
 
+test("Agent vocal : l'orbe animé du logo de Jaris, seul, sans rond ni bouton autour", options, async () => {
+  // Étape 267 (Léo : « utilise l'orbe classique, pourquoi changer avec un cercle, l'orbe du logo de
+  // l'application ») : ni le logo posé dans un bouton rond à anneaux (design v2), ni une autre sphère.
+  await withPage(async (page) => {
+    await page.waitForSelector('.rail__item')
+    await page.click('.rail__item:has-text("Vocal")')
+    await page.waitForSelector('.voice-screen .jaris-orb canvas')
+    assert.equal(await page.locator('.voice-screen__button, .voice-orb').count(), 0, 'un cadre rond est revenu autour de l’orbe')
+    const box = await page.locator('.voice-screen .jaris-orb').boundingBox()
+    assert.ok(box.width >= 200, `orbe trop petit sur une fenêtre normale : ${box.width}px`)
+  })
+})
+
 test.after(() => {
   if (outDir) rmSync(outDir, { recursive: true, force: true })
 })

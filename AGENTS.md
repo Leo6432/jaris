@@ -7130,3 +7130,18 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   fin de fichier, rien d'autre). Le banc de captures a ensuite trouvé un défaut dans le résultat : à 600 px de
   haut, la liste de conversations de la nouvelle barre était coupée à zéro, sans défilement — la barre latérale
   ouverte défile désormais en entier, avec Cerveau/Widget/Options collés en bas.
+
+- **Étape 267 (v0.32.1), Agent vocal : l'orbe du logo, seul (Léo : « vocal il est nul, un bouton mal fait avec
+  l'orbe, c'est moche », puis « utilise l'orbe classique, pourquoi changer avec un cercle, l'orbe du logo »).**
+  Le design v2 posait le logo dans un bouton rond entouré d'anneaux. J'ai d'abord proposé une sphère lisse façon
+  mode voix de ChatGPT : refusée aussitôt — même leçon que les étapes 69-70 et 76, déjà écrite ici : **la
+  signature de Jaris est son orbe animé au bord irrégulier (`JarisOrb`), pas un cercle ni une sphère générique ;
+  quand Léo demande « plus beau », on garde cette forme et on change ce qui l'entoure**. Retenu : `JarisOrb` en
+  grand (taille selon la fenêtre, 140 à 340 px), sans aucun cadre ; ce qui se dit en dessous comme des
+  sous-titres (plus de carte encadrée) ; « Parler à Jaris » et le choix du modèle en bas, le bouton restant en
+  place mais estompé pendant l'écoute et la réponse (rien ne saute). Au repos, « Que puis-je faire pour toi ? »
+  au lieu de « Parle à Jaris », que le bouton juste en dessous disait déjà. Les règles CSS de l'ancien bouton rond
+  et des anneaux (plus aucun usage) sont supprimées. Le skill « frontend-design » demandé par Léo n'existe pas
+  dans cet environnement (ni installé, ni proposé à l'ajout) : utilisé à la place « apple-design ».
+  Régression : `scripts/test-window-chrome-ui.mjs`, l'Agent vocal affiche l'orbe (canvas `.jaris-orb`), sans cadre
+  rond autour, et à au moins 200 px sur une fenêtre normale.

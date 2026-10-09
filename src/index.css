@@ -3684,7 +3684,6 @@ p.capacity-scan__tier-missing {
   color: var(--hud-danger);
 }
 
-
 /* Options → Téléphone (étape 214) : mêmes cartes que les autres réglages, plus le QR code et le code. */
 .phone-access__safety {
   margin: 4px 0 0;
@@ -4809,96 +4808,7 @@ textarea::placeholder {
   padding: 16px 24px 32px;
 }
 
-.voice-screen__button {
-  width: 160px;
-  height: 160px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border-radius: 50%;
-  border: 1px solid var(--hud-line);
-  background: var(--hud-panel);
-  color: var(--hud-text);
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.voice-screen__button:hover {
-  background: var(--jv-hover);
-}
-
-.voice-screen[data-emotion='listening'] .voice-screen__button,
-.voice-screen[data-emotion='happy'] .voice-screen__button {
-  border-color: var(--hud-line-strong);
-}
-
-.voice-screen__logo {
-  width: 80px;
-  height: 80px;
-  border-radius: 20px;
-}
-
-.voice-screen__bars {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  height: 56px;
-}
-
-.voice-screen__bars span {
-  width: 6px;
-  height: 52px;
-  border-radius: 3px;
-  background: var(--hud-accent);
-  animation: jv-bar 0.7s infinite ease-in-out;
-}
-
-.voice-screen__bars span:nth-child(2) {
-  animation-duration: 0.88s;
-  animation-delay: 0.09s;
-}
-
-.voice-screen__bars span:nth-child(3) {
-  animation-duration: 1.06s;
-  animation-delay: 0.18s;
-}
-
-.voice-screen__bars span:nth-child(4) {
-  animation-delay: 0.27s;
-}
-
-.voice-screen__bars span:nth-child(5) {
-  animation-duration: 0.88s;
-  animation-delay: 0.36s;
-}
-
-.voice-screen__dots {
-  display: flex;
-  gap: 8px;
-}
-
-.voice-screen__dots span {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--hud-text-dim);
-  animation: jv-dot 1.2s infinite ease-in-out;
-}
-
-.voice-screen__dots span:nth-child(2) {
-  animation-delay: 0.15s;
-}
-
-.voice-screen__dots span:nth-child(3) {
-  animation-delay: 0.3s;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .voice-screen__bars span,
-  .voice-screen__dots span,
   .chat-panel__typing span {
     animation: none;
   }
@@ -5644,74 +5554,6 @@ select {
 }
 
 /* Le bouton fait 160px, le cercle visible 120px au centre : la place autour sert aux anneaux. */
-.voice-screen__button {
-  position: relative;
-  width: 160px;
-  height: 160px;
-  border: none;
-  background: transparent;
-}
-
-.voice-screen__button::before {
-  content: '';
-  position: absolute;
-  inset: 20px;
-  border-radius: 50%;
-  background: var(--hud-panel);
-  border: 1px solid var(--hud-line);
-  transition: background 0.15s ease;
-}
-
-.voice-screen__button:hover {
-  background: transparent;
-}
-
-.voice-screen__button:hover::before {
-  background: color-mix(in srgb, var(--hud-panel) 92%, var(--hud-text));
-}
-
-.voice-screen__logo {
-  position: relative;
-  width: 84px;
-  height: 84px;
-  border-radius: 22px;
-  transition: opacity 0.3s ease;
-}
-
-.voice-screen[data-emotion='thinking'] .voice-screen__logo {
-  opacity: 0.6;
-}
-
-.voice-screen__ring {
-  position: absolute;
-  inset: 20px;
-  border-radius: 50%;
-  border: 2px solid var(--hud-accent);
-  animation: jv-ring 2s infinite ease-out;
-  pointer-events: none;
-}
-
-.voice-screen__ring--late {
-  animation-delay: 1s;
-}
-
-@keyframes jv-ring {
-  0% {
-    transform: scale(1);
-    opacity: 0.55;
-  }
-  100% {
-    transform: scale(1.7);
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .voice-screen__ring {
-    animation: none;
-    opacity: 0.4;
-  }
-}
 
 .app__voice-footer {
   gap: 14px;
@@ -6152,10 +5994,6 @@ select {
 }
 
 /* --- Agent vocal : des anneaux blancs (noirs en clair), plus aucune couleur de Windows ------------- */
-.voice-screen__button::before {
-  background: var(--hud-panel-raised);
-  border: none;
-}
 
 /* --- Options : onglets arrondis sans barre colorée, réglages séparés par un trait fin -------------- */
 .options-page .options-menu__tab {
@@ -6658,4 +6496,115 @@ select {
 .app-sidebar__workspace .workspace__rail-label,
 .app-sidebar__workspace .panel__status {
   font-size: 12px;
+}
+
+/* ==========================================================================
+   Agent vocal (étape 267, Léo : « vocal il est nul, un bouton mal fait avec l'orbe, c'est moche »)
+   --------------------------------------------------------------------------
+   Façon mode voix de ChatGPT : l'orbe animé du logo de Jaris en grand au centre, seul (plus de rond ni de
+   bouton autour), ce qui se dit en dessous comme des sous-titres (plus de carte encadrée), les commandes en
+   bas. L'orbe est la seule couleur de la fenêtre : il désigne Jaris lui-même, jamais une commande.
+   ========================================================================== */
+.voice-screen {
+  justify-content: space-between;
+  gap: 0;
+  padding: 24px 24px 20px;
+}
+
+.voice-screen__stage {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: safe center;
+  gap: 18px;
+  overflow-y: auto;
+}
+
+/* --- Sous l'orbe : l'état, puis l'échange en cours comme des sous-titres ---------------------- */
+.voice-screen .app__status {
+  margin: 4px 0 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--hud-text);
+}
+
+.voice-screen .app__conversation:not(.app__conversation--widget) {
+  width: 100%;
+  max-width: 560px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: center;
+  gap: 8px;
+}
+
+.voice-screen .app__conversation:not(.app__conversation--widget) .app__transcript {
+  font-style: normal;
+  color: var(--hud-text-dim);
+}
+
+.voice-screen .app__conversation:not(.app__conversation--widget) .app__reply {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--hud-text);
+}
+
+/* --- Commandes en bas -------------------------------------------------------------------------- */
+.voice-screen .app__voice-footer {
+  flex: none;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding-top: 16px;
+}
+
+.voice-screen__controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.voice-screen .app__model-picker {
+  margin: 0;
+}
+
+.voice-screen__talk {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 22px;
+  border: none;
+  border-radius: 9999px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--jv-accent-ink);
+  background: var(--hud-accent);
+  cursor: pointer;
+  transition: transform 0.1s ease-out, opacity 0.2s ease;
+}
+
+.voice-screen__talk:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+/* Pendant l'écoute ou la réponse : le bouton reste en place (rien ne saute), estompé, et dit ce qui se passe. */
+.voice-screen__talk:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.voice-screen .app__hint--small {
+  margin: 0;
+  max-width: 420px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--hud-text-faint);
 }
