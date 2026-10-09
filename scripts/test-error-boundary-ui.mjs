@@ -48,17 +48,20 @@ function Harness() {
     <div className="app-shell">
       <nav className="sidebar">
         <button id="open-brain" onClick={() => setBrain(true)}>cerveau</button>
+        <button id="close-brain" onClick={() => setBrain(false)}>chat</button>
         <button id="break" onClick={() => setBroken(true)}>casser</button>
         <button id="repair" onClick={() => setBroken(false)}>réparer</button>
       </nav>
+      {/* Comme dans App.tsx depuis l'étape 265 : le Cerveau est un écran de la zone principale, on en sort par le menu. */}
       <main className="app-main">
-        <ErrorBoundary label="Le Chat"><Boom when={broken} /></ErrorBoundary>
+        {brain ? (
+          <ErrorBoundary label="Le Cerveau de Jaris">
+            <MemoryBrain graph={GRAPH} />
+          </ErrorBoundary>
+        ) : (
+          <ErrorBoundary label="Le Chat"><Boom when={broken} /></ErrorBoundary>
+        )}
       </main>
-      {brain && (
-        <ErrorBoundary label="Le Cerveau de Jaris" overlay onClose={() => setBrain(false)}>
-          <MemoryBrain graph={GRAPH} onClose={() => setBrain(false)} />
-        </ErrorBoundary>
-      )}
     </div>
   )
 }
@@ -127,7 +130,7 @@ test('Cerveau sans WebGL : la liste des notes remplace la vue 3D, et Jaris reste
     assert.equal(await page.$('.error-panel'), null, 'rattrapé dans le Cerveau lui-même, pas par le garde général')
     assert.deepEqual(pageErrors, [])
 
-    assert.match(await page.textContent('.memory-brain__header'), /— 2 notes/, 'le nœud central n’est pas compté')
+    assert.match(await page.textContent('.memory-brain__header'), /^\s*2 notes/, 'le nœud central n’est pas compté')
 
     await page.click('.memory-brain__list-item >> text=Guitare')
     await page.waitForFunction(() => document.querySelector('.memory-brain__note-content')?.textContent.includes('Contenu'))
@@ -137,7 +140,7 @@ test('Cerveau sans WebGL : la liste des notes remplace la vue 3D, et Jaris reste
     assert.ok(box.left >= 0 && box.top >= 0, JSON.stringify(box))
     assert.ok(box.right <= 1100 && box.bottom <= 760, JSON.stringify(box))
 
-    await page.click('.memory-brain__actions button >> text=Fermer')
+    await page.click('#close-brain')
     assert.equal(await page.$('.memory-brain'), null)
   })
 })
@@ -166,11 +169,14 @@ test('un écran qui plante affiche son message à sa place, sans vider le reste'
   })
 })
 
-test('App.tsx protège chaque écran (et le Cerveau peut toujours être fermé)', () => {
+test('App.tsx protège chaque écran (et on peut toujours quitter le Cerveau)', () => {
   const app = readFileSync(join(projectRoot, 'src/App.tsx'), 'utf8')
   for (const panel of ['ChatPanel', 'CodePanel', 'ImagePanel', 'VideoPanel', 'OptionsMenu']) {
     assert.match(app, new RegExp(`<ErrorBoundary [^>]*>\\s*<${panel}(?: embedded)? />`), `${panel} protégé`)
   }
   assert.match(app, /<ErrorBoundary label="L'Agent vocal">\s*<div className="app app--voice[^"]*"/)
-  assert.match(app, /<ErrorBoundary [^>]*overlay onClose=\{[^}]+\}>\s*<MemoryBrain /)
+  // Étape 265 : le Cerveau est un écran de la zone principale (plus un calque, qui passait sous les boutons
+  // de Windows) — protégé comme les autres, et on en sort toujours par le rail, même s'il a planté.
+  assert.match(app, /<ErrorBoundary label="Le Cerveau de Jaris">\s*<MemoryBrain graph=/)
+  assert.match(app, /const selectMode = \(id: AppMode\): void => \{[^}]*setMemoryGraph\(null\)/)
 })

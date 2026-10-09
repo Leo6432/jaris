@@ -57,6 +57,19 @@ function LineIcon({ d, size = 18 }: { d: string; size?: number }): JSX.Element {
   )
 }
 
+/**
+ * Barre de titre façon Windows 11 : zone de déplacement de la fenêtre ; les boutons réduire/agrandir/fermer
+ * sont les vrais de Windows, posés par-dessus à droite (titleBarOverlay, main.ts).
+ */
+function TitleBar(): JSX.Element {
+  return (
+    <div className="titlebar">
+      <img className="titlebar__logo" src={logo64} alt="" />
+      <span className="titlebar__name">Jaris</span>
+    </div>
+  )
+}
+
 function PanelToggleIcon(): JSX.Element {
   return (
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
@@ -158,6 +171,19 @@ export default function App(): JSX.Element {
   const [chrome, setChrome] = useState<WindowChrome | null>(null)
   const [newSlot, setNewSlot] = useState<HTMLElement | null>(null)
   const [recentsSlot, setRecentsSlot] = useState<HTMLElement | null>(null)
+
+  // Étape 265 : sur une fenêtre étroite, la liste se pose PAR-DESSUS le contenu (index.css) au lieu de
+  // l'écraser à 160 px de large ; choisir une conversation la referme donc, comme un menu. Écouté sur le DOM :
+  // la liste y arrive par portail, et les clics d'un portail ne remontent pas par cet arbre-ci dans React.
+  useEffect(() => {
+    if (!recentsSlot) return
+    const onClick = (event: MouseEvent): void => {
+      const target = event.target as HTMLElement | null
+      if (target?.closest('.workspace__item') && window.matchMedia?.('(max-width: 700px)').matches) setPanelOpen(false)
+    }
+    recentsSlot.addEventListener('click', onClick)
+    return () => recentsSlot.removeEventListener('click', onClick)
+  }, [recentsSlot])
   const [titleSlot, setTitleSlot] = useState<HTMLElement | null>(null)
   const [appVersion, setAppVersion] = useState<string | null>(null)
 
@@ -212,8 +238,13 @@ export default function App(): JSX.Element {
     })
   }
 
+  // Le Cerveau s'affiche dans la zone principale, comme Options (étape 265) : en calque plein écran, il passait
+  // sous les boutons réduire/agrandir/fermer de Windows, qui recouvraient « Ouvrir le dossier » et « Fermer ».
   const openMemoryBrain = (): void => {
-    void window.jaris.getMemoryGraph().then(setMemoryGraph)
+    void window.jaris.getMemoryGraph().then((graph) => {
+      setOptionsShown(false)
+      setMemoryGraph(graph)
+    })
   }
 
   // Suspend la réaction à la voix tant que l'onglet Chat ou Code est actif (à la demande explicite de
@@ -437,8 +468,21 @@ export default function App(): JSX.Element {
   }
 
   if (MODE === 'full') {
+    // Étape 265 : les écrans du premier lancement n'avaient AUCUNE barre de titre — la barre native étant
+    // cachée (titleBarStyle: 'hidden'), la fenêtre ne pouvait même plus être déplacée avant la fin de
+    // l'installation. Ils gardent maintenant la même barre que le reste de Jaris.
+    const setupShell = (screen: JSX.Element): JSX.Element =>
+      chrome?.titleBar ? (
+        <div className="app-shell app-shell--titlebar app-shell--setup">
+          <TitleBar />
+          <div className="app-shell__setup">{screen}</div>
+        </div>
+      ) : (
+        screen
+      )
+
     if (profileName === null) {
-      return (
+      return setupShell(
         <div className="app">
           <form className="app__onboarding" onSubmit={handleOnboardingSubmit}>
             <img className="app__onboarding-logo" src={logo160} alt="Jaris" />
@@ -463,11 +507,11 @@ export default function App(): JSX.Element {
     // fonctionner. `undefined` = on ne sait pas encore (statut en cours de lecture), surtout pas "à
     // installer" : ça ferait clignoter cet écran à chaque démarrage sur une machine déjà prête.
     if (runtimeReady === false) {
-      return <RuntimeSetup onDone={() => setRuntimeReady(true)} />
+      return setupShell(<RuntimeSetup onDone={() => setRuntimeReady(true)} />)
     }
 
     if (!capacityScanDone) {
-      return (
+      return setupShell(
         <CapacityScan
           onDone={() => {
             setCapacityScanDone(true)
@@ -483,24 +527,20 @@ export default function App(): JSX.Element {
     // Colonne de liste : seulement pour les écrans qui ont quelque chose à lister. Toujours montée (cachée
     // sinon) : ses emplacements doivent exister pour que les écrans y rendent leur liste par portail, sans
     // retomber sur leur colonne autonome (Workspace.tsx) dès qu'elle est repliée.
-    const hasPanel = !optionsShown && !!currentMode.panel
+    // Un écran du rail qui n'est pas un mode (Options, Cerveau) remplace le contenu sans changer le mode réel.
+    const screenShown = optionsShown || !!memoryGraph
+    const hasPanel = !screenShown && !!currentMode.panel
     const selectMode = (id: AppMode): void => {
       setAppMode(id)
       setOptionsShown(false)
+      setMemoryGraph(null)
     }
 
     return (
       <ShellSlotsContext.Provider value={{ newSlot, recentsSlot, titleSlot }}>
       <VoiceLaunchContext.Provider value={launchVoice}>
       <div className={`app-shell${chrome?.titleBar ? ' app-shell--titlebar' : ''}`}>
-        {chrome?.titleBar && (
-          // Barre de titre façon Windows 11 : zone de déplacement de la fenêtre ; les boutons réduire/agrandir/
-          // fermer sont les vrais de Windows, posés par-dessus à droite (titleBarOverlay, main.ts).
-          <div className="titlebar">
-            <img className="titlebar__logo" src={logo64} alt="" />
-            <span className="titlebar__name">Jaris</span>
-          </div>
-        )}
+        {chrome?.titleBar && <TitleBar />}
 
         <div className="app-shell__body">
           <nav className="rail" aria-label="Modes de Jaris">
@@ -510,7 +550,7 @@ export default function App(): JSX.Element {
                 label={label}
                 title={title}
                 icon={icon}
-                active={!optionsShown && appMode === id}
+                active={!screenShown && appMode === id}
                 onClick={() => selectMode(id)}
               />
             ))}
@@ -523,7 +563,15 @@ export default function App(): JSX.Element {
               active={false}
               onClick={() => window.jaris.minimizeToWidget?.()}
             />
-            <RailButton label="Options" icon={ICON_OPTIONS} active={optionsShown} onClick={() => setOptionsShown(true)} />
+            <RailButton
+              label="Options"
+              icon={ICON_OPTIONS}
+              active={optionsShown}
+              onClick={() => {
+                setMemoryGraph(null)
+                setOptionsShown(true)
+              }}
+            />
           </nav>
 
           <aside className="panel" hidden={!hasPanel || !panelOpen}>
@@ -564,8 +612,8 @@ export default function App(): JSX.Element {
                   Options, écran d'installation), le nom de l'écran s'affiche à la place (data-label, index.css). */}
               <span
                 className="app-header__title"
-                ref={optionsShown ? undefined : setTitleSlot}
-                data-label={optionsShown ? 'Options' : currentMode.title}
+                ref={screenShown ? undefined : setTitleSlot}
+                data-label={optionsShown ? 'Options' : memoryGraph ? 'Cerveau de Jaris' : currentMode.title}
               />
             </header>
 
@@ -609,7 +657,13 @@ export default function App(): JSX.Element {
               </ErrorBoundary>
             )}
 
-            {!optionsShown && appMode === 'voice' && (
+            {memoryGraph && (
+              <ErrorBoundary label="Le Cerveau de Jaris">
+                <MemoryBrain graph={memoryGraph} />
+              </ErrorBoundary>
+            )}
+
+            {!screenShown && appMode === 'voice' && (
               // Design v2 : le logo au centre d'un cercle, des anneaux couleur d'accent quand Jaris écoute ou
               // parle, l'échange en cours dans une carte, et un bouton « Parler à Jaris » bien visible.
               <ErrorBoundary label="L'Agent vocal">
@@ -668,22 +722,22 @@ export default function App(): JSX.Element {
             )}
 
             {/* Étape 202 : cachés, jamais détruits, en changeant d'onglet — une génération en cours reste visible au retour. */}
-            <KeepAlive active={!optionsShown && appMode === 'chat'}>
+            <KeepAlive active={!screenShown && appMode === 'chat'}>
               <ErrorBoundary label="Le Chat">
                 <ChatPanel />
               </ErrorBoundary>
             </KeepAlive>
-            <KeepAlive active={!optionsShown && appMode === 'code'}>
+            <KeepAlive active={!screenShown && appMode === 'code'}>
               <ErrorBoundary label="Le mode Code">
                 <CodePanel />
               </ErrorBoundary>
             </KeepAlive>
-            <KeepAlive active={!optionsShown && appMode === 'image'}>
+            <KeepAlive active={!screenShown && appMode === 'image'}>
               <ErrorBoundary label="Le mode Image">
                 <ImagePanel />
               </ErrorBoundary>
             </KeepAlive>
-            <KeepAlive active={!optionsShown && appMode === 'video'}>
+            <KeepAlive active={!screenShown && appMode === 'video'}>
               <ErrorBoundary label="Le mode Vidéo">
                 <VideoPanel />
               </ErrorBoundary>
@@ -691,11 +745,6 @@ export default function App(): JSX.Element {
           </main>
         </div>
 
-        {memoryGraph && (
-          <ErrorBoundary label="Le Cerveau de Jaris" overlay onClose={() => setMemoryGraph(null)}>
-            <MemoryBrain graph={memoryGraph} onClose={() => setMemoryGraph(null)} />
-          </ErrorBoundary>
-        )}
       </div>
       </VoiceLaunchContext.Provider>
       </ShellSlotsContext.Provider>

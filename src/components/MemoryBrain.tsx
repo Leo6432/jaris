@@ -3,9 +3,12 @@ import ForceGraph3D, { type ForceGraph3DInstance, type NodeObject } from '3d-for
 import SpriteText from 'three-spritetext'
 import type { MemoryGraph } from '../../shared/ipc'
 
+/**
+ * Étape 265 : un écran de la zone principale (comme Options), plus un calque plein écran — celui-ci passait
+ * sous les boutons réduire/agrandir/fermer de Windows. Plus de bouton « Fermer » : on en sort par le rail.
+ */
 interface MemoryBrainProps {
   graph: MemoryGraph
-  onClose: () => void
 }
 
 interface SelectedNote {
@@ -29,7 +32,7 @@ function makeNodeLabel(node: NodeObject): SpriteText {
   return sprite
 }
 
-export default function MemoryBrain({ graph, onClose }: MemoryBrainProps): JSX.Element {
+export default function MemoryBrain({ graph }: MemoryBrainProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const instanceRef = useRef<ForceGraph3DInstance | null>(null)
   const [selectedNote, setSelectedNote] = useState<SelectedNote | null>(null)
@@ -54,6 +57,8 @@ export default function MemoryBrain({ graph, onClose }: MemoryBrainProps): JSX.E
       instance = new ForceGraph3D(container)
         .graphData({ nodes: graph.nodes.map((n) => ({ ...n })), links: graph.links.map((l) => ({ ...l })) })
         .backgroundColor('rgba(0,0,0,0)')
+        // Étape 265 : l'aide de navigation de la bibliothèque est en anglais, en gris sur gris, collée en bas.
+        .showNavInfo(false)
         .nodeRelSize(4)
         .nodeVal((node) => (isCenterNode(node) ? 3 : 1))
         .nodeColor((node) => (isCenterNode(node) ? '#ffb648' : '#37e2ff'))
@@ -78,9 +83,14 @@ export default function MemoryBrain({ graph, onClose }: MemoryBrainProps): JSX.E
       if (!containerRef.current) return
       instance.width(containerRef.current.clientWidth).height(containerRef.current.clientHeight)
     }
+    // Dans la zone principale, la taille change aussi quand la fenêtre ne bouge pas (liste repliée,
+    // bandeau qui apparaît) : on suit le conteneur lui-même, pas seulement la fenêtre.
+    const observer = new ResizeObserver(handleResize)
+    observer.observe(container)
     window.addEventListener('resize', handleResize)
 
     return () => {
+      observer.disconnect()
       window.removeEventListener('resize', handleResize)
       instance._destructor()
       instanceRef.current = null
@@ -91,12 +101,12 @@ export default function MemoryBrain({ graph, onClose }: MemoryBrainProps): JSX.E
   return (
     <div className="memory-brain">
       <div className="memory-brain__header">
+        {/* Le nom de l'écran est déjà dans l'en-tête de la fenêtre : ne pas l'écrire deux fois. */}
         <span>
-          Cerveau de Jaris — {noteCount} note{noteCount > 1 ? 's' : ''}
+          {noteCount} note{noteCount > 1 ? 's' : ''}
         </span>
         <div className="memory-brain__actions">
           <button onClick={() => window.jaris.openMemoryFolder()}>Ouvrir le dossier</button>
-          <button onClick={onClose}>Fermer</button>
         </div>
       </div>
       {noteCount === 0 ? (

@@ -76,7 +76,7 @@
     --hud-text: #1b1b1b;
     --hud-text-soft: #333333;
     --hud-text-dim: #5d5d5d;
-    --hud-text-faint: #868686;
+    --hud-text-faint: #6b6b6b;
 
     --jv-accent-text: var(--jv-accent);
 
@@ -196,7 +196,7 @@ body.body--scan {
   color: var(--hud-text-dim);
   padding: 6px 16px;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -231,7 +231,7 @@ body.body--scan {
   color: var(--hud-text-dim);
   padding: 6px 14px;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -266,7 +266,7 @@ body.body--scan {
 
 .options-page__tab-header p {
   margin: 4px 0 0;
-  font-size: 0.85rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
 }
 
@@ -285,7 +285,7 @@ body.body--scan {
   color: var(--hud-text-dim);
   padding: 6px 14px;
   border-radius: 999px;
-  font-size: 0.8rem;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -305,7 +305,7 @@ body.body--scan {
 }
 
 .options-menu__section-title {
-  font-size: 0.7rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
 }
 
@@ -336,7 +336,7 @@ body.body--scan {
 
 .options-menu__group-description {
   margin: 0;
-  font-size: 0.76rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
 }
 
@@ -386,13 +386,13 @@ body.body--scan {
 }
 
 .options-menu__row-label {
-  font-size: 0.85rem;
+  font-size: 12px;
   color: var(--hud-text);
 }
 
 .options-menu__row-description {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
 }
 
@@ -452,7 +452,7 @@ body.body--scan {
 
 .options-menu__select {
   padding: 6px 10px;
-  font-size: 0.85rem;
+  font-size: 12px;
   max-width: 260px;
 }
 
@@ -475,9 +475,10 @@ body.body--scan {
    continue, et les cartes se rangent en grille : à la largeur habituelle de la fenêtre d'options, une
    description courte occupait moins de la moitié de la ligne, donc une colonne unique gaspillait la place
    tout en donnant un mur de texte. */
+
 .options-menu__capability-intro {
   margin: 0 0 6px;
-  font-size: 0.85rem;
+  font-size: 12px;
   color: var(--hud-text-dim);
 }
 
@@ -499,7 +500,7 @@ body.body--scan {
 
 .options-menu__capability-group-summary {
   margin: 2px 0 12px;
-  font-size: 0.82rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
 }
 
@@ -522,7 +523,7 @@ body.body--scan {
 .options-menu__capability-title {
   margin: 0;
   font-family: var(--hud-font-display);
-  font-size: 0.98rem;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--hud-text);
@@ -530,7 +531,7 @@ body.body--scan {
 
 .options-menu__capability-description {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: 12px;
   line-height: 1.45;
   color: var(--hud-text-dim);
 }
@@ -553,13 +554,13 @@ body.body--scan {
 .options-menu__capability-example-label {
   flex: 0 0 auto;
   font-family: var(--hud-font-display);
-  font-size: 0.62rem;
+  font-size: 12px;
   font-weight: 600;
   color: var(--hud-text-faint);
 }
 
 .options-menu__capability-example-text {
-  font-size: 0.84rem;
+  font-size: 12px;
   line-height: 1.4;
   color: var(--hud-accent);
 }
@@ -570,7 +571,7 @@ body.body--scan {
   margin: 10px 0 0;
   padding: 9px 13px;
   border-left: 2px solid var(--hud-line-strong);
-  font-size: 0.8rem;
+  font-size: 12px;
   line-height: 1.45;
   color: var(--hud-text-faint);
 }
@@ -581,7 +582,7 @@ body.body--scan {
 }
 
 .options-menu__account {
-  font-size: 0.85rem;
+  font-size: 12px;
   color: var(--hud-text);
   word-break: break-all;
 }
@@ -592,7 +593,7 @@ body.body--scan {
   color: var(--hud-text);
   padding: 6px 14px;
   border-radius: 999px;
-  font-size: 0.8rem;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -606,14 +607,14 @@ body.body--scan {
 }
 
 .options-menu__error {
-  font-size: 0.75rem;
+  font-size: 12px;
   color: var(--hud-danger);
 }
 
 /* Code couleur ambre (avertit sans alarmer), pour le bandeau "Ollama pas à
    jour" (onglet Modèles) — bouton "Mettre à jour" (winget) + lien manuel côte à côte. */
 .options-menu__ollama-warning {
-  font-size: 0.76rem;
+  font-size: 12px;
   color: var(--hud-gold);
   background: rgba(255, 176, 32, 0.08);
   border: 1px solid rgba(255, 176, 32, 0.3);
@@ -631,7 +632,7 @@ body.body--scan {
 }
 
 .options-menu__ollama-update-note {
-  font-size: 0.72rem;
+  font-size: 12px;
   opacity: 0.85;
   margin: 6px 0 0;
 }
@@ -665,7 +666,7 @@ body.body--scan {
 
 .options-menu__scope-dialog p {
   margin: 0 0 16px;
-  font-size: 0.78rem;
+  font-size: 12px;
   color: var(--hud-text-soft);
 }
 
@@ -682,7 +683,7 @@ body.body--scan {
   color: var(--hud-text);
   padding: 9px 10px;
   border-radius: 8px;
-  font-size: 0.78rem;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -702,7 +703,7 @@ body.body--scan {
   color: var(--hud-text-dim);
   padding: 7px 16px;
   border-radius: 999px;
-  font-size: 0.78rem;
+  font-size: 12px;
   cursor: pointer;
   width: 100%;
 }
@@ -712,7 +713,7 @@ body.body--scan {
 }
 
 .options-menu__progress-label {
-  font-size: 0.72rem;
+  font-size: 12px;
   color: var(--hud-text-dim);
   margin-bottom: 4px;
 }
@@ -736,7 +737,7 @@ body.body--scan {
   flex-wrap: wrap;
   gap: 4px 14px;
   margin-top: 6px;
-  font-size: 0.68rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
 }
 
@@ -772,7 +773,7 @@ body.body--scan {
 .options-menu__unscored-confirm p {
   margin: 0;
   max-width: 70ch;
-  font-size: 0.8rem;
+  font-size: 12px;
   color: var(--hud-text-dim);
 }
 
@@ -795,7 +796,7 @@ body.body--scan {
 .options-menu__unscored-results {
   margin: 6px 0 0;
   padding-left: 18px;
-  font-size: 0.8rem;
+  font-size: 12px;
   color: var(--hud-text);
 }
 
@@ -814,7 +815,7 @@ body.body--scan {
 
 .options-menu__model-group-title {
   color: var(--hud-text-dim);
-  font-size: 0.72rem;
+  font-size: 12px;
   font-weight: 600;
   margin-bottom: 6px;
 }
@@ -822,7 +823,7 @@ body.body--scan {
 .options-menu__model-overview {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.75rem;
+  font-size: 12px;
 }
 
 .options-menu__model-overview th,
@@ -835,7 +836,7 @@ body.body--scan {
 .options-menu__model-overview th {
   color: var(--hud-text-dim);
   font-weight: 500;
-  font-size: 0.66rem;
+  font-size: 12px;
 }
 
 .options-menu__model-overview td {
@@ -900,14 +901,14 @@ body.body--scan {
 
 .options-menu__sort-bar-label {
   font-family: var(--hud-font-display);
-  font-size: 0.68rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
   margin-right: 2px;
 }
 
 .options-menu__sort-chip {
   font-family: var(--hud-font-display);
-  font-size: 0.72rem;
+  font-size: 12px;
   background: transparent;
   border: 1px solid var(--hud-line);
   color: var(--hud-text-dim);
@@ -930,7 +931,7 @@ body.body--scan {
    règle générale des champs (plus bas, avec !important), qui lui imposerait des coins droits. */
 .options-menu__model-search {
   font-family: var(--hud-font-body);
-  font-size: 0.8rem;
+  font-size: 12px;
   flex: 0 1 240px;
   min-width: 140px;
   padding: 5px 14px;
@@ -949,7 +950,7 @@ body.body--scan {
 
 .options-menu__model-search-empty {
   color: var(--hud-text-dim);
-  font-size: 0.85rem;
+  font-size: 12px;
 }
 
 /* Les imports Hugging Face (hf.co/...) peuvent être très longs et étiraient tout le tableau — tronqués
@@ -965,7 +966,7 @@ body.body--scan {
   display: inline-block;
   padding: 1px 9px;
   border-radius: 999px;
-  font-size: 0.68rem;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -1032,7 +1033,7 @@ body.body--scan {
 .options-menu__context-slider-ticks {
   display: flex;
   justify-content: space-between;
-  font-size: 0.68rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
 }
 
@@ -1043,7 +1044,7 @@ body.body--scan {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 0.8rem;
+  font-size: 12px;
   color: var(--hud-text-soft);
   overflow-wrap: anywhere;
 }
@@ -1067,24 +1068,24 @@ body.body--scan {
 }
 
 .options-menu__history-date {
-  font-size: 0.65rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
 }
 
 .options-menu__history-transcript {
-  font-size: 0.8rem;
+  font-size: 12px;
   color: var(--hud-text-dim);
   overflow-wrap: anywhere;
 }
 
 .options-menu__history-reply {
-  font-size: 0.85rem;
+  font-size: 12px;
   color: var(--hud-text);
   overflow-wrap: anywhere;
 }
 
 .options-menu__history-empty {
-  font-size: 0.8rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
 }
 
@@ -1157,7 +1158,7 @@ body.body--scan {
 }
 
 .options-menu__voice-description {
-  font-size: 0.95rem;
+  font-size: 13px;
   color: var(--hud-text-dim);
 }
 
@@ -1168,7 +1169,7 @@ body.body--scan {
 
 .options-menu__voice-hint {
   margin: 0;
-  font-size: 0.76rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
   max-width: 480px;
 }
@@ -1223,12 +1224,12 @@ body.body--scan {
 }
 
 .options-menu__mic-result--ok {
-  font-size: 0.8rem;
+  font-size: 12px;
   color: var(--hud-ok);
 }
 
 .options-menu__mic-result--bad {
-  font-size: 0.8rem;
+  font-size: 12px;
   color: var(--hud-danger);
 }
 
@@ -1240,13 +1241,13 @@ body.body--scan {
 }
 
 .app__status {
-  font-size: 0.95rem;
+  font-size: 13px;
   color: var(--hud-text-dim);
   min-height: 1.4em;
 }
 
 .app__hint {
-  font-size: 0.75rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
 }
 
@@ -1274,17 +1275,16 @@ body.body--scan {
 .app__activity {
   margin: 0;
   color: var(--hud-text-faint);
-  font-size: 0.85rem;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
 .memory-brain {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
+  position: relative;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  background: radial-gradient(circle at 50% 30%, var(--hud-panel) 0%, var(--hud-bg) 70%);
 }
 
 .memory-brain__header {
@@ -1292,7 +1292,7 @@ body.body--scan {
   align-items: center;
   justify-content: space-between;
   padding: 14px 20px;
-  font-size: 0.85rem;
+  font-size: 12px;
   color: var(--hud-text-soft);
   border-bottom: 1px solid rgba(var(--jv-ink-rgb), 0.1);
 }
@@ -1308,7 +1308,7 @@ body.body--scan {
   color: var(--hud-text-dim);
   padding: 6px 14px;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -1327,7 +1327,7 @@ body.body--scan {
   align-items: center;
   justify-content: center;
   color: var(--hud-text-faint);
-  font-size: 0.85rem;
+  font-size: 12px;
   text-align: center;
   padding: 0 32px;
 }
@@ -1351,7 +1351,7 @@ body.body--scan {
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  font-size: 0.85rem;
+  font-size: 12px;
   font-weight: 500;
   color: var(--hud-text);
   border-bottom: 1px solid rgba(var(--jv-ink-rgb), 0.1);
@@ -1362,7 +1362,7 @@ body.body--scan {
   border: none;
   color: var(--hud-text-dim);
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 13px;
 }
 
 .memory-brain__note-header button:hover {
@@ -1376,7 +1376,7 @@ body.body--scan {
   white-space: pre-wrap;
   word-break: break-word;
   font-family: inherit;
-  font-size: 0.8rem;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--hud-text-soft);
 }
@@ -1388,7 +1388,7 @@ body.body--scan {
   margin: 16px 16px 0;
   max-width: 480px;
   text-align: center;
-  font-size: 0.8rem;
+  font-size: 12px;
   color: var(--hud-accent-bright);
   background: rgba(var(--hud-accent-rgb), 0.048);
   border: 1px solid rgba(var(--hud-accent-rgb), 0.18);
@@ -1406,7 +1406,7 @@ body.body--scan {
   color: var(--hud-accent-bright);
   padding: 4px 14px;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -1418,7 +1418,7 @@ body.body--scan {
 .app__setup-warning {
   max-width: 480px;
   text-align: center;
-  font-size: 0.8rem;
+  font-size: 12px;
   color: var(--hud-gold);
   background: rgba(255, 176, 32, 0.08);
   border: 1px solid rgba(255, 176, 32, 0.3);
@@ -1458,7 +1458,7 @@ body.body--scan {
   color: var(--hud-text);
   padding: 10px 14px;
   border-radius: 999px;
-  font-size: 0.95rem;
+  font-size: 13px;
   text-align: center;
 }
 
@@ -1473,7 +1473,7 @@ body.body--scan {
   color: var(--hud-text);
   padding: 8px 20px;
   border-radius: 999px;
-  font-size: 0.9rem;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -1515,7 +1515,7 @@ body.body--scan {
 
 .capacity-scan__status {
   color: var(--hud-text-dim);
-  font-size: 0.85rem;
+  font-size: 12px;
 }
 
 .capacity-scan__models {
@@ -1526,11 +1526,11 @@ body.body--scan {
   flex-direction: column;
   gap: 4px;
   color: var(--hud-text);
-  font-size: 0.85rem;
+  font-size: 12px;
 }
 
 .capacity-scan__hint {
-  font-size: 0.75rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
 }
 
@@ -1538,7 +1538,7 @@ body.body--scan {
    rapide (trop gros pour VRAM+RAM ou pas assez de disque, voir runQuickSetup) doit rester visible sur
    l'écran final, pas seulement défiler dans le journal d'installation puis disparaître. */
 .capacity-scan__warning {
-  font-size: 0.76rem;
+  font-size: 12px;
   color: var(--hud-gold);
   background: rgba(255, 176, 32, 0.08);
   border: 1px solid rgba(255, 176, 32, 0.3);
@@ -1583,12 +1583,12 @@ body.body--scan {
 }
 
 .capacity-scan__tier-label {
-  font-size: 0.95rem;
+  font-size: 13px;
   color: var(--hud-text);
 }
 
 .capacity-scan__tier-hardware {
-  font-size: 0.78rem;
+  font-size: 12px;
   color: var(--hud-text-soft);
 }
 
@@ -1596,7 +1596,7 @@ body.body--scan {
 .capacity-scan__tier-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.78rem;
+  font-size: 12px;
   color: var(--hud-text-soft);
 }
 
@@ -1628,7 +1628,7 @@ body.body--scan {
 .capacity-scan__tier-upgrade td {
   white-space: normal !important;
   padding: 0 0 6px !important;
-  font-size: 0.72rem;
+  font-size: 12px;
   line-height: 1.4;
   color: var(--hud-gold);
 }
@@ -1668,7 +1668,7 @@ p.capacity-scan__tier-missing {
 
 .capacity-scan__install-check {
   margin: 8px 2px 0;
-  font-size: 0.78rem;
+  font-size: 12px;
   line-height: 1.45;
   color: var(--hud-text-soft);
 }
@@ -1702,7 +1702,7 @@ p.capacity-scan__tier-missing {
    qui regarde. */
 .capacity-scan__tier-legend {
   margin: 8px 2px 0;
-  font-size: 0.72rem;
+  font-size: 12px;
   line-height: 1.45;
   color: var(--hud-text-faint);
 }
@@ -1999,7 +1999,7 @@ p.capacity-scan__tier-missing {
   margin: auto;
   max-width: 420px;
   text-align: center;
-  font-size: 0.8rem;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--hud-text-faint);
 }
@@ -2008,7 +2008,7 @@ p.capacity-scan__tier-missing {
   max-width: 78%;
   padding: 10px 14px;
   border-radius: 14px;
-  font-size: 0.85rem;
+  font-size: 12px;
   line-height: 1.55;
   /* Les réponses écrites peuvent contenir des listes et des blocs de code (voir le prompt système du
      canal "chat" dans assistant.ts) : on respecte les retours à la ligne du modèle. */
@@ -2038,7 +2038,7 @@ p.capacity-scan__tier-missing {
 
 .chat-panel__error {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: 12px;
   color: var(--hud-gold);
 }
 
@@ -2083,7 +2083,7 @@ p.capacity-scan__tier-missing {
   color: var(--hud-text);
   padding: 6px 6px 0;
   font-family: inherit;
-  font-size: 0.88rem;
+  font-size: 12px;
   line-height: 1.55;
 }
 
@@ -2133,7 +2133,7 @@ p.capacity-scan__tier-missing {
 .composer__attachment-name {
   min-width: 0;
   max-width: 240px;
-  font-size: 0.75rem;
+  font-size: 12px;
   color: var(--hud-text-soft);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2144,7 +2144,7 @@ p.capacity-scan__tier-missing {
   border: none;
   background: transparent;
   color: var(--hud-text-faint);
-  font-size: 0.8rem;
+  font-size: 12px;
   line-height: 1;
   padding: 4px 6px;
   border-radius: 8px;
@@ -2197,7 +2197,7 @@ p.capacity-scan__tier-missing {
   border-radius: 8px;
   background: rgba(21, 21, 23, 0.78);
   color: var(--hud-text);
-  font-size: 0.95rem;
+  font-size: 13px;
   cursor: pointer;
   opacity: 0.85;
   transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
@@ -2243,7 +2243,7 @@ p.capacity-scan__tier-missing {
 
 .workspace__empty {
   margin: 4px 6px;
-  font-size: 0.74rem;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--hud-text-faint);
 }
@@ -2283,7 +2283,7 @@ p.capacity-scan__tier-missing {
   color: var(--hud-text-soft);
   padding: 9px 8px;
   font-family: inherit;
-  font-size: 0.82rem;
+  font-size: 12px;
   text-align: left;
   cursor: pointer;
   transition:
@@ -2316,7 +2316,7 @@ p.capacity-scan__tier-missing {
 }
 
 .workspace__item-meta {
-  font-size: 0.68rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
 }
 
@@ -2351,7 +2351,7 @@ p.capacity-scan__tier-missing {
   flex-wrap: wrap;
   gap: 8px;
   padding: 8px;
-  font-size: 0.74rem;
+  font-size: 12px;
   line-height: 1.4;
   color: var(--hud-text);
   background: rgba(255, 77, 104, 0.07);
@@ -2423,14 +2423,14 @@ p.capacity-scan__tier-missing {
 
 .code-panel__error {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: 12px;
   color: var(--hud-gold);
 }
 
 .code-panel__intro {
   margin: 0;
   max-width: 78ch;
-  font-size: 0.82rem;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--hud-text-dim);
 }
@@ -2461,12 +2461,12 @@ p.capacity-scan__tier-missing {
 }
 
 .code-panel__live-title {
-  font-size: 0.78rem;
+  font-size: 12px;
   color: var(--hud-accent-bright);
 }
 
 .code-panel__live-detail {
-  font-size: 0.7rem;
+  font-size: 12px;
   color: var(--hud-text-dim);
 }
 
@@ -2474,7 +2474,7 @@ p.capacity-scan__tier-missing {
    et la couleur de succès serait sinon silencieusement écrasée par le cyan (piège des étapes 95 et 97). */
 .code-panel__done {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: 12px;
   color: var(--hud-ok);
   border-color: rgba(var(--hud-ok-rgb), 0.45);
   background: rgba(var(--hud-ok-rgb), 0.08);
@@ -2499,7 +2499,7 @@ p.capacity-scan__tier-missing {
   border: 1px solid rgba(var(--jv-ink-rgb), 0.1);
   border-radius: 8px;
   font-family: inherit;
-  font-size: 0.68rem;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--hud-text-dim);
   white-space: pre-wrap;
@@ -2543,7 +2543,7 @@ p.capacity-scan__tier-missing {
   color: var(--hud-text-dim);
   padding: 5px 16px;
   border-radius: 999px;
-  font-size: 0.76rem;
+  font-size: 12px;
   font-family: inherit;
   cursor: pointer;
 }
@@ -2573,14 +2573,14 @@ p.capacity-scan__tier-missing {
   background: rgba(21, 21, 23, 0.6);
   border: 1px solid rgba(var(--jv-ink-rgb), 0.1);
   border-radius: 10px;
-  font-size: 0.7rem;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--hud-text-soft);
 }
 
 .code-panel__hint {
   margin: 0;
-  font-size: 0.68rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
 }
 
@@ -2590,7 +2590,7 @@ p.capacity-scan__tier-missing {
 }
 
 .code-panel__issues {
-  font-size: 0.72rem;
+  font-size: 12px;
   line-height: 1.55;
   color: var(--hud-gold);
   background: rgba(255, 176, 32, 0.08);
@@ -2629,7 +2629,7 @@ p.capacity-scan__tier-missing {
 
 .runtime-setup__status {
   color: var(--hud-text);
-  font-size: 0.9rem;
+  font-size: 13px;
   min-height: 1.2em;
   /* Une ligne de sortie de pip peut être très longue (URL de paquet) : coupée plutôt que d'élargir
      l'écran au-delà de la fenêtre. */
@@ -2669,7 +2669,7 @@ p.capacity-scan__tier-missing {
   padding-left: 20px;
   text-align: left;
   color: var(--hud-danger-soft);
-  font-size: 0.85rem;
+  font-size: 12px;
 }
 
 .runtime-setup__actions {
@@ -2684,7 +2684,7 @@ p.capacity-scan__tier-missing {
   padding: 8px 18px;
   border-radius: 999px;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 13px;
 }
 
 .runtime-setup__actions .runtime-setup__skip {
@@ -2719,7 +2719,7 @@ p.capacity-scan__tier-missing {
 .options-page__navigation-label {
   display: block;
   font-family: var(--hud-font-display);
-  font-size: 0.7rem;
+  font-size: 12px;
   font-weight: 600;
   color: var(--hud-text-faint);
 }
@@ -2960,7 +2960,7 @@ p.capacity-scan__tier-missing {
 
 .options-menu__wake-test-summary {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 12px;
   color: var(--hud-text);
 }
 
@@ -2968,7 +2968,7 @@ p.capacity-scan__tier-missing {
   width: 100%;
   max-width: 420px;
   border-collapse: collapse;
-  font-size: 0.85rem;
+  font-size: 12px;
 }
 
 .options-menu__wake-test-table th {
@@ -3026,13 +3026,13 @@ p.capacity-scan__tier-missing {
 
 .image-install__eyebrow {
   font-family: var(--hud-font-display);
-  font-size: 0.7rem;
+  font-size: 12px;
   color: var(--hud-accent);
 }
 
 .image-install__lead {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 13px;
   line-height: 1.6;
   color: var(--hud-text-dim);
 }
@@ -3145,7 +3145,7 @@ p.capacity-scan__tier-missing {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.86rem;
+  font-size: 12px;
   color: var(--hud-text);
 }
 
@@ -3178,7 +3178,7 @@ p.capacity-scan__tier-missing {
   width: 100%;
   margin-top: 12px;
   padding: 8px 12px;
-  font-size: 0.72rem;
+  font-size: 12px;
 }
 
 .video-install__quality {
@@ -3186,7 +3186,7 @@ p.capacity-scan__tier-missing {
   align-items: center;
   gap: 10px;
   color: var(--hud-text-dim);
-  font-size: 0.85rem;
+  font-size: 12px;
 }
 
 /* Étape 203 : la vidéo occupe la même scène que l'image, sur fond noir comme un lecteur. */
@@ -3270,7 +3270,7 @@ p.capacity-scan__tier-missing {
 .composer__menu-title,
 .effort-picker__list-head {
   padding: 4px 8px 6px;
-  font-size: 0.72rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
 }
 
@@ -3282,7 +3282,7 @@ p.capacity-scan__tier-missing {
   width: 100%;
   padding: 8px;
   font-family: var(--hud-font-body);
-  font-size: 0.82rem;
+  font-size: 12px;
   text-align: left;
   color: var(--hud-text);
   background: transparent;
@@ -3309,7 +3309,7 @@ p.capacity-scan__tier-missing {
   margin-left: auto;
   padding-left: 12px;
   white-space: nowrap;
-  font-size: 0.72rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
 }
 
@@ -3381,7 +3381,7 @@ p.capacity-scan__tier-missing {
   height: 34px;
   padding: 0 10px;
   font-family: var(--hud-font-body);
-  font-size: 0.82rem;
+  font-size: 12px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 10px;
@@ -3456,7 +3456,7 @@ p.capacity-scan__tier-missing {
 }
 
 .effort-picker__current {
-  font-size: 0.92rem;
+  font-size: 13px;
   font-weight: 600;
   color: var(--hud-accent-bright);
 }
@@ -3469,7 +3469,7 @@ p.capacity-scan__tier-missing {
   gap: 2px;
   padding: 2px 6px;
   font-family: var(--hud-font-body);
-  font-size: 0.76rem;
+  font-size: 12px;
   color: var(--hud-text-dim);
   background: transparent;
   border: none;
@@ -3585,7 +3585,7 @@ p.capacity-scan__tier-missing {
   display: flex;
   justify-content: space-between;
   padding: 4px 8px 0;
-  font-size: 0.68rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
 }
 
@@ -3657,7 +3657,7 @@ p.capacity-scan__tier-missing {
 }
 
 .effort-picker__option-sub {
-  font-size: 0.72rem;
+  font-size: 12px;
   color: var(--hud-text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3666,7 +3666,7 @@ p.capacity-scan__tier-missing {
 
 .effort-picker__error {
   margin: 8px 4px 0;
-  font-size: 0.74rem;
+  font-size: 12px;
   color: var(--hud-danger);
 }
 
@@ -3675,12 +3675,12 @@ p.capacity-scan__tier-missing {
 .phone-access__safety {
   margin: 4px 0 0;
   color: var(--hud-text-dim);
-  font-size: 0.85rem;
+  font-size: 12px;
 }
 
 .phone-access__step {
   margin: 0 0 18px;
-  font-size: 0.9rem;
+  font-size: 13px;
   padding: 14px 16px;
   background: var(--hud-panel-raised);
   border: 1px solid var(--hud-line);
@@ -3752,7 +3752,7 @@ p.capacity-scan__tier-missing {
 .phone-access__empty {
   margin: 0;
   color: var(--hud-text-faint);
-  font-size: 0.85rem;
+  font-size: 12px;
 }
 
 .phone-access__confirm {
@@ -3792,14 +3792,6 @@ p.capacity-scan__tier-missing {
   min-width: 0;
 }
 
-/* Le Cerveau couvre tout l'écran : son message d'erreur aussi, sinon il resterait une page vide sans issue. */
-.error-panel--overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  background: radial-gradient(circle at 50% 30%, var(--hud-panel) 0%, var(--hud-bg) 70%);
-}
-
 .error-panel__card {
   max-width: 460px;
   padding: 20px 22px;
@@ -3810,21 +3802,21 @@ p.capacity-scan__tier-missing {
 .error-panel__title {
   margin: 0 0 10px;
   font-family: var(--hud-font-display);
-  font-size: 0.95rem;
+  font-size: 13px;
   color: var(--hud-gold);
 }
 
 .error-panel__text {
   margin: 0 0 8px;
   color: var(--hud-text-soft);
-  font-size: 0.85rem;
+  font-size: 12px;
   line-height: 1.5;
 }
 
 .error-panel__detail {
   margin: 0 0 16px;
   color: var(--hud-text-faint);
-  font-size: 0.75rem;
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 
@@ -3846,7 +3838,7 @@ p.capacity-scan__tier-missing {
   max-width: 560px;
   margin: 0 0 14px;
   color: var(--hud-text-soft);
-  font-size: 0.85rem;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -3871,7 +3863,7 @@ p.capacity-scan__tier-missing {
   background: transparent;
   border: none;
   color: var(--hud-text);
-  font-size: 0.85rem;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -4093,7 +4085,7 @@ textarea::placeholder {
 .options-menu__badge {
   border-radius: 999px;
   font-family: var(--hud-font-body);
-  font-size: 0.72rem;
+  font-size: 12px;
   font-weight: 500;
   padding: 2px 8px;
   border: none;
@@ -4118,7 +4110,7 @@ textarea::placeholder {
 
 .options-menu__section-title,
 .options-menu__model-group-title {
-  font-size: 0.8rem;
+  font-size: 12px;
   font-weight: 500;
   color: var(--hud-text-faint);
 }
@@ -4133,7 +4125,7 @@ textarea::placeholder {
   text-align: left;
   margin: 0 24px 12px;
   padding: 12px 16px;
-  font-size: 0.875rem;
+  font-size: 12px;
   color: var(--hud-text-dim);
 }
 
@@ -5323,7 +5315,7 @@ body.body--mica {
 }
 
 .rail__label {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
 }
 
@@ -5869,4 +5861,129 @@ select {
 /* Intertitres de « Ce que Jaris sait faire » : un cran au-dessus du texte de base (14px en v2). */
 .options-menu__capability-group-title {
   font-size: 16px;
+}
+
+/* ==========================================================================
+   Revue du design v2 (étape 265, Léo : « il y a plein de petits bugs »)
+   --------------------------------------------------------------------------
+   Défauts trouvés en photographiant TOUS les écrans du rendu compilé, avec de faux boutons Windows posés
+   en haut à droite, puis mesurés (positions, tailles de texte, contrastes) plutôt que jugés à l'œil.
+   Écrit en dernier : à spécificité égale, c'est l'ordre qui décide.
+   ========================================================================== */
+
+/* Cerveau : un écran de la zone principale, comme Options — plus un calque plein écran qui passait sous
+   les boutons réduire/agrandir/fermer de Windows. Son nom est déjà dans l'en-tête : ici, une barre d'outils. */
+.memory-brain {
+  background: transparent;
+}
+
+.memory-brain .memory-brain__header {
+  padding: 0 16px 10px;
+  border-bottom: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--hud-text-dim);
+}
+
+.memory-brain .memory-brain__canvas {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Premier lancement (bienvenue, installation, configuration) : même barre de titre que le reste. */
+.app-shell--setup {
+  height: 100%;
+}
+
+.app-shell__setup {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow-y: auto;
+}
+
+.app-shell__setup > .app {
+  flex: 1;
+  height: auto;
+  min-height: 100%;
+  padding: 24px;
+}
+
+/* Listes de la colonne (conversations, projets, images, vidéos) : le titre seul, sur une ligne, comme
+   ChatGPT — la date était coincée à droite du titre, cassée sur deux lignes en 9,5 px. */
+.panel .workspace__item {
+  flex-direction: row;
+  align-items: center;
+}
+
+.panel .workspace__item-meta {
+  display: none;
+}
+
+/* Agent vocal : la réponse de Jaris en texte normal (elle était en demi-gras, toute la réponse). */
+.app__reply,
+.app__conversation:not(.app__conversation--widget) .app__reply {
+  font-weight: 400;
+}
+
+/* Réglages : la taille de texte des Paramètres de Windows 11 — intitulé 14 px, explication 12 px. */
+.options-menu__row-label {
+  font-size: 14px;
+}
+
+.options-page__tab-header p {
+  font-size: 14px;
+  color: var(--hud-text-dim);
+}
+
+/* Phrases d'exemple en couleur d'accent : la version éclaircie en sombre, sinon le bleu Windows passait à
+   3:1 sur le gris des cartes. */
+.options-menu__capability-example-text {
+  color: var(--jv-accent-text);
+}
+
+/* Fenêtre étroite : la colonne de liste passe PAR-DESSUS le contenu au lieu de l'écraser — à 480 px, la
+   laisser dans le flux ne laissait que 160 px à la conversation ou à l'application ouverte. */
+.app-shell__body {
+  position: relative;
+}
+
+@media (max-width: 700px) {
+  .panel {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 68px;
+    z-index: 20;
+    padding-left: 8px;
+    background: var(--jv-side);
+    border-right: 1px solid var(--hud-line);
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.25);
+  }
+}
+
+/* Contenu centré qui peut défiler : « safe » le recolle en haut dès qu'il dépasse, sinon son début passait
+   hors d'atteinte et sa fin sous le champ de saisie (accueil du mode Image sur une petite fenêtre). */
+.image-panel__home {
+  justify-content: safe center;
+}
+
+/* Colonne vide (mode Image ou Vidéo pas encore installé, rien à lister) : une phrase plutôt qu'un vide qui
+   ressemblait à un écran qui n'a pas fini de charger. */
+.panel__list:empty::after {
+  content: 'Rien pour l’instant.';
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--hud-text-faint);
+}
+
+/* Réglages sur un grand écran : une colonne de lecture, comme les Paramètres de Windows 11 — sur 1600 px,
+   l'intitulé d'une ligne et son interrupteur se retrouvaient à plus d'un mètre de distance pour l'œil. */
+.options-page__content > * {
+  max-width: 880px;
+}
+
+/* L'introduction de « Ce que Jaris sait faire » se lit comme le sous-titre des autres pages (14 px). */
+.options-menu__capability-intro {
+  font-size: 14px;
 }

@@ -7104,3 +7104,34 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   PowerShell placé dans un gabarit JavaScript ferme le gabarit : le typecheck l'attrape, la relecture non ; (3) quand une
   automatisation garde une cible, elle doit savoir que la cible a DISPARU plutôt que d'en prendre une autre « au plus
   proche » — en arrière-plan, la plus proche est souvent la fenêtre de l'utilisateur.
+
+- **Étape 265 (v0.31.1), revue du design v2 (Léo, capture à l'appui : « il y a plein de petits bugs, améliore tout le
+  design »).** La capture montrait « Ouvrir le dossier » et « Fermer » SOUS les boutons réduire/agrandir/fermer de
+  Windows : le Cerveau s'ouvrait en calque plein écran (`position: fixed; inset: 0`), alors que le design v2 cache la
+  barre native et laisse Windows poser ses vrais boutons par-dessus, en haut à droite (titleBarOverlay, 3 x 46 px sur
+  40 px). **Méthode, à réutiliser pour toute revue visuelle** : photographier TOUS les écrans du rendu compilé (clair,
+  sombre, 480 px, 1000 px, 1600 px) avec de faux boutons Windows dessinés à leur place, puis MESURER au lieu de juger à
+  l'œil : éléments sous ces boutons, texte rogné, contraste, boutons qui se chevauchent, sorties de fenêtre. Sept vrais
+  défauts trouvés ainsi, dont cinq invisibles à la relecture du code :
+  1. Cerveau sous les boutons de Windows → c'est maintenant un écran de la zone principale, comme Options (on en sort
+     par le rail). L'aide de navigation en anglais de la vue 3D est masquée (`showNavInfo(false)`). L'ancien mode
+     « calque » (props `overlay`/`onClose` d'ErrorBoundary, `.error-panel--overlay`) est supprimé, plus aucun usage.
+  2. Les écrans du premier lancement (bienvenue, installation, configuration) n'avaient AUCUNE barre de titre : la barre
+     native étant cachée, la fenêtre ne pouvait plus être déplacée avant la fin de l'installation.
+  3. Des textes à 8,7-11 px (anciennes tailles en rem calculées sur 14 px) : remontés au minimum de Windows 11, 12 px
+     (intitulés de réglages 14 px). Le widget, réglé avec Léo en usage réel, n'a pas été touché.
+  4. Contrastes sous 4,5:1 en clair (gris discret #868686 → #6b6b6b) et phrases d'exemple bleues à 3:1 en sombre.
+  5. Liste de la colonne : la date coincée à droite du titre, cassée sur deux lignes en 9,5 px → le titre seul, comme
+     ChatGPT.
+  6. Fenêtre étroite : la liste écrasait la conversation à 160 px → elle se pose par-dessus et se referme au choix.
+  7. Grand écran : les réglages s'étalaient sur 1 300 px → colonne de 880 px, comme les Paramètres de Windows.
+  **Piège dans mon propre test, attrapé en remettant le défaut exprès** : `page.addInitScript` ne s'applique PAS à
+  `page.setContent` (aucune navigation) — les réglages qui devaient afficher les écrans du premier lancement n'étaient
+  jamais lus, et le test passait sans rien vérifier. Les réglages sont maintenant écrits dans la page elle-même.
+  **Une décision déjà prise avec Léo, rappelée par un test** : j'avais donné à « Ce que Jaris sait faire » le même
+  titre de page que les réglages ; `test-options-reorganization-ui.mjs` le refuse (étape 111 : cette page garde sa
+  propre intro). Annulé : un test qui échoue sur un choix documenté est un rappel, pas un obstacle à contourner.
+  Régression : `node --test scripts/test-window-chrome-ui.mjs` (aucun écran du rail sous les boutons de Windows,
+  barre de titre au premier lancement, liste par-dessus en fenêtre étroite, aucun texte sous 12 px) ; chaque
+  assertion vérifiée en remettant son défaut. **Non vérifié ici** : le rendu sur la vraie machine de Léo (Mica,
+  vrais boutons de Windows, police réelle).
