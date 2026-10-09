@@ -5987,3 +5987,378 @@ select {
 .options-menu__capability-intro {
   font-size: 14px;
 }
+
+/* ========================================================================
+   Barre latérale ChatGPT
+   Les modes, la liste de conversations et les outils vivent dans une seule
+   colonne ; le rail compact reste disponible quand la liste est repliée.
+   ======================================================================== */
+
+:root {
+  --hud-bg: #212121;
+  --hud-panel: #2f2f2f;
+  --hud-panel-raised: #2f2f2f;
+  --jv-side: #171717;
+  --jv-mica: rgba(23, 23, 23, 0.9);
+  --jv-hover: rgba(255, 255, 255, 0.07);
+  --jv-bubble: #2f2f2f;
+  --jv-code: #1e1e1e;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --hud-bg: #ffffff;
+    --hud-panel: #f4f4f4;
+    --hud-panel-raised: #f4f4f4;
+    --jv-side: #f9f9f9;
+    --jv-mica: rgba(249, 249, 249, 0.92);
+    --jv-hover: rgba(0, 0, 0, 0.06);
+    --jv-bubble: #f4f4f4;
+    --jv-code: #f5f5f5;
+  }
+}
+
+.app-shell__body {
+  position: relative;
+  min-height: 0;
+  background: var(--jv-side);
+}
+
+.app-sidebar {
+  z-index: 2;
+  display: flex;
+  width: 68px;
+  height: 100%;
+  flex: 0 0 68px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 8px;
+  overflow: hidden;
+  background: var(--jv-side);
+  transition: width 160ms ease, flex-basis 160ms ease;
+}
+
+.app-sidebar--expanded {
+  width: 260px;
+  flex-basis: 260px;
+  padding: 10px 12px;
+  border-right: 1px solid var(--hud-line);
+}
+
+.app-sidebar__nav,
+.app-sidebar__utilities {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.app-sidebar__brand {
+  display: flex;
+  height: 42px;
+  flex: 0 0 42px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 4px;
+  color: var(--hud-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.app-sidebar__brand img {
+  width: 25px;
+  height: 25px;
+  flex: 0 0 25px;
+  border-radius: 7px;
+}
+
+.app-sidebar__workspace {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  margin-top: 10px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--hud-line);
+}
+
+.app-sidebar__workspace[hidden] {
+  display: none;
+}
+
+.app-sidebar__workspace .panel__head {
+  height: 38px;
+  gap: 4px;
+  padding: 0 4px 0 8px;
+}
+
+.app-sidebar__workspace .panel__title {
+  color: var(--hud-text-faint);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.app-sidebar__workspace .panel__icon-button {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--hud-text-faint);
+}
+
+.app-sidebar__workspace .panel__icon-button:hover,
+.app-sidebar__workspace .panel__new .workspace__new:hover {
+  background: var(--jv-hover);
+}
+
+.app-sidebar__workspace .panel__new .workspace__new {
+  position: static;
+  width: auto;
+  height: 32px;
+  gap: 7px;
+  padding: 0 8px;
+  border: 1px solid var(--hud-line);
+  border-radius: 8px;
+  color: var(--hud-text-dim);
+  background: transparent;
+  font-family: var(--hud-font-body);
+  font-size: 12px;
+}
+
+.app-sidebar__workspace .panel__new .workspace__new-label {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  white-space: nowrap;
+}
+
+.app-sidebar__workspace .panel__list {
+  min-height: 0;
+  padding: 0 2px;
+  overflow: hidden;
+}
+
+.app-sidebar__workspace .workspace__rail {
+  min-height: 0;
+}
+
+.app-sidebar__workspace .workspace__rail-label {
+  padding: 8px 8px 5px;
+  color: var(--hud-text-faint);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.app-sidebar__workspace .workspace__empty {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.app-sidebar__workspace .workspace__list {
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-width: thin;
+}
+
+.app-sidebar__workspace .workspace__list li,
+.app-sidebar__workspace .workspace__item {
+  border-radius: 8px;
+}
+
+.app-sidebar__workspace .workspace__item {
+  height: 36px;
+  padding: 0 9px;
+}
+
+.app-sidebar__workspace .workspace__item-title {
+  font-size: 12px;
+}
+
+.app-sidebar__workspace .workspace__list li:has(.workspace__item--active),
+.app-sidebar__workspace .workspace__list li:hover {
+  background: var(--jv-hover);
+}
+
+.app-sidebar__workspace .workspace__delete {
+  width: 28px;
+  height: 28px;
+  margin-right: 3px;
+}
+
+.app-sidebar__workspace .panel__status {
+  flex: 0 0 auto;
+  padding: 10px 8px 1px;
+  border-top: 1px solid var(--hud-line);
+  font-size: 11px;
+}
+
+.app-sidebar__utilities {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--hud-line);
+}
+
+.app-sidebar .rail__item {
+  width: 100%;
+  height: 40px;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--hud-text-dim);
+  text-align: left;
+}
+
+.app-sidebar .rail__item::before {
+  display: none;
+}
+
+.app-sidebar .rail__item:hover,
+.app-sidebar .rail__item--active,
+.app-sidebar .rail__item--active:hover {
+  color: var(--hud-text);
+  background: var(--jv-hover);
+}
+
+.app-sidebar .rail__label {
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.app-sidebar:not(.app-sidebar--expanded) {
+  align-items: center;
+}
+
+.app-sidebar:not(.app-sidebar--expanded) .app-sidebar__brand {
+  justify-content: center;
+  padding: 0 0 4px;
+}
+
+.app-sidebar:not(.app-sidebar--expanded) .app-sidebar__brand span,
+.app-sidebar:not(.app-sidebar--expanded) .rail__label {
+  display: none;
+}
+
+.app-sidebar:not(.app-sidebar--expanded) .rail__item {
+  width: 48px;
+  height: 48px;
+  justify-content: center;
+  padding: 0;
+}
+
+.app-sidebar:not(.app-sidebar--expanded) .app-sidebar__nav,
+.app-sidebar:not(.app-sidebar--expanded) .app-sidebar__utilities {
+  align-items: center;
+  width: 100%;
+}
+
+.app-sidebar--expanded .app-sidebar__utilities .rail__item {
+  height: 36px;
+}
+
+.app-header {
+  height: 52px;
+  min-height: 52px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.app-header__title {
+  color: var(--hud-text);
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.app-main {
+  border: 0;
+  border-left: 1px solid var(--hud-line);
+  border-radius: 0;
+  background: var(--hud-bg);
+}
+
+.app-main > .chat-panel,
+.app-main > .code-panel,
+.app-main > .image-panel,
+.app-main > .video-panel {
+  border-radius: 0;
+}
+
+.chat-panel > .composer {
+  width: calc(100% - 40px);
+  max-width: 800px;
+  margin-bottom: 16px;
+  border: 1px solid var(--hud-line-strong);
+  border-radius: 26px;
+  background: var(--hud-panel);
+}
+
+.chat-panel > .composer:focus-within {
+  border-color: rgba(255, 255, 255, 0.24);
+  border-bottom-color: rgba(255, 255, 255, 0.24);
+}
+
+.composer__input {
+  min-height: 38px;
+  padding: 8px 10px;
+  font-size: 15px;
+}
+
+.composer__plus,
+.composer__mic,
+.composer__send {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+
+.composer__plus,
+.composer__mic {
+  color: var(--hud-text-dim);
+}
+
+.composer__send {
+  color: var(--jv-accent-ink);
+}
+
+.empty-state__title {
+  font-size: 28px;
+  font-weight: 550;
+  letter-spacing: -0.025em;
+}
+
+.empty-state__description {
+  max-width: 58ch;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.empty-state__suggestion {
+  height: auto;
+  min-height: 38px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--hud-panel);
+}
+
+.titlebar {
+  background: var(--jv-side);
+}
+
+@media (max-width: 700px) {
+  .app-sidebar--expanded {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 20;
+    box-shadow: 8px 0 28px rgba(0, 0, 0, 0.24);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-sidebar {
+    transition: none;
+  }
+}
