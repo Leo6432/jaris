@@ -45,11 +45,11 @@ import {
   stopOllamaIfStartedByJaris,
   updateOllama
 } from './services/dependencyServices'
-import { deleteModel, getModelThinking, listInstalledModels } from './services/ollama'
+import { deleteModel, getModelThinking, listInstalledModels, setModelsViewRepair } from './services/ollama'
 import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES, resolveChosenModel } from './services/modelChoice'
 import { chosenThink, isAcceptedThink, thinkOptions, thinkingKind } from '../shared/effort'
 import { getStorageStatus, programMoveCommandLine, reconcileStorage, relocateEverything } from './services/relocation'
-import { alignOllamaModelsVariable } from './services/ollamaModelsVariable'
+import { alignOllamaModelsVariable, repairOllamaModelsView, windowsModelsViewDeps } from './services/ollamaModelsVariable'
 import { DOCKER_APP_SUBDIR, findDockerInstallDir } from './services/dockerLocation'
 import { openApp } from './services/appLauncher'
 import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, getMyModelPicks, isUnusedInstalledModel } from './services/hardwareScan'
@@ -1015,8 +1015,20 @@ async function startVoicePipeline(): Promise<void> {
   // (leurs fichiers seraient sinon ouverts, donc impossibles à déplacer).
   await reconcileStorage(log, stopOllamaCompletely)
   // Étape 254 : une variable OLLAMA_MODELS qui désigne un autre dossier rend tous les modèles invisibles.
+  // Étape 289 : de même qu'un chemin qui passe par une jonction (Ollama 0.40+ ne relit plus rien à travers).
   await alignOllamaModelsVariable(log, stopOllamaCompletely)
-  void ensureOllamaRunning(log)
+  // Puis le RÉSULTAT est vérifié : l'appli Ollama peut avoir lancé le serveur avec son propre réglage d'emplacement.
+  const repairModelsView = (): Promise<boolean> =>
+    repairOllamaModelsView(log, {
+      ...windowsModelsViewDeps,
+      serverModelCount: () => listInstalledModels().then((models) => models.length, () => null),
+      restartOllama: async () => {
+        await stopOllamaCompletely()
+        await ensureOllamaRunning(log)
+      }
+    })
+  setModelsViewRepair(repairModelsView)
+  void ensureOllamaRunning(log).then(repairModelsView)
   void ensureSearxngRunning(log)
 
   pipeline = new VoicePipeline()

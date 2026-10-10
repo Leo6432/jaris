@@ -7669,3 +7669,40 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   sur une vraie origine, liste figée pendant un travail) et `scripts/test-github-ui.mjs` (dépôt dans la liste, nom
   exact, conversation retrouvée, « Retirer » sans rien envoyer sur GitHub). Chaque garde-fou a été vérifié en le
   retirant : le test correspondant échoue.
+
+- **« ça remet Ollama a répondu 404 : model 'qwen3.8:27b' not found, et dans modèle je vois tous les modèles non
+  installés, sauf image et vidéo » (Léo, étape 289 — même symptôme qu'avant, « réglé » une fois par un simple
+  redémarrage de l'ordinateur).** Un redémarrage qui « répare » sans qu'on sache pourquoi n'est pas une cause : cette
+  fois, cause cherchée dans le CODE SOURCE d'Ollama et de Go (sources primaires, leçon de la saga SearXNG), pas devinée.
+  - Ollama 0.40+ passe chaque modèle par `filepath.EvalSymlinks` avant de le lire (`manifest.openVerifiedManifestLocked`
+    sur le dossier `manifests-v2`, et `resolveManifestPath` sous Windows). Depuis Go 1.23, `os.Lstat` décrit une
+    JONCTION Windows comme « irrégulière » (ni dossier ni lien : `isReparseTagNameSurrogate`), donc `EvalSymlinks`
+    s'arrête sur `ENOTDIR` dès qu'un chemin la TRAVERSE — et sous Windows `ENOTDIR` vaut `ERROR_PATH_NOT_FOUND`, donc
+    « introuvable ». Les tests de Go ne couvrent qu'une jonction en DERNIER élément du chemin, jamais traversée.
+  - Or Jaris range les modèles derrière la jonction `%USERPROFILE%\.ollama\models` (étape 143). Windows, lui, suit la
+    jonction : Ollama ÉCRIT le modèle sans problème (« success » en 2 s, les fichiers étaient déjà là), puis ne sait plus
+    le RELIRE : liste vide, « model not found ». Image et vidéo ne passent pas par Ollama, d'où l'exception.
+  - L'appli Ollama lance son serveur avec SON réglage d'emplacement (`app/server/server.go`) — souvent le chemin
+    habituel, donc la jonction — alors que le serveur lancé par Jaris reçoit la variable de Jaris. Selon qui a démarré
+    le serveur (Windows au démarrage, la mise à jour d'Ollama, Jaris), ça marche ou pas : c'est ce qui rendait le
+    problème intermittent, et le redémarrage trompeur.
+  Correctif en deux temps (`ollamaModelsVariable.ts`) : (1) **la cause** — Ollama reçoit toujours le VRAI chemin du
+  dossier, sans jonction (`resolve` : variable OLLAMA_MODELS de l'utilisateur + celle du processus, puis Ollama
+  redémarré une fois) ; (2) **le résultat vérifié**, pas seulement la cause supposée — si Ollama n'annonce AUCUN modèle
+  alors que le disque en a, Jaris l'arrête (appli comprise) et le relance lui-même avec le vrai chemin, au démarrage et
+  avant tout téléchargement (`repairOllamaModelsView`, branché dans `pullModelIfMissing` par un setter pour ne pas
+  ajouter d'import à ollama.ts). Une relance au plus par minute, et un appel simultané ATTEND le résultat au lieu de
+  repartir sur un Ollama encore aveugle. Au passage : `countOllamaModels` ne comptait que `manifests/` — un modèle
+  téléchargé depuis Ollama 0.40 n'est QUE dans `manifests-v2/` (un lien hors Windows) ; et une variable vers un
+  dossier disparu revient au dossier de Jaris, sinon Ollama le recréerait vide.
+  **Piège attrapé par les tests, pas en relecture** : le premier jet gardait `if (!effective) return none` en tête de
+  fonction — le cas « aucune variable, chemin habituel = jonction », le PLUS probable chez Léo, n'aurait jamais été
+  corrigé. **Vérifié sur un vrai Windows** : la CI exécute `scripts/junction-check` (Go seul, sans Ollama), qui refait
+  l'appel d'Ollama à travers une vraie jonction `mklink /J` et échoue si le constat ne tient plus.
+  **Leçon générale : un outil tiers peut cesser de lire un chemin qu'il sait encore écrire.** Une jonction est
+  transparente pour Windows, pas forcément pour un programme qui inspecte lui-même ses chemins — donner à un programme
+  tiers le chemin RÉEL plutôt qu'un raccourci posé par Jaris évite toute la famille de ces pannes.
+  Régression : `scripts/test-ollama-models-variable.mjs` (jonction sans variable / variable sur la jonction / variable
+  machine, écriture refusée, dossier disparu, manifests-v2 et liens comptés, réparation, une relance par minute, appels
+  simultanés) et `scripts/test-ollama-pull-repair.mjs` (le modèle déjà là n'est pas retéléchargé). Chaque garde-fou
+  vérifié en le retirant. **Non vérifiable ici** : la machine de Léo elle-même — à confirmer en usage réel.

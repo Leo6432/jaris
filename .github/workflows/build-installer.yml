@@ -51,6 +51,12 @@ jobs:
           go-version-file: tunnel/go.mod
           cache-dependency-path: tunnel/go.sum
 
+      # Étape 289 : la cause des modèles « introuvables » après la mise à jour d'Ollama, vérifiée sur un vrai Windows
+      # (Go ne traverse plus une jonction). Voir scripts/junction-check/main.go et ollamaModelsVariable.ts.
+      - name: Vérifie la lecture d'un modèle à travers une jonction
+        working-directory: scripts/junction-check
+        run: go run .
+
       # Une commande par étape : dans un bloc PowerShell, l'échec d'une commande au milieu ne fait pas
       # forcément échouer l'étape (seul le code de sortie de la dernière compte).
       - name: Vérifie le tunnel du téléphone

@@ -420,8 +420,20 @@ function withTag(model: string): string {
   return lastSegment.includes(':') ? model : `${model}:latest`
 }
 
+/**
+ * Étape 289 : réparation branchée par main.ts (ollamaModelsVariable.repairOllamaModelsView), pour ne pas importer ici
+ * le démarrage d'Ollama. Vrai si Ollama, qui ne voyait plus aucun modèle du disque, les voit de nouveau.
+ */
+let modelsViewRepair: (() => Promise<boolean>) | null = null
+export function setModelsViewRepair(repair: (() => Promise<boolean>) | null): void {
+  modelsViewRepair = repair
+}
+
 export async function pullModelIfMissing(model: string, onStatus?: (message: string) => void): Promise<void> {
-  const installed = await listInstalledModels()
+  let installed = await listInstalledModels()
+  // Aucun modèle annoncé alors qu'il y en a sur le disque : Ollama regarde le mauvais chemin (étape 289, Léo : un
+  // téléchargement « réussi » en 2 s, puis « model not found »). Retélécharger n'y changerait rien.
+  if (installed.length === 0 && modelsViewRepair && (await modelsViewRepair())) installed = await listInstalledModels()
   if (installed.includes(model) || installed.includes(withTag(model))) return
 
   try {
