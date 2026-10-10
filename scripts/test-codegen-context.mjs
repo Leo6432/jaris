@@ -37,6 +37,8 @@ function load(path, modules, fetchImpl = fetch) {
 
 /** Étape 191 : ollama.ts et codeGenerator.ts importent le VRAI module d'effort (pur, sans dépendance). */
 const sharedEffort = load('../shared/effort.ts', {})
+/** Étape 286 : codeGenerator.ts compte les lignes écrites dans index.html avec le VRAI calcul de différences. */
+const sharedLineDiff = load('../shared/lineDiff.ts', {})
 
 // ---------------------------------------------------------------------------------------------------------
 // ollama.ts : une fenêtre pleine sans réponse devient ContextFullError, jamais « bien installé ? »
@@ -136,6 +138,7 @@ function setupCodegen(answer, { modelMax = 262144 } = {}) {
     electron: { app: { getPath: () => '/tmp' } },
     './dataLocation': { getDataRoot: () => '/tmp' },
     '../../shared/effort': sharedEffort,
+    '../../shared/lineDiff': sharedLineDiff,
     'fs/promises': { mkdir: async () => {}, writeFile: async () => {}, readdir: async () => [], readFile: async () => '', rm: async () => {} },
     path: { join: (...parts) => parts.join('/'), isAbsolute: () => true, relative: () => '', resolve: (p) => p, sep: '/' },
     './ollama': {

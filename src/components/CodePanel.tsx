@@ -6,7 +6,7 @@ import { formatCodeGenProgress, formatDuration } from '@/lib/formatCodeGenProgre
 import { formatRecentDate } from '@/lib/formatRecentDate'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import type { ImageAttachment } from '@/lib/imageAttachment'
-import type { CodeGenProgress, GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
+import type { CodeActivity, CodeGenProgress, CodeNarration, GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
 import ModelEffortPicker from './ModelEffortPicker'
 import GithubPicker from './GithubPicker'
 import BranchPicker from './BranchPicker'
@@ -15,7 +15,7 @@ import { ipcErrorMessage } from '@/lib/ipcError'
 import { readSaved, writeSaved } from '@/lib/savedSetting'
 import { CHAT_MIN_WIDTH, clampChatWidth } from '@/lib/splitWidth'
 import { useScreenActive } from '@/lib/shellContext'
-import type { RepoView } from '../../shared/ipc'
+import type { RepoPreview, RepoView } from '../../shared/ipc'
 
 type View = 'preview' | 'code'
 
@@ -24,12 +24,97 @@ const CHAT_WIDTH_KEY = 'jaris.codeChatWidth'
 /** Pas d'une flèche du clavier sur la poignée. */
 const CHAT_WIDTH_STEP = 24
 
-/** Un message de la conversation du mode Code (étape 282) : une demande de Léo, ou ce que Jaris a fait. */
-interface ChatTurn {
-  id: number
-  kind: 'user' | 'reply'
-  text: string
+/**
+ * Un message de la conversation du mode Code (étape 282) : une demande de Léo, ce que Jaris a répondu, une remarque
+ * (téléchargement du modèle, réparation…), ou une action sur un fichier (étape 286 : « Modifié index.html +500 −3 »).
+ */
+type ChatTurn =
+  | { id: number; kind: 'user' | 'reply' | 'note'; text: string }
+  | { id: number; kind: 'activity'; activity: CodeActivity }
+
+/** Le verbe de chaque action, au passé : ce qui VIENT d'être fait, comme les étapes affichées par Claude. */
+const ACTIVITY_VERB: Record<CodeActivity['kind'], string> = {
+  read: 'Lu',
+  edit: 'Modifié',
+  create: 'Créé',
+  rewrite: 'Réécrit',
+  delete: 'Supprimé'
 }
+
+/** « 500 lignes ajoutées, 3 retirées » : l'explication en toutes lettres, au survol de « +500 −3 ». */
+function statsLabel(added: number, removed: number): string {
+  const lines = (count: number): string => (count === 1 ? '1 ligne' : `${count} lignes`)
+  if (removed === 0) return `${lines(added)} ${added === 1 ? 'ajoutée' : 'ajoutées'}`
+  if (added === 0) return `${lines(removed)} ${removed === 1 ? 'retirée' : 'retirées'}`
+  return `${lines(added)} ${added === 1 ? 'ajoutée' : 'ajoutées'}, ${removed} ${removed === 1 ? 'retirée' : 'retirées'}`
+}
+
+/**
+ * Une action de Jaris sur un fichier, en une ligne discrète de la conversation (étape 286). Des lectures qui se
+ * suivent tiennent sur UNE ligne — « Lu 3 fichiers » —, comme les étapes que Claude regroupe entre deux phrases.
+ */
+function ActivityRow({ activity, readPaths }: { activity: CodeActivity; readPaths?: string[] }): JSX.Element {
+  const added = activity.added ?? 0
+  const removed = activity.removed ?? 0
+  if (readPaths && readPaths.length > 1) {
+    return (
+      <div className="code-chat__activity code-chat__activity--read">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Zm0 0v5h5M9 13h6M9 17h4" />
+        </svg>
+        <span className="code-chat__activity-verb">Lu {readPaths.length} fichiers</span>
+        <span className="code-chat__activity-path" title={readPaths.join('\n')}>
+          {readPaths.join(', ')}
+        </span>
+      </div>
+    )
+  }
+  return (
+    <div className={`code-chat__activity code-chat__activity--${activity.kind}`}>
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {activity.kind === 'read' ? (
+          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Zm0 0v5h5M9 13h6M9 17h4" />
+        ) : activity.kind === 'delete' ? (
+          <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+        ) : (
+          <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        )}
+      </svg>
+      <span className="code-chat__activity-verb">{ACTIVITY_VERB[activity.kind]}</span>
+      <span className="code-chat__activity-path" title={activity.path}>
+        {activity.path}
+      </span>
+      {(added > 0 || removed > 0) && (
+        <span className="code-chat__activity-stats" title={statsLabel(added, removed)}>
+          {added > 0 && <span className="repo-change__added">+{added}</span>}
+          {removed > 0 && <span className="repo-change__removed">−{removed}</span>}
+        </span>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Ce qui s'affiche dans la conversation : les tours tels quels, sauf les lectures consécutives, réunies en une ligne
+ * (le même fichier relu n'y figure qu'une fois).
+ */
+type ThreadItem = { turn: ChatTurn; readPaths?: string[] }
+
+function threadItems(turns: ChatTurn[]): ThreadItem[] {
+  const items: ThreadItem[] = []
+  for (const turn of turns) {
+    const previous = items[items.length - 1]
+    if (turn.kind === 'activity' && turn.activity.kind === 'read' && previous?.readPaths) {
+      if (!previous.readPaths.includes(turn.activity.path)) previous.readPaths.push(turn.activity.path)
+      continue
+    }
+    items.push(turn.kind === 'activity' && turn.activity.kind === 'read' ? { turn, readPaths: [turn.activity.path] } : { turn })
+  }
+  return items
+}
+
+/** « Téléchargement de … 42 % » sans son pourcentage : deux avancements du même téléchargement se remplacent. */
+const progressKey = (text: string): string => text.replace(/\s*\d+\s*%\s*$/, '')
 
 type Outcome = { kind: 'done' | 'stopped'; durationMs: number; text?: string }
 
@@ -96,7 +181,6 @@ function CollapseIcon(): JSX.Element {
 export default function CodePanel(): JSX.Element {
   const [description, setDescription] = useState('')
   const [generating, setGenerating] = useState(false)
-  const [statusLines, setStatusLines] = useState<string[]>([])
   const [appResult, setAppResult] = useState<GeneratedApp | null>(null)
   const [view, setView] = useState<View>('preview')
   const [error, setError] = useState<string | null>(null)
@@ -113,12 +197,22 @@ export default function CodePanel(): JSX.Element {
   /** Étape 277 : dépôt GitHub ouvert (choisi dans le bouton GitHub du champ). Remplace l'application générée. */
   const [repo, setRepo] = useState<RepoView | null>(null)
   /**
+   * Étape 287 (Léo : « à droite faut pas que c'est le menu pour enregistrer sur GitHub, mais pouvoir jouer directement
+   * et tester un vrai aperçu ») : le site du dépôt, jouable, changements préparés compris. Les changements et
+   * « Enregistrer sur GitHub » passent dans un onglet à côté.
+   */
+  const [repoPreview, setRepoPreview] = useState<RepoPreview | null>(null)
+  const [repoTab, setRepoTab] = useState<'preview' | 'changes'>('preview')
+  const repoPreviewRequest = useRef(0)
+  /**
    * Étape 282 (Léo : « pour le code fais chat à gauche et aperçu à droite comme Claude et ChatGPT ») : la
    * conversation de l'élément ouvert — ses demandes, et ce que Jaris a fait. Gardée en mémoire seulement : elle
    * repart de zéro quand on ouvre un autre élément, comme le bandeau de fin (étape 102).
    */
   const [turns, setTurns] = useState<ChatTurn[]>([])
   const turnIdRef = useRef(0)
+  /** Étape 286 : tour de l'agent -> message de la conversation qui porte sa phrase (mise à jour en direct). */
+  const narrationTurnsRef = useRef(new Map<number, number>())
   const threadRef = useRef<HTMLDivElement>(null)
   /**
    * Étape 283 (Léo : « pouvoir régler la taille de l'aperçu ») : largeur de la conversation, en pixels, choisie en
@@ -142,7 +236,6 @@ export default function CodePanel(): JSX.Element {
   const [commitMessage, setCommitMessage] = useState('')
   /** Enregistrement sur GitHub en cours (quelques secondes, sans bandeau d'avancement ni bouton Arrêter). */
   const [committing, setCommitting] = useState(false)
-  const statusRef = useRef<HTMLPreElement>(null)
   /** Mis à true par le bouton "Arrêter" : l'échec qui suit est alors un arrêt voulu, pas une panne. */
   const stoppedRef = useRef(false)
 
@@ -154,8 +247,22 @@ export default function CodePanel(): JSX.Element {
     void window.jaris.getGeneratedApps().then(setRecentApps)
   }, [])
 
+  // Étape 286 (Léo : « enlève l'autre carré […] mets les trucs qu'il est en train de faire ») : plus de journal
+  // dans un cadre à part. Ce que Jaris fait s'inscrit dans la conversation, à sa place dans le temps : une action
+  // sur un fichier par ligne, et les rares remarques utiles (téléchargement du modèle, réparation) en texte discret.
   useEffect(() => {
-    return window.jaris.onCodeGenStatus((message) => setStatusLines((prev) => [...prev, message]))
+    const offStatus = window.jaris.onCodeGenStatus(addNote)
+    const offActivity = window.jaris.onCodeGenActivity((activity) => {
+      turnIdRef.current += 1
+      const id = turnIdRef.current
+      setTurns((prev) => [...prev, { id, kind: 'activity', activity }])
+    })
+    const offNarration = window.jaris.onCodeGenNarration(showNarration)
+    return () => {
+      offStatus()
+      offActivity()
+      offNarration()
+    }
   }, [])
 
   useEffect(() => {
@@ -172,19 +279,51 @@ export default function CodePanel(): JSX.Element {
     return () => clearInterval(timer)
   }, [generating])
 
-  useEffect(() => {
-    statusRef.current?.scrollTo({ top: statusRef.current.scrollHeight })
-  }, [statusLines])
-
   // Le dernier message reste visible, comme dans le Chat.
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight })
-  }, [turns, generating, lastOutcome, statusLines, error])
+  }, [turns, generating, lastOutcome, error])
 
-  const addTurn = (kind: ChatTurn['kind'], text: string): void => {
+  function addTurn(kind: 'user' | 'reply' | 'note', text: string): void {
     turnIdRef.current += 1
     const id = turnIdRef.current
     setTurns((prev) => [...prev, { id, kind, text }])
+  }
+
+  /**
+   * Étape 286 (Léo : « il peut pas parler comme toi, il dit ce qu'il fait ») : la phrase de l'agent s'écrit dans la
+   * conversation pendant qu'il la tape, comme une réponse de Claude ; un texte vide la retire (sa réponse finale
+   * arrive à part, comme résumé).
+   */
+  function showNarration({ id, text }: CodeNarration): void {
+    const existing = narrationTurnsRef.current.get(id)
+    if (!text) {
+      if (existing === undefined) return
+      narrationTurnsRef.current.delete(id)
+      setTurns((prev) => prev.filter((turn) => turn.id !== existing))
+      return
+    }
+    if (existing !== undefined) {
+      setTurns((prev) => prev.map((turn) => (turn.id === existing && turn.kind === 'reply' ? { ...turn, text } : turn)))
+      return
+    }
+    turnIdRef.current += 1
+    const turnId = turnIdRef.current
+    narrationTurnsRef.current.set(id, turnId)
+    setTurns((prev) => [...prev, { id: turnId, kind: 'reply', text }])
+  }
+
+  /** Une remarque : l'avancement d'un même téléchargement remplace le précédent au lieu d'empiler 100 lignes. */
+  function addNote(text: string): void {
+    turnIdRef.current += 1
+    const id = turnIdRef.current
+    setTurns((prev) => {
+      const last = prev[prev.length - 1]
+      if (last?.kind === 'note' && last.text !== text && progressKey(last.text) === progressKey(text) && /%\s*$/.test(text)) {
+        return [...prev.slice(0, -1), { ...last, text }]
+      }
+      return [...prev, { id, kind: 'note', text }]
+    })
   }
 
   /** Une nouvelle demande commence : le bandeau de la précédente rejoint l'historique au lieu de disparaître. */
@@ -203,7 +342,6 @@ export default function CodePanel(): JSX.Element {
    * oublié une fois.
    */
   const clearGenerationFeedback = (): void => {
-    setStatusLines([])
     setLastOutcome(null)
     setError(null)
   }
@@ -221,6 +359,8 @@ export default function CodePanel(): JSX.Element {
     // Vidé dès l'envoi, comme ChatGPT : la demande est désormais dans la conversation, pas en double dans le champ.
     setDescription('')
     clearGenerationFeedback()
+    // Les tours de l'agent repartent de 1 à chaque demande : leurs phrases sont de NOUVEAUX messages.
+    narrationTurnsRef.current = new Map()
     setCommitted(null)
     setGenerating(true)
     setProgress(null)
@@ -240,7 +380,7 @@ export default function CodePanel(): JSX.Element {
         text:
           count === 0
             ? "aucun fichier n'a été changé."
-            : `${count === 1 ? '1 fichier à vérifier' : `${count} fichiers à vérifier`}, puis à enregistrer sur GitHub.`
+            : `${count === 1 ? '1 fichier changé' : `${count} fichiers changés`} : essaie dans l'aperçu, puis enregistre depuis « Changements ».`
       })
       void playSoundCueIfEnabled('success')
     } catch (err) {
@@ -265,6 +405,7 @@ export default function CodePanel(): JSX.Element {
     else resetConversation()
     setCommitted(null)
     setAttachment(null)
+    setRepoTab('preview')
     setRepo(view)
   }
 
@@ -406,8 +547,35 @@ export default function CodePanel(): JSX.Element {
     setAttachment(null)
   }
 
-  /** Quelque chose à montrer dans l'aperçu : une application, ou les changements d'un dépôt. */
-  const hasPreview = appResult !== null || (repo !== null && (repo.changes.length > 0 || committed !== null))
+  /** Quelque chose à montrer dans l'aperçu : une application, ou un dépôt (son site, ou ses changements). */
+  const hasPreview = appResult !== null || repo !== null
+  /** Étape 287 : l'onglet « Changements » n'existe que s'il y a quelque chose à vérifier ou qui vient d'être enregistré. */
+  const repoHasChanges = repo !== null && (repo.changes.length > 0 || committed !== null)
+  const showRepoChanges = repoHasChanges && repoTab === 'changes'
+
+  // Le site du dépôt est redemandé à chaque nouvel état (ouverture, travail de Jaris, annulation, enregistrement) :
+  // l'aperçu montre toujours les fichiers tels qu'ils seraient enregistrés. Une réponse en retard sur une plus récente
+  // est ignorée.
+  useEffect(() => {
+    const request = ++repoPreviewRequest.current
+    if (!repo) {
+      setRepoPreview(null)
+      return
+    }
+    void window.jaris
+      .githubPreview(repo.fullName)
+      .then((preview) => {
+        if (repoPreviewRequest.current === request) setRepoPreview(preview)
+      })
+      .catch(() => {
+        if (repoPreviewRequest.current === request) setRepoPreview({ entry: null, url: null })
+      })
+  }, [repo])
+
+  // Plus rien à vérifier (tout annulé) : retour à l'aperçu, l'onglet « Changements » ayant disparu.
+  useEffect(() => {
+    if (!repoHasChanges) setRepoTab('preview')
+  }, [repoHasChanges])
   /** Le nom affiché dans la barre de la carte : celui de la liste de gauche, pour qu'on reconnaisse l'élément ouvert. */
   const previewTitle = appResult
     ? (recentApps.find((recent) => recent.path === appResult.path)?.label ?? 'Ton application')
@@ -509,11 +677,17 @@ export default function CodePanel(): JSX.Element {
                 />
               )}
 
-              {turns.map((turn) =>
-                turn.kind === 'user' ? (
+              {threadItems(turns).map(({ turn, readPaths }) =>
+                turn.kind === 'activity' ? (
+                  <ActivityRow key={turn.id} activity={turn.activity} readPaths={readPaths} />
+                ) : turn.kind === 'user' ? (
                   <div key={turn.id} className="code-chat__user">
                     {turn.text}
                   </div>
+                ) : turn.kind === 'note' ? (
+                  <p key={turn.id} className="code-chat__note">
+                    {turn.text}
+                  </p>
                 ) : (
                   <p key={turn.id} className="code-chat__reply">
                     {turn.text}
@@ -556,13 +730,6 @@ export default function CodePanel(): JSX.Element {
                   {lastOutcome.kind === 'done' && <CheckIcon />}
                   <span>{outcomeText(lastOutcome)}</span>
                 </p>
-              )}
-
-              {/* Journal réservé à ce que le bandeau ne dit PAS (étape 101). */}
-              {statusLines.length > 0 && (
-                <pre ref={statusRef} className="code-panel__status">
-                  {statusLines.join('\n')}
-                </pre>
               )}
 
               {error && <p className="code-panel__error">{error}</p>}
@@ -647,6 +814,23 @@ export default function CodePanel(): JSX.Element {
                   <span className="code-preview__busy">{formatCodeGenProgress(progress, elapsedMs).title}</span>
                 )}
                 <div className="code-preview__tools">
+                  {!appResult && repoHasChanges && (
+                    <div className="code-panel__view-tabs">
+                      <button
+                        className={`code-panel__view-tab${repoTab === 'preview' ? ' code-panel__view-tab--active' : ''}`}
+                        onClick={() => setRepoTab('preview')}
+                      >
+                        Aperçu
+                      </button>
+                      <button
+                        className={`code-panel__view-tab code-preview__changes-tab${repoTab === 'changes' ? ' code-panel__view-tab--active' : ''}`}
+                        onClick={() => setRepoTab('changes')}
+                      >
+                        Changements
+                        {repo && repo.changes.length > 0 && <span className="code-preview__count">{repo.changes.length}</span>}
+                      </button>
+                    </div>
+                  )}
                   {appResult && (
                     <div className="code-panel__view-tabs">
                       <button
@@ -698,7 +882,17 @@ export default function CodePanel(): JSX.Element {
                   ) : (
                     <pre className="code-panel__code">{appResult.html}</pre>
                   )
-                ) : repo && (repo.changes.length > 0 || committed) ? (
+                ) : repo && !showRepoChanges && repoPreview?.url ? (
+                  // Le site du dépôt, avec les mêmes protections qu'une application générée (page isolée, sans accès à
+                  // Jaris ni au disque). La clé recharge la page à chaque nouvel état des fichiers.
+                  <iframe
+                    key={repoPreview.url}
+                    className="code-panel__preview"
+                    title={`Aperçu de ${repo.fullName}`}
+                    sandbox="allow-scripts allow-forms"
+                    src={repoPreview.url}
+                  />
+                ) : repo && showRepoChanges ? (
                   <RepoChanges
                     repo={repo}
                     busy={generating || committing}
@@ -717,9 +911,13 @@ export default function CodePanel(): JSX.Element {
                       <path d="M24 24l-6 5 6 5M40 24l6 5-6 5M35 21l-6 16" />
                     </svg>
                     <p>
-                      {repo
-                        ? "Les changements préparés par Jaris s'afficheront ici, ligne par ligne, avant d'être enregistrés sur GitHub."
-                        : "L'aperçu de ton application s'affichera ici."}
+                      {!repo
+                        ? "L'aperçu de ton application s'affichera ici."
+                        : repoPreview === null
+                          ? 'Chargement du site…'
+                          : repo.fileCount === 0
+                            ? "Le dépôt est vide : le site s'affichera ici dès que Jaris aura créé sa page (index.html)."
+                            : "Ce dépôt n'a pas de page web (index.html) à afficher. Demande à Jaris d'en créer une pour la voir ici."}
                     </p>
                   </div>
                 )}
@@ -729,6 +927,11 @@ export default function CodePanel(): JSX.Element {
                 <p className="code-preview__foot">
                   Aperçu isolé : la sauvegarde de données (localStorage) n'y marche pas, mais fonctionne en ouvrant le fichier
                   depuis le dossier.
+                </p>
+              )}
+              {!appResult && repo && !showRepoChanges && repoPreview?.url && repo.changes.length > 0 && (
+                <p className="code-preview__foot">
+                  Avec les changements de Jaris, pas encore enregistrés sur GitHub — onglet « Changements » pour les enregistrer.
                 </p>
               )}
             </div>

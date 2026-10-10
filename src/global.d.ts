@@ -7,6 +7,7 @@ import type {
   GithubStatus,
   RepoAgentResult,
   RepoCommitResult,
+  RepoPreview,
   RepoView,
   AppVersionStatus,
   LaunchAtStartupStatus,
@@ -19,7 +20,9 @@ import type {
   ContextLengthOptions,
   ConversationEntry,
   ConversationList,
+  CodeActivity,
   CodeGenProgress,
+  CodeNarration,
   GeneratedApp,
   GeneratedAppSummary,
   ModelChoiceInfo,
@@ -154,6 +157,8 @@ declare global {
       // Étape 99 : avancement en direct pendant une génération (l'étape en cours, les caractères déjà
       // écrits, le temps depuis le dernier signe de vie) et arrêt d'une génération déjà partie.
       onCodeGenProgress: (cb: (progress: CodeGenProgress) => void) => () => void
+      onCodeGenActivity: (cb: (activity: CodeActivity) => void) => () => void
+      onCodeGenNarration: (cb: (narration: CodeNarration) => void) => () => void
       cancelCodeGen: () => void
       // Étape 277 : GitHub dans le mode Code (le jeton ne quitte jamais le main).
       githubStatus: () => Promise<GithubStatus>
@@ -166,6 +171,7 @@ declare global {
       githubOpenRepo: (fullName: string, branch?: string) => Promise<RepoView>
       githubRunAgent: (fullName: string, request: string) => Promise<RepoAgentResult>
       githubDiscardChanges: (fullName: string, path?: string) => Promise<RepoView>
+      githubPreview: (fullName: string) => Promise<RepoPreview>
       githubCommit: (fullName: string, message: string) => Promise<RepoCommitResult>
       openGeneratedApp: (path?: string) => Promise<void>
       getGeneratedApps: () => Promise<GeneratedAppSummary[]>

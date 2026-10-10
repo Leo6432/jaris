@@ -65,6 +65,16 @@ window.jaris = {
     window.__emitProgress = cb
     return () => {}
   },
+  // Étape 286 : chaque action sur un fichier, pour que le test simule « Modifié index.html +500 −3 ».
+  onCodeGenActivity: (cb) => {
+    window.__emitActivity = cb
+    return () => {}
+  },
+  // Étape 286 : la phrase de l'agent, écrite en direct dans la conversation.
+  onCodeGenNarration: (cb) => {
+    window.__emitNarration = cb
+    return () => {}
+  },
   getGeneratedApps: () => Promise.resolve(window.__apps),
   // Étape 277 : le bouton GitHub du champ demande l'état de la connexion au montage (masqué si indisponible).
   githubStatus: () => Promise.resolve({ available: false, connected: false, login: null }),
@@ -736,19 +746,100 @@ test('une génération terminée annonce sa durée', options, async () => {
   })
 })
 
-test("pendant une génération, UN SEUL cadre s'affiche", options, async () => {
-  // Léo : "c'est bizarre il y a étape 2 etc. plus un autre rectangle". Le journal répétait les étapes du
-  // bandeau et s'affichait même vide, ce qui donnait deux cadres côte à côte pour la même information.
+test("pendant une génération, UN SEUL cadre : les remarques vont dans la conversation, sans cadre (étape 286)", options, async () => {
+  // Léo : "c'est bizarre il y a étape 2 etc. plus un autre rectangle" (étape 101), puis « enlève l'autre carré »
+  // (étape 286) : le journal à part n'existe plus du tout.
   await withPage(async (page) => {
     await startGeneration(page)
     assert.equal(await page.locator('.code-panel__live').count(), 1)
     assert.equal(await page.locator('.code-panel__status').count(), 0, 'un second cadre (vide) est affiché')
 
-    // Le journal ne revient QUE pour ce que le bandeau ne dit pas — ici, des problèmes réparés.
     await page.evaluate(() => window.__status('2 problème(s) trouvé(s) dans le code, corrigé(s) automatiquement.'))
-    assert.equal(await page.locator('.code-panel__status').count(), 1)
-    const log = await page.textContent('.code-panel__status')
-    assert.doesNotMatch(log, /Génération de l'application|Relecture du code/, 'le journal répète encore les étapes')
+    assert.equal(await page.locator('.code-panel__status').count(), 0, 'le journal à part est revenu')
+    assert.match(await page.textContent('.code-chat__thread .code-chat__note'), /2 problème\(s\) trouvé\(s\)/)
+    // Une remarque n'a ni cadre ni fond : c'est du texte de la conversation.
+    const note = await page.evaluate(() => {
+      const style = getComputedStyle(document.querySelector('.code-chat__note'))
+      return { border: style.borderTopWidth, background: style.backgroundColor }
+    })
+    assert.deepEqual(note, { border: '0px', background: 'rgba(0, 0, 0, 0)' })
+
+    // Le téléchargement d'un modèle avance sur UNE ligne, pas une ligne par pourcentage.
+    await page.evaluate(() => {
+      window.__status('Téléchargement de qwen3.8:27b… 12%')
+      window.__status('Téléchargement de qwen3.8:27b… 13%')
+      window.__status('Téléchargement de qwen3.8:27b… 57%')
+    })
+    const notes = await page.locator('.code-chat__note').allTextContents()
+    assert.deepEqual(notes.slice(1), ['Téléchargement de qwen3.8:27b… 57%'])
+  })
+})
+
+test('« Modifié index.html +500 −3 » : chaque action est une ligne de la conversation (étape 286)', options, async () => {
+  // Léo : « mets les trucs qu'il est en train de faire, par exemple ajouter plus 500 lignes de code dans index ».
+  await withPage(async (page) => {
+    await startGeneration(page)
+    await page.evaluate(() => {
+      window.__emitActivity({ kind: 'read', path: 'index.html' })
+      window.__emitActivity({ kind: 'read', path: 'style.css' })
+      window.__emitActivity({ kind: 'read', path: 'index.html' })
+      window.__emitActivity({ kind: 'edit', path: 'index.html', added: 500, removed: 3 })
+      window.__emitActivity({ kind: 'create', path: 'jeu.js', added: 80, removed: 0 })
+    })
+    const rows = await page.locator('.code-chat__activity').evaluateAll((nodes) =>
+      nodes.map((node) => ({
+        // Les espaces sont faits en CSS (gap) : les morceaux sont relus un par un.
+        text: [...node.querySelectorAll('span:not(.code-chat__activity-stats span)')].map((part) => part.textContent).join(' '),
+        stats: node.querySelector('.code-chat__activity-stats')?.getAttribute('title') ?? null
+      }))
+    )
+    assert.deepEqual(rows, [
+      // Lectures consécutives réunies, le même fichier une seule fois.
+      { text: 'Lu 2 fichiers index.html, style.css', stats: null },
+      { text: 'Modifié index.html +500−3', stats: '500 lignes ajoutées, 3 retirées' },
+      { text: 'Créé jeu.js +80', stats: '80 lignes ajoutées' }
+    ])
+    // Dans la conversation, après la demande, avant le bandeau d'avancement.
+    const order = await page.locator('.code-chat__thread > *').evaluateAll((nodes) => nodes.map((n) => n.className.split(' ')[0]))
+    assert.deepEqual(order, ['code-chat__user', 'code-chat__activity', 'code-chat__activity', 'code-chat__activity', 'code-panel__live'])
+    // Sans cadre, comme une ligne de texte.
+    assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.code-chat__activity')).borderTopWidth), '0px')
+  })
+})
+
+test('l’agent parle comme Claude : sa phrase s’écrit en direct, puis ses actions suivent (étape 286)', options, async () => {
+  // Léo : « il peut pas parler comme toi, il dit ce qu'il fait ».
+  await withPage(async (page) => {
+    await startGeneration(page)
+    await page.evaluate(() => window.__emitNarration({ id: 1, text: 'Je lis' }))
+    assert.deepEqual(await page.locator('.code-chat__reply').allTextContents(), ['Je lis'])
+    // La même phrase se complète sur place, sans nouveau message.
+    await page.evaluate(() => window.__emitNarration({ id: 1, text: 'Je lis index.html pour trouver le score.' }))
+    assert.deepEqual(await page.locator('.code-chat__reply').allTextContents(), ['Je lis index.html pour trouver le score.'])
+    await page.evaluate(() => {
+      window.__emitActivity({ kind: 'read', path: 'index.html' })
+      window.__emitNarration({ id: 2, text: 'J’ajoute le meilleur score.' })
+      window.__emitActivity({ kind: 'edit', path: 'index.html', added: 12, removed: 1 })
+      // Le dernier tour devient le résumé : sa phrase est retirée pour ne pas s'afficher deux fois.
+      window.__emitNarration({ id: 3, text: 'Fini.' })
+      window.__emitNarration({ id: 3, text: '' })
+    })
+    const order = await page.locator('.code-chat__thread > *').evaluateAll((nodes) =>
+      nodes.map((n) => {
+        const parts = n.classList.contains('code-chat__activity')
+          ? [...n.querySelectorAll('span:not(.code-chat__activity-stats span)')].map((part) => part.textContent).join(' ')
+          : n.textContent
+        return `${n.className.split(' ')[0]}:${parts}`
+      })
+    )
+    assert.deepEqual(order.slice(0, 5), [
+      'code-chat__user:une liste de courses',
+      'code-chat__reply:Je lis index.html pour trouver le score.',
+      'code-chat__activity:Lu index.html',
+      'code-chat__reply:J’ajoute le meilleur score.',
+      'code-chat__activity:Modifié index.html +12−1'
+    ])
+    assert.equal(order.some((item) => item.endsWith(':Fini.')), false, 'la phrase retirée est restée')
   })
 })
 
@@ -767,7 +858,7 @@ test("changer d'application efface le bandeau de la génération précédente", 
     // Ouvrir une AUTRE application depuis la colonne de gauche.
     await page.click('.workspace__list li:nth-child(2) .workspace__item')
     await page.waitForFunction(() => document.querySelectorAll('.code-panel__done').length === 0)
-    assert.equal(await page.locator('.code-panel__status').count(), 0, 'le journal de la génération précédente est resté')
+    assert.equal(await page.locator('.code-chat__note').count(), 0, 'les remarques de la génération précédente sont restées')
   })
 })
 

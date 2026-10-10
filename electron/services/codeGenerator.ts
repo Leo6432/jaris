@@ -2,11 +2,12 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { config } from '../config'
 import { chatWithOllama, getModelInfo, getModelThinking, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError, type OllamaMessage, type OllamaTool, type ThinkLevel } from './ollama'
-import { chosenThink, thinkLabel, type ThinkValue } from '../../shared/effort'
+import { chosenThink, type ThinkValue } from '../../shared/effort'
 import { pickBestCodeModel } from './hardwareScan'
 import { getProfile } from './profileStore'
 import { IMAGE_FOR_CODE_SYSTEM_PROMPT, describeImage } from './vision'
-import type { CodeGenProgress, GeneratedApp, GeneratedAppSummary, Profile } from '../../shared/ipc'
+import type { CodeActivity, CodeGenProgress, GeneratedApp, GeneratedAppSummary, Profile } from '../../shared/ipc'
+import { diffLines } from '../../shared/lineDiff'
 import { getDataRoot } from './dataLocation'
 
 /**
@@ -107,6 +108,8 @@ export function isAbortError(error: unknown): boolean {
 export interface GenerateAppOptions {
   /** Avancement EN DIRECT de l'étape en cours — remplace le précédent, ne s'empile pas. */
   onProgress?: (progress: CodeGenProgress) => void
+  /** Ce qui a été écrit dans index.html (étape 286) : « Modifié index.html +500 −3 » dans la conversation. */
+  onActivity?: (activity: CodeActivity) => void
   /** Arrêt demandé par l'utilisateur (bouton "Arrêter"). */
   signal?: AbortSignal
 }
@@ -137,14 +140,15 @@ export interface ModelStepRunnerOptions {
 
 /**
  * Étape 192 : la réflexion choisie pour le modèle du mode Code, si elle a été
- * choisie pour CE modèle et qu'il l'accepte ; « high » comme avant sinon. Le journal dit ce qui est envoyé.
+ * choisie pour CE modèle et qu'il l'accepte ; « high » comme avant sinon.
  */
-export async function resolveCodeThink(profile: Profile | null, model: string, onStatus: (message: string) => void): Promise<ThinkLevel | ThinkValue> {
+export async function resolveCodeThink(profile: Profile | null, model: string): Promise<ThinkLevel | ThinkValue> {
   const choice = profile?.thinkChoices?.code
   if (!choice) return 'high'
   const think = chosenThink(choice, model, await getModelThinking(model))
   if (think === undefined) return 'high'
-  onStatus(`Réflexion de ${model} : ${thinkLabel(think)}.`)
+  // Étape 286 (Léo : « enlève l'autre carré ») : plus de ligne « Réflexion de … » dans la conversation — un
+  // réglage technique, pas une action de Jaris. Le choix reste visible dans le sélecteur du champ.
   return think
 }
 
@@ -173,7 +177,14 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
    */
   // `tools` (étape 277) : seulement pour l'agent qui travaille sur un dépôt GitHub (repoAgent.ts). Absent, l'appel
   // reste exactement celui d'avant, sans outils.
-  return async (label: string, messages: OllamaMessage[], expectedOutputChars: number, tools?: OllamaTool[]): Promise<OllamaMessage> => {
+  // `onDelta` (étape 286) : le texte reçu, fragment par fragment, pour que l'agent affiche sa phrase pendant qu'il l'écrit.
+  return async (
+    label: string,
+    messages: OllamaMessage[],
+    expectedOutputChars: number,
+    tools?: OllamaTool[],
+    onDelta?: (delta: string) => void
+  ): Promise<OllamaMessage> => {
     steps.index += 1
     const currentStep = steps.index
     let charsWritten = 0
@@ -214,6 +225,7 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
           charsWritten += delta.length
           lastActivity = Date.now()
           emit(true)
+          onDelta?.(delta)
         },
         // Raisonnement caché : aucun caractère de code, mais ça prouve que le modèle est bien en train de
         // travailler — sans ça, une longue réflexion est indiscernable d'un blocage.
@@ -519,10 +531,9 @@ export async function resolveCodeModel(onStatus: (message: string) => void, prof
 
   const model = savedCodeModel ?? (await pickBestCodeModel())
 
-  if (installed.includes(model)) {
-    onStatus(`Modèle de code choisi automatiquement pour cette machine : ${model}.`)
-    return model
-  }
+  // Étape 286 (Léo : « enlève […] Modèle de code choisi automatiquement pour cette machine ») : rien à dire
+  // quand le modèle est déjà là. Seul un téléchargement, long et visible, mérite une ligne.
+  if (installed.includes(model)) return model
 
   onStatus(`Téléchargement du modèle de code choisi automatiquement pour cette machine (${model})…`)
   try {
@@ -629,7 +640,7 @@ export async function generateApp(
   imageBase64?: string,
   options: GenerateAppOptions = {}
 ): Promise<GeneratedApp> {
-  const { onProgress, signal } = options
+  const { onProgress, onActivity, signal } = options
   const profile = await getProfile()
 
   /**
@@ -666,7 +677,7 @@ export async function generateApp(
   const model = await resolveCodeModel(onStatus, profile)
   const modelMaxContext = await readModelMaxContext(model)
 
-  const think = await resolveCodeThink(profile, model, onStatus)
+  const think = await resolveCodeThink(profile, model)
   const runModelStep = createModelStepRunner({ model, think, modelMaxContext, steps, onStatus, onProgress, signal })
 
   const withImage = (base: string): string =>
@@ -816,6 +827,8 @@ export async function generateApp(
   const dir = join(getGeneratedAppsDir(), `${Date.now()}-${slugify(description)}`)
   await mkdir(dir, { recursive: true })
   await writeFile(join(dir, 'index.html'), final, 'utf-8')
+  const written = diffLines(currentHtml ?? null, final)
+  onActivity?.({ kind: currentHtml ? 'edit' : 'create', path: 'index.html', added: written.added, removed: written.removed })
 
   return { html: final, path: dir, issues }
 }

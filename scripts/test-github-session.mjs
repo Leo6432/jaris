@@ -59,6 +59,10 @@ function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Proje
     async readText(_snapshot, file) {
       return state.files[file.path]
     }
+    async readBytes(_snapshot, file) {
+      state.byteReads = (state.byteReads ?? 0) + 1
+      return Buffer.from(state.files[file.path])
+    }
     async commit(snapshot, changes, message) {
       state.commits.push({ base: snapshot.commitSha, changes, message })
       for (const change of changes) {
@@ -241,4 +245,45 @@ test('le budget d’historique suit la mémoire du modèle, sans jamais tomber t
   assert.equal(session.historyBudgetChars(null), 90_000)
   assert.equal(session.historyBudgetChars(32768), 40_960)
   assert.equal(session.historyBudgetChars(8192), 20_000)
+})
+
+/** Étape 287 (Léo : « pouvoir jouer directement et tester un vrai aperçu ») */
+test('la page d’accueil du site : index.html à la racine, sinon un dossier de publication, sinon la moins profonde', () => {
+  const { session } = setup()
+  assert.equal(session.findPreviewEntry(['README.md', 'src/a.js']), null)
+  assert.equal(session.findPreviewEntry(['jeu.html', 'index.html', 'docs/index.html']), 'index.html')
+  assert.equal(session.findPreviewEntry(['src/index.html', 'docs/index.html', 'README.md']), 'docs/index.html')
+  assert.equal(session.findPreviewEntry(['a/b/index.html', 'site/index.html']), 'site/index.html')
+  // Même profondeur : le dossier de publication passe avant l'ordre alphabétique.
+  assert.equal(session.findPreviewEntry(['assets/index.html', 'site/index.html']), 'site/index.html')
+  assert.equal(session.findPreviewEntry(['jeux/snake/index.html', 'jeux/index.html']), 'jeux/index.html')
+  assert.equal(session.findPreviewEntry(['b/page.html', 'jeu.html']), 'jeu.html')
+  assert.equal(session.findPreviewEntry(['INDEX.HTML']), 'INDEX.HTML')
+})
+
+test('l’aperçu sert la version PRÉPARÉE par Jaris, sinon celle de GitHub (lue une seule fois)', async () => {
+  const { session, state } = setup({
+    token: 't',
+    files: { 'README.md': '# Projet\n', 'style.css': 'body { color: red }\n', 'vieux.js': 'x\n' },
+    replies: [
+      reply(call('write_file', { path: 'index.html', content: '<h1>Snake</h1>' })),
+      reply(call('delete_file', { path: 'vieux.js' })),
+      reply(call('finish', { summary: 'Site créé.' }))
+    ]
+  })
+  await session.openGithubRepo('leo/projet')
+  // Pas encore de page : rien à afficher.
+  assert.equal(session.githubPreviewEntry('leo/projet'), null)
+  await session.runGithubAgent('leo/projet', 'Crée le site', { onStatus: () => {} })
+  // La page créée par Jaris, pas encore enregistrée, est déjà jouable.
+  assert.equal(session.githubPreviewEntry('leo/projet'), 'index.html')
+  assert.equal(await session.readGithubPreviewFile('leo/projet', 'index.html'), '<h1>Snake</h1>')
+  assert.equal(await session.readGithubPreviewFile('leo/projet', 'vieux.js'), undefined, 'un fichier supprimé est encore servi')
+  assert.equal(await session.readGithubPreviewFile('leo/projet', 'absent.png'), undefined)
+  // Les fichiers inchangés viennent de GitHub, en octets (images, polices), et une seule fois.
+  assert.equal(String(await session.readGithubPreviewFile('leo/projet', 'style.css')), 'body { color: red }\n')
+  await session.readGithubPreviewFile('leo/projet', 'style.css')
+  assert.equal(state.byteReads, 1)
+  // Un dépôt qui n'est plus ouvert ne sert rien.
+  assert.equal(await session.readGithubPreviewFile('leo/autre', 'index.html'), undefined)
 })

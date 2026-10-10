@@ -5,6 +5,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 import { modelChoiceModule } from './load-model-choice.mjs'
+import { loadTsModule } from './load-ts-module.mjs'
 
 // `vm.runInNewContext` crée un realm SANS les globaux de Node : depuis l'étape 99, generateApp arme un
 // battement de cœur (setInterval) pendant chaque appel au modèle, qui échouait ici sur un simple
@@ -49,6 +50,8 @@ function setup() {
       ModelTooLargeError: class extends Error {},
       DiskFullError: class extends Error {}
     },
+    // Étape 286 : le VRAI calcul de différences (pur, sans import), pour compter les lignes écrites dans index.html.
+    '../../shared/lineDiff': loadTsModule('shared/lineDiff.ts'),
     './hardwareScan': { pickBestCodeModel: async () => 'test-model' },
     './modelChoice': modelChoiceModule,
     './profileStore': { getProfile: async () => null },

@@ -7558,3 +7558,75 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   bouton de la barre cliquable, suggestions et poignée toujours utilisables, titre long arrêté avant la carte,
   carte sous la barre en mode agrandi, avec un bandeau et en fenêtre étroite). Vérifié par les tests et une
   capture de l'application complète ; pas encore en usage réel.
+
+- **Le mode Code dit ce qu'il fait, comme Claude, au lieu d'un journal dans un cadre (étape 286, Léo : « enlève
+  l'autre carré Modèle de code choisi automatiquement pour cette machine […] Lecture : index.html, mais mets les
+  trucs qu'il est en train de faire, par exemple ajouter plus 500 lignes de code dans index », puis « il peut pas
+  parler comme toi, il dit ce qu'il fait »).** Trois changements :
+  - **Plus de cadre de journal** (`.code-panel__status`, supprimé avec son CSS). Les rares remarques utiles
+    (téléchargement du modèle, réparation, relance) deviennent du texte discret DANS la conversation
+    (`.code-chat__note`). L'avancement d'un même téléchargement remplace la ligne précédente au lieu d'empiler
+    une ligne par pourcentage. « Modèle de code choisi automatiquement… » et « Réflexion de … » ne sont plus
+    envoyés du tout : un réglage, pas une action.
+  - **Chaque action sur un fichier est une donnée, plus une phrase** (`CodeActivity` : lu, modifié, créé,
+    réécrit, supprimé + lignes ajoutées/retirées, canal `codeGenActivity`). L'écran en fait une ligne courte :
+    « Modifié index.html +500 −3 », l'explication en toutes lettres au survol. Des lectures qui se suivent tiennent
+    sur une ligne (« Lu 3 fichiers »). La génération d'une application annonce aussi « Créé/Modifié index.html »
+    avec ses lignes, calculées par le même `diffLines` que les changements GitHub.
+  - **L'agent parle** : la consigne lui demande UNE phrase courte, à la première personne, avant ses actions
+    (« Je lis index.html pour trouver où le score est affiché. »). `narrationOf` (repoAgent.ts) garde le texte
+    adressé à l'utilisateur et retire tout appel d'outil, y compris un bloc en cours d'écriture ou un appel sans
+    ouverture de bloc (déjà vu avec un vrai modèle). La phrase s'affiche PENDANT qu'il l'écrit (canal
+    `codeGenNarration`, mise à jour sur place). Une fois ses actions commencées, le texte n'est plus réanalysé à
+    chaque fragment : un fichier entier peut suivre, et le réanalyser à chaque fragment coûterait un temps qui
+    grandit au carré de sa taille. La phrase du dernier tour est retirée : elle devient le résumé, affiché à part,
+    sinon la même chose s'afficherait deux fois.
+  **Piège déjà écrit ici, revécu trois fois en une étape** : ajouter `lineDiff` à codeGenerator.ts a cassé tous
+  les bancs de test qui chargent ce fichier avec une liste de modules simulés (« faux import manquant », ou un
+  `undefined` qui ne plante qu'à l'appel) ; ajouter deux canaux à CodePanel imposait de les fournir aux quatre faux
+  ponts preload. Le réflexe : après un nouvel import ou un nouveau canal, `grep` tous les bancs qui chargent le
+  fichier AVANT de lancer la suite. Et un test qui compte les arguments (« un seul argument = pas d'outils ») doit
+  vérifier ce qu'il veut vraiment dire (« jamais une liste d'outils »), sinon il casse au premier argument ajouté
+  pour une autre raison.
+  Régression : `scripts/test-repo-agent.mjs` (narrationOf sur 6 cas réels, phrase envoyée au fil de l'eau et jamais
+  de code, dernière phrase retirée, actions transmises), `scripts/test-codegen-generate.mjs` (« Créé/Modifié
+  index.html » avec les bonnes lignes, plus de « modèle choisi », téléchargement toujours annoncé),
+  `scripts/test-code-panel-ui.mjs` (aucun cadre, remarques sans fond, avancement remplacé, lectures regroupées,
+  phrase mise à jour sur place puis retirée, ordre demande → phrase → action). Chaque garde-fou vérifié en le
+  retirant (8 mutations, toutes attrapées).
+
+- **Un dépôt GitHub s'affiche à droite comme un VRAI site jouable, plus comme le menu d'enregistrement (étape 287,
+  Léo : « à droite faut pas que c'est le menu pour enregistrer sur GitHub, mais pouvoir jouer directement et tester
+  directement un vrai aperçu »).** Le protocole `jaris-preview:` (generatedAppPreview.ts) sert maintenant aussi les
+  FICHIERS d'un dépôt : sa page d'accueil (`findPreviewEntry` : index.html à la racine, sinon docs/, public/, site/,
+  dist/, build/, src/, sinon la page la moins profonde) et tout ce qu'elle charge à côté (CSS, JS, modules, images,
+  polices, sons, JSON). Chaque fichier vient de la version PRÉPARÉE par Jaris s'il l'a changé : c'est elle que Léo
+  veut essayer avant d'enregistrer. Les fichiers inchangés viennent de GitHub en octets (`readBytes`, nouvelle
+  lecture qui garde les images ; 15 Mo maximum), lus une seule fois par session. Les changements et « Enregistrer
+  sur GitHub » passent dans un onglet « Changements » (avec le nombre de fichiers), qui n'existe que s'il y a
+  quelque chose à vérifier. Après le travail de Jaris, l'aperçu reste affiché et se recharge, avec une ligne en bas
+  qui rappelle que ces changements ne sont pas encore sur GitHub.
+  **Sécurité, inchangée dans son principe** : page isolée (sandbox sans allow-same-origin, origine « null », aucun
+  accès à Jaris ni au disque), aucun envoi de formulaire, aucune page imbriquée. Différence assumée avec une
+  application générée : le web en https est autorisé (un vrai site charge souvent une bibliothèque ou une police en
+  ligne, et doit s'afficher comme une fois publié). Un chemin ne sort jamais du dépôt (`..`, `.`, antislash,
+  caractère nul refusés ; l'adresse ramène déjà `%2e%2e` à la racine de l'aperçu). Le schéma déclare `corsEnabled`
+  et `supportFetchAPI`, et chaque réponse porte `Access-Control-Allow-Origin: *` : une page isolée a l'origine
+  « null », et sans ça ses modules, ses polices et ses `fetch` vers ses propres fichiers seraient refusés.
+  **Vérifié dans un VRAI Electron 43** (écran virtuel, `xvfb-run`), pas seulement dans Playwright : feuille de style
+  appliquée, image affichée, script classique ET module ES exécutés, `fetch('data.json')` réussi, accès à Jaris
+  refusé, origine « null ». La session GitHub reste sans dépendance à Electron : main.ts branche sa lecture sur le
+  protocole.
+  **Deux pièges dans MES tests, à ne pas refaire** :
+  - Chromium tue la page (« bad IPC message, reason 114 ») quand une iframe isolée charge `about:blank#…` dans une
+    page elle-même en about:blank (banc `setContent`). Le faux site des tests est une adresse `data:` ; une heure de
+    bisection (souris, `key`, sandbox…) aurait été évitée en regardant d'abord l'adresse exacte réellement chargée.
+  - Un remplacement Python avec `assert` lancé dans une longue commande a échoué sans que je le voie : la suite a
+    tourné sur l'ANCIEN fichier, et j'ai cherché une cause dans le code alors que mon correctif n'était pas
+    appliqué. **Après chaque modification par script, afficher une preuve qu'elle a été écrite (un « applied », ou
+    un grep) avant de lancer quoi que ce soit.**
+  Régression : `scripts/test-repo-preview.mjs` (types, chemins refusés, site dans docs/, règles d'isolation,
+  application générée inchangée, privilèges du schéma), `scripts/test-github-session.mjs` (page d'accueil,
+  version préparée prioritaire, fichier supprimé non servi, lecture unique), `scripts/test-github-ui.mjs` (site
+  jouable dès l'ouverture, rechargé après le travail de Jaris, onglet « Changements » avec son compteur, retour à
+  l'aperçu quand tout est annulé, dépôt sans page web expliqué).

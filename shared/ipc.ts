@@ -662,6 +662,28 @@ export interface GeneratedVideoSummary {
  * Contrairement à `codeGenStatus` (une ligne AJOUTÉE au journal à chaque étape franchie), ce message
  * REMPLACE le précédent : c'est l'état courant, pas un historique.
  */
+/**
+ * Une action de Jaris sur un fichier, en mode Code (étape 286, Léo : « enlève l'autre carré […] mets les trucs
+ * qu'il est en train de faire, par exemple ajouter plus 500 lignes de code dans index »). Affichée comme une
+ * ligne de la conversation (« Modifié index.html +500 −3 »), au lieu d'une ligne de texte brut dans un journal.
+ */
+export interface CodeActivity {
+  kind: 'read' | 'edit' | 'create' | 'rewrite' | 'delete'
+  path: string
+  /** Lignes ajoutées et retirées (absentes pour une lecture ou une suppression). */
+  added?: number
+  removed?: number
+}
+
+/**
+ * Ce que l'agent du mode Code dit à l'utilisateur pendant un tour (étape 286) : « Je lis index.html pour trouver le
+ * score. » `id` = numéro du tour ; le même id met à jour la phrase en direct, un texte vide la retire.
+ */
+export interface CodeNarration {
+  id: number
+  text: string
+}
+
 export interface CodeGenProgress {
   /** Ce que Jaris fait en ce moment ("Écriture de l'application", "Relecture du code"…). */
   label: string
@@ -728,6 +750,15 @@ export interface RepoChange {
   kind: 'added' | 'modified' | 'deleted'
   before: string | null
   after: string | null
+}
+
+/**
+ * Le site d'un dépôt, jouable dans l'aperçu (étape 287) : `entry` est sa page d'accueil (index.html le plus souvent),
+ * `url` l'adresse isolée qui la sert avec les autres fichiers du dépôt. `null` partout : aucune page web à montrer.
+ */
+export interface RepoPreview {
+  entry: string | null
+  url: string | null
 }
 
 /** Un dépôt ouvert dans le mode Code, avec ses changements en attente. */
@@ -878,6 +909,8 @@ export const IPC_CHANNELS = {
   generateApp: 'jaris:generate-app',
   /** main -> renderer : messages d'avancement pendant la génération d'application (étapes de la boucle). */
   codeGenStatus: 'jaris:code-gen-status',
+  codeGenActivity: 'jaris:code-gen-activity',
+  codeGenNarration: 'jaris:code-gen-narration',
   /** main -> renderer : avancement EN DIRECT de l'étape en cours (étape 99) — voir CodeGenProgress. */
   codeGenProgress: 'jaris:code-gen-progress',
   /** renderer -> main : arrête la génération en cours (bouton "Arrêter", étape 99). */
@@ -894,6 +927,7 @@ export const IPC_CHANNELS = {
   githubOpenRepo: 'jaris:github-open-repo',
   githubRunAgent: 'jaris:github-run-agent',
   githubDiscardChanges: 'jaris:github-discard-changes',
+  githubPreview: 'jaris:github-preview',
   githubCommit: 'jaris:github-commit',
   /** renderer -> main : ouvre le dossier de l'application générée dans l'explorateur de fichiers. */
   openGeneratedApp: 'jaris:open-generated-app',

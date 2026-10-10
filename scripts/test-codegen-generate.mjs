@@ -4,6 +4,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 import { modelChoiceModule } from './load-model-choice.mjs'
+import { loadTsModule } from './load-ts-module.mjs'
 
 /**
  * Reproduit en usage réel (Léo, "un jeu Snake") : le modèle a répondu en Python/tkinter au lieu de HTML,
@@ -34,6 +35,7 @@ function setup(responses, { profile = { codeModel: 'test-model', visionModel: 'v
   const calls = []
   const models = []
   const statusLines = []
+  const activity = []
   const visionCalls = []
   const modules = {
     electron: { app: { getPath: () => '/tmp' } },
@@ -53,6 +55,8 @@ function setup(responses, { profile = { codeModel: 'test-model', visionModel: 'v
       ModelTooLargeError: class extends Error {},
       DiskFullError: class extends Error {}
     },
+    // Étape 286 : le VRAI calcul de différences (pur, sans import), pour compter les lignes écrites dans index.html.
+    '../../shared/lineDiff': loadTsModule('shared/lineDiff.ts'),
     './hardwareScan': { pickBestCodeModel: async () => 'test-model' },
     './modelChoice': modelChoiceModule,
     './profileStore': { getProfile: async () => profile },
@@ -71,10 +75,13 @@ function setup(responses, { profile = { codeModel: 'test-model', visionModel: 'v
   vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports }, console, ...TIMERS })
   return {
     generateApp: (description, currentHtml, imageBase64) =>
-      exports.generateApp(description, (line) => statusLines.push(line), currentHtml, imageBase64),
+      exports.generateApp(description, (line) => statusLines.push(line), currentHtml, imageBase64, {
+        onActivity: (item) => activity.push(item)
+      }),
     calls,
     models,
     statusLines,
+    activity,
     visionCalls
   }
 }
@@ -161,4 +168,29 @@ test('mode Code : sur Auto, le modèle calculé pour la machine reste utilisé c
   const app = setup([VALID_HTML, VALID_HTML], { profile: { codeModel: 'test-model' }, installed: ['test-model', 'choisi:14b'] })
   await app.generateApp('une todo list')
   assert.ok(app.models.every((m) => m === 'test-model'))
+})
+
+/**
+ * Étape 286 (Léo : « enlève l'autre carré Modèle de code choisi automatiquement pour cette machine […] mets les
+ * trucs qu'il est en train de faire, par exemple ajouter plus 500 lignes de code dans index »).
+ */
+test('une nouvelle application annonce « Créé index.html » avec ses lignes, sans parler du modèle choisi', async () => {
+  const app = setup([VALID_HTML])
+  const result = await app.generateApp('une todo list')
+  const lines = result.html.split('\n').length
+  assert.deepEqual(JSON.parse(JSON.stringify(app.activity)), [{ kind: 'create', path: 'index.html', added: lines, removed: 0 }])
+  assert.ok(!app.statusLines.some((line) => /choisi automatiquement|Réflexion de/.test(line)), app.statusLines.join(' | '))
+})
+
+test('une modification annonce « Modifié index.html » avec les lignes ajoutées et retirées', async () => {
+  const before = VALID_HTML.replace(/^```html\n|```$/g, '').replace('Jouer', 'Commencer')
+  const app = setup([VALID_HTML])
+  await app.generateApp('renomme le bouton', before)
+  assert.deepEqual(JSON.parse(JSON.stringify(app.activity)), [{ kind: 'edit', path: 'index.html', added: 1, removed: 1 }])
+})
+
+test('le téléchargement du modèle, lui, reste annoncé : long et visible', async () => {
+  const app = setup([VALID_HTML], { installed: [] })
+  await app.generateApp('une todo list')
+  assert.ok(app.statusLines.some((line) => /Téléchargement du modèle de code/.test(line)), app.statusLines.join(' | '))
 })

@@ -9,6 +9,7 @@ import {
   type GithubStatus,
   type RepoAgentResult,
   type RepoCommitResult,
+  type RepoPreview,
   type RepoView,
   type AppMode,
   type AppVersionStatus,
@@ -21,7 +22,9 @@ import {
   type ContextLengthOptions,
   type ConversationEntry,
   type ConversationList,
+  type CodeActivity,
   type CodeGenProgress,
+  type CodeNarration,
   type GeneratedApp,
   type GeneratedAppSummary,
   type MyModelPicks,
@@ -167,6 +170,8 @@ const api = {
   onCodeGenStatus: (cb: (message: string) => void) => subscribe(IPC_CHANNELS.codeGenStatus, cb),
   // Étape 99 : avancement en direct de l'étape en cours, et arrêt d'une génération partie.
   onCodeGenProgress: (cb: (progress: CodeGenProgress) => void) => subscribe(IPC_CHANNELS.codeGenProgress, cb),
+  onCodeGenActivity: (cb: (activity: CodeActivity) => void) => subscribe(IPC_CHANNELS.codeGenActivity, cb),
+  onCodeGenNarration: (cb: (narration: CodeNarration) => void) => subscribe(IPC_CHANNELS.codeGenNarration, cb),
   cancelCodeGen: (): void => ipcRenderer.send(IPC_CHANNELS.cancelCodeGen),
   // Étape 277 : GitHub dans le mode Code. L'arrêt d'un travail en cours passe par cancelCodeGen.
   githubStatus: (): Promise<GithubStatus> => ipcRenderer.invoke(IPC_CHANNELS.githubStatus),
@@ -181,6 +186,7 @@ const api = {
     ipcRenderer.invoke(IPC_CHANNELS.githubRunAgent, fullName, request),
   githubDiscardChanges: (fullName: string, path?: string): Promise<RepoView> =>
     ipcRenderer.invoke(IPC_CHANNELS.githubDiscardChanges, fullName, path),
+  githubPreview: (fullName: string): Promise<RepoPreview> => ipcRenderer.invoke(IPC_CHANNELS.githubPreview, fullName),
   githubCommit: (fullName: string, message: string): Promise<RepoCommitResult> => ipcRenderer.invoke(IPC_CHANNELS.githubCommit, fullName, message),
   openGeneratedApp: (path?: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openGeneratedApp, path),
   getGeneratedApps: (): Promise<GeneratedAppSummary[]> => ipcRenderer.invoke(IPC_CHANNELS.getGeneratedApps),

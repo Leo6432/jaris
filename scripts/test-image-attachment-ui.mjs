@@ -54,6 +54,8 @@ window.jaris = {
   // lisible — l'effet React plante, le composant ne se monte jamais, et le test expire au bout de 30 s
   // sans dire pourquoi (piège déjà vécu à l'étape 96).
   onCodeGenProgress: () => () => {},
+  onCodeGenActivity: () => () => {},
+  onCodeGenNarration: () => () => {},
   cancelCodeGen: () => {},
   getGeneratedApps: () => Promise.resolve([]),
   // Étape 277 : le bouton GitHub du champ demande l'état de la connexion au montage (masqué si indisponible).

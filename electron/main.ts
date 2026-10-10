@@ -73,14 +73,16 @@ import {
   discardGithubChanges,
   finishGithubLogin,
   getGithubStatus,
+  githubPreviewEntry,
   listGithubBranches,
   listGithubRepos,
   logoutGithub,
   openGithubRepo,
+  readGithubPreviewFile,
   runGithubAgent,
   startGithubLogin
 } from './services/githubSession'
-import { createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
+import { createFilesPreview, createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
 import { previewVoice, synthesizeSpeech } from './services/tts'
 import { ttsClient } from './services/ttsClient'
 import { createAppIcon, createTrayIcon } from './services/trayIcon'
@@ -122,6 +124,7 @@ import {
   type ConversationList,
   type GeneratedApp,
   type GeneratedAppSummary,
+  type RepoPreview,
   type JarisEmotion,
   type MemoryGraph,
   type ModelChoiceInfo,
@@ -1588,6 +1591,7 @@ app.whenReady().then(async () => {
           imageBase64,
           {
             onProgress: (progress) => event.sender.send(IPC_CHANNELS.codeGenProgress, progress),
+            onActivity: (activity) => event.sender.send(IPC_CHANNELS.codeGenActivity, activity),
             signal: controller.signal
           }
         )
@@ -1623,6 +1627,8 @@ app.whenReady().then(async () => {
     try {
       return await runGithubAgent(fullName, request, {
         onStatus: (message) => event.sender.send(IPC_CHANNELS.codeGenStatus, message),
+        onActivity: (activity) => event.sender.send(IPC_CHANNELS.codeGenActivity, activity),
+        onNarration: (narration) => event.sender.send(IPC_CHANNELS.codeGenNarration, narration),
         onProgress: (progress) => event.sender.send(IPC_CHANNELS.codeGenProgress, progress),
         signal: controller.signal
       })
@@ -1631,6 +1637,11 @@ app.whenReady().then(async () => {
     }
   })
   ipcMain.handle(IPC_CHANNELS.githubDiscardChanges, (_event, fullName: string, path?: string) => discardGithubChanges(fullName, path))
+  // Étape 287 : le site du dépôt, jouable dans l'aperçu, avec les changements préparés par Jaris (pas encore enregistrés).
+  ipcMain.handle(IPC_CHANNELS.githubPreview, (_event, fullName: string): RepoPreview => {
+    const entry = githubPreviewEntry(fullName)
+    return { entry, url: entry ? createFilesPreview(entry, (path) => readGithubPreviewFile(fullName, path)) : null }
+  })
   ipcMain.handle(IPC_CHANNELS.githubCommit, (_event, fullName: string, message: string) => commitGithubChanges(fullName, message))
 
   // Mode Image (étape 200, remplace le Montage) : le moteur de dessin de l'étape 173 a sa propre page. Seuls des

@@ -1,6 +1,6 @@
 import { config } from '../config'
 import { chosenThink } from '../../shared/effort'
-import type { CodeGenProgress, GithubDeviceCode, GithubRepoSummary, GithubStatus, RepoAgentResult, RepoChange, RepoCommitResult, RepoView } from '../../shared/ipc'
+import type { CodeActivity, CodeGenProgress, CodeNarration, GithubDeviceCode, GithubRepoSummary, GithubStatus, RepoAgentResult, RepoChange, RepoCommitResult, RepoView } from '../../shared/ipc'
 import { GenerationStoppedError, createModelStepRunner, isAbortError, readModelMaxContext, resolveCodeModel } from './codeGenerator'
 import {
   GithubClient,
@@ -30,6 +30,8 @@ interface RepoSession {
   staged: Map<string, string | null>
   /** Contenus lus sur GitHub (`null` = binaire/trop lourd), pour ne pas relire deux fois. */
   originals: Map<string, string | null>
+  /** Fichiers bruts lus pour l'aperçu (étape 287) : une page recharge souvent ses images, inutile de les redemander. */
+  previewFiles: Map<string, Buffer | null>
   busy: boolean
 }
 
@@ -214,7 +216,7 @@ export async function openGithubRepo(fullName: string, branch?: string): Promise
   }
   const snapshot = await withClient((github) => github.openRepo(fullName, branch))
   if (existing) sessions.delete(existing.snapshot.fullName)
-  const session: RepoSession = { snapshot, staged: new Map(), originals: new Map(), busy: false }
+  const session: RepoSession = { snapshot, staged: new Map(), originals: new Map(), previewFiles: new Map(), busy: false }
   sessions.set(snapshot.fullName, session)
   return viewOf(session)
 }
@@ -234,6 +236,8 @@ export function historyBudgetChars(modelMax: number | null): number {
 
 export interface RunGithubAgentOptions {
   onStatus: (message: string) => void
+  onActivity?: (activity: CodeActivity) => void
+  onNarration?: (narration: CodeNarration) => void
   onProgress?: (progress: CodeGenProgress) => void
   signal?: AbortSignal
 }
@@ -266,8 +270,10 @@ export async function runGithubAgent(fullName: string, request: string, options:
       writeFile: (path, content) => stage(session, path, content),
       pendingSummary: () =>
         changesOf(session).map((change) => `- ${change.kind === 'added' ? 'créé' : change.kind === 'deleted' ? 'supprimé' : 'modifié'} : ${change.path}`),
-      chat: (messages) => run(`Travail sur ${session.snapshot.fullName}`, messages, 8000),
+      chat: (messages, onDelta) => run(`Travail sur ${session.snapshot.fullName}`, messages, 8000, undefined, onDelta),
       onStatus: options.onStatus,
+      onActivity: options.onActivity,
+      onNarration: options.onNarration,
       signal: options.signal,
       maxHistoryChars: historyBudgetChars(modelMax)
     })
@@ -278,6 +284,45 @@ export async function runGithubAgent(fullName: string, request: string, options:
   } finally {
     session.busy = false
   }
+}
+
+/**
+ * La page d'accueil du site d'un dépôt (étape 287) : index.html à la racine ; sinon celui d'un dossier de publication
+ * habituel (docs/, public/, site/, dist/, build/, src/) ; sinon la page HTML la moins profonde. `null` : aucune page.
+ */
+export function findPreviewEntry(paths: string[]): string | null {
+  const pages = paths.filter((path) => /\.html?$/i.test(path))
+  if (pages.length === 0) return null
+  const depth = (path: string): number => path.split('/').length
+  const byDepth = (a: string, b: string): number => depth(a) - depth(b) || a.localeCompare(b)
+  if (pages.some((path) => path.toLowerCase() === 'index.html')) return pages.find((path) => path.toLowerCase() === 'index.html') ?? null
+  for (const dir of ['docs', 'public', 'site', 'dist', 'build', 'src']) {
+    const found = pages.find((path) => path.toLowerCase() === `${dir}/index.html`)
+    if (found) return found
+  }
+  const indexes = pages.filter((path) => /(^|\/)index\.html?$/i.test(path)).sort(byDepth)
+  return indexes[0] ?? [...pages].sort(byDepth)[0]
+}
+
+/** La page d'accueil à afficher pour ce dépôt, changements préparés compris (`null` : aucune page web). */
+export function githubPreviewEntry(fullName: string): string | null {
+  return findPreviewEntry(listPaths(requireSession(fullName)))
+}
+
+/**
+ * Un fichier du dépôt pour l'aperçu (étape 287) : la version PRÉPARÉE par Jaris si elle existe — c'est elle que Léo
+ * veut essayer avant d'enregistrer —, sinon celle de GitHub. `undefined` : pas de tel fichier (ou supprimé).
+ */
+export async function readGithubPreviewFile(fullName: string, path: string): Promise<Buffer | string | undefined> {
+  const session = findSession(fullName)
+  if (!session) return undefined
+  if (session.staged.has(path)) return session.staged.get(path) ?? undefined
+  const file = session.snapshot.files.find((entry) => entry.path === path)
+  if (!file) return undefined
+  if (!session.previewFiles.has(path)) {
+    session.previewFiles.set(path, await withClient((github) => github.readBytes(session.snapshot, file)))
+  }
+  return session.previewFiles.get(path) ?? undefined
 }
 
 export function discardGithubChanges(fullName: string, path?: string): RepoView {

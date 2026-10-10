@@ -44,11 +44,14 @@ const CHANGED = {
 }
 
 window.__status = { available: window.__available ?? true, connected: false, login: null }
-window.__calls = { run: [], commit: [], open: [] }
+window.__calls = { run: [], commit: [], open: [], preview: [] }
 
 window.jaris = {
   onCodeGenStatus: () => () => {},
   onCodeGenProgress: (cb) => { window.__emitProgress = cb; return () => {} },
+  // Étape 286 : les actions sur les fichiers s'affichent dans la conversation (« Modifié README.md +1 −1 »).
+  onCodeGenActivity: (cb) => { window.__emitActivity = cb; return () => {} },
+  onCodeGenNarration: (cb) => { window.__emitNarration = cb; return () => {} },
   getGeneratedApps: () => Promise.resolve([{ path: 'C:/apps/liste', label: 'liste de courses', timestamp: Date.now() }]),
   loadGeneratedApp: (path) => Promise.resolve({ html: '<h1>ok</h1>', path, issues: [], previewUrl: 'about:blank' }),
   generateApp: () => Promise.reject(new Error('ne doit pas être appelé avec un dépôt ouvert')),
@@ -92,6 +95,14 @@ window.jaris = {
     })
   },
   githubDiscardChanges: () => Promise.resolve(VIEW),
+  // Étape 287 : le site du dépôt, jouable dans l'aperçu. Une adresse différente à chaque demande, comme le vrai main.
+  githubPreview: (fullName) => {
+    window.__calls.preview.push(fullName)
+    if (window.__noSite) return Promise.resolve({ entry: null, url: null })
+    // Pas « about:blank#… » : dans une page elle-même en about:blank, Chromium tue la page (« bad IPC message,
+    // reason 114 », vérifié ici). Une adresse data: différente à chaque demande, comme le vrai main.
+    return Promise.resolve({ entry: 'index.html', url: 'data:text/html,<p>site ' + window.__calls.preview.length + '</p>' })
+  },
   githubCommit: (fullName, message) => {
     window.__calls.commit.push([fullName, message])
     return Promise.resolve({ sha: 'abc1234def', url: 'https://github.com/leo/projet/commit/abc1234def', view: VIEW })
@@ -201,6 +212,13 @@ test('un dépôt ouvert change le champ, puis les changements s’affichent lign
     // branche dans le champ, rien au-dessus tant que Jaris n'a rien fait.
     assert.equal(await page.textContent('.branch-picker__name'), 'main')
     assert.equal(await page.locator('.repo-panel').count(), 0)
+    // Étape 287 (Léo : « pouvoir jouer directement et tester un vrai aperçu ») : le site du dépôt est jouable dès
+    // l'ouverture, dans la carte, sans onglets tant que rien n'a changé.
+    await page.waitForSelector('.code-preview iframe.code-panel__preview')
+    assert.equal(await page.getAttribute('.code-panel__preview', 'title'), 'Aperçu de leo/projet')
+    assert.equal(await page.getAttribute('.code-panel__preview', 'sandbox'), 'allow-scripts allow-forms')
+    assert.equal(await page.locator('.code-preview__changes-tab').count(), 0)
+    const firstSite = await page.getAttribute('.code-panel__preview', 'src')
     const chips = await page.evaluate(() => {
       const composer = document.querySelector('.composer').getBoundingClientRect()
       const repo = document.querySelector('.repo-picker__trigger').getBoundingClientRect()
@@ -221,7 +239,15 @@ test('un dépôt ouvert change le champ, puis les changements s’affichent lign
     assert.match(await page.textContent('.code-panel__live-title'), /^Étape 2 · Travail sur leo\/projet$/)
 
     await page.evaluate(() => window.__finishAgent())
+    await page.waitForSelector('.code-panel__done')
+    // Étape 287 : après le travail de Jaris, à droite c'est le SITE (avec ses changements), pas le menu d'enregistrement.
+    await page.waitForFunction((first) => document.querySelector('.code-panel__preview')?.getAttribute('src') !== first, firstSite)
+    assert.equal(await page.locator('.repo-change').count(), 0, 'le menu d’enregistrement remplace encore l’aperçu')
+    assert.match(await page.textContent('.code-preview__foot'), /pas encore enregistrés sur GitHub/)
+    assert.equal(await page.textContent('.code-preview__count'), '1')
+    await page.click('.code-preview__changes-tab')
     await page.waitForSelector('.repo-change')
+    assert.equal(await page.locator('.code-panel__preview').count(), 0)
     // Étape 282 : la réponse de Jaris est dans la conversation (à gauche), les changements dans l'aperçu (à droite).
     assert.match(await page.textContent('.code-chat__reply'), /Faute corrigée/)
     assert.equal(await page.evaluate(() => document.querySelector('.code-preview').contains(document.querySelector('.repo-change'))), true)
@@ -237,7 +263,7 @@ test('un dépôt ouvert change le champ, puis les changements s’affichent lign
       }),
       { title: 'leo/projet', capitalized: 'none', branch: 'main' }
     )
-    assert.match(await page.textContent('.code-panel__done'), /1 fichier à vérifier/)
+    assert.match(await page.textContent('.code-panel__done'), /1 fichier changé : essaie dans l'aperçu/)
     assert.equal(await page.textContent('.repo-diff__line--del .repo-diff__text'), 'Bonjour le mondee')
     assert.equal(await page.textContent('.repo-diff__line--add .repo-diff__text'), 'Bonjour le monde')
     assert.match(await page.textContent('.repo-change__stats'), /\+1\s+−1/)
@@ -307,6 +333,7 @@ test('les changements et les boutons sont réellement habillés par le CSS de Ja
     await page.fill('.composer textarea', 'Corrige')
     await page.click('.composer__send')
     await page.evaluate(() => window.__finishAgent())
+    await page.click('.code-preview__changes-tab')
     await page.waitForSelector('.repo-change')
     const styles = await page.evaluate(() => {
       const css = (selector) => getComputedStyle(document.querySelector(selector))
@@ -345,10 +372,36 @@ test('à 760 px de large, rien ne déborde', options, async () => {
       await page.fill('.composer textarea', 'Corrige')
       await page.click('.composer__send')
       await page.evaluate(() => window.__finishAgent())
+      await page.click('.code-preview__changes-tab')
       await page.waitForSelector('.repo-change')
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
       assert.ok(overflow <= 0, `débordement horizontal de ${overflow}px`)
     },
     { width: 760 }
   )
+})
+
+test('un dépôt sans page web le dit dans l’aperçu, au lieu d’une carte vide (étape 287)', options, async () => {
+  await withPage(async (page) => {
+    await page.evaluate(() => {
+      window.__noSite = true
+    })
+    await connectAndOpen(page)
+    await page.waitForFunction(() => /pas de page web/.test(document.querySelector('.code-preview__placeholder')?.textContent ?? ''))
+    assert.equal(await page.locator('.code-panel__preview').count(), 0)
+  })
+})
+
+test('« Changements » : tout annuler ramène l’aperçu, l’onglet disparaît (étape 287)', options, async () => {
+  await withPage(async (page) => {
+    await connectAndOpen(page)
+    await page.fill('.composer textarea', 'Corrige')
+    await page.click('.composer__send')
+    await page.evaluate(() => window.__finishAgent())
+    await page.click('.code-preview__changes-tab')
+    await page.waitForSelector('.repo-change')
+    await page.click('.repo-panel__changes-head .repo-change__discard')
+    await page.waitForSelector('.code-preview iframe.code-panel__preview')
+    assert.equal(await page.locator('.code-preview__changes-tab').count(), 0)
+  })
 })

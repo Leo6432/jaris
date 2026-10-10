@@ -27,6 +27,8 @@ const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code'
 export const GITHUB_SCOPE = 'repo'
 /** Au-delà, un fichier n'est pas lu (ni donc modifié) par Jaris : trop lourd pour le modèle local. */
 const MAX_TEXT_FILE_BYTES = 400_000
+/** Aperçu d'un dépôt (étape 287) : une image ou une police plus lourde n'est pas chargée (le reste s'affiche quand même). */
+const MAX_PREVIEW_FILE_BYTES = 15_000_000
 /** Trois pages de 100 : largement assez pour choisir un dépôt, sans attendre une liste interminable. */
 const MAX_REPO_PAGES = 3
 
@@ -421,6 +423,13 @@ export class GithubClient {
       if (err instanceof GithubError && err.status === 409) return true
       throw err
     }
+  }
+
+  /** Contenu brut d'un fichier pour l'aperçu (étape 287) : images, polices, sons compris. `null` s'il est trop lourd. */
+  async readBytes(snapshot: RepoSnapshot, file: RepoFile): Promise<Buffer | null> {
+    if (file.size > MAX_PREVIEW_FILE_BYTES) return null
+    const blob = await this.request<{ content: string; encoding: string }>('GET', `/repos/${snapshot.owner}/${snapshot.repo}/git/blobs/${file.sha}`)
+    return Buffer.from(blob.content, blob.encoding === 'base64' ? 'base64' : 'utf8')
   }
 
   /** Contenu texte d'un fichier, `null` s'il est binaire ou trop lourd pour être confié au modèle. */

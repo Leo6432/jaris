@@ -2496,21 +2496,6 @@ p.capacity-scan__tier-missing {
   box-shadow: none;
 }
 
-.code-panel__status {
-  margin: 0;
-  padding: 10px 12px;
-  max-height: 110px;
-  overflow-y: auto;
-  background: rgba(21, 21, 23, 0.6);
-  border: 1px solid rgba(var(--jv-ink-rgb), 0.1);
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--hud-text-dim);
-  white-space: pre-wrap;
-}
-
 .code-panel__result {
   flex: 1;
   min-height: 0;
@@ -7438,6 +7423,60 @@ select {
   overflow-wrap: anywhere;
 }
 
+/* Étape 286 (Léo : « enlève l'autre carré […] mets les trucs qu'il est en train de faire ») : chaque action sur un
+   fichier est une ligne discrète de la conversation, sans cadre — « Modifié index.html +500 −3 » —, comme les
+   étapes que Claude affiche entre la demande et la réponse. Les lignes qui se suivent se resserrent en une liste. */
+.code-chat__activity {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--hud-text-dim);
+}
+
+.code-chat__activity + .code-chat__activity {
+  margin-top: -6px;
+}
+
+.code-chat__activity svg {
+  flex: 0 0 auto;
+  color: var(--hud-text-faint);
+}
+
+.code-chat__activity-verb {
+  flex: 0 0 auto;
+}
+
+.code-chat__activity-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--hud-font-mono);
+  font-size: 12px;
+  color: var(--hud-text);
+}
+
+.code-chat__activity-stats {
+  flex: 0 0 auto;
+  display: inline-flex;
+  gap: 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Une remarque (téléchargement du modèle, réparation…) : du texte discret, jamais un cadre. */
+.code-chat__note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--hud-text-faint);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .code-chat > .composer {
   width: 100%;
   max-width: none;
@@ -7535,6 +7574,22 @@ select {
 
 .code-preview__tools .panel__icon-button:hover {
   color: var(--hud-text);
+}
+
+/* Étape 287 : le nombre de fichiers changés, dans l'onglet « Changements » d'un dépôt. */
+.code-preview__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(var(--jv-ink-rgb), 0.12);
+  color: var(--hud-text);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .code-preview__body {

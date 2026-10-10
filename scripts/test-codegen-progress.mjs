@@ -4,6 +4,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
 import { modelChoiceModule } from './load-model-choice.mjs'
+import { loadTsModule } from './load-ts-module.mjs'
 
 /**
  * Avancement et arrêt d'une génération en mode Code (étape 99).
@@ -71,6 +72,8 @@ function setup(responses, { onBeforeCall } = {}) {
       ModelTooLargeError: class extends Error {},
       DiskFullError: class extends Error {}
     },
+    // Étape 286 : le VRAI calcul de différences (pur, sans import), pour compter les lignes écrites dans index.html.
+    '../../shared/lineDiff': loadTsModule('shared/lineDiff.ts'),
     './hardwareScan': { pickBestCodeModel: async () => 'test-model' },
     './modelChoice': modelChoiceModule,
     './profileStore': { getProfile: async () => ({ codeModel: 'test-model', visionModel: 'vision-test' }) },

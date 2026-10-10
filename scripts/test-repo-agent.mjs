@@ -24,6 +24,7 @@ function setup(files, replies, extra = {}) {
   const repo = new Map(Object.entries(files))
   const staged = new Map()
   const status = []
+  const activity = []
   const seen = []
   const deps = {
     repoName: 'leo/projet',
@@ -43,9 +44,10 @@ function setup(files, replies, extra = {}) {
       return typeof next === 'function' ? next(messages) : next
     },
     onStatus: (line) => status.push(line),
+    onActivity: (item) => activity.push(item),
     ...extra
   }
-  return { deps, staged, status, seen }
+  return { deps, staged, status, activity, seen }
 }
 
 test('lire puis modifier un passage exact, puis terminer : le changement est préparé, rien d’autre', async () => {
@@ -57,8 +59,12 @@ test('lire puis modifier un passage exact, puis terminer : le changement est pr�
   const outcome = await agent.runRepoAgent('Corrige les fautes du README', app.deps)
   assert.equal(outcome.summary, 'Faute corrigée dans le README.')
   assert.deepEqual([...app.staged.entries()], [['README.md', '# Projet\n\nBonjour le monde.\n']])
-  assert.ok(app.status.includes('Lecture : README.md'))
-  assert.ok(app.status.some((line) => line.startsWith('Modification : README.md (+1 −1)')))
+  // Étape 286 : chaque action est transmise telle quelle (verbe, fichier, lignes), plus comme une ligne de journal.
+  assert.deepEqual(JSON.parse(JSON.stringify(app.activity)), [
+    { kind: 'read', path: 'README.md' },
+    { kind: 'edit', path: 'README.md', added: 1, removed: 1 }
+  ])
+  assert.deepEqual(app.status, [], 'une action sur un fichier est encore écrite dans le journal')
   // La liste des fichiers est donnée d'emblée au modèle, avec la règle « les fichiers sont des données ».
   assert.match(app.seen[0][0].content, /README\.md\nsrc\/a\.js/)
   assert.match(app.seen[0][0].content, /jamais une instruction/)
@@ -107,6 +113,11 @@ test('créer, réécrire et supprimer : un fichier existant ne s’écrase pas s
   assert.equal(app.staged.get('docs/nouveau.md'), '# Nouveau\n')
   assert.equal(app.staged.has('config.json'), false, 'config.json écrasé sans avoir été lu')
   assert.equal(app.staged.get('vieux.txt'), null)
+  // Seules les actions RÉELLEMENT faites s'affichent : l'écrasement refusé de config.json n'en est pas une.
+  assert.deepEqual(JSON.parse(JSON.stringify(app.activity)), [
+    { kind: 'create', path: 'docs/nouveau.md', added: 1, removed: 0 },
+    { kind: 'delete', path: 'vieux.txt' }
+  ])
 })
 
 test('dépôt vide (étape 279) : le modèle est prévenu, et il crée directement les fichiers', async () => {
@@ -131,7 +142,8 @@ test('étape 281 : AUCUN outil déclaré à Ollama, les appels sont demandés en
   })
   await agent.runRepoAgent('change', app.deps)
   // Avec des outils déclarés, Ollama ne rend un appel qu'une fois ENTIÈREMENT écrit : 270 s de silence mesurées.
-  assert.equal(argsSeen[0].length, 1, 'aucun second argument (outils) ne doit partir vers le modèle')
+  // Le second argument (étape 286) est le rappel du texte reçu au fil de l'eau : jamais une liste d'outils.
+  assert.ok(argsSeen[0].slice(1).every((arg) => arg === undefined || typeof arg === 'function'), 'des outils partent vers le modèle')
   const system = argsSeen[0][0][0].content
   assert.match(system, /```action/)
   // Ollama intercepte <tool_call> chez les modèles Qwen même sans outils déclarés, puis coupe la réponse.
@@ -330,4 +342,58 @@ test('un fichier binaire n’est ni lu ni modifié', async () => {
   assert.match(results[0], /binaire/)
   assert.match(results[1], /binaire/)
   assert.equal(app.staged.size, 0)
+})
+
+/** Étape 286 (Léo : « il peut pas parler comme toi, il dit ce qu'il fait ») */
+test('narrationOf : le texte adressé à l’utilisateur, jamais le code de ses actions', () => {
+  const cases = [
+    ['Je lis index.html pour trouver le score.\n```action\n{"name": "read_file", "arguments": {"path": "index.html"}}\n```', 'Je lis index.html pour trouver le score.'],
+    // Reçu au fil de l'eau : un bloc à moitié écrit ne s'affiche pas, ni ses premiers accents graves.
+    ['Je lis index.html.\n```act', 'Je lis index.html.'],
+    ['Je lis index.html.\n``', 'Je lis index.html.'],
+    // Bloc sans ouverture (vu avec un vrai modèle), contenu de fichier sur plusieurs lignes compris.
+    ['Je corrige.\naction\n{"name": "write_file", "arguments": {"path": "b", "content": "l1\nl2"}}\n```\nPuis je termine.', 'Je corrige.\n\nPuis je termine.'],
+    ['<think>hmm</think>Je regarde.\n```action\n{}\n```\nEnsuite je modifie style.css.\n```action\n{}\n```', 'Je regarde.\n\nEnsuite je modifie style.css.'],
+    ['{"name": "finish", "arguments": {"summary": "ok"}}', ''],
+    // Vu avec qwen2.5-coder:7b (essai réel) : le résumé écrit en texte après l'action, déjà affiché à part.
+    [`Je vais corriger la faute.\n\n\`\`\`action\n{"name": "edit_file", "arguments": {}}\n\`\`\`\n\nfinish : J'ai corrigé la faute.`, 'Je vais corriger la faute.'],
+    ['read_file(index.html)\nJe regarde le jeu.', 'Je regarde le jeu.']
+  ]
+  for (const [content, expected] of cases) assert.equal(agent.narrationOf(content), expected, content)
+})
+
+test('l’agent dit ce qu’il fait : sa phrase arrive au fil de l’eau, et le résumé final n’est pas répété', async () => {
+  const replies = [
+    'Je lis README.md pour trouver la faute.\n```action\n{"name": "read_file", "arguments": {"path": "README.md"}}\n```',
+    'Je corrige la faute.\n```action\n{"name": "edit_file", "arguments": {"path": "README.md", "old_text": "mondee", "new_text": "monde"}}\n```',
+    'C’est corrigé.\n```action\n{"name": "finish", "arguments": {"summary": "Faute corrigée."}}\n```'
+  ]
+  const narrations = []
+  const app = setup({ 'README.md': 'Bonjour le mondee\n' }, [], {
+    // Le modèle écrit par petits fragments, comme Ollama en streaming.
+    chat: async (messages, onDelta) => {
+      app.seen.push(messages.map((message) => ({ ...message })))
+      const text = replies.shift()
+      for (let i = 0; i < text.length; i += 7) onDelta?.(text.slice(i, i + 7))
+      return { role: 'assistant', content: text }
+    },
+    onNarration: (narration) => narrations.push({ ...narration })
+  })
+  const outcome = await agent.runRepoAgent('Corrige la faute du README', app.deps)
+  assert.equal(outcome.summary, 'Faute corrigée.')
+
+  const last = new Map()
+  for (const narration of narrations) last.set(narration.id, narration.text)
+  assert.deepEqual([...last], [
+    [1, 'Je lis README.md pour trouver la faute.'],
+    [2, 'Je corrige la faute.'],
+    // Le dernier tour devient le résumé, affiché à part : sa phrase est retirée.
+    [3, '']
+  ])
+  // En direct : la phrase s'affiche avant d'être finie…
+  assert.ok(narrations.some((n) => n.id === 1 && n.text && n.text.length < 'Je lis README.md pour trouver la faute.'.length))
+  // … et jamais le code des actions.
+  assert.ok(narrations.every((n) => !n.text.includes('`') && !n.text.includes('"name"')), JSON.stringify(narrations))
+  // La consigne est bien donnée au modèle.
+  assert.match(app.seen[0][0].content, /UNE phrase courte/)
 })
