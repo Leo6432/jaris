@@ -107,6 +107,18 @@ test('créer, réécrire et supprimer : un fichier existant ne s’écrase pas s
   assert.equal(app.staged.get('vieux.txt'), null)
 })
 
+test('dépôt vide (étape 279) : le modèle est prévenu, et il crée directement les fichiers', async () => {
+  const app = setup({}, [
+    reply(call('write_file', { path: 'index.html', content: '<h1>Salut</h1>\n' })),
+    reply(call('finish', { summary: 'Page créée.' }))
+  ])
+  const outcome = await agent.runRepoAgent('Crée une page', app.deps)
+  assert.match(app.seen[0][0].content, /Le dépôt est vide/)
+  assert.doesNotMatch(app.seen[0][0].content, /Fichiers du dépôt \(0\)/)
+  assert.equal(app.staged.get('index.html'), '<h1>Salut</h1>\n')
+  assert.equal(outcome.summary, 'Page créée.')
+})
+
 test('aucun chemin ne sort du dépôt ni ne touche .git', () => {
   for (const bad of ['../secret', 'a/../../b', '/etc/passwd/..', '.git/config', '.git', 'a//b/./c', '', 42]) {
     assert.throws(() => agent.normalizeRepoPath(bad), undefined, `accepté à tort : ${bad}`)

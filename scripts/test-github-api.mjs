@@ -259,14 +259,86 @@ test('une branche avec « / » garde son chemin, et un nom de dépôt douteux es
   assert.throws(() => github.parseFullName('leo'), /invalide/)
 })
 
-test('dépôt tout neuf (aucune branche) ou branche disparue : un message juste, pas « sans accès »', async () => {
+test('dépôt tout neuf : il s’ouvre VIDE (étape 279) ; une branche disparue garde un message juste', async () => {
+  let commitsStatus = 409
   const api = fakeFetch((call) => {
     if (call.url.endsWith('/repos/leo/projet')) return SNAPSHOT_ROUTES(call)
+    if (call.url.includes('/commits?per_page=1')) return commitsStatus === 409 ? { status: 409, body: { message: 'Git Repository is empty.' } } : { body: [] }
     return { status: 404, body: { message: 'Branch not found' } }
   })
   const client = new github.GithubClient(TOKEN, api.fetchImpl)
-  await assert.rejects(client.openRepo('leo/projet'), /dépôt est vide/)
+  const empty = await client.openRepo('leo/projet')
+  assert.equal(empty.commitSha, null)
+  assert.equal(empty.branch, 'main')
+  assert.deepEqual(empty.files, [])
   await assert.rejects(client.openRepo('leo/projet', 'vieille'), /« vieille » n'existe pas/)
+  // Des commits existent mais la branche principale manque : ce n'est PAS un dépôt vide.
+  commitsStatus = 200
+  await assert.rejects(client.openRepo('leo/projet'), /branche principale « main » est introuvable/)
+})
+
+const EMPTY_SNAPSHOT = {
+  owner: 'leo',
+  repo: 'projet',
+  fullName: 'leo/projet',
+  branch: 'main',
+  defaultBranch: 'main',
+  private: true,
+  htmlUrl: 'https://github.com/leo/projet',
+  commitSha: null,
+  treeSha: null,
+  files: [],
+  truncated: false
+}
+
+function emptyRepoApi() {
+  return fakeFetch((call) => {
+    if (call.method === 'PUT') {
+      return { status: 201, body: { content: {}, commit: { sha: 'first', html_url: 'https://github.com/leo/projet/commit/first', tree: { sha: 'treeFirst' } } } }
+    }
+    if (call.url.endsWith('/git/trees')) return { status: 201, body: { sha: 'tree2' } }
+    if (call.url.endsWith('/git/commits')) return { status: 201, body: { sha: 'second', html_url: 'https://github.com/leo/projet/commit/second' } }
+    if (call.method === 'PATCH') return { body: {} }
+    return { status: 500, body: {} }
+  })
+}
+
+test('premier enregistrement dans un dépôt vide : un seul fichier = une seule création, en base64', async () => {
+  const api = emptyRepoApi()
+  const client = new github.GithubClient(TOKEN, api.fetchImpl)
+  const result = await client.commit(EMPTY_SNAPSHOT, [{ path: 'docs/présentation.md', content: '# Projet é\n' }], 'Premier fichier')
+  assert.deepEqual(result, { sha: 'first', url: 'https://github.com/leo/projet/commit/first' })
+  assert.equal(api.calls.length, 1)
+  assert.equal(api.calls[0].method, 'PUT')
+  assert.ok(api.calls[0].url.endsWith('/repos/leo/projet/contents/docs/pr%C3%A9sentation.md'))
+  const body = JSON.parse(api.calls[0].body)
+  assert.equal(body.message, 'Premier fichier')
+  assert.equal(Buffer.from(body.content, 'base64').toString('utf8'), '# Projet é\n')
+  assert.equal(body.sha, undefined, 'création : aucun sha à fournir')
+})
+
+test('premier enregistrement avec plusieurs fichiers : les suivants posés SUR le premier, sans forcer', async () => {
+  const api = emptyRepoApi()
+  const client = new github.GithubClient(TOKEN, api.fetchImpl)
+  const result = await client.commit(
+    EMPTY_SNAPSHOT,
+    [
+      { path: 'index.html', content: '<h1>ok</h1>' },
+      { path: 'style.css', content: 'h1{}' }
+    ],
+    'Site de départ'
+  )
+  assert.equal(result.sha, 'second')
+  assert.deepEqual(api.calls.map((call) => call.method), ['PUT', 'POST', 'POST', 'PATCH'])
+  const tree = JSON.parse(api.calls[1].body)
+  assert.equal(tree.base_tree, 'treeFirst')
+  assert.deepEqual(tree.tree, [{ path: 'style.css', mode: '100644', type: 'blob', content: 'h1{}' }])
+  assert.deepEqual(JSON.parse(api.calls[2].body).parents, ['first'])
+  assert.deepEqual(JSON.parse(api.calls[3].body), { sha: 'second', force: false })
+  // Dépôt vide et rien à créer (que des suppressions) : refusé avant tout appel.
+  const none = emptyRepoApi()
+  await assert.rejects(new github.GithubClient(TOKEN, none.fetchImpl).commit(EMPTY_SNAPSHOT, [{ path: 'x', content: null }], 'm'), /aucun fichier à créer/)
+  assert.equal(none.calls.length, 0)
 })
 
 test('la page ouverte dans le navigateur est toujours une page de github.com', async () => {

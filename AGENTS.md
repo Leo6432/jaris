@@ -7398,3 +7398,19 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Jaris, chacun se connecte avec son propre compte. **Non vérifiable ici** : le proxy de cet environnement bloque
   github.com/login/* (« sessions are bound to their configured repositories ») et exige des corps JSON. La
   première vraie connexion de Léo est donc le premier test réel de l'identifiant.
+
+- **Dépôt GitHub vide (étape 279, Léo : « pourquoi on peut pas même sans rien dans le dépôt »)** : la v0.33.0
+  refusait un dépôt tout neuf (« Ce dépôt est vide : ajoute au moins un premier fichier… »). Le refus venait de
+  MON code, pas de GitHub : un dépôt sans commit n'a aucune branche, et j'avais traité ce cas comme une erreur au
+  lieu de le gérer. Corrigé en deux temps. (1) À l'ouverture, si la branche principale est introuvable, Jaris
+  demande la liste des commits. GitHub répond 409 « Git Repository is empty » pour un dépôt vide, qui s'ouvre
+  alors vide (`commitSha: null`). Sinon, c'est une vraie branche manquante, avec son propre message. (2) Au
+  premier enregistrement, l'API d'arbres et de commits ne peut rien écrire tant qu'il n'existe aucun commit. Le
+  premier fichier passe donc par l'API « créer un fichier » (`PUT contents/…`, ce que fait github.com sur un
+  dépôt vide), et les suivants dans un second commit posé dessus, sans forcer. L'agent est prévenu que le dépôt
+  est vide (sinon un petit modèle cherche des fichiers qui n'existent pas). L'accueil propose de créer, pas
+  d'expliquer. Vérifié avec le vrai modèle qwen2.5-coder:7b : `index.html` créé en 2 tours. **Non vérifié ici** :
+  la réponse réelle de GitHub sur un vrai dépôt vide. La doc ne la décrit pas, et ce comportement connu n'a pas
+  pu être testé (le proxy limite cette session au dépôt jaris). **Leçon générale : un cas limite (dépôt vide,
+  liste vide, premier usage) traité comme une erreur « pour être sûr » devient un blocage dès le premier essai
+  réel — c'est souvent exactement le cas que l'utilisateur teste en premier.**

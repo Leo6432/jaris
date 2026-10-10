@@ -337,10 +337,19 @@ export default function CodePanel(): JSX.Element {
         )}
 
         {repo && !generating && repo.changes.length === 0 && !repoSummary && !committed && (
+          // Étape 279 : un dépôt tout neuf s'ouvre aussi ; on y propose de CRÉER, pas d'expliquer ce qui n'existe pas.
           <EmptyState
-            title="Que doit faire Jaris dans ce dépôt ?"
-            description="Il lit les fichiers dont il a besoin et prépare les changements. Tu les vois ligne par ligne, puis tu choisis de les enregistrer sur GitHub — rien n'est envoyé avant."
-            suggestions={['Explique ce que fait ce dépôt', 'Corrige les fautes d\'orthographe', 'Ajoute un fichier .gitignore adapté']}
+            title={repo.fileCount === 0 ? 'Ce dépôt est encore vide' : 'Que doit faire Jaris dans ce dépôt ?'}
+            description={
+              repo.fileCount === 0
+                ? "Décris ce que Jaris doit y créer. Tu verras chaque fichier avant de l'enregistrer sur GitHub — rien n'est envoyé avant."
+                : "Il lit les fichiers dont il a besoin et prépare les changements. Tu les vois ligne par ligne, puis tu choisis de les enregistrer sur GitHub — rien n'est envoyé avant."
+            }
+            suggestions={
+              repo.fileCount === 0
+                ? ['Crée un petit site web de présentation', 'Crée un fichier qui présente le projet', 'Ajoute un fichier .gitignore adapté']
+                : ['Explique ce que fait ce dépôt', "Corrige les fautes d'orthographe", 'Ajoute un fichier .gitignore adapté']
+            }
             onSuggestion={setDescription}
           />
         )}

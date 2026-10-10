@@ -234,8 +234,9 @@ export interface RepoSnapshot {
   defaultBranch: string
   private: boolean
   htmlUrl: string
-  commitSha: string
-  treeSha: string
+  /** `null` : dépôt tout neuf, sans aucun commit (étape 279) — le premier enregistrement le crée. */
+  commitSha: string | null
+  treeSha: string | null
   files: RepoFile[]
   truncated: boolean
 }
@@ -369,10 +370,26 @@ export class GithubClient {
       head = await this.request('GET', `/repos/${owner}/${repo}/branches/${branchPath(target)}`)
     } catch (err) {
       if (!(err instanceof GithubError) || err.status !== 404) throw err
-      // Un dépôt tout neuf n'a encore aucune branche : « introuvable » ferait croire à un problème d'accès.
-      throw branch
-        ? new GithubError(404, `La branche « ${branch} » n'existe pas (ou plus) sur GitHub.`)
-        : githubHttpError(409, undefined, null)
+      if (branch) throw new GithubError(404, `La branche « ${branch} » n'existe pas (ou plus) sur GitHub.`)
+      // Étape 279 (Léo : « pourquoi on peut pas même sans rien dans le dépôt ») : un dépôt tout neuf n'a encore
+      // aucune branche. GitHub le dit en répondant 409 (« Git Repository is empty ») à la liste des commits : on
+      // l'ouvre alors VIDE, et le premier enregistrement crée sa branche.
+      if (await this.isEmpty(owner, repo)) {
+        return {
+          owner,
+          repo,
+          fullName: info.full_name,
+          branch: info.default_branch,
+          defaultBranch: info.default_branch,
+          private: info.private,
+          htmlUrl: info.html_url,
+          commitSha: null,
+          treeSha: null,
+          files: [],
+          truncated: false
+        }
+      }
+      throw new GithubError(404, `La branche principale « ${info.default_branch} » est introuvable sur GitHub.`)
     }
     const tree = await this.request<{ tree: Array<{ path: string; type: string; sha: string; size?: number; mode: string }>; truncated?: boolean }>(
       'GET',
@@ -396,6 +413,16 @@ export class GithubClient {
     }
   }
 
+  private async isEmpty(owner: string, repo: string): Promise<boolean> {
+    try {
+      await this.request('GET', `/repos/${owner}/${repo}/commits?per_page=1`)
+      return false
+    } catch (err) {
+      if (err instanceof GithubError && err.status === 409) return true
+      throw err
+    }
+  }
+
   /** Contenu texte d'un fichier, `null` s'il est binaire ou trop lourd pour être confié au modèle. */
   async readText(snapshot: RepoSnapshot, file: RepoFile): Promise<string | null> {
     if (file.size > MAX_TEXT_FILE_BYTES) return null
@@ -411,10 +438,39 @@ export class GithubClient {
    */
   async commit(snapshot: RepoSnapshot, changes: FileChange[], message: string): Promise<{ sha: string; url: string }> {
     if (changes.length === 0) throw new GithubError(0, "Il n'y a aucun changement à enregistrer.")
+    if (snapshot.commitSha === null || snapshot.treeSha === null) return this.firstCommit(snapshot, changes, message)
+    return this.commitOnto(snapshot, { commitSha: snapshot.commitSha, treeSha: snapshot.treeSha }, changes, message)
+  }
+
+  /**
+   * Dépôt vide (étape 279) : l'API d'arbres et de commits ne peut rien écrire tant qu'il n'existe aucun commit.
+   * L'API « créer un fichier » sait, elle, faire ce tout premier commit (c'est ce que fait le bouton « creating a
+   * new file » d'un dépôt vide sur github.com). Le premier fichier passe donc par elle, les autres suivent dans un
+   * second commit posé dessus, toujours sans forcer.
+   */
+  private async firstCommit(snapshot: RepoSnapshot, changes: FileChange[], message: string): Promise<{ sha: string; url: string }> {
+    const writes = changes.filter((change): change is { path: string; content: string } => change.content !== null)
+    if (writes.length === 0) throw new GithubError(0, "Le dépôt est vide : il n'y a aucun fichier à créer.")
+    const [first, ...rest] = writes
+    const created = await this.request<{ commit: { sha: string; html_url: string; tree: { sha: string } } }>(
+      'PUT',
+      `/repos/${snapshot.owner}/${snapshot.repo}/contents/${first.path.split('/').map(encodeURIComponent).join('/')}`,
+      { message, content: Buffer.from(first.content, 'utf8').toString('base64') }
+    )
+    if (rest.length === 0) return { sha: created.commit.sha, url: created.commit.html_url }
+    return this.commitOnto(snapshot, { commitSha: created.commit.sha, treeSha: created.commit.tree.sha }, rest, message)
+  }
+
+  private async commitOnto(
+    snapshot: RepoSnapshot,
+    parent: { commitSha: string; treeSha: string },
+    changes: FileChange[],
+    message: string
+  ): Promise<{ sha: string; url: string }> {
     const modes = new Map(snapshot.files.map((file) => [file.path, file.mode]))
     const base = `/repos/${snapshot.owner}/${snapshot.repo}`
     const tree = await this.request<{ sha: string }>('POST', `${base}/git/trees`, {
-      base_tree: snapshot.treeSha,
+      base_tree: parent.treeSha,
       tree: changes.map((change) =>
         change.content === null
           ? { path: change.path, mode: modes.get(change.path) ?? '100644', type: 'blob', sha: null }
@@ -424,7 +480,7 @@ export class GithubClient {
     const commit = await this.request<{ sha: string; html_url: string }>('POST', `${base}/git/commits`, {
       message,
       tree: tree.sha,
-      parents: [snapshot.commitSha]
+      parents: [parent.commitSha]
     })
     await this.request('PATCH', `${base}/git/refs/heads/${branchPath(snapshot.branch)}`, { sha: commit.sha, force: false })
     return { sha: commit.sha, url: commit.html_url }

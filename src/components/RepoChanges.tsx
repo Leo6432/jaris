@@ -130,7 +130,7 @@ export default function RepoChanges({ repo, summary, busy, committed, defaultMes
           </select>
         </label>
         <span className="repo-panel__count">
-          {repo.fileCount.toLocaleString('fr-FR')} fichiers{repo.truncated ? ' (liste incomplète)' : ''}
+          {repo.fileCount === 0 ? 'Dépôt vide' : `${repo.fileCount.toLocaleString('fr-FR')} fichiers${repo.truncated ? ' (liste incomplète)' : ''}`}
         </span>
       </div>
 

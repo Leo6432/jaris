@@ -76,6 +76,7 @@ window.jaris = {
   githubListBranches: () => Promise.resolve(['main', 'dev']),
   githubOpenRepo: (fullName, branch) => {
     window.__calls.open.push([fullName, branch])
+    if (window.__emptyRepo) return Promise.resolve({ ...VIEW, fileCount: 0 })
     return Promise.resolve(window.__agentDone ? CHANGED : VIEW)
   },
   githubRunAgent: (fullName, request) => {
@@ -242,6 +243,19 @@ test('si aucun fichier n’a changé, le bandeau le dit, quoi que le modèle pr�
     await page.waitForSelector('.code-panel__done')
     assert.match(await page.textContent('.code-panel__done'), /aucun fichier n'a été changé/)
     assert.equal(await page.locator('.repo-panel__save').count(), 0)
+  })
+})
+
+test('un dépôt tout neuf s’ouvre (étape 279) et propose de créer, pas d’expliquer', options, async () => {
+  await withPage(async (page) => {
+    await page.evaluate(() => {
+      window.__emptyRepo = true
+    })
+    await connectAndOpen(page)
+    assert.equal(await page.textContent('.repo-panel__count'), 'Dépôt vide')
+    assert.match(await page.textContent('.empty-state__title'), /encore vide/)
+    assert.match(await page.textContent('.empty-state'), /Crée un petit site web/)
+    assert.equal(await page.locator('.code-panel__error').count(), 0)
   })
 })
 
