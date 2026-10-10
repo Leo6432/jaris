@@ -145,12 +145,14 @@ test('dessiner : avancement avec barre, puis l’image s’affiche et rejoint la
     await page.click('.composer__send')
     assert.deepEqual((await page.evaluate(() => window.__calls)).find((c) => Array.isArray(c) && c[0] === 'generate'), ['generate', 'un phare sous la tempête'])
     await page.evaluate(() => window.__log('Dessin : étape 2 sur 4'))
-    await page.waitForFunction(() => /Dessin : étape 2 sur 4/.test(document.querySelector('.code-panel__live').textContent))
-    assert.equal(await page.$eval('.image-panel__progress .options-menu__progress-bar-fill', (el) => el.style.width), '50%')
+    await page.waitForFunction(() => /Étape 2 sur 4/.test(document.querySelector('.media-pending').textContent))
+    assert.equal(await page.$eval('.media-pending__bar-fill', (el) => el.style.width), '50%')
 
     await page.evaluate(() => window.__finishGen())
     await page.waitForSelector('.image-panel__image')
-    assert.match(await page.textContent('.code-panel__done'), /ton image est prête/)
+    // L'image prend la place du cadre d'attente : plus de bandeau vert « Terminé… ».
+    assert.equal(await page.locator('.code-panel__done').count(), 0)
+    assert.equal(await page.locator('.media-pending').count(), 0)
     // Étape 271 : plus de titre répété au-dessus de l'image (l'en-tête de la fenêtre le donne).
     assert.match(await page.textContent('.workspace__item--active'), /Un phare/)
     assert.equal(await page.locator('.image-panel__title').count(), 0)
@@ -162,16 +164,48 @@ test('dessiner : avancement avec barre, puis l’image s’affiche et rejoint la
   })
 })
 
-test('« Arrêter » interrompt le dessin et le dit, sans erreur rouge', options, async () => {
+test('pendant le dessin : l’attente au CENTRE, le champ en BAS — plus rien de collé en haut (étape 291)', options, async () => {
+  // Léo, capture à l'appui : « image c'est une catastrophe le design, pourquoi c'est tout en haut » — le bandeau
+  // « Préparation du dessin… [Arrêter] » en haut, le champ juste dessous, et tout le reste de l'écran vide.
+  await withPage(async (page) => {
+    await page.waitForSelector('.composer__input')
+    await page.fill('.composer__input', 'un chat')
+    await page.click('.composer__send')
+    await page.waitForSelector('.media-pending')
+    assert.equal(await page.locator('.code-panel__live').count(), 0, 'le bandeau en haut est revenu')
+    // Comme ChatGPT : le champ est vidé, la demande rappelée au-dessus du cadre.
+    assert.equal(await page.inputValue('.composer__input'), '')
+    assert.equal(await page.textContent('.media-pending__prompt'), 'un chat')
+    assert.match(await page.textContent('.media-pending'), /Création de l'image…/)
+    const layout = await page.evaluate(() => {
+      const box = (selector) => document.querySelector(selector).getBoundingClientRect()
+      const panel = box('.image-panel')
+      const frame = box('.media-pending__frame')
+      const composer = box('.image-panel > .composer')
+      return {
+        composerAtBottom: Math.abs(panel.bottom - composer.bottom) < 24,
+        frameAboveComposer: frame.bottom <= composer.top,
+        // Le cadre est centré dans la place au-dessus du champ (au pixel près, à 40 px près).
+        frameCentered: Math.abs((frame.top + frame.bottom) / 2 - (panel.top + composer.top) / 2) < 40,
+        frameIsSquare: Math.abs(frame.width - frame.height) < 2 && frame.width > 200
+      }
+    })
+    assert.deepEqual(layout, { composerAtBottom: true, frameAboveComposer: true, frameCentered: true, frameIsSquare: true })
+  })
+})
+
+test('on arrête par le bouton du champ, comme dans le Chat : c’est dit sans erreur rouge, et la demande revient', options, async () => {
   await withPage(async (page) => {
     await page.waitForSelector('.composer__input')
     await page.fill('.composer__input', 'un dragon')
     await page.click('.composer__send')
-    await page.waitForSelector('.code-panel__live-stop')
-    await page.click('.code-panel__live-stop')
-    await page.waitForSelector('.code-panel__done--stopped')
-    assert.match(await page.textContent('.code-panel__done'), /Dessin arrêté/)
+    await page.waitForSelector('.media-pending')
+    assert.equal(await page.locator('.code-panel__live-stop').count(), 0, 'le bouton « Arrêter » à part est revenu')
+    await page.click('.composer__send--stop')
+    await page.waitForSelector('.media-note')
+    assert.match(await page.textContent('.media-note'), /^Dessin arrêté après \d+ s\.$/)
     assert.equal(await page.locator('.code-panel__error').count(), 0)
+    assert.equal(await page.inputValue('.composer__input'), 'un dragon')
   })
 })
 

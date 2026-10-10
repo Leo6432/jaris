@@ -44,6 +44,8 @@ function setup(responses, { profile = { codeModel: 'test-model', visionModel: 'v
     'fs/promises': { mkdir: async () => {}, writeFile: async () => {} },
     path: { join: (...parts) => parts.join('/') },
     './ollama': {
+      // Étape 291 : le modèle est-il déjà chargé ? (« Charge le modèle… » avant le premier mot)
+      isModelLoaded: async () => true,
       chatWithOllama: async (messages, _tools, model, _think, _signal, _numCtx, onToken) => {
         calls.push(messages)
         models.push(model)

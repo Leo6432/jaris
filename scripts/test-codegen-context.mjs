@@ -142,6 +142,8 @@ function setupCodegen(answer, { modelMax = 262144 } = {}) {
     'fs/promises': { mkdir: async () => {}, writeFile: async () => {}, readdir: async () => [], readFile: async () => '', rm: async () => {} },
     path: { join: (...parts) => parts.join('/'), isAbsolute: () => true, relative: () => '', resolve: (p) => p, sep: '/' },
     './ollama': {
+      // Étape 291 : le modèle est-il déjà chargé ? (« Charge le modèle… » avant le premier mot)
+      isModelLoaded: async () => true,
       chatWithOllama: async (_messages, _tools, _model, _think, _signal, numCtx) => {
         numCtxs.push(numCtx)
         const next = answer(numCtx, numCtxs.length - 1)

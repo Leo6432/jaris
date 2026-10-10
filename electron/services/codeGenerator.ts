@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { config } from '../config'
-import { chatWithOllama, getModelInfo, getModelThinking, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError, type OllamaMessage, type OllamaTool, type ThinkLevel } from './ollama'
+import { chatWithOllama, getModelInfo, getModelThinking, isModelLoaded, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError, type OllamaMessage, type OllamaTool, type ThinkLevel } from './ollama'
 import { chosenThink, type ThinkValue } from '../../shared/effort'
 import { pickBestCodeModel } from './hardwareScan'
 import { getProfile } from './profileStore'
@@ -192,6 +192,26 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
     let charsWritten = 0
     let thinking = true
     let lastActivity = Date.now()
+    // Étape 291 : avant le premier mot, le modèle se charge, puis lit — rien n'arrive, et c'est normal.
+    let phase: CodeGenProgress['phase'] = 'reading'
+    let checkingLoad = false
+    // Une réponse de /api/ps arrivée après la fin de l'étape ne doit plus rien annoncer.
+    let callDone = false
+    const checkLoaded = (): void => {
+      if (checkingLoad || (phase !== 'reading' && phase !== 'loading')) return
+      checkingLoad = true
+      void isModelLoaded(model)
+        .then((loaded) => {
+          const next = loaded === false ? 'loading' : 'reading'
+          if (!callDone && (phase === 'reading' || phase === 'loading') && next !== phase) {
+            phase = next
+            emit()
+          }
+        })
+        .finally(() => {
+          checkingLoad = false
+        })
+    }
 
     let lastEmit = 0
     const emit = (throttled = false): void => {
@@ -206,14 +226,20 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
         stepCount: steps.count,
         charsWritten,
         thinking,
-        idleMs: now - lastActivity
+        idleMs: now - lastActivity,
+        phase
       })
     }
     emit()
     // Deux sources d'avancement, complémentaires : les fragments reçus (ça avance, avec le compteur qui
     // monte) et ce battement de cœur (même quand plus rien n'arrive, `idleMs` continue de grandir — c'est
     // ce qui permet de dire "bloqué" au lieu de laisser un écran figé sans explication).
-    const heartbeat = setInterval(() => emit(), PROGRESS_HEARTBEAT_MS)
+    checkLoaded()
+    const heartbeat = setInterval(() => {
+      // Tant qu'il se charge, on regarde chaque seconde s'il a fini : il passe alors à la lecture.
+      if (phase === 'loading') checkLoaded()
+      emit()
+    }, PROGRESS_HEARTBEAT_MS)
     const call = (numCtx: number): Promise<OllamaMessage> =>
       chatWithOllama(
         messages,
@@ -224,6 +250,7 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
         numCtx,
         (delta) => {
           thinking = false
+          phase = 'writing'
           charsWritten += delta.length
           lastActivity = Date.now()
           emit(true)
@@ -232,6 +259,7 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
         // Raisonnement caché : aucun caractère de code, mais ça prouve que le modèle est bien en train de
         // travailler — sans ça, une longue réflexion est indiscernable d'un blocage.
         () => {
+          if (phase !== 'writing') phase = 'thinking'
           lastActivity = Date.now()
           emit(true)
         }
@@ -252,6 +280,7 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
         // Même étape (le travail à faire n'a pas changé), compteurs repartis de zéro.
         charsWritten = 0
         thinking = true
+        phase = 'reading'
         lastActivity = Date.now()
         emit()
         try {
@@ -271,6 +300,7 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
       throw err
     } finally {
       clearInterval(heartbeat)
+      callDone = true
     }
   }
 }

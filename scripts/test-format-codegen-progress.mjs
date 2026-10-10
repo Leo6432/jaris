@@ -15,10 +15,10 @@ const source = ts.transpileModule(readFileSync(new URL('../src/lib/formatCodeGen
 
 const exports = {}
 vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(exports, { exports }, () => ({}))
-const { formatCodeLive, formatDuration, STALL_HINT_MS } = exports
+const { formatCodeLive, formatDuration, STALL_HINT_MS, START_STALL_HINT_MS } = exports
 
 function progress(extra) {
-  return { label: "Écriture de l'application", stepIndex: 1, stepCount: 2, charsWritten: 0, thinking: true, idleMs: 0, ...extra }
+  return { label: "Écriture de l'application", stepIndex: 1, stepCount: 2, charsWritten: 0, thinking: true, idleMs: 0, phase: 'writing', ...extra }
 }
 
 test('les durées sont parlées, jamais en millisecondes', () => {
@@ -32,7 +32,7 @@ test('les durées sont parlées, jamais en millisecondes', () => {
 // index.html plus 20 lignes ») : la ligne dit le FICHIER et ses lignes, plus jamais « Étape N » ni un compte de caractères.
 test('un fichier en cours d\'écriture : le verbe, le fichier, et ses lignes', () => {
   const text = formatCodeLive({ kind: 'write', path: 'index.html', lines: 20 }, progress({ thinking: false, charsWritten: 900 }))
-  assert.deepEqual(text, { action: 'Écrit', path: 'index.html', lines: '+20 lignes', stall: null })
+  assert.deepEqual(text, { action: 'Écrit', path: 'index.html', lines: '+20 lignes', elapsed: null, stall: null })
 })
 
 test('une modification et une relecture ont leur propre verbe ; une seule ligne reste au singulier', () => {
@@ -45,23 +45,43 @@ test('avant la première ligne reçue, pas de « +0 lignes »', () => {
   assert.equal(formatCodeLive({ kind: 'write', path: 'style.css', lines: 0 }, null).lines, null)
 })
 
-test("sans fichier en cours, on dit qu'il réfléchit (ou qu'il travaille) — jamais un numéro d'étape", () => {
-  assert.equal(formatCodeLive(null, null).action, 'Réfléchit…')
-  assert.equal(formatCodeLive(null, progress({ thinking: true })).action, 'Réfléchit…')
-  assert.equal(formatCodeLive(null, progress({ thinking: false, charsWritten: 300 })).action, 'Travaille…')
+// Étape 291 (Léo : « pourquoi tu mets aucune nouvelle du modèle depuis 20 s, et après il écrit ») : avant son premier
+// mot, le modèle se charge puis lit — la ligne le DIT, au lieu d'annoncer un silence suspect.
+test('sans fichier en cours, la ligne dit où en est le modèle — jamais un numéro d’étape', () => {
+  assert.equal(formatCodeLive(null, null).action, 'Prépare sa réponse…')
+  assert.equal(formatCodeLive(null, progress({ phase: 'loading' })).action, 'Charge le modèle…')
+  assert.equal(formatCodeLive(null, progress({ phase: 'reading' })).action, 'Prépare sa réponse…')
+  assert.equal(formatCodeLive(null, progress({ phase: 'thinking' })).action, 'Réfléchit…')
+  assert.equal(formatCodeLive(null, progress({ phase: 'writing', thinking: false, charsWritten: 300 })).action, 'Écrit…')
   for (const text of [formatCodeLive(null, progress()), formatCodeLive({ kind: 'write', path: 'index.html', lines: 4 }, progress())]) {
     assert.doesNotMatch(Object.values(text).join(' '), /Étape|caractères/)
   }
 })
 
-test('un silence prolongé du modèle est dit en clair', () => {
+test('avant le premier mot, 45 s de chargement ne sont pas « rien reçu » : juste le temps qui passe', () => {
+  for (const phase of ['loading', 'reading']) {
+    const text = formatCodeLive(null, progress({ phase, idleMs: 45_000 }))
+    assert.equal(text.stall, null, `${phase} : alerte à 45 s`)
+    assert.equal(text.elapsed, '45 s')
+  }
+  // Les toutes premières secondes, rien du tout : la ligne vient d'apparaître.
+  assert.equal(formatCodeLive(null, progress({ phase: 'loading', idleMs: 4_000 })).elapsed, null)
+  // Au-delà de 2 minutes sans le moindre mot, là on le dit.
+  const long = formatCodeLive(null, progress({ phase: 'loading', idleMs: START_STALL_HINT_MS + 5_000 }))
+  assert.equal(long.stall, 'toujours rien après 2 min 05')
+  assert.equal(long.elapsed, null)
+})
+
+test('un modèle qui écrivait puis se tait : le silence est dit en clair', () => {
   // C'est LE cas que Léo décrivait (étape 99, « des fois c'est bloqué ») : sans cette phrase, une ligne immobile ne
   // dit pas si Jaris travaille encore.
-  const text = formatCodeLive({ kind: 'write', path: 'index.html', lines: 12 }, progress({ idleMs: STALL_HINT_MS + 25_000 }))
+  const text = formatCodeLive({ kind: 'write', path: 'index.html', lines: 12 }, progress({ idleMs: STALL_HINT_MS + 15_000 }))
   assert.equal(text.stall, 'rien reçu du modèle depuis 45 s')
   assert.equal(text.path, 'index.html')
+  assert.equal(formatCodeLive(null, progress({ phase: 'thinking', idleMs: STALL_HINT_MS + 15_000 })).stall, 'rien reçu du modèle depuis 45 s')
 })
 
 test("juste en dessous du seuil, on n'alarme pas pour rien", () => {
   assert.equal(formatCodeLive(null, progress({ idleMs: STALL_HINT_MS - 1 })).stall, null)
+  assert.equal(formatCodeLive(null, progress({ phase: 'reading', idleMs: START_STALL_HINT_MS - 1 })).stall, null)
 })

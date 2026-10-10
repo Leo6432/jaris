@@ -7773,3 +7773,30 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   fichiers, ancienne carte sans boutons, carte jamais écrasée en fenêtre étroite) et `scripts/test-code-panel-ui.mjs`
   (application : durée puis carte « index.html » avec « Afficher le code », arrêt sans carte, fin retrouvée en
   rouvrant l'élément). Chaque garde-fou a été vérifié en le retirant.
+
+- **« 1. pourquoi dans code tu mets aucune nouvelle du modèle depuis 20 s, et après il écrit 2. image c'est une
+  catastrophe le design, pourquoi c'est tout en haut » (Léo, étape 291).**
+  1. **Le silence avant le premier mot n'est pas un blocage.** Avant d'écrire, un modèle se CHARGE en mémoire (un
+     gros modèle : plusieurs dizaines de secondes) puis LIT tout ce qu'on lui envoie (fichiers du dépôt compris) — deux
+     phases sans le moindre fragment à montrer. L'étape 99 comptait ce silence depuis le début de l'appel : à 20 s,
+     la ligne annonçait « rien reçu du modèle », exactement pendant ce travail normal. L'avancement porte maintenant
+     une `phase` (`loading` / `reading` / `thinking` / `writing`) : « Charge le modèle… » (vrai : `/api/ps` dit si le
+     modèle est en mémoire, revérifié chaque seconde pendant le chargement), puis « Prépare sa réponse… », avec le
+     temps écoulé dès 10 s. L'alerte « rien reçu du modèle » ne concerne plus qu'un modèle qui avait COMMENCÉ puis se
+     tait (30 s) ; avant le premier mot, elle n'arrive qu'au bout de 2 min (« toujours rien après… »). Ollama qui ne
+     répond pas sur `/api/ps` : on n'affirme rien, il « prépare sa réponse ». **Leçon générale : une alerte de silence
+     doit savoir s'il est NORMAL à ce moment-là** — compter le silence depuis le début d'une opération qui commence
+     par une longue phase muette fait crier au loup à chaque fois, et finit par faire ignorer la vraie alerte.
+  2. **Image (et Vidéo, construite pareil) : l'attente au centre, le champ en bas.** Pendant un dessin, ni l'accueil
+     ni l'image n'étaient affichés : il ne restait que le bandeau « Préparation du dessin… [Arrêter] » et le champ,
+     collés en haut, sur un écran vide. Remplacé, comme ChatGPT, par un cadre aux proportions de ce qui se crée
+     (carré, 16/9 pour une vidéo) qui se remplit au fil des étapes, la demande rappelée au-dessus — un seul composant
+     pour les deux écrans (`MediaPending.tsx`) ; le champ se vide à l'envoi et la demande y revient si on arrête ou
+     si ça échoue ; l'arrêt passe par le bouton du champ ; plus de bandeau vert à la fin (l'image prend la place du
+     cadre). **Leçon générale : un écran doit avoir quelque chose qui occupe le centre dans CHACUN de ses états** —
+     l'accueil et le résultat poussaient le champ en bas, l'état « en cours » n'avait rien, et tout remontait.
+  Régression : `scripts/test-format-codegen-progress.mjs` (phases, 45 s de chargement sans alerte, alerte à 2 min,
+  silence après le premier mot), `scripts/test-codegen-progress.mjs` (phases réellement émises : se charge → lit →
+  réfléchit → écrit ; jamais « se charge » si Ollama ne sait pas), `scripts/test-image-panel-ui.mjs` et
+  `scripts/test-video-panel-ui.mjs` (cadre au centre et carré/16-9, champ en bas, plus de bandeau en haut, arrêt par
+  le champ, demande rendue). Chaque garde-fou a été vérifié en le retirant.

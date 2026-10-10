@@ -240,7 +240,7 @@ test('un dépôt ouvert change le champ, puis les changements s’affichent lign
     // Étape 288 (Léo : « enlève ça [Étape 3 · Travail sur … · Arrêter] […] mets ce qu'il fait en direct ») : une ligne
     // de la conversation dit le fichier que Jaris écrit, plus de bandeau « Étape N · Travail sur … ».
     await page.evaluate(() =>
-      window.__emitProgress({ label: 'Travail sur leo/projet', stepIndex: 2, stepCount: 0, charsWritten: 0, thinking: true, idleMs: 0 })
+      window.__emitProgress({ label: 'Travail sur leo/projet', stepIndex: 2, stepCount: 0, charsWritten: 0, thinking: true, idleMs: 0, phase: 'thinking' })
     )
     await page.waitForSelector('.code-chat__live')
     assert.equal(await page.locator('.code-panel__live').count(), 0, 'le bandeau « Étape » est revenu')

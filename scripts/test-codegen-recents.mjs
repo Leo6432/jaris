@@ -39,6 +39,8 @@ function setup({ dirEntries = [], readdirError = null, files = {} } = {}) {
     },
     path: { join: (...parts) => parts.join('/') },
     './ollama': {
+      // Étape 291 : le modèle est-il déjà chargé ? (« Charge le modèle… » avant le premier mot)
+      isModelLoaded: async () => true,
       chatWithOllama: async () => ({ role: 'assistant', content: '' }),
       listInstalledModels: async () => [],
       pullModelIfMissing: async () => {},

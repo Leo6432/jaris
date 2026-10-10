@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Composer from '@/components/Composer'
 import EmptyState from '@/components/EmptyState'
+import MediaPending from '@/components/MediaPending'
 import Workspace from '@/components/Workspace'
 import { formatDuration } from '@/lib/formatCodeGenProgress'
 import { formatRecentDate } from '@/lib/formatRecentDate'
@@ -58,7 +59,10 @@ export default function VideoPanel(): JSX.Element {
   const [ratio, setRatio] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
-  const [lastOutcome, setLastOutcome] = useState<{ kind: 'done' | 'stopped'; durationMs: number } | null>(null)
+  /** Étape 291 : la demande en cours, rappelée au centre pendant la création (le champ est vidé dès l'envoi). */
+  const [pendingPrompt, setPendingPrompt] = useState('')
+  /** Une vidéo arrêtée : dite en une ligne discrète au-dessus du champ, plus dans un bandeau. */
+  const [stoppedAfterMs, setStoppedAfterMs] = useState<number | null>(null)
   const stoppedRef = useRef(false)
   // Vignettes de l'accueil (étape 213, Léo : « sur image on voit toutes les images, sur vidéo on ne voit rien »).
   // Chaque vidéo arrive en entier par l'IPC et devient une adresse blob: locale, libérée quand la vidéo est
@@ -156,9 +160,9 @@ export default function VideoPanel(): JSX.Element {
     []
   )
 
-  /** Le bandeau de fin et l'erreur décrivent UNE vidéo : effacés dès qu'on en change (leçon de l'étape 102). */
+  /** L'arrêt et l'erreur décrivent UNE vidéo : effacés dès qu'on en change (leçon de l'étape 102). */
   const clearFeedback = (): void => {
-    setLastOutcome(null)
+    setStoppedAfterMs(null)
     setError(null)
     setSaved(false)
     setLogLine(null)
@@ -187,23 +191,30 @@ export default function VideoPanel(): JSX.Element {
       setError(`La qualité ${videoQualityLabel(quality)} n'est pas encore téléchargée : clique sur le bouton de qualité puis « Télécharger ».`)
       return
     }
-    setGenerating(true)
     stoppedRef.current = false
     const startedAt = Date.now()
-    const image = attachment
-      ? { base64: attachment.base64, mimeType: attachment.dataUrl.slice(5, attachment.dataUrl.indexOf(';')) }
+    const sentAttachment = attachment
+    const image = sentAttachment
+      ? { base64: sentAttachment.base64, mimeType: sentAttachment.dataUrl.slice(5, sentAttachment.dataUrl.indexOf(';')) }
       : undefined
+    // Comme ChatGPT : le champ se vide dès l'envoi, la demande est rappelée au-dessus de la vidéo en cours.
+    setPendingPrompt(text)
+    setPrompt('')
+    setAttachment(null)
+    setSelected(null)
+    setGenerating(true)
     try {
       const video = await window.jaris.generateStudioVideo(text, image ?? null, seconds, quality)
-      setPrompt('')
-      setAttachment(null)
+      // La fin se voit : la vidéo prend la place du cadre d'attente (plus de bandeau « Terminé en… »), et un bip.
       setSelected(video)
-      setLastOutcome({ kind: 'done', durationMs: Date.now() - startedAt })
       void playSoundCueIfEnabled('success')
       void refreshVideos()
     } catch (err) {
+      // Rien n'est perdu : la demande (et l'image jointe) reviennent dans le champ, prêtes à être relancées.
+      setPrompt(text)
+      setAttachment(sentAttachment)
       if (stoppedRef.current) {
-        setLastOutcome({ kind: 'stopped', durationMs: Date.now() - startedAt })
+        setStoppedAfterMs(Date.now() - startedAt)
       } else {
         setError(err instanceof Error ? err.message : String(err))
         void playSoundCueIfEnabled('error')
@@ -330,7 +341,7 @@ export default function VideoPanel(): JSX.Element {
       emptyLabel="Aucune vidéo pour l'instant."
     >
       <div className="code-panel image-panel video-panel">
-        {!selected && !generating && (
+        {!selected && !generating && !installing && (
           <div className="image-panel__home">
             <EmptyState
               title="Quelle vidéo veux-tu créer ?"
@@ -406,44 +417,25 @@ export default function VideoPanel(): JSX.Element {
           </div>
         )}
 
+        {/* Étape 291 : comme le mode Image, l'attente au centre dans un cadre aux proportions de la vidéo ; l'arrêt
+            passe par le bouton du champ. */}
         {generating && (
-          <div className="code-panel__live">
-            <div className="code-panel__live-text">
-              <span className="code-panel__live-title">
-                {step ? `Vidéo : étape ${step.step} sur ${step.total}` : logLine ?? 'Préparation de la vidéo…'}
-              </span>
-              <span className="code-panel__live-detail">{formatDuration(elapsedMs)}</span>
-              {step && (
-                <div className="options-menu__progress-bar image-panel__progress">
-                  <div className="options-menu__progress-bar-fill" style={{ width: `${Math.round((step.step / step.total) * 100)}%` }} />
-                </div>
-              )}
-            </div>
-            <button className="code-panel__live-stop" onClick={stop}>
-              Arrêter
-            </button>
-          </div>
+          <MediaPending
+            shape="wide"
+            title="Création de la vidéo…"
+            prompt={pendingPrompt}
+            detail={step ? `Étape ${step.step} sur ${step.total}` : logLine}
+            fraction={step ? step.step / step.total : null}
+            elapsedMs={elapsedMs}
+          />
         )}
 
         {/* Étape 205 : une autre qualité se télécharge depuis son bouton ; l'avancement s'affiche ici. */}
         {installing && (
-          <div className="code-panel__live">
-            <div className="code-panel__live-text">
-              <span className="code-panel__live-title">Téléchargement de la qualité {current?.label}…</span>
-              <span className="code-panel__live-detail">{logLine ?? 'Préparation du téléchargement…'}</span>
-            </div>
-          </div>
+          <MediaPending shape="wide" title={`Téléchargement de la qualité ${current?.label ?? ''}…`} detail={logLine ?? 'Préparation du téléchargement…'} />
         )}
 
-        {!generating && lastOutcome !== null && (
-          <p className={`code-panel__done${lastOutcome.kind === 'stopped' ? ' code-panel__done--stopped' : ''}`}>
-            <span>
-              {lastOutcome.kind === 'done'
-                ? `Terminé en ${formatDuration(lastOutcome.durationMs)} — ta vidéo est prête.`
-                : `Vidéo arrêtée après ${formatDuration(lastOutcome.durationMs)}.`}
-            </span>
-          </p>
-        )}
+        {!generating && stoppedAfterMs !== null && <p className="media-note">Vidéo arrêtée après {formatDuration(stoppedAfterMs)}.</p>}
 
         {error && <p className="code-panel__error">{error}</p>}
 

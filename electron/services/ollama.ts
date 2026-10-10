@@ -545,6 +545,24 @@ export async function deleteModel(model: string): Promise<void> {
 }
 
 /**
+ * Le modèle est-il déjà chargé en mémoire (`/api/ps`) ? Étape 291 (Léo : « pourquoi tu mets aucune nouvelle du modèle
+ * depuis 20 s, et après il écrit ») : avant son premier mot, un modèle peut passer de longues secondes à se charger,
+ * puis à lire la demande — sans rien envoyer. Le savoir permet de DIRE « Charge le modèle… » au lieu d'un silence
+ * annoncé comme suspect. `null` si Ollama ne répond pas (on ne sait pas).
+ */
+export async function isModelLoaded(model: string): Promise<boolean | null> {
+  try {
+    const response = await fetch(`${config.ollama.host}/api/ps`, { signal: AbortSignal.timeout(2000) })
+    if (!response.ok) return null
+    const data = (await response.json()) as { models?: { name?: string; model?: string }[] }
+    const wanted = withTag(model)
+    return (data.models ?? []).some((m) => withTag(m.model ?? m.name ?? '') === wanted)
+  } catch {
+    return null
+  }
+}
+
+/**
  * Décharge de la mémoire (carte graphique et RAM) tous les modèles qu'Ollama garde « au chaud » (étape 173,
  * génération d'images) : Ollama garde un modèle chargé plusieurs minutes après une réponse, et le modèle de
  * dessin ne tiendrait pas en plus sur une carte 8 Go. `keep_alive: 0` sur /api/generate est la méthode

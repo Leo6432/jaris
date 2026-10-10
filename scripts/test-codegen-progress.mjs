@@ -38,7 +38,7 @@ const VALID_HTML =
  * vrai `chatWithOllama` le fait quand on lui passe ce callback. `onAbort` permet de simuler un arrêt
  * pendant l'appel.
  */
-function setup(responses, { onBeforeCall } = {}) {
+function setup(responses, { onBeforeCall, loaded = async () => true } = {}) {
   const calls = []
   const statusLines = []
   const progress = []
@@ -53,6 +53,8 @@ function setup(responses, { onBeforeCall } = {}) {
     },
     path: { join: (...parts) => parts.join('/') },
     './ollama': {
+      // Étape 291 : le modèle est-il déjà chargé ? (« Charge le modèle… » avant le premier mot)
+      isModelLoaded: (...args) => loaded(...args),
       chatWithOllama: async (messages, _tools, _model, _think, signal, _numCtx, onToken, onThinking) => {
         calls.push(messages)
         await onBeforeCall?.(calls.length)
@@ -170,4 +172,34 @@ test("un arrêt pendant la RELECTURE ne se fait pas avaler par sa tolérance aux
 
   await assert.rejects(() => run(app, 'une liste de courses', { signal: controller.signal }), /arrêtée/i)
   assert.equal(app.written.length, 0)
+})
+
+// Étape 291 (Léo : « pourquoi tu mets aucune nouvelle du modèle depuis 20 s, et après il écrit ») : avant son premier
+// mot, le modèle se charge, puis lit ; l'avancement dit laquelle des deux, au lieu d'un silence présenté comme suspect.
+test('avant le premier mot : « se charge » tant que le modèle n’est pas en mémoire, puis réfléchit, puis écrit', async () => {
+  let loadedNow = false
+  const app = setup([VALID_HTML, VALID_HTML], {
+    loaded: async () => loadedNow,
+    // Le chargement prend un moment : l'appel au modèle ne commence qu'après, comme avec un vrai Ollama.
+    onBeforeCall: async (n) => {
+      if (n === 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1300))
+        loadedNow = true
+        await new Promise((resolve) => setTimeout(resolve, 1300))
+      }
+    }
+  })
+  await run(app, 'une liste de courses')
+  const phases = app.progress.filter((p) => p.stepIndex === 1).map((p) => p.phase)
+  const order = phases.filter((phase, i) => phase !== phases[i - 1])
+  assert.deepEqual(order, ['reading', 'loading', 'reading', 'thinking', 'writing'])
+  // La relecture qui suit trouve le modèle déjà en mémoire : jamais « se charge ».
+  assert.equal(app.progress.some((p) => p.stepIndex === 2 && p.phase === 'loading'), false)
+})
+
+test('Ollama ne dit pas si le modèle est chargé : on n’annonce rien de faux, il « prépare sa réponse »', async () => {
+  const app = setup([VALID_HTML, VALID_HTML], { loaded: async () => null })
+  await run(app, 'une liste de courses')
+  assert.equal(app.progress.some((p) => p.phase === 'loading'), false)
+  assert.equal(app.progress[0].phase, 'reading')
 })

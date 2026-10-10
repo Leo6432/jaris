@@ -7488,6 +7488,7 @@ select {
   animation: code-chat-live-pulse 1.2s ease-in-out infinite;
 }
 
+.code-chat__live-elapsed,
 .code-chat__live-stall {
   min-width: 0;
   overflow: hidden;
@@ -7946,4 +7947,121 @@ button.changes-card__file:hover {
 .changes-card__more:hover {
   color: var(--hud-text);
   background: var(--jv-hover);
+}
+
+/* Étape 291 (Léo : « image c'est une catastrophe le design, pourquoi c'est tout en haut ») : l'attente d'une image ou
+   d'une vidéo au CENTRE, dans un cadre aux proportions de ce qui se crée — le champ reste en bas. */
+.media-pending {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px 16px;
+}
+
+.media-pending__prompt {
+  max-width: min(100%, 560px);
+  margin: 0;
+  padding: 9px 16px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--hud-text);
+  background: var(--jv-bubble);
+  border-radius: 18px;
+  overflow-wrap: anywhere;
+}
+
+.media-pending__frame {
+  position: relative;
+  /* Jamais plus haut que la place disponible : le cadre rétrécit avec la fenêtre au lieu de pousser le champ. */
+  max-height: 100%;
+  min-height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--hud-line);
+  border-radius: 16px;
+  background: var(--hud-panel);
+  overflow: hidden;
+}
+
+.media-pending__frame--square {
+  width: min(100%, 420px);
+  aspect-ratio: 1;
+}
+
+.media-pending__frame--wide {
+  width: min(100%, 640px);
+  aspect-ratio: 16 / 9;
+}
+
+/* Un reflet qui passe lentement : quelque chose se crée, même entre deux étapes. */
+.media-pending__shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(var(--jv-ink-rgb), 0.06) 50%, transparent 70%);
+  background-size: 250% 100%;
+  animation: media-pending-shimmer 2.4s linear infinite;
+}
+
+@keyframes media-pending-shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .media-pending__shimmer {
+    animation: none;
+  }
+}
+
+.media-pending__label {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0 16px;
+  text-align: center;
+}
+
+.media-pending__label strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--hud-text);
+}
+
+.media-pending__label span {
+  font-size: 12px;
+  color: var(--hud-text-faint);
+}
+
+.media-pending__bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(var(--jv-ink-rgb), 0.08);
+}
+
+.media-pending__bar-fill {
+  height: 100%;
+  background: var(--hud-text-dim);
+  transition: width 0.4s ease;
+}
+
+/* Un dessin arrêté : une ligne discrète au-dessus du champ, jamais un bandeau sur toute la largeur. */
+.media-note {
+  margin: 0 auto;
+  font-size: 13px;
+  color: var(--hud-text-faint);
+  text-align: center;
 }

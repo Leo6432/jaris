@@ -713,6 +713,12 @@ export interface CodeGenProgress {
    * mort.
    */
   idleMs: number
+  /**
+   * Étape 291 (Léo : « pourquoi tu mets aucune nouvelle du modèle depuis 20 s, et après il écrit ») : où en est le
+   * modèle. Avant son premier mot il se CHARGE en mémoire (`loading`), puis LIT tout ce qu'on lui envoie (`reading`) —
+   * deux phases muettes, normales, qui peuvent durer longtemps. Ensuite il réfléchit (`thinking`) ou écrit (`writing`).
+   */
+  phase: 'loading' | 'reading' | 'thinking' | 'writing'
 }
 
 /**

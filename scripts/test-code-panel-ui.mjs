@@ -532,7 +532,7 @@ test('aperçu agrandi : une génération en cours reste visible, et « Nouvelle 
     await page.click('.code-preview__expand')
     // La ligne en direct est dans la conversation, repliée : la barre de la carte prend le relais (étape 288 : ce
     // que Jaris fait, pas un numéro d'étape).
-    assert.equal(await page.textContent('.code-preview__busy'), 'Réfléchit…')
+    assert.equal(await page.textContent('.code-preview__busy'), 'Prépare sa réponse…')
     await page.evaluate(() => window.__emitLive({ kind: 'write', path: 'index.html', lines: 20 }))
     assert.equal(await page.textContent('.code-preview__busy'), 'Écrit index.html +20 lignes')
     await page.evaluate(() => window.__finishGen())
@@ -686,7 +686,7 @@ test("pendant une génération, l'écran dit ce que Jaris écrit, en direct (ét
   // rien ne bougeait du tout ; l'étape 99 avait un bandeau à part ; maintenant c'est UNE ligne de la conversation.
   await withPage(async (page) => {
     await startGeneration(page)
-    assert.equal(await liveText(page), 'Réfléchit…')
+    assert.equal(await liveText(page), 'Prépare sa réponse…')
 
     await page.evaluate(() => window.__emitLive({ kind: 'write', path: 'index.html', lines: 20 }))
     assert.equal(await liveText(page), 'Écrit index.html +20 lignes')
@@ -695,7 +695,7 @@ test("pendant une génération, l'écran dit ce que Jaris écrit, en direct (ét
 
     // Plus de numéro d'étape ni de compte de caractères, et plus de bandeau du tout.
     await page.evaluate(() =>
-      window.__emitProgress({ label: "Écriture de l'application", stepIndex: 1, stepCount: 2, charsWritten: 4210, thinking: false, idleMs: 0 })
+      window.__emitProgress({ label: "Écriture de l'application", stepIndex: 1, stepCount: 2, charsWritten: 4210, thinking: false, idleMs: 0, phase: 'writing' })
     )
     const panel = await page.textContent('.code-chat')
     assert.doesNotMatch(panel, /Étape \d|caractères écrits/)
@@ -703,13 +703,13 @@ test("pendant une génération, l'écran dit ce que Jaris écrit, en direct (ét
 
     // Un silence prolongé est DIT, au lieu de laisser une ligne immobile sans explication.
     await page.evaluate(() =>
-      window.__emitProgress({ label: "Écriture de l'application", stepIndex: 1, stepCount: 2, charsWritten: 4210, thinking: false, idleMs: 45_000 })
+      window.__emitProgress({ label: "Écriture de l'application", stepIndex: 1, stepCount: 2, charsWritten: 4210, thinking: false, idleMs: 45_000, phase: 'writing' })
     )
     assert.match(await liveText(page), /rien reçu du modèle depuis 45 s/)
 
     // Fichier fini : retour à « il réfléchit », jamais un fichier figé qui n'est plus en cours.
     await page.evaluate(() => window.__emitLive(null))
-    assert.match(await liveText(page), /^Travaille…/)
+    assert.match(await liveText(page), /^Écrit…/)
 
     // C'est la dernière ligne de la conversation, juste au-dessus du champ.
     assert.equal(await page.evaluate(() => document.querySelector('.code-chat__thread').lastElementChild.classList.contains('code-chat__live')), true)
@@ -954,7 +954,7 @@ test('pendant un travail, la liste ne change pas d’élément (sa conversation 
     await startGeneration(page)
     await page.click('.workspace__item:has-text("jeu snake")')
     await page.click('.workspace__new')
-    assert.deepEqual(await threadLines(page), ['code-chat__user:une liste de courses', 'code-chat__live:Réfléchit…'])
+    assert.deepEqual(await threadLines(page), ['code-chat__user:une liste de courses', 'code-chat__live:Prépare sa réponse…'])
   })
 })
 

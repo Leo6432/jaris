@@ -8,7 +8,17 @@ import type { CodeGenProgress, CodeLiveWrite } from '../../shared/ipc'
  * Au-delà de ce seuil sans le moindre fragment reçu du modèle, on le DIT au lieu de laisser deviner : c'est
  * toute la différence entre "c'est long" et "c'est bloqué", que rien n'exprimait avant.
  */
-export const STALL_HINT_MS = 20_000
+export const STALL_HINT_MS = 30_000
+
+/**
+ * Étape 291 (Léo : « pourquoi tu mets aucune nouvelle du modèle depuis 20 s, et après il écrit ») : AVANT son premier
+ * mot, le modèle se charge en mémoire puis lit tout ce qu'on lui envoie — un silence normal, qui dure facilement une
+ * minute avec un gros modèle. On le dit (« Charge le modèle… »), avec le temps écoulé, et on ne s'en inquiète qu'au
+ * bout de ce délai.
+ */
+export const START_STALL_HINT_MS = 120_000
+/** Avant le premier mot, le temps écoulé s'affiche à partir d'ici : la ligne bouge, donc Jaris n'est pas figé. */
+export const ELAPSED_HINT_MS = 10_000
 
 /** "45 s", "1 min 12", "2 h 05" — durée parlée, jamais un nombre de millisecondes. */
 export function formatDuration(ms: number): string {
@@ -33,21 +43,41 @@ export interface CodeLiveText {
   path: string | null
   /** « +20 lignes », dès la première ligne reçue. */
   lines: string | null
+  /** Avant le premier mot : le temps déjà passé à charger ou à lire (« 45 s »), sans inquiéter. */
+  elapsed: string | null
   /** Un silence prolongé du modèle, dit en clair plutôt que laissé à deviner (« c'est long » ≠ « c'est bloqué »). */
   stall: string | null
+}
+
+const PHASE_ACTION: Record<CodeGenProgress['phase'], string> = {
+  loading: 'Charge le modèle…',
+  reading: 'Prépare sa réponse…',
+  thinking: 'Réfléchit…',
+  writing: 'Écrit…'
 }
 
 const LIVE_VERB: Record<CodeLiveWrite['kind'], string> = { write: 'Écrit', edit: 'Modifie', review: 'Relit' }
 
 export function formatCodeLive(live: CodeLiveWrite | null, progress: CodeGenProgress | null): CodeLiveText {
-  const stall = progress && progress.idleMs >= STALL_HINT_MS ? `rien reçu du modèle depuis ${formatDuration(progress.idleMs)}` : null
+  const idle = progress?.idleMs ?? 0
+  // Le modèle a-t-il déjà donné signe de vie dans cet appel (réflexion ou texte) ? Avant, son silence est normal.
+  const started = progress !== null && (progress.phase === 'thinking' || progress.phase === 'writing')
+  const stall = started
+    ? idle >= STALL_HINT_MS
+      ? `rien reçu du modèle depuis ${formatDuration(idle)}`
+      : null
+    : idle >= START_STALL_HINT_MS
+      ? `toujours rien après ${formatDuration(idle)}`
+      : null
+  const elapsed = !started && !stall && idle >= ELAPSED_HINT_MS ? formatDuration(idle) : null
   if (live) {
     return {
       action: LIVE_VERB[live.kind],
       path: live.path,
       lines: live.lines > 0 ? `+${live.lines} ${live.lines === 1 ? 'ligne' : 'lignes'}` : null,
-      stall
+      elapsed: null,
+      stall: started ? stall : null
     }
   }
-  return { action: !progress || progress.thinking ? 'Réfléchit…' : 'Travaille…', path: null, lines: null, stall }
+  return { action: progress ? PHASE_ACTION[progress.phase] : PHASE_ACTION.reading, path: null, lines: null, elapsed, stall }
 }

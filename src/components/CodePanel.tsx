@@ -121,6 +121,7 @@ function LiveLine({ text }: { text: ReturnType<typeof formatCodeLive> }): JSX.El
         </span>
       )}
       {text.lines && <span className="code-chat__activity-stats repo-change__added">{text.lines}</span>}
+      {text.elapsed && <span className="code-chat__live-elapsed">· {text.elapsed}</span>}
       {text.stall && <span className="code-chat__live-stall">· {text.stall}</span>}
     </div>
   )

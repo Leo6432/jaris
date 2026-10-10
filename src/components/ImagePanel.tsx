@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Composer from '@/components/Composer'
 import EmptyState from '@/components/EmptyState'
+import MediaPending from '@/components/MediaPending'
 import Workspace from '@/components/Workspace'
 import { formatDuration } from '@/lib/formatCodeGenProgress'
 import { formatRecentDate } from '@/lib/formatRecentDate'
@@ -35,7 +36,10 @@ export default function ImagePanel(): JSX.Element {
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
-  const [lastOutcome, setLastOutcome] = useState<{ kind: 'done' | 'stopped'; durationMs: number } | null>(null)
+  /** Étape 291 : la demande en cours, rappelée au centre pendant le dessin (le champ est vidé dès l'envoi). */
+  const [pendingPrompt, setPendingPrompt] = useState('')
+  /** Un dessin arrêté : dit en une ligne discrète au-dessus du champ, plus dans un bandeau. */
+  const [stoppedAfterMs, setStoppedAfterMs] = useState<number | null>(null)
   const stoppedRef = useRef(false)
 
   const refreshImages = async (): Promise<GeneratedImageSummary[]> => {
@@ -94,9 +98,9 @@ export default function ImagePanel(): JSX.Element {
     }
   }, [selected])
 
-  /** Le bandeau de fin et l'erreur décrivent UNE image : effacés dès qu'on en change (leçon de l'étape 102). */
+  /** L'arrêt et l'erreur décrivent UNE image : effacés dès qu'on en change (leçon de l'étape 102). */
   const clearFeedback = (): void => {
-    setLastOutcome(null)
+    setStoppedAfterMs(null)
     setError(null)
     setSaved(false)
     setLogLine(null)
@@ -121,19 +125,24 @@ export default function ImagePanel(): JSX.Element {
     const text = prompt.trim()
     if (!text || generating) return
     clearFeedback()
+    // Comme ChatGPT : le champ se vide dès l'envoi, la demande est rappelée au-dessus de l'image en cours.
+    setPendingPrompt(text)
+    setPrompt('')
+    setSelected(null)
     setGenerating(true)
     stoppedRef.current = false
     const startedAt = Date.now()
     try {
       const image = await window.jaris.generateStudioImage(text)
-      setPrompt('')
+      // La fin se voit : l'image prend la place du cadre d'attente (plus de bandeau « Terminé en… »), et un bip.
       setSelected(image)
-      setLastOutcome({ kind: 'done', durationMs: Date.now() - startedAt })
       void playSoundCueIfEnabled('success')
       void refreshImages()
     } catch (err) {
+      // Rien n'est perdu : la demande revient dans le champ, prête à être relancée ou corrigée.
+      setPrompt(text)
       if (stoppedRef.current) {
-        setLastOutcome({ kind: 'stopped', durationMs: Date.now() - startedAt })
+        setStoppedAfterMs(Date.now() - startedAt)
       } else {
         setError(err instanceof Error ? err.message : String(err))
         void playSoundCueIfEnabled('error')
@@ -289,32 +298,20 @@ export default function ImagePanel(): JSX.Element {
           </div>
         )}
 
+        {/* Étape 291 (Léo : « image c'est une catastrophe, pourquoi c'est tout en haut ») : l'attente au centre,
+            dans un cadre aux proportions de l'image ; l'arrêt passe par le bouton du champ, comme dans le Chat. */}
         {generating && (
-          <div className="code-panel__live">
-            <div className="code-panel__live-text">
-              <span className="code-panel__live-title">{step ? `Dessin : étape ${step.step} sur ${step.total}` : logLine ?? "Préparation du dessin…"}</span>
-              <span className="code-panel__live-detail">{formatDuration(elapsedMs)}</span>
-              {step && (
-                <div className="options-menu__progress-bar image-panel__progress">
-                  <div className="options-menu__progress-bar-fill" style={{ width: `${Math.round((step.step / step.total) * 100)}%` }} />
-                </div>
-              )}
-            </div>
-            <button className="code-panel__live-stop" onClick={stop}>
-              Arrêter
-            </button>
-          </div>
+          <MediaPending
+            shape="square"
+            title="Création de l'image…"
+            prompt={pendingPrompt}
+            detail={step ? `Étape ${step.step} sur ${step.total}` : logLine}
+            fraction={step ? step.step / step.total : null}
+            elapsedMs={elapsedMs}
+          />
         )}
 
-        {!generating && lastOutcome !== null && (
-          <p className={`code-panel__done${lastOutcome.kind === 'stopped' ? ' code-panel__done--stopped' : ''}`}>
-            <span>
-              {lastOutcome.kind === 'done'
-                ? `Terminé en ${formatDuration(lastOutcome.durationMs)} — ton image est prête.`
-                : `Dessin arrêté après ${formatDuration(lastOutcome.durationMs)}.`}
-            </span>
-          </p>
-        )}
+        {!generating && stoppedAfterMs !== null && <p className="media-note">Dessin arrêté après {formatDuration(stoppedAfterMs)}.</p>}
 
         {error && <p className="code-panel__error">{error}</p>}
 
