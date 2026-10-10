@@ -7384,3 +7384,8 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   scripts/test-repo-agent.mjs scripts/test-line-diff.mjs scripts/test-github-ui.mjs` (chaque garde vérifiée en la
   retirant). **Non vérifié ici** : une vraie connexion GitHub (il manque l'identifiant de l'application), le
   chiffrement réel de Windows, et la qualité des plus gros modèles Code sur la machine de Léo.
+  **Premier passage en CI raté par MON test, pas par le code** : le test du jeton cherchait le fichier sous
+  « /donnees/github-token.bin » écrit en dur, alors que le module construit ce chemin avec `path.join` — qui donne
+  « \donnees\github-token.bin » sous Windows (la CI). Reproduit ici en remplaçant `join` par `path.win32.join`
+  dans une copie du test, puis corrigé en calculant le chemin attendu avec le même `join`. **Un chemin attendu
+  par un test se calcule comme le code le calcule, jamais en dur : la CI tourne sous Windows.**

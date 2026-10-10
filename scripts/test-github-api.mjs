@@ -53,6 +53,9 @@ function fakeFetch(route) {
 }
 
 const TOKEN = 'gho_jeton_secret_123'
+// Calculé comme le module le calcule : sous Windows (la CI), `join` donne « \\donnees\\github-token.bin » —
+// un chemin écrit en dur avec des « / » ne s'y retrouvait jamais.
+const TOKEN_FILE = join('/donnees', 'github-token.bin')
 
 test('connexion par code : le code demandé avec le seul droit « repo », puis attente polie de la validation', async () => {
   const start = fakeFetch(() => ({
@@ -157,7 +160,7 @@ test('une coupure réseau passagère ne fait pas échouer l’attente', async ()
 
 test('le jeton est chiffré avant d’être écrit, relu, puis effacé à la déconnexion', async () => {
   await github.saveGithubToken(TOKEN)
-  const stored = files.get('/donnees/github-token.bin')
+  const stored = files.get(TOKEN_FILE)
   assert.ok(stored, 'jeton non enregistré')
   assert.ok(!stored.toString().includes(TOKEN), 'le jeton est écrit en clair')
   assert.equal(await github.loadGithubToken(), TOKEN)
@@ -167,7 +170,7 @@ test('le jeton est chiffré avant d’être écrit, relu, puis effacé à la dé
   // Chiffrement indisponible : gardé en mémoire seulement, JAMAIS écrit en clair.
   electron.safeStorage.available = false
   await github.saveGithubToken(TOKEN)
-  assert.equal(files.has('/donnees/github-token.bin'), false)
+  assert.equal(files.has(TOKEN_FILE), false)
   assert.equal(await github.loadGithubToken(), TOKEN)
   await github.clearGithubToken()
   electron.safeStorage.available = true
