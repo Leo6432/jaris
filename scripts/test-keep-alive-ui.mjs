@@ -35,6 +35,8 @@ window.jaris = {
   onCodeGenStatus: () => () => {},
   onCodeGenProgress: (cb) => { window.__emitProgress = cb; return () => {} },
   getGeneratedApps: () => Promise.resolve([]),
+  // Étape 277 : le bouton GitHub du champ demande l'état de la connexion au montage (masqué si indisponible).
+  githubStatus: () => Promise.resolve({ available: false, connected: false, login: null }),
   loadGeneratedApp: (path) => Promise.resolve({ ...APP, path }),
   generateApp: () => new Promise((resolve) => { window.__finishGen = () => resolve(APP) }),
   cancelCodeGen: () => {},

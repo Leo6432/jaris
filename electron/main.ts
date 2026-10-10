@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, nativeImage, nativeTheme, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu, Notification } from 'electron'
+import { app, clipboard, dialog, ipcMain, nativeImage, nativeTheme, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu, Notification } from 'electron'
 // Étape 143 : EN PREMIER — redirige le dossier interne de Chromium et les données vers le dossier de Jaris
 // (installé sur D, ou déplacé) avant que quoi que ce soit ne calcule un chemin ou ne prenne le verrou d'instance.
 import { cleanupStaleChromiumData, getStorageRoot } from './services/storageRoot'
@@ -67,6 +67,19 @@ import { resourcesRoot } from './paths'
 import { randomUUID } from 'crypto'
 import { tmpdir } from 'os'
 import { deleteGeneratedApp, generateApp, getGeneratedAppsDir, listGeneratedApps, loadGeneratedApp } from './services/codeGenerator'
+import {
+  cancelGithubLogin,
+  commitGithubChanges,
+  discardGithubChanges,
+  finishGithubLogin,
+  getGithubStatus,
+  listGithubBranches,
+  listGithubRepos,
+  logoutGithub,
+  openGithubRepo,
+  runGithubAgent,
+  startGithubLogin
+} from './services/githubSession'
 import { createGeneratedAppPreview, registerPreviewHandler, registerPreviewScheme } from './services/generatedAppPreview'
 import { previewVoice, synthesizeSpeech } from './services/tts'
 import { ttsClient } from './services/ttsClient'
@@ -1585,6 +1598,40 @@ app.whenReady().then(async () => {
     }
   )
   ipcMain.on(IPC_CHANNELS.cancelCodeGen, () => codeGenAbort?.abort())
+
+  // Étape 277 : GitHub dans le mode Code. Le jeton reste ici (githubSession.ts) ; l'écran ne reçoit que des
+  // descriptions. Le travail de l'agent partage le contrôleur d'arrêt et l'avancement d'une génération : un seul
+  // travail à la fois dans le mode Code, arrêté par le même bouton.
+  ipcMain.handle(IPC_CHANNELS.githubStatus, () => getGithubStatus())
+  ipcMain.handle(IPC_CHANNELS.githubStartLogin, async () => {
+    const code = await startGithubLogin()
+    // « Le plus facile » (Léo) : le code est déjà copié et la page GitHub déjà ouverte — il n'y a qu'à coller.
+    clipboard.writeText(code.userCode)
+    void shell.openExternal(code.verificationUri)
+    return code
+  })
+  ipcMain.handle(IPC_CHANNELS.githubFinishLogin, () => finishGithubLogin())
+  ipcMain.on(IPC_CHANNELS.githubCancelLogin, () => cancelGithubLogin())
+  ipcMain.handle(IPC_CHANNELS.githubLogout, () => logoutGithub())
+  ipcMain.handle(IPC_CHANNELS.githubListRepos, () => listGithubRepos())
+  ipcMain.handle(IPC_CHANNELS.githubListBranches, (_event, fullName: string) => listGithubBranches(fullName))
+  ipcMain.handle(IPC_CHANNELS.githubOpenRepo, (_event, fullName: string, branch?: string) => openGithubRepo(fullName, branch))
+  ipcMain.handle(IPC_CHANNELS.githubRunAgent, async (event, fullName: string, request: string) => {
+    codeGenAbort?.abort()
+    const controller = new AbortController()
+    codeGenAbort = controller
+    try {
+      return await runGithubAgent(fullName, request, {
+        onStatus: (message) => event.sender.send(IPC_CHANNELS.codeGenStatus, message),
+        onProgress: (progress) => event.sender.send(IPC_CHANNELS.codeGenProgress, progress),
+        signal: controller.signal
+      })
+    } finally {
+      if (codeGenAbort === controller) codeGenAbort = null
+    }
+  })
+  ipcMain.handle(IPC_CHANNELS.githubDiscardChanges, (_event, fullName: string, path?: string) => discardGithubChanges(fullName, path))
+  ipcMain.handle(IPC_CHANNELS.githubCommit, (_event, fullName: string, message: string) => commitGithubChanges(fullName, message))
 
   // Mode Image (étape 200, remplace le Montage) : le moteur de dessin de l'étape 173 a sa propre page. Seuls des
   // NOMS de fichiers PNG voyagent entre l'écran et ici, revérifiés à chaque fois (generatedImagePath).

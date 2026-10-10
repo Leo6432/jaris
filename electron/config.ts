@@ -50,6 +50,15 @@ export const config = {
     /** Modèle de vision (étape 6), séparé du modèle de conversation. */
     visionModel: readEnv('OLLAMA_VISION_MODEL', 'qwen3-vl:8b')
   },
+  github: {
+    /**
+     * Étape 277 : identifiant PUBLIC de l'application GitHub (OAuth App) de Jaris, celle qui affiche « Jaris
+     * demande l'accès à ton compte » pendant la connexion par code. Ce n'est pas un secret (GitHub le dit :
+     * « The client_secret is not needed for the device flow »), il peut donc vivre dans le code. Vide : tout ce
+     * qui touche à GitHub reste masqué dans le mode Code.
+     */
+    clientId: readEnv('GITHUB_CLIENT_ID', '')
+  },
   searxng: {
     // 8091, pas le 8080 par défaut de SearXNG : voir le commentaire dans docker-compose.yml (port bien trop
     // souvent déjà pris par un autre logiciel sur la machine de l'utilisateur, cause réelle et confirmée

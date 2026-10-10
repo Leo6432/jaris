@@ -66,6 +66,8 @@ window.jaris = {
     return () => {}
   },
   getGeneratedApps: () => Promise.resolve(window.__apps),
+  // Étape 277 : le bouton GitHub du champ demande l'état de la connexion au montage (masqué si indisponible).
+  githubStatus: () => Promise.resolve({ available: false, connected: false, login: null }),
   loadGeneratedApp: (path) => Promise.resolve({ ...APP, path }),
   // Génération pilotée par le test (étape 99) : elle reste EN COURS tant que le test ne la termine pas,
   // seule façon d'observer le bandeau d'avancement, qui n'existe que pendant ce temps-là.

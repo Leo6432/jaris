@@ -4,6 +4,12 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC_CHANNELS,
   type WebActivity,
+  type GithubDeviceCode,
+  type GithubRepoSummary,
+  type GithubStatus,
+  type RepoAgentResult,
+  type RepoCommitResult,
+  type RepoView,
   type AppMode,
   type AppVersionStatus,
   type LaunchAtStartupStatus,
@@ -162,6 +168,20 @@ const api = {
   // Étape 99 : avancement en direct de l'étape en cours, et arrêt d'une génération partie.
   onCodeGenProgress: (cb: (progress: CodeGenProgress) => void) => subscribe(IPC_CHANNELS.codeGenProgress, cb),
   cancelCodeGen: (): void => ipcRenderer.send(IPC_CHANNELS.cancelCodeGen),
+  // Étape 277 : GitHub dans le mode Code. L'arrêt d'un travail en cours passe par cancelCodeGen.
+  githubStatus: (): Promise<GithubStatus> => ipcRenderer.invoke(IPC_CHANNELS.githubStatus),
+  githubStartLogin: (): Promise<GithubDeviceCode> => ipcRenderer.invoke(IPC_CHANNELS.githubStartLogin),
+  githubFinishLogin: (): Promise<GithubStatus> => ipcRenderer.invoke(IPC_CHANNELS.githubFinishLogin),
+  githubCancelLogin: (): void => ipcRenderer.send(IPC_CHANNELS.githubCancelLogin),
+  githubLogout: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.githubLogout),
+  githubListRepos: (): Promise<GithubRepoSummary[]> => ipcRenderer.invoke(IPC_CHANNELS.githubListRepos),
+  githubListBranches: (fullName: string): Promise<string[]> => ipcRenderer.invoke(IPC_CHANNELS.githubListBranches, fullName),
+  githubOpenRepo: (fullName: string, branch?: string): Promise<RepoView> => ipcRenderer.invoke(IPC_CHANNELS.githubOpenRepo, fullName, branch),
+  githubRunAgent: (fullName: string, request: string): Promise<RepoAgentResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.githubRunAgent, fullName, request),
+  githubDiscardChanges: (fullName: string, path?: string): Promise<RepoView> =>
+    ipcRenderer.invoke(IPC_CHANNELS.githubDiscardChanges, fullName, path),
+  githubCommit: (fullName: string, message: string): Promise<RepoCommitResult> => ipcRenderer.invoke(IPC_CHANNELS.githubCommit, fullName, message),
   openGeneratedApp: (path?: string): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openGeneratedApp, path),
   getGeneratedApps: (): Promise<GeneratedAppSummary[]> => ipcRenderer.invoke(IPC_CHANNELS.getGeneratedApps),
   loadGeneratedApp: (path: string): Promise<GeneratedApp> => ipcRenderer.invoke(IPC_CHANNELS.loadGeneratedApp, path),

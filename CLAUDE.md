@@ -7388,3 +7388,38 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   method »). **Piège : `getUserMedia` n'existe pas sur `about:blank` (page de `setContent`) — la page de test
   est servie depuis http://localhost par `page.route`.** Vérifiés en remettant un envoi automatique et le message
   d'erreur brut. Non vérifiable ici : la qualité de la transcription sur le vrai micro de Léo.
+
+- **GitHub dans le mode Code (étape 277, Léo : « pouvoir connecter Jaris à GitHub pour Code », « travailler sur
+  mes dépôts », connexion « la plus facile pour les utilisateurs »).** Bouton GitHub dans le champ du mode Code
+  (`GithubPicker.tsx`, même famille que le sélecteur de modèle) → choix d'un dépôt → la demande part à un AGENT
+  (`repoAgent.ts`) qui lit les fichiers et prépare des changements, affichés ligne par ligne (`RepoChanges.tsx`,
+  `shared/lineDiff.ts`) avant le seul bouton qui écrit : « Enregistrer sur GitHub ». Choix structurants :
+  connexion par code (device flow documenté par GitHub : code déjà copié, page déjà ouverte, AUCUN secret
+  embarqué) ; jeton chiffré par Windows (`safeStorage`) et jamais envoyé au renderer ; API REST uniquement (pas de
+  `git` à installer) ; un enregistrement = UN commit via la Git Data API, branche déplacée avec `force: false`
+  (si elle a bougé, GitHub refuse et rien n'est écrasé) ; changements gardés en mémoire côté main (fermer Jaris
+  les abandonne, comme un éditeur non sauvegardé) ; changer de branche refusé tant qu'il reste des changements.
+  **Tout est masqué tant que `config.github.clientId` est vide** : il faut l'identifiant PUBLIC d'une OAuth App
+  créée par Léo avec « Enable Device Flow » cochée — jamais celui d'une autre application (ce serait se faire
+  passer pour elle).
+  **Quatre défauts trouvés en faisant tourner l'agent avec un VRAI modèle ici (Ollama 0.40.2 sur CPU,
+  qwen2.5-coder:7b, le plus petit modèle du mode Code), aucun visible avec un faux modèle :** (1) le modèle écrit
+  ses appels d'outils EN TEXTE (`{"name": "read_file", ...}`) au lieu de vrais appels : l'agent s'arrêtait sans
+  rien faire → `extractTextToolCalls` (JSON seul, une ligne par appel, bloc ```json, balises `<tool_call>`),
+  limité aux noms des outils de l'agent ; (2) passage recopié avec un saut de ligne en trop → introuvable, et le
+  modèle réessayait la même chose en boucle → nouvel essai sans les blancs de début/fin, et arrêt net après 3
+  échecs IDENTIQUES ; (3) **fausse confirmation** : lecture + modification + « finish » envoyés d'un coup, la
+  modification échoue (passage deviné avant d'avoir lu)… et le résumé annonçait « J'ai ajouté 'oeufs' » → un
+  « finish » envoyé dans le même message qu'un appel raté est refusé ; (4) réponse commençant par le mot « finish »
+  seul → retiré. Et l'écran compte les fichiers RÉELLEMENT changés (« aucun fichier n'a été changé ») au lieu de
+  croire le résumé du modèle. **Leçon générale : une boucle d'agent testée seulement avec un faux modèle qui
+  appelle proprement ses outils ne prouve rien sur un petit modèle local — le faire tourner une fois avec un vrai
+  modèle a trouvé quatre défauts en dix minutes.** Même famille que les fausses confirmations des étapes 87-90.
+  Pièges de test : `scripts/load-ts-module.mjs` (nouveau) charge un module dans le realm courant et lève une
+  erreur QUI NOMME l'import manquant au lieu d'un `undefined` silencieux ; le bouton GitHub interroge
+  `githubStatus` au montage → les 3 faux ponts qui montent CodePanel ont dû l'ajouter (piège de l'étape 96) ; le
+  garde « aucun texte affiché ne renvoie vers un README » refuse aussi une suggestion qui parle du README de
+  l'UTILISATEUR → reformulée. Régression : `node --test scripts/test-github-api.mjs scripts/test-github-session.mjs
+  scripts/test-repo-agent.mjs scripts/test-line-diff.mjs scripts/test-github-ui.mjs` (chaque garde vérifiée en la
+  retirant). **Non vérifié ici** : une vraie connexion GitHub (il manque l'identifiant de l'application), le
+  chiffrement réel de Windows, et la qualité des plus gros modèles Code sur la machine de Léo.

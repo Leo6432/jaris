@@ -2,6 +2,12 @@ import type { ThinkValue } from '../shared/effort'
 import type { VideoQuality } from '../shared/videoModel'
 import type {
   AppMode,
+  GithubDeviceCode,
+  GithubRepoSummary,
+  GithubStatus,
+  RepoAgentResult,
+  RepoCommitResult,
+  RepoView,
   AppVersionStatus,
   LaunchAtStartupStatus,
   PhoneAccessStatus,
@@ -149,6 +155,18 @@ declare global {
       // écrits, le temps depuis le dernier signe de vie) et arrêt d'une génération déjà partie.
       onCodeGenProgress: (cb: (progress: CodeGenProgress) => void) => () => void
       cancelCodeGen: () => void
+      // Étape 277 : GitHub dans le mode Code (le jeton ne quitte jamais le main).
+      githubStatus: () => Promise<GithubStatus>
+      githubStartLogin: () => Promise<GithubDeviceCode>
+      githubFinishLogin: () => Promise<GithubStatus>
+      githubCancelLogin: () => void
+      githubLogout: () => Promise<void>
+      githubListRepos: () => Promise<GithubRepoSummary[]>
+      githubListBranches: (fullName: string) => Promise<string[]>
+      githubOpenRepo: (fullName: string, branch?: string) => Promise<RepoView>
+      githubRunAgent: (fullName: string, request: string) => Promise<RepoAgentResult>
+      githubDiscardChanges: (fullName: string, path?: string) => Promise<RepoView>
+      githubCommit: (fullName: string, message: string) => Promise<RepoCommitResult>
       openGeneratedApp: (path?: string) => Promise<void>
       getGeneratedApps: () => Promise<GeneratedAppSummary[]>
       loadGeneratedApp: (path: string) => Promise<GeneratedApp>

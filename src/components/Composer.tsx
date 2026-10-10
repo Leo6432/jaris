@@ -6,6 +6,7 @@ import {
   type ImageAttachment
 } from '@/lib/imageAttachment'
 import { DICTATION_MAX_MS, DictationRecorder, appendDictation } from '@/lib/dictation'
+import { ipcErrorMessage } from '@/lib/ipcError'
 
 /**
  * Champ de saisie commun au Chat et au mode Code (étape 92).
@@ -170,7 +171,7 @@ export default function Composer({
       if (text) onChange(appendDictation(valueRef.current, text))
       else onError("Je n'ai rien entendu : réessaie en parlant un peu plus près du micro.")
     } catch (err) {
-      onError(err instanceof Error ? err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(err))
+      onError(ipcErrorMessage(err))
     } finally {
       setDictation('idle')
       inputRef.current?.focus()

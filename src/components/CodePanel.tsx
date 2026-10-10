@@ -8,6 +8,10 @@ import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import type { ImageAttachment } from '@/lib/imageAttachment'
 import type { CodeGenProgress, GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
 import ModelEffortPicker from './ModelEffortPicker'
+import GithubPicker from './GithubPicker'
+import RepoChanges from './RepoChanges'
+import { ipcErrorMessage } from '@/lib/ipcError'
+import type { RepoView } from '../../shared/ipc'
 
 type View = 'preview' | 'code'
 
@@ -54,7 +58,16 @@ export default function CodePanel(): JSX.Element {
   const [elapsedMs, setElapsedMs] = useState(0)
   /** Issue de la DERNIÈRE génération, affichée à la place du bandeau d'avancement une fois celui-ci fini :
    *  terminée normalement, ou arrêtée à la demande. `null` tant qu'il n'y a rien à annoncer. */
-  const [lastOutcome, setLastOutcome] = useState<{ kind: 'done' | 'stopped'; durationMs: number } | null>(null)
+  const [lastOutcome, setLastOutcome] = useState<{ kind: 'done' | 'stopped'; durationMs: number; text?: string } | null>(null)
+  /** Étape 277 : dépôt GitHub ouvert (choisi dans le bouton GitHub du champ). Remplace l'application générée. */
+  const [repo, setRepo] = useState<RepoView | null>(null)
+  /** Dernière réponse de Jaris sur ce dépôt (ce qu'il a changé, ou la réponse à une question). */
+  const [repoSummary, setRepoSummary] = useState<string | null>(null)
+  const [committed, setCommitted] = useState<{ url: string; sha: string } | null>(null)
+  /** Description proposée pour l'enregistrement : la dernière demande faite sur le dépôt. */
+  const [commitMessage, setCommitMessage] = useState('')
+  /** Enregistrement sur GitHub en cours (quelques secondes, sans bandeau d'avancement ni bouton Arrêter). */
+  const [committing, setCommitting] = useState(false)
   const statusRef = useRef<HTMLPreElement>(null)
   /** Mis à true par le bouton "Arrêter" : l'échec qui suit est alors un arrêt voulu, pas une panne. */
   const stoppedRef = useRef(false)
@@ -105,8 +118,108 @@ export default function CodePanel(): JSX.Element {
     setError(null)
   }
 
+  /** Étape 277 : la demande part à l'agent qui travaille sur le dépôt ouvert, pas au générateur d'application. */
+  const runOnRepo = async (current: RepoView, prompt: string): Promise<void> => {
+    clearGenerationFeedback()
+    setCommitted(null)
+    setGenerating(true)
+    setProgress(null)
+    stoppedRef.current = false
+    const startedAt = Date.now()
+    try {
+      const result = await window.jaris.githubRunAgent(current.fullName, prompt)
+      setRepo(result.view)
+      setRepoSummary(result.summary)
+      setDescription('')
+      if (result.view.changes.length > 0) setCommitMessage(prompt.split('\n')[0].slice(0, 72))
+      const count = result.view.changes.length
+      setLastOutcome({
+        kind: 'done',
+        durationMs: Date.now() - startedAt,
+        // Le compte vient des changements RÉELLEMENT préparés, jamais de ce que le modèle dit avoir fait : vu avec
+        // un vrai modèle, le résumé peut annoncer un changement qui n'a pas eu lieu.
+        text:
+          count === 0
+            ? "aucun fichier n'a été changé."
+            : `${count === 1 ? '1 fichier à vérifier' : `${count} fichiers à vérifier`}, puis à enregistrer sur GitHub.`
+      })
+      void playSoundCueIfEnabled('success')
+    } catch (err) {
+      if (stoppedRef.current) {
+        setLastOutcome({ kind: 'stopped', durationMs: Date.now() - startedAt })
+        // Ce qui a été préparé avant l'arrêt reste affiché (et annulable) : rien n'est perdu ni enregistré.
+        void window.jaris.githubOpenRepo(current.fullName).then(setRepo).catch(() => {})
+      } else {
+        setError(ipcErrorMessage(err))
+        void playSoundCueIfEnabled('error')
+      }
+    } finally {
+      setGenerating(false)
+      setProgress(null)
+    }
+  }
+
+  const openRepo = async (fullName: string, branch?: string): Promise<void> => {
+    const view = await window.jaris.githubOpenRepo(fullName, branch)
+    setAppResult(null)
+    clearGenerationFeedback()
+    setRepoSummary(null)
+    setCommitted(null)
+    setAttachment(null)
+    setRepo(view)
+  }
+
+  const closeRepo = (): void => {
+    setRepo(null)
+    setRepoSummary(null)
+    setCommitted(null)
+    clearGenerationFeedback()
+  }
+
+  const commitRepo = async (message: string): Promise<void> => {
+    if (!repo) return
+    setError(null)
+    setCommitting(true)
+    try {
+      const result = await window.jaris.githubCommit(repo.fullName, message)
+      setRepo(result.view)
+      setCommitted({ url: result.url, sha: result.sha })
+      setRepoSummary(null)
+      setLastOutcome(null)
+      void playSoundCueIfEnabled('success')
+    } catch (err) {
+      setError(ipcErrorMessage(err))
+      void playSoundCueIfEnabled('error')
+    } finally {
+      setCommitting(false)
+    }
+  }
+
+  const discardRepo = async (path?: string): Promise<void> => {
+    if (!repo) return
+    setError(null)
+    try {
+      setRepo(await window.jaris.githubDiscardChanges(repo.fullName, path))
+    } catch (err) {
+      setError(ipcErrorMessage(err))
+    }
+  }
+
+  const changeBranch = async (branch: string): Promise<void> => {
+    if (!repo) return
+    try {
+      await openRepo(repo.fullName, branch)
+    } catch (err) {
+      setError(ipcErrorMessage(err))
+    }
+  }
+
   const generate = async (): Promise<void> => {
     const prompt = description.trim()
+    if (repo) {
+      if (prompt && !generating) await runOnRepo(repo, prompt)
+      return
+    }
     // Une image seule suffit ("reproduis cette maquette") : le texte n'est plus obligatoire s'il y a une image.
     if ((!prompt && !attachment) || generating) return
 
@@ -154,7 +267,7 @@ export default function CodePanel(): JSX.Element {
   }
 
   const openRecent = async (path: string): Promise<void> => {
-    clearGenerationFeedback()
+    closeRepo()
     try {
       const result = await window.jaris.loadGeneratedApp(path)
       setAppResult(result)
@@ -183,6 +296,7 @@ export default function CodePanel(): JSX.Element {
   }
 
   const startOver = (): void => {
+    closeRepo()
     setAppResult(null)
     clearGenerationFeedback()
     setDescription('')
@@ -208,7 +322,30 @@ export default function CodePanel(): JSX.Element {
         {/* Écran de départ : la liste des applications déjà créées vit maintenant dans la colonne de gauche
             (étape 97), il ne reste donc ici que la phrase qui dit à quoi sert ce mode — sans elle, l'écran
             serait entièrement vide avant la première génération. */}
-        {!appResult && !generating && (
+        {/* Étape 277 : un dépôt GitHub ouvert prend la place de l'application générée. */}
+        {repo && (
+          <RepoChanges
+            repo={repo}
+            summary={repoSummary}
+            busy={generating || committing}
+            committed={committed}
+            defaultMessage={commitMessage}
+            onCommit={commitRepo}
+            onDiscard={discardRepo}
+            onBranch={changeBranch}
+          />
+        )}
+
+        {repo && !generating && repo.changes.length === 0 && !repoSummary && !committed && (
+          <EmptyState
+            title="Que doit faire Jaris dans ce dépôt ?"
+            description="Il lit les fichiers dont il a besoin et prépare les changements. Tu les vois ligne par ligne, puis tu choisis de les enregistrer sur GitHub — rien n'est envoyé avant."
+            suggestions={['Explique ce que fait ce dépôt', 'Corrige les fautes d\'orthographe', 'Ajoute un fichier .gitignore adapté']}
+            onSuggestion={setDescription}
+          />
+        )}
+
+        {!repo && !appResult && !generating && (
           <EmptyState
             title="Quelle application veux-tu créer ?"
             description="Décris-la simplement : Jaris l'écrit entièrement sur ta machine, puis la lance juste ici. Tu peux aussi joindre une capture ou une maquette à reproduire."
@@ -307,7 +444,9 @@ export default function CodePanel(): JSX.Element {
                 désigne une position devient fausse au premier changement de mise en page. */}
             <span>
               {lastOutcome.kind === 'done'
-                ? `Terminé en ${formatDuration(lastOutcome.durationMs)} — ton application est à jour.`
+                ? repo
+                  ? `Terminé en ${formatDuration(lastOutcome.durationMs)} — ${lastOutcome.text}`
+                  : `Terminé en ${formatDuration(lastOutcome.durationMs)} — ton application est à jour.`
                 : `Génération arrêtée après ${formatDuration(lastOutcome.durationMs)}.`}
             </span>
           </p>
@@ -332,15 +471,23 @@ export default function CodePanel(): JSX.Element {
           onChange={setDescription}
           onSubmit={() => void generate()}
           placeholder={
-            appResult
+            repo
+              ? `Que veux-tu changer dans ${repo.fullName} ?`
+              : appResult
               ? 'Que veux-tu changer ? (ex: ajoute un mode sombre, trie les tâches par date…)'
               : "Décris l'application à créer, ou joins une maquette à reproduire…"
           }
-          submitLabel={appResult ? 'Modifier' : "Générer l'application"}
-          busyLabel="Génération…"
+          submitLabel={repo ? 'Envoyer' : appResult ? 'Modifier' : "Générer l'application"}
+          busyLabel={repo ? 'Jaris travaille…' : 'Génération…'}
           busy={generating}
           onStop={stop}
-          extraActions={<ModelEffortPicker mode="code" disabled={generating} />}
+          extraActions={
+            <>
+              <GithubPicker repo={repo} onOpenRepo={(fullName) => openRepo(fullName)} onCloseRepo={closeRepo} disabled={generating || committing} />
+              <ModelEffortPicker mode="code" disabled={generating} />
+            </>
+          }
+          imagesAllowed={!repo}
           attachment={attachment}
           onAttachmentChange={setAttachment}
           onError={setError}

@@ -37,7 +37,12 @@ export function formatCodeGenProgress(progress: CodeGenProgress | null, elapsedM
     return { title: 'Préparation…', detail: elapsed }
   }
 
-  const title = `Étape ${progress.stepIndex} sur ${progress.stepCount} · ${progress.label}`
+  // `stepCount` à 0 : nombre d'étapes inconnu d'avance (agent sur un dépôt GitHub, étape 277) — « Étape 3 »
+  // seul, jamais un « sur 0 » ni un total inventé.
+  const title =
+    progress.stepCount > 0
+      ? `Étape ${progress.stepIndex} sur ${progress.stepCount} · ${progress.label}`
+      : `Étape ${progress.stepIndex} · ${progress.label}`
 
   // L'ordre compte : un silence prolongé est l'information la plus utile du moment, il passe devant le
   // reste. Sinon, les caractères écrits (qui montent) prouvent que ça avance.

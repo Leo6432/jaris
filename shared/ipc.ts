@@ -694,6 +694,69 @@ export interface GeneratedAppSummary {
   timestamp: number
 }
 
+/**
+ * Mode Code → dépôts GitHub (étape 277, Léo : « pouvoir connecter Jaris à GitHub pour Code », « travailler sur mes
+ * dépôts », connexion « la plus facile pour les utilisateurs »). Le jeton de connexion ne quitte JAMAIS le main :
+ * l'écran ne voit que ces descriptions.
+ */
+export interface GithubStatus {
+  /** Faux tant qu'aucune application GitHub n'est configurée pour Jaris (identifiant client vide) : tout est masqué. */
+  available: boolean
+  connected: boolean
+  /** Nom du compte GitHub connecté, `null` s'il n'a pas pu être lu (réseau coupé). */
+  login: string | null
+}
+
+/** Le code à taper sur github.com/login/device (connexion par code, sans mot de passe donné à Jaris). */
+export interface GithubDeviceCode {
+  userCode: string
+  verificationUri: string
+}
+
+export interface GithubRepoSummary {
+  /** « propriétaire/nom ». */
+  fullName: string
+  private: boolean
+  description: string | null
+  defaultBranch: string
+  pushedAt: string | null
+}
+
+/** Un fichier changé par Jaris et PAS encore enregistré sur GitHub. `before`/`after` à `null` : créé/supprimé. */
+export interface RepoChange {
+  path: string
+  kind: 'added' | 'modified' | 'deleted'
+  before: string | null
+  after: string | null
+}
+
+/** Un dépôt ouvert dans le mode Code, avec ses changements en attente. */
+export interface RepoView {
+  fullName: string
+  branch: string
+  defaultBranch: string
+  private: boolean
+  htmlUrl: string
+  fileCount: number
+  /** Vrai si GitHub n'a pas donné la liste complète des fichiers (dépôt géant). */
+  truncated: boolean
+  changes: RepoChange[]
+}
+
+export interface RepoAgentResult {
+  /** Ce que Jaris a fait, ou sa réponse si la demande était une question. */
+  summary: string
+  /** Le dépôt avec tous ses changements en attente, ceux d'avant cette demande compris. */
+  view: RepoView
+}
+
+export interface RepoCommitResult {
+  sha: string
+  /** Page du commit sur github.com. */
+  url: string
+  view: RepoView
+}
+
 /** Canaux IPC main -> renderer pour piloter le visage et afficher la conversation. */
 export const IPC_CHANNELS = {
   emotion: 'jaris:emotion',
@@ -819,6 +882,19 @@ export const IPC_CHANNELS = {
   codeGenProgress: 'jaris:code-gen-progress',
   /** renderer -> main : arrête la génération en cours (bouton "Arrêter", étape 99). */
   cancelCodeGen: 'jaris:cancel-code-gen',
+  /** Étape 277 : connexion GitHub et travail sur les dépôts depuis le mode Code (voir GithubStatus). L'arrêt d'un
+   * travail en cours passe par `cancelCodeGen`, comme une génération : un seul travail à la fois dans le mode Code. */
+  githubStatus: 'jaris:github-status',
+  githubStartLogin: 'jaris:github-start-login',
+  githubFinishLogin: 'jaris:github-finish-login',
+  githubCancelLogin: 'jaris:github-cancel-login',
+  githubLogout: 'jaris:github-logout',
+  githubListRepos: 'jaris:github-list-repos',
+  githubListBranches: 'jaris:github-list-branches',
+  githubOpenRepo: 'jaris:github-open-repo',
+  githubRunAgent: 'jaris:github-run-agent',
+  githubDiscardChanges: 'jaris:github-discard-changes',
+  githubCommit: 'jaris:github-commit',
   /** renderer -> main : ouvre le dossier de l'application générée dans l'explorateur de fichiers. */
   openGeneratedApp: 'jaris:open-generated-app',
   /** renderer <-> main : liste les applications déjà générées (les plus récentes d'abord), pour l'écran

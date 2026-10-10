@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'path'
 import { config } from '../config'
-import { chatWithOllama, getModelInfo, getModelThinking, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError, type OllamaMessage, type ThinkLevel } from './ollama'
+import { chatWithOllama, getModelInfo, getModelThinking, listInstalledModels, pullModelIfMissing, ModelTooLargeError, DiskFullError, type OllamaMessage, type OllamaTool, type ThinkLevel } from './ollama'
 import { chosenThink, thinkLabel, type ThinkValue } from '../../shared/effort'
 import { pickBestCodeModel } from './hardwareScan'
 import { getProfile } from './profileStore'
@@ -171,7 +171,9 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
    * toutes les secondes qui porte `idleMs` — le temps écoulé depuis le dernier fragment reçu, seul moyen de
    * distinguer "ça travaille" de "c'est bloqué".
    */
-  return async (label: string, messages: OllamaMessage[], expectedOutputChars: number): Promise<OllamaMessage> => {
+  // `tools` (étape 277) : seulement pour l'agent qui travaille sur un dépôt GitHub (repoAgent.ts). Absent, l'appel
+  // reste exactement celui d'avant, sans outils.
+  return async (label: string, messages: OllamaMessage[], expectedOutputChars: number, tools?: OllamaTool[]): Promise<OllamaMessage> => {
     steps.index += 1
     const currentStep = steps.index
     let charsWritten = 0
@@ -202,7 +204,7 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
     const call = (numCtx: number): Promise<OllamaMessage> =>
       chatWithOllama(
         messages,
-        undefined,
+        tools,
         model,
         think,
         signal,

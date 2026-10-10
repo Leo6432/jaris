@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { formatModelName } from '../lib/formatModelName'
+import { ipcErrorMessage } from '../lib/ipcError'
 
 /**
  * Étape 168, Léo : « remets le bouton pour Lightning et qwen2.5-coder:14b ». L'analyse complète a été retirée
@@ -66,7 +67,7 @@ export default function UnscoredModelsTest(): JSX.Element | null {
       setPercent(100)
       setPhase('done')
     } catch (err) {
-      setError(err instanceof Error ? err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(err))
+      setError(ipcErrorMessage(err))
       setPhase('error')
     }
   }
