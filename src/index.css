@@ -7360,14 +7360,58 @@ select {
 }
 
 .code-chat {
-  flex: 0 0 clamp(340px, 36%, 460px);
-  min-width: 0;
+  /* Étape 283 : --code-chat-width = largeur choisie à la poignée ; sinon la largeur d'origine. */
+  flex: 0 0 var(--code-chat-width, clamp(340px, 36%, 460px));
+  min-width: 300px;
+  /* Une largeur retenue sur un grand écran ne doit jamais écraser l'aperçu sur une fenêtre plus petite. */
+  max-width: calc(100% - 360px);
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 12px 16px 16px;
-  border-right: 1px solid var(--hud-line);
+}
+
+/* La séparation : un filet fin au repos, qui s'épaissit au survol, au clavier et pendant le glissement. Sa zone de
+   prise (9 px) déborde de part et d'autre du filet pour être facile à attraper. */
+.code-split__handle {
+  flex: 0 0 9px;
+  margin: 0 -4px;
+  position: relative;
+  z-index: 2;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.code-split__handle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  background: var(--hud-line);
+  transition: background 0.15s ease, left 0.15s ease, width 0.15s ease;
+}
+
+.code-split__handle:hover::before,
+.code-split__handle:focus-visible::before,
+.code-split--resizing .code-split__handle::before {
+  left: 3px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--hud-text-faint);
+}
+
+.code-split--resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* Pendant le glissement, l'aperçu ne doit ni capter la souris ni sélectionner son contenu. */
+.code-split--resizing .code-panel__preview {
+  pointer-events: none;
 }
 
 .code-chat__thread {
@@ -7468,9 +7512,15 @@ select {
 
   .code-chat {
     flex: 0 1 auto;
+    min-width: 0;
+    max-width: none;
     max-height: 40%;
-    border-right: none;
     border-top: 1px solid var(--hud-line);
+  }
+
+  /* Colonnes l'une sur l'autre : la poignée verticale n'a plus de sens. */
+  .code-split__handle {
+    display: none;
   }
 
   .code-preview {

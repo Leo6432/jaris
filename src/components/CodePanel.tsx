@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import Composer from '@/components/Composer'
 import EmptyState from '@/components/EmptyState'
 import Workspace from '@/components/Workspace'
@@ -12,9 +12,16 @@ import GithubPicker from './GithubPicker'
 import BranchPicker from './BranchPicker'
 import RepoChanges from './RepoChanges'
 import { ipcErrorMessage } from '@/lib/ipcError'
+import { readSaved, writeSaved } from '@/lib/savedSetting'
+import { CHAT_MIN_WIDTH, clampChatWidth } from '@/lib/splitWidth'
 import type { RepoView } from '../../shared/ipc'
 
 type View = 'preview' | 'code'
+
+/** Largeur de la conversation choisie à la poignée (étape 283), retenue d'une ouverture à l'autre. */
+const CHAT_WIDTH_KEY = 'jaris.codeChatWidth'
+/** Pas d'une flèche du clavier sur la poignée. */
+const CHAT_WIDTH_STEP = 24
 
 /** Un message de la conversation du mode Code (étape 282) : une demande de Léo, ou ce que Jaris a fait. */
 interface ChatTurn {
@@ -85,6 +92,17 @@ export default function CodePanel(): JSX.Element {
   const [turns, setTurns] = useState<ChatTurn[]>([])
   const turnIdRef = useRef(0)
   const threadRef = useRef<HTMLDivElement>(null)
+  /**
+   * Étape 283 (Léo : « pouvoir régler la taille de l'aperçu ») : largeur de la conversation, en pixels, choisie en
+   * faisant glisser la séparation ; `null` = largeur d'origine (celle du CSS).
+   */
+  const [chatWidth, setChatWidth] = useState<number | null>(() => {
+    const saved = Number(readSaved(CHAT_WIDTH_KEY))
+    return saved >= CHAT_MIN_WIDTH ? saved : null
+  })
+  const [resizing, setResizing] = useState(false)
+  const splitRef = useRef<HTMLDivElement>(null)
+  const chatRef = useRef<HTMLElement>(null)
   const [committed, setCommitted] = useState<{ url: string; sha: string } | null>(null)
   /** Description proposée pour l'enregistrement : la dernière demande faite sur le dépôt. */
   const [commitMessage, setCommitMessage] = useState('')
@@ -354,6 +372,25 @@ export default function CodePanel(): JSX.Element {
     setAttachment(null)
   }
 
+  /** La largeur que donnerait la poignée à cette position du pointeur, bornée pour ne jamais écraser une colonne. */
+  const widthAt = (clientX: number): number | null => {
+    const split = splitRef.current?.getBoundingClientRect()
+    return split ? clampChatWidth(clientX - split.left, split.width) : null
+  }
+
+  const saveChatWidth = (width: number | null): void => {
+    setChatWidth(width)
+    writeSaved(CHAT_WIDTH_KEY, width === null ? null : String(width))
+  }
+
+  const onHandleKey = (event: React.KeyboardEvent): void => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    const current = chatRef.current?.getBoundingClientRect().width ?? CHAT_MIN_WIDTH
+    const split = splitRef.current?.getBoundingClientRect().width ?? current
+    saveChatWidth(clampChatWidth(current + (event.key === 'ArrowRight' ? CHAT_WIDTH_STEP : -CHAT_WIDTH_STEP), split))
+  }
+
   return (
     <Workspace
       newLabel="Nouvelle application"
@@ -373,8 +410,12 @@ export default function CodePanel(): JSX.Element {
           Claude et ChatGPT ») : la conversation et le champ de saisie à gauche, l'aperçu (ou les changements d'un
           dépôt GitHub) à droite. Fenêtre étroite : l'aperçu passe au-dessus de la conversation (index.css). */}
       <div className="code-panel">
-        <div className="code-split">
-          <section className="code-chat" aria-label="Conversation">
+        <div
+          ref={splitRef}
+          className={`code-split${resizing ? ' code-split--resizing' : ''}`}
+          style={chatWidth === null ? undefined : ({ '--code-chat-width': `${chatWidth}px` } as CSSProperties)}
+        >
+          <section ref={chatRef} className="code-chat" aria-label="Conversation">
             <div className="code-chat__thread" ref={threadRef}>
               {turns.length === 0 && !generating && (
                 <EmptyState
@@ -497,6 +538,39 @@ export default function CodePanel(): JSX.Element {
               rows={3}
             />
           </section>
+
+          {/* La poignée entre les deux colonnes : glisser pour régler la taille de l'aperçu, double-clic pour revenir à
+              la taille d'origine, flèches du clavier une fois sélectionnée. La capture du pointeur garde le glissement
+              même quand la souris passe au-dessus de l'aperçu (une iframe avalerait sinon les mouvements). */}
+          <div
+            className="code-split__handle"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Taille de l'aperçu"
+            aria-valuemin={CHAT_MIN_WIDTH}
+            aria-valuenow={chatWidth ?? undefined}
+            tabIndex={0}
+            title="Glisser pour régler la taille de l'aperçu · double-clic : taille d'origine"
+            onPointerDown={(event) => {
+              event.preventDefault()
+              event.currentTarget.setPointerCapture(event.pointerId)
+              setResizing(true)
+            }}
+            onPointerMove={(event) => {
+              if (!resizing) return
+              const width = widthAt(event.clientX)
+              if (width !== null) setChatWidth(width)
+            }}
+            onPointerUp={(event) => {
+              if (!resizing) return
+              setResizing(false)
+              event.currentTarget.releasePointerCapture(event.pointerId)
+              saveChatWidth(widthAt(event.clientX))
+            }}
+            onPointerCancel={() => setResizing(false)}
+            onDoubleClick={() => saveChatWidth(null)}
+            onKeyDown={onHandleKey}
+          />
 
           <section
             className={`code-preview${!appResult && !(repo && (repo.changes.length > 0 || committed)) ? ' code-preview--empty' : ''}`}

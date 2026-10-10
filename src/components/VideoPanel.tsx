@@ -13,27 +13,12 @@ import type { GeneratedVideoSummary, VideoStudioStatus } from '../../shared/ipc'
 import { DownloadIcon } from './icons'
 import VideoDurationPicker from './VideoDurationPicker'
 import VideoQualityPicker from './VideoQualityPicker'
+import { readSaved, writeSaved } from '@/lib/savedSetting'
 
 const DURATION_KEY = 'jaris.videoSeconds'
 /** Comme l'écran Image : les dernières créations en vignettes sur l'accueil (étape 213). */
 const GALLERY_SIZE = 8
 const QUALITY_KEY = 'jaris.videoQuality'
-
-function readSaved(key: string): string | null {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-function writeSaved(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value)
-  } catch {
-    // Pas de stockage : le choix reste valable jusqu'à la fermeture de Jaris.
-  }
-}
 
 /**
  * Qualité de départ (étape 205) : la dernière choisie si cette machine la propose encore, sinon la plus fidèle déjà

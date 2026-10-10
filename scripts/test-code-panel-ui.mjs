@@ -230,6 +230,94 @@ test('fenêtre étroite : l’aperçu passe au-dessus de la conversation, sans d
   }, 760)
 })
 
+test('la poignée règle la taille de l’aperçu, sans jamais écraser une colonne (étape 283)', options, async () => {
+  // Léo : « pouvoir régler la taille de l'aperçu ».
+  await withPage(async (page) => {
+    await page.click('.workspace__item')
+    await page.waitForSelector('.code-panel__preview')
+    const widths = () =>
+      page.evaluate(() => ({
+        chat: Math.round(document.querySelector('.code-chat').getBoundingClientRect().width),
+        preview: Math.round(document.querySelector('.code-preview').getBoundingClientRect().width),
+        split: Math.round(document.querySelector('.code-split').getBoundingClientRect().width)
+      }))
+    const handle = await page.locator('.code-split__handle').boundingBox()
+    const y = handle.y + handle.height / 2
+    const start = await widths()
+
+    // Glisser de 200 px vers la droite, en passant AU-DESSUS de l'aperçu (une iframe avalerait les mouvements).
+    await page.mouse.move(handle.x + handle.width / 2, y)
+    await page.mouse.down()
+    await page.mouse.move(handle.x + 100, y, { steps: 5 })
+    await page.mouse.move(handle.x + handle.width / 2 + 200, y, { steps: 5 })
+    await page.mouse.up()
+    const dragged = await widths()
+    assert.ok(Math.abs(dragged.chat - (start.chat + 200)) <= 6, `conversation : ${start.chat} → ${dragged.chat}`)
+    assert.ok(dragged.preview < start.preview - 150, 'l’aperçu n’a pas rétréci')
+
+    // Tout à droite : l'aperçu garde 360 px. Tout à gauche : la conversation garde 300 px.
+    let box = await page.locator('.code-split__handle').boundingBox()
+    await page.mouse.move(box.x + box.width / 2, y)
+    await page.mouse.down()
+    await page.mouse.move(2000, y, { steps: 4 })
+    await page.mouse.up()
+    assert.ok((await widths()).preview >= 355, `aperçu écrasé : ${(await widths()).preview}`)
+    box = await page.locator('.code-split__handle').boundingBox()
+    await page.mouse.move(box.x + box.width / 2, y)
+    await page.mouse.down()
+    await page.mouse.move(0, y, { steps: 4 })
+    await page.mouse.up()
+    assert.ok((await widths()).chat >= 299, `conversation écrasée : ${(await widths()).chat}`)
+
+    // Clavier : flèche droite = 24 px de plus.
+    const before = (await widths()).chat
+    await page.focus('.code-split__handle')
+    await page.keyboard.press('ArrowRight')
+    assert.equal((await widths()).chat, before + 24)
+
+    // Double-clic : retour à la taille d'origine.
+    box = await page.locator('.code-split__handle').boundingBox()
+    await page.mouse.dblclick(box.x + box.width / 2, y)
+    assert.equal((await widths()).chat, start.chat)
+
+    // Largeur maximale choisie sur une grande fenêtre, puis fenêtre réduite : l'aperçu garde quand même 360 px.
+    await page.setViewportSize({ width: 1600, height: 860 })
+    box = await page.locator('.code-split__handle').boundingBox()
+    await page.mouse.move(box.x + box.width / 2, y)
+    await page.mouse.down()
+    await page.mouse.move(2000, y, { steps: 4 })
+    await page.mouse.up()
+    await page.setViewportSize({ width: 1280, height: 860 })
+    assert.ok((await widths()).preview >= 355, `aperçu écrasé après réduction : ${(await widths()).preview}`)
+  })
+})
+
+test('la taille choisie est retenue d’une ouverture à l’autre ; pas de poignée en fenêtre étroite', options, async () => {
+  const browser = await chromium.launch()
+  try {
+    const page = await browser.newPage()
+    await page.setViewportSize({ width: 1280, height: 860 })
+    // Servie depuis une vraie adresse : sur about:blank, le stockage du navigateur est refusé.
+    await page.route('http://localhost/', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: buildPage() }))
+    await page.goto('http://localhost/')
+    await page.waitForSelector('.code-split__handle')
+    await page.focus('.code-split__handle')
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    const chosen = await page.evaluate(() => Math.round(document.querySelector('.code-chat').getBoundingClientRect().width))
+    await page.reload()
+    await page.waitForSelector('.code-split__handle')
+    assert.equal(await page.evaluate(() => Math.round(document.querySelector('.code-chat').getBoundingClientRect().width)), chosen)
+
+    await page.setViewportSize({ width: 760, height: 860 })
+    await page.click('.workspace__item')
+    await page.waitForSelector('.code-panel__preview')
+    assert.equal(await page.isVisible('.code-split__handle'), false)
+  } finally {
+    await browser.close()
+  }
+})
+
 test('supprimer demande confirmation, puis retire vraiment la ligne', options, async () => {
   await withPage(async (page) => {
     assert.equal(await page.locator('.workspace__list li').count(), 2)

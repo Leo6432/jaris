@@ -7521,3 +7521,19 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   - Aperçu au-dessus sans débordement à 760 px.
 
   `scripts/test-github-ui.mjs` vérifie que la réponse est dans la conversation et les changements dans l'aperçu.
+
+- **Poignée pour régler la taille de l'aperçu du mode Code (étape 283, Léo : « pouvoir régler la taille de
+  l'aperçu »).** Une séparation à glisser entre la conversation et l'aperçu (`.code-split__handle`, rôle
+  `separator`). Un double-clic revient à la taille d'origine ; les flèches du clavier bougent de 24 px. La taille
+  est retenue (`jaris.codeChatWidth`), via `src/lib/savedSetting.ts`, extrait de VideoPanel au deuxième usage.
+  Bornes en deux couches, toutes deux testées en les retirant tour à tour :
+  - en JS (`clampChatWidth`, pure) : la conversation garde 300 px, l'aperçu 360 px, pendant le glissement ;
+  - en CSS (`max-width: calc(100% - 360px)`) : une largeur retenue sur un grand écran n'écrase jamais l'aperçu
+    sur une fenêtre plus petite. Le JS seul ne suffisait pas : il ne recalcule rien quand la fenêtre change.
+  **Glisser au-dessus d'une iframe** : l'aperçu est une iframe, qui avalerait les mouvements de la souris. Le
+  pointeur est donc capturé (`setPointerCapture`) et l'iframe ne capte plus la souris pendant le glissement
+  (`pointer-events: none`). Le test fait passer la souris AU-DESSUS de l'aperçu pendant le glissement. Pas de
+  poignée en fenêtre étroite (colonnes l'une sur l'autre). **Piège de test** : sur `about:blank` (`setContent`),
+  le stockage du navigateur est refusé. Le test de mémorisation sert donc la page depuis http://localhost
+  (`page.route`), comme le test de la dictée. Régression : `scripts/test-split-width.mjs` et
+  `scripts/test-code-panel-ui.mjs`.
