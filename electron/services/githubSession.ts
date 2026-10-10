@@ -266,7 +266,7 @@ export async function runGithubAgent(fullName: string, request: string, options:
       writeFile: (path, content) => stage(session, path, content),
       pendingSummary: () =>
         changesOf(session).map((change) => `- ${change.kind === 'added' ? 'créé' : change.kind === 'deleted' ? 'supprimé' : 'modifié'} : ${change.path}`),
-      chat: (messages, tools) => run(`Travail sur ${session.snapshot.fullName}`, messages, 8000, tools),
+      chat: (messages) => run(`Travail sur ${session.snapshot.fullName}`, messages, 8000),
       onStatus: options.onStatus,
       signal: options.signal,
       maxHistoryChars: historyBudgetChars(modelMax)

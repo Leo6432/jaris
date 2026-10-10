@@ -77,7 +77,9 @@ function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Proje
       isAbortError: (err) => err?.name === 'AbortError',
       readModelMaxContext: async () => null,
       resolveCodeModel: async () => 'code-model',
-      createModelStepRunner: ({ signal }) => async () => {
+      createModelStepRunner: ({ signal }) => async (_label, _messages, _chars, tools) => {
+        // Étape 281 : jamais d'outils déclarés à Ollama (ils rendaient l'écriture muette pendant des minutes).
+        if (tools !== undefined) throw new Error('des outils ont été déclarés à Ollama')
         if (signal?.aborted) throw Object.assign(new Error('stop'), { name: 'AbortError' })
         const next = replies.shift()
         if (!next) throw new Error('plus de réponse simulée')

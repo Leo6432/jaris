@@ -7465,3 +7465,29 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   grisé muet. CSS mort de l'ancien en-tête retiré (vérifié par grep). Régression : `scripts/test-github-ui.mjs`
   (boutons sur la même ligne DANS le champ, aucun panneau ni « Dépôt vide » en haut, changement de branche
   réellement transmis et affiché, explication quand des changements attendent).
+
+- **« rien reçu du modèle depuis 3 min » pendant le travail sur un dépôt (étape 281, Léo, qwen3.8:27b) : l'agent
+  n'était pas bloqué, il était MUET.** Mesuré ici avec un vrai modèle (Ollama 0.40.2, qwen3.5:0.8b) : avec des
+  outils déclarés à Ollama, la réflexion arrive au fil de l'eau (18 s), puis plus rien jusqu'à 289 s, où
+  `write_file` tombe d'un bloc avec tout le jeu dedans. Ollama ne transmet un appel d'outil qu'une fois ENTIÈREMENT
+  écrit. Or un fichier entier écrit dans un appel, c'est justement l'essentiel du travail. Danger en plus : le fetch
+  de Node (undici) coupe une réponse muette au bout de 5 minutes (`bodyTimeout`/`headersTimeout` = 300 s, vu ici :
+  connexion fermée à 5 min 01). Sur une machine lente, l'écriture d'un gros fichier se serait terminée en erreur.
+  **Corrigé : plus aucun outil déclaré à Ollama dans l'agent de dépôt.** Les appels sont demandés EN TEXTE, dans un
+  bloc ```` ```action ```` contenant le JSON. Ce texte arrive au fil de l'eau, l'écran compte les caractères écrits,
+  et la connexion n'est jamais muette (plus long silence mesuré : 27 s avec qwen2.5-coder:7b, le temps de lire les
+  consignes, contre 270 s avant). Les résultats repartent en messages « user » (« Résultat de read_file : … »), car
+  sans outils déclarés certains modèles ignorent le rôle « tool ».
+  **Piège n°2, trouvé seulement en essayant pour de vrai : PAS de balises `<tool_call>`.** Ollama les intercepte
+  chez les modèles Qwen MÊME sans outils déclarés. Son analyseur attend le format XML propre à Qwen, ne transmet
+  rien, puis coupe la réponse : erreur « EOF » dans le flux, « qwen3.5 tool call parsing failed » dans ses
+  journaux. **Leçon générale : un balisage que le moteur d'inférence connaît lui-même ne doit jamais servir de
+  protocole maison — il le capture.**
+  Lecture rendue tolérante, d'après les vrais défauts vus : JSON avec de vrais retours à la ligne dans une chaîne
+  (`parseLenientJson`), ouverture « ``` » oubliée (vue avec qwen3.5). Un appel illisible (guillemet non échappé)
+  n'est plus jamais affiché comme résumé : on demande au modèle de le réécrire, et on s'arrête après 3 essais.
+  Vérifié avec les vrais modèles : Snake dans un dépôt vide avec qwen2.5-coder:7b (1 tour, 264 s, plus long silence
+  27 s) et modification de app.js (3 tours, 29 s). **Non vérifié** : qwen3.8:27b sur la machine de Léo (trop gros
+  pour la mémoire de cet environnement). **Leçon générale : un indicateur « rien reçu depuis X » ne distingue pas
+  « bloqué » de « muet par construction » — avant de chercher pourquoi un modèle « ne répond pas », mesurer CE QUI
+  ARRIVE et QUAND sur le flux réel.**

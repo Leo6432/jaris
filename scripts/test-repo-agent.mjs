@@ -16,6 +16,8 @@ function call(name, args) {
 }
 
 const reply = (...calls) => ({ role: 'assistant', content: '', tool_calls: calls })
+/** Résultats d'outils renvoyés au modèle : des messages « user » préfixés (étape 281), plus des messages « tool ». */
+const toolResults = (messages) => messages.filter((m) => m.role === 'user' && m.content.startsWith('Résultat de ')).map((m) => m.content)
 
 /** Faux dépôt en mémoire + faux modèle qui répond dans l'ordre aux tours de la boucle. */
 function setup(files, replies, extra = {}) {
@@ -71,10 +73,10 @@ test('modifier sans avoir lu, un passage absent ou ambigu : refusé avec une exp
     { role: 'assistant', content: 'Abandon.' }
   ])
   await agent.runRepoAgent('change', app.deps)
-  const toolResults = app.seen.at(-1).filter((message) => message.role === 'tool').map((message) => message.content)
-  assert.match(toolResults[0], /Lis d'abord a\.txt/)
-  assert.match(toolResults[2], /Passage introuvable/)
-  assert.match(toolResults[3], /apparaît 2 fois/)
+  const results = toolResults(app.seen.at(-1))
+  assert.match(results[0], /Lis d'abord a\.txt/)
+  assert.match(results[2], /Passage introuvable/)
+  assert.match(results[3], /apparaît 2 fois/)
   assert.equal(app.staged.size, 0, 'aucun changement ne doit avoir été préparé')
 })
 
@@ -119,6 +121,53 @@ test('dépôt vide (étape 279) : le modèle est prévenu, et il crée directeme
   assert.equal(outcome.summary, 'Page créée.')
 })
 
+test('étape 281 : AUCUN outil déclaré à Ollama, les appels sont demandés en bloc ```action (pas <tool_call>)', async () => {
+  const argsSeen = []
+  const app = setup({ 'a.txt': 'x' }, [{ role: 'assistant', content: '```action\n{"name": "finish", "arguments": {"summary": "ok"}}\n```' }], {
+    chat: async (...args) => {
+      argsSeen.push(args)
+      return { role: 'assistant', content: '```action\n{"name": "finish", "arguments": {"summary": "ok"}}\n```' }
+    }
+  })
+  await agent.runRepoAgent('change', app.deps)
+  // Avec des outils déclarés, Ollama ne rend un appel qu'une fois ENTIÈREMENT écrit : 270 s de silence mesurées.
+  assert.equal(argsSeen[0].length, 1, 'aucun second argument (outils) ne doit partir vers le modèle')
+  const system = argsSeen[0][0][0].content
+  assert.match(system, /```action/)
+  // Ollama intercepte <tool_call> chez les modèles Qwen même sans outils déclarés, puis coupe la réponse.
+  assert.doesNotMatch(system, /<tool_call>/)
+  for (const tool of agent.REPO_TOOLS) assert.ok(system.includes(`- ${tool.function.name}(`), `outil absent des consignes : ${tool.function.name}`)
+})
+
+test('appels en blocs ```action : bloc complet, ouverture manquante (vue avec qwen3.5), sauts de ligne bruts', () => {
+  assert.deepEqual(
+    agent.extractTextToolCalls('Je lis :\n```action\n{"name": "read_file", "arguments": {"path": "a"}}\n```').map((c) => c.function.arguments.path),
+    ['a']
+  )
+  // Ouverture « ``` » manquante ET fichier sur plusieurs lignes : la lecture ligne par ligne n'y suffirait pas.
+  const noOpening = agent.extractTextToolCalls('action\n{"name": "write_file", "arguments": {"path": "b", "content": "l1\nl2"}}\n```')
+  assert.deepEqual(noOpening.map((c) => [c.function.arguments.path, c.function.arguments.content]), [['b', 'l1\nl2']])
+  // Un fichier écrit avec de VRAIS retours à la ligne dans la chaîne JSON : accepté, contenu intact.
+  const raw = '```action\n{"name": "write_file", "arguments": {"path": "i.html", "content": "<h1>\n\tSalut\n</h1>"}}\n```'
+  assert.equal(agent.extractTextToolCalls(raw)[0].function.arguments.content, '<h1>\n\tSalut\n</h1>')
+  assert.equal(agent.parseLenientJson('{"a": "x"y"}'), undefined, 'un guillemet non échappé reste une erreur, rien n’est deviné')
+})
+
+test('appel illisible : on demande de le réécrire, jamais affiché comme résumé ; trois fois et on s’arrête', async () => {
+  const broken = { role: 'assistant', content: '```action\n{"name": "write_file", "arguments": {"path": "i.html", "content": "<div class="x">"}}\n```' }
+  const app = setup({}, [broken, { role: 'assistant', content: '```action\n{"name": "write_file", "arguments": {"path": "i.html", "content": "<div class=\\"x\\">"}}\n```' }, reply(call('finish', { summary: 'Fait.' }))])
+  const outcome = await agent.runRepoAgent('Crée', app.deps)
+  assert.match(app.seen[1].at(-1).content, /illisible/)
+  assert.equal(app.staged.get('i.html'), '<div class="x">')
+  assert.equal(outcome.summary, 'Fait.')
+
+  const stuck = setup({}, [broken, broken, broken, broken])
+  const result = await agent.runRepoAgent('Crée', stuck.deps)
+  assert.equal(result.limitReached, true)
+  assert.match(result.summary, /3 essais illisibles/)
+  assert.doesNotMatch(result.summary, /"name"/, 'le JSON cassé ne doit jamais devenir le résumé')
+})
+
 test('aucun chemin ne sort du dépôt ni ne touche .git', () => {
   for (const bad of ['../secret', 'a/../../b', '/etc/passwd/..', '.git/config', '.git', 'a//b/./c', '', 42]) {
     assert.throws(() => agent.normalizeRepoPath(bad), undefined, `accepté à tort : ${bad}`)
@@ -134,8 +183,8 @@ test('un chemin refusé devient un message d’outil, pas un plantage de toute l
     { role: 'assistant', content: '', tool_calls: [call('finish', { summary: 'ok' })] }
   ])
   await agent.runRepoAgent('change', app.deps)
-  const results = app.seen.at(-1).filter((message) => message.role === 'tool')
-  assert.match(results[0].content, /^Erreur : Chemin invalide/)
+  const results = toolResults(app.seen.at(-1))
+  assert.match(results[0], /^Résultat de write_file :\nErreur : Chemin invalide/)
   assert.equal(app.staged.size, 0)
 })
 
@@ -200,7 +249,7 @@ test('« finish » envoyé avec un appel raté dans le même message : refusé, 
   ])
   const outcome = await agent.runRepoAgent('Ajoute oeufs', app.deps)
   assert.equal(app.seen.length, 3, 'le premier « finish » ne devait pas terminer le travail')
-  assert.match(app.seen[1].at(-1).content, /finish refusé/)
+  assert.match(app.seen[1].at(-1).content, /Résultat de finish : refusé/)
   assert.equal(app.staged.get('app.js'), "const items = ['pain', 'oeufs']\n")
   assert.equal(outcome.summary, "J'ai ajouté 'oeufs'.")
 })
@@ -277,7 +326,7 @@ test('un fichier binaire n’est ni lu ni modifié', async () => {
     { role: 'assistant', content: '', tool_calls: [call('finish', { summary: 'ok' })] }
   ])
   await agent.runRepoAgent('change', app.deps)
-  const results = app.seen.at(-1).filter((message) => message.role === 'tool').map((message) => message.content)
+  const results = toolResults(app.seen.at(-1))
   assert.match(results[0], /binaire/)
   assert.match(results[1], /binaire/)
   assert.equal(app.staged.size, 0)
