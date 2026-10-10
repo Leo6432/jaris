@@ -7537,3 +7537,32 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   le stockage du navigateur est refusé. Le test de mémorisation sert donc la page depuis http://localhost
   (`page.route`), comme le test de la dictée. Régression : `scripts/test-split-width.mjs` et
   `scripts/test-code-panel-ui.mjs`.
+
+- **Aperçu du mode Code en carte encadrée, avec « Agrandir » (étape 284, Léo, capture de Claude à l'appui :
+  « fais exactement comme ça avec un contour et pouvoir mettre en grand l'aperçu »).** L'aperçu est une carte
+  (`.code-preview__card` : contour fin, coins arrondis, fond `--jv-code`, contenu rogné aux coins), détachée des
+  bords de 8 px. Elle a sa barre de titre (`.code-preview__head`) : à gauche, le nom de ce qui est ouvert (celui
+  de la liste de gauche, ou le dépôt et sa branche) ; à droite, les onglets Aperçu/Code, le dossier et
+  « Agrandir ». L'application va jusqu'aux bords de la carte : plus de second cadre autour de l'iframe. La
+  phrase sur le localStorage devient le pied de la carte. La poignée n'est plus un filet sur toute la hauteur :
+  c'est une petite pastille centrée, comme chez Claude ; sa zone de prise couvre toujours toute la hauteur.
+  « Agrandir » replie la conversation et la poignée (`.code-split--expanded`) ; le même bouton ou Échap la
+  ramènent. Trois cas traités, tous testés :
+  - conversation repliée = bandeau d'avancement invisible : la barre de la carte affiche alors l'étape en cours
+    (`.code-preview__busy`), seulement dans ce mode, pour ne pas doubler le bandeau (leçon de l'étape 101) ;
+  - plus rien à montrer (« Nouvelle application », application supprimée) : l'aperçu agrandi se referme tout
+    seul, sinon la conversation resterait repliée sans aucun bouton pour la faire revenir ;
+  - Échap n'écoute que si l'écran Code est affiché (`useScreenActive`) ; un jeu dans l'aperçu garde ses touches,
+    l'iframe ne les transmet pas.
+  La majuscule du titre (« Liste de courses ») ne s'applique qu'aux applications : sur un dépôt, elle écrivait
+  « Leo/projet » au lieu du nom exact (vu sur capture). CSS mort retiré : `.code-panel__result-bar` et
+  `.code-panel__hint`. `.code-panel__result` reste : les écrans Image et Vidéo s'en servent encore (grep).
+  **Piège dans mon propre contrôle des tests** : le script de mutation restaurait le CSS après une mutation,
+  mais sans reconstruire `out/`. Les mutations suivantes tournaient donc sur un CSS encore cassé : un test a
+  échoué pour une autre raison que la sienne, un autre a semblé ne rien attraper. **Après une mutation d'un
+  fichier compilé, reconstruire aussi au moment de la restauration, pas seulement à la fin.** Une fois corrigé,
+  les 9 mutations sont attrapées.
+  Régression : `scripts/test-code-panel-ui.mjs` (barre unique en haut de la carte à 1280 et 760 px, contour et
+  coins mesurés, application sans second cadre, Agrandir/Réduire/Échap, génération visible en mode agrandi,
+  retour automatique, pastille centrée au repos et au survol) et `scripts/test-github-ui.mjs` (nom exact du
+  dépôt et sa branche). Vérifié par le build, les tests et des captures ; pas encore en usage réel.

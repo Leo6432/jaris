@@ -225,6 +225,18 @@ test('un dépôt ouvert change le champ, puis les changements s’affichent lign
     // Étape 282 : la réponse de Jaris est dans la conversation (à gauche), les changements dans l'aperçu (à droite).
     assert.match(await page.textContent('.code-chat__reply'), /Faute corrigée/)
     assert.equal(await page.evaluate(() => document.querySelector('.code-preview').contains(document.querySelector('.repo-change'))), true)
+    // Étape 284 : la carte de l'aperçu porte le nom EXACT du dépôt et sa branche — jamais « Leo/projet ».
+    assert.deepEqual(
+      await page.evaluate(() => {
+        const title = document.querySelector('.code-preview__title')
+        return {
+          title: title.textContent,
+          capitalized: getComputedStyle(title, '::first-letter').textTransform,
+          branch: document.querySelector('.code-preview__meta').textContent
+        }
+      }),
+      { title: 'leo/projet', capitalized: 'none', branch: 'main' }
+    )
     assert.match(await page.textContent('.code-panel__done'), /1 fichier à vérifier/)
     assert.equal(await page.textContent('.repo-diff__line--del .repo-diff__text'), 'Bonjour le mondee')
     assert.equal(await page.textContent('.repo-diff__line--add .repo-diff__text'), 'Bonjour le monde')

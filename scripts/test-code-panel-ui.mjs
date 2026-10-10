@@ -363,40 +363,160 @@ test('cliquer une application de la liste la rouvre', options, async () => {
 })
 
 for (const width of [1280, 760]) {
-  test(`onglets et actions tiennent sur UNE seule barre, dans le panneau (${width}px)`, options, async () => {
+  test(`titre, onglets et actions tiennent sur UNE seule barre, en haut de la carte (${width}px)`, options, async () => {
     await withPage(async (page) => {
       await page.click('.workspace__item')
       await page.waitForSelector('.code-panel__preview')
 
       const layout = await page.evaluate(() => {
-        const box = (selector) => {
-          const el = document.querySelector(selector)
-          return el ? el.getBoundingClientRect() : null
-        }
+        const box = (selector) => document.querySelector(selector).getBoundingClientRect()
+        const head = box('.code-preview__head')
+        const title = box('.code-preview__title')
         const tabs = box('.code-panel__view-tabs')
-        const actions = box('.code-panel__result-actions')
+        const tools = box('.code-preview__tools')
         const preview = box('.code-panel__preview')
+        const inHead = (r) => r.top >= head.top - 1 && r.bottom <= head.bottom + 1
         return {
-          sameRow: Math.abs(tabs.top - actions.top) < 8,
-          actionsInsideResult: document.querySelector('.code-panel__result').contains(document.querySelector('.code-panel__result-actions')),
-          // Les actions étaient à gauche sous le composeur : elles sont maintenant à droite des onglets.
-          actionsAfterTabs: actions.left > tabs.right,
-          barAbovePreview: tabs.bottom <= preview.top,
+          title: document.querySelector('.code-preview__title').textContent,
+          allInHead: inHead(title) && inHead(tabs) && inHead(tools),
+          headInsideCard: document.querySelector('.code-preview__card').contains(document.querySelector('.code-preview__head')),
+          // Le nom à gauche, les commandes à droite, comme la barre des aperçus de Claude.
+          titleLeftOfTabs: title.right <= tabs.left,
+          toolsAtRightEdge: Math.abs(box('.code-preview__card').right - tools.right) < 16,
+          headAbovePreview: head.bottom <= preview.top + 1,
           horizontalOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
           previewHeight: Math.round(preview.height)
         }
       })
 
-      assert.equal(layout.sameRow, true, 'les actions ne sont plus sur la même ligne que les onglets')
-      assert.equal(layout.actionsInsideResult, true, "les actions flottent hors du panneau de l'application")
-      assert.equal(layout.actionsAfterTabs, true)
-      assert.equal(layout.barAbovePreview, true)
+      assert.equal(layout.title, 'liste de courses', 'le titre de la carte ne nomme pas l’application ouverte')
+      assert.equal(layout.allInHead, true, 'le titre, les onglets et les actions ne sont plus sur la même barre')
+      assert.equal(layout.headInsideCard, true, 'la barre flotte hors de la carte')
+      assert.equal(layout.titleLeftOfTabs, true)
+      assert.equal(layout.toolsAtRightEdge, true, 'les commandes ne sont pas collées à droite')
+      assert.equal(layout.headAbovePreview, true)
       assert.equal(layout.horizontalOverflow, 0, 'la barre déborde en largeur')
       // L'aperçu doit rester le plus gros élément de l'écran, pas être écrasé par ses commandes.
       assert.ok(layout.previewHeight > 400, `aperçu écrasé : ${layout.previewHeight}px`)
     }, width)
   })
 }
+
+test('l’aperçu est une carte encadrée, sans second cadre autour de l’application (étape 284)', options, async () => {
+  // Léo, capture de Claude à l'appui : « fais exactement comme ça avec un contour ».
+  await withPage(async (page) => {
+    await page.click('.workspace__item')
+    await page.waitForSelector('.code-panel__preview')
+    const card = await page.evaluate(() => {
+      const el = document.querySelector('.code-preview__card')
+      const style = getComputedStyle(el)
+      const frame = document.querySelector('.code-panel__preview')
+      const cardBox = el.getBoundingClientRect()
+      const frameBox = frame.getBoundingClientRect()
+      const preview = document.querySelector('.code-preview').getBoundingClientRect()
+      return {
+        border: style.borderTopWidth + ' ' + style.borderTopStyle,
+        borderVisible: style.borderTopColor !== 'rgba(0, 0, 0, 0)',
+        radius: parseFloat(style.borderTopLeftRadius),
+        clipsCorners: style.overflow === 'hidden',
+        background: style.backgroundColor,
+        // Détachée du bord de la zone, comme chez Claude (pas collée au bord de la fenêtre).
+        inset: Math.round(cardBox.top - preview.top),
+        frameBorder: getComputedStyle(frame).borderTopWidth,
+        // L'application va jusqu'aux bords de la carte (à 1 px de contour près).
+        frameFlush: Math.abs(frameBox.left - cardBox.left) <= 1.5 && Math.abs(frameBox.right - cardBox.right) <= 1.5
+      }
+    })
+    assert.equal(card.border, '1px solid')
+    assert.equal(card.borderVisible, true)
+    assert.ok(card.radius >= 8, `coins : ${card.radius}px`)
+    assert.equal(card.clipsCorners, true, 'l’aperçu dépasserait des coins arrondis')
+    assert.notEqual(card.background, 'rgba(0, 0, 0, 0)', 'carte sans fond')
+    assert.ok(card.inset >= 4, `carte collée au bord : ${card.inset}px`)
+    assert.equal(card.frameBorder, '0px', 'un second cadre entoure encore l’application')
+    assert.equal(card.frameFlush, true)
+  })
+})
+
+test('« Agrandir » replie la conversation ; le même bouton ou Échap la ramènent (étape 284)', options, async () => {
+  // Léo : « pouvoir mettre en grand l'aperçu ».
+  await withPage(async (page) => {
+    await page.click('.workspace__item')
+    await page.waitForSelector('.code-panel__preview')
+    const state = () =>
+      page.evaluate(() => ({
+        chat: getComputedStyle(document.querySelector('.code-chat')).display !== 'none',
+        handle: getComputedStyle(document.querySelector('.code-split__handle')).display !== 'none',
+        previewWidth: Math.round(document.querySelector('.code-preview').getBoundingClientRect().width),
+        splitWidth: Math.round(document.querySelector('.code-split').getBoundingClientRect().width),
+        pressed: document.querySelector('.code-preview__expand').getAttribute('aria-pressed'),
+        label: document.querySelector('.code-preview__expand').getAttribute('aria-label')
+      }))
+    const normal = await state()
+    assert.equal(normal.chat, true)
+    assert.equal(normal.label, "Agrandir l'aperçu")
+
+    await page.click('.code-preview__expand')
+    const big = await state()
+    assert.equal(big.chat, false, 'la conversation reste affichée')
+    assert.equal(big.handle, false, 'la poignée reste affichée sans rien à régler')
+    assert.equal(big.previewWidth, big.splitWidth, 'l’aperçu ne prend pas toute la largeur')
+    assert.equal(big.pressed, 'true')
+    assert.equal(big.label, "Réduire l'aperçu")
+
+    await page.click('.code-preview__expand')
+    assert.deepEqual(await state(), normal)
+
+    await page.click('.code-preview__expand')
+    await page.keyboard.press('Escape')
+    assert.deepEqual(await state(), normal, 'Échap ne ramène pas la conversation')
+  })
+})
+
+test('aperçu agrandi : une génération en cours reste visible, et « Nouvelle application » ramène la conversation', options, async () => {
+  await withPage(async (page) => {
+    await page.click('.workspace__item')
+    await page.waitForSelector('.code-panel__preview')
+    await startGeneration(page)
+    await page.click('.code-preview__expand')
+    // Le bandeau d'avancement est dans la conversation, repliée : la barre de la carte prend le relais.
+    assert.match(await page.textContent('.code-preview__busy'), /Préparation/)
+    await page.evaluate(() => window.__finishGen())
+    await page.waitForSelector('.code-panel__done', { state: 'attached' })
+    assert.equal(await page.locator('.code-preview__busy').count(), 0)
+
+    // Plus rien à montrer : la conversation revient d'elle-même, sinon elle resterait repliée sans bouton pour la
+    // faire revenir (la carte vide n'a pas de bouton « Agrandir »).
+    await page.click('.workspace__new')
+    await page.waitForSelector('.code-preview--empty', { state: 'attached' })
+    assert.equal(await page.isVisible('.code-chat'), true)
+    assert.equal(await page.locator('.code-preview__expand').count(), 0)
+  })
+})
+
+test('la poignée est une petite pastille centrée, plus un filet sur toute la hauteur (étape 284)', options, async () => {
+  await withPage(async (page) => {
+    await page.click('.workspace__item')
+    await page.waitForSelector('.code-panel__preview')
+    const grip = await page.evaluate(() => {
+      const handle = document.querySelector('.code-split__handle')
+      const box = handle.getBoundingClientRect()
+      const before = getComputedStyle(handle, '::before')
+      return { handleHeight: box.height, gripHeight: parseFloat(before.height), top: before.top, radius: parseFloat(before.borderTopLeftRadius) }
+    })
+    assert.ok(grip.gripHeight <= 48, `pastille de ${grip.gripHeight}px`)
+    assert.ok(grip.gripHeight < grip.handleHeight / 4, 'encore un filet sur toute la hauteur')
+    assert.equal(grip.top, `${grip.handleHeight / 2}px`, 'pastille pas centrée verticalement')
+    assert.ok(grip.radius >= 2, 'pastille sans bouts arrondis')
+
+    // Au survol, elle grandit un peu pour montrer qu'elle s'attrape, sans redevenir un filet.
+    const handle = await page.locator('.code-split__handle').boundingBox()
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2)
+    await page.waitForTimeout(250)
+    const hovered = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.code-split__handle'), '::before').height))
+    assert.ok(hovered > grip.gripHeight && hovered <= 48, `pastille survolée : ${hovered}px`)
+  })
+})
 
 /** Lance une génération et attend que le bandeau d'avancement apparaisse. */
 async function startGeneration(page) {

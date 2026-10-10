@@ -14,6 +14,7 @@ import RepoChanges from './RepoChanges'
 import { ipcErrorMessage } from '@/lib/ipcError'
 import { readSaved, writeSaved } from '@/lib/savedSetting'
 import { CHAT_MIN_WIDTH, clampChatWidth } from '@/lib/splitWidth'
+import { useScreenActive } from '@/lib/shellContext'
 import type { RepoView } from '../../shared/ipc'
 
 type View = 'preview' | 'code'
@@ -60,6 +61,33 @@ function CheckIcon(): JSX.Element {
   )
 }
 
+/** Icônes de la barre de l'aperçu (étape 284), propres à cet endroit comme CheckIcon. */
+function FolderIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3.6l2 2.2h7.4A2.5 2.5 0 0 1 21 9.7v7.8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5Z" />
+    </svg>
+  )
+}
+
+/** Deux flèches vers les coins : agrandir. */
+function ExpandIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7" />
+    </svg>
+  )
+}
+
+/** Deux flèches vers le centre : réduire. */
+function CollapseIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 10h-6V4M14 10l7-7M4 14h6v6M10 14l-7 7" />
+    </svg>
+  )
+}
+
 /**
  * Mode Code (étape 30) : décrire une application en français et la voir tourner, générée à 100% en local.
  * Une fois une première version obtenue, les demandes suivantes sont traitées comme des modifications du
@@ -101,6 +129,12 @@ export default function CodePanel(): JSX.Element {
     return saved >= CHAT_MIN_WIDTH ? saved : null
   })
   const [resizing, setResizing] = useState(false)
+  /**
+   * Étape 284 (Léo : « pouvoir mettre en grand l'aperçu ») : la conversation se replie et l'aperçu prend toute la
+   * largeur, comme le bouton « Agrandir » des aperçus de Claude. Échap ou le même bouton le ramène à sa taille.
+   */
+  const [previewExpanded, setPreviewExpanded] = useState(false)
+  const screenActive = useScreenActive()
   const splitRef = useRef<HTMLDivElement>(null)
   const chatRef = useRef<HTMLElement>(null)
   const [committed, setCommitted] = useState<{ url: string; sha: string } | null>(null)
@@ -372,6 +406,31 @@ export default function CodePanel(): JSX.Element {
     setAttachment(null)
   }
 
+  /** Quelque chose à montrer dans l'aperçu : une application, ou les changements d'un dépôt. */
+  const hasPreview = appResult !== null || (repo !== null && (repo.changes.length > 0 || committed !== null))
+  /** Le nom affiché dans la barre de la carte : celui de la liste de gauche, pour qu'on reconnaisse l'élément ouvert. */
+  const previewTitle = appResult
+    ? (recentApps.find((recent) => recent.path === appResult.path)?.label ?? 'Ton application')
+    : repo
+      ? repo.fullName
+      : 'Aperçu'
+
+  // Plus rien à montrer (nouvelle application, application supprimée, dépôt refermé) : l'aperçu agrandi se referme,
+  // sinon la conversation resterait repliée devant une carte vide, sans bouton pour la faire revenir.
+  useEffect(() => {
+    if (!hasPreview) setPreviewExpanded(false)
+  }, [hasPreview])
+
+  // Échap ramène l'aperçu à sa taille. Un jeu qui a le clavier garde ses touches : l'iframe ne les transmet pas ici.
+  useEffect(() => {
+    if (!previewExpanded || !screenActive) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setPreviewExpanded(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [previewExpanded, screenActive])
+
   /** La largeur que donnerait la poignée à cette position du pointeur, bornée pour ne jamais écraser une colonne. */
   const widthAt = (clientX: number): number | null => {
     const split = splitRef.current?.getBoundingClientRect()
@@ -412,7 +471,7 @@ export default function CodePanel(): JSX.Element {
       <div className="code-panel">
         <div
           ref={splitRef}
-          className={`code-split${resizing ? ' code-split--resizing' : ''}`}
+          className={`code-split${resizing ? ' code-split--resizing' : ''}${previewExpanded ? ' code-split--expanded' : ''}`}
           style={chatWidth === null ? undefined : ({ '--code-chat-width': `${chatWidth}px` } as CSSProperties)}
         >
           <section ref={chatRef} className="code-chat" aria-label="Conversation">
@@ -572,78 +631,107 @@ export default function CodePanel(): JSX.Element {
             onKeyDown={onHandleKey}
           />
 
-          <section
-            className={`code-preview${!appResult && !(repo && (repo.changes.length > 0 || committed)) ? ' code-preview--empty' : ''}`}
-            aria-label="Aperçu"
-          >
-            {appResult ? (
-              <div className="code-panel__result">
-                {/* Une SEULE barre (étape 94) : onglets Aperçu/Code à gauche, actions à droite. */}
-                <div className="code-panel__result-bar">
-                  <div className="code-panel__view-tabs">
-                    <button
-                      className={`code-panel__view-tab${view === 'preview' ? ' code-panel__view-tab--active' : ''}`}
-                      onClick={() => setView('preview')}
-                    >
-                      Aperçu
-                    </button>
-                    <button
-                      className={`code-panel__view-tab${view === 'code' ? ' code-panel__view-tab--active' : ''}`}
-                      onClick={() => setView('code')}
-                    >
-                      Code
-                    </button>
-                  </div>
-
-                  {!generating && (
-                    <div className="code-panel__result-actions">
-                      <button onClick={() => void window.jaris.openGeneratedApp(appResult.path)} title={appResult.path}>
-                        Ouvrir le dossier
+          <section className={`code-preview${hasPreview ? '' : ' code-preview--empty'}`} aria-label="Aperçu">
+            {/* Étape 284 (Léo, capture de Claude à l'appui : « fais exactement comme ça avec un contour et pouvoir mettre
+                en grand l'aperçu ») : l'aperçu est une CARTE encadrée, avec sa propre barre de titre — le nom de ce qui est
+                affiché à gauche, les commandes à droite —, comme les aperçus de Claude. */}
+            <div className="code-preview__card">
+              <div className="code-preview__head">
+                <span className={`code-preview__title${appResult ? ' code-preview__title--app' : ''}`} title={previewTitle}>
+                  {previewTitle}
+                </span>
+                {repo && !appResult && <span className="code-preview__meta">{repo.branch}</span>}
+                {/* Aperçu agrandi : la conversation est repliée, donc son bandeau d'avancement aussi. Sans ce rappel,
+                    une génération en cours serait invisible jusqu'à la fin. */}
+                {generating && previewExpanded && (
+                  <span className="code-preview__busy">{formatCodeGenProgress(progress, elapsedMs).title}</span>
+                )}
+                <div className="code-preview__tools">
+                  {appResult && (
+                    <div className="code-panel__view-tabs">
+                      <button
+                        className={`code-panel__view-tab${view === 'preview' ? ' code-panel__view-tab--active' : ''}`}
+                        onClick={() => setView('preview')}
+                      >
+                        Aperçu
+                      </button>
+                      <button
+                        className={`code-panel__view-tab${view === 'code' ? ' code-panel__view-tab--active' : ''}`}
+                        onClick={() => setView('code')}
+                      >
+                        Code
                       </button>
                     </div>
                   )}
+                  {appResult && !generating && (
+                    <button
+                      className="panel__icon-button code-preview__folder"
+                      onClick={() => void window.jaris.openGeneratedApp(appResult.path)}
+                      title={`Ouvrir le dossier (${appResult.path})`}
+                      aria-label="Ouvrir le dossier"
+                    >
+                      <FolderIcon />
+                    </button>
+                  )}
+                  {hasPreview && (
+                    <button
+                      className="panel__icon-button code-preview__expand"
+                      onClick={() => setPreviewExpanded(!previewExpanded)}
+                      title={previewExpanded ? "Réduire l'aperçu (Échap)" : "Agrandir l'aperçu"}
+                      aria-label={previewExpanded ? "Réduire l'aperçu" : "Agrandir l'aperçu"}
+                      aria-pressed={previewExpanded}
+                    >
+                      {previewExpanded ? <CollapseIcon /> : <ExpandIcon />}
+                    </button>
+                  )}
                 </div>
+              </div>
 
-                {view === 'preview' ? (
-                  // sandbox sans allow-same-origin : le code généré tourne dans une origine opaque, sans accès à Jaris
-                  // ni aux fichiers locaux (localStorage y est donc bloqué, d'où le try/catch imposé à la génération).
-                  // allow-forms (étape 232) : sans lui, un formulaire généré ne réagit jamais au clic ; l'envoi réel
-                  // reste bloqué par la règle form-action 'none' de l'aperçu (generatedAppPreview.ts).
-                  <iframe className="code-panel__preview" title="Aperçu de l'application" sandbox="allow-scripts allow-forms" src={appResult.previewUrl} />
+              <div className="code-preview__body">
+                {appResult ? (
+                  view === 'preview' ? (
+                    // sandbox sans allow-same-origin : le code généré tourne dans une origine opaque, sans accès à Jaris
+                    // ni aux fichiers locaux (localStorage y est donc bloqué, d'où le try/catch imposé à la génération).
+                    // allow-forms (étape 232) : sans lui, un formulaire généré ne réagit jamais au clic ; l'envoi réel
+                    // reste bloqué par la règle form-action 'none' de l'aperçu (generatedAppPreview.ts).
+                    <iframe className="code-panel__preview" title="Aperçu de l'application" sandbox="allow-scripts allow-forms" src={appResult.previewUrl} />
+                  ) : (
+                    <pre className="code-panel__code">{appResult.html}</pre>
+                  )
+                ) : repo && (repo.changes.length > 0 || committed) ? (
+                  <RepoChanges
+                    repo={repo}
+                    busy={generating || committing}
+                    committed={committed}
+                    defaultMessage={commitMessage}
+                    onCommit={commitRepo}
+                    onDiscard={discardRepo}
+                  />
                 ) : (
-                  <pre className="code-panel__code">{appResult.html}</pre>
+                  <div className="code-preview__placeholder">
+                    <svg viewBox="0 0 64 48" width="96" height="72" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <rect x="2" y="2" width="60" height="44" rx="6" />
+                      <path d="M2 12h60" />
+                      <circle cx="8" cy="7" r="1.2" />
+                      <circle cx="13" cy="7" r="1.2" />
+                      <path d="M24 24l-6 5 6 5M40 24l6 5-6 5M35 21l-6 16" />
+                    </svg>
+                    <p>
+                      {repo
+                        ? "Les changements préparés par Jaris s'afficheront ici, ligne par ligne, avant d'être enregistrés sur GitHub."
+                        : "L'aperçu de ton application s'affichera ici."}
+                    </p>
+                  </div>
                 )}
+              </div>
 
-                <p className="code-panel__hint">
-                  Aperçu isolé : la sauvegarde de données (localStorage) n'y marche pas, mais fonctionne en ouvrant le
-                  fichier depuis le dossier.
+              {appResult && view === 'preview' && (
+                <p className="code-preview__foot">
+                  Aperçu isolé : la sauvegarde de données (localStorage) n'y marche pas, mais fonctionne en ouvrant le fichier
+                  depuis le dossier.
                 </p>
-              </div>
-            ) : repo && (repo.changes.length > 0 || committed) ? (
-              <RepoChanges
-                repo={repo}
-                busy={generating || committing}
-                committed={committed}
-                defaultMessage={commitMessage}
-                onCommit={commitRepo}
-                onDiscard={discardRepo}
-              />
-            ) : (
-              <div className="code-preview__placeholder">
-                <svg viewBox="0 0 64 48" width="96" height="72" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="2" y="2" width="60" height="44" rx="6" />
-                  <path d="M2 12h60" />
-                  <circle cx="8" cy="7" r="1.2" />
-                  <circle cx="13" cy="7" r="1.2" />
-                  <path d="M24 24l-6 5 6 5M40 24l6 5-6 5M35 21l-6 16" />
-                </svg>
-                <p>
-                  {repo
-                    ? "Les changements préparés par Jaris s'afficheront ici, ligne par ligne, avant d'être enregistrés sur GitHub."
-                    : "L'aperçu de ton application s'affichera ici."}
-                </p>
-              </div>
-            )}
+              )}
+            </div>
           </section>
         </div>
       </div>

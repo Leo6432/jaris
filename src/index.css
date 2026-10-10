@@ -2520,16 +2520,6 @@ p.capacity-scan__tier-missing {
   padding: 12px;
 }
 
-/* Onglets à gauche, actions secondaires à droite, sur UNE ligne (étape 94) : les deux étaient des rangées
-   séparées, qui s'empilaient sous le composeur avant même de voir l'application. */
-.code-panel__result-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
 .code-panel__result-actions {
   display: flex;
   gap: 8px;
@@ -2582,17 +2572,6 @@ p.capacity-scan__tier-missing {
   font-size: 12px;
   line-height: 1.55;
   color: var(--hud-text-soft);
-}
-
-.code-panel__hint {
-  margin: 0;
-  font-size: 12px;
-  color: var(--hud-text-faint);
-}
-
-.code-panel__hint code {
-  color: var(--hud-text-dim);
-  word-break: break-all;
 }
 
 .code-panel__issues {
@@ -7369,14 +7348,16 @@ select {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px 16px 16px;
+  /* Étape 284 : 8 px côté aperçu, + les 8 px de la carte = l'espace où se loge la poignée. */
+  padding: 12px 8px 16px 16px;
 }
 
-/* La séparation : un filet fin au repos, qui s'épaissit au survol, au clavier et pendant le glissement. Sa zone de
-   prise (9 px) déborde de part et d'autre du filet pour être facile à attraper. */
+/* Étape 284 (capture de Claude à l'appui) : plus de filet sur toute la hauteur — la carte de l'aperçu a son propre
+   contour. La poignée est une petite pastille verticale, centrée dans l'espace entre la conversation et la carte ;
+   sa zone de prise, elle, couvre toute la hauteur pour rester facile à attraper. */
 .code-split__handle {
-  flex: 0 0 9px;
-  margin: 0 -4px;
+  flex: 0 0 14px;
+  margin: 0 -7px;
   position: relative;
   z-index: 2;
   cursor: col-resize;
@@ -7387,21 +7368,21 @@ select {
 .code-split__handle::before {
   content: '';
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 4px;
-  width: 1px;
-  background: var(--hud-line);
-  transition: background 0.15s ease, left 0.15s ease, width 0.15s ease;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 32px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  background: rgba(var(--jv-ink-rgb), 0.16);
+  transition: background 0.15s ease, height 0.15s ease;
 }
 
 .code-split__handle:hover::before,
 .code-split__handle:focus-visible::before,
 .code-split--resizing .code-split__handle::before {
-  left: 3px;
-  width: 3px;
-  border-radius: 2px;
-  background: var(--hud-text-faint);
+  height: 48px;
+  background: rgba(var(--jv-ink-rgb), 0.42);
 }
 
 .code-split--resizing {
@@ -7475,15 +7456,122 @@ select {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 12px 16px 16px;
+  padding: 8px 8px 8px 8px;
 }
 
-.code-preview > .code-panel__result {
-  padding: 0;
+/* La carte (étape 284) : un contour fin, des coins arrondis, un fond un cran plus sombre que la conversation, et
+   tout son contenu rogné à ses coins — l'aperçu va jusqu'au bord, sans second cadre à l'intérieur. */
+.code-preview__card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--hud-line);
+  border-radius: 12px;
+  background: var(--jv-code);
+  overflow: hidden;
 }
 
-.code-preview > .repo-panel {
+.code-preview__head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 6px 8px 6px 14px;
+  border-bottom: 1px solid var(--hud-line);
+}
+
+.code-preview__title {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--hud-text);
+}
+
+/* Comme la liste de gauche : « Liste de courses », pas « liste de courses » ni « Liste De Courses ». Jamais pour un
+   dépôt : « leo/projet » est un nom exact, pas une phrase. */
+.code-preview__title--app::first-letter {
+  text-transform: uppercase;
+}
+
+.code-preview__meta,
+.code-preview__busy {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--hud-text-faint);
+}
+
+.code-preview__tools {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.code-preview__tools .code-panel__view-tabs {
+  margin-right: 4px;
+}
+
+.code-preview__tools .code-panel__view-tab {
+  padding: 4px 12px;
+}
+
+.code-preview__tools .panel__icon-button {
+  color: var(--hud-text-dim);
+}
+
+.code-preview__tools .panel__icon-button:hover {
+  color: var(--hud-text);
+}
+
+.code-preview__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Le contour est celui de la carte : l'aperçu et le code n'ont plus le leur. */
+.code-preview__body > .code-panel__preview,
+.code-preview__body > .code-panel__code {
+  border: none;
+  border-radius: 0;
+}
+
+.code-preview__body > .code-panel__code {
+  background: transparent;
+}
+
+.code-preview__body > .repo-panel {
   max-width: none;
+  padding: 12px 14px 14px;
+}
+
+.code-preview__foot {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 7px 14px;
+  border-top: 1px solid var(--hud-line);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--hud-text-faint);
+}
+
+/* Aperçu agrandi : la conversation et la poignée se replient, la carte prend toute la largeur. */
+.code-split--expanded .code-chat,
+.code-split--expanded .code-split__handle {
+  display: none;
 }
 
 .code-preview__placeholder {
@@ -7515,7 +7603,7 @@ select {
     min-width: 0;
     max-width: none;
     max-height: 40%;
-    border-top: 1px solid var(--hud-line);
+    padding: 12px 16px 16px;
   }
 
   /* Colonnes l'une sur l'autre : la poignée verticale n'a plus de sens. */
@@ -7530,7 +7618,6 @@ select {
   .code-split:has(.code-preview--empty) .code-chat {
     flex: 1;
     max-height: none;
-    border-top: none;
   }
 
   /* Avec un aperçu au-dessus, l'accueil de la conversation se réduit à sa question et ses suggestions : sinon il
