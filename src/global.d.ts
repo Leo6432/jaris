@@ -109,6 +109,7 @@ declare global {
       // préfixe "data:...;base64,". Lue par le modèle de vision, jamais par celui de conversation/de code.
       sendChatMessage: (prompt: string, imageBase64?: string) => Promise<ChatMessage>
       cancelChat: () => void
+      transcribeDictation: (wav: Uint8Array) => Promise<string>
       getChatHistory: () => Promise<ChatMessage[]>
       listConversations: () => Promise<ConversationList>
       createConversation: () => Promise<ConversationList>

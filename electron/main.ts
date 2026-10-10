@@ -60,6 +60,7 @@ import { getModelsToTest, runQuickSetup, stopModelTest, testUnscoredModels, unsc
 import { chatSession } from './services/chatSession'
 import { PhoneAccessManager } from './services/phoneAccessManager'
 import { PHONE_RESTRICTIONS, phoneStatusFromLog } from './services/phoneAccess'
+import { MAX_VOICE_BYTES, isExpectedWav } from './services/phoneServer'
 import { cancelScheduledShutdown, scheduleShutdown } from './services/systemControl'
 import { getDataRoot } from './services/dataLocation'
 import { resourcesRoot } from './paths'
@@ -370,6 +371,21 @@ function titleBarOverlay(): Electron.TitleBarOverlayOptions {
     color: '#00000000',
     symbolColor: nativeTheme.shouldUseDarkColors ? '#ffffff' : '#1b1b1b',
     height: TITLE_BAR_HEIGHT
+  }
+}
+
+/**
+ * Transcrit un WAV 16 kHz mono avec le modèle déjà chargé pour le micro : message vocal du téléphone (étape 214)
+ * et dictée du champ de saisie (étape 276). Le fichier temporaire est écrit par Jaris lui-même, puis effacé.
+ */
+async function transcribeWav(wav: Buffer): Promise<string> {
+  if (!pipeline) throw new Error("L'écoute n'est pas lancée sur le PC : la transcription n'est pas disponible.")
+  const path = join(tmpdir(), `jaris-dictee-${randomUUID()}.wav`)
+  await writeFile(path, wav)
+  try {
+    return await pipeline.transcribeFile(path)
+  } finally {
+    await rm(path, { force: true })
   }
 }
 
@@ -860,16 +876,7 @@ function getPhoneAccess(): PhoneAccessManager {
     pageDir: join(resourcesRoot(), 'phone'),
     actions: {
       history: () => chatSession.getVisibleMessages(),
-      transcribe: async (wav) => {
-        if (!pipeline) throw new Error("L'écoute n'est pas lancée sur le PC : la transcription n'est pas disponible.")
-        const path = join(tmpdir(), `jaris-phone-${randomUUID()}.wav`)
-        await writeFile(path, wav)
-        try {
-          return await pipeline.transcribeFile(path)
-        } finally {
-          await rm(path, { force: true })
-        }
-      },
+      transcribe: (wav) => transcribeWav(wav),
       // Même conversation que le Chat (et que la voix) : ce qui est dit depuis le téléphone se retrouve sur le
       // PC, et inversement. Seuls les outils sans risque existent pour ce tour (PHONE_RESTRICTIONS).
       sendMessage: async (text, onStatus, mode) => {
@@ -1436,6 +1443,14 @@ app.whenReady().then(async () => {
     )
   })
   ipcMain.on(IPC_CHANNELS.cancelChat, () => chatSession.cancel())
+  // Étape 276 : micro du champ de saisie = dictée. Mêmes garde-fous que le téléphone : un WAV 16 kHz mono, 5 Mo
+  // au plus — ce qui arrive du renderer n'est jamais écrit tel quel s'il n'a pas cette forme.
+  ipcMain.handle(IPC_CHANNELS.transcribeDictation, async (_event, bytes: Uint8Array): Promise<string> => {
+    const wav = Buffer.from(bytes)
+    if (wav.length > MAX_VOICE_BYTES) throw new Error('Dictée trop longue : arrête-la plus tôt (2 minutes au plus).')
+    if (!isExpectedWav(wav)) throw new Error('Enregistrement illisible.')
+    return (await transcribeWav(wav)).trim()
+  })
   ipcMain.handle(IPC_CHANNELS.getChatHistory, (): Promise<ChatMessage[]> => chatSession.getVisibleMessages())
 
   // Téléphone (étape 214) : Options → Téléphone.

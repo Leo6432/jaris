@@ -6905,3 +6905,54 @@ select {
     animation: none;
   }
 }
+
+/* ==========================================================================
+   Étape 276 : dictée du champ de saisie. Pendant l'enregistrement, le micro devient plein (comme le bouton
+   d'envoi) avec un halo qui respire, et un petit compteur s'affiche à côté — pas de couleur vive.
+   ========================================================================== */
+.composer__mic--recording,
+.composer__mic--recording:not(:disabled):hover {
+  color: var(--jv-accent-ink);
+  background: var(--hud-text);
+  animation: composer-dictation-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes composer-dictation-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--jv-ink-rgb), 0.22);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(var(--jv-ink-rgb), 0);
+  }
+}
+
+.composer__dictation {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--hud-text-dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.composer__dictation-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: composer-dictation-blink 1s ease-in-out infinite;
+}
+
+@keyframes composer-dictation-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer__mic--recording,
+  .composer__dictation-dot {
+    animation: none;
+  }
+}

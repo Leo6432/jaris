@@ -5,7 +5,7 @@ import {
   pickedFileToImageAttachment,
   type ImageAttachment
 } from '@/lib/imageAttachment'
-import { useVoiceLaunch } from '@/lib/shellContext'
+import { DICTATION_MAX_MS, DictationRecorder, appendDictation } from '@/lib/dictation'
 
 /**
  * Champ de saisie commun au Chat et au mode Code (étape 92).
@@ -124,9 +124,77 @@ export default function Composer({
   addItems = []
 }: ComposerProps): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false)
-  /** Refonte « design sobre » : le micro de la barre, qui ouvre l'Agent vocal et lance l'écoute. */
-  const launchVoice = useVoiceLaunch()
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // Étape 276 (Léo : « quand on clique sur le micro dans le Chat, ça ne doit pas aller en vocal, ça doit
+  // enregistrer et transcrire en texte ») : le micro de la barre est une DICTÉE — un clic enregistre, un second
+  // arrête ; le texte transcrit s'ajoute à ce qui est déjà écrit, sans rien envoyer tout seul.
+  const [dictation, setDictation] = useState<'idle' | 'recording' | 'transcribing'>('idle')
+  const [dictationSeconds, setDictationSeconds] = useState(0)
+  const recorderRef = useRef<DictationRecorder | null>(null)
+  const dictationTimers = useRef<{ stop?: number; tick?: number }>({})
+  const valueRef = useRef(value)
+  valueRef.current = value
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const canDictate = typeof window !== 'undefined' && typeof window.jaris?.transcribeDictation === 'function'
+
+  const clearDictationTimers = (): void => {
+    window.clearTimeout(dictationTimers.current.stop)
+    window.clearInterval(dictationTimers.current.tick)
+    dictationTimers.current = {}
+  }
+
+  // Écran quitté en pleine dictée : le micro est rendu à Windows, rien n'est transcrit.
+  useEffect(
+    () => () => {
+      clearDictationTimers()
+      recorderRef.current?.cancel()
+      recorderRef.current = null
+    },
+    []
+  )
+
+  const finishDictation = async (): Promise<void> => {
+    const recorder = recorderRef.current
+    recorderRef.current = null
+    clearDictationTimers()
+    if (!recorder) return
+    const wav = recorder.stop()
+    if (!wav) {
+      setDictation('idle')
+      return
+    }
+    setDictation('transcribing')
+    try {
+      const text = await window.jaris.transcribeDictation(wav)
+      if (text) onChange(appendDictation(valueRef.current, text))
+      else onError("Je n'ai rien entendu : réessaie en parlant un peu plus près du micro.")
+    } catch (err) {
+      onError(err instanceof Error ? err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(err))
+    } finally {
+      setDictation('idle')
+      inputRef.current?.focus()
+    }
+  }
+
+  const toggleDictation = async (): Promise<void> => {
+    if (dictation === 'recording') return finishDictation()
+    if (dictation !== 'idle') return
+    try {
+      recorderRef.current = await DictationRecorder.start()
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err))
+      return
+    }
+    setDictation('recording')
+    setDictationSeconds(0)
+    const startedAt = Date.now()
+    dictationTimers.current = {
+      tick: window.setInterval(() => setDictationSeconds(Math.floor((Date.now() - startedAt) / 1000)), 500),
+      // Longue dictée : arrêtée toute seule avant la limite de taille acceptée par Jaris.
+      stop: window.setTimeout(() => void finishDictation(), DICTATION_MAX_MS)
+    }
+  }
 
   // Le menu « + » se ferme au clic en dehors ou sur Échap, comme celui de ChatGPT.
   useEffect(() => {
@@ -229,6 +297,7 @@ export default function Composer({
       )}
 
       <textarea
+        ref={inputRef}
         className="composer__input"
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -289,15 +358,25 @@ export default function Composer({
 
         {extraActions}
 
-        {launchVoice && (
+        {dictation === 'recording' && (
+          <span className="composer__dictation" aria-live="polite">
+            <span className="composer__dictation-dot" aria-hidden="true" />
+            {Math.floor(dictationSeconds / 60)}:{String(dictationSeconds % 60).padStart(2, '0')}
+          </span>
+        )}
+        {dictation === 'transcribing' && <span className="composer__dictation">Transcription…</span>}
+
+        {canDictate && (
           <button
             type="button"
-            className="composer__mic"
-            onClick={launchVoice}
-            title="Parler à Jaris"
-            aria-label="Parler à Jaris"
+            className={`composer__mic${dictation === 'recording' ? ' composer__mic--recording' : ''}`}
+            onClick={() => void toggleDictation()}
+            disabled={dictation === 'transcribing'}
+            aria-pressed={dictation === 'recording'}
+            title={dictation === 'recording' ? 'Terminer la dictée' : 'Dicter (le texte s’écrit dans le champ)'}
+            aria-label={dictation === 'recording' ? 'Terminer la dictée' : 'Dicter'}
           >
-            <MicIcon />
+            {dictation === 'transcribing' ? <span className="composer__spinner" aria-hidden="true" /> : <MicIcon />}
           </button>
         )}
 

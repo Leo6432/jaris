@@ -761,6 +761,8 @@ export const IPC_CHANNELS = {
   sendChatMessage: 'jaris:send-chat-message',
   /** Étape 272 : bouton « Arrêter » du Chat, comme ChatGPT. */
   cancelChat: 'jaris:cancel-chat',
+  /** renderer -> main, étape 276 : dictée du champ de saisie (WAV 16 kHz mono) -> texte transcrit. */
+  transcribeDictation: 'jaris:transcribe-dictation',
   /** main -> renderer, étape 273 : une recherche web ou une page lue pendant la réponse en cours (WebActivity). */
   chatWebActivity: 'jaris:chat-web-activity',
   /** main -> renderer : un fragment de la réponse en cours de génération (étape 48), affiché au fil de

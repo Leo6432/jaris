@@ -7368,3 +7368,23 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `scripts/test-chat-widget-ui.mjs` (aucun élément du widget en zone de déplacement ; la seule règle
   CSS qui en déclare une est `.titlebar` ; la fenêtre du widget a `movable: false`). Vérifié en remettant la zone
   de déplacement, puis en retirant `movable: false`. Non vérifiable ici : le comportement exact sous Windows.
+
+- **Étape 276 (v0.32.10), le micro du champ de saisie devient une dictée (Léo : « quand on clique sur le micro
+  dans le Chat, ça ne doit pas aller en vocal, ça doit enregistrer et transcrire en texte »).** Le micro du champ
+  (Composer.tsx, donc Chat, Code, Image et Vidéo) basculait sur l'Agent vocal et lançait l'écoute. Maintenant : un
+  clic enregistre (bouton plein qui respire, compteur 0:07), un second arrête ; le son est ramené en WAV 16 kHz
+  mono et transcrit par le modèle DÉJÀ chargé pour le micro (`transcribeDictation`, même chemin que les messages
+  vocaux du téléphone — `transcribeWav` partagé dans main.ts) ; le texte s'AJOUTE au champ, séparé par une
+  espace, sans rien envoyer : Léo relit puis envoie. Arrêt automatique avant la limite de 5 Mo (2 min 30). Le
+  contexte `VoiceLaunchContext` et `launchVoice` (App.tsx), qui ne servaient qu'à ce bouton, sont retirés. Le micro
+  utilisé est celui par défaut de Windows (pas encore celui choisi dans Options → Voix).
+  **Choix de sécurité** : ce qui arrive du renderer passe le même contrôle que le téléphone avant d'être écrit
+  dans un fichier temporaire (`isExpectedWav` : WAV PCM 16 bits mono 16 kHz, 5 Mo au plus) ; un test vérifie que
+  le WAV produit par le champ est accepté TEL QUEL par ce contrôle — deux fichiers, une seule forme attendue.
+  Régression : `scripts/test-dictation.mjs` (rééchantillonnage, WAV accepté par isExpectedWav, ajout au texte) et
+  `scripts/test-dictation-ui.mjs` (vrai navigateur avec le FAUX micro de Chromium,
+  `--use-fake-device-for-media-stream` : enregistrement réel, WAV 16 kHz mono transmis, texte ajouté au champ,
+  jamais envoyé, plus aucune bascule vers l'Agent vocal ; erreur affichée sans le préfixe « Error invoking remote
+  method »). **Piège : `getUserMedia` n'existe pas sur `about:blank` (page de `setContent`) — la page de test
+  est servie depuis http://localhost par `page.route`.** Vérifiés en remettant un envoi automatique et le message
+  d'erreur brut. Non vérifiable ici : la qualité de la transcription sur le vrai micro de Léo.

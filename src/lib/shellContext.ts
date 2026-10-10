@@ -27,11 +27,3 @@ export const useShellSlots = (): ShellSlots => useContext(ShellSlotsContext)
 export const ScreenActiveContext = createContext(true)
 
 export const useScreenActive = (): boolean => useContext(ScreenActiveContext)
-
-/**
- * Bouton micro de la barre de saisie (maquette : « Agent vocal intégré au chat ») : bascule sur l'écran
- * Agent vocal et lance l'écoute. `null` hors de la fenêtre principale — le bouton n'est alors pas affiché.
- */
-export const VoiceLaunchContext = createContext<(() => void) | null>(null)
-
-export const useVoiceLaunch = (): (() => void) | null => useContext(VoiceLaunchContext)

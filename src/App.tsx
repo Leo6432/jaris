@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import CapacityScan from '@/components/CapacityScan'
 import ChatPanel from '@/components/ChatPanel'
 import ChatWidget from '@/components/ChatWidget'
@@ -15,7 +15,7 @@ import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import { useJarisStore, type JarisEmotion } from '@/store/useJarisStore'
 import type { AppVersionStatus, MemoryGraph, OllamaVersionStatus, WidgetMode, WindowChrome } from '../shared/ipc'
 import ModelEffortPicker from '@/components/ModelEffortPicker'
-import { ShellSlotsContext, VoiceLaunchContext } from '@/lib/shellContext'
+import { ShellSlotsContext } from '@/lib/shellContext'
 import logo64 from '@/assets/jaris-logo-64.png'
 import logo160 from '@/assets/jaris-logo-160.png'
 
@@ -186,19 +186,6 @@ export default function App(): JSX.Element {
   useEffect(() => {
     if (MODE !== 'full' || !window.jaris.getWindowChrome) return
     void window.jaris.getWindowChrome().then(setChrome).catch(() => {})
-  }, [])
-
-  /**
-   * Micro de la barre de saisie : passe sur l'Agent vocal PUIS déclenche l'écoute. Le changement de mode est
-   * envoyé au main tout de suite (pas seulement par l'effet plus haut, qui ne tourne qu'après le rendu) :
-   * hors de l'Agent vocal, l'écoute est suspendue côté main, et l'ordre des messages IPC garantit qu'elle
-   * est rétablie avant que le réveil n'arrive.
-   */
-  const launchVoice = useCallback((): void => {
-    window.jaris.setActiveMode('voice')
-    setAppMode('voice')
-    setOptionsShown(false)
-    window.jaris.triggerWake()
   }, [])
 
   /** Bouton « Parler à Jaris » et clic sur le logo de l'Agent vocal : une des 3 façons d'activer Jaris
@@ -535,7 +522,6 @@ export default function App(): JSX.Element {
 
     return (
       <ShellSlotsContext.Provider value={{ newSlot, recentsSlot, titleSlot }}>
-      <VoiceLaunchContext.Provider value={launchVoice}>
       <div className={`app-shell${chrome?.titleBar ? ' app-shell--titlebar' : ''}`}>
         {chrome?.titleBar && <TitleBar />}
 
@@ -748,7 +734,6 @@ export default function App(): JSX.Element {
         </div>
 
       </div>
-      </VoiceLaunchContext.Provider>
       </ShellSlotsContext.Provider>
     )
   }
