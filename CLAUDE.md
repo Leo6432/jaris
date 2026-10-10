@@ -7428,3 +7428,12 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   « \donnees\github-token.bin » sous Windows (la CI). Reproduit ici en remplaçant `join` par `path.win32.join`
   dans une copie du test, puis corrigé en calculant le chemin attendu avec le même `join`. **Un chemin attendu
   par un test se calcule comme le code le calcule, jamais en dur : la CI tourne sous Windows.**
+
+- **Identifiant de l'application GitHub ajouté (étape 278)** : `config.github.clientId` vaut maintenant celui de
+  l'OAuth App créée par Léo (« Enable Device Flow » cochée), ce qui fait apparaître le bouton GitHub du mode Code.
+  Cet identifiant est PUBLIC par conception : il ne donne accès à aucun compte. L'accès n'existe que si une
+  personne tape le code sur SON compte GitHub et clique « Authorize ». Le « client secret », lui, ne doit jamais
+  être créé ni partagé : le device flow n'en a pas besoin. Une seule application sert tous les utilisateurs de
+  Jaris, chacun se connecte avec son propre compte. **Non vérifiable ici** : le proxy de cet environnement bloque
+  github.com/login/* (« sessions are bound to their configured repositories ») et exige des corps JSON. La
+  première vraie connexion de Léo est donc le premier test réel de l'identifiant.

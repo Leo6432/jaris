@@ -55,9 +55,11 @@ export const config = {
      * Étape 277 : identifiant PUBLIC de l'application GitHub (OAuth App) de Jaris, celle qui affiche « Jaris
      * demande l'accès à ton compte » pendant la connexion par code. Ce n'est pas un secret (GitHub le dit :
      * « The client_secret is not needed for the device flow »), il peut donc vivre dans le code. Vide : tout ce
-     * qui touche à GitHub reste masqué dans le mode Code.
+     * qui touche à GitHub reste masqué dans le mode Code. Une seule application pour tous les utilisateurs de
+     * Jaris : chacun se connecte ensuite avec SON compte, et le jeton n'est remis qu'à l'ordinateur qui a demandé
+     * le code. Application créée par Léo (étape 278), « Enable Device Flow » cochée.
      */
-    clientId: readEnv('GITHUB_CLIENT_ID', '')
+    clientId: readEnv('GITHUB_CLIENT_ID', 'Ov23liHLHAC7tS05Vm9h')
   },
   searxng: {
     // 8091, pas le 8080 par défaut de SearXNG : voir le commentaire dans docker-compose.yml (port bien trop
