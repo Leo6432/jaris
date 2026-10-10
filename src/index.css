@@ -7339,3 +7339,158 @@ select {
   font-size: 12px;
   color: var(--hud-text-faint);
 }
+
+/* --- Étape 282 : mode Code façon Claude — conversation à gauche, aperçu à droite ---------------------------------
+   Léo, capture de Claude à l'appui : « pour le code fais chat à gauche et aperçu à droite comme Claude et ChatGPT ».
+   La largeur de la zone (et pas celle de la fenêtre) décide de la disposition : la liste de gauche peut être
+   ouverte ou repliée, d'où une requête de conteneur. */
+
+.code-panel {
+  max-width: none;
+  padding: 0;
+  gap: 0;
+  container-type: inline-size;
+}
+
+.code-split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  min-width: 0;
+}
+
+.code-chat {
+  flex: 0 0 clamp(340px, 36%, 460px);
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 16px;
+  border-right: 1px solid var(--hud-line);
+}
+
+.code-chat__thread {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* L'accueil reste centré dans la colonne tant qu'aucun message n'existe, comme une nouvelle discussion. */
+.code-chat__thread > .empty-state {
+  margin: auto 0;
+  padding: 16px 0;
+}
+
+.code-chat .empty-state__title {
+  font-size: 22px;
+}
+
+.code-chat__user {
+  align-self: flex-end;
+  max-width: 88%;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: var(--jv-bubble);
+  color: var(--hud-text);
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.code-chat__reply {
+  margin: 0;
+  color: var(--hud-text);
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.code-chat > .composer {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+/* Dans une colonne étroite, un nom de dépôt ou de branche long est coupé au lieu de pousser l'envoi hors du champ. */
+.code-chat .repo-picker__trigger .effort-picker__model,
+.code-chat .branch-picker__name {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.code-preview {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px 16px;
+}
+
+.code-preview > .code-panel__result {
+  padding: 0;
+}
+
+.code-preview > .repo-panel {
+  max-width: none;
+}
+
+.code-preview__placeholder {
+  margin: auto;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+  color: var(--hud-text-faint);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.code-preview__placeholder p {
+  margin: 0;
+}
+
+/* Zone étroite : l'aperçu passe AU-DESSUS de la conversation (ordre inversé), qui garde son champ en bas. Sans rien
+   à montrer, la colonne d'aperçu disparaît plutôt que d'occuper la moitié de l'écran. */
+@container (max-width: 860px) {
+  .code-split {
+    flex-direction: column-reverse;
+  }
+
+  .code-chat {
+    flex: 0 1 auto;
+    max-height: 40%;
+    border-right: none;
+    border-top: 1px solid var(--hud-line);
+  }
+
+  .code-preview {
+    flex: 1 1 60%;
+  }
+
+  .code-split:has(.code-preview--empty) .code-chat {
+    flex: 1;
+    max-height: none;
+    border-top: none;
+  }
+
+  /* Avec un aperçu au-dessus, l'accueil de la conversation se réduit à sa question et ses suggestions : sinon il
+     écrasait l'aperçu (364 px mesurés à 760 × 860). */
+  .code-split:not(:has(.code-preview--empty)) .code-chat .empty-state__logo,
+  .code-split:not(:has(.code-preview--empty)) .code-chat .empty-state__description {
+    display: none;
+  }
+
+  .code-preview--empty {
+    display: none;
+  }
+}

@@ -16,6 +16,21 @@ import type { RepoView } from '../../shared/ipc'
 
 type View = 'preview' | 'code'
 
+/** Un message de la conversation du mode Code (étape 282) : une demande de Léo, ou ce que Jaris a fait. */
+interface ChatTurn {
+  id: number
+  kind: 'user' | 'reply'
+  text: string
+}
+
+type Outcome = { kind: 'done' | 'stopped'; durationMs: number; text?: string }
+
+/** Le texte du bandeau de fin, réutilisé tel quel quand ce bandeau rejoint l'historique de la conversation. */
+function outcomeText(outcome: Outcome): string {
+  if (outcome.kind === 'stopped') return `Génération arrêtée après ${formatDuration(outcome.durationMs)}.`
+  return `Terminé en ${formatDuration(outcome.durationMs)} — ${outcome.text ?? 'ton application est à jour.'}`
+}
+
 /**
  * Coche du bandeau de fin (étape 100). Définie ici et pas dans icons.tsx : la règle du projet est d'extraire
  * une icône au DEUXIÈME usage, pas avant — elle n'est utilisée qu'à cet endroit.
@@ -59,11 +74,17 @@ export default function CodePanel(): JSX.Element {
   const [elapsedMs, setElapsedMs] = useState(0)
   /** Issue de la DERNIÈRE génération, affichée à la place du bandeau d'avancement une fois celui-ci fini :
    *  terminée normalement, ou arrêtée à la demande. `null` tant qu'il n'y a rien à annoncer. */
-  const [lastOutcome, setLastOutcome] = useState<{ kind: 'done' | 'stopped'; durationMs: number; text?: string } | null>(null)
+  const [lastOutcome, setLastOutcome] = useState<Outcome | null>(null)
   /** Étape 277 : dépôt GitHub ouvert (choisi dans le bouton GitHub du champ). Remplace l'application générée. */
   const [repo, setRepo] = useState<RepoView | null>(null)
-  /** Dernière réponse de Jaris sur ce dépôt (ce qu'il a changé, ou la réponse à une question). */
-  const [repoSummary, setRepoSummary] = useState<string | null>(null)
+  /**
+   * Étape 282 (Léo : « pour le code fais chat à gauche et aperçu à droite comme Claude et ChatGPT ») : la
+   * conversation de l'élément ouvert — ses demandes, et ce que Jaris a fait. Gardée en mémoire seulement : elle
+   * repart de zéro quand on ouvre un autre élément, comme le bandeau de fin (étape 102).
+   */
+  const [turns, setTurns] = useState<ChatTurn[]>([])
+  const turnIdRef = useRef(0)
+  const threadRef = useRef<HTMLDivElement>(null)
   const [committed, setCommitted] = useState<{ url: string; sha: string } | null>(null)
   /** Description proposée pour l'enregistrement : la dernière demande faite sur le dépôt. */
   const [commitMessage, setCommitMessage] = useState('')
@@ -103,6 +124,22 @@ export default function CodePanel(): JSX.Element {
     statusRef.current?.scrollTo({ top: statusRef.current.scrollHeight })
   }, [statusLines])
 
+  // Le dernier message reste visible, comme dans le Chat.
+  useEffect(() => {
+    threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight })
+  }, [turns, generating, lastOutcome, statusLines, error])
+
+  const addTurn = (kind: ChatTurn['kind'], text: string): void => {
+    turnIdRef.current += 1
+    const id = turnIdRef.current
+    setTurns((prev) => [...prev, { id, kind, text }])
+  }
+
+  /** Une nouvelle demande commence : le bandeau de la précédente rejoint l'historique au lieu de disparaître. */
+  const archiveLastOutcome = (): void => {
+    if (lastOutcome) addTurn('reply', outcomeText(lastOutcome))
+  }
+
   /**
    * Le bandeau de fin, le journal et l'erreur décrivent UNE génération précise, celle de l'application
    * affichée. Dès qu'on affiche autre chose, ils ne parlent plus de ce qui est à l'écran — Léo a vu
@@ -119,8 +156,18 @@ export default function CodePanel(): JSX.Element {
     setError(null)
   }
 
+  /** Changer d'élément affiché (application, dépôt, nouvelle application) : la conversation repart de zéro. */
+  const resetConversation = (): void => {
+    setTurns([])
+    clearGenerationFeedback()
+  }
+
   /** Étape 277 : la demande part à l'agent qui travaille sur le dépôt ouvert, pas au générateur d'application. */
   const runOnRepo = async (current: RepoView, prompt: string): Promise<void> => {
+    archiveLastOutcome()
+    addTurn('user', prompt)
+    // Vidé dès l'envoi, comme ChatGPT : la demande est désormais dans la conversation, pas en double dans le champ.
+    setDescription('')
     clearGenerationFeedback()
     setCommitted(null)
     setGenerating(true)
@@ -130,8 +177,7 @@ export default function CodePanel(): JSX.Element {
     try {
       const result = await window.jaris.githubRunAgent(current.fullName, prompt)
       setRepo(result.view)
-      setRepoSummary(result.summary)
-      setDescription('')
+      addTurn('reply', result.summary)
       if (result.view.changes.length > 0) setCommitMessage(prompt.split('\n')[0].slice(0, 72))
       const count = result.view.changes.length
       setLastOutcome({
@@ -160,11 +206,11 @@ export default function CodePanel(): JSX.Element {
     }
   }
 
-  const openRepo = async (fullName: string, branch?: string): Promise<void> => {
+  const openRepo = async (fullName: string, branch?: string, keepConversation = false): Promise<void> => {
     const view = await window.jaris.githubOpenRepo(fullName, branch)
     setAppResult(null)
-    clearGenerationFeedback()
-    setRepoSummary(null)
+    if (keepConversation) clearGenerationFeedback()
+    else resetConversation()
     setCommitted(null)
     setAttachment(null)
     setRepo(view)
@@ -172,9 +218,8 @@ export default function CodePanel(): JSX.Element {
 
   const closeRepo = (): void => {
     setRepo(null)
-    setRepoSummary(null)
     setCommitted(null)
-    clearGenerationFeedback()
+    resetConversation()
   }
 
   const commitRepo = async (message: string): Promise<void> => {
@@ -185,8 +230,9 @@ export default function CodePanel(): JSX.Element {
       const result = await window.jaris.githubCommit(repo.fullName, message)
       setRepo(result.view)
       setCommitted({ url: result.url, sha: result.sha })
-      setRepoSummary(null)
+      archiveLastOutcome()
       setLastOutcome(null)
+      addTurn('reply', `Enregistré sur GitHub (${result.sha.slice(0, 7)}).`)
       void playSoundCueIfEnabled('success')
     } catch (err) {
       setError(ipcErrorMessage(err))
@@ -209,7 +255,9 @@ export default function CodePanel(): JSX.Element {
   const changeBranch = async (branch: string): Promise<void> => {
     if (!repo) return
     try {
-      await openRepo(repo.fullName, branch)
+      // La conversation continue : seule la branche change.
+      await openRepo(repo.fullName, branch, true)
+      addTurn('reply', `Branche ${branch}.`)
     } catch (err) {
       setError(ipcErrorMessage(err))
     }
@@ -224,6 +272,9 @@ export default function CodePanel(): JSX.Element {
     // Une image seule suffit ("reproduis cette maquette") : le texte n'est plus obligatoire s'il y a une image.
     if ((!prompt && !attachment) || generating) return
 
+    archiveLastOutcome()
+    addTurn('user', prompt || 'Reproduis l’image jointe.')
+    setDescription('')
     clearGenerationFeedback()
     setGenerating(true)
     setProgress(null)
@@ -237,7 +288,6 @@ export default function CodePanel(): JSX.Element {
         attachment?.base64
       )
       setAppResult(result)
-      setDescription('')
       setAttachment(null)
       setView('preview')
       // Fin annoncée de deux façons : le bandeau reste affiché avec la durée, et un bip si les sons sont
@@ -319,191 +369,209 @@ export default function CodePanel(): JSX.Element {
       onDelete={(path) => void remove(path)}
       emptyLabel="Aucune application pour l'instant."
     >
+      {/* Étape 282 (Léo, capture de Claude à l'appui : « pour le code fais chat à gauche et aperçu à droite comme
+          Claude et ChatGPT ») : la conversation et le champ de saisie à gauche, l'aperçu (ou les changements d'un
+          dépôt GitHub) à droite. Fenêtre étroite : l'aperçu passe au-dessus de la conversation (index.css). */}
       <div className="code-panel">
-        {/* Écran de départ : la liste des applications déjà créées vit maintenant dans la colonne de gauche
-            (étape 97), il ne reste donc ici que la phrase qui dit à quoi sert ce mode — sans elle, l'écran
-            serait entièrement vide avant la première génération. */}
-        {/* Étape 277 : un dépôt GitHub ouvert prend la place de l'application générée. */}
-        {/* Étape 280 : rien en haut tant qu'il n'y a rien à montrer — le dépôt et sa branche sont dans le champ. */}
-        {repo && (repo.changes.length > 0 || repoSummary || committed) && (
-          <RepoChanges
-            repo={repo}
-            summary={repoSummary}
-            busy={generating || committing}
-            committed={committed}
-            defaultMessage={commitMessage}
-            onCommit={commitRepo}
-            onDiscard={discardRepo}
-          />
-        )}
+        <div className="code-split">
+          <section className="code-chat" aria-label="Conversation">
+            <div className="code-chat__thread" ref={threadRef}>
+              {turns.length === 0 && !generating && (
+                <EmptyState
+                  title={
+                    repo
+                      ? repo.fileCount === 0
+                        ? 'Ce dépôt est encore vide'
+                        : 'Que doit faire Jaris dans ce dépôt\u00a0?'
+                      : appResult
+                        ? 'Que veux-tu changer\u00a0?'
+                        : 'Quelle application veux-tu créer\u00a0?'
+                  }
+                  description={
+                    repo
+                      ? repo.fileCount === 0
+                        ? "Décris ce que Jaris doit y créer. Tu verras chaque fichier avant de l'enregistrer sur GitHub — rien n'est envoyé avant."
+                        : "Il lit les fichiers dont il a besoin et prépare les changements. Tu les vois ligne par ligne, puis tu choisis de les enregistrer sur GitHub — rien n'est envoyé avant."
+                      : appResult
+                        ? "Décris une modification : Jaris la fait sur ta machine et l'aperçu se met à jour."
+                        : "Décris-la simplement : Jaris l'écrit entièrement sur ta machine, puis la lance dans l'aperçu. Tu peux aussi joindre une capture ou une maquette à reproduire."
+                  }
+                  suggestions={
+                    repo
+                      ? repo.fileCount === 0
+                        ? ['Crée un petit site web de présentation', 'Crée un fichier qui présente le projet', 'Ajoute un fichier .gitignore adapté']
+                        : ['Explique ce que fait ce dépôt', "Corrige les fautes d'orthographe", 'Ajoute un fichier .gitignore adapté']
+                      : appResult
+                        ? ['Ajoute un mode sombre', 'Rends-la plus jolie', 'Ajoute un bouton pour tout effacer']
+                        : ['Un minuteur Pomodoro', 'Une liste de courses', 'Un convertisseur de devises']
+                  }
+                  onSuggestion={setDescription}
+                />
+              )}
 
-        {repo && !generating && repo.changes.length === 0 && !repoSummary && !committed && (
-          // Étape 279 : un dépôt tout neuf s'ouvre aussi ; on y propose de CRÉER, pas d'expliquer ce qui n'existe pas.
-          <EmptyState
-            title={repo.fileCount === 0 ? 'Ce dépôt est encore vide' : 'Que doit faire Jaris dans ce dépôt ?'}
-            description={
-              repo.fileCount === 0
-                ? "Décris ce que Jaris doit y créer. Tu verras chaque fichier avant de l'enregistrer sur GitHub — rien n'est envoyé avant."
-                : "Il lit les fichiers dont il a besoin et prépare les changements. Tu les vois ligne par ligne, puis tu choisis de les enregistrer sur GitHub — rien n'est envoyé avant."
-            }
-            suggestions={
-              repo.fileCount === 0
-                ? ['Crée un petit site web de présentation', 'Crée un fichier qui présente le projet', 'Ajoute un fichier .gitignore adapté']
-                : ['Explique ce que fait ce dépôt', "Corrige les fautes d'orthographe", 'Ajoute un fichier .gitignore adapté']
-            }
-            onSuggestion={setDescription}
-          />
-        )}
+              {turns.map((turn) =>
+                turn.kind === 'user' ? (
+                  <div key={turn.id} className="code-chat__user">
+                    {turn.text}
+                  </div>
+                ) : (
+                  <p key={turn.id} className="code-chat__reply">
+                    {turn.text}
+                  </p>
+                )
+              )}
 
-        {!repo && !appResult && !generating && (
-          <EmptyState
-            title="Quelle application veux-tu créer ?"
-            description="Décris-la simplement : Jaris l'écrit entièrement sur ta machine, puis la lance juste ici. Tu peux aussi joindre une capture ou une maquette à reproduire."
-            suggestions={['Un minuteur Pomodoro', 'Une liste de courses', 'Un convertisseur de devises']}
-            onSuggestion={setDescription}
-          />
-        )}
+              {appResult && appResult.issues.length > 0 && (
+                <div className="code-panel__issues">
+                  <strong>
+                    L'application a été générée mais {appResult.issues.length === 1 ? "un problème n'a pas pu être corrigé" : `${appResult.issues.length} problèmes n'ont pas pu être corrigés`} :
+                  </strong>
+                  <ul>
+                    {appResult.issues.map((issue) => (
+                      <li key={issue}>{issue}</li>
+                    ))}
+                  </ul>
+                  Relance la génération, ou reformule ta demande en plus simple.
+                </div>
+              )}
 
-        {appResult && appResult.issues.length > 0 && (
-          <div className="code-panel__issues">
-            <strong>
-              L'application a été générée mais {appResult.issues.length === 1 ? "un problème n'a pas pu être corrigé" : `${appResult.issues.length} problèmes n'ont pas pu être corrigés`} :
-            </strong>
-            <ul>
-              {appResult.issues.map((issue) => (
-                <li key={issue}>{issue}</li>
-              ))}
-            </ul>
-            Relance la génération, ou reformule ta demande en plus simple.
-          </div>
-        )}
-
-        {appResult && (
-          <div className="code-panel__result">
-            {/* Une SEULE barre (étape 94) : les onglets Aperçu/Code et les actions secondaires étaient deux
-                rangées séparées, empilées au-dessus de l'aperçu — "après il y a des boutons" (Léo). */}
-            <div className="code-panel__result-bar">
-              <div className="code-panel__view-tabs">
-                <button
-                  className={`code-panel__view-tab${view === 'preview' ? ' code-panel__view-tab--active' : ''}`}
-                  onClick={() => setView('preview')}
-                >
-                  Aperçu
-                </button>
-                <button
-                  className={`code-panel__view-tab${view === 'code' ? ' code-panel__view-tab--active' : ''}`}
-                  onClick={() => setView('code')}
-                >
-                  Code
-                </button>
-              </div>
-
-              {!generating && (
-                <div className="code-panel__result-actions">
-                  <button onClick={() => void window.jaris.openGeneratedApp(appResult.path)} title={appResult.path}>
-                    Ouvrir le dossier
+              {/* Étape 99 : où on en est (étape X), la preuve que ça avance (les caractères écrits), depuis combien
+                  de temps, et une sortie de secours — à la suite de la demande, comme une réponse en cours. */}
+              {generating && (
+                <div className="code-panel__live">
+                  <div className="code-panel__live-text">
+                    <span className="code-panel__live-title">{formatCodeGenProgress(progress, elapsedMs).title}</span>
+                    <span className="code-panel__live-detail">{formatCodeGenProgress(progress, elapsedMs).detail}</span>
+                  </div>
+                  <button className="code-panel__live-stop" onClick={stop}>
+                    Arrêter
                   </button>
                 </div>
               )}
+
+              {/* Fin annoncée À L'ENDROIT MÊME où l'avancement était suivi (étape 100). À la demande suivante, ce
+                  bandeau rejoint l'historique de la conversation (archiveLastOutcome). */}
+              {!generating && lastOutcome !== null && (
+                <p className={`code-panel__done${lastOutcome.kind === 'stopped' ? ' code-panel__done--stopped' : ''}`}>
+                  {lastOutcome.kind === 'done' && <CheckIcon />}
+                  <span>{outcomeText(lastOutcome)}</span>
+                </p>
+              )}
+
+              {/* Journal réservé à ce que le bandeau ne dit PAS (étape 101). */}
+              {statusLines.length > 0 && (
+                <pre ref={statusRef} className="code-panel__status">
+                  {statusLines.join('\n')}
+                </pre>
+              )}
+
+              {error && <p className="code-panel__error">{error}</p>}
             </div>
 
-            {view === 'preview' ? (
-              // sandbox sans allow-same-origin : le code généré par le modèle tourne dans une origine opaque,
-              // sans accès à Jaris ni aux fichiers locaux. Conséquence assumée : localStorage y est bloqué
-              // (d'où le try/catch imposé dans les consignes de génération), mais il refonctionne dès que le
-              // fichier est ouvert normalement dans un navigateur depuis le dossier du projet.
-              // allow-forms (étape 232) : sans lui, un formulaire généré ne réagit jamais au clic (vérifié dans un
-              // vrai navigateur : l'évènement « submit » n'est même pas déclenché). L'envoi réel reste bloqué par
-              // la règle form-action 'none' de l'aperçu (generatedAppPreview.ts).
-              <iframe className="code-panel__preview" title="Aperçu de l'application" sandbox="allow-scripts allow-forms" src={appResult.previewUrl} />
+            <Composer
+              value={description}
+              onChange={setDescription}
+              onSubmit={() => void generate()}
+              placeholder={
+                repo
+                  ? `Que veux-tu changer dans ${repo.fullName} ?`
+                  : appResult
+                    ? 'Que veux-tu changer ? (ex: ajoute un mode sombre…)'
+                    : "Décris l'application à créer…"
+              }
+              submitLabel={repo ? 'Envoyer' : appResult ? 'Modifier' : "Générer l'application"}
+              busyLabel={repo ? 'Jaris travaille…' : 'Génération…'}
+              busy={generating}
+              onStop={stop}
+              extraActions={
+                <>
+                  <GithubPicker repo={repo} onOpenRepo={(fullName) => openRepo(fullName)} onCloseRepo={closeRepo} disabled={generating || committing} />
+                  {repo && <BranchPicker repo={repo} onChange={changeBranch} disabled={generating || committing} />}
+                  <ModelEffortPicker mode="code" disabled={generating} />
+                </>
+              }
+              imagesAllowed={!repo}
+              attachment={attachment}
+              onAttachmentChange={setAttachment}
+              onError={setError}
+              rows={3}
+            />
+          </section>
+
+          <section
+            className={`code-preview${!appResult && !(repo && (repo.changes.length > 0 || committed)) ? ' code-preview--empty' : ''}`}
+            aria-label="Aperçu"
+          >
+            {appResult ? (
+              <div className="code-panel__result">
+                {/* Une SEULE barre (étape 94) : onglets Aperçu/Code à gauche, actions à droite. */}
+                <div className="code-panel__result-bar">
+                  <div className="code-panel__view-tabs">
+                    <button
+                      className={`code-panel__view-tab${view === 'preview' ? ' code-panel__view-tab--active' : ''}`}
+                      onClick={() => setView('preview')}
+                    >
+                      Aperçu
+                    </button>
+                    <button
+                      className={`code-panel__view-tab${view === 'code' ? ' code-panel__view-tab--active' : ''}`}
+                      onClick={() => setView('code')}
+                    >
+                      Code
+                    </button>
+                  </div>
+
+                  {!generating && (
+                    <div className="code-panel__result-actions">
+                      <button onClick={() => void window.jaris.openGeneratedApp(appResult.path)} title={appResult.path}>
+                        Ouvrir le dossier
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {view === 'preview' ? (
+                  // sandbox sans allow-same-origin : le code généré tourne dans une origine opaque, sans accès à Jaris
+                  // ni aux fichiers locaux (localStorage y est donc bloqué, d'où le try/catch imposé à la génération).
+                  // allow-forms (étape 232) : sans lui, un formulaire généré ne réagit jamais au clic ; l'envoi réel
+                  // reste bloqué par la règle form-action 'none' de l'aperçu (generatedAppPreview.ts).
+                  <iframe className="code-panel__preview" title="Aperçu de l'application" sandbox="allow-scripts allow-forms" src={appResult.previewUrl} />
+                ) : (
+                  <pre className="code-panel__code">{appResult.html}</pre>
+                )}
+
+                <p className="code-panel__hint">
+                  Aperçu isolé : la sauvegarde de données (localStorage) n'y marche pas, mais fonctionne en ouvrant le
+                  fichier depuis le dossier.
+                </p>
+              </div>
+            ) : repo && (repo.changes.length > 0 || committed) ? (
+              <RepoChanges
+                repo={repo}
+                busy={generating || committing}
+                committed={committed}
+                defaultMessage={commitMessage}
+                onCommit={commitRepo}
+                onDiscard={discardRepo}
+              />
             ) : (
-              <pre className="code-panel__code">{appResult.html}</pre>
+              <div className="code-preview__placeholder">
+                <svg viewBox="0 0 64 48" width="96" height="72" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="2" y="2" width="60" height="44" rx="6" />
+                  <path d="M2 12h60" />
+                  <circle cx="8" cy="7" r="1.2" />
+                  <circle cx="13" cy="7" r="1.2" />
+                  <path d="M24 24l-6 5 6 5M40 24l6 5-6 5M35 21l-6 16" />
+                </svg>
+                <p>
+                  {repo
+                    ? "Les changements préparés par Jaris s'afficheront ici, ligne par ligne, avant d'être enregistrés sur GitHub."
+                    : "L'aperçu de ton application s'affichera ici."}
+                </p>
+              </div>
             )}
-
-            <p className="code-panel__hint">
-              Aperçu isolé : la sauvegarde de données (localStorage) n'y marche pas, mais fonctionne en
-              ouvrant le fichier depuis le dossier.
-            </p>
-          </div>
-        )}
-
-        {/* Étape 99 : le bandeau qui manquait. Une génération enchaîne 2 à 4 appels au modèle local, chacun
-            pouvant durer plusieurs minutes — "on ne sait pas quand c'est terminé et des fois c'est bloqué et
-            ça fait rien" (Léo). On montre donc où on en est (étape X sur Y), la preuve que ça avance (les
-            caractères écrits, qui montent), depuis combien de temps, et une sortie de secours. */}
-        {generating && (
-          <div className="code-panel__live">
-            <div className="code-panel__live-text">
-              <span className="code-panel__live-title">{formatCodeGenProgress(progress, elapsedMs).title}</span>
-              <span className="code-panel__live-detail">{formatCodeGenProgress(progress, elapsedMs).detail}</span>
-            </div>
-            <button className="code-panel__live-stop" onClick={stop}>
-              Arrêter
-            </button>
-          </div>
-        )}
-
-        {/* Fin de génération annoncée À L'ENDROIT MÊME où l'avancement était suivi (étape 100) : Léo
-            regardait le bandeau, c'est donc là que doit s'afficher "c'est fini", pas dans une petite ligne
-            grise ailleurs. Une modification d'application donne souvent un aperçu presque identique à
-            l'œil — sans cette phrase, rien ne dit que le travail est terminé. */}
-        {!generating && lastOutcome !== null && (
-          <p className={`code-panel__done${lastOutcome.kind === 'stopped' ? ' code-panel__done--stopped' : ''}`}>
-            {lastOutcome.kind === 'done' && <CheckIcon />}
-            {/* Pas de "ci-dessus"/"ci-dessous" : l'aperçu est au-dessus de ce bandeau, mais une phrase qui
-                désigne une position devient fausse au premier changement de mise en page. */}
-            <span>
-              {lastOutcome.kind === 'done'
-                ? repo
-                  ? `Terminé en ${formatDuration(lastOutcome.durationMs)} — ${lastOutcome.text}`
-                  : `Terminé en ${formatDuration(lastOutcome.durationMs)} — ton application est à jour.`
-                : `Génération arrêtée après ${formatDuration(lastOutcome.durationMs)}.`}
-            </span>
-          </p>
-        )}
-
-        {/* Journal réservé à ce que le bandeau ne dit PAS (modèle à télécharger, problèmes réparés, relance
-            après une réponse inexploitable). Il répétait les étapes une par une, ce qui donnait deux cadres
-            côte à côte disant la même chose — et il s'affichait même vide pendant toute la génération
-            (étape 101, Léo : "il y a étape 2 etc. plus un autre rectangle"). */}
-        {statusLines.length > 0 && (
-          <pre ref={statusRef} className="code-panel__status">
-            {statusLines.join('\n')}
-          </pre>
-        )}
-
-        {error && <p className="code-panel__error">{error}</p>}
-
-        {/* Composeur EN BAS, comme dans le Chat (étape 97) : les deux écrans ont maintenant exactement la
-            même présentation — liste à gauche, contenu au centre, champ de saisie en bas. */}
-        <Composer
-          value={description}
-          onChange={setDescription}
-          onSubmit={() => void generate()}
-          placeholder={
-            repo
-              ? `Que veux-tu changer dans ${repo.fullName} ?`
-              : appResult
-              ? 'Que veux-tu changer ? (ex: ajoute un mode sombre, trie les tâches par date…)'
-              : "Décris l'application à créer, ou joins une maquette à reproduire…"
-          }
-          submitLabel={repo ? 'Envoyer' : appResult ? 'Modifier' : "Générer l'application"}
-          busyLabel={repo ? 'Jaris travaille…' : 'Génération…'}
-          busy={generating}
-          onStop={stop}
-          extraActions={
-            <>
-              <GithubPicker repo={repo} onOpenRepo={(fullName) => openRepo(fullName)} onCloseRepo={closeRepo} disabled={generating || committing} />
-              {repo && <BranchPicker repo={repo} onChange={changeBranch} disabled={generating || committing} />}
-              <ModelEffortPicker mode="code" disabled={generating} />
-            </>
-          }
-          imagesAllowed={!repo}
-          attachment={attachment}
-          onAttachmentChange={setAttachment}
-          onError={setError}
-          rows={3}
-        />
+          </section>
+        </div>
       </div>
     </Workspace>
   )

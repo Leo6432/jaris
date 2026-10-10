@@ -10,10 +10,12 @@ import type { RepoChange, RepoView } from '../../shared/ipc'
  * Étape 280 (Léo, capture à l'appui : « enlève dépôt vide et la branche mets pas en haut mais en bas comme le dépôt,
  * comme sur ChatGPT ») : plus d'en-tête en haut. Le dépôt ET la branche se choisissent dans le champ de saisie
  * (GithubPicker, BranchPicker).
+ *
+ * Étape 282 (Léo : « pour le code fais chat à gauche et aperçu à droite comme Claude et ChatGPT ») : ce panneau vit
+ * dans la colonne d'aperçu ; la réponse de Jaris (son résumé) est passée dans la conversation, à gauche.
  */
 interface Props {
   repo: RepoView
-  summary: string | null
   busy: boolean
   committed: { url: string; sha: string } | null
   defaultMessage: string
@@ -81,7 +83,7 @@ function ChangeCard({ change, busy, onDiscard }: { change: RepoChange; busy: boo
   )
 }
 
-export default function RepoChanges({ repo, summary, busy, committed, defaultMessage, onCommit, onDiscard }: Props): JSX.Element {
+export default function RepoChanges({ repo, busy, committed, defaultMessage, onCommit, onDiscard }: Props): JSX.Element {
   const [message, setMessage] = useState(defaultMessage)
 
   // Le message proposé suit la dernière demande, tant que Léo ne l'a pas réécrit lui-même.
@@ -102,8 +104,6 @@ export default function RepoChanges({ repo, summary, busy, committed, defaultMes
 
   return (
     <div className="repo-panel">
-      {summary && <p className="repo-panel__summary">{summary}</p>}
-
       {committed && (
         <p className="repo-panel__committed">
           Enregistré sur GitHub ({committed.sha.slice(0, 7)}) ·{' '}

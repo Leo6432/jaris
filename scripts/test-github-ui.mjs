@@ -222,7 +222,9 @@ test('un dépôt ouvert change le champ, puis les changements s’affichent lign
 
     await page.evaluate(() => window.__finishAgent())
     await page.waitForSelector('.repo-change')
-    assert.match(await page.textContent('.repo-panel__summary'), /Faute corrigée/)
+    // Étape 282 : la réponse de Jaris est dans la conversation (à gauche), les changements dans l'aperçu (à droite).
+    assert.match(await page.textContent('.code-chat__reply'), /Faute corrigée/)
+    assert.equal(await page.evaluate(() => document.querySelector('.code-preview').contains(document.querySelector('.repo-change'))), true)
     assert.match(await page.textContent('.code-panel__done'), /1 fichier à vérifier/)
     assert.equal(await page.textContent('.repo-diff__line--del .repo-diff__text'), 'Bonjour le mondee')
     assert.equal(await page.textContent('.repo-diff__line--add .repo-diff__text'), 'Bonjour le monde')

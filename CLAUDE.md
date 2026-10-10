@@ -7491,3 +7491,33 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   pour la mémoire de cet environnement). **Leçon générale : un indicateur « rien reçu depuis X » ne distingue pas
   « bloqué » de « muet par construction » — avant de chercher pourquoi un modèle « ne répond pas », mesurer CE QUI
   ARRIVE et QUAND sur le flux réel.**
+
+- **Mode Code façon Claude : conversation à gauche, aperçu à droite (étape 282, Léo, capture de Claude à l'appui :
+  « pour le code fais chat à gauche et aperçu à droite comme Claude et ChatGPT »).** CodePanel est découpé en deux
+  colonnes (`.code-split`) :
+  - à gauche (`.code-chat`), la conversation : bulles des demandes, réponses de Jaris, avancement en direct,
+    bandeau de fin, journal, erreur, et le champ de saisie en bas ;
+  - à droite (`.code-preview`), l'aperçu (onglets Aperçu/Code et « Ouvrir le dossier ») ou, pour un dépôt GitHub,
+    les changements ligne par ligne avec « Enregistrer sur GitHub ». Sans rien à montrer, un emplacement vide le
+    dit.
+
+  La conversation n'existait pas avant : seul le DERNIER bandeau de fin était affiché. Désormais, chaque demande
+  devient une bulle. À la demande suivante, le bandeau précédent rejoint l'historique (`archiveLastOutcome`) au
+  lieu de disparaître. La conversation est gardée en mémoire seulement, et repart de zéro quand on ouvre un autre
+  élément (même règle que le bandeau, étape 102). Le résumé de l'agent GitHub est passé de RepoChanges à la
+  conversation. Le champ est vidé dès l'envoi : la demande était sinon affichée deux fois, dans la bulle et dans
+  le champ, vu sur une capture.
+
+  **Disposition décidée par une requête de CONTENEUR, pas par la largeur de la fenêtre** : la liste de gauche peut
+  être ouverte ou repliée, c'est donc la place réelle de la zone qui compte. Sous 860 px, l'aperçu passe AU-DESSUS
+  (`column-reverse`, 60 %). L'accueil de la conversation perd alors son logo et son texte : mesuré, il écrasait
+  l'aperçu (364 px, puis 398 px, sous le minimum de 400 px du test existant). Sans rien à prévisualiser, la
+  colonne d'aperçu disparaît en fenêtre étroite. Titres avec une espace insécable avant « ? » : dans une colonne
+  étroite, le « ? » passait seul à la ligne (vu sur capture).
+
+  Régression : `scripts/test-code-panel-ui.mjs` vérifie plusieurs points.
+  - Colonnes côte à côte, iframe dans l'aperçu, champ en bas de la conversation.
+  - Historique bulle → réponse → bulle, champ vidé à l'envoi.
+  - Aperçu au-dessus sans débordement à 760 px.
+
+  `scripts/test-github-ui.mjs` vérifie que la réponse est dans la conversation et les changements dans l'aperçu.

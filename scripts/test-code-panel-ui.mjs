@@ -167,26 +167,67 @@ test('les applications déjà créées sont listées en colonne, avec des dates 
   })
 })
 
-test('le Chat et le mode Code ont la MÊME présentation', options, async () => {
-  // Demande explicite de Léo ("les conversation et code fait comme claude ou chatgpt la meme présentation").
-  // Les deux écrans partagent le même composant : ce test vérifie que le mode Code en a bien tous les
-  // éléments, dans le même ordre — colonne à gauche, contenu au centre, champ de saisie EN BAS.
+test('conversation à gauche, aperçu à droite, champ de saisie en bas de la conversation (étape 282)', options, async () => {
+  // Léo, capture de Claude à l'appui : « pour le code fais chat à gauche et aperçu à droite comme Claude et ChatGPT ».
   await withPage(async (page) => {
     await page.click('.workspace__item')
     await page.waitForSelector('.code-panel__preview')
 
     const layout = await page.evaluate(() => {
       const box = (selector) => document.querySelector(selector).getBoundingClientRect()
+      const chat = box('.code-chat')
+      const preview = box('.code-preview')
       return {
         railLeftOfContent: box('.workspace__rail').right <= box('.workspace__main').left + 1,
-        composerBelowPreview: box('.composer').top > box('.code-panel__preview').top,
-        composerLast: document.querySelector('.code-panel').lastElementChild.classList.contains('composer')
+        chatLeftOfPreview: chat.right <= preview.left + 1,
+        sideBySide: Math.abs(chat.top - preview.top) < 2,
+        iframeInPreview: document.querySelector('.code-preview').contains(document.querySelector('.code-panel__preview')),
+        composerInChat: document.querySelector('.code-chat').lastElementChild.classList.contains('composer'),
+        composerAtBottom: Math.abs(box('.composer').bottom - chat.bottom) < 24,
+        previewWiderThanChat: preview.width > chat.width
       }
     })
-    assert.equal(layout.railLeftOfContent, true)
-    assert.equal(layout.composerBelowPreview, true, "le champ de saisie n'est pas en bas")
-    assert.equal(layout.composerLast, true)
+    assert.deepEqual(layout, {
+      railLeftOfContent: true,
+      chatLeftOfPreview: true,
+      sideBySide: true,
+      iframeInPreview: true,
+      composerInChat: true,
+      composerAtBottom: true,
+      previewWiderThanChat: true
+    })
   })
+})
+
+test('la conversation garde les demandes ; le bandeau de fin rejoint l’historique à la demande suivante', options, async () => {
+  await withPage(async (page) => {
+    await startGeneration(page)
+    assert.equal(await page.textContent('.code-chat__user'), 'une liste de courses')
+    // La demande n'est plus en double : le champ est vidé dès l'envoi, comme ChatGPT.
+    assert.equal(await page.inputValue('.composer__input'), '')
+    await page.evaluate(() => window.__finishGen())
+    await page.waitForSelector('.code-panel__done')
+    // Deuxième demande : la fin de la première ne disparaît pas, elle devient un message de la conversation.
+    await page.fill('.composer textarea', 'ajoute un mode sombre')
+    await page.click('.composer__send')
+    await page.waitForSelector('.code-panel__live')
+    const thread = await page.locator('.code-chat__thread > *').evaluateAll((nodes) => nodes.map((n) => n.className.split(' ')[0]))
+    assert.deepEqual(thread.slice(0, 3), ['code-chat__user', 'code-chat__reply', 'code-chat__user'])
+    assert.match(await page.textContent('.code-chat__reply'), /Terminé en \d+ s/)
+  })
+})
+
+test('fenêtre étroite : l’aperçu passe au-dessus de la conversation, sans débordement', options, async () => {
+  await withPage(async (page) => {
+    await page.click('.workspace__item')
+    await page.waitForSelector('.code-panel__preview')
+    const layout = await page.evaluate(() => {
+      const chat = document.querySelector('.code-chat').getBoundingClientRect()
+      const preview = document.querySelector('.code-preview').getBoundingClientRect()
+      return { previewAbove: preview.bottom <= chat.top + 1, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }
+    })
+    assert.deepEqual(layout, { previewAbove: true, overflow: 0 })
+  }, 760)
 })
 
 test('supprimer demande confirmation, puis retire vraiment la ligne', options, async () => {
