@@ -7669,3 +7669,42 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   version préparée prioritaire, fichier supprimé non servi, lecture unique), `scripts/test-github-ui.mjs` (site
   jouable dès l'ouverture, rechargé après le travail de Jaris, onglet « Changements » avec son compteur, retour à
   l'aperçu quand tout est annulé, dépôt sans page web expliqué).
+
+- **« enlève ça, arrêter on peut comme dans le chat […] mets ce qu'il fait en direct, par exemple code index.html plus
+  20 lignes […] je suis dans le chat en train de parler et je vois aucune conversation à gauche » (Léo, étape 288).**
+  Trois retours, trois changements :
+  1. **Plus de bandeau « Étape 3 · Travail sur … · 2 min 52 · 1696 caractères écrits [Arrêter] ».** À la place, UNE
+     ligne à la suite de la conversation, avec un point qui pulse : « Écrit index.html +20 lignes », « Modifie
+     jeu.js +3 lignes », « Relit index.html », sinon « Réfléchit… ». L'arrêt passe par le bouton rond du champ, comme
+     dans le Chat (il existait déjà : `busy`/`onStop` du Composer). Un silence prolongé du modèle reste dit en clair
+     sur cette ligne (« rien reçu du modèle depuis 45 s », leçon de l'étape 99). Nouveau canal `codeGenLive`
+     (`CodeLiveWrite {kind, path, lines}`) ; `formatCodeLive` remplace `formatCodeGenProgress`.
+     Pour un dépôt, les lignes sont comptées PENDANT que le modèle écrit son bloc d'action (`createLiveWriteTracker`,
+     repoAgent.ts) : il reconnaît `write_file`/`edit_file` et le chemin, puis compte les retours à la ligne du seul
+     `content`/`new_text` (jamais `old_text`, qui n'est pas écrit), échappés (`\n`) ou bruts. Pour une application
+     générée, `generateApp` compte les lignes de la réponse en cours (écriture, relance, relecture).
+     **Vrai défaut trouvé en écrivant les tests du suiveur, pas en relecture** : il ne repartait de zéro qu'à la fin
+     d'un bloc qui ÉCRIVAIT. Après un bloc de LECTURE, le texte lu restait dans sa mémoire, et le premier `"path"`
+     trouvé était celui du fichier lu : « Écrit index.html » s'affichait pendant l'écriture de style.css. Remis à
+     zéro à chaque ouverture/fin de bloc, et un second appel écrit dans le même bloc prend le relais.
+  2. **Les conversations du mode Code apparaissent à gauche et reviennent quand on rouvre l'élément**
+     (`src/lib/codeConversations.ts`). La liste mélange applications et dépôts, du plus récent au plus ancien
+     (« GitHub · Aujourd'hui, 20:22 » pour un dépôt). Chaque élément garde sa conversation, bandeau de fin compris
+     (rouvrir doit dire comment le dernier travail s'est terminé). Stockage de la fenêtre + copie en mémoire si le
+     stockage est refusé. Un dépôt se « Retire » de la liste, jamais « Supprimer » : le dépôt reste sur GitHub
+     (`WorkspaceItem.removeLabel`). Son nom reste EXACT (« leo/projet ») : la majuscule de début des titres
+     d'application écrivait « Leo/projet » (`exactTitle`, repéré sur la capture, pas par les tests).
+     **Deux règles qui empêchent de mélanger les conversations** : (a) la conversation n'est enregistrée que sous le
+     nom de l'élément qui la POSSÈDE (`conversationOwnerRef`), et seulement quand cet élément est celui affiché —
+     pendant un changement d'élément, une conversation vide n'écrase jamais celle qu'on quitte ; (b) pendant un
+     travail, la liste ne change pas d'élément : ses actions s'écrivent en direct dans la conversation affichée, en
+     changer les mettrait dans celle d'un autre.
+  **Non vérifié ici** : le suiveur sur un VRAI modèle (les modèles locaux de cet environnement avaient été effacés) —
+  les tests le nourrissent caractère par caractère, en fragments de 7 et d'un bloc, comme le ferait Ollama.
+  Régression : `scripts/test-format-codegen-progress.mjs` (`formatCodeLive`), `scripts/test-repo-agent.mjs` (suiveur :
+  lignes au fil de l'eau, lecture puis écriture, deux écritures dans un bloc, ancien texte jamais compté, modèle coupé
+  en pleine écriture), `scripts/test-codegen-generate.mjs` (Écrit / Modifie / Relit), `scripts/test-code-panel-ui.mjs`
+  (ligne en direct sans bandeau, arrêt par le champ, conversation retrouvée, y compris après rechargement de la page
+  sur une vraie origine, liste figée pendant un travail) et `scripts/test-github-ui.mjs` (dépôt dans la liste, nom
+  exact, conversation retrouvée, « Retirer » sans rien envoyer sur GitHub). Chaque garde-fou a été vérifié en le
+  retirant : le test correspondant échoue.

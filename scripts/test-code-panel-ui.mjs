@@ -45,7 +45,8 @@ const APP = {
   previewUrl: 'about:blank'
 }
 
-window.__apps = [
+// __presetApps : la liste telle qu'un redémarrage la retrouve (test des conversations conservées, étape 288).
+window.__apps = window.__presetApps ?? [
   { path: 'C:/apps/liste', label: 'liste de courses', timestamp: Date.now() - 3600_000 },
   { path: 'C:/apps/snake', label: 'jeu snake', timestamp: Date.now() - 90_000_000 }
 ]
@@ -73,6 +74,11 @@ window.jaris = {
   // Étape 286 : la phrase de l'agent, écrite en direct dans la conversation.
   onCodeGenNarration: (cb) => {
     window.__emitNarration = cb
+    return () => {}
+  },
+  // Étape 288 : le fichier que Jaris écrit en ce moment, et ses lignes (« Écrit index.html +20 lignes »).
+  onCodeGenLive: (cb) => {
+    window.__emitLive = cb
     return () => {}
   },
   getGeneratedApps: () => Promise.resolve(window.__apps),
@@ -254,7 +260,7 @@ test('la conversation garde les demandes ; le bandeau de fin rejoint l’histori
     // Deuxième demande : la fin de la première ne disparaît pas, elle devient un message de la conversation.
     await page.fill('.composer textarea', 'ajoute un mode sombre')
     await page.click('.composer__send')
-    await page.waitForSelector('.code-panel__live')
+    await page.waitForSelector('.code-chat__live')
     const thread = await page.locator('.code-chat__thread > *').evaluateAll((nodes) => nodes.map((n) => n.className.split(' ')[0]))
     assert.deepEqual(thread.slice(0, 3), ['code-chat__user', 'code-chat__reply', 'code-chat__user'])
     assert.match(await page.textContent('.code-chat__reply'), /Terminé en \d+ s/)
@@ -523,8 +529,11 @@ test('aperçu agrandi : une génération en cours reste visible, et « Nouvelle 
     await page.waitForSelector('.code-panel__preview')
     await startGeneration(page)
     await page.click('.code-preview__expand')
-    // Le bandeau d'avancement est dans la conversation, repliée : la barre de la carte prend le relais.
-    assert.match(await page.textContent('.code-preview__busy'), /Préparation/)
+    // La ligne en direct est dans la conversation, repliée : la barre de la carte prend le relais (étape 288 : ce
+    // que Jaris fait, pas un numéro d'étape).
+    assert.equal(await page.textContent('.code-preview__busy'), 'Réfléchit…')
+    await page.evaluate(() => window.__emitLive({ kind: 'write', path: 'index.html', lines: 20 }))
+    assert.equal(await page.textContent('.code-preview__busy'), 'Écrit index.html +20 lignes')
     await page.evaluate(() => window.__finishGen())
     await page.waitForSelector('.code-panel__done', { state: 'attached' })
     assert.equal(await page.locator('.code-preview__busy').count(), 0)
@@ -659,73 +668,77 @@ test('la carte reste SOUS la barre : aperçu agrandi, bandeau affiché, fenêtre
   )
 })
 
-/** Lance une génération et attend que le bandeau d'avancement apparaisse. */
+/** Lance une génération et attend que la ligne « en direct » apparaisse (étape 288 : plus de bandeau). */
 async function startGeneration(page) {
   await page.fill('.composer__input', 'une liste de courses')
   await page.click('.composer__send')
-  await page.waitForSelector('.code-panel__live')
+  await page.waitForSelector('.code-chat__live')
 }
 
-test("pendant une génération, l'écran dit où on en est au lieu de rester figé", options, async () => {
-  // Le retour de Léo, mot pour mot : "on ne sait pas quand c'est terminé et des fois c'est bloqué et ça
-  // fait rien". Avant l'étape 99, ce bandeau n'existait pas : seul un bouton grisé "Génération…" restait
-  // affiché, parfois plusieurs minutes, sans rien d'autre.
+/** La ligne en direct, morceau par morceau (les espaces sont faits en CSS, par `gap`). */
+const liveText = (page) =>
+  page.evaluate(() => [...document.querySelectorAll('.code-chat__live > span:not(.code-chat__live-dot)')].map((part) => part.textContent).join(' '))
+
+test("pendant une génération, l'écran dit ce que Jaris écrit, en direct (étape 288)", options, async () => {
+  // Léo, sur le bandeau « Étape 3 · Travail sur … · 2 min 52 · 1696 caractères écrits [Arrêter] » : « enlève ça […]
+  // on s'en fout, mais mets ce qu'il fait en direct, par exemple code index.html plus 20 lignes ». Avant l'étape 99,
+  // rien ne bougeait du tout ; l'étape 99 avait un bandeau à part ; maintenant c'est UNE ligne de la conversation.
   await withPage(async (page) => {
     await startGeneration(page)
-    assert.match(await page.textContent('.code-panel__live-title'), /Préparation/)
+    assert.equal(await liveText(page), 'Réfléchit…')
 
-    await page.evaluate(() =>
-      window.__emitProgress({
-        label: "Écriture de l'application",
-        stepIndex: 1,
-        stepCount: 2,
-        charsWritten: 4210,
-        thinking: false,
-        idleMs: 0
-      })
-    )
-    assert.equal(await page.textContent('.code-panel__live-title'), "Étape 1 sur 2 · Écriture de l'application")
-    assert.match((await page.textContent('.code-panel__live-detail')).replace(/\s/g, ' '), /4 210 caractères écrits/)
+    await page.evaluate(() => window.__emitLive({ kind: 'write', path: 'index.html', lines: 20 }))
+    assert.equal(await liveText(page), 'Écrit index.html +20 lignes')
+    await page.evaluate(() => window.__emitLive({ kind: 'write', path: 'index.html', lines: 87 }))
+    assert.equal(await liveText(page), 'Écrit index.html +87 lignes')
 
-    // Un silence prolongé est DIT, au lieu de laisser un écran immobile sans explication.
+    // Plus de numéro d'étape ni de compte de caractères, et plus de bandeau du tout.
     await page.evaluate(() =>
-      window.__emitProgress({
-        label: "Écriture de l'application",
-        stepIndex: 1,
-        stepCount: 2,
-        charsWritten: 4210,
-        thinking: false,
-        idleMs: 45_000
-      })
+      window.__emitProgress({ label: "Écriture de l'application", stepIndex: 1, stepCount: 2, charsWritten: 4210, thinking: false, idleMs: 0 })
     )
-    assert.match(await page.textContent('.code-panel__live-detail'), /rien reçu du modèle depuis 45 s/)
+    const panel = await page.textContent('.code-chat')
+    assert.doesNotMatch(panel, /Étape \d|caractères écrits/)
+    assert.equal(await page.locator('.code-panel__live').count(), 0, 'le bandeau est revenu')
+
+    // Un silence prolongé est DIT, au lieu de laisser une ligne immobile sans explication.
+    await page.evaluate(() =>
+      window.__emitProgress({ label: "Écriture de l'application", stepIndex: 1, stepCount: 2, charsWritten: 4210, thinking: false, idleMs: 45_000 })
+    )
+    assert.match(await liveText(page), /rien reçu du modèle depuis 45 s/)
+
+    // Fichier fini : retour à « il réfléchit », jamais un fichier figé qui n'est plus en cours.
+    await page.evaluate(() => window.__emitLive(null))
+    assert.match(await liveText(page), /^Travaille…/)
+
+    // C'est la dernière ligne de la conversation, juste au-dessus du champ.
+    assert.equal(await page.evaluate(() => document.querySelector('.code-chat__thread').lastElementChild.classList.contains('code-chat__live')), true)
   })
 })
 
-test('le bouton "Arrêter" arrête vraiment, et ne laisse pas une erreur rouge', options, async () => {
+test("on arrête par le bouton du champ, comme dans le Chat — sans erreur rouge (étape 288)", options, async () => {
+  // Léo : « enlève ça [Arrêter], on peut [arrêter] comme dans le chat ».
   await withPage(async (page) => {
     await startGeneration(page)
+    assert.equal(await page.locator('.code-panel__live-stop').count(), 0, 'le bouton « Arrêter » à part est revenu')
 
-    // Le nom de classe présent dans le JSX ne prouve pas que le CSS s'y applique (piège du bouton resté
-    // gris, étape 97) : on mesure le style RÉELLEMENT calculé.
-    const style = await page.evaluate(() => {
-      const css = getComputedStyle(document.querySelector('.code-panel__live-stop'))
-      return { radius: css.borderTopLeftRadius, font: css.fontFamily, transform: css.textTransform }
+    // Le nom de classe présent dans le JSX ne prouve pas que le CSS s'y applique (piège du bouton resté gris,
+    // étape 97) : le bouton du champ est mesuré, il doit être visible et rond comme celui du Chat.
+    const button = await page.evaluate(() => {
+      const node = document.querySelector('.composer__send--stop')
+      const box = node.getBoundingClientRect()
+      return { label: node.getAttribute('aria-label'), radius: getComputedStyle(node).borderTopLeftRadius, visible: box.width > 20 && box.height > 20 }
     })
-    // Refonte « design sobre » : la famille de boutons est une pilule en Geist, sans capitales.
-    assert.equal(style.radius, '9999px', 'le bouton Arrêter est resté au style par défaut du navigateur')
-    assert.match(style.font, /Geist/)
-    assert.equal(style.transform, 'none')
+    assert.deepEqual(button, { label: 'Arrêter', radius: '50%', visible: true })
 
-    await page.click('.code-panel__live-stop')
+    await page.click('.composer__send--stop')
     assert.equal(await page.evaluate(() => window.__cancelled), true)
 
-    // L'arrêt est une décision de l'utilisateur, pas une panne : il s'annonce dans le bandeau, à la place
-    // même de l'avancement qu'il interrompt, jamais en rouge.
+    // L'arrêt est une décision de l'utilisateur, pas une panne : il s'annonce à la place de la ligne en direct,
+    // jamais en rouge.
     await page.waitForSelector('.code-panel__done')
     assert.match(await page.textContent('.code-panel__done'), /Génération arrêtée après \d+ s/)
     assert.equal(await page.locator('.code-panel__error').count(), 0)
-    assert.equal(await page.locator('.code-panel__live').count(), 0)
+    assert.equal(await page.locator('.code-chat__live').count(), 0)
     // Neutre, et surtout pas la couleur de succès : ce n'est pas une application livrée.
     const stopped = await page.evaluate(() => {
       const css = getComputedStyle(document.querySelector('.code-panel__done'))
@@ -742,7 +755,7 @@ test('une génération terminée annonce sa durée', options, async () => {
     await page.evaluate(() => window.__finishGen())
     await page.waitForSelector('.code-panel__done')
     assert.match(await page.textContent('.code-panel__done'), /Terminé en \d+ s/)
-    assert.equal(await page.locator('.code-panel__live').count(), 0)
+    assert.equal(await page.locator('.code-chat__live').count(), 0)
   })
 })
 
@@ -751,7 +764,8 @@ test("pendant une génération, UN SEUL cadre : les remarques vont dans la conve
   // (étape 286) : le journal à part n'existe plus du tout.
   await withPage(async (page) => {
     await startGeneration(page)
-    assert.equal(await page.locator('.code-panel__live').count(), 1)
+    assert.equal(await page.locator('.code-chat__live').count(), 1)
+    assert.equal(await page.locator('.code-panel__live').count(), 0, 'le bandeau à part est revenu')
     assert.equal(await page.locator('.code-panel__status').count(), 0, 'un second cadre (vide) est affiché')
 
     await page.evaluate(() => window.__status('2 problème(s) trouvé(s) dans le code, corrigé(s) automatiquement.'))
@@ -786,7 +800,7 @@ test('« Modifié index.html +500 −3 » : chaque action est une ligne de la co
       window.__emitActivity({ kind: 'edit', path: 'index.html', added: 500, removed: 3 })
       window.__emitActivity({ kind: 'create', path: 'jeu.js', added: 80, removed: 0 })
     })
-    const rows = await page.locator('.code-chat__activity').evaluateAll((nodes) =>
+    const rows = await page.locator('.code-chat__activity:not(.code-chat__live)').evaluateAll((nodes) =>
       nodes.map((node) => ({
         // Les espaces sont faits en CSS (gap) : les morceaux sont relus un par un.
         text: [...node.querySelectorAll('span:not(.code-chat__activity-stats span)')].map((part) => part.textContent).join(' '),
@@ -799,9 +813,9 @@ test('« Modifié index.html +500 −3 » : chaque action est une ligne de la co
       { text: 'Modifié index.html +500−3', stats: '500 lignes ajoutées, 3 retirées' },
       { text: 'Créé jeu.js +80', stats: '80 lignes ajoutées' }
     ])
-    // Dans la conversation, après la demande, avant le bandeau d'avancement.
+    // Dans la conversation, après la demande, avant la ligne en direct.
     const order = await page.locator('.code-chat__thread > *').evaluateAll((nodes) => nodes.map((n) => n.className.split(' ')[0]))
-    assert.deepEqual(order, ['code-chat__user', 'code-chat__activity', 'code-chat__activity', 'code-chat__activity', 'code-panel__live'])
+    assert.deepEqual(order, ['code-chat__user', 'code-chat__activity', 'code-chat__activity', 'code-chat__activity', 'code-chat__live'])
     // Sans cadre, comme une ligne de texte.
     assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.code-chat__activity')).borderTopWidth), '0px')
   })
@@ -871,6 +885,96 @@ test('"Nouvelle application" repart d\'un écran propre', options, async () => {
     await page.click('.workspace__new')
     await page.waitForFunction(() => document.querySelectorAll('.code-panel__done').length === 0)
   })
+})
+
+/** La conversation affichée, ligne par ligne (« classe:texte »), sans l'écran d'accueil d'une conversation vide. */
+const threadLines = (page) =>
+  page.locator('.code-chat__thread > :not(.empty-state)').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const text = node.classList.contains('code-chat__activity')
+        ? [...node.querySelectorAll('span:not(.code-chat__activity-stats span):not(.code-chat__live-dot)')].map((part) => part.textContent).join(' ')
+        : node.textContent
+      return `${node.className.split(' ')[0]}:${text}`
+    })
+  )
+
+/** Crée « liste de courses v2 » : le vrai main l'enregistre dans son propre dossier, donc elle rejoint la liste. */
+async function generateNewApp(page) {
+  await startGeneration(page)
+  await page.evaluate(() => {
+    window.__emitActivity({ kind: 'create', path: 'index.html', added: 20, removed: 0 })
+    window.__apps.unshift({ path: 'C:/Users/leo/Jaris/generated-apps/2026-09-14-liste-de-courses', label: 'liste de courses v2', timestamp: Date.now() })
+    window.__finishGen()
+  })
+  await page.waitForSelector('.code-panel__done')
+  await page.waitForFunction(() => document.querySelectorAll('.workspace__list li').length === 3)
+}
+
+test('une application garde sa conversation : la rouvrir la retrouve, fin comprise (étape 288)', options, async () => {
+  // Léo : « je suis dans le chat en train de parler et je vois aucune conversation à gauche ».
+  await withPage(async (page) => {
+    await generateNewApp(page)
+    const expected = ['code-chat__user:une liste de courses', 'code-chat__activity:Créé index.html +20']
+    assert.deepEqual((await threadLines(page)).slice(0, 2), expected)
+    // L'application créée est l'élément actif de la liste.
+    assert.equal(await page.textContent('.workspace__item--active .workspace__item-title'), 'liste de courses v2')
+
+    await page.click('.workspace__new')
+    await page.waitForSelector('.empty-state')
+    assert.deepEqual(await threadLines(page), [])
+
+    await page.click('.workspace__item:has-text("liste de courses v2")')
+    await page.waitForFunction(() => document.querySelectorAll('.code-chat__user').length === 1)
+    const restored = await threadLines(page)
+    assert.deepEqual(restored.slice(0, 2), expected)
+    // Le bandeau de fin fait partie de la conversation retrouvée : on sait comment le dernier travail s'est terminé.
+    assert.match(restored[2], /^code-chat__reply:Terminé en \d+ s/)
+
+    // Une autre application a SA conversation (vide ici), jamais celle de la précédente.
+    await page.click('.workspace__item:has-text("jeu snake")')
+    await page.waitForSelector('.empty-state')
+    assert.deepEqual(await threadLines(page), [])
+  })
+})
+
+test('pendant un travail, la liste ne change pas d’élément (sa conversation y écrit en direct)', options, async () => {
+  await withPage(async (page) => {
+    await startGeneration(page)
+    await page.click('.workspace__item:has-text("jeu snake")')
+    await page.click('.workspace__new')
+    assert.deepEqual(await threadLines(page), ['code-chat__user:une liste de courses', 'code-chat__live:Réfléchit…'])
+  })
+})
+
+test('les conversations survivent à un redémarrage de Jaris (étape 288)', options, async () => {
+  // Page servie sur une vraie origine : sur about:blank, le stockage est refusé et seule la copie en mémoire tient.
+  const html = buildPage()
+  const browser = await chromium.launch()
+  try {
+    const page = await browser.newPage()
+    await page.setViewportSize({ width: 1280, height: 860 })
+    await page.route('http://jaris.test/**', (route) => route.fulfill({ contentType: 'text/html', body: html }))
+    await page.goto('http://jaris.test/')
+    await page.waitForSelector('.workspace__rail')
+    await generateNewApp(page)
+
+    // Au redémarrage, l'application créée est toujours sur le disque : le faux main la liste d'emblée.
+    const apps = await page.evaluate(() => window.__apps)
+    await page.addInitScript((saved) => {
+      window.__presetApps = saved
+    }, apps)
+    await page.reload()
+    await page.waitForSelector('.workspace__rail')
+    assert.deepEqual(await threadLines(page), [], 'une conversation est affichée avant qu’on ait choisi quoi que ce soit')
+
+    await page.click('.workspace__item:has-text("liste de courses v2")')
+    await page.waitForFunction(() => document.querySelectorAll('.code-chat__user').length === 1)
+    const restored = await threadLines(page)
+    assert.deepEqual(restored.slice(0, 2), ['code-chat__user:une liste de courses', 'code-chat__activity:Créé index.html +20'])
+    assert.match(restored[2], /^code-chat__reply:Terminé en \d+ s/)
+  } finally {
+    await browser.close()
+  }
 })
 
 test.after(() => {

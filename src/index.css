@@ -2321,6 +2321,11 @@ p.capacity-scan__tier-missing {
   text-transform: uppercase;
 }
 
+/* Un dépôt GitHub garde son nom exact (« leo/projet », jamais « Leo/projet ») : c'est un identifiant, pas un titre. */
+.workspace__item-title--exact::first-letter {
+  text-transform: none;
+}
+
 .workspace__item-meta {
   font-size: 12px;
   color: var(--hud-text-faint);
@@ -7465,6 +7470,49 @@ select {
   gap: 6px;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+
+/* Étape 288 : ce que Jaris fait EN CE MOMENT — même allure qu'une action terminée, avec un point qui pulse et un
+   verbe au présent (« Écrit index.html +20 lignes »). Remplace le bandeau « Étape · caractères · Arrêter ». */
+.code-chat__live {
+  color: var(--hud-text);
+}
+
+.code-chat__live-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin: 0 3px;
+  border-radius: 999px;
+  background: var(--hud-text-dim);
+  animation: code-chat-live-pulse 1.2s ease-in-out infinite;
+}
+
+.code-chat__live-stall {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--hud-text-faint);
+}
+
+@keyframes code-chat-live-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .code-chat__live-dot {
+    animation: none;
+  }
 }
 
 /* Une remarque (téléchargement du modèle, réparation…) : du texte discret, jamais un cadre. */

@@ -52,6 +52,8 @@ window.jaris = {
   // Étape 286 : les actions sur les fichiers s'affichent dans la conversation (« Modifié README.md +1 −1 »).
   onCodeGenActivity: (cb) => { window.__emitActivity = cb; return () => {} },
   onCodeGenNarration: (cb) => { window.__emitNarration = cb; return () => {} },
+  // Étape 288 : le fichier en cours d'écriture, en direct dans la conversation.
+  onCodeGenLive: (cb) => { window.__emitLive = cb; return () => {} },
   getGeneratedApps: () => Promise.resolve([{ path: 'C:/apps/liste', label: 'liste de courses', timestamp: Date.now() }]),
   loadGeneratedApp: (path) => Promise.resolve({ html: '<h1>ok</h1>', path, issues: [], previewUrl: 'about:blank' }),
   generateApp: () => Promise.reject(new Error('ne doit pas être appelé avec un dépôt ouvert')),
@@ -231,12 +233,18 @@ test('un dépôt ouvert change le champ, puis les changements s’affichent lign
     await page.click('.composer__send')
     assert.deepEqual(await page.evaluate(() => window.__calls.run), [['leo/projet', 'Corrige les fautes du README']])
 
-    // Avancement sans total connu : « Étape 2 », jamais « sur 0 ».
+    // Étape 288 (Léo : « enlève ça [Étape 3 · Travail sur … · Arrêter] […] mets ce qu'il fait en direct ») : une ligne
+    // de la conversation dit le fichier que Jaris écrit, plus de bandeau « Étape N · Travail sur … ».
     await page.evaluate(() =>
       window.__emitProgress({ label: 'Travail sur leo/projet', stepIndex: 2, stepCount: 0, charsWritten: 0, thinking: true, idleMs: 0 })
     )
-    await page.waitForSelector('.code-panel__live')
-    assert.match(await page.textContent('.code-panel__live-title'), /^Étape 2 · Travail sur leo\/projet$/)
+    await page.waitForSelector('.code-chat__live')
+    assert.equal(await page.locator('.code-panel__live').count(), 0, 'le bandeau « Étape » est revenu')
+    await page.evaluate(() => window.__emitLive({ kind: 'edit', path: 'README.md', lines: 3 }))
+    assert.equal(
+      await page.evaluate(() => [...document.querySelectorAll('.code-chat__live > span:not(.code-chat__live-dot)')].map((part) => part.textContent).join(' ')),
+      'Modifie README.md +3 lignes'
+    )
 
     await page.evaluate(() => window.__finishAgent())
     await page.waitForSelector('.code-panel__done')
@@ -403,5 +411,62 @@ test('« Changements » : tout annuler ramène l’aperçu, l’onglet disparaî
     await page.click('.repo-panel__changes-head .repo-change__discard')
     await page.waitForSelector('.code-preview iframe.code-panel__preview')
     assert.equal(await page.locator('.code-preview__changes-tab').count(), 0)
+  })
+})
+
+/** La conversation affichée, ligne par ligne (« classe:texte »), sans l'écran d'accueil d'une conversation vide. */
+const threadLines = (page) =>
+  page.locator('.code-chat__thread > :not(.empty-state)').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const text = node.classList.contains('code-chat__activity')
+        ? [...node.querySelectorAll('span:not(.code-chat__activity-stats span):not(.code-chat__live-dot)')].map((part) => part.textContent).join(' ')
+        : node.textContent
+      return `${node.className.split(' ')[0]}:${text}`
+    })
+  )
+
+test('un dépôt ouvert apparaît à gauche, et sa conversation revient quand on le rouvre (étape 288)', options, async () => {
+  // Léo : « c'est bizarre, je suis dans le chat en train de parler et je vois aucune conversation à gauche » — la liste
+  // disait « Aucune application pour l'instant » pendant qu'il travaillait sur un dépôt.
+  await withPage(async (page) => {
+    await connectAndOpen(page)
+    await page.waitForSelector('.workspace__item--active')
+    assert.equal(await page.textContent('.workspace__item--active .workspace__item-title'), 'leo/projet')
+    // Le nom EXACT à l'écran aussi : la majuscule de début des titres d'application écrivait « Leo/projet ».
+    assert.equal(
+      await page.evaluate(() => getComputedStyle(document.querySelector('.workspace__item--active .workspace__item-title'), '::first-letter').textTransform),
+      'none'
+    )
+    assert.match(await page.textContent('.workspace__item--active .workspace__item-meta'), /^GitHub · Aujourd'hui/)
+
+    await page.fill('.composer textarea', 'Corrige les fautes du README')
+    await page.click('.composer__send')
+    await page.evaluate(() => {
+      window.__emitActivity({ kind: 'edit', path: 'README.md', added: 1, removed: 1 })
+      window.__finishAgent()
+    })
+    await page.waitForSelector('.code-panel__done')
+    const expected = ['code-chat__user:Corrige les fautes du README', 'code-chat__activity:Modifié README.md +1−1', 'code-chat__reply:Faute corrigée dans le README.']
+
+    // Une application, puis retour au dépôt PAR LA LISTE : tout revient, y compris comment le travail s'est terminé.
+    await page.click('.workspace__item:has-text("liste de courses")')
+    await page.waitForSelector('.empty-state')
+    assert.deepEqual(await threadLines(page), [])
+    await page.click('.workspace__item:has-text("leo/projet")')
+    await page.waitForFunction(() => document.querySelectorAll('.code-chat__user').length === 1)
+    const restored = await threadLines(page)
+    assert.deepEqual(restored.slice(0, 3), expected)
+    assert.match(restored[3], /^code-chat__reply:Terminé en \d+ s — 1 fichier changé/)
+    assert.equal(await page.textContent('.workspace__item--active .workspace__item-title'), 'leo/projet')
+
+    // « Retirer », jamais « Supprimer » : le dépôt reste sur GitHub, seule la ligne part.
+    await page.click('.workspace__list li:has-text("leo/projet") .workspace__delete')
+    assert.match(await page.textContent('.workspace__confirm span'), /reste sur GitHub/)
+    assert.equal(await page.textContent('.workspace__confirm-yes'), 'Retirer')
+    await page.click('.workspace__confirm-yes')
+    await page.waitForFunction(() => ![...document.querySelectorAll('.workspace__item-title')].some((node) => node.textContent === 'leo/projet'))
+    // Le dépôt affiché est fermé, sans rien enregistrer ni annuler sur GitHub.
+    assert.equal(await page.locator('.branch-picker__trigger').count(), 0)
+    assert.deepEqual(await page.evaluate(() => window.__calls.commit), [])
   })
 })

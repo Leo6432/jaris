@@ -2,11 +2,11 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import Composer from '@/components/Composer'
 import EmptyState from '@/components/EmptyState'
 import Workspace from '@/components/Workspace'
-import { formatCodeGenProgress, formatDuration } from '@/lib/formatCodeGenProgress'
+import { formatCodeLive, formatDuration } from '@/lib/formatCodeGenProgress'
 import { formatRecentDate } from '@/lib/formatRecentDate'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import type { ImageAttachment } from '@/lib/imageAttachment'
-import type { CodeActivity, CodeGenProgress, CodeNarration, GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
+import type { CodeActivity, CodeGenProgress, CodeLiveWrite, CodeNarration, GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
 import ModelEffortPicker from './ModelEffortPicker'
 import GithubPicker from './GithubPicker'
 import BranchPicker from './BranchPicker'
@@ -15,6 +15,18 @@ import { ipcErrorMessage } from '@/lib/ipcError'
 import { readSaved, writeSaved } from '@/lib/savedSetting'
 import { CHAT_MIN_WIDTH, clampChatWidth } from '@/lib/splitWidth'
 import { useScreenActive } from '@/lib/shellContext'
+import {
+  appConversationKey,
+  forgetConversation,
+  forgetRepo,
+  loadConversation,
+  loadRecentRepos,
+  rememberRepo,
+  repoConversationKey,
+  saveConversation,
+  type ChatTurn,
+  type RecentRepo
+} from '@/lib/codeConversations'
 import type { RepoPreview, RepoView } from '../../shared/ipc'
 
 type View = 'preview' | 'code'
@@ -28,9 +40,6 @@ const CHAT_WIDTH_STEP = 24
  * Un message de la conversation du mode Code (étape 282) : une demande de Léo, ce que Jaris a répondu, une remarque
  * (téléchargement du modèle, réparation…), ou une action sur un fichier (étape 286 : « Modifié index.html +500 −3 »).
  */
-type ChatTurn =
-  | { id: number; kind: 'user' | 'reply' | 'note'; text: string }
-  | { id: number; kind: 'activity'; activity: CodeActivity }
 
 /** Le verbe de chaque action, au passé : ce qui VIENT d'être fait, comme les étapes affichées par Claude. */
 const ACTIVITY_VERB: Record<CodeActivity['kind'], string> = {
@@ -93,6 +102,26 @@ function ActivityRow({ activity, readPaths }: { activity: CodeActivity; readPath
     </div>
   )
 }
+
+/** La ligne « en direct » (étape 288) : même allure qu'une action terminée, avec un point qui pulse. */
+function LiveLine({ text }: { text: ReturnType<typeof formatCodeLive> }): JSX.Element {
+  return (
+    <div className="code-chat__live code-chat__activity" role="status" aria-live="polite">
+      <span className="code-chat__live-dot" aria-hidden="true" />
+      <span className="code-chat__activity-verb">{text.action}</span>
+      {text.path && (
+        <span className="code-chat__activity-path" title={text.path}>
+          {text.path}
+        </span>
+      )}
+      {text.lines && <span className="code-chat__activity-stats repo-change__added">{text.lines}</span>}
+      {text.stall && <span className="code-chat__live-stall">· {text.stall}</span>}
+    </div>
+  )
+}
+
+/** La même chose en une phrase, pour la barre de l'aperçu agrandi (la conversation est alors repliée). */
+const liveSummary = (text: ReturnType<typeof formatCodeLive>): string => [text.action, text.path, text.lines].filter(Boolean).join(' ')
 
 /**
  * Ce qui s'affiche dans la conversation : les tours tels quels, sauf les lectures consécutives, réunies en une ligne
@@ -188,9 +217,8 @@ export default function CodePanel(): JSX.Element {
   const [attachment, setAttachment] = useState<ImageAttachment | null>(null)
   /** Avancement en direct de l'étape en cours (étape 99) — `null` avant le premier appel au modèle. */
   const [progress, setProgress] = useState<CodeGenProgress | null>(null)
-  /** Temps écoulé depuis le clic, réaffiché chaque seconde : "ça tourne depuis 2 min" est la première
-   *  chose que Léo cherchait des yeux ("on ne sait pas quand c'est terminé"). */
-  const [elapsedMs, setElapsedMs] = useState(0)
+  /** Étape 288 : le fichier que Jaris écrit en ce moment, ligne par ligne (`null` : il n'écrit pas de fichier). */
+  const [live, setLive] = useState<CodeLiveWrite | null>(null)
   /** Issue de la DERNIÈRE génération, affichée à la place du bandeau d'avancement une fois celui-ci fini :
    *  terminée normalement, ou arrêtée à la demande. `null` tant qu'il n'y a rien à annoncer. */
   const [lastOutcome, setLastOutcome] = useState<Outcome | null>(null)
@@ -210,6 +238,13 @@ export default function CodePanel(): JSX.Element {
    * repart de zéro quand on ouvre un autre élément, comme le bandeau de fin (étape 102).
    */
   const [turns, setTurns] = useState<ChatTurn[]>([])
+  /**
+   * Étape 288 : l'élément à qui appartient la conversation affichée (`app:…`, `repo:…`, ou `null` pour une
+   * nouvelle application pas encore créée). Elle n'est enregistrée que sous CE nom : pendant un changement
+   * d'élément, une conversation vide ne doit jamais écraser celle de l'élément qu'on quitte.
+   */
+  const conversationOwnerRef = useRef<string | null>(null)
+  const [recentRepos, setRecentRepos] = useState<RecentRepo[]>(() => loadRecentRepos())
   const turnIdRef = useRef(0)
   /** Étape 286 : tour de l'agent -> message de la conversation qui porte sa phrase (mise à jour en direct). */
   const narrationTurnsRef = useRef(new Map<number, number>())
@@ -266,17 +301,17 @@ export default function CodePanel(): JSX.Element {
   }, [])
 
   useEffect(() => {
-    return window.jaris.onCodeGenProgress(setProgress)
+    const offProgress = window.jaris.onCodeGenProgress(setProgress)
+    const offLive = window.jaris.onCodeGenLive(setLive)
+    return () => {
+      offProgress()
+      offLive()
+    }
   }, [])
 
-  // Chronomètre de la génération en cours. Une seconde suffit : ce n'est pas une mesure, c'est un signe que
-  // Jaris est toujours vivant — et il s'arrête net dès que la génération est finie.
+  // Rien ne s'écrit plus une fois le travail fini (ou arrêté) : la ligne en direct ne doit pas rester figée.
   useEffect(() => {
-    if (!generating) return
-    const startedAt = Date.now()
-    setElapsedMs(0)
-    const timer = setInterval(() => setElapsedMs(Date.now() - startedAt), 1000)
-    return () => clearInterval(timer)
+    if (!generating) setLive(null)
   }, [generating])
 
   // Le dernier message reste visible, comme dans le Chat.
@@ -346,9 +381,16 @@ export default function CodePanel(): JSX.Element {
     setError(null)
   }
 
-  /** Changer d'élément affiché (application, dépôt, nouvelle application) : la conversation repart de zéro. */
-  const resetConversation = (): void => {
-    setTurns([])
+  /**
+   * Changer d'élément affiché (application, dépôt, nouvelle application) : sa conversation revient telle qu'on l'a
+   * laissée (étape 288) ; une nouvelle application repart de zéro.
+   */
+  const switchConversation = (key: string | null): void => {
+    const loaded = key ? loadConversation(key) : []
+    turnIdRef.current = Math.max(turnIdRef.current, ...loaded.map((turn) => turn.id))
+    conversationOwnerRef.current = key
+    narrationTurnsRef.current = new Map()
+    setTurns(loaded)
     clearGenerationFeedback()
   }
 
@@ -395,6 +437,7 @@ export default function CodePanel(): JSX.Element {
     } finally {
       setGenerating(false)
       setProgress(null)
+      setRecentRepos(rememberRepo(current.fullName))
     }
   }
 
@@ -402,7 +445,8 @@ export default function CodePanel(): JSX.Element {
     const view = await window.jaris.githubOpenRepo(fullName, branch)
     setAppResult(null)
     if (keepConversation) clearGenerationFeedback()
-    else resetConversation()
+    else switchConversation(repoConversationKey(view.fullName))
+    setRecentRepos(rememberRepo(view.fullName))
     setCommitted(null)
     setAttachment(null)
     setRepoTab('preview')
@@ -412,7 +456,7 @@ export default function CodePanel(): JSX.Element {
   const closeRepo = (): void => {
     setRepo(null)
     setCommitted(null)
-    resetConversation()
+    switchConversation(null)
   }
 
   const commitRepo = async (message: string): Promise<void> => {
@@ -480,6 +524,8 @@ export default function CodePanel(): JSX.Element {
         appResult?.html,
         attachment?.base64
       )
+      // La conversation suit l'application jusqu'à sa nouvelle version (chaque génération crée son propre dossier).
+      conversationOwnerRef.current = appConversationKey(result.path)
       setAppResult(result)
       setAttachment(null)
       setView('preview')
@@ -511,9 +557,14 @@ export default function CodePanel(): JSX.Element {
   }
 
   const openRecent = async (path: string): Promise<void> => {
-    closeRepo()
+    // Pendant un travail, ses actions s'écrivent dans la conversation affichée : en changer maintenant les mettrait
+    // dans celle d'un autre élément (étape 288). Même règle pour un dépôt et pour « Nouvelle application ».
+    if (generating) return
+    setRepo(null)
+    setCommitted(null)
     try {
       const result = await window.jaris.loadGeneratedApp(path)
+      switchConversation(appConversationKey(result.path))
       setAppResult(result)
       setView('preview')
     } catch (err) {
@@ -530,6 +581,7 @@ export default function CodePanel(): JSX.Element {
     setError(null)
     try {
       await window.jaris.deleteGeneratedApp(path)
+      forgetConversation(appConversationKey(path))
       setRecentApps(await window.jaris.getGeneratedApps())
       // L'application supprimée était justement celle affichée : l'aperçu pointerait sur un dossier qui
       // n'existe plus, donc retour à l'écran de départ.
@@ -540,12 +592,55 @@ export default function CodePanel(): JSX.Element {
   }
 
   const startOver = (): void => {
+    if (generating) return
     closeRepo()
     setAppResult(null)
-    clearGenerationFeedback()
     setDescription('')
     setAttachment(null)
   }
+
+  /** Étape 288 : un dépôt de la liste de gauche se rouvre avec sa conversation. */
+  const openRepoFromList = async (fullName: string): Promise<void> => {
+    if (generating) return
+    try {
+      await openRepo(fullName)
+    } catch (err) {
+      setError(ipcErrorMessage(err))
+    }
+  }
+
+  /** Retiré de la liste seulement (et sa conversation oubliée) : le dépôt reste sur GitHub. */
+  const removeRepoFromList = (fullName: string): void => {
+    setRecentRepos(forgetRepo(fullName))
+    if (repo && repo.fullName.toLowerCase() === fullName.toLowerCase()) closeRepo()
+  }
+
+  // Applications ET dépôts, du plus récent au plus ancien, comme les conversations du Chat.
+  const listItems = [
+    ...recentApps.map((recent) => ({ at: recent.timestamp, item: { id: recent.path, title: recent.label, meta: formatRecentDate(recent.timestamp) } })),
+    ...recentRepos.map((recent) => ({
+      at: recent.at,
+      item: {
+        id: repoConversationKey(recent.fullName),
+        title: recent.fullName,
+        exactTitle: true,
+        meta: `GitHub · ${formatRecentDate(recent.at)}`,
+        removeLabel: { action: 'Retirer', question: `Retirer « ${recent.fullName} » de la liste ? Le dépôt reste sur GitHub.` }
+      }
+    }))
+  ]
+    .sort((a, b) => b.at - a.at)
+    .map(({ item }) => item)
+
+  // La conversation affichée est enregistrée sous le nom de son élément, une fois le travail fini (jamais pendant :
+  // la phrase de Jaris change à chaque fragment reçu). Le bandeau de fin y est compris, comme le message qu'il
+  // deviendra à la demande suivante : rouvrir l'élément doit dire comment le dernier travail s'est terminé.
+  const activeConversation = appResult ? appConversationKey(appResult.path) : repo ? repoConversationKey(repo.fullName) : null
+  useEffect(() => {
+    const owner = conversationOwnerRef.current
+    if (generating || !owner || owner !== activeConversation) return
+    saveConversation(owner, lastOutcome ? [...turns, { id: turnIdRef.current + 1, kind: 'reply', text: outcomeText(lastOutcome) }] : turns)
+  }, [turns, generating, activeConversation, lastOutcome])
 
   /** Quelque chose à montrer dans l'aperçu : une application, ou un dépôt (son site, ou ses changements). */
   const hasPreview = appResult !== null || repo !== null
@@ -623,15 +718,11 @@ export default function CodePanel(): JSX.Element {
       newLabel="Nouvelle application"
       label="Code"
       onNew={startOver}
-      items={recentApps.map((recent) => ({
-        id: recent.path,
-        title: recent.label,
-        meta: formatRecentDate(recent.timestamp)
-      }))}
-      activeId={appResult?.path ?? null}
-      onSelect={(path) => void openRecent(path)}
-      onDelete={(path) => void remove(path)}
-      emptyLabel="Aucune application pour l'instant."
+      items={listItems}
+      activeId={appResult?.path ?? (repo ? repoConversationKey(repo.fullName) : null)}
+      onSelect={(id) => void (id.startsWith('repo:') ? openRepoFromList(id.slice('repo:'.length)) : openRecent(id))}
+      onDelete={(id) => void (id.startsWith('repo:') ? removeRepoFromList(id.slice('repo:'.length)) : remove(id))}
+      emptyLabel="Aucune conversation pour l'instant."
     >
       {/* Étape 282 (Léo, capture de Claude à l'appui : « pour le code fais chat à gauche et aperçu à droite comme
           Claude et ChatGPT ») : la conversation et le champ de saisie à gauche, l'aperçu (ou les changements d'un
@@ -709,19 +800,10 @@ export default function CodePanel(): JSX.Element {
                 </div>
               )}
 
-              {/* Étape 99 : où on en est (étape X), la preuve que ça avance (les caractères écrits), depuis combien
-                  de temps, et une sortie de secours — à la suite de la demande, comme une réponse en cours. */}
-              {generating && (
-                <div className="code-panel__live">
-                  <div className="code-panel__live-text">
-                    <span className="code-panel__live-title">{formatCodeGenProgress(progress, elapsedMs).title}</span>
-                    <span className="code-panel__live-detail">{formatCodeGenProgress(progress, elapsedMs).detail}</span>
-                  </div>
-                  <button className="code-panel__live-stop" onClick={stop}>
-                    Arrêter
-                  </button>
-                </div>
-              )}
+              {/* Étape 288 (Léo : « enlève ça [le bandeau Étape · caractères · Arrêter], on peut arrêter comme dans le
+                  Chat, mais mets ce qu'il fait en direct, par exemple code index.html plus 20 lignes ») : une seule ligne,
+                  à la suite de la conversation, qui dit ce que Jaris fait. L'arrêt passe par le bouton du champ. */}
+              {generating && <LiveLine text={formatCodeLive(live, progress)} />}
 
               {/* Fin annoncée À L'ENDROIT MÊME où l'avancement était suivi (étape 100). À la demande suivante, ce
                   bandeau rejoint l'historique de la conversation (archiveLastOutcome). */}
@@ -811,7 +893,9 @@ export default function CodePanel(): JSX.Element {
                 {/* Aperçu agrandi : la conversation est repliée, donc son bandeau d'avancement aussi. Sans ce rappel,
                     une génération en cours serait invisible jusqu'à la fin. */}
                 {generating && previewExpanded && (
-                  <span className="code-preview__busy">{formatCodeGenProgress(progress, elapsedMs).title}</span>
+                  <span className="code-preview__busy">
+                    {liveSummary(formatCodeLive(live, progress))}
+                  </span>
                 )}
                 <div className="code-preview__tools">
                   {!appResult && repoHasChanges && (

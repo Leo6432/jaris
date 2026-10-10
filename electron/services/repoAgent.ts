@@ -1,6 +1,6 @@
 import type { OllamaMessage, OllamaTool, OllamaToolCall } from './ollama'
 import { diffLines } from '../../shared/lineDiff'
-import type { CodeActivity, CodeNarration } from '../../shared/ipc'
+import type { CodeActivity, CodeLiveWrite, CodeNarration } from '../../shared/ipc'
 
 /**
  * L'agent qui travaille sur un dépôt GitHub (étape 277) : le modèle Code lit les fichiers dont il a besoin, puis
@@ -36,6 +36,8 @@ export interface RepoAgentDeps {
    * est affichée à part, comme résumé).
    */
   onNarration?: (narration: CodeNarration) => void
+  /** Le fichier en cours d'écriture, ligne par ligne (étape 288) ; `null` quand l'écriture est finie. */
+  onLive?: (live: CodeLiveWrite | null) => void
   signal?: AbortSignal
   maxTurns?: number
   /** Taille au-delà de laquelle les anciennes lectures sont retirées de l'historique envoyé au modèle. */
@@ -249,6 +251,88 @@ export function narrationOf(content: string): string {
       .replace(/\n{3,}/g, '\n\n')
       .trim()
   )
+}
+
+/**
+ * Suit, pendant que le modèle l'écrit, l'action qui écrit un fichier (étape 288, Léo : « mets ce qu'il fait en
+ * direct, par exemple code index.html plus 20 lignes »). Reçoit le texte du modèle fragment par fragment : repère
+ * `write_file`/`edit_file` et son chemin, puis compte les lignes de son contenu (`content`, ou `new_text` pour une
+ * modification) — un retour à la ligne s'écrit `\n` dans le JSON, ou tel quel quand le modèle est moins rigoureux.
+ * Chaque caractère n'est regardé qu'une fois : un fichier de 500 lignes ne coûte pas plus cher à suivre qu'à recevoir.
+ */
+export function createLiveWriteTracker(emit: (live: CodeLiveWrite | null) => void): { push: (delta: string) => void; end: () => void } {
+  let buffer = ''
+  let current: CodeLiveWrite | null = null
+  let counting = false
+  /** Le contenu de l'action suivie est fini : un second appel écrit dans le même bloc peut prendre le relais. */
+  let written = false
+  let escaped = false
+  let fence = 0
+
+  const reset = (): void => {
+    if (current) emit(null)
+    current = null
+    counting = false
+    written = false
+    escaped = false
+    buffer = ''
+  }
+
+  const detect = (): void => {
+    if (!current || written) {
+      const name = /"name"\s*:\s*"(write_file|edit_file)"/.exec(buffer)
+      const path = /"path"\s*:\s*"([^"\\]+)"/.exec(buffer)
+      if (name && path) {
+        current = { kind: name[1] === 'write_file' ? 'write' : 'edit', path: path[1], lines: 0 }
+        written = false
+        emit({ ...current })
+      }
+    }
+    if (current && !counting && !written) {
+      const key = current.kind === 'write' ? 'content' : 'new_text'
+      if (new RegExp(`"${key}"\\s*:\\s*"$`).test(buffer)) counting = true
+    }
+  }
+
+  return {
+    push(delta: string): void {
+      for (const char of delta) {
+        // Ouverture ou fin d'un bloc (```) : tout repart de zéro. Sans ça, le chemin d'une LECTURE précédente (resté
+        // dans ce qui a été lu) serait pris pour celui du fichier écrit ensuite.
+        fence = char === '`' ? fence + 1 : 0
+        if (fence === 3 && !counting) {
+          reset()
+          continue
+        }
+        if (counting && current) {
+          if (escaped) {
+            escaped = false
+            if (char === 'n') {
+              current.lines += 1
+              emit({ ...current })
+            }
+          } else if (char === '\\') {
+            escaped = true
+          } else if (char === '\n') {
+            current.lines += 1
+            emit({ ...current })
+          } else if (char === '"') {
+            counting = false
+            written = true
+            buffer = ''
+          }
+          continue
+        }
+        buffer += char
+        // Jamais plus que le début d'une action : au-delà, on ne garde que la fin, où arrivent le nom et le chemin.
+        if (buffer.length > 4000) buffer = buffer.slice(-400)
+        if (char === '"') detect()
+      }
+    },
+    end(): void {
+      reset()
+    }
+  }
 }
 
 const NUDGE =
@@ -488,15 +572,24 @@ export async function runRepoAgent(request: string, deps: RepoAgentDeps): Promis
       shown = text
       deps.onNarration?.({ id: turn, text })
     }
-    const onDelta = deps.onNarration
-      ? (delta: string): void => {
-          if (actionsStarted) return
-          streamed += delta
-          if (/```|<tool_call>|\{\s*"name"\s*:/.test(streamed)) actionsStarted = true
-          showNarration(narrationOf(streamed))
-        }
-      : undefined
-    const reply = await deps.chat(messages, onDelta)
+    const live = deps.onLive ? createLiveWriteTracker(deps.onLive) : null
+    const onDelta =
+      deps.onNarration || live
+        ? (delta: string): void => {
+            live?.push(delta)
+            if (actionsStarted || !deps.onNarration) return
+            streamed += delta
+            if (/```|<tool_call>|\{\s*"name"\s*:/.test(streamed)) actionsStarted = true
+            showNarration(narrationOf(streamed))
+          }
+        : undefined
+    let reply: OllamaMessage
+    try {
+      reply = await deps.chat(messages, onDelta)
+    } finally {
+      // Le modèle a fini d'écrire (ou s'est arrêté) : la ligne « en direct » laisse place au résultat de l'action.
+      live?.end()
+    }
     showNarration(narrationOf(reply.content ?? ''))
     const structured = reply.tool_calls ?? []
     const calls = structured.length > 0 ? structured : extractTextToolCalls(reply.content ?? '')

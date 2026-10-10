@@ -397,3 +397,93 @@ test('l’agent dit ce qu’il fait : sa phrase arrive au fil de l’eau, et le 
   // La consigne est bien donnée au modèle.
   assert.match(app.seen[0][0].content, /UNE phrase courte/)
 })
+
+/**
+ * La ligne « en direct » (étape 288, Léo : « mets ce qu'il fait en direct, par exemple code index.html plus 20
+ * lignes ») suit le texte du modèle caractère par caractère : les fragments reçus coupent n'importe où.
+ */
+function track(text, chunk = 1) {
+  const events = []
+  const tracker = agent.createLiveWriteTracker((live) => events.push(live && { ...live }))
+  for (let i = 0; i < text.length; i += chunk) tracker.push(text.slice(i, i + chunk))
+  tracker.end()
+  return events
+}
+const block = (json) => '```action\n' + JSON.stringify(json) + '\n```\n'
+
+test('écriture d’un fichier : son nom dès qu’il est connu, puis +1 ligne à chaque ligne reçue, puis plus rien', () => {
+  for (const chunk of [1, 7, 1000]) {
+    const events = track('Je crée la page.\n' + block({ name: 'write_file', arguments: { path: 'index.html', content: '<h1>a</h1>\n<p>b</p>\n<p>c</p>' } }), chunk)
+    const lines = events.filter(Boolean).map((live) => `${live.kind} ${live.path} ${live.lines}`)
+    assert.equal(lines[0], 'write index.html 0', `fragments de ${chunk}`)
+    assert.equal(lines.at(-1), 'write index.html 2', `fragments de ${chunk}`)
+    assert.equal(events.at(-1), null, 'la ligne en direct reste affichée après la fin du bloc')
+  }
+})
+
+test('les retours à la ligne écrits tels quels comptent aussi, une barre oblique échappée non', () => {
+  const raw = '```action\n{"name": "write_file", "arguments": {"path": "a.txt", "content": "un\ndeux\ntrois\\\\nquatre"}}\n```'
+  assert.equal(Math.max(...track(raw).filter(Boolean).map((live) => live.lines)), 2)
+})
+
+test('une modification ne compte que le nouveau texte, jamais l’ancien', () => {
+  const events = track(block({ name: 'edit_file', arguments: { path: 'jeu.js', old_text: 'a\nb\nc\nd', new_text: 'x\ny' } }))
+  assert.deepEqual(events.filter(Boolean).at(-1), { kind: 'edit', path: 'jeu.js', lines: 1 })
+})
+
+test('après une lecture, c’est le fichier ÉCRIT qui s’affiche, pas celui qui vient d’être lu', () => {
+  const events = track(
+    block({ name: 'read_file', arguments: { path: 'index.html' } }) + block({ name: 'write_file', arguments: { path: 'style.css', content: 'a\nb' } })
+  )
+  assert.deepEqual([...new Set(events.filter(Boolean).map((live) => live.path))], ['style.css'])
+})
+
+test('deux écritures dans le même bloc : la seconde prend le relais', () => {
+  const two =
+    '```action\n' +
+    JSON.stringify({ name: 'write_file', arguments: { path: 'a.js', content: '1\n2' } }) +
+    '\n' +
+    JSON.stringify({ name: 'write_file', arguments: { path: 'b.js', content: '1\n2\n3' } }) +
+    '\n```'
+  const paths = track(two).filter(Boolean).map((live) => `${live.path} ${live.lines}`)
+  assert.deepEqual([paths[0], paths.at(-1)], ['a.js 0', 'b.js 2'])
+})
+
+test('un texte sans écriture ne montre aucun fichier', () => {
+  assert.deepEqual(track('Je lis le fichier.\n' + block({ name: 'read_file', arguments: { path: 'README.md' } }) + block({ name: 'finish', arguments: { summary: 'Fini.' } })), [])
+})
+
+test('la boucle relaie l’écriture en direct, puis l’efface quand le modèle a fini d’écrire', async () => {
+  const text = block({ name: 'write_file', arguments: { path: 'index.html', content: '<p>a</p>\n<p>b</p>' } })
+  const live = []
+  const app = setup({}, [], {
+    onLive: (item) => live.push(item && { ...item }),
+    chat: async (messages, onDelta) => {
+      if (messages.some((m) => m.role === 'user' && m.content.startsWith('Résultat de write_file'))) {
+        return { role: 'assistant', content: block({ name: 'finish', arguments: { summary: 'Page créée.' } }) }
+      }
+      for (const char of text) onDelta?.(char)
+      return { role: 'assistant', content: text }
+    }
+  })
+  const outcome = await agent.runRepoAgent('Crée une page', app.deps)
+  assert.equal(outcome.summary, 'Page créée.')
+  assert.deepEqual(live.filter(Boolean).at(-1), { kind: 'write', path: 'index.html', lines: 1 })
+  assert.equal(live.at(-1), null)
+  assert.equal(app.staged.get('index.html'), '<p>a</p>\n<p>b</p>')
+})
+
+test('un modèle coupé en pleine écriture (Arrêter, panne) n’y laisse pas un fichier figé « en cours »', async () => {
+  const half = '```action\n{"name": "write_file", "arguments": {"path": "index.html", "content": "<p>a</p>\\n<p>'
+  const live = []
+  const app = setup({}, [], {
+    onLive: (item) => live.push(item && { ...item }),
+    chat: async (_messages, onDelta) => {
+      for (const char of half) onDelta?.(char)
+      throw new Error('Connexion à Ollama coupée')
+    }
+  })
+  await assert.rejects(agent.runRepoAgent('Crée une page', app.deps), /coupée/)
+  assert.deepEqual(live.filter(Boolean).at(-1), { kind: 'write', path: 'index.html', lines: 1 })
+  assert.equal(live.at(-1), null)
+})

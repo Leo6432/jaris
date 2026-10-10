@@ -22,6 +22,13 @@ export interface WorkspaceItem {
   title: string
   /** Deuxième information, plus discrète (bulle au survol) : la date du dernier échange / de la génération. */
   meta?: string
+  /**
+   * Étape 288 : un élément qui n'est pas SUPPRIMÉ mais seulement retiré de la liste (un dépôt GitHub reste sur
+   * GitHub). Sans ce libellé, « Supprimer » laisserait croire que le dépôt lui-même va être effacé.
+   */
+  removeLabel?: { action: string; question: string }
+  /** Nom à écrire tel quel (un dépôt « leo/projet »), sans la majuscule de début donnée aux autres titres. */
+  exactTitle?: boolean
 }
 
 interface WorkspaceProps {
@@ -89,7 +96,7 @@ export default function Workspace({
                   à la fenêtre, et Jaris se replierait en widget en plein milieu (piège de l'étape 93). */}
               {pendingDelete === item.id ? (
                 <div className="workspace__confirm">
-                  <span>Supprimer « {item.title} » ?</span>
+                  <span>{item.removeLabel?.question ?? `Supprimer « ${item.title} » ?`}</span>
                   <button
                     className="workspace__confirm-yes"
                     onClick={() => {
@@ -97,7 +104,7 @@ export default function Workspace({
                       onDelete(item.id)
                     }}
                   >
-                    Supprimer
+                    {item.removeLabel?.action ?? 'Supprimer'}
                   </button>
                   <button className="workspace__confirm-no" onClick={() => setPendingDelete(null)}>
                     Annuler
@@ -110,15 +117,15 @@ export default function Workspace({
                     onClick={() => onSelect(item.id)}
                     title={item.meta ? `${item.title} · ${item.meta}` : item.title}
                   >
-                    <span className="workspace__item-title">{item.title}</span>
+                    <span className={`workspace__item-title${item.exactTitle ? ' workspace__item-title--exact' : ''}`}>{item.title}</span>
                     {/* Masquée dans la barre latérale (comme ChatGPT), visible dans la colonne autonome. */}
                     {item.meta && <span className="workspace__item-meta">{item.meta}</span>}
                   </button>
                   <button
                     className="workspace__delete"
                     onClick={() => setPendingDelete(item.id)}
-                    title={`Supprimer ${item.title}`}
-                    aria-label={`Supprimer ${item.title}`}
+                    title={`${item.removeLabel?.action ?? 'Supprimer'} ${item.title}`}
+                    aria-label={`${item.removeLabel?.action ?? 'Supprimer'} ${item.title}`}
                   >
                     <DeleteIcon />
                   </button>

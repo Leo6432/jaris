@@ -36,6 +36,7 @@ window.jaris = {
   onCodeGenProgress: (cb) => { window.__emitProgress = cb; return () => {} },
   onCodeGenActivity: () => () => {},
   onCodeGenNarration: () => () => {},
+  onCodeGenLive: (cb) => { window.__emitLive = cb; return () => {} },
   getGeneratedApps: () => Promise.resolve([]),
   // Étape 277 : le bouton GitHub du champ demande l'état de la connexion au montage (masqué si indisponible).
   githubStatus: () => Promise.resolve({ available: false, connected: false, login: null }),
@@ -116,18 +117,17 @@ test('une génération Code survit à un aller-retour vers un autre onglet', opt
   await withPage(async (page) => {
     await page.fill('.composer__input', 'une todo list')
     await page.click('.composer__send')
-    await page.evaluate(() =>
-      window.__emitProgress({ label: "Écriture de l'application", stepIndex: 1, stepCount: 2, charsWritten: 1200, thinking: false, idleMs: 0 })
-    )
-    await page.waitForSelector('.code-panel__live')
+    // Étape 288 : l'avancement est la ligne « en direct » de la conversation (le fichier en cours et ses lignes).
+    await page.evaluate(() => window.__emitLive({ kind: 'write', path: 'index.html', lines: 42 }))
+    await page.waitForSelector('.code-chat__live')
 
     await page.click('#to-chat')
     await page.waitForSelector('.chat-stand-in')
-    assert.equal(await page.isVisible('.code-panel__live'), false, 'caché pendant qu’on est ailleurs')
+    assert.equal(await page.isVisible('.code-chat__live'), false, 'caché pendant qu’on est ailleurs')
 
     await page.click('#to-code')
-    assert.equal(await page.isVisible('.code-panel__live'), true, 'l’avancement est toujours là au retour')
-    assert.match(await page.textContent('.code-panel__live'), /1\s?200 caractères/)
+    assert.equal(await page.isVisible('.code-chat__live'), true, 'l’avancement est toujours là au retour')
+    assert.match(await page.textContent('.code-chat__live'), /index\.html\s*\+42 lignes/)
   })
 })
 

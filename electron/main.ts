@@ -1592,6 +1592,7 @@ app.whenReady().then(async () => {
           {
             onProgress: (progress) => event.sender.send(IPC_CHANNELS.codeGenProgress, progress),
             onActivity: (activity) => event.sender.send(IPC_CHANNELS.codeGenActivity, activity),
+            onLive: (live) => event.sender.send(IPC_CHANNELS.codeGenLive, live),
             signal: controller.signal
           }
         )
@@ -1629,6 +1630,7 @@ app.whenReady().then(async () => {
         onStatus: (message) => event.sender.send(IPC_CHANNELS.codeGenStatus, message),
         onActivity: (activity) => event.sender.send(IPC_CHANNELS.codeGenActivity, activity),
         onNarration: (narration) => event.sender.send(IPC_CHANNELS.codeGenNarration, narration),
+        onLive: (live) => event.sender.send(IPC_CHANNELS.codeGenLive, live),
         onProgress: (progress) => event.sender.send(IPC_CHANNELS.codeGenProgress, progress),
         signal: controller.signal
       })

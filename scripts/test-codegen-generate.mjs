@@ -36,6 +36,7 @@ function setup(responses, { profile = { codeModel: 'test-model', visionModel: 'v
   const models = []
   const statusLines = []
   const activity = []
+  const live = []
   const visionCalls = []
   const modules = {
     electron: { app: { getPath: () => '/tmp' } },
@@ -43,11 +44,13 @@ function setup(responses, { profile = { codeModel: 'test-model', visionModel: 'v
     'fs/promises': { mkdir: async () => {}, writeFile: async () => {} },
     path: { join: (...parts) => parts.join('/') },
     './ollama': {
-      chatWithOllama: async (messages, _tools, model) => {
+      chatWithOllama: async (messages, _tools, model, _think, _signal, _numCtx, onToken) => {
         calls.push(messages)
         models.push(model)
         const next = responses.shift()
         if (next === undefined) throw new Error('plus de réponse simulée disponible (critique/réparation)')
+        // Étape 288 : la réponse arrive par fragments, comme avec le vrai Ollama, pour suivre ses lignes en direct.
+        for (const piece of next.match(/[\s\S]{1,5}/g) ?? []) onToken?.(piece)
         return { role: 'assistant', content: next }
       },
       listInstalledModels: async () => installed,
@@ -76,12 +79,14 @@ function setup(responses, { profile = { codeModel: 'test-model', visionModel: 'v
   return {
     generateApp: (description, currentHtml, imageBase64) =>
       exports.generateApp(description, (line) => statusLines.push(line), currentHtml, imageBase64, {
-        onActivity: (item) => activity.push(item)
+        onActivity: (item) => activity.push(item),
+        onLive: (item) => live.push(item && { ...item })
       }),
     calls,
     models,
     statusLines,
     activity,
+    live,
     visionCalls
   }
 }
@@ -193,4 +198,24 @@ test('le téléchargement du modèle, lui, reste annoncé : long et visible', as
   const app = setup([VALID_HTML], { installed: [] })
   await app.generateApp('une todo list')
   assert.ok(app.statusLines.some((line) => /Téléchargement du modèle de code/.test(line)), app.statusLines.join(' | '))
+})
+
+test('« Écrit index.html +N lignes » en direct, puis « Relit », et plus rien à la fin (étape 288)', async () => {
+  // Léo : « mets ce qu'il fait en direct, par exemple code index.html plus 20 lignes ».
+  const app = setup([VALID_HTML, VALID_HTML])
+  await app.generateApp('un bouton')
+  const writes = app.live.filter((item) => item?.kind === 'write')
+  assert.deepEqual(writes[0], { kind: 'write', path: 'index.html', lines: 0 })
+  // Une ligne de plus à chaque retour à la ligne reçu : la dernière valeur est le nombre de lignes de la réponse.
+  assert.equal(writes.at(-1).lines, VALID_HTML.split('\n').length - 1)
+  assert.ok(writes.length > 3, 'les lignes ne montent pas au fil de l’eau')
+  assert.equal(app.live.some((item) => item?.kind === 'review'), true, 'la relecture n’est pas annoncée')
+  assert.equal(app.live.at(-1), null, 'la ligne en direct reste affichée après la fin')
+})
+
+test('une modification s’annonce « Modifie index.html », pas « Écrit »', async () => {
+  const app = setup([VALID_HTML, VALID_HTML])
+  await app.generateApp('ajoute un mode sombre', '<!DOCTYPE html><html><body>ancien</body></html>')
+  const kinds = [...new Set(app.live.filter(Boolean).map((item) => item.kind))]
+  assert.deepEqual(kinds, ['edit', 'review'])
 })

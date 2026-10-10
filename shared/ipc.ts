@@ -684,6 +684,18 @@ export interface CodeNarration {
   text: string
 }
 
+/**
+ * Le fichier que Jaris est EN TRAIN d'écrire (étape 288, Léo : « mets ce qu'il fait en direct, par exemple code
+ * index.html plus 20 lignes ») : mis à jour à chaque ligne reçue du modèle, `null` quand il a fini. `review` : il
+ * relit et réécrit le fichier (relecture d'une application générée).
+ */
+export interface CodeLiveWrite {
+  kind: 'write' | 'edit' | 'review'
+  path: string
+  /** Lignes déjà écrites pour ce fichier. */
+  lines: number
+}
+
 export interface CodeGenProgress {
   /** Ce que Jaris fait en ce moment ("Écriture de l'application", "Relecture du code"…). */
   label: string
@@ -911,6 +923,7 @@ export const IPC_CHANNELS = {
   codeGenStatus: 'jaris:code-gen-status',
   codeGenActivity: 'jaris:code-gen-activity',
   codeGenNarration: 'jaris:code-gen-narration',
+  codeGenLive: 'jaris:code-gen-live',
   /** main -> renderer : avancement EN DIRECT de l'étape en cours (étape 99) — voir CodeGenProgress. */
   codeGenProgress: 'jaris:code-gen-progress',
   /** renderer -> main : arrête la génération en cours (bouton "Arrêter", étape 99). */

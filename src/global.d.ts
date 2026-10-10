@@ -22,6 +22,7 @@ import type {
   ConversationList,
   CodeActivity,
   CodeGenProgress,
+  CodeLiveWrite,
   CodeNarration,
   GeneratedApp,
   GeneratedAppSummary,
@@ -159,6 +160,7 @@ declare global {
       onCodeGenProgress: (cb: (progress: CodeGenProgress) => void) => () => void
       onCodeGenActivity: (cb: (activity: CodeActivity) => void) => () => void
       onCodeGenNarration: (cb: (narration: CodeNarration) => void) => () => void
+      onCodeGenLive: (cb: (live: CodeLiveWrite | null) => void) => () => void
       cancelCodeGen: () => void
       // Étape 277 : GitHub dans le mode Code (le jeton ne quitte jamais le main).
       githubStatus: () => Promise<GithubStatus>

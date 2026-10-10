@@ -24,6 +24,7 @@ import {
   type ConversationList,
   type CodeActivity,
   type CodeGenProgress,
+  type CodeLiveWrite,
   type CodeNarration,
   type GeneratedApp,
   type GeneratedAppSummary,
@@ -172,6 +173,7 @@ const api = {
   onCodeGenProgress: (cb: (progress: CodeGenProgress) => void) => subscribe(IPC_CHANNELS.codeGenProgress, cb),
   onCodeGenActivity: (cb: (activity: CodeActivity) => void) => subscribe(IPC_CHANNELS.codeGenActivity, cb),
   onCodeGenNarration: (cb: (narration: CodeNarration) => void) => subscribe(IPC_CHANNELS.codeGenNarration, cb),
+  onCodeGenLive: (cb: (live: CodeLiveWrite | null) => void) => subscribe(IPC_CHANNELS.codeGenLive, cb),
   cancelCodeGen: (): void => ipcRenderer.send(IPC_CHANNELS.cancelCodeGen),
   // Étape 277 : GitHub dans le mode Code. L'arrêt d'un travail en cours passe par cancelCodeGen.
   githubStatus: (): Promise<GithubStatus> => ipcRenderer.invoke(IPC_CHANNELS.githubStatus),

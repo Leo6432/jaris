@@ -1,4 +1,4 @@
-import type { CodeGenProgress } from '../../shared/ipc'
+import type { CodeGenProgress, CodeLiveWrite } from '../../shared/ipc'
 
 /**
  * Ce que Léo lit pendant qu'une génération tourne (mode Code, étape 99) — le seul retour qu'il ait pendant
@@ -20,37 +20,34 @@ export function formatDuration(ms: number): string {
   return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}`
 }
 
-export interface CodeGenProgressText {
-  /** Ligne principale : où on en est ("Étape 2 sur 2 · Relecture du code"). */
-  title: string
-  /** Ligne de détail : depuis combien de temps, et ce que le modèle est en train de faire. */
-  detail: string
+/**
+ * La ligne « en direct » du mode Code (étape 288, Léo : « enlève ça [Étape 3 · … caractères écrits · Arrêter], on s'en
+ * fout, mais mets ce qu'il fait en direct, par exemple code index.html plus 20 lignes »). Plus de numéro d'étape ni de
+ * compteur de caractères : ce que Jaris FAIT — le fichier qu'il écrit et ses lignes —, sinon qu'il réfléchit.
+ * L'arrêt se fait par le bouton du champ, comme dans le Chat.
+ */
+export interface CodeLiveText {
+  /** « Écrit », « Modifie », « Relit », ou « Réfléchit… » / « Travaille… » quand aucun fichier n'est en cours. */
+  action: string
+  /** Le fichier en cours d'écriture, s'il y en a un. */
+  path: string | null
+  /** « +20 lignes », dès la première ligne reçue. */
+  lines: string | null
+  /** Un silence prolongé du modèle, dit en clair plutôt que laissé à deviner (« c'est long » ≠ « c'est bloqué »). */
+  stall: string | null
 }
 
-/**
- * `progress` vaut `null` tant que le modèle n'a pas commencé (Jaris prépare la demande, ou télécharge le
- * modèle de code au tout premier usage — le journal juste en dessous le dit alors en clair).
- */
-export function formatCodeGenProgress(progress: CodeGenProgress | null, elapsedMs: number): CodeGenProgressText {
-  const elapsed = formatDuration(elapsedMs)
-  if (!progress) {
-    return { title: 'Préparation…', detail: elapsed }
-  }
+const LIVE_VERB: Record<CodeLiveWrite['kind'], string> = { write: 'Écrit', edit: 'Modifie', review: 'Relit' }
 
-  // `stepCount` à 0 : nombre d'étapes inconnu d'avance (agent sur un dépôt GitHub, étape 277) — « Étape 3 »
-  // seul, jamais un « sur 0 » ni un total inventé.
-  const title =
-    progress.stepCount > 0
-      ? `Étape ${progress.stepIndex} sur ${progress.stepCount} · ${progress.label}`
-      : `Étape ${progress.stepIndex} · ${progress.label}`
-
-  // L'ordre compte : un silence prolongé est l'information la plus utile du moment, il passe devant le
-  // reste. Sinon, les caractères écrits (qui montent) prouvent que ça avance.
-  if (progress.idleMs >= STALL_HINT_MS) {
-    return { title, detail: `${elapsed} · rien reçu du modèle depuis ${formatDuration(progress.idleMs)}` }
+export function formatCodeLive(live: CodeLiveWrite | null, progress: CodeGenProgress | null): CodeLiveText {
+  const stall = progress && progress.idleMs >= STALL_HINT_MS ? `rien reçu du modèle depuis ${formatDuration(progress.idleMs)}` : null
+  if (live) {
+    return {
+      action: LIVE_VERB[live.kind],
+      path: live.path,
+      lines: live.lines > 0 ? `+${live.lines} ${live.lines === 1 ? 'ligne' : 'lignes'}` : null,
+      stall
+    }
   }
-  if (progress.charsWritten > 0) {
-    return { title, detail: `${elapsed} · ${progress.charsWritten.toLocaleString('fr-FR')} caractères écrits` }
-  }
-  return { title, detail: `${elapsed} · le modèle réfléchit…` }
+  return { action: !progress || progress.thinking ? 'Réfléchit…' : 'Travaille…', path: null, lines: null, stall }
 }

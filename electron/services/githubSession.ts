@@ -1,6 +1,6 @@
 import { config } from '../config'
 import { chosenThink } from '../../shared/effort'
-import type { CodeActivity, CodeGenProgress, CodeNarration, GithubDeviceCode, GithubRepoSummary, GithubStatus, RepoAgentResult, RepoChange, RepoCommitResult, RepoView } from '../../shared/ipc'
+import type { CodeActivity, CodeGenProgress, CodeLiveWrite, CodeNarration, GithubDeviceCode, GithubRepoSummary, GithubStatus, RepoAgentResult, RepoChange, RepoCommitResult, RepoView } from '../../shared/ipc'
 import { GenerationStoppedError, createModelStepRunner, isAbortError, readModelMaxContext, resolveCodeModel } from './codeGenerator'
 import {
   GithubClient,
@@ -238,6 +238,7 @@ export interface RunGithubAgentOptions {
   onStatus: (message: string) => void
   onActivity?: (activity: CodeActivity) => void
   onNarration?: (narration: CodeNarration) => void
+  onLive?: (live: CodeLiveWrite | null) => void
   onProgress?: (progress: CodeGenProgress) => void
   signal?: AbortSignal
 }
@@ -274,6 +275,7 @@ export async function runGithubAgent(fullName: string, request: string, options:
       onStatus: options.onStatus,
       onActivity: options.onActivity,
       onNarration: options.onNarration,
+      onLive: options.onLive,
       signal: options.signal,
       maxHistoryChars: historyBudgetChars(modelMax)
     })

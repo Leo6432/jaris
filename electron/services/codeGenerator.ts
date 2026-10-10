@@ -6,7 +6,7 @@ import { chosenThink, type ThinkValue } from '../../shared/effort'
 import { pickBestCodeModel } from './hardwareScan'
 import { getProfile } from './profileStore'
 import { IMAGE_FOR_CODE_SYSTEM_PROMPT, describeImage } from './vision'
-import type { CodeActivity, CodeGenProgress, GeneratedApp, GeneratedAppSummary, Profile } from '../../shared/ipc'
+import type { CodeActivity, CodeGenProgress, CodeLiveWrite, GeneratedApp, GeneratedAppSummary, Profile } from '../../shared/ipc'
 import { diffLines } from '../../shared/lineDiff'
 import { getDataRoot } from './dataLocation'
 
@@ -110,6 +110,8 @@ export interface GenerateAppOptions {
   onProgress?: (progress: CodeGenProgress) => void
   /** Ce qui a été écrit dans index.html (étape 286) : « Modifié index.html +500 −3 » dans la conversation. */
   onActivity?: (activity: CodeActivity) => void
+  /** index.html pendant qu'il s'écrit, ligne par ligne (étape 288) ; `null` entre deux étapes. */
+  onLive?: (live: CodeLiveWrite | null) => void
   /** Arrêt demandé par l'utilisateur (bouton "Arrêter"). */
   signal?: AbortSignal
 }
@@ -640,7 +642,32 @@ export async function generateApp(
   imageBase64?: string,
   options: GenerateAppOptions = {}
 ): Promise<GeneratedApp> {
-  const { onProgress, onActivity, signal } = options
+  const { onProgress, onActivity, onLive, signal } = options
+
+  /**
+   * Étape 288 (Léo : « mets ce qu'il fait en direct, par exemple code index.html plus 20 lignes ») : chaque ligne du
+   * fichier reçue du modèle fait avancer « Écrit index.html · +N lignes ». La ligne disparaît à la fin de l'étape.
+   */
+  const liveStep = async (kind: CodeLiveWrite['kind'], step: () => Promise<OllamaMessage>): Promise<OllamaMessage> => {
+    if (!onLive) return step()
+    onLive({ kind, path: 'index.html', lines: 0 })
+    try {
+      return await step()
+    } finally {
+      onLive(null)
+    }
+  }
+  const countLines = (kind: CodeLiveWrite['kind']): ((delta: string) => void) | undefined => {
+    if (!onLive) return undefined
+    let lines = 0
+    return (delta) => {
+      let added = 0
+      for (const char of delta) if (char === '\n') added += 1
+      if (added === 0) return
+      lines += added
+      onLive({ kind, path: 'index.html', lines })
+    }
+  }
   const profile = await getProfile()
 
   /**
@@ -703,10 +730,15 @@ export async function generateApp(
     { role: 'user', content: userPrompt }
   ]
   const expectedChars = currentHtml ? currentHtml.length : NEW_APP_EXPECTED_CHARS
-  const first = await runModelStep(
-    currentHtml ? "Modification de l'application" : "Écriture de l'application",
-    generateMessages,
-    expectedChars
+  const writeKind: CodeLiveWrite['kind'] = currentHtml ? 'edit' : 'write'
+  const first = await liveStep(writeKind, () =>
+    runModelStep(
+      currentHtml ? "Modification de l'application" : "Écriture de l'application",
+      generateMessages,
+      expectedChars,
+      undefined,
+      countLines(writeKind)
+    )
   )
   let draft = extractHtml(first.content)
   if (!draft) {
@@ -739,7 +771,7 @@ export async function generateApp(
     // première — l'annoncer évite de laisser croire que l'étape en cours patine. Le total prévu monte
     // d'autant : mieux vaut un total qui s'ajuste qu'une "étape 4 sur 3".
     steps.count += 1
-    const retry = await runModelStep('Nouvelle tentative', retryMessages, expectedChars)
+    const retry = await liveStep(writeKind, () => runModelStep('Nouvelle tentative', retryMessages, expectedChars, undefined, countLines(writeKind)))
     draft = extractHtml(retry.content)
     if (!draft) {
       // Un message générique ("reformule, ou relance") ne dit rien de la VRAIE cause si ça se reproduit :
@@ -766,7 +798,7 @@ export async function generateApp(
         content: `Demande initiale de l'utilisateur : ${description}\n\nCode à relire :\n\n\`\`\`html\n${draft}\n\`\`\``
       }
     ]
-    const reviewed = await runModelStep('Relecture du code', critiqueMessages, draft.length)
+    const reviewed = await liveStep('review', () => runModelStep('Relecture du code', critiqueMessages, draft.length, undefined, countLines('review')))
     const reviewedHtml = extractHtml(reviewed.content)
     if (reviewedHtml) {
       final = reviewedHtml
