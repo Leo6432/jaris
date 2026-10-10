@@ -1738,7 +1738,6 @@ p.capacity-scan__tier-missing {
   display: flex;
   align-items: center;
   justify-content: center;
-  -webkit-app-region: no-drag;
   animation: jaris-orb-pop-in 0.22s ease-out;
   /* voiceLayoutRef (App.tsx) recalcule la taille de l'orbe dès que .app__voice-footer change de hauteur (ex:
      le transcript qui apparaît au début de "réfléchit") : sans transition, ce changement de taille est un
@@ -1774,11 +1773,13 @@ p.capacity-scan__tier-missing {
  * transparent) ; le contenu est ancré en HAUT (flex-start), donc collé au vrai bord haut de l'écran — une
  * réponse longue pousse le tout vers le bas au lieu de laisser un vide entre l'orbe et le bord de l'écran.
  */
+/* Étape 275 (Léo : « si on prend le bout du widget on peut le déplacer », puis « il ne doit pas bouger ») :
+   plus de zone de déplacement — le widget est une encoche fixe en haut au centre ; on pouvait le traîner
+   ailleurs, et il revenait en haut au centre au premier changement d'état de Jaris. */
 .app--widget {
   justify-content: flex-start;
   gap: 10px;
   padding: 16px 14px;
-  -webkit-app-region: drag;
 }
 
 /*
@@ -1848,7 +1849,6 @@ p.capacity-scan__tier-missing {
   border-radius: 999px;
   box-shadow: none;
   cursor: pointer;
-  -webkit-app-region: no-drag;
 }
 
 .chat-widget__bar {
@@ -1860,11 +1860,6 @@ p.capacity-scan__tier-missing {
   border: 1px solid var(--hud-line);
   border-radius: 999px;
   box-shadow: none;
-  /* `.app--widget` met TOUTE la fenêtre en zone de déplacement (`-webkit-app-region: drag`) pour qu'on
-     puisse attraper le widget : sans cette exception, un champ de saisie posé dedans serait impossible à
-     cliquer ET impossible à remplir — Chromium donne le geste à la fenêtre avant le champ. Piège de la
-     même famille que le conteneur en `pointer-events: none` qui rendait une case à cocher incliquable. */
-  -webkit-app-region: no-drag;
 }
 
 /* La règle générale `input, textarea, select` (plus haut dans ce fichier) impose bordure/fond/coins droits
@@ -1901,7 +1896,6 @@ p.capacity-scan__tier-missing {
   color: var(--hud-text-dim);
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
-  -webkit-app-region: no-drag;
 }
 
 .chat-widget__send:not(:disabled):hover {
@@ -1929,7 +1923,6 @@ p.capacity-scan__tier-missing {
   box-shadow: none;
   max-height: 300px;
   overflow-y: auto;
-  -webkit-app-region: no-drag;
 }
 
 .chat-widget__question {
@@ -1974,7 +1967,6 @@ p.capacity-scan__tier-missing {
   max-width: 270px;
   max-height: 380px;
   overflow-y: auto;
-  -webkit-app-region: no-drag;
 }
 
 .app__conversation--widget p {

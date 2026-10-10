@@ -13,8 +13,8 @@ import test from 'node:test'
  *
  * Testé dans un VRAI navigateur avec le VRAI CSS compilé, parce que les deux choses qui peuvent casser ici
  * ne se voient pas en relisant le code :
- * - le champ de saisie est posé dans une fenêtre entièrement en zone de déplacement
- *   (`-webkit-app-region: drag`, .app--widget) : sans exception explicite, il serait impossible à remplir ;
+ * - le champ de saisie doit rester cliquable : une zone de déplacement (`-webkit-app-region: drag`) le rendrait
+ *   impossible à remplir — il n'y en a plus du tout depuis l'étape 275 (le widget ne se déplace plus) ;
  * - la règle générale `input, ... { border: ... !important }` redessinerait un cadre carré à l'intérieur de
  *   la pilule arrondie (même piège que le composeur du Chat et le curseur de longueur de contexte).
  */
@@ -241,16 +241,30 @@ test('le halo du widget vocal inactif possède lui aussi sa marge complète', op
   })
 })
 
-test('on peut vraiment TAPER dans la barre malgré la zone de déplacement de la fenêtre', options, async () => {
+test('on peut vraiment TAPER dans la barre, et rien dans le widget ne permet de le déplacer', options, async () => {
   await withWidget(async (page) => {
     // Un vrai clic aux coordonnées du champ (pas un fill() qui écrit dedans sans passer par la souris) :
     // c'est précisément ce que `-webkit-app-region: drag` casserait.
     await page.click('.chat-widget__input')
     await page.keyboard.type('quel temps fait-il ?')
     assert.equal(await page.inputValue('.chat-widget__input'), 'quel temps fait-il ?')
-    const dragRegion = await page.$eval('.chat-widget__bar', (el) => getComputedStyle(el).webkitAppRegion)
-    assert.equal(dragRegion, 'no-drag', 'la barre reste en zone de déplacement : impossible d’y écrire')
+    // Étape 275 (Léo : « si on prend le bout du widget on peut le déplacer » — « il ne doit pas bouger ») :
+    // aucune zone de déplacement, ni sur la barre, ni sur son bord.
+    const dragging = await page.evaluate(() =>
+      [document.documentElement, ...document.querySelectorAll('*')].filter((el) => getComputedStyle(el).webkitAppRegion === 'drag').map((el) => el.className || el.tagName)
+    )
+    assert.deepEqual(dragging, [], 'une partie du widget permet encore de le déplacer')
   })
+})
+
+test('le widget ne se déplace pas : seule la barre de titre de la fenêtre principale en est une, et Windows le refuse aussi', () => {
+  const css = readFileSync(join(projectRoot, 'src/index.css'), 'utf8')
+  // Chaque règle qui déclare une zone de déplacement : seulement `.titlebar` (fenêtre principale).
+  const dragRules = [...css.matchAll(/([^{}]+)\{[^{}]*-webkit-app-region:\s*drag/g)].map((m) => m[1].replace(/\/\*[\s\S]*?\*\//g, '').trim())
+  assert.deepEqual(dragRules, ['.titlebar'], `zone de déplacement hors de la barre de titre : ${dragRules.join(', ')}`)
+  const main = readFileSync(join(projectRoot, 'electron/main.ts'), 'utf8')
+  const widgetWindow = main.slice(main.indexOf('function createWidgetWindow'), main.indexOf('webPreferences', main.indexOf('function createWidgetWindow')))
+  assert.match(widgetWindow, /movable: false/, 'la fenêtre du widget reste déplaçable par Windows')
 })
 
 test('le champ n’a pas de second cadre carré à l’intérieur de la pilule arrondie', options, async () => {

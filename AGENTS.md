@@ -7315,3 +7315,17 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   pas d'indicateur pendant la recherche, une seule recherche après sa fin), `scripts/test-web-activity.mjs`
   (fusion en cours → terminée, signalement au début puis à la fin), `scripts/test-chat-session-restore.mjs`.
   Vérifié en remettant l'ancienne règle CSS et l'indicateur pendant la recherche : le test échoue bien.
+
+- **Étape 275 (v0.32.9), le widget ne se déplace plus (Léo : « si on prend le bout du widget on peut le
+  déplacer », puis, question à choix à l'appui : « il ne doit pas bouger »).** Toute la fenêtre du widget était
+  en zone de déplacement (`-webkit-app-region: drag` sur `.app--widget`, depuis l'étape 19), avec des exceptions
+  « no-drag » pour l'orbe, la pilule, la barre de saisie, la réponse… Attrapé par son bord transparent, il se
+  laissait traîner ailleurs, puis revenait en haut au centre au premier changement d'état de Jaris
+  (`positionWidgetWindow` recalcule toujours cette place). La zone de déplacement est retirée, et avec elle les
+  cinq exceptions qui n'existaient que pour la contrer ; la fenêtre est en plus `movable: false`, pour que
+  Windows lui-même refuse de la déplacer. Seule zone de déplacement restante : la barre de titre de la fenêtre
+  principale. La phrase de Léo pouvait vouloir dire « c'est un bug » ou « je veux pouvoir le déplacer » —
+  tranché par une question à choix plutôt que deviné.
+  Régression : `scripts/test-chat-widget-ui.mjs` (aucun élément du widget en zone de déplacement ; la seule règle
+  CSS qui en déclare une est `.titlebar` ; la fenêtre du widget a `movable: false`). Vérifié en remettant la zone
+  de déplacement, puis en retirant `movable: false`. Non vérifiable ici : le comportement exact sous Windows.

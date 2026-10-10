@@ -487,6 +487,9 @@ function createWidgetWindow(): BrowserWindow {
     backgroundColor: '#00000000',
     hasShadow: false,
     resizable: false,
+    // Étape 275 (Léo : « il ne doit pas bouger ») : une encoche fixe en haut au centre, jamais déplaçable —
+    // pas de zone de déplacement dans la page (index.css) ET refusé par Windows lui-même.
+    movable: false,
     skipTaskbar: true,
     show: false,
     webPreferences: {
