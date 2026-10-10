@@ -7453,3 +7453,15 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   pu être testé (le proxy limite cette session au dépôt jaris). **Leçon générale : un cas limite (dépôt vide,
   liste vide, premier usage) traité comme une erreur « pour être sûr » devient un blocage dès le premier essai
   réel — c'est souvent exactement le cas que l'utilisateur teste en premier.**
+
+- **Dépôt et branche dans le champ, comme ChatGPT (étape 280, Léo, capture à l'appui : « enlève dépôt vide et la
+  branche mets pas en haut mais en bas comme le dépôt »)** : l'en-tête du dépôt (nom, « Privé », sélecteur de
+  branche, « Dépôt vide » / « N fichiers ») est retiré. La branche devient un bouton du champ de saisie
+  (`BranchPicker.tsx`), juste après le dépôt, dans la même famille que les autres boutons. Le panneau du dépôt
+  n'apparaît plus qu'avec quelque chose à montrer (réponse, changements, enregistrement) : un dépôt tout juste
+  ouvert affiche donc l'accueil centré avec le champ, comme une nouvelle discussion. Deux boutons voisins ne
+  portent plus le même dessin : le dépôt a une icône de classeur, la branche garde l'icône de branche. Quand des
+  changements attendent, le panneau des branches EXPLIQUE pourquoi on ne peut pas en changer, au lieu d'un bouton
+  grisé muet. CSS mort de l'ancien en-tête retiré (vérifié par grep). Régression : `scripts/test-github-ui.mjs`
+  (boutons sur la même ligne DANS le champ, aucun panneau ni « Dépôt vide » en haut, changement de branche
+  réellement transmis et affiché, explication quand des changements attendent).

@@ -17,15 +17,16 @@ interface Props {
   disabled?: boolean
 }
 
-/** Branche de git (neutre, sans logo de marque). */
+/**
+ * Un dépôt (un classeur), sans logo de marque. Étape 280 : la branche a désormais son propre bouton à côté, avec
+ * l'icône de branche — deux boutons voisins ne doivent pas porter le même dessin.
+ */
 export function RepoIcon(): JSX.Element {
   return (
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="6" cy="5" r="2.2" />
-      <circle cx="6" cy="19" r="2.2" />
-      <circle cx="18" cy="7" r="2.2" />
-      <path d="M6 7.2v9.6" />
-      <path d="M18 9.2c0 4.3-6 3.8-11 7.4" />
+      <path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z" />
+      <path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3" />
+      <path d="M9 7h6" />
     </svg>
   )
 }
@@ -107,7 +108,7 @@ export default function GithubPicker({ repo, onOpenRepo, onCloseRepo, disabled =
     <div className="effort-picker github-picker" ref={rootRef}>
       <button
         type="button"
-        className={`effort-picker__trigger github-picker__trigger${open ? ' effort-picker__trigger--open' : ''}${repo ? ' github-picker__trigger--active' : ''}`}
+        className={`effort-picker__trigger github-picker__trigger repo-picker__trigger${open ? ' effort-picker__trigger--open' : ''}${repo ? ' github-picker__trigger--active' : ''}`}
         onClick={() => setOpen(!open)}
         disabled={disabled}
         title={repo ? `Dépôt GitHub : ${repo.fullName} (${repo.branch})` : 'Travailler sur un dépôt GitHub'}

@@ -6,6 +6,10 @@ import type { RepoChange, RepoView } from '../../shared/ipc'
  * Un dépôt GitHub ouvert dans le mode Code (étape 277) : ce que Jaris a répondu, puis CHAQUE changement préparé,
  * ligne par ligne, avant le seul bouton qui écrit sur GitHub. Rien ne part sans ce clic : c'est la garantie
  * que Léo voit exactement ce qui sera enregistré.
+ *
+ * Étape 280 (Léo, capture à l'appui : « enlève dépôt vide et la branche mets pas en haut mais en bas comme le dépôt,
+ * comme sur ChatGPT ») : plus d'en-tête en haut. Le dépôt ET la branche se choisissent dans le champ de saisie
+ * (GithubPicker, BranchPicker).
  */
 interface Props {
   repo: RepoView
@@ -15,7 +19,6 @@ interface Props {
   defaultMessage: string
   onCommit: (message: string) => Promise<void>
   onDiscard: (path?: string) => Promise<void>
-  onBranch: (branch: string) => Promise<void>
 }
 
 /** Au-delà, la fin d'un très long diff est résumée : l'écran resterait figé sur un fichier réécrit en entier. */
@@ -78,20 +81,11 @@ function ChangeCard({ change, busy, onDiscard }: { change: RepoChange; busy: boo
   )
 }
 
-export default function RepoChanges({ repo, summary, busy, committed, defaultMessage, onCommit, onDiscard, onBranch }: Props): JSX.Element {
+export default function RepoChanges({ repo, summary, busy, committed, defaultMessage, onCommit, onDiscard }: Props): JSX.Element {
   const [message, setMessage] = useState(defaultMessage)
-  const [branches, setBranches] = useState<string[] | null>(null)
 
   // Le message proposé suit la dernière demande, tant que Léo ne l'a pas réécrit lui-même.
   useEffect(() => setMessage(defaultMessage), [defaultMessage])
-
-  useEffect(() => {
-    setBranches(null)
-    void window.jaris
-      .githubListBranches(repo.fullName)
-      .then(setBranches)
-      .catch(() => setBranches([repo.branch]))
-  }, [repo.fullName, repo.branch])
 
   const totals = useMemo(
     () =>
@@ -105,35 +99,9 @@ export default function RepoChanges({ repo, summary, busy, committed, defaultMes
     [repo.changes]
   )
   const hasChanges = repo.changes.length > 0
-  const branchOptions = branches && branches.includes(repo.branch) ? branches : [repo.branch, ...(branches ?? [])]
 
   return (
     <div className="repo-panel">
-      <div className="repo-panel__head">
-        <a className="repo-panel__name" href={repo.htmlUrl} target="_blank" rel="noreferrer" title="Ouvrir sur GitHub">
-          {repo.fullName}
-        </a>
-        {repo.private && <span className="repo-panel__badge">Privé</span>}
-        <label className="repo-panel__branch">
-          <span>Branche</span>
-          <select
-            value={repo.branch}
-            onChange={(event) => void onBranch(event.target.value)}
-            disabled={busy || hasChanges}
-            title={hasChanges ? 'Enregistre ou annule tes changements avant de changer de branche.' : 'Branche sur laquelle Jaris travaille'}
-          >
-            {branchOptions.map((branch) => (
-              <option key={branch} value={branch}>
-                {branch}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="repo-panel__count">
-          {repo.fileCount === 0 ? 'Dépôt vide' : `${repo.fileCount.toLocaleString('fr-FR')} fichiers${repo.truncated ? ' (liste incomplète)' : ''}`}
-        </span>
-      </div>
-
       {summary && <p className="repo-panel__summary">{summary}</p>}
 
       {committed && (

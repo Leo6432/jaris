@@ -6965,6 +6965,13 @@ select {
   color: var(--hud-text);
 }
 
+/* Un nom de branche peut être long (« claude/ma-longue-branche ») : coupé, jamais poussé hors du champ. */
+.branch-picker__name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .github-picker__panel {
   width: 340px;
   padding: 10px;
@@ -7155,63 +7162,6 @@ select {
   flex-direction: column;
   gap: 12px;
   padding-top: 8px;
-}
-
-/* Dépôt tout juste ouvert : l'en-tête du dépôt reste en haut, sans grandir, et la question d'accueil avec le
-   champ se centrent dans l'espace restant (les deux marges automatiques se partagent la place libre). */
-.code-panel:has(.repo-panel + .empty-state) > .repo-panel {
-  flex: 0 0 auto;
-  margin-bottom: auto;
-}
-
-.code-panel:has(.repo-panel + .empty-state) > .composer {
-  margin-bottom: auto;
-}
-
-.repo-panel__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 14px;
-  font-size: 13px;
-  color: var(--hud-text-dim);
-}
-
-.repo-panel__name {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--hud-text);
-  text-decoration: none;
-}
-
-.repo-panel__name:hover {
-  text-decoration: underline;
-}
-
-.repo-panel__badge {
-  padding: 2px 8px;
-  font-size: 11px;
-  border: 1px solid var(--hud-line);
-  border-radius: 999px;
-}
-
-.repo-panel__branch {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.repo-panel__branch select {
-  height: 30px;
-  max-width: 220px;
-  padding: 0 8px;
-  font-family: var(--hud-font-body);
-  font-size: 13px;
-}
-
-.repo-panel__count {
-  margin-left: auto;
-  color: var(--hud-text-faint);
 }
 
 .repo-panel__summary {

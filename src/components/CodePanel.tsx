@@ -9,6 +9,7 @@ import type { ImageAttachment } from '@/lib/imageAttachment'
 import type { CodeGenProgress, GeneratedApp, GeneratedAppSummary } from '../../shared/ipc'
 import ModelEffortPicker from './ModelEffortPicker'
 import GithubPicker from './GithubPicker'
+import BranchPicker from './BranchPicker'
 import RepoChanges from './RepoChanges'
 import { ipcErrorMessage } from '@/lib/ipcError'
 import type { RepoView } from '../../shared/ipc'
@@ -323,7 +324,8 @@ export default function CodePanel(): JSX.Element {
             (étape 97), il ne reste donc ici que la phrase qui dit à quoi sert ce mode — sans elle, l'écran
             serait entièrement vide avant la première génération. */}
         {/* Étape 277 : un dépôt GitHub ouvert prend la place de l'application générée. */}
-        {repo && (
+        {/* Étape 280 : rien en haut tant qu'il n'y a rien à montrer — le dépôt et sa branche sont dans le champ. */}
+        {repo && (repo.changes.length > 0 || repoSummary || committed) && (
           <RepoChanges
             repo={repo}
             summary={repoSummary}
@@ -332,7 +334,6 @@ export default function CodePanel(): JSX.Element {
             defaultMessage={commitMessage}
             onCommit={commitRepo}
             onDiscard={discardRepo}
-            onBranch={changeBranch}
           />
         )}
 
@@ -493,6 +494,7 @@ export default function CodePanel(): JSX.Element {
           extraActions={
             <>
               <GithubPicker repo={repo} onOpenRepo={(fullName) => openRepo(fullName)} onCloseRepo={closeRepo} disabled={generating || committing} />
+              {repo && <BranchPicker repo={repo} onChange={changeBranch} disabled={generating || committing} />}
               <ModelEffortPicker mode="code" disabled={generating} />
             </>
           }

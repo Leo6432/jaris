@@ -77,7 +77,7 @@ window.jaris = {
   githubOpenRepo: (fullName, branch) => {
     window.__calls.open.push([fullName, branch])
     if (window.__emptyRepo) return Promise.resolve({ ...VIEW, fileCount: 0 })
-    return Promise.resolve(window.__agentDone ? CHANGED : VIEW)
+    return Promise.resolve({ ...(window.__agentDone ? CHANGED : VIEW), branch: branch ?? 'main' })
   },
   githubRunAgent: (fullName, request) => {
     window.__calls.run.push([fullName, request])
@@ -142,13 +142,13 @@ async function withPage(run, { available = true, width = 1280 } = {}) {
 
 /** Connexion complète puis ouverture de leo/projet, partagée par plusieurs tests. */
 async function connectAndOpen(page) {
-  await page.click('.github-picker__trigger')
+  await page.click('.repo-picker__trigger')
   await page.click('.github-picker__primary')
   await page.waitForSelector('.github-picker__code')
   await page.evaluate(() => window.__approve())
   await page.waitForSelector('.github-picker__repo')
   await page.click('.github-picker__repo >> text=leo/projet')
-  await page.waitForSelector('.repo-panel')
+  await page.waitForSelector('.branch-picker__trigger')
 }
 
 const options = { skip: chromium ? false : 'Playwright indisponible dans cet environnement' }
@@ -165,7 +165,7 @@ test('sans application GitHub configurée, aucun bouton GitHub', options, async 
 
 test('connexion : le code à coller s’affiche, puis la liste des dépôts du compte', options, async () => {
   await withPage(async (page) => {
-    await page.click('.github-picker__trigger')
+    await page.click('.repo-picker__trigger')
     assert.match(await page.textContent('.github-picker__panel'), /Connecte ton compte GitHub/)
     await page.click('.github-picker__primary')
     await page.waitForSelector('.github-picker__code')
@@ -183,7 +183,7 @@ test('connexion : le code à coller s’affiche, puis la liste des dépôts du c
 
 test('annuler la connexion ne montre pas d’erreur, et revient au bouton « Se connecter »', options, async () => {
   await withPage(async (page) => {
-    await page.click('.github-picker__trigger')
+    await page.click('.repo-picker__trigger')
     await page.click('.github-picker__primary')
     await page.waitForSelector('.github-picker__code')
     await page.click('.github-picker__secondary >> text=Annuler')
@@ -195,9 +195,19 @@ test('annuler la connexion ne montre pas d’erreur, et revient au bouton « Se 
 test('un dépôt ouvert change le champ, puis les changements s’affichent ligne par ligne, SANS rien enregistrer', options, async () => {
   await withPage(async (page) => {
     await connectAndOpen(page)
-    assert.equal(await page.textContent('.github-picker__trigger .effort-picker__model'), 'projet')
+    assert.equal(await page.textContent('.repo-picker__trigger .effort-picker__model'), 'projet')
     assert.equal(await page.getAttribute('.composer textarea', 'placeholder'), 'Que veux-tu changer dans leo/projet ?')
-    assert.match(await page.textContent('.repo-panel__head'), /leo\/projet/)
+    // Étape 280 (Léo : « la branche mets pas en haut mais en bas comme le dépôt, comme sur ChatGPT ») : dépôt ET
+    // branche dans le champ, rien au-dessus tant que Jaris n'a rien fait.
+    assert.equal(await page.textContent('.branch-picker__name'), 'main')
+    assert.equal(await page.locator('.repo-panel').count(), 0)
+    const chips = await page.evaluate(() => {
+      const composer = document.querySelector('.composer').getBoundingClientRect()
+      const repo = document.querySelector('.repo-picker__trigger').getBoundingClientRect()
+      const branch = document.querySelector('.branch-picker__trigger').getBoundingClientRect()
+      return { inComposer: branch.top >= composer.top && branch.bottom <= composer.bottom, sameRow: Math.abs(branch.top - repo.top) < 2, after: branch.left > repo.left }
+    })
+    assert.deepEqual(chips, { inComposer: true, sameRow: true, after: true })
 
     await page.fill('.composer textarea', 'Corrige les fautes du README')
     await page.click('.composer__send')
@@ -217,8 +227,11 @@ test('un dépôt ouvert change le champ, puis les changements s’affichent lign
     assert.equal(await page.textContent('.repo-diff__line--del .repo-diff__text'), 'Bonjour le mondee')
     assert.equal(await page.textContent('.repo-diff__line--add .repo-diff__text'), 'Bonjour le monde')
     assert.match(await page.textContent('.repo-change__stats'), /\+1\s+−1/)
-    // La branche ne se change pas tant que des changements attendent.
-    assert.equal(await page.isDisabled('.repo-panel__branch select'), true)
+    // La branche ne se change pas tant que des changements attendent — et le panneau dit pourquoi.
+    await page.click('.branch-picker__trigger')
+    assert.match(await page.textContent('.github-picker__panel'), /avant de changer de branche/)
+    assert.equal(await page.locator('.github-picker__panel .github-picker__repo').count(), 0)
+    await page.keyboard.press('Escape')
 
     // RIEN n'est parti sur GitHub tant que Léo n'a pas cliqué.
     assert.deepEqual(await page.evaluate(() => window.__calls.commit), [])
@@ -252,10 +265,25 @@ test('un dépôt tout neuf s’ouvre (étape 279) et propose de créer, pas d’
       window.__emptyRepo = true
     })
     await connectAndOpen(page)
-    assert.equal(await page.textContent('.repo-panel__count'), 'Dépôt vide')
+    // Étape 280 : plus de « Dépôt vide » en haut (Léo : « enlève dépôt vide »).
+    assert.equal(await page.locator('.repo-panel').count(), 0)
+    assert.doesNotMatch(await page.textContent('.code-panel'), /Dépôt vide/)
     assert.match(await page.textContent('.empty-state__title'), /encore vide/)
     assert.match(await page.textContent('.empty-state'), /Crée un petit site web/)
     assert.equal(await page.locator('.code-panel__error').count(), 0)
+  })
+})
+
+test('changer de branche depuis le champ rouvre le dépôt sur cette branche', options, async () => {
+  await withPage(async (page) => {
+    await connectAndOpen(page)
+    await page.click('.branch-picker__trigger')
+    await page.waitForSelector('.github-picker__panel .github-picker__repo >> text=dev')
+    assert.match(await page.textContent('.github-picker__panel'), /Principale/)
+    await page.click('.github-picker__panel .github-picker__repo >> text=dev')
+    await page.waitForFunction(() => window.__calls.open.some(([, branch]) => branch === 'dev'))
+    assert.deepEqual(await page.evaluate(() => window.__calls.open.at(-1)), ['leo/projet', 'dev'])
+    await page.waitForFunction(() => document.querySelector('.branch-picker__name')?.textContent === 'dev')
   })
 })
 
@@ -291,8 +319,8 @@ test('ouvrir une application de la liste ou « Nouvelle application » quitte le
   await withPage(async (page) => {
     await connectAndOpen(page)
     await page.click('.workspace__new')
-    await page.waitForSelector('.repo-panel', { state: 'detached' })
-    assert.equal(await page.textContent('.github-picker__trigger .effort-picker__model'), 'GitHub')
+    await page.waitForSelector('.branch-picker__trigger', { state: 'detached' })
+    assert.equal(await page.textContent('.repo-picker__trigger .effort-picker__model'), 'GitHub')
   })
 })
 
