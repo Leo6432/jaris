@@ -139,8 +139,8 @@ test('le résultat arrivé pendant qu’on était ailleurs s’affiche au retour
     await page.evaluate(() => window.__finishGen())
     await page.waitForTimeout(100)
     await page.click('#to-code')
-    await page.waitForSelector('.code-panel__done')
-    assert.match(await page.textContent('.code-panel__done'), /Terminé/)
+    await page.waitForSelector('.code-chat__worked')
+    assert.match(await page.textContent('.code-chat__worked'), /Travaillé pendant/)
   })
 })
 

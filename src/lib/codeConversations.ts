@@ -9,9 +9,21 @@ import { readSaved, writeSaved } from './savedSetting'
  * Gardées dans le stockage de la fenêtre (elles survivent à un redémarrage), avec une copie en mémoire : si ce
  * stockage est refusé, elles tiennent au moins le temps de la session au lieu de disparaître au premier clic.
  */
+/** Un fichier de la carte de fin (étape 290) : ses lignes ajoutées et retirées. */
+export interface ChangedFile {
+  path: string
+  kind: 'added' | 'modified' | 'deleted'
+  added: number
+  removed: number
+}
+
 export type ChatTurn =
   | { id: number; kind: 'user' | 'reply' | 'note'; text: string }
   | { id: number; kind: 'activity'; activity: CodeActivity }
+  /** Étape 290 : « Travaillé pendant 2 min 10 » (ou « Arrêté après… »), à la place du bandeau vert de fin. */
+  | { id: number; kind: 'worked'; durationMs: number; stopped?: boolean }
+  /** Étape 290 : la carte « N fichiers modifiés », comme ChatGPT. */
+  | { id: number; kind: 'changes'; files: ChangedFile[] }
 
 export interface RecentRepo {
   fullName: string

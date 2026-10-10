@@ -7767,3 +7767,183 @@ select {
     display: none;
   }
 }
+
+/* Étape 290 (Léo, capture de ChatGPT à l'appui : « à la fin ça doit faire comme ChatGPT, pas comme ça ») : plus de
+   bandeau vert en fin de travail. Une ligne discrète pour la durée, puis la carte des fichiers modifiés. */
+.code-chat__worked {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--hud-text-faint);
+}
+
+.code-chat__worked::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--hud-line);
+}
+
+.changes-card {
+  /* Sans ça, dans le fil (colonne flex de hauteur limitée), « overflow: hidden » laisse la carte s'écraser à 0 px
+     dès que la conversation déborde — vu sur la capture d'une fenêtre étroite. */
+  flex: 0 0 auto;
+  border: 1px solid var(--hud-line);
+  border-radius: 14px;
+  background: var(--hud-panel);
+  overflow: hidden;
+}
+
+.changes-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 12px 14px;
+}
+
+.changes-card__icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  color: var(--hud-text);
+  background: var(--jv-hover);
+}
+
+.changes-card__summary {
+  /* Colonne de conversation étroite : les boutons passent sous le titre (à droite) plutôt que de l'écraser. */
+  flex: 1 1 120px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 13px;
+}
+
+.changes-card__summary strong {
+  font-weight: 600;
+  color: var(--hud-text);
+}
+
+.changes-card__totals {
+  font-family: var(--hud-font-mono);
+  font-size: 12px;
+}
+
+.changes-card__actions {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.changes-card__undo,
+.changes-card__show {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  font-family: var(--hud-font-body);
+  font-size: 13px;
+  color: var(--hud-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.changes-card__show {
+  border-color: var(--hud-line);
+}
+
+.changes-card__undo:hover:not(:disabled),
+.changes-card__show:hover {
+  background: var(--jv-hover);
+}
+
+.changes-card__undo:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.changes-card__files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--hud-line);
+}
+
+.changes-card__file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 14px;
+  font-family: var(--hud-font-body);
+  font-size: 13px;
+  text-align: left;
+  color: var(--hud-text);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+button.changes-card__file {
+  cursor: pointer;
+}
+
+button.changes-card__file:hover {
+  background: var(--jv-hover);
+}
+
+.changes-card__path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.changes-card__dir,
+.changes-card__deleted {
+  color: var(--hud-text-faint);
+}
+
+.changes-card__stats {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  font-family: var(--hud-font-mono);
+  font-size: 12px;
+}
+
+.changes-card__more {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 14px;
+  font-family: var(--hud-font-body);
+  font-size: 13px;
+  color: var(--hud-text-dim);
+  /* Comme ChatGPT : la dernière ligne, plus claire, se lit comme un bouton qui déplie la liste. */
+  background: rgba(var(--jv-ink-rgb), 0.04);
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.changes-card__more:hover {
+  color: var(--hud-text);
+  background: var(--jv-hover);
+}

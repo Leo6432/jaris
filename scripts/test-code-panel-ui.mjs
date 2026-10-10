@@ -249,21 +249,22 @@ test('conversation à gauche, aperçu à droite, champ de saisie en bas de la co
   })
 })
 
-test('la conversation garde les demandes ; le bandeau de fin rejoint l’historique à la demande suivante', options, async () => {
+test('la conversation garde les demandes ; la fin de la précédente y reste, sans ses boutons', options, async () => {
   await withPage(async (page) => {
     await startGeneration(page)
     assert.equal(await page.textContent('.code-chat__user'), 'une liste de courses')
     // La demande n'est plus en double : le champ est vidé dès l'envoi, comme ChatGPT.
     assert.equal(await page.inputValue('.composer__input'), '')
     await page.evaluate(() => window.__finishGen())
-    await page.waitForSelector('.code-panel__done')
-    // Deuxième demande : la fin de la première ne disparaît pas, elle devient un message de la conversation.
+    await page.waitForSelector('.changes-card')
+    // Deuxième demande : la fin de la première ne disparaît pas, elle reste dans la conversation.
     await page.fill('.composer textarea', 'ajoute un mode sombre')
     await page.click('.composer__send')
     await page.waitForSelector('.code-chat__live')
     const thread = await page.locator('.code-chat__thread > *').evaluateAll((nodes) => nodes.map((n) => n.className.split(' ')[0]))
-    assert.deepEqual(thread.slice(0, 3), ['code-chat__user', 'code-chat__reply', 'code-chat__user'])
-    assert.match(await page.textContent('.code-chat__reply'), /Terminé en \d+ s/)
+    assert.deepEqual(thread.slice(0, 4), ['code-chat__user', 'code-chat__worked', 'changes-card', 'code-chat__user'])
+    assert.match(await page.textContent('.code-chat__worked'), /^Travaillé pendant \d+ s$/)
+    assert.equal(await page.locator('.changes-card__actions button').count(), 0, 'une carte ancienne garde ses boutons')
   })
 })
 
@@ -535,7 +536,7 @@ test('aperçu agrandi : une génération en cours reste visible, et « Nouvelle 
     await page.evaluate(() => window.__emitLive({ kind: 'write', path: 'index.html', lines: 20 }))
     assert.equal(await page.textContent('.code-preview__busy'), 'Écrit index.html +20 lignes')
     await page.evaluate(() => window.__finishGen())
-    await page.waitForSelector('.code-panel__done', { state: 'attached' })
+    await page.waitForSelector('.code-chat__worked', { state: 'attached' })
     assert.equal(await page.locator('.code-preview__busy').count(), 0)
 
     // Plus rien à montrer : la conversation revient d'elle-même, sinon elle resterait repliée sans bouton pour la
@@ -735,27 +736,35 @@ test("on arrête par le bouton du champ, comme dans le Chat — sans erreur roug
 
     // L'arrêt est une décision de l'utilisateur, pas une panne : il s'annonce à la place de la ligne en direct,
     // jamais en rouge.
-    await page.waitForSelector('.code-panel__done')
-    assert.match(await page.textContent('.code-panel__done'), /Génération arrêtée après \d+ s/)
+    await page.waitForSelector('.code-chat__worked--stopped')
+    assert.match(await page.textContent('.code-chat__worked'), /^Arrêté après \d+ s$/)
     assert.equal(await page.locator('.code-panel__error').count(), 0)
     assert.equal(await page.locator('.code-chat__live').count(), 0)
-    // Neutre, et surtout pas la couleur de succès : ce n'est pas une application livrée.
-    const stopped = await page.evaluate(() => {
-      const css = getComputedStyle(document.querySelector('.code-panel__done'))
-      return { color: css.color, shadow: css.boxShadow }
-    })
-    assert.doesNotMatch(stopped.color, /49, 255, 176/)
-    assert.equal(stopped.shadow, 'none')
+    // Rien de livré : aucune carte de fichiers, et pas la couleur de succès.
+    assert.equal(await page.locator('.changes-card').count(), 0)
+    const stopped = await page.evaluate(() => getComputedStyle(document.querySelector('.code-chat__worked')).color)
+    assert.doesNotMatch(stopped, /49, 255, 176/)
   })
 })
 
-test('une génération terminée annonce sa durée', options, async () => {
+test('une génération terminée finit comme ChatGPT : la durée, puis la carte du fichier écrit (étape 290)', options, async () => {
   await withPage(async (page) => {
     await startGeneration(page)
     await page.evaluate(() => window.__finishGen())
-    await page.waitForSelector('.code-panel__done')
-    assert.match(await page.textContent('.code-panel__done'), /Terminé en \d+ s/)
+    await page.waitForSelector('.changes-card')
+    assert.match(await page.textContent('.code-chat__worked'), /^Travaillé pendant \d+ s$/)
     assert.equal(await page.locator('.code-chat__live').count(), 0)
+    assert.equal(await page.locator('.code-panel__done').count(), 0, 'le bandeau vert est revenu')
+    const card = await page.evaluate(() => ({
+      title: document.querySelector('.changes-card__summary strong').textContent,
+      file: document.querySelector('.changes-card__name').textContent,
+      buttons: [...document.querySelectorAll('.changes-card__actions button')].map((b) => b.textContent)
+    }))
+    // Une application générée n'a rien à « annuler » sur GitHub : seul « Afficher le code ».
+    assert.deepEqual(card, { title: '1 fichier modifié', file: 'index.html', buttons: ['Afficher le code'] })
+    await page.click('.changes-card__show')
+    await page.waitForSelector('.code-panel__code')
+    assert.match(await page.textContent('.code-panel__code'), /Ma liste/)
   })
 })
 
@@ -867,11 +876,11 @@ test("changer d'application efface le bandeau de la génération précédente", 
       window.__status('2 problème(s) trouvé(s) dans le code, corrigé(s) automatiquement.')
       window.__finishGen()
     })
-    await page.waitForSelector('.code-panel__done')
+    await page.waitForSelector('.code-chat__worked')
 
     // Ouvrir une AUTRE application depuis la colonne de gauche.
     await page.click('.workspace__list li:nth-child(2) .workspace__item')
-    await page.waitForFunction(() => document.querySelectorAll('.code-panel__done').length === 0)
+    await page.waitForFunction(() => document.querySelectorAll('.code-chat__worked, .changes-card').length === 0)
     assert.equal(await page.locator('.code-chat__note').count(), 0, 'les remarques de la génération précédente sont restées')
   })
 })
@@ -880,10 +889,10 @@ test('"Nouvelle application" repart d\'un écran propre', options, async () => {
   await withPage(async (page) => {
     await startGeneration(page)
     await page.evaluate(() => window.__finishGen())
-    await page.waitForSelector('.code-panel__done')
+    await page.waitForSelector('.code-chat__worked')
 
     await page.click('.workspace__new')
-    await page.waitForFunction(() => document.querySelectorAll('.code-panel__done').length === 0)
+    await page.waitForFunction(() => document.querySelectorAll('.code-chat__worked, .changes-card').length === 0)
   })
 })
 
@@ -891,10 +900,13 @@ test('"Nouvelle application" repart d\'un écran propre', options, async () => {
 const threadLines = (page) =>
   page.locator('.code-chat__thread > :not(.empty-state)').evaluateAll((nodes) =>
     nodes.map((node) => {
+      const kind = node.className.split(' ')[0]
+      if (kind === 'code-chat__worked') return kind
+      if (kind === 'changes-card') return `${kind}:${node.querySelector('strong').textContent}`
       const text = node.classList.contains('code-chat__activity')
         ? [...node.querySelectorAll('span:not(.code-chat__activity-stats span):not(.code-chat__live-dot)')].map((part) => part.textContent).join(' ')
         : node.textContent
-      return `${node.className.split(' ')[0]}:${text}`
+      return `${kind}:${text}`
     })
   )
 
@@ -906,7 +918,7 @@ async function generateNewApp(page) {
     window.__apps.unshift({ path: 'C:/Users/leo/Jaris/generated-apps/2026-09-14-liste-de-courses', label: 'liste de courses v2', timestamp: Date.now() })
     window.__finishGen()
   })
-  await page.waitForSelector('.code-panel__done')
+  await page.waitForSelector('.changes-card')
   await page.waitForFunction(() => document.querySelectorAll('.workspace__list li').length === 3)
 }
 
@@ -927,8 +939,8 @@ test('une application garde sa conversation : la rouvrir la retrouve, fin compri
     await page.waitForFunction(() => document.querySelectorAll('.code-chat__user').length === 1)
     const restored = await threadLines(page)
     assert.deepEqual(restored.slice(0, 2), expected)
-    // Le bandeau de fin fait partie de la conversation retrouvée : on sait comment le dernier travail s'est terminé.
-    assert.match(restored[2], /^code-chat__reply:Terminé en \d+ s/)
+    // La fin du travail fait partie de la conversation retrouvée : sa durée, et le fichier écrit.
+    assert.deepEqual(restored.slice(2), ['code-chat__worked', 'changes-card:1 fichier modifié'])
 
     // Une autre application a SA conversation (vide ici), jamais celle de la précédente.
     await page.click('.workspace__item:has-text("jeu snake")')
@@ -971,7 +983,7 @@ test('les conversations survivent à un redémarrage de Jaris (étape 288)', opt
     await page.waitForFunction(() => document.querySelectorAll('.code-chat__user').length === 1)
     const restored = await threadLines(page)
     assert.deepEqual(restored.slice(0, 2), ['code-chat__user:une liste de courses', 'code-chat__activity:Créé index.html +20'])
-    assert.match(restored[2], /^code-chat__reply:Terminé en \d+ s/)
+    assert.deepEqual(restored.slice(2), ['code-chat__worked', 'changes-card:1 fichier modifié'])
   } finally {
     await browser.close()
   }

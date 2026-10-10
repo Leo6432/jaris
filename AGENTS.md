@@ -7706,3 +7706,31 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   machine, écriture refusée, dossier disparu, manifests-v2 et liens comptés, réparation, une relance par minute, appels
   simultanés) et `scripts/test-ollama-pull-repair.mjs` (le modèle déjà là n'est pas retéléchargé). Chaque garde-fou
   vérifié en le retirant. **Non vérifiable ici** : la machine de Léo elle-même — à confirmer en usage réel.
+
+- **« à la fin ça doit faire comme ChatGPT, pas comme ça » (Léo, étape 290, deux captures : la carte « 11 fichiers
+  modifiés +1375 −140 · Annuler · Afficher les modifications » de ChatGPT, et le bandeau vert de Jaris « Terminé en
+  2 min 10 — 1 fichier changé : essaie dans l'aperçu, puis enregistre depuis « Changements » »).** Le bandeau vert est
+  remplacé, pour un dépôt comme pour une application générée, par la fin de ChatGPT : une ligne discrète
+  « Travaillé pendant 2 min 10 » (ou « Arrêté après… »), la réponse de Jaris, puis la carte des fichiers modifiés
+  (`ChangesCard.tsx`) — total des lignes, chaque fichier avec son dossier en retrait et ses +/−, trois fichiers puis
+  « Afficher N autres fichiers ». Pour un dépôt : « Annuler » (tout ce qui est préparé repart, rien n'a été envoyé) et
+  « Afficher les modifications » (onglet « Changements ») ; pour une application : « Afficher le code ». Les lignes
+  sont calculées par la MÊME fonction que l'onglet « Changements » (`diffLines`), pour que les deux ne se contredisent
+  jamais ; et le compte vient toujours des changements réellement préparés — « Aucun fichier n'a été changé » reste dit
+  quand le modèle prétend le contraire.
+  **Plus d'état « bandeau de fin » à part** : la durée et la carte sont des messages de la conversation (`worked`,
+  `changes`). Elles s'enregistrent donc avec elle et reviennent quand on rouvre l'élément, sans le mécanisme
+  d'archivage ni le nettoyage à chaque changement d'élément qu'il demandait (étape 102) : ce qui appartient à UNE
+  conversation ne peut plus s'afficher sur une autre. Seule la carte du DERNIER travail a ses boutons, et « Annuler »
+  disparaît dès qu'il n'y a plus rien à annuler (annulé ou enregistré sur GitHub).
+  **Vrai défaut attrapé sur la capture d'une fenêtre étroite, pas par les tests** : dans le fil (colonne flex de
+  hauteur limitée), la carte en `overflow: hidden` s'écrasait à 0 px dès que la conversation débordait — il n'en
+  restait qu'un trait. Un élément flex dont `overflow` n'est pas `visible` a une hauteur minimale de 0 : il se laisse
+  écraser. Corrigé par `flex: 0 0 auto`. **Leçon générale : dans une colonne flex qui défile, tout enfant en
+  `overflow: hidden` (une carte aux coins arrondis, typiquement) doit refuser de rétrécir** — sinon il disparaît sans
+  la moindre erreur, et seulement quand le contenu déborde, donc jamais sur la capture d'une conversation courte.
+  Régression : `scripts/test-github-ui.mjs` (ordre durée → réponse → carte, contenu de la carte, « Afficher les
+  modifications », « Annuler » sans rien envoyer, plus de bouton après annulation ou enregistrement, plus de trois
+  fichiers, ancienne carte sans boutons, carte jamais écrasée en fenêtre étroite) et `scripts/test-code-panel-ui.mjs`
+  (application : durée puis carte « index.html » avec « Afficher le code », arrêt sans carte, fin retrouvée en
+  rouvrant l'élément). Chaque garde-fou a été vérifié en le retirant.

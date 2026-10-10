@@ -89,14 +89,18 @@ window.jaris = {
     return new Promise((resolve, reject) => {
       window.__finishAgent = () => {
         window.__agentDone = true
-        resolve({ summary: 'Faute corrigée dans le README.', view: CHANGED })
+        resolve({ summary: 'Faute corrigée dans le README.', view: window.__manyChanges ? { ...CHANGED, changes: window.__manyChanges } : CHANGED })
       }
       // Un modèle qui annonce un changement qu'il n'a pas fait (vu pour de vrai) : aucun fichier changé.
       window.__finishAgentEmpty = () => resolve({ summary: "J'ai ajouté 'oeufs'.", view: VIEW })
       window.__failAgent = reject
     })
   },
-  githubDiscardChanges: () => Promise.resolve(VIEW),
+  githubDiscardChanges: (fullName, path) => {
+    window.__calls.discard = [...(window.__calls.discard ?? []), [fullName, path ?? null]]
+    window.__agentDone = false
+    return Promise.resolve(VIEW)
+  },
   // Étape 287 : le site du dépôt, jouable dans l'aperçu. Une adresse différente à chaque demande, comme le vrai main.
   githubPreview: (fullName) => {
     window.__calls.preview.push(fullName)
@@ -247,7 +251,7 @@ test('un dépôt ouvert change le champ, puis les changements s’affichent lign
     )
 
     await page.evaluate(() => window.__finishAgent())
-    await page.waitForSelector('.code-panel__done')
+    await page.waitForSelector('.changes-card')
     // Étape 287 : après le travail de Jaris, à droite c'est le SITE (avec ses changements), pas le menu d'enregistrement.
     await page.waitForFunction((first) => document.querySelector('.code-panel__preview')?.getAttribute('src') !== first, firstSite)
     assert.equal(await page.locator('.repo-change').count(), 0, 'le menu d’enregistrement remplace encore l’aperçu')
@@ -271,7 +275,6 @@ test('un dépôt ouvert change le champ, puis les changements s’affichent lign
       }),
       { title: 'leo/projet', capitalized: 'none', branch: 'main' }
     )
-    assert.match(await page.textContent('.code-panel__done'), /1 fichier changé : essaie dans l'aperçu/)
     assert.equal(await page.textContent('.repo-diff__line--del .repo-diff__text'), 'Bonjour le mondee')
     assert.equal(await page.textContent('.repo-diff__line--add .repo-diff__text'), 'Bonjour le monde')
     assert.match(await page.textContent('.repo-change__stats'), /\+1\s+−1/)
@@ -292,18 +295,121 @@ test('un dépôt ouvert change le champ, puis les changements s’affichent lign
     assert.deepEqual(await page.evaluate(() => window.__calls.commit), [['leo/projet', 'Corrige une faute du README']])
     assert.equal(await page.getAttribute('.repo-panel__committed a', 'href'), 'https://github.com/leo/projet/commit/abc1234def')
     assert.equal(await page.locator('.repo-change').count(), 0)
+    // Étape 290 : une fois enregistré, plus rien à « Annuler » sur la carte de fin — seul l'affichage reste.
+    assert.deepEqual(
+      await page.locator('.changes-card__actions button').evaluateAll((buttons) => buttons.map((b) => b.textContent)),
+      ['Afficher les modifications']
+    )
   })
 })
 
-test('si aucun fichier n’a changé, le bandeau le dit, quoi que le modèle prétende', options, async () => {
+test('si aucun fichier n’a changé, la conversation le dit, quoi que le modèle prétende', options, async () => {
   await withPage(async (page) => {
     await connectAndOpen(page)
     await page.fill('.composer textarea', 'Ajoute oeufs')
     await page.click('.composer__send')
     await page.evaluate(() => window.__finishAgentEmpty())
-    await page.waitForSelector('.code-panel__done')
-    assert.match(await page.textContent('.code-panel__done'), /aucun fichier n'a été changé/)
+    await page.waitForSelector('.code-chat__worked')
+    // Le modèle dit « J'ai ajouté 'oeufs' » : la conversation, elle, dit ce qui s'est vraiment passé.
+    assert.match(await page.textContent('.code-chat__note'), /Aucun fichier n'a été changé/)
+    assert.equal(await page.locator('.changes-card').count(), 0)
     assert.equal(await page.locator('.repo-panel__save').count(), 0)
+  })
+})
+
+/** La carte de fin, lue comme on la voit : titre, totaux, puis chaque fichier et ses lignes. */
+const readChangesCard = (page) =>
+  page.evaluate(() => {
+    const card = [...document.querySelectorAll('.changes-card')].at(-1)
+    const text = (node) => node?.textContent.replace(/\s+/g, ' ').trim() ?? null
+    return {
+      title: text(card.querySelector('.changes-card__summary strong')),
+      totals: text(card.querySelector('.changes-card__totals')),
+      files: [...card.querySelectorAll('.changes-card__file')].map((row) => `${text(row.querySelector('.changes-card__path'))} ${text(row.querySelector('.changes-card__stats'))}`),
+      buttons: [...card.querySelectorAll('.changes-card__actions button')].map(text),
+      more: text(card.querySelector('.changes-card__more'))
+    }
+  })
+
+test('la fin d’un travail ressemble à ChatGPT : durée, réponse, puis la carte des fichiers modifiés (étape 290)', options, async () => {
+  // Léo, capture de ChatGPT à l'appui : « à la fin ça doit faire comme ChatGPT, pas comme ça » — à la place du bandeau
+  // vert « Terminé en 2 min 10 — 1 fichier changé : essaie dans l'aperçu, puis enregistre depuis « Changements » ».
+  await withPage(async (page) => {
+    await connectAndOpen(page)
+    await page.fill('.composer textarea', 'Corrige les fautes du README')
+    await page.click('.composer__send')
+    await page.evaluate(() => window.__finishAgent())
+    await page.waitForSelector('.changes-card')
+    assert.equal(await page.locator('.code-panel__done').count(), 0, 'le bandeau vert est revenu')
+
+    const order = await page.locator('.code-chat__thread > *').evaluateAll((nodes) => nodes.map((n) => n.className.split(' ')[0]))
+    assert.deepEqual(order, ['code-chat__user', 'code-chat__worked', 'code-chat__reply', 'changes-card'])
+    assert.match(await page.textContent('.code-chat__worked'), /^Travaillé pendant \d+ s$/)
+    assert.deepEqual(await readChangesCard(page), {
+      title: '1 fichier modifié',
+      totals: '+1 −1',
+      files: ['README.md +1−1'],
+      buttons: ['Annuler', 'Afficher les modifications'],
+      more: null
+    })
+
+    // « Afficher les modifications » : les lignes, à droite, dans l'onglet « Changements ».
+    await page.click('.changes-card__show')
+    await page.waitForSelector('.repo-change')
+    assert.equal(await page.textContent('.repo-diff__line--add .repo-diff__text'), 'Bonjour le monde')
+
+    // « Annuler » : tout ce qui était préparé repart, et rien n'est jamais parti sur GitHub.
+    await page.click('.changes-card__undo')
+    await page.waitForSelector('.changes-card__undo', { state: 'detached' })
+    assert.deepEqual(await page.evaluate(() => window.__calls.discard), [['leo/projet', null]])
+    assert.deepEqual(await page.evaluate(() => window.__calls.commit), [])
+    assert.match(await page.textContent('.code-chat__thread > :last-child'), /Changement annulé : rien n'a été enregistré sur GitHub/)
+    // La carte reste comme trace de ce qui a été fait, sans boutons qui n'auraient plus de sens.
+    assert.deepEqual((await readChangesCard(page)).buttons, [])
+    assert.equal(await page.locator('.repo-change').count(), 0)
+  })
+})
+
+test('plus de trois fichiers : « Afficher N autres fichiers » déplie la liste ; une ancienne carte perd ses boutons', options, async () => {
+  await withPage(async (page) => {
+    await page.evaluate(() => {
+      window.__manyChanges = ['src/App.tsx', 'src/components/ChatPanel.tsx', 'src/index.css', 'README.md', 'package.json'].map((path) => ({
+        path,
+        kind: 'modified',
+        before: 'a\n',
+        after: 'a\nb\n'
+      }))
+    })
+    await connectAndOpen(page)
+    await page.fill('.composer textarea', 'Refais le design')
+    await page.click('.composer__send')
+    await page.evaluate(() => window.__finishAgent())
+    await page.waitForSelector('.changes-card')
+    let card = await readChangesCard(page)
+    assert.equal(card.title, '5 fichiers modifiés')
+    assert.equal(card.totals, '+5 −0')
+    assert.deepEqual(card.files, ['src/App.tsx +1', 'src/components/ChatPanel.tsx +1', 'src/index.css +1'])
+    assert.equal(card.more, 'Afficher 2 autres fichiers')
+    await page.click('.changes-card__more')
+    card = await readChangesCard(page)
+    assert.equal(card.files.length, 5)
+    assert.equal(card.more, 'Afficher moins')
+    // Le dossier est en retrait, le nom du fichier en avant, comme sur ChatGPT.
+    assert.deepEqual(
+      await page.evaluate(() => {
+        const row = document.querySelector('.changes-card__file')
+        return [getComputedStyle(row.querySelector('.changes-card__dir')).color === getComputedStyle(row.querySelector('.changes-card__name')).color]
+      }),
+      [false]
+    )
+
+    // Deuxième demande : la première carte reste, mais sans boutons (seule la dernière agit).
+    await page.fill('.composer textarea', 'Et le pied de page')
+    await page.click('.composer__send')
+    await page.evaluate(() => window.__finishAgent())
+    await page.waitForFunction(() => document.querySelectorAll('.changes-card').length === 2)
+    const buttons = await page.locator('.changes-card').evaluateAll((cards) => cards.map((c) => c.querySelectorAll('.changes-card__actions button').length))
+    assert.deepEqual(buttons, [0, 2])
   })
 })
 
@@ -418,10 +524,13 @@ test('« Changements » : tout annuler ramène l’aperçu, l’onglet disparaî
 const threadLines = (page) =>
   page.locator('.code-chat__thread > :not(.empty-state)').evaluateAll((nodes) =>
     nodes.map((node) => {
+      const kind = node.className.split(' ')[0]
+      if (kind === 'code-chat__worked') return kind
+      if (kind === 'changes-card') return `${kind}:${node.querySelector('strong').textContent}`
       const text = node.classList.contains('code-chat__activity')
         ? [...node.querySelectorAll('span:not(.code-chat__activity-stats span):not(.code-chat__live-dot)')].map((part) => part.textContent).join(' ')
         : node.textContent
-      return `${node.className.split(' ')[0]}:${text}`
+      return `${kind}:${text}`
     })
   )
 
@@ -445,8 +554,14 @@ test('un dépôt ouvert apparaît à gauche, et sa conversation revient quand on
       window.__emitActivity({ kind: 'edit', path: 'README.md', added: 1, removed: 1 })
       window.__finishAgent()
     })
-    await page.waitForSelector('.code-panel__done')
-    const expected = ['code-chat__user:Corrige les fautes du README', 'code-chat__activity:Modifié README.md +1−1', 'code-chat__reply:Faute corrigée dans le README.']
+    await page.waitForSelector('.changes-card')
+    const expected = [
+      'code-chat__user:Corrige les fautes du README',
+      'code-chat__activity:Modifié README.md +1−1',
+      'code-chat__worked',
+      'code-chat__reply:Faute corrigée dans le README.',
+      'changes-card:1 fichier modifié'
+    ]
 
     // Une application, puis retour au dépôt PAR LA LISTE : tout revient, y compris comment le travail s'est terminé.
     await page.click('.workspace__item:has-text("liste de courses")')
@@ -454,9 +569,8 @@ test('un dépôt ouvert apparaît à gauche, et sa conversation revient quand on
     assert.deepEqual(await threadLines(page), [])
     await page.click('.workspace__item:has-text("leo/projet")')
     await page.waitForFunction(() => document.querySelectorAll('.code-chat__user').length === 1)
-    const restored = await threadLines(page)
-    assert.deepEqual(restored.slice(0, 3), expected)
-    assert.match(restored[3], /^code-chat__reply:Terminé en \d+ s — 1 fichier changé/)
+    // La fin du travail (durée, carte des fichiers) revient avec la conversation.
+    assert.deepEqual(await threadLines(page), expected)
     assert.equal(await page.textContent('.workspace__item--active .workspace__item-title'), 'leo/projet')
 
     // « Retirer », jamais « Supprimer » : le dépôt reste sur GitHub, seule la ligne part.
@@ -469,4 +583,34 @@ test('un dépôt ouvert apparaît à gauche, et sa conversation revient quand on
     assert.equal(await page.locator('.branch-picker__trigger').count(), 0)
     assert.deepEqual(await page.evaluate(() => window.__calls.commit), [])
   })
+})
+
+test('fenêtre étroite : la carte de fin garde sa hauteur et le fil descend jusqu’à elle (étape 290)', options, async () => {
+  // Vu sur la capture : dans le fil (colonne de hauteur limitée), la carte en « overflow: hidden » s'écrasait à 0 px
+  // dès que la conversation débordait — il n'en restait qu'un trait.
+  await withPage(
+    async (page) => {
+      await page.evaluate(() => {
+        window.__manyChanges = ['a.js', 'b.js', 'c.js', 'd.js'].map((path) => ({ path, kind: 'modified', before: 'a\n', after: 'a\nb\n' }))
+      })
+      await connectAndOpen(page)
+      await page.fill('.composer textarea', 'Une longue demande')
+      await page.click('.composer__send')
+      await page.evaluate(() => {
+        for (let id = 1; id <= 6; id++) window.__emitNarration({ id, text: `Étape ${id} : je lis un fichier de plus pour comprendre le projet.` })
+        window.__finishAgent()
+      })
+      await page.waitForSelector('.changes-card')
+      await page.waitForTimeout(100)
+      const layout = await page.evaluate(() => {
+        const thread = document.querySelector('.code-chat__thread')
+        const card = document.querySelector('.changes-card').getBoundingClientRect()
+        return { overflows: thread.scrollHeight > thread.clientHeight, cardHeight: card.height, bottomSeen: Math.abs(thread.scrollTop + thread.clientHeight - thread.scrollHeight) < 2 }
+      })
+      assert.equal(layout.overflows, true, 'le test doit faire déborder la conversation')
+      assert.ok(layout.cardHeight > 150, `carte écrasée à ${layout.cardHeight}px`)
+      assert.equal(layout.bottomSeen, true)
+    },
+    { width: 1000 }
+  )
 })

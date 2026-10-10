@@ -11,6 +11,7 @@ import ModelEffortPicker from './ModelEffortPicker'
 import GithubPicker from './GithubPicker'
 import BranchPicker from './BranchPicker'
 import RepoChanges from './RepoChanges'
+import ChangesCard from './ChangesCard'
 import { ipcErrorMessage } from '@/lib/ipcError'
 import { readSaved, writeSaved } from '@/lib/savedSetting'
 import { CHAT_MIN_WIDTH, clampChatWidth } from '@/lib/splitWidth'
@@ -24,12 +25,17 @@ import {
   rememberRepo,
   repoConversationKey,
   saveConversation,
+  type ChangedFile,
   type ChatTurn,
   type RecentRepo
 } from '@/lib/codeConversations'
 import type { RepoPreview, RepoView } from '../../shared/ipc'
+import { diffLines } from '../../shared/lineDiff'
 
 type View = 'preview' | 'code'
+
+/** `Omit` appliqué à chaque genre de message séparément (un `Omit` simple fusionnerait les genres). */
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
 
 /** Largeur de la conversation choisie à la poignée (étape 283), retenue d'une ouverture à l'autre. */
 const CHAT_WIDTH_KEY = 'jaris.codeChatWidth'
@@ -145,37 +151,27 @@ function threadItems(turns: ChatTurn[]): ThreadItem[] {
 /** « Téléchargement de … 42 % » sans son pourcentage : deux avancements du même téléchargement se remplacent. */
 const progressKey = (text: string): string => text.replace(/\s*\d+\s*%\s*$/, '')
 
-type Outcome = { kind: 'done' | 'stopped'; durationMs: number; text?: string }
-
-/** Le texte du bandeau de fin, réutilisé tel quel quand ce bandeau rejoint l'historique de la conversation. */
-function outcomeText(outcome: Outcome): string {
-  if (outcome.kind === 'stopped') return `Génération arrêtée après ${formatDuration(outcome.durationMs)}.`
-  return `Terminé en ${formatDuration(outcome.durationMs)} — ${outcome.text ?? 'ton application est à jour.'}`
+/**
+ * La carte de fin (étape 290) : chaque fichier changé et ses lignes, calculées comme dans l'onglet « Changements »
+ * (même fonction), pour que les deux ne se contredisent jamais.
+ */
+function changedFiles(changes: RepoView['changes']): ChangedFile[] {
+  return changes.map((change) => {
+    const diff = diffLines(change.before, change.after)
+    return { path: change.path, kind: change.kind, added: diff.added, removed: diff.removed }
+  })
 }
 
-/**
- * Coche du bandeau de fin (étape 100). Définie ici et pas dans icons.tsx : la règle du projet est d'extraire
- * une icône au DEUXIÈME usage, pas avant — elle n'est utilisée qu'à cet endroit.
- */
-function CheckIcon(): JSX.Element {
+/** « Travaillé pendant 2 min 10 », comme ChatGPT, ou « Arrêté après 12 s » : une ligne discrète, plus un bandeau. */
+function WorkedLine({ durationMs, stopped }: { durationMs: number; stopped?: boolean }): JSX.Element {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M4 12.5l5.2 5.2L20 7" />
-    </svg>
+    <p className={`code-chat__worked${stopped ? ' code-chat__worked--stopped' : ''}`}>
+      <span>{stopped ? `Arrêté après ${formatDuration(durationMs)}` : `Travaillé pendant ${formatDuration(durationMs)}`}</span>
+    </p>
   )
 }
 
-/** Icônes de la barre de l'aperçu (étape 284), propres à cet endroit comme CheckIcon. */
+/** Icônes de la barre de l'aperçu (étape 284), propres à cet endroit. */
 function FolderIcon(): JSX.Element {
   return (
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -221,7 +217,6 @@ export default function CodePanel(): JSX.Element {
   const [live, setLive] = useState<CodeLiveWrite | null>(null)
   /** Issue de la DERNIÈRE génération, affichée à la place du bandeau d'avancement une fois celui-ci fini :
    *  terminée normalement, ou arrêtée à la demande. `null` tant qu'il n'y a rien à annoncer. */
-  const [lastOutcome, setLastOutcome] = useState<Outcome | null>(null)
   /** Étape 277 : dépôt GitHub ouvert (choisi dans le bouton GitHub du champ). Remplace l'application générée. */
   const [repo, setRepo] = useState<RepoView | null>(null)
   /**
@@ -317,12 +312,17 @@ export default function CodePanel(): JSX.Element {
   // Le dernier message reste visible, comme dans le Chat.
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight })
-  }, [turns, generating, lastOutcome, error])
+  }, [turns, generating, error])
 
   function addTurn(kind: 'user' | 'reply' | 'note', text: string): void {
+    pushTurn({ kind, text })
+  }
+
+  /** Ajoute un message de n'importe quel genre (étape 290 : la durée du travail, la carte des fichiers changés). */
+  function pushTurn(turn: DistributiveOmit<ChatTurn, 'id'>): void {
     turnIdRef.current += 1
     const id = turnIdRef.current
-    setTurns((prev) => [...prev, { id, kind, text }])
+    setTurns((prev) => [...prev, { ...turn, id } as ChatTurn])
   }
 
   /**
@@ -361,11 +361,6 @@ export default function CodePanel(): JSX.Element {
     })
   }
 
-  /** Une nouvelle demande commence : le bandeau de la précédente rejoint l'historique au lieu de disparaître. */
-  const archiveLastOutcome = (): void => {
-    if (lastOutcome) addTurn('reply', outcomeText(lastOutcome))
-  }
-
   /**
    * Le bandeau de fin, le journal et l'erreur décrivent UNE génération précise, celle de l'application
    * affichée. Dès qu'on affiche autre chose, ils ne parlent plus de ce qui est à l'écran — Léo a vu
@@ -377,7 +372,6 @@ export default function CodePanel(): JSX.Element {
    * oublié une fois.
    */
   const clearGenerationFeedback = (): void => {
-    setLastOutcome(null)
     setError(null)
   }
 
@@ -396,7 +390,6 @@ export default function CodePanel(): JSX.Element {
 
   /** Étape 277 : la demande part à l'agent qui travaille sur le dépôt ouvert, pas au générateur d'application. */
   const runOnRepo = async (current: RepoView, prompt: string): Promise<void> => {
-    archiveLastOutcome()
     addTurn('user', prompt)
     // Vidé dès l'envoi, comme ChatGPT : la demande est désormais dans la conversation, pas en double dans le champ.
     setDescription('')
@@ -411,23 +404,21 @@ export default function CodePanel(): JSX.Element {
     try {
       const result = await window.jaris.githubRunAgent(current.fullName, prompt)
       setRepo(result.view)
+      // Étape 290 (Léo : « à la fin ça doit faire comme ChatGPT ») : la durée, la réponse, puis la carte des fichiers.
+      pushTurn({ kind: 'worked', durationMs: Date.now() - startedAt })
       addTurn('reply', result.summary)
-      if (result.view.changes.length > 0) setCommitMessage(prompt.split('\n')[0].slice(0, 72))
-      const count = result.view.changes.length
-      setLastOutcome({
-        kind: 'done',
-        durationMs: Date.now() - startedAt,
-        // Le compte vient des changements RÉELLEMENT préparés, jamais de ce que le modèle dit avoir fait : vu avec
-        // un vrai modèle, le résumé peut annoncer un changement qui n'a pas eu lieu.
-        text:
-          count === 0
-            ? "aucun fichier n'a été changé."
-            : `${count === 1 ? '1 fichier changé' : `${count} fichiers changés`} : essaie dans l'aperçu, puis enregistre depuis « Changements ».`
-      })
+      // Les fichiers viennent des changements RÉELLEMENT préparés, jamais de ce que le modèle dit avoir fait : vu
+      // avec un vrai modèle, le résumé peut annoncer un changement qui n'a pas eu lieu.
+      if (result.view.changes.length > 0) {
+        setCommitMessage(prompt.split('\n')[0].slice(0, 72))
+        pushTurn({ kind: 'changes', files: changedFiles(result.view.changes) })
+      } else {
+        addTurn('note', "Aucun fichier n'a été changé.")
+      }
       void playSoundCueIfEnabled('success')
     } catch (err) {
       if (stoppedRef.current) {
-        setLastOutcome({ kind: 'stopped', durationMs: Date.now() - startedAt })
+        pushTurn({ kind: 'worked', durationMs: Date.now() - startedAt, stopped: true })
         // Ce qui a été préparé avant l'arrêt reste affiché (et annulable) : rien n'est perdu ni enregistré.
         void window.jaris.githubOpenRepo(current.fullName).then(setRepo).catch(() => {})
       } else {
@@ -467,8 +458,6 @@ export default function CodePanel(): JSX.Element {
       const result = await window.jaris.githubCommit(repo.fullName, message)
       setRepo(result.view)
       setCommitted({ url: result.url, sha: result.sha })
-      archiveLastOutcome()
-      setLastOutcome(null)
       addTurn('reply', `Enregistré sur GitHub (${result.sha.slice(0, 7)}).`)
       void playSoundCueIfEnabled('success')
     } catch (err) {
@@ -487,6 +476,14 @@ export default function CodePanel(): JSX.Element {
     } catch (err) {
       setError(ipcErrorMessage(err))
     }
+  }
+
+  /** « Annuler » de la carte de fin (étape 290) : tout ce qui est préparé repart, rien n'a été envoyé sur GitHub. */
+  const undoRepoChanges = async (): Promise<void> => {
+    if (!repo || repo.changes.length === 0) return
+    const count = repo.changes.length
+    await discardRepo()
+    addTurn('note', `${count === 1 ? 'Changement annulé' : `${count} changements annulés`} : rien n'a été enregistré sur GitHub.`)
   }
 
   const changeBranch = async (branch: string): Promise<void> => {
@@ -509,7 +506,6 @@ export default function CodePanel(): JSX.Element {
     // Une image seule suffit ("reproduis cette maquette") : le texte n'est plus obligatoire s'il y a une image.
     if ((!prompt && !attachment) || generating) return
 
-    archiveLastOutcome()
     addTurn('user', prompt || 'Reproduis l’image jointe.')
     setDescription('')
     clearGenerationFeedback()
@@ -517,6 +513,7 @@ export default function CodePanel(): JSX.Element {
     setProgress(null)
     stoppedRef.current = false
     const startedAt = Date.now()
+    const previousHtml = appResult?.html ?? null
     try {
       // appResult présent = demande de modification : le fichier actuel part avec la demande.
       const result = await window.jaris.generateApp(
@@ -529,16 +526,18 @@ export default function CodePanel(): JSX.Element {
       setAppResult(result)
       setAttachment(null)
       setView('preview')
-      // Fin annoncée de deux façons : le bandeau reste affiché avec la durée, et un bip si les sons sont
-      // activés — une génération peut durer plusieurs minutes, pendant lesquelles Léo fait autre chose.
-      setLastOutcome({ kind: 'done', durationMs: Date.now() - startedAt })
+      // Fin annoncée comme sur ChatGPT (étape 290) : la durée, puis la carte du fichier écrit — et un bip si les sons
+      // sont activés : une génération peut durer plusieurs minutes, pendant lesquelles Léo fait autre chose.
+      pushTurn({ kind: 'worked', durationMs: Date.now() - startedAt })
+      const diff = diffLines(previousHtml, result.html)
+      pushTurn({ kind: 'changes', files: [{ path: 'index.html', kind: previousHtml === null ? 'added' : 'modified', added: diff.added, removed: diff.removed }] })
       void playSoundCueIfEnabled('success')
       void window.jaris.getGeneratedApps().then(setRecentApps)
     } catch (err) {
       // Un arrêt demandé n'est pas une panne : il s'affiche dans le bandeau, au même endroit que
       // l'avancement qu'il interrompt, jamais en rouge.
       if (stoppedRef.current) {
-        setLastOutcome({ kind: 'stopped', durationMs: Date.now() - startedAt })
+        pushTurn({ kind: 'worked', durationMs: Date.now() - startedAt, stopped: true })
       } else {
         setError(err instanceof Error ? err.message : String(err))
         void playSoundCueIfEnabled('error')
@@ -633,20 +632,42 @@ export default function CodePanel(): JSX.Element {
     .map(({ item }) => item)
 
   // La conversation affichée est enregistrée sous le nom de son élément, une fois le travail fini (jamais pendant :
-  // la phrase de Jaris change à chaque fragment reçu). Le bandeau de fin y est compris, comme le message qu'il
-  // deviendra à la demande suivante : rouvrir l'élément doit dire comment le dernier travail s'est terminé.
+  // la phrase de Jaris change à chaque fragment reçu). La fin du dernier travail (durée, fichiers) en fait partie.
   const activeConversation = appResult ? appConversationKey(appResult.path) : repo ? repoConversationKey(repo.fullName) : null
   useEffect(() => {
     const owner = conversationOwnerRef.current
     if (generating || !owner || owner !== activeConversation) return
-    saveConversation(owner, lastOutcome ? [...turns, { id: turnIdRef.current + 1, kind: 'reply', text: outcomeText(lastOutcome) }] : turns)
-  }, [turns, generating, activeConversation, lastOutcome])
+    saveConversation(owner, turns)
+  }, [turns, generating, activeConversation])
 
   /** Quelque chose à montrer dans l'aperçu : une application, ou un dépôt (son site, ou ses changements). */
   const hasPreview = appResult !== null || repo !== null
   /** Étape 287 : l'onglet « Changements » n'existe que s'il y a quelque chose à vérifier ou qui vient d'être enregistré. */
   const repoHasChanges = repo !== null && (repo.changes.length > 0 || committed !== null)
   const showRepoChanges = repoHasChanges && repoTab === 'changes'
+
+  // Étape 290 : seule la carte du DERNIER travail a ses boutons — une carte plus ancienne n'est plus qu'une trace.
+  let liveChangesId: number | null = null
+  for (let index = turns.length - 1; index >= 0; index--) {
+    const turn = turns[index]
+    if (turn.kind === 'changes') liveChangesId = turn.id
+    if (turn.kind === 'changes' || turn.kind === 'user') break
+  }
+  const changesActions = generating
+    ? undefined
+    : repo
+      ? repoHasChanges
+        ? {
+            // Plus rien à annuler une fois annulé ou enregistré sur GitHub : le bouton disparaît.
+            onUndo: repo.changes.length > 0 ? () => void undoRepoChanges() : undefined,
+            onShow: () => setRepoTab('changes'),
+            showLabel: 'Afficher les modifications',
+            busy: committing
+          }
+        : undefined
+      : appResult
+        ? { onShow: () => setView('code'), showLabel: 'Afficher le code' }
+        : undefined
 
   // Le site du dépôt est redemandé à chaque nouvel état (ouverture, travail de Jaris, annulation, enregistrement) :
   // l'aperçu montre toujours les fichiers tels qu'ils seraient enregistrés. Une réponse en retard sur une plus récente
@@ -779,6 +800,10 @@ export default function CodePanel(): JSX.Element {
                   <p key={turn.id} className="code-chat__note">
                     {turn.text}
                   </p>
+                ) : turn.kind === 'worked' ? (
+                  <WorkedLine key={turn.id} durationMs={turn.durationMs} stopped={turn.stopped} />
+                ) : turn.kind === 'changes' ? (
+                  <ChangesCard key={turn.id} files={turn.files} actions={turn.id === liveChangesId ? changesActions : undefined} />
                 ) : (
                   <p key={turn.id} className="code-chat__reply">
                     {turn.text}
@@ -804,15 +829,6 @@ export default function CodePanel(): JSX.Element {
                   Chat, mais mets ce qu'il fait en direct, par exemple code index.html plus 20 lignes ») : une seule ligne,
                   à la suite de la conversation, qui dit ce que Jaris fait. L'arrêt passe par le bouton du champ. */}
               {generating && <LiveLine text={formatCodeLive(live, progress)} />}
-
-              {/* Fin annoncée À L'ENDROIT MÊME où l'avancement était suivi (étape 100). À la demande suivante, ce
-                  bandeau rejoint l'historique de la conversation (archiveLastOutcome). */}
-              {!generating && lastOutcome !== null && (
-                <p className={`code-panel__done${lastOutcome.kind === 'stopped' ? ' code-panel__done--stopped' : ''}`}>
-                  {lastOutcome.kind === 'done' && <CheckIcon />}
-                  <span>{outcomeText(lastOutcome)}</span>
-                </p>
-              )}
 
               {error && <p className="code-panel__error">{error}</p>}
             </div>
