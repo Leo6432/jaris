@@ -424,7 +424,27 @@ export function releaseEngine(): void {
  * Dessine l'image décrite par `prompt` et renvoie le fichier PNG créé. Lève une erreur au message déjà
  * lisible par Léo en cas d'échec (le court-circuit d'assistant.ts l'affiche tel quel).
  */
-export async function generateImage(prompt: string, onLog: Log = () => {}, signal?: AbortSignal): Promise<GeneratedImage> {
+/**
+ * Étape 292 : traduit une demande en anglais avant le dessin (promptTranslator.ts, branché par main.ts pour les
+ * demandes tapées par Léo ; l'outil du Chat, lui, écrit déjà sa description en anglais).
+ */
+export type PromptTranslate = (prompt: string) => Promise<{ text: string; translated: boolean }>
+
+/**
+ * Le texte réellement envoyé au modèle de dessin : la demande traduite si une traduction est demandée. Le nom du
+ * fichier, lui, garde les mots de Léo (« Un chat » dans la liste, pas « A cat »).
+ */
+export async function drawingPrompt(text: string, onLog: Log, translate?: PromptTranslate): Promise<string> {
+  if (!translate) return text
+  onLog('Traduction de la demande pour le modèle de dessin…')
+  const result = await translate(text)
+  const english = cleanPrompt(result.text)
+  if (!result.translated || !english) return text
+  if (english.toLowerCase() !== text.toLowerCase()) onLog(`Demande traduite pour le dessin : « ${english} »`)
+  return english
+}
+
+export async function generateImage(prompt: string, onLog: Log = () => {}, signal?: AbortSignal, translate?: PromptTranslate): Promise<GeneratedImage> {
   if (process.platform !== 'win32') throw new Error("La génération d'images n'est disponible que sur Windows pour l'instant.")
   const text = cleanPrompt(prompt)
   if (!text) throw new Error("Je n'ai pas de description de l'image à dessiner : dis-moi ce que tu veux voir.")
@@ -443,6 +463,9 @@ export async function generateImage(prompt: string, onLog: Log = () => {}, signa
     const exe = engineExe()
     const models = modelPaths()
     if (signal?.aborted) throw new Error('Dessin annulé.')
+    // Avant de libérer la carte graphique : la traduction utilise un modèle d'Ollama.
+    const drawn = await drawingPrompt(text, onLog, translate)
+    if (signal?.aborted) throw new Error('Dessin annulé.')
 
     // Le modèle de conversation est encore chargé sur la carte graphique (il vient de décider de dessiner) :
     // sans ce déchargement, les deux ne tiennent pas ensemble sur une carte 8 Go.
@@ -454,7 +477,7 @@ export async function generateImage(prompt: string, onLog: Log = () => {}, signa
     const fileName = imageFileName(text, new Date())
     const output = join(dir, fileName)
     onLog('Préparation du dessin…')
-    await runEngine(exe, buildSdArgs({ models, prompt: text, output, seed: Math.floor(Math.random() * 2 ** 31) }), onLog, signal)
+    await runEngine(exe, buildSdArgs({ models, prompt: drawn, output, seed: Math.floor(Math.random() * 2 ** 31) }), onLog, signal)
     if ((await sizeOf(output)) === null) {
       throw new Error("Le moteur d'images a terminé sans créer d'image.")
     }

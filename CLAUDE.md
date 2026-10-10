@@ -7800,3 +7800,25 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   réfléchit → écrit ; jamais « se charge » si Ollama ne sait pas), `scripts/test-image-panel-ui.mjs` et
   `scripts/test-video-panel-ui.mjs` (cadre au centre et carré/16-9, champ en bas, plus de bandeau en haut, arrêt par
   le champ, demande rendue). Chaque garde-fou a été vérifié en le retirant.
+
+- **« je lui ai envoyé "chat" comme prompt, voici ce qu'il m'a fait » (Léo, étape 292, capture : le portrait d'un
+  homme souriant derrière un bureau).** Cause REPRODUITE ici avec le vrai modèle, pas devinée : FLUX.2 klein (mêmes
+  fichiers, même révision, même commande sd-cli que Jaris, en 512 px sur processeur) dessine pour « un chat » une
+  MESSAGERIE (bulles de discussion, visages) — il a appris sur des légendes anglaises, où « chat » veut dire
+  conversation — et pour « a cat » un vrai chat. L'outil `generate_image` du Chat demandait déjà au modèle de
+  conversation d'écrire la description EN ANGLAIS ; le mode Image, la Vidéo et le téléphone envoyaient la demande
+  tapée telle quelle. Corrigé par une traduction préalable (`promptTranslator.ts`) avec le modèle RAPIDE, sans
+  réflexion, consigne qui nomme le faux ami (« chat » = cat) et interdit d'ajouter des détails ; la traduction passe
+  AVANT de libérer la carte graphique pour le dessin. Le nom du fichier garde les mots de Léo (« Un chat » dans la
+  liste, pas « A cat ») et la ligne d'avancement montre ce qui part vraiment au dessin. Ollama arrêté ou réponse
+  inexploitable : la demande part telle quelle, le dessin n'est jamais bloqué. **Vérifié pour de vrai avec
+  qwen3:1.7b** (un modèle rapide de Jaris) : « un chat » → a cat, « chat » → a cat, « un chat noir sur un canapé » →
+  a black cat on a couch, « un coin de rue à Paris la nuit » → a street corner in Paris at night, une demande déjà
+  en anglais recopiée telle quelle. **Leçon générale : un modèle spécialisé (dessin, vidéo) n'a pas forcément la
+  langue de l'utilisateur — un mot qui existe dans les deux langues avec deux sens (« chat ») ne produit aucune
+  erreur, juste un résultat absurde.** Quand une fonction passe par l'outil du Chat et une autre par un écran dédié,
+  vérifier que les deux font subir la MÊME préparation à la demande : ici seul l'outil la traduisait.
+  Régression : `scripts/test-prompt-translator.mjs` (consigne, nettoyage, repli, branchement Image/Vidéo/téléphone
+  mais pas l'outil du Chat), `scripts/test-image-generation.mjs` et `scripts/test-video-generation.mjs` (traduction
+  avant la libération de la carte, texte traduit envoyé à sd-cli, nom de fichier inchangé). Chaque garde-fou vérifié
+  en le retirant.

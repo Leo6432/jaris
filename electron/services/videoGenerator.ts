@@ -9,6 +9,7 @@ import {
   claimEngine,
   cleanPrompt,
   downloadVerified,
+  drawingPrompt,
   engineExe,
   engineReady,
   ensureEngine,
@@ -17,7 +18,8 @@ import {
   releaseEngine,
   runEngine,
   sizeOf,
-  type Log
+  type Log,
+  type PromptTranslate
 } from './imageGenerator'
 import {
   DEFAULT_VIDEO_SECONDS,
@@ -329,7 +331,9 @@ export async function generateVideo(
   signal?: AbortSignal,
   initImage?: { bytes: Uint8Array; extension: 'png' | 'jpg' },
   seconds: VideoSeconds = DEFAULT_VIDEO_SECONDS,
-  quality: VideoQuality = 'q6'
+  quality: VideoQuality = 'q6',
+  // Étape 292 : comme les images, une demande tapée en français est d'abord traduite (le modèle vidéo lit l'anglais).
+  translate?: PromptTranslate
 ): Promise<GeneratedVideoFile> {
   if (process.platform !== 'win32') throw new Error("La création de vidéos n'est disponible que sur Windows pour l'instant.")
   const text = cleanPrompt(prompt)
@@ -343,6 +347,9 @@ export async function generateVideo(
         `La qualité ${videoQualityLabel(quality)} n'est pas encore téléchargée : télécharge-la depuis le bouton de qualité du mode Vidéo.`
       )
     }
+    if (signal?.aborted) throw new Error('Vidéo annulée.')
+    // Avant de libérer la carte graphique : la traduction utilise un modèle d'Ollama.
+    const drawn = await drawingPrompt(text, onLog, translate)
     if (signal?.aborted) throw new Error('Vidéo annulée.')
 
     const unloaded = await unloadOllamaModels()
@@ -362,7 +369,7 @@ export async function generateVideo(
       engineExe(),
       buildVideoArgs({
         models: modelPaths(quality),
-        prompt: text,
+        prompt: drawn,
         output,
         seed: Math.floor(Math.random() * 2 ** 31),
         seconds: normalizeVideoSeconds(seconds),

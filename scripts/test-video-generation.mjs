@@ -506,3 +506,16 @@ test('échec du moteur (étape 211) : « vidéo » et pas « image », code lisi
   assert.match(image.describeEngineFailure(1, ['vk::Device::allocateMemory: ErrorOutOfDeviceMemory'], 'video'), /Pas assez de mémoire pour créer la vidéo.*durée plus courte/)
   assert.match(image.describeEngineFailure(1, ['x'], 'image'), /Le moteur d'images s'est arrêté sans finir l'image \(code 1\)/, 'les images gardent leur texte')
 })
+
+test('vidéo (étape 292) : une demande tapée en français est traduite avant sd-cli, le nom garde les mots de Léo', async () => {
+  const t = await installed()
+  t.events.length = 0
+  const result = await t.video.generateVideo('un chat qui court', () => {}, undefined, undefined, 2, 'q6', async () => {
+    t.events.push('translate')
+    return { text: 'a cat running', translated: true }
+  })
+  assert.deepEqual(t.events, ['translate', 'unload', 'spawn'])
+  const { args } = t.spawns[0]
+  assert.equal(args[args.indexOf('-p') + 1], 'a cat running')
+  assert.match(result.fileName, /un-chat-qui-court/)
+})

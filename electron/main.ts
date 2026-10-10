@@ -16,6 +16,7 @@ import {
   listGeneratedImages,
   readGeneratedImageDataUrl
 } from './services/imageGenerator'
+import { toEnglishPrompt } from './services/promptTranslator'
 import { imageLabelFromFileName } from '../shared/imageGallery'
 import { isVideoQuality, normalizeVideoSeconds, pickVideoModel, VIDEO_DURATIONS } from '../shared/videoModel'
 import {
@@ -939,7 +940,7 @@ function getPhoneAccess(): PhoneAccessManager {
         }
       },
       generateImage: async (prompt, onStatus, signal) => {
-        const image = await generateImage(prompt, onStatus, signal)
+        const image = await generateImage(prompt, onStatus, signal, toEnglishPrompt)
         broadcast(IPC_CHANNELS.studioGalleryChanged)
         return { fileName: image.fileName }
       },
@@ -950,7 +951,8 @@ function getPhoneAccess(): PhoneAccessManager {
           signal,
           undefined,
           normalizeVideoSeconds(seconds),
-          isVideoQuality(quality) ? quality : 'q6'
+          isVideoQuality(quality) ? quality : 'q6',
+          toEnglishPrompt
         )
         broadcast(IPC_CHANNELS.studioGalleryChanged)
         return { fileName: video.fileName }
@@ -1676,7 +1678,9 @@ app.whenReady().then(async () => {
         (message) => {
           if (!event.sender.isDestroyed()) event.sender.send(IPC_CHANNELS.imageStudioLog, message)
         },
-        controller.signal
+        controller.signal,
+        // Étape 292 : « un chat » tapé ici était dessiné comme « a chat » (une conversation).
+        toEnglishPrompt
       )
       return { fileName: image.fileName, label: imageLabelFromFileName(image.fileName), timestamp: Date.now() }
     } finally {
@@ -1726,7 +1730,8 @@ app.whenReady().then(async () => {
           controller.signal,
           initImage,
           normalizeVideoSeconds(seconds),
-          isVideoQuality(quality) ? quality : 'q6'
+          isVideoQuality(quality) ? quality : 'q6',
+          toEnglishPrompt
         )
         return { fileName: video.fileName, label: imageLabelFromFileName(video.fileName), timestamp: Date.now() }
       } finally {

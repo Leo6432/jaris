@@ -386,3 +386,47 @@ test('isImageModelInstalled : vrai seulement avec le moteur ET les trois fichier
   assert.equal(await t.gen.isImageModelInstalled(), false, 'moteur absent = pas installé')
   t.cleanup()
 })
+
+// Étape 292 (Léo, capture à l'appui : « je lui ai envoyé "chat" comme prompt, voici ce qu'il m'a fait » — un homme
+// souriant à un bureau) : le modèle de dessin lit l'anglais, « un chat » y devient « a chat », une conversation.
+test('une demande tapée en français est traduite AVANT le dessin, le nom du fichier garde les mots de Léo', async () => {
+  const t = await installed()
+  t.events.length = 0
+  const logs = []
+  const translated = []
+  const image = await t.gen.generateImage('un chat', (m) => logs.push(m), undefined, async (text) => {
+    translated.push(text)
+    t.events.push('translate')
+    return { text: 'a cat', translated: true }
+  })
+  assert.deepEqual(translated, ['un chat'])
+  // La traduction utilise un modèle d'Ollama : elle passe AVANT de libérer la carte graphique pour le dessin.
+  assert.deepEqual(t.events, ['translate', 'unload', 'spawn'])
+  assert.match(image.fileName, /-un-chat\.png$/, 'la liste doit dire « Un chat », pas « A cat »')
+  assert.ok(logs.includes('Demande traduite pour le dessin : « a cat »'), 'Léo voit ce qui part vraiment au dessin')
+  t.cleanup()
+})
+
+test('le texte TRADUIT est celui qui part à sd-cli, et une traduction impossible garde la demande telle quelle', async () => {
+  for (const [answer, expected] of [
+    [{ text: 'a cat', translated: true }, 'a cat'],
+    [{ text: 'un chat', translated: false }, 'un chat'],
+    [{ text: '   ', translated: true }, 'un chat']
+  ]) {
+    const t = await installed()
+    await t.gen.generateImage('un chat', () => {}, undefined, async () => answer)
+    const { args } = t.gen.lastSpawn.spawnArgs
+    assert.equal(args[args.indexOf('-p') + 1], expected)
+    t.cleanup()
+  }
+})
+
+test('sans traduction demandée (l’outil du Chat écrit déjà en anglais), rien ne change', async () => {
+  const t = await installed()
+  t.events.length = 0
+  await t.gen.generateImage('a ginger cat on a blue sofa', () => {})
+  assert.deepEqual(t.events, ['unload', 'spawn'])
+  const { args } = t.gen.lastSpawn.spawnArgs
+  assert.equal(args[args.indexOf('-p') + 1], 'a ginger cat on a blue sofa')
+  t.cleanup()
+})
