@@ -6335,8 +6335,9 @@ select {
 }
 
 .app-header {
-  height: 52px;
-  min-height: 52px;
+  /* Variable (étape 285) : le mode Code fait monter son aperçu à la hauteur de cette barre, de cette valeur exacte. */
+  height: var(--app-header-h);
+  min-height: var(--app-header-h);
   padding: 0 18px;
   border: 0;
   border-radius: 0;
@@ -6350,6 +6351,7 @@ select {
 }
 
 .app-main {
+  --app-header-h: 52px;
   border: 0;
   border-left: 1px solid var(--hud-line);
   border-radius: 0;
@@ -7572,6 +7574,37 @@ select {
 .code-split--expanded .code-chat,
 .code-split--expanded .code-split__handle {
   display: none;
+}
+
+/* Étape 285 (Léo, capture à l'appui : « trop gros espace » au-dessus de la carte) : la barre de titre de Jaris
+   (« Code », le nom de l'élément ouvert) prend toute la largeur, mais seule la colonne de gauche s'en sert. Comme
+   chez Claude, l'aperçu monte donc jusqu'en haut, à côté de cette barre ; la conversation, elle, reste dessous.
+   Trois garde-fous, chacun testé :
+   - seulement côte à côte et pas agrandi : sinon la carte recouvrirait toute la barre, y compris le bouton qui
+     rouvre la liste quand elle est repliée ;
+   - jamais quand un bandeau (nouveau modèle, mise à jour) est affiché sous la barre : la carte le recouvrirait ;
+   - la zone qui remonte laisse passer les clics (pointer-events), sauf la carte, la poignée et le contenu de la
+     conversation : le titre et le bouton de la barre restent cliquables. */
+@container not (max-width: 860px) {
+  .app-main:not(:has(> .app__new-models)) .code-split:not(.code-split--expanded) {
+    margin-top: calc(-1 * var(--app-header-h, 0px));
+    pointer-events: none;
+  }
+
+  .app-main:not(:has(> .app__new-models)) .code-split:not(.code-split--expanded) .code-chat {
+    padding-top: calc(var(--app-header-h, 0px) + 12px);
+  }
+
+  .app-main:not(:has(> .app__new-models)) .code-split:not(.code-split--expanded) .code-chat > *,
+  .app-main:not(:has(> .app__new-models)) .code-split:not(.code-split--expanded) .code-split__handle,
+  .app-main:not(:has(> .app__new-models)) .code-split:not(.code-split--expanded) .code-preview {
+    pointer-events: auto;
+  }
+}
+
+/* Le titre de la barre ne doit jamais passer sous la carte : la conversation fait au moins 300 px de large. */
+.app-main:has(> .keep-alive[aria-hidden='false'] .code-split:not(.code-split--expanded)) .app-header__title {
+  max-width: 240px;
 }
 
 .code-preview__placeholder {

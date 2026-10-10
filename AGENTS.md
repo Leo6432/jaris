@@ -7527,3 +7527,34 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   coins mesurés, application sans second cadre, Agrandir/Réduire/Échap, génération visible en mode agrandi,
   retour automatique, pastille centrée au repos et au survol) et `scripts/test-github-ui.mjs` (nom exact du
   dépôt et sa branche). Vérifié par le build, les tests et des captures ; pas encore en usage réel.
+
+- **L'aperçu du mode Code monte jusqu'en haut, à côté de la barre de titre (étape 285, Léo, capture à
+  l'appui : « trop gros espace », précisé par une question à choix : l'espace AU-DESSUS de la carte).** La barre
+  de titre de Jaris (`.app-header`, 52 px : « Code » ou le nom de l'élément ouvert) prend toute la largeur, mais
+  seule la colonne de gauche s'en sert. La carte commençait donc sous elle, à 60 px du haut, au-dessus d'une
+  bande vide. Comme chez Claude, la zone conversation + aperçu remonte maintenant de la hauteur de la barre
+  (`--app-header-h`, nouvelle variable, utilisée AUSSI par la barre elle-même pour que les deux ne divergent
+  jamais). La conversation garde un retrait égal : elle reste sous le titre. Trois garde-fous, chacun testé en
+  le retirant :
+  - **seulement côte à côte et pas agrandi** (`@container not (max-width: 860px)`, `:not(.code-split--expanded)`) :
+    sinon la carte, pleine largeur, recouvrirait toute la barre, y compris le bouton qui rouvre la liste ;
+  - **jamais avec un bandeau** sous la barre (nouveau modèle, mise à jour : `:has(> .app__new-models)`) ;
+  - **les clics traversent la zone remontée** : `pointer-events: none` sur le conteneur, rendu aux seuls enfants
+    réels (contenu de la conversation, poignée, carte). Sans ça, le bouton de la barre devient incliquable : il
+    est sous la boîte (transparente) du conteneur. Le titre de la barre est limité à 240 px quand l'aperçu est
+    affiché (la conversation fait au moins 300 px) : un nom long ne passe jamais sous la carte.
+  **Piège évité avant de coder** : une marge négative sur la seule colonne d'aperçu aurait été rognée si un
+  conteneur parent avait `overflow: hidden` — vérifié par grep qu'aucun ne l'a entre `.app-main` et
+  `.code-split`.
+  **Piège dans mon propre test, attrapé en le faisant échouer exprès** : la première version montait l'écran
+  avec une barre de titre, mais SANS la barre latérale. La liste des applications s'affichait donc à gauche de
+  l'écran, et le bouton de la barre tombait au-dessus d'elle, pas au-dessus de la conversation : retirer
+  `pointer-events: none` ne cassait rien dans le test, alors que le bouton aurait été incliquable dans Jaris.
+  Le test reproduit maintenant toute la structure de App.tsx (barre latérale qui reçoit la liste par portail,
+  barre de titre dont l'écran écrit le titre, bandeau, enveloppe KeepAlive). **Leçon générale : un test de
+  mise en page ne prouve rien si son banc ne reproduit pas la géométrie réelle — vérifier QUEL élément se
+  trouve sous le point testé dans l'application, pas seulement que le test passe.**
+  Régression : `scripts/test-code-panel-ui.mjs` (carte à moins de 12 px du haut, conversation sous la barre,
+  bouton de la barre cliquable, suggestions et poignée toujours utilisables, titre long arrêté avant la carte,
+  carte sous la barre en mode agrandi, avec un bandeau et en fenêtre étroite). Vérifié par les tests et une
+  capture de l'application complète ; pas encore en usage réel.

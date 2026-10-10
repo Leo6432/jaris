@@ -93,7 +93,41 @@ window.jaris = {
   }
 }
 
-createRoot(document.getElementById('root')).render(<Panel />)
+// Étape 285 : la même structure que App.tsx autour de l'écran — barre latérale qui accueille la liste par
+// portail, barre de titre dont le titre est écrit par l'écran, bandeau éventuel, enveloppe KeepAlive —, pour
+// mesurer la carte d'aperçu par rapport à la VRAIE barre de Jaris. Sans la barre latérale, la liste s'afficherait
+// à gauche de l'écran et le bouton de la barre tomberait au-dessus d'elle, pas au-dessus de la conversation.
+import { useState } from 'react'
+import { ShellSlotsContext } from './src/lib/shellContext'
+
+const shell = window.__shell
+if (shell?.label) window.__apps[0].label = shell.label
+
+function Shell() {
+  const [newSlot, setNewSlot] = useState(null)
+  const [recentsSlot, setRecentsSlot] = useState(null)
+  const [titleSlot, setTitleSlot] = useState(null)
+  return (
+    <ShellSlotsContext.Provider value={{ newSlot, recentsSlot, titleSlot }}>
+      <aside className="app-sidebar" style={{ width: 240, flex: '0 0 240px' }}>
+        <div className="panel__new" ref={setNewSlot} />
+        <div className="panel__list" ref={setRecentsSlot} />
+      </aside>
+      <main className="app-main">
+        <header className="app-header">
+          <button className="panel__icon-button shell-toggle" onClick={() => { window.__toggled = (window.__toggled ?? 0) + 1 }}>≡</button>
+          <span className="app-header__title" ref={setTitleSlot} data-label="Code" />
+        </header>
+        {shell.banner && <div className="app__new-models"><p>Nouveau modèle disponible : qwen3.5:9b.</p><button>Fermer</button></div>}
+        <div className="keep-alive" style={{ display: 'contents' }} aria-hidden="false">
+          <Panel />
+        </div>
+      </main>
+    </ShellSlotsContext.Provider>
+  )
+}
+
+createRoot(document.getElementById('root')).render(shell ? <Shell /> : <Panel />)
 `
 
 let pageHtml = null
@@ -516,6 +550,103 @@ test('la poignée est une petite pastille centrée, plus un filet sur toute la h
     const hovered = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.code-split__handle'), '::before').height))
     assert.ok(hovered > grip.gripHeight && hovered <= 48, `pastille survolée : ${hovered}px`)
   })
+})
+
+/** Ouvre l'écran Code DANS une barre de titre comme celle de Jaris (étape 285), puis l'application de la liste. */
+async function withShell(run, { width = 1640, label = null, banner = false } = {}) {
+  const html = buildPage().replace('<div id="root">', `<script>window.__shell = ${JSON.stringify({ label, banner })}</script><div id="root">`)
+  const browser = await chromium.launch()
+  try {
+    const page = await browser.newPage()
+    await page.setViewportSize({ width, height: 860 })
+    await page.setContent(html)
+    await page.click('.workspace__item')
+    await page.waitForSelector('.code-panel__preview')
+    await run(page)
+  } finally {
+    await browser.close()
+  }
+}
+
+const shellLayout = (page) =>
+  page.evaluate(() => {
+    const box = (selector) => document.querySelector(selector).getBoundingClientRect()
+    const main = box('.app-main')
+    const header = box('.app-header')
+    const banner = document.querySelector('.app__new-models')
+    return {
+      cardTop: Math.round(box('.code-preview__card').top - main.top),
+      cardLeft: Math.round(box('.code-preview__card').left),
+      headerBottom: Math.round(header.bottom - main.top),
+      bannerBottom: banner ? Math.round(banner.getBoundingClientRect().bottom - main.top) : null,
+      threadTop: Math.round(box('.code-chat__thread').top - main.top),
+      titleRight: Math.round(box('.app-header__title').right)
+    }
+  })
+
+test('la carte monte jusqu’en haut, à côté de la barre de titre de Jaris (étape 285)', options, async () => {
+  // Léo, capture à l'appui : « trop gros espace » au-dessus de la carte — la barre « Code » prenait toute la largeur.
+  await withShell(async (page) => {
+    const layout = await shellLayout(page)
+    assert.ok(layout.cardTop <= 12, `carte à ${layout.cardTop}px du haut (barre de ${layout.headerBottom}px)`)
+    // La conversation, elle, reste sous la barre : son titre ne passe pas sur le premier message.
+    assert.ok(layout.threadTop >= layout.headerBottom, `conversation à ${layout.threadTop}px, sous une barre de ${layout.headerBottom}px`)
+
+    // La zone qui remonte laisse passer les clics : le bouton de la barre (rouvrir la liste) reste cliquable.
+    const toggle = await page.locator('.shell-toggle').boundingBox()
+    const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.className, [toggle.x + toggle.width / 2, toggle.y + toggle.height / 2])
+    assert.match(String(hit), /shell-toggle/, `le clic tombe sur « ${hit} » au lieu du bouton de la barre`)
+    await page.click('.shell-toggle')
+    assert.equal(await page.evaluate(() => window.__toggled), 1)
+
+    // À l'inverse, la barre de Jaris ne recouvre pas les boutons de la carte, qui sont à sa hauteur.
+    const expand = await page.locator('.code-preview__expand').boundingBox()
+    const expandHit = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('button')?.className, [expand.x + expand.width / 2, expand.y + expand.height / 2])
+    assert.match(String(expandHit), /code-preview__expand/, `le clic tombe sur « ${expandHit} » au lieu de « Agrandir »`)
+
+    // Et le reste fonctionne toujours : une suggestion remplit le champ, la poignée se règle au clavier.
+    await page.click('.empty-state__suggestion')
+    assert.notEqual(await page.inputValue('.composer__input'), '')
+    const before = await page.evaluate(() => Math.round(document.querySelector('.code-chat').getBoundingClientRect().width))
+    await page.focus('.code-split__handle')
+    await page.keyboard.press('ArrowRight')
+    assert.equal(await page.evaluate(() => Math.round(document.querySelector('.code-chat').getBoundingClientRect().width)), before + 24)
+  })
+})
+
+test('un long titre de barre ne passe jamais sous la carte', options, async () => {
+  await withShell(
+    async (page) => {
+      const layout = await shellLayout(page)
+      assert.ok(layout.titleRight <= layout.cardLeft, `titre jusqu'à ${layout.titleRight}px, carte à ${layout.cardLeft}px`)
+    },
+    { label: 'un convertisseur de devises avec graphique historique et alertes de seuil par courriel' }
+  )
+})
+
+test('la carte reste SOUS la barre : aperçu agrandi, bandeau affiché, fenêtre étroite', options, async () => {
+  // Agrandie, elle recouvrirait toute la barre, bouton de la liste compris.
+  await withShell(async (page) => {
+    await page.click('.code-preview__expand')
+    const layout = await shellLayout(page)
+    assert.ok(layout.cardTop >= layout.headerBottom, `agrandie : carte à ${layout.cardTop}px, barre jusqu'à ${layout.headerBottom}px`)
+  })
+  // Un bandeau (nouveau modèle, mise à jour) sous la barre ne doit pas être recouvert.
+  await withShell(
+    async (page) => {
+      const layout = await shellLayout(page)
+      assert.ok(layout.cardTop >= layout.bannerBottom, `carte à ${layout.cardTop}px sur un bandeau qui finit à ${layout.bannerBottom}px`)
+    },
+    { banner: true }
+  )
+  // Colonnes l'une sur l'autre : l'aperçu prend toute la largeur, il recouvrirait la barre entière.
+  await withShell(
+    async (page) => {
+      const layout = await shellLayout(page)
+      assert.ok(layout.cardTop >= layout.headerBottom, `étroite : carte à ${layout.cardTop}px, barre jusqu'à ${layout.headerBottom}px`)
+    },
+    { width: 1000 }
+  )
 })
 
 /** Lance une génération et attend que le bandeau d'avancement apparaisse. */
