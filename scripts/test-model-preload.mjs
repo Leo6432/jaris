@@ -48,12 +48,10 @@ test('fenêtre ramenée au maximum du modèle, la même au préchargement et aux
     return new Response(JSON.stringify({ message: { role: 'assistant', content: 'ok' }, done: true, prompt_eval_count: 900, eval_count: 100 }), { status: 200 })
   }
   assert.equal(await ollama.preloadModel('qwen3:1.7b', 65536), true)
-  let metrics
-  await ollama.chatWithOllama([{ role: 'user', content: 'x' }], undefined, 'qwen3:1.7b', 'low', undefined, 65536, undefined, undefined, (m) => (metrics = m))
+  await ollama.chatWithOllama([{ role: 'user', content: 'x' }], undefined, 'qwen3:1.7b', 'low', undefined, 65536)
   await ollama.structuredChat([{ role: 'user', content: 'x' }], 'qwen3:1.7b', { type: 'object' }, undefined, 65536)
   const sent = calls.filter((call) => !call.url.endsWith('/api/show')).map((call) => call.body.options.num_ctx)
   assert.deepEqual(sent, [40960, 40960, 40960])
-  assert.equal(metrics.contextWindow, 40960, 'le compteur doit afficher le vrai maximum du modèle')
   assert.equal(calls.filter((call) => call.url.endsWith('/api/show')).length, 1, 'le maximum est mis en cache')
 
   // Un réglage plus petit que le maximum du modèle est gardé tel quel.

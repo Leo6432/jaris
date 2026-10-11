@@ -9,7 +9,6 @@ import { IMAGE_FOR_CODE_SYSTEM_PROMPT, describeImage } from './vision'
 import type { CodeActivity, CodeGenProgress, CodeLiveWrite, GeneratedApp, GeneratedAppSummary, Profile } from '../../shared/ipc'
 import { diffLines } from '../../shared/lineDiff'
 import { getDataRoot } from './dataLocation'
-import { reportContextUsage } from './contextUsage'
 import { t } from '../../shared/i18n'
 
 /**
@@ -32,7 +31,7 @@ const CODE_NUM_CTX_MIN = 16384
  * classique (non hybride) coûterait plusieurs Go de mémoire vidéo de plus. Abaissé encore à la limite du
  * modèle lui-même quand Ollama la donne.
  */
-export const CODE_NUM_CTX_MAX = 65536
+const CODE_NUM_CTX_MAX = 65536
 /**
  * Caractères par token, volontairement pessimiste : mesuré avec le tokenizer qwen3.5 (étape 159), du CSS
  * donne 2,9 caractères par token, du JavaScript 3,6, du français 3,8. Un HTML généré est surtout du CSS et
@@ -260,9 +259,7 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
           if (phase !== 'writing') phase = 'thinking'
           lastActivity = Date.now()
           emit(true)
-        },
-        // Étape 299 : le compteur « utilisé / maximum » du mode Code, pour la fenêtre de CET appel.
-        (metrics) => reportContextUsage('code', metrics, numCtx)
+        }
       )
     try {
       const numCtx = computeCodeNumCtx(messages, expectedOutputChars, modelMaxContext)

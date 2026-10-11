@@ -8000,3 +8000,15 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `node --test scripts/test-context-usage.mjs scripts/test-chat-conversations-ui.mjs` (maximum calculé
   côté main ; dans un vrai navigateur : « — / 32k » avant toute réponse, mesure ensuite, retour à « — / 32k » en
   changeant de fil, rien sans maximum connu — vérifié en retirant l'affichage d'avance).
+
+- **Compteur de mémoire RETIRÉ à la demande de Léo (étape 301, « enlève le contexte en fait »), une version après
+  l'avoir rendu visible (étape 300).** Cette entrée REMPLACE les étapes 299-300 pour l'affichage, même convention que le
+  retrait de KDE Connect ou de Mobile connecté : le CODE part, l'HISTORIQUE reste (les faits vérifiés sur
+  `prompt_eval_count` = cache + nouveau, et le piège des faux ponts à compléter, restent valables pour un futur
+  indicateur). Retirés : `contextUsage.ts`, `useContextUsage.ts`, `formatContextUsage.ts`, `ContextGauge` (Composer),
+  les canaux `contextUsage`/`getContextWindow`, les types, le CSS `.composer__context*`, les 3 phrases dans les 24
+  langues, `ChatMetrics.contextWindow` (son seul lecteur était le compteur) et les tests du compteur. **GARDÉ
+  volontairement** : le plafond de la fenêtre au maximum propre de chaque modèle (`fitToModelContext`, ollama.ts) — un
+  vrai correctif indépendant de l'affichage (un petit modèle ne reçoit plus une fenêtre plus grande que ce qu'il sait
+  lire), toujours couvert par `scripts/test-model-preload.mjs`. Grep-sweep fait : plus aucune référence au compteur ;
+  le seul écart restant avec la v0.34.5 dans `electron/`, `src/` et `shared/` est ce plafond.

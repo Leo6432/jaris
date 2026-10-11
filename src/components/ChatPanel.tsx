@@ -14,7 +14,6 @@ import WebActivityBlock from './WebActivityBlock'
 import { mergeWebActivity } from '@/lib/webActivity'
 import { DownloadIcon } from './icons'
 import { t } from '@/lib/i18n'
-import { useContextUsage } from '@/lib/useContextUsage'
 
 /**
  * Mode Chat (étape 30) : la même conversation que la voix, au clavier. Le fil vit côté main
@@ -35,8 +34,6 @@ export default function ChatPanel(): JSX.Element {
   const [attachment, setAttachment] = useState<ImageAttachment | null>(null)
   /** Conversations (étape 96) : la liste complète et laquelle est active — affichées par Workspace. */
   const [conversations, setConversations] = useState<ConversationList | null>(null)
-  // Étape 299 : « utilisé / maximum » de la mémoire du modèle, d'après Ollama, pour la conversation affichée.
-  const contextUsage = useContextUsage('chat', conversations?.activeId ?? null)
   const threadRef = useRef<HTMLDivElement>(null)
   /** Étape 185 : image tout juste enregistrée (index du message), le temps d'afficher ✓. */
   const [savedIndex, setSavedIndex] = useState<number | null>(null)
@@ -268,7 +265,6 @@ export default function ChatPanel(): JSX.Element {
           onAttachmentChange={setAttachment}
           onError={setError}
           submitOnEnter
-          contextUsage={contextUsage}
         />
       </div>
     </Workspace>

@@ -79,7 +79,6 @@ function setup(responses, { onBeforeCall, loaded = async () => true } = {}) {
     '../../shared/lineDiff': loadTsModule('shared/lineDiff.ts'),
     './hardwareScan': { pickBestCodeModel: async () => 'test-model' },
     './modelChoice': modelChoiceModule,
-    './contextUsage': { reportContextUsage: () => {} },
     './profileStore': { getProfile: async () => ({ codeModel: 'test-model', visionModel: 'vision-test' }) },
     '../config': { config: { ollama: { visionModel: 'vision-par-defaut' } } },
     './vision': { IMAGE_FOR_CODE_SYSTEM_PROMPT: 'prompt', describeImage: async () => 'une maquette' }

@@ -46,9 +46,8 @@ import {
   stopOllamaIfStartedByJaris,
   updateOllama
 } from './services/dependencyServices'
-import { deleteModel, fitToModelContext, getModelThinking, listInstalledModels, preloadModel, setModelsViewRepair, waitForOllama } from './services/ollama'
+import { deleteModel, getModelThinking, listInstalledModels, preloadModel, setModelsViewRepair, waitForOllama } from './services/ollama'
 import { StartupProgress } from './services/startupProgress'
-import { onContextUsage } from './services/contextUsage'
 import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES, resolveChosenModel } from './services/modelChoice'
 import { chosenThink, isAcceptedThink, thinkOptions, thinkingKind } from '../shared/effort'
 import { getStorageStatus, programMoveCommandLine, reconcileStorage, relocateEverything } from './services/relocation'
@@ -69,7 +68,7 @@ import { getDataRoot } from './services/dataLocation'
 import { resourcesRoot } from './paths'
 import { randomUUID } from 'crypto'
 import { tmpdir } from 'os'
-import { CODE_NUM_CTX_MAX, deleteGeneratedApp, generateApp, getGeneratedAppsDir, listGeneratedApps, loadGeneratedApp } from './services/codeGenerator'
+import { deleteGeneratedApp, generateApp, getGeneratedAppsDir, listGeneratedApps, loadGeneratedApp } from './services/codeGenerator'
 import {
   cancelGithubLogin,
   commitGithubChanges,
@@ -148,8 +147,7 @@ import {
   type ImageStudioStatus,
   type VideoStudioStatus,
   type VoiceTestStartResult,
-  type WidgetMode,
-  type ContextUsageScope
+  type WidgetMode
 } from '../shared/ipc'
 
 /**
@@ -1310,8 +1308,6 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.setupStatus, () => lastSetupStatus)
   ipcMain.handle(IPC_CHANNELS.getStartupState, () => startup.state())
   startup.on('change', (state) => broadcast(IPC_CHANNELS.startupState, state))
-  // Étape 299 : le compteur « utilisé / maximum » du Chat et du mode Code, mis à jour après chaque réponse.
-  onContextUsage((usage) => broadcast(IPC_CHANNELS.contextUsage, usage))
   ipcMain.on(IPC_CHANNELS.triggerWake, () => triggerVisibleWake())
   ipcMain.on(IPC_CHANNELS.audioEnded, () => pipeline?.notifyAudioEnded())
   ipcMain.handle(IPC_CHANNELS.getProfile, () => getProfile())
@@ -1446,17 +1442,6 @@ app.whenReady().then(async () => {
   // chacun pour que le dernier ne dépasse pas la vram") : le modèle de référence est celui du palier
   // PUISSANT (le plus gros modèle de conversation configuré, voir computeContextLengthOptions pour le
   // pourquoi), jamais un modèle choisi par le renderer — recalculé à chaque ouverture de l'onglet.
-  // Étape 300 (Léo : « je vois pas le contexte, c'est où ? ») : le compteur n'apparaissait qu'après une réponse du
-  // modèle — jamais tant que la conversation ne faisait que reprendre, ni après une réponse directe (« salut »). Le
-  // maximum est connu d'avance : la mémoire réglée en Chat (ramenée au modèle choisi à la main s'il y en a un), le
-  // plafond du mode Code ramené au modèle Code. L'utilisé, lui, n'est jamais inventé : il vient après la réponse.
-  ipcMain.handle(IPC_CHANNELS.getContextWindow, async (_event, scope: ContextUsageScope): Promise<number | null> => {
-    const profile = await getProfile()
-    if (scope === 'code') return profile?.codeModel ? fitToModelContext(profile.codeModel, CODE_NUM_CTX_MAX) : null
-    const setting = profile?.contextLength ?? config.ollama.numCtx
-    const chosen = profile?.modelChoices?.chat
-    return chosen ? fitToModelContext(chosen, setting) : setting
-  })
   ipcMain.handle(IPC_CHANNELS.getContextLengthOptions, async () => {
     const profile = await getProfile()
     const model = profile?.models?.large ?? config.ollama.model

@@ -48,7 +48,6 @@ function converseWith(journal, chat, execute) {
     './systemPrompt': systemPromptModule,
     '../../shared/effort': load('shared/effort.ts'),
     './memoryStore': { listMemoryTitles: async () => [] },
-    './contextUsage': { reportContextUsage: () => {} },
     './profileStore': { getProfile: async () => null },
     './notepad': { requestedNotepadText: () => undefined, openNotepadText: async () => '' },
     './appLauncher': { didAppLaunch: (result) => result.endsWith('a été lancé.') },
@@ -175,8 +174,7 @@ test('chatWithOllama transmet les mesures d’Ollama (réponse d’un bloc, comm
   const chat = loadOllama({ ok: true, status: 200, json: async () => data })
   let metrics
   await chat([{ role: 'user', content: 'x' }], [], 'm', 'medium', undefined, 8192, undefined, undefined, (m) => (metrics = m))
-  // Étape 299 : la fenêtre réellement demandée (ici non plafonnée) accompagne les mesures, pour le compteur.
-  assert.equal(JSON.stringify(metrics), JSON.stringify({ loadMs: 41000, promptTokens: 4300, promptMs: 2200, outputTokens: 1200, outputMs: 48000, thinkingChars: 6, contextWindow: 8192 }))
+  assert.equal(JSON.stringify(metrics), JSON.stringify({ loadMs: 41000, promptTokens: 4300, promptMs: 2200, outputTokens: 1200, outputMs: 48000, thinkingChars: 6 }))
 })
 
 test('chatWithOllama transmet les mesures d’Ollama en streaming (Chat), réflexion comptée', async () => {

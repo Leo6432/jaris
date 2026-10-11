@@ -30,7 +30,6 @@ function setup(chat, execute, writeNote = async () => assert.fail('aucun documen
     './ollama': { chatWithOllama: chat, listInstalledModels: async () => ['test'] },
     './systemPrompt': systemPromptModule,
     './memoryStore': { listMemoryTitles: async () => [] },
-    './contextUsage': { reportContextUsage: () => {} },
     './profileStore': { getProfile: async () => null },
     './notepad': { requestedNotepadText: noteExports.requestedNotepadText, openNotepadText: writeNote },
     './appLauncher': { didAppLaunch: (result) => result.endsWith('a été lancé.') },

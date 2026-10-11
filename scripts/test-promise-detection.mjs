@@ -22,7 +22,6 @@ const modules = {
   './ollama': {},
   './systemPrompt': systemPromptModule,
   './memoryStore': {},
-  './contextUsage': { reportContextUsage: () => {} },
   './profileStore': {},
   // TOOLS doit être un vrai tableau (pas {}) : assistant.ts calcule `TOOL_NAMES = TOOLS.map(...)` au niveau
   // module (findLeakedToolName, voir test-false-completion.mjs) — un mock vide ferait planter le chargement

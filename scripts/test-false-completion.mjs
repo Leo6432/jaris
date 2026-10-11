@@ -34,7 +34,6 @@ const modules = {
   './ollama': {},
   './systemPrompt': systemPromptModule,
   './memoryStore': {},
-  './contextUsage': { reportContextUsage: () => {} },
   './profileStore': {},
   './tools': {
     TOOLS: REAL_TOOL_NAMES.map((name) => ({ function: { name } })),

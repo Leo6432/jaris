@@ -180,7 +180,8 @@ test('sans appairage : écran de code ; le lien du QR connecte tout seul et effa
     assert.equal(await page.isVisible('#app'), false)
     await open(page, server, base)
     assert.equal(new URL(page.url()).hash, '', 'le code ne reste pas dans l’adresse')
-    assert.match(await page.textContent('.messages'), /Écris à Jaris/)
+    // Attendu plutôt que lu tout de suite : sous la charge de la suite complète, le mot d'accueil arrivait parfois après.
+    await page.waitForFunction(() => /Écris à Jaris/.test(document.querySelector('.messages')?.textContent ?? ''))
   })
 })
 

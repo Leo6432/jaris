@@ -65,7 +65,6 @@ function setup(responses, { profile = { codeModel: 'test-model', visionModel: 'v
     '../../shared/lineDiff': loadTsModule('shared/lineDiff.ts'),
     './hardwareScan': { pickBestCodeModel: async () => 'test-model' },
     './modelChoice': modelChoiceModule,
-    './contextUsage': { reportContextUsage: () => {} },
     './profileStore': { getProfile: async () => profile },
     // Étape 91 : une maquette jointe est d'abord traduite en TEXTE par le modèle de vision (le modèle de
     // code ne sait pas lire une image, et les deux ne tiennent pas ensemble en VRAM).

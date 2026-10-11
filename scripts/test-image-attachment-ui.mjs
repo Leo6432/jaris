@@ -42,13 +42,6 @@ window.__sent = []
 window.__nextPickedFile = null
 window.__pickCalls = 0
 window.jaris = {
-  // Étape 299 : le compteur « utilisé / maximum » ; __emitUsage le simule comme le processus principal.
-  onContextUsage: (cb) => {
-    window.__emitUsage = cb
-    return () => {}
-  },
-  // Étape 300 : la fenêtre connue avant toute réponse (aucune : le compteur attend une mesure).
-  getContextWindow: () => Promise.resolve(window.__contextWindow === undefined ? null : window.__contextWindow),
   getChatHistory: () => Promise.resolve([]),
   // Ajouté à l'étape 96 : ChatPanel liste ses conversations au montage. Sans ce faux canal, le composant
   // plante dans son effet et la page ne rend jamais rien — le test paraît alors juste "bloqué".

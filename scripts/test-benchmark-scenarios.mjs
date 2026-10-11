@@ -480,7 +480,6 @@ function loadRealConverse() {
     },
     '../../shared/effort': effort,
     './memoryStore': { listMemoryTitles: async () => current.sim.noteTitles() },
-    './contextUsage': { reportContextUsage: () => {} },
     './profileStore': { getProfile: async () => null },
     './tools': {
       TOOLS,

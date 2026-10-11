@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import Composer from '@/components/Composer'
-import { useContextUsage } from '@/lib/useContextUsage'
 import EmptyState from '@/components/EmptyState'
 import Workspace from '@/components/Workspace'
 import { formatCodeLive, formatDuration } from '@/lib/formatCodeGenProgress'
@@ -639,8 +638,6 @@ export default function CodePanel(): JSX.Element {
   // La conversation affichée est enregistrée sous le nom de son élément, une fois le travail fini (jamais pendant :
   // la phrase de Jaris change à chaque fragment reçu). La fin du dernier travail (durée, fichiers) en fait partie.
   const activeConversation = appResult ? appConversationKey(appResult.path) : repo ? repoConversationKey(repo.fullName) : null
-  // Étape 299 : « utilisé / maximum » de la mémoire du modèle, d'après Ollama, pour la conversation affichée.
-  const contextUsage = useContextUsage('code', activeConversation)
   useEffect(() => {
     const owner = conversationOwnerRef.current
     if (generating || !owner || owner !== activeConversation) return
@@ -864,7 +861,6 @@ export default function CodePanel(): JSX.Element {
               }
               attachment={attachment}
               onAttachmentChange={setAttachment}
-              contextUsage={contextUsage}
               onError={setError}
               rows={3}
             />

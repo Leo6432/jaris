@@ -102,13 +102,6 @@ window.__calls = []
 const list = () => Promise.resolve(JSON.parse(JSON.stringify(window.__state)))
 
 window.jaris = {
-  // Étape 299 : le compteur « utilisé / maximum » ; __emitUsage le simule comme le processus principal.
-  onContextUsage: (cb) => {
-    window.__emitUsage = cb
-    return () => {}
-  },
-  // Étape 300 : la fenêtre connue avant toute réponse (32k réglés).
-  getContextWindow: () => Promise.resolve(window.__contextWindow === undefined ? 32768 : window.__contextWindow),
   getChatHistory: () => Promise.resolve(THREADS[window.__state.activeId] ?? []),
   listConversations: list,
   selectConversation: (id) => {
@@ -249,45 +242,6 @@ test('changer de conversation recharge VRAIMENT le fil affiché', options, async
     assert.doesNotMatch(thread, /chats dorment/, "les messages de l'ancien fil sont restés à l'écran")
     assert.equal(await page.textContent('.workspace__item--active .workspace__item-title'), 'recette de crêpes')
     assert.deepEqual(await page.evaluate(() => window.__calls), [['select', 'b']])
-  })
-})
-
-// Étape 299 (Léo : « comme ChatGPT ou Claude, par exemple 461k/1m ») : le compteur de mémoire, après une réponse.
-test('compteur « utilisé / maximum » : visible dès l’ouverture, mesuré après une réponse, orange passé 80 %', options, async () => {
-  await withPage(async (page) => {
-    await page.waitForSelector('.chat-panel__message')
-    // Étape 300 (Léo : « je vois pas le contexte, c'est où ? ») : visible tout de suite, avec le maximum réglé — et
-    // l'utilisé jamais inventé avant une vraie mesure.
-    await page.waitForSelector('.composer__context')
-    assert.equal((await page.textContent('.composer__context-text')).trim(), '— / 32k')
-    assert.match(await page.getAttribute('.composer__context', 'title'), /prochaine réponse/)
-    await page.evaluate(() => window.__emitUsage({ scope: 'chat', used: 5213, max: 32768 }))
-    await page.waitForFunction(() => document.querySelector('.composer__context-text')?.textContent.trim() === '5,1k / 32k')
-    assert.match(await page.getAttribute('.composer__context', 'title'), /5\s?213 tokens utilisés sur 32\s?768/)
-    const calm = await page.$eval('.composer__context', (el) => getComputedStyle(el).color)
-
-    // Une mesure du mode Code ne s'affiche jamais dans le Chat.
-    await page.evaluate(() => window.__emitUsage({ scope: 'code', used: 99, max: 100 }))
-    assert.equal((await page.textContent('.composer__context-text')).trim(), '5,1k / 32k')
-
-    await page.evaluate(() => window.__emitUsage({ scope: 'chat', used: 28000, max: 32768 }))
-    await page.waitForSelector('.composer__context--high')
-    assert.notEqual(await page.$eval('.composer__context', (el) => getComputedStyle(el).color), calm, 'aucune alerte visible passé 80 %')
-
-    // Le chiffre décrivait l'ancienne conversation : en en ouvrant une autre, on revient au maximum seul.
-    await page.click('.workspace__list li:nth-child(2) .workspace__item')
-    await page.waitForFunction(() => document.querySelector('.composer__context-text')?.textContent.trim() === '— / 32k')
-  })
-})
-
-test('compteur : sans maximum connu (Ollama injoignable), rien n’est affiché plutôt qu’un chiffre faux', options, async () => {
-  await withPage(async (page) => {
-    await page.evaluate(() => {
-      window.__contextWindow = null
-    })
-    await page.click('.workspace__new')
-    await page.waitForFunction(() => document.querySelectorAll('.chat-panel__message').length === 0)
-    await page.waitForFunction(() => !document.querySelector('.composer__context'))
   })
 })
 

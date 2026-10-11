@@ -53,13 +53,6 @@ window.__apps = window.__presetApps ?? [
 window.__deleted = []
 
 window.jaris = {
-  // Étape 299 : le compteur « utilisé / maximum » ; __emitUsage le simule comme le processus principal.
-  onContextUsage: (cb) => {
-    window.__emitUsage = cb
-    return () => {}
-  },
-  // Étape 300 : la fenêtre connue avant toute réponse (aucune : le compteur attend une mesure).
-  getContextWindow: () => Promise.resolve(window.__contextWindow === undefined ? null : window.__contextWindow),
   // Rappel gardé pour que le test puisse simuler une vraie ligne de journal (voir le test du cadre unique).
   onCodeGenStatus: (cb) => {
     window.__status = cb
@@ -273,25 +266,6 @@ test('la conversation garde les demandes ; la fin de la précédente y reste, sa
     assert.match(await page.textContent('.code-chat__worked'), /^Travaillé pendant \d+ s$/)
     assert.equal(await page.locator('.changes-card__actions button').count(), 0, 'une carte ancienne garde ses boutons')
   })
-})
-
-// Étape 299 : le compteur garde sa place dans le champ, même à 760 px, et reste après la création de l'application.
-test('compteur « utilisé / maximum » dans le mode Code : gardé à la fin de la création, sans débordement à 760 px', options, async () => {
-  await withPage(async (page) => {
-    await startGeneration(page)
-    await page.evaluate(() => window.__emitUsage({ scope: 'code', used: 12500, max: 16384 }))
-    await page.waitForSelector('.composer__context')
-    await page.evaluate(() => window.__finishGen())
-    await page.waitForSelector('.changes-card')
-    assert.equal((await page.textContent('.composer__context-text')).trim(), '12k / 16k', 'effacé alors que c’est la même conversation')
-    const layout = await page.evaluate(() => {
-      const bar = document.querySelector('.composer__actions').getBoundingClientRect()
-      const gauge = document.querySelector('.composer__context').getBoundingClientRect()
-      return { inside: gauge.left >= bar.left && gauge.right <= bar.right, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }
-    })
-    assert.ok(layout.inside, 'le compteur sort de la barre du champ')
-    assert.equal(layout.overflow, 0)
-  }, 760)
 })
 
 test('fenêtre étroite : l’aperçu passe au-dessus de la conversation, sans débordement', options, async () => {

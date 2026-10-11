@@ -768,18 +768,6 @@ export interface GeneratedAppSummary {
  * dépôts », connexion « la plus facile pour les utilisateurs »). Le jeton de connexion ne quitte JAMAIS le main :
  * l'écran ne voit que ces descriptions.
  */
-/**
- * Étape 299 : place occupée dans la mémoire du modèle après une réponse, d'après Ollama (voir contextUsage.ts). `chat`
- * couvre la conversation (voix comprise : c'est la même), `code` le mode Code.
- */
-export type ContextUsageScope = 'chat' | 'code'
-
-export interface ContextUsage {
-  scope: ContextUsageScope
-  used: number
-  max: number
-}
-
 export interface GithubStatus {
   /** Faux tant qu'aucune application GitHub n'est configurée pour Jaris (identifiant client vide) : tout est masqué. */
   available: boolean
@@ -1003,10 +991,6 @@ export const IPC_CHANNELS = {
   cancelCodeGen: 'jaris:cancel-code-gen',
   /** Étape 277 : connexion GitHub et travail sur les dépôts depuis le mode Code (voir GithubStatus). L'arrêt d'un
    * travail en cours passe par `cancelCodeGen`, comme une génération : un seul travail à la fois dans le mode Code. */
-  /** Étape 299 : place occupée dans la mémoire du modèle (main → fenêtres). */
-  contextUsage: 'jaris:context-usage',
-  /** Étape 300 : la fenêtre connue AVANT toute réponse, pour que le compteur soit visible tout de suite. */
-  getContextWindow: 'jaris:get-context-window',
   githubStatus: 'jaris:github-status',
   githubStartLogin: 'jaris:github-start-login',
   githubFinishLogin: 'jaris:github-finish-login',

@@ -163,7 +163,6 @@ function setupCodegen(answer, { modelMax = 262144 } = {}) {
     },
     './hardwareScan': { pickBestCodeModel: async () => 'test-model' },
     './modelChoice': modelChoiceModule,
-    './contextUsage': { reportContextUsage: () => {} },
     './profileStore': { getProfile: async () => ({ codeModel: 'test-model' }) },
     '../config': { config: { ollama: { visionModel: 'v' } } },
     './vision': { IMAGE_FOR_CODE_SYSTEM_PROMPT: '', describeImage: async () => '' }

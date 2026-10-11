@@ -53,8 +53,6 @@ export interface ChatMetrics {
   outputTokens?: number
   outputMs?: number
   thinkingChars: number
-  /** Étape 299 : la fenêtre RÉELLEMENT demandée pour cet appel (après plafonnement au maximum du modèle). */
-  contextWindow?: number
 }
 
 function metricsOf(data: OllamaChatResponse, thinkingChars: number): ChatMetrics {
@@ -132,7 +130,7 @@ async function requestChat(
       throw new ContextFullError(model, numCtx)
     }
     if (!data.message) throw new Error(t('ollama.empty', { model }))
-    onMetrics?.({ ...metricsOf(data, data.message.thinking?.length ?? 0), contextWindow: numCtx })
+    onMetrics?.(metricsOf(data, data.message.thinking?.length ?? 0))
     return data.message
   }
 
@@ -185,7 +183,7 @@ async function requestChat(
     if (doneReason === 'length') throw new ContextFullError(model, numCtx)
     throw new Error(t('ollama.empty', { model }))
   }
-  if (finalChunk) onMetrics?.({ ...metricsOf(finalChunk, thinkingChars), contextWindow: numCtx })
+  if (finalChunk) onMetrics?.(metricsOf(finalChunk, thinkingChars))
   return { role, content, tool_calls: toolCalls }
 }
 
@@ -376,7 +374,7 @@ const thinkingCache = new Map<string, ModelThinking>()
  * Étape 299 (Léo : « on est d'accord que tous les modèles n'ont pas le même contexte ? ») : chaque modèle a son propre
  * maximum (`model_info["<architecture>.context_length"]` dans `/api/show`). La mémoire réglée dans Options vaut pour
  * TOUS les modèles de conversation : sans plafond, un petit modèle pouvait recevoir une fenêtre plus grande que ce
- * qu'il sait lire, et le compteur afficher une limite qui n'est pas la sienne. Mis en cache par modèle (une seule
+ * qu'il sait lire. Mis en cache par modèle (une seule
  * lecture) ; une lecture impossible ne plafonne rien, exactement le comportement d'avant.
  */
 const nativeContextCache = new Map<string, number | null>()
