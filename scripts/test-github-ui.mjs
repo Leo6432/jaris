@@ -112,6 +112,8 @@ window.jaris = {
   },
   githubCommit: (fullName, message) => {
     window.__calls.commit.push([fullName, message])
+    // Comme le vrai : une fois enregistré, plus rien n'est préparé (rouvrir le dépôt le retrouve propre).
+    window.__agentDone = false
     return Promise.resolve({ sha: 'abc1234def', url: 'https://github.com/leo/projet/commit/abc1234def', view: VIEW })
   }
 }
@@ -596,6 +598,37 @@ const threadLines = (page) =>
       return `${kind}:${text}`
     })
   )
+
+// Étape 302 (Léo : « pourquoi les boutons disparaissent quand je relance, afficher modification etc. ») : un travail
+// enregistré sur GitHub reste consultable quand on revient à la conversation — plus de carte muette.
+test('enregistré sur GitHub : en revenant à la conversation, la carte propose « Voir sur GitHub »', options, async () => {
+  await withPage(async (page) => {
+    await connectAndOpen(page)
+    await page.fill('.composer textarea', 'Corrige les fautes du README')
+    await page.click('.composer__send')
+    await page.evaluate(() => window.__finishAgent())
+    await page.waitForSelector('.changes-card__show')
+    await page.click('.changes-card__show')
+    await page.waitForSelector('.repo-panel__save')
+    await page.click('.repo-panel__save')
+    await page.waitForFunction(() => window.__calls.commit.length === 1)
+
+    // Comme une relance : on quitte le dépôt, puis on y revient par la liste — plus rien n'est préparé en mémoire.
+    await page.click('.workspace__item:has-text("liste de courses")')
+    await page.waitForSelector('.empty-state')
+    await page.click('.workspace__item:has-text("leo/projet")')
+    await page.waitForSelector('.changes-card')
+    const link = page.locator('.changes-card a.changes-card__show')
+    await link.waitFor()
+    assert.equal(await link.textContent(), 'Voir sur GitHub')
+    assert.equal(await link.getAttribute('href'), 'https://github.com/leo/projet/commit/abc1234def')
+    assert.equal(await link.getAttribute('target'), '_blank')
+    // Habillé comme les autres boutons de la carte, pas en lien bleu souligné du navigateur.
+    const style = await link.evaluate((el) => ({ decoration: getComputedStyle(el).textDecorationLine, radius: getComputedStyle(el).borderTopLeftRadius }))
+    assert.equal(style.decoration, 'none')
+    assert.notEqual(style.radius, '0px')
+  })
+})
 
 test('un dépôt ouvert apparaît à gauche, et sa conversation revient quand on le rouvre (étape 288)', options, async () => {
   // Léo : « c'est bizarre, je suis dans le chat en train de parler et je vois aucune conversation à gauche » — la liste

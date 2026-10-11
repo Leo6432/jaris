@@ -384,6 +384,8 @@
   "changes.showMore_zero": "Rādīt vēl {count} failus",
   "changes.showMore_one": "Rādīt vēl {count} failu",
   "changes.showMore_other": "Rādīt vēl {count} failus",
+  "changes.viewOnGithub": "Skatīt GitHub",
+  "changes.viewOnGithub.title": "Atvērt saglabātās izmaiņas GitHub",
   "error.title": "{label}: radās problēma",
   "error.hint": "Pārējais Jaris turpina darboties. Mēģini vēlreiz; ja tas atkārtojas, restartē Jaris.",
   "error.detail": "Sīkāk: {message}",

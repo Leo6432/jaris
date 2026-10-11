@@ -375,6 +375,8 @@
   "changes.showLess": "Show less",
   "changes.showMore_one": "Show {count} more file",
   "changes.showMore_other": "Show {count} more files",
+  "changes.viewOnGithub": "View on GitHub",
+  "changes.viewOnGithub.title": "Open the saved changes on GitHub",
   "error.title": "{label} ran into a problem",
   "error.hint": "The rest of Jaris still works. Try again; if it happens again, restart Jaris.",
   "error.detail": "Detail: {message}",

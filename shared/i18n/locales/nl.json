@@ -375,6 +375,8 @@
   "changes.showLess": "Minder tonen",
   "changes.showMore_one": "Nog {count} bestand tonen",
   "changes.showMore_other": "Nog {count} bestanden tonen",
+  "changes.viewOnGithub": "Bekijken op GitHub",
+  "changes.viewOnGithub.title": "De opgeslagen wijzigingen op GitHub openen",
   "error.title": "{label} heeft een probleem gehad",
   "error.hint": "De rest van Jaris werkt nog. Probeer het opnieuw; als het weer gebeurt, start Jaris opnieuw.",
   "error.detail": "Detail: {message}",

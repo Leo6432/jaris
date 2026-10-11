@@ -7902,6 +7902,11 @@ select {
   border-color: var(--hud-line);
 }
 
+/* Étape 302 : « Voir sur GitHub » est un lien, habillé exactement comme le bouton qu'il remplace. */
+a.changes-card__show {
+  text-decoration: none;
+}
+
 .changes-card__undo:hover:not(:disabled),
 .changes-card__show:hover {
   background: var(--jv-hover);

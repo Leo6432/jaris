@@ -384,6 +384,8 @@
   "changes.showMore_one": "Prikaži još {count} datoteku",
   "changes.showMore_few": "Prikaži još {count} datoteke",
   "changes.showMore_other": "Prikaži još {count} datoteka",
+  "changes.viewOnGithub": "Pogledaj na GitHubu",
+  "changes.viewOnGithub.title": "Otvori spremljene promjene na GitHubu",
   "error.title": "{label}: došlo je do problema",
   "error.hint": "Ostatak Jarisa i dalje radi. Pokušaj ponovno; ako se ponovi, ponovno pokreni Jarisa.",
   "error.detail": "Pojedinosti: {message}",

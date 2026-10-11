@@ -375,6 +375,8 @@
   "changes.showLess": "Visa mindre",
   "changes.showMore_one": "Visa {count} fil till",
   "changes.showMore_other": "Visa {count} filer till",
+  "changes.viewOnGithub": "Visa på GitHub",
+  "changes.viewOnGithub.title": "Öppna de sparade ändringarna på GitHub",
   "error.title": "{label} stötte på ett problem",
   "error.hint": "Resten av Jaris fungerar fortfarande. Försök igen; om det händer igen, starta om Jaris.",
   "error.detail": "Detalj: {message}",

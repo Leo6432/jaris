@@ -375,6 +375,8 @@
   "changes.showLess": "Λιγότερα",
   "changes.showMore_one": "Εμφάνιση {count} ακόμα αρχείου",
   "changes.showMore_other": "Εμφάνιση {count} ακόμα αρχείων",
+  "changes.viewOnGithub": "Προβολή στο GitHub",
+  "changes.viewOnGithub.title": "Άνοιγμα των αποθηκευμένων αλλαγών στο GitHub",
   "error.title": "{label}: παρουσιάστηκε πρόβλημα",
   "error.hint": "Ο υπόλοιπος Jaris συνεχίζει να λειτουργεί. Δοκίμασε ξανά· αν ξανασυμβεί, επανεκκίνησε τον Jaris.",
   "error.detail": "Λεπτομέρεια: {message}",

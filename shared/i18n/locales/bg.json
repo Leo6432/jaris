@@ -375,6 +375,8 @@
   "changes.showLess": "Покажи по-малко",
   "changes.showMore_one": "Покажи още {count} файл",
   "changes.showMore_other": "Покажи още {count} файла",
+  "changes.viewOnGithub": "Виж в GitHub",
+  "changes.viewOnGithub.title": "Отвори запазените промени в GitHub",
   "error.title": "{label}: възникна проблем",
   "error.hint": "Останалата част от Jaris продължава да работи. Опитай пак; ако се повтори, рестартирай Jaris.",
   "error.detail": "Подробности: {message}",

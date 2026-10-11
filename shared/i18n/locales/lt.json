@@ -384,6 +384,8 @@
   "changes.showMore_one": "Rodyti dar {count} failą",
   "changes.showMore_few": "Rodyti dar {count} failus",
   "changes.showMore_other": "Rodyti dar {count} failų",
+  "changes.viewOnGithub": "Žiūrėti GitHub",
+  "changes.viewOnGithub.title": "Atidaryti išsaugotus pakeitimus GitHub",
   "error.title": "{label}: kilo problema",
   "error.hint": "Likusi Jaris dalis toliau veikia. Bandyk dar kartą; jei tai kartojasi, paleisk Jaris iš naujo.",
   "error.detail": "Išsamiau: {message}",

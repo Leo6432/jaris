@@ -393,6 +393,8 @@
   "changes.showMore_two": "Pokaži še {count} datoteki",
   "changes.showMore_few": "Pokaži še {count} datoteke",
   "changes.showMore_other": "Pokaži še {count} datotek",
+  "changes.viewOnGithub": "Ogled na GitHubu",
+  "changes.viewOnGithub.title": "Odpri shranjene spremembe na GitHubu",
   "error.title": "{label}: prišlo je do težave",
   "error.hint": "Preostali Jaris deluje naprej. Poskusi znova; če se ponovi, znova zaženi Jarisa.",
   "error.detail": "Podrobnosti: {message}",

@@ -375,6 +375,8 @@
   "changes.showLess": "Näita vähem",
   "changes.showMore_one": "Näita veel {count} faili",
   "changes.showMore_other": "Näita veel {count} faili",
+  "changes.viewOnGithub": "Vaata GitHubis",
+  "changes.viewOnGithub.title": "Ava salvestatud muudatused GitHubis",
   "error.title": "{label}: tekkis probleem",
   "error.hint": "Ülejäänud Jaris töötab edasi. Proovi uuesti; kui see kordub, taaskäivita Jaris.",
   "error.detail": "Üksikasjad: {message}",

@@ -20,6 +20,11 @@ interface Props {
     showLabel: string
     busy?: boolean
   }
+  /**
+   * Étape 302 : ces changements ont été enregistrés sur GitHub. Sans boutons en direct (carte plus ancienne, ou Jaris
+   * relancé), la carte propose de revoir le commit sur GitHub plutôt que de rester muette.
+   */
+  commitUrl?: string
 }
 
 /** Comme ChatGPT : trois fichiers, le reste derrière « Afficher N autres fichiers ». */
@@ -68,7 +73,7 @@ function FileRow({ file }: { file: ChangedFile }): JSX.Element {
   )
 }
 
-export default function ChangesCard({ files, actions }: Props): JSX.Element {
+export default function ChangesCard({ files, actions, commitUrl }: Props): JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const added = files.reduce((sum, file) => sum + file.added, 0)
   const removed = files.reduce((sum, file) => sum + file.removed, 0)
@@ -103,6 +108,13 @@ export default function ChangesCard({ files, actions }: Props): JSX.Element {
             <button type="button" className="changes-card__show" onClick={actions.onShow}>
               {actions.showLabel}
             </button>
+          </span>
+        )}
+        {!actions && commitUrl && (
+          <span className="changes-card__actions">
+            <a className="changes-card__show" href={commitUrl} target="_blank" rel="noreferrer" title={t('changes.viewOnGithub.title')}>
+              {t('changes.viewOnGithub')}
+            </a>
           </span>
         )}
       </header>

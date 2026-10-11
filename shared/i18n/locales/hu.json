@@ -375,6 +375,8 @@
   "changes.showLess": "Kevesebb megjelenítése",
   "changes.showMore_one": "Még {count} fájl megjelenítése",
   "changes.showMore_other": "Még {count} fájl megjelenítése",
+  "changes.viewOnGithub": "Megtekintés a GitHubon",
+  "changes.viewOnGithub.title": "A mentett módosítások megnyitása a GitHubon",
   "error.title": "{label}: hiba történt",
   "error.hint": "Jaris többi része továbbra is működik. Próbáld újra; ha megismétlődik, indítsd újra Jarist.",
   "error.detail": "Részletek: {message}",

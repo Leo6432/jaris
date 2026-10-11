@@ -384,6 +384,8 @@
   "changes.showMore_one": "Afișează încă {count} fișier",
   "changes.showMore_few": "Afișează încă {count} fișiere",
   "changes.showMore_other": "Afișează încă {count} de fișiere",
+  "changes.viewOnGithub": "Vezi pe GitHub",
+  "changes.viewOnGithub.title": "Deschide pe GitHub modificările salvate",
   "error.title": "{label}: a apărut o problemă",
   "error.hint": "Restul lui Jaris funcționează în continuare. Încearcă din nou; dacă se repetă, repornește Jaris.",
   "error.detail": "Detaliu: {message}",

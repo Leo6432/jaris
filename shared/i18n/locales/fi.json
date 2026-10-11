@@ -375,6 +375,8 @@
   "changes.showLess": "Näytä vähemmän",
   "changes.showMore_one": "Näytä {count} tiedosto lisää",
   "changes.showMore_other": "Näytä {count} tiedostoa lisää",
+  "changes.viewOnGithub": "Näytä GitHubissa",
+  "changes.viewOnGithub.title": "Avaa tallennetut muutokset GitHubissa",
   "error.title": "Ongelma: {label}",
   "error.hint": "Muu Jaris toimii edelleen. Yritä uudelleen; jos ongelma toistuu, käynnistä Jaris uudelleen.",
   "error.detail": "Lisätietoja: {message}",

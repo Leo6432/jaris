@@ -157,10 +157,11 @@ test('dessiner : avancement avec barre, puis l’image s’affiche et rejoint la
     assert.match(await page.textContent('.workspace__item--active'), /Un phare/)
     assert.equal(await page.locator('.image-panel__title').count(), 0)
     assert.match(await page.textContent('.workspace__rail'), /Un phare/)
-    // Mesure une fois l'image décodée : sous charge (suite complète), la mesure tombait parfois avant, à 1x1.
+    // Mesure une fois l'image décodée ET mise à sa taille finale : sous charge (suite complète), la mesure tombait
+    // parfois entre les deux, à 1x1. Si elle n'atteint jamais sa taille, l'attente échoue : le test garde son mordant.
     await page.waitForFunction(() => {
       const el = document.querySelector('.image-panel__image')
-      return el && el.complete && el.naturalWidth > 0
+      return el && el.complete && el.naturalWidth > 0 && el.getBoundingClientRect().width > 200
     })
     const image = await page.$eval('.image-panel__image', (el) => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height, fit: getComputedStyle(el).objectFit } })
     assert.equal(image.fit, 'contain', 'image entière, jamais rognée')

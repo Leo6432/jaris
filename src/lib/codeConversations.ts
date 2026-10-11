@@ -22,8 +22,27 @@ export type ChatTurn =
   | { id: number; kind: 'activity'; activity: CodeActivity }
   /** Étape 290 : « Travaillé pendant 2 min 10 » (ou « Arrêté après… »), à la place du bandeau vert de fin. */
   | { id: number; kind: 'worked'; durationMs: number; stopped?: boolean }
-  /** Étape 290 : la carte « N fichiers modifiés », comme ChatGPT. */
-  | { id: number; kind: 'changes'; files: ChangedFile[] }
+  /**
+   * Étape 290 : la carte « N fichiers modifiés », comme ChatGPT. Étape 302 : `commit`, une fois ces changements
+   * enregistrés sur GitHub — gardé avec la conversation, pour pouvoir les revoir même après une relance de Jaris.
+   */
+  | { id: number; kind: 'changes'; files: ChangedFile[]; commit?: { url: string; sha: string } }
+
+/**
+ * Étape 302 (Léo : « pourquoi les boutons disparaissent quand je relance ») : le commit enregistré est attaché à la
+ * carte du DERNIER travail. Ce qui est préparé ne vit qu'en mémoire (fermer Jaris l'abandonne, voir githubSession.ts)
+ * et disparaît donc avec ses boutons ; un commit, lui, existe pour de bon sur GitHub et reste consultable. Pure.
+ */
+export function attachCommit(turns: ChatTurn[], commit: { url: string; sha: string }): ChatTurn[] {
+  for (let index = turns.length - 1; index >= 0; index--) {
+    const turn = turns[index]
+    if (turn.kind !== 'changes') continue
+    const next = [...turns]
+    next[index] = { ...turn, commit }
+    return next
+  }
+  return turns
+}
 
 export interface RecentRepo {
   fullName: string

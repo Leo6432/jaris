@@ -393,6 +393,8 @@
   "changes.showMore_few": "Показати ще {count} файли",
   "changes.showMore_many": "Показати ще {count} файлів",
   "changes.showMore_other": "Показати ще {count} файлів",
+  "changes.viewOnGithub": "Переглянути на GitHub",
+  "changes.viewOnGithub.title": "Відкрити збережені зміни на GitHub",
   "error.title": "{label}: виникла проблема",
   "error.hint": "Решта Jaris працює далі. Спробуй ще раз; якщо повториться, перезапусти Jaris.",
   "error.detail": "Подробиці: {message}",

@@ -8051,3 +8051,20 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   vrai correctif indépendant de l'affichage (un petit modèle ne reçoit plus une fenêtre plus grande que ce qu'il sait
   lire), toujours couvert par `scripts/test-model-preload.mjs`. Grep-sweep fait : plus aucune référence au compteur ;
   le seul écart restant avec la v0.34.5 dans `electron/`, `src/` et `shared/` est ce plafond.
+
+- **« Pourquoi les boutons disparaissent quand je relance, afficher modification etc. » (Léo, capture d'une carte
+  « 1 fichier modifié » + « Enregistré sur GitHub (a2b162d) », étape 302).** Les boutons de la carte de fin (étape 290)
+  n'existent que tant qu'ils ont un sens EN MÉMOIRE : des changements préparés (`repo.changes`) ou un enregistrement
+  de cette session (`committed`). Les deux disparaissent à la relance — ce qui est préparé ne vit qu'en mémoire,
+  « fermer Jaris abandonne les changements non enregistrés » (githubSession.ts, choix assumé) — donc la carte restait
+  muette, même pour un travail bel et bien enregistré sur GitHub. Corrigé : au moment de l'enregistrement, le commit
+  (`url`, `sha`) est attaché à la carte du DERNIER travail (`attachCommit`, codeConversations.ts, pure) et gardé avec
+  la conversation ; sans boutons en direct, la carte propose « Voir sur GitHub » (lien vers le commit, ouvert dans le
+  navigateur, habillé comme les autres boutons de la carte). Un travail NON enregistré reste perdu à la fermeture,
+  comme avant. **Piège trouvé par le test, pas en relecture : le faux GitHub de `test-github-ui.mjs` gardait les
+  changements « préparés » APRÈS un enregistrement (rouvrir le dépôt les rendait encore), contrairement au vrai —
+  la carte gardait donc ses boutons en direct et le test ne pouvait pas voir le nouveau lien. Un faux service doit
+  reproduire les transitions d'état du vrai (ici : enregistrer vide ce qui est préparé), pas seulement ses réponses.**
+  Régression : `node --test scripts/test-code-commit-card.mjs scripts/test-github-ui.mjs` (commit sur la seule carte du
+  dernier travail ; dans un vrai navigateur : travailler, enregistrer, quitter le dépôt, y revenir → « Voir sur
+  GitHub » pointe sur le commit — vérifié en retirant l'enregistrement du commit sur la carte).

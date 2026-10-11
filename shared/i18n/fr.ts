@@ -385,6 +385,8 @@ export const fr = {
   "changes.showLess": "Afficher moins",
   "changes.showMore_one": "Afficher {count} autre fichier",
   "changes.showMore_other": "Afficher {count} autres fichiers",
+  "changes.viewOnGithub": "Voir sur GitHub",
+  "changes.viewOnGithub.title": "Ouvrir sur GitHub les changements enregistrés",
   "error.title": "{label} a rencontré un problème",
   "error.hint": "Le reste de Jaris fonctionne toujours. Réessaie ; si ça recommence, redémarre Jaris.",
   "error.detail": "Détail : {message}",

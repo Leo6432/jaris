@@ -384,6 +384,8 @@
   "changes.showMore_one": "Zobraziť ešte {count} súbor",
   "changes.showMore_few": "Zobraziť ešte {count} súbory",
   "changes.showMore_other": "Zobraziť ešte {count} súborov",
+  "changes.viewOnGithub": "Zobraziť na GitHube",
+  "changes.viewOnGithub.title": "Otvoriť uložené zmeny na GitHube",
   "error.title": "{label}: nastal problém",
   "error.hint": "Zvyšok Jarisa funguje ďalej. Skús to znova; ak sa to opakuje, reštartuj Jarisa.",
   "error.detail": "Podrobnosti: {message}",

@@ -19,6 +19,7 @@ import { useScreenActive } from '@/lib/shellContext'
 import {
   appConversationKey,
   forgetConversation,
+  attachCommit,
   forgetRepo,
   loadConversation,
   loadRecentRepos,
@@ -462,6 +463,7 @@ export default function CodePanel(): JSX.Element {
       const result = await window.jaris.githubCommit(repo.fullName, message)
       setRepo(result.view)
       setCommitted({ url: result.url, sha: result.sha })
+      setTurns((current) => attachCommit(current, { url: result.url, sha: result.sha }))
       addTurn('reply', t('code.savedOnGithub', { sha: result.sha.slice(0, 7) }))
       void playSoundCueIfEnabled('success')
     } catch (err) {
@@ -807,7 +809,7 @@ export default function CodePanel(): JSX.Element {
                 ) : turn.kind === 'worked' ? (
                   <WorkedLine key={turn.id} durationMs={turn.durationMs} stopped={turn.stopped} />
                 ) : turn.kind === 'changes' ? (
-                  <ChangesCard key={turn.id} files={turn.files} actions={turn.id === liveChangesId ? changesActions : undefined} />
+                  <ChangesCard key={turn.id} files={turn.files} actions={turn.id === liveChangesId ? changesActions : undefined} commitUrl={turn.commit?.url} />
                 ) : (
                   <p key={turn.id} className="code-chat__reply">
                     {turn.text}

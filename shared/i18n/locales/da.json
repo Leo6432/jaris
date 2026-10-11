@@ -375,6 +375,8 @@
   "changes.showLess": "Vis mindre",
   "changes.showMore_one": "Vis {count} fil mere",
   "changes.showMore_other": "Vis {count} filer mere",
+  "changes.viewOnGithub": "Se på GitHub",
+  "changes.viewOnGithub.title": "Åbn de gemte ændringer på GitHub",
   "error.title": "{label} stødte på et problem",
   "error.hint": "Resten af Jaris virker stadig. Prøv igen; hvis det sker igen, så genstart Jaris.",
   "error.detail": "Detalje: {message}",

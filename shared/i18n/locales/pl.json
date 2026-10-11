@@ -393,6 +393,8 @@
   "changes.showMore_few": "Pokaż jeszcze {count} pliki",
   "changes.showMore_many": "Pokaż jeszcze {count} plików",
   "changes.showMore_other": "Pokaż jeszcze {count} plików",
+  "changes.viewOnGithub": "Zobacz na GitHubie",
+  "changes.viewOnGithub.title": "Otwórz zapisane zmiany na GitHubie",
   "error.title": "{label}: wystąpił problem",
   "error.hint": "Reszta Jarisa nadal działa. Spróbuj ponownie; jeśli to się powtórzy, uruchom Jarisa ponownie.",
   "error.detail": "Szczegóły: {message}",
