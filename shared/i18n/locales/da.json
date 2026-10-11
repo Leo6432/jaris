@@ -359,6 +359,7 @@
   "composer.attachment.pasted": "Indsat billede",
   "composer.attachment.remove": "Fjern billedet",
   "composer.add": "Tilføj",
+  "composer.context.title": "Samtalehukommelse: {used} af {max} tokens brugt",
   "composer.dictation.transcribing": "Transskriberer…",
   "composer.dictation.finish": "Afslut dikteringen",
   "composer.dictation.start.title": "Diktér (teksten skrives i indtastningsfeltet)",

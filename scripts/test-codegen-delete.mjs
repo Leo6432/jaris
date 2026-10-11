@@ -57,6 +57,7 @@ function setup() {
     '../../shared/lineDiff': loadTsModule('shared/lineDiff.ts'),
     './hardwareScan': { pickBestCodeModel: async () => 'test-model' },
     './modelChoice': modelChoiceModule,
+    './contextUsage': { reportContextUsage: () => {} },
     './profileStore': { getProfile: async () => null },
     './vision': { describeImage: async () => '', IMAGE_FOR_CODE_SYSTEM_PROMPT: '' },
     '../config': { config: { ollama: {} } }

@@ -359,6 +359,7 @@
   "composer.attachment.pasted": "Liitetty kuva",
   "composer.attachment.remove": "Poista kuva",
   "composer.add": "Lisää",
+  "composer.context.title": "Keskustelun muisti: {used}/{max} tokenia käytössä",
   "composer.dictation.transcribing": "Litteroidaan…",
   "composer.dictation.finish": "Lopeta sanelu",
   "composer.dictation.start.title": "Sanele (teksti kirjoitetaan kenttään)",

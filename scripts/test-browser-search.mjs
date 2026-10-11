@@ -101,6 +101,7 @@ function converseWith({ chat, restrictions, openSearch }) {
     './systemPrompt': systemPromptModule,
     '../../shared/effort': load('shared/effort.ts'),
     './memoryStore': { listMemoryTitles: async () => [] },
+    './contextUsage': { reportContextUsage: () => {} },
     './profileStore': { getProfile: async () => null },
     './notepad': { requestedNotepadText: () => undefined, openNotepadText: async () => '' },
     './appLauncher': { didAppLaunch: (result) => result.endsWith('a été lancé.') },

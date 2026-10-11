@@ -32,6 +32,11 @@ const GRAPH = {
   links: [{ source: 'Léo', target: 'Guitare' }, { source: 'Léo', target: 'Recette crêpes' }]
 }
 window.jaris = {
+  // Étape 299 : le compteur « utilisé / maximum » ; __emitUsage le simule comme le processus principal.
+  onContextUsage: (cb) => {
+    window.__emitUsage = cb
+    return () => {}
+  },
   getMemoryNoteContent: (title) => Promise.resolve('# ' + title + '\\nContenu de la note.'),
   openMemoryFolder: () => {}
 }

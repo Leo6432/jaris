@@ -9,6 +9,7 @@ import { IMAGE_FOR_CODE_SYSTEM_PROMPT, describeImage } from './vision'
 import type { CodeActivity, CodeGenProgress, CodeLiveWrite, GeneratedApp, GeneratedAppSummary, Profile } from '../../shared/ipc'
 import { diffLines } from '../../shared/lineDiff'
 import { getDataRoot } from './dataLocation'
+import { reportContextUsage } from './contextUsage'
 import { t } from '../../shared/i18n'
 
 /**
@@ -259,7 +260,9 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
           if (phase !== 'writing') phase = 'thinking'
           lastActivity = Date.now()
           emit(true)
-        }
+        },
+        // Étape 299 : le compteur « utilisé / maximum » du mode Code, pour la fenêtre de CET appel.
+        (metrics) => reportContextUsage('code', metrics, numCtx)
       )
     try {
       const numCtx = computeCodeNumCtx(messages, expectedOutputChars, modelMaxContext)

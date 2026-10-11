@@ -3197,6 +3197,24 @@ p.capacity-scan__tier-missing {
   flex: 1;
 }
 
+/* Étape 299 : la place occupée dans la mémoire du modèle (« 5,1k / 32k »), discrète, avant le choix du modèle. */
+.composer__context {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 0 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--hud-text-faint);
+  cursor: default;
+}
+
+.composer__context--high {
+  color: var(--hud-gold);
+}
+
 .composer__add {
   position: relative;
 }

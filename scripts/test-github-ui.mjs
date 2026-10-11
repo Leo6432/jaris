@@ -47,6 +47,11 @@ window.__status = { available: window.__available ?? true, connected: false, log
 window.__calls = { run: [], commit: [], open: [], preview: [] }
 
 window.jaris = {
+  // Étape 299 : le compteur « utilisé / maximum » ; __emitUsage le simule comme le processus principal.
+  onContextUsage: (cb) => {
+    window.__emitUsage = cb
+    return () => {}
+  },
   onCodeGenStatus: () => () => {},
   onCodeGenProgress: (cb) => { window.__emitProgress = cb; return () => {} },
   // Étape 286 : les actions sur les fichiers s'affichent dans la conversation (« Modifié README.md +1 −1 »).

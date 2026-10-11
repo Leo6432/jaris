@@ -359,6 +359,7 @@
   "composer.attachment.pasted": "Inklistrad bild",
   "composer.attachment.remove": "Ta bort bilden",
   "composer.add": "Lägg till",
+  "composer.context.title": "Samtalsminne: {used} av {max} tokens används",
   "composer.dictation.transcribing": "Transkriberar…",
   "composer.dictation.finish": "Avsluta dikteringen",
   "composer.dictation.start.title": "Diktera (texten skrivs i inmatningsfältet)",

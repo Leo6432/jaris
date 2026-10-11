@@ -7947,3 +7947,40 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   description part et jamais l'image elle-même, rien de lu sans image ; et dans un vrai navigateur : dépôt ouvert, « + »
   présent, capture jointe envoyée avec la demande puis retirée du champ — test vérifié en remettant l'ancienne
   restriction). Qualité de la reproduction sur de vraies captures : non vérifiable ici, à juger par Léo.
+
+- **Compteur « utilisé / maximum » de la mémoire du modèle, dans le Chat et le mode Code (étape 299, Léo : « Ollama
+  donne-t-il la fenêtre de contexte, pour qu'on mette comme ChatGPT ou Claude, par exemple 461k/1m ? »).** Faits
+  vérifiés dans le CODE d'Ollama 0.40.3 avant d'écrire une ligne : `prompt_eval_count` compte TOUTE la conversation
+  envoyée, partie déjà en cache comprise (`llm/llama_server.go`, `promptEvalCount` = `cache_n + prompt_n`), et
+  `eval_count` la réponse (réflexion comprise) — Jaris les lisait déjà (`ChatMetrics`, journal des demandes, étape
+  245) sans les montrer. Le maximum affiché est la fenêtre DEMANDÉE pour l'appel (`num_ctx` : le réglage « Mémoire
+  de conversation » en Chat, la fenêtre calculée par étape en Code), PAS le maximum natif du modèle : c'est elle qui
+  coupe le début de la conversation. `contextUsage.ts` (pur + petit émetteur) reçoit chaque mesure depuis
+  `conversation()` (assistant.ts, sauf téléphone) et `createModelStepRunner` (codeGenerator.ts), main.ts la diffuse
+  (`IPC_CHANNELS.contextUsage`), et `useContextUsage` l'affiche dans le champ (`ContextGauge`, Composer.tsx : anneau
+  + « 5,1k / 32k », détail exact en infobulle, couleur `--hud-gold` passé 80 %). Le « k » vaut 1024, comme le réglage
+  (sinon 32768 réglé et plein s'afficheraient « 32k » et « 33k »). Le chiffre s'efface en passant à une AUTRE
+  conversation, mais PAS quand une nouvelle application reçoit son nom à la fin de sa création (rien → nom : même
+  conversation) — les deux règles sont vérifiées par un test qui casse chacune. **Piège déjà écrit ici (étape 96),
+  évité cette fois AVANT de lancer la suite : un nouvel abonnement `window.jaris.onXxx` au montage doit être ajouté à
+  TOUS les faux ponts explicites des tests navigateur (8 fichiers ici), et un nouvel `import` dans assistant.ts ou
+  codeGenerator.ts à tous les tests qui chargent ces modules (15 ici) — sinon la suite part en expirations muettes.**
+  Régression : `node --test scripts/test-context-usage.mjs` (calcul, diffusion, format, branchement Chat/Code/main) et
+  les tests « compteur » de `test-chat-conversations-ui.mjs` et `test-code-panel-ui.mjs` (vrai navigateur : rien avant
+  la 1re mesure, texte et infobulle exacts, mesure du Code jamais dans le Chat, alerte à 80 %, effacement au changement
+  de fil, gardé à la fin d'une création, aucun débordement à 760 px). Non vérifié avec un vrai Ollama ici.
+  **Suite dans la même version, Léo : « on est d'accord que tous les modèles n'ont pas le même contexte ? »** — Oui, et
+  ça révélait un vrai trou : la mémoire réglée dans Options vaut pour TOUS les modèles de conversation, et n'était
+  jamais ramenée au maximum propre du modèle utilisé (seul le mode Code le faisait, `computeCodeNumCtx`). Un petit
+  modèle pouvait donc recevoir une fenêtre plus grande que ce qu'il sait lire, et le compteur afficher une limite qui
+  n'est pas la sienne. Corrigé à UN seul endroit, `requestChat` + `preloadModel` (ollama.ts, `fitToModelContext`),
+  par où passent conversation, correction de la voix, mémoire automatique et préchargement : plafonner chez chaque
+  appelant aurait pu donner deux fenêtres différentes au même modèle, et Ollama le recharge alors à chaque phrase
+  (étape 294). Le maximum est lu une fois par modèle (`/api/show`, clé `<architecture>.context_length`), mis en cache ;
+  une lecture impossible ne plafonne rien et sera retentée. La fenêtre réellement envoyée remonte avec les mesures
+  (`ChatMetrics.contextWindow`) : c'est elle que le compteur affiche. **Piège attendu et traité : chaque test qui
+  simule Ollama par un `fetch` unique voyait une requête `/api/show` en plus (comptes d'appels, premier corps
+  envoyé) — ces faux Ollama répondent maintenant à `/api/show` à part.** Régression supplémentaire :
+  `node --test scripts/test-model-preload.mjs` (même fenêtre plafonnée au préchargement, à la conversation et à la
+  correction ; lue une seule fois ; réglage plus petit gardé ; lecture impossible sans plafond puis retentée — vérifié
+  en retirant le plafond).

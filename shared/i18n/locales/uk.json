@@ -373,6 +373,7 @@
   "composer.attachment.pasted": "Вставлене зображення",
   "composer.attachment.remove": "Прибрати зображення",
   "composer.add": "Додати",
+  "composer.context.title": "Пам'ять розмови: використано {used} з {max} токенів",
   "composer.dictation.transcribing": "Розпізнавання…",
   "composer.dictation.finish": "Завершити диктування",
   "composer.dictation.start.title": "Диктувати (текст вводиться в поле)",

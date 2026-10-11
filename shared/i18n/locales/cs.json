@@ -366,6 +366,7 @@
   "composer.attachment.pasted": "Vložený obrázek",
   "composer.attachment.remove": "Odebrat obrázek",
   "composer.add": "Přidat",
+  "composer.context.title": "Paměť konverzace: využito {used} z {max} tokenů",
   "composer.dictation.transcribing": "Přepis…",
   "composer.dictation.finish": "Ukončit diktování",
   "composer.dictation.start.title": "Diktovat (text se píše do pole)",

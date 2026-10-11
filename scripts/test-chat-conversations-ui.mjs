@@ -102,6 +102,11 @@ window.__calls = []
 const list = () => Promise.resolve(JSON.parse(JSON.stringify(window.__state)))
 
 window.jaris = {
+  // Étape 299 : le compteur « utilisé / maximum » ; __emitUsage le simule comme le processus principal.
+  onContextUsage: (cb) => {
+    window.__emitUsage = cb
+    return () => {}
+  },
   getChatHistory: () => Promise.resolve(THREADS[window.__state.activeId] ?? []),
   listConversations: list,
   selectConversation: (id) => {
@@ -242,6 +247,31 @@ test('changer de conversation recharge VRAIMENT le fil affiché', options, async
     assert.doesNotMatch(thread, /chats dorment/, "les messages de l'ancien fil sont restés à l'écran")
     assert.equal(await page.textContent('.workspace__item--active .workspace__item-title'), 'recette de crêpes')
     assert.deepEqual(await page.evaluate(() => window.__calls), [['select', 'b']])
+  })
+})
+
+// Étape 299 (Léo : « comme ChatGPT ou Claude, par exemple 461k/1m ») : le compteur de mémoire, après une réponse.
+test('compteur « utilisé / maximum » : affiché après une réponse, orange passé 80 %, effacé en changeant de fil', options, async () => {
+  await withPage(async (page) => {
+    await page.waitForSelector('.chat-panel__message')
+    assert.equal(await page.locator('.composer__context').count(), 0, 'rien d’inventé avant la première mesure')
+    await page.evaluate(() => window.__emitUsage({ scope: 'chat', used: 5213, max: 32768 }))
+    await page.waitForSelector('.composer__context')
+    assert.equal((await page.textContent('.composer__context-text')).trim(), '5,1k / 32k')
+    assert.match(await page.getAttribute('.composer__context', 'title'), /5\s?213 tokens utilisés sur 32\s?768/)
+    const calm = await page.$eval('.composer__context', (el) => getComputedStyle(el).color)
+
+    // Une mesure du mode Code ne s'affiche jamais dans le Chat.
+    await page.evaluate(() => window.__emitUsage({ scope: 'code', used: 99, max: 100 }))
+    assert.equal((await page.textContent('.composer__context-text')).trim(), '5,1k / 32k')
+
+    await page.evaluate(() => window.__emitUsage({ scope: 'chat', used: 28000, max: 32768 }))
+    await page.waitForSelector('.composer__context--high')
+    assert.notEqual(await page.$eval('.composer__context', (el) => getComputedStyle(el).color), calm, 'aucune alerte visible passé 80 %')
+
+    // Le chiffre décrivait l'ancienne conversation : il disparaît quand on en ouvre une autre.
+    await page.click('.workspace__list li:nth-child(2) .workspace__item')
+    await page.waitForFunction(() => !document.querySelector('.composer__context'))
   })
 })
 

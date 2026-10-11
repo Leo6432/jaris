@@ -359,6 +359,7 @@
   "composer.attachment.pasted": "Поставено изображение",
   "composer.attachment.remove": "Премахни изображението",
   "composer.add": "Добави",
+  "composer.context.title": "Памет на разговора: използвани {used} от {max} токена",
   "composer.dictation.transcribing": "Транскрипция…",
   "composer.dictation.finish": "Край на диктовката",
   "composer.dictation.start.title": "Диктувай (текстът се пише в полето)",

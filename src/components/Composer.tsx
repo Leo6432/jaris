@@ -7,7 +7,9 @@ import {
 } from '@/lib/imageAttachment'
 import { DICTATION_MAX_MS, DictationRecorder, appendDictation } from '@/lib/dictation'
 import { ipcErrorMessage } from '@/lib/ipcError'
-import { t } from '@/lib/i18n'
+import { currentLocale, t } from '@/lib/i18n'
+import { contextUsageRatio, formatTokenCount } from '@/lib/formatContextUsage'
+import type { ContextUsage } from '../../shared/ipc'
 
 /**
  * Champ de saisie commun au Chat et au mode Code (étape 92).
@@ -61,6 +63,41 @@ interface ComposerProps {
   imagesAllowed?: boolean
   /** Entrées supplémentaires du menu « + » (étape 191). */
   addItems?: ComposerAddItem[]
+  /** Étape 299 : place occupée dans la mémoire du modèle (« 5,1k / 32k »), après la première réponse. */
+  contextUsage?: ContextUsage | null
+}
+
+/**
+ * Étape 299 (Léo : « comme ChatGPT ou Claude, par exemple 461k/1m ») : un petit anneau qui se remplit, et le compte
+ * « utilisé / maximum ». Le détail exact (en tokens) dans l'infobulle. Orange passé 80 % : la conversation va bientôt
+ * perdre son début.
+ */
+function ContextGauge({ usage }: { usage: ContextUsage }): JSX.Element {
+  const ratio = contextUsageRatio(usage.used, usage.max)
+  const circumference = 2 * Math.PI * 6
+  const exact = new Intl.NumberFormat(currentLocale())
+  const title = t('composer.context.title', { used: exact.format(usage.used), max: exact.format(usage.max) })
+  return (
+    <span className={`composer__context${ratio >= 0.8 ? ' composer__context--high' : ''}`} title={title} aria-label={title}>
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+        <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
+        <circle
+          cx="8"
+          cy="8"
+          r="6"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeDasharray={`${circumference * ratio} ${circumference}`}
+          transform="rotate(-90 8 8)"
+        />
+      </svg>
+      <span className="composer__context-text">
+        {formatTokenCount(usage.used)} / {formatTokenCount(usage.max)}
+      </span>
+    </span>
+  )
 }
 
 function PlusIcon(): JSX.Element {
@@ -123,7 +160,8 @@ export default function Composer({
   rows = 2,
   extraActions,
   imagesAllowed = true,
-  addItems = []
+  addItems = [],
+  contextUsage = null
 }: ComposerProps): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -357,6 +395,8 @@ export default function Composer({
         )}
 
         <span className="composer__spacer" />
+
+        {contextUsage && <ContextGauge usage={contextUsage} />}
 
         {extraActions}
 

@@ -32,6 +32,11 @@ const APP = { html: '<h1>ok</h1>', path: 'C:/apps/todo', issues: [], previewUrl:
 window.__mounts = { image: 0 }
 
 window.jaris = {
+  // Étape 299 : le compteur « utilisé / maximum » ; __emitUsage le simule comme le processus principal.
+  onContextUsage: (cb) => {
+    window.__emitUsage = cb
+    return () => {}
+  },
   onCodeGenStatus: () => () => {},
   onCodeGenProgress: (cb) => { window.__emitProgress = cb; return () => {} },
   onCodeGenActivity: () => () => {},

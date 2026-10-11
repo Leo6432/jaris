@@ -55,7 +55,8 @@ function loadOllama(fetchImpl) {
       './huggingFaceImport': { importHuggingFaceModel: async () => {} },
       '../../shared/effort': sharedEffort
     },
-    fetchImpl
+    // Étape 299 : `/api/show` (maximum du modèle) répond à part, sans plafond, et n'est pas compté comme une demande.
+    async (url, init) => (String(url).endsWith('/api/show') ? new Response('{"model_info":{}}', { status: 200 }) : fetchImpl(url, init))
   )
 }
 
@@ -162,6 +163,7 @@ function setupCodegen(answer, { modelMax = 262144 } = {}) {
     },
     './hardwareScan': { pickBestCodeModel: async () => 'test-model' },
     './modelChoice': modelChoiceModule,
+    './contextUsage': { reportContextUsage: () => {} },
     './profileStore': { getProfile: async () => ({ codeModel: 'test-model' }) },
     '../config': { config: { ollama: { visionModel: 'v' } } },
     './vision': { IMAGE_FOR_CODE_SYSTEM_PROMPT: '', describeImage: async () => '' }

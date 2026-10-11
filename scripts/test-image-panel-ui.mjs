@@ -35,6 +35,11 @@ window.__images = window.__images || [
 ]
 
 window.jaris = {
+  // Étape 299 : le compteur « utilisé / maximum » ; __emitUsage le simule comme le processus principal.
+  onContextUsage: (cb) => {
+    window.__emitUsage = cb
+    return () => {}
+  },
   getImageStudioStatus: async () => window.__status,
   installImageStudio: () => {
     window.__calls.push('install')

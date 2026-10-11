@@ -40,6 +40,7 @@ const modules = {
   '../../shared/lineDiff': loadTsModule('shared/lineDiff.ts'),
   './hardwareScan': { pickBestCodeModel: async () => 'test-model' },
   './modelChoice': modelChoiceModule,
+  './contextUsage': { reportContextUsage: () => {} },
   './profileStore': { getProfile: async () => null }
 }
 const exports = {}

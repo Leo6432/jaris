@@ -359,6 +359,7 @@
   "composer.attachment.pasted": "Επικολλημένη εικόνα",
   "composer.attachment.remove": "Αφαίρεση εικόνας",
   "composer.add": "Προσθήκη",
+  "composer.context.title": "Μνήμη συνομιλίας: {used} από {max} tokens σε χρήση",
   "composer.dictation.transcribing": "Μεταγραφή…",
   "composer.dictation.finish": "Τέλος υπαγόρευσης",
   "composer.dictation.start.title": "Υπαγόρευση (το κείμενο γράφεται στο πεδίο)",

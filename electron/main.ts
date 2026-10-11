@@ -48,6 +48,7 @@ import {
 } from './services/dependencyServices'
 import { deleteModel, getModelThinking, listInstalledModels, preloadModel, setModelsViewRepair, waitForOllama } from './services/ollama'
 import { StartupProgress } from './services/startupProgress'
+import { onContextUsage } from './services/contextUsage'
 import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES, resolveChosenModel } from './services/modelChoice'
 import { chosenThink, isAcceptedThink, thinkOptions, thinkingKind } from '../shared/effort'
 import { getStorageStatus, programMoveCommandLine, reconcileStorage, relocateEverything } from './services/relocation'
@@ -1308,6 +1309,8 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.setupStatus, () => lastSetupStatus)
   ipcMain.handle(IPC_CHANNELS.getStartupState, () => startup.state())
   startup.on('change', (state) => broadcast(IPC_CHANNELS.startupState, state))
+  // Étape 299 : le compteur « utilisé / maximum » du Chat et du mode Code, mis à jour après chaque réponse.
+  onContextUsage((usage) => broadcast(IPC_CHANNELS.contextUsage, usage))
   ipcMain.on(IPC_CHANNELS.triggerWake, () => triggerVisibleWake())
   ipcMain.on(IPC_CHANNELS.audioEnded, () => pipeline?.notifyAudioEnded())
   ipcMain.handle(IPC_CHANNELS.getProfile, () => getProfile())

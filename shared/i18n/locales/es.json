@@ -359,6 +359,7 @@
   "composer.attachment.pasted": "Imagen pegada",
   "composer.attachment.remove": "Quitar la imagen",
   "composer.add": "Añadir",
+  "composer.context.title": "Memoria de la conversación: {used} tokens usados de {max}",
   "composer.dictation.transcribing": "Transcribiendo…",
   "composer.dictation.finish": "Terminar el dictado",
   "composer.dictation.start.title": "Dictar (el texto se escribe en el campo)",

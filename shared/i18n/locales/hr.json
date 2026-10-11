@@ -366,6 +366,7 @@
   "composer.attachment.pasted": "Zalijepljena slika",
   "composer.attachment.remove": "Ukloni sliku",
   "composer.add": "Dodaj",
+  "composer.context.title": "Memorija razgovora: iskorišteno {used} od {max} tokena",
   "composer.dictation.transcribing": "Transkripcija…",
   "composer.dictation.finish": "Završi diktiranje",
   "composer.dictation.start.title": "Diktiraj (tekst se upisuje u polje)",

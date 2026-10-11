@@ -369,6 +369,7 @@ export const fr = {
   "composer.attachment.pasted": "Image collée",
   "composer.attachment.remove": "Retirer l'image",
   "composer.add": "Ajouter",
+  "composer.context.title": "Mémoire de la conversation : {used} tokens utilisés sur {max}",
   "composer.dictation.transcribing": "Transcription…",
   "composer.dictation.finish": "Terminer la dictée",
   "composer.dictation.start.title": "Dicter (le texte s’écrit dans le champ)",

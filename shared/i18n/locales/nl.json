@@ -359,6 +359,7 @@
   "composer.attachment.pasted": "Geplakte afbeelding",
   "composer.attachment.remove": "Afbeelding verwijderen",
   "composer.add": "Toevoegen",
+  "composer.context.title": "Gespreksgeheugen: {used} van {max} tokens gebruikt",
   "composer.dictation.transcribing": "Transcriberen…",
   "composer.dictation.finish": "Dicteren beëindigen",
   "composer.dictation.start.title": "Dicteren (de tekst verschijnt in het invoerveld)",

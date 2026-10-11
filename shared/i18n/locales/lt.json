@@ -366,6 +366,7 @@
   "composer.attachment.pasted": "Įklijuotas paveikslėlis",
   "composer.attachment.remove": "Pašalinti paveikslėlį",
   "composer.add": "Pridėti",
+  "composer.context.title": "Pokalbio atmintis: panaudota {used} iš {max} žetonų",
   "composer.dictation.transcribing": "Transkribuojama…",
   "composer.dictation.finish": "Baigti diktavimą",
   "composer.dictation.start.title": "Diktuoti (tekstas rašomas į lauką)",

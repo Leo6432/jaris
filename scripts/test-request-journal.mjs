@@ -48,6 +48,7 @@ function converseWith(journal, chat, execute) {
     './systemPrompt': systemPromptModule,
     '../../shared/effort': load('shared/effort.ts'),
     './memoryStore': { listMemoryTitles: async () => [] },
+    './contextUsage': { reportContextUsage: () => {} },
     './profileStore': { getProfile: async () => null },
     './notepad': { requestedNotepadText: () => undefined, openNotepadText: async () => '' },
     './appLauncher': { didAppLaunch: (result) => result.endsWith('a été lancé.') },
@@ -162,7 +163,9 @@ function loadOllama(response) {
     './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: () => 100, getDownloadBudgetGb: async () => 100 },
     './huggingFaceImport': { importHuggingFaceModel: async () => {} }
   }
-  return load('electron/services/ollama.ts', modules, { fetch: async () => response }).chatWithOllama
+  // Étape 299 : `/api/show` (maximum du modèle) répond à part, sans plafond.
+  const show = { ok: true, status: 200, json: async () => ({ model_info: {} }) }
+  return load('electron/services/ollama.ts', modules, { fetch: async (url) => (String(url).endsWith('/api/show') ? show : response) }).chatWithOllama
 }
 
 const ollamaFinal = { load_duration: 41e9, prompt_eval_count: 4300, prompt_eval_duration: 2.2e9, eval_count: 1200, eval_duration: 48e9 }
@@ -172,7 +175,8 @@ test('chatWithOllama transmet les mesures d’Ollama (réponse d’un bloc, comm
   const chat = loadOllama({ ok: true, status: 200, json: async () => data })
   let metrics
   await chat([{ role: 'user', content: 'x' }], [], 'm', 'medium', undefined, 8192, undefined, undefined, (m) => (metrics = m))
-  assert.equal(JSON.stringify(metrics), JSON.stringify({ loadMs: 41000, promptTokens: 4300, promptMs: 2200, outputTokens: 1200, outputMs: 48000, thinkingChars: 6 }))
+  // Étape 299 : la fenêtre réellement demandée (ici non plafonnée) accompagne les mesures, pour le compteur.
+  assert.equal(JSON.stringify(metrics), JSON.stringify({ loadMs: 41000, promptTokens: 4300, promptMs: 2200, outputTokens: 1200, outputMs: 48000, thinkingChars: 6, contextWindow: 8192 }))
 })
 
 test('chatWithOllama transmet les mesures d’Ollama en streaming (Chat), réflexion comptée', async () => {

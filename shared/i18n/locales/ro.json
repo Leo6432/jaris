@@ -366,6 +366,7 @@
   "composer.attachment.pasted": "Imagine lipită",
   "composer.attachment.remove": "Elimină imaginea",
   "composer.add": "Adaugă",
+  "composer.context.title": "Memoria conversației: {used} tokeni folosiți din {max}",
   "composer.dictation.transcribing": "Transcriere…",
   "composer.dictation.finish": "Termină dictarea",
   "composer.dictation.start.title": "Dictează (textul se scrie în câmp)",

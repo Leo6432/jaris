@@ -55,6 +55,7 @@ import {
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload,
   type StartupState,
+  type ContextUsage,
   type WidgetMode,
   type WindowChrome,
   type LanguageState
@@ -80,6 +81,7 @@ const api = {
   /** Étape 294 : où en est le démarrage (écran d'accueil animé). */
   getStartupState: (): Promise<StartupState> => ipcRenderer.invoke(IPC_CHANNELS.getStartupState),
   onStartupState: (cb: (state: StartupState) => void) => subscribe(IPC_CHANNELS.startupState, cb),
+  onContextUsage: (cb: (usage: ContextUsage) => void) => subscribe(IPC_CHANNELS.contextUsage, cb),
   triggerWake: (): void => ipcRenderer.send(IPC_CHANNELS.triggerWake),
   notifyAudioEnded: (): void => ipcRenderer.send(IPC_CHANNELS.audioEnded),
   /**

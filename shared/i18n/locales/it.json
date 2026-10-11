@@ -359,6 +359,7 @@
   "composer.attachment.pasted": "Immagine incollata",
   "composer.attachment.remove": "Rimuovi l'immagine",
   "composer.add": "Aggiungi",
+  "composer.context.title": "Memoria della conversazione: {used} token usati su {max}",
   "composer.dictation.transcribing": "Trascrizione…",
   "composer.dictation.finish": "Termina la dettatura",
   "composer.dictation.start.title": "Detta (il testo si scrive nel campo)",

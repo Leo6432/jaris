@@ -366,6 +366,7 @@
   "composer.attachment.pasted": "Ielīmēts attēls",
   "composer.attachment.remove": "Noņemt attēlu",
   "composer.add": "Pievienot",
+  "composer.context.title": "Sarunas atmiņa: izmantoti {used} no {max} tokeniem",
   "composer.dictation.transcribing": "Atšifrē…",
   "composer.dictation.finish": "Beigt diktēšanu",
   "composer.dictation.start.title": "Diktēt (teksts tiek rakstīts laukā)",

@@ -26,6 +26,7 @@ const modules = {
   './ollama': {},
   './systemPrompt': systemPromptModule,
   './memoryStore': {},
+  './contextUsage': { reportContextUsage: () => {} },
   './profileStore': {},
   './tools': { TOOLS: [{ function: { name: 'open_app' } }], createToolExecutor: () => {} },
   './hardwareScan': {},

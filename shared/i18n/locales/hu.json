@@ -359,6 +359,7 @@
   "composer.attachment.pasted": "Beillesztett kép",
   "composer.attachment.remove": "Kép eltávolítása",
   "composer.add": "Hozzáadás",
+  "composer.context.title": "Beszélgetés memóriája: {used} / {max} token felhasználva",
   "composer.dictation.transcribing": "Átírás…",
   "composer.dictation.finish": "Diktálás befejezése",
   "composer.dictation.start.title": "Diktálás (a szöveg a mezőbe íródik)",

@@ -2,6 +2,7 @@ import { resolveChosenModel } from './modelChoice'
 import { requestedNotepadText, openNotepadText } from './notepad'
 import { config } from '../config'
 import { chatWithOllama, getModelThinking, listInstalledModels, type ChatMetrics, type OllamaMessage, type ThinkLevel } from './ollama'
+import { reportContextUsage } from './contextUsage'
 import { chosenThink, thinkLabel, type ThinkValue } from '../../shared/effort'
 import { listMemoryTitles } from './memoryStore'
 import { getProfile } from './profileStore'
@@ -652,6 +653,8 @@ async function conversation(
       (measured) => (metrics = measured)
     )
     journal.timed(describeModelCall(model, message, metrics), askedAt)
+    // Étape 299 : le compteur « utilisé / maximum » du Chat (pas pour le téléphone, qui a sa propre page).
+    if (!restrictions) reportContextUsage('chat', metrics, numCtx)
     if (!message.tool_calls?.length) {
       if (wantsEmailSent && !computerUseCalled && !nudgedForEmail) {
         nudgedForEmail = true

@@ -373,6 +373,7 @@
   "composer.attachment.pasted": "Wklejony obraz",
   "composer.attachment.remove": "Usuń obraz",
   "composer.add": "Dodaj",
+  "composer.context.title": "Pamięć rozmowy: użyto {used} z {max} tokenów",
   "composer.dictation.transcribing": "Transkrypcja…",
   "composer.dictation.finish": "Zakończ dyktowanie",
   "composer.dictation.start.title": "Dyktuj (tekst wpisuje się w pole)",

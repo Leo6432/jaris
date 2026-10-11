@@ -306,6 +306,7 @@ function loadConverse(chat, execute, onExecutorArgs) {
     './ollama': { chatWithOllama: chat, listInstalledModels: async () => ['test'] },
     './systemPrompt': systemPromptModule,
     './memoryStore': { listMemoryTitles: async () => [] },
+    './contextUsage': { reportContextUsage: () => {} },
     './profileStore': { getProfile: async () => null },
     './notepad': { requestedNotepadText: noteExports.requestedNotepadText, openNotepadText: async () => '' },
     './appLauncher': { didAppLaunch: (r) => r.endsWith('a été lancé.') },

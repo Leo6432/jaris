@@ -22,7 +22,9 @@ function load(responses) {
     './systemResources': { DISK_SAFETY_MARGIN_GB: 5, detectFreeDiskGb: () => 100, getDownloadBudgetGb: async () => 100 },
     './huggingFaceImport': { importHuggingFaceModel: async () => {} }
   }
-  const fetch = async (_url, init) => {
+  const fetch = async (url, init) => {
+    // Étape 299 : le maximum du modèle, lu une fois avant la demande — sans plafond ici (aucun maximum annoncé).
+    if (String(url).endsWith('/api/show')) return { ok: true, status: 200, json: async () => ({ model_info: {} }) }
     const body = JSON.parse(init.body)
     calls.push(body)
     const [status, payload] = responses.shift()

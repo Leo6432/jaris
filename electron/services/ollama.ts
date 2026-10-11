@@ -53,6 +53,8 @@ export interface ChatMetrics {
   outputTokens?: number
   outputMs?: number
   thinkingChars: number
+  /** Étape 299 : la fenêtre RÉELLEMENT demandée pour cet appel (après plafonnement au maximum du modèle). */
+  contextWindow?: number
 }
 
 function metricsOf(data: OllamaChatResponse, thinkingChars: number): ChatMetrics {
@@ -104,13 +106,15 @@ async function requestChat(
   onMetrics?: (metrics: ChatMetrics) => void
 ): Promise<OllamaMessage> {
   const streaming = Boolean(onToken || onThinking)
-  const numCtx = (body.options as { num_ctx?: number } | undefined)?.num_ctx ?? config.ollama.numCtx
+  const options = body.options as { num_ctx?: number } | undefined
+  // Étape 299 : jamais plus que ce que le modèle lui-même accepte (voir fitToModelContext).
+  const numCtx = await fitToModelContext(model, options?.num_ctx ?? config.ollama.numCtx)
   let response: Response
   try {
     response = await fetch(`${config.ollama.host}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...body, stream: streaming }),
+      body: JSON.stringify({ ...body, ...(options ? { options: { ...options, num_ctx: numCtx } } : {}), stream: streaming }),
       signal
     })
   } catch (err) {
@@ -128,7 +132,7 @@ async function requestChat(
       throw new ContextFullError(model, numCtx)
     }
     if (!data.message) throw new Error(t('ollama.empty', { model }))
-    onMetrics?.(metricsOf(data, data.message.thinking?.length ?? 0))
+    onMetrics?.({ ...metricsOf(data, data.message.thinking?.length ?? 0), contextWindow: numCtx })
     return data.message
   }
 
@@ -181,7 +185,7 @@ async function requestChat(
     if (doneReason === 'length') throw new ContextFullError(model, numCtx)
     throw new Error(t('ollama.empty', { model }))
   }
-  if (finalChunk) onMetrics?.(metricsOf(finalChunk, thinkingChars))
+  if (finalChunk) onMetrics?.({ ...metricsOf(finalChunk, thinkingChars), contextWindow: numCtx })
   return { role, content, tool_calls: toolCalls }
 }
 
@@ -304,10 +308,12 @@ export async function waitForOllama(timeoutMs: number, intervalMs = 500): Promis
  */
 export async function preloadModel(model: string, numCtx: number, timeoutMs = 120_000): Promise<boolean> {
   try {
+    // La même fenêtre plafonnée que les vraies demandes (requestChat) : sinon Ollama rechargerait le modèle.
+    const fitted = await fitToModelContext(model, numCtx)
     const response = await fetch(`${config.ollama.host}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, prompt: '', options: { num_ctx: numCtx } }),
+      body: JSON.stringify({ model, prompt: '', options: { num_ctx: fitted } }),
       signal: AbortSignal.timeout(timeoutMs)
     })
     if (!response.ok) return false
@@ -365,6 +371,49 @@ export async function getModelInfo(model: string): Promise<Record<string, unknow
  * cache : la réponse ne change pas tant que le modèle n'est pas retéléchargé, et elle est lue à chaque message.
  */
 const thinkingCache = new Map<string, ModelThinking>()
+
+/**
+ * Étape 299 (Léo : « on est d'accord que tous les modèles n'ont pas le même contexte ? ») : chaque modèle a son propre
+ * maximum (`model_info["<architecture>.context_length"]` dans `/api/show`). La mémoire réglée dans Options vaut pour
+ * TOUS les modèles de conversation : sans plafond, un petit modèle pouvait recevoir une fenêtre plus grande que ce
+ * qu'il sait lire, et le compteur afficher une limite qui n'est pas la sienne. Mis en cache par modèle (une seule
+ * lecture) ; une lecture impossible ne plafonne rien, exactement le comportement d'avant.
+ */
+const nativeContextCache = new Map<string, number | null>()
+
+/** Le maximum natif lu dans la réponse de `/api/show`, quelle que soit l'architecture. Pure. */
+export function nativeContextFromModelInfo(modelInfo: unknown): number | null {
+  if (!modelInfo || typeof modelInfo !== 'object') return null
+  for (const [key, value] of Object.entries(modelInfo as Record<string, unknown>)) {
+    if (key.endsWith('.context_length') && typeof value === 'number' && value > 0) return value
+  }
+  return null
+}
+
+export async function modelNativeContext(model: string): Promise<number | null> {
+  if (nativeContextCache.has(model)) return nativeContextCache.get(model) ?? null
+  try {
+    const response = await fetch(`${config.ollama.host}/api/show`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model })
+    })
+    if (!response.ok) return null
+    const data = (await response.json()) as { model_info?: unknown }
+    const native = nativeContextFromModelInfo(data?.model_info)
+    nativeContextCache.set(model, native)
+    return native
+  } catch {
+    // Ollama injoignable : pas mis en cache, on réessaiera au prochain appel.
+    return null
+  }
+}
+
+/** La fenêtre demandée, ramenée au maximum du modèle quand elle le dépasse. */
+export async function fitToModelContext(model: string, numCtx: number): Promise<number> {
+  const native = await modelNativeContext(model)
+  return native !== null && native < numCtx ? native : numCtx
+}
 
 export async function getModelThinking(model: string): Promise<ModelThinking | null> {
   const cached = thinkingCache.get(model)

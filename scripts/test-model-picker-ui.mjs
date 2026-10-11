@@ -47,6 +47,11 @@ const THINKING = {
 }
 
 window.jaris = {
+  // Étape 299 : le compteur « utilisé / maximum » ; __emitUsage le simule comme le processus principal.
+  onContextUsage: (cb) => {
+    window.__emitUsage = cb
+    return () => {}
+  },
   getChatHistory: () => Promise.resolve([]),
   listConversations: () => Promise.resolve({ activeId: 'a', conversations: [{ id: 'a', title: 'Nouvelle conversation', createdAt: '', updatedAt: '2026-09-14T10:00:00.000Z', messageCount: 0 }] }),
   selectConversation: () => Promise.resolve({ activeId: 'a', conversations: [] }),
