@@ -7923,3 +7923,25 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   pendant, il paraissait faire 160 px (la carte et l'orbe grandissent en apparaissant).
   Régression : `node --test scripts/test-launch-at-startup.mjs scripts/test-widget-transition.mjs scripts/test-startup.mjs
   scripts/test-startup-splash-ui.mjs`.
+
+- **Jaris se repliait QUAND MÊME en widget juste après l'écran de démarrage (étape 296, Léo après la 0.34.2 : « c'est
+  bien mais j'ouvre ça se met toujours directement en widget »).** Le correctif de l'étape 295 ouvrait bien la grande
+  fenêtre, mais la séquence était : détruire l'écran de démarrage, PUIS afficher la fenêtre. Pendant cet instant,
+  Windows donne le premier plan à une autre application (celle qui était derrière) : la fenêtre de Jaris arrive sans
+  focus ou le perd aussitôt, et son handler `'blur'` la replie en widget exactement comme si Léo avait changé d'appli.
+  Seul le lancement à l'ouverture de session (étape 165) avait une protection (délai de grâce + premier plan forcé),
+  d'où un symptôme limité aux lancements normaux. Corrigé pour TOUT lancement : la fenêtre est affichée et mise au
+  premier plan (`setAlwaysOnTop(true)` / `showFullWindow()` / `moveTop()` / `setAlwaysOnTop(false)`) PENDANT que
+  l'écran de démarrage a encore le focus — le premier plan passe d'une fenêtre de Jaris à l'autre, ce que Windows
+  autorise —, l'écran de démarrage n'est détruit qu'ensuite, et un délai de grâce (`revealGraceUntil`, ex-
+  `loginRevealUntil` : 30 s à l'ouverture de session, `STARTUP_REVEAL_GRACE_MS` = 5 s sinon) est posé AVANT
+  l'affichage. **Leçon générale : quand une fenêtre en remplace une autre, ouvrir la nouvelle AVANT de fermer
+  l'ancienne — dans l'autre ordre, Windows confie le premier plan à une application tierce pendant l'intervalle, et
+  tout ce qui réagit à la perte de focus (ici le repli en widget) se déclenche sur une fenêtre que personne n'a
+  quittée.** Corollaire, même famille que la touche « + » gatée d'un seul côté (étape 82) : une protection ajoutée
+  pour UN chemin d'ouverture (l'ouverture de session) doit être revue dès qu'un autre chemin passe par la même
+  séquence. Au passage, `test-image-panel-ui.mjs` mesurait l'image avant son décodage sous la charge de la suite
+  complète (1×1 une fois sur deux) : il attend maintenant `complete && naturalWidth > 0`. **Vérifié par le build et
+  les tests structurels (ordre affichage → fermeture, délai de grâce posé avant, chaque garde vérifié en réintroduisant
+  son défaut), PAS en usage réel sur Windows** : le comportement exact du premier plan n'est observable que chez Léo.
+  Régression : `node --test scripts/test-launch-at-startup.mjs scripts/test-widget-transition.mjs scripts/test-startup.mjs`.

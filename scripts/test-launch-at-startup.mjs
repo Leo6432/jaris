@@ -77,21 +77,31 @@ const mainSource = ts.transpileModule(readFileSync(join(projectRoot, 'electron/m
 
 test('main.ts : lancé au démarrage, la fenêtre principale s’affiche en grand ; sinon elle s’ouvre normalement', () => {
   assert.match(mainSource, /revealAtLogin = onboardingDone && wasLaunchedAtLogin\(process\.argv\)/)
-  const reveal = /if \(revealAtLogin\) \{[\s\S]*?setAlwaysOnTop\(false\)/.exec(mainSource)
-  assert.ok(reveal, 'bloc d’affichage au démarrage introuvable')
-  assert.match(reveal[0], /maximize\(\)/, 'la fenêtre doit couvrir le bureau')
-  assert.match(reveal[0], /showFullWindow\(\)/, 'la fenêtre doit être affichée ET recevoir le focus')
+  const start = mainSource.indexOf('function revealAfterStartup(')
+  assert.ok(start >= 0, 'revealAfterStartup introuvable')
+  const reveal = mainSource.slice(start, mainSource.indexOf('\n}\n', start))
   // Étape 294 : l'affichage attend la fin de l'écran de démarrage ; au démarrage de Windows, la fenêtre s'ouvre en grand.
   assert.match(mainSource, /startup\.whenReady\(\(\) => void windowsLoaded\.then\(\(\) => revealAfterStartup\(revealAtLogin\)\)\)/)
-  assert.match(reveal[0], /loginRevealUntil = Date\.now\(\) \+ LOGIN_REVEAL_GRACE_MS/, 'le délai de grâce part de l’affichage')
-  // Étape 295 (Léo : « ça doit ouvrir normalement ») : aux autres lancements, la fenêtre normale de Jaris, plus le widget.
-  assert.match(mainSource, /setAlwaysOnTop\(false\);\s*return;\s*\}\s*\}\s*showFullWindow\(\);\s*\}, SPLASH_EXIT_MS\)/)
+  assert.match(reveal, /if \(revealAtLogin\)\s*win\.maximize\(\);/, 'à l’ouverture de session, la fenêtre doit couvrir le bureau')
+  // Étape 296 (Léo : « ça se met toujours directement en widget ») : TOUT lancement a le délai de grâce et le premier
+  // plan forcé, pas seulement l'ouverture de session — 30 s dans ce cas, quelques secondes sinon.
+  assert.match(reveal, /revealGraceUntil = Date\.now\(\) \+ \(revealAtLogin \? LOGIN_REVEAL_GRACE_MS : STARTUP_REVEAL_GRACE_MS\)/)
+  assert.match(reveal, /win\.setAlwaysOnTop\(true\);\s*showFullWindow\(\);\s*win\.moveTop\(\);\s*win\.setAlwaysOnTop\(false\);/)
+  // Le délai de grâce est posé AVANT l'affichage : le 'blur' qui suivrait l'apparition est déjà couvert.
+  assert.ok(reveal.indexOf('revealGraceUntil =') < reveal.indexOf('showFullWindow()'))
+  // L'écran de démarrage n'est fermé qu'APRÈS : le premier plan passe d'une fenêtre de Jaris à l'autre, sans
+  // laisser Windows le donner entre-temps à une autre application.
+  assert.ok(reveal.lastIndexOf('showFullWindow()') < reveal.indexOf('splash.destroy()'), 'écran de démarrage fermé trop tôt')
+  const grace = Number(/const STARTUP_REVEAL_GRACE_MS = ([\d_]+)/.exec(mainSource)?.[1].replace(/_/g, ''))
+  assert.ok(grace >= 2_000 && grace <= 10_000, `délai de grâce normal ${grace} ms`)
 })
 
-test('main.ts : la perte de focus pendant l’ouverture de session ne replie pas la fenêtre en widget', () => {
+test('main.ts : la perte de focus juste après l’apparition ne replie pas la fenêtre en widget', () => {
   const blurHandler = /win\.on\(['"]blur['"],[\s\S]{0,400}?\}\);/.exec(mainSource)
   assert.ok(blurHandler, "handler 'blur' introuvable")
-  assert.match(blurHandler[0], /Date\.now\(\) < loginRevealUntil/)
+  assert.match(blurHandler[0], /Date\.now\(\) < revealGraceUntil\)\s*return;/)
+  // Aucun reste de l'ancien délai réservé à l'ouverture de session.
+  assert.doesNotMatch(mainSource, /loginRevealUntil/)
 })
 
 test('main.ts : l’interrupteur passe par l’état réel de Windows (canaux get/set branchés)', () => {

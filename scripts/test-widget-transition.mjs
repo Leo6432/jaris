@@ -77,7 +77,7 @@ test('après l’onboarding, la fenêtre de Jaris s’ouvre après le démarrage
  // Étape 294 : le widget apparaît quand le démarrage est fini et que ses fenêtres ont fait leur premier rendu.
  assert.match(source,/const windowsLoaded\s*=\s*Promise\.all\(\[windowLoaded\(fullWindow\),\s*windowLoaded\(widgetWindow\)\]\)/)
  const reveal=source.slice(source.indexOf('function revealAfterStartup('),source.indexOf('function createWidgetWindow('))
- assert.match(reveal,/showFullWindow\(\);\s*\}, SPLASH_EXIT_MS\)/)
+ assert.match(reveal,/showFullWindow\(\)/)
  assert.doesNotMatch(reveal,/showWidgetWindow\(/,'le widget ne doit plus s’imposer à l’ouverture')
  assert.match(source,/widgetWindow\s*=\s*createWidgetWindow\(\)/)
  assert.match(source,/function triggerVisibleWake\(\)[\s\S]{0,500}showWidgetWindow\(true\)[\s\S]{0,200}pipeline\.triggerWake\(\)/)

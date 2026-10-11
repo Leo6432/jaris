@@ -202,9 +202,10 @@ let dialogOpen = false
  * jugé perturbant en pleine configuration (Options a son propre bouton "Fermer", pas besoin du repli en
  * plus). Mis à jour par IPC_CHANNELS.setOptionsOpen, envoyé par OptionsMenu.tsx à chaque ouverture/fermeture. */
 let optionsOpen = false
-/** Horodatage jusqu'auquel 'blur' ne replie pas la fenêtre, après un lancement au démarrage de Windows
- * (voir LOGIN_REVEAL_GRACE_MS, launchAtStartup.ts). 0 = aucun délai en cours. */
-let loginRevealUntil = 0
+/** Horodatage jusqu'auquel 'blur' ne replie pas la fenêtre juste après son apparition au démarrage : 30 s après
+ * un lancement par Windows à l'ouverture de session (LOGIN_REVEAL_GRACE_MS, launchAtStartup.ts), quelques secondes
+ * après un lancement normal (STARTUP_REVEAL_GRACE_MS, étape 296). 0 = aucun délai en cours. */
+let revealGraceUntil = 0
 
 // Plus haut que large : le contenu (orbe + texte) reste ancré en haut de la fenêtre (voir .app--widget en
 // CSS), donc collé au vrai bord haut de l'écran (étape 68, façon "notch"). Le reste de la hauteur, vide et
@@ -493,8 +494,9 @@ function createFullWindow(showWhenReady = true): BrowserWindow {
   win.on('blur', () => {
     if (!onboardingDone || dialogOpen || quitting || !hasWidgetToShow()) return
     // Étape 165 : juste après l'ouverture de session, l'Explorateur et les autres programmes de démarrage
-    // prennent le focus — ce n'est pas Léo qui change d'appli, la fenêtre doit rester affichée.
-    if (Date.now() < loginRevealUntil) return
+    // prennent le focus — ce n'est pas Léo qui change d'appli, la fenêtre doit rester affichée. Étape 296 : même
+    // chose juste après l'écran de démarrage, où Windows termine encore de passer le premier plan à cette fenêtre.
+    if (Date.now() < revealGraceUntil) return
     win.hide()
     applyListeningForActiveMode()
     // Étape 176 (Léo : « si je clique sur une autre application il disparaît sans widget… il montre le
@@ -528,6 +530,8 @@ const SPLASH_HEIGHT = 420
 const SPLASH_EXIT_MS = 380
 /** Filet : une fenêtre de Jaris qui ne finirait jamais de se charger ne doit pas bloquer l'affichage. */
 const SPLASH_WINDOWS_LOAD_LIMIT_MS = 15_000
+/** Étape 296 : après l'écran de démarrage, une perte de focus pendant ce délai ne replie pas Jaris en widget. */
+const STARTUP_REVEAL_GRACE_MS = 5_000
 
 /**
  * Étape 294 — l'écran de démarrage, façon ChatGPT : une petite carte au centre de l'écran (l'orbe de Jaris et ce qui
@@ -584,6 +588,15 @@ function windowLoaded(win: BrowserWindow): Promise<void> {
 /**
  * Étape 294 — tout est prêt : la carte de démarrage joue sa sortie (elle vient de recevoir `ready`), puis la fenêtre
  * de Jaris s'ouvre à sa place — en grand si Jaris a été lancé par Windows à l'ouverture de session (étape 165).
+ *
+ * Étape 296 (Léo, après la 0.34.2 : « j'ouvre, ça se met toujours directement en widget ») : la fenêtre s'ouvrait
+ * bien, puis se repliait aussitôt. L'écran de démarrage était détruit AVANT d'afficher la fenêtre : pendant cet
+ * instant, Windows donne le premier plan à une autre application, la fenêtre de Jaris arrive sans focus ou le
+ * perd aussitôt, et son 'blur' la replie en widget comme si Léo avait changé d'appli. Seul le lancement à
+ * l'ouverture de session avait une protection (délai de grâce + premier plan forcé). Désormais, pour TOUT
+ * lancement : la fenêtre est affichée et mise au premier plan PENDANT que l'écran de démarrage a encore le focus
+ * (le passage se fait d'une fenêtre de Jaris à l'autre), avec le même délai de grâce, et l'écran de démarrage
+ * n'est fermé qu'ensuite.
  */
 function revealAfterStartup(revealAtLogin: boolean): void {
   if (startupRevealed) return
@@ -591,27 +604,23 @@ function revealAfterStartup(revealAtLogin: boolean): void {
     startupRevealed = true
     const splash = splashWindow
     splashWindow = null
-    if (splash && !splash.isDestroyed()) splash.destroy()
-    if (quitting) return
-    if (revealAtLogin) {
-      const win = fullWindow
-      if (win && !win.isDestroyed()) {
-        // Le délai de grâce de l'ouverture de session part de l'affichage, plus du lancement : la fenêtre arrive
-        // maintenant après l'écran de démarrage, et les autres programmes prennent encore le focus à ce moment-là.
-        loginRevealUntil = Date.now() + LOGIN_REVEAL_GRACE_MS
-        win.maximize()
-        // Brièvement au premier plan forcé : pendant l'ouverture de session, Windows peut refuser le focus à un
-        // programme de démarrage, et la fenêtre resterait derrière celles qui s'ouvrent en même temps.
-        win.setAlwaysOnTop(true)
-        showFullWindow()
-        win.setAlwaysOnTop(false)
-        return
-      }
+    const win = fullWindow
+    if (!quitting && win && !win.isDestroyed()) {
+      // Le délai de grâce part de l'affichage, pas du lancement : à l'ouverture de session, les autres programmes
+      // prennent encore le focus à ce moment-là.
+      revealGraceUntil = Date.now() + (revealAtLogin ? LOGIN_REVEAL_GRACE_MS : STARTUP_REVEAL_GRACE_MS)
+      if (revealAtLogin) win.maximize()
+      // Brièvement au premier plan forcé : Windows peut refuser le focus à une fenêtre qui s'ouvre sans clic, et
+      // elle resterait derrière les autres.
+      win.setAlwaysOnTop(true)
+      showFullWindow()
+      win.moveTop()
+      win.setAlwaysOnTop(false)
+    } else if (!quitting) {
+      showFullWindow()
     }
-    // Étape 295 (Léo : « quand ça ouvre ça met directement en widget, mais ça doit ouvrir normalement ») : après
-    // l'écran de démarrage, la fenêtre de Jaris s'ouvre comme celle de n'importe quelle application. Le widget
-    // reste là où il était utile : quand on réduit Jaris ou qu'on passe sur une autre application.
-    showFullWindow()
+    // Seulement maintenant : le premier plan est déjà passé à la fenêtre de Jaris.
+    if (splash && !splash.isDestroyed()) splash.destroy()
   }, SPLASH_EXIT_MS)
 }
 
