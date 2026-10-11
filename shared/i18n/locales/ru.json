@@ -374,6 +374,8 @@
   "composer.attachment.remove": "Убрать изображение",
   "composer.add": "Добавить",
   "composer.context.title": "Память разговора: использовано {used} из {max} токенов",
+  "composer.context.pending.chat": "Заданная память: {max} токенов. Точное число появится после следующего ответа.",
+  "composer.context.pending.code": "Доступная память: до {max} токенов. Точное число появится после следующей генерации.",
   "composer.dictation.transcribing": "Распознавание…",
   "composer.dictation.finish": "Завершить диктовку",
   "composer.dictation.start.title": "Диктовать (текст вводится в поле)",

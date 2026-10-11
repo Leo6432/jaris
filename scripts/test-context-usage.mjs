@@ -60,3 +60,12 @@ test('Code : chaque étape est mesurée avec la fenêtre de son propre appel (qu
 test('le processus principal relaie chaque mesure aux fenêtres', () => {
   assert.match(plain('electron/main.ts'), /onContextUsage\(\(usage\) => broadcast\(IPC_CHANNELS\.contextUsage, usage\)\)/)
 })
+
+// Étape 300 (Léo : « je vois pas le contexte, c'est où ? ») : le maximum est demandé AVANT toute réponse.
+test('maximum connu d’avance : la mémoire réglée en Chat (ramenée au modèle choisi), le plafond Code ramené au modèle Code', () => {
+  const main = plain('electron/main.ts')
+  const handler = /ipcMain\.handle\(IPC_CHANNELS\.getContextWindow,[\s\S]*?\n\s*\}\);/.exec(main)?.[0] ?? ''
+  assert.match(handler, /scope === 'code'\)\s*return profile\?\.codeModel \? fitToModelContext\(profile\.codeModel, CODE_NUM_CTX_MAX\) : null;/)
+  assert.match(handler, /const setting = profile\?\.contextLength \?\? config\.ollama\.numCtx;/)
+  assert.match(handler, /return chosen \? fitToModelContext\(chosen, setting\) : setting;/)
+})

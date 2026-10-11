@@ -58,6 +58,8 @@ window.jaris = {
     window.__emitUsage = cb
     return () => {}
   },
+  // Étape 300 : la fenêtre connue avant toute réponse (aucune : le compteur attend une mesure).
+  getContextWindow: () => Promise.resolve(window.__contextWindow === undefined ? null : window.__contextWindow),
   // Rappel gardé pour que le test puisse simuler une vraie ligne de journal (voir le test du cadre unique).
   onCodeGenStatus: (cb) => {
     window.__status = cb

@@ -52,6 +52,8 @@ window.jaris = {
     window.__emitUsage = cb
     return () => {}
   },
+  // Étape 300 : la fenêtre connue avant toute réponse (aucune : le compteur attend une mesure).
+  getContextWindow: () => Promise.resolve(window.__contextWindow === undefined ? null : window.__contextWindow),
   onCodeGenStatus: () => () => {},
   onCodeGenProgress: (cb) => { window.__emitProgress = cb; return () => {} },
   // Étape 286 : les actions sur les fichiers s'affichent dans la conversation (« Modifié README.md +1 −1 »).

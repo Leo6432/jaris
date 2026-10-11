@@ -360,6 +360,8 @@
   "composer.attachment.remove": "Remove the image",
   "composer.add": "Add",
   "composer.context.title": "Conversation memory: {used} tokens used out of {max}",
+  "composer.context.pending.chat": "Memory setting: {max} tokens. The exact count appears after the next reply.",
+  "composer.context.pending.code": "Available memory: up to {max} tokens. The exact count appears after the next generation.",
   "composer.dictation.transcribing": "Transcribing…",
   "composer.dictation.finish": "Finish dictation",
   "composer.dictation.start.title": "Dictate (the text is written in the input box)",

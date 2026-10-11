@@ -1005,6 +1005,8 @@ export const IPC_CHANNELS = {
    * travail en cours passe par `cancelCodeGen`, comme une génération : un seul travail à la fois dans le mode Code. */
   /** Étape 299 : place occupée dans la mémoire du modèle (main → fenêtres). */
   contextUsage: 'jaris:context-usage',
+  /** Étape 300 : la fenêtre connue AVANT toute réponse, pour que le compteur soit visible tout de suite. */
+  getContextWindow: 'jaris:get-context-window',
   githubStatus: 'jaris:github-status',
   githubStartLogin: 'jaris:github-start-login',
   githubFinishLogin: 'jaris:github-finish-login',

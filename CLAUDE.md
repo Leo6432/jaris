@@ -8023,3 +8023,19 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `node --test scripts/test-model-preload.mjs` (même fenêtre plafonnée au préchargement, à la conversation et à la
   correction ; lue une seule fois ; réglage plus petit gardé ; lecture impossible sans plafond puis retentée — vérifié
   en retirant le plafond).
+
+- **« Je vois pas le contexte, c'est où ? » (Léo, juste après la 0.34.6, étape 300).** Le compteur de l'étape 299 ne
+  s'affichait qu'APRÈS une réponse du modèle dans la conversation ouverte : rien à la réouverture de Jaris sur une
+  conversation existante, rien non plus après une réponse directe qui ne passe pas par le modèle (« salut », « ouvre
+  le Bloc-notes »). Un indicateur qui n'existe pas encore ne se trouve pas — c'est exactement ce qu'a vécu Léo.
+  Corrigé : le compteur est visible dès l'ouverture avec le maximum connu d'avance (« — / 32k »), et l'utilisé arrive
+  après la réponse suivante, jamais inventé avant. Nouveau canal `getContextWindow` (main.ts) : en Chat, la mémoire
+  réglée, ramenée au modèle choisi à la main s'il y en a un (sinon le modèle répondant n'est pas connu d'avance, il
+  dépend de la question) ; en Code, le plafond `CODE_NUM_CTX_MAX` ramené au modèle Code. Maximum inconnu (Ollama
+  injoignable) : rien d'affiché plutôt qu'un chiffre faux. L'infobulle dit quand le compte exact arrivera.
+  **Leçon générale : un indicateur qui n'apparaît qu'après un évènement doit être testé dans l'état de départ réel
+  de l'utilisateur (application rouverte, conversation déjà commencée), pas seulement juste après l'évènement — sinon
+  « ça marche » dans le test et « je ne le vois pas » chez lui.** Même famille que l'écran vide de l'étape 94.
+  Régression : `node --test scripts/test-context-usage.mjs scripts/test-chat-conversations-ui.mjs` (maximum calculé
+  côté main ; dans un vrai navigateur : « — / 32k » avant toute réponse, mesure ensuite, retour à « — / 32k » en
+  changeant de fil, rien sans maximum connu — vérifié en retirant l'affichage d'avance).

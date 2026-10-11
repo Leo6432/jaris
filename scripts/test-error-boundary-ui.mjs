@@ -37,6 +37,8 @@ window.jaris = {
     window.__emitUsage = cb
     return () => {}
   },
+  // Étape 300 : la fenêtre connue avant toute réponse (aucune : le compteur attend une mesure).
+  getContextWindow: () => Promise.resolve(window.__contextWindow === undefined ? null : window.__contextWindow),
   getMemoryNoteContent: (title) => Promise.resolve('# ' + title + '\\nContenu de la note.'),
   openMemoryFolder: () => {}
 }

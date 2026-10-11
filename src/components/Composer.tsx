@@ -9,7 +9,7 @@ import { DICTATION_MAX_MS, DictationRecorder, appendDictation } from '@/lib/dict
 import { ipcErrorMessage } from '@/lib/ipcError'
 import { currentLocale, t } from '@/lib/i18n'
 import { contextUsageRatio, formatTokenCount } from '@/lib/formatContextUsage'
-import type { ContextUsage } from '../../shared/ipc'
+import type { ContextGaugeValue } from '@/lib/useContextUsage'
 
 /**
  * Champ de saisie commun au Chat et au mode Code (étape 92).
@@ -64,7 +64,7 @@ interface ComposerProps {
   /** Entrées supplémentaires du menu « + » (étape 191). */
   addItems?: ComposerAddItem[]
   /** Étape 299 : place occupée dans la mémoire du modèle (« 5,1k / 32k »), après la première réponse. */
-  contextUsage?: ContextUsage | null
+  contextUsage?: ContextGaugeValue | null
 }
 
 /**
@@ -72,11 +72,15 @@ interface ComposerProps {
  * « utilisé / maximum ». Le détail exact (en tokens) dans l'infobulle. Orange passé 80 % : la conversation va bientôt
  * perdre son début.
  */
-function ContextGauge({ usage }: { usage: ContextUsage }): JSX.Element {
-  const ratio = contextUsageRatio(usage.used, usage.max)
+function ContextGauge({ usage }: { usage: ContextGaugeValue }): JSX.Element {
+  const ratio = usage.used === null ? 0 : contextUsageRatio(usage.used, usage.max)
   const circumference = 2 * Math.PI * 6
   const exact = new Intl.NumberFormat(currentLocale())
-  const title = t('composer.context.title', { used: exact.format(usage.used), max: exact.format(usage.max) })
+  // Étape 300 : avant toute réponse, le maximum seul (« — / 32k »), et l'infobulle dit quand l'utilisé arrivera.
+  const title =
+    usage.used === null
+      ? t(usage.scope === 'code' ? 'composer.context.pending.code' : 'composer.context.pending.chat', { max: exact.format(usage.max) })
+      : t('composer.context.title', { used: exact.format(usage.used), max: exact.format(usage.max) })
   return (
     <span className={`composer__context${ratio >= 0.8 ? ' composer__context--high' : ''}`} title={title} aria-label={title}>
       <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -94,7 +98,7 @@ function ContextGauge({ usage }: { usage: ContextUsage }): JSX.Element {
         />
       </svg>
       <span className="composer__context-text">
-        {formatTokenCount(usage.used)} / {formatTokenCount(usage.max)}
+        {usage.used === null ? '—' : formatTokenCount(usage.used)} / {formatTokenCount(usage.max)}
       </span>
     </span>
   )

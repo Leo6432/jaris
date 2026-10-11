@@ -374,6 +374,8 @@
   "composer.attachment.remove": "Odstrani sliko",
   "composer.add": "Dodaj",
   "composer.context.title": "Spomin pogovora: porabljenih {used} od {max} žetonov",
+  "composer.context.pending.chat": "Nastavljen spomin: {max} žetonov. Natančno število se prikaže po naslednjem odgovoru.",
+  "composer.context.pending.code": "Razpoložljiv spomin: do {max} žetonov. Natančno število se prikaže po naslednjem ustvarjanju.",
   "composer.dictation.transcribing": "Prepisovanje…",
   "composer.dictation.finish": "Končaj narekovanje",
   "composer.dictation.start.title": "Narekuj (besedilo se piše v polje)",

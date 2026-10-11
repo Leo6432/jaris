@@ -360,6 +360,8 @@
   "composer.attachment.remove": "Ta bort bilden",
   "composer.add": "Lägg till",
   "composer.context.title": "Samtalsminne: {used} av {max} tokens används",
+  "composer.context.pending.chat": "Inställt minne: {max} tokens. Det exakta antalet visas efter nästa svar.",
+  "composer.context.pending.code": "Tillgängligt minne: upp till {max} tokens. Det exakta antalet visas efter nästa generering.",
   "composer.dictation.transcribing": "Transkriberar…",
   "composer.dictation.finish": "Avsluta dikteringen",
   "composer.dictation.start.title": "Diktera (texten skrivs i inmatningsfältet)",

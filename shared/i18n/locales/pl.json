@@ -374,6 +374,8 @@
   "composer.attachment.remove": "Usuń obraz",
   "composer.add": "Dodaj",
   "composer.context.title": "Pamięć rozmowy: użyto {used} z {max} tokenów",
+  "composer.context.pending.chat": "Ustawiona pamięć: {max} tokenów. Dokładna liczba pojawi się po następnej odpowiedzi.",
+  "composer.context.pending.code": "Dostępna pamięć: do {max} tokenów. Dokładna liczba pojawi się po następnym generowaniu.",
   "composer.dictation.transcribing": "Transkrypcja…",
   "composer.dictation.finish": "Zakończ dyktowanie",
   "composer.dictation.start.title": "Dyktuj (tekst wpisuje się w pole)",

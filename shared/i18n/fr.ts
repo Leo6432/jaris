@@ -370,6 +370,8 @@ export const fr = {
   "composer.attachment.remove": "Retirer l'image",
   "composer.add": "Ajouter",
   "composer.context.title": "Mémoire de la conversation : {used} tokens utilisés sur {max}",
+  "composer.context.pending.chat": "Mémoire réglée : {max} tokens. Le compte exact s'affiche après la prochaine réponse.",
+  "composer.context.pending.code": "Mémoire disponible : jusqu'à {max} tokens. Le compte exact s'affiche après la prochaine génération.",
   "composer.dictation.transcribing": "Transcription…",
   "composer.dictation.finish": "Terminer la dictée",
   "composer.dictation.start.title": "Dicter (le texte s’écrit dans le champ)",

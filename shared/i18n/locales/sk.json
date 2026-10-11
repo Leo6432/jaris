@@ -367,6 +367,8 @@
   "composer.attachment.remove": "Odobrať obrázok",
   "composer.add": "Pridať",
   "composer.context.title": "Pamäť konverzácie: využitých {used} z {max} tokenov",
+  "composer.context.pending.chat": "Nastavená pamäť: {max} tokenov. Presný počet sa zobrazí po ďalšej odpovedi.",
+  "composer.context.pending.code": "Dostupná pamäť: až {max} tokenov. Presný počet sa zobrazí po ďalšom generovaní.",
   "composer.dictation.transcribing": "Prepis…",
   "composer.dictation.finish": "Ukončiť diktovanie",
   "composer.dictation.start.title": "Diktovať (text sa píše do poľa)",

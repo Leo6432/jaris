@@ -360,6 +360,8 @@
   "composer.attachment.remove": "Afbeelding verwijderen",
   "composer.add": "Toevoegen",
   "composer.context.title": "Gespreksgeheugen: {used} van {max} tokens gebruikt",
+  "composer.context.pending.chat": "Ingesteld geheugen: {max} tokens. Het exacte aantal verschijnt na het volgende antwoord.",
+  "composer.context.pending.code": "Beschikbaar geheugen: tot {max} tokens. Het exacte aantal verschijnt na de volgende generatie.",
   "composer.dictation.transcribing": "Transcriberen…",
   "composer.dictation.finish": "Dicteren beëindigen",
   "composer.dictation.start.title": "Dicteren (de tekst verschijnt in het invoerveld)",

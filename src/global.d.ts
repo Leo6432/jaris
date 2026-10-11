@@ -56,6 +56,7 @@ import type {
   VoiceSetupStatusPayload,
   StartupState,
   ContextUsage,
+  ContextUsageScope,
   WidgetMode,
   WindowChrome
 } from '../shared/ipc'
@@ -77,6 +78,7 @@ declare global {
       getStartupState: () => Promise<StartupState>
       onStartupState: (cb: (state: StartupState) => void) => () => void
       onContextUsage: (cb: (usage: ContextUsage) => void) => () => void
+      getContextWindow: (scope: ContextUsageScope) => Promise<number | null>
       triggerWake: () => void
       notifyAudioEnded: () => void
       /** Langue au chargement (synchrone), `null` si indisponible. Optionnel : absent des faux ponts des tests. */

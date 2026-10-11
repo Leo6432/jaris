@@ -32,7 +32,7 @@ const CODE_NUM_CTX_MIN = 16384
  * classique (non hybride) coûterait plusieurs Go de mémoire vidéo de plus. Abaissé encore à la limite du
  * modèle lui-même quand Ollama la donne.
  */
-const CODE_NUM_CTX_MAX = 65536
+export const CODE_NUM_CTX_MAX = 65536
 /**
  * Caractères par token, volontairement pessimiste : mesuré avec le tokenizer qwen3.5 (étape 159), du CSS
  * donne 2,9 caractères par token, du JavaScript 3,6, du français 3,8. Un HTML généré est surtout du CSS et

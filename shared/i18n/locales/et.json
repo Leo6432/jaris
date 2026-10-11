@@ -360,6 +360,8 @@
   "composer.attachment.remove": "Eemalda pilt",
   "composer.add": "Lisa",
   "composer.context.title": "Vestluse mälu: kasutatud {used} / {max} tokenit",
+  "composer.context.pending.chat": "Seatud mälu: {max} tokenit. Täpne arv ilmub pärast järgmist vastust.",
+  "composer.context.pending.code": "Saadaolev mälu: kuni {max} tokenit. Täpne arv ilmub pärast järgmist loomist.",
   "composer.dictation.transcribing": "Transkribeerimine…",
   "composer.dictation.finish": "Lõpeta dikteerimine",
   "composer.dictation.start.title": "Dikteeri (tekst kirjutatakse välja)",

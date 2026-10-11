@@ -52,6 +52,8 @@ window.jaris = {
     window.__emitUsage = cb
     return () => {}
   },
+  // Étape 300 : la fenêtre connue avant toute réponse (aucune : le compteur attend une mesure).
+  getContextWindow: () => Promise.resolve(window.__contextWindow === undefined ? null : window.__contextWindow),
   getChatHistory: () => Promise.resolve([]),
   listConversations: () => Promise.resolve({ activeId: 'a', conversations: [{ id: 'a', title: 'Nouvelle conversation', createdAt: '', updatedAt: '2026-09-14T10:00:00.000Z', messageCount: 0 }] }),
   selectConversation: () => Promise.resolve({ activeId: 'a', conversations: [] }),
