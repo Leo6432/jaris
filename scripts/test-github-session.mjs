@@ -166,6 +166,8 @@ test('l’agent prépare des changements ; un fichier remis à l’identique dis
   await session.openGithubRepo('leo/projet')
   const result = await session.runGithubAgent('leo/projet', 'Corrige', { onStatus: () => {} })
   assert.equal(result.summary, 'README corrigé et guide ajouté.')
+  // Étape 303 : travail allé à son terme → l'écran peut l'enregistrer tout seul sur GitHub.
+  assert.equal(result.finished, true)
   assert.deepEqual(
     result.view.changes.map((change) => [change.path, change.kind]),
     [
@@ -373,4 +375,11 @@ test('l’aperçu sert la version PRÉPARÉE par Jaris, sinon celle de GitHub (l
   assert.equal(state.byteReads, 1)
   // Un dépôt qui n'est plus ouvert ne sert rien.
   assert.equal(await session.readGithubPreviewFile('leo/autre', 'index.html'), undefined)
+})
+
+// Étape 303 : seul un travail TERMINÉ est enregistré tout seul — limite d'étapes ou échec répété le laissent en attente.
+test('« terminé » vient du vrai résultat de l’agent : une limite atteinte ne compte jamais comme terminé', async () => {
+  const { readFileSync } = await import('node:fs')
+  const source = readFileSync(new URL('../electron/services/githubSession.ts', import.meta.url), 'utf8')
+  assert.match(source, /return \{ summary: outcome\.summary, view: viewOf\(session\), finished: !outcome\.limitReached \}/)
 })

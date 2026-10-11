@@ -315,7 +315,7 @@ export async function runGithubAgent(fullName: string, request: string, options:
       signal: options.signal,
       maxHistoryChars: historyBudgetChars(modelMax)
     })
-    return { summary: outcome.summary, view: viewOf(session) }
+    return { summary: outcome.summary, view: viewOf(session), finished: !outcome.limitReached }
   } catch (err) {
     if (isAbortError(err)) throw new GenerationStoppedError()
     throw err

@@ -8068,3 +8068,22 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `node --test scripts/test-code-commit-card.mjs scripts/test-github-ui.mjs` (commit sur la seule carte du
   dernier travail ; dans un vrai navigateur : travailler, enregistrer, quitter le dépôt, y revenir → « Voir sur
   GitHub » pointe sur le commit — vérifié en retirant l'enregistrement du commit sur la carte).
+
+- **Enregistrement automatique sur GitHub d'un travail terminé (étape 303, Léo : « faut pas qu'il demande pour
+  enregistrer sur GitHub, par exemple toi tu me demandes pas de cliquer sur un bouton pour enregistrer »).** Cette
+  entrée REMPLACE le choix de l'étape 277 (« RIEN ne part sur GitHub avant le clic sur Enregistrer ») : une demande
+  explicite gagne sur un choix noté ici. Désormais, quand le travail de Jaris sur un dépôt va à son terme et change
+  des fichiers, `runOnRepo` (CodePanel.tsx) enregistre tout seul (un commit sur la branche ouverte, jamais forcé,
+  description = première ligne de la demande). **Gardé volontairement : un travail INTERROMPU n'est jamais envoyé** —
+  limite d'étapes ou échec répété (`limitReached` de runRepoAgent, désormais exposé en `RepoAgentResult.finished`),
+  ou « Arrêter » (qui ne renvoie pas de résultat) : il reste en attente avec « Annuler » / « Afficher » / « Enregistrer
+  sur GitHub », pour ne pas pousser un travail à moitié fait. Un enregistrement refusé (conflit, branche protégée)
+  affiche son erreur et laisse aussi le bouton manuel. Un seul bip de fin (celui du travail), pas deux. Textes devenus
+  faux corrigés dans les 24 langues (« tu les vérifies avant qu'ils soient enregistrés », « rien n'est envoyé
+  avant »). Les tests du parcours manuel simulent désormais un travail interrompu (`__agentUnfinished`), le seul cas
+  où ce parcours existe encore. **Piège rencontré en écrivant le test : un commentaire contenant des accents graves
+  (`...`) à l'intérieur du faux pont, qui est lui-même un gabarit JavaScript entre accents graves, coupait le gabarit
+  et faisait échouer TOUT le fichier de tests d'un coup ("Unexpected identifier") — dans ces faux ponts, jamais
+  d'accent grave dans un commentaire.** Régression : `node --test scripts/test-github-ui.mjs
+  scripts/test-github-session.mjs` (terminé → un commit avec la demande, plus d'« Annuler » ; interrompu → aucun
+  commit ; « terminé » lu du vrai résultat de l'agent — chaque cas vérifié en cassant le comportement).

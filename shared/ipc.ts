@@ -840,6 +840,11 @@ export interface RepoAgentResult {
   summary: string
   /** Le dépôt avec tous ses changements en attente, ceux d'avant cette demande compris. */
   view: RepoView
+  /**
+   * Étape 303 : le travail est allé à son terme (ni limite d'étapes, ni échec répété). Seul un travail terminé est
+   * enregistré tout seul sur GitHub : un travail interrompu en route reste en attente, à vérifier.
+   */
+  finished: boolean
 }
 
 export interface RepoCommitResult {

@@ -415,8 +415,14 @@ export default function CodePanel(): JSX.Element {
       // Les fichiers viennent des changements RÉELLEMENT préparés, jamais de ce que le modèle dit avoir fait : vu
       // avec un vrai modèle, le résumé peut annoncer un changement qui n'a pas eu lieu.
       if (result.view.changes.length > 0) {
-        setCommitMessage((prompt || t('code.reproduceImage.short')).split('\n')[0].slice(0, 72))
+        const message = (prompt || t('code.reproduceImage.short')).split('\n')[0].slice(0, 72)
+        setCommitMessage(message)
         pushTurn({ kind: 'changes', files: changedFiles(result.view.changes) })
+        // Étape 303 (Léo : « faut pas qu'il demande pour enregistrer sur GitHub, toi tu me demandes pas de cliquer sur
+        // un bouton ») : un travail terminé est enregistré tout seul. Interrompu en route (limite d'étapes, échec
+        // répété), il reste en attente avec « Enregistrer sur GitHub » — on n'envoie pas un travail à moitié fait.
+        // Sans son ici : le bip de fin du travail, juste après, suffit (deux bips d'affilée pour une seule demande).
+        if (result.finished) await commitRepo(message, current.fullName, false)
       } else {
         addTurn('note', t('code.noFileChanged'))
       }
@@ -455,17 +461,17 @@ export default function CodePanel(): JSX.Element {
     switchConversation(null)
   }
 
-  const commitRepo = async (message: string): Promise<void> => {
-    if (!repo) return
+  const commitRepo = async (message: string, fullName = repo?.fullName, sound = true): Promise<void> => {
+    if (!fullName) return
     setError(null)
     setCommitting(true)
     try {
-      const result = await window.jaris.githubCommit(repo.fullName, message)
+      const result = await window.jaris.githubCommit(fullName, message)
       setRepo(result.view)
       setCommitted({ url: result.url, sha: result.sha })
       setTurns((current) => attachCommit(current, { url: result.url, sha: result.sha }))
       addTurn('reply', t('code.savedOnGithub', { sha: result.sha.slice(0, 7) }))
-      void playSoundCueIfEnabled('success')
+      if (sound) void playSoundCueIfEnabled('success')
     } catch (err) {
       setError(ipcErrorMessage(err))
       void playSoundCueIfEnabled('error')

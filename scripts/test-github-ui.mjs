@@ -90,10 +90,16 @@ window.jaris = {
     return new Promise((resolve, reject) => {
       window.__finishAgent = () => {
         window.__agentDone = true
-        resolve({ summary: 'Faute corrigée dans le README.', view: window.__manyChanges ? { ...CHANGED, changes: window.__manyChanges } : CHANGED })
+        // Étape 303 : « finished » comme le vrai main ; __agentUnfinished simule un travail interrompu en route
+        // (limite d'étapes), qui reste en attente au lieu d'être enregistré tout seul.
+        resolve({
+          summary: 'Faute corrigée dans le README.',
+          view: window.__manyChanges ? { ...CHANGED, changes: window.__manyChanges } : CHANGED,
+          finished: !window.__agentUnfinished
+        })
       }
       // Un modèle qui annonce un changement qu'il n'a pas fait (vu pour de vrai) : aucun fichier changé.
-      window.__finishAgentEmpty = () => resolve({ summary: "J'ai ajouté 'oeufs'.", view: VIEW })
+      window.__finishAgentEmpty = () => resolve({ summary: "J'ai ajouté 'oeufs'.", view: VIEW, finished: true })
       window.__failAgent = reject
     })
   },
@@ -277,6 +283,10 @@ test('annuler la connexion ne montre pas d’erreur, et revient au bouton « Se 
 test('un dépôt ouvert change le champ, puis les changements s’affichent ligne par ligne, SANS rien enregistrer', options, async () => {
   await withPage(async (page) => {
     await connectAndOpen(page)
+    // Étape 303 : travail interrompu en route — il reste en attente (vérifier, annuler, enregistrer à la main).
+    await page.evaluate(() => {
+      window.__agentUnfinished = true
+    })
     assert.equal(await page.textContent('.repo-picker__trigger .effort-picker__model'), 'projet')
     assert.equal(await page.getAttribute('.composer textarea', 'placeholder'), 'Que veux-tu changer dans leo/projet ?')
     // Étape 280 (Léo : « la branche mets pas en haut mais en bas comme le dépôt, comme sur ChatGPT ») : dépôt ET
@@ -401,6 +411,10 @@ test('la fin d’un travail ressemble à ChatGPT : durée, réponse, puis la car
   // vert « Terminé en 2 min 10 — 1 fichier changé : essaie dans l'aperçu, puis enregistre depuis « Changements » ».
   await withPage(async (page) => {
     await connectAndOpen(page)
+    // Étape 303 : travail interrompu en route — il reste en attente (vérifier, annuler, enregistrer à la main).
+    await page.evaluate(() => {
+      window.__agentUnfinished = true
+    })
     await page.fill('.composer textarea', 'Corrige les fautes du README')
     await page.click('.composer__send')
     await page.evaluate(() => window.__finishAgent())
@@ -446,6 +460,10 @@ test('plus de trois fichiers : « Afficher N autres fichiers » déplie la liste
       }))
     })
     await connectAndOpen(page)
+    // Étape 303 : travail interrompu en route — il reste en attente (vérifier, annuler, enregistrer à la main).
+    await page.evaluate(() => {
+      window.__agentUnfinished = true
+    })
     await page.fill('.composer textarea', 'Refais le design')
     await page.click('.composer__send')
     await page.evaluate(() => window.__finishAgent())
@@ -509,6 +527,10 @@ test('changer de branche depuis le champ rouvre le dépôt sur cette branche', o
 test('les changements et les boutons sont réellement habillés par le CSS de Jaris', options, async () => {
   await withPage(async (page) => {
     await connectAndOpen(page)
+    // Étape 303 : travail interrompu en route — il reste en attente (vérifier, annuler, enregistrer à la main).
+    await page.evaluate(() => {
+      window.__agentUnfinished = true
+    })
     await page.fill('.composer textarea', 'Corrige')
     await page.click('.composer__send')
     await page.evaluate(() => window.__finishAgent())
@@ -548,6 +570,10 @@ test('à 760 px de large, rien ne déborde', options, async () => {
   await withPage(
     async (page) => {
       await connectAndOpen(page)
+    // Étape 303 : travail interrompu en route — il reste en attente (vérifier, annuler, enregistrer à la main).
+    await page.evaluate(() => {
+      window.__agentUnfinished = true
+    })
       await page.fill('.composer textarea', 'Corrige')
       await page.click('.composer__send')
       await page.evaluate(() => window.__finishAgent())
@@ -574,6 +600,10 @@ test('un dépôt sans page web le dit dans l’aperçu, au lieu d’une carte vi
 test('« Changements » : tout annuler ramène l’aperçu, l’onglet disparaît (étape 287)', options, async () => {
   await withPage(async (page) => {
     await connectAndOpen(page)
+    // Étape 303 : travail interrompu en route — il reste en attente (vérifier, annuler, enregistrer à la main).
+    await page.evaluate(() => {
+      window.__agentUnfinished = true
+    })
     await page.fill('.composer textarea', 'Corrige')
     await page.click('.composer__send')
     await page.evaluate(() => window.__finishAgent())
@@ -601,16 +631,45 @@ const threadLines = (page) =>
 
 // Étape 302 (Léo : « pourquoi les boutons disparaissent quand je relance, afficher modification etc. ») : un travail
 // enregistré sur GitHub reste consultable quand on revient à la conversation — plus de carte muette.
+// Étape 303 (Léo : « faut pas qu'il demande pour enregistrer sur GitHub, toi tu me demandes pas de cliquer sur un
+// bouton ») : un travail terminé part sur GitHub tout seul ; un travail interrompu, jamais.
+test('travail terminé : enregistré tout seul sur GitHub, sans clic, avec la demande comme description', options, async () => {
+  await withPage(async (page) => {
+    await connectAndOpen(page)
+    await page.fill('.composer textarea', 'Corrige les fautes du README')
+    await page.click('.composer__send')
+    await page.evaluate(() => window.__finishAgent())
+    await page.waitForFunction(() => window.__calls.commit.length === 1)
+    assert.deepEqual(await page.evaluate(() => window.__calls.commit), [['leo/projet', 'Corrige les fautes du README']])
+    await page.waitForFunction(() => /Enregistré sur GitHub/.test(document.querySelector('.code-chat__thread').textContent))
+    const order = await page.locator('.code-chat__thread > *').evaluateAll((nodes) => nodes.map((n) => n.className.split(' ')[0]))
+    assert.deepEqual(order, ['code-chat__user', 'code-chat__worked', 'code-chat__reply', 'changes-card', 'code-chat__reply'])
+    // Plus rien à annuler (c'est enregistré) ; les modifications restent consultables.
+    assert.deepEqual((await readChangesCard(page)).buttons, ['Afficher les modifications'])
+  })
+})
+
+test('travail interrompu en route : rien n’est envoyé sur GitHub, il reste à vérifier', options, async () => {
+  await withPage(async (page) => {
+    await connectAndOpen(page)
+    await page.evaluate(() => {
+      window.__agentUnfinished = true
+    })
+    await page.fill('.composer textarea', 'Corrige les fautes du README')
+    await page.click('.composer__send')
+    await page.evaluate(() => window.__finishAgent())
+    await page.waitForSelector('.changes-card__undo')
+    assert.deepEqual(await page.evaluate(() => window.__calls.commit), [])
+  })
+})
+
 test('enregistré sur GitHub : en revenant à la conversation, la carte propose « Voir sur GitHub »', options, async () => {
   await withPage(async (page) => {
     await connectAndOpen(page)
     await page.fill('.composer textarea', 'Corrige les fautes du README')
     await page.click('.composer__send')
     await page.evaluate(() => window.__finishAgent())
-    await page.waitForSelector('.changes-card__show')
-    await page.click('.changes-card__show')
-    await page.waitForSelector('.repo-panel__save')
-    await page.click('.repo-panel__save')
+    // Étape 303 : un travail terminé est enregistré tout seul, sans clic.
     await page.waitForFunction(() => window.__calls.commit.length === 1)
 
     // Comme une relance : on quitte le dépôt, puis on y revient par la liste — plus rien n'est préparé en mémoire.
@@ -635,6 +694,10 @@ test('un dépôt ouvert apparaît à gauche, et sa conversation revient quand on
   // disait « Aucune application pour l'instant » pendant qu'il travaillait sur un dépôt.
   await withPage(async (page) => {
     await connectAndOpen(page)
+    // Étape 303 : travail interrompu en route — il reste en attente (vérifier, annuler, enregistrer à la main).
+    await page.evaluate(() => {
+      window.__agentUnfinished = true
+    })
     await page.waitForSelector('.workspace__item--active')
     assert.equal(await page.textContent('.workspace__item--active .workspace__item-title'), 'leo/projet')
     // Le nom EXACT à l'écran aussi : la majuscule de début des titres d'application écrivait « Leo/projet ».
