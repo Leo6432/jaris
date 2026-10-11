@@ -53,7 +53,8 @@ function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Proje
         htmlUrl: 'https://github.com/leo/projet',
         commitSha: `commit${state.commits.length}`,
         treeSha: `tree${state.commits.length}`,
-        files: Object.keys(state.files).map((path) => ({ path, sha: path, size: 10, mode: '100644' })),
+        // Comme le vrai GitHub : l'empreinte (sha) change avec le contenu du fichier.
+        files: Object.keys(state.files).map((path) => ({ path, sha: `${path}:${state.files[path]}`, size: 10, mode: '100644' })),
         truncated: false
       }
     }
@@ -375,6 +376,27 @@ test('l’aperçu sert la version PRÉPARÉE par Jaris, sinon celle de GitHub (l
   assert.equal(state.byteReads, 1)
   // Un dépôt qui n'est plus ouvert ne sert rien.
   assert.equal(await session.readGithubPreviewFile('leo/autre', 'index.html'), undefined)
+})
+
+// Étape 304 (Léo : « l'aperçu montre toujours l'ancien site, et pas le nouveau — je viens de confirmer avec Vercel ») :
+// l'aperçu avait déjà lu index.html AVANT le travail ; après l'enregistrement, ce cache le resservait sous le même nom.
+test('après un enregistrement sur GitHub, l’aperçu montre la NOUVELLE version, jamais celle lue avant', async () => {
+  const { session, state } = setup({
+    token: 't',
+    files: { 'index.html': '<h1>Ancien</h1>' },
+    replies: [
+      reply(call('read_file', { path: 'index.html' })),
+      reply(call('edit_file', { path: 'index.html', old_text: 'Ancien', new_text: 'Nouveau' })),
+      reply(call('finish', { summary: 'Titre changé.' }))
+    ]
+  })
+  await session.openGithubRepo('leo/projet')
+  // L'aperçu du site tel qu'il est sur GitHub, avant toute demande.
+  assert.equal(String(await session.readGithubPreviewFile('leo/projet', 'index.html')), '<h1>Ancien</h1>')
+  await session.runGithubAgent('leo/projet', 'Change le titre', { onStatus: () => {} })
+  assert.equal(String(await session.readGithubPreviewFile('leo/projet', 'index.html')), '<h1>Nouveau</h1>')
+  await session.commitGithubChanges('leo/projet', 'Change le titre')
+  assert.equal(String(await session.readGithubPreviewFile('leo/projet', 'index.html')), '<h1>Nouveau</h1>', 'l’ancien site est revenu dans l’aperçu')
 })
 
 // Étape 303 : seul un travail TERMINÉ est enregistré tout seul — limite d'étapes ou échec répété le laissent en attente.

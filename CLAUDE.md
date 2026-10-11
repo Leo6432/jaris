@@ -8087,3 +8087,20 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   d'accent grave dans un commentaire.** Régression : `node --test scripts/test-github-ui.mjs
   scripts/test-github-session.mjs` (terminé → un commit avec la demande, plus d'« Annuler » ; interrompu → aucun
   commit ; « terminé » lu du vrai résultat de l'agent — chaque cas vérifié en cassant le comportement).
+
+- **« L'aperçu montre toujours l'ancien site, et pas le nouveau — je viens de confirmer avec Vercel » (Léo, étape
+  304).** Vercel (déployé depuis GitHub) avait la nouvelle version : l'enregistrement était bon, seul l'aperçu de
+  Jaris mentait. Cause trouvée en lisant le cycle complet : `readGithubPreviewFile` (githubSession.ts) gardait chaque
+  fichier lu sur GitHub dans `previewFiles`, rangé par CHEMIN. L'aperçu lit `index.html` dès l'ouverture du dépôt,
+  donc avant le travail de Jaris ; pendant le travail, la version préparée passe devant (aucun souci) ; mais après
+  l'enregistrement, `commitGithubChanges` vidait les changements préparés et le cache `originals`… pas
+  `previewFiles` — et l'ancien `index.html` ressortait sous le même chemin. Corrigé en rangeant ce cache par
+  EMPREINTE GitHub (`sha` du contenu) plutôt que par chemin : une empreinte change avec le contenu, donc une version
+  périmée ne peut plus ressortir, quel que soit le chemin qui y mène (enregistrement, changement de branche,
+  réouverture) — et vidé en plus à l'enregistrement pour ne pas grossir. **Leçon générale : un cache rangé par NOM
+  d'un contenu qui peut changer doit être vidé par TOUS les chemins qui le changent ; le ranger par empreinte du
+  contenu supprime la question.** Même famille que le bandeau effacé sur un seul chemin sur trois (étape 102).
+  **Piège du faux GitHub, encore (après l'étape 302) : son `sha` valait le chemin, identique avant et après une
+  modification — un cache rangé par empreinte n'aurait rien prouvé ; il suit désormais le contenu, comme le vrai.**
+  Régression : `node --test scripts/test-github-session.mjs` (aperçu lu avant le travail, travail, enregistrement :
+  l'aperçu montre la nouvelle version — vérifié en remettant le cache par chemin, le test échoue avec l'ancien site).

@@ -35,7 +35,12 @@ interface RepoSession {
   staged: Map<string, string | null>
   /** Contenus lus sur GitHub (`null` = binaire/trop lourd), pour ne pas relire deux fois. */
   originals: Map<string, string | null>
-  /** Fichiers bruts lus pour l'aperçu (étape 287) : une page recharge souvent ses images, inutile de les redemander. */
+  /**
+   * Fichiers bruts lus pour l'aperçu (étape 287) : une page recharge souvent ses images, inutile de les redemander.
+   * Étape 304 : rangés par EMPREINTE GitHub (sha du contenu), plus par chemin — après un enregistrement, l'ancien
+   * index.html ressortait de ce cache sous le même chemin, et l'aperçu montrait l'ancien site alors que GitHub (et
+   * Vercel) avaient le nouveau. Une empreinte change avec le contenu : une version périmée ne peut plus ressortir.
+   */
   previewFiles: Map<string, Buffer | null>
   busy: boolean
 }
@@ -357,10 +362,10 @@ export async function readGithubPreviewFile(fullName: string, path: string): Pro
   if (session.staged.has(path)) return session.staged.get(path) ?? undefined
   const file = session.snapshot.files.find((entry) => entry.path === path)
   if (!file) return undefined
-  if (!session.previewFiles.has(path)) {
-    session.previewFiles.set(path, await withClient((github) => github.readBytes(session.snapshot, file)))
+  if (!session.previewFiles.has(file.sha)) {
+    session.previewFiles.set(file.sha, await withClient((github) => github.readBytes(session.snapshot, file)))
   }
-  return session.previewFiles.get(path) ?? undefined
+  return session.previewFiles.get(file.sha) ?? undefined
 }
 
 export function discardGithubChanges(fullName: string, path?: string): RepoView {
@@ -391,6 +396,8 @@ export async function commitGithubChanges(fullName: string, message: string): Pr
   // Le commit est fait : on repart de la nouvelle version de la branche pour la demande suivante.
   session.staged.clear()
   session.originals.clear()
+  // Plus rien à y reprendre : la nouvelle version n'a plus les mêmes empreintes (et la mémoire ne grossit pas).
+  session.previewFiles.clear()
   try {
     session.snapshot = await withClient((github) => github.openRepo(session.snapshot.fullName, session.snapshot.branch))
   } catch {
