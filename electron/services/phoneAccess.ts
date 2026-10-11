@@ -1,4 +1,6 @@
 import type { ConverseRestrictions } from './assistant'
+import { t, type MessageKey } from '../../shared/i18n'
+import { imageStepFromLog } from '../../shared/imageGallery'
 
 /**
  * Ce que Jaris peut faire quand le message vient du téléphone (étape 214). Choix de Léo : « tout sauf le
@@ -20,9 +22,10 @@ export const PHONE_ALLOWED_TOOLS: ReadonlySet<string> = new Set([
   'generate_image'
 ])
 
-export const PHONE_REFUSAL =
-  "Depuis ton téléphone, je ne peux pas taper, cliquer ni regarder ton écran : c'est bloqué pour ta sécurité. " +
-  'Fais-le depuis le PC. Pour éteindre le PC, utilise le bouton d’extinction en haut de la page.'
+/** Étape 293 : dans la langue de Jaris au moment du refus (elle peut changer pendant que le téléphone est relié). */
+export function phoneRefusal(): string {
+  return t('phone.refusal')
+}
 
 export const PHONE_RESTRICTIONS: ConverseRestrictions = {
   allowedTools: PHONE_ALLOWED_TOOLS,
@@ -31,19 +34,21 @@ export const PHONE_RESTRICTIONS: ConverseRestrictions = {
     "cliquer, ni regarder l'écran, ni éteindre le PC : ces outils n'existent pas ici. Si on te le demande, dis " +
     'simplement que c’est bloqué depuis le téléphone pour sa sécurité, sans rien inventer. Pour éteindre le PC, ' +
     'il existe un bouton d’extinction en haut de la page du téléphone : indique-le.',
-  refusal: PHONE_REFUSAL
+  get refusal() {
+    return phoneRefusal()
+  }
 }
 
 /** Outil en cours -> phrase affichée sur le téléphone (jamais le nom technique ni ses arguments). */
-const TOOL_STATUS: Record<string, string> = {
-  search_web: 'Recherche sur le web…',
-  read_web_page: 'Lecture de la page…',
-  generate_image: "Dessin de l'image…",
-  open_app: "Ouverture de l'application sur le PC…",
-  set_reminder: 'Programmation du rappel…',
-  remember: 'Je retiens…',
-  recall_memory: 'Je cherche dans ma mémoire…',
-  get_system_stats: "Lecture de l'état du PC…"
+const TOOL_STATUS: Record<string, MessageKey> = {
+  search_web: 'phone.status.search_web',
+  read_web_page: 'phone.status.read_web_page',
+  generate_image: 'phone.status.generate_image',
+  open_app: 'phone.status.open_app',
+  set_reminder: 'phone.status.set_reminder',
+  remember: 'phone.status.remember',
+  recall_memory: 'phone.status.recall_memory',
+  get_system_stats: 'phone.status.get_system_stats'
 }
 
 /**
@@ -53,8 +58,12 @@ const TOOL_STATUS: Record<string, string> = {
  */
 export function phoneStatusFromLog(line: string): string | null {
   const tool = line.match(/^Outil appelé : ([a-z_]+)\(/)
-  if (tool) return TOOL_STATUS[tool[1]] ?? 'Jaris travaille…'
-  if (/^Dessin : étape (\d+) sur (\d+)/.test(line)) return line.replace(/^Dessin : /, 'Dessin : ')
-  if (/^Modèle (choisi|choisi à la main) :/.test(line)) return 'Jaris réfléchit…'
+  if (tool) return t(TOOL_STATUS[tool[1]] ?? 'phone.status.working')
+  // Étape 293 : « Dessin : 2/4 » (le mot suit la langue, voir imageGenerator) ; l'ancienne forme reste reconnue.
+  const step = imageStepFromLog(line)
+  if (step && (line.startsWith(`${t('engine.step.image')} :`) || /^Dessin : étape/.test(line))) {
+    return t('common.labelValue', { label: t('engine.step.image'), value: `${step.step}/${step.total}` })
+  }
+  if (/^Modèle (choisi|choisi à la main) :/.test(line)) return t('phone.status.thinking')
   return null
 }

@@ -2,6 +2,7 @@ import { execFile, spawn } from 'child_process'
 import { existsSync } from 'fs'
 import { promisify } from 'util'
 import { shell } from 'electron'
+import { t } from '../../shared/i18n'
 
 /**
  * Étape 248 (Léo, journal des demandes : « ouvre Firefox et cherche une recette de tiramisu » à la voix) : le
@@ -116,22 +117,23 @@ const defaultDeps: BrowserSearchDeps = { findExe: findBrowserExe, launch: launch
  */
 export async function openBrowserSearch(request: BrowserSearchRequest, deps: BrowserSearchDeps = defaultDeps): Promise<string> {
   const url = searchUrl(request)
-  const what = `${request.site === 'youtube' ? 'Recherche YouTube' : 'Recherche'} « ${request.query} »`
+  const what = t(request.site === 'youtube' ? 'browser.what.youtube' : 'browser.what', { query: request.query })
   let missing = ''
   if (request.browser) {
     const exe = await deps.findExe(request.browser.exe)
     if (exe) {
       const error = await deps.launch(exe, [url])
-      if (!error) return `${what} envoyée à ${request.browser.name}.`
-      missing = `${request.browser.name} n'a pas pu être lancé (${error}) : `
+      if (!error) return t('browser.sent', { what, browser: request.browser.name })
+      missing = t('browser.launchFailed', { browser: request.browser.name, error })
     } else {
-      missing = `${request.browser.name} introuvable sur ce PC : `
+      missing = t('browser.missing', { browser: request.browser.name })
     }
   }
   try {
     await deps.openExternal(url)
   } catch (err) {
-    return `Échec de l'ouverture du navigateur : ${err instanceof Error ? err.message : String(err)}`
+    return t('browser.openFailed', { error: err instanceof Error ? err.message : String(err) })
   }
-  return `${missing}${missing ? what.charAt(0).toLowerCase() + what.slice(1) : what} envoyée à ton navigateur par défaut.`
+  const sent = t('browser.sentDefault', { what })
+  return missing ? `${missing} ${sent.charAt(0).toLowerCase()}${sent.slice(1)}` : sent
 }

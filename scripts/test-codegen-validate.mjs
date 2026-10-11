@@ -5,6 +5,7 @@ import vm from 'node:vm'
 import ts from 'typescript'
 import { modelChoiceModule } from './load-model-choice.mjs'
 import { loadTsModule } from './load-ts-module.mjs'
+import { withI18n } from './i18n-test-module.mjs'
 
 // `vm.runInNewContext` crée un realm SANS les globaux de Node : depuis l'étape 99, generateApp arme un
 // battement de cœur (setInterval) pendant chaque appel au modèle, qui échouait ici sur un simple
@@ -42,7 +43,7 @@ const modules = {
   './profileStore': { getProfile: async () => null }
 }
 const exports = {}
-vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports }, ...TIMERS })
+vm.runInNewContext(source, { exports, require: withI18n((name) => modules[name]), module: { exports }, ...TIMERS })
 
 const { validateGeneratedHtml } = exports
 

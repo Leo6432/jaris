@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ipcErrorMessage } from '@/lib/ipcError'
 import { usePickerPanel } from '@/lib/usePickerPanel'
 import type { GithubDeviceCode, GithubRepoSummary, GithubStatus, RepoView } from '../../shared/ipc'
+import { t } from '@/lib/i18n'
 
 /**
  * Le bouton GitHub du champ de saisie, en mode Code (étape 277) — comme le sélecteur de dépôt de Codex ou de
@@ -75,7 +76,7 @@ export default function GithubPicker({ repo, onOpenRepo, onCloseRepo, disabled =
       setRepos(null)
     } catch (err) {
       const message = ipcErrorMessage(err)
-      if (message !== 'Connexion annulée.') setError(message)
+      if (message !== t('github.loginCancelled')) setError(message)
     } finally {
       setCode(null)
     }
@@ -111,7 +112,7 @@ export default function GithubPicker({ repo, onOpenRepo, onCloseRepo, disabled =
         className={`effort-picker__trigger github-picker__trigger repo-picker__trigger${open ? ' effort-picker__trigger--open' : ''}${repo ? ' github-picker__trigger--active' : ''}`}
         onClick={() => setOpen(!open)}
         disabled={disabled}
-        title={repo ? `Dépôt GitHub : ${repo.fullName} (${repo.branch})` : 'Travailler sur un dépôt GitHub'}
+        title={repo ? t('github.trigger.repo', { name: repo.fullName, branch: repo.branch }) : t('github.trigger.none')}
         aria-haspopup="dialog"
         aria-expanded={open}
       >
@@ -120,47 +121,44 @@ export default function GithubPicker({ repo, onOpenRepo, onCloseRepo, disabled =
       </button>
 
       {open && (
-        <div ref={panelRef} className="effort-picker__panel github-picker__panel" role="dialog" aria-label="Dépôt GitHub" style={panelStyle}>
+        <div ref={panelRef} className="effort-picker__panel github-picker__panel" role="dialog" aria-label={t('github.repo')} style={panelStyle}>
           {!status.connected ? (
             code ? (
               <div className="github-picker__login">
-                <p className="github-picker__text">Colle ce code sur la page GitHub qui vient de s'ouvrir, puis clique sur « Authorize ».</p>
-                <div className="github-picker__code" aria-label="Code de connexion">
+                <p className="github-picker__text">{t('github.login.paste')}</p>
+                <div className="github-picker__code" aria-label={t('github.login.code')}>
                   {code.userCode}
                 </div>
-                <p className="github-picker__hint">Code déjà copié. En attente de ta validation sur GitHub…</p>
+                <p className="github-picker__hint">{t('github.login.waiting')}</p>
                 <div className="github-picker__row">
                   <a className="github-picker__link" href={code.verificationUri} target="_blank" rel="noreferrer">
-                    Rouvrir la page
+                    {t('github.login.reopen')}
                   </a>
                   <button type="button" className="github-picker__secondary" onClick={() => window.jaris.githubCancelLogin()}>
-                    Annuler
+                    {t('common.cancel')}
                   </button>
                 </div>
               </div>
             ) : (
               <div className="github-picker__login">
-                <p className="github-picker__text">
-                  Connecte ton compte GitHub : Jaris pourra lire tes dépôts et y préparer des changements. Tu les vérifies
-                  avant qu'ils soient enregistrés.
-                </p>
+                <p className="github-picker__text">{t('github.login.intro')}</p>
                 <button type="button" className="github-picker__primary" onClick={() => void connect()}>
-                  Se connecter à GitHub
+                  {t('github.login.button')}
                 </button>
               </div>
             )
           ) : (
             <>
               <div className="github-picker__head">
-                <span className="github-picker__account">{status.login ? `@${status.login}` : 'Compte GitHub connecté'}</span>
+                <span className="github-picker__account">{status.login ? `@${status.login}` : t('github.connected')}</span>
                 <button type="button" className="github-picker__secondary" onClick={() => void logout()}>
-                  Se déconnecter
+                  {t('common.logout')}
                 </button>
               </div>
               <input
                 className="github-picker__search"
                 type="search"
-                placeholder="Rechercher un dépôt"
+                placeholder={t('github.search')}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 autoFocus
@@ -176,15 +174,15 @@ export default function GithubPicker({ repo, onOpenRepo, onCloseRepo, disabled =
                         setOpen(false)
                       }}
                     >
-                      <span className="github-picker__repo-name">Aucun dépôt</span>
-                      <span className="github-picker__repo-meta">Nouvelle application</span>
+                      <span className="github-picker__repo-name">{t('github.noRepo')}</span>
+                      <span className="github-picker__repo-meta">{t('code.new')}</span>
                     </button>
                   </li>
                 )}
                 {repos === null ? (
-                  <li className="github-picker__empty">Chargement des dépôts…</li>
+                  <li className="github-picker__empty">{t('github.loadingRepos')}</li>
                 ) : shown.length === 0 ? (
-                  <li className="github-picker__empty">Aucun dépôt trouvé.</li>
+                  <li className="github-picker__empty">{t('github.noneFound')}</li>
                 ) : (
                   shown.map((item) => (
                     <li key={item.fullName}>
@@ -197,7 +195,7 @@ export default function GithubPicker({ repo, onOpenRepo, onCloseRepo, disabled =
                       >
                         <span className="github-picker__repo-name">{item.fullName}</span>
                         <span className="github-picker__repo-meta">
-                          {opening === item.fullName ? 'Ouverture…' : item.private ? 'Privé' : 'Public'}
+                          {opening === item.fullName ? t('github.opening') : item.private ? t('github.private') : t('github.public')}
                         </span>
                       </button>
                     </li>

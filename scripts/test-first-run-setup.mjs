@@ -1,3 +1,4 @@
+import { I18N_MODULES } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { readFileSync } from 'node:fs'
@@ -14,6 +15,7 @@ test('un échec d’Ollama conserve sa vraie raison dans le message final du pre
   const exports = {}
   const reason = 'L’installeur Ollama s’est arrêté avec le code 5. Journal : D:\\Jaris\\downloads\\JarisOllamaSetup.log'
   vm.runInThisContext(`(function(exports, module, require) { ${compiled} })`)(exports, { exports }, (id) => {
+    if (id in I18N_MODULES) return I18N_MODULES[id]
     if (id === './dependencyServices') return {
       isOllamaInstalled: async () => false,
       installOllamaSilently: async (onProgress) => { onProgress(reason); return false }
@@ -43,6 +45,7 @@ test('le code 448 déclenche un essai ciblé puis la fenêtre du même installeu
   globalThis.fetch = async () => ({ ok: true })
   try {
     vm.runInThisContext(`(function(exports, module, require) { ${compiled} })`)(exports, { exports }, (id) => {
+    if (id in I18N_MODULES) return I18N_MODULES[id]
       if (id === 'child_process') return {
         exec: (_command, callback) => callback(null, { stdout: '', stderr: '' }),
         execSync: () => '',

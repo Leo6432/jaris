@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -13,7 +14,7 @@ function load(path) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   }).outputText
   const module = { exports: {} }
-  vm.runInThisContext(`(function (exports, require, module) {\n${source}\n})`)(module.exports, () => ({}), module)
+  vm.runInThisContext(`(function (exports, require, module) {\n${source}\n})`)(module.exports, withI18n(() => ({})), module)
   return module.exports
 }
 const { MAI_UI_MODEL, MAI_UI_GROUNDING_PROMPT, maiUiInstruction, parseMaiUiPoint, zoomRect, aimWithMaiUi } = load('../electron/services/maiUi.ts')

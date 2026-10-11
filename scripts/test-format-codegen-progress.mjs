@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -14,7 +15,7 @@ const source = ts.transpileModule(readFileSync(new URL('../src/lib/formatCodeGen
 }).outputText
 
 const exports = {}
-vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(exports, { exports }, () => ({}))
+vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(exports, { exports }, withI18n(() => ({})))
 const { formatCodeLive, formatDuration, STALL_HINT_MS, START_STALL_HINT_MS } = exports
 
 function progress(extra) {

@@ -1,4 +1,5 @@
 import type { ModelChoiceInfo, ModelChoiceMode, Profile } from '../../shared/ipc'
+import { t, type MessageKey } from '../../shared/i18n'
 
 /**
  * Étape 141, Léo : « ajoute dans chat code vocal, la possibilité de choisir le model ou faire auto, comme se
@@ -21,12 +22,13 @@ export const MODEL_CHOICE_MODES: readonly ModelChoiceMode[] = ['chat', 'code', '
 // du profil (comme le mode Image avec son modèle de dessin). Un ancien choix enregistré hors de cette liste
 // (« role:code » en Chat, n'importe quoi en Code) retombe sur Auto.
 const CONVERSATION_ROLES = [
-  { key: 'flash', label: 'Faible' },
-  { key: 'medium', label: 'Moyen' },
-  { key: 'large', label: 'Élevé' }
+  { key: 'flash', label: 'role.flash' },
+  { key: 'medium', label: 'role.medium' },
+  { key: 'large', label: 'role.large' }
 ] as const
 
-const ROLES_BY_MODE: Record<ModelChoiceMode, ReadonlyArray<{ key: string; label: string }>> = {
+// Étape 293 : le libellé est une clé de traduction, traduite à chaque lecture (la langue peut changer en cours de route).
+const ROLES_BY_MODE: Record<ModelChoiceMode, ReadonlyArray<{ key: string; label: MessageKey }>> = {
   chat: CONVERSATION_ROLES,
   voice: CONVERSATION_ROLES,
   code: []
@@ -83,7 +85,7 @@ export function buildModelChoiceInfo(profile: Profile | null, mode: ModelChoiceM
     roles: ROLES_BY_MODE[mode].flatMap(({ key, label }) => {
       const value = `role:${key}`
       const model = modelForRole(profile, value, mode)
-      return model ? [{ value, label, model, installed: installed === null || isInstalled(model, selectableModels(installed)) }] : []
+      return model ? [{ value, label: t(label), model, installed: installed === null || isInstalled(model, selectableModels(installed)) }] : []
     })
   }
 }
@@ -103,9 +105,9 @@ export function applyModelChoice(
   if (model === null) {
     delete choices[mode]
   } else {
-    if (mode === 'code') throw new Error('Le mode Code utilise toujours le modèle Code : il ne se choisit pas.')
+    if (mode === 'code') throw new Error(t('choice.codeFixed'))
     const target = modelForRole(profile, model, mode)
-    if (!target || !isInstalled(target, selectableModels(installed))) throw new Error(`Le modèle du rôle ${model} n'est pas installé dans Ollama.`)
+    if (!target || !isInstalled(target, selectableModels(installed))) throw new Error(t('choice.notInstalled', { model }))
     choices[mode] = model
   }
   return { ...profile, modelChoices: choices }

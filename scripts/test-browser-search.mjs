@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -20,7 +21,7 @@ const transpile = (path) =>
 
 function load(path, modules = {}) {
   const module = { exports: {} }
-  vm.runInThisContext(`(function (exports, require, module) {\n${transpile(path)}\n})`)(module.exports, (name) => modules[name] ?? nodeRequire(name), module)
+  vm.runInThisContext(`(function (exports, require, module) {\n${transpile(path)}\n})`)(module.exports, withI18n((name) => modules[name] ?? nodeRequire(name)), module)
   return module.exports
 }
 

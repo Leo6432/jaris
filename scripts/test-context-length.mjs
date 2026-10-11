@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
@@ -51,7 +52,7 @@ function loadHardwareScan({ freeVramMib, tempC = 40, modelInfo, sizeBytes }) {
     }
   }
   const exports = {}
-  vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(exports, { exports }, (name) => modules[name] ?? nodeRequire(name))
+  vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(exports, { exports }, withI18n((name) => modules[name] ?? nodeRequire(name)))
   return exports
 }
 

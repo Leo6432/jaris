@@ -5,6 +5,8 @@ import { join } from 'path'
 import type { AddressInfo } from 'net'
 import type { ChatMessage, ModelChoiceInfo, PhoneDevice } from '../../shared/ipc'
 import type { PhoneDeviceStore } from './phoneDevices'
+import { currentLanguage, currentLocale, t, type MessageKey } from '../../shared/i18n'
+import { fr } from '../../shared/i18n/fr'
 
 /**
  * Serveur du téléphone (étape 214). Il n'écoute QUE sur 127.0.0.1 : rien sur le réseau local, rien sur
@@ -29,7 +31,7 @@ export type PhoneModelMode = 'chat' | 'voice'
 
 function phoneModelMode(value: unknown): PhoneModelMode {
   if (value === 'chat' || value === 'voice') return value
-  throw new HttpError(400, 'Mode inconnu.')
+  throw new HttpError(400, t('phone.err.mode'))
 }
 
 export interface PhoneMedia {
@@ -118,6 +120,18 @@ const PAGE_FILES: Record<string, { file: string; type: string }> = {
   '/sw.js': { file: 'sw.js', type: 'text/javascript; charset=utf-8' }
 }
 
+/**
+ * Étape 293 : les textes de la page du téléphone (clés `pwa.*`), dans la langue de Jaris au moment où la page est
+ * chargée. Un fichier à part plutôt qu'un script dans la page : la page interdit tout script en ligne (CSP).
+ */
+export function phonePageI18nScript(): string {
+  const messages: Record<string, string> = {}
+  for (const key of Object.keys(fr) as MessageKey[]) if (key.startsWith('pwa.')) messages[key] = t(key)
+  // Le chemin vers l'écran d'appairage, avec les vrais noms affichés sur le PC dans cette langue.
+  messages['pwa.pair.path'] = `${t('options.title')} → ${t('options.tab.phone')} → ${t('phone.connect')}`
+  return `window.JARIS_I18N = ${JSON.stringify({ lang: currentLanguage(), locale: currentLocale(), messages })}\n`
+}
+
 /** Délai avant l'extinction demandée depuis le téléphone : le temps de se raviser et d'annuler. */
 export const POWER_OFF_DELAY_S = 60
 
@@ -160,7 +174,7 @@ function readBody(req: IncomingMessage, limit: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const declared = Number(req.headers['content-length'] ?? 0)
     if (declared > limit) {
-      reject(new HttpError(413, 'Message trop long.'))
+      reject(new HttpError(413, t('phone.err.tooLong')))
       req.resume()
       return
     }
@@ -169,7 +183,7 @@ function readBody(req: IncomingMessage, limit: number): Promise<Buffer> {
     req.on('data', (chunk: Buffer) => {
       size += chunk.length
       if (size > limit) {
-        reject(new HttpError(413, 'Message trop long.'))
+        reject(new HttpError(413, t('phone.err.tooLong')))
         req.destroy()
         return
       }
@@ -188,7 +202,7 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
   } catch {
     // traité juste en dessous
   }
-  throw new HttpError(400, 'Requête illisible.')
+  throw new HttpError(400, t('phone.err.badRequest'))
 }
 
 /** Vérifie que c'est bien un WAV PCM 16 bits mono 16 kHz, le seul format que la page envoie. */
@@ -257,7 +271,7 @@ export class PhoneServer {
     const header = req.headers.authorization ?? ''
     const token = header.startsWith('Bearer ') ? header.slice(7).trim() : ''
     const device = token ? await this.deps.devices.findByToken(token) : null
-    if (!device) throw new HttpError(401, 'Ce téléphone n’est pas (ou plus) connecté à Jaris.')
+    if (!device) throw new HttpError(401, t('phone.err.notPaired'))
     void this.deps.devices.touch(device.id, this.now()).catch(() => {})
     return device
   }
@@ -265,21 +279,21 @@ export class PhoneServer {
   private async pair(req: IncomingMessage): Promise<{ token: string }> {
     const now = this.now()
     this.pairAttempts = this.pairAttempts.filter((t) => now - t < 60_000)
-    if (this.pairAttempts.length >= PAIRING_ATTEMPTS_PER_MINUTE) throw new HttpError(429, 'Trop d’essais : attends une minute.')
+    if (this.pairAttempts.length >= PAIRING_ATTEMPTS_PER_MINUTE) throw new HttpError(429, t('phone.err.tooManyAttempts'))
     this.pairAttempts.push(now)
 
     const body = await readJson(req)
     const code = typeof body.code === 'string' ? body.code.replace(/\D/g, '') : ''
-    const name = typeof body.name === 'string' ? body.name : 'Téléphone'
+    const name = typeof body.name === 'string' ? body.name : t('phone.defaultName')
     const pairing = this.pairing
     if (!pairing || now > pairing.expiresAt) {
       this.pairing = null
-      throw new HttpError(403, 'Code expiré : affiche un nouveau code sur le PC (Options → Téléphone).')
+      throw new HttpError(403, t('phone.err.codeExpired', { path: `${t('options.title')} → ${t('options.tab.phone')}` }))
     }
     if (code !== pairing.code) {
       pairing.attemptsLeft -= 1
       if (pairing.attemptsLeft <= 0) this.pairing = null
-      throw new HttpError(403, 'Code incorrect.')
+      throw new HttpError(403, t('phone.err.badCode'))
     }
     // Usage unique : le même code ne connecte jamais un second appareil.
     this.pairing = null
@@ -291,10 +305,10 @@ export class PhoneServer {
     if (this.busy[lane])
       throw new HttpError(
         409,
-        lane === 'conversation' ? 'Jaris répond encore au message précédent.' : 'Une création est déjà en cours : attends qu’elle soit finie.'
+        lane === 'conversation' ? t('phone.err.conversationBusy') : t('phone.err.studioBusy')
       )
     this.busy[lane] = true
-    const job: Job = { id: randomUUID(), lane, state: 'running', status: lane === 'conversation' ? 'Jaris réfléchit…' : 'Préparation…', abort }
+    const job: Job = { id: randomUUID(), lane, state: 'running', status: lane === 'conversation' ? t('phone.status.thinking') : t('phone.status.preparing'), abort }
     this.jobs.set(job.id, job)
     // Seuls des travaux FINIS sont oubliés : une vidéo longue ne doit jamais disparaître pendant qu'elle se fait.
     for (const [id, old] of this.jobs) {
@@ -334,11 +348,11 @@ export class PhoneServer {
   }
 
   private async transcribeInto(job: Job, wav: Buffer): Promise<string> {
-    job.status = 'Transcription sur ton PC…'
+    job.status = t('phone.status.transcribing')
     const transcript = (await this.deps.transcribe(wav)).trim()
-    if (!transcript) throw new Error("Je n'ai rien entendu : réessaie en parlant un peu plus près du téléphone.")
+    if (!transcript) throw new Error(t('phone.err.nothingHeard'))
     job.transcript = transcript
-    job.status = 'Jaris réfléchit…'
+    job.status = t('phone.status.thinking')
     return transcript
   }
 
@@ -347,7 +361,7 @@ export class PhoneServer {
     const transcript = await this.transcribeInto(job, wav)
     await this.answer(job, transcript, 'voice')
     if (!job.reply) return
-    job.status = 'Jaris prépare sa voix…'
+    job.status = t('phone.status.voice')
     try {
       job.audio = await this.deps.speak(job.reply)
     } catch {
@@ -361,10 +375,10 @@ export class PhoneServer {
 
   private async createImage(body: Record<string, unknown>): Promise<Job> {
     const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : ''
-    if (!prompt) throw new HttpError(400, 'Décris l’image à créer.')
-    if (prompt.length > MAX_PROMPT_CHARS) throw new HttpError(413, 'Description trop longue.')
+    if (!prompt) throw new HttpError(400, t('phone.err.describeImage'))
+    if (prompt.length > MAX_PROMPT_CHARS) throw new HttpError(413, t('phone.err.promptTooLong'))
     const studio = await this.studioStatus()
-    if (!studio.image.ready) throw new HttpError(409, studio.image.reason ?? 'Le mode Image n’est pas prêt sur ton PC.')
+    if (!studio.image.ready) throw new HttpError(409, studio.image.reason ?? t('phone.err.imageNotReady'))
     const abort = new AbortController()
     return this.startJob(
       'studio',
@@ -378,15 +392,15 @@ export class PhoneServer {
 
   private async createVideo(body: Record<string, unknown>): Promise<Job> {
     const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : ''
-    if (!prompt) throw new HttpError(400, 'Décris la vidéo à créer.')
-    if (prompt.length > MAX_PROMPT_CHARS) throw new HttpError(413, 'Description trop longue.')
+    if (!prompt) throw new HttpError(400, t('phone.err.describeVideo'))
+    if (prompt.length > MAX_PROMPT_CHARS) throw new HttpError(413, t('phone.err.promptTooLong'))
     const studio = await this.studioStatus()
-    if (!studio.video.ready) throw new HttpError(409, studio.video.reason ?? 'Le mode Vidéo n’est pas prêt sur ton PC.')
+    if (!studio.video.ready) throw new HttpError(409, studio.video.reason ?? t('phone.err.videoNotReady'))
     // Jamais cru sur parole : seules une durée et une qualité DÉJÀ proposées par le PC sont acceptées.
     const seconds = typeof body.seconds === 'number' ? body.seconds : Number.NaN
-    if (!studio.video.durations.includes(seconds)) throw new HttpError(400, 'Durée inconnue.')
+    if (!studio.video.durations.includes(seconds)) throw new HttpError(400, t('phone.err.duration'))
     const quality = typeof body.quality === 'string' ? body.quality : ''
-    if (!studio.video.qualities.some((q) => q.id === quality)) throw new HttpError(400, 'Qualité non installée sur ton PC.')
+    if (!studio.video.qualities.some((q) => q.id === quality)) throw new HttpError(400, t('phone.err.quality'))
     const abort = new AbortController()
     return this.startJob(
       'studio',
@@ -403,9 +417,9 @@ export class PhoneServer {
     try {
       fileName = decodeURIComponent(rawName)
     } catch {
-      throw new HttpError(404, 'Fichier introuvable.')
+      throw new HttpError(404, t('phone.err.fileMissing'))
     }
-    if (!MEDIA_NAME.test(fileName)) throw new HttpError(404, 'Fichier introuvable.')
+    if (!MEDIA_NAME.test(fileName)) throw new HttpError(404, t('phone.err.fileMissing'))
     let content: Buffer
     try {
       content =
@@ -415,7 +429,7 @@ export class PhoneServer {
             ? await this.deps.readImageThumbnail(fileName)
             : await this.deps.readVideo(fileName)
     } catch {
-      throw new HttpError(404, 'Fichier introuvable.')
+      throw new HttpError(404, t('phone.err.fileMissing'))
     }
     res.writeHead(200, {
       ...SECURITY_HEADERS,
@@ -431,6 +445,11 @@ export class PhoneServer {
       const url = new URL(req.url ?? '/', 'http://localhost')
       const path = url.pathname
 
+      if (req.method === 'GET' && path === '/i18n.js') {
+        res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache' })
+        res.end(phonePageI18nScript())
+        return
+      }
       if (req.method === 'GET' && PAGE_FILES[path]) {
         const { file, type } = PAGE_FILES[path]
         const content = await readFile(join(this.deps.pageDir, file))
@@ -444,7 +463,7 @@ export class PhoneServer {
         return
       }
 
-      if (!path.startsWith('/api/')) throw new HttpError(404, 'Page introuvable.')
+      if (!path.startsWith('/api/')) throw new HttpError(404, t('phone.err.pageMissing'))
       const device = await this.authenticate(req)
 
       if (req.method === 'GET' && path === '/api/me') {
@@ -459,15 +478,15 @@ export class PhoneServer {
       if (req.method === 'POST' && path === '/api/message') {
         const body = await readJson(req)
         const text = typeof body.text === 'string' ? body.text.trim() : ''
-        if (!text) throw new HttpError(400, 'Message vide.')
-        if (text.length > MAX_TEXT_CHARS) throw new HttpError(413, 'Message trop long.')
+        if (!text) throw new HttpError(400, t('phone.err.empty'))
+        if (text.length > MAX_TEXT_CHARS) throw new HttpError(413, t('phone.err.tooLong'))
         const job = this.startJob('conversation', (j) => this.answer(j, text, 'chat'))
         send(res, 202, { jobId: job.id })
         return
       }
       if (req.method === 'POST' && path === '/api/talk') {
         const wav = await readBody(req, MAX_VOICE_BYTES)
-        if (!isExpectedWav(wav)) throw new HttpError(400, 'Enregistrement illisible.')
+        if (!isExpectedWav(wav)) throw new HttpError(400, t('phone.err.badRecording'))
         const job = this.startJob('conversation', (j) => this.talk(j, wav))
         send(res, 202, { jobId: job.id })
         return
@@ -490,7 +509,7 @@ export class PhoneServer {
             await this.deps.cancelShutdown()
             this.shutdownAt = null
           } else {
-            throw new HttpError(400, 'Action inconnue.')
+            throw new HttpError(400, t('phone.err.action'))
           }
         } catch (err) {
           if (err instanceof HttpError) throw err
@@ -508,7 +527,7 @@ export class PhoneServer {
         const mode = phoneModelMode(body.mode)
         try {
           if (path === '/api/model') {
-            if (body.model !== null && typeof body.model !== 'string') throw new HttpError(400, 'Modèle inconnu.')
+            if (body.model !== null && typeof body.model !== 'string') throw new HttpError(400, t('phone.err.model'))
             await this.deps.setModelChoice(mode, body.model as string | null)
           } else {
             await this.deps.setThinkChoice(mode, body.think ?? null)
@@ -552,30 +571,30 @@ export class PhoneServer {
       const jobMatch = path.match(/^\/api\/jobs\/([0-9a-f-]{36})(\/audio|\/cancel)?$/)
       if (jobMatch) {
         const job = this.jobs.get(jobMatch[1])
-        if (!job) throw new HttpError(404, 'Message introuvable.')
+        if (!job) throw new HttpError(404, t('phone.err.jobMissing'))
         if (req.method === 'GET' && !jobMatch[2]) {
           const { id, state, status, transcript, reply, image, fileName, error } = job
           send(res, 200, { id, state, status, transcript, reply, image, fileName, error, audio: Boolean(job.audio) })
           return
         }
         if (req.method === 'GET' && jobMatch[2] === '/audio') {
-          if (!job.audio) throw new HttpError(404, 'Pas de voix pour cette réponse.')
+          if (!job.audio) throw new HttpError(404, t('phone.err.noAudio'))
           res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': 'audio/wav', 'Content-Length': String(job.audio.length), 'Cache-Control': 'private, no-store' })
           res.end(job.audio)
           return
         }
         if (req.method === 'POST' && jobMatch[2] === '/cancel') {
           // Seule une création s'arrête : une réponse de Jaris déjà partie va de toute façon jusqu'au bout.
-          if (job.lane !== 'studio') throw new HttpError(400, 'Ce travail ne peut pas être arrêté.')
+          if (job.lane !== 'studio') throw new HttpError(400, t('phone.err.notCancellable'))
           job.abort?.abort()
           send(res, 200, { ok: true })
           return
         }
       }
-      throw new HttpError(404, 'Page introuvable.')
+      throw new HttpError(404, t('phone.err.pageMissing'))
     } catch (err) {
       if (err instanceof HttpError) send(res, err.status, { error: err.message })
-      else send(res, 500, { error: 'Erreur sur le PC.' })
+      else send(res, 500, { error: t('phone.err.pc') })
     }
   }
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import ForceGraph3D, { type ForceGraph3DInstance, type NodeObject } from '3d-force-graph'
 import SpriteText from 'three-spritetext'
 import type { MemoryGraph } from '../../shared/ipc'
+import { t, tn } from '@/lib/i18n'
 
 /**
  * Étape 265 : un écran de la zone principale (comme Options), plus un calque plein écran — celui-ci passait
@@ -102,21 +103,16 @@ export default function MemoryBrain({ graph }: MemoryBrainProps): JSX.Element {
     <div className="memory-brain">
       <div className="memory-brain__header">
         {/* Le nom de l'écran est déjà dans l'en-tête de la fenêtre : ne pas l'écrire deux fois. */}
-        <span>
-          {noteCount} note{noteCount > 1 ? 's' : ''}
-        </span>
+        <span>{tn('brain.notes', noteCount)}</span>
         <div className="memory-brain__actions">
-          <button onClick={() => window.jaris.openMemoryFolder()}>Ouvrir le dossier</button>
+          <button onClick={() => window.jaris.openMemoryFolder()}>{t('common.openFolder')}</button>
         </div>
       </div>
       {noteCount === 0 ? (
-        <div className="memory-brain__empty">Aucune note pour l'instant : parle à Jaris pour qu'il apprenne.</div>
+        <div className="memory-brain__empty">{t('brain.empty')}</div>
       ) : view3dFailed ? (
         <div className="memory-brain__fallback">
-          <p className="memory-brain__fallback-text">
-            La vue en 3D ne peut pas s'afficher sur cet ordinateur (la carte graphique ou son pilote la refuse).
-            Voici tes notes en liste : clique sur une note pour la lire.
-          </p>
+          <p className="memory-brain__fallback-text">{t('brain.no3d')}</p>
           <ul className="memory-brain__list">
             {graph.nodes
               .filter((node) => !node.isCenter)
@@ -137,10 +133,10 @@ export default function MemoryBrain({ graph }: MemoryBrainProps): JSX.Element {
         <div className="memory-brain__note">
           <div className="memory-brain__note-header">
             <span>{selectedNote.title}</span>
-            <button onClick={() => setSelectedNote(null)}>✕</button>
+            <button onClick={() => setSelectedNote(null)} aria-label={t('common.close')}>✕</button>
           </div>
           <pre className="memory-brain__note-content">
-            {selectedNote.content === null ? 'Chargement...' : selectedNote.content}
+            {selectedNote.content === null ? t('common.loading') : selectedNote.content}
           </pre>
         </div>
       )}

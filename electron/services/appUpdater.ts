@@ -4,6 +4,7 @@ import { spawn } from 'child_process'
 import { join } from 'path'
 import { DownloadError, downloadToFile } from './download'
 import type { UpdateProgress } from '../../shared/ipc'
+import { t } from '../../shared/i18n'
 
 /**
  * Met à jour Jaris lui-même depuis l'interface (étape 20 du roadmap), sans jamais `git pull`/`npm run
@@ -91,11 +92,11 @@ export async function checkForUpdate(): Promise<{ status: AppVersionStatus | nul
     if (!response.ok) {
       return response.status === 404
         ? { status: null, error: null }
-        : { status: null, error: `GitHub a répondu HTTP ${response.status}.` }
+        : { status: null, error: t('upd.githubHttp', { status: response.status }) }
     }
     const release = (await response.json()) as { tag_name?: string; assets?: { name: string; browser_download_url: string }[] }
     const latestParts = release.tag_name ? parseSemver(release.tag_name) : null
-    if (!latestParts) return { status: null, error: 'Réponse GitHub inattendue : aucune version reconnue.' }
+    if (!latestParts) return { status: null, error: t('upd.githubUnexpected') }
 
     const currentVersion = app.getVersion()
     const currentParts = parseSemver(currentVersion) ?? [0, 0, 0]
@@ -136,12 +137,12 @@ export async function updateApp(
   onProgress?: (progress: Omit<UpdateProgress, 'target'>) => void
 ): Promise<{ success: boolean; message: string }> {
   if (!cachedStatus?.outdated) {
-    return { success: false, message: 'Aucune mise à jour disponible.' }
+    return { success: false, message: t('upd.none') }
   }
   if (!cachedDownloadUrl) {
     return {
       success: false,
-      message: `Une nouvelle version (${cachedStatus.latest}) existe, mais aucun installeur n'est joint à sa Release GitHub.`
+      message: t('upd.noInstaller', { version: cachedStatus.latest })
     }
   }
 
@@ -183,12 +184,12 @@ export async function updateApp(
     onBeforeQuit?.()
     app.quit()
 
-    return { success: true, message: `Mise à jour vers ${cachedStatus.latest} : Jaris va se fermer et relancer automatiquement.` }
+    return { success: true, message: t('upd.restarting', { version: cachedStatus.latest }) }
   } catch (err) {
     // Un message de DownloadError est DÉJÀ rédigé pour Léo (voir download.ts) : le réhabiller en "Échec de
     // la mise à jour : The operation was aborted due to timeout" lui enlevait justement ce qui était
     // actionnable dedans. Tout le reste garde le préfixe, qui situe au moins l'erreur.
     if (err instanceof DownloadError) return { success: false, message: err.message }
-    return { success: false, message: `Échec de la mise à jour : ${err instanceof Error ? err.message : String(err)}` }
+    return { success: false, message: t('upd.failed', { error: err instanceof Error ? err.message : String(err) }) }
   }
 }

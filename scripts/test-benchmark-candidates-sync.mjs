@@ -5,6 +5,7 @@ import test from 'node:test'
 import { promisify } from 'node:util'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * Étape 167 : qwen2.5-coder:14b faisait partie des modèles de Jaris mais manquait dans la copie des listes du
@@ -30,7 +31,7 @@ async function jarisModels() {
     './ollama': { getModelInfo: async () => null, getInstalledModelSizeBytes: async () => null, listInstalledModels: async () => [] }
   }
   const exports = {}
-  vm.runInNewContext(source, { exports, module: { exports }, require: (n) => modules[n] ?? nodeRequire(n) })
+  vm.runInNewContext(source, { exports, module: { exports }, require: withI18n((n) => modules[n] ?? nodeRequire(n)) })
   // Tableau recopié dans ce realm : vm.runInNewContext a ses propres prototypes (deepEqual échouerait sinon).
   return [...(await exports.getModelOverview()).entries].map((e) => String(e.model))
 }

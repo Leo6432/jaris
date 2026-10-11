@@ -3,6 +3,7 @@ import { existsSync } from 'fs'
 import { cp, mkdir, rm } from 'fs/promises'
 import { join } from 'path'
 import { DATA_SUBDIR, DEFAULT_USER_DATA, OWNED_ENTRIES, getStorageRoot, writeMarker } from './storageRoot'
+import { t } from '../../shared/i18n'
 
 /**
  * Où vivent les données PROPRES à Jaris — conversations, profil, mémoire, applications générées, rappels.
@@ -28,7 +29,7 @@ export async function copyDataTo(newRoot: string, onProgress: (message: string) 
   for (const entry of OWNED_ENTRIES) {
     const source = join(from, entry)
     if (!existsSync(source)) continue
-    onProgress(`Copie de tes conversations et réglages (${entry})…`)
+    onProgress(t('move.copyingData', { entry }))
     await cp(source, join(dest, entry), { recursive: true, force: true })
   }
 }

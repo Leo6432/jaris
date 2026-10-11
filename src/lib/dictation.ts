@@ -1,3 +1,4 @@
+import { t } from '../../shared/i18n'
 /**
  * Étape 276 (Léo : « quand on clique sur le micro dans le Chat, ça ne doit pas aller en vocal, ça doit enregistrer
  * et transcrire en texte ») : la dictée du champ de saisie. Le son est enregistré ici, ramené au format que la
@@ -87,12 +88,12 @@ export class DictationRecorder {
 
   /** Ouvre le micro par défaut de Windows. Échoue (message clair) si aucun micro n'est accessible. */
   static async start(): Promise<DictationRecorder> {
-    if (!navigator.mediaDevices?.getUserMedia) throw new Error("Le micro n'est pas accessible ici.")
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error(t('dictation.unavailable'))
     let stream: MediaStream
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } })
     } catch {
-      throw new Error("Impossible d'ouvrir le micro : vérifie qu'un micro est branché et autorisé dans Windows.")
+      throw new Error(t('dictation.openFailed'))
     }
     const ctx = new AudioContext()
     const source = ctx.createMediaStreamSource(stream)

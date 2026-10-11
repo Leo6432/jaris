@@ -4,29 +4,36 @@ import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { I18N_MODULES } from './i18n-test-module.mjs'
 
 const nodeRequire = createRequire(import.meta.url)
 const SERVICES = new URL('../electron/services/', import.meta.url)
+const SHARED = new URL('../shared/', import.meta.url)
 
 export function loadPhoneModules(overrides = {}) {
   const cache = {}
-  const load = (name) => {
-    if (cache[name]) return cache[name]
-    const source = ts.transpileModule(readFileSync(new URL(`${name}.ts`, SERVICES), 'utf8'), {
+  // Les services (electron/services) ET les modules partagés qu'ils importent (shared/, étape 293 : le refus du
+  // téléphone lit désormais shared/imageGallery), chacun résolu depuis son propre dossier.
+  const loadFrom = (dir, name) => {
+    const id = `${dir.href}${name}`
+    if (cache[id]) return cache[id]
+    const source = ts.transpileModule(readFileSync(new URL(`${name}.ts`, dir), 'utf8'), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
     }).outputText
     const module = { exports: {} }
-    cache[name] = module.exports
+    cache[id] = module.exports
     const localRequire = (spec) => {
       if (overrides[spec]) return overrides[spec]
-      if (spec.startsWith('./')) return load(spec.slice(2))
+      if (spec in I18N_MODULES) return I18N_MODULES[spec]
+      if (spec.startsWith('./')) return loadFrom(dir, spec.slice(2))
+      if (dir === SERVICES && spec.startsWith('../../shared/')) return loadFrom(SHARED, spec.slice('../../shared/'.length))
       return nodeRequire(spec)
     }
     vm.runInThisContext(`(function (exports, require, module) {${source}\n})`)(module.exports, localRequire, module)
-    cache[name] = module.exports
+    cache[id] = module.exports
     return module.exports
   }
-  return { load }
+  return { load: (name) => loadFrom(SERVICES, name) }
 }
 
 /** WAV PCM 16 bits mono 16 kHz de `ms` millisecondes (silence), le format envoyé par la page. */

@@ -1,4 +1,5 @@
 import { IMAGE_TYPES_BY_EXTENSION, type PickedImageFile } from '../../shared/ipc'
+import { t } from '../../shared/i18n'
 
 /**
  * Pièce jointe image du Chat et du mode Code (étape 91).
@@ -42,7 +43,7 @@ export function computeScaledSize(
   max: number = MAX_IMAGE_WIDTH
 ): { width: number; height: number } {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-    throw new Error("Dimensions d'image invalides.")
+    throw new Error(t('attachment.badSize'))
   }
   if (width <= max) return { width: Math.round(width), height: Math.round(height) }
   return { width: max, height: Math.max(1, Math.round((height / width) * max)) }
@@ -57,7 +58,7 @@ function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image()
     image.onload = () => resolve(image)
-    image.onerror = () => reject(new Error("Ce fichier n'a pas pu être lu comme une image."))
+    image.onerror = () => reject(new Error(t('attachment.notImage')))
     image.src = dataUrl
   })
 }
@@ -66,7 +67,7 @@ function readAsDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error("Ce fichier n'a pas pu être lu."))
+    reader.onerror = () => reject(new Error(t('attachment.unreadable')))
     reader.readAsDataURL(file)
   })
 }
@@ -79,7 +80,7 @@ function readAsDataUrl(file: Blob): Promise<string> {
  */
 export async function fileToImageAttachment(file: File | Blob, name = ''): Promise<ImageAttachment> {
   if (!isSupportedImageType(file.type)) {
-    throw new Error(`Format d'image non pris en charge : ${file.type || 'inconnu'}.`)
+    throw new Error(t('attachment.unsupported', { type: file.type || t('attachment.unknownType') }))
   }
   return renderToAttachment(await readAsDataUrl(file), name)
 }
@@ -91,7 +92,7 @@ export async function fileToImageAttachment(file: File | Blob, name = ''): Promi
  */
 export async function pickedFileToImageAttachment(picked: PickedImageFile): Promise<ImageAttachment> {
   if (!isSupportedImageType(picked.type)) {
-    throw new Error(`Format d'image non pris en charge : ${picked.type || 'inconnu'}.`)
+    throw new Error(t('attachment.unsupported', { type: picked.type || t('attachment.unknownType') }))
   }
   return renderToAttachment(`data:${picked.type};base64,${picked.base64}`, picked.name)
 }
@@ -104,7 +105,7 @@ async function renderToAttachment(originalDataUrl: string, name: string): Promis
   canvas.width = size.width
   canvas.height = size.height
   const context = canvas.getContext('2d')
-  if (!context) throw new Error("Impossible de préparer l'image (canvas indisponible).")
+  if (!context) throw new Error(t('attachment.noCanvas'))
   context.drawImage(image, 0, 0, size.width, size.height)
 
   const dataUrl = canvas.toDataURL('image/jpeg', 0.85)

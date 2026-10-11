@@ -20,6 +20,7 @@ import {
 } from './searxngHome'
 import { formatBytes } from '../../shared/formatBytes'
 import type { OllamaVersionStatus, UpdateProgress } from '../../shared/ipc'
+import { t } from '../../shared/i18n'
 
 const execAsync = promisify(exec)
 
@@ -82,11 +83,7 @@ async function warnIfOllamaOutdated(log: LogFn): Promise<void> {
     if (data.version && isVersionOlder(data.version, MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH)) {
       if (attemptedSilentOllamaRestart) return
       attemptedSilentOllamaRestart = true
-      log(
-        `Ollama ${data.version} détecté : les versions antérieures à ${MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH} ` +
-          "peuvent faire apparaître de brèves fenêtres de console Windows vides au chargement d'un modèle " +
-          '(bug corrigé côté Ollama, pas côté Jaris) — tentative de mise à jour silencieuse…'
-      )
+      log(t('dep.ollamaOld', { version: data.version, min: MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH }))
       // Uniquement le redémarrage silencieux (applique une mise à jour déjà téléchargée en arrière-plan par
       // Ollama, sans la moindre fenêtre) : jamais le vrai installeur ici (downloadAndLaunchOfficialInstaller,
       // utilisé par le bouton "Mettre à jour" d'Options), qui lui ouvre une fenêtre — remplacer le problème
@@ -105,14 +102,14 @@ async function warnIfOllamaOutdated(log: LogFn): Promise<void> {
           const stillOld = !recheckData?.version || isVersionOlder(recheckData.version, MIN_OLLAMA_VERSION_NO_CONSOLE_FLASH)
           log(
             stillOld
-              ? "Redémarrage silencieux tenté, mais Ollama reste sur l'ancienne version — mets-le à jour manuellement dans Options → Modèles pour faire disparaître ces fenêtres."
-              : `Ollama mis à jour silencieusement (${recheckData?.version}).`
+              ? t('dep.ollamaStillOld')
+              : t('dep.ollamaSilentlyUpdated', { version: recheckData?.version ?? '' })
           )
         } catch {
-          log('Mets à jour Ollama manuellement dans Options → Modèles pour faire disparaître ces fenêtres.')
+          log(t('dep.ollamaUpdateManually'))
         }
       } else {
-        log('Mets à jour Ollama manuellement dans Options → Modèles pour faire disparaître ces fenêtres.')
+        log(t('dep.ollamaUpdateManually'))
       }
     }
   } catch {
@@ -379,7 +376,7 @@ export async function isOllamaInstalled(): Promise<boolean> {
  * visible, quelques clics) : mieux vaut demander deux clics que ne pas installer Ollama du tout.
  */
 export async function installOllamaSilently(onProgress: (message: string, percent?: number) => void): Promise<boolean> {
-  onProgress("Téléchargement d'Ollama…", 0)
+  onProgress(t('dep.ollamaDownloading'), 0)
   const installerPath = join(downloadsDir(), 'JarisOllamaSetup.exe')
   const logPath = join(downloadsDir(), 'JarisOllamaSetup.log')
   try {
@@ -391,18 +388,18 @@ export async function installOllamaSilently(onProgress: (message: string, percen
       onProgress: ({ receivedBytes, totalBytes, percent }) =>
         onProgress(
           totalBytes === null
-            ? `Téléchargement d'Ollama : ${formatBytes(receivedBytes)}…`
-            : `Téléchargement d'Ollama : ${formatBytes(receivedBytes)} sur ${formatBytes(totalBytes)}…`,
+            ? t('dep.ollamaDownloadingBytes', { received: formatBytes(receivedBytes) })
+            : t('dep.ollamaDownloadingOf', { received: formatBytes(receivedBytes), total: formatBytes(totalBytes) }),
           percent ?? undefined
         )
     })
   } catch (err) {
-    onProgress(err instanceof Error ? err.message : "Le téléchargement d'Ollama a échoué.")
+    onProgress(err instanceof Error ? err.message : t('dep.ollamaDownloadFailed'))
     return false
   }
 
   if (!(await isOfficialOllamaInstaller(installerPath))) {
-    onProgress("L'installeur téléchargé n'a pas une signature valide d'Ollama Inc. ; installation arrêtée.")
+    onProgress(t('dep.ollamaBadSignature'))
     await rm(installerPath, { force: true }).catch(() => {})
     return false
   }
@@ -415,11 +412,11 @@ export async function installOllamaSilently(onProgress: (message: string, percen
       windowsHide: silent,
       env: ollamaInstallerEnv()
     })
-    proc.on('error', (err) => resolve(`Windows n'a pas pu ouvrir l'installeur Ollama : ${err.message}`))
-    proc.on('close', (code) => resolve(code === 0 ? null : `L'installeur Ollama s'est arrêté avec le code ${code ?? 'inconnu'}.`))
+    proc.on('error', (err) => resolve(t('dep.ollamaInstallerOpenFailed', { error: err.message })))
+    proc.on('close', (code) => resolve(code === 0 ? null : t('dep.ollamaInstallerCode', { code: code ?? t('engine.code.unknown') })))
   })
 
-  onProgress("Installation d'Ollama en cours…")
+  onProgress(t('dep.ollamaInstalling'))
   let allowJunctions = false
   let failure = await runInstaller(true, allowJunctions)
   if (failure && getStorageRoot()) {
@@ -428,14 +425,14 @@ export async function installOllamaSilently(onProgress: (message: string, percen
       // Inno Setup 6.7 protège les jonctions non élevées. Tenter d'abord /DIR= vers le vrai dossier,
       // puis n'ouvrir cette exception que si le journal prouve qu'une autre jonction Jaris est bloquée.
       allowJunctions = true
-      onProgress("Windows bloque un dossier Jaris redirigé vers D:. Nouvelle tentative avec l'installeur Ollama signé…")
+      onProgress(t('dep.ollamaJunctionRetry'))
       failure = await runInstaller(true, allowJunctions)
     }
   }
   if (failure) {
     // L'installation silencieuse masque les boîtes d'erreur. Une seule reprise avec la fenêtre officielle
     // laisse voir le problème et permet de terminer sans retélécharger 1,5 Go.
-    onProgress("L'installation silencieuse d'Ollama a échoué. Son installeur s'ouvre : termine les étapes affichées…")
+    onProgress(t('dep.ollamaSilentFailed'))
     failure = await runInstaller(false, allowJunctions)
   }
   // 1,5 Go qui n'a plus aucune utilité une fois l'installation terminée (réussie ou non).
@@ -443,16 +440,16 @@ export async function installOllamaSilently(onProgress: (message: string, percen
   if (failure) {
     const installerLog = await readFile(logPath, 'utf8').catch(() => '')
     const detail = installerLog.split(/\r?\n/).filter((line) => /error|failed|cannot|denied|erreur|impossible|refus/i.test(line)).at(-1)?.trim()
-    onProgress(`${failure}${detail ? ` Détail : ${detail.slice(-300)}.` : ''} Journal : ${logPath}`)
+    onProgress(`${failure}${detail ? ` ${t('dep.detail', { detail: detail.slice(-300) })}` : ''} ${t('dep.logFile', { path: logPath })}`)
     return false
   }
 
   // L'installeur rend la main avant qu'Ollama ait fini de démarrer son serveur : sans cette attente, la
   // suite (téléchargement des modèles) partirait sur un service qui ne répond pas encore.
-  onProgress("Démarrage d'Ollama…")
+  onProgress(t('dep.ollamaStarting'))
   await waitUntil(() => isUp(`${config.ollama.host}/api/tags`), 60000)
   if (!(await isOllamaInstalled())) {
-    onProgress(`L'installeur Ollama s'est terminé sans erreur, mais Jaris ne trouve ni son programme ni son serveur. Journal : ${logPath}`)
+    onProgress(t('dep.ollamaNotFoundAfterInstall', { path: logPath }))
     return false
   }
   return true
@@ -485,7 +482,7 @@ export async function updateOllama(onProgress?: OllamaUpdateProgress): Promise<O
     // Filet de sécurité final : une exception qui remonte jusqu'ici sans ce try/catch traverserait
     // ipcMain.handle telle quelle jusqu'au renderer, où handleUpdateOllama (OptionsMenu.tsx) n'a pas de
     // .catch() — le bouton redeviendrait "Mettre à jour" sans jamais afficher la moindre explication.
-    return { success: false, message: `Erreur inattendue pendant la mise à jour : ${err instanceof Error ? err.message : String(err)}` }
+    return { success: false, message: t('dep.updateUnexpected', { error: err instanceof Error ? err.message : String(err) }) }
   }
 }
 
@@ -498,7 +495,7 @@ async function updateOllamaInner(onProgress?: OllamaUpdateProgress): Promise<Oll
     await checkOllamaFreshness()
     const status = getOllamaVersionStatus()
     if (status && !status.outdated) {
-      return { success: true, message: `Ollama redémarré et mis à jour (${status.current}).` }
+      return { success: true, message: t('dep.ollamaRestartedUpdated', { version: status.current ?? '' }) }
     }
     // Le redémarrage n'a rien changé (rien de prêt en arrière-plan, "Auto-download updates" désactivé côté
     // Ollama, ou le vrai payload de mise à jour vit ailleurs que dans le binaire déjà installé — voir
@@ -513,9 +510,7 @@ async function updateOllamaInner(onProgress?: OllamaUpdateProgress): Promise<Oll
     return {
       success: true,
       installerPending: true,
-      message:
-        "L'installeur Ollama officiel a été téléchargé et lancé : termine l'installation dans la fenêtre " +
-        'qui vient de s\'ouvrir (Ollama redémarre automatiquement à la fin).'
+      message: t('dep.ollamaInstallerLaunched')
     }
   }
 
@@ -537,7 +532,7 @@ async function updateOllamaInner(onProgress?: OllamaUpdateProgress): Promise<Oll
     proc.on('error', (err) => {
       resolve({
         success: false,
-        message: `Le téléchargement automatique de l'installeur a aussi échoué, et winget est introuvable (${err.message}) : installe "App Installer" depuis le Microsoft Store, ou télécharge/lance l'installeur toi-même depuis ton navigateur sur ollama.com/download.`
+        message: t('dep.wingetMissing', { error: err.message })
       })
     })
     proc.on('close', (code) => {
@@ -545,7 +540,7 @@ async function updateOllamaInner(onProgress?: OllamaUpdateProgress): Promise<Oll
         // Re-vérifie pour de vrai plutôt que de supposer que ça a marché (ex: winget peut sortir en code 0
         // même sans rien avoir eu à faire) : le bandeau (OptionsMenu.tsx) relit getOllamaVersionStatus juste
         // après l'appel, ce cache doit donc déjà être à jour à ce moment-là.
-        void checkOllamaFreshness().then(() => resolve({ success: true, message: 'Ollama mis à jour.' }))
+        void checkOllamaFreshness().then(() => resolve({ success: true, message: t('dep.ollamaUpdated') }))
         return
       }
       // APPINSTALLER_CLI_ERROR_UPDATE_NOT_APPLICABLE (0x8A15002B, documenté par Microsoft) : winget dit
@@ -559,17 +554,13 @@ async function updateOllamaInner(onProgress?: OllamaUpdateProgress): Promise<Oll
       if (code === 2316632107 || code === -1978335189) {
         resolve({
           success: false,
-          message:
-            "Ni le redémarrage d'Ollama, ni le téléchargement automatique de l'installeur, ni winget n'ont " +
-            "trouvé de mise à jour applicable, alors qu'une version plus récente existe bien sur GitHub : " +
-            'vérifie ta connexion, ou télécharge/lance l\'installeur toi-même depuis ton navigateur sur ' +
-            'ollama.com/download.'
+          message: t('dep.noApplicableUpdate')
         })
         return
       }
       resolve({
         success: false,
-        message: `Le téléchargement automatique de l'installeur a échoué, et winget aussi (code ${code}) : ${output.trim().slice(-500) || 'aucun détail'} — essaie depuis ton navigateur sur ollama.com/download.`
+        message: t('dep.wingetFailed', { code: String(code), output: output.trim().slice(-500) || t('dep.noDetail') })
       })
     })
   })
@@ -587,7 +578,7 @@ export async function ensureOllamaRunning(log: LogFn): Promise<void> {
     return
   }
 
-  log("Ollama n'est pas lancé, démarrage automatique…")
+  log(t('dep.ollamaAutoStart'))
   // Une console absente sur le parent oblige les helpers GPU d’Ollama à en créer
   // une nouvelle. Sous Windows, fournir une console cachée qu’ils peuvent hériter.
   // Garder PowerShell vivant permet aussi à taskkill /T de fermer tout l’arbre.
@@ -601,12 +592,12 @@ export async function ensureOllamaRunning(log: LogFn): Promise<void> {
   // spawn() signale un échec (ex: "ollama" absent du PATH) de façon asynchrone via l'évènement 'error' du
   // process, jamais en levant une exception directement : sans ce listener, Node la traite comme une
   // exception non rattrapée et ça plante tout Jaris (au lieu de juste échouer à démarrer Ollama).
-  proc.on('error', (err) => log(`Échec du démarrage automatique d'Ollama : ${err.message}`))
+  proc.on('error', (err) => log(t('dep.ollamaAutoStartFailed', { error: err.message })))
   proc.unref()
   ollamaProcessStartedByJaris = proc
 
   const up = await waitUntil(() => isUp(url), 20000)
-  log(up ? 'Ollama démarré.' : "Échec du démarrage automatique d'Ollama : lance-le manuellement (`ollama serve`).")
+  log(up ? t('dep.ollamaStarted') : t('dep.ollamaStartManually'))
   if (up) {
     void warnIfOllamaOutdated(log)
     void checkOllamaFreshness()
@@ -772,9 +763,7 @@ async function isWslInstalled(): Promise<boolean> {
  * Desktop) : jamais redémarrer le PC à la place de Léo, seulement le lui dire clairement à l'appelant.
  */
 async function installWsl(onProgress: (message: string) => void): Promise<boolean> {
-  onProgress(
-    'Installation de WSL, nécessaire à Docker Desktop (une fenêtre Windows peut demander une autorisation — accepte-la pour continuer)…'
-  )
+  onProgress(t('dep.wslInstalling'))
   const exitCode = await new Promise<number | null>((resolve) => {
     const proc = spawn(
       'powershell',
@@ -809,7 +798,7 @@ async function installWsl(onProgress: (message: string) => void): Promise<boolea
  * Desktop juste après et en observant s'il répond vraiment, jamais en devinant depuis un code non documenté.
  */
 export async function installDockerDesktop(onProgress: (message: string) => void, targetRoot?: string): Promise<boolean> {
-  onProgress('Téléchargement de Docker Desktop (environ 600 Mo, ça peut prendre plusieurs minutes)…')
+  onProgress(t('dep.dockerDownloading'))
   const installerPath = join(targetRoot ? join(targetRoot, 'downloads') : downloadsDir(), 'JarisDockerDesktopInstaller.exe')
   try {
     // Le plafond était ici de 10 minutes pour le téléchargement entier, choisi à partir de la taille
@@ -822,16 +811,16 @@ export async function installDockerDesktop(onProgress: (message: string) => void
       onProgress: ({ receivedBytes, totalBytes }) =>
         onProgress(
           totalBytes === null
-            ? `Téléchargement de Docker Desktop : ${formatBytes(receivedBytes)}…`
-            : `Téléchargement de Docker Desktop : ${formatBytes(receivedBytes)} sur ${formatBytes(totalBytes)}…`
+            ? t('dep.dockerDownloadingBytes', { received: formatBytes(receivedBytes) })
+            : t('dep.dockerDownloadingOf', { received: formatBytes(receivedBytes), total: formatBytes(totalBytes) })
         )
     })
   } catch (err) {
-    onProgress(err instanceof Error ? err.message : 'Le téléchargement de Docker Desktop a échoué.')
+    onProgress(err instanceof Error ? err.message : t('dep.dockerDownloadFailed'))
     return false
   }
 
-  onProgress("Installation de Docker Desktop en cours (une fenêtre Windows peut demander une autorisation — accepte-la pour continuer)…")
+  onProgress(t('dep.dockerInstalling'))
   const exitCode = await new Promise<number | null>((resolve) => {
     // Étape 143 : dans le dossier de Jaris quand il y en a un (programme ET disque virtuel où vivent les images),
     // avec les indicateurs officiels de Docker — sinon Docker se mettrait sur C quoi que Léo ait choisi.
@@ -911,11 +900,11 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
   try {
     dir = prepareSearxngComposeDir()
   } catch (err) {
-    log(`Impossible de préparer le dossier de SearXNG : ${err instanceof Error ? err.message : String(err)}`)
+    log(t('dep.searxngDirFailed', { error: err instanceof Error ? err.message : String(err) }))
     return
   }
   if ((await isUp(config.searxng.host)) && (await retireMisplacedSearxng(dir))) {
-    log('SearXNG ne dépend plus du dossier du programme : recréation du conteneur dans le dossier de Jaris…')
+    log(t('dep.searxngMoving'))
   }
   if (await isUp(config.searxng.host)) {
     // Deux raisons de recréer un conteneur DÉJÀ lancé, constatées chacune sur un fait observable : il
@@ -926,31 +915,31 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
     if (networkExposed || jsonBroken) {
       log(
         networkExposed
-          ? 'SearXNG était accessible depuis tout le réseau local : recréation du conteneur pour le limiter à cet ordinateur…'
-          : 'SearXNG répond mais refuse le format JSON : recréation du conteneur avec la configuration actuelle…'
+          ? t('dep.searxngExposed')
+          : t('dep.searxngNoJson')
       )
       try {
         await execAsync(composeCommand('up -d --force-recreate'), { cwd: searxngComposeDir(), windowsHide: true })
         if (jsonBroken) {
           const fixed = await waitUntil(() => searxngJsonSearchWorks(), 30000)
-          log(fixed ? 'SearXNG recréé, le format JSON fonctionne.' : 'SearXNG recréé, mais refuse toujours le format JSON — vérifie searxng/settings.yml.')
+          log(fixed ? t('dep.searxngJsonFixed') : t('dep.searxngJsonStillBroken'))
         }
         if (networkExposed) {
           const stillExposed = !isLocalOnlyBinding(await readSearxngPortBinding())
           log(
             stillExposed
-              ? "SearXNG recréé, mais son port reste publié sur le réseau — vérifie la ligne ports: de docker-compose.yml."
-              : "SearXNG recréé : il n'est plus joignable que depuis cet ordinateur."
+              ? t('dep.searxngStillExposed')
+              : t('dep.searxngLocalOnly')
           )
         }
       } catch (err) {
-        log(`Échec de la recréation de SearXNG : ${err instanceof Error ? err.message : String(err)}`)
+        log(t('dep.searxngRecreateFailed', { error: err instanceof Error ? err.message : String(err) }))
       }
     }
     return
   }
 
-  log("SearXNG n'est pas lancé, démarrage de Docker…")
+  log(t('dep.searxngStartingDocker'))
   try {
     await execAsync('docker info', { windowsHide: true })
   } catch {
@@ -975,11 +964,8 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
         if (!(await isWslInstalled())) {
           log(
             wslLaunched
-              ? "WSL a été installé, mais Windows doit redémarrer pour l'activer avant que Docker Desktop " +
-                  'puisse fonctionner : redémarre ton PC, puis relance Jaris pour continuer.'
-              : "WSL n'a pas pu s'installer (autorisation Windows refusée, ou échec du téléchargement) : " +
-                  'lance "wsl --install --no-distribution" toi-même dans un PowerShell en administrateur, redémarre, puis ' +
-                  'relance Jaris pour activer la recherche web.'
+              ? t('dep.wslRestart')
+              : t('dep.wslFailed')
           )
           return
         }
@@ -999,19 +985,15 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
       // demande explicite de Léo, on essaie de l'installer nous-mêmes plutôt que de se contenter de lui
       // dire d'aller le faire — voir installDockerDesktop ci-dessus pour pourquoi ce n'est PAS silencieux
       // comme pour Ollama (élévation Windows incontournable).
-      if (launchFailed && result.includes('aucune application nommée')) {
+      if (launchFailed && result === t('app.notFound', { name: 'Docker Desktop' })) {
         justInstalled = await installDockerDesktop(log)
         if (justInstalled) {
-          log('Docker Desktop installé, démarrage…')
+          log(t('dep.dockerInstalledStarting'))
           const relaunch = await openApp('Docker Desktop')
           log(relaunch)
           launchFailed = !didAppLaunch(relaunch)
         } else {
-          log(
-            "Docker Desktop n'a pas pu s'installer tout seul (téléchargement impossible, ou autorisation " +
-              'Windows refusée) : installe-le manuellement sur docker.com/products/docker-desktop pour ' +
-              'activer la recherche web.'
-          )
+          log(t('dep.dockerInstallFailed'))
         }
       }
     }
@@ -1031,10 +1013,8 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
       // probable, pas un fait, plutôt que d'inventer une cause précise.
       log(
         justInstalled
-          ? "Docker Desktop vient d'être installé mais ne répond pas encore : un redémarrage de Windows " +
-              "est probablement nécessaire pour finir d'activer la virtualisation — redémarre ton PC, la " +
-              'recherche web sera disponible juste après.'
-          : 'Docker n\'a pas pu démarrer automatiquement : installe Docker Desktop (ou ouvre-le manuellement s\'il est déjà installé ailleurs) pour activer la recherche web.'
+          ? t('dep.dockerNeedsRestart')
+          : t('dep.dockerStartFailed')
       )
       return
     }
@@ -1045,10 +1025,10 @@ export async function ensureSearxngRunning(log: LogFn): Promise<void> {
     await retireMisplacedSearxng(dir)
     await execAsync(composeCommand('up -d'), { cwd: dir, windowsHide: true })
   } catch (err) {
-    log(`Échec du démarrage de SearXNG : ${err instanceof Error ? err.message : String(err)}`)
+    log(t('dep.searxngStartFailed', { error: err instanceof Error ? err.message : String(err) }))
     return
   }
 
   const up = await waitUntil(() => isUp(config.searxng.host), 30000)
-  log(up ? 'SearXNG démarré.' : 'SearXNG ne répond pas encore, réessaie la recherche web dans un instant.')
+  log(up ? t('dep.searxngStarted') : t('dep.searxngNotYet'))
 }

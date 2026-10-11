@@ -1,4 +1,5 @@
 import { spawn } from 'child_process'
+import { t } from '../../shared/i18n'
 
 /**
  * Simule des vrais événements clavier/souris bas niveau via l'API Win32 SendInput (P/Invoke depuis un
@@ -183,7 +184,7 @@ export async function typeText(text: string): Promise<string> {
     ...process.env,
     JARIS_TYPE_TEXT: text
   })
-  return error ? `Échec de la saisie du texte : ${error}` : `Texte tapé.`
+  return error ? t('input.typeFailed', { error }) : `Texte tapé.`
 }
 
 /** Appuie sur une touche spéciale nommée (entrée, tab, échap...), whitelist fixe dans KEY_CODES. */
@@ -193,7 +194,7 @@ export async function pressKey(key: string): Promise<string> {
     return `Touche "${key}" inconnue. Touches disponibles : ${Object.keys(KEY_CODES).join(', ')}.`
   }
   const error = await runPowerShell(`[JarisInput]::KeyPress(${vk})`)
-  return error ? `Échec de l'appui sur la touche : ${error}` : `Touche "${key}" pressée.`
+  return error ? t('input.keyFailed', { error }) : `Touche "${key}" pressée.`
 }
 
 /**
@@ -218,7 +219,7 @@ export async function mediaKey(action: string): Promise<string> {
     return `Action multimédia "${action}" inconnue. Actions disponibles : ${Object.keys(MEDIA_KEY_CODES).join(', ')}.`
   }
   const error = await runPowerShell(`[JarisInput]::KeyPress(${vk})`)
-  return error ? `Échec de l'action multimédia : ${error}` : `Action "${action}" effectuée.`
+  return error ? t('input.mediaFailed', { error }) : `Action "${action}" effectuée.`
 }
 
 /**
@@ -237,5 +238,5 @@ export async function clickMouse(x: number | null, y: number | null, button: str
 
   const dpi = physicalPixels && hasPos ? '[JarisInput]::DpiAware()\n' : ''
   const error = await runPowerShell(`${dpi}[JarisInput]::Click(${px}, ${py}, $${hasPos ? 'true' : 'false'}, "${safeButton}")`)
-  return error ? `Échec du clic : ${error}` : `Clic ${safeButton} effectué${hasPos ? ` à (${px}, ${py})` : ''}.`
+  return error ? t('input.clickFailed', { error }) : `Clic ${safeButton} effectué${hasPos ? ` à (${px}, ${py})` : ''}.`
 }

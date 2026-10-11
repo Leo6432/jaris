@@ -8,6 +8,7 @@ import { config } from '../config'
 import { pythonScriptsDir } from '../paths'
 import { resolvePythonBin } from './pythonRuntime'
 import type { AudioInputDevice } from '../../shared/ipc'
+import { t } from '../../shared/i18n'
 
 type VoiceServerProcess = ChildProcessByStdio<Writable, Readable, Readable>
 
@@ -45,11 +46,11 @@ export function listeningUnavailableReason(status: VoiceListeningStatus): string
     case 'ready':
       return null
     case 'loading':
-      return "L'écoute démarre encore. Au premier lancement, Jaris télécharge la transcription (environ 2,5 Go) : réessaie dans quelques minutes."
+      return t('voice.starting')
     case 'failed':
-      return `L'écoute n'a pas pu démarrer : ${status.message}`
+      return t('voice.startFailed', { message: status.message ?? '' })
     case 'off':
-      return "L'écoute n'est pas lancée. Ferme puis rouvre Jaris."
+      return t('voice.notRunning')
   }
 }
 
@@ -59,6 +60,30 @@ export function listeningUnavailableReason(status: VoiceListeningStatus): string
  * (Parakeet v3, en RAM — étape 158) dans un seul process. Émet 'wake', 'transcript' (text: string),
  * 'log', 'error', 'micTestLevel' (level: number) et 'micTestDone' (detected: boolean).
  */
+/**
+ * Étape 293 (24 langues) : le programme d'écoute (python/voice_server.py) écrit ses messages en français. Ceux qui
+ * arrivent à l'écran (liste « la voix ne fonctionne pas », progression) sont traduits ICI, à leur arrivée, d'après leur
+ * forme connue — le sidecar reste inchangé, et un message inconnu (détail technique d'une exception) passe tel quel.
+ */
+const SIDECAR_MESSAGES: Array<[RegExp, (match: RegExpMatchArray) => string]> = [
+  [/^dépendance Python manquante ou inutilisable \((.*)\)\./su, (m) => t('voice.py.missingDep', { detail: m[1] })],
+  [/^Chargement de la transcription\b/u, () => t('voice.py.loadingStt')],
+  [/^échec de chargement de la transcription \(Parakeet v3\) : (.*)$/su, (m) => t('voice.py.sttFailed', { detail: m[1] })],
+  [/^Ouverture du microphone/u, () => t('voice.py.openingMic')],
+  [/^impossible d'ouvrir le micro : (.*)$/su, (m) => t('voice.py.micFailed', { detail: m[1] })],
+  [/^Ce micro n'accepte pas 16 kHz directement, ré-échantillonnage depuis (\d+) Hz/u, (m) => t('voice.py.resampling', { rate: m[1] })],
+  [/^Test du mot Jaris : transcription impossible \((.*)\)$/su, (m) => t('voice.py.wakeTestFailed', { detail: m[1] })],
+  [/^Écoute du mot Jaris impossible : (.*)$/su, (m) => t('voice.py.wakeFailed', { detail: m[1] })]
+]
+
+export function translateSidecarMessage(message: string): string {
+  for (const [pattern, translate] of SIDECAR_MESSAGES) {
+    const match = message.match(pattern)
+    if (match) return translate(match)
+  }
+  return message
+}
+
 export class VoiceClient extends EventEmitter {
   private proc: VoiceServerProcess | null = null
   private ready: Promise<void> | null = null
@@ -113,11 +138,13 @@ export class VoiceClient extends EventEmitter {
             if (this.proc === proc) this.status = { state: 'ready' }
             resolveReady()
             break
-          case 'fatal':
+          case 'fatal': {
             settled = true
-            if (this.proc === proc) this.status = { state: 'failed', message: payload.message }
-            rejectReady(new Error(payload.message))
+            const message = translateSidecarMessage(payload.message)
+            if (this.proc === proc) this.status = { state: 'failed', message }
+            rejectReady(new Error(message))
             break
+          }
           case 'wake':
             this.emit('wake')
             break
@@ -125,10 +152,10 @@ export class VoiceClient extends EventEmitter {
             this.emit('transcript', payload.text)
             break
           case 'log':
-            this.emit('log', payload.message)
+            this.emit('log', translateSidecarMessage(payload.message))
             break
           case 'error':
-            this.emit('error', new Error(payload.message))
+            this.emit('error', new Error(translateSidecarMessage(payload.message)))
             break
           case 'mic_test_started':
             this.emit('micTestStarted')
@@ -163,7 +190,7 @@ export class VoiceClient extends EventEmitter {
         if (this.proc === proc && this.status.state !== 'failed') {
           this.status = {
             state: 'failed',
-            message: settled ? `l'écoute s'est arrêtée toute seule (code ${code})` : `le programme d'écoute s'est arrêté avant d'être prêt (code ${code})`
+            message: settled ? t('voice.stopped', { code: String(code) }) : t('voice.stoppedEarly', { code: String(code) })
           }
         }
         this.proc = null
@@ -196,12 +223,12 @@ export class VoiceClient extends EventEmitter {
    */
   transcribeFile(path: string, timeoutMs = 120_000): Promise<string> {
     const reason = listeningUnavailableReason(this.status)
-    if (reason || !this.proc) return Promise.reject(new Error(reason ?? "L'écoute n'est pas lancée sur le PC."))
+    if (reason || !this.proc) return Promise.reject(new Error(reason ?? t('voice.notRunningPc')))
     const id = randomUUID()
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.fileTranscripts.delete(id)
-        reject(new Error('La transcription a pris trop de temps.'))
+        reject(new Error(t('voice.transcriptionTimeout')))
       }, timeoutMs)
       this.fileTranscripts.set(id, {
         resolve: (text) => {

@@ -87,6 +87,9 @@ import { createFilesPreview, createGeneratedAppPreview, registerPreviewHandler, 
 import { previewVoice, synthesizeSpeech } from './services/tts'
 import { ttsClient } from './services/ttsClient'
 import { createAppIcon, createTrayIcon } from './services/trayIcon'
+import { languageState, loadLanguageSetting, saveLanguageSetting } from './services/language'
+import { t } from '../shared/i18n'
+import type { LanguageSetting } from '../shared/i18n/languages'
 import { VoicePipeline } from './services/voicePipeline'
 import { listAudioInputDevices } from './services/voiceClient'
 import { ensureMemoryDir, getMemoryDir, getMemoryGraph, recallNote } from './services/memoryStore'
@@ -396,7 +399,7 @@ function titleBarOverlay(): Electron.TitleBarOverlayOptions {
  * et dictée du champ de saisie (étape 276). Le fichier temporaire est écrit par Jaris lui-même, puis effacé.
  */
 async function transcribeWav(wav: Buffer): Promise<string> {
-  if (!pipeline) throw new Error("L'écoute n'est pas lancée sur le PC : la transcription n'est pas disponible.")
+  if (!pipeline) throw new Error(t('main.noPipeline'))
   const path = join(tmpdir(), `jaris-dictee-${randomUUID()}.wav`)
   await writeFile(path, wav)
   try {
@@ -798,6 +801,24 @@ function bringJarisBackAfterPilot(): void {
   applyPilotWidgetGuard()
 }
 
+/** Menu de l'icône de la barre système, reconstruit quand la langue change (un menu natif ne se retraduit pas seul). */
+function refreshTrayMenu(): void {
+  if (!tray) return
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: t('tray.open'), click: () => showFullWindow() },
+      { type: 'separator' },
+      {
+        label: t('tray.quit'),
+        click: () => {
+          quitting = true
+          app.quit()
+        }
+      }
+    ])
+  )
+}
+
 /** Envoie un évènement du pipeline vocal à toutes les fenêtres actuellement ouvertes (réglages et/ou widget). */
 function broadcast(channel: string, payload?: unknown): void {
   if (channel === IPC_CHANNELS.log) console.log('[jaris]', payload)
@@ -853,8 +874,8 @@ async function saveThinkChoice(mode: ModelChoiceMode, think: unknown): Promise<v
     // La valeur vient de l'écran : revérifiée ICI contre ce que le modèle annonce vraiment.
     const installed = await listInstalledModels()
     const model = thinkingModelFor(profile, mode, installed, buildModelChoiceInfo(profile, mode, installed).autoModel)
-    if (!model) throw new Error("Choisis d'abord un modèle : en Auto, il change selon la question.")
-    if (!isAcceptedThink(think, await getModelThinking(model))) throw new Error(`${model} n'accepte pas ce réglage de réflexion.`)
+    if (!model) throw new Error(t('main.chooseModelFirst'))
+    if (!isAcceptedThink(think, await getModelThinking(model))) throw new Error(t('main.thinkRejected', { model }))
     thinkChoices[mode] = { model, think }
   }
   await saveProfile({ ...profile, thinkChoices })
@@ -920,19 +941,19 @@ function getPhoneAccess(): PhoneAccessManager {
       studio: async () => {
         const [image, video] = await Promise.all([getImageStudioStatus(), getVideoStudioStatus()])
         const imageReason = !image.supported
-          ? 'La création d’images ne fonctionne que sur Windows.'
+          ? t('phone.studio.imageWindowsOnly')
           : !image.capable
             ? image.reason
             : !image.installed
-              ? 'Le mode Image n’est pas encore installé : installe-le une fois depuis Jaris sur ton PC (mode Image).'
+              ? t('phone.studio.imageMissing')
               : null
         const qualities = video.qualities.filter((q) => q.installed).map(({ id, label }) => ({ id, label }))
         const videoReason = !video.supported
-          ? 'La création de vidéos ne fonctionne que sur Windows.'
+          ? t('phone.studio.videoWindowsOnly')
           : !video.capable
             ? video.reason
             : !qualities.length
-              ? 'Le mode Vidéo n’est pas encore installé : installe une qualité une fois depuis Jaris sur ton PC (mode Vidéo).'
+              ? t('phone.studio.videoMissing')
               : null
         return {
           image: { ready: imageReason === null, reason: imageReason },
@@ -980,11 +1001,11 @@ function getPhoneAccess(): PhoneAccessManager {
       // Étape 218 : extinction demandée par le bouton du téléphone (jamais par la conversation), annulable.
       shutdown: async (seconds) => {
         await scheduleShutdown(seconds)
-        broadcast(IPC_CHANNELS.log, `Extinction du PC demandée depuis le téléphone, dans ${seconds} s.`)
+        broadcast(IPC_CHANNELS.log, t('phone.shutdownRequested', { seconds }))
       },
       cancelShutdown: async () => {
         await cancelScheduledShutdown()
-        broadcast(IPC_CHANNELS.log, 'Extinction du PC annulée depuis le téléphone.')
+        broadcast(IPC_CHANNELS.log, t('phone.shutdownCancelled'))
       }
     }
   })
@@ -1006,8 +1027,8 @@ function getPhoneAccess(): PhoneAccessManager {
  * aussi en notification Windows, puis il est annoncé à la voix si elle marche.
  */
 function fireReminder(message: string): void {
-  if (Notification.isSupported()) new Notification({ title: 'Rappel de Jaris', body: message }).show()
-  broadcast(IPC_CHANNELS.log, `Rappel : ${message}`)
+  if (Notification.isSupported()) new Notification({ title: t('reminder.title'), body: message }).show()
+  broadcast(IPC_CHANNELS.log, t('reminder.spoken', { message }))
   void pipeline?.announceReminder(message)
 }
 
@@ -1086,7 +1107,7 @@ async function startVoicePipeline(): Promise<void> {
     broadcast(IPC_CHANNELS.setupStatus, lastSetupStatus)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    broadcast(IPC_CHANNELS.log, `Échec du démarrage du pipeline vocal : ${message}`)
+    broadcast(IPC_CHANNELS.log, t('voice.pipelineFailed', { message }))
     lastSetupStatus = { ready: false, missing: [message] }
     broadcast(IPC_CHANNELS.setupStatus, lastSetupStatus)
   }
@@ -1100,6 +1121,17 @@ app.whenReady().then(async () => {
   // déjà perdu la course au verrou continuerait quand même à créer sa fenêtre, démarrer Ollama, etc. avant
   // de se fermer — exactement le flash visible à corriger ici.
   if (!gotSingleInstanceLock) return
+  // La langue AVANT toute fenêtre, tout menu et tout message : chaque écran naît directement dans la bonne langue.
+  await loadLanguageSetting()
+  ipcMain.on(IPC_CHANNELS.languageState, (event) => {
+    event.returnValue = languageState()
+  })
+  ipcMain.handle(IPC_CHANNELS.setLanguage, async (_event, next: LanguageSetting) => {
+    const state = await saveLanguageSetting(next)
+    broadcast(IPC_CHANNELS.languageChanged, state)
+    refreshTrayMenu()
+    return state
+  })
   setPilotWindowHooks({ begin: setJarisAsideForPilot, end: bringJarisBackAfterPilot, guard: setPilotBorrowGuard })
   void cleanupStaleChromiumData()
   // Étape 200 : le Montage a été retiré ; son paquet Remotion (environ 600 Mo) ne sert plus à rien.
@@ -1206,11 +1238,11 @@ app.whenReady().then(async () => {
   // l'écran restait muet, comme si le micro n'entendait rien. La raison revient maintenant à l'écran.
   const voiceTestStart = (reason: string | null): VoiceTestStartResult => ({ started: reason === null, reason })
   ipcMain.handle(IPC_CHANNELS.testMicrophone, (): VoiceTestStartResult =>
-    voiceTestStart(pipeline ? pipeline.testMic() : "L'écoute n'est pas encore lancée. Réessaie dans un instant.")
+    voiceTestStart(pipeline ? pipeline.testMic() : t('main.voiceNotReady'))
   )
   ipcMain.on(IPC_CHANNELS.stopTestMicrophone, () => pipeline?.stopTestMic())
   ipcMain.handle(IPC_CHANNELS.testWakeWord, (): VoiceTestStartResult =>
-    voiceTestStart(pipeline ? pipeline.testWakeWord() : "L'écoute n'est pas encore lancée. Réessaie dans un instant.")
+    voiceTestStart(pipeline ? pipeline.testWakeWord() : t('main.voiceNotReady'))
   )
   ipcMain.on(IPC_CHANNELS.stopTestWakeWord, () => pipeline?.stopTestWakeWord())
   ipcMain.on(IPC_CHANNELS.setActiveMode, (_event, mode: AppMode) => {
@@ -1298,7 +1330,7 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.chooseModelsLocation, async () => {
     const dialogOptions = {
       properties: ['openDirectory' as const, 'createDirectory' as const],
-      title: 'Choisir le dossier où mettre tout Jaris'
+      title: t('main.dialog.chooseFolder')
     }
     // try/finally : un échec du dialogue laissait sinon `dialogOpen` bloqué à true pour toute la session,
     // et la fenêtre de réglages ne se serait plus JAMAIS repliée en widget en changeant d'application.
@@ -1315,7 +1347,7 @@ app.whenReady().then(async () => {
     const log = (message: string): void => broadcast(IPC_CHANNELS.modelsLocationProgress, message)
     // Ollama et les sidecars Python doivent tous les deux libérer leurs fichiers avant de déplacer quoi
     // que ce soit, sinon la copie échoue ou laisse des données à moitié écrites.
-    log('Arrêt temporaire des services…')
+    log(t('main.move.stopping'))
     pipeline?.stop()
     ttsClient.stop()
     await stopOllamaCompletely()
@@ -1341,9 +1373,9 @@ app.whenReady().then(async () => {
             .on('error', () => {})
             .unref()
         })
-        log('Tout est copié. Jaris se ferme, se réinstalle dans le nouveau dossier et se rouvre tout seul…')
+        log(t('main.move.reinstalling'))
       } else {
-        log('Tout est déplacé. Redémarrage de Jaris pour utiliser le nouveau dossier…')
+        log(t('main.move.restarting'))
         // Les stores calculent leur chemin UNE fois au chargement du module : il faut relancer Jaris.
         app.relaunch()
       }
@@ -1352,18 +1384,18 @@ app.whenReady().then(async () => {
       setTimeout(() => app.quit(), 800)
       const notes = [
         outcome.dockerUninstalled && !outcome.dockerReinstalled
-          ? 'Docker Desktop n’a pas pu être réinstallé dans ce dossier. La recherche web réessaiera au prochain lancement ; vérifie son emplacement dans Options → Modèles.'
+          ? t('main.move.dockerFailed')
           : '',
-        outcome.leftovers.length ? `Quelques anciens fichiers verrouillés n'ont pas pu être effacés : ${outcome.leftovers.join(', ')}.` : ''
+        outcome.leftovers.length ? t('main.move.leftovers', { files: outcome.leftovers.join(', ') }) : ''
       ].filter(Boolean)
       return { success: true, message: [
         outcome.dockerUninstalled && !outcome.dockerReinstalled
-          ? `Jaris et Ollama ont été déplacés dans ${newDir}, mais Docker Desktop reste à réinstaller.`
-          : `Jaris, Ollama et Docker Desktop sont déplacés dans ${newDir}.`,
+          ? t('main.move.doneNoDocker', { dir: newDir })
+          : t('main.move.done', { dir: newDir }),
         ...notes
       ].join(' ') }
     } catch (err) {
-      log('Redémarrage des services…')
+      log(t('main.move.restartingServices'))
       void ensureOllamaRunning(log)
       await startVoicePipeline()
       return { success: false, message: err instanceof Error ? err.message : String(err) }
@@ -1405,7 +1437,7 @@ app.whenReady().then(async () => {
     const fresh = currentIds.filter((id) => !known.has(id))
     // Étape 251 : MAI-UI remplace UI-TARS. Un PC qui avait UI-TARS l'apprend ici, jusqu'à ce que « Retester la
     // configuration » installe MAI-UI (et supprime UI-TARS) ; d'ici là, le modèle de vision vise lui-même.
-    if (profile.pilotModel && profile.pilotModel !== PILOT_MODEL) fresh.push(`${PILOT_MODEL_LABEL} (pilotage d'écran)`)
+    if (profile.pilotModel && profile.pilotModel !== PILOT_MODEL) fresh.push(`${PILOT_MODEL_LABEL} (${t('role.pilot')})`)
     return fresh
   })
   ipcMain.handle(IPC_CHANNELS.acknowledgeNewModels, async (): Promise<void> => {
@@ -1444,7 +1476,7 @@ app.whenReady().then(async () => {
   // un rôle du profil (ou inconnu d'Ollama) n'est jamais supprimé, quoi que demande l'interface.
   ipcMain.handle(IPC_CHANNELS.deleteUnusedModel, async (_event, model: string): Promise<void> => {
     if (typeof model !== 'string' || !(await isUnusedInstalledModel(model, await getProfile()))) {
-      throw new Error("Ce modèle est utilisé par Jaris ou n'est pas installé : il n'a pas été supprimé.")
+      throw new Error(t('main.modelInUse'))
     }
     await deleteModel(model)
   })
@@ -1477,7 +1509,7 @@ app.whenReady().then(async () => {
   // au plus — ce qui arrive du renderer n'est jamais écrit tel quel s'il n'a pas cette forme.
   ipcMain.handle(IPC_CHANNELS.transcribeDictation, async (_event, bytes: Uint8Array): Promise<string> => {
     const wav = Buffer.from(bytes)
-    if (wav.length > MAX_VOICE_BYTES) throw new Error('Dictée trop longue : arrête-la plus tôt (2 minutes au plus).')
+    if (wav.length > MAX_VOICE_BYTES) throw new Error(t('main.dictationTooLong'))
     if (!isExpectedWav(wav)) throw new Error('Enregistrement illisible.')
     return (await transcribeWav(wav)).trim()
   })
@@ -1536,11 +1568,11 @@ app.whenReady().then(async () => {
   // dessous : sans lui, la fenêtre de Windows faisait perdre le focus à Jaris, qui se repliait en widget.
   ipcMain.handle(IPC_CHANNELS.saveGeneratedImage, async (_event, dataUrl: string): Promise<SaveImageResult> => {
     const bytes = decodePngDataUrl(String(dataUrl))
-    if (!bytes) return { saved: false, error: "Cette image ne peut pas être enregistrée (ce n'est pas une image PNG)." }
+    if (!bytes) return { saved: false, error: t('main.notPng') }
     const dialogOptions = {
-      title: "Enregistrer l'image",
+      title: t('main.dialog.saveImage'),
       defaultPath: join(app.getPath('pictures'), defaultImageFileName(new Date())),
-      filters: [{ name: 'Image PNG', extensions: ['png'] }]
+      filters: [{ name: t('main.dialog.pngFilter'), extensions: ['png'] }]
     }
     dialogOpen = true
     let target: string | undefined
@@ -1561,8 +1593,8 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.pickImageFile, async (): Promise<PickedImageFile | null> => {
     const dialogOptions = {
       properties: ['openFile' as const],
-      title: 'Choisir une image à envoyer à Jaris',
-      filters: [{ name: 'Images', extensions: Object.keys(IMAGE_TYPES_BY_EXTENSION) }]
+      title: t('main.dialog.pickImage'),
+      filters: [{ name: t('app.mode.image.panel'), extensions: Object.keys(IMAGE_TYPES_BY_EXTENSION) }]
     }
     dialogOpen = true
     let chosen: string | undefined
@@ -1751,9 +1783,9 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.saveGeneratedVideo, async (_event, fileName: string): Promise<SaveImageResult> => {
     const source = generatedVideoPath(String(fileName))
     const dialogOptions = {
-      title: 'Enregistrer la vidéo',
+      title: t('main.dialog.saveVideo'),
       defaultPath: join(app.getPath('videos'), String(fileName).replace(/^[\d-]+T[\d-]+-/, '')),
-      filters: [{ name: 'Vidéo WebM', extensions: ['webm'] }]
+      filters: [{ name: t('main.dialog.webmFilter'), extensions: ['webm'] }]
     }
     dialogOpen = true
     let target: string | undefined
@@ -1768,7 +1800,7 @@ app.whenReady().then(async () => {
       await copyFile(source, /\.webm$/i.test(target) ? target : `${target}.webm`)
       return { saved: true }
     } catch (err) {
-      return { saved: false, error: `Impossible d'enregistrer la vidéo : ${err instanceof Error ? err.message : String(err)}` }
+      return { saved: false, error: t('main.saveVideoFailed', { error: err instanceof Error ? err.message : String(err) }) }
     }
   })
   ipcMain.handle(IPC_CHANNELS.openGeneratedApp, async (_event, path?: string) => {
@@ -1793,19 +1825,7 @@ app.whenReady().then(async () => {
   // et la faire disparaître de la barre système.
   tray = new Tray(createTrayIcon())
   tray.setToolTip('Jaris')
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Ouvrir Jaris', click: () => showFullWindow() },
-      { type: 'separator' },
-      {
-        label: 'Quitter',
-        click: () => {
-          quitting = true
-          app.quit()
-        }
-      }
-    ])
-  )
+  refreshTrayMenu()
   tray.on('click', () => showFullWindow())
 
   /**
@@ -1897,7 +1917,7 @@ app.whenReady().then(async () => {
   void startVoicePipeline()
   // Étape 214 : accès téléphone relancé au démarrage s'il était activé (sans ouvrir le navigateur tout seul).
   void getProfile().then((profile) => {
-    if (profile?.phoneAccessEnabled) void getPhoneAccess().enable().catch((err) => broadcast(IPC_CHANNELS.log, `Téléphone : ${String(err)}`))
+    if (profile?.phoneAccessEnabled) void getPhoneAccess().enable().catch((err) => broadcast(IPC_CHANNELS.log, t('phone.log', { message: String(err) })))
   })
 })
 

@@ -24,6 +24,43 @@
     return document.getElementById(id)
   }
 
+  // Étape 293 : les textes viennent du PC, dans la langue de Jaris (/i18n.js, servi juste avant cette page et gardé
+  // avec elle par le service worker). Une clé absente se voit telle quelle plutôt que de laisser un texte vide.
+  var I18N = (window.JARIS_I18N && window.JARIS_I18N.messages) || {}
+  var LOCALE = (window.JARIS_I18N && window.JARIS_I18N.locale) || 'fr-FR'
+  function tr(key, vars) {
+    var text = typeof I18N[key] === 'string' ? I18N[key] : key
+    if (vars) {
+      Object.keys(vars).forEach(function (name) {
+        text = text.split('{' + name + '}').join(String(vars[name]))
+      })
+    }
+    return text
+  }
+  /** Les textes écrits dans index.html (en français) : remplacés une fois, au chargement. */
+  function applyStaticTexts() {
+    if (window.JARIS_I18N && window.JARIS_I18N.lang) document.documentElement.lang = window.JARIS_I18N.lang
+    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n]'), function (node) {
+      node.textContent = tr(node.getAttribute('data-i18n'))
+    })
+    ;['placeholder', 'aria-label', 'title', 'alt'].forEach(function (attribute) {
+      Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-' + attribute + ']'), function (node) {
+        node.setAttribute(attribute, tr(node.getAttribute('data-i18n-' + attribute)))
+      })
+    })
+    // Une phrase avec un passage en gras : le gras est replacé là où la traduction met {path}.
+    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n-strong]'), function (node) {
+      var parts = tr(node.getAttribute('data-i18n-strong')).split('{path}')
+      var strong = document.createElement('strong')
+      strong.textContent = tr(node.getAttribute('data-i18n-strong-value'))
+      node.textContent = ''
+      node.appendChild(document.createTextNode(parts[0]))
+      node.appendChild(strong)
+      node.appendChild(document.createTextNode(parts.slice(1).join('{path}')))
+    })
+  }
+  applyStaticTexts()
+
   function readStorage(storage, key) {
     try {
       return storage.getItem(key)
@@ -51,7 +88,7 @@
     if (/iPhone/.test(ua)) return 'iPhone'
     if (/iPad/.test(ua)) return 'iPad'
     if (/Android/.test(ua)) return 'Android'
-    return 'Téléphone'
+    return tr('pwa.deviceName')
   }
 
   function authHeaders() {
@@ -60,8 +97,8 @@
 
   function checkAuth(res, path) {
     if (res.status === 401 && path !== '/api/pair') {
-      forgetToken('Ce téléphone a été déconnecté depuis le PC. Entre un nouveau code pour le reconnecter.')
-      throw new Error('Non connecté.')
+      forgetToken(tr('pwa.disconnected'))
+      throw new Error(tr('pwa.notConnected'))
     }
   }
 
@@ -82,10 +119,10 @@
       signal: controller ? controller.signal : undefined
     })
       .catch(function (err) {
-        if (controller && controller.signal.aborted) throw new Error("L'envoi à ton PC n'a pas abouti à temps : vérifie le réseau, puis réessaie.")
+        if (controller && controller.signal.aborted) throw new Error(tr('pwa.sendTimeout'))
         // Aucune réponse du tout : le PC est éteint ou injoignable, on le dit plutôt qu'un « Load failed ».
         if (token && path !== '/api/pair') setPc('off')
-        throw new Error('Ton PC ne répond pas : il est peut-être éteint.')
+        throw new Error(tr('pwa.pcNoAnswer'))
       })
       .then(function (res) {
         clearTimeout(timer)
@@ -101,7 +138,7 @@
       })
       .then(function (data) {
         checkAuth(res, path)
-        if (!res.ok) throw new Error(data.error || 'Erreur ' + res.status)
+        if (!res.ok) throw new Error(data.error || tr('pwa.errorStatus', { status: res.status }))
         return data
       })
   }
@@ -110,7 +147,7 @@
   function apiBlobUrl(path) {
     return fetch(path, { headers: authHeaders(), cache: 'no-store' }).then(function (res) {
       checkAuth(res, path)
-      if (!res.ok) throw new Error('Fichier indisponible.')
+      if (!res.ok) throw new Error(tr('pwa.fileUnavailable'))
       return res.blob().then(function (blob) {
         return URL.createObjectURL(blob)
       })
@@ -133,7 +170,7 @@
           if (!token) return onEnd(null, err)
           // Jaris redémarré entre-temps : ce travail n'existe plus sur le PC.
           if (/introuvable/i.test(err.message)) return onEnd(null, err)
-          setStatus('Connexion perdue, nouvel essai…')
+          setStatus(tr('pwa.retrying'))
           setTimeout(tick, POLL_MS * 3)
         })
     }
@@ -239,13 +276,13 @@
   }
 
   function pcStatusText() {
-    if (pc.state === 'off') return navigator.onLine === false ? 'Pas de réseau sur le téléphone' : 'PC éteint ou injoignable'
-    if (pc.state === 'unknown') return 'Connexion à ton PC…'
+    if (pc.state === 'off') return navigator.onLine === false ? tr('pwa.status.noNetwork') : tr('pwa.status.pcOff')
+    if (pc.state === 'unknown') return tr('pwa.status.connecting')
     if (pc.shutdownAt) {
       var left = pc.shutdownAt - Date.now()
-      return left > 0 ? 'Extinction du PC dans ' + formatCountdown(left) : 'Le PC s’éteint…'
+      return left > 0 ? tr('pwa.status.shutdownIn', { time: formatCountdown(left) }) : tr('pwa.status.shuttingDown')
     }
-    return 'PC allumé'
+    return tr('pwa.status.pcOn')
   }
 
   function renderPc() {
@@ -258,10 +295,10 @@
     if (pc.state === 'off')
       offline.textContent =
         navigator.onLine === false
-          ? 'Ton téléphone n’a pas de réseau : reconnecte-le (Wi-Fi ou 4G).'
+          ? tr('pwa.offline.noNetwork')
           : pc.shutdownAt
-            ? 'Ton PC est éteint (extinction demandée depuis le téléphone). Le téléphone ne peut pas le rallumer.'
-            : 'Ton PC ne répond pas : il est éteint, en veille, ou Jaris n’est pas ouvert dessus. Tout revient ici dès qu’il répond.'
+            ? tr('pwa.offline.shutDown')
+            : tr('pwa.offline.noAnswer')
     if (!conversationBusy && !studioBusy) setStatus('')
     renderPowerSheet()
   }
@@ -306,8 +343,8 @@
     $('power-confirm').hidden = pending
     $('power-cancel').hidden = !pending
     $('power-text').textContent = pending
-      ? 'Ton PC s’éteint dans ' + formatCountdown(pc.shutdownAt - Date.now()) + '. Tu peux encore annuler.'
-      : 'Ton PC s’éteindra dans 1 minute. D’ici là, tu peux encore annuler. Pense à enregistrer ce qui est ouvert dessus.'
+      ? tr('pwa.power.pending', { time: formatCountdown(pc.shutdownAt - Date.now()) })
+      : tr('pwa.power.text')
   }
 
   function showPowerError(message) {
@@ -386,7 +423,7 @@
   function pair(code) {
     var digits = String(code || '').replace(/\D/g, '')
     if (digits.length !== 8) {
-      showPair('Le code fait 8 chiffres.')
+      showPair(tr('pwa.pair.codeLength'))
       return
     }
     $('pair-submit').disabled = true
@@ -435,7 +472,7 @@
     if (options.image && /^data:image\//.test(options.image)) {
       var img = document.createElement('img')
       img.src = options.image
-      img.alt = 'Image créée par Jaris'
+      img.alt = tr('pwa.image.alt')
       item.appendChild(img)
     }
     list.appendChild(item)
@@ -448,7 +485,7 @@
     list.textContent = ''
     var li = document.createElement('li')
     li.className = 'empty'
-    li.textContent = 'Écris à Jaris : il répond depuis ton PC, sans rien envoyer ailleurs. Pour lui parler, va dans Vocal.'
+    li.textContent = tr('pwa.chat.empty')
     list.appendChild(li)
   }
 
@@ -464,7 +501,7 @@
           })
         }
         var pending = readStorage(sessionStorage, JOB_KEY)
-        if (pending && !conversationBusy) followChat(pending, addMessage('assistant', 'Jaris réfléchit…', { pending: true }))
+        if (pending && !conversationBusy) followChat(pending, addMessage('assistant', tr('pwa.thinking'), { pending: true }))
       })
       .catch(function (err) {
         if (token) setStatus(err.message)
@@ -477,8 +514,8 @@
     pollJob(
       jobId,
       function (job) {
-        renderText(pendingBubble.body, job.status || 'Jaris réfléchit…')
-        setStatus(job.status || 'Jaris réfléchit…')
+        renderText(pendingBubble.body, job.status || tr('pwa.thinking'))
+        setStatus(job.status || tr('pwa.thinking'))
       },
       function (job, err) {
         writeStorage(sessionStorage, JOB_KEY, null)
@@ -490,7 +527,7 @@
           return
         }
         if (job.state === 'done') addMessage('assistant', job.reply, { image: job.image })
-        else addMessage('assistant', job.error || 'Erreur sur le PC.', { error: true })
+        else addMessage('assistant', job.error || tr('pwa.pcError'), { error: true })
       }
     )
   }
@@ -502,7 +539,7 @@
     input.value = ''
     autosize()
     addMessage('user', text)
-    var pending = addMessage('assistant', 'Jaris réfléchit…', { pending: true })
+    var pending = addMessage('assistant', tr('pwa.thinking'), { pending: true })
     setConversationBusy(true)
     api('POST', '/api/message', { text: text })
       .then(function (data) {
@@ -599,12 +636,12 @@
 
   function startListening() {
     if (conversationBusy) {
-      setVoiceState('idle', 'Jaris répond encore au Chat : attends un instant.')
+      setVoiceState('idle', tr('pwa.voice.chatBusy'))
       return
     }
     var AudioCtx = window.AudioContext || window.webkitAudioContext
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !AudioCtx) {
-      setVoiceState('idle', "Ce navigateur ne permet pas d'utiliser le micro.")
+      setVoiceState('idle', tr('pwa.voice.noMic'))
       return
     }
     unlockAudio()
@@ -612,7 +649,7 @@
     var ctx = new AudioCtx()
     if (ctx.resume) ctx.resume().catch(function () {})
     voice.ctx = ctx
-    setVoiceState('listening', 'Je t’écoute…')
+    setVoiceState('listening', tr('pwa.voice.listening'))
     navigator.mediaDevices
       .getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } })
       .then(function (stream) {
@@ -652,7 +689,7 @@
       })
       .catch(function () {
         releaseMic()
-        setVoiceState('idle', 'Micro refusé : autorise le micro pour cette page dans les réglages du téléphone.')
+        setVoiceState('idle', tr('pwa.voice.micRefused'))
       })
   }
 
@@ -662,14 +699,14 @@
     $('voice-orb').style.setProperty('--level', String(Math.min(1, voice.level * 8)))
     if (!voice.frames && now - voice.startedAt > NO_SOUND_MS) {
       releaseMic()
-      setVoiceState('idle', "Le micro n'envoie aucun son à la page. Touche Jaris pour réessayer ; si ça recommence, dis-le-moi.")
+      setVoiceState('idle', tr('pwa.voice.micSilent'))
       return
     }
     if (now - voice.startedAt >= MAX_RECORD_MS) return finishListening(true)
     if (voice.heard && now - voice.lastLoudAt > SILENCE_MS) return finishListening(true)
     if (!voice.heard && now - voice.startedAt > NOTHING_HEARD_MS) {
       releaseMic()
-      setVoiceState('idle', "Je n'ai rien entendu. Touche Jaris pour réessayer.")
+      setVoiceState('idle', tr('pwa.voice.nothingHeard'))
     }
   }
 
@@ -679,8 +716,8 @@
     var rate = voice.rate
     voice.chunks = []
     releaseMic()
-    if (!send) return setVoiceState('idle', 'Touche Jaris pour parler')
-    if (frames < (rate * MIN_SPEECH_MS) / 1000) return setVoiceState('idle', 'Trop court : touche Jaris, parle, puis fais une pause.')
+    if (!send) return setVoiceState('idle', tr('pwa.voice.tapToTalk'))
+    if (frames < (rate * MIN_SPEECH_MS) / 1000) return setVoiceState('idle', tr('pwa.voice.tooShort'))
     sendTalk(encodeWav(downsampleTo16k(chunks, frames, rate), 16000))
   }
 
@@ -708,7 +745,7 @@
   function stopSpeaking() {
     var audio = $('voice-audio')
     audio.pause()
-    setVoiceState('idle', 'Touche Jaris pour parler')
+    setVoiceState('idle', tr('pwa.voice.tapToTalk'))
   }
 
   function showVoiceExchange(transcript, reply, image) {
@@ -730,52 +767,52 @@
     if (!voice.replyUrl) return
     audio.src = voice.replyUrl
     var played = audio.play()
-    setVoiceState('speaking', 'Jaris parle… touche-le pour l’arrêter')
+    setVoiceState('speaking', tr('pwa.voice.speaking'))
     if (played && played.catch)
       played.catch(function () {
         // Lecture refusée par le téléphone (mode silencieux, autre geste) : un bouton pour l'écouter.
-        $('voice-replay-label').textContent = 'Écouter la réponse'
+        $('voice-replay-label').textContent = tr('pwa.voice.listen')
         $('voice-replay').hidden = false
-        setVoiceState('idle', 'Touche « Écouter la réponse », ou Jaris pour reparler')
+        setVoiceState('idle', tr('pwa.voice.listenOrTalk'))
       })
   }
 
   function sendTalk(wav) {
     setConversationBusy(true)
-    setVoiceState('working', 'Envoi à ton PC…')
+    setVoiceState('working', tr('pwa.voice.sending'))
     $('voice-replay').hidden = true
     showVoiceExchange('…', '', null)
     // Un envoi qui ne répond jamais (réseau, tunnel) finit par un message, jamais par une attente sans fin.
     api('POST', '/api/talk', wav, 'audio/wav', UPLOAD_TIMEOUT_MS)
       .then(function (data) {
-        setVoiceState('working', 'Transcription sur ton PC…')
+        setVoiceState('working', tr('pwa.voice.transcribing'))
         pollJob(
           data.jobId,
           function (job) {
             if (job.transcript) $('voice-transcript').textContent = job.transcript
-            setVoiceState('working', job.status || 'Jaris réfléchit…')
-            setStatus(job.status || 'Jaris réfléchit…')
+            setVoiceState('working', job.status || tr('pwa.thinking'))
+            setStatus(job.status || tr('pwa.thinking'))
           },
           function (job, err) {
             setConversationBusy(false)
-            if (!job) return setVoiceState('idle', (err && err.message) || 'Erreur sur le PC.')
+            if (!job) return setVoiceState('idle', (err && err.message) || tr('pwa.pcError'))
             if (job.transcript) $('voice-transcript').textContent = job.transcript
             if (job.state !== 'done') {
               if (!job.transcript) $('voice-last').hidden = true
-              return setVoiceState('idle', job.error || 'Erreur sur le PC.')
+              return setVoiceState('idle', job.error || tr('pwa.pcError'))
             }
             showVoiceExchange(job.transcript, job.reply, job.image)
-            if (!job.audio) return setVoiceState('idle', 'Touche Jaris pour reparler (la voix n’est pas disponible sur le PC).')
+            if (!job.audio) return setVoiceState('idle', tr('pwa.voice.noVoice'))
             apiBlobUrl('/api/jobs/' + job.id + '/audio')
               .then(function (url) {
                 if (voice.replyUrl) URL.revokeObjectURL(voice.replyUrl)
                 voice.replyUrl = url
-                $('voice-replay-label').textContent = 'Réécouter'
+                $('voice-replay-label').textContent = tr('pwa.voice.replay')
                 $('voice-replay').hidden = false
                 playReply()
               })
               .catch(function () {
-                setVoiceState('idle', 'Touche Jaris pour reparler (voix non reçue).')
+                setVoiceState('idle', tr('pwa.voice.voiceMissing'))
               })
           }
         )
@@ -783,7 +820,7 @@
       .catch(function (err) {
         setConversationBusy(false)
         $('voice-last').hidden = true
-        setVoiceState('idle', err.message || "Le message n'a pas pu être envoyé.")
+        setVoiceState('idle', err.message || tr('pwa.sendFailed'))
       })
   }
 
@@ -836,11 +873,11 @@
   }
 
   function modelLabelOf(info) {
-    if (!info || info.selected === null || info.selected === undefined) return 'Auto'
+    if (!info || info.selected === null || info.selected === undefined) return tr('pwa.auto')
     var role = (info.roles || []).filter(function (r) {
       return r.value === info.selected
     })[0]
-    return role ? role.label : 'Personnalisé'
+    return role ? role.label : tr('pwa.custom')
   }
 
   function renderModelChip(mode) {
@@ -869,7 +906,7 @@
   function openSheet(mode) {
     sheetMode = mode
     $('sheet-scope').textContent =
-      mode === 'chat' ? 'Pour le Chat : le même réglage que le Chat du PC.' : 'Pour le Vocal : le même réglage que l’Agent vocal du PC.'
+      mode === 'chat' ? tr('pwa.sheet.chatScope') : tr('pwa.sheet.voiceScope')
     showSheetError('')
     $('sheet').hidden = false
     renderSheet()
@@ -917,31 +954,31 @@
     var note = $('sheet-think-note')
     if (!info) {
       note.hidden = false
-      note.textContent = 'Chargement depuis ton PC…'
+      note.textContent = tr('pwa.loading')
       return
     }
     var offline = info.installed === null
     list.appendChild(
-      sheetRow('Auto', 'Jaris choisit le modèle selon la question', info.selected === null, offline, function () {
+      sheetRow(tr('pwa.auto'), tr('pwa.sheet.autoHint'), info.selected === null, offline, function () {
         choose('/api/model', { mode: mode, model: null })
       })
     )
     ;(info.roles || []).forEach(function (role) {
       list.appendChild(
-        sheetRow(role.label, role.model + (role.installed ? '' : ' — pas installé sur le PC'), info.selected === role.value, offline || !role.installed, function () {
+        sheetRow(role.label, role.model + (role.installed ? '' : tr('pwa.sheet.notInstalled')), info.selected === role.value, offline || !role.installed, function () {
           choose('/api/model', { mode: mode, model: role.value })
         })
       )
     })
     var thinking = info.thinking
     note.hidden = false
-    if (offline) note.textContent = 'Ollama ne répond pas sur le PC : impossible de changer de modèle pour l’instant.'
-    else if (!thinking) note.textContent = 'Choisis d’abord un modèle : en Auto, il change selon la question.'
-    else if (thinking.kind === 'none') note.textContent = 'Ce modèle ne réfléchit pas avant de répondre.'
-    else if (thinking.kind === 'unknown') note.textContent = 'Ollama ne dit pas si ce modèle sait réfléchir.'
+    if (offline) note.textContent = tr('pwa.sheet.ollamaDown')
+    else if (!thinking) note.textContent = tr('pwa.sheet.chooseModelFirst')
+    else if (thinking.kind === 'none') note.textContent = tr('pwa.sheet.noThink')
+    else if (thinking.kind === 'unknown') note.textContent = tr('pwa.sheet.unknownThink')
     else note.hidden = true
     if (offline || !thinking || !thinking.options || !thinking.options.length) return
-    var values = [{ value: null, label: 'Auto' }].concat(thinking.options)
+    var values = [{ value: null, label: tr('pwa.auto') }].concat(thinking.options)
     values.forEach(function (option) {
       var button = document.createElement('button')
       button.type = 'button'
@@ -1002,7 +1039,7 @@
   function applyStudio(kind, info) {
     var notice = $(kind + '-unavailable')
     notice.hidden = info.ready
-    notice.textContent = info.ready ? '' : info.reason || 'Pas encore prêt sur ton PC.'
+    notice.textContent = info.ready ? '' : info.reason || tr('pwa.studio.notReady')
     $(kind + '-form').hidden = !info.ready
   }
 
@@ -1062,7 +1099,7 @@
 
   function formatDate(timestamp) {
     try {
-      return new Date(timestamp).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+      return new Date(timestamp).toLocaleString(LOCALE, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
     } catch (e) {
       return ''
     }
@@ -1082,7 +1119,7 @@
         if (!gallery.items.length) {
           var li = document.createElement('li')
           li.className = 'gallery__empty'
-          li.textContent = kind === 'image' ? 'Aucune image pour l’instant : décris-en une au-dessus.' : 'Aucune vidéo pour l’instant : décris-en une au-dessus.'
+          li.textContent = kind === 'image' ? tr('pwa.image.none') : tr('pwa.video.none')
           $(kind + '-gallery').appendChild(li)
         }
         showMore(kind)
@@ -1107,7 +1144,7 @@
     var button = document.createElement('button')
     button.type = 'button'
     button.className = 'tile tile--' + kind
-    button.setAttribute('aria-label', (kind === 'image' ? 'Voir l’image ' : 'Voir la vidéo ') + item.label)
+    button.setAttribute('aria-label', tr(kind === 'image' ? 'pwa.image.view' : 'pwa.video.view', { name: item.label }))
     var frame = document.createElement('span')
     frame.className = 'tile__frame'
     button.appendChild(frame)
@@ -1180,7 +1217,7 @@
     viewer.hidden = false
     var loading = document.createElement('p')
     loading.className = 'viewer__loading'
-    loading.textContent = 'Chargement depuis ton PC…'
+    loading.textContent = tr('pwa.loading')
     media.appendChild(loading)
     var cached = kind === 'video' ? galleries.video.thumbs[item.fileName] : null
     ;(cached ? Promise.resolve(cached) : apiBlobUrl(mediaPath(kind, item.fileName)))
@@ -1207,7 +1244,7 @@
             if (played && played.catch) played.catch(function () {})
           } else {
             var note = $('viewer-note')
-            note.textContent = 'Ton téléphone ne sait pas lire ce format de vidéo (WebM) : enregistre-la, ou regarde-la sur le PC.'
+            note.textContent = tr('pwa.video.unsupported')
             note.hidden = false
           }
         }
@@ -1240,7 +1277,7 @@
       $(k + '-progress').hidden = !(studioBusy && k === kind)
     })
     if (jobId) {
-      $(kind + '-status').textContent = status || 'Préparation…'
+      $(kind + '-status').textContent = status || tr('pwa.preparing')
       $(kind + '-stop').setAttribute('data-job', jobId)
       writeStorage(sessionStorage, STUDIO_KEY, JSON.stringify({ id: jobId, kind: kind }))
     } else writeStorage(sessionStorage, STUDIO_KEY, null)
@@ -1248,19 +1285,19 @@
   }
 
   function followStudio(kind, jobId) {
-    setStudioBusy(kind, jobId, 'Préparation…')
+    setStudioBusy(kind, jobId, tr('pwa.preparing'))
     showStudioError(kind, '')
     pollJob(
       jobId,
       function (job) {
-        $(kind + '-status').textContent = job.status || 'En cours…'
-        if (currentTab === kind) setStatus(kind === 'image' ? 'Image en cours…' : 'Vidéo en cours…')
+        $(kind + '-status').textContent = job.status || tr('pwa.studio.running')
+        if (currentTab === kind) setStatus(tr(kind === 'image' ? 'pwa.image.running' : 'pwa.video.running'))
       },
       function (job, err) {
         setStudioBusy(kind, null)
-        if (!job) return showStudioError(kind, err ? err.message : 'Erreur sur le PC.')
-        if (job.state === 'cancelled') return showStudioError(kind, 'Création arrêtée.')
-        if (job.state !== 'done') return showStudioError(kind, job.error || 'Erreur sur le PC.')
+        if (!job) return showStudioError(kind, err ? err.message : tr('pwa.pcError'))
+        if (job.state === 'cancelled') return showStudioError(kind, tr('pwa.studio.cancelled'))
+        if (job.state !== 'done') return showStudioError(kind, job.error || tr('pwa.pcError'))
         $(kind + '-prompt').value = ''
         loadGallery(kind).then(function () {
           var made = galleries[kind].items.filter(function (item) {
@@ -1287,7 +1324,7 @@
     if (studioBusy) return
     var prompt = $(kind + '-prompt').value.trim()
     if (!prompt) {
-      showStudioError(kind, kind === 'image' ? 'Décris l’image à créer.' : 'Décris la vidéo à créer.')
+      showStudioError(kind, tr(kind === 'image' ? 'pwa.image.describe' : 'pwa.video.describe'))
       return
     }
     var body = { prompt: prompt }
@@ -1310,7 +1347,7 @@
   function stopStudio(kind) {
     var jobId = $(kind + '-stop').getAttribute('data-job')
     if (!jobId) return
-    $(kind + '-status').textContent = 'Arrêt en cours…'
+    $(kind + '-status').textContent = tr('pwa.studio.stopping')
     api('POST', '/api/jobs/' + jobId + '/cancel', {}).catch(function (err) {
       showStudioError(kind, err.message)
     })
@@ -1345,7 +1382,7 @@
   })
   $('voice-replay').addEventListener('click', playReply)
   $('voice-audio').addEventListener('ended', function () {
-    if (voice.state === 'speaking') setVoiceState('idle', 'Touche Jaris pour reparler')
+    if (voice.state === 'speaking') setVoiceState('idle', tr('pwa.voice.tapToTalkAgain'))
   })
   ;['image', 'video'].forEach(function (kind) {
     $(kind + '-form').addEventListener('submit', function (e) {

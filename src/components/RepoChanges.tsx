@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { diffLines, type DiffHunk } from '../../shared/lineDiff'
 import type { RepoChange, RepoView } from '../../shared/ipc'
+import { t, tn } from '@/lib/i18n'
+import type { MessageKey } from '../../shared/i18n'
 
 /**
  * Un dépôt GitHub ouvert dans le mode Code (étape 277) : ce que Jaris a répondu, puis CHAQUE changement préparé,
@@ -26,7 +28,7 @@ interface Props {
 /** Au-delà, la fin d'un très long diff est résumée : l'écran resterait figé sur un fichier réécrit en entier. */
 const MAX_LINES_PER_FILE = 800
 
-const KIND_LABEL: Record<RepoChange['kind'], string> = { added: 'Créé', modified: 'Modifié', deleted: 'Supprimé' }
+const KIND_LABEL: Record<RepoChange['kind'], MessageKey> = { added: 'code.activity.create', modified: 'code.activity.edit', deleted: 'code.activity.delete' }
 
 function DiffView({ hunks }: { hunks: DiffHunk[] }): JSX.Element {
   let shown = 0
@@ -56,7 +58,7 @@ function DiffView({ hunks }: { hunks: DiffHunk[] }): JSX.Element {
   return (
     <div className="repo-diff">
       {blocks}
-      {hidden > 0 && <p className="repo-diff__more">… {hidden} lignes de plus, non affichées.</p>}
+      {hidden > 0 && <p className="repo-diff__more">… {tn('repo.diff.more', hidden)}</p>}
     </div>
   )
 }
@@ -68,14 +70,14 @@ function ChangeCard({ change, busy, onDiscard }: { change: RepoChange; busy: boo
     <section className="repo-change">
       <header className="repo-change__head">
         <button type="button" className="repo-change__toggle" onClick={() => setOpen(!open)} aria-expanded={open}>
-          <span className={`repo-change__kind repo-change__kind--${change.kind}`}>{KIND_LABEL[change.kind]}</span>
+          <span className={`repo-change__kind repo-change__kind--${change.kind}`}>{t(KIND_LABEL[change.kind])}</span>
           <span className="repo-change__path">{change.path}</span>
           <span className="repo-change__stats">
             <span className="repo-change__added">+{diff.added}</span> <span className="repo-change__removed">−{diff.removed}</span>
           </span>
         </button>
-        <button type="button" className="repo-change__discard" onClick={onDiscard} disabled={busy} title={`Annuler le changement de ${change.path}`}>
-          Annuler
+        <button type="button" className="repo-change__discard" onClick={onDiscard} disabled={busy} title={t('repo.discard.title', { path: change.path })}>
+          {t('common.cancel')}
         </button>
       </header>
       {open && <DiffView hunks={diff.hunks} />}
@@ -106,9 +108,9 @@ export default function RepoChanges({ repo, busy, committed, defaultMessage, onC
     <div className="repo-panel">
       {committed && (
         <p className="repo-panel__committed">
-          Enregistré sur GitHub ({committed.sha.slice(0, 7)}) ·{' '}
+          {t('code.savedOnGithub', { sha: committed.sha.slice(0, 7) })}{' '}
           <a href={committed.url} target="_blank" rel="noreferrer">
-            Voir le commit
+            {t('repo.viewCommit')}
           </a>
         </p>
       )}
@@ -117,11 +119,11 @@ export default function RepoChanges({ repo, busy, committed, defaultMessage, onC
         <>
           <div className="repo-panel__changes-head">
             <span>
-              {repo.changes.length === 1 ? '1 fichier changé' : `${repo.changes.length} fichiers changés`} ·{' '}
+              {tn('repo.filesChanged', repo.changes.length)} ·{' '}
               <span className="repo-change__added">+{totals.added}</span> <span className="repo-change__removed">−{totals.removed}</span>
             </span>
             <button type="button" className="repo-change__discard" onClick={() => void onDiscard()} disabled={busy}>
-              Tout annuler
+              {t('repo.discardAll')}
             </button>
           </div>
           {repo.changes.map((change) => (
@@ -132,16 +134,16 @@ export default function RepoChanges({ repo, busy, committed, defaultMessage, onC
               className="repo-panel__message"
               value={message}
               onChange={(event) => setMessage(event.target.value)}
-              placeholder="Description des changements"
-              aria-label="Description des changements"
+              placeholder={t('repo.message')}
+              aria-label={t('repo.message')}
               disabled={busy}
             />
             <button type="button" className="repo-panel__save" onClick={() => void onCommit(message)} disabled={busy || !message.trim()}>
-              Enregistrer sur GitHub
+              {t('repo.commit')}
             </button>
           </div>
           <p className="repo-panel__note">
-            Un seul enregistrement sur la branche {repo.branch}. Rien n'est envoyé à GitHub avant ce clic.
+            {t('repo.commit.note', { branch: repo.branch })}
           </p>
         </>
       )}

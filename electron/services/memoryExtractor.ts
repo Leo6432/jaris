@@ -3,6 +3,7 @@ import { chatWithOllama, type OllamaMessage } from './ollama'
 import { TOOLS } from './tools'
 import { listMemoryTitles, rememberNote } from './memoryStore'
 import { getProfile } from './profileStore'
+import { t } from '../../shared/i18n'
 
 const REMEMBER_TOOL = TOOLS.find((t) => t.function.name === 'remember')
 if (!REMEMBER_TOOL) {
@@ -70,9 +71,9 @@ export async function extractMemoryFromExchange(
       const content = String(call.function.arguments.content ?? '').trim()
       if (!title || !content) continue
       await rememberNote(title, content, Boolean(call.function.arguments.replace))
-      onLog?.(`Mémoire enrichie automatiquement : "${title}"`)
+      onLog?.(t('memory.autoSaved', { title }))
     }
   } catch (err) {
-    onLog?.(`Extraction mémoire ignorée (erreur) : ${err instanceof Error ? err.message : String(err)}`)
+    onLog?.(t('memory.autoFailed', { error: err instanceof Error ? err.message : String(err) }))
   }
 }

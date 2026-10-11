@@ -1,3 +1,4 @@
+import { currentLocale, t } from '../../shared/i18n'
 /**
  * Date d'une application déjà générée, telle qu'affichée dans "Tes applications" (mode Code).
  *
@@ -13,14 +14,15 @@ export function formatRecentDate(timestamp: number, now: Date = new Date()): str
   const date = new Date(timestamp)
   if (Number.isNaN(date.getTime())) return ''
 
-  const time = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  const locale = currentLocale()
+  const time = date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
   const days = calendarDaysBetween(date, now)
 
-  if (days === 0) return `Aujourd'hui, ${time}`
-  if (days === 1) return `Hier, ${time}`
+  if (days === 0) return t('date.today', { time })
+  if (days === 1) return t('date.yesterday', { time })
 
   const sameYear = date.getFullYear() === now.getFullYear()
-  return date.toLocaleDateString('fr-FR', {
+  return date.toLocaleDateString(locale, {
     day: 'numeric',
     month: 'long',
     ...(sameYear ? {} : { year: 'numeric' })

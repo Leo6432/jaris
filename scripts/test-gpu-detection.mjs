@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -52,7 +53,7 @@ function load({ platform = 'win32', nvidia = null, registry = null } = {}) {
   vm.runInThisContext(`(function (exports, module, require, process) { ${source} })`)(
     module.exports,
     module,
-    (name) => modules[name] ?? nodeRequire(name),
+    withI18n((name) => modules[name] ?? nodeRequire(name)),
     { ...process, platform }
   )
   return { scan: module.exports, commands }

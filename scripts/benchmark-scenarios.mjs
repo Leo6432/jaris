@@ -325,7 +325,7 @@ export function createSimulator(setup = {}) {
         const wanted = str(args.app_name)
         if (!wanted.trim()) return { result: "Aucun nom d'application n'a été précisé : impossible de savoir laquelle ouvrir.", final: true }
         const app = findApp(apps, wanted)
-        if (!app) return { result: `Je n'ai trouvé aucune application nommée "${wanted}" installée sur cette machine.`, final: true }
+        if (!app) return { result: `Je n'ai trouvé aucune application nommée « ${wanted} » installée sur cette machine.`, final: true }
         state.opened.push({ app: app.name, turn })
         state.screen = `Je vois la fenêtre de ${app.name} ouverte au premier plan.`
         return { result: `${app.name} a été lancé.` }
@@ -373,7 +373,7 @@ export function createSimulator(setup = {}) {
         const query = str(args.query)
         state.searches.push({ query, turn })
         const found = setup.search?.(norm(query))
-        return { result: found ?? `Aucun résultat trouvé pour "${query}".` }
+        return { result: found ?? `Aucun résultat trouvé pour « ${query} ».` }
       }
       case 'read_web_page': {
         const url = str(args.url)

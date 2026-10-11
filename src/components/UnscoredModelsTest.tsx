@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { formatModelName } from '../lib/formatModelName'
 import { ipcErrorMessage } from '../lib/ipcError'
+import { t, tn } from '@/lib/i18n'
 
 /**
  * Étape 168, Léo : « remets le bouton pour Lightning et qwen2.5-coder:14b ». L'analyse complète a été retirée
@@ -20,7 +21,7 @@ export default function UnscoredModelsTest(): JSX.Element | null {
   const [models, setModels] = useState<string[] | null>(null)
   const [phase, setPhase] = useState<Phase>('idle')
   const [percent, setPercent] = useState(0)
-  const [current, setCurrent] = useState('Préparation…')
+  const [current, setCurrent] = useState(() => t('runtime.preparing'))
   const [rows, setRows] = useState<Row[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -37,9 +38,9 @@ export default function UnscoredModelsTest(): JSX.Element | null {
         const [done, total] = args.map(Number)
         if (total > 0) setPercent(Math.min(100, Math.round((done / total) * 100)))
       } else if (marker === '##PULL_MODEL_PROGRESS##') {
-        setCurrent(`Téléchargement de ${formatModelName(args[0])} : ${args[1]} %`)
+        setCurrent(t('unscored.downloading', { model: formatModelName(args[0]), percent: args[1] }))
       } else if (marker === '##MODEL_TESTING##') {
-        setCurrent(`Test de ${formatModelName(args[0])}…`)
+        setCurrent(t('unscored.testing', { model: formatModelName(args[0]) }))
       } else if (marker === '##MODEL_DONE##') {
         upsert({ model: args[0], status: 'done', correct: Number(args[1]), total: Number(args[2]) })
       } else if (marker === '##REPLAY_DONE##') {
@@ -54,7 +55,7 @@ export default function UnscoredModelsTest(): JSX.Element | null {
 
   if (!models) return null
   if (!models.length && phase === 'idle') {
-    return <p className="capacity-scan__status">Tous les modèles de Jaris ont un score.</p>
+    return <p className="capacity-scan__status">{t('unscored.allScored')}</p>
   }
 
   const run = async (): Promise<void> => {
@@ -75,41 +76,26 @@ export default function UnscoredModelsTest(): JSX.Element | null {
   return (
     <div className="options-menu__unscored">
       <p className="options-menu__unscored-title">
-        Modèles à tester ({models.length}) : {models.map((model) => formatModelName(model)).join(', ')}
+        {t('unscored.toTest', { count: models.length, models: models.map((model) => formatModelName(model)).join(', ') })}
       </p>
-      <p className="options-menu__unscored-text">
-        Les tests ont changé : des demandes jouées de bout en bout pour la conversation (la demande est-elle vraiment
-        faite ?), de vraies captures d'écran pour la vision, et des applications réellement ouvertes et cliquées pour
-        le code. Chaque modèle ne repasse que les épreuves qui lui manquent. En attendant, Jaris garde ses choix
-        actuels. Un modèle jamais testé n'est jamais choisi.
-      </p>
+      <p className="options-menu__unscored-text">{t('unscored.changed')}</p>
 
       {phase === 'idle' && (
         <button className="options-menu__action" onClick={() => setPhase('confirming')}>
-          Tester ces modèles
+          {t('unscored.test')}
         </button>
       )}
 
       {phase === 'confirming' && (
         <div className="options-menu__unscored-confirm">
-          <p>
-            Chaque modèle est téléchargé, testé (40 demandes complètes, dont 8 rejouées, 17 questions sur des captures
-            d'écran posées 2 fois pour la vision, 5 applications pour le code), puis supprimé — sauf ceux que tu avais
-            déjà. Tout ce qu'il répond est enregistré pour être revérifié ensuite. Le test de
-            code utilise Microsoft Edge en arrière-plan, sans rien afficher. Les gros
-            modèles débordent sur la RAM : compte plusieurs heures, et ferme les jeux et logiciels lourds pendant
-            le test. Un modèle trop gros pour ton PC est sauté.
-          </p>
-          <p>
-            Tu peux l'arrêter à tout moment, même en fermant Jaris : au prochain lancement du test, il reprend
-            après le dernier modèle terminé.
-          </p>
+          <p>{t('unscored.confirm')}</p>
+          <p>{t('unscored.resume')}</p>
           <div className="options-menu__unscored-actions">
             <button className="options-menu__action" onClick={() => void run()}>
-              Lancer le test
+              {t('unscored.start')}
             </button>
             <button className="options-menu__action" onClick={() => setPhase('idle')}>
-              Annuler
+              {t('common.cancel')}
             </button>
           </div>
         </div>
@@ -118,7 +104,7 @@ export default function UnscoredModelsTest(): JSX.Element | null {
       {(phase === 'running' || phase === 'done' || phase === 'error') && (
         <div className="options-menu__progress">
           <div className="options-menu__progress-label">
-            {phase === 'running' ? current : phase === 'done' ? 'Test terminé.' : 'Test interrompu.'}
+            {phase === 'running' ? current : phase === 'done' ? t('unscored.done') : t('unscored.interrupted')}
           </div>
           <div className="options-menu__progress-bar">
             <div className="options-menu__progress-bar-fill" style={{ width: `${percent}%` }} />
@@ -127,12 +113,15 @@ export default function UnscoredModelsTest(): JSX.Element | null {
             <ul className="options-menu__unscored-results">
               {rows.map((row) => (
                 <li key={row.model}>
-                  {formatModelName(row.model)} :{' '}
-                  {row.status === 'done'
-                    ? `${row.correct}/${row.total}`
-                    : row.status === 'replayed'
-                      ? `${row.total} cas refait${(row.total ?? 0) > 1 ? 's' : ''}`
-                      : `sauté — ${row.reason ?? 'raison inconnue'}`}
+                  {t('common.labelValue', {
+                    label: formatModelName(row.model),
+                    value:
+                      row.status === 'done'
+                        ? `${row.correct}/${row.total}`
+                        : row.status === 'replayed'
+                          ? tn('unscored.replayed', row.total ?? 0)
+                          : t('unscored.skipped', { reason: row.reason ?? t('unscored.unknownReason') })
+                  })}
                 </li>
               ))}
             </ul>
@@ -141,18 +130,18 @@ export default function UnscoredModelsTest(): JSX.Element | null {
           {phase !== 'running' && (
             <div className="options-menu__unscored-actions">
               <button className="options-menu__action" onClick={() => void window.jaris.showUnscoredResults()}>
-                Ouvrir le fichier des résultats
+                {t('unscored.openResults')}
               </button>
               {phase === 'error' && (
                 <button className="options-menu__action" onClick={() => void run()}>
-                  Reprendre le test
+                  {t('unscored.resumeButton')}
                 </button>
               )}
             </div>
           )}
           {phase === 'done' && (
             <p className="options-menu__unscored-text">
-              Envoie le fichier benchmark-nouveaux-modeles.md pour que les scores soient ajoutés à Jaris.
+              {t('unscored.send')}
             </p>
           )}
         </div>

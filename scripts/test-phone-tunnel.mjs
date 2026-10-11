@@ -158,8 +158,9 @@ test('le dossier d’état du tunnel ne s’appelle jamais « tailscale »', () 
 // erreur de connexion sécurisée) arrive jusqu'à l'écran au lieu de rester cachée.
 test('préparation visible, puis adresse prête ; une erreur de certificat ensuite est affichée', async () => {
   const fake = fakeTunnel([
-    { event: 'preparing', text: 'Préparation du certificat sécurisé…' },
-    { event: 'preparing', text: "Vérification de l'adresse depuis internet…" },
+    // Les textes exacts de tunnel/main.go : Jaris les reconnaît pour les traduire (étape 293).
+    { event: 'preparing', text: "Préparation du certificat sécurisé (jusqu'à 2 minutes la première fois)…" },
+    { event: 'preparing', text: "Vérification de l'adresse depuis internet (jusqu'à 10 minutes la première fois)…" },
     { event: 'ready', url: 'https://jaris.tail1234.ts.net' },
     { event: 'tls_error', message: 'acme: rate limited' }
   ])
@@ -169,7 +170,10 @@ test('préparation visible, puis adresse prête ; une erreur de certificat ensui
   try {
     tunnel.start(4321)
     const state = await waitFor(tunnel, (s) => s.state === 'ready' && s.warning)
-    assert.deepEqual(messages, ['Préparation du certificat sécurisé…', "Vérification de l'adresse depuis internet…"])
+    assert.deepEqual(messages, [
+      "Préparation du certificat sécurisé (jusqu'à 2 minutes la première fois)…",
+      "Vérification de l'adresse depuis internet (jusqu'à 10 minutes la première fois)…"
+    ])
     assert.equal(state.address, 'https://jaris.tail1234.ts.net')
     assert.match(state.warning, /acme: rate limited/)
   } finally {

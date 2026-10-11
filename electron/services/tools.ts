@@ -10,6 +10,7 @@ import { clickMouse, mediaKey, pressKey, typeText } from './inputControl'
 import { getSystemStatsText, shutdownPc } from './systemControl'
 import { generateImage, type GeneratedImage } from './imageGenerator'
 import type { WebActivity } from '../../shared/ipc'
+import { t } from '../../shared/i18n'
 
 export const TOOLS: OllamaTool[] = [
   {
@@ -302,7 +303,10 @@ export const TOOLS: OllamaTool[] = [
   }
 ]
 
-/** Début de la réponse d'une image réussie (court-circuit d'assistant.ts : jamais reformulée par le modèle). */
+/**
+ * Début de la réponse d'une image réussie (court-circuit d'assistant.ts : jamais reformulée par le modèle). Le texte
+ * affiché suit la langue de Jaris (`reply.imageDone`) ; cette version française reste la référence du simulateur.
+ */
 export const IMAGE_DONE_REPLY = 'Voilà ton image.'
 
 /**
@@ -388,7 +392,7 @@ export function createToolExecutor(
       case 'generate_image': {
         const image = await generateImage(String(args.prompt ?? ''), onLog, signal)
         onImage?.(image)
-        return IMAGE_DONE_REPLY
+        return t('reply.imageDone')
       }
       case 'shutdown_pc':
         return shutdownPc(toolFlag(args.restart))

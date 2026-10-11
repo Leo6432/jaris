@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { renderFormattedText } from '@/lib/formatReply'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import { formatChatProgress } from '@/lib/formatChatProgress'
+import { t } from '@/lib/i18n'
 
 // Délai de disparition automatique de la réponse, volontairement confortable pour la lecture
 // (300ms par mot) — voir computeReplyDismissDelayMs et l'effet plus bas. Une réponse courte reste au
@@ -180,8 +181,8 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
       <button
         className="chat-widget__idle"
         type="button"
-        title="Jaris Chat — appuie sur + pour écrire"
-        aria-label="Jaris Chat inactif"
+        title={t('widget.chat.idle.title')}
+        aria-label={t('widget.chat.idle')}
         onClick={() => window.jaris.openSettings()}
       >
         <ChatIcon />
@@ -215,8 +216,8 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
             className="chat-widget__input"
             type="text"
             value={input}
-            placeholder="Pose ta question à Jaris…"
-            aria-label="Pose ta question à Jaris"
+            placeholder={t('widget.chat.placeholder')}
+            aria-label={t('widget.chat.label')}
             disabled={sending}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => {
@@ -225,7 +226,7 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
               if (event.key === 'Escape') dismiss()
             }}
           />
-          <button className="chat-widget__send" type="submit" disabled={sending || !input.trim()} title="Envoyer">
+          <button className="chat-widget__send" type="submit" disabled={sending || !input.trim()} title={t('common.send')}>
             <SendIcon />
           </button>
         </form>
@@ -233,17 +234,17 @@ export default function ChatWidget({ inactive = false }: { inactive?: boolean })
 
       {expanded && (
         <div className="chat-widget__answer">
-          <p className="chat-widget__question">« {question} »</p>
+          <p className="chat-widget__question">{t('common.quoted', { text: question })}</p>
           {error ? (
             <p className="chat-widget__error">{error}</p>
           ) : (
             <div className="chat-widget__reply">
-              {reply ? renderFormattedText(reply) : (progress ?? 'Jaris réfléchit…')}
+              {reply ? renderFormattedText(reply) : (progress ?? t('app.status.thinking'))}
             </div>
           )}
           <div className="chat-widget__actions">
             <button className="chat-widget__action" onClick={() => window.jaris.openSettings()}>
-              Ouvrir le Chat
+              {t('widget.chat.open')}
             </button>
           </div>
         </div>

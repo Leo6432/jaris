@@ -7,6 +7,7 @@ import {
 } from '@/lib/imageAttachment'
 import { DICTATION_MAX_MS, DictationRecorder, appendDictation } from '@/lib/dictation'
 import { ipcErrorMessage } from '@/lib/ipcError'
+import { t } from '@/lib/i18n'
 
 /**
  * Champ de saisie commun au Chat et au mode Code (étape 92).
@@ -169,7 +170,7 @@ export default function Composer({
     try {
       const text = await window.jaris.transcribeDictation(wav)
       if (text) onChange(appendDictation(valueRef.current, text))
-      else onError("Je n'ai rien entendu : réessaie en parlant un peu plus près du micro.")
+      else onError(t('composer.dictation.nothing'))
     } catch (err) {
       onError(ipcErrorMessage(err))
     } finally {
@@ -269,7 +270,7 @@ export default function Composer({
   // dans la barre, accompagne maintenant l'entrée « Image » du menu.
   const menuItems: ComposerAddItem[] = [
     ...(imagesAllowed
-      ? [{ id: 'image', label: 'Joindre une image', hint: 'ou Ctrl+V pour coller', icon: <AttachIcon />, onSelect: () => void pick() }]
+      ? [{ id: 'image', label: t('composer.attachImage'), hint: t('composer.attachImage.hint'), icon: <AttachIcon />, onSelect: () => void pick() }]
       : []),
     ...addItems
   ]
@@ -282,15 +283,15 @@ export default function Composer({
     >
       {attachment && (
         <div className="composer__attachment">
-          <img src={attachment.dataUrl} alt="Aperçu de l'image jointe" />
-          <span className="composer__attachment-name">{attachment.name || 'Image collée'}</span>
+          <img src={attachment.dataUrl} alt={t('composer.attachment.preview')} />
+          <span className="composer__attachment-name">{attachment.name || t('composer.attachment.pasted')}</span>
           <button
             type="button"
             className="composer__attachment-remove"
             onClick={() => onAttachmentChange(null)}
             disabled={busy}
-            title="Retirer l'image"
-            aria-label="Retirer l'image"
+            title={t('composer.attachment.remove')}
+            aria-label={t('composer.attachment.remove')}
           >
             ✕
           </button>
@@ -324,8 +325,8 @@ export default function Composer({
               className={`composer__plus${menuOpen ? ' composer__plus--open' : ''}`}
               onClick={() => setMenuOpen(!menuOpen)}
               disabled={busy}
-              title="Ajouter"
-              aria-label="Ajouter"
+              title={t('composer.add')}
+              aria-label={t('composer.add')}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
             >
@@ -333,7 +334,7 @@ export default function Composer({
             </button>
             {menuOpen && (
               <div className="composer__menu" role="menu">
-                <span className="composer__menu-title">Ajouter</span>
+                <span className="composer__menu-title">{t('composer.add')}</span>
                 {menuItems.map((item) => (
                   <button
                     key={item.id}
@@ -365,7 +366,7 @@ export default function Composer({
             {Math.floor(dictationSeconds / 60)}:{String(dictationSeconds % 60).padStart(2, '0')}
           </span>
         )}
-        {dictation === 'transcribing' && <span className="composer__dictation">Transcription…</span>}
+        {dictation === 'transcribing' && <span className="composer__dictation">{t('composer.dictation.transcribing')}</span>}
 
         {canDictate && (
           <button
@@ -374,15 +375,15 @@ export default function Composer({
             onClick={() => void toggleDictation()}
             disabled={dictation === 'transcribing'}
             aria-pressed={dictation === 'recording'}
-            title={dictation === 'recording' ? 'Terminer la dictée' : 'Dicter (le texte s’écrit dans le champ)'}
-            aria-label={dictation === 'recording' ? 'Terminer la dictée' : 'Dicter'}
+            title={dictation === 'recording' ? t('composer.dictation.finish') : t('composer.dictation.start.title')}
+            aria-label={dictation === 'recording' ? t('composer.dictation.finish') : t('composer.dictation.start')}
           >
             {dictation === 'transcribing' ? <span className="composer__spinner" aria-hidden="true" /> : <MicIcon />}
           </button>
         )}
 
         {busy && onStop ? (
-          <button type="button" className="composer__send composer__send--stop" onClick={onStop} title="Arrêter" aria-label="Arrêter">
+          <button type="button" className="composer__send composer__send--stop" onClick={onStop} title={t('common.stop')} aria-label={t('common.stop')}>
             <StopIcon />
           </button>
         ) : (

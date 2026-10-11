@@ -9,6 +9,7 @@ import { IMAGE_FOR_CODE_SYSTEM_PROMPT, describeImage } from './vision'
 import type { CodeActivity, CodeGenProgress, CodeLiveWrite, GeneratedApp, GeneratedAppSummary, Profile } from '../../shared/ipc'
 import { diffLines } from '../../shared/lineDiff'
 import { getDataRoot } from './dataLocation'
+import { t } from '../../shared/i18n'
 
 /**
  * Fenêtre de contexte dédiée à la génération de code : le modèle doit produire un fichier HTML complet
@@ -119,7 +120,7 @@ export interface GenerateAppOptions {
 /** Levée quand l'utilisateur arrête lui-même la génération : ce n'est pas une panne, juste un arrêt. */
 export class GenerationStoppedError extends Error {
   constructor() {
-    super("Génération arrêtée.")
+    super(t('codegen.stopped'))
   }
 }
 
@@ -156,11 +157,7 @@ export async function resolveCodeThink(profile: Profile | null, model: string): 
 
 /** Message final quand même la plus grande fenêtre permise ne suffit pas : lisible, et avec quoi faire. */
 function contextTooSmallError(numCtx: number): Error {
-  return new Error(
-    `Le modèle a rempli toute sa mémoire de travail (${numCtx} tokens) avant d'avoir fini d'écrire. ` +
-      "La demande est sans doute trop longue pour être traitée d'un bloc : demande un changement plus " +
-      'petit, ou recommence à zéro.'
-  )
+  return new Error(t('codegen.contextFull', { tokens: numCtx }))
 }
 
 /**
@@ -276,7 +273,7 @@ export function createModelStepRunner({ model, think = 'high', modelMaxContext, 
         const larger = Math.min(numCtx * 2, modelMaxContext ?? CODE_NUM_CTX_MAX, CODE_NUM_CTX_MAX)
         if (!isContextFullError(err)) throw err
         if (larger <= numCtx) throw contextTooSmallError(numCtx)
-        onStatus('Le modèle a manqué de mémoire de travail en réfléchissant : nouvelle tentative avec plus de mémoire…')
+        onStatus(t('codegen.retryMoreMemory'))
         // Même étape (le travail à faire n'a pas changé), compteurs repartis de zéro.
         charsWritten = 0
         thinking = true
@@ -396,13 +393,13 @@ const REPAIR_SYSTEM_PROMPT =
 export function validateGeneratedHtml(html: string): string[] {
   const issues: string[] = []
 
-  if (!/<html[\s>]/i.test(html)) issues.push('la balise <html> est absente')
-  if (!/<body[\s>]/i.test(html)) issues.push('la balise <body> est absente')
+  if (!/<html[\s>]/i.test(html)) issues.push(t('codegen.issue.noHtml'))
+  if (!/<body[\s>]/i.test(html)) issues.push(t('codegen.issue.noBody'))
 
   const opened = (html.match(/<script[\s>]/gi) ?? []).length
   const closed = (html.match(/<\/script>/gi) ?? []).length
   if (opened !== closed) {
-    issues.push(`les balises <script> ne sont pas appariées (${opened} ouvrante(s), ${closed} fermante(s))`)
+    issues.push(t('codegen.issue.scripts', { opened, closed }))
   }
 
   // Classes de bibliothèques jamais chargées ici : sans leur CSS, une classe d'icône n'affiche pas
@@ -422,18 +419,12 @@ export function validateGeneratedHtml(html: string): string[] {
     )
   ]
   if (ghostClasses.length) {
-    issues.push(
-      `le fichier utilise des classes d'une bibliothèque externe non chargée, sans aucun effet : ` +
-        `${ghostClasses.slice(0, 4).join(', ')} — écris le CSS toi-même, et remplace toute icône par du SVG inline`
-    )
+    issues.push(t('codegen.issue.ghostClasses', { classes: ghostClasses.slice(0, 4).join(', ') }))
   }
 
   const external = [...new Set(html.match(/(?:src|href)\s*=\s*["']https?:\/\/[^"']+/gi) ?? [])]
   if (external.length) {
-    issues.push(
-      `le fichier charge des ressources externes, interdites ici : ${external.slice(0, 3).join(', ')}` +
-        ' — remplace-les par un équivalent écrit en dur dans le fichier'
-    )
+    issues.push(t('codegen.issue.external', { resources: external.slice(0, 3).join(', ') }))
   }
 
   // Texte réellement affiché à l'écran : tout ce qui reste une fois le code (script/style), les
@@ -454,10 +445,7 @@ export function validateGeneratedHtml(html: string): string[] {
   ]
   // Deux marqueurs minimum : un seul pourrait apparaître par hasard dans un texte qui parle de code.
   if (jsSignals.filter((pattern) => pattern.test(visibleText)).length >= 2) {
-    issues.push(
-      "du code JavaScript se trouve directement dans le <body> et s'affiche comme du texte à l'écran au " +
-        "lieu de s'exécuter : déplace TOUT ce code à l'intérieur d'une balise <script> avant </body>"
-    )
+    issues.push(t('codegen.issue.looseJs'))
   }
 
   // Reproduit en usage réel (Léo, un jeu Snake généré) : `body { height: 100vh; overflow: hidden; }` est un
@@ -479,13 +467,7 @@ export function validateGeneratedHtml(html: string): string[] {
   const hasFixedViewportHeight = /height\s*:\s*100(?:vh|%)/i.test(htmlOrBodyDeclarations)
   const hasHiddenOverflow = /overflow(?:-y)?\s*:\s*hidden/i.test(htmlOrBodyDeclarations)
   if (hasFixedViewportHeight && hasHiddenOverflow) {
-    issues.push(
-      '<html>/<body> combine une hauteur fixe (100vh/100%) et overflow: hidden — si le contenu réel ' +
-        "dépasse la hauteur du petit aperçu de Jaris, tout ce qui dépasse (souvent un bouton) devient " +
-        'invisible et incliquable, sans moyen de faire défiler pour l\'atteindre : remplace par ' +
-        '`overflow-y: auto` (ou retire la hauteur fixe) pour que la page reste utilisable avec moins de ' +
-        'place verticale'
-    )
+    issues.push(t('codegen.issue.fixedHeight'))
   }
 
   return issues
@@ -531,16 +513,10 @@ function extractHtml(raw: string): string | null {
  */
 function describeDownloadFailure(err: unknown): Error | null {
   if (err instanceof ModelTooLargeError) {
-    return new Error(
-      `Cet ordinateur n'a pas assez de mémoire (VRAM + RAM) pour faire tourner ${err.model} ` +
-        `(${err.requiredGb.toFixed(1)} Go nécessaires pour ${err.budgetGb.toFixed(1)} Go disponibles).`
-    )
+    return new Error(t('codegen.tooLarge', { model: err.model, required: err.requiredGb.toFixed(1), budget: err.budgetGb.toFixed(1) }))
   }
   if (err instanceof DiskFullError) {
-    return new Error(
-      `Pas assez d'espace disque libre pour télécharger ${err.model} (${err.requiredGb.toFixed(1)} Go ` +
-        `nécessaires pour ${err.freeDiskGb.toFixed(1)} Go libres). Libère de l'espace disque puis réessaie.`
-    )
+    return new Error(t('codegen.diskFull', { model: err.model, required: err.requiredGb.toFixed(1), free: err.freeDiskGb.toFixed(1) }))
   }
   return null
 }
@@ -567,7 +543,7 @@ export async function resolveCodeModel(onStatus: (message: string) => void, prof
   // quand le modèle est déjà là. Seul un téléchargement, long et visible, mérite une ligne.
   if (installed.includes(model)) return model
 
-  onStatus(`Téléchargement du modèle de code choisi automatiquement pour cette machine (${model})…`)
+  onStatus(t('codegen.downloadingModel', { model }))
   try {
     await pullModelIfMissing(model, onStatus)
     return model
@@ -576,7 +552,7 @@ export async function resolveCodeModel(onStatus: (message: string) => void, prof
     // s'il échoue quand même, aucun modèle de code ne peut tourner sur cette machine.
     const readable = describeDownloadFailure(err)
     throw readable
-      ? new Error(`${readable.message} Le mode Code ne peut malheureusement pas fonctionner sur cette machine.`)
+      ? new Error(`${readable.message} ${t('codegen.cannotRun')}`)
       : err
   }
 }
@@ -648,7 +624,7 @@ export async function deleteGeneratedApp(path: string): Promise<void> {
   // direct. isAbsolute couvre le cas Windows d'un autre disque (D:\... depuis C:\...), où `relative`
   // renvoie un chemin absolu plutôt qu'une suite de "..".
   if (!inside || inside.startsWith('..') || isAbsolute(inside) || inside.includes(sep)) {
-    throw new Error("Ce dossier n'est pas une application générée par Jaris : suppression refusée.")
+    throw new Error(t('codegen.notGenerated'))
   }
   await rm(target, { recursive: true, force: true })
 }
@@ -722,7 +698,7 @@ export async function generateApp(
     // direct ici : describeImage ne streame pas, donc il n'y a rien de vrai à afficher — le journal dit
     // simplement ce qui se passe, comme avant.
     steps.index = 1
-    onStatus("Lecture de l'image jointe…")
+    onStatus(t('codegen.readingImage'))
     imageDescription = await describeImage(
       imageBase64,
       "Décris cette interface pour qu'elle puisse être reconstruite fidèlement.",
@@ -780,8 +756,8 @@ export async function generateApp(
     const wrongLanguage = first.content.match(/```(\w+)/)?.[1]?.toLowerCase()
     onStatus(
       wrongLanguage && wrongLanguage !== 'html'
-        ? `Le modèle a répondu en ${wrongLanguage} au lieu de HTML : nouvelle tentative avec une consigne plus explicite…`
-        : "Réponse du modèle inexploitable : nouvelle tentative…"
+        ? t('codegen.wrongLanguage', { language: wrongLanguage })
+        : t('codegen.unusable')
     )
     const retryMessages: OllamaMessage[] = [
       ...generateMessages,
@@ -810,11 +786,7 @@ export async function generateApp(
       const raw = retry.content.trim()
       const preview = raw.slice(0, 300)
       throw new Error(
-        "Le modèle n'a pas renvoyé de code HTML exploitable, même après une nouvelle tentative. Reformule " +
-          'ta demande différemment, ou relance.' +
-          (preview
-            ? ` Ce qu'il a répondu à la place : "${preview}${raw.length > 300 ? '…' : ''}"`
-            : ' Sa réponse était vide.')
+        `${t('codegen.noHtml')} ${preview ? t('codegen.noHtml.preview', { preview: `${preview}${raw.length > 300 ? '…' : ''}` }) : t('codegen.noHtml.empty')}`
       )
     }
   }
@@ -833,14 +805,14 @@ export async function generateApp(
     if (reviewedHtml) {
       final = reviewedHtml
     } else {
-      onStatus('La relecture n\'a rien renvoyé d\'exploitable : le premier jet est conservé.')
+      onStatus(t('codegen.reviewUnusable'))
     }
   } catch (err) {
     // Un arrêt demandé par l'utilisateur n'est PAS un échec de relecture à absorber : sans ce relais, le
     // clic sur "Arrêter" pendant la relecture aurait été avalé ici et la génération aurait continué
     // jusqu'au bout comme si de rien n'était.
     if (err instanceof GenerationStoppedError) throw err
-    onStatus(`Relecture impossible (${err instanceof Error ? err.message : String(err)}) : le premier jet est conservé.`)
+    onStatus(t('codegen.reviewFailed', { error: err instanceof Error ? err.message : String(err) }))
   }
 
   // Vérification structurelle : la relecture ci-dessus est faite "au jugé" par le modèle, qui laisse
@@ -877,12 +849,12 @@ export async function generateApp(
       // corrigé. Ce qui reste vraiment cassé est de toute façon affiché à part (GeneratedApp.issues).
       onStatus(
         issues.length
-          ? `${detected} problème(s) trouvé(s) dans le code, ${detected - issues.length} corrigé(s) automatiquement.`
-          : `${detected} problème(s) trouvé(s) dans le code, corrigé(s) automatiquement.`
+          ? t('codegen.repaired.partial', { found: detected, fixed: detected - issues.length })
+          : t('codegen.repaired.all', { found: detected })
       )
     } catch (err) {
       if (err instanceof GenerationStoppedError) throw err
-      onStatus(`Réparation impossible (${err instanceof Error ? err.message : String(err)}).`)
+      onStatus(t('codegen.repairFailed', { error: err instanceof Error ? err.message : String(err) }))
     }
   }
 

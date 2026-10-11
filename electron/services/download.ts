@@ -3,6 +3,7 @@ import { mkdir, unlink } from 'fs/promises'
 import { once } from 'events'
 import { dirname } from 'path'
 import { formatBytes } from '../../shared/formatBytes'
+import { t } from '../../shared/i18n'
 
 /**
  * Téléchargement de gros fichiers (installeurs), avec avancement au fil de l'eau (étape 98).
@@ -71,33 +72,29 @@ export function describeDownloadFailure(
 
   if (stalledAfterMs !== null) {
     return receivedBytes === 0
-      ? `Le serveur n'a pas répondu au bout de ${seconds} secondes : vérifie ta connexion internet, puis réessaie.`
-      : `Téléchargement interrompu après ${formatBytes(receivedBytes)} (plus rien reçu pendant ${seconds} secondes) : ` +
-          'vérifie ta connexion internet, puis réessaie.'
+      ? t('dl.noAnswer', { seconds })
+      : t('dl.stalled', { received: formatBytes(receivedBytes), seconds })
   }
 
   const code = (error as { code?: string } | null)?.code
   if (code === 'ENOSPC') {
-    return "Plus assez de place sur le disque pour télécharger le fichier : fais un peu de place, puis réessaie."
+    return t('dl.diskFull')
   }
   if (code === 'EBUSY' || code === 'EPERM' || code === 'EACCES') {
-    return (
-      'Windows a refusé d\'écrire le fichier téléchargé (un antivirus, ou une installation déjà en cours) : ' +
-      'redémarre Jaris, puis réessaie.'
-    )
+    return t('dl.writeRefused')
   }
 
   const message = error instanceof Error ? error.message : String(error)
   // Message exact de fetch quand la connexion ne s'établit pas du tout — incompréhensible tel quel.
   if (message === 'fetch failed') {
-    return "Impossible de joindre le serveur : pas de connexion internet, ou un pare-feu bloque l'accès."
+    return t('dl.unreachable')
   }
   if ((error as { name?: string } | null)?.name === 'AbortError') {
     return receivedBytes === 0
-      ? 'Le téléchargement a été interrompu avant même de commencer : réessaie.'
-      : `Le téléchargement a été interrompu après ${formatBytes(receivedBytes)} : réessaie.`
+      ? t('dl.abortedBeforeStart')
+      : t('dl.abortedAfter', { received: formatBytes(receivedBytes) })
   }
-  return `Le téléchargement a échoué : ${message}`
+  return t('dl.failed', { error: message })
 }
 
 /**
@@ -131,9 +128,9 @@ export async function downloadToFile(url: string, destination: string, options: 
     arm(connectTimeoutMs)
     const response = await fetch(url, { signal: controller.signal })
     if (!response.ok) {
-      throw new DownloadError(`Le serveur a répondu « HTTP ${response.status} » au lieu d'envoyer le fichier.`)
+      throw new DownloadError(t('dl.httpStatus', { status: response.status }))
     }
-    if (!response.body) throw new DownloadError("Le serveur a répondu sans le moindre fichier à télécharger.")
+    if (!response.body) throw new DownloadError(t('dl.noBody'))
 
     const announced = Number(response.headers.get('content-length'))
     totalBytes = Number.isFinite(announced) && announced > 0 ? announced : null
@@ -182,8 +179,7 @@ export async function downloadToFile(url: string, destination: string, options: 
 
     if (totalBytes !== null && receivedBytes !== totalBytes) {
       throw new DownloadError(
-        `Téléchargement incomplet : ${formatBytes(receivedBytes)} reçus sur ${formatBytes(totalBytes)} annoncés. ` +
-          'Vérifie ta connexion internet, puis réessaie.'
+        t('dl.incomplete', { received: formatBytes(receivedBytes), total: formatBytes(totalBytes) })
       )
     }
     return receivedBytes

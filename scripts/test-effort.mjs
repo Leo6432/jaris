@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -12,7 +13,7 @@ const source = ts.transpileModule(readFileSync(new URL('../shared/effort.ts', im
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText
 const exports = {}
-vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(exports, { exports }, () => ({}))
+vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(exports, { exports }, withI18n(() => ({})))
 const { thinkingKind, thinkOptions, isAcceptedThink, chosenThink, thinkLabel, parseModelThinking } = exports
 
 // Réponses /api/show réduites à ce qui compte, d'après les fiches officielles vérifiées à l'étape 191.

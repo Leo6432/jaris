@@ -2,6 +2,7 @@ import { existsSync } from 'fs'
 import { cp, lstat, mkdir, readdir, readlink, rename, rm, stat, statfs, unlink } from 'fs/promises'
 import { spawn } from 'child_process'
 import { dirname, join } from 'path'
+import { t } from '../../shared/i18n'
 
 /**
  * Les dossiers LOURDS que d'autres logiciels écrivent à leur emplacement Windows habituel (sur C), et comment
@@ -36,20 +37,20 @@ export function bricks(): Brick[] {
   const profile = process.env.USERPROFILE ?? ''
   const local = process.env.LOCALAPPDATA ?? process.env.APPDATA ?? ''
   return [
-    { label: 'les modèles Ollama', link: join(profile, '.ollama', 'models'), subdir: 'ollama-models' },
-    { label: 'le programme Ollama', link: join(local, 'Programs', 'Ollama'), subdir: 'ollama-app' },
-    { label: "les données d'Ollama (journaux, mises à jour)", link: join(local, 'Ollama'), subdir: 'ollama-data' },
-    { label: "l'environnement Python (voix)", link: join(local, 'Jaris', 'python-runtime'), subdir: 'python-runtime' },
-    { label: 'le cache de reconnaissance et de synthèse vocale', link: join(profile, '.cache', 'huggingface'), subdir: 'huggingface-cache' },
+    { label: t('brick.ollamaModels'), link: join(profile, '.ollama', 'models'), subdir: 'ollama-models' },
+    { label: t('brick.ollamaApp'), link: join(local, 'Programs', 'Ollama'), subdir: 'ollama-app' },
+    { label: t('brick.ollamaData'), link: join(local, 'Ollama'), subdir: 'ollama-data' },
+    { label: t('brick.python'), link: join(local, 'Jaris', 'python-runtime'), subdir: 'python-runtime' },
+    { label: t('brick.hfCache'), link: join(profile, '.cache', 'huggingface'), subdir: 'huggingface-cache' },
     // Étape 155 (Léo : « C:\Users\happy\.cache\supertonic3\onnx\vector_estimator.onnx, Supertonic c'est pas
     // Jaris ? ») : la voix de Jaris range son modèle HORS du cache HuggingFace, dans ~/.cache/<cache_dir> du
     // modèle par défaut (supertonic/config.py, supertonic==1.3.1 : DEFAULT_MODEL = "supertonic-3" -> "supertonic3").
     // À revoir si requirements.txt change de version de Supertonic (garde-fou : test-models-location.mjs).
-    { label: 'la voix de Jaris (Supertonic)', link: join(profile, '.cache', 'supertonic3'), subdir: 'supertonic-cache' },
+    { label: t('brick.voice'), link: join(profile, '.cache', 'supertonic3'), subdir: 'supertonic-cache' },
     // Étape 173 : le moteur et le modèle de dessin (environ 5 Go, voir imageGenerator.ts).
     // Le Montage (étape 189) n'est plus une brique depuis l'étape 200 : retiré, son paquet est effacé au
     // démarrage (legacyCleanup.ts).
-    { label: "la génération d'images", link: join(local, 'Jaris', 'image-generation'), subdir: 'image-generation' }
+    { label: t('brick.image'), link: join(local, 'Jaris', 'image-generation'), subdir: 'image-generation' }
   ]
 }
 
@@ -97,7 +98,7 @@ export function createJunction(link: string, target: string): Promise<void> {
       stderr += chunk.toString()
     })
     proc.on('error', reject)
-    proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(stderr.trim() || `mklink a échoué (code ${code})`))))
+    proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(stderr.trim() || t('move.mklinkFailed', { code: String(code) })))))
   })
 }
 
@@ -174,7 +175,7 @@ export async function copyAll(plans: PreparedMove[], onProgress: (message: strin
       plan.createdTarget = !existsSync(plan.target)
       await mkdir(plan.target, { recursive: true })
       if (plan.real) {
-        onProgress(`Copie de ${plan.brick.label}…`)
+        onProgress(t('move.copying', { what: plan.brick.label }))
         await cp(plan.real, plan.target, { recursive: true, force: true })
       }
     }
@@ -214,7 +215,7 @@ export async function switchAll(plans: PreparedMove[]): Promise<CommittedMove[]>
         await createJunction(plan.brick.link, plan.target)
       } catch (err) {
         if (backup) await rename(backup, plan.brick.link)
-        throw new Error(`${plan.brick.label} : ${err instanceof Error ? err.message : String(err)}`)
+        throw new Error(t('common.labelValue', { label: plan.brick.label, value: err instanceof Error ? err.message : String(err) }))
       }
       done.push({ ...plan, backup })
     }

@@ -37,7 +37,8 @@ export function imageLabelFromFileName(fileName: string): string {
  * `null` pour les autres lignes (préparation, finition…), qui restent affichées telles quelles.
  */
 export function imageStepFromLog(line: string): { step: number; total: number } | null {
-  const match = /étape (\d+) sur (\d+)/i.exec(line)
+  // « Dessin : 2/4 » depuis l'étape 293 (la même forme dans toutes les langues) ; « étape 2 sur 4 » pour les anciens.
+  const match = /(\d+)\s*\/\s*(\d+)\s*$/.exec(line) ?? /étape (\d+) sur (\d+)/i.exec(line)
   if (!match) return null
   const step = Number(match[1])
   const total = Number(match[2])

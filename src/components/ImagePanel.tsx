@@ -10,6 +10,7 @@ import { playSoundCueIfEnabled } from '@/lib/soundDesign'
 import { imageStepFromLog } from '../../shared/imageGallery'
 import type { GeneratedImageSummary, ImageStudioStatus } from '../../shared/ipc'
 import { DownloadIcon } from './icons'
+import { t } from '@/lib/i18n'
 
 /** Nombre d'images montrées en vignettes sur l'accueil du mode Image (chacune voyage en entier par l'IPC). */
 const GALLERY_SIZE = 8
@@ -91,7 +92,7 @@ export default function ImagePanel(): JSX.Element {
     void window.jaris.readGeneratedImage(selected.fileName).then((url) => {
       if (cancelled) return
       if (url) setSelectedUrl(url)
-      else setError("Cette image n'existe plus sur le disque.")
+      else setError(t('image.missing'))
     })
     return () => {
       cancelled = true
@@ -198,27 +199,25 @@ export default function ImagePanel(): JSX.Element {
     return (
       <div className="image-panel image-install">
         <div className="image-install__card">
-          <span className="image-install__eyebrow">Image</span>
-          <h2>Créer des images</h2>
-          <p className="image-install__lead">
-            Décris une image en français : Jaris la dessine sur ton PC (FLUX.2 klein), sans rien envoyer sur internet.
-          </p>
+          <span className="image-install__eyebrow">{t('app.mode.image')}</span>
+          <h2>{t('image.install.title')}</h2>
+          <p className="image-install__lead">{t('image.install.lead')}</p>
           {!status.supported ? (
-            <p className="code-panel__error">La création d'images n'est disponible que sur Windows pour l'instant.</p>
+            <p className="code-panel__error">{t('image.install.windowsOnly')}</p>
           ) : !status.capable ? (
-            <p className="code-panel__error">Ton PC n'a pas assez de puissance pour dessiner : {status.reason}.</p>
+            <p className="code-panel__error">{t('image.install.notCapable', { reason: status.reason ?? '' })}</p>
           ) : installing ? (
             <div className="options-menu__progress">
-              <div className="options-menu__progress-label">{logLine ?? 'Préparation du téléchargement…'}</div>
+              <div className="options-menu__progress-label">{logLine ?? t('media.preparingDownload')}</div>
               <div className="options-menu__progress-sub">
-                <span>Laisse Jaris ouvert pendant l'installation.</span>
+                <span>{t('media.keepOpen')}</span>
               </div>
             </div>
           ) : (
             <>
-              <p className="image-install__lead">Le modèle de dessin n'est pas encore installé : {status.downloadLabel} à télécharger, une seule fois.</p>
+              <p className="image-install__lead">{t('image.install.missing', { size: status.downloadLabel })}</p>
               <button className="image-install__button" onClick={() => void install()}>
-                Installer le modèle d'image
+                {t('image.install.button')}
               </button>
             </>
           )}
@@ -233,30 +232,30 @@ export default function ImagePanel(): JSX.Element {
 
   return (
     <Workspace
-      newLabel="Nouvelle image"
-      label="Image"
+      newLabel={t('image.new')}
+      label={t('app.mode.image')}
       onNew={startOver}
       items={images.map((image) => ({ id: image.fileName, title: image.label, meta: formatRecentDate(image.timestamp) }))}
       activeId={selected?.fileName ?? null}
       onSelect={open}
       onDelete={(fileName) => void remove(fileName)}
-      emptyLabel="Aucune image pour l'instant."
+      emptyLabel={t('image.listEmpty')}
     >
       <div className="code-panel image-panel">
         {!selected && !generating && (
           <div className="image-panel__home">
             <EmptyState
-              title="Qu'est-ce qu'on dessine ?"
-              description="Décris l'image à créer : le sujet, le style, les couleurs. Les images sont générées sur ton ordinateur, sans limite."
-              suggestions={['Un phare au crépuscule, aquarelle', 'Un chat astronaute, style affiche', 'Une cuisine scandinave lumineuse']}
+              title={t('image.empty.title')}
+              description={t('image.empty.hint')}
+              suggestions={[t('image.suggest.1'), t('image.suggest.2'), t('image.suggest.3')]}
               onSuggestion={setPrompt}
             />
             {gallery.length > 0 && (
               // Étape 268 : une section titrée, centrée à la largeur du champ de saisie, juste sous les
               // suggestions (elle était repoussée en bas de l'écran et collée à gauche).
               <section className="image-panel__recent">
-                <h2 className="image-panel__recent-title">Tes dernières images</h2>
-                <ul className="image-panel__gallery" aria-label="Dernières images">
+                <h2 className="image-panel__recent-title">{t('image.recent')}</h2>
+                <ul className="image-panel__gallery" aria-label={t('image.recent.label')}>
                   {gallery.map((image) => (
                     <li key={image.fileName}>
                       <button className="image-panel__thumb" onClick={() => open(image.fileName)} title={image.label}>
@@ -277,11 +276,11 @@ export default function ImagePanel(): JSX.Element {
             <div className="image-panel__stage">
               <figure className="image-panel__figure">
                 <div className="code-panel__result-actions image-panel__actions">
-                  <button className="image-panel__save" onClick={() => void save()} disabled={!selectedUrl} title="Enregistrer l'image où tu veux">
-                    <DownloadIcon /> {saved ? 'Enregistrée' : 'Enregistrer'}
+                  <button className="image-panel__save" onClick={() => void save()} disabled={!selectedUrl} title={t('image.save.title')}>
+                    <DownloadIcon /> {saved ? t('media.saved') : t('media.save')}
                   </button>
-                  <button onClick={() => void window.jaris.openGeneratedImages(selected.fileName)} title="Montrer l'image dans son dossier">
-                    Ouvrir le dossier
+                  <button onClick={() => void window.jaris.openGeneratedImages(selected.fileName)} title={t('image.reveal')}>
+                    {t('common.openFolder')}
                   </button>
                 </div>
                 {selectedUrl && (
@@ -303,15 +302,15 @@ export default function ImagePanel(): JSX.Element {
         {generating && (
           <MediaPending
             shape="square"
-            title="Création de l'image…"
+            title={t('image.creating')}
             prompt={pendingPrompt}
-            detail={step ? `Étape ${step.step} sur ${step.total}` : logLine}
+            detail={step ? t('media.step', { step: step.step, total: step.total }) : logLine}
             fraction={step ? step.step / step.total : null}
             elapsedMs={elapsedMs}
           />
         )}
 
-        {!generating && stoppedAfterMs !== null && <p className="media-note">Dessin arrêté après {formatDuration(stoppedAfterMs)}.</p>}
+        {!generating && stoppedAfterMs !== null && <p className="media-note">{t('image.stoppedAfter', { duration: formatDuration(stoppedAfterMs) })}</p>}
 
         {error && <p className="code-panel__error">{error}</p>}
 
@@ -319,9 +318,9 @@ export default function ImagePanel(): JSX.Element {
           value={prompt}
           onChange={setPrompt}
           onSubmit={() => void generate()}
-          placeholder="Décris l'image à créer…"
-          submitLabel="Créer l'image"
-          busyLabel="Dessin…"
+          placeholder={t('image.placeholder')}
+          submitLabel={t('image.submit')}
+          busyLabel={t('image.busy')}
           busy={generating}
           onStop={stop}
           attachment={null}

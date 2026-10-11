@@ -14,7 +14,8 @@ import { CORRECTION_SCHEMA, correctTranscript } from './transcriptCorrector'
 import { structuredChat } from './ollama'
 import { config } from '../config'
 import { appendJournal, formatElapsed } from './requestJournal'
-import { THINKING_ACTIVITY, activityFromLog, formatActivity } from '../../shared/voiceActivity'
+import { activityFromLog, formatActivity, thinkingActivity } from '../../shared/voiceActivity'
+import { t } from '../../shared/i18n'
 
 /** Retour à idle après une erreur (pas d'audio en cours, donc pas besoin d'attendre une fin de lecture). */
 const ERROR_IDLE_DELAY_MS = 2500
@@ -249,7 +250,7 @@ export class VoicePipeline extends EventEmitter {
   async announceReminder(message: string): Promise<void> {
     this.clearIdleTimer()
     this.setEmotion('thinking')
-    await this.speak(`Rappel : ${message}`)
+    await this.speak(t('reminder.spoken', { message }))
   }
 
   /**
@@ -269,7 +270,7 @@ export class VoicePipeline extends EventEmitter {
       if (combined) this.emit('transcript', combined)
 
       if (!combined) {
-        await this.speak("Je n'ai rien entendu, réessaie.")
+        await this.speak(t('voice.heardNothing'))
         break
       }
 
@@ -285,7 +286,7 @@ export class VoicePipeline extends EventEmitter {
       const live = await getLiveGpuStatus()
       const gpuStatus = checkGpuTempSafety(live.tempC)
       if (gpuStatus.action === 'abort' || gpuStatus.action === 'shutdown') {
-        this.emit('log', `Sécurité thermique GPU : ${gpuStatus.message}`)
+        this.emit('log', t('chat.gpuSafety', { message: gpuStatus.message ?? '' }))
         await this.speak(gpuStatus.message as string, combined)
         // Délai pour laisser l'avertissement être dit avant de fermer réellement l'appli (voir main.ts,
         // qui écoute cet évènement pour faire un vrai app.quit()).
@@ -365,7 +366,7 @@ export class VoicePipeline extends EventEmitter {
           this.emit('log', `Erreur Ollama : ${detail}`)
           // Même logique que côté Chat (chatSession.ts) : le détail est déjà clair et actionnable, mieux
           // vaut le dire à voix haute que cacher la vraie cause derrière un message toujours identique.
-          reply = `Je n'arrive pas à réfléchir pour le moment : ${detail}`
+          reply = t('chat.cannotThink', { detail })
         }
       } finally {
         if (this.abortController === controller) this.abortController = null
@@ -413,8 +414,9 @@ export class VoicePipeline extends EventEmitter {
     const timer = setInterval(() => {
       if (this.activity) this.emit('activity', formatActivity(this.activity.text, Date.now() - this.activity.since))
     }, 1000)
-    this.activity = { text: THINKING_ACTIVITY, since, timer }
-    this.emit('activity', formatActivity(THINKING_ACTIVITY, 0))
+    const thinking = thinkingActivity()
+    this.activity = { text: thinking, since, timer }
+    this.emit('activity', formatActivity(thinking, 0))
   }
 
   /** Une ligne du journal qui dit quelque chose de neuf (outil, étape du pilotage) remplace l'activité affichée. */

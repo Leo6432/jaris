@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs'
@@ -74,7 +75,7 @@ function loadModelsLocation(env, { failJunctionFor = null } = {}) {
   vm.runInThisContext(`(function (exports, module, require, process) { ${source} })`)(
     exports,
     { exports },
-    (name) => modules[name] ?? nodeRequire(name),
+    withI18n((name) => modules[name] ?? nodeRequire(name)),
     fakeProcess
   )
   return exports

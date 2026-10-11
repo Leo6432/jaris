@@ -15,6 +15,7 @@ import { DownloadIcon } from './icons'
 import VideoDurationPicker from './VideoDurationPicker'
 import VideoQualityPicker from './VideoQualityPicker'
 import { readSaved, writeSaved } from '@/lib/savedSetting'
+import { t } from '@/lib/i18n'
 
 const DURATION_KEY = 'jaris.videoSeconds'
 /** Comme l'écran Image : les dernières créations en vignettes sur l'accueil (étape 213). */
@@ -115,7 +116,7 @@ export default function VideoPanel(): JSX.Element {
         setVideoUrl(url)
       })
       .catch(() => {
-        if (!cancelled) setError("Cette vidéo n'existe plus sur le disque.")
+        if (!cancelled) setError(t('video.missing'))
       })
     return () => {
       cancelled = true
@@ -188,7 +189,7 @@ export default function VideoPanel(): JSX.Element {
     if (!text || generating || installing || !quality) return
     clearFeedback()
     if (!status?.qualities.find((q) => q.id === quality)?.installed) {
-      setError(`La qualité ${videoQualityLabel(quality)} n'est pas encore téléchargée : clique sur le bouton de qualité puis « Télécharger ».`)
+      setError(t('video.qualityMissing', { quality: videoQualityLabel(quality) }))
       return
     }
     stoppedRef.current = false
@@ -285,38 +286,32 @@ export default function VideoPanel(): JSX.Element {
     return (
       <div className="image-panel image-install">
         <div className="image-install__card">
-          <span className="image-install__eyebrow">Vidéo</span>
-          <h2>Créer des vidéos</h2>
-          <p className="image-install__lead">
-            Décris une scène en français, ou joins une image à animer : Jaris crée une courte vidéo (de 1 à 5 secondes)
-            sur ton PC avec Wan 2.2, sans rien envoyer sur internet.
-          </p>
+          <span className="image-install__eyebrow">{t('app.mode.video')}</span>
+          <h2>{t('video.install.title')}</h2>
+          <p className="image-install__lead">{t('video.install.lead')}</p>
           {!status.supported ? (
-            <p className="code-panel__error">La création de vidéos n'est disponible que sur Windows pour l'instant.</p>
+            <p className="code-panel__error">{t('video.install.windowsOnly')}</p>
           ) : !status.capable ? (
-            <p className="code-panel__error">Ton PC n'a pas assez de puissance pour créer des vidéos : {status.reason}.</p>
+            <p className="code-panel__error">{t('video.install.notCapable', { reason: status.reason ?? '' })}</p>
           ) : installing ? (
             <div className="options-menu__progress">
-              <div className="options-menu__progress-label">{logLine ?? 'Préparation du téléchargement…'}</div>
+              <div className="options-menu__progress-label">{logLine ?? t('media.preparingDownload')}</div>
               <div className="options-menu__progress-sub">
-                <span>Laisse Jaris ouvert pendant l'installation.</span>
+                <span>{t('media.keepOpen')}</span>
               </div>
             </div>
           ) : (
             <>
-              <p className="image-install__lead">
-                C'est lourd : {current?.downloadLabel} à télécharger, une seule fois. Et c'est lent : plusieurs minutes
-                par vidéo, la carte graphique tourne à fond pendant ce temps.
-              </p>
+              <p className="image-install__lead">{t('video.install.heavy', { size: current?.downloadLabel ?? '' })}</p>
               {/* Étape 205 : la qualité se choisit AVANT de télécharger — seuls les crans possibles sur ce PC. */}
               {current && (
                 <div className="video-install__quality">
-                  <span>Qualité</span>
+                  <span>{t('video.quality')}</span>
                   <VideoQualityPicker qualities={status.qualities} value={current.id} onChange={chooseQuality} />
                 </div>
               )}
               <button className="image-install__button" onClick={() => current && void install(current.id)}>
-                Installer la qualité {current?.label}
+                {t('video.install.button', { quality: current?.label ?? '' })}
               </button>
             </>
           )}
@@ -331,29 +326,29 @@ export default function VideoPanel(): JSX.Element {
 
   return (
     <Workspace
-      newLabel="Nouvelle vidéo"
-      label="Vidéo"
+      newLabel={t('video.new')}
+      label={t('app.mode.video')}
       onNew={startOver}
       items={videos.map((video) => ({ id: video.fileName, title: video.label, meta: formatRecentDate(video.timestamp) }))}
       activeId={selected?.fileName ?? null}
       onSelect={open}
       onDelete={(fileName) => void remove(fileName)}
-      emptyLabel="Aucune vidéo pour l'instant."
+      emptyLabel={t('video.listEmpty')}
     >
       <div className="code-panel image-panel video-panel">
         {!selected && !generating && !installing && (
           <div className="image-panel__home">
             <EmptyState
-              title="Quelle vidéo veux-tu créer ?"
-              description="Décris la scène : ce qui bouge, le décor, la lumière. Pour animer une image, joins-la avec le « + » du champ."
-              suggestions={['Des vagues sur une plage au ralenti', 'Un renard qui court dans la neige', 'Une ville la nuit en accéléré']}
+              title={t('video.empty.title')}
+              description={t('video.empty.hint')}
+              suggestions={[t('video.suggest.1'), t('video.suggest.2'), t('video.suggest.3')]}
               onSuggestion={setPrompt}
             />
             {gallery.length > 0 && (
               // Étape 268 : même section que le mode Image (titrée, centrée, juste sous les suggestions).
               <section className="image-panel__recent">
-                <h2 className="image-panel__recent-title">Tes dernières vidéos</h2>
-                <ul className="image-panel__gallery video-panel__gallery" aria-label="Dernières vidéos">
+                <h2 className="image-panel__recent-title">{t('video.recent')}</h2>
+                <ul className="image-panel__gallery video-panel__gallery" aria-label={t('video.recent.label')}>
                   {gallery.map((video) => (
                     <li key={video.fileName}>
                       <button className="image-panel__thumb video-panel__thumb" onClick={() => open(video.fileName)} title={video.label}>
@@ -394,11 +389,11 @@ export default function VideoPanel(): JSX.Element {
             <div className="image-panel__stage">
               <figure className="image-panel__figure">
                 <div className="code-panel__result-actions image-panel__actions">
-                  <button className="image-panel__save" onClick={() => void save()} title="Enregistrer la vidéo où tu veux">
-                    <DownloadIcon /> {saved ? 'Enregistrée' : 'Enregistrer'}
+                  <button className="image-panel__save" onClick={() => void save()} title={t('video.save.title')}>
+                    <DownloadIcon /> {saved ? t('media.saved') : t('media.save')}
                   </button>
-                  <button onClick={() => void window.jaris.openGeneratedVideos(selected.fileName)} title="Montrer la vidéo dans son dossier">
-                    Ouvrir le dossier
+                  <button onClick={() => void window.jaris.openGeneratedVideos(selected.fileName)} title={t('video.reveal')}>
+                    {t('common.openFolder')}
                   </button>
                 </div>
                 {videoUrl && (
@@ -422,9 +417,9 @@ export default function VideoPanel(): JSX.Element {
         {generating && (
           <MediaPending
             shape="wide"
-            title="Création de la vidéo…"
+            title={t('video.creating')}
             prompt={pendingPrompt}
-            detail={step ? `Étape ${step.step} sur ${step.total}` : logLine}
+            detail={step ? t('media.step', { step: step.step, total: step.total }) : logLine}
             fraction={step ? step.step / step.total : null}
             elapsedMs={elapsedMs}
           />
@@ -432,10 +427,10 @@ export default function VideoPanel(): JSX.Element {
 
         {/* Étape 205 : une autre qualité se télécharge depuis son bouton ; l'avancement s'affiche ici. */}
         {installing && (
-          <MediaPending shape="wide" title={`Téléchargement de la qualité ${current?.label ?? ''}…`} detail={logLine ?? 'Préparation du téléchargement…'} />
+          <MediaPending shape="wide" title={t('video.downloadingQuality', { quality: current?.label ?? '' })} detail={logLine ?? t('media.preparingDownload')} />
         )}
 
-        {!generating && stoppedAfterMs !== null && <p className="media-note">Vidéo arrêtée après {formatDuration(stoppedAfterMs)}.</p>}
+        {!generating && stoppedAfterMs !== null && <p className="media-note">{t('video.stoppedAfter', { duration: formatDuration(stoppedAfterMs) })}</p>}
 
         {error && <p className="code-panel__error">{error}</p>}
 
@@ -443,9 +438,9 @@ export default function VideoPanel(): JSX.Element {
           value={prompt}
           onChange={setPrompt}
           onSubmit={() => void generate()}
-          placeholder={attachment ? "Décris le mouvement à donner à l'image…" : 'Décris la vidéo à créer…'}
-          submitLabel="Créer la vidéo"
-          busyLabel="Vidéo…"
+          placeholder={attachment ? t('video.placeholder.animate') : t('video.placeholder')}
+          submitLabel={t('video.submit')}
+          busyLabel={t('video.busy')}
           attachment={attachment}
           onAttachmentChange={setAttachment}
           onError={setError}

@@ -48,6 +48,19 @@ class ConfirmationTests(unittest.TestCase):
         for text in ('Привет, как дела?', 'Жаль, что ты не пришёл.', 'Париж'):
             self.assertFalse(contains_wake_name(text), text)
 
+    def test_name_in_every_voice_language(self):
+        # Étape 293 (24 langues) : « Jaris » écrit comme on le prononce dans chaque alphabet et chaque orthographe
+        # où le son « dj » prend plusieurs lettres. Sans ça, un Russe ou un Grec disait le nom sans jamais réveiller.
+        for text in ('Джарис', 'Джарис, открой YouTube.', 'Τζάρις', 'Τζάρις, άνοιξε το YouTube.', 'Džaris',
+                     'Džaris, otevři YouTube.', 'Dżaris', 'Dżaris, otwórz YouTube.', 'Dzsáris', 'Dzsáris, nyisd meg a YouTube-ot.',
+                     'Джаріс', 'ДЖАРИС'):
+            self.assertTrue(contains_wake_name(text), text)
+        self.assertEqual(remove_wake_prefix('Джарис, открой YouTube.'), 'открой YouTube.')
+        self.assertEqual(remove_wake_prefix('Τζάρις, άνοιξε το YouTube.'), 'άνοιξε το YouTube.')
+        # De vrais mots de ces langues ne réveillent pas Jaris : le son « dj » seul ne suffit pas.
+        for text in ('Джаз в клубе.', 'Τζάμι', 'Džem je sladký.', 'Dżem truskawkowy.', 'Παρίσι', 'Джерело води.'):
+            self.assertFalse(contains_wake_name(text), text)
+
     def test_loose_forms_only_when_said_alone(self):
         # Dans une vraie phrase, seule la forme stricte compte : « j'ai ce livre » ne réveille jamais Jaris.
         for text in ("J'ai ce livre sur la table.", 'Jazz ce soir au club ?', 'Je sais pas.', "J'ai ce qu'il faut.", 'Jessica arrive.'):

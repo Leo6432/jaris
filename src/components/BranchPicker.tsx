@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ipcErrorMessage } from '@/lib/ipcError'
 import { usePickerPanel } from '@/lib/usePickerPanel'
 import type { RepoView } from '../../shared/ipc'
+import { t } from '@/lib/i18n'
 
 /**
  * La branche du dépôt ouvert, dans le champ de saisie à côté du dépôt (étape 280, Léo : « la branche mets pas en
@@ -72,7 +73,7 @@ export default function BranchPicker({ repo, onChange, disabled = false }: Props
           setOpen(!open)
         }}
         disabled={disabled}
-        title={`Branche : ${repo.branch}`}
+        title={t('github.branch.title', { branch: repo.branch })}
         aria-haspopup="dialog"
         aria-expanded={open}
       >
@@ -81,15 +82,15 @@ export default function BranchPicker({ repo, onChange, disabled = false }: Props
       </button>
 
       {open && (
-        <div ref={panelRef} className="effort-picker__panel github-picker__panel" role="dialog" aria-label="Branche" style={panelStyle}>
+        <div ref={panelRef} className="effort-picker__panel github-picker__panel" role="dialog" aria-label={t('github.branch')} style={panelStyle}>
           {locked ? (
             <p className="github-picker__text">
-              Enregistre ou annule tes changements avant de changer de branche : ils seraient perdus.
+              {t('github.branch.locked')}
             </p>
           ) : (
             <ul className="github-picker__list">
               {branches === null ? (
-                <li className="github-picker__empty">Chargement des branches…</li>
+                <li className="github-picker__empty">{t('github.branch.loading')}</li>
               ) : (
                 shown.map((branch) => (
                   <li key={branch}>
@@ -99,7 +100,7 @@ export default function BranchPicker({ repo, onChange, disabled = false }: Props
                       onClick={() => void choose(branch)}
                     >
                       <span className="github-picker__repo-name">{branch}</span>
-                      {branch === repo.defaultBranch && <span className="github-picker__repo-meta">Principale</span>}
+                      {branch === repo.defaultBranch && <span className="github-picker__repo-meta">{t('github.branch.main')}</span>}
                     </button>
                   </li>
                 ))

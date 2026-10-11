@@ -1,3 +1,4 @@
+import { t } from '../../shared/i18n'
 /**
  * Lecture d'une page web précise (étape 48) : search_web (webSearch.ts) ne renvoie que 5 courts extraits
  * SearXNG, souvent insuffisants pour une adresse, un horaire ou un détail précis absent du résumé — cet
@@ -55,11 +56,11 @@ export async function readWebPage(url: string): Promise<string> {
   try {
     response = await fetch(parsed, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
   } catch (err) {
-    throw new Error(`Impossible de charger la page ${url} : ${err instanceof Error ? err.message : String(err)}`)
+    throw new Error(t('page.loadFailed', { url, error: err instanceof Error ? err.message : String(err) }))
   }
 
   if (!response.ok) {
-    throw new Error(`La page ${url} a répondu ${response.status}.`)
+    throw new Error(t('page.httpError', { url, status: response.status }))
   }
 
   const contentType = response.headers.get('content-type') ?? ''

@@ -1,6 +1,7 @@
 import { config } from '../config'
 import { DISK_SAFETY_MARGIN_GB, detectFreeDiskGb, getDownloadBudgetGb } from './systemResources'
 import { DiskFullError, ModelTooLargeError } from './ollama'
+import { t } from '../../shared/i18n'
 
 /**
  * Étape 139, Léo : "oui" (au contournement proposé pour que G9v3-3B soit VRAIMENT utilisé malgré Ollama
@@ -49,7 +50,7 @@ export function parseHuggingFaceModel(model: string): { repo: string; tag: strin
 
 async function fetchText(url: string): Promise<string> {
   const response = await fetch(url)
-  if (!response.ok) throw new Error(`Hugging Face a répondu ${response.status} pour ${url}`)
+  if (!response.ok) throw new Error(t('hf.statusFor', { status: response.status, url }))
   return response.text()
 }
 
@@ -74,8 +75,8 @@ function resumableSource(url: string, size: number, signal: AbortSignal, onChunk
 
   const open = async (): Promise<void> => {
     const response = await fetch(url, { signal, headers: received > 0 ? { Range: `bytes=${received}-` } : undefined })
-    if (received > 0 && response.status !== 206) throw new Error(`Hugging Face ne permet pas de reprendre ce téléchargement (${response.status})`)
-    if (!response.ok || !response.body) throw new Error(`Hugging Face a répondu ${response.status}`)
+    if (received > 0 && response.status !== 206) throw new Error(t('hf.noResume', { status: response.status }))
+    if (!response.ok || !response.body) throw new Error(t('hf.status', { status: response.status }))
     reader = response.body.getReader()
   }
 
@@ -86,7 +87,7 @@ function resumableSource(url: string, size: number, signal: AbortSignal, onChunk
           if (!reader) await open()
           const { done, value } = await reader!.read()
           if (done) {
-            if (size && received < size) throw new Error('connexion fermée avant la fin du fichier')
+            if (size && received < size) throw new Error(t('hf.closedEarly'))
             controller.close()
             return
           }
@@ -128,7 +129,7 @@ async function streamBlobToOllama(
     const percent = layer.size ? Math.floor((received / layer.size) * 100) : 0
     if (percent !== lastPercent) {
       lastPercent = percent
-      onStatus?.(`Téléchargement de ${label}… ${percent}%`)
+      onStatus?.(t('hf.downloading', { label, percent }))
     }
   })
   try {
@@ -142,14 +143,14 @@ async function streamBlobToOllama(
     if (!upload.ok) {
       throw new Error(
         upload.status === 400
-          ? `${label} reçu incomplet ou corrompu (empreinte refusée par Ollama)`
-          : `Ollama a répondu ${upload.status} en recevant ${label}`
+          ? t('hf.corrupt', { label })
+          : t('hf.ollamaStatus', { status: upload.status, label })
       )
     }
   } catch (err) {
-    if (controller.signal.aborted) throw new Error(`Téléchargement de ${label} bloqué : plus aucune donnée reçue depuis une minute.`)
+    if (controller.signal.aborted) throw new Error(t('hf.stalled', { label }))
     const cause = err instanceof Error && err.cause instanceof Error ? err.cause.message : ''
-    throw new Error(`Téléchargement de ${label} interrompu (${err instanceof Error ? err.message : String(err)}${cause ? ` : ${cause}` : ''}).`)
+    throw new Error(t('hf.interrupted', { label, error: `${err instanceof Error ? err.message : String(err)}${cause ? ` : ${cause}` : ''}` }))
   } finally {
     if (stallTimer) clearTimeout(stallTimer)
   }
@@ -161,18 +162,18 @@ async function streamBlobToOllama(
  */
 export async function importHuggingFaceModel(model: string, onStatus?: (message: string) => void): Promise<void> {
   const parsed = parseHuggingFaceModel(model)
-  if (!parsed) throw new Error(`${model} n'est pas un modèle Hugging Face importable`)
+  if (!parsed) throw new Error(t('hf.notImportable', { model }))
   const { repo, tag } = parsed
 
   const manifestResponse = await fetch(`${HF_REGISTRY}/${repo}/manifests/${tag}`, { headers: { Accept: MANIFEST_ACCEPT } })
-  if (!manifestResponse.ok) throw new Error(`Hugging Face a répondu ${manifestResponse.status} pour le manifeste de ${model}`)
+  if (!manifestResponse.ok) throw new Error(t('hf.manifestStatus', { status: manifestResponse.status, model }))
   const manifest = (await manifestResponse.json()) as Manifest
 
   const ggufLayers = manifest.layers.filter(
     (l) => l.mediaType === 'application/vnd.ollama.image.model' || l.mediaType === 'application/vnd.ollama.image.projector'
   )
   if (!ggufLayers.some((l) => l.mediaType === 'application/vnd.ollama.image.model')) {
-    throw new Error(`Le manifeste de ${model} ne contient aucun fichier de modèle`)
+    throw new Error(t('hf.manifestEmpty', { model }))
   }
 
   const requiredGb = ggufLayers.reduce((sum, l) => sum + l.size, 0) / 1024 ** 3
@@ -199,7 +200,7 @@ export async function importHuggingFaceModel(model: string, onStatus?: (message:
   const template = templateLayer ? await fetchText(`${HF_REGISTRY}/${repo}/blobs/${templateLayer.digest}`) : undefined
   const parameters = paramsLayer ? (JSON.parse(await fetchText(`${HF_REGISTRY}/${repo}/blobs/${paramsLayer.digest}`)) as Record<string, unknown>) : undefined
 
-  onStatus?.(`Installation de ${model} dans Ollama…`)
+  onStatus?.(t('hf.installing', { model }))
   const create = await fetch(`${config.ollama.host}/api/create`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -212,6 +213,6 @@ export async function importHuggingFaceModel(model: string, onStatus?: (message:
     } catch {
       // corps illisible : le code HTTP seul reste l'information utile
     }
-    throw new Error(`Ollama a refusé d'installer ${model} (${create.status}${detail ? ` : ${detail}` : ''})`)
+    throw new Error(t('hf.createRefused', { model, detail: `${create.status}${detail ? ` : ${detail}` : ''}` }))
   }
 }

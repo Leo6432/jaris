@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * electron/services/huggingFaceImport.ts — étape 139, contournement du bug d'Ollama 0.34.2 ("blocked redirect
@@ -87,7 +88,7 @@ function setup({ layers, template = '{{ .Prompt }}', params = { stop: ['<|im_end
     './ollama': { ModelTooLargeError, DiskFullError }
   }
   const exports = {}
-  const context = { exports, module: { exports }, require: (id) => modules[id], fetch: fakeFetch, Response, ReadableStream, TransformStream, AbortController, setTimeout, clearTimeout, JSON }
+  const context = { exports, module: { exports }, require: withI18n((id) => modules[id]), fetch: fakeFetch, Response, ReadableStream, TransformStream, AbortController, setTimeout, clearTimeout, JSON }
   vm.runInNewContext(source, context)
   return { ...exports, uploads, creates, requests, statuses: [] }
 }

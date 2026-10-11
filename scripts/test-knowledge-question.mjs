@@ -5,6 +5,7 @@ import vm from 'node:vm'
 import ts from 'typescript'
 import { modelChoiceModule } from './load-model-choice.mjs'
 import { systemPromptModule } from './load-system-prompt.mjs'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * looksLikeKnowledgeQuestion (assistant.ts) — Léo : "fait en sorte qu'il regarde tout le temps sur le web
@@ -32,7 +33,7 @@ const modules = {
   './resourceMonitor': {}
 }
 const exports = {}
-vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports } })
+vm.runInNewContext(source, { exports, require: withI18n((name) => modules[name]), module: { exports } })
 const { looksLikeKnowledgeQuestion } = exports
 
 test('reproduit le cas réel rapporté par Léo : "Qui a créé ChatGPT ?"', () => {

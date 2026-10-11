@@ -6,6 +6,7 @@ import type { Readable, Writable } from 'stream'
 import { config } from '../config'
 import { pythonScriptsDir } from '../paths'
 import { resolvePythonBin } from './pythonRuntime'
+import { currentLanguage } from '../../shared/i18n'
 
 type TtsServerProcess = ChildProcessByStdio<Writable, Readable, Readable>
 
@@ -101,7 +102,8 @@ class TtsClient extends EventEmitter {
     await this.start()
     return new Promise((resolve, reject) => {
       this.queue.push({ resolve, reject })
-      const request = { text: text.replace(/\n/g, ' '), voice }
+      // Étape 293 : la langue de Jaris à chaque phrase (codes ISO identiques à ceux de Supertonic), sans relancer la voix.
+      const request = { text: text.replace(/\n/g, ' '), voice, lang: currentLanguage() }
       this.proc?.stdin.write(JSON.stringify(request) + '\n')
     })
   }

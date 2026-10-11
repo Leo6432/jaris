@@ -16,11 +16,24 @@ export type ConverseChannel = 'voice' | 'chat'
  * relecture 18,8 s → 0,8 s sur un modèle classique, 18,7 s → 5,3 s sur un modèle hybride comme qwen3.5.
  * Les consignes ne doivent donc plus rien contenir qui change d'une demande à l'autre.
  */
-export function dateTimeNote(now: Date = new Date()): string {
-  return `(Nous sommes le ${now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}, il est ${now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}.)`
+export function dateTimeNote(now: Date = new Date(), locale = 'fr-FR'): string {
+  const date = now.toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const time = now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+  // Étape 293 (24 langues) : hors français, une simple parenthèse dans la langue de l'utilisateur — une phrase en
+  // français collée devant chaque demande tirerait un petit modèle vers une réponse en français.
+  return locale.startsWith('fr') ? `(Nous sommes le ${date}, il est ${time}.)` : `(${date}, ${time})`
 }
 
-export function buildSystemPrompt(userName: string | null, memoryTitles: string[], channel: ConverseChannel): string {
+/**
+ * Étape 293 : la langue de la réponse (nom anglais, « German »). Les consignes restent en français — ce sont des
+ * instructions pour le modèle, jamais lues par l'utilisateur —, mais la réponse suit la langue choisie dans Jaris.
+ * Le français par défaut donne exactement les consignes d'avant (scripts/benchmark-cases.mjs en garde une copie).
+ */
+export function buildSystemPrompt(userName: string | null, memoryTitles: string[], channel: ConverseChannel, replyLanguage = 'French'): string {
+  const french = replyLanguage === 'French'
+  const answerIn = french
+    ? 'Réponds en français'
+    : `Réponds TOUJOURS en ${replyLanguage} (la langue de l'utilisateur), même si ces consignes sont écrites en français`
   const addressing = userName
     ? `L'utilisateur s'appelle ${userName} : appelle-le par son prénom de temps en temps, sans exagérer. `
     : ''
@@ -47,10 +60,10 @@ export function buildSystemPrompt(userName: string | null, memoryTitles: string[
 
   const style =
     channel === 'voice'
-      ? "Réponds en français, de façon concise et naturelle, comme dans une conversation orale. " +
+      ? `${answerIn}, de façon concise et naturelle, comme dans une conversation orale. ` +
         "Ta réponse est lue à voix haute par une synthèse vocale : n'utilise jamais d'émojis, d'astérisques, " +
         'de listes à puces ni de mise en forme, uniquement du texte normal. '
-      : "Réponds en français, de façon claire et directe. Tu réponds par écrit dans une fenêtre de chat : " +
+      : `${answerIn}, de façon claire et directe. Tu réponds par écrit dans une fenêtre de chat : ` +
         "tu peux utiliser des listes à puces, des blocs de code et des retours à la ligne quand ça rend la " +
         "réponse plus lisible, mais reste concis et n'en abuse pas pour une réponse courte. Pas d'émojis. "
 
@@ -131,6 +144,7 @@ export function buildSystemPrompt(userName: string | null, memoryTitles: string[
     "transmets-le fidèlement (tel quel ou reformulé brièvement) : n'invente JAMAIS d'étapes de dépannage " +
     "supplémentaires qui n'y figurent pas (redémarrer l'ordinateur, réinstaller un logiciel, taper une " +
     "commande...), même pour avoir l'air plus utile — un message d'erreur mal compris ou incomplet reste " +
-    "préférable à des instructions inventées et fausses."
+    "préférable à des instructions inventées et fausses." +
+    (french ? '' : ` Rappel : ta réponse est TOUJOURS en ${replyLanguage}.`)
   )
 }

@@ -13,6 +13,7 @@ import { installImageModel } from './imageGenerator'
 import { detectRamGb } from './systemResources'
 import { pickImageModel } from '../../shared/imageModel'
 import { PILOT_MODEL_LABEL, pickPilotModel } from '../../shared/pilotModel'
+import { t } from '../../shared/i18n'
 
 /**
  * Configuration de l'écran d'accueil (CapacityScan.tsx) et de « Retester la configuration » : ne lance JAMAIS
@@ -23,10 +24,12 @@ import { PILOT_MODEL_LABEL, pickPilotModel } from '../../shared/pilotModel'
  * candidats perdants.
  */
 export async function runQuickSetup(onLine: (line: string) => void): Promise<CapacityScanResult> {
-  onLine('Détection du matériel...')
+  onLine(t('bench.detecting'))
   let picked = await pickBestModelsFromBenchmark()
   onLine(
-    `Carte détectée : ${picked.gpuName ?? 'inconnue'}${picked.vramGb !== null ? ` (${picked.vramGb} Go de VRAM)` : ''}.`
+    picked.vramGb !== null
+      ? t('bench.gpuVram', { gpu: picked.gpuName ?? t('bench.unknownGpu'), vram: picked.vramGb })
+      : t('bench.gpu', { gpu: picked.gpuName ?? t('bench.unknownGpu') })
   )
 
   // Un modèle ignoré (trop gros pour VRAM+RAM, ou pas assez de disque) ne doit jamais rendre la
@@ -60,17 +63,13 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
         pulledOk.add(model)
       } catch (err) {
         if (err instanceof ModelTooLargeError || err instanceof DiskFullError) {
-          if (!skippedModels.has(model)) onLine(`Modèle ${model} ignoré : ${err.message}`)
+          if (!skippedModels.has(model)) onLine(t('bench.skipped', { model, error: err.message }))
           skippedModels.set(model, err.message)
         } else if (model.startsWith('hf.co/') && !failedHuggingFace.has(model)) {
-          onLine(
-            `Téléchargement de ${model} impossible pour l'instant (${err instanceof Error ? err.message : String(err)}). ` +
-              "C'est un bug connu de certaines versions d'Ollama avec Hugging Face : Jaris prend le meilleur modèle " +
-              'suivant en attendant. Mets Ollama à jour puis relance « Retester la configuration » pour le récupérer.'
-          )
+          onLine(t('bench.hfFailed', { model, error: err instanceof Error ? err.message : String(err) }))
           failedHuggingFace.add(model)
           // Phrase courte pour Léo (affichée dans Options → Modèles) ; l'erreur brute reste dans le journal ci-dessus.
-          blockedReasons.set(model, "ta version d'Ollama bloque ce téléchargement (bug corrigé dans sa prochaine version)")
+          blockedReasons.set(model, t('bench.hfBlocked'))
           newFailure = true
         } else {
           throw err
@@ -92,11 +91,11 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
       image = { ...imagePick, installed: true }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      onLine(`Modèle d'image ${imagePick.model} non installé : ${message}`)
+      onLine(t('bench.imageFailed', { model: imagePick.model, error: message }))
       image = { ...imagePick, installed: false, error: message }
     }
   } else {
-    onLine(`Pas de modèle d'image : ${imagePick.reason}.`)
+    onLine(t('bench.noImage', { reason: imagePick.reason ?? '' }))
   }
 
   // Étape 231, Léo : « comme image vidéo le mettre seul, si l'utilisateur n'a pas assez on met pas le rôle et il
@@ -110,11 +109,11 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
       pilot = { ...pilotPick, installed: true }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      onLine(`Modèle de pilotage d'écran non installé (${message}) — le modèle de vision pilote l'écran en attendant.`)
+      onLine(t('bench.pilotFailed', { error: message }))
       pilot = { ...pilotPick, installed: false, error: message }
     }
   } else {
-    onLine(`Pas de modèle de pilotage d'écran : ${pilotPick.reason}. Le modèle de vision pilote l'écran, comme avant.`)
+    onLine(t('bench.noPilot', { reason: pilotPick.reason ?? '' }))
   }
 
   const profile = await getProfile()
@@ -155,12 +154,12 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
         onLine(
           model === profile.pilotModel
             ? pilotModel
-              ? `Ancien modèle de pilotage d'écran ${model} supprimé (remplacé par ${PILOT_MODEL_LABEL}).`
-              : `Ancien modèle de pilotage d'écran ${model} supprimé (ta carte graphique ne le fait plus tourner).`
-            : `Ancien modèle ${model} supprimé (remplacé par un meilleur choix pour ta configuration).`
+              ? t('bench.oldPilotReplaced', { model, replacement: PILOT_MODEL_LABEL })
+              : t('bench.oldPilotDropped', { model })
+            : t('bench.oldModelReplaced', { model })
         )
       } catch (err) {
-        onLine(`Échec de la suppression de l'ancien modèle ${model} : ${err instanceof Error ? err.message : String(err)}`)
+        onLine(t('bench.deleteFailed', { model, error: err instanceof Error ? err.message : String(err) }))
       }
     }
 
@@ -240,7 +239,7 @@ export function testUnscoredModels(onLine: (line: string) => void): Promise<{ mo
   const models = getModelsToTest()
   const resultsPath = unscoredResultsPath()
   if (!models.length) return Promise.resolve({ models, resultsPath })
-  if (runningTest) return Promise.reject(new Error('Un test est déjà en cours : attends sa fin, ou ferme Jaris pour l’arrêter.'))
+  if (runningTest) return Promise.reject(new Error(t('bench.testRunning')))
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, [join(resourcesRoot(), 'scripts', 'benchmark-models.mjs')], {
       windowsHide: true,
@@ -283,14 +282,14 @@ export function testUnscoredModels(onLine: (line: string) => void): Promise<{ mo
     proc.on('error', (err) => {
       release()
       if (runningTest === proc) runningTest = null
-      reject(new Error(`Impossible de lancer le test : ${err.message}`))
+      reject(new Error(t('bench.testLaunchFailed', { error: err.message })))
     })
     proc.on('close', (code) => {
       release()
       if (runningTest === proc) runningTest = null
       if (buffer.trim()) onLine(buffer)
       if (code === 0) resolve({ models, resultsPath })
-      else reject(new Error(`Le test s'est arrêté avant la fin (code ${code ?? '?'}). Relance-le : il reprendra là où il en était.`))
+      else reject(new Error(t('bench.testStopped', { code: code ?? '?' })))
     })
   })
 }

@@ -36,6 +36,7 @@ import {
   setupFor
 } from './benchmark-scenarios.mjs'
 import { systemPromptModule } from './load-system-prompt.mjs'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * Étape 232, puis 233 (relecture du protocole par ChatGPT) : les demandes complètes (benchmark-scenarios.mjs).
@@ -57,7 +58,7 @@ function loadTs(path, modules = {}) {
   // Les dépendances non fournies ne servent qu'à d'autres fonctions que celles testées : un objet neutre suffit.
   const stub = new Proxy(function () {}, { get: (_t, key) => (key === Symbol.toPrimitive ? () => '' : stub), apply: () => stub, construct: () => stub })
   const module = { exports: {} }
-  vm.runInThisContext(`(function (exports, require, module) {\n${transpile(path)}\n})`)(module.exports, (name) => modules[name] ?? stub, module)
+  vm.runInThisContext(`(function (exports, require, module) {\n${transpile(path)}\n})`)(module.exports, withI18n((name) => modules[name] ?? stub), module)
   return module.exports
 }
 
@@ -632,23 +633,35 @@ test('les copies de assistant.ts dans le test sont identiques à l’original (s
   assert.equal(hasUnnegatedMailIntent('envoie un mail a jean point dupont arobase gmail point com pour lui dire que la reunion est a 14:30'), true)
   assert.ok(read('electron/services/assistant.ts').includes(`const MAX_TOOL_ROUNDS = ${MAX_TOOL_ROUNDS}`))
   assert.ok(read('electron/services/conversationSession.ts').includes(`const MAX_HISTORY_MESSAGES = ${MAX_HISTORY_MESSAGES}`))
-  assert.ok(read('electron/services/assistant.ts').includes(`const fallback = ${JSON.stringify(FALLBACK_REPLY)}`))
+  // Étape 293 : le texte vit dans le catalogue français (les autres langues en sont la traduction).
+  assert.ok(read('electron/services/assistant.ts').includes("const fallback = t('reply.empty')"))
+  assert.ok(read('shared/i18n/fr.ts').includes(`"reply.empty": ${JSON.stringify(FALLBACK_REPLY)}`))
 })
 
 // --- (3) Les outils simulés renvoient les textes des vrais outils ---------------------------------------------
 test('les résultats simulés sont les MÊMES textes que les vrais outils de Jaris', () => {
   const sources = {
-    'electron/services/appLauncher.ts': ["export const APP_LAUNCHED_SUFFIX = 'a été lancé.'", 'Je n\'ai trouvé aucune application nommée "${name}" installée sur cette machine.', "Aucun nom d'application n'a été précisé : impossible de savoir laquelle ouvrir."],
+    'electron/services/appLauncher.ts': ["export const APP_LAUNCHED_SUFFIX = 'a été lancé.'", "t('app.notFound', { name })", "t('app.noName')"],
+    // Étape 293 : les messages montrés à l'utilisateur vivent dans le catalogue français, recopiés ici à l'identique.
+    'shared/i18n/fr.ts': [
+      '"app.notFound": "Je n\'ai trouvé aucune application nommée « {name} » installée sur cette machine."',
+      '"app.noName": "Aucun nom d\'application n\'a été précisé : impossible de savoir laquelle ouvrir."',
+      '"search.noResult": "Aucun résultat trouvé pour « {query} »."',
+      '"shutdown.restarting": "Redémarrage en cours."',
+      '"shutdown.shuttingDown": "Extinction en cours."',
+      '"pilot.noGoal": "Dis-moi ce qu\'il faut faire à l\'écran."',
+      '"input.typeFailed": "Échec de la saisie du texte : {error}"'
+    ],
     'electron/services/reminders.ts': ["`Rappel programmé dans ${delayMinutes} minute${delayMinutes > 1 ? 's' : ''} : ${reminder.message}`", "Je n'ai pas pu programmer ce rappel : message ou délai invalide."],
     'electron/services/memoryStore.ts': ['Noté dans la mémoire ("${title}").', 'Aucune note trouvée pour "${title}".', "const entry = `\\n\\n_${timestamp}_\\n${content}`", '`# ${sanitizeTitle(title)}${entry}`', ".replace(/[\\\\/:*?\"<>|]/g, '').slice(0, 80) || 'note'"],
-    'electron/services/webSearch.ts': ['Aucun résultat trouvé pour "${query}".', '`${i + 1}. ${r.title} — ${r.content ?? \'\'} (${r.url})`'],
+    'electron/services/webSearch.ts': ["t('search.noResult', { query })", '`${i + 1}. ${r.title} — ${r.content ?? \'\'} (${r.url})`'],
     'electron/services/webPage.ts': ['URL invalide : "${url}".', 'URL refusée (seuls http/https sont autorisés) : "${url}".', "chargée mais aucun texte lisible n'a pu en être extrait."],
     'electron/services/tools.ts': ["export const IMAGE_DONE_REPLY = 'Voilà ton image.'", 'toolFlag(args.replace)', 'shutdownPc(toolFlag(args.restart))', "value === true || (typeof value === 'string' && value.trim().toLowerCase() === 'true')"],
-    'electron/services/systemControl.ts': ["'Redémarrage en cours.' : 'Extinction en cours.'"],
-    'electron/services/computerUse.ts': ['if (!goal.trim()) return "Dis-moi ce qu\'il faut faire à l\'écran."'],
+    'electron/services/systemControl.ts': ["t('shutdown.restarting') : t('shutdown.shuttingDown')"],
+    'electron/services/computerUse.ts': ["if (!goal.trim()) return t('pilot.noGoal')"],
     'electron/services/inputControl.ts': [
       '`Texte tapé.`', 'Touche "${key}" pressée.', 'Action "${action}" effectuée.', 'return "Aucun texte à taper."',
-      '`Échec de la saisie du texte : ${error}`', 'Touche "${key}" inconnue. Touches disponibles : ${Object.keys(KEY_CODES).join(\', \')}.',
+      "t('input.typeFailed', { error })", 'Touche "${key}" inconnue. Touches disponibles : ${Object.keys(KEY_CODES).join(\', \')}.',
       'Action multimédia "${action}" inconnue. Actions disponibles : ${Object.keys(MEDIA_KEY_CODES).join(\', \')}.',
       '`Clic ${safeButton} effectué${hasPos ? ` à (${px}, ${py})` : \'\'}.`'
     ]

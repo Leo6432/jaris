@@ -17,6 +17,7 @@ import { getModelThinking, type ThinkLevel } from './ollama'
 import { getProfile } from './profileStore'
 import { runRepoAgent } from './repoAgent'
 import type { ThinkValue } from '../../shared/effort'
+import { t } from '../../shared/i18n'
 
 /**
  * État GitHub du mode Code (étape 277), côté main : compte connecté, dépôts ouverts et changements préparés par
@@ -62,7 +63,7 @@ async function forget(): Promise<void> {
 /** Toute demande à GitHub passe par ici : un jeton refusé (retiré sur github.com) déconnecte proprement. */
 async function withClient<T>(action: (github: GithubClient) => Promise<T>): Promise<T> {
   const github = await getClient()
-  if (!github) throw new GithubError(401, "Jaris n'est pas connecté à GitHub.", 'auth')
+  if (!github) throw new GithubError(401, t('github.err.notConnected'), 'auth')
   try {
     return await action(github)
   } catch (err) {
@@ -91,7 +92,7 @@ export async function getGithubStatus(): Promise<GithubStatus> {
 }
 
 export async function startGithubLogin(): Promise<GithubDeviceCode> {
-  if (!clientId()) throw new GithubError(0, "La connexion à GitHub n'est pas encore configurée dans cette version de Jaris.")
+  if (!clientId()) throw new GithubError(0, t('github.err.notConfigured'))
   pendingLogin?.controller.abort()
   const device = await requestDeviceCode(clientId())
   pendingLogin = { device, controller: new AbortController() }
@@ -101,7 +102,7 @@ export async function startGithubLogin(): Promise<GithubDeviceCode> {
 /** Attend que le code soit validé sur github.com, puis enregistre le jeton (chiffré). */
 export async function finishGithubLogin(): Promise<GithubStatus> {
   const pending = pendingLogin
-  if (!pending) throw new GithubError(0, 'Aucune connexion en cours : clique sur « Se connecter à GitHub ».')
+  if (!pending) throw new GithubError(0, t('github.err.noPending'))
   try {
     const token = await pollDeviceToken(clientId(), pending.device, { signal: pending.controller.signal })
     await saveGithubToken(token)
@@ -110,7 +111,7 @@ export async function finishGithubLogin(): Promise<GithubStatus> {
     sessions.clear()
     return await getGithubStatus()
   } catch (err) {
-    if (isAbortError(err)) throw new GithubError(0, 'Connexion annulée.')
+    if (isAbortError(err)) throw new GithubError(0, t('github.loginCancelled'))
     throw err
   } finally {
     if (pendingLogin === pending) pendingLogin = null
@@ -142,7 +143,7 @@ function findSession(fullName: string): RepoSession | undefined {
 
 function requireSession(fullName: string): RepoSession {
   const session = findSession(fullName)
-  if (!session) throw new GithubError(0, `Le dépôt ${fullName} n'est plus ouvert : rouvre-le depuis le bouton GitHub.`)
+  if (!session) throw new GithubError(0, t('github.err.notOpen', { name: fullName }))
   return session
 }
 
@@ -212,7 +213,7 @@ export async function openGithubRepo(fullName: string, branch?: string): Promise
   const existing = findSession(fullName)
   if (existing && existing.staged.size > 0) {
     if (!branch || branch === existing.snapshot.branch) return viewOf(existing)
-    throw new GithubError(0, 'Enregistre ou annule tes changements avant de changer de branche.')
+    throw new GithubError(0, t('github.err.pendingBranch'))
   }
   const snapshot = await withClient((github) => github.openRepo(fullName, branch))
   if (existing) sessions.delete(existing.snapshot.fullName)
@@ -247,7 +248,7 @@ export async function runGithubAgent(fullName: string, request: string, options:
   // Dépôt oublié entre-temps (relecture impossible après un enregistrement) : rouvert depuis GitHub.
   if (!findSession(fullName)) await openGithubRepo(fullName)
   const session = requireSession(fullName)
-  if (session.busy) throw new GithubError(0, 'Jaris travaille déjà sur ce dépôt.')
+  if (session.busy) throw new GithubError(0, t('github.err.busy'))
   session.busy = true
   try {
     const profile = await getProfile()
@@ -329,7 +330,7 @@ export async function readGithubPreviewFile(fullName: string, path: string): Pro
 
 export function discardGithubChanges(fullName: string, path?: string): RepoView {
   const session = requireSession(fullName)
-  if (session.busy) throw new GithubError(0, 'Attends la fin du travail en cours (ou arrête-le) avant d\'annuler.')
+  if (session.busy) throw new GithubError(0, t('github.err.busyUndo'))
   if (path) session.staged.delete(path)
   else session.staged.clear()
   return viewOf(session)
@@ -341,10 +342,10 @@ export function discardGithubChanges(fullName: string, path?: string): RepoView 
  */
 export async function commitGithubChanges(fullName: string, message: string): Promise<RepoCommitResult> {
   const session = requireSession(fullName)
-  if (session.busy) throw new GithubError(0, 'Attends la fin du travail en cours avant d\'enregistrer.')
+  if (session.busy) throw new GithubError(0, t('github.err.busySave'))
   const changes = [...session.staged.entries()].map(([path, content]) => ({ path, content }))
-  if (changes.length === 0) throw new GithubError(0, "Il n'y a aucun changement à enregistrer.")
-  const text = message.trim() || 'Modifications préparées avec Jaris'
+  if (changes.length === 0) throw new GithubError(0, t('github.err.noChanges'))
+  const text = message.trim() || t('github.defaultCommit')
   session.busy = true
   let result: { sha: string; url: string }
   try {

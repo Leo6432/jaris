@@ -13,10 +13,14 @@ import '@fontsource/geist-mono/latin-500.css'
 import App from './App'
 import ScreenScan from './components/ScreenScan'
 import './index.css'
+import { initRendererLanguage } from './lib/i18n'
 
 // L'overlay de scan (étape 18) est un arbre React totalement séparé de App (pas un mode de plus dans
 // App.tsx) : il n'a besoin d'aucun état Jaris ni d'aucune des vérifications d'onboarding qui protègent le
 // rendu de App, seulement d'un canvas plein écran piloté par electron/services/scanOverlay.ts.
+// Avant le premier rendu : l'écran naît dans la bonne langue (lecture synchrone auprès du processus principal).
+initRendererLanguage()
+
 const isScanOverlay = new URLSearchParams(window.location.search).get('mode') === 'scan'
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(

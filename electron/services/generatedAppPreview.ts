@@ -1,5 +1,6 @@
 import { protocol } from 'electron'
 import { randomUUID } from 'crypto'
+import { t } from '../../shared/i18n'
 
 const SCHEME = 'jaris-preview'
 
@@ -123,13 +124,13 @@ const BASE_HEADERS = {
 /** Sert un fichier d'un aperçu de dépôt. Exporté pour être testé sans Electron. */
 export async function serveFilesPreview(source: FilesPreviewSource, pathname: string): Promise<Response> {
   const path = previewPath(pathname)
-  if (path === null) return new Response('Chemin refusé', { status: 400 })
+  if (path === null) return new Response(t('preview.pathRefused'), { status: 400 })
   // Un site publié depuis un sous-dossier (docs/, public/…) écrit souvent « /style.css » pour un fichier rangé à côté
   // de sa page : sans ce second essai, ce lien pointerait à la racine du dépôt et l'aperçu s'afficherait sans style.
   const entryDir = source.entry.includes('/') ? source.entry.slice(0, source.entry.lastIndexOf('/')) : ''
   let content = await source.read(path)
   if (content === undefined && entryDir && !path.startsWith(`${entryDir}/`)) content = await source.read(`${entryDir}/${path}`)
-  if (content === undefined) return new Response('Fichier introuvable dans le dépôt', { status: 404 })
+  if (content === undefined) return new Response(t('preview.fileMissing'), { status: 404 })
   return new Response(typeof content === 'string' ? content : new Uint8Array(content), {
     headers: {
       ...BASE_HEADERS,
@@ -149,7 +150,7 @@ export function registerPreviewHandler(): void {
     const source = request.method === 'GET' && !url.username && !url.password && !url.port ? previews.get(url.hostname) : undefined
     if (source?.kind === 'files') return serveFilesPreview(source, url.pathname)
     const html = source?.kind === 'html' && url.pathname === '/index.html' && !url.search ? source.html : undefined
-    if (html === undefined) return new Response('Aperçu introuvable', { status: 404 })
+    if (html === undefined) return new Response(t('preview.missing'), { status: 404 })
     return new Response(html, {
       headers: {
         ...BASE_HEADERS,

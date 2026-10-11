@@ -1,3 +1,4 @@
+import { t, type MessageKey } from './i18n'
 /**
  * Le modèle vidéo de Jaris (étape 203, Léo : « ajoute vidéo : Wan 2.2-TI2V-5B »). Module pur, partagé par le main
  * (refus avant tout téléchargement) et l'écran, testé sans Electron.
@@ -56,7 +57,8 @@ export type VideoQuality = 'light' | 'q6' | 'q8' | 'original'
 
 export interface VideoQualityLevel {
   id: VideoQuality
-  label: string
+  /** Clé du catalogue (Faible, Moyen, Élevé, Extra), traduite par videoQualityLabel. */
+  label: MessageKey
   /** Mémoire vidéo minimale (Go, tolérance incluse : une carte « 8 Go » en annonce parfois 7,9). */
   minVramGb: number
   minRamGb: number
@@ -69,12 +71,12 @@ export const VIDEO_QUALITIES: VideoQualityLevel[] = [
   // Étape 209 (Léo, PC d'un ami avec 16 Go de RAM : Q6 refusé faute de RAM) : le MÊME modèle vidéo que Q6, mais
   // le lecteur de description en Q4 (3,7 Go au lieu de 4,7) — 9,3 Go de fichiers, ~14,3 Go de RAM avec Windows
   // et Jaris : tient dans 16 Go. Le lecteur ne sert qu'une fois par vidéo, à lire la description.
-  { id: 'light', label: 'Faible', minVramGb: 7.5, minRamGb: 15, vramLabel: 8, ramLabel: 16 },
-  { id: 'q6', label: 'Moyen', minVramGb: 7.5, minRamGb: 23, vramLabel: 8, ramLabel: 24 },
-  { id: 'q8', label: 'Élevé', minVramGb: 9.5, minRamGb: 23, vramLabel: 10, ramLabel: 24 },
+  { id: 'light', label: 'role.flash', minVramGb: 7.5, minRamGb: 15, vramLabel: 8, ramLabel: 16 },
+  { id: 'q6', label: 'role.medium', minVramGb: 7.5, minRamGb: 23, vramLabel: 8, ramLabel: 24 },
+  { id: 'q8', label: 'role.large', minVramGb: 9.5, minRamGb: 23, vramLabel: 10, ramLabel: 24 },
   // Étape 207 (Léo : « jusqu'à l'original, comme l'effort ») : sans compression. Modèle 10 Go + ~2,5 Go de calcul
   // + ~0,5 Go pour Windows → cartes de 16 Go ; trois fichiers 22,8 Go en RAM + ~5 Go → machines de 32 Go.
-  { id: 'original', label: 'Extra', minVramGb: 15.5, minRamGb: 30, vramLabel: 16, ramLabel: 32 }
+  { id: 'original', label: 'think.xhigh', minVramGb: 15.5, minRamGb: 30, vramLabel: 16, ramLabel: 32 }
 ]
 
 export function isVideoQuality(value: unknown): value is VideoQuality {
@@ -82,7 +84,8 @@ export function isVideoQuality(value: unknown): value is VideoQuality {
 }
 
 export function videoQualityLabel(quality: VideoQuality): string {
-  return VIDEO_QUALITIES.find((q) => q.id === quality)?.label ?? quality
+  const key = VIDEO_QUALITIES.find((q) => q.id === quality)?.label
+  return key ? t(key) : quality
 }
 
 export interface VideoQualityPick {
@@ -94,11 +97,11 @@ export interface VideoQualityPick {
 
 export function availableVideoQualities(vramGb: number | null, ramGb: number): VideoQualityPick {
   const lightest = VIDEO_QUALITIES[0]
-  if (vramGb === null) return { qualities: [], reason: `aucune carte graphique détectée (il en faut une de ${lightest.vramLabel} Go ou plus)` }
+  if (vramGb === null) return { qualities: [], reason: t('hw.noGpu', { need: lightest.vramLabel }) }
   if (vramGb < lightest.minVramGb) {
-    return { qualities: [], reason: `carte graphique trop petite (${vramGb} Go de VRAM, il en faut ${lightest.vramLabel} ou plus)` }
+    return { qualities: [], reason: t('hw.gpuTooSmall', { have: vramGb, need: lightest.vramLabel }) }
   }
-  if (ramGb < lightest.minRamGb) return { qualities: [], reason: `pas assez de RAM (${Math.round(ramGb)} Go, il en faut ${lightest.ramLabel} ou plus)` }
+  if (ramGb < lightest.minRamGb) return { qualities: [], reason: t('hw.notEnoughRam', { have: Math.round(ramGb), need: lightest.ramLabel }) }
   return { qualities: VIDEO_QUALITIES.filter((q) => vramGb >= q.minVramGb && ramGb >= q.minRamGb).map((q) => q.id), reason: null }
 }
 

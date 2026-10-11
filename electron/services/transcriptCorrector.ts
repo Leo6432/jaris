@@ -1,3 +1,4 @@
+import { replyLanguageName } from '../../shared/i18n'
 /**
  * Correcteur de ce que Léo a dit (étape 207, Léo : « pour le vocal, ajouter un correcteur un peu comme Apple » —
  * précisé : « corriger ce que j'ai dit », tout seul, avant la réponse). La transcription locale se trompe sur
@@ -18,7 +19,27 @@ export type CorrectionChat = (system: string, user: string, signal?: AbortSignal
 
 export const CORRECTION_TIMEOUT_MS = 6000
 
-export function correctionSystemPrompt(userName: string | null): string {
+/**
+ * Étape 293 (24 langues) : `language` est le nom anglais de la langue parlée (« German »). Hors français, les exemples
+ * français et les homophones propres à la transcription française sont retirés — un petit modèle aurait pu les prendre
+ * pour une invitation à TRADUIRE la phrase en français —, et la consigne interdit explicitement toute traduction.
+ */
+export function correctionSystemPrompt(userName: string | null, language = 'French'): string {
+  if (language !== 'French') {
+    return [
+      `Tu corriges la transcription automatique d'une phrase dite à voix haute, en ${language}, à un assistant vocal.`,
+      'Règles :',
+      `- La phrase est en ${language} : garde-la dans cette langue, ne la traduis JAMAIS.`,
+      '- Corrige UNIQUEMENT les mots mal reconnus (homophones, noms propres ou de marques déformés, mots coupés), les accents et la ponctuation.',
+      "- Ne réponds JAMAIS à la phrase. N'ajoute rien, ne retire rien, ne reformule pas : même sens, mêmes mots quand ils sont justes.",
+      "- L'assistant s'appelle « Jaris » (« Jarvis » devient « Jaris »).",
+      userName ? `- La personne qui parle s'appelle « ${userName} ».` : '',
+      "- S'il n'y a rien à corriger, renvoie la phrase telle quelle.",
+      'Réponds au format JSON demandé, avec la phrase corrigée dans « texte ».'
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
   return [
     "Tu corriges la transcription automatique d'une phrase dite à voix haute, en français, à un assistant vocal.",
     'Règles :',
@@ -62,7 +83,8 @@ function comparable(text: string): string {
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
+    // \p{L} et pas a-z : une phrase en russe ou en grec n'est pas vidée de toutes ses lettres (étape 293).
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()
 }
 
@@ -115,7 +137,7 @@ export async function correctTranscript(
   else signal?.addEventListener('abort', forward, { once: true })
   let raw: string
   try {
-    raw = await chat(correctionSystemPrompt(userName), original, controller.signal)
+    raw = await chat(correctionSystemPrompt(userName, replyLanguageName()), original, controller.signal)
   } catch (err) {
     if (signal?.aborted) throw err
     return { text: original, changed: false }

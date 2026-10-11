@@ -10,6 +10,7 @@ import { getProfile } from './profileStore'
 import { checkGpuTempSafety } from './resourceMonitor'
 import { readGeneratedImageDataUrl, type GeneratedImage } from './imageGenerator'
 import type { ChatMessage, SoundCue, WebActivity } from '../../shared/ipc'
+import { t } from '../../shared/i18n'
 
 /**
  * Nombre de messages gardés pour l'AFFICHAGE du fil de discussion, bien plus large que la fenêtre envoyée
@@ -110,7 +111,7 @@ class ChatSession {
    */
   private async answerAboutImage(prompt: string, imageBase64: string, onLog: (message: string) => void): Promise<string> {
     const profile = await getProfile()
-    onLog("Lecture de l'image…")
+    onLog(t('chat.readingImage'))
     return describeImage(
       imageBase64,
       prompt || "Décris cette image.",
@@ -148,7 +149,7 @@ class ChatSession {
     const live = await getLiveGpuStatus()
     const gpuStatus = checkGpuTempSafety(live.tempC)
     if (gpuStatus.action === 'abort' || gpuStatus.action === 'shutdown') {
-      onLog(`Sécurité thermique GPU : ${gpuStatus.message}`)
+      onLog(t('chat.gpuSafety', { message: gpuStatus.message ?? '' }))
       onSoundCue?.('error')
       return this.pushVisible({ role: 'assistant', content: gpuStatus.message as string })
     }
@@ -208,7 +209,7 @@ class ChatSession {
       // logique que pour un outil qui échoue (voir assistant.ts) : ne jamais cacher la vraie cause.
       return this.pushVisible({
         role: 'assistant',
-        content: `Je n'arrive pas à réfléchir pour le moment : ${detail}`,
+        content: t('chat.cannotThink', { detail }),
         ...(web.length ? { web } : {})
       })
     }
@@ -252,7 +253,7 @@ class ChatSession {
         ...(web.length ? { web } : {})
       })
     }
-    return this.pushVisible({ role: 'assistant', content: partial || 'Réponse arrêtée.', stopped: true, ...(web.length ? { web } : {}) })
+    return this.pushVisible({ role: 'assistant', content: partial || t('chat.stopped'), stopped: true, ...(web.length ? { web } : {}) })
   }
 
   private pushVisible(message: ChatMessage): ChatMessage {

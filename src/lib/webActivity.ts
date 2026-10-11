@@ -1,4 +1,5 @@
 import type { WebActivity } from '../../shared/ipc'
+import { t, tn } from '../../shared/i18n'
 
 /**
  * Étape 273 (Léo : « quand il recherche sur le web, tu peux pas faire comme Claude, une petite flèche pour voir ce
@@ -7,15 +8,15 @@ import type { WebActivity } from '../../shared/ipc'
  */
 export function webActivityLabel(items: WebActivity[]): string {
   const last = items[items.length - 1]
-  if (last?.pending) return last.kind === 'search' ? `Recherche : « ${last.query} »` : `Lecture de ${sourceDomain(last.url)}`
+  if (last?.pending) return last.kind === 'search' ? t('web.searching', { query: last.query }) : t('web.reading', { site: sourceDomain(last.url) })
   const done = items.filter((item) => !item.pending)
   const searches = done.filter((item) => item.kind === 'search')
   const reads = done.filter((item) => item.kind === 'read')
   const parts: string[] = []
-  if (searches.length === 1) parts.push('A cherché sur le web')
-  else if (searches.length > 1) parts.push(`A fait ${searches.length} recherches sur le web`)
-  if (reads.length) parts.push(`${parts.length ? 'lu' : 'A lu'} ${reads.length} page${reads.length > 1 ? 's' : ''}`)
-  return parts.join(' et ')
+  if (searches.length === 1) parts.push(t('web.searchedOnce'))
+  else if (searches.length > 1) parts.push(tn('web.searchedMany', searches.length))
+  if (reads.length) parts.push(tn(parts.length ? 'web.andRead' : 'web.read', reads.length))
+  return parts.join(t('web.and'))
 }
 
 /**

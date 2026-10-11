@@ -3,6 +3,7 @@ import { EventEmitter } from 'events'
 import { existsSync } from 'fs'
 import { createInterface } from 'readline'
 import type { Readable, Writable } from 'stream'
+import { t } from '../../shared/i18n'
 
 /** État du tunnel, sans les appareils (ajoutés par phoneAccessManager). */
 export type TunnelState =
@@ -42,6 +43,18 @@ export function isTailscaleUrl(value: string, kind: 'action' | 'address'): boole
  * les transforme en un état simple pour l'écran Options → Téléphone. Fermer son entrée standard l'arrête :
  * le tunnel ne survit jamais à Jaris.
  */
+/**
+ * Étape 293 : le module téléphone (tunnel/main.go) écrit ses étapes en français. Traduites ici, à l'arrivée, plutôt
+ * que dans le Go : ce sont les seules phrases qu'il produit lui-même (le reste vient de Tailscale, en anglais).
+ */
+export function translateTunnelText(text: string): string {
+  if (text.startsWith('Préparation du certificat sécurisé')) return t('phone.tunnel.cert')
+  if (text.startsWith("Vérification de l'adresse depuis internet")) return t('phone.tunnel.verify')
+  const notReachable = "L'adresse ne répond pas encore depuis internet : "
+  if (text.startsWith(notReachable)) return t('phone.tunnel.notReachable', { error: text.slice(notReachable.length) })
+  return text
+}
+
 export class PhoneTunnel extends EventEmitter {
   private proc: TunnelProcess | null = null
   private current: TunnelState = { state: 'off' }
@@ -65,7 +78,7 @@ export class PhoneTunnel extends EventEmitter {
 
   private run(args: string[], onEvent: (event: TunnelEvent) => void): TunnelProcess | null {
     if (!existsSync(this.binaryPath)) {
-      this.set({ state: 'unsupported', message: "Le module téléphone n'est pas présent dans cette installation de Jaris." })
+      this.set({ state: 'unsupported', message: t('phone.tunnel.missing') })
       return null
     }
     const proc = this.spawnFn(this.binaryPath, ['--state', this.stateDir, ...args], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
@@ -98,20 +111,20 @@ export class PhoneTunnel extends EventEmitter {
           this.set({
             state: 'enable_funnel',
             ...(event.url && isTailscaleUrl(event.url, 'action') ? { actionUrl: event.url } : {}),
-            ...(event.text ? { message: event.text } : {})
+            ...(event.text ? { message: translateTunnelText(event.text) } : {})
           })
           break
         case 'preparing':
-          this.set({ state: 'starting', message: event.text })
+          this.set({ state: 'starting', message: event.text ? translateTunnelText(event.text) : event.text })
           break
         case 'ready':
-          if (isTailscaleUrl(event.url, 'address')) this.set({ state: 'ready', address: event.url, ...(event.warning ? { warning: event.warning } : {}) })
-          else this.set({ state: 'error', message: `Adresse inattendue reçue de Tailscale : ${event.url}` })
+          if (isTailscaleUrl(event.url, 'address')) this.set({ state: 'ready', address: event.url, ...(event.warning ? { warning: translateTunnelText(event.warning) } : {}) })
+          else this.set({ state: 'error', message: t('phone.tunnel.badAddress', { url: event.url ?? '' }) })
           break
         case 'tls_error':
           // Une connexion sécurisée a échoué (téléphone ou vérification) : on le dit au lieu de le cacher.
-          if (this.current.state === 'ready') this.set({ ...this.current, warning: `Connexion sécurisée refusée : ${event.message}` })
-          else if (this.current.state === 'starting') this.set({ state: 'starting', message: `${this.current.message ?? 'Démarrage…'} (dernière erreur : ${event.message})` })
+          if (this.current.state === 'ready') this.set({ ...this.current, warning: t('phone.tunnel.tlsRefused', { error: event.message ?? '' }) })
+          else if (this.current.state === 'starting') this.set({ state: 'starting', message: t('phone.tunnel.lastError', { status: this.current.message ?? t('phone.tunnel.starting'), error: event.message ?? '' }) })
           break
         case 'error':
           this.set({ state: 'error', message: event.message })
@@ -124,7 +137,7 @@ export class PhoneTunnel extends EventEmitter {
       if (this.proc !== proc) return
       this.proc = null
       if (this.current.state !== 'error' && this.current.state !== 'off') {
-        this.set({ state: 'error', message: `Le tunnel s'est arrêté (code ${code}).` })
+        this.set({ state: 'error', message: t('phone.tunnel.stopped', { code: String(code) }) })
       }
     })
     proc.on('error', (err) => {

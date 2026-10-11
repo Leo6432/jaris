@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -18,7 +19,7 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/oll
 const mod = { exports: {} }
 vm.runInThisContext(`(function (exports, require, module) {\n${source}\n})`)(
   mod.exports,
-  (name) => (name === './modelsLocation' ? { currentRealDir: async () => null } : nodeRequire(name)),
+  withI18n((name) => (name === './modelsLocation' ? { currentRealDir: async () => null } : nodeRequire(name))),
   mod
 )
 const { decideModelsVariable, alignOllamaModelsVariable, countOllamaModels, samePath, repairOllamaModelsView } = mod.exports

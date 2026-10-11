@@ -1,5 +1,6 @@
 import { exec, spawn } from 'child_process'
 import { promisify } from 'util'
+import { allTranslations, t } from '../../shared/i18n'
 
 const execAsync = promisify(exec)
 const CACHE_TTL_MS = 5 * 60_000
@@ -185,9 +186,16 @@ export function findBestMatch(apps: StartApp[], query: string): StartApp | undef
  */
 export const APP_LAUNCHED_SUFFIX = 'a été lancé.'
 
-/** Vrai seulement si le résultat de `openApp` est son message de succès. */
+/**
+ * Vrai seulement si le résultat de `openApp` est son message de succès. Étape 293 : ce message suit la langue de
+ * Jaris (« {name} a été lancé. », « {name} was launched. »…) — reconnu dans toutes les langues, le nom de
+ * l'application pouvant être n'importe où dans la phrase selon la grammaire.
+ */
 export function didAppLaunch(result: string): boolean {
-  return result.endsWith(APP_LAUNCHED_SUFFIX)
+  return allTranslations('app.launched').some((template) => {
+    const [before, after] = template.split('{name}').map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    return after !== undefined && new RegExp(`^${before}.+${after}$`, 'su').test(result.trim())
+  })
 }
 
 function launch(command: string, args: string[]): Promise<string | null> {
@@ -204,21 +212,21 @@ export async function openApp(name: string): Promise<string> {
   // afficherait un nom vide entre guillemets) : voir findBestMatch ci-dessus, un nom vide/absent ouvrait
   // jusqu'ici l'application dont le nom est le plus court sur TOUTE la machine, sans rapport avec la demande.
   if (!name.trim()) {
-    return "Aucun nom d'application n'a été précisé : impossible de savoir laquelle ouvrir."
+    return t('app.noName')
   }
 
   let apps: StartApp[]
   try {
     apps = await listInstalledApps()
   } catch (err) {
-    return `Impossible de lister les applications installées : ${err instanceof Error ? err.message : String(err)}`
+    return t('app.listFailed', { error: err instanceof Error ? err.message : String(err) })
   }
 
   const match = findBestMatch(apps, name)
   if (!match) {
-    return `Je n'ai trouvé aucune application nommée "${name}" installée sur cette machine.`
+    return t('app.notFound', { name })
   }
 
   const error = await launch('explorer.exe', [`shell:appsFolder\\${match.AppID}`])
-  return error ? `Échec de l'ouverture de "${match.Name}" : ${error}` : `${match.Name} ${APP_LAUNCHED_SUFFIX}`
+  return error ? t('app.launchFailed', { name: match.Name, error }) : t('app.launched', { name: match.Name })
 }

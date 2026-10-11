@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { EventEmitter } from 'node:events'
@@ -34,7 +35,7 @@ function transpile(relativePath) {
 
 function loadPure(relativePath) {
   const module = { exports: {} }
-  vm.runInThisContext(`(function (exports, module) { ${transpile(relativePath)} })`)(module.exports, module)
+  vm.runInThisContext(`(function (exports, module, require) { ${transpile(relativePath)} })`)(module.exports, module, withI18n((name) => { throw new Error(`import inattendu : ${name}`) }))
   return module.exports
 }
 
@@ -43,7 +44,7 @@ function loadWith(relativePath, modules, fakeProcess) {
   vm.runInThisContext(`(function (exports, module, require, process) { ${transpile(relativePath)} })`)(
     module.exports,
     module,
-    (id) => modules[id] ?? nodeRequire(id),
+    withI18n((id) => modules[id] ?? nodeRequire(id)),
     fakeProcess
   )
   return module.exports
@@ -332,7 +333,7 @@ test('vidéo : Ollama libéré AVANT sd-cli, commande officielle de Wan 2.2, des
   assert.ok(!args.includes('-i'), 'sans image jointe, la vidéo part du texte seul')
   assert.match(args[args.indexOf('-o') + 1], /\.webm$/, 'WebM : lisible directement par l’écran')
   assert.equal(dirname(result.path), join(t.dataRoot, 'generated-videos'))
-  assert.deepEqual(logs.filter((l) => l.startsWith('Vidéo')), ['Vidéo : étape 1 sur 3', 'Vidéo : étape 2 sur 3', 'Vidéo : étape 3 sur 3'])
+  assert.deepEqual(logs.filter((l) => l.startsWith('Vidéo')), ['Vidéo : 1/3', 'Vidéo : 2/3', 'Vidéo : 3/3'])
   t.cleanup()
 })
 

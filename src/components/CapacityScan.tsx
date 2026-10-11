@@ -3,6 +3,7 @@ import type { CapacityScanResult, MyModelPicks as MyModelPicksData } from '../..
 import { formatModelName } from '../lib/formatModelName'
 import MyModelPicks from './MyModelPicks'
 import { PILOT_MODEL_LABEL } from '../../shared/pilotModel'
+import { t, tn } from '@/lib/i18n'
 
 interface CapacityScanProps {
   onDone: () => void
@@ -50,17 +51,14 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
   return (
     <div className="app">
       <div className="app__onboarding capacity-scan">
-        <h1>{result ? 'Configuration terminée' : 'Configuration de Jaris'}</h1>
+        <h1>{result ? t('setup.done.title') : t('setup.title')}</h1>
 
         {!result && !installing && !error && (
           <>
-            <p>
-              Jaris a regardé ta machine et choisi, pour chaque rôle, le meilleur modèle qui y tient — voici
-              ce qu'il va installer.
-            </p>
-            {picks === null ? <p className="capacity-scan__status">Détection du matériel...</p> : <MyModelPicks picks={picks} title="Modèles choisis pour ta machine" beforeInstall />}
+            <p>{t('setup.intro')}</p>
+            {picks === null ? <p className="capacity-scan__status">{t('options.retest.detecting')}</p> : <MyModelPicks picks={picks} title={t('setup.picks.title')} beforeInstall />}
             <button onClick={start} disabled={picks === null}>
-              Continuer
+              {t('common.continue')}
             </button>
           </>
         )}
@@ -68,59 +66,53 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
         {installing && (
           <>
             <div className="capacity-scan__spinner" />
-            <p className="capacity-scan__status">Téléchargement des modèles choisis...</p>
+            <p className="capacity-scan__status">{t('setup.downloading')}</p>
             {log.length > 0 && <p className="capacity-scan__status">{log[log.length - 1]}</p>}
           </>
         )}
 
         {error && (
           <>
-            <p className="capacity-scan__status">La configuration a échoué : {error}</p>
-            <button onClick={start}>Réessayer</button>
+            <p className="capacity-scan__status">{t('setup.failed', { error })}</p>
+            <button onClick={start}>{t('common.retry')}</button>
           </>
         )}
 
         {result && (
           <>
             <p>
-              Carte graphique : {result.gpuName ?? 'non détectée'}
-              {result.vramGb !== null ? ` (${result.vramGb} Go de VRAM)` : ''}
+              {t('setup.gpu', { gpu: result.gpuName ?? t('setup.gpu.none') })}
+              {result.vramGb !== null ? ` (${t('picks.vram', { gb: result.vramGb })})` : ''}
             </p>
             <ul className="capacity-scan__models">
-              <li>Faible : {formatModelName(result.models.flash)}</li>
-              <li>Moyen : {formatModelName(result.models.medium)}</li>
-              <li>Élevé : {formatModelName(result.models.large)}</li>
-              <li>Vision : {formatModelName(result.visionModel)}</li>
-              <li>Code : {formatModelName(result.codeModel)}</li>
-              {result.image && <li>Image : {result.image.model ?? 'aucun modèle (pas assez de puissance)'}</li>}
+              <li>{t('common.labelValue', { label: t('role.flash'), value: formatModelName(result.models.flash) })}</li>
+              <li>{t('common.labelValue', { label: t('role.medium'), value: formatModelName(result.models.medium) })}</li>
+              <li>{t('common.labelValue', { label: t('role.large'), value: formatModelName(result.models.large) })}</li>
+              <li>{t('common.labelValue', { label: t('role.vision'), value: formatModelName(result.visionModel) })}</li>
+              <li>{t('common.labelValue', { label: t('app.mode.code'), value: formatModelName(result.codeModel) })}</li>
+              {result.image && <li>{t('common.labelValue', { label: t('app.mode.image'), value: result.image.model ?? t('setup.image.none') })}</li>}
               {result.pilot && (
-                <li>Pilotage d'écran : {result.pilot.model ? PILOT_MODEL_LABEL : 'le modèle Vision (pas assez de puissance pour un modèle dédié)'}</li>
+                <li>{t('common.labelValue', { label: t('role.pilot'), value: result.pilot.model ? PILOT_MODEL_LABEL : t('setup.pilot.none') })}</li>
               )}
             </ul>
             {result.image?.error && (
               <div className="capacity-scan__warning">
-                <p>Le modèle d'image n'a pas pu être installé : {result.image.error}</p>
+                <p>{t('setup.image.error', { error: result.image.error })}</p>
               </div>
             )}
             {result.pilot?.error && (
               <div className="capacity-scan__warning">
-                <p>Le modèle de pilotage d'écran n'a pas pu être installé : {result.pilot.error}. Le modèle Vision pilote l'écran en attendant.</p>
+                <p>{t('setup.pilot.error', { error: result.pilot.error })}</p>
               </div>
             )}
-            <p className="capacity-scan__hint">
-              Jaris choisit automatiquement le modèle le plus adapté à chaque question. Modifiable plus tard
-              depuis Options → Modèles.
-            </p>
+            <p className="capacity-scan__hint">{t('setup.hint')}</p>
             {result.skippedModels && result.skippedModels.length > 0 && (
               <div className="capacity-scan__warning">
-                <p>
-                  Attention : {result.skippedModels.length > 1 ? 'certains modèles ci-dessus ne sont' : 'un des modèles ci-dessus n\'est'} en
-                  réalité pas {result.skippedModels.length > 1 ? 'installés' : 'installé'}, Jaris utilisera un repli moins bon en attendant :
-                </p>
+                <p>{tn('setup.skipped', result.skippedModels.length)}</p>
                 <ul>
                   {result.skippedModels.map(({ model, reason }) => (
                     <li key={model}>
-                      {formatModelName(model)} : {reason}
+                      {t('common.labelValue', { label: formatModelName(model), value: reason })}
                     </li>
                   ))}
                 </ul>
@@ -128,20 +120,17 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
             )}
             {result.blockedModels && result.blockedModels.length > 0 && (
               <div className="capacity-scan__warning">
-                <p>
-                  {result.blockedModels.length > 1 ? 'Ces meilleurs modèles n\'ont' : 'Ce meilleur modèle n\'a'} pas pu être
-                  téléchargé pour l'instant, Jaris utilise le suivant à la place :
-                </p>
+                <p>{tn('setup.blocked', result.blockedModels.length)}</p>
                 <ul>
                   {result.blockedModels.map(({ model, reason }) => (
                     <li key={model}>
-                      {formatModelName(model)} : {reason}
+                      {t('common.labelValue', { label: formatModelName(model), value: reason })}
                     </li>
                   ))}
                 </ul>
               </div>
             )}
-            <button onClick={finish}>Continuer</button>
+            <button onClick={finish}>{t('common.continue')}</button>
           </>
         )}
       </div>

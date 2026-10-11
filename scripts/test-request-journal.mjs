@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -26,7 +27,7 @@ function load(path, modules = {}, extra = {}) {
   const names = Object.keys(extra)
   vm.runInThisContext(`(function (exports, require, module${names.map((n) => `, ${n}`).join('')}) {\n${transpile(path)}\n})`)(
     module.exports,
-    (name) => modules[name] ?? nodeRequire(name),
+    withI18n((name) => modules[name] ?? nodeRequire(name)),
     module,
     ...names.map((n) => extra[n])
   )

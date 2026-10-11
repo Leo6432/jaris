@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -14,7 +15,7 @@ const source = ts.transpileModule(readFileSync(new URL('../src/lib/formatRecentD
 }).outputText
 
 const exports = {}
-vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(exports, { exports }, () => ({}))
+vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(exports, { exports }, withI18n(() => ({})))
 const { formatRecentDate } = exports
 
 const NOW = new Date(2026, 8, 14, 15, 30) // 14 septembre 2026, 15h30 (mois 0-indexé)

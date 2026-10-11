@@ -3,6 +3,7 @@ import { readdir, realpath } from 'fs/promises'
 import { homedir } from 'os'
 import { join, win32 } from 'path'
 import { currentRealDir } from './modelsLocation'
+import { t } from '../../shared/i18n'
 
 /**
  * Étape 254 — Léo : « tous les modèles ne sont pas installés sauf vidéo et image », même après « Retester » et un
@@ -154,34 +155,27 @@ export async function alignOllamaModelsVariable(
       await deps.writeUserVar(decision.to)
     } catch (err) {
       // Sans le réglage de Windows, le Ollama que Jaris démarre reçoit quand même le bon chemin (ci-dessous).
-      log(`Jaris n'a pas pu enregistrer le dossier des modèles dans Windows : ${err instanceof Error ? err.message : String(err)}`)
+      log(t('omv.saveFailed', { error: err instanceof Error ? err.message : String(err) }))
     }
     process.env.OLLAMA_MODELS = decision.to
-    log(
-      `Ollama cherchait tes modèles par un raccourci de dossier (${decision.from}), que ses versions récentes ne savent plus ` +
-        `lire : il reçoit maintenant leur vrai emplacement, ${decision.to}, et redémarre. Rien n'a été déplacé ni effacé.`
-    )
+    log(t('omv.resolved', { from: decision.from, to: decision.to }))
     await stopOllama()
     return true
   }
-  const counts = `${decision.fromCount} modèle(s) là-bas, ${decision.toCount} dans ${decision.to}`
+  const counts = t('omv.counts', { fromCount: decision.fromCount, toCount: decision.toCount, to: decision.to })
   if (decision.action === 'warn-machine') {
-    log(
-      `Ollama cherche ses modèles dans ${decision.from} (réglage OLLAMA_MODELS de Windows, pour toute la machine) au lieu de ${decision.to} : ${counts}. ` +
-        'Jaris ne peut pas le changer sans droits administrateur : mets le réglage « emplacement des modèles » d’Ollama sur ' +
-        `${decision.to}.`
-    )
+    log(t('omv.machineWide', { from: decision.from, to: decision.to, counts }))
     return false
   }
   try {
     await deps.writeUserVar(decision.to)
   } catch (err) {
-    log(`Ollama cherche ses modèles dans ${decision.from} au lieu de ${decision.to} (${counts}), et Jaris n'a pas pu corriger le réglage : ${err instanceof Error ? err.message : String(err)}`)
+    log(t('omv.fixFailed', { from: decision.from, to: decision.to, counts, error: err instanceof Error ? err.message : String(err) }))
     return false
   }
   // Ollama, et tout ce que Jaris lance ensuite, héritent de la variable de CE processus : elle doit suivre aussi.
   process.env.OLLAMA_MODELS = decision.to
-  log(`Ollama cherchait ses modèles dans ${decision.from} (${counts}) : réglage remis sur ${decision.to}, Ollama redémarre. Rien n'a été effacé.`)
+  log(t('omv.fixed', { from: decision.from, to: decision.to, counts }))
   await stopOllama()
   return true
 }
@@ -230,15 +224,15 @@ export function repairOllamaModelsView(
       if (onDisk === 0 || (await deps.serverModelCount()) !== 0) return false
       if (now - lastRepairAt < REPAIR_INTERVAL_MS) return false
       lastRepairAt = now
-      log(`Ollama ne voit aucun de tes ${onDisk} modèles, pourtant bien rangés dans ${dir} : Jaris le relance en lui donnant ce dossier…`)
+      log(t('omv.repairing', { count: onDisk, dir }))
       process.env.OLLAMA_MODELS = dir
       await deps.restartOllama()
       const seen = await deps.serverModelCount()
       if (seen) {
-        log(`Ollama voit de nouveau tes modèles (${seen}).`)
+        log(t('omv.repaired', { count: seen }))
         return true
       }
-      log(`Ollama ne voit toujours pas tes modèles, rangés dans ${dir}. Redémarre l'ordinateur, puis relance Jaris.`)
+      log(t('omv.repairFailed', { dir }))
       return false
     } catch {
       return false

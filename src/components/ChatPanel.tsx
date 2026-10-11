@@ -13,6 +13,7 @@ import ModelEffortPicker from './ModelEffortPicker'
 import WebActivityBlock from './WebActivityBlock'
 import { mergeWebActivity } from '@/lib/webActivity'
 import { DownloadIcon } from './icons'
+import { t } from '@/lib/i18n'
 
 /**
  * Mode Chat (étape 30) : la même conversation que la voix, au clavier. Le fil vit côté main
@@ -161,8 +162,8 @@ export default function ChatPanel(): JSX.Element {
 
   return (
     <Workspace
-      newLabel="Nouvelle conversation"
-      label="Chat"
+      newLabel={t('chat.new')}
+      label={t('app.mode.chat')}
       onNew={() => void applyConversationChange(window.jaris.createConversation())}
       items={(conversations?.conversations ?? []).map((conversation) => ({
         id: conversation.id,
@@ -172,15 +173,15 @@ export default function ChatPanel(): JSX.Element {
       activeId={conversations?.activeId ?? null}
       onSelect={(id) => void applyConversationChange(window.jaris.selectConversation(id))}
       onDelete={(id) => void applyConversationChange(window.jaris.deleteConversation(id))}
-      emptyLabel="Aucune conversation pour l'instant."
+      emptyLabel={t('code.listEmpty')}
     >
       <div className="chat-panel">
         <div className="chat-panel__thread" ref={threadRef}>
           {messages.length === 0 && !sending && (
             <EmptyState
-              title="Que puis-je faire pour toi ?"
-              description="Écris à Jaris comme tu lui parles. Il a les mêmes outils qu'à la voix : ouvrir une application, chercher sur le web, regarder ton écran, retenir une information, envoyer un mail, dessiner une image."
-              suggestions={['Résume mes mails non lus', 'Quel temps demain à Lyon ?', 'Ouvre Spotify et mets du jazz']}
+              title={t('app.voice.prompt')}
+              description={t('chat.empty.hint')}
+              suggestions={[t('chat.suggest.1'), t('chat.suggest.2'), t('chat.suggest.3')]}
               onSuggestion={(text) => void send(text)}
             />
           )}
@@ -191,26 +192,26 @@ export default function ChatPanel(): JSX.Element {
               <div className="chat-panel__body">
               {message.web && <WebActivityBlock items={message.web} />}
               {message.image && message.role === 'user' && (
-                <img className="chat-panel__message-image" src={message.image} alt="Image envoyée à Jaris" />
+                <img className="chat-panel__message-image" src={message.image} alt={t('chat.image.sent')} />
               )}
               {renderFormattedText(message.content)}
               {/* Étape 272 : réponse coupée par « Arrêter » — dit discrètement, pour qu'une phrase tronquée ne
                   passe pas pour une réponse complète. */}
-              {message.stopped && message.content !== 'Réponse arrêtée.' && <p className="chat-panel__stopped">Réponse arrêtée.</p>}
+              {message.stopped && message.content !== t('chat.stopped') && <p className="chat-panel__stopped">{t('chat.stopped')}</p>}
               {/* Étape 173 : image dessinée par Jaris, sous sa réponse et en grand. */}
               {message.image && message.role === 'assistant' && (
                 <figure className="chat-panel__generated">
                   <img
                     className="chat-panel__message-image chat-panel__message-image--generated"
                     src={message.image}
-                    alt="Image dessinée par Jaris"
+                    alt={t('chat.image.drawn')}
                   />
                   {/* Étape 185 : Windows demande où l'enregistrer (fenêtre « Enregistrer sous », côté main). */}
                   <button
                     type="button"
                     className="chat-panel__save-image"
-                    title={savedIndex === index ? 'Image enregistrée' : "Télécharger l'image"}
-                    aria-label={savedIndex === index ? 'Image enregistrée' : "Télécharger l'image"}
+                    title={savedIndex === index ? t('chat.image.saved') : t('chat.image.download')}
+                    aria-label={savedIndex === index ? t('chat.image.saved') : t('chat.image.download')}
                     onClick={() => void saveImage(message.image as string, index)}
                   >
                     {savedIndex === index ? '✓' : <DownloadIcon />}
@@ -239,7 +240,7 @@ export default function ChatPanel(): JSX.Element {
                         <span />
                         <span />
                       </span>
-                      <span className="chat-panel__progress">{progress ?? 'Jaris réfléchit…'}</span>
+                      <span className="chat-panel__progress">{progress ?? t('app.status.thinking')}</span>
                     </div>
                   )
                 )}
@@ -254,9 +255,9 @@ export default function ChatPanel(): JSX.Element {
           value={input}
           onChange={setInput}
           onSubmit={() => void send()}
-          placeholder="Écris à Jaris…"
-          submitLabel="Envoyer"
-          busyLabel="Envoi…"
+          placeholder={t('chat.placeholder')}
+          submitLabel={t('common.send')}
+          busyLabel={t('chat.sending')}
           busy={sending}
           onStop={() => window.jaris.cancelChat()}
           extraActions={<ModelEffortPicker mode="chat" disabled={sending} />}

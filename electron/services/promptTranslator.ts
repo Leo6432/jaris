@@ -11,11 +11,13 @@ import { getProfile } from './profileStore'
  */
 export const TRANSLATE_SYSTEM_PROMPT = [
   "Tu traduis en anglais la description d'une image à dessiner, pour un modèle de dessin qui ne comprend que l'anglais.",
+  // Étape 293 (24 langues) : la demande arrive dans la langue choisie dans Jaris — jamais supposée française.
+  "La description peut être écrite dans n'importe quelle langue (français, allemand, espagnol, russe, grec, polonais…) : traduis-la toujours vers l'anglais, jamais vers une autre langue.",
   'Réponds UNIQUEMENT par la traduction anglaise, sur une seule ligne, sans guillemets, sans explication.',
   "Garde exactement le sens : n'ajoute aucun détail, n'en retire aucun.",
-  'Attention aux faux amis : « chat » = cat, « chien » = dog, « coin » = corner, « pain » = bread, « car » = because.',
+  'Attention aux faux amis : « chat » = cat, « chien » = dog, « coin » = corner, « pain » = bread, « car » = because ; en allemand « Gift » = poison, « Rock » = skirt ; en espagnol « carpeta » = folder.',
   'Si la description est déjà en anglais, recopie-la telle quelle.',
-  'Exemples : « un chat » → a cat ; « un phare au crépuscule, aquarelle » → a lighthouse at dusk, watercolor.'
+  'Exemples : « un chat » → a cat ; « un phare au crépuscule, aquarelle » → a lighthouse at dusk, watercolor ; « ein Hund im Schnee » → a dog in the snow ; « кот на диване » → a cat on a sofa.'
 ].join('\n')
 
 export interface TranslateDeps {

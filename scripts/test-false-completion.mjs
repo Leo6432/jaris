@@ -5,6 +5,7 @@ import vm from 'node:vm'
 import ts from 'typescript'
 import { modelChoiceModule } from './load-model-choice.mjs'
 import { systemPromptModule } from './load-system-prompt.mjs'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * findLeakedToolName (assistant.ts) détecte qu'une réponse SANS appel d'outil mentionne malgré tout le nom
@@ -43,7 +44,7 @@ const modules = {
   './resourceMonitor': {}
 }
 const exports = {}
-vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports } })
+vm.runInNewContext(source, { exports, require: withI18n((name) => modules[name]), module: { exports } })
 const { findLeakedToolName } = exports
 
 test('reproduit le vrai cas rapporté par Léo : une action déjà "faite" au passé composé, avec le nom de l\'outil', () => {

@@ -5,6 +5,7 @@ import vm from 'node:vm'
 import ts from 'typescript'
 import { modelChoiceModule } from './load-model-choice.mjs'
 import { loadTsModule } from './load-ts-module.mjs'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * Reproduit en usage réel (Léo, "un jeu Snake") : le modèle a répondu en Python/tkinter au lieu de HTML,
@@ -77,7 +78,7 @@ function setup(responses, { profile = { codeModel: 'test-model', visionModel: 'v
     }
   }
   const exports = {}
-  vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports }, console, ...TIMERS })
+  vm.runInNewContext(source, { exports, require: withI18n((name) => modules[name]), module: { exports }, console, ...TIMERS })
   return {
     generateApp: (description, currentHtml, imageBase64) =>
       exports.generateApp(description, (line) => statusLines.push(line), currentHtml, imageBase64, {

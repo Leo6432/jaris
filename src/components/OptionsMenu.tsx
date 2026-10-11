@@ -23,10 +23,14 @@ import MyModelPicks from './MyModelPicks'
 import JarisOrb from './JarisOrb'
 import { formatModelName } from '../lib/formatModelName'
 import { formatContextLength } from '../lib/formatContextLength'
+import { currentLocale, t, tn } from '../lib/i18n'
+import { LANGUAGES, languageInfo, type LanguageSetting } from '../../shared/i18n/languages'
+import type { MessageKey } from '../../shared/i18n'
 
 interface VoiceOption {
   id: string
-  description: string
+  /** Clé du catalogue (shared/i18n/fr.ts) : traduite au moment du rendu, jamais figée à la langue du démarrage. */
+  description: MessageKey
   /** Couleur de l'anneau JarisOrb pour distinguer cette voix (voir color? dans JarisOrb.tsx) — même forme
    * (anneau déchiqueté) que sur l'accueil pour toutes les voix, JAMAIS un cercle lisse générique : seule la
    * couleur change, à la demande explicite de Léo ("fait pas un cercle rond... fait le même cercle que dans
@@ -35,16 +39,16 @@ interface VoiceOption {
 }
 
 const TTS_VOICES: VoiceOption[] = [
-  { id: 'M1', description: 'Vive, énergique', color: '#37e2ff' },
-  { id: 'M2', description: 'Grave, sérieuse', color: '#2b6cff' },
-  { id: 'M3', description: 'Autoritaire, confiante', color: '#6c5ce7' },
-  { id: 'M4', description: 'Douce, jeune', color: '#55e6c1' },
-  { id: 'M5', description: 'Chaleureuse, narrative', color: '#feca57' },
-  { id: 'F1', description: 'Calme, posée', color: '#ff9ff3' },
-  { id: 'F2', description: 'Vive, enjouée', color: '#ff6b81' },
-  { id: 'F3', description: 'Professionnelle', color: '#48dbfb' },
-  { id: 'F4', description: 'Nette, confiante', color: '#c8d6e5' },
-  { id: 'F5', description: 'Douce, bienveillante', color: '#ffb8b8' }
+  { id: 'M1', description: 'options.voice.M1', color: '#37e2ff' },
+  { id: 'M2', description: 'options.voice.M2', color: '#2b6cff' },
+  { id: 'M3', description: 'options.voice.M3', color: '#6c5ce7' },
+  { id: 'M4', description: 'options.voice.M4', color: '#55e6c1' },
+  { id: 'M5', description: 'options.voice.M5', color: '#feca57' },
+  { id: 'F1', description: 'options.voice.F1', color: '#ff9ff3' },
+  { id: 'F2', description: 'options.voice.F2', color: '#ff6b81' },
+  { id: 'F3', description: 'options.voice.F3', color: '#48dbfb' },
+  { id: 'F4', description: 'options.voice.F4', color: '#c8d6e5' },
+  { id: 'F5', description: 'options.voice.F5', color: '#ffb8b8' }
 ]
 
 const DEFAULT_VOICE_INDEX = TTS_VOICES.findIndex((v) => v.id === 'M3')
@@ -81,16 +85,14 @@ export interface MicTestVerdict {
  * micro trop faible (un vrai micro a toujours un léger souffle) : c'est Windows qui ne donne aucun son.
  */
 export function micTestVerdict(done: MicTestDonePayload): MicTestVerdict {
-  if (done.detected) return { ok: true, text: 'Micro détecté : du son a bien été capté.' }
+  if (done.detected) return { ok: true, text: t('options.micTest.detected') }
   if (done.silentStream) {
     return {
       ok: false,
-      text:
-        "Windows n'envoie aucun son (silence total). Le micro est sans doute coupé dans Windows, ou bloqué : " +
-        'Paramètres Windows → Confidentialité et sécurité → Microphone → active « Autoriser les applications de bureau à accéder au microphone ».'
+      text: t('options.micTest.silent')
     }
   }
-  return { ok: false, text: "Son trop faible : vérifie que le bon micro est sélectionné et parle plus près." }
+  return { ok: false, text: t('options.micTest.tooQuiet') }
 }
 
 export function groupWakeHeard(heard: WakeTestHeardPayload[]): WakeTestRow[] {
@@ -99,14 +101,14 @@ export function groupWakeHeard(heard: WakeTestHeardPayload[]): WakeTestRow[] {
   for (const h of heard) {
     if (h.matched) continue
     // « Rice. », « Rice? » et « rice » sont le même mot compris : regroupés, affichés sans ponctuation finale.
-    const shown = h.tooShort ? 'Son trop court ou trop faible' : h.text ? h.text.replace(/[\s.,!?;:…]+$/u, '') : 'Rien compris'
+    const shown = h.tooShort ? t('options.wakeTest.tooShort') : h.text ? h.text.replace(/[\s.,!?;:…]+$/u, '') : t('options.wakeTest.nothing')
     const key = shown.toLowerCase()
-    const row = misses.get(key) ?? { label: h.tooShort || !h.text ? shown : `« ${shown} »`, count: 0, matched: false }
+    const row = misses.get(key) ?? { label: h.tooShort || !h.text ? shown : t('common.quoted', { text: shown }), count: 0, matched: false }
     row.count += 1
     misses.set(key, row)
   }
   const rows = [...misses.values()].sort((a, b) => b.count - a.count)
-  return recognized ? [{ label: 'Reconnu', count: recognized, matched: true }, ...rows] : rows
+  return recognized ? [{ label: t('options.wakeTest.recognized'), count: recognized, matched: true }, ...rows] : rows
 }
 
 // Refonte étape 115 (Léo : "il ya des categorie dans les options qui peuvent etre ensemble, refait
@@ -127,11 +129,11 @@ type Tab = 'capacites' | 'voix' | 'modeles' | 'telephone' | 'general'
  * "Ce que Jaris sait faire" (capacites) garde sa propre phrase d'intro DANS sa section (étape 111), pas ce
  * gabarit — seuls les 3 onglets de réglages en ont besoin.
  */
-const TAB_META: Partial<Record<Tab, { title: string; subtitle: string }>> = {
-  voix: { title: 'Voix', subtitle: "La voix de Jaris, les périphériques qu'il utilise, et les façons de le réveiller." },
-  modeles: { title: 'Modèles', subtitle: 'Ce que ta machine fait tourner, et combien Jaris garde en tête pendant une conversation.' },
-  telephone: { title: 'Téléphone', subtitle: 'Parler à Jaris depuis ton téléphone, de n’importe où, sans rien installer dessus.' },
-  general: { title: 'Général', subtitle: "L'application elle-même : version, fichiers, historique." }
+const TAB_META: Partial<Record<Tab, { title: MessageKey; subtitle: MessageKey }>> = {
+  voix: { title: 'options.tab.voice', subtitle: 'options.tab.voice.subtitle' },
+  modeles: { title: 'options.tab.models', subtitle: 'options.tab.models.subtitle' },
+  telephone: { title: 'options.tab.phone', subtitle: 'options.tab.phone.subtitle' },
+  general: { title: 'options.tab.general', subtitle: 'options.tab.general.subtitle' }
 }
 
 /**
@@ -182,7 +184,7 @@ export function ReliabilityBadge({ value, label }: { value: string | null; label
  */
 export function scoreTestLabel(value: string | null): string | undefined {
   const total = value?.split('/')[1]
-  return total === '78' ? 'Questions' : total === '48' ? 'Demandes' : total === '34' ? 'Images' : total === '5' ? 'Code' : undefined
+  return total === '78' ? t('options.score.questions') : total === '48' ? t('options.score.requests') : total === '34' ? t('options.score.images') : total === '5' ? t('options.score.code') : undefined
 }
 
 
@@ -261,6 +263,10 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
   // Étape 180 (Léo : « ça marche 1 fois sur 3 ») : ce que Jaris a compris à chaque « Jaris » dit pendant le test.
   const [wakeTesting, setWakeTesting] = useState(false)
   const [wakeHeard, setWakeHeard] = useState<WakeTestHeardPayload[]>([])
+  // Langue (Options → Général) : lue de façon synchrone (comme au démarrage), puis tenue à jour par le changement.
+  const [languageSetting, setLanguageSetting] = useState<LanguageSetting>(() => window.jaris.getLanguageState?.()?.setting ?? 'auto')
+  const [systemLanguage, setSystemLanguage] = useState(() => window.jaris.getLanguageState?.()?.systemCode ?? 'fr')
+  const [savingLanguage, setSavingLanguage] = useState(false)
 
   useEffect(() => {
     window.jaris.getProfile().then((p) => {
@@ -448,9 +454,23 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
     return window.jaris.onModelBenchmarkLine(setRetestLine)
   }, [retestingConfig])
 
+  const chooseLanguage = (next: LanguageSetting): void => {
+    setLanguageSetting(next)
+    setSavingLanguage(true)
+    setError(null)
+    window.jaris
+      .setLanguage(next)
+      .then((state) => {
+        setLanguageSetting(state.setting)
+        setSystemLanguage(state.systemCode)
+      })
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setSavingLanguage(false))
+  }
+
   const handleRetestConfiguration = async (): Promise<void> => {
     setError(null)
-    setRetestLine('Détection du matériel...')
+    setRetestLine(t('options.retest.detecting'))
     setRetestingConfig(true)
     try {
       const result = await window.jaris.runQuickSetup()
@@ -461,8 +481,9 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
       // à l'utiliser bien plus tard, loin du vrai moment de la cause (voir aussi CapacityScan.tsx).
       if (result.skippedModels?.length) {
         setError(
-          `Configuration mise à jour, mais ${result.skippedModels.length > 1 ? 'ces modèles ont' : 'ce modèle a'} ` +
-            `été ignoré : ${result.skippedModels.map((s) => `${s.model} (${s.reason})`).join(' ; ')}`
+          tn('options.retest.skipped', result.skippedModels.length, {
+            models: result.skippedModels.map((s) => `${s.model} (${s.reason})`).join(' ; ')
+          })
         )
       }
     } catch (err) {
@@ -479,7 +500,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
   }
 
   const handleClearHistory = async (): Promise<void> => {
-    if (!window.confirm("Supprimer définitivement tout l'historique des conversations ?")) return
+    if (!window.confirm(t('options.history.confirmClear'))) return
     setError(null)
     setClearingHistory(true)
     try {
@@ -528,18 +549,18 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
       .checkForUpdate()
       .then(({ status, error }) => {
         if (error) {
-          setUpdateCheckMessage(`Vérification impossible : ${error}`)
+          setUpdateCheckMessage(t('options.update.checkFailed', { error }))
           return
         }
         if (status) {
           setAppVersionStatus(status)
           setUpdateCheckMessage(
             status.outdated
-              ? `Nouvelle version disponible : ${status.latest} (tu as ${status.current}).`
-              : `Jaris est à jour (${status.current}).`
+              ? t('options.update.available', { latest: status.latest ?? '', current: status.current })
+              : t('options.update.upToDate', { current: status.current })
           )
         } else {
-          setUpdateCheckMessage("Aucune version publiée n'a été trouvée sur GitHub.")
+          setUpdateCheckMessage(t('options.update.noRelease'))
         }
       })
       .catch((err: unknown) => setUpdateCheckMessage(err instanceof Error ? err.message : String(err)))
@@ -555,8 +576,8 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
         setOllamaInstallerPending(false)
         setOllamaUpdateMessage(
           status.outdated
-            ? `L'installation d'Ollama n'a pas abouti : la version ${status.current} est toujours là. Tu peux relancer la mise à jour.`
-            : `Ollama est à jour (${status.current}).`
+            ? t('options.ollama.installFailed', { current: status.current ?? '' })
+            : t('options.ollama.upToDate', { current: status.current ?? '' })
         )
       }),
     []
@@ -739,7 +760,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
     void window.jaris.testWakeWord().then(({ started, reason }) => {
       if (started) return
       setWakeTesting(false)
-      setVoiceTestIssue({ test: 'wake', text: reason ?? "Le test n'a pas pu démarrer." })
+      setVoiceTestIssue({ test: 'wake', text: reason ?? t('options.test.couldNotStart') })
     })
   }
 
@@ -758,7 +779,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
     void window.jaris.testMicrophone().then(({ started, reason }) => {
       if (started) return
       setMicTesting(false)
-      setVoiceTestIssue({ test: 'mic', text: reason ?? "Le test n'a pas pu démarrer." })
+      setVoiceTestIssue({ test: 'mic', text: reason ?? t('options.test.couldNotStart') })
     })
   }
 
@@ -769,35 +790,35 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
           <circle cx="12" cy="12" r="3" />
           <path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1" />
         </svg>
-        Options
+        {t('options.title')}
       </button>
     )
   }
 
   const navigation = (
-    <aside className="options-page__navigation" aria-label="Sections des options">
+    <aside className="options-page__navigation" aria-label={t('options.nav.label')}>
       {/* Deux catégories distinctes, à la demande de Léo (étape 111) : "Ce que Jaris sait faire" n'est
           pas un réglage — on n'y change rien, on y découvre. Le laisser en tête de "Réglages" le faisait
           passer pour un panneau de configuration de plus. */}
-      <span className="options-page__navigation-label">Découvrir</span>
+      <span className="options-page__navigation-label">{t('options.nav.discover')}</span>
       <nav className="options-menu__tabs">
         <button className={`options-menu__tab${tab === 'capacites' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('capacites')}>
-          Ce que Jaris sait faire
+          {t('options.tab.capabilities')}
         </button>
       </nav>
-      <span className="options-page__navigation-label options-page__navigation-label--next">Réglages</span>
+      <span className="options-page__navigation-label options-page__navigation-label--next">{t('options.nav.settings')}</span>
       <nav className="options-menu__tabs">
         <button className={`options-menu__tab${tab === 'voix' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('voix')}>
-          Voix
+          {t('options.tab.voice')}
         </button>
         <button className={`options-menu__tab${tab === 'modeles' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('modeles')}>
-          Modèles
+          {t('options.tab.models')}
         </button>
         <button className={`options-menu__tab${tab === 'telephone' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('telephone')}>
-          Téléphone
+          {t('options.tab.phone')}
         </button>
         <button className={`options-menu__tab${tab === 'general' ? ' options-menu__tab--active' : ''}`} onClick={() => setTab('general')}>
-          Général
+          {t('options.tab.general')}
         </button>
       </nav>
     </aside>
@@ -808,12 +829,12 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
       className={`options-page${embedded ? ' options-page--embedded' : ''}`}
       role={embedded ? undefined : 'dialog'}
       aria-modal={embedded ? undefined : true}
-      aria-label="Options de Jaris"
+      aria-label={t('options.page.label')}
     >
       <header className="options-page__header">
         <div>
           <span className="options-page__eyebrow">Jaris</span>
-          <h2>Options</h2>
+          <h2>{t('options.title')}</h2>
         </div>
         <button
           className="options-page__close"
@@ -832,7 +853,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
             setOpen(false)
           }}
         >
-          Fermer
+          {t('common.close')}
         </button>
       </header>
 
@@ -844,20 +865,17 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
           <div className="options-page__content">
         {TAB_META[tab] && (
           <div className="options-page__tab-header">
-            <h3>{TAB_META[tab]!.title}</h3>
-            <p>{TAB_META[tab]!.subtitle}</p>
+            <h3>{t(TAB_META[tab]!.title)}</h3>
+            <p>{t(TAB_META[tab]!.subtitle)}</p>
           </div>
         )}
         {tab === 'capacites' && (
           <div className="options-menu__section">
-            <p className="options-menu__capability-intro">
-              Tu n'as rien à activer : dis-le, ou écris-le dans le Chat. Les phrases en exemple marchent
-              telles quelles.
-            </p>
+            <p className="options-menu__capability-intro">{t('options.capabilities.intro')}</p>
             {CAPABILITIES.map((group) => (
               <section key={group.title} className="options-menu__capability-group">
-                <h3 className="options-menu__capability-group-title">{group.title}</h3>
-                <p className="options-menu__capability-group-summary">{group.summary}</p>
+                <h3 className="options-menu__capability-group-title">{t(group.title)}</h3>
+                <p className="options-menu__capability-group-summary">{t(group.summary)}</p>
                 {/* Les limitations ("les messages sont hors de portée") ne sont PAS des cartes : ce sont des
                     notes. Les rendre comme les autres laisserait croire à une capacité de plus, exactement la
                     famille des fausses confirmations déjà corrigée plusieurs fois dans ce projet. */}
@@ -866,12 +884,12 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                     .filter((item) => !item.limitation)
                     .map((item) => (
                       <article key={item.title} className="options-menu__capability">
-                        <h4 className="options-menu__capability-title">{item.title}</h4>
-                        <p className="options-menu__capability-description">{item.description}</p>
+                        <h4 className="options-menu__capability-title">{t(item.title)}</h4>
+                        <p className="options-menu__capability-description">{t(item.description)}</p>
                         {item.example && (
                           <p className="options-menu__capability-example">
-                            <span className="options-menu__capability-example-label">{group.exampleLabel ?? 'Dis'}</span>
-                            <span className="options-menu__capability-example-text">« {item.example} »</span>
+                            <span className="options-menu__capability-example-label">{t(group.exampleLabel ?? 'capabilities.say')}</span>
+                            <span className="options-menu__capability-example-text">{t('common.quoted', { text: t(item.example) })}</span>
                           </p>
                         )}
                       </article>
@@ -881,7 +899,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                   .filter((item) => item.limitation)
                   .map((item) => (
                     <p key={item.title} className="options-menu__capability-limitation">
-                      <strong>{item.title}.</strong> {item.description}
+                      <strong>{t(item.title)}.</strong> {t(item.description)}
                     </p>
                   ))}
               </section>
@@ -899,21 +917,21 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                 plusieurs captures, "tu a toujours pas compris que c'etais ça que faut changer, je veut que
                 ça ressemble a ça", capture de la carte compacte à l'appui). L'écran d'accueil (App.tsx,
                 mode 'voice') garde lui son orbe à 320px, seule CETTE carte du menu Options change. */}
-            <SettingGroup title="La voix de Jaris">
+            <SettingGroup title={t('options.voice.group')}>
             <div className="options-menu__voice-picker">
               <div className="options-menu__voice-nav">
-                <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex - 1)} disabled={previewing}>
+                <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex - 1)} disabled={previewing} aria-label={t('options.voice.previous')}>
                   ‹
                 </button>
                 <JarisOrb emotion="idle" color={voice.color} size={100} />
-                <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex + 1)} disabled={previewing}>
+                <button className="options-menu__arrow" onClick={() => void chooseVoice(voiceIndex + 1)} disabled={previewing} aria-label={t('options.voice.next')}>
                   ›
                 </button>
               </div>
               <div className="options-menu__voice-info">
                 <div className="options-menu__voice-heading">
-                  <span className="options-menu__voice-name">{previewing ? 'Lecture...' : voice.id}</span>
-                  <span className="options-menu__voice-description">{voice.description}</span>
+                  <span className="options-menu__voice-name">{previewing ? t('options.voice.playing') : voice.id}</span>
+                  <span className="options-menu__voice-description">{t(voice.description)}</span>
                 </div>
                 <div className="options-menu__voice-dots">
                   {TTS_VOICES.map((v, i) => (
@@ -926,10 +944,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                     />
                   ))}
                 </div>
-                <p className="options-menu__voice-hint">
-                  Chaque voix est écoutée dès qu'elle est choisie. Le cercle prend sa couleur pour que tu la
-                  reconnaisses d'un coup d'œil.
-                </p>
+                <p className="options-menu__voice-hint">{t('options.voice.hint')}</p>
               </div>
             </div>
             </SettingGroup>
@@ -945,15 +960,15 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                 119 (maquette "Options Jaris.dc.html") : "Son" ne contenait qu'UNE ligne (le bip d'interface),
                 exactement la "carte à une seule ligne" que la maquette dit d'éliminer — les deux parlent de
                 la même chose (ce que Jaris fait entendre/écoute), pas de deux sujets distincts. */}
-            <SettingGroup title="Son et périphériques">
+            <SettingGroup title={t('options.sound.group')}>
               <SettingRow
-                label="Micro utilisé"
+                label={t('options.sound.mic')}
                 description={
                   inputDevices !== null && inputDevices.length === 0
-                    ? 'Aucun micro détecté : branche-en un, puis redémarre Jaris.'
+                    ? t('options.sound.mic.none')
                     : savingAudioDevice
-                      ? 'Changement de micro : redémarrage du pipeline vocal (rechargement des modèles)…'
-                      : 'Changer de micro relance l\'écoute : quelques secondes.'
+                      ? t('options.sound.mic.saving')
+                      : t('options.sound.mic.hint')
                 }
               >
                 <select
@@ -962,7 +977,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                   onChange={(e) => void chooseInputDevice(e.target.value)}
                   disabled={inputDevices === null || savingAudioDevice}
                 >
-                  <option value="">Défaut du système</option>
+                  <option value="">{t('options.sound.systemDefault')}</option>
                   {inputDevices?.map((device) => (
                     <option key={device.index} value={device.index}>
                       {device.name}
@@ -971,14 +986,14 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                 </select>
               </SettingRow>
 
-              <SettingRow label="Haut-parleur utilisé" description="Là où Jaris parle.">
+              <SettingRow label={t('options.sound.speaker')} description={t('options.sound.speaker.hint')}>
                 <select
                   className="options-menu__select"
                   value={profile?.audioOutputDeviceId || ''}
                   onChange={(e) => void chooseOutputDevice(e.target.value)}
                   disabled={outputDevices === null}
                 >
-                  <option value="">Défaut du système</option>
+                  <option value="">{t('options.sound.systemDefault')}</option>
                   {outputDevices?.map((device) => (
                     <option key={device.deviceId} value={device.deviceId}>
                       {device.label || device.deviceId}
@@ -987,26 +1002,26 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                 </select>
               </SettingRow>
 
-              <SettingRow label="Bips d'interface" description="Un son court à l'écoute, la réflexion, un clic.">
+              <SettingRow label={t('options.sound.beeps')} description={t('options.sound.beeps.hint')}>
                 <Toggle
-                  label="Bips d'interface"
+                  label={t('options.sound.beeps')}
                   checked={profile?.soundEffectsEnabled !== false}
                   onChange={(next) => void toggleSoundEffects(next)}
                 />
               </SettingRow>
-              <SettingRow label="Corriger ce que je dis" description="Remet les mots mal compris avant que Jaris réponde.">
+              <SettingRow label={t('options.sound.correct')} description={t('options.sound.correct.hint')}>
                 <Toggle
-                  label="Corriger ce que je dis"
+                  label={t('options.sound.correct')}
                   checked={profile?.voiceCorrectionEnabled !== false}
                   onChange={(next) => void toggleVoiceCorrection(next)}
                 />
               </SettingRow>
-              <SettingRow label="Tester le micro" description="Vérifie que Jaris capte bien ta voix.">
+              <SettingRow label={t('options.sound.micTest')} description={t('options.sound.micTest.hint')}>
                 <button
                   className={`options-menu__action${micTesting ? ' options-menu__action--danger' : ''}`}
                   onClick={toggleMicTest}
                 >
-                  {micTesting ? 'Arrêter' : 'Tester'}
+                  {micTesting ? t('common.stop') : t('common.test')}
                 </button>
               </SettingRow>
               {(micTesting || micTestResult !== null) && (
@@ -1039,48 +1054,41 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
               )}
             </SettingGroup>
 
-            <SettingGroup
-              title="Déclencher l'écoute"
-              description="Les trois façons sont indépendantes : garde celles que tu utilises."
-            >
-              <SettingRow label="Touche « + » du pavé numérique" description="La façon la plus fiable, même en jeu.">
+            <SettingGroup title={t('options.wake.group')} description={t('options.wake.group.hint')}>
+              <SettingRow label={t('options.wake.key')} description={t('options.wake.key.hint')}>
                 <Toggle
-                  label="Touche « + » du pavé numérique"
+                  label={t('options.wake.key')}
                   checked={profile?.activationKeyEnabled !== false}
                   onChange={(next) => void toggleActivationKey(next)}
                 />
               </SettingRow>
-              <SettingRow label="Clic sur le cercle de Jaris" description="Sur la page Agent vocal comme sur le widget.">
+              <SettingRow label={t('options.wake.orb')} description={t('options.wake.orb.hint')}>
                 <Toggle
-                  label="Clic sur le cercle de Jaris"
+                  label={t('options.wake.orb')}
                   checked={profile?.activationOrbClickEnabled !== false}
                   onChange={(next) => void toggleActivationOrbClick(next)}
                 />
               </SettingRow>
               <SettingRow
-                label="Dire « Jaris » à voix haute"
-                description={
-                  savingWakewordSetting
-                    ? 'Redémarrage du pipeline vocal (rechargement des modèles)…'
-                    : 'Pas toujours parfait : « Jarvis » peut aussi le réveiller.'
-                }
+                label={t('options.wake.word')}
+                description={savingWakewordSetting ? t('options.wake.word.saving') : t('options.wake.word.hint')}
               >
                 <Toggle
-                  label="Dire « Jaris » à voix haute"
+                  label={t('options.wake.word')}
                   checked={profile?.activationWakeWordEnabled !== false}
                   disabled={savingWakewordSetting}
                   onChange={(next) => void toggleActivationWakeword(next)}
                 />
               </SettingRow>
               <SettingRow
-                label="Tester le mot « Jaris »"
-                description="Dis « Jaris » plusieurs fois : Jaris affiche ce qu'il a compris, sans se réveiller."
+                label={t('options.wakeTest.label')}
+                description={t('options.wakeTest.hint')}
               >
                 <button
                   className={`options-menu__action${wakeTesting ? ' options-menu__action--danger' : ''}`}
                   onClick={toggleWakeTest}
                 >
-                  {wakeTesting ? 'Arrêter' : 'Tester'}
+                  {wakeTesting ? t('common.stop') : t('common.test')}
                 </button>
               </SettingRow>
               {voiceTestIssue?.test === 'wake' && (
@@ -1092,15 +1100,15 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                 <div className="options-menu__wake-test">
                   <p className="options-menu__wake-test-summary">
                     {wakeHeard.length === 0
-                      ? 'À toi : dis « Jaris », attends une seconde, recommence.'
-                      : `${wakeHeard.filter((h) => h.matched).length} reconnu(s) sur ${wakeHeard.length}`}
+                      ? t('options.wakeTest.yourTurn')
+                      : t('options.wakeTest.summary', { recognized: wakeHeard.filter((h) => h.matched).length, total: wakeHeard.length })}
                   </p>
                   {wakeHeard.length > 0 && (
                     <table className="options-menu__wake-test-table">
                       <thead>
                         <tr>
-                          <th>Ce que Jaris a compris</th>
-                          <th>Fois</th>
+                          <th>{t('options.wakeTest.heard')}</th>
+                          <th>{t('options.wakeTest.times')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1126,17 +1134,16 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                 modèle", mais le réglage qu'on vient justement de toucher (le curseur) ne doit pas se
                 retrouver sous un gros tableau qu'il faut d'abord dépasser pour le retrouver. */}
             {contextLengthOptions && (
-              <SettingGroup title="Mémoire de conversation">
+              <SettingGroup title={t('options.context.group')}>
                 <SettingRow
                   stacked
                   className="options-menu__context-row"
-                  label="Combien Jaris garde en tête"
+                  label={t('options.context.label')}
                   description={
                     <>
-                      Comme le curseur "Context length" d'Ollama, sauf que le maximum est déjà limité à ce
-                      que ta carte graphique peut encaisser sans déborder. Actuellement :{' '}
+                      {t('options.context.hint')}{' '}
                       <strong>{formatContextLength(contextLengthOptions.current)}</strong>
-                      {savingContextLength ? ' (enregistrement…)' : ''}
+                      {savingContextLength ? ` ${t('options.context.saving')}` : ''}
                     </>
                   }
                 >
@@ -1160,9 +1167,9 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
               </SettingGroup>
             )}
 
-            <SettingGroup title="Ce que ta machine fait tourner">
+            <SettingGroup title={t('options.models.group')}>
               {myPicks === null ? (
-                <p className="capacity-scan__status">Chargement...</p>
+                <p className="capacity-scan__status">{t('common.loading')}</p>
               ) : (
                 <>
                   <MyModelPicks picks={myPicks} onDeleteUnused={handleDeleteUnusedModel} />
@@ -1170,20 +1177,18 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                 </>
               )}
               <SettingRow
-                label="Retester la configuration"
-                description="Redétecte la VRAM/RAM (utile après un changement matériel, par exemple une
-                  nouvelle carte graphique) et télécharge directement les modèles déjà connus pour cette
-                  nouvelle configuration, sans repasser par une analyse comparative complète."
+                label={t('options.retest.label')}
+                description={t('options.retest.hint')}
               >
                 <button className="options-menu__action" onClick={() => void handleRetestConfiguration()} disabled={retestingConfig}>
-                  {retestingConfig ? 'Nouvelle détection en cours...' : 'Retester la configuration'}
+                  {retestingConfig ? t('options.retest.running') : t('options.retest.label')}
                 </button>
               </SettingRow>
               {retestingConfig && retestLine && <p className="capacity-scan__status options-menu__retest-progress">{retestLine}</p>}
               {profile?.codeModel && (
                 <SettingRow
-                  label="Modèle du mode Code"
-                  description="Choisi et téléchargé automatiquement selon ta configuration, comme les modèles ci-dessus."
+                  label={t('options.codeModel.label')}
+                  description={t('options.codeModel.hint')}
                 >
                   <strong>{formatModelName(profile.codeModel)}</strong>
                 </SettingRow>
@@ -1207,19 +1212,38 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
             {/* Étape 165 (Léo : « dès que le PC démarre on voit la fenêtre Jaris et pas le fond d'écran, et
                 pour l'activer/désactiver »). L'état affiché est celui que Windows a réellement enregistré,
                 relu après chaque bascule (voir launchAtStartup.ts), jamais supposé. */}
-            <SettingGroup title="Démarrage">
+            <SettingGroup title={t('language.label')}>
+              <SettingRow label={t('language.label')} description={savingLanguage ? t('language.saving') : t('language.description')}>
+                <select
+                  className="options-menu__select"
+                  value={languageSetting}
+                  onChange={(e) => chooseLanguage(e.target.value as LanguageSetting)}
+                  disabled={savingLanguage}
+                  aria-label={t('language.label')}
+                >
+                  <option value="auto">{t('language.auto', { language: languageInfo(systemLanguage).name })}</option>
+                  {LANGUAGES.map((language) => (
+                    <option key={language.code} value={language.code} lang={language.code}>
+                      {language.name}
+                    </option>
+                  ))}
+                </select>
+              </SettingRow>
+            </SettingGroup>
+
+            <SettingGroup title={t('options.startup.group')}>
               <SettingRow
-                label="Ouvrir Jaris au démarrage de Windows"
+                label={t('options.startup.label')}
                 description={
                   launchAtStartup && !launchAtStartup.supported
-                    ? 'Disponible seulement dans la version installée de Jaris.'
+                    ? t('options.startup.unsupported')
                     : launchAtStartup?.blockedByWindows
-                      ? 'Windows bloque ce lancement : réactive Jaris dans Paramètres → Applications → Démarrage.'
-                      : 'Dès que tu allumes ton PC, la fenêtre de Jaris s\'ouvre en grand, à la place du bureau.'
+                      ? t('options.startup.blocked')
+                      : t('options.startup.hint')
                 }
               >
                 <Toggle
-                  label="Ouvrir Jaris au démarrage de Windows"
+                  label={t('options.startup.label')}
                   checked={Boolean(launchAtStartup?.enabled)}
                   disabled={!launchAtStartup?.supported || savingLaunchAtStartup}
                   onChange={(next) => {
@@ -1235,28 +1259,27 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
               </SettingRow>
             </SettingGroup>
 
-            <SettingGroup title="Mise à jour">
+            <SettingGroup title={t('options.update.group')}>
               <SettingRow
-                label="Rechercher une mise à jour"
+                label={t('options.update.check')}
                 description={
                   <>
-                    Version installée : <strong>{installedVersion ?? appVersionStatus?.current ?? '...'}</strong>
+                    {t('options.update.installed')} <strong>{installedVersion ?? appVersionStatus?.current ?? '...'}</strong>
                     {updateCheckMessage ? <> — {updateCheckMessage}</> : null}
                   </>
                 }
               >
                 <button className="options-menu__action" onClick={handleCheckForUpdate} disabled={checkingUpdate}>
-                  {checkingUpdate ? 'Recherche en cours…' : 'Rechercher une mise à jour'}
+                  {checkingUpdate ? t('options.update.checking') : t('options.update.check')}
                 </button>
               </SettingRow>
 
               {appVersionStatus?.outdated && (
                 <div className="options-menu__ollama-warning">
-                  Jaris {appVersionStatus.current} installé, la dernière version est{' '}
-                  {appVersionStatus.latest}.
+                  {t('options.update.outdated', { current: appVersionStatus.current, latest: appVersionStatus.latest ?? '' })}
                   <div className="options-menu__ollama-update-actions">
                     <button onClick={handleUpdateApp} disabled={updatingApp}>
-                      {updatingApp ? 'Mise à jour en cours…' : 'Mettre à jour'}
+                      {updatingApp ? t('options.update.running') : t('options.update.button')}
                     </button>
                   </div>
                   {/* Étape 98 : une VRAIE barre qui avance, à la place d'une phrase figée. L'installeur pèse
@@ -1272,31 +1295,31 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                 machine, pas les modèles eux-mêmes (déjà dans Modèles, à côté du choix du palier). La ligne
                 Ollama reste visible même à jour (seule la donnée déjà lue par getOllamaVersionStatus()
                 change de forme d'affichage, aucun nouvel appel IPC). */}
-            <SettingGroup title="Fichiers et moteur local">
+            <SettingGroup title={t('options.files.group')}>
               <SettingRow
                 label="Ollama"
                 description={
                   !ollamaVersionStatus
-                    ? 'Vérification de la version…'
+                    ? t('options.ollama.checking')
                     : !ollamaVersionStatus.current
-                      ? "Ollama ne répond pas pour l'instant : Jaris le relance tout seul ; si ça dure, redémarre Jaris."
+                      ? t('options.ollama.down')
                       : ollamaVersionStatus.outdated
-                        ? `Version ${ollamaVersionStatus.current} installée · ${ollamaVersionStatus.latest} disponible. Certains modèles récents peuvent refuser de se télécharger tant qu'il n'est pas à jour.`
+                        ? t('options.ollama.outdated', { current: ollamaVersionStatus.current, latest: ollamaVersionStatus.latest ?? '' })
                         : ollamaVersionStatus.latest
-                          ? `Version ${ollamaVersionStatus.current} installée · à jour.`
-                          : `Version ${ollamaVersionStatus.current} installée (impossible de vérifier s'il en existe une plus récente : pas d'accès à internet ?).`
+                          ? t('options.ollama.current', { current: ollamaVersionStatus.current })
+                          : t('options.ollama.unknownLatest', { current: ollamaVersionStatus.current })
                 }
               >
                 {ollamaVersionStatus?.outdated && !ollamaInstallerPending && (
                   <button className="options-menu__action" onClick={handleUpdateOllama} disabled={updatingOllama}>
-                    {updatingOllama ? 'Mise à jour en cours…' : 'Mettre à jour'}
+                    {updatingOllama ? t('options.update.running') : t('options.update.button')}
                   </button>
                 )}
               </SettingRow>
               {ollamaVersionStatus?.outdated && (
                 <div className="options-menu__ollama-warning">
                   <a href="https://ollama.com/download" target="_blank" rel="noreferrer">
-                    Ou télécharge manuellement sur ollama.com/download
+                    {t('options.ollama.manual')}
                   </a>
                   {updatingOllama && (
                     <>
@@ -1305,7 +1328,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                           de Jaris (étape 98) plutôt qu'un second indicateur inventé à côté. */}
                       <AppUpdateProgress progress={ollamaUpdateProgress} target="ollama" />
                       <p className="options-menu__ollama-update-note">
-                        Une fenêtre Windows peut demander une autorisation (élévation) — accepte-la pour continuer.
+                        {t('options.ollama.elevation')}
                       </p>
                     </>
                   )}
@@ -1318,53 +1341,57 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
               {!updatingOllama && ollamaUpdateMessage && <p className="options-menu__ollama-update-note">{ollamaUpdateMessage}</p>}
               {ollamaInstallerPending && (
                 <p className="options-menu__ollama-update-note">
-                  Jaris attend la fin de l'installation : ce message se mettra à jour tout seul.
+                  {t('options.ollama.waiting')}
                 </p>
               )}
 
               <SettingRow
-                label="Dossier de Jaris"
-                description="Tout ce que Jaris installe et enregistre — le programme, tes conversations, Ollama et ses
-                  modèles, la voix, Docker — peut vivre ailleurs que sur C (un autre disque, par exemple). « Déplacer »
-                  emporte TOUT d'un coup, ou rien si quelque chose l'en empêche."
+                label={t('options.folder.label')}
+                description={t('options.folder.hint')}
               >
                 <button className="options-menu__action" onClick={handleChooseModelsLocation} disabled={movingModelsLocation}>
-                  {movingModelsLocation ? 'Déplacement en cours…' : 'Déplacer…'}
+                  {movingModelsLocation ? t('options.folder.moving') : t('options.folder.move')}
                 </button>
               </SettingRow>
               {modelsLocation && (
                 <ul className="options-menu__models-location-list">
-                  {modelsLocation.items.map((item) => (
-                    <li key={item.label}>
-                      <span className="options-menu__models-location-label">{item.label.charAt(0).toUpperCase() + item.label.slice(1)}</span> :{' '}
-                      {item.path}
-                    </li>
-                  ))}
+                  {modelsLocation.items.map((item) => {
+                    // « Libellé : chemin » à la française, « Libellé: chemin » ailleurs : la ponctuation suit le
+                    // catalogue de la langue, le libellé garde son style à lui.
+                    const [before, after] = t('common.labelValue', { label: '\u0000', value: item.path }).split('\u0000')
+                    return (
+                      <li key={item.label}>
+                        {before}
+                        <span className="options-menu__models-location-label">{item.label.charAt(0).toUpperCase() + item.label.slice(1)}</span>
+                        {after}
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
               {modelsLocationMessage && <p className="options-menu__ollama-update-note">{modelsLocationMessage}</p>}
             </SettingGroup>
 
-            <SettingGroup title="Historique des conversations">
+            <SettingGroup title={t('options.history.group')}>
               {history === null ? (
-                <p className="capacity-scan__status">Chargement...</p>
+                <p className="capacity-scan__status">{t('common.loading')}</p>
               ) : history.length === 0 ? (
-                <p className="options-menu__history-empty">Aucun échange enregistré pour l'instant.</p>
+                <p className="options-menu__history-empty">{t('options.history.empty')}</p>
               ) : (
                 <ul className="options-menu__history-list">
                   {[...history].reverse().map((entry) => (
                     <li key={entry.id} className="options-menu__history-entry">
-                      <div className="options-menu__history-date">{new Date(entry.timestamp).toLocaleString('fr-FR')}</div>
-                      <div className="options-menu__history-transcript">« {entry.transcript} »</div>
+                      <div className="options-menu__history-date">{new Date(entry.timestamp).toLocaleString(currentLocale())}</div>
+                      <div className="options-menu__history-transcript">{t('common.quoted', { text: entry.transcript })}</div>
                       <div className="options-menu__history-reply">{entry.reply}</div>
                     </li>
                   ))}
                 </ul>
               )}
               {history !== null && (
-                <SettingRow label="Dossier de l'historique" description="Ouvre le fichier où tout est enregistré, ou efface-le complètement.">
+                <SettingRow label={t('options.history.folder')} description={t('options.history.folder.hint')}>
                   <button className="options-menu__action" onClick={() => void window.jaris.openConversationHistoryFile()}>
-                    Ouvrir le dossier
+                    {t('common.openFolder')}
                   </button>
                   {history.length > 0 && (
                     <button
@@ -1372,23 +1399,20 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                       onClick={() => void handleClearHistory()}
                       disabled={clearingHistory}
                     >
-                      {clearingHistory ? 'Suppression...' : "Supprimer l'historique"}
+                      {clearingHistory ? t('common.deleting') : t('options.history.clear')}
                     </button>
                   )}
                 </SettingRow>
               )}
             </SettingGroup>
 
-            <SettingGroup title="Journal des demandes">
-              <SettingRow
-                label="Journal des demandes"
-                description="Pour chaque demande, à la voix ou dans le Chat, Jaris note les étapes et le temps que chacune a pris. Utile pour comprendre une demande qui traîne : tu peux m'envoyer ce fichier."
-              >
+            <SettingGroup title={t('options.journal.label')}>
+              <SettingRow label={t('options.journal.label')} description={t('options.journal.hint')}>
                 <button className="options-menu__action" onClick={() => void window.jaris.openRequestJournal(false)}>
-                  Ouvrir le journal
+                  {t('options.journal.open')}
                 </button>
                 <button className="options-menu__action" onClick={() => void window.jaris.openRequestJournal(true)}>
-                  Montrer le fichier
+                  {t('options.journal.reveal')}
                 </button>
               </SettingRow>
             </SettingGroup>

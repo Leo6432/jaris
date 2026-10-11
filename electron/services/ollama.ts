@@ -2,6 +2,7 @@ import { config } from '../config'
 import { parseModelThinking, type ModelThinking, type ThinkValue } from '../../shared/effort'
 import { DISK_SAFETY_MARGIN_GB, detectFreeDiskGb, getDownloadBudgetGb } from './systemResources'
 import { importHuggingFaceModel } from './huggingFaceImport'
+import { t } from '../../shared/i18n'
 
 export interface OllamaToolCall {
   function: { name: string; arguments: Record<string, unknown> }
@@ -80,10 +81,7 @@ export class ContextFullError extends Error {
     readonly model: string,
     readonly numCtx: number
   ) {
-    super(
-      `Le modèle '${model}' a rempli toute sa mémoire de travail (${numCtx} tokens) en réfléchissant, avant ` +
-        "d'écrire sa réponse."
-    )
+    super(t('ollama.contextFull', { model, tokens: numCtx }))
     this.name = 'ContextFullError'
   }
 }
@@ -117,11 +115,11 @@ async function requestChat(
     })
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') throw err
-    throw new Error(`Impossible de joindre Ollama sur ${config.ollama.host} (est-il lancé ?)`)
+    throw new Error(t('ollama.unreachable', { host: config.ollama.host }))
   }
 
   if (!response.ok) {
-    throw new Error(`Ollama a répondu ${response.status} : ${await response.text()}`)
+    throw new Error(t('ollama.httpError', { status: response.status, body: await response.text() }))
   }
 
   if (!streaming) {
@@ -129,12 +127,12 @@ async function requestChat(
     if (data.done_reason === 'length' && !data.message?.content && !data.message?.tool_calls?.length) {
       throw new ContextFullError(model, numCtx)
     }
-    if (!data.message) throw new Error(`Réponse vide d'Ollama (modèle '${model}' bien installé ?)`)
+    if (!data.message) throw new Error(t('ollama.empty', { model }))
     onMetrics?.(metricsOf(data, data.message.thinking?.length ?? 0))
     return data.message
   }
 
-  if (!response.body) throw new Error(`Réponse en streaming sans corps d'Ollama (modèle '${model}').`)
+  if (!response.body) throw new Error(t('ollama.noStreamBody', { model }))
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
@@ -181,7 +179,7 @@ async function requestChat(
 
   if (!content && !toolCalls) {
     if (doneReason === 'length') throw new ContextFullError(model, numCtx)
-    throw new Error(`Réponse vide d'Ollama (modèle '${model}' bien installé ?)`)
+    throw new Error(t('ollama.empty', { model }))
   }
   if (finalChunk) onMetrics?.(metricsOf(finalChunk, thinkingChars))
   return { role, content, tool_calls: toolCalls }
@@ -278,7 +276,7 @@ export async function structuredChat(
 
 export async function listInstalledModels(): Promise<string[]> {
   const response = await fetch(`${config.ollama.host}/api/tags`)
-  if (!response.ok) throw new Error(`Ollama a répondu ${response.status} en listant les modèles installés`)
+  if (!response.ok) throw new Error(t('ollama.listFailed', { status: response.status }))
   const data = (await response.json()) as OllamaTagsResponse
   return (data.models ?? []).map((m) => m.name)
 }
@@ -293,7 +291,7 @@ export async function listInstalledModels(): Promise<string[]> {
  */
 export async function getInstalledModelSizeBytes(model: string): Promise<number | null> {
   const response = await fetch(`${config.ollama.host}/api/tags`)
-  if (!response.ok) throw new Error(`Ollama a répondu ${response.status} en listant les modèles installés`)
+  if (!response.ok) throw new Error(t('ollama.listFailed', { status: response.status }))
   const data = (await response.json()) as OllamaTagsResponse
   const entry = (data.models ?? []).find((m) => m.name === model)
   return typeof entry?.size === 'number' ? entry.size : null
@@ -362,10 +360,7 @@ export class ModelTooLargeError extends Error {
   readonly budgetGb: number
 
   constructor(model: string, requiredGb: number, budgetGb: number) {
-    super(
-      `${model} nécessite environ ${requiredGb.toFixed(1)} Go, au-delà des ${budgetGb.toFixed(1)} Go de ` +
-        "VRAM + RAM disponibles sur cette machine : il ne pourrait de toute façon pas tourner."
-    )
+    super(t('ollama.tooLarge', { model, required: requiredGb.toFixed(1), budget: budgetGb.toFixed(1) }))
     this.name = 'ModelTooLargeError'
     this.model = model
     this.requiredGb = requiredGb
@@ -384,10 +379,7 @@ export class DiskFullError extends Error {
   readonly freeDiskGb: number
 
   constructor(model: string, requiredGb: number, freeDiskGb: number) {
-    super(
-      `${model} nécessite environ ${requiredGb.toFixed(1)} Go, au-delà des ${freeDiskGb.toFixed(1)} Go ` +
-        "d'espace disque libre sur cette machine."
-    )
+    super(t('ollama.diskFull', { model, required: requiredGb.toFixed(1), free: freeDiskGb.toFixed(1) }))
     this.name = 'DiskFullError'
     this.model = model
     this.requiredGb = requiredGb
@@ -444,7 +436,7 @@ export async function pullModelIfMissing(model: string, onStatus?: (message: str
     // Face, à l'identique. Jamais pour un manque de place (VRAM/disque) : réessayer n'y changerait rien.
     if (!model.startsWith('hf.co/') || err instanceof ModelTooLargeError || err instanceof DiskFullError) throw err
     // Phrase courte : l'erreur brute d'Ollama contient une URL de plusieurs centaines de caractères.
-    onStatus?.(`Ollama n'arrive pas à télécharger ${model} : Jaris le récupère directement depuis Hugging Face…`)
+    onStatus?.(t('ollama.pull.hfFallback', { model }))
     try {
       await importHuggingFaceModel(model, onStatus)
     } catch (importErr) {
@@ -461,7 +453,7 @@ async function pullWithOllama(model: string, onStatus?: (message: string) => voi
   const budgetGb = await getDownloadBudgetGb()
   const freeDiskGb = detectFreeDiskGb()
 
-  onStatus?.(`Téléchargement du modèle ${model}…`)
+  onStatus?.(t('ollama.pull.start', { model }))
   const controller = new AbortController()
   const response = await fetch(`${config.ollama.host}/api/pull`, {
     method: 'POST',
@@ -470,7 +462,7 @@ async function pullWithOllama(model: string, onStatus?: (message: string) => voi
     signal: controller.signal
   })
   if (!response.ok || !response.body) {
-    throw new Error(`Échec du téléchargement de ${model} (Ollama a répondu ${response.status})`)
+    throw new Error(t('ollama.pull.httpError', { model, status: response.status }))
   }
 
   const reader = response.body.getReader()
@@ -497,7 +489,7 @@ async function pullWithOllama(model: string, onStatus?: (message: string) => voi
         continue
       }
 
-      if (progress.error) throw new Error(`Échec du téléchargement de ${model} : ${progress.error}`)
+      if (progress.error) throw new Error(t('ollama.pull.failed', { model, error: progress.error }))
 
       if (!sizeChecked && progress.total) {
         sizeChecked = true
@@ -519,10 +511,10 @@ async function pullWithOllama(model: string, onStatus?: (message: string) => voi
         const percent = Math.floor((progress.completed / progress.total) * 100)
         if (percent !== lastPercent) {
           lastPercent = percent
-          onStatus?.(`Téléchargement du modèle ${model}… ${percent}%`)
+          onStatus?.(t('ollama.pull.progress', { model, percent }))
         }
       } else if (progress.status) {
-        onStatus?.(`${model} : ${progress.status}`)
+        onStatus?.(t('common.labelValue', { label: model, value: progress.status }))
       }
     }
   }
@@ -540,7 +532,7 @@ export async function deleteModel(model: string): Promise<void> {
     body: JSON.stringify({ name: model })
   })
   if (!response.ok) {
-    throw new Error(`Échec de la suppression de ${model} (Ollama a répondu ${response.status})`)
+    throw new Error(t('ollama.delete.failed', { model, status: response.status }))
   }
 }
 

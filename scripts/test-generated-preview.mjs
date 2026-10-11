@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import {randomUUID} from 'node:crypto'
@@ -8,7 +9,7 @@ const source=ts.transpileModule(readFileSync(new URL('../electron/services/gener
 function setup(){
  const exports={};let handler;let schemes
  const protocol={registerSchemesAsPrivileged:s=>{schemes=s},handle:(_scheme,h)=>{handler=h}}
- vm.runInNewContext(source,{exports,URL,Response,require:name=>name==='electron'?{protocol}:{randomUUID}})
+ vm.runInNewContext(source,{exports,URL,Response,require:withI18n(name=>name==='electron'?{protocol}:{randomUUID})})
  exports.registerPreviewScheme();exports.registerPreviewHandler()
  return {api:exports,request:(url,method='GET')=>handler({url,method}),schemes}
 }

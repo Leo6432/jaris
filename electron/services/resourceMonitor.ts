@@ -1,4 +1,5 @@
 import * as os from 'os'
+import { t } from '../../shared/i18n'
 
 const CPU_OVERLOAD_PCT = 90
 const RAM_OVERLOAD_PCT = 90
@@ -60,15 +61,15 @@ let lastWarnedAt = 0
 export async function checkOverloadWarning(): Promise<string | null> {
   const load = await getSystemLoad()
   const reasons: string[] = []
-  if (load.cpuPct >= CPU_OVERLOAD_PCT) reasons.push(`le CPU à ${load.cpuPct}%`)
-  if (load.ramPct >= RAM_OVERLOAD_PCT) reasons.push(`la RAM à ${load.ramPct}%`)
+  if (load.cpuPct >= CPU_OVERLOAD_PCT) reasons.push(t('load.cpu', { pct: load.cpuPct }))
+  if (load.ramPct >= RAM_OVERLOAD_PCT) reasons.push(t('load.ram', { pct: load.ramPct }))
 
   if (!reasons.length) return null
   if (Date.now() - lastWarnedAt < WARNING_COOLDOWN_MS) return null
   lastWarnedAt = Date.now()
 
-  const joined = reasons.length === 1 ? reasons[0] : `${reasons.slice(0, -1).join(', ')} et ${reasons[reasons.length - 1]}`
-  return `Attention, ta machine est assez chargée en ce moment, avec ${joined}, ça risque d'être plus lent que d'habitude.`
+  const joined = reasons.length === 1 ? reasons[0] : `${reasons.slice(0, -1).join(', ')}${t('web.and')}${reasons[reasons.length - 1]}`
+  return t('load.warning', { reasons: joined })
 }
 
 /**
@@ -102,16 +103,16 @@ export function checkGpuTempSafety(tempC: number | null): GpuTempStatus {
   if (tempC >= GPU_SHUTDOWN_TEMP_C) {
     return {
       action: 'shutdown',
-      message: `${GPU_SHUTDOWN_TEMP_C} degrés dépassés, le GPU est à ${tempC} degrés, je m'arrête automatiquement pour protéger la machine.`
+      message: t('gpu.shutdown', { limit: GPU_SHUTDOWN_TEMP_C, temp: tempC })
     }
   }
   if (tempC >= GPU_ABORT_TEMP_C) {
-    return { action: 'abort', message: `${GPU_ABORT_TEMP_C} degrés dépassés, arrêt de la requête.` }
+    return { action: 'abort', message: t('gpu.abort', { limit: GPU_ABORT_TEMP_C }) }
   }
   if (tempC >= GPU_WARN_TEMP_C) {
     return {
       action: 'warn',
-      message: `Attention, le GPU dépasse ${GPU_WARN_TEMP_C} degrés, il est actuellement à ${tempC} degrés.`
+      message: t('gpu.warn', { limit: GPU_WARN_TEMP_C, temp: tempC })
     }
   }
   return { action: 'none', message: null }

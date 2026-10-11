@@ -1,3 +1,4 @@
+import { t } from './i18n'
 /**
  * Le modèle d'image de Jaris (étape 174, Léo : « dans model ajoute image et met le seul image, et si pas assez
  * de puissance met aucun model »). Un seul modèle existe (FLUX.2 klein 4B, étape 173) : ce fichier dit
@@ -28,13 +29,13 @@ export interface ImageModelPick {
 
 export function pickImageModel(vramGb: number | null, ramGb: number): ImageModelPick {
   if (vramGb === null) {
-    return { model: null, reason: 'aucune carte graphique détectée (il en faut une de 6 Go ou plus)' }
+    return { model: null, reason: t('hw.noGpu', { need: 6 }) }
   }
   if (vramGb < IMAGE_MIN_VRAM_GB) {
-    return { model: null, reason: `carte graphique trop petite (${vramGb} Go de VRAM, il en faut 6 ou plus)` }
+    return { model: null, reason: t('hw.gpuTooSmall', { have: vramGb, need: 6 }) }
   }
   if (ramGb < IMAGE_MIN_RAM_GB) {
-    return { model: null, reason: `pas assez de RAM (${Math.round(ramGb)} Go, il en faut 16 ou plus)` }
+    return { model: null, reason: t('hw.notEnoughRam', { have: Math.round(ramGb), need: 16 }) }
   }
   return { model: IMAGE_MODEL, reason: null }
 }

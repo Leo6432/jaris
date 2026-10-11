@@ -1,5 +1,6 @@
 import { VIDEO_DURATIONS, type VideoSeconds } from '../../shared/videoModel'
 import SliderPicker from './SliderPicker'
+import { tn, t } from '@/lib/i18n'
 
 /**
  * Durée d'une vidéo (étape 204, Léo : « on peut pas ajouter la possibilité de choisir la durée ? comme l'effort »).
@@ -20,7 +21,7 @@ function ClockIcon(): JSX.Element {
   )
 }
 
-const label = (seconds: number): string => `${seconds} seconde${seconds > 1 ? 's' : ''}`
+const label = (seconds: number): string => tn('video.duration.seconds', seconds)
 
 export default function VideoDurationPicker({ value, onChange, disabled = false }: Props): JSX.Element {
   return (
@@ -28,7 +29,7 @@ export default function VideoDurationPicker({ value, onChange, disabled = false 
       className="duration-picker"
       icon={<ClockIcon />}
       triggerLabel={`${value} s`}
-      name="Durée de la vidéo"
+      name={t('video.duration.name')}
       title={label(value)}
       steps={VIDEO_DURATIONS.map((seconds) => ({ value: seconds, label: label(seconds) }))}
       value={value}

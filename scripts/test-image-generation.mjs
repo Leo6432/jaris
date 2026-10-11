@@ -11,6 +11,7 @@ import vm from 'node:vm'
 import ts from 'typescript'
 import { modelChoiceModule } from './load-model-choice.mjs'
 import { systemPromptModule } from './load-system-prompt.mjs'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * Génération d'images en local (étape 173 : stable-diffusion.cpp + FLUX.2 klein 4B).
@@ -29,7 +30,7 @@ const projectRoot = fileURLToPath(new URL('..', import.meta.url))
 
 function loadPure(relativePath) {
   const module = { exports: {} }
-  vm.runInThisContext(`(function (exports, module) { ${transpile(relativePath)} })`)(module.exports, module)
+  vm.runInThisContext(`(function (exports, module, require) { ${transpile(relativePath)} })`)(module.exports, module, withI18n((name) => { throw new Error(`import inattendu : ${name}`) }))
   return module.exports
 }
 const nodeRequire = createRequire(import.meta.url)
@@ -134,7 +135,7 @@ function loadGenerator({ corruptFile = null, engineExitCode = 0, engineOutput = 
   vm.runInThisContext(`(function (exports, module, require, process) { ${transpile('electron/services/imageGenerator.ts')} })`)(
     module.exports,
     module,
-    (id) => modules[id] ?? nodeRequire(id),
+    withI18n((id) => modules[id] ?? nodeRequire(id)),
     fakeProcess
   )
   const loaded = module.exports
@@ -189,7 +190,7 @@ test('dessin : la carte graphique est libérée AVANT de lancer sd-cli, l’imag
   assert.equal(dirname(image.path), join(t.dataRoot, 'generated-images'), 'rangé avec les données de Léo')
   assert.match(image.fileName, /^\d{4}-\d{2}-\d{2}T[\d-]+-a-ginger-cat-on-a-blue-sofa\.png$/)
   // Avancement lu sur la vraie sortie : les étapes de dessin, jamais les compteurs du chargement des poids.
-  assert.deepEqual(logs.filter((l) => l.startsWith('Dessin')), ['Dessin : étape 1 sur 4', 'Dessin : étape 2 sur 4', 'Dessin : étape 3 sur 4', 'Dessin : étape 4 sur 4'])
+  assert.deepEqual(logs.filter((l) => l.startsWith('Dessin')), ['Dessin : 1/4', 'Dessin : 2/4', 'Dessin : 3/4', 'Dessin : 4/4'])
   assert.ok(logs.some((l) => l.includes('Carte graphique libérée')))
   t.cleanup()
 })
@@ -324,7 +325,7 @@ function loadConverse(chat, execute, onExecutorArgs) {
     }
   }
   const exports = {}
-  vm.runInNewContext(transpile('electron/services/assistant.ts'), { exports, Error, require: (name) => modules[name] })
+  vm.runInNewContext(transpile('electron/services/assistant.ts'), { exports, Error, require: withI18n((name) => modules[name]) })
   return exports.converse
 }
 

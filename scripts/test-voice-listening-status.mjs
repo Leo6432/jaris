@@ -1,3 +1,4 @@
+import { I18N_MODULES } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { readFileSync } from 'node:fs'
@@ -39,6 +40,7 @@ const modules = {
 }
 const module = { exports: {} }
 vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(module.exports, module, (name) => {
+  if (name in I18N_MODULES) return I18N_MODULES[name]
   if (!(name in modules)) throw new Error(`module inattendu : ${name}`)
   return modules[name]
 })

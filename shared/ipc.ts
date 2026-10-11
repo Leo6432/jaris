@@ -1,3 +1,4 @@
+import type { LanguageCode, LanguageSetting } from './i18n/languages'
 import type { ModelThinkingChoice, StoredThinkChoice } from './effort'
 /** Types partagés entre le process principal (electron/) et le renderer (src/). */
 import type { ImageModelPick } from './imageModel'
@@ -81,6 +82,18 @@ export interface ModelChoiceInfo {
    * proposer d'exact — il faut d'abord choisir un modèle.
    */
   thinking?: ModelThinkingChoice | null
+}
+
+/** La langue de Jaris telle que le processus principal l'a décidée, avec le catalogue de cette langue. */
+export interface LanguageState {
+  /** Ce que l'utilisateur a choisi (`auto` = suivre Windows). */
+  setting: LanguageSetting
+  /** La langue réellement utilisée. */
+  code: LanguageCode
+  /** La langue que donnerait `auto` sur cette machine (affichée à côté de « Automatique »). */
+  systemCode: LanguageCode
+  /** Le catalogue de `code` (vide pour le français, embarqué partout). */
+  messages: Record<string, string>
 }
 
 export interface Profile {
@@ -820,6 +833,16 @@ export const IPC_CHANNELS = {
   /** renderer <-> main : profil utilisateur (prénom), demandé une seule fois au premier lancement. */
   getProfile: 'jaris:get-profile',
   saveProfile: 'jaris:save-profile',
+  /**
+   * Langue de Jaris (Léo : « jaris doit détecter la langue de Windows et traduire jaris, et sinon tu peux changer dans
+   * les paramètres »). `languageState` est SYNCHRONE (renderer -> main, au chargement de la page) : l'écran doit
+   * s'afficher directement dans la bonne langue, jamais en français une fraction de seconde avant de basculer.
+   */
+  languageState: 'jaris:language-state',
+  /** renderer -> main : choisit la langue (`auto` = celle de Windows). */
+  setLanguage: 'jaris:set-language',
+  /** main -> renderer : la langue a changé (toutes les fenêtres se traduisent aussitôt). */
+  languageChanged: 'jaris:language-changed',
   /** renderer -> main : ouvre le dossier de mémoire markdown de Jaris dans l'explorateur de fichiers. */
   openMemoryFolder: 'jaris:open-memory-folder',
   /** renderer <-> main : récupère les notes de la mémoire et leurs liens, pour la vue graphe 3D. */

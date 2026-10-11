@@ -819,7 +819,7 @@ test('« Modifié index.html +500 −3 » : chaque action est une ligne de la co
     assert.deepEqual(rows, [
       // Lectures consécutives réunies, le même fichier une seule fois.
       { text: 'Lu 2 fichiers index.html, style.css', stats: null },
-      { text: 'Modifié index.html +500−3', stats: '500 lignes ajoutées, 3 retirées' },
+      { text: 'Modifié index.html +500−3', stats: '500 lignes ajoutées, 3 lignes retirées' },
       { text: 'Créé jeu.js +80', stats: '80 lignes ajoutées' }
     ])
     // Dans la conversation, après la demande, avant la ligne en direct.

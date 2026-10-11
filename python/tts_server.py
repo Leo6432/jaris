@@ -67,9 +67,11 @@ def main() -> None:
             if voice not in voice_styles:
                 voice_styles[voice] = tts.get_voice_style(voice_name=voice)
 
+            # Étape 293 (24 langues) : la langue vient de chaque demande (celle choisie dans Jaris), --language
+            # n'est plus qu'un repli pour une demande qui n'en donne pas.
             wav, _duration = tts.synthesize(
                 text=text,
-                lang=args.language,
+                lang=request.get("lang") or args.language,
                 voice_style=voice_styles[voice],
                 # 8 -> 12 (borne haute recommandée par Supertonic) : Léo a comparé les 3 échantillons
                 # (niveaux 1/5/12 générés et envoyés en usage réel) et préféré 12, malgré le coût mesuré

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RuntimeSetupProgress } from '../../shared/ipc'
+import { t } from '@/lib/i18n'
 
 /**
  * Écran d'installation du premier lancement (étape 16 du roadmap) : Jaris installe lui-même Python, ses
@@ -51,22 +52,18 @@ export default function RuntimeSetup({ onDone }: { onDone: () => void }): JSX.El
   }, [attempt, onDone])
 
   const statusText = finished
-    ? "L'installation n'est pas allée jusqu'au bout :"
+    ? t('runtime.incomplete')
     : progress === null
-      ? 'Préparation…'
+      ? t('runtime.preparing')
       : progress.failed
-        ? "Suite de l'installation…"
+        ? t('runtime.continuing')
         : progress.message
 
   return (
     <div className="app">
       <div className="runtime-setup">
-        <h1>Installation de Jaris</h1>
-        <p className="runtime-setup__intro">
-          Jaris télécharge ce dont il a besoin pour fonctionner entièrement sur ton ordinateur : le moteur
-          de conversation et la reconnaissance vocale. Ça prend quelques minutes la première fois, et tu
-          n'as rien à faire.
-        </p>
+        <h1>{t('runtime.title')}</h1>
+        <p className="runtime-setup__intro">{t('runtime.intro')}</p>
 
         {/* Étape 234 (bêta) : un échec s'affichait DEUX fois (ici et dans la liste en dessous), et la barre
             continuait d'animer une fois tout arrêté — ce qui se lit comme « ça travaille encore ». */}
@@ -94,9 +91,9 @@ export default function RuntimeSetup({ onDone }: { onDone: () => void }): JSX.El
 
         {finished && (
           <div className="runtime-setup__actions">
-            <button onClick={() => setAttempt((n) => n + 1)}>Réessayer</button>
+            <button onClick={() => setAttempt((n) => n + 1)}>{t('common.retry')}</button>
             <button className="runtime-setup__skip" onClick={onDone}>
-              Continuer quand même
+              {t('runtime.skip')}
             </button>
           </div>
         )}

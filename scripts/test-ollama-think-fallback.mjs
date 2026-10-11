@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -27,7 +28,7 @@ function load(responses) {
     const [status, payload] = responses.shift()
     return { ok: status === 200, status, text: async () => payload, json: async () => JSON.parse(payload) }
   }
-  vm.runInThisContext(`(function (exports, require, module, fetch) {\n${source}\n})`)(module.exports, (name) => modules[name], module, fetch)
+  vm.runInThisContext(`(function (exports, require, module, fetch) {\n${source}\n})`)(module.exports, withI18n((name) => modules[name]), module, fetch)
   return { chat: module.exports.chatWithOllama, calls }
 }
 

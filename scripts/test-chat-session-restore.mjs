@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * Reproduit en usage réel (Léo, "si on relance jarvis, on a plus rien dans le chat") : chatSession.ts
@@ -83,7 +84,7 @@ function setup(pastEntries) {
     module: { exports },
     // Étape 272 : le bouton « Arrêter » utilise AbortController, global de Node absent d'un contexte vm neuf.
     AbortController,
-    require: (name) => modules[name] ?? nodeRequire(name)
+    require: withI18n((name) => modules[name] ?? nodeRequire(name))
   })
   return { chatSession: exports.chatSession, appended, calls }
 }

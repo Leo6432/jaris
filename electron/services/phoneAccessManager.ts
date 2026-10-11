@@ -3,6 +3,7 @@ import type { PhoneAccessStatus, PhonePairing } from '../../shared/ipc'
 import { PhoneDeviceStore } from './phoneDevices'
 import { PhoneServer, type PhoneServerDeps } from './phoneServer'
 import { PhoneTunnel, type TunnelState } from './phoneTunnel'
+import { t } from '../../shared/i18n'
 
 export interface PhoneAccessOptions {
   tunnelBinary: string
@@ -75,7 +76,7 @@ export class PhoneAccessManager extends EventEmitter {
   /** Nouveau code, uniquement quand l'adresse est prête (sinon le téléphone n'aurait rien à ouvrir). */
   createPairing(): PhonePairing {
     const tunnel = this.tunnel.state
-    if (tunnel.state !== 'ready') throw new Error("L'adresse du téléphone n'est pas encore prête.")
+    if (tunnel.state !== 'ready') throw new Error(t('phone.addressNotReady'))
     const { code, expiresAt } = this.server.createPairingCode()
     // Le code voyage après le « # » : il n'est jamais envoyé dans une requête ni gardé dans un journal web.
     return { code, expiresAt, link: `${tunnel.address}/#code=${code}` }

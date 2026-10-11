@@ -3,6 +3,7 @@ import { thinkLabel, type ThinkValue } from '../../shared/effort'
 import type { ModelChoiceInfo, ModelChoiceMode } from '../../shared/ipc'
 import { formatModelName } from '@/lib/formatModelName'
 import { usePickerPanel } from '@/lib/usePickerPanel'
+import { t } from '@/lib/i18n'
 
 /**
  * Modèle et réflexion (« think »), présentés comme le panneau de ChatGPT — étapes 191 à 193.
@@ -98,7 +99,7 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
 
   const selected = info?.selected ?? AUTO
   const role = info?.roles?.find((r) => r.value === selected)
-  const modelLabel = locked ? 'Code' : selected === AUTO ? 'Auto' : role?.label ?? 'Personnalisé'
+  const modelLabel = locked ? t('app.mode.code') : selected === AUTO ? t('picker.auto') : role?.label ?? t('picker.custom')
   const thinking = info?.thinking ?? null
   const kind = thinking?.kind ?? null
   const canThink = kind === 'levels' || kind === 'toggle'
@@ -155,7 +156,7 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
           setOpen(!open)
         }}
         disabled={disabled || info?.installed === null}
-        title={info?.installed === null ? "Ollama ne répond pas : impossible de lister les modèles." : 'Modèle et réflexion'}
+        title={info?.installed === null ? t('picker.ollamaDown') : t('picker.label')}
         aria-haspopup="dialog"
         aria-expanded={open}
       >
@@ -169,7 +170,7 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
           ref={panelRef}
           className="effort-picker__panel"
           role="dialog"
-          aria-label="Modèle et réflexion"
+          aria-label={t('picker.label')}
           style={panelStyle}
         >
           {view === 'think' ? (
@@ -182,8 +183,8 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
                     className={`effort-picker__head-icon effort-picker__brain${thinkSelected === true ? ' effort-picker__brain--on' : ''}`}
                     onClick={() => void chooseThink(thinkSelected !== true)}
                     aria-pressed={thinkSelected === true}
-                    aria-label="Réfléchir avant de répondre"
-                    title={thinkSelected === true ? 'Réflexion activée : cliquer pour la couper' : 'Cliquer pour activer la réflexion'}
+                    aria-label={t('picker.think.label')}
+                    title={thinkSelected === true ? t('picker.think.on') : t('picker.think.off')}
                   >
                     <ReasoningIcon />
                   </button>
@@ -212,7 +213,7 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
                           {levelChosen ? `· ${modelShort}` : modelShort}
                         </span>
                       ) : (
-                        <span className="effort-picker__model-role">Choisir un modèle</span>
+                        <span className="effort-picker__model-role">{t('picker.chooseModel')}</span>
                       )}
                       <ChevronIcon direction="right" />
                     </button>
@@ -224,8 +225,8 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
                     className="effort-picker__reset"
                     onClick={() => void chooseThink(null)}
                     disabled={thinkSelected === null}
-                    title="Réflexion automatique (celle que Jaris choisit)"
-                    aria-label="Réflexion automatique"
+                    title={t('picker.think.auto.title')}
+                    aria-label={t('picker.think.auto')}
                   >
                     <ResetIcon />
                   </button>
@@ -241,7 +242,7 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
                   style={{ '--fill': options.length > 1 && index >= 0 ? index / (options.length - 1) : 0 } as React.CSSProperties}
                   role="slider"
                   tabIndex={0}
-                  aria-label="Niveau de réflexion"
+                  aria-label={t('picker.think.level')}
                   aria-valuemin={0}
                   aria-valuemax={options.length - 1}
                   aria-valuenow={index === -1 ? undefined : index}
@@ -275,17 +276,17 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
           ) : (
             <>
               <div className="effort-picker__list-head">
-                <button type="button" className="effort-picker__back" onClick={() => setView('think')} aria-label="Retour">
+                <button type="button" className="effort-picker__back" onClick={() => setView('think')} aria-label={t('common.back')}>
                   <ChevronIcon direction="left" />
                 </button>
-                <span>Sélectionner un modèle</span>
+                <span>{t('picker.selectModel')}</span>
               </div>
               <ul className="effort-picker__list">
                 <li>
                   <button type="button" className="effort-picker__option" onClick={() => void chooseModel(AUTO)}>
                     <span className="effort-picker__option-text">
-                      <span className="effort-picker__option-title">Auto</span>
-                      <span className="effort-picker__option-sub">{info?.autoModel ? formatModelName(info.autoModel, { quant: false }) : 'Jaris choisit le bon modèle pour chaque demande'}</span>
+                      <span className="effort-picker__option-title">{t('picker.auto')}</span>
+                      <span className="effort-picker__option-sub">{info?.autoModel ? formatModelName(info.autoModel, { quant: false }) : t('picker.auto.hint')}</span>
                     </span>
                     {selected === AUTO && <CheckIcon />}
                   </button>
@@ -297,13 +298,13 @@ export default function ModelEffortPicker({ mode, disabled = false }: Props): JS
                       className="effort-picker__option"
                       onClick={() => void chooseModel(r.value)}
                       disabled={!r.installed}
-                      title={r.installed ? r.model : `${r.model} n'est pas installé`}
+                      title={r.installed ? r.model : t('picker.notInstalled.title', { model: r.model })}
                     >
                       <span className="effort-picker__option-text">
                         <span className="effort-picker__option-title">{r.label}</span>
                         <span className="effort-picker__option-sub">
                           {formatModelName(r.model, { quant: false })}
-                          {r.installed ? '' : ' — pas installé'}
+                          {r.installed ? '' : ` — ${t('picker.notInstalled')}`}
                         </span>
                       </span>
                       {selected === r.value && <CheckIcon />}

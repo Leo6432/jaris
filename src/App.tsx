@@ -18,13 +18,16 @@ import ModelEffortPicker from '@/components/ModelEffortPicker'
 import { ShellSlotsContext } from '@/lib/shellContext'
 import logo64 from '@/assets/jaris-logo-64.png'
 import logo160 from '@/assets/jaris-logo-160.png'
+import { t, tn, useLanguage } from '@/lib/i18n'
+import type { MessageKey } from '../shared/i18n'
+import { LANGUAGES, languageInfo, type LanguageSetting } from '../shared/i18n/languages'
 
-const STATUS_LABEL: Record<JarisEmotion, string> = {
-  idle: 'Parle à Jaris',
-  listening: "Jaris t'écoute…",
-  thinking: 'Jaris réfléchit…',
-  happy: 'Jaris répond',
-  surprised: 'Oups !'
+const STATUS_LABEL: Record<JarisEmotion, MessageKey> = {
+  idle: 'app.status.idle',
+  listening: 'app.status.listening',
+  thinking: 'app.status.thinking',
+  happy: 'app.status.happy',
+  surprised: 'app.status.surprised'
 }
 
 /** Les modes de la barre latérale permanente (étape 30 ; Image à la place du Montage depuis l'étape 200). */
@@ -35,12 +38,12 @@ type AppMode = 'voice' | 'chat' | 'code' | 'image' | 'video'
  * chaque icône, dans cet ordre — l'Agent vocal en premier depuis l'étape 270 (Léo : « c'est le premier »). `label` est le nom affiché dans le rail, `title` celui de l'en-tête, `panel` le
  * titre de la colonne de liste à côté du rail (absente en Vocal : rien à lister).
  */
-const MODES: Array<{ id: AppMode; label: string; title: string; panel?: string; icon: string }> = [
-  { id: 'voice', label: 'Vocal', title: 'Agent vocal', icon: 'M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0zM5 11a7 7 0 0 0 14 0M12 18v3' },
-  { id: 'chat', label: 'Chat', title: 'Chat', panel: 'Conversations', icon: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z' },
-  { id: 'code', label: 'Code', title: 'Code', panel: 'Projets', icon: 'M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16' },
-  { id: 'image', label: 'Image', title: 'Image', panel: 'Images', icon: 'M4 5h16v14H4zM4 16l5-5 4 4 2-2 5 5M15.5 9.5h.01' },
-  { id: 'video', label: 'Vidéo', title: 'Vidéo', panel: 'Vidéos', icon: 'M3 6h13v12H3zM16 10l5-3v10l-5-3' }
+const MODES: Array<{ id: AppMode; label: MessageKey; title: MessageKey; panel?: MessageKey; icon: string }> = [
+  { id: 'voice', label: 'app.mode.voice', title: 'app.mode.voice.title', icon: 'M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0zM5 11a7 7 0 0 0 14 0M12 18v3' },
+  { id: 'chat', label: 'app.mode.chat', title: 'app.mode.chat', panel: 'app.mode.chat.panel', icon: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z' },
+  { id: 'code', label: 'app.mode.code', title: 'app.mode.code', panel: 'app.mode.code.panel', icon: 'M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16' },
+  { id: 'image', label: 'app.mode.image', title: 'app.mode.image', panel: 'app.mode.image.panel', icon: 'M4 5h16v14H4zM4 16l5-5 4 4 2-2 5 5M15.5 9.5h.01' },
+  { id: 'video', label: 'app.mode.video', title: 'app.mode.video', panel: 'app.mode.video.panel', icon: 'M3 6h13v12H3zM16 10l5-3v10l-5-3' }
 ]
 
 const ICON_BRAIN =
@@ -121,6 +124,8 @@ const WIDGET_ORB_COLLAPSED_SIZE = 32
 const WIDGET_ORB_EXPANDED_SIZE = 160
 
 export default function App(): JSX.Element {
+  // Toute l'interface se redessine quand la langue change (Options → Général) : chaque texte passe par t().
+  const language = useLanguage()
   const emotion = useJarisStore((state) => state.emotion)
   const setEmotion = useJarisStore((state) => state.setEmotion)
   const transcript = useJarisStore((state) => state.transcript)
@@ -138,6 +143,7 @@ export default function App(): JSX.Element {
   const [capacityScanDone, setCapacityScanDone] = useState<boolean | undefined>(undefined)
   const [runtimeReady, setRuntimeReady] = useState<boolean | undefined>(undefined)
   const [nameInput, setNameInput] = useState('')
+  const [onboardingLanguage, setOnboardingLanguage] = useState<LanguageSetting>(() => window.jaris.getLanguageState?.()?.setting ?? 'auto')
   const [memoryGraph, setMemoryGraph] = useState<MemoryGraph | null>(null)
   const [newModels, setNewModels] = useState<string[]>([])
   // Étape 252 : ce que Jaris fait pendant une demande vocale (« Je réfléchis… 12 s »), `null` hors demande.
@@ -466,18 +472,34 @@ export default function App(): JSX.Element {
         <div className="app">
           <form className="app__onboarding" onSubmit={handleOnboardingSubmit}>
             <img className="app__onboarding-logo" src={logo160} alt="Jaris" />
-            <h1>Bienvenue sur Jaris</h1>
-            <p>
-              Ton assistant personnel, 100 % local. Rien ne quitte ton ordinateur, et c'est gratuit. Comment
-              dois-je t'appeler ?
-            </p>
+            <h1>{t('app.onboarding.title')}</h1>
+            <p>{t('app.onboarding.intro')}</p>
             <input
               autoFocus
               value={nameInput}
               onChange={(event) => setNameInput(event.target.value)}
-              placeholder="Ton prénom"
+              placeholder={t('app.onboarding.name')}
             />
-            <button type="submit">Commencer</button>
+            <button type="submit">{t('app.onboarding.start')}</button>
+            {/* Dès le tout premier écran : la langue de Windows est déjà appliquée, mais on peut en choisir une autre. */}
+            <label className="app__onboarding-language">
+              <span>{t('language.label')}</span>
+              <select
+                value={onboardingLanguage}
+                onChange={(event) => {
+                  const next = event.target.value as LanguageSetting
+                  setOnboardingLanguage(next)
+                  void window.jaris.setLanguage(next)
+                }}
+              >
+                <option value="auto">{t('language.auto', { language: languageInfo(window.jaris.getLanguageState?.()?.systemCode ?? language).name })}</option>
+                {LANGUAGES.map((option) => (
+                  <option key={option.code} value={option.code} lang={option.code}>
+                    {option.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           </form>
         </div>
       )
@@ -511,7 +533,7 @@ export default function App(): JSX.Element {
     // La colonne de liste ne montre que la liste de l'écran affiché, ou les sections d'Options. Étape 270 (Léo :
     // « pourquoi j'ai une conversation dans le mode vocal, faut pas ça à gauche ») : sans liste à lui (Agent
     // vocal, Cerveau), l'écran n'a pas de colonne — la barre d'icônes, elle, ne bouge pas.
-    const listTitle = optionsShown ? 'Options' : memoryGraph ? undefined : currentMode.panel
+    const listTitle = optionsShown ? t('options.title') : memoryGraph ? undefined : currentMode.panel && t(currentMode.panel)
     const hasList = !!listTitle
     const selectMode = (id: AppMode): void => {
       setAppMode(id)
@@ -529,14 +551,14 @@ export default function App(): JSX.Element {
           {/* Étape 269 (Léo, capture de Codex : « fais comme ça, ne mets pas les conversations dans la même
               barre ») : deux colonnes. La barre d'icônes (modes en haut, outils en bas) ne change jamais ; la
               colonne de liste à côté se replie à la demande et garde la même place sur tous les écrans. */}
-          <nav className="app-rail" aria-label="Modes de Jaris">
+          <nav className="app-rail" aria-label={t('app.rail.label')}>
             <img className="app-rail__logo" src={logo64} alt="Jaris" />
             <div className="app-rail__group">
               {MODES.map(({ id, label, title, icon }) => (
                 <RailButton
                   key={id}
-                  label={label}
-                  title={title}
+                  label={t(label)}
+                  title={t(title)}
                   icon={icon}
                   active={!screenShown && appMode === id}
                   onClick={() => selectMode(id)}
@@ -544,9 +566,9 @@ export default function App(): JSX.Element {
               ))}
             </div>
             <div className="app-rail__group app-rail__group--end">
-              <RailButton label="Cerveau" title="Cerveau de Jaris" icon={ICON_BRAIN} active={!!memoryGraph} onClick={openMemoryBrain} />
+              <RailButton label={t('app.brain')} title={t('app.brain.title')} icon={ICON_BRAIN} active={!!memoryGraph} onClick={openMemoryBrain} />
               <RailButton
-                label="Options"
+                label={t('options.title')}
                 icon={ICON_OPTIONS}
                 active={optionsShown}
                 onClick={() => {
@@ -565,8 +587,8 @@ export default function App(): JSX.Element {
               <button
                 className="panel__icon-button app-sidebar__collapse"
                 onClick={() => setPanelOpen(false)}
-                title="Réduire la liste"
-                aria-label="Réduire la liste"
+                title={t('app.list.collapse')}
+                aria-label={t('app.list.collapse')}
               >
                 <PanelToggleIcon />
               </button>
@@ -577,7 +599,7 @@ export default function App(): JSX.Element {
             <div className="panel__list" ref={setRecentsSlot} />
             <div className="panel__status">
               <span className="panel__status-dot" />
-              Local{appVersion ? ` · v${appVersion}` : ''}
+              {t('app.local')}{appVersion ? ` · v${appVersion}` : ''}
             </div>
           </aside>
 
@@ -587,8 +609,8 @@ export default function App(): JSX.Element {
                 <button
                   className="panel__icon-button"
                   onClick={() => setPanelOpen(true)}
-                  title="Afficher la liste"
-                  aria-label="Afficher la liste"
+                  title={t('app.list.expand')}
+                  aria-label={t('app.list.expand')}
                 >
                   <PanelToggleIcon />
                 </button>
@@ -598,28 +620,25 @@ export default function App(): JSX.Element {
               <span
                 className="app-header__title"
                 ref={screenShown ? undefined : setTitleSlot}
-                data-label={optionsShown ? 'Options' : memoryGraph ? 'Cerveau de Jaris' : currentMode.title}
+                data-label={optionsShown ? t('options.title') : memoryGraph ? t('app.brain.title') : t(currentMode.title)}
               />
             </header>
 
             {newModels.length > 0 && (
               <div className="app__new-models">
                 <p>
-                  {newModels.length === 1 ? 'Nouveau modèle disponible : ' : `${newModels.length} nouveaux modèles disponibles : `}
-                  <strong>{newModels.join(', ')}</strong>. Ouvre Options → Modèles puis « Retester la
-                  configuration » pour voir s'ils conviennent mieux à ta config.
+                  {tn('app.newModels', newModels.length)} <strong>{newModels.join(', ')}</strong>. {t('app.newModels.hint')}
                 </p>
-                <button onClick={dismissNewModels}>Fermer</button>
+                <button onClick={dismissNewModels}>{t('common.close')}</button>
               </div>
             )}
 
             {ollamaVersionStatus?.outdated && !ollamaPopupDismissed && (
               <div className="app__new-models">
                 <p>
-                  Ollama {ollamaVersionStatus.current} installé, la dernière version est{' '}
-                  {ollamaVersionStatus.latest}. Ouvre Options → Général pour mettre à jour.
+                  {t('app.ollamaOutdated', { current: ollamaVersionStatus.current ?? '', latest: ollamaVersionStatus.latest ?? '' })}
                 </p>
-                <button onClick={() => setOllamaPopupDismissed(true)}>Fermer</button>
+                <button onClick={() => setOllamaPopupDismissed(true)}>{t('common.close')}</button>
               </div>
             )}
 
@@ -629,21 +648,20 @@ export default function App(): JSX.Element {
                   {/* Onglet "Mise à jour", pas "Modèles" : celui de Jaris a son propre onglet depuis qu'il a
                       été séparé de celui d'Ollama, mais cette phrase était restée sur l'ancien — envoyer
                       quelqu'un sur un onglet où le bouton n'est pas est une autre façon de "ne rien faire". */}
-                  Jaris {appVersionStatus.current} installé, la dernière version est{' '}
-                  {appVersionStatus.latest}. Ouvre Options → Général pour l'installer.
+                  {t('app.jarisOutdated', { current: appVersionStatus.current, latest: appVersionStatus.latest ?? '' })}
                 </p>
-                <button onClick={() => setAppPopupDismissed(true)}>Fermer</button>
+                <button onClick={() => setAppPopupDismissed(true)}>{t('common.close')}</button>
               </div>
             )}
 
             {optionsShown && (
-              <ErrorBoundary label="Les Options">
+              <ErrorBoundary label={t('app.boundary.options')}>
                 <OptionsMenu embedded navSlot={panelOpen ? recentsSlot : null} />
               </ErrorBoundary>
             )}
 
             {memoryGraph && (
-              <ErrorBoundary label="Le Cerveau de Jaris">
+              <ErrorBoundary label={t('app.boundary.brain')}>
                 <MemoryBrain graph={memoryGraph} />
               </ErrorBoundary>
             )}
@@ -651,7 +669,7 @@ export default function App(): JSX.Element {
             {!screenShown && appMode === 'voice' && (
               // Étape 267, façon mode voix de ChatGPT : la sphère et ce qui se dit au centre, comme des
               // sous-titres (plus de carte), les commandes en bas de l'écran.
-              <ErrorBoundary label="L'Agent vocal">
+              <ErrorBoundary label={t('app.boundary.voice')}>
                 <div className="app app--voice voice-screen" data-emotion={emotion}>
                   <div className="voice-screen__stage">
                     {/* Étape 267 (Léo : « utilise l'orbe classique, celui du logo de l'application ») : l'orbe
@@ -659,11 +677,11 @@ export default function App(): JSX.Element {
                         le bouton « Parler à Jaris » en bas reste le chemin au clavier. */}
                     <JarisOrb emotion={emotion} size={voiceOrbSize} onClick={wakeFromClick} />
                     {/* Au repos, une question plutôt que « Parle à Jaris » : le bouton juste en dessous le dit déjà. */}
-                    <h1 className="app__status">{emotion === 'idle' ? 'Que puis-je faire pour toi ?' : STATUS_LABEL[emotion]}</h1>
+                    <h1 className="app__status">{emotion === 'idle' ? t('app.voice.prompt') : t(STATUS_LABEL[emotion])}</h1>
 
                     {(transcript || reply || voiceActivity) && (
                       <div className="app__conversation">
-                        {transcript && <p className="app__transcript">« {transcript} »</p>}
+                        {transcript && <p className="app__transcript">{t('common.quoted', { text: transcript })}</p>}
                         {voiceActivity && <p className="app__activity">{voiceActivity}</p>}
                         {reply && <p className="app__reply">{reply}</p>}
                       </div>
@@ -683,25 +701,25 @@ export default function App(): JSX.Element {
                         disabled={emotion !== 'idle'}
                       >
                         <MicIcon />
-                        {emotion === 'idle' ? 'Parler à Jaris' : emotion === 'listening' ? 'Je t’écoute…' : 'Un instant…'}
+                        {emotion === 'idle' ? t('app.voice.talk') : emotion === 'listening' ? t('app.voice.listening') : t('app.voice.wait')}
                       </button>
                     </div>
 
                     <div className="app__hint app__hint--small">
-                      Ou dis « Jaris », ou appuie sur + du pavé numérique, depuis n'importe quelle appli.
+                      {t('app.voice.hint')}
                     </div>
 
                     {setupStatus && !setupStatus.ready && (
                       <div className="app__setup-warning">
                         {/* Étape 234 (bêta) : « pipeline vocal », « sidecar » et « voir le README » ne disaient rien à
                             quelqu'un qui n'a jamais vu le code — et aucun fichier d'explication n'est livré avec Jaris. */}
-                        La voix ne fonctionne pas pour l'instant (le Chat, lui, marche) :
+                        {t('app.voice.broken')}
                         <ul>
                           {setupStatus.missing.map((item) => (
                             <li key={item}>{item}</li>
                           ))}
                         </ul>
-                        Ferme puis relance Jaris : il réessaiera d'installer ce qui manque.
+                        {t('app.voice.broken.hint')}
                       </div>
                     )}
                   </div>
@@ -711,22 +729,22 @@ export default function App(): JSX.Element {
 
             {/* Étape 202 : cachés, jamais détruits, en changeant d'onglet — une génération en cours reste visible au retour. */}
             <KeepAlive active={!screenShown && appMode === 'chat'}>
-              <ErrorBoundary label="Le Chat">
+              <ErrorBoundary label={t('app.boundary.chat')}>
                 <ChatPanel />
               </ErrorBoundary>
             </KeepAlive>
             <KeepAlive active={!screenShown && appMode === 'code'}>
-              <ErrorBoundary label="Le mode Code">
+              <ErrorBoundary label={t('app.boundary.code')}>
                 <CodePanel />
               </ErrorBoundary>
             </KeepAlive>
             <KeepAlive active={!screenShown && appMode === 'image'}>
-              <ErrorBoundary label="Le mode Image">
+              <ErrorBoundary label={t('app.boundary.image')}>
                 <ImagePanel />
               </ErrorBoundary>
             </KeepAlive>
             <KeepAlive active={!screenShown && appMode === 'video'}>
-              <ErrorBoundary label="Le mode Vidéo">
+              <ErrorBoundary label={t('app.boundary.video')}>
                 <VideoPanel />
               </ErrorBoundary>
             </KeepAlive>
@@ -770,10 +788,10 @@ export default function App(): JSX.Element {
           onClick={() => window.jaris.openSettings()} />
       </div>
       <div className="widget-details" aria-hidden={widgetCollapsed}>
-        <div className="app__status app__status--widget">{STATUS_LABEL[emotion]}</div>
+        <div className="app__status app__status--widget">{t(STATUS_LABEL[emotion])}</div>
         {(transcript || reply) && (
           <div className="app__conversation app__conversation--widget">
-            {transcript && <p className="app__transcript">« {transcript} »</p>}
+            {transcript && <p className="app__transcript">{t('common.quoted', { text: transcript })}</p>}
             {voiceActivity && <p className="app__activity">{voiceActivity}</p>}
             {reply && <p className="app__reply">{reply}</p>}
           </div>

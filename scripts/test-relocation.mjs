@@ -1,3 +1,5 @@
+import { withI18n } from './i18n-test-module.mjs'
+import { loadTsModule } from './load-ts-module.mjs'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { createRequire } from 'node:module'
@@ -9,6 +11,7 @@ import vm from 'node:vm'
 import ts from 'typescript'
 
 const nodeRequire = createRequire(import.meta.url)
+const formatBytesModule = loadTsModule('shared/formatBytes.ts')
 
 /**
  * relocation.ts — étape 143, Léo : « si il veut changer dans les options ça doit tout déplacer, jamais une
@@ -52,7 +55,8 @@ function setup({ dockerPlan = { action: 'none' }, dockerUninstallOk = true, dock
     vm.runInThisContext(`(function (exports, module, require, process) { ${transpile(path)} })`)(
       exports,
       { exports },
-      (name) => modules[name] ?? nodeRequire(name),
+      // Étape 293 : relocation.ts écrit les tailles avec le VRAI formatBytes partagé (unités traduites).
+      withI18n((name) => modules[name] ?? (name === '../../shared/formatBytes' ? formatBytesModule : nodeRequire(name))),
       fakeProcess
     )
     return exports

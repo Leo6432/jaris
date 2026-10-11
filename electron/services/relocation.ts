@@ -20,6 +20,8 @@ import {
   type CommittedMove
 } from './modelsLocation'
 import { DATA_SUBDIR, DOWNLOADS_SUBDIR, getStorageRoot } from './storageRoot'
+import { t } from '../../shared/i18n'
+import { formatBytes } from '../../shared/formatBytes'
 
 /**
  * Étape 143, Léo : « si il veut changer dans les options ça doit tout déplacer, jamais une partie ».
@@ -66,9 +68,7 @@ export class RelocationRefused extends Error {}
 export function validateNewRoot(newRoot: string, forbiddenParents: string[]): void {
   for (const parent of forbiddenParents) {
     if (parent && isInside(newRoot, parent)) {
-      throw new RelocationRefused(
-        `Choisis un dossier en dehors de ${parent} : Jaris y range déjà ses propres fichiers. Rien n'a été déplacé.`
-      )
+      throw new RelocationRefused(t('move.outsideParent', { parent }))
     }
   }
 }
@@ -91,7 +91,7 @@ export interface RelocationResult {
 }
 
 function formatGb(bytes: number): string {
-  return `${(bytes / 1024 ** 3).toFixed(1).replace('.', ',')} Go`
+  return formatBytes(bytes)
 }
 
 async function removeIfEmpty(dir: string): Promise<void> {
@@ -106,10 +106,10 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
   const { onProgress } = deps
   // Les emplacements déplacés sont ceux de Windows (%LOCALAPPDATA%, %USERPROFILE%) : ailleurs, ils seraient
   // vides et chaque chemin deviendrait relatif au dossier courant.
-  if (process.platform !== 'win32') throw new RelocationRefused("Cette fonctionnalité n'est disponible que sur Windows.")
+  if (process.platform !== 'win32') throw new RelocationRefused(t('move.windowsOnly'))
   const previousRoot = getStorageRoot()
   if (previousRoot && previousRoot.toLowerCase() === newRoot.toLowerCase()) {
-    throw new RelocationRefused(`Tout est déjà dans ${newRoot}.`)
+    throw new RelocationRefused(t('move.alreadyThere', { dir: newRoot }))
   }
 
   const exePath = app.getPath('exe')
@@ -124,7 +124,7 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
   ])
 
   // --- 1. Vérifications, sans rien modifier ---
-  onProgress('Vérification de ce qui doit être déplacé…')
+  onProgress(t('move.checking'))
   const plans = await planMoves(newRoot)
   const dockerPlan: DockerMovePlan = await planDockerMove(newRoot, deps.startDocker, previousRoot ? [join(previousRoot, DOCKER_APP_SUBDIR)] : [])
   const programTarget = app.isPackaged && !isInside(exePath, newRoot) ? join(newRoot, PROGRAM_SUBDIR) : null
@@ -133,10 +133,7 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
     (await bytesToCopy(plans)) + (await folderSize(getDataRoot())) + (programTarget ? PROGRAM_INSTALLER_BYTES : 0)
   const free = await freeBytes(newRoot)
   if (free !== null && free - FREE_SPACE_MARGIN_BYTES < needed) {
-    throw new RelocationRefused(
-      `Pas assez de place dans ${newRoot} : il faut ${formatGb(needed + FREE_SPACE_MARGIN_BYTES)} libres, il y en a ` +
-        `${formatGb(free)}. Rien n'a été déplacé.`
-    )
+    throw new RelocationRefused(t('move.noSpace', { dir: newRoot, needed: formatGb(needed + FREE_SPACE_MARGIN_BYTES), free: formatGb(free) }))
   }
 
   // --- 2. Préparation : installeur du programme, puis copies. L'origine n'est toujours pas touchée ---
@@ -145,19 +142,16 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
     const version = app.getVersion()
     const downloads = join(newRoot, DOWNLOADS_SUBDIR)
     programInstaller = join(downloads, `Jaris-Setup-${version}.exe`)
-    onProgress('Téléchargement du programme Jaris pour le réinstaller dans le nouveau dossier…')
+    onProgress(t('move.downloadingProgram'))
     try {
       await downloadToFile(installerUrlForVersion(version), programInstaller, {
         onProgress: ({ percent }) => {
-          if (percent !== null) onProgress(`Téléchargement du programme Jaris… ${Math.round(percent)} %`)
+          if (percent !== null) onProgress(t('move.downloadingProgramPercent', { percent: Math.round(percent) }))
         }
       })
     } catch (err) {
       await rm(downloads, { recursive: true, force: true }).catch(() => {})
-      throw new RelocationRefused(
-        `Impossible de télécharger le programme Jaris (${err instanceof Error ? err.message : String(err)}) : il faut ` +
-          'Internet pour le déplacer lui aussi. Rien n\'a été déplacé.'
-      )
+      throw new RelocationRefused(t('move.programDownloadFailed', { error: err instanceof Error ? err.message : String(err) }))
     }
   }
 
@@ -174,29 +168,27 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
     await copyAll(plans, onProgress)
   } catch (err) {
     await discardEverything()
-    throw new Error(`La copie a échoué (${err instanceof Error ? err.message : String(err)}). Rien n'a été déplacé.`)
+    throw new Error(t('move.copyFailed', { error: err instanceof Error ? err.message : String(err) }))
   }
 
   // --- 3. Bascule : tout se défait si une étape échoue ---
-  onProgress('Bascule vers le nouveau dossier…')
+  onProgress(t('move.switching'))
   let done: CommittedMove[]
   try {
     done = await switchAll(plans)
   } catch (err) {
     await discardEverything()
-    throw new Error(`${err instanceof Error ? err.message : String(err)}. Tout a été remis comme avant.`)
+    throw new Error(t('move.rolledBack', { error: err instanceof Error ? err.message : String(err) }))
   }
 
   let dockerUninstalled = false
   if (dockerPlan.action === 'uninstall') {
-    onProgress('Désinstallation de Docker Desktop (une fenêtre Windows va demander une autorisation — accepte-la)…')
+    onProgress(t('move.uninstallingDocker'))
     dockerUninstalled = await uninstallDockerForMove(dockerPlan.installDir)
     if (!dockerUninstalled) {
       await undoSwitches(done)
       await discardEverything()
-      throw new Error(
-        "Docker Desktop n'a pas pu être désinstallé (autorisation Windows refusée ?) : tout a été remis comme avant."
-      )
+      throw new Error(t('move.dockerUninstallFailed'))
     }
   }
 
@@ -205,16 +197,16 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
   } catch (err) {
     await undoSwitches(done)
     await discardEverything()
-    throw new Error(`Impossible d'enregistrer le nouveau dossier (${err instanceof Error ? err.message : String(err)}). Tout a été remis comme avant.`)
+    throw new Error(t('move.saveRootFailed', { error: err instanceof Error ? err.message : String(err) }))
   }
 
   // --- 4. Effacement des anciens emplacements ---
-  onProgress("Effacement des anciens emplacements…")
+  onProgress(t('move.cleaning'))
   const leftovers = await finalizeAll(done)
   try {
     await removeOldData(previousRoot, newRoot)
   } catch {
-    leftovers.push(previousRoot ? join(previousRoot, DATA_SUBDIR) : 'anciennes conversations')
+    leftovers.push(previousRoot ? join(previousRoot, DATA_SUBDIR) : t('move.oldConversations'))
   }
   if (previousRoot) {
     for (const sub of [DOWNLOADS_SUBDIR, DOCKER_APP_SUBDIR, DOCKER_DATA_SUBDIR]) {
@@ -229,7 +221,7 @@ export async function relocateEverything(newRoot: string, deps: RelocationDeps):
   // ET son disque WSL dans la nouvelle racine. Ne pas reporter cette étape à une future recherche web.
   let dockerReinstalled = !dockerUninstalled
   if (dockerUninstalled) {
-    onProgress('Réinstallation de Docker Desktop et de ses données dans le nouveau dossier…')
+    onProgress(t('move.reinstallingDocker'))
     try {
       dockerReinstalled = await deps.installDocker(newRoot)
     } catch {
@@ -260,11 +252,11 @@ export function reconcileStorage(log: (message: string) => void, stopOllama: () 
     const needed = await bytesToCopy(plans)
     const free = await freeBytes(root)
     if (free !== null && free - FREE_SPACE_MARGIN_BYTES < needed) {
-      log(`Pas assez de place dans ${root} pour y ranger ${formatGb(needed)} : laissé en place pour l'instant.`)
+      log(t('move.reconcileNoSpace', { dir: root, needed: formatGb(needed) }))
       return
     }
     if (plans.some((p) => p.real && p.brick.subdir.startsWith('ollama'))) await stopOllama()
-    log(`Rangement dans ${root} de ce qui était encore ailleurs…`)
+    log(t('move.reconciling', { dir: root }))
     try {
       await copyAll(plans, log)
       let done: CommittedMove[]
@@ -275,9 +267,9 @@ export function reconcileStorage(log: (message: string) => void, stopOllama: () 
         throw err
       }
       await finalizeAll(done)
-      log(`Tout est rangé dans ${root}.`)
+      log(t('move.reconciled', { dir: root }))
     } catch (err) {
-      log(`Rangement dans ${root} impossible pour l'instant (${err instanceof Error ? err.message : String(err)}) : rien n'a changé.`)
+      log(t('move.reconcileFailed', { dir: root, error: err instanceof Error ? err.message : String(err) }))
     }
   })().finally(() => {
     reconciling = null
@@ -288,9 +280,9 @@ export function reconcileStorage(log: (message: string) => void, stopOllama: () 
 /** Où vit réellement chaque partie de Jaris, lu sur le disque (Options → Modèles). */
 export async function getStorageStatus(dockerInstallDir: string | null): Promise<{ root: string | null; items: { label: string; path: string }[] }> {
   const items: { label: string; path: string }[] = []
-  if (app.isPackaged) items.push({ label: 'le programme Jaris', path: win32.dirname(app.getPath('exe')) })
-  items.push({ label: 'tes conversations et réglages', path: getDataRoot() })
+  if (app.isPackaged) items.push({ label: t('brick.program'), path: win32.dirname(app.getPath('exe')) })
+  items.push({ label: t('brick.data'), path: getDataRoot() })
   for (const brick of bricks()) items.push({ label: brick.label, path: (await currentRealDir(brick.link)) ?? brick.link })
-  if (dockerInstallDir) items.push({ label: 'Docker Desktop (recherche web)', path: dockerInstallDir })
+  if (dockerInstallDir) items.push({ label: t('brick.docker'), path: dockerInstallDir })
   return { root: getStorageRoot(), items }
 }

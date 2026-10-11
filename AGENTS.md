@@ -7783,3 +7783,59 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   mais pas l'outil du Chat), `scripts/test-image-generation.mjs` et `scripts/test-video-generation.mjs` (traduction
   avant la libération de la carte, texte traduit envoyé à sd-cli, nom de fichier inchangé). Chaque garde-fou vérifié
   en le retirant.
+
+- **Jaris en 24 langues (étape 293, Léo : « jaris doit détecter la langue de windows et traduire jaris, et sinon tu
+  peux changer dans les paramètres, tout doit être traduit, et par exemple image il doit pas traduire en français »).**
+  Exactement les 24 langues où la VOIX marche de bout en bout (transcription Parakeet v3 ET synthèse Supertonic) :
+  proposer une langue où Jaris ne pourrait ni entendre ni parler aurait été une promesse fausse dès le premier mot.
+  **Architecture** : un seul traducteur partagé (`shared/i18n`, `t()`/`tn()`), le catalogue SOURCE en français
+  (`fr.ts`, ~1300 clés) et 23 traductions JSON (`shared/i18n/locales/`). Le processus principal choisit la langue
+  (réglage `language.json`, sinon `app.getPreferredSystemLanguages()`, en parcourant TOUTE la liste de préférence de
+  Windows, repli anglais — jamais français — pour une langue non parlée) et envoie aux fenêtres le SEUL catalogue
+  utile, lu de façon synchrone avant le premier rendu (vérifié : aucune traduction dans le bundle de l'écran). Le
+  choix se fait dès le tout premier écran (prénom) et dans Options → Général.
+  **Ce qui reste volontairement en français** : les consignes et résultats d'outils destinés au MODÈLE (seule la
+  langue de sa RÉPONSE suit le réglage, via `buildSystemPrompt(…, replyLanguage)`), et les lignes de journal de
+  diagnostic, sur lesquelles des motifs s'appuient (`voiceActivity.ts`, `imageStepFromLog`) — seules les phrases
+  AFFICHÉES qu'on en tire passent par le catalogue. **L'image et la vidéo partent TOUJOURS en anglais** quelle que
+  soit la langue de l'interface (`promptTranslator.ts`, consigne « n'importe quelle langue → anglais ») : c'est
+  exactement le « image il doit pas traduire en français » de Léo.
+  **Pièges rencontrés, à ne pas refaire :**
+  - **« one » n'est pas « 1 »** : en russe, ukrainien, croate, slovène, letton et lituanien, la catégorie de pluriel
+    `one` couvre aussi 21, 31, 101… Une forme « one » sans le nombre (« Nouveau modèle disponible ») y devient fausse
+    pour 21. Le test de complétude exige `{count}` dans « one » partout où « one » dépasse 0 et 1 ; pour les phrases
+    sans nombre, une formulation neutre. Les catégories attendues sont MESURÉES (`Intl.PluralRules` sur 0..1000),
+    jamais recopiées d'une liste : « many » ne sert qu'aux décimales en tchèque/slovaque/lituanien, et `other` est
+    gardé partout comme repli de `tn()`.
+  - **L'outil d'écriture de fichiers retire les espaces de fin de ligne** : la traduction de « et » (entouré
+    d'espaces, collé entre deux morceaux) devenait « ja » sans espace final. Le script de construction recopie
+    désormais les espaces de bord du français, et le test de complétude les compare clé par clé.
+  - **Une phrase « Options → Modèles » traduite doit désigner l'onglet sous SON nom traduit** : vérifié langue par
+    langue contre les libellés des onglets du même catalogue (`test-options-references.mjs`). Faux positifs réels
+    écartés explicitement : en danois, finnois et russe, les Paramètres de WINDOWS portent le même mot qu'Options.
+  - **Le nom « Jaris » en d'autres alphabets** (« Джарис », « Τζάρις », « Džaris », « Dżaris », « Dzsáris ») réveillait
+    bien Jaris, mais `remove_wake_prefix` cherchait le nom dans le texte BRUT : « Джарис, открой YouTube » gardait
+    « Джарис, » dans la demande. Trouvé par le nouveau test, corrigé en comparant mot par mot la forme latine.
+  - **La ponctuation fait partie de la traduction** : « Libellé : valeur » (espace avant les deux-points) est
+    français ; ailleurs « Libellé: valeur ». Plus aucun ` : ` collé à la main autour d'un texte affiché : passer par
+    `common.labelValue`. Repéré sur une CAPTURE en russe, pas en relecture.
+  - **`language.json` manquait à la liste des fichiers emportés par « Déplacer »** (`OWNED_ENTRIES`) : Jaris serait
+    reparti dans la langue de Windows après un déplacement. Tout nouveau fichier écrit dans `getDataRoot()` doit y
+    être ajouté (test dans `test-data-location.mjs`).
+  - **Les faux ponts de modules des tests** : presque tous les modules importent maintenant le traducteur, et ~60
+    fichiers de test ont cassé d'un coup. `load-ts-module.mjs` fournit d'office le VRAI traducteur (une seule
+    instance, en français par défaut), et `withI18n()` (`scripts/i18n-test-module.mjs`) enveloppe les faux ponts
+    écrits à la main — plutôt qu'un bouchon `t = (clé) => clé`, qui aurait vidé de sens tous les tests qui comparent
+    un texte affiché.
+  **Limites connues, assumées** : (1) les 23 traductions sont écrites par Claude, relues par les tests (clés,
+  variables, pluriels, espaces, renvois d'onglets) mais PAS par des locuteurs natifs ; (2) les filets de sécurité
+  écrits sur le français (promesse d'action sans outil, ouverture directe « ouvre X », salutations courtes, Bloc-notes)
+  ne se déclenchent pas dans les autres langues — le modèle traite alors ces demandes normalement, sans raccourci ;
+  (3) la police Geist n'embarque que l'alphabet latin : cyrillique et grec s'affichent dans la police de Windows ;
+  (4) la reconnaissance du nom « Jaris » dans les autres langues n'a pas été mesurée sur de vraies voix.
+  **Vérifié ici** : typecheck, build, toute la suite de tests, et des captures d'Options en 9 langues (fr, de, ru,
+  el, fi, hu, lt, pl, bg) à 1200 et 760 px avec une détection automatique des textes coupés ou débordants (aucun).
+  **Non vérifié** : l'usage réel sur Windows (détection de la langue de Windows, voix dans une autre langue).
+  Régression : `node --test scripts/test-i18n-completeness.mjs scripts/test-options-references.mjs
+  scripts/test-prompt-translator.mjs scripts/test-data-location.mjs` et `python scripts/test-wake-confirmation.py`.
+  Chaque nouveau garde-fou vérifié en réintroduisant son défaut.

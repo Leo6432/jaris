@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -19,7 +20,7 @@ function load(relativePath) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   }).outputText
   const module = { exports: {} }
-  vm.runInThisContext(`(function (exports, module) { ${source} })`)(module.exports, module)
+  vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(module.exports, module, withI18n((name) => { throw new Error(`import inattendu : ${name}`) }))
   return module.exports
 }
 

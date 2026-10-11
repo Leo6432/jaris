@@ -6,6 +6,7 @@ import ts from 'typescript'
 import { modelChoiceModule } from './load-model-choice.mjs'
 import { systemPromptModule } from './load-system-prompt.mjs'
 import { loadPhoneModules } from './phone-test-loader.mjs'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * Étape 214 (Léo : « tout sauf le risqué » depuis le téléphone) : la VRAIE boucle de conversation, avec les
@@ -18,7 +19,7 @@ const transpile = (path) =>
 
 const TOOL_NAMES = [...readFileSync(new URL('../electron/services/tools.ts', import.meta.url), 'utf8').matchAll(/^\s+name: '([a-z_]+)',/gm)].map((m) => m[1])
 const TOOLS = TOOL_NAMES.map((name) => ({ type: 'function', function: { name, description: name, parameters: { type: 'object', properties: {} } } }))
-const { PHONE_ALLOWED_TOOLS, PHONE_RESTRICTIONS, PHONE_REFUSAL, phoneStatusFromLog } = loadPhoneModules().load('phoneAccess')
+const { PHONE_ALLOWED_TOOLS, PHONE_RESTRICTIONS, phoneRefusal, phoneStatusFromLog } = loadPhoneModules().load('phoneAccess')
 
 const noteExports = {}
 vm.runInNewContext(transpile('../electron/services/notepad.ts'), { exports: noteExports, require: (name) => (name === 'util' ? { promisify: () => {} } : {}) })
@@ -42,7 +43,7 @@ function setup(chat, execute, writeNote = async () => assert.fail('aucun documen
     './tools': { TOOLS, createToolExecutor: () => execute }
   }
   const exports = {}
-  vm.runInNewContext(transpile('../electron/services/assistant.ts'), { exports, Error, require: (name) => modules[name] })
+  vm.runInNewContext(transpile('../electron/services/assistant.ts'), { exports, Error, require: withI18n((name) => modules[name]) })
   return (prompt, restrictions) => exports.converse(prompt, null, () => {}, undefined, [], undefined, undefined, 'chat', undefined, undefined, undefined, restrictions)
 }
 
@@ -88,14 +89,14 @@ for (const forbidden of ['type_text', 'click_mouse', 'shutdown_pc', 'look_at_scr
         return 'fait'
       }
     )
-    assert.equal(await converse('Fais-le', PHONE_RESTRICTIONS), PHONE_REFUSAL)
+    assert.equal(await converse('Fais-le', PHONE_RESTRICTIONS), phoneRefusal())
     assert.equal(executed, 0)
   })
 }
 
 test('« ouvre le bloc-notes et écris… » depuis le téléphone : rien n’est écrit sur le PC', async () => {
   const converse = setup(async () => assert.fail('pas de modèle'), async () => assert.fail('pas d’outil'))
-  assert.equal(await converse('Ouvre le bloc-notes et écris bonjour', PHONE_RESTRICTIONS), PHONE_REFUSAL)
+  assert.equal(await converse('Ouvre le bloc-notes et écris bonjour', PHONE_RESTRICTIONS), phoneRefusal())
 })
 
 test('ouvrir une application reste possible depuis le téléphone (choix de Léo)', async () => {

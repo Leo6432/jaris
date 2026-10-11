@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { WebActivity } from '../../shared/ipc'
 import { isWebLink, pageAddress, sourceDomain, webActivityLabel } from '@/lib/webActivity'
+import { t, tn } from '@/lib/i18n'
 
 function SearchIcon(): JSX.Element {
   return (
@@ -79,12 +80,12 @@ export default function WebActivityBlock({ items }: { items: WebActivity[] }): J
                   <span className="web-activity__query">{item.query}</span>
                   <span className="web-activity__count">
                     {item.pending
-                      ? 'en cours…'
+                      ? t('web.running')
                       : item.failed
-                        ? 'échec'
+                        ? t('web.failed')
                         : item.results.length === 0
-                          ? 'aucun résultat'
-                          : `${item.results.length} résultat${item.results.length > 1 ? 's' : ''}`}
+                          ? t('web.noResult')
+                          : tn('web.results', item.results.length)}
                   </span>
                 </div>
                 {item.results.length > 0 && (
@@ -99,8 +100,8 @@ export default function WebActivityBlock({ items }: { items: WebActivity[] }): J
               <li key={index} className="web-activity__step">
                 <div className="web-activity__step-head">
                   <PageIcon />
-                  <span className="web-activity__query">Page lue</span>
-                  {(item.pending || item.failed) && <span className="web-activity__count">{item.pending ? 'en cours…' : 'échec'}</span>}
+                  <span className="web-activity__query">{t('web.pageRead')}</span>
+                  {(item.pending || item.failed) && <span className="web-activity__count">{item.pending ? t('web.running') : t('web.failed')}</span>}
                 </div>
                 <div className="web-activity__sources">
                   <Source url={item.url} title={pageAddress(item.url)} />

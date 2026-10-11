@@ -3,6 +3,7 @@ import QRCode from 'qrcode'
 import type { PhoneAccessStatus, PhonePairing } from '../../shared/ipc'
 import { formatRecentDate } from '@/lib/formatRecentDate'
 import { SettingGroup, SettingRow, Toggle } from './SettingsLayout'
+import { t } from '@/lib/i18n'
 
 /** « 12345678 » -> « 1234 5678 » : plus facile à recopier sur un téléphone. */
 export function formatPairingCode(code: string): string {
@@ -87,19 +88,15 @@ export default function PhoneAccessSettings(): JSX.Element {
   return (
     <div className="options-menu__section phone-access">
       <SettingGroup
-        title="Parler à Jaris depuis ton téléphone"
-        description="Écris ou parle à Jaris depuis ton téléphone, et crée des images et des vidéos, même loin de chez toi en 4G. C'est la même conversation que le Chat."
+        title={t('phone.group')}
+        description={t('phone.group.hint')}
       >
         <SettingRow
-          label="Accès depuis le téléphone"
-          description={
-            status.state === 'unsupported'
-              ? status.message
-              : 'Chiffré de bout en bout par Tailscale (gratuit) : personne d’autre ne lit tes messages, pas même Tailscale. Rien à installer sur le téléphone.'
-          }
+          label={t('phone.access')}
+          description={status.state === 'unsupported' ? status.message : t('phone.access.hint')}
         >
           <Toggle
-            label="Accès depuis le téléphone"
+            label={t('phone.access')}
             checked={enabled}
             disabled={busy || status.state === 'unsupported'}
             onChange={(next) => {
@@ -109,32 +106,29 @@ export default function PhoneAccessSettings(): JSX.Element {
           />
         </SettingRow>
         <p className="phone-access__safety">
-          Pour ta sécurité, depuis le téléphone Jaris ne peut ni taper, ni cliquer, ni regarder ton écran. Le PC ne s'éteint que par le bouton prévu sur la page du téléphone, avec une minute pour annuler.
+          {t('phone.safety')}
         </p>
       </SettingGroup>
 
-      {status.state === 'starting' && <p className="phone-access__step">{status.message ?? 'Démarrage de la connexion…'}</p>}
+      {status.state === 'starting' && <p className="phone-access__step">{status.message ?? t('phone.starting')}</p>}
 
       {status.state === 'login' && (
         <div className="phone-access__step phone-access__step--action">
-          <strong>Étape 1 sur 2 : connecte ce PC à Tailscale</strong>
-          <p>
-            Une page s'est ouverte dans ton navigateur : crée un compte gratuit ou connecte-toi avec Google ou Microsoft. Une seule
-            fois : Jaris s'en souviendra.
-          </p>
+          <strong>{t('phone.step1')}</strong>
+          <p>{t('phone.step1.hint')}</p>
           <button className="options-menu__action" onClick={() => void window.jaris.openPhoneAccessLink()}>
-            Ouvrir la page de connexion
+            {t('phone.step1.open')}
           </button>
         </div>
       )}
 
       {status.state === 'enable_funnel' && (
         <div className="phone-access__step phone-access__step--action">
-          <strong>Étape 2 sur 2 : autorise l'adresse web de Jaris</strong>
-          <p>Sur ton compte Tailscale, un clic suffit pour que ton téléphone puisse joindre Jaris de n'importe où.</p>
+          <strong>{t('phone.step2')}</strong>
+          <p>{t('phone.step2.hint')}</p>
           {status.actionUrl ? (
             <button className="options-menu__action" onClick={() => void window.jaris.openPhoneAccessLink()}>
-              Ouvrir la page d'autorisation
+              {t('phone.step2.open')}
             </button>
           ) : (
             status.message && <p>{status.message}</p>
@@ -144,38 +138,35 @@ export default function PhoneAccessSettings(): JSX.Element {
 
       {status.state === 'error' && (
         <div className="phone-access__step phone-access__step--error">
-          <strong>La connexion n'a pas pu démarrer</strong>
+          <strong>{t('phone.error')}</strong>
           <p>{status.message}</p>
           <button className="options-menu__action" disabled={busy} onClick={() => void run(() => window.jaris.setPhoneAccessEnabled(true))}>
-            Réessayer
+            {t('common.retry')}
           </button>
         </div>
       )}
 
       {status.state === 'ready' && (
-        <SettingGroup title="Connecter un téléphone">
+        <SettingGroup title={t('phone.connect')}>
           {status.message && <p className="phone-access__step phone-access__step--error">{status.message}</p>}
-          <SettingRow label="Adresse de ton Jaris" description={<span className="phone-access__address">{status.address}</span>}>
+          <SettingRow label={t('phone.address')} description={<span className="phone-access__address">{status.address}</span>}>
             <button className="options-menu__action" disabled={busy} onClick={showPairing}>
-              {pairing ? 'Nouveau code' : 'Connecter un téléphone'}
+              {pairing ? t('phone.newCode') : t('phone.connect')}
             </button>
           </SettingRow>
           {pairing && (
             <div className="phone-access__pairing">
-              {qr && <img className="phone-access__qr" src={qr} alt="QR code pour connecter le téléphone" />}
+              {qr && <img className="phone-access__qr" src={qr} alt={t('phone.qr.alt')} />}
               <div className="phone-access__pairing-text">
                 <ol>
-                  <li>Scanne ce QR code avec l'appareil photo de ton téléphone.</li>
-                  <li>
-                    Ajoute la page à l'écran d'accueil : iPhone, <em>Partager → Sur l'écran d'accueil</em> ; Android, <em>menu ⋮ → Ajouter à
-                    l'écran d'accueil</em>.
-                  </li>
+                  <li>{t('phone.pair.scan')}</li>
+                  <li>{t('phone.pair.homeScreen')}</li>
                 </ol>
                 <p>
-                  Ou ouvre l'adresse ci-dessus et tape le code :
+                  {t('phone.pair.code')}
                   <span className="phone-access__code">{formatPairingCode(pairing.code)}</span>
                 </p>
-                <p className="phone-access__expiry">Valable encore {minutesLeft(pairing.expiresAt, now)} min, pour un seul téléphone.</p>
+                <p className="phone-access__expiry">{t('phone.pair.expiry', { minutes: minutesLeft(pairing.expiresAt, now) })}</p>
               </div>
             </div>
           )}
@@ -183,21 +174,21 @@ export default function PhoneAccessSettings(): JSX.Element {
       )}
 
       {enabled && (
-        <SettingGroup title="Téléphones connectés">
+        <SettingGroup title={t('phone.devices')}>
           {status.devices.length === 0 ? (
-            <p className="phone-access__empty">Aucun téléphone pour l'instant.</p>
+            <p className="phone-access__empty">{t('phone.devices.none')}</p>
           ) : (
             status.devices.map((device) => (
-              <SettingRow key={device.id} label={device.name} description={`Connecté ${formatRecentDate(Date.parse(device.createdAt)).toLowerCase()} · actif ${formatRecentDate(Date.parse(device.lastSeenAt)).toLowerCase()}`}>
+              <SettingRow key={device.id} label={device.name} description={t('phone.device.meta', { created: formatRecentDate(Date.parse(device.createdAt)).toLowerCase(), seen: formatRecentDate(Date.parse(device.lastSeenAt)).toLowerCase() })}>
                 <button className="options-menu__action" disabled={busy} onClick={() => void run(() => window.jaris.removePhoneDevice(device.id))}>
-                  Déconnecter
+                  {t('phone.device.disconnect')}
                 </button>
               </SettingRow>
             ))
           )}
           <SettingRow
-            label="Se déconnecter de Tailscale"
-            description="Oublie ce PC sur ton compte Tailscale et déconnecte tous les téléphones. À refaire depuis le début ensuite."
+            label={t('phone.logout')}
+            description={t('phone.logout.hint')}
           >
             {confirmLogout ? (
               <span className="phone-access__confirm">
@@ -210,15 +201,15 @@ export default function PhoneAccessSettings(): JSX.Element {
                     void run(() => window.jaris.logoutPhoneAccess())
                   }}
                 >
-                  Confirmer
+                  {t('common.confirm')}
                 </button>
                 <button className="options-menu__action" onClick={() => setConfirmLogout(false)}>
-                  Annuler
+                  {t('common.cancel')}
                 </button>
               </span>
             ) : (
               <button className="options-menu__action" disabled={busy} onClick={() => setConfirmLogout(true)}>
-                Se déconnecter
+                {t('common.logout')}
               </button>
             )}
           </SettingRow>

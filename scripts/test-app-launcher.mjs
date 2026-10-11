@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * findBestMatch/openApp (appLauncher.ts) : reproduit le vrai bug rapporté par Léo ("Ouvre le bloc-notes et
@@ -22,7 +23,7 @@ const modules = {
   util: { promisify: (fn) => fn }
 }
 const exports = {}
-vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports }, process }, {})
+vm.runInNewContext(source, { exports, require: withI18n((name) => modules[name]), module: { exports }, process }, {})
 const { findBestMatch, openApp, didAppLaunch } = exports
 
 const REAL_WORLD_APPS = [

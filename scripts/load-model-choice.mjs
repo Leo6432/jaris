@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * Charge le VRAI electron/services/modelChoice.ts (étape 141) pour les faux ponts de modules des tests
@@ -13,7 +14,7 @@ export function loadModelChoice() {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   }).outputText
   const module = { exports: {} }
-  vm.runInThisContext(`(function (exports, require, module) {${source}\n})`)(module.exports, () => ({}), module)
+  vm.runInThisContext(`(function (exports, require, module) {${source}\n})`)(module.exports, withI18n(() => ({})), module)
   return module.exports
 }
 

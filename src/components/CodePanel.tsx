@@ -31,6 +31,8 @@ import {
 } from '@/lib/codeConversations'
 import type { RepoPreview, RepoView } from '../../shared/ipc'
 import { diffLines } from '../../shared/lineDiff'
+import { t, tn } from '@/lib/i18n'
+import type { MessageKey } from '../../shared/i18n'
 
 type View = 'preview' | 'code'
 
@@ -48,20 +50,19 @@ const CHAT_WIDTH_STEP = 24
  */
 
 /** Le verbe de chaque action, au passé : ce qui VIENT d'être fait, comme les étapes affichées par Claude. */
-const ACTIVITY_VERB: Record<CodeActivity['kind'], string> = {
-  read: 'Lu',
-  edit: 'Modifié',
-  create: 'Créé',
-  rewrite: 'Réécrit',
-  delete: 'Supprimé'
+const ACTIVITY_VERB: Record<CodeActivity['kind'], MessageKey> = {
+  read: 'code.activity.read',
+  edit: 'code.activity.edit',
+  create: 'code.activity.create',
+  rewrite: 'code.activity.rewrite',
+  delete: 'code.activity.delete'
 }
 
 /** « 500 lignes ajoutées, 3 retirées » : l'explication en toutes lettres, au survol de « +500 −3 ». */
 function statsLabel(added: number, removed: number): string {
-  const lines = (count: number): string => (count === 1 ? '1 ligne' : `${count} lignes`)
-  if (removed === 0) return `${lines(added)} ${added === 1 ? 'ajoutée' : 'ajoutées'}`
-  if (added === 0) return `${lines(removed)} ${removed === 1 ? 'retirée' : 'retirées'}`
-  return `${lines(added)} ${added === 1 ? 'ajoutée' : 'ajoutées'}, ${removed} ${removed === 1 ? 'retirée' : 'retirées'}`
+  if (removed === 0) return tn('code.stats.added', added)
+  if (added === 0) return tn('code.stats.removed', removed)
+  return `${tn('code.stats.added', added)}, ${tn('code.stats.removed', removed)}`
 }
 
 /**
@@ -77,7 +78,7 @@ function ActivityRow({ activity, readPaths }: { activity: CodeActivity; readPath
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Zm0 0v5h5M9 13h6M9 17h4" />
         </svg>
-        <span className="code-chat__activity-verb">Lu {readPaths.length} fichiers</span>
+        <span className="code-chat__activity-verb">{tn('code.activity.readFiles', readPaths.length)}</span>
         <span className="code-chat__activity-path" title={readPaths.join('\n')}>
           {readPaths.join(', ')}
         </span>
@@ -95,7 +96,7 @@ function ActivityRow({ activity, readPaths }: { activity: CodeActivity; readPath
           <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
         )}
       </svg>
-      <span className="code-chat__activity-verb">{ACTIVITY_VERB[activity.kind]}</span>
+      <span className="code-chat__activity-verb">{t(ACTIVITY_VERB[activity.kind])}</span>
       <span className="code-chat__activity-path" title={activity.path}>
         {activity.path}
       </span>
@@ -167,7 +168,7 @@ function changedFiles(changes: RepoView['changes']): ChangedFile[] {
 function WorkedLine({ durationMs, stopped }: { durationMs: number; stopped?: boolean }): JSX.Element {
   return (
     <p className={`code-chat__worked${stopped ? ' code-chat__worked--stopped' : ''}`}>
-      <span>{stopped ? `Arrêté après ${formatDuration(durationMs)}` : `Travaillé pendant ${formatDuration(durationMs)}`}</span>
+      <span>{stopped ? t('code.stoppedAfter', { duration: formatDuration(durationMs) }) : t('code.workedFor', { duration: formatDuration(durationMs) })}</span>
     </p>
   )
 }
@@ -414,7 +415,7 @@ export default function CodePanel(): JSX.Element {
         setCommitMessage(prompt.split('\n')[0].slice(0, 72))
         pushTurn({ kind: 'changes', files: changedFiles(result.view.changes) })
       } else {
-        addTurn('note', "Aucun fichier n'a été changé.")
+        addTurn('note', t('code.noFileChanged'))
       }
       void playSoundCueIfEnabled('success')
     } catch (err) {
@@ -459,7 +460,7 @@ export default function CodePanel(): JSX.Element {
       const result = await window.jaris.githubCommit(repo.fullName, message)
       setRepo(result.view)
       setCommitted({ url: result.url, sha: result.sha })
-      addTurn('reply', `Enregistré sur GitHub (${result.sha.slice(0, 7)}).`)
+      addTurn('reply', t('code.savedOnGithub', { sha: result.sha.slice(0, 7) }))
       void playSoundCueIfEnabled('success')
     } catch (err) {
       setError(ipcErrorMessage(err))
@@ -484,7 +485,7 @@ export default function CodePanel(): JSX.Element {
     if (!repo || repo.changes.length === 0) return
     const count = repo.changes.length
     await discardRepo()
-    addTurn('note', `${count === 1 ? 'Changement annulé' : `${count} changements annulés`} : rien n'a été enregistré sur GitHub.`)
+    addTurn('note', tn('code.changesUndone', count))
   }
 
   const changeBranch = async (branch: string): Promise<void> => {
@@ -492,7 +493,7 @@ export default function CodePanel(): JSX.Element {
     try {
       // La conversation continue : seule la branche change.
       await openRepo(repo.fullName, branch, true)
-      addTurn('reply', `Branche ${branch}.`)
+      addTurn('reply', t('code.branch', { branch }))
     } catch (err) {
       setError(ipcErrorMessage(err))
     }
@@ -507,7 +508,7 @@ export default function CodePanel(): JSX.Element {
     // Une image seule suffit ("reproduis cette maquette") : le texte n'est plus obligatoire s'il y a une image.
     if ((!prompt && !attachment) || generating) return
 
-    addTurn('user', prompt || 'Reproduis l’image jointe.')
+    addTurn('user', prompt || t('code.reproduceImage.short'))
     setDescription('')
     clearGenerationFeedback()
     setGenerating(true)
@@ -518,7 +519,7 @@ export default function CodePanel(): JSX.Element {
     try {
       // appResult présent = demande de modification : le fichier actuel part avec la demande.
       const result = await window.jaris.generateApp(
-        prompt || 'Reproduis fidèlement l\'interface de l\'image jointe.',
+        prompt || t('code.reproduceImage'),
         appResult?.html,
         attachment?.base64
       )
@@ -625,7 +626,7 @@ export default function CodePanel(): JSX.Element {
         title: recent.fullName,
         exactTitle: true,
         meta: `GitHub · ${formatRecentDate(recent.at)}`,
-        removeLabel: { action: 'Retirer', question: `Retirer « ${recent.fullName} » de la liste ? Le dépôt reste sur GitHub.` }
+        removeLabel: { action: t('code.repo.remove'), question: t('code.repo.removeQuestion', { name: recent.fullName }) }
       }
     }))
   ]
@@ -662,12 +663,12 @@ export default function CodePanel(): JSX.Element {
             // Plus rien à annuler une fois annulé ou enregistré sur GitHub : le bouton disparaît.
             onUndo: repo.changes.length > 0 ? () => void undoRepoChanges() : undefined,
             onShow: () => setRepoTab('changes'),
-            showLabel: 'Afficher les modifications',
+            showLabel: t('code.showChanges'),
             busy: committing
           }
         : undefined
       : appResult
-        ? { onShow: () => setView('code'), showLabel: 'Afficher le code' }
+        ? { onShow: () => setView('code'), showLabel: t('code.showCode') }
         : undefined
 
   // Le site du dépôt est redemandé à chaque nouvel état (ouverture, travail de Jaris, annulation, enregistrement) :
@@ -695,10 +696,10 @@ export default function CodePanel(): JSX.Element {
   }, [repoHasChanges])
   /** Le nom affiché dans la barre de la carte : celui de la liste de gauche, pour qu'on reconnaisse l'élément ouvert. */
   const previewTitle = appResult
-    ? (recentApps.find((recent) => recent.path === appResult.path)?.label ?? 'Ton application')
+    ? (recentApps.find((recent) => recent.path === appResult.path)?.label ?? t('code.yourApp'))
     : repo
       ? repo.fullName
-      : 'Aperçu'
+      : t('code.preview')
 
   // Plus rien à montrer (nouvelle application, application supprimée, dépôt refermé) : l'aperçu agrandi se referme,
   // sinon la conversation resterait repliée devant une carte vide, sans bouton pour la faire revenir.
@@ -737,14 +738,14 @@ export default function CodePanel(): JSX.Element {
 
   return (
     <Workspace
-      newLabel="Nouvelle application"
-      label="Code"
+      newLabel={t('code.new')}
+      label={t('app.mode.code')}
       onNew={startOver}
       items={listItems}
       activeId={appResult?.path ?? (repo ? repoConversationKey(repo.fullName) : null)}
       onSelect={(id) => void (id.startsWith('repo:') ? openRepoFromList(id.slice('repo:'.length)) : openRecent(id))}
       onDelete={(id) => void (id.startsWith('repo:') ? removeRepoFromList(id.slice('repo:'.length)) : remove(id))}
-      emptyLabel="Aucune conversation pour l'instant."
+      emptyLabel={t('code.listEmpty')}
     >
       {/* Étape 282 (Léo, capture de Claude à l'appui : « pour le code fais chat à gauche et aperçu à droite comme
           Claude et ChatGPT ») : la conversation et le champ de saisie à gauche, l'aperçu (ou les changements d'un
@@ -755,36 +756,36 @@ export default function CodePanel(): JSX.Element {
           className={`code-split${resizing ? ' code-split--resizing' : ''}${previewExpanded ? ' code-split--expanded' : ''}`}
           style={chatWidth === null ? undefined : ({ '--code-chat-width': `${chatWidth}px` } as CSSProperties)}
         >
-          <section ref={chatRef} className="code-chat" aria-label="Conversation">
+          <section ref={chatRef} className="code-chat" aria-label={t('code.conversation')}>
             <div className="code-chat__thread" ref={threadRef}>
               {turns.length === 0 && !generating && (
                 <EmptyState
                   title={
                     repo
                       ? repo.fileCount === 0
-                        ? 'Ce dépôt est encore vide'
-                        : 'Que doit faire Jaris dans ce dépôt\u00a0?'
+                        ? t('code.empty.repoEmpty')
+                        : t('code.empty.repo')
                       : appResult
-                        ? 'Que veux-tu changer\u00a0?'
-                        : 'Quelle application veux-tu créer\u00a0?'
+                        ? t('code.empty.app')
+                        : t('code.empty.new')
                   }
                   description={
                     repo
                       ? repo.fileCount === 0
-                        ? "Décris ce que Jaris doit y créer. Tu verras chaque fichier avant de l'enregistrer sur GitHub — rien n'est envoyé avant."
-                        : "Il lit les fichiers dont il a besoin et prépare les changements. Tu les vois ligne par ligne, puis tu choisis de les enregistrer sur GitHub — rien n'est envoyé avant."
+                        ? t('code.empty.repoEmpty.hint')
+                        : t('code.empty.repo.hint')
                       : appResult
-                        ? "Décris une modification : Jaris la fait sur ta machine et l'aperçu se met à jour."
-                        : "Décris-la simplement : Jaris l'écrit entièrement sur ta machine, puis la lance dans l'aperçu. Tu peux aussi joindre une capture ou une maquette à reproduire."
+                        ? t('code.empty.app.hint')
+                        : t('code.empty.new.hint')
                   }
                   suggestions={
                     repo
                       ? repo.fileCount === 0
-                        ? ['Crée un petit site web de présentation', 'Crée un fichier qui présente le projet', 'Ajoute un fichier .gitignore adapté']
-                        : ['Explique ce que fait ce dépôt', "Corrige les fautes d'orthographe", 'Ajoute un fichier .gitignore adapté']
+                        ? [t('code.suggest.repoEmpty.1'), t('code.suggest.repoEmpty.2'), t('code.suggest.gitignore')]
+                        : [t('code.suggest.repo.1'), t('code.suggest.repo.2'), t('code.suggest.gitignore')]
                       : appResult
-                        ? ['Ajoute un mode sombre', 'Rends-la plus jolie', 'Ajoute un bouton pour tout effacer']
-                        : ['Un minuteur Pomodoro', 'Une liste de courses', 'Un convertisseur de devises']
+                        ? [t('code.suggest.app.1'), t('code.suggest.app.2'), t('code.suggest.app.3')]
+                        : [t('code.suggest.new.1'), t('code.suggest.new.2'), t('code.suggest.new.3')]
                   }
                   onSuggestion={setDescription}
                 />
@@ -815,14 +816,14 @@ export default function CodePanel(): JSX.Element {
               {appResult && appResult.issues.length > 0 && (
                 <div className="code-panel__issues">
                   <strong>
-                    L'application a été générée mais {appResult.issues.length === 1 ? "un problème n'a pas pu être corrigé" : `${appResult.issues.length} problèmes n'ont pas pu être corrigés`} :
+                    {tn('code.issues', appResult.issues.length)}
                   </strong>
                   <ul>
                     {appResult.issues.map((issue) => (
                       <li key={issue}>{issue}</li>
                     ))}
                   </ul>
-                  Relance la génération, ou reformule ta demande en plus simple.
+                  {t('code.issues.hint')}
                 </div>
               )}
 
@@ -840,13 +841,13 @@ export default function CodePanel(): JSX.Element {
               onSubmit={() => void generate()}
               placeholder={
                 repo
-                  ? `Que veux-tu changer dans ${repo.fullName} ?`
+                  ? t('code.placeholder.repo', { name: repo.fullName })
                   : appResult
-                    ? 'Que veux-tu changer ? (ex: ajoute un mode sombre…)'
-                    : "Décris l'application à créer…"
+                    ? t('code.placeholder.app')
+                    : t('code.placeholder.new')
               }
-              submitLabel={repo ? 'Envoyer' : appResult ? 'Modifier' : "Générer l'application"}
-              busyLabel={repo ? 'Jaris travaille…' : 'Génération…'}
+              submitLabel={repo ? t('common.send') : appResult ? t('code.submit.modify') : t('code.submit.generate')}
+              busyLabel={repo ? t('code.busy.repo') : t('code.busy.app')}
               busy={generating}
               onStop={stop}
               extraActions={
@@ -871,11 +872,11 @@ export default function CodePanel(): JSX.Element {
             className="code-split__handle"
             role="separator"
             aria-orientation="vertical"
-            aria-label="Taille de l'aperçu"
+            aria-label={t('code.handle.label')}
             aria-valuemin={CHAT_MIN_WIDTH}
             aria-valuenow={chatWidth ?? undefined}
             tabIndex={0}
-            title="Glisser pour régler la taille de l'aperçu · double-clic : taille d'origine"
+            title={t('code.handle.title')}
             onPointerDown={(event) => {
               event.preventDefault()
               event.currentTarget.setPointerCapture(event.pointerId)
@@ -897,7 +898,7 @@ export default function CodePanel(): JSX.Element {
             onKeyDown={onHandleKey}
           />
 
-          <section className={`code-preview${hasPreview ? '' : ' code-preview--empty'}`} aria-label="Aperçu">
+          <section className={`code-preview${hasPreview ? '' : ' code-preview--empty'}`} aria-label={t('code.preview')}>
             {/* Étape 284 (Léo, capture de Claude à l'appui : « fais exactement comme ça avec un contour et pouvoir mettre
                 en grand l'aperçu ») : l'aperçu est une CARTE encadrée, avec sa propre barre de titre — le nom de ce qui est
                 affiché à gauche, les commandes à droite —, comme les aperçus de Claude. */}
@@ -921,13 +922,13 @@ export default function CodePanel(): JSX.Element {
                         className={`code-panel__view-tab${repoTab === 'preview' ? ' code-panel__view-tab--active' : ''}`}
                         onClick={() => setRepoTab('preview')}
                       >
-                        Aperçu
+                        {t('code.preview')}
                       </button>
                       <button
                         className={`code-panel__view-tab code-preview__changes-tab${repoTab === 'changes' ? ' code-panel__view-tab--active' : ''}`}
                         onClick={() => setRepoTab('changes')}
                       >
-                        Changements
+                        {t('code.tab.changes')}
                         {repo && repo.changes.length > 0 && <span className="code-preview__count">{repo.changes.length}</span>}
                       </button>
                     </div>
@@ -938,13 +939,13 @@ export default function CodePanel(): JSX.Element {
                         className={`code-panel__view-tab${view === 'preview' ? ' code-panel__view-tab--active' : ''}`}
                         onClick={() => setView('preview')}
                       >
-                        Aperçu
+                        {t('code.preview')}
                       </button>
                       <button
                         className={`code-panel__view-tab${view === 'code' ? ' code-panel__view-tab--active' : ''}`}
                         onClick={() => setView('code')}
                       >
-                        Code
+                        {t('app.mode.code')}
                       </button>
                     </div>
                   )}
@@ -952,8 +953,8 @@ export default function CodePanel(): JSX.Element {
                     <button
                       className="panel__icon-button code-preview__folder"
                       onClick={() => void window.jaris.openGeneratedApp(appResult.path)}
-                      title={`Ouvrir le dossier (${appResult.path})`}
-                      aria-label="Ouvrir le dossier"
+                      title={t('code.openFolderPath', { path: appResult.path })}
+                      aria-label={t('common.openFolder')}
                     >
                       <FolderIcon />
                     </button>
@@ -962,8 +963,8 @@ export default function CodePanel(): JSX.Element {
                     <button
                       className="panel__icon-button code-preview__expand"
                       onClick={() => setPreviewExpanded(!previewExpanded)}
-                      title={previewExpanded ? "Réduire l'aperçu (Échap)" : "Agrandir l'aperçu"}
-                      aria-label={previewExpanded ? "Réduire l'aperçu" : "Agrandir l'aperçu"}
+                      title={previewExpanded ? t('code.preview.collapseEsc') : t('code.preview.expand')}
+                      aria-label={previewExpanded ? t('code.preview.collapse') : t('code.preview.expand')}
                       aria-pressed={previewExpanded}
                     >
                       {previewExpanded ? <CollapseIcon /> : <ExpandIcon />}
@@ -979,7 +980,7 @@ export default function CodePanel(): JSX.Element {
                     // ni aux fichiers locaux (localStorage y est donc bloqué, d'où le try/catch imposé à la génération).
                     // allow-forms (étape 232) : sans lui, un formulaire généré ne réagit jamais au clic ; l'envoi réel
                     // reste bloqué par la règle form-action 'none' de l'aperçu (generatedAppPreview.ts).
-                    <iframe className="code-panel__preview" title="Aperçu de l'application" sandbox="allow-scripts allow-forms" src={appResult.previewUrl} />
+                    <iframe className="code-panel__preview" title={t('code.preview.appTitle')} sandbox="allow-scripts allow-forms" src={appResult.previewUrl} />
                   ) : (
                     <pre className="code-panel__code">{appResult.html}</pre>
                   )
@@ -989,7 +990,7 @@ export default function CodePanel(): JSX.Element {
                   <iframe
                     key={repoPreview.url}
                     className="code-panel__preview"
-                    title={`Aperçu de ${repo.fullName}`}
+                    title={t('code.preview.of', { name: repo.fullName })}
                     sandbox="allow-scripts allow-forms"
                     src={repoPreview.url}
                   />
@@ -1013,12 +1014,12 @@ export default function CodePanel(): JSX.Element {
                     </svg>
                     <p>
                       {!repo
-                        ? "L'aperçu de ton application s'affichera ici."
+                        ? t('code.placeholderPreview.app')
                         : repoPreview === null
-                          ? 'Chargement du site…'
+                          ? t('code.placeholderPreview.loading')
                           : repo.fileCount === 0
-                            ? "Le dépôt est vide : le site s'affichera ici dès que Jaris aura créé sa page (index.html)."
-                            : "Ce dépôt n'a pas de page web (index.html) à afficher. Demande à Jaris d'en créer une pour la voir ici."}
+                            ? t('code.placeholderPreview.repoEmpty')
+                            : t('code.placeholderPreview.noPage')}
                     </p>
                   </div>
                 )}
@@ -1026,13 +1027,12 @@ export default function CodePanel(): JSX.Element {
 
               {appResult && view === 'preview' && (
                 <p className="code-preview__foot">
-                  Aperçu isolé : la sauvegarde de données (localStorage) n'y marche pas, mais fonctionne en ouvrant le fichier
-                  depuis le dossier.
+                  {t('code.preview.isolated')}
                 </p>
               )}
               {!appResult && repo && !showRepoChanges && repoPreview?.url && repo.changes.length > 0 && (
                 <p className="code-preview__foot">
-                  Avec les changements de Jaris, pas encore enregistrés sur GitHub — onglet « Changements » pour les enregistrer.
+                  {t('code.preview.withChanges')}
                 </p>
               )}
             </div>

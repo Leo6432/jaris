@@ -1,3 +1,4 @@
+import { t } from './i18n'
 /**
  * Le modèle de pilotage d'écran (étape 231, Léo : « oui pour nouveau rôle… comme image vidéo le mettre seul, si
  * l'utilisateur n'a pas assez on met pas le rôle et il fait comme maintenant »). Un seul modèle, comme Image et
@@ -28,9 +29,9 @@ export interface PilotModelPick {
 }
 
 export function pickPilotModel(vramGb: number | null): PilotModelPick {
-  if (vramGb === null) return { model: null, reason: 'aucune carte graphique détectée (il en faut une de 8 Go ou plus)' }
+  if (vramGb === null) return { model: null, reason: t('hw.noGpu', { need: 8 }) }
   if (vramGb < PILOT_MIN_VRAM_GB) {
-    return { model: null, reason: `carte graphique trop petite (${vramGb} Go de VRAM, il en faut 8 ou plus)` }
+    return { model: null, reason: t('hw.gpuTooSmall', { have: vramGb, need: 8 }) }
   }
   return { model: PILOT_MODEL, reason: null }
 }

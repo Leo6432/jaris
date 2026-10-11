@@ -1,6 +1,7 @@
 import { installOllamaSilently, isOllamaInstalled } from './dependencyServices'
 import { installPythonRuntime, isPythonRuntimeReady } from './pythonRuntime'
 import type { RuntimeSetupProgress, RuntimeSetupStatus } from '../../shared/ipc'
+import { t } from '../../shared/i18n'
 
 /**
  * Met la machine en état de faire tourner Jaris, au premier lancement, sans que l'utilisateur ait la
@@ -36,7 +37,7 @@ export async function runFirstRunSetup(onProgress: (progress: RuntimeSetupProgre
   const status = await getRuntimeSetupStatus()
 
   if (!status.ollamaReady) {
-    onProgress({ step: 'ollama', message: "Installation d'Ollama (le moteur de conversation)…" })
+    onProgress({ step: 'ollama', message: t('setup.run.ollama') })
     let lastOllamaMessage = ''
     const installed = await installOllamaSilently((message, percent) => {
       lastOllamaMessage = message
@@ -45,20 +46,20 @@ export async function runFirstRunSetup(onProgress: (progress: RuntimeSetupProgre
     if (!installed) {
       onProgress({
         step: 'ollama',
-        message: `Ollama n'a pas pu s'installer. ${lastOllamaMessage || "Réessaie depuis Jaris ; si le problème persiste, installe Ollama depuis ollama.com/download."}`,
+        message: t('setup.run.ollamaFailed', { detail: lastOllamaMessage || t('setup.run.ollamaRetry') }),
         failed: true
       })
     }
   }
 
   if (!status.pythonReady) {
-    onProgress({ step: 'python', message: 'Installation de Python (pour la voix)…', percent: 0 })
+    onProgress({ step: 'python', message: t('setup.run.python'), percent: 0 })
     try {
       await installPythonRuntime((message, percent) => onProgress({ step: 'python', message, percent }))
     } catch (err) {
       onProgress({
         step: 'python',
-        message: `L'installation de Python a échoué : ${err instanceof Error ? err.message : String(err)}`,
+        message: t('setup.run.pythonFailed', { error: err instanceof Error ? err.message : String(err) }),
         failed: true
       })
     }

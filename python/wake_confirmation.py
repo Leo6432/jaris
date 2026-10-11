@@ -54,14 +54,31 @@ CYRILLIC_TO_LATIN = str.maketrans({
     'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'j', 'з': 'z', 'и': 'i', 'й': 'i',
     'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'ou', 'ф': 'f',
     'х': 'h', 'ц': 'ts', 'ч': 'tch', 'ш': 'ch', 'щ': 'ch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'iou', 'я': 'ia',
+    # Étape 293 (24 langues) : l'ukrainien a ses propres lettres.
+    'і': 'i', 'ї': 'i', 'є': 'e', 'ґ': 'g',
 })
+
+# Étape 293 (24 langues) : le grec aussi, avec la même logique (le son, à la française).
+GREEK_TO_LATIN = str.maketrans({
+    'α': 'a', 'β': 'v', 'γ': 'g', 'δ': 'd', 'ε': 'e', 'ζ': 'z', 'η': 'i', 'θ': 'th', 'ι': 'i', 'κ': 'k', 'λ': 'l',
+    'μ': 'm', 'ν': 'n', 'ξ': 'x', 'ο': 'o', 'π': 'p', 'ρ': 'r', 'σ': 's', 'ς': 's', 'τ': 't', 'υ': 'y', 'φ': 'f',
+    'χ': 'h', 'ψ': 'ps', 'ω': 'o',
+})
+
+# Étape 293 : le son « dj » de « Jaris » s'écrit avec deux ou trois lettres dans plusieurs langues — « Джарис » en
+# russe, ukrainien et bulgare, « Τζάρις » en grec, « Džaris » en tchèque, slovaque, croate, slovène, letton et
+# lituanien, « Dżaris » en polonais, « Dzsáris » en hongrois. Ramené à « j » AVANT tout le reste, sinon le « d »
+# collé devant empêchait la comparaison (« djaris » n'est pas « jaris »).
+DJ_SOUNDS = re.compile(r'дж|τζ|dzs|dž|dż')
 
 
 def _latin(text: str) -> str:
     # Étape 184 (Léo : « ajoute Jáis ») : les accents sont retirés avant de comparer — « Jáis », « Jàis », « Jaïs »
     # redeviennent « jais », forme déjà acceptée, plutôt que d'ajouter chaque accent un par un.
-    plain = unicodedata.normalize('NFD', text.lower().translate(CYRILLIC_TO_LATIN))
-    return ''.join(c for c in plain if not unicodedata.combining(c))
+    lowered = DJ_SOUNDS.sub('j', unicodedata.normalize('NFC', text.lower()))
+    # Accents retirés AVANT de transcrire les alphabets : « ά » grec accentué redevient « α », connu de la table.
+    plain = ''.join(c for c in unicodedata.normalize('NFD', lowered) if not unicodedata.combining(c))
+    return plain.translate(CYRILLIC_TO_LATIN).translate(GREEK_TO_LATIN)
 
 
 def _compact(text: str) -> str:
@@ -75,8 +92,13 @@ def contains_wake_name(text: str) -> bool:
 def remove_wake_prefix(text: str) -> str:
     if SHORT_WAKE_NAME.match(_compact(text)):
         return ''
-    match = WAKE_NAME.search(text)
-    return text[match.end():].lstrip(' ,.!?:;—-') if match else text
+    # Étape 293 : mot par mot, chacun comparé dans sa forme LATINE — « Джарис, открой YouTube » réveillait bien Jaris
+    # (contains_wake_name compare la forme latine) mais gardait « Джарис, » dans la demande, faute de retrouver le nom
+    # dans le texte d'origine. La demande qui suit garde, elle, son écriture d'origine.
+    for word in re.finditer(r'\w+', text):
+        if WAKE_NAME.fullmatch(_latin(word.group())):
+            return text[word.end():].lstrip(' ,.!?:;—-')
+    return text
 
 
 # Découpage d'une phrase dans le flux du micro (morceaux de 80 ms) : commence au premier morceau assez fort, se

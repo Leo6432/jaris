@@ -1,6 +1,7 @@
 import type { VideoQualityStatus } from '../../shared/ipc'
 import type { VideoQuality } from '../../shared/videoModel'
 import SliderPicker from './SliderPicker'
+import { t } from '@/lib/i18n'
 
 /**
  * Qualité du modèle vidéo (étape 205, Léo : « une barre d'effort Q4, Q6 ou Q8, et si une personne ne peut que Q6
@@ -23,8 +24,8 @@ export default function VideoQualityPicker({ qualities, value, onChange, onDownl
       className="quality-picker"
       icon={null}
       triggerLabel={current?.label ?? ''}
-      name="Qualité de la vidéo"
-      title={`Qualité ${current?.label ?? ''}`}
+      name={t('video.quality.name')}
+      title={t('video.quality.title', { quality: current?.label ?? '' })}
       steps={qualities.map((q) => ({ value: q.id, label: q.label }))}
       value={value}
       onChange={onChange}
@@ -33,7 +34,7 @@ export default function VideoQualityPicker({ qualities, value, onChange, onDownl
       footer={
         current && !current.installed && onDownload ? (
           <button type="button" className="quality-picker__download" onClick={() => onDownload(current.id)}>
-            Télécharger ({current.downloadLabel})
+            {t('video.quality.download', { size: current.downloadLabel })}
           </button>
         ) : null
       }

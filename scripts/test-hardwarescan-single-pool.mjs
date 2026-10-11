@@ -5,6 +5,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import { promisify } from 'node:util'
 import ts from 'typescript'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * Étape 160, Léo : « que tous les modèles soient au même endroit, pas des modèles code, pas des modèles
@@ -42,7 +43,7 @@ function setup({ vramMib, ramGb = 32, scores = REAL_SCORES } = {}) {
     './ollama': { getModelInfo: async () => null, getInstalledModelSizeBytes: async () => null, listInstalledModels: async () => [] }
   }
   const exports = {}
-  vm.runInNewContext(source, { exports, module: { exports }, require: (name) => modules[name] ?? nodeRequire(name) })
+  vm.runInNewContext(source, { exports, module: { exports }, require: withI18n((name) => modules[name] ?? nodeRequire(name)) })
   return exports
 }
 

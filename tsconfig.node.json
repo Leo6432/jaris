@@ -9,7 +9,8 @@
     "skipLibCheck": true,
     "strict": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+    "resolveJsonModule": true
   },
   "include": ["electron.vite.config.ts", "electron/**/*.ts", "shared/**/*.ts"]
 }

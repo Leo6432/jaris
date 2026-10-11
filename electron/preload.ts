@@ -55,8 +55,10 @@ import {
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload,
   type WidgetMode,
-  type WindowChrome
+  type WindowChrome,
+  type LanguageState
 } from '../shared/ipc'
+import type { LanguageSetting } from '../shared/i18n/languages'
 
 function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
   const listener = (_event: Electron.IpcRendererEvent, payload: T): void => callback(payload)
@@ -76,6 +78,19 @@ const api = {
   getSetupStatus: (): Promise<VoiceSetupStatusPayload> => ipcRenderer.invoke(IPC_CHANNELS.setupStatus),
   triggerWake: (): void => ipcRenderer.send(IPC_CHANNELS.triggerWake),
   notifyAudioEnded: (): void => ipcRenderer.send(IPC_CHANNELS.audioEnded),
+  /**
+   * Langue au chargement de la page, lue de façon SYNCHRONE : le premier rendu est déjà dans la bonne langue. `null`
+   * si le processus principal ne répond pas (jamais attendu) : l'écran reste alors en français.
+   */
+  getLanguageState: (): LanguageState | null => {
+    try {
+      return ipcRenderer.sendSync(IPC_CHANNELS.languageState) as LanguageState
+    } catch {
+      return null
+    }
+  },
+  setLanguage: (setting: LanguageSetting): Promise<LanguageState> => ipcRenderer.invoke(IPC_CHANNELS.setLanguage, setting),
+  onLanguageChanged: (cb: (state: LanguageState) => void) => subscribe(IPC_CHANNELS.languageChanged, cb),
   getProfile: (): Promise<Profile | null> => ipcRenderer.invoke(IPC_CHANNELS.getProfile),
   saveProfile: (profile: Profile): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.saveProfile, profile),
   openMemoryFolder: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.openMemoryFolder),

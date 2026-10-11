@@ -1,3 +1,5 @@
+import { t, type MessageKey } from './i18n'
+
 /**
  * Réflexion (« think ») du modèle choisi — étapes 191 puis 192.
  *
@@ -77,19 +79,20 @@ export function isAcceptedThink(value: unknown, meta: ModelThinking | null): val
  * techniques d'Ollama (low/medium/high/xhigh) affichés en français, avec les mêmes mots que la qualité vidéo.
  * Un niveau inconnu garde son nom d'origine plutôt que d'être deviné.
  */
-const THINK_LABELS: Record<string, string> = {
-  off: 'Désactivée',
-  low: 'Faible',
-  medium: 'Moyen',
-  high: 'Élevé',
-  xhigh: 'Extra',
-  max: 'Max'
+const THINK_LABELS: Record<string, MessageKey> = {
+  off: 'think.off',
+  low: 'think.low',
+  medium: 'think.medium',
+  high: 'think.high',
+  xhigh: 'think.xhigh',
+  max: 'think.max'
 }
 
 export function thinkLabel(value: ThinkValue): string {
-  if (value === true) return 'Activée'
-  if (value === false) return 'Désactivée'
-  return THINK_LABELS[value] ?? value
+  if (value === true) return t('think.on')
+  if (value === false) return t('think.off')
+  const key = THINK_LABELS[value]
+  return key ? t(key) : value
 }
 
 /**

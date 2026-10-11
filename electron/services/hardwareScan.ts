@@ -15,6 +15,7 @@ import type {
   MyModelPicks,
   Profile
 } from '../../shared/ipc'
+import { t } from '../../shared/i18n'
 
 const execAsync = promisify(exec)
 
@@ -1213,11 +1214,11 @@ export async function getModelOverview(profile?: Profile | null): Promise<ModelO
     labels.push(label)
     usageByModel.set(model, labels)
   }
-  addUsage(activeModels.flash, 'Faible')
-  addUsage(activeModels.medium, 'Moyen')
-  addUsage(activeModels.large, 'Élevé')
-  addUsage(activeModels.vision, 'Vision')
-  addUsage(activeModels.code, 'Code')
+  addUsage(activeModels.flash, t('role.flash'))
+  addUsage(activeModels.medium, t('role.medium'))
+  addUsage(activeModels.large, t('role.large'))
+  addUsage(activeModels.vision, t('role.vision'))
+  addUsage(activeModels.code, t('app.mode.code'))
 
   // Fiabilité affichée : le test de conversation quand le modèle l'a passé (le cas général), sinon celui de
   // code, sinon celui de vision.

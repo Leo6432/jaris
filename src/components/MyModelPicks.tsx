@@ -4,6 +4,8 @@ import { formatModelName } from '../lib/formatModelName'
 import { ReliabilityBadge, scoreTestLabel } from './OptionsMenu'
 import { formatIntelligenceIndex } from '../lib/formatIntelligenceIndex'
 import { PILOT_MODEL_LABEL } from '../../shared/pilotModel'
+import { t } from '@/lib/i18n'
+import type { MessageKey } from '../../shared/i18n'
 
 interface MyModelPicksProps {
   picks: MyModelPicksData
@@ -22,12 +24,12 @@ interface MyModelPicksProps {
 /** Rôles dont le choix tient compte des demandes complètes (étape 241). */
 const CONVERSATION_ROLES = new Set(['flash', 'medium', 'large'])
 
-const ROLES: { key: 'flash' | 'medium' | 'large' | 'vision' | 'code'; label: string }[] = [
-  { key: 'flash', label: 'Faible' },
-  { key: 'medium', label: 'Moyen' },
-  { key: 'large', label: 'Élevé' },
-  { key: 'vision', label: 'Vision' },
-  { key: 'code', label: 'Code' }
+const ROLES: { key: 'flash' | 'medium' | 'large' | 'vision' | 'code'; label: MessageKey }[] = [
+  { key: 'flash', label: 'role.flash' },
+  { key: 'medium', label: 'role.medium' },
+  { key: 'large', label: 'role.large' },
+  { key: 'vision', label: 'role.vision' },
+  { key: 'code', label: 'app.mode.code' }
 ]
 
 /** Vitesse publiée par Artificial Analysis (étape 131) — mesurée sur leur matériel, pas sur cette machine. */
@@ -37,15 +39,15 @@ function formatSpeed(entry: ModelOverviewEntry): string {
 
 /** Libellé collé à la valeur : ce tableau n'a pas d'en-tête, un nombre nu serait incompréhensible (étape 130). */
 function formatIntelligence(entry: ModelOverviewEntry): string {
-  return entry.artificialAnalysisIndex === null ? '—' : `Intelligence ${formatIntelligenceIndex(entry.artificialAnalysisIndex)}`
+  return entry.artificialAnalysisIndex === null ? '—' : t('picks.intelligence', { value: formatIntelligenceIndex(entry.artificialAnalysisIndex) })
 }
 
 /** "RTX 3070 · 8 Go de VRAM · 32 Go de RAM" — seulement ce qui a vraiment été détecté, jamais inventé. */
 export function formatHardware(picks: MyModelPicksData): string {
-  const parts = [picks.gpuName ?? 'Carte graphique non détectée']
-  if (picks.vramGb !== null) parts.push(`${picks.vramGb} Go de VRAM`)
+  const parts = [picks.gpuName ?? t('picks.noGpu')]
+  if (picks.vramGb !== null) parts.push(t('picks.vram', { gb: picks.vramGb }))
   // Arrondi : la RAM détectée arrive en Go fractionnaires (« 63.161624908447266 Go », capture de Léo).
-  parts.push(`${Math.round(picks.ramGb)} Go de RAM`)
+  parts.push(t('picks.ram', { gb: Math.round(picks.ramGb) }))
   return parts.join(' · ')
 }
 
@@ -58,7 +60,7 @@ export function formatHardware(picks: MyModelPicksData): string {
  * Analysis, puis taille (pickBestFrom, hardwareScan.ts). Partagée entre l'écran d'accueil (CapacityScan.tsx)
  * et Options → Modèles, comme l'ancienne.
  */
-export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta machine', onDeleteUnused, beforeInstall = false }: MyModelPicksProps): JSX.Element {
+export default function MyModelPicks({ picks, title = t('picks.title'), onDeleteUnused, beforeInstall = false }: MyModelPicksProps): JSX.Element {
   const [confirming, setConfirming] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -92,13 +94,13 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
               return (
                 <Fragment key={key}>
                   <tr>
-                    <td className="capacity-scan__tier-slot">{label}</td>
+                    <td className="capacity-scan__tier-slot">{t(label)}</td>
                     <td className="capacity-scan__tier-model" title={entry.model}>
                       {formatModelName(entry.model)}
                     </td>
                     <td
                       className="capacity-scan__tier-speed"
-                      title="Vitesse de génération publiée par Artificial Analysis — mesurée sur leur matériel, pas sur ta machine"
+                      title={t('picks.speed.title')}
                     >
                       {formatSpeed(entry)}
                     </td>
@@ -109,7 +111,7 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
                         demandes comptent pour Faible, Moyen et Élevé seulement : elles ne s'affichent que là. */}
                     <td className="capacity-scan__tier-scores">
                       <ReliabilityBadge value={entry.toolCalling} label={scoreTestLabel(entry.toolCalling)} />
-                      {CONVERSATION_ROLES.has(key) && <ReliabilityBadge value={entry.demands ?? null} label="Demandes" />}
+                      {CONVERSATION_ROLES.has(key) && <ReliabilityBadge value={entry.demands ?? null} label={t('options.score.requests')} />}
                     </td>
                   </tr>
                   {/* Étape 138 : la ligne ci-dessus est le modèle RÉELLEMENT utilisé. Quand le meilleur choix
@@ -118,7 +120,7 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
                   {missing && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
-                      <td colSpan={4}>Pas installé sur ce PC pour l'instant — clique « Retester la configuration ».</td>
+                      <td colSpan={4}>{t('picks.notInstalled')}</td>
                     </tr>
                   )}
                   {upgrade && (
@@ -126,8 +128,8 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
                       <td />
                       <td colSpan={4}>
                         {upgrade.blockedReason
-                          ? `Meilleur choix : ${formatModelName(upgrade.model)}, pas encore installé — ${upgrade.blockedReason}.`
-                          : `Meilleur choix disponible : ${formatModelName(upgrade.model)} — clique « Retester la configuration » pour l'installer.`}
+                          ? t('picks.upgrade.blocked', { model: formatModelName(upgrade.model), reason: upgrade.blockedReason })
+                          : t('picks.upgrade.available', { model: formatModelName(upgrade.model) })}
                       </td>
                     </tr>
                   )}
@@ -140,8 +142,8 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
             {picks.image && (
               <>
                 <tr className="capacity-scan__tier-image">
-                  <td className="capacity-scan__tier-slot">Image</td>
-                  <td className="capacity-scan__tier-model">{picks.image.model ?? 'Aucun modèle'}</td>
+                  <td className="capacity-scan__tier-slot">{t('app.mode.image')}</td>
+                  <td className="capacity-scan__tier-model">{picks.image.model ?? t('picks.noModel')}</td>
                   <td className="capacity-scan__tier-speed">—</td>
                   <td className="capacity-scan__tier-intelligence">—</td>
                   <td />
@@ -149,13 +151,13 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
                 {!picks.image.model ? (
                   <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                     <td />
-                    <td colSpan={4}>Pas assez de puissance pour dessiner : {picks.image.reason}.</td>
+                    <td colSpan={4}>{t('picks.image.notCapable', { reason: picks.image.reason ?? '' })}</td>
                   </tr>
                 ) : (
                   !beforeInstall && picks.image.installed === false && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
-                      <td colSpan={4}>Pas installé sur ce PC pour l'instant — clique « Retester la configuration » (environ 5 Go).</td>
+                      <td colSpan={4}>{t('picks.notInstalled.size', { gb: 5 })}</td>
                     </tr>
                   )
                 )}
@@ -165,9 +167,9 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
             {picks.video && (
               <>
                 <tr className="capacity-scan__tier-image capacity-scan__tier-video">
-                  <td className="capacity-scan__tier-slot">Vidéo</td>
+                  <td className="capacity-scan__tier-slot">{t('app.mode.video')}</td>
                   <td className="capacity-scan__tier-model">
-                    {picks.video.model ? `${picks.video.model} · qualité ${picks.video.qualityLabel}` : 'Aucun modèle'}
+                    {picks.video.model ? t('picks.video.model', { model: picks.video.model, quality: picks.video.qualityLabel ?? '' }) : t('picks.noModel')}
                   </td>
                   <td className="capacity-scan__tier-speed">—</td>
                   <td className="capacity-scan__tier-intelligence">—</td>
@@ -176,13 +178,13 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
                 {!picks.video.model ? (
                   <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                     <td />
-                    <td colSpan={4}>Pas assez de puissance pour la vidéo : {picks.video.reason}.</td>
+                    <td colSpan={4}>{t('picks.video.notCapable', { reason: picks.video.reason ?? '' })}</td>
                   </tr>
                 ) : (
                   !beforeInstall && picks.video.installed === false && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
-                      <td colSpan={4}>Pas installé sur ce PC pour l'instant — télécharge-le depuis le mode Vidéo.</td>
+                      <td colSpan={4}>{t('picks.video.notInstalled')}</td>
                     </tr>
                   )
                 )}
@@ -193,8 +195,8 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
             {picks.pilot && (
               <>
                 <tr className="capacity-scan__tier-image capacity-scan__tier-pilot">
-                  <td className="capacity-scan__tier-slot">Pilotage d'écran</td>
-                  <td className="capacity-scan__tier-model">{picks.pilot.model ? PILOT_MODEL_LABEL : 'Aucun modèle'}</td>
+                  <td className="capacity-scan__tier-slot">{t('role.pilot')}</td>
+                  <td className="capacity-scan__tier-model">{picks.pilot.model ? PILOT_MODEL_LABEL : t('picks.noModel')}</td>
                   <td className="capacity-scan__tier-speed">—</td>
                   <td className="capacity-scan__tier-intelligence">—</td>
                   <td />
@@ -202,13 +204,13 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
                 {!picks.pilot.model ? (
                   <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                     <td />
-                    <td colSpan={4}>Pas assez de puissance : {picks.pilot.reason}. Le modèle Vision pilote l'écran à sa place.</td>
+                    <td colSpan={4}>{t('picks.pilot.notCapable', { reason: picks.pilot.reason ?? '' })}</td>
                   </tr>
                 ) : (
                   !beforeInstall && picks.pilot.installed === false && (
                     <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
                       <td />
-                      <td colSpan={4}>Pas installé sur ce PC pour l'instant — clique « Retester la configuration » (environ 6 Go).</td>
+                      <td colSpan={4}>{t('picks.notInstalled.size', { gb: 6 })}</td>
                     </tr>
                   )
                 )}
@@ -219,15 +221,15 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
       </div>
       {/* Étape 140, Léo : "je veut etre sur que les model visbile sont réel et pas un autre model". */}
       {beforeInstall ? null : !check ? (
-        <p className="capacity-scan__install-check">Impossible de vérifier auprès d'Ollama pour l'instant (il ne répond pas).</p>
+        <p className="capacity-scan__install-check">{t('picks.check.unavailable')}</p>
       ) : (
         <div className="capacity-scan__install-check">
-          {check.notInstalled.length === 0 && <p>✓ Vérifié auprès d'Ollama : ces modèles sont bien installés sur ce PC.</p>}
+          {check.notInstalled.length === 0 && <p>✓ {t('picks.check.ok')}</p>}
           {check.otherInstalled.length === 0 ? (
-            <p>Aucun autre modèle installé : ce que tu vois est exactement ce qu'il y a sur ton PC.</p>
+            <p>{t('picks.check.noOther')}</p>
           ) : (
             <>
-              <p>Autres modèles installés, que Jaris n'utilise pas :</p>
+              <p>{t('picks.check.others')}</p>
               <ul className="capacity-scan__other-models">
                 {check.otherInstalled.map((model) => (
                   <li key={model}>
@@ -236,15 +238,15 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
                       (confirming === model ? (
                         <span className="capacity-scan__other-actions">
                           <button className="options-menu__action capacity-scan__delete-confirm" disabled={deleting === model} onClick={() => void remove(model)}>
-                            {deleting === model ? 'Suppression…' : 'Supprimer'}
+                            {deleting === model ? t('common.deleting') : t('common.delete')}
                           </button>
                           <button className="options-menu__action" disabled={deleting === model} onClick={() => setConfirming(null)}>
-                            Annuler
+                            {t('common.cancel')}
                           </button>
                         </span>
                       ) : (
                         <button className="options-menu__action" onClick={() => setConfirming(model)}>
-                          Supprimer
+                          {t('common.delete')}
                         </button>
                       ))}
                   </li>
@@ -255,16 +257,7 @@ export default function MyModelPicks({ picks, title = 'Modèles utilisés sur ta
           )}
         </div>
       )}
-      <p className="capacity-scan__tier-legend">
-        Pour chaque rôle, Jaris met en balance fiabilité et intelligence parmi les modèles qui tiennent dans ta
-        machine : sa note est l'intelligence multipliée par la chance de réussir 5 actions de suite sans erreur
-        (Questions), puis, pour Faible, Moyen et Élevé, par la part de vraies demandes réussies de bout en bout
-        (Demandes). Une erreur sur 78 coûte peu, une erreur sur 10 coûte presque la moitié de la note. Faible prend la
-        meilleure note parmi les plus rapides, Moyen la meilleure qui tient sur ta carte graphique, Élevé et
-        Code la meilleure même si elle déborde sur la RAM, Vision la meilleure parmi ceux qui lisent les images, Image le seul modèle de dessin s'il tient sur ta machine, Vidéo le modèle vidéo avec la meilleure qualité que ta machine peut faire tourner. Vitesse et Intelligence : mesures publiées par Artificial
-        Analysis, identiques pour tout le monde — elles comparent les modèles entre eux, pas la vitesse sur ta
-        machine.
-      </p>
+      <p className="capacity-scan__tier-legend">{t('picks.legend')}</p>
     </div>
   )
 }

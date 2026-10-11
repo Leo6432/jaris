@@ -8,6 +8,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import { promisify } from 'node:util'
 import ts from 'typescript'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * Étape 153, Léo : la mise à jour échouait avec « Échec de désinstallation des anciens fichiers
@@ -31,7 +32,7 @@ function load(file, modules, globals = {}) {
   vm.runInNewContext(compile(file), {
     exports,
     module: { exports },
-    require: (name) => modules[name] ?? nodeRequire(name),
+    require: withI18n((name) => modules[name] ?? nodeRequire(name)),
     ...globals
   })
   return exports

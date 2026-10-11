@@ -3,6 +3,7 @@ import { config } from '../config'
 import { hideScanOverlay, showScanOverlay } from './scanOverlay'
 import { getLiveGpuStatus, pickSafeVisionModel } from './hardwareScan'
 import { listInstalledModels } from './ollama'
+import { replyLanguageName, replyLanguageRule, t } from '../../shared/i18n'
 
 interface OllamaVisionResponse {
   message?: { content?: string }
@@ -70,7 +71,7 @@ export async function captureScreenshotBase64(): Promise<ScreenCapture> {
   })
 
   const source = sources[0]
-  if (!source) throw new Error("Impossible de capturer l'écran (aucune source disponible).")
+  if (!source) throw new Error(t('vision.noSource'))
   const real = source.thumbnail.getSize()
   return {
     imageBase64: source.thumbnail.toPNG().toString('base64'),
@@ -97,11 +98,20 @@ export async function captureScreenForPilot(): Promise<PilotScreenCapture> {
     thumbnailSize: { width: Math.round(display.size.width * display.scaleFactor), height: Math.round(display.size.height * display.scaleFactor) }
   })
   const source = sources[0]
-  if (!source) throw new Error("Impossible de capturer l'écran (aucune source disponible).")
+  if (!source) throw new Error(t('vision.noSource'))
   const full = source.thumbnail
   const small = full.getSize().width > MAX_SCREENSHOT_WIDTH ? full.resize({ width: MAX_SCREENSHOT_WIDTH, quality: 'best' }) : full
   const { width, height } = small.getSize()
   return { imageBase64: small.toPNG().toString('base64'), scale: display.size.width / width, width, height, full }
+}
+
+/**
+ * Étape 293 : les consignes de vision disent « Réponds en français » ; dans une autre langue, cette phrase nommerait
+ * la mauvaise langue juste avant la règle qui impose la bonne. Remplacée plutôt que contredite.
+ */
+export function localizeReplyLanguage(prompt: string): string {
+  const name = replyLanguageName()
+  return name === 'French' ? prompt : prompt.replace(/Réponds en français/g, `Réponds en ${name}`)
 }
 
 /**
@@ -135,7 +145,8 @@ export async function describeImage(
       body: JSON.stringify({
         model,
         messages: [
-          { role: 'system', content: systemPrompt },
+          // Étape 293 : la réponse dans la langue de Jaris (rien d'ajouté en français).
+          { role: 'system', content: localizeReplyLanguage(systemPrompt) + replyLanguageRule() },
           { role: 'user', content: question, images: [imageBase64] }
         ],
         stream: false,
@@ -144,16 +155,16 @@ export async function describeImage(
       })
     })
   } catch {
-    throw new Error(`Impossible de joindre Ollama sur ${config.ollama.host} (est-il lancé ?)`)
+    throw new Error(t('ollama.unreachable', { host: config.ollama.host }))
   }
 
   if (!response.ok) {
-    throw new Error(`Ollama (vision) a répondu ${response.status} : ${await response.text()}`)
+    throw new Error(t('vision.httpError', { status: response.status, body: await response.text() }))
   }
 
   const data = (await response.json()) as OllamaVisionResponse
   const content = data.message?.content?.trim()
-  if (!content) throw new Error(`Réponse vide du modèle de vision '${model}' (bien installé ? ollama pull ${model})`)
+  if (!content) throw new Error(t('vision.empty', { model }))
   return content
 }
 

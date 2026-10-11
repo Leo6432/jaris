@@ -13,6 +13,8 @@ import type { SoundCue } from '../../shared/ipc'
 import { buildSystemPrompt, dateTimeNote, type ConverseChannel } from './systemPrompt'
 import { describeModelCall, startJournalEntry, type JournalEntry } from './requestJournal'
 import { directBrowserSearch, openBrowserSearch } from './browserSearch'
+import { allTranslations, currentLanguage, currentLocale, t } from '../../shared/i18n'
+import { languageInfo } from '../../shared/i18n/languages'
 
 /**
  * Design sonore (étape 31) : seuls les outils qui correspondent à une action PHYSIQUE/perceptible ont un
@@ -144,8 +146,8 @@ const SIMPLE_GREETING = /^(?:salut|bonjour|bonsoir|coucou|hello|hey)(?:\s+jaris)
  */
 export function directSocialReply(prompt: string): string | undefined {
   const trimmed = prompt.trim()
-  if (SIMPLE_GREETING.test(trimmed)) return "Salut ! Comment puis-je t'aider ?"
-  if (SOCIAL_CHECK_IN.test(trimmed)) return "Oui, tout va bien. Comment puis-je t'aider ?"
+  if (SIMPLE_GREETING.test(trimmed)) return t('reply.greeting')
+  if (SOCIAL_CHECK_IN.test(trimmed)) return t('reply.checkIn')
   return undefined
 }
 
@@ -385,6 +387,23 @@ export async function converse(...args: ConverseArgs): Promise<string> {
   }
 }
 
+/** Le message d'un outil qui a échoué, tel que l'utilisateur le lit (et tel qu'il reste dans l'historique). */
+function toolFailure(err: unknown): string {
+  return t('reply.toolFailed', { error: err instanceof Error ? err.message : String(err) })
+}
+
+/**
+ * Étape 293 : un échec déjà enregistré peut avoir été écrit dans une AUTRE langue (l'utilisateur a changé de langue
+ * entre-temps) — on reconnaît le début de la phrase dans toutes les langues connues, pas seulement l'actuelle.
+ */
+export function isToolFailureText(content: string): boolean {
+  const text = content.trimStart()
+  return allTranslations('reply.toolFailed').some((template) => {
+    const prefix = template.split('{error}')[0].trim()
+    return prefix.length > 0 && text.startsWith(prefix)
+  })
+}
+
 type Tail<T extends unknown[]> = T extends [unknown, ...infer Rest] ? Rest : never
 type ConverseArgs = Tail<Parameters<typeof conversation>>
 
@@ -429,7 +448,7 @@ async function conversation(
   // Deux barrières plutôt qu'une : les outils interdits ne sont même pas présentés au modèle (plus bas), ET
   // l'exécution les refuse quand même — un modèle peut inventer un appel à un outil qu'on ne lui a pas donné.
   const executeTool: typeof runTool = async (name, args) => {
-    if (!isToolAllowed(name)) throw new Error(restrictions?.refusal ?? 'Action indisponible ici.')
+    if (!isToolAllowed(name)) throw new Error(restrictions?.refusal ?? t('reply.unavailable'))
     return runTool(name, args)
   }
   const tools = restrictions ? TOOLS.filter((tool) => isToolAllowed(tool.function.name)) : TOOLS
@@ -438,11 +457,11 @@ async function conversation(
   // Le Bloc-notes écrit sur le PC : jamais depuis le téléphone (Léo : « pas taper à ta place »).
   if (noteText !== undefined && restrictions) return restrictions.refusal
   if (noteText !== undefined) {
-    onLog?.('Préparation du document et ouverture du Bloc-notes…')
+    onLog?.(t('log.notepad.preparing'))
     try {
       return await openNotepadText(noteText, signal)
     } catch (err) {
-      return `Impossible de confirmer l’ouverture du document : ${err instanceof Error ? err.message : String(err)}`
+      return t('reply.notepad.failed', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 
@@ -450,36 +469,40 @@ async function conversation(
   // pilotage d'écran (journal de Léo : 2 min de réflexion, puis des clics dans la barre des tâches).
   const browserSearch = directBrowserSearch(prompt)
   if (browserSearch) {
-    if (!isToolAllowed('open_app')) return restrictions?.refusal ?? 'Action indisponible ici.'
-    if (signal?.aborted) return 'Recherche annulée.'
-    onLog?.(`Recherche ouverte directement dans le navigateur : « ${browserSearch.query} »${browserSearch.browser ? ` (${browserSearch.browser.name})` : ''}.`)
+    if (!isToolAllowed('open_app')) return restrictions?.refusal ?? t('reply.unavailable')
+    if (signal?.aborted) return t('reply.searchCancelled')
+    onLog?.(
+      browserSearch.browser
+        ? t('log.browserSearch.in', { query: browserSearch.query, browser: browserSearch.browser.name })
+        : t('log.browserSearch', { query: browserSearch.query })
+    )
     return openBrowserSearch(browserSearch)
   }
 
   const screenTask = directScreenTask(prompt)
   if (screenTask && isToolAllowed('computer_use_task')) {
-    if (signal?.aborted) return 'Tâche annulée.'
+    if (signal?.aborted) return t('reply.taskCancelled')
     onLog?.(`Action à l'écran demandée : pilotage direct, sans réflexion préalable du modèle.`)
     onSoundCue?.('scan')
     try {
       return await executeTool('computer_use_task', { goal: screenTask })
     } catch (err) {
-      return `Échec de l'outil : ${err instanceof Error ? err.message : String(err)}`
+      return toolFailure(err)
     }
   }
 
   const requestedApp = directAppRequest(prompt)
   if (requestedApp) {
-    if (signal?.aborted) return "Ouverture annulée."
-    onLog?.(`Ouverture demandée : ${requestedApp}.`)
+    if (signal?.aborted) return t('reply.openCancelled')
+    onLog?.(t('log.opening', { app: requestedApp }))
     try {
       const result = await executeTool('open_app', { app_name: requestedApp })
       // Explorer accuse réception avant que l'application ait nécessairement une fenêtre visible.
       return didAppLaunch(result)
-        ? `Demande d'ouverture transmise à Windows pour ${requestedApp}.`
+        ? t('reply.openSent', { app: requestedApp })
         : result
     } catch (err) {
-      return `Échec de l'outil : ${err instanceof Error ? err.message : String(err)}`
+      return toolFailure(err)
     }
   }
 
@@ -499,7 +522,7 @@ async function conversation(
     // liste vide -> pas de repli possible -> on garde le modèle normalement configuré pour le palier.
     listInstalledModels().catch(() => [] as string[])
   ])
-  if (overloadWarning) onLog?.(`Avertissement machine chargée : ${overloadWarning}`)
+  if (overloadWarning) onLog?.(t('log.overload', { warning: overloadWarning }))
 
   if (live.tempC !== null && live.tempC >= GPU_TEMP_LIMIT_C && tier !== 'flash') {
     onLog?.(`GPU à ${live.tempC}°C (seuil ${GPU_TEMP_LIMIT_C}°C) : passage au palier rapide le temps qu'elle refroidisse.`)
@@ -511,7 +534,7 @@ async function conversation(
   // c'est un choix explicite de Léo, pas à défaire en silence. `null` = Auto, strictement comme avant.
   const chosenModel = resolveChosenModel(profile, channel, installedModels)
   if (!chosenModel && profile?.modelChoices?.[channel]) {
-    onLog?.(`${profile.modelChoices[channel]} n'est plus installé : retour au choix automatique.`)
+    onLog?.(t('log.chosenModelGone', { model: profile.modelChoices[channel] ?? '' }))
   }
 
   /** Résout modèle + effort de réflexion pour un palier donné, avec le même repli VRAM temps réel que ci-dessus. */
@@ -553,16 +576,18 @@ async function conversation(
    */
   const finalize = (text: string): string => {
     const trimmed = text.trim()
-    const fallback = "Désolé, je n'ai pas trouvé quoi répondre, tu peux reformuler ?"
+    const fallback = t('reply.empty')
     const normalized = normalizeAssistantText(trimmed || fallback, prompt) || fallback
     const cleaned = channel === 'voice' ? stripMarkdownForVoice(normalized) : normalized
     return withOverloadWarning(cleaned)
   }
 
+  // Étape 293 : la réponse dans la langue choisie dans Jaris (Options → Général), quelle que soit celle des consignes.
+  const systemPrompt = buildSystemPrompt(userName, memoryTitles, channel, languageInfo(currentLanguage()).english)
   const messages: OllamaMessage[] = [
     {
       role: 'system',
-      content: restrictions ? `${buildSystemPrompt(userName, memoryTitles, channel)}\n\n${restrictions.note}` : buildSystemPrompt(userName, memoryTitles, channel)
+      content: restrictions ? `${systemPrompt}\n\n${restrictions.note}` : systemPrompt
     },
     // Les erreurs d'outils sont conservées dans l'historique visible, mais pas réinjectées au modèle :
     // qwen3.5:4b a reproduit un ancien 403 SANS appeler search_web, alors que le service répondait 200.
@@ -570,7 +595,7 @@ async function conversation(
     // Ce filtre s'applique au chargement comme en session, dans les deux canaux, sans effacer le disque.
     ...history.filter((message, index) => {
       const isToolFailure = (entry?: OllamaMessage): boolean =>
-        entry?.role === 'assistant' && entry.content.trimStart().startsWith("Échec de l'outil :")
+        entry?.role === 'assistant' && isToolFailureText(entry.content)
       // Nettoie aussi le vrai échange erroné déjà écrit sur disque : « salut » suivi d'une explication
       // inventée de `/think`. Le garder dans les 12 derniers messages inciterait le modèle à le répéter.
       const isHallucinatedThinkReply = (entry: OllamaMessage | undefined, previous?: OllamaMessage): boolean =>
@@ -583,7 +608,7 @@ async function conversation(
     }),
     // La date ici et non dans les consignes : elles restent identiques d'une demande à l'autre, et Ollama n'a pas
     // à les relire (voir dateTimeNote). L'historique garde la question seule, sans la date.
-    { role: 'user', content: `${dateTimeNote()} ${prompt}` }
+    { role: 'user', content: `${dateTimeNote(new Date(), currentLocale())} ${prompt}` }
   ]
 
   // Un petit modèle local abandonne parfois en cours de route sur une tâche à plusieurs étapes : il
@@ -726,7 +751,7 @@ async function conversation(
       try {
         result = await executeTool(call.function.name, call.function.arguments)
       } catch (err) {
-        result = `Échec de l'outil : ${err instanceof Error ? err.message : String(err)}`
+        result = toolFailure(err)
         toolFailed = true
       }
       onLog?.(`Résultat de l'outil : ${result}`)
@@ -786,5 +811,5 @@ async function conversation(
     }
   }
 
-  throw new Error("Trop d'actions enchaînées, j'abandonne pour éviter de tourner en rond.")
+  throw new Error(t('reply.tooManyRounds'))
 }

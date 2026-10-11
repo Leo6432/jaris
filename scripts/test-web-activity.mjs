@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -15,7 +16,7 @@ function load(path, modules = {}) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   }).outputText
   const exports = {}
-  vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(exports, { exports }, (name) => modules[name] ?? {})
+  vm.runInThisContext(`(function (exports, module, require) { ${source} })`)(exports, { exports }, withI18n((name) => modules[name] ?? {}))
   return exports
 }
 

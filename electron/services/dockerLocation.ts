@@ -3,6 +3,7 @@ import { existsSync } from 'fs'
 import { rm } from 'fs/promises'
 import { dirname, join, resolve, sep } from 'path'
 import { promisify } from 'util'
+import { t } from '../../shared/i18n'
 
 const execAsync = promisify(exec)
 
@@ -122,21 +123,14 @@ export async function planDockerMove(newRoot: string, startDocker: () => Promise
     const deadline = Date.now() + 90_000
     while (!(await dockerResponds())) {
       if (Date.now() > deadline) {
-        throw new Error(
-          "Docker Desktop ne répond pas : impossible de vérifier ce qu'il contient avant de le déplacer. " +
-            'Ouvre Docker Desktop (ou redémarre le PC), puis relance « Déplacer ». Rien n\'a été déplacé.'
-        )
+        throw new Error(t('move.dockerNotResponding'))
       }
       await new Promise((r) => setTimeout(r, 3000))
     }
   }
 
   if (!isOnlyJarisDockerContent(await readDockerContent())) {
-    throw new Error(
-      "Docker Desktop contient d'autres projets que la recherche web de Jaris. Le déplacer oblige à le " +
-        'désinstaller, ce qui les effacerait : rien n\'a été déplacé. Si tu n\'en as plus besoin, supprime-les ' +
-        'dans Docker Desktop puis relance « Déplacer ».'
-    )
+    throw new Error(t('move.dockerHasOtherProjects'))
   }
   return { action: 'uninstall', installDir }
 }

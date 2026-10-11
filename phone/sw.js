@@ -5,8 +5,8 @@
 // version tant que le PC répond).
 'use strict'
 
-var CACHE = 'jaris-page-v1'
-var FILES = ['/', '/app.js', '/app.css', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/logo.png']
+var CACHE = 'jaris-page-v2'
+var FILES = ['/', '/i18n.js', '/app.js', '/app.css', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/logo.png']
 
 self.addEventListener('install', function (event) {
   event.waitUntil(

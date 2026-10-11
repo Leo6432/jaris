@@ -14,6 +14,7 @@ import { withPilotWindows, type PilotWindows } from './pilotWindows'
 import { markCenter, type ScreenMark } from './screenMarks'
 import { describeElements, findElementByName, type ClickableElement } from './uiAutomation'
 import { MAX_SCREENSHOT_WIDTH } from './vision'
+import { replyLanguageName, t, type MessageKey } from '../../shared/i18n'
 
 /**
  * Convertit une coordonnée renvoyée par le modèle de vision (repérée sur l'image réduite à
@@ -232,8 +233,8 @@ export async function streamOllamaChat(body: Record<string, unknown>, signal?: A
       signal: controller.signal,
       body: JSON.stringify({ ...body, stream: true })
     })
-    if (!response.ok) throw new Error(`Ollama a répondu ${response.status} : ${(await response.text()).slice(0, 300)}`)
-    if (!response.body) throw new Error('Ollama a répondu sans contenu.')
+    if (!response.ok) throw new Error(t('ollama.httpError', { status: response.status, body: (await response.text()).slice(0, 300) }))
+    if (!response.body) throw new Error(t('ollama.noBody'))
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
@@ -258,8 +259,8 @@ export async function streamOllamaChat(body: Record<string, unknown>, signal?: A
     take(buffer + decoder.decode())
     return content.trim()
   } catch (err) {
-    if (silence === 'first') throw new Error(`il n'a rien répondu en ${Math.round(FIRST_CHUNK_TIMEOUT_MS / 60000)} min (chargement ou lecture de l'image trop long sur cette machine)`)
-    if (silence === 'idle') throw new Error(`il s'est arrêté de répondre pendant ${IDLE_TIMEOUT_MS / 1000} s`)
+    if (silence === 'first') throw new Error(t('vision.silentFirst', { minutes: Math.round(FIRST_CHUNK_TIMEOUT_MS / 60000) }))
+    if (silence === 'idle') throw new Error(t('vision.silentIdle', { seconds: IDLE_TIMEOUT_MS / 1000 }))
     throw err
   } finally {
     clearTimeout(timer)
@@ -389,7 +390,7 @@ async function nextStep(
         messages: [
           {
             role: 'system',
-            content: [SYSTEM_PROMPT, OPEN_APP_RULE, capture.marks.length ? MARKS_RULE : '', withPilot ? PILOT_TARGET_RULE : '', capture.windowOnly ? BACKGROUND_RULE : '']
+            content: [SYSTEM_PROMPT, OPEN_APP_RULE, capture.marks.length ? MARKS_RULE : '', withPilot ? PILOT_TARGET_RULE : '', capture.windowOnly ? BACKGROUND_RULE : '', resultLanguageRule()]
               .filter(Boolean)
               .join('\n\n')
           },
@@ -401,12 +402,12 @@ async function nextStep(
       signal
     )
   } catch (err) {
-    return { action: 'fail', result: `Le modèle de vision ${model} n'a pas pu regarder l'écran : ${err instanceof Error ? err.message : String(err)}` }
+    return { action: 'fail', result: t('pilot.visionFailed', { model, error: err instanceof Error ? err.message : String(err) }) }
   }
-  if (!content) return { action: 'fail', result: 'Réponse vide du modèle de vision.' }
+  if (!content) return { action: 'fail', result: t('pilot.visionEmpty') }
 
   const step = extractStep(content)
-  if (!step) return { action: 'fail', result: `Le modèle de vision ${model} a proposé une action inexécutable : ${content.slice(0, 300)}` }
+  if (!step) return { action: 'fail', result: t('pilot.visionBadAction', { model, content: content.slice(0, 300) }) }
   // Positions sur 0–1000 ramenées aux pixels de l'image ; toScreenCoord les porte ensuite à l'écran réel.
   return { ...step, ...fromThousandths(step.x, step.y, capture.width, capture.height) }
 }
@@ -428,7 +429,7 @@ async function nextTextStep(
       {
         model,
         messages: [
-          { role: 'system', content: capture.windowOnly ? `${TEXT_PLANNER_PROMPT}\n\n${BACKGROUND_RULE}` : TEXT_PLANNER_PROMPT },
+          { role: 'system', content: [TEXT_PLANNER_PROMPT, capture.windowOnly ? BACKGROUND_RULE : '', resultLanguageRule()].filter(Boolean).join('\n\n') },
           { role: 'user', content: buildTextStepPrompt(goal, history, capture.window, capture.marks) }
         ],
         think: false,
@@ -526,13 +527,25 @@ function pilotView(full: NativeImage): Pick<MaiUiDeps, 'width' | 'height' | 'vie
  * `MAX_STEPS` évite une boucle infinie si le modèle de vision reste bloqué sans jamais renvoyer "done"/"fail".
  * Étape 256 : la fenêtre de Jaris s'écarte le temps de la tâche (pilotWindows.ts), sinon c'est elle qu'on piloterait.
  */
+/**
+ * Étape 293 : le texte libre du champ « result » (lu tel quel par l'utilisateur à la fin d'une tâche) dans la langue de
+ * Jaris. Rien d'ajouté en français. Les valeurs de « action » restent celles du format, jamais traduites.
+ */
+function resultLanguageRule(): string {
+  const name = replyLanguageName()
+  return name === 'French' ? '' : `Écris le texte du champ "result" en ${name} (la langue de l'utilisateur) ; les valeurs de "action" restent exactement celles du format.`
+}
+
+/** Les raisons de reprendre l'écran au premier plan, dites à l'utilisateur. */
+type ForegroundReason = Extract<MessageKey, `pilot.foreground.${string}`>
+
 export async function computerUseTask(
   goal: string,
   visionModel: string,
   onProgress?: (message: string) => void,
   signal?: AbortSignal
 ): Promise<string> {
-  if (!goal.trim()) return "Dis-moi ce qu'il faut faire à l'écran."
+  if (!goal.trim()) return t('pilot.noGoal')
   return withPilotWindows((windows) => runComputerUseTask(goal, visionModel, windows, onProgress, signal))
 }
 
@@ -565,10 +578,10 @@ async function runComputerUseTask(
   /** Le champ choisi (arrière-plan) : le prochain texte y est déposé directement, sans clavier. */
   let field: ScreenMark | undefined
   let borrowNoted = false
-  const goForeground = async (reason: string): Promise<void> => {
+  const goForeground = async (reason: ForegroundReason): Promise<void> => {
     mode = 'foreground'
     field = undefined
-    onProgress?.(`${reason} : je prends la main sur l'écran jusqu'à la fin de la tâche.`)
+    onProgress?.(t('pilot.takingOver', { reason: t(reason) }))
     await windows.setAside()
   }
   /**
@@ -578,7 +591,7 @@ async function runComputerUseTask(
    */
   const borrow = async (gesture: () => Promise<void>): Promise<boolean> => {
     if (!borrowNoted) {
-      onProgress?.("Cette étape a besoin de la souris ou du clavier : je les emprunte un instant, puis je te rends la main.")
+      onProgress?.(t('pilot.borrow'))
       borrowNoted = true
     }
     windows.guard(true)
@@ -605,7 +618,7 @@ async function runComputerUseTask(
     // voicePipeline.ts) : sans ça, une fois lancée, cette boucle de clics ne pouvait plus jamais être
     // interrompue avant MAX_STEPS ou la fin naturelle de l'objectif, contrairement au reste de la
     // conversation.
-    if (signal?.aborted) return "Tâche interrompue avant d'être terminée."
+    if (signal?.aborted) return t('pilot.interrupted')
 
     // Chaque itération (capture + appel au modèle de vision) peut prendre plusieurs minutes (voir streamOllamaChat) sur
     // une machine chargée ou sans GPU — sans un signe de vie régulier, ça ressemble à un plantage silencieux
@@ -617,7 +630,7 @@ async function runComputerUseTask(
     // Étape 256 : la capture porte les boutons de la fenêtre visée, numérotés (Set-of-Marks). Sans réponse de
     // Windows, la capture d'avant, sans numéros : le pilotage par position reste possible.
     const onCaptureFallback = (reason: string): void => {
-      if (!fallbackNoted) onProgress?.(`Boutons numérotés indisponibles (${reason}) : je pilote d'après l'image seule.`)
+      if (!fallbackNoted) onProgress?.(t('pilot.noMarks', { reason }))
       fallbackNoted = true
     }
     let capture: PilotCapture
@@ -638,22 +651,22 @@ async function runComputerUseTask(
           // La fenêtre gardée a disparu (fermée) : on ne pioche JAMAIS une autre fenêtre en silence — en arrière-plan,
           // ce pourrait être celle où Léo travaille. Le pilotage d'avant, annoncé, sur l'écran.
           lockedHwnd = undefined
-          await goForeground("La fenêtre que je pilotais s'est fermée")
+          await goForeground('pilot.foreground.closed')
           capture = await capturePilotScreen(onCaptureFallback)
         } else if (capture.windowOnly && capture.hwnd) {
-          if (mode === undefined) onProgress?.("Je travaille en arrière-plan : tu peux continuer à te servir de ton ordinateur.")
+          if (mode === undefined) onProgress?.(t('pilot.background'))
           mode = 'background'
           if (targetHwnd !== capture.hwnd) field = undefined
           targetHwnd = capture.hwnd
           lockedHwnd ??= capture.root ?? capture.hwnd
         } else {
           // Fenêtre introuvable ou impossible à capturer seule : le pilotage d'avant, sur l'écran, Jaris écarté.
-          await goForeground(mode === undefined ? 'Cette fenêtre ne peut pas être suivie en arrière-plan' : 'La fenêtre suivie ne répond plus')
+          await goForeground(mode === undefined ? 'pilot.foreground.cannotFollow' : 'pilot.foreground.notResponding')
           capture = await capturePilotScreen(onCaptureFallback)
         }
       }
     } catch (err) {
-      throw new Error(`Impossible de capturer l'écran : ${err instanceof Error ? err.message : String(err)}`)
+      throw new Error(t('pilot.captureFailed', { error: err instanceof Error ? err.message : String(err) }))
     }
     const origin = capture.origin ?? { x: 0, y: 0 }
     const background = mode === 'background'
@@ -669,9 +682,9 @@ async function runComputerUseTask(
         onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : je lis les boutons de la fenêtre…`)
         const planned = await nextTextStep(goal, history, capture, plannerModel, signal)
         if (planned.error) {
-          if (signal?.aborted) return "Tâche interrompue avant d'être terminée."
+          if (signal?.aborted) return t('pilot.interrupted')
           textPlanning = false
-          onProgress?.(`Lecture des boutons par ${plannerModel} impossible (${planned.error}) : je continue avec l'image.`)
+          onProgress?.(t('pilot.textFailed', { model: plannerModel, error: planned.error }))
         } else if (!planned.step || planned.step.action === 'look') {
           if (++textLooks >= MAX_TEXT_LOOKS) textPlanning = false
         } else if (!(planned.step.action === 'done' && history.length === 0)) {
@@ -680,21 +693,21 @@ async function runComputerUseTask(
         }
         if (!step) onProgress?.(`Étape ${i + 1}/${MAX_STEPS} : je regarde l'écran de plus près…`)
       }
-      if (signal?.aborted) return "Tâche interrompue avant d'être terminée."
+      if (signal?.aborted) return t('pilot.interrupted')
       if (!step) step = await nextStep(goal, history, capture, visionModel, signal, pilotModel !== null)
     } finally {
       hideScanOverlay()
     }
 
     // Une annulation pendant l'inférence ne doit jamais être suivie d'un clic tardif.
-    if (signal?.aborted) return "Tâche interrompue avant d'être terminée."
-    if (step.action === 'done') return step.result || 'Fait.'
+    if (signal?.aborted) return t('pilot.interrupted')
+    if (step.action === 'done') return step.result || t('pilot.done')
     // Lever l'erreur active le court-circuit d'assistant.ts : le modèle de conversation ne doit pas
     // masquer ce diagnostic ni relancer dix fois une tâche qui vient d'échouer.
-    if (step.action === 'fail') throw new Error(step.result || 'Le pilotage de l’écran a échoué sans préciser pourquoi.')
+    if (step.action === 'fail') throw new Error(step.result || t('pilot.failedNoReason'))
     consecutiveWaits = step.action === 'wait' ? consecutiveWaits + 1 : 0
     if (consecutiveWaits >= MAX_CONSECUTIVE_WAITS) {
-      throw new Error("Le modèle de vision demande seulement d'attendre depuis trois captures consécutives. Je m'arrête sans avoir terminé l'objectif.")
+      throw new Error(t('pilot.onlyWaits'))
     }
 
     switch (step.action) {
@@ -730,7 +743,7 @@ async function runComputerUseTask(
             const { x, y } = markCenter(target)
             let result = ''
             if (!(await borrow(async () => { result = await clickMouse(x, y, 'left', capture.physical) }))) {
-              await goForeground('La fenêtre suivie refuse de passer devant')
+              await goForeground('pilot.foreground.refuses')
               history.push(`${i + 1}. Clic sur "${target.name}" pas encore fait : la fenêtre ne passait pas devant`)
               break
             }
@@ -776,14 +789,14 @@ async function runComputerUseTask(
               aimed = ' (viseur sans réponse lisible : position estimée)'
             }
           } catch (err) {
-            if (signal?.aborted) return "Tâche interrompue avant d'être terminée."
+            if (signal?.aborted) return t('pilot.interrupted')
             // Le viseur est une précision en plus, pas une condition : sans lui, la position estimée reste le secours.
             aimed = ` (viseur indisponible : ${err instanceof Error ? err.message : String(err)} ; position estimée)`
           } finally {
             hideScanOverlay()
             void unloadPilot(pilotModel)
           }
-          if (signal?.aborted) return "Tâche interrompue avant d'être terminée."
+          if (signal?.aborted) return t('pilot.interrupted')
         }
         // Étape 263 : une image de la fenêtre seule commence à son coin, pas à celui de l'écran.
         const sx = toScreenCoord(px, capture.scale)
@@ -795,7 +808,7 @@ async function runComputerUseTask(
         if (background) {
           // Un clic par position demande la vraie souris : empruntée le temps du clic, fenêtre devant.
           if (!(await borrow(async () => { result = await clickMouse(x, y, button, capture.physical) }))) {
-            await goForeground('La fenêtre suivie refuse de passer devant')
+            await goForeground('pilot.foreground.refuses')
             history.push(`${i + 1}. Clic ${button}${what} pas encore fait : la fenêtre ne passait pas devant`)
             break
           }
@@ -842,7 +855,7 @@ async function runComputerUseTask(
           result = await typeText(text)
         })
         if (!typed) {
-          await goForeground('La fenêtre suivie refuse de passer devant')
+          await goForeground('pilot.foreground.refuses')
           history.push(`${i + 1}. Texte "${text}" pas encore tapé : la fenêtre ne passait pas devant`)
           break
         }
@@ -869,7 +882,7 @@ async function runComputerUseTask(
             result = await pressKey(key)
           })
           if (!pressed) {
-            await goForeground('La fenêtre suivie refuse de passer devant')
+            await goForeground('pilot.foreground.refuses')
             history.push(`${i + 1}. Touche "${key}" pas encore pressée : la fenêtre ne passait pas devant`)
             break
           }
@@ -913,5 +926,5 @@ async function runComputerUseTask(
     }
   }
 
-  throw new Error(`Je me suis arrêté après ${MAX_STEPS} étapes sans terminer l'objectif : ${goal}.`)
+  throw new Error(t('pilot.maxSteps', { steps: MAX_STEPS, goal }))
 }

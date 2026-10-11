@@ -4923,6 +4923,25 @@ textarea::placeholder {
   background: var(--hud-accent);
 }
 
+/* Étape 293 : le choix de la langue dès le premier écran — discret, sous le bouton, la langue de Windows étant
+   déjà appliquée ; un menu natif, qui affiche chaque langue dans son propre alphabet. */
+.app__onboarding-language {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--hud-text-faint);
+}
+
+.app__onboarding-language select {
+  height: 34px;
+  padding: 0 10px;
+  font-family: var(--hud-font-body);
+  font-size: 13px;
+  color: var(--hud-text);
+}
+
 .runtime-setup,
 .capacity-scan {
   font-family: var(--hud-font-body);

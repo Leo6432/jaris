@@ -7,6 +7,7 @@ import { config } from '../config'
 import { pythonScriptsDir } from '../paths'
 import { getStorageRoot } from './storageRoot'
 import { downloadToFile } from './download'
+import { t } from '../../shared/i18n'
 
 /**
  * Installe et gère le Python de Jaris (étape 16 du roadmap).
@@ -136,7 +137,7 @@ async function findPythonArchiveUrl(): Promise<string> {
   const release = (await response.json()) as { assets?: { name: string; browser_download_url: string }[] }
   const pattern = new RegExp(`^cpython-${PYTHON_SERIES.replace('.', '\\.')}\\.\\d+\\+.*-x86_64-pc-windows-msvc-install_only\\.tar\\.gz$`)
   const asset = release.assets?.find((a) => pattern.test(a.name))
-  if (!asset) throw new Error(`aucune version de Python ${PYTHON_SERIES} pour Windows dans la dernière publication`)
+  if (!asset) throw new Error(t('py.noRelease', { series: PYTHON_SERIES }))
   return asset.browser_download_url
 }
 
@@ -147,12 +148,12 @@ async function findPythonArchiveUrl(): Promise<string> {
  */
 export function pythonListError(status: number, rateLimitRemaining: string | null): string {
   if ((status === 403 || status === 429) && rateLimitRemaining === '0') {
-    return "GitHub limite le nombre de téléchargements depuis ta connexion pour l'instant : réessaie dans une heure (ou depuis une autre connexion)"
+    return t('py.rateLimited')
   }
   if (status === 403 || status === 429) {
-    return `GitHub refuse l'accès à la liste des versions de Python (HTTP ${status}) : réessaie plus tard, ou vérifie qu'un pare-feu ne bloque pas github.com`
+    return t('py.refused', { status })
   }
-  return `liste des versions de Python inaccessible (HTTP ${status}) : réessaie plus tard`
+  return t('py.listUnavailable', { status })
 }
 
 /**
@@ -168,9 +169,9 @@ export const PIP_INSTALL = ['-m', 'pip', 'install', '--no-cache-dir'] as const
  * et plus de 2,5 Go à télécharger.
  */
 async function installDependencies(python: string, onProgress: InstallProgress): Promise<void> {
-  onProgress('Installation des dépendances Python (plusieurs minutes)…')
+  onProgress(t('py.installingDeps'))
   const code = await run(python, [...PIP_INSTALL, '-r', requirementsPath()], onProgress)
-  if (code !== 0) throw new Error(`installation des dépendances Python échouée (code ${code})`)
+  if (code !== 0) throw new Error(t('py.depsFailed', { code: String(code) }))
 }
 
 /**
@@ -186,28 +187,28 @@ export async function installPythonRuntime(onProgress: InstallProgress): Promise
   await mkdir(dir, { recursive: true })
   for (const entry of await readdir(dir)) await rm(join(dir, entry), { recursive: true, force: true })
 
-  onProgress('Recherche de la dernière version de Python…', 0)
+  onProgress(t('py.searching'), 0)
   const archivePath = join(dir, 'python.tar.gz')
   // Étape 234 (bêta) : le téléchargeur commun (download.ts) plutôt qu'une copie sans délai d'inactivité ni
   // contrôle de taille — un téléchargement bloqué laissait l'écran figé sur « 43 % » pour toujours.
   await downloadToFile(await findPythonArchiveUrl(), archivePath, {
     onProgress: ({ percent }) => {
-      if (percent !== null) onProgress(`Téléchargement de Python : ${Math.round(percent)} %`, percent)
+      if (percent !== null) onProgress(t('py.downloading', { percent: Math.round(percent) }), percent)
     }
   })
 
-  onProgress('Décompression de Python…')
+  onProgress(t('py.extracting'))
   // `tar` est fourni avec Windows depuis Windows 10 (build 17063) et sait lire un .tar.gz : évite
   // d'embarquer une librairie de décompression rien que pour cette étape unique.
   const extractCode = await run('tar', ['-xzf', archivePath, '-C', dir], onProgress)
-  if (extractCode !== 0) throw new Error(`décompression de Python échouée (code ${extractCode})`)
+  if (extractCode !== 0) throw new Error(t('py.extractFailed', { code: String(extractCode) }))
   await rm(archivePath, { force: true })
 
   const python = findPythonExe(dir)
-  if (!python) throw new Error("python.exe est introuvable dans l'archive téléchargée")
+  if (!python) throw new Error(t('py.noExe'))
 
   await installDependencies(python, onProgress)
   await rm(join(dir, '.install-temp'), { recursive: true, force: true }).catch(() => {})
   await writeFile(stampPath(), await requirementsHash())
-  onProgress('Python et ses dépendances sont installés.', 100)
+  onProgress(t('py.done'), 100)
 }

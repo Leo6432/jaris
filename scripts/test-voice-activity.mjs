@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -14,15 +15,15 @@ function load(path) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   }).outputText
   const module = { exports: {} }
-  vm.runInThisContext(`(function (exports, require, module) {\n${source}\n})`)(module.exports, () => ({}), module)
+  vm.runInThisContext(`(function (exports, require, module) {\n${source}\n})`)(module.exports, withI18n(() => ({})), module)
   return module.exports
 }
-const { activityFromLog, formatActivity, THINKING_ACTIVITY } = load('../shared/voiceActivity.ts')
+const { activityFromLog, formatActivity, thinkingActivity } = load('../shared/voiceActivity.ts')
 
 test('le compteur avance chaque seconde, puis en minutes', () => {
-  assert.equal(formatActivity(THINKING_ACTIVITY, 0), 'Je réfléchis… 0 s')
-  assert.equal(formatActivity(THINKING_ACTIVITY, 45_900), 'Je réfléchis… 45 s')
-  assert.equal(formatActivity(THINKING_ACTIVITY, 125_000), 'Je réfléchis… 2 min 05')
+  assert.equal(formatActivity(thinkingActivity(), 0), 'Je réfléchis… 0 s')
+  assert.equal(formatActivity(thinkingActivity(), 45_900), 'Je réfléchis… 45 s')
+  assert.equal(formatActivity(thinkingActivity(), 125_000), 'Je réfléchis… 2 min 05')
 })
 
 test('les vraies lignes du journal de Léo deviennent des phrases courtes, sans coordonnées ni nom technique', () => {

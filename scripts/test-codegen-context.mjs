@@ -1,3 +1,4 @@
+import { I18N_MODULES } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -26,6 +27,7 @@ function load(path, modules, fetchImpl = fetch) {
   vm.runInThisContext(`(function (exports, require, module, fetch) {${transpile(path)}\n})`)(
     module.exports,
     (name) => {
+      if (name in I18N_MODULES) return I18N_MODULES[name]
       if (!(name in modules)) throw new Error(`faux import manquant : ${name}`)
       return modules[name]
     },

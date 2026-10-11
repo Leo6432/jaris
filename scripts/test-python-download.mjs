@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -14,7 +15,7 @@ function load() {
   const out = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
   const stub = new Proxy(function () {}, { get: (_t, key) => (key === Symbol.toPrimitive ? () => '' : stub), apply: () => stub, construct: () => stub })
   const exports = {}
-  vm.runInThisContext(`(function (exports, require, module) {\n${out}\n})`)(exports, () => stub, { exports })
+  vm.runInThisContext(`(function (exports, require, module) {\n${out}\n})`)(exports, withI18n(() => stub), { exports })
   return exports
 }
 

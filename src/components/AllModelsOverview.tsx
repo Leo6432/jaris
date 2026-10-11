@@ -6,12 +6,14 @@ import { ReliabilityBadge } from './OptionsMenu'
 import UnscoredModelsTest from './UnscoredModelsTest'
 import { formatIntelligenceIndex } from '../lib/formatIntelligenceIndex'
 import { filterModels } from '../lib/filterModels'
+import { t } from '@/lib/i18n'
+import type { MessageKey } from '../../shared/i18n'
 
 /**
  * Étape 210 : mêmes mots que le choix du modèle dans le Chat et le Vocal (Faible · Moyen · Élevé). La catégorie
  * interne (hardwareScan.ts) garde ses valeurs : seul l'affichage change.
  */
-const CATEGORY_LABELS: Record<ModelCategory, string> = { Rapide: 'Faible', Moyen: 'Moyen', Puissant: 'Élevé' }
+const CATEGORY_LABELS: Record<ModelCategory, MessageKey> = { Rapide: 'role.flash', Moyen: 'role.medium', Puissant: 'role.large' }
 
 /**
  * Léo : "dans model ajoute un bouton en dessous de tout les palier, tout les model et met tout les model
@@ -67,22 +69,22 @@ const DEFAULT_SORT_DIR: Record<SortKey, 'asc' | 'desc'> = {
   artificialAnalysisSpeed: 'desc'
 }
 
-const SORT_LABELS: Record<SortKey, string> = {
-  vramGb: 'VRAM nécessaire',
-  toolCalling: "Appel d'outils",
-  demands: 'Demandes complètes',
-  artificialAnalysisIndex: 'Intelligence (Artificial Analysis)',
-  artificialAnalysisSpeed: 'Vitesse (Artificial Analysis)'
+const SORT_LABELS: Record<SortKey, MessageKey> = {
+  vramGb: 'models.sort.vram',
+  toolCalling: 'models.sort.tools',
+  demands: 'models.sort.demands',
+  artificialAnalysisIndex: 'models.sort.intelligence',
+  artificialAnalysisSpeed: 'models.sort.speed'
 }
 
 /** Libellés COURTS pour la barre "Trier par" (étape 129) : les titres de colonne complets ci-dessus
  * ("Intelligence (Artificial Analysis)") sont bien trop longs pour tenir en pastilles sur une seule ligne. */
-const SORT_CHIP_LABELS: Record<SortKey, string> = {
-  vramGb: 'VRAM',
-  toolCalling: "Appel d'outils",
-  demands: 'Demandes',
-  artificialAnalysisIndex: 'Intelligence',
-  artificialAnalysisSpeed: 'Vitesse'
+const SORT_CHIP_LABELS: Record<SortKey, MessageKey> = {
+  vramGb: 'models.chip.vram',
+  toolCalling: 'models.sort.tools',
+  demands: 'options.score.requests',
+  artificialAnalysisIndex: 'models.chip.intelligence',
+  artificialAnalysisSpeed: 'models.chip.speed'
 }
 
 const SORT_KEYS: SortKey[] = ['vramGb', 'toolCalling', 'demands', 'artificialAnalysisIndex', 'artificialAnalysisSpeed']
@@ -123,7 +125,7 @@ function SortButton({ sortKey, sort, onSort }: { sortKey: SortKey; sort: SortSta
   const active = sort?.key === sortKey
   return (
     <button type="button" className="options-menu__sort-button" onClick={() => onSort(sortKey)} aria-pressed={active}>
-      {SORT_LABELS[sortKey]}
+      {t(SORT_LABELS[sortKey])}
       {/* Indicateur TOUJOURS présent (↕ au repos), jamais seulement une fois la colonne active : sans lui,
           un titre cliquable est indiscernable d'un titre normal — c'est très exactement ce que Léo n'a pas
           vu ("je voit pas de truc pour filtrés"). */}
@@ -158,12 +160,12 @@ function SortBar({
       <input
         type="search"
         className="options-menu__model-search"
-        placeholder="Rechercher un modèle"
-        aria-label="Rechercher un modèle"
+        placeholder={t('models.search')}
+        aria-label={t('models.search')}
         value={query}
         onChange={(event) => onQuery(event.target.value)}
       />
-      <span className="options-menu__sort-bar-label">Trier par</span>
+      <span className="options-menu__sort-bar-label">{t('models.sortBy')}</span>
       {SORT_KEYS.map((key) => {
         const active = sort?.key === key
         return (
@@ -174,7 +176,7 @@ function SortBar({
             onClick={() => onSort(key)}
             aria-pressed={active}
           >
-            {SORT_CHIP_LABELS[key]}
+            {t(SORT_CHIP_LABELS[key])}
             {active && <span className="options-menu__sort-arrow">{sort.dir === 'asc' ? ' ▲' : ' ▼'}</span>}
           </button>
         )
@@ -185,7 +187,7 @@ function SortBar({
         onClick={onReset}
         aria-pressed={sort === null}
       >
-        Par défaut
+        {t('models.sort.default')}
       </button>
     </div>
   )
@@ -224,40 +226,35 @@ export default function AllModelsOverview(): JSX.Element {
   return (
     <div className="options-menu__all-models">
       <button className="options-menu__action" onClick={() => void openPage()}>
-        Tous les modèles
+        {t('models.all')}
       </button>
       {open &&
         createPortal(
-          <div className="options-page options-page--models" role="dialog" aria-modal="true" aria-label="Tous les modèles de Jaris">
+          <div className="options-page options-page--models" role="dialog" aria-modal="true" aria-label={t('models.all.label')}>
             <header className="options-page__header">
               <div>
                 <span className="options-page__eyebrow">Jaris</span>
-                <h2>Tous les modèles</h2>
+                <h2>{t('models.all')}</h2>
               </div>
               <button className="options-page__close" onClick={() => setOpen(false)}>
-                Fermer
+                {t('common.close')}
               </button>
             </header>
             <div className="options-page__body options-page__body--models">
               <main className="options-page__workspace">
                 <div className="options-page__content">
                   <div className="options-page__tab-header">
-                    <h3>Tous les modèles candidats</h3>
-                    <p>
-                      Tous les modèles que Jaris connaît, dans une seule liste. Pour chaque rôle, Jaris cherche
-                      dans toute la liste : le plus intelligent parmi les plus rapides pour Faible, le plus intelligent qui tient sur ta carte
-                      pour Moyen, le plus intelligent tout court pour Élevé et Code. La catégorie sert
-                      seulement à repérer les modèles rapides ou puissants.
-                    </p>
+                    <h3>{t('models.candidates')}</h3>
+                    <p>{t('models.candidates.hint')}</p>
                   </div>
-                  {loading && <p className="capacity-scan__status">Chargement...</p>}
+                  {loading && <p className="capacity-scan__status">{t('common.loading')}</p>}
 
                   {overview && <UnscoredModelsTest />}
                   {overview && (
                     <SortBar sort={sort} onSort={toggleSort} onReset={() => setSort(null)} query={query} onQuery={setQuery} />
                   )}
                   {sortedEntries && sortedEntries.length === 0 && (
-                    <p className="options-menu__model-search-empty">Aucun modèle ne correspond à « {query.trim()} ».</p>
+                    <p className="options-menu__model-search-empty">{t('models.search.none', { query: query.trim() })}</p>
                   )}
                   {/* Étape 160 : UN seul tableau. Chaque rôle de Jaris cherche dans tous les modèles ; la colonne
                       Catégorie n'est qu'un repère pour lire la liste, jamais un critère de choix. */}
@@ -267,9 +264,9 @@ export default function AllModelsOverview(): JSX.Element {
                         <table className="options-menu__model-overview">
                           <thead>
                             <tr>
-                              <th>Modèle</th>
-                              <th>Catégorie</th>
-                              <th>Utilisé par Jaris</th>
+                              <th>{t('models.col.model')}</th>
+                              <th>{t('models.col.category')}</th>
+                              <th>{t('models.col.used')}</th>
                               <th className="options-menu__col-num">
                                 <SortButton sortKey="vramGb" sort={sort} onSort={toggleSort} />
                               </th>
@@ -277,14 +274,14 @@ export default function AllModelsOverview(): JSX.Element {
                                 <SortButton sortKey="toolCalling" sort={sort} onSort={toggleSort} />
                               </th>
                               {/* Étape 243 : les 48 vraies demandes de bout en bout, à côté des questions isolées. */}
-                              <th className="options-menu__col-num" title="Vraies demandes réussies de bout en bout, sur 48">
+                              <th className="options-menu__col-num" title={t('models.col.demands.title')}>
                                 <SortButton sortKey="demands" sort={sort} onSort={toggleSort} />
                               </th>
                               {/* Intelligence Index lu directement chez Artificial Analysis. */}
                               <th className="options-menu__col-num" title="Artificial Analysis Intelligence Index v4.3.2">
                                 <SortButton sortKey="artificialAnalysisIndex" sort={sort} onSort={toggleSort} />
                               </th>
-                              <th className="options-menu__col-num" title="Vitesse de génération publiée par Artificial Analysis (tokens/s)">
+                              <th className="options-menu__col-num" title={t('models.col.speed.title')}>
                                 <SortButton sortKey="artificialAnalysisSpeed" sort={sort} onSort={toggleSort} />
                               </th>
                             </tr>
@@ -296,18 +293,18 @@ export default function AllModelsOverview(): JSX.Element {
                                   {formatModelName(entry.model)}
                                 </td>
                                 <td>
-                                  {entry.category ? CATEGORY_LABELS[entry.category] : '—'}
-                                  {entry.readsImages ? ' · lit les images' : ''}
+                                  {entry.category ? t(CATEGORY_LABELS[entry.category]) : '—'}
+                                  {entry.readsImages ? ` · ${t('models.readsImages')}` : ''}
                                 </td>
-                                <td>{entry.usedIn?.length ? `Oui — ${entry.usedIn.join(', ')}` : 'Non'}</td>
-                                <td className="options-menu__col-num">{entry.vramGb} Go</td>
+                                <td>{entry.usedIn?.length ? t('models.usedIn', { roles: entry.usedIn.join(', ') }) : t('common.no')}</td>
+                                <td className="options-menu__col-num">{t('unit.gb', { value: entry.vramGb })}</td>
                                 <td className="options-menu__col-num">
                                   <ReliabilityBadge value={entry.toolCalling} />
                                 </td>
                                 <td className="options-menu__col-num">
                                   <ReliabilityBadge value={entry.demands ?? null} />
                                 </td>
-                                <td className="options-menu__col-num">{entry.artificialAnalysisIndex === null ? 'Non publié' : formatIntelligenceIndex(entry.artificialAnalysisIndex)}</td>
+                                <td className="options-menu__col-num">{entry.artificialAnalysisIndex === null ? t('models.notPublished') : formatIntelligenceIndex(entry.artificialAnalysisIndex)}</td>
                                 <td className="options-menu__col-num">{entry.artificialAnalysisSpeed ?? '—'}</td>
                               </tr>
                             ))}

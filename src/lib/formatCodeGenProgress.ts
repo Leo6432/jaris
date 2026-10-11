@@ -1,4 +1,5 @@
 import type { CodeGenProgress, CodeLiveWrite } from '../../shared/ipc'
+import { t, tn, type MessageKey } from '../../shared/i18n'
 
 /**
  * Ce que Léo lit pendant qu'une génération tourne (mode Code, étape 99) — le seul retour qu'il ait pendant
@@ -23,11 +24,11 @@ export const ELAPSED_HINT_MS = 10_000
 /** "45 s", "1 min 12", "2 h 05" — durée parlée, jamais un nombre de millisecondes. */
 export function formatDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.round(ms / 1000))
-  if (totalSeconds < 60) return `${totalSeconds} s`
+  if (totalSeconds < 60) return t('duration.seconds', { s: totalSeconds })
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
-  if (minutes < 60) return `${minutes} min ${String(seconds).padStart(2, '0')}`
-  return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}`
+  if (minutes < 60) return t('duration.minutes', { m: minutes, s: String(seconds).padStart(2, '0') })
+  return t('duration.hours', { h: Math.floor(minutes / 60), m: String(minutes % 60).padStart(2, '0') })
 }
 
 /**
@@ -49,14 +50,14 @@ export interface CodeLiveText {
   stall: string | null
 }
 
-const PHASE_ACTION: Record<CodeGenProgress['phase'], string> = {
-  loading: 'Charge le modèle…',
-  reading: 'Prépare sa réponse…',
-  thinking: 'Réfléchit…',
-  writing: 'Écrit…'
+const PHASE_ACTION: Record<CodeGenProgress['phase'], MessageKey> = {
+  loading: 'code.phase.loading',
+  reading: 'code.phase.reading',
+  thinking: 'code.phase.thinking',
+  writing: 'code.phase.writing'
 }
 
-const LIVE_VERB: Record<CodeLiveWrite['kind'], string> = { write: 'Écrit', edit: 'Modifie', review: 'Relit' }
+const LIVE_VERB: Record<CodeLiveWrite['kind'], MessageKey> = { write: 'code.live.write', edit: 'code.live.edit', review: 'code.live.review' }
 
 export function formatCodeLive(live: CodeLiveWrite | null, progress: CodeGenProgress | null): CodeLiveText {
   const idle = progress?.idleMs ?? 0
@@ -64,20 +65,20 @@ export function formatCodeLive(live: CodeLiveWrite | null, progress: CodeGenProg
   const started = progress !== null && (progress.phase === 'thinking' || progress.phase === 'writing')
   const stall = started
     ? idle >= STALL_HINT_MS
-      ? `rien reçu du modèle depuis ${formatDuration(idle)}`
+      ? t('code.stall.started', { duration: formatDuration(idle) })
       : null
     : idle >= START_STALL_HINT_MS
-      ? `toujours rien après ${formatDuration(idle)}`
+      ? t('code.stall.start', { duration: formatDuration(idle) })
       : null
   const elapsed = !started && !stall && idle >= ELAPSED_HINT_MS ? formatDuration(idle) : null
   if (live) {
     return {
-      action: LIVE_VERB[live.kind],
+      action: t(LIVE_VERB[live.kind]),
       path: live.path,
-      lines: live.lines > 0 ? `+${live.lines} ${live.lines === 1 ? 'ligne' : 'lignes'}` : null,
+      lines: live.lines > 0 ? `+${tn('code.live.lines', live.lines)}` : null,
       elapsed: null,
       stall: started ? stall : null
     }
   }
-  return { action: progress ? PHASE_ACTION[progress.phase] : PHASE_ACTION.reading, path: null, lines: null, elapsed, stall }
+  return { action: t(progress ? PHASE_ACTION[progress.phase] : PHASE_ACTION.reading), path: null, lines: null, elapsed, stall }
 }

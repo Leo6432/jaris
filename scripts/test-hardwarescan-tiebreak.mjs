@@ -5,6 +5,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import { promisify } from 'node:util'
 import ts from 'typescript'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * Reproduit la question de Léo ("pourquoi on regarde pas les vrais benchmarks pour départager les 6/6 ?") :
@@ -53,7 +54,7 @@ function setup({ verifiedToolScoresMd = '', vramMib = 30 * 1024, ramGb = 32 } = 
   vm.runInNewContext(source, {
     exports,
     module: { exports },
-    require: (name) => modules[name] ?? nodeRequire(name)
+    require: withI18n((name) => modules[name] ?? nodeRequire(name))
   })
   return exports
 }

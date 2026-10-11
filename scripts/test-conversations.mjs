@@ -4,6 +4,7 @@ import * as nodePath from 'node:path'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * Plusieurs conversations dans le Chat (étape 96, demande de Léo : "avoir plusieurs conversation sur chat"),
@@ -59,7 +60,7 @@ function setup({ files = {} } = {}) {
     path: nodePath
   }
   const exports = {}
-  vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports } })
+  vm.runInNewContext(source, { exports, require: withI18n((name) => modules[name]), module: { exports } })
   return { ...exports, disk }
 }
 

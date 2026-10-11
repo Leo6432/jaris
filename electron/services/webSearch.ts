@@ -1,6 +1,7 @@
 import { config } from '../config'
 import { readSearxngContainerSettings } from './dependencyServices'
 import type { WebSource } from '../../shared/ipc'
+import { t } from '../../shared/i18n'
 
 interface SearxngResult {
   title: string
@@ -29,10 +30,7 @@ export async function searchWebDetailed(query: string): Promise<{ text: string; 
     response = await fetch(url)
   } catch {
     // Étape 234 (bêta) : ce message arrive tel quel à l'écran — « docker compose up -d » ne disait rien à Léo.
-    throw new Error(
-      `La recherche web ne répond pas : son service (SearXNG, que Jaris lance avec Docker Desktop) n'est pas démarré. ` +
-        `Jaris le démarre tout seul à l'ouverture ; si ça continue, ouvre Docker Desktop, attends qu'il soit prêt, puis réessaie. (${config.searxng.host})`
-    )
+    throw new Error(t('search.down', { host: config.searxng.host }))
   }
 
   if (!response.ok) {
@@ -62,18 +60,18 @@ export async function searchWebDetailed(query: string): Promise<{ text: string; 
     if (response.status === 403) {
       const containerSettings = await readSearxngContainerSettings()
       throw new Error(
-        `La recherche web est bloquée par SearXNG (erreur 403, format JSON refusé). Contenu renvoyé par ` +
-          `SearXNG : "${bodySnippet}". Fichier de configuration tel que le conteneur le voit RÉELLEMENT en ce ` +
-          `moment : ${containerSettings ? `"${containerSettings.slice(0, 500)}"` : 'impossible à lire (Docker indisponible ?)'}. ` +
-          `Transmets ce message exact en entier (les deux parties entre guillemets) pour qu'on trouve enfin la vraie cause.`
+        t('search.forbidden', {
+          body: bodySnippet,
+          settings: containerSettings ? `"${containerSettings.slice(0, 500)}"` : t('search.forbidden.unreadable')
+        })
       )
     }
-    throw new Error(`SearXNG a répondu ${response.status} : ${bodySnippet}`)
+    throw new Error(t('search.httpError', { status: response.status, body: bodySnippet }))
   }
 
   const data = (await response.json()) as SearxngResponse
   const results = (data.results ?? []).slice(0, MAX_RESULTS)
-  if (!results.length) return { text: `Aucun résultat trouvé pour "${query}".`, sources: [] }
+  if (!results.length) return { text: t('search.noResult', { query }), sources: [] }
 
   return {
     text: results.map((r, i) => `${i + 1}. ${r.title} — ${r.content ?? ''} (${r.url})`).join('\n'),

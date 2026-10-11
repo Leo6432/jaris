@@ -5,6 +5,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import { promisify } from 'node:util'
 import ts from 'typescript'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * Léo, sur la page "Tous les modèles" (Options → Modèles) : "fait pour rapide etc... celui qui faut le moin
@@ -48,7 +49,7 @@ function setup({ verifiedToolScoresMd = '', vramMib = 30 * 1024, ramGb = 32 } = 
   vm.runInNewContext(source, {
     exports,
     module: { exports },
-    require: (name) => modules[name] ?? nodeRequire(name)
+    require: withI18n((name) => modules[name] ?? nodeRequire(name))
   })
   return exports
 }

@@ -3,6 +3,7 @@ import { mkdir, readFile, readdir, rm, writeFile } from 'fs/promises'
 import { dirname, join } from 'path'
 import type { ConversationEntry, ConversationSummary } from '../../shared/ipc'
 import { getDataRoot } from './dataLocation'
+import { t } from '../../shared/i18n'
 
 /**
  * Jaris n'avait qu'UNE seule conversation continue, à dessein depuis l'étape 47 (voix et chat unifiés).
@@ -36,7 +37,11 @@ function entriesPath(id: string): string {
  */
 const MAX_HISTORY_ENTRIES = 300
 
-/** Nom par défaut d'une conversation tant qu'aucun message n'a été envoyé dedans. */
+/**
+ * Nom par défaut d'une conversation tant qu'aucun message n'a été envoyé dedans. C'est un MARQUEUR enregistré tel
+ * quel sur le disque (toujours ce texte français) : l'étape 293 le traduit à la lecture (listConversations), pour que
+ * changer de langue renomme aussi les conversations vides déjà créées.
+ */
 export const UNTITLED_CONVERSATION = 'Nouvelle conversation'
 
 interface ConversationsIndex {
@@ -127,7 +132,9 @@ export async function listConversations(): Promise<{ activeId: string; conversat
   const index = await readIndex()
   return {
     activeId: index.activeId,
-    conversations: [...index.conversations].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    conversations: [...index.conversations]
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map((c) => (c.title === UNTITLED_CONVERSATION ? { ...c, title: t('conv.untitled') } : c))
   }
 }
 

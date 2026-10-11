@@ -19,7 +19,8 @@ import {
   runEngine,
   sizeOf,
   type Log,
-  type PromptTranslate
+  type PromptTranslate,
+  type EngineWording
 } from './imageGenerator'
 import {
   DEFAULT_VIDEO_SECONDS,
@@ -38,6 +39,7 @@ import {
 import { imageLabelFromFileName, imageTimestampFromFileName, isGeneratedVideoFileName } from '../../shared/imageGallery'
 import { formatBytes } from '../../shared/formatBytes'
 import type { GeneratedVideoSummary, VideoStudioStatus } from '../../shared/ipc'
+import { t, type MessageKey } from '../../shared/i18n'
 
 /**
  * Mode Vidéo (étape 203, Léo : « ajoute vidéo : Wan 2.2-TI2V-5B »). Même moteur que les images (sd-cli de
@@ -56,7 +58,7 @@ import type { GeneratedVideoSummary, VideoStudioStatus } from '../../shared/ipc'
 export interface VideoModelFile {
   role: 'diffusion' | 'vae' | 't5xxl'
   fileName: string
-  label: string
+  label: MessageKey
   url: string
   bytes: number
   sha256: string
@@ -72,7 +74,7 @@ const COMFY_WAN21_REPO = 'https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repac
 const VIDEO_VAE: VideoModelFile = {
   role: 'vae',
   fileName: 'wan2.2_vae.safetensors',
-  label: 'le décodeur vidéo',
+  label: 'file.video.vae',
   url: 'https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/ee6f4a40737a995bf5818954cfce6d59443b0f04/split_files/vae/wan2.2_vae.safetensors',
   bytes: 1_409_400_960,
   sha256: 'e40321bd36b9709991dae2530eb4ac303dd168276980d3e9bc4b6e2b75fed156'
@@ -91,7 +93,7 @@ const VIDEO_VAE: VideoModelFile = {
 const FASTWAN_Q6: VideoModelFile = {
   role: 'diffusion',
   fileName: 'FastWan2.2-TI2V-5B-q6_k.gguf',
-  label: 'le modèle vidéo (FastWan 2.2 TI2V 5B, Q6)',
+  label: 'file.video.q6',
   url: `${FASTWAN_REPO}/FastWan2.2-TI2V-5B-q6_k.gguf`,
   bytes: 4_210_247_200,
   sha256: '416a87e30f2328dbefd7666ac90b395ead74f443748ff31c83483ac4ac6121cc'
@@ -108,7 +110,7 @@ export const VIDEO_QUALITY_FILES: Record<VideoQuality, { diffusion: VideoModelFi
     t5xxl: {
       role: 't5xxl',
       fileName: 'umt5-xxl-encoder-Q4_K_M.gguf',
-      label: 'le lecteur de description (UMT5, Q4)',
+      label: 'file.video.umt5q4',
       url: `${UMT5_REPO}/umt5-xxl-encoder-Q4_K_M.gguf`,
       bytes: 3_655_145_312,
       sha256: '17cf97a5bbbc60a646d6105b832b6f657ce904a8a1ad970e4b59df0c67584a40'
@@ -119,7 +121,7 @@ export const VIDEO_QUALITY_FILES: Record<VideoQuality, { diffusion: VideoModelFi
     t5xxl: {
       role: 't5xxl',
       fileName: 'umt5-xxl-encoder-Q6_K.gguf',
-      label: 'le lecteur de description (UMT5, Q6)',
+      label: 'file.video.umt5q6',
       url: `${UMT5_REPO}/umt5-xxl-encoder-Q6_K.gguf`,
       bytes: 4_667_283_296,
       sha256: '9209b4c77b34ad8cf3f06b04c6eaa27e7beeebb348a31f85e3b38a1d719b09ed'
@@ -129,7 +131,7 @@ export const VIDEO_QUALITY_FILES: Record<VideoQuality, { diffusion: VideoModelFi
     diffusion: {
       role: 'diffusion',
       fileName: 'FastWan2.2-TI2V-5B-q8_0.gguf',
-      label: 'le modèle vidéo (FastWan 2.2 TI2V 5B, Q8)',
+      label: 'file.video.q8',
       url: `${FASTWAN_REPO}/FastWan2.2-TI2V-5B-q8_0.gguf`,
       bytes: 5_412_844_128,
       sha256: 'b62f50ff87c4dfa2910c6883d45015e05b709366581698b302e259e7f25c9208'
@@ -137,7 +139,7 @@ export const VIDEO_QUALITY_FILES: Record<VideoQuality, { diffusion: VideoModelFi
     t5xxl: {
       role: 't5xxl',
       fileName: 'umt5-xxl-encoder-Q8_0.gguf',
-      label: 'le lecteur de description (UMT5, Q8)',
+      label: 'file.video.umt5q8',
       url: `${UMT5_REPO}/umt5-xxl-encoder-Q8_0.gguf`,
       bytes: 6_043_068_256,
       sha256: '2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc'
@@ -153,7 +155,7 @@ export const VIDEO_QUALITY_FILES: Record<VideoQuality, { diffusion: VideoModelFi
     diffusion: {
       role: 'diffusion',
       fileName: 'Wan2_2-TI2V-5B-FastWanFullAttn_bf16.safetensors',
-      label: 'le modèle vidéo (FastWan 2.2 TI2V 5B, original)',
+      label: 'file.video.original',
       url: `${KIJAI_REPO}/FastWan/Wan2_2-TI2V-5B-FastWanFullAttn_bf16.safetensors`,
       bytes: 9_999_659_744,
       sha256: '5f464f043fab64d43e61d6ee162316a445209c066027c4d8082d265b74ecd328'
@@ -161,7 +163,7 @@ export const VIDEO_QUALITY_FILES: Record<VideoQuality, { diffusion: VideoModelFi
     t5xxl: {
       role: 't5xxl',
       fileName: 'umt5_xxl_fp16.safetensors',
-      label: 'le lecteur de description (UMT5, original)',
+      label: 'file.video.umt5original',
       url: `${COMFY_WAN21_REPO}/split_files/text_encoders/umt5_xxl_fp16.safetensors`,
       bytes: 11_366_399_385,
       sha256: '7b8850f1961e1cf8a77cca4c964a358d303f490833c6c087d0cff4b2f99db2af'
@@ -266,7 +268,7 @@ export function buildVideoArgs({ models, prompt, output, seed, seconds, initImag
   ]
 }
 
-const VIDEO_WORDING = { step: 'Vidéo', finishing: 'Assemblage de la vidéo…', cancelled: 'Vidéo annulée.', kind: 'video' as const }
+const VIDEO_WORDING: EngineWording = { step: 'engine.step.video', finishing: 'engine.finishing.video', cancelled: 'engine.cancelled.video', kind: 'video' }
 
 /** Ce qui manque sur le disque pour une qualité (fichier absent ou pas à la bonne taille). */
 async function missingFiles(quality: VideoQuality): Promise<VideoModelFile[]> {
@@ -282,7 +284,7 @@ async function ensureVideoModels(quality: VideoQuality, onLog: Log): Promise<voi
   const missing = await missingFiles(quality)
   if (missing.length) {
     const total = missing.reduce((sum, f) => sum + f.bytes, 0)
-    onLog(`Modèle vidéo (${VIDEO_MODEL}, ${videoQualityLabel(quality)}) : ${formatBytes(total)} à télécharger, ça peut prendre un moment.`)
+    onLog(t('video.download.size', { model: VIDEO_MODEL, quality: videoQualityLabel(quality), size: formatBytes(total) }))
   }
   for (const file of missing) {
     await downloadVerified(file.url, join(videoModelsDir(), file.fileName), file, file.label, onLog)
@@ -293,18 +295,18 @@ async function ensureVideoModels(quality: VideoQuality, onLog: Log): Promise<voi
 async function assertQualityFits(quality: VideoQuality): Promise<void> {
   const { vramGb } = await detectGpu()
   const pick = availableVideoQualities(vramGb, detectRamGb())
-  if (!pick.qualities.length) throw new Error(`Ton PC n'a pas assez de puissance pour créer des vidéos : ${pick.reason}.`)
+  if (!pick.qualities.length) throw new Error(t('video.install.notCapable', { reason: pick.reason ?? '' }))
   if (!pick.qualities.includes(quality)) {
     const level = VIDEO_QUALITIES.find((q) => q.id === quality)
     throw new Error(
-      `La qualité ${videoQualityLabel(quality)} demande une carte graphique de ${level?.vramLabel} Go et ${level?.ramLabel} Go de RAM : choisis une qualité plus légère.`
+      t('video.qualityTooHeavy', { quality: videoQualityLabel(quality), vram: level?.vramLabel ?? '', ram: level?.ramLabel ?? '' })
     )
   }
 }
 
 /** Installé à la demande, depuis le mode Vidéo : le moteur (s'il manque) puis les fichiers de la qualité choisie. */
 export async function installVideoModel(quality: VideoQuality = 'q6', onLog: Log = () => {}): Promise<void> {
-  if (process.platform !== 'win32') throw new Error("La création de vidéos n'est disponible que sur Windows pour l'instant.")
+  if (process.platform !== 'win32') throw new Error(t('video.install.windowsOnly'))
   await assertQualityFits(quality)
   await ensureEngine(onLog)
   await ensureVideoModels(quality, onLog)
@@ -335,25 +337,25 @@ export async function generateVideo(
   // Étape 292 : comme les images, une demande tapée en français est d'abord traduite (le modèle vidéo lit l'anglais).
   translate?: PromptTranslate
 ): Promise<GeneratedVideoFile> {
-  if (process.platform !== 'win32') throw new Error("La création de vidéos n'est disponible que sur Windows pour l'instant.")
+  if (process.platform !== 'win32') throw new Error(t('video.install.windowsOnly'))
   const text = cleanPrompt(prompt)
-  if (!text) throw new Error("Je n'ai pas de description de la vidéo : dis-moi ce que tu veux voir.")
+  if (!text) throw new Error(t('video.noPrompt'))
   await assertQualityFits(quality)
   claimEngine('video')
   let initPath: string | undefined
   try {
     if (!(await isVideoQualityInstalled(quality))) {
       throw new Error(
-        `La qualité ${videoQualityLabel(quality)} n'est pas encore téléchargée : télécharge-la depuis le bouton de qualité du mode Vidéo.`
+        t('video.qualityNotDownloaded', { quality: videoQualityLabel(quality) })
       )
     }
-    if (signal?.aborted) throw new Error('Vidéo annulée.')
+    if (signal?.aborted) throw new Error(t('engine.cancelled.video'))
     // Avant de libérer la carte graphique : la traduction utilise un modèle d'Ollama.
     const drawn = await drawingPrompt(text, onLog, translate)
-    if (signal?.aborted) throw new Error('Vidéo annulée.')
+    if (signal?.aborted) throw new Error(t('engine.cancelled.video'))
 
     const unloaded = await unloadOllamaModels()
-    if (unloaded.length) onLog(`Carte graphique libérée pour la vidéo (${unloaded.join(', ')} déchargé).`)
+    if (unloaded.length) onLog(t('video.gpuFreed', { models: unloaded.join(', ') }))
 
     const dir = generatedVideosDir()
     await mkdir(dir, { recursive: true })
@@ -364,7 +366,7 @@ export async function generateVideo(
       initPath = join(dir, `.depart-${fileName}.${initImage.extension}`)
       await writeFile(initPath, initImage.bytes)
     }
-    onLog('Préparation de la vidéo…')
+    onLog(t('video.preparing'))
     await runEngine(
       engineExe(),
       buildVideoArgs({
@@ -379,7 +381,7 @@ export async function generateVideo(
       signal,
       VIDEO_WORDING
     )
-    if (!((await sizeOf(output)) ?? 0)) throw new Error("Le moteur a terminé sans créer de vidéo.")
+    if (!((await sizeOf(output)) ?? 0)) throw new Error(t('video.noOutput'))
     return { path: output, fileName }
   } finally {
     if (initPath) await rm(initPath, { force: true })
@@ -407,7 +409,7 @@ export async function listGeneratedVideos(): Promise<GeneratedVideoSummary[]> {
 
 /** Le nom vient de l'écran : revérifié ici, jamais un chemin. */
 export function generatedVideoPath(fileName: string): string {
-  if (!isGeneratedVideoFileName(fileName)) throw new Error('Vidéo inconnue.')
+  if (!isGeneratedVideoFileName(fileName)) throw new Error(t('video.unknown'))
   return join(generatedVideosDir(), fileName)
 }
 

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { withI18n } from './i18n-test-module.mjs'
 
 const source = ts.transpileModule(readFileSync(new URL('../electron/services/computerUse.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
@@ -134,7 +135,7 @@ function setup(steps, inputResult, onFetch, elements = [], pilot = { profile: nu
   const prompts = []
   const exports = {}
   vm.runInNewContext(source, {
-    exports, Error, AbortSignal, AbortController, TextDecoder, require: name => modules[name],
+    exports, Error, AbortSignal, AbortController, TextDecoder, require: withI18n(name => modules[name]),
     // L'attente « wait » (1,2 s) passe tout de suite ; les délais d'inactivité (minutes) ne se déclenchent jamais ici.
     setTimeout: (fn, ms) => (ms <= 2000 ? fn() : 0), clearTimeout: () => {},
     fetch: async (url, options) => {
@@ -586,7 +587,7 @@ function silentOllama({ firstChunk = false } = {}) {
     './maiUi': maiUi, '../../shared/pilotModel': pilotModel, './uiAutomation': {}, './vision': {}
   }
   vm.runInNewContext(source, {
-    exports, Error, AbortSignal, AbortController, TextDecoder, require: (name) => modules[name],
+    exports, Error, AbortSignal, AbortController, TextDecoder, require: withI18n((name) => modules[name]),
     setTimeout: (fn, ms) => (timers.push({ fn, ms }), timers.length), clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].fn = null },
     fetch: async (_url, options) => {
       const aborted = new Promise((_, reject) => options.signal.addEventListener('abort', () => reject(new Error('aborted'))))

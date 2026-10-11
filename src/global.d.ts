@@ -1,6 +1,8 @@
 import type { ThinkValue } from '../shared/effort'
 import type { VideoQuality } from '../shared/videoModel'
+import type { LanguageSetting } from '../shared/i18n/languages'
 import type {
+  LanguageState,
   AppMode,
   GithubDeviceCode,
   GithubRepoSummary,
@@ -72,6 +74,10 @@ declare global {
       getSetupStatus: () => Promise<VoiceSetupStatusPayload>
       triggerWake: () => void
       notifyAudioEnded: () => void
+      /** Langue au chargement (synchrone), `null` si indisponible. Optionnel : absent des faux ponts des tests. */
+      getLanguageState?: () => LanguageState | null
+      setLanguage: (setting: LanguageSetting) => Promise<LanguageState>
+      onLanguageChanged?: (cb: (state: LanguageState) => void) => () => void
       getProfile: () => Promise<Profile | null>
       saveProfile: (profile: Profile) => Promise<void>
       openMemoryFolder: () => Promise<void>

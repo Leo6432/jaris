@@ -74,3 +74,19 @@ test('branché sur les demandes TAPÉES (Image, Vidéo, téléphone), pas sur l�
   const tools = readFileSync(new URL('../electron/services/tools.ts', import.meta.url), 'utf8')
   assert.match(tools, /generateImage\(String\(args\.prompt \?\? ''\), onLog, signal\)/)
 })
+
+// Étape 293 (24 langues) : Léo — « par exemple image il doit pas traduire en français ». La demande arrive dans la
+// langue choisie dans Jaris, et part TOUJOURS vers l'anglais : jamais vers la langue de l'interface.
+test('une demande écrite dans n’importe quelle langue part vers l’anglais, jamais vers la langue de Jaris', async () => {
+  assert.match(TRANSLATE_SYSTEM_PROMPT, /n'importe quelle langue/)
+  assert.match(TRANSLATE_SYSTEM_PROMPT, /jamais vers une autre langue/)
+  for (const [request, english] of [['ein Hund im Schnee', 'a dog in the snow'], ['кот на диване', 'a cat on a sofa']]) {
+    const m = fakeModel(english)
+    assert.deepEqual(await toEnglishPrompt(request, m.deps), { text: english, translated: true })
+    assert.equal(m.calls[0].messages[1].content, request)
+    assert.equal(m.calls[0].messages[0].content, TRANSLATE_SYSTEM_PROMPT)
+  }
+  // La consigne ne dépend pas de la langue de l'interface : aucune règle « réponds en <langue> » n'y est ajoutée.
+  const source = readFileSync(new URL('../electron/services/promptTranslator.ts', import.meta.url), 'utf8')
+  assert.doesNotMatch(source, /replyLanguage|currentLanguage/)
+})

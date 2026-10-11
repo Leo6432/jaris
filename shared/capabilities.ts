@@ -1,3 +1,4 @@
+import type { MessageKey } from './i18n'
 /**
  * Liste de ce que Jaris sait faire, affichée dans Options → Découvrir (étape 108, demande de Léo :
  * "dans les option tu peut mettre tout se que jaris peut faire" ; refondue à l'étape 111, "fait une
@@ -24,12 +25,14 @@
  * Une capacité SANS `toolNames` décrit une fonctionnalité de l'application elle-même (mode Code, plusieurs
  * conversations...), pas un appel d'outil : rien dans `tools.ts` ne peut la couvrir, donc rien ne l'exige.
  */
+// Étape 293 (24 langues) : chaque texte est une CLÉ du catalogue (shared/i18n/fr.ts), traduite au rendu. Le
+// français source de chaque clé reste lisible dans fr.ts, sous `capabilities.*`.
 export interface Capability {
-  title: string
+  title: MessageKey
   /** À quoi ça sert, en une phrase courte — jamais le détail de l'implémentation. */
-  description: string
+  description: MessageKey
   /** La phrase exacte à dire pour déclencher ça, affichée à part (sans guillemets : le rendu les ajoute). */
-  example?: string
+  example?: MessageKey
   /** Vrai pour une entrée qui explique ce que Jaris NE peut PAS faire : affichée en note, pas en carte. */
   limitation?: boolean
   /** Noms exacts dans `TOOLS` (tools.ts) si cette capacité correspond à un ou plusieurs outils précis.
@@ -38,197 +41,196 @@ export interface Capability {
 }
 
 export interface CapabilityGroup {
-  title: string
+  title: MessageKey
   /** Une ligne qui situe le groupe, affichée sous son titre. */
-  summary: string
+  summary: MessageKey
   /** Étiquette devant les exemples du groupe. "Dis" par défaut — le mode Code, lui, se pilote au clavier
    *  dans son propre champ, jamais à la voix : y afficher "Dis" serait une consigne fausse. */
-  exampleLabel?: string
+  exampleLabel?: MessageKey
   items: Capability[]
 }
 
 export const CAPABILITIES: CapabilityGroup[] = [
   {
-    title: 'Sur ton ordinateur',
-    summary: 'Jaris fait à ta place ce que tu ferais à la souris et au clavier.',
+    title: 'capabilities.g1.title',
+    summary: 'capabilities.g1.summary',
     items: [
       {
-        title: 'Ouvrir une application',
-        description: 'Cherche parmi tout ce qui est installé : rien à configurer, rien à tenir à jour.',
-        example: 'ouvre le bloc-notes',
+        title: 'capabilities.g1.i1.title',
+        description: 'capabilities.g1.i1.description',
+        example: 'capabilities.g1.i1.example',
         toolNames: ['open_app']
       },
       {
-        title: 'Écrire du texte à ta place',
-        description: 'Dicte, Jaris tape là où ton curseur clignote.',
+        title: 'capabilities.g1.i2.title',
+        description: 'capabilities.g1.i2.description',
         // Jamais de guillemets DANS un exemple : le rendu l'encadre déjà des siens (OptionsMenu.tsx), et
         // deux niveaux imbriqués donnaient « écris « bonjour... » » — vu sur une capture, pas en relecture.
-        example: 'écris merci beaucoup, à demain',
+        example: 'capabilities.g1.i2.example',
         toolNames: ['type_text']
       },
       {
-        title: 'Appuyer sur une touche, cliquer',
-        description: 'Valider, fermer, cliquer quelque part — sans lâcher ce que tu fais.',
-        example: 'appuie sur Entrée',
+        title: 'capabilities.g1.i3.title',
+        description: 'capabilities.g1.i3.description',
+        example: 'capabilities.g1.i3.example',
         toolNames: ['press_key', 'click_mouse']
       },
       {
-        title: 'Régler le son',
-        description: 'Volume, coupure du son, lecture, pause, piste suivante.',
-        example: 'baisse le son',
+        title: 'capabilities.g1.i4.title',
+        description: 'capabilities.g1.i4.description',
+        example: 'capabilities.g1.i4.example',
         toolNames: ['media_control']
       },
       {
-        title: 'Regarder ton écran',
-        description: 'Te décrit ce qui est affiché, ou répond à une question précise dessus.',
-        example: "qu'est-ce qu'il y a à l'écran ?",
+        title: 'capabilities.g1.i5.title',
+        description: 'capabilities.g1.i5.description',
+        example: 'capabilities.g1.i5.example',
         toolNames: ['look_at_screen']
       },
       {
-        title: 'Faire une tâche complète tout seul',
-        description: 'Plusieurs actions à la suite dans une appli ou un site, en arrière-plan quand l\'appli le permet : tu continues à te servir de ton PC. Plus lent : Jaris te prévient avant de s\'y mettre.',
-        example: 'ouvre YouTube et cherche un tuto guitare',
+        title: 'capabilities.g1.i6.title',
+        description: 'capabilities.g1.i6.description',
+        example: 'capabilities.g1.i6.example',
         toolNames: ['computer_use_task']
       },
       {
-        title: 'Dessiner une image',
-        description: "Crée l'image que tu décris, sur ton PC, et l'affiche dans le Chat. Son modèle s'installe avec les autres (Options → Modèles).",
-        example: 'dessine-moi un chat roux sur un canapé bleu',
+        title: 'capabilities.g1.i7.title',
+        description: 'capabilities.g1.i7.description',
+        example: 'capabilities.g1.i7.example',
         toolNames: ['generate_image']
       },
       {
-        title: "Te dire l'état de la machine",
-        description: 'Processeur, mémoire, carte graphique, température.',
-        example: 'ça chauffe, mon PC ?',
+        title: 'capabilities.g1.i8.title',
+        description: 'capabilities.g1.i8.description',
+        example: 'capabilities.g1.i8.example',
         toolNames: ['get_system_stats']
       },
       {
-        title: 'Éteindre ou redémarrer le PC',
-        description: 'Seulement si tu le demandes clairement — jamais de sa propre initiative.',
-        example: "éteins l'ordinateur",
+        title: 'capabilities.g1.i9.title',
+        description: 'capabilities.g1.i9.description',
+        example: 'capabilities.g1.i9.example',
         toolNames: ['shutdown_pc']
       }
     ]
   },
   {
-    title: 'Chercher une information',
-    summary: 'Pour ce que Jaris ne sait pas, ou ce qui a changé depuis.',
+    title: 'capabilities.g2.title',
+    summary: 'capabilities.g2.summary',
     items: [
       {
-        title: 'Chercher sur le web',
-        description: "Pour une info récente ou dont il n'est pas sûr. La recherche tourne sur ta machine, pas chez un service payant.",
-        example: 'quel temps il fait demain ?',
+        title: 'capabilities.g2.i1.title',
+        description: 'capabilities.g2.i1.description',
+        example: 'capabilities.g2.i1.example',
         toolNames: ['search_web']
       },
       {
-        title: 'Lire une page précise',
-        description: "Quand un extrait de recherche ne suffit pas : horaire exact, adresse, prix.",
-        example: 'lis-moi cette page et résume-la',
+        title: 'capabilities.g2.i2.title',
+        description: 'capabilities.g2.i2.description',
+        example: 'capabilities.g2.i2.example',
         toolNames: ['read_web_page']
       }
     ]
   },
   {
-    title: 'Se souvenir de toi',
-    summary: "Ce que tu lui dis une fois, il le garde — sur ton disque, jamais en ligne.",
+    title: 'capabilities.g3.title',
+    summary: 'capabilities.g3.summary',
     items: [
       {
-        title: 'Retenir quelque chose',
-        description: 'Une habitude, une préférence, un fait — retrouvé même après un redémarrage.',
-        example: 'retiens que je bois du thé, pas du café',
+        title: 'capabilities.g3.i1.title',
+        description: 'capabilities.g3.i1.description',
+        example: 'capabilities.g3.i1.example',
         toolNames: ['remember']
       },
       {
-        title: 'Te le ressortir plus tard',
-        description: 'Il relit ce qu\'il a noté dès que tu y fais référence.',
-        example: 'je bois quoi le matin, déjà ?',
+        title: 'capabilities.g3.i2.title',
+        description: 'capabilities.g3.i2.description',
+        example: 'capabilities.g3.i2.example',
         toolNames: ['recall_memory']
       },
       {
-        title: 'Te rappeler quelque chose à l\'heure dite',
-        description: 'Dit à voix haute au bon moment, même si Jaris a été relancé entre-temps.',
-        example: 'rappelle-moi de sortir le linge dans 10 minutes',
+        title: 'capabilities.g3.i3.title',
+        description: 'capabilities.g3.i3.description',
+        example: 'capabilities.g3.i3.example',
         toolNames: ['set_reminder']
       }
     ]
   },
   {
-    title: 'Créer une application (mode Code)',
-    summary: "Décris ce que tu veux, Jaris l'écrit et te le montre tout de suite.",
-    exampleLabel: 'Écris',
+    title: 'capabilities.g4.title',
+    summary: 'capabilities.g4.summary',
+    exampleLabel: 'capabilities.write',
     items: [
       {
-        title: 'Partir d\'une idée',
-        description: "Jaris écrit la page, se relit lui-même, et corrige ce qu'il trouve. Tu peux joindre une image comme modèle.",
-        example: 'un minuteur de cuisine avec un gros bouton'
+        title: 'capabilities.g4.i1.title',
+        description: 'capabilities.g4.i1.description',
+        example: 'capabilities.g4.i1.example'
       },
       {
-        title: 'Changer ce qui existe déjà',
-        description: 'Redemande un changement sur une application ouverte : elle est mise à jour sur place.',
-        example: 'mets le fond en noir et le texte en plus gros'
+        title: 'capabilities.g4.i2.title',
+        description: 'capabilities.g4.i2.description',
+        example: 'capabilities.g4.i2.example'
       },
       {
-        title: 'Retrouver tes créations',
-        description: "Elles restent toutes dans la colonne de gauche après un redémarrage, et tu peux en supprimer.",
+        title: 'capabilities.g4.i3.title',
+        description: 'capabilities.g4.i3.description',
       }
     ]
   },
   {
-    title: 'Créer des images (Image)',
-    summary: "Le bouton Image à gauche : Jaris dessine sur ton PC, sans rien envoyer sur internet. Tes images restent dans la liste.",
-    exampleLabel: 'Écris',
+    title: 'capabilities.g5.title',
+    summary: 'capabilities.g5.summary',
+    exampleLabel: 'capabilities.write',
     items: [
       {
-        title: 'Une image à partir d’une description',
-        description: 'Décris le sujet, le style et les couleurs : Jaris la dessine, puis tu peux l’enregistrer où tu veux.',
-        example: 'un chat astronaute sur la Lune, style aquarelle, tons bleus'
+        title: 'capabilities.g5.i1.title',
+        description: 'capabilities.g5.i1.description',
+        example: 'capabilities.g5.i1.example'
       },
       {
-        title: 'Retrouver tes images',
-        description: 'Toutes tes images, même celles demandées dans le Chat ou à la voix, sont dans la colonne de gauche.'
+        title: 'capabilities.g5.i2.title',
+        description: 'capabilities.g5.i2.description'
       }
     ]
   },
   {
-    title: 'Créer des vidéos (Vidéo)',
-    summary: "Le bouton Vidéo à gauche : Jaris crée une courte vidéo sur ton PC avec Wan 2.2. C'est lent : plusieurs minutes par vidéo.",
-    exampleLabel: 'Écris',
+    title: 'capabilities.g6.title',
+    summary: 'capabilities.g6.summary',
+    exampleLabel: 'capabilities.write',
     items: [
       {
-        title: 'Une vidéo à partir d’une description',
-        description: 'Décris la scène et ce qui bouge : Jaris crée de 1 à 5 secondes de vidéo (durée choisie avec l’horloge du champ), que tu peux enregistrer où tu veux.',
-        example: 'un chat roux marche dans la neige au coucher du soleil'
+        title: 'capabilities.g6.i1.title',
+        description: 'capabilities.g6.i1.description',
+        example: 'capabilities.g6.i1.example'
       },
       {
-        title: 'Animer une image',
-        description: 'Joins une image avec le « + » du champ et décris le mouvement : Jaris la fait bouger.'
+        title: 'capabilities.g6.i2.title',
+        description: 'capabilities.g6.i2.description'
       },
       {
-        title: 'Choisir la qualité',
-        description: "Le bouton étoile du champ : de Faible à Extra, plus fidèle mais plus lourde à chaque cran. Seules les qualités que ton PC peut faire tourner sont proposées."
+        title: 'capabilities.g6.i3.title',
+        description: 'capabilities.g6.i3.description'
       }
     ]
   },
   {
-    title: 'Discuter par écrit',
-    summary: "Le Chat, pour quand tu ne veux pas parler à voix haute.",
+    title: 'capabilities.g7.title',
+    summary: 'capabilities.g7.summary',
     items: [
       {
-        title: 'Plusieurs conversations séparées',
-        description: 'Comme sur ChatGPT : un fil par sujet, chacun avec son propre historique.'
+        title: 'capabilities.g7.i1.title',
+        description: 'capabilities.g7.i1.description'
       },
       {
-        title: 'Lui montrer une image',
-        description: 'Joins une photo ou une capture : Jaris la décrit, ou s\'en sert comme modèle en mode Code.'
+        title: 'capabilities.g7.i2.title',
+        description: 'capabilities.g7.i2.description'
       },
       {
-        title: 'Continuer à la voix',
-        description: 'Ce que tu dis à voix haute continue la conversation ouverte dans le Chat, et inversement.'
+        title: 'capabilities.g7.i3.title',
+        description: 'capabilities.g7.i3.description'
       },
       {
-        title: 'Depuis ton téléphone',
-        description:
-          'Options → Téléphone : écris à Jaris, parle-lui (il te répond à voix haute), crée des images et des vidéos et retrouve-les, de n’importe où, chiffré, sans appli à installer. Le téléphone montre si le PC est allumé et peut l’éteindre (avec une minute pour annuler) ; Jaris n’y tape ni ne clique jamais.'
+        title: 'capabilities.g7.i4.title',
+        description: 'capabilities.g7.i4.description'
       }
     ]
   }

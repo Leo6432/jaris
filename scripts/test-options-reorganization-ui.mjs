@@ -203,7 +203,7 @@ test('chaque page de réglages a son titre + sous-titre de la maquette (repéré
     for (const [tabName, title, subtitle] of [
       ['Voix', 'Voix', "La voix de Jaris, les périphériques qu'il utilise, et les façons de le réveiller."],
       ['Modèles', 'Modèles', 'Ce que ta machine fait tourner, et combien Jaris garde en tête pendant une conversation.'],
-      ['Général', 'Général', "L'application elle-même : version, fichiers, historique."]
+      ['Général', 'Général', "L'application elle-même : langue, version, fichiers, historique."]
     ]) {
       await page.click(`.options-menu__tab:has-text("${tabName}")`)
       await page.waitForSelector('.options-page__tab-header h3')
@@ -227,7 +227,7 @@ test('Général regroupe VRAIMENT mise à jour, fichiers/moteur local et histori
     // (maquette "Options Jaris.dc.html"), remis ici à l'étape 122 sur demande explicite de Léo ("deplace
     // Fichiers et moteur local avec dossier etc... dans général") — voir le test "Modèles regroupe..."
     // ci-dessous, qui vérifie qu'il a bien disparu de Modèles plutôt que d'avoir simplement été dupliqué.
-    assert.deepEqual(titles, ['Démarrage', 'Mise à jour', 'Fichiers et moteur local', 'Historique des conversations', 'Journal des demandes'])
+    assert.deepEqual(titles, ['Langue', 'Démarrage', 'Mise à jour', 'Fichiers et moteur local', 'Historique des conversations', 'Journal des demandes'])
     const content = await page.textContent('.options-page__content')
     assert.ok(content.includes('Rechercher une mise à jour'), 'la section mise à jour doit être présente')
     assert.ok(content.includes('Dossier de Jaris'), 'le déplacement du dossier de Jaris doit être présent')
@@ -725,7 +725,7 @@ test('Voix : le test du mot « Jaris » regroupe les essais en tableau — réus
       heard('', false, true)
     })
     await page.waitForFunction(() => document.querySelectorAll('.options-menu__wake-test-table tbody tr').length === 4)
-    assert.equal(await page.textContent('.options-menu__wake-test-summary'), '2 reconnu(s) sur 6')
+    assert.equal(await page.textContent('.options-menu__wake-test-summary'), 'Reconnu : 2 sur 6')
     const rows = await page.$$eval('.options-menu__wake-test-table tbody tr', (els) =>
       els.map((tr) => [...tr.cells].map((td) => td.textContent).concat(tr.className))
     )

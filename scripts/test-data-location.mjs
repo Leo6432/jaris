@@ -1,3 +1,4 @@
+import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -58,7 +59,7 @@ function loadStorage(defaultUserData, { exe = '/opt/Jaris/Jaris.exe', isPackaged
     vm.runInThisContext(`(function (exports, module, require, process) { ${transpile(path)} })`)(
       exports,
       { exports },
-      (name) => modules[name] ?? nodeRequire(name),
+      withI18n((name) => modules[name] ?? nodeRequire(name)),
       fakeProcess
     )
     return exports
@@ -85,6 +86,8 @@ function fillUserData(userData) {
   mkdirSync(join(userData, 'generated-apps', '2026-snake'), { recursive: true })
   writeFileSync(join(userData, 'generated-apps', '2026-snake', 'index.html'), '<html>Snake</html>')
   writeFileSync(join(userData, 'reminders.json'), '[]')
+  // Étape 293 : la langue choisie dans les réglages suit les données, sinon Jaris repart dans celle de Windows.
+  writeFileSync(join(userData, 'language.json'), '{"setting":"de"}')
   // Fichier INTERNE de Chromium : jamais copié avec nos données.
   mkdirSync(join(userData, 'Cache'), { recursive: true })
   writeFileSync(join(userData, 'Cache', 'data_0'), 'cache chromium')
@@ -177,6 +180,7 @@ test('« Déplacer » : copie d’abord, bascule du repère ensuite, effacement 
   await dataLocation.copyDataTo(newRoot, () => {})
   assert.ok(existsSync(join(userData, 'profile.json')), 'après la copie, les originaux sont encore là')
   assert.equal(readFileSync(join(newRoot, 'jaris-data', 'memory', 'Adresse.md'), 'utf8'), '# Adresse')
+  assert.equal(readFileSync(join(newRoot, 'jaris-data', 'language.json'), 'utf8'), '{"setting":"de"}', 'la langue choisie est emportée')
 
   dataLocation.switchStorageRoot(newRoot)
   assert.equal(JSON.parse(readFileSync(join(userData, 'storage-location.json'), 'utf8')).root, newRoot)

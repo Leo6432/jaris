@@ -2,6 +2,7 @@ import { app, safeStorage } from 'electron'
 import { readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import type { GithubRepoSummary } from '../../shared/ipc'
+import { t } from '../../shared/i18n'
 
 /**
  * GitHub pour le mode Code (étape 277). Léo : « pouvoir connecter Jaris à GitHub pour Code », pour « travailler
@@ -75,13 +76,13 @@ async function postForm(url: string, params: Record<string, string>, fetchImpl: 
     })
   } catch (err) {
     if (isAbort(err)) throw err
-    throw new GithubError(0, 'Impossible de joindre GitHub : vérifie ta connexion internet.')
+    throw new GithubError(0, t('github.err.offline'))
   }
   const text = await response.text()
   try {
     return JSON.parse(text) as Record<string, unknown>
   } catch {
-    throw new GithubError(response.status, `GitHub a répondu quelque chose d'illisible (code ${response.status}).`)
+    throw new GithubError(response.status, t('github.err.unreadable', { status: response.status }))
   }
 }
 
@@ -90,7 +91,7 @@ export async function requestDeviceCode(clientId: string, fetchImpl: FetchLike =
   const data = await postForm(DEVICE_CODE_URL, { client_id: clientId, scope: GITHUB_SCOPE }, fetchImpl)
   if (typeof data.error === 'string') throw deviceFlowError(data.error)
   if (typeof data.device_code !== 'string' || typeof data.user_code !== 'string') {
-    throw new GithubError(0, "GitHub n'a pas donné de code de connexion. Réessaie dans un instant.")
+    throw new GithubError(0, t('github.err.noCode'))
   }
   return {
     deviceCode: data.device_code,
@@ -110,15 +111,15 @@ function deviceFlowError(code: string): GithubError {
   switch (code) {
     case 'expired_token':
     case 'token_expired':
-      return new GithubError(0, 'Le code a expiré avant d\'être validé sur GitHub. Clique à nouveau sur « Se connecter à GitHub ».')
+      return new GithubError(0, t('github.err.expired'))
     case 'access_denied':
-      return new GithubError(0, 'La connexion a été refusée sur GitHub. Tu peux recommencer quand tu veux.')
+      return new GithubError(0, t('github.err.denied'))
     case 'device_flow_disabled':
-      return new GithubError(0, "La connexion par code n'est pas activée dans l'application GitHub de Jaris (case « Enable Device Flow »).")
+      return new GithubError(0, t('github.err.deviceFlow'))
     case 'incorrect_client_credentials':
-      return new GithubError(0, "GitHub ne reconnaît pas l'application de Jaris (identifiant client invalide).")
+      return new GithubError(0, t('github.err.badClient'))
     default:
-      return new GithubError(0, `GitHub a refusé la connexion (${code}).`)
+      return new GithubError(0, t('github.err.refused', { code }))
   }
 }
 
@@ -126,7 +127,7 @@ function deviceFlowError(code: string): GithubError {
 export function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(Object.assign(new Error('Connexion annulée.'), { name: 'AbortError' }))
+      reject(Object.assign(new Error(t('github.loginCancelled')), { name: 'AbortError' }))
       return
     }
     const timer = setTimeout(() => {
@@ -135,7 +136,7 @@ export function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> 
     }, ms)
     const onAbort = (): void => {
       clearTimeout(timer)
-      reject(Object.assign(new Error('Connexion annulée.'), { name: 'AbortError' }))
+      reject(Object.assign(new Error(t('github.loginCancelled')), { name: 'AbortError' }))
     }
     signal?.addEventListener('abort', onAbort, { once: true })
   })
@@ -252,7 +253,7 @@ export interface FileChange {
 /** « propriétaire/nom », refusé sinon : ce texte finit dans des URL de l'API. */
 export function parseFullName(fullName: string): { owner: string; repo: string } {
   const match = /^([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+)$/.exec(fullName.trim())
-  if (!match || match[2] === '.' || match[2] === '..') throw new GithubError(0, `Nom de dépôt invalide : ${fullName}`)
+  if (!match || match[2] === '.' || match[2] === '..') throw new GithubError(0, t('github.err.badName', { name: fullName }))
   return { owner: match[1], repo: match[2] }
 }
 
@@ -268,27 +269,27 @@ function branchPath(branch: string): string {
 export function githubHttpError(status: number, apiMessage: string | undefined, rateLimitRemaining: string | null): GithubError {
   const message = apiMessage ?? ''
   if (status === 401) {
-    return new GithubError(401, "Ta connexion à GitHub n'est plus valable (retirée ou expirée). Reconnecte-toi depuis le mode Code.", 'auth')
+    return new GithubError(401, t('github.err.auth'), 'auth')
   }
   if (/workflow/i.test(message)) {
-    return new GithubError(status, "GitHub refuse que Jaris modifie les fichiers .github/workflows (il faudrait une autorisation spéciale). Annule le changement de ce fichier puis réessaie.")
+    return new GithubError(status, t('github.err.workflows'))
   }
   if (status === 403 && rateLimitRemaining === '0') {
-    return new GithubError(403, 'GitHub limite le nombre de demandes pour le moment : réessaie dans quelques minutes.')
+    return new GithubError(403, t('github.err.rateLimit'))
   }
   if (status === 422 && /fast.?forward/i.test(message)) {
     return new GithubError(
       422,
-      "Le dépôt a changé sur GitHub depuis que Jaris l'a ouvert : rien n'a été écrasé. Annule tes changements, rouvre le dépôt pour repartir de la dernière version, puis redemande-les.",
+      t('github.err.conflict'),
       'conflict'
     )
   }
   if ((status === 422 || status === 403) && /protected/i.test(message)) {
-    return new GithubError(status, 'Cette branche est protégée sur GitHub : Jaris ne peut pas y enregistrer directement. Choisis une autre branche.')
+    return new GithubError(status, t('github.err.protected'))
   }
-  if (status === 404) return new GithubError(404, 'Introuvable sur GitHub (dépôt supprimé, renommé, ou sans accès pour ton compte).')
-  if (status === 409) return new GithubError(409, 'Ce dépôt est vide : ajoute au moins un premier fichier sur GitHub avant de travailler dessus avec Jaris.')
-  return new GithubError(status, `GitHub a répondu une erreur (code ${status}${message ? ` : ${message}` : ''}).`)
+  if (status === 404) return new GithubError(404, t('github.err.notFound'))
+  if (status === 409) return new GithubError(409, t('github.err.emptyRepo'))
+  return new GithubError(status, t('github.err.generic', { code: `${status}${message ? ` : ${message}` : ''}` }))
 }
 
 export class GithubClient {
@@ -314,7 +315,7 @@ export class GithubClient {
       })
     } catch (err) {
       if (isAbort(err)) throw err
-      throw new GithubError(0, 'Impossible de joindre GitHub : vérifie ta connexion internet.')
+      throw new GithubError(0, t('github.err.offline'))
     }
     const text = await response.text()
     let data: unknown = null
@@ -372,7 +373,7 @@ export class GithubClient {
       head = await this.request('GET', `/repos/${owner}/${repo}/branches/${branchPath(target)}`)
     } catch (err) {
       if (!(err instanceof GithubError) || err.status !== 404) throw err
-      if (branch) throw new GithubError(404, `La branche « ${branch} » n'existe pas (ou plus) sur GitHub.`)
+      if (branch) throw new GithubError(404, t('github.err.noBranch', { branch }))
       // Étape 279 (Léo : « pourquoi on peut pas même sans rien dans le dépôt ») : un dépôt tout neuf n'a encore
       // aucune branche. GitHub le dit en répondant 409 (« Git Repository is empty ») à la liste des commits : on
       // l'ouvre alors VIDE, et le premier enregistrement crée sa branche.
@@ -391,7 +392,7 @@ export class GithubClient {
           truncated: false
         }
       }
-      throw new GithubError(404, `La branche principale « ${info.default_branch} » est introuvable sur GitHub.`)
+      throw new GithubError(404, t('github.err.noDefaultBranch', { branch: info.default_branch }))
     }
     const tree = await this.request<{ tree: Array<{ path: string; type: string; sha: string; size?: number; mode: string }>; truncated?: boolean }>(
       'GET',
@@ -446,7 +447,7 @@ export class GithubClient {
    * deleted »), le reste par `content` : GitHub crée lui-même les blobs.
    */
   async commit(snapshot: RepoSnapshot, changes: FileChange[], message: string): Promise<{ sha: string; url: string }> {
-    if (changes.length === 0) throw new GithubError(0, "Il n'y a aucun changement à enregistrer.")
+    if (changes.length === 0) throw new GithubError(0, t('github.err.noChanges'))
     if (snapshot.commitSha === null || snapshot.treeSha === null) return this.firstCommit(snapshot, changes, message)
     return this.commitOnto(snapshot, { commitSha: snapshot.commitSha, treeSha: snapshot.treeSha }, changes, message)
   }
@@ -459,7 +460,7 @@ export class GithubClient {
    */
   private async firstCommit(snapshot: RepoSnapshot, changes: FileChange[], message: string): Promise<{ sha: string; url: string }> {
     const writes = changes.filter((change): change is { path: string; content: string } => change.content !== null)
-    if (writes.length === 0) throw new GithubError(0, "Le dépôt est vide : il n'y a aucun fichier à créer.")
+    if (writes.length === 0) throw new GithubError(0, t('github.err.nothingToCreate'))
     const [first, ...rest] = writes
     const created = await this.request<{ commit: { sha: string; html_url: string; tree: { sha: string } } }>(
       'PUT',

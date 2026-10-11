@@ -5,6 +5,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import { promisify } from 'node:util'
 import ts from 'typescript'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * Choix des modèles pour la machine RÉELLE (hardwareScan.ts).
@@ -61,7 +62,7 @@ function setup({ verifiedToolScoresMd = '', vramMib, ramGb = 32, installed = nul
   vm.runInNewContext(source, {
     exports,
     module: { exports },
-    require: (name) => modules[name] ?? nodeRequire(name)
+    require: withI18n((name) => modules[name] ?? nodeRequire(name))
   })
   return exports
 }

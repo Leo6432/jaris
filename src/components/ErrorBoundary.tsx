@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { t } from '@/lib/i18n'
 
 interface ErrorBoundaryProps {
   /** Nom de l'écran, tel que Léo le voit dans le menu (« Le Chat », « Le Cerveau de Jaris »...). */
@@ -33,13 +34,13 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     return (
       <div className="error-panel" role="alert">
         <div className="error-panel__card">
-          <h3 className="error-panel__title">{label} a rencontré un problème</h3>
+          <h3 className="error-panel__title">{t('error.title', { label })}</h3>
           <p className="error-panel__text">
-            Le reste de Jaris fonctionne toujours. Réessaie ; si ça recommence, redémarre Jaris.
+            {t('error.hint')}
           </p>
-          <p className="error-panel__detail">Détail : {message}</p>
+          <p className="error-panel__detail">{t('error.detail', { message })}</p>
           <div className="error-panel__actions">
-            <button onClick={() => this.setState({ message: null })}>Réessayer</button>
+            <button onClick={() => this.setState({ message: null })}>{t('common.retry')}</button>
           </div>
         </div>
       </div>

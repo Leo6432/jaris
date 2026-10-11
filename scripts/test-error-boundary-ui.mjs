@@ -174,9 +174,10 @@ test('App.tsx protège chaque écran (et on peut toujours quitter le Cerveau)', 
   for (const panel of ['ChatPanel', 'CodePanel', 'ImagePanel', 'VideoPanel', 'OptionsMenu']) {
     assert.match(app, new RegExp(`<ErrorBoundary [^>]*>\\s*<${panel}(?: embedded)?(?: navSlot=\\{[^}]+\\})? />`), `${panel} protégé`)
   }
-  assert.match(app, /<ErrorBoundary label="L'Agent vocal">\s*<div className="app app--voice[^"]*"/)
+  // Étape 293 : les noms d'écran passent par le catalogue (« L'Agent vocal » en français).
+  assert.match(app, /<ErrorBoundary label=\{t\('app\.boundary\.voice'\)\}>\s*<div className="app app--voice[^"]*"/)
   // Étape 265 : le Cerveau est un écran de la zone principale (plus un calque, qui passait sous les boutons
   // de Windows) — protégé comme les autres, et on en sort toujours par le rail, même s'il a planté.
-  assert.match(app, /<ErrorBoundary label="Le Cerveau de Jaris">\s*<MemoryBrain graph=/)
+  assert.match(app, /<ErrorBoundary label=\{t\('app\.boundary\.brain'\)\}>\s*<MemoryBrain graph=/)
   assert.match(app, /const selectMode = \(id: AppMode\): void => \{[^}]*setMemoryGraph\(null\)/)
 })

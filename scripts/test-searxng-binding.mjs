@@ -5,6 +5,7 @@ import test from 'node:test'
 import vm from 'node:vm'
 import { promisify } from 'node:util'
 import ts from 'typescript'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * Étape 103, demande de Léo après avoir demandé si le dépôt public contenait des données sensibles :
@@ -84,7 +85,7 @@ function setup({ binding = '0.0.0.0:8091', jsonStatus = 200 } = {}) {
   vm.runInNewContext(source, {
     exports,
     module: { exports },
-    require: (name) => modules[name] ?? nodeRequire(name),
+    require: withI18n((name) => modules[name] ?? nodeRequire(name)),
     // Globaux absents d'un contexte vm neuf : sans eux, isUp() planterait sur "fetch is not defined" et le
     // test échouerait pour une raison sans rapport avec ce qu'il vérifie.
     fetch: async (url) => ({ status: String(url).includes('format=json') ? currentJsonStatus : 200 }),

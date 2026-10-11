@@ -5,6 +5,7 @@ import vm from 'node:vm'
 import ts from 'typescript'
 import { modelChoiceModule } from './load-model-choice.mjs'
 import { systemPromptModule } from './load-system-prompt.mjs'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * PROMISE_WITHOUT_ACTION (assistant.ts) détecte une promesse d'action du modèle ("je vais faire X") sans
@@ -31,7 +32,7 @@ const modules = {
   './resourceMonitor': {}
 }
 const exports = {}
-vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports } })
+vm.runInNewContext(source, { exports, require: withI18n((name) => modules[name]), module: { exports } })
 const { PROMISE_WITHOUT_ACTION } = exports
 
 test('reproduit le vrai cas rapporté par Léo (étape 32) : un adverbe entre "je vais" et le verbe', () => {

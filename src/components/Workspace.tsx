@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { DeleteIcon } from '@/components/icons'
 import { useScreenActive, useShellSlots } from '@/lib/shellContext'
+import { t } from '@/lib/i18n'
 
 /**
  * Liste d'éléments + zone de travail, façon Claude/ChatGPT (étape 97, demande de Léo : "les conversation
@@ -85,7 +86,7 @@ export default function Workspace({
 
   const recents = (
     <div className="workspace__rail">
-      <div className="workspace__rail-label">Récents</div>
+      <div className="workspace__rail-label">{t('workspace.recents')}</div>
       {items.length === 0 ? (
         <p className="workspace__empty">{emptyLabel}</p>
       ) : (
@@ -96,7 +97,7 @@ export default function Workspace({
                   à la fenêtre, et Jaris se replierait en widget en plein milieu (piège de l'étape 93). */}
               {pendingDelete === item.id ? (
                 <div className="workspace__confirm">
-                  <span>{item.removeLabel?.question ?? `Supprimer « ${item.title} » ?`}</span>
+                  <span>{item.removeLabel?.question ?? t('workspace.deleteQuestion', { title: item.title })}</span>
                   <button
                     className="workspace__confirm-yes"
                     onClick={() => {
@@ -104,10 +105,10 @@ export default function Workspace({
                       onDelete(item.id)
                     }}
                   >
-                    {item.removeLabel?.action ?? 'Supprimer'}
+                    {item.removeLabel?.action ?? t('common.delete')}
                   </button>
                   <button className="workspace__confirm-no" onClick={() => setPendingDelete(null)}>
-                    Annuler
+                    {t('common.cancel')}
                   </button>
                 </div>
               ) : (
@@ -124,8 +125,8 @@ export default function Workspace({
                   <button
                     className="workspace__delete"
                     onClick={() => setPendingDelete(item.id)}
-                    title={`${item.removeLabel?.action ?? 'Supprimer'} ${item.title}`}
-                    aria-label={`${item.removeLabel?.action ?? 'Supprimer'} ${item.title}`}
+                    title={`${item.removeLabel?.action ?? t('common.delete')} ${item.title}`}
+                    aria-label={`${item.removeLabel?.action ?? t('common.delete')} ${item.title}`}
                   >
                     <DeleteIcon />
                   </button>

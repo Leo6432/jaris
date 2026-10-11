@@ -12,6 +12,7 @@ import { IMAGE_MODEL, pickImageModel } from '../../shared/imageModel'
 import { formatBytes } from '../../shared/formatBytes'
 import { imageLabelFromFileName, imageTimestampFromFileName, isGeneratedImageFileName } from '../../shared/imageGallery'
 import type { GeneratedImageSummary, ImageStudioStatus } from '../../shared/ipc'
+import { t, type MessageKey } from '../../shared/i18n'
 
 /**
  * Génération d'images en local (étape 173, Léo : « existe-t-il des modèles locaux image » puis « oui » à
@@ -46,7 +47,8 @@ export interface ImageModelFile {
   /** Rôle dans la ligne de commande de sd-cli. */
   role: 'diffusion' | 'vae' | 'llm'
   fileName: string
-  label: string
+  /** Ce que c'est, dans les messages de téléchargement (clé du catalogue, traduite au moment du message). */
+  label: MessageKey
   url: string
   bytes: number
   sha256: string
@@ -56,7 +58,7 @@ export const IMAGE_MODEL_FILES: ImageModelFile[] = [
   {
     role: 'diffusion',
     fileName: 'flux-2-klein-4b-Q4_0.gguf',
-    label: 'le modèle de dessin (FLUX.2 klein)',
+    label: 'file.image.diffusion',
     url: 'https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF/resolve/3b1f5a9dc3abb32238b053aeb3d823c30afdacbd/flux-2-klein-4b-Q4_0.gguf',
     bytes: 2_460_378_560,
     sha256: 'd1023499ef3f2f82ff7c50e6778495195c1b6cc34835741778868428111f9ff4'
@@ -64,7 +66,7 @@ export const IMAGE_MODEL_FILES: ImageModelFile[] = [
   {
     role: 'vae',
     fileName: 'flux2-vae.safetensors',
-    label: "le décodeur d'image",
+    label: 'file.image.vae',
     url: 'https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/resolve/e7b7dc27f91deacad38e78976d1f2b499d76a294/vae/diffusion_pytorch_model.safetensors',
     bytes: 168_120_878,
     sha256: 'ca70d2202afe6415bdbcb8793ba8cd99fd159cfe6192381504d6c4d3036e0f04'
@@ -72,7 +74,7 @@ export const IMAGE_MODEL_FILES: ImageModelFile[] = [
   {
     role: 'llm',
     fileName: 'Qwen3-4B-Q4_K_M.gguf',
-    label: 'le lecteur de description (Qwen3 4B)',
+    label: 'file.image.llm',
     url: 'https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/22c9fc8a8c7700b76a1789366280a6a5a1ad1120/Qwen3-4B-Q4_K_M.gguf',
     bytes: 2_497_281_312,
     sha256: 'f6f851777709861056efcdad3af01da38b31223a3ba26e61a4f8bf3a2195813a'
@@ -156,16 +158,13 @@ export function parseSdProgress(line: string): { step: number; total: number } |
  */
 export function describeEngineFailure(code: number | null, lastLines: string[], kind: 'image' | 'video' = 'image'): string {
   const text = lastLines.join('\n')
-  const what = kind === 'video' ? 'créer la vidéo' : "dessiner l'image"
   if (/out of (device )?memory|ErrorOutOfDeviceMemory|failed to allocate/i.test(text)) {
-    return `Pas assez de mémoire pour ${what} (carte graphique ou RAM) : ferme les jeux ou logiciels lourds ouverts${kind === 'video' ? ', ou choisis une durée plus courte ou une qualité plus basse' : ''}, puis redemande.`
+    return t(kind === 'video' ? 'engine.oom.video' : 'engine.oom.image')
   }
   if (/vulkan/i.test(text) && /(fail|error|not found|no device)/i.test(text)) {
-    return `Ta carte graphique n'a pas pu être utilisée pour ${what} (Vulkan) : mets à jour le pilote de ta carte graphique, puis redemande.`
+    return t(kind === 'video' ? 'engine.vulkan.video' : 'engine.vulkan.image')
   }
-  const engine = kind === 'video' ? 'Le moteur vidéo' : "Le moteur d'images"
-  const unfinished = kind === 'video' ? 'sans finir la vidéo' : "sans finir l'image"
-  const codeText = code === null ? 'inconnu' : code > 0xffff ? `0x${(code >>> 0).toString(16).toUpperCase()}` : String(code)
+  const codeText = code === null ? t('engine.code.unknown') : code > 0xffff ? `0x${(code >>> 0).toString(16).toUpperCase()}` : String(code)
   const meaningful = lastLines.map((l) => l.trim()).filter(Boolean)
   // Une assertion de ggml s'écrit « …/ggml-backend.cpp:930: pre-allocated tensor … » : sans mot « error », elle
   // passait pour une ligne ordinaire et n'était jamais reprise (étape 212).
@@ -174,8 +173,9 @@ export function describeEngineFailure(code: number | null, lastLines: string[], 
     .slice(-3)
   const detail = (errors.length ? errors : meaningful.slice(-1)).join(' / ')
   // 0xC0000409 : Windows a arrêté le programme d'un coup (assertion interne, pile corrompue…) — sans message.
-  const brutal = (code ?? 0) >>> 0 === 0xc0000409 ? (errors.length ? ' — arrêt brutal' : ' — arrêt brutal, sans message du moteur') : ''
-  return `${engine} s'est arrêté ${unfinished} (code ${codeText}${brutal})${detail ? `. Dernière ligne : ${detail}` : ''}.`
+  const brutal = (code ?? 0) >>> 0 === 0xc0000409 ? ` — ${t(errors.length ? 'engine.brutal' : 'engine.brutalSilent')}` : ''
+  const stopped = t(kind === 'video' ? 'engine.stopped.video' : 'engine.stopped.image', { code: `${codeText}${brutal}` })
+  return detail ? t('engine.stoppedWithDetail', { stopped, detail }) : `${stopped}.`
 }
 
 export async function sha256OfFile(path: string): Promise<string> {
@@ -202,26 +202,24 @@ export async function downloadVerified(
   url: string,
   destination: string,
   expected: { bytes: number; sha256: string },
-  label: string,
+  labelKey: MessageKey,
   onLog: Log
 ): Promise<void> {
+  const label = t(labelKey)
   const temporary = `${destination}.download`
   let lastLoggedPercent = -10
   await downloadToFile(url, temporary, {
     onProgress: ({ receivedBytes, percent }) => {
       if (percent === null || percent - lastLoggedPercent < 10) return
       lastLoggedPercent = percent
-      onLog(`Téléchargement de ${label} : ${percent} % (${formatBytes(receivedBytes)} sur ${formatBytes(expected.bytes)})`)
+      onLog(t('download.fileProgress', { label, percent, received: formatBytes(receivedBytes), total: formatBytes(expected.bytes) }))
     }
   })
-  onLog(`Vérification de ${label}…`)
+  onLog(t('download.verifying', { label }))
   const digest = await sha256OfFile(temporary)
   if (digest !== expected.sha256) {
     await rm(temporary, { force: true })
-    throw new Error(
-      `Le fichier téléchargé pour ${label} ne correspond pas à l'original (fichier abîmé pendant le téléchargement) : ` +
-        'il a été effacé, redemande l’image pour le retélécharger.'
-    )
+    throw new Error(t('download.corrupt', { label }))
   }
   await rename(temporary, destination)
 }
@@ -255,8 +253,8 @@ export async function ensureEngine(onLog: Log): Promise<string> {
 
   await mkdir(imageEngineRoot(), { recursive: true })
   const zip = join(imageEngineRoot(), 'sd-cli.zip')
-  onLog('Installation du moteur d’images…')
-  await downloadVerified(SD_ENGINE.url, zip, SD_ENGINE, 'le moteur d’images', onLog)
+  onLog(t('engine.installing'))
+  await downloadVerified(SD_ENGINE.url, zip, SD_ENGINE, 'file.engine', onLog)
   const staging = `${binDir}.new`
   await rm(staging, { recursive: true, force: true })
   await mkdir(staging, { recursive: true })
@@ -266,10 +264,10 @@ export async function ensureEngine(onLog: Log): Promise<string> {
   try {
     await runExecFile(tar, ['-xf', zip, '-C', staging])
   } catch (err) {
-    throw new Error(`Impossible de décompresser le moteur d’images : ${err instanceof Error ? err.message : String(err)}`)
+    throw new Error(t('engine.unzipFailed', { error: err instanceof Error ? err.message : String(err) }))
   }
   if (!existsSync(join(staging, 'sd-cli.exe'))) {
-    throw new Error("Le moteur d'images téléchargé ne contient pas sd-cli.exe : téléchargement refusé.")
+    throw new Error(t('engine.noExe'))
   }
   await writeFile(join(staging, '.version'), SD_ENGINE.tag, 'utf-8')
   await rm(binDir, { recursive: true, force: true })
@@ -288,7 +286,7 @@ async function ensureModels(onLog: Log): Promise<void> {
   }
   if (missing.length) {
     const total = missing.reduce((sum, f) => sum + f.bytes, 0)
-    onLog(`Modèle d'image (${IMAGE_MODEL}) : ${formatBytes(total)} à télécharger, ça peut prendre plusieurs minutes.`)
+    onLog(t('image.download.size', { model: IMAGE_MODEL, size: formatBytes(total) }))
   }
   for (const file of missing) {
     await downloadVerified(file.url, paths[file.role], file, file.label, onLog)
@@ -301,7 +299,7 @@ async function ensureModels(onLog: Log): Promise<void> {
  * même moment que les modèles Ollama — jamais par un dessin.
  */
 export async function installImageModel(onLog: Log = () => {}): Promise<void> {
-  if (process.platform !== 'win32') throw new Error("La génération d'images n'est disponible que sur Windows pour l'instant.")
+  if (process.platform !== 'win32') throw new Error(t('image.install.windowsOnly'))
   await ensureEngine(onLog)
   await ensureModels(onLog)
 }
@@ -315,19 +313,20 @@ function killTree(pid: number | undefined, kill: () => void): void {
 }
 
 /** Ce que le journal dit pendant le calcul : « Dessin » pour une image, « Vidéo » pour une vidéo (étape 203). */
+/** Les mots de l'avancement du moteur — des clés du catalogue, traduites au moment du message (étape 293). */
 export interface EngineWording {
-  step: string
-  finishing: string
-  cancelled: string
+  step: MessageKey
+  finishing: MessageKey
+  cancelled: MessageKey
   /** Pour le message d'échec (étape 211) : « image » ou « vidéo ». */
   kind?: 'image' | 'video'
 }
 
-const IMAGE_WORDING: EngineWording = { step: 'Dessin', finishing: "Finition de l'image…", cancelled: 'Dessin annulé.' }
+const IMAGE_WORDING: EngineWording = { step: 'engine.step.image', finishing: 'engine.finishing.image', cancelled: 'engine.cancelled.image' }
 
 export function runEngine(exe: string, args: string[], onLog: Log, signal?: AbortSignal, wording: EngineWording = IMAGE_WORDING): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (signal?.aborted) return reject(new Error(wording.cancelled))
+    if (signal?.aborted) return reject(new Error(t(wording.cancelled)))
     const proc = spawn(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
     const lastLines: string[] = []
     let lastStep = 0
@@ -346,12 +345,12 @@ export function runEngine(exe: string, args: string[], onLog: Log, signal?: Abor
       clearTimeout(stall)
       stall = setTimeout(() => {
         killTree(proc.pid, () => proc.kill())
-        finish(new Error(`Le moteur d'images ne donne plus signe de vie depuis ${ENGINE_STALL_MS / 60_000} minutes : arrêté.`))
+        finish(new Error(t('engine.stalled', { minutes: ENGINE_STALL_MS / 60_000 })))
       }, ENGINE_STALL_MS)
     }
     const onAbort = (): void => {
       killTree(proc.pid, () => proc.kill())
-      finish(new Error(wording.cancelled))
+      finish(new Error(t(wording.cancelled)))
     }
     signal?.addEventListener('abort', onAbort)
     armStall()
@@ -365,14 +364,15 @@ export function runEngine(exe: string, args: string[], onLog: Log, signal?: Abor
         const progress = parseSdProgress(line)
         if (progress && progress.step !== lastStep) {
           lastStep = progress.step
-          onLog(`${wording.step} : étape ${progress.step} sur ${progress.total}`)
-          if (progress.step === progress.total) onLog(wording.finishing)
+          // Étape 293 : « Dessin : 2/4 » — une forme sans mot à traduire, que imageStepFromLog lit dans toutes les langues.
+          onLog(t('common.labelValue', { label: t(wording.step), value: `${progress.step}/${progress.total}` }))
+          if (progress.step === progress.total) onLog(t(wording.finishing))
         }
       }
     }
     proc.stdout?.on('data', onData)
     proc.stderr?.on('data', onData)
-    proc.on('error', (err) => finish(new Error(`Impossible de lancer le moteur d'images : ${err.message}`)))
+    proc.on('error', (err) => finish(new Error(t('engine.launchFailed', { error: err.message }))))
     proc.on('close', (code) => {
       if (code === 0) finish()
       else finish(new Error(describeEngineFailure(code, lastLines, wording.kind)))
@@ -411,8 +411,8 @@ export interface GeneratedImage {
 let busyWith: 'image' | 'video' | null = null
 
 export function claimEngine(kind: 'image' | 'video'): void {
-  if (busyWith === 'image') throw new Error("Je suis déjà en train de dessiner une image : attends qu'elle soit finie, puis redemande.")
-  if (busyWith === 'video') throw new Error("Je suis déjà en train de créer une vidéo : attends qu'elle soit finie, puis redemande.")
+  if (busyWith === 'image') throw new Error(t('engine.busy.image'))
+  if (busyWith === 'video') throw new Error(t('engine.busy.video'))
   busyWith = kind
 }
 
@@ -436,50 +436,50 @@ export type PromptTranslate = (prompt: string) => Promise<{ text: string; transl
  */
 export async function drawingPrompt(text: string, onLog: Log, translate?: PromptTranslate): Promise<string> {
   if (!translate) return text
-  onLog('Traduction de la demande pour le modèle de dessin…')
+  onLog(t('image.translating'))
   const result = await translate(text)
   const english = cleanPrompt(result.text)
   if (!result.translated || !english) return text
-  if (english.toLowerCase() !== text.toLowerCase()) onLog(`Demande traduite pour le dessin : « ${english} »`)
+  if (english.toLowerCase() !== text.toLowerCase()) onLog(t('image.translated', { text: english }))
   return english
 }
 
 export async function generateImage(prompt: string, onLog: Log = () => {}, signal?: AbortSignal, translate?: PromptTranslate): Promise<GeneratedImage> {
-  if (process.platform !== 'win32') throw new Error("La génération d'images n'est disponible que sur Windows pour l'instant.")
+  if (process.platform !== 'win32') throw new Error(t('image.install.windowsOnly'))
   const text = cleanPrompt(prompt)
-  if (!text) throw new Error("Je n'ai pas de description de l'image à dessiner : dis-moi ce que tu veux voir.")
+  if (!text) throw new Error(t('image.noPrompt'))
   // Étape 174 : même décision que la ligne « Image » d'Options → Modèles. Vérifié AVANT tout téléchargement :
   // 5 Go téléchargés pour une machine qui ne pourra jamais dessiner seraient 5 Go perdus.
   const { vramGb } = await detectGpu()
   const pick = pickImageModel(vramGb, detectRamGb())
-  if (!pick.model) throw new Error(`Ton PC n'a pas assez de puissance pour dessiner des images : ${pick.reason}.`)
+  if (!pick.model) throw new Error(t('image.notCapable', { reason: pick.reason ?? '' }))
   // Vérifié APRÈS l'attente ci-dessus, juste avant de le poser : deux demandes simultanées ne passent jamais toutes les deux.
   claimEngine('image')
   try {
     // Étape 175 : un dessin n'installe JAMAIS rien — c'est le rôle d'Options → Modèles, comme pour les autres modèles.
     if (!(await isImageModelInstalled())) {
-      throw new Error("Le modèle d'image n'est pas encore installé sur ce PC : ouvre Options → Modèles et clique « Retester la configuration ».")
+      throw new Error(t('image.notInstalled'))
     }
     const exe = engineExe()
     const models = modelPaths()
-    if (signal?.aborted) throw new Error('Dessin annulé.')
+    if (signal?.aborted) throw new Error(t('engine.cancelled.image'))
     // Avant de libérer la carte graphique : la traduction utilise un modèle d'Ollama.
     const drawn = await drawingPrompt(text, onLog, translate)
-    if (signal?.aborted) throw new Error('Dessin annulé.')
+    if (signal?.aborted) throw new Error(t('engine.cancelled.image'))
 
     // Le modèle de conversation est encore chargé sur la carte graphique (il vient de décider de dessiner) :
     // sans ce déchargement, les deux ne tiennent pas ensemble sur une carte 8 Go.
     const unloaded = await unloadOllamaModels()
-    if (unloaded.length) onLog(`Carte graphique libérée pour le dessin (${unloaded.join(', ')} déchargé).`)
+    if (unloaded.length) onLog(t('image.gpuFreed', { models: unloaded.join(', ') }))
 
     const dir = generatedImagesDir()
     await mkdir(dir, { recursive: true })
     const fileName = imageFileName(text, new Date())
     const output = join(dir, fileName)
-    onLog('Préparation du dessin…')
+    onLog(t('image.preparing'))
     await runEngine(exe, buildSdArgs({ models, prompt: drawn, output, seed: Math.floor(Math.random() * 2 ** 31) }), onLog, signal)
     if ((await sizeOf(output)) === null) {
-      throw new Error("Le moteur d'images a terminé sans créer d'image.")
+      throw new Error(t('image.noOutput'))
     }
     return { path: output, fileName }
   } finally {

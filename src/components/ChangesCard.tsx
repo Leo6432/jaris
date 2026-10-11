@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ChangedFile } from '@/lib/codeConversations'
+import { t, tn } from '@/lib/i18n'
 
 /**
  * La fin d'un travail en mode Code, comme sur ChatGPT (étape 290, Léo, capture à l'appui : « à la fin ça doit faire
@@ -57,7 +58,7 @@ function FileRow({ file }: { file: ChangedFile }): JSX.Element {
       <span className="changes-card__path" title={file.path}>
         {slash >= 0 && <span className="changes-card__dir">{file.path.slice(0, slash + 1)}</span>}
         <span className="changes-card__name">{file.path.slice(slash + 1)}</span>
-        {file.kind === 'deleted' && <span className="changes-card__deleted"> (supprimé)</span>}
+        {file.kind === 'deleted' && <span className="changes-card__deleted"> {t('changes.deleted')}</span>}
       </span>
       <span className="changes-card__stats">
         {file.added > 0 && <span className="repo-change__added">+{file.added}</span>}
@@ -75,13 +76,13 @@ export default function ChangesCard({ files, actions }: Props): JSX.Element {
   const hidden = files.length - VISIBLE_FILES
 
   return (
-    <section className="changes-card" aria-label="Fichiers modifiés">
+    <section className="changes-card" aria-label={t('changes.label')}>
       <header className="changes-card__head">
         <span className="changes-card__icon">
           <DiffIcon />
         </span>
         <span className="changes-card__summary">
-          <strong>{files.length === 1 ? '1 fichier modifié' : `${files.length} fichiers modifiés`}</strong>
+          <strong>{tn('changes.count', files.length)}</strong>
           <span className="changes-card__totals">
             <span className="repo-change__added">+{added}</span> <span className="repo-change__removed">−{removed}</span>
           </span>
@@ -94,9 +95,9 @@ export default function ChangesCard({ files, actions }: Props): JSX.Element {
                 className="changes-card__undo"
                 onClick={actions.onUndo}
                 disabled={actions.busy}
-                title="Annule ces changements : rien n'a encore été enregistré"
+                title={t('changes.undo.title')}
               >
-                Annuler <UndoIcon />
+                {t('common.cancel')} <UndoIcon />
               </button>
             )}
             <button type="button" className="changes-card__show" onClick={actions.onShow}>
@@ -122,7 +123,7 @@ export default function ChangesCard({ files, actions }: Props): JSX.Element {
       </ul>
       {hidden > 0 && (
         <button type="button" className="changes-card__more" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>
-          {expanded ? 'Afficher moins' : `Afficher ${hidden === 1 ? '1 autre fichier' : `${hidden} autres fichiers`}`} <ChevronIcon open={expanded} />
+          {expanded ? t('changes.showLess') : tn('changes.showMore', hidden)} <ChevronIcon open={expanded} />
         </button>
       )}
     </section>

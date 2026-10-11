@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto'
 import { mkdir, readFile, rename, writeFile } from 'fs/promises'
 import { dirname } from 'path'
 import type { PhoneDevice } from '../../shared/ipc'
+import { t } from '../../shared/i18n'
 
 interface StoredDevice extends PhoneDevice {
   /** SHA-256 du jeton : le jeton lui-même n'est jamais écrit sur le disque, seulement sur le téléphone. */
@@ -46,7 +47,7 @@ export class PhoneDeviceStore {
     const token = randomBytes(32).toString('base64url')
     const device: StoredDevice = {
       id: randomUUID(),
-      name: name.trim().slice(0, 60) || 'Téléphone',
+      name: name.trim().slice(0, 60) || t('phone.defaultName'),
       createdAt: new Date(now).toISOString(),
       lastSeenAt: new Date(now).toISOString(),
       tokenHash: hashToken(token).toString('hex')

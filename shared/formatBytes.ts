@@ -1,3 +1,4 @@
+import { currentLocale, t } from './i18n'
 /**
  * Taille de fichier lisible ("98 Mo", "1,5 Go"), en français (virgule décimale, "o" pour octets).
  *
@@ -7,12 +8,16 @@
  * piège déjà rencontré avec les types dupliqués de `shared/ipc.ts` et avec les deux composeurs (étape 92).
  */
 export function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 0) return '0 o'
+  // Étape 293 : les unités suivent la langue (« Go » en français, « GB » en anglais, « ГБ » en russe) et la virgule
+  // décimale aussi (Intl) : « 1,5 Go », « 1.5 GB ».
+  const decimal = (value: number): string =>
+    new Intl.NumberFormat(currentLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value)
+  if (!Number.isFinite(bytes) || bytes < 0) return t('unit.b', { value: 0 })
   const go = bytes / 1024 ** 3
-  if (go >= 1) return `${go.toFixed(1).replace('.', ',')} Go`
+  if (go >= 1) return t('unit.gb', { value: decimal(go) })
   const mo = bytes / 1024 ** 2
-  if (mo >= 1) return `${Math.round(mo)} Mo`
+  if (mo >= 1) return t('unit.mb', { value: Math.round(mo) })
   const ko = bytes / 1024
-  if (ko >= 1) return `${Math.round(ko)} Ko`
-  return `${Math.round(bytes)} o`
+  if (ko >= 1) return t('unit.kb', { value: Math.round(ko) })
+  return t('unit.b', { value: Math.round(bytes) })
 }

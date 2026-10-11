@@ -5,6 +5,7 @@ import vm from 'node:vm'
 import ts from 'typescript'
 import { modelChoiceModule } from './load-model-choice.mjs'
 import { loadTsModule } from './load-ts-module.mjs'
+import { withI18n } from './i18n-test-module.mjs'
 
 /**
  * Avancement et arrêt d'une génération en mode Code (étape 99).
@@ -83,7 +84,7 @@ function setup(responses, { onBeforeCall, loaded = async () => true } = {}) {
     './vision': { IMAGE_FOR_CODE_SYSTEM_PROMPT: 'prompt', describeImage: async () => 'une maquette' }
   }
   const exports = {}
-  vm.runInNewContext(source, { exports, require: (name) => modules[name], module: { exports }, console, ...TIMERS })
+  vm.runInNewContext(source, { exports, require: withI18n((name) => modules[name]), module: { exports }, console, ...TIMERS })
   return { exports, calls, statusLines, progress, written }
 }
 

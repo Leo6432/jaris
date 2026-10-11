@@ -1,5 +1,6 @@
 import { formatUpdateProgress } from '@/lib/formatUpdateProgress'
 import type { UpdateProgress } from '../../shared/ipc'
+import { t } from '@/lib/i18n'
 
 /**
  * Avancement d'une mise à jour de Jaris (étape 98), affiché sous le bouton "Mettre à jour" tant qu'elle
@@ -43,8 +44,8 @@ export default function AppUpdateProgress({
       <div className="options-menu__progress-sub">
         <span>
           {target === 'ollama'
-            ? "Laisse Jaris ouvert : c'est lui qui télécharge, et Ollama est un gros fichier (plusieurs minutes)."
-            : 'Ne ferme pas Jaris : il se ferme et se rouvre tout seul à la fin.'}
+            ? t('update.ollama.keepOpen')
+            : t('update.jaris.keepOpen')}
         </span>
       </div>
     </div>
