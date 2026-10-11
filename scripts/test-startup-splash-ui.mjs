@@ -55,6 +55,12 @@ function buildBundle() {
 const steps = (states) => ['engine', 'listening', 'voice', 'brain'].map((id, i) => ({ id, state: states[i] }))
 const state = (states, ready = false) => ({ ready, timedOut: false, steps: steps(states) })
 
+const mainSource = readFileSync(join(projectRoot, 'electron/main.ts'), 'utf8')
+const SPLASH = {
+  width: Number(/const SPLASH_WIDTH = (\d+)/.exec(mainSource)[1]),
+  height: Number(/const SPLASH_HEIGHT = (\d+)/.exec(mainSource)[1])
+}
+
 async function withSplash(initial, lang, run) {
   const css = readFileSync(globSync(join(projectRoot, 'out/renderer/assets/index-*.css'))[0], 'utf8')
   const messages = lang === 'fr' ? {} : JSON.parse(readFileSync(join(projectRoot, `shared/i18n/locales/${lang}.json`), 'utf8'))
@@ -62,7 +68,7 @@ async function withSplash(initial, lang, run) {
   const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
   try {
     const page = await browser.newPage()
-    await page.setViewportSize({ width: 360, height: 380 })
+    await page.setViewportSize(SPLASH)
     await page.setContent(`<!doctype html><html><head><style>${css}</style></head><body><div id="root"></div>${init}<script>${buildBundle()}</script></body></html>`)
     await page.waitForSelector('.startup__card')
     await run(page)
@@ -107,8 +113,7 @@ test('quand tout est prêt, la carte s’efface vraiment (Jaris apparaît juste 
     const opacity = await page.$eval('.startup__card', (el) => Number(getComputedStyle(el).opacity))
     assert.ok(opacity < 0.05, `opacité ${opacity} à la fin de la sortie`)
   })
-  const main = readFileSync(join(projectRoot, 'electron/main.ts'), 'utf8')
-  const exitMs = Number(/const SPLASH_EXIT_MS = (\d+)/.exec(main)?.[1])
+  const exitMs = Number(/const SPLASH_EXIT_MS = (\d+)/.exec(mainSource)?.[1])
   const css = readFileSync(join(projectRoot, 'src/index.css'), 'utf8')
   const outMs = Number(/\.startup--leaving \.startup__card \{\s*animation: startup-out (\d+)ms/.exec(css)?.[1])
   assert.ok(outMs > 0 && exitMs > outMs, `sortie ${outMs} ms, Jaris affiché après ${exitMs} ms`)
@@ -123,8 +128,15 @@ test('dans la langue de Jaris (ici l’allemand), sans un mot de français', opt
 
 test('la carte est décollée des bords de la fenêtre transparente (coins arrondis propres sous Windows)', options, async () => {
   await withSplash(state(['running', 'running', 'running', 'running']), 'fr', async (page) => {
+    // Mesure APRÈS les animations d'entrée (la carte et l'orbe grandissent en apparaissant).
+    await page.waitForTimeout(800)
     const box = await page.$eval('.startup__card', (el) => el.getBoundingClientRect().toJSON())
-    assert.ok(box.x >= 12 && box.y >= 12 && box.right <= 360 - 12 && box.bottom <= 380 - 12, JSON.stringify(box))
+    assert.ok(box.x >= 12 && box.y >= 12 && box.right <= SPLASH.width - 12 && box.bottom <= SPLASH.height - 12, JSON.stringify(box))
+    // Étape 295 : l'orbe agrandi tient dans la carte, sans pousser le texte ni le trait hors du cadre.
+    const orb = await page.$eval('.startup__card .jaris-orb, .startup__card canvas', (el) => el.getBoundingClientRect().toJSON())
+    assert.ok(orb.width >= 170, `orbe de ${orb.width}px`)
+    const bar = await page.$eval('.startup__bar', (el) => el.getBoundingClientRect().toJSON())
+    assert.ok(orb.top >= box.y && bar.bottom <= box.bottom - 16, JSON.stringify({ orb, bar, box }))
     assert.equal(await page.$eval('body', (el) => getComputedStyle(el).backgroundColor), 'rgba(0, 0, 0, 0)', 'fond transparent')
   })
 })

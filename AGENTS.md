@@ -7871,3 +7871,16 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `node --test scripts/test-startup.mjs scripts/test-startup-splash-ui.mjs scripts/test-model-preload.mjs`
   (étapes, échec et délai qui ne bloquent pas, rien d'affiché avant la fin, carte qui s'efface vraiment, même
   fenêtre de contexte partout). Chaque garde-fou vérifié en réintroduisant son défaut.
+
+- **Ouverture normale après l'écran de démarrage (étape 295, Léo : « quand ça ouvre ça met directement en widget, mais
+  ça doit ouvrir normalement », et « augmente un peu la taille de l'orbe »).** Cette entrée REMPLACE le choix noté
+  depuis l'étape 19 (« après la configuration, aucun panneau ne s'impose au démarrage, seul le widget apparaît ») :
+  une demande explicite qui contredit un choix noté ici gagne. Après la carte de démarrage, `revealAfterStartup` ouvre
+  maintenant la fenêtre de Jaris (taille normale ; en grand quand Windows l'a lancé à l'ouverture de session) ; le
+  widget reste préchargé et prend le relais quand on réduit Jaris ou qu'on passe sur une autre application. Le
+  drapeau `revealFullAfterStartup` (ouvrir la grande fenêtre si on la demandait pendant l'attente) n'a plus de raison
+  d'être et a été retiré. Orbe de la carte : 132 → 176 px, carte agrandie en conséquence (fenêtre 380×420) ; le test
+  navigateur lit la taille de la fenêtre dans main.ts et mesure l'orbe APRÈS les animations d'entrée — mesuré
+  pendant, il paraissait faire 160 px (la carte et l'orbe grandissent en apparaissant).
+  Régression : `node --test scripts/test-launch-at-startup.mjs scripts/test-widget-transition.mjs scripts/test-startup.mjs
+  scripts/test-startup-splash-ui.mjs`.

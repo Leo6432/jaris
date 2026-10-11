@@ -75,17 +75,17 @@ const mainSource = ts.transpileModule(readFileSync(join(projectRoot, 'electron/m
   compilerOptions: { removeComments: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext }
 }).outputText
 
-test('main.ts : lancé au démarrage, la fenêtre principale s’affiche en grand et le widget ne s’impose pas', () => {
+test('main.ts : lancé au démarrage, la fenêtre principale s’affiche en grand ; sinon elle s’ouvre normalement', () => {
   assert.match(mainSource, /revealAtLogin = onboardingDone && wasLaunchedAtLogin\(process\.argv\)/)
   const reveal = /if \(revealAtLogin\) \{[\s\S]*?setAlwaysOnTop\(false\)/.exec(mainSource)
   assert.ok(reveal, 'bloc d’affichage au démarrage introuvable')
   assert.match(reveal[0], /maximize\(\)/, 'la fenêtre doit couvrir le bureau')
   assert.match(reveal[0], /showFullWindow\(\)/, 'la fenêtre doit être affichée ET recevoir le focus')
-  // Étape 294 : l'affichage attend la fin de l'écran de démarrage ; au démarrage de Windows, la grande fenêtre
-  // s'affiche et la fonction s'arrête là — le widget ne s'impose qu'aux autres lancements.
+  // Étape 294 : l'affichage attend la fin de l'écran de démarrage ; au démarrage de Windows, la fenêtre s'ouvre en grand.
   assert.match(mainSource, /startup\.whenReady\(\(\) => void windowsLoaded\.then\(\(\) => revealAfterStartup\(revealAtLogin\)\)\)/)
   assert.match(reveal[0], /loginRevealUntil = Date\.now\(\) \+ LOGIN_REVEAL_GRACE_MS/, 'le délai de grâce part de l’affichage')
-  assert.match(mainSource, /setAlwaysOnTop\(false\);\s*return;\s*\}\s*\}\s*if \(revealFullAfterStartup\)\s*showFullWindow\(\);\s*else\s*showWidgetWindow\(\)/)
+  // Étape 295 (Léo : « ça doit ouvrir normalement ») : aux autres lancements, la fenêtre normale de Jaris, plus le widget.
+  assert.match(mainSource, /setAlwaysOnTop\(false\);\s*return;\s*\}\s*\}\s*showFullWindow\(\);\s*\}, SPLASH_EXIT_MS\)/)
 })
 
 test('main.ts : la perte de focus pendant l’ouverture de session ne replie pas la fenêtre en widget', () => {

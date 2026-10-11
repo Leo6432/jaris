@@ -113,7 +113,7 @@ const body = (name) => {
 
 test('rien ne s’affiche avant la fin du démarrage : widget, grande fenêtre, touche +, surveillance du widget', () => {
   assert.match(body('showWidgetWindow'), /^function showWidgetWindow\([^)]*\) \{\s*if \(!startupRevealed\)\s*return;/)
-  assert.match(body('showFullWindow'), /^function showFullWindow\(\) \{\s*if \(!startupRevealed\) \{\s*revealFullAfterStartup = true;/)
+  assert.match(body('showFullWindow'), /^function showFullWindow\(\) \{\s*if \(!startupRevealed\) \{\s*if \(splashWindow && !splashWindow\.isDestroyed\(\)\) \{\s*splashWindow\.show\(\);\s*splashWindow\.focus\(\);/)
   assert.match(body('triggerVisibleWake'), /if \(!startupRevealed \|\| modeWithoutWidget\(\)\)\s*return;/)
   assert.match(body('watchWidgetPresence'), /!startupRevealed/)
 })

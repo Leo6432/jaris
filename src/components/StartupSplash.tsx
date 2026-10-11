@@ -11,6 +11,9 @@ const STEP_LABEL: Record<StartupStepId, MessageKey> = {
   brain: 'startup.step.brain'
 }
 
+/** Étape 295 (Léo : « augmente un peu la taille de l'orbe ») : l'orbe porte la carte, le texte reste discret. */
+export const STARTUP_ORB_SIZE = 176
+
 const isTerminal = (state: string): boolean => state === 'done' || state === 'failed'
 
 /**
@@ -55,7 +58,7 @@ export default function StartupSplash(): JSX.Element {
   return (
     <div className={`startup${state?.ready ? ' startup--leaving' : ''}`}>
       <div className="startup__card" role="status" aria-live="polite" aria-label={t('startup.aria')}>
-        <JarisOrb emotion="idle" size={132} />
+        <JarisOrb emotion="idle" size={STARTUP_ORB_SIZE} />
         <div className="startup__name">Jaris</div>
         {/* La clé rejoue le fondu à chaque nouvelle étape annoncée. */}
         <div className="startup__step" key={headline}>

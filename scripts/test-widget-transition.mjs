@@ -69,12 +69,17 @@ test('la limite native du Chat exclut le halo transparent',()=>{
  assert.equal(context.exports.inside({x:330,y:74},bounds),false,'le halo inférieur doit déclencher la sortie')
 })
 
-test('après l’onboarding, la grande fenêtre reste cachée mais le widget inactif apparaît',()=>{
+// Étape 295 (Léo : « quand ça ouvre ça met directement en widget, mais ça doit ouvrir normalement ») : après l'écran
+// de démarrage, la fenêtre de Jaris s'ouvre ; le widget reste préchargé pour le moment où on la réduit.
+test('après l’onboarding, la fenêtre de Jaris s’ouvre après le démarrage, le widget reste prêt derrière',()=>{
  const source=ts.transpileModule(main,{compilerOptions:{removeComments:true,target:ts.ScriptTarget.ES2022}}).outputText
  assert.match(source,/fullWindow\s*=\s*createFullWindow\(!onboardingDone\)/)
  // Étape 294 : le widget apparaît quand le démarrage est fini et que ses fenêtres ont fait leur premier rendu.
  assert.match(source,/const windowsLoaded\s*=\s*Promise\.all\(\[windowLoaded\(fullWindow\),\s*windowLoaded\(widgetWindow\)\]\)/)
- assert.match(source,/function revealAfterStartup\([\s\S]*?else\s*showWidgetWindow\(\)/)
+ const reveal=source.slice(source.indexOf('function revealAfterStartup('),source.indexOf('function createWidgetWindow('))
+ assert.match(reveal,/showFullWindow\(\);\s*\}, SPLASH_EXIT_MS\)/)
+ assert.doesNotMatch(reveal,/showWidgetWindow\(/,'le widget ne doit plus s’imposer à l’ouverture')
+ assert.match(source,/widgetWindow\s*=\s*createWidgetWindow\(\)/)
  assert.match(source,/function triggerVisibleWake\(\)[\s\S]{0,500}showWidgetWindow\(true\)[\s\S]{0,200}pipeline\.triggerWake\(\)/)
 })
 

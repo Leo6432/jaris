@@ -254,8 +254,6 @@ let lastSetupStatus: VoiceSetupStatusPayload = { ready: true, missing: [] }
 const startup = new StartupProgress()
 let startupRevealed = false
 let splashWindow: BrowserWindow | null = null
-/** Ouvrir Jaris (icône, second lancement) pendant le démarrage : la grande fenêtre s'ouvrira à l'affichage. */
-let revealFullAfterStartup = false
 /** Le suivi du moteur et du modèle n'est lancé qu'au premier démarrage du pipeline, pas à ses relances. */
 let startupEngineTracked = false
 
@@ -524,8 +522,8 @@ function createFullWindow(showWhenReady = true): BrowserWindow {
  * de saisie Chat ; « Jaris » déplie aussi le widget vocal, qui revient ensuite à son petit état au repos.
  */
 /** Taille de l'écran de démarrage : la carte (index.css, .startup) plus une marge transparente tout autour. */
-const SPLASH_WIDTH = 360
-const SPLASH_HEIGHT = 380
+const SPLASH_WIDTH = 380
+const SPLASH_HEIGHT = 420
 /** Durée laissée à la carte pour s'effacer (animation de sortie, index.css) avant que Jaris apparaisse. */
 const SPLASH_EXIT_MS = 380
 /** Filet : une fenêtre de Jaris qui ne finirait jamais de se charger ne doit pas bloquer l'affichage. */
@@ -584,9 +582,8 @@ function windowLoaded(win: BrowserWindow): Promise<void> {
 }
 
 /**
- * Étape 294 — tout est prêt : la carte de démarrage joue sa sortie (elle vient de recevoir `ready`), puis Jaris
- * apparaît à sa place — le widget comme d'habitude, ou la grande fenêtre si on l'a demandée pendant l'attente, ou
- * en grand si Jaris a été lancé par Windows à l'ouverture de session (étape 165).
+ * Étape 294 — tout est prêt : la carte de démarrage joue sa sortie (elle vient de recevoir `ready`), puis la fenêtre
+ * de Jaris s'ouvre à sa place — en grand si Jaris a été lancé par Windows à l'ouverture de session (étape 165).
  */
 function revealAfterStartup(revealAtLogin: boolean): void {
   if (startupRevealed) return
@@ -611,8 +608,10 @@ function revealAfterStartup(revealAtLogin: boolean): void {
         return
       }
     }
-    if (revealFullAfterStartup) showFullWindow()
-    else showWidgetWindow()
+    // Étape 295 (Léo : « quand ça ouvre ça met directement en widget, mais ça doit ouvrir normalement ») : après
+    // l'écran de démarrage, la fenêtre de Jaris s'ouvre comme celle de n'importe quelle application. Le widget
+    // reste là où il était utile : quand on réduit Jaris ou qu'on passe sur une autre application.
+    showFullWindow()
   }, SPLASH_EXIT_MS)
 }
 
@@ -716,9 +715,8 @@ function positionWidgetWindow(win: BrowserWindow, expanded: boolean, animate = f
 
 /** Les deux fenêtres ne sont jamais visibles en même temps (sinon double lecture audio des réponses). */
 function showFullWindow(): void {
-  // Étape 294 : pendant le démarrage, l'écran d'accueil reste devant ; la grande fenêtre suivra quand tout sera prêt.
+  // Étape 294 : pendant le démarrage, l'écran d'accueil reste devant ; la grande fenêtre s'ouvre quand tout est prêt.
   if (!startupRevealed) {
-    revealFullAfterStartup = true
     if (splashWindow && !splashWindow.isDestroyed()) {
       splashWindow.show()
       splashWindow.focus()
@@ -2022,8 +2020,8 @@ app.whenReady().then(async () => {
   // d'ambiguïté d'agencement clavier) — visuellement c'est quand même la touche "+" cherchée à l'origine.
   registerWakeShortcut('numadd')
 
-  // Après la première configuration, aucun panneau ne s'impose au démarrage : Jaris écoute en arrière-plan
-  // et la barre apparaît seulement avec « Jaris » ou +. L'onboarding reste visible au premier lancement.
+  // Après la première configuration, l'écran de démarrage puis la fenêtre de Jaris (étapes 294-295) ; le widget
+  // prend le relais quand on la réduit ou qu'on passe sur une autre application. L'onboarding au premier lancement.
   const profile = await getProfile()
   onboardingDone = Boolean(profile?.capacityScanDone)
   // Étape 165 : lancé par Windows à l'ouverture de session (Options → Général), Jaris s'affiche en grand au
