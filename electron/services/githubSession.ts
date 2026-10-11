@@ -1,15 +1,18 @@
 import { config } from '../config'
 import { chosenThink } from '../../shared/effort'
-import type { CodeActivity, CodeGenProgress, CodeLiveWrite, CodeNarration, GithubDeviceCode, GithubRepoSummary, GithubStatus, RepoAgentResult, RepoChange, RepoCommitResult, RepoView } from '../../shared/ipc'
+import type { CodeActivity, CodeGenProgress, CodeLiveWrite, CodeNarration, GithubDeviceCode, GithubLostConnection, GithubRepoSummary, GithubStatus, RepoAgentResult, RepoChange, RepoCommitResult, RepoView } from '../../shared/ipc'
 import { GenerationStoppedError, createModelStepRunner, isAbortError, readModelMaxContext, resolveCodeModel } from './codeGenerator'
 import {
   GithubClient,
   GithubError,
+  clearConnectionRecord,
   clearGithubToken,
-  loadGithubToken,
   pollDeviceToken,
+  readConnectionRecord,
+  readGithubToken,
   requestDeviceCode,
   saveGithubToken,
+  writeConnectionRecord,
   type DeviceLogin,
   type RepoSnapshot
 } from './github'
@@ -21,8 +24,9 @@ import { t } from '../../shared/i18n'
 
 /**
  * État GitHub du mode Code (étape 277), côté main : compte connecté, dépôts ouverts et changements préparés par
- * Jaris en attente de vérification. Rien de tout ça n'est écrit sur le disque, à part le jeton chiffré
- * (github.ts) : fermer Jaris abandonne les changements non enregistrés, comme fermer un éditeur sans sauvegarder.
+ * Jaris en attente de vérification. Rien de tout ça n'est écrit sur le disque, à part le jeton chiffré et la trace
+ * de connexion sans le jeton (github.ts) : fermer Jaris abandonne les changements non enregistrés, comme fermer un
+ * éditeur sans sauvegarder.
  */
 
 interface RepoSession {
@@ -45,19 +49,41 @@ function clientId(): string {
   return config.github.clientId
 }
 
+/** Un jeton trouvé mais illisible au dernier essai (pour dire pourquoi Jaris n'est plus connecté). */
+let tokenUnreadable = false
+
 async function getClient(): Promise<GithubClient | null> {
   if (client) return client
-  const token = await loadGithubToken()
-  if (!token) return null
-  client = new GithubClient(token)
+  const stored = await readGithubToken()
+  tokenUnreadable = stored.unreadable
+  if (!stored.token) return null
+  client = new GithubClient(stored.token)
   return client
 }
 
-async function forget(): Promise<void> {
+/**
+ * Oublie la connexion. `rejected` : GitHub a refusé le jeton — la trace le note (étape 297) pour l'afficher ;
+ * sinon c'est Léo qui s'est déconnecté, et il n'y a rien à expliquer.
+ */
+async function forget(rejected = false): Promise<void> {
   client = null
   login = null
   sessions.clear()
   await clearGithubToken()
+  if (!rejected) {
+    await clearConnectionRecord()
+    return
+  }
+  const record = await readConnectionRecord()
+  if (record) await writeConnectionRecord({ ...record, rejectedAt: Date.now() })
+}
+
+/** Étape 297 : pas (ou plus) de jeton alors qu'une connexion avait été faite — dit pourquoi. */
+async function lostConnection(): Promise<GithubLostConnection | null> {
+  const record = await readConnectionRecord()
+  if (!record) return null
+  const reason = record.rejectedAt !== null ? 'rejected' : record.memoryOnly ? 'memoryOnly' : tokenUnreadable ? 'unreadable' : 'missing'
+  return { reason, login: record.login, connectedAt: record.connectedAt }
 }
 
 /** Toute demande à GitHub passe par ici : un jeton refusé (retiré sur github.com) déconnecte proprement. */
@@ -67,7 +93,7 @@ async function withClient<T>(action: (github: GithubClient) => Promise<T>): Prom
   try {
     return await action(github)
   } catch (err) {
-    if (err instanceof GithubError && err.reason === 'auth') await forget()
+    if (err instanceof GithubError && err.reason === 'auth') await forget(true)
     throw err
   }
 }
@@ -75,14 +101,16 @@ async function withClient<T>(action: (github: GithubClient) => Promise<T>): Prom
 export async function getGithubStatus(): Promise<GithubStatus> {
   if (!clientId()) return { available: false, connected: false, login: null }
   const github = await getClient()
-  if (!github) return { available: true, connected: false, login: null }
+  if (!github) return { available: true, connected: false, login: null, lost: await lostConnection() }
   if (!login) {
     try {
       login = await github.viewer()
+      const record = await readConnectionRecord()
+      if (record && record.login !== login) await writeConnectionRecord({ ...record, login })
     } catch (err) {
       if (err instanceof GithubError && err.reason === 'auth') {
-        await forget()
-        return { available: true, connected: false, login: null }
+        await forget(true)
+        return { available: true, connected: false, login: null, lost: await lostConnection() }
       }
       // Réseau coupé : toujours connecté, le nom s'affichera au prochain essai.
       return { available: true, connected: true, login: null }
@@ -105,7 +133,8 @@ export async function finishGithubLogin(): Promise<GithubStatus> {
   if (!pending) throw new GithubError(0, t('github.err.noPending'))
   try {
     const token = await pollDeviceToken(clientId(), pending.device, { signal: pending.controller.signal })
-    await saveGithubToken(token)
+    const encrypted = await saveGithubToken(token)
+    await writeConnectionRecord({ connectedAt: Date.now(), login: null, memoryOnly: !encrypted, rejectedAt: null })
     client = new GithubClient(token)
     login = null
     sessions.clear()

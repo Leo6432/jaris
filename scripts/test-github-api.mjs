@@ -32,7 +32,12 @@ const fsPromises = {
   writeFile: async (path, data) => files.set(path, Buffer.from(data)),
   rm: async (path) => files.delete(path)
 }
-const github = loadTsModule('electron/services/github.ts', { electron, 'fs/promises': fsPromises, path: { join } })
+const github = loadTsModule('electron/services/github.ts', {
+  electron,
+  'fs/promises': fsPromises,
+  path: { join },
+  './dataLocation': { getDataRoot: () => '/donnees-jaris' }
+})
 
 /** Faux fetch : chaque appel est noté, la réponse vient d'une fonction de routage. */
 function fakeFetch(route) {
@@ -174,6 +179,44 @@ test('le jeton est chiffré avant d’être écrit, relu, puis effacé à la dé
   assert.equal(await github.loadGithubToken(), TOKEN)
   await github.clearGithubToken()
   electron.safeStorage.available = true
+})
+
+// Étape 297 (Léo : « ça déconnecte GitHub tous les jours ») : Jaris distingue un jeton absent d'un jeton illisible,
+// et garde une trace de la connexion SANS le jeton, avec les données de Léo (pas dans le dossier du jeton).
+test('jeton absent ≠ jeton illisible, et chiffrement indisponible signalé à l’enregistrement', async () => {
+  assert.deepEqual({ ...(await github.readGithubToken()) }, { token: null, unreadable: false })
+  assert.equal(await github.saveGithubToken(TOKEN), true)
+  const realDecrypt = electron.safeStorage.decryptString
+  electron.safeStorage.decryptString = () => {
+    throw new Error('Error while decrypting the ciphertext provided to safeStorage.decryptString')
+  }
+  try {
+    assert.deepEqual({ ...(await github.readGithubToken()) }, { token: null, unreadable: true })
+  } finally {
+    electron.safeStorage.decryptString = realDecrypt
+  }
+  assert.deepEqual({ ...(await github.readGithubToken()) }, { token: TOKEN, unreadable: false })
+  await github.clearGithubToken()
+  electron.safeStorage.available = false
+  assert.equal(await github.saveGithubToken(TOKEN), false)
+  await github.clearGithubToken()
+  electron.safeStorage.available = true
+})
+
+test('la trace de connexion vit avec les données de Léo, sans jamais contenir le jeton', async () => {
+  const recordFile = join('/donnees-jaris', github.GITHUB_RECORD_FILE)
+  assert.equal(await github.readConnectionRecord(), null)
+  await github.saveGithubToken(TOKEN)
+  await github.writeConnectionRecord({ connectedAt: 1_000, login: 'leo', memoryOnly: false, rejectedAt: null })
+  assert.ok(files.has(recordFile), 'trace écrite ailleurs que dans le dossier des données')
+  assert.ok(!files.get(recordFile).toString().includes(TOKEN), 'le jeton ne doit jamais apparaître dans la trace')
+  assert.deepEqual({ ...(await github.readConnectionRecord()) }, { connectedAt: 1_000, login: 'leo', memoryOnly: false, rejectedAt: null })
+  // Une trace abîmée ne fait rien croire : elle est ignorée.
+  files.set(recordFile, Buffer.from('{pas du json'))
+  assert.equal(await github.readConnectionRecord(), null)
+  await github.clearConnectionRecord()
+  await github.clearGithubToken()
+  assert.equal(files.has(recordFile), false)
 })
 
 const SNAPSHOT_ROUTES = (call) => {

@@ -7945,3 +7945,25 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   les tests structurels (ordre affichage → fermeture, délai de grâce posé avant, chaque garde vérifié en réintroduisant
   son défaut), PAS en usage réel sur Windows** : le comportement exact du premier plan n'est observable que chez Léo.
   Régression : `node --test scripts/test-launch-at-startup.mjs scripts/test-widget-transition.mjs scripts/test-startup.mjs`.
+
+- **« Ça déconnecte GitHub tous les jours » dans le mode Code (étape 297, Léo) : cause NON identifiée, Jaris note
+  maintenant la vraie raison au lieu d'un correctif deviné.** Faits vérifiés avant d'écrire une ligne : l'identifiant
+  client (`Ov23li…`) est celui d'une application OAuth, dont les jetons n'expirent pas (docs.github.com, « Token
+  expiration and revocation » : retrait après UN AN sans usage, au-delà de 10 jetons par compte/application/droits,
+  ou s'il est publié dans un dépôt public — Léo n'a reçu aucun mail de révocation) ; l'expiration à 8 h ne concerne
+  que les GitHub Apps. Côté Jaris, seuls deux chemins effacent le jeton : un 401 de GitHub et « Se déconnecter » ;
+  la mise à jour (installeur NSIS, `jaris.nsh`) ne touche pas aux données. Léo ne sait pas à quel moment ça arrive
+  (après relance, mise à jour, Jaris resté ouvert). Restent possibles, sans moyen de trancher d'ici : jeton refusé par
+  GitHub, fichier `github-token.bin` disparu, ou illisible pour le chiffrement de Windows (`safeStorage`), dont l'échec
+  était jusqu'ici avalé en silence (`catch { return null }`) et se lisait comme « jamais connecté ». Plutôt qu'une
+  5e hypothèse façon SearXNG : `readGithubToken` distingue un jeton ABSENT d'un jeton ILLISIBLE, `saveGithubToken`
+  dit s'il a pu chiffrer, et une trace SANS le jeton (`github-connection.json` : date, compte, refus éventuel) vit
+  avec les données de Léo — PAS dans le dossier du jeton, pour survivre justement si c'est ce dossier qui disparaît
+  (ajoutée à `OWNED_ENTRIES` pour suivre un « Déplacer »). À la déconnexion suivante, le sélecteur GitHub affiche la
+  raison (`github.lost.missing/unreadable/rejected/memoryOnly`, 24 langues) au-dessus de « Se connecter » ; se
+  déconnecter soi-même efface la trace. **Leçon générale : un `catch` qui renvoie « rien » sur une lecture de secret
+  confond « absent » et « illisible » — deux pannes aux causes opposées ; garder la distinction coûte une ligne et
+  rend le prochain signalement diagnosticable.** Régression : `node --test scripts/test-github-api.mjs
+  scripts/test-github-session.mjs scripts/test-github-ui.mjs` (absent ≠ illisible, trace sans jeton et ailleurs que
+  le jeton, chaque raison rendue, rien affiché sans connexion préalable ; chaque garde vérifié en réintroduisant son
+  défaut). **Prochaine étape : quand Léo rapporte la phrase affichée, corriger la vraie cause.**

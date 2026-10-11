@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ipcErrorMessage } from '@/lib/ipcError'
 import { usePickerPanel } from '@/lib/usePickerPanel'
-import type { GithubDeviceCode, GithubRepoSummary, GithubStatus, RepoView } from '../../shared/ipc'
-import { t } from '@/lib/i18n'
+import type { GithubDeviceCode, GithubLostConnection, GithubRepoSummary, GithubStatus, RepoView } from '../../shared/ipc'
+import { currentLocale, t } from '@/lib/i18n'
 
 /**
  * Le bouton GitHub du champ de saisie, en mode Code (étape 277) — comme le sélecteur de dépôt de Codex ou de
@@ -11,6 +11,15 @@ import { t } from '@/lib/i18n'
  * Connexion « la plus facile » (Léo) : un clic, la page GitHub s'ouvre avec le code déjà copié, il n'y a qu'à
  * le coller puis autoriser. Masqué entièrement tant que Jaris n'a pas d'application GitHub configurée.
  */
+/**
+ * Étape 297 (Léo : « ça déconnecte GitHub tous les jours ») : la raison réelle de la déconnexion, notée par Jaris,
+ * plutôt qu'un simple bouton « Se connecter » qui ne dit rien de ce qui s'est passé.
+ */
+export function lostConnectionMessage(lost: GithubLostConnection): string {
+  const date = new Date(lost.connectedAt).toLocaleString(currentLocale(), { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+  return t(`github.lost.${lost.reason}`, { date })
+}
+
 interface Props {
   repo: RepoView | null
   onOpenRepo: (fullName: string) => Promise<void>
@@ -141,6 +150,11 @@ export default function GithubPicker({ repo, onOpenRepo, onCloseRepo, disabled =
               </div>
             ) : (
               <div className="github-picker__login">
+                {status.lost && (
+                  <p className="github-picker__lost" role="status">
+                    {lostConnectionMessage(status.lost)}
+                  </p>
+                )}
                 <p className="github-picker__text">{t('github.login.intro')}</p>
                 <button type="button" className="github-picker__primary" onClick={() => void connect()}>
                   {t('github.login.button')}

@@ -6996,6 +6996,18 @@ select {
   color: var(--hud-text-faint);
 }
 
+/* Étape 297 : pourquoi Jaris n'est plus connecté à GitHub, au-dessus du bouton pour se reconnecter. */
+.github-picker__lost {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--hud-text);
+  background: var(--hud-panel-raised);
+  border: 1px solid var(--hud-line);
+}
+
 .github-picker__code {
   align-self: center;
   padding: 8px 16px;

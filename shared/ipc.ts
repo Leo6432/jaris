@@ -774,6 +774,20 @@ export interface GithubStatus {
   connected: boolean
   /** Nom du compte GitHub connecté, `null` s'il n'a pas pu être lu (réseau coupé). */
   login: string | null
+  /** Étape 297 : déconnecté alors que Jaris avait été connecté — et pourquoi (voir GithubConnectionRecord). */
+  lost?: GithubLostConnection | null
+}
+
+/**
+ * Pourquoi Jaris n'est plus connecté : le fichier du jeton a disparu, Windows n'a pas pu le relire (chiffrement),
+ * GitHub l'a refusé, ou il n'avait jamais pu être chiffré et n'était gardé qu'en mémoire jusqu'à la fermeture.
+ */
+export type GithubLostReason = 'missing' | 'unreadable' | 'rejected' | 'memoryOnly'
+
+export interface GithubLostConnection {
+  reason: GithubLostReason
+  login: string | null
+  connectedAt: number
 }
 
 /** Le code à taper sur github.com/login/device (connexion par code, sans mot de passe donné à Jaris). */

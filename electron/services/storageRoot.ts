@@ -38,8 +38,9 @@ export const AUTO_ROOT_NAME = 'Jaris-data'
  * Chromium qui partageaient autrefois le même dossier. `generated-videos` reste après le retrait du Montage
  * (étape 200) : ce sont les vidéos de Léo, elles suivent ses données comme avant. `language.json` (étape 293) aussi :
  * sans lui, un « Déplacer » faisait repartir Jaris dans la langue de Windows au lieu de celle choisie.
+ * `github-connection.json` (étape 297) : la trace de la connexion GitHub, sans le jeton.
  */
-export const OWNED_ENTRIES = ['conversations', 'conversation-history.json', 'profile.json', 'language.json', 'memory', 'generated-apps', 'generated-images', 'generated-videos', 'reminders.json', 'journal-demandes.txt']
+export const OWNED_ENTRIES = ['conversations', 'conversation-history.json', 'profile.json', 'language.json', 'memory', 'generated-apps', 'generated-images', 'generated-videos', 'reminders.json', 'journal-demandes.txt', 'github-connection.json']
 
 interface StorageMarker {
   root?: unknown

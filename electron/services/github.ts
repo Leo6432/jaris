@@ -3,6 +3,7 @@ import { readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import type { GithubRepoSummary } from '../../shared/ipc'
 import { t } from '../../shared/i18n'
+import { getDataRoot } from './dataLocation'
 
 /**
  * GitHub pour le mode Code (étape 277). Léo : « pouvoir connecter Jaris à GitHub pour Code », pour « travailler
@@ -193,28 +194,94 @@ function tokenPath(): string {
   return join(app.getPath('userData'), 'github-token.bin')
 }
 
-export async function saveGithubToken(token: string): Promise<void> {
+/** Enregistre le jeton. Renvoie `false` quand Windows n'a pas pu le chiffrer : il n'est alors gardé qu'en mémoire. */
+export async function saveGithubToken(token: string): Promise<boolean> {
   if (!safeStorage.isEncryptionAvailable()) {
     memoryToken = token
-    return
+    return false
   }
   memoryToken = null
   await writeFile(tokenPath(), safeStorage.encryptString(token))
+  return true
+}
+
+/** Le jeton enregistré, et si un fichier existait sans pouvoir être relu (chiffrement de Windows). */
+export interface StoredGithubToken {
+  token: string | null
+  unreadable: boolean
+}
+
+export async function readGithubToken(): Promise<StoredGithubToken> {
+  if (memoryToken) return { token: memoryToken, unreadable: false }
+  let encrypted: Buffer
+  try {
+    encrypted = await readFile(tokenPath())
+  } catch {
+    return { token: null, unreadable: false }
+  }
+  try {
+    const token = safeStorage.decryptString(encrypted)
+    return token ? { token, unreadable: false } : { token: null, unreadable: true }
+  } catch {
+    return { token: null, unreadable: true }
+  }
 }
 
 export async function loadGithubToken(): Promise<string | null> {
-  if (memoryToken) return memoryToken
-  try {
-    const encrypted = await readFile(tokenPath())
-    return safeStorage.decryptString(encrypted) || null
-  } catch {
-    return null
-  }
+  return (await readGithubToken()).token
 }
 
 export async function clearGithubToken(): Promise<void> {
   memoryToken = null
   await rm(tokenPath(), { force: true })
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Trace de la connexion (étape 297)
+// ---------------------------------------------------------------------------------------------------------
+// Léo : « ça déconnecte GitHub tous les jours ». Le jeton d'une application OAuth n'expire pas tout seul (GitHub ne
+// le retire qu'après un an sans usage), et rien dans Jaris ne l'efface hors d'un refus de GitHub ou d'un clic sur
+// « Se déconnecter » : la cause n'est pas visible d'ici. Plutôt qu'un correctif deviné, Jaris garde une trace SANS
+// le jeton (date, compte, refus éventuel) avec les données de Léo — pas à côté du jeton, pour qu'elle survive si
+// c'est justement le dossier du jeton qui disparaît —, et dit à la déconnexion suivante ce qui s'est vraiment passé.
+
+export const GITHUB_RECORD_FILE = 'github-connection.json'
+
+export interface GithubConnectionRecord {
+  connectedAt: number
+  login: string | null
+  /** Jeton gardé en mémoire seulement (chiffrement de Windows indisponible) : perdu à la fermeture de Jaris. */
+  memoryOnly: boolean
+  /** Moment où GitHub a refusé le jeton (401), `null` sinon. */
+  rejectedAt: number | null
+}
+
+function recordPath(): string {
+  return join(getDataRoot(), GITHUB_RECORD_FILE)
+}
+
+export async function readConnectionRecord(): Promise<GithubConnectionRecord | null> {
+  try {
+    const data = JSON.parse(await readFile(recordPath(), 'utf-8')) as Partial<GithubConnectionRecord>
+    if (typeof data.connectedAt !== 'number') return null
+    return {
+      connectedAt: data.connectedAt,
+      login: typeof data.login === 'string' ? data.login : null,
+      memoryOnly: data.memoryOnly === true,
+      rejectedAt: typeof data.rejectedAt === 'number' ? data.rejectedAt : null
+    }
+  } catch {
+    return null
+  }
+}
+
+/** Une trace qui ne s'écrit pas ne doit jamais faire échouer la connexion elle-même. */
+export async function writeConnectionRecord(record: GithubConnectionRecord): Promise<void> {
+  await writeFile(recordPath(), JSON.stringify(record, null, 2), 'utf-8').catch(() => {})
+}
+
+export async function clearConnectionRecord(): Promise<void> {
+  await rm(recordPath(), { force: true }).catch(() => {})
 }
 
 // ---------------------------------------------------------------------------------------------------------

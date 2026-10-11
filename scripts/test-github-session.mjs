@@ -16,7 +16,8 @@ const electron = { app: { getPath: () => '/donnees' }, safeStorage: { isEncrypti
 const realGithub = loadTsModule('electron/services/github.ts', {
   electron,
   'fs/promises': { readFile: async () => Buffer.from(''), writeFile: async () => {}, rm: async () => {} },
-  path: { join }
+  path: { join },
+  './dataLocation': { getDataRoot: () => '/donnees' }
 })
 const lineDiff = loadTsModule('shared/lineDiff.ts')
 const repoAgent = loadTsModule('electron/services/repoAgent.ts', { '../../shared/lineDiff': lineDiff })
@@ -24,7 +25,7 @@ const repoAgent = loadTsModule('electron/services/repoAgent.ts', { '../../shared
 class GenerationStoppedError extends Error {}
 
 function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Projet\nBonjour\n', 'src/a.js': 'let a = 1\n' }, replies = [] } = {}) {
-  const state = { token, openCount: 0, commits: [], failAuth: false, files: { ...files }, cleared: 0 }
+  const state = { token, unreadable: false, memoryOnly: false, record: null, openCount: 0, commits: [], failAuth: false, files: { ...files }, cleared: 0 }
   class FakeClient {
     constructor(value) {
       this.token = value
@@ -93,13 +94,21 @@ function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Proje
     './github': {
       ...realGithub,
       GithubClient: FakeClient,
-      loadGithubToken: async () => state.token,
+      readGithubToken: async () => ({ token: state.token, unreadable: !state.token && state.unreadable }),
       saveGithubToken: async (value) => {
         state.token = value
+        return !state.memoryOnly
       },
       clearGithubToken: async () => {
         state.token = null
         state.cleared += 1
+      },
+      readConnectionRecord: async () => (state.record ? { ...state.record } : null),
+      writeConnectionRecord: async (record) => {
+        state.record = { ...record }
+      },
+      clearConnectionRecord: async () => {
+        state.record = null
       },
       requestDeviceCode: async () => ({ deviceCode: 'd', userCode: 'ABCD-1234', verificationUri: 'https://github.com/login/device', expiresAt: Infinity, intervalMs: 1 }),
       pollDeviceToken: async () => 'gho_nouveau'
@@ -122,7 +131,7 @@ test('sans application GitHub configurée, tout est masqué', async () => {
 
 test('connexion par code : le code est rendu à l’écran, puis le compte connecté est reconnu', async () => {
   const { session, state } = setup()
-  assert.deepEqual(await session.getGithubStatus(), { available: true, connected: false, login: null })
+  assert.deepEqual(await session.getGithubStatus(), { available: true, connected: false, login: null, lost: null })
   const code = await session.startGithubLogin()
   assert.deepEqual(code, { userCode: 'ABCD-1234', verificationUri: 'https://github.com/login/device' })
   assert.equal(Object.keys(code).includes('deviceCode'), false, 'le code interne ne doit jamais partir vers l’écran')
@@ -238,6 +247,53 @@ test('une connexion retirée sur github.com déconnecte proprement et efface le 
   assert.equal(state.token, null)
   assert.equal(state.cleared, 1)
   assert.equal((await session.getGithubStatus()).connected, false)
+})
+
+// Étape 297 (Léo : « ça déconnecte GitHub tous les jours ») : la déconnexion suivante dit ce qui s'est passé.
+test('déconnexion : la vraie raison est notée et rendue à l’écran', async () => {
+  // GitHub refuse le jeton en cours d'usage.
+  let { session, state } = setup()
+  await session.startGithubLogin()
+  await session.finishGithubLogin()
+  assert.equal(state.record.login, 'leo', 'le compte est noté une fois connu')
+  assert.equal(state.record.memoryOnly, false)
+  state.failAuth = true
+  await assert.rejects(session.listGithubRepos())
+  let status = await session.getGithubStatus()
+  assert.equal(status.connected, false)
+  assert.equal(status.lost.reason, 'rejected')
+  assert.equal(status.lost.login, 'leo')
+
+  // Le fichier du jeton a disparu entre deux lancements.
+  ;({ session, state } = setup())
+  state.record = { connectedAt: 5, login: 'leo', memoryOnly: false, rejectedAt: null }
+  assert.equal((await session.getGithubStatus()).lost.reason, 'missing')
+
+  // Il est là, mais Windows n'a pas su le relire.
+  ;({ session, state } = setup())
+  state.record = { connectedAt: 5, login: 'leo', memoryOnly: false, rejectedAt: null }
+  state.unreadable = true
+  assert.equal((await session.getGithubStatus()).lost.reason, 'unreadable')
+
+  // Il n'avait jamais pu être chiffré : noté à la connexion, puis perdu à la fermeture (relance simulée).
+  ;({ session, state } = setup())
+  state.memoryOnly = true
+  await session.startGithubLogin()
+  await session.finishGithubLogin()
+  assert.equal(state.record.memoryOnly, true)
+  const relaunched = setup()
+  relaunched.state.record = state.record
+  assert.equal((await relaunched.session.getGithubStatus()).lost.reason, 'memoryOnly')
+})
+
+test('se déconnecter soi-même efface la trace ; jamais connecté : rien à expliquer', async () => {
+  const { session, state } = setup()
+  assert.equal((await session.getGithubStatus()).lost, null)
+  await session.startGithubLogin()
+  await session.finishGithubLogin()
+  await session.logoutGithub()
+  assert.equal(state.record, null)
+  assert.equal((await session.getGithubStatus()).lost, null)
 })
 
 test('le budget d’historique suit la mémoire du modèle, sans jamais tomber trop bas', () => {

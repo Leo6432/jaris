@@ -43,7 +43,7 @@ const CHANGED = {
   changes: [{ path: 'README.md', kind: 'modified', before: '# Projet\\nBonjour le mondee\\n', after: '# Projet\\nBonjour le monde\\n' }]
 }
 
-window.__status = { available: window.__available ?? true, connected: false, login: null }
+window.__status = { available: window.__available ?? true, connected: false, login: null, lost: window.__lost ?? null }
 window.__calls = { run: [], commit: [], open: [], preview: [] }
 
 window.jaris = {
@@ -143,8 +143,8 @@ function buildPage() {
   return pageHtml
 }
 
-async function withPage(run, { available = true, width = 1280 } = {}) {
-  const html = buildPage().replace('<div id="root">', `<script>window.__available = ${available}</script><div id="root">`)
+async function withPage(run, { available = true, width = 1280, lost = null } = {}) {
+  const html = buildPage().replace('<div id="root">', `<script>window.__available = ${available}; window.__lost = ${JSON.stringify(lost)}</script><div id="root">`)
   const browser = await chromium.launch()
   try {
     const page = await browser.newPage()
@@ -195,6 +195,32 @@ test('connexion : le code à coller s’affiche, puis la liste des dépôts du c
     // La recherche filtre la liste.
     await page.fill('.github-picker__search', 'site')
     assert.equal(await page.locator('.github-picker__repo').count(), 1)
+  })
+})
+
+// Étape 297 (Léo : « ça déconnecte GitHub tous les jours ») : la raison réelle s'affiche au-dessus du bouton.
+test('déconnecté par GitHub : la raison s’affiche, habillée, au-dessus de « Se connecter »', options, async () => {
+  const connectedAt = new Date(2026, 9, 10, 9, 5).getTime()
+  await withPage(
+    async (page) => {
+      await page.click('.repo-picker__trigger')
+      await page.waitForSelector('.github-picker__lost')
+      const text = await page.textContent('.github-picker__lost')
+      assert.match(text, /a été refusée par GitHub/)
+      assert.match(text, /10 octobre/)
+      assert.doesNotMatch(text, /\{date\}/)
+      const lost = await page.$eval('.github-picker__lost', (el) => ({ top: el.getBoundingClientRect().top, border: getComputedStyle(el).borderTopWidth }))
+      const button = await page.$eval('.github-picker__primary', (el) => el.getBoundingClientRect().top)
+      assert.ok(lost.top < button, 'la raison doit précéder le bouton')
+      assert.equal(lost.border, '1px', 'message non habillé par le CSS de Jaris')
+    },
+    { lost: { reason: 'rejected', login: 'leo', connectedAt } }
+  )
+  // Jamais connecté : pas de message.
+  await withPage(async (page) => {
+    await page.click('.repo-picker__trigger')
+    await page.waitForSelector('.github-picker__primary')
+    assert.equal(await page.locator('.github-picker__lost').count(), 0)
   })
 })
 
