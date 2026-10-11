@@ -630,6 +630,26 @@ export async function deleteGeneratedApp(path: string): Promise<void> {
 }
 
 /**
+ * Image jointe (étape 91) : le modèle de vision la traduit en texte AVANT que le modèle de code soit chargé — deux
+ * étapes strictement séquentielles, jamais deux modèles en mémoire à la fois. Partagé par une nouvelle application
+ * et, depuis l'étape 298, par le travail sur un dépôt GitHub.
+ */
+export async function describeImageForCode(imageBase64: string, visionModel: string, onStatus: (message: string) => void): Promise<string> {
+  onStatus(t('codegen.readingImage'))
+  return describeImage(imageBase64, "Décris cette interface pour qu'elle puisse être reconstruite fidèlement.", visionModel, IMAGE_FOR_CODE_SYSTEM_PROMPT)
+}
+
+/** La demande, suivie de la description de l'image jointe quand il y en a une. */
+export function withImageDescription(base: string, imageDescription: string | undefined): string {
+  return imageDescription
+    ? `${base}\n\nL'utilisateur a joint une image (maquette ou capture à reproduire). En voici la ` +
+        `description fidèle, faite par un modèle de vision :\n\n${imageDescription}\n\n` +
+        'Reproduis cette interface le plus fidèlement possible : même disposition, mêmes textes, mêmes ' +
+        'couleurs.'
+    : base
+}
+
+/**
  * Génère une application web autonome à partir d'une description, en deux passes façon Lovable/Emergent
  * plutôt qu'un simple appel LLM brut :
  *  1. génération, guidée par un prompt système enrichi de consignes strictes (APP_RULES) ;
@@ -698,13 +718,7 @@ export async function generateApp(
     // direct ici : describeImage ne streame pas, donc il n'y a rien de vrai à afficher — le journal dit
     // simplement ce qui se passe, comme avant.
     steps.index = 1
-    onStatus(t('codegen.readingImage'))
-    imageDescription = await describeImage(
-      imageBase64,
-      "Décris cette interface pour qu'elle puisse être reconstruite fidèlement.",
-      profile?.visionModel ?? config.ollama.visionModel,
-      IMAGE_FOR_CODE_SYSTEM_PROMPT
-    )
+    imageDescription = await describeImageForCode(imageBase64, profile?.visionModel ?? config.ollama.visionModel, onStatus)
   }
 
   const model = await resolveCodeModel(onStatus, profile)
@@ -713,13 +727,7 @@ export async function generateApp(
   const think = await resolveCodeThink(profile, model)
   const runModelStep = createModelStepRunner({ model, think, modelMaxContext, steps, onStatus, onProgress, signal })
 
-  const withImage = (base: string): string =>
-    imageDescription
-      ? `${base}\n\nL'utilisateur a joint une image (maquette ou capture à reproduire). En voici la ` +
-        `description fidèle, faite par un modèle de vision :\n\n${imageDescription}\n\n` +
-        'Reproduis cette interface le plus fidèlement possible : même disposition, mêmes textes, mêmes ' +
-        'couleurs.'
-      : base
+  const withImage = (base: string): string => withImageDescription(base, imageDescription)
 
   const userPrompt = currentHtml
     ? withImage(

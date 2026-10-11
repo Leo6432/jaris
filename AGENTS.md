@@ -7928,3 +7928,22 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   scripts/test-github-session.mjs scripts/test-github-ui.mjs` (absent ≠ illisible, trace sans jeton et ailleurs que
   le jeton, chaque raison rendue, rien affiché sans connexion préalable ; chaque garde vérifié en réintroduisant son
   défaut). **Prochaine étape : quand Léo rapporte la phrase affichée, corriger la vraie cause.**
+
+- **Image jointe aussi avec un dépôt GitHub ouvert (étape 298, Léo : « on peut ajouter une image quand on fait une
+  nouvelle conversation, mais en plein chat on n'a pas le bouton à gauche »).** Vérifié AVANT de coder, par un vrai
+  navigateur : après une génération, ou en rouvrant une application, le « + » du champ est bien là — la seule chose
+  qui le fait disparaître est `imagesAllowed={!repo}` (CodePanel.tsx) : avec un dépôt GitHub ouvert, le menu « + »
+  n'avait plus aucune entrée, donc plus de bouton du tout (ni collage, ni glisser). Demande d'origine — reproduire un
+  site depuis une capture — déjà couverte pour une nouvelle application depuis l'étape 91 ; seul le chemin « dépôt »
+  manquait. Corrigé en réutilisant EXACTEMENT la lecture d'image des applications, extraite de `generateApp` en deux
+  fonctions partagées (`describeImageForCode`, `withImageDescription`, codeGenerator.ts) plutôt que recopiée dans
+  githubSession.ts : l'image est lue par le modèle de vision AVANT de charger le modèle de code (jamais deux modèles
+  en mémoire, contrainte de l'étape 91), puis seule sa description part avec la demande dans `runRepoAgent`. Le canal
+  `githubRunAgent` prend un `imageBase64` optionnel ; une image seule suffit (« Reproduis l'image jointe »).
+  **Leçon générale : quand une option est désactivée pour un contexte (`imagesAllowed={!repo}`), le bouton qui la porte
+  peut disparaître entièrement si c'était sa seule entrée — l'utilisateur ne voit pas « image indisponible ici » mais
+  « le bouton a disparu », et décrit le symptôme par le moment où ça arrive (« en plein chat »), pas par sa cause.**
+  Régression : `node --test scripts/test-github-session.mjs scripts/test-github-ui.mjs` (vision avant code, la
+  description part et jamais l'image elle-même, rien de lu sans image ; et dans un vrai navigateur : dépôt ouvert, « + »
+  présent, capture jointe envoyée avec la demande puis retirée du champ — test vérifié en remettant l'ancienne
+  restriction). Qualité de la reproduction sur de vraies captures : non vérifiable ici, à juger par Léo.

@@ -84,8 +84,9 @@ window.jaris = {
     if (window.__emptyRepo) return Promise.resolve({ ...VIEW, fileCount: 0 })
     return Promise.resolve({ ...(window.__agentDone ? CHANGED : VIEW), branch: branch ?? 'main' })
   },
-  githubRunAgent: (fullName, request) => {
-    window.__calls.run.push([fullName, request])
+  pickImageFile: () => Promise.resolve(window.__nextPickedFile ?? null),
+  githubRunAgent: (fullName, request, imageBase64) => {
+    window.__calls.run.push(imageBase64 ? [fullName, request, imageBase64] : [fullName, request])
     return new Promise((resolve, reject) => {
       window.__finishAgent = () => {
         window.__agentDone = true
@@ -221,6 +222,42 @@ test('déconnecté par GitHub : la raison s’affiche, habillée, au-dessus de �
     await page.click('.repo-picker__trigger')
     await page.waitForSelector('.github-picker__primary')
     assert.equal(await page.locator('.github-picker__lost').count(), 0)
+  })
+})
+
+// Étape 298 (Léo : « on peut ajouter une image pour une nouvelle conversation, mais en plein chat on n'a pas le
+// bouton à gauche ») : avec un dépôt ouvert, le « + » et l'image restent là, et la capture part avec la demande.
+test('dépôt ouvert : le bouton « + » permet de joindre une capture, envoyée avec la demande', options, async () => {
+  await withPage(async (page) => {
+    await connectAndOpen(page)
+    await page.waitForSelector('.composer__plus')
+    // Une petite image rouge, comme une vraie capture (le champ la réduit et la réencode).
+    const base64 = await page.evaluate(() => {
+      const canvas = document.createElement('canvas')
+      canvas.width = 40
+      canvas.height = 20
+      const context = canvas.getContext('2d')
+      context.fillStyle = '#c0392b'
+      context.fillRect(0, 0, 40, 20)
+      return canvas.toDataURL('image/png').split(',')[1]
+    })
+    await page.evaluate((data) => {
+      window.__nextPickedFile = { name: 'site.png', type: 'image/png', base64: data }
+    }, base64)
+    await page.click('.composer__plus')
+    await page.click('.composer__menu-item:has-text("Joindre une image")')
+    await page.waitForSelector('.composer__attachment img')
+    // Une image seule suffit : « Envoyer » est actif sans texte.
+    assert.equal(await page.locator('.composer__send').isDisabled(), false)
+    await page.click('.composer__send')
+    await page.waitForFunction(() => window.__calls.run.length === 1)
+    const [[fullName, request, sentImage]] = await page.evaluate(() => window.__calls.run)
+    assert.equal(fullName, 'leo/projet')
+    assert.match(request, /image jointe/)
+    assert.ok(typeof sentImage === 'string' && sentImage.length > 20, 'la capture doit partir avec la demande')
+    await page.evaluate(() => window.__finishAgent())
+    await page.waitForSelector('.changes-card')
+    assert.equal(await page.locator('.composer__attachment').count(), 0, 'la capture envoyée ne reste pas dans le champ')
   })
 })
 

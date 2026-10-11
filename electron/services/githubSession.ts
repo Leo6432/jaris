@@ -1,7 +1,7 @@
 import { config } from '../config'
 import { chosenThink } from '../../shared/effort'
 import type { CodeActivity, CodeGenProgress, CodeLiveWrite, CodeNarration, GithubDeviceCode, GithubLostConnection, GithubRepoSummary, GithubStatus, RepoAgentResult, RepoChange, RepoCommitResult, RepoView } from '../../shared/ipc'
-import { GenerationStoppedError, createModelStepRunner, isAbortError, readModelMaxContext, resolveCodeModel } from './codeGenerator'
+import { GenerationStoppedError, createModelStepRunner, describeImageForCode, isAbortError, readModelMaxContext, resolveCodeModel, withImageDescription } from './codeGenerator'
 import {
   GithubClient,
   GithubError,
@@ -271,6 +271,8 @@ export interface RunGithubAgentOptions {
   onLive?: (live: CodeLiveWrite | null) => void
   onProgress?: (progress: CodeGenProgress) => void
   signal?: AbortSignal
+  /** Étape 298 (Léo : « en plein chat, on n'a pas le bouton image ») : une capture jointe, comme pour une nouvelle application. */
+  imageBase64?: string
 }
 
 export async function runGithubAgent(fullName: string, request: string, options: RunGithubAgentOptions): Promise<RepoAgentResult> {
@@ -281,6 +283,10 @@ export async function runGithubAgent(fullName: string, request: string, options:
   session.busy = true
   try {
     const profile = await getProfile()
+    // L'image est lue AVANT de charger le modèle de code : jamais deux modèles en mémoire à la fois (étape 91).
+    const task = options.imageBase64
+      ? withImageDescription(request, await describeImageForCode(options.imageBase64, profile?.visionModel ?? config.ollama.visionModel, options.onStatus))
+      : request
     const model = await resolveCodeModel(options.onStatus, profile)
     const modelMax = await readModelMaxContext(model)
     const run = createModelStepRunner({
@@ -293,7 +299,7 @@ export async function runGithubAgent(fullName: string, request: string, options:
       onProgress: options.onProgress,
       signal: options.signal
     })
-    const outcome = await runRepoAgent(request, {
+    const outcome = await runRepoAgent(task, {
       repoName: session.snapshot.fullName,
       branch: session.snapshot.branch,
       listPaths: () => listPaths(session),

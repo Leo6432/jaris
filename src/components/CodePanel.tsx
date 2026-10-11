@@ -391,8 +391,8 @@ export default function CodePanel(): JSX.Element {
   }
 
   /** Étape 277 : la demande part à l'agent qui travaille sur le dépôt ouvert, pas au générateur d'application. */
-  const runOnRepo = async (current: RepoView, prompt: string): Promise<void> => {
-    addTurn('user', prompt)
+  const runOnRepo = async (current: RepoView, prompt: string, image: ImageAttachment | null): Promise<void> => {
+    addTurn('user', prompt || t('code.reproduceImage.short'))
     // Vidé dès l'envoi, comme ChatGPT : la demande est désormais dans la conversation, pas en double dans le champ.
     setDescription('')
     clearGenerationFeedback()
@@ -404,7 +404,9 @@ export default function CodePanel(): JSX.Element {
     stoppedRef.current = false
     const startedAt = Date.now()
     try {
-      const result = await window.jaris.githubRunAgent(current.fullName, prompt)
+      // Étape 298 : une capture jointe part avec la demande, comme pour une nouvelle application.
+      const result = await window.jaris.githubRunAgent(current.fullName, prompt || t('code.reproduceImage'), image?.base64)
+      setAttachment(null)
       setRepo(result.view)
       // Étape 290 (Léo : « à la fin ça doit faire comme ChatGPT ») : la durée, la réponse, puis la carte des fichiers.
       pushTurn({ kind: 'worked', durationMs: Date.now() - startedAt })
@@ -412,7 +414,7 @@ export default function CodePanel(): JSX.Element {
       // Les fichiers viennent des changements RÉELLEMENT préparés, jamais de ce que le modèle dit avoir fait : vu
       // avec un vrai modèle, le résumé peut annoncer un changement qui n'a pas eu lieu.
       if (result.view.changes.length > 0) {
-        setCommitMessage(prompt.split('\n')[0].slice(0, 72))
+        setCommitMessage((prompt || t('code.reproduceImage.short')).split('\n')[0].slice(0, 72))
         pushTurn({ kind: 'changes', files: changedFiles(result.view.changes) })
       } else {
         addTurn('note', t('code.noFileChanged'))
@@ -502,7 +504,7 @@ export default function CodePanel(): JSX.Element {
   const generate = async (): Promise<void> => {
     const prompt = description.trim()
     if (repo) {
-      if (prompt && !generating) await runOnRepo(repo, prompt)
+      if ((prompt || attachment) && !generating) await runOnRepo(repo, prompt, attachment)
       return
     }
     // Une image seule suffit ("reproduis cette maquette") : le texte n'est plus obligatoire s'il y a une image.
@@ -857,7 +859,6 @@ export default function CodePanel(): JSX.Element {
                   <ModelEffortPicker mode="code" disabled={generating} />
                 </>
               }
-              imagesAllowed={!repo}
               attachment={attachment}
               onAttachmentChange={setAttachment}
               onError={setError}

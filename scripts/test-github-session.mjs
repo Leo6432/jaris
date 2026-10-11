@@ -73,7 +73,7 @@ function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Proje
       return { sha: `sha${state.commits.length}`, url: `https://github.com/leo/projet/commit/sha${state.commits.length}` }
     }
   }
-  const config = { config: { github: { clientId } } }
+  const config = { config: { github: { clientId }, ollama: { visionModel: 'vision-model' } } }
   const session = loadTsModule('electron/services/githubSession.ts', {
     '../config': config,
     '../../shared/effort': { chosenThink: () => undefined },
@@ -81,8 +81,19 @@ function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Proje
       GenerationStoppedError,
       isAbortError: (err) => err?.name === 'AbortError',
       readModelMaxContext: async () => null,
-      resolveCodeModel: async () => 'code-model',
-      createModelStepRunner: ({ signal }) => async (_label, _messages, _chars, tools) => {
+      resolveCodeModel: async () => {
+        state.order = [...(state.order ?? []), 'code']
+        return 'code-model'
+      },
+      // Étape 298 : l'image d'un dépôt passe par la même lecture que celle d'une nouvelle application.
+      describeImageForCode: async (base64, visionModel) => {
+        state.order = [...(state.order ?? []), 'vision']
+        state.described = [base64, visionModel]
+        return 'DESCRIPTION DE LA CAPTURE'
+      },
+      withImageDescription: (base, description) => (description ? `${base}\n\n${description}` : base),
+      createModelStepRunner: ({ signal }) => async (_label, messages, _chars, tools) => {
+        state.prompts = [...(state.prompts ?? []), messages]
         // Étape 281 : jamais d'outils déclarés à Ollama (ils rendaient l'écriture muette pendant des minutes).
         if (tools !== undefined) throw new Error('des outils ont été déclarés à Ollama')
         if (signal?.aborted) throw Object.assign(new Error('stop'), { name: 'AbortError' })
@@ -294,6 +305,26 @@ test('se déconnecter soi-même efface la trace ; jamais connecté : rien à exp
   await session.logoutGithub()
   assert.equal(state.record, null)
   assert.equal((await session.getGithubStatus()).lost, null)
+})
+
+// Étape 298 (Léo : « en plein chat, on n'a pas le bouton image ») : une capture jointe sur un dépôt ouvert.
+test('dépôt ouvert : l’image est lue AVANT le modèle de code, et sa description part avec la demande', async () => {
+  const { session, state } = setup({ token: 't', replies: [reply(call('finish', { summary: 'Fait.' }))] })
+  await session.openGithubRepo('leo/projet')
+  await session.runGithubAgent('leo/projet', 'Reproduis ce site', { onStatus: () => {}, imageBase64: 'QUJD' })
+  assert.deepEqual(state.described, ['QUJD', 'vision-model'])
+  assert.deepEqual(state.order, ['vision', 'code'], 'jamais deux modèles chargés à la fois')
+  const sent = JSON.stringify(state.prompts[0])
+  assert.match(sent, /Reproduis ce site/)
+  assert.match(sent, /DESCRIPTION DE LA CAPTURE/)
+  assert.doesNotMatch(sent, /QUJD/, 'le modèle de code ne reçoit jamais l’image elle-même')
+})
+
+test('dépôt ouvert sans image : rien n’est lu par le modèle de vision', async () => {
+  const { session, state } = setup({ token: 't', replies: [reply(call('finish', { summary: 'Fait.' }))] })
+  await session.openGithubRepo('leo/projet')
+  await session.runGithubAgent('leo/projet', 'Corrige', { onStatus: () => {} })
+  assert.equal(state.described, undefined)
 })
 
 test('le budget d’historique suit la mémoire du modèle, sans jamais tomber trop bas', () => {

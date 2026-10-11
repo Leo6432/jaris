@@ -1822,12 +1822,13 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.githubListRepos, () => listGithubRepos())
   ipcMain.handle(IPC_CHANNELS.githubListBranches, (_event, fullName: string) => listGithubBranches(fullName))
   ipcMain.handle(IPC_CHANNELS.githubOpenRepo, (_event, fullName: string, branch?: string) => openGithubRepo(fullName, branch))
-  ipcMain.handle(IPC_CHANNELS.githubRunAgent, async (event, fullName: string, request: string) => {
+  ipcMain.handle(IPC_CHANNELS.githubRunAgent, async (event, fullName: string, request: string, imageBase64?: string) => {
     codeGenAbort?.abort()
     const controller = new AbortController()
     codeGenAbort = controller
     try {
       return await runGithubAgent(fullName, request, {
+        imageBase64,
         onStatus: (message) => event.sender.send(IPC_CHANNELS.codeGenStatus, message),
         onActivity: (activity) => event.sender.send(IPC_CHANNELS.codeGenActivity, activity),
         onNarration: (narration) => event.sender.send(IPC_CHANNELS.codeGenNarration, narration),

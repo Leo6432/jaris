@@ -203,8 +203,8 @@ const api = {
   githubListRepos: (): Promise<GithubRepoSummary[]> => ipcRenderer.invoke(IPC_CHANNELS.githubListRepos),
   githubListBranches: (fullName: string): Promise<string[]> => ipcRenderer.invoke(IPC_CHANNELS.githubListBranches, fullName),
   githubOpenRepo: (fullName: string, branch?: string): Promise<RepoView> => ipcRenderer.invoke(IPC_CHANNELS.githubOpenRepo, fullName, branch),
-  githubRunAgent: (fullName: string, request: string): Promise<RepoAgentResult> =>
-    ipcRenderer.invoke(IPC_CHANNELS.githubRunAgent, fullName, request),
+  githubRunAgent: (fullName: string, request: string, imageBase64?: string): Promise<RepoAgentResult> =>
+    ipcRenderer.invoke(IPC_CHANNELS.githubRunAgent, fullName, request, imageBase64),
   githubDiscardChanges: (fullName: string, path?: string): Promise<RepoView> =>
     ipcRenderer.invoke(IPC_CHANNELS.githubDiscardChanges, fullName, path),
   githubPreview: (fullName: string): Promise<RepoPreview> => ipcRenderer.invoke(IPC_CHANNELS.githubPreview, fullName),

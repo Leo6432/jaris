@@ -180,7 +180,7 @@ declare global {
       githubListRepos: () => Promise<GithubRepoSummary[]>
       githubListBranches: (fullName: string) => Promise<string[]>
       githubOpenRepo: (fullName: string, branch?: string) => Promise<RepoView>
-      githubRunAgent: (fullName: string, request: string) => Promise<RepoAgentResult>
+      githubRunAgent: (fullName: string, request: string, imageBase64?: string) => Promise<RepoAgentResult>
       githubDiscardChanges: (fullName: string, path?: string) => Promise<RepoView>
       githubPreview: (fullName: string) => Promise<RepoPreview>
       githubCommit: (fullName: string, message: string) => Promise<RepoCommitResult>
