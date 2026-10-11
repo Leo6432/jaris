@@ -1305,5 +1305,11 @@
   "omv.fixed": "Ollama buscaba sus modelos en {from} ({counts}): ajuste devuelto a {to}, Ollama se reinicia. No se ha borrado nada.",
   "omv.repairing": "Ollama no ve ninguno de tus {count} modelos, aunque están guardados en {dir}: Jaris lo reinicia indicándole esta carpeta…",
   "omv.repaired": "Ollama vuelve a ver tus modelos ({count}).",
-  "omv.repairFailed": "Ollama sigue sin ver tus modelos, guardados en {dir}. Reinicia el ordenador y vuelve a abrir Jaris."
+  "omv.repairFailed": "Ollama sigue sin ver tus modelos, guardados en {dir}. Reinicia el ordenador y vuelve a abrir Jaris.",
+  "startup.step.engine": "Iniciando el motor…",
+  "startup.step.listening": "Preparando la escucha…",
+  "startup.step.voice": "Preparando la voz…",
+  "startup.step.brain": "Cargando el modelo…",
+  "startup.ready": "Listo",
+  "startup.aria": "Jaris se está iniciando"
 }

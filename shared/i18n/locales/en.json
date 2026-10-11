@@ -1305,5 +1305,11 @@
   "omv.fixed": "Ollama was looking for its models in {from} ({counts}): setting changed back to {to}, Ollama is restarting. Nothing was deleted.",
   "omv.repairing": "Ollama doesn't see any of your {count} models, even though they're stored in {dir}: Jaris is restarting it with this folder…",
   "omv.repaired": "Ollama sees your models again ({count}).",
-  "omv.repairFailed": "Ollama still doesn't see your models, stored in {dir}. Restart the computer, then launch Jaris again."
+  "omv.repairFailed": "Ollama still doesn't see your models, stored in {dir}. Restart the computer, then launch Jaris again.",
+  "startup.step.engine": "Starting the engine…",
+  "startup.step.listening": "Getting listening ready…",
+  "startup.step.voice": "Getting the voice ready…",
+  "startup.step.brain": "Loading the model…",
+  "startup.ready": "Ready",
+  "startup.aria": "Jaris is starting"
 }

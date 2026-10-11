@@ -1347,5 +1347,11 @@
   "omv.fixed": "Ollama szukała swoich modeli w {from} ({counts}): ustawienie przywrócono na {to}, Ollama uruchamia się ponownie. Nic nie zostało usunięte.",
   "omv.repairing": "Ollama nie widzi żadnego z twoich modeli (liczba: {count}), choć są w {dir}: Jaris uruchamia ją ponownie, wskazując ten folder…",
   "omv.repaired": "Ollama znów widzi twoje modele ({count}).",
-  "omv.repairFailed": "Ollama nadal nie widzi twoich modeli, które są w {dir}. Uruchom ponownie komputer, a potem otwórz Jarisa."
+  "omv.repairFailed": "Ollama nadal nie widzi twoich modeli, które są w {dir}. Uruchom ponownie komputer, a potem otwórz Jarisa.",
+  "startup.step.engine": "Uruchamianie silnika…",
+  "startup.step.listening": "Przygotowywanie słuchania…",
+  "startup.step.voice": "Przygotowywanie głosu…",
+  "startup.step.brain": "Wczytywanie modelu…",
+  "startup.ready": "Gotowe",
+  "startup.aria": "Jaris się uruchamia"
 }

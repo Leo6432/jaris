@@ -54,6 +54,7 @@ import type {
   UpdateProgress,
   VoiceReplyPayload,
   VoiceSetupStatusPayload,
+  StartupState,
   WidgetMode,
   WindowChrome
 } from '../shared/ipc'
@@ -72,6 +73,8 @@ declare global {
       onChatWebActivity: (cb: (activity: WebActivity) => void) => () => void
       onSetupStatus: (cb: (status: VoiceSetupStatusPayload) => void) => () => void
       getSetupStatus: () => Promise<VoiceSetupStatusPayload>
+      getStartupState: () => Promise<StartupState>
+      onStartupState: (cb: (state: StartupState) => void) => () => void
       triggerWake: () => void
       notifyAudioEnded: () => void
       /** Langue au chargement (synchrone), `null` si indisponible. Optionnel : absent des faux ponts des tests. */

@@ -263,14 +263,58 @@ export async function structuredChat(
   messages: OllamaMessage[],
   model: string,
   schema: Record<string, unknown>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  /**
+   * Étape 294 : la MÊME fenêtre que la conversation quand le modèle est le même. Ollama recharge entièrement un
+   * modèle dont la fenêtre demandée change (`needsReload`, server/sched.go) : la correction en 2048 puis la réponse
+   * en 8192 rechargeaient le modèle rapide deux fois par phrase dite à Jaris.
+   */
+  numCtx = 2048
 ): Promise<string> {
-  const body = { model, messages, format: schema, options: { temperature: 0, num_ctx: 2048 } }
+  const body = { model, messages, format: schema, options: { temperature: 0, num_ctx: numCtx } }
   try {
     return (await requestChat({ ...body, think: false }, model, signal)).content ?? ''
   } catch (err) {
     if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) throw err
     return (await requestChat(body, model, signal)).content ?? ''
+  }
+}
+
+/**
+ * Étape 294 — démarrage : attend qu'Ollama réponde (`true`), ou abandonne après `timeoutMs` (`false`). Ne lève jamais.
+ */
+export async function waitForOllama(timeoutMs: number, intervalMs = 500): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    try {
+      const response = await fetch(`${config.ollama.host}/api/tags`, { signal: AbortSignal.timeout(2000) })
+      if (response.ok) return true
+    } catch {
+      // Pas encore lancé : on réessaie jusqu'au délai.
+    }
+    if (Date.now() >= deadline) return false
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+}
+
+/**
+ * Étape 294 — charge un modèle en mémoire sans rien lui demander (requête vide, méthode documentée par Ollama), pour
+ * que la première question n'attende pas son chargement. `numCtx` doit être EXACTEMENT celui des vraies demandes :
+ * une autre valeur ferait recharger le modèle à la première question, préchargement perdu. `true` si chargé.
+ */
+export async function preloadModel(model: string, numCtx: number, timeoutMs = 120_000): Promise<boolean> {
+  try {
+    const response = await fetch(`${config.ollama.host}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, prompt: '', options: { num_ctx: numCtx } }),
+      signal: AbortSignal.timeout(timeoutMs)
+    })
+    if (!response.ok) return false
+    await response.json().catch(() => null)
+    return true
+  } catch {
+    return false
   }
 }
 

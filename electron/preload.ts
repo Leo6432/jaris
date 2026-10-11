@@ -54,6 +54,7 @@ import {
   type UpdateProgress,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload,
+  type StartupState,
   type WidgetMode,
   type WindowChrome,
   type LanguageState
@@ -76,6 +77,9 @@ const api = {
   onChatWebActivity: (cb: (activity: WebActivity) => void) => subscribe(IPC_CHANNELS.chatWebActivity, cb),
   onSetupStatus: (cb: (status: VoiceSetupStatusPayload) => void) => subscribe(IPC_CHANNELS.setupStatus, cb),
   getSetupStatus: (): Promise<VoiceSetupStatusPayload> => ipcRenderer.invoke(IPC_CHANNELS.setupStatus),
+  /** Étape 294 : où en est le démarrage (écran d'accueil animé). */
+  getStartupState: (): Promise<StartupState> => ipcRenderer.invoke(IPC_CHANNELS.getStartupState),
+  onStartupState: (cb: (state: StartupState) => void) => subscribe(IPC_CHANNELS.startupState, cb),
   triggerWake: (): void => ipcRenderer.send(IPC_CHANNELS.triggerWake),
   notifyAudioEnded: (): void => ipcRenderer.send(IPC_CHANNELS.audioEnded),
   /**

@@ -64,7 +64,9 @@ export async function extractMemoryFromExchange(
     ]
 
     // Vérifié non-undefined au chargement du module (throw ci-dessus sinon) : le cast est sûr ici.
-    const message = await chatWithOllama(messages, [REMEMBER_TOOL!], model, 'low')
+    // Étape 294 : la fenêtre de la conversation (réglage Options → Modèles), pas celle par défaut — une autre valeur
+    // ferait recharger le modèle médium par Ollama après chaque échange, juste avant la question suivante.
+    const message = await chatWithOllama(messages, [REMEMBER_TOOL!], model, 'low', undefined, profile?.contextLength ?? config.ollama.numCtx)
     for (const call of message.tool_calls ?? []) {
       if (call.function.name !== 'remember') continue
       const title = String(call.function.arguments.title ?? '').trim()

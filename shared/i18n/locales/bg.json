@@ -1305,5 +1305,11 @@
   "omv.fixed": "Ollama търсеше моделите си в {from} ({counts}): настройката е върната на {to}, Ollama се рестартира. Нищо не е изтрито.",
   "omv.repairing": "Ollama не вижда нито един от моделите ти (общо: {count}), макар че са в {dir}: Jaris я рестартира, като ѝ дава тази папка…",
   "omv.repaired": "Ollama отново вижда моделите ти ({count}).",
-  "omv.repairFailed": "Ollama все още не вижда моделите ти, намиращи се в {dir}. Рестартирай компютъра, после отвори отново Jaris."
+  "omv.repairFailed": "Ollama все още не вижда моделите ти, намиращи се в {dir}. Рестартирай компютъра, после отвори отново Jaris.",
+  "startup.step.engine": "Стартиране на двигателя…",
+  "startup.step.listening": "Подготовка на слушането…",
+  "startup.step.voice": "Подготовка на гласа…",
+  "startup.step.brain": "Зареждане на модела…",
+  "startup.ready": "Готово",
+  "startup.aria": "Jaris се стартира"
 }

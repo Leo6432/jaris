@@ -72,7 +72,9 @@ test('la limite native du Chat exclut le halo transparent',()=>{
 test('après l’onboarding, la grande fenêtre reste cachée mais le widget inactif apparaît',()=>{
  const source=ts.transpileModule(main,{compilerOptions:{removeComments:true,target:ts.ScriptTarget.ES2022}}).outputText
  assert.match(source,/fullWindow\s*=\s*createFullWindow\(!onboardingDone\)/)
- assert.match(source,/widgetWindow\.once\(['"]ready-to-show['"][\s\S]{0,100}showWidgetWindow\(\)/)
+ // Étape 294 : le widget apparaît quand le démarrage est fini et que ses fenêtres ont fait leur premier rendu.
+ assert.match(source,/const windowsLoaded\s*=\s*Promise\.all\(\[windowLoaded\(fullWindow\),\s*windowLoaded\(widgetWindow\)\]\)/)
+ assert.match(source,/function revealAfterStartup\([\s\S]*?else\s*showWidgetWindow\(\)/)
  assert.match(source,/function triggerVisibleWake\(\)[\s\S]{0,500}showWidgetWindow\(true\)[\s\S]{0,200}pipeline\.triggerWake\(\)/)
 })
 

@@ -1326,5 +1326,11 @@
   "omv.fixed": "Ollama hľadala svoje modely v {from} ({counts}): nastavenie vrátené na {to}, Ollama sa reštartuje. Nič nebolo odstránené.",
   "omv.repairing": "Ollama nevidí žiadny z tvojich modelov (počet: {count}), hoci sú uložené v {dir}: Jaris ju reštartuje a odovzdá jej tento priečinok…",
   "omv.repaired": "Ollama znova vidí tvoje modely ({count}).",
-  "omv.repairFailed": "Ollama stále nevidí tvoje modely uložené v {dir}. Reštartuj počítač a potom otvor Jarisa."
+  "omv.repairFailed": "Ollama stále nevidí tvoje modely uložené v {dir}. Reštartuj počítač a potom otvor Jarisa.",
+  "startup.step.engine": "Spúšťa sa motor…",
+  "startup.step.listening": "Pripravuje sa počúvanie…",
+  "startup.step.voice": "Pripravuje sa hlas…",
+  "startup.step.brain": "Načítava sa model…",
+  "startup.ready": "Pripravené",
+  "startup.aria": "Jaris sa spúšťa"
 }

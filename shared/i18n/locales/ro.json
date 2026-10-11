@@ -1326,5 +1326,11 @@
   "omv.fixed": "Ollama își căuta modelele în {from} ({counts}): setarea a fost readusă pe {to}, Ollama repornește. Nimic nu a fost șters.",
   "omv.repairing": "Ollama nu vede niciunul dintre modelele tale (număr: {count}), deși sunt puse în {dir}: Jaris o repornește dându-i acest dosar…",
   "omv.repaired": "Ollama îți vede din nou modelele ({count}).",
-  "omv.repairFailed": "Ollama tot nu îți vede modelele, puse în {dir}. Repornește calculatorul, apoi relansează Jaris."
+  "omv.repairFailed": "Ollama tot nu îți vede modelele, puse în {dir}. Repornește calculatorul, apoi relansează Jaris.",
+  "startup.step.engine": "Se pornește motorul…",
+  "startup.step.listening": "Se pregătește ascultarea…",
+  "startup.step.voice": "Se pregătește vocea…",
+  "startup.step.brain": "Se încarcă modelul…",
+  "startup.ready": "Gata",
+  "startup.aria": "Jaris pornește"
 }

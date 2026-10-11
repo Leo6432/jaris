@@ -308,11 +308,14 @@ export class VoicePipeline extends EventEmitter {
         const profile = await getProfile()
         if (profile?.voiceCorrectionEnabled !== false) {
           const model = profile?.models?.flash ?? config.ollama.model
+          // Étape 294 : la fenêtre de la conversation, pour que le modèle rapide reste chargé entre la correction et
+          // la réponse — une autre valeur le faisait recharger par Ollama à chaque phrase (server/sched.go).
+          const numCtx = profile?.contextLength ?? config.ollama.numCtx
           const correctionStart = Date.now()
           const corrected = await correctTranscript(
             combined,
             (system, user, signal) =>
-              structuredChat([{ role: 'system', content: system }, { role: 'user', content: user }], model, CORRECTION_SCHEMA, signal),
+              structuredChat([{ role: 'system', content: system }, { role: 'user', content: user }], model, CORRECTION_SCHEMA, signal, numCtx),
             profile?.name ?? null,
             controller.signal
           )

@@ -46,7 +46,8 @@ import {
   stopOllamaIfStartedByJaris,
   updateOllama
 } from './services/dependencyServices'
-import { deleteModel, getModelThinking, listInstalledModels, setModelsViewRepair } from './services/ollama'
+import { deleteModel, getModelThinking, listInstalledModels, preloadModel, setModelsViewRepair, waitForOllama } from './services/ollama'
+import { StartupProgress } from './services/startupProgress'
 import { applyModelChoice, buildModelChoiceInfo, MODEL_CHOICE_MODES, resolveChosenModel } from './services/modelChoice'
 import { chosenThink, isAcceptedThink, thinkOptions, thinkingKind } from '../shared/effort'
 import { getStorageStatus, programMoveCommandLine, reconcileStorage, relocateEverything } from './services/relocation'
@@ -245,6 +246,20 @@ const WIDGET_CHAT_MAX_HEIGHT = 440
 let lastSetupStatus: VoiceSetupStatusPayload = { ready: true, missing: [] }
 
 /**
+ * Étape 294 — démarrage (Léo : « quand on ouvre Jaris, tout est pas ok, il y a les modèles qui se lancent… je veux
+ * que ça se lance quand tout est ok »). Tant que `startupRevealed` est faux, ni le widget ni la grande fenêtre ne
+ * s'affichent : l'écran de démarrage (`splashWindow`) montre ce qui se prépare — moteur, écoute, voix, modèle.
+ * Au tout premier lancement (configuration), rien n'est retenu : les écrans d'installation ont leur propre suivi.
+ */
+const startup = new StartupProgress()
+let startupRevealed = false
+let splashWindow: BrowserWindow | null = null
+/** Ouvrir Jaris (icône, second lancement) pendant le démarrage : la grande fenêtre s'ouvrira à l'affichage. */
+let revealFullAfterStartup = false
+/** Le suivi du moteur et du modèle n'est lancé qu'au premier démarrage du pipeline, pas à ses relances. */
+let startupEngineTracked = false
+
+/**
  * Dernière émotion connue du pipeline vocal, tenue à jour par `pipeline.on('emotion', ...)`. Sert
  * UNIQUEMENT à `showWidgetWindow` : le renderer choisit déplié/replié d'après l'émotion
  * (`widgetCollapsed = emotion === 'idle'`, App.tsx), donc la fenêtre native doit se baser sur la MÊME
@@ -357,7 +372,7 @@ async function buildMemoryGraphWithUser(): Promise<MemoryGraph> {
   }
 }
 
-function loadRenderer(win: BrowserWindow, mode: 'full' | 'widget'): void {
+function loadRenderer(win: BrowserWindow, mode: 'full' | 'widget' | 'splash'): void {
   if (isDev && process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?mode=${mode}`)
   } else {
@@ -508,6 +523,99 @@ function createFullWindow(showWhenReady = true): BrowserWindow {
  * en Vocal, petit indicateur inactif en Chat, aucune forme en Code. Le + déplie l'écoute vocale ou la barre
  * de saisie Chat ; « Jaris » déplie aussi le widget vocal, qui revient ensuite à son petit état au repos.
  */
+/** Taille de l'écran de démarrage : la carte (index.css, .startup) plus une marge transparente tout autour. */
+const SPLASH_WIDTH = 360
+const SPLASH_HEIGHT = 380
+/** Durée laissée à la carte pour s'effacer (animation de sortie, index.css) avant que Jaris apparaisse. */
+const SPLASH_EXIT_MS = 380
+/** Filet : une fenêtre de Jaris qui ne finirait jamais de se charger ne doit pas bloquer l'affichage. */
+const SPLASH_WINDOWS_LOAD_LIMIT_MS = 15_000
+
+/**
+ * Étape 294 — l'écran de démarrage, façon ChatGPT : une petite carte au centre de l'écran (l'orbe de Jaris et ce qui
+ * se prépare), affichée dès le lancement et fermée quand tout est prêt. Le fermer soi-même (Alt+F4, barre des tâches)
+ * avant la fin quitte Jaris, comme on l'attend d'une application qu'on vient de lancer par erreur.
+ */
+function createSplashWindow(): BrowserWindow {
+  const win = new BrowserWindow({
+    icon: createAppIcon(),
+    title: 'Jaris',
+    width: SPLASH_WIDTH,
+    height: SPLASH_HEIGHT,
+    center: true,
+    frame: false,
+    // Transparente, la carte arrondie dessinée avec une marge (même parade que le widget pour les coins de Windows).
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    show: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/preload.mjs'),
+      sandbox: false
+    }
+  })
+  win.once('ready-to-show', () => {
+    if (!win.isDestroyed() && !startupRevealed) win.show()
+  })
+  win.on('close', () => {
+    if (startupRevealed || quitting) return
+    quitting = true
+    app.quit()
+  })
+  win.on('closed', () => {
+    if (splashWindow === win) splashWindow = null
+  })
+  loadRenderer(win, 'splash')
+  return win
+}
+
+/** Une fenêtre prête à être montrée (son premier rendu fait), ou le filet de temps dépassé. */
+function windowLoaded(win: BrowserWindow): Promise<void> {
+  return new Promise((resolve) => {
+    const limit = setTimeout(resolve, SPLASH_WINDOWS_LOAD_LIMIT_MS)
+    win.once('ready-to-show', () => {
+      clearTimeout(limit)
+      resolve()
+    })
+  })
+}
+
+/**
+ * Étape 294 — tout est prêt : la carte de démarrage joue sa sortie (elle vient de recevoir `ready`), puis Jaris
+ * apparaît à sa place — le widget comme d'habitude, ou la grande fenêtre si on l'a demandée pendant l'attente, ou
+ * en grand si Jaris a été lancé par Windows à l'ouverture de session (étape 165).
+ */
+function revealAfterStartup(revealAtLogin: boolean): void {
+  if (startupRevealed) return
+  setTimeout(() => {
+    startupRevealed = true
+    const splash = splashWindow
+    splashWindow = null
+    if (splash && !splash.isDestroyed()) splash.destroy()
+    if (quitting) return
+    if (revealAtLogin) {
+      const win = fullWindow
+      if (win && !win.isDestroyed()) {
+        // Le délai de grâce de l'ouverture de session part de l'affichage, plus du lancement : la fenêtre arrive
+        // maintenant après l'écran de démarrage, et les autres programmes prennent encore le focus à ce moment-là.
+        loginRevealUntil = Date.now() + LOGIN_REVEAL_GRACE_MS
+        win.maximize()
+        // Brièvement au premier plan forcé : pendant l'ouverture de session, Windows peut refuser le focus à un
+        // programme de démarrage, et la fenêtre resterait derrière celles qui s'ouvrent en même temps.
+        win.setAlwaysOnTop(true)
+        showFullWindow()
+        win.setAlwaysOnTop(false)
+        return
+      }
+    }
+    if (revealFullAfterStartup) showFullWindow()
+    else showWidgetWindow()
+  }, SPLASH_EXIT_MS)
+}
+
 function createWidgetWindow(): BrowserWindow {
   // Position définitive posée juste avant l'affichage par positionWidgetWindow() (recalculée à chaque
   // fois, pas figée ici) : la valeur de départ n'a pas d'importance tant que la fenêtre reste cachée.
@@ -608,6 +716,15 @@ function positionWidgetWindow(win: BrowserWindow, expanded: boolean, animate = f
 
 /** Les deux fenêtres ne sont jamais visibles en même temps (sinon double lecture audio des réponses). */
 function showFullWindow(): void {
+  // Étape 294 : pendant le démarrage, l'écran d'accueil reste devant ; la grande fenêtre suivra quand tout sera prêt.
+  if (!startupRevealed) {
+    revealFullAfterStartup = true
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashWindow.show()
+      splashWindow.focus()
+    }
+    return
+  }
   stopChatPointerWatch()
   if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide()
   if (!fullWindow || fullWindow.isDestroyed()) fullWindow = createFullWindow()
@@ -673,7 +790,7 @@ const WIDGET_WATCHDOG_MS = 1000
 
 function watchWidgetPresence(): void {
   setInterval(() => {
-    if (!onboardingDone || quitting || !hasWidgetToShow()) return
+    if (!onboardingDone || quitting || !startupRevealed || !hasWidgetToShow()) return
     if (!fullWindow || fullWindow.isDestroyed() || fullWindow.isVisible()) return
     if (!widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible()) {
       showWidgetWindow()
@@ -688,6 +805,8 @@ function watchWidgetPresence(): void {
 }
 
 function showWidgetWindow(forceExpanded = false): void {
+  // Étape 294 : rien ne s'affiche avant la fin du démarrage (voir `startupRevealed`).
+  if (!startupRevealed) return
   if (fullWindow && !fullWindow.isDestroyed() && fullWindow.isVisible()) return
   // Depuis le mode Code, Jaris disparaît complètement : "ça doit rien faire aucun widget" (Léo). Un widget
   // déjà affiché est caché plutôt que laissé tel quel — sinon, passer en Code puis quitter la fenêtre
@@ -731,7 +850,7 @@ function showWidgetWindow(forceExpanded = false): void {
 
 /** La touche + ouvre la forme du mode actif : barre écrite en Chat, écoute visible en Agent vocal. */
 function triggerVisibleWake(): void {
-  if (modeWithoutWidget()) return
+  if (!startupRevealed || modeWithoutWidget()) return
   if (activeMode === 'chat') {
     if (!fullWindow?.isVisible()) showWidgetWindow(true)
     return
@@ -822,7 +941,7 @@ function refreshTrayMenu(): void {
 /** Envoie un évènement du pipeline vocal à toutes les fenêtres actuellement ouvertes (réglages et/ou widget). */
 function broadcast(channel: string, payload?: unknown): void {
   if (channel === IPC_CHANNELS.log) console.log('[jaris]', payload)
-  for (const win of [fullWindow, widgetWindow]) {
+  for (const win of [fullWindow, widgetWindow, splashWindow]) {
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
   }
 }
@@ -1032,6 +1151,21 @@ function fireReminder(message: string): void {
   void pipeline?.announceReminder(message)
 }
 
+/** Après le démarrage d'Ollama par Jaris (déjà jusqu'à 20 s d'attente), le temps de confirmer qu'il répond. */
+const STARTUP_ENGINE_CONFIRM_MS = 10_000
+
+/**
+ * Étape 294 — charge le modèle de conversation pendant l'écran de démarrage : celui choisi à la main pour la voix, sinon
+ * le palier rapide (celui des phrases courtes, et de la correction de ce qui est entendu). Même fenêtre de contexte que
+ * les vraies demandes, sinon Ollama le rechargerait à la première question (`needsReload`, server/sched.go).
+ */
+async function warmUpConversationModel(): Promise<boolean> {
+  const profile = await getProfile()
+  const model = profile?.modelChoices?.voice || profile?.models?.flash
+  if (!model) return false
+  return preloadModel(model, profile?.contextLength ?? config.ollama.numCtx)
+}
+
 async function startVoicePipeline(): Promise<void> {
   const log = (message: string): void => broadcast(IPC_CHANNELS.log, message)
   // Étape 143 : range dans le dossier de Jaris ce qui n'y est pas encore, avant de démarrer Ollama et la voix
@@ -1051,7 +1185,19 @@ async function startVoicePipeline(): Promise<void> {
       }
     })
   setModelsViewRepair(repairModelsView)
-  void ensureOllamaRunning(log).then(repairModelsView)
+  const ollamaStarted = ensureOllamaRunning(log).then(repairModelsView)
+  // Étape 294 : au premier démarrage seulement, l'écran d'accueil attend le moteur, puis le modèle de conversation
+  // préchargé (sa première réponse n'attend plus son chargement). La recherche web (Docker, parfois plusieurs
+  // minutes, parfois absent) ne le retient jamais : elle continue de démarrer en arrière-plan comme avant.
+  if (!startupEngineTracked) {
+    startupEngineTracked = true
+    const engineUp = ollamaStarted.then(
+      () => waitForOllama(STARTUP_ENGINE_CONFIRM_MS),
+      () => false
+    )
+    startup.track('engine', engineUp)
+    startup.track('brain', engineUp.then((up) => up && warmUpConversationModel()))
+  }
   void ensureSearxngRunning(log)
 
   pipeline = new VoicePipeline()
@@ -1153,6 +1299,8 @@ app.whenReady().then(async () => {
   void checkAppFreshness()
 
   ipcMain.handle(IPC_CHANNELS.setupStatus, () => lastSetupStatus)
+  ipcMain.handle(IPC_CHANNELS.getStartupState, () => startup.state())
+  startup.on('change', (state) => broadcast(IPC_CHANNELS.startupState, state))
   ipcMain.on(IPC_CHANNELS.triggerWake, () => triggerVisibleWake())
   ipcMain.on(IPC_CHANNELS.audioEnded, () => pipeline?.notifyAudioEnded())
   ipcMain.handle(IPC_CHANNELS.getProfile, () => getProfile())
@@ -1881,20 +2029,10 @@ app.whenReady().then(async () => {
   // Étape 165 : lancé par Windows à l'ouverture de session (Options → Général), Jaris s'affiche en grand au
   // lieu de démarrer discrètement — « dès que le PC démarre on voit la fenêtre Jaris et pas le fond d'écran ».
   const revealAtLogin = onboardingDone && wasLaunchedAtLogin(process.argv)
+  // Étape 294 : l'écran de démarrage d'abord, pour qu'il apparaisse au plus vite ; Jaris se prépare derrière.
+  if (onboardingDone) splashWindow = createSplashWindow()
+  else startupRevealed = true
   fullWindow = createFullWindow(!onboardingDone)
-  if (revealAtLogin) {
-    loginRevealUntil = Date.now() + LOGIN_REVEAL_GRACE_MS
-    const win = fullWindow
-    win.once('ready-to-show', () => {
-      if (win.isDestroyed()) return
-      win.maximize()
-      // Brièvement au premier plan forcé : pendant l'ouverture de session, Windows peut refuser le focus à un
-      // programme de démarrage, et la fenêtre resterait derrière celles qui s'ouvrent en même temps.
-      win.setAlwaysOnTop(true)
-      showFullWindow()
-      win.setAlwaysOnTop(false)
-    })
-  }
 
   // Widget pré-créé et chargé en arrière-plan dès le démarrage (caché) : sans ça, la première fois qu'on
   // réduit la fenêtre, il fallait créer la fenêtre Electron ET charger toute la page React avant de
@@ -1903,18 +2041,21 @@ app.whenReady().then(async () => {
   if (onboardingDone) {
     widgetWindow = createWidgetWindow()
     // Une fois Jaris hors de sa fenêtre principale, son état inactif reste visible en haut au centre dès le
-    // démarrage : petit orbe en Vocal, petit indicateur Chat dans ce mode. La création reste préchargée pour
-    // éviter un flash blanc avant que React ait peint la bonne forme.
-    widgetWindow.once('ready-to-show', () => {
-      if (!revealAtLogin) showWidgetWindow()
-    })
+    // démarrage : petit orbe en Vocal, petit indicateur Chat dans ce mode. Étape 294 : seulement quand tout est
+    // prêt ET que ses fenêtres ont fini leur premier rendu (pas de flash blanc ni de forme provisoire).
+    const windowsLoaded = Promise.all([windowLoaded(fullWindow), windowLoaded(widgetWindow)])
+    startup.whenReady(() => void windowsLoaded.then(() => revealAfterStartup(revealAtLogin)))
+    // La voix (synthèse) se charge pendant l'attente, plus à la toute première réponse.
+    startup.track('voice', ttsClient.start().then(() => true))
   }
 
   watchWidgetPresence()
   // Les rappels en attente sont réarmés UNE fois, ici — plus à chaque redémarrage du moteur vocal (changement de
   // micro, mot d'activation...), qui les faisait sonner en double (étape 234).
   void restoreReminders(fireReminder)
-  void startVoicePipeline()
+  // Étape 294 : l'écoute compte comme prête quand le moteur vocal a vraiment démarré (ou a échoué : l'écran de
+  // démarrage ne doit jamais rester bloqué, et le message habituel dira ce qui manque).
+  startup.track('listening', startVoicePipeline().then(() => lastSetupStatus.ready))
   // Étape 214 : accès téléphone relancé au démarrage s'il était activé (sans ouvrir le navigateur tout seul).
   void getProfile().then((profile) => {
     if (profile?.phoneAccessEnabled) void getPhoneAccess().enable().catch((err) => broadcast(IPC_CHANNELS.log, t('phone.log', { message: String(err) })))

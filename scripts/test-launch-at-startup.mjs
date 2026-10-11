@@ -81,7 +81,11 @@ test('main.ts : lancé au démarrage, la fenêtre principale s’affiche en gran
   assert.ok(reveal, 'bloc d’affichage au démarrage introuvable')
   assert.match(reveal[0], /maximize\(\)/, 'la fenêtre doit couvrir le bureau')
   assert.match(reveal[0], /showFullWindow\(\)/, 'la fenêtre doit être affichée ET recevoir le focus')
-  assert.match(mainSource, /once\('ready-to-show', \(\) => \{\s*if \(!revealAtLogin\)\s*showWidgetWindow\(\)/)
+  // Étape 294 : l'affichage attend la fin de l'écran de démarrage ; au démarrage de Windows, la grande fenêtre
+  // s'affiche et la fonction s'arrête là — le widget ne s'impose qu'aux autres lancements.
+  assert.match(mainSource, /startup\.whenReady\(\(\) => void windowsLoaded\.then\(\(\) => revealAfterStartup\(revealAtLogin\)\)\)/)
+  assert.match(reveal[0], /loginRevealUntil = Date\.now\(\) \+ LOGIN_REVEAL_GRACE_MS/, 'le délai de grâce part de l’affichage')
+  assert.match(mainSource, /setAlwaysOnTop\(false\);\s*return;\s*\}\s*\}\s*if \(revealFullAfterStartup\)\s*showFullWindow\(\);\s*else\s*showWidgetWindow\(\)/)
 })
 
 test('main.ts : la perte de focus pendant l’ouverture de session ne replie pas la fenêtre en widget', () => {

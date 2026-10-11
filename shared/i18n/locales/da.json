@@ -1305,5 +1305,11 @@
   "omv.fixed": "Ollama ledte efter sine modeller i {from} ({counts}): indstillingen er sat tilbage til {to}, Ollama genstarter. Intet er blevet slettet.",
   "omv.repairing": "Ollama ser ingen af dine {count} modeller, selvom de ligger i {dir}: Jaris genstarter den med denne mappe…",
   "omv.repaired": "Ollama ser dine modeller igen ({count}).",
-  "omv.repairFailed": "Ollama ser stadig ikke dine modeller, der ligger i {dir}. Genstart computeren, og åbn derefter Jaris igen."
+  "omv.repairFailed": "Ollama ser stadig ikke dine modeller, der ligger i {dir}. Genstart computeren, og åbn derefter Jaris igen.",
+  "startup.step.engine": "Starter motoren…",
+  "startup.step.listening": "Forbereder lytning…",
+  "startup.step.voice": "Forbereder stemmen…",
+  "startup.step.brain": "Indlæser modellen…",
+  "startup.ready": "Klar",
+  "startup.aria": "Jaris starter"
 }

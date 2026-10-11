@@ -1347,5 +1347,11 @@
   "omv.fixed": "Ollama шукала свої моделі в {from} ({counts}): параметр повернуто на {to}, Ollama перезапускається. Нічого не видалено.",
   "omv.repairing": "Ollama не бачить жодної з твоїх моделей (усього: {count}), хоча вони лежать у {dir}: Jaris перезапускає її, вказавши цю папку…",
   "omv.repaired": "Ollama знову бачить твої моделі ({count}).",
-  "omv.repairFailed": "Ollama досі не бачить твоїх моделей, що лежать у {dir}. Перезавантаж комп'ютер, а потім знову відкрий Jaris."
+  "omv.repairFailed": "Ollama досі не бачить твоїх моделей, що лежать у {dir}. Перезавантаж комп'ютер, а потім знову відкрий Jaris.",
+  "startup.step.engine": "Запуск рушія…",
+  "startup.step.listening": "Підготовка прослуховування…",
+  "startup.step.voice": "Підготовка голосу…",
+  "startup.step.brain": "Завантаження моделі…",
+  "startup.ready": "Готово",
+  "startup.aria": "Jaris запускається"
 }

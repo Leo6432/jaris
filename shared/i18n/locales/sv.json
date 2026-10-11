@@ -1305,5 +1305,11 @@
   "omv.fixed": "Ollama letade efter sina modeller i {from} ({counts}): inställningen återställd till {to}, Ollama startar om. Inget har raderats.",
   "omv.repairing": "Ollama ser ingen av dina {count} modeller, trots att de ligger i {dir}: Jaris startar om den med den här mappen…",
   "omv.repaired": "Ollama ser dina modeller igen ({count}).",
-  "omv.repairFailed": "Ollama ser fortfarande inte dina modeller, som ligger i {dir}. Starta om datorn och öppna sedan Jaris igen."
+  "omv.repairFailed": "Ollama ser fortfarande inte dina modeller, som ligger i {dir}. Starta om datorn och öppna sedan Jaris igen.",
+  "startup.step.engine": "Startar motorn…",
+  "startup.step.listening": "Förbereder lyssnandet…",
+  "startup.step.voice": "Förbereder rösten…",
+  "startup.step.brain": "Laddar modellen…",
+  "startup.ready": "Klar",
+  "startup.aria": "Jaris startar"
 }

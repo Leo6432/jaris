@@ -1305,5 +1305,11 @@
   "omv.fixed": "Ollama etsi mallejaan kansiosta {from} ({counts}): asetus palautettu arvoon {to}, Ollama käynnistyy uudelleen. Mitään ei poistettu.",
   "omv.repairing": "Ollama ei näe yhtään {count} mallistasi, vaikka ne ovat kansiossa {dir}: Jaris käynnistää sen uudelleen ja antaa sille tämän kansion…",
   "omv.repaired": "Ollama näkee taas mallisi ({count}).",
-  "omv.repairFailed": "Ollama ei vieläkään näe mallejasi, jotka ovat kansiossa {dir}. Käynnistä tietokone uudelleen ja avaa sitten Jaris."
+  "omv.repairFailed": "Ollama ei vieläkään näe mallejasi, jotka ovat kansiossa {dir}. Käynnistä tietokone uudelleen ja avaa sitten Jaris.",
+  "startup.step.engine": "Käynnistetään moottoria…",
+  "startup.step.listening": "Valmistellaan kuuntelua…",
+  "startup.step.voice": "Valmistellaan ääntä…",
+  "startup.step.brain": "Ladataan mallia…",
+  "startup.ready": "Valmis",
+  "startup.aria": "Jaris käynnistyy"
 }

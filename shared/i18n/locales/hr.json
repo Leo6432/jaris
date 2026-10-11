@@ -1326,5 +1326,11 @@
   "omv.fixed": "Ollama je tražila svoje modele u {from} ({counts}): postavka vraćena na {to}, Ollama se ponovno pokreće. Ništa nije izbrisano.",
   "omv.repairing": "Ollama ne vidi nijedan od tvojih modela (broj: {count}), iako su spremljeni u {dir}: Jaris je ponovno pokreće i daje joj tu mapu…",
   "omv.repaired": "Ollama ponovno vidi tvoje modele ({count}).",
-  "omv.repairFailed": "Ollama i dalje ne vidi tvoje modele spremljene u {dir}. Ponovno pokreni računalo, zatim otvori Jarisa."
+  "omv.repairFailed": "Ollama i dalje ne vidi tvoje modele spremljene u {dir}. Ponovno pokreni računalo, zatim otvori Jarisa.",
+  "startup.step.engine": "Pokretanje pogona…",
+  "startup.step.listening": "Priprema slušanja…",
+  "startup.step.voice": "Priprema glasa…",
+  "startup.step.brain": "Učitavanje modela…",
+  "startup.ready": "Spremno",
+  "startup.aria": "Jaris se pokreće"
 }

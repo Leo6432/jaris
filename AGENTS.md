@@ -7839,3 +7839,35 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   Régression : `node --test scripts/test-i18n-completeness.mjs scripts/test-options-references.mjs
   scripts/test-prompt-translator.mjs scripts/test-data-location.mjs` et `python scripts/test-wake-confirmation.py`.
   Chaque nouveau garde-fou vérifié en réintroduisant son défaut.
+
+- **Écran de démarrage façon ChatGPT (étape 294, Léo : « fais une petite animation de démarrage comme ChatGPT, car
+  quand on ouvre Jaris tout est pas ok, il y a les modèles qui se lancent… je veux que ça se lance quand tout est
+  ok »).** Au lancement (configuration déjà faite), une petite carte s'affiche au centre de l'écran : l'orbe de Jaris
+  animé, l'étape en cours (« Démarrage du moteur… », « Préparation de l'écoute… », « Préparation de la voix… »,
+  « Chargement du modèle… ») et un fin trait d'avancement. Ni le widget ni la grande fenêtre ne s'affichent avant la
+  fin (`startupRevealed`, main.ts) ; la carte s'efface puis Jaris apparaît à sa place. Quatre étapes suivies
+  (`startupProgress.ts`, pur et testé) : Ollama qui répond, le moteur vocal démarré, la synthèse vocale chargée
+  (elle ne se chargeait jusqu'ici qu'à la toute première réponse) et le modèle de conversation PRÉCHARGÉ.
+  **Ne jamais bloquer** : une étape qui échoue compte comme terminée (les messages habituels disent ce qui manque),
+  et au-delà de 90 s Jaris s'affiche quand même et finit en arrière-plan (premier lancement qui télécharge la
+  transcription, Ollama qui ne démarre pas). La recherche web (Docker) ne retient jamais l'écran. Ouvrir Jaris pendant
+  l'attente (icône, second lancement) ramène la carte devant et ouvre la grande fenêtre à la fin ; fermer la carte
+  quitte Jaris. Au démarrage de Windows, la fenêtre s'ouvre en grand APRÈS la carte, et le délai de grâce contre la
+  perte de focus part maintenant de cet affichage (il partait du lancement, donc pouvait être déjà écoulé).
+  **Vrai défaut trouvé en préparant le préchargement, vérifié dans le CODE SOURCE d'Ollama (server/sched.go,
+  `needsReload`) plutôt que supposé** : un modèle est entièrement rechargé quand une demande donne une fenêtre de
+  contexte (`num_ctx`) différente de celle avec laquelle il est chargé. Or, à la voix, la correction de la phrase
+  entendue utilisait le modèle rapide en 2048 puis la réponse en 8192 : le modèle rapide était rechargé à chaque
+  phrase. Même chose pour la mémoire automatique (fenêtre par défaut au lieu de celle du curseur d'Options). Toutes
+  les demandes au modèle de conversation passent maintenant `profile?.contextLength ?? config.ollama.numCtx`, et le
+  préchargement aussi — sinon il aurait été perdu dès la première question. **Leçon générale : précharger un modèle
+  ne sert que si TOUTES les demandes qui suivent ont les mêmes réglages de chargement ; un réglage qui diffère d'un
+  appel à l'autre ne produit aucune erreur, juste un rechargement silencieux à chaque fois.**
+  **Piège CSS évité, attrapé en relisant avant de tester** : en mouvement réduit, la sortie de la carte réutilisait la
+  même animation en sens inverse — or changer seulement le sens d'une animation ne la rejoue pas ; la carte serait
+  restée visible jusqu'à sa fermeture brutale. Une animation de sortie au nom distinct (`startup-fade-out`).
+  **Vérifié ici** : typecheck, build, toute la suite de tests, captures de la carte (sombre/clair, français/allemand/
+  grec). **Non vérifié** : le vrai démarrage sur Windows (durées réelles des étapes, préchargement sur sa carte).
+  Régression : `node --test scripts/test-startup.mjs scripts/test-startup-splash-ui.mjs scripts/test-model-preload.mjs`
+  (étapes, échec et délai qui ne bloquent pas, rien d'affiché avant la fin, carte qui s'efface vraiment, même
+  fenêtre de contexte partout). Chaque garde-fou vérifié en réintroduisant son défaut.

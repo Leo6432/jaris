@@ -56,6 +56,22 @@ export interface VoiceSetupStatusPayload {
   missing: string[]
 }
 
+/**
+ * Étape 294 — démarrage de Jaris (Léo : « quand on ouvre Jaris, tout est pas ok, il y a les modèles qui se lancent…
+ * je veux que ça se lance quand tout est ok »). Les étapes attendues avant d'afficher Jaris : le moteur (Ollama),
+ * l'écoute (transcription), la voix (synthèse) et le modèle de conversation préchargé.
+ */
+export type StartupStepId = 'engine' | 'listening' | 'voice' | 'brain'
+export type StartupStepState = 'pending' | 'running' | 'done' | 'failed'
+
+export interface StartupState {
+  /** Toutes les étapes terminées (réussies ou non), ou délai maximal dépassé : Jaris peut s'afficher. */
+  ready: boolean
+  /** Prêt parce que le délai maximal est passé, pas parce que tout a fini (le reste continue en arrière-plan). */
+  timedOut: boolean
+  steps: Array<{ id: StartupStepId; state: StartupStepState }>
+}
+
 /** Les 3 paliers de modèles Ollama choisis par le scan de capacité (étape 13), selon la VRAM détectée. */
 export interface ModelTiers {
   flash: string
@@ -828,6 +844,8 @@ export const IPC_CHANNELS = {
   reply: 'jaris:reply',
   log: 'jaris:log',
   setupStatus: 'jaris:setup-status',
+  startupState: 'jaris:startup-state',
+  getStartupState: 'jaris:get-startup-state',
   /** renderer -> main : déclenche l'écoute manuellement (sans dire le mot d'activation). */
   triggerWake: 'jaris:trigger-wake',
   /** renderer <-> main : profil utilisateur (prénom), demandé une seule fois au premier lancement. */

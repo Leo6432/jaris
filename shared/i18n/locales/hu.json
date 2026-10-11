@@ -1305,5 +1305,11 @@
   "omv.fixed": "Az Ollama itt kereste a modelljeit: {from} ({counts}). A beállítás visszaállítva erre: {to}, az Ollama újraindul. Semmi sem lett törölve.",
   "omv.repairing": "Az Ollama egyetlen modelledet sem látja (összesen: {count}), pedig itt vannak: {dir}. Jaris újraindítja, és megadja neki ezt a mappát…",
   "omv.repaired": "Az Ollama újra látja a modelljeidet ({count}).",
-  "omv.repairFailed": "Az Ollama még mindig nem látja a modelljeidet, amelyek itt vannak: {dir}. Indítsd újra a számítógépet, majd nyisd meg újra Jarist."
+  "omv.repairFailed": "Az Ollama még mindig nem látja a modelljeidet, amelyek itt vannak: {dir}. Indítsd újra a számítógépet, majd nyisd meg újra Jarist.",
+  "startup.step.engine": "A motor indítása…",
+  "startup.step.listening": "A hallgatás előkészítése…",
+  "startup.step.voice": "A hang előkészítése…",
+  "startup.step.brain": "A modell betöltése…",
+  "startup.ready": "Kész",
+  "startup.aria": "Jaris indul"
 }

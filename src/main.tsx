@@ -12,6 +12,7 @@ import '@fontsource/geist-mono/latin-400.css'
 import '@fontsource/geist-mono/latin-500.css'
 import App from './App'
 import ScreenScan from './components/ScreenScan'
+import StartupSplash from './components/StartupSplash'
 import './index.css'
 import { initRendererLanguage } from './lib/i18n'
 
@@ -21,8 +22,9 @@ import { initRendererLanguage } from './lib/i18n'
 // Avant le premier rendu : l'écran naît dans la bonne langue (lecture synchrone auprès du processus principal).
 initRendererLanguage()
 
-const isScanOverlay = new URLSearchParams(window.location.search).get('mode') === 'scan'
+const mode = new URLSearchParams(window.location.search).get('mode')
 
+// Étape 294 : l'écran de démarrage est lui aussi un arbre à part — rien de Jaris n'est prêt pendant qu'il s'affiche.
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  <React.StrictMode>{isScanOverlay ? <ScreenScan /> : <App />}</React.StrictMode>
+  <React.StrictMode>{mode === 'scan' ? <ScreenScan /> : mode === 'splash' ? <StartupSplash /> : <App />}</React.StrictMode>
 )

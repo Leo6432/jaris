@@ -1305,5 +1305,11 @@
   "omv.fixed": "Ollama otsis oma mudeleid kaustast {from} ({counts}): seade taastati väärtusele {to}, Ollama taaskäivitub. Midagi ei kustutatud.",
   "omv.repairing": "Ollama ei näe ühtegi su {count} mudelist, kuigi need on kaustas {dir}: Jaris taaskäivitab selle ja annab talle selle kausta…",
   "omv.repaired": "Ollama näeb jälle su mudeleid ({count}).",
-  "omv.repairFailed": "Ollama ei näe ikka veel su mudeleid, mis on kaustas {dir}. Taaskäivita arvuti ja ava seejärel Jaris."
+  "omv.repairFailed": "Ollama ei näe ikka veel su mudeleid, mis on kaustas {dir}. Taaskäivita arvuti ja ava seejärel Jaris.",
+  "startup.step.engine": "Mootori käivitamine…",
+  "startup.step.listening": "Kuulamise ettevalmistamine…",
+  "startup.step.voice": "Hääle ettevalmistamine…",
+  "startup.step.brain": "Mudeli laadimine…",
+  "startup.ready": "Valmis",
+  "startup.aria": "Jaris käivitub"
 }

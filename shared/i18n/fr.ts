@@ -1316,4 +1316,12 @@ export const fr = {
   "omv.repairing": "Ollama ne voit aucun de tes {count} modèles, pourtant bien rangés dans {dir} : Jaris le relance en lui donnant ce dossier…",
   "omv.repaired": "Ollama voit de nouveau tes modèles ({count}).",
   "omv.repairFailed": "Ollama ne voit toujours pas tes modèles, rangés dans {dir}. Redémarre l'ordinateur, puis relance Jaris.",
+
+  // Étape 294 : écran de démarrage.
+  "startup.step.engine": "Démarrage du moteur…",
+  "startup.step.listening": "Préparation de l'écoute…",
+  "startup.step.voice": "Préparation de la voix…",
+  "startup.step.brain": "Chargement du modèle…",
+  "startup.ready": "Prêt",
+  "startup.aria": "Démarrage de Jaris",
 } as const

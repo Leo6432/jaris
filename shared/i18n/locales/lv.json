@@ -1326,5 +1326,11 @@
   "omv.fixed": "Ollama meklēja savus modeļus mapē {from} ({counts}): iestatījums atjaunots uz {to}, Ollama restartējas. Nekas netika izdzēsts.",
   "omv.repairing": "Ollama neredz nevienu no taviem modeļiem (kopā: {count}), lai gan tie atrodas mapē {dir}: Jaris to restartē, norādot šo mapi…",
   "omv.repaired": "Ollama atkal redz tavus modeļus ({count}).",
-  "omv.repairFailed": "Ollama joprojām neredz tavus modeļus, kas atrodas mapē {dir}. Restartē datoru un pēc tam atkal atver Jaris."
+  "omv.repairFailed": "Ollama joprojām neredz tavus modeļus, kas atrodas mapē {dir}. Restartē datoru un pēc tam atkal atver Jaris.",
+  "startup.step.engine": "Dzinēja palaišana…",
+  "startup.step.listening": "Klausīšanās sagatavošana…",
+  "startup.step.voice": "Balss sagatavošana…",
+  "startup.step.brain": "Modeļa ielāde…",
+  "startup.ready": "Gatavs",
+  "startup.aria": "Jaris startē"
 }

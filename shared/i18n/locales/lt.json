@@ -1326,5 +1326,11 @@
   "omv.fixed": "Ollama ieškojo savo modelių {from} ({counts}): nustatymas grąžintas į {to}, Ollama pasileidžia iš naujo. Niekas nebuvo ištrinta.",
   "omv.repairing": "Ollama nemato nė vieno iš tavo modelių ({count}), nors jie tvarkingai sudėti {dir}: Jaris ją paleidžia iš naujo, nurodydamas šį aplanką…",
   "omv.repaired": "Ollama vėl mato tavo modelius ({count}).",
-  "omv.repairFailed": "Ollama vis dar nemato tavo modelių, sudėtų {dir}. Paleisk kompiuterį iš naujo, tada vėl paleisk Jaris."
+  "omv.repairFailed": "Ollama vis dar nemato tavo modelių, sudėtų {dir}. Paleisk kompiuterį iš naujo, tada vėl paleisk Jaris.",
+  "startup.step.engine": "Paleidžiamas variklis…",
+  "startup.step.listening": "Ruošiamas klausymas…",
+  "startup.step.voice": "Ruošiamas balsas…",
+  "startup.step.brain": "Įkeliamas modelis…",
+  "startup.ready": "Paruošta",
+  "startup.aria": "Jaris paleidžiamas"
 }

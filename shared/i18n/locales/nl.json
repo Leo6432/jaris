@@ -1305,5 +1305,11 @@
   "omv.fixed": "Ollama zocht zijn modellen in {from} ({counts}): instelling teruggezet op {to}, Ollama start opnieuw. Er is niets gewist.",
   "omv.repairing": "Ollama ziet geen van je {count} modellen, hoewel ze in {dir} staan: Jaris start het opnieuw met deze map…",
   "omv.repaired": "Ollama ziet je modellen weer ({count}).",
-  "omv.repairFailed": "Ollama ziet je modellen in {dir} nog steeds niet. Start de computer opnieuw op en open Jaris daarna weer."
+  "omv.repairFailed": "Ollama ziet je modellen in {dir} nog steeds niet. Start de computer opnieuw op en open Jaris daarna weer.",
+  "startup.step.engine": "Engine starten…",
+  "startup.step.listening": "Luisteren voorbereiden…",
+  "startup.step.voice": "Stem voorbereiden…",
+  "startup.step.brain": "Model laden…",
+  "startup.ready": "Klaar",
+  "startup.aria": "Jaris start op"
 }
