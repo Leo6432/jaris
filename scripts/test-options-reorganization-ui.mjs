@@ -106,7 +106,7 @@ const overrides = {
     vramGb: 8,
     codeModel: 'qwen2.5-coder:7b',
     // Étape 160 : une seule liste de modèles, chacun avec son étiquette (repère affiché seulement).
-    entries: [
+    entries: window.__overviewEntries ?? [
       { model: 'ministral-3:3b', vramGb: 3.0, category: 'Rapide', readsImages: true, usedIn: ['Rapide', 'Médium'], toolCalling: '6/6', demands: '33/48', intelligence: null, artificialAnalysisIndex: 4.8 },
       { model: 'qwen3:1.7b', vramGb: 2, category: 'Rapide', readsImages: false, usedIn: [], toolCalling: null, intelligence: null, artificialAnalysisIndex: null },
       { model: 'gemma4:31b', vramGb: 20, category: 'Puissant', readsImages: true, usedIn: ['Vision'], toolCalling: null, intelligence: null, artificialAnalysisIndex: null }
@@ -410,6 +410,57 @@ test('"Tous les modèles" ouvre une page plein écran séparée, pas une liste d
     await page.click('.options-page--models .options-page__close')
     await page.waitForFunction(() => document.querySelector('.options-page--models') === null)
     assert.ok(await page.$('.options-menu__tab--active:has-text("Modèles")'), 'la page Options doit rester ouverte sur Modèles après Fermer')
+  })
+})
+
+// Léo, captures à l'appui : « essaye de mettre en gros pour pas faire défiler, et il y a un bug ». La page
+// restait bloquée à 880 px même sur un grand écran, ce qui obligeait à faire défiler le tableau de côté ; et
+// pendant ce défilement, le fond arrondi de la carte s'arrêtait au milieu des colonnes, parce que c'était
+// le conteneur, et non la carte, qui défilait. Mesuré avec 24 vrais noms de modèles, pas trois lignes courtes.
+const LONG_OVERVIEW = [
+  'qwen3.5:0.8b', 'MiniCPM5-2B (Q4_K_M)', 'LFM2.5-2.6B (Q4_K_M)', 'G9v3-3B', 'qwen3:1.7b', 'granite4.1:3b',
+  'granite4.2:3b', 'Nanbeige4.1-3B (Q4_K_M)', 'qwen3.5:2b', 'ministral-3:3b', 'qwen3-vl:2b', 'qwen3.5:4b',
+  'qwen2.5-coder:7b', 'Ling-3.0-tiny (Q4_K_M)', 'qwen3-vl:4b', 'granite4.2:8b', 'granite4.1:8b', 'ministral-3:8b',
+  'GLM-4.6V-Flash (Q4_K_M)', 'qwen3.5:9b', 'gemma4:12b', 'qwen3-vl:8b', 'qwen2.5-coder:14b', 'ministral-3:14b'
+].map((model, i) => ({
+  model, vramGb: Math.round((1 + i * 0.4) * 10) / 10, category: i < 11 ? 'Rapide' : 'Moyen',
+  readsImages: /vl|gemma|ministral|GLM/.test(model), usedIn: model === 'granite4.2:8b' ? ['Faible', 'Moyen'] : [],
+  toolCalling: `${50 + i}/78`, demands: /vl|coder|GLM/.test(model) ? null : `${20 + i}/48`, intelligence: null,
+  artificialAnalysisIndex: i % 5 === 0 ? null : 5 + i / 3, artificialAnalysisSpeed: i % 2 ? 100 + i : null
+}))
+
+async function measureModelsTable(page, width, height) {
+  await page.setViewportSize({ width, height })
+  await page.evaluate((entries) => { window.__overviewEntries = entries }, LONG_OVERVIEW)
+  await page.click('.options-menu__tab:has-text("Modèles")')
+  await page.click('.options-menu__all-models button:has-text("Tous les modèles")')
+  await page.waitForSelector('.options-page--models tbody tr')
+  return page.evaluate(() => {
+    const box = (selector) => {
+      const el = document.querySelector(`.options-page--models ${selector}`)
+      return { width: el.getBoundingClientRect().width, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth, overflowX: getComputedStyle(el).overflowX }
+    }
+    return { wrapper: box('.options-menu__model-overview-scroll'), card: box('.options-menu__model-group'), table: box('.options-menu__model-overview') }
+  })
+}
+
+test('« Tous les modèles » tient en entier sans défiler de côté sur un écran d’ordinateur portable', options, async () => {
+  await withOptions(async (page) => {
+    for (const [width, height] of [[1366, 768], [1000, 760]]) {
+      const m = await measureModelsTable(page, width, height)
+      assert.ok(m.card.width > 880, `${width} px : la page ne doit plus être bloquée à 880 px (carte de ${m.card.width} px)`)
+      assert.ok(m.card.scrollWidth <= m.card.clientWidth + 1, `${width} px : le tableau défile encore de côté (${m.card.scrollWidth} > ${m.card.clientWidth})`)
+      await page.click('.options-page--models .options-page__close')
+    }
+  })
+})
+
+test('dans une fenêtre étroite, le tableau défile DANS sa carte : le fond arrondi ne s’arrête plus au milieu', options, async () => {
+  await withOptions(async (page) => {
+    const m = await measureModelsTable(page, 760, 700)
+    assert.ok(m.table.width > m.card.clientWidth, `le cas étroit doit vraiment déborder pour que le test serve : ${m.table.width} <= ${m.card.clientWidth}`)
+    assert.equal(m.card.overflowX, 'auto', 'la carte elle-même doit porter le défilement')
+    assert.ok(m.wrapper.scrollWidth <= m.wrapper.clientWidth + 1, `rien ne doit déborder de la carte (${m.wrapper.scrollWidth} > ${m.wrapper.clientWidth})`)
   })
 })
 

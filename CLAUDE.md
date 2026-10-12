@@ -8104,3 +8104,22 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   modification — un cache rangé par empreinte n'aurait rien prouvé ; il suit désormais le contenu, comme le vrai.**
   Régression : `node --test scripts/test-github-session.mjs` (aperçu lu avant le travail, travail, enregistrement :
   l'aperçu montre la nouvelle version — vérifié en remettant le cache par chemin, le test échoue avec l'ancien site).
+
+- **« Tous les modèles » : « essaye de mettre en gros pour pas faire défiler, et il y a un bug » (Léo, étape
+  305, deux captures).** Deux défauts dans la même page, tous les deux reproduits avant de toucher au code, avec
+  24 vrais noms de modèles plutôt que les 3 lignes courtes des tests existants. (1) La règle générale des pages
+  de réglages `.options-page__content > * { max-width: 880px }` (une colonne de lecture, voulue pour les
+  réglages) s'appliquait aussi à ce tableau de 8 colonnes : bloqué à 880 px même sur un écran de 1920 px, pour un
+  tableau qui en demandait 1320 — d'où le défilement de côté. Les titres de colonnes y contribuaient, en chasse
+  fixe et sans retour à la ligne : « Intelligence (Artificial Analysis) » prenait à lui seul la place de deux
+  colonnes. Corrigé par une limite propre à cette page (1440 px), et des titres qui passent sur deux lignes, dans
+  la police du texte, les CHIFFRES restant en chasse fixe : mesuré, le tableau tient sans défiler dès 1000 px de
+  large. (2) Le « bug » : le défilement était porté par le conteneur, pas par la carte arrondie qu'il contient —
+  la carte gardait la largeur de la fenêtre pendant que le tableau continuait au-delà, et en faisant défiler, son
+  fond s'arrêtait au milieu des colonnes. C'est maintenant la carte elle-même qui défile (fenêtres étroites
+  seulement). **Leçon générale : une limite de largeur pensée pour un type de contenu (une colonne de réglages)
+  ne vaut pas pour un autre posé dans le même gabarit (un tableau) — et quand un contenu défile de côté, c'est
+  l'élément qui porte le fond et la bordure qui doit défiler, sinon le décor s'arrête là où commence le
+  débordement.** Régression : `scripts/test-options-reorganization-ui.mjs` (24 modèles : pas de défilement de
+  côté à 1366 et 1000 px ; à 760 px, la carte porte le défilement et rien n'en déborde — les deux tests échouent
+  avec l'ancien CSS, vérifié).

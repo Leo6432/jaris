@@ -761,7 +761,10 @@ body.body--splash {
   color: var(--hud-text-faint);
 }
 
-.options-menu__model-overview-scroll {
+/* Le tableau défile DANS sa carte, jamais la carte avec lui (Léo, capture à l'appui) : quand le défilement
+   était porté par ce conteneur, la carte arrondie gardait la largeur de la fenêtre pendant que le tableau,
+   plus large, continuait au-delà — en faisant défiler, son fond s'arrêtait au milieu des colonnes. */
+.options-menu__model-overview-scroll > .options-menu__model-group {
   overflow-x: auto;
 }
 
@@ -5799,6 +5802,22 @@ select {
    l'intitulé d'une ligne et son interrupteur se retrouvaient à plus d'un mètre de distance pour l'œil. */
 .options-page__content > * {
   max-width: 880px;
+}
+
+/* « Tous les modèles » est un TABLEAU de 8 colonnes, pas une colonne de réglages : la limite de 880 px
+   ci-dessus le forçait à défiler de côté même sur un écran de 1920 px (Léo : « mettre en gros pour pas
+   faire défiler »). Deux classes : plus spécifique que la règle générale, quel que soit l'ordre. */
+.options-page--models .options-page__content > * {
+  max-width: 1440px;
+}
+
+/* Titres de colonnes sur deux lignes si besoin, et dans la police du texte : en chasse fixe et sans retour à
+   la ligne, « Intelligence (Artificial Analysis) » prenait à lui seul la place de deux colonnes. Les
+   CHIFFRES restent en chasse fixe et alignés, c'est là que ça sert. */
+.options-menu__model-overview th.options-menu__col-num {
+  white-space: normal;
+  font-family: var(--hud-font-body);
+  vertical-align: bottom;
 }
 
 /* L'introduction de « Ce que Jaris sait faire » se lit comme le sous-titre des autres pages (14 px). */
