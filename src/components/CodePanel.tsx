@@ -269,6 +269,8 @@ export default function CodePanel(): JSX.Element {
   const [commitMessage, setCommitMessage] = useState('')
   /** Enregistrement sur GitHub en cours (quelques secondes, sans bandeau d'avancement ni bouton Arrêter). */
   const [committing, setCommitting] = useState(false)
+  const [githubDisconnected, setGithubDisconnected] = useState(false)
+  const [githubLoginRequest, setGithubLoginRequest] = useState(0)
   /** Mis à true par le bouton "Arrêter" : l'échec qui suit est alors un arrêt voulu, pas une panne. */
   const stoppedRef = useRef(false)
 
@@ -434,6 +436,7 @@ export default function CodePanel(): JSX.Element {
         void window.jaris.githubOpenRepo(current.fullName).then(setRepo).catch(() => {})
       } else {
         setError(ipcErrorMessage(err))
+        void checkGithubConnection()
         void playSoundCueIfEnabled('error')
       }
     } finally {
@@ -461,6 +464,20 @@ export default function CodePanel(): JSX.Element {
     switchConversation(null)
   }
 
+  /**
+   * Étape 309 : une demande refusée parce que Jaris n'est plus connecté à GitHub n'affichait qu'un texte, sans aucun
+   * moyen de se reconnecter. Après chaque échec, l'état réel est relu ; s'il n'y a plus de connexion, un bouton
+   * « Se connecter à GitHub » apparaît sous le message et ouvre directement le panneau de connexion.
+   */
+  const checkGithubConnection = async (): Promise<void> => {
+    try {
+      const status = await window.jaris.githubStatus()
+      setGithubDisconnected(status.available && !status.connected)
+    } catch {
+      // État illisible : rien de plus à proposer que le message déjà affiché.
+    }
+  }
+
   const commitRepo = async (message: string, fullName = repo?.fullName, sound = true): Promise<void> => {
     if (!fullName) return
     setError(null)
@@ -474,6 +491,7 @@ export default function CodePanel(): JSX.Element {
       if (sound) void playSoundCueIfEnabled('success')
     } catch (err) {
       setError(ipcErrorMessage(err))
+      void checkGithubConnection()
       void playSoundCueIfEnabled('error')
     } finally {
       setCommitting(false)
@@ -843,6 +861,18 @@ export default function CodePanel(): JSX.Element {
               {generating && <LiveLine text={formatCodeLive(live, progress)} />}
 
               {error && <p className="code-panel__error">{error}</p>}
+              {error && githubDisconnected && (
+                <button
+                  type="button"
+                  className="code-panel__reconnect"
+                  onClick={() => {
+                    setGithubDisconnected(false)
+                    setGithubLoginRequest((count) => count + 1)
+                  }}
+                >
+                  {t('github.login.button')}
+                </button>
+              )}
             </div>
 
             <Composer
@@ -862,7 +892,13 @@ export default function CodePanel(): JSX.Element {
               onStop={stop}
               extraActions={
                 <>
-                  <GithubPicker repo={repo} onOpenRepo={(fullName) => openRepo(fullName)} onCloseRepo={closeRepo} disabled={generating || committing} />
+                  <GithubPicker
+                    repo={repo}
+                    onOpenRepo={(fullName) => openRepo(fullName)}
+                    onCloseRepo={closeRepo}
+                    disabled={generating || committing}
+                    loginRequest={githubLoginRequest}
+                  />
                   {repo && <BranchPicker repo={repo} onChange={changeBranch} disabled={generating || committing} />}
                   <ModelEffortPicker mode="code" disabled={generating} />
                 </>

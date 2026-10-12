@@ -7057,7 +7057,8 @@ select {
 }
 
 .github-picker__primary,
-.repo-panel__save {
+.repo-panel__save,
+.code-panel__reconnect {
   height: 36px;
   padding: 0 16px;
   font-family: var(--hud-font-body);
@@ -7072,7 +7073,8 @@ select {
 }
 
 .github-picker__primary:hover:not(:disabled),
-.repo-panel__save:hover:not(:disabled) {
+.repo-panel__save:hover:not(:disabled),
+.code-panel__reconnect:hover:not(:disabled) {
   filter: brightness(1.08);
 }
 
@@ -8258,4 +8260,10 @@ button.changes-card__file:hover {
   to {
     opacity: 0;
   }
+}
+
+/* Étape 309 : « Se connecter à GitHub » juste sous l'erreur qui l'explique, à gauche comme le message. */
+.code-panel__reconnect {
+  align-self: flex-start;
+  margin-top: 8px;
 }

@@ -8203,3 +8203,21 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   l'identifiant qui a échoué.** Régression : `node --test scripts/test-github-session.mjs` (refus isolé : lecture
   refaite, jeton gardé ; jeton vraiment retiré : effacé, travail gardé puis enregistré après reconnexion au même
   compte ; autre compte : rien n'est repris). Les deux premiers tests échouent sur l'ancien code, vérifié.
+
+- **« Ça met "Jaris n'est pas connecté à GitHub" quand je l'ai mis à jour, et il n'y a même pas "Se reconnecter" »
+  (Léo, étape 309).** Être déconnecté après cette mise à jour était attendu : l'ANCIENNE version avait déjà effacé
+  le jeton sur un refus passager, et la v0.34.15 corrige seulement les refus à venir. Le vrai défaut était
+  ailleurs : aucun chemin visible pour se reconnecter. Le panneau GitHub ne lisait l'état de connexion qu'une
+  fois, au montage du mode Code (`useEffect(..., [])`). Après une déconnexion, il se croyait toujours connecté et
+  montrait la liste des dépôts au lieu de « Se connecter à GitHub ». L'erreur de la conversation n'était qu'un
+  texte. Corrigé à deux endroits. (1) Le panneau relit l'état à CHAQUE ouverture, et après l'échec d'ouverture
+  d'un dépôt. (2) Après l'échec d'une demande ou d'un enregistrement, CodePanel relit l'état réel
+  (`githubStatus`) ; s'il n'y a plus de connexion, un bouton « Se connecter à GitHub » apparaît sous le message
+  et ouvre directement le panneau de connexion (prop `loginRequest`). On ne devine jamais la déconnexion d'après
+  le texte de l'erreur : c'est l'état réel qui décide. Le bouton rejoint la famille des boutons principaux
+  (`.github-picker__primary`), vérifié par mesure du style calculé. **Leçon générale : un état lu une seule fois
+  au montage (connexion, droits, quota…) devient faux dès qu'il change ailleurs — le relire au moment où
+  l'utilisateur en a besoin, et toujours accompagner une erreur du geste qui la répare.** Régression :
+  `scripts/test-github-ui.mjs` (déconnexion en plein travail : le bouton apparaît, habillé, et ouvre la
+  connexion, pas une liste périmée ; le panneau relit l'état à chaque ouverture). Les deux tests échouent sur
+  l'ancien code, vérifié.

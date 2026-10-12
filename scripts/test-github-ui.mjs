@@ -649,6 +649,43 @@ test('travail terminé : enregistré tout seul sur GitHub, sans clic, avec la de
   })
 })
 
+// Étape 309, Léo : « ça met Jaris n'est pas connecté à GitHub, et il n'y a même pas se reconnecter ».
+test('plus connecté en plein travail : « Se connecter à GitHub » apparaît sous l’erreur et ouvre la connexion', options, async () => {
+  await withPage(async (page) => {
+    await connectAndOpen(page)
+    await page.fill('.composer textarea', 'Ajoute un cookie')
+    await page.click('.composer__send')
+    // La connexion a été perdue entre-temps : la demande échoue, et main ne voit plus de connexion.
+    await page.evaluate(() => {
+      window.__status = { available: true, connected: false, login: null, lost: null }
+      window.__failAgent(new Error("Error invoking remote method 'jaris:github-run-agent': GithubError: Jaris n'est pas connecté à GitHub."))
+    })
+    await page.waitForSelector('.code-panel__reconnect')
+    assert.equal((await page.textContent('.code-panel__error')).trim(), "Jaris n'est pas connecté à GitHub.")
+    const style = await page.$eval('.code-panel__reconnect', (el) => {
+      const css = getComputedStyle(el)
+      return { radius: css.borderRadius, background: css.backgroundColor }
+    })
+    assert.equal(style.radius, '999px', 'habillé comme les autres boutons principaux, pas laissé au style du navigateur')
+    assert.notEqual(style.background, 'rgba(0, 0, 0, 0)')
+    await page.click('.code-panel__reconnect')
+    // Le panneau GitHub s'ouvre directement sur la connexion, pas sur une liste de dépôts périmée.
+    await page.waitForSelector('.github-picker__panel .github-picker__primary')
+    assert.equal(await page.$('.github-picker__panel .github-picker__repo'), null)
+  })
+})
+
+test('le panneau GitHub relit la connexion à chaque ouverture : jamais une liste quand elle est perdue', options, async () => {
+  await withPage(async (page) => {
+    await connectAndOpen(page)
+    await page.evaluate(() => {
+      window.__status = { available: true, connected: false, login: null, lost: null }
+    })
+    await page.click('.repo-picker__trigger')
+    await page.waitForSelector('.github-picker__panel .github-picker__primary')
+  })
+})
+
 test('travail interrompu en route : rien n’est envoyé sur GitHub, il reste à vérifier', options, async () => {
   await withPage(async (page) => {
     await connectAndOpen(page)

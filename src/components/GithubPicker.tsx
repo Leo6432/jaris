@@ -25,6 +25,8 @@ interface Props {
   onOpenRepo: (fullName: string) => Promise<void>
   onCloseRepo: () => void
   disabled?: boolean
+  /** Étape 309 : change à chaque clic sur « Se connecter à GitHub » sous une erreur — ouvre le panneau de connexion. */
+  loginRequest?: number
 }
 
 /**
@@ -45,7 +47,7 @@ function shortName(fullName: string): string {
   return fullName.split('/')[1] ?? fullName
 }
 
-export default function GithubPicker({ repo, onOpenRepo, onCloseRepo, disabled = false }: Props): JSX.Element | null {
+export default function GithubPicker({ repo, onOpenRepo, onCloseRepo, disabled = false, loginRequest = 0 }: Props): JSX.Element | null {
   const [status, setStatus] = useState<GithubStatus | null>(null)
   const [open, setOpen] = useState(false)
   const [code, setCode] = useState<GithubDeviceCode | null>(null)
@@ -58,6 +60,17 @@ export default function GithubPicker({ repo, onOpenRepo, onCloseRepo, disabled =
   useEffect(() => {
     void window.jaris.githubStatus().then(setStatus).catch(() => setStatus(null))
   }, [])
+
+  // Étape 309 (Léo : « ça met Jaris n'est pas connecté à GitHub, et il n'y a même pas se reconnecter ») : l'état lu une
+  // seule fois au montage restait « connecté » après une déconnexion, et le panneau montrait la liste au lieu du bouton
+  // de connexion. Il est relu à chaque ouverture.
+  useEffect(() => {
+    if (open) void window.jaris.githubStatus().then(setStatus).catch(() => {})
+  }, [open])
+
+  useEffect(() => {
+    if (loginRequest > 0) setOpen(true)
+  }, [loginRequest])
 
   const loadRepos = useCallback(async () => {
     setError(null)
@@ -106,6 +119,8 @@ export default function GithubPicker({ repo, onOpenRepo, onCloseRepo, disabled =
       setOpen(false)
     } catch (err) {
       setError(ipcErrorMessage(err))
+      // Plus connecté : le panneau repasse sur « Se connecter ».
+      setStatus(await window.jaris.githubStatus())
     } finally {
       setOpening(null)
     }
