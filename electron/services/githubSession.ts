@@ -73,12 +73,14 @@ async function getClient(): Promise<GithubClient | null> {
 async function forget(rejected = false): Promise<void> {
   client = null
   login = null
-  sessions.clear()
   await clearGithubToken()
   if (!rejected) {
+    sessions.clear()
     await clearConnectionRecord()
     return
   }
+  // Étape 308 (Léo : « ça veut dire que ça va pas sauvegarder dans GitHub ») : un refus en plein travail effaçait
+  // aussi les changements préparés. Ils restent : une fois reconnecté au même compte, ils partent sur GitHub.
   const record = await readConnectionRecord()
   if (record) await writeConnectionRecord({ ...record, rejectedAt: Date.now() })
 }
@@ -92,14 +94,25 @@ async function lostConnection(): Promise<GithubLostConnection | null> {
 }
 
 /** Toute demande à GitHub passe par ici : un jeton refusé (retiré sur github.com) déconnecte proprement. */
+const isAuthError = (err: unknown): boolean => err instanceof GithubError && err.reason === 'auth'
+
 async function withClient<T>(action: (github: GithubClient) => Promise<T>): Promise<T> {
   const github = await getClient()
   if (!github) throw new GithubError(401, t('github.err.notConnected'), 'auth')
   try {
     return await action(github)
   } catch (err) {
-    if (err instanceof GithubError && err.reason === 'auth') await forget(true)
-    throw err
+    if (!isAuthError(err)) throw err
+    // Étape 308 : un seul refus effaçait le jeton pour de bon — Léo devait se reconnecter « tous les jours ». Avant
+    // d'effacer quoi que ce soit, GitHub dit lui-même si ce jeton vaut encore (/user) : s'il passe, la demande est
+    // refaite une fois au lieu de déconnecter ; s'il est refusé là aussi, le jeton est vraiment mort.
+    try {
+      await github.viewer()
+    } catch (check) {
+      if (isAuthError(check)) await forget(true)
+      throw err
+    }
+    return await action(github)
   }
 }
 
@@ -138,12 +151,15 @@ export async function finishGithubLogin(): Promise<GithubStatus> {
   if (!pending) throw new GithubError(0, t('github.err.noPending'))
   try {
     const token = await pollDeviceToken(clientId(), pending.device, { signal: pending.controller.signal })
+    const previous = await readConnectionRecord()
     const encrypted = await saveGithubToken(token)
     await writeConnectionRecord({ connectedAt: Date.now(), login: null, memoryOnly: !encrypted, rejectedAt: null })
     client = new GithubClient(token)
     login = null
-    sessions.clear()
-    return await getGithubStatus()
+    const status = await getGithubStatus()
+    // Changements préparés gardés après un refus (étape 308) : seulement pour le MÊME compte, jamais pour un autre.
+    if (!previous || previous.login === null || previous.login !== status.login) sessions.clear()
+    return status
   } catch (err) {
     if (isAbortError(err)) throw new GithubError(0, t('github.loginCancelled'))
     throw err

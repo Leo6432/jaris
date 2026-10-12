@@ -8140,3 +8140,27 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   l'ordre, edit_file en deux blocs, README à quatre accents graves, bloc non fermé refusé, de bout en bout, compteur
   en direct, finish prématuré refusé, lire et réécrire accepté, passage vide orienté vers write_file). Chaque nouveau
   test échoue sur l'ancien code, vérifié.
+
+- **« Ça met encore "Ta connexion à GitHub n'est plus valable" pendant qu'il code : ça veut dire que ça ne va pas
+  sauvegarder dans GitHub ? » (Léo, étape 308).** Oui : ce message correspond à un vrai refus de GitHub (code 401)
+  en plein travail. Deux défauts de Jaris aggravaient chaque refus, corrigés quelle que soit sa cause. (1) UN seul
+  401 effaçait le jeton pour de bon : rien ne distinguait un refus isolé d'un jeton réellement retiré.
+  `withClient` (githubSession.ts) demande maintenant à GitHub si le jeton vaut encore (`GET /user`) : s'il passe,
+  la demande est refaite une fois et rien n'est effacé ; s'il est refusé là aussi, le jeton est vraiment mort et
+  l'effacement reste le bon geste. (2) Ce même refus jetait aussi les changements préparés (`sessions.clear()`
+  dans `forget`, puis encore à la reconnexion) : le travail en cours était perdu. Après un refus, les changements
+  restent maintenant ; après reconnexion au MÊME compte (nom lu dans la trace de connexion de l'étape 297), ils
+  partent sur GitHub. Avec un autre compte, ils sont jetés : jamais le travail d'un compte enregistré au nom d'un
+  autre. Une déconnexion voulue (« Se déconnecter ») efface tout, comme avant.
+  **Cause du refus toujours NON identifiée, et pas devinée :** l'identifiant de Jaris (`Ov23…`) est celui d'une
+  OAuth App, dont les jetons n'expirent pas avec le temps (vérifié dans la doc GitHub : l'expiration en 8 h ne
+  concerne que les GitHub Apps). Le code n'utilise qu'un seul jeton, toujours le dernier (grep de chaque
+  `new GithubClient` et `saveGithubToken`). La doc officielle « Token expiration and revocation » liste les
+  retraits possibles (limite de 10 jetons par compte et par application, jeton publié dans un dépôt public,
+  retrait sur github.com…), et le journal de sécurité du compte de Léo (`oauth_access.destroy` / `revoke`)
+  donne le motif dans un champ `explanation`. C'est ce fait-là qu'il faut obtenir avant tout autre correctif.
+  **Leçon générale : un état difficile à recréer (un jeton, un travail en cours) ne s'efface pas sur un seul signal
+  d'échec — vérifier d'abord par un second moyen indépendant, et ne jamais jeter le travail de l'utilisateur avec
+  l'identifiant qui a échoué.** Régression : `node --test scripts/test-github-session.mjs` (refus isolé : lecture
+  refaite, jeton gardé ; jeton vraiment retiré : effacé, travail gardé puis enregistré après reconnexion au même
+  compte ; autre compte : rien n'est repris). Les deux premiers tests échouent sur l'ancien code, vérifié.

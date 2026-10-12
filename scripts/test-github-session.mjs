@@ -32,7 +32,7 @@ function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Proje
     }
     async viewer() {
       if (state.failAuth) throw new realGithub.GithubError(401, 'retiré', 'auth')
-      return 'leo'
+      return state.login ?? 'leo'
     }
     async listRepos() {
       if (state.failAuth) throw new realGithub.GithubError(401, 'Reconnecte-toi', 'auth')
@@ -59,6 +59,12 @@ function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Proje
       }
     }
     async readText(_snapshot, file) {
+      // Étape 308 : un refus isolé (le jeton marche encore) ou un jeton vraiment retiré.
+      if (state.failAuth) throw new realGithub.GithubError(401, 'Reconnecte-toi', 'auth')
+      if (state.failReads > 0) {
+        state.failReads -= 1
+        throw new realGithub.GithubError(401, 'Reconnecte-toi', 'auth')
+      }
       return state.files[file.path]
     }
     async readBytes(_snapshot, file) {
@@ -300,6 +306,65 @@ test('une connexion retirée sur github.com déconnecte proprement et efface le 
   assert.equal(state.token, null)
   assert.equal(state.cleared, 1)
   assert.equal((await session.getGithubStatus()).connected, false)
+})
+
+// Étape 308, Léo : « ça met encore Ta connexion à GitHub n'est plus valable… pendant qu'il code ».
+test('un refus isolé pendant le travail ne déconnecte plus : GitHub confirme le jeton, la lecture est refaite', async () => {
+  const { session, state } = setup({
+    token: 't',
+    replies: [reply(call('read_file', { path: 'README.md' })), reply(call('finish', { summary: 'lu' }))]
+  })
+  await session.openGithubRepo('leo/projet')
+  state.failReads = 1
+  await session.runGithubAgent('leo/projet', 'Lis le README', { onStatus: () => {} })
+  const results = state.prompts.at(-1).filter((m) => m.role === 'user' && m.content.startsWith('Résultat de read_file'))
+  assert.match(results.at(-1).content, /# Projet/, 'la lecture refaite rend bien le fichier')
+  assert.equal(state.cleared, 0, 'le jeton n’est jamais effacé pour un refus isolé')
+  assert.equal(state.token, 't')
+  assert.equal((await session.getGithubStatus()).connected, true)
+})
+
+test('jeton vraiment retiré en plein travail : le travail préparé est gardé et part après reconnexion au même compte', async () => {
+  const { session, state } = setup({
+    token: 't',
+    replies: [
+      reply(call('write_file', { path: 'jeu.js', content: 'let score = 0\n' })),
+      reply(call('read_file', { path: 'README.md' })),
+      reply(call('finish', { summary: 'fait' }))
+    ]
+  })
+  // Comme après une vraie connexion : la trace existe, et /user y ajoute le nom du compte.
+  state.record = { connectedAt: 1, login: null, memoryOnly: false, rejectedAt: null }
+  await session.getGithubStatus()
+  await session.openGithubRepo('leo/projet')
+  // GitHub refuse désormais le jeton partout, /user compris : il est vraiment mort.
+  state.failAuth = true
+  await session.runGithubAgent('leo/projet', 'Ajoute le jeu', { onStatus: () => {} })
+  assert.equal(state.token, null, 'un jeton refusé par /user aussi est bien effacé')
+  assert.equal((await session.getGithubStatus()).lost?.reason, 'rejected')
+  // Reconnexion au même compte : le fichier préparé n'a pas été jeté.
+  state.failAuth = false
+  await session.startGithubLogin()
+  await session.finishGithubLogin()
+  await session.commitGithubChanges('leo/projet', 'Ajoute le jeu')
+  assert.deepEqual(state.commits[0].changes.map((change) => change.path), ['jeu.js'])
+})
+
+test('reconnexion avec un AUTRE compte : les changements préparés pour l’ancien ne sont jamais repris', async () => {
+  const { session, state } = setup({
+    token: 't',
+    replies: [reply(call('write_file', { path: 'jeu.js', content: 'x\n' })), reply(call('read_file', { path: 'README.md' })), reply(call('finish', { summary: 'fait' }))]
+  })
+  state.record = { connectedAt: 1, login: null, memoryOnly: false, rejectedAt: null }
+  await session.getGithubStatus()
+  await session.openGithubRepo('leo/projet')
+  state.failAuth = true
+  await session.runGithubAgent('leo/projet', 'Ajoute le jeu', { onStatus: () => {} })
+  state.failAuth = false
+  state.login = 'quelquun-dautre'
+  await session.startGithubLogin()
+  await session.finishGithubLogin()
+  await assert.rejects(session.commitGithubChanges('leo/projet', 'x'), /plus ouvert/)
 })
 
 // Étape 297 (Léo : « ça déconnecte GitHub tous les jours ») : la déconnexion suivante dit ce qui s'est passé.
