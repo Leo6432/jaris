@@ -971,6 +971,7 @@
   "github.err.noDefaultBranch": "Nie znaleziono gałęzi głównej „{branch}” na GitHubie.",
   "github.err.noChanges": "Nie ma zmian do zapisania.",
   "github.err.nothingToCreate": "Repozytorium jest puste: nie ma plików do utworzenia.",
+  "github.keptReadme": "GitHub nie przyjmuje gałęzi bez żadnego pliku, więc zostawiłem zamiast nich mały plik README.md.",
   "github.err.notConnected": "Jaris nie jest połączony z GitHubem.",
   "github.err.notConfigured": "Połączenie z GitHubem nie jest jeszcze skonfigurowane w tej wersji Jarisa.",
   "github.err.noPending": "Żadne łączenie nie trwa: kliknij „Połącz z GitHubem”.",

@@ -8123,3 +8123,28 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   débordement.** Régression : `scripts/test-options-reorganization-ui.mjs` (24 modèles : pas de défilement de
   côté à 1366 et 1000 px ; à 760 px, la carte porte le défilement et rien n'en déborde — les deux tests échouent
   avec l'ancien CSS, vérifié).
+
+- **« Je lui demande de tout supprimer… ça met Introuvable sur GitHub, et sur GitHub rien n'a changé » (Léo,
+  étape 306).** Jaris venait de lire le dépôt sans problème : le message « dépôt supprimé, renommé, ou sans
+  accès » était donc faux pour ce cas. La cause a été VÉRIFIÉE sur le vrai GitHub avant tout correctif, pas
+  supposée. Avec l'accord de Léo, une branche jetable de deux fichiers a été créée. Supprimer le premier fichier
+  (contrôle) passe. Supprimer le dernier, avec exactement l'appel de Jaris (`POST git/trees` avec `base_tree` et
+  `sha: null`), renvoie « 404 Not Found ». L'arbre vide de git (`4b825dc…`) n'existe pas non plus côté GitHub
+  (404 en lecture). GitHub refuse donc toute branche sans aucun fichier, et il le dit par un 404 que la
+  traduction générique faisait passer pour un dépôt introuvable. Corrigé à la source plutôt qu'en traduisant
+  mieux l'erreur : quand les changements laisseraient la branche vide, un README.md minimal reste à la place.
+  Il est préparé à la fin du travail de l'agent, donc visible dans les changements comme n'importe quel
+  fichier, et la réponse de Jaris le dit. Il est aussi remis juste avant l'envoi si la suppression vient
+  d'ailleurs, par exemple si Léo annule ce README. **Leçon générale : un code HTTP générique (404) peut cacher
+  une règle précise du service (ici, « jamais de branche vide ») ; quand l'erreur contredit ce qu'on vient
+  d'observer (le dépôt a été lu une seconde plus tôt), reproduire l'appel exact sur un cas jetable plutôt que
+  de deviner.** Le faux GitHub des tests refuse maintenant une branche vide comme le vrai. Sans ça, le test
+  aurait validé un enregistrement que GitHub rejette (même famille que les étapes 302 et 304).
+  **Limite rencontrée :** le proxy de l'environnement de développement interdit de supprimer une branche. La
+  branche d'essai `claude/tmp-empty-tree-test` est restée sur GitHub, avec un seul fichier texte, à effacer à
+  la main. Régression : `node --test scripts/test-github-session.mjs` (« tout supprimer » garde un README
+  visible, Jaris le dit et l'enregistrement passe ; README annulé : il est remis à l'envoi. Les deux tests
+  échouent sans le correctif, avec « Introuvable sur GitHub », vérifié). La garde « aucun texte ne renvoie vers un
+  README » (`test-options-references.mjs`) a reçu une seule exception, ciblée sur la ligne qui crée ce fichier dans
+  le dépôt de Léo. Ce n'est pas un renvoi vers une documentation de Jaris, et la garde attrape toujours le reste
+  (vérifié avec un faux « Consulte le README »).

@@ -66,11 +66,16 @@ function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Proje
       return Buffer.from(state.files[file.path])
     }
     async commit(snapshot, changes, message) {
-      state.commits.push({ base: snapshot.commitSha, changes, message })
+      const after = { ...state.files }
       for (const change of changes) {
-        if (change.content === null) delete state.files[change.path]
-        else state.files[change.path] = change.content
+        if (change.content === null) delete after[change.path]
+        else after[change.path] = change.content
       }
+      // Comme le vrai GitHub (étape 306, essai réel sur une branche jetable) : une branche sans aucun fichier est
+      // refusée par « 404 Not Found » à la création de l'arbre, et rien ne change sur GitHub.
+      if (Object.keys(after).length === 0) throw new realGithub.GithubError(404, 'Introuvable sur GitHub')
+      state.commits.push({ base: snapshot.commitSha, changes, message })
+      state.files = after
       return { sha: `sha${state.commits.length}`, url: `https://github.com/leo/projet/commit/sha${state.commits.length}` }
     }
   }
@@ -221,6 +226,40 @@ test('« Enregistrer » envoie exactement les changements affichés, puis repart
   // Nouvelle base : le commit suivant partira bien de la version qui vient d'être enregistrée.
   assert.ok(state.openCount >= 2)
   await assert.rejects(session.commitGithubChanges('leo/projet', 'rien'), /aucun changement/)
+})
+
+// Étape 306, Léo : « je lui demande de tout supprimer… ça met Introuvable sur GitHub, et sur GitHub rien n'a changé ».
+test('« tout supprimer » : un README.md reste, Jaris le dit, et l’enregistrement passe au lieu d’un 404', async () => {
+  const { session, state } = setup({
+    token: 't',
+    replies: [
+      reply(call('delete_file', { path: 'README.md' }), call('delete_file', { path: 'src/a.js' })),
+      reply(call('finish', { summary: 'Tout est supprimé.' }))
+    ]
+  })
+  await session.openGithubRepo('leo/projet')
+  const { summary, view } = await session.runGithubAgent('leo/projet', 'Supprime tout', { onStatus: () => {} })
+  assert.deepEqual(
+    view.changes.map((change) => `${change.kind} ${change.path}`).sort(),
+    ['deleted src/a.js', 'modified README.md'],
+    'le README gardé doit apparaître dans les changements, pas être ajouté en cachette à l’envoi'
+  )
+  assert.match(summary, /Tout est supprimé\.\n\nGitHub n'accepte pas une branche sans aucun fichier/)
+  await session.commitGithubChanges('leo/projet', 'Supprime tout')
+  assert.deepEqual(state.files, { 'README.md': '# projet\n' })
+})
+
+test('« tout supprimer » puis annuler le README : l’enregistrement le remet quand même, jamais un 404', async () => {
+  const { session, state } = setup({
+    token: 't',
+    files: { 'index.html': '<h1>Site</h1>' },
+    replies: [reply(call('delete_file', { path: 'index.html' })), reply(call('finish', { summary: 'ok' }))]
+  })
+  await session.openGithubRepo('leo/projet')
+  await session.runGithubAgent('leo/projet', 'Supprime tout', { onStatus: () => {} })
+  session.discardGithubChanges('leo/projet', 'README.md')
+  await session.commitGithubChanges('leo/projet', 'Supprime tout')
+  assert.deepEqual(state.files, { 'README.md': '# projet\n' })
 })
 
 test('annuler un fichier, puis tout annuler', async () => {
@@ -403,5 +442,5 @@ test('après un enregistrement sur GitHub, l’aperçu montre la NOUVELLE versio
 test('« terminé » vient du vrai résultat de l’agent : une limite atteinte ne compte jamais comme terminé', async () => {
   const { readFileSync } = await import('node:fs')
   const source = readFileSync(new URL('../electron/services/githubSession.ts', import.meta.url), 'utf8')
-  assert.match(source, /return \{ summary: outcome\.summary, view: viewOf\(session\), finished: !outcome\.limitReached \}/)
+  assert.match(source, /return \{ summary, view: viewOf\(session\), finished: !outcome\.limitReached \}/)
 })

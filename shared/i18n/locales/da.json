@@ -929,6 +929,7 @@
   "github.err.noDefaultBranch": "Hovedgrenen “{branch}” kan ikke findes på GitHub.",
   "github.err.noChanges": "Der er ingen ændringer at gemme.",
   "github.err.nothingToCreate": "Repository'et er tomt: der er ingen fil at oprette.",
+  "github.keptReadme": "GitHub accepterer ikke en gren helt uden filer, så jeg beholdt en lille README.md i stedet.",
   "github.err.notConnected": "Jaris er ikke forbundet til GitHub.",
   "github.err.notConfigured": "Forbindelsen til GitHub er endnu ikke sat op i denne version af Jaris.",
   "github.err.noPending": "Intet login i gang: klik på “Log ind på GitHub”.",

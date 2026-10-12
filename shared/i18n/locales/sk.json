@@ -950,6 +950,7 @@
   "github.err.noDefaultBranch": "Hlavná vetva „{branch}“ sa na GitHube nenašla.",
   "github.err.noChanges": "Nie sú žiadne zmeny na uloženie.",
   "github.err.nothingToCreate": "Repozitár je prázdny: nie sú žiadne súbory na vytvorenie.",
+  "github.keptReadme": "GitHub neprijme vetvu úplne bez súborov, preto som namiesto nich ponechal malý README.md.",
   "github.err.notConnected": "Jaris nie je pripojený ku GitHubu.",
   "github.err.notConfigured": "Pripojenie ku GitHubu ešte nie je v tejto verzii Jarisa nastavené.",
   "github.err.noPending": "Žiadne pripájanie neprebieha: klikni na „Pripojiť sa ku GitHubu“.",

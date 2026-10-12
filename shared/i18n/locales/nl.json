@@ -929,6 +929,7 @@
   "github.err.noDefaultBranch": "De hoofdbranch “{branch}” is niet te vinden op GitHub.",
   "github.err.noChanges": "Er zijn geen wijzigingen om op te slaan.",
   "github.err.nothingToCreate": "De repository is leeg: er is geen bestand om te maken.",
+  "github.keptReadme": "GitHub accepteert geen branch zonder enig bestand, dus heb ik in plaats daarvan een kleine README.md laten staan.",
   "github.err.notConnected": "Jaris is niet verbonden met GitHub.",
   "github.err.notConfigured": "De verbinding met GitHub is in deze versie van Jaris nog niet ingesteld.",
   "github.err.noPending": "Geen aanmelding bezig: klik op “Aanmelden bij GitHub”.",

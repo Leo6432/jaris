@@ -950,6 +950,7 @@
   "github.err.noDefaultBranch": "Glavna grana „{branch}” nije pronađena na GitHubu.",
   "github.err.noChanges": "Nema promjena za spremanje.",
   "github.err.nothingToCreate": "Repozitorij je prazan: nema datoteka za izradu.",
+  "github.keptReadme": "GitHub ne prihvaća granu bez ijedne datoteke, pa sam umjesto toga zadržao mali README.md.",
   "github.err.notConnected": "Jaris nije povezan s GitHubom.",
   "github.err.notConfigured": "Veza s GitHubom još nije postavljena u ovoj verziji Jarisa.",
   "github.err.noPending": "Povezivanje nije u tijeku: klikni „Poveži se s GitHubom”.",

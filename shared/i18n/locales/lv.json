@@ -950,6 +950,7 @@
   "github.err.noDefaultBranch": "Galvenais zars „{branch}” GitHub nav atrasts.",
   "github.err.noChanges": "Nav izmaiņu, ko saglabāt.",
   "github.err.nothingToCreate": "Repozitorijs ir tukšs: nav failu, ko izveidot.",
+  "github.keptReadme": "GitHub nepieņem zaru pavisam bez failiem, tāpēc to vietā atstāju nelielu README.md.",
   "github.err.notConnected": "Jaris nav savienots ar GitHub.",
   "github.err.notConfigured": "GitHub savienojums šajā Jaris versijā vēl nav konfigurēts.",
   "github.err.noPending": "Savienošana nenotiek: noklikšķini „Savienot ar GitHub”.",

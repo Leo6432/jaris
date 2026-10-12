@@ -929,6 +929,7 @@
   "github.err.noDefaultBranch": "Основният клон „{branch}“ не е намерен в GitHub.",
   "github.err.noChanges": "Няма промени за записване.",
   "github.err.nothingToCreate": "Хранилището е празно: няма файл за създаване.",
+  "github.keptReadme": "GitHub не приема клон без нито един файл, затова оставих малък README.md на мястото им.",
   "github.err.notConnected": "Jaris не е свързан с GitHub.",
   "github.err.notConfigured": "Връзката с GitHub още не е настроена в тази версия на Jaris.",
   "github.err.noPending": "Няма свързване в ход: щракни „Свържи се с GitHub“.",

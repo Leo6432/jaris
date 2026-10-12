@@ -950,6 +950,7 @@
   "github.err.noDefaultBranch": "Pagrindinės šakos „{branch}“ „GitHub“ nerasta.",
   "github.err.noChanges": "Nėra jokių pakeitimų, kuriuos reikėtų įrašyti.",
   "github.err.nothingToCreate": "Saugykla tuščia: nėra jokio failo, kurį reikėtų sukurti.",
+  "github.keptReadme": "GitHub nepriima šakos visiškai be failų, todėl vietoj jų palikau nedidelį README.md.",
   "github.err.notConnected": "Jaris neprisijungęs prie „GitHub“.",
   "github.err.notConfigured": "Prisijungimas prie „GitHub“ šioje Jaris versijoje dar nesukonfigūruotas.",
   "github.err.noPending": "Joks prisijungimas nevyksta: spustelėk „Prisijungti prie GitHub“.",

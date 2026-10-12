@@ -971,6 +971,7 @@
   "github.err.noDefaultBranch": "Основная ветка «{branch}» не найдена на GitHub.",
   "github.err.noChanges": "Нет изменений для сохранения.",
   "github.err.nothingToCreate": "Репозиторий пуст: нет файлов для создания.",
+  "github.keptReadme": "GitHub не принимает ветку совсем без файлов, поэтому я оставил вместо них небольшой README.md.",
   "github.err.notConnected": "Jaris не подключён к GitHub.",
   "github.err.notConfigured": "Подключение к GitHub ещё не настроено в этой версии Jaris.",
   "github.err.noPending": "Подключение не выполняется: нажми «Подключиться к GitHub».",

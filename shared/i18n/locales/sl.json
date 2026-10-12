@@ -971,6 +971,7 @@
   "github.err.noDefaultBranch": "Glavne veje „{branch}“ na GitHubu ni mogoče najti.",
   "github.err.noChanges": "Ni sprememb za shranjevanje.",
   "github.err.nothingToCreate": "Repozitorij je prazen: ni datotek za ustvarjanje.",
+  "github.keptReadme": "GitHub ne sprejme veje brez ene same datoteke, zato sem namesto njih pustil majhen README.md.",
   "github.err.notConnected": "Jaris ni povezan z GitHubom.",
   "github.err.notConfigured": "Povezava z GitHubom v tej različici Jarisa še ni nastavljena.",
   "github.err.noPending": "Povezovanje ne poteka: klikni „Poveži se z GitHubom“.",

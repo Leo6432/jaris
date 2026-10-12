@@ -929,6 +929,7 @@
   "github.err.noDefaultBranch": "The main branch “{branch}” can't be found on GitHub.",
   "github.err.noChanges": "There are no changes to save.",
   "github.err.nothingToCreate": "The repository is empty: there's no file to create.",
+  "github.keptReadme": "GitHub doesn't accept a branch with no files at all, so I kept a small README.md instead.",
   "github.err.notConnected": "Jaris isn't connected to GitHub.",
   "github.err.notConfigured": "The GitHub connection isn't set up yet in this version of Jaris.",
   "github.err.noPending": "No sign-in in progress: click “Sign in to GitHub”.",

@@ -929,6 +929,7 @@
   "github.err.noDefaultBranch": "Huvudgrenen ”{branch}” hittades inte på GitHub.",
   "github.err.noChanges": "Det finns inga ändringar att spara.",
   "github.err.nothingToCreate": "Förrådet är tomt: det finns ingen fil att skapa.",
+  "github.keptReadme": "GitHub godtar inte en gren helt utan filer, så jag behöll en liten README.md i stället.",
   "github.err.notConnected": "Jaris är inte ansluten till GitHub.",
   "github.err.notConfigured": "Anslutningen till GitHub är inte konfigurerad ännu i den här versionen av Jaris.",
   "github.err.noPending": "Ingen inloggning pågår: klicka på ”Logga in på GitHub”.",

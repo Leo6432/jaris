@@ -950,6 +950,7 @@
   "github.err.noDefaultBranch": "Hlavní větev „{branch}“ nebyla na GitHubu nalezena.",
   "github.err.noChanges": "Nejsou žádné změny k uložení.",
   "github.err.nothingToCreate": "Repozitář je prázdný: nejsou žádné soubory k vytvoření.",
+  "github.keptReadme": "GitHub nepřijme větev úplně bez souborů, proto jsem místo nich ponechal malý README.md.",
   "github.err.notConnected": "Jaris není připojený ke GitHubu.",
   "github.err.notConfigured": "Připojení ke GitHubu v této verzi Jarise ještě není nastavené.",
   "github.err.noPending": "Žádné připojování neprobíhá: klikni na „Připojit se ke GitHubu“.",

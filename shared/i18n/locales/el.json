@@ -929,6 +929,7 @@
   "github.err.noDefaultBranch": "Ο κύριος κλάδος «{branch}» δεν βρέθηκε στο GitHub.",
   "github.err.noChanges": "Δεν υπάρχει καμία αλλαγή για αποθήκευση.",
   "github.err.nothingToCreate": "Το αποθετήριο είναι κενό: δεν υπάρχει κανένα αρχείο για δημιουργία.",
+  "github.keptReadme": "Το GitHub δεν δέχεται κλάδο χωρίς κανένα αρχείο, γι' αυτό κράτησα στη θέση τους ένα μικρό README.md.",
   "github.err.notConnected": "Ο Jaris δεν είναι συνδεδεμένος στο GitHub.",
   "github.err.notConfigured": "Η σύνδεση στο GitHub δεν έχει ρυθμιστεί ακόμα σε αυτή την έκδοση του Jaris.",
   "github.err.noPending": "Καμία σύνδεση σε εξέλιξη: κάνε κλικ στο «Σύνδεση στο GitHub».",

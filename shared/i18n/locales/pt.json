@@ -929,6 +929,7 @@
   "github.err.noDefaultBranch": "O branch principal “{branch}” não foi encontrado no GitHub.",
   "github.err.noChanges": "Não há nenhuma alteração para salvar.",
   "github.err.nothingToCreate": "O repositório está vazio: não há nenhum arquivo a criar.",
+  "github.keptReadme": "O GitHub não aceita um branch sem nenhum ficheiro, por isso mantive um pequeno README.md no lugar.",
   "github.err.notConnected": "O Jaris não está conectado ao GitHub.",
   "github.err.notConfigured": "A conexão com o GitHub ainda não está configurada nesta versão do Jaris.",
   "github.err.noPending": "Nenhuma conexão em andamento: clique em “Entrar no GitHub”.",

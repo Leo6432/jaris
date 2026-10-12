@@ -950,6 +950,7 @@
   "github.err.noDefaultBranch": "Ramura principală „{branch}” nu a fost găsită pe GitHub.",
   "github.err.noChanges": "Nu există nicio modificare de salvat.",
   "github.err.nothingToCreate": "Depozitul este gol: nu există niciun fișier de creat.",
+  "github.keptReadme": "GitHub nu acceptă o ramură fără niciun fișier, așa că am păstrat în schimb un mic README.md.",
   "github.err.notConnected": "Jaris nu este conectat la GitHub.",
   "github.err.notConfigured": "Conexiunea la GitHub nu este încă configurată în această versiune a lui Jaris.",
   "github.err.noPending": "Nicio conectare în curs: dă clic pe „Conectează-te la GitHub”.",

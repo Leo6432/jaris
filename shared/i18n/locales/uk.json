@@ -971,6 +971,7 @@
   "github.err.noDefaultBranch": "Основну гілку «{branch}» не знайдено на GitHub.",
   "github.err.noChanges": "Немає змін для збереження.",
   "github.err.nothingToCreate": "Репозиторій порожній: немає файлів для створення.",
+  "github.keptReadme": "GitHub не приймає гілку зовсім без файлів, тому я залишив замість них невеликий README.md.",
   "github.err.notConnected": "Jaris не підключено до GitHub.",
   "github.err.notConfigured": "Підключення до GitHub ще не налаштовано в цій версії Jaris.",
   "github.err.noPending": "Підключення не виконується: натисни «Підключитися до GitHub».",

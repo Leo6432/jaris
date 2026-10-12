@@ -929,6 +929,7 @@
   "github.err.noDefaultBranch": "Päähaaraa ”{branch}” ei löydy GitHubista.",
   "github.err.noChanges": "Tallennettavia muutoksia ei ole.",
   "github.err.nothingToCreate": "Tietovarasto on tyhjä: luotavia tiedostoja ei ole.",
+  "github.keptReadme": "GitHub ei hyväksy haaraa, jossa ei ole yhtään tiedostoa, joten jätin tilalle pienen README.md-tiedoston.",
   "github.err.notConnected": "Jaris ei ole yhdistetty GitHubiin.",
   "github.err.notConfigured": "GitHub-yhteyttä ei ole vielä määritetty tähän Jaris-versioon.",
   "github.err.noPending": "Yhdistäminen ei ole käynnissä: napsauta ”Yhdistä GitHubiin”.",

@@ -929,6 +929,7 @@
   "github.err.noDefaultBranch": "No se encuentra la rama principal «{branch}» en GitHub.",
   "github.err.noChanges": "No hay ningún cambio que guardar.",
   "github.err.nothingToCreate": "El repositorio está vacío: no hay ningún archivo que crear.",
+  "github.keptReadme": "GitHub no acepta una rama sin ningún archivo, así que dejé un pequeño README.md en su lugar.",
   "github.err.notConnected": "Jaris no está conectado a GitHub.",
   "github.err.notConfigured": "La conexión con GitHub aún no está configurada en esta versión de Jaris.",
   "github.err.noPending": "No hay ninguna conexión en curso: haz clic en «Conectarse a GitHub».",

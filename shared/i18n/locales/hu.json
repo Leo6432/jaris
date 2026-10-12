@@ -929,6 +929,7 @@
   "github.err.noDefaultBranch": "A(z) „{branch}” főág nem található a GitHubon.",
   "github.err.noChanges": "Nincs mentendő módosítás.",
   "github.err.nothingToCreate": "A tároló üres: nincs létrehozandó fájl.",
+  "github.keptReadme": "A GitHub nem fogad el egyetlen fájl nélküli ágat, ezért meghagytam helyettük egy kis README.md fájlt.",
   "github.err.notConnected": "Jaris nincs csatlakoztatva a GitHubhoz.",
   "github.err.notConfigured": "A GitHub-kapcsolat még nincs beállítva Jaris ezen verziójában.",
   "github.err.noPending": "Nincs folyamatban csatlakozás: kattints a „Csatlakozás a GitHubhoz” gombra.",

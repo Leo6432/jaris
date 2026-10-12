@@ -929,6 +929,7 @@
   "github.err.noDefaultBranch": "Der Haupt-Branch „{branch}“ ist auf GitHub nicht zu finden.",
   "github.err.noChanges": "Es gibt keine Änderungen zu speichern.",
   "github.err.nothingToCreate": "Das Repository ist leer: Es gibt keine Datei zu erstellen.",
+  "github.keptReadme": "GitHub akzeptiert keinen Branch ganz ohne Dateien, deshalb habe ich stattdessen eine kleine README.md behalten.",
   "github.err.notConnected": "Jaris ist nicht mit GitHub verbunden.",
   "github.err.notConfigured": "Die Verbindung zu GitHub ist in dieser Version von Jaris noch nicht eingerichtet.",
   "github.err.noPending": "Keine Anmeldung im Gange: Klick auf „Bei GitHub anmelden“.",

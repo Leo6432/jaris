@@ -939,6 +939,7 @@ export const fr = {
   "github.err.noDefaultBranch": "La branche principale « {branch} » est introuvable sur GitHub.",
   "github.err.noChanges": "Il n'y a aucun changement à enregistrer.",
   "github.err.nothingToCreate": "Le dépôt est vide : il n'y a aucun fichier à créer.",
+  "github.keptReadme": "GitHub n'accepte pas une branche sans aucun fichier : j'ai donc gardé un petit README.md à la place.",
   "github.err.notConnected": "Jaris n'est pas connecté à GitHub.",
   "github.err.notConfigured": "La connexion à GitHub n'est pas encore configurée dans cette version de Jaris.",
   "github.err.noPending": "Aucune connexion en cours : clique sur « Se connecter à GitHub ».",

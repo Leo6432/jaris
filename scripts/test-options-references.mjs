@@ -72,11 +72,19 @@ test('aucune phrase « Options → … » écrite en dur dans le code (elles pas
   assert.deepEqual(wrong, [])
 })
 
+// Seule exception, étape 306 : le README.md que Jaris CRÉE dans le dépôt GitHub de Léo quand « tout supprimer »
+// laisserait la branche vide (GitHub la refuse). Ce n'est pas un renvoi vers une documentation de Jaris.
+const KEPT_README_LINE = /^\s*stage\(session, 'README\.md', /
 test('aucun texte affiché ne renvoie vers un README (aucun n’est livré avec Jaris)', () => {
   const offenders = [...files('src'), ...files('electron')].filter((file) =>
     readFileSync(join(root, file), 'utf8')
       .split('\n')
-      .some((line) => !/^\s*(\/\/|\*|\/\*|\{\/\*)/.test(line) && /README/.test(line))
+      .some(
+        (line) =>
+          !/^\s*(\/\/|\*|\/\*|\{\/\*)/.test(line) &&
+          /README/.test(line) &&
+          !(file.endsWith('githubSession.ts') && KEPT_README_LINE.test(line))
+      )
   )
   assert.deepEqual(offenders, [])
 })

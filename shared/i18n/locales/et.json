@@ -929,6 +929,7 @@
   "github.err.noDefaultBranch": "Peaharu „{branch}“ ei leitud GitHubist.",
   "github.err.noChanges": "Salvestatavaid muudatusi pole.",
   "github.err.nothingToCreate": "Hoidla on tühi: loodavaid faile pole.",
+  "github.keptReadme": "GitHub ei luba haru, milles pole ühtegi faili, seega jätsin selle asemele väikese README.md.",
   "github.err.notConnected": "Jaris pole GitHubiga ühendatud.",
   "github.err.notConfigured": "GitHubi ühendus pole selles Jarise versioonis veel seadistatud.",
   "github.err.noPending": "Ühendamine ei käi: klõpsa „Ühenda GitHubiga“.",

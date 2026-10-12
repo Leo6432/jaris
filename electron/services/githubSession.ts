@@ -215,6 +215,18 @@ function stage(session: RepoSession, path: string, content: string | null): void
   else session.staged.set(path, content)
 }
 
+/**
+ * GitHub refuse une branche sans aucun fichier (étape 306, essai réel sur une branche jetable : supprimer le DERNIER
+ * fichier → `POST git/trees` « 404 Not Found », et l'arbre vide de git n'existe pas côté GitHub — 404 lui aussi).
+ * Léo voyait donc « Introuvable sur GitHub » après « tout supprimer », sans que rien ne change. Un README.md minimal
+ * reste à la place, préparé comme n'importe quel fichier : visible dans les changements, jamais caché à l'envoi.
+ */
+function keepBranchNonEmpty(session: RepoSession): boolean {
+  if (listPaths(session).length > 0) return false
+  stage(session, 'README.md', `# ${session.snapshot.repo}\n`)
+  return true
+}
+
 function changesOf(session: RepoSession): RepoChange[] {
   return [...session.staged.entries()]
     .map(([path, after]): RepoChange => {
@@ -320,7 +332,8 @@ export async function runGithubAgent(fullName: string, request: string, options:
       signal: options.signal,
       maxHistoryChars: historyBudgetChars(modelMax)
     })
-    return { summary: outcome.summary, view: viewOf(session), finished: !outcome.limitReached }
+    const summary = keepBranchNonEmpty(session) ? `${outcome.summary}\n\n${t('github.keptReadme')}` : outcome.summary
+    return { summary, view: viewOf(session), finished: !outcome.limitReached }
   } catch (err) {
     if (isAbortError(err)) throw new GenerationStoppedError()
     throw err
@@ -383,6 +396,8 @@ export function discardGithubChanges(fullName: string, path?: string): RepoView 
 export async function commitGithubChanges(fullName: string, message: string): Promise<RepoCommitResult> {
   const session = requireSession(fullName)
   if (session.busy) throw new GithubError(0, t('github.err.busySave'))
+  // Filet : des suppressions préparées autrement que par l'agent ne doivent pas non plus vider la branche.
+  keepBranchNonEmpty(session)
   const changes = [...session.staged.entries()].map(([path, content]) => ({ path, content }))
   if (changes.length === 0) throw new GithubError(0, t('github.err.noChanges'))
   const text = message.trim() || t('github.defaultCommit')
