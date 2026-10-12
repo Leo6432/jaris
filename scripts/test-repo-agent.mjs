@@ -165,6 +165,105 @@ test('appels en blocs ```action : bloc complet, ouverture manquante (vue avec qw
   assert.equal(agent.parseLenientJson('{"a": "x"y"}'), undefined, 'un guillemet non échappé reste une erreur, rien n’est deviné')
 })
 
+// Étape 307, Léo : « Jaris n'arrive pas à écrire ses actions correctement (3 essais illisibles) » pour un Cookie Clicker.
+// Un fichier HTML/JS dans une chaîne JSON oblige à échapper chaque guillemet : le contenu voyage maintenant TEL QUEL.
+const COOKIE_HTML = '<!DOCTYPE html>\n<button id="cookie" onclick="clic()">🍪</button>\n<script>\n  const label = "Score : " + score\n</script>'
+
+test('le contenu d’un fichier arrive tel quel dans le bloc qui suit l’action : aucun guillemet à échapper', () => {
+  const text = 'Je crée la page.\n```action\n{"name": "write_file", "arguments": {"path": "index.html"}}\n```\n```html\n' + COOKIE_HTML + '\n```'
+  const calls = agent.extractTextToolCalls(text)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].function.arguments.path, 'index.html')
+  assert.equal(calls[0].function.arguments.content, COOKIE_HTML + '\n', 'contenu intact, guillemets compris, avec sa fin de ligne')
+})
+
+test('plusieurs fichiers d’un coup : chaque bloc de contenu va à son action, dans l’ordre', () => {
+  const text =
+    '```action\n{"name": "write_file", "arguments": {"path": "index.html"}}\n{"name": "write_file", "arguments": {"path": "style.css"}}\n```\n' +
+    '```html\n<p class="a">1</p>\n```\nPuis le style :\n```css\n.a { color: "red"; }\n```\n' +
+    '```action\n{"name": "write_file", "arguments": {"path": "script.js"}}\n```\n```js\nlet s = "x"\n```'
+  const calls = agent.extractTextToolCalls(text)
+  assert.deepEqual(
+    calls.map((c) => [c.function.arguments.path, c.function.arguments.content]),
+    [['index.html', '<p class="a">1</p>\n'], ['style.css', '.a { color: "red"; }\n'], ['script.js', 'let s = "x"\n']]
+  )
+})
+
+test('edit_file : l’ancien passage puis le nouveau, chacun dans son bloc, sans rien ajouter', () => {
+  const text = '```action\n{"name": "edit_file", "arguments": {"path": "jeu.js"}}\n```\n```js\nscore += 1\n```\n```js\nscore += bonus\n```'
+  const [call] = agent.extractTextToolCalls(text)
+  assert.equal(call.function.arguments.old_text, 'score += 1')
+  assert.equal(call.function.arguments.new_text, 'score += bonus')
+})
+
+test('un README qui contient lui-même ``` : entouré de quatre accents graves, il arrive entier', () => {
+  const readme = '# Cookie\n```bash\nnpm start\n```\nFin.'
+  const text = '```action\n{"name": "write_file", "arguments": {"path": "README.md"}}\n```\n````markdown\n' + readme + '\n````\nC’est fait.'
+  assert.equal(agent.extractTextToolCalls(text)[0].function.arguments.content, readme + '\n')
+  assert.equal(agent.narrationOf(text), 'C’est fait.', 'aucune ligne du README ne s’affiche comme une phrase de Jaris')
+})
+
+test('un bloc de contenu jamais fermé (modèle coupé) n’est pas pris : jamais un fichier tronqué', () => {
+  const text = '```action\n{"name": "write_file", "arguments": {"path": "index.html"}}\n```\n```html\n<h1>Cookie</h1>\n<p>début du'
+  const [call] = agent.extractTextToolCalls(text)
+  assert.equal(call.function.arguments.content, undefined)
+})
+
+test('le contenu tel quel fait vraiment le travail, de bout en bout, et le modèle est prévenu du format', async () => {
+  const app = setup({}, [
+    { role: 'assistant', content: 'Je crée le jeu.\n```action\n{"name": "write_file", "arguments": {"path": "index.html"}}\n```\n```html\n' + COOKIE_HTML + '\n```' },
+    { role: 'assistant', content: '```action\n{"name": "finish", "arguments": {"summary": "Jeu créé."}}\n```' }
+  ])
+  const outcome = await agent.runRepoAgent('Fais un Cookie Clicker', app.deps)
+  assert.equal(app.staged.get('index.html'), COOKIE_HTML + '\n')
+  assert.equal(outcome.summary, 'Jeu créé.')
+  assert.match(app.seen[0][0].content, /ne mets JAMAIS son contenu dans le JSON/)
+})
+
+test('une action d’écriture sans contenu explique quoi faire au lieu d’un simple « content manquant »', async () => {
+  const app = setup({}, [
+    { role: 'assistant', content: '```action\n{"name": "write_file", "arguments": {"path": "index.html"}}\n```' },
+    { role: 'assistant', content: '```action\n{"name": "finish", "arguments": {"summary": "ok"}}\n```' }
+  ])
+  await agent.runRepoAgent('Crée la page', app.deps)
+  assert.match(toolResults(app.seen[1]).at(-1), /bloc de code fermé, juste après l'action/)
+})
+
+test('« finish » envoyé avec une lecture pas encore vue (vu avec qwen2.5-coder:7b) : refusé, le travail continue', async () => {
+  const app = setup({ 'README.md': '# site\n' }, [
+    { role: 'assistant', content: 'Je regarde.\n```action\n{"name": "list_files", "arguments": {"dir": ""}}\n```\n```action\n{"name": "finish", "arguments": {"summary": "Je vais créer le jeu."}}\n```' },
+    { role: 'assistant', content: '```action\n{"name": "write_file", "arguments": {"path": "index.html"}}\n```\n```html\n<h1 class="t">Cookie</h1>\n```' },
+    { role: 'assistant', content: '```action\n{"name": "finish", "arguments": {"summary": "Jeu créé."}}\n```' }
+  ])
+  const outcome = await agent.runRepoAgent('Fais un Cookie Clicker', app.deps)
+  assert.equal(outcome.summary, 'Jeu créé.', 'la promesse « Je vais créer » n’est jamais rendue comme résumé')
+  assert.equal(app.staged.get('index.html'), '<h1 class="t">Cookie</h1>\n')
+  assert.match(toolResults(app.seen[1]).at(-1), /finish : refusé, tu n'as pas encore vu le résultat/)
+})
+
+test('lire puis réécrire dans le même message, puis « finish » : accepté, le travail est fait (essai réel)', async () => {
+  const app = setup({ 'README.md': '# site\n' }, [
+    {
+      role: 'assistant',
+      content:
+        '```action\n{"name": "read_file", "arguments": {"path": "README.md"}}\n```\n```action\n{"name": "write_file", "arguments": {"path": "README.md"}}\n```\n```md\n# site\n\nUn Cookie Clicker.\n```\n```action\n{"name": "finish", "arguments": {"summary": "README présenté."}}\n```'
+    }
+  ])
+  const outcome = await agent.runRepoAgent('Présente le jeu dans le README', app.deps)
+  assert.equal(outcome.summary, 'README présenté.')
+  assert.equal(app.staged.get('README.md'), '# site\n\nUn Cookie Clicker.\n')
+})
+
+test('un passage vide (« ajouter à la fin », vu pour de vrai) oriente vers la réécriture du fichier entier', async () => {
+  const app = setup({ 'README.md': '# site\n' }, [
+    reply(call('read_file', { path: 'README.md' })),
+    reply(call('edit_file', { path: 'README.md', old_text: '', new_text: 'Fin.' })),
+    reply(call('finish', { summary: 'ok' }))
+  ])
+  await agent.runRepoAgent('Ajoute une ligne', app.deps)
+  assert.match(toolResults(app.seen[2]).at(-1), /réécris le fichier entier avec write_file/)
+})
+
 test('appel illisible : on demande de le réécrire, jamais affiché comme résumé ; trois fois et on s’arrête', async () => {
   const broken = { role: 'assistant', content: '```action\n{"name": "write_file", "arguments": {"path": "i.html", "content": "<div class="x">"}}\n```' }
   const app = setup({}, [broken, { role: 'assistant', content: '```action\n{"name": "write_file", "arguments": {"path": "i.html", "content": "<div class=\\"x\\">"}}\n```' }, reply(call('finish', { summary: 'Fait.' }))])
@@ -447,6 +546,29 @@ test('deux écritures dans le même bloc : la seconde prend le relais', () => {
     '\n```'
   const paths = track(two).filter(Boolean).map((live) => `${live.path} ${live.lines}`)
   assert.deepEqual([paths[0], paths.at(-1)], ['a.js 0', 'b.js 2'])
+})
+
+test('contenu tel quel (étape 307) : le fichier s’affiche dès l’action, puis +1 à chaque ligne du bloc qui suit', () => {
+  for (const chunk of [1, 5, 1000]) {
+    const text = 'Je crée la page.\n```action\n{"name": "write_file", "arguments": {"path": "index.html"}}\n```\n```html\n<h1>a</h1>\n<p class="b">b</p>\n<p>c</p>\n```\nFini.'
+    const events = track(text, chunk)
+    const lines = events.filter(Boolean).map((live) => `${live.kind} ${live.path} ${live.lines}`)
+    assert.equal(lines[0], 'write index.html 0', `fragments de ${chunk}`)
+    assert.equal(lines.at(-1), 'write index.html 3', `fragments de ${chunk}`)
+    assert.equal(events.at(-1), null)
+  }
+})
+
+test('contenu tel quel : une modification ne compte que le second bloc (le nouveau texte)', () => {
+  const text = '```action\n{"name": "edit_file", "arguments": {"path": "jeu.js"}}\n```\n```js\na\nb\nc\nd\n```\n```js\nx\ny\n```'
+  assert.deepEqual(track(text).filter(Boolean).at(-1), { kind: 'edit', path: 'jeu.js', lines: 2 })
+})
+
+test('contenu tel quel : la lecture suivante n’est jamais prise pour le fichier en cours', () => {
+  const text =
+    '```action\n{"name": "write_file", "arguments": {"path": "a.css"}}\n```\n```css\nx\n```\n' +
+    '```action\n{"name": "read_file", "arguments": {"path": "b.js"}}\n```'
+  assert.deepEqual([...new Set(track(text).filter(Boolean).map((live) => live.path))], ['a.css'])
 })
 
 test('un texte sans écriture ne montre aucun fichier', () => {

@@ -8109,3 +8109,34 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   README » (`test-options-references.mjs`) a reçu une seule exception, ciblée sur la ligne qui crée ce fichier dans
   le dépôt de Léo. Ce n'est pas un renvoi vers une documentation de Jaris, et la garde attrape toujours le reste
   (vérifié avec un faux « Consulte le README »).
+
+- **« Jaris n'arrive pas à écrire ses actions correctement (3 essais illisibles) » sur « fais un site type Cookie
+  Clicker » (Léo, étape 307).** Le protocole de l'étape 281 (appels écrits en blocs ```action) mettait le fichier
+  ENTIER dans une chaîne JSON : chaque guillemet du HTML et du JavaScript devait devenir `\"`. Le modèle de Léo le
+  savait, et l'annonçait (« en échappant correctement les guillemets dans le JSON »), mais n'y arrivait pas sur un
+  fichier entier. Une consigne de plus n'aurait rien changé (leçon de l'étape SearXNG) : la contrainte est retirée.
+  Le contenu voyage maintenant TEL QUEL dans le bloc de code qui suit l'action : write_file ne porte que le chemin
+  et prend le bloc suivant ; edit_file en prend deux, l'ancien passage puis le nouveau. Il n'y a plus rien à
+  échapper. Un README qui contient lui-même ``` s'entoure de ```` : la clôture doit avoir au moins autant d'accents
+  graves que l'ouverture, règle Markdown. Un bloc jamais fermé n'est pas pris, pour que jamais un fichier coupé ne
+  parte sur GitHub. L'ancien format JSON reste accepté. L'affichage « en direct » compte les lignes du bloc brut,
+  et la narration ne montre jamais une ligne de README entouré de ````.
+  **Vérifié avec un vrai modèle, pas seulement par des tests** (qwen2.5-coder:7b dans Ollama, la vraie boucle
+  `runRepoAgent`, la demande de Léo mot pour mot). Le modèle a adopté le nouveau format dès le premier tour
+  (`index.html` avec tous ses guillemets, `style.css`, `script.js`), et cet essai a révélé deux autres défauts, tous
+  deux corrigés. (1) Lors du 1er essai, `list_files` et `finish` sont arrivés dans le même message, avec le résumé
+  « Je vais créer… » et aucun fichier, et Jaris l'acceptait. Un `finish` envoyé avec une lecture dont le modèle n'a
+  pas vu le résultat est désormais refusé, SAUF si un fichier a réellement changé dans ce message : un premier garde
+  trop strict avait refusé « lire puis réécrire le README puis finish », un travail pourtant fini, et le modèle
+  s'était mis à tourner en rond. (2) Un `old_text` vide voulait dire « ajouter à la fin » : le message d'erreur
+  oriente vers write_file du fichier entier. 3e essai réel : 2 tours, 205 s, les 4 fichiers préparés, terminé
+  proprement. **Limite honnête :** ce n'est pas le modèle de code de Léo (trop lourd pour le disque de cet
+  environnement) ; le format ne demande rien de plus qu'un bloc de code, ce que tous les modèles de code savent faire.
+  **Leçon générale : ne jamais demander à un petit modèle d'encoder un gros texte libre dans une chaîne JSON — le
+  passer en bloc brut retire toute la classe d'erreurs d'échappement au lieu de la combattre par des consignes.**
+  **Piège de mon propre banc d'essai, à ne pas confondre avec un défaut de Jaris :** un `fetch` sans flux coupe à
+  5 min (undici) quand la machine est chargée ; Jaris reçoit au fil de l'eau, donc le script d'essai aussi.
+  Régression : `node --test scripts/test-repo-agent.mjs` (contenu brut avec guillemets, plusieurs fichiers dans
+  l'ordre, edit_file en deux blocs, README à quatre accents graves, bloc non fermé refusé, de bout en bout, compteur
+  en direct, finish prématuré refusé, lire et réécrire accepté, passage vide orienté vers write_file). Chaque nouveau
+  test échoue sur l'ancien code, vérifié.

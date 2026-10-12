@@ -85,7 +85,7 @@ export const REPO_TOOLS: OllamaTool[] = [
     function: {
       name: 'edit_file',
       description:
-        'Remplace UN passage exact d\'un fichier déjà lu. old_text doit être copié tel quel depuis read_file (espaces et retours à la ligne compris) et n\'apparaître qu\'une seule fois.',
+        'Remplace UN passage exact d\'un fichier déjà lu. old_text doit être copié tel quel depuis read_file (espaces et retours à la ligne compris) et n\'apparaître qu\'une seule fois. Écris old_text puis new_text dans deux blocs de code juste après l\'action, sans les mettre dans le JSON.',
       parameters: {
         type: 'object',
         properties: { path: { type: 'string' }, old_text: { type: 'string' }, new_text: { type: 'string' } },
@@ -97,7 +97,7 @@ export const REPO_TOOLS: OllamaTool[] = [
     type: 'function',
     function: {
       name: 'write_file',
-      description: 'Écrit un fichier entier : pour CRÉER un fichier, ou réécrire un petit fichier déjà lu.',
+      description: 'Écrit un fichier entier : pour CRÉER un fichier, ou réécrire un petit fichier déjà lu. Écris le contenu dans un bloc de code juste après l\'action, sans le mettre dans le JSON.',
       parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] }
     }
   },
@@ -226,7 +226,18 @@ function toolProtocol(): string {
     '```action',
     '{"name": "read_file", "arguments": {"path": "index.html"}}',
     '```',
-    'Les arguments sont du JSON valide : un retour à la ligne s\'écrit \\n et un guillemet \\". Après tes appels, arrête-toi : leurs résultats te seront donnés dans le message suivant.',
+    // Étape 307 (Léo : « Jaris n'arrive pas à écrire ses actions correctement (3 essais illisibles) ») : un fichier
+    // entier dans une chaîne JSON oblige à échapper chaque guillemet du HTML et du JavaScript, et un modèle local s'y
+    // perd. Le contenu voyage donc TEL QUEL dans le bloc suivant : il n'y a plus rien à échapper.
+    "Pour écrire un fichier, ne mets JAMAIS son contenu dans le JSON : écris l'action avec seulement le chemin, puis le fichier tel quel dans le bloc de code qui suit, sans rien échapper :",
+    '```action',
+    '{"name": "write_file", "arguments": {"path": "index.html"}}',
+    '```',
+    '```html',
+    '<p class="score">Score : 0</p>',
+    '```',
+    "Pour edit_file, même chose : l'action avec seulement le chemin, puis deux blocs, d'abord le passage exact actuel, ensuite son remplacement. Si le fichier contient lui-même ```, entoure-le de ```` (quatre accents graves).",
+    'Le JSON des actions reste court et valide. Après tes appels, arrête-toi : leurs résultats te seront donnés dans le message suivant.',
     'Outils :',
     ...lines
   ].join('\n')
@@ -241,7 +252,7 @@ const TOOL_LINE = new RegExp(`^\\s*(${REPO_TOOLS.map((tool) => tool.function.nam
  */
 export function narrationOf(content: string): string {
   return (
-    content
+    stripFencedBlocks(content)
       .replace(/<think>[\s\S]*?(<\/think>|$)/g, '')
       .replace(/```[\s\S]*?```/g, '\n')
       .replace(/<tool_call>[\s\S]*?(<\/tool_call>|$)/g, '')
@@ -275,6 +286,13 @@ export function createLiveWriteTracker(emit: (live: CodeLiveWrite | null) => voi
   let written = false
   let escaped = false
   let fence = 0
+  /** Un bloc ```action est ouvert (sa clôture peut annoncer un contenu brut, étape 307). */
+  let inBlock = false
+  /** Étape 307 : contenu brut dans les blocs qui suivent l'action — attendu entre deux blocs, ou en cours dedans. */
+  let raw: null | 'awaiting' | 'inside' = null
+  let rawBlocks = 0
+  let rawFence = 0
+  let line = ''
 
   const reset = (): void => {
     if (current) emit(null)
@@ -283,6 +301,37 @@ export function createLiveWriteTracker(emit: (live: CodeLiveWrite | null) => voi
     written = false
     escaped = false
     buffer = ''
+    raw = null
+  }
+
+  /** Le bloc brut qui porte le nouveau texte : le seul pour write_file, le second (après l'ancien passage) pour edit_file. */
+  const countedBlock = (): number => (current?.kind === 'edit' ? 1 : 0)
+
+  /** Une ligne complète reçue pendant qu'un contenu brut est attendu ou en cours d'écriture. */
+  const rawLine = (text: string, ended: boolean): void => {
+    const fenceLine = FENCE_LINE.exec(text)
+    if (raw === 'awaiting') {
+      if (!fenceLine) return
+      if (fenceLine[2] === 'action') {
+        // Un nouvel appel au lieu du contenu attendu : rien à suivre de plus pour l'action précédente.
+        reset()
+        inBlock = true
+        return
+      }
+      raw = 'inside'
+      rawFence = fenceLine[1].length
+      return
+    }
+    if (fenceLine && fenceLine[1].length >= rawFence && !fenceLine[2]) {
+      if (rawBlocks === countedBlock()) written = true
+      rawBlocks += 1
+      raw = !written && rawBlocks <= countedBlock() ? 'awaiting' : null
+      return
+    }
+    if (ended && current && rawBlocks === countedBlock()) {
+      current.lines += 1
+      emit({ ...current })
+    }
   }
 
   const detect = (): void => {
@@ -304,10 +353,27 @@ export function createLiveWriteTracker(emit: (live: CodeLiveWrite | null) => voi
   return {
     push(delta: string): void {
       for (const char of delta) {
+        if (raw) {
+          if (char === '\n') {
+            rawLine(line, true)
+            line = ''
+          } else line += char
+          continue
+        }
         // Ouverture ou fin d'un bloc (```) : tout repart de zéro. Sans ça, le chemin d'une LECTURE précédente (resté
         // dans ce qui a été lu) serait pris pour celui du fichier écrit ensuite.
         fence = char === '`' ? fence + 1 : 0
         if (fence === 3 && !counting) {
+          // Fin d'un bloc action qui écrit un fichier sans "content" : le fichier arrive tel quel dans le bloc suivant.
+          if (inBlock && current && !written) {
+            inBlock = false
+            raw = 'awaiting'
+            rawBlocks = 0
+            line = ''
+            fence = 0
+            continue
+          }
+          inBlock = !inBlock
           reset()
           continue
         }
@@ -338,6 +404,8 @@ export function createLiveWriteTracker(emit: (live: CodeLiveWrite | null) => voi
     },
     end(): void {
       reset()
+      inBlock = false
+      line = ''
     }
   }
 }
@@ -386,6 +454,121 @@ export function parseLenientJson(text: string): unknown {
   }
 }
 
+export interface FencedBlock {
+  /** Le mot après l'ouverture (« action », « html »…), en minuscules ; vide s'il n'y en a pas. */
+  info: string
+  body: string
+  /** `false` : le texte s'arrête avant la clôture (modèle coupé). */
+  closed: boolean
+}
+
+const FENCE_LINE = /^[ \t]*(`{3,})[ \t]*([^`\s]*)[ \t]*$/
+
+/**
+ * Les blocs de code d'un texte, dans l'ordre, lus ligne par ligne. Comme en Markdown, un bloc se ferme par une ligne
+ * d'au moins autant d'accents graves que son ouverture : un README qui contient lui-même ``` s'entoure de ````.
+ */
+export function fencedBlocks(text: string): FencedBlock[] {
+  const blocks: FencedBlock[] = []
+  let open: { fence: number; info: string; lines: string[] } | null = null
+  for (const line of text.replace(/\r\n/g, '\n').split('\n')) {
+    const fence = FENCE_LINE.exec(line)
+    if (!open) {
+      if (fence) open = { fence: fence[1].length, info: fence[2].toLowerCase(), lines: [] }
+      continue
+    }
+    if (fence && fence[1].length >= open.fence && !fence[2]) {
+      blocks.push({ info: open.info, body: open.lines.join('\n'), closed: true })
+      open = null
+      continue
+    }
+    open.lines.push(line)
+  }
+  if (open) blocks.push({ info: open.info, body: open.lines.join('\n'), closed: false })
+  return blocks
+}
+
+/**
+ * Le texte sans ses blocs ouverts par QUATRE accents graves ou plus (un README qui contient lui-même ```, étape 307),
+ * un bloc en cours d'écriture compris. Les blocs ordinaires restent à narrationOf, qui sait aussi traiter un bloc
+ * dont l'ouverture manque (sa clôture seule ne doit pas être prise ici pour une ouverture).
+ */
+function stripFencedBlocks(text: string): string {
+  const kept: string[] = []
+  let fence = 0
+  for (const line of text.split('\n')) {
+    const match = FENCE_LINE.exec(line)
+    if (fence === 0) {
+      if (match && match[1].length >= 4) fence = match[1].length
+      else kept.push(line)
+    } else if (match && match[1].length >= fence && !match[2]) {
+      fence = 0
+      kept.push('')
+    }
+  }
+  return kept.join('\n')
+}
+
+/** Les arguments qu'un appel attend en blocs bruts (étape 307), dans l'ordre où les blocs doivent suivre. */
+function rawKeysOf(call: OllamaToolCall): string[] {
+  const args = call.function.arguments ?? {}
+  if (call.function.name === 'write_file') return typeof args.content === 'string' ? [] : ['content']
+  if (call.function.name === 'edit_file') return ['old_text', 'new_text'].filter((key) => typeof args[key] !== 'string')
+  return []
+}
+
+/** Les appels d'outils d'une valeur JSON lue dans un bloc : seuls les noms des outils de l'agent sont acceptés. */
+function callsIn(value: unknown, calls: OllamaToolCall[] = []): OllamaToolCall[] {
+  if (Array.isArray(value)) {
+    for (const item of value) callsIn(item, calls)
+    return calls
+  }
+  const object = value as { name?: unknown; arguments?: unknown; parameters?: unknown; function?: unknown } | null
+  if (!object || typeof object !== 'object') return calls
+  if (object.function && typeof object.function === 'object') return callsIn(object.function, calls)
+  const args = object.arguments ?? object.parameters ?? {}
+  if (typeof object.name === 'string' && TOOL_NAMES.has(object.name) && args && typeof args === 'object') {
+    calls.push({ function: { name: object.name, arguments: { ...(args as Record<string, unknown>) } } })
+  }
+  return calls
+}
+
+/**
+ * Étape 307 : les appels écrits en blocs ```action, et le contenu des fichiers pris TEL QUEL dans les blocs qui
+ * suivent (une action write_file sans "content" attend un bloc ; edit_file sans old_text/new_text en attend deux).
+ * Un bloc de contenu jamais fermé n'est pas pris : un fichier coupé en route ne doit pas partir sur GitHub.
+ */
+function callsFromBlocks(text: string): OllamaToolCall[] {
+  const calls: OllamaToolCall[] = []
+  const waiting: Array<{ call: OllamaToolCall; key: string }> = []
+  for (const block of fencedBlocks(text)) {
+    if (waiting.length > 0 && block.info !== 'action') {
+      const next = waiting.shift() as { call: OllamaToolCall; key: string }
+      if (!block.closed) continue
+      // Un fichier finit par un retour à la ligne ; un passage à remplacer reste exactement tel qu'il a été écrit.
+      next.call.function.arguments[next.key] = next.key === 'content' && block.body ? `${block.body}\n` : block.body
+      continue
+    }
+    waiting.length = 0
+    if (!['action', 'json', ''].includes(block.info)) continue
+    const whole = parseLenientJson(block.body.trim())
+    // Plusieurs appels à la suite dans le même bloc : un par ligne.
+    const parsed =
+      whole !== undefined
+        ? whole
+        : block.body
+            .split('\n')
+            .filter((line) => line.trim().startsWith('{'))
+            .map((line) => parseLenientJson(line.trim()))
+            .filter((value) => value !== undefined)
+    for (const call of callsIn(parsed)) {
+      calls.push(call)
+      for (const key of rawKeysOf(call)) waiting.push({ call, key })
+    }
+  }
+  return calls
+}
+
 /**
  * Appels d'outils écrits EN TEXTE au lieu d'être de vrais appels. Constaté pour de vrai ici avec
  * qwen2.5-coder:7b (le plus petit modèle du mode Code) : il répond `{"name": "read_file", "arguments": {...}}`
@@ -396,6 +579,8 @@ export function parseLenientJson(text: string): unknown {
 export function extractTextToolCalls(content: string): OllamaToolCall[] {
   const text = content.trim()
   if (!text) return []
+  const fromBlocks = callsFromBlocks(text)
+  if (fromBlocks.length > 0) return fromBlocks
   const candidates: string[] = []
   for (const match of text.matchAll(/<tool_call>([\s\S]*?)(?:<\/tool_call>|$)/g)) candidates.push(match[1])
   for (const match of text.matchAll(/```(?:json|action)?\s*([\s\S]*?)```/g)) candidates.push(match[1])
@@ -404,20 +589,7 @@ export function extractTextToolCalls(content: string): OllamaToolCall[] {
 
   const calls: OllamaToolCall[] = []
   const accept = (value: unknown): void => {
-    if (Array.isArray(value)) {
-      value.forEach(accept)
-      return
-    }
-    const object = value as { name?: unknown; arguments?: unknown; parameters?: unknown; function?: unknown } | null
-    if (!object || typeof object !== 'object') return
-    if (object.function && typeof object.function === 'object') {
-      accept(object.function)
-      return
-    }
-    const args = object.arguments ?? object.parameters ?? {}
-    if (typeof object.name === 'string' && TOOL_NAMES.has(object.name) && args && typeof args === 'object') {
-      calls.push({ function: { name: object.name, arguments: args as Record<string, unknown> } })
-    }
+    callsIn(value, calls)
   }
   for (const candidate of candidates) {
     const chunk = candidate.trim()
@@ -450,7 +622,7 @@ export function looksLikeBrokenToolCall(content: string): boolean {
 }
 
 const UNREADABLE_CALL =
-  "Résultat : ton appel d'outil est illisible (JSON invalide, souvent un guillemet non échappé dans un texte : écris \\\" ). Réécris-le dans un bloc ```action."
+  "Résultat : ton appel d'outil est illisible (JSON invalide, souvent un guillemet du fichier dans le JSON). Ne mets jamais le contenu d'un fichier dans le JSON : réécris l'action dans un bloc ```action avec seulement le chemin, puis le fichier tel quel dans le bloc de code suivant."
 
 /** Vu avec qwen2.5-coder:7b : une réponse qui commence par le mot « finish » seul, puis le vrai résumé. */
 function cleanSummary(text: string): string {
@@ -515,7 +687,8 @@ export async function runRepoAgent(request: string, deps: RepoAgentDeps): Promis
         if (content === undefined) throw new ToolFailure(`Fichier introuvable : ${path}. Pour créer un fichier, utilise write_file.`)
         if (content === null) throw new ToolFailure(`${path} est un fichier binaire ou trop lourd : il ne peut pas être modifié.`)
         if (!readPaths.has(path)) throw new ToolFailure(`Lis d'abord ${path} avec read_file avant de le modifier.`)
-        if (!oldText) throw new ToolFailure('old_text est vide : copie le passage exact à remplacer.')
+        // Essai réel (étape 307) : un passage vide voulait dire « ajouter à la fin » — c'est un write_file du fichier entier.
+        if (!oldText) throw new ToolFailure("old_text est vide. Pour ajouter du texte (à la fin par exemple), réécris le fichier entier avec write_file, contenu dans le bloc de code suivant. Pour remplacer un passage, écris après l'action un bloc avec le passage exact, puis un bloc avec son remplacement.")
         let from = oldText
         let to = newText
         let count = countOccurrences(content, from)
@@ -543,7 +716,7 @@ export async function runRepoAgent(request: string, deps: RepoAgentDeps): Promis
       }
       case 'write_file': {
         const path = normalizeRepoPath(args.path)
-        if (typeof args.content !== 'string') throw new ToolFailure('content manquant.')
+        if (typeof args.content !== 'string') throw new ToolFailure("Contenu manquant : écris le fichier entier dans un bloc de code fermé, juste après l'action.")
         const existing = await deps.readFile(path)
         if (existing === null) throw new ToolFailure(`${path} est un fichier binaire ou trop lourd : il ne peut pas être réécrit.`)
         if (existing !== undefined && !readPaths.has(path)) throw new ToolFailure(`${path} existe déjà : lis-le d'abord avec read_file, puis utilise plutôt edit_file.`)
@@ -632,9 +805,22 @@ export async function runRepoAgent(request: string, deps: RepoAgentDeps): Promis
     usedTools = true
     /** Un appel de ce message a échoué : un « finish » envoyé dans le même message ne peut pas être cru. */
     let batchFailed = false
+    /**
+     * Étape 307, essai réel avec qwen2.5-coder:7b sur « fais un Cookie Clicker » : list_files et finish dans le même
+     * message, résumé « Je vais créer… », aucun fichier. Une lecture dont le modèle n'a pas encore vu le résultat
+     * montre que le travail n'est pas fini : son « finish » est refusé, comme après un appel raté.
+     */
+    let batchLookedUp = false
+    /** Un fichier a vraiment changé dans ce message : lire puis réécrire d'un coup (essai réel) reste un travail fini. */
+    let batchChanged = false
     for (const call of calls) {
       const name = call.function?.name ?? ''
       const args = (call.function?.arguments ?? {}) as Record<string, unknown>
+      if (name === 'finish' && batchLookedUp && !batchChanged && !batchFailed) {
+        messages.push({ role: 'user', content: "Résultat de finish : refusé, tu n'as pas encore vu le résultat de tes lectures juste au-dessus. Lis-le, fais le travail demandé, puis rappelle finish." })
+        continue
+      }
+      if (name === 'list_files' || name === 'read_file') batchLookedUp = true
       if (name === 'finish' && batchFailed) {
         // Constaté avec qwen2.5-coder:7b : lecture, modification et « finish » envoyés d'un coup, la
         // modification échoue (passage deviné avant d'avoir lu le fichier)… et le résumé annonçait quand même
@@ -651,6 +837,7 @@ export async function runRepoAgent(request: string, deps: RepoAgentDeps): Promis
       let result: string
       try {
         result = await execute(name, args)
+        if (name === 'write_file' || name === 'edit_file' || name === 'delete_file') batchChanged = true
       } catch (err) {
         if ((err as { name?: string } | null)?.name === 'AbortError') throw err
         const message = (err as { message?: string } | null)?.message ?? String(err)
