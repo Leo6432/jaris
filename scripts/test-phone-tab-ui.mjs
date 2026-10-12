@@ -28,14 +28,15 @@ import OptionsMenu from './src/components/OptionsMenu'
 
 window.__calls = []
 window.__phone = { state: 'off', devices: [] }
-let listener = () => {}
-window.__emitPhone = (status) => { window.__phone = status; listener(status) }
+// Comme le vrai pont (ipcRenderer.on) : plusieurs abonnés à la fois — les cases de « Jaris partout » ET les réglages.
+const listeners = new Set()
+window.__emitPhone = (status) => { window.__phone = status; for (const listener of listeners) listener(status) }
 
 const overrides = {
   getProfile: async () => ({ name: 'Léo' }),
   listAudioInputDevices: async () => [],
   getPhoneAccess: async () => window.__phone,
-  onPhoneAccessChanged: (cb) => { listener = cb; return () => {} },
+  onPhoneAccessChanged: (cb) => { listeners.add(cb); return () => listeners.delete(cb) },
   setPhoneAccessEnabled: async (enabled) => {
     window.__calls.push(['enable', enabled])
     window.__phone = enabled ? { state: 'starting', devices: window.__phone.devices } : { state: 'off', devices: window.__phone.devices }
@@ -96,7 +97,7 @@ async function withPhoneTab(run) {
     await page.setContent(buildPage())
     await page.waitForSelector('.options-menu__trigger')
     await page.click('.options-menu__trigger')
-    await page.click('.options-menu__tab:has-text("Téléphone")')
+    await page.click('.options-menu__tab:has-text("Jaris partout")')
     await page.waitForSelector('.phone-access')
     await run(page)
   } finally {
@@ -106,6 +107,42 @@ async function withPhoneTab(run) {
 
 const calls = (page) => page.evaluate(() => window.__calls)
 const READY = (devices = []) => ({ state: 'ready', address: 'https://jaris.tail1234.ts.net', devices })
+
+// Étape 310, Léo : « à la place de téléphone trouve un nom… une case Jaris téléphone avec une icône, Discord, numéro… »
+test('« Jaris partout » : une case par moyen de joindre Jaris, les futurs en « Bientôt disponible »', options, async () => {
+  await withPhoneTab(async (page) => {
+    const cards = await page.$$eval('.channels .channel-card', (els) =>
+      els.map((el) => ({
+        title: el.querySelector('.channel-card__title')?.textContent,
+        badge: el.querySelector('.channel-card__badge')?.textContent,
+        icon: Boolean(el.querySelector('.channel-card__icon svg')),
+        soon: el.getAttribute('aria-disabled') === 'true'
+      }))
+    )
+    assert.deepEqual(cards, [
+      { title: 'Téléphone', badge: 'À activer', icon: true, soon: false },
+      { title: 'Discord', badge: 'Bientôt disponible', icon: true, soon: true },
+      { title: 'Telegram', badge: 'Bientôt disponible', icon: true, soon: true },
+      { title: 'Numéro de téléphone', badge: 'Bientôt disponible', icon: true, soon: true }
+    ])
+    // Les réglages du téléphone restent juste en dessous, et la case suit leur état.
+    await page.click('.phone-access [role="switch"]')
+    await page.evaluate(() => window.__emitPhone({ state: 'ready', address: 'https://jaris.tail1234.ts.net', devices: [] }))
+    await page.waitForFunction(() => document.querySelector('.channel-card--on .channel-card__badge')?.textContent === 'Activé')
+    // Vraiment habillées par le CSS de Jaris (grille, coins arrondis, pointillés pour « bientôt »), mesuré.
+    const style = await page.evaluate(() => {
+      const css = (selector) => getComputedStyle(document.querySelector(selector))
+      return {
+        grid: css('.channels').display,
+        radius: css('.channel-card').borderRadius,
+        soonBorder: css('.channel-card--soon').borderTopStyle,
+        columns: css('.channels').gridTemplateColumns.split(' ').length
+      }
+    })
+    assert.deepEqual(style, { grid: 'grid', radius: '16px', soonBorder: 'dashed', columns: 2 }, 'quatre cases en 2 × 2')
+    assert.equal(await page.textContent('.options-page__tab-header h3'), 'Jaris partout')
+  })
+})
 
 test('désactivé par défaut : ce que ça fait, que c’est chiffré, et ce qui reste interdit depuis le téléphone', options, async () => {
   await withPhoneTab(async (page) => {

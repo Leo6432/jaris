@@ -168,7 +168,7 @@ const options = { skip: chromium ? false : 'Playwright indisponible dans cet env
 test('onglets réduits : les anciens onglets Micro/Activation/Mise à jour/Stockage/Historique ont disparu', options, async () => {
   await withOptions(async (page) => {
     const labels = await page.$$eval('.options-menu__tab', (els) => els.map((el) => el.textContent?.trim()))
-    assert.deepEqual(labels, ['Ce que Jaris sait faire', 'Voix', 'Modèles', 'Téléphone', 'Général'], `onglets affichés : ${labels.join(', ')}`)
+    assert.deepEqual(labels, ['Ce que Jaris sait faire', 'Voix', 'Modèles', 'Jaris partout', 'Général'], `onglets affichés : ${labels.join(', ')}`)
     assert.doesNotMatch(await page.textContent('body'), /Mobile connecté/)
   })
 })

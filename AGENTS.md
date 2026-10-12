@@ -8182,3 +8182,23 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `scripts/test-github-ui.mjs` (déconnexion en plein travail : le bouton apparaît, habillé, et ouvre la
   connexion, pas une liste périmée ; le panneau relit l'état à chaque ouverture). Les deux tests échouent sur
   l'ancien code, vérifié.
+
+- **« À la place de Téléphone, trouve un nom : on va y mettre toutes les solutions pour parler avec Jaris
+  (téléphone site, Discord, numéro de téléphone). Au pire, mets "bientôt disponible", et fais un truc stylé avec
+  des cases » (Léo, étape 310).** L'onglet s'appelle « Jaris partout ». Le nom n'a pas de nouvelle clé : c'est la
+  valeur de `options.tab.phone` qui change. Ainsi, les phrases du téléphone qui indiquent le chemin (« Options →
+  … → Connecter un téléphone », phoneServer.ts) suivent toutes seules, et la description de « Ce que Jaris sait
+  faire » a été réécrite dans les 24 langues à partir de l'ancien nom de CHAQUE langue (lu dans git), jamais d'un
+  nom supposé. En tête de l'onglet, une case par moyen de joindre Jaris (`AnywhereSettings.tsx`). Téléphone :
+  badge « Activé » ou « À activer », qui suit l'état réel de l'accès. Discord, Telegram et Numéro de téléphone : « Bientôt
+  disponible », en pointillés et en sourdine, `aria-disabled`, rien de cliquable ni de promis (Telegram ajouté à
+  la demande de Léo, « ajoute aussi Telegram et mets bientôt dispo »). Les réglages du
+  téléphone restent dessous, inchangés. Icônes SVG maison (téléphone, bulle, avion en papier, combiné), sans logo de marque.
+  **Piège du faux pont, encore (même famille que les étapes 302 et 304) :** le faux `onPhoneAccessChanged` du test
+  ne gardait qu'UN abonné ; avec les cases ET les réglages abonnés, le second aurait volé les notifications du
+  premier dans le test, alors que le vrai pont (`ipcRenderer.on`) les accepte tous. Le faux pont garde maintenant
+  tous ses abonnés, comme le vrai. **Piège CSS mesuré :** `repeat(auto-fit, minmax(190px, 1fr))` créait une 4e
+  colonne vide dans une page large ; remplacé par une grille 2 × 2 pour les quatre cases, une seule colonne sous 700 px. Vérifié par
+  captures (sombre, clair, 620 px) et par le style calculé. Régression : `scripts/test-phone-tab-ui.mjs` (les quatre
+  cases, leurs badges et icônes, la case Téléphone qui suit l'état réel, grille 2 × 2, coins arrondis,
+  pointillés pour « bientôt »), plus le nouveau nom dans les tests d'onglets.

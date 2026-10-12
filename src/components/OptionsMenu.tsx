@@ -18,7 +18,7 @@ import { CAPABILITIES } from '../../shared/capabilities'
 import AllModelsOverview from './AllModelsOverview'
 import AppUpdateProgress from './AppUpdateProgress'
 import { SettingGroup, SettingRow, Toggle } from './SettingsLayout'
-import PhoneAccessSettings from './PhoneAccessSettings'
+import AnywhereSettings from './AnywhereSettings'
 import MyModelPicks from './MyModelPicks'
 import JarisOrb from './JarisOrb'
 import { formatModelName } from '../lib/formatModelName'
@@ -1197,7 +1197,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
           </div>
         )}
 
-        {tab === 'telephone' && <PhoneAccessSettings />}
+        {tab === 'telephone' && <AnywhereSettings />}
 
         {tab === 'general' && (
           <div className="options-menu__section">

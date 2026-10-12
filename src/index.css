@@ -8267,3 +8267,97 @@ button.changes-card__file:hover {
   align-self: flex-start;
   margin-top: 8px;
 }
+
+/* Étape 310 — Options → « Jaris partout » : une case par moyen de joindre Jaris loin du PC. Mêmes jetons que les
+   cartes de réglages (panneau relevé, filet, coins de 16 px) ; « Bientôt disponible » en pointillés et en sourdine,
+   pour ne jamais ressembler à quelque chose de cliquable. */
+.channels {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 700px) {
+  .channels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.channel-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--hud-line);
+  border-radius: 16px;
+  background: var(--hud-panel-raised);
+}
+
+.channel-card__icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 4px;
+  border-radius: 12px;
+  color: var(--hud-accent);
+  background: color-mix(in srgb, var(--hud-accent) 14%, transparent);
+}
+
+.channel-card__title {
+  font-family: var(--hud-font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--hud-text);
+}
+
+.channel-card__text {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--hud-text-dim);
+}
+
+.channel-card__badge {
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 3px 10px;
+  border: 1px solid var(--hud-line);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hud-text-dim);
+  background: var(--hud-panel);
+}
+
+.channel-card--on {
+  border-color: color-mix(in srgb, var(--hud-ok) 55%, var(--hud-line));
+}
+
+.channel-card--on .channel-card__badge {
+  border-color: transparent;
+  color: var(--hud-ok);
+  background: color-mix(in srgb, var(--hud-ok) 16%, transparent);
+}
+
+.channel-card--soon {
+  border-style: dashed;
+  background: transparent;
+}
+
+.channel-card--soon .channel-card__icon {
+  color: var(--hud-text-faint);
+  background: var(--hud-panel-raised);
+}
+
+.channel-card--soon .channel-card__title {
+  color: var(--hud-text-dim);
+}
+
+.channel-card--soon .channel-card__badge {
+  color: var(--hud-text-faint);
+  background: transparent;
+}
