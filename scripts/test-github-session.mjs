@@ -26,16 +26,20 @@ class GenerationStoppedError extends Error {}
 
 function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Projet\nBonjour\n', 'src/a.js': 'let a = 1\n' }, replies = [] } = {}) {
   const state = { token, unreadable: false, memoryOnly: false, record: null, openCount: 0, commits: [], failAuth: false, files: { ...files }, cleared: 0 }
+  // Étape 311 : jetons qui expirent. `dead` : jetons que GitHub refuse désormais (expirés) ; chaque jeton de
+  // renouvellement ne sert qu'une fois, comme chez GitHub.
+  Object.assign(state, { refreshToken: null, expiresAt: null, dead: new Set(), refreshCalls: 0, usedRefresh: new Set(), refreshRefused: false, refreshOffline: false, nextLogin: null })
+  const refused = (value) => state.failAuth || state.dead.has(value)
   class FakeClient {
     constructor(value) {
       this.token = value
     }
     async viewer() {
-      if (state.failAuth) throw new realGithub.GithubError(401, 'retiré', 'auth')
+      if (refused(this.token)) throw new realGithub.GithubError(401, 'retiré', 'auth')
       return state.login ?? 'leo'
     }
     async listRepos() {
-      if (state.failAuth) throw new realGithub.GithubError(401, 'Reconnecte-toi', 'auth')
+      if (refused(this.token)) throw new realGithub.GithubError(401, 'Reconnecte-toi', 'auth')
       return [{ fullName: 'leo/projet', private: true, description: null, defaultBranch: 'main', pushedAt: null }]
     }
     async listBranches() {
@@ -60,7 +64,7 @@ function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Proje
     }
     async readText(_snapshot, file) {
       // Étape 308 : un refus isolé (le jeton marche encore) ou un jeton vraiment retiré.
-      if (state.failAuth) throw new realGithub.GithubError(401, 'Reconnecte-toi', 'auth')
+      if (refused(this.token)) throw new realGithub.GithubError(401, 'Reconnecte-toi', 'auth')
       if (state.failReads > 0) {
         state.failReads -= 1
         throw new realGithub.GithubError(401, 'Reconnecte-toi', 'auth')
@@ -117,14 +121,29 @@ function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Proje
     './github': {
       ...realGithub,
       GithubClient: FakeClient,
-      readGithubToken: async () => ({ token: state.token, unreadable: !state.token && state.unreadable }),
+      readGithubToken: async () => ({
+        token: state.token,
+        unreadable: !state.token && state.unreadable,
+        ...(state.token && state.refreshToken ? { refreshToken: state.refreshToken, expiresAt: state.expiresAt } : {})
+      }),
       saveGithubToken: async (value) => {
-        state.token = value
+        const set = typeof value === 'string' ? { token: value, refreshToken: null, expiresAt: null } : value
+        Object.assign(state, { token: set.token, refreshToken: set.refreshToken, expiresAt: set.expiresAt })
         return !state.memoryOnly
       },
       clearGithubToken: async () => {
-        state.token = null
+        Object.assign(state, { token: null, refreshToken: null, expiresAt: null })
         state.cleared += 1
+      },
+      refreshGithubToken: async (_clientId, refreshToken) => {
+        state.refreshCalls += 1
+        const n = state.refreshCalls
+        // Comme un vrai aller-retour réseau : deux demandes refusées en même temps se croisent pendant ce temps-là.
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        if (state.refreshOffline) throw new realGithub.GithubError(0, 'Pas de connexion à Internet')
+        if (state.refreshRefused || state.usedRefresh.has(refreshToken)) throw new realGithub.GithubError(401, 'refusé', 'auth')
+        state.usedRefresh.add(refreshToken)
+        return { token: `gho_${n}`, refreshToken: `ghr_${n}`, expiresAt: Date.now() + 8 * 3_600_000 }
       },
       readConnectionRecord: async () => (state.record ? { ...state.record } : null),
       writeConnectionRecord: async (record) => {
@@ -134,7 +153,8 @@ function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Proje
         state.record = null
       },
       requestDeviceCode: async () => ({ deviceCode: 'd', userCode: 'ABCD-1234', verificationUri: 'https://github.com/login/device', expiresAt: Infinity, intervalMs: 1 }),
-      pollDeviceToken: async () => 'gho_nouveau'
+      pollDeviceToken: async () => 'gho_nouveau',
+      pollDeviceTokenSet: async () => state.nextLogin ?? { token: 'gho_nouveau', refreshToken: null, expiresAt: null }
     },
     './ollama': { getModelThinking: async () => null },
     './profileStore': { getProfile: async () => ({}) },
@@ -402,6 +422,71 @@ test('déconnexion : la vraie raison est notée et rendue à l’écran', async 
   const relaunched = setup()
   relaunched.state.record = state.record
   assert.equal((await relaunched.session.getGithubStatus()).lost.reason, 'memoryOnly')
+})
+
+// Étape 311 (Léo : « je l'ai connecté hier soir… avec Claude ça ne me demande jamais une seule fois depuis 1 an ») :
+// un jeton de 8 h expiré n'est PAS un jeton retiré — il se renouvelle en silence, comme chez Claude.
+function expiring(setupOptions = {}) {
+  const made = setup({ token: 'gho_vieux', ...setupOptions })
+  Object.assign(made.state, { refreshToken: 'ghr_0', expiresAt: Date.now() - 1_000 })
+  made.state.dead.add('gho_vieux')
+  made.state.record = { connectedAt: 1, login: 'leo', memoryOnly: false, rejectedAt: null }
+  return made
+}
+
+test('jeton expiré au lancement : renouvelé avant usage, jamais effacé', async () => {
+  const { session, state } = expiring()
+  assert.deepEqual(await session.getGithubStatus(), { available: true, connected: true, login: 'leo' })
+  assert.equal(state.refreshCalls, 1)
+  assert.equal(state.token, 'gho_1', 'le nouveau jeton n’est pas enregistré')
+  assert.equal(state.refreshToken, 'ghr_1', 'le nouveau jeton de renouvellement n’est pas enregistré')
+  assert.equal(state.cleared, 0, 'un jeton seulement expiré a été effacé')
+  assert.equal((await session.listGithubRepos()).length, 1)
+  assert.equal(state.refreshCalls, 1, 'un jeton neuf ne doit pas être renouvelé à chaque demande')
+})
+
+test('jeton refusé en plein travail : un seul renouvellement pour deux demandes, puis elles sont refaites', async () => {
+  const { session, state } = setup({ token: 'gho_a' })
+  Object.assign(state, { refreshToken: 'ghr_a', expiresAt: Date.now() + 3_600_000 })
+  assert.equal((await session.getGithubStatus()).login, 'leo')
+  // GitHub le refuse plus tôt que l'échéance notée (horloge décalée, par exemple).
+  state.dead.add('gho_a')
+  const [first, second] = await Promise.all([session.listGithubRepos(), session.listGithubRepos()])
+  assert.equal(first.length + second.length, 2)
+  // Deux renouvellements avec le même jeton : le second serait refusé par GitHub et effacerait la connexion.
+  assert.equal(state.refreshCalls, 1)
+  assert.equal(state.token, 'gho_1')
+  assert.equal(state.cleared, 0)
+})
+
+test('renouvellement refusé : la connexion est vraiment perdue, et l’écran le dit', async () => {
+  const { session, state } = expiring()
+  state.refreshRefused = true
+  const status = await session.getGithubStatus()
+  assert.equal(status.connected, false)
+  assert.equal(status.lost.reason, 'rejected')
+  assert.equal(state.token, null)
+  assert.equal(state.refreshCalls, 1, 'un jeton de renouvellement refusé ne doit pas être redemandé')
+})
+
+test('réseau coupé pendant le renouvellement : rien n’est effacé, et ça repart au prochain essai', async () => {
+  const { session, state } = expiring()
+  state.refreshOffline = true
+  assert.deepEqual(await session.getGithubStatus(), { available: true, connected: true, login: null })
+  assert.equal(state.token, 'gho_vieux')
+  assert.equal(state.cleared, 0)
+  state.refreshOffline = false
+  assert.equal((await session.getGithubStatus()).login, 'leo')
+  assert.notEqual(state.token, 'gho_vieux')
+})
+
+test('connexion à une application à jetons qui expirent : le renouvellement est gardé', async () => {
+  const { session, state } = setup()
+  state.nextLogin = { token: 'gho_x', refreshToken: 'ghr_x', expiresAt: Date.now() + 8 * 3_600_000 }
+  await session.startGithubLogin()
+  assert.equal((await session.finishGithubLogin()).login, 'leo')
+  assert.equal(state.token, 'gho_x')
+  assert.equal(state.refreshToken, 'ghr_x')
 })
 
 test('se déconnecter soi-même efface la trace ; jamais connecté : rien à expliquer', async () => {

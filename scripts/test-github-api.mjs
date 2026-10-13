@@ -203,6 +203,75 @@ test('jeton absent ≠ jeton illisible, et chiffrement indisponible signalé à 
   electron.safeStorage.available = true
 })
 
+// Étape 311 (Léo : « je l'ai connecté hier soir… avec Claude ça ne me demande jamais une seule fois depuis 1 an ») :
+// une application OAuth à jetons qui expirent donne un jeton de 8 h ET un jeton de renouvellement de 6 mois. Jaris
+// jetait le second : connecté le soir, refusé le lendemain, sans rien dans le journal de sécurité de GitHub.
+const REFRESH = 'ghr_renouvellement_secret_456'
+
+test('jeton qui expire : la connexion garde le jeton de renouvellement et l’échéance', async () => {
+  const poll = fakeFetch(() => ({
+    body: { access_token: TOKEN, expires_in: 28_800, refresh_token: REFRESH, refresh_token_expires_in: 15_811_200, token_type: 'bearer' }
+  }))
+  const set = await github.pollDeviceTokenSet('c', { deviceCode: 'd', userCode: 'u', verificationUri: 'v', expiresAt: 1e12, intervalMs: 1 }, {
+    fetchImpl: poll.fetchImpl,
+    sleep: async () => {},
+    now: () => 5_000
+  })
+  assert.deepEqual({ ...set }, { token: TOKEN, refreshToken: REFRESH, expiresAt: 5_000 + 28_800_000 })
+  // Application dont les jetons n'expirent pas : rien à renouveler, comme avant.
+  const plain = fakeFetch(() => ({ body: { access_token: TOKEN, token_type: 'bearer' } }))
+  const once = await github.pollDeviceTokenSet('c', { deviceCode: 'd', userCode: 'u', verificationUri: 'v', expiresAt: 1e12, intervalMs: 1 }, {
+    fetchImpl: plain.fetchImpl,
+    sleep: async () => {},
+    now: () => 0
+  })
+  assert.deepEqual({ ...once }, { token: TOKEN, refreshToken: null, expiresAt: null })
+})
+
+test('renouvellement : le bon formulaire, sans secret, et un refus de GitHub ≠ une panne', async () => {
+  const ok = fakeFetch(() => ({ body: { access_token: 'gho_neuf', expires_in: 28_800, refresh_token: 'ghr_neuf' } }))
+  const set = await github.refreshGithubToken('client-id', REFRESH, ok.fetchImpl, () => 10_000)
+  assert.deepEqual({ ...set }, { token: 'gho_neuf', refreshToken: 'ghr_neuf', expiresAt: 10_000 + 28_800_000 })
+  assert.equal(ok.calls[0].url, 'https://github.com/login/oauth/access_token')
+  const params = new URLSearchParams(ok.calls[0].body)
+  assert.equal(params.get('grant_type'), 'refresh_token')
+  assert.equal(params.get('refresh_token'), REFRESH)
+  assert.equal(params.get('client_id'), 'client-id')
+  assert.equal(params.get('client_secret'), null, 'aucun secret ne doit être envoyé (ni embarqué)')
+
+  // Jeton de renouvellement refusé (déjà servi, expiré après 6 mois, retiré) : vrai refus, la connexion est perdue.
+  const refused = fakeFetch(() => ({ body: { error: 'bad_refresh_token', error_description: 'The refresh token passed is incorrect or expired.' } }))
+  await assert.rejects(github.refreshGithubToken('c', REFRESH, refused.fetchImpl), (err) => {
+    assert.equal(err.reason, 'auth')
+    assert.ok(!String(err.message).includes(REFRESH), 'le jeton de renouvellement est cité dans le message')
+    return true
+  })
+  // Réseau coupé ou réponse incomplète : rien ne doit être effacé, ce n'est PAS un refus.
+  const offline = { fetchImpl: async () => Promise.reject(new TypeError('fetch failed')) }
+  await assert.rejects(github.refreshGithubToken('c', REFRESH, offline.fetchImpl), (err) => err.reason !== 'auth')
+  const odd = fakeFetch(() => ({ body: {} }))
+  await assert.rejects(github.refreshGithubToken('c', REFRESH, odd.fetchImpl), (err) => err.reason !== 'auth')
+})
+
+test('jeton qui expire : chiffré avec son renouvellement, et un ancien jeton seul se relit toujours', async () => {
+  assert.equal(await github.saveGithubToken({ token: TOKEN, refreshToken: REFRESH, expiresAt: 123_456 }), true)
+  const stored = files.get(TOKEN_FILE)
+  assert.ok(!stored.toString().includes(TOKEN) && !stored.toString().includes(REFRESH), 'un jeton est écrit en clair')
+  assert.deepEqual({ ...(await github.readGithubToken()) }, { token: TOKEN, unreadable: false, refreshToken: REFRESH, expiresAt: 123_456 })
+  assert.equal(await github.loadGithubToken(), TOKEN)
+  // Les connexions faites avant la mise à jour (jeton brut) restent lisibles telles quelles.
+  await github.saveGithubToken(TOKEN)
+  assert.deepEqual({ ...(await github.readGithubToken()) }, { token: TOKEN, unreadable: false })
+  // Chiffrement indisponible : le renouvellement reste en mémoire seulement, jamais sur le disque.
+  await github.clearGithubToken()
+  electron.safeStorage.available = false
+  assert.equal(await github.saveGithubToken({ token: TOKEN, refreshToken: REFRESH, expiresAt: 1 }), false)
+  assert.equal(files.has(TOKEN_FILE), false)
+  assert.equal((await github.readGithubToken()).refreshToken, REFRESH)
+  await github.clearGithubToken()
+  electron.safeStorage.available = true
+})
+
 test('la trace de connexion vit avec les données de Léo, sans jamais contenir le jeton', async () => {
   const recordFile = join('/donnees-jaris', github.GITHUB_RECORD_FILE)
   assert.equal(await github.readConnectionRecord(), null)

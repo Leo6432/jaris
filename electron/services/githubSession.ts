@@ -7,13 +7,15 @@ import {
   GithubError,
   clearConnectionRecord,
   clearGithubToken,
-  pollDeviceToken,
+  pollDeviceTokenSet,
   readConnectionRecord,
   readGithubToken,
+  refreshGithubToken,
   requestDeviceCode,
   saveGithubToken,
   writeConnectionRecord,
   type DeviceLogin,
+  type GithubTokenSet,
   type RepoSnapshot
 } from './github'
 import { getModelThinking, type ThinkLevel } from './ollama'
@@ -57,13 +59,57 @@ function clientId(): string {
 /** Un jeton trouvé mais illisible au dernier essai (pour dire pourquoi Jaris n'est plus connecté). */
 let tokenUnreadable = false
 
+/** Le jeton en cours, avec de quoi le renouveler s'il expire (étape 311). */
+let tokenSet: GithubTokenSet | null = null
+/** Renouvelé un peu AVANT l'échéance : une demande partie juste avant ne doit pas tomber pile sur l'expiration. */
+const RENEW_MARGIN_MS = 5 * 60_000
+/** Un seul renouvellement à la fois : chaque jeton de renouvellement ne sert qu'une fois chez GitHub. */
+let renewing: Promise<GithubClient | null> | null = null
+
 async function getClient(): Promise<GithubClient | null> {
-  if (client) return client
-  const stored = await readGithubToken()
-  tokenUnreadable = stored.unreadable
-  if (!stored.token) return null
-  client = new GithubClient(stored.token)
+  if (!client) {
+    const stored = await readGithubToken()
+    tokenUnreadable = stored.unreadable
+    if (!stored.token) return null
+    tokenSet = { token: stored.token, refreshToken: stored.refreshToken ?? null, expiresAt: stored.expiresAt ?? null }
+    client = new GithubClient(stored.token)
+  }
+  // Jeton qui expire bientôt : renouvelé avant de s'en servir. Un réseau coupé n'y change rien (on tente avec l'actuel).
+  if (tokenSet?.refreshToken && tokenSet.expiresAt !== null && Date.now() >= tokenSet.expiresAt - RENEW_MARGIN_MS) {
+    try {
+      return (await renewToken()) ?? client
+    } catch {
+      return client
+    }
+  }
   return client
+}
+
+/**
+ * Renouvelle le jeton avec le jeton de renouvellement (étape 311). `null` : rien pour renouveler, ou GitHub refuse
+ * le renouvellement — le jeton est alors vraiment perdu. Une panne réseau remonte telle quelle (rien n'est perdu).
+ */
+function renewToken(): Promise<GithubClient | null> {
+  if (renewing) return renewing
+  const refreshToken = tokenSet?.refreshToken
+  if (!refreshToken) return Promise.resolve(null)
+  renewing = (async () => {
+    try {
+      const next = await refreshGithubToken(clientId(), refreshToken)
+      await saveGithubToken(next)
+      tokenSet = next
+      client = new GithubClient(next.token)
+      return client
+    } catch (err) {
+      if (!isAuthError(err)) throw err
+      // Refusé : ce jeton de renouvellement ne servira plus, inutile de le redemander à GitHub.
+      if (tokenSet) tokenSet = { ...tokenSet, refreshToken: null }
+      return null
+    } finally {
+      renewing = null
+    }
+  })()
+  return renewing
 }
 
 /**
@@ -72,6 +118,7 @@ async function getClient(): Promise<GithubClient | null> {
  */
 async function forget(rejected = false): Promise<void> {
   client = null
+  tokenSet = null
   login = null
   await clearGithubToken()
   if (!rejected) {
@@ -103,6 +150,12 @@ async function withClient<T>(action: (github: GithubClient) => Promise<T>): Prom
     return await action(github)
   } catch (err) {
     if (!isAuthError(err)) throw err
+    // Étape 311 : jeton déjà remplacé par une autre demande partie en même temps — on refait avec le nouveau, sans
+    // relancer de renouvellement (le jeton de renouvellement ne sert qu'une fois).
+    if (client && client !== github) return await action(client)
+    // Jeton expiré (application à jetons de 8 h) : renouvelé, puis la demande est refaite.
+    const renewed = await renewToken()
+    if (renewed) return await action(renewed)
     // Étape 308 : un seul refus effaçait le jeton pour de bon — Léo devait se reconnecter « tous les jours ». Avant
     // d'effacer quoi que ce soit, GitHub dit lui-même si ce jeton vaut encore (/user) : s'il passe, la demande est
     // refaite une fois au lieu de déconnecter ; s'il est refusé là aussi, le jeton est vraiment mort.
@@ -122,12 +175,14 @@ export async function getGithubStatus(): Promise<GithubStatus> {
   if (!github) return { available: true, connected: false, login: null, lost: await lostConnection() }
   if (!login) {
     try {
-      login = await github.viewer()
+      // Même chemin que toute autre demande : un jeton expiré est renouvelé ici aussi, jamais effacé d'emblée.
+      login = await withClient((client) => client.viewer())
       const record = await readConnectionRecord()
       if (record && record.login !== login) await writeConnectionRecord({ ...record, login })
     } catch (err) {
-      if (err instanceof GithubError && err.reason === 'auth') {
-        await forget(true)
+      if (isAuthError(err)) {
+        // Jeton toujours là : GitHub n'a pas pu confirmer (réseau) — encore connecté, le nom viendra plus tard.
+        if (client) return { available: true, connected: true, login: null }
         return { available: true, connected: false, login: null, lost: await lostConnection() }
       }
       // Réseau coupé : toujours connecté, le nom s'affichera au prochain essai.
@@ -150,11 +205,12 @@ export async function finishGithubLogin(): Promise<GithubStatus> {
   const pending = pendingLogin
   if (!pending) throw new GithubError(0, t('github.err.noPending'))
   try {
-    const token = await pollDeviceToken(clientId(), pending.device, { signal: pending.controller.signal })
+    const next = await pollDeviceTokenSet(clientId(), pending.device, { signal: pending.controller.signal })
     const previous = await readConnectionRecord()
-    const encrypted = await saveGithubToken(token)
+    const encrypted = await saveGithubToken(next)
     await writeConnectionRecord({ connectedAt: Date.now(), login: null, memoryOnly: !encrypted, rejectedAt: null })
-    client = new GithubClient(token)
+    tokenSet = next
+    client = new GithubClient(next.token)
     login = null
     const status = await getGithubStatus()
     // Changements préparés gardés après un refus (étape 308) : seulement pour le MÊME compte, jamais pour un autre.

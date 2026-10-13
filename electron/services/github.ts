@@ -151,11 +151,60 @@ export interface PollOptions {
 }
 
 /**
+ * Étape 311 (Léo : « je l'ai connecté hier soir… avec Claude ça ne me demande jamais une seule fois depuis 1 an ») :
+ * une application OAuth peut être réglée pour donner des jetons qui EXPIRENT au bout de 8 heures, avec un jeton de
+ * renouvellement valable 6 mois (docs.github.com, « Authorizing OAuth apps », « Expiring access tokens »). Jaris ne
+ * gardait que `access_token` : connecté le soir, refusé le lendemain matin, et rien dans le journal de sécurité de
+ * GitHub, puisqu'un jeton expiré n'est pas « retiré ». Claude, lui, renouvelle en silence (les « Regenerated a token »
+ * de ce même journal). Jaris garde désormais le jeton de renouvellement et l'échéance, quand GitHub en donne.
+ */
+export interface GithubTokenSet {
+  token: string
+  /** `null` : jeton qui n'expire pas (application OAuth sans expiration). */
+  refreshToken: string | null
+  /** Échéance du jeton (ms), `null` s'il n'expire pas. */
+  expiresAt: number | null
+}
+
+function tokenSetFrom(data: Record<string, unknown>, now: number): GithubTokenSet | null {
+  if (typeof data.access_token !== 'string' || !data.access_token) return null
+  return {
+    token: data.access_token,
+    refreshToken: typeof data.refresh_token === 'string' && data.refresh_token ? data.refresh_token : null,
+    expiresAt: typeof data.expires_in === 'number' && data.expires_in > 0 ? now + data.expires_in * 1000 : null
+  }
+}
+
+/**
+ * Renouvelle un jeton qui expire (documenté : pas de secret client pour un jeton obtenu par le device flow). Chaque
+ * jeton de renouvellement ne sert qu'UNE fois : l'appelant ne doit jamais en lancer deux en même temps. Un jeton de
+ * renouvellement refusé (`bad_refresh_token`, expiré après 6 mois sans usage, retiré…) est un vrai refus.
+ */
+export async function refreshGithubToken(
+  clientId: string,
+  refreshToken: string,
+  fetchImpl: FetchLike = fetch,
+  now: () => number = Date.now
+): Promise<GithubTokenSet> {
+  const data = await postForm(ACCESS_TOKEN_URL, { client_id: clientId, grant_type: 'refresh_token', refresh_token: refreshToken }, fetchImpl)
+  const set = tokenSetFrom(data, now())
+  if (set) return set
+  // Seul un refus explicite de GitHub (`error`) perd la connexion ; une réponse incomplète n'efface rien.
+  if (typeof data.error === 'string') throw new GithubError(401, t('github.err.auth'), 'auth')
+  throw new GithubError(0, t('github.err.unreadable', { status: 200 }))
+}
+
+/**
  * Étape 3 du device flow : attendre que Léo ait validé le code. Respecte l'intervalle imposé (et l'allonge de 5 s
  * sur `slow_down`, comme la documentation l'exige). Une coupure réseau passagère ne fait pas échouer l'attente :
  * Léo est peut-être en train de taper le code, trois échecs d'affilée seulement l'arrêtent.
  */
 export async function pollDeviceToken(clientId: string, login: DeviceLogin, options: PollOptions = {}): Promise<string> {
+  return (await pollDeviceTokenSet(clientId, login, options)).token
+}
+
+/** Comme pollDeviceToken, avec le jeton de renouvellement et l'échéance quand GitHub en donne (étape 311). */
+export async function pollDeviceTokenSet(clientId: string, login: DeviceLogin, options: PollOptions = {}): Promise<GithubTokenSet> {
   const { fetchImpl = fetch, sleep = abortableSleep, now = Date.now, signal } = options
   let interval = login.intervalMs
   let networkFailures = 0
@@ -172,7 +221,8 @@ export async function pollDeviceToken(clientId: string, login: DeviceLogin, opti
       if (networkFailures >= 3) throw err
       continue
     }
-    if (typeof data.access_token === 'string' && data.access_token) return data.access_token
+    const set = tokenSetFrom(data, now())
+    if (set) return set
     const code = typeof data.error === 'string' ? data.error : 'unknown'
     if (code === 'authorization_pending') continue
     if (code === 'slow_down') {
@@ -190,29 +240,66 @@ export async function pollDeviceToken(clientId: string, login: DeviceLogin, opti
 /** Repli si le chiffrement du système est indisponible : gardé en mémoire seulement, jamais écrit en clair. */
 let memoryToken: string | null = null
 
+/**
+ * Ce qui est chiffré sur le disque : le jeton seul (ancien format, et jeton qui n'expire pas), ou, dès qu'il y a un
+ * jeton de renouvellement, les trois valeurs en JSON. Un jeton GitHub ne commence jamais par « { ».
+ */
+function serializeTokenSet(value: string | GithubTokenSet): string {
+  if (typeof value === 'string') return value
+  return value.refreshToken ? JSON.stringify(value) : value.token
+}
+
+function parseTokenSet(text: string): GithubTokenSet | null {
+  if (!text) return null
+  if (!text.startsWith('{')) return { token: text, refreshToken: null, expiresAt: null }
+  try {
+    const data = JSON.parse(text) as Partial<GithubTokenSet>
+    if (typeof data.token !== 'string' || !data.token) return null
+    return {
+      token: data.token,
+      refreshToken: typeof data.refreshToken === 'string' && data.refreshToken ? data.refreshToken : null,
+      expiresAt: typeof data.expiresAt === 'number' ? data.expiresAt : null
+    }
+  } catch {
+    return null
+  }
+}
+
 function tokenPath(): string {
   return join(app.getPath('userData'), 'github-token.bin')
 }
 
 /** Enregistre le jeton. Renvoie `false` quand Windows n'a pas pu le chiffrer : il n'est alors gardé qu'en mémoire. */
-export async function saveGithubToken(token: string): Promise<boolean> {
+export async function saveGithubToken(token: string | GithubTokenSet): Promise<boolean> {
+  const text = serializeTokenSet(token)
   if (!safeStorage.isEncryptionAvailable()) {
-    memoryToken = token
+    memoryToken = text
     return false
   }
   memoryToken = null
-  await writeFile(tokenPath(), safeStorage.encryptString(token))
+  await writeFile(tokenPath(), safeStorage.encryptString(text))
   return true
 }
 
-/** Le jeton enregistré, et si un fichier existait sans pouvoir être relu (chiffrement de Windows). */
+/**
+ * Le jeton enregistré, et si un fichier existait sans pouvoir être relu (chiffrement de Windows). `refreshToken` et
+ * `expiresAt` ne sont présents que pour un jeton qui expire (étape 311).
+ */
 export interface StoredGithubToken {
   token: string | null
   unreadable: boolean
+  refreshToken?: string
+  expiresAt?: number | null
+}
+
+function storedFrom(text: string): StoredGithubToken {
+  const set = parseTokenSet(text)
+  if (!set) return { token: null, unreadable: true }
+  return set.refreshToken ? { token: set.token, unreadable: false, refreshToken: set.refreshToken, expiresAt: set.expiresAt } : { token: set.token, unreadable: false }
 }
 
 export async function readGithubToken(): Promise<StoredGithubToken> {
-  if (memoryToken) return { token: memoryToken, unreadable: false }
+  if (memoryToken) return storedFrom(memoryToken)
   let encrypted: Buffer
   try {
     encrypted = await readFile(tokenPath())
@@ -220,8 +307,7 @@ export async function readGithubToken(): Promise<StoredGithubToken> {
     return { token: null, unreadable: false }
   }
   try {
-    const token = safeStorage.decryptString(encrypted)
-    return token ? { token, unreadable: false } : { token: null, unreadable: true }
+    return storedFrom(safeStorage.decryptString(encrypted))
   } catch {
     return { token: null, unreadable: true }
   }

@@ -8241,3 +8241,40 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   captures (sombre, clair, 620 px) et par le style calculé. Régression : `scripts/test-phone-tab-ui.mjs` (les quatre
   cases, leurs badges et icônes, la case Téléphone qui suit l'état réel, grille 2 × 2, coins arrondis,
   pointillés pour « bientôt »), plus le nouveau nom dans les tests d'onglets.
+
+- **« Je l'ai connecté hier soir, avec Claude ça ne me demande jamais une seule fois depuis 1 an » (Léo, étape
+  311) : un jeton qui EXPIRE n'est pas un jeton RETIRÉ.** Après les étapes 297 et 308, Léo voyait encore « Ta
+  connexion GitHub… a été refusée par GitHub » le lendemain de sa connexion, alors que son journal de sécurité
+  GitHub ne montrait AUCUNE révocation. La documentation de GitHub (« Authorizing OAuth apps », jetons qui
+  expirent) donne la piste : une application OAuth peut émettre des jetons valables 8 heures, accompagnés d'un
+  jeton de renouvellement valable 6 mois (`expires_in`, `refresh_token`, `refresh_token_expires_in`). Jaris
+  ne gardait que `access_token` et jetait le reste : connecté le soir, mort le matin, sans rien d'anormal à voir
+  sur github.com. Claude ne redemande jamais parce qu'il renouvelle en silence. **Cause la plus probable, pas
+  prouvée** : les réglages de l'application OAuth ne sont pas lisibles d'ici. Le correctif ne change rien si les
+  jetons n'expirent pas (pas de jeton de renouvellement, comportement identique à avant).
+  Ce qui change (`github.ts`, `githubSession.ts`) :
+  1. **La connexion garde les trois valeurs** (`pollDeviceTokenSet`) et les chiffre ensemble (JSON dans le même
+     `github-token.bin`). Un ancien fichier qui ne contient que le jeton brut se relit toujours tel quel ; un
+     jeton GitHub ne commence jamais par « { », ce qui distingue les deux formats sans marqueur.
+  2. **Renouvellement avant usage** quand l'échéance est à moins de 5 minutes, et **au premier refus** en plein
+     travail : renouvelé, puis la demande est refaite, AVANT la vérification `/user` de l'étape 308.
+  3. **Un seul renouvellement à la fois.** Chez GitHub, un jeton de renouvellement ne sert qu'UNE fois : deux
+     demandes refusées en même temps qui renouvellent chacune de leur côté feraient refuser la seconde, et
+     effaceraient la connexion qu'on voulait sauver. Les demandes partagent la même promesse, et une demande
+     dont le jeton a déjà été remplacé est refaite directement avec le nouveau.
+  4. **Seul un refus explicite de GitHub (`error`, ex. `bad_refresh_token`) perd la connexion.** Un réseau coupé
+     ou une réponse incomplète pendant le renouvellement n'efface rien : Jaris reste connecté et réessaie la fois
+     suivante. Un jeton de renouvellement refusé n'est pas redemandé une seconde fois.
+  **Limite assumée** : les connexions faites AVANT cette version n'ont pas de jeton de renouvellement (il a été
+  jeté). Léo doit se reconnecter UNE fois après la mise à jour ; ensuite, la connexion tient tant que Jaris sert au
+  moins une fois tous les 6 mois. **Leçon générale : quand un service répond « refusé » à un jeton, vérifier dans
+  sa documentation si le jeton peut EXPIRER avant de supposer qu'il a été RETIRÉ.** Les deux donnent le même 401,
+  mais seul le premier se répare tout seul, et seulement si on a gardé de quoi le renouveler. Plus largement :
+  ne jamais jeter un champ d'une réponse d'authentification sans savoir à quoi il sert.
+  Régression : `scripts/test-github-api.mjs` (le formulaire de renouvellement, sans secret ; un refus ≠ une
+  panne ; chiffrement des trois valeurs ; ancien format relu) et `scripts/test-github-session.mjs` (expiré au
+  lancement → renouvelé, jamais effacé ; deux refus simultanés → UN seul renouvellement, avec un faux GitHub dont
+  les jetons de renouvellement ne servent qu'une fois ; renouvellement refusé → déconnexion expliquée ; réseau
+  coupé → rien d'effacé ; connexion qui garde le renouvellement). Les 5 tests échouent sur l'ancien code. Les
+  garde-fous « un seul à la fois » et « pas de second essai d'un jeton refusé » ont été vérifiés en les retirant
+  un par un. **Non vérifié en usage réel** : que l'application OAuth de Jaris émette bien des jetons qui expirent.
