@@ -40,6 +40,12 @@ Les modèles de l'ancien test (17 questions) qui n'ont pas été retestés et ne
 (phi4-mini, functiongemma:270m, granite4:1b, nemotron-3-nano:4b, qwen3.5:2b-q4_K_M) n'ont plus de score.
 gemma4:31b n'est candidat qu'en vision.
 
+Étape 312 : K2 Horizon 3.7B mesuré par Claude avec ce même script, sans carte graphique, sous Ollama 0.40.4-rc1
+(le score ne dépend pas du matériel, seule la durée change). Ses 2 erreurs aux questions sont relues et réelles
+(rappel à 75 min au lieu de 90, « clic droit » pris pour la flèche droite) ; code 5/5 (le formulaire, coupé une
+fois par le délai, rejoué) ; demandes complètes 33/48, dont une demande coupée par un redémarrage de la machine
+et comptée ratée (au mieux 34/48). Ses réponses justes n'ont pas été relues une à une.
+
 | Modèle | Appel d'outils |
 |---|---|
 | qwen3.5:2b | 66/78 |
@@ -59,6 +65,7 @@ gemma4:31b n'est candidat qu'en vision.
 | hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M | 66/78 |
 | hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M | 67/78 |
 | hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 68/78 |
+| hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 76/78 |
 | qwen3.5:35b | 78/78 |
 | qwen3.6:35b | 76/78 |
 | qwen3.5:27b | 78/78 |
@@ -114,6 +121,7 @@ ratent vraiment (tâches gardées dans le stockage du navigateur, interdit dans 
 | devstral-small-2:24b | 5/5 |
 | qwen2.5-coder:14b | 5/5 |
 | qwen2.5-coder:7b | 5/5 |
+| hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 5/5 |
 
 ## Demandes complètes — de bout en bout
 
@@ -180,6 +188,7 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M | 36/48 |
 | ministral-3:14b | 34/48 |
 | ministral-3:3b | 34/48 |
+| hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 33/48 |
 | qwen3.5:2b | 32/48 |
 | qwen3:1.7b | 28/48 |
 | hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 26/48 |

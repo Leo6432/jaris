@@ -54,7 +54,14 @@ import { getStorageStatus, programMoveCommandLine, reconcileStorage, relocateEve
 import { alignOllamaModelsVariable, repairOllamaModelsView, windowsModelsViewDeps } from './services/ollamaModelsVariable'
 import { DOCKER_APP_SUBDIR, findDockerInstallDir } from './services/dockerLocation'
 import { openApp } from './services/appLauncher'
-import { computeContextLengthOptions, getAllCandidateModelIds, getModelOverview, getMyModelPicks, isUnusedInstalledModel } from './services/hardwareScan'
+import {
+  computeContextLengthOptions,
+  getAllCandidateModelIds,
+  getModelOverview,
+  getMyModelPicks,
+  isUnusedInstalledModel,
+  setOllamaVersionSource
+} from './services/hardwareScan'
 import { config } from './config'
 import { getRuntimeSetupStatus, runFirstRunSetup } from './services/firstRunSetup'
 import { restoreReminders } from './services/reminders'
@@ -168,6 +175,8 @@ registerPreviewScheme()
 // À poser avant `ready`, comme tout commutateur Chromium.
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
+// Étape 312 : les choix de modèles écartent ce que la version d'Ollama installée ne sait pas charger (K2 Horizon).
+setOllamaVersionSource(() => getOllamaVersionStatus()?.current ?? null)
 if (!gotSingleInstanceLock) {
   app.quit()
 }

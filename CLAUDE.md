@@ -8278,3 +8278,36 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   coupé → rien d'effacé ; connexion qui garde le renouvellement). Les 5 tests échouent sur l'ancien code. Les
   garde-fous « un seul à la fois » et « pas de second essai d'un jeton refusé » ont été vérifiés en les retirant
   un par un. **Non vérifié en usage réel** : que l'application OAuth de Jaris émette bien des jetons qui expirent.
+
+- **K2 Horizon 0.9B, 3.7B, 7B et 32B ajoutés aux modèles de Jaris (Léo, étape 312 : « ajoute sur tous les modèles
+  test comme d'habitude, 3.7b 0.9b 7b et 32b »).** Leur architecture `k2-horizon` n'est chargée qu'à partir
+  d'Ollama 0.40.4 (pré-version rc1 seulement au 14/10/2026, vérifié pour de vrai ici : la 3.7B téléchargée, chargée
+  et testée). Candidats partout où leur poids les place (Rapide/Médium, Puissant avec débordement RAM pour la 32B,
+  Code pour les quatre), GGUF officiels d'IFM en Q4_K_M ; Intelligence Index Artificial Analysis relevé pour 0.9B
+  (3), 3.7B (16) et 7B (21), aucune page pour la 32B (rien d'inventé).
+  **Le vrai risque, traité avant de livrer : choisir ou tester un modèle que l'Ollama installé ne sait pas
+  charger.** Léo est en 0.40.3 : sans garde, Jaris aurait téléchargé jusqu'à 21 Go pour un modèle qui ne démarre
+  pas, à la configuration comme au bouton de test. `MIN_OLLAMA_VERSION` (hardwareScan.ts, recopié dans
+  benchmark-models.mjs et vérifié identique par test-benchmark-candidates-sync.mjs) : tant que la version installée
+  est plus ancienne, OU INCONNUE (Ollama pas encore interrogé), ces modèles ne sont choisis pour aucun rôle, ne sont
+  pas proposés au test, et le script les saute avant tout téléchargement en disant pourquoi. « 0.40.4-rc1 » compte
+  comme 0.40.4, puisque la pré-version les charge déjà. La version vient du contrôle déjà fait au démarrage
+  (dependencyServices.ts), branchée par main.ts (`setOllamaVersionSource`) plutôt qu'importée : hardwareScan.ts
+  est chargé par une dizaine de tests avec de faux ponts, un nouvel import les aurait tous cassés.
+  **Scores de la 3.7B mesurés ici**, avec le même script, sans carte graphique (le score ne dépend pas du matériel) :
+  76/78 aux outils (2 erreurs relues et réelles), 5/5 en code, 33/48 en demandes complètes. Une demande, coupée par
+  un redémarrage de la machine, est comptée ratée : au mieux 34/48. Les 0.9B, 7B et 32B restent à mesurer par Léo
+  avec le bouton, une fois Ollama 0.40.4 installé ; la 32B (21 Go) ne tient ni dans la mémoire ni sur le disque de
+  cette machine de développement. Premier essai de la 0.9B : elle réfléchit parfois sans fin, 25 minutes sur une
+  seule question avant d'être coupée.
+  **Conséquence des règles actuelles, mesurée et annoncée plutôt que découverte plus tard** : sur la machine de Léo
+  (8 Go), rien ne change. Mais sur une carte de 6 Go avec 16 Go de RAM, dès Ollama 0.40.4, K2 Horizon 3.7B devient
+  le modèle de TOUS les rôles à la place de qwen3.5:4b : son Intelligence Index (16 contre 13,1) l'emporte malgré
+  des demandes complètes plus faibles (33/48 contre 42/48). Règle de choix laissée telle quelle, c'est celle de Léo.
+  **Leçon générale : un modèle qui exige une version minimale d'un moteur doit être bloqué à TOUS les endroits qui
+  le choisissent ou le téléchargent (configuration, mode Code, bouton de test, script), et une version inconnue
+  doit compter comme insuffisante.** Ne bloquer qu'un seul chemin laisse les autres télécharger pour rien.
+  Régression : `scripts/test-hardwarescan-min-ollama.mjs` (aucun rôle sur K2 sous 0.40.3 pour 5 tailles de carte,
+  candidat dès 0.40.4-rc1, version inconnue = prudence, bouton de test filtré), `scripts/test-benchmark-cases.mjs`
+  (sauté sans téléchargement sous 0.40.3, testé sous 0.40.4-rc1) et `scripts/test-benchmark-candidates-sync.mjs`
+  (même table des deux côtés). Chaque garde a été retirée une par une pour vérifier que son test échoue.

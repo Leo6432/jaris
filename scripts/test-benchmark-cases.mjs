@@ -163,7 +163,7 @@ const PERFECT = {
   "En fait ma voiture n'est plus": ['remember', { title: 'Voiture', content: 'Renault Clio', replace: true }]
 }
 
-function startFakeOllama({ installed, answer, dropChat = () => false, pullFails = false, hang = () => false }) {
+function startFakeOllama({ installed, answer, dropChat = () => false, pullFails = false, hang = () => false, version = '0.99.0-test' }) {
   const requests = []
   // Étape 230 : téléchargements et suppressions, pour vérifier qu'un modèle téléchargé par le test est supprimé.
   const pulled = []
@@ -176,7 +176,7 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
     req.on('data', (chunk) => (body += chunk))
     req.on('end', () => {
       res.setHeader('Content-Type', 'application/json')
-      if (req.url === '/api/version') return res.end(JSON.stringify({ version: '0.99.0-test' }))
+      if (req.url === '/api/version') return res.end(JSON.stringify({ version }))
       if (req.url === '/api/tags') return res.end(JSON.stringify({ models: installed.map((name) => ({ name })) }))
       if (req.url === '/api/pull' && pullFails) {
         res.statusCode = 500
@@ -325,6 +325,40 @@ test('JARIS_ONLY_MODELS : seuls les modèles demandés sont testés, dans leur �
   } finally {
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// Étape 312 : K2 Horizon n'est chargé qu'à partir d'Ollama 0.40.4. Le bouton « Tester les modèles sans score »
+// ne doit jamais le télécharger pour rien avec une version plus ancienne — et le tester dès que c'est possible.
+test('K2 Horizon : sauté avant tout téléchargement sous Ollama 0.40.3, testé dès la 0.40.4 (pré-version comprise)', async () => {
+  const K2 = 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M'
+  for (const [version, testable] of [['0.40.3', false], ['0.40.4-rc1', true]]) {
+    const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+    const fake = await startFakeOllama({ installed: [], answer: (_m, p) => perfectAnswer(p), version })
+    try {
+      const { code, out } = await runScript({
+        OLLAMA_HOST: fake.host,
+        JARIS_ANALYSIS_SCOPE: 'conversation',
+        JARIS_RESULTS_PATH: join(dir, 'benchmark-nouveaux-modeles.md'),
+        JARIS_RESUME: '1',
+        JARIS_ONLY_MODELS: K2,
+        JARIS_RAM_SAFETY_MARGIN_GB: '0.1'
+      })
+      assert.equal(code, 0, out)
+      const skipped = out.split('\n').find((l) => l.startsWith(`##MODEL_SKIPPED## ${K2}`))
+      if (testable) {
+        assert.equal(skipped, undefined, out)
+        assert.deepEqual(fake.pulled, [K2])
+        assert.equal(fake.requests.filter((r) => r.model === K2).length, CONVERSATION_TOTAL)
+      } else {
+        assert.match(skipped ?? '', /il faut Ollama 0\.40\.4 ou plus récent pour le charger \(installé : 0\.40\.3\)/, out)
+        assert.deepEqual(fake.pulled, [], 'téléchargé pour rien')
+        assert.equal(fake.requests.length, 0)
+      }
+    } finally {
+      fake.server.close()
+      rmSync(dir, { recursive: true, force: true })
+    }
   }
 })
 

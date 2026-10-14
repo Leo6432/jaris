@@ -60,6 +60,14 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   // github.com/ollama/ollama (voir MEDIUM_CANDIDATES plus bas pour le détail complet). Le 3b, lui, a DÉJÀ un
   // vrai score mesuré sur la machine de Léo (6/6, `scripts/verified-tool-scores.md`) — pas juste informatif
   // en attente de test, déjà confirmé fiable pour de vrai. Rejoint Rapide.
+  // Étape 196 (28/09/2026) : K2 Horizon vérifié mais PAS ajouté — son architecture `k2-horizon` n'était chargée
+  // par aucune version d'Ollama. Étape 312 (Léo : « ajoute sur tous les modèles test comme d'habitude, 3.7b,
+  // 0.9b, 7b et 32b ») : Ollama 0.40.4 (pré-version rc1, embarque llama.cpp b11521) le charge — vérifié pour de
+  // vrai ici, téléchargé et lancé avec le GGUF officiel d'IFM/MBZUAI (Apache 2.0) : outils et réflexion annoncés.
+  // Les quatre tailles denses sont candidates partout où leur poids les place (Rapide/Médium, Puissant pour la
+  // 32B, Code pour toutes) ; jamais choisies ni testées tant qu'Ollama est plus ancien que 0.40.4 (voir
+  // MIN_OLLAMA_VERSION). Poids = fichiers Q4_K_M publiés : 0,67 / 3,16 / 5,59 / 21,08 Go.
+  { model: 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M', vramGb: 3.2 },
   { model: 'ministral-3:3b', vramGb: 3.0 },
   // granite4.2:3b (déjà candidat Médium, voir MEDIUM_CANDIDATES plus bas) rejoint aussi Rapide — étape 127,
   // proposé par ChatGPT (relayé par Léo, "vas sur le site .../recommend") après avoir ouvert le
@@ -106,17 +114,9 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   // score d'appel d'outils (verified-tool-scores.md), que Léo mesure lui-même.
   { model: 'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M', vramGb: 1.7 },
   { model: 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M', vramGb: 1.6 },
-  { model: 'qwen3.5:0.8b', vramGb: 1.0 }
-  // Étape 196, Léo : « on peut ajouter K2 Horizon 3.7B ? il est le meilleur sur les benchmarks ». Vérifié le
-  // 28/09/2026 et PAS ajouté pour l'instant : le modèle existe bien (IFM/MBZUAI, Apache 2.0, GGUF officiel
-  // hf.co/IFM/K2-Horizon-3.7B-GGUF, Q4_K_M 3,16 Go, Intelligence Index Artificial Analysis 16), mais son GGUF
-  // déclare une architecture NOUVELLE (`k2-horizon`) que le llama.cpp officiel ne sait pas encore charger
-  // (« unknown model architecture: 'k2-horizon' », github.com/ggml-org/llama.cpp/issues/28361 et #29424,
-  // ouverts) et aucune note de version d'Ollama (jusqu'à 0.34.4 / 0.40.0 pré-version) ne l'annonce. Jaris le
-  // téléchargerait (3 Go) pour un modèle qui ne démarre pas. Autres réserves : modèle annoncé en anglais
-  // seulement, et format d'appel d'outils propre (parseur `k2_horizon` dans vLLM). À revoir dès qu'une version
-  // d'Ollama le charge : l'ajouter ici, puis mesurer son score d'outils (verified-tool-scores.md) avant qu'il
-  // puisse être choisi.
+  { model: 'qwen3.5:0.8b', vramGb: 1.0 },
+  // K2 Horizon 0.9B : voir la note de l'étape 312 juste au-dessus de ministral-3:3b.
+  { model: 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M', vramGb: 0.7 }
 ]
 // gemma4:e4b et granite4:3b (devenu granite4.1:3b, voir plus bas) ajoutés suite au même benchmark local :
 // gemma4:e4b (6/6 en tool-calling, bien plus rapide que qwen3.5:9b) en tête si la VRAM le permet, la famille
@@ -157,6 +157,8 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
   { model: 'gemma4:12b', vramGb: 7.6 },
   { model: 'qwen3.5:9b', vramGb: 6.6 },
   { model: 'ministral-3:8b', vramGb: 6.0 },
+  // K2 Horizon 7B, 3.7B et 0.9B : voir la note de l'étape 312 dans FLASH_CANDIDATES.
+  { model: 'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M', vramGb: 5.6 },
   { model: 'granite4.2:8b', vramGb: 5.3 },
   { model: 'granite4.1:8b', vramGb: 5.3 },
   // Étape 219, Léo : « tu peux ajouter Ling 3.0 Tiny ». inclusionAI (Ant Group), sorti le 06/08/2026 :
@@ -173,6 +175,7 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
   // Ne gagne pas tout seul : choisi seulement d'après son score d'appel d'outils (verified-tool-scores.md).
   { model: 'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M', vramGb: 4.8 },
   { model: 'qwen3.5:4b', vramGb: 3.4 },
+  { model: 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M', vramGb: 3.2 },
   { model: 'qwen3.5:2b', vramGb: 2.7 },
   // Nanbeige4.1-3B : voir le commentaire de l'étape 229 dans FLASH_CANDIDATES.
   { model: 'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M', vramGb: 2.4 },
@@ -184,7 +187,8 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
   // LFM2.5-2.6B et MiniCPM5-2B : voir FLASH_CANDIDATES, même raisonnement que G9v3.
   { model: 'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M', vramGb: 1.7 },
   { model: 'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M', vramGb: 1.6 },
-  { model: 'qwen3.5:0.8b', vramGb: 1.0 }
+  { model: 'qwen3.5:0.8b', vramGb: 1.0 },
+  { model: 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M', vramGb: 0.7 }
 ]
 const LARGE_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3.5:35b', vramGb: 24 },
@@ -221,6 +225,9 @@ const LARGE_CANDIDATES: ModelCandidate[] = [
   // raisonnement complet sur pourquoi granite4.1 reste en parallèle plutôt que d'être remplacé.
   { model: 'granite4.2:30b', vramGb: 18 },
   { model: 'gemma4:26b', vramGb: 19 },
+  // K2 Horizon 32B (dense, 21 Go en Q4_K_M) : voir la note de l'étape 312 dans FLASH_CANDIDATES. Peut déborder
+  // sur la RAM comme les autres grands modèles (LARGE_RAM_OFFLOAD_MODELS).
+  { model: 'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M', vramGb: 21.1 },
   { model: 'gpt-oss:20b', vramGb: 14 },
   // Mistral Small : la conclusion précédente ("3.1"/"3.2" n'existent pas sous ce nom sur Ollama") était
   // FAUSSE — vérifiée à nouveau sur ollama.com/library/mistral-small3.2 (revue des 5 listes de candidats,
@@ -276,6 +283,7 @@ const LARGE_RAM_OFFLOAD_MODELS = new Set([
   'mistral-small3.2:24b',
   'glm-4.7-flash:q4_K_M',
   'nemotron-3.5-lightning:30b',
+  'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M',
   'qwen3.6:35b-a3b',
   'qwen3-coder:30b',
   'north-mini-code-1.0',
@@ -383,6 +391,8 @@ const CODE_CANDIDATES: ModelCandidate[] = [
   // Étape 227 (Léo : « il est nul ») : qwen3-coder-next RETIRÉ pour la même raison. Vérifié : 9,2 chez Artificial
   // Analysis, deux fois moins que qwen3.6:35b-a3b (18,2) juste en dessous, pour 52 Go contre 22.
   { model: 'qwen3.6:35b-a3b', vramGb: 22 },
+  // Étape 312 : les quatre K2 Horizon passent aussi le test de code (voir FLASH_CANDIDATES).
+  { model: 'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M', vramGb: 21.1 },
   { model: 'qwen3-coder:30b', vramGb: 19 },
   { model: 'north-mini-code-1.0', vramGb: 19 },
   { model: 'qwen2.5-coder:32b', vramGb: 20 },
@@ -393,7 +403,10 @@ const CODE_CANDIDATES: ModelCandidate[] = [
   // Palier intermédiaire entre 32b et 7b ci-dessous, absent jusqu'ici (relecture Codex, étape 46) : taille
   // vérifiée sur ollama.com/library/qwen2.5-coder:14b (9 Go).
   { model: 'qwen2.5-coder:14b', vramGb: 9 },
-  { model: 'qwen2.5-coder:7b', vramGb: 4.7 }
+  { model: 'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M', vramGb: 5.6 },
+  { model: 'qwen2.5-coder:7b', vramGb: 4.7 },
+  { model: 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M', vramGb: 3.2 },
+  { model: 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M', vramGb: 0.7 }
 ]
 
 // Revue complète des 5 listes ci-dessus (demande de Léo, "revoire tous les model pour des meilleurs") :
@@ -448,6 +461,47 @@ const ALL_MODELS: ModelCandidate[] = (() => {
   // Du plus gros au plus petit : l'ordre dont pickForBudget a besoin (premier qui tient = le plus gros).
   return [...byModel.values()].sort((a, b) => b.vramGb - a.vramGb)
 })()
+
+/**
+ * Étape 312 : version d'Ollama nécessaire pour CHARGER un modèle dont l'architecture est trop récente pour les
+ * versions précédentes (K2 Horizon : `k2-horizon`, inconnue avant 0.40.4). Un tel modèle n'est ni choisi, ni
+ * proposé au test, tant que la version installée est plus ancienne — ou encore inconnue (Ollama pas encore
+ * interrogé) : télécharger 1 à 21 Go pour un modèle qui ne démarre pas serait pire qu'attendre. « 0.40.4-rc1 »
+ * compte comme 0.40.4 : la pré-version le charge déjà (vérifié). Recopiée dans benchmark-models.mjs.
+ */
+export const MIN_OLLAMA_VERSION: Record<string, string> = {
+  'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': '0.40.4',
+  'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': '0.40.4',
+  'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': '0.40.4',
+  'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M': '0.40.4'
+}
+
+/** Version d'Ollama installée, branchée par main.ts sur le dernier contrôle (dependencyServices.ts). */
+let installedOllamaVersion: () => string | null = () => null
+export function setOllamaVersionSource(source: () => string | null): void {
+  installedOllamaVersion = source
+}
+
+/** Même lecture que dependencyServices.ts : « 0.40.4-rc1 » donne 0.40.4. */
+function isOlderVersion(version: string, minimum: string): boolean {
+  const parts = (v: string): number[] => v.split('.').map((p) => parseInt(p, 10) || 0)
+  const a = parts(version)
+  const b = parts(minimum)
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const diff = (a[i] ?? 0) - (b[i] ?? 0)
+    if (diff !== 0) return diff < 0
+  }
+  return false
+}
+
+/** Modèles que cette version d'Ollama ne sait pas charger (version inconnue : tous ceux qui en exigent une). */
+export function modelsNeedingNewerOllama(version: string | null = installedOllamaVersion()): Set<string> {
+  return new Set(
+    Object.entries(MIN_OLLAMA_VERSION)
+      .filter(([, minimum]) => !version || isOlderVersion(version, minimum))
+      .map(([model]) => model)
+  )
+}
 
 /** Modèles qui lisent une image (vision native vérifiée sur ollama.com, voir VISION_CANDIDATES). */
 const READS_IMAGES = new Set(VISION_CANDIDATES.map((c) => c.model))
@@ -915,7 +969,11 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 11.1, // Ling 3.0 Tiny
   'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 12.5, // MiniCPM5-2B (Reasoning) — 12,46 relevé le 02/10/2026, aucune vitesse publiée
   'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M': 8.4, // Nanbeige4.1-3B (Reasoning) — 8,40 relevé le 03/10/2026
-  'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 8.4 // LFM2.5-2.6B (Reasoning) — 8,39 relevé le 03/10/2026
+  'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 8.4, // LFM2.5-2.6B (Reasoning) — 8,39 relevé le 03/10/2026
+  // Étape 312 : pages Artificial Analysis relues le 14/10/2026. Pas de page pour la 32B (rien d'inventé).
+  'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 3, // K2 Horizon 0.9B
+  'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': 16, // K2 Horizon 3.7B
+  'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': 21 // K2 Horizon 7B
 }
 
 /**
@@ -1185,8 +1243,11 @@ export function getUnscoredModels(campaign: CampaignCompletion = { scenarios: ne
   const needsCode = (model: string): boolean =>
     CODE_ROLE_MODELS.has(model) &&
     ((!scores.code.get(model)?.endsWith(`/${CODE_TEST_TOTAL}`) && !campaign.code.has(model)) || Boolean(campaign.todo?.code.has(model)))
+  // Étape 312 : jamais proposé au test tant qu'Ollama ne sait pas le charger (il serait téléchargé pour rien).
+  const tooNewForOllama = modelsNeedingNewerOllama()
   return [...ALL_MODELS]
     .sort((a, b) => a.vramGb - b.vramGb)
+    .filter((c) => !tooNewForOllama.has(c.model))
     .filter((c) => needsConversation(c.model) || needsVision(c.model) || needsCode(c.model))
     .map((c) => c.model)
 }
@@ -1313,6 +1374,7 @@ function computeModelPicks(
   code: ModelOverviewEntry
 } {
   const budgetGb = vramGb !== null ? Math.max(0, vramGb - GPU_RESERVED_GB) : 0
+  const tooNewForOllama = modelsNeedingNewerOllama()
   // Budget élargi pour les candidats "Puissant" qui tolèrent de déborder sur la RAM (voir
   // LARGE_RAM_OFFLOAD_MODELS) : VRAM (déjà amputée de la réservation STT) + RAM (moins la marge pour
   // l'OS/les autres logiciels) — jamais pour les autres candidats, qui doivent tenir entièrement en VRAM
@@ -1485,7 +1547,8 @@ function computeModelPicks(
     // `exclude` (étape 136) : modèles dont le téléchargement vient d'échouer sur CETTE machine (voir
     // runQuickSetup, benchmarkRunner.ts) — retirés AVANT tout calcul, repli ultime compris. Jamais la liste
     // entière : si tout était exclu, on garde la liste d'origine.
-    const filtered = pool.filter((c) => !exclude.has(c.model))
+    // Étape 312 : un modèle que la version d'Ollama installée ne sait pas charger n'est jamais choisi non plus.
+    const filtered = pool.filter((c) => !exclude.has(c.model) && !tooNewForOllama.has(c.model))
     const candidates = filtered.length ? filtered : pool
     const budgetOf = (c: ModelCandidate): number => (allowRam ? budgetForCandidate(c.model) : budgetGb)
     const scored = candidates

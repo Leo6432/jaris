@@ -50,6 +50,20 @@ test('chaque modèle de Jaris figure dans le script de test', async () => {
   assert.deepEqual(missing, [], `modèles jamais testables par benchmark-models.mjs : ${missing.join(', ')}`)
 })
 
+function versionTable(source) {
+  const match = /const MIN_OLLAMA_VERSION(?:: [^=]+)? = \{([\s\S]*?)\n\}/.exec(source)
+  assert.ok(match, 'MIN_OLLAMA_VERSION introuvable')
+  return Object.fromEntries([...match[1].matchAll(/'([^']+)': '([^']+)'/g)].map((m) => [m[1], m[2]]))
+}
+
+// Étape 312 : sans la même version minimale des deux côtés, le script téléchargerait K2 Horizon pour rien (ou
+// Jaris le choisirait alors que le script refuse de le tester).
+test('même version minimale d’Ollama des deux côtés', () => {
+  const jaris = versionTable(hardwareScanSource)
+  assert.ok(Object.keys(jaris).length >= 4)
+  assert.deepEqual(versionTable(script), jaris)
+})
+
 test('même règle de débordement sur la RAM des deux côtés', () => {
   assert.deepEqual(
     [...setLiteral(script, 'RAM_OFFLOAD_MODELS')].sort(),

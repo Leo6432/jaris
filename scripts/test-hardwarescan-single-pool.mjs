@@ -199,6 +199,13 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
   )
   const visionOnly = new Set([...source.match(/const VISION_CANDIDATES[\s\S]*?\n\]/)[0].matchAll(/model: '([^']+)'/g)].map((x) => x[1]))
   const codeOnly = new Set([...source.match(/const CODE_CANDIDATES[\s\S]*?\n\]/)[0].matchAll(/model: '([^']+)'/g)].map((x) => x[1]))
+  // Étape 312 : K2 Horizon n'est proposé au test qu'une fois Ollama 0.40.4 installé — version inconnue ici, donc
+  // jamais (test-hardwarescan-min-ollama.mjs vérifie le cas où la version suffit).
+  for (const model of setup({ vramMib: 8 * 1024 }).modelsNeedingNewerOllama(null)) {
+    conversationModels.delete(model)
+    visionOnly.delete(model)
+    codeOnly.delete(model)
+  }
   // Scores du dépôt après la campagne de Léo (05/10/2026) puis le test de vision version 4 : tout est noté.
   assert.equal(setup({ vramMib: 8 * 1024 }).getUnscoredModels().length, 0)
   // Sans ces trois nouvelles épreuves (vision, code, demandes complètes), tout repasse.

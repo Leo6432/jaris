@@ -238,6 +238,31 @@ const ONLY_MODELS = new Set(
 const inOnlyModels = (model) => ONLY_MODELS.size === 0 || ONLY_MODELS.has(model)
 
 /**
+ * Étape 312 : version d'Ollama nécessaire pour CHARGER ces modèles (architecture `k2-horizon`, inconnue avant
+ * 0.40.4). Recopie de MIN_OLLAMA_VERSION (hardwareScan.ts ; test-benchmark-candidates-sync.mjs vérifie que les
+ * deux restent identiques). Un tel modèle est sauté AVANT tout téléchargement quand la version installée est plus
+ * ancienne, ou inconnue : 1 à 21 Go téléchargés pour un modèle qui ne démarre pas ne mesureraient rien.
+ */
+const MIN_OLLAMA_VERSION = {
+  'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': '0.40.4',
+  'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': '0.40.4',
+  'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': '0.40.4',
+  'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M': '0.40.4'
+}
+
+/** Même lecture que Jaris : « 0.40.4-rc1 » compte comme 0.40.4 (la pré-version charge déjà K2 Horizon). */
+function isOlderVersion(version, minimum) {
+  const parts = (v) => v.split('.').map((p) => parseInt(p, 10) || 0)
+  const a = parts(version)
+  const b = parts(minimum)
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const diff = (a[i] ?? 0) - (b[i] ?? 0)
+    if (diff !== 0) return diff < 0
+  }
+  return false
+}
+
+/**
  * Petite marge sous la VRAM totale détectée, pour le contexte (num_ctx, 4096 par défaut) et l'overhead
  * OS/pilote pendant le test — même valeur que GPU_RESERVED_GB côté app (electron/services/hardwareScan.ts)
  * depuis l'étape 158 (la transcription tourne en RAM, elle ne prend plus de place sur la carte).
@@ -295,7 +320,8 @@ const RAM_OFFLOAD_MODELS = new Set([
   'gpt-oss:20b',
   'mistral-small3.2:24b',
   'glm-4.7-flash:q4_K_M',
-  'nemotron-3.5-lightning:30b'
+  'nemotron-3.5-lightning:30b',
+  'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M'
 ])
 
 const MODELS = [
@@ -356,6 +382,12 @@ const MODELS = [
   // (GGUF officiel de Liquid AI). Voir FLASH_CANDIDATES dans hardwareScan.ts.
   'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M',
   'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M',
+  // Étape 312 (Léo) : K2 Horizon 0.9B, 3.7B, 7B et 32B, GGUF officiels d'IFM. Exigent Ollama 0.40.4 (voir
+  // MIN_OLLAMA_VERSION ci-dessous) ; voir FLASH_CANDIDATES dans hardwareScan.ts.
+  'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M',
+  'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M',
+  'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M',
+  'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M',
   // Ignorés jusqu'ici car trop gros pour la machine de dev (RTX 3070, 8 Go) : maintenant que le script
   // détecte la VRAM disponible et saute automatiquement ce qui ne rentre pas (voir detectVramGb ci-dessous),
   // les garder dans la liste permet aux utilisateurs avec plus de VRAM de vraiment les tester chez eux —
@@ -429,6 +461,11 @@ const VISION_CANDIDATES = [
 // (codeGenerator.ts n'en utilise jamais, voir CODE_TEST_CASES plus bas) mais sur la génération de code.
 const CODE_CANDIDATES = [
   { model: 'qwen3.6:35b-a3b', vramGb: 22 },
+  // Étape 312 : les quatre K2 Horizon (voir CODE_CANDIDATES dans hardwareScan.ts).
+  { model: 'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M', vramGb: 21.1 },
+  { model: 'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M', vramGb: 5.6 },
+  { model: 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M', vramGb: 3.2 },
+  { model: 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M', vramGb: 0.7 },
   // Ligne dédiée code d'Alibaba, DISTINCTE de qwen3.6:35b-a3b malgré une taille/architecture proche (30 Md
   // total / 3,3 Md actifs, MoE, 19 Go) — vérifié directement sur Ollama, les deux tags existent séparément.
   { model: 'qwen3-coder:30b', vramGb: 19 },
@@ -480,6 +517,10 @@ const MODEL_SIZE_HINTS = {
   'hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M': 1.6,
   'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M': 2.4,
   'hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M': 1.7,
+  'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 0.7,
+  'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': 3.2,
+  'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': 5.6,
+  'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M': 21.1,
   'qwen3.5:35b': 24,
   'qwen3.6:35b': 24,
   'qwen3.5:27b': 17,
@@ -524,6 +565,9 @@ const MEDIUM_TIER_MODELS = new Set([
   'granite4.2:8b',
   'granite4.1:8b',
   'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M',
+  'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M',
+  'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M',
+  'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M',
   'qwen3.5:4b',
   'qwen3.5:2b',
   'granite4.2:3b',
@@ -542,6 +586,7 @@ const LARGE_TIER_MODELS = new Set([
   'mistral-small3.2:24b',
   'glm-4.7-flash:q4_K_M',
   'nemotron-3.5-lightning:30b',
+  'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M',
   // hardwareScan.ts reprend aussi ces 4 dans LARGE_CANDIDATES comme repli si rien de plus gros ne rentre,
   // ce qui les rend multi-paliers (voir isSafeToPruneEarly ci-dessous) : présents ici pour que
   // FLASH/MEDIUM/LARGE_TIER_MODELS reflètent fidèlement hardwareScan.ts, même si en pratique ça les exclut
@@ -1707,8 +1752,16 @@ async function main() {
   // restant. La vérification RÉELLE (manifeste Ollama + espace disque relu en direct, dans pullModel) reste
   // le seul filet de sécurité : ce pré-filtre n'est qu'une estimation pour ne pas tenter l'impossible,
   // jamais un remplacement du vrai contrôle.
-  const missing = missingAll.filter((m) => modelWeightGb(m) <= budgetFor(m))
-  const tooLargeUpfront = missingAll.filter((m) => modelWeightGb(m) > budgetFor(m))
+  // Étape 312 : modèles que cette version d'Ollama ne sait pas charger — sautés, jamais téléchargés pour rien.
+  // `ollamaVersion` : lue plus haut pour l'en-tête des résultats (« inconnue » si Ollama n'a pas répondu).
+  const knownOllamaVersion = ollamaVersion && ollamaVersion !== 'inconnue' ? ollamaVersion : null
+  const tooNewForOllama = new Set(
+    Object.entries(MIN_OLLAMA_VERSION)
+      .filter(([, minimum]) => !knownOllamaVersion || isOlderVersion(knownOllamaVersion, minimum))
+      .map(([model]) => model)
+  )
+  const missing = missingAll.filter((m) => modelWeightGb(m) <= budgetFor(m) && !tooNewForOllama.has(m))
+  const tooLargeUpfront = missingAll.filter((m) => modelWeightGb(m) > budgetFor(m) && !tooNewForOllama.has(m))
   // Étape 169 : la VRAIE raison d'un modèle sauté, transmise avec ##MODEL_SKIPPED## et écrite dans le fichier de
   // résultats — Léo voyait seulement « sauté (trop gros ou téléchargement impossible) » pour G9v3-3B, un modèle de
   // 1,9 Go qui ne pouvait évidemment pas être trop gros, sans aucun moyen de savoir ce qui avait échoué.
@@ -1733,16 +1786,20 @@ async function main() {
     console.log('')
   }
 
-  const toRun = SCOPED_MODELS.filter((m) => !alreadyDone(m, 'conversation') && (installed.includes(m) || missing.includes(m)))
-  const scenarioToRun = SCOPED_SCENARIO_MODELS.filter((m) => !alreadyDone(m, 'scenarios') && (installed.includes(m) || missing.includes(m)))
+  for (const m of new Set(allInstallable)) {
+    if (!tooNewForOllama.has(m)) continue
+    const installedVersion = knownOllamaVersion ?? 'version inconnue'
+    skipReasons.set(m, `il faut Ollama ${MIN_OLLAMA_VERSION[m]} ou plus récent pour le charger (installé : ${installedVersion})`)
+    reportSkip(m, 'avant le test')
+  }
+  // Un modèle déjà téléchargé mais que cette version d'Ollama ne charge pas n'est pas testé non plus.
+  const runnable = (m) => !tooNewForOllama.has(m) && (installed.includes(m) || missing.includes(m))
+  const toRun = SCOPED_MODELS.filter((m) => !alreadyDone(m, 'conversation') && runnable(m))
+  const scenarioToRun = SCOPED_SCENARIO_MODELS.filter((m) => !alreadyDone(m, 'scenarios') && runnable(m))
   // Les deux épreuves de conversation se jouent à la suite pour un même modèle, chargé une seule fois.
   const conversationPhase = CONVERSATION_SCOPE.filter((m) => toRun.includes(m) || scenarioToRun.includes(m))
-  const visionToRun = SCOPED_VISION_CANDIDATES.map((c) => c.model).filter(
-    (m) => !alreadyDone(m, 'vision') && (installed.includes(m) || missing.includes(m))
-  )
-  const codeToRun = SCOPED_CODE_CANDIDATES.map((c) => c.model).filter(
-    (m) => !alreadyDone(m, 'code') && (installed.includes(m) || missing.includes(m))
-  )
+  const visionToRun = SCOPED_VISION_CANDIDATES.map((c) => c.model).filter((m) => !alreadyDone(m, 'vision') && runnable(m))
+  const codeToRun = SCOPED_CODE_CANDIDATES.map((c) => c.model).filter((m) => !alreadyDone(m, 'code') && runnable(m))
   /**
    * Léo, 05/10/2026 : « à la fin, refaire les tests qui n'ont pas marché… on teste tout ». Seulement les cas arrêtés
    * par le délai maximal (ou non joués après 3 délais de suite) — demandes complètes, vision ET code : une panne de

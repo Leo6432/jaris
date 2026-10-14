@@ -61,7 +61,8 @@ test('"Tous les modèles" : une seule liste, triée par VRAM croissante, le moin
   for (let i = 1; i < overview.entries.length; i++) {
     assert.ok(overview.entries[i - 1].vramGb <= overview.entries[i].vramGb, `pas trié : ${overview.entries[i].model}`)
   }
-  assert.equal(overview.entries[0].model, 'qwen3.5:0.8b')
+  // Étape 312 : K2 Horizon 0.9B (0,7 Go) passe devant qwen3.5:0.8b (1 Go).
+  assert.equal(overview.entries[0].model, 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M')
 })
 
 test('chaque modèle n\'apparaît qu\'une fois, avec son étiquette Rapide/Moyen/Puissant (repère affiché)', async () => {
