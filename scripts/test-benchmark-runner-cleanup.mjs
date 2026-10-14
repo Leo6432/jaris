@@ -347,7 +347,16 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
     if (id === 'child_process') return { spawn: fakeSpawn }
     if (id === 'path') return { join: (...parts) => parts.join('/') }
     if (id.endsWith('config')) return { config: { ollama: { host: 'http://127.0.0.1:11434' } } }
-    if (id === './ollama') return { ModelTooLargeError: class extends Error {}, DiskFullError: class extends Error {} }
+    if (id === './ollama')
+      return {
+        ModelTooLargeError: class extends Error {},
+        DiskFullError: class extends Error {},
+        // Étape 313 : la vue d'Ollama est vérifiée AVANT le lancement du script.
+        repairModelsViewIfNeeded: async () => {
+          events.push(`repair (${procs.length} lancé)`)
+          return false
+        }
+      }
     if (id === './hardwareScan') return { getUnscoredModels: () => ['qwen3.5:9b'], campaignCompletion: () => ({ scenarios: new Set(), vision: new Set(), code: new Set() }) }
     if (id === 'fs') return { readFileSync: () => { throw new Error('ENOENT') } }
     if (id === './profileStore') return {}
@@ -362,14 +371,18 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
 
   // Test terminé normalement : veille bloquée pendant, rétablie à la fin.
   const done = testUnscoredModels(() => {})
-  assert.deepEqual(events, ['start prevent-app-suspension'])
+  // Un second clic pendant la vérification d'Ollama ne lance pas un second test.
+  await assert.rejects(testUnscoredModels(() => {}))
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.deepEqual(events, ['repair (0 lancé)', 'start prevent-app-suspension'])
   procs[0].emit('close', 0)
   await done
-  assert.deepEqual(events, ['start prevent-app-suspension', 'stop'])
+  assert.deepEqual(events, ['repair (0 lancé)', 'start prevent-app-suspension', 'stop'])
   assert.equal(active.size, 0)
 
   // Test arrêté (Jaris fermé) : la veille est rétablie aussi.
   const stopped = testUnscoredModels(() => {}).catch(() => {})
+  await new Promise((resolve) => setImmediate(resolve))
   stopModelTest()
   await stopped
   assert.equal(active.size, 0, 'aucun blocage ne doit survivre au test')

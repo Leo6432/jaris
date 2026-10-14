@@ -512,6 +512,19 @@ export function setModelsViewRepair(repair: (() => Promise<boolean>) | null): vo
   modelsViewRepair = repair
 }
 
+/**
+ * Étape 313 : la même vérification avant le test des modèles, dont le script télécharge lui-même (sans passer par
+ * pullModelIfMissing). Après une mise à jour d'Ollama, son appli relance le serveur avec SON réglage d'emplacement :
+ * chez Léo, trois modèles téléchargés pour rien puis « model not found » sur toutes leurs questions.
+ */
+export async function repairModelsViewIfNeeded(): Promise<boolean> {
+  try {
+    return modelsViewRepair ? await modelsViewRepair() : false
+  } catch {
+    return false
+  }
+}
+
 export async function pullModelIfMissing(model: string, onStatus?: (message: string) => void): Promise<void> {
   let installed = await listInstalledModels()
   // Aucun modèle annoncé alors qu'il y en a sur le disque : Ollama regarde le mauvais chemin (étape 289, Léo : un

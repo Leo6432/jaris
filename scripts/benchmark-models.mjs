@@ -985,6 +985,21 @@ async function pullModel(model, budgetGb, diskCtx, onBucket) {
     // detectFreeDiskGb() — inutile de continuer à le compter en plus.
     diskCtx.reservedGb -= reservedGb
   }
+  // Étape 313 (Léo, 14/10/2026 : K2 Horizon 0.9B, 7B et 32B téléchargés pour de vrai — 3, 13 et 21 minutes —, puis
+  // « model not found » sur chacune de leurs 131 questions, notés 0/78) : « success » prouve qu'Ollama a ÉCRIT le
+  // modèle, pas qu'il sait le RELIRE (dossier lu à travers une jonction, étape 289). Vérifié ici : un modèle
+  // introuvable juste après son téléchargement est sauté avec la vraie raison, jamais noté sur des erreurs.
+  const show = await postJson('/api/show', { model })
+  if (show.status === 404) throw new Error(unreadableAfterPull(show.text))
+}
+
+/** Raison donnée quand Ollama ne retrouve pas un modèle qu'il vient de télécharger (étape 313). */
+function unreadableAfterPull(answer) {
+  const detail = String(answer ?? '').trim().slice(0, 200)
+  return (
+    `Ollama dit l'avoir téléchargé mais ne le retrouve pas${detail ? ` (${detail})` : ''} : il lit sans doute ses ` +
+    'modèles à travers une jonction. Ferme puis relance Jaris (il redonne le bon dossier à Ollama), puis relance le test.'
+  )
 }
 
 /**

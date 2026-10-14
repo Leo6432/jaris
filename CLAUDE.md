@@ -8311,3 +8311,33 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   candidat dès 0.40.4-rc1, version inconnue = prudence, bouton de test filtré), `scripts/test-benchmark-cases.mjs`
   (sauté sans téléchargement sous 0.40.3, testé sous 0.40.4-rc1) et `scripts/test-benchmark-candidates-sync.mjs`
   (même table des deux côtés). Chaque garde a été retirée une par une pour vérifier que son test échoue.
+
+- **K2 Horizon 0.9B, 7B et 32B notés 0/78, 0/48, 0/5 chez Léo (étape 313, Ollama 0.40.4 stable sortie le 14/10) :
+  ce n'était PAS un score, c'était Ollama.** Les fichiers de résultats envoyés par Léo montrent les trois modèles
+  téléchargés pour de vrai (3, 13 et 21 minutes entre deux modèles, cohérent avec 0,7, 5,6 et 21 Go), puis
+  « 404 model not found » sur chacune de leurs 131 questions, sans un seul appel réussi. Vérifié avant de conclure :
+  la même Ollama 0.40.4 stable, ici sous Linux, télécharge, relit et fait répondre K2 Horizon 0.9B (« Bonjour ! 😊 »).
+  Ni le modèle ni Ollama ne sont donc en cause. Le symptôme est exactement celui de l'étape 289 : Ollama ÉCRIT le
+  modèle mais ne sait plus le RELIRE à travers la jonction du dossier des modèles, après avoir été relancé par sa propre
+  appli (ici, juste après sa mise à jour en 0.40.4). **Cause probable, pas prouvée : la machine de Léo n'est pas
+  accessible d'ici.**
+  **Le vrai défaut de Jaris, prouvé :** la réparation de l'étape 289 (`repairOllamaModelsView`) ne tournait qu'au
+  démarrage de Jaris et avant un téléchargement fait par JARIS (`pullModelIfMissing`). Or le bouton « Tester les
+  modèles sans score » lance un script qui télécharge LUI-MÊME : il échappait à la réparation. Et le script prenait
+  « success » pour une preuve que le modèle était utilisable, puis notait 131 erreurs comme 131 mauvaises réponses.
+  Deux corrections :
+  1. **Le bouton répare d'abord** (`repairModelsViewIfNeeded`, ollama.ts, appelée par `testUnscoredModels` avant de
+     lancer le script). Un second clic pendant cette vérification ne lance pas un second test (`preparingTest`).
+  2. **Le script vérifie chaque téléchargement** : `/api/show` juste après « success ». Si Ollama ne retrouve pas le
+     modèle, celui-ci est SAUTÉ, avec une raison qui dit quoi faire : relancer Jaris, puis le test. Il n'est jamais
+     noté 0 sur des erreurs, et aucune question ne lui est posée.
+  **Leçon générale, même famille que l'étape 289 : « téléchargé avec succès » ne veut pas dire « utilisable ».**
+  Après toute installation dont dépend une mesure, vérifier que le résultat se RELIT avant de mesurer quoi que ce soit.
+  Une erreur de lecture comptée comme une mauvaise réponse produit un score faux et plausible (0/78), bien pire qu'une
+  absence de score. **Corollaire : une réparation branchée sur UN chemin de téléchargement ne protège pas les autres.**
+  Le script de test télécharge par sa propre route, comme la touche « + » gatée d'un seul côté (étape 82).
+  Régression : `scripts/test-benchmark-cases.mjs` (modèle téléchargé mais illisible : sauté avec la vraie raison,
+  aucune question posée, pas de « 0/78 » ; le faux Ollama de ces tests répond désormais à `/api/show`) et
+  `scripts/test-benchmark-runner-cleanup.mjs` (réparation AVANT le lancement, second clic refusé). Chaque garde a été
+  retirée une par une pour vérifier que son test échoue. **À faire par Léo :** relancer Jaris, puis le bouton de test.
+  Les cas en erreur de la campagne du 14/10 sont repris tout seuls.

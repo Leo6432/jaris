@@ -163,7 +163,7 @@ const PERFECT = {
   "En fait ma voiture n'est plus": ['remember', { title: 'Voiture', content: 'Renault Clio', replace: true }]
 }
 
-function startFakeOllama({ installed, answer, dropChat = () => false, pullFails = false, hang = () => false, version = '0.99.0-test' }) {
+function startFakeOllama({ installed, answer, dropChat = () => false, pullFails = false, hang = () => false, version = '0.99.0-test', unreadable = [] }) {
   const requests = []
   // Étape 230 : téléchargements et suppressions, pour vérifier qu'un modèle téléchargé par le test est supprimé.
   const pulled = []
@@ -178,6 +178,13 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
       res.setHeader('Content-Type', 'application/json')
       if (req.url === '/api/version') return res.end(JSON.stringify({ version }))
       if (req.url === '/api/tags') return res.end(JSON.stringify({ models: installed.map((name) => ({ name })) }))
+      // Étape 313 : `unreadable` = écrit sur le disque mais introuvable pour Ollama (dossier lu à travers une jonction).
+      if (req.url === '/api/show') {
+        const name = JSON.parse(body).model ?? JSON.parse(body).name
+        if (installed.includes(name) && !unreadable.includes(name)) return res.end('{}')
+        res.statusCode = 404
+        return res.end(JSON.stringify({ error: `model '${name}' not found` }))
+      }
       if (req.url === '/api/pull' && pullFails) {
         res.statusCode = 500
         return res.end(JSON.stringify({ error: 'pull model manifest: file does not exist' }))
@@ -359,6 +366,37 @@ test('K2 Horizon : sauté avant tout téléchargement sous Ollama 0.40.3, testé
       fake.server.close()
       rmSync(dir, { recursive: true, force: true })
     }
+  }
+})
+
+// Étape 313 (Léo, 14/10/2026) : trois K2 Horizon téléchargés pour de vrai, puis « model not found » sur chacune de
+// leurs 131 questions, notés 0/78 — une panne d'Ollama prise pour un score. Un modèle illisible juste après son
+// téléchargement est sauté avec la vraie raison, et aucune question ne lui est posée.
+test('un modèle téléchargé mais introuvable pour Ollama est sauté, jamais noté 0', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const model = 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M'
+  const fake = await startFakeOllama({ installed: [], answer: (_m, p) => perfectAnswer(p), unreadable: [model] })
+  try {
+    const resultsPath = join(dir, 'benchmark-nouveaux-modeles.md')
+    const { code, out } = await runScript({
+      OLLAMA_HOST: fake.host,
+      JARIS_ANALYSIS_SCOPE: 'all',
+      JARIS_RESULTS_PATH: resultsPath,
+      JARIS_RESUME: '1',
+      JARIS_ONLY_MODELS: model,
+      JARIS_RAM_SAFETY_MARGIN_GB: '0.1'
+    })
+    assert.equal(code, 0, out)
+    assert.deepEqual(fake.pulled, [model], 'le téléchargement a bien eu lieu')
+    assert.equal(fake.requests.length, 0, 'aucune question ne doit être posée à un modèle introuvable')
+    const skipped = out.split('\n').find((l) => l.startsWith(`##MODEL_SKIPPED## ${model}`))
+    assert.match(skipped ?? '', /ne le retrouve pas[\s\S]*relance Jaris/, out)
+    const results = readFileSync(resultsPath, 'utf8')
+    assert.doesNotMatch(results, /K2-Horizon-0\.9B-GGUF:Q4_K_M \|[^\n]*\| 0\/78 \|/, 'noté 0/78 sur des erreurs')
+    assert.match(results, /## Modèles non testés[\s\S]*K2-Horizon-0\.9B-GGUF:Q4_K_M\*\* : téléchargement impossible : Ollama dit l'avoir téléchargé mais ne le retrouve pas/)
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
   }
 })
 
@@ -833,7 +871,8 @@ test('fermer Jaris arrête le test en cours, et un second lancement est refusé 
   const beforeQuit = main.slice(main.indexOf("app.on('before-quit'"), main.indexOf('})', main.indexOf("app.on('before-quit'")))
   assert.match(beforeQuit, /stopModelTest\(\)/)
   const runner = readFileSync(new URL('../electron/services/benchmarkRunner.ts', import.meta.url), 'utf8')
-  assert.match(runner, /if \(runningTest\) return Promise\.reject/)
+  // Étape 313 : refusé aussi pendant la vérification d'Ollama qui précède le lancement.
+  assert.match(runner, /if \(runningTest \|\| preparingTest\) throw/)
   assert.match(runner, /runningTest\?\.kill\(\)/)
 })
 

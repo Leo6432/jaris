@@ -5,7 +5,7 @@ import { join } from 'path'
 import { config } from '../config'
 import { resourcesRoot } from '../paths'
 import { getDataRoot } from './dataLocation'
-import { deleteModel, pullModelIfMissing, ModelTooLargeError, DiskFullError } from './ollama'
+import { deleteModel, pullModelIfMissing, repairModelsViewIfNeeded, ModelTooLargeError, DiskFullError } from './ollama'
 import { campaignCompletion, getAllCandidateModelIds, getUnscoredModels, pickBestModelsFromBenchmark } from './hardwareScan'
 import { getProfile, saveProfile } from './profileStore'
 import type { CapacityScanResult } from '../../shared/ipc'
@@ -228,6 +228,8 @@ export function getModelsToTest(): string[] {
  * de résultats. Gardé ici pour l'arrêter à la fermeture (stopModelTest) et refuser un second lancement.
  */
 let runningTest: ChildProcess | null = null
+/** Vrai pendant la vérification d'Ollama qui précède le lancement : un second clic ne lance pas un second test. */
+let preparingTest = false
 
 /** Arrête le test de modèles en cours, s'il y en a un (fermeture de Jaris). Il reprendra au prochain lancement. */
 export function stopModelTest(): void {
@@ -235,11 +237,19 @@ export function stopModelTest(): void {
   runningTest = null
 }
 
-export function testUnscoredModels(onLine: (line: string) => void): Promise<{ models: string[]; resultsPath: string }> {
+export async function testUnscoredModels(onLine: (line: string) => void): Promise<{ models: string[]; resultsPath: string }> {
   const models = getModelsToTest()
   const resultsPath = unscoredResultsPath()
-  if (!models.length) return Promise.resolve({ models, resultsPath })
-  if (runningTest) return Promise.reject(new Error(t('bench.testRunning')))
+  if (!models.length) return { models, resultsPath }
+  if (runningTest || preparingTest) throw new Error(t('bench.testRunning'))
+  // Étape 313 : Ollama doit voir ses modèles AVANT que le script en télécharge — sinon chaque modèle est téléchargé
+  // pour rien, puis « introuvable » à chaque question (dossier lu à travers une jonction, étape 289).
+  preparingTest = true
+  try {
+    await repairModelsViewIfNeeded()
+  } finally {
+    preparingTest = false
+  }
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, [join(resourcesRoot(), 'scripts', 'benchmark-models.mjs')], {
       windowsHide: true,
