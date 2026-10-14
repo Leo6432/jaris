@@ -555,6 +555,7 @@
   "runtime.skip": "Fortsätt ändå",
   "unscored.downloading": "Laddar ner {model}: {percent} %",
   "unscored.testing": "Testar {model}…",
+  "unscored.working": "Testar {model} — modellen svarar fortfarande ({minutes} min)",
   "unscored.allScored": "Alla Jaris modeller har ett betyg.",
   "unscored.toTest": "Modeller att testa ({count}): {models}",
   "unscored.changed": "Testerna har ändrats: förfrågningar som spelas upp från början till slut för samtal (utförs förfrågan verkligen?), riktiga skärmbilder för vision, och appar som verkligen öppnas och klickas på för kod. Varje modell gör bara om de prov den saknar. Under tiden behåller Jaris sina nuvarande val. En modell som aldrig testats väljs aldrig.",

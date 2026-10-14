@@ -89,6 +89,34 @@ export class ContextFullError extends Error {
 export type ThinkLevel = 'low' | 'medium' | 'high'
 
 /**
+ * Étape 314 : K2 Horizon laisse parfois sa balise de fin de réflexion dans la réponse visible
+ * (« </ifm|think>D'accord, ton rappel est programmé… »), quand Ollama n'a pas reconnu le début de la réflexion —
+ * 3 réponses de la 7B dans les demandes complètes de Léo du 14/10/2026. Lue à voix haute, la balise devient du
+ * charabia ; et tout ce qui la PRÉCÈDE est de la réflexion (en anglais chez la 0.9B), jamais une réponse.
+ * `</think>` est traité pareil : même fuite possible chez les modèles qui l'utilisent.
+ */
+const THINK_END_TAGS = ['</ifm|think>', '</think>']
+const LEAKED_THINK_END = /<\/(?:ifm\|)?think>/gi
+
+export function stripLeakedThinking(content: string): string {
+  let end = -1
+  for (const match of content.matchAll(LEAKED_THINK_END)) end = (match.index ?? 0) + match[0].length
+  return end < 0 ? content : content.slice(end).trimStart()
+}
+
+/**
+ * Ce qui peut déjà s'afficher pendant le streaming : la réponse sans la réflexion fuitée, en retenant une fin qui
+ * pourrait être le début d'une balise (« </if » arrivé seul) jusqu'au fragment suivant.
+ */
+export function visibleReplySoFar(content: string): string {
+  const visible = stripLeakedThinking(content)
+  // Une balise n'a qu'un « < » : seul le dernier peut commencer une balise encore incomplète.
+  const start = visible.lastIndexOf('<')
+  const tail = start < 0 ? '' : visible.slice(start).toLowerCase()
+  return tail && THINK_END_TAGS.some((tag) => tag.startsWith(tail)) ? visible.slice(0, start) : visible
+}
+
+/**
  * `onToken` (étape 48) bascule cet appel en streaming NDJSON (`stream: true`) plutôt que la réponse d'un
  * bloc habituelle : chaque fragment de `message.content` est relayé au fil de l'eau, en plus d'accumuler la
  * réponse complète comme avant (tool_calls compris, présents dans un des derniers fragments plutôt que
@@ -131,7 +159,7 @@ async function requestChat(
     }
     if (!data.message) throw new Error(t('ollama.empty', { model }))
     onMetrics?.(metricsOf(data, data.message.thinking?.length ?? 0))
-    return data.message
+    return { ...data.message, content: stripLeakedThinking(data.message.content ?? '') }
   }
 
   if (!response.body) throw new Error(t('ollama.noStreamBody', { model }))
@@ -139,6 +167,8 @@ async function requestChat(
   const decoder = new TextDecoder()
   let buffer = ''
   let content = ''
+  // Étape 314 : ce qui a déjà été relayé à l'écran (jamais la réflexion fuitée, voir visibleReplySoFar).
+  let shown = ''
   let toolCalls: OllamaToolCall[] | undefined
   let role: OllamaMessage['role'] = 'assistant'
   let doneReason: string | undefined
@@ -164,7 +194,15 @@ async function requestChat(
       }
       if (chunk.message?.content) {
         content += chunk.message.content
-        onToken?.(chunk.message.content)
+        if (onToken) {
+          // Une balise arrivée APRÈS du texte déjà affiché ne peut plus l'effacer à l'écran : la réponse finale
+          // (sans la réflexion) le remplace de toute façon à la fin du tour.
+          const visible = visibleReplySoFar(content)
+          if (visible.length > shown.length && visible.startsWith(shown)) {
+            onToken(visible.slice(shown.length))
+            shown = visible
+          }
+        }
       }
       // Jamais accumulé dans la réponse rendue : sert uniquement de signe de vie pendant la réflexion
       // (mode Code, étape 99), où plusieurs minutes peuvent s'écouler avant le premier caractère de code.
@@ -179,6 +217,7 @@ async function requestChat(
     }
   }
 
+  content = stripLeakedThinking(content)
   if (!content && !toolCalls) {
     if (doneReason === 'length') throw new ContextFullError(model, numCtx)
     throw new Error(t('ollama.empty', { model }))

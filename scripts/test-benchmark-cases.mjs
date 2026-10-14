@@ -163,7 +163,7 @@ const PERFECT = {
   "En fait ma voiture n'est plus": ['remember', { title: 'Voiture', content: 'Renault Clio', replace: true }]
 }
 
-function startFakeOllama({ installed, answer, dropChat = () => false, pullFails = false, hang = () => false, version = '0.99.0-test', unreadable = [] }) {
+function startFakeOllama({ installed, answer, dropChat = () => false, pullFails = false, hang = () => false, delay = () => 0, version = '0.99.0-test', unreadable = [] }) {
   const requests = []
   // Étape 230 : téléchargements et suppressions, pour vérifier qu'un modèle téléchargé par le test est supprimé.
   const pulled = []
@@ -219,7 +219,10 @@ function startFakeOllama({ installed, answer, dropChat = () => false, pullFails 
             : call
               ? { role: 'assistant', content: '', tool_calls: [{ function: { name: call[0], arguments: call[1] } }] }
               : { role: 'assistant', content: 'Je suis Jaris.' }
-        return res.end(JSON.stringify({ message, done_reason: 'stop', eval_count: 10, eval_duration: 1e8 }))
+        const reply = JSON.stringify({ message, done_reason: 'stop', eval_count: 10, eval_duration: 1e8 })
+        // Étape 314 : une réponse lente (gros modèle sur une petite carte), pour le signe de vie du script.
+        const wait = delay(json.model, prompt)
+        return wait > 0 ? setTimeout(() => res.end(reply), wait) : res.end(reply)
       }
       res.statusCode = 404
       res.end('{}')
@@ -301,6 +304,38 @@ test('le vrai script : vraies consignes et 15 outils envoyés, 17 questions not�
   }
 })
 
+test('étape 314 : une longue réponse donne un signe de vie régulier, puis le remet à zéro', async () => {
+  // Léo : « j'ai quitté ça bloquait depuis longtemps » — la 32B écrivait une application pendant 8 à 15 minutes sans
+  // que l'écran du test ne bouge. Ici la toute première question met 1,7 s, avec un signe de vie toutes les 0,4 s.
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  let slowed = false
+  const fake = await startFakeOllama({
+    installed: ['ministral-3:3b'],
+    answer: (_model, prompt) => perfectAnswer(prompt),
+    delay: () => (slowed ? 0 : ((slowed = true), 1700))
+  })
+  try {
+    const { code, out } = await runScript({
+      OLLAMA_HOST: fake.host,
+      JARIS_RESULTS_PATH: join(dir, 'r.md'),
+      JARIS_ONLY_MODELS: 'ministral-3:3b',
+      JARIS_RETEST_ALL: '1',
+      JARIS_HEARTBEAT_MS: '400'
+    })
+    assert.equal(code, 0, out)
+    const beats = [...out.matchAll(/^##WORKING## (\S+) (\d+)$/gm)].map((m) => ({ model: m[1], seconds: Number(m[2]) }))
+    assert.ok(beats.every((b) => b.model === 'ministral-3:3b'), JSON.stringify(beats))
+    const firstReset = beats.findIndex((b) => b.seconds === 0)
+    assert.ok(firstReset >= 3, `au moins 3 signes de vie avant la fin de la réponse lente : ${JSON.stringify(beats)}`)
+    const during = beats.slice(0, firstReset).map((b) => b.seconds)
+    assert.ok(during.every((s, i) => s >= 1 && (i === 0 || s >= during[i - 1])), `secondes écoulées croissantes : ${during}`)
+    // Les réponses rapides qui suivent ne parlent pas : jamais un signe de vie par question.
+    assert.ok(beats.length < 10, `trop de signes de vie pour une seule réponse lente : ${beats.length}`)
+  } finally {
+    fake.server.close()
+  }
+})
+
 test('JARIS_ONLY_MODELS : seuls les modèles demandés sont testés, dans leur épreuve (conversation ou code)', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
   const fake = await startFakeOllama({
@@ -341,12 +376,16 @@ test('K2 Horizon : sauté avant tout téléchargement sous Ollama 0.40.3, testé
   const K2 = 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M'
   for (const [version, testable] of [['0.40.3', false], ['0.40.4-rc1', true]]) {
     const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+    // Étape 314 : la 0.9B a désormais un score recopié ; ce test porte sur la version d'Ollama, pas sur le fichier.
+    const noScores = join(dir, 'aucun-score.md')
+    writeFileSync(noScores, '')
     const fake = await startFakeOllama({ installed: [], answer: (_m, p) => perfectAnswer(p), version })
     try {
       const { code, out } = await runScript({
         OLLAMA_HOST: fake.host,
         JARIS_ANALYSIS_SCOPE: 'conversation',
         JARIS_RESULTS_PATH: join(dir, 'benchmark-nouveaux-modeles.md'),
+        JARIS_VERIFIED_SCORES_PATH: noScores,
         JARIS_RESUME: '1',
         JARIS_ONLY_MODELS: K2,
         JARIS_RAM_SAFETY_MARGIN_GB: '0.1'

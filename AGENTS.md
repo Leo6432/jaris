@@ -8302,3 +8302,42 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `scripts/test-benchmark-runner-cleanup.mjs` (réparation AVANT le lancement, second clic refusé). Chaque garde a été
   retirée une par une pour vérifier que son test échoue. **À faire par Léo :** relancer Jaris, puis le bouton de test.
   Les cas en erreur de la campagne du 14/10 sont repris tout seuls.
+
+- **« j'ai quitté ça bloquait depuis longtemps » (Léo, étape 314, campagne K2 Horizon du 14/10 avec Ollama 0.40.4).**
+  Rien n'était bloqué : le test en était au code de la 32B, qui écrit à 2,5 mots par seconde sur une carte de 8 Go
+  (8 à 15 minutes par application, une coupée au bout de 20 minutes). Pendant tout ce temps, l'écran du test
+  affichait « Test de K2 Horizon 32B… » sans que rien ne bouge — indiscernable d'un blocage. Même famille que
+  `computer_use_task` (étape 34) et la mise à jour d'Ollama (étape 112) : **une attente de plusieurs minutes doit dire
+  qu'elle avance.** Le script émet `##WORKING## <modèle> <secondes>` toutes les 15 s pendant CHAQUE appel au modèle
+  (`postJsonWithHeartbeat`, le seul passage vers `/api/chat`), puis `##WORKING## <modèle> 0` quand une longue réponse
+  se termine — sans cette remise à zéro, l'écran garderait « 12 min » pendant les questions courtes qui suivent.
+  `UnscoredModelsTest.tsx` affiche « le modèle répond toujours (X min) » à partir d'une minute (clé
+  `unscored.working`, minutes écrites en abrégé ou sans accord dans les 24 langues, pour éviter des pluriels). Le marqueur ne compte que du
+  temps : il ne prétend jamais savoir combien il en reste.
+  **Scores relus une par une, justes comprises** (détail dans verified-tool-scores.md) : 0.9B 46/78 et 0/48 ;
+  7B 76/78 et 35/48 (une demande coupée par le délai à refaire) ; 32B 78/78 et 42/48. Code des trois pas encore mesuré.
+  **Vrai défaut de Jaris trouvé en relisant : la balise de fin de réflexion de K2 Horizon fuit dans la réponse.**
+  « </ifm|think> Ton code wifi est TROMPETTE-42. » (7B, 3 réponses), et chez la 0.9B toute la réflexion en anglais
+  AVANT la balise. Ollama sépare normalement la réflexion (`message.thinking`), mais il rate parfois le début de celle
+  de K2. Rien ne la retirait : à la voix, Jaris aurait lu la balise. **Et la formule de choix fait justement passer le
+  Médium de Léo à la K2 7B** (intelligence 21 × fiabilité, 13,4 contre 10,9 pour granite4.2:8b sur 8 Go) : le défaut
+  l'aurait touché dès cette version. `stripLeakedThinking` (ollama.ts) garde ce qui suit la DERNIÈRE balise
+  (`</ifm|think>` ou `</think>`), en bloc comme en streaming ; en streaming, `visibleReplySoFar` retient une fin qui
+  pourrait commencer une balise (« </if » arrivé seul) jusqu'au fragment suivant, pour qu'elle ne s'affiche jamais,
+  même un instant. Une réponse qui n'est QUE la balise devient une réponse vide (phrase de secours), pas « </ifm|think> »
+  lu à voix haute. Le simulateur du test (`benchmark-scenarios.mjs`) applique la même copie, vérifiée identique, et le
+  test croisé avec le vrai `converse()` couvre ce cas ; la trace garde la réponse brute d'Ollama. Seule « code wifi »
+  changeait de verdict (7B 34 → 35/48) ; la 0.9B reste à 0/48, son texte après la balise étant incohérent.
+  **Leçon générale : relire une réponse comptée fausse pour un détail de forme (« balise laissée ») doit aussi poser la
+  question « est-ce Jaris qui devrait la nettoyer ? ».** Noter le défaut dans le score aurait été juste pour la mesure,
+  mais aurait laissé le vrai bug en place chez l'utilisateur — et le score aurait faussement pénalisé le modèle pour
+  un travail que Jaris doit faire.
+  Régression : `scripts/test-benchmark-cases.mjs` (une réponse lente donne des signes de vie croissants puis une
+  remise à zéro, jamais un par question), `scripts/test-unscored-models-ui.mjs` (vrai navigateur : rien avant une
+  minute, « 12 min » ensuite, nom lisible, retour à « Test de … » après la remise à zéro),
+  `scripts/test-leaked-thinking.mjs` (vrai requestChat, en bloc et en streaming coupé en morceaux, « < » ordinaire
+  intact, copie du simulateur identique) et `scripts/test-benchmark-scenarios.mjs` (test croisé). Le test de version
+  d'Ollama de l'étape 312 lit désormais un fichier de scores vide : il supposait que la 0.9B n'avait pas de score. Chaque garde a été
+  retirée une par une pour vérifier que son test échoue. **Non vérifié en usage réel** : l'affichage pendant le vrai
+  test de Léo, et la 7B en Médium sur sa machine. **À faire par Léo :** relancer le test (bouton « Tester ces
+  modèles ») pour mesurer le code des trois modèles et refaire la demande coupée de la 7B.

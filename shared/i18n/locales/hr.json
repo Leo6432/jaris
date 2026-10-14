@@ -567,6 +567,7 @@
   "runtime.skip": "Ipak nastavi",
   "unscored.downloading": "Preuzimanje modela {model}: {percent} %",
   "unscored.testing": "Testiranje modela {model}…",
+  "unscored.working": "Testiranje modela {model} — model još odgovara ({minutes} min)",
   "unscored.allScored": "Svi Jarisovi modeli imaju ocjenu.",
   "unscored.toTest": "Modeli za testiranje ({count}): {models}",
   "unscored.changed": "Testovi su se promijenili: za razgovor zahtjevi odigrani od početka do kraja (je li zahtjev doista ispunjen?), za vid stvarne snimke zaslona, a za kod aplikacije koje se doista otvaraju i klikaju. Svaki model prolazi samo testove koji mu nedostaju. Do tada Jaris zadržava trenutačne izbore. Model koji nikad nije testiran nikad se ne bira.",

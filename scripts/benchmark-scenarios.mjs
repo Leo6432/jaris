@@ -145,6 +145,13 @@ export function findLeakedToolName(text, toolNames = TOOL_NAME_LIST) {
   return toolNames.find((name) => new RegExp(`\\b${name}\\b`, 'i').test(text))
 }
 
+/** Copie de stripLeakedThinking (electron/services/ollama.ts, étape 314) — vérifiée identique par le test. */
+export function stripLeakedThinking(content) {
+  let end = -1
+  for (const match of content.matchAll(/<\/(?:ifm\|)?think>/gi)) end = match.index + match[0].length
+  return end < 0 ? content : content.slice(end).trimStart()
+}
+
 function stripMarkdownForVoice(text) {
   return text
     .replace(/\*\*(.+?)\*\*/g, '$1')
@@ -494,10 +501,13 @@ export async function runScenario(scenario, chat, { variant = 0, onEvent } = {})
         // plus ce qui s'était passé avant.
         onEvent?.({ kind: 'requete', turn: turnIndex, round, messages: [...messages] })
         const data = await chat(messages)
-        const message = data.message ?? { role: 'assistant', content: '' }
+        const rawMessage = data.message ?? { role: 'assistant', content: '' }
+        // Étape 314 : comme chatWithOllama (ollama.ts), la réflexion fuitée avant « </ifm|think> » n'est jamais une
+        // réponse. La trace garde la réponse brute d'Ollama.
+        const message = typeof rawMessage.content === 'string' ? { ...rawMessage, content: stripLeakedThinking(rawMessage.content) } : rawMessage
         const { message: _m, ...meta } = data
-        modelCalls.push({ turn: turnIndex, round, sent, ms: Math.round(performance.now() - callStart), response: message, meta })
-        onEvent?.({ kind: 'reponse', turn: turnIndex, round, ms: modelCalls.at(-1).ms, response: message, meta })
+        modelCalls.push({ turn: turnIndex, round, sent, ms: Math.round(performance.now() - callStart), response: rawMessage, meta })
+        onEvent?.({ kind: 'reponse', turn: turnIndex, round, ms: modelCalls.at(-1).ms, response: rawMessage, meta })
         if (!message.tool_calls?.length) {
           const content = str(message.content)
           if (data.done_reason === 'length' && !content) {

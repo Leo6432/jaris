@@ -1117,11 +1117,35 @@ async function waitForOllama() {
   return false
 }
 
+/**
+ * Étape 314, Léo : « j'ai quitté ça bloquait depuis longtemps ». Rien n'était bloqué : la 32B écrivait une
+ * application à 2,5 mots par seconde sur sa carte de 8 Go, soit 8 à 15 minutes pendant lesquelles l'écran du test
+ * n'affichait rien de nouveau. Pendant toute réponse, une ligne `##WORKING## <modèle> <secondes>` part toutes les
+ * HEARTBEAT_MS : Jaris affiche « répond toujours (X min) ». Une dernière ligne à 0 seconde quand une longue réponse
+ * se termine, sinon l'écran garderait « 12 min » pendant les questions courtes qui suivent.
+ */
+const HEARTBEAT_MS = Number(process.env.JARIS_HEARTBEAT_MS) || 15_000
+
+async function postJsonWithHeartbeat(path, body, timeoutMs) {
+  const started = Date.now()
+  let beats = 0
+  const heartbeat = setInterval(() => {
+    beats++
+    console.log(`##WORKING## ${body.model} ${Math.round((Date.now() - started) / 1000)}`)
+  }, HEARTBEAT_MS)
+  try {
+    return await postJson(path, body, timeoutMs)
+  } finally {
+    clearInterval(heartbeat)
+    if (beats > 0) console.log(`##WORKING## ${body.model} 0`)
+  }
+}
+
 /** Une question à Ollama : attend son retour s'il est injoignable, et abandonne l'analyse s'il ne revient pas. */
 async function postChat(body) {
   for (let attempt = 0; ; attempt++) {
     try {
-      const res = await postJson('/api/chat', body, callTimeoutMs)
+      const res = await postJsonWithHeartbeat('/api/chat', body, callTimeoutMs)
       if (!res.ok) throw new Error(`${res.status} ${res.text}`)
       return JSON.parse(res.text)
     } catch (err) {

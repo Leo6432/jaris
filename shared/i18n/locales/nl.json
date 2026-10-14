@@ -555,6 +555,7 @@
   "runtime.skip": "Toch doorgaan",
   "unscored.downloading": "{model} downloaden: {percent}%",
   "unscored.testing": "{model} testen…",
+  "unscored.working": "{model} testen — het model antwoordt nog ({minutes} min)",
   "unscored.allScored": "Alle modellen van Jaris hebben een score.",
   "unscored.toTest": "Te testen modellen ({count}): {models}",
   "unscored.changed": "De tests zijn veranderd: verzoeken die van begin tot eind worden uitgespeeld voor het gesprek (wordt het verzoek echt uitgevoerd?), echte schermafbeeldingen voor visie, en apps die echt worden geopend en aangeklikt voor code. Elk model doet alleen de proeven over die het mist. Intussen houdt Jaris zijn huidige keuzes aan. Een nooit getest model wordt nooit gekozen.",

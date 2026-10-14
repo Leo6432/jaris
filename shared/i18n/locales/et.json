@@ -555,6 +555,7 @@
   "runtime.skip": "Jätka ikkagi",
   "unscored.downloading": "Mudeli {model} allalaadimine: {percent} %",
   "unscored.testing": "Mudeli {model} testimine…",
+  "unscored.working": "Mudeli {model} testimine — mudel vastab endiselt ({minutes} min)",
   "unscored.allScored": "Kõigil Jarise mudelitel on hinne.",
   "unscored.toTest": "Testitavad mudelid ({count}): {models}",
   "unscored.changed": "Testid on muutunud: vestluse jaoks algusest lõpuni läbimängitud päringud (kas päring tõesti täidetakse?), nägemise jaoks päris ekraanipildid ja koodi jaoks päriselt avatud ning klõpsatud rakendused. Iga mudel teeb läbi ainult puuduvad katsed. Seni hoiab Jaris oma praegused valikud. Kunagi testimata mudelit ei valita kunagi.",

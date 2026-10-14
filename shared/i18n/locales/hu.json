@@ -555,6 +555,7 @@
   "runtime.skip": "Folytatás mindenképp",
   "unscored.downloading": "Letöltés: {model}: {percent} %",
   "unscored.testing": "Tesztelés: {model}…",
+  "unscored.working": "Tesztelés: {model} — a modell még válaszol ({minutes} perc)",
   "unscored.allScored": "Jaris összes modelljének van pontszáma.",
   "unscored.toTest": "Tesztelendő modellek ({count}): {models}",
   "unscored.changed": "A tesztek megváltoztak: a beszélgetéshez elejétől végéig lejátszott kérések (tényleg teljesül a kérés?), a látáshoz valódi képernyőképek, a kódhoz pedig ténylegesen megnyitott és kattintgatott alkalmazások. Minden modell csak a hiányzó próbákat futja le. Addig Jaris megtartja a jelenlegi választásait. Soha nem tesztelt modellt soha nem választ.",

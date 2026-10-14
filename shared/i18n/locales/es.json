@@ -555,6 +555,7 @@
   "runtime.skip": "Continuar de todos modos",
   "unscored.downloading": "Descargando {model}: {percent} %",
   "unscored.testing": "Probando {model}…",
+  "unscored.working": "Probando {model}: el modelo sigue respondiendo ({minutes} min)",
   "unscored.allScored": "Todos los modelos de Jaris tienen puntuación.",
   "unscored.toTest": "Modelos que probar ({count}): {models}",
   "unscored.changed": "Las pruebas han cambiado: peticiones jugadas de principio a fin para la conversación (¿se hace realmente lo pedido?), capturas de pantalla reales para la visión y aplicaciones abiertas y pulsadas de verdad para el código. Cada modelo solo repite las pruebas que le faltan. Mientras tanto, Jaris mantiene sus elecciones actuales. Un modelo nunca probado nunca se elige.",

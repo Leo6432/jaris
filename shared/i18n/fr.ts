@@ -565,6 +565,7 @@ export const fr = {
   "runtime.skip": "Continuer quand même",
   "unscored.downloading": "Téléchargement de {model} : {percent} %",
   "unscored.testing": "Test de {model}…",
+  "unscored.working": "Test de {model} — le modèle répond toujours ({minutes} min)",
   "unscored.allScored": "Tous les modèles de Jaris ont un score.",
   "unscored.toTest": "Modèles à tester ({count}) : {models}",
   "unscored.changed": "Les tests ont changé : des demandes jouées de bout en bout pour la conversation (la demande est-elle vraiment faite ?), de vraies captures d'écran pour la vision, et des applications réellement ouvertes et cliquées pour le code. Chaque modèle ne repasse que les épreuves qui lui manquent. En attendant, Jaris garde ses choix actuels. Un modèle jamais testé n'est jamais choisi.",

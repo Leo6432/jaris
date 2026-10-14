@@ -579,6 +579,7 @@
   "runtime.skip": "Vseeno nadaljuj",
   "unscored.downloading": "Prenašanje modela {model}: {percent} %",
   "unscored.testing": "Preizkušanje modela {model}…",
+  "unscored.working": "Preizkušanje modela {model} — model še vedno odgovarja ({minutes} min)",
   "unscored.allScored": "Vsi modeli Jarisa imajo oceno.",
   "unscored.toTest": "Modeli za preizkus ({count}): {models}",
   "unscored.changed": "Preizkusi so se spremenili: za pogovor zahteve, odigrane od začetka do konca (je zahteva res izpolnjena?), za vid resnični posnetki zaslona in za kodo aplikacije, ki se res odprejo in preklikajo. Vsak model opravi le manjkajoče preizkuse. Do takrat Jaris obdrži trenutne izbire. Model, ki ni bil nikoli preizkušen, ni nikoli izbran.",

@@ -555,6 +555,7 @@
   "runtime.skip": "Jatka silti",
   "unscored.downloading": "Ladataan mallia {model}: {percent} %",
   "unscored.testing": "Testataan mallia {model}…",
+  "unscored.working": "Testataan mallia {model} — malli vastaa yhä ({minutes} min)",
   "unscored.allScored": "Kaikilla Jarisin malleilla on pistemäärä.",
   "unscored.toTest": "Testattavat mallit ({count}): {models}",
   "unscored.changed": "Testit ovat muuttuneet: alusta loppuun pelatut pyynnöt keskustelulle (tehdäänkö pyyntö todella?), oikeat kuvakaappaukset näölle ja oikeasti avatut ja napsautetut sovellukset koodille. Kukin malli suorittaa vain puuttuvat kokeensa. Sillä välin Jaris pitää nykyiset valintansa. Koskaan testaamatonta mallia ei koskaan valita.",

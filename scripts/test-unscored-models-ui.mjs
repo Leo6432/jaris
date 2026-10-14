@@ -75,3 +75,30 @@ test('le rejeu des cas coupés se voit dans le suivi, sans passer pour un score'
     await browser.close()
   }
 })
+
+test('étape 314 : une réponse de plusieurs minutes affiche depuis combien de temps le modèle répond', options, async () => {
+  // Léo a quitté un test qu'il croyait bloqué : la 32B mettait 8 à 15 minutes par application, sans rien afficher.
+  const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
+  try {
+    const page = await browser.newPage()
+    await page.setContent(buildPage())
+    await page.click('button >> text=Tester ces modèles')
+    await page.click('button >> text=Lancer le test')
+    const label = () => page.$eval('.options-menu__progress-label', (el) => el.textContent)
+    await page.evaluate(() => window.__line('##MODEL_TESTING## hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M'))
+    await page.waitForFunction(() => document.querySelector('.options-menu__progress-label')?.textContent.startsWith('Test de'))
+    // Sous une minute : rien ne change.
+    await page.evaluate(() => window.__line('##WORKING## hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M 45'))
+    assert.doesNotMatch(await label(), /répond toujours/)
+    await page.evaluate(() => window.__line('##WORKING## hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M 750'))
+    await page.waitForFunction(() => document.querySelector('.options-menu__progress-label')?.textContent.includes('répond toujours'))
+    assert.match(await label(), /le modèle répond toujours \(12 min\)$/)
+    assert.doesNotMatch(await label(), /hf\.co|GGUF/, 'nom lisible, jamais le nom technique')
+    // Fin de la longue réponse : retour à « Test de … » pour les questions courtes qui suivent.
+    await page.evaluate(() => window.__line('##WORKING## hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M 0'))
+    await page.waitForFunction(() => !document.querySelector('.options-menu__progress-label')?.textContent.includes('répond toujours'))
+    assert.match(await label(), /^Test de .+…$/)
+  } finally {
+    await browser.close()
+  }
+})

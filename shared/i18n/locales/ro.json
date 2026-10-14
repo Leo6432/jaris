@@ -567,6 +567,7 @@
   "runtime.skip": "Continuă oricum",
   "unscored.downloading": "Descărcare {model}: {percent} %",
   "unscored.testing": "Testare {model}…",
+  "unscored.working": "Testare {model} — modelul încă răspunde ({minutes} min)",
   "unscored.allScored": "Toate modelele lui Jaris au o notă.",
   "unscored.toTest": "Modele de testat ({count}): {models}",
   "unscored.changed": "Testele s-au schimbat: cereri jucate de la cap la coadă pentru conversație (cererea e chiar îndeplinită?), capturi de ecran reale pentru viziune și aplicații chiar deschise și apăsate pentru cod. Fiecare model trece doar probele care îi lipsesc. Între timp, Jaris își păstrează alegerile actuale. Un model netestat niciodată nu este ales niciodată.",

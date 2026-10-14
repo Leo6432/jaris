@@ -567,6 +567,7 @@
   "runtime.skip": "Přesto pokračovat",
   "unscored.downloading": "Stahování modelu {model}: {percent} %",
   "unscored.testing": "Testování modelu {model}…",
+  "unscored.working": "Testování modelu {model} — model stále odpovídá ({minutes} min)",
   "unscored.allScored": "Všechny modely Jarise mají hodnocení.",
   "unscored.toTest": "Modely k otestování ({count}): {models}",
   "unscored.changed": "Testy se změnily: pro konverzaci požadavky přehrané od začátku do konce (je požadavek opravdu splněn?), pro vidění skutečné snímky obrazovky a pro kód aplikace, které se opravdu otevřou a proklikají. Každý model projde jen chybějícími zkouškami. Do té doby si Jaris ponechá současné volby. Model, který nikdy nebyl otestován, se nikdy nevybere.",

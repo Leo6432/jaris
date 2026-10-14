@@ -46,6 +46,21 @@ gemma4:31b n'est candidat qu'en vision.
 fois par le délai, rejoué) ; demandes complètes 33/48, dont une demande coupée par un redémarrage de la machine
 et comptée ratée (au mieux 34/48). Ses réponses justes n'ont pas été relues une à une.
 
+Étape 314 : K2 Horizon 0.9B, 7B et 32B mesurés par Léo le 14/10/2026 (Jaris 0.34.20, Ollama 0.40.4, RTX 3070).
+Toutes les réponses relues une à une, justes comprises, et corrigées à la main :
+- 0.9B 49 → 46 : une réponse en anglais, « Appellez shutdown_pc » (nom d'outil lu à voix haute, et il annonce
+  qu'il éteint), « Je vais le faire maintenant » à « je vais éteindre mon PC ce soir ». Demandes 0/48 : 29
+  réponses vides, le reste en anglais ou incohérent (même une fois la réflexion fuitée retirée).
+- 7B demandes 40 → 35 : taille de RAM inventée (« 4,3 Go sur 9 Go » au lieu d'un %), délai faux jusqu'à
+  l'anniversaire de maman (et un 14 mars 2027 donné pour un lundi), rappel dans 90 min annoncé « demain matin »,
+  heure dictée illisible (« dix vingt trente »), et un prénom et une sœur inventés. « </ifm|think> Ton code wifi
+  est TROMPETTE-42. » reste juste : Jaris retire désormais cette balise (et la réflexion qui la précède) avant
+  d'afficher ou de lire une réponse. Une demande coupée par le délai est à refaire (au mieux 36/48). Ses 2 erreurs
+  aux questions (YouTube cherché sur internet au lieu d'être ouvert) sont réelles.
+- 32B : 78/78 et 42/48, aucune correction (« ouvert du lundi au vendredi » vient bien du résultat de recherche).
+Code des trois pas encore mesuré : Léo a arrêté pendant le code de la 32B, qui écrit à 2,5 mots par seconde sur
+8 Go de mémoire vidéo (8 à 15 min par application). Le prochain clic sur « Tester ces modèles » le reprend.
+
 | Modèle | Appel d'outils |
 |---|---|
 | qwen3.5:2b | 66/78 |
@@ -66,6 +81,9 @@ et comptée ratée (au mieux 34/48). Ses réponses justes n'ont pas été relues
 | hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M | 67/78 |
 | hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 68/78 |
 | hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 76/78 |
+| hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 46/78 |
+| hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 76/78 |
+| hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M | 78/78 |
 | qwen3.5:35b | 78/78 |
 | qwen3.6:35b | 76/78 |
 | qwen3.5:27b | 78/78 |
@@ -180,12 +198,14 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | gpt-oss:20b | 43/48 |
 | granite4.1:8b | 43/48 |
 | hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M | 43/48 |
+| hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M | 42/48 |
 | qwen3.5:4b | 42/48 |
 | qwen3.6:35b | 42/48 |
 | mistral-small3.2:24b | 41/48 |
 | ministral-3:8b | 39/48 |
 | hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M | 37/48 |
 | hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M | 36/48 |
+| hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 35/48 |
 | ministral-3:14b | 34/48 |
 | ministral-3:3b | 34/48 |
 | hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 33/48 |
@@ -195,3 +215,4 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M | 26/48 |
 | granite4.1:3b | 25/48 |
 | qwen3.5:0.8b | 13/48 |
+| hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 0/48 |

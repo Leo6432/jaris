@@ -567,6 +567,7 @@
   "runtime.skip": "Tomēr turpināt",
   "unscored.downloading": "Lejupielādē {model}: {percent} %",
   "unscored.testing": "Testē {model}…",
+  "unscored.working": "Testē {model} — modelis joprojām atbild ({minutes} min)",
   "unscored.allScored": "Visiem Jaris modeļiem ir vērtējums.",
   "unscored.toTest": "Testējamie modeļi ({count}): {models}",
   "unscored.changed": "Testi ir mainījušies: sarunai — pieprasījumi, kas izspēlēti no sākuma līdz beigām (vai pieprasījums tiešām izpildīts?), redzei — īsti ekrānuzņēmumi, kodam — lietotnes, kas tiešām tiek atvērtas un noklikšķinātas. Katrs modelis iziet tikai trūkstošos pārbaudījumus. Pa to laiku Jaris patur pašreizējās izvēles. Nekad netestēts modelis nekad netiek izvēlēts.",

@@ -460,6 +460,8 @@ function realHardwareScan() {
 function loadRealConverse() {
   const current = {}
   const effort = loadTs('shared/effort.ts')
+  // Étape 314 : le vrai retrait de la réflexion fuitée (« </ifm|think> »), que chatWithOllama applique à chaque réponse.
+  const { stripLeakedThinking } = loadTs('electron/services/ollama.ts')
   const modules = {
     './modelChoice': { resolveChosenModel: () => null },
     './notepad': loadTs('electron/services/notepad.ts'),
@@ -473,7 +475,7 @@ function loadRealConverse() {
         const data = toData(step)
         // Comme requestChat (ollama.ts) : fenêtre pleine sans rien produire = erreur.
         if (data.done_reason === 'length' && !data.message?.content && !data.message?.tool_calls?.length) throw new Error('fenêtre de contexte pleine')
-        return data.message
+        return typeof data.message?.content === 'string' ? { ...data.message, content: stripLeakedThinking(data.message.content) } : data.message
       },
       getModelThinking: async () => null,
       listInstalledModels: async () => []
@@ -551,6 +553,17 @@ const EXTRA_TRACES = [
     })(),
     CASES['contexte-long'].good
   ],
+  // Étape 314 : vraies réponses de K2 Horizon 7B et 0.9B (balise de fin de réflexion laissée dans la réponse).
+  [
+    'réflexion fuitée avant « </ifm|think> » retirée',
+    SCENARIOS.find((s) => s.id === 'code-wifi'),
+    [
+      calls(['remember', { title: 'Code wifi', content: 'TROMPETTE-42' }]),
+      text('The user wants me to save it.\n\n</ifm|think>\nNoté.'),
+      text('</ifm|think> Ton code wifi est TROMPETTE-42.'),
+      text('</ifm|think> Ton code wifi est TROMPETTE-42.')
+    ]
+  ],
   ['arguments en texte JSON (certains modèles)', SCENARIOS.find((s) => s.id === 'dictee-rappel'), [{ raw: { message: { role: 'assistant', content: '', tool_calls: [{ function: { name: 'set_reminder', arguments: '{"message":"Sortir le gâteau","delay_minutes":20}' } }] }, done_reason: 'stop' } }, text('Rappel programmé.')]]
 ]
 
@@ -593,7 +606,11 @@ test('la boucle est bien exercée : relances, échecs, plafond et nettoyage ont 
   assert.match((await run(byId('merci'), EXTRA_TRACES[4][2])).reason, /réponse vide/)
   assert.match((await run(byId('merci'), EXTRA_TRACES[5][2])).reason, /fenêtre de contexte pleine/)
   assert.match((await run(byId('ne-pas-lancer'), EXTRA_TRACES[6][2])).reason, /appel d'outil écrit en texte/)
-  assert.equal((await run(byId('dictee-rappel'), EXTRA_TRACES[8][2])).ok, true)
+  assert.equal((await run(byId('dictee-rappel'), EXTRA_TRACES[9][2])).ok, true)
+  const leaked = await run(byId('code-wifi'), EXTRA_TRACES[8][2])
+  assert.deepEqual(leaked.turns.map((t) => t.reply), ['Noté.', 'Ton code wifi est TROMPETTE-42.'])
+  assert.equal(leaked.ok, true, leaked.reason)
+  assert.match(leaked.modelCalls[1].response.content, /<\/ifm\|think>/, 'la trace garde la réponse brute d’Ollama')
   assert.ok(!(await run(EXTRA_TRACES[7][1], EXTRA_TRACES[7][2])).turns[0].messages.some((m) => m.content === 'Ancienne question.'))
   const thinking = await runScenario(byId('bitcoin'), scripted(EXTRA_TRACES[2][2]))
   assert.equal(thinking.turns[0].messages.find((m) => m.tool_calls)?.thinking, 'Il faut chercher le cours.')

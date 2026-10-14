@@ -567,6 +567,7 @@
   "runtime.skip": "Vis tiek tęsti",
   "unscored.downloading": "Atsisiunčiamas {model}: {percent} %",
   "unscored.testing": "Testuojamas {model}…",
+  "unscored.working": "Testuojamas {model} — modelis vis dar atsako ({minutes} min.)",
   "unscored.allScored": "Visi Jaris modeliai turi įvertinimą.",
   "unscored.toTest": "Testuotini modeliai ({count}): {models}",
   "unscored.changed": "Testai pasikeitė: pokalbiui – nuo pradžios iki galo atliekami prašymai (ar prašymas tikrai įvykdytas?), regai – tikros ekrano nuotraukos, kodui – tikrai atidaromos ir spaudomos programos. Kiekvienas modelis iš naujo laiko tik trūkstamus bandymus. Kol kas Jaris palieka dabartinius pasirinkimus. Niekada netestuotas modelis niekada nepasirenkamas.",

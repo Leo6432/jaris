@@ -41,6 +41,15 @@ export default function UnscoredModelsTest(): JSX.Element | null {
         setCurrent(t('unscored.downloading', { model: formatModelName(args[0]), percent: args[1] }))
       } else if (marker === '##MODEL_TESTING##') {
         setCurrent(t('unscored.testing', { model: formatModelName(args[0]) }))
+      } else if (marker === '##WORKING##') {
+        // Étape 314 : une réponse de plusieurs minutes (gros modèle débordant sur la RAM) ne doit pas passer pour un
+        // blocage. Sous une minute, rien ne change : « Test de X… » suffit.
+        const minutes = Math.floor(Number(args[1]) / 60)
+        setCurrent(
+          minutes >= 1
+            ? t('unscored.working', { model: formatModelName(args[0]), minutes })
+            : t('unscored.testing', { model: formatModelName(args[0]) })
+        )
       } else if (marker === '##MODEL_DONE##') {
         upsert({ model: args[0], status: 'done', correct: Number(args[1]), total: Number(args[2]) })
       } else if (marker === '##REPLAY_DONE##') {

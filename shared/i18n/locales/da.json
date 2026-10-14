@@ -555,6 +555,7 @@
   "runtime.skip": "Fortsæt alligevel",
   "unscored.downloading": "Downloader {model}: {percent} %",
   "unscored.testing": "Tester {model}…",
+  "unscored.working": "Tester {model} — modellen svarer stadig ({minutes} min)",
   "unscored.allScored": "Alle Jaris' modeller har en score.",
   "unscored.toTest": "Modeller, der skal testes ({count}): {models}",
   "unscored.changed": "Testene er ændret: anmodninger afviklet fra start til slut for samtale (bliver anmodningen virkelig udført?), rigtige skærmbilleder for vision og apps, der virkelig åbnes og klikkes i, for kode. Hver model tager kun de prøver om, den mangler. Indtil da beholder Jaris sine nuværende valg. En model, der aldrig er testet, vælges aldrig.",
