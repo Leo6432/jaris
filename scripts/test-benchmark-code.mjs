@@ -84,7 +84,22 @@ const APPS = {
       '<input id="t"><button id="a">Ajouter</button><ul id="l"></ul>',
       "a.onclick=()=>{const li=document.createElement('li');const s=document.createElement('span');s.textContent=t.value;const d=document.createElement('button');d.innerHTML='<svg width=\"14\" height=\"14\"><rect x=\"3\" y=\"3\" width=\"8\" height=\"10\" stroke=\"black\" fill=\"none\"/></svg>';d.onclick=()=>li.remove();li.append(s,d);l.append(li);t.value=''}"
     ),
+    // Étape 315 (K2 Horizon 7B, 15/10/2026) : chaque tâche affichée dans un champ modifiable. Léo la voit à l'écran,
+    // mais `innerText` ne lit pas la valeur d'un champ : la liste était comptée vide alors qu'elle marchait.
+    goodFields: page(
+      '<input id="t"><button id="a">Ajouter</button><div id="l"></div>',
+      "a.onclick=()=>{const row=document.createElement('div');const i=document.createElement('input');i.value=t.value;const d=document.createElement('button');d.textContent='Supprimer';d.onclick=()=>row.remove();row.append(i,d);l.append(row);t.value=''}"
+    ),
     bad: [
+      [
+        // Le champ de saisie, jamais vidé, garde « Appeler Marc » : il ne doit jamais compter comme une ligne de la liste.
+        'tâches dans des champs, « Supprimer » vide toute la liste, champ de saisie jamais vidé',
+        page(
+          '<input id="t"><button id="a">Ajouter</button><div id="l"></div>',
+          "a.onclick=()=>{const row=document.createElement('div');const i=document.createElement('input');i.value=t.value;const d=document.createElement('button');d.textContent='Supprimer';d.onclick=()=>{l.innerHTML=''};row.append(i,d);l.append(row)}"
+        ),
+        /fait disparaître l’autre/
+      ],
       [
         'supprimer efface toute la liste',
         page('<input id="t"><button id="a">Ajouter</button><ul id="l"></ul>', "a.onclick=()=>{const li=document.createElement('li');li.innerHTML='<span>'+t.value+'</span> <button>Supprimer</button>';li.querySelector('button').onclick=()=>{l.innerHTML=''};l.append(li);t.value=''}"),
@@ -131,7 +146,7 @@ for (const testCase of CODE_TEST_CASES) {
   test(`« ${testCase.id} » : l’application juste passe, les cassées échouent avec leur raison`, options, async () => {
     const { page: browserPage, close } = await openBrowser(browserPath)
     try {
-      for (const variant of ['good', 'goodLong', 'goodIcons', 'goodIcons2', 'goodBareText']) {
+      for (const variant of ['good', 'goodLong', 'goodIcons', 'goodIcons2', 'goodBareText', 'goodFields']) {
         if (APPS[testCase.id][variant]) assert.equal(await checkGeneratedApp(browserPage, testCase, APPS[testCase.id][variant]), null, variant)
       }
     } finally {

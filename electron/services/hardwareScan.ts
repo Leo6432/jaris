@@ -1137,6 +1137,9 @@ export function lookStoppedTask(row: { calls?: unknown; turns?: unknown }): bool
   })
 }
 
+/** Réponse d'Ollama quand le modèle n'est pas (ou plus) là : copie de MODEL_NOT_FOUND (benchmark-models.mjs). */
+const MODEL_NOT_FOUND = /model '[^']+' not found/
+
 /** Modèles qui ont TOUT fait, sans cas encore à refaire, dans le fichier brut d'une campagne (rôle par rôle). */
 export interface CampaignCompletion {
   scenarios: Set<string>
@@ -1175,7 +1178,11 @@ export function campaignCompletion(tracesText: string): CampaignCompletion {
       continue
     }
     const model = String(row.model)
-    const pending = Boolean(row.timeout) || (/^erreur/.test(String(row.reason ?? '')) && !row.replay) || (row.type === 'demande' && lookStoppedTask(row))
+    // Étape 315 : « model not found » reste à faire même après un rejeu — le modèle n'a jamais répondu (supprimé
+    // avant son rejeu, ou illisible par Ollama). Sans ça, K2 Horizon 0.9B, jamais testé en code, n'était plus proposé.
+    const reason = String(row.reason ?? '')
+    const pending =
+      Boolean(row.timeout) || (/^erreur/.test(reason) && (!row.replay || MODEL_NOT_FOUND.test(reason))) || (row.type === 'demande' && lookStoppedTask(row))
     if (row.type === 'demande' && versions?.demandes === SCENARIO_TEST_VERSION) {
       latest.set(`scenarios|${model}|${row.id}|${row.pass}`, { role: 'scenarios', model, pending })
     } else if (row.type === 'vision' && versions?.vision === VISION_TEST_VERSION) {

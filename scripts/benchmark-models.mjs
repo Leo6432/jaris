@@ -1028,6 +1028,9 @@ const OLLAMA_POLL_MS = Number(process.env.JARIS_OLLAMA_POLL_MS) || 5000
  */
 const CALL_TIMEOUT_MS = (Number(process.env.JARIS_CALL_TIMEOUT_MIN) || 20) * 60 * 1000
 const CALL_TIMEOUT_LABEL = CALL_TIMEOUT_MS >= 60_000 ? `${Math.round(CALL_TIMEOUT_MS / 60_000)} min` : `${Math.round(CALL_TIMEOUT_MS / 1000)} s`
+/** Étape 315 : réponse d'Ollama quand le modèle n'est pas (ou plus) là — jamais une erreur du modèle lui-même. */
+const MODEL_NOT_FOUND = /model '[^']+' not found/
+
 /** Délai des demandes REJOUÉES après un dépassement (voir replayTimedOut) : bien plus large, jamais infini. */
 const REPLAY_CALL_TIMEOUT_MS = (Number(process.env.JARIS_REPLAY_TIMEOUT_MIN) || 120) * 60 * 1000
 /** Délai en vigueur : CALL_TIMEOUT_MS pendant la campagne, REPLAY_CALL_TIMEOUT_MS pendant les demandes rejouées. */
@@ -1848,8 +1851,13 @@ async function main() {
    * score. Jaris lance toujours le test en reprise (JARIS_RESUME) : le rejeu se fait donc tout seul à la fin du test,
    * et à chaque nouveau clic tant qu'il reste un cas en délai.
    */
-  async function replayTimedOut() {
-    if (!RESUME || !existsSync(TRACES_PATH)) return 0
+  /**
+   * Étape 315 : les cas encore à refaire (voir replayTimedOut), lus dans les traces. Sert aussi à NE PAS supprimer un
+   * modèle qui en a encore : le 15/10/2026, K2 Horizon 7B a été supprimé juste après son épreuve de code, puis ses 3
+   * cas à refaire ont reçu « model not found » — et ont été notés comme rejoués.
+   */
+  function pendingCases() {
+    if (!existsSync(TRACES_PATH)) return []
     // La DERNIÈRE ligne de chaque cas, et seulement du test actuel : un cas déjà rejoué (ou refait) n'est plus en délai.
     const latest = new Map()
     let versions = null
@@ -1877,13 +1885,25 @@ async function main() {
     // Léo, 05/10/2026 : on refait aussi un cas qui a PLANTÉ (« erreur : … » : appel d'outil illisible pour Ollama, moteur
     // tombé…), pas seulement un délai dépassé. Une seule fois : s'il replante au rejeu, à l'identique, c'est bien le
     // modèle, et son erreur reste comptée fausse. Un délai dépassé, lui, est retenté à chaque lancement.
-    const crashed = (r) => /^erreur/.test(r.reason ?? '') && !r.replay
+    // Étape 315 : sauf « model not found » — le modèle n'a jamais répondu (supprimé, ou illisible par Ollama), ce
+    // n'est pas SON erreur : le cas reste à faire, même après un rejeu.
+    const crashed = (r) => /^erreur/.test(r.reason ?? '') && (!r.replay || MODEL_NOT_FOUND.test(r.reason))
     // Étape 242 : une demande où « regarder l'écran » en pleine tâche avait arrêté Jaris (avant le correctif) est
     // refaite aussi : avec Jaris corrigé, le modèle aurait continué. Une fois refaite, elle n'a plus cette forme.
     const lookStopped = (r) => r.type === 'demande' && lookStoppedTask(r)
-    const todo = [...latest.values()].filter((r) => (r.timeout || crashed(r) || lookStopped(r)) && inScope(r))
+    return [...latest.values()].filter((r) => (r.timeout || crashed(r) || lookStopped(r)) && inScope(r))
+  }
+
+  /** Modèles gardés après leur dernière épreuve parce qu'ils ont encore des cas à refaire : supprimés après le rejeu. */
+  const releaseAfterReplay = new Set()
+
+  async function replayTimedOut() {
+    if (!RESUME) return 0
+    const todo = pendingCases()
     if (!todo.length) return 0
-    const looks = todo.filter(lookStopped).length
+    // La liste lue au démarrage ne sait pas qu'un modèle a été supprimé depuis : on redemande à Ollama.
+    const installedNow = await listInstalledModels().catch(() => installed)
+    const looks = todo.filter((r) => r.type === 'demande' && lookStoppedTask(r)).length
     if (looks) console.log(`\n${looks} demande(s) arrêtée(s) par « regarder l'écran » en pleine tâche (avant le correctif de Jaris) : refaites.`)
     console.log(`\n${todo.length} test(s) arrêté(s) par le délai maximal, par une erreur, ou à refaire : rejoués à l'identique, délai porté à ${Math.round(REPLAY_CALL_TIMEOUT_MS / 60_000)} min.`)
     console.log('Leur nouveau résultat est écrit dans le fichier brut (traces) ; le tableau de résultats, lui, n\'est pas recalculé.')
@@ -1894,7 +1914,7 @@ async function main() {
         // Une application déjà écrite dont seule la VÉRIFICATION a planté se revérifie sans le modèle : le
         // retélécharger (20 Go pour qwen2.5-coder:32b) ne servait à rien (constaté au rejeu du 05/10/2026).
         const needsModel = records.some((r) => !(r.type === 'code' && r.html && !r.timeout))
-        const downloadedHere = needsModel && !installed.includes(model)
+        const downloadedHere = needsModel && !installedNow.includes(model)
         if (downloadedHere) {
           try {
             await pullModel(model, budgetFor(model), { reservedGb: 0 }, () => {})
@@ -1922,7 +1942,7 @@ async function main() {
           replayed++
         }
         console.log(`##REPLAY_DONE## ${model} ${replayed}`)
-        if (downloadedHere && DELETE_AFTER_TEST) await deleteModelViaApi(model).catch(() => {})
+        if ((downloadedHere && DELETE_AFTER_TEST) || releaseAfterReplay.has(model)) await deleteModelViaApi(model).catch(() => {})
       }
     } finally {
       callTimeoutMs = CALL_TIMEOUT_MS
@@ -2174,6 +2194,11 @@ async function main() {
   const lastPhaseOf = (model) => (codeToRun.includes(model) ? 'code' : visionToRun.includes(model) ? 'vision' : 'conversation')
   async function releaseAfterLastTest(model, phase) {
     if (!(tightDiskMode || DELETE_AFTER_TEST) || initiallyInstalledSet.has(model) || lastPhaseOf(model) !== phase) return
+    if (RESUME && pendingCases().some((r) => r.model === model)) {
+      releaseAfterReplay.add(model)
+      console.log(`  ${model} : gardé jusqu'au rejeu de ses tests à refaire, supprimé ensuite`)
+      return
+    }
     try {
       await deleteModelViaApi(model)
       downloadedByTest.delete(model)

@@ -63,6 +63,22 @@ async function pageText(page) {
 }
 
 /**
+ * Étape 315 : le texte visible PLUS le contenu des champs, sauf le champ de saisie (n° 1). Une liste peut afficher
+ * chaque tâche dans un champ modifiable : Léo la voit à l'écran, mais `innerText` ne lit jamais la valeur d'un champ
+ * (K2 Horizon 7B, campagne du 15/10/2026 : tâches bien affichées et bien supprimées, comptées « ne s'affichent pas »).
+ * Le champ de saisie reste exclu : une appli qui ne le vide pas après « Ajouter » ne doit pas passer pour une liste.
+ */
+async function pageTextWithFields(page) {
+  const text = await page.evaluate(`(() => {
+    ${HELPERS}
+    const fields = __j.inputs().slice(1).map((i) => i.value.trim()).filter(Boolean)
+    return [document.body ? document.body.innerText : '', ...fields].join(' ')
+  })()`)
+  log(page, `lu le texte de la page et des champs de la liste : « ${String(text).replace(/\s+/g, ' ').trim().slice(0, 2000)} »`)
+  return text
+}
+
+/**
  * Clique le bouton voulu, au milieu du bouton, comme une vraie souris. `within` : texte d'une ligne de liste, pour
  * viser le bouton de CETTE ligne (supprimer une tâche précise).
  *
@@ -83,7 +99,10 @@ async function clickButton(page, pattern, what, hintPattern, within) {
       // L'élément le plus profond qui contient le texte — pas seulement une feuille : « <li>Acheter du pain<button>
       // Supprimer</button></li> » (texte posé à côté du bouton, sans balise à lui) est une ligne parfaitement valide,
       // que la recherche d'une feuille ne trouvait pas (qwen2.5-coder:14b/32b, campagne de Léo du 05/10/2026).
-      const holders = [...document.querySelectorAll('body *')].filter((e) => !/^(SCRIPT|STYLE|TEMPLATE)$/.test(e.tagName) && e.textContent.includes(within))
+      // Étape 315 : ou un champ qui CONTIENT ce texte (tâche affichée dans un champ modifiable, voir pageTextWithFields).
+      const holders = [...document.querySelectorAll('body *')].filter(
+        (e) => !/^(SCRIPT|STYLE|TEMPLATE)$/.test(e.tagName) && (e.textContent.includes(within) || (/^(INPUT|TEXTAREA)$/.test(e.tagName) && e.value.trim() === within))
+      )
       const leaf = holders.find((e) => !holders.some((o) => o !== e && e.contains(o)))
       let box = leaf
       while (box && !__j.buttons().some((b) => box.contains(b))) box = box.parentElement
@@ -226,10 +245,10 @@ export const CODE_TEST_CASES = [
       await clickButton(page, 'ajout', 'Ajouter', 'add|ajout|submit')
       await typeInto(page, 0, 'Appeler Marc')
       await clickButton(page, 'ajout', 'Ajouter', 'add|ajout|submit')
-      const text = await pageText(page)
+      const text = await pageTextWithFields(page)
       if (!text.includes('Acheter du pain') || !text.includes('Appeler Marc')) throw new Fail('les deux tâches ajoutées ne s’affichent pas')
       await clickButton(page, 'supprim|effacer|retirer|×|✕|✖|🗑|^\\s*x\\s*$', 'Supprimer', 'delete|remove|suppr|trash|\\bdel\\b|poubelle', 'Acheter du pain')
-      const after = await pageText(page)
+      const after = await pageTextWithFields(page)
       if (after.includes('Acheter du pain')) throw new Fail('la tâche supprimée est toujours affichée')
       if (!after.includes('Appeler Marc')) throw new Fail('supprimer une tâche a aussi fait disparaître l’autre')
     }

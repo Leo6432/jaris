@@ -1074,6 +1074,61 @@ test(
   }
 )
 
+// Étape 315 : le 15/10/2026, K2 Horizon 7B (téléchargé par un test précédent) a été supprimé juste après son épreuve
+// de code, PUIS ses cas coupés par le délai ont été « rejoués » sur un modèle absent : « model not found », notés
+// comme rejoués. Le modèle doit rester installé jusqu'à son rejeu, et n'être supprimé qu'après.
+test('rejeu : un modèle qui a des cas à refaire n’est supprimé qu’APRÈS leur rejeu', { timeout: 240000, skip: BROWSER ? false : 'aucun navigateur ici (le test de code en a besoin)' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const model = 'qwen2.5-coder:7b'
+  const resultsPath = join(dir, 'r.md')
+  writeFileSync(`${resultsPath}.telecharges.json`, JSON.stringify([model]))
+  const codePrompt = CODE_TEST_CASES[0].prompt
+  const counter =
+    '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><div id="n">0</div><button id="p">+1</button><button id="z">Remettre à zéro</button>' +
+    "<script>let n=0;const s=()=>document.getElementById('n').textContent=n;p.onclick=()=>{n++;s()};z.onclick=()=>{n=0;s()}</script></body></html>"
+  let hung = false
+  const fake = await startFakeOllama({
+    installed: [model],
+    answer: (_m, prompt) => ({ content: prompt.includes(codePrompt) ? `\`\`\`html\n${counter}\n\`\`\`` : '' }),
+    // La 1re écriture du compteur dépasse le délai ; au rejeu, le modèle répond.
+    hang: (_m, prompt) => prompt.includes(codePrompt) && !hung && (hung = true)
+  })
+  try {
+    const { code, out } = await runScript({
+      OLLAMA_HOST: fake.host,
+      JARIS_RESULTS_PATH: resultsPath,
+      JARIS_ANALYSIS_SCOPE: 'code',
+      JARIS_ONLY_MODELS: model,
+      JARIS_RETEST_ALL: '1',
+      JARIS_RESUME: '1',
+      JARIS_DELETE_AFTER_TEST: '1',
+      JARIS_CALL_TIMEOUT_MIN: '0.01',
+      JARIS_REPLAY_TIMEOUT_MIN: '0.05'
+    })
+    assert.equal(code, 0, out)
+    assert.match(out, /gardé jusqu'au rejeu de ses tests à refaire/)
+    const rows = readFileSync(join(dir, 'r.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((t) => t.type === 'code' && t.id === CODE_TEST_CASES[0].id)
+    assert.equal(rows.length, 2, JSON.stringify(rows))
+    assert.ok(rows[0].timeout && !rows[0].replay)
+    assert.ok(rows[1].replay && rows[1].ok, `rejoué sur le modèle encore installé : ${rows[1].reason}`)
+    assert.ok(!rows.some((r) => /not found/.test(r.reason ?? '')))
+    assert.deepEqual(fake.deleted, [model], 'supprimé une seule fois, après le rejeu')
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('« model not found » : même règle dans le script et dans Jaris (hardwareScan.ts) — jamais une erreur du modèle', () => {
+  const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8')
+  const jaris = readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8')
+  const pattern = (source) => source.match(/const MODEL_NOT_FOUND = (\/.+\/)\n/)?.[1]
+  assert.ok(pattern(script))
+  assert.equal(pattern(jaris), pattern(script))
+  assert.match(script, /const crashed = \(r\) => \/\^erreur\/\.test\(r\.reason \?\? ''\) && \(!r\.replay \|\| MODEL_NOT_FOUND\.test\(r\.reason\)\)/)
+  assert.match(jaris, /\(!row\.replay \|\| MODEL_NOT_FOUND\.test\(reason\)\)/)
+})
+
 // Répétition générale du 04/10/2026 : qwen3-vl:2b a réfléchi jusqu'à remplir sa fenêtre de contexte malgré
 // `think: false`, puis n'a rien répondu. Le verdict était juste (« réponse vide ») mais n'en disait pas la cause.
 // Léo, 05/10/2026 : « bon c'est bon, faux c'est faux, et dès qu'il n'a pas eu le temps, on refait ». Vision et code

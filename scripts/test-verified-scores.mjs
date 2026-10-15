@@ -35,9 +35,9 @@ test('vision sur 34 et code sur 5 (une mesure incomplète ne doit pas être reco
   assert.equal(vision.length, 11)
   for (const [model, score] of vision) assert.match(score, /^\d+\/34$/, `Vision ${model} : ${score}`)
   // Campagne de Léo du 04-05/10/2026 : 5 applications par modèle (test de code version 3), les 7 candidats notés,
-  // plus K2 Horizon 3.7B mesuré à l'étape 312.
+  // plus K2 Horizon 3.7B (étape 312), 32B et 7B (étape 315).
   const code = rows(section('Code'))
-  assert.equal(code.length, 8)
+  assert.equal(code.length, 10)
   for (const [model, score] of code) assert.match(score, /^\d\/5$/, `Code ${model} : ${score}`)
 })
 

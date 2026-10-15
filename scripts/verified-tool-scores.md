@@ -130,6 +130,14 @@ lecture de l’écran). Toutes revérifiées après la campagne : la liste de t�
 fait planter la VÉRIFICATION (bug du test, corrigé) et passe juste ; qwen3.6:35b-a3b et north-mini-code-1.0 la
 ratent vraiment (tâches gardées dans le stockage du navigateur, interdit dans l’aperçu : la liste reste vide).
 
+Étape 315 : K2 Horizon 32B et 7B mesurés par Léo le 15/10/2026 (Jaris 0.34.21). 32B : 5/5, dont l'addition et la
+liste de tâches coupées par le délai de 20 min puis réussies au rejeu (34 et 16 min, chaque clic vérifié). 7B : 3/5
+provisoire. Sa liste de tâches, comptée fausse, marche : elle affiche chaque tâche dans un champ modifiable, que le
+juge ne lisait pas (corrigé, et les 43 applications déjà testées rejugées : aucun autre verdict ne change). Son
+convertisseur et son formulaire ont dépassé 20 min, puis leur rejeu a échoué sur « model not found » : le script
+avait supprimé la 7B avant de la rejouer (corrigé). Ils restent à refaire, au mieux 5/5. K2 Horizon 0.9B : pas
+encore de score de code (« model not found » sur ses 5 applis, jamais générées).
+
 | Modèle | Fiabilité |
 |---|---|
 | qwen3.6:35b-a3b | 4/5 |
@@ -140,6 +148,8 @@ ratent vraiment (tâches gardées dans le stockage du navigateur, interdit dans 
 | qwen2.5-coder:14b | 5/5 |
 | qwen2.5-coder:7b | 5/5 |
 | hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 5/5 |
+| hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M | 5/5 |
+| hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 3/5 |
 
 ## Demandes complètes — de bout en bout
 

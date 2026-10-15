@@ -343,3 +343,23 @@ test('modèles à tester : un cas à refaire compte même quand le score est dé
   assert.ok(toTest.includes('granite4.2:8b'), 'le cas à refaire doit le faire proposer')
   assert.ok(!toTest.includes('gemma4:12b'), 'un modèle sans rien à refaire reste fini')
 })
+
+// Étape 315 : le 14/10/2026, les 5 applis de code de K2 Horizon 0.9B ont reçu « model not found » (Ollama ne
+// retrouvait pas le modèle), y compris à leur rejeu. Comptées comme « rejouées », elles faisaient croire que la 0.9B
+// avait fini son code : le bouton ne la proposait plus, alors qu'elle n'avait jamais écrit une seule appli.
+test('modèles à tester : « model not found » reste à faire même après un rejeu, une vraie erreur du modèle non', () => {
+  const scan = setup({ vramMib: 8 * 1024 })
+  scan.setOllamaVersionSource(() => '0.40.4')
+  const lines = [{ type: 'campagne', versions: { conversation: 6, demandes: scan.SCENARIO_TEST_VERSION, vision: scan.VISION_TEST_VERSION, code: scan.CODE_TEST_VERSION } }]
+  const ids = ['compteur', 'addition', 'convertisseur', 'liste-taches', 'formulaire-contact']
+  const missing = (model) => `erreur : 404 {"error":"model '${model}' not found"}`
+  const tiny = 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M'
+  for (const replay of [false, true]) for (const id of ids) lines.push({ type: 'code', model: tiny, id, ok: false, reason: missing(tiny), ...(replay ? { replay } : {}) })
+  // Une vraie erreur du modèle, déjà rejouée une fois : finie (comportement d'avant).
+  for (const id of ids) lines.push({ type: 'code', model: 'qwen2.5-coder:7b', id, ok: id !== 'addition', reason: id === 'addition' ? 'erreur : 500 invalid character' : null, ...(id === 'addition' ? { replay: true } : {}) })
+  const campaign = scan.campaignCompletion(lines.map((l) => JSON.stringify(l)).join('\n'))
+  assert.ok(!campaign.code.has(tiny), 'jamais « fini » sur des « model not found »')
+  assert.ok(campaign.todo.code.has(tiny))
+  assert.ok(campaign.code.has('qwen2.5-coder:7b') && !campaign.todo.code.has('qwen2.5-coder:7b'))
+  assert.ok(scan.getUnscoredModels(campaign).includes(tiny), 'la 0.9B est de nouveau proposée au test')
+})

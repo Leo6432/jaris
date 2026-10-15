@@ -8380,3 +8380,42 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   retirée une par une pour vérifier que son test échoue. **Non vérifié en usage réel** : l'affichage pendant le vrai
   test de Léo, et la 7B en Médium sur sa machine. **À faire par Léo :** relancer le test (bouton « Tester ces
   modèles ») pour mesurer le code des trois modèles et refaire la demande coupée de la 7B.
+
+- **Résultats de code de K2 Horizon (Léo, étape 315, campagne du 15/10/2026 avec Jaris 0.34.21) : deux bugs du test
+  et une erreur du juge, trouvés en relisant les traces avant de recopier quoi que ce soit.**
+  1. **Le juge de la liste de tâches ne lisait pas les champs.** La 7B affiche chaque tâche dans un champ modifiable
+     (`<input value="Acheter du pain">`) : à l'écran, les tâches sont là et « Supprimer » retire la bonne (vérifié
+     par une capture et un vrai clic). Mais le juge lisait `innerText`, qui ne contient jamais la valeur d'un champ :
+     « les deux tâches ajoutées ne s'affichent pas ». `pageTextWithFields` (benchmark-code.mjs) lit aussi les champs
+     de la liste — jamais le champ de saisie n° 1, sinon une appli qui ne le vide pas passerait pour une liste — et
+     `clickButton` retrouve la ligne d'une tâche par la valeur de son champ. Les 43 applications déjà stockées dans
+     les traces ont été REJUGÉES avec le juge corrigé : seule celle-ci change. `CODE_TEST_VERSION` n'est donc pas
+     augmentée (elle aurait invalidé tous les scores de code pour un verdict). **Leçon générale : relire une réponse
+     comptée fausse, c'est aussi l'OUVRIR pour de vrai — le verdict d'un juge automatique n'est qu'une hypothèse.**
+  2. **Un modèle supprimé AVANT son rejeu.** La 7B, téléchargée par un test précédent (registre
+     `.telecharges.json`), était supprimée juste après son épreuve de code ; puis le rejeu de ses cas coupés par le
+     délai partait sur un modèle absent : « model not found », noté comme rejoué. Le rejeu se fiait en plus à la
+     liste des modèles lue AU DÉMARRAGE. `releaseAfterLastTest` garde désormais un modèle qui a encore des cas à
+     refaire (`pendingCases`, la même sélection que le rejeu) et le supprime après le rejeu ; le rejeu redemande la
+     liste à Ollama. **Leçon générale : une liste lue au démarrage d'un long traitement est périmée dès que le
+     traitement lui-même la modifie.**
+  3. **« model not found » comptait comme une vraie erreur du modèle.** Un plantage n'est rejoué qu'une fois : s'il
+     replante, c'est le modèle (règle du 05/10/2026). Mais un 404 « model not found » ne vient jamais du modèle — il
+     n'a jamais répondu. Résultat : les 5 applis de la 0.9B (404 le 14/10, rejeu compris) passaient pour « finies »,
+     et le bouton ne proposait plus la 0.9B alors qu'elle n'avait jamais écrit une ligne de code. `MODEL_NOT_FOUND`,
+     même motif dans le script et dans Jaris (`campaignCompletion`, hardwareScan.ts), vérifié identique par un test :
+     un tel cas reste à faire même après un rejeu.
+  **Scores recopiés :** 32B code 5/5 (addition et liste coupées à 20 min, réussies au rejeu en 34 et 16 min, chaque
+  clic vérifié) ; 7B code 3/5 provisoire (2 applis à refaire, au mieux 5/5) ; 0.9B sans score de code. Avec les vraies
+  traces de Léo, le bouton propose maintenant la 0.9B et la 7B, et rien d'autre. Les choix de Jaris sur la machine de
+  Léo ne changent pas.
+  **Durée : mon estimation de l'étape 314 était trop basse** (1 h à 1 h 45, réel ≈ 2 h 25 le 15/10) : j'avais compté
+  ~5 min pour le code de la 7B, mesurée à 63 mots/s en conversation ; en code, elle a dépassé deux fois le délai de
+  20 min et mis 17 min sur une autre appli. Une vitesse mesurée sur des réponses courtes ne dit rien d'un modèle qui
+  peut partir en boucle sur une tâche longue : donner une fourchette avec le pire cas (délais compris), pas la moyenne.
+  Régression : `scripts/test-benchmark-code.mjs` (liste affichée dans des champs : juste ; champ de saisie jamais vidé
+  avec une liste effacée : faux), `scripts/test-benchmark-cases.mjs` (modèle gardé jusqu'à son rejeu puis supprimé une
+  fois ; même règle « model not found » des deux côtés) et `scripts/test-hardwarescan-single-pool.mjs` (« model not
+  found » rejoué reste à faire, une vraie erreur rejouée non). Le test de version d'Ollama de l'étape 312 repart des
+  scores de l'étape 312 (il supposait la 7B et la 32B sans score). Chaque garde a été retirée une par une pour vérifier
+  que son test échoue.

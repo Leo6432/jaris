@@ -87,10 +87,13 @@ test('dès Ollama 0.40.4, K2 Horizon redevient un candidat comme les autres', as
 })
 
 test('le bouton de test ne propose K2 Horizon qu’une fois Ollama capable de le charger', () => {
-  const tooOld = setup({ scores: REAL_SCORES, vramMib: 8192, ollamaVersion: '0.40.3' })
+  // Étape 315 : les scores de la 7B et de la 32B ont été recopiés depuis ; ce test porte sur la version d'Ollama, il
+  // repart donc de l'état de l'étape 312 (seule la 3.7B mesurée).
+  const scores = REAL_SCORES.split('\n').filter((line) => !/K2-Horizon-(0\.9B|7B|32B)/.test(line)).join('\n')
+  const tooOld = setup({ scores, vramMib: 8192, ollamaVersion: '0.40.3' })
   // Recopiés dans ce realm : vm.runInNewContext a ses propres prototypes (deepEqual échouerait sinon).
   assert.deepEqual([...tooOld.getUnscoredModels()].filter((m) => ALL_K2.includes(m)), [])
-  const recent = setup({ scores: REAL_SCORES, vramMib: 8192, ollamaVersion: '0.40.4' })
+  const recent = setup({ scores, vramMib: 8192, ollamaVersion: '0.40.4' })
   const offered = [...recent.getUnscoredModels()]
   // 3.7B a déjà ses trois scores (mesurés à l'étape 312) ; les trois autres tailles restent à mesurer.
   assert.deepEqual(ALL_K2.filter((m) => offered.includes(m)).sort(), [K2.tiny, K2.mid, K2.large].sort())
