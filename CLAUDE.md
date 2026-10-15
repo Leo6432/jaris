@@ -8418,4 +8418,7 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   fois ; même règle « model not found » des deux côtés) et `scripts/test-hardwarescan-single-pool.mjs` (« model not
   found » rejoué reste à faire, une vraie erreur rejouée non). Le test de version d'Ollama de l'étape 312 repart des
   scores de l'étape 312 (il supposait la 7B et la 32B sans score). Chaque garde a été retirée une par une pour vérifier
-  que son test échoue.
+  que son test échoue. **Piège déjà noté plus haut, retombé dedans :** le premier envoi a fait échouer la CI Windows,
+  car le test de synchronisation cherchait le motif suivi de `\n`, alors que la CI récupère les fichiers en CRLF.
+  Vérifié ensuite sur une copie CRLF des deux fichiers avant de republier. Tout motif qui lit le code source ne doit
+  jamais exiger `\n` : `\r?$` avec le drapeau `m`.

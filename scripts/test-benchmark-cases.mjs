@@ -1122,7 +1122,8 @@ test('rejeu : un modèle qui a des cas à refaire n’est supprimé qu’APRÈS 
 test('« model not found » : même règle dans le script et dans Jaris (hardwareScan.ts) — jamais une erreur du modèle', () => {
   const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8')
   const jaris = readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8')
-  const pattern = (source) => source.match(/const MODEL_NOT_FOUND = (\/.+\/)\n/)?.[1]
+  // Fin de ligne lue sans « \n » : la CI Windows récupère les fichiers en CRLF.
+  const pattern = (source) => source.match(/const MODEL_NOT_FOUND = (\/[^\r\n]+\/)\r?$/m)?.[1]
   assert.ok(pattern(script))
   assert.equal(pattern(jaris), pattern(script))
   assert.match(script, /const crashed = \(r\) => \/\^erreur\/\.test\(r\.reason \?\? ''\) && \(!r\.replay \|\| MODEL_NOT_FOUND\.test\(r\.reason\)\)/)
