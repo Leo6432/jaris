@@ -8383,3 +8383,16 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   car le test de synchronisation cherchait le motif suivi de `\n`, alors que la CI récupère les fichiers en CRLF.
   Vérifié ensuite sur une copie CRLF des deux fichiers avant de republier. Tout motif qui lit le code source ne doit
   jamais exiger `\n` : `\r?$` avec le drapeau `m`.
+
+- **« ajoute Phi-4-mini-instruct pour le test aussi » (Léo, étape 316).** Vérifié à la source avant de l'ajouter, pas
+  pris sur parole : ollama.com/library/phi4-mini donne le tag officiel `phi4-mini` (= 3.8b en Q4_K_M, 2,5 Go), le badge
+  « tools », l'appel d'outils documenté, 128K de contexte, Ollama 0.5.13 minimum (aucune entrée `MIN_OLLAMA_VERSION`,
+  contrairement à K2 Horizon). Artificial Analysis (« Phi-4 Mini Instruct ») : intelligence 6, valeur que la page
+  marque elle-même comme ESTIMÉE (notée telle quelle dans le commentaire), 46 tokens/s. Candidat Rapide, Médium et
+  Code, comme la K2 3.7B de taille voisine ; texte seul, donc jamais Vision. Le script le connaissait déjà
+  (`MODELS`, `MODEL_SIZE_HINTS`, vestige de l'ancien test sur 17) : il manquait seulement aux listes du palier Médium
+  et du code, que le test de synchronisation des deux copies (script/Jaris) vérifie. Il n'a aucun score des tests
+  actuels : le bouton le propose avec K2 Horizon 0.9B et 7B (vérifié sur les vraies traces de Léo), et le modèle choisi
+  pour chaque rôle sur sa machine ne change pas. **Piège de test rencontré :** deux assertions supposaient que TOUS
+  les modèles du dépôt avaient un score (« tout est noté », 30 modèles de conversation) — elles nomment maintenant
+  phi4-mini comme seule exception, au lieu de compter un nombre sans dire lequel manque.

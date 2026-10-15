@@ -332,6 +332,7 @@ const MODELS = [
   'qwen3.5:2b-q4_K_M',
   'qwen3.5:4b',
   'qwen3.5:9b',
+  // Étape 316 : de nouveau candidat de Jaris (Rapide, Médium, Code), voir FLASH_CANDIDATES dans hardwareScan.ts.
   'phi4-mini',
   'gemma4:e4b',
   // gemma4:12b et granite4.1:8b : voir MEDIUM_CANDIDATES dans hardwareScan.ts pour le détail de la
@@ -465,6 +466,8 @@ const CODE_CANDIDATES = [
   { model: 'hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M', vramGb: 21.1 },
   { model: 'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M', vramGb: 5.6 },
   { model: 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M', vramGb: 3.2 },
+  // Étape 316 : Phi-4-mini (voir CODE_CANDIDATES dans hardwareScan.ts).
+  { model: 'phi4-mini', vramGb: 2.5 },
   { model: 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M', vramGb: 0.7 },
   // Ligne dédiée code d'Alibaba, DISTINCTE de qwen3.6:35b-a3b malgré une taille/architecture proche (30 Md
   // total / 3,3 Md actifs, MoE, 19 Go) — vérifié directement sur Ollama, les deux tags existent séparément.
@@ -568,6 +571,7 @@ const MEDIUM_TIER_MODELS = new Set([
   'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M',
   'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M',
   'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M',
+  'phi4-mini',
   'qwen3.5:4b',
   'qwen3.5:2b',
   'granite4.2:3b',

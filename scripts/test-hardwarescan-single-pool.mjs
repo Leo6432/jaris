@@ -206,23 +206,26 @@ test('modèles à tester : tous les modèles de conversation notés à l’ancie
     visionOnly.delete(model)
     codeOnly.delete(model)
   }
-  // Scores du dépôt après la campagne de Léo (05/10/2026) puis le test de vision version 4 : tout est noté.
-  assert.equal(setup({ vramMib: 8 * 1024 }).getUnscoredModels().length, 0)
+  // Scores du dépôt après la campagne de Léo (05/10/2026) puis le test de vision version 4 : tout est noté, sauf
+  // phi4-mini, de nouveau candidat à l'étape 316 et pas encore mesuré.
+  assert.deepEqual([...setup({ vramMib: 8 * 1024 }).getUnscoredModels()], ['phi4-mini'])
   // Sans ces trois nouvelles épreuves (vision, code, demandes complètes), tout repasse.
   const before = REAL_SCORES.replace(/## Vision[\s\S]*$/, '')
   assert.deepEqual(new Set(setup({ vramMib: 8 * 1024, scores: before }).getUnscoredModels()), new Set([...conversationModels, ...visionOnly, ...codeOnly]))
-  // Une fois les trois nouvelles épreuves notées, plus rien à tester.
+  // Une fois les trois nouvelles épreuves notées, plus rien à tester (sauf phi4-mini, qui n'a pas encore son score
+  // aux 78 questions : étape 316).
   const table = (heading, models, score) => `\n\n## ${heading}\n\n| Modèle | Score |\n|---|---|\n${[...models].map((m) => `| ${m} | ${score} |`).join('\n')}\n`
   const allNew =
     REAL_SCORES.replace(/## Vision[\s\S]*$/, '') +
     table('Vision — compréhension', visionOnly, '30/34') +
     table('Code — génération', codeOnly, '4/5') +
     table('Demandes complètes', conversationModels, '40/48')
-  assert.deepEqual([...setup({ vramMib: 8 * 1024, scores: allNew }).getUnscoredModels()], [])
+  assert.deepEqual([...setup({ vramMib: 8 * 1024, scores: allNew }).getUnscoredModels()], ['phi4-mini'])
   // Avec les scores de l'ancien test (sur 17 et sur 3), tout repasse.
   const old = before.replace(/\| (\d+)\/78 \|/g, '| 16/17 |').replace(/\| (\d+)\/18 \|/g, '| 3/3 |')
   const unscored = [...setup({ vramMib: 8 * 1024, scores: old }).getUnscoredModels()]
-  assert.equal(conversationModels.size, 30)
+  // 30, plus phi4-mini (étape 316).
+  assert.equal(conversationModels.size, 31)
   for (const model of conversationModels) assert.ok(unscored.includes(model), `${model} doit repasser le nouveau test`)
   // Étape 230 : le test de vision a changé aussi (6 images × 3, l'ancien était sur 3) — chaque candidat Vision
   // repasse, y compris ceux qui ne servent qu'à la vision (qwen3-vl, GLM-4.6V, gemma4:31b).

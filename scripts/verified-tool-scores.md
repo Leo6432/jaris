@@ -37,7 +37,8 @@ de résultats, et les scores ci-dessous sont CORRIGÉS à la main sur ces relect
   éteindre, ou dire qu'il éteint, est faux.
 
 Les modèles de l'ancien test (17 questions) qui n'ont pas été retestés et ne sont plus proposés par Jaris
-(phi4-mini, functiongemma:270m, granite4:1b, nemotron-3-nano:4b, qwen3.5:2b-q4_K_M) n'ont plus de score.
+(phi4-mini, functiongemma:270m, granite4:1b, nemotron-3-nano:4b, qwen3.5:2b-q4_K_M) n'ont plus de score. phi4-mini
+redevient candidat à l'étape 316 (demande de Léo) : il repasse tous les tests actuels.
 gemma4:31b n'est candidat qu'en vision.
 
 Étape 312 : K2 Horizon 3.7B mesuré par Claude avec ce même script, sans carte graphique, sous Ollama 0.40.4-rc1

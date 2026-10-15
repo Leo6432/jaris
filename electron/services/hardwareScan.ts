@@ -69,6 +69,13 @@ const FLASH_CANDIDATES: ModelCandidate[] = [
   // MIN_OLLAMA_VERSION). Poids = fichiers Q4_K_M publiés : 0,67 / 3,16 / 5,59 / 21,08 Go.
   { model: 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M', vramGb: 3.2 },
   { model: 'ministral-3:3b', vramGb: 3.0 },
+  // Étape 316, Léo : « ajoute Phi-4-mini-instruct pour le test aussi ». Microsoft (MIT), 3,8 milliards de paramètres,
+  // texte seul. Vérifié sur ollama.com/library/phi4-mini avant de l'ajouter : tag officiel `phi4-mini` (= 3.8b en
+  // Q4_K_M, 2,5 Go), badge « tools », appel d'outils documenté, 128K de contexte, Ollama 0.5.13 minimum (donc aucune
+  // version exigée ici, contrairement à K2 Horizon). Artificial Analysis (« Phi-4 Mini Instruct ») : intelligence 6,
+  // ESTIMÉE par eux, 46 tokens/s. Il avait un score sur l'ancien test de 17 questions, retiré à l'étape 166 : jamais
+  // mesuré sur les tests actuels, il est candidat partout où sa taille le place (Rapide, Médium, Code).
+  { model: 'phi4-mini', vramGb: 2.5 },
   // granite4.2:3b (déjà candidat Médium, voir MEDIUM_CANDIDATES plus bas) rejoint aussi Rapide — étape 127,
   // proposé par ChatGPT (relayé par Léo, "vas sur le site .../recommend") après avoir ouvert le
   // comparateur interactif, inaccessible depuis cet environnement (voir le commentaire au-dessus de
@@ -177,6 +184,8 @@ const MEDIUM_CANDIDATES: ModelCandidate[] = [
   { model: 'qwen3.5:4b', vramGb: 3.4 },
   { model: 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M', vramGb: 3.2 },
   { model: 'qwen3.5:2b', vramGb: 2.7 },
+  // Phi-4-mini : voir la note de l'étape 316 dans FLASH_CANDIDATES.
+  { model: 'phi4-mini', vramGb: 2.5 },
   // Nanbeige4.1-3B : voir le commentaire de l'étape 229 dans FLASH_CANDIDATES.
   { model: 'hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M', vramGb: 2.4 },
   { model: 'granite4.2:3b', vramGb: 2.2 },
@@ -406,6 +415,8 @@ const CODE_CANDIDATES: ModelCandidate[] = [
   { model: 'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M', vramGb: 5.6 },
   { model: 'qwen2.5-coder:7b', vramGb: 4.7 },
   { model: 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M', vramGb: 3.2 },
+  // Phi-4-mini : voir la note de l'étape 316 dans FLASH_CANDIDATES.
+  { model: 'phi4-mini', vramGb: 2.5 },
   { model: 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M', vramGb: 0.7 }
 ]
 
@@ -973,7 +984,9 @@ const ARTIFICIAL_ANALYSIS_INTELLIGENCE_INDEX: Record<string, number> = {
   // Étape 312 : pages Artificial Analysis relues le 14/10/2026. Pas de page pour la 32B (rien d'inventé).
   'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M': 3, // K2 Horizon 0.9B
   'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M': 16, // K2 Horizon 3.7B
-  'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': 21 // K2 Horizon 7B
+  'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M': 21, // K2 Horizon 7B
+  // Étape 316 : page relue le 15/10/2026. Valeur marquée « estimée » par Artificial Analysis eux-mêmes.
+  'phi4-mini': 6 // Phi-4 Mini Instruct
 }
 
 /**
@@ -1015,7 +1028,8 @@ const ARTIFICIAL_ANALYSIS_SPEED: Record<string, number> = {
   'qwen3-vl:8b': 115,
   'qwen3-coder:30b': 85,
   'north-mini-code-1.0': 84,
-  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 58
+  'hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M': 58,
+  'phi4-mini': 46
 }
 
 /**
