@@ -31,6 +31,9 @@ try {
 const projectRoot = fileURLToPath(new URL('..', import.meta.url))
 const entryPath = join(projectRoot, 'tmp-code-panel-entry.tsx')
 
+/** Attend deux images : le temps que React affiche ce qu'un bloc d'évènements simulés a changé (étape 319). */
+const settle = (page) => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)))))
+
 const APP_HTML = '<!DOCTYPE html><html><body><h1>Ma liste</h1></body></html>'
 
 /** Faux pont preload : trois applications déjà générées, et une génération qui répond tout de suite. */
@@ -43,6 +46,12 @@ const APP = {
   path: 'C:/Users/leo/Jaris/generated-apps/2026-09-14-liste-de-courses',
   issues: [],
   previewUrl: 'about:blank'
+}
+
+// Rappel qui rend la main deux images plus tard : le temps que React affiche ce que l'évènement a changé.
+const settled = (cb) => (value) => {
+  cb(value)
+  return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined))))
 }
 
 // __presetApps : la liste telle qu'un redémarrage la retrouve (test des conversations conservées, étape 288).
@@ -58,27 +67,30 @@ window.jaris = {
     window.__status = cb
     return () => {}
   },
+  // Étape 319 : React n'affiche un changement qu'au rendu suivant. Les tests lisaient l'écran juste après l'évènement
+  // et échouaient sur une machine chargée (« Prépare sa réponse… » au lieu de « Écrit index.html +20 lignes »), sans
+  // défaut de Jaris. Chaque évènement simulé rend une promesse résolue deux images plus tard, que page.evaluate attend.
   // Étape 99 : CodePanel s'abonne à l'avancement au montage. Un canal manquant ne donne aucune erreur
   // lisible — l'effet React plante, le composant ne se monte jamais, et le test expire au bout de 30 s
   // sans dire pourquoi (piège déjà vécu à l'étape 96). Le rappel est gardé pour que le test puisse
   // simuler de vrais messages d'avancement, comme le ferait le main process.
   onCodeGenProgress: (cb) => {
-    window.__emitProgress = cb
+    window.__emitProgress = settled(cb)
     return () => {}
   },
   // Étape 286 : chaque action sur un fichier, pour que le test simule « Modifié index.html +500 −3 ».
   onCodeGenActivity: (cb) => {
-    window.__emitActivity = cb
+    window.__emitActivity = settled(cb)
     return () => {}
   },
   // Étape 286 : la phrase de l'agent, écrite en direct dans la conversation.
   onCodeGenNarration: (cb) => {
-    window.__emitNarration = cb
+    window.__emitNarration = settled(cb)
     return () => {}
   },
   // Étape 288 : le fichier que Jaris écrit en ce moment, et ses lignes (« Écrit index.html +20 lignes »).
   onCodeGenLive: (cb) => {
-    window.__emitLive = cb
+    window.__emitLive = settled(cb)
     return () => {}
   },
   getGeneratedApps: () => Promise.resolve(window.__apps),
@@ -560,6 +572,7 @@ test('aperçu agrandi : une génération en cours reste visible, et « Nouvelle 
     // faire revenir (la carte vide n'a pas de bouton « Agrandir »).
     await page.click('.workspace__new')
     await page.waitForSelector('.code-preview--empty', { state: 'attached' })
+    await page.waitForSelector('.code-chat', { state: 'visible' })
     assert.equal(await page.isVisible('.code-chat'), true)
     assert.equal(await page.locator('.code-preview__expand').count(), 0)
   })
@@ -826,6 +839,7 @@ test('« Modifié index.html +500 −3 » : chaque action est une ligne de la co
       window.__emitActivity({ kind: 'edit', path: 'index.html', added: 500, removed: 3 })
       window.__emitActivity({ kind: 'create', path: 'jeu.js', added: 80, removed: 0 })
     })
+    await settle(page)
     const rows = await page.locator('.code-chat__activity:not(.code-chat__live)').evaluateAll((nodes) =>
       nodes.map((node) => ({
         // Les espaces sont faits en CSS (gap) : les morceaux sont relus un par un.
@@ -864,6 +878,7 @@ test('l’agent parle comme Claude : sa phrase s’écrit en direct, puis ses ac
       window.__emitNarration({ id: 3, text: 'Fini.' })
       window.__emitNarration({ id: 3, text: '' })
     })
+    await settle(page)
     const order = await page.locator('.code-chat__thread > *').evaluateAll((nodes) =>
       nodes.map((n) => {
         const parts = n.classList.contains('code-chat__activity')
