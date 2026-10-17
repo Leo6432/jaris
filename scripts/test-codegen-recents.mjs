@@ -50,6 +50,8 @@ function setup({ dirEntries = [], readdirError = null, files = {} } = {}) {
     },
     // Étape 286 : le VRAI calcul de différences (pur, sans import), pour compter les lignes écrites dans index.html.
     '../../shared/lineDiff': loadTsModule('shared/lineDiff.ts'),
+    // Le VRAI contrôle de syntaxe des scripts (compile sans exécuter) : validateGeneratedHtml le consulte à chaque génération.
+    './scriptSyntax': loadTsModule('electron/services/scriptSyntax.ts', { vm }),
     './hardwareScan': { pickBestCodeModel: async () => 'test-model' },
     './modelChoice': modelChoiceModule,
     './profileStore': { getProfile: async () => null }
@@ -108,4 +110,19 @@ test('loadGeneratedApp relit le fichier index.html du dossier donné', async () 
   assert.equal(result.html, '<!DOCTYPE html><html></html>')
   assert.equal(result.path, '/fake/userData/generated-apps/1000-jeu-snake')
   assert.equal(result.issues.length, 0)
+})
+
+test('rouvrir une application dont le JavaScript ne compile pas la signale encore, en mots simples', async () => {
+  // Bug vu en vrai (`function toggleAlarm(false) {`) : l'avertissement de la génération ne doit pas disparaître au
+  // prochain lancement, quand on rouvre l'application depuis la liste.
+  const { loadGeneratedApp } = setup({
+    files: {
+      '/fake/userData/generated-apps/1000-reveil/index.html':
+        '<!DOCTYPE html>\n<html><body>\n<script>\nfunction toggleAlarm(false) {}\n</script>\n</body></html>'
+    }
+  })
+  const result = await loadGeneratedApp('/fake/userData/generated-apps/1000-reveil')
+  assert.equal(result.issues.length, 1)
+  assert.match(result.issues[0], /ses boutons et ses animations ne réagiront pas/)
+  assert.match(result.issues[0], /ligne 4, « Unexpected token 'false' »/)
 })

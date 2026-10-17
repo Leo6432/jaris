@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { loadTsModule } from './load-ts-module.mjs'
+import vm from 'node:vm'
 
 /**
  * L'agent qui travaille sur un dépôt GitHub (étape 277), avec un faux modèle qui joue un scénario d'appels
@@ -9,7 +10,9 @@ import { loadTsModule } from './load-ts-module.mjs'
  * travail en cours, une simple annonce sans outil est relancée une fois, et « Arrêter » coupe vraiment.
  */
 const lineDiff = loadTsModule('shared/lineDiff.ts')
-const agent = loadTsModule('electron/services/repoAgent.ts', { '../../shared/lineDiff': lineDiff })
+/** Le VRAI contrôle de syntaxe (compile sans exécuter) : un « finish » ne passe pas sur un JavaScript qui ne compile pas. */
+const scriptSyntax = loadTsModule('electron/services/scriptSyntax.ts', { vm })
+const agent = loadTsModule('electron/services/repoAgent.ts', { '../../shared/lineDiff': lineDiff, './scriptSyntax': scriptSyntax })
 
 function call(name, args) {
   return { function: { name, arguments: args } }
@@ -608,4 +611,72 @@ test('un modèle coupé en pleine écriture (Arrêter, panne) n’y laisse pas u
   await assert.rejects(agent.runRepoAgent('Crée une page', app.deps), /coupée/)
   assert.deepEqual(live.filter(Boolean).at(-1), { kind: 'write', path: 'index.html', lines: 1 })
   assert.equal(live.at(-1), null)
+})
+
+/**
+ * Bug vu en vrai dans le mode Code : `function toggleAlarm(false) {` (« Unexpected token 'false' »), aucun bouton qui
+ * marche, présenté comme terminé. Dans un dépôt, un travail terminé part TOUT SEUL sur GitHub (étape 303) : un fichier
+ * JavaScript préparé qui ne compile pas ne doit jamais laisser passer « finish ».
+ */
+const BROKEN_JS = 'let alarme = false\nfunction toggleAlarm(false) {\n  alarme = !alarme\n}\n'
+const FIXED_JS = 'let alarme = false\nfunction toggleAlarm() {\n  alarme = !alarme\n}\n'
+
+test('un JavaScript préparé qui ne compile pas : « finish » refusé avec l’erreur exacte, accepté une fois corrigé', async () => {
+  const app = setup({}, [
+    reply(call('write_file', { path: 'reveil.js', content: BROKEN_JS }), call('finish', { summary: 'Réveil créé.' })),
+    reply(call('write_file', { path: 'reveil.js', content: FIXED_JS }), call('finish', { summary: 'Réveil créé.' }))
+  ])
+  const outcome = await agent.runRepoAgent('Fais un réveil', app.deps)
+  assert.equal(outcome.limitReached, false)
+  assert.equal(outcome.summary, 'Réveil créé.')
+  assert.equal(app.staged.get('reveil.js'), FIXED_JS)
+  const refusal = toolResults(app.seen[1]).find((result) => result.startsWith('Résultat de finish : refusé, ce JavaScript ne compile pas'))
+  assert.ok(refusal, 'le « finish » sur un fichier cassé a été accepté')
+  assert.match(refusal, /- reveil\.js, ligne 2 : « Unexpected token 'false' » — ligne fautive : function toggleAlarm\(false\) \{/)
+})
+
+test('une erreur de syntaxe jamais corrigée : le travail s’arrête comme interrompu, et l’utilisateur le sait', async () => {
+  const broken = () => reply(call('write_file', { path: 'reveil.js', content: BROKEN_JS }), call('finish', { summary: 'Tout marche !' }))
+  const app = setup({}, [broken(), broken(), broken()])
+  const outcome = await agent.runRepoAgent('Fais un réveil', app.deps)
+  // Interrompu = jamais enregistré tout seul sur GitHub (étape 303) ; jamais la fausse confirmation du modèle.
+  assert.equal(outcome.limitReached, true)
+  assert.equal(app.seen.length, 3, 'deux chances de corriger, pas plus')
+  assert.doesNotMatch(outcome.summary, /Tout marche/)
+  assert.match(outcome.summary, /n'a pas réussi à corriger une erreur dans reveil\.js/)
+  assert.match(outcome.summary, /ligne 2, « Unexpected token 'false' »/)
+  assert.match(outcome.summary, /Rien n'a été enregistré sur GitHub/)
+})
+
+test('une réponse finale sans outil ne contourne pas le contrôle : même refus, même correction', async () => {
+  const app = setup({}, [
+    reply(call('write_file', { path: 'index.html', content: `<!DOCTYPE html>\n<script>\n${BROKEN_JS}</script>\n` })),
+    { role: 'assistant', content: 'Voilà, le réveil est prêt.' },
+    reply(call('write_file', { path: 'index.html', content: `<!DOCTYPE html>\n<script>\n${FIXED_JS}</script>\n` })),
+    { role: 'assistant', content: 'Corrigé, le réveil marche.' }
+  ])
+  const outcome = await agent.runRepoAgent('Fais un réveil', app.deps)
+  assert.equal(outcome.limitReached, false)
+  assert.equal(outcome.summary, 'Corrigé, le réveil marche.')
+  const refusal = toolResults(app.seen[2]).find((result) => result.startsWith('Résultat de finish : refusé'))
+  assert.match(refusal, /- index\.html \(script n°1 de la page\), ligne 4 : « Unexpected token 'false' »/)
+})
+
+test('une erreur déjà présente sur GitHub (ou une syntaxe compilée par un outil) n’est jamais reprochée à l’agent', async () => {
+  const files = { 'src/vieux.js': "const titre = 'Bonjour'\nfunction cassee( {\n", 'src/App.js': 'export const App = () => <h1>Bonjour</h1>\n' }
+  const app = setup(
+    files,
+    [
+      reply(call('read_file', { path: 'src/vieux.js' }), call('read_file', { path: 'src/App.js' })),
+      reply(
+        call('edit_file', { path: 'src/vieux.js', old_text: 'Bonjour', new_text: 'Salut' }),
+        call('edit_file', { path: 'src/App.js', old_text: 'Bonjour', new_text: 'Salut' })
+      ),
+      reply(call('finish', { summary: 'Textes changés.' }))
+    ],
+    { readOriginalFile: async (path) => files[path] }
+  )
+  const outcome = await agent.runRepoAgent('Remplace Bonjour par Salut', app.deps)
+  assert.equal(outcome.limitReached, false)
+  assert.equal(outcome.summary, 'Textes changés.')
 })

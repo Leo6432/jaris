@@ -77,6 +77,8 @@ function setup(responses, { onBeforeCall, loaded = async () => true } = {}) {
     },
     // Étape 286 : le VRAI calcul de différences (pur, sans import), pour compter les lignes écrites dans index.html.
     '../../shared/lineDiff': loadTsModule('shared/lineDiff.ts'),
+    // Le VRAI contrôle de syntaxe des scripts (compile sans exécuter) : validateGeneratedHtml le consulte à chaque génération.
+    './scriptSyntax': loadTsModule('electron/services/scriptSyntax.ts', { vm }),
     './hardwareScan': { pickBestCodeModel: async () => 'test-model' },
     './modelChoice': modelChoiceModule,
     './profileStore': { getProfile: async () => ({ codeModel: 'test-model', visionModel: 'vision-test' }) },

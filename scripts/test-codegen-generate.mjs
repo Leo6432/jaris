@@ -63,6 +63,8 @@ function setup(responses, { profile = { codeModel: 'test-model', visionModel: 'v
     },
     // Étape 286 : le VRAI calcul de différences (pur, sans import), pour compter les lignes écrites dans index.html.
     '../../shared/lineDiff': loadTsModule('shared/lineDiff.ts'),
+    // Le VRAI contrôle de syntaxe des scripts (compile sans exécuter) : validateGeneratedHtml le consulte à chaque génération.
+    './scriptSyntax': loadTsModule('electron/services/scriptSyntax.ts', { vm }),
     './hardwareScan': { pickBestCodeModel: async () => 'test-model' },
     './modelChoice': modelChoiceModule,
     './profileStore': { getProfile: async () => profile },
@@ -221,4 +223,61 @@ test('une modification s’annonce « Modifie index.html », pas « Écrit »', 
   await app.generateApp('ajoute un mode sombre', '<!DOCTYPE html><html><body>ancien</body></html>')
   const kinds = [...new Set(app.live.filter(Boolean).map((item) => item.kind))]
   assert.deepEqual(kinds, ['edit', 'review'])
+})
+
+/**
+ * Bug vu en vrai : une application livrée avec `function toggleAlarm(false) {` (« Unexpected token 'false' »). Tout le
+ * script était mort et Jaris l'a présentée comme terminée. L'erreur doit déclencher la passe de réparation, avec un
+ * message précis pour le modèle ; si elle reste, l'utilisateur est prévenu en mots simples (GeneratedApp.issues).
+ */
+const ALARM = (signature) =>
+  '```html\n<!DOCTYPE html>\n<html>\n<head><style>body { margin: 0; }</style></head>\n' +
+  '<body><button id="alarme">Alarme</button><script>\n' +
+  'let alarme = false\n' +
+  `function toggleAlarm(${signature}) {\n` +
+  '  alarme = !alarme\n' +
+  '}\n' +
+  "document.getElementById('alarme').addEventListener('click', toggleAlarm);\n" +
+  '</script></body>\n</html>\n```'
+const BROKEN_ALARM = ALARM('false')
+const FIXED_ALARM = ALARM('')
+
+test('une erreur de syntaxe JavaScript déclenche la passe de réparation, avec script, ligne et erreur', async () => {
+  // Génération (cassée), relecture (toujours cassée), réparation (corrigée).
+  const app = setup([BROKEN_ALARM, BROKEN_ALARM, FIXED_ALARM])
+  const result = await app.generateApp('un réveil')
+  assert.equal(app.calls.length, 3, 'la passe de réparation n’a pas été lancée')
+  const repairRequest = app.calls[2].find((message) => message.role === 'user').content
+  assert.match(repairRequest, /Problèmes détectés/)
+  assert.match(repairRequest, /erreur de syntaxe JavaScript dans le script n°1, ligne 3 de ce script \(ligne 6 du fichier\)/)
+  assert.match(repairRequest, /Unexpected token 'false'/)
+  assert.match(repairRequest, /La ligne fautive : function toggleAlarm\(false\) \{/)
+  assert.match(result.html, /function toggleAlarm\(\) \{/, 'la version réparée doit être gardée')
+  assert.equal(result.issues.length, 0)
+  assert.ok(app.statusLines.some((line) => /corrigé\(s\) automatiquement/.test(line)), app.statusLines.join(' | '))
+})
+
+test('une erreur de syntaxe qui reste après réparation prévient l’utilisateur, en mots simples', async () => {
+  const app = setup([BROKEN_ALARM, BROKEN_ALARM, BROKEN_ALARM])
+  const result = await app.generateApp('un réveil')
+  assert.equal(app.calls.length, 3)
+  assert.equal(result.issues.length, 1, 'l’application cassée est présentée comme réussie, sans avertissement')
+  // Le message affiché dit ce que ça change pour la personne, ce qu'elle peut faire, et garde le détail exact.
+  assert.match(result.issues[0], /ses boutons et ses animations ne réagiront pas/)
+  assert.match(result.issues[0], /Écris « corrige l'erreur »/)
+  assert.match(result.issues[0], /ligne 6, « Unexpected token 'false' »/)
+  assert.doesNotMatch(result.issues[0], /script n°|ligne fautive|syntaxe/, 'le message affiché ne doit pas être celui du modèle')
+})
+
+test('une réparation qui retire l’erreur de syntaxe est gardée, même si elle laisse un défaut mineur à la place', async () => {
+  // Un défaut pour un autre : avant, l'égalité gardait la page dont aucun bouton ne marche.
+  const fixedWithRemoteFont = FIXED_ALARM.replace(
+    '<head>',
+    '<head><link href="https://fonts.example.com/police.css" rel="stylesheet">'
+  )
+  const app = setup([BROKEN_ALARM, BROKEN_ALARM, fixedWithRemoteFont])
+  const result = await app.generateApp('un réveil')
+  assert.match(result.html, /function toggleAlarm\(\) \{/)
+  assert.equal(result.issues.length, 1)
+  assert.match(result.issues[0], /ressources externes/)
 })

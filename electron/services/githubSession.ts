@@ -393,6 +393,9 @@ export async function runGithubAgent(fullName: string, request: string, options:
       branch: session.snapshot.branch,
       listPaths: () => listPaths(session),
       readFile: (path) => currentText(session, path),
+      // La version de GitHub : une erreur de syntaxe qui y était déjà (ou une syntaxe compilée par un outil, JSX…)
+      // n'est jamais reprochée à l'agent.
+      readOriginalFile: (path) => originalText(session, path),
       writeFile: (path, content) => stage(session, path, content),
       pendingSummary: () =>
         changesOf(session).map((change) => `- ${change.kind === 'added' ? 'créé' : change.kind === 'deleted' ? 'supprimé' : 'modifié'} : ${change.path}`),

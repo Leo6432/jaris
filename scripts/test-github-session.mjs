@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { join } from 'node:path'
 import test from 'node:test'
 import { loadTsModule } from './load-ts-module.mjs'
+import vm from 'node:vm'
 
 /**
  * État GitHub du mode Code côté main (étape 277), avec un faux GitHub et un faux modèle. Verrouillé ici :
@@ -20,7 +21,9 @@ const realGithub = loadTsModule('electron/services/github.ts', {
   './dataLocation': { getDataRoot: () => '/donnees' }
 })
 const lineDiff = loadTsModule('shared/lineDiff.ts')
-const repoAgent = loadTsModule('electron/services/repoAgent.ts', { '../../shared/lineDiff': lineDiff })
+/** Le VRAI contrôle de syntaxe (compile sans exécuter) : un « finish » ne passe pas sur un JavaScript qui ne compile pas. */
+const scriptSyntax = loadTsModule('electron/services/scriptSyntax.ts', { vm })
+const repoAgent = loadTsModule('electron/services/repoAgent.ts', { '../../shared/lineDiff': lineDiff, './scriptSyntax': scriptSyntax })
 
 class GenerationStoppedError extends Error {}
 
@@ -593,4 +596,42 @@ test('« terminé » vient du vrai résultat de l’agent : une limite atteinte 
   const { readFileSync } = await import('node:fs')
   const source = readFileSync(new URL('../electron/services/githubSession.ts', import.meta.url), 'utf8')
   assert.match(source, /return \{ summary, view: viewOf\(session\), finished: !outcome\.limitReached \}/)
+})
+
+/**
+ * Bug vu en vrai dans le mode Code : `function toggleAlarm(false) {`, aucun bouton qui marche, présenté comme terminé.
+ * Un travail terminé partant tout seul sur GitHub, un JavaScript cassé PAR L'AGENT le laisse en attente ; une erreur
+ * déjà présente sur GitHub (la session donne sa version d'origine à l'agent) ne l'empêche jamais de terminer.
+ */
+test('JavaScript cassé par l’agent : jamais « terminé » ; erreur déjà sur GitHub : terminé quand même', async () => {
+  const files = { 'jeu.js': "const titre = 'Bonjour'\nfunction cassee( {\n", 'reveil.js': 'function toggleAlarm(on) {}\n' }
+  const already = setup({
+    token: 't',
+    files,
+    replies: [
+      reply(call('read_file', { path: 'jeu.js' })),
+      reply(call('edit_file', { path: 'jeu.js', old_text: 'Bonjour', new_text: 'Salut' })),
+      reply(call('finish', { summary: 'Titre changé.' }))
+    ]
+  })
+  await already.session.openGithubRepo('leo/projet')
+  const kept = await already.session.runGithubAgent('leo/projet', 'Change le titre', { onStatus: () => {} })
+  assert.equal(kept.finished, true, 'une erreur qui était déjà sur GitHub a bloqué la fin du travail')
+
+  const introduced = setup({
+    token: 't',
+    files,
+    replies: [
+      reply(call('read_file', { path: 'reveil.js' })),
+      reply(call('edit_file', { path: 'reveil.js', old_text: '(on)', new_text: '(false)' }), call('finish', { summary: 'Fait.' })),
+      reply(call('finish', { summary: 'Fait.' })),
+      reply(call('finish', { summary: 'Fait.' }))
+    ]
+  })
+  await introduced.session.openGithubRepo('leo/projet')
+  const stopped = await introduced.session.runGithubAgent('leo/projet', "Ajoute l'alarme", { onStatus: () => {} })
+  assert.equal(stopped.finished, false, 'un JavaScript cassé par l’agent serait parti tout seul sur GitHub')
+  assert.match(stopped.summary, /reveil\.js/)
+  assert.deepEqual(stopped.view.changes.map((change) => change.path), ['reveil.js'], 'le travail préparé reste à vérifier')
+  assert.equal(introduced.state.commits.length, 0)
 })
