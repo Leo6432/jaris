@@ -1241,6 +1241,20 @@ const VISION_ROLE_MODELS = new Set(VISION_CANDIDATES.map((c) => c.model))
 const CODE_ROLE_MODELS = new Set(CODE_CANDIDATES.map((c) => c.model))
 
 /**
+ * Étape 319, Léo : « j'ai fait les tests de phi-4-mini et K2 Horizon, je t'ai donné les résultats, pourquoi il a
+ * encore le bouton ? ». Cas restés « à refaire » dans la campagne mais CLOS : le score recopié devient définitif
+ * et le bouton ne les propose plus. K2 Horizon 7B en code : 2 applis jamais rejouées (délai de 20 min dépassé,
+ * modèle supprimé avant son rejeu, puis rejeu sauté — trois défauts du script, tous corrigés), donc 3/5. Calculé
+ * avant de clore : même à 5/5, aucun choix de modèle ne change sur 12 machines types, alors que les refaire
+ * coûterait jusqu'à 2 h par appli (délai du rejeu). Un nouveau score reçu remplacerait simplement le 3/5.
+ */
+const CLOSED_TODO: Record<'scenarios' | 'vision' | 'code', ReadonlySet<string>> = {
+  scenarios: new Set(),
+  vision: new Set(),
+  code: new Set(['hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M'])
+}
+
+/**
  * Modèles de Jaris à tester, du plus léger au plus lourd : la liste que teste le bouton « Tester les modèles »
  * (Tous les modèles, étape 168). Étape 230 : rôle par rôle — un modèle de conversation sans score du test ACTUEL
  * (y compris un ancien score sur 17), un modèle de vision sans score du test de vision ACTUEL (sur 18), un modèle
@@ -1253,17 +1267,20 @@ export function getUnscoredModels(campaign: CampaignCompletion = { scenarios: ne
   // Le script ne rejoue que l'épreuve qui manque. Une épreuve déjà TOUT faite dans la campagne en cours (fichier
   // brut, pas encore recopié dans verified-tool-scores.md) n'est plus à faire non plus.
   // Étape 244 : un cas encore à refaire dans la campagne compte, même quand le score est déjà recopié.
+  // Étape 319 : sauf un cas clos (CLOSED_TODO), dont le score recopié est définitif.
+  const stillTodo = (role: keyof typeof CLOSED_TODO, model: string): boolean =>
+    Boolean(campaign.todo?.[role].has(model)) && !CLOSED_TODO[role].has(model)
   const needsConversation = (model: string): boolean =>
     CONVERSATION_ROLE_MODELS.has(model) &&
     (!scores.conversation.get(model)?.endsWith(`/${CONVERSATION_TEST_TOTAL}`) ||
       (!scores.scenarios.get(model)?.endsWith(`/${SCENARIO_TEST_TOTAL}`) && !campaign.scenarios.has(model)) ||
-      Boolean(campaign.todo?.scenarios.has(model)))
+      stillTodo('scenarios', model))
   const needsVision = (model: string): boolean =>
     VISION_ROLE_MODELS.has(model) &&
-    ((!scores.vision.get(model)?.endsWith(`/${VISION_TEST_TOTAL}`) && !campaign.vision.has(model)) || Boolean(campaign.todo?.vision.has(model)))
+    ((!scores.vision.get(model)?.endsWith(`/${VISION_TEST_TOTAL}`) && !campaign.vision.has(model)) || stillTodo('vision', model))
   const needsCode = (model: string): boolean =>
     CODE_ROLE_MODELS.has(model) &&
-    ((!scores.code.get(model)?.endsWith(`/${CODE_TEST_TOTAL}`) && !campaign.code.has(model)) || Boolean(campaign.todo?.code.has(model)))
+    ((!scores.code.get(model)?.endsWith(`/${CODE_TEST_TOTAL}`) && !campaign.code.has(model)) || stillTodo('code', model))
   // Étape 312 : jamais proposé au test tant qu'Ollama ne sait pas le charger (il serait téléchargé pour rien).
   const tooNewForOllama = modelsNeedingNewerOllama()
   return [...ALL_MODELS]

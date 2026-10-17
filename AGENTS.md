@@ -8473,3 +8473,25 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   - la machine de Léo identique, modèle par modèle.
   Chaque test a été vérifié en remettant l'ancien repli, l'ancienne règle de Rapide et mon premier jet. **Non
   vérifiable ici :** la vitesse réelle de ces choix sur une machine sans carte.
+
+- **« Je comprends rien du tout, j'ai fait les tests de phi-4-mini et K2 Horizon, je t'ai donné les résultats,
+  pourquoi il a encore le bouton ? » (Léo, étape 319, Jaris 0.34.26).** Vérifié sur ses vraies traces (pas
+  supposé) : le bouton ne proposait plus qu'un seul modèle, K2 Horizon 7B, pour 2 applis de code jamais vraiment
+  testées. Elles avaient dépassé le délai de 20 min. Au rejeu, le script avait déjà supprimé le modèle (« model
+  not found »). Ensuite, le rejeu suivant les a sautées. Ce sont trois défauts du script, tous corrigés. La règle
+  de l'étape 244 (« un cas à refaire l'est même quand le score est recopié ») les gardait donc à faire pour
+  toujours. Les refaire coûterait jusqu'à 2 h par appli (délai du rejeu), et la simulation à 5/5 ne change aucun
+  choix de modèle sur 12 machines types : le 3/5 devient définitif. Nouvelle liste `CLOSED_TODO`
+  (hardwareScan.ts) : des cas restés à refaire mais clos. Elle ne vaut que si un score est recopié. Le script, lui,
+  ne rejoue que les modèles que le bouton lui passe (`JARIS_ONLY_MODELS`), donc rien n'est à changer de son côté.
+  Vérifié sur les vraies traces de Léo : le bouton ne propose plus rien, et l'écran affiche « tous les modèles
+  ont un score » à la place.
+  **Leçon générale : pour Léo, « j'ai fait les tests » veut dire « c'est fini ».** Un bouton qui reste après ça
+  doit avoir une raison qu'il comprend, ou disparaître. Avant de lui demander de relancer un test, calculer ce
+  qu'il changerait. Un test long qui ne peut rien changer ne doit pas lui être proposé, et l'expliquer dans des
+  termes de script (« rejeu », « cas à refaire ») ne fait que l'embrouiller.
+  Régression : `scripts/test-hardwarescan-single-pool.mjs`, qui couvre trois cas :
+  - les vraies dernières lignes de la 7B ne font plus proposer le test ;
+  - un autre modèle dans le même état reste proposé ;
+  - sans score recopié, la 7B redevient à tester.
+  Le test échoue quand on vide `CLOSED_TODO`.

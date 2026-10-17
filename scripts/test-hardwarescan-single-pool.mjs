@@ -365,3 +365,36 @@ test('modèles à tester : « model not found » reste à faire même après un 
   assert.ok(campaign.code.has('qwen2.5-coder:7b') && !campaign.todo.code.has('qwen2.5-coder:7b'))
   assert.ok(scan.getUnscoredModels(campaign).includes(tiny), 'la 0.9B est de nouveau proposée au test')
 })
+
+// Étape 319, Léo : « j'ai fait les tests de phi-4-mini et K2 Horizon, je t'ai donné les résultats, pourquoi il a
+// encore le bouton ? ». Ses vraies dernières lignes de code pour K2 Horizon 7B : 3 applis jugées, 2 coupées par le
+// délai puis « model not found » au rejeu. Clos (CLOSED_TODO) : 3/5 définitif. Une autre appli dans le même état
+// reste proposée, et sans score recopié la 7B redevient à tester : la clôture ne vaut que pour un score connu.
+test('modèles à tester : un cas clos (K2 Horizon 7B en code, 3/5 définitif) ne fait plus proposer le test', () => {
+  const mid = 'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M'
+  const row = `| ${mid} | 3/5 |\n`
+  assert.ok(REAL_SCORES.includes(row), 'le 3/5 de la 7B est recopié')
+  const missing = (model) => `erreur : 404 {"error":"model '${model}' not found"}`
+  const traces = (scan) => {
+    const lines = [{ type: 'campagne', versions: { conversation: 6, demandes: scan.SCENARIO_TEST_VERSION, vision: scan.VISION_TEST_VERSION, code: scan.CODE_TEST_VERSION } }]
+    for (const model of [mid, 'qwen2.5-coder:7b']) {
+      lines.push({ type: 'code', model, id: 'compteur', ok: true }, { type: 'code', model, id: 'addition', ok: true })
+      lines.push({ type: 'code', model, id: 'liste-taches', ok: false, reason: 'les deux tâches ajoutées ne s’affichent pas' })
+      for (const id of ['convertisseur', 'formulaire-contact']) {
+        lines.push({ type: 'code', model, id, ok: false, timeout: true, reason: 'erreur : délai dépassé : aucune réponse du modèle en 20 min' })
+        lines.push({ type: 'code', model, id, ok: false, replay: true, reason: missing(model) })
+      }
+    }
+    return lines.map((l) => JSON.stringify(l)).join('\n')
+  }
+  const scan = setup({ vramMib: 8 * 1024 })
+  scan.setOllamaVersionSource(() => '0.40.5')
+  const campaign = scan.campaignCompletion(traces(scan))
+  assert.ok(campaign.todo.code.has(mid), 'la campagne garde ses 2 applis à refaire')
+  const toTest = scan.getUnscoredModels(campaign)
+  assert.ok(!toTest.includes(mid), 'la 7B n’est plus proposée')
+  assert.ok(toTest.includes('qwen2.5-coder:7b'), 'un modèle non clos dans le même état reste proposé')
+  const withoutScore = setup({ vramMib: 8 * 1024, scores: REAL_SCORES.replace(row, '') })
+  withoutScore.setOllamaVersionSource(() => '0.40.5')
+  assert.ok(withoutScore.getUnscoredModels(withoutScore.campaignCompletion(traces(withoutScore))).includes(mid), 'sans score recopié, à tester')
+})

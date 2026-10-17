@@ -154,6 +154,10 @@ encore de score de code (« model not found » sur ses 5 applis, jamais génér�
 l'aperçu). phi4-mini 5/5. Les 2 applis à refaire de la 7B n'ont PAS été rejouées : le rejeu écartait les modèles
 dont le score de code était déjà recopié (corrigé) — toujours 3/5 provisoire, au mieux 5/5.
 
+Étape 319 : 3/5 de la 7B rendu définitif par Léo (« pourquoi il a encore le bouton ? »). Calculé avant : même à
+5/5, aucun choix de modèle ne change sur 12 machines types. Le bouton ne propose plus ces 2 applis (CLOSED_TODO,
+hardwareScan.ts) ; un nouveau score reçu remplacerait simplement celui-ci.
+
 | Modèle | Fiabilité |
 |---|---|
 | qwen3.6:35b-a3b | 4/5 |
