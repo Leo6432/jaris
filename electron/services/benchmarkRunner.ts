@@ -228,13 +228,32 @@ export function getModelsToTest(): string[] {
  * de résultats. Gardé ici pour l'arrêter à la fermeture (stopModelTest) et refuser un second lancement.
  */
 let runningTest: ChildProcess | null = null
+/** Se résout quand le test en cours est vraiment sorti (stopModelTest l'attend). */
+let runningTestExit: Promise<void> | null = null
 /** Vrai pendant la vérification d'Ollama qui précède le lancement : un second clic ne lance pas un second test. */
 let preparingTest = false
+/** Attente maximale de la sortie du test après son arrêt. */
+const STOP_TEST_WAIT_MAX_MS = 5000
 
-/** Arrête le test de modèles en cours, s'il y en a un (fermeture de Jaris). Il reprendra au prochain lancement. */
-export function stopModelTest(): void {
+/**
+ * Arrête le test de modèles en cours, s'il y en a un (fermeture de Jaris, « Déplacer »). Il reprendra au prochain
+ * lancement. La promesse ne se résout qu'une fois le test vraiment sorti (ou au bout de STOP_TEST_WAIT_MAX_MS) : il
+ * écrit ses résultats dans le dossier des données, que « Déplacer » copie puis efface juste après.
+ */
+export function stopModelTest(): Promise<void> {
+  const exit = runningTestExit
   runningTest?.kill()
   runningTest = null
+  runningTestExit = null
+  if (!exit) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    const giveUp = setTimeout(resolve, STOP_TEST_WAIT_MAX_MS)
+    giveUp.unref()
+    void exit.then(() => {
+      clearTimeout(giveUp)
+      resolve()
+    })
+  })
 }
 
 export async function testUnscoredModels(onLine: (line: string) => void): Promise<{ models: string[]; resultsPath: string }> {
@@ -268,6 +287,11 @@ export async function testUnscoredModels(onLine: (line: string) => void): Promis
       }
     })
     runningTest = proc
+    const exit = new Promise<void>((done) => {
+      proc.once('close', () => done())
+      proc.once('error', () => done())
+    })
+    runningTestExit = exit
     // Étape 236 : un test de 1,5 à 3 jours sans surveillance. Sans ce blocage, la mise en veille de Windows le
     // suspendait en pleine génération — au réveil, une requête coupée passe pour un modèle figé ou un Ollama
     // arrêté. Le PC reste éveillé tant que le test tourne (l'écran, lui, peut s'éteindre), et seulement pendant.
@@ -292,11 +316,13 @@ export async function testUnscoredModels(onLine: (line: string) => void): Promis
     proc.on('error', (err) => {
       release()
       if (runningTest === proc) runningTest = null
+      if (runningTestExit === exit) runningTestExit = null
       reject(new Error(t('bench.testLaunchFailed', { error: err.message })))
     })
     proc.on('close', (code) => {
       release()
       if (runningTest === proc) runningTest = null
+      if (runningTestExit === exit) runningTestExit = null
       if (buffer.trim()) onLine(buffer)
       if (code === 0) resolve({ models, resultsPath })
       else reject(new Error(t('bench.testStopped', { code: code ?? '?' })))

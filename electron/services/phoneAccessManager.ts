@@ -67,10 +67,14 @@ export class PhoneAccessManager extends EventEmitter {
     this.tunnel.start(port)
   }
 
-  /** Coupe l'accès : plus aucune requête du téléphone n'atteint Jaris. Les téléphones restent appairés. */
+  /**
+   * Coupe l'accès : plus aucune requête du téléphone n'atteint Jaris. Les téléphones restent appairés. Ne se termine
+   * qu'une fois le tunnel vraiment sorti : « Déplacer » copie et efface son dossier juste après.
+   */
   async disable(): Promise<void> {
-    this.tunnel.stop()
+    const tunnelStopped = this.tunnel.stop()
     await this.server.close()
+    await tunnelStopped
   }
 
   /** Nouveau code, uniquement quand l'adresse est prête (sinon le téléphone n'aurait rien à ouvrir). */

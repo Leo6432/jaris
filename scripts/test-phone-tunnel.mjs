@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { EventEmitter } from 'node:events'
 import { tmpdir } from 'node:os'
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
@@ -12,7 +13,8 @@ import { loadPhoneModules } from './phone-test-loader.mjs'
  * du programme ne doit jamais finir ouverte dans le navigateur), et ne jamais laisser le tunnel tourner seul.
  */
 
-const { PhoneTunnel: RealPhoneTunnel, isTailscaleUrl } = loadPhoneModules().load('phoneTunnel')
+const phoneModules = loadPhoneModules()
+const { PhoneTunnel: RealPhoneTunnel, isTailscaleUrl } = phoneModules.load('phoneTunnel')
 // Le faux tunnel est un script Node lancé par Node lui-même : identique sous Linux et sur le runner Windows de
 // la CI (où un fichier avec « #! » ne s'exécute pas tout seul).
 const nodeSpawn = (bin, args, options) => spawn(process.execPath, [bin, ...args], options)
@@ -194,5 +196,65 @@ test('adresse donnée malgré une vérification qui échoue : l’avertissement 
   } finally {
     tunnel.stop()
     fake.cleanup()
+  }
+})
+
+// « Déplacer » coupe l'accès téléphone puis copie et efface son dossier (identité Tailscale, journal). Le tunnel y
+// écrit jusqu'à sa sortie, et sous Windows un fichier encore ouvert ne s'efface pas : l'arrêt doit attendre la
+// vraie sortie du programme, pas seulement la fermeture de son entrée.
+test('arrêter le tunnel attend que le programme soit vraiment sorti', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-tunnel-slow-'))
+  const path = join(dir, 'jaris-tunnel')
+  const lastWrite = join(dir, 'derniere-ecriture')
+  writeFileSync(
+    path,
+    `process.stdout.write(JSON.stringify({ event: 'preparing', text: 'en route' }) + '\\n')
+process.stdin.on('end', () => setTimeout(() => {
+  require('fs').writeFileSync(${JSON.stringify(lastWrite)}, 'état enregistré')
+  process.exit(0)
+}, 300))
+process.stdin.resume()
+`
+  )
+  const tunnel = new PhoneTunnel(path, dir)
+  try {
+    tunnel.start(4321)
+    await waitFor(tunnel, (s) => s.message === 'en route')
+    const stopped = tunnel.stop()
+    assert.equal(tunnel.state.state, 'off', 'l’écran passe à « arrêté » tout de suite')
+    await stopped
+    assert.ok(existsSync(lastWrite), 'stop() s’est terminé avant que le tunnel ait fini d’écrire et soit sorti')
+  } finally {
+    await tunnel.stop()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('couper l’accès téléphone attend l’arrêt du tunnel', async () => {
+  const { PhoneAccessManager } = phoneModules.load('phoneAccessManager')
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-phone-disable-'))
+  let releaseTunnel
+  const tunnel = Object.assign(new EventEmitter(), {
+    state: { state: 'ready', address: 'https://jaris.tail1234.ts.net' },
+    stop() {
+      this.state = { state: 'off' }
+      return new Promise((resolve) => {
+        releaseTunnel = resolve
+      })
+    }
+  })
+  const manager = new PhoneAccessManager({ tunnelBinary: '', tunnelStateDir: dir, devicesFile: join(dir, 'phone-devices.json'), pageDir: dir, actions: {}, tunnel })
+  try {
+    let finished = false
+    const disabled = manager.disable().then(() => {
+      finished = true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    assert.equal(finished, false, 'disable() ne doit pas rendre la main tant que le tunnel tourne encore')
+    releaseTunnel()
+    await disabled
+    assert.equal(finished, true)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
   }
 })

@@ -55,6 +55,9 @@ export function translateTunnelText(text: string): string {
   return text
 }
 
+/** Attente maximale de la sortie du tunnel après un arrêt : 3 s pour sortir seul, puis il est tué. */
+const STOP_WAIT_MAX_MS = 6000
+
 export class PhoneTunnel extends EventEmitter {
   private proc: TunnelProcess | null = null
   private current: TunnelState = { state: 'off' }
@@ -147,14 +150,36 @@ export class PhoneTunnel extends EventEmitter {
     })
   }
 
-  stop(): void {
+  /**
+   * Arrête le tunnel. L'état passe à « arrêté » tout de suite ; la promesse, elle, ne se résout qu'une fois le
+   * programme vraiment sorti (ou au bout de STOP_WAIT_MAX_MS) : il écrit son identité et son journal dans le dossier
+   * des données jusqu'à sa sortie, et « Déplacer » copie puis efface ce dossier juste après. Sous Windows, un fichier
+   * encore ouvert ne s'efface pas.
+   */
+  stop(): Promise<void> {
     const proc = this.proc
     this.proc = null
+    let exited: Promise<void> = Promise.resolve()
     if (proc) {
+      exited = new Promise<void>((resolve) => {
+        if (proc.exitCode !== null || proc.signalCode !== null) {
+          resolve()
+          return
+        }
+        const giveUp = setTimeout(resolve, STOP_WAIT_MAX_MS)
+        giveUp.unref()
+        const done = (): void => {
+          clearTimeout(giveUp)
+          resolve()
+        }
+        proc.once('exit', done)
+        proc.once('error', done)
+      })
       proc.stdin.end()
       setTimeout(() => proc.kill(), 3000).unref()
     }
     this.set({ state: 'off' })
+    return exited
   }
 
   /** Déconnecte ce PC du compte Tailscale (il faudra se reconnecter pour réactiver). */

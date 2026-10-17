@@ -2,7 +2,7 @@ import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import * as fsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as nodePath from 'node:path'
@@ -47,7 +47,7 @@ function transpile(path) {
  * Charge storageRoot.ts (qui s'exécute à son chargement, comme au vrai démarrage) puis dataLocation.ts, avec
  * un `app` simulé qui retient les appels à setPath.
  */
-function loadStorage(defaultUserData, { exe = '/opt/Jaris/Jaris.exe', isPackaged = false, platform = 'linux', dataModules = {} } = {}) {
+function loadStorage(defaultUserData, { exe = '/opt/Jaris/Jaris.exe', isPackaged = false, platform = 'linux', dataModules = {}, storageModules = {} } = {}) {
   const paths = { userData: defaultUserData, exe }
   const setPathCalls = []
   const app = {
@@ -69,7 +69,7 @@ function loadStorage(defaultUserData, { exe = '/opt/Jaris/Jaris.exe', isPackaged
     )
     return exports
   }
-  const storageRoot = load('../electron/services/storageRoot.ts', { electron: { app } })
+  const storageRoot = load('../electron/services/storageRoot.ts', { electron: { app }, ...storageModules })
   const dataLocation = load('../electron/services/dataLocation.ts', { electron: { app }, './storageRoot': storageRoot, ...dataModules })
   return { storageRoot, dataLocation, setPathCalls, app }
 }
@@ -451,6 +451,118 @@ test('installé sur D (ou ancien repère) : la clé de chiffrement de l’ancien
   rmSync(root, { recursive: true, force: true })
 })
 
+test('disque débranché puis rebranché : le jeton GitHub et le téléphone de D ne sont jamais écrasés par ceux créés sur C', async () => {
+  const { userData, root } = setupUserData()
+  const before = startJaris(userData)
+  const phoneToken = await fillForgottenData(before)
+  await before.github.writeConnectionRecord({ connectedAt: 1, login: 'leo', memoryOnly: false, rejectedAt: null })
+  const newRoot = join(root, 'D', 'Jaris')
+  await moveData(before, null, newRoot)
+  await startJaris(userData).storageRoot.cleanupStaleChromiumData()
+
+  // Disque débranché : Jaris démarre sur C (dossier de Chromium neuf, donc AUTRE clé), Léo s'y reconnecte à GitHub,
+  // et l'accès téléphone s'y crée une nouvelle identité avec un nouveau téléphone.
+  const unplugged = `${newRoot}-debranche`
+  renameSync(newRoot, unplugged)
+  const onC = startJaris(userData)
+  assert.equal(onC.dataRoot, userData, 'disque absent : Jaris tourne sur l’emplacement par défaut')
+  assert.equal(await onC.github.saveGithubToken('gho_jeton_cree_sur_C'), true)
+  await onC.github.writeConnectionRecord({ connectedAt: 2, login: 'compte-sur-C', memoryOnly: false, rejectedAt: null })
+  mkdirSync(join(userData, 'phone-tunnel'), { recursive: true })
+  writeFileSync(join(userData, 'phone-tunnel', 'tailscaled.state'), '{"_machinekey":"mkey:identite-neuve"}')
+  await onC.devices.add('Téléphone ajouté sur C')
+
+  // Disque rebranché.
+  renameSync(unplugged, newRoot)
+  const after = startJaris(userData)
+  await after.storageRoot.cleanupStaleChromiumData()
+  assert.equal(after.dataRoot, join(newRoot, 'jaris-data'))
+  await assertForgottenDataReadable(after, phoneToken)
+  assert.equal((await after.github.readConnectionRecord())?.login, 'leo', 'la trace décrit le jeton gardé')
+  assert.deepEqual((await after.devices.list()).map((d) => d.name), ['iPhone de Léo'])
+  assert.deepEqual(readdirSync(userData), ['storage-location.json'], 'les copies laissées sur C sont effacées')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('mise à jour après une session disque débranché : le jeton du dossier de Chromium de la racine passe avant celui de C', async () => {
+  const { userData, root } = setupUserData()
+  const rootA = join(root, 'D', 'Jaris-data')
+  const electronA = join(rootA, 'electron')
+  mkdirSync(electronA, { recursive: true })
+  writeFileSync(join(userData, 'storage-location.json'), JSON.stringify({ root: rootA }))
+  // Version d'avant : le jeton de D rangé dans le dossier de Chromium de D, chiffré avec SA clé…
+  writeFileSync(join(electronA, 'github-token.bin'), chromiumSafeStorage({ getPath: () => electronA }).encryptString(GITHUB_TOKEN))
+  // … et, laissé sur C par une session disque débranché, un autre jeton chiffré avec la clé de C.
+  writeFileSync(join(userData, 'github-token.bin'), chromiumSafeStorage({ getPath: () => userData }).encryptString('gho_jeton_cree_sur_C'))
+
+  const jaris = startJaris(userData)
+  await jaris.storageRoot.cleanupStaleChromiumData()
+  assert.equal(await jaris.github.loadGithubToken(), GITHUB_TOKEN, 'le jeton lisible avec la clé de D doit être gardé')
+  assert.deepEqual(readdirSync(userData), ['storage-location.json'])
+  rmSync(root, { recursive: true, force: true })
+})
+
+/** Faux `fs` dont la copie de `source` s'arrête en route (disque plein) après avoir écrit un morceau. */
+function fsWithInterruptedCopy(source) {
+  const realFs = nodeRequire('node:fs')
+  return {
+    ...realFs,
+    renameSync: (from, to) => {
+      if (from === source) throw Object.assign(new Error('EPERM: renommage refusé'), { code: 'EPERM' })
+      return realFs.renameSync(from, to)
+    },
+    cpSync: (from, to, options) => {
+      if (from !== source) return realFs.cpSync(from, to, options)
+      realFs.mkdirSync(to, { recursive: true })
+      realFs.writeFileSync(join(to, 'certs-a-moitie'), 'x')
+      throw Object.assign(new Error('ENOSPC: plus de place'), { code: 'ENOSPC' })
+    }
+  }
+}
+
+test('rapatriement interrompu en route : aucune copie partielle n’est prise pour la bonne, le démarrage suivant reprend tout', () => {
+  const { userData, root } = setupUserData()
+  const rootA = join(root, 'D', 'Jaris-data')
+  const legacy = join(rootA, 'electron', 'phone-tunnel')
+  mkdirSync(join(legacy, 'certs'), { recursive: true })
+  writeFileSync(join(legacy, 'tailscaled.state'), '{"_machinekey":"mkey:pc-de-leo"}')
+  writeFileSync(join(legacy, 'certs', 'jaris.ts.net.crt'), 'certificat')
+  writeFileSync(join(userData, 'storage-location.json'), JSON.stringify({ root: rootA }))
+  const dataDir = join(rootA, 'jaris-data')
+
+  loadStorage(userData, { storageModules: { fs: fsWithInterruptedCopy(legacy) } })
+  assert.ok(!existsSync(join(dataDir, 'phone-tunnel')), 'une copie coupée ne doit rien laisser : elle serait sautée pour toujours')
+  assert.ok(!existsSync(join(dataDir, 'phone-tunnel.jaris-copie')))
+  assert.ok(existsSync(join(legacy, 'tailscaled.state')), 'l’original est intact')
+
+  const { dataLocation } = loadStorage(userData)
+  assert.equal(readFileSync(join(dataLocation.getDataRoot(), 'phone-tunnel', 'tailscaled.state'), 'utf8'), '{"_machinekey":"mkey:pc-de-leo"}')
+  assert.equal(readFileSync(join(dataLocation.getDataRoot(), 'phone-tunnel', 'certs', 'jaris.ts.net.crt'), 'utf8'), 'certificat')
+  assert.ok(!existsSync(legacy))
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('installé sur D, copie depuis C interrompue : l’identité du téléphone n’est jamais laissée à moitié à destination', () => {
+  const { userData, root } = setupUserData()
+  const source = join(userData, 'phone-tunnel')
+  mkdirSync(join(source, 'certs'), { recursive: true })
+  writeFileSync(join(source, 'tailscaled.state'), '{"_machinekey":"mkey:pc-de-leo"}')
+  writeFileSync(join(source, 'certs', 'jaris.ts.net.crt'), 'certificat')
+  const chosen = join(root, 'D', 'Jaris-data')
+  mkdirSync(chosen, { recursive: true })
+  writeFileSync(join(userData, 'storage-location.json'), JSON.stringify({ root: chosen }))
+
+  const first = loadStorage(userData, { storageModules: { fs: fsWithInterruptedCopy(source) } })
+  assert.equal(first.storageRoot.getStorageRoot(), null, 'copie ratée : Jaris démarre sur l’emplacement par défaut')
+  assert.ok(!existsSync(join(chosen, 'jaris-data', 'phone-tunnel')), 'rien de partiel à destination')
+  assert.ok(existsSync(join(source, 'tailscaled.state')))
+
+  const { dataLocation } = loadStorage(userData)
+  assert.equal(readFileSync(join(dataLocation.getDataRoot(), 'phone-tunnel', 'certs', 'jaris.ts.net.crt'), 'utf8'), 'certificat')
+  assert.ok(!existsSync(source))
+  rmSync(root, { recursive: true, force: true })
+})
+
 test('rien n’est relu depuis un dossier qui va être effacé : jeton et identité du téléphone lus avec les données', () => {
   const github = readFileSync(new URL('../electron/services/github.ts', import.meta.url), 'utf8')
   const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
@@ -468,28 +580,88 @@ test('chaque fichier que Jaris écrit dans ses données suit « Déplacer », sa
   // Recopié depuis le programme à chaque démarrage, conteneur recréé s'il pointe ailleurs (searxngHome.ts).
   const rebuiltAlone = new Set(['searxng-docker'])
 
+  // electron/ ET shared/ : un nom de fichier partagé avec l'écran vit dans shared/ (ex. code-conversations.json).
+  const repo = fileURLToPath(new URL('..', import.meta.url))
+  const rel = (file) => nodePath.relative(repo, file).split(nodePath.sep).join('/')
   const sources = []
   const walk = (dir) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name)
       if (entry.isDirectory()) walk(full)
-      else if (entry.name.endsWith('.ts')) sources.push([full, readFileSync(full, 'utf8')])
+      else if (entry.name.endsWith('.ts')) sources.push({ file: rel(full), ast: ts.createSourceFile(full, readFileSync(full, 'utf8'), ts.ScriptTarget.ES2022, true) })
     }
   }
-  walk(fileURLToPath(new URL('../electron', import.meta.url)))
-  const constants = new Map()
-  for (const [, text] of sources) {
-    for (const m of text.matchAll(/export const ([A-Z_]+) = '([^']+)'/g)) constants.set(m[1], m[2])
+  walk(join(repo, 'electron'))
+  walk(join(repo, 'shared'))
+  const visit = (node, fn) => {
+    fn(node)
+    ts.forEachChild(node, (child) => visit(child, fn))
   }
+
+  // Constantes texte : celles d'un fichier valent pour lui, les exportées pour tous.
+  const exported = new Map()
+  const local = new Map()
+  for (const { file, ast } of sources) {
+    const mine = new Map()
+    visit(ast, (node) => {
+      if (!ts.isVariableDeclaration(node) || !ts.isIdentifier(node.name) || !node.initializer || !ts.isStringLiteral(node.initializer)) return
+      if (!(node.parent.flags & ts.NodeFlags.Const)) return
+      mine.set(node.name.text, node.initializer.text)
+      const statement = node.parent.parent
+      if (ts.isVariableStatement(statement) && statement.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) exported.set(node.name.text, node.initializer.text)
+    })
+    local.set(file, mine)
+  }
+
+  // Lu dans l'ARBRE du code (pas dans le texte) : un commentaire qui cite getDataRoot() ne compte pas, et un usage
+  // indirect (variable, paramètre par défaut, fonction passée ailleurs) ne passe plus inaperçu.
   const written = []
-  for (const [file, text] of sources) {
-    for (const m of text.matchAll(/join\(getDataRoot\(\), (?:'([^']+)'|([A-Z_]+))/g)) {
-      const name = m[1] ?? constants.get(m[2])
-      assert.ok(name, `${file} : nom de fichier introuvable pour ${m[0]}`)
+  const indirect = new Map()
+  for (const { file, ast } of sources) {
+    visit(ast, (node) => {
+      if (!ts.isIdentifier(node) || node.text !== 'getDataRoot') return
+      const parent = node.parent
+      if (ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent) || (ts.isFunctionDeclaration(parent) && parent.name === node)) return
+      const call = ts.isCallExpression(parent) && parent.expression === node && parent.arguments.length === 0 ? parent : null
+      const join_ = call && ts.isCallExpression(call.parent) && ts.isIdentifier(call.parent.expression) && call.parent.expression.text === 'join' && call.parent.arguments[0] === call ? call.parent : null
+      if (!join_) {
+        indirect.set(file, (indirect.get(file) ?? 0) + 1)
+        return
+      }
+      const arg = join_.arguments[1]
+      const name = arg && ts.isStringLiteral(arg) ? arg.text : arg && ts.isIdentifier(arg) ? local.get(file).get(arg.text) ?? exported.get(arg.text) : undefined
+      assert.ok(name, `${file} : nom de fichier introuvable pour ${join_.getText()}`)
+      written.push(name)
+    })
+  }
+
+  // Ceux qui passent par getDataRoot() autrement que join(getDataRoot(), 'nom'). Un nouveau venu fait échouer ce test :
+  // l'ajouter ici avec ce qu'il écrit, et vérifier que ces noms sont dans OWNED_ENTRIES.
+  const known = {
+    // copyDataTo lit le dossier entier pour le copier : n'y écrit rien à lui.
+    'electron/services/dataLocation.ts': { uses: 1, writes: [] },
+    // Vérifie, mesure et affiche le dossier entier pendant « Déplacer » : n'y écrit rien.
+    'electron/services/relocation.ts': { uses: 3, writes: [] },
+    // getJournalPath(root = getDataRoot()) puis join(root, 'journal-demandes.txt').
+    'electron/services/requestJournal.ts': { uses: 1, writes: ['journal-demandes.txt'] }
+  }
+  for (const [file, uses] of indirect) {
+    assert.ok(
+      known[file],
+      `${file} utilise getDataRoot() autrement que join(getDataRoot(), 'nom') : ce qu'il y écrit échappe à ce contrôle — l'ajouter à la liste « known » avec ses fichiers`
+    )
+    assert.equal(uses, known[file].uses, `${file} : usages indirects de getDataRoot() changés, revérifier ce qu'il écrit dans les données`)
+  }
+  for (const [file, { writes }] of Object.entries(known)) {
+    assert.ok(indirect.has(file), `${file} ne passe plus par getDataRoot() indirectement : le retirer de « known »`)
+    const text = readFileSync(join(repo, file), 'utf8')
+    for (const name of writes) {
+      assert.ok(text.includes(`'${name}'`), `${file} n'écrit plus « ${name} » : mettre « known » à jour`)
       written.push(name)
     }
   }
-  for (const name of ['github-token.bin', 'phone-tunnel', 'phone-devices.json', 'benchmark-nouveaux-modeles.md', 'searxng-docker']) {
+
+  for (const name of ['github-token.bin', 'phone-tunnel', 'phone-devices.json', 'benchmark-nouveaux-modeles.md', 'searxng-docker', 'journal-demandes.txt']) {
     assert.ok(written.includes(name), `${name} devrait être trouvé par ce contrôle (sinon le contrôle lui-même ne voit plus rien)`)
   }
   for (const name of written) {
@@ -506,12 +678,24 @@ test('chaque fichier que Jaris écrit dans ses données suit « Déplacer », sa
   }
 })
 
+test('les entrées liées à une clé ou à une identité ne sont jamais écrasées au démarrage, et suivent toutes « Déplacer »', () => {
+  const { userData, root } = setupUserData()
+  const { storageRoot } = loadStorage(userData)
+  rmSync(root, { recursive: true, force: true })
+  for (const name of ['github-token.bin', 'github-connection.json', 'phone-tunnel', 'phone-devices.json']) {
+    assert.ok(storageRoot.KEPT_AT_DESTINATION_ENTRIES.includes(name), `${name} doit être protégé`)
+  }
+  for (const name of storageRoot.KEPT_AT_DESTINATION_ENTRIES) assert.ok(storageRoot.OWNED_ENTRIES.includes(name), `${name} doit aussi suivre « Déplacer »`)
+})
+
 test('« Déplacer » arrête d’abord ce qui écrit dans les données : accès téléphone et test de modèles', () => {
   const source = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
   const handlerAt = source.indexOf('IPC_CHANNELS.chooseModelsLocation, async')
   const handler = source.slice(handlerAt, source.indexOf('IPC_CHANNELS.getRuntimeSetupStatus', handlerAt))
   const moveAt = handler.indexOf('relocateEverything(')
-  for (const stop of ['stopModelTest()', 'phoneAccess?.disable()']) {
+  // ATTENDUS (await) : un programme encore en train de sortir garde ses fichiers ouverts, et Windows refuse alors de
+  // les effacer de l'ancien dossier.
+  for (const stop of ['await stopModelTest()', 'await phoneAccess?.disable()']) {
     const at = handler.indexOf(stop)
     assert.ok(at !== -1 && at < moveAt, `${stop} doit venir avant relocateEverything`)
   }

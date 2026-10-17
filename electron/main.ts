@@ -1514,8 +1514,9 @@ app.whenReady().then(async () => {
     ttsClient.stop()
     await stopOllamaCompletely()
     // Même raison pour ce qui écrit dans les données pendant la copie : l'accès téléphone (identité Tailscale,
-    // téléphones appairés, messages reçus) et un test de modèles en cours (il reprendra au prochain clic).
-    stopModelTest()
+    // téléphones appairés, messages reçus) et un test de modèles en cours (il reprendra au prochain clic). Attendus
+    // jusqu'à leur sortie : sous Windows, un fichier encore ouvert ne s'efface pas de l'ancien dossier.
+    await stopModelTest()
     await phoneAccess?.disable().catch(() => {})
 
     // Étape 143, Léo : « ça doit tout déplacer, jamais une partie » — programme, conversations, Ollama,

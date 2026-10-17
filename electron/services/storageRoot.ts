@@ -91,6 +91,19 @@ export const OWNED_ENTRIES = [
 export const LEGACY_ELECTRON_ENTRIES = ['github-token.bin', PHONE_TUNNEL_DIR]
 
 /**
+ * Entrées liées à une CLÉ ou à une IDENTITÉ, jamais écrasées quand le démarrage rapatrie le dossier par défaut vers
+ * une racine qui les a déjà (moveOwnedEntriesSync) :
+ * - le jeton GitHub ne se relit qu'avec la clé de chiffrement du dossier de Chromium de SA racine
+ *   (CHROMIUM_KEY_FILE), et sa trace (`github-connection.json`) décrit CE jeton ;
+ * - l'identité Tailscale du téléphone et la liste des téléphones appairés à CETTE identité vont ensemble.
+ * Cas réel : racine sur D, Jaris démarré disque débranché (il tourne alors sur C), reconnexion à GitHub sur C, disque
+ * rebranché. Écrasé, le bon jeton de D était remplacé par celui de C, chiffré avec une autre clé : illisible, Léo
+ * était déconnecté de GitHub (et l'identité du téléphone remplacée par une neuve). La copie restée sur C est effacée
+ * avec le reste du dossier par défaut (cleanupStaleChromiumData).
+ */
+export const KEPT_AT_DESTINATION_ENTRIES = [...LEGACY_ELECTRON_ENTRIES, 'github-connection.json', 'phone-devices.json']
+
+/**
  * Fichier de Chromium qui garde la clé de chiffrement de Windows (`os_crypt.encrypted_key`, protégée par DPAPI) :
  * c'est avec elle que `safeStorage` chiffre le jeton GitHub. Un dossier de Chromium neuf en crée une NOUVELLE, et
  * le jeton copié devient illisible : la clé doit suivre chaque déplacement du dossier de Chromium.
@@ -153,10 +166,38 @@ export function writeMarker(userData: string, root: string, staleElectronDir?: s
   rmSync(join(userData, LEGACY_MARKER_NAME), { force: true })
 }
 
+/** Suffixe du nom temporaire d'une copie en cours (copyWholeSync). */
+const PARTIAL_COPY_SUFFIX = '.jaris-copie'
+
+/**
+ * Copie `source` vers `dest` (absent) sans JAMAIS laisser `dest` à moitié écrit : la copie se fait sous un nom
+ * temporaire voisin, puis prend son vrai nom d'un seul coup (renommage dans le même dossier). Sur un échec en route
+ * (fichier verrouillé, disque plein, coupure de courant), `dest` n'existe toujours pas : la tentative suivante repart
+ * de l'original au lieu de prendre une copie incomplète pour la bonne et de ne plus jamais y toucher.
+ */
+function copyWholeSync(source: string, dest: string): void {
+  const partial = `${dest}${PARTIAL_COPY_SUFFIX}`
+  rmSync(partial, { recursive: true, force: true })
+  try {
+    cpSync(source, partial, { recursive: true })
+    renameSync(partial, dest)
+  } catch (err) {
+    try {
+      rmSync(partial, { recursive: true, force: true })
+    } catch {
+      // effacée au prochain essai (début de cette fonction)
+    }
+    throw err
+  }
+}
+
 /**
  * Copie les données de Jaris de `from` vers `to` puis efface les originaux — dans CET ordre, et chaque
  * original n'est effacé qu'une fois TOUTES les copies réussies : une erreur en route laisse les originaux
  * intacts (l'exception remonte). Une source absente est simplement sautée (installation neuve).
+ *
+ * Une entrée de KEPT_AT_DESTINATION_ENTRIES déjà présente dans `to` n'est jamais écrasée : l'original est laissé
+ * (effacé ensuite avec le reste du dossier par défaut), et elle n'est copiée, d'un seul tenant, que si `to` ne l'a pas.
  */
 export function moveOwnedEntriesSync(from: string, to: string): void {
   if (from === to) return
@@ -165,7 +206,13 @@ export function moveOwnedEntriesSync(from: string, to: string): void {
   for (const entry of OWNED_ENTRIES) {
     const source = join(from, entry)
     if (!existsSync(source)) continue
-    cpSync(source, join(to, entry), { recursive: true, force: true })
+    const dest = join(to, entry)
+    if (KEPT_AT_DESTINATION_ENTRIES.includes(entry)) {
+      if (existsSync(dest)) continue
+      copyWholeSync(source, dest)
+    } else {
+      cpSync(source, dest, { recursive: true, force: true })
+    }
     copied.push(source)
   }
   for (const source of copied) rmSync(source, { recursive: true, force: true })
@@ -193,9 +240,15 @@ export function adoptLegacyEntriesSync(electronDir: string, dataDir: string): vo
       try {
         renameSync(source, dest)
       } catch {
-        // Autre disque, ou renommage refusé : copie d'abord, original effacé seulement ensuite.
-        cpSync(source, dest, { recursive: true })
-        rmSync(source, { recursive: true, force: true })
+        // Renommage refusé : copie d'abord, d'un seul tenant (une copie interrompue ne laisse rien à `dest`), et
+        // original effacé seulement ensuite.
+        copyWholeSync(source, dest)
+        try {
+          rmSync(source, { recursive: true, force: true })
+        } catch (err) {
+          // La copie est complète et c'est elle qui sert désormais : un reste de l'original n'est plus jamais lu.
+          console.error(`[jaris] ${entry} copié avec les données, ancien exemplaire pas entièrement effacé :`, err)
+        }
       }
     } catch (err) {
       console.error(`[jaris] ${entry} n'a pas pu rejoindre les données, gardé à son ancien emplacement :`, err)
@@ -241,12 +294,15 @@ function bootstrap(): string | null {
       if (!isNewAutoRoot) return null
       mkdirSync(root, { recursive: true })
     }
+    const electronDir = join(root, ELECTRON_SUBDIR)
+    const staleElectronDir = readStaleElectronDir(DEFAULT_USER_DATA)
+    // D'abord ce que les versions d'avant rangeaient dans le dossier de Chromium de CETTE racine : chiffré avec SA
+    // clé, c'est lui le bon jeton. Rapatrié après le dossier par défaut, il aurait été sauté au profit d'un jeton
+    // laissé sur C par une session disque débranché, illisible avec cette clé.
+    adoptLegacyEntriesSync(electronDir, join(root, DATA_SUBDIR))
     // Données encore dans le dossier par défaut (première installation sur D d'un Jaris déjà utilisé, ou
     // ancien repère) : rapatriées AVANT que le moindre store ne calcule son chemin.
     moveOwnedEntriesSync(DEFAULT_USER_DATA, join(root, DATA_SUBDIR))
-    const electronDir = join(root, ELECTRON_SUBDIR)
-    const staleElectronDir = readStaleElectronDir(DEFAULT_USER_DATA)
-    adoptLegacyEntriesSync(electronDir, join(root, DATA_SUBDIR))
     // Le dossier de Chromium de cette racine n'a pas encore de clé (installation sur D d'un Jaris déjà utilisé) :
     // celle de l'ancien dossier, AVANT que Chromium n'en crée une nouvelle — sinon le jeton GitHub rapatrié ci-dessus
     // ne se relirait plus. Les deux anciens dossiers sont encore là : ils ne sont effacés qu'après `ready`.
