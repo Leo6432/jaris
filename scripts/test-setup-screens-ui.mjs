@@ -215,7 +215,7 @@ for (const colorScheme of ['light', 'dark']) {
     await withScreen('capacity', { colorScheme }, async (page) => {
       assert.deepEqual(await lowContrastTexts(page), [], 'carte des modèles (badges compris)')
       await page.click('.capacity-scan > button')
-      await page.evaluate(() => window.__pull({ model: 'qwen3.5:4b', completed: 1.2 * 1024 ** 3, total: 3.4 * 1024 ** 3 }))
+      await page.evaluate(() => window.__pull({ model: 'qwen3.5:4b', completed: 1.2 * 1024 ** 3, total: 3.4 * 1024 ** 3, percent: 35, nextFile: false }))
       await page.waitForSelector('[role="progressbar"][aria-valuenow]')
       assert.deepEqual(await lowContrastTexts(page), [], 'téléchargement')
       await page.evaluate(() =>
@@ -244,7 +244,7 @@ test('téléchargement : une vraie barre qui suit le pourcentage, avec la taille
         return bar.firstElementChild.getBoundingClientRect().width / bar.getBoundingClientRect().width
       })
 
-    await page.evaluate(() => window.__pull({ model: 'qwen3.5:4b', completed: 0.35 * 5.4 * 1024 ** 3, total: 5.4 * 1024 ** 3 }))
+    await page.evaluate(() => window.__pull({ model: 'qwen3.5:4b', completed: 0.35 * 5.4 * 1024 ** 3, total: 5.4 * 1024 ** 3, percent: 35, nextFile: false }))
     await page.waitForFunction(() => document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow') === '35')
     await page.waitForTimeout(400) // la largeur de la barre est animée (0,3 s)
     assert.ok(Math.abs((await fillRatio()) - 0.35) < 0.02, `barre à ${await fillRatio()}`)
@@ -254,10 +254,21 @@ test('téléchargement : une vraie barre qui suit le pourcentage, avec la taille
     assert.equal((await page.textContent('.capacity-scan__progress-size')).trim(), '1,9 Go sur 5,4 Go')
     assert.equal(await page.$('.capacity-scan__spinner'), null, 'plus de rond qui tourne')
 
-    await page.evaluate(() => window.__pull({ model: 'qwen3.5:4b', completed: 0.8 * 5.4 * 1024 ** 3, total: 5.4 * 1024 ** 3 }))
+    await page.evaluate(() => window.__pull({ model: 'qwen3.5:4b', completed: 0.8 * 5.4 * 1024 ** 3, total: 5.4 * 1024 ** 3, percent: 80, nextFile: false }))
     await page.waitForTimeout(400)
     assert.ok(Math.abs((await fillRatio()) - 0.8) < 0.02, `barre à ${await fillRatio()}`)
     assert.equal((await page.textContent('.capacity-scan__progress-size')).trim(), '4,3 Go sur 5,4 Go')
+
+    // Un second gros fichier du même modèle (le lecteur d'images de MAI-UI 8B) : le pourcentage affiché vient du processus
+    // principal et ne recule pas ; la ligne le dit, et la taille, elle, est la vraie (le total a grandi).
+    await page.evaluate(() =>
+      window.__pull({ model: 'hf.co/mradermacher/MAI-UI-8B-GGUF:Q4_K_M', completed: 5.1 * 1024 ** 3, total: 5.8 * 1024 ** 3, percent: 99, nextFile: true })
+    )
+    await page.waitForFunction(() => document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow') === '99')
+    await page.waitForTimeout(400)
+    assert.ok(Math.abs((await fillRatio()) - 0.99) < 0.02, `barre à ${await fillRatio()}`)
+    assert.equal((await page.textContent('.capacity-scan__progress-step')).trim(), 'Téléchargement du modèle MAI-UI-8B (Q4_K_M) : fichier suivant…')
+    assert.equal((await page.textContent('.capacity-scan__progress-size')).trim(), '5,1 Go sur 5,8 Go')
 
     // Fin de ce téléchargement : plus de pourcentage ni de taille, la barre fait un va-et-vient pendant la suite.
     await page.evaluate(() => {

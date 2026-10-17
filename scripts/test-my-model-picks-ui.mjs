@@ -27,6 +27,10 @@ const entryPath = join(projectRoot, 'tmp-my-picks-entry.tsx')
 const ENTRY = `
 import { createRoot } from 'react-dom/client'
 import MyModelPicks from './src/components/MyModelPicks'
+import { setLanguage } from './shared/i18n'
+
+// Langue de l'écran (français par défaut) : les libellés des rôles n'ont pas la même longueur partout.
+if (window.__lang) setLanguage(window.__lang.code, window.__lang.messages)
 
 const e = (model, tool, ai, aiSpeed, demands = null) => ({
   model, vramGb: 8, usedIn: [],
@@ -73,7 +77,7 @@ function buildPage() {
   return pageHtml
 }
 
-async function withPreview(run, width = 760, installCheck = undefined, pilot = undefined) {
+async function withPreview(run, width = 760, installCheck = undefined, pilot = undefined, lang = 'fr') {
   const html = buildPage()
   const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined })
   try {
@@ -81,9 +85,11 @@ async function withPreview(run, width = 760, installCheck = undefined, pilot = u
     await page.setViewportSize({ width, height: 900 })
     // Données de vérification propres à ce test, posées AVANT le script de la page (setContent n'exécute pas
     // les scripts d'initialisation de Playwright).
+    const messages = lang === 'fr' ? {} : JSON.parse(readFileSync(join(projectRoot, `shared/i18n/locales/${lang}.json`), 'utf8'))
     const injected =
       (installCheck === undefined ? '' : `<script>window.__installCheck = ${JSON.stringify(installCheck)}</script>`) +
-      (pilot === undefined ? '' : `<script>window.__pilot = ${JSON.stringify(pilot)}</script>`)
+      (pilot === undefined ? '' : `<script>window.__pilot = ${JSON.stringify(pilot)}</script>`) +
+      (lang === 'fr' ? '' : `<script>window.__lang = ${JSON.stringify({ code: lang, messages }).replace(/</g, '\\u003c')}</script>`)
     await page.setContent(html.replace('<div id="root"></div>', `${injected}<div id="root"></div>`))
     await page.waitForSelector('.capacity-scan__tier-table')
     await run(page)
@@ -238,6 +244,68 @@ test('Faible, Moyen et Élevé montrent les deux scores, chacun avec son nom ; V
     await withPreview(async (page) => {
       const [card, table] = await page.evaluate(() => [document.querySelector('.capacity-scan__tier').clientWidth, document.querySelector('.capacity-scan__tier-table').scrollWidth])
       assert.ok(table <= card, `à ${width} px, le tableau (${table} px) dépasse de la carte (${card} px)`)
+    }, width)
+  }
+})
+
+/** Pour chaque ligne de rôle : le libellé (nombre de lignes à l'écran, coupé ou non) et la position du nom du modèle. */
+const roleLayout = (page) =>
+  page.evaluate(() => {
+    const card = document.querySelector('.capacity-scan__tier').getBoundingClientRect()
+    return [...document.querySelectorAll('.capacity-scan__tier-table tr:not(.capacity-scan__tier-upgrade)')].map((tr) => {
+      const slot = tr.querySelector('td.capacity-scan__tier-slot')
+      const range = document.createRange()
+      range.selectNodeContents(slot)
+      const lineTops = new Set([...range.getClientRects()].map((r) => Math.round(r.top)))
+      const name = tr.querySelector('td.capacity-scan__tier-model').getBoundingClientRect()
+      return { label: slot.textContent, lines: lineTops.size, slotRight: slot.getBoundingClientRect().right, nameLeft: Math.round(name.left), nameRight: name.right, cardRight: card.right }
+    })
+  })
+
+// Relecteur, après la carte sur deux lignes par rôle : la marge fixe du rôle (8,5em) coupait « Bildschirmsteuer / ung »
+// au milieu du mot en allemand. Le rôle prend maintenant la largeur de son plus long libellé, sur UNE ligne.
+for (const [lang, longest] of [['de', 'Bildschirmsteuerung'], ['hu', 'Képernyővezérlés'], ['it', 'Controllo dello schermo'], ['fr', "Pilotage d'écran"]]) {
+  test(`${lang} : « ${longest} » et chaque rôle tiennent sur une ligne, les noms alignés en colonne, rien hors de la carte`, options, async () => {
+    for (const width of [760, 420]) {
+      await withPreview(
+        async (page) => {
+          const rows = await roleLayout(page)
+          assert.ok(rows.some((row) => row.label === longest), `libellé attendu : ${JSON.stringify(rows.map((r) => r.label))}`)
+          for (const row of rows) {
+            assert.equal(row.lines, 1, `à ${width} px, « ${row.label} » est coupé sur ${row.lines} lignes`)
+            assert.ok(row.slotRight <= row.nameLeft + 0.5, `à ${width} px, « ${row.label} » chevauche le nom du modèle`)
+            assert.ok(row.nameRight <= row.cardRight + 0.5, `à ${width} px, le nom de « ${row.label} » dépasse de la carte`)
+          }
+          assert.equal(new Set(rows.map((row) => row.nameLeft)).size, 1, `à ${width} px, les noms ne commencent pas tous au même endroit : ${rows.map((r) => r.nameLeft)}`)
+        },
+        width,
+        undefined,
+        { model: 'hf.co/mradermacher/MAI-UI-8B-GGUF:Q4_K_M', reason: null, installed: true },
+        lang
+      )
+    }
+  })
+}
+
+// Relecteurs : sur deux lignes par rôle, un « — » n'est plus sous un titre de colonne et ne veut plus rien dire
+// (« – —  Code 5/5 »). Une vitesse ou une intelligence non publiée disparaît ; les vraies valeurs restent.
+test('carte sur deux lignes par rôle : aucun « — » orphelin, les valeurs publiées restent', options, async () => {
+  for (const width of [760, 560]) {
+    await withPreview(async (page) => {
+      const visible = await page.$$eval('.capacity-scan__tier-table td', (tds) =>
+        tds.filter((td) => td.getClientRects().length > 0).map((td) => td.textContent.trim())
+      )
+      assert.ok(!visible.includes('—'), `à ${width} px, un « — » seul reste visible : ${JSON.stringify(visible)}`)
+      for (const value of ['Intelligence 10,8', '22 tok/s', 'Intelligence 13,1', '109 tok/s', 'Intelligence 7,0']) {
+        assert.ok(visible.includes(value), `à ${width} px, « ${value} » a disparu`)
+      }
+      // Code : ni vitesse ni intelligence publiées, mais son score reste.
+      const code = await page.$$eval('.capacity-scan__tier-table tr', (trs) =>
+        trs
+          .filter((tr) => tr.querySelector('.capacity-scan__tier-slot')?.textContent === 'Code')
+          .map((tr) => [...tr.querySelectorAll('td')].filter((td) => td.getClientRects().length > 0).map((td) => td.textContent.trim()))
+      )
+      assert.deepEqual(JSON.parse(JSON.stringify(code)), [['Code', 'qwen2.5-coder:14b', 'Code 5/5']])
     }, width)
   }
 })

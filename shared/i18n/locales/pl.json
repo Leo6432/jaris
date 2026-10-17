@@ -851,6 +851,7 @@
   "ollama.pull.httpError": "Pobieranie modelu {model} nie powiodło się (Ollama odpowiedziała {status})",
   "ollama.pull.failed": "Pobieranie modelu {model} nie powiodło się: {error}",
   "ollama.pull.progress": "Pobieranie modelu {model}… {percent}%",
+  "ollama.pull.nextFile": "Pobieranie modelu {model}: następny plik…",
   "ollama.delete.failed": "Usunięcie modelu {model} nie powiodło się (Ollama odpowiedziała {status})",
   "chat.readingImage": "Czytanie obrazu…",
   "chat.gpuSafety": "Ochrona termiczna GPU: {message}",

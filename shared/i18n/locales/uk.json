@@ -851,6 +851,7 @@
   "ollama.pull.httpError": "Не вдалося завантажити {model} (Ollama відповіла {status})",
   "ollama.pull.failed": "Не вдалося завантажити {model}: {error}",
   "ollama.pull.progress": "Завантаження моделі {model}… {percent}%",
+  "ollama.pull.nextFile": "Завантаження моделі {model}: наступний файл…",
   "ollama.delete.failed": "Не вдалося видалити {model} (Ollama відповіла {status})",
   "chat.readingImage": "Читання зображення…",
   "chat.gpuSafety": "Теплове захищення GPU: {message}",

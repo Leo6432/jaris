@@ -819,6 +819,7 @@ export const fr = {
   "ollama.pull.httpError": "Échec du téléchargement de {model} (Ollama a répondu {status})",
   "ollama.pull.failed": "Échec du téléchargement de {model} : {error}",
   "ollama.pull.progress": "Téléchargement du modèle {model}… {percent}%",
+  "ollama.pull.nextFile": "Téléchargement du modèle {model} : fichier suivant…",
   "ollama.delete.failed": "Échec de la suppression de {model} (Ollama a répondu {status})",
   "chat.readingImage": "Lecture de l'image…",
   "chat.gpuSafety": "Sécurité thermique GPU : {message}",

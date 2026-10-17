@@ -809,6 +809,7 @@
   "ollama.pull.httpError": "Nedladdningen av {model} misslyckades (Ollama svarade {status})",
   "ollama.pull.failed": "Nedladdningen av {model} misslyckades: {error}",
   "ollama.pull.progress": "Laddar ner modellen {model}… {percent} %",
+  "ollama.pull.nextFile": "Laddar ner modellen {model}: nästa fil…",
   "ollama.delete.failed": "Raderingen av {model} misslyckades (Ollama svarade {status})",
   "chat.readingImage": "Läser bilden…",
   "chat.gpuSafety": "GPU-temperaturskydd: {message}",

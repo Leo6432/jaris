@@ -1557,6 +1557,22 @@ body.body--splash {
   font-variant-numeric: tabular-nums;
 }
 
+/* Options → Modèles → « Retester la configuration » : la même barre (ModelPullBar), alignée sur les réglages. */
+.options-menu__retest-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0 8px;
+}
+
+.options-menu__retest-progress p {
+  margin: 0;
+}
+
+.options-menu__retest-progress .capacity-scan__progress-size {
+  font-variant-numeric: tabular-nums;
+}
+
 .capacity-scan__status {
   color: var(--hud-text-dim);
   font-size: 12px;
@@ -1698,47 +1714,40 @@ body.body--splash {
    800 px avec un long nom) : chaque rôle sur deux lignes — le rôle et le nom du modèle en entier, puis vitesse,
    intelligence et scores juste en dessous. Avant, c'est le nom qui cédait la place, jusqu'à 10 px (« q… »). */
 @container (max-width: 799px) {
-  .capacity-scan__tier-table,
-  .capacity-scan__tier-table tbody {
-    display: block;
+  /* Le tableau garde DEUX vraies colonnes. La première (le rôle) prend la largeur de son libellé le plus long, sur
+     une ligne, dans toutes les langues : une marge fixe coupait « Bildschirmsteuer / ung » au milieu du mot. Les
+     autres cellules d'une ligne ne sont plus des cellules : le navigateur les réunit lui-même dans UNE cellule
+     (règle des tableaux CSS), où le nom tient toute sa ligne et les chiffres passent à la ligne suivante. */
+  .capacity-scan__tier-table td:first-child {
+    width: 1px;
+    padding: 3px 12px 3px 0 !important;
+    vertical-align: baseline;
   }
 
-  /* Une ligne du tableau devient un bloc : le rôle dans la marge de gauche, le nom sur toute la largeur restante,
-     puis vitesse, intelligence et scores qui passent à la ligne d'eux-mêmes s'ils n'ont pas la place. */
-  .capacity-scan__tier-table tr {
-    display: flow-root;
-    padding: 3px 0 3px calc(8.5em + 10px);
-  }
-
-  .capacity-scan__tier-table td {
+  .capacity-scan__tier-table td:not(:first-child) {
     display: inline-block;
     vertical-align: baseline;
-    padding: 0 10px 0 0 !important;
-  }
-
-  .capacity-scan__tier-table td.capacity-scan__tier-slot {
-    float: left;
-    width: 8.5em;
-    margin-left: calc(-8.5em - 10px);
-    padding: 0 !important;
-    white-space: normal;
-    overflow-wrap: anywhere;
+    padding: 0 10px 3px 0 !important;
   }
 
   .capacity-scan__tier-table td.capacity-scan__tier-model,
   .capacity-scan__tier-table .capacity-scan__tier-upgrade td:last-child {
     display: block;
     width: auto;
-    padding: 0 !important;
+    padding: 3px 0 0 !important;
+  }
+
+  .capacity-scan__tier-table .capacity-scan__tier-upgrade td:last-child {
+    padding: 0 0 6px !important;
   }
 
   .capacity-scan__tier-table td.capacity-scan__tier-scores {
     white-space: normal;
   }
 
-  /* Image, Vidéo, Pilotage d'écran : ni vitesse, ni intelligence, ni score — une seule ligne, sans « — ». */
-  .capacity-scan__tier-table .capacity-scan__tier-upgrade td:first-child,
-  .capacity-scan__tier-table .capacity-scan__tier-image td:nth-child(n + 3) {
+  /* Sans colonnes, un « — » seul ne veut plus rien dire (« – —  Code 5/5 ») : une vitesse ou une intelligence non
+     publiée disparaît, comme la vitesse, l'intelligence et les scores d'Image, de Vidéo et du pilotage d'écran. */
+  .capacity-scan__tier-table td.capacity-scan__tier-empty {
     display: none;
   }
 }

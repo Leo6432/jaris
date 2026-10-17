@@ -809,6 +809,7 @@
   "ollama.pull.httpError": "Mudeli {model} allalaadimine ebaõnnestus (Ollama vastas {status})",
   "ollama.pull.failed": "Mudeli {model} allalaadimine ebaõnnestus: {error}",
   "ollama.pull.progress": "Mudeli {model} allalaadimine… {percent}%",
+  "ollama.pull.nextFile": "Mudeli {model} allalaadimine: järgmine fail…",
   "ollama.delete.failed": "Mudeli {model} kustutamine ebaõnnestus (Ollama vastas {status})",
   "chat.readingImage": "Pildi lugemine…",
   "chat.gpuSafety": "GPU termokaitse: {message}",

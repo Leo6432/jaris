@@ -809,6 +809,7 @@
   "ollama.pull.httpError": "Download af {model} mislykkedes (Ollama svarede {status})",
   "ollama.pull.failed": "Download af {model} mislykkedes: {error}",
   "ollama.pull.progress": "Downloader modellen {model}… {percent} %",
+  "ollama.pull.nextFile": "Downloader modellen {model}: næste fil…",
   "ollama.delete.failed": "Sletning af {model} mislykkedes (Ollama svarede {status})",
   "chat.readingImage": "Læser billedet…",
   "chat.gpuSafety": "GPU-temperaturbeskyttelse: {message}",

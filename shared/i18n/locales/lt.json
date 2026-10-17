@@ -830,6 +830,7 @@
   "ollama.pull.httpError": "Nepavyko atsisiųsti {model} (Ollama atsakė {status})",
   "ollama.pull.failed": "Nepavyko atsisiųsti {model}: {error}",
   "ollama.pull.progress": "Atsisiunčiamas modelis {model}… {percent}%",
+  "ollama.pull.nextFile": "Atsisiunčiamas modelis {model}: kitas failas…",
   "ollama.delete.failed": "Nepavyko ištrinti {model} (Ollama atsakė {status})",
   "chat.readingImage": "Skaitomas paveikslėlis…",
   "chat.gpuSafety": "GPU šiluminė apsauga: {message}",

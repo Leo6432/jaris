@@ -809,6 +809,7 @@
   "ollama.pull.httpError": "Downloaden van {model} mislukt (Ollama antwoordde {status})",
   "ollama.pull.failed": "Downloaden van {model} mislukt: {error}",
   "ollama.pull.progress": "Model {model} downloaden… {percent}%",
+  "ollama.pull.nextFile": "Model {model} downloaden: volgend bestand…",
   "ollama.delete.failed": "Verwijderen van {model} mislukt (Ollama antwoordde {status})",
   "chat.readingImage": "Afbeelding lezen…",
   "chat.gpuSafety": "Thermische beveiliging GPU: {message}",

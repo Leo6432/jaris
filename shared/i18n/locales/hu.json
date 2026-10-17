@@ -809,6 +809,7 @@
   "ollama.pull.httpError": "A letöltés nem sikerült: {model} (Ollama válasza: {status})",
   "ollama.pull.failed": "A letöltés nem sikerült: {model}: {error}",
   "ollama.pull.progress": "Modell letöltése: {model}… {percent}%",
+  "ollama.pull.nextFile": "Modell letöltése: {model} – következő fájl…",
   "ollama.delete.failed": "A törlés nem sikerült: {model} (Ollama válasza: {status})",
   "chat.readingImage": "A kép olvasása…",
   "chat.gpuSafety": "GPU hővédelem: {message}",

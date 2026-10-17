@@ -809,6 +809,7 @@
   "ollama.pull.httpError": "Failed to download {model} (Ollama responded {status})",
   "ollama.pull.failed": "Failed to download {model}: {error}",
   "ollama.pull.progress": "Downloading the model {model}… {percent}%",
+  "ollama.pull.nextFile": "Downloading the model {model}: next file…",
   "ollama.delete.failed": "Failed to delete {model} (Ollama responded {status})",
   "chat.readingImage": "Reading the image…",
   "chat.gpuSafety": "GPU thermal safety: {message}",

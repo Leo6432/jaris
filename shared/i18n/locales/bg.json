@@ -809,6 +809,7 @@
   "ollama.pull.httpError": "Изтеглянето на {model} се провали (Ollama отговори {status})",
   "ollama.pull.failed": "Изтеглянето на {model} се провали: {error}",
   "ollama.pull.progress": "Изтегляне на модела {model}… {percent}%",
+  "ollama.pull.nextFile": "Изтегляне на модела {model}: следващ файл…",
   "ollama.delete.failed": "Изтриването на {model} се провали (Ollama отговори {status})",
   "chat.readingImage": "Четене на изображението…",
   "chat.gpuSafety": "Термична защита на GPU: {message}",

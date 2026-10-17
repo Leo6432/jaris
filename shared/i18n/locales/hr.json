@@ -830,6 +830,7 @@
   "ollama.pull.httpError": "Preuzimanje modela {model} nije uspjelo (Ollama je odgovorila {status})",
   "ollama.pull.failed": "Preuzimanje modela {model} nije uspjelo: {error}",
   "ollama.pull.progress": "Preuzimanje modela {model}… {percent}%",
+  "ollama.pull.nextFile": "Preuzimanje modela {model}: sljedeća datoteka…",
   "ollama.delete.failed": "Brisanje modela {model} nije uspjelo (Ollama je odgovorila {status})",
   "chat.readingImage": "Čitanje slike…",
   "chat.gpuSafety": "Toplinska zaštita GPU-a: {message}",

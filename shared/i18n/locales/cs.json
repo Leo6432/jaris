@@ -830,6 +830,7 @@
   "ollama.pull.httpError": "Stažení modelu {model} se nezdařilo (Ollama odpověděla {status})",
   "ollama.pull.failed": "Stažení modelu {model} se nezdařilo: {error}",
   "ollama.pull.progress": "Stahování modelu {model}… {percent}%",
+  "ollama.pull.nextFile": "Stahování modelu {model}: další soubor…",
   "ollama.delete.failed": "Smazání modelu {model} se nezdařilo (Ollama odpověděla {status})",
   "chat.readingImage": "Čtení obrázku…",
   "chat.gpuSafety": "Tepelná ochrana GPU: {message}",

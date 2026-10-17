@@ -2,17 +2,12 @@ import { useEffect, useState } from 'react'
 import type { CapacityScanResult, ModelPullProgress, MyModelPicks as MyModelPicksData } from '../../shared/ipc'
 import { formatModelName } from '../lib/formatModelName'
 import MyModelPicks from './MyModelPicks'
+import ModelPullBar from './ModelPullBar'
 import { PILOT_MODEL_LABEL } from '../../shared/pilotModel'
-import { formatBytes } from '../../shared/formatBytes'
 import { t, tn } from '@/lib/i18n'
 
 interface CapacityScanProps {
   onDone: () => void
-}
-
-/** Pourcentage reçu d'un téléchargement, entre 0 et 100 (0 tant que la taille n'est pas connue). */
-function pullPercent(pull: ModelPullProgress): number {
-  return pull.total > 0 ? Math.min(100, Math.floor((pull.completed / pull.total) * 100)) : 0
 }
 
 /** Ligne « Vidéo » du résumé : le modèle et sa qualité, s'il reste à le télécharger depuis le mode Vidéo, ou aucun. */
@@ -91,27 +86,7 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
         {installing && (
           <div className="capacity-scan__progress">
             <p className="capacity-scan__status">{t('setup.downloading')}</p>
-            <p className="capacity-scan__status capacity-scan__progress-step">
-              {pull ? t('ollama.pull.progress', { model: formatModelName(pull.model), percent: pullPercent(pull) }) : log[log.length - 1] ?? ''}
-            </p>
-            <div
-              className="runtime-setup__bar"
-              role="progressbar"
-              aria-label={t('setup.downloading')}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={pull ? pullPercent(pull) : undefined}
-            >
-              <div
-                className={`runtime-setup__bar-fill${pull ? '' : ' runtime-setup__bar-fill--pulse'}`}
-                style={pull ? { width: `${pullPercent(pull)}%` } : undefined}
-              />
-            </div>
-            {pull && (
-              <p className="capacity-scan__status capacity-scan__progress-size">
-                {t('setup.downloadSize', { received: formatBytes(pull.completed), total: formatBytes(pull.total) })}
-              </p>
-            )}
+            <ModelPullBar pull={pull} line={log[log.length - 1] ?? ''} label={t('setup.downloading')} />
           </div>
         )}
 

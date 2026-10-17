@@ -368,6 +368,13 @@ export interface ModelPullProgress {
   model: string
   completed: number
   total: number
+  /**
+   * Pourcentage à afficher (createPullPercent, ollama.ts) : ne recule jamais quand Ollama découvre un fichier de plus
+   * du modèle en route, et reste sous 100 tant que le téléchargement n'est pas fini.
+   */
+  percent: number
+  /** Un fichier de plus du modèle est en cours : la barre attend que les octets reçus la rattrapent. */
+  nextFile: boolean
 }
 
 /**

@@ -830,6 +830,7 @@
   "ollama.pull.httpError": "Descărcarea {model} a eșuat (Ollama a răspuns {status})",
   "ollama.pull.failed": "Descărcarea {model} a eșuat: {error}",
   "ollama.pull.progress": "Descărcarea modelului {model}… {percent}%",
+  "ollama.pull.nextFile": "Descărcarea modelului {model}: fișierul următor…",
   "ollama.delete.failed": "Ștergerea {model} a eșuat (Ollama a răspuns {status})",
   "chat.readingImage": "Citirea imaginii…",
   "chat.gpuSafety": "Siguranță termică GPU: {message}",
