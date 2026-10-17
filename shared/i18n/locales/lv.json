@@ -139,6 +139,7 @@
   "options.folder.hint": "Viss, ko Jaris instalē un saglabā — programma, tavas sarunas, Ollama un tās modeļi, balss, Docker — var atrasties citur, nevis diskā C (piemēram, citā diskā). „Pārvietot” pārvieto VISU uzreiz vai neko, ja kaut kas traucē.",
   "options.folder.moving": "Notiek pārvietošana…",
   "options.folder.move": "Pārvietot…",
+  "options.folder.codeNotSaved": "Nekas netika pārvietots: režīma “Kods” sarunas pirms pārvietošanas neizdevās saglabāt. Mēģini vēlreiz pēc brīža.",
   "options.history.group": "Sarunu vēsture",
   "options.history.empty": "Pagaidām nav saglabāta neviena saruna.",
   "options.history.folder": "Vēstures mape",

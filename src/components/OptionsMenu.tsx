@@ -23,6 +23,7 @@ import MyModelPicks from './MyModelPicks'
 import JarisOrb from './JarisOrb'
 import { formatModelName } from '../lib/formatModelName'
 import { formatContextLength } from '../lib/formatContextLength'
+import { migrateLegacyCodeConversations } from '../lib/codeConversations'
 import { currentLocale, t, tn } from '../lib/i18n'
 import { LANGUAGES, languageInfo, type LanguageSetting } from '../../shared/i18n/languages'
 import type { MessageKey } from '../../shared/i18n'
@@ -381,11 +382,18 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
   const handleChooseModelsLocation = (): void => {
     setModelsLocationMessage(null)
     setMovingModelsLocation(true)
-    window.jaris
-      .chooseModelsLocation()
-      .then(({ success, message }) => {
-        if (message) setModelsLocationMessage(message)
-        if (success) return window.jaris.getModelsLocationStatus().then(setModelsLocation)
+    // « Déplacer » change le dossier de Chromium et efface l'ancien, avec son stockage : les conversations du mode
+    // Code que l'ancienne version y gardait doivent être dans leur fichier AVANT. Si ça échoue, rien n'est déplacé.
+    migrateLegacyCodeConversations()
+      .then((saved) => {
+        if (!saved) {
+          setModelsLocationMessage(t('options.folder.codeNotSaved'))
+          return
+        }
+        return window.jaris.chooseModelsLocation().then(({ success, message }) => {
+          if (message) setModelsLocationMessage(message)
+          if (success) return window.jaris.getModelsLocationStatus().then(setModelsLocation)
+        })
       })
       .catch((err: unknown) => setModelsLocationMessage(err instanceof Error ? err.message : String(err)))
       .finally(() => setMovingModelsLocation(false))

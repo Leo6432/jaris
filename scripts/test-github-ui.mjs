@@ -55,6 +55,12 @@ window.jaris = {
   // Étape 288 : le fichier en cours d'écriture, en direct dans la conversation.
   onCodeGenLive: (cb) => { window.__emitLive = cb; return () => {} },
   getGeneratedApps: () => Promise.resolve([{ path: 'C:/apps/liste', label: 'liste de courses', timestamp: Date.now() }]),
+  // Conversations du mode Code (code-conversations.json, tenu par le main) : un fichier vide au départ, et l'écran
+  // garde ses changements en mémoire le temps de la page.
+  loadCodeConversations: () => ({ repos: [], conversations: {} }),
+  saveCodeConversation: () => Promise.resolve(),
+  saveCodeRepos: () => Promise.resolve(),
+  importCodeConversations: () => Promise.resolve(),
   loadGeneratedApp: (path) => Promise.resolve({ html: '<h1>ok</h1>', path, issues: [], previewUrl: 'about:blank' }),
   generateApp: () => Promise.reject(new Error('ne doit pas être appelé avec un dépôt ouvert')),
   cancelCodeGen: () => { window.__failAgent?.(new Error('aborted')) },

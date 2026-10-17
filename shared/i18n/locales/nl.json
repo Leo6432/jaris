@@ -138,6 +138,7 @@
   "options.folder.hint": "Alles wat Jaris installeert en opslaat — het programma, je gesprekken, Ollama en zijn modellen, de stem, Docker — kan ergens anders dan op C staan (op een andere schijf bijvoorbeeld). “Verplaatsen” neemt ALLES in één keer mee, of niets als iets het tegenhoudt.",
   "options.folder.moving": "Bezig met verplaatsen…",
   "options.folder.move": "Verplaatsen…",
+  "options.folder.codeNotSaved": "Er is niets verplaatst: de gesprekken van de Code-modus konden vóór het verplaatsen niet worden opgeslagen. Probeer het zo opnieuw.",
   "options.history.group": "Gespreksgeschiedenis",
   "options.history.empty": "Nog geen uitwisseling opgeslagen.",
   "options.history.folder": "Map van de geschiedenis",

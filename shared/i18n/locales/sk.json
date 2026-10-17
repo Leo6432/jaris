@@ -139,6 +139,7 @@
   "options.folder.hint": "Všetko, čo Jaris inštaluje a ukladá — program, tvoje konverzácie, Ollama a jej modely, hlas, Docker — môže byť inde ako na disku C (napríklad na inom disku). „Presunúť“ vezme VŠETKO naraz, alebo nič, ak tomu niečo bráni.",
   "options.folder.moving": "Presúva sa…",
   "options.folder.move": "Presunúť…",
+  "options.folder.codeNotSaved": "Nič sa nepresunulo: konverzácie z režimu Kód sa pred presunom nepodarilo uložiť. Skús to o chvíľu znova.",
   "options.history.group": "História konverzácií",
   "options.history.empty": "Zatiaľ nie je uložená žiadna konverzácia.",
   "options.history.folder": "Priečinok histórie",

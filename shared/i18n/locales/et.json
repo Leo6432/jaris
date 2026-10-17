@@ -138,6 +138,7 @@
   "options.folder.hint": "Kõik, mida Jaris installib ja salvestab — programm, su vestlused, Ollama ja selle mudelid, hääl, Docker — võib asuda mujal kui C-kettal (näiteks teisel kettal). „Teisalda“ viib KÕIK korraga või mitte midagi, kui miski seda takistab.",
   "options.folder.moving": "Teisaldamine…",
   "options.folder.move": "Teisalda…",
+  "options.folder.codeNotSaved": "Midagi ei teisaldatud: režiimi Kood vestlusi ei õnnestunud enne teisaldamist salvestada. Proovi hetke pärast uuesti.",
   "options.history.group": "Vestluste ajalugu",
   "options.history.empty": "Ühtegi vestlust pole veel salvestatud.",
   "options.history.folder": "Ajaloo kaust",

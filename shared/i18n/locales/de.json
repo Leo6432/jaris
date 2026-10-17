@@ -138,6 +138,7 @@
   "options.folder.hint": "Alles, was Jaris installiert und speichert — das Programm, deine Gespräche, Ollama und seine Modelle, die Stimme, Docker — kann woanders als auf C liegen (zum Beispiel auf einem anderen Laufwerk). „Verschieben“ nimmt ALLES auf einmal mit, oder nichts, wenn etwas es verhindert.",
   "options.folder.moving": "Wird verschoben…",
   "options.folder.move": "Verschieben…",
+  "options.folder.codeNotSaved": "Es wurde nichts verschoben: Die Unterhaltungen des Code-Modus konnten vor dem Verschieben nicht gesichert werden. Versuch es gleich noch einmal.",
   "options.history.group": "Gesprächsverlauf",
   "options.history.empty": "Noch kein Austausch gespeichert.",
   "options.history.folder": "Verlaufsordner",

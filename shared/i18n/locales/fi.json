@@ -138,6 +138,7 @@
   "options.folder.hint": "Kaikki, mitä Jaris asentaa ja tallentaa — ohjelma, keskustelusi, Ollama malleineen, ääni, Docker — voi olla muualla kuin C-asemalla (esimerkiksi toisella levyllä). ”Siirrä” siirtää KAIKEN kerralla, tai ei mitään, jos jokin estää sen.",
   "options.folder.moving": "Siirretään…",
   "options.folder.move": "Siirrä…",
+  "options.folder.codeNotSaved": "Mitään ei siirretty: Koodi-tilan keskusteluja ei voitu tallentaa ennen siirtoa. Yritä hetken päästä uudelleen.",
   "options.history.group": "Keskusteluhistoria",
   "options.history.empty": "Keskusteluja ei ole vielä tallennettu.",
   "options.history.folder": "Historiakansio",

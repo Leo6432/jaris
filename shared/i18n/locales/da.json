@@ -138,6 +138,7 @@
   "options.folder.hint": "Alt, hvad Jaris installerer og gemmer — programmet, dine samtaler, Ollama og dets modeller, stemmen, Docker — kan ligge et andet sted end på C (f.eks. et andet drev). “Flyt” tager ALT med på én gang, eller intet, hvis noget forhindrer det.",
   "options.folder.moving": "Flytter…",
   "options.folder.move": "Flyt…",
+  "options.folder.codeNotSaved": "Intet er flyttet: samtalerne i Kode-tilstanden kunne ikke gemmes inden flytningen. Prøv igen om lidt.",
   "options.history.group": "Samtalehistorik",
   "options.history.empty": "Ingen udvekslinger gemt endnu.",
   "options.history.folder": "Mappe til historikken",

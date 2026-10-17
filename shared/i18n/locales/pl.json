@@ -140,6 +140,7 @@
   "options.folder.hint": "Wszystko, co Jaris instaluje i zapisuje — program, twoje rozmowy, Ollama i jej modele, głos, Docker — może być gdzie indziej niż na dysku C (np. na innym dysku). „Przenieś” zabiera WSZYSTKO naraz albo nic, jeśli coś stanie na przeszkodzie.",
   "options.folder.moving": "Przenoszenie…",
   "options.folder.move": "Przenieś…",
+  "options.folder.codeNotSaved": "Nic nie zostało przeniesione: przed przeniesieniem nie udało się zapisać rozmów z trybu Kod. Spróbuj ponownie za chwilę.",
   "options.history.group": "Historia rozmów",
   "options.history.empty": "Na razie nie zapisano żadnej rozmowy.",
   "options.history.folder": "Folder historii",

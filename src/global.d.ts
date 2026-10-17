@@ -1,6 +1,7 @@
 import type { ThinkValue } from '../shared/effort'
 import type { VideoQuality } from '../shared/videoModel'
 import type { LanguageSetting } from '../shared/i18n/languages'
+import type { CodeConversationsData, CodeRepoEntry } from '../shared/codeConversations'
 import type {
   LanguageState,
   AppMode,
@@ -188,6 +189,11 @@ declare global {
       getGeneratedApps: () => Promise<GeneratedAppSummary[]>
       loadGeneratedApp: (path: string) => Promise<GeneratedApp>
       deleteGeneratedApp: (path: string) => Promise<void>
+      /** Conversations du mode Code, lues une fois de façon synchrone (code-conversations.json). */
+      loadCodeConversations: () => CodeConversationsData | null
+      saveCodeConversation: (key: string, turns: unknown[] | null) => Promise<void>
+      saveCodeRepos: (repos: CodeRepoEntry[]) => Promise<void>
+      importCodeConversations: (data: CodeConversationsData) => Promise<void>
       listAudioInputDevices: () => Promise<AudioInputDevice[]>
       setAudioInputDevice: (deviceIndex: number | null) => Promise<void>
       setWakewordEnabled: (enabled: boolean) => Promise<void>

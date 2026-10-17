@@ -148,6 +148,7 @@ export const fr = {
   "options.folder.hint": "Tout ce que Jaris installe et enregistre — le programme, tes conversations, Ollama et ses modèles, la voix, Docker — peut vivre ailleurs que sur C (un autre disque, par exemple). « Déplacer » emporte TOUT d'un coup, ou rien si quelque chose l'en empêche.",
   "options.folder.moving": "Déplacement en cours…",
   "options.folder.move": "Déplacer…",
+  "options.folder.codeNotSaved": "Rien n'a été déplacé : les conversations du mode Code n'ont pas pu être mises à l'abri avant le déplacement. Réessaie dans un instant.",
   "options.history.group": "Historique des conversations",
   "options.history.empty": "Aucun échange enregistré pour l'instant.",
   "options.history.folder": "Dossier de l'historique",
