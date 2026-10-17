@@ -8530,3 +8530,22 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   - seules les 2 applis coupées sont rejouées ;
   - la 7B est supprimée après.
   Ce test échoue avec l'ancienne règle « model not found » (aucun rejeu).
+
+- **« Et là ? ça met 2 cas refaits » (Léo, étape 321, Jaris 0.34.28, retest de K2 Horizon 7B du 17/10).** Le rejeu
+  préparé à l'étape 320 a marché du premier coup chez lui : 7B retéléchargée, exactement les 2 applis refaites, puis
+  supprimée. Résultats : convertisseur réussi (90 s), formulaire compté faux (« aucun message de confirmation »).
+  **Le formulaire marchait, le juge lisait trop tôt.** Ouvert et cliqué ici : il affiche « Envoi en cours… », puis
+  « Votre message a bien été envoyé » 1,5 s plus tard, sans erreur JavaScript. Le juge lisait la page 0,25 s après
+  le clic (`page.click` puis `pageText`). Une personne devant l'écran voit la confirmation. Corrigé :
+  `waitForPageText` relit la page toutes les 0,25 s, jusqu'à 5 s (`CONFIRMATION_WAIT_MS`). L'attente reste
+  bornée : une confirmation au bout de 8 s est toujours fausse. Seul le formulaire attend, parce qu'un faux
+  « envoi » en cours est un motif courant et légitime ; un compteur ou une addition doivent répondre tout de suite.
+  Les 55 applis des traces de Léo ont été rejugées. Seuls deux verdicts changent, tous deux de la 7B : la liste
+  (déjà connue, étape 315) et ce formulaire. Aucun autre modèle n'est touché. La 7B passe à 5/5, sans changer aucun
+  choix de modèle (simulé sur 12 machines types). Avec ces traces, le bouton ne propose plus rien.
+  **Leçon générale, deuxième fois sur le même modèle (étape 315 : liste dans des champs) : un verdict « faux » sur
+  un modèle dont le reste est juste mérite d'ouvrir l'appli et de cliquer soi-même avant de recopier le score.** Le
+  juge lit l'écran comme une machine, à un instant précis et d'une seule façon. Une appli correcte qui s'en écarte
+  un peu (texte dans un champ, confirmation différée) passe pour cassée.
+  Régression : `scripts/test-benchmark-code.mjs`. La fixture `goodDelayed` (confirmation à 1,5 s) doit passer, et
+  une confirmation à 8 s doit échouer. La première échoue avec `CONFIRMATION_WAIT_MS = 0`.

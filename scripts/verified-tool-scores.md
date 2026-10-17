@@ -160,6 +160,11 @@ dernières. Son convertisseur a été écrit et réussi le 14/10 (106 s), puis c
 de le retester : le bouton propose de nouveau la 7B, pour ces 2 applis (le convertisseur est refait aussi). La
 clôture de l'étape 319, qui cachait le bouton, est retirée.
 
+Étape 321 (retest de Léo du 17/10/2026, Jaris 0.34.27) : 7B 5/5. Convertisseur réussi (90 s). Formulaire écrit en
+6 min et compté faux, alors qu'il marche : il affiche « Envoi en cours… », puis sa confirmation 1,5 s plus tard, et
+le juge lisait la page 0,25 s après le clic. Le juge attend maintenant jusqu'à 5 s. Les 55 applis des traces ont
+été rejugées : seules la liste (étape 315) et ce formulaire de la 7B changent de verdict.
+
 | Modèle | Fiabilité |
 |---|---|
 | qwen3.6:35b-a3b | 4/5 |
@@ -171,7 +176,7 @@ clôture de l'étape 319, qui cachait le bouton, est retirée.
 | qwen2.5-coder:7b | 5/5 |
 | hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 5/5 |
 | hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M | 5/5 |
-| hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 4/5 |
+| hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 5/5 |
 | phi4-mini | 5/5 |
 | hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 1/5 |
 

@@ -63,6 +63,24 @@ async function pageText(page) {
 }
 
 /**
+ * Étape 321 : attend que la page affiche ce qu'on cherche, jusqu'à `CONFIRMATION_WAIT_MS`, comme Léo qui regarde
+ * l'écran quelques secondes après avoir cliqué. Le formulaire de K2 Horizon 7B (campagne du 17/10/2026) affichait
+ * « Envoi en cours… », puis sa confirmation 1,5 s plus tard. Lu 0,25 s après le clic, il était compté faux alors
+ * qu'il marchait. Une seule lecture est notée au journal : la dernière.
+ */
+const CONFIRMATION_WAIT_MS = 5000
+async function waitForPageText(page, accept) {
+  const start = Date.now()
+  let text = await page.evaluate('document.body ? document.body.innerText : ""')
+  while (!accept(text) && Date.now() - start < CONFIRMATION_WAIT_MS) {
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    text = await page.evaluate('document.body ? document.body.innerText : ""')
+  }
+  log(page, `lu le texte de la page après ${((Date.now() - start) / 1000 + 0.25).toFixed(2).replace('.', ',')} s : « ${String(text).replace(/\s+/g, ' ').trim().slice(0, 2000)} »`)
+  return text
+}
+
+/**
  * Étape 315 : le texte visible PLUS le contenu des champs, sauf le champ de saisie (n° 1). Une liste peut afficher
  * chaque tâche dans un champ modifiable : Léo la voit à l'écran, mais `innerText` ne lit jamais la valeur d'un champ
  * (K2 Horizon 7B, campagne du 15/10/2026 : tâches bien affichées et bien supprimées, comptées « ne s'affichent pas »).
@@ -267,9 +285,11 @@ export const CODE_TEST_CASES = [
       }
       const confirmation = /merci|confirm|bien ete|envoye(e|s)?\b|recu\b|succes/
       const before = norm(await pageText(page))
+      const confirmed = (text) => confirmation.test(text) && !(confirmation.test(before) && text === before)
       await clickButton(page, 'envoy', 'Envoyer', 'send|submit|envoy')
-      const after = norm(await pageText(page))
-      if (!confirmation.test(after) || (confirmation.test(before) && after === before)) throw new Fail('aucun message de confirmation après « Envoyer »')
+      // Étape 321 : une confirmation qui arrive après un court « Envoi en cours… » compte (voir waitForPageText).
+      const after = norm(await waitForPageText(page, (text) => confirmed(norm(text))))
+      if (!confirmed(after)) throw new Fail('aucun message de confirmation après « Envoyer »')
     }
   }
 ]
