@@ -2,6 +2,7 @@ import type { OllamaMessage, OllamaTool, OllamaToolCall } from './ollama'
 import { diffLines } from '../../shared/lineDiff'
 import type { CodeActivity, CodeLiveWrite, CodeNarration } from '../../shared/ipc'
 import { replyLanguageName, t } from '../../shared/i18n'
+import { brokenScriptAfterChange, isSyntaxCheckedFile, type InlineScriptProblem } from './scriptSyntax'
 
 /**
  * L'agent qui travaille sur un dépôt GitHub (étape 277) : le modèle Code lit les fichiers dont il a besoin, puis
@@ -19,10 +20,22 @@ export interface RepoAgentDeps {
   listPaths: () => string[]
   /** Contenu actuel : `undefined` = n'existe pas, `null` = binaire ou trop lourd. */
   readFile: (path: string) => Promise<string | null | undefined>
+  /**
+   * Contenu sur GitHub, AVANT tout changement préparé (`undefined` = n'y existe pas). Sert à ne reprocher à l'agent
+   * qu'une erreur de syntaxe qu'il a lui-même introduite (voir brokenScriptAfterChange). Absent : tout fichier
+   * JavaScript préparé est traité comme nouveau.
+   */
+  readOriginalFile?: (path: string) => Promise<string | null | undefined>
   /** Prépare un changement (`null` = supprimer). */
   writeFile: (path: string, content: string | null) => void
   /** Ce qui est déjà préparé avant cette demande, pour que l'agent continue au lieu de repartir de zéro. */
   pendingSummary: () => string[]
+  /**
+   * Chemins des fichiers DÉJÀ préparés avant cette demande (créés ou modifiés, pas encore enregistrés). Leurs scripts
+   * sont revérifiés eux aussi avant « terminé » : un travail terminé part tout seul sur GitHub avec TOUT ce qui est
+   * préparé (étape 303), y compris un fichier cassé par une demande précédente que celle-ci n'a pas touché.
+   */
+  stagedPaths?: () => string[]
   /**
    * Un tour du modèle, SANS outils déclarés à Ollama (étape 281) : les appels sont écrits en texte (voir
    * TOOL_PROTOCOL), pour que ce texte arrive au fil de l'eau.
@@ -59,6 +72,11 @@ const MAX_READ_CHARS = 60_000
 const MAX_LISTED_PATHS = 1500
 /** Au-delà, le même appel raté arrête l'agent au lieu de tourner en rond. */
 const MAX_SAME_FAILURE = 3
+/**
+ * Un « finish » refusé parce qu'un fichier JavaScript préparé ne compile pas : le modèle a ce nombre de chances de le
+ * corriger. Ensuite le travail s'arrête comme interrompu (rien n'est enregistré tout seul sur GitHub) et le dit.
+ */
+const MAX_SYNTAX_REFUSALS = 2
 /** Un échec d'outil à renvoyer au modèle (et à compter), à distinguer d'une vraie panne. */
 class ToolFailure extends Error {}
 const REMOVED_CONTENT = '[Contenu retiré pour libérer de la mémoire — relis le fichier avec read_file si tu en as encore besoin.]'
@@ -658,6 +676,63 @@ export async function runRepoAgent(request: string, deps: RepoAgentDeps): Promis
   let nudged = false
   /** Nombre d'échecs de chaque appel identique (même outil, mêmes arguments). */
   const failures = new Map<string, number>()
+  /**
+   * Fichiers JavaScript (ou pages web) préparés — pendant cette demande ou une précédente — : vérifiés avant d'annoncer
+   * « terminé ». Repartir des seuls fichiers de CETTE demande laissait passer un fichier cassé la fois d'avant
+   * (« mets le titre en rouge » ne touche que style.css, puis tout partait sur GitHub, le fichier cassé compris).
+   */
+  const changedScripts = new Set<string>((deps.stagedPaths?.() ?? []).filter(isSyntaxCheckedFile))
+  let syntaxRefusals = 0
+
+  /**
+   * Bug vu en vrai dans le mode Code : un fichier livré avec `function toggleAlarm(false) {` (« Unexpected token
+   * 'false' »), donc aucun bouton ne marchait, présenté comme terminé. Un travail ne se termine pas sur un fichier
+   * JavaScript préparé qui ne compile pas : le modèle reçoit l'erreur exacte pour la corriger, deux fois au plus ;
+   * ensuite, le travail s'arrête comme interrompu — jamais enregistré tout seul sur GitHub — et l'utilisateur le sait.
+   */
+  const brokenScripts = async (): Promise<{ path: string; problem: InlineScriptProblem }[]> => {
+    const broken: { path: string; problem: InlineScriptProblem }[] = []
+    for (const path of changedScripts) {
+      const content = await deps.readFile(path)
+      if (typeof content !== 'string') continue
+      let original: string | null | undefined
+      try {
+        original = deps.readOriginalFile ? await deps.readOriginalFile(path) : undefined
+      } catch (err) {
+        if ((err as { name?: string } | null)?.name === 'AbortError') throw err
+        // Version de GitHub illisible (réseau) : impossible de savoir si l'erreur vient de l'agent, rien n'est reproché.
+        continue
+      }
+      const problem = brokenScriptAfterChange(path, content, original)
+      if (problem) broken.push({ path, problem })
+    }
+    return broken
+  }
+  /** `null` : le travail peut se terminer. Sinon le résultat à rendre (abandon) ou `'retry'` (le modèle corrige). */
+  const blockFinish = async (): Promise<RepoAgentOutcome | 'retry' | null> => {
+    const broken = await brokenScripts()
+    if (broken.length === 0) return null
+    if (syntaxRefusals >= MAX_SYNTAX_REFUSALS) {
+      const { path, problem } = broken[0]
+      return { summary: t('repo.brokenScript', { path, line: problem.fileLine ?? '?', message: problem.message }), limitReached: true }
+    }
+    syntaxRefusals += 1
+    const list = broken
+      .map(({ path, problem }) => {
+        const where = problem.fileLine === null ? '' : `, ligne ${problem.fileLine}`
+        const script = /\.html?$/i.test(path) ? ` (script n°${problem.script} de la page)` : ''
+        const source = problem.sourceLine ? ` — ligne fautive : ${problem.sourceLine}` : ''
+        return `- ${path}${script}${where} : « ${problem.message} »${source}`
+      })
+      .join('\n')
+    messages.push({
+      role: 'user',
+      content:
+        "Résultat de finish : refusé, ce JavaScript ne compile pas — une seule erreur de syntaxe empêche TOUT le script de " +
+        `s'exécuter (aucun bouton ne marche) :\n${list}\nCorrige ces erreurs (relis le fichier avec read_file si besoin), puis rappelle finish.`
+    })
+    return 'retry'
+  }
 
   const execute = async (name: string, args: Record<string, unknown>): Promise<string> => {
     switch (name) {
@@ -711,6 +786,7 @@ export async function runRepoAgent(request: string, deps: RepoAgentDeps): Promis
         const index = content.indexOf(from)
         const updated = content.slice(0, index) + to + content.slice(index + from.length)
         deps.writeFile(path, updated)
+        if (isSyntaxCheckedFile(path)) changedScripts.add(path)
         deps.onActivity?.({ kind: 'edit', path, ...lineStats(content, updated) })
         return `Modifié : ${path}.`
       }
@@ -722,6 +798,7 @@ export async function runRepoAgent(request: string, deps: RepoAgentDeps): Promis
         if (existing !== undefined && !readPaths.has(path)) throw new ToolFailure(`${path} existe déjà : lis-le d'abord avec read_file, puis utilise plutôt edit_file.`)
         deps.writeFile(path, args.content)
         readPaths.add(path)
+        if (isSyntaxCheckedFile(path)) changedScripts.add(path)
         deps.onActivity?.({ kind: existing === undefined ? 'create' : 'rewrite', path, ...lineStats(existing ?? null, args.content) })
         return `${existing === undefined ? 'Créé' : 'Réécrit'} : ${path}.`
       }
@@ -730,6 +807,7 @@ export async function runRepoAgent(request: string, deps: RepoAgentDeps): Promis
         const existing = await deps.readFile(path)
         if (existing === undefined) throw new ToolFailure(`Fichier introuvable : ${path}.`)
         deps.writeFile(path, null)
+        changedScripts.delete(path)
         deps.onActivity?.({ kind: 'delete', path })
         return `Supprimé : ${path}.`
       }
@@ -797,6 +875,12 @@ export async function runRepoAgent(request: string, deps: RepoAgentDeps): Promis
         messages.push({ role: 'user', content: NUDGE })
         continue
       }
+      const blocked = await blockFinish()
+      if (blocked === 'retry') continue
+      if (blocked) {
+        showNarration('')
+        return blocked
+      }
       // Sa réponse devient le résumé, affiché à part : la même phrase ne s'affiche pas deux fois.
       showNarration('')
       return { summary: cleanSummary(reply.content), limitReached: false }
@@ -829,6 +913,12 @@ export async function runRepoAgent(request: string, deps: RepoAgentDeps): Promis
         continue
       }
       if (name === 'finish') {
+        const blocked = await blockFinish()
+        if (blocked === 'retry') continue
+        if (blocked) {
+          showNarration('')
+          return blocked
+        }
         // Sans résumé, le texte de la réponse sert de résumé — sauf s'il ne contenait que l'appel écrit en JSON.
         const summary = typeof args.summary === 'string' && args.summary.trim() ? args.summary.trim() : structured.length > 0 ? reply.content.trim() : ''
         showNarration('')

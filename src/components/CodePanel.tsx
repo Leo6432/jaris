@@ -844,14 +844,18 @@ export default function CodePanel(): JSX.Element {
               {appResult && appResult.issues.length > 0 && (
                 <div className="code-panel__issues">
                   <strong>
-                    {tn('code.issues', appResult.issues.length)}
+                    {/* Rouverte depuis la liste (peut-être faite par une version qui ne vérifiait rien) : pas « générée
+                        mais non corrigée », juste ce qu'elle contient. */}
+                    {appResult.reopened ? t('code.issues.reopened') : tn('code.issues', appResult.issues.length)}
                   </strong>
                   <ul>
                     {appResult.issues.map((issue) => (
                       <li key={issue}>{issue}</li>
                     ))}
                   </ul>
-                  {t('code.issues.hint')}
+                  {/* Une erreur de syntaxe dit déjà quoi faire (« corrige l'erreur ») : « relance la génération » ne
+                      s'ajoute que s'il reste d'autres problèmes, sinon les deux conseils se contrediraient. */}
+                  {appResult.issues.length > (appResult.scriptErrors ?? 0) && t('code.issues.hint')}
                 </div>
               )}
 

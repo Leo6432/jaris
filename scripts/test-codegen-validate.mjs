@@ -38,6 +38,8 @@ const modules = {
   },
   // Étape 286 : le VRAI calcul de différences (pur, sans import), pour compter les lignes écrites dans index.html.
   '../../shared/lineDiff': loadTsModule('shared/lineDiff.ts'),
+  // Le VRAI contrôle de syntaxe des scripts (compile sans exécuter) : validateGeneratedHtml le consulte à chaque génération.
+  './scriptSyntax': loadTsModule('electron/services/scriptSyntax.ts', { vm }),
   './hardwareScan': { pickBestCodeModel: async () => 'test-model' },
   './modelChoice': modelChoiceModule,
   './profileStore': { getProfile: async () => null }
@@ -77,4 +79,60 @@ test("overflow: hidden sur un sélecteur qui n'est ni html ni body ne déclenche
 test('height: 100vh sans overflow: hidden (page normale) ne déclenche PAS le piège', () => {
   const issues = validateGeneratedHtml(withStyle('body { min-height: 100vh; }'))
   assert.ok(!issues.some((issue) => /overflow: hidden/.test(issue)))
+})
+
+/**
+ * Bug vu en vrai : une application livrée avec `function toggleAlarm(false) {` — « Unexpected token 'false' ». Tout le
+ * script mort, aucun bouton qui marche, et aucun avertissement : les motifs de texte ci-dessus ne compilaient jamais
+ * le JavaScript. Désormais chaque script de la page est compilé (sans être exécuté).
+ */
+const withScripts = (...scripts) =>
+  `<!DOCTYPE html>\n<html>\n<head><style>body { margin: 0; }</style></head>\n<body>\n<button id="alarme">Alarme</button>\n${scripts.join('\n')}\n</body>\n</html>`
+
+test('le cas réel `function toggleAlarm(false) {` est signalé au modèle : script, ligne, erreur et ligne fautive', () => {
+  const html = withScripts(
+    '<script>\n  const etat = { alarme: false }\n</script>',
+    "<script>\n  let alarme = false\n  function toggleAlarm(false) {\n    alarme = !alarme\n  }\n  document.getElementById('alarme').addEventListener('click', toggleAlarm)\n</script>"
+  )
+  const issues = validateGeneratedHtml(html)
+  const syntax = issues.filter((issue) => /erreur de syntaxe/.test(issue))
+  assert.equal(syntax.length, 1, issues.join(' | '))
+  assert.match(syntax[0], /script n°2/)
+  assert.match(syntax[0], /ligne 3 de ce script \(ligne 11 du fichier\)/)
+  assert.match(syntax[0], /Unexpected token 'false'/)
+  assert.match(syntax[0], /function toggleAlarm\(false\) \{/)
+})
+
+test('des scripts valides et variés ne déclenchent AUCUNE erreur de syntaxe (le contrôle tourne à chaque génération)', () => {
+  const html = withScripts(
+    '<script type="application/json" id="config">{ "theme": "sombre", pas du JavaScript }</script>',
+    '<script type="text/template" id="ligne"><li>{{ nom }}</li></script>',
+    `<script>
+  /* Horloge avec alarme */
+  class Horloge {
+    #alarme = null
+    constructor(el) { this.el = el }
+    async tic() { await new Promise((r) => setTimeout(r, 1000)); return new Date() }
+  }
+  const format = (d) => \`\${String(d?.getHours() ?? 0).padStart(2, '0')}:\${String(d?.getMinutes() ?? 0).padStart(2, '0')}\`
+  const heureValide = /^\\d{2}:\\d{2}$/
+  const reglages = { volume: 0.5, ...JSON.parse(document.getElementById('config')?.textContent || '{}') }
+  document.getElementById('alarme').addEventListener('click', async () => {
+    const h = new Horloge(document.body)
+    document.title = format(await h.tic())
+  })
+</script>`,
+    `<script type="module">
+import { lancer } from './jeu.js'
+export const version = 1
+const donnees = await fetch(import.meta.url).catch(() => null)
+lancer?.(donnees)
+</script>`
+  )
+  const issues = validateGeneratedHtml(html)
+  assert.equal(
+    issues.filter((issue) => /erreur de syntaxe/.test(issue)).length,
+    0,
+    `faux positif : du JavaScript valide signalé comme cassé (${issues.join(' | ')})`
+  )
 })

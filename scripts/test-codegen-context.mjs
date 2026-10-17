@@ -142,6 +142,7 @@ function setupCodegen(answer, { modelMax = 262144 } = {}) {
     './dataLocation': { getDataRoot: () => '/tmp' },
     '../../shared/effort': sharedEffort,
     '../../shared/lineDiff': sharedLineDiff,
+    './scriptSyntax': load('../electron/services/scriptSyntax.ts', { vm }),
     'fs/promises': { mkdir: async () => {}, writeFile: async () => {}, readdir: async () => [], readFile: async () => '', rm: async () => {} },
     path: { join: (...parts) => parts.join('/'), isAbsolute: () => true, relative: () => '', resolve: (p) => p, sep: '/' },
     './ollama': {

@@ -9,6 +9,7 @@ import { IMAGE_FOR_CODE_SYSTEM_PROMPT, describeImage } from './vision'
 import type { CodeActivity, CodeGenProgress, CodeLiveWrite, GeneratedApp, GeneratedAppSummary, Profile } from '../../shared/ipc'
 import { diffLines } from '../../shared/lineDiff'
 import { getDataRoot } from './dataLocation'
+import { findInlineScriptSyntaxErrors, type InlineScriptProblem } from './scriptSyntax'
 import { t } from '../../shared/i18n'
 
 /**
@@ -390,7 +391,7 @@ const REPAIR_SYSTEM_PROMPT =
  * page. Renvoie la liste des problèmes trouvés, formulée pour être renvoyée telle quelle au modèle
  * (passe de réparation) et affichée à l'utilisateur si elle persiste.
  */
-export function validateGeneratedHtml(html: string): string[] {
+function structuralIssues(html: string): string[] {
   const issues: string[] = []
 
   if (!/<html[\s>]/i.test(html)) issues.push(t('codegen.issue.noHtml'))
@@ -471,6 +472,47 @@ export function validateGeneratedHtml(html: string): string[] {
   }
 
   return issues
+}
+
+/**
+ * Bug vu en vrai : une application livrée avec `function toggleAlarm(false) {` — « Unexpected token 'false' ». Tout
+ * le script était mort (aucun bouton ne marchait) et Jaris l'a présentée comme terminée : les motifs de texte
+ * ci-dessus ne compilent jamais le JavaScript. Chaque script écrit dans la page est donc COMPILÉ (sans être exécuté,
+ * voir scriptSyntax.ts). Le message au modèle est précis (script, ligne, erreur du moteur, ligne fautive) ; celui
+ * montré à l'utilisateur, s'il reste, est écrit pour quelqu'un qui ne code pas (syntaxIssueForUser).
+ */
+function syntaxIssueForModel(problem: InlineScriptProblem): string {
+  const where = problem.line === null ? '' : `, ligne ${problem.line} de ce script (ligne ${problem.fileLine} du fichier)`
+  const source = problem.sourceLine ? ` La ligne fautive : ${problem.sourceLine}` : ''
+  return (
+    `erreur de syntaxe JavaScript dans le script n°${problem.script}${where} : « ${problem.message} ».${source} — ` +
+    "une seule erreur de syntaxe empêche TOUT ce script de s'exécuter (aucun bouton ne marche) : corrige-la sans " +
+    "rien changer d'autre"
+  )
+}
+
+function syntaxIssueForUser(problem: InlineScriptProblem): string {
+  return t('codegen.issue.scriptBroken', { line: problem.fileLine ?? '?', message: problem.message })
+}
+
+interface HtmlInspection {
+  structural: string[]
+  syntax: InlineScriptProblem[]
+}
+
+function inspectGeneratedHtml(html: string): HtmlInspection {
+  return { structural: structuralIssues(html), syntax: findInlineScriptSyntaxErrors(html) }
+}
+
+const issuesForModel = (found: HtmlInspection): string[] => [...found.structural, ...found.syntax.map(syntaxIssueForModel)]
+const issuesForUser = (found: HtmlInspection): string[] => [...found.structural, ...found.syntax.map(syntaxIssueForUser)]
+
+/**
+ * Tous les défauts mécaniquement détectables du fichier, formulés pour le modèle (passe de réparation) : motifs de
+ * texte, puis erreurs de syntaxe des scripts.
+ */
+export function validateGeneratedHtml(html: string): string[] {
+  return issuesForModel(inspectGeneratedHtml(html))
 }
 
 /**
@@ -603,7 +645,10 @@ export async function listGeneratedApps(limit = 20): Promise<GeneratedAppSummary
 /** Recharge une application déjà générée depuis son dossier, pour la remontrer dans l'aperçu (voir ci-dessus). */
 export async function loadGeneratedApp(path: string): Promise<GeneratedApp> {
   const html = await readFile(join(path, 'index.html'), 'utf-8')
-  return { html, path, issues: [] }
+  // Rouvrir une application dont le JavaScript ne compile pas ne doit pas la présenter comme intacte : l'avertissement
+  // de sa génération ne reviendrait sinon jamais.
+  const syntax = findInlineScriptSyntaxErrors(html)
+  return { html, path, issues: syntax.map(syntaxIssueForUser), scriptErrors: syntax.length, reopened: true }
 }
 
 /**
@@ -827,7 +872,8 @@ export async function generateApp(
   // régulièrement passer des défauts pourtant mécaniquement détectables (code hors <script>, balises non
   // appariées, CDN oublié). Ici on les détecte pour de vrai, et on les renvoie au modèle avec la liste
   // exacte de ce qui ne va pas — beaucoup plus efficace qu'une nouvelle demande de relecture générique.
-  let issues = validateGeneratedHtml(final)
+  let found = inspectGeneratedHtml(final)
+  let issues = issuesForModel(found)
   if (issues.length) {
     const detected = issues.length
     try {
@@ -846,9 +892,14 @@ export async function generateApp(
       // La réparation n'est gardée que si elle améliore vraiment les choses : un modèle peut très bien
       // renvoyer une version differemment cassée, auquel cas on garde la précédente.
       if (repairedHtml) {
-        const remaining = validateGeneratedHtml(repairedHtml)
-        if (remaining.length < issues.length) {
+        const after = inspectGeneratedHtml(repairedHtml)
+        const remaining = issuesForModel(after)
+        // Une erreur de syntaxe tue TOUT le script : une réparation qui en retire une est gardée même si elle laisse
+        // autant de défauts au total (un défaut mineur à la place d'une page dont aucun bouton ne marche).
+        const fewerFatal = after.syntax.length < found.syntax.length && remaining.length <= issues.length
+        if (remaining.length < issues.length || fewerFatal) {
           final = repairedHtml
+          found = after
           issues = remaining
         }
       }
@@ -872,5 +923,5 @@ export async function generateApp(
   const written = diffLines(currentHtml ?? null, final)
   onActivity?.({ kind: currentHtml ? 'edit' : 'create', path: 'index.html', added: written.added, removed: written.removed })
 
-  return { html: final, path: dir, issues }
+  return { html: final, path: dir, issues: issuesForUser(found), scriptErrors: found.syntax.length }
 }
