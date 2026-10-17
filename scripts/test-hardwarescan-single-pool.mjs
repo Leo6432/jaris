@@ -372,8 +372,9 @@ test('modèles à tester : « model not found » reste à faire même après un 
 // reste proposée, et sans score recopié la 7B redevient à tester : la clôture ne vaut que pour un score connu.
 test('modèles à tester : un cas clos (K2 Horizon 7B en code, 3/5 définitif) ne fait plus proposer le test', () => {
   const mid = 'hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M'
-  const row = `| ${mid} | 3/5 |\n`
-  assert.ok(REAL_SCORES.includes(row), 'le 3/5 de la 7B est recopié')
+  // Fins de ligne lues telles quelles : \r\n sur la CI Windows.
+  const row = /^\| hf\.co\/IFM\/K2-Horizon-7B-GGUF:Q4_K_M \| 3\/5 \|\r?\n/m
+  assert.ok(row.test(REAL_SCORES), 'le 3/5 de la 7B est recopié')
   const missing = (model) => `erreur : 404 {"error":"model '${model}' not found"}`
   const traces = (scan) => {
     const lines = [{ type: 'campagne', versions: { conversation: 6, demandes: scan.SCENARIO_TEST_VERSION, vision: scan.VISION_TEST_VERSION, code: scan.CODE_TEST_VERSION } }]

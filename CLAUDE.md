@@ -8534,3 +8534,7 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   - un autre modèle dans le même état reste proposé ;
   - sans score recopié, la 7B redevient à tester.
   Le test échoue quand on vide `CLOSED_TODO`.
+  **Piège CRLF revenu (déjà vu à l'étape 316), premier échec de la CI de la 0.34.26 :** le test cherchait la ligne
+  du 3/5 avec `\n`, mais sous Windows le fichier des scores se lit avec `\r\n`. Ce n'est pas le code qui était en
+  cause. Un test qui cherche ou retire une ligne précise d'un fichier du dépôt doit l'écrire `\r?\n` ; il est
+  vérifié ici avec le fichier converti en `\r\n`, mutation comprise.
