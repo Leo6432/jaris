@@ -4,7 +4,7 @@ import { converse, type ConverseRestrictions } from './assistant'
 import { IMAGE_CHAT_SYSTEM_PROMPT, describeImage } from './vision'
 import { appendConversationEntry, getConversationHistory } from './conversationStore'
 import { clearSessionHistory, getSessionHistory, pushSessionExchange } from './conversationSession'
-import { extractMemoryFromExchange } from './memoryExtractor'
+import { cancelMemoryExtraction, extractMemoryFromExchange } from './memoryExtractor'
 import { getLiveGpuStatus } from './hardwareScan'
 import { getProfile } from './profileStore'
 import { checkGpuTempSafety } from './resourceMonitor'
@@ -138,6 +138,9 @@ class ChatSession {
     // Étape 273 : chaque recherche web ou page lue, dès qu'elle a lieu (bloc dépliable affiché en direct).
     onWebActivity?: (activity: WebActivity) => void
   ): Promise<ChatMessage> {
+    // Nouvelle demande (Chat ou téléphone) : la mémoire automatique de l'échange précédent ne doit pas occuper Ollama
+    // devant elle (vu en vrai : environ une minute d'attente). Son échange sera relu à la prochaine réponse.
+    cancelMemoryExtraction()
     // Sans ça, un message envoyé avant que le premier getVisibleMessages() (appelé au montage de
     // ChatPanel.tsx) ait fini de charger l'historique pourrait écraser la restauration en cours.
     await this.ensureLoaded()

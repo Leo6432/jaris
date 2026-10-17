@@ -6,7 +6,7 @@ import { synthesizeSpeech } from './tts'
 import { appendConversationEntry } from './conversationStore'
 import { converse } from './assistant'
 import { VOICE_CONTEXT_MAX_AGE_MS, clearSessionHistory, getSessionHistory, pushSessionExchange } from './conversationSession'
-import { extractMemoryFromExchange } from './memoryExtractor'
+import { cancelMemoryExtraction, extractMemoryFromExchange } from './memoryExtractor'
 import { getProfile } from './profileStore'
 import { getLiveGpuStatus } from './hardwareScan'
 import { checkGpuTempSafety } from './resourceMonitor'
@@ -263,6 +263,9 @@ export class VoicePipeline extends EventEmitter {
    */
   private async runTranscript(firstPart: string): Promise<void> {
     this.busy = true
+    // Nouvelle demande : la mémoire automatique de l'échange précédent ne doit pas occuper Ollama devant la correction
+    // et la réponse (vu en vrai : environ une minute d'attente). Son échange sera relu à la prochaine réponse.
+    cancelMemoryExtraction()
     let parts = firstPart ? [firstPart] : []
 
     while (true) {
