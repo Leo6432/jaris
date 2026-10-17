@@ -1,8 +1,8 @@
 import { app } from 'electron'
-import { existsSync } from 'fs'
+import { existsSync, rmSync } from 'fs'
 import { cp, mkdir, rm } from 'fs/promises'
 import { join } from 'path'
-import { DATA_SUBDIR, DEFAULT_USER_DATA, OWNED_ENTRIES, getStorageRoot, writeMarker } from './storageRoot'
+import { DATA_SUBDIR, DEFAULT_USER_DATA, ELECTRON_SUBDIR, OWNED_ENTRIES, carryChromiumKeySync, getStorageRoot, writeMarker } from './storageRoot'
 import { t } from '../../shared/i18n'
 
 /**
@@ -38,10 +38,23 @@ export async function copyDataTo(newRoot: string, onProgress: (message: string) 
  * Étape 2 : bascule. Le fichier-repère pointe désormais vers la nouvelle racine, lue au prochain démarrage.
  * Le dossier interne de Chromium de CETTE exécution est encore ouvert : noté pour être effacé au démarrage
  * suivant (cleanupStaleChromiumData).
+ *
+ * Sa clé de chiffrement part d'abord dans le nouveau dossier de Chromium (CHROMIUM_KEY_FILE), en remplaçant toute
+ * clé laissée là par une ancienne session : c'est elle qui a chiffré le jeton GitHub copié avec les données. Sans
+ * elle, Chromium en crée une nouvelle au démarrage suivant et le jeton devient illisible (déconnecté de GitHub).
  */
 export function switchStorageRoot(newRoot: string): void {
   const currentElectronDir = app.getPath('userData')
-  writeMarker(DEFAULT_USER_DATA, newRoot, currentElectronDir === DEFAULT_USER_DATA ? null : currentElectronDir)
+  const newElectronDir = join(newRoot, ELECTRON_SUBDIR)
+  const createdElectronDir = !existsSync(newElectronDir)
+  carryChromiumKeySync([currentElectronDir], newElectronDir, true)
+  try {
+    writeMarker(DEFAULT_USER_DATA, newRoot, currentElectronDir === DEFAULT_USER_DATA ? null : currentElectronDir)
+  } catch (err) {
+    // Rien n'a basculé : ne rien laisser derrière.
+    if (createdElectronDir) rmSync(newElectronDir, { recursive: true, force: true })
+    throw err
+  }
 }
 
 /** Étape 3 : effacement des anciennes données, une fois la bascule faite. */
@@ -51,7 +64,17 @@ export async function removeOldData(previousRoot: string | null, newRoot: string
   // Dans le dossier par défaut de Windows, seules les entrées CONNUES sont effacées (il garde le
   // fichier-repère) ; un ancien dossier `jaris-data` n'a jamais contenu que nos fichiers.
   if (!previousRoot) {
-    for (const entry of OWNED_ENTRIES) await rm(join(from, entry), { recursive: true, force: true })
+    // Chaque entrée est tentée, même après un échec (fichier encore ouvert) : une seule entrée bloquée ne doit pas
+    // laisser toutes les suivantes sur l'ancien disque. L'échec remonte ensuite (signalé comme reste à effacer).
+    let failure: unknown = null
+    for (const entry of OWNED_ENTRIES) {
+      try {
+        await rm(join(from, entry), { recursive: true, force: true })
+      } catch (err) {
+        failure ??= err
+      }
+    }
+    if (failure) throw failure
   } else {
     await rm(from, { recursive: true, force: true })
   }

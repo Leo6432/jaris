@@ -387,4 +387,18 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
   await stopped
   assert.equal(active.size, 0, 'aucun blocage ne doit survivre au test')
   assert.equal(events.filter((e) => e === 'stop').length, 2)
+
+  // « Déplacer » copie puis efface les résultats du test juste après l'avoir arrêté : l'arrêt attend sa vraie sortie.
+  const third = testUnscoredModels(() => {}).catch(() => {})
+  await new Promise((resolve) => setImmediate(resolve))
+  const slow = procs.at(-1)
+  let exited = false
+  slow.kill = () =>
+    setTimeout(() => {
+      exited = true
+      slow.emit('close', null)
+    }, 30)
+  await stopModelTest()
+  assert.equal(exited, true, 'stopModelTest() doit attendre que le test soit vraiment sorti')
+  await third
 })
