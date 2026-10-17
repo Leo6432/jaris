@@ -20,11 +20,12 @@ const source = ts.transpileModule(readFileSync(new URL('../electron/services/cha
 
 function setup(pastEntries) {
   const appended = []
-  const calls = { converse: 0, vision: [], exchanges: [] }
+  const calls = { converse: 0, vision: [], exchanges: [], memoryCancels: 0, cancelsSeenByConverse: [] }
   const modules = {
     './assistant': {
       converse: async (prompt, ...rest) => {
         calls.converse += 1
+        calls.cancelsSeenByConverse.push(calls.memoryCancels)
         // Étape 173 : dernier argument = onImage, appelé quand generate_image a dessiné une image.
         // Étape 272 : une réponse longue, que le bouton « Arrêter » interrompt après un premier morceau.
         // rest[4] = signal, rest[7] = onToken (voir la signature de converse()).
@@ -70,7 +71,7 @@ function setup(pastEntries) {
       getSessionHistory: async () => [],
       pushSessionExchange: (prompt, reply) => { calls.exchanges.push([prompt, reply]) }
     },
-    './memoryExtractor': { extractMemoryFromExchange: async () => {} },
+    './memoryExtractor': { extractMemoryFromExchange: async () => {}, cancelMemoryExtraction: () => { calls.memoryCancels += 1 } },
     './hardwareScan': { getLiveGpuStatus: async () => ({ freeVramGb: null, tempC: null }) },
     './profileStore': { getProfile: async () => null },
     './resourceMonitor': { checkGpuTempSafety: () => ({ action: 'ok', message: '' }) },
@@ -124,6 +125,14 @@ test("un nouveau message envoyé s'ajoute à la suite de l'historique restauré,
     ])
   )
   assert.equal(appended.length, 1)
+})
+
+test('une nouvelle demande (Chat ou téléphone) arrête la mémoire automatique AVANT de réfléchir', async () => {
+  const { chatSession, calls } = setup([])
+  await chatSession.send('première question', () => {}, () => {})
+  // Le téléphone passe par le même send(), avec ses restrictions.
+  await chatSession.send('depuis le téléphone', () => {}, () => {}, undefined, undefined, undefined, { allowedTools: new Set(), note: '', refusal: '' })
+  assert.deepEqual([...calls.cancelsSeenByConverse], [1, 2], 'arrêtée avant chaque réflexion, pas après')
 })
 
 test('un historique vide (premier lancement) donne un fil vide, pas une erreur', async () => {
