@@ -1,7 +1,7 @@
 import { app } from 'electron'
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
-import { dirname, join, win32 } from 'path'
+import { dirname, join, resolve, win32 } from 'path'
 
 /**
  * Étape 143, Léo : « si il choisit dès l'installation le D tout est dans le D, ou si il veut changer dans les
@@ -34,13 +34,68 @@ export const DOWNLOADS_SUBDIR = 'downloads'
 export const AUTO_ROOT_NAME = 'Jaris-data'
 
 /**
+ * Identité Tailscale de l'accès téléphone (main.ts). JAMAIS nommé « tailscale » : sous Windows, Tailscale réécrit
+ * alors les droits du dossier, ce qui est refusé sans administrateur (v0.22.0 ; voir stateDirFor, tunnel/main.go).
+ */
+export const PHONE_TUNNEL_DIR = 'phone-tunnel'
+
+/**
  * Ce que Jaris écrit lui-même dans son dossier de données, et RIEN d'autre : jamais les fichiers internes de
  * Chromium qui partageaient autrefois le même dossier. `generated-videos` reste après le retrait du Montage
  * (étape 200) : ce sont les vidéos de Léo, elles suivent ses données comme avant. `language.json` (étape 293) aussi :
  * sans lui, un « Déplacer » faisait repartir Jaris dans la langue de Windows au lieu de celle choisie.
  * `github-connection.json` (étape 297) : la trace de la connexion GitHub, sans le jeton.
+ *
+ * Tout ce qui n'est PAS dans cette liste est perdu par un « Déplacer » : l'ancien dossier de données est effacé en
+ * entier, et l'ancien dossier de Chromium aussi au démarrage suivant (cleanupStaleChromiumData). D'où les ajouts :
+ * - `github-token.bin` et `phone-tunnel` : le jeton GitHub chiffré et l'identité Tailscale de l'accès téléphone,
+ *   rangés autrefois dans le dossier de Chromium (voir LEGACY_ELECTRON_ENTRIES) ;
+ * - `phone-devices.json` : les téléphones appairés ;
+ * - `code-conversations.json` : les conversations du mode Code ;
+ * - les trois fichiers du bouton « Tester les modèles sans score » (benchmarkRunner.ts et
+ *   scripts/benchmark-models.mjs : résultats, traces brutes, registre des modèles téléchargés par le test) ;
+ * - `duel-pilotes` : le rapport du duel des pilotes d'écran (étape 249, fonctionnalité retirée, rapport gardé).
+ * Restent volontairement dehors, parce que Jaris les reconstruit seul : `searxng-docker` (recopié depuis le
+ * programme à chaque démarrage, conteneur recréé s'il pointe ailleurs : searxngHome.ts) et les réglages de confort
+ * de la fenêtre (largeur de l'aperçu, durée et qualité de vidéo, dans le stockage local de Chromium : valeurs par
+ * défaut sinon).
  */
-export const OWNED_ENTRIES = ['conversations', 'conversation-history.json', 'profile.json', 'language.json', 'memory', 'generated-apps', 'generated-images', 'generated-videos', 'reminders.json', 'journal-demandes.txt', 'github-connection.json']
+export const OWNED_ENTRIES = [
+  'conversations',
+  'conversation-history.json',
+  'profile.json',
+  'language.json',
+  'memory',
+  'generated-apps',
+  'generated-images',
+  'generated-videos',
+  'reminders.json',
+  'journal-demandes.txt',
+  'github-connection.json',
+  'github-token.bin',
+  'phone-devices.json',
+  'code-conversations.json',
+  'benchmark-nouveaux-modeles.md',
+  'benchmark-nouveaux-modeles.traces.jsonl',
+  'benchmark-nouveaux-modeles.md.telecharges.json',
+  'duel-pilotes',
+  PHONE_TUNNEL_DIR
+]
+
+/**
+ * Ce que les versions d'avant rangeaient dans le dossier de CHROMIUM (`app.getPath('userData')`), qui change de place
+ * à chaque « Déplacer » et dont l'ancien exemplaire est effacé au démarrage suivant : le jeton GitHub chiffré
+ * (github.ts) et l'identité Tailscale de l'accès téléphone (main.ts). Ils vivent désormais avec les autres données ;
+ * une installation qui les a encore à l'ancien endroit les y retrouve au démarrage (adoptLegacyEntriesSync).
+ */
+export const LEGACY_ELECTRON_ENTRIES = ['github-token.bin', PHONE_TUNNEL_DIR]
+
+/**
+ * Fichier de Chromium qui garde la clé de chiffrement de Windows (`os_crypt.encrypted_key`, protégée par DPAPI) :
+ * c'est avec elle que `safeStorage` chiffre le jeton GitHub. Un dossier de Chromium neuf en crée une NOUVELLE, et
+ * le jeton copié devient illisible : la clé doit suivre chaque déplacement du dossier de Chromium.
+ */
+export const CHROMIUM_KEY_FILE = 'Local State'
 
 interface StorageMarker {
   root?: unknown
@@ -116,6 +171,56 @@ export function moveOwnedEntriesSync(from: string, to: string): void {
   for (const source of copied) rmSync(source, { recursive: true, force: true })
 }
 
+function sameDir(a: string, b: string): boolean {
+  const norm = (p: string): string => resolve(p).replace(/[\\/]+$/, '').toLowerCase()
+  return norm(a) === norm(b)
+}
+
+/**
+ * Range dans `dataDir` ce qui était encore dans le dossier de Chromium `electronDir` (LEGACY_ELECTRON_ENTRIES).
+ * Jamais par-dessus une donnée déjà rangée. Une entrée qui ne peut pas être déplacée reste où elle est (rien n'efface
+ * le dossier de Chromium en service) et sera retentée au prochain démarrage : un échec ici ne doit jamais faire
+ * abandonner la racine de stockage.
+ */
+export function adoptLegacyEntriesSync(electronDir: string, dataDir: string): void {
+  if (sameDir(electronDir, dataDir)) return
+  for (const entry of LEGACY_ELECTRON_ENTRIES) {
+    const source = join(electronDir, entry)
+    const dest = join(dataDir, entry)
+    if (!existsSync(source) || existsSync(dest)) continue
+    try {
+      mkdirSync(dataDir, { recursive: true })
+      try {
+        renameSync(source, dest)
+      } catch {
+        // Autre disque, ou renommage refusé : copie d'abord, original effacé seulement ensuite.
+        cpSync(source, dest, { recursive: true })
+        rmSync(source, { recursive: true, force: true })
+      }
+    } catch (err) {
+      console.error(`[jaris] ${entry} n'a pas pu rejoindre les données, gardé à son ancien emplacement :`, err)
+    }
+  }
+}
+
+/**
+ * Copie la clé de chiffrement de Chromium (CHROMIUM_KEY_FILE) du premier dossier de `sources` qui en a une vers
+ * `electronDir`. Sans `overwrite`, une clé déjà présente est gardée (dossier de Chromium déjà en service).
+ */
+export function carryChromiumKeySync(sources: (string | null)[], electronDir: string, overwrite: boolean): boolean {
+  const target = join(electronDir, CHROMIUM_KEY_FILE)
+  if (!overwrite && existsSync(target)) return false
+  for (const dir of sources) {
+    if (!dir || sameDir(dir, electronDir)) continue
+    const source = join(dir, CHROMIUM_KEY_FILE)
+    if (!existsSync(source)) continue
+    mkdirSync(electronDir, { recursive: true })
+    copyFileSync(source, target)
+    return true
+  }
+  return false
+}
+
 /**
  * Au démarrage : quelle racine utiliser, et prépare-la. Renvoie `null` quand tout reste à l'emplacement par
  * défaut de Windows. Ne lève jamais : dans le pire des cas, Jaris démarre sur l'emplacement par défaut.
@@ -139,8 +244,19 @@ function bootstrap(): string | null {
     // Données encore dans le dossier par défaut (première installation sur D d'un Jaris déjà utilisé, ou
     // ancien repère) : rapatriées AVANT que le moindre store ne calcule son chemin.
     moveOwnedEntriesSync(DEFAULT_USER_DATA, join(root, DATA_SUBDIR))
-    writeMarker(DEFAULT_USER_DATA, root, readStaleElectronDir(DEFAULT_USER_DATA))
-    app.setPath('userData', join(root, ELECTRON_SUBDIR))
+    const electronDir = join(root, ELECTRON_SUBDIR)
+    const staleElectronDir = readStaleElectronDir(DEFAULT_USER_DATA)
+    adoptLegacyEntriesSync(electronDir, join(root, DATA_SUBDIR))
+    // Le dossier de Chromium de cette racine n'a pas encore de clé (installation sur D d'un Jaris déjà utilisé) :
+    // celle de l'ancien dossier, AVANT que Chromium n'en crée une nouvelle — sinon le jeton GitHub rapatrié ci-dessus
+    // ne se relirait plus. Les deux anciens dossiers sont encore là : ils ne sont effacés qu'après `ready`.
+    try {
+      carryChromiumKeySync([staleElectronDir, DEFAULT_USER_DATA], electronDir, false)
+    } catch (err) {
+      console.error('[jaris] Clé de chiffrement de Chromium non reprise :', err)
+    }
+    writeMarker(DEFAULT_USER_DATA, root, staleElectronDir)
+    app.setPath('userData', electronDir)
     return root
   } catch (err) {
     console.error('[jaris] Racine de stockage inutilisable, emplacement par défaut conservé :', err)

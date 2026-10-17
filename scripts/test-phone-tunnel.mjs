@@ -144,10 +144,12 @@ test('le message d’erreur du tunnel arrive tel quel', async () => {
 // le tunnel ne doivent utiliser ce nom — vérifié des deux côtés, la CI tournant, elle, en administrateur.
 test('le dossier d’état du tunnel ne s’appelle jamais « tailscale »', () => {
   const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
-  const dirName = main.match(/const PHONE_TUNNEL_DIR = '([^']+)'/)?.[1]
-  assert.ok(dirName, 'PHONE_TUNNEL_DIR introuvable dans main.ts')
+  const storage = readFileSync(new URL('../electron/services/storageRoot.ts', import.meta.url), 'utf8')
+  const dirName = storage.match(/export const PHONE_TUNNEL_DIR = '([^']+)'/)?.[1]
+  assert.ok(dirName, 'PHONE_TUNNEL_DIR introuvable dans storageRoot.ts')
   assert.notEqual(dirName.toLowerCase(), 'tailscale')
-  assert.match(main, /tunnelStateDir: join\(app\.getPath\('userData'\), PHONE_TUNNEL_DIR\)/)
+  // Avec les autres données (et non plus le dossier de Chromium, effacé après un « Déplacer »).
+  assert.match(main, /tunnelStateDir: join\(getDataRoot\(\), PHONE_TUNNEL_DIR\)/)
   const go = readFileSync(new URL('../tunnel/main.go', import.meta.url), 'utf8')
   assert.match(go, /dir := stateDirFor\(\*stateDir\)/, 'le tunnel doit aussi se protéger lui-même')
   assert.match(go, /Dir:\s+dir,/)

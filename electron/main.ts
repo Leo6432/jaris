@@ -1,7 +1,7 @@
 import { app, clipboard, dialog, ipcMain, nativeImage, nativeTheme, session, shell, BrowserWindow, globalShortcut, screen, Tray, Menu, Notification } from 'electron'
 // Étape 143 : EN PREMIER — redirige le dossier interne de Chromium et les données vers le dossier de Jaris
 // (installé sur D, ou déplacé) avant que quoi que ce soit ne calcule un chemin ou ne prenne le verrou d'instance.
-import { cleanupStaleChromiumData, getStorageRoot } from './services/storageRoot'
+import { PHONE_TUNNEL_DIR, cleanupStaleChromiumData, getStorageRoot } from './services/storageRoot'
 import { pickImageModel } from '../shared/imageModel'
 import { PILOT_MODEL, PILOT_MODEL_LABEL, pickPilotModel } from '../shared/pilotModel'
 import {
@@ -1031,8 +1031,6 @@ function tunnelBinaryPath(): string {
   return app.isPackaged ? join(process.resourcesPath, 'bin', name) : join(__dirname, '../../tunnel/dist', name)
 }
 
-const PHONE_TUNNEL_DIR = 'phone-tunnel'
-
 function getPhoneAccess(): PhoneAccessManager {
   if (phoneAccess) return phoneAccess
   // Dossier « tailscale » laissé à moitié créé par la v0.22.0 (journaux seulement : la connexion n'avait jamais
@@ -1040,11 +1038,11 @@ function getPhoneAccess(): PhoneAccessManager {
   void rm(join(app.getPath('userData'), 'tailscale'), { recursive: true, force: true }).catch(() => {})
   const manager = new PhoneAccessManager({
     tunnelBinary: tunnelBinaryPath(),
-    // L'identité Tailscale de ce PC reste dans le dossier de Jaris : elle n'a pas à suivre un déplacement des
-    // données (Options → Général), et la perdre obligerait à se reconnecter. JAMAIS nommé « tailscale » : sous
-    // Windows, Tailscale réécrit alors les droits du dossier, ce qui est refusé sans administrateur (« Access
-    // is denied », v0.22.0 chez Léo). Voir aussi stateDirFor (tunnel/main.go).
-    tunnelStateDir: join(app.getPath('userData'), PHONE_TUNNEL_DIR),
+    // L'identité Tailscale de ce PC vit avec les autres données (getDataRoot) et suit donc un « Déplacer ». Elle
+    // était rangée dans le dossier de Chromium, qui change de place à chaque déplacement et dont l'ancien exemplaire
+    // est effacé : la perdre obligeait à se reconnecter à Tailscale. Une identité encore à l'ancien endroit est
+    // rapatriée au démarrage (storageRoot.ts). Nom du dossier : voir PHONE_TUNNEL_DIR (jamais « tailscale »).
+    tunnelStateDir: join(getDataRoot(), PHONE_TUNNEL_DIR),
     devicesFile: join(getDataRoot(), 'phone-devices.json'),
     pageDir: join(resourcesRoot(), 'phone'),
     actions: {
@@ -1515,6 +1513,10 @@ app.whenReady().then(async () => {
     pipeline?.stop()
     ttsClient.stop()
     await stopOllamaCompletely()
+    // Même raison pour ce qui écrit dans les données pendant la copie : l'accès téléphone (identité Tailscale,
+    // téléphones appairés, messages reçus) et un test de modèles en cours (il reprendra au prochain clic).
+    stopModelTest()
+    await phoneAccess?.disable().catch(() => {})
 
     // Étape 143, Léo : « ça doit tout déplacer, jamais une partie » — programme, conversations, Ollama,
     // Python, voix, Docker : tout ou rien (relocation.ts).
@@ -1562,6 +1564,7 @@ app.whenReady().then(async () => {
       log(t('main.move.restartingServices'))
       void ensureOllamaRunning(log)
       await startVoicePipeline()
+      if ((await getProfile())?.phoneAccessEnabled) void getPhoneAccess().enable().catch(() => {})
       return { success: false, message: err instanceof Error ? err.message : String(err) }
     }
   })

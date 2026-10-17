@@ -1,4 +1,4 @@
-import { app, safeStorage } from 'electron'
+import { safeStorage } from 'electron'
 import { readFile, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import type { GithubRepoSummary } from '../../shared/ipc'
@@ -265,8 +265,15 @@ function parseTokenSet(text: string): GithubTokenSet | null {
   }
 }
 
+/**
+ * Le jeton vit avec les autres données de Jaris (getDataRoot), pas dans le dossier de Chromium : celui-ci change de
+ * place à chaque « Déplacer » et son ancien exemplaire est effacé au démarrage suivant — un jeton rangé là était
+ * perdu à chaque déplacement. Un jeton encore à l'ancien endroit est rapatrié au démarrage (storageRoot.ts).
+ */
+export const GITHUB_TOKEN_FILE = 'github-token.bin'
+
 function tokenPath(): string {
-  return join(app.getPath('userData'), 'github-token.bin')
+  return join(getDataRoot(), GITHUB_TOKEN_FILE)
 }
 
 /** Enregistre le jeton. Renvoie `false` quand Windows n'a pas pu le chiffrer : il n'est alors gardé qu'en mémoire. */
@@ -328,8 +335,9 @@ export async function clearGithubToken(): Promise<void> {
 // Léo : « ça déconnecte GitHub tous les jours ». Le jeton d'une application OAuth n'expire pas tout seul (GitHub ne
 // le retire qu'après un an sans usage), et rien dans Jaris ne l'efface hors d'un refus de GitHub ou d'un clic sur
 // « Se déconnecter » : la cause n'est pas visible d'ici. Plutôt qu'un correctif deviné, Jaris garde une trace SANS
-// le jeton (date, compte, refus éventuel) avec les données de Léo — pas à côté du jeton, pour qu'elle survive si
-// c'est justement le dossier du jeton qui disparaît —, et dit à la déconnexion suivante ce qui s'est vraiment passé.
+// le jeton (date, compte, refus éventuel) avec les données de Léo, et dit à la déconnexion suivante ce qui s'est
+// vraiment passé. (Le jeton vivait alors dans le dossier de Chromium, effacé après un « Déplacer » ; il a rejoint
+// la trace dans les données depuis.)
 
 export const GITHUB_RECORD_FILE = 'github-connection.json'
 

@@ -1,12 +1,17 @@
 import { withI18n } from './i18n-test-module.mjs'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import * as fsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import * as nodePath from 'node:path'
 import { join } from 'node:path'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { loadTsModule } from './load-ts-module.mjs'
 
 const nodeRequire = createRequire(import.meta.url)
 
@@ -42,7 +47,7 @@ function transpile(path) {
  * Charge storageRoot.ts (qui s'exécute à son chargement, comme au vrai démarrage) puis dataLocation.ts, avec
  * un `app` simulé qui retient les appels à setPath.
  */
-function loadStorage(defaultUserData, { exe = '/opt/Jaris/Jaris.exe', isPackaged = false, platform = 'linux' } = {}) {
+function loadStorage(defaultUserData, { exe = '/opt/Jaris/Jaris.exe', isPackaged = false, platform = 'linux', dataModules = {} } = {}) {
   const paths = { userData: defaultUserData, exe }
   const setPathCalls = []
   const app = {
@@ -65,7 +70,7 @@ function loadStorage(defaultUserData, { exe = '/opt/Jaris/Jaris.exe', isPackaged
     return exports
   }
   const storageRoot = load('../electron/services/storageRoot.ts', { electron: { app } })
-  const dataLocation = load('../electron/services/dataLocation.ts', { electron: { app }, './storageRoot': storageRoot })
+  const dataLocation = load('../electron/services/dataLocation.ts', { electron: { app }, './storageRoot': storageRoot, ...dataModules })
   return { storageRoot, dataLocation, setPathCalls, app }
 }
 
@@ -238,4 +243,300 @@ test('les 5 stores lisent leur emplacement via getDataRoot, plus jamais userData
       `${name}.ts ne doit plus calculer son chemin depuis userData en dur, sinon "Déplacer" ne le déplace pas`
     )
   }
+})
+
+// ---------------------------------------------------------------------------------------------------------
+// Données oubliées par « Déplacer » : jeton GitHub, identité du téléphone, téléphones appairés, conversations du
+// mode Code, résultats des tests de modèles. Seules les entrées de OWNED_ENTRIES sont copiées ; tout le reste de
+// l'ancien dossier de données est effacé, et l'ancien dossier de Chromium aussi au démarrage suivant.
+// ---------------------------------------------------------------------------------------------------------
+
+/**
+ * Faux `safeStorage` qui se comporte comme le vrai sous Windows : la clé de chiffrement est lue dans le fichier
+ * « Local State » du dossier de Chromium EN SERVICE (`os_crypt.encrypted_key`), et un dossier sans ce fichier en
+ * reçoit une NOUVELLE au premier usage (Chromium, OSCrypt::Init). Un texte chiffré avec une autre clé ne se relit pas.
+ */
+function chromiumSafeStorage(app) {
+  let key = null
+  const currentKey = () => {
+    if (key) return key
+    const file = join(app.getPath('userData'), 'Local State')
+    try {
+      key = JSON.parse(readFileSync(file, 'utf8')).os_crypt.encrypted_key
+    } catch {
+      key = null
+    }
+    if (!key) {
+      key = `cle-${randomUUID()}`
+      mkdirSync(app.getPath('userData'), { recursive: true })
+      writeFileSync(file, JSON.stringify({ os_crypt: { encrypted_key: key } }))
+    }
+    return key
+  }
+  return {
+    isEncryptionAvailable: () => true,
+    encryptString: (text) => Buffer.from(`v10|${currentKey()}|${Buffer.from(text).toString('base64')}`),
+    decryptString: (buffer) => {
+      const [, usedKey, data] = buffer.toString().split('|')
+      if (usedKey !== currentKey()) throw new Error('Error while decrypting the ciphertext provided to safeStorage.decryptString.')
+      return Buffer.from(data, 'base64').toString()
+    }
+  }
+}
+
+/** Une « exécution » de Jaris : la racine lue au démarrage, puis github.ts et la liste des téléphones. */
+function startJaris(userData, options) {
+  const session = loadStorage(userData, options)
+  const github = loadTsModule('electron/services/github.ts', {
+    electron: { safeStorage: chromiumSafeStorage(session.app) },
+    'fs/promises': fsPromises,
+    path: nodePath,
+    './dataLocation': session.dataLocation
+  })
+  const { PhoneDeviceStore } = loadTsModule('electron/services/phoneDevices.ts', {
+    crypto: nodeRequire('node:crypto'),
+    'fs/promises': fsPromises,
+    path: nodePath
+  })
+  const dataRoot = session.dataLocation.getDataRoot()
+  return { ...session, github, devices: new PhoneDeviceStore(join(dataRoot, 'phone-devices.json')), dataRoot }
+}
+
+const GITHUB_TOKEN = 'gho_jeton_de_leo'
+const GITHUB_REFRESH = 'ghr_renouvellement_de_leo'
+
+/** Tout ce qu'un Jaris utilisé a dans ses données en plus des conversations et du profil. */
+async function fillForgottenData(jaris) {
+  assert.equal(await jaris.github.saveGithubToken({ token: GITHUB_TOKEN, refreshToken: GITHUB_REFRESH, expiresAt: 42 }), true)
+  const { token: phoneToken } = await jaris.devices.add('iPhone de Léo')
+  mkdirSync(join(jaris.dataRoot, 'phone-tunnel', 'certs'), { recursive: true })
+  writeFileSync(join(jaris.dataRoot, 'phone-tunnel', 'tailscaled.state'), '{"_machinekey":"mkey:pc-de-leo"}')
+  writeFileSync(join(jaris.dataRoot, 'phone-tunnel', 'certs', 'jaris.ts.net.crt'), 'certificat')
+  writeFileSync(join(jaris.dataRoot, 'code-conversations.json'), '{"repos":["leo/site"]}')
+  writeFileSync(join(jaris.dataRoot, 'benchmark-nouveaux-modeles.md'), '# Résultats')
+  writeFileSync(join(jaris.dataRoot, 'benchmark-nouveaux-modeles.traces.jsonl'), '{"type":"campagne"}\n')
+  writeFileSync(join(jaris.dataRoot, 'benchmark-nouveaux-modeles.md.telecharges.json'), '["k2-horizon:7b"]')
+  mkdirSync(join(jaris.dataRoot, 'duel-pilotes'), { recursive: true })
+  writeFileSync(join(jaris.dataRoot, 'duel-pilotes', 'resultat-duel-pilotes.md'), '# Duel')
+  return phoneToken
+}
+
+/** Après le déplacement et le redémarrage : chaque donnée est là ET se relit avec le vrai code de Jaris. */
+async function assertForgottenDataReadable(jaris, phoneToken) {
+  assert.deepEqual(
+    { ...(await jaris.github.readGithubToken()) },
+    { token: GITHUB_TOKEN, unreadable: false, refreshToken: GITHUB_REFRESH, expiresAt: 42 },
+    'le jeton GitHub doit suivre ET rester lisible (sinon : déconnecté de GitHub après chaque « Déplacer »)'
+  )
+  assert.equal((await jaris.devices.findByToken(phoneToken))?.name, 'iPhone de Léo', 'le téléphone appairé doit encore être reconnu')
+  assert.equal(readFileSync(join(jaris.dataRoot, 'phone-tunnel', 'tailscaled.state'), 'utf8'), '{"_machinekey":"mkey:pc-de-leo"}')
+  assert.equal(readFileSync(join(jaris.dataRoot, 'phone-tunnel', 'certs', 'jaris.ts.net.crt'), 'utf8'), 'certificat')
+  assert.equal(readFileSync(join(jaris.dataRoot, 'code-conversations.json'), 'utf8'), '{"repos":["leo/site"]}')
+  assert.equal(readFileSync(join(jaris.dataRoot, 'benchmark-nouveaux-modeles.md'), 'utf8'), '# Résultats')
+  assert.equal(readFileSync(join(jaris.dataRoot, 'benchmark-nouveaux-modeles.traces.jsonl'), 'utf8'), '{"type":"campagne"}\n')
+  assert.equal(readFileSync(join(jaris.dataRoot, 'benchmark-nouveaux-modeles.md.telecharges.json'), 'utf8'), '["k2-horizon:7b"]')
+  assert.equal(readFileSync(join(jaris.dataRoot, 'duel-pilotes', 'resultat-duel-pilotes.md'), 'utf8'), '# Duel')
+}
+
+/** « Déplacer » tel que relocation.ts l'enchaîne pour les données : copie, bascule, effacement des originaux. */
+async function moveData(jaris, previousRoot, newRoot) {
+  await jaris.dataLocation.copyDataTo(newRoot, () => {})
+  jaris.dataLocation.switchStorageRoot(newRoot)
+  await jaris.dataLocation.removeOldData(previousRoot, newRoot)
+}
+
+test('« Déplacer » (emplacement par défaut → D) : jeton GitHub, téléphone, Code, tests de modèles suivent et se relisent', async () => {
+  const { userData, root } = setupUserData()
+  fillUserData(userData)
+  const before = startJaris(userData)
+  assert.equal(before.dataRoot, userData)
+  const phoneToken = await fillForgottenData(before)
+  const newRoot = join(root, 'D', 'Jaris')
+
+  await moveData(before, null, newRoot)
+  assert.equal(
+    readFileSync(join(newRoot, 'electron', 'Local State'), 'utf8'),
+    readFileSync(join(userData, 'Local State'), 'utf8'),
+    'la clé de chiffrement doit partir dans le nouveau dossier de Chromium au moment de la bascule'
+  )
+
+  // Redémarrage : Chromium dans le nouveau dossier, puis effacement de tout l'ancien dossier par défaut.
+  const after = startJaris(userData)
+  await after.storageRoot.cleanupStaleChromiumData()
+  assert.equal(after.dataRoot, join(newRoot, 'jaris-data'))
+  await assertForgottenDataReadable(after, phoneToken)
+  assert.deepEqual(readdirSync(userData), ['storage-location.json'], 'il ne reste que le fichier-repère sur C')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('« Déplacer » (D → E) : la clé suit même si un ancien dossier de Chromium traîne déjà à destination', async () => {
+  const { userData, root } = setupUserData()
+  const rootA = join(root, 'D', 'Jaris-data')
+  const rootB = join(root, 'E', 'Jaris')
+  mkdirSync(rootA, { recursive: true })
+  writeFileSync(join(userData, 'storage-location.json'), JSON.stringify({ root: rootA }))
+  // Reste d'une ancienne session sur E : un dossier de Chromium avec une AUTRE clé.
+  mkdirSync(join(rootB, 'electron'), { recursive: true })
+  writeFileSync(join(rootB, 'electron', 'Local State'), JSON.stringify({ os_crypt: { encrypted_key: 'cle-oubliee' } }))
+
+  const before = startJaris(userData)
+  assert.equal(before.dataRoot, join(rootA, 'jaris-data'))
+  const phoneToken = await fillForgottenData(before)
+  await moveData(before, rootA, rootB)
+  assert.ok(!existsSync(join(rootA, 'jaris-data')), 'l’ancien dossier de données est bien effacé en entier')
+
+  const after = startJaris(userData)
+  await after.storageRoot.cleanupStaleChromiumData()
+  await assertForgottenDataReadable(after, phoneToken)
+  assert.ok(!existsSync(rootA), 'l’ancienne racine, vide, est retirée')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('mise à jour : jeton GitHub et identité du téléphone encore dans le dossier de Chromium sont rapatriés au démarrage', async () => {
+  const { userData, root } = setupUserData()
+  const rootA = join(root, 'D', 'Jaris-data')
+  const electronA = join(rootA, 'electron')
+  mkdirSync(electronA, { recursive: true })
+  writeFileSync(join(userData, 'storage-location.json'), JSON.stringify({ root: rootA }))
+  // Ce que les versions d'avant écrivaient dans le dossier de Chromium (chiffré avec SA clé).
+  const legacyStorage = chromiumSafeStorage({ getPath: () => electronA })
+  writeFileSync(join(electronA, 'github-token.bin'), legacyStorage.encryptString(GITHUB_TOKEN))
+  mkdirSync(join(electronA, 'phone-tunnel'), { recursive: true })
+  writeFileSync(join(electronA, 'phone-tunnel', 'tailscaled.state'), '{"_machinekey":"mkey:pc-de-leo"}')
+
+  const jaris = startJaris(userData)
+  assert.equal(jaris.app.getPath('userData'), electronA)
+  assert.equal(await jaris.github.loadGithubToken(), GITHUB_TOKEN, 'connexion GitHub gardée à la mise à jour')
+  assert.equal(readFileSync(join(jaris.dataRoot, 'phone-tunnel', 'tailscaled.state'), 'utf8'), '{"_machinekey":"mkey:pc-de-leo"}')
+  assert.ok(!existsSync(join(electronA, 'github-token.bin')) && !existsSync(join(electronA, 'phone-tunnel')), 'plus rien au vieil endroit')
+
+  // Et le « Déplacer » suivant les emporte enfin.
+  const rootB = join(root, 'E', 'Jaris')
+  await moveData(jaris, rootA, rootB)
+  const after = startJaris(userData)
+  await after.storageRoot.cleanupStaleChromiumData()
+  assert.equal(await after.github.loadGithubToken(), GITHUB_TOKEN)
+  assert.equal(readFileSync(join(after.dataRoot, 'phone-tunnel', 'tailscaled.state'), 'utf8'), '{"_machinekey":"mkey:pc-de-leo"}')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('rapatriement : jamais par-dessus une donnée déjà rangée avec les autres', () => {
+  const { userData, root } = setupUserData()
+  const rootA = join(root, 'D', 'Jaris-data')
+  mkdirSync(join(rootA, 'electron'), { recursive: true })
+  mkdirSync(join(rootA, 'jaris-data'), { recursive: true })
+  writeFileSync(join(rootA, 'electron', 'github-token.bin'), 'vieux')
+  writeFileSync(join(rootA, 'jaris-data', 'github-token.bin'), 'récent')
+  writeFileSync(join(userData, 'storage-location.json'), JSON.stringify({ root: rootA }))
+  const { dataLocation } = loadStorage(userData)
+  assert.equal(readFileSync(join(dataLocation.getDataRoot(), 'github-token.bin'), 'utf8'), 'récent')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('installé sur D (ou ancien repère) : la clé de chiffrement de l’ancien dossier suit les données rapatriées', async () => {
+  const { userData, root } = setupUserData()
+  // Jaris déjà utilisé à l'emplacement par défaut, connecté à GitHub.
+  const before = startJaris(userData)
+  await before.github.saveGithubToken(GITHUB_TOKEN)
+  const chosen = join(root, 'D', 'Jaris-data')
+  mkdirSync(chosen, { recursive: true })
+  // Racine décidée au démarrage SANS passer par « Déplacer » (même chemin que le dossier automatique sur D) :
+  // seul le démarrage peut reprendre la clé.
+  writeFileSync(join(userData, 'storage-location.json'), JSON.stringify({ root: chosen }))
+
+  const after = startJaris(userData)
+  await after.storageRoot.cleanupStaleChromiumData()
+  assert.equal(after.dataRoot, join(chosen, 'jaris-data'))
+  assert.deepEqual({ ...(await after.github.readGithubToken()) }, { token: GITHUB_TOKEN, unreadable: false })
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('rien n’est relu depuis un dossier qui va être effacé : jeton et identité du téléphone lus avec les données', () => {
+  const github = readFileSync(new URL('../electron/services/github.ts', import.meta.url), 'utf8')
+  const main = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
+  assert.ok(!github.includes("app.getPath('userData')"), 'github.ts ne doit plus ranger le jeton dans le dossier de Chromium')
+  assert.match(github, /return join\(getDataRoot\(\), GITHUB_TOKEN_FILE\)/)
+  assert.match(main, /tunnelStateDir: join\(getDataRoot\(\), PHONE_TUNNEL_DIR\)/)
+  assert.match(main, /devicesFile: join\(getDataRoot\(\), 'phone-devices\.json'\)/)
+})
+
+test('chaque fichier que Jaris écrit dans ses données suit « Déplacer », sauf ce qu’il sait reconstruire seul', () => {
+  const { userData, root } = setupUserData()
+  const { storageRoot } = loadStorage(userData)
+  rmSync(root, { recursive: true, force: true })
+  const owned = new Set(storageRoot.OWNED_ENTRIES)
+  // Recopié depuis le programme à chaque démarrage, conteneur recréé s'il pointe ailleurs (searxngHome.ts).
+  const rebuiltAlone = new Set(['searxng-docker'])
+
+  const sources = []
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name)
+      if (entry.isDirectory()) walk(full)
+      else if (entry.name.endsWith('.ts')) sources.push([full, readFileSync(full, 'utf8')])
+    }
+  }
+  walk(fileURLToPath(new URL('../electron', import.meta.url)))
+  const constants = new Map()
+  for (const [, text] of sources) {
+    for (const m of text.matchAll(/export const ([A-Z_]+) = '([^']+)'/g)) constants.set(m[1], m[2])
+  }
+  const written = []
+  for (const [file, text] of sources) {
+    for (const m of text.matchAll(/join\(getDataRoot\(\), (?:'([^']+)'|([A-Z_]+))/g)) {
+      const name = m[1] ?? constants.get(m[2])
+      assert.ok(name, `${file} : nom de fichier introuvable pour ${m[0]}`)
+      written.push(name)
+    }
+  }
+  for (const name of ['github-token.bin', 'phone-tunnel', 'phone-devices.json', 'benchmark-nouveaux-modeles.md', 'searxng-docker']) {
+    assert.ok(written.includes(name), `${name} devrait être trouvé par ce contrôle (sinon le contrôle lui-même ne voit plus rien)`)
+  }
+  for (const name of written) {
+    assert.ok(owned.has(name) || rebuiltAlone.has(name), `« ${name} » est écrit dans les données mais perdu au prochain « Déplacer » (OWNED_ENTRIES)`)
+  }
+
+  // Les fichiers voisins que le script de test écrit à côté de ses résultats (mêmes règles de nom que lui).
+  const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8')
+  assert.ok(script.includes("const TRACES_PATH = `${RESULTS_PATH.replace(/\\.md$/i, '')}.traces.jsonl`"), 'nom des traces changé dans le script')
+  assert.ok(script.includes('const ledgerPath = `${RESULTS_PATH}.telecharges.json`'), 'nom du registre changé dans le script')
+  const results = 'benchmark-nouveaux-modeles.md'
+  for (const name of [results.replace(/\.md$/i, '') + '.traces.jsonl', `${results}.telecharges.json`, 'code-conversations.json']) {
+    assert.ok(owned.has(name), `« ${name} » doit suivre « Déplacer »`)
+  }
+})
+
+test('« Déplacer » arrête d’abord ce qui écrit dans les données : accès téléphone et test de modèles', () => {
+  const source = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8')
+  const handlerAt = source.indexOf('IPC_CHANNELS.chooseModelsLocation, async')
+  const handler = source.slice(handlerAt, source.indexOf('IPC_CHANNELS.getRuntimeSetupStatus', handlerAt))
+  const moveAt = handler.indexOf('relocateEverything(')
+  for (const stop of ['stopModelTest()', 'phoneAccess?.disable()']) {
+    const at = handler.indexOf(stop)
+    assert.ok(at !== -1 && at < moveAt, `${stop} doit venir avant relocateEverything`)
+  }
+})
+
+test('effacement des anciennes données : une entrée bloquée n’empêche pas d’effacer les suivantes', async () => {
+  const { userData, root } = setupUserData()
+  fillUserData(userData)
+  writeFileSync(join(userData, 'phone-devices.json'), '{"devices":[]}')
+  const realRm = fsPromises.rm
+  const { dataLocation } = loadStorage(userData, {
+    dataModules: {
+      'fs/promises': {
+        ...fsPromises,
+        // « conversations » encore ouvert par un autre programme : Windows refuse de l'effacer.
+        rm: async (path, options) => {
+          if (path === join(userData, 'conversations')) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' })
+          return realRm(path, options)
+        }
+      }
+    }
+  })
+  await assert.rejects(dataLocation.removeOldData(null, join(root, 'D', 'Jaris')), /EBUSY/)
+  assert.ok(!existsSync(join(userData, 'profile.json')), 'les entrées suivantes sont quand même effacées')
+  assert.ok(!existsSync(join(userData, 'phone-devices.json')))
+  assert.ok(existsSync(join(userData, 'conversations')))
+  rmSync(root, { recursive: true, force: true })
 })

@@ -60,7 +60,9 @@ function fakeFetch(route) {
 const TOKEN = 'gho_jeton_secret_123'
 // Calculé comme le module le calcule : sous Windows (la CI), `join` donne « \\donnees\\github-token.bin » —
 // un chemin écrit en dur avec des « / » ne s'y retrouvait jamais.
-const TOKEN_FILE = join('/donnees', 'github-token.bin')
+// Avec les autres données de Jaris (getDataRoot), plus dans le dossier de Chromium (`/donnees`), effacé après un
+// « Déplacer ».
+const TOKEN_FILE = join('/donnees-jaris', 'github-token.bin')
 
 test('connexion par code : le code demandé avec le seul droit « repo », puis attente polie de la validation', async () => {
   const start = fakeFetch(() => ({
