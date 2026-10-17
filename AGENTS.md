@@ -8396,3 +8396,35 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   pour chaque rôle sur sa machine ne change pas. **Piège de test rencontré :** deux assertions supposaient que TOUS
   les modèles du dépôt avaient un score (« tout est noté », 30 modèles de conversation) — elles nomment maintenant
   phi4-mini comme seule exception, au lieu de compter un nombre sans dire lequel manque.
+
+- **Résultats du 17/10/2026 : Phi-4-mini, code de K2 0.9B, rejeux de K2 7B (Léo, étape 317, Jaris 0.34.23, Ollama
+  0.40.5).** Toutes les réponses de Phi-4-mini relues une à une, justes comprises.
+  1. **Phi-4-mini ne fait aucun vrai appel d'outil** (0 sur 78) : il écrit ses appels en texte, sous des formes qui
+     changent d'une question à l'autre (`look_at_screen{...}`, `media_control({...})`, JSON `{"type": ...}`). Jaris
+     les lirait à voix haute, donc faux — même règle que ministral-3:14b. Relecture des justes : 9 → 7/78 (« je n'ai
+     pas la capacité de fournir le moment actuel » alors que l'heure est dans les consignes ; « Comment tu
+     t'appelles ? » sans son nom) et 4 → 2/48 (« Regardez l'écran » à un merci ; la phrase de Tom recopiée comme si
+     c'était lui). Code 5/5 : il écrit du code correct, c'est l'appel d'outils qui lui manque. **Leçon : un juge qui
+     ne vérifie que l'absence d'appel d'outil laisse passer des refus absurdes (« en tant qu'IA, je n'ai pas
+     l'heure ») — c'est pour ça que les réponses justes se relisent aussi.**
+  2. **K2 0.9B en code : 1/5**, chaque échec ouvert et vérifié (son script renomme le bouton « +1 », deux erreurs de
+     syntaxe, stockage du navigateur interdit dans l'aperçu).
+  3. **K2 7B : la demande coupée, refaite, est juste** (reprise par le pilotage d'écran, permise pour ce cas) :
+     36/48. **Mais ses 2 applis à refaire n'ont pas été rejouées.** Le rejeu ne regardait, pour la vision et le
+     code, que `SCOPED_VISION/CODE_CANDIDATES`, qui écartent les modèles déjà notés — et la 7B avait un score de
+     code provisoire recopié à l'étape 315. Les demandes, elles, utilisaient `CONVERSATION_SCOPE` (non filtré) :
+     même intention (étape 244 : « un cas à refaire l'est même quand le score est recopié »), appliquée à un seul
+     type de cas sur trois. Corrigé : vision et code passent par les listes complètes, filtrées seulement par la
+     portée et `JARIS_ONLY_MODELS`. **Leçon générale, la même que la touche « + » gatée d'un seul côté : quand une
+     règle doit valoir pour plusieurs types de cas, vérifier chaque branche, pas seulement celle qui a motivé la
+     règle.** Régression : `scripts/test-benchmark-cases.mjs` (qwen2.5-coder:7b, vrai 5/5 recopié, cas coupé :
+     rejoué, et seulement lui), qui échoue sans le correctif.
+  **Constat signalé à Léo, pas corrigé ici (règle de choix, donc sa décision) :** sur une machine où aucun modèle
+  noté ne tient (sans carte graphique, ou sans vitesse publiée parmi ceux qui tiennent), Jaris prend le plus léger
+  des modèles notés, quelle que soit sa note. Depuis que la K2 0.9B est notée (v0.34.21), c'est elle (0/48 aux
+  demandes, 1/5 en code), au lieu de qwen3.5:0.8b (13/48). Calculé, pas supposé : sans carte et avec 8 Go de RAM,
+  Rapide, Médium, Puissant et Code tombent tous sur la 0.9B. La machine de Léo (8 Go de VRAM) n'est pas concernée.
+  **Piège de test revenu pour la troisième fois (étapes 314, 316, 317) :** un test qui prend un VRAI modèle du dépôt
+  en supposant qu'il n'a pas de score casse dès que ce score est recopié. Un test qui porte sur autre chose que les
+  scores (version d'Ollama, téléchargement illisible) lit désormais un fichier de scores vide
+  (`JARIS_VERIFIED_SCORES_PATH`, ou un texte de scores filtré) au lieu du vrai fichier.

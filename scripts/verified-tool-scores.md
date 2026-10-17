@@ -56,11 +56,20 @@ Toutes les réponses relues une à une, justes comprises, et corrigées à la ma
   l'anniversaire de maman (et un 14 mars 2027 donné pour un lundi), rappel dans 90 min annoncé « demain matin »,
   heure dictée illisible (« dix vingt trente »), et un prénom et une sœur inventés. « </ifm|think> Ton code wifi
   est TROMPETTE-42. » reste juste : Jaris retire désormais cette balise (et la réflexion qui la précède) avant
-  d'afficher ou de lire une réponse. Une demande coupée par le délai est à refaire (au mieux 36/48). Ses 2 erreurs
+  d'afficher ou de lire une réponse. La demande coupée par le délai, refaite le 17/10/2026, est juste (reprise par
+  le pilotage d'écran, permise pour cette demande) : 36/48. Ses 2 erreurs
   aux questions (YouTube cherché sur internet au lieu d'être ouvert) sont réelles.
 - 32B : 78/78 et 42/48, aucune correction (« ouvert du lundi au vendredi » vient bien du résultat de recherche).
 Code des trois pas encore mesuré : Léo a arrêté pendant le code de la 32B, qui écrit à 2,5 mots par seconde sur
 8 Go de mémoire vidéo (8 à 15 min par application). Le prochain clic sur « Tester ces modèles » le reprend.
+
+Étape 317 : phi4-mini (Phi-4-mini-instruct) mesuré par Léo le 17/10/2026 (Jaris 0.34.23, Ollama 0.40.5), toutes
+les réponses relues une à une. Il n'a fait AUCUN vrai appel d'outil sur les 78 questions : il écrit ses appels en
+texte, sous des formes changeantes (`look_at_screen{...}`, `media_control({...})`, JSON), que Jaris lirait à voix
+haute. Questions 9 → 7 : « en tant qu'IA, je n'ai pas la capacité de fournir le moment actuel » à « Quelle heure
+est-il ? » (l'heure est dans les consignes), et « Comment tu t'appelles ? » sans son nom (« Cherchi des
+informations… »). Demandes 4 → 2 : « Regardez l'écran, s'il vous plaît. » à un merci, et la phrase de Tom recopiée
+comme si c'était lui. Code 5/5, chaque appli utilisée pour de vrai : il écrit du code, pas des appels d'outils.
 
 | Modèle | Appel d'outils |
 |---|---|
@@ -84,6 +93,7 @@ Code des trois pas encore mesuré : Léo a arrêté pendant le code de la 32B, q
 | hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 76/78 |
 | hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 46/78 |
 | hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 76/78 |
+| phi4-mini | 7/78 |
 | hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M | 78/78 |
 | qwen3.5:35b | 78/78 |
 | qwen3.6:35b | 76/78 |
@@ -139,6 +149,11 @@ convertisseur et son formulaire ont dépassé 20 min, puis leur rejeu a échoué
 avait supprimé la 7B avant de la rejouer (corrigé). Ils restent à refaire, au mieux 5/5. K2 Horizon 0.9B : pas
 encore de score de code (« model not found » sur ses 5 applis, jamais générées).
 
+Étape 317 (campagne du 17/10/2026) : K2 Horizon 0.9B 1/5, chaque échec vérifié (le bouton « +1 » renommé en
+« Remettre à zéro » par son propre script, deux erreurs de syntaxe JavaScript, stockage du navigateur interdit dans
+l'aperçu). phi4-mini 5/5. Les 2 applis à refaire de la 7B n'ont PAS été rejouées : le rejeu écartait les modèles
+dont le score de code était déjà recopié (corrigé) — toujours 3/5 provisoire, au mieux 5/5.
+
 | Modèle | Fiabilité |
 |---|---|
 | qwen3.6:35b-a3b | 4/5 |
@@ -151,6 +166,8 @@ encore de score de code (« model not found » sur ses 5 applis, jamais génér�
 | hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 5/5 |
 | hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M | 5/5 |
 | hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 3/5 |
+| phi4-mini | 5/5 |
+| hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 1/5 |
 
 ## Demandes complètes — de bout en bout
 
@@ -216,7 +233,7 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | ministral-3:8b | 39/48 |
 | hf.co/openbmb/MiniCPM5-2B-GGUF:Q4_K_M | 37/48 |
 | hf.co/mradermacher/Nanbeige4.1-3B-GGUF:Q4_K_M | 36/48 |
-| hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 35/48 |
+| hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 36/48 |
 | ministral-3:14b | 34/48 |
 | ministral-3:3b | 34/48 |
 | hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 33/48 |
@@ -226,4 +243,5 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | hf.co/inclusionAI/Ling-3.0-tiny-GGUF:Q4_K_M | 26/48 |
 | granite4.1:3b | 25/48 |
 | qwen3.5:0.8b | 13/48 |
+| phi4-mini | 2/48 |
 | hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 0/48 |

@@ -1880,12 +1880,14 @@ async function main() {
     }
     // Étape 244 : un cas à refaire l'est même quand le score du modèle est déjà recopié dans verified-tool-scores.md
     // (sinon les 67 demandes de l'étape 242 n'étaient jamais rejouées : leurs modèles avaient déjà un score sur 48).
+    // Étape 317 : pour la vision et le code aussi — SCOPED_VISION/CODE_CANDIDATES écartent les modèles déjà notés, et
+    // les 2 applis à refaire de K2 Horizon 7B (score de code provisoire recopié) n'étaient jamais rejouées.
     const inScope = (row) =>
       row.type === 'demande'
         ? CONVERSATION_SCOPE.includes(row.model) && inOnlyModels(row.model)
         : row.type === 'vision'
-          ? SCOPED_VISION_CANDIDATES.some((c) => c.model === row.model)
-          : SCOPED_CODE_CANDIDATES.some((c) => c.model === row.model)
+          ? (SCOPE === 'all' || SCOPE === 'vision') && VISION_CANDIDATES.some((c) => c.model === row.model) && inOnlyModels(row.model)
+          : (SCOPE === 'all' || SCOPE === 'code') && CODE_CANDIDATES.some((c) => c.model === row.model) && inOnlyModels(row.model)
     // Léo, 05/10/2026 : on refait aussi un cas qui a PLANTÉ (« erreur : … » : appel d'outil illisible pour Ollama, moteur
     // tombé…), pas seulement un délai dépassé. Une seule fois : s'il replante au rejeu, à l'identique, c'est bien le
     // modèle, et son erreur reste comptée fausse. Un délai dépassé, lui, est retenté à chaque lancement.

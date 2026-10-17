@@ -415,12 +415,16 @@ test('un modèle téléchargé mais introuvable pour Ollama est sauté, jamais n
   const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
   const model = 'hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M'
   const fake = await startFakeOllama({ installed: [], answer: (_m, p) => perfectAnswer(p), unreadable: [model] })
+  // Étape 317 : la 0.9B a maintenant tous ses scores recopiés ; ce test porte sur un téléchargement illisible.
+  const noScores = join(dir, 'aucun-score.md')
+  writeFileSync(noScores, '')
   try {
     const resultsPath = join(dir, 'benchmark-nouveaux-modeles.md')
     const { code, out } = await runScript({
       OLLAMA_HOST: fake.host,
       JARIS_ANALYSIS_SCOPE: 'all',
       JARIS_RESULTS_PATH: resultsPath,
+      JARIS_VERIFIED_SCORES_PATH: noScores,
       JARIS_RESUME: '1',
       JARIS_ONLY_MODELS: model,
       JARIS_RAM_SAFETY_MARGIN_GB: '0.1'
@@ -1113,6 +1117,44 @@ test('rejeu : un modèle qui a des cas à refaire n’est supprimé qu’APRÈS 
     assert.ok(rows[1].replay && rows[1].ok, `rejoué sur le modèle encore installé : ${rows[1].reason}`)
     assert.ok(!rows.some((r) => /not found/.test(r.reason ?? '')))
     assert.deepEqual(fake.deleted, [model], 'supprimé une seule fois, après le rejeu')
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// Étape 317 : le 17/10/2026, les 2 applis à refaire de K2 Horizon 7B n'ont pas été rejouées : son score de code
+// (provisoire) était déjà recopié, et le rejeu ne regardait que les modèles de code ENCORE à noter. La demande à
+// refaire du même modèle, elle, l'a bien été. qwen2.5-coder:7b a un vrai 5/5 recopié : son cas coupé doit être rejoué.
+test('rejeu : un cas de code à refaire est rejoué même quand le modèle a déjà un score de code recopié', { timeout: 120000, skip: BROWSER ? false : 'aucun navigateur ici (le test de code en a besoin)' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const model = 'qwen2.5-coder:7b'
+  assert.match(readFileSync(new URL('./verified-tool-scores.md', import.meta.url), 'utf8'), /\| qwen2\.5-coder:7b \| 5\/5 \|/)
+  const testCase = CODE_TEST_CASES[0]
+  writeFileSync(
+    join(dir, 'r.traces.jsonl'),
+    [
+      { type: 'campagne', versions: { conversation: CONVERSATION_TEST_VERSION, code: CODE_TEST_VERSION } },
+      { type: 'code', model, id: testCase.id, ok: false, timeout: true, reason: 'erreur : délai dépassé : aucune réponse du modèle en 20 min' }
+    ].map((row) => JSON.stringify(row)).join('\n') + '\n'
+  )
+  const counter =
+    '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><div id="n">0</div><button id="p">+1</button><button id="z">Remettre à zéro</button>' +
+    "<script>let n=0;const s=()=>document.getElementById('n').textContent=n;p.onclick=()=>{n++;s()};z.onclick=()=>{n=0;s()}</script></body></html>"
+  const fake = await startFakeOllama({ installed: [model], answer: (_m, prompt) => ({ content: prompt.includes(testCase.prompt) ? `\`\`\`html\n${counter}\n\`\`\`` : '' }) })
+  try {
+    const { code, out } = await runScript({
+      OLLAMA_HOST: fake.host,
+      JARIS_RESULTS_PATH: join(dir, 'r.md'),
+      JARIS_ANALYSIS_SCOPE: 'code',
+      JARIS_ONLY_MODELS: model,
+      JARIS_RESUME: '1'
+    })
+    assert.equal(code, 0, out)
+    const rows = readFileSync(join(dir, 'r.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((t) => t.type === 'code')
+    assert.equal(rows.length, 2, out)
+    assert.ok(rows[1].replay && rows[1].ok, `rejoué et juste : ${rows[1].reason}`)
+    assert.equal(fake.requests.length, 1, 'seul le cas à refaire est rejoué, pas les 5 applis')
   } finally {
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })
