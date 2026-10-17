@@ -336,6 +336,7 @@
   "code.issues_few": "Aplikacija je generirana, ali {count} problema nisu se mogla ispraviti:",
   "code.issues_other": "Aplikacija je generirana, ali {count} problema nije se moglo ispraviti:",
   "code.issues.hint": "Ponovno pokreni generiranje ili jednostavnije opiši zahtjev.",
+  "code.issues.reopened": "Ova aplikacija treba ispravak:",
   "code.placeholder.repo": "Što želiš promijeniti u aplikaciji {name}?",
   "code.placeholder.app": "Što želiš promijeniti? (npr. dodaj tamni način…)",
   "code.placeholder.new": "Opiši aplikaciju koju želiš izraditi…",

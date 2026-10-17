@@ -343,6 +343,7 @@
   "code.issues_few": "Aplikacija je bila ustvarjena, vendar {count} težave ostajajo neodpravljene:",
   "code.issues_other": "Aplikacija je bila ustvarjena, vendar {count} težav ostaja neodpravljenih:",
   "code.issues.hint": "Znova zaženi ustvarjanje ali preprosteje opiši svojo zahtevo.",
+  "code.issues.reopened": "To aplikacijo je treba popraviti:",
   "code.placeholder.repo": "Kaj želiš spremeniti v aplikaciji {name}?",
   "code.placeholder.app": "Kaj želiš spremeniti? (npr. dodaj temni način…)",
   "code.placeholder.new": "Opiši aplikacijo, ki jo želiš ustvariti…",

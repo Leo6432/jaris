@@ -625,6 +625,14 @@ export interface GeneratedApp {
    * cassée pour un succès — sur un petit modèle local, ça arrive.
    */
   issues: string[]
+  /**
+   * Combien des derniers `issues` sont des erreurs de syntaxe JavaScript (codegen.issue.scriptBroken, qui dit
+   * déjà quoi faire : « corrige l'erreur ») : le conseil « relance la génération » ne s'affiche que s'il reste
+   * d'autres problèmes, sinon les deux conseils se contrediraient.
+   */
+  scriptErrors?: number
+  /** Application rouverte depuis la liste, pas tout juste générée : ses problèmes ne sont pas « non corrigés ». */
+  reopened?: boolean
 }
 
 /**

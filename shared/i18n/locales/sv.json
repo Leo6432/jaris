@@ -329,6 +329,7 @@
   "code.issues_one": "Appen har skapats men ett problem kunde inte åtgärdas:",
   "code.issues_other": "Appen har skapats men {count} problem kunde inte åtgärdas:",
   "code.issues.hint": "Starta genereringen igen, eller formulera din förfrågan enklare.",
+  "code.issues.reopened": "Den här appen behöver rättas:",
   "code.placeholder.repo": "Vad vill du ändra i {name}?",
   "code.placeholder.app": "Vad vill du ändra? (t.ex. lägg till ett mörkt läge…)",
   "code.placeholder.new": "Beskriv appen du vill skapa…",

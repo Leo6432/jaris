@@ -164,3 +164,109 @@ test('dépôt : seule une erreur INTRODUITE par le changement est reprochée (JS
   assert.ok(syntax.brokenScriptAfterChange('jeu.js', 'function f( {\n', undefined))
   assert.ok(syntax.brokenScriptAfterChange('index.html', '<script>function toggleAlarm(false) {}</script>', undefined))
 })
+
+/**
+ * Relecture adverse du premier correctif : quatre trous, chacun verrouillé ici.
+ */
+test('module : une ligne dont on a seulement retiré `export` / `export default` reste contrôlée (cas réel avec export)', () => {
+  // Avant : la ligne était marquée « retouchée », donc jamais signalée — le cas réel passait dès qu'il y avait `export`.
+  for (const code of [
+    'export function toggleAlarm(false) {}',
+    'export default function toggleAlarm(false) {}',
+    'export default function (false) {}',
+    "import { a } from './a.js'\nexport async function charger(false) {}"
+  ]) {
+    const problem = syntax.checkJavaScriptSyntax(code, 'module')
+    assert.ok(problem, `non signalé : ${code}`)
+    assert.equal(problem.message, "Unexpected token 'false'")
+  }
+  assert.equal(syntax.findInlineScriptSyntaxErrors('<script type="module">export function toggleAlarm(false) {}</script>').length, 1)
+})
+
+test('module : export default sous toutes ses formes valides ne déclenche jamais rien (fonctions fléchées comprises)', () => {
+  for (const code of [
+    'export default (a, b) => a + b',
+    'export default async () => { await 1 }',
+    'export default x => x * 2',
+    'export default function () {}',
+    'export default function* () { yield 1 }',
+    'export default async function () {}\nawait 2',
+    'export default class {}',
+    'export default class extends Array {}',
+    'export default class Jeu extends Base { #x = 1 }',
+    'export default [1, 2, 3]',
+    'export default `gabarit ${1}`',
+    // Une déclaration reste une déclaration : la ligne suivante n'est pas recollée à la fonction (le module l'accepte).
+    "export default function f() {}\n/re/.test('s')",
+    "export default class A {}\n[1, 2].forEach(() => {})",
+    'export\n  default\n  function\n  ()\n  {}'
+  ]) {
+    assert.equal(syntax.checkJavaScriptSyntax(code, 'module'), null, `faux positif : ${code}`)
+  }
+})
+
+test('script qui s’arrête trop tôt et finit par un retour à la ligne : la ligne rapportée est la dernière ÉCRITE', () => {
+  // Presque tous les <script> générés finissent par un retour à la ligne : le moteur désignait la ligne vide d'après.
+  const problem = syntax.checkJavaScriptSyntax('function f() {\n  x(\n', 'classic')
+  assert.equal(problem.message, 'Unexpected end of input')
+  assert.equal(problem.line, 2)
+  assert.equal(problem.sourceLine, 'x(')
+  const [inPage] = syntax.findInlineScriptSyntaxErrors('<body>\n<script>\nfunction f() {\n  x(\n</script>\n</body>')
+  assert.equal(inPage.fileLine, 4, 'la ligne montrée à l’utilisateur doit être celle du code, pas celle de </script>')
+})
+
+test('un <script> que le navigateur n’exécute jamais (textarea, title, style, noscript, template, svg) n’est pas compilé', () => {
+  for (const html of [
+    '<textarea><script>alert(</script></textarea>',
+    '<title>Mon <script>alert(</script> éditeur</title>',
+    '<style>/* <script>alert(</script> */ body { color: red }</style>',
+    '<noscript><script>alert(</script></noscript>',
+    '<template id="ligne"><li><script>alert(</script></li></template>',
+    '<template><template><script>a(</script></template><script>b(</script></template>',
+    '<svg viewBox="0 0 10 10"><script><![CDATA[ if (a < b && c) go() ]]></script></svg>',
+    '<svg><svg><script>if (a &lt; b) go()</script></svg><script>x(</script></svg>'
+  ]) {
+    assert.deepEqual(JSON.parse(JSON.stringify(syntax.findInlineScriptSyntaxErrors(html))), [], `faux positif : ${html}`)
+  }
+  // Après la zone inerte, un vrai script cassé est toujours trouvé (le scanner reprend bien après sa fermeture).
+  for (const before of ['<textarea>x</textarea>', '<svg/>', '<svg><circle r="1"/></svg>', '<template><p>a</p></template>']) {
+    const [problem] = syntax.findInlineScriptSyntaxErrors(`${before}<script>function toggleAlarm(false) {}</script>`)
+    assert.equal(problem?.message, "Unexpected token 'false'", `vrai défaut manqué après ${before}`)
+  }
+})
+
+test('dépôt : gabarits serveur et syntaxes d’outils ne sont jamais reprochés, nouveau fichier ou non', () => {
+  // Nouvelle page de gabarit créée par l'agent (Flask/Jinja, EJS, Liquid, PHP, Thymeleaf).
+  assert.equal(syntax.brokenScriptAfterChange('templates/index.html', '<script>const user = {{ user|tojson }}</script>', undefined), null)
+  assert.equal(syntax.brokenScriptAfterChange('views/liste.html', '<script>const items = <%- JSON.stringify(items) %></script>', undefined), null)
+  assert.equal(syntax.brokenScriptAfterChange('_layouts/a.html', '<script>{% if site.analytics %}ga()\n{% endif %}</script>', undefined), null)
+  assert.equal(syntax.brokenScriptAfterChange('page.html', '<script>var user = [[${user}]];</script>', undefined), null)
+  // Jinja AJOUTÉ à une page dont le script compilait : toujours un gabarit, jamais reproché.
+  assert.equal(
+    syntax.brokenScriptAfterChange('templates/produits.html', '<script>const items = {{ items|tojson }};\nafficher(items)</script>', '<script>afficher([])</script>'),
+    null
+  )
+  // JSX ajouté à un .js qui compilait (projet React en .js), Flow, décorateur, en-tête Jekyll.
+  assert.equal(syntax.brokenScriptAfterChange('src/App.js', 'function App() {\n  return <h1>Bonjour</h1>\n}\n', 'function App() {\n  return null\n}\n'), null)
+  assert.equal(syntax.brokenScriptAfterChange('src/types.js', 'type Props = { titre: string }\nexport const x = 1\n', undefined), null)
+  assert.equal(syntax.brokenScriptAfterChange('src/a.js', '// @flow\nconst f = (x?: number) => x\n', 'const f = (x) => x\n'), null)
+  assert.equal(syntax.brokenScriptAfterChange('src/b.js', 'interface Jeu { score: number }\n', undefined), null)
+  assert.equal(syntax.brokenScriptAfterChange('src/c.js', 'class A {\n  @observable score = 0\n}\n', 'class A {\n  score = 0\n}\n'), null)
+  assert.equal(syntax.brokenScriptAfterChange('assets/site.js', '---\n---\nconst base = "{{ site.baseurl }}"\n', undefined), null)
+  // Une vraie erreur dans une page ou un .js reste reprochée, même à côté d'un script de gabarit.
+  const page = '<script>const user = {{ user }}</script>\n<script>function toggleAlarm(false) {}</script>'
+  assert.equal(syntax.brokenScriptAfterChange('templates/reveil.html', page, undefined)?.message, "Unexpected token 'false'")
+  assert.equal(syntax.brokenScriptAfterChange('src/App.js', 'function toggleAlarm(false) {}\n', 'function toggleAlarm() {}\n')?.message, "Unexpected token 'false'")
+})
+
+test('un `<script>` écrit dans la valeur d’un attribut n’est jamais pris pour un vrai script', () => {
+  for (const html of [
+    '<input value="<script>alert(</script>">',
+    '<iframe srcdoc="<script>alert(</script>"></iframe>',
+    "<div data-exemple='<script>if (</script>'>texte</div>"
+  ]) {
+    assert.deepEqual(JSON.parse(JSON.stringify(syntax.findInlineScriptSyntaxErrors(html))), [], `faux positif : ${html}`)
+  }
+  const [problem] = syntax.findInlineScriptSyntaxErrors('<input value="<script>"><p>a</p><script>function toggleAlarm(false) {}</script>')
+  assert.equal(problem?.message, "Unexpected token 'false'")
+})

@@ -336,6 +336,7 @@
   "code.issues_few": "Aplikácia bola vygenerovaná, ale {count} problémy sa nepodarilo opraviť:",
   "code.issues_other": "Aplikácia bola vygenerovaná, ale {count} problémov sa nepodarilo opraviť:",
   "code.issues.hint": "Spusti generovanie znova alebo svoju požiadavku sformuluj jednoduchšie.",
+  "code.issues.reopened": "Táto aplikácia potrebuje opravu:",
   "code.placeholder.repo": "Čo chceš zmeniť v aplikácii {name}?",
   "code.placeholder.app": "Čo chceš zmeniť? (napr. pridaj tmavý režim…)",
   "code.placeholder.new": "Opíš aplikáciu, ktorú chceš vytvoriť…",

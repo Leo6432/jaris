@@ -329,6 +329,7 @@
   "code.issues_one": "Sovellus luotiin, mutta yhtä ongelmaa ei voitu korjata:",
   "code.issues_other": "Sovellus luotiin, mutta {count} ongelmaa ei voitu korjata:",
   "code.issues.hint": "Käynnistä luonti uudelleen tai muotoile pyyntösi yksinkertaisemmin.",
+  "code.issues.reopened": "Tämä sovellus tarvitsee korjauksen:",
   "code.placeholder.repo": "Mitä haluat muuttaa? ({name})",
   "code.placeholder.app": "Mitä haluat muuttaa? (esim. lisää tumma tila…)",
   "code.placeholder.new": "Kuvaile luotava sovellus…",

@@ -329,6 +329,7 @@
   "code.issues_one": "Rakendus loodi, kuid üht probleemi ei õnnestunud parandada:",
   "code.issues_other": "Rakendus loodi, kuid {count} probleemi ei õnnestunud parandada:",
   "code.issues.hint": "Käivita genereerimine uuesti või sõnasta oma soov lihtsamalt.",
+  "code.issues.reopened": "See rakendus vajab parandamist:",
   "code.placeholder.repo": "Mida tahad rakenduses {name} muuta?",
   "code.placeholder.app": "Mida tahad muuta? (nt lisa tume režiim…)",
   "code.placeholder.new": "Kirjelda loodavat rakendust…",

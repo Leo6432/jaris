@@ -329,6 +329,7 @@
   "code.issues_one": "Appen er lavet, men et problem kunne ikke rettes:",
   "code.issues_other": "Appen er lavet, men {count} problemer kunne ikke rettes:",
   "code.issues.hint": "Start genereringen igen, eller formuler din anmodning enklere.",
+  "code.issues.reopened": "Denne app skal rettes:",
   "code.placeholder.repo": "Hvad vil du ændre i {name}?",
   "code.placeholder.app": "Hvad vil du ændre? (f.eks. tilføj en mørk tilstand…)",
   "code.placeholder.new": "Beskriv den app, der skal laves…",

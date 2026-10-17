@@ -336,6 +336,7 @@
   "code.issues_few": "Programa sugeneruota, bet nepavyko ištaisyti {count} problemų:",
   "code.issues_other": "Programa sugeneruota, bet nepavyko ištaisyti {count} problemų:",
   "code.issues.hint": "Paleisk generavimą iš naujo arba suformuluok užklausą paprasčiau.",
+  "code.issues.reopened": "Šią programą reikia pataisyti:",
   "code.placeholder.repo": "Ką nori pakeisti programėlėje {name}?",
   "code.placeholder.app": "Ką nori pakeisti? (pvz., pridėk tamsųjį režimą…)",
   "code.placeholder.new": "Aprašyk kuriamą programėlę…",

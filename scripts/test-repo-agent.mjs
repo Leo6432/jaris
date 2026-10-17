@@ -680,3 +680,26 @@ test('une erreur déjà présente sur GitHub (ou une syntaxe compilée par un ou
   assert.equal(outcome.limitReached, false)
   assert.equal(outcome.summary, 'Textes changés.')
 })
+
+test('un fichier cassé par une demande PRÉCÉDENTE, encore préparé, bloque aussi « finish » (tout part ensemble)', async () => {
+  // Relecture adverse : la demande 1 casse reveil.js (arrêtée, non enregistrée) ; la demande 2 ne touche que
+  // style.css puis « finish » — avant, ce « terminé » envoyait tout sur GitHub, reveil.js cassé compris.
+  const app = setup(
+    { 'style.css': 'h1 { color: black }\n', 'reveil.js': FIXED_JS },
+    [
+      reply(call('read_file', { path: 'style.css' })),
+      reply(call('edit_file', { path: 'style.css', old_text: 'black', new_text: 'red' }), call('finish', { summary: 'Couleur changée.' })),
+      reply(call('read_file', { path: 'reveil.js' })),
+      reply(call('edit_file', { path: 'reveil.js', old_text: '(false)', new_text: '()' }), call('finish', { summary: 'Couleur changée et réveil réparé.' }))
+    ],
+    { stagedPaths: () => ['reveil.js'], readOriginalFile: async (path) => ({ 'style.css': 'h1 { color: black }\n', 'reveil.js': FIXED_JS })[path] }
+  )
+  app.staged.set('reveil.js', BROKEN_JS)
+  const outcome = await agent.runRepoAgent('Mets le titre en rouge', app.deps)
+  const refusal = toolResults(app.seen[2]).find((result) => result.startsWith('Résultat de finish : refusé'))
+  assert.ok(refusal, 'un fichier cassé par la demande précédente a laissé passer « finish »')
+  assert.match(refusal, /- reveil\.js, ligne 2 : « Unexpected token 'false' »/)
+  assert.equal(outcome.limitReached, false)
+  assert.equal(outcome.summary, 'Couleur changée et réveil réparé.')
+  assert.equal(app.staged.get('reveil.js'), FIXED_JS)
+})

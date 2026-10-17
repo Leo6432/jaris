@@ -339,6 +339,7 @@ export const fr = {
   "code.issues_one": "L'application a été générée mais un problème n'a pas pu être corrigé :",
   "code.issues_other": "L'application a été générée mais {count} problèmes n'ont pas pu être corrigés :",
   "code.issues.hint": "Relance la génération, ou reformule ta demande en plus simple.",
+  "code.issues.reopened": "Cette application a besoin d'une correction :",
   "code.placeholder.repo": "Que veux-tu changer dans {name} ?",
   "code.placeholder.app": "Que veux-tu changer ? (ex: ajoute un mode sombre…)",
   "code.placeholder.new": "Décris l'application à créer…",

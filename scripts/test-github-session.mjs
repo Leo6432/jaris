@@ -27,7 +27,7 @@ const repoAgent = loadTsModule('electron/services/repoAgent.ts', { '../../shared
 
 class GenerationStoppedError extends Error {}
 
-function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Projet\nBonjour\n', 'src/a.js': 'let a = 1\n' }, replies = [] } = {}) {
+function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Projet\nBonjour\n', 'src/a.js': 'let a = 1\n' }, replies = [], agent = repoAgent } = {}) {
   const state = { token, unreadable: false, memoryOnly: false, record: null, openCount: 0, commits: [], failAuth: false, files: { ...files }, cleared: 0 }
   // Étape 311 : jetons qui expirent. `dead` : jetons que GitHub refuse désormais (expirés) ; chaque jeton de
   // renouvellement ne sert qu'une fois, comme chez GitHub.
@@ -161,7 +161,8 @@ function setup({ clientId = 'cid', token = null, files = { 'README.md': '# Proje
     },
     './ollama': { getModelThinking: async () => null },
     './profileStore': { getProfile: async () => ({}) },
-    './repoAgent': repoAgent
+    './repoAgent': agent,
+    './scriptSyntax': scriptSyntax
   })
   return { session, state }
 }
@@ -595,7 +596,10 @@ test('après un enregistrement sur GitHub, l’aperçu montre la NOUVELLE versio
 test('« terminé » vient du vrai résultat de l’agent : une limite atteinte ne compte jamais comme terminé', async () => {
   const { readFileSync } = await import('node:fs')
   const source = readFileSync(new URL('../electron/services/githubSession.ts', import.meta.url), 'utf8')
-  assert.match(source, /return \{ summary, view: viewOf\(session\), finished: !outcome\.limitReached \}/)
+  // Le résultat de l'agent, que le dernier contrôle des scripts préparés peut seulement rendre « non terminé ».
+  assert.match(source, /let limitReached = outcome\.limitReached\n/)
+  assert.match(source, /return \{ summary, view: viewOf\(session\), finished: !limitReached \}/)
+  assert.doesNotMatch(source, /limitReached = false/)
 })
 
 /**
@@ -634,4 +638,57 @@ test('JavaScript cassé par l’agent : jamais « terminé » ; erreur déjà su
   assert.match(stopped.summary, /reveil\.js/)
   assert.deepEqual(stopped.view.changes.map((change) => change.path), ['reveil.js'], 'le travail préparé reste à vérifier')
   assert.equal(introduced.state.commits.length, 0)
+})
+
+/**
+ * Relecture adverse : le contrôle ne couvrait que les fichiers de la demande EN COURS. Une demande 1 casse reveil.js
+ * (arrêtée, non enregistrée) ; une demande 2 ne touche que style.css puis « finish » : « terminé » envoyait TOUT ce
+ * qui est préparé sur GitHub, reveil.js cassé compris.
+ */
+test('deux demandes de suite : un fichier cassé par la première n’est jamais envoyé par la seconde', async () => {
+  const broken = (summary) => reply(call('edit_file', { path: 'reveil.js', old_text: '(on)', new_text: '(false)' }), call('finish', { summary }))
+  const { session, state } = setup({
+    token: 't',
+    files: { 'reveil.js': 'function toggleAlarm(on) {}\n', 'style.css': 'h1 { color: black }\n' },
+    replies: [
+      // Demande 1 : casse reveil.js et n'arrive jamais à le corriger (deux refus, puis arrêt).
+      reply(call('read_file', { path: 'reveil.js' })),
+      broken('Alarme ajoutée.'),
+      reply(call('finish', { summary: 'Alarme ajoutée.' })),
+      reply(call('finish', { summary: 'Alarme ajoutée.' })),
+      // Demande 2 : ne touche que style.css, puis « finish » à chaque fois.
+      reply(call('read_file', { path: 'style.css' })),
+      reply(call('edit_file', { path: 'style.css', old_text: 'black', new_text: 'red' }), call('finish', { summary: 'Couleur changée.' })),
+      reply(call('finish', { summary: 'Couleur changée.' })),
+      reply(call('finish', { summary: 'Couleur changée.' }))
+    ]
+  })
+  await session.openGithubRepo('leo/projet')
+  const first = await session.runGithubAgent('leo/projet', "Ajoute l'alarme", { onStatus: () => {} })
+  assert.equal(first.finished, false)
+  const second = await session.runGithubAgent('leo/projet', 'Mets le titre en rouge', { onStatus: () => {} })
+  assert.equal(second.finished, false, 'le « terminé » de la demande 2 aurait envoyé reveil.js cassé sur GitHub')
+  assert.match(second.summary, /reveil\.js/)
+  assert.doesNotMatch(second.summary, /Couleur changée/)
+  assert.deepEqual(second.view.changes.map((change) => change.path), ['reveil.js', 'style.css'], 'le travail préparé reste à vérifier')
+  assert.equal(state.commits.length, 0)
+})
+
+test('dernier filet de la session : même un agent qui ne vérifie rien ne peut pas annoncer « terminé » sur un script cassé', async () => {
+  // Un agent simulé qui prépare un fichier cassé et répond « terminé » sans contrôle : la session doit le rattraper.
+  const careless = {
+    runRepoAgent: async (_request, deps) => {
+      deps.writeFile('reveil.js', 'function toggleAlarm(false) {}\n')
+      return { summary: 'Tout marche !', limitReached: false }
+    }
+  }
+  const { session, state } = setup({ token: 't', files: { 'reveil.js': 'function toggleAlarm(on) {}\n' }, agent: careless })
+  await session.openGithubRepo('leo/projet')
+  // L'agent simulé n'a jamais lu reveil.js : la session lit elle-même la version de GitHub pour comparer.
+  const result = await session.runGithubAgent('leo/projet', "Ajoute l'alarme", { onStatus: () => {} })
+  assert.equal(result.finished, false, 'un script cassé est parti tout seul sur GitHub')
+  assert.doesNotMatch(result.summary, /Tout marche/)
+  assert.match(result.summary, /n'a pas réussi à corriger une erreur dans reveil\.js/)
+  assert.match(result.summary, /ligne 1, « Unexpected token 'false' »/)
+  assert.equal(state.commits.length, 0)
 })

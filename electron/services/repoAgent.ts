@@ -31,6 +31,12 @@ export interface RepoAgentDeps {
   /** Ce qui est déjà préparé avant cette demande, pour que l'agent continue au lieu de repartir de zéro. */
   pendingSummary: () => string[]
   /**
+   * Chemins des fichiers DÉJÀ préparés avant cette demande (créés ou modifiés, pas encore enregistrés). Leurs scripts
+   * sont revérifiés eux aussi avant « terminé » : un travail terminé part tout seul sur GitHub avec TOUT ce qui est
+   * préparé (étape 303), y compris un fichier cassé par une demande précédente que celle-ci n'a pas touché.
+   */
+  stagedPaths?: () => string[]
+  /**
    * Un tour du modèle, SANS outils déclarés à Ollama (étape 281) : les appels sont écrits en texte (voir
    * TOOL_PROTOCOL), pour que ce texte arrive au fil de l'eau.
    */
@@ -670,8 +676,12 @@ export async function runRepoAgent(request: string, deps: RepoAgentDeps): Promis
   let nudged = false
   /** Nombre d'échecs de chaque appel identique (même outil, mêmes arguments). */
   const failures = new Map<string, number>()
-  /** Fichiers JavaScript (ou pages web) changés pendant CETTE demande : vérifiés avant d'annoncer « terminé ». */
-  const changedScripts = new Set<string>()
+  /**
+   * Fichiers JavaScript (ou pages web) préparés — pendant cette demande ou une précédente — : vérifiés avant d'annoncer
+   * « terminé ». Repartir des seuls fichiers de CETTE demande laissait passer un fichier cassé la fois d'avant
+   * (« mets le titre en rouge » ne touche que style.css, puis tout partait sur GitHub, le fichier cassé compris).
+   */
+  const changedScripts = new Set<string>((deps.stagedPaths?.() ?? []).filter(isSyntaxCheckedFile))
   let syntaxRefusals = 0
 
   /**

@@ -267,6 +267,9 @@ test('une erreur de syntaxe qui reste après réparation prévient l’utilisate
   assert.match(result.issues[0], /Écris « corrige l'erreur »/)
   assert.match(result.issues[0], /ligne 6, « Unexpected token 'false' »/)
   assert.doesNotMatch(result.issues[0], /script n°|ligne fautive|syntaxe/, 'le message affiché ne doit pas être celui du modèle')
+  // Seule une erreur de syntaxe reste : l'écran n'ajoute pas « relance la génération », qui contredirait le message.
+  assert.equal(result.scriptErrors, 1)
+  assert.notEqual(result.reopened, true)
 })
 
 test('une réparation qui retire l’erreur de syntaxe est gardée, même si elle laisse un défaut mineur à la place', async () => {
@@ -280,4 +283,5 @@ test('une réparation qui retire l’erreur de syntaxe est gardée, même si ell
   assert.match(result.html, /function toggleAlarm\(\) \{/)
   assert.equal(result.issues.length, 1)
   assert.match(result.issues[0], /ressources externes/)
+  assert.equal(result.scriptErrors, 0)
 })

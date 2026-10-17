@@ -329,6 +329,7 @@
   "code.issues_one": "The app was generated but one problem couldn't be fixed:",
   "code.issues_other": "The app was generated but {count} problems couldn't be fixed:",
   "code.issues.hint": "Run the generation again, or rephrase your request more simply.",
+  "code.issues.reopened": "This app needs a fix:",
   "code.placeholder.repo": "What do you want to change in {name}?",
   "code.placeholder.app": "What do you want to change? (e.g. add a dark mode…)",
   "code.placeholder.new": "Describe the app to create…",

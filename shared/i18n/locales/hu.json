@@ -329,6 +329,7 @@
   "code.issues_one": "Az alkalmazás elkészült, de egy problémát nem sikerült kijavítani:",
   "code.issues_other": "Az alkalmazás elkészült, de {count} problémát nem sikerült kijavítani:",
   "code.issues.hint": "Indítsd újra a generálást, vagy fogalmazd meg egyszerűbben a kérésed.",
+  "code.issues.reopened": "Ezt az alkalmazást javítani kell:",
   "code.placeholder.repo": "Mit szeretnél megváltoztatni ebben: {name}?",
   "code.placeholder.app": "Mit szeretnél megváltoztatni? (pl. adj hozzá sötét módot…)",
   "code.placeholder.new": "Írd le a létrehozandó alkalmazást…",

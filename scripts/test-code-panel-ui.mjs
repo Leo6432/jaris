@@ -84,12 +84,13 @@ window.jaris = {
   getGeneratedApps: () => Promise.resolve(window.__apps),
   // Étape 277 : le bouton GitHub du champ demande l'état de la connexion au montage (masqué si indisponible).
   githubStatus: () => Promise.resolve({ available: false, connected: false, login: null }),
-  loadGeneratedApp: (path) => Promise.resolve({ ...APP, path }),
+  // __loadExtra / __genExtra : ce que le main ajoute à l'application (problèmes restants, réouverture), réglé par un test.
+  loadGeneratedApp: (path) => Promise.resolve({ ...APP, ...(window.__loadExtra ?? {}), path }),
   // Génération pilotée par le test (étape 99) : elle reste EN COURS tant que le test ne la termine pas,
   // seule façon d'observer le bandeau d'avancement, qui n'existe que pendant ce temps-là.
   generateApp: () =>
     new Promise((resolve, reject) => {
-      window.__finishGen = () => resolve(APP)
+      window.__finishGen = () => resolve({ ...APP, ...(window.__genExtra ?? {}) })
       window.__failGen = (err) => reject(err)
     }),
   cancelCodeGen: () => {
@@ -991,4 +992,60 @@ test('les conversations survivent à un redémarrage de Jaris (étape 288)', opt
 
 test.after(() => {
   if (outDir) rmSync(outDir, { recursive: true, force: true })
+})
+
+/**
+ * Relecture adverse : sous « Écris « corrige l'erreur » pour que Jaris réessaie », l'écran ajoutait toujours « Relance
+ * la génération, ou reformule ta demande en plus simple » — deux conseils contradictoires. Et une application ROUVERTE
+ * (faite peut-être par une version qui ne vérifiait rien) se disait « générée mais un problème n'a pas pu être corrigé ».
+ */
+const SYNTAX_ISSUE =
+  "le code de l'application contient une erreur : la page s'affiche, mais ses boutons et ses animations ne réagiront pas. Écris « corrige l'erreur » pour que Jaris réessaie (détail technique : ligne 6, « Unexpected token 'false' »)"
+const issuesBox = (page) =>
+  page.evaluate(() => {
+    const box = document.querySelector('.code-panel__issues')
+    return box && { header: box.querySelector('strong').textContent, items: box.querySelectorAll('li').length, text: box.textContent }
+  })
+
+test('seule une erreur de syntaxe reste : un seul conseil (« corrige l’erreur »), jamais « relance la génération »', options, async () => {
+  await withPage(async (page) => {
+    await page.evaluate((issue) => {
+      window.__genExtra = { issues: [issue], scriptErrors: 1 }
+    }, SYNTAX_ISSUE)
+    await startGeneration(page)
+    await page.evaluate(() => window.__finishGen())
+    await page.waitForSelector('.code-panel__issues')
+    const box = await issuesBox(page)
+    assert.equal(box.header, "L'application a été générée mais un problème n'a pas pu être corrigé :")
+    assert.equal(box.items, 1)
+    assert.doesNotMatch(box.text, /Relance la génération/, 'deux conseils contradictoires affichés ensemble')
+  })
+})
+
+test('un autre problème reste à côté : le conseil « relance la génération » revient', options, async () => {
+  await withPage(async (page) => {
+    await page.evaluate((issue) => {
+      window.__genExtra = { issues: ['le fichier utilise des ressources externes', issue], scriptErrors: 1 }
+    }, SYNTAX_ISSUE)
+    await startGeneration(page)
+    await page.evaluate(() => window.__finishGen())
+    await page.waitForSelector('.code-panel__issues')
+    const box = await issuesBox(page)
+    assert.equal(box.items, 2)
+    assert.match(box.text, /Relance la génération, ou reformule ta demande en plus simple\./)
+  })
+})
+
+test('une application ROUVERTE avec une erreur : en-tête neutre, jamais « générée mais non corrigée »', options, async () => {
+  await withPage(async (page) => {
+    await page.evaluate((issue) => {
+      window.__loadExtra = { issues: [issue], scriptErrors: 1, reopened: true }
+    }, SYNTAX_ISSUE)
+    await page.click('.workspace__item')
+    await page.waitForSelector('.code-panel__issues')
+    const box = await issuesBox(page)
+    assert.equal(box.header, "Cette application a besoin d'une correction :")
+    assert.doesNotMatch(box.text, /générée|Relance la génération/)
+    assert.match(box.text, /corrige l'erreur/)
+  })
 })

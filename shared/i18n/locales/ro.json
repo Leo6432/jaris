@@ -336,6 +336,7 @@
   "code.issues_few": "Aplicația a fost generată, dar {count} probleme nu au putut fi corectate:",
   "code.issues_other": "Aplicația a fost generată, dar {count} de probleme nu au putut fi corectate:",
   "code.issues.hint": "Repornește generarea sau reformulează cererea mai simplu.",
+  "code.issues.reopened": "Această aplicație are nevoie de o corectare:",
   "code.placeholder.repo": "Ce vrei să schimbi în {name}?",
   "code.placeholder.app": "Ce vrei să schimbi? (ex: adaugă un mod întunecat…)",
   "code.placeholder.new": "Descrie aplicația de creat…",

@@ -647,7 +647,8 @@ export async function loadGeneratedApp(path: string): Promise<GeneratedApp> {
   const html = await readFile(join(path, 'index.html'), 'utf-8')
   // Rouvrir une application dont le JavaScript ne compile pas ne doit pas la présenter comme intacte : l'avertissement
   // de sa génération ne reviendrait sinon jamais.
-  return { html, path, issues: findInlineScriptSyntaxErrors(html).map(syntaxIssueForUser) }
+  const syntax = findInlineScriptSyntaxErrors(html)
+  return { html, path, issues: syntax.map(syntaxIssueForUser), scriptErrors: syntax.length, reopened: true }
 }
 
 /**
@@ -922,5 +923,5 @@ export async function generateApp(
   const written = diffLines(currentHtml ?? null, final)
   onActivity?.({ kind: currentHtml ? 'edit' : 'create', path: 'index.html', added: written.added, removed: written.removed })
 
-  return { html: final, path: dir, issues: issuesForUser(found) }
+  return { html: final, path: dir, issues: issuesForUser(found), scriptErrors: found.syntax.length }
 }

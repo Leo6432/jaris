@@ -125,4 +125,8 @@ test('rouvrir une application dont le JavaScript ne compile pas la signale encor
   assert.equal(result.issues.length, 1)
   assert.match(result.issues[0], /ses boutons et ses animations ne réagiront pas/)
   assert.match(result.issues[0], /ligne 4, « Unexpected token 'false' »/)
+  // Rouverte, pas tout juste générée : l'écran ne dit pas « générée mais non corrigée », et ne conseille pas de
+  // relancer la génération (le message dit déjà d'écrire « corrige l'erreur »).
+  assert.equal(result.reopened, true)
+  assert.equal(result.scriptErrors, 1)
 })

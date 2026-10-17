@@ -329,6 +329,7 @@
   "code.issues_one": "De app is gegenereerd, maar één probleem kon niet worden opgelost:",
   "code.issues_other": "De app is gegenereerd, maar {count} problemen konden niet worden opgelost:",
   "code.issues.hint": "Start het genereren opnieuw, of formuleer je verzoek eenvoudiger.",
+  "code.issues.reopened": "Deze app moet worden gecorrigeerd:",
   "code.placeholder.repo": "Wat wil je veranderen aan {name}?",
   "code.placeholder.app": "Wat wil je veranderen? (bijv. voeg een donkere modus toe…)",
   "code.placeholder.new": "Beschrijf de app die je wilt maken…",

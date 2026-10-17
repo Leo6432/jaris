@@ -343,6 +343,7 @@
   "code.issues_many": "Aplikacja została wygenerowana, ale {count} problemów pozostało nienaprawionych:",
   "code.issues_other": "Aplikacja została wygenerowana, ale {count} problemów pozostało nienaprawionych:",
   "code.issues.hint": "Uruchom generowanie ponownie albo sformułuj prośbę prościej.",
+  "code.issues.reopened": "Ta aplikacja wymaga poprawki:",
   "code.placeholder.repo": "Co chcesz zmienić w {name}?",
   "code.placeholder.app": "Co chcesz zmienić? (np. dodaj tryb ciemny…)",
   "code.placeholder.new": "Opisz aplikację do stworzenia…",

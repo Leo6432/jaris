@@ -336,6 +336,7 @@
   "code.issues_one": "Lietotne tika ģenerēta, taču {count} problēmu neizdevās izlabot:",
   "code.issues_other": "Lietotne tika ģenerēta, taču {count} problēmas neizdevās izlabot:",
   "code.issues.hint": "Palaid ģenerēšanu vēlreiz vai noformulē pieprasījumu vienkāršāk.",
+  "code.issues.reopened": "Šo lietotni nepieciešams izlabot:",
   "code.placeholder.repo": "Ko vēlies mainīt lietotnē {name}?",
   "code.placeholder.app": "Ko vēlies mainīt? (piem., pievieno tumšo režīmu…)",
   "code.placeholder.new": "Apraksti izveidojamo lietotni…",

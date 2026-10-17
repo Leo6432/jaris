@@ -21,6 +21,7 @@ import {
 import { getModelThinking, type ThinkLevel } from './ollama'
 import { getProfile } from './profileStore'
 import { runRepoAgent } from './repoAgent'
+import { brokenScriptAfterChange, isSyntaxCheckedFile } from './scriptSyntax'
 import type { ThinkValue } from '../../shared/effort'
 import { t } from '../../shared/i18n'
 
@@ -364,6 +365,26 @@ export interface RunGithubAgentOptions {
   imageBase64?: string
 }
 
+/**
+ * Un fichier préparé (pas encore enregistré) dont le JavaScript ne compile pas, et que la version de GitHub ne
+ * justifie pas (voir brokenScriptAfterChange). Une version de GitHub illisible (réseau) ne reproche rien.
+ */
+async function brokenStagedScript(session: RepoSession): Promise<{ path: string; line: number | null; message: string } | null> {
+  for (const [path, content] of session.staged) {
+    if (typeof content !== 'string' || !isSyntaxCheckedFile(path)) continue
+    let original: string | null | undefined
+    try {
+      original = await originalText(session, path)
+    } catch (err) {
+      if (isAbortError(err)) throw err
+      continue
+    }
+    const problem = brokenScriptAfterChange(path, content, original)
+    if (problem) return { path, line: problem.fileLine, message: problem.message }
+  }
+  return null
+}
+
 export async function runGithubAgent(fullName: string, request: string, options: RunGithubAgentOptions): Promise<RepoAgentResult> {
   // Dépôt oublié entre-temps (relecture impossible après un enregistrement) : rouvert depuis GitHub.
   if (!findSession(fullName)) await openGithubRepo(fullName)
@@ -399,6 +420,8 @@ export async function runGithubAgent(fullName: string, request: string, options:
       writeFile: (path, content) => stage(session, path, content),
       pendingSummary: () =>
         changesOf(session).map((change) => `- ${change.kind === 'added' ? 'créé' : change.kind === 'deleted' ? 'supprimé' : 'modifié'} : ${change.path}`),
+      // Préparé par une demande précédente : revérifié lui aussi avant « terminé » (voir brokenStagedScript).
+      stagedPaths: () => [...session.staged.entries()].filter(([, content]) => content !== null).map(([path]) => path),
       chat: (messages, onDelta) => run(`Travail sur ${session.snapshot.fullName}`, messages, 8000, undefined, onDelta),
       onStatus: options.onStatus,
       onActivity: options.onActivity,
@@ -407,8 +430,19 @@ export async function runGithubAgent(fullName: string, request: string, options:
       signal: options.signal,
       maxHistoryChars: historyBudgetChars(modelMax)
     })
-    const summary = keepBranchNonEmpty(session) ? `${outcome.summary}\n\n${t('github.keptReadme')}` : outcome.summary
-    return { summary, view: viewOf(session), finished: !outcome.limitReached }
+    let limitReached = outcome.limitReached
+    let finalSummary = outcome.summary
+    // Dernier filet avant « terminé », qui part TOUT SEUL sur GitHub avec tout ce qui est préparé (étape 303) : aucun
+    // fichier préparé — de cette demande ou d'une précédente — ne doit contenir un JavaScript qui ne compile pas.
+    if (!limitReached) {
+      const broken = await brokenStagedScript(session)
+      if (broken) {
+        limitReached = true
+        finalSummary = t('repo.brokenScript', { path: broken.path, line: broken.line ?? '?', message: broken.message })
+      }
+    }
+    const summary = keepBranchNonEmpty(session) ? `${finalSummary}\n\n${t('github.keptReadme')}` : finalSummary
+    return { summary, view: viewOf(session), finished: !limitReached }
   } catch (err) {
     if (isAbortError(err)) throw new GenerationStoppedError()
     throw err

@@ -329,6 +329,7 @@
   "code.issues_one": "L'app è stata generata ma un problema non è stato corretto:",
   "code.issues_other": "L'app è stata generata ma {count} problemi non sono stati corretti:",
   "code.issues.hint": "Riavvia la generazione, o riformula la richiesta in modo più semplice.",
+  "code.issues.reopened": "Questa app ha bisogno di una correzione:",
   "code.placeholder.repo": "Cosa vuoi cambiare in {name}?",
   "code.placeholder.app": "Cosa vuoi cambiare? (es.: aggiungi una modalità scura…)",
   "code.placeholder.new": "Descrivi l'app da creare…",

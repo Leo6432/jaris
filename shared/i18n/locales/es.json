@@ -329,6 +329,7 @@
   "code.issues_one": "La aplicación se ha generado pero no se pudo corregir un problema:",
   "code.issues_other": "La aplicación se ha generado pero no se pudieron corregir {count} problemas:",
   "code.issues.hint": "Vuelve a lanzar la generación, o reformula tu petición de forma más sencilla.",
+  "code.issues.reopened": "Esta aplicación necesita una corrección:",
   "code.placeholder.repo": "¿Qué quieres cambiar en {name}?",
   "code.placeholder.app": "¿Qué quieres cambiar? (p. ej.: añade un modo oscuro…)",
   "code.placeholder.new": "Describe la aplicación que quieres crear…",
