@@ -1988,9 +1988,10 @@ app.whenReady().then(async () => {
     // même caché : c'est lui qui porte le lecteur audio des réponses parlées (App.tsx), y compris quand on parle
     // depuis la grande fenêtre.
     onboardingDone = true
-    // Même délai de grâce qu'après l'écran de démarrage (étape 296) : la fenêtre vient de changer d'écran et le
-    // widget de naître ; une perte de focus passagère à cet instant ne doit pas la replier en widget.
-    revealGraceUntil = Date.now() + STARTUP_REVEAL_GRACE_MS
+    // PAS de délai de grâce ici, contrairement à la sortie de l'écran de démarrage (étape 296) : aucune fenêtre ne
+    // passe le premier plan à une autre. Celle-ci a déjà le focus (on vient d'y cliquer « Continuer »), elle change
+    // seulement d'écran, et le widget naît caché (sans prendre le focus). Un délai ne ferait qu'ignorer un vrai
+    // changement d'application dans les secondes qui suivent : Jaris resterait derrière, sans widget.
     if (!widgetWindow || widgetWindow.isDestroyed()) widgetWindow = createWidgetWindow()
     showFullWindow()
   })

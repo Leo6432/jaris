@@ -157,7 +157,8 @@ test('le widget est préparé, caché, et une seule fois', () => {
 test('dès la fin de la configuration, passer sur une autre application replie Jaris dans le widget préparé', () => {
   const s = firstLaunch()
   s.finishOnboarding()
-  s.advance(GRACE_MS + 1)
+  // Une seconde après « Continuer », l'utilisateur clique sur son navigateur : c'est un vrai changement d'application.
+  s.advance(1_000)
   s.fullWindow.handlers.blur()
   assert.equal(s.fullWindow.visible, false, 'changer d’application doit replier Jaris')
   s.flushTimers()
@@ -175,12 +176,17 @@ test('dès la fin de la configuration, réduire la fenêtre montre aussi le widg
   assert.equal(s.createdWidgets[0].visible, true)
 })
 
-test('une perte de focus passagère juste au clic sur « Continuer » ne replie pas la fenêtre', () => {
+// Le délai de grâce de l'étape 296 couvre un vrai passage de premier plan (écran de démarrage détruit, grande fenêtre
+// affichée). Ici, aucune fenêtre ne change de mains : la fenêtre a déjà le focus et le widget naît caché. Un délai
+// ferait ignorer un vrai changement d'application juste après « Continuer » : Jaris resterait derrière l'autre
+// application, sans widget, jusqu'à ce qu'on revienne dessus.
+test('« Continuer » ne pose aucun délai de grâce : un changement d’application aussitôt après n’est pas ignoré', () => {
   const s = firstLaunch()
   s.finishOnboarding()
+  assert.equal(s.context.revealGraceUntil, 0, 'la fin de la configuration ne doit pas poser de délai de grâce')
   s.advance(200)
   s.fullWindow.handlers.blur()
+  assert.equal(s.fullWindow.visible, false, 'un changement d’application juste après « Continuer » doit replier Jaris')
   s.flushTimers()
-  assert.equal(s.fullWindow.visible, true)
-  assert.equal(s.createdWidgets[0].visible, false)
+  assert.equal(s.createdWidgets[0].visible, true, 'le widget préparé doit prendre le relais')
 })
