@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react'
-import type { CapacityScanResult, MyModelPicks as MyModelPicksData } from '../../shared/ipc'
+import type { CapacityScanResult, ModelPullProgress, MyModelPicks as MyModelPicksData } from '../../shared/ipc'
 import { formatModelName } from '../lib/formatModelName'
 import MyModelPicks from './MyModelPicks'
+import ModelPullBar from './ModelPullBar'
 import { PILOT_MODEL_LABEL } from '../../shared/pilotModel'
 import { t, tn } from '@/lib/i18n'
 
 interface CapacityScanProps {
   onDone: () => void
+}
+
+/** Ligne « Vidéo » du résumé : le modèle et sa qualité, s'il reste à le télécharger depuis le mode Vidéo, ou aucun. */
+function videoSummary(video: NonNullable<CapacityScanResult['video']>): string {
+  if (!video.model) return t('setup.video.none')
+  const values = { model: video.model, quality: video.qualityLabel ?? '' }
+  return video.installed ? t('picks.video.model', values) : t('setup.video.later', values)
 }
 
 /**
@@ -23,6 +31,8 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
   const [picks, setPicks] = useState<MyModelPicksData | null>(null)
   const [installing, setInstalling] = useState(false)
   const [log, setLog] = useState<string[]>([])
+  // Le modèle en cours de téléchargement (octets reçus / taille), `null` entre deux téléchargements.
+  const [pull, setPull] = useState<ModelPullProgress | null>(null)
   const [result, setResult] = useState<CapacityScanResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -32,12 +42,18 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
 
   useEffect(() => {
     if (!installing) return
-    return window.jaris.onModelBenchmarkLine((line) => setLog((prev) => [...prev, line]))
+    const stopLines = window.jaris.onModelBenchmarkLine((line) => setLog((prev) => [...prev, line]))
+    const stopProgress = window.jaris.onModelPullProgress(setPull)
+    return () => {
+      stopLines()
+      stopProgress()
+    }
   }, [installing])
 
   const start = (): void => {
     setError(null)
     setLog([])
+    setPull(null)
     setInstalling(true)
     window.jaris
       .runQuickSetup()
@@ -63,12 +79,15 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
           </>
         )}
 
+        {/* Une vraie barre (et la taille) pendant un téléchargement de modèle, plutôt qu'un rond qui tourne : un
+            modèle pèse plusieurs Go, l'utilisateur doit voir que ça avance et combien il en reste. Entre deux
+            téléchargements (détection, modèle d'image…), la même barre fait un va-et-vient : ça travaille, sans
+            pourcentage inventé — comme l'écran d'installation juste avant. */}
         {installing && (
-          <>
-            <div className="capacity-scan__spinner" />
+          <div className="capacity-scan__progress">
             <p className="capacity-scan__status">{t('setup.downloading')}</p>
-            {log.length > 0 && <p className="capacity-scan__status">{log[log.length - 1]}</p>}
-          </>
+            <ModelPullBar pull={pull} line={log[log.length - 1] ?? ''} label={t('setup.downloading')} />
+          </div>
         )}
 
         {error && (
@@ -91,6 +110,8 @@ export default function CapacityScan({ onDone }: CapacityScanProps): JSX.Element
               <li>{t('common.labelValue', { label: t('role.vision'), value: formatModelName(result.visionModel) })}</li>
               <li>{t('common.labelValue', { label: t('app.mode.code'), value: formatModelName(result.codeModel) })}</li>
               {result.image && <li>{t('common.labelValue', { label: t('app.mode.image'), value: result.image.model ?? t('setup.image.none') })}</li>}
+              {/* Même décision que la ligne « Vidéo » de la carte des modèles (pickVideoModel) ; jamais téléchargé ici. */}
+              {result.video && <li>{t('common.labelValue', { label: t('app.mode.video'), value: videoSummary(result.video) })}</li>}
               {result.pilot && (
                 <li>{t('common.labelValue', { label: t('role.pilot'), value: result.pilot.model ? PILOT_MODEL_LABEL : t('setup.pilot.none') })}</li>
               )}

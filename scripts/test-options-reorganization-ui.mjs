@@ -98,6 +98,12 @@ const overrides = {
     window.__benchLine = cb
     return () => {}
   },
+  // « Retester la configuration » : runQuickSetup reste en cours ; le test diffuse lui-même l'avancement d'Ollama.
+  runQuickSetup: () => new Promise((resolve) => (window.__finishRetest = () => resolve({ gpuName: null, vramGb: 8, models: {}, visionModel: 'x', codeModel: 'x' }))),
+  onModelPullProgress: (cb) => {
+    window.__pull = cb
+    return () => { window.__pull = null }
+  },
   testUnscoredModels: () => {
     window.__testCalls = (window.__testCalls ?? 0) + 1
     return new Promise((resolve) => (window.__finishTest = () => resolve({ models: [], resultsPath: 'x' })))
@@ -520,6 +526,39 @@ test('mise à jour d’Ollama : pas de second bouton pendant l’installeur, pui
   } finally {
     await browser.close()
   }
+})
+
+// Relecteur : « Retester la configuration » lance le même runQuickSetup que l'écran de configuration, et télécharge
+// les mêmes modèles (plusieurs Go) — il n'affichait qu'une ligne « … 35% », sans barre ni taille.
+test('« Retester la configuration » : la même barre et la taille que l’écran de configuration, puis le va-et-vient', options, async () => {
+  await withOptions(async (page) => {
+    await page.click('.options-menu__tab:has-text("Modèles")')
+    await page.click('button:has-text("Retester la configuration")')
+    await page.waitForFunction(() => typeof window.__pull === 'function')
+    const bar = page.locator('.options-menu__retest-progress [role="progressbar"]')
+    assert.equal(await bar.count(), 1, 'une barre sous le bouton pendant le retest')
+    assert.equal(await bar.getAttribute('aria-valuenow'), null, 'rien ne se télécharge encore : va-et-vient, sans pourcentage inventé')
+
+    await page.evaluate(() => window.__pull({ model: 'granite4.2:8b', completed: 0.4 * 5 * 1024 ** 3, total: 5 * 1024 ** 3, percent: 40, nextFile: false }))
+    await page.waitForFunction(() => document.querySelector('.options-menu__retest-progress [role="progressbar"]')?.getAttribute('aria-valuenow') === '40')
+    await page.waitForTimeout(400) // la largeur de la barre est animée (0,3 s)
+    const fill = await bar.evaluate((el) => el.firstElementChild.getBoundingClientRect().width / el.getBoundingClientRect().width)
+    assert.ok(Math.abs(fill - 0.4) < 0.02, `barre à ${fill}`)
+    const box = await bar.boundingBox()
+    assert.ok(box.width >= 200 && box.height >= 4, `une vraie barre, pas un trait : ${JSON.stringify(box)}`)
+    assert.equal((await page.textContent('.options-menu__retest-progress .capacity-scan__progress-step')).trim(), 'Téléchargement du modèle granite4.2:8b… 40%')
+    assert.equal((await page.textContent('.options-menu__retest-progress .capacity-scan__progress-size')).trim(), '2,0 Go sur 5,0 Go')
+
+    await page.evaluate(() => {
+      window.__pull(null)
+      window.__benchLine('Installation du modèle de dessin…')
+    })
+    await page.waitForFunction(() => !document.querySelector('.options-menu__retest-progress [role="progressbar"]').hasAttribute('aria-valuenow'))
+    assert.match(await page.textContent('.options-menu__retest-progress'), /Installation du modèle de dessin/)
+
+    await page.evaluate(() => window.__finishRetest())
+    await page.waitForFunction(() => !document.querySelector('.options-menu__retest-progress'))
+  })
 })
 
 // Étape 168, Léo : « remets le bouton pour Lightning et qwen2.5-coder:14b ».

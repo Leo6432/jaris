@@ -18,6 +18,7 @@ import type {
   PhonePairing,
   AudioInputDevice,
   CapacityScanResult,
+  ModelPullProgress,
   ChatMessage,
   WebActivity,
   ContextLengthOptions,
@@ -123,6 +124,7 @@ declare global {
       testUnscoredModels: () => Promise<{ models: string[]; resultsPath: string }>
       showUnscoredResults: () => Promise<void>
       onModelBenchmarkLine: (cb: (line: string) => void) => () => void
+      onModelPullProgress: (cb: (progress: ModelPullProgress | null) => void) => () => void
       getNewModels: () => Promise<string[]>
       acknowledgeNewModels: () => Promise<void>
       // imageBase64 (étape 91) : image déjà réduite et encodée par src/lib/imageAttachment.ts, sans le

@@ -21,6 +21,9 @@ interface MyModelPicksProps {
   beforeInstall?: boolean
 }
 
+/** Cellule sans valeur (« — » ou vide) : masquée quand la carte passe sur deux lignes par rôle (index.css). */
+const EMPTY = ' capacity-scan__tier-empty'
+
 /** Rôles dont le choix tient compte des demandes complètes (étape 241). */
 const CONVERSATION_ROLES = new Set(['flash', 'medium', 'large'])
 
@@ -98,13 +101,18 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                     <td className="capacity-scan__tier-model" title={entry.model}>
                       {formatModelName(entry.model)}
                     </td>
+                    {/* « — » si rien n'est publié : aligné en colonne dans le tableau large, masqué quand la carte passe sur
+                        deux lignes par rôle (il n'y a plus de colonne pour lui donner un sens, voir index.css). */}
                     <td
-                      className="capacity-scan__tier-speed"
+                      className={`capacity-scan__tier-speed${entry.artificialAnalysisSpeed === null ? EMPTY : ''}`}
                       title={t('picks.speed.title')}
                     >
                       {formatSpeed(entry)}
                     </td>
-                    <td className="capacity-scan__tier-intelligence" title="Artificial Analysis Intelligence Index v4.3.2">
+                    <td
+                      className={`capacity-scan__tier-intelligence${entry.artificialAnalysisIndex === null ? EMPTY : ''}`}
+                      title="Artificial Analysis Intelligence Index v4.3.2"
+                    >
                       {formatIntelligence(entry)}
                     </td>
                     {/* Étape 243, Léo : « il y a seulement les questions visibles et pas le score de demandes ». Les
@@ -144,9 +152,9 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                 <tr className="capacity-scan__tier-image">
                   <td className="capacity-scan__tier-slot">{t('app.mode.image')}</td>
                   <td className="capacity-scan__tier-model">{picks.image.model ?? t('picks.noModel')}</td>
-                  <td className="capacity-scan__tier-speed">—</td>
-                  <td className="capacity-scan__tier-intelligence">—</td>
-                  <td />
+                  <td className={`capacity-scan__tier-speed${EMPTY}`}>—</td>
+                  <td className={`capacity-scan__tier-intelligence${EMPTY}`}>—</td>
+                  <td className={EMPTY.trim()} />
                 </tr>
                 {!picks.image.model ? (
                   <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
@@ -171,9 +179,9 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                   <td className="capacity-scan__tier-model">
                     {picks.video.model ? t('picks.video.model', { model: picks.video.model, quality: picks.video.qualityLabel ?? '' }) : t('picks.noModel')}
                   </td>
-                  <td className="capacity-scan__tier-speed">—</td>
-                  <td className="capacity-scan__tier-intelligence">—</td>
-                  <td />
+                  <td className={`capacity-scan__tier-speed${EMPTY}`}>—</td>
+                  <td className={`capacity-scan__tier-intelligence${EMPTY}`}>—</td>
+                  <td className={EMPTY.trim()} />
                 </tr>
                 {!picks.video.model ? (
                   <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">
@@ -197,9 +205,9 @@ export default function MyModelPicks({ picks, title = t('picks.title'), onDelete
                 <tr className="capacity-scan__tier-image capacity-scan__tier-pilot">
                   <td className="capacity-scan__tier-slot">{t('role.pilot')}</td>
                   <td className="capacity-scan__tier-model">{picks.pilot.model ? PILOT_MODEL_LABEL : t('picks.noModel')}</td>
-                  <td className="capacity-scan__tier-speed">—</td>
-                  <td className="capacity-scan__tier-intelligence">—</td>
-                  <td />
+                  <td className={`capacity-scan__tier-speed${EMPTY}`}>—</td>
+                  <td className={`capacity-scan__tier-intelligence${EMPTY}`}>—</td>
+                  <td className={EMPTY.trim()} />
                 </tr>
                 {!picks.pilot.model ? (
                   <tr className="capacity-scan__tier-upgrade capacity-scan__tier-missing">

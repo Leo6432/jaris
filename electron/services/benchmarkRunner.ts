@@ -5,14 +5,16 @@ import { join } from 'path'
 import { config } from '../config'
 import { resourcesRoot } from '../paths'
 import { getDataRoot } from './dataLocation'
-import { deleteModel, pullModelIfMissing, repairModelsViewIfNeeded, ModelTooLargeError, DiskFullError } from './ollama'
+import { deleteModel, pullModelIfMissing, repairModelsViewIfNeeded, ModelTooLargeError, DiskFullError, type PullProgressListener } from './ollama'
 import { campaignCompletion, getAllCandidateModelIds, getUnscoredModels, pickBestModelsFromBenchmark } from './hardwareScan'
 import { getProfile, saveProfile } from './profileStore'
 import type { CapacityScanResult } from '../../shared/ipc'
 import { installImageModel } from './imageGenerator'
+import { isVideoQualityInstalled } from './videoGenerator'
 import { detectRamGb } from './systemResources'
 import { pickImageModel } from '../../shared/imageModel'
 import { PILOT_MODEL_LABEL, pickPilotModel } from '../../shared/pilotModel'
+import { pickVideoModel } from '../../shared/videoModel'
 import { t } from '../../shared/i18n'
 
 /**
@@ -23,7 +25,7 @@ import { t } from '../../shared/i18n'
  * rapide/médium/puissant, souvent les mêmes sur une machine contrainte, + vision + code), jamais les
  * candidats perdants.
  */
-export async function runQuickSetup(onLine: (line: string) => void): Promise<CapacityScanResult> {
+export async function runQuickSetup(onLine: (line: string) => void, onProgress?: PullProgressListener): Promise<CapacityScanResult> {
   onLine(t('bench.detecting'))
   let picked = await pickBestModelsFromBenchmark()
   onLine(
@@ -59,7 +61,7 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
     let newFailure = false
     for (const model of modelsToInstall) {
       try {
-        await pullModelIfMissing(model, onLine)
+        await pullModelIfMissing(model, onLine, onProgress)
         pulledOk.add(model)
       } catch (err) {
         if (err instanceof ModelTooLargeError || err instanceof DiskFullError) {
@@ -105,7 +107,7 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
   let pilot: CapacityScanResult['pilot'] = pilotPick
   if (pilotPick.model) {
     try {
-      await pullModelIfMissing(pilotPick.model, onLine)
+      await pullModelIfMissing(pilotPick.model, onLine, onProgress)
       pilot = { ...pilotPick, installed: true }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -180,6 +182,13 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
     })
   }
 
+  // Le modèle vidéo, pour le résumé de fin : même décision que la ligne « Vidéo » de la carte des modèles. Jamais
+  // téléchargé ici (plusieurs Go, il s'installe depuis le mode Vidéo) — le résumé dit donc s'il est déjà là ou pas.
+  const videoPick = pickVideoModel(picked.vramGb, detectRamGb())
+  const video: CapacityScanResult['video'] = videoPick.quality
+    ? { ...videoPick, installed: await isVideoQualityInstalled(videoPick.quality).catch(() => false) }
+    : videoPick
+
   const blockedList = [...blockedReasons].map(([model, reason]) => ({ model, reason }))
   const skippedList = [...skippedModels].map(([model, reason]) => ({ model, reason }))
   return {
@@ -187,7 +196,8 @@ export async function runQuickSetup(onLine: (line: string) => void): Promise<Cap
     skippedModels: skippedList.length ? skippedList : undefined,
     blockedModels: blockedList.length ? blockedList : undefined,
     image,
-    pilot
+    pilot,
+    video
   }
 }
 

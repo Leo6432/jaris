@@ -7,6 +7,7 @@ import type {
   ContextLengthOptions,
   ConversationEntry,
   MyModelPicks as MyModelPicksData,
+  ModelPullProgress,
   ModelsLocationStatus,
   OllamaVersionStatus,
   Profile,
@@ -20,6 +21,7 @@ import AppUpdateProgress from './AppUpdateProgress'
 import { SettingGroup, SettingRow, Toggle } from './SettingsLayout'
 import AnywhereSettings from './AnywhereSettings'
 import MyModelPicks from './MyModelPicks'
+import ModelPullBar from './ModelPullBar'
 import JarisOrb from './JarisOrb'
 import { formatModelName } from '../lib/formatModelName'
 import { formatContextLength } from '../lib/formatContextLength'
@@ -250,6 +252,8 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
   // Étape 140, Léo : "je clique sur une nouvelle detection, et ça fait rien ça charge". Le retest télécharge
   // parfois plusieurs Go (G9v3-3B : 1,9 Go) : sans afficher son avancement, le bouton semblait bloqué.
   const [retestLine, setRetestLine] = useState<string | null>(null)
+  // Le modèle en cours de téléchargement pendant ce retest (octets reçus / taille), `null` entre deux téléchargements.
+  const [retestPull, setRetestPull] = useState<ModelPullProgress | null>(null)
   const [inputDevices, setInputDevices] = useState<AudioInputDevice[] | null>(null)
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[] | null>(null)
   const [savingAudioDevice, setSavingAudioDevice] = useState(false)
@@ -459,7 +463,14 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
   // de minutes à tout retélécharger/retester alors que verified-tool-scores.md connaît déjà le gagnant).
   useEffect(() => {
     if (!retestingConfig) return
-    return window.jaris.onModelBenchmarkLine(setRetestLine)
+    const stopLines = window.jaris.onModelBenchmarkLine(setRetestLine)
+    // Même barre que l'écran de configuration (runQuickSetup télécharge ici les mêmes modèles, parfois plusieurs Go) :
+    // le processus principal l'envoie déjà à cette fenêtre, il suffisait de l'écouter.
+    const stopProgress = window.jaris.onModelPullProgress(setRetestPull)
+    return () => {
+      stopLines()
+      stopProgress()
+    }
   }, [retestingConfig])
 
   const chooseLanguage = (next: LanguageSetting): void => {
@@ -479,6 +490,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
   const handleRetestConfiguration = async (): Promise<void> => {
     setError(null)
     setRetestLine(t('options.retest.detecting'))
+    setRetestPull(null)
     setRetestingConfig(true)
     try {
       const result = await window.jaris.runQuickSetup()
@@ -499,6 +511,7 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
     } finally {
       setRetestingConfig(false)
       setRetestLine(null)
+      setRetestPull(null)
     }
   }
 
@@ -1192,7 +1205,11 @@ export default function OptionsMenu({ embedded = false, navSlot = null }: Option
                   {retestingConfig ? t('options.retest.running') : t('options.retest.label')}
                 </button>
               </SettingRow>
-              {retestingConfig && retestLine && <p className="capacity-scan__status options-menu__retest-progress">{retestLine}</p>}
+              {retestingConfig && (
+                <div className="options-menu__retest-progress">
+                  <ModelPullBar pull={retestPull} line={retestLine ?? ''} label={t('options.retest.running')} />
+                </div>
+              )}
               {profile?.codeModel && (
                 <SettingRow
                   label={t('options.codeModel.label')}

@@ -352,6 +352,29 @@ export interface CapacityScanResult {
   image?: ImageModelPick & { error?: string }
   /** Étape 231 : le modèle de pilotage d'écran, même principe que `image` (absent du rôle si pas assez de puissance). */
   pilot?: PilotModelPick & { error?: string }
+  /**
+   * Le modèle vidéo et sa meilleure qualité possible ici (pickVideoModel, même décision que la carte des modèles).
+   * Jamais téléchargé pendant la configuration (il s'installe depuis le mode Vidéo) : `installed` dit s'il est déjà là.
+   */
+  video?: VideoModelPick
+}
+
+/**
+ * Avancement du téléchargement d'un modèle par Ollama (`completed`/`total` en octets, toutes couches du modèle
+ * additionnées), pour la barre de progression de la configuration (CapacityScan.tsx). `null` = ce téléchargement
+ * est fini (réussi ou non) : la barre disparaît.
+ */
+export interface ModelPullProgress {
+  model: string
+  completed: number
+  total: number
+  /**
+   * Pourcentage à afficher (createPullPercent, ollama.ts) : ne recule jamais quand Ollama découvre un fichier de plus
+   * du modèle en route, et reste sous 100 tant que le téléchargement n'est pas fini.
+   */
+  percent: number
+  /** Un fichier de plus du modèle est en cours : la barre attend que les octets reçus la rattrapent. */
+  nextFile: boolean
 }
 
 /**
@@ -924,6 +947,8 @@ export const IPC_CHANNELS = {
   showUnscoredResults: 'jaris:show-unscored-results',
   /** main -> renderer : une ligne de progression (configuration ou test des modèles), au fil de l'eau. */
   modelBenchmarkLine: 'jaris:model-benchmark-line',
+  /** main -> renderer : octets reçus d'un modèle en cours de téléchargement (ModelPullProgress), `null` à la fin. */
+  modelPullProgress: 'jaris:model-pull-progress',
   /** renderer -> main : modèles choisis pour CETTE machine, sans rien télécharger (voir getMyModelPicks,
    * hardwareScan.ts) — écran d'accueil et Options → Modèles. */
   getMyModelPicks: 'jaris:get-my-model-picks',

@@ -3,6 +3,7 @@ import { parseModelThinking, type ModelThinking, type ThinkValue } from '../../s
 import { DISK_SAFETY_MARGIN_GB, detectFreeDiskGb, getDownloadBudgetGb } from './systemResources'
 import { importHuggingFaceModel } from './huggingFaceImport'
 import { t } from '../../shared/i18n'
+import type { ModelPullProgress } from '../../shared/ipc'
 
 export interface OllamaToolCall {
   function: { name: string; arguments: Record<string, unknown> }
@@ -472,9 +473,32 @@ export async function getModelThinking(model: string): Promise<ModelThinking | n
 
 interface OllamaPullProgress {
   status?: string
+  /** Couche du modèle concernée : Ollama télécharge les couches l'une après l'autre, chacune avec son total. */
+  digest?: string
   total?: number
   completed?: number
   error?: string
+}
+
+/** Avancement d'un téléchargement (configuration, CapacityScan.tsx) ; `null` quand il est fini, réussi ou non. */
+export type PullProgressListener = (progress: ModelPullProgress | null) => void
+
+/**
+ * Pourcentage AFFICHÉ d'un téléchargement, à partir des octets reçus et du total connu jusqu'ici. Ollama télécharge
+ * les fichiers d'un modèle l'un après l'autre sans annoncer les suivants : le total grandit en route, et le
+ * pourcentage brut recule (100 % → 87 % quand le lecteur d'images de MAI-UI 8B commence). Celui-ci ne recule jamais,
+ * plafonne à 99 % tant que le téléchargement n'est pas fini (Ollama vérifie encore les fichiers après le dernier
+ * octet), et `nextFile` dit qu'un fichier de plus est en cours pendant que la barre attend que les octets la
+ * rattrapent — sans quoi une barre immobile se lirait comme un blocage.
+ */
+export function createPullPercent(): (completed: number, total: number) => { percent: number; nextFile: boolean } {
+  let shown = 0
+  return (completed, total) => {
+    const raw = total > 0 ? Math.floor((Math.min(completed, total) / total) * 100) : 0
+    const nextFile = raw < shown
+    shown = Math.min(99, Math.max(shown, raw))
+    return { percent: shown, nextFile }
+  }
 }
 
 /**
@@ -564,7 +588,11 @@ export async function repairModelsViewIfNeeded(): Promise<boolean> {
   }
 }
 
-export async function pullModelIfMissing(model: string, onStatus?: (message: string) => void): Promise<void> {
+export async function pullModelIfMissing(
+  model: string,
+  onStatus?: (message: string) => void,
+  onProgress?: PullProgressListener
+): Promise<void> {
   let installed = await listInstalledModels()
   // Aucun modèle annoncé alors qu'il y en a sur le disque : Ollama regarde le mauvais chemin (étape 289, Léo : un
   // téléchargement « réussi » en 2 s, puis « model not found »). Retélécharger n'y changerait rien.
@@ -572,13 +600,14 @@ export async function pullModelIfMissing(model: string, onStatus?: (message: str
   if (installed.includes(model) || installed.includes(withTag(model))) return
 
   try {
-    await pullWithOllama(model, onStatus)
+    await pullWithOllama(model, onStatus, onProgress)
   } catch (err) {
     // Étape 139 : Ollama 0.34.2 bloque tout `pull hf.co/...` (redirection entre hôtes, voir
     // huggingFaceImport.ts). Plutôt que d'abandonner ce modèle, Jaris le récupère lui-même depuis Hugging
     // Face, à l'identique. Jamais pour un manque de place (VRAM/disque) : réessayer n'y changerait rien.
     if (!model.startsWith('hf.co/') || err instanceof ModelTooLargeError || err instanceof DiskFullError) throw err
     // Phrase courte : l'erreur brute d'Ollama contient une URL de plusieurs centaines de caractères.
+    onProgress?.(null)
     onStatus?.(t('ollama.pull.hfFallback', { model }))
     try {
       await importHuggingFaceModel(model, onStatus)
@@ -588,10 +617,14 @@ export async function pullModelIfMissing(model: string, onStatus?: (message: str
       // reconnaître pour retomber sur le modèle suivant), complétée de la raison du second échec.
       throw new Error(`${err instanceof Error ? err.message : String(err)} ; import direct aussi impossible : ${importErr instanceof Error ? importErr.message : String(importErr)}`)
     }
+  } finally {
+    // Fin de ce téléchargement, réussi ou non : la barre de progression disparaît (sinon elle resterait affichée,
+    // figée, pendant l'installation du modèle suivant ou du modèle d'image).
+    onProgress?.(null)
   }
 }
 
-async function pullWithOllama(model: string, onStatus?: (message: string) => void): Promise<void> {
+async function pullWithOllama(model: string, onStatus?: (message: string) => void, onProgress?: PullProgressListener): Promise<void> {
 
   const budgetGb = await getDownloadBudgetGb()
   const freeDiskGb = detectFreeDiskGb()
@@ -611,8 +644,18 @@ async function pullWithOllama(model: string, onStatus?: (message: string) => voi
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
-  let lastPercent = -1
   let sizeChecked = false
+  // Ollama envoie l'avancement couche par couche (le gros fichier du modèle, puis quelques petits fichiers) : la
+  // taille affichée porte sur le TOTAL, sinon elle retombait à 0 % après le gros fichier.
+  const layers = new Map<string, { completed: number; total: number }>()
+  // Ce total grandit à chaque nouveau fichier, qu'Ollama n'annonce pas d'avance (il les télécharge l'un après
+  // l'autre, server/images.go). Un second GROS fichier (le lecteur d'images de MAI-UI 8B : 0,75 Go après 5,0 Go)
+  // ferait retomber le pourcentage de 100 à 87 : celui qu'on affiche ne recule jamais, et reste sous 100 tant que
+  // le téléchargement n'est pas fini (vérification comprise).
+  const shown = createPullPercent()
+  let lastPercentSaid = -1
+  let nextFileSaid = false
+  let lastStep = ''
 
   while (true) {
     const { done, value } = await reader.read()
@@ -651,10 +694,27 @@ async function pullWithOllama(model: string, onStatus?: (message: string) => voi
       }
 
       if (progress.total && progress.completed !== undefined) {
-        const percent = Math.floor((progress.completed / progress.total) * 100)
-        if (percent !== lastPercent) {
-          lastPercent = percent
+        layers.set(progress.digest ?? progress.status ?? '', { completed: Math.min(progress.completed, progress.total), total: progress.total })
+        let completed = 0
+        let total = 0
+        for (const layer of layers.values()) {
+          completed += layer.completed
+          total += layer.total
+        }
+        const { percent, nextFile } = shown(completed, total)
+        // La ligne de texte (journal, mode Code) : chaque pourcentage une seule fois, et « fichier suivant » une fois
+        // par fichier — jamais « 99 % » répété après, qui ferait une ligne de plus sans rien apprendre.
+        if (nextFile && !nextFileSaid) onStatus?.(t('ollama.pull.nextFile', { model }))
+        else if (!nextFile && percent > lastPercentSaid) {
+          lastPercentSaid = percent
           onStatus?.(t('ollama.pull.progress', { model, percent }))
+        }
+        nextFileSaid = nextFile
+        // Au millième près : pendant un fichier suivant, le pourcentage ne bouge plus, la taille reçue si.
+        const step = `${percent}|${nextFile}|${Math.floor((completed / total) * 1000)}`
+        if (step !== lastStep) {
+          lastStep = step
+          onProgress?.({ model, completed, total, percent, nextFile })
         }
       } else if (progress.status) {
         onStatus?.(t('common.labelValue', { label: model, value: progress.status }))

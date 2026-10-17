@@ -19,6 +19,7 @@ import {
   type PhonePairing,
   type AudioInputDevice,
   type CapacityScanResult,
+  type ModelPullProgress,
   type ChatMessage,
   type ContextLengthOptions,
   type ConversationEntry,
@@ -153,6 +154,7 @@ const api = {
     invoke(IPC_CHANNELS.testUnscoredModels),
   showUnscoredResults: (): Promise<void> => invoke(IPC_CHANNELS.showUnscoredResults),
   onModelBenchmarkLine: (cb: (line: string) => void) => subscribe(IPC_CHANNELS.modelBenchmarkLine, cb),
+  onModelPullProgress: (cb: (progress: ModelPullProgress | null) => void) => subscribe(IPC_CHANNELS.modelPullProgress, cb),
   getNewModels: (): Promise<string[]> => invoke(IPC_CHANNELS.getNewModels),
   acknowledgeNewModels: (): Promise<void> => invoke(IPC_CHANNELS.acknowledgeNewModels),
   // imageBase64 (étape 91) : image jointe, déjà réduite côté renderer (voir src/lib/imageAttachment.ts) et
