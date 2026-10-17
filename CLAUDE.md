@@ -8467,3 +8467,48 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   en supposant qu'il n'a pas de score casse dès que ce score est recopié. Un test qui porte sur autre chose que les
   scores (version d'Ollama, téléchargement illisible) lit désormais un fichier de scores vide
   (`JARIS_VERIFIED_SCORES_PATH`, ou un texte de scores filtré) au lieu du vrai fichier.
+
+- **« oui » (prendre le meilleur des petits modèles) + « on est d'accord que phi-4-mini et K2 0.9B ont exactement
+  les mêmes tests que les autres modèles » (Léo, étape 318, Jaris 0.34.25).**
+  1. **Mêmes tests : vérifié sur les traces, pas affirmé de mémoire.** Les versions de test enregistrées dans chaque
+     campagne sont identiques (conversation v6, demandes v3, code v3), donc mêmes questions, mêmes demandes, mêmes
+     applis et mêmes juges. Les prompts système stockés dans les traces ont été comparés par empreinte puis par
+     différence : un seul écart, l'emplacement de la date et de l'heure (depuis le 14/10, en tête de chaque message
+     de l'utilisateur, comme Jaris le fait aujourd'hui depuis l'étape 79, au lieu d'une date fixe dans le prompt
+     système). Autres différences, sans effet sur la note : l'horloge réelle dans les questions (aucun juge de
+     conversation n'en dépend) et un Ollama plus récent (0.40.x au lieu de 0.35.1). Le juge de code a été corrigé
+     entre-temps, mais les 43 anciennes applis ont toutes été rejugées avec le juge corrigé (une seule a changé
+     de verdict, la liste de K2 7B). **Leçon générale : pour répondre à « les conditions étaient-elles les
+     mêmes ? », comparer ce que les traces ont RÉELLEMENT enregistré (versions, prompts), pas ce que le code
+     actuel ferait.**
+  2. **Choix sur une petite machine : le meilleur des petits, plus le plus léger.** Le constat de l'étape 317 :
+     quand aucun modèle noté ne tient (pas de carte graphique), `pickRole` prenait le plus léger des modèles
+     notés, quelle que soit sa note, donc K2 Horizon 0.9B (0/48) partout. Remplacé par `bestOfLightest` : les
+     modèles jusqu'à 2 fois le poids du plus léger (`SMALL_CLASS_FACTOR`, même gabarit), et parmi eux la
+     meilleure note, avec la même formule que d'habitude. La légèreté reste le seul repère de vitesse quand rien
+     ne tient, mais elle sert seulement à délimiter les « petits », plus à choisir. Deuxième trou, même famille :
+     Rapide, quand aucun modèle fiable n'a de vitesse publiée, reprenait le plus léger des plus fiables aux 78
+     questions (encore la 0.9B sur une carte de 2 Go). Il prend désormais la meilleure note, comme Médium.
+     Résultat calculé avant/après sur 8 machines types :
+     - sans carte ou avec 1 Go : Rapide/Médium/Puissant/Code passent de K2 0.9B à qwen3.5:0.8b ;
+     - 2 Go : Rapide passe de K2 0.9B à qwen3.5:0.8b ;
+     - 3 Go/16 Go de RAM : Rapide passe de qwen3:1.7b (28/48) à MiniCPM5-2B (37/48, plus léger en plus) ;
+     - jusqu'à 3 Go : Vision passe de qwen3-vl:2b (21/34) à qwen3.5:4b (28/34, 3,4 Go). C'est un modèle plus
+       lourd, donc plus lent sans carte. À confirmer en usage réel ;
+     - 6, 8 (la machine de Léo), 12 et 24 Go : aucun changement.
+  **Piège dans mon premier jet, attrapé par le test de la machine de 6 Go :** appliquer `bestOfLightest` aussi à
+  Rapide faisait tomber Rapide de K2 3.7B à qwen3.5:0.8b sur une machine où plusieurs modèles tiennent. Quand des
+  modèles tiennent, c'est la note qui décide, pas le gabarit : le repli « petits » est réservé au cas où rien ne
+  tient.
+  **Piège du test de mutation :** les deux lignes `if (!speeds.length) return bestNote(scored, chain)` (Rapide et
+  Médium) sont identiques. Un remplacement de texte « toutes occurrences » a remis l'ancien code dans les deux, et
+  le test a échoué sur une `ReferenceError` (`reference` inconnu dans Médium), pas sur le défaut visé. **Leçon
+  générale : une mutation doit échouer POUR LA BONNE RAISON. Quand la ligne visée existe en double, ne remplacer
+  que l'occurrence voulue et vérifier sa position avant de conclure que le test mord.**
+  Régression : `node --test scripts/test-hardwarescan-small-machines.mjs`. Il couvre :
+  - sans carte, avec 8 et 16 Go de RAM : jamais la 0.9B ;
+  - Rapide à 1, 2 et 3 Go ;
+  - la machine de 6 Go inchangée ;
+  - la machine de Léo identique, modèle par modèle.
+  Chaque test a été vérifié en remettant l'ancien repli, l'ancienne règle de Rapide et mon premier jet. **Non
+  vérifiable ici :** la vitesse réelle de ces choix sur une machine sans carte.

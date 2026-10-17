@@ -1467,7 +1467,9 @@ function computeModelPicks(
    * un modèle qui a 5 points d'intelligence en plus mais ne perd que 3 points de vitesse »). Parmi les modèles
    * qui restent au moins à RAPIDE_MIN_SPEED_RATIO de la vitesse du plus rapide, le plus INTELLIGENT (à
    * intelligence égale, le plus rapide). Un modèle sans vitesse publiée ne peut pas prouver qu'il est rapide :
-   * écarté tant qu'au moins un modèle en a une ; si aucun n'en a, retour au plus léger.
+   * écarté tant qu'au moins un modèle en a une ; si aucun n'en a, la meilleure note parmi ceux qui tiennent,
+   * comme pour Médium (étape 318 : avant, le plus léger des plus fiables aux 78 questions, sans regarder les
+   * demandes complètes — K2 Horizon 0.9B, 0/48, sur une carte de 2 Go).
    */
   const fastEnoughThenSmartest = (scored: Scored[], chain: number): Scored[] => {
     // Le plancher de vitesse se calcule sur les modèles les plus fiables (sans quoi un petit modèle très rapide
@@ -1476,7 +1478,7 @@ function computeModelPicks(
     const top = Math.max(...scored.map((c) => parseToolScore(c.result.toolCalling)))
     const reference = scored.filter((c) => parseToolScore(c.result.toolCalling) === top)
     const speeds = reference.map((c) => ARTIFICIAL_ANALYSIS_SPEED[c.model]).filter((v): v is number => v !== undefined)
-    if (!speeds.length) return [...reference].sort(fastestFirst)
+    if (!speeds.length) return bestNote(scored, chain)
     const floor = Math.max(...speeds) * RAPIDE_MIN_SPEED_RATIO
     return scored
       .filter((c) => (ARTIFICIAL_ANALYSIS_SPEED[c.model] ?? -1) >= floor)
@@ -1546,6 +1548,23 @@ function computeModelPicks(
   }
 
   /**
+   * Étape 318, Léo (« oui » à « prendre le meilleur des petits modèles au lieu du plus léger ») : quand AUCUN
+   * modèle noté ne tient (pas de carte graphique), Jaris prenait le PLUS LÉGER, sans regarder sa note. Depuis que
+   * K2 Horizon 0.9B est noté (0/48 aux demandes, 1/5 en code), c'était lui partout, au lieu de qwen3.5:0.8b
+   * (13/48). La légèreté reste un critère — sans budget qui tienne, c'est le seul repère de vitesse —, mais
+   * seulement pour délimiter les « petits » : jusqu'à deux fois le poids du plus léger, le même gabarit. Parmi
+   * eux, la meilleure note. Réservé à ce repli : quand des modèles tiennent, c'est la note seule qui décide.
+   */
+  const SMALL_CLASS_FACTOR = 2
+  const bestOfLightest = (scored: Scored[], chain: number): Scored[] => {
+    const lightest = Math.min(...scored.map((c) => c.vramGb))
+    return bestNote(
+      scored.filter((c) => c.vramGb <= lightest * SMALL_CLASS_FACTOR),
+      chain
+    )
+  }
+
+  /**
    * Un rôle = une question posée à TOUS les modèles (étape 160) :
    * - `pool` : les modèles capables de ce rôle (tous, sauf Vision qui exige de lire une image) ;
    * - `resultOf` : le score de fiabilité qui compte pour ce rôle — critère de validité, jamais départagé ;
@@ -1583,9 +1602,16 @@ function computeModelPicks(
     // sur un modèle jamais testé pour ça.
     if (!scored.length) {
       const known = candidates.filter((c) => resultOf(c)?.toolCalling != null)
-      const fallbackPool = known.length ? known : candidates
-      const model = pickForBudget(fallbackPool, budgetGb)
-      const candidate = fallbackPool.find((c) => c.model === model)
+      // Étape 318 : parmi les modèles notés, aucun ne tient — le meilleur des plus légers, et non plus le plus léger.
+      if (known.length) {
+        const ranked = known
+          .map((c) => ({ model: c.model, vramGb: c.vramGb, result: resultOf(c) as LocalBenchmarkEntry }))
+          .map((c) => (withDemands ? { ...c, demands: demandRate(c.model) ?? Math.max(0, parseToolScore(c.result.toolCalling)) } : c))
+        const best = bestOfLightest(ranked, chain)[0]
+        return entryOf(best.model, best.vramGb, best.result)
+      }
+      const model = pickForBudget(candidates, budgetGb)
+      const candidate = candidates.find((c) => c.model === model)
       return entryOf(model, candidate?.vramGb ?? 0, candidate ? resultOf(candidate) : undefined)
     }
 
