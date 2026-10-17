@@ -8549,3 +8549,49 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   un peu (texte dans un champ, confirmation différée) passe pour cassée.
   Régression : `scripts/test-benchmark-code.mjs`. La fixture `goodDelayed` (confirmation à 1,5 s) doit passer, et
   une confirmation à 8 s doit échouer. La première échoue avec `CONFIRMATION_WAIT_MS = 0`.
+
+- **« Tous les modèles ont passé le même test ? » puis « ça change pas mon PC et ton PC pour les scores, tu es sûr ? »
+  et « oui » pour retester (Léo, étape 322, Jaris 0.34.29).**
+  1. **Mêmes tests : vérifié en rejugeant, pas de mémoire.**
+     - Code : les 60 applis des 12 modèles sont notées par le même juge, le juge actuel.
+     - Vision : les 11 scores recopiés sont identiques au juge actuel.
+     - 78 questions : le juge n'a pas changé depuis le 03/10 (`git log -L` sur `isCorrectAnswer`), avant tous ces
+       scores.
+     - Demandes complètes : avec le seul juge automatique, 13 modèles bougeraient de 1 à 5 points. C'est vrai même
+       avec le juge DE L'ÉPOQUE, extrait de Git, sur les lignes de l'époque. L'écart vient donc des relectures à la
+       main (justes comprises), gardées seulement dans les totaux. Simulé : aucun choix ne change sur 14 machines
+       types. **Leçon générale : une correction manuelle gardée seulement dans un total ne se rejoue pas.** Quand on
+       relit un verdict à la main, soit on corrige le juge pour tout le monde, soit on accepte que le total ne se
+       reproduise plus par programme, et on le sait.
+  2. **Le PC compte un peu.** Le test ne fixe pas la température (seules les demandes ont une graine), donc un
+     modèle ne répond pas pareil d'un essai à l'autre. Même sur le PC de Léo : la liste de K2 7B a raté le 14/10 et
+     réussi le 15/10. Un autre matériel (processeur seul, Ollama 0.40.4-rc1) ajoute un peu de cette variation. Seul
+     concerné : K2 Horizon 3.7B, mesuré sur le PC de Claude. Simulé : 3 points de moins aux questions, 4 aux
+     demandes et 1 en code suffisent pour que les cartes de 5 à 6 Go passent à qwen3.5:4b. La machine de Léo ne
+     change pas. L'en-tête de verified-tool-scores.md affirmait qu'un score « reste valable sur n'importe quelle
+     machine » : nuancé.
+  3. **Section « À remesurer » (verified-tool-scores.md)**, lue des deux côtés :
+     - `parseModelsToRemeasure` (hardwareScan.ts) fait proposer le modèle par le bouton comme s'il n'avait aucun
+       score ;
+     - `readVerifiedModels` (benchmark-models.mjs) le fait retester en entier ;
+     - les choix de modèles gardent ses scores en attendant, sans changement sur 14 machines types.
+     Une fois les nouveaux scores recopiés, retirer le modèle de la section.
+  4. **Les 78 questions sont maintenant suivies dans le fichier du test** (`CampaignCompletion.conversation`, lignes
+     `question` de la version de test 6). Avant, un modèle sans score de conversation restait proposé juste après
+     avoir TOUT passé, jusqu'à ce que ses scores soient recopiés : le bouton qui reste, exactement la confusion de
+     l'étape 319. Les questions ne sont jamais rejouées, donc jamais « à refaire ». `CONVERSATION_TEST_VERSION`
+     rejoint les copies de versions vérifiées par test.
+  **Répétition à sec** avec le VRAI script, les VRAIES traces de Léo et les mêmes réglages que le bouton. Ma machine
+  de test a dû être ajustée : une fausse carte de 8 Go (`nvidia-smi` simulé) et une marge disque à 0, parce que
+  son disque est presque plein. La 3.7B est téléchargée, passe 78 questions, 48 demandes et 5 applis, puis elle est
+  supprimée. Ensuite, le bouton ne propose plus rien. **Piège de mon propre test, attrapé en le lançant :**
+  `runScript` teste par défaut le palier « Rapide », où la 3.7B n'est pas candidate (elle est en « Médium ») ;
+  0 question posée, et ce n'était pas le correctif qui était en cause.
+  Régression : `scripts/test-hardwarescan-single-pool.mjs` couvre trois points :
+  - le bouton propose la 3.7B seule ;
+  - elle reste choisie sur 6 Go ;
+  - une fois tout passé, elle n'est plus proposée, et elle l'est encore si seules les questions manquent.
+  `scripts/test-benchmark-cases.mjs` vérifie qu'avec le vrai fichier de scores, le script repose les 78 questions.
+  `scripts/test-hardwarescan-min-ollama.mjs` repart sans la section, car il porte sur la version d'Ollama. Trois
+  mutations vérifiées : sans retrait côté script, sans lecture de la section côté Jaris, sans suivi des questions ;
+  chacune fait échouer son test pour la bonne raison.

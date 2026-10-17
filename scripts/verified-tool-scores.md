@@ -7,7 +7,9 @@ remesurer un modèle (`npm run benchmark:models`), dont on recopie ensuite le r�
 
 Pourquoi c'est possible : la fiabilité d'un modèle (répond-il avec le bon outil et les bons arguments,
 comprend-il vraiment une image, génère-t-il du code valide) est une propriété du modèle lui-même, pas du
-matériel qui le fait tourner — un score mesuré une fois reste valable sur n'importe quelle machine. La
+matériel qui le fait tourner — un score mesuré une fois reste valable sur n'importe quelle machine, à quelques
+points près (étape 322 : un modèle ne répond pas exactement pareil d'un essai à l'autre, et un autre matériel ajoute
+un peu de cette variation ; voir « À remesurer » en fin de fichier). La
 **vitesse**, elle, dépend du matériel de chacun : jamais stockée ici. Jaris affiche à la place la vitesse
 publiée par Artificial Analysis (`ARTIFICIAL_ANALYSIS_SPEED` dans `electron/services/hardwareScan.ts`),
 identique pour tout le monde et présentée comme un repère comparatif, jamais comme une prédiction locale.
@@ -256,3 +258,16 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | qwen3.5:0.8b | 13/48 |
 | phi4-mini | 2/48 |
 | hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 0/48 |
+
+## À remesurer sur le PC de Léo
+
+Étape 322 (Léo : « ça change pas mon pc et ton pc pour les scores tu es sûr ? », puis « oui » pour retester). Un
+modèle ne répond pas exactement pareil d'un essai à l'autre, et un autre PC (carte graphique ou non, version
+d'Ollama) ajoute un peu de cette variation. Les modèles ci-dessous ont été mesurés ailleurs que sur le PC de Léo :
+Jaris garde leurs scores pour ses choix en attendant, mais le bouton « Tester les modèles » les propose, et le
+script les reteste en entier comme s'ils n'avaient aucun score. Une fois les nouveaux scores recopiés, retirer le
+modèle de cette liste.
+
+| Modèle | Mesuré où |
+|---|---|
+| hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | PC de Claude, sans carte graphique, Ollama 0.40.4-rc1 (13/10/2026) |

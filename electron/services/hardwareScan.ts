@@ -1100,6 +1100,33 @@ export function parseVerifiedToolScores(): Record<VerifiedTier, Map<string, stri
 }
 
 /**
+ * Étape 322, Léo : « ça change pas mon pc et ton pc pour les scores tu es sûr ? », puis « oui » pour retester.
+ * Modèles de la section « À remesurer » de verified-tool-scores.md : leurs scores ont été mesurés ailleurs que sur le
+ * PC de Léo. Jaris les garde pour ses choix en attendant, mais le bouton de test les propose comme s'ils n'avaient
+ * aucun score, et le script les reteste en entier (même section lue par readVerifiedModels, benchmark-models.mjs).
+ */
+export function parseModelsToRemeasure(): Set<string> {
+  const models = new Set<string>()
+  let raw: string
+  try {
+    raw = readFileSync(join(resourcesRoot(), 'scripts', 'verified-tool-scores.md'), 'utf-8')
+  } catch {
+    return models
+  }
+  let inSection = false
+  for (const line of raw.split('\n')) {
+    if (line.startsWith('## ')) {
+      inSection = line.slice(3).trim().toLowerCase().startsWith('à remesurer')
+      continue
+    }
+    if (!inSection || !line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
+    const model = line.split('|')[1]?.trim()
+    if (model) models.add(model)
+  }
+  return models
+}
+
+/**
  * Nombre de réponses notées par le test de conversation ACTUEL : 26 questions posées 3 fois chacune (étape 230,
  * CONVERSATION_TOTAL dans scripts/benchmark-cases.mjs — copie vérifiée par scripts/test-benchmark-cases.mjs).
  * Un score de conversation sur un autre total (« 16/17 », version 4) vient d'un ancien test.
@@ -1118,7 +1145,8 @@ export const SCENARIO_TEST_TOTAL = 48
 /** Étape 232 : code, 5 applications générées puis ouvertes et utilisées (CODE_TOTAL, scripts/benchmark-code.mjs). Avant : sur 3. */
 export const CODE_TEST_TOTAL = 5
 
-/** Versions des tests en cours (copies de SCENARIO/VISION/CODE_TEST_VERSION des scripts, vérifiées par test). */
+/** Versions des tests en cours (copies de CONVERSATION/SCENARIO/VISION/CODE_TEST_VERSION des scripts, vérifiées par test). */
+export const CONVERSATION_TEST_VERSION = 6
 export const SCENARIO_TEST_VERSION = 3
 export const VISION_TEST_VERSION = 4
 export const CODE_TEST_VERSION = 3
@@ -1156,6 +1184,12 @@ const MODEL_NOT_FOUND = /model '[^']+' not found/
 
 /** Modèles qui ont TOUT fait, sans cas encore à refaire, dans le fichier brut d'une campagne (rôle par rôle). */
 export interface CampaignCompletion {
+  /**
+   * Étape 322 : les 78 questions aussi. Sans elles, un modèle sans score de conversation restait proposé par le
+   * bouton juste après avoir TOUT passé, jusqu'à ce que ses scores soient recopiés — le bouton qui reste alors que
+   * Léo vient de faire le test. Les questions ne sont jamais rejouées par le script : jamais « à refaire ».
+   */
+  conversation?: Set<string>
   scenarios: Set<string>
   vision: Set<string>
   code: Set<string>
@@ -1176,7 +1210,7 @@ export interface CampaignCompletion {
  * dépassé reste à refaire, un plantage aussi tant qu'il n'a pas été rejoué une fois.
  */
 export function campaignCompletion(tracesText: string): CampaignCompletion {
-  type Role = 'scenarios' | 'vision' | 'code'
+  type Role = 'conversation' | 'scenarios' | 'vision' | 'code'
   const latest = new Map<string, { role: Role; model: string; pending: boolean }>()
   let versions: Record<string, number> | null = null
   for (const line of tracesText.split('\n')) {
@@ -1197,7 +1231,9 @@ export function campaignCompletion(tracesText: string): CampaignCompletion {
     const reason = String(row.reason ?? '')
     const pending =
       Boolean(row.timeout) || (/^erreur/.test(reason) && (!row.replay || MODEL_NOT_FOUND.test(reason))) || (row.type === 'demande' && lookStoppedTask(row))
-    if (row.type === 'demande' && versions?.demandes === SCENARIO_TEST_VERSION) {
+    if (row.type === 'question' && versions?.conversation === CONVERSATION_TEST_VERSION) {
+      latest.set(`conversation|${model}|${row.index}|${row.pass}`, { role: 'conversation', model, pending: false })
+    } else if (row.type === 'demande' && versions?.demandes === SCENARIO_TEST_VERSION) {
       latest.set(`scenarios|${model}|${row.id}|${row.pass}`, { role: 'scenarios', model, pending })
     } else if (row.type === 'vision' && versions?.vision === VISION_TEST_VERSION) {
       latest.set(`vision|${model}|${row.kind}|${row.file}|${row.id}|${row.pass}`, { role: 'vision', model, pending })
@@ -1205,7 +1241,12 @@ export function campaignCompletion(tracesText: string): CampaignCompletion {
       latest.set(`code|${model}|${row.id}`, { role: 'code', model, pending })
     }
   }
-  const totals: Record<Role, number> = { scenarios: SCENARIO_TEST_TOTAL, vision: VISION_TEST_TOTAL, code: CODE_TEST_TOTAL }
+  const totals: Record<Role, number> = {
+    conversation: CONVERSATION_TEST_TOTAL,
+    scenarios: SCENARIO_TEST_TOTAL,
+    vision: VISION_TEST_TOTAL,
+    code: CODE_TEST_TOTAL
+  }
   const counts = new Map<string, { cases: number; pending: boolean }>()
   for (const { role, model, pending } of latest.values()) {
     const key = `${role}|${model}`
@@ -1214,8 +1255,8 @@ export function campaignCompletion(tracesText: string): CampaignCompletion {
     entry.pending ||= pending
     counts.set(key, entry)
   }
-  const done = { scenarios: new Set<string>(), vision: new Set<string>(), code: new Set<string>() }
-  const todo = { scenarios: new Set<string>(), vision: new Set<string>(), code: new Set<string>() }
+  const done = { conversation: new Set<string>(), scenarios: new Set<string>(), vision: new Set<string>(), code: new Set<string>() }
+  const todo = { conversation: new Set<string>(), scenarios: new Set<string>(), vision: new Set<string>(), code: new Set<string>() }
   for (const [key, { cases, pending }] of counts) {
     const [role, ...rest] = key.split('|') as [Role, ...string[]]
     if (cases === totals[role] && !pending) done[role].add(rest.join('|'))
@@ -1253,17 +1294,21 @@ export function getUnscoredModels(campaign: CampaignCompletion = { scenarios: ne
   // Le script ne rejoue que l'épreuve qui manque. Une épreuve déjà TOUT faite dans la campagne en cours (fichier
   // brut, pas encore recopié dans verified-tool-scores.md) n'est plus à faire non plus.
   // Étape 244 : un cas encore à refaire dans la campagne compte, même quand le score est déjà recopié.
+  // Étape 322 : un modèle « à remesurer » compte comme sans score ici (pas dans les choix de modèles).
+  const remeasure = parseModelsToRemeasure()
+  const scored = (tier: VerifiedTier, model: string, total: number): boolean =>
+    !remeasure.has(model) && Boolean(scores[tier].get(model)?.endsWith(`/${total}`))
   const needsConversation = (model: string): boolean =>
     CONVERSATION_ROLE_MODELS.has(model) &&
-    (!scores.conversation.get(model)?.endsWith(`/${CONVERSATION_TEST_TOTAL}`) ||
-      (!scores.scenarios.get(model)?.endsWith(`/${SCENARIO_TEST_TOTAL}`) && !campaign.scenarios.has(model)) ||
+    ((!scored('conversation', model, CONVERSATION_TEST_TOTAL) && !campaign.conversation?.has(model)) ||
+      (!scored('scenarios', model, SCENARIO_TEST_TOTAL) && !campaign.scenarios.has(model)) ||
       Boolean(campaign.todo?.scenarios.has(model)))
   const needsVision = (model: string): boolean =>
     VISION_ROLE_MODELS.has(model) &&
-    ((!scores.vision.get(model)?.endsWith(`/${VISION_TEST_TOTAL}`) && !campaign.vision.has(model)) || Boolean(campaign.todo?.vision.has(model)))
+    ((!scored('vision', model, VISION_TEST_TOTAL) && !campaign.vision.has(model)) || Boolean(campaign.todo?.vision.has(model)))
   const needsCode = (model: string): boolean =>
     CODE_ROLE_MODELS.has(model) &&
-    ((!scores.code.get(model)?.endsWith(`/${CODE_TEST_TOTAL}`) && !campaign.code.has(model)) || Boolean(campaign.todo?.code.has(model)))
+    ((!scored('code', model, CODE_TEST_TOTAL) && !campaign.code.has(model)) || Boolean(campaign.todo?.code.has(model)))
   // Étape 312 : jamais proposé au test tant qu'Ollama ne sait pas le charger (il serait téléchargé pour rien).
   const tooNewForOllama = modelsNeedingNewerOllama()
   return [...ALL_MODELS]

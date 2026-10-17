@@ -1201,6 +1201,27 @@ test('rejeu : modèle supprimé, score recopié, « model not found » au 1er re
   }
 })
 
+// Étape 322 : un modèle de la section « À remesurer » de verified-tool-scores.md est retesté en entier par le script,
+// malgré ses scores (même lecture que parseModelsToRemeasure, hardwareScan.ts, côté bouton de Jaris).
+test('« À remesurer » : le vrai fichier de scores fait retester K2 Horizon 3.7B malgré ses scores', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const model = 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M'
+  const scores = readFileSync(new URL('./verified-tool-scores.md', import.meta.url), 'utf8')
+  assert.match(scores, /^\| hf\.co\/IFM\/K2-Horizon-3\.7B-GGUF:Q4_K_M \| \d+\/78 \|/m)
+  assert.match(scores.split(/\r?\n## À remesurer/)[1] ?? '', /\| hf\.co\/IFM\/K2-Horizon-3\.7B-GGUF:Q4_K_M \|/)
+  // Déjà installé : le budget mémoire et disque de la machine qui lance les tests n'entre pas en jeu.
+  const fake = await startFakeOllama({ installed: [model], answer: () => null })
+  try {
+    // Palier « Médium », où la 3.7B est candidate aux 78 questions (le palier « Rapide » par défaut de runScript ne l'a pas).
+    const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: join(dir, 'r.md'), JARIS_ONLY_MODELS: model, JARIS_ANALYSIS_SCOPE: 'medium' })
+    assert.equal(code, 0, out)
+    assert.equal(fake.requests.filter((r) => r.model === model).length, CONVERSATION_TOTAL, `les 78 questions, comme un modèle sans score : ${out}`)
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('« model not found » : même règle dans le script et dans Jaris (hardwareScan.ts) — jamais une erreur du modèle', () => {
   const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8')
   const jaris = readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8')

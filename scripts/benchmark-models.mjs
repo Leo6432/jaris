@@ -161,10 +161,20 @@ function readVerifiedModels() {
     return result
   }
   let currentTier = null
+  // Étape 322 : section « À remesurer » — modèles mesurés ailleurs que sur le PC de Léo, retestés en entier (même
+  // lecture que parseModelsToRemeasure, hardwareScan.ts, qui les fait proposer par le bouton de Jaris).
+  let remeasureSection = false
+  const remeasure = new Set()
   for (const line of raw.split('\n')) {
     if (line.startsWith('## ')) {
       const heading = line.slice(3).trim().toLowerCase()
       currentTier = tierOfHeading(heading)
+      remeasureSection = heading.startsWith('à remesurer')
+      continue
+    }
+    if (remeasureSection && line.startsWith('|') && !line.includes('---') && !line.includes('Modèle')) {
+      const model = line.split('|')[1]?.trim()
+      if (model) remeasure.add(model)
       continue
     }
     if (!currentTier || !line.startsWith('|') || line.includes('---') || line.includes('Modèle')) continue
@@ -183,6 +193,7 @@ function readVerifiedModels() {
     if (currentTier === 'vision' && !cells[1].endsWith(`/${VISION_TOTAL}`)) continue
     result[currentTier].add(cells[0])
   }
+  for (const model of remeasure) for (const tier of Object.values(result)) tier.delete(model)
   return result
 }
 // VERIFIED_MODELS : défini plus bas, après VISION_TOTAL dont il dépend (étape 230).
