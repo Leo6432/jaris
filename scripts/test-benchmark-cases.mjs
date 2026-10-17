@@ -1202,20 +1202,41 @@ test('rejeu : modèle supprimé, score recopié, « model not found » au 1er re
 })
 
 // Étape 322 : un modèle de la section « À remesurer » de verified-tool-scores.md est retesté en entier par le script,
-// malgré ses scores (même lecture que parseModelsToRemeasure, hardwareScan.ts, côté bouton de Jaris).
-test('« À remesurer » : le vrai fichier de scores fait retester K2 Horizon 3.7B malgré ses scores', async () => {
+// malgré ses scores (même lecture que parseModelsToRemeasure, hardwareScan.ts, côté bouton de Jaris). Étape 323 : la
+// section du vrai fichier est vide depuis que la 3.7B est remesurée ; elle est remplie ici dans une copie.
+test('« À remesurer » : un modèle de la section est retesté malgré ses scores', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
   const model = 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M'
-  const scores = readFileSync(new URL('./verified-tool-scores.md', import.meta.url), 'utf8')
-  assert.match(scores, /^\| hf\.co\/IFM\/K2-Horizon-3\.7B-GGUF:Q4_K_M \| \d+\/78 \|/m)
-  assert.match(scores.split(/\r?\n## À remesurer/)[1] ?? '', /\| hf\.co\/IFM\/K2-Horizon-3\.7B-GGUF:Q4_K_M \|/)
+  const real = readFileSync(new URL('./verified-tool-scores.md', import.meta.url), 'utf8')
+  assert.match(real, /^\| hf\.co\/IFM\/K2-Horizon-3\.7B-GGUF:Q4_K_M \| \d+\/78 \|/m)
+  const scores = real.replace(/(## À remesurer[^\n]*\n[\s\S]*?\|---\|---\|\r?\n)/, `$1| ${model} | exemple |\n`)
+  assert.notEqual(scores, real, 'section « À remesurer » introuvable dans le vrai fichier')
+  writeFileSync(join(dir, 'scores.md'), scores)
   // Déjà installé : le budget mémoire et disque de la machine qui lance les tests n'entre pas en jeu.
   const fake = await startFakeOllama({ installed: [model], answer: () => null })
   try {
     // Palier « Médium », où la 3.7B est candidate aux 78 questions (le palier « Rapide » par défaut de runScript ne l'a pas).
-    const { code, out } = await runScript({ OLLAMA_HOST: fake.host, JARIS_RESULTS_PATH: join(dir, 'r.md'), JARIS_ONLY_MODELS: model, JARIS_ANALYSIS_SCOPE: 'medium' })
+    const { code, out } = await runScript({
+      OLLAMA_HOST: fake.host,
+      JARIS_RESULTS_PATH: join(dir, 'r.md'),
+      JARIS_ONLY_MODELS: model,
+      JARIS_ANALYSIS_SCOPE: 'medium',
+      JARIS_VERIFIED_SCORES_PATH: join(dir, 'scores.md')
+    })
     assert.equal(code, 0, out)
     assert.equal(fake.requests.filter((r) => r.model === model).length, CONVERSATION_TOTAL, `les 78 questions, comme un modèle sans score : ${out}`)
+    // Contre-épreuve : le même fichier SANS la ligne de la section le dispense du test (il a ses scores).
+    writeFileSync(join(dir, 'scores-sans.md'), real)
+    const before = fake.requests.length
+    const again = await runScript({
+      OLLAMA_HOST: fake.host,
+      JARIS_RESULTS_PATH: join(dir, 'r2.md'),
+      JARIS_ONLY_MODELS: model,
+      JARIS_ANALYSIS_SCOPE: 'medium',
+      JARIS_VERIFIED_SCORES_PATH: join(dir, 'scores-sans.md')
+    })
+    assert.equal(again.code, 0, again.out)
+    assert.equal(fake.requests.length, before, `aucune question sans la section : ${again.out}`)
   } finally {
     fake.server.close()
     rmSync(dir, { recursive: true, force: true })

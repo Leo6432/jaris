@@ -49,6 +49,16 @@ gemma4:31b n'est candidat qu'en vision.
 fois par le délai, rejoué) ; demandes complètes 33/48, dont une demande coupée par un redémarrage de la machine
 et comptée ratée (au mieux 34/48). Ses réponses justes n'ont pas été relues une à une.
 
+Étape 323 : K2 Horizon 3.7B remesuré sur le PC de Léo le 17/10/2026 (Jaris 0.34.29, Ollama 0.40.5, RTX 3070), avec
+les mêmes tests ; ce sont ces scores qui comptent désormais. Questions 76/78, comme chez Claude ; les 2 erreurs sont
+relues et réelles (« dans une heure et demie » devenu 1,5 minute, PC éteint sur « je vais éteindre mon PC ce soir »).
+Demandes 31/48, toutes relues, justes comprises : le juge corrigé donne 32 (voir la section des demandes), et la
+blague, sans aucun sens (« il fait un grand chokri… c'est un poète du Moyen Âge »), est comptée fausse, comme le
+texte incohérent de la 0.9B. Code 2/5 (5/5 chez Claude), chaque échec ouvert et cliqué : le convertisseur réaffiche
+le nombre tapé (« 100.0 °F » pour 100 °C), la liste ne garde qu'une tâche sur deux, et la confirmation du formulaire
+reste cachée même après un envoi valide. Un premier essai interrompu, sur le même PC, avait réussi le convertisseur :
+la dernière ligne compte, comme pour tous les modèles.
+
 Étape 314 : K2 Horizon 0.9B, 7B et 32B mesurés par Léo le 14/10/2026 (Jaris 0.34.20, Ollama 0.40.4, RTX 3070).
 Toutes les réponses relues une à une, justes comprises, et corrigées à la main :
 - 0.9B 49 → 46 : une réponse en anglais, « Appellez shutdown_pc » (nom d'outil lu à voix haute, et il annonce
@@ -167,6 +177,8 @@ clôture de l'étape 319, qui cachait le bouton, est retirée.
 le juge lisait la page 0,25 s après le clic. Le juge attend maintenant jusqu'à 5 s. Les 55 applis des traces ont
 été rejugées : seules la liste (étape 315) et ce formulaire de la 7B changent de verdict.
 
+Étape 323 : K2 Horizon 3.7B 2/5 sur le PC de Léo (5/5 chez Claude) : détail dans la section des conversations.
+
 | Modèle | Fiabilité |
 |---|---|
 | qwen3.6:35b-a3b | 4/5 |
@@ -176,7 +188,7 @@ le juge lisait la page 0,25 s après le clic. Le juge attend maintenant jusqu'à
 | devstral-small-2:24b | 5/5 |
 | qwen2.5-coder:14b | 5/5 |
 | qwen2.5-coder:7b | 5/5 |
-| hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 5/5 |
+| hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 2/5 |
 | hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M | 5/5 |
 | hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 5/5 |
 | phi4-mini | 5/5 |
@@ -249,7 +261,7 @@ inventé, aucune réponse claire à « ne l'éteins surtout pas », réponse en 
 | hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 36/48 |
 | ministral-3:14b | 34/48 |
 | ministral-3:3b | 34/48 |
-| hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 33/48 |
+| hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 31/48 |
 | qwen3.5:2b | 32/48 |
 | qwen3:1.7b | 28/48 |
 | hf.co/bartowski/ai9stars_G9v3-3B-GGUF | 26/48 |
@@ -268,6 +280,9 @@ Jaris garde leurs scores pour ses choix en attendant, mais le bouton « Tester l
 script les reteste en entier comme s'ils n'avaient aucun score. Une fois les nouveaux scores recopiés, retirer le
 modèle de cette liste.
 
+Étape 323 : K2 Horizon 3.7B remesuré sur le PC de Léo et retiré de la liste. Questions identiques (76/78),
+demandes 31/48 au lieu de 33, code 2/5 au lieu de 5/5 : l'écart réel entre deux essais d'un petit modèle peut être
+grand, surtout en code. Liste vide pour l'instant : chaque score de ce fichier vient désormais du PC de Léo.
+
 | Modèle | Mesuré où |
 |---|---|
-| hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | PC de Claude, sans carte graphique, Ollama 0.40.4-rc1 (13/10/2026) |

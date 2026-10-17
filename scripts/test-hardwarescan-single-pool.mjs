@@ -372,9 +372,12 @@ test('modèles à tester : « model not found » reste à faire même après un 
 // Horizon 3.7B, mesuré sur le PC de Claude. Section « À remesurer » : le bouton le propose comme s'il n'avait aucun
 // score, Jaris garde ses scores pour choisir en attendant, et une fois TOUT passé, le bouton ne le propose plus,
 // 78 questions comprises (avant, seules les demandes, la vision et le code étaient suivies dans le fichier du test).
+// Étape 323 : la 3.7B est remesurée et la section du vrai fichier est vide ; elle y est remise pour ce test.
 test('modèle à remesurer : proposé au test, toujours choisi en attendant, plus proposé une fois tout passé', async () => {
   const k2 = 'hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M'
-  const scan = setup({ vramMib: 6 * 1024, ramGb: 16 })
+  const scores = REAL_SCORES.replace(/(## À remesurer[^\n]*\n[\s\S]*?\|---\|---\|\r?\n)/, `$1| ${k2} | exemple |\n`)
+  assert.notEqual(scores, REAL_SCORES, 'section « À remesurer » introuvable dans le vrai fichier')
+  const scan = setup({ vramMib: 6 * 1024, ramGb: 16, scores })
   scan.setOllamaVersionSource(() => '0.40.5')
   assert.ok(scan.parseModelsToRemeasure().has(k2))
   assert.match(REAL_SCORES, /^\| hf\.co\/IFM\/K2-Horizon-3\.7B-GGUF:Q4_K_M \| \d+\/78 \|/m, 'ses scores restent dans le fichier')

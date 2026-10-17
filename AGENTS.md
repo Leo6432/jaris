@@ -8595,3 +8595,40 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   `scripts/test-hardwarescan-min-ollama.mjs` repart sans la section, car il porte sur la version d'Ollama. Trois
   mutations vérifiées : sans retrait côté script, sans lecture de la section côté Jaris, sans suivi des questions ;
   chacune fait échouer son test pour la bonne raison.
+
+- **Retest de K2 Horizon 3.7B sur le PC de Léo (étape 323, Jaris 0.34.30, résultats du 17/10/2026).** Le parcours
+  de l'étape 322 a marché du premier coup : la 3.7B a été téléchargée, testée en entier, puis supprimée. Comparé à
+  la mesure faite sur mon PC :
+  - questions : 76/78 des deux côtés ;
+  - demandes : 31/48 au lieu de 33 ;
+  - code : 2/5 au lieu de 5/5.
+  **Chaque échec de code a été ouvert et cliqué ici, et ils sont réels :**
+  - le convertisseur réaffiche le nombre tapé (« 100.0 °F » pour 100 °C) ;
+  - la liste ne garde qu'une tâche sur deux ;
+  - la confirmation du formulaire reste cachée, `display: none`, même après un envoi valide.
+  Un premier essai interrompu, sur le même PC, avait réussi le convertisseur : la dernière ligne compte, comme pour
+  tous. Choix de Jaris : rien ne change sur la machine de Léo ; sur les cartes de 5 à 6 Go, Code passe de la 3.7B à
+  qwen3.5:4b, la conversation reste à la 3.7B. **La crainte de Léo était donc fondée :** l'écart entre deux essais
+  d'un petit modèle peut être grand, surtout en code. « Un score mesuré une fois vaut partout » était trop
+  optimiste.
+  **Deux erreurs du juge des demandes, trouvées en relisant les 48 réponses une par une, et corrigées pour tout le
+  monde :**
+  1. **Gazole** : toute réponse qui mentionnait le SP95 sans son prix était comptée « prix attribué au SP95 », même
+     quand le bon prix était donné au gazole et que le SP95 n'était que proposé dans une phrase suivante. Le contrôle
+     se fait maintenant phrase par phrase. L'erreur de départ (« 1,689 € le litre pour le SP95-E10 », dans la même
+     phrase) reste fausse.
+  2. **Échec partiel (Discord)** : demander à qui écrire est accepté depuis l'étape 246, mais seulement avec un
+     « ? ». « Tu pourras me dire à qui tu veux écrire… » (sans « ? ») est maintenant reconnu. Une telle demande qui
+     prétend aussi avoir écrit reste fausse.
+  Rejugé sur les 1 680 demandes de tous les modèles : seuls ces 2 verdicts de la 3.7B changent. Les juges sont plus
+  justes, sans toucher aux scores des autres modèles. Ma relecture ajoute un faux : la blague sans aucun sens (même
+  règle que le texte incohérent de la 0.9B). **Leçon générale, deuxième confirmation après l'étape 321 : un verdict
+  « faux » doit se vérifier contre ce que l'outil a VRAIMENT renvoyé (ici le résultat de recherche : la réponse
+  donnait le bon prix au bon carburant), pas seulement contre le texte de la réponse.**
+  La section « À remesurer » est vide mais gardée, avec son mécanisme. Les tests qui s'appuyaient sur son contenu
+  réel la remplissent dans une copie, avec une contre-épreuve : sans la ligne, le modèle n'est pas retesté.
+  Régression :
+  - `scripts/test-benchmark-scenarios.mjs` : les vraies réponses de la 3.7B (gazole et Discord) sont justes, leurs
+    voisines fausses restent fausses ; les nouvelles assertions échouent avec l'ancien juge ;
+  - `scripts/test-hardwarescan-single-pool.mjs` et `scripts/test-benchmark-cases.mjs` : mécanisme « À remesurer »
+    sur une copie remplie.
