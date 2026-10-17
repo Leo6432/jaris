@@ -8538,3 +8538,34 @@ ordre d'ampleur du chantier (la plus lourde en premier), pas par priorité.
   du 3/5 avec `\n`, mais sous Windows le fichier des scores se lit avec `\r\n`. Ce n'est pas le code qui était en
   cause. Un test qui cherche ou retire une ligne précise d'un fichier du dépôt doit l'écrire `\r?\n` ; il est
   vérifié ici avec le fichier converti en `\r\n`, mutation comprise.
+
+- **« Tu m'as dit que K2 7B a eu un bug sur 2 des 5 applis de code. Je t'ai pas donné les historiques, que tu
+  vérifies toi-même ? Sinon on peut retester » (Léo, étape 320, Jaris 0.34.27).** Il avait raison : je n'avais lu
+  que la DERNIÈRE ligne de chaque appli dans ses traces. En relisant toutes les lignes, la 7B a passé le test de code
+  deux fois, le 14/10 et le 15/10. Le 14/10, son convertisseur a été écrit en 106 s et réussi. Il est revérifié
+  ici avec le juge actuel : juste. Au second essai, il a été coupé par le délai. Le formulaire n'a été écrit dans
+  aucun des deux essais. Score corrigé : 4/5 au lieu de 3/5 (compteur, addition, liste de tâches du 15/10,
+  convertisseur du 14/10 ; un délai dépassé n'est pas un verdict, donc le dernier VERDICT du convertisseur reste
+  celui du 14/10). Léo a choisi de retester (question à choix simple). La clôture de l'étape 319 (`CLOSED_TODO`),
+  qui cachait le bouton, est entièrement retirée plutôt que laissée vide. Le bouton propose de nouveau la 7B, pour
+  ces 2 applis : la dernière ligne du convertisseur est un « model not found », donc il est refait aussi.
+  **Répétition à sec avant de publier, avec le VRAI script et les VRAIES traces de Léo** (faux Ollama 0.40.5, 7B
+  absente du disque), lancée avec les mêmes réglages que le bouton :
+  - la 7B est retéléchargée ;
+  - exactement les 2 applis sont rejouées, avec le délai du rejeu (120 min) ;
+  - la 7B est supprimée après ;
+  - rien d'autre n'est testé ;
+  - sur les traces qui en sortent, le bouton ne propose plus rien.
+  Ce rejeu avait été empêché trois fois de suite par trois défauts différents. Il est maintenant couvert d'un seul
+  tenant. Limite connue, signalée à Léo : une appli qui dépasse encore 2 h reste « à refaire » (règle du 05/10 :
+  « dès qu'il n'a pas eu le temps, on refait »).
+  **Leçon générale : avant d'affirmer qu'un cas n'a « jamais été testé », lire TOUTES ses lignes dans les traces,
+  pas seulement la dernière.** Le dernier essai peut avoir été coupé alors qu'un essai précédent, dans les mêmes
+  conditions (même version de test, même juge), avait donné un vrai verdict. **Et une question à choix simple
+  avant de cacher un test vaut mieux qu'une décision prise à la place de Léo :** à l'étape 319, j'avais clos le cas
+  moi-même, en l'écrivant comme « rendu définitif par Léo » alors qu'il n'avait rien décidé.
+  Régression : `scripts/test-benchmark-cases.mjs`, qui vérifie trois points :
+  - la 7B est retéléchargée une seule fois ;
+  - seules les 2 applis coupées sont rejouées ;
+  - la 7B est supprimée après.
+  Ce test échoue avec l'ancienne règle « model not found » (aucun rejeu).

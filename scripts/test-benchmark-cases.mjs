@@ -1161,6 +1161,46 @@ test('rejeu : un cas de code à refaire est rejoué même quand le modèle a dé
   }
 })
 
+// Étape 320 : le cas réel de K2 Horizon 7B chez Léo, de bout en bout. Deux applis coupées par le délai, puis
+// « model not found » à leur rejeu, un score de code déjà recopié, et le modèle supprimé du disque. Trois défauts
+// successifs avaient empêché ce rejeu ; vérifié ici d'un seul tenant : retéléchargé, ces 2 applis seulement, supprimé.
+test('rejeu : modèle supprimé, score recopié, « model not found » au 1er rejeu — retéléchargé, 2 applis rejouées, supprimé', { timeout: 120000, skip: BROWSER ? false : 'aucun navigateur ici (le test de code en a besoin)' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'jaris-bench-'))
+  const model = 'qwen2.5-coder:7b'
+  assert.match(readFileSync(new URL('./verified-tool-scores.md', import.meta.url), 'utf8'), /\| qwen2\.5-coder:7b \| 5\/5 \|/)
+  const [cut1, cut2] = [CODE_TEST_CASES[2], CODE_TEST_CASES[4]]
+  const rows = [{ type: 'campagne', versions: { conversation: CONVERSATION_TEST_VERSION, code: CODE_TEST_VERSION } }]
+  for (const testCase of CODE_TEST_CASES) {
+    if (testCase !== cut1 && testCase !== cut2) rows.push({ type: 'code', model, id: testCase.id, ok: true, html: '<p>ok</p>' })
+  }
+  for (const testCase of [cut1, cut2]) {
+    rows.push({ type: 'code', model, id: testCase.id, ok: false, timeout: true, reason: 'erreur : délai dépassé : aucune réponse du modèle en 20 min' })
+    rows.push({ type: 'code', model, id: testCase.id, ok: false, replay: true, reason: `erreur : 404 {"error":"model '${model}' not found"}` })
+  }
+  writeFileSync(join(dir, 'r.traces.jsonl'), rows.map((row) => JSON.stringify(row)).join('\n') + '\n')
+  const fake = await startFakeOllama({ installed: [], answer: () => ({ content: '```html\n<!DOCTYPE html><html><body><p>vide</p></body></html>\n```' }) })
+  try {
+    const { code, out } = await runScript({
+      OLLAMA_HOST: fake.host,
+      JARIS_RESULTS_PATH: join(dir, 'r.md'),
+      JARIS_ANALYSIS_SCOPE: 'all',
+      JARIS_ONLY_MODELS: model,
+      JARIS_RESUME: '1',
+      JARIS_DELETE_AFTER_TEST: '1'
+    })
+    assert.equal(code, 0, out)
+    assert.deepEqual(fake.pulled, [model], `retéléchargé une fois : ${out}`)
+    assert.deepEqual(fake.deleted, [model], 'supprimé après son rejeu')
+    assert.equal(fake.requests.length, 2, 'les 2 applis coupées, et rien d’autre')
+    const replayed = readFileSync(join(dir, 'r.traces.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((t) => t.type === 'code' && t.replay).slice(-2)
+    assert.deepEqual(replayed.map((t) => t.id).sort(), [cut1.id, cut2.id].sort())
+    assert.ok(replayed.every((t) => !/not found/.test(t.reason ?? '')), 'cette fois le modèle a vraiment répondu')
+  } finally {
+    fake.server.close()
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('« model not found » : même règle dans le script et dans Jaris (hardwareScan.ts) — jamais une erreur du modèle', () => {
   const script = readFileSync(new URL('./benchmark-models.mjs', import.meta.url), 'utf8')
   const jaris = readFileSync(new URL('../electron/services/hardwareScan.ts', import.meta.url), 'utf8')

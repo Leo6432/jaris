@@ -154,9 +154,11 @@ encore de score de code (« model not found » sur ses 5 applis, jamais génér�
 l'aperçu). phi4-mini 5/5. Les 2 applis à refaire de la 7B n'ont PAS été rejouées : le rejeu écartait les modèles
 dont le score de code était déjà recopié (corrigé) — toujours 3/5 provisoire, au mieux 5/5.
 
-Étape 319 : 3/5 de la 7B rendu définitif par Léo (« pourquoi il a encore le bouton ? »). Calculé avant : même à
-5/5, aucun choix de modèle ne change sur 12 machines types. Le bouton ne propose plus ces 2 applis (CLOSED_TODO,
-hardwareScan.ts) ; un nouveau score reçu remplacerait simplement celui-ci.
+Étape 320 : 7B passée à 4/5 après relecture de TOUTES ses lignes dans les traces de Léo, pas seulement les
+dernières. Son convertisseur a été écrit et réussi le 14/10 (106 s), puis coupé par le délai au second essai du
+15/10. Revérifié avec le juge actuel : juste. Son formulaire n'a été écrit dans aucun des deux essais. Léo a choisi
+de le retester : le bouton propose de nouveau la 7B, pour ces 2 applis (le convertisseur est refait aussi). La
+clôture de l'étape 319, qui cachait le bouton, est retirée.
 
 | Modèle | Fiabilité |
 |---|---|
@@ -169,7 +171,7 @@ hardwareScan.ts) ; un nouveau score reçu remplacerait simplement celui-ci.
 | qwen2.5-coder:7b | 5/5 |
 | hf.co/IFM/K2-Horizon-3.7B-GGUF:Q4_K_M | 5/5 |
 | hf.co/IFM/K2-Horizon-32B-GGUF:Q4_K_M | 5/5 |
-| hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 3/5 |
+| hf.co/IFM/K2-Horizon-7B-GGUF:Q4_K_M | 4/5 |
 | phi4-mini | 5/5 |
 | hf.co/IFM/K2-Horizon-0.9B-GGUF:Q4_K_M | 1/5 |
 
