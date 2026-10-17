@@ -1019,6 +1019,15 @@ export const IPC_CHANNELS = {
   /** renderer -> main : supprime définitivement une application générée (son dossier). Le chemin est
    * revérifié côté main avant tout effacement, voir deleteGeneratedApp (codeGenerator.ts). */
   deleteGeneratedApp: 'jaris:delete-generated-app',
+  /** renderer <-> main, SYNCHRONE (sendSync) : la liste et les conversations du mode Code, lues une fois dans
+   * code-conversations.json (dossier de données, voir codeConversationsStore.ts). `null` si le main ne répond pas. */
+  loadCodeConversations: 'jaris:load-code-conversations',
+  /** renderer -> main : enregistre (ou retire, avec `null`) la conversation d'un élément du mode Code. */
+  saveCodeConversation: 'jaris:save-code-conversation',
+  /** renderer -> main : enregistre la liste des dépôts GitHub récents du mode Code. */
+  saveCodeRepos: 'jaris:save-code-repos',
+  /** renderer -> main : reprend l'ancien localStorage dans le fichier ; résolu une fois l'écriture confirmée. */
+  importCodeConversations: 'jaris:import-code-conversations',
   /** renderer <-> main : modèles candidats (hardwareScan.ts) apparus depuis le dernier scan de capacité (étape 29), à afficher en popup. */
   getNewModels: 'jaris:get-new-models',
   /** renderer -> main : l'utilisateur a vu le popup de nouveaux modèles, ne plus le remontrer avant les prochains. */

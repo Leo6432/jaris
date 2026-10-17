@@ -38,6 +38,12 @@ window.jaris = {
   onCodeGenNarration: () => () => {},
   onCodeGenLive: (cb) => { window.__emitLive = cb; return () => {} },
   getGeneratedApps: () => Promise.resolve([]),
+  // Conversations du mode Code (code-conversations.json, tenu par le main) : un fichier vide au départ, et l'écran
+  // garde ses changements en mémoire le temps de la page.
+  loadCodeConversations: () => ({ repos: [], conversations: {} }),
+  saveCodeConversation: () => Promise.resolve(),
+  saveCodeRepos: () => Promise.resolve(),
+  importCodeConversations: () => Promise.resolve(),
   // Étape 277 : le bouton GitHub du champ demande l'état de la connexion au montage (masqué si indisponible).
   githubStatus: () => Promise.resolve({ available: false, connected: false, login: null }),
   loadGeneratedApp: (path) => Promise.resolve({ ...APP, path }),

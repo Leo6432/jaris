@@ -61,6 +61,7 @@ import {
   type LanguageState
 } from '../shared/ipc'
 import type { LanguageSetting } from '../shared/i18n/languages'
+import type { CodeConversationsData, CodeRepoEntry } from '../shared/codeConversations'
 
 function subscribe<T>(channel: string, callback: (payload: T) => void): () => void {
   const listener = (_event: Electron.IpcRendererEvent, payload: T): void => callback(payload)
@@ -226,6 +227,21 @@ const api = {
   getGeneratedApps: (): Promise<GeneratedAppSummary[]> => invoke(IPC_CHANNELS.getGeneratedApps),
   loadGeneratedApp: (path: string): Promise<GeneratedApp> => invoke(IPC_CHANNELS.loadGeneratedApp, path),
   deleteGeneratedApp: (path: string): Promise<void> => invoke(IPC_CHANNELS.deleteGeneratedApp, path),
+  /**
+   * Conversations du mode Code, lues de façon SYNCHRONE une seule fois (codeConversations.ts garde ensuite sa copie
+   * en mémoire) : l'écran les affiche dès son premier rendu, comme avant. `null` si le main ne répond pas.
+   */
+  loadCodeConversations: (): CodeConversationsData | null => {
+    try {
+      return (ipcRenderer.sendSync(IPC_CHANNELS.loadCodeConversations) as CodeConversationsData | null) ?? null
+    } catch {
+      return null
+    }
+  },
+  saveCodeConversation: (key: string, turns: unknown[] | null): Promise<void> =>
+    invoke(IPC_CHANNELS.saveCodeConversation, key, turns),
+  saveCodeRepos: (repos: CodeRepoEntry[]): Promise<void> => invoke(IPC_CHANNELS.saveCodeRepos, repos),
+  importCodeConversations: (data: CodeConversationsData): Promise<void> => invoke(IPC_CHANNELS.importCodeConversations, data),
   listAudioInputDevices: (): Promise<AudioInputDevice[]> => invoke(IPC_CHANNELS.listAudioInputDevices),
   setAudioInputDevice: (deviceIndex: number | null): Promise<void> =>
     invoke(IPC_CHANNELS.setAudioInputDevice, deviceIndex),

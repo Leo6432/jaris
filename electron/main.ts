@@ -76,6 +76,8 @@ import { resourcesRoot } from './paths'
 import { randomUUID } from 'crypto'
 import { tmpdir } from 'os'
 import { deleteGeneratedApp, generateApp, getGeneratedAppsDir, listGeneratedApps, loadGeneratedApp } from './services/codeGenerator'
+import { CodeConversationsStore } from './services/codeConversationsStore'
+import { CODE_CONVERSATIONS_FILE } from '../shared/codeConversations'
 import {
   cancelGithubLogin,
   commitGithubChanges,
@@ -1977,6 +1979,25 @@ app.whenReady().then(async () => {
     const loaded = await loadGeneratedApp(path)
     return { ...loaded, previewUrl: createGeneratedAppPreview(loaded.html) }
   })
+  // La liste et les conversations du mode Code, dans un fichier du dossier de données (codeConversationsStore.ts) :
+  // le localStorage où elles vivaient partait avec le dossier de Chromium à chaque « Déplacer ». Créé au premier
+  // usage ; lu de façon synchrone (l'écran les affiche dès son premier rendu), écrit à chaque changement.
+  let codeConversationsStore: CodeConversationsStore | null = null
+  const codeConversations = (): CodeConversationsStore =>
+    (codeConversationsStore ??= new CodeConversationsStore(join(getDataRoot(), CODE_CONVERSATIONS_FILE)))
+  ipcMain.on(IPC_CHANNELS.loadCodeConversations, (event) => {
+    try {
+      event.returnValue = codeConversations().load()
+    } catch (err) {
+      console.error('[code] Lecture des conversations du mode Code impossible :', err)
+      event.returnValue = null
+    }
+  })
+  ipcMain.handle(IPC_CHANNELS.saveCodeConversation, (_event, key: unknown, turns: unknown) =>
+    codeConversations().setConversation(key, turns)
+  )
+  ipcMain.handle(IPC_CHANNELS.saveCodeRepos, (_event, repos: unknown) => codeConversations().setRepos(repos))
+  ipcMain.handle(IPC_CHANNELS.importCodeConversations, (_event, data: unknown) => codeConversations().importLegacy(data))
 
   ipcMain.on(IPC_CHANNELS.onboardingFinished, () => {
     // L'onboarding vient de se terminer dans la fenêtre de réglages : elle bascule en widget flottant.

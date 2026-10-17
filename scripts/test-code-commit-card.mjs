@@ -6,7 +6,9 @@ import { loadTsModule } from './load-ts-module.mjs'
  * Étape 302 (Léo : « pourquoi les boutons disparaissent quand je relance ») : le commit enregistré est attaché à la
  * carte du DERNIER travail, et gardé avec la conversation — il reste consultable après une relance.
  */
-const { attachCommit } = loadTsModule('src/lib/codeConversations.ts', { './savedSetting': { readSaved: () => null, writeSaved: () => {} } })
+const { attachCommit } = loadTsModule('src/lib/codeConversations.ts', {
+  '../../shared/codeConversations': loadTsModule('shared/codeConversations.ts')
+})
 const commit = { url: 'https://github.com/leo/projet/commit/abc', sha: 'abc' }
 const card = (id) => ({ id, kind: 'changes', files: [{ path: 'README.md', kind: 'modified', added: 1, removed: 1 }] })
 

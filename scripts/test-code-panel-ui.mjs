@@ -82,6 +82,22 @@ window.jaris = {
     return () => {}
   },
   getGeneratedApps: () => Promise.resolve(window.__apps),
+  // Les conversations du mode Code vivent dans code-conversations.json, tenu par le main : le faux main les garde
+  // dans window.__codeFile, et __presetCodeFile simule le fichier retrouvé sur le disque après un redémarrage.
+  loadCodeConversations: () => {
+    window.__codeFile ??= window.__presetCodeFile ?? { repos: [], conversations: {} }
+    return JSON.parse(JSON.stringify(window.__codeFile))
+  },
+  saveCodeConversation: (key, turns) => {
+    if (turns) window.__codeFile.conversations[key] = JSON.parse(JSON.stringify(turns))
+    else delete window.__codeFile.conversations[key]
+    return Promise.resolve()
+  },
+  saveCodeRepos: (repos) => {
+    window.__codeFile.repos = JSON.parse(JSON.stringify(repos))
+    return Promise.resolve()
+  },
+  importCodeConversations: () => Promise.resolve(),
   // Étape 277 : le bouton GitHub du champ demande l'état de la connexion au montage (masqué si indisponible).
   githubStatus: () => Promise.resolve({ available: false, connected: false, login: null }),
   loadGeneratedApp: (path) => Promise.resolve({ ...APP, path }),
@@ -970,11 +986,27 @@ test('les conversations survivent à un redémarrage de Jaris (étape 288)', opt
     await page.waitForSelector('.workspace__rail')
     await generateNewApp(page)
 
-    // Au redémarrage, l'application créée est toujours sur le disque : le faux main la liste d'emblée.
+    // La conversation part au main (code-conversations.json, dans le dossier de données), JAMAIS dans le stockage
+    // de la fenêtre : celui-ci appartient au dossier de Chromium, effacé par un « Déplacer ».
+    await page.waitForFunction(() => Object.keys(window.__codeFile?.conversations ?? {}).length === 1)
+    assert.deepEqual(
+      await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('jaris.codeConversation') || key === 'jaris.codeRepos')),
+      [],
+      'une conversation du mode Code a été écrite dans le stockage de la fenêtre'
+    )
+
+    // Au redémarrage, l'application créée et le fichier des conversations sont toujours sur le disque ; le stockage
+    // de la fenêtre, lui, est vidé, comme après un « Déplacer » (nouveau dossier de Chromium).
     const apps = await page.evaluate(() => window.__apps)
-    await page.addInitScript((saved) => {
-      window.__presetApps = saved
-    }, apps)
+    const codeFile = await page.evaluate(() => window.__codeFile)
+    await page.evaluate(() => localStorage.clear())
+    await page.addInitScript(
+      ({ savedApps, savedFile }) => {
+        window.__presetApps = savedApps
+        window.__presetCodeFile = savedFile
+      },
+      { savedApps: apps, savedFile: codeFile }
+    )
     await page.reload()
     await page.waitForSelector('.workspace__rail')
     assert.deepEqual(await threadLines(page), [], 'une conversation est affichée avant qu’on ait choisi quoi que ce soit')

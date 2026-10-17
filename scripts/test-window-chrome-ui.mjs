@@ -48,6 +48,9 @@ const known = {
   listConversations: async () => ({ conversations: conv, activeId: 'b' }),
   getChatHistory: async () => [{ role: 'user', content: 'Bonjour' }, { role: 'assistant', content: 'Bonjour Léo !' }],
   getGeneratedApps: async () => [{ path: '/a', label: 'Minuteur de cuisine', timestamp: Date.now() }],
+  // Conversations du mode Code (code-conversations.json, tenu par le main), lues de façon SYNCHRONE : un vrai objet
+  // ici, pas la promesse que le Proxy renverrait.
+  loadCodeConversations: () => ({ repos: [], conversations: {} }),
   listGeneratedImages: async () => [],
   listGeneratedVideos: async () => [],
   getImageStudioStatus: async () => ({ supported: true, capable: true, reason: null, installed: false, downloadLabel: '5 Go' }),
