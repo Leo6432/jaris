@@ -13,6 +13,8 @@ type ReminderFireHandler = (message: string) => void
 
 const storePath = join(getDataRoot(), 'reminders.json')
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
+/** Plus long délai qu'un setTimeout respecte (2^31-1 ms, 24,8 jours) ; au-delà, Node le ramène à 1 ms. */
+const MAX_TIMER_MS = 2 ** 31 - 1
 
 async function readReminders(): Promise<Reminder[]> {
   try {
@@ -39,6 +41,12 @@ function arm(reminder: Reminder, onFire: ReminderFireHandler): void {
   const previous = timers.get(reminder.id)
   if (previous) clearTimeout(previous)
   const delayMs = Math.max(0, new Date(reminder.fireAt).getTime() - Date.now())
+  // Étape 319 : setTimeout ramène à 1 ms tout délai au-delà de 2^31-1 ms (24,8 jours) — « rappelle-moi dans un
+  // mois » sonnait tout de suite, puis était effacé. Un délai plus long attend par tranches et se réarme.
+  if (delayMs > MAX_TIMER_MS) {
+    timers.set(reminder.id, setTimeout(() => arm(reminder, onFire), MAX_TIMER_MS))
+    return
+  }
   const timer = setTimeout(() => {
     timers.delete(reminder.id)
     void removeReminder(reminder.id)
