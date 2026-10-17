@@ -724,3 +724,17 @@ test('effacement des anciennes données : une entrée bloquée n’empêche pas 
   assert.ok(existsSync(join(userData, 'conversations')))
   rmSync(root, { recursive: true, force: true })
 })
+
+test('les copies de secours d’un code-conversations.json illisible suivent aussi « Déplacer » (étape 319)', () => {
+  // Rangées à côté du fichier (codeConversationsStore.ts), pas via join(getDataRoot(), …) : le balayage ci-dessus ne
+  // peut pas les voir. Sans cette entrée, un « Déplacer » depuis un ancien jaris-data effaçait la seule copie.
+  const { userData, root } = setupUserData()
+  const { storageRoot } = loadStorage(userData)
+  rmSync(root, { recursive: true, force: true })
+  const shared = readFileSync(new URL('../shared/codeConversations.ts', import.meta.url), 'utf8')
+  const aside = shared.match(/export const CODE_CONVERSATIONS_ASIDE_DIR = '([^']+)'/)
+  assert.ok(aside, 'la constante du dossier de secours existe')
+  assert.ok(storageRoot.OWNED_ENTRIES.includes(aside[1]), `${aside[1]} est dans OWNED_ENTRIES`)
+  const store = readFileSync(new URL('../electron/services/codeConversationsStore.ts', import.meta.url), 'utf8')
+  assert.match(store, /join\(dirname\(filePath\), CODE_CONVERSATIONS_ASIDE_DIR,/, 'le dossier de secours est bien à côté du fichier, dans les données')
+})

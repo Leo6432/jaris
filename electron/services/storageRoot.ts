@@ -75,6 +75,8 @@ export const OWNED_ENTRIES = [
   'github-token.bin',
   'phone-devices.json',
   'code-conversations.json',
+  // Copies de secours d'un code-conversations.json illisible (codeConversationsStore.ts) : jamais perdues non plus.
+  'code-conversations-illisibles',
   'benchmark-nouveaux-modeles.md',
   'benchmark-nouveaux-modeles.traces.jsonl',
   'benchmark-nouveaux-modeles.md.telecharges.json',
