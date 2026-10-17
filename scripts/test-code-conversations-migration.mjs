@@ -142,7 +142,7 @@ test('une conversation déjà dans le fichier garde sa version ; aucune reprise 
   assert.equal(empty.calls.imports.length, 0)
 })
 
-test('main muet (fichier non lu) : RIEN n’est envoyé, pour ne jamais écraser le fichier avec une liste vide', async () => {
+test('main muet (fichier non lu) : l’écran n’écrit RIEN ; seule la reprise part, et c’est le main qui décide', async () => {
   for (const loadCodeConversations of [() => null, () => { throw new Error('pas de réponse') }, () => Promise.resolve(null)]) {
     const storage = new FakeStorage(legacyEntries())
     const main = fakeMain()
@@ -153,9 +153,70 @@ test('main muet (fichier non lu) : RIEN n’est envoyé, pour ne jamais écraser
     screen.forgetConversation('app:C:/apps/snake')
     assert.equal(screen.loadConversation('app:C:/apps/neuve')[0].text, 'nouvelle', 'gardée au moins le temps de la session')
     await flush()
-    assert.deepEqual(main.calls, { save: [], repos: [], imports: [] })
-    assert.equal(storage.length, 5)
+    // Une conversation ou une liste envoyée écraserait le fichier avec ce que l'écran a (presque rien). La reprise,
+    // elle, est AJOUTÉE à ce que le main lit sur le disque — et il refuse d'écrire s'il n'a pas pu le lire.
+    assert.deepEqual(main.calls.save, [])
+    assert.deepEqual(main.calls.repos, [])
+    assert.equal(main.calls.imports.length, 1)
+    assert.equal(storage.length, 5, 'l’ancien stockage a été vidé sans écriture confirmée')
   }
+})
+
+test('reprise lancée à l’ouverture de Jaris, SANS ouvrir l’écran Code : le fichier n’est même pas lu', async () => {
+  const storage = new FakeStorage(legacyEntries())
+  let loads = 0
+  const main = fakeMain()
+  install({ storage, jaris: { ...main.jaris, loadCodeConversations: () => (loads++, { repos: [], conversations: {} }) } })
+  const screen = loadScreen()
+  const first = screen.migrateLegacyCodeConversations()
+  // Deux appels pendant l'écriture (ouverture, puis « Déplacer ») : une seule reprise envoyée.
+  assert.equal(screen.migrateLegacyCodeConversations(), first)
+  await flush()
+  assert.equal(main.calls.imports.length, 1)
+  assert.equal(loads, 0, 'l’écran Code a été chargé pour rien')
+  assert.equal(storage.length, 5)
+  main.confirm()
+  assert.equal(await first, true)
+  assert.deepEqual([...storage.map.keys()].sort(), ['jaris.codeChatWidth', 'jaris.codeConversation.app:C:/apps/abime'])
+  // Plus rien à reprendre : rien n'est renvoyé au main.
+  assert.equal(await screen.migrateLegacyCodeConversations(), true)
+  assert.equal(main.calls.imports.length, 1)
+})
+
+test('reprise refusée : `false`, rien ne quitte l’ancien stockage, et l’appel suivant réessaie', async () => {
+  const storage = new FakeStorage(legacyEntries())
+  const main = fakeMain()
+  install({ storage, jaris: main.jaris })
+  const screen = loadScreen()
+  const errors = []
+  const original = console.error
+  console.error = (...args) => errors.push(args.join(' '))
+  try {
+    const first = screen.migrateLegacyCodeConversations()
+    await flush()
+    main.refuse()
+    assert.equal(await first, false)
+  } finally {
+    console.error = original
+  }
+  assert.equal(storage.length, 5)
+  assert.equal(errors.length, 1)
+
+  const second = screen.migrateLegacyCodeConversations()
+  await flush()
+  assert.equal(main.calls.imports.length, 2, 'la reprise n’a pas été retentée')
+  main.confirm()
+  assert.equal(await second, true)
+  assert.equal(storage.length, 2)
+})
+
+test('reprise sans pont vers le main : `false` (jamais « rien à reprendre » alors que tout est encore là)', async () => {
+  install({ storage: new FakeStorage(legacyEntries()), jaris: null })
+  assert.equal(await loadScreen().migrateLegacyCodeConversations(), false)
+  install({ storage: new FakeStorage({ 'jaris.codeChatWidth': '420' }), jaris: null })
+  assert.equal(await loadScreen().migrateLegacyCodeConversations(), true)
+  install({ storage: null, jaris: fakeMain().jaris })
+  assert.equal(await loadScreen().migrateLegacyCodeConversations(), true)
 })
 
 test('stockage de la fenêtre refusé (page de test, about:blank) : le mode Code marche quand même', () => {
@@ -182,14 +243,14 @@ test('de bout en bout avec le vrai fichier : reprise, puis « Déplacer » (nouv
     importCodeConversations: async (data) => store.importLegacy(clone(data))
   })
 
-  // Premier lancement de la nouvelle version : l'ancien stockage passe dans le fichier.
+  // Premier lancement de la nouvelle version, sur l'Agent vocal : l'ancien stockage passe dans le fichier dès
+  // l'ouverture (App.tsx), sans que l'écran Code ait été ouvert.
   const oldFile = join(root, 'C', 'jaris-data', shared.CODE_CONVERSATIONS_FILE)
   const storage = new FakeStorage(legacyEntries())
   install({ storage, jaris: bridgeFor(new Store(oldFile)) })
-  const screen = loadScreen()
-  screen.loadRecentRepos()
-  await flush()
+  assert.equal(await loadScreen().migrateLegacyCodeConversations(), true)
   assert.deepEqual([...storage.map.keys()].sort(), ['jaris.codeChatWidth', 'jaris.codeConversation.app:C:/apps/abime'])
+  const screen = loadScreen()
   screen.saveConversation('app:C:/apps/pong', turns('un pong'))
   await flush()
 

@@ -139,6 +139,7 @@
   "options.folder.hint": "Sve što Jaris instalira i sprema — program, tvoji razgovori, Ollama i njezini modeli, glas, Docker — može biti negdje drugdje osim na disku C (na primjer na drugom disku). „Premjesti” odnosi SVE odjednom, ili ništa ako nešto to spriječi.",
   "options.folder.moving": "Premještanje…",
   "options.folder.move": "Premjesti…",
+  "options.folder.codeNotSaved": "Ništa nije premješteno: razgovori iz načina Kod nisu se mogli spremiti prije premještanja. Pokušaj ponovno za trenutak.",
   "options.history.group": "Povijest razgovora",
   "options.history.empty": "Zasad nije spremljen nijedan razgovor.",
   "options.history.folder": "Mapa povijesti",

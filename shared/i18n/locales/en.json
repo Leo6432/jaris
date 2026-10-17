@@ -138,6 +138,7 @@
   "options.folder.hint": "Everything Jaris installs and saves — the program, your conversations, Ollama and its models, the voice, Docker — can live somewhere other than C (another drive, for example). “Move” takes EVERYTHING at once, or nothing if something prevents it.",
   "options.folder.moving": "Moving…",
   "options.folder.move": "Move…",
+  "options.folder.codeNotSaved": "Nothing was moved: the Code mode conversations couldn't be saved before the move. Try again in a moment.",
   "options.history.group": "Conversation history",
   "options.history.empty": "No exchange saved yet.",
   "options.history.folder": "History folder",

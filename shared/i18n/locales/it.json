@@ -138,6 +138,7 @@
   "options.folder.hint": "Tutto ciò che Jaris installa e salva — il programma, le tue conversazioni, Ollama e i suoi modelli, la voce, Docker — può stare altrove rispetto a C (un altro disco, per esempio). «Sposta» porta via TUTTO in una volta, o niente se qualcosa lo impedisce.",
   "options.folder.moving": "Spostamento in corso…",
   "options.folder.move": "Sposta…",
+  "options.folder.codeNotSaved": "Non è stato spostato nulla: le conversazioni della modalità Codice non sono state salvate prima dello spostamento. Riprova tra un attimo.",
   "options.history.group": "Cronologia delle conversazioni",
   "options.history.empty": "Nessuno scambio salvato per ora.",
   "options.history.folder": "Cartella della cronologia",

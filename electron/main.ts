@@ -1998,6 +1998,16 @@ app.whenReady().then(async () => {
   )
   ipcMain.handle(IPC_CHANNELS.saveCodeRepos, (_event, repos: unknown) => codeConversations().setRepos(repos))
   ipcMain.handle(IPC_CHANNELS.importCodeConversations, (_event, data: unknown) => codeConversations().importLegacy(data))
+  // Une écriture refusée un instant par Windows (antivirus, indexeur) est retentée à la fermeture, une fois les
+  // fenêtres fermées (plus rien ne peut arriver de l'écran) : sinon le tout dernier changement de la session, resté
+  // en mémoire, ne serait jamais arrivé dans le fichier.
+  app.on('will-quit', () => {
+    try {
+      codeConversationsStore?.flush()
+    } catch (err) {
+      console.error('[code] Conversations du mode Code non enregistrées à la fermeture :', err)
+    }
+  })
 
   ipcMain.on(IPC_CHANNELS.onboardingFinished, () => {
     // L'onboarding vient de se terminer dans la fenêtre de réglages : elle bascule en widget flottant.

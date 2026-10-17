@@ -139,6 +139,7 @@
   "options.folder.hint": "Viskas, ką Jaris įdiegia ir įrašo – programa, tavo pokalbiai, „Ollama“ ir jos modeliai, balsas, „Docker“ – gali būti kitur nei diske C (pavyzdžiui, kitame diske). „Perkelti“ perkelia VISKĄ iš karto arba nieko, jei kas nors trukdo.",
   "options.folder.moving": "Perkeliama…",
   "options.folder.move": "Perkelti…",
+  "options.folder.codeNotSaved": "Niekas nebuvo perkelta: režimo „Kodas“ pokalbių nepavyko išsaugoti prieš perkėlimą. Bandyk dar kartą po akimirkos.",
   "options.history.group": "Pokalbių istorija",
   "options.history.empty": "Kol kas neįrašytas nė vienas pokalbis.",
   "options.history.folder": "Istorijos aplankas",

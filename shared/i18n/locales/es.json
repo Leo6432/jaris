@@ -138,6 +138,7 @@
   "options.folder.hint": "Todo lo que Jaris instala y guarda —el programa, tus conversaciones, Ollama y sus modelos, la voz, Docker— puede estar en otro sitio que no sea C (otro disco, por ejemplo). «Mover» lo lleva TODO de una vez, o nada si algo lo impide.",
   "options.folder.moving": "Moviendo…",
   "options.folder.move": "Mover…",
+  "options.folder.codeNotSaved": "No se ha movido nada: las conversaciones del modo Código no se pudieron guardar antes del traslado. Vuelve a intentarlo en un momento.",
   "options.history.group": "Historial de conversaciones",
   "options.history.empty": "Todavía no hay ningún intercambio guardado.",
   "options.history.folder": "Carpeta del historial",

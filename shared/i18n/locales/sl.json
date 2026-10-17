@@ -140,6 +140,7 @@
   "options.folder.hint": "Vse, kar Jaris namesti in shrani — program, tvoji pogovori, Ollama in njeni modeli, glas, Docker — je lahko drugje kot na disku C (na primer na drugem disku). „Premakni“ odnese VSE naenkrat ali nič, če kaj to prepreči.",
   "options.folder.moving": "Premikanje…",
   "options.folder.move": "Premakni…",
+  "options.folder.codeNotSaved": "Nič ni bilo premaknjeno: pogovorov iz načina Koda pred premikom ni bilo mogoče shraniti. Poskusi znova čez trenutek.",
   "options.history.group": "Zgodovina pogovorov",
   "options.history.empty": "Zaenkrat ni shranjen noben pogovor.",
   "options.history.folder": "Mapa zgodovine",

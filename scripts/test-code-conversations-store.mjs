@@ -23,7 +23,11 @@ function loadStore(fsModule = realFs) {
   }).CodeConversationsStore
 }
 
-/** Un `fs` réel dont on peut faire échouer UN appel (le suivant de ce nom) et dont on note les appels. */
+/**
+ * Un `fs` réel dont on peut faire échouer les prochains appels d'un nom (`failNext.set(nom, erreur)` : le suivant
+ * seulement ; `failNext.set(nom, { error, times })` : les `times` suivants ; `Infinity` : tant qu'on ne l'a pas retiré)
+ * et dont on note les appels.
+ */
 function faultyFs() {
   const calls = []
   const failNext = new Map()
@@ -31,15 +35,23 @@ function faultyFs() {
   for (const name of ['readFileSync', 'openSync', 'writeFileSync', 'fsyncSync', 'closeSync', 'renameSync', 'mkdirSync']) {
     wrapped[name] = (...args) => {
       calls.push([name, typeof args[0] === 'string' ? path.basename(args[0]) : args[0]])
-      const error = failNext.get(name)
-      if (error) {
-        failNext.delete(name)
+      const planned = failNext.get(name)
+      if (planned) {
+        const { error, times } = planned instanceof Error ? { error: planned, times: 1 } : planned
+        if (times <= 1) failNext.delete(name)
+        else failNext.set(name, { error, times: times - 1 })
         throw error
       }
       return realFs[name](...args)
     }
   }
   return { fs: wrapped, calls, failNext }
+}
+
+/** Attente du store : notée, jamais réelle (le vrai store attend quelques dizaines de millisecondes entre deux essais). */
+function fakeSleep() {
+  const waits = []
+  return { waits, sleep: (ms) => waits.push(ms) }
 }
 
 function tempDir(t) {
@@ -69,7 +81,7 @@ test('écriture atomique : une panne pendant l’écriture laisse l’ancienne v
   const file = join(tempDir(t), 'code-conversations.json')
   const faulty = faultyFs()
   const Store = loadStore(faulty.fs)
-  const store = new Store(file)
+  const store = new Store(file, { sleep: fakeSleep().sleep })
   store.setConversation('app:C:/apps/snake', turns('un snake'))
   const before = readFileSync(file, 'utf-8')
 
@@ -78,9 +90,10 @@ test('écriture atomique : une panne pendant l’écriture laisse l’ancienne v
   assert.throws(() => store.setConversation('app:C:/apps/pong', turns('un pong')))
   assert.equal(readFileSync(file, 'utf-8'), before, 'le fichier a été touché par une écriture ratée')
 
-  // Remplacement refusé (fichier ouvert par un antivirus) : pareil.
-  faulty.failNext.set('renameSync', errno('EPERM'))
+  // Remplacement refusé pour de bon (fichier tenu ouvert par un antivirus, même après les nouveaux essais) : pareil.
+  faulty.failNext.set('renameSync', { error: errno('EPERM'), times: Infinity })
   assert.throws(() => store.setConversation('app:C:/apps/pong', turns('un pong')))
+  faulty.failNext.delete('renameSync')
   assert.equal(readFileSync(file, 'utf-8'), before)
   assert.deepEqual(Object.keys(new Store(file).load().conversations), ['app:C:/apps/snake'])
 
@@ -99,29 +112,105 @@ test('fichier abîmé : jamais écrasé par une liste vide, il est gardé à cô
     const file = join(dir, 'code-conversations.json')
     writeFileSync(file, damaged, 'utf-8')
     const Store = loadStore()
-    const store = new Store(file, () => Date.UTC(2026, 9, 17, 9, 30))
+    const store = new Store(file, { now: () => Date.UTC(2026, 9, 17, 9, 30) })
     assert.deepEqual(store.load(), { repos: [], conversations: {} })
 
     store.setConversation('app:C:/apps/neuve', turns('nouvelle'))
-    const aside = readdirSync(dir).filter((name) => name.includes('illisible'))
-    assert.deepEqual(aside, ['code-conversations.illisible-2026-10-17T09-30-00-000Z.json'], `contenu : ${JSON.stringify(damaged)}`)
-    assert.equal(readFileSync(join(dir, aside[0]), 'utf-8'), damaged, 'le fichier abîmé a été modifié')
+    // Dans un dossier au nom FIXE (emporté par « Déplacer » avec les données), sous un nom daté.
+    const asideDir = join(dir, shared.CODE_CONVERSATIONS_ASIDE_DIR)
+    assert.deepEqual(readdirSync(asideDir), ['code-conversations-2026-10-17T09-30-00-000Z.json'], `contenu : ${JSON.stringify(damaged)}`)
+    assert.equal(readFileSync(join(asideDir, 'code-conversations-2026-10-17T09-30-00-000Z.json'), 'utf-8'), damaged, 'le fichier abîmé a été modifié')
     assert.deepEqual(Object.keys(new Store(file).load().conversations), ['app:C:/apps/neuve'])
   }
 })
 
-test('fichier inaccessible pour l’instant (verrouillé) : rien n’est écrit par-dessus pendant la session', (t) => {
+test('fichier refusé un instant (antivirus) à la première lecture : relu, la liste n’apparaît jamais vide', (t) => {
+  const file = join(tempDir(t), 'code-conversations.json')
+  writeFileSync(file, JSON.stringify({ version: 1, repos: [], conversations: { 'app:C:/apps/snake': turns('un snake') } }), 'utf-8')
+  const faulty = faultyFs()
+  faulty.failNext.set('readFileSync', { error: errno('EBUSY'), times: 2 })
+  const pause = fakeSleep()
+  const store = new (loadStore(faulty.fs))(file, { sleep: pause.sleep })
+  assert.deepEqual(Object.keys(store.load().conversations), ['app:C:/apps/snake'])
+  assert.equal(pause.waits.length, 2, 'la lecture n’a pas été réessayée après une courte attente')
+  // Et le travail de la session s'enregistre normalement, à côté de ce qui était déjà là.
+  store.setConversation('app:C:/apps/pong', turns('un pong'))
+  assert.deepEqual(Object.keys(new (loadStore())(file).load().conversations).sort(), ['app:C:/apps/pong', 'app:C:/apps/snake'])
+
+  // Avec la VRAIE attente (synchrone, dans le processus principal) : elle marche hors d'un navigateur.
+  const real = faultyFs()
+  real.failNext.set('readFileSync', errno('EPERM'))
+  const started = Date.now()
+  assert.equal(Object.keys(new (loadStore(real.fs))(file).load().conversations).length, 2)
+  assert.ok(Date.now() - started >= 40, 'aucune attente entre les deux essais')
+})
+
+test('fichier verrouillé pour de bon : l’écran le sait (null), rien n’est écrit par-dessus, et il est relu ensuite', (t) => {
   const file = join(tempDir(t), 'code-conversations.json')
   writeFileSync(file, JSON.stringify({ version: 1, repos: [], conversations: { 'app:C:/apps/snake': turns('un snake') } }), 'utf-8')
   const original = readFileSync(file, 'utf-8')
   const faulty = faultyFs()
-  faulty.failNext.set('readFileSync', errno('EBUSY'))
-  const store = new (loadStore(faulty.fs))(file)
-  assert.deepEqual(store.load(), { repos: [], conversations: {} })
+  faulty.failNext.set('readFileSync', { error: errno('EBUSY'), times: Infinity })
+  const store = new (loadStore(faulty.fs))(file, { sleep: fakeSleep().sleep })
+  assert.equal(store.load(), null, 'une liste vide renvoyée à l’écran ferait croire que tout a été effacé')
   assert.throws(() => store.setRepos([{ fullName: 'leo/projet', at: 1 }]))
   assert.throws(() => store.setConversation('app:C:/apps/pong', turns('un pong')))
+  assert.throws(() => store.importLegacy({ repos: [], conversations: { 'app:C:/apps/vieux': turns('vieux') } }))
   assert.equal(readFileSync(file, 'utf-8'), original, 'le fichier verrouillé a été écrasé')
   assert.equal(readdirSync(path.dirname(file)).some((name) => name.includes('illisible')), false, 'un fichier sain n’est jamais mis de côté')
+
+  // Le verrou est levé : le fichier est relu (rien de vide n'a été gardé à sa place), puis complété.
+  faulty.failNext.delete('readFileSync')
+  store.setConversation('app:C:/apps/pong', turns('un pong'))
+  assert.deepEqual(Object.keys(new (loadStore())(file).load().conversations).sort(), ['app:C:/apps/pong', 'app:C:/apps/snake'])
+})
+
+test('remplacement refusé un instant par Windows : réessayé ; refusé jusqu’au bout : réécrit à la fermeture', (t) => {
+  const file = join(tempDir(t), 'code-conversations.json')
+  const faulty = faultyFs()
+  const pause = fakeSleep()
+  const store = new (loadStore(faulty.fs))(file, { sleep: pause.sleep })
+  store.setConversation('app:C:/apps/snake', turns('un snake'))
+
+  faulty.failNext.set('renameSync', { error: errno('EPERM'), times: 2 })
+  store.setConversation('app:C:/apps/pong', turns('un pong'))
+  assert.equal(pause.waits.length, 2)
+  assert.deepEqual(Object.keys(new (loadStore())(file).load().conversations).sort(), ['app:C:/apps/pong', 'app:C:/apps/snake'])
+
+  // Le dernier changement de la session ne passe pas : gardé en mémoire, puis écrit par flush() à la fermeture.
+  faulty.failNext.set('renameSync', { error: errno('EPERM'), times: Infinity })
+  assert.throws(() => store.setConversation('app:C:/apps/tetris', turns('un tetris')))
+  faulty.failNext.delete('renameSync')
+  assert.equal(new (loadStore())(file).load().conversations['app:C:/apps/tetris'], undefined)
+  store.flush()
+  assert.deepEqual(Object.keys(new (loadStore())(file).load().conversations).sort(), ['app:C:/apps/pong', 'app:C:/apps/snake', 'app:C:/apps/tetris'])
+
+  // Rien en attente : la fermeture n'écrit rien.
+  faulty.calls.length = 0
+  store.flush()
+  assert.equal(faulty.calls.some(([name]) => name === 'openSync'), false)
+  // Une erreur qui ne passera pas en réessayant (disque plein) n'est pas réessayée.
+  pause.waits.length = 0
+  faulty.failNext.set('renameSync', errno('ENOSPC'))
+  assert.throws(() => store.setConversation('app:C:/apps/x', turns('x')))
+  assert.equal(pause.waits.length, 0)
+})
+
+test('fichier abîmé ET impossible à mettre de côté : rien n’est écrit, et on réessaie au prochain accès', (t) => {
+  const dir = tempDir(t)
+  const file = join(dir, 'code-conversations.json')
+  writeFileSync(file, '{ pas fini', 'utf-8')
+  const faulty = faultyFs()
+  faulty.failNext.set('renameSync', { error: errno('EACCES'), times: Infinity })
+  const store = new (loadStore(faulty.fs))(file, { sleep: fakeSleep().sleep, now: () => Date.UTC(2026, 9, 17, 9, 30) })
+  assert.equal(store.load(), null)
+  assert.throws(() => store.setConversation('app:C:/apps/neuve', turns('nouvelle')))
+  assert.equal(readFileSync(file, 'utf-8'), '{ pas fini')
+
+  faulty.failNext.delete('renameSync')
+  store.setConversation('app:C:/apps/neuve', turns('nouvelle'))
+  assert.equal(readFileSync(join(dir, shared.CODE_CONVERSATIONS_ASIDE_DIR, 'code-conversations-2026-10-17T09-30-00-000Z.json'), 'utf-8'), '{ pas fini')
+  assert.deepEqual(Object.keys(new (loadStore())(file).load().conversations), ['app:C:/apps/neuve'])
 })
 
 test('reprise de l’ancien stockage : ajoutée au fichier sans rien écraser', (t) => {

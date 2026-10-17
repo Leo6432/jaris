@@ -139,6 +139,7 @@
   "options.folder.hint": "Vše, co Jaris instaluje a ukládá — program, tvoje konverzace, Ollama a její modely, hlas, Docker — může být jinde než na disku C (třeba na jiném disku). „Přesunout“ vezme VŠECHNO najednou, nebo nic, pokud tomu něco brání.",
   "options.folder.moving": "Přesouvání…",
   "options.folder.move": "Přesunout…",
+  "options.folder.codeNotSaved": "Nic nebylo přesunuto: konverzace z režimu Kód se před přesunem nepodařilo uložit. Zkus to za chvíli znovu.",
   "options.history.group": "Historie konverzací",
   "options.history.empty": "Zatím není uložena žádná konverzace.",
   "options.history.folder": "Složka historie",

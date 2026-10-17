@@ -139,6 +139,7 @@
   "options.folder.hint": "Tot ce instalează și salvează Jaris — programul, conversațiile tale, Ollama și modelele ei, vocea, Docker — poate sta în altă parte decât pe C (pe alt disc, de exemplu). „Mută” ia TOTUL deodată, sau nimic dacă ceva îl împiedică.",
   "options.folder.moving": "Mutare în curs…",
   "options.folder.move": "Mută…",
+  "options.folder.codeNotSaved": "Nu s-a mutat nimic: conversațiile din modul Cod nu au putut fi salvate înainte de mutare. Încearcă din nou peste o clipă.",
   "options.history.group": "Istoricul conversațiilor",
   "options.history.empty": "Nicio conversație salvată deocamdată.",
   "options.history.folder": "Dosarul istoricului",

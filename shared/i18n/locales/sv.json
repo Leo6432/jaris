@@ -138,6 +138,7 @@
   "options.folder.hint": "Allt som Jaris installerar och sparar — programmet, dina samtal, Ollama och dess modeller, rösten, Docker — kan ligga någon annanstans än på C (en annan disk, till exempel). ”Flytta” tar med ALLT på en gång, eller inget om något hindrar det.",
   "options.folder.moving": "Flyttar…",
   "options.folder.move": "Flytta…",
+  "options.folder.codeNotSaved": "Inget har flyttats: samtalen i Kod-läget kunde inte sparas före flytten. Försök igen om en stund.",
   "options.history.group": "Samtalshistorik",
   "options.history.empty": "Inga utbyten sparade ännu.",
   "options.history.folder": "Historikmapp",

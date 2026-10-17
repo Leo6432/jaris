@@ -12,6 +12,7 @@ import JarisOrb from '@/components/JarisOrb'
 import MemoryBrain from '@/components/MemoryBrain'
 import OptionsMenu from '@/components/OptionsMenu'
 import { playSoundCueIfEnabled } from '@/lib/soundDesign'
+import { migrateLegacyCodeConversations } from '@/lib/codeConversations'
 import { useJarisStore, type JarisEmotion } from '@/store/useJarisStore'
 import type { AppVersionStatus, MemoryGraph, OllamaVersionStatus, WidgetMode, WindowChrome } from '../shared/ipc'
 import ModelEffortPicker from '@/components/ModelEffortPicker'
@@ -187,6 +188,14 @@ export default function App(): JSX.Element {
   useEffect(() => {
     if (MODE !== 'full') return
     void window.jaris.getAppVersion().then(setAppVersion).catch(() => {})
+  }, [])
+
+  // Les conversations du mode Code gardées par l'ancienne version dans le stockage de la fenêtre passent dans leur
+  // fichier DÈS l'ouverture, sans attendre une visite de l'écran Code : Jaris s'ouvre sur l'Agent vocal, et un
+  // « Déplacer » fait entre-temps efface ce stockage (codeConversations.ts). Fenêtre principale seulement.
+  useEffect(() => {
+    if (MODE !== 'full') return
+    void migrateLegacyCodeConversations()
   }, [])
 
   useEffect(() => {

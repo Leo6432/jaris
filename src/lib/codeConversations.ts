@@ -132,40 +132,65 @@ export function readLegacyCodeConversations(
   return keys.length > 0 ? { data, keys } : null
 }
 
-/**
- * Reprise (premier lancement de cette version) : les anciennes conversations sont affichées tout de suite, ajoutées au
- * fichier sans y écraser quoi que ce soit, puis retirées du stockage de la fenêtre — seulement une fois l'écriture
- * CONFIRMÉE par le main. Si elle échoue, elles restent où elles sont et seront reprises au lancement suivant.
- */
-function adoptLegacy(target: Store): void {
-  let storage: Storage
-  let legacy: ReturnType<typeof readLegacyCodeConversations>
+function readLegacy(): { storage: Storage; legacy: NonNullable<ReturnType<typeof readLegacyCodeConversations>> } | null {
   try {
-    storage = localStorage
-    legacy = readLegacyCodeConversations(storage)
+    const storage = localStorage
+    const legacy = readLegacyCodeConversations(storage)
+    return legacy ? { storage, legacy } : null
   } catch {
-    return // Stockage refusé (page de test sur about:blank…) : rien à reprendre.
+    return null // Stockage refusé (page de test sur about:blank…) : rien à reprendre.
   }
-  if (!legacy) return
-  const merged = fromData(
-    mergeCodeConversations({ repos: target.repos, conversations: Object.fromEntries(target.conversations) }, legacy.data)
-  )
-  target.repos = merged.repos
-  target.conversations = merged.conversations
-  if (!target.bridge) return
-  const { keys } = legacy
-  target.bridge.importCodeConversations(legacy.data).then(
+}
+
+let migration: Promise<boolean> | null = null
+
+/**
+ * Reprise de l'ancien stockage de la fenêtre (avant le fichier) : ajouté au fichier par le main SANS y écraser quoi
+ * que ce soit, puis retiré du stockage de la fenêtre — seulement une fois l'écriture CONFIRMÉE. `true` quand il ne
+ * reste rien à reprendre ; `false` si l'écriture a échoué (tout reste alors où c'était, et sera repris au prochain
+ * appel).
+ *
+ * Lancée dès l'ouverture de la fenêtre principale (App.tsx), pas seulement à la première visite de l'écran Code :
+ * Jaris s'ouvre sur l'Agent vocal, et un « Déplacer » fait sans être passé par Code effaçait l'ancien dossier de
+ * Chromium — avec ce stockage jamais repris. Pour la même raison, « Déplacer » l'attend avant de commencer
+ * (OptionsMenu.tsx). Passe par le pont même si la lecture du fichier a échoué à l'ouverture : c'est le main qui
+ * décide, et il refuse d'écrire tant qu'il n'a pas pu lire le fichier existant.
+ */
+export function migrateLegacyCodeConversations(): Promise<boolean> {
+  if (migration) return migration
+  const found = readLegacy()
+  if (!found) return Promise.resolve(true)
+  const bridge = findBridge()
+  if (!bridge) return Promise.resolve(false)
+  const { storage, legacy } = found
+  // Envoyé tout de suite (pas au tour suivant) : il part avant toute autre demande de cette fenêtre au main.
+  let pending: Promise<void>
+  try {
+    pending = Promise.resolve(bridge.importCodeConversations(legacy.data))
+  } catch (err) {
+    pending = Promise.reject(err)
+  }
+  const running = pending.then(
     () => {
-      for (const key of keys) {
+      for (const key of legacy.keys) {
         try {
           storage.removeItem(key)
         } catch {
-          // Déjà dans le fichier : une entrée restée ici est simplement ignorée au prochain lancement.
+          // Déjà dans le fichier : une entrée restée ici serait simplement reprise (sans rien écraser) plus tard.
         }
       }
+      return true
     },
-    (err: unknown) => console.error('[code] Reprise des anciennes conversations du mode Code impossible :', err)
+    (err: unknown) => {
+      console.error('[code] Reprise des anciennes conversations du mode Code impossible :', err)
+      return false
+    }
   )
+  migration = running
+  void running.then(() => {
+    if (migration === running) migration = null
+  })
+  return running
 }
 
 function ensureStore(): Store {
@@ -179,7 +204,17 @@ function ensureStore(): Store {
     loaded = null
   }
   store = { ...fromData(loaded), bridge: loaded ? bridge : null }
-  adoptLegacy(store)
+  // Ce qui reste dans l'ancien stockage est affiché tout de suite (sans écraser ce que le fichier contient déjà),
+  // même si sa reprise dans le fichier est encore en cours ou a échoué.
+  const found = readLegacy()
+  if (found) {
+    const merged = fromData(
+      mergeCodeConversations({ repos: store.repos, conversations: Object.fromEntries(store.conversations) }, found.legacy.data)
+    )
+    store.repos = merged.repos
+    store.conversations = merged.conversations
+  }
+  void migrateLegacyCodeConversations()
   return store
 }
 

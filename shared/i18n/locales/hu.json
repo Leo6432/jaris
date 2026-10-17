@@ -138,6 +138,7 @@
   "options.folder.hint": "Minden, amit Jaris telepít és ment — a program, a beszélgetéseid, az Ollama és a modelljei, a hang, a Docker — lehet máshol is, mint a C meghajtón (például egy másik lemezen). Az „Áthelyezés” MINDENT egyszerre visz, vagy semmit, ha valami megakadályozza.",
   "options.folder.moving": "Áthelyezés folyamatban…",
   "options.folder.move": "Áthelyezés…",
+  "options.folder.codeNotSaved": "Semmi sem lett áthelyezve: a Kód mód beszélgetéseit nem sikerült elmenteni az áthelyezés előtt. Próbáld újra egy pillanat múlva.",
   "options.history.group": "Beszélgetési előzmények",
   "options.history.empty": "Még nincs mentett beszélgetés.",
   "options.history.folder": "Előzmények mappája",

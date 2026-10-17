@@ -1020,7 +1020,8 @@ export const IPC_CHANNELS = {
    * revérifié côté main avant tout effacement, voir deleteGeneratedApp (codeGenerator.ts). */
   deleteGeneratedApp: 'jaris:delete-generated-app',
   /** renderer <-> main, SYNCHRONE (sendSync) : la liste et les conversations du mode Code, lues une fois dans
-   * code-conversations.json (dossier de données, voir codeConversationsStore.ts). `null` si le main ne répond pas. */
+   * code-conversations.json (dossier de données, voir codeConversationsStore.ts). `null` si le main ne répond pas, ou
+   * si le fichier existant n'a pas pu être lu (l'écran n'y écrit alors rien, pour ne jamais l'écraser). */
   loadCodeConversations: 'jaris:load-code-conversations',
   /** renderer -> main : enregistre (ou retire, avec `null`) la conversation d'un élément du mode Code. */
   saveCodeConversation: 'jaris:save-code-conversation',

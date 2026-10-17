@@ -8,6 +8,12 @@
  * Pur : aucun accès au disque ni à la fenêtre ici.
  */
 export const CODE_CONVERSATIONS_FILE = 'code-conversations.json'
+/**
+ * Dossier (à côté du fichier) où un fichier abîmé est mis de côté au lieu d'être écrasé, sous un nom daté. Un nom
+ * FIXE, pour pouvoir être emporté par « Déplacer » avec le reste des données (OWNED_ENTRIES, storageRoot.ts) : sans
+ * ça, déplacer depuis un ancien dossier `jaris-data` effacerait cette dernière copie avec lui.
+ */
+export const CODE_CONVERSATIONS_ASIDE_DIR = 'code-conversations-illisibles'
 
 /** Une conversation garde ses derniers messages : au-delà, les plus anciens partent. */
 export const MAX_CODE_TURNS = 200
