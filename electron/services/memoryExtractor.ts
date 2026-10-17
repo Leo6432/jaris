@@ -18,24 +18,58 @@ export interface Exchange {
 
 /**
  * Échanges pas encore lus par la mémoire automatique. Une extraction arrêtée par une nouvelle demande (voir
- * cancelMemoryExtraction) ne perd donc pas son échange : il est relu avec le suivant, à la prochaine réponse.
- * Plafonné : dans une longue conversation sans pause, seuls les derniers comptent.
+ * cancelMemoryExtraction) ne perd donc pas son échange : il est relu avec les suivants, à la prochaine réponse.
+ * Plafond LARGE : sur la machine de Léo, une extraction dure environ une minute, donc une conversation suivie peut en
+ * faire arrêter plusieurs de suite ; avec seulement 3 échanges gardés, « ma sœur s'appelle Emma » dit au 1er message
+ * était perdu au 5e sans jamais avoir été lu. Ce sont les phrases de l'utilisateur qui portent les faits : elles sont
+ * gardées entières ici ; seule la demande au modèle les raccourcit (voir exchangesForPrompt).
  */
-const MAX_PENDING_EXCHANGES = 3
-/** La réponse de Jaris ne sert qu'à comprendre l'échange : coupée dans la demande au modèle (plusieurs échanges). */
-const MAX_REPLY_CHARS_IN_PROMPT = 2000
+const MAX_PENDING_EXCHANGES = 12
+/** Dans la demande au modèle : le dernier échange presque entier, les plus anciens plus courts (la demande reste petite). */
+const PROMPT_LIMITS = {
+  latest: { transcript: 4000, reply: 600 },
+  older: { transcript: 800, reply: 300 }
+}
 
 let pending: Exchange[] = []
 let current: { controller: AbortController; done: Promise<void> } | null = null
+/** Change à chaque effacement de l'historique : une extraction partie avant n'écrit plus rien (voir clearPendingMemoryExchanges). */
+let clearEpoch = 0
 
 /**
- * Arrête l'extraction en cours, à appeler au DÉBUT de chaque nouvelle demande (voix, Chat, téléphone). Vu en usage
- * réel : l'extraction lancée juste après une réponse occupait encore Ollama quand la question suivante est arrivée,
- * qui a attendu environ une minute derrière elle. Couper la connexion arrête la génération côté Ollama. Rien n'est
- * affiché ni journalisé comme un échec : l'échange reste en attente et sera relu à la prochaine réponse.
+ * Arrête l'extraction en cours, à appeler au DÉBUT de chaque nouvelle demande (voix, Chat, téléphone, Code, Image,
+ * Vidéo). Vu en usage réel : l'extraction lancée juste après une réponse occupait encore Ollama quand la question
+ * suivante est arrivée, qui a attendu environ une minute derrière elle. Couper la connexion arrête la génération côté
+ * Ollama. Rien n'est affiché ni journalisé comme un échec : l'échange reste en attente et sera relu à la prochaine
+ * réponse.
  */
 export function cancelMemoryExtraction(): void {
   current?.controller.abort()
+}
+
+/**
+ * L'utilisateur efface l'historique (ou une conversation) : les échanges encore en attente partent avec lui, et
+ * l'extraction en cours n'écrit plus rien. Sans ça, une info dite juste avant l'effacement (extraction arrêtée par la
+ * question suivante, échange resté en attente) aurait quand même fini dans la mémoire à la réponse d'après.
+ */
+export function clearPendingMemoryExchanges(): void {
+  clearEpoch += 1
+  pending = []
+  current?.controller.abort()
+}
+
+function cut(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max)}…` : text
+}
+
+/** Les échanges tels que le modèle les lit, du plus ancien au plus récent. */
+export function exchangesForPrompt(batch: Exchange[]): string {
+  return batch
+    .map(({ transcript, reply }, index) => {
+      const limits = index === batch.length - 1 ? PROMPT_LIMITS.latest : PROMPT_LIMITS.older
+      return `Utilisateur : ${cut(transcript, limits.transcript)}\nJaris : ${cut(reply, limits.reply)}`
+    })
+    .join('\n\n')
 }
 
 /**
@@ -52,7 +86,13 @@ export function cancelMemoryExtraction(): void {
  * après l'avoir laissée se terminer — une note déjà en cours d'écriture n'est donc jamais écrite deux fois.
  */
 export function extractMemoryFromExchange(transcript: string, reply: string, onLog?: (message: string) => void): Promise<void> {
-  pending = [...pending, { transcript, reply }].slice(-MAX_PENDING_EXCHANGES)
+  const queued = [...pending, { transcript, reply }]
+  const dropped = queued.length - MAX_PENDING_EXCHANGES
+  if (dropped > 0) {
+    // Jamais en silence : un fait dit dans ces échanges ne sera pas retenu (journal de développement seulement).
+    console.info(`[mémoire] ${dropped} échange(s) ancien(s) retiré(s) de la file sans avoir été lu(s) (plus de ${MAX_PENDING_EXCHANGES} en attente).`)
+  }
+  pending = queued.slice(-MAX_PENDING_EXCHANGES)
   const previous = current
   previous?.controller.abort()
   const controller = new AbortController()
@@ -72,6 +112,7 @@ export function extractMemoryFromExchange(transcript: string, reply: string, onL
 async function runExtraction(signal: AbortSignal, onLog?: (message: string) => void): Promise<void> {
   const batch = pending
   if (!batch.length) return
+  const epoch = clearEpoch
   let answered = false
   try {
     const [memoryTitles, profile] = await Promise.all([listMemoryTitles(), getProfile()])
@@ -109,15 +150,9 @@ async function runExtraction(signal: AbortSignal, onLog?: (message: string) => v
           'déjà connue et inchangée, mais appelle-le bien (avec replace: true) si cette info vient de changer.'
         : '')
 
-    const exchanges = batch
-      .map(({ transcript, reply }) => {
-        const shown = reply.length > MAX_REPLY_CHARS_IN_PROMPT ? `${reply.slice(0, MAX_REPLY_CHARS_IN_PROMPT)}…` : reply
-        return `Utilisateur : ${transcript}\nJaris : ${shown}`
-      })
-      .join('\n\n')
     const messages: OllamaMessage[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: exchanges }
+      { role: 'user', content: exchangesForPrompt(batch) }
     ]
 
     // Vérifié non-undefined au chargement du module (throw ci-dessus sinon) : le cast est sûr ici.
@@ -130,23 +165,28 @@ async function runExtraction(signal: AbortSignal, onLog?: (message: string) => v
     // nouvelle demande arrive maintenant (plus rien n'occupe Ollama).
     pending = pending.filter((exchange) => !batch.includes(exchange))
     for (const call of message.tool_calls ?? []) {
+      // Historique effacé pendant que le modèle répondait : rien de ce qu'il en a tiré n'est écrit.
+      if (epoch !== clearEpoch) return
       if (call.function.name !== 'remember') continue
       const title = String(call.function.arguments.title ?? '').trim()
       const content = String(call.function.arguments.content ?? '').trim()
       if (!title || !content) continue
-      const refused = refusedNoteReason(title, content, batch, profile?.name ?? null)
-      if (refused) {
-        console.info(`[mémoire] note « ${title} » écartée : ${refused}`)
+      const review = reviewNote(title, content, batch, profile?.name ?? null)
+      if ('refused' in review) {
+        console.info(`[mémoire] note « ${title} » écartée : ${review.refused}`)
         continue
       }
-      // toolFlag, jamais Boolean() : `replace: "false"` en texte (petit modèle) EFFAÇAIT la note existante.
-      await rememberNote(title, content, toolFlag(call.function.arguments.replace))
-      onLog?.(t('memory.autoSaved', { title }))
+      if (review.title !== title) console.info(`[mémoire] titre « ${title} » remplacé par « ${review.title} » (il désignait l'échange).`)
+      // toolFlag, jamais Boolean() : `replace: "false"` en texte (petit modèle) EFFAÇAIT la note existante. Et jamais
+      // de remplacement sous un titre changé par Jaris : le modèle visait une autre note, celle-ci serait effacée.
+      const replace = review.title === title && toolFlag(call.function.arguments.replace)
+      await rememberNote(review.title, content, replace)
+      onLog?.(t('memory.autoSaved', { title: review.title }))
     }
   } catch (err) {
     // Arrêtée par une nouvelle demande : rien à dire, ses échanges restent en attente (lus à la prochaine réponse).
     // Détecté par le signal lui-même, jamais par le type d'erreur (une coupure peut remonter sous un autre nom).
-    if (signal.aborted && !answered) return
+    if ((signal.aborted && !answered) || epoch !== clearEpoch) return
     // Vraie erreur : ces échanges sont abandonnés, sinon un échange qui fait toujours échouer serait retenté sans fin.
     pending = pending.filter((exchange) => !batch.includes(exchange))
     onLog?.(t('memory.autoFailed', { error: err instanceof Error ? err.message : String(err) }))
@@ -157,16 +197,23 @@ async function runExtraction(signal: AbortSignal, onLog?: (message: string) => v
 // Garde-fous dans le CODE (une consigne de plus ne suffit pas face à un petit modèle, voir CLAUDE.md). Vu en vrai
 // avec qwen3.5:0.8b : après « Bonjour ! Tu peux te présenter en deux phrases ? », la mémoire a enregistré sous le
 // titre « Conversation » la RÉPONSE de Jaris elle-même (« Bonjour Léo : je suis Jaris, un assistant personnel… »).
+// Règle de prudence, qui l'emporte sur tout le reste : un vrai fait dit par l'utilisateur passe toujours, même
+// reformulé, même complété par la réponse de Jaris, même sous un titre maladroit.
 // ---------------------------------------------------------------------------------------------------------------
 
-/** Mots d'un titre qui désignent l'ÉCHANGE lui-même, pas un sujet (texte sans accents, en minuscules). */
+/**
+ * Mots d'un titre qui désignent l'ÉCHANGE lui-même, pas un sujet (texte sans accents, en minuscules). Jamais un nom
+ * français courant à double sens : « Chat » (l'animal), « Entretien » (d'embauche). Ceux qui restent ambigus
+ * (« Présentation » : celle de Jaris, ou celle que Léo fait lundi devant son patron) ne jettent rien à eux seuls :
+ * c'est le contenu qui décide (voir reviewNote).
+ */
 const EXCHANGE_TITLE_WORDS = new Set([
   'conversation', 'conversations', 'echange', 'echanges', 'discussion', 'discussions', 'dialogue', 'dialogues',
   'reponse', 'reponses', 'question', 'questions', 'presentation', 'presentations', 'salutation', 'salutations',
   'bonjour', 'salut', 'bonsoir', 'bienvenue', 'accueil', 'introduction', 'message', 'messages', 'demande',
-  'demandes', 'requete', 'requetes', 'chat', 'entretien', 'interaction', 'interactions', 'exchange', 'exchanges',
-  'dialog', 'reply', 'replies', 'response', 'responses', 'answer', 'answers', 'greeting', 'greetings', 'hello',
-  'hi', 'welcome', 'request', 'requests', 'talk', 'smalltalk'
+  'demandes', 'requete', 'requetes', 'interaction', 'interactions', 'exchange', 'exchanges', 'dialog', 'reply',
+  'replies', 'response', 'responses', 'answer', 'answers', 'greeting', 'greetings', 'hello', 'hi', 'welcome',
+  'request', 'requests', 'talk', 'smalltalk'
 ])
 
 /**
@@ -194,6 +241,26 @@ const STOP_WORDS = new Set([
   'that', 'this', 'from', 'are', 'was', 'were', 'has', 'have', 'had', 'his', 'her', 'hers', 'its', 'their',
   'they', 'them', 'she', 'him', 'you', 'your', 'our', 'not', 'but', 'also', 'very', 'been', 'being', 'will',
   'can', 'about', 'into'
+])
+
+/**
+ * Salutations et formules de politesse (sans accents) : l'utilisateur les dit, Jaris les répète, elles ne prouvent
+ * jamais d'où vient un fait. Dans le cas vu en vrai, « bonjour » comptait comme un mot de l'utilisateur.
+ */
+const COURTESY_WORDS = new Set([
+  'bonjour', 'bonsoir', 'salut', 'coucou', 'hello', 'hey', 'merci', 'thanks', 'thank', 'please', 'stp', 'svp',
+  'bienvenue', 'welcome', 'enchante', 'enchantee', 'okay', 'accord', 'plaisir', 'pleasure', 'cordialement'
+])
+
+/**
+ * Ce qui RACONTE l'échange au lieu de dire un fait (sans accents) : « L'utilisateur a salué Jaris et lui a demandé de
+ * se présenter ». Ne sert que sous un titre qui désigne déjà l'échange : ailleurs, « Léo a demandé une augmentation »
+ * est un vrai fait.
+ */
+const NARRATION_STEMS = ['demand', 'salu', 'remerci', 'repond', 'reponse', 'question', 'conversation', 'echang', 'discut', 'dialog']
+const NARRATION_WORDS = new Set([
+  'jaris', 'bonjour', 'bonsoir', 'coucou', 'hello', 'merci', 'ask', 'asks', 'asked', 'greet', 'greets', 'greeted',
+  'thank', 'thanks', 'thanked', 'reply', 'replies', 'replied', 'answer', 'answers', 'answered', 'talked'
 ])
 
 /** Minuscules, sans accents (« œ » → « oe »), pour comparer des mots écrits différemment. */
@@ -234,6 +301,16 @@ function sameWord(word: string, candidates: Set<string>): boolean {
   return false
 }
 
+/** Une QUESTION posée à Jaris (« C'est quoi la photosynthèse ? ») : sa réponse est du savoir de Jaris, pas un fait sur l'utilisateur. */
+export function isQuestion(text: string): boolean {
+  const trimmed = text.trim()
+  if (/\?\s*["'»”’)\]]*\s*$/.test(trimmed)) return true
+  // Pas « quand »/« when » : « Quand j'étais petit, j'habitais à Lyon » est une affirmation.
+  return /^(?:c['’]?est quoi|qu['’]?est[- ]ce|est[- ]ce que|quel(?:le)?s?|comment|pourquoi|combien|où|qui est|qui a|peux[- ]tu|pourrais[- ]tu|sais[- ]tu|what|who|why|how|where|which|can you|could you|do you|does)(?![\p{L}\p{N}])/iu.test(
+    trimmed
+  )
+}
+
 /** Le titre ne désigne que l'échange (« Conversation », « Échange avec Jaris », « Greeting ») : pas un sujet. */
 export function isExchangeTitle(title: string): boolean {
   const words = wordsOf(title).map(plain)
@@ -243,32 +320,62 @@ export function isExchangeTitle(title: string): boolean {
   )
 }
 
-/**
- * Le contenu vient surtout de la réponse de Jaris, pas des mots de l'utilisateur : ses mots porteurs se retrouvent
- * au moins deux fois plus souvent dans la réponse seule que dans ce qu'a dit l'utilisateur. Un fait reformulé à la
- * troisième personne garde les mots de l'utilisateur (« ma sœur s'appelle Emma » → « La sœur de Léo s'appelle
- * Emma ») ; les mots que personne n'a dits (une traduction, un mot ajouté) ne comptent ni pour ni contre.
- */
-export function isCopiedFromReply(content: string, exchanges: Exchange[], userName: string | null): boolean {
-  const userWords = new Set(exchanges.flatMap((exchange) => wordsOf(exchange.transcript).map(comparable)))
-  const replyWords = new Set(exchanges.flatMap((exchange) => wordsOf(exchange.reply).map(comparable)))
+/** D'où viennent les mots porteurs d'une note : ce qu'a dit l'utilisateur (affirmations / questions), ou la réponse de Jaris seule. */
+function originOf(content: string, exchanges: Exchange[], userName: string | null): { fromStatement: number; fromQuestion: number; onlyFromReply: number } {
+  const collect = (texts: string[]): Set<string> => new Set(texts.flatMap((text) => wordsOf(text).map(comparable)))
+  const statementWords = collect(exchanges.filter((exchange) => !isQuestion(exchange.transcript)).map((exchange) => exchange.transcript))
+  const questionWords = collect(exchanges.filter((exchange) => isQuestion(exchange.transcript)).map((exchange) => exchange.transcript))
+  const replyWords = collect(exchanges.map((exchange) => exchange.reply))
   // Le prénom de l'utilisateur et le nom de Jaris : Jaris les dit, une note les cite, ils ne disent pas d'où vient le fait.
   const names = new Set(['jaris', ...wordsOf(userName ?? '').map(comparable)])
-  let fromUser = 0
-  let onlyFromReply = 0
+  const origin = { fromStatement: 0, fromQuestion: 0, onlyFromReply: 0 }
   for (const raw of wordsOf(content)) {
     if (STOP_WORDS.has(raw)) continue
     const word = comparable(raw)
-    if (names.has(word) || (word.length < 3 && !/^\d+$/.test(word))) continue
-    if (sameWord(word, userWords)) fromUser += 1
-    else if (sameWord(word, replyWords)) onlyFromReply += 1
+    if (names.has(word) || COURTESY_WORDS.has(word) || (word.length < 3 && !/^\d+$/.test(word))) continue
+    if (sameWord(word, statementWords)) origin.fromStatement += 1
+    else if (sameWord(word, questionWords)) origin.fromQuestion += 1
+    else if (sameWord(word, replyWords)) origin.onlyFromReply += 1
   }
-  return onlyFromReply > 0 && onlyFromReply >= 2 * fromUser
+  return origin
 }
 
-/** Pourquoi une note proposée par le modèle est écartée (pour le journal de développement), ou null si elle passe. */
-export function refusedNoteReason(title: string, content: string, exchanges: Exchange[], userName: string | null): string | null {
-  if (isExchangeTitle(title)) return "titre qui désigne l'échange, pas un sujet"
-  if (isCopiedFromReply(content, exchanges, userName)) return 'contenu repris de la réponse de Jaris'
-  return null
+/**
+ * Le contenu est repris de la réponse de Jaris, pas des mots de l'utilisateur. Deux cas seulement, pour rester prudent :
+ *  - AUCUN mot porteur ne vient de l'utilisateur, et certains viennent de la réponse (sa présentation recopiée) ;
+ *  - les seuls mots venus de l'utilisateur viennent de QUESTIONS, et la réponse en apporte au moins trois, plus de
+ *    trois fois plus (« C'est quoi la photosynthèse ? » → la note recopie l'explication de Jaris).
+ * Une note qui complète un fait de l'utilisateur avec les mots de Jaris passe donc (« je suis végétarien » → « Léo est
+ * végétarien et ne mange pas de viande »). Les mots que personne n'a dits (une traduction, un mot ajouté) ne comptent
+ * ni pour ni contre.
+ */
+export function isCopiedFromReply(content: string, exchanges: Exchange[], userName: string | null): boolean {
+  const { fromStatement, fromQuestion, onlyFromReply } = originOf(content, exchanges, userName)
+  if (onlyFromReply === 0) return false
+  if (fromStatement + fromQuestion === 0) return true
+  return fromStatement === 0 && onlyFromReply >= 3 && onlyFromReply > 3 * fromQuestion
+}
+
+/** La note raconte l'échange (« Léo a salué Jaris et lui a demandé de se présenter ») au lieu de dire un fait. */
+function narratesExchange(content: string): boolean {
+  return wordsOf(content)
+    .map(plain)
+    .some((word) => NARRATION_WORDS.has(word) || NARRATION_STEMS.some((stem) => word.startsWith(stem)))
+}
+
+/**
+ * Ce que devient une note proposée par le modèle : gardée telle quelle, gardée sous un autre titre, ou écartée (avec
+ * la raison, pour le journal de développement). Un titre qui désigne l'échange ne jette jamais à lui seul un vrai fait
+ * de l'utilisateur : la note est gardée sous le prénom de l'utilisateur (ce que la consigne demande déjà), ou sous son
+ * titre si aucun prénom n'est connu. Elle n'est écartée que si son contenu ne vient pas clairement de l'utilisateur
+ * (moins de deux mots à lui) ou s'il raconte l'échange.
+ */
+export function reviewNote(title: string, content: string, exchanges: Exchange[], userName: string | null): { title: string } | { refused: string } {
+  if (isCopiedFromReply(content, exchanges, userName)) return { refused: 'contenu repris de la réponse de Jaris' }
+  if (!isExchangeTitle(title)) return { title }
+  const { fromStatement, fromQuestion } = originOf(content, exchanges, userName)
+  if (fromStatement + fromQuestion < 2 || narratesExchange(content)) {
+    return { refused: "titre qui désigne l'échange, et contenu qui ne dit pas un fait de l'utilisateur" }
+  }
+  return { title: userName?.trim() || title }
 }

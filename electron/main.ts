@@ -101,6 +101,7 @@ import type { LanguageSetting } from '../shared/i18n/languages'
 import { VoicePipeline } from './services/voicePipeline'
 import { listAudioInputDevices } from './services/voiceClient'
 import { ensureMemoryDir, getMemoryDir, getMemoryGraph, recallNote } from './services/memoryStore'
+import { cancelMemoryExtraction, clearPendingMemoryExchanges } from './services/memoryExtractor'
 import {
   clearConversationHistory,
   createConversation,
@@ -1096,11 +1097,14 @@ function getPhoneAccess(): PhoneAccessManager {
         }
       },
       generateImage: async (prompt, onStatus, signal) => {
+        // Nouvelle demande : la mémoire automatique ne doit pas occuper Ollama (ni la carte graphique) devant le dessin.
+        cancelMemoryExtraction()
         const image = await generateImage(prompt, onStatus, signal, toEnglishPrompt)
         broadcast(IPC_CHANNELS.studioGalleryChanged)
         return { fileName: image.fileName }
       },
       generateVideo: async (prompt, seconds, quality, onStatus, signal) => {
+        cancelMemoryExtraction()
         const video = await generateVideo(
           prompt,
           onStatus,
@@ -1352,10 +1356,14 @@ app.whenReady().then(async () => {
     return switchConversation()
   })
   ipcMain.handle(IPC_CHANNELS.deleteConversation, async (_event, id: string) => {
+    // Un échange de cette conversation encore en attente de la mémoire automatique ne doit pas être retenu après.
+    clearPendingMemoryExchanges()
     await deleteConversation(id)
     return switchConversation()
   })
   ipcMain.handle(IPC_CHANNELS.clearConversationHistory, async () => {
+    // Rien de ce qui vient d'être effacé ne doit finir dans la mémoire automatique (échanges encore en attente).
+    clearPendingMemoryExchanges()
     await clearConversationHistory()
     pipeline?.clearHistory()
     // Le mode Chat (étape 30) alimente le même historique et le même contexte court terme : le laisser
@@ -1791,6 +1799,8 @@ app.whenReady().then(async () => {
       // la génération en cours, et c'est lui que le bouton "Arrêter" déclenche (étape 99). Remis à null à
       // la fin pour qu'un clic tardif n'annule pas la génération SUIVANTE.
       codeGenAbort?.abort()
+      // Nouvelle demande : la mémoire automatique de l'échange précédent ne doit pas occuper Ollama devant elle.
+      cancelMemoryExtraction()
       const controller = new AbortController()
       codeGenAbort = controller
       try {
@@ -1833,6 +1843,7 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.githubOpenRepo, (_event, fullName: string, branch?: string) => openGithubRepo(fullName, branch))
   ipcMain.handle(IPC_CHANNELS.githubRunAgent, async (event, fullName: string, request: string, imageBase64?: string) => {
     codeGenAbort?.abort()
+    cancelMemoryExtraction()
     const controller = new AbortController()
     codeGenAbort = controller
     try {
@@ -1867,6 +1878,8 @@ app.whenReady().then(async () => {
   )
   ipcMain.handle(IPC_CHANNELS.generateStudioImage, async (event, prompt: string): Promise<GeneratedImageSummary> => {
     imageStudioAbort?.abort()
+    // Nouvelle demande : la mémoire automatique ne doit pas occuper Ollama (ni la carte graphique) devant le dessin.
+    cancelMemoryExtraction()
     const controller = new AbortController()
     imageStudioAbort = controller
     try {
@@ -1912,6 +1925,7 @@ app.whenReady().then(async () => {
       quality?: unknown
     ): Promise<GeneratedVideoSummary> => {
       videoStudioAbort?.abort()
+      cancelMemoryExtraction()
       const controller = new AbortController()
       videoStudioAbort = controller
       const initImage =
