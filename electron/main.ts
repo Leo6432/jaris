@@ -1979,10 +1979,20 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.on(IPC_CHANNELS.onboardingFinished, () => {
-    // L'onboarding vient de se terminer dans la fenêtre de réglages : elle bascule en widget flottant.
+    // Fin de la configuration (« Continuer » de « Configuration terminée ») : la fenêtre RESTE ouverte, au
+    // premier plan, sur l'écran d'accueil — même règle qu'au démarrage normal (étape 295). Avant, elle se cachait
+    // et seul le petit widget restait en haut de l'écran : un nouvel utilisateur croyait que Jaris s'était
+    // fermé, au moment précis où il voulait commencer. Le widget est seulement préparé, caché (au tout premier
+    // lancement il n'existe pas encore : il n'est créé au démarrage que si la configuration était déjà faite),
+    // pour prendre le relais dès qu'on réduit Jaris ou qu'on passe sur une autre application. Il doit exister
+    // même caché : c'est lui qui porte le lecteur audio des réponses parlées (App.tsx), y compris quand on parle
+    // depuis la grande fenêtre.
     onboardingDone = true
-    fullWindow?.hide()
-    showWidgetWindow()
+    // Même délai de grâce qu'après l'écran de démarrage (étape 296) : la fenêtre vient de changer d'écran et le
+    // widget de naître ; une perte de focus passagère à cet instant ne doit pas la replier en widget.
+    revealGraceUntil = Date.now() + STARTUP_REVEAL_GRACE_MS
+    if (!widgetWindow || widgetWindow.isDestroyed()) widgetWindow = createWidgetWindow()
+    showFullWindow()
   })
   ipcMain.on(IPC_CHANNELS.openSettings, () => showFullWindow())
 

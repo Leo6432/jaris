@@ -517,8 +517,8 @@ export default function App(): JSX.Element {
         <CapacityScan
           onDone={() => {
             setCapacityScanDone(true)
-            // Bascule vers le widget flottant : cette fenêtre de réglages se cache, Jaris reste visible
-            // en bas à droite de l'écran.
+            // Cette fenêtre reste ouverte et affiche l'accueil (Agent vocal, le mode par défaut) ; le main
+            // prépare seulement le widget, caché, pour le moment où on la réduira (étape 295).
             window.jaris.notifyOnboardingFinished()
           }}
         />
