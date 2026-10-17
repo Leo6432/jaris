@@ -1650,7 +1650,11 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC_CHANNELS.setThinkChoice, (_event, mode: ModelChoiceMode, think: unknown): Promise<void> => saveThinkChoice(mode, think))
   ipcMain.handle(IPC_CHANNELS.setModelChoice, (_event, mode: ModelChoiceMode, model: string | null): Promise<void> => saveModelChoice(mode, model))
   ipcMain.handle(IPC_CHANNELS.runQuickSetup, async (event): Promise<CapacityScanResult> => {
-    return runQuickSetup((line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line))
+    return runQuickSetup(
+      (line) => event.sender.send(IPC_CHANNELS.modelBenchmarkLine, line),
+      // Barre de progression de l'écran de configuration (octets reçus / taille du modèle).
+      (progress) => event.sender.send(IPC_CHANNELS.modelPullProgress, progress)
+    )
   })
 
   // Mode Chat (étape 30) : même Jaris, mêmes outils, sans synthèse vocale. Un rappel programmé par écrit

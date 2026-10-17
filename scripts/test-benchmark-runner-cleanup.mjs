@@ -30,8 +30,11 @@ function loadModule(relativePath, requireShim) {
  * @param {Set<string>} [skippedRoles] rôles ('flash'/'medium'/'large'/'vision'/'code') dont le pull doit échouer
  *   avec ModelTooLargeError, pour simuler un modèle ignoré faute de VRAM/disque.
  */
-function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor = new Set(), { pullErrorFor = new Set(), repick, vramGb = 8, ramGb = 32, imageInstallError = null } = {}) {
+function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor = new Set(), { pullErrorFor = new Set(), repick, vramGb = 8, ramGb = 32, imageInstallError = null, videoInstalled = false } = {}) {
   const imageInstalls = []
+  const videoChecks = []
+  // Le 3e argument de pullModelIfMissing (avancement du téléchargement, pour la barre de l'écran de configuration).
+  const progressListeners = []
   const deletedModels = []
   const pulledModels = []
   const pickCalls = []
@@ -46,7 +49,8 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
   }
   // pullModelIfMissing doit lever une VRAIE instance de ModelTooLargeError pour que le `catch` de
   // runQuickSetup (err instanceof ModelTooLargeError) la reconnaisse.
-  ollamaModule.pullModelIfMissing = async (model) => {
+  ollamaModule.pullModelIfMissing = async (model, _onStatus, onProgress) => {
+    progressListeners.push(onProgress)
     if (skippedRoles.has(model)) throw new ollamaModule.ModelTooLargeError(`${model} trop gros pour cette configuration`)
     // Reproduit l'erreur réelle d'Ollama 0.34.2 sur un import Hugging Face (github.com/ollama/ollama/issues/18526).
     if (pullErrorFor.has(model)) throw new Error('pull model manifest: blocked redirect to a different host')
@@ -102,11 +106,23 @@ function setup(picked, initialProfile, skippedRoles = new Set(), failDeleteFor =
     if (id === 'electron') return { app: { getVersion: () => '0.0.0-test' } }
     if (id === '../../shared/imageModel') return loadModule('../shared/imageModel.ts', () => ({}))
     if (id === '../../shared/pilotModel') return loadModule('../shared/pilotModel.ts', () => ({}))
+    // Le modèle vidéo du résumé de fin : même décision (pickVideoModel) que la carte des modèles.
+    if (id === '../../shared/videoModel') return loadModule('../shared/videoModel.ts', () => ({}))
+    if (id === './videoGenerator') {
+      return {
+        isVideoQualityInstalled: async (quality) => {
+          videoChecks.push(quality)
+          return videoInstalled
+        }
+      }
+    }
     throw new Error(`module non simulé dans le test : ${id}`)
   })
 
   return {
-    run: () => runQuickSetup((line) => lines.push(line)),
+    run: (onProgress) => runQuickSetup((line) => lines.push(line), onProgress),
+    videoChecks,
+    progressListeners,
     deletedModels,
     pulledModels,
     pickCalls,
@@ -315,6 +331,37 @@ test('téléchargement raté : le reste est configuré, l’ancien modèle de pi
   assert.match(result.pilot.error, /blocked redirect/)
 })
 
+// Écran « Configuration terminée » : le résumé oubliait la ligne Vidéo. Même décision que la carte des modèles
+// (pickVideoModel), jamais téléchargé pendant la configuration — le résultat dit s'il est déjà là.
+test('le résultat donne le modèle vidéo choisi pour la machine, et s’il est déjà téléchargé', async () => {
+  const t = setup(IMAGE_PICKED, { models: {} })
+  const result = await t.run()
+  assert.equal(result.video.model, 'FastWan 2.2 TI2V 5B')
+  assert.equal(result.video.quality, 'q6', '8 Go de carte et 32 Go de RAM : la qualité Moyen')
+  assert.equal(result.video.installed, false)
+  assert.deepEqual(t.videoChecks, ['q6'])
+  assert.ok(!t.pulledModels.some((m) => /wan/i.test(m)), 'le modèle vidéo ne se télécharge jamais pendant la configuration')
+
+  const installed = await setup(IMAGE_PICKED, { models: {} }, new Set(), new Set(), { videoInstalled: true }).run()
+  assert.equal(installed.video.installed, true)
+})
+
+test('carte trop petite pour la vidéo : aucun modèle, avec la raison, sans rien vérifier sur le disque', async () => {
+  const t = setup(IMAGE_PICKED, { models: {} }, new Set(), new Set(), { vramGb: 6 })
+  const result = await t.run()
+  assert.equal(result.video.model, null)
+  assert.ok(result.video.reason, 'la raison est donnée')
+  assert.deepEqual(t.videoChecks, [])
+})
+
+test('l’avancement des téléchargements est transmis à chaque modèle (barre de l’écran de configuration)', async () => {
+  const t = setup(IMAGE_PICKED, { models: {} })
+  const onProgress = () => {}
+  await t.run(onProgress)
+  assert.ok(t.progressListeners.length >= 6, `modèles des rôles + pilotage : ${t.progressListeners.length}`)
+  assert.ok(t.progressListeners.every((listener) => listener === onProgress))
+})
+
 // Étape 236 : le test de modèles dure 1,5 à 3 jours sans surveillance. Sans blocage, la veille de Windows le
 // suspendait ; au réveil, une requête coupée passait pour un modèle figé ou un Ollama arrêté.
 test('le PC ne se met pas en veille pendant le test de modèles, et seulement pendant', async () => {
@@ -365,7 +412,8 @@ test('le PC ne se met pas en veille pendant le test de modèles, et seulement pe
     if (id === './imageGenerator') return {}
     if (id === './systemResources') return {}
     if (id === 'electron') return { app: { getVersion: () => '0.0.0-test' }, powerSaveBlocker }
-    if (id === '../../shared/imageModel' || id === '../../shared/pilotModel') return {}
+    if (id === '../../shared/imageModel' || id === '../../shared/pilotModel' || id === '../../shared/videoModel') return {}
+    if (id === './videoGenerator') return {}
     throw new Error(`module non simulé dans le test : ${id}`)
   })
 

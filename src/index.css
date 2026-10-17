@@ -32,11 +32,13 @@
   /* Liens et phrases d'exemple : le texte normal, soulignés là où ce sont des liens. */
   --jv-accent-text: var(--hud-text);
 
-  /* Couleurs de sens (jamais décoratives) : ambre = attention, vert = OK, rouge = échec. */
+  /* Couleurs de sens (jamais décoratives) : ambre = attention, vert = OK, rouge = échec. Ce sont presque toujours
+     des couleurs de TEXTE (badges, erreurs, avertissements) : chacune garde au moins 4,5:1 de contraste sur les
+     fonds de Jaris, badges compris — le vert (4,0:1) et le rouge (2,8:1 sur un badge) ne l'avaient pas. */
   --hud-gold: #e8a33d;
-  --hud-ok: #3fb27f;
-  --hud-ok-rgb: 63, 178, 127;
-  --hud-danger: #e5484d;
+  --hud-ok: #4cc38a;
+  --hud-ok-rgb: 76, 195, 138;
+  --hud-danger: #ff8a8a;
   --hud-danger-soft: #f2a5a7;
 
   --hud-line: rgba(255, 255, 255, 0.1);
@@ -105,6 +107,15 @@
     --jv-composer: #ffffff;
     --jv-composer-border: rgba(0, 0, 0, 0.1);
     --jv-composer-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+
+    /* Couleurs de sens en thème clair : les teintes pâles pensées pour le fond sombre tombaient entre 1,6 et 3,9:1
+       sur fond clair (la liste des échecs de l'installation en rose pâle : 1,9:1, quasi illisible). Des teintes
+       foncées, au moins 4,5:1 sur le blanc, le gris des panneaux et celui des badges. */
+    --hud-gold: #8a5300;
+    --hud-ok: #137344;
+    --hud-ok-rgb: 19, 115, 68;
+    --hud-danger: #b91c1c;
+    --hud-danger-soft: #b91c1c;
   }
 }
 
@@ -1511,29 +1522,39 @@ body.body--splash {
   color: var(--hud-text-dim);
 }
 
-.capacity-scan {
-  max-width: 480px;
-  /* Le tableau de suivi en direct (ModelAnalysisProgress) peut dépasser la hauteur de la fenêtre avec
-     plusieurs dizaines de candidats affichés à la fois : ce conteneur défile lui-même plutôt que de laisser
-     le bas du tableau invisible (contrairement au reste de l'onboarding, jamais assez grand pour ça). */
-  max-height: 92vh;
+/* Écran « Configuration de Jaris » (CapacityScan.tsx) : la carte des modèles a besoin de la largeur d'un tableau,
+   pas des 440 px de l'écran de bienvenue — les noms des modèles s'y affichaient « q… », écrasés à 10 px, et les
+   scores débordaient de la carte. Plus de défilement DANS la colonne (sa barre tombait au milieu de la fenêtre) :
+   c'est l'écran entier qui défile, centré sans jamais rogner le haut (`safe`). */
+.app__onboarding.capacity-scan {
+  width: 100%;
+  max-width: 680px;
+}
+
+.app:has(> .capacity-scan) {
   overflow-y: auto;
+  justify-content: safe center;
 }
 
-.capacity-scan__spinner {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: 3px solid rgba(var(--hud-accent-rgb), 0.09);
-  border-top-color: var(--hud-accent);
-  animation: capacity-scan-spin 0.9s linear infinite;
-  margin: 8px 0;
+/* Téléchargement des modèles : la barre de l'écran d'installation (.runtime-setup__bar), remplie pendant un
+   téléchargement, en va-et-vient entre deux. */
+.capacity-scan__progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 440px;
 }
 
-@keyframes capacity-scan-spin {
-  to {
-    transform: rotate(360deg);
-  }
+.capacity-scan__progress-step,
+.capacity-scan__progress-size {
+  overflow-wrap: anywhere;
+}
+
+.app__onboarding .capacity-scan__progress-size {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 .capacity-scan__status {
@@ -1633,13 +1654,18 @@ body.body--splash {
   padding-right: 8px !important;
 }
 
+/* Le nom du modèle s'affiche toujours EN ENTIER (il était tronqué en « q… » dès que la carte manquait de place) :
+   sa colonne prend toute la place restante ; une carte trop étroite pour tout tenir sur une ligne passe sur deux
+   lignes par rôle (voir le @container plus bas) plutôt que de couper le nom. */
 .capacity-scan__tier-model {
   color: var(--hud-text);
   padding-right: 10px !important;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 0;
   width: 100%;
+}
+
+.capacity-scan__tier-table td.capacity-scan__tier-model {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Intelligence Index du modèle retenu (étape 130) — volontairement plus terne que le badge de fiabilité
@@ -1663,18 +1689,57 @@ body.body--splash {
 }
 
 /* Étape 243 : deux scores nommés côte à côte (« Questions 77/78 », « Demandes 45/48 »), qui passent à la ligne
-   proprement en fenêtre étroite plutôt que de déborder (la cellule peut passer à la ligne ENTRE les deux, jamais
-   au milieu d'un score). */
-/* Côte à côte quand la carte a la place ; l'un sous l'autre seulement quand elle est étroite (la colonne du modèle
-   prend sinon toute la place restante et forcerait les deux scores l'un sous l'autre même en grand). */
+   proprement quand la place manque (la cellule peut passer à la ligne ENTRE les deux, jamais au milieu d'un score). */
 .capacity-scan__tiers {
   container-type: inline-size;
 }
 
-@container (max-width: 540px) {
-  .capacity-scan__tier-table td.capacity-scan__tier-scores,
-  .capacity-scan__tier-table td.capacity-scan__tier-intelligence {
+/* Carte trop étroite pour le tableau complet sur une ligne (rôle, nom, vitesse, intelligence, deux scores : environ
+   800 px avec un long nom) : chaque rôle sur deux lignes — le rôle et le nom du modèle en entier, puis vitesse,
+   intelligence et scores juste en dessous. Avant, c'est le nom qui cédait la place, jusqu'à 10 px (« q… »). */
+@container (max-width: 799px) {
+  .capacity-scan__tier-table,
+  .capacity-scan__tier-table tbody {
+    display: block;
+  }
+
+  /* Une ligne du tableau devient un bloc : le rôle dans la marge de gauche, le nom sur toute la largeur restante,
+     puis vitesse, intelligence et scores qui passent à la ligne d'eux-mêmes s'ils n'ont pas la place. */
+  .capacity-scan__tier-table tr {
+    display: flow-root;
+    padding: 3px 0 3px calc(8.5em + 10px);
+  }
+
+  .capacity-scan__tier-table td {
+    display: inline-block;
+    vertical-align: baseline;
+    padding: 0 10px 0 0 !important;
+  }
+
+  .capacity-scan__tier-table td.capacity-scan__tier-slot {
+    float: left;
+    width: 8.5em;
+    margin-left: calc(-8.5em - 10px);
+    padding: 0 !important;
     white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .capacity-scan__tier-table td.capacity-scan__tier-model,
+  .capacity-scan__tier-table .capacity-scan__tier-upgrade td:last-child {
+    display: block;
+    width: auto;
+    padding: 0 !important;
+  }
+
+  .capacity-scan__tier-table td.capacity-scan__tier-scores {
+    white-space: normal;
+  }
+
+  /* Image, Vidéo, Pilotage d'écran : ni vitesse, ni intelligence, ni score — une seule ligne, sans « — ». */
+  .capacity-scan__tier-table .capacity-scan__tier-upgrade td:first-child,
+  .capacity-scan__tier-table .capacity-scan__tier-image td:nth-child(n + 3) {
+    display: none;
   }
 }
 
@@ -1727,6 +1792,16 @@ p.capacity-scan__tier-missing {
   margin: 8px 2px 0;
   font-size: 12px;
   line-height: 1.45;
+  color: var(--hud-text-faint);
+}
+
+/* Écran de configuration : la règle des paragraphes de l'accueil (16 px, centrés) passait devant celle-ci — la légende
+   y faisait une dizaine de lignes et repoussait « Continuer » hors de l'écran. La même légende que dans Options. */
+.app__onboarding .capacity-scan__tier-legend {
+  margin: 8px 2px 0;
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: left;
   color: var(--hud-text-faint);
 }
 
