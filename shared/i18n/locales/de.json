@@ -959,6 +959,7 @@
   "github.err.busy": "Jaris arbeitet bereits an diesem Repository.",
   "github.err.busyUndo": "Warte, bis die laufende Arbeit fertig ist (oder stoppe sie), bevor du verwirfst.",
   "github.err.busySave": "Warte, bis die laufende Arbeit fertig ist, bevor du speicherst.",
+  "github.err.dataMoving": "Jaris verschiebt deine Daten in einen anderen Ordner: Die Verbindung zu GitHub ist bis zum Neustart pausiert. Versuch es gleich danach noch einmal.",
   "github.defaultCommit": "Mit Jaris vorbereitete Änderungen",
   "main.noPipeline": "Das Zuhören läuft nicht auf dem PC: Die Transkription ist nicht verfügbar.",
   "main.chooseModelFirst": "Wähl zuerst ein Modell: Bei Auto wechselt es je nach Frage.",

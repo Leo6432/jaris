@@ -67,11 +67,13 @@ export class CodeConversationsStore {
   private data: CodeConversationsData | null = null
   /** La dernière écriture a échoué : la copie en mémoire est plus récente que le fichier (voir flush()). */
   private dirty = false
+  /** « Déplacer » en cours (voir holdWrites) : les changements restent en mémoire, rien n'est écrit. */
+  private held = false
   private readonly now: () => number
   private readonly sleep: (ms: number) => void
 
   constructor(
-    private readonly filePath: string,
+    private filePath: string,
     options: StoreOptions = {}
   ) {
     this.now = options.now ?? Date.now
@@ -122,6 +124,9 @@ export class CodeConversationsStore {
    * l'écriture échoue (ou si le fichier existant n'a pas pu être lu) — l'écran garde alors son ancien stockage.
    */
   importLegacy(extra: unknown): void {
+    // L'écran efface l'ancien stockage dès que cette reprise répond : elle doit être SUR le disque, jamais seulement
+    // gardée en mémoire le temps d'un déplacement. Refusée : l'écran la retentera plus tard, rien n'est perdu.
+    if (this.held) throw new Error('Anciennes conversations du mode Code non reprises : un déplacement des données est en cours.')
     const legacy = sanitizeCodeConversations(extra)
     if (!legacy) throw new Error('Anciennes conversations du mode Code refusées : forme inattendue.')
     this.save(mergeCodeConversations(this.current(), legacy))
@@ -135,6 +140,26 @@ export class CodeConversationsStore {
     if (!this.dirty || !this.data) return
     this.write(this.data)
     this.dirty = false
+  }
+
+  /**
+   * « Déplacer » (Options) : pendant la copie — souvent des dizaines de minutes — l'écran du mode Code reste utilisable.
+   * Écrit dans l'ancien dossier, un changement serait perdu : déjà copié (ou sur le point de l'être), ce dossier est
+   * effacé à la fin. Les changements restent donc en mémoire (l'écran les affiche normalement) jusqu'à releaseWrites.
+   */
+  holdWrites(): void {
+    this.held = true
+  }
+
+  /**
+   * Fin du déplacement. `movedTo` : le fichier dans le NOUVEAU dossier (déplacement réussi) — ce qui a été gardé en
+   * mémoire y est écrit, et les écritures suivantes y vont. Sans : déplacement annulé, tout repart dans le fichier
+   * d'origine, resté intact. Une écriture qui échoue ici est retentée à la fermeture (flush), au bon endroit.
+   */
+  releaseWrites(movedTo?: string): void {
+    this.held = false
+    if (movedTo) this.filePath = movedTo
+    this.flush()
   }
 
   private current(): CodeConversationsData {
@@ -189,6 +214,7 @@ export class CodeConversationsStore {
     // prochaine écriture (le fichier entier) l'emporte avec elle, et flush() la retente à la fermeture.
     this.data = next
     this.dirty = true
+    if (this.held) return
     this.write(next)
     this.dirty = false
   }

@@ -959,6 +959,7 @@
   "github.err.busy": "Jaris juba töötab selle hoidlaga.",
   "github.err.busyUndo": "Oota käimasoleva töö lõppu (või peata see) enne tühistamist.",
   "github.err.busySave": "Oota käimasoleva töö lõppu enne salvestamist.",
+  "github.err.dataMoving": "Jaris teisaldab sinu andmeid teise kausta: GitHubi ühendus on peatatud, kuni Jaris taaskäivitub. Proovi kohe pärast seda uuesti.",
   "github.defaultCommit": "Jarisega ette valmistatud muudatused",
   "main.noPipeline": "Kuulamine pole arvutis käivitatud: kõnetuvastus pole saadaval.",
   "main.chooseModelFirst": "Vali kõigepealt mudel: Auto-režiimis muutub see vastavalt küsimusele.",

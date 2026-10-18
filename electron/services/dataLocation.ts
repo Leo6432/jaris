@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { existsSync, rmSync } from 'fs'
-import { cp, mkdir, rm } from 'fs/promises'
+import { cp, mkdir, rm, stat } from 'fs/promises'
 import { join } from 'path'
 import { DATA_SUBDIR, DEFAULT_USER_DATA, ELECTRON_SUBDIR, OWNED_ENTRIES, carryChromiumKeySync, getStorageRoot, writeMarker } from './storageRoot'
 import { t } from '../../shared/i18n'
@@ -20,8 +20,28 @@ export function getDataRoot(): string {
   return root ? join(root, DATA_SUBDIR) : DEFAULT_USER_DATA
 }
 
-/** Étape 1 d'un « Déplacer » : copie des données vers la nouvelle racine. Rien n'est effacé. */
-export async function copyDataTo(newRoot: string, onProgress: (message: string) => void): Promise<void> {
+/**
+ * Un fichier a-t-il changé depuis sa copie ? Plus récent ou d'une autre taille que la copie. Une copie garde la date du
+ * fichier sous Windows (CopyFile) et prend celle du moment de la copie ailleurs : dans les deux cas, un fichier
+ * modifié après elle est plus récent qu'elle. Un dossier est toujours parcouru, ses fichiers sont filtrés un par un.
+ */
+async function changedSinceCopy(source: string, destination: string): Promise<boolean> {
+  const original = await stat(source)
+  if (original.isDirectory()) return true
+  const copy = await stat(destination).catch(() => null)
+  return !copy || copy.size !== original.size || original.mtimeMs > copy.mtimeMs
+}
+
+/**
+ * Étape 1 d'un « Déplacer » : copie des données vers la nouvelle racine. Rien n'est effacé.
+ * `onlyChanged` : rattrapage, juste avant d'effacer l'ancien dossier — seuls les fichiers ajoutés ou modifiés depuis la
+ * première copie sont recopiés (sans tout recopier, vidéos comprises), sans message d'avancement.
+ */
+export async function copyDataTo(
+  newRoot: string,
+  onProgress: (message: string) => void,
+  { onlyChanged = false }: { onlyChanged?: boolean } = {}
+): Promise<void> {
   const from = getDataRoot()
   const dest = join(newRoot, DATA_SUBDIR)
   if (from === dest) return
@@ -29,8 +49,9 @@ export async function copyDataTo(newRoot: string, onProgress: (message: string) 
   for (const entry of OWNED_ENTRIES) {
     const source = join(from, entry)
     if (!existsSync(source)) continue
-    onProgress(t('move.copyingData', { entry }))
-    await cp(source, join(dest, entry), { recursive: true, force: true })
+    if (!onlyChanged) onProgress(t('move.copyingData', { entry }))
+    const filter = onlyChanged ? { filter: changedSinceCopy } : {}
+    await cp(source, join(dest, entry), { recursive: true, force: true, ...filter })
   }
 }
 

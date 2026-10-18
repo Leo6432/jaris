@@ -959,6 +959,7 @@
   "github.err.busy": "Jaris arbetar redan med det här förrådet.",
   "github.err.busyUndo": "Vänta tills det pågående arbetet är klart (eller stoppa det) innan du ångrar.",
   "github.err.busySave": "Vänta tills det pågående arbetet är klart innan du sparar.",
+  "github.err.dataMoving": "Jaris flyttar dina data till en annan mapp: anslutningen till GitHub är pausad tills Jaris startar om. Försök igen direkt efteråt.",
   "github.defaultCommit": "Ändringar förberedda med Jaris",
   "main.noPipeline": "Lyssnandet är inte igång på datorn: transkribering är inte tillgänglig.",
   "main.chooseModelFirst": "Välj en modell först: i Auto byts den beroende på frågan.",

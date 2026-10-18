@@ -969,6 +969,7 @@ export const fr = {
   "github.err.busy": "Jaris travaille déjà sur ce dépôt.",
   "github.err.busyUndo": "Attends la fin du travail en cours (ou arrête-le) avant d'annuler.",
   "github.err.busySave": "Attends la fin du travail en cours avant d'enregistrer.",
+  "github.err.dataMoving": "Jaris déplace tes données vers un autre dossier : la connexion à GitHub est en pause jusqu'à son redémarrage. Réessaie juste après.",
   "github.defaultCommit": "Modifications préparées avec Jaris",
   "main.noPipeline": "L'écoute n'est pas lancée sur le PC : la transcription n'est pas disponible.",
   "main.chooseModelFirst": "Choisis d'abord un modèle : en Auto, il change selon la question.",

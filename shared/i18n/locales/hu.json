@@ -959,6 +959,7 @@
   "github.err.busy": "Jaris már dolgozik ezen a tárolón.",
   "github.err.busyUndo": "Elvetés előtt várd meg a folyamatban lévő munka végét (vagy állítsd le).",
   "github.err.busySave": "Mentés előtt várd meg a folyamatban lévő munka végét.",
+  "github.err.dataMoving": "A Jaris áthelyezi az adataidat egy másik mappába: a GitHub-kapcsolat szünetel, amíg újra nem indul. Próbáld újra rögtön utána.",
   "github.defaultCommit": "Jarisszal előkészített módosítások",
   "main.noPipeline": "A figyelés nincs elindítva a gépen: az átírás nem érhető el.",
   "main.chooseModelFirst": "Előbb válassz modellt: Auto módban a kérdéstől függően változik.",

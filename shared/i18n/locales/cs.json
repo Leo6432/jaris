@@ -980,6 +980,7 @@
   "github.err.busy": "Jaris už na tomto repozitáři pracuje.",
   "github.err.busyUndo": "Před zahozením počkej na konec probíhající práce (nebo ji zastav).",
   "github.err.busySave": "Před uložením počkej na konec probíhající práce.",
+  "github.err.dataMoving": "Jaris přesouvá tvá data do jiné složky: připojení ke GitHubu je pozastavené, dokud se Jaris nerestartuje. Zkus to znovu hned potom.",
   "github.defaultCommit": "Změny připravené s Jarisem",
   "main.noPipeline": "Poslech na počítači není spuštěný: přepis není k dispozici.",
   "main.chooseModelFirst": "Nejprve zvol model: v režimu Auto se mění podle otázky.",

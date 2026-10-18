@@ -105,7 +105,15 @@ export default function GithubPicker({ repo, onOpenRepo, onCloseRepo, disabled =
   }
 
   const logout = async (): Promise<void> => {
-    await window.jaris.githubLogout()
+    setError(null)
+    try {
+      await window.jaris.githubLogout()
+    } catch (err) {
+      // Refusée (pendant un « Déplacer », par exemple) : toujours connecté, et le message dit pourquoi. Sans ce
+      // relais, le clic ne faisait rien à l'écran — l'erreur ne partait que dans la console.
+      setError(ipcErrorMessage(err))
+      return
+    }
     setStatus({ available: true, connected: false, login: null })
     setRepos(null)
     onCloseRepo()

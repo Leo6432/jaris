@@ -980,6 +980,7 @@
   "github.err.busy": "Jaris jau dirba su šia saugykla.",
   "github.err.busyUndo": "Prieš atšaukdamas palauk, kol baigsis dabartinis darbas (arba jį sustabdyk).",
   "github.err.busySave": "Prieš įrašydamas palauk, kol baigsis dabartinis darbas.",
+  "github.err.dataMoving": "Jaris perkelia tavo duomenis į kitą aplanką: ryšys su „GitHub“ pristabdytas, kol Jaris bus paleistas iš naujo. Bandyk dar kartą iškart po to.",
   "github.defaultCommit": "Pakeitimai, paruošti su Jaris",
   "main.noPipeline": "Klausymas kompiuteryje nepaleistas: transkripcija nepasiekiama.",
   "main.chooseModelFirst": "Pirmiausia pasirink modelį: automatiniu režimu jis keičiasi pagal klausimą.",

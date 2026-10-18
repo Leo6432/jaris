@@ -1001,6 +1001,7 @@
   "github.err.busy": "Jaris już pracuje nad tym repozytorium.",
   "github.err.busyUndo": "Poczekaj na koniec bieżącej pracy (albo ją zatrzymaj), zanim cofniesz.",
   "github.err.busySave": "Poczekaj na koniec bieżącej pracy, zanim zapiszesz.",
+  "github.err.dataMoving": "Jaris przenosi twoje dane do innego folderu: połączenie z GitHubem jest wstrzymane do ponownego uruchomienia. Spróbuj ponownie zaraz potem.",
   "github.defaultCommit": "Zmiany przygotowane z Jarisem",
   "main.noPipeline": "Nasłuchiwanie nie jest uruchomione na komputerze: transkrypcja jest niedostępna.",
   "main.chooseModelFirst": "Najpierw wybierz model: w trybie Auto zmienia się on zależnie od pytania.",

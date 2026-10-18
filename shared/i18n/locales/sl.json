@@ -1001,6 +1001,7 @@
   "github.err.busy": "Jaris že dela na tem repozitoriju.",
   "github.err.busyUndo": "Pred zavrženjem počakaj, da se trenutno delo konča (ali ga ustavi).",
   "github.err.busySave": "Pred shranjevanjem počakaj, da se trenutno delo konča.",
+  "github.err.dataMoving": "Jaris premika tvoje podatke v drugo mapo: povezava z GitHubom je začasno ustavljena, dokler se Jaris ne zažene znova. Poskusi znova takoj zatem.",
   "github.defaultCommit": "Spremembe, pripravljene z Jarisom",
   "main.noPipeline": "Poslušanje na računalniku ni zagnano: prepis ni na voljo.",
   "main.chooseModelFirst": "Najprej izberi model: v načinu Samodejno se spreminja glede na vprašanje.",

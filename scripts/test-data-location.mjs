@@ -965,6 +965,36 @@ test('« Déplacer » arrête d’abord ce qui écrit dans les données : accès
   }
 })
 
+/**
+ * Relecture croisée : la pause de GitHub (jeton jamais renouvelé dans l'ancien dossier pendant la copie) et la mise en
+ * mémoire des conversations du mode Code ne servent que si main.ts les pose AVANT la copie et les relâche dans tous les
+ * cas. Aucun test des services ne le voit : retirer une de ces lignes laisserait toute la suite verte, et le jeton se
+ * renouvellerait de nouveau dans l'ancien dossier (ou les conversations resteraient en mémoire jusqu'à la fermeture).
+ */
+test('« Déplacer » met GitHub et le mode Code en pause AVANT la copie, puis les relâche, réussite comme échec', () => {
+  // Fins de ligne Windows (la CI extrait le dépôt en CRLF) ramenées à \n avant de chercher quoi que ce soit.
+  const source = readFileSync(new URL('../electron/main.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+  const handlerAt = source.indexOf('IPC_CHANNELS.chooseModelsLocation, async')
+  const handler = source.slice(handlerAt, source.indexOf('IPC_CHANNELS.getRuntimeSetupStatus', handlerAt))
+  const moveAt = handler.indexOf('relocateEverything(')
+  // Le dernier `catch (err)` du gestionnaire : celui du déplacement annulé (le relâchement interne s'appelle releaseErr).
+  const failedAt = handler.lastIndexOf('} catch (err) {')
+  assert.ok(moveAt !== -1 && failedAt > moveAt, 'gestionnaire de « Déplacer » introuvable')
+  for (const pause of ['setGithubDataMoving(true)', 'codeStore.holdWrites()']) {
+    const at = handler.indexOf(pause)
+    assert.ok(at !== -1 && at < moveAt, `${pause} doit venir avant relocateEverything`)
+  }
+  const succeeded = handler.slice(moveAt, failedAt)
+  assert.ok(
+    succeeded.includes('codeStore.releaseWrites(join(outcome.dataDir, CODE_CONVERSATIONS_FILE))'),
+    'après un succès, les conversations gardées en mémoire partent dans le NOUVEAU dossier'
+  )
+  assert.ok(!succeeded.includes('setGithubDataMoving(false)'), 'après un succès, GitHub reste en pause jusqu’à la relance')
+  const failed = handler.slice(failedAt)
+  assert.ok(failed.includes('setGithubDataMoving(false)'), 'déplacement annulé : GitHub repart')
+  assert.ok(failed.includes('codeStore.releaseWrites()'), 'déplacement annulé : les conversations repartent dans l’ancien dossier, intact')
+})
+
 test('effacement des anciennes données : une entrée bloquée n’empêche pas d’effacer les suivantes', async () => {
   const { userData, root } = setupUserData()
   fillUserData(userData)
