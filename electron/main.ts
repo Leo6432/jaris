@@ -151,6 +151,7 @@ import {
   type SoundCue,
   type VoiceReplyPayload,
   type VoiceSetupStatusPayload,
+  type WakeAvailabilityPayload,
   type WakeTestHeardPayload,
   type MicTestDonePayload,
   type GeneratedImageSummary,
@@ -868,18 +869,64 @@ function showWidgetWindow(forceExpanded = false): void {
   if (pilotTasks > 0 || pilotBorrowing) applyPilotWidgetGuard()
 }
 
+/**
+ * Ouvre la barre de saisie du widget Chat, clavier prêt à écrire : touche « + », et depuis l'étape 325 un clic sur le
+ * petit indicateur inactif (la plupart des ordinateurs portables n'ont pas de pavé numérique, donc pas de « + »).
+ * `showWidgetWindow(true)` dérive la forme native, la région cliquable et le contenu dessiné du même état, et relance
+ * le relevé du pointeur DÉSARMÉ : il ne repliera la barre qu'après y avoir vu entrer la souris puis en sortir — un
+ * clic arrive avec la souris déjà dans la fenêtre, la barre ne se replie donc pas aussitôt.
+ */
+function openChatWidgetBar(): void {
+  // Un indicateur resté à l'écran d'un mode précédent (clic juste avant un changement de mode) ne doit jamais
+  // ouvrir la barre du Chat hors du mode Chat, ni par-dessus la grande fenêtre (les deux ne s'affichent jamais ensemble).
+  if (!startupRevealed || activeMode !== 'chat') return
+  if (fullWindow && !fullWindow.isDestroyed() && fullWindow.isVisible()) return
+  showWidgetWindow(true)
+}
+
+/** Pourquoi l'écoute ne peut pas démarrer maintenant, `null` si elle le peut (étape 325). */
+function listeningUnavailable(): string | null {
+  return pipeline ? pipeline.listeningUnavailable() : t('main.voiceNotReady')
+}
+
+/** Jaris réduit : une même raison n'est pas redonnée en notification à chaque pression de « + ». */
+const WAKE_NOTICE_REPEAT_MS = 30_000
+let lastWakeNotice = { reason: '', at: 0 }
+
+/**
+ * Étape 325 : « Parler à Jaris », l'orbe et « + » ne faisaient RIEN quand l'écoute n'était pas prête — et « + »
+ * dépliait même le widget vocal pour rien (une grande zone invisible qui capte les clics en haut de l'écran, le
+ * pipeline ne passant jamais à l'écoute). La raison va à l'écran vocal, près du bouton ; si la grande fenêtre est
+ * cachée (Jaris réduit), une notification de Windows la dit, le widget restant replié.
+ */
+function reportWakeUnavailable(reason: string): void {
+  broadcast(IPC_CHANNELS.wakeAvailability, { reason, attempt: true } satisfies WakeAvailabilityPayload)
+  if (fullWindow && !fullWindow.isDestroyed() && fullWindow.isVisible() && !fullWindow.isMinimized()) return
+  const now = Date.now()
+  if (reason === lastWakeNotice.reason && now - lastWakeNotice.at < WAKE_NOTICE_REPEAT_MS) return
+  lastWakeNotice = { reason, at: now }
+  if (Notification.isSupported()) new Notification({ title: t('voice.wakeUnavailable.title'), body: reason }).show()
+}
+
 /** La touche + ouvre la forme du mode actif : barre écrite en Chat, écoute visible en Agent vocal. */
 function triggerVisibleWake(): void {
   if (!startupRevealed || modeWithoutWidget()) return
   if (activeMode === 'chat') {
-    if (!fullWindow?.isVisible()) showWidgetWindow(true)
+    openChatWidgetBar()
     return
   }
-  // Une pression pendant les toutes premières secondes du démarrage ne doit pas laisser une barre vide
-  // affichée indéfiniment si le pipeline n'existe pas encore : dans ce cas, on ignore simplement la touche.
-  if (!pipeline) return
+  // Vérifié AVANT de déplier le widget : pipeline pas encore créé (premières secondes), programme d'écoute qui
+  // charge encore (premier lancement : téléchargement de la transcription), en échec ou arrêté — il ne répondrait
+  // pas à « trigger », et le widget resterait déplié pour rien.
+  const reason = listeningUnavailable()
+  if (reason !== null || !pipeline) {
+    reportWakeUnavailable(reason ?? t('main.voiceNotReady'))
+    return
+  }
   if (!fullWindow?.isVisible()) showWidgetWindow(true)
   pipeline.triggerWake()
+  lastWakeNotice = { reason: '', at: 0 }
+  broadcast(IPC_CHANNELS.wakeAvailability, { reason: null, attempt: true } satisfies WakeAvailabilityPayload)
 }
 
 /** Dès que la souris quitte la barre Chat, elle rend sa place au petit indicateur inactif permanent. */
@@ -1259,6 +1306,10 @@ async function startVoicePipeline(): Promise<void> {
   pipeline.on('micTestLevel', (level: number) => broadcast(IPC_CHANNELS.micTestLevel, { level }))
   pipeline.on('micTestDone', (done: MicTestDonePayload) => broadcast(IPC_CHANNELS.micTestDone, done))
   pipeline.on('wakeTestHeard', (heard: WakeTestHeardPayload) => broadcast(IPC_CHANNELS.wakeTestHeard, heard))
+  // Étape 325 : la raison affichée près de « Parler à Jaris » suit l'état réel de l'écoute, et s'efface quand elle est prête.
+  pipeline.on('listeningStatus', (reason: string | null) =>
+    broadcast(IPC_CHANNELS.wakeAvailability, { reason, attempt: false } satisfies WakeAvailabilityPayload)
+  )
   // Arrêt d'urgence déclenché par la sécurité thermique GPU (voicePipeline/resourceMonitor) : un vrai
   // app.quit() (pas juste cacher la fenêtre, voir `quitting` plus haut), pour protéger la machine.
   pipeline.on('shutdown', () => {
@@ -1440,6 +1491,7 @@ app.whenReady().then(async () => {
     if (displayedWidgetMode === 'chat') chatPointerWasInside = true
   })
   ipcMain.on(IPC_CHANNELS.collapseChatWidget, () => collapseChatWidget())
+  ipcMain.on(IPC_CHANNELS.openChatWidget, () => openChatWidgetBar())
   ipcMain.handle(IPC_CHANNELS.getLaunchAtStartup, () => getLaunchAtStartup(app, process.platform))
   ipcMain.handle(IPC_CHANNELS.setLaunchAtStartup, (_event, enabled: boolean) =>
     setLaunchAtStartup(app, process.platform, enabled)

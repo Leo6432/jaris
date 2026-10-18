@@ -58,7 +58,8 @@ export function listeningUnavailableReason(status: VoiceListeningStatus): string
  * Sidecar Python persistant : écoute continue du micro, détection du mot
  * d'activation "Jaris" (ou déclenchement manuel, voir triggerWake) et transcription
  * (Parakeet v3, en RAM — étape 158) dans un seul process. Émet 'wake', 'transcript' (text: string),
- * 'log', 'error', 'micTestLevel' (level: number) et 'micTestDone' (detected: boolean).
+ * 'log', 'error', 'micTestLevel' (level: number), 'micTestDone' (detected: boolean) et 'status'
+ * (VoiceListeningStatus, à chaque changement d'état — étape 325).
  */
 /**
  * Étape 293 (24 langues) : le programme d'écoute (python/voice_server.py) écrit ses messages en français. Ceux qui
@@ -94,6 +95,15 @@ export class VoiceClient extends EventEmitter {
   }
 
   /**
+   * Étape 325 : chaque changement d'état est annoncé ('status') — « Parler à Jaris » montre pourquoi l'écoute ne peut
+   * pas démarrer, et cette raison doit s'effacer d'elle-même dès que l'écoute redevient possible (fin du chargement).
+   */
+  private setStatus(status: VoiceListeningStatus): void {
+    this.status = status
+    this.emit('status', status)
+  }
+
+  /**
    * @param inputDeviceIndex Index PortAudio choisi dans Options → Voix (voir Profile.audioInputDeviceIndex),
    * prioritaire sur MIC_INPUT_DEVICE (.env) s'il est fourni. `undefined`/`null` = retombe sur .env.
    * @param wakewordEnabled Options → Activation (étape 81, Profile.activationWakeWordEnabled) : `false`
@@ -103,7 +113,7 @@ export class VoiceClient extends EventEmitter {
   start(inputDeviceIndex?: number | null, wakewordEnabled = true): Promise<void> {
     if (this.ready) return this.ready
 
-    this.status = { state: 'loading' }
+    this.setStatus({ state: 'loading' })
     this.ready = new Promise((resolveReady, rejectReady) => {
       // Transcription : Parakeet v3, version épinglée dans voice_server.py (étape 158) — plus de réglage à passer.
       const args = ['-u', voiceServerScript()]
@@ -135,13 +145,13 @@ export class VoiceClient extends EventEmitter {
         switch (payload.event) {
           case 'ready':
             settled = true
-            if (this.proc === proc) this.status = { state: 'ready' }
+            if (this.proc === proc) this.setStatus({ state: 'ready' })
             resolveReady()
             break
           case 'fatal': {
             settled = true
             const message = translateSidecarMessage(payload.message)
-            if (this.proc === proc) this.status = { state: 'failed', message }
+            if (this.proc === proc) this.setStatus({ state: 'failed', message })
             rejectReady(new Error(message))
             break
           }
@@ -188,10 +198,10 @@ export class VoiceClient extends EventEmitter {
       proc.on('exit', (code) => {
         // Un arrêt voulu (stop) a déjà détaché ce process : son statut n'a plus à changer.
         if (this.proc === proc && this.status.state !== 'failed') {
-          this.status = {
+          this.setStatus({
             state: 'failed',
             message: settled ? t('voice.stopped', { code: String(code) }) : t('voice.stoppedEarly', { code: String(code) })
-          }
+          })
         }
         this.proc = null
         this.ready = null
@@ -199,7 +209,7 @@ export class VoiceClient extends EventEmitter {
       })
 
       proc.on('error', (err) => {
-        if (this.proc === proc) this.status = { state: 'failed', message: err.message }
+        if (this.proc === proc) this.setStatus({ state: 'failed', message: err.message })
         if (!settled) rejectReady(err)
       })
     })
@@ -211,7 +221,7 @@ export class VoiceClient extends EventEmitter {
     this.proc?.kill()
     this.proc = null
     this.ready = null
-    this.status = { state: 'off' }
+    this.setStatus({ state: 'off' })
   }
 
   private wakePaused = false

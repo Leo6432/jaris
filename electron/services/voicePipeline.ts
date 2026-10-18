@@ -169,6 +169,8 @@ export class VoicePipeline extends EventEmitter {
     this.voice.on('micTestLevel', (level: number) => this.emit('micTestLevel', level))
     this.voice.on('micTestDone', (done: MicTestDonePayload) => this.emit('micTestDone', done))
     this.voice.on('wakeTestHeard', (heard: WakeTestHeardPayload) => this.emit('wakeTestHeard', heard))
+    // Étape 325 : la raison affichée près de « Parler à Jaris » suit l'état réel (effacée quand l'écoute est prête).
+    this.voice.on('status', () => this.emit('listeningStatus', this.listeningUnavailable()))
 
     await this.voice.start(inputDeviceIndex, wakewordEnabled)
     this.setEmotion('idle')
@@ -186,6 +188,14 @@ export class VoicePipeline extends EventEmitter {
 
   triggerWake(): void {
     this.voice.triggerWake()
+  }
+
+  /**
+   * Étape 325 : pourquoi l'écoute ne peut pas démarrer maintenant (chargement, échec, arrêt), `null` si elle le peut —
+   * vérifié AVANT de déplier le widget ou d'envoyer « trigger » au programme d'écoute, qui sinon n'y répond pas.
+   */
+  listeningUnavailable(): string | null {
+    return listeningUnavailableReason(this.voice.getStatus())
   }
 
   /**

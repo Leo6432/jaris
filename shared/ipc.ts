@@ -302,6 +302,18 @@ export interface MicTestDonePayload {
   silentStream: boolean
 }
 
+/**
+ * main -> renderer (étape 325) : l'écoute peut-elle démarrer maintenant ? « Parler à Jaris », le clic sur l'orbe et la
+ * touche « + » ne faisaient RIEN de visible quand le programme d'écoute chargeait encore, avait échoué, ou n'était pas
+ * encore créé. `reason` dit pourquoi (`null` : c'est possible). `attempt` est vrai quand l'utilisateur vient d'essayer :
+ * seul un essai fait APPARAÎTRE la raison près du bouton ; un simple changement d'état ne fait que la mettre à jour ou
+ * l'effacer (écoute redevenue prête).
+ */
+export interface WakeAvailabilityPayload {
+  reason: string | null
+  attempt: boolean
+}
+
 /** Réponse au lancement d'un test micro ou du mot « Jaris » : `reason` dit pourquoi il n'a pas pu démarrer. */
 export interface VoiceTestStartResult {
   started: boolean
@@ -903,6 +915,8 @@ export const IPC_CHANNELS = {
   getStartupState: 'jaris:get-startup-state',
   /** renderer -> main : déclenche l'écoute manuellement (sans dire le mot d'activation). */
   triggerWake: 'jaris:trigger-wake',
+  /** main -> renderer, étape 325 : pourquoi l'écoute ne peut pas démarrer maintenant (WakeAvailabilityPayload). */
+  wakeAvailability: 'jaris:wake-availability',
   /** renderer <-> main : profil utilisateur (prénom), demandé une seule fois au premier lancement. */
   getProfile: 'jaris:get-profile',
   saveProfile: 'jaris:save-profile',
@@ -1156,6 +1170,12 @@ export const IPC_CHANNELS = {
   armChatWidgetPointer: 'jaris:arm-chat-widget-pointer',
   /** widget Chat -> main : la souris a quitté toute la barre/réponse, revenir au petit état inactif. */
   collapseChatWidget: 'jaris:collapse-chat-widget',
+  /**
+   * widget Chat -> main, étape 325 : un clic sur le petit indicateur inactif ouvre la barre de saisie, comme la touche
+   * « + » — absente de la plupart des ordinateurs portables (pas de pavé numérique). La grande fenêtre reste joignable
+   * par « Ouvrir le Chat » dans la barre.
+   */
+  openChatWidget: 'jaris:open-chat-widget',
   /**
    * renderer -> main : OptionsMenu.tsx prévient à chaque ouverture/fermeture de la page Options (elle vit
    * dans la fenêtre normale, pas une fenêtre à part — voir `optionsOpen`, main.ts). Léo : "quand on est

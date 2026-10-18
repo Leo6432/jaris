@@ -124,3 +124,21 @@ test('message vocal pendant que l’écoute charge encore : la vraie raison, pas
   void client.start().catch(() => {})
   await assert.rejects(client.transcribeFile('x.wav'), /télécharge la transcription/)
 })
+
+// Étape 325 : « Parler à Jaris » dit pourquoi l'écoute ne démarre pas, et cette raison doit s'effacer d'elle-même
+// quand l'écoute devient prête — chaque changement d'état est donc annoncé, y compris un arrêt après coup.
+test('chaque changement d’état de l’écoute est annoncé (chargement, prête, arrêt imprévu, arrêt voulu)', async () => {
+  const client = new VoiceClient()
+  const seen = []
+  client.on('status', (status) => seen.push(listeningUnavailableReason(status) === null ? 'prête' : status.state))
+  const ready = client.start()
+  emitLine({ event: 'ready' })
+  await ready
+  lastProc.emit('exit', 3)
+  await tick()
+  const second = client.start()
+  emitLine({ event: 'ready' })
+  await second
+  client.stop()
+  assert.deepEqual(seen, ['loading', 'prête', 'failed', 'loading', 'prête', 'off'])
+})

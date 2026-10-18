@@ -38,6 +38,7 @@ import type {
   MicTestDonePayload,
   VoiceTestStartResult,
   MicTestLevelPayload,
+  WakeAvailabilityPayload,
   WakeTestHeardPayload,
   ModelOverviewResult,
   ModelsLocationStatus,
@@ -78,6 +79,7 @@ declare global {
       getStartupState: () => Promise<StartupState>
       onStartupState: (cb: (state: StartupState) => void) => () => void
       triggerWake: () => void
+      onWakeAvailability: (cb: (payload: WakeAvailabilityPayload) => void) => () => void
       notifyAudioEnded: () => void
       /** Langue au chargement (synchrone), `null` si indisponible. Optionnel : absent des faux ponts des tests. */
       getLanguageState?: () => LanguageState | null
@@ -215,6 +217,7 @@ declare global {
       setChatWidgetKeepOpen: (keepOpen: boolean) => void
       armChatWidgetPointer: () => void
       collapseChatWidget: () => void
+      openChatWidget: () => void
       onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => () => void
       onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => () => void
       onSoundCue: (cb: (cue: SoundCue) => void) => () => void

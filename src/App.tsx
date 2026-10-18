@@ -203,14 +203,51 @@ export default function App(): JSX.Element {
     void window.jaris.getWindowChrome().then(setChrome).catch(() => {})
   }, [])
 
+  /**
+   * Étape 325 : pourquoi « Parler à Jaris » (ou l'orbe, ou « + ») n'a rien déclenché — écoute qui charge encore, en
+   * échec ou arrêtée (`listening`, raison donnée par le main), ou clic désactivé dans Options → Voix (`clickOff`).
+   * Affichée près du bouton après un essai seulement, effacée dès que ça redevient possible.
+   */
+  const [wakeNotice, setWakeNotice] = useState<{ kind: 'listening' | 'clickOff'; text: string } | null>(null)
+
   /** Bouton « Parler à Jaris » et clic sur le logo de l'Agent vocal : une des 3 façons d'activer Jaris
    *  (Options → Voix, étape 81), relue à la volée comme le « + » plus bas. */
   const wakeFromClick = (): void => {
     void window.jaris.getProfile().then((profile) => {
-      if (profile?.activationOrbClickEnabled === false) return
+      if (profile?.activationOrbClickEnabled === false) {
+        // Étape 325 : plus de clic sans effet ni explication — on dit où le réactiver.
+        setWakeNotice({ kind: 'clickOff', text: t('app.voice.clickOff') })
+        return
+      }
       window.jaris.triggerWake()
     })
   }
+
+  // Quitter ou retrouver l'écran vocal oublie la raison : en revenant (par exemple après avoir réactivé le clic dans
+  // Options → Voix), un nouvel essai la redonne si elle tient toujours, plutôt qu'une raison périmée. Un essai fait
+  // pendant qu'un autre écran est affiché (« + » pressé depuis les Options) n'en laisse aucune en attente.
+  const voiceScreenShown = !optionsShown && !memoryGraph && appMode === 'voice'
+  const voiceScreenShownRef = useRef(voiceScreenShown)
+  voiceScreenShownRef.current = voiceScreenShown
+  useEffect(() => {
+    setWakeNotice(null)
+  }, [voiceScreenShown])
+
+  // Un essai qui échoue fait apparaître la raison ; un essai réussi l'efface ; un simple changement d'état de l'écoute
+  // ne fait que mettre à jour une raison déjà affichée, ou l'effacer quand l'écoute est prête (jamais l'inverse : la
+  // raison n'apparaît pas sans que Léo ait essayé). Le clic désactivé ne dépend pas de l'écoute : seul un essai réussi
+  // (« + ») ou un changement d'écran le retire.
+  useEffect(() => {
+    if (MODE !== 'full') return
+    return window.jaris.onWakeAvailability(({ reason, attempt }) =>
+      setWakeNotice((current) => {
+        if (reason === null) return attempt || current?.kind === 'listening' ? null : current
+        if (!voiceScreenShownRef.current) return current
+        if (attempt || current?.kind === 'listening') return { kind: 'listening', text: reason }
+        return current
+      })
+    )
+  }, [])
 
   // Taille de l'orbe de l'Agent vocal : grande, mais toujours avec la place pour le texte et les commandes
   // en dessous, sur une petite fenêtre comme sur un grand écran (le canvas de l'orbe a une taille en pixels).
@@ -713,6 +750,14 @@ export default function App(): JSX.Element {
                         {emotion === 'idle' ? t('app.voice.talk') : emotion === 'listening' ? t('app.voice.listening') : t('app.voice.wait')}
                       </button>
                     </div>
+
+                    {/* Étape 325 : pourquoi le bouton n'a rien déclenché, juste dessous. Pas répété quand l'avertissement
+                        « la voix ne fonctionne pas » plus bas dit déjà la même chose (une seule explication à l'écran). */}
+                    {wakeNotice && !(wakeNotice.kind === 'listening' && setupStatus && !setupStatus.ready) && (
+                      <p className="voice-screen__notice" role="status">
+                        {wakeNotice.text}
+                      </p>
+                    )}
 
                     <div className="app__hint app__hint--small">
                       {t('app.voice.hint')}

@@ -36,6 +36,7 @@ import {
   type MicTestDonePayload,
   type VoiceTestStartResult,
   type MicTestLevelPayload,
+  type WakeAvailabilityPayload,
   type WakeTestHeardPayload,
   type ModelOverviewResult,
   type ModelsLocationStatus,
@@ -96,6 +97,8 @@ const api = {
   getStartupState: (): Promise<StartupState> => invoke(IPC_CHANNELS.getStartupState),
   onStartupState: (cb: (state: StartupState) => void) => subscribe(IPC_CHANNELS.startupState, cb),
   triggerWake: (): void => ipcRenderer.send(IPC_CHANNELS.triggerWake),
+  /** Étape 325 : pourquoi l'écoute ne peut pas démarrer maintenant (affiché près de « Parler à Jaris »). */
+  onWakeAvailability: (cb: (payload: WakeAvailabilityPayload) => void) => subscribe(IPC_CHANNELS.wakeAvailability, cb),
   notifyAudioEnded: (): void => ipcRenderer.send(IPC_CHANNELS.audioEnded),
   /**
    * Langue au chargement de la page, lue de façon SYNCHRONE : le premier rendu est déjà dans la bonne langue. `null`
@@ -267,6 +270,7 @@ const api = {
     ipcRenderer.send(IPC_CHANNELS.setChatWidgetKeepOpen, keepOpen),
   armChatWidgetPointer: (): void => ipcRenderer.send(IPC_CHANNELS.armChatWidgetPointer),
   collapseChatWidget: (): void => ipcRenderer.send(IPC_CHANNELS.collapseChatWidget),
+  openChatWidget: (): void => ipcRenderer.send(IPC_CHANNELS.openChatWidget),
   onMicTestLevel: (cb: (payload: MicTestLevelPayload) => void) => subscribe(IPC_CHANNELS.micTestLevel, cb),
   onMicTestDone: (cb: (payload: MicTestDonePayload) => void) => subscribe(IPC_CHANNELS.micTestDone, cb),
   onSoundCue: (cb: (cue: SoundCue) => void) => subscribe(IPC_CHANNELS.soundCue, cb),
