@@ -25,6 +25,7 @@ import {
   findLeakedToolName,
   hasUnnegatedMailIntent,
   isWritingRequest,
+  isPureCalculation,
   isScreenQuestion,
   lookStoppedTask,
   looksLikeKnowledgeQuestion,
@@ -627,7 +628,10 @@ test('les copies de assistant.ts dans le test sont identiques à l’original (s
     'Je vais chercher ça.', 'Je vais maintenant utiliser type_text pour écrire cela.', 'je vais bien. je dois partir chercher du pain',
     "J'ai ouvert le bloc-notes avec open_app.", "N'envoie pas de mail à Paul.", 'envoie un mail', 'Un instant.', 'Attends-moi.',
     'Laisse-moi faire.', 'Je m’en occupe tout de suite, voici la réponse complète à ta question sur le pain.', 'Dis-moi la météo',
-    'Trouve trois boulangeries et envoie-leur un mail', 'Mon nom est Léo ?', 'Retiens que je suis végétarien.', "C'est quoi le Bitcoin ?"
+    'Trouve trois boulangeries et envoie-leur un mail', 'Mon nom est Léo ?', 'Retiens que je suis végétarien.', "C'est quoi le Bitcoin ?",
+    // Bêta de l'étape 324 : un simple calcul n'est pas une question de connaissance (isPureCalculation).
+    'Combien font 12 fois 7 ?', '12*7 ?', 'Combien font dix-sept plus vingt-cinq ?', 'Calcule 12,5 fois 3 ?', '15 pour cent de 80 ?',
+    'La racine carrée de 144 ?', '(12 + 3) × 2 ?', 'Combien coûtent 2 kg de pommes ?', '15 % de TVA sur 80 € en France ?', '1789 et 1815 ?'
   ]
   const scan = realHardwareScan()
   for (const phrase of [...phrases, "Qu'est-ce qu'il y a sur mon écran ?", 'Tu vois quoi là ?', 'Que vois-tu ?', 'Regarde la météo', 'Lis mes écrans']) {
@@ -636,6 +640,7 @@ test('les copies de assistant.ts dans le test sont identiques à l’original (s
   for (const phrase of phrases) {
     assert.equal(directSocialReply(phrase), real.directSocialReply(phrase), phrase)
     assert.equal(looksLikeKnowledgeQuestion(phrase), real.looksLikeKnowledgeQuestion(phrase), phrase)
+    assert.equal(isPureCalculation(phrase), real.isPureCalculation(phrase), phrase)
     assert.equal(promiseWithoutAction(phrase), real.PROMISE_WITHOUT_ACTION(phrase), phrase)
     assert.equal(findLeakedToolName(phrase), real.findLeakedToolName(phrase), phrase)
     assert.equal(normalizeAssistantText(`${phrase} 😄 &#33;`, phrase), real.normalizeAssistantText(`${phrase} 😄 &#33;`, phrase), phrase)

@@ -185,6 +185,45 @@ test('question de connaissance sans recherche : le brouillon de mémoire n’est
   assert.equal(relaunched.filter((m) => m.role === 'user').at(-1).content.replace(/^\(Nous sommes le [^]*?\.\) /, ''), 'Comment faire du pain ?', 'la dernière demande de l’utilisateur reste sa vraie question')
 })
 
+// Bêta de l'étape 324 : « Combien font 12 fois 7 ? » — le modèle répondait 84, juste, puis la relance « question de
+// connaissance » le forçait à chercher sur internet ; la recherche échouait (SearXNG absent au premier lancement) et le
+// court-circuit « Échec de l'outil » remplaçait la bonne réponse. Un calcul seul ne demande aucune donnée du monde.
+function calculationConverse(firstReply) {
+  const calls = { model: 0, search: 0, relaunched: false }
+  const converse = setup(async (messages) => {
+    calls.model++
+    if (messages.some((m) => m.role === 'system' && /appelle d'abord search_web/.test(m.content))) calls.relaunched = true
+    if (calls.model === 1) return { role: 'assistant', content: firstReply }
+    return { role: 'assistant', content: '', tool_calls: [{ function: { name: 'search_web', arguments: { query: 'x' } } }] }
+  }, async (name) => {
+    assert.equal(name, 'search_web')
+    calls.search++
+    throw new Error('La recherche web locale (SearXNG) ne répond pas.')
+  })
+  return { converse, calls }
+}
+
+for (const channel of ['chat', 'voice']) {
+  for (const prompt of ['Combien font 12 fois 7 ?', '12 fois 7 ?', '12*7 ?']) {
+    test(`${channel} : « ${prompt} » est répondu sans relance vers internet, même quand la recherche est en panne`, async () => {
+      const { converse, calls } = calculationConverse('12 fois 7 font 84.')
+      const reply = await converse(prompt, null, () => {}, undefined, [], undefined, undefined, channel)
+      assert.equal(reply, '12 fois 7 font 84.')
+      assert.equal(calls.model, 1, 'un seul appel au modèle')
+      assert.equal(calls.relaunched, false, 'aucune relance vers search_web')
+      assert.equal(calls.search, 0, 'aucune recherche')
+    })
+  }
+}
+
+test('contre-épreuve : une question qui demande une donnée du monde garde sa relance (et un échec de recherche reste dit)', async () => {
+  const { converse, calls } = calculationConverse('Environ 3 € le kilo.')
+  const reply = await converse('Combien coûtent 2 kg de pommes ?', null, () => {}, undefined, [], undefined, undefined, 'chat')
+  assert.equal(calls.relaunched, true)
+  assert.equal(calls.search, 1)
+  assert.match(reply, /^Échec de l'outil : La recherche web locale/)
+})
+
 for (const channel of ['voice', 'chat']) {
   for (const app of ['Steam', 'Blocnotes']) {
     test(`${channel}: ouverture explicite de ${app} sans fausse confirmation du modèle`, async () => {

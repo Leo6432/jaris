@@ -115,9 +115,51 @@ export function lookStoppedTask(row) {
   })
 }
 
+// Copie de isPureCalculation (assistant.ts, bêta de l'étape 324) : un simple calcul n'est pas une question de connaissance.
+const CALC_NUMBER_WORDS = new Set([
+  'zero', 'un', 'une', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze',
+  'treize', 'quatorze', 'quinze', 'seize', 'vingt', 'vingts', 'trente', 'quarante', 'cinquante', 'soixante',
+  'septante', 'octante', 'huitante', 'nonante', 'cent', 'cents', 'mille', 'million', 'millions', 'milliard',
+  'milliards', 'demi', 'demie'
+])
+const CALC_OPERATORS = new Set([
+  '+', '-', '−', 'x', '×', '*', '/', '÷', '=', '^', '%', 'plus', 'moins', 'fois', 'multiplie', 'multipliee',
+  'multiplies', 'multipliees', 'multiplier', 'divise', 'divisee', 'divises', 'divisees', 'diviser', 'sur', 'pourcent',
+  'pourcentage', 'carre', 'carree', 'carres', 'carrees', 'cube', 'racine', 'puissance', 'exposant', 'modulo', 'somme',
+  'produit', 'difference', 'quotient', 'moyenne', 'double', 'triple', 'moitie', 'tiers', 'quart'
+])
+const CALC_LEAD_WORDS = new Set(['combien', 'calcule', 'calcul', 'calculer', 'font', 'fait', 'vaut', 'valent', 'egal', 'egale', 'resultat'])
+const CALC_FILLER_WORDS = new Set([
+  'ca', 'c', 'est', 'ce', 'que', 'qu', 'quoi', 'quel', 'quelle', 'le', 'la', 'les', 'l', 'de', 'des', 'du', 'd', 'a',
+  'au', 'aux', 'et', 'par', 'virgule', 'moi', 'tu', 'peux', 'pourrais', 'dis', 'donne', 'stp', 'svp', 'jaris', '(', ')'
+])
+
+export function isPureCalculation(prompt) {
+  const text = prompt
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[’`]/g, "'")
+    .replace(/s'il (?:te|vous) plait/g, ' ')
+    .replace(/\bpour ?cents?\b/g, ' pourcent ')
+    .replace(/(\d)\s*x\s*(?=\d)/g, '$1 x ')
+    .replace(/([a-z])-(?=[a-z])/g, '$1 ')
+    .replace(/(?<!\d)[.,]|[.,](?!\d)/g, ' ')
+    .replace(/[+\-−×*\/÷=^%()]/g, ' $& ')
+    .replace(/['?!;:«»"…]/g, ' ')
+  let numbers = 0
+  let operations = 0
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    if (/^\d+(?:[.,]\d+)*$/.test(word) || CALC_NUMBER_WORDS.has(word)) numbers++
+    else if (CALC_OPERATORS.has(word) || CALC_LEAD_WORDS.has(word)) operations++
+    else if (!CALC_FILLER_WORDS.has(word)) return false
+  }
+  return numbers > 0 && operations > 0
+}
+
 export function looksLikeKnowledgeQuestion(prompt) {
   const trimmed = prompt.trim()
-  if (!trimmed || NOT_A_KNOWLEDGE_QUESTION.test(trimmed) || SOCIAL_CHECK_IN.test(trimmed)) return false
+  if (!trimmed || NOT_A_KNOWLEDGE_QUESTION.test(trimmed) || SOCIAL_CHECK_IN.test(trimmed) || isPureCalculation(trimmed)) return false
   return QUESTION_START_WORDS.test(trimmed) || INFO_SEEKING_IMPERATIVE.test(trimmed) || trimmed.endsWith('?')
 }
 

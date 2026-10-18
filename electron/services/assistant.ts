@@ -151,17 +151,71 @@ export function directSocialReply(prompt: string): string | undefined {
   return undefined
 }
 
+// Bêta de l'étape 324 : « Combien font 12 fois 7 ? » passait pour une question de connaissance. Le modèle répondait
+// 84, juste, puis la relance l'obligeait à chercher sur internet ; si la recherche échouait (SearXNG absent, fréquent
+// au premier lancement), « Échec de l'outil » remplaçait la bonne réponse. Un calcul ne demande aucune donnée du
+// monde : une demande faite UNIQUEMENT de nombres, d'opérations et de quelques mots de liaison n'en est pas une.
+// Tout autre mot la laisse question de connaissance : « pommes », « habitants », « TVA », « France », mais aussi une
+// unité ou une monnaie (« 100 dollars en euros » demande un taux de change, donc une donnée du monde).
+// Français seulement, comme le reste de ce filet ; une demande en chiffres et symboles seuls (« 12*7 ») vaut partout.
+const CALC_NUMBER_WORDS = new Set([
+  'zero', 'un', 'une', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze',
+  'treize', 'quatorze', 'quinze', 'seize', 'vingt', 'vingts', 'trente', 'quarante', 'cinquante', 'soixante',
+  'septante', 'octante', 'huitante', 'nonante', 'cent', 'cents', 'mille', 'million', 'millions', 'milliard',
+  'milliards', 'demi', 'demie'
+])
+const CALC_OPERATORS = new Set([
+  '+', '-', '−', 'x', '×', '*', '/', '÷', '=', '^', '%', 'plus', 'moins', 'fois', 'multiplie', 'multipliee',
+  'multiplies', 'multipliees', 'multiplier', 'divise', 'divisee', 'divises', 'divisees', 'diviser', 'sur', 'pourcent',
+  'pourcentage', 'carre', 'carree', 'carres', 'carrees', 'cube', 'racine', 'puissance', 'exposant', 'modulo', 'somme',
+  'produit', 'difference', 'quotient', 'moyenne', 'double', 'triple', 'moitie', 'tiers', 'quart'
+])
+// Mots qui annoncent un calcul : avec eux, « Combien font 3 et 4 ? » suffit, sans opération écrite.
+const CALC_LEAD_WORDS = new Set(['combien', 'calcule', 'calcul', 'calculer', 'font', 'fait', 'vaut', 'valent', 'egal', 'egale', 'resultat'])
+// Mots de liaison qui ne demandent rien par eux-mêmes (« c'est quoi », « le carré de », « dis-moi »).
+const CALC_FILLER_WORDS = new Set([
+  'ca', 'c', 'est', 'ce', 'que', 'qu', 'quoi', 'quel', 'quelle', 'le', 'la', 'les', 'l', 'de', 'des', 'du', 'd', 'a',
+  'au', 'aux', 'et', 'par', 'virgule', 'moi', 'tu', 'peux', 'pourrais', 'dis', 'donne', 'stp', 'svp', 'jaris', '(', ')'
+])
+
+/**
+ * true si la demande n'est QU'UN calcul (« 12 fois 7 », « Combien font 12,5 fois 3 ? », « racine carrée de 144 »,
+ * « 12*7 ») : au moins un nombre, une opération ou un mot comme « combien », et aucun autre mot que des liaisons.
+ */
+export function isPureCalculation(prompt: string): boolean {
+  const text = prompt
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[’`]/g, "'")
+    .replace(/s'il (?:te|vous) plait/g, ' ')
+    .replace(/\bpour ?cents?\b/g, ' pourcent ')
+    .replace(/(\d)\s*x\s*(?=\d)/g, '$1 x ')
+    .replace(/([a-z])-(?=[a-z])/g, '$1 ')
+    .replace(/(?<!\d)[.,]|[.,](?!\d)/g, ' ')
+    .replace(/[+\-−×*\/÷=^%()]/g, ' $& ')
+    .replace(/['?!;:«»"…]/g, ' ')
+  let numbers = 0
+  let operations = 0
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    if (/^\d+(?:[.,]\d+)*$/.test(word) || CALC_NUMBER_WORDS.has(word)) numbers++
+    else if (CALC_OPERATORS.has(word) || CALC_LEAD_WORDS.has(word)) operations++
+    else if (!CALC_FILLER_WORDS.has(word)) return false
+  }
+  return numbers > 0 && operations > 0
+}
+
 /**
  * true si la phrase RESSEMBLE à une demande d'information (question de connaissance générale — fait,
  * personne, entreprise, définition, événement... — ou demande à l'impératif du même genre) plutôt qu'une
  * commande d'action ou une question sur Jaris/l'utilisateur lui-même — sert uniquement à décider s'il faut
  * relancer le modèle vers search_web (voir wantsWebInfo plus bas), jamais une vraie analyse de langage : un
  * début de phrase interrogatif/impératif ou un simple "?" final suffit, exactement le niveau de rigueur déjà
- * utilisé pour `hasUnnegatedMailIntent` juste au-dessus.
+ * utilisé pour `hasUnnegatedMailIntent` juste au-dessus. Un simple calcul n'en est pas une (isPureCalculation).
  */
 export function looksLikeKnowledgeQuestion(prompt: string): boolean {
   const trimmed = prompt.trim()
-  if (!trimmed || NOT_A_KNOWLEDGE_QUESTION.test(trimmed) || SOCIAL_CHECK_IN.test(trimmed)) return false
+  if (!trimmed || NOT_A_KNOWLEDGE_QUESTION.test(trimmed) || SOCIAL_CHECK_IN.test(trimmed) || isPureCalculation(trimmed)) return false
   return QUESTION_START_WORDS.test(trimmed) || INFO_SEEKING_IMPERATIVE.test(trimmed) || trimmed.endsWith('?')
 }
 
